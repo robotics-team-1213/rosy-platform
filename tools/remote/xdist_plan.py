@@ -67,6 +67,8 @@ def serial_reason(inv: list[str], serial: list[str]) -> str | None:
         for prefix in serial:
             if path in ("", ".") or path == prefix or path.startswith(prefix + "/") or prefix.startswith(path + "/"):
                 return f"{prefix} is in {SERIAL_FILE.name}"
+    if len(paths) == 1 and paths[0].split("::", 1)[0].endswith(".py"):
+        return "single test file"
     return None
 
 

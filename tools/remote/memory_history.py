@@ -14,6 +14,7 @@ the hosts' memory, filled the test PCs. Standard library only.
 
 from __future__ import annotations
 
+import functools
 import json
 import math
 import re
@@ -71,26 +72,31 @@ def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str,
         out.write(json.dumps(row) + "\n")
 
 
+@functools.lru_cache(maxsize=256)
+def _cached_rows(path_str: str, mtime_ns: int, size: int, want: str) -> tuple[dict, ...]:
+    rows, needle = [], json.dumps(want)
+    # Line by line: every invocation of a landing reads this at once, and the file only grows.
+    with open(path_str, encoding="utf-8", errors="replace") as lines:
+        for line in lines:
+            if needle not in line:
+                continue
+            try:
+                row = json.loads(line)
+                if row["key"] == want:
+                    rows.append(row)
+            except (ValueError, KeyError, TypeError):
+                continue  # a torn or foreign line
+    return tuple(rows)
+
+
 def _rows(history: Path | None, inv: list[str]) -> list[dict]:
-    want, rows = key(inv), []
     if history is None:
-        return rows
-    needle = json.dumps(want)
+        return []
     try:
-        # Line by line: every invocation of a landing reads this at once, and the file only grows.
-        with history.open(encoding="utf-8", errors="replace") as lines:
-            for line in lines:
-                if needle not in line:
-                    continue
-                try:
-                    row = json.loads(line)
-                    if row["key"] == want:
-                        rows.append(row)
-                except (ValueError, KeyError, TypeError):
-                    continue  # a torn or foreign line
+        st = history.stat()
+        return list(_cached_rows(str(history), st.st_mtime_ns, st.st_size, key(inv)))
     except OSError:
-        pass
-    return rows
+        return []
 
 
 def _gb_from_peaks(peaks) -> int:

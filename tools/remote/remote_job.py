@@ -44,6 +44,7 @@ ROOM_DEFERRED = b"[remote-pytest] admission deferred: host room"
 ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone; DEFER_HOLD='""" + HOLD_DEFERRED.decode() + r"""'; DEFER_ROOM='""" + ROOM_DEFERRED.decode() + r"""'
 CAPC=${ROSY_HOST_CORES:-$(nproc)}; CAPG=${ROSY_HOST_GB:-$(awk '/^MemTotal:/{print int($2 / 1048576)}' /proc/meminfo)}
 w_admit0=$(date +%s)
+_sl=0.5
 exec 9> ~/rosy-jobs/.admit
 while :; do
   now=$(date +%s)
@@ -74,7 +75,7 @@ while :; do
   if [ "$AL" = 1 ] && [ "$gh" = 1 ]; then
     rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; : "${w0:=$now}"
     if [ $((now - w0)) -ge "${ROSY_ALONE_HOLD_WAIT_S:-180}" ]; then echo "$DEFER_HOLD"; exit 253; fi
-    sleep 5; continue
+    sleep "$_sl"; case "$_sl" in 0.5) _sl=1;; *) _sl=2;; esac; continue
   fi
   if [ "$AL" != 1 ] && [ $((now - w_admit0)) -ge "${ROSY_ADMIT_WAIT_S:-180}" ]; then
     flock -u 9; echo "$DEFER_ROOM"; exit 253
@@ -82,7 +83,9 @@ while :; do
   [ "$AL" = 1 ] && echo $$ > ~/rosy-jobs/$$.alone-wait
   flock -u 9
   [ -n "${said:-}" ] || { echo "[remote-pytest] waiting for host room ($others job(s), ${uc}c ${ug}GB in use)"; said=1; }
-  sleep 5
+  sleep "$_sl"
+  if [ "${ROSY_JOB_TURN:-}" = 1 ] || [ "$AL" = 1 ]; then case "$_sl" in 0.5) _sl=1;; *) _sl=2;; esac
+  else case "$_sl" in 0.5) _sl=1;; 1) _sl=2;; 2) _sl=4;; 4) _sl=8;; *) _sl=10;; esac; fi
 done
 [ -n "${said:-}" ] && echo "[remote-pytest] host room after waiting"
 exec 9>&-"""
@@ -133,9 +136,14 @@ umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 fi
 B=$(mktemp -d /tmp/rosy-pytest-XXXXXX) || exit 1
 # TMPDIR beside the basetemp, not in it (pytest wipes --basetemp at start): TEMP-or-/tmp tests leak otherwise.
 mkdir -m 700 "$B/p" "$B/t"; export TMPDIR=$B/t TEMP=$B/t TMP=$B/t
-# The deps hash names the inputs, not what unpinned pip picked; installed dist-info names do (one per run).
-echo "[remote-pytest] env ${V##*/} freeze $(cd "$V" && ls -d lib/python3*/site-packages/*.dist-info \
-  receiver-crypto/*.dist-info 2>/dev/null | sha256sum | cut -c1-16)"
+# The deps hash names the inputs, not what unpinned pip picked; installed dist-info names do (cached per venv).
+SM=$(stat -c '%y' "$V"/lib/python*/site-packages 2>/dev/null | tr '\n' ';')
+PM=; F=
+[ -r "$V/.freeze-sha" ] && IFS='|' read -r PM F < "$V/.freeze-sha" || true
+[ -n "$F" ] && [ "$PM" = "$SM" ] || { F=$(cd "$V" && ls -d lib/python3*/site-packages/*.dist-info \
+  receiver-crypto/*.dist-info 2>/dev/null | sha256sum | cut -c1-16); \
+  printf '%s|%s\n' "$SM" "$F" > "$V/.freeze-sha.tmp.$$" 2>/dev/null && mv -f "$V/.freeze-sha.tmp.$$" "$V/.freeze-sha" 2>/dev/null || true; }
+echo "[remote-pytest] env ${V##*/} freeze $F"
 # Best-effort lowest, not idle (-c3): idle gets no disk time while any other process writes, so a timing
 # test's SQLite fsync stalled for seconds on a busy AI PC (g1 contact gap p99 4.7-5.7 s, 2026-10-26).
 # The scope's cgroup ends with pytest, so a watcher inside it reads memory.peak (kernel >= 5.19) after pytest is

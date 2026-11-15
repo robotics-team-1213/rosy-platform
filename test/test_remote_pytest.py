@@ -1479,3 +1479,13 @@ def test_a_jobs_own_core_reservation_is_its_placement_floor(monkeypatch, tmp_pat
         rp.run([["test/x.py"], ["ROSY_JOB_CORES=6", "ROSY_ALONE_FILES=a.py", "tools/collect_alone.py"]],
                [tmp_path / "1.txt", tmp_path / "2.txt"], repo=ROOT, wait=0, poll=1, sleep=lambda s: None)
     assert asked == [6]
+
+
+def test_single_file_is_serial_and_freeze_sha_cached_in_job_script(monkeypatch):
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    monkeypatch.setattr(rp, "probe", lambda h: host(nproc=8, load1=4.0))
+    monkeypatch.setenv(xp.TURN_ENV, "1")
+    assert rp.placed_hosts("pytest", ["a@1"], cores=6) == ["a@1"], "turn holder may fall back even with cores > 2"
+    assert xp.serial_reason(["pkg/test/test_a.py"], []) == "single test file"
+    assert xp.serial_reason(["pkg/test/test_a.py", "pkg/test/test_b.py"], []) is None
+    assert ".freeze-sha" in rj.JOB and "_sl=0.5" in rj.ADMIT

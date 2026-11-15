@@ -193,3 +193,17 @@ def test_reserve_reads_history_once_and_lane_ship_skips_non_browser_invocations(
     monkeypatch.setattr(rp.remote_job, "run", lambda h, name, k, log, job, inv, *a: log.write_bytes(b"1 passed\n") and 0)
     assert rp.run_on("h", [browser, plain], [tmp_path / "1.txt", tmp_path / "2.txt"], "ab" * 20, tmp_path, None, kind="lane") == [0, None]
     assert shipped == [1]  # plain has no history, but a lane never runs it
+
+
+def test_rows_caches_by_file_stat_and_invalidates_on_append(tmp_path):
+    mh._cached_rows.cache_clear()
+    history = tmp_path / mh.FILE
+    a, b = ["test/a.py"], ["test/b.py"]
+    mh.record(history, a, "h", 512, "ab" * 20, 1.0)
+    assert len(mh._rows(history, a)) == 1
+    assert mh._cached_rows.cache_info().misses == 1
+    assert len(mh._rows(history, a)) == 1
+    assert mh._cached_rows.cache_info().hits == 1
+    assert mh._rows(history, b) == []
+    mh.record(history, b, "h", 1024, "ab" * 20, 2.0)
+    assert len(mh._rows(history, b)) == 1

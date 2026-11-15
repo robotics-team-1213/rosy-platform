@@ -121,7 +121,8 @@ def placed_hosts(runner, cls: str, hosts: list[str] | None, cores: int) -> list[
     chosen, notes = runner.place(cls, hosts, probes, cores)
     for note in notes:
         print(f"[remote-pytest] {note}", file=runner.sys.stderr, flush=True)
-    if not chosen and cls == "pytest" and cores <= runner.NEEDS[cls][0]:
+    if not chosen and cls == "pytest" and (cores <= runner.NEEDS[cls][0]
+                                           or runner.os.environ.get(runner.xdist_plan.TURN_ENV) == "1"):
         fallback = [(h, p) for h, p in zip(hosts, probes)
                     if p and p["pytest"] and (not p.get("pytest_blocked") or runner.os.environ.get(runner.xdist_plan.TURN_ENV) == "1")
                     and not p["busy"] and not runner.disk_full(p) and h not in runner.SITES]

@@ -298,7 +298,7 @@ class Gate:
                 self._cv.notify_all()
 
 
-SPLIT_S = 240  # an invocation whose median run exceeds this is split (2026-11-01: 30 min combined invocations)
+SPLIT_S = 90  # an invocation whose median run exceeds this is split (Wave-3A: tighter tail splitting)
 MAX_SPLIT = 12
 BYTES_PER_S = 2000  # shortcut: rough test-code bytes per run second for invocations with no history; replace if it misorders
 FLEET_SECONDS = "tools/harness/fleet_test_seconds.json"

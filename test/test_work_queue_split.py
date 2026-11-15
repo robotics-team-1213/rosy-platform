@@ -33,12 +33,12 @@ def test_measured_long_invocations_split_and_every_test_file_runs_once(tmp_path,
     seen = {tuple(multi): 600.0, ("pkg/test",): 600.0, ("short/test",): 30.0}
     unpacked = wq.split(tmp_path, [multi], seen)
     assert unpacked[-1] == ["ROSY_JOB_CORES=6", "other/test"]
-    assert len(unpacked) == 4 and sorted(w for g in unpacked[:-1] for w in g if w != "ROSY_JOB_CORES=6") == [
+    assert len(unpacked) == 6 and sorted(w for g in unpacked[:-1] for w in g if w != "ROSY_JOB_CORES=6") == [
         f"pkg/test/test_{n}.py" for n in "abcde"]
     assert wq.split(tmp_path, [["short/test"]], seen) == [["short/test"]], "under SPLIT_S stays whole"
     assert wq.split(tmp_path, [["never/ran"]], seen) == [["never/ran"]], "a missing path has zero estimated cost"
     groups = wq.split(tmp_path, [["pkg/test"]], seen)
-    assert len(groups) == 3  # ceil(600 / 240)
+    assert len(groups) == 5  # min(ceil(600 / 90), 5 files)
     files = sorted(f for g in groups for f in g)
     assert files == [f"pkg/test/test_{n}.py" for n in "abcde"], "each test file exactly once, helpers not run"
 
@@ -67,7 +67,7 @@ def test_unknown_large_directory_uses_existing_balancing_and_cap_and_preserves_m
     assert all(g[0] == packet[0] for g in groups)
     expected = sorted(f"pkg/test/test_{n}.py" for n in [* "abcde", *extra])
     assert sorted(p for g in groups for p in g[1:]) == expected
-    assert len(wq.split(tmp_path, [packet], {tuple(packet): 600})) == 3
+    assert len(wq.split(tmp_path, [packet], {tuple(packet): 600})) == 7
     assert wq.split(tmp_path, [packet], {tuple(packet): 30}) == [packet]
 
 
@@ -142,7 +142,7 @@ def test_an_ignore_word_splits_too_and_the_ignored_file_never_runs(tmp_path, mon
     _tree(tmp_path, monkeypatch)
     inv = ["pkg/test", "--ignore=pkg/test/test_a.py"]
     groups = wq.split(tmp_path, [inv], {tuple(inv): 600.0})
-    assert len(groups) == 3 and all(g[-1] == "--ignore=pkg/test/test_a.py" for g in groups)
+    assert len(groups) == 4 and all(g[-1] == "--ignore=pkg/test/test_a.py" for g in groups)
     files = sorted(w for g in groups for w in g if not w.startswith("-"))
     assert files == [f"pkg/test/test_{n}.py" for n in "bcde"], "every other test file exactly once"
     other = ["pkg/test", "-k", "x"]
@@ -163,6 +163,6 @@ def test_fleet_weights_and_unpacked_serial_paths_are_preserved(tmp_path, monkeyp
     assert wq._fleet_weights(tmp_path) == {"test_a.py": 180.0, "test_b.py": 20.0, "test_c.py": 20.0}
     assert wq._file_weight(tmp_path, tmp_path / "operations/fleet/test/test_a.py", {"test_a.py": 180.0}) == 180.0
     fleet_groups = wq.split(tmp_path, [["operations/fleet/test"]], {("operations/fleet/test",): 400.0})
-    assert ["operations/fleet/test/test_a.py"] in fleet_groups and len(fleet_groups) == 2
+    assert ["operations/fleet/test/test_a.py"] in fleet_groups and len(fleet_groups) == 3
     assert wq.split(tmp_path, [["pkg/test", "serial/test"]], {("pkg/test", "serial/test"): 600.0}) == [
         ["pkg/test", "serial/test"]]
