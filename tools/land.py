@@ -458,8 +458,9 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 print(f"[plan] then git -C {main_co} merge --ff-only {candidate}  ({branch})")
                 return 0
 
-            delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
-            if tested_main and delta and all(map(record_only, delta)):
+            base_main = tested_main or (full_main if args.tests == "auto" else None)
+            delta = lines(wt, "diff", "--name-only", base_main, main_sha) if base_main else []
+            if base_main and delta and all(map(record_only, delta)):
                 # Only module-scoped suites may skip; root test/ guards read the records themselves.
                 invocations = land_speculate.root_part(invocations)
                 reusable = False  # module suites ran on an earlier candidate, not this one
