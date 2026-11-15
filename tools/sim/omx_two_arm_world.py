@@ -34,7 +34,8 @@ WRIST_ASSETS = sites.ISAAC / "assets/omx_wrist_camera_b"  # link5 parts in mm, a
 WRIST_PARTS = ("link5_gripper", "gripper_plate_F6", "b16-u16-span-D-holder-assembly")
 FPS = 15
 # the cell as its cameras see it (2026-11-10 top/side frames, G-29): yellow table, light-blue v11 plates with dark lane pads, light-blue ship
-COLOURS = dict(floor=[.37, .43, .37, 1], table=[.58, .47, .21, 1], belt=[.16, .21, .24, 1], plate=[.52, .69, .79, 1], pad=[.08, .09, .1, 1],
+COLOURS = dict(floor=[.37, .43, .37, 1], table=[.58, .47, .21, 1], belt=[.16, .21, .24, 1], plate=[.52, .69, .79, 1],
+               plate_navy=[.082, .149, .290, 1], plate_sky=[.643, .859, .910, 1], pad=[.08, .09, .1, 1],
                ship=[.50, .72, .85, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
 
 
@@ -277,37 +278,44 @@ class World:
                                    size=[H["length"] / 2 * mm, (y_out - y_in) / 2 * mm, tall / 2 * mm], rgba=[0, 0, 0, 0])
 
     def _temp(self, spec):
-        """Both temporary plates: a convex deck, and per lane the vertical 0.6 mm seat plus the 45 degree funnel as four convex walls (SCAD v7)."""
+        """Both temporary plates: collision prism/walls (invisible when CAD STL visuals are shown) + two-color CAD STLs + lane pads."""
         L, S = self.layout, sites.SCAD
+        src = L.choices["temp_source"]
+        use_stl = src != "procedural"
         width, length, _, _, _ = sites.lane_geometry(L.choices["temp_radius_m"])
         seat, catch, rim = S["seat_h"], S["catch"], S["rim"]
         section = lambda h: [(h, 0), (h, seat), (h + catch, seat + catch), (h + catch + rim, seat + catch), (h + catch + rim, 0)]  # noqa: E731
         deck_z = L.deck_z
         spec.add_mesh(name="wall_side", uservert=wall(section(width / 2), length + 2 * (catch + rim), True))
         spec.add_mesh(name="wall_end", uservert=wall(section(length / 2), width + 2 * (catch + rim), False))
-        spec.add_mesh(name="temp_slot_plate_v11", file=self._asset("temp_slot_plate_v11"), scale=[.001] * 3)
+        stl_layers = (("temp_slot_plate_v11", COLOURS["plate"]),) if src == "scad-v11" else (
+            ("temp_slot_plate_v12_navy", COLOURS["plate_navy"]),
+            ("temp_slot_plate_v12_sky", COLOURS["plate_sky"]),
+        )
+        if use_stl:
+            for mesh_name, _ in stl_layers:
+                spec.add_mesh(name=mesh_name, file=self._asset(mesh_name), scale=[.001] * 3)
+        proxy_rgba = [0, 0, 0, 0] if use_stl else COLOURS["plate"]
         for tag, plate in L.plates.items():
             spec.add_mesh(name=f"deck_{tag}", uservert=prism(plate["outline"], deck_z - S["deck_t"], deck_z))
-            colour = COLOURS["plate"]
-            spec.worldbody.add_geom(name=f"deck_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"deck_{tag}", rgba=colour)
-            mid_xy, mid_yaw = plate["lanes"][1]
-            spec.worldbody.add_geom(
-                name=f"plate_stl_{tag}",
-                type=mujoco.mjtGeom.mjGEOM_MESH,
-                meshname="temp_slot_plate_v11",
-                pos=[*mid_xy, deck_z - S["deck_t"]],
-                quat=[math.cos(mid_yaw / 2), 0, 0, math.sin(mid_yaw / 2)],
-                contype=0,
-                conaffinity=0,
-                rgba=colour,
-            )
+            spec.worldbody.add_geom(name=f"deck_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"deck_{tag}", rgba=proxy_rgba)
+            mid_xy, _ = plate["lanes"][1]
+            arm_xy = L.arms[f"arm_{tag}"].base[:2]
+            stl_yaw = math.atan2(mid_xy[1] - arm_xy[1], mid_xy[0] - arm_xy[0]) - math.pi  # STL ears point +x (for -x direction)
+            stl_quat = [math.cos(stl_yaw / 2), 0, 0, math.sin(stl_yaw / 2)]
+            if use_stl:
+                for mesh_name, rgba in stl_layers:
+                    suffix = mesh_name.removeprefix("temp_slot_plate_")
+                    spec.worldbody.add_geom(name=f"plate_{suffix}_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=mesh_name,
+                                            pos=[*mid_xy, deck_z - S["deck_t"]], quat=stl_quat, contype=0, conaffinity=0, rgba=rgba)
             for i, (xy, yaw) in enumerate(plate["lanes"], 1):
-                spec.worldbody.add_geom(name=f"lane{tag}{i}", type=mujoco.mjtGeom.mjGEOM_BOX, pos=[*xy, deck_z + .0003], size=[length / 2, width / 2, .0003],
+                spec.worldbody.add_geom(name=f"lane{tag}{i}", type=mujoco.mjtGeom.mjGEOM_BOX, pos=[*xy, deck_z + .0003],
+                                        size=[S["cont_l"] / 2, S["cont_w"] / 2, .0003],
                                         quat=[math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)], contype=0, conaffinity=0, rgba=COLOURS["pad"])
                 for mesh, turn in (("wall_side", 0), ("wall_side", math.pi), ("wall_end", 0), ("wall_end", math.pi)):
                     a = yaw + turn
                     spec.worldbody.add_geom(name=f"w{tag}{i}{mesh[5]}{int(turn > 0)}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=mesh,
-                                            pos=[*xy, deck_z], quat=[math.cos(a / 2), 0, 0, math.sin(a / 2)], rgba=colour)
+                                            pos=[*xy, deck_z], quat=[math.cos(a / 2), 0, 0, math.sin(a / 2)], rgba=proxy_rgba)
 
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):

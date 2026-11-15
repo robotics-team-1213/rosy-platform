@@ -498,6 +498,8 @@ def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
         "temp_slot_bridge_a",
         "temp_slot_bridge_b",
         "temp_slot_plate_v11",
+        "temp_slot_plate_v12_navy",
+        "temp_slot_plate_v12_sky",
         "container_1x3_v3",
     ):
         assert name in source["meshes"] and (sites.SHIP_ASSETS / f"{name}.stl").is_file()
@@ -527,6 +529,28 @@ def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
     assert bundle["stages"][0]["stage"] == "mujoco" and bundle["stages"][0]["stage_order"] == 1
     assert bundle["stages"][1]["stage"] == "isaac" and bundle["stages"][1]["stage_order"] == 2
     assert bundle["stages"][1]["isaac_handoff"]["schema"] == "rosy.omx-isaac-handoff.v1"
+
+
+def test_temp_plate_renders_two_color_v12_cad_oriented_into_bridge():
+    try:
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    w = tw.World()
+    m = w.model
+    assert w.layout.choices["temp_lanes"] == "fan" and w.layout.choices["temp_radius_m"] == pytest.approx(0.200)
+    for tag in ("a", "b"):
+        navy_id = m.geom(f"plate_v12_navy_{tag}").id
+        sky_id = m.geom(f"plate_v12_sky_{tag}").id
+        deck_id = m.geom(f"deck_{tag}").id
+        wall_id = m.geom(f"w{tag}1s0").id
+        assert np.allclose(m.geom_quat[navy_id], [1.0, 0.0, 0.0, 0.0], atol=1e-5)
+        assert np.allclose(m.geom_quat[sky_id], [1.0, 0.0, 0.0, 0.0], atol=1e-5)
+        assert m.geom_rgba[navy_id, 3] == pytest.approx(1.0) and m.geom_rgba[sky_id, 3] == pytest.approx(1.0)
+        assert not np.allclose(m.geom_rgba[navy_id, :3], m.geom_rgba[sky_id, :3])
+        assert m.geom_rgba[deck_id, 3] == pytest.approx(0.0) and m.geom_rgba[wall_id, 3] == pytest.approx(0.0)
+
 
 
 

@@ -23,13 +23,10 @@ CHOICES = dict(
     fixture_case="nominal-palletizing-v21-ship-surveyed",  # measured arm bases (arm_b FK, arm_a plate centre); "nominal-palletizing-v21-ship" = CAD bases
     base_z="measured",       # "measured": table + 12 mm base plate (ruler, arm_b; arm_a ASSUMED the same); "cad": the fixture's arm base z
     belt_height="ruler",     # "ruler": belt end surface 55 mm under the table (inventory, D435 says 56); "fixture": the surveyed case's belt_drop face
-    temp_lanes="photo-20261108",  # "photo-20261108": the plates where the 11-08 top frame sees them (the user moves them by hand for now);
-                             # "fan": temp_radius_m and temp_direction_deg, where the bridge v7 seats plate v11 (Confluence 23233175; the user keeps
-                             # the arm freer without it, 11-09); "photo-20261107": the older loose v7 plates (use temp_radius_m=.214)
-    temp_radius_m=.150,      # SCAD arm_r: the printed fan's shape, and with temp_lanes="fan" arm centre to middle-lane centre (v9 to v11: 200;
-                             # the 11-08 plates' middle lanes lie 139 and 155 mm from arm_b and arm_a)
+    temp_lanes="fan",        # "fan": bridge v7 seats plate v12 at temp_radius_m (.200) and temp_direction_deg (180); "photo-20261108"/"photo-20261107"/"photo-20261110"/"snapshot"
+    temp_radius_m=.200,      # SCAD arm_r: the printed fan's shape (v12: 200 mm -> 13.77 deg), and with temp_lanes="fan" arm centre to middle-lane centre
     temp_direction_deg=180., # from each arm toward -x, away from the belt (the user's slot plan 2026-10-31)
-    temp_source="scad-v11",  # the plate source; "stl" keeps the same collision shape and shows the downloaded STL as the visual
+    temp_source="scad-v12",  # two-color plate v12 CAD STLs ("navy"+"sky"); "scad-v11" keeps monochrome v11 STL; "procedural" shows collision walls
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=-.014,   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull

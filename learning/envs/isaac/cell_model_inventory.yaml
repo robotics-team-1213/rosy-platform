@@ -21,11 +21,11 @@ models:
     measured: Confluence 23592971·23234388 정격 선박 r08(v15, 316×130 mm, 3 mm 부양) + v16 모듈형 일체형 접안 요람(berth-cradle-stern/mid/bow) + OMX 받침판 간격 브리지(berth-spacer-bridge-a/b, 정격 Δy 39.0 mm [35/39/43 mm], Δx -8/0/+8 mm, 반복 정밀도 RSS ±0.32 mm, 최대 선수미 회전 ±0.19°) + 선미 탁자 끝 후크(0/5/10 mm) + 2 cm 하향 박형 컨베이어 오목 스토퍼(berth-belt-concave-stopper, 입구 62 mm·평면 44 mm·깊이 9 mm). 구형 돌기 격자 판(KAN-108, ship_plate.py)도 호환 지원
     differs: MuJoCo(omx_two_arm_world)와 Isaac(stacking_scene) 모두 r08 선체·선실·v16 일체형 요람·받침판 간격 브리지·2 cm 하향 오목 벨트 스토퍼 메시를 반영한다(berth_kit=v16-modular, sim2real G-18)
   - id: temp_plate
-    name: 임시 칸 판(v11 두 장) 및 3-프롱 정렬 브리지(v7)
-    cad: {file: temp_slot_plate_v11.stl, sha256: null}
+    name: 임시 칸 판(v12 두 장, 남색+하늘 2색) 및 3-프롱 정렬 브리지(v7)
+    cad: {file: temp_slot_plate_v12_navy.stl, sha256: null}
     sim: reflected
-    measured: Confluence 23233175·15368863·23232928 판 v11(남색 바닥+하늘색 유도벽 2색 분리, F1~F4 기준점, 설계 반지름 200 mm·단계 17.34°) + 정렬 브리지 v7(temp_slot_bridge_a/b.stl, PR33_C02_BASE 양끝 Ø13 카운터보어 결합 3-프롱 소켓). 위 카메라 프레임에서 칸 패드·컨테이너를 되투영해 맞춤(omx_real2sim measure, 2026-11-10 실측 단계 17.0°, 반지름 203.4 mm)
-    differs: MuJoCo·Isaac 모두 판 v11 STL(소켓 귀 3곳·F1~F4 포함)과 브리지 v7 STL을 함께 그리며, 스냅샷(temp_lanes=snapshot) 또는 브리지 정격(temp_lanes=fan, radius=0.200)을 선택지로 읽는다(sim2real G-17)
+    measured: Confluence 23233175·15368863·23232928 판 v12(남색 바닥+하늘색 유도벽 2색 분리, F1~F4 기준점, 설계 반지름 200 mm·단계 13.76°·폭 169.7 mm) + 정렬 브리지 v7(temp_slot_bridge_a/b.stl, PR33_C02_BASE 양끝 Ø13 카운터보어 결합 3-프롱 소켓). 위 카메라 프레임에서 칸 패드·컨테이너를 되투영해 맞춤(omx_real2sim measure)
+    differs: MuJoCo(omx_two_arm_world)·Isaac(stacking_scene) 모두 판 v12 2색 STL(navy+sky, F1~F4·소켓 귀 3곳)과 브리지 v7 STL을 200 mm 브리지 정격(temp_lanes=fan, temp_radius_m=0.200)으로 맞춰 그린다(sim2real G-17)
   - id: workbench
     name: 작업대
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}

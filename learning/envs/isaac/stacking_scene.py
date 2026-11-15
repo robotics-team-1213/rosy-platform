@@ -263,7 +263,7 @@ def add_ship_plate(stage, fixture):
 
 
 def add_cell_structures(stage, fixture):
-    """Add the surveyed CAD cell structures (PR33_C02_BASE, bridge v7, plate v11, and r08 + v16 berth-modular cradles/spacer bridges/concave stopper)."""
+    """Add the surveyed CAD cell structures (PR33_C02_BASE, bridge v7, two-color plate v12, and r08 + v16 berth-modular cradles/spacer bridges/concave stopper)."""
     import math
     from pathlib import Path
     from pxr import Gf, UsdGeom, Vt
@@ -292,7 +292,8 @@ def add_cell_structures(stage, fixture):
         if fixture.get('temp_bridge', 'v7') == 'v7':
             place_stl(f'/World/CellStructures/TempBridge_{tag}', f'temp_slot_bridge_{tag}', (bx, by, table_z), 0., (.92, .68, .22))
         plate_xy = (bx - .200, by)
-        place_stl(f'/World/CellStructures/TempPlate_{tag}', 'temp_slot_plate_v11', (plate_xy[0], plate_xy[1], table_z), 0., (.52, .69, .79))
+        place_stl(f'/World/CellStructures/TempPlate_{tag}_navy', 'temp_slot_plate_v12_navy', (plate_xy[0], plate_xy[1], table_z), 0., (.082, .149, .290))
+        place_stl(f'/World/CellStructures/TempPlate_{tag}_sky', 'temp_slot_plate_v12_sky', (plate_xy[0], plate_xy[1], table_z), 0., (.643, .859, .910))
 
     stern_x = fixture.get('ship_stern_x_m', .178)
     centre_y = fixture.get('ship_centre_y_m', -.001)
