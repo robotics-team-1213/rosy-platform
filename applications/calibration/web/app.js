@@ -228,6 +228,17 @@ function renderInspector() {
   if (d.pixel_z_view) addDtDd(dl, "투영 px (z_view)", `[${d.pixel_z_view[0].toFixed(1)}, ${d.pixel_z_view[1].toFixed(1)}]`);
   if (d.pixel_surface_z) addDtDd(dl, "투영 px (surface_z)", `[${d.pixel_surface_z[0].toFixed(1)}, ${d.pixel_surface_z[1].toFixed(1)}]`);
   if (Number.isFinite(d.surface_z)) addDtDd(dl, "surface_z (m)", `${d.surface_z} m`);
+  if (Number.isFinite(d.depth_surface_z)) {
+    const dTxt = Number.isFinite(d.depth_diff_mm) ? ` (${d.depth_diff_mm >= 0 ? "+" : ""}${d.depth_diff_mm} mm)` : "";
+    addDtDd(dl, "D435 depth surface_z", `${d.depth_surface_z} m${dTxt}`);
+  }
+  if (Number.isFinite(d.place_vs_start_step_mm)) {
+    addDtDd(dl, "Place−Start 높이차", `${d.place_vs_start_step_mm >= 0 ? "+" : ""}${d.place_vs_start_step_mm} mm`);
+  }
+  if (Number.isFinite(d.touch_surface_z)) {
+    const tTxt = Number.isFinite(d.touch_diff_mm) ? ` (${d.touch_diff_mm >= 0 ? "+" : ""}${d.touch_diff_mm} mm)` : "";
+    addDtDd(dl, "Touch 영수증 surface_z", `${d.touch_surface_z} m${tTxt}`);
+  }
   if (Number.isFinite(d.loo_dist_mm)) addDtDd(dl, "LOO 잔차 거리", `${d.loo_dist_mm.toFixed(2)} mm`);
   if (Array.isArray(d.loo_residual_mm)) {
     addDtDd(dl, "LOO 벡터 (map−arm)", `[${d.loo_residual_mm[0].toFixed(2)}, ${d.loo_residual_mm[1].toFixed(2)}] mm`);
@@ -282,6 +293,29 @@ function renderRobotAndBias(profile) {
     envTag.textContent = "PROFILE OK";
   }
 
+  const cv = profile?.cross_verify || {};
+  const verdictStatus = (v) => (v === "fail" ? "crit" : v === "warn" ? "warn" : v === "pass" ? "active" : "neutral");
+  const verdictLabel = (v) => (v === "pass" ? "OK" : v === "warn" ? "WARN" : v === "fail" ? "FAIL" : "미측정");
+  const setCv = (id, name, v, detail = "") => {
+    const el = $(id);
+    el.setAttribute("status", verdictStatus(v));
+    el.textContent = `${name}: ${verdictLabel(v)}${detail}`;
+  };
+  const dCam = cv.depth || {};
+  const dInfo = Number.isFinite(dCam.cam_to_table_mm) ? ` (${dCam.cam_to_table_mm}mm)` : "";
+  setCv("cvDepthTag", "Depth", dCam.verdict, dInfo);
+  const tInfo = Number.isFinite(cv.touch?.max_diff_mm) ? ` (max ${cv.touch.max_diff_mm}mm)` : "";
+  setCv("cvTouchTag", "Touch", cv.touch?.verdict, tInfo);
+  const mInfo = Number.isFinite(cv.map?.max_loo_mm) ? ` (${cv.map.max_loo_mm}mm)` : "";
+  setCv("cvMapTag", "Map", cv.map?.verdict, mInfo);
+  const fInfo = Number.isFinite(cv.fk?.tcp_z_m) ? ` (z=${cv.fk.tcp_z_m}m)` : "";
+  setCv("cvFkTag", "FK", cv.fk?.verdict, fInfo);
+  const parts = [];
+  if (Number.isFinite(dCam.cam_to_table_mm)) parts.push(`cam→table=${dCam.cam_to_table_mm}mm (cfg ${dCam.config_height_m ?? "-"}m)`);
+  if (Number.isFinite(dCam.plate_mm)) parts.push(`plate=${dCam.plate_mm}mm`);
+  if (cv.measured) parts.push(`verify ${cv.measured}`);
+  $("crossVerifyMeta").textContent = parts.length ? parts.join(" · ") : "depth-verify.json 없음 (surface-*.json / Map / FK만 표시)";
+
   const biasWrap = $("biasTableWrap");
   biasWrap.replaceChildren();
   const regions = profile?.bias?.regions || [];
@@ -323,12 +357,20 @@ function renderSitesTable(profile) {
   const extras = entries.filter(([, s]) => s.extra).length;
   $("siteCountNote").textContent = `${entries.length}개 site (extra ${extras}개)`;
 
-  const { tbl, tbody } = makeTable(["Site", "z_view / surf_z", "Map 출처", "점(OK/Drop/Plan)", "Max LOO", "비고"]);
+  const { tbl, tbody } = makeTable(["Site", "z_view / surf_z", "Depth Δ", "Touch Δ", "Map 출처", "점(OK/Drop/Plan)", "Max LOO", "비고"]);
   for (const [name, s] of entries) {
     const tr = document.createElement("tr");
     if (name === state.siteName) tr.setAttribute("data-selected", "true");
     const m = s.map;
     const zTxt = `${m?.z_view ?? "-"} / ${s.surface_z ?? "없음"}`;
+    const fmtDiff = (val, z) => {
+      if (!Number.isFinite(val)) return Number.isFinite(z) ? `${z}m` : "-";
+      return `${val >= 0 ? "+" : ""}${val.toFixed(1)}mm`;
+    };
+    const depthTxt = Number.isFinite(s.place_vs_start_step_mm) && Math.abs(s.place_vs_start_step_mm) > 8
+      ? `${fmtDiff(s.depth_diff_mm, s.depth_surface_z)} (step ${s.place_vs_start_step_mm >= 0 ? "+" : ""}${s.place_vs_start_step_mm.toFixed(0)}mm)`
+      : fmtDiff(s.depth_diff_mm, s.depth_surface_z);
+    const touchTxt = fmtDiff(s.touch_diff_mm, s.touch_surface_z);
     const srcTxt = s.extra ? "EXTRA(미사용)" : s.map_from ? `← ${s.map_from}` : s.in_map_sites ? "직접측정" : "미지정";
     const ptsTxt = m ? `${m.inlier_count}/${m.dropped_count}/${m.planned_count}` : "-";
     const lmax = m?.loo_error_mm?.max;
@@ -339,6 +381,17 @@ function renderSitesTable(profile) {
     if (s.extra) tdName.setAttribute("data-level", "warn");
     const tdZ = document.createElement("td");
     tdZ.textContent = zTxt;
+    const tdDepth = document.createElement("td");
+    tdDepth.textContent = depthTxt;
+    if ((Number.isFinite(s.depth_diff_mm) && Math.abs(s.depth_diff_mm) > 6) || (Number.isFinite(s.place_vs_start_step_mm) && Math.abs(s.place_vs_start_step_mm) > 8)) {
+      tdDepth.setAttribute("data-level", "warn");
+    } else if (Number.isFinite(s.depth_diff_mm)) {
+      tdDepth.setAttribute("data-level", "ok");
+    }
+    const tdTouch = document.createElement("td");
+    tdTouch.textContent = touchTxt;
+    if (Number.isFinite(s.touch_diff_mm) && Math.abs(s.touch_diff_mm) > 5) tdTouch.setAttribute("data-level", "error");
+    else if (Number.isFinite(s.touch_diff_mm)) tdTouch.setAttribute("data-level", "ok");
     const tdSrc = document.createElement("td");
     tdSrc.textContent = srcTxt;
     const tdPts = document.createElement("td");
@@ -350,7 +403,7 @@ function renderSitesTable(profile) {
     const tdNote = document.createElement("td");
     tdNote.textContent = s.note || (m?.measured ? `measured ${m.measured}` : "-");
 
-    tr.append(tdName, tdZ, tdSrc, tdPts, tdLoo, tdNote);
+    tr.append(tdName, tdZ, tdDepth, tdTouch, tdSrc, tdPts, tdLoo, tdNote);
     tr.addEventListener("click", () => {
       state.siteName = name;
       renderAll();

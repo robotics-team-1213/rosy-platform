@@ -21,11 +21,24 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
+
+
+def _run_v4l2_z16(cmd: list[str], timeout_s: float, **kwargs):
+    """Run v4l2-ctl with 'Z16' primary, falling back to 'Z16 ' ONLY on CalledProcessError."""
+    try:
+        return subprocess.run(cmd, timeout=float(timeout_s), check=True, **kwargs)
+    except subprocess.CalledProcessError:
+        fmt = "--set-fmt-video=width=640,height=480,pixelformat=Z16"
+        if fmt not in cmd:
+            raise
+        retry = [f"{fmt} " if part == fmt else part for part in cmd]
+        return subprocess.run(retry, timeout=float(timeout_s), check=True, **kwargs)
 
 
 def capture_top_depth_z16(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-depth", out_raw: Path | None = None,
@@ -39,11 +52,11 @@ def capture_top_depth_z16(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-de
     except OSError:
         return None
     try:
-        captured = subprocess.run(["v4l2-ctl", "-d", dev_path,
-                                   "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
-                                   "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
-                                   f"--stream-to={raw_path}"], timeout=float(timeout_s), check=True,
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        captured = _run_v4l2_z16(["v4l2-ctl", "-d", dev_path,
+                                  "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
+                                  "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
+                                  f"--stream-to={raw_path}"], float(timeout_s),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError):
         return None
     if getattr(captured, "returncode", 0) != 0 or not raw_path.exists() or raw_path.stat().st_size != 640 * 480 * 2:
@@ -86,11 +99,11 @@ def _capture_top_depth_z16_receipt_locked(dev_path: str, out_raw: Path, timeout_
             return None
         started_wall = time.time()
         started = time.monotonic()
-        captured = subprocess.run(["v4l2-ctl", "--verbose", "-d", dev_path,
-                                   "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
-                                   "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
-                                   f"--stream-to={raw_path}"], timeout=float(timeout_s), check=True,
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        captured = _run_v4l2_z16(["v4l2-ctl", "--verbose", "-d", dev_path,
+                                  "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
+                                  "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
+                                  f"--stream-to={raw_path}"], float(timeout_s),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         ended = time.monotonic()
         ended_wall = time.time()
         raw = raw_path.read_bytes()
@@ -325,9 +338,232 @@ def plate_top(heights, to_depth, base_px, radius_px: float = 45.0, plate_mm=(8.0
     return float(np.median(on)) if len(on) >= 4 else None
 
 
+def _load_json_opt(path: Path | None) -> dict | None:
+    if path is None or not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _project_site_px(rec: dict | None, cam_top: dict, arm_xy, fit_z: float | None, target_z: float | None, cal_mod):
+    if not arm_xy or len(arm_xy) < 2 or not rec or not rec.get("homography"):
+        return None
+    try:
+        u, v = cal_mod.to_pixel(rec["homography"], arm_xy[:2])
+        if target_z is not None and fit_z is not None and cam_top.get("center_px") and cam_top.get("height_m"):
+            u, v = cal_mod.parallax((u, v), float(fit_z), float(target_z), cam_top)
+        return [round(float(u), 2), round(float(v), 2)]
+    except Exception:
+        return None
+
+
+def _finite_height(heights, to_depth, px) -> float | None:
+    if px is None or len(px) < 2:
+        return None
+    val = height_at(heights, to_depth, px)
+    return round(float(val), 2) if np.isfinite(val) else None
+
+
+def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | None = None, *,
+                         depth=None, colour=None, live: dict | None = None,
+                         touch_receipts: dict[str, dict] | None = None, now_ts: float | None = None) -> dict:
+    """Read-only post-calibration cross-verification across D435 depth, touch receipts, map LOO/bias, and live FK."""
+    import math
+    from datetime import datetime, timezone
+
+    omx_dir = str(Path(__file__).resolve().parent)
+    if omx_dir not in sys.path:
+        sys.path.insert(0, omx_dir)
+    import cell_attempts
+    import cell_calibration as cal
+    import cell_params as prm
+    import cell_pivot
+
+    now = float(now_ts) if now_ts is not None else time.time()
+    work_dir = Path(config["work_dir"]).expanduser() if config.get("work_dir") else None
+    cal_sites = (calibration or {}).get("sites") or {}
+    try:
+        with_maps = cell_pivot.with_site_maps(config, calibration) if (calibration and cal_sites) else (calibration or {"sites": {}})
+    except SystemExit:
+        with_maps = calibration or {"sites": {}}
+
+    cam_top = (config.get("cameras") or {}).get("top") or {}
+    cfg_height_m = cam_top.get("height_m")
+    flags: list[str] = []
+    cam_report: dict = {"config_height_m": cfg_height_m, "cam_to_table_mm": None, "height_diff_mm": None,
+                        "plate_mm": None, "cam_to_plate_mm": None, "align_scale": None, "align_shift": None,
+                        "align_edge_px": None}
+
+    heights = to_depth = plate_mm = None
+    if depth is not None and colour is not None:
+        plane = table_plane(depth)
+        cam_mm = round(abs(float(plane[1])), 2)
+        heights = height_map(depth, plane)
+        to_depth, edge_px = align_edges(colour, heights)
+        cam_report["cam_to_table_mm"] = cam_mm
+        cam_report["align_scale"] = round(float(to_depth[0, 0]), 3)
+        cam_report["align_shift"] = [round(float(to_depth[0, 2]), 1), round(float(to_depth[1, 2]), 1)]
+        cam_report["align_edge_px"] = round(float(edge_px), 2)
+        if cfg_height_m is not None:
+            cam_report["height_diff_mm"] = round(cam_mm - float(cfg_height_m) * 1000.0, 1)
+        base_px = cam_top.get("plate_px")
+        if base_px is None:
+            map_sites = (config.get("calibrate") or {}).get("map_sites") or list(config.get("sites") or [])
+            for sname in list(map_sites) + list((with_maps.get("sites") or {}).keys()):
+                rec = cell_pivot.map_record(with_maps, sname)
+                if rec and rec.get("homography"):
+                    fit_z = rec.get("z_view", ((config.get("sites") or {}).get(sname) or {}).get("z"))
+                    base_px = _project_site_px(rec, cam_top, (0.0, 0.0), fit_z, 0.0, cal)
+                    if base_px is not None:
+                        break
+        if base_px is not None:
+            plate_mm = plate_top(heights, to_depth, base_px)
+        if plate_mm is not None:
+            plate_mm = round(float(plate_mm), 2)
+            cam_report["plate_mm"] = plate_mm
+            cam_report["cam_to_plate_mm"] = round(cam_mm - plate_mm, 2)
+        else:
+            flags.append("plate_not_found")
+    else:
+        flags.append("missing_depth")
+
+    sites_report: dict[str, dict] = {}
+    max_loo_limit = float(prm.default("calibrate.max_loo_mm"))
+    bias_regions = (bias or {}).get("regions") or []
+    for name, spec in (config.get("sites") or {}).items():
+        rec = cell_pivot.map_record(with_maps, name)
+        surface_z = spec.get("surface_z")
+        fit_z = (rec or {}).get("z_view", spec.get("z"))
+        target_z = surface_z if surface_z is not None else spec.get("z")
+        site_flags: list[str] = []
+
+        place_px = _project_site_px(rec, cam_top, spec.get("place"), fit_z, target_z, cal) or spec.get("surface_px")
+        start_px = _project_site_px(rec, cam_top, spec.get("start"), fit_z, target_z, cal)
+        surf_px = spec.get("surface_px")
+        place_mm = _finite_height(heights, to_depth, place_px) if heights is not None else None
+        start_mm = _finite_height(heights, to_depth, start_px) if heights is not None else None
+        surf_px_mm = _finite_height(heights, to_depth, surf_px) if (heights is not None and surf_px) else None
+        site_mm = place_mm if place_mm is not None else (surf_px_mm if surf_px_mm is not None else start_mm)
+
+        depth_z = round((site_mm - plate_mm) / 1000.0, 4) if (site_mm is not None and plate_mm is not None) else None
+        depth_diff_mm = round((depth_z - float(surface_z)) * 1000.0, 1) if (depth_z is not None and surface_z is not None) else None
+        step_mm = round(place_mm - start_mm, 1) if (place_mm is not None and start_mm is not None) else None
+        if depth_diff_mm is not None and abs(depth_diff_mm) > 6.0:
+            site_flags.append("depth_diff_gt_6mm")
+        if step_mm is not None and abs(step_mm) > 8.0:
+            site_flags.append("place_vs_start_step_gt_8mm")
+
+        receipt = (touch_receipts or {}).get(name)
+        if receipt is None and touch_receipts is None and work_dir is not None:
+            receipt = _load_json_opt(work_dir / f"surface-{name}.json")
+        touch_z = receipt.get("surface_z") if (receipt and receipt.get("result") in (None, "touched") and receipt.get("surface_z") is not None) else None
+        touch_diff_mm = round((float(touch_z) - float(surface_z)) * 1000.0, 1) if (touch_z is not None and surface_z is not None) else None
+        if touch_diff_mm is not None and abs(touch_diff_mm) > 5.0:
+            site_flags.append("touch_diff_gt_5mm")
+
+        loo_max = ((rec or {}).get("loo_error_mm") or {}).get("max")
+        if loo_max is not None and float(loo_max) > max_loo_limit:
+            site_flags.append("high_loo")
+        rec_sha = cell_attempts.digest(rec) if rec else None
+        site_bias = [r for r in bias_regions if r.get("site") == name]
+        bias_fresh = all(rec_sha is not None and r.get("map_sha") == rec_sha for r in site_bias) if site_bias else None
+        if bias_fresh is False:
+            site_flags.append("stale_bias")
+
+        flags.extend(f"{name}:{fl}" for fl in site_flags)
+        sites_report[name] = {
+            "surface_z": surface_z, "place_mm": place_mm, "start_mm": start_mm, "surface_px_mm": surf_px_mm,
+            "depth_surface_z_m": depth_z, "depth_diff_mm": depth_diff_mm, "place_vs_start_step_mm": step_mm,
+            "touch_surface_z_m": touch_z, "touch_measured": (receipt or {}).get("measured"), "touch_diff_mm": touch_diff_mm,
+            "loo_max_mm": loo_max, "bias_fresh": bias_fresh, "flags": site_flags,
+        }
+
+    live_data = live if live is not None else (_load_json_opt(Path(config["io"]).expanduser() / "live.json") if config.get("io") else None)
+    fk_report: dict = {"present": bool(live_data), "fresh": False, "age_s": None, "tcp": None, "within_reach": None}
+    if live_data:
+        t = live_data.get("t")
+        age_s = round(now - float(t), 2) if isinstance(t, (int, float)) else None
+        fk_report["age_s"] = age_s
+        fk_report["fresh"] = age_s is not None and age_s <= 2.0
+        state = live_data.get("state")
+        if isinstance(state, list) and len(state) >= 5:
+            plan = _load_json_opt(Path(config["plan_path"]).expanduser()) if config.get("plan_path") else None
+            tcp_x_m = config.get("tcp_x_m") if config.get("tcp_x_m") is not None else (plan or {}).get("tcp_x_m")
+            try:
+                x, y, z, yaw = cell_pivot.joints_tcp(state, tcp_x_m)
+                fk_report["tcp"] = {"x": round(float(x), 4), "y": round(float(y), 4), "z": round(float(z), 4), "yaw_deg": round(float(yaw), 1)}
+                max_reach = (config.get("calibrate") or {}).get("max_reach_m") or ((plan or {}).get("limits") or {}).get("max_reach_m")
+                if max_reach is not None:
+                    fk_report["within_reach"] = math.hypot(x, y) <= float(max_reach) + 1e-6
+            except (Exception, SystemExit):
+                fk_report["tcp"] = None
+
+    crit_tags = ("depth_diff_gt_6mm", "touch_diff_gt_5mm", "place_vs_start_step_gt_8mm", "stale_bias", "high_loo")
+    if any(any(tag in fl for tag in crit_tags) for fl in flags):
+        verdict = "fail"
+    elif flags or not sites_report:
+        verdict = "warn"
+    else:
+        verdict = "pass"
+
+    return {
+        "schema": "rosy.omx-cell-depth-verify.v1",
+        "arm_id": config.get("arm_id"),
+        "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "verdict": verdict, "ok": verdict == "pass", "flags": flags,
+        "camera_top": cam_report, "sites": sites_report, "live_fk": fk_report,
+    }
+
+
+def _fetch_colour_frame(url: str):
+    import urllib.request
+    import cv2
+
+    with urllib.request.urlopen(url, timeout=2.0) as res:
+        arr = np.frombuffer(res.read(5 * 1024 * 1024), dtype=np.uint8)
+    return cv2.imdecode(arr, cv2.IMREAD_COLOR)
+
+
+def _verify_main(argv: list[str]) -> int:
+    import cv2
+
+    ap = argparse.ArgumentParser(description="Verify calibrated sites against D435 depth, touch receipts, and live FK")
+    ap.add_argument("--config", required=True, type=Path)
+    ap.add_argument("--depth", type=Path, help="raw Z16, 640x480 mm")
+    ap.add_argument("--colour", type=Path, help="top camera colour frame")
+    ap.add_argument("--capture", action="store_true", help="capture fresh Z16 depth (and colour from cameras.top.url)")
+    ap.add_argument("--write", action="store_true", help="write work_dir/depth-verify.json atomically")
+    args = ap.parse_args(argv)
+    config = json.loads(args.config.read_text(encoding="utf-8"))
+    cal = _load_json_opt(Path(config["calibration_path"]).expanduser()) if config.get("calibration_path") else None
+    bias_p = Path(config["calibration_path"]).expanduser().with_suffix(".bias.json") if config.get("calibration_path") else None
+    bias = _load_json_opt(bias_p)
+    depth = np.fromfile(args.depth, np.uint16).reshape(480, 640) if args.depth else (capture_top_depth_z16() if args.capture else None)
+    colour = cv2.imread(str(args.colour)) if args.colour else None
+    if colour is None and args.capture:
+        url = ((config.get("cameras") or {}).get("top") or {}).get("url")
+        if url:
+            colour = _fetch_colour_frame(url)
+    report = verify_profile_depth(config, cal, bias, depth=depth, colour=colour)
+    if args.write and config.get("work_dir"):
+        work = Path(config["work_dir"]).expanduser()
+        work.mkdir(parents=True, exist_ok=True)
+        out = work / "depth-verify.json"
+        tmp = work / "depth-verify.tmp"
+        tmp.write_text(json.dumps(report, indent=1), encoding="utf-8")
+        tmp.replace(out)
+    print(json.dumps(report, indent=1))
+    return 0
+
+
 def main(argv=None) -> int:
     import cv2
 
+    tokens = list(sys.argv[1:] if argv is None else argv)
+    if tokens and tokens[0] == "verify":
+        return _verify_main(tokens[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--depth", required=True, help="raw Z16, 640 x 480, mm")
     ap.add_argument("--colour", required=True)

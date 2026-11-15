@@ -274,3 +274,37 @@ def test_live_frame_proxy_allows_loopback_and_blocks_remote_ssrf(store, tmp_path
     finally:
         cam.shutdown()
         cam.server_close()
+
+
+def test_cross_verify_merges_depth_verify_and_touch_receipts_into_profile_snapshot(store, tmp_path):
+    reg = _write_test_profile(tmp_path, "http://127.0.0.1:1/unused.jpg", include_tcp_x=True)
+    work = tmp_path / "arm_test" / "w1"
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "surface-pallet.json").write_text(json.dumps({"result": "touched", "surface_z": -0.011, "measured": "2026-11-16 00:01"}))
+    (work / "depth-verify.json").write_text(json.dumps({
+        "schema": "rosy.omx-cell-depth-verify.v1",
+        "measured": "2026-11-16T00:02:00+00:00",
+        "camera_top": {"config_height_m": 0.6, "cam_to_table_mm": 605.4, "plate_mm": 14.0},
+        "sites": {"pallet": {"depth_surface_z_m": 0.018, "depth_diff_mm": 28.0, "place_vs_start_step_mm": 28.0,
+                             "flags": ["depth_diff_gt_6mm", "place_vs_start_step_gt_8mm"]}},
+    }))
+    server = web.make_server(store, 0, None, profiles_path=reg)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        _, html = call(url, "/")
+        html_txt = html.decode("utf-8")
+        assert "교차 검증 (Depth · Touch · Map · FK)" in html_txt and "cvDepthTag" in html_txt
+        status, body = call(url, web.PROFILES_API)
+        assert status == 200
+        prof = json.loads(body)["profiles"][0]
+        cv = prof["cross_verify"]
+        assert cv["present"] is True and cv["depth"]["cam_to_table_mm"] == 605.4
+        assert cv["depth"]["verdict"] == "fail" and cv["touch"]["verdict"] == "pass"
+        site = prof["sites"]["pallet"]
+        assert site["depth_surface_z"] == 0.018 and site["depth_diff_mm"] == 28.0
+        assert site["place_vs_start_step_mm"] == 28.0
+        assert site["touch_surface_z"] == -0.011 and site["touch_diff_mm"] == -1.0
+    finally:
+        server.shutdown()
+        server.server_close()

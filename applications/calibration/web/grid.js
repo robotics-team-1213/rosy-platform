@@ -4,6 +4,7 @@
 
 const tone = (name) => window.RosyPalette.cssColor(name);
 const font = (role = "micro", family = "mono") => window.RosyPalette.canvasFont(role, family);
+const siteHit = (site, role, s, pt) => ({ kind: "site", role, site, surface_z: s.surface_z, depth_surface_z: s.depth_surface_z, depth_diff_mm: s.depth_diff_mm, place_vs_start_step_mm: s.place_vs_start_step_mm, touch_surface_z: s.touch_surface_z, touch_diff_mm: s.touch_diff_mm, ...pt });
 
 export function invert3x3(h) {
   const [[a, b, c], [d, e, f], [g, i, j]] = h;
@@ -291,7 +292,7 @@ export function renderTopView(canvas, state) {
       if (sp) {
         drawDiamond(ctx, sp[0], sp[1], 7, tone("--series-goal"), tone("--scrim"));
         drawBadge(ctx, sp[0] + 8, sp[1] + 4, `${siteName}.start`, tone("--series-goal"), tone("--scrim"));
-        hitTargets.push({ key: `site:${siteName}:start`, x: sp[0], y: sp[1], data: { kind: "site", role: "start", site: siteName, ...siteObj.start } });
+        hitTargets.push({ key: `site:${siteName}:start`, x: sp[0], y: sp[1], data: siteHit(siteName, "start", siteObj, siteObj.start) });
       }
     }
     if (siteObj?.place?.arm_m) {
@@ -303,7 +304,7 @@ export function renderTopView(canvas, state) {
         ctx.strokeRect(pp[0] - 6, pp[1] - 6, 12, 12);
         ctx.restore();
         drawBadge(ctx, pp[0] + 8, pp[1] + 16, `${siteName}.place`, tone("--series-primary"), tone("--scrim"));
-        hitTargets.push({ key: `site:${siteName}:place`, x: pp[0], y: pp[1], data: { kind: "site", role: "place", site: siteName, ...siteObj.place } });
+        hitTargets.push({ key: `site:${siteName}:place`, x: pp[0], y: pp[1], data: siteHit(siteName, "place", siteObj, siteObj.place) });
       }
     }
   }
@@ -509,7 +510,7 @@ export function renderArmGrid(canvas, state) {
         const [sx, sy] = toCanvas(s.start.arm_m[0], s.start.arm_m[1]);
         drawDiamond(ctx, sx, sy, active ? 7 : 5, active ? tone("--series-goal") : tone("--line-50"), tone("--scrim"));
         if (active) drawBadge(ctx, sx + 8, sy, `${name}.start`, tone("--series-goal"), tone("--scrim"));
-        hitTargets.push({ key: `site:${name}:start`, x: sx, y: sy, data: { kind: "site", role: "start", site: name, ...s.start, surface_z: s.surface_z } });
+        hitTargets.push({ key: `site:${name}:start`, x: sx, y: sy, data: siteHit(name, "start", s, s.start) });
       }
       if (s.place?.arm_m) {
         const [px, py] = toCanvas(s.place.arm_m[0], s.place.arm_m[1]);
@@ -519,7 +520,7 @@ export function renderArmGrid(canvas, state) {
         ctx.strokeRect(px - 5, py - 5, 10, 10);
         ctx.restore();
         if (active) drawBadge(ctx, px + 8, py + 14, `${name}.place`, tone("--series-primary"), tone("--scrim"));
-        hitTargets.push({ key: `site:${name}:place`, x: px, y: py, data: { kind: "site", role: "place", site: name, ...s.place, surface_z: s.surface_z } });
+        hitTargets.push({ key: `site:${name}:place`, x: px, y: py, data: siteHit(name, "place", s, s.place) });
       }
     }
   }

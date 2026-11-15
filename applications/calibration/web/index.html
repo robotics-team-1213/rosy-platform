@@ -162,6 +162,16 @@
               <h2 class="ui-section-heading">로봇 · 프로필 · Bias 상태</h2>
               <ui-tag id="envTag" status="neutral">-</ui-tag>
             </header>
+            <div class="cal-cv-strip" aria-label="교차 검증 상태">
+              <span class="cal-control-label">교차 검증 (Depth · Touch · Map · FK)</span>
+              <div class="cal-cv-badges">
+                <ui-tag id="cvDepthTag" status="neutral">Depth -</ui-tag>
+                <ui-tag id="cvTouchTag" status="neutral">Touch -</ui-tag>
+                <ui-tag id="cvMapTag" status="neutral">Map -</ui-tag>
+                <ui-tag id="cvFkTag" status="neutral">FK -</ui-tag>
+              </div>
+              <p id="crossVerifyMeta" class="cal-card-sub">-</p>
+            </div>
             <dl id="robotStatusDl" class="ui-readout"></dl>
             <h3 class="cal-subhead">Pivot-Near Bias 영역</h3>
             <div id="biasTableWrap" class="cal-table-wrap"></div>

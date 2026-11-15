@@ -274,6 +274,81 @@ def _check_operating_profile(op_prof: dict | None, op_err: str | None, config: d
                         "message": f"operating_envelope_path 미확인/누락: {Path(env_p).name}"})
 
 
+def _build_cross_verify(
+    sites_out: dict[str, dict[str, Any]], depth_verify: dict | None, regions_out: list[dict],
+    live_info: dict, bind_err: str | None,
+) -> dict[str, Any]:
+    dv_sites = (depth_verify or {}).get("sites") or {}
+    any_depth = bool(depth_verify and any(s.get("depth_surface_z") is not None for s in sites_out.values()))
+    depth_bad = any("depth_diff_gt_6mm" in s.get("cross_verify_flags", []) or "place_vs_start_step_gt_8mm" in s.get("cross_verify_flags", []) for s in sites_out.values())
+    depth_v = "fail" if depth_bad else ("pass" if any_depth else ("warn" if depth_verify else "unmeasured"))
+
+    touch_diffs = [abs(s["touch_diff_mm"]) for s in sites_out.values() if s.get("touch_diff_mm") is not None]
+    touch_count = sum(1 for s in sites_out.values() if s.get("touch_surface_z") is not None)
+    touch_bad = any(d > 5.0 for d in touch_diffs)
+    touch_v = "fail" if touch_bad else ("pass" if touch_count else "unmeasured")
+
+    loos = [s["map"]["loo_error_mm"]["max"] for s in sites_out.values()
+            if not s.get("extra") and (s.get("map") or {}).get("loo_error_mm") and s["map"]["loo_error_mm"].get("max") is not None]
+    max_loo = round(max(loos), 2) if loos else None
+    loo_limit = float(prm.default("calibrate.max_loo_mm"))
+    map_v = "fail" if (max_loo is not None and max_loo > loo_limit) else ("warn" if (bind_err or max_loo is None) else "pass")
+
+    fresh_bias = sum(1 for r in regions_out if not r.get("stale_map"))
+    bias_v = "fail" if (regions_out and fresh_bias < len(regions_out)) else ("pass" if regions_out else "warn")
+
+    fk_fresh = bool(live_info.get("present") and not live_info.get("stale") and live_info.get("tcp"))
+    fk_v = "pass" if fk_fresh else ("warn" if live_info.get("present") else "unmeasured")
+
+    sub = (depth_v, touch_v, map_v)
+    overall = "fail" if "fail" in sub or bias_v == "fail" else ("warn" if "warn" in (*sub, bias_v) else ("pass" if (any_depth or touch_count) else "unmeasured"))
+    cam_top = dict((depth_verify or {}).get("camera_top") or {})
+    return {
+        "present": bool(depth_verify or touch_count or dv_sites),
+        "depth_verify_present": bool(depth_verify),
+        "measured": (depth_verify or {}).get("measured"),
+        "verdict": overall,
+        "depth": {"verdict": depth_v, **cam_top},
+        "touch": {"verdict": touch_v, "sites_measured": touch_count, "max_diff_mm": round(max(touch_diffs), 1) if touch_diffs else None},
+        "map": {"verdict": map_v, "max_loo_mm": max_loo, "map_bound": not bind_err},
+        "bias": {"verdict": bias_v, "fresh_regions": fresh_bias, "total_regions": len(regions_out)},
+        "fk": {"verdict": fk_v, "present": bool(live_info.get("present")), "fresh": fk_fresh, "tcp_z_m": (live_info.get("tcp") or {}).get("z")},
+    }
+
+
+def _attach_site_cross_verify(name: str, is_extra: bool, surface_z, dv_site: dict, touch: dict | None,
+                              hygiene: list[dict[str, str]]) -> dict[str, Any]:
+    depth_z = dv_site.get("depth_surface_z_m")
+    depth_diff = round((float(depth_z) - float(surface_z)) * 1000.0, 1) if (depth_z is not None and surface_z is not None) else dv_site.get("depth_diff_mm")
+    step_mm = dv_site.get("place_vs_start_step_mm")
+    touch_z = touch.get("surface_z") if (touch and touch.get("result") in (None, "touched") and touch.get("surface_z") is not None) else dv_site.get("touch_surface_z_m")
+    touch_diff = round((float(touch_z) - float(surface_z)) * 1000.0, 1) if (touch_z is not None and surface_z is not None) else dv_site.get("touch_diff_mm")
+    flags = list(dv_site.get("flags") or [])
+    if depth_diff is not None and abs(depth_diff) > 6.0 and "depth_diff_gt_6mm" not in flags:
+        flags.append("depth_diff_gt_6mm")
+    if step_mm is not None and abs(step_mm) > 8.0 and "place_vs_start_step_gt_8mm" not in flags:
+        flags.append("place_vs_start_step_gt_8mm")
+    if touch_diff is not None and abs(touch_diff) > 5.0 and "touch_diff_gt_5mm" not in flags:
+        flags.append("touch_diff_gt_5mm")
+    if not is_extra:
+        if "depth_diff_gt_6mm" in flags:
+            hygiene.append({"level": "warning", "code": f"depth_diff:{name}",
+                            "message": f"{name}: D435 depth({depth_z}) vs surface_z({surface_z}) = {depth_diff:+.1f} mm"})
+        if "place_vs_start_step_gt_8mm" in flags:
+            hygiene.append({"level": "warning", "code": f"place_step:{name}",
+                            "message": f"{name}: place vs start 높이차 {step_mm:+.1f} mm (적재물/단차 의심)"})
+        if "touch_diff_gt_5mm" in flags:
+            hygiene.append({"level": "error", "code": f"touch_diff:{name}",
+                            "message": f"{name}: touch({touch_z}) vs surface_z({surface_z}) = {touch_diff:+.1f} mm"})
+    crit = any(f in ("depth_diff_gt_6mm", "place_vs_start_step_gt_8mm", "touch_diff_gt_5mm") for f in flags)
+    status = "fail" if crit else ("pass" if (depth_z is not None or touch_z is not None) else "unmeasured")
+    return {
+        "depth_surface_z": depth_z, "depth_diff_mm": depth_diff, "place_vs_start_step_mm": step_mm,
+        "touch_surface_z": touch_z, "touch_measured": (touch or {}).get("measured") or dv_site.get("touch_measured"),
+        "touch_diff_mm": touch_diff, "cross_verify_flags": flags, "cross_verify_status": status,
+    }
+
+
 def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None) -> dict[str, Any]:
     """Build a read-only calibration & status snapshot for one profile registry entry."""
     cfg_path = Path(entry["config_path"])
@@ -296,6 +371,9 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
     ref_path = Path(ref_str) if ref_str else None
     live_img_path = Path(entry["live_top_path"]) if entry.get("live_top_path") else None
     inc_path = Path(entry["incident_path"]) if entry.get("incident_path") else None
+    raw_wd = Path(config["work_dir"]).expanduser() if config.get("work_dir") else None
+    work_dir = raw_wd if (raw_wd is None or raw_wd.is_absolute() or raw_wd.exists()) else (cfg_path.parent / raw_wd)
+    dv_path = Path(entry["depth_verify_path"]) if entry.get("depth_verify_path") else (work_dir / "depth-verify.json" if work_dir else None)
 
     calibration, cal_err = _read_json(cal_path)
     bias, bias_err = _read_json(bias_path)
@@ -303,6 +381,7 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
     plan, _ = _read_json(plan_path)
     live, _ = _read_json(live_path)
     incident, _ = _read_json(inc_path)
+    depth_verify, _ = _read_json(dv_path)
 
     calibration = calibration or {"schema": cal.SCHEMA, "sites": {}}
     bias = bias or {"schema": cell_pivot.SCHEMA, "regions": []}
@@ -359,6 +438,11 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
                 hygiene.append({"level": "warning", "code": f"high_loo:{name}",
                                 "message": f"{name}: LOO max {lmax} mm > {prm.default('calibrate.max_loo_mm')} mm"})
 
+        dv_site = ((depth_verify or {}).get("sites") or {}).get(name) or {}
+        touch_dir = Path(entry["surface_receipts_dir"]) if entry.get("surface_receipts_dir") else work_dir
+        touch_data, _ = _read_json(touch_dir / f"surface-{name}.json" if touch_dir and not is_extra else None)
+        cv_fields = _attach_site_cross_verify(name, is_extra, surface_z, dv_site, touch_data, hygiene)
+
         sites_out[name] = {
             "name": name, "extra": is_extra, "in_map_sites": name in map_sites,
             "map_from": spec.get("map_from"), "tier_of": spec.get("tier_of"),
@@ -369,6 +453,7 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
             "start": _project_point(rec, camera_top, spec.get("start"), surface_z),
             "place": _project_point(rec, camera_top, spec.get("place"), surface_z),
             "map": map_detail,
+            **cv_fields,
         }
 
     bias_reach_mm = float(prm.default("calibrate.bias_near_mm"))
@@ -400,6 +485,7 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
     ref_site = next((s for s in map_sites if s in sites_out and sites_out[s]["map"]), None)
     ref_record = cell_pivot.map_record(with_maps, ref_site) if ref_site else None
     live_info = _parse_live(live, config, plan, ref_record, now_ts=now_ts)
+    cross_verify = _build_cross_verify(sites_out, depth_verify, regions_out, live_info, bind_err)
 
     return {
         "schema": "rosy.calibration-profile-view.v1",
@@ -429,6 +515,7 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
             "low_zones": limits.get("low_zones") or [],
         },
         "hygiene": hygiene, "sites": sites_out,
+        "cross_verify": cross_verify,
         "bias": {"schema": bias.get("schema"), "reach_mm": bias_reach_mm, "regions": regions_out},
         "operating_profile": op_prof,
         "robot_status": {
