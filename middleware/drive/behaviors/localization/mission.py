@@ -27,6 +27,11 @@ the readiness HOLD, the speed clip and the bound control policy. Kinds:
   ended when the front LiDAR sector is closer than `min_front_clearance_m`, or when the
   sector cannot be measured: fewer than `min_front_beams` valid beams, or more than
   `max_blind_share` of them inf, NaN or below `range_min`. Self-masked returns do not count.
+- `nudge_backward`: the exact mirror of `nudge_forward` into the rear sector (`-nudge_linear`,
+  the REAR strip/gap of the same D-424 rules; the rear has no ultrasonic, so an unknown beam
+  behind the body always refuses). A nudge is the one kind an operator may also ask while
+  LOCALIZED (a relative step in the robot's own frame needs no pose): such a run does not end
+  on LOCALIZED; a run started without a pose still ends on it (the search found its answer).
 - `lane_to_stopline`: CORE's camera line follow, started here without the
   LOCALIZED gate of `PUT /line-follow/mode` (this kind only), capped to
   `lane_linear` through the safety session speed. Line follow keeps its own
@@ -61,8 +66,9 @@ from core_features.line_follow.clearance import front_sector
 from core_features.line_follow.model import LineFollowMode
 from core_features.localization.rotate_to import RotateGoal, rotate_goal, turn_rate
 
-ROTATE, NUDGE, LANE, SQUARE = "rotate_in_place", "nudge_forward", "lane_to_stopline", "to_square"
-KINDS = (ROTATE, NUDGE, LANE, SQUARE)
+ROTATE, NUDGE, NUDGE_BACK, LANE, SQUARE = ("rotate_in_place", "nudge_forward", "nudge_backward",
+                                           "lane_to_stopline", "to_square")
+KINDS = (ROTATE, NUDGE, NUDGE_BACK, LANE, SQUARE)
 ROTATE_TO = "rotate_to"  # D-603: started only by start_rotate_to (POST /motion/rotate_to)
 UNSUPPORTED = {SQUARE: "to_square needs a lane route to the square without a map frame; "
                        "not implemented (D-395 P2-7 follow-up), use lane_to_stopline"}
@@ -147,6 +153,7 @@ class _Run:
     gap_ticks: int = 0          # consecutive ticks a running turn saw only an evidence gap
     goal: Optional[RotateGoal] = None   # D-603 rotate_to
     signed_rad: float = 0.0             # D-603: signed odom turn since the start
+    search: bool = True                  # a pose-search mission ends on LOCALIZED; a step does not
 
 
 def _wrap(angle: float) -> float:
@@ -218,10 +225,10 @@ class LocalizationMission:
         cfg = self.config
         if not (math.isfinite(max_time_s) and 0.0 < max_time_s <= cfg.max_time_s):
             raise ValueError(f"max_time_s must be in (0, {cfg.max_time_s}]")
-        limit = cfg.nudge_max_m if kind == NUDGE else cfg.max_distance_m
+        limit = cfg.nudge_max_m if kind in (NUDGE, NUDGE_BACK) else cfg.max_distance_m
         if not (math.isfinite(max_distance_m) and 0.0 <= max_distance_m <= limit):
             raise ValueError(f"max_distance_m must be in [0, {limit}] for {kind}")
-        if kind in (NUDGE, LANE) and max_distance_m <= 0.0:
+        if kind in (NUDGE, NUDGE_BACK, LANE) and max_distance_m <= 0.0:
             raise ValueError(f"{kind} needs max_distance_m > 0")
         if kind in UNSUPPORTED:
             raise MissionRefused("unsupported", UNSUPPORTED[kind])
@@ -232,8 +239,14 @@ class LocalizationMission:
             if self._safety.estop or self._modes.is_emergency:
                 raise MissionRefused("estop", "release the emergency stop first")
             status = self._loc.status()
+            search = True
             if status is not None and status.state is LocState.LOCALIZED:
-                raise MissionRefused("localized", "the robot is LOCALIZED; missions only run without a pose")
+                # The not-LOCALIZED gate is search semantics (the node re-searches from a new
+                # place), not safety; a nudge is a relative step in the robot's own frame, so an
+                # operator may ask it on a LOCALIZED robot too. That run ignores LOCALIZED.
+                if kind not in (NUDGE, NUDGE_BACK):
+                    raise MissionRefused("localized", "the robot is LOCALIZED; missions only run without a pose")
+                search = False
             if self._run is not None:
                 raise MissionRefused("busy", f"mission {self._run.kind} is running")
             if status is not None and status.reason == CHECKING:
@@ -244,7 +257,7 @@ class LocalizationMission:
                 raise MissionRefused("busy", reason)
             blocked, room = self._judge(kind, now)
             distance = float(max_distance_m)
-            if blocked is None and kind == NUDGE and room < distance:
+            if blocked is None and kind in (NUDGE, NUDGE_BACK) and room < distance:
                 if room < cfg.nudge_min_m:
                     blocked = f"only {room:.3f} m of room before the stop gap"
                 else:
@@ -258,7 +271,7 @@ class LocalizationMission:
             if not ok:
                 raise MissionRefused("busy", why)
             self._state.set_mode(RobotMode.NAVIGATION)
-            run = _Run(kind, distance, float(max_time_s), target, now)
+            run = _Run(kind, distance, float(max_time_s), target, now, search=search)
             self._run = run
             if kind == LANE:
                 self._safety.set_session_speed(cfg.lane_linear)
@@ -312,7 +325,7 @@ class LocalizationMission:
     def localized(self) -> None:
         """LOCALIZED ends a search mission (it found the pose); a D-603 turn goes on."""
         with self._lock:
-            if self._run is not None and self._run.kind != ROTATE_TO:
+            if self._run is not None and self._run.kind != ROTATE_TO and self._run.search:
                 self.end("localized")
 
     # --- run --------------------------------------------------------------------
@@ -337,8 +350,9 @@ class LocalizationMission:
                                      min_rate=cfg.rotate_to_min_angular)
                     if rate is not None:  # None was "done" in _end_reason this very tick
                         self._command.set_nav_twist(Twist(0.0, rate))
-                elif run.kind == NUDGE:
-                    self._command.set_nav_twist(Twist(self.config.nudge_linear, 0.0))
+                elif run.kind in (NUDGE, NUDGE_BACK):
+                    sign = -1.0 if run.kind == NUDGE_BACK else 1.0
+                    self._command.set_nav_twist(Twist(sign * self.config.nudge_linear, 0.0))
                 return
             self.end(reason)
 
@@ -347,7 +361,8 @@ class LocalizationMission:
         if self._safety.estop or self._modes.is_emergency:
             return "estop"
         status = self._loc.status()
-        if run.kind != ROTATE_TO and status is not None and status.state is LocState.LOCALIZED:
+        if run.kind != ROTATE_TO and run.search and status is not None \
+                and status.state is LocState.LOCALIZED:
             return "localized"
         if self._modes.mode is not Mode.NAVIGATION:
             return "cancelled"
@@ -377,8 +392,8 @@ class LocalizationMission:
             return "obstacle" if run.gap_ticks >= cfg.rotate_coverage_debounce_ticks else None
         if run.travelled_m >= run.max_distance_m:
             return "done"
-        if run.kind == NUDGE:
-            return "obstacle" if self._judge(NUDGE, now)[0] is not None else None
+        if run.kind in (NUDGE, NUDGE_BACK):
+            return "obstacle" if self._judge(run.kind, now)[0] is not None else None
         if not self._line_follow.active:
             return "cancelled"
         if self._line_follow.status().state == "LOST":
@@ -461,15 +476,19 @@ class LocalizationMission:
             margin = cfg.rotate_stop_margin_m if running else cfg.rotate_margin_m
             reason = body.rotation_reason(view, margin)
             return (None, math.inf) if reason is None else (reason, 0.0)
-        if body.unknown_blocks(view):
-            return "front not measurable: a beam without a return reaches past the body front", 0.0
-        gap = body.translation_gap(view.points)
+        reverse = kind == NUDGE_BACK
+        if body.unknown_blocks(view, reverse=reverse):
+            edge = "rear" if reverse else "front"
+            return f"{edge} not measurable: a beam without a return reaches past the body {edge}", 0.0
+        gap = body.translation_gap(view.points, reverse=reverse)
         if gap is None:
             return None, math.inf
         stop = body.stop_gap_m(cfg.nudge_linear)
+        from_lidar = body.lidar_to_rear_m if reverse else body.lidar_to_front_m
         if gap <= stop:
-            return (f"front clearance {gap + body.lidar_to_front_m:.3f} m <= stop "
-                    f"{stop + body.lidar_to_front_m:.3f} m (from the LiDAR)", 0.0)
+            side = "rear" if reverse else "front"
+            return (f"{side} clearance {gap + from_lidar:.3f} m <= stop "
+                    f"{stop + from_lidar:.3f} m (from the LiDAR)", 0.0)
         return None, gap - stop
 
     def _clearance(self, now: float) -> dict:
@@ -480,7 +499,7 @@ class LocalizationMission:
             return {"nearest_m": None, "need_m": None}
         body = self._body()
         if body is None:
-            nearest = self._front[1][1] if self._front[0] is self._scan[0] else None
+            nearest = self._front[1][2] if self._front[0] is self._scan[0] else None
             return {"nearest_m": None if nearest is None else round(nearest, 3), "need_m": cfg.rotate_clearance_m}
         config = self._line_follow.config
         view = body.scan_view(self._scan[0], forward_deg=config.lidar_forward_deg,
@@ -496,12 +515,22 @@ class LocalizationMission:
         if self._front[0] is not sample:
             config = self._line_follow.config
             look = {"forward_deg": config.lidar_forward_deg, "self_mask": config.lidar_self_mask}
+            # Pinky Pro: 0 is the rear. No self mask behind: the mask is drawn for the front frame, and
+            # a rotated copy could hide a real return there (review 11-15); unmasked fails closed.
+            rear = {"forward_deg": config.lidar_forward_deg + 180.0, "self_mask": ()}
             self._front = (sample, (front_sector(sample, half_angle_deg=cfg.front_half_angle_deg, **look),
+                                    front_sector(sample, half_angle_deg=cfg.front_half_angle_deg, **rear),
                                     front_sector(sample, half_angle_deg=180.0, **look)[0]))
-        (front, valid, beams), nearest = self._front[1]
+        (front, valid, beams), (behind, bvalid, bbeams), nearest = self._front[1]
         if kind == ROTATE:
             if nearest is not None and nearest < cfg.rotate_clearance_m:
                 return f"a return at {nearest:.2f} m < {cfg.rotate_clearance_m} m around the robot"
+            return None
+        if kind == NUDGE_BACK:
+            if bvalid < cfg.min_front_beams or bbeams - bvalid > cfg.max_blind_share * max(bbeams, 1):
+                return f"rear sector not measurable ({bvalid} of {bbeams} beams valid)"
+            if behind is not None and behind < cfg.min_front_clearance_m:
+                return f"rear clearance {behind:.2f} m < {cfg.min_front_clearance_m} m"
             return None
         if kind == NUDGE and (valid < cfg.min_front_beams
                               or beams - valid > cfg.max_blind_share * max(beams, 1)):

@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from fleet.charge_bays import bays_from_map
 from .pipeline_ledger import write_ledger
@@ -51,13 +51,24 @@ def _enrich_task_health(task: dict) -> dict:
     return task
 
 
-def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=(), operator_guard=None,
-                            amr_evidence_fn=None, omx_evidence_fn=None) -> None:
+def install_pipeline_routes(
+    app, *, console=None, site_maps=None, read_guard=(), operator_guard=None, proposer_guard=None,
+    amr_evidence_fn=None, omx_evidence_fn=None,
+) -> None:
     if getattr(app.state, "_pipeline_routes_installed", False):
         return
     app.state._pipeline_routes_installed = True
-    # Mutations need operator; bare test apps without app.state.operator_guard keep read_guard.
-    operator_guard = operator_guard or getattr(app.state, "operator_guard", None) or read_guard
+
+    def _deny_missing_guard():
+        raise HTTPException(403, detail={"code": "OPERATOR_GUARD_MISSING"})
+
+    resolved_operator = operator_guard if operator_guard is not None else getattr(app.state, "operator_guard", None)
+    if resolved_operator is None:
+        # Bare unit-test apps pass read_guard=(); guarded apps without an operator guard fail closed.
+        resolved_operator = [Depends(_deny_missing_guard)] if read_guard else ()
+    operator_guard = resolved_operator
+    resolved_proposer = proposer_guard if proposer_guard is not None else getattr(app.state, "proposer_guard", None)
+    proposer_guard = resolved_proposer if resolved_proposer is not None else operator_guard
     app.state.omx_cell_states = getattr(app.state, "omx_cell_states", None) or {}
     app.state.omx_cell_tasks = getattr(app.state, "omx_cell_tasks", None) or {}
     app.state.pinky_tasks = getattr(app.state, "pinky_tasks", None) or {}
@@ -350,7 +361,8 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=(),
         STATION_CAMERA_LINKS=STATION_CAMERA_LINKS, _arm_live_catalog=_arm_live_catalog,
         zones_override_path=zones_override_path, _save_ledger=_save_ledger,
         _is_human_detected=_is_human_detected, _evaluate_decision=_evaluate_decision,
-        inputs=inputs, rules=rules, active_map=active_map, read_guard=read_guard, operator_guard=operator_guard,
+        inputs=inputs, rules=rules, active_map=active_map, read_guard=read_guard,
+        operator_guard=operator_guard, proposer_guard=proposer_guard,
         _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn,
     )
     install_cell_tasks_routes(app, ctx)
