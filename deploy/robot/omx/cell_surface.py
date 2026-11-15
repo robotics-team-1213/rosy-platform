@@ -18,10 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_pipeline as cp  # noqa: E402
 
 
-def probe_library(plan: dict, x: float, y: float, yaw: float, z_from: float, z_to: float) -> dict:
+def probe_library(plan: dict, x: float, y: float, yaw: float, z_from: float, z_to: float, tcp_x_m: float | None = None) -> dict:
     from grasp_planner import NAMES, Planner, norm_to_rad
 
-    p = dict(plan, approach_m=z_from - z_to, descend_m_s=0.010)
+    p = dict(plan, approach_m=z_from - z_to, descend_m_s=0.010, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
     planner = Planner(p)
     chunks, _ = planner.site("probe", {"x": x, "y": y, "z": z_to, "yaw_deg": yaw}, p["grip_closed"],
                              p["grip_closed"], norm_to_rad(p["home"][4]))
@@ -39,14 +39,14 @@ def fk_z(state: list, tcp_x_m: float | None = None) -> float:
     return kin.fk([norm_to_rad(v) for v in state[:5]]).z
 
 
-def touch(cell, library_path: Path, fk=fk_z) -> dict:
+def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None) -> dict:
     """goto above, descend; a contact hold is the surface. Always ends folded home (or reports why not)."""
     steps = []
     for command in (f"load {library_path}", "goto above_probe", "run descend_probe"):
         status = cell.act(command)
         steps.append({"command": command, **{k: status.get(k) for k in cp.STEP_KEYS}})
         if status.get("contact"):
-            z = fk(status["state"])
+            z = fk(status["state"], tcp_x_m) if fk is fk_z else fk(status["state"])
             for after in ("retreat", "park"):
                 steps.append({"command": after, "ok": cell.act(after).get("ok")})
             return {"result": "touched", "surface_z": round(z, 4), "error": status.get("error"), "steps": steps}
@@ -68,13 +68,14 @@ def main(argv=None):
     args = ap.parse_args(argv)
     config = json.loads(args.config.read_text(encoding="utf-8"))
     plan = json.loads(Path(config["plan_path"]).expanduser().read_text())
+    tcp_x_m = config.get("tcp_x_m", plan.get("tcp_x_m"))
     site = config["sites"][args.site]
     x, y = site["place"]
     work = Path(config["work_dir"]).expanduser()
     path = work / f"surface-{args.site}.library.json"
-    path.write_text(json.dumps(probe_library(plan, x, y, site["yaw_deg"], args.z_from, args.z_to)))
+    path.write_text(json.dumps(probe_library(plan, x, y, site["yaw_deg"], args.z_from, args.z_to, tcp_x_m=tcp_x_m)))
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-    out = dict(touch(cell, path), site=args.site, xy=[x, y], measured=time.strftime("%Y-%m-%d %H:%M"))
+    out = dict(touch(cell, path, tcp_x_m=tcp_x_m), site=args.site, xy=[x, y], measured=time.strftime("%Y-%m-%d %H:%M"))
     (work / f"surface-{args.site}.json").write_text(json.dumps(out, indent=1))
     if args.write and out["result"] == "touched":
         site["surface_z"] = out["surface_z"]
