@@ -178,8 +178,10 @@ def run_hybrid_stack_stage(
 
     after_side = frame_fn("side") if frame_fn is not None else None
     after_top = frame_fn("top") if frame_fn is not None else None
+    place_area = str(task.directive["place"].get("area") or task.directive["place"].get("area_id") or "pallet").strip().lower()
+    verify = cell_area_xyz.verify_stack_outcome_z_mm if place_area == "pallet" else cell_area_xyz.verify_stack_outcome
     cam_verify = (
-        cell_area_xyz.verify_stack_outcome(
+        verify(
             before_side=before_side,
             after_side=after_side,
             before_top=before_top,
@@ -188,7 +190,7 @@ def run_hybrid_stack_stage(
             place=task.directive["place"],
         )
         if frame_fn is not None
-        else {"verified": broker.current_state == HandoverState.COMPLETED, "reason": "stack_guard_verified"}
+        else {"verified": False, "reason": "no post-release camera"}
     )
 
     recovered_place_xyz = [

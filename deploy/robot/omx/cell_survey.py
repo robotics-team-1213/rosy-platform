@@ -14,7 +14,7 @@ from pathlib import Path
 import cell_attempts
 import cell_calibration as cal
 import cell_pipeline as cp
-from cell_observe import keep, locate, record_key
+from cell_observe import keep, locate, map_check, record_key
 
 
 def survey(cell, config: dict, calibration: dict, site: str, work: Path, choices=None) -> dict:
@@ -28,6 +28,9 @@ def survey(cell, config: dict, calibration: dict, site: str, work: Path, choices
 
     if not found["found"]:
         return done("box not seen")
+    if error := map_check(config, found, calibration):
+        tried["map_error"] = error
+        return done("map refused")
     yaw_pick, yaw = cp.grasp_yaw(config, calibration, site, found, choices)
     tried["grasp_yaw"] = {"choice": yaw_pick, "yaw_deg": yaw}
     pick = cp.target(config, site, found["arm_m"], yaw)

@@ -217,6 +217,9 @@ def episode_binding() -> dict:
 
 def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
     """A raw training episode around one carry (episode_recorder.py), when config['episodes'] names a root."""
+    import cell_attempts
+
+    cell_attempts.RUN["episode"] = None
     spec = config.get("episodes")
     if not spec:
         return None
@@ -237,6 +240,9 @@ def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
     )
     if not cell.act(f"episode start {folder}").get("ok"):
         return None
+    binding = episode_binding()
+    if binding:  # the attempt row written for this carry names the folder back
+        cell_attempts.RUN["episode"] = {"attempt_id": binding["attempt_id"], "folder": str(folder)}
     import episode_recorder
     return episode_recorder.CameraSession(folder, spec["cameras"])
 

@@ -2,7 +2,7 @@
 """OMX-AI Self-Profile-Anchored Z-Axis (`mm`) Calibration (A), 3D ContainerSpec ROI Projection, and Live Perception (B)."""
 from __future__ import annotations
 
-import math, subprocess, sys, tempfile, time
+import math, sys, time
 from pathlib import Path
 from typing import Any, Sequence
 import numpy as np
@@ -20,46 +20,17 @@ from omx_adapter.z_profile import (  # noqa: E402
 )
 import cell_arm_cal  # noqa: E402
 import cell_depth  # noqa: E402
+import cell_frame  # noqa: E402
+from cell_z_side_reference import (  # noqa: E402,F401  (re-exported)
+    SIDE_COL_U_BOUNDS, detect_side_self_profile_landmarks, fit_visual_datum_line, _side_reference_markers, _fixed_side_reference_diagnostic,
+    measure_side_gripper_pose_mm,
+)
+from cell_depth import capture_top_depth_z16  # noqa: E402,F401
 
-SIDE_COL_U_BOUNDS: dict[int, tuple[int, int]] = {1: (173, 238), 2: (239, 305), 3: (306, 377)}
 TOP_SLOT_CENTER_PX: dict[tuple[int, int], tuple[float, float]] = {
     (1, 1): (341.5, 217.5), (2, 1): (395.0, 217.5), (3, 1): (452.5, 217.5),
     (1, 2): (341.5, 325.5), (2, 2): (395.0, 325.5), (3, 2): (452.5, 325.5),
 }
-_DEPTH_ALIGN_CACHE: dict[tuple[int, int], tuple[np.ndarray, np.ndarray, float]] = {}
-
-
-def detect_side_self_profile_landmarks(side_img: np.ndarray | None, *, datum_z_offset_mm: float = 0.0) -> list[tuple[float, float]]:
-    """Auto-detect `arm_b`'s physical CAD landmarks and the visual floor datum (`datum_z_offset_mm`) in a Side-view frame."""
-    if side_img is None or not hasattr(side_img, "shape") or len(side_img.shape) != 3 or side_img.shape[1] < 580 or side_img.shape[0] < 400:
-        return []
-    import cv2
-    ys, _ = np.where(cv2.cvtColor(side_img[200:395, 500:570], cv2.COLOR_BGR2GRAY) < 60)
-    if len(ys) < 400 or not (345.0 <= (v_datum := float(200.0 + np.percentile(ys, 98))) <= 390.0):
-        return []
-    mm_per_px, v_base_bottom = 90.0 / 175.0, v_datum + float(datum_z_offset_mm) / (90.0 / 175.0)
-    return [(round(v_base_bottom, 1), 0.0), (round(v_datum, 1), round(float(datum_z_offset_mm), 2)), (round(v_base_bottom - 13.0 / mm_per_px, 1), 13.0), (round(v_base_bottom - 97.5 / mm_per_px, 1), 97.5)]
-
-
-def fit_visual_datum_line(side_img: np.ndarray | None, *, datum_z_offset_mm: float | None = None, tactile_z_trim_mm: float = 0.0) -> dict[str, Any]:
-    """Structured 4-layer calibration (`optics` -> `self_profile` -> `visual_datum` -> `closed_loop_residual`)."""
-    prof, col_bottoms, v_robot_base_px = SideViewZProfile(datum_z_offset_mm=0.0, k1=-0.055, k2=0.010), {}, None
-    if side_img is not None and hasattr(side_img, "shape") and len(side_img.shape) == 3 and side_img.shape[1] >= 580:
-        import cv2
-        ys_b, _ = np.where(cv2.cvtColor(side_img[200:395, 500:570], cv2.COLOR_BGR2GRAY) < 60)
-        if len(ys_b) >= 400:
-            v_robot_base_px = round(prof.undistort_uv(535.0, 200.0 + float(np.percentile(ys_b, 98)))[1], 1)
-        hsv = cv2.cvtColor(side_img[180:388, 173:377], cv2.COLOR_BGR2HSV)
-        sat_c = (hsv[..., 0] >= 4) & (hsv[..., 0] <= 36) & (hsv[..., 1] >= 110) & (hsv[..., 2] >= 140)
-        for c_idx, (u0, u1) in SIDE_COL_U_BOUNDS.items():
-            rows = np.where(sat_c[:, u0 - 173:u1 - 173].sum(axis=1) >= 24)[0]
-            if len(rows) >= 12:
-                col_bottoms[c_idx] = round(prof.undistort_uv(0.5 * (u0 + u1), 180.0 + float(rows[-1]))[1], 1)
-    slope = max(-0.04, min(0.04, round((col_bottoms[2] - col_bottoms[1]) / 66.5, 5))) if (1 in col_bottoms and 2 in col_bottoms) else 0.0
-    v_pallet_ref = col_bottoms.get(2, col_bottoms.get(1))
-    visual_datum_z_mm = round(max(-4.0, min(6.0, ((v_robot_base_px + slope * (272.0 - 535.0)) - v_pallet_ref) * (90.0 / 175.0))), 2) if (v_robot_base_px is not None and v_pallet_ref is not None) else 0.0
-    eff_datum_mm = round(float(datum_z_offset_mm) if datum_z_offset_mm is not None else (visual_datum_z_mm + float(tactile_z_trim_mm)), 2)
-    return {"datum_z_offset_mm": eff_datum_mm, "visual_datum_z_mm": visual_datum_z_mm, "tactile_z_trim_mm": round(float(tactile_z_trim_mm), 2), "v_robot_base_px": v_robot_base_px, "k1": -0.055, "k2": 0.010, "col_bottom_v_px": col_bottoms, "datum_slope_v_per_u": slope}
 
 
 def default_z_profile_mm(arm_id: str = "arm_b") -> dict[str, Any]:
@@ -68,9 +39,6 @@ def default_z_profile_mm(arm_id: str = "arm_b") -> dict[str, Any]:
 
 
 def _aligned_depth_heights(top_depth: np.ndarray, top_colour: np.ndarray | None = None, z_profile: dict[str, Any] | None = None) -> tuple[np.ndarray, np.ndarray, float]:
-    key = (id(top_depth), int(top_depth.sum()))
-    if key in _DEPTH_ALIGN_CACHE:
-        return _DEPTH_ALIGN_CACHE[key]
     heights, td_cfg = cell_depth.height_map(top_depth, cell_depth.table_plane(top_depth)), (z_profile or {}).get("top_depth") or {}
     if td_cfg.get("to_depth_matrix"):
         to_depth, edge_px = np.array(td_cfg["to_depth_matrix"], dtype=np.float32), float(td_cfg.get("align_edge_px", 0.0))
@@ -78,24 +46,7 @@ def _aligned_depth_heights(top_depth: np.ndarray, top_colour: np.ndarray | None 
         to_depth, edge_px = cell_depth.align_edges(top_colour, heights)
     else:
         to_depth, edge_px = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32), 0.0
-    if len(_DEPTH_ALIGN_CACHE) >= 8:
-        _DEPTH_ALIGN_CACHE.clear()
-    _DEPTH_ALIGN_CACHE[key] = (heights, to_depth, float(edge_px))
-    return _DEPTH_ALIGN_CACHE[key]
-
-
-def capture_top_depth_z16(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-depth", out_raw: Path | None = None, *, timeout_s: float = 1.8) -> np.ndarray | None:
-    """Capture a warmed 640x480 Z16 depth frame (`mm`) from D435 at 6 fps, or load the latest warmed cell Z16 frame."""
-    raw_path, dev = (Path(out_raw) if out_raw is not None else Path(tempfile.gettempdir()) / "rosy-top-depth-z16.raw"), (dev_path if Path(dev_path).exists() else "/dev/video6")
-    if Path(dev).exists():
-        try:
-            subprocess.run(["v4l2-ctl", "-d", dev, "--set-fmt-video=width=640,height=480,pixelformat=Z16 ", "--set-parm=6", "--stream-mmap=3", "--stream-skip=12", "--stream-count=1", f"--stream-to={raw_path}"], timeout=float(timeout_s), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
-    for cand in (raw_path, Path("/home/robttt/rosy-test/runs/decision-vla-depth-1793890232940317053/depth.raw")):
-        if cand.exists() and cand.stat().st_size == 640 * 480 * 2 and float(((arr := np.fromfile(cand, dtype=np.uint16)) > 0).mean()) >= 0.40:
-            return arr.reshape(480, 640)
-    return None
+    return heights, to_depth, float(edge_px)
 
 
 def project_container_spec_roi(col: int, tier: int = 1, spec_id: str = "C3", x_offset_mm: float = 0.0, row: int = 1, *, z_profile: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -160,15 +111,16 @@ def evaluate_slot_spec_gate(
     slot_obs_or_z_top_mm: dict[str, Any] | float, expected_tier: int = 1, *, spec_id: str = "C3",
     valid_depth_ratio: float | None = None, dz_top_side_mm: float | None = None, tilt_deg: float = 0.0, obs_area_mm2: float | None = None,
 ) -> dict[str, Any]:
-    """Wrap `evaluate_signed_tier_residual_mm` for either a `perceive_slot_z_mm` observation dict or a raw `z_top_mm` float."""
+    """Audit measured observations; raw numeric input is for explicit model/simulation evaluation."""
     if isinstance(slot_obs_or_z_top_mm, dict):
         d = slot_obs_or_z_top_mm
         tier_k = int(d.get("expected_tier") or d.get("tier") or expected_tier)
-        z_top = float(d.get("measured_top_z_mm") or d.get("fused_top_z_mm") or d.get("side_top_z_mm") or d.get("depth_top_z_mm") or 0.0)
+        z_top = next((float(d[k]) for k in ("measured_top_z_mm", "fused_top_z_mm", "side_top_z_mm", "depth_top_z_mm") if d.get(k) is not None), 0.0)
         s_t, d_t = d.get("side_top_z_mm"), d.get("depth_top_z_mm")
         dz_ts = float(dz_top_side_mm) if dz_top_side_mm is not None else (float(s_t) - float(d_t) if (s_t is not None and d_t is not None) else float(d.get("side_vs_depth_top_dz_mm") or 0.0))
-        v_ratio = float(valid_depth_ratio) if valid_depth_ratio is not None else float(d.get("valid_depth_ratio", 1.0 if d.get("found", True) else 0.0))
-        return evaluate_signed_tier_residual_mm(z_top, tier_k, valid_depth_ratio=v_ratio, dz_top_side_mm=dz_ts, tilt_deg=tilt_deg, obs_area_mm2=obs_area_mm2 or d.get("obs_area_mm2"), spec_id=str(d.get("spec_id") or spec_id))
+        measured = d.get("found") is True and d.get("measurement_calibrated") is True and s_t is not None and d_t is not None
+        v_ratio = (float(valid_depth_ratio) if valid_depth_ratio is not None else float(d.get("valid_depth_ratio", 0.0))) if measured else 0.0
+        return evaluate_signed_tier_residual_mm(z_top, tier_k, valid_depth_ratio=v_ratio, dz_top_side_mm=dz_ts, tilt_deg=tilt_deg, obs_area_mm2=obs_area_mm2 if obs_area_mm2 is not None else d.get("obs_area_mm2"), spec_id=str(d.get("spec_id") or spec_id))
     return evaluate_signed_tier_residual_mm(float(slot_obs_or_z_top_mm), int(expected_tier), valid_depth_ratio=1.0 if valid_depth_ratio is None else float(valid_depth_ratio),
                                              dz_top_side_mm=0.0 if dz_top_side_mm is None else float(dz_top_side_mm), tilt_deg=tilt_deg, obs_area_mm2=obs_area_mm2, spec_id=spec_id)
 
@@ -180,12 +132,14 @@ def calibrate_z_profile_mm(
     """(A) Calibrate and persist the OMX-AI self-profile Z-mm model from Top Depth + Side View + FK landmarks."""
     cal = cell_arm_cal.load(config_or_work, arm_id)
     z_prof = dict(cal.get("z_profile_mm") or default_z_profile_mm(arm_id))
+    depth_plate_measured = False
     if top_depth is not None and hasattr(top_depth, "ndim") and top_depth.ndim == 2 and top_depth.size > 0:
         heights, to_depth, edge_px = _aligned_depth_heights(top_depth, top_colour)
         plate_mm = cell_depth.plate_top(heights, to_depth, base_px)
+        depth_plate_measured = bool(top_colour is not None and plate_mm is not None and np.isfinite(edge_px))
         td_prof = TopDepthZProfile(measured_plate_top_mm=plate_mm if plate_mm is not None else 13.0, cad_plate_top_mm=float(OMX_AI_PROFILE_MM["base_plate_top_z_mm"]))
         slot_heights_mm = {f"c{c_idx}_r{r_idx}": td_prof.raw_height_to_link0_z_mm(raw_h) for (c_idx, r_idx), px in TOP_SLOT_CENTER_PX.items() if np.isfinite(raw_h := cell_depth.height_at(heights, to_depth, px))}
-        z_prof["top_depth"] = {**td_prof.to_dict(), "align_edge_px": round(float(edge_px), 2), "to_depth_matrix": to_depth.tolist(), "slot_heights_mm": slot_heights_mm}
+        z_prof["top_depth"] = {**td_prof.to_dict(), "align_edge_px": round(float(edge_px), 2), "to_depth_matrix": to_depth.tolist(), "base_px": list(base_px), "slot_heights_mm": slot_heights_mm}
     tactile_trim = float(z_prof.get("tactile_z_trim_mm", 0.0))
     datum_info = fit_visual_datum_line(side_img, tactile_z_trim_mm=tactile_trim) if side_img is not None else {"datum_z_offset_mm": tactile_trim, "datum_slope_v_per_u": 0.0, "k1": 0.0, "k2": 0.0}
     z_prof["visual_datum"] = datum_info
@@ -201,10 +155,54 @@ def calibrate_z_profile_mm(
         z_prof["side_view"] = SideViewZProfile.fit_from_landmarks(pts, datum_z_offset_mm=float(datum_info.get("datum_z_offset_mm", 0.0)), datum_slope_v_per_u=float(datum_info.get("datum_slope_v_per_u", 0.0)), k1=float(datum_info.get("k1", 0.0)), k2=float(datum_info.get("k2", 0.0))).to_dict()
     elif "side_view" not in z_prof:
         z_prof["side_view"] = SideViewZProfile().to_dict()
+    z_prof["depth_plate_measured"] = depth_plate_measured
+    # The visual landmarks all derive from one edge; they cannot prove an independent side Z reference.
+    z_prof["measurement_calibrated"] = False
     if side_img is not None and hasattr(side_img, "shape") and len(side_img.shape) == 3:
         z_prof["side_observed_slots"] = {f"col_{c}": obs for c in (1, 2, 3) if (obs := perceive_slot_z_mm(side_img, col=c, tier=1, z_profile=z_prof))["found"]}
     cell_arm_cal.record_z_profile(config_or_work, z_prof, arm_id=arm_id)
     return z_prof
+
+
+def _current_frame_calibration_checks(
+    side_img: np.ndarray | None, top_colour: np.ndarray | None, top_depth: np.ndarray | None,
+    heights: np.ndarray | None, z_profile: dict[str, Any] | None, valid_depth_ratio: float,
+) -> dict[str, Any]:
+    """Bind both live views to physical references; a saved calibration flag alone is insufficient."""
+    checks: dict[str, Any] = {"ok": False, "reason": "missing current-frame calibration evidence",
+                               "side_reference": _fixed_side_reference_diagnostic(side_img, z_profile)}
+    prof = z_profile or {}
+    td = prof.get("top_depth") or {}
+    side_cfg = prof.get("side_view") or {}
+    if not (prof.get("measurement_calibrated") is True and side_cfg and td.get("to_depth_matrix")
+            and td.get("measured_plate_top_mm") is not None and td.get("base_px") is not None
+            and side_img is not None and top_colour is not None and top_depth is not None
+            and heights is not None and valid_depth_ratio >= 0.80):
+        return checks
+    try:
+        side_prof = SideViewZProfile.from_dict(side_cfg)
+        landmarks = detect_side_self_profile_landmarks(side_img, datum_z_offset_mm=side_prof.datum_z_offset_mm)
+        if len(landmarks) < 2 or max(abs(side_prof.v_to_z_mm(v) - z) for v, z in landmarks) > 3.0:
+            return {**checks, "reason": "side CAD landmarks moved or missing"}
+        live_affine, edge_px = cell_depth.align_edges(top_colour, heights)
+        saved_affine = np.asarray(td["to_depth_matrix"], dtype=float)
+        live_affine = np.asarray(live_affine, dtype=float)
+        refs = np.array([[120.0, 240.0, 1.0], [395.0, 217.5, 1.0], [452.5, 325.5, 1.0]]).T
+        if (saved_affine.shape != (2, 3) or live_affine.shape != (2, 3)
+                or not np.isfinite(edge_px) or edge_px > 3.0
+                or not np.isfinite(live_affine).all()
+                or np.max(np.linalg.norm((live_affine - saved_affine) @ refs, axis=0)) > 3.0):
+            return {**checks, "reason": "current RGB/depth alignment differs from calibration"}
+        plate_mm = cell_depth.plate_top(heights, live_affine, td["base_px"])
+        if plate_mm is None or not np.isfinite(plate_mm) or abs(float(plate_mm) - float(td["measured_plate_top_mm"])) > 3.0:
+            return {**checks, "reason": "current depth plate reference differs from calibration"}
+    except (IndexError, TypeError, ValueError, OverflowError, RuntimeError, ZeroDivisionError):
+        return {**checks, "reason": "current-frame calibration check failed"}
+    # detect_side_self_profile_landmarks derives all points from one observed edge and
+    # a fixed 90 mm / 175 px scale. It cannot independently prove this frame's Z scale.
+    return {**checks, "reason": "independent current-frame side Z reference unavailable",
+            "side_landmarks": len(landmarks), "side_reference_verified": False,
+            "align_edge_px": round(float(edge_px), 2), "depth_plate_mm": round(float(plate_mm), 2)}
 
 
 def perceive_slot_z_mm(
@@ -240,9 +238,15 @@ def perceive_slot_z_mm(
                 v_top_px, v_centroid_px = round(float(v0 + chosen_rows[0]), 1), round(float(v0 + chosen_rows.mean()), 1)
                 side_top_z_mm, side_mid_z_mm = side_prof.v_to_z_mm(v_top_px), side_prof.v_to_z_mm(v_centroid_px)
     depth_top_z_mm: float | None = None
+    valid_depth_ratio = 0.0
+    heights = None
     if top_depth is not None and hasattr(top_depth, "ndim") and top_depth.ndim == 2 and top_depth.size > 0:
         heights, to_depth, _ = _aligned_depth_heights(top_depth, top_colour, z_profile)
-        raw_h = cell_depth.height_at(heights, to_depth, TOP_SLOT_CENTER_PX.get((int(col), int(row)), (395.0, 217.5)), 16)
+        slot_px = TOP_SLOT_CENTER_PX.get((int(col), int(row)), (395.0, 217.5))
+        u_d, v_d = np.round(to_depth @ [*slot_px, 1.0]).astype(int)
+        patch = heights[max(0, v_d - 16):min(heights.shape[0], v_d + 17), max(0, u_d - 16):min(heights.shape[1], u_d + 17)]
+        valid_depth_ratio = round(float(np.isfinite(patch).mean()), 4) if patch.size else 0.0
+        raw_h = cell_depth.height_at(heights, to_depth, slot_px, 16)
         if not np.isfinite(raw_h) or raw_h < 12.0:
             u_d, v_d = int(round(282.0 + (int(col) - 1) * 28.0)), (245 if int(row) == 1 else 315)
             patch = heights[max(0, v_d - 22):min(heights.shape[0], v_d + 22), max(0, u_d - 20):min(heights.shape[1], u_d + 20)]
@@ -263,10 +267,14 @@ def perceive_slot_z_mm(
     measured_grasp_z_mm = round(max(5.5, min(140.0, fused_top_z_mm - (expected_top_z_mm - expected_grasp_z_mm))), 2)
     dz_top_mm, dz_grasp_mm = round(fused_top_z_mm - expected_top_z_mm, 2), round(measured_grasp_z_mm - expected_grasp_z_mm, 2)
     dz_ts = round(float(side_top_z_mm) - float(depth_top_z_mm), 2) if (side_top_z_mm is not None and depth_top_z_mm is not None) else 0.0
-    spec_gate = evaluate_signed_tier_residual_mm(fused_top_z_mm, expected_tier, dz_top_side_mm=dz_ts, spec_id=spec_id)
+    calibration_checks = _current_frame_calibration_checks(side_img, top_colour, top_depth, heights, z_profile, valid_depth_ratio)
+    measurement_calibrated = bool(calibration_checks["ok"] and side_top_z_mm is not None and depth_top_z_mm is not None)
+    spec_gate = evaluate_signed_tier_residual_mm(fused_top_z_mm, expected_tier, valid_depth_ratio=valid_depth_ratio if measurement_calibrated else 0.0, dz_top_side_mm=dz_ts, spec_id=spec_id)
     return {"found": True, "basis": basis, "col": int(col), "row": int(row), "expected_tier": expected_tier, "inferred_tier": inferred_tier,
             "v_top_px": v_top_px, "v_centroid_px": v_centroid_px, "side_top_z_mm": side_top_z_mm, "side_mid_z_mm": side_mid_z_mm,
-            "depth_top_z_mm": depth_top_z_mm, "measured_top_z_mm": fused_top_z_mm, "measured_mid_z_mm": side_mid_z_mm if side_mid_z_mm is not None else round(fused_top_z_mm - 15.0, 2),
+            "depth_top_z_mm": depth_top_z_mm, "valid_depth_ratio": valid_depth_ratio, "measurement_calibrated": measurement_calibrated,
+            "calibration_checks": calibration_checks,
+            "measured_top_z_mm": fused_top_z_mm, "measured_mid_z_mm": side_mid_z_mm if side_mid_z_mm is not None else round(fused_top_z_mm - 15.0, 2),
             "measured_grasp_z_mm": measured_grasp_z_mm, "measured_grasp_z_m": round(measured_grasp_z_mm / 1000.0, 5), "expected_top_z_mm": expected_top_z_mm,
             "expected_mid_z_mm": expected_mid_z_mm, "expected_grasp_z_mm": expected_grasp_z_mm, "dz_top_mm": dz_top_mm, "dz_grasp_mm": dz_grasp_mm,
             "dz_m": round(dz_grasp_mm / 1000.0, 5), "r_k_mm": spec_gate["r_k_mm"], "spec_id": spec_gate["spec_id"], "spec_gate": spec_gate}
@@ -283,34 +291,9 @@ def perceive_all_columns_z_mm(
             obs = perceive_slot_z_mm(side_img, top_colour, top_depth, col=c_idx, row=row, tier=int(obs["inferred_tier"]), z_profile=z_profile, spec_id=spec_id)
         rec_views = reconcile_top_and_side_z_mm(obs.get("depth_top_z_mm"), obs.get("side_top_z_mm"))
         cols[c_idx] = {**obs, "reconcile_views": rec_views, "spec_gate": evaluate_slot_spec_gate(obs, expected_tier=int(tier or obs.get("inferred_tier") or 1), spec_id=spec_id)}
+    all_found = all(cols[c].get("found", False) for c in (1, 2, 3))
     return {"row": int(row), "spec_id": resolve_container_spec(spec_id)["spec_id"], "columns": cols, "col_1": cols[1], "col_2": cols[2], "col_3": cols[3],
-            "all_found": all(cols[c].get("found", False) for c in (1, 2, 3)), "all_aligned": all(cols[c]["reconcile_views"]["aligned"] and cols[c]["spec_gate"]["verdict"] == "PASS" for c in (1, 2, 3) if cols[c].get("found"))}
-
-
-def measure_side_gripper_pose_mm(
-    side_img: np.ndarray | None, before_side: np.ndarray | None, col: int, *, target_u_px: float = 254.0, u_m_per_px: float = 0.00070,
-    expected_z_mm: float | None = None, joint_state_deg: Sequence[float] | None = None, z_profile: dict[str, Any] | None = None, tol_u_px: float = 12.0, tol_z_mm: float = 14.0,
-) -> dict[str, Any]:
-    """(B) Measure both horizontal (`u_px -> dx_mm`) and vertical (`v_px -> gripper_z_mm, dz_mm`) gripper pose in Side View."""
-    if side_img is None or before_side is None or not hasattr(side_img, "shape") or side_img.shape != before_side.shape:
-        return {"found": False, "target_u_px": target_u_px}
-    diff = side_img[70:165, 160:390].astype(np.int32) - before_side[70:165, 160:390].astype(np.int32)
-    ys, xs = np.where((diff[..., 0] * diff[..., 0] + diff[..., 1] * diff[..., 1] + diff[..., 2] * diff[..., 2]) > 1024)
-    if len(xs) < 40:
-        return {"found": False, "target_u_px": target_u_px}
-    p65, p90 = np.percentile(ys, (65, 90))
-    side_prof, tip_mask = SideViewZProfile.from_dict((z_profile or {}).get("side_view")), (ys >= p65)
-    u_gripper = round(float(160.0 + np.median(xs[tip_mask] if int(tip_mask.sum()) >= 10 else xs)), 1)
-    v_gripper_tip, v_gripper_center = round(float(70.0 + p90), 1), round(float(70.0 + np.median(ys)), 1)
-    du_px, dx_m, gripper_z_mm = round(target_u_px - u_gripper, 1), round((target_u_px - u_gripper) * float(u_m_per_px), 5), side_prof.v_to_z_mm(v_gripper_tip)
-    fk_z_mm = float(fk_landmarks_mm(joint_state_deg[:5], unit="deg")["landmarks_z_mm"]["jaw_tip"]) if (joint_state_deg is not None and len(joint_state_deg) >= 5) else None
-    ref_z_mm = float(expected_z_mm) if expected_z_mm is not None else fk_z_mm
-    dz_mm = round(ref_z_mm - gripper_z_mm, 2) if ref_z_mm is not None else 0.0
-    return {"found": True, "gripper_u_px": u_gripper, "gripper_v_tip_px": v_gripper_tip, "gripper_v_center_px": v_gripper_center,
-            "target_u_px": target_u_px, "du_px": du_px, "dx_m": dx_m, "dx_mm": round(dx_m * 1000.0, 2), "gripper_z_mm": gripper_z_mm,
-            "expected_z_mm": round(ref_z_mm, 2) if ref_z_mm is not None else None, "fk_jaw_tip_z_mm": round(fk_z_mm, 2) if fk_z_mm is not None else None,
-            "dz_mm": dz_mm, "dz_m": round(dz_mm / 1000.0, 5), "within_zone": bool(abs(du_px) <= tol_u_px),
-            "within_z_zone": True if ref_z_mm is None else (abs(dz_mm) <= tol_z_mm), "reconciled_tcp_mm": reconcile_tcp_z_mm(gripper_z_mm)}
+            "all_found": all_found, "all_aligned": all_found and all(cols[c]["reconcile_views"]["aligned"] and cols[c]["spec_gate"]["verdict"] == "PASS" for c in (1, 2, 3))}
 
 
 def top_pixel_to_arm_xy_vanishing(u_px: float, v_px: float, *, h_top_m: float = 0.030, dx_reg_m: float = 0.0, dy_reg_m: float = 0.0) -> tuple[float, float]:
@@ -372,12 +355,12 @@ def judge_z_axis_alignment_mm(
     t_slot = round((time.perf_counter() - t0) * 1000.0, 2)
     s_top, d_top = obs.get("side_top_z_mm"), obs.get("depth_top_z_mm")
     cross_diff = round(float(s_top) - float(d_top), 2) if (s_top is not None and d_top is not None) else None
-    cross_sync = True if cross_diff is None else (abs(cross_diff) <= max(6.5, float(tol_z_mm) * 1.5))
+    cross_sync = cross_diff is not None and abs(cross_diff) <= max(6.5, float(tol_z_mm) * 1.5)
     rec_z = float(obs.get("measured_grasp_z_mm") or TIER_GRASP_Z_MM.get(tier, 7.4))
     plan_z = float(planned_z_mm) if planned_z_mm is not None else rec_z
     z_err = round(plan_z - rec_z, 2)
     fk_jaw_z = round(float(fk_landmarks_mm(joint_state_deg[:5], unit="deg", tcp_x_mm=91.93 if arm_id == "arm_s" else 74.1)["landmarks_z_mm"]["jaw_tip"]), 2) if (joint_state_deg is not None and len(joint_state_deg) >= 5) else None
-    aligned = bool(obs.get("found", False) and abs(z_err) <= float(tol_z_mm) and cross_sync)
+    aligned = bool(obs.get("found", False) and obs.get("measurement_calibrated") is True and obs.get("spec_gate", {}).get("verdict") == "PASS" and abs(z_err) <= float(tol_z_mm) and cross_sync)
     verdict = "aligned" if aligned else ("adjust_z_up" if z_err < -float(tol_z_mm) else ("adjust_z_down" if z_err > float(tol_z_mm) else "reconcile_views"))
     return {"ok": bool(obs.get("found", False)), "z_aligned": aligned, "verdict": verdict, "basis": obs.get("basis", "none"), "col": int(col), "row": int(row), "tier": int(tier),
             "inferred_tier": obs.get("inferred_tier", tier), "fk_jaw_tip_z_mm": fk_jaw_z, "side_top_z_mm": s_top, "depth_top_z_mm": d_top, "fused_top_z_mm": obs.get("measured_top_z_mm"),

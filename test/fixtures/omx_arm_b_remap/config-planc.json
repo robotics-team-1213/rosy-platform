@@ -1,0 +1,46 @@
+{
+ "arm_id": "arm_b",
+ "tcp_x_m": 0.0741,
+ "coarse": {
+  "z_view": 0.12
+ },
+ "sites": {
+  "pinky": {
+   "yaw_deg": -67.8
+  },
+  "belt": {
+   "yaw_deg": 0.0
+  },
+  "floor": {
+   "yaw_deg": -67.8
+  }
+ },
+ "calibrate": {
+  "map_points": [
+   [
+    0.0797,
+    0.007
+   ],
+   [
+    0.0655,
+    0.0459
+   ],
+   [
+    0.0799,
+    0.0291
+   ],
+   [
+    0.0728,
+    0.0611
+   ],
+   [
+    0.0909,
+    0.0525
+   ]
+  ]
+ },
+ "joint_max": {
+  "wrist_flex.pos": 55.3
+ },
+ "joint_max_note": "2026-11-14: arm_b's wrist holder touched link3/4 at wrist_flex 59.3; logged wrist PWM is low to 56 (p95<=45), 58-60 p95 125; 55.3 is the Plan C boundary (omx-camera-intrinsics-options.md, C plan)"
+}
