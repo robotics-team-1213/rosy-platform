@@ -262,16 +262,20 @@ def _plan_schedule(plan: dict, cfg: dict, cals: dict):
     """pair_schedule(lib_a, lib_b): the coordination.plan schedule for two carries, or None. For --plan-only output only."""
     import cell_two_arm
     from cell_coordinate import rigid_of
-    from grasp_planner import load_kinematics
     from omx_adapter.coordination import plan as coordinate
 
-    kin, _, _ = load_kinematics(None)
+    ab_cfg = {a: cfg[a] for a in AB}
     rigids = {"arm_a": rigid_of(cals["arm_a"], cals["arm_b"], "pallet", "pallet"), "arm_b": (0.0, 0.0, 0.0)}
     tips = {a: float(cfg[a].get("fingertip_m", 0.0)) for a in AB}
     libs = lambda path: json.loads(Path(path).read_text())  # noqa: E731
 
     def pair_schedule(lib_a, lib_b, start=(0, 0)):
-        ra, rb = (cell_two_arm.carry_route(p, libs(p), kin, rigids[a], tips[a]) for p, a in ((lib_a, "arm_a"), (lib_b, "arm_b")))
+        loaded = {"arm_a": [(lib_a, libs(lib_a))], "arm_b": [(lib_b, libs(lib_b))]}
+        kins = cell_two_arm.kinematics_for(ab_cfg, loaded)
+        ra, rb = (
+            cell_two_arm.carry_route(p, loaded[a][0][1], kins[a], rigids[a], tips[a])
+            for p, a in ((lib_a, "arm_a"), (lib_b, "arm_b"))
+        )
         steps = coordinate(ra[0], rb[0], plan.get("margin_m", 0.05), start=start)
         return None if steps is None else {"steps": steps["steps"], "makespan_s": steps["makespan_s"]}
 
