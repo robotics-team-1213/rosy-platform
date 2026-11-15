@@ -366,13 +366,21 @@ def verify_main(argv: list[str], capture_fn=None) -> int:
     config = json.loads(args.config.read_text(encoding="utf-8"))
     cal_p = Path(config["calibration_path"]).expanduser() if config.get("calibration_path") else None
     cal_data, bias = load_json_opt(cal_p), (load_json_opt(cell_pivot.bias_path(cal_p)) if cal_p else None)
+    cam_top = (config.get("cameras") or {}).get("top") or {}
+    dev = str(cam_top.get("device") or "").lower()
+    url = str(cam_top.get("url") or "")
+    has_depth = cam_top.get("has_depth") is not False and (
+        bool(cam_top.get("depth_device"))
+        or ((not dev or "d435" in dev or "depth" in dev) and not url.lower().endswith("/arm_s_top.jpg"))
+    )
     cap = capture_fn or cell_depth.capture_top_depth_z16
-    depth = np.fromfile(args.depth, np.uint16).reshape(480, 640) if args.depth else (cap() if args.capture else None)
+    depth = np.fromfile(args.depth, np.uint16).reshape(480, 640) if args.depth else (cap() if (args.capture and has_depth) else None)
     colour = cv2.imread(str(args.colour)) if args.colour else None
-    url = ((config.get("cameras") or {}).get("top") or {}).get("url")
     if colour is None and args.capture and url:
         colour = fetch_colour_frame(url)
     report = verify_profile_depth(config, cal_data, bias, depth=depth, colour=colour)
+    if args.capture and not args.depth and not has_depth:
+        report["camera_top"]["depth_capture_skipped"] = "rgb_only_top_camera"
     if args.write and config.get("work_dir"):
         work = Path(config["work_dir"]).expanduser()
         work.mkdir(parents=True, exist_ok=True)

@@ -229,3 +229,33 @@ def site_sigma_summary(record: dict | None, points_arm: list, cam_top: dict, tar
     if not sigmas:
         return None
     return {"max_mm": round(max(sigmas), 2), "mean_mm": round(sum(sigmas) / len(sigmas), 2)}
+
+
+def plan_leverage(points: list, sites: dict, sigma_mark_mm: float = 3.0) -> dict:
+    """Estimate noise-only 1-sigma extrapolation (`sigma_mark_mm * sqrt(h0)`) across nominal `map_points`."""
+    pts = [[float(p[0]), float(p[1])] for p in (points or []) if isinstance(p, (list, tuple)) and len(p) >= 2]
+    if len(pts) < 4:
+        return {"sigma_mark_mm": float(sigma_mark_mm), "sites": {}, "max_sigma_mm": None}
+    xy = np.array(pts, float)
+    if not np.all(np.isfinite(xy)):
+        return {"sigma_mark_mm": float(sigma_mark_mm), "sites": {}, "max_sigma_mm": None}
+    x0, y0 = xy[:, 0].mean(), xy[:, 1].mean()
+    sx, sy = max(1e-4, float(xy[:, 0].std())), max(1e-4, float(xy[:, 1].std()))
+    Z = np.column_stack([(xy[:, 0] - x0) / sx, (xy[:, 1] - y0) / sy, np.ones(len(xy))])
+    cov_inv = np.linalg.pinv(Z.T @ Z)
+    out: dict[str, dict] = {}
+    for name, spec in (sites or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        vals: dict[str, float] = {}
+        for key in ("start", "place"):
+            pt = spec.get(key)
+            if isinstance(pt, (list, tuple)) and len(pt) >= 2:
+                z0 = np.array([(float(pt[0]) - x0) / sx, (float(pt[1]) - y0) / sy, 1.0])
+                h0 = max(0.0, float(z0 @ cov_inv @ z0))
+                vals[f"{key}_sigma_mm"] = round(float(sigma_mark_mm) * math.sqrt(h0), 2)
+        if vals:
+            vals["max_sigma_mm"] = max(vals.values())
+            out[name] = vals
+    max_all = max((v["max_sigma_mm"] for v in out.values()), default=None)
+    return {"sigma_mark_mm": float(sigma_mark_mm), "sites": out, "max_sigma_mm": max_all}

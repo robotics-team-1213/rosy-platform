@@ -136,3 +136,24 @@ def test_omx_tcp_fallback_and_eval_verdict_states():
         drift={"alarmed_sites": ["a"], "pattern": "local", "suggested_advisory": ["pivot-near a"]},
     )
     assert adv["eval_verdict"] == "advisory" and adv["lateral_xy_verified"] is False
+
+
+def test_plan_leverage_and_rgb_only_verify_capture_skip(tmp_path):
+    patch = [[-0.11, 0.11], [-0.11, 0.17], [-0.09, 0.11], [-0.09, 0.17]]
+    sites = {"pinky": {"place": [0.02, 0.18], "start": [-0.09, 0.14]}}
+    tight = cell_map_fit.plan_leverage(patch, sites, sigma_mark_mm=3.0)
+    assert tight["sites"]["pinky"]["place_sigma_mm"] > 10.0
+    wide = cell_map_fit.plan_leverage(patch + [[0.00, 0.21], [-0.03, 0.21]], sites, sigma_mark_mm=3.0)
+    assert wide["sites"]["pinky"]["place_sigma_mm"] < 5.0 and wide["sites"]["pinky"]["place_sigma_mm"] < tight["sites"]["pinky"]["place_sigma_mm"] * 0.5
+
+    cfg_path = tmp_path / "arm_s.json"
+    work = tmp_path / "w"
+    cfg_path.write_text(json.dumps({
+        "arm_id": "arm_s", "work_dir": str(work), "sites": {},
+        "cameras": {"top": {"url": "http://127.0.0.1:1/frame/arm_s_top.jpg", "device": "/dev/v4l/by-id/rosy-arm_s_jieli"}},
+    }), encoding="utf-8")
+    called = []
+    rc = cell_cal_eval.verify_main(["--config", str(cfg_path), "--capture", "--write"], capture_fn=lambda: called.append(1))
+    assert rc == 0 and called == []
+    written = json.loads((work / "depth-verify.json").read_text(encoding="utf-8"))
+    assert written["camera_top"]["depth_capture_skipped"] == "rgb_only_top_camera" and written["eval_verdict"] == "unknown"

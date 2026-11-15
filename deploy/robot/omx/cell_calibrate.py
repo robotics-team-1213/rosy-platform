@@ -238,9 +238,12 @@ def main(argv=None):
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     points = config.get("calibrate", {}).get("map_points", MAP_POINTS)
     if args.plan_only:
+        import cell_map_fit
+
         rows = rp.plan(config, points)
         refused = rp.refusal(rows)
-        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config)}), flush=True)
+        lev = cell_map_fit.plan_leverage(points, config.get("sites") or {})
+        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config), "leverage": lev}), flush=True)
         return 2 if refused else 0
     cal_path = Path(config["calibration_path"]).expanduser()
     calibration = json.loads(cal_path.read_text()) if cal_path.exists() else {"schema": cal.SCHEMA, "sites": {}}

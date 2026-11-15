@@ -12,14 +12,7 @@ const state = {
   frameSource: "live",
   errorScale: 5,
   layout: "both",
-  layers: {
-    pxGrid: true,
-    metricGrid: true,
-    sites: true,
-    points: true,
-    bias: true,
-    centerAndTcp: true,
-  },
+  layers: { pxGrid: true, metricGrid: true, sites: true, points: true, bias: true, centerAndTcp: true },
   selectedKey: null,
   selectedData: null,
   frameCache: new Map(),
@@ -90,14 +83,8 @@ function loadFrameImage(profileId, source) {
     const img = new Image();
     const rec = { img, status: "loading" };
     state.frameCache.set(key, rec);
-    img.onload = () => {
-      rec.status = "ready";
-      renderCanvases();
-    };
-    img.onerror = () => {
-      rec.status = "error";
-      renderCanvases();
-    };
+    img.onload = () => { rec.status = "ready"; renderCanvases(); };
+    img.onerror = () => { rec.status = "error"; renderCanvases(); };
     img.src = `/api/calibration/v1/profiles/${encodeURIComponent(profileId)}/frame/${encodeURIComponent(source)}?t=${Date.now()}`;
   }
   return null;
@@ -240,6 +227,9 @@ function renderInspector() {
     addDtDd(dl, "Touch 영수증 surface_z", `${d.touch_surface_z} m${tTxt}`);
   }
   if (Number.isFinite(d.loo_dist_mm)) addDtDd(dl, "LOO 잔차 거리", `${d.loo_dist_mm.toFixed(2)} mm`);
+  if (d.map_sigma_mm && Number.isFinite(d.map_sigma_mm.max_mm)) {
+    addDtDd(dl, "예측 불확실성 (1σ)", `max ±${d.map_sigma_mm.max_mm} mm (mean ±${d.map_sigma_mm.mean_mm} mm)`);
+  }
   if (Array.isArray(d.loo_residual_mm)) {
     addDtDd(dl, "LOO 벡터 (map−arm)", `[${d.loo_residual_mm[0].toFixed(2)}, ${d.loo_residual_mm[1].toFixed(2)}] mm`);
   }
@@ -294,13 +284,16 @@ function renderRobotAndBias(profile) {
   }
 
   const cv = profile?.cross_verify || {};
-  const verdictStatus = (v) => (v === "fail" ? "crit" : v === "warn" ? "warn" : v === "pass" ? "active" : "neutral");
-  const verdictLabel = (v) => (v === "pass" ? "OK" : v === "warn" ? "WARN" : v === "fail" ? "FAIL" : "미측정");
+  const drift = profile?.drift || {};
+  const verdictStatus = (v) => (v === "fail" || v === "hold" ? "crit" : v === "warn" || v === "advisory" ? "warn" : v === "pass" ? "active" : "neutral");
+  const verdictLabel = (v) => (v === "pass" ? "OK" : v === "warn" ? "WARN" : v === "fail" ? "FAIL" : v === "hold" ? "HOLD" : v === "advisory" ? "ADVISORY" : "미측정");
   const setCv = (id, name, v, detail = "") => {
     const el = $(id);
+    if (!el) return;
     el.setAttribute("status", verdictStatus(v));
     el.textContent = `${name}: ${verdictLabel(v)}${detail}`;
   };
+  setCv("cvEvalTag", "Eval", cv.eval_verdict || "unknown");
   const dCam = cv.depth || {};
   const dInfo = Number.isFinite(dCam.cam_to_table_mm) ? ` (${dCam.cam_to_table_mm}mm)` : "";
   setCv("cvDepthTag", "Depth", dCam.verdict, dInfo);
@@ -310,9 +303,16 @@ function renderRobotAndBias(profile) {
   setCv("cvMapTag", "Map", cv.map?.verdict, mInfo);
   const fInfo = Number.isFinite(cv.fk?.tcp_z_m) ? ` (z=${cv.fk.tcp_z_m}m)` : "";
   setCv("cvFkTag", "FK", cv.fk?.verdict, fInfo);
+  const driftAlarm = (drift.alarmed_sites || []).length;
+  const driftVerdict = driftAlarm > 0 ? "advisory" : "pass";
+  const driftDetail = driftAlarm > 0 ? ` (${drift.pattern || "drift"}: ${driftAlarm})` : "";
+  setCv("cvDriftTag", "Drift", driftVerdict, driftDetail);
   const parts = [];
   if (Number.isFinite(dCam.cam_to_table_mm)) parts.push(`cam→table=${dCam.cam_to_table_mm}mm (cfg ${dCam.config_height_m ?? "-"}m)`);
-  if (Number.isFinite(dCam.plate_mm)) parts.push(`plate=${dCam.plate_mm}mm`);
+  if (Number.isFinite(dCam.cam_to_plate_mm)) parts.push(`cam→plate=${dCam.cam_to_plate_mm}mm`);
+  else if (Number.isFinite(dCam.plate_mm)) parts.push(`plate=${dCam.plate_mm}mm`);
+  if (dCam.lateral_xy_verified === false) parts.push("XY미검증");
+  if ((drift.suggested_advisory || []).length) parts.push(`권고: ${drift.suggested_advisory.join(", ")}`);
   if (cv.measured) parts.push(`verify ${cv.measured}`);
   $("crossVerifyMeta").textContent = parts.length ? parts.join(" · ") : "depth-verify.json 없음 (surface-*.json / Map / FK만 표시)";
 
@@ -374,7 +374,9 @@ function renderSitesTable(profile) {
     const srcTxt = s.extra ? "EXTRA(미사용)" : s.map_from ? `← ${s.map_from}` : s.in_map_sites ? "직접측정" : "미지정";
     const ptsTxt = m ? `${m.inlier_count}/${m.dropped_count}/${m.planned_count}` : "-";
     const lmax = m?.loo_error_mm?.max;
-    const looTxt = Number.isFinite(lmax) ? `${lmax.toFixed(1)} mm` : "-";
+    const sigmaMax = s.map_sigma_mm?.max_mm;
+    const looTxt = (Number.isFinite(lmax) ? `${lmax.toFixed(1)}mm` : "-") + (Number.isFinite(sigmaMax) ? ` · ±${sigmaMax.toFixed(1)}` : "");
+    const alarmed = (profile.drift?.alarmed_sites || []).includes(name);
 
     const tdName = document.createElement("td");
     tdName.textContent = name;
@@ -401,7 +403,9 @@ function renderSitesTable(profile) {
     if (Number.isFinite(lmax) && lmax > 15) tdLoo.setAttribute("data-level", "error");
     else if (Number.isFinite(lmax) && lmax > 5) tdLoo.setAttribute("data-level", "warn");
     const tdNote = document.createElement("td");
-    tdNote.textContent = s.note || (m?.measured ? `measured ${m.measured}` : "-");
+    const noteText = s.note || (m?.measured ? `measured ${m.measured}` : "-");
+    tdNote.textContent = alarmed ? `[DRIFT] ${noteText}` : noteText;
+    if (alarmed) tdNote.setAttribute("data-level", "warn");
 
     tr.append(tdName, tdZ, tdDepth, tdTouch, tdSrc, tdPts, tdLoo, tdNote);
     tr.addEventListener("click", () => {
@@ -532,26 +536,17 @@ function wireControls(reqs) {
   $("btnReloadSnapshot").addEventListener("click", () => loadSnapshot());
   $("btnRefreshFrame").addEventListener("click", () => refreshActiveFrame());
   $("btnClearSelect").addEventListener("click", () => {
-    state.selectedKey = null;
-    state.selectedData = null;
-    renderCanvases();
-    renderInspector();
+    state.selectedKey = null; state.selectedData = null; renderCanvases(); renderInspector();
   });
-
   $("siteSelect").addEventListener("change", (ev) => {
-    state.siteName = ev.target.value;
-    state.selectedKey = null;
-    state.selectedData = null;
-    renderAll();
+    state.siteName = ev.target.value; state.selectedKey = null; state.selectedData = null; renderAll();
   });
-
   const zBtns = [$("zPlaneView"), $("zPlaneSurface")];
-  $("zPlaneView").addEventListener("click", () => { state.zPlane = "z_view"; setSegmentGroup(zBtns, $("zPlaneView")); renderCanvases(); });
-  $("zPlaneSurface").addEventListener("click", () => { state.zPlane = "surface"; setSegmentGroup(zBtns, $("zPlaneSurface")); renderCanvases(); });
-
   const fBtns = [$("frameRef"), $("frameLive")];
-  $("frameRef").addEventListener("click", () => { state.frameSource = "reference"; setSegmentGroup(fBtns, $("frameRef")); renderCanvases(); });
-  $("frameLive").addEventListener("click", () => { state.frameSource = "live"; setSegmentGroup(fBtns, $("frameLive")); renderCanvases(); });
+  for (const [el, val, grp, key] of [
+    [$("zPlaneView"), "z_view", zBtns, "zPlane"], [$("zPlaneSurface"), "surface", zBtns, "zPlane"],
+    [$("frameRef"), "reference", fBtns, "frameSource"], [$("frameLive"), "live", fBtns, "frameSource"],
+  ]) el.addEventListener("click", () => { state[key] = val; setSegmentGroup(grp, el); renderCanvases(); });
 
   const scaleBtns = [$("scale1"), $("scale5"), $("scale10")];
   for (const b of scaleBtns) {
@@ -564,28 +559,15 @@ function wireControls(reqs) {
   for (const [id, key] of [["layerPxGrid", "pxGrid"], ["layerMetricGrid", "metricGrid"], ["layerSites", "sites"], ["layerPoints", "points"], ["layerBias", "bias"], ["layerTcp", "centerAndTcp"]]) {
     $(id).addEventListener("change", (ev) => { state.layers[key] = Boolean(ev.target.checked); renderCanvases(); });
   }
-
   for (const [canvasId, getTargets] of [["topCanvas", () => state.lastTopHitTargets], ["armCanvas", () => state.lastArmHitTargets]]) {
     const c = $(canvasId);
     c.addEventListener("click", (ev) => {
       const hit = pickHit(c, ev.clientX, ev.clientY, getTargets());
-      if (hit) {
-        state.selectedKey = hit.key;
-        state.selectedData = hit.data;
-        renderCanvases();
-        renderInspector();
-      }
+      if (hit) { state.selectedKey = hit.key; state.selectedData = hit.data; renderCanvases(); renderInspector(); }
     });
   }
 }
 
-const reqs = initRequests({
-  onSessionChanged: () => {
-    loadSnapshot();
-  },
-});
+const reqs = initRequests({ onSessionChanged: () => loadSnapshot() });
 wireControls(reqs);
-reqs.session.restore().then(() => {
-  reqs.refresh();
-  loadSnapshot();
-});
+reqs.session.restore().then(() => { reqs.refresh(); loadSnapshot(); });
