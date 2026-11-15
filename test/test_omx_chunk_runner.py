@@ -460,6 +460,22 @@ def test_an_empty_grasp_is_judged_after_the_slow_jaws_stop():
     assert done["holding"] is False and done["state"][5] == pytest.approx(46.6)
 
 
+def test_release_waits_for_slow_jaws_to_open_before_settling():
+    class SlowJaws(Robot):  # release must not declare settled while jaws are still pinched on the box
+        def send_action(self, action):
+            target = action["gripper.pos"]
+            super().send_action({**action, "gripper.pos": self.pos[5]})
+            self.pos[5] += max(-0.5, min(0.5, target - self.pos[5]))
+
+    lib = library()
+    lib["chunks"]["release_place"] = [[0.0, -60.0, 50.0, 45.0, 10.0, 60.5]]
+    robot = SlowJaws(object_at=54.5)
+    robot.pos[5] = 54.5
+    status = run_with(robot, lib, ["run release_place", "stop"])
+    done = by_command(status, "run release_place")[0]
+    assert done["ok"] is True and done["settled"] is True and done["state"][5] == pytest.approx(60.5)
+
+
 def test_a_burst_of_jogs_against_a_joint_that_does_not_follow_is_refused():
     robot = Robot(blocked=(1,))
     status, clock = [], [0.0]

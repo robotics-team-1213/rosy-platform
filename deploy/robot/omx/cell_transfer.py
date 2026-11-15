@@ -155,6 +155,7 @@ class Gate:
 
 FOLDED = ("goto above_pick", "run descend_pick", "run grasp_pick", "run lift_pick", "park",
           "goto above_place", "run descend_place", "run release_place", "run lift_place", "park")
+RETURN_HELD = ("goto above_place", "run descend_place", "run release_place", "run lift_place", "park")
 
 # jaws folded home on nothing stop about 2 units above the closed command (48.6 for 46.6); on a 30 mm box near 52.6
 STILL_HOLDING_UNITS = 4.0
@@ -178,7 +179,8 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
     steps = []
     if closed is None:  # 2026-11-13 arm_s: judged against the 46.5 command, empty jaws at 50.0 counted as holding
         try:
-            closed = json.loads(Path(library).read_text()).get("jaw_empty_stop")
+            _lib = json.loads(Path(library).read_text())
+            closed = _lib.get("jaw_empty_stop") if _lib.get("jaw_empty_stop") is not None else _lib.get("gripper_closed")
         except (OSError, ValueError):
             closed = None
 
@@ -240,12 +242,18 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
                 return {"result": "misaligned", "at": "pinch", "pinch": seen, "steps": steps}
         if command == "run lift_place" and status.get("ok") and after_place is not None:
             after_place()  # hover over the box just placed: the wrist reference for 'centred' (cell_wrist_ref)
-        if command in ("run grasp_pick", "run lift_pick") and not status.get("holding"):
+        no_pick = "run grasp_pick" not in sequence
+        if (
+            command in ("run grasp_pick", "run lift_pick")
+            or (no_pick and command in ("goto above_place", "run descend_place"))
+        ) and not status.get("holding"):
             import cell_arm_cal
 
             if cell_arm_cal.infer_holding(status, closed=closed if closed is not None else 48.8):
                 status["holding"] = True
                 status["holding_inferred"] = True
+            elif no_pick and status.get("holding") is None:
+                status["holding"] = False
         if command == "run grasp_pick" and not status.get("holding") and feel is not None:
             status = feel(run)  # cell_feel: an empty grasp feels again, shifted along the closing axis
             if status.get("contact") or not status.get("ok"):

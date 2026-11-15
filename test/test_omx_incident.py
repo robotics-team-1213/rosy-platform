@@ -543,4 +543,17 @@ def test_decide_handles_torque_after_open_error_string_without_crashing(tmp_path
     assert "caps not confirmed restored" in out["decision"]["reason"]
 
 
+def test_handle_filters_leader_keys_from_latched_reboot(tmp_path, monkeypatch):
+    """2026-11-16 00:03: leader hw_error recorded 'leader 6' in latched; act() only receives follower ints."""
+    monkeypatch.chdir(tmp_path)
+    s = session(tmp_path, latched=False, windup=False)
+    data = json.loads(s.read_text())
+    data["hardware_faults"] = {"leader 6": {"hw_error": 32}, "13": {"hw_error": 32}}
+    s.write_text(json.dumps(data))
+    called = []
+    out = oi.handle(s, "arm_b", act=lambda ids: called.append(ids) or {"rebooted": ids}, link=Link())
+    assert called == [[13]]
+    assert set(out["facts"]["latched"]) == {"leader 6", "13"}
+
+
 

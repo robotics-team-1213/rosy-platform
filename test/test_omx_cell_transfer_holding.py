@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("numpy")
 sys.path.insert(0, str(Path(__file__).parents[1] / "deploy/robot/omx"))
-from cell_transfer import transfer_folded  # noqa: E402
+from cell_transfer import RETURN_HELD, transfer_folded  # noqa: E402
 from cell_envelope import SEQUENCE  # noqa: E402
 
 
@@ -66,3 +66,25 @@ def test_a_park_that_shed_its_load_is_not_backed_up(tmp_path):
     cell = Strained("run lift_pick", "contact (overload-hold on shoulder_lift by the guard): lift and elbow shed its load")
     out = transfer_folded(cell, library)
     assert "retreat" not in cell.sent and out["result"] == "contact" and out["at"] == "park"
+
+
+@pytest.mark.parametrize("jaws, expected", [(53.6, "placed"), (48.9, "empty")])
+def test_return_held_places_when_jaws_hold_box_and_folds_when_empty(tmp_path, jaws, expected):
+    class HeldCell:
+        def __init__(self, hold_jaws):
+            self.jaws, self.sent = hold_jaws, []
+
+        def act(self, command):
+            self.sent.append(command)
+            after_rel = "run release_place" in self.sent
+            return {"ok": True, "state": [0, 0, 0, 0, 0, 48.8 if after_rel else self.jaws]}
+
+    library = tmp_path / "lib.json"
+    library.write_text(json.dumps({"gripper_closed": 48.8, "jaw_empty_stop": 48.8, "chunks": {}}))
+    cell = HeldCell(jaws)
+    out = transfer_folded(cell, library, sequence=RETURN_HELD)
+    assert out["result"] == expected
+    if expected == "placed":
+        assert cell.sent == [f"load {library}", *RETURN_HELD]
+    else:
+        assert "run release_place" not in cell.sent and cell.sent[-1] == "park"

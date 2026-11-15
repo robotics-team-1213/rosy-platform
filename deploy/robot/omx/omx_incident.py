@@ -236,7 +236,8 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
     folder.mkdir(parents=True, exist_ok=True)
     if d["hold"]:  # the local hold exists before any device recovery and before Fleet is asked
         keep_hold(arm, f"{folder}: {d['reason']}"[:380])
-    acted = act([int(m) for m in f["latched"]]) if act and "reboot_latched" in d["actions"] else None
+    follower_ids = [int(m) for m in f["latched"] if str(m).isdigit()]
+    acted = act(follower_ids) if act and follower_ids and "reboot_latched" in d["actions"] else None
     incident = {"schema": "rosy.omx-incident.v1", "arm": arm, "stamp": stamp, "session": str(session_path),
                 "facts": f, "decision": d, "recovery": acted, "reported": False}
     cell_decisions.append(decisions, {

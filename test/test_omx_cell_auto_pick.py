@@ -1402,3 +1402,41 @@ def test_gate_validates_zone_entry_and_park_release_across_chained_commands(tmp_
     assert gate.act("chain run lift_place ; park")["ok"]
     assert left == [True]
 
+
+def test_run_return_held_plans_places_and_stops_when_empty(tmp_path):
+    class HeldCell(Cell):
+        def act(self, command):
+            out = super().act(command)
+            if command.endswith("run release_place") or command == "run release_place":
+                self.grip = CONFIG["plan"]["grip_closed"]
+            return {**out, "settled": True, "state": self.q[:5] + [self.grip]}
+
+    config = copy.deepcopy(CONFIG)
+    auto.cell_attempts.start(tmp_path / "attempts.jsonl")
+    config["sites"]["belt"] = {**config["sites"]["pinky"], "place": [0.060, 0.065]}
+    cal_data_path = biased_map(tmp_path)
+    cal.save(cal_data_path, "belt", {
+        "homography": cal.fit([(tray_pixel(x, y), (x, y)) for x in (0.05, 0.072, 0.094) for y in (0.06, 0.10, 0.14)]).tolist(),
+        "loo_error_mm": {"max": 0.1, "mean": 0.1}, "points": [],
+    })
+    cal_data = auto.cell_pivot.with_site_maps(config, cal.load(cal_data_path))
+    # 1. Dry-run plans place onto belt without running the arm
+    dry_cell = HeldCell([CONT2])
+    dry = auto.run_return_held(dry_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path, dry_run=True)
+    assert dry["result"] == "planned" and Path(dry["plan"]["library"]).is_file()
+    # 2. Holding object at home places onto belt and verifies arrival
+    full_cell = HeldCell([CONT2])
+    full_cell.held = full_cell.objects[0]
+    full_cell.grip = CONFIG["plan"]["grip_closed"] + 5.0
+    placed = auto.run_return_held(full_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path, object_id="container-2")
+    assert placed["result"] == "placed", placed
+    assert placed["verify"]["inside"] is True, placed["verify"]
+    assert full_cell.held is None
+    assert "run grasp_pick" not in full_cell.commands and "run release_place" in full_cell.commands
+    # 3. Empty jaws at home stop at above_place and park cleanly without opening jaws
+    empty_cell = HeldCell([])
+    empty_cell.grip = CONFIG["plan"]["grip_closed"]
+    empty = auto.run_return_held(empty_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path)
+    assert empty["result"] == "empty" and "run release_place" not in empty_cell.commands
+    assert empty_cell.commands[-1] == "park"
+
