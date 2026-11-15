@@ -346,8 +346,35 @@ class Runner:
     def run(self, lines) -> None:
         """`lines()` returns the commands that arrived since the last call."""
         self.target = self.present()
-        self.report(command="start", ok=True, present=self.target)
         period = 1.0 / self.fps
+        motion = getattr(self.robot, "motion", None)
+        # Wait for the guard's stationary initial alignment before admitting or reporting ready for chunks.
+        while motion is not None and not getattr(motion, "tracking", True):
+            started = self.clock()
+            arrived = lines()
+            if arrived:
+                self.pending += arrived
+                if "human-hold" in self.pending:
+                    self.pending.clear()  # preempt even a queued stop or park
+                    self.command("human-hold")
+            try:
+                self.tick()
+            except Exception as error:
+                self.status(
+                    {
+                        "command": "start",
+                        "ok": False,
+                        "fault": f"session ended: {type(error).__name__}: {error}"[:1000],
+                        "t": round(time.time(), 3),
+                    }
+                )
+                raise
+            if getattr(self, "_stopped", False):
+                return
+            if self.human_hold_latched:
+                break
+            self.sleep(max(0.0, period - (self.clock() - started)))
+        self.report(command="start", ok=True, present=self.target)
         self.last_input = self.clock()
         while True:
             started = self.clock()

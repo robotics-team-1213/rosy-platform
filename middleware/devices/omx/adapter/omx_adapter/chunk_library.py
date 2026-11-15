@@ -79,16 +79,19 @@ def chain_path(steps: list[list], fps: int, blend_s: float = 0.25) -> list:
 
 def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None,
               speed: float = 0.85) -> list:
-    """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed)."""
+    """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed);
+    stay folded for near-home or already-folded pan turns (`wait` side -> `home`) instead of unfolding."""
     goal = list(home[:5]) + [closed]
-    if (
-        max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 5.0 and abs(start[5] - closed) <= 5.0
-    ) or (
+    near_home = max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 5.0 and abs(start[5] - closed) <= 5.0
+    folded_pose = (
         start[1] <= -50.0
+        and goal[1] <= -50.0
         and max(abs(a - b) for a, b in zip(start[1:4], goal[1:4])) <= 10.0
-        and abs(start[0] - goal[0]) <= 12.0
-    ):
-        return flow([list(start), goal], fps, 0.5 * speed * PARK_SPEED, blend=[False, False], blend_s=0.2,
+        and abs(start[0] - goal[0]) <= 70.0
+    )
+    if near_home or folded_pose:
+        rate = (0.5 if abs(start[0] - goal[0]) <= 12.0 else 1.0) * speed * PARK_SPEED
+        return flow([list(start), goal], fps, rate, blend=[False, False], blend_s=0.2,
                     rise_speed=RISE_SPEED)
     return transit_path(start, goal, closed, fps, transit, speed)
 

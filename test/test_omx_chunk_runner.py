@@ -1360,4 +1360,48 @@ def test_hardware_stop_while_extended_folds_home_before_turning_torque_off():
     assert end["state"][:5] == pytest.approx(HOME[:5])
 
 
+def test_runner_waits_for_guard_alignment_before_reporting_start_or_starting_chunks():
+    class AligningRobot(Robot):
+        def __init__(self):
+            super().__init__()
+            self.motion = type("Motion", (), {"tracking": False})()
+            self.align_ticks = 0
+
+        def send_action(self, action):
+            if not self.motion.tracking:
+                if abs(action["shoulder_pan.pos"] - HOME[0]) > 0.5:
+                    raise ValueError("follower: alignment deadline exceeded")
+                self.align_ticks += 1
+                if self.align_ticks >= 16:
+                    self.motion.tracking = True
+            return super().send_action(action)
+
+    robot, status, clock = AligningRobot(), [], [0.0]
+    seen_start = []
+
+    def lines():
+        if by_command(status, "start") and not seen_start:
+            seen_start.append(robot.motion.tracking)
+            return ["run approach_pinky", "stop"]
+        if not seen_start and clock[0] == 0.0:
+            # Even an eager queued command before `start` must not preempt alignment
+            return ["state"]
+        return []
+
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lines)
+    assert seen_start == [True] and robot.align_ticks == 16
+    assert by_command(status, "start")[0]["ok"] is True
+    assert by_command(status, "run approach_pinky")[0]["ok"] is True
+
+
+@pytest.mark.parametrize("wait_pan", [-49.212, 50.812])
+def test_park_from_folded_side_wait_pose_stays_folded_without_rising_to_transit(wait_pan):
+    home = [0.8, -62.2, 53.1, 51.6, 45.2, 49.0]
+    wait_side = [wait_pan, -62.2, 53.1, 51.6, 45.2, 49.0]
+    path = m.park_path(wait_side, home, 49.0, fps=30)
+    assert all(f[1] <= -50.0 for f in path)
+    assert not m.too_fast([wait_side] + path, 30)
+    assert path[-1] == pytest.approx(home)
 
