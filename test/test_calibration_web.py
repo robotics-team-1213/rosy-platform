@@ -167,3 +167,110 @@ def test_check_request_takes_pass_or_fail(account_screen, store):
     assert status == 200 and json.loads(text)["answer"]["result"] == "fail"
     rows = {r["id"]: r for r in json.loads(call(url, web.API, cookie="valid")[1])["requests"]}
     assert rows["pose-1"]["verdict"] == "fail" and rows["belt-end-1"]["status"] == "open"
+
+
+def _write_test_profile(tmp_path: Path, live_url: str, *, include_tcp_x: bool = False) -> Path:
+    arm_dir = tmp_path / "arm_test"
+    arm_dir.mkdir(parents=True, exist_ok=True)
+    ref_img = arm_dir / "ref.jpg"
+    ref_img.write_bytes(b"\xff\xd8\xff\xd9")
+    cfg = {
+        "arm_id": "arm_a",
+        "work_dir": "w1",
+        "calibration_path": str(arm_dir / "calibration.json"),
+        "cameras": {"top": {"url": live_url, "height_m": 0.6, "center_px": [320, 240]}},
+        "preflight": {"reference_top": str(ref_img)},
+        "calibrate": {"map_sites": ["pallet"], "map_points": [[0.10, 0.08], [0.12, 0.08], [0.12, 0.12], [0.10, 0.12]]},
+        "sites": {"pallet": {"surface_z": -0.01, "start": [0.15, 0.03], "place": [0.15, 0.115]}},
+    }
+    if include_tcp_x:
+        cfg["tcp_x_m"] = 0.074
+    (arm_dir / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+    cal_data = {
+        "schema": "rosy.omx-cell-calibration.v1",
+        "sites": {
+            "pallet": {
+                "z_view": 0.14,
+                "homography": [[0.0, -0.001, 0.3], [0.001, 0.0, -0.1], [0.0, 0.0, 1.0]],
+                "loo_error_mm": {"max": 3.1, "mean": 1.8},
+                "points": [
+                    {"pixel": [220, 200], "arm_m": [0.10, 0.08]},
+                    {"pixel": [220, 180], "arm_m": [0.12, 0.08]},
+                    {"pixel": [180, 180], "arm_m": [0.12, 0.12]},
+                    {"pixel": [180, 200], "arm_m": [0.10, 0.12]},
+                ],
+            }
+        },
+    }
+    (arm_dir / "calibration.json").write_text(json.dumps(cal_data), encoding="utf-8")
+    (arm_dir / "live.json").write_text(json.dumps({"t": 1.0, "state": [0.0, -0.5, 0.8, 0.4, 0.0]}), encoding="utf-8")
+    reg = tmp_path / "profiles.json"
+    reg.write_text(json.dumps([{"id": "arm_a", "config_path": str(arm_dir / "config.json"),
+                                "live_path": str(arm_dir / "live.json")}]), encoding="utf-8")
+    return reg
+
+
+def test_unconfigured_profiles_serves_static_grid_assets(open_screen):
+    assert call(open_screen, "/grid.js")[0] == 200 and call(open_screen, "/requests.js")[0] == 200
+    status, body = call(open_screen, web.PROFILES_API)
+    data = json.loads(body)
+    assert status == 200 and data["configured"] is False and data["profiles"] == []
+
+
+def test_profiles_endpoint_is_account_gated_and_survives_missing_tcp_x(store, tmp_path, monkeypatch):
+    reg = _write_test_profile(tmp_path, "http://127.0.0.1:1/unreachable.jpg", include_tcp_x=False)
+    monkeypatch.setattr(web.cell_calibration_view.cell_pivot, "joints_tcp", lambda *a: (_ for _ in ()).throw(SystemExit(2)))
+    account = Account()
+    server = web.make_server(store, 0, account, profiles_path=reg)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        assert call(url, web.PROFILES_API)[0] == 401
+        assert call(url, web.PROFILES_API + "/arm_a/frame/reference")[0] == 401
+        status, body = call(url, web.PROFILES_API, cookie="valid")
+        assert status == 200
+        prof = json.loads(body)["profiles"][0]
+        assert prof["id"] == "arm_a" and prof["sites"]["pallet"]["map"]["inlier_count"] == 4
+        assert prof["robot_status"]["live"]["present"] is True and prof["robot_status"]["live"]["tcp"] is None
+        assert call(url, web.PROFILES_API, cookie="valid", origin=ORIGIN, body={})[0] == 405
+        assert call(url, web.PROFILES_API + "/arm_a/frame/reference", cookie="valid") == (200, b"\xff\xd8\xff\xd9")
+        assert call(url, web.PROFILES_API + "/arm_a/frame/live", cookie="valid")[0] == 503
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_live_frame_proxy_allows_loopback_and_blocks_remote_ssrf(store, tmp_path):
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class CamHandler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):  # noqa: N802
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", "8")
+            self.end_headers()
+            self.wfile.write(b"\x89PNG-cam")
+
+    cam = HTTPServer(("127.0.0.1", 0), CamHandler)
+    threading.Thread(target=cam.serve_forever, daemon=True).start()
+    try:
+        reg = _write_test_profile(tmp_path, f"http://127.0.0.1:{cam.server_port}/top.jpg", include_tcp_x=True)
+        server = web.make_server(store, 0, None, profiles_path=reg)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        url = f"http://127.0.0.1:{server.server_port}"
+        try:
+            assert call(url, web.PROFILES_API + "/arm_a/frame/live") == (200, b"\x89PNG-cam")
+            # mutate live URL in registry to a non-loopback host -> must refuse (SSRF guard)
+            items = json.loads(reg.read_text(encoding="utf-8"))
+            items[0]["live_frame_url"] = "http://169.254.169.254/latest/meta-data"
+            reg.write_text(json.dumps(items), encoding="utf-8")
+            assert call(url, web.PROFILES_API + "/arm_a/frame/live")[0] == 403
+        finally:
+            server.shutdown()
+            server.server_close()
+    finally:
+        cam.shutdown()
+        cam.server_close()
