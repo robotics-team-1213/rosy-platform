@@ -33,3 +33,36 @@ def test_empty_jaws_end_the_carry_at_the_grasp(tmp_path, stop, carried):
     out = transfer_folded(cell, library, sequence=SEQUENCE)
     assert ("goto above_place" in cell.sent) is carried
     assert out["result"] != "empty" if carried else out == {**out, "result": "empty", "at": "run grasp_pick"}
+
+
+class Strained(Cell):
+    """The park after `after` holds with a contact; `error` is the runner's text."""
+
+    def __init__(self, after, error):
+        super().__init__(jaws=50.0)  # above this library's empty stop: a box is held
+        self.after, self.error = after, error
+
+    def act(self, command):
+        out = super().act(command)
+        if command == "park" and self.after in self.sent:
+            return {**out, "ok": False, "contact": True, "error": self.error}
+        return out
+
+
+def test_a_park_overload_after_a_wrist_refusal_keeps_its_contact_in_the_steps(tmp_path):
+    """2026-11-14 arm_s: the wrist refused at above_pick, the park from there overloaded shoulder_lift and the arm sagged onto
+    the box; the result said only "misaligned" and nothing stopped the next attempt."""
+    library = tmp_path / "lib.json"
+    library.write_text(json.dumps({"chunks": {}}))
+    cell = Strained("goto above_pick", "contact in park: shoulder_lift lag rose to 2.3 units at PWM -538 of 600")
+    out = transfer_folded(cell, library, wrist=lambda: {"verdict": "refuse"})
+    park = [s for s in out["steps"] if s["command"] == "park"][-1]  # run_auto stops on it (test_a_park_that_ended_in_contact)
+    assert out["result"] == "misaligned" and park["contact"] and "shoulder_lift" in park["error"]
+
+
+def test_a_park_that_shed_its_load_is_not_backed_up(tmp_path):
+    library = tmp_path / "lib.json"
+    library.write_text(json.dumps({"gripper_closed": 45.5, "jaw_empty_stop": 45.5, "chunks": {}}))
+    cell = Strained("run lift_pick", "contact (overload-hold on shoulder_lift by the guard): lift and elbow shed its load")
+    out = transfer_folded(cell, library)
+    assert "retreat" not in cell.sent and out["result"] == "contact" and out["at"] == "park"
