@@ -99,3 +99,12 @@ def test_resume_counts_only_landings_it_relaunched(tmp_path, monkeypatch):
     monkeypatch.setattr(land_tick.land_async, "orphans", lambda repo: ["land-held-1", "land-ok-1"])
     monkeypatch.setattr(land_tick.land_async, "resume", resume)
     assert land_tick.resume(tmp_path) == "resumed 1 of 2: land-ok-1"
+
+
+def test_warm_runs_only_when_queue_is_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(land_tick.land_queue, "queue_dir", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_queue, "ahead", lambda q, t: [{"status": "pending"}])
+    assert land_tick.warm(tmp_path) == "queue active; skipped"
+    monkeypatch.setattr(land_tick.land_queue, "ahead", lambda q, t: [])
+    monkeypatch.setattr(land_tick.land_cache, "warm_main", lambda repo, limit: (3, 4))
+    assert land_tick.warm(tmp_path) == "warmed 3 of 4"

@@ -38,7 +38,7 @@ ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 # FULL round carried 60-163 min of browser chunks and the hosts ran at load ~5 of 24 cores; each PC's JOB
 # admission (remote_job.ADMIT, since 10-28) now holds the cores and GB, and LOAD-FLAKY ids keep their ALONE chunk.
 # ROSY_BROWSER_PER_HOST overrides it to measure.
-BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "4"))
+BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "2"))
 # 6 since 2026-11-01: FULL rounds ran their invocations at 0.4-0.7x parallelism (sum run_s / wall), the tail queued
 # behind the run's own workers for 60-117 min; each PC's JOB admission still bounds cores and GB.
 MAX_MAIN = 3  # main workers one run may ask of a full host; 3 avoids diluting xdist headroom down to -n 2

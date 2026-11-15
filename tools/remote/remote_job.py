@@ -40,8 +40,10 @@ WAIT_CAP = 3  # timeout_s multiples a job may wait for room; new jobs stay out m
 # always starts, however large. One flock makes check and lock one step across runs. Waiting keeps the laptop
 # polling (its pid is up), so land_watchdog sees it as alive.
 HOLD_DEFERRED = b"[remote-pytest] admission deferred: gpu/sim hold"
-ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone; DEFER_HOLD='""" + HOLD_DEFERRED.decode() + r"""'
+ROOM_DEFERRED = b"[remote-pytest] admission deferred: host room"
+ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone; DEFER_HOLD='""" + HOLD_DEFERRED.decode() + r"""'; DEFER_ROOM='""" + ROOM_DEFERRED.decode() + r"""'
 CAPC=${ROSY_HOST_CORES:-$(nproc)}; CAPG=${ROSY_HOST_GB:-$(awk '/^MemTotal:/{print int($2 / 1048576)}' /proc/meminfo)}
+w_admit0=$(date +%s)
 exec 9> ~/rosy-jobs/.admit
 while :; do
   now=$(date +%s)
@@ -62,8 +64,8 @@ while :; do
     [ "$p" != $$ ] && kill -0 "$p" 2>/dev/null && pending=1
   done
   if [ "$AL" = 1 ]; then ok=$((others == 0))
-  # ROSY_JOB_TURN=1 (xdist_plan.TURN_JOB): the landing holding the turn; never beside an alone job, else at once.
-  elif [ "${ROSY_JOB_TURN:-}" = 1 ]; then ok=$((held == 0))
+  # ROSY_JOB_TURN=1 (xdist_plan.TURN_JOB): prioritized above CAPC/CAPG, capped against 2x overcommit.
+  elif [ "${ROSY_JOB_TURN:-}" = 1 ]; then ok=$((held == 0 && (others == 0 || (uc + RC <= CAPC + 4 && ug + G <= CAPG + 6))))
   else ok=$((held == 0 && pending == 0 && (others == 0 || (uc + RC <= CAPC && ug + G <= CAPG)))); fi
   if [ $ok = 1 ]; then echo "$$ $X $RC $G" > "$L"; rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; break; fi
   # 11-09: behind a training or Gazebo hold (hours) an alone waiter's marker kept every pytest off the host. It
@@ -73,6 +75,9 @@ while :; do
     rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; : "${w0:=$now}"
     if [ $((now - w0)) -ge "${ROSY_ALONE_HOLD_WAIT_S:-180}" ]; then echo "$DEFER_HOLD"; exit 253; fi
     sleep 5; continue
+  fi
+  if [ "$AL" != 1 ] && [ $((now - w_admit0)) -ge "${ROSY_ADMIT_WAIT_S:-180}" ]; then
+    flock -u 9; echo "$DEFER_ROOM"; exit 253
   fi
   [ "$AL" = 1 ] && echo $$ > ~/rosy-jobs/$$.alone-wait
   flock -u 9
@@ -112,12 +117,14 @@ export PYTEST_TIMEOUT="${ROSY_PER_TEST_TIMEOUT:-900}"
 # xdist_plan job words: an xdist job's workers and a light host's memory cap, for the lock and MemoryMax.
 # ROSY_JOB_RESERVE_GB: the lock budget placement counts (laptop memory history), apart from the MemoryMax cap.
 # ROSY_JOB_RESERVE_CORES: the lock's cores from the laptop's cpu history; -n stays ROSY_JOB_CORES.
-C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-$M}; RC=${ROSY_JOB_RESERVE_CORES:-$C}
+C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-${ROSY_JOB_MEM_GB:-2}}; RC=${ROSY_JOB_RESERVE_CORES:-$C}
 [[ $C$M$G$RC =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/_MEM_GB/_RESERVE_* must be whole numbers"; exit 2; }
 X=pytest; [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && X=browser  # PROBE counts browser locks per host
 """ + ADMIT + "\n" + ISAAC_GPU_GUARD + r"""
 # Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
-[ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
+[ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { compgen -G ~/.cache/ms-playwright/chromium-*/chrome*/chrome >/dev/null 2>&1 \
+  || compgen -G ~/.cache/ms-playwright/chromium_headless_shell-*/chrome*/chrome* >/dev/null 2>&1 \
+  || timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
 umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
 # tmp_path root per job, removed by the EXIT trap: /tmp/pytest-of-<user> garbage filled a host disk (2026-10-26).
@@ -347,6 +354,8 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                         raise RebootSoon(f"{host}: nightly reboot admission deferred")
                     if rc == 253 and HOLD_DEFERRED + b"\n" in log.read_bytes():
                         raise RebootSoon(f"{host}: an alone job deferred while other jobs ran; placed elsewhere")
+                    if rc == 253 and ROOM_DEFERRED + b"\n" in log.read_bytes():
+                        raise RebootSoon(f"{host}: admission deferred after room wait; placed elsewhere")
                     wait = max(0.0, admitted - wait_from) if waiting else 0.0  # user@address: only the user part
                     out.write(f"\n{TIMING} host={host.split('@')[0]} start={start_at:.0f} wait_s={wait:.0f}"
                               f" run_s={clock() - admitted:.0f}\n".encode())

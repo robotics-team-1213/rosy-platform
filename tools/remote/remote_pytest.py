@@ -89,11 +89,10 @@ NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
 LIGHT_GB = {"pytest": 4}
 HEADROOM: dict[str, dict] = {}  # place(): measured free cores/GB of each placed host, for xdist_plan
 BLOCKED: set[str] = set()  # place(): reachable hosts left out for an alone job, for workers()
-SITE_RESERVE = (2, 4)
+SITE_RESERVE = (1, 2)
 SITE_CPU_QUOTA = "400%"
-# Seconds a placement reservation (~/rosy-jobs/<name>.resv) counts before the job lock replaces it:
-# pytest waits up to 600 s for the repo lock and 3600 s for a venv build; --pick gives the script 10 min.
-RESERVE_S = {"pytest": 4500, "pick": 600}
+# Seconds a placement reservation (~/rosy-jobs/<name>.resv) counts before the job lock replaces it.
+RESERVE_S = {"pytest": 900, "pick": 600}
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
@@ -214,7 +213,7 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
             BLOCKED.discard(host)
             continue
         site = host in SITES or p.get("site", False)
-        cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
+        cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - ((2 if cls == "sim" else SITE_RESERVE[0]) if site else 0)
         mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
         why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else "alone job running or waiting"
                if cls == "pytest" and p.get("pytest_blocked") else f"no {cls} capability" if not p[cls]
@@ -230,7 +229,8 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
                               "sim_held": p.get("sim_held", 0), "browser_jobs": p.get("browser_jobs", 0), "caps": p.get("caps", ())}
             ranked.append((site, mem < need_m, -min(cores / need_c, mem / need_m), i, host))
     ranked.sort()
-    return [r[-1] for r in ranked if not r[0]] or [r[-1] for r in ranked], notes
+    non_site = [r[-1] for r in ranked if not r[0]]
+    return (non_site + [r[-1] for r in ranked if r[0]] if not any(not r[0] and not r[1] for r in ranked) else non_site) or [r[-1] for r in ranked], notes
 
 
 LOCAL_REFUSED = ("[remote-pytest] {what} is removed (D-584): tests never run on the operator laptop."

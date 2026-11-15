@@ -110,7 +110,7 @@ def test_site_pc_under_another_name_keeps_its_protections(monkeypatch, tmp_path)
     monkeypatch.setattr(rp, "probe", probes.get)
     assert rp.placed_hosts("pytest", list(probes)) == ["model@1"]  # last
     _, notes = rp.place("pytest", [other], [roomy])
-    assert "5.8 cores, 9.0 GB free (site PC)" in notes[0]  # Fleet reserve taken off
+    assert "6.8 cores, 11.0 GB free (site PC)" in notes[0]  # Fleet reserve taken off
     probes["model@1"] = host(avail_gb=1)
     assert rp.placed_hosts("pytest", list(probes)) == [other]
     sent = []
@@ -586,11 +586,11 @@ def test_a_slow_host_does_not_hold_back_queued_invocations(monkeypatch, tmp_path
 
 
 def test_a_full_hosts_default_lanes_take_four_of_a_full_rounds_browser_chunks():
-    """2026-10-31: the per-host cap counts every run's browser jobs; 2 left 4 slots for all preparing landings."""
+    """2026-10-31: the per-host cap counts every run's browser jobs; 2 prevents browser exhaustion."""
     room = {"cores": 18, "mem": 18, "site": False, "light": False}
     b = [rp.BROWSER_ENV, "t/a_browser.py"]
-    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": dict(room)}).count(("a", "lane")) == 4
-    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": {**room, "browser_jobs": 3}}).count(("a", "lane")) == 1
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": dict(room)}).count(("a", "lane")) == 2
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": {**room, "browser_jobs": 1}}).count(("a", "lane")) == 1
 
 
 def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do_not(monkeypatch):
@@ -961,7 +961,7 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
     assert start.returncode == 0, start.stderr
     lock, jobs = home / "rosy-jobs" / "r.0.lock", home / "rosy-test" / "runs" / "r.jobs"
     pid = _wait_for_lock(lock)
-    assert lock.read_text().split()[1:] == ["pytest", "2", "6"]
+    assert lock.read_text().split()[1:] == ["pytest", "2", "2"]
     assert os.getpgid(pid) == pid  # KILL's process-group target
     assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0  # a retried start: no second job
     assert _poll_until_done(env) == 3
@@ -1389,7 +1389,7 @@ def test_exclusive_word_reaches_actual_job_export_and_admission(tmp_path):
     assert start.returncode == 0, start.stderr
     assert _poll_until_done(env) == 0
     out = (home / 'rosy-test/runs/r.jobs/0.log').read_text()
-    assert 'job_alone=1' in out and re.search(r'^\d+ alone 2 6$', out, re.M)
+    assert 'job_alone=1' in out and re.search(r'^\d+ alone 2 2$', out, re.M)
     assert 'ROSY_JOB_ALONE=1' not in out
 
 
@@ -1446,7 +1446,7 @@ def test_venv_installs_pinned_xdist_so_its_hash_rebuilds_the_venv():
     assert "pytest-xdist==3.8.0" in rp.VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
 
 
-@pytest.mark.parametrize("words, lock, mem", [([], "2 6", "6G"), (["ROSY_JOB_CORES=6"], "6 6", "6G"),
+@pytest.mark.parametrize("words, lock, mem", [([], "2 2", "6G"), (["ROSY_JOB_CORES=6"], "6 2", "6G"),
                                               (["ROSY_JOB_MEM_GB=4"], "2 4", "4G")])
 def test_job_records_its_xdist_budget_in_the_lock_and_caps_memory(tmp_path, words, lock, mem):
     if not shutil.which("setsid") or sys.platform == "win32":

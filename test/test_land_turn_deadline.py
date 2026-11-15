@@ -308,3 +308,11 @@ def test_round_one_record_only_delta_since_full_main_skips_module_suites(repos, 
     monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, rnd: calls.append((rnd, inv)) or [])
     assert land.main(["--tests", "auto"]) == 0
     assert calls == [(1, [["test/test_guard.py"]])]
+
+
+def test_overtime_cap_stops_runaway_tickets(monkeypatch):
+    args = land.argparse.Namespace(_overtime=land.land_checks.MAX_OVERTIMES - 1)
+    assert land.land_checks.next_overtime(land, args) == land.land_checks.MAX_OVERTIMES
+    args._overtime = land.land_checks.MAX_OVERTIMES
+    with pytest.raises(land.Stop, match="overtime"):
+        land.land_checks.next_overtime(land, args)

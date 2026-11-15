@@ -126,7 +126,7 @@ def test_job_prints_the_scope_memory_peak_and_keeps_the_exit_code(tmp_path, peak
 @pytest.mark.parametrize("words, lock, mem", [(["ROSY_JOB_RESERVE_GB=3"], "2 3", "6G"),
                                               (["ROSY_JOB_MEM_GB=4"], "2 4", "4G"),
                                               (["ROSY_JOB_CORES=6", "ROSY_JOB_RESERVE_GB=3"], "6 3", "6G"),
-                                              (["ROSY_JOB_CORES=6", "ROSY_JOB_RESERVE_CORES=2"], "2 6", "6G")])
+                                              (["ROSY_JOB_CORES=6", "ROSY_JOB_RESERVE_CORES=2"], "2 2", "6G")])
 def test_job_lock_takes_the_reservation_and_memory_max_the_cap(tmp_path, words, lock, mem):
     home, env = _job_env(tmp_path, 'cat "$HOME/rosy-jobs/r.0.lock"\n')
     (tmp_path / "bin" / "systemd-run").write_text(
@@ -162,13 +162,13 @@ def test_missing_history_has_no_rows(tmp_path):
 
 def test_a_run_reserves_its_largest_measured_need_and_full_while_any_is_unmeasured(tmp_path):
     history, small, heavy = tmp_path / mh.FILE, ["test/a.py"], ["test/b.py"]
-    assert mh.reserve_gb_all(history, [small]) == 6 and mh.reserve_gb_all(None, [small]) == 6
+    assert mh.reserve_gb_all(history, [small]) == 2 and mh.reserve_gb_all(None, [small]) == 2
     mh.record(history, small, "omen", 300, "ab" * 20)
     assert mh.reserve_gb_all(history, [small]) == 1
-    assert mh.reserve_gb_all(history, [small, heavy]) == 6  # heavy was never measured
+    assert mh.reserve_gb_all(history, [small, heavy]) == 2  # heavy was never measured
     mh.record(history, heavy, "omen", 2000, "ab" * 20)
     assert mh.reserve_gb_all(history, [small, heavy]) == 3  # 1.25 x 2000 MiB, rounded up
-    assert mh.reserve_gb_all(history, []) == 6
+    assert mh.reserve_gb_all(history, []) == 2
     assert 'pytest 2 ${5:-6}' in rp.SHIP  # the run's measured GB, 6 from an older caller
     with history.open("ab") as out:
         out.write(b'\xff\xfe{"key": "torn\n')  # a torn multibyte write must not crash a run

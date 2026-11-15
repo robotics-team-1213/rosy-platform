@@ -341,6 +341,15 @@ def landed_copy(main_co: Path, argv: list[str]) -> int | None:
 
 
 CAP_POLL_S = 15
+MAX_OVERTIMES = 2
+
+
+def next_overtime(land, args) -> int:
+    """Increment overtime count and stop runaway zombies past MAX_OVERTIMES turns."""
+    nxt = overtimes(land, args) + 1
+    if nxt > MAX_OVERTIMES:
+        raise land.Stop(f"stopped after {MAX_OVERTIMES} overtime handoffs without finishing")
+    return nxt
 
 
 def turn_wanted(land, wt: Path) -> bool:

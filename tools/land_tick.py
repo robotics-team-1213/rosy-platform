@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import land_async  # noqa: E402
+import land_cache  # noqa: E402
 import land_gc  # noqa: E402
 import land_mainred  # noqa: E402
 import land_queue  # noqa: E402
@@ -35,6 +36,7 @@ import worktrees  # noqa: E402
 
 ALERT_S = 30 * 60  # a main-red id open this long with no owner is called out
 SHOWN = 10  # the oldest open main-red ids the report names
+WARM_BATCH = 8  # missing main invocations warmed during an idle tick
 WORKTREE_IDLE_H = 12  # a worktree nobody touched this long is removed (branch kept, dirty work to refs/wip/)
 RECHECK_STAMP, LOG, REPORT, LOCK = ("rosy-land-tick.recheck", "rosy-land-tick.log", "rosy-land-backlog.txt",
                                      "rosy-land-tick.lock")
@@ -99,6 +101,14 @@ def cleanup(repo: Path) -> str:
             f" kept {len(problems)} changed; worktrees removed {gone}")
 
 
+def warm(repo: Path) -> str:
+    """Warm main's cache when no landing is waiting in the queue."""
+    if land_queue.ahead(land_queue.queue_dir(repo), Path("~")):
+        return "queue active; skipped"
+    done, ran = land_cache.warm_main(repo, limit=WARM_BATCH)
+    return f"warmed {done} of {ran}" if ran else "already warm"
+
+
 def report(repo: Path, common: Path, now: float | None = None) -> list[str]:
     now = time.time() if now is None else now
     rows = land_queue.ahead(land_queue.queue_dir(repo), Path("~"))
@@ -126,7 +136,8 @@ def main(argv: list[str] | None = None) -> int:
     steps = [] if "--report" in argv else [("recheck", lambda: recheck(repo, common)), ("resume", lambda: resume(repo)),
                                            ("rollup", lambda: _run(repo, "tools/land_rollup.py", "apply", "--auto",
                                                                    timeout=20 * 60)),
-                                           ("cleanup", lambda: cleanup(repo))]
+                                           ("cleanup", lambda: cleanup(repo)),
+                                           ("warm", lambda: warm(repo))]
     try:
         with land_async.locked(common / LOCK):  # one tick at a time; a long recheck makes the next ones skip
             for name, step in steps:

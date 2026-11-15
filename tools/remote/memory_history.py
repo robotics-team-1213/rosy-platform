@@ -22,7 +22,8 @@ import time
 from pathlib import Path
 
 FILE = "rosy-pytest-memory.jsonl"
-FULL_GB, MARGIN = 6, 1.25
+# Seconds-to-GB: default cgroup MemoryMax (6 GB); unmeasured runs reserve UNKNOWN_GB until recorded.
+FULL_GB, UNKNOWN_GB, MARGIN = 6, 2, 1.25
 PEAK = re.compile(r"^\[remote-pytest\] memory peak (\d+) MiB\r?$", re.M)
 CPU = re.compile(r"^\[remote-pytest\] cpu (\d+) ms over (\d+) ms\r?$", re.M)
 
@@ -125,9 +126,10 @@ def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
                         continue
         except OSError:
             pass
-    if not invs or len(peaks) < len(keys):
-        return FULL_GB
-    return _gb_from_peaks(peaks.values())
+    if not invs:
+        return UNKNOWN_GB
+    measured = _gb_from_peaks(peaks.values()) if peaks else 0
+    return max(measured, UNKNOWN_GB) if len(peaks) < len(keys) else measured
 
 
 def reserve_cores(history: Path | None, inv: list[str], workers: int) -> int:

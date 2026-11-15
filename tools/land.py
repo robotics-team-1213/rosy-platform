@@ -533,7 +533,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             if turn_epoch is None or land_queue.turn_started() != turn_epoch:
                 raise Stop("landing turn ownership changed before overtime handoff; ticket left as is")
             land_queue.release(ticket, "turn deadline", started=land_queue.turn_started())
-            args._overtime = land_checks.overtimes(sys.modules[__name__], args) + 1
+            args._overtime = land_checks.next_overtime(sys.modules[__name__], args)
             land_queue.set_status(ticket, "preparing", overtime=args._overtime)
             full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, "")
             continue
