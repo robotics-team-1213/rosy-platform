@@ -60,6 +60,7 @@ from omx_real2sim_helpers import (  # noqa: E402, F401
     rect,
     ship_polygon,
     turn,
+    unseated_containers,
 )
 import omx_two_arm_sites as sites  # noqa: E402
 
