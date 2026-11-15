@@ -169,14 +169,6 @@ def self_calibrate(
     if not points:
         if cell_pivot.bias_at(bias_data, site, target_xy, params=p):
             return bias_data, None
-        rec = cell_pivot.map_record(calibration, site) or {}
-        ma_fn = _parent_attr("map_agrees", map_agrees)
-        if rec.get("loo_error_mm") and ma_fn(rec, p):
-            inliers = [tuple(pt["arm_m"]) for pt in (rec.get("points") or [])]
-            if inliers and 1000 * min(math.dist(q, target_xy) for q in inliers) <= prm.get(
-                p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM
-            ):
-                return bias_data, None
         return bias_data, "no clear pivot point within reach of the object"
     chosen = min(points, key=lambda q: math.dist(q, target_xy))
     if any(r["site"] == site and math.dist(r["point_m"], chosen) <= 0.010 for r in bias_data["regions"]):

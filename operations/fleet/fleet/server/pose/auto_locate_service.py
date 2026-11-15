@@ -91,7 +91,22 @@ class AutoLocateService:
         logger.warning("auto locate block lift: robot_id=%s lifted=%s principal_id=%s", robot_id, lifted, principal_id)
         return lifted
 
+    def _keep_enabled_open(self, now: float) -> None:
+        """Robots in auto_locate_robots keep a session open without an operator (user, 2026-11-13).
+        A DEGRADED fit is never reopened here: a new session would clear that latch (D-989 3)."""
+        if self.map_pose is None:
+            return
+        for robot_id in self._watched():
+            if not self.map_pose.auto_locate_enabled(robot_id) or now < self._until.get(robot_id, -1.0):
+                continue
+            tracker = self._trackers.get(robot_id)
+            if tracker is not None and tracker.view(now)["state"] == "DEGRADED":
+                continue
+            logger.info("auto locate session opened by config: robot_id=%s", robot_id)
+            self.start([robot_id])
+
     async def tick(self) -> None:
+        self._keep_enabled_open(self._clock())
         self._feed_map_pose(self._clock())  # first: the blink below can wait on a robot
         try:
             await self._sessions(self._clock())
@@ -210,8 +225,13 @@ class AutoLocateService:
 
     def snapshot(self) -> dict:
         now = self._clock()
+        identity = getattr(self.tracking, "identity", None)
+        lamp_reasons = ({r.get("robot_id"): (r.get("last") or {}).get("lamp_reason")
+                         for r in identity.snapshot().get("robots", [])}
+                        if hasattr(identity, "snapshot") else {})
         return {"use": "observation-only",
                 "robots": [tracker.view(now) | {"session_left_s": round(max(0.0, self._until[rid] - now), 1),
+                                                "lamp_reason": lamp_reasons.get(rid),
                                                 "anchor_enabled": (self.map_pose is not None
                                                                    and self.map_pose.auto_locate_enabled(rid)),
                                                 "anchor_refused_reason": self._anchor_reason.get(rid),
