@@ -171,15 +171,17 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
         if not cp.grip_to(cell, mark_open(config)):
             return fail("grip_to failed")
         now = settled_frame(cell, sleep, clock, params=p)
-        use_colour = bool(mark_cfg.get("colour"))
-        if mark_cfg.get("centre"):
-            all_blobs = jaw_centres(closed, now, p, colour=use_colour) or (
-                [] if use_colour else jaw_centres(closed, now, p, colour=True)
-            )
+        explicit_colour = mark_cfg.get("colour")
+        detect = jaw_centres if mark_cfg.get("centre") else jaw_blobs
+        if explicit_colour is not None:
+            used_colour = bool(explicit_colour)
+            all_blobs = detect(closed, now, p, colour=used_colour)
         else:
-            all_blobs = jaw_blobs(closed, now, p, colour=use_colour) or (
-                [] if use_colour else jaw_blobs(closed, now, p, colour=True)
-            )
+            all_blobs = detect(closed, now, p, colour=False)
+            used_colour = False
+            if not all_blobs:
+                all_blobs = detect(closed, now, p, colour=True)
+                used_colour = True
         saw_blobs |= bool(all_blobs)
         if not all_blobs:
             pick, rejected = None, "no changed blob"
@@ -199,7 +201,7 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
         if pick is not None and not agreed:
             rejected = "awaiting agreement"
         if keep_dir is not None:
-            mask = _changed_mask(closed, now, prm.get(p, "pivot.diff_px", DIFF_PX), use_colour)
+            mask = _changed_mask(closed, now, prm.get(p, "pivot.diff_px", DIFF_PX), used_colour)
             _save_mark_try(keep_dir, idx, closed, now, mask, all_blobs, pick, rejected)
         if agreed:
             if report is not None:
@@ -317,14 +319,14 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     if record is None:
         return {"result": "no map for the site"}
     params = config.get("params")
-    tcp_x_m = config.get("tcp_x_m", (config.get("plan") or {}).get("tcp_x_m"))
+    tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else (config.get("plan") or {}).get("tcp_x_m")
     z_view = pivot_z_view(config, site)
     expected_near = None
     H = record.get("homography")
     if isinstance(H, list) and len(H) == 3 and "top" in (config.get("cameras") or {}):
         try:
             expected_near = ([mark_pixel(record, config, site, point, z_view)], prm.get(params, "pivot.follow_px", FOLLOW_PX) + 40)
-        except (np.linalg.LinAlgError, KeyError, ValueError):
+        except (np.linalg.LinAlgError, KeyError, TypeError, ValueError, ZeroDivisionError):
             expected_near = None
     view = {"x": point[0], "y": point[1], "z": round(z_view - config["plan"]["approach_m"], 4)}
     marks, tcps = [], []
@@ -347,7 +349,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
             log({"pivot": yaw, "mark_px": pixel})
             if state is None or pixel is None:
                 continue
-            x, y, z, fk_yaw = joints_tcp(state, tcp_x_m)
+            x, y, z, fk_yaw = joints_tcp(state, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
             marks.append(mark_to_arm(record, config, site, pixel, z))
             tcps.append((x, y, z, fk_yaw))
     finally:

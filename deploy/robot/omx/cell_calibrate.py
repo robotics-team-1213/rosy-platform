@@ -378,7 +378,7 @@ def main(argv=None):
             if not s.get("place"):
                 done.append({step: "no place point to touch"})
                 continue
-            tcp_x_m = config.get("tcp_x_m", config["plan"].get("tcp_x_m"))
+            tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else config["plan"].get("tcp_x_m")
             lib = work / f"surface-{site}.json"
             lib.write_text(json.dumps(cell_surface.probe_library(
                 config["plan"], *s["place"], s["yaw_deg"], 0.10, 0.010, tcp_x_m=tcp_x_m)))

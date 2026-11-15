@@ -68,7 +68,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     config = json.loads(args.config.read_text(encoding="utf-8"))
     plan = json.loads(Path(config["plan_path"]).expanduser().read_text())
-    tcp_x_m = config.get("tcp_x_m", plan.get("tcp_x_m"))
+    tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else plan.get("tcp_x_m")
     site = config["sites"][args.site]
     x, y = site["place"]
     work = Path(config["work_dir"]).expanduser()

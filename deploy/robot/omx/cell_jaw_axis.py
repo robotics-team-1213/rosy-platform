@@ -115,8 +115,9 @@ def measure(cell, config: dict, calibration: dict, site: str, point, yaws, work:
                 rows.append({"yaw": yaw, "stopped": "open"})
                 break
             opened = cell_pivot.settled_frame(cell, sleep, params=params)
+            tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else (config.get("plan") or {}).get("tcp_x_m")
             x, y, jaw_z, fk_yaw = cell_pivot.joints_tcp(
-                cell.act("state").get("state"), config.get("tcp_x_m", (config.get("plan") or {}).get("tcp_x_m")))
+                cell.act("state").get("state"), **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
             around = cell_pivot.mark_pixel(record, config, site, (x, y), jaw_z)
             axis = changed_axis_px(closed, opened, around, prm.get(params, "pivot.max_blob"), params)
             row = {"yaw": yaw, "fk_yaw": round(fk_yaw, 1), "z": round(jaw_z, 4), "axis_px_deg": axis, "offset_deg": None}
