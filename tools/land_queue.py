@@ -272,7 +272,7 @@ def touch(ticket: Path | None = None) -> None:
 
 
 def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None,
-         done=None, form=None, tested: str | None = None, changed=None) -> str | None:
+         done=None, form=None, tested: str | None = None, changed=None, on_ahead=None) -> str | None:
     """Mark ``ticket`` waiting; return None once nothing blocks it (``blockers``), marked as in its turn;
     QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop.
     ``"landed"`` as soon as ``done()`` is true (a batch landed this branch), ``"batch"`` when ``form(rows)``
@@ -295,6 +295,8 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
             return None
         if form and form(rows):
             return "batch"
+        if on_ahead and len(rows) == 1 and rows[0].get("status") == "turn":
+            on_ahead(rows[0])
         if len(rows) != said or clock() - last >= REPORT_EVERY:
             print(f"[queue] position {len(rows) + 1}; ahead: {describe(rows)}", flush=True)
             said, last = len(rows), clock()

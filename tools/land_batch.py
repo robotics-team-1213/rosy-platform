@@ -189,7 +189,8 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     while True:
         got = land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
                               done=lambda: in_main(land, wt, branch), form=form,
-                              tested=land_full.restore(wt, branch), changed=lambda: land_prepare.relaunch(land, qdir, ticket))
+                              tested=land_full.restore(wt, branch), changed=lambda: land_prepare.relaunch(land, qdir, ticket),
+                              on_ahead=land_prepare.train(land, wt, branch, args, python, qdir, ticket))
         if got == "landed":
             args._carried = True  # this member observes the leader's FF; it did not move main again
             land_full.forget(wt, branch)
@@ -284,7 +285,8 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
             raise land.Stop("the affected batch selects the FULL tier: it re-forms by group (D-889 addendum 6)")
         land_prepare.prepare(land, wt, name, args, python, qdir, ticket)
         land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
-                        tested=land_full.restore(wt, name))
+                        tested=land_full.restore(wt, name),
+                        on_ahead=land_prepare.train(land, wt, name, args, python, qdir, ticket))
         code = land.rounds(args, wt, name, main_co, python, qdir, ticket)
     except (land.Stop, land_queue.QueueError) as stop:
         land_full.forget(wt, name)

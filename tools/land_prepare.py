@@ -160,6 +160,28 @@ def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None, roll=Non
         land_queue.set_status(ticket, "preparing", full_wait=False)
 
 
+def train(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path):
+    """1-step Merge-Train: speculate once for position-1's turn holder right before our turn."""
+    seen: list[str | None] = [None]
+
+    def on_ahead(leader: dict) -> None:
+        if getattr(args, "tests", None) != "auto" or os.environ.get(SPECULATE_ENV) == "0":
+            return
+        if not land.land_full.restore(wt, branch):
+            return
+        tip = land.git(wt, "rev-parse", "-q", "--verify", f"refs/heads/{leader.get('branch') or ''}",
+                       check=False).stdout.strip()
+        key = f"{leader.get('branch') or ''}:{tip or leader.get('tested', '')}"
+        if not key or seen[0] == key:
+            return
+        seen[0] = key
+        try:
+            land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)
+        except Exception as exc:  # noqa: BLE001 - merge-train is advisory; the real turn still decides
+            print(f"[train] 1-step speculation skipped ({exc})", flush=True)
+    return on_ahead
+
+
 def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, invocations, note) -> str | None:
     """Mid-turn work too long for the lock (a FULL delta, or the turn's time cap): prepare it outside, wait again,
     and give back the main it now passed over."""
@@ -167,7 +189,8 @@ def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     land_queue.release(ticket, note)
     prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
     land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=watch(land, wt),
-                    tested=land.land_full.restore(wt, branch), changed=lambda: relaunch(land, qdir, ticket))
+                    tested=land.land_full.restore(wt, branch), changed=lambda: relaunch(land, qdir, ticket),
+                    on_ahead=train(land, wt, branch, args, python, qdir, ticket))
     return land.land_full.restore(wt, branch)
 
 
