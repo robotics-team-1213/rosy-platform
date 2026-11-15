@@ -275,15 +275,11 @@ def infer_tier_from_top_z_mm(z_top_mm: float) -> int:
 
 
 def reconcile_top_and_side_z_mm(top_z_mm: float | None, side_z_mm: float | None, *, tol_mm: float = 8.0) -> dict[str, Any]:
-    if top_z_mm is not None and side_z_mm is not None:
-        dz, aligned = round(float(top_z_mm) - float(side_z_mm), 2), abs(float(top_z_mm) - float(side_z_mm)) <= float(tol_mm)
-        fused = round(0.65 * float(side_z_mm) + 0.35 * float(top_z_mm), 2) if aligned else round(float(side_z_mm), 2)
-    elif side_z_mm is not None:
-        dz, aligned, fused = 0.0, True, round(float(side_z_mm), 2)
-    elif top_z_mm is not None:
-        dz, aligned, fused = 0.0, True, round(float(top_z_mm), 2)
-    else:
+    if top_z_mm is None and side_z_mm is None:
         return {"top_z_mm": None, "side_z_mm": None, "fused_z_mm": None, "dz_mm": None, "dz_top_side_mm": None, "aligned": False, "inferred_tier": None}
+    dz = round(float(top_z_mm) - float(side_z_mm), 2) if top_z_mm is not None and side_z_mm is not None else None
+    aligned = bool(dz is not None and abs(float(top_z_mm) - float(side_z_mm)) <= float(tol_mm))
+    fused = round(0.65 * float(side_z_mm) + 0.35 * float(top_z_mm) if aligned else float(side_z_mm if side_z_mm is not None else top_z_mm), 2)
     return {"top_z_mm": round(float(top_z_mm), 2) if top_z_mm is not None else None, "side_z_mm": round(float(side_z_mm), 2) if side_z_mm is not None else None, "fused_z_mm": fused, "dz_mm": dz, "dz_top_side_mm": dz, "aligned": aligned, "inferred_tier": infer_tier_from_top_z_mm(fused)}
 
 

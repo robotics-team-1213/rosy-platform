@@ -55,12 +55,12 @@ def main(argv=None, *, two=None) -> int:
             for point in [library["source"][k] for k in (("pick", "place") if args.carry else ("pick",))]:
                 if zones.zone_of((point["x"], point["y"])) != configs[n]["zone_side"]:
                     raise SystemExit(f"{path}: outside arm {n}'s own zone ({configs[n]['zone_side']})")
-    kin, _, _ = two.load_kinematics(None)
+    kins = two.kinematics_for(configs, libraries)
     rigids = {"a": two.rigid_of(calibrations["a"], calibrations["b"], "pallet", "pallet"), "b": (0.0, 0.0, 0.0)}
     tips = {n: float(configs[n].get("fingertip_m", 0.0)) for n in two.ORDER}
     routes = {
-        n: two.carry_route(*libraries[n][0], kin, rigids[n], tips[n])
-        if args.carry else two.route(libraries[n], kin, rigids[n], tips[n])
+        n: two.carry_route(*libraries[n][0], kins[n], rigids[n], tips[n])
+        if args.carry else two.route(libraries[n], kins[n], rigids[n], tips[n])
         for n in two.ORDER
     }
     schedule = two.plan(routes["a"][0], routes["b"][0], args.margin)
@@ -94,7 +94,7 @@ def main(argv=None, *, two=None) -> int:
     outcome = {**moved_out, "fold": None}
     if moved_out["failed"]:
         outcome["fold"] = two.safe_fold(
-            cells, {n: libraries[n][-1][1] for n in two.ORDER}, kin, rigids, tips, args.margin, log, moved_out)
+            cells, {n: libraries[n][-1][1] for n in two.ORDER}, kins, rigids, tips, args.margin, log, moved_out)
     elif args.carry:
         outcome["still_holding"] = two.still_holding(cells, {n: libraries[n][-1][1] for n in two.ORDER})
     after = cells["b"].frame("top")

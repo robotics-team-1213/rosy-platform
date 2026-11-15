@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # chunk_runner, teach_
 from cell_control_core import TICKS, norm_to_rad, rad_to_norm  # noqa: E402,F401  (re-exported)
 from teach_trajectory import GUARD_UNITS_PER_S, slow, too_fast  # noqa: E402
 from motion_profile import retime  # noqa: E402
+from omx_tcp import ENV, LOG, resolve_tcp  # noqa: E402
 from descend_profile import two_stage  # noqa: E402
 
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
@@ -46,7 +47,7 @@ _KIN_CACHE: dict[tuple[str, float | None, int], tuple] = {}
 
 
 def load_kinematics(root: Path | None, tcp_x_m: float | None = None):
-    """The OMX-F kinematics; ROSY_OMX_TCP_X_M (or plan tcp_x_m) replaces the stock TCP (link5 x 0.09193) for another jaw.
+    """The OMX-F kinematics; explicit tcp_x_m (or ROSY_OMX_TCP_X_M when omitted) replaces the stock TCP (link5 x 0.09193) for another jaw.
     arm_b's v2.1 jaws end at 0.0740 (STL); on 2026-11-03 closed jaws over a box top went to stock-FK 12.4 mm
     without touching the 20 mm top, so the stock TCP put the real tips about 18 mm above every planned height."""
     if root is None:
@@ -57,16 +58,15 @@ def load_kinematics(root: Path | None, tcp_x_m: float | None = None):
         sys.path.insert(0, str(root))
     from omx_adapter.kinematics import IkLimits, OmxKinematics, TopDownPose
 
-    path, tcp = root / "config/omx_f_kinematics.yaml", os.environ.get("ROSY_OMX_TCP_X_M") or tcp_x_m
+    path = root / "config/omx_f_kinematics.yaml"
+    tcp = None if tcp_x_m is None and not os.environ.get(ENV) else resolve_tcp(tcp_x_m)[0]  # else: the yaml's stock jaw
     mtime = path.stat().st_mtime_ns if path.exists() else 0
-    if not tcp:
+    if tcp is None:
+        LOG.info("jaw TCP from the stock kinematics yaml (no cell config, plan or %s)", ENV)
         key = (str(path.resolve()), None, mtime)
         if key not in _KIN_CACHE:
             _KIN_CACHE[key] = (OmxKinematics.load(path), IkLimits, TopDownPose)
         return _KIN_CACHE[key]
-    tcp = float(tcp)
-    if not (math.isfinite(tcp) and 0.05 <= tcp <= 0.12):
-        raise SystemExit(f"ROSY_OMX_TCP_X_M {tcp} outside the OMX-F jaw range 0.05..0.12")
     key = (str(path.resolve()), round(tcp, 6), mtime)
     if key not in _KIN_CACHE:
         import yaml
@@ -80,6 +80,8 @@ def load_kinematics(root: Path | None, tcp_x_m: float | None = None):
 class Planner:
     def __init__(self, plan: dict, kinematics_root: Path | None = None):
         self.plan = plan
+        raw_tcp = plan.get("tcp_x_m") if plan.get("tcp_x_m") is not None else os.environ.get("ROSY_OMX_TCP_X_M")
+        self.tcp_x_m = float(raw_tcp) if raw_tcp not in (None, "") else None
         self.kin, IkLimits, self.TopDownPose = load_kinematics(kinematics_root, plan.get("tcp_x_m"))
         lim = plan["limits"]
         self.limits = IkLimits(position_limits={k: tuple(v) for k, v in lim["joints_rad"].items()},
@@ -243,6 +245,7 @@ class Planner:
                 raise SystemExit(f"{name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s)")
         transit = self.keep_out(chunks)
         return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": self.fps, "chunks": chunks,
+                **({"tcp_x_m": self.tcp_x_m} if self.tcp_x_m is not None else {}),
                 # jaw_empty_stop: where this arm's empty jaws stop (arm_s 48.5-48.9, 2026-11-13); the park closes to it and
                 # cell_transfer judges holding against it, so empty jaws are neither 'something in them' nor a held box
                 "gripper_closed": p.get("jaw_empty_stop", p["grip_closed"]), "jaw_empty_stop": p.get("jaw_empty_stop"),

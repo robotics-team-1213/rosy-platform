@@ -30,8 +30,10 @@ from chunk_runner_commands import EMPTY_MARGIN, dispatch_runner_command  # noqa:
 from chunk_runner_guards import (  # noqa: E402, F401
     CONTACT_LAG, CONTACT_TICKS, JOG_MAX, MOTORS, PWM_STOP, PWM_STOP_S, REL_MAX, SETTLE_TOL,
     STALL_GAP, STALL_MOVE, TEMP_STOP, build_chain_segments, build_jog_target, build_splice_frames,
-    check_motor_thermal_and_stall, contact_limits, evaluate_adaptive_contact_guard, read_motor_health,
+    check_motor_thermal_and_stall, contact_limits, evaluate_adaptive_contact_guard, hold_runner, human_hold_ack,
+    human_hold_overload, read_motor_health,
 )
+from chunk_runner_trace import trace_receipt  # noqa: E402
 from chunk_runner_settle import (  # noqa: E402, F401
     IDLE_PARK_S, IDLE_RETRY_S, IDLE_STOP_S, SETTLE_S, check_chunk_settled, check_runner_idle,
 )
@@ -71,15 +73,17 @@ class Runner:
         self.target, self.queue, self.chunk, self.settle_since = None, [], None, None
         self.far_since, self.last_grip, self.last_body, self.pending = None, None, None, []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
+        self.human_hold_latched = self.torque_hold_commanded = self._human_hold_ack_pending = False
         self.played, self.retreat_frames, self.jog_path, self.contact_ticks, self.contact_start = [], [], [], 0, None
         self.lag, self.paced, self.paced_ticks, self.pace_floor, self.pace_last = 0.0, 0, 0, 0.0, None
         self.last_input, self.home_since, self.idle_parks, self.peak_lag, self.over_ticks = 0.0, None, 0, 0.0, 0
         self.live, self.health_present, self.samples, self.grip_from, self.holding = live, None, [], None, False
         self.recorder, self.operating_context, self._lib_digest_cache = Recorder(), operating_context, None
         self.trend, self.trace, self.jitter_buf, self.damped_ticks = [], None, [], 0
-        self._damp_cooldown, self.sway_peak, self.pitch_hold = 0, {}, 0.0
+        self.trace_file, self.trace_source, self.trace_cursor, self.trace_sequence = None, None, 0, 0
+        self._damp_cooldown = 0
+        self._damp_cooldown, self.sway_peak, self.pitch_hold, self.speed_queue = 0, {}, 0.0, None
         self.speed, self.speed_low, self.speed_out, self.speed_base, self.speed_phase = 1.0, 1.0, None, None, 0.0
-        self.speed_queue = None
         self.jitter = {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
         self.ensembler = TemporalChunkEnsembler(coeff=0.08, vmax=GUARD_UNITS_PER_S, fps=fps)
 
@@ -99,6 +103,8 @@ class Runner:
     def report(self, *, present=None, **fields) -> None:
         if hasattr(self.trace, "flush"):
             self.trace.flush()
+        reported_at = time.time()
+        receipt = trace_receipt(self, fields.get("command"), reported_at, fields.get("ok"))
         state = self.present() if present is None else present
         if self.jitter["shaking"] and "jitter" not in fields:
             fields["jitter"] = self.jitter
@@ -109,9 +115,12 @@ class Runner:
                 target=[round(v, 2) for v in self.target],
                 health=self.health,
                 fault=self.fault,
+                human_hold_latched=self.human_hold_latched,
+                torque_hold_commanded=self.torque_hold_commanded,
                 operating_context=self.operating_context,
                 library_sha256=self._library_digest(),
-                t=time.time(),
+                t=reported_at,
+                **({"trace_receipt": receipt} if receipt is not None else {}),
             )
         )
 
@@ -123,27 +132,9 @@ class Runner:
         """Apply one judge command; False means stop."""
         return dispatch_runner_command(self, line)
 
-    def hold(self, present, reason) -> None:
+    def hold(self, present, reason, *, human=False) -> None:
         """Stop where the arm is with torque on (the lag closes) and keep the way back for `retreat`."""
-        chunk, jogging = self.chunk, bool(self.jog_path)
-        self.queue, self.retreat_frames = [], (self.played or self.jog_path[:-1])[::-1]
-        self.target = list(present[:5]) + [self.target[5]]
-        self.fault, self.holding = reason, bool(self.holding and present[5] > self.target[5] + EMPTY_MARGIN)
-        self.chunk, self.played, self.jog_path = None, [], []
-        self.pace_floor, self.paced, self.pace_last, self.trend = 0.0, 0, None, []
-        # stop exactly where the arm is (no leftover wrist nudge); the failed chunk keeps its own sway record
-        self.pitch_hold, sway, self.sway_peak, self.speed_low = 0.0, self.sway_peak, {}, 1.0
-        if chunk == "park":
-            self.last_input = self.clock()
-            self._stop_after_park = None
-        self.report(
-            command=f"run {chunk or 'jog'}" if chunk or jogging else "fault",
-            ok=False,
-            error=self.fault,
-            contact=True,
-            present=present,
-            **({"sway": sway} if sway else {}),
-        )
+        hold_runner(self, present, reason, human=human, empty_margin=EMPTY_MARGIN)
 
     def strained(self, sent, present):
         return runner_strain.strained(self, sent, present)
@@ -235,6 +226,8 @@ class Runner:
                     "present": [round(v, 3) for v in present],
                     "s": round(self.speed, 3),
                     "pwm": getattr(getattr(self.robot, "motion", None), "effort_pwm", None) or {},
+                    "owner_session_id": (self.operating_context or {}).get("session_id"),
+                    "library_sha256": self._library_digest(),
                     **({"load": load} if load else {}),
                 }
             )
@@ -249,7 +242,9 @@ class Runner:
         motion = getattr(self.robot, "motion", None)
         held = getattr(motion, "held", None) or {}
         if held:
-            if not (self.fault or "").startswith("contact"):
+            if self.human_hold_latched:
+                human_hold_overload(self, present)
+            elif not (self.fault or "").startswith("contact"):
                 self.hold(
                     present, f"contact (overload-hold on {', '.join(held)} by the guard): lift and elbow shed its load"
                 )
@@ -342,10 +337,11 @@ class Runner:
         else:
             self.far_since = None
         check_chunk_settled(self, present, error, now, _cr_attr)
+        human_hold_ack(self, present)
 
     def idle(self) -> bool:
         """Fold home, then end the session (True), when no command has come for a while."""
-        return check_runner_idle(self, _cr_attr)
+        return not self.human_hold_latched and check_runner_idle(self, _cr_attr)
 
     def run(self, lines) -> None:
         """`lines()` returns the commands that arrived since the last call."""
@@ -359,6 +355,9 @@ class Runner:
             if arrived:
                 self.last_input, self.idle_parks = started, 0
             self.pending += arrived
+            if "human-hold" in self.pending:
+                self.pending.clear()  # preempt even a queued stop or park
+                self.command("human-hold")
             while (
                 len(self.pending) > 1
                 and self.pending[0].strip().split()[:1] in (["state"], ["episode"])
@@ -391,6 +390,8 @@ class Runner:
                         "chunk": self.chunk,
                         "lag": round(self.lag, 2),
                         "fault": self.fault,
+                        "human_hold_latched": self.human_hold_latched,
+                        "torque_hold_commanded": self.torque_hold_commanded,
                         "health": self.health,
                         **({"jitter": self.jitter} if self.jitter["shaking"] else {}),
                     }

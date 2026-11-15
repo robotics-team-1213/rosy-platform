@@ -325,3 +325,12 @@ def test_implausible_operator_override_is_refused(tmp_path, kind, override):
     values, source = resolve(kind, nominal, fallback_source="geometry.yaml", robot=ROBOT,
                              store=CalibrationStore(tmp_path), override=override)
     assert values == nominal and "refused" in source
+
+
+def test_floor_paint_gate_must_stay_off_orange_and_grey():
+    ok = {"pink_h_low": 160, "pink_h_high": 179, "pink_min_saturation": 30, "pink_min_value": 60}
+    assert check_values("floor_paint", ok) is None
+    assert check_values("floor_paint", {**ok, "pink_h_low": 10}) is not None       # reaches orange containers
+    assert check_values("floor_paint", {**ok, "pink_min_saturation": 5}) is not None  # grey carpet
+    assert check_values("floor_paint", {**ok, "pink_h_high": 150}) is not None      # low >= high
+    assert check_values("floor_paint", {**ok, "pink_min_value": 60.5}) is not None  # integers only
