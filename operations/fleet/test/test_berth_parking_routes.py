@@ -13,6 +13,7 @@ from fleet.server.ledger.berth_parking_routes import (
     infer_bay_id,
     install_berth_parking_routes,
 )
+from fleet.server.ledger.berth_parking_scenario import dispatch_nav_target, install_berth_scenario_routes
 from fleet.server.site_auth import SitePrincipal
 
 
@@ -75,6 +76,13 @@ def test_berth_parking_status_and_dispatch_routes():
         require_operator=fake_operator,
         require_named_operator=fake_operator,
         compute_road_plan=fake_compute_road_plan,
+        dispatch_nav=dispatch_nav_target,
+    )
+    install_berth_scenario_routes(
+        app,
+        console=DummyConsole(),
+        operator_guard=[],
+        require_operator=fake_operator,
     )
 
     client = TestClient(app)
@@ -122,7 +130,8 @@ def _road_app(goal, refusal=None):
         return SitePrincipal(principal_id="op-named", role="operator")
 
     install_berth_parking_routes(app, console=console, task_service=None, read_guard=[], operator_guard=[],
-                                 require_operator=named, require_named_operator=named, compute_road_plan=plan)
+                                 require_operator=named, require_named_operator=named, compute_road_plan=plan,
+                                 dispatch_nav=dispatch_nav_target)
     return TestClient(app, raise_server_exceptions=False), HTTPException, HubError
 
 
@@ -176,7 +185,8 @@ def test_queued_road_nav2_is_reported_queued_not_dispatched():
     named = lambda: SitePrincipal(principal_id="op-named", role="operator")  # noqa: E731
     routes.install_berth_parking_routes(app, console=SimpleNamespace(trip_refusal=lambda ids: None), task_service=Tasks(),
                                         read_guard=[], operator_guard=[], require_operator=named,
-                                        require_named_operator=named, compute_road_plan=plan)
+                                        require_named_operator=named, compute_road_plan=plan,
+                                        dispatch_nav=dispatch_nav_target)
     res = TestClient(app).post("/api/fleet/robots/rosy_46/road-nav2", json={"x": 0.0, "y": 0.0},
                                headers={"Idempotency-Key": "k1"})
     body = res.json()

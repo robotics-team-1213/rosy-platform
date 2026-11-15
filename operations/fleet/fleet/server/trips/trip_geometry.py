@@ -335,3 +335,30 @@ def robot_frame_goal(goal: tuple, site_pose: MapPose, state, map_id: Optional[st
     c, s = math.cos(turn), math.sin(turn)
     dx, dy = goal[0] - site_pose.x, goal[1] - site_pose.y
     return rx + c * dx - s * dy, ry + s * dx + c * dy, wrap(goal[2] + turn)
+
+
+async def site_goal_in_robot_frame(app, console, robot_id: str, goal: tuple) -> tuple:
+    """A console site-map goal in the robot's own Nav2 map frame, the way trips convert free goals (D-1003);
+    409 instead of sending site coordinates raw (2026-11-13 rosy_46 drove to the wrong place).
+    shortcut: converted at submit, so a goal that waits QUEUED keeps the robot frame of that moment; a robot that
+    reboots (new SLAM origin) before dispatch would get it in the old frame. Convert at dispatch when queued site
+    goals become common."""
+    from fastapi import HTTPException
+    site_maps = getattr(app.state, "site_maps", None)
+    active = site_maps.active() if site_maps is not None else None
+    if active is None:
+        raise HTTPException(409, detail={"code": "SITE_MAP_NOT_ACTIVE", "message": "no active site map"})
+    service = getattr(app.state, "map_pose", None)
+    site_pose = service.arbitrated_pose(robot_id) if service is not None else None
+    try:
+        state, _ = await console._gather_state(robot_id)
+        converted = robot_frame_goal(goal, site_pose, state, active[1].map_id)
+    except SiteFrameMismatch:
+        converted = None
+    except Exception:  # noqa: BLE001 - an unreadable robot is not a frame proof
+        converted = None
+    if converted is None:
+        raise HTTPException(409, detail={
+            "code": "SITE_POSE_UNKNOWN",
+            "message": f"{robot_id}: Fleet cannot place this robot on the site map yet, so the goal was not sent"})
+    return converted

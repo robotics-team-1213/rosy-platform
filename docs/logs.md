@@ -14852,6 +14852,7 @@ osy-d395-s1d\`.
 - 증거: `python tools/land.py --tests full --no-cache` 실행 기록으로 남는다.
 - gate 변화: 없음.
 
+
 ## 2026-11-13 · uncommitted · docs(solutions): 학습 센터 자리 업그레이드 교훈을 역사 기록으로 표시
 - 변경: `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`의 `applies_when`을 고쳐 후보 `rosy-learning-center.service`가 2026-10-31 퇴역했고 자리 업그레이드 절차는 역사 기록임을 밝혔다. `install_review_release.py` 절은 살아있는 보호 센터(8768 `rosy-edge-review`)에 그대로 적용된다고 못박았다.
 - 증거: 원격 pytest `test/test_update_ops.py` 예정.
@@ -14866,7 +14867,10 @@ osy-d395-s1d\`.
 - 변경: `tools/land_checks.py` `main_red`가 `tools/collect_alone.py::test_runs_alone[<file>]`·`test_collects_alone[<file>]` id를 node id로 넘기지 않고 `ROSY_ALONE_FILES=<file>`·`ROSY_COLLECT_PATHS=<file>`로 따로 돌린다(`land_mainred.alone_invocation`). 일반 id는 그대로 한 번에 돌리고 결과는 모두 `known_failures`로 분류해 `land_mainred.red`에 기록한다. 착지를 통과시키지 않는 계약은 그대로.
 - 증거: `test/test_land_checks_mainred.py` 새 시험(원격). 사례 land-fix-main-size-split-20261113052820: alone 계열 NEW만 남아 멈췄고 main에서 같은 파일을 직접 돌려도 12건 같게 실패(main-red였음).
 - gate 변화: 없음.
-
+## 2026-11-14 · uncommitted · fix(tools): 임시 ref 삭제 실패가 원격 시험 실행을 죽이지 않음
+- 변경: `tools/remote/remote_pytest.py` `ship()`의 `finally`가 `refs/remote-pytest/<name>` 삭제 실패를 무시한다. 교훈 `docs/solutions/workflow-issues/landing-stopped-or-stalled-without-a-test-verdict-2026-11-14.md`에 추가 절.
+- 증거: `test/test_remote_pytest.py::test_a_failed_temp_ref_delete_does_not_fail_the_ship`(원격, 수정 전 실패 확인). 사례 land-chore-publish-full-20261114-1230-20261114042845: 삭제 exit 1 traceback으로 정지, 시험 판정 없음. 삭제가 실패한 원인은 미확인.
+- gate 변화: 없음.
 ## 2026-11-14 · uncommitted · fleet: D-1022 기체 SLAM 지도–현장 지도 결속
 - 변경: CORE `StateSnapshot.map_grid_id`(읽은 격자 해시), Fleet `robot_map_bindings`(승인·철회·이력, 격자·현장 지도 버전에 묶임), `/api/fleet/robots/{id}/map-binding`(읽기·승인·철회·벽에서 마커 없는 제안, SLAM 자세의 현장 좌표와 카메라 자세 차이), `fleet.trip.map_binding_required`(기본 꺼짐; 켜면 free 목표는 결속으로만, 없으면 `map_frame` 정지). API v1.393, ADR D-1022.
 - 증거: 원격 `test_map_binding_fit`·`_store`·`_routes`·`test_site_map_frame_safety`·`test_trip_runner`·`test_trip_robot_frame_goal`·`test_initial_pose`·`test_protocol_version_alignment` 통과. 실물 미수행(기체 선 연결).

@@ -5543,6 +5543,11 @@
 - 증거: 시트를 300 dpi로 그려 OpenCV DICT_4X4_250이 번호·크기(±0.2 mm)대로 되읽음. 한 장에 12 mm 24개, 20 mm 12개 컨테이너. 실물 인쇄·판독률은 미실시.
 - gate 변화: SOURCE. 인쇄 후 자로 확인·판독률 측정은 사람 몫이다.
 
+## 2026-11-14 · uncommitted · 앞으로/뒤로 한 걸음 경로
+- 변경: `fleet/server/pose/nudge_routes.py`(서버 홀더, `fleet.server.nudge_routes`) `POST /api/fleet/robots/{id}/step` — 이름 있는 운영자만, trip runner·대형·console goal 이 로봇을 쥐고 있으면 409 `STEP_ROBOT_BUSY`, 응답 없음 409 `ROBOT_OFFLINE`, CORE 거부는 502 본문 code 그대로. 실제 주행은 로봇의 CORE 미션 경로(`nudge_forward`/`nudge_backward`, `max_time_s`=거리/0.03+5)에 맡긴다(D-2). 감사 행 `step`. `role_builders.py`가 map-pin 옆에 등록.
+- 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고. 실물 로봇 확인은 미실시.
+- gate 변화: 없음. 안전 경로 검토 요청은 결과 파일에 별도로 남긴다(운동 명령 경로).
+
 ## 2026-11-14 · uncommitted · 충전 복귀 이동 (D-1029)
 - 변경: `fleet.station_recovery.dispatch`(기본 false). 승인된 복구 요청이 `TripRunner.start(..., purpose="charge_return")`로 고른 충전 칸까지 trip을 시작하고, 도착하면 lease를 끝내고 `plug_charger` 사람 요청을 보낸다. 실패·거절은 `station_recovery_return` 사건. 새 `station_recovery_dispatch.py`, trip lease 본문 `purpose`.
 - 증거: 원격 `test_station_recovery_dispatch.py`·`test_station_recovery.py`·`test_person_requests.py`·`test_trip_lease.py` 116 통과, trip·cli 시험 679 통과.

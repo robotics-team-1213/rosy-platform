@@ -76,7 +76,7 @@
 ## 최근 기록
 
 - 2026-11-14 · uncommitted · 충전 복귀 lease와 10 % 미룸 (D-1029)
+- 2026-11-14 · uncommitted · nudge_backward 시험
 - 2026-11-14 · uncommitted · 상태 표시등 설정 영속 인계
 - 2026-11-13 · uncommitted · fix(core): ros_bridge_helpers publisher parameter follows the *_pub convention (main red)
 - 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
-- 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정

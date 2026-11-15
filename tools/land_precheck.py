@@ -11,6 +11,8 @@ every landing after it. ``--mixed "<the user's words>"`` lets one through.
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
@@ -88,3 +90,83 @@ def precheck(land, wt: Path, python: str, mixed_ok: str = "") -> None:
             print(f"[precheck] lint fails before main is merged (the supervisor re-lints after the merge): {exc}")
     land.secret_scan(wt, before)
     print("[precheck] safety review, size ratchet, lint and secret scan passed", flush=True)
+
+
+def _git(cwd: Path, *args: str, check: bool = True) -> str:
+    result = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, encoding="utf-8")
+    if check and result.returncode != 0:
+        raise SystemExit(f"[land-async] git {' '.join(args)} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def pop_opt(argv: list[str], name: str, hint: str) -> tuple[str | None, list[str]]:
+    """Extract ``--name value`` or ``--name=value`` from ``argv``; return ``(value, rest)``."""
+    value, rest, i = None, [], 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == name:
+            if i + 1 >= len(argv) or not argv[i + 1].strip() or argv[i + 1].startswith("--"):
+                raise SystemExit(f"[land-async] {name} needs {hint}")
+            if value is not None:
+                raise SystemExit(f"[land-async] {name} may only be passed once")
+            value, i = argv[i + 1], i + 2
+        elif arg.startswith(name + "="):
+            val = arg.split("=", 1)[1]
+            if not val.strip() or val.startswith("--"):
+                raise SystemExit(f"[land-async] {name} needs {hint}")
+            if value is not None:
+                raise SystemExit(f"[land-async] {name} may only be passed once")
+            value, i = val, i + 1
+        else:
+            rest.append(arg)
+            i += 1
+    return value, rest
+
+
+def _checked_out_worktrees(cwd: Path, branch: str) -> list[Path]:
+    listing = _git(cwd, "worktree", "list", "--porcelain")
+    target, paths = f"refs/heads/{branch}", []
+    for block in listing.split("\n\n"):
+        lines = block.splitlines()
+        wt = next((line[9:] for line in lines if line.startswith("worktree ")), None)
+        ref = next((line[7:] for line in lines if line.startswith("branch ")), None)
+        if wt and ref == target:
+            paths.append(Path(wt))
+    return paths
+
+
+def resolve_branch(cwd: Path, branch: str | None, prefix: str = "land/") -> tuple[str, str]:
+    """Return ``(branch_name, ref)`` for HEAD or an explicit local topic branch."""
+    if branch is None:
+        name = _git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
+        if name in ("HEAD", "main") or name.startswith(prefix):
+            raise SystemExit(f"[land-async] run it from a topic branch's worktree, not {name!r}")
+        if _git(cwd, "status", "--porcelain", "--untracked-files=no"):
+            raise SystemExit("[land-async] uncommitted changes: commit them first (a landing takes only commits)")
+        return name, "HEAD"
+    name = branch.removeprefix("refs/heads/")
+    if name in ("HEAD", "main") or name.startswith(prefix):
+        raise SystemExit(f"[land-async] pass a topic branch name, not {name!r}")
+    if subprocess.run(["git", "-C", str(cwd), "show-ref", "--verify", "--quiet", f"refs/heads/{name}"],
+                      capture_output=True).returncode != 0:
+        raise SystemExit(f"[land-async] local branch not found: {name!r}")
+    for wt in _checked_out_worktrees(cwd, name):
+        if _git(wt, "status", "--porcelain", "--untracked-files=no"):
+            raise SystemExit(f"[land-async] {name} has uncommitted changes in {wt}: commit them first"
+                             " (a landing takes only commits)")
+    return name, f"refs/heads/{name}"
+
+
+def precheck_branch(cwd: Path, branch: str, words: list[str], place: Path, fallback_land: Path) -> int:
+    """Run land.py --precheck on ``branch`` from a temporary hidden checkout under ``place``."""
+    place.mkdir(exist_ok=True)
+    wt = place / f"precheck-{branch.replace('/', '-')}-{os.getpid()}"
+    _git(cwd, "worktree", "remove", "--force", str(wt), check=False)
+    _git(cwd, "worktree", "add", "--detach", "-q", str(wt), f"refs/heads/{branch}")
+    try:
+        land_py = wt / "tools" / "land.py"
+        if not land_py.is_file():
+            land_py = fallback_land
+        return subprocess.call([sys.executable, str(land_py), "--precheck", *words], cwd=wt)
+    finally:
+        _git(cwd, "worktree", "remove", "--force", str(wt), check=False)

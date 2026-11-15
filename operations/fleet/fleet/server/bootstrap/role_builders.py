@@ -28,6 +28,7 @@ from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_
 from fleet.server.lane_route_routes import install_lane_route_routes
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.map_pose_service import MapPoseService, install_map_pin_route, install_map_pose_routes
+from fleet.server.nudge_routes import install_nudge_step_route
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
 from fleet.server.mission_model_turn_store import MissionModelTurnStore
@@ -296,6 +297,9 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     trip_runner.traffic.ai_replan = AiReplan(app.state.ai_first, app.state.ai_facts, app.state.ai_episodes)
     install_map_pin_route(app, service=map_pose, require_named_operator=require_named_operator,
                           record_event=site_maps.record_event, busy=trip_runner.robot_busy)
+    install_nudge_step_route(app, console=console, trip_busy=trip_runner.robot_busy,
+                             require_named_operator=require_named_operator,
+                             record_event=site_maps.record_event)
     if task_service is not None:
         console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
         console.goal_leases.admit_attempt = task_service.admit_attempt

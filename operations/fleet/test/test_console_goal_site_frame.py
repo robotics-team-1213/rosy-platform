@@ -9,7 +9,8 @@ import pytest
 from fastapi import HTTPException
 
 from rosy.world.state.projections.map_pose import MapPose
-from fleet.server.ledger.task_dispatch_routes import GoalRequest, _site_goal_in_robot_frame
+from fleet.server.ledger.task_dispatch_routes import ConsoleGoalRequest
+from fleet.server.trip_geometry import site_goal_in_robot_frame
 
 LOCALIZED = {"localization": {"state": "LOCALIZED", "pose_frame": "map"}}
 
@@ -20,7 +21,7 @@ def _convert(state, site_pose, active_map="site", goal=(0.0, 0.0, 0.0)):
     active = None if active_map is None else (3, SimpleNamespace(map_id=active_map))
     app = SimpleNamespace(state=SimpleNamespace(site_maps=SimpleNamespace(active=lambda: active),
                                                 map_pose=SimpleNamespace(arbitrated_pose=lambda rid: site_pose)))
-    return asyncio.run(_site_goal_in_robot_frame(app, SimpleNamespace(_gather_state=gather), "rosy_46", goal))
+    return asyncio.run(site_goal_in_robot_frame(app, SimpleNamespace(_gather_state=gather), "rosy_46", goal))
 
 
 def test_a_site_goal_is_rotated_and_shifted_into_the_robot_frame():
@@ -48,6 +49,6 @@ def test_without_a_frame_proof_the_goal_is_refused_not_sent_raw(state, site, act
 
 
 def test_the_frame_field_takes_only_site():
-    assert GoalRequest(x=0, y=0, frame="site").frame == "site"
+    assert ConsoleGoalRequest(x=0, y=0, frame="site").frame == "site"
     with pytest.raises(ValueError):
-        GoalRequest(x=0, y=0, frame="robot")
+        ConsoleGoalRequest(x=0, y=0, frame="robot")

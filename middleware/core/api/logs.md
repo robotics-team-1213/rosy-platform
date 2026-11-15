@@ -1394,3 +1394,8 @@
 - 변경: Viewer GET과 Operator PUT `/host/lamp/status-patterns`를 추가하고 운전 중 OFF를 `LAMP_BUSY`로 거절한다. API 계약 v1.394와 변경 이벤트를 기록했다.
 - 증거: 원격 CORE·네이티브 시험 결과는 이 브랜치 검증에 기록한다.
 - gate 변화: 없음. 실물 LED 수용은 별도다.
+
+## 2026-11-14 · uncommitted · API 계약 v1.402
+- 변경: 계약 핀 v1.402 (Fleet `/api/fleet/robots/{id}/step`과 CORE 미션 종류 `nudge_backward`, nudge 의 LOCALIZED 완화).
+- 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고.
+- gate 변화: 없음.

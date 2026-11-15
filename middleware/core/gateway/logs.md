@@ -2172,6 +2172,11 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 원격 CORE·rosy-face·native systemd 계약 시험 결과는 이 브랜치 검증에 기록한다.
 - gate 변화: 없음. 장치·현장 판정은 수행하지 않았다.
 
+## 2026-11-14 · uncommitted · nudge_backward 시험
+- 변경: `test_localization_mission_backward.py` — 후방 막힘 거부·짧아지기·정지 갭 정지·0.10 m 한도·음의 선속도·전방 동작 불변, 그리고 LOCALIZED 완화(nudge 시작 가능, 그 실행은 localized 로 끝나지 않음; 검색 nudge는 여전히 localized 로 끝남).
+- 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고.
+- gate 변화: 없음.
+
 ## 2026-11-14 · uncommitted · 충전 복귀 lease와 10 % 미룸 (D-1029)
 - 변경: trip lease `purpose: "charge_return"`(v1.399). 살아 있는 동안 안전 게이트 선속도 상한 `safety.charge_return_linear`(0.10). `battery_policy`는 충전 복귀 lease + 내비게이션 진행 중이면 10 % 동작을 미루고(`battery.critical_deferred`), 끝났는데 아직 10 % 이하면 `battery_policy` E-Stop. 5 % 그대로. 판단 중 예외는 기존 래치.
 - 증거: 원격 `test_bridge_battery_policy.py`·`test_core_trip_lease.py` 160 통과, `test_core_logic.py`·`test_api.py` 포함 278 통과.

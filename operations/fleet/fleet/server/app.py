@@ -50,6 +50,8 @@ from fleet.server.site_auth import (
 )
 from fleet.server.static_routes import install_static_routes
 from fleet.server.berth_parking_routes import install_berth_parking_routes
+from fleet.server.berth_parking_scenario import dispatch_nav_target, install_berth_scenario_routes
+from fleet.server.trip_geometry import site_goal_in_robot_frame
 from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest 재수출: test_task_contract_docs 참조
     GoalRequest,
     cancel_pending_task_queue,
@@ -291,6 +293,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
     app.state.operator_guard = [Depends(require_operator)]  # pipeline mutations
+    app.state.proposer_guard = [Depends(require_proposer)]  # cell worker / telemetry ingress
     from fleet.server.workcell_observation_routes import install_workcell_observation_routes as install_observations
     install_observations(app, workcell_observations, require_viewer, require_named_operator, task_service, authorize)
 
@@ -373,11 +376,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         app, console=console, task_service=task_service, configured_omx=configured_omx,
         stop_transport=stop_transport, stop_targets=stop_targets, require_viewer=require_viewer,
         require_operator=require_operator, require_named_operator=require_named_operator,
-        read_guard=read_guard, operator_guard=operator_guard, drive_cancel=drive_cancel)
+        read_guard=read_guard, operator_guard=operator_guard, drive_cancel=drive_cancel,
+        convert_site_goal=site_goal_in_robot_frame)
     install_berth_parking_routes(
         app, console=console, task_service=task_service, read_guard=read_guard,
         operator_guard=operator_guard, require_operator=require_operator,
-        require_named_operator=require_named_operator)
+        require_named_operator=require_named_operator, dispatch_nav=dispatch_nav_target)
+    install_berth_scenario_routes(
+        app, console=console, operator_guard=operator_guard, require_operator=require_operator)
 
     trip_runner = install_trip_and_map_surfaces(
         app, console=console, console_token=console_token, task_service=task_service,

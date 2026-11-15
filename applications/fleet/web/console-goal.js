@@ -3,6 +3,7 @@ import {randomUUID} from "/console/assets/uuid.js";
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill } from "./localization-badge.js";
 import { roadPolylineBetween } from "/console/assets/guide-layer.js";
+import { planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/assets/site-map-model.js";
 
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
   toWorld, refreshGuide, queuedReason, drawMap = () => {}, onSelectRobot = () => {} }) {
@@ -79,9 +80,15 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     }
     drawMap(); render();
 
+    // A robot on its own (SLAM) map takes a site goal only as a lane trip Fleet plans from its measured site pose;
+    // say why before the confirm when that cannot start (2026-11-14: no raw site goal into a robot's own frame).
+    const siteMapId = view.activeSiteMap?.map?.map_id;
+    const viaTrip = !view.map && selectedRobot?.state?.map_id !== siteMapId;   // site view, robot not on this map
+    const onFrame = () => !view.map && (view.robots.find(robot => robot.robot_id === robotId)?.state?.map_id !== siteMapId) === viaTrip
+      && view.activeSiteMap?.map?.map_id === siteMapId;
     const canDispatch = !view.stateUnavailable && auth.role === "operator" && !namedReason()
-      && !capabilityReason(selectedRobot?.capabilities, 'navigation.goal_navigation')
-      && !motionCommandReason(view, robotId, "goal") && selectedRobot?.online && selectedRobot.state?.safety?.estop === false;
+      && (viaTrip || !capabilityReason(selectedRobot?.capabilities, 'navigation.goal_navigation'))
+      && !motionCommandReason(view, robotId, viaTrip ? "trip" : "goal") && selectedRobot?.online && selectedRobot.state?.safety?.estop === false;
     if (!canDispatch) {
       try {
         const qs = new URLSearchParams({
@@ -105,16 +112,30 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       return;
     }
 
+    if (viaTrip) {
+      const blocked = !siteMapId ? "현장 지도 활성화 필요: 활성 지도가 없어 보내지 않습니다"
+        : !placeId ? "차로 위 아님: 지도의 장소를 찍으세요"
+        : !view.guide ? "위치 확인 중: 잠시 뒤 다시 찍으세요"
+        : tripPoseReason(view.guide, robotId, view.activeSiteMap);
+      if (blocked) {
+        view.selectedGoal = { ...view.selectedGoal, status: "BLOCKED", statusText: blocked, at: Date.now() };
+        drawMap(); render();
+        log(`${robotId} 출발 보류 · ${blocked}`, "bad");
+        return;
+      }
+    }
+
     const mapSnapshot = JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]);
     const siteFrame = !view.map; // the site map view: Fleet converts into the robot's own map frame (D-1003)
     await confirmedAction.run({
-      message: `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`,
+      message: viaTrip ? `${robotId}를 ${where}까지 차로로 보낼까요?` : `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`,
       opener: el("map-canvas"),
       eligible: () => !view.stateUnavailable && view.selected === robotId && !namedReason()
-        && !capabilityReason(view.robots.find(robot => robot.robot_id === robotId)?.capabilities, 'navigation.goal_navigation')
-        && !motionCommandReason(view, robotId, "goal")
+        && (viaTrip || !capabilityReason(view.robots.find(robot => robot.robot_id === robotId)?.capabilities, 'navigation.goal_navigation'))
+        && !motionCommandReason(view, robotId, viaTrip ? "trip" : "goal")
         && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false)
-        && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
+        && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin])
+        && (Boolean(view.map) || onFrame()),   // site view: the robot did not change map under the open confirm
       request: async owner => {
     view.selected = null;
     view.cursor = null;
@@ -124,6 +145,15 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     render();
     focusGoalButton(robotId);
     try {
+      if (viaTrip) {
+        const plan = await planTrip(call, robotId, { to: placeId });
+        owner.check();
+        await startTrip(call, plan.plan_id);
+        owner.check();
+        log(`${robotId} → ${where} 차로 주행 시작 (Trip ${String(plan.plan_id).slice(0, 8)})`, "good");
+        refreshGuide();
+        return;
+      }
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
         body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)), ...(siteFrame ? { frame: "site" } : {}) }), signals: [owner.signal],
@@ -151,9 +181,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       else log(`${robotId} → ${where} 미션 하달`, "good");
       refreshGuide();
     } catch (err) {
-      if (err.name !== "AbortError") log(`${robotId} 목표 이동 거절 — ${err.message}`, "bad");
+      if (err.name !== "AbortError") log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripRefusalText(err) : err.message}`, "bad");
     }
-      }, onError: err => log(`${robotId} 목표 이동 거절 — ${err.message}`, "bad"),
+      }, onError: err => log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripRefusalText(err) : err.message}`, "bad"),
     });
   }
 
