@@ -330,9 +330,22 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
                  and all(isinstance(inv, list) and inv
                          and all(isinstance(word, str) and word for word in inv)
                          for inv in anchor["invocations"]))
+    overtime_delta = (not delta and not full and getattr(args, "_overtime", 0)
+                      and anchor and anchor["tier"] in ("affected", "delta") and anchor.get("invocations"))
     if keep_full:
         # A delta cannot replace a FULL origin; retain its exact base and invocations.
         print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
+    elif overtime_delta:
+        try:
+            combined = land.land_record.plan(invocations, anchor,
+                                              available=(wt / land.land_record.TARGET).is_file())
+        except ValueError as exc:
+            raise land.Stop(f"invalid delta preparation plan: {exc}") from exc
+        land.land_full.save(wt, branch, candidate, main_sha, "delta", combined,
+                            base_tier=anchor["tier"],
+                            flaky=land.land_full.flaky(wt, branch) + (flaky or []),
+                            yields=int(anchor.get("yields") or 0) + 1,
+                            reused=reused or bool(anchor.get("reused")))
     elif not delta:
         land.land_full.save(wt, branch, candidate, main_sha, tier, invocations, flaky=flaky, reused=reused,
                             env=env if explicit else None)

@@ -673,6 +673,29 @@ def test_guard_and_body_rounds_share_one_lint_run_per_tree(repos, monkeypatch, t
     assert len(lint_calls) == 1
     assert (tmp_path / "lint-gpre.txt").read_text(encoding="utf-8") == "lint pass\n"
     assert (tmp_path / "lint-pre.txt").read_text(encoding="utf-8") == "lint pass\n"
+    other = tmp_path / "turn-logs"
+    other.mkdir()
+    land.run_tests(wt, args, [], other, 1)
+    assert len(lint_calls) == 1
+    assert (other / "lint-1.txt").read_text(encoding="utf-8") == "lint pass\n"
+
+
+def test_overtime_merges_affected_anchor_instead_of_dropping_own_invocations(repos, monkeypatch):
+    main, wt = repos
+    base = git(main, "rev-parse", "HEAD")
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch work")
+    candidate = git(wt, "rev-parse", "HEAD")
+    land.land_full.save(wt, "feat/x", candidate, base, "affected", [["own/test"]])
+    commit(main, {"lib/peer.py": "peer = 1\n"}, "peer moves main")
+    git(wt, "merge", "--no-edit", "main")
+    monkeypatch.setattr(land.land_mainred, "CARRIED", [])
+    monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [])
+    args = land.argparse.Namespace(tests="auto", no_cache=False, _overtime=1)
+    land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["delta/test"]], "")
+    saved = json.loads((main / ".git" / land.land_full.RECORDS / "feat-x.json").read_text(encoding="utf-8"))
+    assert saved["tier"] == "delta" and saved["base_tier"] == "affected"
+    assert ["own/test"] in saved["invocations"] and ["delta/test"] in saved["invocations"]
 
 
 def test_a_snapshot_ticket_gathers_as_pending_then_starts_one_rollup(tmp_path, monkeypatch):

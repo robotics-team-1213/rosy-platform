@@ -408,8 +408,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     head = land.out(wt, "rev-parse", "HEAD")
     if (wt / land.HARNESS).is_file():
         lint_log = logdir / f"lint-{round_no}.txt"
-        key = (str(logdir.resolve()), str(round_no).removeprefix("g"), head, id(land.step),
-               (wt / land.HARNESS).stat().st_mtime_ns)
+        key = (str(wt.resolve()), head, id(land.step), (wt / land.HARNESS).stat().st_mtime_ns)
         with _lint_lock:
             if key in _lint_done:
                 lint_log.write_text(_lint_done[key], encoding="utf-8")
