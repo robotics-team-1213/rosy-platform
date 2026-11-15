@@ -1436,3 +1436,50 @@ def test_park_from_folded_side_wait_pose_stays_folded_without_rising_to_transit(
     flipped_roll = m.park_path([wait_pan, -62.2, 53.1, 51.6, -54.8, 49.0], home, 49.0, fps=30)
     assert any(f[1] > -30.0 for f in flipped_roll)
 
+
+def test_load_holding_library_skips_empty_jaw_pinch_on_recovery_park(tmp_path):
+    class HeldRobot(Robot):
+        def __init__(self):
+            super().__init__(object_at=53.0)
+            self.pos[5] = 55.0
+
+            class _Motion:
+                pwm_limits = {"gripper": 300}
+                effort_pwm = {**dict.fromkeys(m.NAMES[:5], 0), "gripper": -260}
+                held = ()
+
+            self.motion = _Motion()
+
+    lib = {
+        "schema": m.SCHEMA,
+        "names": m.NAMES,
+        "fps": 30,
+        "gripper_closed": 46.6,
+        "holding": True,
+        "chunks": {
+            "home": [list(HOME)],
+            "release_place": [[*HOME[:5], round(46.6 + 0.1 * k, 2)] for k in range(11)],
+        },
+    }
+    lib_path = tmp_path / "return-held-beltend.json"
+    lib_path.write_text(json.dumps(lib))
+    robot, status, clock = HeldRobot(), [], [0.0]
+    queue = [f"load {lib_path}", "park", "stop now"]
+
+    def lines():
+        return [queue.pop(0)] if queue and not r.chunk else []
+
+    r = m.Runner(robot, {**library(), "chunks": {**library()["chunks"], "home": [list(HOME)]}}, fps=30,
+                 status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lines)
+    load_res = by_command(status, f"load {lib_path}")
+    assert load_res and load_res[0]["ok"] is True
+    park_res = by_command(status, "run park")
+    assert park_res and park_res[0]["ok"] is True
+    assert r.holding is True
+    r.target = list(lib["chunks"]["release_place"][0])
+    r.command("run release_place")
+    assert r.holding is False
+
+

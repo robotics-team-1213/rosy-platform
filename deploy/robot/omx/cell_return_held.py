@@ -2,6 +2,7 @@
 """Return-held handler: place an object already held at home onto a destination without picking."""
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 import time
@@ -44,6 +45,9 @@ def _plan_return_held(config, entry, dest_site, place_xy, work: Path):
                 place,
                 work / f"return-held-{dest_site}.json",
             )
+            lib_data = json.loads(Path(lib).read_text(encoding="utf-8"))
+            lib_data["holding"] = True
+            Path(lib).write_text(json.dumps(lib_data, indent=1), encoding="utf-8")
             return lib, place, approach, jaws, None
         except SystemExit as exc:
             error = str(exc)[:160]

@@ -227,6 +227,8 @@ def dispatch_runner_command(runner, line: str) -> bool:
             runner.plan_check(library)
             runner.library = library
             runner._lib_digest_cache = (id(library), lib_digest)
+            if library.get("holding") is True:
+                runner.holding = True
         elif verb != "state":
             raise ValueError(
                 "commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | human-hold | state | stop"
