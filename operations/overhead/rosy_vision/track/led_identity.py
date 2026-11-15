@@ -55,8 +55,9 @@ class LedConfig:
     min_value: int = 120
     ring_inner: float = 0.6       # x blob radius
     ring_outer: float = 2.6       # x blob radius
-    on_fraction: float = 0.02     # lit share of the ring at or above: on
-    off_fraction: float = 0.005   # at or below: off; between: unsure
+    # EV -0.3 site tuning (ceiling_north 2026-11-15, rosy_42 blue): ON measured 0.0055-0.0074 vs OFF 0.0001-0.0010.
+    on_fraction: float = 0.005    # lit share of the ring at or above: on
+    off_fraction: float = 0.003   # at or below: off; between: unsure
     min_off_s: float = 0.8
     max_off_s: float = 2.2
     max_on_s: float = 1.7
