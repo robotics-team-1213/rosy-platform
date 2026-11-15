@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-from typing import Mapping, Optional
+from typing import Literal, Mapping, Optional
 
 from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -42,6 +42,14 @@ class GoalRequest(BaseModel):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError("goal coordinates must be finite numbers")
         return value
+
+
+class ConsoleGoalRequest(GoalRequest):
+    """Console /goal request extending CORE mirror GoalRequest with optional site frame (D-1003)."""
+
+    #: "site": x, y, yaw are on the active site map (the console's site view) and Fleet converts them into the
+    #: robot's own Nav2 map frame (D-1003); absent: already in the robot's frame, sent as before.
+    frame: Optional[Literal["site"]] = None
 
 
 class DispatchRearmRequest(BaseModel):
@@ -132,6 +140,7 @@ def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
     read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None, require_named_operator, stop_targets=None,
+    convert_site_goal=None,
 ) -> None:
     drive_cancel = drive_cancel or DriveCancelFence()
     stop_targets = tuple(dict.fromkeys((*configured_omx.items(), *(stop_targets or ()))))
@@ -206,13 +215,20 @@ def install_task_dispatch_routes(
 
     @app.post("/api/fleet/robots/{robot_id}/goal", tags=["fleet"])
     async def fleet_goal(
-        robot_id: str, body: GoalRequest,
+        robot_id: str, body: ConsoleGoalRequest,
         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
         principal: SitePrincipal = Depends(require_named_operator),
     ) -> dict:
         try:
             if busy := console.trip_refusal([robot_id]):  # D-494 5: refused before a task is queued for it
                 raise busy
+            if body.frame == "site":
+                if convert_site_goal is None:
+                    raise HTTPException(409, detail={
+                        "code": "SITE_POSE_UNKNOWN",
+                        "message": f"{robot_id}: site-frame goal conversion is unavailable, so the goal was not sent"})
+                x, y, yaw = await convert_site_goal(app, console, robot_id, (body.x, body.y, body.yaw))
+                body = body.model_copy(update={"x": x, "y": y, "yaw": yaw, "frame": None})
             if task_service is not None:
                 if not idempotency_key:
                     raise HTTPException(status_code=400, detail={

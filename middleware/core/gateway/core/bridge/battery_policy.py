@@ -25,7 +25,9 @@ could move unchanged.
    resting curve — which makes the shutdown decision itself better informed.
 8. Offer the dock at the warning level (DNC-006). No dock, or no support, and
    this does nothing and the SAF-005 fallback below still stands.
-9. Then the SAF-005 action. A `RETURN_HOME` that cannot be dispatched escalates
+9. D-1029: a Fleet charge return in progress defers the 10% action (the DEEP e-stop above never waits);
+   it latches as soon as the return ends while the pack is still critical.
+10. Then the SAF-005 action. A `RETURN_HOME` that cannot be dispatched escalates
    to e-stop: refusing to move is safe, believing you are driving home when you
    are not is not. A dock run under way *is* the return home: a Nav2 home goal
    would preempt it, and navigation refuses goals whenever docking holds the
@@ -37,9 +39,15 @@ from __future__ import annotations
 
 import contextlib
 import math
+import time
 
 from core_features.command.arbitration import Mode
+from core_common.protocol.wire_status import NavigationState
 from core_features.power.battery import BatteryLevel
+
+#: D-1029: how long the return must be over before the deferred 10 % action latches.
+INACTIVE_LATCH_S = 2.0
+_NAV_IDLE = {NavigationState.IDLE, NavigationState.ARRIVED, NavigationState.CANCELED, NavigationState.FAILED}
 
 
 #: A reading above this is a broken sensor, not a charged pack: a stuck ADC must not end a stop.
@@ -58,6 +66,18 @@ def _release_recovered_stop(services) -> None:
     if safety.estop:  # a person's stop arrived between those lines; put EMERGENCY back over it
         services.state.set_estop(True, safety.estop_source)
         services.modes.transition(Mode.EMERGENCY)
+
+
+def _charge_return_active(services) -> bool:
+    """D-1029: a live charge-return lease and navigation in progress. Any doubt is False (latch).
+
+    Navigation, not ``fleet_goal()``: a trip goal carries a correlation id only with a goal lease (off by default)."""
+    try:
+        return bool(services.trip_lease.charge_return_active()
+                    and not services.nav.docking_active_provider()
+                    and services.nav.nav_state not in _NAV_IDLE)
+    except Exception:
+        return False
 
 
 def apply_voltage(services, voltage: float) -> None:
@@ -97,6 +117,27 @@ def apply_voltage(services, voltage: float) -> None:
     services.docking.on_battery_level(battery.level)
 
     action = services.safety.on_battery_percent(percent)
+    safety, lease = services.safety, services.trip_lease
+    if lease.critical_deferred:
+        # D-1029: kept while the pack stays critical, through any other stop; it latches once the return has been
+        # over for INACTIVE_LATCH_S (a reading between two legs is not the end) and nothing else holds the robot.
+        now = time.monotonic()
+        if percent > safety.battery_policy.critical_percent:
+            lease.critical_deferred, lease.critical_inactive_since = False, None
+        elif _charge_return_active(services):
+            lease.critical_inactive_since = None
+        elif lease.critical_inactive_since is None:
+            lease.critical_inactive_since = now
+        elif (now - lease.critical_inactive_since >= INACTIVE_LATCH_S and not safety.estop
+              and not services.nav.docking_active_provider()):
+            lease.critical_deferred, lease.critical_inactive_since = False, None
+            safety.trigger_estop("battery_policy")
+            return
+    elif action in ("RETURN_HOME", "STOP") and _charge_return_active(services):
+        lease.critical_deferred, lease.critical_inactive_since = True, None
+        services.events.publish("battery.critical_deferred", severity="warning", source="safety_manager",
+                                data={"percent": percent})
+        return
     if action == "RETURN_HOME":
         if services.nav.docking_active_provider():
             return

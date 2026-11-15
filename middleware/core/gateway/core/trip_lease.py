@@ -22,6 +22,7 @@ commands nothing (D-2). Memory only: a CORE restart has no lease.
 from __future__ import annotations
 
 import logging
+import math
 import re
 import threading
 from collections import OrderedDict
@@ -30,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
-from core_common.protocol.trip_lease import MAX_TTL_S, MIN_TTL_S, TripLeaseError
+from core_common.protocol.trip_lease import MAX_TTL_S, MIN_TTL_S, PURPOSES, TripLeaseError
 from core_features.command.arbitration import Mode
 
 LEASE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
@@ -64,6 +65,7 @@ class _Lease:
     event_mono: float
     warned: set = field(default_factory=set)
     job_id: Optional[str] = None
+    purpose: Optional[str] = None
 
 
 def _iso(epoch: float) -> str:
@@ -84,11 +86,15 @@ class TripLeaseManager:
         self._ended_ids: OrderedDict[str, dict] = OrderedDict()
         #: ``halt(reason)``: stop line-follow / navigation and go IDLE. Wired by CORE.
         self.halt: Callable[[str], None] = lambda reason: None
+        #: D-1029: battery_policy deferred its critical action while a charge return drives.
+        self.critical_deferred = False
+        self.critical_inactive_since: Optional[float] = None  # D-1029: monotonic start of "return over"
 
     # --- lease -------------------------------------------------------------
 
     def open(self, *, lease_id: str, trip_id: str, holder: str, operator_name: str,
              ttl_s: float, owner_id: str, origin: str = "", job_id: Optional[str] = None,
+             purpose: Optional[str] = None,
              refuse: Callable[[], Optional[TripLeaseError]] = lambda: None) -> tuple[dict, bool]:
         """Open, or renew when the same token sends the same ``lease_id``.
 
@@ -97,6 +103,8 @@ class TripLeaseManager:
         """
         if job_id is not None and not 1 <= len(str(job_id).strip()) <= MAX_TRIP_ID_LENGTH:
             raise TripLeaseError("VALIDATION_ERROR", f"job_id must be 1-{MAX_TRIP_ID_LENGTH} characters")
+        if purpose is not None and purpose not in PURPOSES:
+            raise TripLeaseError("VALIDATION_ERROR", f"purpose must be one of {sorted(PURPOSES)}")
         lease_id = str(lease_id or "")
         trip_id = str(trip_id or "").strip()
         holder = str(holder or "").strip()
@@ -131,6 +139,8 @@ class TripLeaseManager:
                 if current.owner_id != owner_id or current.lease_id != lease_id:
                     raise TripLeaseError("TRIP_LEASED", "a Fleet trip lease is active",
                                          self._public(current, now))
+                if current.purpose != purpose:
+                    raise TripLeaseError("CONFLICT", "a renew cannot change the lease purpose")
                 current.renewed_mono = now
                 current.ttl_s = ttl
                 public = self._public(current, now)
@@ -145,7 +155,7 @@ class TripLeaseManager:
                     lease_id=lease_id, trip_id=trip_id, holder=holder,
                     operator_name=operator_name, owner_id=owner_id, ttl_s=ttl,
                     origin=origin, since=_iso(self._clock()), renewed_mono=now, event_mono=now,
-                    job_id=None if job_id is None else str(job_id).strip())
+                    job_id=None if job_id is None else str(job_id).strip(), purpose=purpose)
                 self._ended = None
                 public = self._public(current, now)
                 renewed = False
@@ -237,6 +247,13 @@ class TripLeaseManager:
         with self._lock:
             return self._public(self._lease, self._monotonic()) if self._lease is not None else None
 
+    def charge_return_active(self) -> bool:
+        """D-1029: a live (not lapsed) lease opened for a charge return."""
+        with self._lock:
+            current = self._lease
+            return (current is not None and current.purpose == "charge_return"
+                    and self._monotonic() - current.renewed_mono < current.ttl_s)
+
     def matches_nowait(self, *, lease_id, trip_id, job_id, owner_id):
         """Matching remaining lease, False if lost, None on contention; never display-rounded."""
         if not self._lock.acquire(blocking=False):
@@ -306,10 +323,12 @@ class TripLeaseManager:
             "since": lease.since,
             "expires_in_s": round(max(0.0, lease.ttl_s - (now - lease.renewed_mono)), 1),
             "job_id": lease.job_id,
+            "purpose": lease.purpose,
         }
 
 
-def build_trip_lease(events, state, modes, safety, line_follow, command, nav) -> TripLeaseManager:
+def build_trip_lease(events, state, modes, safety, line_follow, command, nav,
+                     charge_return_linear: float = 0.10) -> TripLeaseManager:
     trip_lease = TripLeaseManager(events)
     state.set_trip_lease_provider(lambda: (trip_lease.current(), trip_lease.ended()))
 
@@ -339,6 +358,13 @@ def build_trip_lease(events, state, modes, safety, line_follow, command, nav) ->
             events.publish("mode.changed", source="trip_lease",
                            data={"from": Mode.NAVIGATION.value, "to": Mode.IDLE.value, "by": "trip_lease"})
     trip_lease.halt = halt
+    # D-1029: low-power return driving; the lease alone decides (the cap holds before navigation starts).
+    # A bad configured value (0, negative, NaN) never removes the cap: it falls back to the default.
+    if not (math.isfinite(charge_return_linear) and charge_return_linear > 0):
+        log.warning("safety.charge_return_linear %r is not a positive speed; using 0.10", charge_return_linear)
+        charge_return_linear = 0.10
+    safety.charge_return_linear_provider = (
+        lambda: charge_return_linear if trip_lease.charge_return_active() else None)
     # D-760 2: while a lease is open, line follow needs a held Fleet authority (a lapsed lease the 5 Hz
     # timer has not ended yet still counts: safe side).
     line_follow.authority_leased = lambda: trip_lease.current() is not None
