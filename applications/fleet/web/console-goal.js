@@ -126,6 +126,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     }
 
     const mapSnapshot = JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]);
+    const siteFrame = !view.map; // the site map view: Fleet converts into the robot's own map frame (D-1003)
     await confirmedAction.run({
       message: viaTrip ? `${robotId}를 ${where}까지 차로로 보낼까요?` : `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`,
       opener: el("map-canvas"),
@@ -155,7 +156,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       }
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
-        body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)) }), signals: [owner.signal],
+        body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)), ...(siteFrame ? { frame: "site" } : {}) }), signals: [owner.signal],
       });
       owner.check();
       const task = result && result.task ? result.task : null;

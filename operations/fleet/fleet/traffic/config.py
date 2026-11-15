@@ -95,17 +95,19 @@ def _trip_lease(args) -> dict:
     return {"required": required, "ttl_s": float(ttl_s)}
 
 
-def _station_recovery(args) -> bool:
-    """D-721 Amendment: ``fleet.station_recovery.enabled`` (default false). Off, Fleet asks and approves nothing."""
+def _station_recovery(args) -> dict:
+    """D-721 Amendment: ``fleet.station_recovery.enabled`` (default false): off, Fleet asks and approves nothing.
+    D-1029: ``dispatch`` (default false) lets an approval start the charge return trip; it needs ``enabled``."""
     import yaml
 
     try:
         site_config = {}
         if getattr(args, "site_config", None) is not None:
             site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        value = ((site_config.get("fleet") or {}).get("station_recovery") or {}).get("enabled", False)
+        section = (site_config.get("fleet") or {}).get("station_recovery") or {}
+        value, dispatch = section.get("enabled", False), section.get("dispatch", False)
     except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"station recovery config: {exc}")
-    if not isinstance(value, bool):
-        sys.exit("station recovery config: fleet.station_recovery.enabled must be true or false")
-    return value
+    if not isinstance(value, bool) or not isinstance(dispatch, bool):
+        sys.exit("station recovery config: fleet.station_recovery.enabled and dispatch must be true or false")
+    return {"enabled": value, "dispatch": value and dispatch}
