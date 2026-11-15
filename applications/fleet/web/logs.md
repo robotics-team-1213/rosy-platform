@@ -1,5 +1,7 @@
 # console_source verification log
 
+2026-11-14: keep the last ceiling-camera picture on the Fleet map when the feed drops — dimmed (opacity only), with a small bottom-left capture-time stamp (`카메라 HH:MM:SS · N초 전`) until the next live frame replaces it; keepFrame/staleStamp node tests cover the decision. Calibration/planning paths still use fresh frames only. Remote browser/design-gate verification follows.
+
 ## 2026-10-11 · 0702cdb15 · uiux: 선택 로봇의 배정·진행 작업면 (D-651)
 
 - 변경: 지도 작업면과 선택한 로봇 작업면을 나눴다. 선택은 명령과 분리하고 선택 변경 시 이전 목표 지정·미확정 명령을 취소한다. 기존 경로·한 바퀴·반복 입력은 종류별로 하나씩 표시한다. 지도 장소·신호는 번호·아이콘으로 줄이고 좌표·교통과 기술 옵션은 지도 밖 접힘으로 옮겼다. 전체 취소·개입 큐와 전체 로봇 연결·안전·교정 요약은 보존한다.
