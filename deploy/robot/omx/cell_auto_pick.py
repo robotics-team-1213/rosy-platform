@@ -1,29 +1,25 @@
 #!/usr/bin/env python3
-"""Autonomous pick and place of catalogue objects for arm S, no human hands (2026-10-28).
-
-Single Responsibility:
-  - Autonomous pick-and-place execution loop (`run_auto`, `main`).
-  - Top-camera observation, candidate selection, and placement verification live in `cell_auto_pick_plan.py`
-    and are re-exported here unchanged.
-"""
-from __future__ import annotations
-
+"""OMX autonomous pick and place loop; observation and evidence live in focused modules."""
 import json
 from pathlib import Path
 import sys
 import time
+import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_act_shadow  # noqa: E402
 import cell_attempts  # noqa: E402
-import cell_executor  # noqa: E402
+import cell_auto_record  # noqa: E402
+import cell_auto_evidence  # noqa: E402
 from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
     CLOSING,
     choose,
     observe,
     plan_pick,
+    save_frame_receipt,
     verify_placed,
 )
+import cell_executor  # noqa: E402
 from cell_auto_safety import (  # noqa: E402, F401
     PWM_FRACTION,
     TEMP_STOP_C,
@@ -42,6 +38,7 @@ from cell_auto_safety import (  # noqa: E402, F401
 from cell_auto_setup import load_config  # noqa: E402,F401
 from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401
 import cell_calibration as cal  # noqa: E402
+import cell_carry_choices  # noqa: E402
 import cell_decisions as cd  # noqa: E402
 import cell_diagnose  # noqa: E402,F401
 import cell_hooks  # noqa: E402
@@ -49,20 +46,10 @@ import cell_jaw_axis  # noqa: E402,F401
 import cell_objects  # noqa: E402
 from cell_observe import keep, predicted_pixel, wrap90  # noqa: E402,F401
 import cell_params as prm  # noqa: E402
-from cell_pick_geom import (  # noqa: E402,F401
-    across,
-    grasp_depth,
-    grasp_yaw,
-    jaw_open_for,
-    parse_dest,
-    reachable_ends,
-    surface_z,
-)
+from cell_pick_geom import across, grasp_depth, grasp_yaw, jaw_open_for, parse_dest, reachable_ends, surface_z  # noqa: E402,F401
 import cell_pipeline as cp  # noqa: E402
 import cell_pivot  # noqa: E402
 import cell_place_fit  # noqa: E402
-import cell_scene_guard  # noqa: E402
-import cell_site_track  # noqa: E402
 from cell_transfer import FOLDED, STILL_HOLDING_UNITS, Gate, transfer_folded  # noqa: E402,F401
 import cell_wrist_ref  # noqa: E402
 
@@ -91,14 +78,15 @@ def run_auto(
         return {**out, "result": f"refused: source {source!r} is not a site in the config"}
     if dest in config["sites"] and "place" not in config["sites"][dest]:
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
-    for site in {source, dest} & {k for k, v in config["sites"].items() if v.get("track")}:
-        config, out[f"track_{site}"] = cell_site_track.follow(
-            config, site, cell.frame("top"), lambda q, s=site: predicted_pixel(config, calibration, s, q), work
-        )
-        if not out[f"track_{site}"]["tracked"]:
-            return {**out, "result": f"refused: {site}: {out[f'track_{site}'].get('why')}"}
-        roi = config["sites"][site]["auto_roi"] if site == source else roi
+    map_error = cell_auto_evidence.map_pose_preflight(cell, config, calibration, calibration_path, work, dry_run, out)
+    if map_error:
+        return {**out, "result": f"held: {map_error}"}
+    config, roi, track_error = cell_auto_evidence.track_sites(
+        cell, config, calibration, source, dest, roi, work, dry_run, out)
+    if track_error:
+        return {**out, "result": track_error}
     dest_site, place_xy = parse_dest(config, source, dest)
+    config, carry, carry_shadow = cell_carry_choices.apply(config, choices, dest, dest_site, log, source)  # sim-ranked carry offer, learns from this try
     droi = config["sites"][dest_site].get("auto_roi") or (
         roi if dest_site == source or config["sites"][dest_site].get("layer", 0) > 0 else None
     )
@@ -108,16 +96,33 @@ def run_auto(
     bias_data = cell_place_fit.with_tier_biases(
         config, cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params"))
     )
-    episode, failed_yaws, dest_view = None, [], None
+    episode, failed_yaws, gate, dest_view = None, [], None, None
     attempts = int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts
     shadow = None if dry_run else cell_act_shadow.load(config, work)
     try:
         for attempt in range(attempts):
             t0, tried = time.time(), {"locate": {"found": False}, "scenario_id": scenario_id}
-            if droi is not None and dest_site != source:  # the destination is looked at again before each attempt
-                _, dmask, _, derr = observe(cell, config, calibration, dest_site, droi, catalog)
-                dest_view = None if derr else (dmask, droi)
-            img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog)
+            if carry_shadow:
+                tried["carry_shadowed"] = carry_shadow  # a site value won over the offer: ingest must not credit it
+            capture_id = uuid.uuid4().hex
+            source_frame = None
+            if not dry_run:
+                source_frame, source_record, source_error = cell_auto_evidence.source_frame(
+                    cell, work / "frames" / f"{capture_id}-source.jpg")
+                if source_error:
+                    tried["fail"] = {"stage": "camera", "class": "fresh source frame unavailable"}
+                    cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+                    return {**out, "result": "held: fresh source frame unavailable", "error": source_error}
+                tried["source_frame"] = source_record
+            source_image = source_frame["image"] if source_frame is not None else cell.frame("top")
+            dest_view, derr = cell_auto_evidence.destination_view(
+                cell, config, calibration, dest_site, droi, source, catalog, source_image)
+            if derr and not dry_run:
+                tried["fail"] = {"stage": "camera", "class": f"destination observation: {derr}"}
+                cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+                return {**out, "result": f"held: destination observation: {derr}"}
+            img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog,
+                                                image=source_image)
             usable, refused = (
                 choose(
                     cell, config, calibration, source, dest_site, place_xy, roi,
@@ -144,18 +149,23 @@ def run_auto(
                 return {**out, "result": f"stopped: {row['error']}"}
             target = usable[0]
             known = cell_pivot.bias_at(bias_data, source, target["object"]["raw_m"], params=config.get("params"))
-            pivot_cell = guarded if not dry_run and "_commissioning" in config else None
             bias_data, problem = self_calibrate(
-                pivot_cell, config, calibration, calibration_path, source,
+                None, config, calibration, calibration_path, source,
                 target["object"]["raw_m"], objects, work, bias_data, sleep, log,
             )
             bias_data = cell_place_fit.with_tier_biases(config, bias_data)
+            bias_error = (cell_auto_evidence.bias_map_error(config, calibration, bias_data, source,
+                                                            target["object"]["raw_m"]) if "map_pose_frame" in out else None)
+            if bias_error:
+                tried["fail"] = {"stage": "calibrate", "class": bias_error}
+                cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+                return {**out, "result": f"held: {bias_error}"}
             cd.bias(known, problem, target["object"]["raw_m"])
             if problem and not dry_run:
                 tried["locate"] = {"found": True, "arm_m": target["object"]["raw_m"]}
                 tried["fail"] = {"stage": "calibrate", "class": problem}
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
-                return {**out, "result": f"stopped: {problem}"}
+                return {**out, "result": f"held: {problem}; separate audited calibration required"}
             if (
                 not dry_run
                 and problem is None
@@ -163,21 +173,8 @@ def run_auto(
                 != target["bias_region"]
             ):
                 usable, refused = choose(
-                    cell,
-                    config,
-                    calibration,
-                    source,
-                    dest_site,
-                    place_xy,
-                    roi,
-                    objects,
-                    mask,
-                    catalog,
-                    bias_data,
-                    choices,
-                    work,
-                    failed_yaws,
-                    dest_view,
+                    cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
+                    bias_data, choices, work, failed_yaws, dest_view,
                 )
                 if not usable:
                     row["error"] = "no usable object after the pivot"
@@ -206,6 +203,17 @@ def run_auto(
             row.update(chosen=tried["auto"], plan=tried["plan"], pivot_needed=problem, long_axis_deg=o["long_axis_deg"])
             if dry_run:
                 return {**out, "result": "planned"}
+            before_frame, frame_record, evidence_error = cell_auto_evidence.pre_motion_frame(
+                cell, config, calibration, catalog, source, roi, o["raw_m"], o["object"],
+                dest_site, droi, place_xy, bias_data, source_frame,
+                work / "frames" / f"{capture_id}-before.jpg")
+            if frame_record is not None:
+                tried["before_frame"] = frame_record
+            if evidence_error:
+                tried["fail"] = {"stage": "camera" if "source" in evidence_error or "camera" in evidence_error
+                                 else "verify", "class": evidence_error}
+                cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+                return {**out, "result": f"held: {evidence_error}"}
             folded = prm.get(config.get("params"), "auto.fold_before_transport")
             sequence = FOLDED if folded else cp.SEQUENCE
             config = dict(config, _payload=cell_objects.payload(catalog, o["object"]))
@@ -213,23 +221,18 @@ def run_auto(
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
             choice, tried["execution"] = cell_executor.choose(choices, attempt)
             gate = Gate(guarded, config, calibration, sequence=sequence)
+            ledger = cell_attempts.ReplanLedger(config, calibration, source, dest, attempt, tried, t0, choices)
             # shadow inference before the gate opens: no delay between the approval and the motion
             shadow_row = shadow.capture(cell, config, attempt, img) if shadow else None
-            held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a))
+            held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a), ledger.finish)
             if held is not None:
                 tried["envelope"] = held
                 tried["transfer"] = {"result": "held", "at": "preflight", "steps": [], "envelope": held}
                 close_episode(cell, episode, False, f"held: {held['reason']}")
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {held['reason']}"}
-            guard = cell_scene_guard.hook(
-                guarded,
-                config,
-                guarded.frame("top"),
-                roi,
-                predicted_pixel(config, calibration, source, (0.0, 0.0)),
-                predicted_pixel(config, calibration, source, o["raw_m"]),
-            )
+            guard = cell_auto_evidence.scene_guard(
+                guarded, config, calibration, source, roi, o["raw_m"], before_frame["image"])
             wrist, capture, pinch, feel = cell_hooks.pick_hooks(
                 same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration, guard
             )
@@ -253,6 +256,11 @@ def run_auto(
                 or ("disabled or uncalibrated" if wrist is None else None)
             )
             tried["transfer"] = moved
+            if gate.transitions:
+                tried["transfer"] = {**moved, "steps": list(gate.history)}
+            if gate.blocked:
+                close_episode(cell, episode, False, "supervised audit transition held")
+                return {**out, "result": "held: supervised audit transition"}
             if moved["result"] not in ("placed", "contact", "fault", "refused"):
                 cell_executor.outcome(choices, tried["execution"], choice, False, moved["result"])
             if moved["result"] in ("empty", "reinserted") or (
@@ -268,18 +276,11 @@ def run_auto(
                                            moved["result"], moved.get("at"))
                     return {**out, "result": f"stopped: {decided['cause']} -> {decided['chosen']}"}
             held = moved["result"] == "placed" or any(s.get("holding") for s in moved["steps"])
-            if target["offset"] is not None and moved["result"] in ("placed", "empty", "contact", "reinserted"):
-                choices.outcome(
-                    CLOSING,
-                    target["offset"],
-                    moved["result"] == "placed",
-                    f"{moved['result']} at yaw {target['pick']['yaw_deg']}",
-                )
-                choices.save()
             if moved["result"] == "placed":
                 place_xy = (target["place"]["x"], target["place"]["y"])
                 tried["verify"] = verify_placed(
-                    guarded, config, calibration, dest_site, place_xy, droi, catalog, bias_data, o["object"], held
+                    guarded, config, calibration, dest_site, place_xy, droi, catalog, bias_data, o["object"],
+                    before_frame, work / "frames" / f"{capture_id}-after.jpg", source, o["raw_m"], roi,
                 )
                 cd.emit(
                     "verify",
@@ -290,7 +291,8 @@ def run_auto(
                     f"placement seen on the {tried['verify']['basis']}",
                 )
                 tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"])
-                cell_executor.outcome(choices, tried["execution"], choice, bool(tried["verify"].get("inside")),
+                cell_executor.outcome(choices, tried["execution"], choice,
+                                      tried["verify"].get("verified") is True and tried["verify"].get("inside") is True,
                                       "placement verification")
                 pending = cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(
                     ".pending.json"
@@ -300,38 +302,27 @@ def run_auto(
                         pending.replace(cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site))
                     else:
                         pending.unlink()
+            accepted = (moved["result"] == "placed" and tried["verify"].get("verified") is True
+                        and tried["verify"].get("inside") is True)
+            if target["offset"] is not None and (accepted or moved["result"] in ("empty", "contact", "reinserted")):
+                choices.outcome(CLOSING, target["offset"], accepted,
+                                f"{moved['result']} at yaw {target['pick']['yaw_deg']}")
+                choices.save()
+            if accepted or moved["result"] in ("empty", "contact", "reinserted"):
+                cell_carry_choices.outcome(choices, carry, accepted)
             close_episode(
-                cell,
-                episode,
-                moved["result"] == "placed" and tried["verify"]["inside"],
-                f"{moved['result']} at {moved.get('at')}"
-                if moved["result"] != "placed"
+                cell, episode, accepted,
+                f"{moved['result']} at {moved.get('at')}" if moved["result"] != "placed"
                 else "placed but not seen at the destination",
             )
             episode = None
             cd.after(moved, choices.best(CLOSING), attempt + 1 < attempts, guarded.monitor)
-            cell_act_shadow.record(shadow, shadow_row,
-                                   cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices),
-                                   moved["result"], moved.get("at"))
-            try:
-                import cell_problem_pipeline
-
-                cell_problem_pipeline.capture_from_attempt(
-                    config,
-                    {
-                        "from": source,
-                        "dest": dest,
-                        "result": moved["result"],
-                        "fail_stage": moved.get("at"),
-                        "why": moved.get("error"),
-                        "grasp_debate": moved.get("grasp_debate"),
-                        "wrist": moved.get("wrist"),
-                    },
-                )
-            except Exception:
-                pass
-            if moved["result"] == "placed" and tried["verify"]["inside"]:
-                return {**out, "result": "placed"}
+            attempt_id = cell_attempts.record(config, calibration, source, dest, attempt, tried, ledger.t_start, choices)
+            cell_act_shadow.record(shadow, shadow_row, attempt_id, moved["result"], moved.get("at"))
+            cell_auto_record.capture_problem(config, source, dest, moved)
+            if (moved["result"] == "placed" and tried["verify"].get("verified") is True
+                    and tried["verify"]["inside"]):
+                return {**out, "result": "placed", "attempt_id": attempt_id}
             grasped = any(s.get("command") == "run grasp_pick" and s.get("holding") for s in moved["steps"])
             if moved["result"] == "contact" and grasped:
                 return {
@@ -342,17 +333,18 @@ def run_auto(
             if parks and parks[-1].get("contact"):  # 2026-11-14 arm_s: a park overloaded at a far pick; no next attempt from there
                 return {**out, "result": f"stopped: contact at park: {parks[-1].get('error')}"}
             if moved["result"] not in ("empty", "contact", "reinserted"):
-                if moved["result"] in ("fault", "refused"):
-                    cp.fold(cell, sleep)
-                return {**out, "result": f"stopped: {moved['result']}"}
+                if moved["result"] in ("fault", "refused") and not gate.blocked:
+                    cp.fold(gate, sleep)
+                return {**out, "result": "stopped: placement unverified" if moved["result"] == "placed"
+                        else f"stopped: {moved['result']}"}
     except Aborted as stop:
         close_episode(cell, episode, False, f"aborted: {stop}")
         if "execution" in tried:
             cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
         return {**out, "result": f"aborted: {stop}"}
     except Exception:
-        if guarded is not None:
-            cp.fold(cell, sleep)
+        if gate is not None and gate.before_motion is not None and not gate.blocked:
+            cp.fold(gate, sleep)
         close_episode(cell, episode, False, "pipeline exception")
         raise
     return {**out, "result": f"stopped: {attempts} attempts"}
@@ -366,28 +358,23 @@ def main(argv=None):
     ap = parser(__doc__)
     ap.add_argument("--commissioning", action="store_true", help="a supervised trial of this one carry (D-911)")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
+    ap.add_argument("--task-id", help="correlate this one carry with a Fleet task; does not authorize completion")
+    ap.add_argument("--handoff-lease-id", help="Fleet lease paired with --task-id")
     ap.add_argument("--scenario-id", help="scenario identifier from the cell task")
     args = ap.parse_args(argv)
     if args.commissioning != args.person_at_switch:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
+    if bool(args.task_id) != bool(args.handoff_lease_id) or (args.task_id and args.dry_run):
+        raise SystemExit("--task-id and --handoff-lease-id require each other and a real single carry")
     config, cell, calibration_path, work = open_cell(args, args.commissioning)
     dark = cell_preflight.ready(cell.frame, config)
     if dark:
         print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))
         return 1
     result = run_auto(
-        cell,
-        config,
-        cell_pivot.with_site_maps(config, cal.load(calibration_path)),
-        calibration_path,
-        cell_objects.load_catalog(args.catalog),
-        args.roi,
-        args.source,
-        args.dest,
-        work,
-        cell_choices.Choices(work / "choices.json"),
-        args.dry_run,
-        scenario_id=args.scenario_id,
+        cell, config, cell_pivot.with_site_maps(config, cal.load(calibration_path)), calibration_path,
+        cell_objects.load_catalog(args.catalog), args.roi, args.source, args.dest, work,
+        cell_choices.Choices(work / "choices.json"), args.dry_run, scenario_id=args.scenario_id,
     )
     print(json.dumps(result, indent=1, default=str))
     return 0 if result["result"] in ("placed", "planned") else 1
