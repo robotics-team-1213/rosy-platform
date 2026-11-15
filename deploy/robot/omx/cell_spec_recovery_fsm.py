@@ -115,14 +115,15 @@ def evaluate_execution_gate(
         return _gate_res(gate, "PASS", None, "pre_place interlock passed")
 
     if gate == "post_release":
-        if isinstance(z_gate, dict):
-            r_k = z_gate.get("r_k_mm")
-            if r_k is not None and 1.0 <= float(r_k) <= 3.0:
-                return _gate_res(gate, "FAIL", "S6_UNSEATED_CONE", f"r_k_mm={float(r_k):.2f}mm in [1.0, 3.0]mm")
-            if z_gate.get("verdict", "PASS") != "PASS":
-                v_z = str(z_gate.get("verdict") or "FAIL")
-                f_code = str(z_gate.get("failure_code") or "S6_UNSEATED_CONE")
-                return _gate_res(gate, v_z, f_code, str(z_gate.get("reason") or "post_release z_gate failed"))
+        if not isinstance(z_gate, dict) or "verdict" not in z_gate:
+            return _gate_res(gate, "UNKNOWN", "S5_VIEW_OR_GATE_MISMATCH", "post_release z_gate missing")
+        r_k = z_gate.get("r_k_mm")
+        if r_k is not None and 1.0 <= float(r_k) <= 3.0:
+            return _gate_res(gate, "FAIL", "S6_UNSEATED_CONE", f"r_k_mm={float(r_k):.2f}mm in [1.0, 3.0]mm")
+        if z_gate["verdict"] != "PASS":
+            v_z = str(z_gate.get("verdict") or "FAIL")
+            f_code = str(z_gate.get("failure_code") or "S6_UNSEATED_CONE")
+            return _gate_res(gate, v_z, f_code, str(z_gate.get("reason") or "post_release z_gate failed"))
         return _gate_res(gate, "PASS", None, "post_release interlock passed")
 
     if gate == "leg_transition":

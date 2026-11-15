@@ -268,3 +268,15 @@ def test_the_park_closes_to_where_this_arms_empty_jaws_stop():
     library = m.Planner(dict(PLAN, jaw_empty_stop=49.0)).library()
     assert library["gripper_closed"] == library["jaw_empty_stop"] == 49.0
     assert library["chunks"]["grasp_pick"][-1][5] == PLAN["grip_closed"]  # the grasp still squeezes to the command
+
+
+def test_plan_tcp_x_m_wins_over_env_and_records_in_library(monkeypatch):
+    """D-1033: plan['tcp_x_m'] is canonical during planning even when ROSY_OMX_TCP_X_M is set for another arm."""
+    q = [0.0, -0.3, 0.4, 1.2, 0.0]
+    monkeypatch.setenv("ROSY_OMX_TCP_X_M", "0.0740")
+    explicit = m.Planner(dict(PLAN, tcp_x_m=0.0885))
+    env_only = m.load_kinematics(None)[0]
+    assert explicit.kin.fk(q).x != pytest.approx(env_only.fk(q).x, abs=1e-4)
+    assert explicit.library()["tcp_x_m"] == pytest.approx(0.0885)
+    with pytest.raises(SystemExit, match="jaw range"):
+        m.load_kinematics(None, 0.0)

@@ -26,17 +26,39 @@ def case(work: Path, row: dict) -> None:
         f.write(json.dumps({"t": round(time.time(), 3), **row}, default=str) + "\n")
 
 
-def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
+def limit_error(config: dict, library: dict) -> str | None:
+    """The first way a planned library leaves this arm's joint window, else None. ``joint_min`` looks at every chunk;
+    ``joint_max`` only at ``played_chunks`` when the caller lists them (the remap plays above_pick and the fold home)."""
+    names, chunks = library["names"], library["chunks"]
+    # arm_b's wrist roll holds at 9.89 in free air (2026-11-06): refuse the plan here, so every caller tries its next yaw
+    for name, low in (config.get("joint_min") or {}).items():
+        lowest = min(row[names.index(name)] for chunk in chunks.values() for row in chunk)
+        if lowest < low:
+            return f"{name} target {lowest:.1f} is under this arm's joint_min {low}"
+    # 2026-11-14: arm_b's printed wrist holder touched link3/4 at wrist_flex 59.3, so its profile caps the wrist lower
+    played = config.get("played_chunks")
+    for name, high in (config.get("joint_max") or {}).items():
+        highest = max(row[names.index(name)] for key, chunk in chunks.items() if played is None or key in played
+                      for row in chunk)
+        if highest > high:
+            return f"{name} target {highest:.1f} is over this arm's joint_max {high}"
+    return None
+
+
+def plan_library(config: dict, pick: dict, place: dict, *, check: bool = True) -> dict:
+    """The chunk library for a pick and place; refused (SystemExit) when it leaves the arm's joint window."""
     from grasp_planner import Planner
 
     library = Planner(dict(config["plan"], pick=pick, place=place, keep_out=config.get("keep_out"),
                            **({"tcp_x_m": config["tcp_x_m"]} if "tcp_x_m" in config else {}))).library()
-    # arm_b's wrist roll holds at 9.89 in free air (2026-11-06): refuse the plan here, so every caller tries its next yaw
-    for name, low in (config.get("joint_min") or {}).items():
-        column = library["names"].index(name)
-        lowest = min(row[column] for chunk in library["chunks"].values() for row in chunk)
-        if lowest < low:
-            raise SystemExit(f"{name} target {lowest:.1f} is under this arm's joint_min {low}")
+    error = limit_error(config, library) if check else None
+    if error:
+        raise SystemExit(error)
+    return library
+
+
+def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
+    library = plan_library(config, pick, place)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({k: v for k, v in library.items() if v is not None}))
     return path
@@ -174,7 +196,7 @@ class FifoCell:
                             self._frame_cache[camera] = (etag, decoded)
                         return decoded.copy() if decoded is not None else decoded
                     break
-                except (OSError, http.client.HTTPException):
+                except (OSError, http.client.HTTPException, AttributeError):  # 3.12 http.client: a closed keep-alive read
                     try:
                         if conn is not None:
                             conn.close()
@@ -232,7 +254,7 @@ class FifoCell:
         image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         if image is None:
             raise ValueError("camera frame is not a decodable JPEG")
-        return {"image": image, "jpeg_sha256": hashlib.sha256(raw).hexdigest(),
+        return {"image": image, "jpeg_bytes": raw, "jpeg_sha256": hashlib.sha256(raw).hexdigest(),
                 "source_seq": sequence, "source_stamp": source_stamp,
                 "camera": camera, "captured_at": captured_at, "etag": etag}
 

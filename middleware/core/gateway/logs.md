@@ -2171,3 +2171,8 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 변경: CORE가 rosy-display가 읽는 영속 설정을 원자적으로 기록한다. rosy-face는 평상시 패턴만 런타임에 억제하고 부팅·안전·식별 표시는 유지한다.
 - 증거: 원격 CORE·rosy-face·native systemd 계약 시험 결과는 이 브랜치 검증에 기록한다.
 - gate 변화: 없음. 장치·현장 판정은 수행하지 않았다.
+
+## 2026-11-14 · uncommitted · nudge_backward 시험
+- 변경: `test_localization_mission_backward.py` — 후방 막힘 거부·짧아지기·정지 갭 정지·0.10 m 한도·음의 선속도·전방 동작 불변, 그리고 LOCALIZED 완화(nudge 시작 가능, 그 실행은 localized 로 끝나지 않음; 검색 nudge는 여전히 localized 로 끝남).
+- 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고.
+- gate 변화: 없음.

@@ -29,24 +29,17 @@ from cell_calibrate_auto import (  # noqa: E402,F401  (re-exported)
     pivot_near_yaws,
     self_calibrate,
 )
+from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401  (re-exported)
 import cell_calibration as cal  # noqa: E402
+from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401  (re-exported)
 import cell_params as prm  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
 import cell_pivot  # noqa: E402
+import cell_remap_plan as rp  # noqa: E402
 
 MAP_POINTS = [
-    [-0.12, 0.17],
-    [-0.10, 0.19],
-    [-0.08, 0.17],
-    [-0.06, 0.19],
-    [-0.04, 0.17],
-    [-0.10, 0.15],
-    [-0.06, 0.15],
-    [-0.02, 0.19],
-    [0.02, 0.19],
-    [0.066, 0.195],
-    [0.06, 0.18],
-    [0.04, 0.17],
+    [-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15],
+    [-0.06, 0.15], [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17],
 ]  # the 2026-10-28 remap grid
 AT_STOP_S = 1.5  # the most a refused remap move waits for its stop evidence before it folds
 
@@ -90,15 +83,25 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     ref = (config.get("preflight") or {}).get("reference_top")
     ref_path = Path(ref).expanduser() if ref else None
     ref_gray = _load_ref_gray(ref_path) if (ref_path and ref_path.exists()) else None
+    if config.get("calibration_path"):
+        from cell_auto_evidence import bound_map_error
+        try:
+            raw_reference = ref_path.read_bytes() if ref_path else b""
+        except OSError:
+            raw_reference = b""
+        out["map_binding_error"] = bound_map_error(calibration, config, raw_reference)
+    elif (expected_ref_hash := (config.get("preflight") or {}).get("reference_sha256")):
+        out["reference_mismatch"] = not cell_preflight.reference_matches(ref_path, expected_ref_hash)
     if ref_gray is not None:
         shift = cell_preflight.camera_shift_px(
             ref_gray,
             frame if frame.ndim == 2 else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
         )
         out["camera_shift"] = shift
-        out["camera_moved"] = not shift["ok"] or shift["max_px"] > prm.get(params, "calibrate.max_shift_px")
+        out["camera_moved"] = (bool(out.get("map_binding_error")) or out.get("reference_mismatch", False)
+                               or not shift["ok"] or shift["max_px"] > prm.get(params, "calibrate.max_shift_px"))
     else:
-        out["camera_moved"] = False
+        out["camera_moved"] = bool(out.get("map_binding_error")) or out.get("reference_mismatch", False)
         out["no_reference"] = True
     bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
     for site, xy in targets:
@@ -200,7 +203,7 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
         view = {"x": x, "y": y, "z": round(z_view - config["plan"]["approach_m"], 4), "yaw_deg": yaw}
         try:
-            lib = cp.write_library(config, view, view, work / f"remap-{i}.json")
+            lib = cp.write_library(rp.scoped(config), view, view, work / f"remap-{i}.json")
         except SystemExit as exc:
             log({"point": [x, y], "skipped": str(exc)[:100]})
             continue
@@ -229,10 +232,15 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         kept = consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
         near = predicted(kept, (x, y)) if len(kept) >= 4 else None
+        report = {}
         mark = cell_pivot.mark_jaws(
-            cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px"))
+            cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px")),
+            keep=frames / f"{i:02d}", report=report,
         )
-        log({"point": [x, y], "mark": mark, "near": near})
+        row = {"point": [x, y], "mark": mark, "near": near}
+        if mark is None and report.get("reason"):
+            row["why"] = report["reason"]
+        log(row)
         if mark:
             marks.append((mark, (x, y)))
     cell.act("park")
@@ -247,42 +255,14 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         log({"dropped_marks": dropped})
     if not enough_agree(len(marks), len(seen)):
         raise SystemExit(f"remap: only {len(marks)} marks agree of {len(seen)}")
-    return {
-        "homography": cal.fit(marks).round(9).tolist(),
+    return dict(fitted_map(config, marks, z_view), **{
         "z_view": z_view,
         "coarse": True,
         "dropped_marks": dropped,
         "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks],
         "loo_error_mm": cal.loo_error_mm(marks),
         "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }
-
-
-def move_regions(config: dict, reference, current) -> dict:
-    """Carry every image region (site polygons and ROIs) from the reference frame to the current one (ORB + RANSAC)."""
-    import cv2
-
-    orb = cv2.ORB_create(3000)
-    k1, d1 = orb.detectAndCompute(reference, None)
-    k2, d2 = orb.detectAndCompute(current, None)
-    m = sorted(cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(d1, d2), key=lambda x: x.distance)[:600]
-    H, _ = cv2.findHomography(
-        np.float32([k1[x.queryIdx].pt for x in m]), np.float32([k2[x.trainIdx].pt for x in m]), cv2.RANSAC, 3.0
-    )
-    tp = lambda pts: [[int(round(float(v))) for v in q] for q in cv2.perspectiveTransform(np.float32([pts]), H)[0]]  # noqa: E731
-    for site in config["sites"].values():
-        if site.get("surface_px"):
-            site["surface_px"] = tp(site["surface_px"])
-        if site.get("auto_roi"):
-            r = site["auto_roi"]
-            q = np.array(tp([[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]]))
-            site["auto_roi"] = [
-                int(max(0, q[:, 0].min())),
-                int(max(0, q[:, 1].min())),
-                int(min(639, q[:, 0].max())),
-                int(min(479, q[:, 1].max())),
-            ]
-    return config
+    })
 
 
 def main(argv=None):
@@ -291,6 +271,10 @@ def main(argv=None):
     ap.add_argument("step", choices=["check", "auto"])
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
+    ap.add_argument("--plan-only", action="store_true", help="print each remap point's IK and verdict; opens no port or camera")
+    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair"], help="auto: run only these step kinds (remap, regions, pivot-near, "
+                    "surface, consensus-repair); a reviewed plan for one step must not run the others. 2026-11-15: a "
+                    "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
     import cv2
@@ -299,6 +283,12 @@ def main(argv=None):
     config = json.loads(args.config.read_text(encoding="utf-8"))
     config["params"] = prm.load(config.get("params_path"))["values"]
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
+    points = config.get("calibrate", {}).get("map_points", MAP_POINTS)
+    if args.plan_only:
+        rows = rp.plan(config, points)
+        refused = rp.refusal(rows)
+        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config)}), flush=True)
+        return 2 if refused else 0
     cal_path = Path(config["calibration_path"]).expanduser()
     calibration = json.loads(cal_path.read_text()) if cal_path.exists() else {"schema": cal.SCHEMA, "sites": {}}
     targets = [(t.split(":")[0], tuple(float(v) for v in t.split(":")[1].split(","))) for t in args.targets]
@@ -307,9 +297,15 @@ def main(argv=None):
     work.mkdir(parents=True, exist_ok=True)
     found = check(config, calibration, targets, cell.frame("top"), config["params"])
     todo = stale(found)
+    if args.only:
+        todo = [step for step in todo if step.split()[0] in args.only]
     print(json.dumps({"check": found, "todo": todo}, default=str), flush=True)
     if args.step == "check" or not todo:
         return 0
+    refused = rp.refusal(rp.plan(config, points)) if "remap" in todo else None  # before any move: one bad point refuses the run
+    if refused:
+        print(json.dumps({"refused": refused, "todo": todo}))
+        return 2
     if not (args.commissioning and args.person_at_switch):
         print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo}))
         return 2
@@ -321,8 +317,7 @@ def main(argv=None):
 
             stills = cell_hooks.stills(cell, config)
             try:
-                record = remap(cell, config, config.get("calibrate", {}).get("map_points", MAP_POINTS), work,
-                               at_stop=stills)
+                record = remap(cell, config, points, work, at_stop=stills)
             finally:
                 stills.close()
             if not map_agrees(record, config["params"]):
@@ -331,19 +326,26 @@ def main(argv=None):
             current = cell.frame("top")
             for site in map_sites(config):
                 calibration["sites"][site] = dict(record, note="remap by cell_calibrate")
-            cal_path.write_text(json.dumps(calibration))
-            cell_pivot.bias_path(cal_path).write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}))
             if ref_path.exists():
                 move_regions(
                     config,
                     cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE),
                     cv2.cvtColor(current, cv2.COLOR_BGR2GRAY),
                 )
-            cv2.imwrite(str(ref_path), current)
+            save_bound_map_reference(cal_path, ref_path, calibration, config, current)
+            cell_pivot.bias_path(cal_path).write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}))
             done.append({"remap": record["loo_error_mm"]})
         elif step == "regions":
             continue
         elif step == "consensus-repair":
+            from cell_auto_evidence import bound_reference_image
+
+            ref_name = (config.get("preflight") or {}).get("reference_top")
+            ref_path = Path(ref_name).expanduser() if ref_name else None
+            reference, error = bound_reference_image(calibration, config, ref_path)
+            if error:
+                done.append({"consensus-repair": error})
+                break
             for s in map_sites(config):
                 rec = (calibration.get("sites") or {}).get(s) or {}
                 pts = [(tuple(p["pixel"]), tuple(p["arm_m"])) for p in (rec.get("points") or [])]
@@ -353,7 +355,7 @@ def main(argv=None):
                         rec["homography"] = cal.fit(kept).round(9).tolist()
                         rec["points"] = [{"pixel": list(p), "arm_m": list(a)} for p, a in kept]
                         rec["loo_error_mm"] = cal.loo_error_mm(kept)
-            cal_path.write_text(json.dumps(calibration))
+            save_bound_map_reference(cal_path, ref_path, calibration, config, reference)
             done.append({"consensus-repair": calibration["sites"][map_sites(config)[0]]["loo_error_mm"]})
         elif step.startswith("pivot-near"):
             site, xy = step.split()[1].split(":")

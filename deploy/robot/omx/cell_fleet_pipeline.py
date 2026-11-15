@@ -66,10 +66,15 @@ class FleetModelPipeline:
     def __init__(self, work_dir: Path, base_plan: dict | None = None) -> None:
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
+        self.policy_dir = self.work_dir / "sim"
+        self.policy_dir.mkdir(exist_ok=True)
         if base_plan is None:
             global _DEFAULT_BASE_PLAN
             if _DEFAULT_BASE_PLAN is None:
                 _DEFAULT_BASE_PLAN = json.loads((HERE / "grasp-plan.example.json").read_text(encoding="utf-8"))
+                from omx_tcp import V21_JAW_TCP_M
+
+                _DEFAULT_BASE_PLAN["tcp_x_m"] = V21_JAW_TCP_M  # the sim default is the measured v2.1 jaw, stated here
                 _DEFAULT_BASE_PLAN["limits"]["workspace_min_m"] = [-0.05, -0.28, 0.002]
                 _DEFAULT_BASE_PLAN["limits"]["workspace_max_m"] = [0.28, 0.28, 0.26]
             base_plan = deepcopy(_DEFAULT_BASE_PLAN)
@@ -144,7 +149,7 @@ class FleetModelPipeline:
             "place": {**dst_spec, "effective_xyz_m": [dst_spec["x"], dst_spec["y"], dst_spec["z"]]},
             "execution": {"approach_m": 0.026, "release_lift_m": 0.042, "structural_wrist": True},
         }
-        cfg = {"_work": self.work_dir, "arm_id": arm_id}
+        cfg = {"_work": self.policy_dir, "arm_id": arm_id}
         directive = cpp.apply_learned_il_rl_residual(cfg, directive)
 
         wrist_det = None
