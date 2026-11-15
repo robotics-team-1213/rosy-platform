@@ -25,6 +25,17 @@ def _cap():
     return cell_auto_pick
 
 
+def _slow_chunk(frames: list[list[float]], factor: int = 5) -> list[list[float]]:
+    if factor <= 1 or len(frames) < 2:
+        return frames
+    out = [list(frames[0])]
+    for a, b in zip(frames, frames[1:]):
+        for k in range(1, factor + 1):
+            t = k / factor
+            out.append([round(x + (y - x) * t, 4) for x, y in zip(a, b)])
+    return out
+
+
 def _plan_return_held(config, entry, dest_site, place_xy, work: Path):
     height = entry["top_height_mm"] / 1000 - grasp_depth(config, dest_site)
     s = config["sites"][dest_site]
@@ -47,6 +58,9 @@ def _plan_return_held(config, entry, dest_site, place_xy, work: Path):
             )
             lib_data = json.loads(Path(lib).read_text(encoding="utf-8"))
             lib_data["holding"] = True
+            chunks = lib_data.get("chunks") or {}
+            if "descend_place" in chunks:
+                chunks["descend_place"] = _slow_chunk(chunks["descend_place"])
             Path(lib).write_text(json.dumps(lib_data, indent=1), encoding="utf-8")
             return lib, place, approach, jaws, None
         except SystemExit as exc:

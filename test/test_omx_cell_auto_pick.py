@@ -1424,7 +1424,12 @@ def test_run_return_held_plans_places_and_stops_when_empty(tmp_path):
     dry_cell = HeldCell([CONT2])
     dry = auto.run_return_held(dry_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path, dry_run=True)
     assert dry["result"] == "planned" and Path(dry["plan"]["library"]).is_file()
-    assert json.loads(Path(dry["plan"]["library"]).read_text()).get("holding") is True
+    dry_lib = json.loads(Path(dry["plan"]["library"]).read_text())
+    assert dry_lib.get("holding") is True
+    desc = dry_lib["chunks"]["descend_place"]
+    assert len(desc) >= 2 and all(
+        max(abs(b - a) for a, b in zip(f0, f1)) <= 0.15 for f0, f1 in zip(desc, desc[1:])
+    )
     # 2. Holding object at home places onto belt and verifies arrival
     full_cell = HeldCell([CONT2])
     full_cell.held = full_cell.objects[0]
