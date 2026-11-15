@@ -357,14 +357,6 @@ def test_guard_round_wiring(monkeypatch, mode):
     land_guards.first(ROOT, argparse.Namespace(tests=mode, node=True),
                       [["pkg/test", "test/test_harness_contracts.py"]], Path("."), 1, None, isolated=False)
     assert seen[0][2] == [list(land_guards.GUARDS)]
-    seen.clear()
-    land_guards.first(ROOT, argparse.Namespace(tests=mode, node=True), [["test"]], Path("."), "pre", None,
-                      isolated=False)
-    assert seen[0][2] == []
-    seen.clear()
-    land_guards.first(ROOT, argparse.Namespace(tests=mode, node=True),
-                      [["test", "--ignore=test/architecture"]], Path("."), "pre", None, isolated=False)
-    assert seen[0][2] == [["test/architecture"]]
 
 
 def test_guards_cover_every_existing_root_guard_set_file():

@@ -36,20 +36,8 @@ def first(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: 
     """
     if args.tests not in ("auto", "full"):
         return []
-    def _covered(guard: str) -> bool:
-        for inv in invocations:
-            ignored = [w.split("=", 1)[1].rstrip("/") for w in inv if w.startswith("--ignore=")]
-            if any(guard == ign or guard.startswith(ign + "/") for ign in ignored):
-                continue
-            for w in inv:
-                if "::" not in w and not w.startswith("-") and "=" not in w:
-                    p = w.rstrip("/")
-                    if guard == p or guard.startswith(p + "/"):
-                        return True
-        return False
-
     paths = [p.rstrip("/") for inv in invocations for p in inv]
-    guards = [g for g in GUARDS if (wt / g).exists() and (str(round_no) != "pre" or not _covered(g))]
+    guards = [g for g in GUARDS if (wt / g).exists() and (str(round_no) != "pre" or g not in paths)]
     batch = [] if not guards or all(any(p == g or p.startswith(g + "/") for g in guards) for p in paths) else [guards]
     quick = argparse.Namespace(**{**vars(args), "node": False})
     branch = subprocess.run(["git", "-C", str(wt), "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True,
