@@ -357,6 +357,15 @@ class Runner:
                 if "human-hold" in self.pending:
                     self.pending.clear()  # preempt even a queued stop or park
                     self.command("human-hold")
+                stop = next(
+                    (i for i, cmd in enumerate(self.pending) if cmd.strip() in ("stop", "stop now", "stop fold")),
+                    None,
+                )
+                if stop is not None and all(cmd.strip() == "state" for cmd in self.pending[:stop]):
+                    for cmd in self.pending[:stop]:
+                        self.command(cmd)
+                    self.report(command=self.pending[stop], ok=True, present=self.target)
+                    return
             try:
                 self.tick()
             except Exception as error:
@@ -369,12 +378,17 @@ class Runner:
                     }
                 )
                 raise
-            if getattr(self, "_stopped", False):
-                return
-            if self.human_hold_latched:
+            if self.human_hold_latched or self.fault or getattr(motion, "held", None):
+                self.report(
+                    command="start",
+                    ok=False,
+                    error=self.fault or ("human hold latched" if self.human_hold_latched else "guard hold active"),
+                    present=self.target,
+                )
                 break
             self.sleep(max(0.0, period - (self.clock() - started)))
-        self.report(command="start", ok=True, present=self.target)
+        else:
+            self.report(command="start", ok=True, present=self.target)
         self.last_input = self.clock()
         while True:
             started = self.clock()

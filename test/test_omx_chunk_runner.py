@@ -1377,14 +1377,15 @@ def test_runner_waits_for_guard_alignment_before_reporting_start_or_starting_chu
             return super().send_action(action)
 
     robot, status, clock = AligningRobot(), [], [0.0]
-    seen_start = []
+    queue, seen_start = ["run approach_pinky", "stop"], []
 
     def lines():
         if by_command(status, "start") and not seen_start:
             seen_start.append(robot.motion.tracking)
-            return ["run approach_pinky", "stop"]
+        if queue and by_command(status, "start") and not r.chunk:
+            return [queue.pop(0)]
         if not seen_start and clock[0] == 0.0:
-            # Even an eager queued command before `start` must not preempt alignment
+            # Even a command arriving before `start` must not preempt alignment
             return ["state"]
         return []
 
@@ -1395,6 +1396,14 @@ def test_runner_waits_for_guard_alignment_before_reporting_start_or_starting_chu
     assert by_command(status, "start")[0]["ok"] is True
     assert by_command(status, "run approach_pinky")[0]["ok"] is True
 
+    # A stop arriving while still aligning exits immediately without waiting for alignment
+    stopped = []
+    r_stop = m.Runner(AligningRobot(), library(), fps=30, status=stopped.append, clock=lambda: clock[0],
+                      sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r_stop.run(lambda: ["stop now"])
+    assert stopped[-1]["command"] == "stop now" and stopped[-1]["ok"] is True
+    assert not by_command(stopped, "start")
+
 
 @pytest.mark.parametrize("wait_pan", [-49.212, 50.812])
 def test_park_from_folded_side_wait_pose_stays_folded_without_rising_to_transit(wait_pan):
@@ -1404,4 +1413,10 @@ def test_park_from_folded_side_wait_pose_stays_folded_without_rising_to_transit(
     assert all(f[1] <= -50.0 for f in path)
     assert not m.too_fast([wait_side] + path, 30)
     assert path[-1] == pytest.approx(home)
+    # Open jaws close before turning while remaining folded; large wrist_roll deltas still use transit
+    open_path = m.park_path([wait_pan, -62.2, 53.1, 51.6, 45.2, 60.0], home, 49.0, fps=30)
+    closed_idx = next(i for i, f in enumerate(open_path) if abs(f[5] - 49.0) <= 0.1)
+    assert abs(open_path[closed_idx][0] - wait_pan) <= 1e-3 and all(f[1] <= -50.0 for f in open_path)
+    flipped_roll = m.park_path([wait_pan, -62.2, 53.1, 51.6, -54.8, 49.0], home, 49.0, fps=30)
+    assert any(f[1] > -30.0 for f in flipped_roll)
 

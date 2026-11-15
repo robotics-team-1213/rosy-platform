@@ -88,10 +88,16 @@ def park_path(start: list, home: list, closed: float, fps: int, transit: dict | 
         and goal[1] <= -50.0
         and max(abs(a - b) for a, b in zip(start[1:4], goal[1:4])) <= 10.0
         and abs(start[0] - goal[0]) <= 70.0
+        and abs(start[4] - goal[4]) <= 45.0
     )
     if near_home or folded_pose:
+        waypoints = (
+            [list(start), list(start[:5]) + [closed], goal]
+            if abs(start[5] - closed) > 5.0
+            else [list(start), goal]
+        )
         rate = (0.5 if abs(start[0] - goal[0]) <= 12.0 else 1.0) * speed * PARK_SPEED
-        return flow([list(start), goal], fps, rate, blend=[False, False], blend_s=0.2,
+        return flow(waypoints, fps, rate, blend=[False] * len(waypoints), blend_s=0.2,
                     rise_speed=RISE_SPEED)
     return transit_path(start, goal, closed, fps, transit, speed)
 
