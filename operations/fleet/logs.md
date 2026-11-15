@@ -5542,3 +5542,8 @@
 - 변경: `cell_print_sheets`에 `container-tags` 시트(DICT_4X4_250 100~199, 번호마다 지붕·옆면 두 장, 12 또는 20 mm, 50 mm 확인 막대)와 Cell 화면 「보정 인쇄물」의 태그 번호·크기 입력. 태그↔object_ref 표는 시트에 넣지 않는다.
 - 증거: 시트를 300 dpi로 그려 OpenCV DICT_4X4_250이 번호·크기(±0.2 mm)대로 되읽음. 한 장에 12 mm 24개, 20 mm 12개 컨테이너. 실물 인쇄·판독률은 미실시.
 - gate 변화: SOURCE. 인쇄 후 자로 확인·판독률 측정은 사람 몫이다.
+
+## 2026-11-14 · uncommitted · 앞으로/뒤로 한 걸음 경로
+- 변경: `fleet/server/pose/nudge_routes.py`(서버 홀더, `fleet.server.nudge_routes`) `POST /api/fleet/robots/{id}/step` — 이름 있는 운영자만, trip runner·대형·console goal 이 로봇을 쥐고 있으면 409 `STEP_ROBOT_BUSY`, 응답 없음 409 `ROBOT_OFFLINE`, CORE 거부는 502 본문 code 그대로. 실제 주행은 로봇의 CORE 미션 경로(`nudge_forward`/`nudge_backward`, `max_time_s`=거리/0.03+5)에 맡긴다(D-2). 감사 행 `step`. `role_builders.py`가 map-pin 옆에 등록.
+- 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고. 실물 로봇 확인은 미실시.
+- gate 변화: 없음. 안전 경로 검토 요청은 결과 파일에 별도로 남긴다(운동 명령 경로).
