@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-14 · uncommitted · API 참조 v1.401 재위치화 경로
 - 2026-11-14 · uncommitted · fix(tools): 임시 ref 삭제 실패가 원격 시험 실행을 죽이지 않음
 - 2026-11-14 · uncommitted · fix(tools): main_red가 alone 계열 NEW id를 파일 단위로 main에서 다시 돌림
 - 2026-11-14 · uncommitted · CORE 상태 표시등 API 계약
 - 2026-11-13 · uncommitted · docs(solutions): 학습 센터 자리 업그레이드 교훈을 역사 기록으로 표시
-- 2026-11-11 · uncommitted · docs: 게시 검증 체크포인트 — 2026-11-11 착지분 무캐시 FULL 근거 확보
