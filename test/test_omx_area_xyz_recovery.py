@@ -14,6 +14,68 @@ for _p in (ROOT / "middleware/devices/omx/adapter", ROOT / "deploy/robot/omx", R
 from omx_adapter.area_xyz import AREA_XYZ_SCHEMA, DIRECTIVE_SCHEMA, build_directive, resolve_area_xyz  # noqa: E402
 import cell_area_xyz  # noqa: E402
 
+
+@pytest.mark.parametrize("failed", ["retreat", "grip 57.85", "goto above_pick", "grip 55.80", "park"])
+def test_hover_recovery_stops_at_first_refused_command(failed):
+    from cell_area_recovery import recover_hover
+
+    commands, steps = [], []
+    def act(cmd):
+        commands.append(cmd)
+        row = {"ok": cmd != failed, "t": 1.0}
+        steps.append({"command": cmd, **row})
+        return row
+    assert recover_hover(act, 58.2, steps, park_after=True) is False
+    assert commands[-1] == failed
+
+
+@pytest.mark.parametrize("max_attempts", [1, 2])
+def test_failed_hover_recovery_does_not_retry_descend(tmp_path, monkeypatch, max_attempts):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+    )
+    monkeypatch.setattr(cell_area_xyz, "plan_library_from_directive", lambda *a, **k: ({"chunks": {}}, {"grip_open": 58.2}, {}))
+    commands = []
+    def act(cmd):
+        commands.append(cmd)
+        return {"ok": cmd not in ("run descend_pick", "retreat"), "state": [0, 0, 0, 0, 0, 58.2]}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan={}, work_dir=tmp_path, act_fn=act, max_attempts=max_attempts,
+    )
+    assert result["result"] == "held" and result["at"] == "recovery"
+    assert commands.count("run descend_pick") == 1 and commands[-1] == "retreat"
+
+
+@pytest.mark.parametrize("failed", ["grip 57.60", "retreat", "park"])
+def test_early_touchdown_release_stops_at_first_refusal(failed):
+    from cell_area_recovery import release_early_touchdown
+
+    commands = []
+    def act(cmd):
+        commands.append(cmd)
+        return {"ok": cmd != failed}
+    assert release_early_touchdown(act, 57.6) == failed.split()[0]
+    assert commands[-1] == failed
+
+
+def test_stack_verification_requires_measured_height(monkeypatch):
+    from cell_area_zones import verify_stack_outcome_z_mm
+
+    pick = {"area": "belt", "col": 3, "row": 1, "tier": 1}
+    place = {"area": "pallet", "col": 2, "row": 1, "tier": 2}
+    missing = verify_stack_outcome_z_mm(before_side=None, after_side=None, pick=pick, place=place)
+    assert missing["verified"] is False
+    assert missing["z_gate"]["verdict"] == "UNKNOWN"
+
+    monkeypatch.setattr("cell_area_zones.perceive_slot_z_mm", lambda *args, **kwargs: {
+        "found": True, "measured_top_z_mm": 64.2,
+    })
+    unseated = verify_stack_outcome_z_mm(before_side=None, after_side=None, pick=pick, place=place)
+    assert unseated["verified"] is False
+    assert unseated["z_gate"]["failure_code"] == "S6_UNSEATED_CONE"
+
 def test_round2_consensus_signed_z_judge_catches_nearest_bug_and_c1_area():
     from omx_adapter.z_profile import evaluate_signed_tier_residual_mm
 
@@ -57,6 +119,16 @@ def test_round2_consensus_signed_z_judge_catches_nearest_bug_and_c1_area():
     assert c1_pass["gate_ok"] is True
     assert c1_pass["verdict"] == "PASS"
     assert c1_pass["failure_code"] is None
+
+
+def test_post_release_requires_an_explicit_z_pass():
+    import cell_spec_recovery_fsm as csrf
+
+    for missing in (None, {}, {"r_k_mm": 0.0}, "PASS"):
+        gate = csrf.evaluate_execution_gate("post_release", z_gate=missing)
+        assert gate["verdict"] == "UNKNOWN"
+        assert gate["ok"] is False
+    assert csrf.evaluate_execution_gate("post_release", z_gate={"verdict": "PASS"})["ok"] is True
 
 
 def test_cell_spec_recovery_fsm_gates_skills_and_temp_directives():

@@ -51,7 +51,8 @@ def open_cell(args, commissioning=False):
     work = Path(config["work_dir"]).expanduser()
     cp.KEEP["dir"] = work / "frames"
     cell_attempts.start(work / "attempts.jsonl", knowledge=config.get("knowledge"), params=config.get("params_path"),
-                        arm_id=config.get("arm_id", "arm_s"))
+                        arm_id=config.get("arm_id", "arm_s"), task_id=getattr(args, "task_id", None),
+                        handoff_lease_id=getattr(args, "handoff_lease_id", None))
     if not args.dry_run:
         cd.start(work / "decisions.jsonl", knowledge=config.get("knowledge"))
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])

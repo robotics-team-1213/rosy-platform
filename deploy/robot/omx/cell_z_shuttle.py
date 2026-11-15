@@ -22,13 +22,15 @@ from omx_adapter.z_profile import (  # noqa: E402
     reconcile_top_and_side_z_mm, resolve_container_spec,
 )
 
+from omx_tcp import V21_JAW_TCP_M  # noqa: E402
+
 SNAPSHOT_DEFAULT_PATH = HERE / "sim" / "cell_snapshots" / "20261112-0254.json"
 _SNAPSHOT_CACHE: dict[tuple[Path, int, int], dict[str, Any]] = {}
 
 DEFAULT_SHUTTLE_BASE_PLAN: dict[str, Any] = {
     "fps": 30, "home": [0.76, -62.25, 52.92, 51.7, 44.71],
     "grip_closed": 48.8, "grip_open": 58.2, "grip_release": 57.6, "hold_current_ma": 93,
-    "transit_speed": 0.82, "descend_pick_guard_frac": 0.30, "descend_place_guard_frac": 0.26, "tcp_x_m": 0.0885,
+    "transit_speed": 0.82, "descend_pick_guard_frac": 0.30, "descend_place_guard_frac": 0.26, "tcp_x_m": V21_JAW_TCP_M,  # measured v2.1 jaw (omx_tcp), no longer the rejected 0.0885
     "limits": {
         "joints_rad": {"joint1": [-3.14, 3.14], "joint2": [-2.05, 1.57], "joint3": [-1.57, 1.53], "joint4": [-1.8, 2.0], "joint5": [-3.14, 3.14]},
         "workspace_min_m": [-0.095, -0.24, 0.005], "workspace_max_m": [0.26, 0.24, 0.145], "singularity_radius_m": 0.03,
@@ -141,8 +143,9 @@ def _audit_columns_for_spec_gate(
     *, spec_id: str = "C3", enforce_spec_gate: bool = False,
     column_audits: dict[int, dict[str, Any]] | Sequence[dict[str, Any]] | None = None,
     side_img: np.ndarray | None = None, top_img: np.ndarray | None = None, top_depth: np.ndarray | None = None,
+    snapshot_simulation: bool = False,
 ) -> dict[str, Any]:
-    """Build `spec_gate_audit` across columns, flagging any column with `reconcile_views.aligned is False` or `r_k_mm <= -4.0` as `S2_TOPPLED_OR_SLUMPED`."""
+    """Build `spec_gate_audit`; absent views stay unknown and measured mismatches fail."""
     spec = resolve_container_spec(spec_id)
     raw_cols: dict[int, dict[str, Any]] = {}
     if isinstance(column_audits, dict):
@@ -160,23 +163,37 @@ def _audit_columns_for_spec_gate(
         for c_idx, obs in all_obs["columns"].items():
             if obs.get("found"):
                 raw_cols[int(c_idx)] = obs
-    if not raw_cols:
+    if not raw_cols and snapshot_simulation:
         raw_cols = dict(load_snapshot_bundle()["column_observations"])
+    if not snapshot_simulation:
+        for c in (1, 2, 3):
+            raw_cols.setdefault(c, {"col": c, "expected_tier": 1, "found": False, "basis": "none"})
 
     audited_cols: dict[int, dict[str, Any]] = {}
     flagged_columns: list[int] = []
     for c_idx in sorted(raw_cols):
         entry = dict(raw_cols[c_idx])
         tier_k = int(entry.get("expected_tier") or entry.get("tier") or 1)
-        rec_views = entry.get("reconcile_views") if isinstance(entry.get("reconcile_views"), dict) else reconcile_top_and_side_z_mm(entry.get("depth_top_z_mm"), entry.get("side_top_z_mm"))
+        live_observation = not snapshot_simulation or "basis" in entry
+        rec_views = (reconcile_top_and_side_z_mm(entry.get("depth_top_z_mm"), entry.get("side_top_z_mm"))
+                     if live_observation or not isinstance(entry.get("reconcile_views"), dict) else entry["reconcile_views"])
         z_top = float(entry.get("measured_top_z_mm") or entry.get("z_top_mm") or rec_views.get("fused_z_mm") or TIER_TOP_Z_MM.get(tier_k, 30.0))
-        res = evaluate_signed_tier_residual_mm(
-            z_top, tier_k, valid_depth_ratio=float(entry.get("valid_depth_ratio", 1.0)),
-            dz_top_side_mm=float(rec_views.get("dz_top_side_mm") or 0.0),
-            tilt_deg=float(entry.get("tilt_deg", 0.0)), obs_area_mm2=entry.get("obs_area_mm2"), spec_id=spec["spec_id"],
-        )
-        if not bool(rec_views.get("aligned", True)) or float(res["r_k_mm"]) <= -4.0:
-            res = {**res, "verdict": "FAIL", "failure_code": "S2_TOPPLED_OR_SLUMPED"}
+        if live_observation:
+            import cell_z_profile as czp
+
+            # Caller-provided profile flags have no current camera-position receipt.
+            res = czp.evaluate_slot_spec_gate({**entry, "measurement_calibrated": False}, expected_tier=tier_k, spec_id=spec["spec_id"])
+        else:
+            res = evaluate_signed_tier_residual_mm(
+                z_top, tier_k, valid_depth_ratio=float(entry.get("valid_depth_ratio", 1.0)),
+                dz_top_side_mm=float(rec_views.get("dz_top_side_mm") or 0.0),
+                tilt_deg=float(entry.get("tilt_deg", 0.0)), obs_area_mm2=entry.get("obs_area_mm2"), spec_id=spec["spec_id"],
+            )
+        if not rec_views["aligned"]:
+            both_measured = entry.get("depth_top_z_mm") is not None and entry.get("side_top_z_mm") is not None
+            failed = both_measured
+            res = {**res, "verdict": "FAIL" if failed else "UNKNOWN",
+                   "failure_code": "S2_TOPPLED_OR_SLUMPED" if failed else "S5_VIEW_OR_GATE_MISMATCH"}
         if res["failure_code"] == "S2_TOPPLED_OR_SLUMPED" or res["verdict"] != "PASS":
             flagged_columns.append(int(c_idx))
         audited_cols[int(c_idx)] = {"col": int(c_idx), "expected_tier": tier_k, "reconcile_views": rec_views, **res}
@@ -236,7 +253,7 @@ def execute_shuttle_roundtrip(
     base_plan: dict[str, Any] | None = None, work_dir: Path | None = None, act_fn: Callable[[str], dict[str, Any]] | None = None,
     frame_fn: Callable[[str], Any] | None = None, max_attempts: int = 2, enforce_spec_gate: bool = False,
     column_audits: dict[int, dict[str, Any]] | Sequence[dict[str, Any]] | None = None,
-    leg1_result: dict[str, Any] | None = None, vision_refine: bool = False,
+    leg1_result: dict[str, Any] | None = None, vision_refine: bool = False, snapshot_simulation: bool = False,
 ) -> dict[str, Any]:
     """Execute a 2-leg `pallet <-> temp_plate_b` shuttle roundtrip with `spec_gate_audit` and `leg2_blocked_by_interlock`."""
     if isinstance(col, Path):
@@ -257,15 +274,20 @@ def execute_shuttle_roundtrip(
         col=int(col), row=int(row), tier=int(tier), lane=lane,
         temp_area=temp_area, arm_id=arm_id, object_id=object_id, spec_id=spec_id, vision_refine=vision_refine,
     )
+    side_img = frame_fn("side") if frame_fn is not None else None
+    top_img = frame_fn("top") if frame_fn is not None else None
+    top_depth = frame_fn("top_depth") if frame_fn is not None else None
+    sim_reference = bool(snapshot_simulation and act_fn is None and frame_fn is None)
     spec_gate_audit = _audit_columns_for_spec_gate(
         spec_id=bundle["spec_id"], enforce_spec_gate=enforce_spec_gate, column_audits=column_audits,
-        side_img=frame_fn("side") if frame_fn is not None else None,
-        top_img=frame_fn("top") if frame_fn is not None else None,
-        top_depth=frame_fn("top_depth") if frame_fn is not None else None,
+        side_img=side_img, top_img=top_img, top_depth=top_depth, snapshot_simulation=sim_reference,
     )
-    res_leg1 = dict(leg1_result) if isinstance(leg1_result, dict) else _run_single_shuttle_leg(
+    evidence_hold = not sim_reference and not spec_gate_audit["all_passed"]
+    res_leg1 = ({"directive_id": bundle["leg1"]["directive_id"], "result": "blocked_by_interlock", "task_verified": False,
+                 "blocked_by_interlock": True, "reason": "current measured stack audit unavailable or failed", "steps": []}
+                if evidence_hold else dict(leg1_result) if isinstance(leg1_result, dict) else _run_single_shuttle_leg(
         bundle["leg1"], leg_name="leg1", base_plan=eff_plan, work_dir=eff_work, act_fn=act_fn, frame_fn=frame_fn, max_attempts=max_attempts,
-    )
+    ))
     leg2_blocked_by_interlock = bool((res_leg1.get("result") != "placed") or (enforce_spec_gate and int(col) in spec_gate_audit["flagged_columns"]))
     res_leg2 = (
         {"directive_id": bundle["leg2"]["directive_id"], "result": "blocked_by_interlock", "task_verified": False, "blocked_by_interlock": True, "reason": "leg1 failed to place or failed spec gate interlock", "steps": []}
@@ -277,7 +299,11 @@ def execute_shuttle_roundtrip(
         "arm_id": arm_id, "spec_id": bundle["spec_id"], "enforce_spec_gate": bool(enforce_spec_gate),
         "leg2_blocked_by_interlock": leg2_blocked_by_interlock, "spec_gate_audit": spec_gate_audit,
         "leg1_result": res_leg1, "leg2_result": res_leg2, "outbound_result": res_leg1, "inbound_result": res_leg2,
-        "completed": bool(res_leg1.get("result") == "placed" and res_leg2.get("result") == "placed" and not leg2_blocked_by_interlock),
+        "completed": bool(not sim_reference and spec_gate_audit["all_passed"] and not leg2_blocked_by_interlock
+                          and all(r.get("result") == "placed" and r.get("task_verified") is True for r in (res_leg1, res_leg2))),
+        "simulated_success": bool(sim_reference and not leg2_blocked_by_interlock
+                                  and spec_gate_audit["columns"].get(int(col), {}).get("verdict") == "PASS"
+                                  and all(r.get("result") == "placed" for r in (res_leg1, res_leg2))),
     }
 
 
@@ -333,12 +359,18 @@ def execute_temp_plate_123_tier_recovery_loop(
             ),
         )
         archived_cases += 1
-    sample_roundtrip = execute_shuttle_roundtrip(col=2, row=1, tier=1, lane=2, arm_id=arm_id, object_id=object_id, work_dir=eff_work, act_fn=act_fn, frame_fn=frame_fn, enforce_spec_gate=enforce_spec_gate)
-    completed = all(p["pick_wrist_roll"] >= -5.0 and p["place_wrist_roll"] >= -5.0 for p in shuttle_plans)
+    sample_roundtrip = execute_shuttle_roundtrip(col=2, row=1, tier=1, lane=2, arm_id=arm_id, object_id=object_id, work_dir=eff_work, act_fn=act_fn, frame_fn=frame_fn, enforce_spec_gate=enforce_spec_gate, snapshot_simulation=dry_run)
+    plan_safe = all(p["pick_wrist_roll"] >= -5.0 and p["place_wrist_roll"] >= -5.0 for p in shuttle_plans)
+    # This routine runs one sample pair; planning the other pairs is not execution evidence.
+    full_loop_executed = (len(shuttle_plans) == 1 and shuttle_plans[0]["lane"] == 2 and shuttle_plans[0]["tier"] == 1
+                          and sample_roundtrip["completed"])
+    completed = bool(not dry_run and plan_safe and full_loop_executed)
     return {
-        "ok": completed, "completed": completed, "dry_run": bool(dry_run), "archived_problem_cases": archived_cases,
-        "shuttle_count": len(shuttle_plans), "twin_samples": twin.samples,
-        "all_wrist_rolls_safe": completed, "all_z_aligned": True,
+        "ok": plan_safe if dry_run else completed, "completed": completed, "dry_run": bool(dry_run),
+        "completion_verdict": "SIMULATED" if dry_run else "PASS" if completed else "UNKNOWN", "archived_problem_cases": archived_cases,
+        "shuttle_count": len(shuttle_plans), "verified_shuttle_count": int(not dry_run and sample_roundtrip["completed"]),
+        "twin_samples": twin.samples,
+        "all_wrist_rolls_safe": plan_safe, "all_z_aligned": completed and sample_roundtrip["spec_gate_audit"]["all_passed"],
         "spec_gate_audit": sample_roundtrip["spec_gate_audit"],
         "sample_roundtrip": sample_roundtrip, "plans": shuttle_plans,
     }
@@ -347,13 +379,14 @@ def execute_temp_plate_123_tier_recovery_loop(
 def run_snapshot_verification(
     snapshot_id_or_path: str | Path = "20261112-0254", *, work_dir: Path | None = None, enforce_spec_gate: bool = False,
 ) -> dict[str, Any]:
-    """Verify workcell snapshot `20261112-0254.json` geometry, `spec_gate_audit`, and 1-3 tier shuttle replay."""
+    """Evaluate an offline workcell snapshot and simulated shuttle replay, without physical task acceptance."""
     bundle = load_snapshot_bundle(snapshot_id_or_path)
-    roundtrip = execute_shuttle_roundtrip(col=2, row=1, tier=1, lane=2, work_dir=work_dir, enforce_spec_gate=enforce_spec_gate, column_audits=bundle["column_observations"])
+    roundtrip = execute_shuttle_roundtrip(col=2, row=1, tier=1, lane=2, work_dir=work_dir, enforce_spec_gate=enforce_spec_gate, column_audits=bundle["column_observations"], snapshot_simulation=True)
     cam_motion = bundle.get("camera_motion") or {}
     return {
-        "schema": "rosy.omx-snapshot-verification.v1", "snapshot_id": bundle["snapshot_id"], "snapshot_path": bundle["snapshot_path"],
-        "verified": bool(not cam_motion.get("moved", False) and len(bundle["temp_plate_b_lanes"]) == 3 and roundtrip["completed"]),
+        "schema": "rosy.omx-snapshot-simulation-verification.v1", "snapshot_id": bundle["snapshot_id"], "snapshot_path": bundle["snapshot_path"],
+        "verification_scope": "offline_snapshot_simulation", "physical_task_verified": False,
+        "verified": bool(not cam_motion.get("moved", False) and len(bundle["temp_plate_b_lanes"]) == 3 and roundtrip["simulated_success"]),
         "camera_motion_ok": not bool(cam_motion.get("moved", False)), "temp_plate_a_seen": len(bundle["temp_plate_a_lanes"]),
         "temp_plate_b_seen": len(bundle["temp_plate_b_lanes"]), "spec_gate_audit": roundtrip["spec_gate_audit"], "shuttle_roundtrip": roundtrip,
     }

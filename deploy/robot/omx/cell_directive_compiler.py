@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from omx_adapter.motion_profile import compile_smooth_chunk
+from omx_tcp import resolve_tcp
 
 HERE = Path(__file__).resolve().parent
 ADAPTER_ROOT = HERE.parents[2] / "middleware/devices/omx/adapter"
@@ -79,7 +80,7 @@ def build_plan_from_directive(
     plan["hold_current_ma"] = int(
         exec_cfg.get("hold_current_ma", max(140, int(cal.get("hold_current_ma", plan.get("hold_current_ma", 140)))))
     )
-    plan["tcp_x_m"] = float(exec_cfg.get("tcp_x_m", plan.get("tcp_x_m", 0.0885)))
+    plan["tcp_x_m"], plan["tcp_source"] = resolve_tcp(exec_cfg.get("tcp_x_m"), plan.get("tcp_x_m"))
     plan["approach_m"] = approach_m
     plan["lift_m"] = actual_lift_m
     default_rel_lift = max(0.042, place_approach_m + 0.014) if arm_id == "arm_s" else place_approach_m
