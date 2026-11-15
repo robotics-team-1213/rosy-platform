@@ -176,6 +176,8 @@ def apply_to_config(config: dict[str, Any]) -> dict[str, Any]:
         params["wrist.finger_color"] = color_code
     if cal.get("samples", 0) > 0:
         params["gripper.held_30mm"] = round(float(cal["held_30mm"]), 2)
+        if cal.get("gap_mm_per_unit") is not None:
+            params["gripper.gap_mm_per_unit"] = round(float(cal["gap_mm_per_unit"]), 2)
         params["auto.jaw_margin_mm"] = round(float(cal["jaw_margin_mm"]), 2)
         params["auto.jaw_margin_max_mm"] = round(
             max(float(params.get("auto.jaw_margin_max_mm", 8.0)), float(cal["jaw_margin_mm"]) + 0.5), 2

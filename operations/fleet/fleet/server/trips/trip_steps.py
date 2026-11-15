@@ -347,6 +347,18 @@ class TripSteps:
         if live.first_seq is None:
             live.first_seq, live.arc_base = (seq if isinstance(seq, int) else 0), arc_before
 
+    async def _recheck_binding(self, live: LiveTrip, active) -> None:
+        """Stop (cancelling the goal) when the binding a sent goal used was revoked or superseded, or the
+        robot loaded another grid or lost localisation since."""
+        robot_id = live.view["robot_id"]
+        state = await self._call(self._robot_state(robot_id)) if self._robot_state is not None else None
+        _, reason = self._store.map_bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0]))
+        sent = (live.view["detail"].get("goal_frame") or {}).get("binding_id")
+        if not reason and sent != (self._store.map_bindings.active(robot_id) or {}).get("binding_id"):
+            reason = "MAP_BINDING_CHANGED"
+        if reason:
+            await self._stop(live, "stopped", "map_frame", {"map_id": active[1].map_id, "binding": reason})
+
     async def _step_free(self, live: LiveTrip, index: int, s: float, pose) -> None:
         segment = live.segments[index]
         active = self._store.active()
@@ -361,6 +373,8 @@ class TripSteps:
         # (409 NAVIGATION_ACTIVE, SIM run 5), so the D-463 rolling point 0.2 m ahead failed the trip at its second send.
         x, y, yaw = live.arc(index).point_at(segment["s_to"])
         if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
+            if self.config.map_binding_required:  # D-1022 review: the running goal's binding must still hold
+                await self._recheck_binding(live, active)
             return
         if not await ready_free_goal(self, live):  # D-772 charge-only native readiness
             return
@@ -369,13 +383,17 @@ class TripSteps:
         goal = (x, y, yaw)
         if self._robot_state is not None:  # D-1003: Nav2 runs on the robot's own map, not the site map
             state = await self._call(self._robot_state(live.view["robot_id"]))
+            binding = (self._store.map_bindings.matching_fit(live.view["robot_id"], state or {},
+                                                             (active[1].map_id, active[0]))
+                       if self.config.map_binding_required else None)  # D-1022
             try:
-                converted = robot_frame_goal(goal, pose, state, active[1].map_id)
+                converted = robot_frame_goal(goal, pose, state, active[1].map_id, binding)
             except SiteFrameMismatch as error:
                 # D-1010: the site side of the conversion is not this map. Never convert, never
                 # send the site goal raw to a robot known to run its own map frame.
                 await self._stop(live, "stopped", "map_frame",
-                                 {"pose_map_id": error.pose_map_id, "map_id": error.map_id})
+                                 {"pose_map_id": error.pose_map_id, "map_id": error.map_id,
+                                  **({"binding": error.reason} if error.reason else {})})
                 return
             if converted is None:
                 # D-1010 review: no proof the frames bind (not LOCALIZED, no robot map id equal to
@@ -390,7 +408,14 @@ class TripSteps:
             live.view["detail"]["goal_frame"] = {  # D-1010: the audit binding of the sent goal
                 "map_id": active[1].map_id, "map_version": active[0],
                 "robot_map_id": (state or {}).get("map_id"),
-                "goal_frame": "site" if site_frame else "robot"}
+                "goal_frame": "site" if site_frame else "robot",
+                **({"map_grid_id": (state or {}).get("map_grid_id"), "binding_id": (
+                    self._store.map_bindings.active(live.view["robot_id"]) or {}).get("binding_id")}
+                   if binding is not None else {})}
+        elif self.config.map_binding_required:  # D-1022 review: no robot state, no grid to bind
+            await self._stop(live, "stopped", "map_frame",
+                             {"map_id": active[1].map_id, "robot_map_id": None, "binding": "MAP_BINDING_REQUIRED"})
+            return
         elif not self._poses_in_robot_frame:
             # D-1010 review: a port without robot snapshots (D-1003 6) proves nothing either; an
             # unproven free goal stops the trip instead of leaving in site coordinates.

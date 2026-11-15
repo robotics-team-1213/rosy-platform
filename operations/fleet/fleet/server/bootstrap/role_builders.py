@@ -264,6 +264,9 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
                                   require_operator, require_named_operator, read_guard):
     install_lane_route_routes(app, console=console, task_service=task_service, site_maps=site_maps,
                               require_named_operator=require_named_operator, read_guard=read_guard)
+    from fleet.server.map_binding_routes import install_map_binding_routes  # D-1022
+    install_map_binding_routes(app, console=console, site_maps=site_maps, read_guard=read_guard,
+                               require_named_operator=require_named_operator)
 
     async def _trip_caps(robot_id: str):
         display = console._capability_display
@@ -295,6 +298,12 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     trip_runner.traffic.ai_replan = AiReplan(app.state.ai_first, app.state.ai_facts, app.state.ai_episodes)
     install_map_pin_route(app, service=map_pose, require_named_operator=require_named_operator,
                           record_event=site_maps.record_event, busy=trip_runner.robot_busy)
+    from fleet.server.relocalize_routes import install_relocalize_routes
+    install_relocalize_routes(
+        app, service=getattr(app.state, "localization_service", None), clients=console.clients,
+        read_state=map_pose.state, require_named_operator=require_named_operator,
+        read_guard=read_guard, record_event=site_maps.record_event,
+        busy=lambda robot_id: bool(engaged(console, robot_id)) or trip_runner.robot_busy(robot_id))
     install_nudge_step_route(app, console=console, trip_busy=trip_runner.robot_busy,
                              require_named_operator=require_named_operator,
                              record_event=site_maps.record_event)

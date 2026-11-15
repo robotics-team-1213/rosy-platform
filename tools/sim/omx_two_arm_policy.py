@@ -76,7 +76,8 @@ def summarise(rows, whole):
 def evaluate(args):
     import av
     driver = Driver(args.model, args.steps_file, sites.parse_choices(args.choice),
-                    pick_vision=getattr(args, "pick_vision", False), belt_skew=getattr(args, "belt_skew", False))
+                    pick_vision=getattr(args, "pick_vision", False), belt_skew=getattr(args, "belt_skew", False),
+                    ensemble_coeff=getattr(args, "ensemble_coeff", None), n_action_steps=getattr(args, "n_action_steps", None))
     rows, runs = [], []
     Path(args.artifacts).mkdir(parents=True, exist_ok=True)
     planned = plan_tasks(args.plan_dir, args.tasks.split(",")) if args.plan_dir else None
@@ -194,14 +195,17 @@ def run_round(args):
                           **sites.parse_choices(args.choice))
     recipe = dict(ladder.RECIPE, steps=args.steps, optimizer_lr=args.lr, batch_size=args.batch_size, mode=args.mode, policy=args.policy,
                   skill=args.skill, zero_error_deg=args.zero_error_deg, servo_lag=args.servo_lag, physics_ranges=args.physics_ranges,
-                  pick_vision=bool(getattr(args, "pick_vision", False)), belt_skew=bool(getattr(args, "belt_skew", False)))
+                  pick_vision=bool(getattr(args, "pick_vision", False)), belt_skew=bool(getattr(args, "belt_skew", False)),
+                  no_goal=bool(getattr(args, "no_goal", False)))
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
                   tasks=names, seeds=args.seeds, recipe=recipe, choices=parsed_choices, claim="기하: 도달·순서·충돌(D-947). 실물 근거가 아닙니다.")
     write_record(run, record)
     me, environment = str(Path(__file__)), dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1")
     log = (run / "round.log").open("w", encoding="utf-8")
     chosen = [arg for item in args.choice or [] for arg in ("--choice", item)]
-    skilled = [*skills.argv(args), *(["--pick-vision"] if getattr(args, "pick_vision", False) else []), *(["--belt-skew"] if getattr(args, "belt_skew", False) else [])]
+    skilled = [*skills.argv(args), *(["--pick-vision"] if getattr(args, "pick_vision", False) else []),
+               *(["--belt-skew"] if getattr(args, "belt_skew", False) else [])]
+    no_goal = ["--no-goal"] if getattr(args, "no_goal", False) else []
     try:
         plan = []
         if args.mode == "concurrent":
@@ -210,7 +214,7 @@ def run_round(args):
                            env=dict(environment, PYTHONIOENCODING="utf-8"), stdout=log, stderr=subprocess.STDOUT, check=True)
             plan = ["--plan-dir", str(run / "plan")]
         parts = [(run / f"part{k}", list(range(TRAIN_SEED_BASE + k, TRAIN_SEED_BASE + args.seeds, args.workers))) for k in range(min(args.workers, args.seeds))]
-        running = [subprocess.Popen([args.python, me, "collect", "--seeds", ",".join(map(str, seeds)), "--tasks", args.tasks, "--out", str(part), *plan, *chosen, *skilled],
+        running = [subprocess.Popen([args.python, me, "collect", "--seeds", ",".join(map(str, seeds)), "--tasks", args.tasks, "--out", str(part), *plan, *chosen, *skilled, *no_goal],
                                     env=dict(environment, OMP_NUM_THREADS="1"), stdout=log, stderr=subprocess.STDOUT) for part, seeds in parts]
         if any(worker.wait() for worker in running):
             raise RuntimeError("collect")
@@ -285,7 +289,7 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     one = commands.add_parser("collect")
     for flag, kw in (("--seeds", dict(required=True)), ("--tasks", dict(default=",".join(TASKS))), ("--out", dict(required=True)),
-                     ("--plan-dir", dict(help="two-arm plans")), ("--choice", dict(action="append"))):
+                     ("--plan-dir", dict(help="two-arm plans")), ("--choice", dict(action="append")), ("--no-goal", dict(action="store_true"))):
         one.add_argument(flag, **kw)
     skills.options(one)
     for name in ("evaluate", "round"):
@@ -296,8 +300,11 @@ def main(argv=None):
         skills.options(one)
         if name == "evaluate":
             for flag, kw in (("--model", dict(required=True)), ("--steps-file", dict(required=True)), ("--out", dict(required=True)),
-                             ("--artifacts", dict(required=True)), ("--plan-dir", dict(help="judge whole tasks"))):
+                             ("--artifacts", dict(required=True)), ("--plan-dir", dict(help="judge whole tasks")),
+                             ("--ensemble-coeff", dict(type=float)), ("--n-action-steps", dict(type=int))):
                 one.add_argument(flag, **kw)
+        else:
+            one.add_argument("--no-goal", action="store_true")
     for flag, kw in (("--root", dict(required=True)), ("--python", dict(default=sys.executable)), ("--lerobot-train", dict(required=True)),
                      ("--source-sha", dict()), ("--seeds", dict(type=int, default=30)), ("--workers", dict(type=int, default=6)),
                      ("--train-workers", dict(type=int, default=8)), ("--steps", dict(type=int, default=60000)),
@@ -308,7 +315,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "collect":
         return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir, sites.parse_choices(args.choice),
-                       args.skill, args.zero_error_deg, args.servo_lag, args.physics_ranges, pick_vision=args.pick_vision, belt_skew=args.belt_skew)
+                       args.skill, args.zero_error_deg, args.servo_lag, args.physics_ranges,
+                       pick_vision=args.pick_vision, belt_skew=args.belt_skew, no_goal=args.no_goal)
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 
 

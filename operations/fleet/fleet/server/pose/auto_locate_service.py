@@ -13,7 +13,8 @@ import logging
 import time
 from typing import Callable, Iterable, Mapping, Optional
 
-from fleet.localization.auto_locate import AlignmentTracker
+from fleet.localization import auto_locate
+from fleet.localization.auto_locate import AlignmentTracker, RecoveryWindow
 from fleet.server.identity_triggers import caution
 from fleet.server.trip_guard import engaged
 
@@ -90,7 +91,22 @@ class AutoLocateService:
         logger.warning("auto locate block lift: robot_id=%s lifted=%s principal_id=%s", robot_id, lifted, principal_id)
         return lifted
 
+    def _keep_enabled_open(self, now: float) -> None:
+        """Robots in auto_locate_robots keep a session open without an operator (user, 2026-11-13).
+        A DEGRADED fit is never reopened here: a new session would clear that latch (D-989 3)."""
+        if self.map_pose is None:
+            return
+        for robot_id in self._watched():
+            if not self.map_pose.auto_locate_enabled(robot_id) or now < self._until.get(robot_id, -1.0):
+                continue
+            tracker = self._trackers.get(robot_id)
+            if tracker is not None and tracker.view(now)["state"] == "DEGRADED":
+                continue
+            logger.info("auto locate session opened by config: robot_id=%s", robot_id)
+            self.start([robot_id])
+
     async def tick(self) -> None:
+        self._keep_enabled_open(self._clock())
         self._feed_map_pose(self._clock())  # first: the blink below can wait on a robot
         try:
             await self._sessions(self._clock())
@@ -164,10 +180,58 @@ class AutoLocateService:
     def _watched(self) -> set[str]:
         return {rid for source in self.tracking.sources for rid in source.robot_ids}
 
+    def recovery_window(self, robot_id: str, *, bay_bounds=None) -> Optional[RecoveryWindow]:
+        """Bounded Path B SLAM recovery window from confirmed track pose or peer fallback."""
+        identity = self.tracking.identity
+        if identity is not None:
+            track = self._track(identity, robot_id)
+            if track.get("state") == "CONFIRMED":
+                x, y = auto_locate._finite_float(track.get("x")), auto_locate._finite_float(track.get("y"))
+                if x is not None and y is not None:
+                    yaw = track.get("yaw_cam") if track.get("yaw_cam") is not None else track.get("yaw")
+                    return auto_locate.recovery_window(x, y, yaw_cam=yaw, bay_bounds=bay_bounds)
+        peer = self._peer_recovery_pose(robot_id)
+        if peer is not None:
+            return auto_locate.recovery_window(peer[0], peer[1], yaw_cam=peer[2], bay_bounds=bay_bounds)
+        return None
+
+    def _peer_recovery_pose(self, robot_id: str) -> Optional[tuple[float, float, Optional[float]]]:
+        best: Optional[tuple[float, float, float, Optional[float]]] = None
+        for other_id in sorted(self._watched()):
+            if other_id == robot_id:
+                continue
+            state = self.tracking.robot_state(other_id)
+            peers = state.get("peers") if isinstance(state, Mapping) else None
+            if not isinstance(peers, list):
+                continue
+            for row in peers:
+                if not isinstance(row, Mapping) or row.get("robot_id") != robot_id:
+                    continue
+                if row.get("localization_state") != "LOCALIZED":
+                    continue
+                age_s = auto_locate._finite_float(row.get("age_s", 0.0))
+                if age_s is None or age_s < 0.0:
+                    continue
+                pose = row.get("pose")
+                if not isinstance(pose, Mapping):
+                    continue
+                x, y = auto_locate._finite_float(pose.get("x")), auto_locate._finite_float(pose.get("y"))
+                if x is None or y is None:
+                    continue
+                yaw = auto_locate._finite_float(pose.get("yaw"))
+                if best is None or age_s < best[0]:
+                    best = (age_s, x, y, yaw)
+        return None if best is None else (best[1], best[2], best[3])
+
     def snapshot(self) -> dict:
         now = self._clock()
+        identity = getattr(self.tracking, "identity", None)
+        lamp_reasons = ({r.get("robot_id"): (r.get("last") or {}).get("lamp_reason")
+                         for r in identity.snapshot().get("robots", [])}
+                        if hasattr(identity, "snapshot") else {})
         return {"use": "observation-only",
                 "robots": [tracker.view(now) | {"session_left_s": round(max(0.0, self._until[rid] - now), 1),
+                                                "lamp_reason": lamp_reasons.get(rid),
                                                 "anchor_enabled": (self.map_pose is not None
                                                                    and self.map_pose.auto_locate_enabled(rid)),
                                                 "anchor_refused_reason": self._anchor_reason.get(rid),

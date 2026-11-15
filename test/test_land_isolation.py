@@ -359,6 +359,23 @@ def test_guard_round_wiring(monkeypatch, mode):
     assert seen[0][2] == [list(land_guards.GUARDS)]
 
 
+def test_guards_cover_every_existing_root_guard_set_file():
+    import affected_tests
+    from pathlib import PurePosixPath
+
+    assert land_guards.GUARDS[:3] == (
+        "test/architecture",
+        "test/test_harness_contracts.py",
+        "test/test_behavior_test_ownership.py",
+    )
+    expected_root = {
+        path for path in affected_tests.GUARD_SET
+        if len(PurePosixPath(path).parts) == 2 and PurePosixPath(path).parts[0] == "test" and (ROOT / path).is_file()
+    }
+    assert expected_root <= set(land_guards.GUARDS)
+    assert all((ROOT / path).exists() for path in land_guards.GUARDS)
+
+
 def test_selector_edge_on_this_repo_selects_the_incident_test():
     """The 2026-10-26 change to native_cycle.py: its test is on the references edge and loads it by path."""
     repo, _, refs, _ = land_isolation._selector(ROOT)
