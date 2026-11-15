@@ -93,10 +93,11 @@ def _http(exc: TrackingError | IdentityError) -> HTTPException:
 
 
 def install_tracking_routes(app, *, tracking, require_operator, read_guard, operator_guard,
-                            require_named_operator=None, map_revision=None, map_pose=None) -> None:
+                            require_named_operator=None, map_revision=None, map_pose=None,
+                            console=None) -> None:
     measured = MeasuredCalibrationService(tracking, map_revision=map_revision)
     from fleet.server.auto_locate_service import AutoLocateService
-    tracking.auto_locate = AutoLocateService(tracking, map_pose=map_pose)
+    tracking.auto_locate = AutoLocateService(tracking, map_pose=map_pose, console=console)
     app.state.measured_calibration = measured
 
     def named(principal):

@@ -55,8 +55,24 @@ This rebase is not a touch-verified map: the loo error stays what it was (floor 
   `20261114T001446-arm_s`). Wait for each jog to settle (state near the target) before the next, or use `retreat` /
   `cell_pipeline --stage recover`.
 
+## 2026-11-14 18:00: a USB replug moved the camera again, and recovery ran on the stale map
+
+- The arm_s hub was unplugged and plugged back; the top camera came back 109 px lower (phase correlation on the arm
+  plate against the night's frame, ORB homography 597 inliers, 1.3 px median). Nothing checked it: cell_recovery ran six
+  grasps that all closed on air. It looked like the Pinky had moved; moving only the Pinky polygon was the wrong fix.
+  `rebase_map.py --write` + `pxshift.py --write` put the hover over the box (photo).
+- The same run showed three more gaps, all now scenarios (`cell_failure_scenarios`): the always-running belt read as a
+  moved pile, a run without a chunk session said only `refused`, and a park from a far pick (0.054, 0.184 m) overloaded
+  shoulder_lift (it lags 1.3-1.6 just holding there; the guard trips near 2.2), which cell_unwedge read as `stuck` at
+  once. Hand 0.3-unit settled jogs lifted it only to lag 2.0, under the guard; a person had to support the arm.
+- Code now: `cell_recovery.carry` checks `cell_calibrate.check` before every pick (cause `camera_moved`, a person; no
+  `preflight.reference_top` refuses), `scene_moved` ignores the belt's rects, bare `refused` is `no_session`, a park that
+  ended in contact stops `run_auto` (`park_contact`), and unwedge judges lag over each joint's own starting droop
+  (ceiling 2.0) with 0.3 steps. Why the far-pick park overloads is still a hypothesis (reach x pose), not measured.
+
 ## Next time
 
+- Any USB or cable work on a cell can move its top camera: rebase before the next run (the recovery gate now refuses).
 - After a camera shift, rebase map **and** config pixels together, clamp to the frame, before any plan.
 - Do not run a remap while objects sit under its grid points; clear them, or rebase instead.
 - The script used live is `~/rosy-test/omx-record-prep-20261019/rebase_map_20261113.py` on the control PC (map part only);

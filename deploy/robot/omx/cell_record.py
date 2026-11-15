@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_observe import locate  # noqa: E402
+from cell_observe import locate, map_check  # noqa: E402
 
 EMPTY_MARGIN = 2.0  # jaws this far above their closed command are holding something (chunk_runner's rule)
 
@@ -47,9 +47,15 @@ def episode_outcomes(dataset_root: Path, closed: float) -> list:
 def record_cycle(cell, config: dict, calibration: dict, work: Path, source: str = "pinky", dest: str = "belt",
                  run=subprocess.run) -> dict:
     """One recorded A/B cycle. No chunk session may be running: record_session takes the arm."""
+    from cell_envelope import verification_tolerance
     from cell_pipeline import target
     from grasp_planner import Planner
     from cell_robot_profile import load
+
+    try:
+        reset_tolerance_mm = verification_tolerance(config)
+    except ValueError as exc:
+        return {"result": f"held: invalid reset tolerance ({exc})"}
 
     try:
         rec = config["record"]
@@ -61,6 +67,8 @@ def record_cycle(cell, config: dict, calibration: dict, work: Path, source: str 
     found = locate(cell, config, calibration, source)
     if not found["found"]:
         return {"result": "not located", "locate": found}
+    if error := map_check(config, found, calibration):
+        return {"result": f"held: {error}", "locate": found}
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     folder = Path(work) / "recordings" / stamp
     folder.mkdir(parents=True)
@@ -85,14 +93,20 @@ def record_cycle(cell, config: dict, calibration: dict, work: Path, source: str 
         row["segment"] = "A" if row["episode"] == 0 else "B"
     session["episode_outcomes"] = outcomes or session.get("episode_outcomes")
     session["outcome_source"] = "cell_record: follower jaws against their closed command, read from the dataset"
-    session_path.write_text(json.dumps(session, indent=2, default=str))
     back = locate(cell, config, calibration, source)  # the camera services are back after the session
+    reset_error = map_check(config, back, calibration) if back["found"] else "box not seen after recording"
     reset_mm = (1000 * sum((a - b) ** 2 for a, b in zip(back["arm_m"], found["arm_m"])) ** 0.5
-                if back["found"] else None)
+                if back["found"] and reset_error is None else None)
+    reset_ok = reset_mm is not None and reset_error is None and reset_mm <= reset_tolerance_mm
+    reset_check = {"passed": reset_ok, "distance_mm": reset_mm, "tolerance_mm": reset_tolerance_mm,
+                   "error": reset_error, "locate": back}
+    session["reset_check"] = reset_check
+    session_path.write_text(json.dumps(session, indent=2, default=str))
     ok = (finished.returncode == 0 and session.get("safe_end") is True
-          and [o["outcome"] for o in outcomes] == ["held", "held"])
+          and [o["outcome"] for o in outcomes] == ["held", "held"] and reset_ok)
     return {"result": "recorded" if ok else "recorded with issues", "folder": str(folder),
             "dataset": record_config["dataset"]["root"], "exit": finished.returncode,
             "safe_end": session.get("safe_end"), "outcomes": outcomes, "reset_mm": reset_mm,
+            "reset_check": reset_check,
             "seal": f"record_seal.py --session-dir {folder} --name arm-s-cycle-{stamp} --rig-revision <rig> "
                     "--calibration <follower calibration json>"}

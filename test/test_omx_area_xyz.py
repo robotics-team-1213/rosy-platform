@@ -92,7 +92,8 @@ def test_middleware_directive_executes_on_cell_and_stacks_tier3_with_autocal(tmp
         act_fn=fake_act,
         max_attempts=2,
     )
-    assert res["result"] == "placed"
+    assert res["result"] == "unverified_place"
+    assert res["verification"]["z_gate"]["verdict"] == "UNKNOWN"
     assert res["place"]["effective_xyz_m"][2] == 0.0674
     assert res["calibration"]["samples"] == 1
     assert (tmp_path / "arm-cal-arm_b.json").exists()
@@ -148,9 +149,9 @@ def test_empty_grasp_recovery_lowers_z_and_verify_stack_outcome_checks_side_came
         frame_fn=fake_frame,
         max_attempts=3,
     )
-    assert res["result"] == "placed"
-    assert res["task_verified"] is True
-    assert res["verification"]["verified"] is True
+    assert res["result"] == "unverified_place"
+    assert res["task_verified"] is False
+    assert res["verification"]["z_gate"]["verdict"] == "UNKNOWN"
     assert len(res["recovery"]) == 1
     assert res["pick"]["x"] == 0.1988
     assert res["pick"]["z"] < 0.0398
@@ -263,9 +264,12 @@ def test_parallel_sim_precheck_and_multistage_task_plan(tmp_path: Path):
         frame_fn=fake_frame,
         parallel_sim=True,
     )
-    assert plan_res["task_verified"] is True
-    assert plan_res["stages_completed"] == 2
-    assert set(plan_res["used_candidates"]) == {"stage1-tier2", "stage2-tier3"}
+    assert plan_res["task_verified"] is False
+    assert plan_res["stages_attempted"] == 1
+    assert plan_res["stages_completed"] == 0
+    assert plan_res["used_candidates"] == []
+    assert plan_res["stages"][0]["verification"]["z_gate"]["verdict"] == "UNKNOWN"
+    assert stage_state["stage"] == 1  # no tier-3 motion after an unverified tier-2 release
 
 
 def test_live_perception_vanishing_projection_base_and_candidates():
@@ -538,6 +542,54 @@ def test_fused_hover_alignment_and_smooth_rail_belt_retract(tmp_path, monkeypatc
     )
     assert len(replans) == 2 and calls.count("goto above_pick") == 2
 
+    calls.clear()
+    def refused_load(cmd):
+        calls.append(cmd)
+        return {"ok": False, "error": "library_not_reviewed"}
+    with pytest.raises(align.RefinementCommandFailed, match="refined_library_load_failed"):
+        align.refine_pick_pose_at_hover(
+            cur_directive=directive, base_plan=SAMPLE_BASE_PLAN, lib={},
+            plan={"pick": {"yaw_deg": -90}, "grip_open": 58.2}, cal={},
+            lib_path=tmp_path / "refused.library.json", work_dir=tmp_path, kinematics_root=None,
+            arm_id="arm_b", exec_cfg={"vision_refine": True, "wrist_samples": 1},
+            frame_fn=lambda camera: object(), before_side=object(), above_shaking=False,
+            run_cmd=refused_load, wrist_log=[],
+        )
+    assert len(calls) == 1 and calls[0].startswith("load ")
+
+    calls.clear()
+    def refused_second_load(cmd):
+        calls.append(cmd)
+        return {"ok": not (cmd.startswith("load ") and len([c for c in calls if c.startswith("load ")]) == 2),
+                "state": [0, 0, 0, 0, 0, 58.2]}
+    with pytest.raises(align.RefinementCommandFailed, match="refined_library_load_failed"):
+        align.refine_pick_pose_at_hover(
+            cur_directive=directive, base_plan=SAMPLE_BASE_PLAN, lib={},
+            plan={"pick": {"yaw_deg": -90}, "grip_open": 58.2}, cal={},
+            lib_path=tmp_path / "refused-second.library.json", work_dir=tmp_path, kinematics_root=None,
+            arm_id="arm_b", exec_cfg={"vision_refine": True, "wrist_passes": 2},
+            frame_fn=lambda camera: object(), before_side=object(), above_shaking=False,
+            run_cmd=refused_second_load, wrist_log=[],
+        )
+    assert len([c for c in calls if c.startswith("load ")]) == 2
+    assert calls.count("goto above_pick") == 1
+
+    calls.clear()
+    def refused_refined_grip(cmd):
+        calls.append(cmd)
+        return ({"ok": False} if cmd.startswith("grip ") else
+                {"ok": True, "state": [0, 0, 0, 0, 0, 50.0]})
+    with pytest.raises(align.RefinementCommandFailed, match="refined_grip_failed"):
+        align.refine_pick_pose_at_hover(
+            cur_directive=directive, base_plan=SAMPLE_BASE_PLAN, lib={},
+            plan={"pick": {"yaw_deg": -90}, "grip_open": 58.2}, cal={},
+            lib_path=tmp_path / "refused-grip.library.json", work_dir=tmp_path, kinematics_root=None,
+            arm_id="arm_b", exec_cfg={"vision_refine": True, "wrist_samples": 1},
+            frame_fn=lambda camera: object(), before_side=object(), above_shaking=False,
+            run_cmd=refused_refined_grip, wrist_log=[],
+        )
+    assert calls[-1].startswith("grip ") and "run descend_pick" not in calls
+
     phases = crp.compile_rail_and_belt_safe_standby_waypoints(
         [-22.98, -11.55, 37.73, 44.27, 22.1, 59.32]
     )
@@ -546,6 +598,65 @@ def test_fused_hover_alignment_and_smooth_rail_belt_retract(tmp_path, monkeypatc
     assert frames[-1] == phases[-1]["pose"]
     assert all(max(abs(a - b) for a, b in zip(left, right)) < 0.2
                for left, right in zip(frames, frames[1:]))
+
+
+def test_refused_initial_library_does_not_retry_or_move(tmp_path, monkeypatch):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+    )
+    monkeypatch.setattr(cell_area_xyz, "plan_library_from_directive", lambda *a, **k: ({"chunks": {}}, {}, {}))
+    commands = []
+    def refused(cmd):
+        commands.append(cmd)
+        return {"ok": False, "error": "library_not_reviewed"}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=refused,
+    )
+    assert result["result"] == "held" and result["task_verified"] is False
+    assert len(commands) == 1 and commands[0].startswith("load ")
+
+
+def test_refused_above_pick_does_not_park_and_retry(tmp_path, monkeypatch):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+    )
+    monkeypatch.setattr(cell_area_xyz, "plan_library_from_directive", lambda *a, **k: ({"chunks": {}}, {}, {}))
+    commands = []
+    def refused(cmd):
+        commands.append(cmd)
+        return {"ok": True} if cmd.startswith("load ") else {"ok": False, "error": "guard_contact"}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=refused,
+    )
+    assert result["result"] == "held" and result["error"] == "guard_contact"
+    assert result["task_verified"] is False and len(commands) == 2
+    assert commands[0].startswith("load ") and commands[1] == "goto above_pick"
+
+
+def test_failed_hover_settle_or_grip_stops_before_descent(tmp_path, monkeypatch):
+    for failed, expected in (("run above_pick", "above_pick_settle_failed"),
+                             ("grip 58.20", "above_pick_grip_failed")):
+        directive = build_directive(
+            arm_id="arm_b",
+            pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+            place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+        )
+        monkeypatch.setattr(cell_area_xyz, "plan_library_from_directive", lambda *a, **k: ({"chunks": {}}, {"grip_open": 58.2}, {}))
+        commands = []
+        def act(cmd):
+            commands.append(cmd)
+            return ({"ok": False, "error": "guard_refused"} if cmd == failed else
+                    {"ok": True, "state": [0, 0, 0, 0, 0, 50.0], "t": 1.0})
+        result = cell_area_xyz.execute_directive(
+            directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act,
+        )
+        assert result["result"] == "held" and result["at"] == expected
+        assert result["task_verified"] is False and "run descend_pick" not in commands
+        assert failed in commands
 
 
 def test_chained_post_place_keeps_audit_steps(tmp_path):
@@ -565,12 +676,221 @@ def test_chained_post_place_keeps_audit_steps(tmp_path):
     result = cell_area_xyz.execute_directive(
         directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
     )
-    assert result["result"] == "placed"
+    assert result["result"] == "unverified_place"
+    assert result["verification"]["z_gate"]["verdict"] == "UNKNOWN"
+    assert not (tmp_path / "problem-cases.jsonl").exists()
     assert called.count("chain run lift_place ; park") == 1
     assert "run lift_place" not in called and "park" not in called
     assert [step["command"] for step in result["steps"]][-3:] == [
         "chain run lift_place ; park", "run lift_place", "park",
     ]
+
+
+@pytest.mark.parametrize("failed, at", [("grip ", "early_touchdown_grip"),
+                                       ("retreat", "early_touchdown_retreat"),
+                                       ("park", "early_touchdown_park")])
+def test_early_touchdown_refusal_cannot_verify_placement(tmp_path, monkeypatch, failed, at):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+        vision_refine=False,
+    )
+    directive["execution"] = {"grasp_deliberation": False}
+    monkeypatch.setattr(cell_area_xyz, "evaluate_tactile_place_compliance", lambda *a, **k: {
+        "compliant": True, "early_touchdown": True,
+    })
+    commands = []
+    def act(cmd):
+        commands.append(cmd)
+        refused = cmd.startswith(failed) if failed == "grip " else cmd == failed
+        jaw = 58.2 if cmd == "goto above_pick" else 54.36
+        return {"ok": not refused, "holding": True, "state": [0, -10, 15, 45, 41, jaw],
+                "gripper_current_ma": 172.0}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
+    )
+    assert result["result"] == "held" and result["at"] == at
+    assert result["task_verified"] is False and "run release_place" not in commands
+
+
+def test_failed_lift_place_cannot_verify_placement(tmp_path, monkeypatch):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+        vision_refine=False,
+    )
+    directive["execution"] = {"grasp_deliberation": False}
+    monkeypatch.setattr(cell_area_xyz, "verify_stack_outcome_z_mm", lambda **k: pytest.fail("failed lift reached verification"))
+    commands = []
+    def act(cmd):
+        commands.append(cmd)
+        jaw = 58.2 if cmd == "goto above_pick" else 54.36
+        return {"ok": cmd != "run lift_place", "holding": True,
+                "state": [0, -10, 15, 45, 41, jaw], "gripper_current_ma": 172.0}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
+    )
+    assert result["result"] == "contact" and result["at"] == "run lift_place"
+    assert result["task_verified"] is False
+
+
+def test_refused_reinsert_does_not_start_next_attempt(tmp_path, monkeypatch):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+        vision_refine=False,
+    )
+    monkeypatch.setattr(cell_area_xyz.cgd, "kinesthetic_judge", lambda *a, **k: {
+        "verdict": "reinsert" if k.get("r_lift") else "proceed",
+    })
+    monkeypatch.setattr(cell_area_xyz.cgd, "debate_and_decide", lambda **k: {
+        "verdict": "reinsert_and_retry" if k["stage"] == "run lift_pick" else "proceed",
+    })
+    commands = []
+    def act(cmd):
+        commands.append(cmd)
+        jaw = 58.2 if cmd == "goto above_pick" else 54.36
+        return {"ok": cmd != "run reinsert_pick", "holding": True,
+                "state": [0, -10, 15, 45, 41, jaw], "gripper_current_ma": 172.0}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=2,
+    )
+    assert result["result"] == "held" and result["at"] == "reinsert_pick"
+    assert result["task_verified"] is False and commands[-1] == "run reinsert_pick"
+    assert len([c for c in commands if c.startswith("load ")]) == 1
+
+
+@pytest.mark.parametrize("failed, at", [("goto above_place", "slip_above_place"), ("park", "slip_park")])
+def test_refused_slip_recovery_does_not_start_next_attempt(tmp_path, monkeypatch, failed, at):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+        vision_refine=False,
+    )
+    directive["execution"] = {"grasp_deliberation": False}
+    monkeypatch.setattr(cell_area_xyz.cell_arm_cal, "evaluate_grasp_dynamics", lambda *a, **k: {
+        "holding": k.get("r_lift") is None,
+    })
+    monkeypatch.setattr(cell_area_xyz.cell_arm_cal, "infer_holding", lambda status, **k: status.get("phase") != "run lift_pick")
+    commands = []
+    def act(cmd):
+        commands.append(cmd)
+        jaw = 58.2 if cmd == "goto above_pick" else 54.36
+        return {"ok": cmd != failed, "phase": cmd, "holding": True,
+                "state": [0, -10, 15, 45, 41, jaw], "gripper_current_ma": 172.0}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
+    )
+    assert result["result"] == "held" and result["at"] == at
+    assert result["task_verified"] is False and commands[-1] == failed
+
+
+def test_refused_above_place_is_not_reissued_after_slip(tmp_path, monkeypatch):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+        vision_refine=False,
+    )
+    directive["execution"] = {"grasp_deliberation": False}
+    monkeypatch.setattr(cell_area_xyz.cell_arm_cal, "evaluate_grasp_dynamics", lambda *a, **k: {
+        "holding": k.get("r_above_place") is None,
+    })
+    monkeypatch.setattr(cell_area_xyz.cell_arm_cal, "infer_holding", lambda status, **k: status.get("phase") != "goto above_place")
+    commands = []
+    def act(cmd):
+        commands.append(cmd)
+        jaw = 58.2 if cmd == "goto above_pick" else 54.36
+        return {"ok": cmd != "goto above_place", "phase": cmd, "holding": True,
+                "state": [0, -10, 15, 45, 41, jaw], "gripper_current_ma": 172.0}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=2,
+    )
+    assert result["result"] == "held" and result["at"] == "slip_goto above_place"
+    assert commands.count("goto above_place") == 1 and "park" not in commands
+
+
+def test_slip_retry_parks_before_loading_next_plan(tmp_path, monkeypatch):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+        vision_refine=False,
+    )
+    directive["execution"] = {"grasp_deliberation": False}
+    monkeypatch.setattr(cell_area_xyz, "diagnose_and_recover_pick", lambda **k: {})
+    monkeypatch.setattr(cell_area_xyz.cell_arm_cal, "evaluate_grasp_dynamics", lambda *a, **k: {
+        "holding": not (k.get("r_lift") or {}).get("slip", False),
+    })
+    monkeypatch.setattr(cell_area_xyz.cell_arm_cal, "infer_holding", lambda status, **k: not status.get("slip", False))
+    commands, lifts = [], 0
+    def act(cmd):
+        nonlocal lifts
+        commands.append(cmd)
+        if cmd == "run lift_pick":
+            lifts += 1
+        jaw = 58.2 if cmd == "goto above_pick" else 54.36
+        return {"ok": not (cmd.startswith("load ") and len([c for c in commands if c.startswith("load ")]) == 2),
+                "phase": cmd, "slip": cmd == "run lift_pick" and lifts == 1, "holding": True,
+                "state": [0, -10, 15, 45, 41, jaw], "gripper_current_ma": 172.0}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=2,
+    )
+    loads = [i for i, c in enumerate(commands) if c.startswith("load ")]
+    assert result["result"] == "held" and len(loads) == 2
+    assert "park" in commands[loads[0]:loads[1]]
+
+
+def test_empty_grasp_park_refusal_is_held(tmp_path, monkeypatch):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+        vision_refine=False,
+    )
+    directive["execution"] = {"grasp_deliberation": False}
+    monkeypatch.setattr(cell_area_xyz.cell_arm_cal, "infer_holding", lambda *a, **k: False)
+    monkeypatch.setattr(cell_area_xyz.cell_arm_cal, "evaluate_grasp_dynamics", lambda *a, **k: {"holding": False})
+    commands = []
+    def act(cmd):
+        commands.append(cmd)
+        jaw = 58.2 if cmd == "goto above_pick" else 52.65
+        return {"ok": cmd != "park", "holding": False,
+                "state": [0, -10, 15, 45, 41, jaw], "gripper_current_ma": 55.0}
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
+    )
+    assert result["result"] == "held" and result["at"] == "empty_park"
+    assert result["task_verified"] is False and commands[-1] == "park"
+
+
+def test_post_release_z_failure_does_not_repick_empty_source(tmp_path, monkeypatch):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "belt", "col": 3, "row": 1, "tier": 1},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2},
+        vision_refine=False,
+    )
+    monkeypatch.setattr(cell_area_xyz, "verify_stack_outcome_z_mm", lambda **kwargs: {
+        "verified": False, "reason": "unseated", "z_gate": {"verdict": "FAIL", "failure_code": "S6_UNSEATED_CONE"},
+        "recovery_skill": {"skill": "seat_nudge"},
+    })
+    commands = []
+
+    def act(command):
+        commands.append(command)
+        return {"ok": True, "holding": True, "state": [0, -10, 15, 45, 41, 54.36], "gripper_current_ma": 172.0}
+
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=2,
+    )
+    assert result["result"] == "unverified_place"
+    assert result["verification"]["recovery_skill"]["skill"] == "seat_nudge"
+    assert commands.count("run descend_pick") == 1
 
 
 def test_stay_in_hover_macro_stops_before_place_and_release(tmp_path):

@@ -9,6 +9,8 @@ Single Responsibility:
 from __future__ import annotations
 
 import math
+import hashlib
+import os
 from pathlib import Path
 import sys
 
@@ -29,6 +31,19 @@ import cell_place_fit  # noqa: E402
 CLOSING = "gripper.closing_axis_offset_deg"
 
 
+def save_frame_receipt(path: Path, receipt: dict) -> dict:
+    raw = receipt.get("jpeg_bytes")
+    if (not isinstance(raw, bytes) or not raw.startswith(b"\xff\xd8")
+            or hashlib.sha256(raw).hexdigest() != receipt.get("jpeg_sha256")):
+        raise ValueError("camera JPEG bytes do not match source receipt")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("xb") as stream:
+        stream.write(raw)
+        stream.flush()
+        os.fsync(stream.fileno())
+    return {"path": str(path), **{key: receipt[key] for key in ("jpeg_sha256", "source_seq", "source_stamp")}}
+
+
 def _parent_attr(name: str, default):
     mod = sys.modules.get("cell_auto_pick")
     if mod is not None and hasattr(mod, name):
@@ -36,14 +51,14 @@ def _parent_attr(name: str, default):
     return default
 
 
-def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list):
+def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list, *, image=None):
     import cv2
 
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     record = cell_pivot.map_record(calibration, site)
     if record is None:
         return None, None, [], f"no map for {site}"
-    img = cell.frame("top")
+    img = image if image is not None else cell.frame("top")
     cd.see(keep(f"auto-{site}-top", img))
     poly = config["sites"][site].get("surface_px")
     lab = config["sites"][site].get("surface_lab")
@@ -83,6 +98,15 @@ def past_pan_limit(config: dict, point_m) -> float | None:
         return None
     pan = math.atan2(point_m[1], point_m[0])
     return None if limits[0] <= pan <= limits[1] else round(math.degrees(pan), 1)
+
+
+def past_park_reach(config: dict, point_m) -> float | None:
+    """The reach (mm) to a point past the plan's park reach, else None. 2026-11-14 arm_s, measured in free air at pan 120:
+    the park from above_pick folded at 120-186 mm and failed at 192 mm every time (shoulder_lift contact, the arm then
+    sagging onto what it hovered over); a slow lift first and then the park folded it."""
+    limit = (config.get("plan") or {}).get("limits", {}).get("park_reach_m")
+    reach = math.hypot(point_m[0], point_m[1])
+    return round(reach * 1000) if limit and reach > limit else None
 
 
 def plan_pick(
@@ -172,6 +196,8 @@ def choose(
             why = "not inside the camera view"
         elif (pan := past_pan_limit(config, o["raw_m"])) is not None:
             why = f"out of reach: pan {pan} deg past the joint1 limit"
+        elif (reach := past_park_reach(config, o["raw_m"])) is not None:
+            why = f"out of reach: {reach} mm, past the park reach {round(config['plan']['limits']['park_reach_m'] * 1000)} mm"
         elif not square_entry(entries, o):
             entry = entries[o["object"]]
             ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
@@ -265,28 +291,66 @@ def choose(
     return usable, refused
 
 
-def verify_placed(cell, config, calibration, dest_site, place_xy, roi, catalog, bias_data, object_id, held):
+def verify_placed(cell, config, calibration, dest_site, place_xy, roi, catalog, bias_data, object_id,
+                  before_frame, after_path: Path, source_site, source_xy, source_roi):
+    source = getattr(cell, "cell", cell)
+    frame_receipt = getattr(source, "frame_receipt", None)
+    if not callable(frame_receipt) or before_frame is None:
+        return {"found": False, "inside": False, "verified": False, "basis": "unverified: fresh camera source missing"}
+    try:
+        after = frame_receipt("top", previous=before_frame)
+        frame = save_frame_receipt(after_path, after)
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"found": False, "inside": False, "verified": False, "basis": "unverified: fresh camera frame missing"}
     record = cell_pivot.map_record(calibration, dest_site)
-    if roi is None or record is None:
-        return {"found": held, "inside": held, "basis": "arm placement"}
+    if roi is None or record is None or "z_view" in record:
+        return {"found": False, "inside": False, "verified": False,
+                "basis": "unverified: destination ROI or fine map missing", "frame": frame}
     obs_fn = _parent_attr("observe", observe)
-    _, _, objects, _ = obs_fn(cell, config, calibration, dest_site, roi, catalog)
+    _, _, objects, error = obs_fn(cell, config, calibration, dest_site, roi, catalog, image=after["image"])
+    if error:
+        return {"found": False, "inside": False, "verified": False, "basis": f"unverified: {error}",
+                "frame": frame}
+    _, _, before_objects, error = obs_fn(cell, config, calibration, dest_site, roi, catalog,
+                                         image=before_frame["image"])
+    if error:
+        return {"found": False, "inside": False, "verified": False, "basis": f"unverified: {error}",
+                "frame": frame}
     region = cell_pivot.bias_at(bias_data, dest_site, place_xy, params=config.get("params"))
     bx, by = region["bias_mm"] if region else (0.0, 0.0)
+    tolerance = config.get("verify_tol_mm", 10.0)
+    if any(1000 * math.dist((o["raw_m"][0] - bx / 1000, o["raw_m"][1] - by / 1000), place_xy)
+           <= tolerance for o in before_objects):
+        return {"found": True, "inside": False, "verified": False,
+                "basis": "unverified: destination occupied before transfer", "frame": frame}
+    if source_site == dest_site and source_roi == roi:
+        source_objects = objects
+    else:
+        _, _, source_objects, error = obs_fn(cell, config, calibration, source_site, source_roi, catalog,
+                                             image=after["image"])
+        if error:
+            return {"found": False, "inside": False, "verified": False, "basis": f"unverified: {error}",
+                    "frame": frame}
+    if any(o.get("object") == object_id and 1000 * math.dist(o["raw_m"], source_xy) <= tolerance
+           for o in source_objects):
+        return {"found": True, "inside": False, "verified": False,
+                "basis": "unverified: source still occupied", "frame": frame}
     near = [
         (1000 * math.dist((o["raw_m"][0] - bx / 1000, o["raw_m"][1] - by / 1000), place_xy), o)
         for o in objects
         if o.get("object") == object_id
     ]
     if not near:
-        return {"found": False, "inside": False, "basis": "map"}
+        return {"found": False, "inside": False, "verified": True, "basis": "map", "frame": frame}
     off, o = min(near, key=lambda pair: pair[0])
     seen = [round(1000 * (o["raw_m"][0] - place_xy[0]), 1), round(1000 * (o["raw_m"][1] - place_xy[1]), 1)]
     return {
         "found": True,
-        "inside": off <= config.get("verify_tol_mm", 10.0),
+        "inside": off <= tolerance,
+        "verified": True,
         "off_mm": round(off, 1),
         "basis": "map",
+        "frame": frame,
         "seen_bias_mm": seen,
         "used_bias_mm": [bx, by],
     }

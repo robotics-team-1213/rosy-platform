@@ -9,6 +9,7 @@ Exit 0 only when every check passes; each failure says what to do.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -17,6 +18,15 @@ import urllib.request
 from pathlib import Path
 
 import cell_params as prm
+
+
+def reference_matches(path: Path | None, expected_sha256: str | None) -> bool:
+    if not expected_sha256:
+        return True
+    try:
+        return path is not None and hashlib.sha256(path.read_bytes()).hexdigest() == expected_sha256
+    except OSError:
+        return False
 
 
 def lights(frames: dict, params=None) -> list:
@@ -126,9 +136,25 @@ def checks(config: dict, viewer: str, max_shift_px: float, fetch=None, run=subpr
     except OSError:
         cur = None
     out += lights({"top": cur}, config.get("params"))
-    ref_path = (config.get("preflight") or {}).get("reference_top")
-    if cur is not None and ref_path and Path(ref_path).expanduser().exists():
-        ref = cv2.imread(str(Path(ref_path).expanduser()), cv2.IMREAD_GRAYSCALE)
+    preflight = config.get("preflight") or {}
+    ref_path = Path(preflight["reference_top"]).expanduser() if preflight.get("reference_top") else None
+    expected_ref_hash = preflight.get("reference_sha256")
+    map_error = None
+    if config.get("calibration_path"):
+        from cell_auto_evidence import bound_map_error
+        try:
+            bound = json.loads(Path(config["calibration_path"]).expanduser().read_text())
+            raw_reference = ref_path.read_bytes() if ref_path else b""
+        except (OSError, ValueError):
+            bound, raw_reference = {}, b""
+        expected_ref_hash = bound.get("reference_top_sha256") if isinstance(bound, dict) else None
+        map_error = bound_map_error(bound if isinstance(bound, dict) else {}, config, raw_reference)
+    if map_error:
+        out.append(("top camera pose", False, map_error))
+    elif not reference_matches(ref_path, expected_ref_hash):
+        out.append(("top camera pose", False, "reference image hash differs from the bound map: restore the map reference"))
+    elif cur is not None and ref_path and ref_path.exists():
+        ref = cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE)
         shift = camera_shift_px(ref, cur)
         ok = shift["ok"] and shift["max_px"] <= max_shift_px
         out.append(("top camera pose", ok, f"{shift}" + ("" if ok else ": the map is stale - remap (layout_map) and re-pivot before any motion")))

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import cell_params as prm
 import cell_preflight
+from omx_tcp import mismatch as tcp_mismatch
 
 TCP_STOCK = 0.09193
 BAD = ("fail", "warn", "skipped")
@@ -295,7 +296,9 @@ def check_monitors(arm, device, logs_dir, since, params, io):
     )
 
 
-def check_tcp(config):
+def check_tcp(config, env=None):
+    clash = tcp_mismatch(config.get("tcp_x_m"), env)
     if "tcp_x_m" in config:
-        return row("tcp", "ok", f"plans with {config['tcp_x_m']} m: {config.get('tcp_x_m_evidence', 'no evidence recorded')}")
+        return row("tcp", "warn" if clash else "ok",
+                   clash or f"plans with {config['tcp_x_m']} m: {config.get('tcp_x_m_evidence', 'no evidence recorded')}")
     return row("tcp", "warn", f"stock {TCP_STOCK}, unmeasured (ROSY_OMX_TCP_X_M in the run script decides)")
