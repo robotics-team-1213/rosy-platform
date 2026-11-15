@@ -127,3 +127,26 @@ def test_verify_profile_depth_checks_depth_touch_and_keeps_legacy_cli(tmp_path, 
     assert "depth_diff_gt_6mm" in rep["sites"]["occupied_box"]["flags"]
     assert "place_vs_start_step_gt_8mm" in rep["sites"]["occupied_box"]["flags"]
     assert rep["verdict"] == "fail"
+
+
+def test_verify_profile_depth_handles_polygon_surface_px_and_fetch_errors():
+    depth, colour = scene()
+    # Box in scene() sits around colour px (315, 210) at +76 mm above table (+56 mm above 20 mm plate)
+    cfg = {
+        "arm_id": "arm_poly",
+        "cameras": {"top": {"height_m": 0.62, "plate_px": [150, 380]}},
+        "sites": {
+            "belt_poly": {
+                "surface_z": 0.056,
+                "surface_px": [[302, 198], [328, 198], [328, 222], [302, 222]],
+            },
+        },
+    }
+    rep = cd.verify_profile_depth(cfg, None, depth=depth, colour=colour)
+    site = rep["sites"]["belt_poly"]
+    assert site["surface_px_mm"] == pytest.approx(76.0, abs=4.0)
+    assert site["place_mm"] == pytest.approx(76.0, abs=4.0)
+    assert site["depth_surface_z_m"] == pytest.approx(0.056, abs=0.005)
+    assert site["flags"] == []
+    assert cd._fetch_colour_frame("file:///etc/passwd") is None
+    assert cd._fetch_colour_frame("http://127.0.0.1:9/no-such.jpg") is None

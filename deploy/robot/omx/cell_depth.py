@@ -339,10 +339,8 @@ def plate_top(heights, to_depth, base_px, radius_px: float = 45.0, plate_mm=(8.0
 
 
 def _load_json_opt(path: Path | None) -> dict | None:
-    if path is None or not path.is_file():
-        return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8")) if (path and path.is_file()) else None
     except (OSError, ValueError):
         return None
 
@@ -359,11 +357,38 @@ def _project_site_px(rec: dict | None, cam_top: dict, arm_xy, fit_z: float | Non
         return None
 
 
+def _num2(p) -> bool:
+    return isinstance(p, (list, tuple)) and len(p) >= 2 and isinstance(p[0], (int, float)) and isinstance(p[1], (int, float))
+
+
+def _poly_center_px(px):
+    if _num2(px):
+        return [float(px[0]), float(px[1])]
+    pts = [p for p in (px or ()) if _num2(p)] if isinstance(px, (list, tuple)) else []
+    return [round(sum(float(p[0]) for p in pts) / len(pts), 2), round(sum(float(p[1]) for p in pts) / len(pts), 2)] if pts else None
+
+
 def _finite_height(heights, to_depth, px) -> float | None:
-    if px is None or len(px) < 2:
-        return None
-    val = height_at(heights, to_depth, px)
+    if isinstance(px, (list, tuple)) and len(px) >= 3 and isinstance(px[0], (list, tuple)):
+        import cv2
+        pts = [np.round(to_depth @ [float(p[0]), float(p[1]), 1.0])[:2] for p in px if _num2(p)]
+        if len(pts) >= 3:
+            mask = np.zeros(heights.shape, dtype=np.uint8)
+            cv2.fillPoly(mask, [np.asarray(pts, dtype=np.int32)], 1)
+            if mask.any():
+                vals = heights[(mask == 1) & np.isfinite(heights)]
+                return round(float(np.median(vals)), 2) if vals.size else None
+        px = _poly_center_px(px)
+    val = height_at(heights, to_depth, px) if _num2(px) else float("nan")
     return round(float(val), 2) if np.isfinite(val) else None
+
+
+def _import_omx():
+    omx_dir = str(Path(__file__).resolve().parent)
+    if omx_dir not in sys.path:
+        sys.path.insert(0, omx_dir)
+    import cell_attempts, cell_calibration, cell_params, cell_pivot
+    return cell_attempts, cell_calibration, cell_params, cell_pivot
 
 
 def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | None = None, *,
@@ -373,28 +398,20 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
     import math
     from datetime import datetime, timezone
 
-    omx_dir = str(Path(__file__).resolve().parent)
-    if omx_dir not in sys.path:
-        sys.path.insert(0, omx_dir)
-    import cell_attempts
-    import cell_calibration as cal
-    import cell_params as prm
-    import cell_pivot
-
+    cell_attempts, cal, prm, cell_pivot = _import_omx()
     now = float(now_ts) if now_ts is not None else time.time()
     work_dir = Path(config["work_dir"]).expanduser() if config.get("work_dir") else None
-    cal_sites = (calibration or {}).get("sites") or {}
     try:
-        with_maps = cell_pivot.with_site_maps(config, calibration) if (calibration and cal_sites) else (calibration or {"sites": {}})
+        with_maps = cell_pivot.with_site_maps(config, calibration) if (calibration and calibration.get("sites")) else (calibration or {"sites": {}})
     except SystemExit:
         with_maps = calibration or {"sites": {}}
 
     cam_top = (config.get("cameras") or {}).get("top") or {}
     cfg_height_m = cam_top.get("height_m")
     flags: list[str] = []
-    cam_report: dict = {"config_height_m": cfg_height_m, "cam_to_table_mm": None, "height_diff_mm": None,
-                        "plate_mm": None, "cam_to_plate_mm": None, "align_scale": None, "align_shift": None,
-                        "align_edge_px": None}
+    cam_report: dict = dict.fromkeys(("cam_to_table_mm", "height_diff_mm", "plate_mm", "cam_to_plate_mm",
+                                      "align_scale", "align_shift", "align_edge_px"))
+    cam_report["config_height_m"] = cfg_height_m
 
     heights = to_depth = plate_mm = None
     if depth is not None and colour is not None:
@@ -402,12 +419,12 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
         cam_mm = round(abs(float(plane[1])), 2)
         heights = height_map(depth, plane)
         to_depth, edge_px = align_edges(colour, heights)
-        cam_report["cam_to_table_mm"] = cam_mm
-        cam_report["align_scale"] = round(float(to_depth[0, 0]), 3)
-        cam_report["align_shift"] = [round(float(to_depth[0, 2]), 1), round(float(to_depth[1, 2]), 1)]
-        cam_report["align_edge_px"] = round(float(edge_px), 2)
-        if cfg_height_m is not None:
-            cam_report["height_diff_mm"] = round(cam_mm - float(cfg_height_m) * 1000.0, 1)
+        cam_report.update({
+            "cam_to_table_mm": cam_mm, "align_scale": round(float(to_depth[0, 0]), 3),
+            "align_shift": [round(float(to_depth[0, 2]), 1), round(float(to_depth[1, 2]), 1)],
+            "align_edge_px": round(float(edge_px), 2),
+            "height_diff_mm": round(cam_mm - float(cfg_height_m) * 1000.0, 1) if cfg_height_m is not None else None,
+        })
         base_px = cam_top.get("plate_px")
         if base_px is None:
             map_sites = (config.get("calibrate") or {}).get("map_sites") or list(config.get("sites") or [])
@@ -418,12 +435,10 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
                     base_px = _project_site_px(rec, cam_top, (0.0, 0.0), fit_z, 0.0, cal)
                     if base_px is not None:
                         break
-        if base_px is not None:
-            plate_mm = plate_top(heights, to_depth, base_px)
+        plate_mm = plate_top(heights, to_depth, base_px) if base_px is not None else None
         if plate_mm is not None:
             plate_mm = round(float(plate_mm), 2)
-            cam_report["plate_mm"] = plate_mm
-            cam_report["cam_to_plate_mm"] = round(cam_mm - plate_mm, 2)
+            cam_report.update({"plate_mm": plate_mm, "cam_to_plate_mm": round(cam_mm - plate_mm, 2)})
         else:
             flags.append("plate_not_found")
     else:
@@ -439,13 +454,12 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
         target_z = surface_z if surface_z is not None else spec.get("z")
         site_flags: list[str] = []
 
-        place_px = _project_site_px(rec, cam_top, spec.get("place"), fit_z, target_z, cal) or spec.get("surface_px")
+        place_px = _project_site_px(rec, cam_top, spec.get("place"), fit_z, target_z, cal) or _poly_center_px(spec.get("surface_px"))
         start_px = _project_site_px(rec, cam_top, spec.get("start"), fit_z, target_z, cal)
-        surf_px = spec.get("surface_px")
         place_mm = _finite_height(heights, to_depth, place_px) if heights is not None else None
         start_mm = _finite_height(heights, to_depth, start_px) if heights is not None else None
-        surf_px_mm = _finite_height(heights, to_depth, surf_px) if (heights is not None and surf_px) else None
-        site_mm = place_mm if place_mm is not None else (surf_px_mm if surf_px_mm is not None else start_mm)
+        surf_px_mm = _finite_height(heights, to_depth, spec.get("surface_px")) if heights is not None else None
+        site_mm = next((v for v in (place_mm, surf_px_mm, start_mm) if v is not None), None)
 
         depth_z = round((site_mm - plate_mm) / 1000.0, 4) if (site_mm is not None and plate_mm is not None) else None
         depth_diff_mm = round((depth_z - float(surface_z)) * 1000.0, 1) if (depth_z is not None and surface_z is not None) else None
@@ -455,9 +469,7 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
         if step_mm is not None and abs(step_mm) > 8.0:
             site_flags.append("place_vs_start_step_gt_8mm")
 
-        receipt = (touch_receipts or {}).get(name)
-        if receipt is None and touch_receipts is None and work_dir is not None:
-            receipt = _load_json_opt(work_dir / f"surface-{name}.json")
+        receipt = (touch_receipts or {}).get(name) or (_load_json_opt(work_dir / f"surface-{name}.json") if (touch_receipts is None and work_dir) else None)
         touch_z = receipt.get("surface_z") if (receipt and receipt.get("result") in (None, "touched") and receipt.get("surface_z") is not None) else None
         touch_diff_mm = round((float(touch_z) - float(surface_z)) * 1000.0, 1) if (touch_z is not None and surface_z is not None) else None
         if touch_diff_mm is not None and abs(touch_diff_mm) > 5.0:
@@ -485,32 +497,23 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
     if live_data:
         t = live_data.get("t")
         age_s = round(now - float(t), 2) if isinstance(t, (int, float)) else None
-        fk_report["age_s"] = age_s
-        fk_report["fresh"] = age_s is not None and age_s <= 2.0
+        fk_report.update({"age_s": age_s, "fresh": age_s is not None and age_s <= 2.0})
         state = live_data.get("state")
         if isinstance(state, list) and len(state) >= 5:
             plan = _load_json_opt(Path(config["plan_path"]).expanduser()) if config.get("plan_path") else None
             tcp_x_m = config.get("tcp_x_m") if config.get("tcp_x_m") is not None else (plan or {}).get("tcp_x_m")
+            max_reach = (config.get("calibrate") or {}).get("max_reach_m") or ((plan or {}).get("limits") or {}).get("max_reach_m")
             try:
                 x, y, z, yaw = cell_pivot.joints_tcp(state, tcp_x_m)
                 fk_report["tcp"] = {"x": round(float(x), 4), "y": round(float(y), 4), "z": round(float(z), 4), "yaw_deg": round(float(yaw), 1)}
-                max_reach = (config.get("calibrate") or {}).get("max_reach_m") or ((plan or {}).get("limits") or {}).get("max_reach_m")
-                if max_reach is not None:
-                    fk_report["within_reach"] = math.hypot(x, y) <= float(max_reach) + 1e-6
+                fk_report["within_reach"] = (math.hypot(x, y) <= float(max_reach) + 1e-6) if max_reach is not None else None
             except (Exception, SystemExit):
                 fk_report["tcp"] = None
 
     crit_tags = ("depth_diff_gt_6mm", "touch_diff_gt_5mm", "place_vs_start_step_gt_8mm", "stale_bias", "high_loo")
-    if any(any(tag in fl for tag in crit_tags) for fl in flags):
-        verdict = "fail"
-    elif flags or not sites_report:
-        verdict = "warn"
-    else:
-        verdict = "pass"
-
+    verdict = "fail" if any(any(tag in fl for tag in crit_tags) for fl in flags) else ("warn" if (flags or not sites_report) else "pass")
     return {
-        "schema": "rosy.omx-cell-depth-verify.v1",
-        "arm_id": config.get("arm_id"),
+        "schema": "rosy.omx-cell-depth-verify.v1", "arm_id": config.get("arm_id"),
         "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "verdict": verdict, "ok": verdict == "pass", "flags": flags,
         "camera_top": cam_report, "sites": sites_report, "live_fk": fk_report,
@@ -518,17 +521,22 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
 
 
 def _fetch_colour_frame(url: str):
-    import urllib.request
-    import cv2
+    import urllib.error, urllib.parse, urllib.request, cv2
 
-    with urllib.request.urlopen(url, timeout=2.0) as res:
-        arr = np.frombuffer(res.read(5 * 1024 * 1024), dtype=np.uint8)
-    return cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if urllib.parse.urlparse(url).scheme not in ("http", "https"):
+        return None
+    try:
+        with urllib.request.urlopen(url, timeout=2.0) as res:
+            arr = np.frombuffer(res.read(5 * 1024 * 1024), dtype=np.uint8)
+        return cv2.imdecode(arr, cv2.IMREAD_COLOR) if arr.size else None
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
 
 
 def _verify_main(argv: list[str]) -> int:
     import cv2
 
+    _, _, _, cell_pivot = _import_omx()
     ap = argparse.ArgumentParser(description="Verify calibrated sites against D435 depth, touch receipts, and live FK")
     ap.add_argument("--config", required=True, type=Path)
     ap.add_argument("--depth", type=Path, help="raw Z16, 640x480 mm")
@@ -537,21 +545,18 @@ def _verify_main(argv: list[str]) -> int:
     ap.add_argument("--write", action="store_true", help="write work_dir/depth-verify.json atomically")
     args = ap.parse_args(argv)
     config = json.loads(args.config.read_text(encoding="utf-8"))
-    cal = _load_json_opt(Path(config["calibration_path"]).expanduser()) if config.get("calibration_path") else None
-    bias_p = Path(config["calibration_path"]).expanduser().with_suffix(".bias.json") if config.get("calibration_path") else None
-    bias = _load_json_opt(bias_p)
+    cal_p = Path(config["calibration_path"]).expanduser() if config.get("calibration_path") else None
+    cal, bias = _load_json_opt(cal_p), (_load_json_opt(cell_pivot.bias_path(cal_p)) if cal_p else None)
     depth = np.fromfile(args.depth, np.uint16).reshape(480, 640) if args.depth else (capture_top_depth_z16() if args.capture else None)
     colour = cv2.imread(str(args.colour)) if args.colour else None
-    if colour is None and args.capture:
-        url = ((config.get("cameras") or {}).get("top") or {}).get("url")
-        if url:
-            colour = _fetch_colour_frame(url)
+    url = ((config.get("cameras") or {}).get("top") or {}).get("url")
+    if colour is None and args.capture and url:
+        colour = _fetch_colour_frame(url)
     report = verify_profile_depth(config, cal, bias, depth=depth, colour=colour)
     if args.write and config.get("work_dir"):
         work = Path(config["work_dir"]).expanduser()
         work.mkdir(parents=True, exist_ok=True)
-        out = work / "depth-verify.json"
-        tmp = work / "depth-verify.tmp"
+        tmp, out = work / "depth-verify.tmp", work / "depth-verify.json"
         tmp.write_text(json.dumps(report, indent=1), encoding="utf-8")
         tmp.replace(out)
     print(json.dumps(report, indent=1))
