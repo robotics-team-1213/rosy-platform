@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1034 | 원격·분리 제어 유닛의 중앙 Rosy Account 연동, 터널 브리지, 기계 토큰 분리 및 공용 브라우저 세션. [전문](../adr/D-1034-paired-control-unit-central-account-wiring.md) | Accepted (2026-11-15, 사용자 결정; `cell-a`↔`rosy-fleet-r` 실물 연동 검증·`shared/web` 통합 반영, 서명 compose 템플릿·R 이미지 갱신 별도) |
 | D-990 | Monitoring 화면의 Rosy Account 로그인. [전문](../adr/D-990-monitoring-account-receiver.md) | Accepted (2026-11-07, 사용자 지시; Account client 등록·배포·현장 수용 별도) |
 | D-992 | 장비 등록과 Rosy Account 연동. [전문](../adr/D-992-device-enrollment-account-link.md) | Accepted (2026-11-07, 사용자 지시; 현장 활성화·실물 수용 별도) |
 | D-996 | 셀 사실은 항만 사건 4개로만 Harbor에 가고, 화물 신원은 판독값으로만 맞춘다 — S load는 Fleet ARM_TRANSFER 제안, container_tag 100~199, R relay는 직계 셀만. [전문](../adr/D-996-harbor-port-events-and-intake-identity.md) | Proposed (2026-11-08, 사용자 결정 D1~D7; 시뮬레이션 프로필 구현, 실물·마커 판독률 수용 전) |
