@@ -305,21 +305,14 @@ def run_auto(
             accepted = (moved["result"] == "placed" and tried["verify"].get("verified") is True
                         and tried["verify"].get("inside") is True)
             if target["offset"] is not None and (accepted or moved["result"] in ("empty", "contact", "reinserted")):
-                choices.outcome(
-                    CLOSING,
-                    target["offset"],
-                    accepted,
-                    f"{moved['result']} at yaw {target['pick']['yaw_deg']}",
-                )
+                choices.outcome(CLOSING, target["offset"], accepted,
+                                f"{moved['result']} at yaw {target['pick']['yaw_deg']}")
                 choices.save()
             if accepted or moved["result"] in ("empty", "contact", "reinserted"):
                 cell_carry_choices.outcome(choices, carry, accepted)
             close_episode(
-                cell,
-                episode,
-                accepted,
-                f"{moved['result']} at {moved.get('at')}"
-                if moved["result"] != "placed"
+                cell, episode, accepted,
+                f"{moved['result']} at {moved.get('at')}" if moved["result"] != "placed"
                 else "placed but not seen at the destination",
             )
             episode = None
@@ -379,18 +372,9 @@ def main(argv=None):
         print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))
         return 1
     result = run_auto(
-        cell,
-        config,
-        cell_pivot.with_site_maps(config, cal.load(calibration_path)),
-        calibration_path,
-        cell_objects.load_catalog(args.catalog),
-        args.roi,
-        args.source,
-        args.dest,
-        work,
-        cell_choices.Choices(work / "choices.json"),
-        args.dry_run,
-        scenario_id=args.scenario_id,
+        cell, config, cell_pivot.with_site_maps(config, cal.load(calibration_path)), calibration_path,
+        cell_objects.load_catalog(args.catalog), args.roi, args.source, args.dest, work,
+        cell_choices.Choices(work / "choices.json"), args.dry_run, scenario_id=args.scenario_id,
     )
     print(json.dumps(result, indent=1, default=str))
     return 0 if result["result"] in ("placed", "planned") else 1
