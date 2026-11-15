@@ -30,7 +30,8 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             tcp = tcp_position(i)
             if np.linalg.norm(tcp-np.array(sample['position'])) < .04:
                 return False
-        return sample['lifted'] and stable_box(sample['body'], index)
+        return sample['lifted'] and stable_box(sample['body'], index,
+            cube='pickup_center_m' in fixture, fixture=fixture)
 
     class StackingEnv:
         # shortcut: one CPU-facing SDK world, use Isaac Lab vector scenes when measured rollout throughput is limiting.
@@ -75,9 +76,14 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             return self.get_observations()
 
         def activate(self):
-            jitter = self.rng.uniform(-.003, .003, 2)
-            yaw = self.rng.uniform(-.03, .03)
-            cargo[self.index].set_world_pose(np.array([(.16 if mapped else .20)+jitter[0], -.09+jitter[1], BELT_TOP+.015+.001]),
+            jitter_xy = fixture.get('infeed_jitter_xy_m', [.003, .003])
+            jitter = self.rng.uniform(-1., 1., 2)*jitter_xy
+            yaw = self.rng.uniform(-fixture.get('infeed_yaw_jitter_rad', .03),
+                                   fixture.get('infeed_yaw_jitter_rad', .03))
+            source = fixture.get('pickup_center_m', [(.16 if mapped else .20), -.09, BELT_TOP+.016])
+            pose = [source[0]+jitter[0], source[1]+jitter[1], source[2]]
+            self.source_z = pose[2]
+            cargo[self.index].set_world_pose(np.array(pose),
                 np.array([math.cos(yaw/2), 0., 0., math.sin(yaw/2)]))
             cargo[self.index].set_linear_velocity(np.zeros(3))
             cargo[self.index].set_angular_velocity(np.zeros(3))
@@ -149,7 +155,7 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             self.transitions += 1
             self.episode_length_buf += 1
             p, sample, force = self.measured(self.index)
-            self.lifted |= (free_lift(sample['body'], active, BELT_TOP+.015) if mapped else
+            self.lifted |= (free_lift(sample['body'], active, self.source_z) if mapped else
                 bool(p[2] > BELT_TOP+.015+.02 and np.all(force[2*active:2*active+2] > .005)))
             sample['lifted'] = self.lifted
             good = accepted(self.index, sample)

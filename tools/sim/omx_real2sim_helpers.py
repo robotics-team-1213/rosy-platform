@@ -226,6 +226,25 @@ def measure_temp_plates(frame, layout, prev=None):
     return dict(plates=plates, shape=shape, camera_check=scale)
 
 
+def unseated_containers(frame, layout, plates, yaw_tol_deg=4., off_tol_m=.008, near_m=.06):
+    """Containers on a temp plate that do not sit in a lane: turned or shifted past the plate fit's own tolerance (fit_plate
+    leaves such a container out, so its lane comes from the pads). Returns dict(plate, lane, off_mm, turn_deg) per container."""
+    lanes = [(t, l) for t, p in plates["plates"].items() for l in p.get("lanes", [])]
+    cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
+    out = []
+    for b in lane_blobs(frame, cam, layout.deck_z, sites.CONTAINER[layout.choices["ship_source"]][2]):
+        if b["kind"] != "container" or not lanes:
+            continue
+        t, lane = min(lanes, key=lambda tl: math.dist(tl[1]["xy"], b["xy"]))
+        v = (math.cos(math.radians(lane["yaw_deg"])), math.sin(math.radians(lane["yaw_deg"])))
+        d = np.subtract(b["xy"], lane["xy"])
+        off = abs(d[1] * v[0] - d[0] * v[1]) if b["partial"] else float(np.hypot(*d))  # a partial blob's along-lane centre is unknown
+        turn_deg = abs((math.degrees(fold(b["yaw"])) - lane["yaw_deg"] + 90) % 180 - 90)
+        if np.hypot(*d) < near_m and (turn_deg > yaw_tol_deg or off > off_tol_m):
+            out.append(dict(plate=t, lane=lane["lane"], off_mm=round(off * 1000, 1), turn_deg=round(turn_deg, 1)))
+    return out
+
+
 @functools.lru_cache(maxsize=1)
 def hull_outline():
     """Plan-view outline (ship mm, x stern to bow, y to port) and deck height (mm) of the r08 hull mesh."""

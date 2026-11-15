@@ -283,3 +283,141 @@ def test_the_halves_of_a_split_get_distinct_build_stamps(tmp_path, monkeypatch):
     stamps = land_rollup.split(tmp_path, "land-r", NOW, builder=lambda repo, half, now: f"{now:%Y%m%d%H%M%S}",
                                resumer=lambda m: None)
     assert len(stamps) == 2 and stamps[0] != stamps[1]
+
+
+def test_remote_runs_extracts_and_deduplicates_from_log_and_resume_log(tmp_path):
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    (holder / "land-fix-a.log").write_text(
+        "[remote-pytest] deadbeef12 on model-pc (~/rosy-test/runs/land-1-aaa111)\n"
+        "[remote-pytest] bad line without path\n"
+        "[remote-pytest] deadbeef12 on ai-pc (~/rosy-test/runs/land-1-bbb222)\n",
+        encoding="utf-8",
+    )
+    (holder / "land-fix-a.resume.log").write_text(
+        "[remote-pytest] deadbeef12 on model-pc (~/rosy-test/runs/land-1-aaa111)\n"
+        "[remote-pytest] cafe567890 on model-pc (~/rosy-test/runs/land-2-ccc333)\n",
+        encoding="utf-8",
+    )
+    rollup_name = "land/fix/land-rollup-20261109000000-20261109000000"
+    (holder / (rollup_name.replace("/", "-") + ".log")).write_text(
+        "[remote-pytest] 0123456789 on rosy@ai-pc (~/rosy-test/runs/land-1-ddd444)\n"
+        "[remote-pytest] 0123456789 on rosy@ai-pc (~/rosy-test/runs/land-1-ddd444)\n",
+        encoding="utf-8",
+    )
+    rows = [
+        {"branch": "land/fix/a", "worktree": str(holder / "land-fix-a")},
+        {"branch": "land/fix/b", "worktree": str(holder / "land-fix-b"), "rollup": rollup_name},
+        {"branch": "land/fix/c", "worktree": str(holder / "land-fix-c"), "rollup": rollup_name},
+        {"branch": "land/fix/missing", "worktree": str(holder / "land-fix-missing")},
+    ]
+    assert land_rollup.remote_runs(holder, rows) == [
+        ("model-pc", "land-1-aaa111"),
+        ("ai-pc", "land-1-bbb222"),
+        ("model-pc", "land-2-ccc333"),
+        ("rosy@ai-pc", "land-1-ddd444"),
+    ]
+
+
+def test_stop_remote_invokes_ssh_and_survives_unreachable_hosts(tmp_path, monkeypatch):
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    (holder / "land-fix-a.log").write_text(
+        "[remote-pytest] deadbeef12 on dead-host (~/rosy-test/runs/land-1-111111)\n"
+        "[remote-pytest] deadbeef12 on err-host (~/rosy-test/runs/land-1-222222)\n"
+        "[remote-pytest] deadbeef12 on live-host (~/rosy-test/runs/land-1-333333)\n",
+        encoding="utf-8",
+    )
+    rows = [{"branch": "land/fix/a", "worktree": str(holder / "land-fix-a")}]
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append((cmd, kw))
+        host = cmd[-5]  # [ssh, -o..., host, bash, -s, --, run_name]
+        if host == "dead-host":
+            raise subprocess.TimeoutExpired(cmd, 10)
+        if host == "err-host":
+            raise OSError("ssh unavailable")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(land_rollup.subprocess, "run", fake_run)
+    assert land_rollup.stop_remote(holder, rows) == 1
+    assert [c[0][-5] for c in calls] == ["dead-host", "err-host", "live-host"]
+    assert [c[0][-1] for c in calls] == ["land-1-111111", "land-1-222222", "land-1-333333"]
+    cmd, kw = calls[2]
+    assert cmd[:9] == ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                       "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2"]
+    assert cmd[10:] == ["bash", "-s", "--", "land-1-333333"]
+    assert kw["timeout"] == 10
+    script = kw["input"].decode("utf-8")
+    assert "\r" not in script  # Windows text=True would turn \n into \r\n and break remote bash
+    assert '[ -d ~/rosy-test/runs/"$1".jobs ] || exit 0' in script
+    assert 'kill -TERM -- "-$p"' in script
+    for pat in ('~/rosy-jobs/"$1".lock', '~/rosy-jobs/"$1".*.lock', '~/rosy-jobs/"$1".resv'):
+        assert pat in script
+
+
+def test_roll_calls_stop_remote_only_for_stopped_members(repo, monkeypatch):
+    main, snapshot = repo
+    holder = land_rollup.land_async.holder(main)
+    a, b = snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"})
+    old = snapshot("fix/land-rollup-20261109000000-20261109000000", {"pkg/r.py": "r = 1\n"})
+    old.update(status="preparing", full_wait=True, ticket="t-old", pid=7)
+    (holder / (old["branch"].replace("/", "-") + ".members")).write_text(json.dumps(
+        [{"branch": m["branch"], "worktree": m["worktree"], "ticket": "gone"} for m in (a, b)]))
+    (holder / (old["branch"].replace("/", "-") + ".log")).write_text(
+        "[remote-pytest] deadbeef12 on model-pc (~/rosy-test/runs/land-1-old111)\n", encoding="utf-8")
+    new = {**snapshot("fix/c", {"pkg/c.py": "z = 2\n"}), "status": "preparing", "full_wait": True,
+           "ticket": "t-new", "pid": 8}
+    (holder / (Path(new["worktree"]).name + ".log")).write_text(
+        "[remote-pytest] cafe123456 on ai-pc (~/rosy-test/runs/land-1-new222)\n", encoding="utf-8")
+
+    stopped, ssh_runs, events = [], [], []
+    real_run = subprocess.run
+
+    def fake_run(cmd, *args, **kw):
+        if cmd and cmd[0] == "ssh":
+            ssh_runs.append((cmd[-5], cmd[-1]))
+            events.append("ssh")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return real_run(cmd, *args, **kw)
+
+    def fake_stop(pid):
+        stopped.append(pid)
+        events.append("stop")
+
+    monkeypatch.setattr(land_rollup.subprocess, "run", fake_run)
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    monkeypatch.setattr(land_rollup, "plan", lambda repo_, rows, tier_of=None: rows)
+    monkeypatch.setattr(land_rollup, "adopted", lambda qdir, first: True)
+    monkeypatch.setattr(land_rollup, "stop", fake_stop)
+    monkeypatch.setattr(land_rollup.land_queue, "ahead", lambda qdir, t: [old, new])
+
+    # Partial merge: b clashed, so old keeps landing b and only new is stopped.
+    monkeypatch.setattr(land_rollup, "build", lambda repo_, members, now, urgent="": (
+        "land/fix/land-rollup-y", [m for m in members if m["branch"] != "land/fix/b"]))
+    assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
+    assert stopped == [8]
+    assert ssh_runs == [("ai-pc", "land-1-new222")]
+    assert events == ["ssh", "stop"]
+
+    # Full merge: both old and new are stopped, and old's remote run is stopped once before stop(pid).
+    stopped.clear()
+    ssh_runs.clear()
+    events.clear()
+    monkeypatch.setattr(land_rollup, "build", lambda repo_, members, now, urgent="": (
+        "land/fix/land-rollup-x", members))
+    assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
+    assert sorted(stopped) == [7, 8]
+    assert ssh_runs == [("model-pc", "land-1-old111"), ("ai-pc", "land-1-new222")]
+    assert events == ["ssh", "ssh", "stop", "stop"]
+
+    # Unreachable SSH host never breaks roll().
+    def failing_run(cmd, *args, **kw):
+        if cmd and cmd[0] == "ssh":
+            raise subprocess.TimeoutExpired(cmd, 10)
+        return real_run(cmd, *args, **kw)
+
+    monkeypatch.setattr(land_rollup.subprocess, "run", failing_run)
+    assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
+

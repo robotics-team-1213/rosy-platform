@@ -35,7 +35,8 @@ from chunk_runner_guards import (  # noqa: E402, F401
 )
 from chunk_runner_trace import trace_receipt  # noqa: E402
 from chunk_runner_settle import (  # noqa: E402, F401
-    IDLE_PARK_S, IDLE_RETRY_S, IDLE_STOP_S, SETTLE_S, check_chunk_settled, check_runner_idle,
+    IDLE_PARK_S, IDLE_RETRY_S, IDLE_STOP_S, SETTLE_S,
+    check_chunk_settled, check_runner_idle, tick_or_report, wait_aligned_before_start,
 )
 from episode_recorder import Recorder  # noqa: E402
 import joint_jitter  # noqa: E402
@@ -346,8 +347,9 @@ class Runner:
     def run(self, lines) -> None:
         """`lines()` returns the commands that arrived since the last call."""
         self.target = self.present()
-        self.report(command="start", ok=True, present=self.target)
         period = 1.0 / self.fps
+        if not wait_aligned_before_start(self, lines, period):
+            return
         self.last_input = self.clock()
         while True:
             started = self.clock()
@@ -367,18 +369,7 @@ class Runner:
                     return
             if self.pending and not getattr(self, "_stop_after_park", None) and not self.command(self.pending.pop(0)):
                 return
-            try:
-                self.tick()
-            except Exception as error:
-                self.status(
-                    {
-                        "command": f"run {self.chunk}" if self.chunk else "tick",
-                        "ok": False,
-                        "fault": f"session ended: {type(error).__name__}: {error}"[:1000],
-                        "t": round(time.time(), 3),
-                    }
-                )
-                raise
+            tick_or_report(self, f"run {self.chunk}" if self.chunk else "tick")
             if getattr(self, "_stopped", False) or self.idle():
                 return
             if self.live and self.ticks % max(1, self.fps // 10) == 0:

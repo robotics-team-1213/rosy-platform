@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import time
 
 _HERE = str(Path(__file__).resolve().parent)
 if _HERE not in sys.path:
@@ -143,3 +144,53 @@ def check_runner_idle(runner, cr_attr) -> bool:
         )
         return True
     return False
+
+
+def tick_or_report(runner, command_label: str) -> None:
+    """Run one control tick, emitting a structured terminal fault status if it raises."""
+    try:
+        runner.tick()
+    except Exception as error:
+        runner.status(
+            {
+                "command": command_label,
+                "ok": False,
+                "fault": f"session ended: {type(error).__name__}: {error}"[:1000],
+                "t": round(time.time(), 3),
+            }
+        )
+        raise
+
+
+def wait_aligned_before_start(runner, lines, period: float) -> bool:
+    """Wait for the guard's stationary initial alignment before admitting chunks; False stops early."""
+    motion = getattr(runner.robot, "motion", None)
+    while motion is not None and not getattr(motion, "tracking", True):
+        started = runner.clock()
+        arrived = lines()
+        if arrived:
+            runner.pending += arrived
+            if "human-hold" in runner.pending:
+                runner.pending.clear()
+                runner.command("human-hold")
+            stop = next(
+                (i for i, cmd in enumerate(runner.pending) if cmd.strip() in ("stop", "stop now", "stop fold")),
+                None,
+            )
+            if stop is not None and all(cmd.strip() == "state" for cmd in runner.pending[:stop]):
+                for cmd in runner.pending[:stop]:
+                    runner.command(cmd)
+                runner.report(command=runner.pending[stop], ok=True, present=runner.target)
+                return False
+        tick_or_report(runner, "start")
+        if runner.human_hold_latched or runner.fault or getattr(motion, "held", None):
+            runner.report(
+                command="start",
+                ok=False,
+                error=runner.fault or ("human hold latched" if runner.human_hold_latched else "guard hold active"),
+                present=runner.target,
+            )
+            return True
+        runner.sleep(max(0.0, period - (runner.clock() - started)))
+    runner.report(command="start", ok=True, present=runner.target)
+    return True
