@@ -209,7 +209,7 @@ def build_cross_verify(sites_out: dict[str, dict[str, Any]], depth_verify: dict 
     sub = (depth_v, touch_v, map_v)
     drift_alarm = bool((drift or {}).get("alarmed_sites"))
     overall = "fail" if ("fail" in sub or bias_v == "fail") else ("warn" if ("warn" in (*sub, bias_v) or drift_alarm) else ("pass" if (any_depth or touch_count) else "unmeasured"))
-    eval_v = "hold" if overall == "fail" else ("advisory" if (overall == "warn" or drift_alarm or bias_sig_warn or bias_v == "unmeasured") else ("unknown" if overall == "unmeasured" else "pass"))
+    eval_v = "hold" if overall == "fail" else ("unknown" if overall == "unmeasured" else ("advisory" if (overall == "warn" or drift_alarm or bias_sig_warn or bias_v == "unmeasured") else "pass"))
     cam_top = dict((depth_verify or {}).get("camera_top") or {})
     return {
         "schema": SCHEMA, "present": bool(depth_verify or touch_count or (depth_verify or {}).get("sites")),

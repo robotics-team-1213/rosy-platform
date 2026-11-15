@@ -39,10 +39,11 @@ def test_learn_bias_preserves_pivot_circle_writes_map_sha_and_logs_rejected(tmp_
 
     # Out-of-window innovation is refused from bias.json, yet raw observation still hits cal-monitor.jsonl.
     rej = cca.learn_bias(cfg, cal_path, "pinky", [0.101, 0.201], {"found": True, "seen_bias_mm": [18.0, 0.0], "used_bias_mm": [2.0, -1.0]}, calibration=cal_data)
-    assert rej is None
-    rows = cell_cal_monitor.load_observations(cell_cal_monitor.monitor_path(cfg))
-    assert len(rows) == 2 and rows[-1]["accepted"] is False and rows[-1]["reason"] == "exceeds_bias_learn_max_mm"
-    assert rows[-1]["raw_mm"] == [18.0, 0.0]
+    huge = cca.learn_bias(cfg, cal_path, "pinky", [0.101, 0.201], {"found": True, "seen_bias_mm": [80.0, 0.0], "used_bias_mm": [2.0, -1.0]}, calibration=cal_data)
+    assert rej is None and huge is None
+    assert cpb.bias_at(cpb.load_bias(cpb.bias_path(cal_path)), "pinky", [0.101, 0.201], pivot_only=True)["radius_mm"] == 12.0
+    rows = cell_cal_monitor.load_observations(cell_cal_monitor.monitor_path(cfg), arm_id="arm_b")
+    assert len(rows) == 3 and rows[-2]["reason"] == "exceeds_bias_learn_max_mm" and rows[-1]["reason"] == "exceeds_max_bias"
 
 
 def test_map_fit_repair_and_projective_predict_sigma(monkeypatch):
@@ -98,10 +99,15 @@ def test_circle_center_sigma_and_monitor_common_vs_local_and_sha_reset(tmp_path)
     common = cell_cal_monitor.summarize(cfg, cal_data)
     assert common["pattern"] == "common" and common["suggested_advisory"] == ["remap"]
 
-    # Shared map_sha across tier-aliased sites must not falsely trigger common-mode remap
+    # Shared map_sha across distinct real sites must trigger common-mode remap, while map_from/tier_of aliases must not
     shared_cal = {"sites": {"site_a": rec_a, "site_b": rec_a}}
-    shared = cell_cal_monitor.summarize(cfg, shared_cal)
-    assert shared["pattern"] != "common"
+    cfg_alias = {**cfg, "sites": {"site_a": {}, "site_b": {"map_from": "site_a"}}}
+    for _ in range(15):
+        cell_cal_monitor.record_observation(cfg, site="site_b", map_sha=sha_a, source="place_look", raw_mm=[1.0, 0.0], residual_mm=[0.4, -0.2], sigma_mm=3.0)
+    for _ in range(8):
+        cell_cal_monitor.record_observation(cfg, site="site_b", map_sha=sha_a, source="place_look", raw_mm=[12.0, 1.0], residual_mm=[9.0, 0.5], sigma_mm=3.0)
+    assert cell_cal_monitor.summarize(cfg, shared_cal)["pattern"] == "common"
+    assert cell_cal_monitor.summarize(cfg_alias, shared_cal)["pattern"] != "common"
 
     # Mixed look (1D mark_sigma=3.0) + place_look (1D hypot=4.24) baseline must NOT falsely NIS-alarm
     mixed_ok = cell_cal_monitor.evaluate_site_series([

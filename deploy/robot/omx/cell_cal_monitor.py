@@ -79,19 +79,23 @@ def record_observation(
     return entry
 
 
-def load_observations(path: Path | None, *, arm_id: str | None = None) -> list[dict[str, Any]]:
+def load_observations(path: Path | None, *, arm_id: str | None = None, tail: int = 2000) -> list[dict[str, Any]]:
     if path is None or not path.is_file():
         return []
     rows: list[dict[str, Any]] = []
     try:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            if isinstance(row, dict) and (arm_id is None or row.get("arm_id") in (None, arm_id)):
-                rows.append(row)
-    except (OSError, ValueError):
+        lines = path.read_text(encoding="utf-8").splitlines()[-tail:]
+    except OSError:
         return rows
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict) and (arm_id is None or row.get("arm_id") == arm_id):
+            rows.append(row)
     return rows
 
 
@@ -151,7 +155,9 @@ def evaluate_site_series(rows: list[dict[str, Any]], params=None) -> dict[str, A
         sig_1d = max(1.0, float(r.get("sigma_mm") or 3.0))
         nis_vals.append((float(res[0]) ** 2 + float(res[1]) ** 2) / (sig_1d * sig_1d))
     latest_nis = round(nis_vals[-1], 2) if nis_vals else None
-    nis_alarm = (latest_nis is not None and latest_nis > nis_limit) or (len(nis_vals) >= 3 and (sum(nis_vals[-3:]) / 3.0) > nis_limit)
+    nis_alarm = (len(nis_vals) >= 3 and (sum(nis_vals[-3:]) / 3.0) > nis_limit) or (
+        latest_nis is not None and latest_nis > 2.0 * nis_limit
+    )
 
     raw_pts = [_finite2(r.get("raw_mm")) for r in rows]
     e = np.array([p for p in raw_pts if p is not None], float).reshape(-1, 2)
@@ -175,7 +181,7 @@ def evaluate_site_series(rows: list[dict[str, Any]], params=None) -> dict[str, A
             res_med = np.median(res_pts, axis=0)
             pivot_disagrees = float(np.hypot(*res_med)) / (sig_1d / math.sqrt(min_n)) > 3.0
 
-    rejected = sum(1 for r in rows if not r.get("accepted", True))
+    rejected = sum(1 for r in rows[-10:] if not r.get("accepted", True))
     alarm = nis_alarm or cusum_alarm or rejected >= 2
     status = "advisory" if (alarm or pivot_disagrees) else ("pass" if len(e) >= min_n else "unknown")
     return {
@@ -208,8 +214,8 @@ def summarize(config: dict, calibration: dict | None, *, rows: list[dict] | None
         if res["status"] == "advisory":
             alarmed_sites.append(name)
             vec = res.get("shift_mm") if res.get("cusum_alarm") else None
-            if vec is not None:
-                key = sha or (spec or {}).get("map_from") or name
+            if vec is not None and not (spec or {}).get("tier_of") and not (spec or {}).get("map_from"):
+                key = f"{sha}:{name}"
                 group_vecs[key] = np.asarray(vec, float)
 
     vecs = list(group_vecs.values())

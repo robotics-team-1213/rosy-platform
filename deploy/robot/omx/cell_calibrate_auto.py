@@ -192,11 +192,6 @@ def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict
     if not prm.get(p, "auto.bias_from_place") or not verify.get("found") or "seen_bias_mm" not in verify:
         return None
     seen, used = verify["seen_bias_mm"], verify["used_bias_mm"]
-    try:
-        for value in (seen, used):
-            cell_pivot.validate_bias({"point_m": place_xy, "bias_mm": value}, p)
-    except ValueError:
-        return None
     cal_data = calibration
     if cal_data is None and calibration_path:
         try:
@@ -209,14 +204,21 @@ def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict
         float(prm.get(p, "verify.mark_sigma_mm")),
         float(prm.get(p, "verify.place_sigma_mm")),
     )
-    resid = [float(seen[0]) - float(used[0]), float(seen[1]) - float(used[1])]
-    within = math.dist(seen, used) <= prm.get(p, "auto.bias_learn_max_mm")
+    valid = True
+    try:
+        for value in (seen, used):
+            cell_pivot.validate_bias({"point_m": place_xy, "bias_mm": value}, p)
+    except ValueError:
+        valid = False
+    resid = ([float(seen[0]) - float(used[0]), float(seen[1]) - float(used[1])]
+             if isinstance(seen, (list, tuple)) and isinstance(used, (list, tuple)) and len(seen) >= 2 and len(used) >= 2 else None)
+    within = valid and math.dist(seen, used) <= prm.get(p, "auto.bias_learn_max_mm")
     need_sha = record is not None
-    ok = within and (not need_sha or map_sha is not None)
+    ok = valid and within and (not need_sha or map_sha is not None)
     cell_cal_monitor.record_observation(
         config, site=site, map_sha=map_sha, source="place_look", raw_mm=seen, residual_mm=resid,
         sigma_mm=sigma_mm, accepted=ok,
-        reason=None if ok else ("missing_map_sha" if (need_sha and map_sha is None) else "exceeds_bias_learn_max_mm"),
+        reason=None if ok else ("exceeds_max_bias" if not valid else ("missing_map_sha" if (need_sha and map_sha is None) else "exceeds_bias_learn_max_mm")),
     )
     if not ok:
         return None

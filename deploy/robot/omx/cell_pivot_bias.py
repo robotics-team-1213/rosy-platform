@@ -104,10 +104,11 @@ def save_bias(path, bias: dict, params=None) -> None:
     _BIAS_CACHE.clear()
 
 
-def bias_at(data: dict, site: str, point_m, reach_mm: float | None = None, params=None):
+def bias_at(data: dict, site: str, point_m, reach_mm: float | None = None, params=None, *, pivot_only: bool = False):
     """The nearest region's bias (dx, dy mm) within reach of the point (ties prefer pivot circles), else None."""
     reach_mm = prm.get(params, "pivot.bias_reach_mm", BIAS_REACH_MM) if reach_mm is None else reach_mm
     for region in data["regions"]:
         validate_bias(region, params)
-    near = [r for r in data["regions"] if r["site"] == site and 1000 * math.dist(r["point_m"], point_m) <= reach_mm]
+    near = [r for r in data["regions"]
+            if r["site"] == site and (not pivot_only or "radius_mm" in r) and 1000 * math.dist(r["point_m"], point_m) <= reach_mm]
     return min(near, key=lambda r: (round(math.dist(r["point_m"], point_m), 4), 0 if is_pivot_region(r) else 1), default=None)
