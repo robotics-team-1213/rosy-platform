@@ -65,7 +65,10 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         state, commanded = status.get("state"), status.get("target")
         if state is None or commanded is None:
             return out("refuse", why="no arm state")
-        tcp_kw = {"tcp_x_m": config["tcp_x_m"]} if config.get("tcp_x_m") is not None else {}
+        import omx_tcp
+
+        tcp_x_m = omx_tcp.config_tcp(config)
+        tcp_kw = {"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}
         x, y, z, yaw = cell_pivot.joints_tcp(state, **tcp_kw)
         bias = region.get("bias_mm", [0.0, 0.0])
         expected = []
@@ -80,6 +83,15 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
             return out("refuse", why="jaw mark not seen near where the jaws should be")
         k = min(range(len(fingers)), key=lambda j: math.dist(pixel, expected[j]))
         tcp = tcp_from_mark(cell_pivot.mark_to_arm(record, config, site, pixel, z), yaw, fingers[k])
+        import cell_attempts
+        import cell_cal_monitor
+
+        raw_bias = [1000.0 * (tcp[0] - x), 1000.0 * (tcp[1] - y)]
+        resid_bias = [raw_bias[0] - bias[0], raw_bias[1] - bias[1]]
+        cell_cal_monitor.record_observation(
+            config, site=site, map_sha=cell_attempts.digest(record), source="look",
+            raw_mm=raw_bias, residual_mm=resid_bias, sigma_mm=float(prm.get(params, "verify.mark_sigma_mm")),
+        )
         d = (box[0] - tcp[0], box[1] - tcp[1])
         off = 1000 * math.hypot(*d)
         row = {"look": i, "mark_px": [round(v, 1) for v in pixel], "finger": k, "fk_m": [round(x, 4), round(y, 4)],
