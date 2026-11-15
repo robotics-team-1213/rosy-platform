@@ -176,6 +176,8 @@ def test_allowed_types_and_sim_probe_refuse_unlisted_policies():
     assert runner.CoreArmTarget(sim_client(), policy_type='smolvla').policy_type == 'smolvla'
     assert runner.CoreArmTarget(sim_client(), policy_type='smolvla', sim_probe=True).policy_type == 'smolvla'
     with pytest.raises(PermissionError):
+        runner.CoreArmTarget(sim_client(simulation=False), policy_type='smolvla', sim_probe=True)
+    with pytest.raises(PermissionError):
         runner.CoreArmTarget(sim_client(), policy_type='diffusion', sim_probe=True)
 
 

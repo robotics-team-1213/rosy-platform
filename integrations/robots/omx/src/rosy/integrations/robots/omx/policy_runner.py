@@ -175,11 +175,13 @@ class CoreArmTarget:
         import numpy as np
         if not client.is_connected:
             raise ValueError('connect the CORE client first')
-        # Execution allows only ALLOWED_POLICY_TYPES. The D-866 P0 probe may send a bench type to a CORE that
+        # Execution allows only ALLOWED_POLICY_TYPES. A SIM probe (D-866 P0) must only drive a CORE that
         # reports simulation; the owner session still enforces its own SIM-only install (D-800).
-        if not (policy_type in ALLOWED_POLICY_TYPES
-                or (sim_probe is True and policy_type in SIM_PROBE_POLICY_TYPES
-                    and client.info.get('simulation') is True)):
+        if sim_probe is True:
+            allowed = policy_type in SIM_PROBE_POLICY_TYPES and client.info.get('simulation') is True
+        else:
+            allowed = policy_type in ALLOWED_POLICY_TYPES
+        if not allowed:
             raise PermissionError(f'policy type {policy_type} may not drive this CORE')
         self.policy_type = policy_type
         self.client, self._np, self.joint_names = client, np, list(client.info['joint_names'])
