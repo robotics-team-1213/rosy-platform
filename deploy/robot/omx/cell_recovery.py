@@ -64,26 +64,48 @@ def unsolved(choices) -> dict:
             for c in values if c["value"] == "ask_person" and c["tries"]}
 
 
+def moving_rects(config: dict) -> list:
+    """The belt's top-view rects ([x0, y0, x1, y1]): its `moving_px` when set, else its ROI and its surface's bounds. It runs
+    all the time, so its change is never a moved pile (2026-11-14 arm_s: the belt blob reached past its ROI, up to the
+    frame's top; the surface polygon had been clipped at the frame's edge before the camera moved, and a box on the belt
+    stands taller than the surface it rides on)."""
+    site = (config.get("sites") or {}).get("belt") or {}
+    if site.get("moving_px"):
+        return [site["moving_px"]]
+    rects = [site["auto_roi"]] if site.get("auto_roi") else []
+    if site.get("surface_px"):
+        xs, ys = [p[0] for p in site["surface_px"]], [p[1] for p in site["surface_px"]]
+        rects.append([min(xs), min(ys), max(xs), max(ys)])
+    return rects
+
+
 def at_home(state, home: list, tolerance: float = 2.0) -> bool:
     """The body joints are folded; the jaws do not count. No reading is not home."""
     return bool(state) and max(abs(a - b) for a, b in zip(state[:5], home[:5])) <= tolerance
 
 
 def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS, choices=None, explain=None, slow=None, folded=None,
-          observe=None) -> dict:
+          observe=None, camera=None, ignore=()) -> dict:
     """pick() -> run_auto's result; push(cause, attempt) -> whether it moved the arm; expected_px(attempt) -> pixels of the
     pick and the place; frame() -> the top view with the arm folded. An action earns its record from the next attempt: only a
     placed box counts as working, and `choices` then ranks the actions next time. explain(cause, out) -> cell_why's row: what it
     measured orders the actions, and a cause unknown again goes to a person. slow() -> lowered the lift speed, or at the floor.
     folded() -> the arm came home: a fold can fail after a stop, and no retry starts from there. observe() -> a site camera's
-    frame of a failure (cell_site_camera): kept on the row as evidence, never read by the choice of action."""
+    frame of a failure (cell_site_camera): kept on the row as evidence, never read by the choice of action. camera(frame) ->
+    the top camera's shift when it moved off the map's reference, else None: checked before every pick, no motion on a stale
+    map. ignore: rects that always change (the belt), left out of both scene checks."""
     tried, rows, pending = {}, [], None
     try:
         for _ in range(rounds):
             before = frame()
+            shift = camera(before) if camera else None
+            if shift:
+                rows.append({"result": "camera moved", "cause": "camera_moved", "camera_shift": shift, "action": "ask_person"})
+                emit("recovery", rows[-1], cell_diagnose.RECOVERY["camera_moved"], "ask_person", "rule", "camera moved")
+                return {"result": "ask a person: camera_moved", "rounds": rows, "ask": cell_diagnose.ASK["camera_moved"]}
             out = pick()
             attempt = (out.get("attempts") or [{}])[-1]
-            moved = away_from(scene_moved(before, frame()), expected_px(attempt))
+            moved = away_from(scene_moved(before, frame(), ignore), expected_px(attempt))
             cause = cell_diagnose.attempt_cause(out["result"], bool(moved))
             if pending:
                 learned(choices, *pending, cause == "placed", out["result"])
@@ -98,7 +120,7 @@ def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS,
                 action = "ask_person"
             if action == "push_clear":
                 before = frame()
-                if not push(cause, attempt) or not scene_moved(before, frame()):
+                if not push(cause, attempt) or not scene_moved(before, frame(), ignore):
                     learned(choices, cause, action, False, "the push changed nothing in the top view")
                     action = "ask_person"
             if action == "ask_person":
@@ -175,10 +197,22 @@ def main(argv=None) -> int:
         config["plan"]["lift_guard_frac"] = slower
         return True
 
-    camera = config.get("evidence_camera")
-    observe = (lambda: cell_site_camera.fleet_frame(camera, work / "evidence")) if camera else None
+    import cell_calibrate
+
+    if not (config.get("preflight") or {}).get("reference_top"):
+        ap.error("no preflight.reference_top: recovery cannot tell a moved top camera, so it does not move the arm")
+
+    def moved_camera(frame):
+        found = cell_calibrate.check(config, calibration, [], frame, config.get("params"))
+        if found.get("no_reference"):
+            return {"why": "the reference frame is missing"}
+        return found["camera_shift"] if found["camera_moved"] else None
+
+    evidence = config.get("evidence_camera")
+    observe = (lambda: cell_site_camera.fleet_frame(evidence, work / "evidence")) if evidence else None
     out = carry(lambda: cell.frame("top"), pick, push, expected_px=expected_px, choices=choices, explain=explain, slow=slow,
-                folded=lambda: at_home(cell.act("state").get("state"), config["plan"]["home"]), observe=observe)
+                folded=lambda: at_home(cell.act("state").get("state"), config["plan"]["home"]), observe=observe,
+                camera=moved_camera, ignore=moving_rects(config))
     print(json.dumps({**out, "unsolved": unsolved(choices), "open_questions": cell_why.open_questions(why_path)}, indent=1, default=str))
     return 0 if out["result"] == "placed" else 1
 
