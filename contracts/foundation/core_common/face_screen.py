@@ -348,6 +348,12 @@ BACKLIGHT = {"active": 100, "idle": 30, "standby": 0}
 CALIBRATING_STRIP = "CALIBRATING - keep clear"
 CORE_MISSING_LINE = "CORE not responding"
 STOP_RELEASE = "Release: dashboard > E-stop reset"
+IDENTIFY_COLORS = {
+    "identify_blue": "blue",
+    "identify_blue_quiet": "blue",
+    "identify_amber": "amber",
+    "identify_amber_quiet": "amber",
+}
 #: ASCII: the LCD font has no Hangul. The mode face stays D-385; this line says the situation.
 SITUATION_LINE = {"IDLE": "Waiting", "MANUAL": "Manual", "NAVIGATION": "Going", "DOCKING": "Docking"}
 NAV_STOP_LINE = {"BLOCKED": "Route blocked", "FAILED": "Navigation failed"}
@@ -452,11 +458,13 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
 
     The answer: ``kind`` (one of KINDS), ``row`` (the table row id), ``face``,
     ``overlay`` (``{"kind": "drive"|"wake", "payload": {...}}``), ``strip`` and
-    ``strip_tone`` (``caution``/``info``), ``backlight`` (%), ``awake`` and, for
-    a stopped card, ``cause``/``release``.
+    ``strip_tone`` (``caution``/``info``), ``backlight`` (%), ``awake``,
+    ``identify_color`` (``"blue"``/``"amber"``/None) and, for a stopped card,
+    ``cause``/``release``.
     """
     answer = {"kind": STATUS, "row": "", "face": None, "overlay": None, "strip": None,
-              "strip_tone": None, "backlight": 100, "awake": True, "person": None}
+              "strip_tone": None, "backlight": 100, "awake": True, "person": None,
+              "identify_color": None}
     kind = robot_state.stage_kind(stage)
 
     def status(row: str, **extra: Any) -> dict:
@@ -512,6 +520,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     # A fleet identify call names this robot. It does not replace a caution,
     # a bench test, or a calibration strip, and it does not change the mode face.
     called = isinstance(test, str) and test.startswith("identify_")
+    identify_color = IDENTIFY_COLORS.get(test) if called else None
     call_line = None
     if called and strip is None:
         robot_id = _robot_id(core.get("robot_id"))
@@ -544,7 +553,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
             and (percent is None or percent >= LOW_BATTERY_PERCENT)):
         return {**answer, "kind": LIGHT, "row": "light", "backlight": 100}
     # Row 18: standby sleeps unless a wake card, a caution, a call, or a fleet question must be seen.
-    if power == "standby" and wake is None and tone != "caution" and call_line is None and ask_line is None:
+    if power == "standby" and wake is None and tone != "caution" and call_line is None and ask_line is None and identify_color is None:
         return {**answer, "kind": SLEEP, "row": "standby", "backlight": BACKLIGHT["standby"], "awake": False}
 
     face = situation_face(core) or (core.get("face") if core.get("face") in FACES else DEFAULT_FACE)
@@ -575,6 +584,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     if strip is not None and tone == "info" and not strip.startswith("Charging"):
         strip = _with_level(strip, core)
     backlight = (100 if overlay is not None or call_line is not None or ask_line is not None or person
+                 or identify_color is not None
                  else BACKLIGHT.get(power, 100))
     return {**answer, "kind": FACE, "row": row, "face": face, "overlay": overlay, "strip": strip,
-            "strip_tone": tone, "backlight": backlight, "person": person}
+            "strip_tone": tone, "backlight": backlight, "person": person,
+            "identify_color": identify_color}

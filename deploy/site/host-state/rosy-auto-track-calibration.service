@@ -1,0 +1,11 @@
+[Unit]
+Description=Automatic OpenCV track calibration and sub-pixel map sync for ceiling_north
+# Requisite, not Requires: a run must never start the site stack.
+After=rosy-site-stack.service
+Requisite=rosy-site-stack.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/rosy-auto-track-calibration
+SyslogIdentifier=rosy-auto-track-calibration
+TimeoutStartSec=180
