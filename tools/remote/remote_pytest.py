@@ -59,7 +59,7 @@ import host_caps, host_probe  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, current_profile, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
 from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, history,  # noqa: E402,F401
-                        small_only, stranded, upgrade_watch, wanted, workers)
+                        small_first, small_only, stranded, upgrade_watch, wanted, workers)
 
 CANCELLED = remote_job.CANCELLED
 
@@ -460,7 +460,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
         cpu, k = SITE_CPU_QUOTA if host in SITES else "", 0  # k: job number on this host's run dir
         pick = host_caps.route(want, host_caps.room(host, HEADROOM), host_caps.needs(repo, sha, invocations))
-        take = (lambda: work.take_small(pick, host)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick, host)
+        take = (lambda: work.take_small(pick, host)) if small_first(HEADROOM.get(host)) else lambda: work.take(pick, host)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)

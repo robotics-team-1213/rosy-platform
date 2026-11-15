@@ -130,20 +130,21 @@ def main_workers(room: dict, jobs: int) -> int:
 
 
 def wanted(kind: str, invocations: list[list[str]], site: bool = False):
-    """The Work.take filter of a worker kind (None: anything); a site PC's worker never takes a LAB_ONLY one."""
+    """The Work.take filter of a worker kind (None: anything); a site PC never takes LAB_ONLY or host_alone."""
     pick = _wanted(kind, invocations)
     if not site:
         return pick
-    return lambda i: not lab_only(invocations[i]) and (pick is None or pick(i))
+    return lambda i: not lab_only(invocations[i]) and not host_alone(invocations[i]) and (pick is None or pick(i))
 
 
 def stranded(work: "Work", invocations: list[list[str]], hosts: list[str], headroom: dict) -> bool:
-    """With only site PCs left and only LAB_ONLY invocations queued, mark those not run (LOST_EXIT: no lab PC had
-    room, D-584), never a failure; True when it did. Otherwise a site worker that takes nothing would loop."""
-    if not all((headroom.get(h) or {}).get("site") for h in hosts) or not all(lab_only(invocations[i]) for i in work.todo):
+    """With only site PCs left and only LAB_ONLY or host_alone invocations queued, mark those not run (LOST_EXIT:
+    no lab PC had room, D-584), never a failure; True when it did. Otherwise a site worker would loop."""
+    if (not hosts or not work.todo or not all((headroom.get(h) or {}).get("site") for h in hosts)
+            or not all(lab_only(invocations[i]) or host_alone(invocations[i]) for i in work.todo)):
         return False
     for i in work.todo:
-        print(f"[remote-pytest] not run: {' '.join(invocations[i])} needs a lab PC (work_queue.LAB_ONLY)",
+        print(f"[remote-pytest] not run: {' '.join(invocations[i])} needs a lab PC (work_queue.LAB_ONLY / host_alone)",
               file=sys.stderr, flush=True)
         work.codes[i] = LOST_EXIT
     work.todo.clear()
@@ -231,9 +232,14 @@ class Work:
 UPGRADE_S = 300  # how often a run on small hosts only looks for a lab PC again
 
 
+def small_first(room: dict | None) -> bool:
+    """True for a light or site host that pulls smallest queued invocations first."""
+    return bool(room and (room.get("light") or room.get("site")))
+
+
 def small_only(plan: list[tuple[str, str]], headroom: dict) -> bool:
     """Every worker's host is the site PC or a light one (place(): the lab PCs were full or held)."""
-    return all((headroom.get(h) or {}).get("site") or (headroom.get(h) or {}).get("light") for h, _ in plan)
+    return all(small_first(headroom.get(h)) for h, _ in plan)
 
 
 def upgrade_watch(work: Work, plan, headroom: dict, place, deferred: set, every: float = UPGRADE_S):
