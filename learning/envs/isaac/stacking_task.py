@@ -17,7 +17,8 @@ from run_omx_backend import FOLLOWER_STIFFNESS, FOLLOWER_DAMPING, FOLLOWER_MAX_E
 
 def run(args):
     global FIXTURE
-    container = getattr(args, 'mapped_container_stack', False)
+    container_rl = getattr(args, 'mapped_container_rl', False)
+    container = getattr(args, 'mapped_container_stack', False) or container_rl
     if container:
         args.mapped_cube_stack = True
     mapped = args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack
@@ -28,8 +29,12 @@ def run(args):
         elif args.mapped_cube_stack:
             from mapped_stack_fixture import CUBE_FIXTURE as FIXTURE
             if container:
-                from mapped_stack_fixture import container_fixture
-                FIXTURE = container_fixture(layers=args.layers, case=args.container_case)
+                if container_rl:
+                    from container_rl_fixture import fixture as container_rl_fixture
+                    FIXTURE = container_rl_fixture(layers=args.layers, case=args.container_case)
+                else:
+                    from mapped_stack_fixture import container_fixture
+                    FIXTURE = container_fixture(layers=args.layers, case=args.container_case)
     import numpy as np
     import torch
     import yaml
@@ -273,7 +278,7 @@ def run(args):
         positions, quaternions = wrist_views[arm].get_world_poses()
         return np.array(tcp_from_wrist(positions[0], quaternions[0], FIXTURE.get('tcp_offset_m', (.09193, -.0016, 0.))))
 
-    if args.mapped_long_stack or args.mapped_cube_stack:
+    if args.mapped_long_stack or args.mapped_cube_stack and not container_rl:
         from mapped_stack_task import execute
         recording = None
         if container:
@@ -334,8 +339,9 @@ def main():
     modes.add_argument('--mapped-long-stack', action='store_true')
     modes.add_argument('--mapped-cube-stack', action='store_true')
     modes.add_argument('--mapped-container-stack', action='store_true')
+    modes.add_argument('--mapped-container-rl', action='store_true')
     modes.add_argument('--mapped-rl', action='store_true')
-    parser.add_argument('--layers', type=int, choices=(1, 3), default=3)
+    parser.add_argument('--layers', type=int, choices=(1, 2, 3), default=3)
     parser.add_argument('--container-case', choices=('nominal', 'offset', 'reverse', 'column', 'nominal-estimate', 'nominal-bc-v0',
                                  'nominal-bc-v0-rl0', 'release-episodes-rl0', 'release-episodes-rl1',
                                  'release-episodes-rl2', 'release-episodes-rl3', 'nominal-bc-v0-rl3',
@@ -345,7 +351,7 @@ def main():
                         default='nominal')
     args = parser.parse_args()
     check_vendor_manifest()
-    if args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack or args.mapped_container_stack:
+    if args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack or args.mapped_container_stack or args.mapped_container_rl:
         from mapped_stack_fixture import physical_model
         # The original remains unchanged; the visual-only TCP is restored as a nonphysical USD child of link5.
         model = physical_model(args.urdf)
