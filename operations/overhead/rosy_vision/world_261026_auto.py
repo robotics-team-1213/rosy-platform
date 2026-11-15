@@ -133,6 +133,7 @@ def _segment_masks(img: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     ).astype(np.uint8) * 255
     yellow_mask = ((hsv[:, :, 0] >= 15) & (hsv[:, :, 0] <= 35)
                    & (hsv[:, :, 1] >= 80) & (hsv[:, :, 2] >= 100)).astype(np.uint8) * 255
+    white_mask[pink_mask > 0] = 0  # the pale pink tape also passes the white bound (S 40-74)
     return white_mask, green_mask, pink_mask, yellow_mask
 
 

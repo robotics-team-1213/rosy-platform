@@ -68,7 +68,13 @@ This rebase is not a touch-verified map: the loo error stays what it was (floor 
 - Code now: `cell_recovery.carry` checks `cell_calibrate.check` before every pick (cause `camera_moved`, a person; no
   `preflight.reference_top` refuses), `scene_moved` ignores the belt's rects, bare `refused` is `no_session`, a park that
   ended in contact stops `run_auto` (`park_contact`), and unwedge judges lag over each joint's own starting droop
-  (ceiling 2.0) with 0.3 steps. Why the far-pick park overloads is still a hypothesis (reach x pose), not measured.
+  (ceiling 2.0) with 0.3 steps.
+- Measured the same night in free air (pan 120, z 0.043, no box): the park from above_pick folded at 120-186 mm (peak lag
+  1.47-1.81) and failed at 192 mm with the same shoulder_lift contact. Holding there loads the lift little (PWM -8); the
+  park's own motion overloads it. Raising the lift first in settled 0.5 steps to -16, then the park, folded it. The
+  planner now refuses a box past `plan.limits.park_reach_m` (arm_s live: 0.18) as out of reach, a person moves it.
+- The camera moved a second time (55 px) around the control PC's 19:10-20:26 outage; the new gate refused before any
+  motion until the rebase.
 
 ## Next time
 

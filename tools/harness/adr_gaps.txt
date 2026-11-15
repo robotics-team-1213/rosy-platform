@@ -141,4 +141,14 @@ D-1029 reserved in another in-flight branch (refs/adr/D-1029, low-battery Fleet 
 D-1030 reserved in another in-flight branch (refs/adr/D-1030, selection token), absent from this D-1034 branch; remove when its ADR lands
 D-1031 reserved in another in-flight branch (refs/adr/D-1031, robot release channel), absent from this D-1034 branch; remove when its ADR lands
 D-1032 reserved in another in-flight branch (refs/adr/D-1032, OMX two-arm grasp policy), absent from this D-1034 branch; remove when its ADR lands
-D-1033 reserved in another in-flight branch (refs/adr/D-1033, omx-per-arm-profile), absent from this D-1034 branch; remove when its ADR lands
+D-1022 reserved in another in-flight branch (refs/adr/D-1022), absent from this D-1033 branch; remove when its ADR lands
+D-1023 reserved in another in-flight branch (refs/adr/D-1023), absent from this D-1033 branch; remove when its ADR lands
+D-1024 reserved in another in-flight branch (refs/adr/D-1024), absent from this D-1033 branch; remove when its ADR lands
+D-1025 reserved in another in-flight branch (refs/adr/D-1025), absent from this D-1033 branch; remove when its ADR lands
+D-1026 reserved in another in-flight branch (refs/adr/D-1026), absent from this D-1033 branch; remove when its ADR lands
+D-1027 reserved in another in-flight branch (refs/adr/D-1027), absent from this D-1033 branch; remove when its ADR lands
+D-1028 reserved in another in-flight branch (refs/adr/D-1028), absent from this D-1033 branch; remove when its ADR lands
+D-1029 reserved in another in-flight branch (refs/adr/D-1029), absent from this D-1033 branch; remove when its ADR lands
+D-1030 reserved in another in-flight branch (refs/adr/D-1030), absent from this D-1033 branch; remove when its ADR lands
+D-1031 reserved in another in-flight branch (refs/adr/D-1031), absent from this D-1033 branch; remove when its ADR lands
+D-1032 reserved in another in-flight branch (refs/adr/D-1032), absent from this D-1033 branch; remove when its ADR lands
