@@ -18,8 +18,8 @@ before and after, report anything that moved. Each run has its own folder: nothi
 
     cell_two_arm.py --a cell-a.json a1.json a2.json --b cell-b.json b1.json b2.json --out runs/ --commissioning --person-at-switch
 
-shortcut: the libraries are planned beforehand, one per arm, since ROSY_OMX_TCP_X_M is one value per process; upgrade when the
-tool length is per arm in the config. An arm's config may state `fingertip_m`, the length its kinematics lack (arm_a: unmeasured).
+Each arm reads its own TCP length (`tcp_x_m`, `plan.tcp_x_m`, or measured `arm-cal` `z_profile_mm.tcp_v21_x_mm`);
+an arm's config may also state `fingertip_m`, the length its kinematics lack (arm_a: unmeasured).
 shortcut: this runs on the FIFO sessions, not through Fleet or WorkcellCoordinator; upgrade when those drive a cell's arms.
 """
 from __future__ import annotations
@@ -42,10 +42,42 @@ from omx_adapter.coordination import Segment, clearance, moved, plan, ready, thi
 from omx_adapter.swept_volume import capsules  # noqa: E402
 
 STEP_M = 0.03
+TCP_MISMATCH_TOL_M = 0.001
 KEEP_ALIVE_S = 10.0  # `state` keeps a waiting arm's idle fold (runner.idle_park_s 60) from starting by itself
 ORDER = ("a", "b")
 LOW = {"run descend_pick": "run lift_pick", "run grasp_pick": "run lift_pick",
        "run descend_place": "run lift_place", "run release_place": "run lift_place"}  # the chunk that climbs out from each
+
+
+def tcp_x_of(config: dict) -> float | None:
+    """Resolve an arm's TCP length (m) from explicit config/plan or measured arm-cal (`samples > 0`)."""
+    if config.get("tcp_x_m") is not None:
+        return float(config["tcp_x_m"])
+    plan_cfg = config.get("plan") or {}
+    if plan_cfg.get("tcp_x_m") is not None:
+        return float(plan_cfg["tcp_x_m"])
+    cal = config.get("_arm_calibration") or {}
+    tcp_mm = (cal.get("z_profile_mm") or {}).get("tcp_v21_x_mm")
+    if cal.get("samples", 0) > 0 and tcp_mm is not None:
+        return float(tcp_mm) / 1000.0
+    return None
+
+
+def kinematics_for(configs: dict, libraries: dict | None = None, *, root: Path | None = None) -> dict:
+    """Load one kinematics instance per arm and reject libraries whose `tcp_x_m` disagrees by > 1 mm."""
+    kins = {}
+    for key, config in configs.items():
+        tcp_x_m = tcp_x_of(config)
+        kins[key] = load_kinematics(root, tcp_x_m)[0]
+        if libraries is not None and tcp_x_m is not None:
+            for path, library in libraries[key]:
+                lib_tcp = library.get("tcp_x_m")
+                if lib_tcp is not None and abs(float(lib_tcp) - tcp_x_m) > TCP_MISMATCH_TOL_M:
+                    raise SystemExit(
+                        f"arm {key} {path}: library tcp_x_m {float(lib_tcp):.4f} m disagrees with "
+                        f"arm tcp {tcp_x_m:.4f} m (>{TCP_MISMATCH_TOL_M * 1000:.1f} mm)"
+                    )
+    return kins
 
 
 def poses_of(frames, kin, rigid, tip_m: float, item=None) -> list:
@@ -188,18 +220,19 @@ def safe_fold(cells: dict, libraries: dict, kin, rigids: dict, tips: dict, margi
         return {"folded": False, "person_needed": "no arm state"}
     here, sweep, exits = {}, {}, {}
     for n in ORDER:
+        arm_kin = kin[n] if isinstance(kin, dict) else kin
         library = libraries[n]
         home = library["chunks"]["home"][-1]
         # wide jaws count as holding too: open ones take about as much room, and the state alone cannot tell them apart
         item = ITEM if states[n][5] > library.get("gripper_closed", float("-inf")) + STILL_HOLDING_UNITS else None
-        here[n] = poses_of([states[n]], kin, rigids[n], tips[n], item)
+        here[n] = poses_of([states[n]], arm_kin, rigids[n], tips[n], item)
         exits[n] = way_out(library, moved_out.get("last", {}).get(n), moved_out.get("stopped", {}).get(n))
         sweep[n] = None
         if exits[n] is not None:
             frames = [frame for _, chunk in exits[n] for frame in chunk]
             at = frames[-1] if frames else states[n]
             if frames or max(abs(a - b) for a, b in zip(states[n][:5], home[:5])) > 2.0:
-                sweep[n] = poses_of(frames + command_frames(library, "park", list(at)), kin, rigids[n], tips[n], item)
+                sweep[n] = poses_of(frames + command_frames(library, "park", list(at)), arm_kin, rigids[n], tips[n], item)
     order = fold_order(here, sweep, margin_m)
     if order is None:
         return {"folded": False, "person_needed": "no fold order keeps the margin", "states": states}
