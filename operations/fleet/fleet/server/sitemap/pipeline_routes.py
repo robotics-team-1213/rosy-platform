@@ -13,6 +13,8 @@ from types import SimpleNamespace
 from fastapi import Depends, HTTPException
 
 from fleet.charge_bays import bays_from_map
+from .pipeline_ledger import write_ledger
+from .pipeline_task_input import finite_json_value
 
 
 def _storage_dir() -> Path:
@@ -50,7 +52,8 @@ def _enrich_task_health(task: dict) -> dict:
 
 
 def install_pipeline_routes(
-    app, *, console=None, site_maps=None, read_guard=(), operator_guard=None, proposer_guard=None
+    app, *, console=None, site_maps=None, read_guard=(), operator_guard=None, proposer_guard=None,
+    amr_evidence_fn=None, omx_evidence_fn=None,
 ) -> None:
     if getattr(app.state, "_pipeline_routes_installed", False):
         return
@@ -134,8 +137,10 @@ def install_pipeline_routes(
     app.state.get_arm_live_catalog = _arm_live_catalog
     app.state.station_camera_links = STATION_CAMERA_LINKS
 
-    ledger_path = _storage_dir() / "rosy-pipeline-ledger.json"
-    zones_override_path = _storage_dir() / "station_zones.yaml"
+    storage_dir = _storage_dir()
+    ledger_path = storage_dir / "rosy-pipeline-ledger.json"
+    zones_override_path = storage_dir / "station_zones.yaml"
+    app.state._pipeline_ledger_fault = storage_dir == Path("/tmp") and not os.environ.get("PYTEST_CURRENT_TEST")
     if not os.environ.get("PYTEST_CURRENT_TEST") and ledger_path.is_file():
         try:
             saved = json.loads(ledger_path.read_text(encoding="utf-8"))
@@ -149,29 +154,52 @@ def install_pipeline_routes(
             if isinstance(saved.get("human_detected"), dict):
                 app.state.human_detected.update({k: bool(v) for k, v in saved["human_detected"].items()})
         except Exception:
-            pass
+            app.state._pipeline_ledger_fault = True
 
     def _save_ledger() -> None:
         if os.environ.get("PYTEST_CURRENT_TEST"):
             return
+        if app.state._pipeline_ledger_fault:
+            raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
         try:
-            ledger_path.write_text(
-                json.dumps(
-                    {
-                        "omx_cell_states": app.state.omx_cell_states,
-                        "omx_cell_tasks": app.state.omx_cell_tasks,
-                        "pinky_tasks": app.state.pinky_tasks,
-                        "pipeline_decisions": app.state.pipeline_decisions[-100:],
-                        "detected_displaced_site": app.state.detected_displaced_site,
-                        "cable_tangled": app.state.cable_tangled,
-                        "human_detected": app.state.human_detected,
-                    },
-                    ensure_ascii=False,
-                ),
-                encoding="utf-8",
-            )
+            write_ledger(ledger_path, {
+                "omx_cell_states": app.state.omx_cell_states,
+                "omx_cell_tasks": app.state.omx_cell_tasks,
+                "pinky_tasks": app.state.pinky_tasks,
+                "pipeline_decisions": app.state.pipeline_decisions[-100:],
+                "detected_displaced_site": app.state.detected_displaced_site,
+                "cable_tangled": app.state.cable_tangled,
+                "human_detected": app.state.human_detected,
+            })
+        except Exception as exc:
+            app.state._pipeline_ledger_fault = True
+            raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"}) from exc
+
+    def _ready_amr(task: dict) -> dict | None:
+        if app.state._pipeline_ledger_fault:
+            return None
+        # No Fleet source currently reports brake and bed readiness; absent source holds the task.
+        try:
+            observed = amr_evidence_fn(task) if callable(amr_evidence_fn) else None
         except Exception:
-            pass
+            return None
+        if not isinstance(observed, dict):
+            return None
+        if not finite_json_value(observed):
+            return None
+        stamp = observed.get("observed_at")
+        speed = observed.get("v_cmd_mps")
+        pose = observed.get("pose")
+        if (observed.get("robot_id") != task["robot_id"] or observed.get("cell_id") != task["cell_id"]
+                or observed.get("wheel_brake_locked") is not True or observed.get("bed_ready") is not True
+                or not isinstance(stamp, (int, float)) or isinstance(stamp, bool)
+                or not 0 <= time.time() - stamp <= 2.0
+                or not isinstance(speed, (int, float)) or isinstance(speed, bool)
+                or abs(speed) > 1e-4
+                or not isinstance(pose, dict)
+                or any(not isinstance(pose.get(axis), (int, float)) for axis in ("x", "y", "yaw"))):
+            return None
+        return observed
 
     def _is_human_detected(subject_id: str | None = None) -> bool:
         hd = app.state.human_detected or {}
@@ -183,13 +211,15 @@ def install_pipeline_routes(
 
     def _evaluate_decision(subject_id: str, domain: str | None = None, facts_override: dict | None = None) -> dict:
         ov = dict(facts_override or {})
+        if "human_detected" in ov and ov["human_detected"] is not None and not ov["human_detected"]:
+            raise HTTPException(409, detail={"code": "HUMAN_CLEAR_EVIDENCE_UNAVAILABLE"})
         if "tangled" in ov and ov["tangled"] is not None:
             app.state.cable_tangled = bool(ov["tangled"])
         if "displaced_to" in ov and ov["displaced_to"] in ("belt_far", "floor_front", None, ""):
             app.state.detected_displaced_site = ov["displaced_to"] or None
         if "human_detected" in ov and ov["human_detected"] is not None:
             key = subject_id if subject_id in ("cell_s", "cell_ab") else "all"
-            app.state.human_detected[key] = bool(ov["human_detected"])
+            app.state.human_detected[key] = True
         tangled = bool(app.state.cable_tangled)
         displaced = app.state.detected_displaced_site
         human_near = _is_human_detected(subject_id)
@@ -229,7 +259,8 @@ def install_pipeline_routes(
                 reason = f"Decision(arm_target): 용기 정위치(present) 확인 → {auto_preset} 자동 선택 (미세 조그 {'ON' if tangled else 'OFF'})"
             auto_pinky_action = None
         else:
-            cell_locked = any((cs.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD")) for cs in app.state.omx_cell_states.values())
+            cell_locked = any((cs.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD", "ABORTED") or cs.get("amr_motion_inhibited"))
+                              for cs in app.state.omx_cell_states.values())
             state_str = "human_estop" if human_near else ("blocked" if (tangled or cell_locked) else "normal")
             facts = {
                 "state": state_str,
@@ -332,6 +363,7 @@ def install_pipeline_routes(
         _is_human_detected=_is_human_detected, _evaluate_decision=_evaluate_decision,
         inputs=inputs, rules=rules, active_map=active_map, read_guard=read_guard,
         operator_guard=operator_guard, proposer_guard=proposer_guard,
+        _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn,
     )
     install_cell_tasks_routes(app, ctx)
     install_gates_routes(app, ctx)
