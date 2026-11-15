@@ -67,6 +67,38 @@ def test_harbor_order_rehandle_outbound_restore(layout, reach):
     assert [m["destination"] for m in moves[3:]] == ["ship-h1r2-l0", "ship-h1r2-l1"]  # down into the freed level, old order kept
 
 
+def test_order_source_and_harbor_permutation(layout, reach):
+    state = {c: s for c, s, _ in layout.plan_order()}
+    request = {"cargo_id": "bar-3"}
+    rule, why = plan.resolve_order({}, layout, state, request, reach)
+    assert why is None and rule["order_source"] == "rosy_r"
+    requested = rule["moves"]
+    supplied = list(requested)
+    chosen, why = plan.resolve_order({"requested_moves": requested, "harbor_order": supplied},
+                                     layout, state, request, reach)
+    assert why is None and chosen == {"moves": supplied, "order_source": "harbor"}
+    with pytest.raises(ValueError, match="exactly"):
+        plan.resolve_order({"requested_moves": requested, "harbor_order": supplied[:-1]},
+                           layout, state, request, reach)
+    with pytest.raises(ValueError, match="not executable"):
+        plan.resolve_order({"requested_moves": requested, "harbor_order": list(reversed(supplied))},
+                           layout, state, request, reach)
+
+
+def test_shadow_order_never_changes_execution(layout, reach, caplog):
+    state = {c: s for c, s, _ in layout.plan_order()}
+    expected, _ = plan.resolve_order({}, layout, state, {"cargo_id": "bar-3"}, reach)
+    with caplog.at_level("INFO"):
+        actual, _ = plan.resolve_order({}, layout, state, {"cargo_id": "bar-3"}, reach,
+                                       suggester=lambda _request, _state: [])
+    assert actual == expected
+    assert "agreement=False" in caplog.text
+    moves, holds = plan.plan_outbound(layout, BOTH, reach)
+    assert not holds and {move["order_source"] for move in moves} == {"rosy_r"}
+    rows, _ = plan.schedule(layout, moves, ("arm_a", "arm_b"))
+    assert {row["order_source"] for row in rows} == {"rosy_r"}
+
+
 def test_one_arm_without_a_temporary_place_in_reach_holds(layout, reach):
     """arm_b alone has one free lane of its plate and the stern bay: no request finds a lane left for its target once its blockers are
     out (a person or a Pinky trip)."""
