@@ -238,11 +238,16 @@ def test_collect_no_goal_omits_environment_state_feature(monkeypatch, tmp_path):
         "omx_two_arm_world": fake_world,
     }.items():
         monkeypatch.setitem(sys.modules, name, mod)
+    calls = []
     monkeypatch.setattr(policy.skills, "disturb", lambda *a, **k: None)
-    monkeypatch.setattr(policy.teaching.Teacher, "run_task", lambda *a, **k: None)
+    monkeypatch.setattr(policy.teaching.Teacher, "run_task", lambda self, task, isolated=False, **k: calls.append(isolated))
 
     policy.collect([0], ["stack"], tmp_path / "ds", no_goal=True)
+    assert calls == [False]
     assert policy.GOAL not in created["features"] and "observation.state" in created["features"]
+
+    policy.collect([0], ["stack"], tmp_path / "ds_skill", skill="grasp", no_goal=True)
+    assert calls == [False, True]
 
     ds = FakeDataset(created["features"])
     rec = policy.Recorder(types.SimpleNamespace(layout=sites.Layout()), ds, {}, no_goal=True)

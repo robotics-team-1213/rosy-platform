@@ -150,7 +150,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
                                seed=seed, pick_vision=pick_vision, belt_skew=belt_skew)
             skills.disturb(teacher, seed, zero_error_deg, lag, physics)
             teacher.error_draw = (STEP_ERROR_SEED_BASE + 100 * seed + 50 * names.index(name), zero_error_deg, physics)
-            teacher.run_task(planned[name] if planned else tasks.get_task(layout, name))
+            teacher.run_task(planned[name] if planned else tasks.get_task(layout, name), isolated=bool(skill) and planned is None)
             if teacher.spoiled:
                 spoiled.append(f"{name}:{seed}")
             print("collected", name, seed, flush=True)
