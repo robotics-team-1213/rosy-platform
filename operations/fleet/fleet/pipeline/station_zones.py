@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import json
 import yaml
 
 DEFAULT_YAML_PATH = Path(__file__).with_name("station_zones.yaml")
@@ -38,6 +39,10 @@ def save_station_zones_yaml(yaml_text: str, target_path: Path) -> dict[str, Any]
         raise ValueError("YAML root must be a mapping")
     if "staging_bays" not in parsed and "export_stations" not in parsed:
         raise ValueError("YAML must define staging_bays or export_stations")
+    try:
+        json.dumps(parsed, allow_nan=False)
+    except (TypeError, ValueError):
+        raise ValueError("station zones must contain finite JSON values") from None
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(yaml_text, encoding="utf-8")
     return load_station_zones(target_path)
