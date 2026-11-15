@@ -580,6 +580,30 @@ def test_v24_berth_docks_and_symmetric_194mm_layout_render_without_quay():
     assert "ship_quay" not in names_v18
 
 
+def test_temp_plate_v12_lanes_seat_containers_without_interlane_wall_overlap():
+    try:
+        import mujoco
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    w = tw.World()
+    data = w.reset()
+    lanes = ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3")
+    cids = [cid for cid, _ in w.layout.containers()[:len(lanes)]]
+    for cid, site in zip(cids, lanes):
+        w.put(data, cid, site)
+    for _ in range(int(0.5 / w.model.opt.timestep)):
+        mujoco.mj_step(w.model, data)
+    for cid, site in zip(cids, lanes):
+        pos, _, tilt = w.pose(data, cid)
+        s = w.layout.sites[site]
+        assert np.linalg.norm(pos[:2] - s["xy"]) * 1000 < 0.5, site
+        assert abs(pos[2] - s["z"]) * 1000 < 0.3, site
+        assert tilt < 0.5, site
+
+
+
 
 
 
