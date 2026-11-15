@@ -16,6 +16,10 @@ from cell_control_core import apply_wrist_xy_step, plan_library_from_directive
 import cell_fingers
 
 
+class RefinementCommandFailed(RuntimeError):
+    pass
+
+
 def _jaw_pos(state: list[Any] | tuple[Any, ...] | None) -> float | None:
     """Extract gripper position from a 5/6/7-DOF state vector (`len >= 6`, last element is gripper)."""
     if state and len(state) >= 6 and state[-1] is not None:
@@ -35,6 +39,8 @@ def settle_above_pick_jaws(
     jaw = _jaw_pos(above_state)
     if above_shaking or (jaw is not None and jaw < float(plan["grip_open"]) - 1.0):
         r_settle = run_cmd("run above_pick")
+        if not r_settle.get("ok"):
+            raise RefinementCommandFailed("above_pick_settle_failed")
         s_jaw = _jaw_pos(r_settle.get("state") or [])
         if (
             steps_log
@@ -44,7 +50,8 @@ def settle_above_pick_jaws(
         ):
             import time as _time
 
-            run_cmd(f"grip {float(plan['grip_open']):.2f}")
+            if not run_cmd(f"grip {float(plan['grip_open']):.2f}").get("ok"):
+                raise RefinementCommandFailed("above_pick_grip_failed")
             _time.sleep(min(0.30, max(0.12, (float(plan["grip_open"]) - s_jaw) / 8.0)))
     return above_shaking
 
@@ -131,13 +138,17 @@ def refine_pick_pose_at_hover(
             cur_directive, base_plan, work_dir=work_dir, kinematics_root=kinematics_root
         )
         lib_path.write_text(json.dumps(lib), encoding="utf-8")
-        run_cmd(f"load {lib_path}")
+        if not run_cmd(f"load {lib_path}").get("ok"):
+            raise RefinementCommandFailed("refined_library_load_failed")
         r_above2 = run_cmd("goto above_pick")
+        if not r_above2.get("ok"):
+            raise RefinementCommandFailed("refined_above_pick_failed")
         s2_jaw = _jaw_pos(r_above2.get("state") or [])
         if s2_jaw is not None and s2_jaw < float(plan["grip_open"]) - 1.2:
             import time as _time
 
-            run_cmd(f"grip {float(plan['grip_open']):.2f}")
+            if not run_cmd(f"grip {float(plan['grip_open']):.2f}").get("ok"):
+                raise RefinementCommandFailed("refined_grip_failed")
             _time.sleep(0.22)
     for _ in range(1, max(1, int(exec_cfg.get("wrist_passes", 1))) if wrist_shifted else 1):
         w_img = frame_fn("wrist")
@@ -158,6 +169,8 @@ def refine_pick_pose_at_hover(
             cur_directive, base_plan, work_dir=work_dir, kinematics_root=kinematics_root,
         )
         lib_path.write_text(json.dumps(lib), encoding="utf-8")
-        run_cmd(f"load {lib_path}")
-        run_cmd("goto above_pick")
+        if not run_cmd(f"load {lib_path}").get("ok"):
+            raise RefinementCommandFailed("refined_library_load_failed")
+        if not run_cmd("goto above_pick").get("ok"):
+            raise RefinementCommandFailed("refined_above_pick_failed")
     return lib, plan, cal, last_wrist_obs, vision_refined_xy

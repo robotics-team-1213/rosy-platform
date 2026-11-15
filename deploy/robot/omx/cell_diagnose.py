@@ -41,8 +41,11 @@ STRATEGY = {
 OBSTACLE_TYPES = {"tangled blob": "tangled pile", "no finger room": "packed", "edge of view": "edge of view",
                   "not inside the camera view": "edge of view", "out of reach": "out of reach"}
 ASK = {"edge_of_view": "move the box, or aim the top camera, so the box and the room beside it are in view",
-       "out_of_reach": "move the box inside the arm's reach"}
-ATTEMPT_CAUSES = (("stopped: no usable object (tangled pile)", "pile"), ("stopped: no usable object (edge of view)", "edge_of_view"),
+       "out_of_reach": "move the box inside the arm's reach",
+       "camera_moved": "the top camera moved since the map's reference: remap (cell_calibrate auto, a person at the switch), then rerun",
+       "no_session": "start record_session.py --chunks for this arm, then rerun"}
+# 2026-11-14 arm_s: run_auto's bare "refused" is its one no-session answer; its other refusals are prefixed and stay `other`
+ATTEMPT_CAUSES = (("stopped: contact at park", "park_contact"),("stopped: no usable object (tangled pile)", "pile"), ("stopped: no usable object (edge of view)", "edge_of_view"),
                   ("stopped: no usable object (out of reach)", "out_of_reach"),
                   ("stopped: released", "lift_stall"), ("stopped: holding", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
                   ("stopped: misaligned", "misaligned"), ("stopped: reinserted", "unstable_grasp"), ("stopped: placed", "not_seen_placed"), ("stopped: no usable", "no_room"),
@@ -71,6 +74,10 @@ RECOVERY = {
     "stuck_in_jaws": ["ask_person"],
     # named apart so the ledger counts them: 13 calibrate and 35 descent stops in the 110 real attempts up to 2026-11-07
     "calibrate": ["ask_person"],
+    "camera_moved": ["ask_person"],  # 2026-11-14 arm_s: a USB replug moved the top camera 109 px; six grasps closed on air
+    "no_session": ["ask_person"],
+    # 2026-11-14 arm_s: park from a far pick overloaded shoulder_lift and the arm sagged onto the box; a moved pile never re-plans it
+    "park_contact": ["ask_person"],
     "contact": ["ask_person"],
     "other": ["ask_person"],  # a fault, a refusal, an abort: never retried
 }
@@ -80,6 +87,8 @@ def attempt_cause(result: str, pile_moved: bool = False) -> str:
     """The cause of an attempt's end; a pile the camera saw change overrides only the causes that would try again."""
     if result == "placed":
         return "placed"
+    if result == "refused":
+        return "no_session"
     cause = next((c for prefix, c in ATTEMPT_CAUSES if result.startswith(prefix)),
                  "no_progress" if result.startswith("stopped: ") and result.endswith(" attempts") else "other")
     # a contact's table is spent on this plan; only a pile that moved makes it stale (35 of 110 real attempts, none of them re-planned)

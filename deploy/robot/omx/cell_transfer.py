@@ -22,6 +22,8 @@ class Gate:
     def __init__(self, cell, config: dict, calibration: dict, *, sequence=cp.SEQUENCE):
         self.cell, self.config, self.calibration, self.assessment = cell, config, calibration, None
         self.sequence, self.source, self.home = sequence, {}, None
+        self.before_motion, self.finish_attempt = None, None
+        self.history, self.transitions, self.finalized, self.blocked = [], 0, False, False
         self._lib_cache: dict[tuple[str, int, int], tuple[dict, str]] = {}
         # two arms, one pallet (cell_zones): a reach claims its zone before it moves and frees it once folded home
         self.zones = Zones(config, calibration) if config.get("zone_side") else None
@@ -45,7 +47,7 @@ class Gate:
                       self.cell.act("state") if state is None else state,
                       sequence=self.sequence, library_sha256=lib_sha)
 
-    def open(self, library, before_motion) -> dict | None:
+    def open(self, library, before_motion, finish_attempt=None) -> dict | None:
         """None when the carry may start (the intent is written first); else the held envelope."""
         self.assessment = self._assess(library)
         if not self.assessment["allowed"]:
@@ -55,26 +57,60 @@ class Gate:
             before_motion(self.assessment)
         except OSError:
             return {**self.assessment, "allowed": False, "reason": "audit_unavailable"}
+        self.before_motion, self.finish_attempt = before_motion, finish_attempt
         return None
+
+    def _settled_home(self, status, assessment) -> bool:
+        from chunk_runner import SETTLE_TOL
+
+        present, home = status.get("state"), self.home
+        return (status.get("ok") is True and status.get("settled") is True and not status.get("fault")
+                and same_session(status, assessment)
+                and isinstance(present, list) and isinstance(home, list) and len(present) == len(home) == 6
+                and all(type(v) in (int, float) and math.isfinite(v) for v in present[:5] + home[:5])
+                and all(abs(p - h) <= SETTLE_TOL for p, h in zip(present[:5], home[:5])))
 
     def act(self, command: str) -> dict:
         if command == "state":
             return self.cell.act(command)
+        if self.blocked:
+            return {"ok": False, "error": "held: audit_transition_incomplete"}
         state, recovering = self.cell.act("state"), command.split()[0] in ("retreat", "park")
         lib_sha = None
         if command.startswith("load "):
             library, lib_sha = self._load_library(command[5:])
             self.source = library.get("source") or {}
-            # The unchanged reviewed carry already owns its durable pending intent.
-            identical = (self.assessment["mode"] == "automatic"
-                         and digest([self.config, self.calibration, self.sequence]) == self.scope_sha
+            identical = (digest([self.config, self.calibration, self.sequence]) == self.scope_sha
                          and lib_sha == self.assessment["library_sha256"])
             if not identical:
+                if digest([self.config, self.calibration, self.sequence]) != self.scope_sha:
+                    return {"ok": False, "error": "held: reviewed_scope_changed"}
+                if self.assessment["mode"] != "commissioning" or self.finish_attempt is None:
+                    return {"ok": False, "error": "held: revised_library_requires_supervised_audit"}
                 fresh = self._assess(library, state=state)
                 if not fresh["allowed"] or fresh["mode"] != self.assessment["mode"]:
                     return {"ok": False, "error": f"held: {fresh['reason']}", "envelope": fresh}
-                fresh["session_id"] = self.assessment["session_id"]
+                old = self.assessment
+                parked = self.act("park")
+                if not self._settled_home(parked, old):
+                    self.blocked = True
+                    return {"ok": False, "error": "held: revised_library_home_unconfirmed"}
+                try:
+                    self.finish_attempt("replanned", old, parked, self.history)
+                except Exception:
+                    self.blocked = True
+                    return {"ok": False, "error": "held: audit_unavailable"}
+                self.finalized = True
+                self.history = []
+                fresh["session_id"] = old["session_id"]
+                try:
+                    self.before_motion(fresh)
+                except Exception:
+                    self.blocked = True
+                    return {"ok": False, "error": "held: audit_unavailable"}
                 self.assessment = fresh
+                self.finalized = False
+                self.transitions += 1
         if not same_session(state, self.assessment, recovering=recovering):
             faulted = state.get("fault") and same_session(state, self.assessment, recovering=True)
             return {"ok": False, "error": "held: fault" if faulted else "held: session_changed"}
@@ -90,19 +126,23 @@ class Gate:
                 if not allowed:
                     return {"ok": False, "error": f"held: zone: {why}"}
         status = self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
+        status = {**status, "pre_state_trace": {"t": state.get("t"), "trace_receipt": state.get("trace_receipt")}}
+        self.history.append({"command": command, **{k: status.get(k) for k in cp.STEP_KEYS}})
         if command.startswith("load ") and status.get("ok"):
             self.home = ((library.get("chunks", {}).get("home") or [None])[-1]
                          if lib_sha == a["library_sha256"] else None)
+        if command.startswith("load ") and not status.get("ok") and self.transitions:
+            try:
+                self.finish_attempt("load_refused", a, status, self.history)
+                self.finalized = True
+            except Exception:
+                status = {**status, "error": "held: audit_unavailable"}
+            self.blocked = True
         if self.zones and sub_commands and sub_commands[-1] == "park":
             from chunk_runner import SETTLE_TOL
 
-            present, home = status.get("state"), self.home
             # Runner timeouts report ok=True; only measured, settled home clears physical occupancy.
-            confirmed = (status.get("ok") is True and status.get("settled") is True and not status.get("fault")
-                         and same_session(status, a)
-                         and isinstance(present, list) and isinstance(home, list) and len(present) == len(home) == 6
-                         and all(type(v) in (int, float) and math.isfinite(v) for v in present[:5] + home[:5])
-                         and all(abs(p - h) <= SETTLE_TOL for p, h in zip(present[:5], home[:5])))
+            confirmed = self._settled_home(status, a)
             if confirmed:
                 self.zones.leave()
             elif status.get("ok"):
@@ -154,10 +194,11 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
                 status = run(command)
         if status.get("contact") and command == "park":
             # a fold's strain hold at the reach: back off and fold again (home in runs 3-4, 2026-10-28); a second stops
-            run("retreat")
-            status = run("park")
-            if status.get("ok"):
-                continue
+            if "overload-hold" not in (status.get("error") or ""):  # a shed load sags: no backing up from there
+                run("retreat")
+                status = run("park")
+                if status.get("ok"):
+                    continue
         if status.get("contact") and command == "run lift_place":
             # strain after release: backing up brings the open jaws round the box again (2026-10-28 Pinky); fold from here
             run("park")

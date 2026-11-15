@@ -10,7 +10,6 @@
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import sys
 
@@ -157,14 +156,19 @@ class TestCellStackGuard:
         before_side = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
         before_side[252:315, 155:220] = (30, 120, 240)
         after_side = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
-        after_side[125:190, 230:288] = (30, 120, 240)
+        after_side[113:180, 230:288] = (30, 120, 240)
         v_out = guard.verify_post_release_cameras(
             before_side=before_side,
             after_side=after_side,
             pick={"col": 1, "tier": 1},
             place={"col": 2, "tier": 3},
         )
-        assert v_out["verified"] is True
+        # The side pixels land on tier 3 (|r_k| < 1 mm), but a side-only synthetic frame has no
+        # calibrated depth or independent side Z reference, so the tier is never approved.
+        assert abs(v_out["z_gate"]["r_k_mm"]) < 1.0
+        assert v_out["verified"] is False
+        assert v_out["z_gate"]["verdict"] == "UNKNOWN"
+        assert v_out["z_gate"]["failure_code"] == "S5_VIEW_OR_GATE_MISMATCH"
 
 
 @pytest.mark.parametrize("bad_z", [None, float("nan"), float("inf"), RuntimeError("height lost")])
@@ -294,7 +298,7 @@ class TestVlaHandoverBroker:
                 if side_calls[0] <= 1:
                     img[182:250, 295:368] = (30, 120, 240)
                 else:
-                    img[125:190, 230:288] = (30, 120, 240)
+                    img[113:180, 230:288] = (30, 120, 240)
             elif role == "top":
                 img[170:260, 380:410] = (30, 120, 240)
             return img
@@ -316,7 +320,7 @@ class TestVlaHandoverBroker:
             read_z_fn=lambda: lifted["z_m"],
             lift_step_fn=lambda dz: lifted.__setitem__("z_m", lifted["z_m"] + dz),
         )
-        assert out["ok"] is True
+        assert out["ok"] is False  # uncalibrated synthetic frames cannot prove the tier
         assert out["state"] == "COMPLETED"
         assert out["retry_count"] == 1
         assert out["vla_steps_proposed"] == 4
@@ -325,13 +329,11 @@ class TestVlaHandoverBroker:
         assert out["gate_reports"][0]["passed"] is False
         assert out["gate_reports"][0]["stage_failed"] == "STAGE_1_HEIGHT"
         assert out["gate_reports"][1]["passed"] is True
-        assert out["verification"]["verified"] is True
-        assert out["il_rl_update"]["bucket"] == "pallet_right"
-        assert out["il_rl_update"]["reward"] == 2.0
+        assert out["verification"]["verified"] is False
+        assert out["verification"]["z_gate"]["verdict"] == "UNKNOWN"
+        assert abs(out["verification"]["z_gate"]["r_k_mm"]) < 1.0
         assert "run release_place" in cmds_executed
         assert cmds_executed.count("run release_place") == 1
-        rl_doc = json.loads((tmp_path / "rl-policy.json").read_text(encoding="utf-8"))
-        assert "tier_3" in rl_doc.get("place_tiers", {})
 
     def test_execute_3tier_hybrid_plan_across_tiers_1_2_3(self, tmp_path: Path):
         broker = VlaHandoverBroker(arm_id="arm_b", max_retries=2)
@@ -372,8 +374,9 @@ class TestVlaHandoverBroker:
             read_z_fn=lambda: measured_z[0],
             lift_step_fn=lambda _dz: None,
         )
-        assert plan_out["ok"] is True
-        assert plan_out["tiers_completed"] == [1, 2, 3]
+        assert plan_out["ok"] is False
+        assert plan_out["tiers_completed"] == []
+        assert plan_out["stages"][0]["verification"]["reason"] == "no post-release camera"
 
     def test_missing_release_readbacks_hold_the_stage_and_release_nothing(self, tmp_path: Path):
         broker = VlaHandoverBroker(arm_id="arm_b", max_retries=2)

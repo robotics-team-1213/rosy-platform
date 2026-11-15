@@ -84,6 +84,7 @@ def test_control_core_workspace_clamping_and_wrist_step() -> None:
 def test_rl_speed_scale_wired_into_build_plan(tmp_path: Path) -> None:
     """`rl_speed_scale` from `apply_learned_il_rl_residual` scales `transit_speed` and `lift_m_s` within safe bounds."""
     base_plan = json.loads((OMX_DIR / "grasp-plan.example.json").read_text(encoding="utf-8"))
+    base_plan["tcp_x_m"] = 0.074  # a missing TCP is refused (omx_tcp); the measured v2.1 jaw
     directive = {
         "schema": "rosy.omx-cell-area-xyz-directive.v1",
         "directive_id": "test-rl-speed",
