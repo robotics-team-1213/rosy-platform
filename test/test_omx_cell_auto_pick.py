@@ -416,6 +416,16 @@ def test_completed_transfer_failures_update_executor_ledger(tmp_path, monkeypatc
     assert (choice["tries"], choice["ok"]) == (len(attempts), 0)
 
 
+@pytest.mark.parametrize("transfer_result", ["empty", "misaligned", "reinserted"])
+def test_a_park_that_ended_in_contact_stops_the_run(tmp_path, monkeypatch, transfer_result):
+    """2026-11-14 arm_s: the park after a refused wrist overloaded shoulder_lift and the arm sagged onto the box, but the
+    transfer said "misaligned" and the next attempt would have started from there."""
+    park = {"command": "park", "ok": False, "contact": True, "error": "contact in park: shoulder_lift lag rose to 2.3 units"}
+    monkeypatch.setattr(auto, "transfer_folded", lambda *args, **kwargs: {"result": transfer_result, "at": "wrist", "steps": [park]})
+    result, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert result["result"] == "stopped: contact at park: contact in park: shoulder_lift lag rose to 2.3 units" and len(attempts) == 1
+
+
 @pytest.mark.parametrize("transfer_result", ["contact", "fault", "refused"])
 def test_guard_fault_and_refusal_stops_do_not_update_executor_ledger(tmp_path, monkeypatch, transfer_result):
     monkeypatch.setattr(auto, "transfer_folded", lambda *args, **kwargs: {

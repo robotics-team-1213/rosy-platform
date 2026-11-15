@@ -29,6 +29,10 @@ from chunk_runner import SETTLE_TOL  # noqa: E402
 BODY = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
 ACTIONS = {"lift": "shoulder_lift", "pull": "elbow_flex"}
 STEP, LAG_STOP, CLEAR, MAX_STEPS, SETTLE_S = 1.0, 1.2, 12.0, 60, 1.5
+# 2026-11-14 arm_s at a far pick: shoulder_lift lagged 1.3-1.6 just holding (P 640), so LAG_STOP read every step as blocked.
+# A joint that already droops gets DROOP_ROOM over its own starting lag, never past LAG_CEIL (the guard trips near 2.2), and
+# SMALL_STEP jogs (hand 0.3 steps raised the lift there until it stalled at 2.04).
+LAG_CEIL, DROOP_ROOM, SMALL_STEP = 2.0, 0.4, 0.3
 HOME = [0.8, -62.2, 53.1, 51.6, 45.2]  # the chunk libraries' home (topdown-guard), body joints
 RELEASE_OPEN, JAW_STEP, JAW_TOL = 2.7, 5.0, 1.5  # gripper units; 2.7 was the way from a 30 mm box back to its approach opening
 
@@ -55,9 +59,11 @@ def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None) -> dic
     if status.get("ok") is not True or lags(status) is None:
         return {"result": "stopped", "error": status.get("error") or "body measurements unavailable"}
     initial_lift = status["state"][1]
+    limits = [min(LAG_CEIL, max(LAG_STOP, b + DROOP_ROOM)) for b in lags(status)]
+    size = SMALL_STEP if max(lags(status)) > LAG_STOP else STEP
     lift_direction = 1 if home[1] > initial_lift else -1
     rows, last, blocked, misses, lifted = [], None, None, 0, 0.0
-    for step in range(MAX_STEPS):
+    for step in range(round(MAX_STEPS * STEP / size)):
         lifted = lift_direction * (status["state"][1] - initial_lift)
         action = decide(last, blocked, lifted)
         joint = ACTIONS[action]
@@ -65,7 +71,7 @@ def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None) -> dic
         remaining = home[index] - status["target"][index]  # jog changes the held target, not the measured pose
         if remaining * (home[index] - status["state"][index]) <= 0:
             return {"result": "stopped", "error": f"{joint} reached home before clearance", "rows": rows}
-        delta = max(-STEP, min(STEP, remaining))
+        delta = max(-size, min(size, remaining))
         status = cell.act(f"jog {joint}.pos {delta}")
         if not status.get("ok"):
             return {"result": "stopped", "at": step, "error": status.get("error"), "rows": rows}
@@ -76,7 +82,7 @@ def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None) -> dic
         lag = lags(status)
         if lag is None:
             return {"result": "stopped", "at": step, "error": "body measurements unavailable", "rows": rows}
-        strained = max(lag) > LAG_STOP
+        strained = any(v > limit for v, limit in zip(lag, limits))
         row = {"step": step, "action": action, "delta": delta, "state": status["state"], "lags": lag,
                "outcome": "blocked" if strained else "moved"}
         if frames:
@@ -105,7 +111,7 @@ def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None) -> dic
             return {"result": "recovered" if recovered else "stopped",
                     "park": parked.get("error") if recovered else parked.get("error") or "park did not confirm settled home",
                     "rows": rows}
-    return {"result": "stopped", "error": f"not clear after {MAX_STEPS} steps", "rows": rows}
+    return {"result": "stopped", "error": f"not clear after {len(rows)} steps", "rows": rows}
 
 
 def release_and_rise(cell, *, sleep=time.sleep) -> dict:
