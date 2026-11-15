@@ -30,23 +30,14 @@ from cell_calibrate_auto import (  # noqa: E402,F401  (re-exported)
     self_calibrate,
 )
 import cell_calibration as cal  # noqa: E402
+from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401  (re-exported)
 import cell_params as prm  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
 import cell_pivot  # noqa: E402
 
 MAP_POINTS = [
-    [-0.12, 0.17],
-    [-0.10, 0.19],
-    [-0.08, 0.17],
-    [-0.06, 0.19],
-    [-0.04, 0.17],
-    [-0.10, 0.15],
-    [-0.06, 0.15],
-    [-0.02, 0.19],
-    [0.02, 0.19],
-    [0.066, 0.195],
-    [0.06, 0.18],
-    [0.04, 0.17],
+    [-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15],
+    [-0.06, 0.15], [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17],
 ]  # the 2026-10-28 remap grid
 AT_STOP_S = 1.5  # the most a refused remap move waits for its stop evidence before it folds
 
@@ -229,10 +220,15 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         kept = consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
         near = predicted(kept, (x, y)) if len(kept) >= 4 else None
+        report = {}
         mark = cell_pivot.mark_jaws(
-            cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px"))
+            cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px")),
+            keep=frames / f"{i:02d}", report=report,
         )
-        log({"point": [x, y], "mark": mark, "near": near})
+        row = {"point": [x, y], "mark": mark, "near": near}
+        if mark is None and report.get("reason"):
+            row["why"] = report["reason"]
+        log(row)
         if mark:
             marks.append((mark, (x, y)))
     cell.act("park")
@@ -247,15 +243,13 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         log({"dropped_marks": dropped})
     if not enough_agree(len(marks), len(seen)):
         raise SystemExit(f"remap: only {len(marks)} marks agree of {len(seen)}")
-    return {
-        "homography": cal.fit(marks).round(9).tolist(),
+    return dict(fitted_map(config, marks, z_view), **{
         "z_view": z_view,
         "coarse": True,
         "dropped_marks": dropped,
         "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks],
-        "loo_error_mm": cal.loo_error_mm(marks),
         "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }
+    })
 
 
 def move_regions(config: dict, reference, current) -> dict:
@@ -291,6 +285,9 @@ def main(argv=None):
     ap.add_argument("step", choices=["check", "auto"])
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
+    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair"], help="auto: run only these step kinds (remap, regions, pivot-near, "
+                    "surface, consensus-repair); a reviewed plan for one step must not run the others. 2026-11-15: a "
+                    "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
     import cv2
@@ -307,6 +304,8 @@ def main(argv=None):
     work.mkdir(parents=True, exist_ok=True)
     found = check(config, calibration, targets, cell.frame("top"), config["params"])
     todo = stale(found)
+    if args.only:
+        todo = [step for step in todo if step.split()[0] in args.only]
     print(json.dumps({"check": found, "todo": todo}, default=str), flush=True)
     if args.step == "check" or not todo:
         return 0

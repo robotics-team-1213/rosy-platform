@@ -25,9 +25,15 @@ a tool. If a step lacks a tool, add it to the engine (`deploy/robot/omx/cell_*`)
    depth↔colour alignment, each surface's height over the table and each arm's plate (its FK zero).
    - FK height of a surface = (surface mm − plate mm) / 1000.
    - Alignment: scene edges, not object masks alone. Objects in one row leave the alignment loose.
-3. **Camera model** (D-933/D-954): use Fleet Cell's printed markers. Get slot IDs from
+3. **Camera model** (D-933/D-954): the lens first. The D435 top camera's K is in the device
+   (`cell_device_intrinsics.py read`, no streaming; it was 618.5 px, never the assumed 615) and is accepted only
+   when tilted board frames reproduce it (`verify`); other cameras fit K with `cell_checkerboard.py intrinsics`.
+   Then the pose: use Fleet Cell's printed markers. Get slot IDs from
    `operations/fleet/fleet/server/cell/cell_print_sheets.py:arm_ids`, matching `cell_frame.slot_ids` and the cell's `markers.slot`.
    `cell_frame.py learn` with gripper-marker views at FK points (supervised), then `cell_frame.py check`.
+   - Before trusting it for stacking, check it without the arm: the printed board on the table and on 30/60/90 mm
+     stacks in the arm's zone, `cell_tier_check.py` (per tier rms <= 1.5, max <= 2.5, height within 1.5 mm). The
+     arm's own map points lie on one plane and carry its FK error; a one-height map is 6-11 mm off per 30 mm.
    - Do not locate the jaws from depth or from an open/close colour difference. Both failed on this cell
      (2026-11-01: LOO 62-355 px from depth; 1 of 4 and 6 of 10 colour marks over the dark belt and pallet).
 4. **Surfaces**: write each site's `surface_z` from step 2. A touch (`cell_surface`) only confirms a hard,
