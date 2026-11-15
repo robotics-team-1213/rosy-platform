@@ -179,3 +179,31 @@ def test_resolve_branch_rejects_untracked_files_but_allows_gitignored(tmp_path, 
     (dev / "forgotten.py").write_text("x = 1\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="uncommitted changes"):
         precheck.resolve_branch(cwd, arg)
+
+
+def test_precheck_stops_on_manual_merge_conflict_and_allows_auto_resolvable(eol_repo, monkeypatch):
+    _git(eol_repo, "switch", "-q", "main")
+    (eol_repo / "docs").mkdir()
+    commit(eol_repo, {"docs/logs.md": b"## 2026-11-01\n- base\n", "c.py": b"1\n2\n3\n"})
+    _git(eol_repo, "switch", "-q", "feat/x")
+    _git(eol_repo, "merge", "-q", "--ff-only", "main")
+    commit(eol_repo, {"docs/logs.md": b"## 2026-11-01\n- base\n\n## 2026-11-02\n- feat\n"})
+    _git(eol_repo, "switch", "-q", "main")
+    commit(eol_repo, {"docs/logs.md": b"## 2026-11-01\n- base\n\n## 2026-11-03\n- main\n"})
+    _git(eol_repo, "switch", "-q", "feat/x")
+    land = real_land()
+    load("land_precheck").precheck(land, eol_repo, sys.executable)
+
+    _git(eol_repo, "switch", "-q", "main")
+    commit(eol_repo, {"c.py": b"main\n2\n3\n"})
+    _git(eol_repo, "switch", "-q", "feat/x")
+    commit(eol_repo, {"c.py": b"feat\n2\n3\n"})
+    with pytest.raises(land.Stop, match="conflicts with this branch"):
+        load("land_precheck").precheck(land, eol_repo, sys.executable)
+
+    monkeypatch.chdir(eol_repo)
+    tool = load("land_async")
+    monkeypatch.setattr(tool, "start", lambda *a, **k: pytest.fail("conflicting branch must not queue"))
+    assert tool.main(["--tests", "auto"]) == 1
+    assert not _git(eol_repo, "branch", "--list", "land/*")
+    assert not (eol_repo / ".git" / "rosy-land-queue").exists()
