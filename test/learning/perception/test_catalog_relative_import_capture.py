@@ -16,6 +16,9 @@ def identity(stat):
 
 
 def fd_count():
+    # Descriptors of unreachable objects left by earlier tests are closed whenever the collector
+    # happens to run; a count that straddles that moment is load dependent, so settle it first.
+    gc.collect()
     return len(list(Path('/proc/self/fd').iterdir()))
 
 

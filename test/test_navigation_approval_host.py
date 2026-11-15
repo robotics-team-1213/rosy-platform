@@ -462,3 +462,19 @@ def test_starting_navigation_reports_the_os_update_unit(root, tmp_path):
 def test_no_seal_reads_as_needing_measurement(root):
     state = host.status(root, Ops(root))
     assert state["approval"]["valid"] is False and state["needs_measurement"] is True
+
+
+def test_commit_checks_the_projection_with_the_image_installed_dispatcher(monkeypatch, tmp_path):
+    # The release copy of os_storage_dispatch.py cannot find os-bootstrap and answers HOLD (geg6 11-09).
+    import types
+    for name, attr in (("os_state_config", "commit_runtime"), ("os_state_ready", "publish_ready")):
+        monkeypatch.setitem(sys.modules, name, types.SimpleNamespace(**{attr: lambda *a, **k: None}))
+    calls = []
+    ops = host.SystemOps()
+    ops.run = lambda *argv, **k: (calls.append(argv), types.SimpleNamespace(
+        returncode=0, stdout='{"phase": "PROJECTED"}'))[1]
+
+    ops.commit(tmp_path, b"new", b"old")
+
+    assert calls == [(sys.executable, "-B", "/opt/rosy/native-runtime/os_storage_dispatch.py", "--projected")]
+    assert host.HERE not in host.DISPATCH.parents

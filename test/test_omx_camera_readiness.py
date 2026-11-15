@@ -249,6 +249,8 @@ def test_service_has_independent_restore_for_the_same_state_directory():
     assert start[start.index('--state-dir')+1] == stop[stop.index('--state-dir')+1]
     assert unit['Service']['NoNewPrivileges'] == 'true'
     assert 'rosy-omx-camera-view.service' in unit['Unit']['Requires']
+    # the role aliases exist before the first try (2026-11-08 boot: three retries on a missing alias)
+    assert 'rosy-omx-cameras-bind.service' in unit['Unit']['Wants'] and 'rosy-omx-cameras-bind.service' in unit['Unit']['After']
     # A boot-time refusal restores the originals in ExecStopPost; only a bounded retry reaches READY.
     assert unit['Service']['Restart'] == 'on-failure'
     assert int(unit['Unit']['StartLimitBurst']) <= 3

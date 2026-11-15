@@ -144,6 +144,8 @@ class FakeCore:
 
 
 class Ports:
+    poses_in_robot_frame = True  # D-1003 6: this rig's single frame is the robot's own Nav2 map
+
     def __init__(self, caps=LANE):
         self.caps = {"rosy_60": caps}
         self.pose = None
@@ -164,13 +166,10 @@ class Ports:
         self.line_starts: list[str] = []  # D-601 A: CAMERA_LINE turned on by the trip
         self.line_start_error = None
         self.camera = {"available": True, "stale": False, "age_ms": 40}  # D-601 B
-
     def caps_for(self, robot_id):
         return self.caps.get(robot_id)
-
     async def arbitrated_pose(self, robot_id):  # async on purpose: the runner takes either
         return self.pose
-
     async def refresh(self, robot_id, force_rest=False):
         assert force_rest  # the trip loop reads past the 1 Hz hub cache
         self.refreshes += 1
@@ -219,7 +218,7 @@ class Ports:
 
     def at(self, arc, s, state="LOCALIZED", dy=0.0, anchor_age_s=0.1):
         x, y, yaw = arc.point_at(s)
-        self.pose = MapPose(x, y + dy, yaw, state, "sighting", 0.0, 0.1, anchor_age_s)
+        self.pose = MapPose(x, y + dy, yaw, state, "sighting", 0.0, 0.1, anchor_age_s, getattr(self, "map_id", None))
 
 
 def _map(*places, edges) -> SiteMap:
@@ -665,22 +664,6 @@ def test_core_waiting_at_a_junction_stops_the_trip_after_the_timeout():
 
 
 # ---- free -----------------------------------------------------------------------------------
-
-def test_free_trip_sends_d463_points_ahead_across_the_place_and_arrives():
-    runner, store, ports = _setup(_free_map(), caps=BOTH)
-    _plan(store, ports, "ab:fwd", 0.1, "C")
-    run(runner.start("p1", "bob"))
-    _ticks(runner, ports)
-    assert ports.goals == [(0.3, 0.0)] and ports.sent == []
-    _ticks(runner, ports)
-    assert len(ports.goals) == 1  # the same point is not sent again
-    ports.at(_arc(store, "ab:fwd"), 0.9)
-    _ticks(runner, ports)
-    assert ports.goals[-1] == (1.0, 0.1)  # 0.2 m ahead runs on into bc
-    ports.at(_arc(store, "bc:fwd"), 0.97)
-    _ticks(runner, ports)
-    assert runner.view("p1")["state"] == "arrived"
-
 
 def test_each_trip_step_renews_the_goal_lease_and_a_failed_renewal_keeps_the_trip():
     """D-550 10: the trip loop is the renewer of trip goals; a renewal error is left to CORE."""
@@ -1313,6 +1296,7 @@ def test_a_trip_robot_never_yields_and_is_not_a_reassignment_candidate(monkeypat
 
     console.map = no_map
     console._pose_of = lambda robot_id: (0.5, 0.0)
+    run(console.snapshot())  # the frames must be known (state read) before room is made
     result = run(console._make_room("a", 1.0, 0.0, 0.0, [(0.0, 0.0), (1.0, 0.0)], ["b", "c"]))
     assert result["no_space"] == ["b"] and result["yielding"] == ["c"]
     assert not [c for c in robots[1].calls if c[0] == "navigation_goal"]

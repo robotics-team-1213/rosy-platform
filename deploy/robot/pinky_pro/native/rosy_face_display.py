@@ -210,6 +210,7 @@ class FaceDisplay:
         self._ticks = 0
         self.shutting_down = False
         self.animating: tuple | None = None
+        self._core_face_live = False  # tick may draw CORE's newest face (see step)
         self.screen: dict | None = None
         self.draws = 0
         self.frames = 0
@@ -496,6 +497,9 @@ class FaceDisplay:
         if kind == "face" and screen["overlay"] is None:
             # The face plays from tick(); the status bar rides every frame.
             self.animating = bar
+            # CORE's live face replaces the bar's only while the bar shows it unchanged: no
+            # situation face (recovery hold included) and no lamp-level substitution.
+            self._core_face_live = bar is not None and core is not None and bar[0] == core.get("face")
             self._drawn = None
         else:
             self.animating = None
@@ -571,12 +575,12 @@ class FaceDisplay:
             core = self._read_core()
             if core is None or core.get("estop") or core.get("robot_mode") == "EMERGENCY":
                 return False
-            if core.get("face") and core.get("activity_kind") != "CALIBRATING":
+            if core.get("face") and self._core_face_live:
                 face = core["face"]
             expires = core.get("expression_until")
             live = expires is not None and self._wall() <= expires
             intent = core.get("expression") if live else None
-            if expires is not None and not live:
+            if expires is not None and not live and self._core_face_live:
                 face = "basic"
             intent = intent or {"gaze_x": 0., "resting": False}
             frame = self._faces.next(face, expression=intent, now=self._clock())

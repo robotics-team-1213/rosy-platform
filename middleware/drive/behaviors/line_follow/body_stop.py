@@ -1,7 +1,7 @@
 """D-422 body-referenced obstacle stop: a LineFollowManager mixin (keeps manager.py in budget).
 
 The URDF body outline is swept along the intended lane arc (clearance.body_path_gap); in place,
-the rotation radius (clearance.rotation_gap). Every method runs under the manager's
+the side the body turns into (clearance.rotation_sweep_gap, D-1008). Every method runs under the manager's
 ``self._lock`` except ``observe_ultrasonic`` and ``bind_motion_envelope``, which take it.
 
 Review fixes (2026-10-02):
@@ -26,7 +26,7 @@ from typing import Callable, Optional
 
 from core_common.robot_body import inside_body
 from core_features.line_follow.clearance import (
-    body_envelope_gap, body_path_gap, rotation_gap, ultrasonic_points)
+    body_envelope_gap, body_path_gap, rotation_sweep_gap, ultrasonic_points)
 from core_features.line_follow.model import _finite
 from core_features.safety.velocity import limit_velocity
 
@@ -205,8 +205,8 @@ class BodyStopMixin:
         LiDAR points (current scan + remembered ones under range_min) move to base_footprint; a
         fresh forward ultrasonic echo adds its cone. Moving: the URDF outline swept along the
         arcs the commanded twist can take, stop gap from the speed (or the LiDAR-origin
-        override), never below the LiDAR blind-zone gap. In place: the rotation circle, which
-        never moves closer, so stop and resume are the body margin (no override, no hysteresis).
+        override), never below the LiDAR blind-zone gap. In place: the outline turned toward
+        the intended side (D-1008), so stop and resume are the body margin (no override, no hysteresis).
         """
         c = self._config
         if self._odometry_hold:
@@ -242,8 +242,12 @@ class BodyStopMixin:
             half_angle_deg=c.obstacle_ultrasonic_half_angle_deg)
         groups = (("lidar", lidar), ("memory", self._remembered_points()), ("ultrasonic", sonar))
         if linear <= 1e-6:
-            gaps = [rotation_gap(points, rotation_radius_m=c.body_rotation_radius_m,
-                                 reach_m=c.obstacle_path_horizon_m) for _, points in groups]
+            # D-1008: only the side the body turns into; a turn with no direction yet counts both.
+            gaps = [rotation_sweep_gap(points, sign=angular, front_x_m=c.body_front_x_m,
+                                       rear_x_m=c.body_rear_x_m, half_width_m=c.body_half_width_m,
+                                       rotation_radius_m=c.body_rotation_radius_m,
+                                       horizon_m=c.obstacle_path_horizon_m,
+                                       pad_m=c.obstacle_body_margin_m) for _, points in groups]
             stop = resume = c.obstacle_body_margin_m
         else:
             stop, resume = self._stop_resume_gaps(linear)

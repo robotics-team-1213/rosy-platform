@@ -308,6 +308,21 @@ def test_a_session_gain_is_written_for_the_session_and_restored_to_the_value_fou
     assert arm.motors[13]["p_gain"] == 400 and (13, "p_gain", 400) not in arm.writes
 
 
+def test_every_session_logs_the_follower_registers_after_its_caps_and_again_before_restoring_them(tmp_path):
+    """2026-11-09: joint2 replayed 2-4x stiffer than its P cap said; the session's own registers settle it."""
+    arm, leader = follower({12: {"i_gain": 0, "d_gain": 3600}}), leader_arm()
+    s, _ = session(arm, leader)
+    rows = []
+    s.log = lambda **row: rows.append(row)
+    record = s.execute(config(tmp_path), {**CAPS, 12: {**CAPS[12], "p_gain": 1600}}, teleop_only=False)
+    dumps = [r for r in rows if r.get("step") == "registers"]
+    assert [d["when"] for d in dumps] == ["caps written", "stop"]
+    assert dumps[0]["registers"]["12"]["p_gain"] == 1600 and dumps[0]["registers"]["12"]["d_gain"] == 3600
+    assert dumps[1]["registers"]["12"]["p_gain"] == 1600 and arm.motors[12]["p_gain"] == 400  # read, then restored
+    assert str(dumps[0]["registers"]["11"]["profile_acc"]).startswith("error")  # a failed read is kept, not raised
+    assert record["safe_end"] is True and record["caps_restored"] is True
+
+
 def test_a_session_profile_is_written_for_the_session_and_restored_to_the_value_found(tmp_path):
     """2026-10-27: the servo snapped to each whole-tick goal; a session profile ramps between them."""
     found = {"profile_acc": 0, "profile_vel": 0}

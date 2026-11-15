@@ -134,6 +134,26 @@ export function serverCalibrationDrift(sources) {
   return worst;
 }
 
+// D-1006 보정 건강 상태(서버 calibration_health). 거부된 맞춤·보이는 범위 부족도 알린다.
+// 가장 무거운 상태 하나만: 불일치 > 어긋남 > 범위 부족. fresh·unknown 은 알림 없음.
+const HEALTH_RANK = Object.freeze({ mismatch: 3, drifting: 2, insufficient_coverage: 1 });
+const HEALTH_TEXT = Object.freeze({
+  mismatch: "승인 교정이 현재 영상과 맞지 않습니다(카메라가 움직였거나 바닥이 바뀜 — 원인은 아직 판정 못 함). 맵 고정을 다시 하세요.",
+  drifting: "승인 교정과 새 맞춤이 어긋납니다. 카메라가 움직인 것 같습니다. 맵 고정을 다시 하세요.",
+  insufficient_coverage: "카메라에 보이는 차선이 적어 교정을 확인할 수 없습니다. 카메라를 옮겨 트랙이 더 보이게 하세요.",
+});
+export function calibrationHealthNotice(sources) {
+  let worst = null;
+  for (const source of sources || []) {
+    const health = source?.calibration_health;
+    const rank = HEALTH_RANK[health?.state];
+    if (!rank || (worst && rank <= worst.rank)) continue;
+    worst = { rank, sourceId: source.source_id, state: health.state, blocking: health.blocking === true,
+      text: HEALTH_TEXT[health.state] + (health.blocking ? " 카메라 위치 판정은 중지되었습니다." : "") };
+  }
+  return worst;
+}
+
 // 조감도가 쓸 최종 판정: 로봇 표본 판정(정지 로봇 차이)이 살아 있으면 그것이 먼저다 —
 // 로봇이 카메라에 안 보이면(관측 0/0대) 표본 판정은 null이고 서버 판정으로 그린다.
 export function effectiveDriftVerdict(robotVerdict, sources) {

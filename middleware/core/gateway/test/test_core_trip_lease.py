@@ -191,6 +191,7 @@ FENCED = [
     ("post", "/api/v1/mode", {"mode": "NAVIGATION"}),
     ("post", "/api/v1/teleop", {"linear": 0.1, "angular": 0.0}),
     ("post", "/api/v1/navigation/goal", {"x": 1.0, "y": 0.0}),
+    ("post", "/api/v1/navigation/route", {"points": [{"x": 1.0, "y": 0.0}]}),  # D-1009
     ('post', '/api/v1/navigation/handover', dict(expected_boot_id='00000000-0000-0000-0000-000000000001',
         run_id='00000000-0000-0000-0000-000000000001', expected_owner_generation=0, correlation_id='work-attempt')),
     ("post", "/api/v1/navigation/home", None),

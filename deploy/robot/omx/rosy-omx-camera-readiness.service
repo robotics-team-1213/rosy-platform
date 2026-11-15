@@ -1,7 +1,10 @@
 [Unit]
 Description=ROSY OMX automatic camera tuning and photometric readiness
 Requires=rosy-omx-camera-view.service
-After=rosy-omx-camera-view.service
+# The role aliases (/dev/v4l/by-id/rosy-*) come from the bind; at boot it ran 20 s after this start, so all three
+# retries failed on a missing alias and readiness stayed down until a person restarted it (2026-11-08).
+Wants=rosy-omx-cameras-bind.service
+After=rosy-omx-camera-view.service rosy-omx-cameras-bind.service
 # A refused start runs ExecStopPost restore; the documented recovery is one more start (2026-10-23/24).
 StartLimitIntervalSec=300
 StartLimitBurst=3

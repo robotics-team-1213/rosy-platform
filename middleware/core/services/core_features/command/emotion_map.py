@@ -4,7 +4,7 @@
 같은 우선순위 문법을 따르되, 표정에는 깜빡임 같은 시간 축이 없다 — 모드가 바뀔
 때 한 번 갈아입고 유지한다.
 
-GIF 이름은 emotion 패키지의 어휘다(hello/basic/angry/bored/fun/happy/interest/sad).
+GIF 이름은 emotion 패키지의 어휘다(전체 목록은 core_common.face_screen.FACES).
 감정 노드는 모르는 이름을 거부한다(fail closed) — 여기서도 모르는 입력은
 None(지금 표정 유지)이지 추측이 아니다.
 """

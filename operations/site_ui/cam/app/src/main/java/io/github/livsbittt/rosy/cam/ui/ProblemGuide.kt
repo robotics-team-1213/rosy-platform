@@ -95,6 +95,7 @@ object ProblemGuide {
             // Re-pairing cannot help: the token is fine, the site does not allow this camera (rosy-00, 2026-10-01).
             LinkError.Forbidden -> Guidance(Problem.FORBIDDEN, NextStep.NONE, "close 4403", retrying)
             LinkError.ProtocolMismatch -> Guidance(Problem.PROTOCOL_MISMATCH, NextStep.NONE, "close 4400", retrying)
+            LinkError.SiteMoved -> Guidance(Problem.SITE_CHECKING, NextStep.NONE, "site moved", retrying)
             LinkError.CredentialUnknown -> Guidance(Problem.SITE_CHECKING, NextStep.NONE, "close 4503", retrying)
             is LinkError.Busy -> Guidance(Problem.BUSY, NextStep.NONE, "close ${error.code} ${error.reason}".trim(), retrying)
             is LinkError.InvalidConfig -> Guidance(Problem.INVALID_CONFIG, NextStep.NONE, error.field, retrying)

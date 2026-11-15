@@ -105,3 +105,8 @@
 - 변경: 같은 페이지를 다시 읽던 브랜드 링크가 본문(#main)으로 옮겨 가게 했다. 공용 브랜드 링크는 유지한다.
 - 증거: 1366·390 폭에서 브랜드 클릭으로 입력한 조회 키와 세션이 사라지는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 운영 수용은 별도다.
+
+## 2026-11-09 · uncommitted · deploy(monitoring): 전용 서명 이미지 rosy-site-monitoring (D-1001 이행 2)
+- 변경: `deploy/site/Dockerfile.monitoring`(fleet 패키지 없음)을 후보 빌드·서명 목록에 넣고 compose를 그 이미지로 바꿨다. Fleet 이미지에서 Monitoring 소스·화면을 뺐다. 업데이트기·검증기는 이미지 목록의 선택 항목 `monitoring`을 받고, 이전 후보(Fleet 이미지 동반)는 그대로 검증·되돌린다.
+- 증거: 원격 pytest(후보 빌더·검증기·업데이트기·배치 시험, 구조 시험에서 Fleet 이미지 예외 제거). 실제 이미지 빌드·R 배포는 하지 않았다.
+- gate 변화: SOURCE 회귀. 운영 수용은 별도다.

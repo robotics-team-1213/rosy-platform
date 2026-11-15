@@ -13,12 +13,12 @@ from typing import Optional
 import httpx
 
 from fleet.hub.hub import HubError
-from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, exit_segment, lane_action, turn_target
 from fleet.server.trip_admission import LOCALIZED
 from fleet.server.charge_goal_gate import ready_free_goal
-from fleet.server.trip_geometry import arc_newer, bend_fields, junction_fields, next_bend
+from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_fields, junction_fields,
+                                        next_bend, robot_frame_goal)
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
@@ -159,7 +159,7 @@ class TripSteps:
             if lane:
                 await self._step_lane(live, index, remaining, pose)
             else:
-                await self._step_free(live, index, s)
+                await self._step_free(live, index, s, pose)
         except _JunctionAborted as exc:
             await self._stop(live, "stopped", "junction", {"junction_state": "aborted",
                                                            "junction_seq": exc.args[0] if exc.args else None})
@@ -347,22 +347,63 @@ class TripSteps:
         if live.first_seq is None:
             live.first_seq, live.arc_base = (seq if isinstance(seq, int) else 0), arc_before
 
-    async def _step_free(self, live: LiveTrip, index: int, s: float) -> None:
+    async def _step_free(self, live: LiveTrip, index: int, s: float, pose) -> None:
         segment = live.segments[index]
-        if live.view["hold"] is not None:  # hold at the place: the goal is the place itself
-            x, y, yaw = live.arc(index).point_at(segment["s_to"])
-        elif s + STEP_M > segment["s_to"] and index + 1 < len(live.segments):
-            nxt = live.segments[index + 1]
-            x, y, yaw = live.arc(index + 1).point_at(min(nxt["s_from"] + s + STEP_M - segment["s_to"], nxt["s_to"]))
-        else:
-            x, y, yaw = live.arc(index).point_at(min(s + STEP_M, segment["s_to"]))
+        active = self._store.active()
+        if active is None or active[0] != live.view["map_version"]:
+            # D-1010: the plan's frame is not the active site map any more. A free goal is a
+            # coordinate in one frame; sending it against another map drives the robot elsewhere.
+            await self._stop(live, "stopped", "map_version",
+                             {"map_version": live.view["map_version"],
+                              "active_version": None if active is None else active[0]})
+            return
+        # D-1003 4: the segment's end place, one goal per segment. CORE refuses a new goal while Nav2 runs one
+        # (409 NAVIGATION_ACTIVE, SIM run 5), so the D-463 rolling point 0.2 m ahead failed the trip at its second send.
+        x, y, yaw = live.arc(index).point_at(segment["s_to"])
         if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
             return
         if not await ready_free_goal(self, live):  # D-772 charge-only native readiness
             return
         if not live.open:
             return
-        reply = await self._call(self._goal(live.view["robot_id"], x, y, yaw)) or {}
+        goal = (x, y, yaw)
+        if self._robot_state is not None:  # D-1003: Nav2 runs on the robot's own map, not the site map
+            state = await self._call(self._robot_state(live.view["robot_id"]))
+            try:
+                converted = robot_frame_goal(goal, pose, state, active[1].map_id)
+            except SiteFrameMismatch as error:
+                # D-1010: the site side of the conversion is not this map. Never convert, never
+                # send the site goal raw to a robot known to run its own map frame.
+                await self._stop(live, "stopped", "map_frame",
+                                 {"pose_map_id": error.pose_map_id, "map_id": error.map_id})
+                return
+            if converted is None:
+                # D-1010 review: no proof the frames bind (not LOCALIZED, no robot map id equal to
+                # the site's, an unreadable state). The site goal never goes out raw to another
+                # frame's robot; charge returns ride on the same-map proof in robot_frame_goal.
+                await self._stop(live, "stopped", "map_frame",
+                                 {"map_id": active[1].map_id,
+                                  "robot_map_id": None if state is None else state.get("map_id")})
+                return
+            site_frame = converted is goal  # the same-map proof returns the goal object itself
+            goal = converted
+            live.view["detail"]["goal_frame"] = {  # D-1010: the audit binding of the sent goal
+                "map_id": active[1].map_id, "map_version": active[0],
+                "robot_map_id": (state or {}).get("map_id"),
+                "goal_frame": "site" if site_frame else "robot"}
+        elif not self._poses_in_robot_frame:
+            # D-1010 review: a port without robot snapshots (D-1003 6) proves nothing either; an
+            # unproven free goal stops the trip instead of leaving in site coordinates.
+            await self._stop(live, "stopped", "map_frame",
+                             {"map_id": active[1].map_id, "robot_map_id": None})
+            return
+        try:
+            reply = await self._call(self._goal(live.view["robot_id"], *goal)) or {}
+        except RobotApiError as exc:
+            if exc.code == "NAVIGATION_ACTIVE":  # the last segment's goal is still finishing: sent again next period
+                live.view["detail"]["goal_wait"] = exc.message  # shown, so a stall names CORE's reason
+                return
+            raise
         live.last_goal = (x, y)
         await self._after_send(live)
         if reply.get("accepted") is False or reply.get("queued"):

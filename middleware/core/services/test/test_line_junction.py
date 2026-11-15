@@ -483,7 +483,11 @@ def test_d422_near_stop_aborts_the_turn():
         if decision.angular:
             break
     assert status.junction.state == 'turning' and decision.angular > 0
-    decision, status = rig.step(seen=False, move=True, points=[(0., .105)])  # inside the swing
+    # D-1008: a left turn is judged on the side the body swings into. Behind the left face's rear half the
+    # same distance is trailing (the face moves away from it), so the turn goes on; ahead of the front half it stops.
+    decision, status = rig.step(seen=False, move=True, points=[(-.04, .085)])
+    assert status.junction.state == 'turning' and decision.angular > 0
+    decision, status = rig.step(seen=False, move=True, points=[(.04, .085)])  # inside the swing
     assert (status.junction.state, status.junction.reason, decision.angular) == ('aborted', 'near_stop', 0.)
 
 

@@ -52,6 +52,10 @@ def test_default_recipe_changes_only_pytest_pin_and_rekeys_the_environment(monke
                             ' true) MB)"\n')
     # 2026-11-09: pytest-timeout fails a hung test with its id (remote_job exports PYTEST_TIMEOUT).
     pinned = pinned.replace("pytest-xdist==3.8.0", "pytest-xdist==3.8.0 pytest-timeout==2.4.0")
+    # 2026-11-10: playwright pinned to the last green 1.64.1 (1.65.0 enforces inert on
+    # select_option and turned the ui-confirm live-dialog browser tests red overnight).
+    pinned = pinned.replace("numpy pillow playwright pytest-xdist==3.8.0",
+                            "numpy pillow playwright==1.64.1 pytest-xdist==3.8.0")
     assert pinned != old
     assert rp.VENV == pinned
     assert tools().render_setup(rp.VENV, None) == pinned

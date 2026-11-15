@@ -33,6 +33,7 @@ class Bus:
         self.fail_write = False
         self.bad_reads = 0  # corrupt status packets before a good one
         self.goals = {}
+        self.temps = dict.fromkeys(NAMES, 30)
         self.profiles = {(n, register): 1 for n in NAMES
                          for register in ('Profile_Velocity', 'Profile_Acceleration')}
 
@@ -63,6 +64,8 @@ class Bus:
             return 5 if motor == "gripper" else 4
         if register == "Hardware_Error_Status":
             return 0
+        if register == "Present_Temperature":
+            return self.temps[motor]
         if register == "Torque_Enable":
             return self.torque[motor]
         if register in ("Profile_Velocity", "Profile_Acceleration"):
@@ -768,9 +771,98 @@ def test_sustained_loaded_tracking_error_latches_before_firmware_overload(guard)
     for _ in range(10):
         follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - 25
         step()
-    with pytest.raises(ValueError, match=r'shoulder_lift.*overload risk.*PWM=-300.*limit=330.*duration='):
-        for _ in range(20):
+    with pytest.raises(ValueError, match=r'shoulder_lift.*overload risk.*hold timed out.*PWM=-300.*limit=330.*duration='):
+        for _ in range(120):
             follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - 25
+            step()
+    assert not any(follower.torque.values()) and motion.failed
+
+
+def overload_into_hold(guard, pwm=-300):
+    """A shoulder_lift stalled 25 ticks behind at the cap until the guard takes its one hold."""
+    motion, follower, leader, clock, step = phased_pair(guard)
+    effort_read(follower, pwm=pwm)
+    while 'shoulder_lift' not in motion.held:
+        follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - 25
+        step()
+        assert not motion.failed
+    return motion, follower, leader, clock, step
+
+
+def test_overload_holds_with_torque_on_and_the_goal_set_to_present_once(guard):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    held_goal = motion.command['shoulder_lift']
+    assert held_goal == follower.raw['shoulder_lift'] and all(follower.torque[n] for n in guard.BODY)
+    for _ in range(20):  # the joint sags under the cap (3.5 deg); the goal must not chase it down (2026-11-09 review)
+        follower.raw['shoulder_lift'] -= 2
+        step()
+    assert motion.command['shoulder_lift'] == held_goal and not motion.failed
+
+
+def test_a_frozen_hold_still_at_the_cap_times_out_on_pwm_alone(guard):
+    # the goal sits on present, so the error-gated overload test reads 0 error and would never fire
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    started = clock[0]
+    with pytest.raises(ValueError, match=r'shoulder_lift: overload risk; hold timed out at PWM=-300 limit=330'):
+        for _ in range(200):
+            follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift'])
+            step()
+    assert clock[0] - started == pytest.approx(guard.HOLD_S, abs=0.3)
+    assert not any(follower.torque.values()) and motion.failed
+
+
+def test_a_hold_never_frees_itself_and_after_release_a_second_overload_ends_the_session(guard):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    held_goal = motion.command['shoulder_lift']
+    effort_read(follower, pwm=0)  # off the cap, same target: the joint must not resume into the stall (2026-11-09 review)
+    for _ in range(40):
+        follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift'])
+        step()
+    assert 'shoulder_lift' in motion.held and motion.command['shoulder_lift'] == held_goal and not motion.failed
+    motion.release_hold()
+    assert not motion.held
+    effort_read(follower, pwm=-300)
+    with pytest.raises(ValueError, match='overload risk.*second overload on this joint'):
+        for _ in range(60):
+            follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - 25
+            step()
+    assert not any(follower.torque.values())
+
+
+@pytest.mark.parametrize('shed_load', [False, True])
+def test_a_hold_freezes_every_joint_unless_the_runner_sheds_load(guard, shed_load):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    motion.shed_load = shed_load
+    effort_read(follower, pwm=0)
+    elbow = motion.command['elbow_flex']
+    for _ in range(10):  # the runner's target keeps moving on another joint
+        leader.raw['elbow_flex'] += 4
+        follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift'])
+        follower.raw['elbow_flex'] = int(motion.command['elbow_flex'])
+        step()
+    assert (motion.command['elbow_flex'] != elbow) == shed_load
+    assert 'shoulder_lift' in motion.held and not motion.failed
+
+
+def test_a_held_joint_that_warms_ends_the_session(guard):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    follower.temps['shoulder_lift'] += guard.HOLD_TEMP_RISE_C
+    with pytest.raises(ValueError, match='held joint warmed'):
+        for _ in range(10):
+            step()
+    assert not any(follower.torque.values())
+
+
+def test_an_error_inside_the_hold_watch_still_turns_torque_off(guard):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    read = follower.read
+    def broken(register, motor, **kwargs):
+        if register == 'Present_Temperature':
+            raise ConnectionError('temperature read failed')
+        return read(register, motor, **kwargs)
+    follower.read = broken
+    with pytest.raises(ConnectionError):
+        for _ in range(10):
             step()
     assert not any(follower.torque.values()) and motion.failed
 
@@ -841,7 +933,7 @@ def test_effort_boundaries_apply_to_all_commanded_body_modes(guard, body_only, e
     motion.send(action(leader))
     effort_read(follower, pwm=pwm)
     def run():
-        for _ in range(9):
+        for _ in range(27):  # the overload test fires within 1 s, the hold then times out after HOLD_S
             clock[0] += 0.2
             follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - error_ticks
             motion.send(action(leader))

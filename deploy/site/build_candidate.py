@@ -47,7 +47,7 @@ MIRRORED_IMAGES = {
 # sources are copied whole, so ignored files under any of them could reach the
 # Docker daemon or an image. Python caches and egg-info carry no secrets.
 _HARMLESS_IGNORED = ("__pycache__/", ".pytest_cache/", ".egg-info/")
-_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account")
+_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account", "Dockerfile.monitoring")
 _PARSED_COPY_FLAGS = ("--chown=", "--chmod=")
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -235,6 +235,7 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
     services = {
         "fleet": (site / "Dockerfile.fleet", root),
         "account": (site / "Dockerfile.account", root),
+        "monitoring": (site / "Dockerfile.monitoring", root),  # D-1001
         "vision": (site / "Dockerfile.vision", root),
         "proxy": (site / "Dockerfile.proxy", site),
     }

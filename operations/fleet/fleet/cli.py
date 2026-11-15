@@ -579,8 +579,8 @@ def run_console(args: argparse.Namespace) -> None:
             print("warning: --calibration-drift-interval-s is 0; the calibration drift "
                   "watch is disabled", file=sys.stderr, flush=True)
         tracking_service = TrackingService(
-            sighting_service.sources, calibrations=calibration_store,
-            drift_provider=drift_provider)
+            sighting_service.sources, calibrations=calibration_store, drift_provider=drift_provider,
+            health=getattr(calibration_drift_watch, 'health', None))
         sighting_service.approved_revision = tracking_service.approved_revision
     if getattr(args, "vision_url", None) and tracking_service is None:
         print("warning: --vision-url set but no --sightings-config; the calibration drift "

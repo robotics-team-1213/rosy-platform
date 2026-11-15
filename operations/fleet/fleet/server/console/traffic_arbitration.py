@@ -84,6 +84,11 @@ class TrafficArbitration:
             if here is not None and traffic.coincident(pose, here):
                 # 출발점과 같은 보고는 길을 막은 로봇이 아니라 측위가 안 된 겹침이다 (D-116).
                 continue
+            if self._map_mismatch(mover, robot_id):
+                # D-1010: its pose is another frame's numbers, so this route-versus-pose
+                # verdict would be fiction. It stays a blocker for a human, never moved.
+                out.append(robot_id)
+                continue
             nearest = bays.nearest_on_route(route, pose)
             if nearest is None or math.dist(nearest, pose) >= self._yield_keep_out_m:
                 continue
@@ -118,8 +123,9 @@ class TrafficArbitration:
             pose = self._pose_of(robot_id)
             # 거리장 계산은 맵이 크면 몇백 ms(40x40 m, 20 m 경로에서 0.38 s)라 이벤트 루프 밖에서 돈다.
             # 제 목표를 받고 교통 판정을 기다리는 로봇은 비켜세울 수 없다(_send_to_bay 거절) - 자리 없음으로 기다린다.
-            bay = None if pose is None or self.trip_busy(robot_id) or robot_id in self._goal_busy else await asyncio.to_thread(
-                bays.best_bay, grid, route, pose, keep_out_m=self._yield_keep_out_m)
+            bay = None if pose is None or self.trip_busy(robot_id) or robot_id in self._goal_busy \
+                or self._map_mismatch(mover, robot_id) else await asyncio.to_thread(
+                    bays.best_bay, grid, route, pose, keep_out_m=self._yield_keep_out_m)
             self.goal_leases.check_stop(mover, stop)
             if bay is None:
                 no_space.append(robot_id)
@@ -203,6 +209,8 @@ class TrafficArbitration:
             if state:
                 robot_id = row["robot_id"]
                 self._seen[robot_id] = state
+                if state.get("map_id") is not None:  # D-1010: the last frame this robot confirmed
+                    self._robot_maps[robot_id] = state["map_id"]
                 if self._state_sink is not None:
                     try:
                         self._state_sink(robot_id, state)
@@ -253,6 +261,34 @@ class TrafficArbitration:
     def _verdict(self, robot_id: str) -> str:
         """Trust only an explicit LOCALIZED map snapshot."""
         return trust.classify(self._seen.get(robot_id))
+
+    def _map_mismatch(self, mover: str, robot_id: str) -> bool:
+        """D-1010: only two robots on the same **known** map (their own ``state.map_id``) may share
+        one crossing grid. A snapshot without a map id falls back to that robot's last confirmed
+        one (logged once); a robot with no confirmed frame at all is held as a mismatch — an
+        unknown frame is never used in a crossing verdict (2026-11-10 review)."""
+        mover_map, other_map = self._frame_of(mover), self._frame_of(robot_id)
+        return not (mover_map is not None and other_map is not None and mover_map == other_map)
+
+    def _frame_of(self, robot_id: str) -> Optional[str]:
+        current = (self._seen.get(robot_id) or {}).get("map_id")
+        if current is not None:
+            return current
+        remembered = self._robot_maps.get(robot_id)
+        if remembered is not None and robot_id not in self._robot_map_fallbacks:
+            self._robot_map_fallbacks[robot_id] = True
+            logger.warning("traffic: %s reports no map_id; comparing on its last confirmed %s",
+                           robot_id, remembered)
+        return remembered
+
+    def _claim_blocker(self, mover: str, route) -> tuple[Optional[str], bool]:
+        """``(blocker, is_conflict)`` for a dispatched goal's route: the first claim crossing it,
+        or the first claim on another known map frame — never a silent frame merge (D-1010)."""
+        conflict = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(mover,))
+        if conflict is not None:
+            return conflict, True
+        return next((rid for rid in sorted(self._claims)
+                     if rid != mover and self._map_mismatch(mover, rid)), None), False
 
     def _untrusted_blocks(self, robot_id: str, route: Sequence) -> bool:
         return (self._verdict(robot_id) == trust.UNTRUSTED

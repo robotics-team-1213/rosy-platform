@@ -118,6 +118,19 @@ class SiteResolver(
         return browser.browse(browseTimeoutMs) { manual in it.addresses }.singleOrNull()
     }
 
+    /**
+     * Adverts of this app's service under a host name other than the saved `tls_host`, one per name (at most
+     * [MAX_MOVED]). They are unauthenticated hints only: the caller must prove the site by the pinned CA, the
+     * hostname bound to the leaf and the remembered receiver key before saving any of them (D-341, review M2).
+     */
+    fun otherHosts(): List<SiteSighting> {
+        val saved = link.tlsHost ?: return emptyList()
+        if (link.caPin == null) return emptyList()
+        return browser.browse(browseTimeoutMs) { !sameHost(it.tlsHost, saved) }
+            .filter { it.addresses.isNotEmpty() && SiteLink.isTlsHost(SiteLink.normalizeHost(it.tlsHost)) && !sameHost(it.tlsHost, saved) }
+            .distinctBy { SiteLink.normalizeHost(it.tlsHost) }.take(MAX_MOVED)
+    }
+
     /** `manual_host` as an address, or null when absent or not a literal (never throws, review M1). */
     private fun manualAddress(): InetAddress? = link.manualHost?.let(::literal)
 
@@ -159,6 +172,7 @@ class SiteResolver(
         /** D-391 1 "정해진 시간": how long a browse may look for the site before `not_discovered`. */
         const val BROWSE_TIMEOUT_MS = 5_000L
         const val CACHE_MS = 30_000L
+        const val MAX_MOVED = 3
         private const val TAG = "SiteResolver"
 
         /**

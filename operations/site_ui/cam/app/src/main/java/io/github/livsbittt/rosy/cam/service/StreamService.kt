@@ -386,6 +386,11 @@ class StreamService : LifecycleService() {
                     activeLink.status.collect { status ->
                         _state.update { it.copy(link = status) }
                         if (status.stopped) endSession()
+                        // The site now answers under another host name and the new link is saved: start over on it.
+                        else if (status.error == io.github.livsbittt.rosy.cam.link.LinkError.SiteMoved) lifecycleScope.launch {
+                            if (link !== activeLink) return@launch // an earlier emission already restarted
+                            releaseSession(); if (!sessionActive) beginSession()
+                        }
                     }
                 }
             }

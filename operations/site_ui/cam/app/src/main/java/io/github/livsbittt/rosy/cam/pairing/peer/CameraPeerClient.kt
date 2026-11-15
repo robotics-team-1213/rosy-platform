@@ -35,7 +35,9 @@ class CameraPeerClient internal constructor(private val candidate: PairableSite,
     private val signer: PeerSigner, private val vault: CameraRelationshipVault,
     private val current: () -> Boolean = { true }, private val now: () -> Instant = Instant::now,
     private val baseClient: OkHttpClient = cameraPeerHttp(candidate), private val pause: ((Long) -> Unit)? = null,
-    private val monotonic: () -> Long = System::nanoTime) {
+    private val monotonic: () -> Long = System::nanoTime,
+    /** The site's earlier endpoint: its remembered approval may move to [candidate] after a proof (host rename). */
+    private val moveFrom: PairableSite? = null) {
     private val lock = Object()
     private var closed = false
     private var active: Call? = null
@@ -57,7 +59,12 @@ class CameraPeerClient internal constructor(private val candidate: PairableSite,
     /** Explicit v2 discovery only: a failed v2 transaction never downgrades to the legacy flow. */
     fun connect(onPending: (CameraPending) -> Unit, confirmCa: (PeerCaOffer) -> Boolean): CameraConnection {
         val fence = attemptFence
-        val remembered = vault.read(candidate)
+        val remembered = vault.read(candidate) ?: moveFrom?.let { old ->
+            // Same approval, new origin: every check below (pinned CA, hostname bound to the leaf, receiver id and key,
+            // signed challenge) still runs against the remembered record, so a different site fails and stays unsaved.
+            vault.read(old)?.let { it.copy(origin = origin) }
+        }
+        val moving = moveFrom != null && vault.read(candidate) == null && remembered != null
         try {
             if (remembered != null) {
                 if (!remembered.validAt(now())) throw PeerApprovalExpired()
@@ -159,6 +166,7 @@ class CameraPeerClient internal constructor(private val candidate: PairableSite,
             val link = SiteLink(candidate.serviceName, candidate.tlsHost, candidate.port, pin, accessToken, relationship.sourceId,
                 true, credentialId = credentialId, expiresAt = sessionExpiry.toString())
             require(SiteLink.validate(link) == null)
+            if (moving) synchronized(lock) { checkAlive(); vault.remember(candidate, relationship, fence) }
             return CameraConnection(link, relationship, fence)
         } finally {
             if (!approved && requestId != null && requestSecret != null) cleanupCancel()

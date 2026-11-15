@@ -315,6 +315,10 @@ def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
         ticket = adopted
         # its owner now: a relaunch, or a rollup taking its first member's place (D-889 23), whose land.py then ends
         set_status(ticket, status, pid=os.getpid(), branch=branch, worktree=str(wt))
+        if urgent and (holder := urgent_holder(qdir)):  # an urgent rollup on its member's place (D-889 33)
+            print(f"[queue] not urgent: {describe([holder])} is already urgent; one at a time", flush=True)
+        elif urgent:
+            set_status(ticket, status, urgent=urgent)
     elif urgent and (holder := urgent_holder(qdir)):
         raise QueueError(f"--urgent refused: {describe([holder])} is already urgent ({holder['urgent']}); one at a time")
     elif not urgent and (why := full(qdir)):

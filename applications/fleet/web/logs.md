@@ -1182,3 +1182,8 @@
 - 변경: 계정 관리 화면이 가입 요청 목록을 읽지 못하면 그 자리에 "요청 목록을 읽지 못했습니다. 새로 고쳐 주세요."를 보이고, 계정·앱 목록은 그대로 그린다. 요청 거절 확인 창이 늘어 확인 창 핀을 2로 올렸다(D-993).
 - 증거: 착지 시험에서 `test_procedure_layout_browser.py`가 모든 폭에서 등록된 앱 목록이 비어 실패했다(요청 목록 실패가 읽기 전체를 멈춤). `test_web_dialog_contract.py`는 확인 창 수 1≠2로 실패했다.
 - gate 변화: 없음. CE: 해당 없음 — 새 기능의 실패 경로 보강.
+
+## 2026-11-10 · uncommitted · uiux(console): 지도 프레임 다름 보류 문구 (D-1010)
+- 변경: 대기 이유 MAP_FRAME_MISMATCH 문구(roster-presentation.js)와 맵 중재 칩 label(map-overlays.js). Fleet 서버의 새 보류 이유를 사람이 읽게.
+- 근거: node --test operations/fleet/test/web/(변경 파일 읽는 시험 없음, 문구만).
+- gate 변화: 없음(SOURCE만).

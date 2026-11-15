@@ -682,3 +682,32 @@
 5. 착지 기록에 단계 시간을 더한다: `merged`(main 병합 초), `async`(대기열에 넣을 때 main보다 뒤진 커밋 수). 대기 시간(`turn`), 사전 시험과 FULL(`prepared`의 tier), 차례(`turn`→`landed`/`stop`)는 있던 기록을 쓴다. `land_stats`가 날마다 단계별 p50/p90을 보인다.
 
 **되돌림.** 1의 자동 해결 뒤 API 기준서 lint·계약 시험 실패가 일주일에 두 번 넘게 나오면 1을 끈다. 2의 자동 교체가 차례 중인 착지를 자주 버려 처리량이 줄면 차례 중인 표는 교체하지 않고 다음 착지로 미룬다. 4의 rollup이 실패해 구성원을 다시 나누는 일이 1/4을 넘으면 `--auto` 실행을 멈춘다.
+
+### 추가 33 (2026-11-09): 기다리는 착지는 등급과 상관없이 한 rollup으로 묶는다 (사용자 결정 2026-11-09 "대기하는것들을 하나로 합쳐서 하면 더이상 문제가 없잖아")
+
+**왜.** 11-09 18:40 대기열 12표 중 8표가 FULL이었고, 그중 6표는 FULL 자리(동시 2개)를 기다리며 시험을 돌리지 않았다(`preparing`+`full_wait`). 추가 32의 30분 rollup은 실제로 30분마다 돌았지만 `pending`·`waiting`만 구성원으로 보고 `--auto`는 affected 등급만 묶어서, 그날 내내 한 건도 묶지 못했다(`rosy-land-rollup.log`: "fewer than two pending landings fit together"). FULL 한 번은 30~90분이라 FULL 6표를 따로 돌리면 대기열이 몇 시간 동안 가득 찬다.
+
+**결정.**
+1. FULL 자리를 기다리는 표(`preparing`+`full_wait`, 시험을 돌리지 않는다)도 rollup 구성원이다. 사전 시험을 돌리고 있는 표는 그 진행을 버리지 않도록 넣지 않는다.
+2. 한 rollup에 등급을 섞는다. FULL이나 안전 경로 구성원이 하나라도 있으면 rollup은 FULL을 돌고, 그 FULL이 안전 시험을 포함해 모든 구성원을 덮는다. 그때는 시험 묶음 겹침(추가 23)을 보지 않는다. main과 손으로 풀어야 할 충돌이 있는 구성원은 지금처럼 빠져 자기 표로 착지한다. 한 rollup은 최대 12표(`ROSY_ROLLUP_MAX`), rollup은 다시 rollup에 넣지 않는다.
+3. rollup이 멈추면 `land_async`의 감독이 main 체크아웃의 `land_rollup.py split`을 띄워 반으로 나눈다. 반쪽은 다시 rollup으로, 하나 남은 구성원은 자기 스냅숏에서 혼자 다시 착지해 실패하면 자기 STOP 이유로 주인에게 돌아간다. 모든 구성원의 스냅숏은 그대로 둔다.
+4. watchdog의 자동 rollup은 30분이 아니라 10분마다(차례 한 번 안에 적어도 한 번) 돈다. `apply --urgent "<사용자의 말>"`은 rollup을 급한 착지로 넣는다. 이미 급한 착지가 있으면 추가 5대로 하나만 급하다.
+
+5. 시험 PC에서 살아 있는 `gpu`·`sim` 잠금(`hold_gpu.sh` 학습, Gazebo) 뒤에 선 alone 작업은 `*.alone-wait` 표시를 쓰지 않는다. 그 표시가 같은 PC의 일반 pytest를 모두 막아 11-09 AI PC가 약 4시간 멈췄다. 180초(`ROSY_ALONE_HOLD_WAIT_S`) 뒤에도 잠금이 있으면 입장을 미루고(exit 253) 그 호출은 다른 PC로 다시 배치된다(야간 재부팅 미룸과 같은 길).
+
+**검증.** 11-09 18:58 이 규칙으로 기다리던 5표(FULL 4, affected 1)를 한 rollup(`land/fix/land-rollup-20261109095841-20261109095841`)으로 묶었고, main과 충돌하는 FULL 2표는 빠졌다. 대기열은 12표에서 9표가 됐다.
+
+**되돌림.** `ROSY_ROLLUP_MIXED=0`이면 추가 23·32 규칙으로 돌아간다(`pending`·`waiting`만, 한 등급, 안전과 `--auto`의 FULL은 따로, 자동 split 없음). 섞인 rollup이 나뉘는 일이 일주일에 1/3을 넘거나, 나뉜 반쪽 착지가 따로 착지했을 때보다 늦으면 끈다.
+
+### 추가 34 (2026-11-09): FULL을 시작하지 않은 rollup은 다시 묶고, FULL 자리를 기다리는 후보는 하나로 (사용자 지시 2026-11-09 "대기하는것들을 하나로 합쳐서 하면 더이상 문제가 없잖아", "바로 처리하고 병렬로 더 개선해")
+
+**왜.** 11-09 22:40 main이 84분 멈췄고 대기열 12표 중 FULL 5표가 FULL 자리(동시 2개)를 기다렸다. 그중 2표는 이미 rollup이었는데 추가 33은 rollup을 다시 묶지 않아, 기다리는 FULL 후보가 rollup 두 개와 낱개 셋으로 따로 남았다. 자동 rollup은 차례를 쥔 착지의 watchdog에서만 돌아서, 모두 사전 시험 중이라 차례 쥔 표가 없을 때는 돌지 않았다. 그 사이 main이 착지 도구를 바꾸면 기다리던 FULL 표는 FULL을 처음부터 다시 했다(`calibration-screen`: 차례 두 번 뒤 다시 `preparing`).
+
+**결정.**
+1. FULL을 시작하지 않은 rollup(`pending`, 또는 `preparing`+`full_wait`)도 rollup 구성원 후보다. 그 rollup의 `.members` 기록에 있는 구성원이 각자 남아 있는 스냅숏으로 새 계획에 들어간다. FULL을 통과하고 차례를 기다리는(`waiting`) rollup과 급한 rollup은 그대로 둔다. 기록을 못 읽거나 중첩되었거나 구성원 스냅숏이 없으면 다시 묶지 않는다.
+2. 옛 rollup은 구성원 전부가 새 rollup에 병합됐을 때만 멈춘다. 멈추기 전에 `.split` 표시를 남겨 감독이 그 rollup을 반으로 나눠 다시 넣지 않게 한다. 구성원 하나라도 빠지면 옛 rollup은 계속 착지하고, 병합된 구성원은 두 rollup에 같이 실린다(나중 것은 이미 main에 있는 커밋을 병합할 뿐이다). 새 것이 없이 rollup 하나만 다시 묶는 일은 하지 않는다. 계획과 멈춤 사이에 옛 rollup이 FULL을 시작했으면 그 진행은 버려진다(구성원은 새 rollup에 다 있다).
+3. 착지가 FULL 자리를 기다리기 시작하면(`full_wait`) main 체크아웃의 `land_rollup.py apply --auto`를 한 번 띄운다. 그래서 기다리는 FULL 후보는 차례를 쥔 표가 없어도 곧 하나의 rollup으로 묶인다. 띄운 착지가 구성원이면 rollup은 그 착지를 맨 나중에 멈춘다. `apply`는 `rosy-land-rollup.lock`으로 한 번에 하나만 돈다. 다른 `apply`가 돌던 중이라 빠진 대기 표가 있을 수 있으므로, 기다리는 동안 10분마다 다시 띄운다.
+
+**검증.** `test/test_land_rollup.py`(다시 묶기, `waiting` rollup 제외, 일부만 병합되면 옛 rollup 유지와 `.split` 표시), `test/test_land_prepare.py`(FULL 대기 시작 때 한 번 rollup)를 원격 시험 PC에서 돌린다.
+
+**되돌림.** `ROSY_ROLLUP_MIXED=0`이면 rollup을 다시 묶지 않는다(추가 33의 되돌림과 같다). 다시 묶인 rollup이 일주일에 두 번 넘게 FULL을 다시 시작해 착지가 늦어지면 3의 즉시 실행을 끄고 watchdog 주기만 쓴다.

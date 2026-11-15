@@ -28,7 +28,7 @@ from pathlib import Path
 
 LIMIT_S = 30 * 60.0
 CHECK_S = 60.0
-ROLLUP_EVERY_S = 30 * 60.0
+ROLLUP_EVERY_S = 10 * 60.0  # D-889 33: at least once per (<= 30 min) turn, was 30 min
 STAMP, ROLLUP_LOG = "rosy-land-rollup.stamp", "rosy-land-rollup.log"
 
 

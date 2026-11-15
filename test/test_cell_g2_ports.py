@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import sys
 import socket
+import tempfile
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -62,8 +63,13 @@ def test_fresh_run_provisions_its_instance_socket_before_starting_owner(tmp_path
 
 
 @pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="Unix IPC requires a Linux host")
-def test_fresh_run_can_bind_its_instance_socket_before_starting_owner(tmp_path):
-    run = module().fresh_evidence(tmp_path / "run")
+def test_fresh_run_can_bind_its_instance_socket_before_starting_owner():
+    # AF_UNIX paths stop at 107 bytes; collect_alone's nested tmp_path went past it (red on main 10-29..11-09).
+    with tempfile.TemporaryDirectory(prefix="g2", dir="/tmp") as short:
+        _bind_and_talk(module().fresh_evidence(Path(short) / "run"))
+
+
+def _bind_and_talk(run):
     socket_path = run / "uds" / "omx_cell_sim_01" / "control.sock"
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
         listener.bind(str(socket_path))

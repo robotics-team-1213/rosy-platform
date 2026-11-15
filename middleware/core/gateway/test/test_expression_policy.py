@@ -71,6 +71,23 @@ def test_missing_ids_greet_the_group_without_fabricating_individuals():
     assert out.face != "happy"
 
 
+
+def test_a_group_arriving_together_is_cheered_and_one_person_is_greeted():
+    together = seen(policy(), people=[person(1, .4), person(2, .6)])
+    assert together.face == "cheer" and together.reacting
+    assert seen(policy(), people=[person(None, .3), person(None, .7)]).face == "cheer"
+    assert seen(policy(), people=[person(None, .5)]).face == "happy"
+    assert seen(policy(), people=[person(1, .5), person(1, .52)]).face == "happy"  # one person, two boxes
+    p = policy()
+    seen(p, people=[person(1, .4), person(2, .6)])
+    faces = []
+    for i in range(4, 40):
+        observe(p, i * .2, i, [person(1, .4), person(2, .6)])
+        faces.append(p.update("IDLE", "IDLE", i * .2).face)
+    later = faces[8:]  # after the cheer: the one left to greet gets a plain greeting
+    assert "happy" in later and "cheer" not in later
+
+
 @pytest.mark.parametrize("kind", ["stale", "unknown", "invalid", "replay"])
 def test_untrusted_or_old_evidence_cannot_greet_or_hold_a_direction(kind):
     p = policy()

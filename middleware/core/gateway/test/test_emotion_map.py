@@ -52,7 +52,8 @@ def test_boredom_never_leaks_into_operating_modes(mode):
 def test_every_name_is_one_the_emotion_node_knows():
     # The GIF filenames are the set_emotion vocabulary; a typo here would be a
     # silent no-op on the robot (the node rejects unknown names).
-    known = {"hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad"}
+    known = {"hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad",
+             "doze", "scan", "lost", "worry", "lowbat", "cheer", "thinking", "searching"}
     from core_features.command.emotion_map import EMOTION_BY_MODE, NAV_STUCK_EMOTION
     assert set(EMOTION_BY_MODE.values()) <= known
     assert NAV_STUCK_EMOTION in known

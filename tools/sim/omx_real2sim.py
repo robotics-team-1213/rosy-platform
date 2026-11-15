@@ -39,6 +39,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/sim"))
+import omx_cell_anchor as anchor  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 
 SCHEMA = "rosy.omx-cell-snapshot.v1"
@@ -407,7 +408,7 @@ def overlay(frame, layout, plates, ship=None, belt=None):
     return img
 
 
-def measure(run, prev_path=None):
+def measure(run, prev_path=None, camera_moved_ok=False):
     import cv2
 
     run = Path(run)
@@ -417,6 +418,17 @@ def measure(run, prev_path=None):
     top = cv2.imread(str(frames["top"])) if "top" in frames else None
     if top is None:
         raise SystemExit(f"no readable top frame in {run / 'frames'}")
+    anchor.remember(frames["top"])  # this frame is the next snapshot's reference
+    camera_motion = dict(checked=False, reason="no previous snapshot")
+    ref = prev and anchor.reference(prev.get("frames", {}).get("top", ""))
+    if prev and not ref:
+        camera_motion["reason"] = "the previous snapshot's top frame is not in the local frame store"
+    elif ref:
+        m = anchor.motion(cv2.imread(str(ref)), top)
+        camera_motion = dict(checked=True, moved=anchor.moved(m), **m) if m else dict(checked=False, reason="too few far-band matches")
+        if camera_motion.get("moved") and not camera_moved_ok:
+            raise SystemExit(f"top camera moved since the previous snapshot ({m}): re-survey it (G-19, calibration step 3) "
+                             "before measuring; --camera-moved-ok measures anyway")
     items = {"temp_plates": lambda: measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"]),
              "ship": lambda: measure_ship(top, layout),
              "belt": lambda: measure_belt(top, layout)}
@@ -426,7 +438,7 @@ def measure(run, prev_path=None):
     tp = results["temp_plates"]
     snap = dict(schema=SCHEMA, taken_at=json.loads((run / "capture.json").read_text())["taken_at"] if (run / "capture.json").exists() else None,
                 frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
-                camera=dict(top=layout.fixture["real_cameras"]["top"]),
+                camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_motion=camera_motion,
                 items=dict(temp_plates=dict(plates={t: p["lanes"] for t, p in tp["plates"].items() if "lanes" in p},
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
                                             errors={t: p["error"] for t, p in tp["plates"].items() if "error" in p},
@@ -532,6 +544,7 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("capture"); c.add_argument("--site", help="ssh target of the PC serving the cell cameras, default the first omx_hosts entry in private/lab-hosts.json"); c.add_argument("--out", required=True)
     m = sub.add_parser("measure"); m.add_argument("run"); m.add_argument("--prev")
+    m.add_argument("--camera-moved-ok", action="store_true", help="measure although the top camera moved since --prev")
     d = sub.add_parser("diff"); d.add_argument("old"); d.add_argument("new")
     s = sub.add_parser("sim"); s.add_argument("snapshot"); s.add_argument("--sha", required=True); s.add_argument("--out", required=True)
     s.add_argument("--stages", help="comma list, default every stage")
@@ -548,7 +561,7 @@ def main(argv=None):
             a.site = next(iter(lab_hosts.omx_hosts(lab_hosts.load())), "") or p.error("--site, or omx_hosts in private/lab-hosts.json")
         print(json.dumps(capture(a.site, a.out)))
     elif a.cmd == "measure":
-        snap = measure(a.run, a.prev)
+        snap = measure(a.run, a.prev, a.camera_moved_ok)
         print(json.dumps(snap["items"], indent=1))
     elif a.cmd == "diff":
         load = lambda f: json.loads(Path(f).read_text(encoding="utf-8"))

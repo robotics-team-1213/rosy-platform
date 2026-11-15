@@ -27,11 +27,13 @@ export const MESSAGES = {
   bad_code: "코드는 폰 화면에 뜬 숫자 6자리입니다.",
   no_source: "연결할 카메라 자리를 고르세요.",
   not_revealed_reason: "폰에 아직 코드가 없습니다",
-  no_free_source_reason: "빈 카메라 자리가 없습니다 — 먼저 자격을 폐기하세요",
+  no_free_source_reason: "연결할 수 있는 카메라 자리가 없습니다 — 설정 파일의 paired 자리를 확인하세요",
   NOT_REVEALED: "폰이 아직 코드를 띄우지 않았습니다. 폰 화면에 코드가 뜬 뒤 다시 입력하세요.",
   ALREADY_APPROVED: "이미 승인된 요청입니다.",
   SOURCE_NOT_PAIRED: "이 카메라 자리는 설정 파일 토큰을 쓰는 자리라 연결 승인 대상이 아닙니다.",
-  SOURCE_HAS_CREDENTIAL: "이 카메라 자리에 이미 자격이 있습니다 — 폰을 바꾸려면 먼저 그 자격을 폐기하세요.",
+  SOURCE_HAS_CREDENTIAL: "이 카메라 자리에 이미 자격이 있습니다 — 목록에서 '교체'로 고르면 새 폰이 확인한 뒤 옛 자격이 폐기됩니다.",
+  REPLACE_TARGET_CHANGED: "교체하려던 자격이 그새 바뀌었거나 폐기됐습니다. 목록을 다시 보고 고르세요.",
+  SOURCE_PENDING_CONFIRM: "이 자리에 다른 승인이 폰 확인을 기다리는 중입니다. 확인되거나 만료된 뒤 다시 시도하세요.",
   UNKNOWN_SOURCE: "모르는 카메라 자리입니다 — 사이트 카메라 설정(site-cameras.yaml)을 확인하세요.",
   PAIRING_REQUEST_CLOSED: "요청이 이미 닫혔습니다(만료·거절·완료). 폰에서 다시 요청하세요.",
   UNKNOWN_PAIRING_REQUEST: "요청이 목록에서 사라졌습니다(만료). 폰에서 다시 요청하세요.",
@@ -67,6 +69,24 @@ export function canApprove(identity) {
 
 export function freeSources(listing) {
   return (listing?.paired_sources || []).filter((s) => !s.has_credential).map((s) => s.source_id);
+}
+
+// 승인 대상: 빈 자리를 먼저, 그 뒤에 교체할 수 있는 자리(기기 이름·자격 ID를 보여 준다).
+// replace 는 서버에 보낼 교체 대상 자격 ID — 화면이 낡아도 엉뚱한 자격을 바꾸지 못하게 한다.
+export function approveTargets(listing) {
+  const rows = listing?.paired_sources || [];
+  return [
+    ...rows.filter((s) => !s.has_credential).map((s) => ({ source: s.source_id, replace: null, label: s.source_id })),
+    ...rows.filter((s) => s.has_credential && s.replaceable && s.credential_id).map((s) => ({
+      source: s.source_id, replace: s.credential_id,
+      label: `교체 · ${s.source_id} — ${s.device_label || "이름 없음"} (${s.credential_id})`,
+    })),
+  ];
+}
+
+// 빈 자리는 source_id 그대로, 교체는 자격 ID를 붙여 같은 자리의 두 항목을 구분한다.
+export function targetValue(target) {
+  return target.replace ? `${target.source}#${target.replace}` : target.source;
 }
 
 // expires_in_s 는 조회 순간의 값이다. 다음 조회 전까지 이 브라우저 시계로 줄인다.
@@ -235,7 +255,7 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     const listing = state.pending;
     if (!list || !listing) return;
     const manage = canApprove(identity());
-    const sources = freeSources(listing);
+    const sources = approveTargets(listing);
     keepFocus(list, "data-request-id", () => {
       const rows = (listing.requests || []).map((row) => {
         const item = document.createElement("li");
@@ -322,10 +342,11 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     state.target = row;
     el("camera-approve-target").textContent = row.device_label;
     const select = el("camera-approve-source");
-    select.replaceChildren(...freeSources(state.pending).map((source) => {
+    state.targets = approveTargets(state.pending);
+    select.replaceChildren(...state.targets.map((target) => {
       const option = document.createElement("option");
-      option.value = source;
-      option.textContent = source;
+      option.value = targetValue(target);
+      option.textContent = target.label;
       return option;
     }));
     el("camera-approve-code").value = "";
@@ -347,7 +368,9 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     const row = state.target;
     if (state.busy || !row) return;
     const code = normalizePairingCode(el("camera-approve-code").value);
-    const source = el("camera-approve-source").value;
+    const chosen = el("camera-approve-source").value;
+    const target = (state.targets || []).find((t) => targetValue(t) === chosen);
+    const source = target?.source;
     const error = pairingCodeError(code) || (source ? null : MESSAGES.no_source);
     if (error) return lines(el("camera-approve-error"), [error], true);
     state.busy = true;
@@ -356,7 +379,8 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     submit.setAttribute("reason", "승인 요청 중");
     try {
       const result = await call(`${BASE}/requests/${encodeURIComponent(row.request_id)}/approve`, {
-        method: "POST", body: { code, source_id: source },
+        method: "POST",
+        body: { code, source_id: source, ...(target.replace ? { replace_credential_id: target.replace } : {}) },
       });
       life.check();
       el("camera-approve-code").value = "";

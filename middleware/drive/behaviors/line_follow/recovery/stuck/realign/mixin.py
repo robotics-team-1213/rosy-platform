@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import Optional
 
-from core_common.robot_body import NOMINAL_BODY, ROTATION_SECTORS, SWEEP_PAD_M
+from core_common.robot_body import NOMINAL_BODY, ROTATION_SECTORS
 from core_features.line_follow.model import LineFollowMode
 from core_features.line_follow.recovery.stuck.realign.manoeuvre import Manoeuvre
 from core_features.line_follow.recovery.stuck.realign.recovery import RealignRecovery
 from core_features.line_follow.recovery.stuck.realign.request import MAX_REALIGNS, request_refusal
-from core_features.line_follow.recovery.stuck.stuck_recovery import _TURN_CLEAR_M, _TURN_RATE, CROSSWALK
+from core_features.line_follow.recovery.stuck.stuck_recovery import _TURN_RATE, CROSSWALK, turn_blocked
 
 
 class RealignMixin:
@@ -83,7 +83,7 @@ class RealignMixin:
                 return why
             return None if self._rear_sweep_clear(now, -linear, angular) else "rear_sweep_blocked"
         if kind == "PIVOT":
-            if inp.turn_m is None or inp.turn_m < SWEEP_PAD_M + _TURN_CLEAR_M:
+            if turn_blocked(inp, angular):
                 return "turn_blocked"
             base = [(x + c.body_lidar_x_m, y) for x, y in self._body_points]
             if NOMINAL_BODY.seen_sectors(base) < ROTATION_SECTORS:   # geometry-free sector count (D-424)

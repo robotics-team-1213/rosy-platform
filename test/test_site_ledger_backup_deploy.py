@@ -48,6 +48,16 @@ def test_compose_backup_command_keeps_fourteen_backups():
     assert command[command.index("--prune") + 1] == "14"
 
 
+def test_compose_backup_command_pins_every_retention_group():
+    service = yaml.safe_load(
+        (SITE / "compose.yaml").read_text(encoding="utf-8"))["services"]["fleet-backup"]
+    command = service["command"]
+    expected = {"--prune-history": "30", "--prune-audit": "90",
+                "--prune-api-audit": "90", "--prune-sightings": "90"}
+    for flag, days in expected.items():
+        assert command[command.index(flag) + 1] == days
+
+
 def test_backup_check_service_runs_site_db_check_on_the_host_backup_dir():
     text = (SITE / "rosy-site-ledger-backup-check.service").read_text(encoding="utf-8")
     assert "Type=oneshot" in text

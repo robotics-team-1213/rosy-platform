@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
-- 2026-11-08 · uncommitted · feat(sim): 임시 칸 판 줄마다 3단
-- 2026-11-08 · uncommitted · revert(sim): 위 카메라로 잰 배 자리는 r08 모형과 맞지 않아 되돌림
-- 2026-11-08 · uncommitted · feat(sim): 손목 카메라를 실물 화면에 맞춘 자리로
-- 2026-11-08 · uncommitted · feat(sim): 임시 칸 판 v11 자리와 임시 칸 줄 반출
-- 2026-11-08 · uncommitted · feat(sim): 두 팔 동시 동작을 배우는 정책 모드
+- 2026-11-09 · uncommitted · feat(sim): 양팔 세계 배경을 실제 방 벽 색으로
+- 2026-11-09 · uncommitted · feat(sim): 양팔 모델 shadow 점검(D-793 L2)
+- 2026-11-09 · uncommitted · fix(sim): 정확히 겹쳐 쌓은 시작 상태가 튀는 문제
+- 2026-11-09 · uncommitted · feat(sim): 동시 학습 라운드에 재배치 장면, 측정 벨트 병합
+- 2026-11-09 · uncommitted · feat(sim): 두 팔이 동시에 하는 재배치 시나리오

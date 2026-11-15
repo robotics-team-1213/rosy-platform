@@ -15,7 +15,9 @@ from uuid import uuid4
 
 from core_common.protocol.schemas import NavigationState
 from core_common.protocol.native_receipts import NativeReceipts
+from .lease import expire_goal_lease, renew_goal_lease
 from .native_handover import native_readback, with_terminal_navigation
+from .route import route, route_closed, route_continue, route_progress, route_progress_kept, route_status
 
 
 @dataclass
@@ -24,6 +26,8 @@ class NavGoalSpec:
     y: float
     yaw: float
     frame: str = "map"
+    #: Route legs only: poses to pass through before `x, y` (Nav2 NavigateThroughPoses). Empty = NavigateToPose.
+    via: tuple["NavGoalSpec", ...] = ()
 
 
 class NavExecutor(Protocol):
@@ -106,6 +110,8 @@ class NavigationManager:
         #: 도킹이 주행을 쥐고 있는가 (CoreServices 가 주입). 그동안 목표는 거절한다 —
         #: Nav2 목표가 도크 진입을 선점하면 안 된다 (DOCKING 4 > NAVIGATION 5).
         self.docking_active_provider = lambda: False
+        self._route = None  # RouteRun of POST /navigation/route (route.py); kept after it ends for the readback
+        self.costmap_provider = lambda: None  # global costmap grid dict, to skip pass points inside obstacles
 
     def _execution(self, event, *args):
         return True if self._execution_binding is None else self._execution_binding.check(event, *args)
@@ -231,6 +237,7 @@ class NavigationManager:
             self._set_state(NavigationState.PLANNING)
             self._active_correlation_id = correlation_id
             self._active_spec = spec
+            self._route = None
             self._lease = (None if lease_ttl_s is None
                            else (correlation_id, self.lease_clock() + lease_ttl_s,
                                  operation.run_id, lease_owner))
@@ -270,30 +277,8 @@ class NavigationManager:
                 return None
             return self._active_correlation_id, self._active_spec
 
-    def renew_goal_lease(self, correlation_id: str, ttl_s: float, owner: str | None = None) -> None:
-        """D-550 10: renew only an unexpired lease for this exact goal and sender."""
-        _check_lease_ttl(ttl_s)
-        with self._lock:
-            now = self.lease_clock()
-            if (self._lease is None or now >= self._lease[1] or self._nav_state in _IDLE_STATES
-                    or correlation_id != self._lease[0] or correlation_id != self._active_correlation_id):
-                raise NavigationError("GOAL_LEASE_NOT_ACTIVE", f"no active leased goal {correlation_id!r}")
-            if owner != self._lease[3]:  # D-760 9: only the token that sent the goal (lease_owner)
-                raise NavigationError("FORBIDDEN", "only the token that sent this leased goal may renew it")
-            self._lease = (correlation_id, now + ttl_s, self._lease[2], self._lease[3])
-            self._native_mutate(self._advance_generation)
-
-    def expire_goal_lease(self) -> bool:
-        """D-550 10: cancel a leased goal whose lease ran out, on the SAF-003 STOP cancel path.
-        Ticked by the bridge (5 Hz). True when a goal was cancelled."""
-        with self._lock:
-            lease = self._lease
-            if lease is None or self.lease_clock() < lease[1]:
-                return False
-            # Dropped first: a renewal racing this expiry is refused, not revived.
-            self._lease = None
-        # A goal that already ended or was replaced is left alone (correlation id check).
-        return self.cancel(source="goal_lease", correlation_id=lease[0], run_id=lease[2])
+    renew_goal_lease = renew_goal_lease
+    expire_goal_lease = expire_goal_lease
 
     def _refuse_while_docking(self) -> None:
         if self.docking_active_provider():
@@ -470,6 +455,7 @@ class NavigationManager:
                 if receipt_sink is not None:
                     receipt_sink(closed_receipt)
             self._lease = None
+            route_closed(self, "failed" if source == "stuck_detector" else "canceled")
             self._set_state(NavigationState.CANCELED)
             correlation_id = self._active_correlation_id
             self._active_correlation_id = None
@@ -505,7 +491,8 @@ class NavigationManager:
                     return
                 self._native_mutate(self.native.update, native_run_id, phase="RUNNING")
             self._set_state(NavigationState.NAVIGATING)
-            if self._moving_session is not None and self._last_progress_pos is not None:
+            if (self._moving_session is not None and self._last_progress_pos is not None
+                    or route_progress_kept(self)):
                 # SWM-002 는 NAV-006 이 그대로 적용된다고 못박았다. 0.5 초마다
                 # 기준점을 초기화하면 30 초 무진척 조건은 영원히 성립하지 않고,
                 # 문틀에 낀 팔로워가 아무 신호 없이 계속 밀어붙인다.
@@ -517,6 +504,11 @@ class NavigationManager:
                   correlation_id: str | None = None,
                   native_run_id: UUID | None = None) -> None:
         closed_receipt = None
+        sent = route_continue(self, succeeded, error, native_run_id)
+        if sent is True:
+            return  # a route leg ended and the next leg is out: still the same run
+        if sent:  # the next leg could not be sent: the run fails, whatever the leg that just ended did
+            succeeded, error = False, sent
         with self._lock:
             if not self._execution('callback', native_run_id): return
             if native_run_id is not None:
@@ -555,6 +547,8 @@ class NavigationManager:
 
     def capture_native_operation(self, run_id: UUID | None = None): return self.native.capture(self._lock, run_id)
 
+    route = route
+    route_status = route_status
     native_readback = native_readback
     with_terminal_navigation = with_terminal_navigation
 
@@ -576,6 +570,7 @@ class NavigationManager:
         """NAV-006 stuck: NAVIGATING 중 진척 없으면 자동 취소."""
         if self._nav_state is not NavigationState.NAVIGATING:
             return
+        route_progress(self, x, y)
         now = self.clock()
         if self._last_progress_pos is not None:
             dist = math.hypot(x - self._last_progress_pos[0], y - self._last_progress_pos[1])

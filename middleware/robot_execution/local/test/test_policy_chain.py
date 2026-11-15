@@ -60,7 +60,7 @@ def chain_setup(tmp_path, *, enabled=True, camera=True):
     seed, driver, clock, _, _ = setup_session(tmp_path, camera=camera)
     runtime = runtime_methods(seed, driver)
     policy = seed.policy
-    with approved_fleet(tmp_path/'fleet', workcell_id=seed.owner.config.workcell_id,
+    with approved_fleet(tmp_path/'fleet', workcell_id=seed.owner.config.workcell_id, ram_db=True,
             instance_id=seed.owner.config.instance_id, policy_revision=policy.recheck()['revision']) as fleet:
         scope = LeaseScope(seed.lease.identity, seed.lease.episode_id, seed.lease.policy_revision,
             seed.owner.session_id, fleet.window['window_id'], fleet.rig_revision,

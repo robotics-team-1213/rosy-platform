@@ -70,7 +70,7 @@ def fake_land(paths):
     return calls, SimpleNamespace(
         Stop=Stop, HARNESS="absent.py", out=lambda *a: "main-sha", lines=lambda *a: paths,
         safety_review=gate("safety"), size_check=gate("size"), secret_scan=gate("secret"),
-        git=lambda *a, **k: SimpleNamespace(returncode=0))
+        git=lambda *a, **k: SimpleNamespace(returncode=0, stdout=""))  # no grep hit: no CRLF added
 
 
 def test_precheck_refuses_a_mixed_branch_unless_the_users_words_are_given(tmp_path):

@@ -44,7 +44,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from joint_tune import BASELINE, FOLLOWER, SerialBus, no_interrupts, protect_signals, session_lock
-from session_caps import load_caps as load_caps, model_tuning, robot_tuning
+from session_caps import load_caps as load_caps, log_registers, model_tuning, register_dump, robot_tuning
 from record_config import validate_config
 
 SERVICES = ("rosy-omx-camera@top.service", "rosy-omx-camera@front.service",
@@ -257,6 +257,7 @@ class Session:
                     # mode 5 obeys Goal Current, clamped to 50 by the baseline: v2.1 jaws stuck shut (2026-11-03)
                     bus.write("goal_current", value)
                     self.log(step="cap", motor=motor, name="goal_current", value=value, after=bus.read("goal_current"))
+        self.log(step="registers", when="caps written", registers=register_dump(bus, caps))
 
     def all_torque_off(self, bus) -> dict:
         state = {}
@@ -453,10 +454,10 @@ class Session:
                 leader.close()
         except Exception as exc:
             record["leader_gripper_torque_after"] = f"error: {exc}"
+        log_registers(self, "stop", FOLLOWER)  # what the session left, before the caps go back
         failures = self.restore_caps()
         record["caps_restored"] = not failures or failures
-        record["torque_off_confirmed"] = torque_ok
-        record["hardware_faults"] = self.hardware_faults
+        record["torque_off_confirmed"], record["hardware_faults"] = torque_ok, self.hardware_faults
         record["manual_attention_required"] = (bool(self.hardware_faults) or not torque_ok or bool(failures)
                                                or record["leader_gripper_torque_after"] != 0)
         for unit in reversed(stopped):

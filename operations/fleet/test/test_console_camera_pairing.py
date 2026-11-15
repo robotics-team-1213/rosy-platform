@@ -100,7 +100,8 @@ def test_the_pending_and_summary_shapes_carry_every_field_the_panel_reads(tmp_pa
             "expires_at", "expired"} <= set(cred)
     assert (cred["state"], cred["approved_by"]) == ("pending_confirm", "alice")
     after = client.get(f"{BASE}/pending", headers=_auth(VIEWER)).json()
-    assert {"source_id": "ceiling_north", "has_credential": True} in after["paired_sources"]
+    assert any(row["source_id"] == "ceiling_north" and row["has_credential"] is True
+               for row in after["paired_sources"])
 
 
 def test_a_single_token_site_is_recognised_by_the_panel_and_refused_with_the_reason(tmp_path):
@@ -188,3 +189,33 @@ def test_the_shell_wires_the_panel_and_reasks_it_on_every_login():
     # route-absent 404 closes the gate; the calm sentence is the page's, not a failure.
     assert 'gate.fail(err.status, err.code) === "absent"' in module
     assert "dialogs.openLiveDialog(dialog" in module and "showModal" not in module
+
+
+def test_http_replace_needs_the_named_credential_id(tmp_path):
+    client, _clock = _app(tmp_path)
+
+    def pair(source, **extra):
+        phone, request_id, code = _request(client)
+        reply = client.post(f"{BASE}/requests/{request_id}/approve", headers=_auth(OPERATOR),
+                            json={"code": code, "source_id": source, **extra})
+        return phone, request_id, reply
+
+    phone, request_id, first = pair("ceiling_north")
+    old_id = first.json()["credential_id"]
+    client.get(f"{BASE}/requests/{request_id}", headers={"Authorization": phone.bearer})
+    assert client.post(f"{BASE}/requests/{request_id}/confirm", headers={"Authorization": phone.bearer},
+                       json={"credential_id": old_id}).status_code == 200
+    listing = client.get(f"{BASE}/pending", headers=_auth(VIEWER)).json()["paired_sources"]
+    held = next(row for row in listing if row["source_id"] == "ceiling_north")
+    assert (held["credential_id"], held["device_label"], held["replaceable"]) == (old_id, phone.label, True)
+
+    assert pair("ceiling_north")[2].json()["detail"]["code"] == "SOURCE_HAS_CREDENTIAL"
+    assert pair("ceiling_north", replace_credential_id="cred-wrong")[2].json()["detail"]["code"] \
+        == "REPLACE_TARGET_CHANGED"
+    # A viewer cannot replace: the approve route keeps its named-operator guard.
+    _p, rid, code = _request(client)
+    assert client.post(f"{BASE}/requests/{rid}/approve", headers=_auth(VIEWER),
+                       json={"code": code, "source_id": "ceiling_north",
+                             "replace_credential_id": old_id}).status_code == 403
+    replaced = pair("ceiling_north", replace_credential_id=old_id)[2]
+    assert replaced.status_code == 200 and replaced.json()["replaces"] == old_id

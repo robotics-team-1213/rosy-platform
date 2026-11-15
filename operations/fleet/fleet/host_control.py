@@ -30,6 +30,8 @@ HOSTS: dict[str, dict[str, frozenset[str]]] = {
             "rosy-omx-camera-readiness.service",
             "rosy-omx-camera-view.service",
             "rosy-omx-camera@arm_a_wrist.service",
+            "rosy-omx-camera@arm_b_wrist.service",
+            "rosy-omx-camera@side.service",
             "rosy-omx-camera@top.service",
         )
     },

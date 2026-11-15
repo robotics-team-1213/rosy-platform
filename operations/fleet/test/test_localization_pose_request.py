@@ -11,8 +11,8 @@ from rosy.world.state.projections.map_pose import MapPose
 from fleet.server.localization_service import LocalizationService
 
 
-def trusted(x=1.0, y=2.0, yaw=0.5, anchor_age_s=0.2):
-    return MapPose(x, y, yaw, "LOCALIZED", "sighting", 0.0, 0.1, anchor_age_s=anchor_age_s)
+def trusted(x=1.0, y=2.0, yaw=0.5, anchor_age_s=0.2, map_id="site"):
+    return MapPose(x, y, yaw, "LOCALIZED", "sighting", 0.0, 0.1, anchor_age_s, map_id)
 
 
 UNKNOWN = MapPose(None, None, None, "UNKNOWN", None, 0.0, None)
@@ -24,8 +24,9 @@ def request(request_id="pose-1", age_s=0.5, ttl_s=30.0, reason="pose_stale"):
             "age_s": age_s, "ttl_s": ttl_s, "evidence": {"odom_pose": {"x": 9.0, "y": 9.0, "yaw": 0.0}}}
 
 
-def robot(loc="LOCALIZED", frame="map", lf_reason="lane_return_pose_stale"):
+def robot(loc="LOCALIZED", frame="map", lf_reason="lane_return_pose_stale", map_id="site"):
     state = {"robot_id": "r1", "pose": {"x": 9.0, "y": 9.0, "yaw": 0.0},        # the robot's own (odom) pose
+             "map_id": map_id,
              "localization": {"state": loc, "pose_frame": frame},
              "line_follow": {"mode": "CAMERA_LINE", "state": "HOLD", "reason": lf_reason}}
     r = FakeRobot("r1", state=state)
@@ -76,6 +77,19 @@ def test_untrusted_overhead_or_none_is_never_used_and_the_operator_is_told():
         assert r.decisions == [], pose
         view = svc.view("r1")
         assert view["needs_human"] and view["pose_request"]["state"] == "needs_human"
+
+
+def test_an_overhead_pose_from_another_map_frame_is_never_an_answer():
+    """D-1010: the site-frame pose is only the robot's pose on the same map (D-546 6 (a) frame rule)."""
+    assert pose_request.overhead_decision(request(), trusted(), robot_map_id="slam") is None
+    assert pose_request.overhead_decision(request(), trusted(map_id=None), robot_map_id="site") is None
+    assert pose_request.overhead_decision(request(), trusted(), robot_map_id=None) is None
+    assert pose_request.overhead_decision(request(), trusted(), robot_map_id="site") is not None
+    for pose, robot_map in ((trusted(map_id="world_261026"), "site"), (trusted(), "world_261026")):
+        r = robot(map_id=robot_map)
+        svc, clock = rig(r, pose)
+        ticks(svc, clock, 2.0)
+        assert r.decisions == [] and svc.view("r1")["needs_human"]
 
 
 def test_the_overhead_answer_needs_the_pose_request_flag_not_the_arbiter_cue():

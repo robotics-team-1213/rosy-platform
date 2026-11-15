@@ -24,7 +24,7 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import NavigateThroughPoses, NavigateToPose
 from nav2_msgs.msg import Costmap
 from lifecycle_msgs.msg import TransitionEvent
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
@@ -40,6 +40,7 @@ from core.bridge import (
     goal_tracker,
     map_observation,
     map_pose,
+    nav_goal,
     observation,
     odometry,
     pilot_recorder_client,
@@ -94,6 +95,7 @@ class RosBridge:
         self.initialpose_pub = node.create_publisher(PoseWithCovarianceStamped, "initialpose", 10)
 
         self.nav_client = ActionClient(node, NavigateToPose, "navigate_to_pose")
+        self.route_client = ActionClient(node, NavigateThroughPoses, "navigate_through_poses")  # D-1009
         self.tf_buffer = Buffer(cache_time=Duration(seconds=10.0))  # 자원 경계: tf2 Jazzy 기본값=10s 명시
         self.tf_listener = TransformListener(self.tf_buffer, node)
 
@@ -784,17 +786,12 @@ class RosBridge:
 
     def send_native_goal(self, spec: NavGoalSpec, native_run_id,
                          *, correlation_id: str | None = None) -> None:
-        goal = NavigateToPose.Goal()
-        goal.pose.header.frame_id = spec.frame
-        goal.pose.header.stamp = self._node.get_clock().now().to_msg()
-        goal.pose.pose.position.x = spec.x
-        goal.pose.pose.position.y = spec.y
-        goal.pose.pose.orientation.z = math.sin(spec.yaw / 2.0)
-        goal.pose.pose.orientation.w = math.cos(spec.yaw / 2.0)
-        if not self.nav_client.wait_for_server(timeout_sec=0.0):
-            self._node.get_logger().warn("navigate_to_pose server not ready; goal queued anyway")
+        goal, through = nav_goal.build(spec, self._node.get_clock().now().to_msg())
+        client = self.route_client if through else self.nav_client
+        if not client.wait_for_server(timeout_sec=0.0):
+            self._node.get_logger().warn("navigation action server not ready; goal queued anyway")
         generation = self._goals.opening(correlation_id, native_run_id)
-        future = self.nav_client.send_goal_async(goal)
+        future = client.send_goal_async(goal)
         future.add_done_callback(lambda done, gen=generation: self._goal_response_cb(done, gen))
         goal_tracker.watch_response(self._goals, self._svc.nav, future, generation)
 

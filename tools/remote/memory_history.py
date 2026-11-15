@@ -76,7 +76,7 @@ def _rows(history: Path | None, inv: list[str]) -> list[dict]:
         return rows
     try:
         # Line by line: every invocation of a landing reads this at once, and the file only grows.
-        with history.open(encoding="utf-8") as lines:
+        with history.open(encoding="utf-8", errors="replace") as lines:
             for line in lines:
                 try:
                     row = json.loads(line)
@@ -93,6 +93,27 @@ def reserve_gb(history: Path | None, inv: list[str]) -> int:
     """MARGIN x inv's highest recorded peak, rounded up to whole GB within 1..FULL_GB; FULL_GB with no record."""
     peaks = [r["peak_mib"] for r in _rows(history, inv) if isinstance(r.get("peak_mib"), int)]
     return min(FULL_GB, max(1, math.ceil(max(peaks) * MARGIN / 1024))) if peaks else FULL_GB
+
+
+def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
+    """The largest ``reserve_gb`` over invs in one read of the history: a run's placement reservation
+    (remote_pytest.SHIP). 2026-11-09: three runs waiting to start held 18 GB of a model PC at a fixed 6 GB each."""
+    keys, peaks = {key(inv) for inv in invs}, {}
+    if history is not None and invs:
+        try:
+            with history.open(encoding="utf-8", errors="replace") as lines:
+                for line in lines:
+                    try:
+                        row = json.loads(line)
+                        if row["key"] in keys and isinstance(row.get("peak_mib"), int):
+                            peaks[row["key"]] = max(peaks.get(row["key"], 0), row["peak_mib"])
+                    except (ValueError, KeyError, TypeError):
+                        continue
+        except OSError:
+            pass
+    if not invs or len(peaks) < len(keys):
+        return FULL_GB
+    return min(FULL_GB, max(1, math.ceil(max(peaks.values()) * MARGIN / 1024)))
 
 
 def reserve_cores(history: Path | None, inv: list[str], workers: int) -> int:

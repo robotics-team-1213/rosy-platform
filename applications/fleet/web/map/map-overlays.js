@@ -165,6 +165,7 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
     YIELDING: "비켜서는 중",
     YIELDED: "양보 대기",
     NO_YIELD_SPACE: "자리 없음",
+    MAP_FRAME_MISMATCH: "지도 프레임 다름",
   };
 
   function drawMediation(ctx, grid) {

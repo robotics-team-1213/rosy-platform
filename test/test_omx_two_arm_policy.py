@@ -51,3 +51,4 @@ def test_only_finished_tasks_make_a_round_pass():
     assert policy.outcome(dict(whole=[dict(completed=True), dict(completed=True)])) == dict(status="passed")
     for whole in ([dict(completed=True), dict(completed=False)], []):
         assert policy.outcome(dict(whole=whole))["status"] == "failed"
+

@@ -167,6 +167,8 @@ def test_the_photo_plates_stand_where_the_top_camera_saw_them():
 
 
 def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
+    assert not any(s.get("blocked") for s in layout.sites.values())  # the plates where the 11-08 top frame sees them clear the hull
+    layout = sites.Layout(temp_lanes="fan", temp_radius_m=.200, ship_centre_y_m=.007)  # plate v11 on its bridge, the ship as estimated before
     """Plate v11 where its bridge seats it reaches 20 mm over the estimated r08 hull at arm_b (MuJoCo: the container sat 5 mm up, 7 deg
     tilted on lane 1). Such a lane is no place until the base plate yaw and the ship are measured."""
     assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-b-1", "tmp-b-1-l1", "tmp-b-1-l2"}  # every tier of that lane
@@ -175,7 +177,7 @@ def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
 
 
 def test_temp_lanes_follow_the_scad_fan_and_point_at_the_arm():
-    layout = sites.Layout(temp_lanes="fan", ship_source="fixture-studs")
+    layout = sites.Layout(temp_lanes="fan", temp_radius_m=.200, ship_source="fixture-studs")
     width, length, flare, fan, angles = sites.lane_geometry(.200)
     assert width == pytest.approx(.0308) and length == pytest.approx(.096) and math.degrees(fan) == pytest.approx(17.3, abs=.1) and angles[1] == 0
     assert layout.choices["temp_lanes"] == "fan" and layout.choices["temp_radius_m"] == .200  # plate v11 on its bridge (Confluence 23233175)

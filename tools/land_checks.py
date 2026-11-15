@@ -107,7 +107,13 @@ def _ids(wt: Path, verdict: str) -> list[str]:
                              "*test_*.py").stdout.splitlines()
             if len(found) == 1:
                 nodeid = found[0] + sep + rest
-        ids.append(nodeid)
+        # A parameter id pytest printed with spaces or \u escapes does not survive the remote argv (2026-11-08:
+        # "[response1-비상 ...]" ran nothing, exit 4); rerun the whole test function instead.
+        head, bracket, _ = nodeid.partition("[")
+        if bracket and re.search(r"[\s\\]", nodeid[len(head):]):
+            nodeid = head
+        if nodeid not in ids:
+            ids.append(nodeid)
     return ids
 
 
@@ -369,6 +375,10 @@ def check_turn(land, wt: Path, args, round_no) -> None:
         raise land.Overtime("turn budget expired: remaining checks prepare outside the lock")
 
 
+_lint_lock = threading.Lock()
+_lint_done: dict[tuple, str] = {}
+
+
 def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
     # Earlier waiter budgets remain, but every turn has the user's unconditional thirty-minute ceiling.
@@ -377,13 +387,21 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     maximum = turn_deadline(land, args, round_no, maximum=True)
     python = land.sys.executable
     done = []
-    if (wt / land.HARNESS).is_file():
-        land.step(wt, [python, land.HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
-        done.append("lint ok")
-    check_turn(land, wt, args, round_no)
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
     head = land.out(wt, "rev-parse", "HEAD")
+    if (wt / land.HARNESS).is_file():
+        lint_log = logdir / f"lint-{round_no}.txt"
+        key = (str(logdir.resolve()), str(round_no).removeprefix("g"), head, id(land.step),
+               (wt / land.HARNESS).stat().st_mtime_ns)
+        with _lint_lock:
+            if key in _lint_done:
+                lint_log.write_text(_lint_done[key], encoding="utf-8")
+            else:
+                _, text = land.step(wt, [python, land.HARNESS, "lint"], lint_log, "lint")
+                _lint_done[key] = text
+        done.append("lint ok")
+    check_turn(land, wt, args, round_no)
     # Long invocations split by measured run time so hosts run them side by side (2026-11-01: 30 min tails).
     invocations = sys.modules["work_queue"].split(wt, invocations)
     reused, todo, keep = land.land_cache.split(wt, args, invocations, head, python, land.select)

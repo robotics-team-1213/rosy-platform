@@ -15,12 +15,12 @@ from typing import Callable, Optional
 from core_common.protocol.schemas import LineStuckStatus
 from core_common.robot_body import ScanView, RobotBody
 from core_features.line_follow.clearance import (Point, body_clearances, body_envelope_gap,
-                                                 self_mask_rear_blind_m)
+                                                 rotation_sweep_gap, self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
 from core_features.line_follow.recovery.stuck.progress_watch import ProgressWatch
 from core_features.line_follow.recovery.junction.gate import MANEUVER
-from core_features.line_follow.recovery.stuck.stuck_recovery import (AnswerRefused, REPORT_ONLY,
-                                                                  StuckInput, StuckRecovery)
+from core_features.line_follow.recovery.stuck.stuck_recovery import (_TURN_CLEAR_M, AnswerRefused,
+                                                                  REPORT_ONLY, StuckInput, StuckRecovery)
 from core_features.line_follow.recovery.stuck.trail import ForwardTrail
 
 #: Providers CORE binds at start (core/drive/line_follow.py). Unbound or failing ones read as
@@ -269,6 +269,18 @@ class StuckRecoveryMixin:
             return config.obstacle_corridor_half_width_m
         return config.body_half_width_m + config.recovery_rear_lateral_margin_m
 
+    def _turn_rooms(self) -> tuple[Optional[float], Optional[float]]:
+        """D-1008: (left, right) room to turn in place, each only on the side the body turns into."""
+        c = self._config
+        if self._body_points is None or not c.body_stop_known:
+            return None, None
+        base = [(x + c.body_lidar_x_m, y) for x, y in self._body_points]
+        rooms = [rotation_sweep_gap(base, sign=side, front_x_m=c.body_front_x_m, rear_x_m=c.body_rear_x_m,
+                                    half_width_m=c.body_half_width_m, rotation_radius_m=c.body_rotation_radius_m,
+                                    horizon_m=c.obstacle_path_horizon_m, pad_m=_TURN_CLEAR_M)
+                 for side in (1.0, -1.0)]
+        return tuple(math.inf if room is None else room for room in rooms)
+
     def _stuck_input(self, now: float) -> StuckInput:
         config = self._config
         known = config.body_geometry_known
@@ -328,6 +340,7 @@ class StuckRecoveryMixin:
             blind = max(0.0, self._range_min - (lidar_x - rear_x), self_mask_rear_blind_m(
                 config.lidar_self_mask, lidar_x_m=lidar_x, rear_x_m=rear_x,
                 half_width_m=self._rear_half_width()))
+        turns = self._turn_rooms()
         trail_m, trail_yaw = self._trail.measure(now, config.recovery_trail_s)
         last_forward = self._trail.last_forward_at()
         recovered_at = self._recovery.recovered_at
@@ -336,6 +349,7 @@ class StuckRecoveryMixin:
             now=now, cause=cause, cause_detail=detail, lane_visible=lane, front_clear=front_clear,
             front_band_m=front, front_stop_m=front_stop,
             rear_m=seen["rear_m"] if known else None, turn_m=seen["turn_m"],
+            turn_ccw_m=turns[0], turn_cw_m=turns[1],
             rear_blind_m=blind, trail_m=trail_m, trail_yaw_deg=trail_yaw,
             trail_age_s=None if last_forward is None else round(now - last_forward, 3),
             scan_age_s=None if self._body_at is None else now - self._body_at,

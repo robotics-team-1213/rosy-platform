@@ -51,6 +51,13 @@ sealed interface LinkError {
      */
     data object Forbidden : LinkError
 
+    /**
+     * The site now advertises under another host name and the camera followed it (persisted by the credential
+     * provider after a pinned, signed proof). The link ends without stopping; the service starts a new session
+     * against the saved link.
+     */
+    data object SiteMoved : LinkError
+
     data class InvalidConfig(val field: String) : LinkError
     /** Transport failure before or during the session; [kind] drives the operator guidance. */
     data class Network(val detail: String, val kind: NetworkFailure = NetworkFailure.OTHER) : LinkError
@@ -97,7 +104,7 @@ data class SensorInfo(val width: Int, val height: Int, val rotationDeg: Int)
  *   network. The adapter's `captured_at = received - age_ms` is therefore later than the true
  *   capture time by that transmit delay.
  * - Reconnects with [Backoff]; 4400 stops only for an incompatibility reason;
- *   4401 and 4409 stop.
+ *   4401 stops a link without a [credentialProvider] (with one it is retried slowly), 4409 stops.
  * - With a [resolver], the URL host is the site's `tls_host` and each connect looks its address up through
  *   mDNS ([SiteDns]); a failed connect drops the cached address so the next one browses again (D-391 1).
  */
@@ -112,6 +119,9 @@ class OverheadLink(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
     private val backoff = Backoff()
+
+    /** Used when the site refused the credential: it may be restarting, so ask rarely but never give up (D-341 11). */
+    private val slowBackoff = Backoff(listOf(5_000L, 15_000L, 60_000L))
     private val policy = LatestOnlyPolicy()
     private val meter = RateMeter()
 
@@ -165,7 +175,7 @@ class OverheadLink(
             check(!started) { "OverheadLink is single-use" }
             started = true
             running = true
-            backoff.reset()
+            backoff.reset(); slowBackoff.reset()
             policy.resetCount()
             meter.clear()
             sentCount = 0
@@ -293,9 +303,13 @@ class OverheadLink(
                         }
                     }
                 } catch (_: kotlinx.coroutines.CancellationException) { }
+                catch (_: SiteMoved) { onLost(gen, LinkError.SiteMoved, fatal = false, moved = true) }
                 catch (failure: Exception) {
+                    // Only a local, definite denial stops the link. A refusal by the site (CredentialUnavailable) or any
+                    // transport error is retried: the site may be restarting (2026-11-08 Vision restart stopped the camera).
                     val denied = failure is CredentialDenied || failure is IllegalArgumentException
-                    onLost(gen, if (denied) LinkError.Unauthorized else LinkError.Network(failure.javaClass.simpleName), denied)
+                    val error = if (denied) LinkError.Unauthorized else LinkError.Network(failure.javaClass.simpleName)
+                    onLost(gen, error, denied, slow = failure is CredentialUnavailable)
                 }
             }
             synchronized(lock) { if (isCurrent(gen)) { credentialJob = job; job.start() } else job.cancel() }
@@ -318,18 +332,19 @@ class OverheadLink(
     private fun isCurrent(gen: Int): Boolean = synchronized(lock) { running && gen == generation }
 
     /** Drops the socket of [gen] and either retries with backoff or stops for good. */
-    private fun onLost(gen: Int, error: LinkError, fatal: Boolean) {
+    private fun onLost(gen: Int, error: LinkError, fatal: Boolean, slow: Boolean = false, moved: Boolean = false) {
         synchronized(lock) {
             if (!running || gen != generation) return
             socket = null
             expiryJob?.cancel(); expiryJob = null
             generation++
-            if (fatal) {
+            if (fatal || moved) {
+                // A moved site ends this link without a retry: the saved host changed, so the service builds a new one.
                 running = false
             } else {
-                val delayMs = backoff.nextDelayMs()
+                val wait = if (slow) slowBackoff.nextDelayMs() else backoff.nextDelayMs()
                 reconnectJob = scope.launch {
-                    delay(delayMs)
+                    delay(wait)
                     connect()
                 }
             }
@@ -370,12 +385,12 @@ class OverheadLink(
             if (!isCurrent(gen)) return
             when (val msg = Protocol.parseServerMessage(text)) {
                 is ServerMessage.Config -> {
-                    backoff.reset()
+                    backoff.reset(); slowBackoff.reset()
                     Log.i(TAG, "config ${msg.config}")
                     _status.update { it.copy(config = msg.config) }
                 }
                 is ServerMessage.Status -> {
-                    backoff.reset()
+                    backoff.reset(); slowBackoff.reset()
                     Log.d(TAG, "status $msg")
                     _status.update { it.copy(site = msg) }
                 }
@@ -389,7 +404,7 @@ class OverheadLink(
                 }
                 is ServerMessage.BadCamera -> Log.w(TAG, "ignored bad camera message (${msg.reason}): $text")
                 is ServerMessage.Demand -> {
-                    backoff.reset()
+                    backoff.reset(); slowBackoff.reset()
                     Log.i(TAG, "demand wanted=${msg.wanted}")
                     _status.update { it.copy(wanted = msg.wanted) }
                 }
@@ -412,6 +427,8 @@ class OverheadLink(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            // With a credential provider every connect brings a freshly minted bearer, so a 401 means the site could not
+            // check it yet (restart) rather than "this camera is unknown": retry slowly instead of stopping.
             val error = if (response?.code == 401) {
                 LinkError.Unauthorized
             } else {
@@ -424,14 +441,16 @@ class OverheadLink(
             // again once, and stop only if the fresh route fails the pin too (review M3).
             val viaDiscovery = resolver?.route?.value is SiteRoute.Discovered
             val fatal = pinFailed && !(viaDiscovery && pinRetryAvailable.getAndSet(false))
+            val renewable = credentialProvider != null && error == LinkError.Unauthorized
             // The site may have moved: the next attempt browses again instead of reusing the cached address.
             if (response == null) resolver?.invalidate()
-            onLost(gen, error, fatal = fatal)
+            onLost(gen, error, fatal = fatal, slow = renewable)
         }
 
         private fun handleClose(code: Int, reason: String) {
-            val (error, fatal) = closeOutcome(code, reason)
-            onLost(gen, error, fatal)
+            val (error, closeFatal) = closeOutcome(code, reason)
+            val renewable = credentialProvider != null && error == LinkError.Unauthorized
+            onLost(gen, error, fatal = closeFatal && !renewable, slow = renewable)
         }
     }
 

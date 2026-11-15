@@ -200,6 +200,33 @@ def _add_account(candidate):
     return candidate
 
 
+def _add_monitoring(candidate):
+    """D-1001: the base candidate also carries Monitoring's own signed image."""
+    root, _, image_ids, _ = candidate
+    manifest = json.loads((root / 'release.json').read_text())
+    ids = _write_images_tar(root / 'images.tar', services=(*manifest['images'], 'monitoring'))
+    sbom = root / 'sbom/monitoring.spdx'
+    sbom.write_text('Monitoring SPDX fixture')
+    image_ids['monitoring'] = ids['monitoring'][0]
+    manifest['images']['monitoring'] = {'reference': f'rosy-site-monitoring:{COMMIT}',
+        'image_id': image_ids['monitoring'], 'platform': 'linux/amd64',
+        'sbom': 'sbom/monitoring.spdx', 'sbom_sha256': hashlib.sha256(sbom.read_bytes()).hexdigest()}
+    manifest['image_archive_sha256'] = hashlib.sha256((root / 'images.tar').read_bytes()).hexdigest()
+    (root / 'release.json').write_text(json.dumps(manifest))
+    return candidate
+
+
+def test_verifies_own_monitoring_image_beside_account_and_rejects_its_tampered_sbom(candidate):
+    _add_monitoring(_add_account(candidate))
+    root, _, image_ids, _ = candidate
+    summary = _verify(candidate)
+    assert summary['verified_images'] == [*SERVICES, 'account', 'monitoring']
+    assert summary['image_ids']['monitoring'] == image_ids['monitoring']
+    (root / 'sbom/monitoring.spdx').write_text('tampered Monitoring SPDX')
+    with pytest.raises(_load_verifier().CandidateVerificationError, match='monitoring'):
+        _verify(candidate)
+
+
 def test_verifies_independent_account_image_and_rejects_its_tampered_sbom(candidate):
     _add_account(candidate)
     root, _, image_ids, _ = candidate

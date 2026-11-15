@@ -89,3 +89,39 @@ def test_every_lap_scenario_starts_and_ends_on_the_lap_route():
         assert set(places) == {'scenario_end'} and requests['rosy_01']['to'] == 'scenario_end'
         assert spawns['rosy_02'] == tuple(graph['parking']['spot'])
         assert 0.5 < end - start <= 1.5 and math.dist(spawns['rosy_01'][:2], places['scenario_end'][:2]) > 0.2, name
+
+
+def test_nav_run_turns_the_site_map_off_the_world_map_and_frees_every_edge(tmp_path):
+    """D-1003 --nav: the native pose binding and the site map share one turned frame; robots keep the world map."""
+    import json
+    from types import SimpleNamespace
+    m = _module()
+    reservations = SimpleNamespace(api_ports=(18081, 18082), hub_url='http://127.0.0.1:18083', ros_domain_id=97)
+    m.write_run(tmp_path, 'nav-test', 'nav-test', reservations, nav=True)
+    tx, ty, turn = json.loads((tmp_path / 'binding.json').read_text())['map_from_world']
+    assert (tx, ty, turn) == m.NAV_SITE_FROM_WORLD and math.hypot(tx, ty) > 3.0  # far off: a raw goal would miss
+    x, y, yaw = m.to_site((1.0, 0.0, 0.0))
+    assert (round(x, 9), round(y, 9), round(yaw, 9)) == (2.0, 4.0, round(math.pi / 2, 9))
+    assert m.to_site((1.0, 2.0, 0.5), nav=False) == (1.0, 2.0, 0.5)
+    base = {'places': [{'id': 'A', 'x': 1.0, 'y': 0.0, 'yaw': None, 'exit_yaw': 0.0}],
+            'edges': [{'id': 'e', 'drive_mode': 'lane', 'polyline': [[0.0, 0.0], [1.0, 0.0]]}], 'crosswalks': [{}]}
+    site = m.nav_site_map(base)
+    assert [round(v, 9) for v in (site['places'][0]['x'], site['places'][0]['y'])] == [2.0, 4.0]
+    assert site['places'][0]['yaw'] is None and round(site['places'][0]['exit_yaw'], 9) == round(math.pi / 2, 9)
+    assert site['edges'][0]['drive_mode'] == 'free' and site['crosswalks'] == []
+    assert [[round(v, 9) for v in q] for q in site['edges'][0]['polyline']] == [[2.0, 3.0], [2.0, 4.0]]
+    m.write_run(tmp_path, 'nav-test', 'nav-test', reservations)
+    assert json.loads((tmp_path / 'binding.json').read_text())['map_from_world'] == [0.0, 0.0, 0.0]
+
+
+def test_the_two_camera_launch_takes_nav_mode_for_gz_multi():
+    source = (Path(__file__).resolve().parents[1]
+              / 'integrations/simulation/gazebo/launch/map_v2_fleet_multi_real.launch.py').read_text()
+    assert "mode=LaunchConfiguration('nav_mode', default='none')" in source and "choices=['none', 'nav']" in source
+
+
+def test_nav_run_raises_the_cyclone_participant_limit_only_for_nav(tmp_path):
+    m = _module()
+    assert m.cyclone_profile(tmp_path).name == 'cyclonedds_localhost.xml'
+    nav = m.cyclone_profile(tmp_path, nav=True).read_text(encoding='utf-8')
+    assert '<MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>' in nav and '<NetworkInterface name="lo"/>' in nav

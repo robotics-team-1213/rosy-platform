@@ -158,3 +158,18 @@ def test_reading_the_history_does_not_hold_the_file_in_memory(tmp_path):
 
 def test_missing_history_has_no_rows(tmp_path):
     assert mh._rows(None, ["x"]) == [] and mh._rows(tmp_path / "absent", ["x"]) == []
+
+
+def test_a_run_reserves_its_largest_measured_need_and_full_while_any_is_unmeasured(tmp_path):
+    history, small, heavy = tmp_path / mh.FILE, ["test/a.py"], ["test/b.py"]
+    assert mh.reserve_gb_all(history, [small]) == 6 and mh.reserve_gb_all(None, [small]) == 6
+    mh.record(history, small, "omen", 300, "ab" * 20)
+    assert mh.reserve_gb_all(history, [small]) == 1
+    assert mh.reserve_gb_all(history, [small, heavy]) == 6  # heavy was never measured
+    mh.record(history, heavy, "omen", 2000, "ab" * 20)
+    assert mh.reserve_gb_all(history, [small, heavy]) == 3  # 1.25 x 2000 MiB, rounded up
+    assert mh.reserve_gb_all(history, []) == 6
+    assert 'pytest 2 ${5:-6}' in rp.SHIP  # the run's measured GB, 6 from an older caller
+    with history.open("ab") as out:
+        out.write(b'\xff\xfe{"key": "torn\n')  # a torn multibyte write must not crash a run
+    assert mh.reserve_gb_all(history, [small, heavy]) == 3 and mh.reserve_gb(history, small) == 1

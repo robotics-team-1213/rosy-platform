@@ -72,7 +72,7 @@ SCANNER_DIR = "deploy/robot/pinky_pro/release"  # its scanner; admission runs it
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
-
+RENORMALIZE = ("-X", "renormalize")  # merges clean CRLF->LF per side first: line endings alone never conflict (11-09)
 
 TURN_CAP_S = 1200  # D-889 26 (20 min): the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
 TURN_MAX_S = 1800  # user decision 2026-11-02: every acquired turn yields, even without a waiter
@@ -110,7 +110,7 @@ def lines(cwd: Path, *args: str) -> list[str]:
 def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, source: str = "main") -> list[str]:
     """Merge main_sha (``source``: a batch member's tip, land_batch.py) into HEAD; return the auto-resolved paths."""
     if dry_run:
-        tree = git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main_sha, check=False)
+        tree = git(wt, "merge-tree", "--write-tree", "--no-messages", *RENORMALIZE, "HEAD", main_sha, check=False)
         conflicts = conflict_stages(tree.stdout) if tree.returncode == 1 else {}
         resolved, manual = plan(wt, conflicts, ("HEAD", main_sha))
         print(f"[plan] merge main {main_sha[:10]}: "
@@ -118,7 +118,7 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, sour
         if manual:
             raise Stop("merge would conflict outside the auto-resolvable set:\n  " + "\n  ".join(manual))
         return sorted(resolved)
-    result = git(wt, "merge", "--no-edit", "--no-commit", "-m",
+    result = git(wt, "merge", *RENORMALIZE, "--no-edit", "--no-commit", "-m",
                  f"Merge branch '{source}' into {branch}", main_sha, check=False)
     if result.returncode == 0 and git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0:
         return []
@@ -440,7 +440,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 else:
                     invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
                 if note and note.startswith(land_selection.DELTA_NOTE) and not land_selection.delta_yields(
-                        ticket, land_full.prepared(wt, branch, full_main) if full_main else None):
+                        ticket, land_full.prepared(wt, branch, full_main) if full_main else None, land_checks.turn_wanted(sys.modules[__name__], wt)):
                     note = None
                 if note and note not in summary:
                     summary.append(note)

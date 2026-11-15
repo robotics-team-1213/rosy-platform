@@ -22,7 +22,9 @@ DESTINATIONS = ('/console', '/console/cell', '/console/site-map', '/console/inst
 
 
 ANCHORS = {'/console/site-map': {'teach-heading'},
-           '/console/install': {'robots', 'device-profiles', 'cameras', 'calibration'}}
+           '/console/install': {'robots', 'device-profiles', 'cameras', 'calibration', 'robot-enrollment', 'peer-picker',
+                                'camera-link', 'camera-peer-panel', 'usb-camera-panel', 'camera-calibration',
+                                'measured-calibration'}}
 
 
 def fleet_return_allowed(target):

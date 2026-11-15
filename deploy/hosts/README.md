@@ -124,6 +124,7 @@ git fetch origin && python tools/remote/update_status.py
 
 새 PC를 붙이거나 장치를 바꿀 때:
 
+0. 현장 매핑 `private/site-map.yaml`(PC별 역할·관제 단위·Compose·갱신 경로·팔 보드)을 같은 날 고치고 `python tools/remote/site_map.py check`로 실제 보드와 맞춘다.
 1. `private/lab-hosts.json`에 SSH 주소를 넣고, 위 「PC 설치와 갱신」의 host-state를 역할에 맞게 설치한다(`/usr/local/bin/rosy-update-gate` 포함).
 2. 업데이트 경로를 D-805에서 고른다. OMX 셀은 `deploy/robot/omx/omx_autoupdate.py`, 네이티브 서비스는 같은 업데이터의 `"kind": "service"`, 모델 PC 코드는 서명 후보(D-446)를 따른다. 타이머 유닛은 관문(`ExecCondition`)을 거쳐야 한다.
 3. OMX 셀 설정의 `devices`·`follower_device`는 실제 `/dev/serial/by-id/` 경로로 적는다. 상시 토크 OFF 관측기가 버스를 잡는 셀은 `observers`(`unit`·`device`·`health`)를 함께 적는다. 보드를 바꾸면 이 설정과 관측기 env를 같은 날 고친다.

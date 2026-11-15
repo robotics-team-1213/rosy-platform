@@ -8,8 +8,8 @@ ROS 를 모른다. `sample` 은 bridge 의 `translate.lidar_sample` 모양(`rang
 - `front_clearance`: 정면 ±half_angle 부채꼴의 최소 거리(sector).
 - `scan_points` + `path_clearance`: 지금 조향으로 곧 지나갈 짧은 호 둘레의 띠(폭 ±half_width)
   안 점까지의 호 길이(path). L 모서리에서 돌아 나가는 쪽이 아닌 벽은 세지 않는다.
-- D-422 `body_path_gap` / `rotation_gap`: URDF 몸 윤곽(사각형 ∩ 회전 원)이 의도 호를 따라 쓸고
-  갈 때 첫 접촉까지의 거리, 제자리 회전은 회전 반경 밖 여유. 점은 base_footprint 기준이다.
+- D-422 `body_path_gap` / `rotation_sweep_gap`: URDF 몸 윤곽(사각형 ∩ 회전 원)이 의도 호를 따라 쓸고
+  갈 때 첫 접촉까지의 거리, 제자리 회전은 몸이 돌아 들어가는 쪽만(D-1008). 점은 base_footprint 기준이다.
 """
 
 from __future__ import annotations
@@ -243,11 +243,11 @@ def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, fro
     first. None = nothing touched.
     Straight lines are solved exactly; arcs are stepped (~step_m of body motion) and refined
     by bisection, over the points of the annulus the body can reach (review M4).
-    linear must be positive: in-place rotation is `rotation_gap`.
+    linear must be positive: in-place rotation is `rotation_sweep_gap`.
     """
     speed = float(linear)
     if not speed > 0.0:
-        raise ValueError("body_path_gap needs a forward speed; use rotation_gap in place")
+        raise ValueError("body_path_gap needs a forward speed; use rotation_sweep_gap in place")
     curvature = float(angular) / speed
     straight = abs(curvature) < 1e-9
     limit = horizon_m if straight else min(horizon_m, math.pi / abs(curvature))
@@ -366,15 +366,33 @@ def body_envelope_gap(points: Sequence[Point], *, linear: float, angular: float,
     return None if best is None else max(0.0, best - pad_m)
 
 
-def rotation_gap(points: Sequence[Point], *, rotation_radius_m: float,
-                 reach_m: float) -> Optional[float]:
-    """D-422 in-place rotation: the smallest gap outside the URDF rotation radius (base_footprint
-    points). Points farther than rotation_radius_m + reach_m are ignored; None = none nearer."""
+def rotation_sweep_gap(points: Sequence[Point], *, sign: float, front_x_m: float, rear_x_m: float,
+                       half_width_m: float, rotation_radius_m: float, horizon_m: float,
+                       pad_m: float, step_deg: float = 1.0) -> Optional[float]:
+    """User 2026-11-09 (D-1008): in-place rotation guards only the area the body sweeps into.
+
+    The URDF outline, grown by pad_m, turns about the base origin toward `sign` (+ left/CCW,
+    - right/CW, 0 = no heading yet: either side counts). The result is the travel at the rotation
+    radius until the first point touches it; 0 = a point is already inside, None = none within
+    horizon_m (or a full turn). A zero or NaN sign counts both sides. A point the body turns away from is not in the sweep, so a wall
+    close behind the trailing side never stops the turn. Contact is searched in step_deg steps
+    and reported at the step before it. Points are in base_footprint."""
+    outer = rotation_radius_m + pad_m
+    near = [(math.hypot(x, y), math.atan2(y, x)) for x, y in points if math.hypot(x, y) <= outer]
+    if not near:
+        return None
+    steps = int(min(2.0 * math.pi, horizon_m / rotation_radius_m) / math.radians(step_deg))
     best: Optional[float] = None
-    for x, y in points:
-        gap = max(0.0, math.hypot(x, y) - rotation_radius_m)
-        if gap <= reach_m and (best is None or gap < best):
-            best = gap
+    for turn in ((1.0, -1.0) if not sign or math.isnan(sign) else (math.copysign(1.0, sign),)):
+        for radius, angle in near:
+            for k in range(steps + 1):
+                if best is not None and max(0, k - 1) * math.radians(step_deg) * rotation_radius_m >= best:
+                    break
+                back = angle - turn * k * math.radians(step_deg)   # the point, turned back to the body
+                if _inside_body(radius * math.cos(back), radius * math.sin(back), front_x_m + pad_m,
+                                rear_x_m - pad_m, half_width_m + pad_m, outer):
+                    best = max(0, k - 1) * math.radians(step_deg) * rotation_radius_m
+                    break
     return best
 
 

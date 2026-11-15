@@ -89,3 +89,28 @@ def load_caps(path: Path, *, model=None, robot=None) -> dict:
     names = {"pwm": "pwm_limit", "current": "current_limit", "p": "p_gain", "i": "i_gain", "acc": "profile_acc",
              "vel": "profile_vel"}
     return {motor: {names[key]: value for key, value in cap.items()} for motor, cap in caps.items()}
+
+
+DUMP = ("mode", "pwm_limit", "current_limit", "p_gain", "i_gain", "d_gain", "profile_acc", "profile_vel")
+
+
+def register_dump(bus, motors) -> dict:
+    """Read only: what each follower motor holds, as evidence for the servo fit (joint2 ran 2-4x stiffer than its caps
+    said, robot-13 2026-11-09). A failed read is recorded, never raised: the session must still restore its caps."""
+    out = {}
+    for motor in motors:
+        bus.motor = motor
+        row = out[str(motor)] = {}
+        for name in DUMP:
+            try:
+                row[name] = bus.read(name)
+            except Exception as exc:
+                row[name] = f"error: {exc}"
+    return out
+
+
+def log_registers(session, when: str, motors) -> None:
+    try:
+        session.log(step="registers", when=when, registers=session._with_follower(lambda bus: register_dump(bus, motors)))
+    except Exception as exc:  # the bus is gone: the stop path goes on to torque off and caps
+        session.log(step="registers", when=when, error=str(exc))

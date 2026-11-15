@@ -90,15 +90,10 @@ PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_la
 # session, so record_session turns torque OFF instead of holding for hours (6 h on 2026-10-27/28). `state` holds.
 # A fold a hold stopped (a blocked joint) is tried once more after IDLE_RETRY_S; a second hold keeps the arm where it is.
 IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
-# Strain, in every other chunk (goto, park, lift), where normal travel lags up to ~2.6 units: hold when a load-bearing
-# joint lags STRAIN_LAG, its lag rose STRAIN_RISE over STRAIN_TICKS ticks and the guard's 5 Hz PWM is at STRAIN_PWM of its cap.
-# Real strains (2026-10-27): shoulder 2.4 -> 4.7 deg at 263 -> 516 of 600 in 0.7 s, a wrist on the wall at 55-86 %.
-# The guard brakes at 10 deg/s^2 (0.65 deg on at RISE_SPEED 2), so 2.2 units (4.0 deg) still stops short of its 5.
-STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM = 2.2, 0.25, 6, 0.5
-# A blocked wrist roll pushes at low PWM (arm_a dead at 28 % of its cap, 4 times on 2026-11-01), so the PWM test
-# never fires. Its travel lag saws up to ~1.6 going negative while it keeps moving (arm_b's "stalls" at -13 and 9.89,
-# 8 of 8, 2026-11-06), so a rising lag holds at ROLL_BLOCK_LAG only once ROLL_STILL_TICKS show it still, or at STRAIN_LAG.
-ROLL_BLOCK_LAG, ROLL_STILL, ROLL_STILL_TICKS, TEMP_STOP = 1.5, 0.3, 15, 65  # TEMP_STOP in deg C; motors' own limits 70-72
+from runner_strain import (  # noqa: E402  the strain and shed holds, with their constants (tests read them here)
+    ROLL_BLOCK_LAG as ROLL_BLOCK_LAG, STRAIN_LAG as STRAIN_LAG, STRAIN_PWM as STRAIN_PWM, STRAIN_RISE as STRAIN_RISE)
+import runner_strain  # noqa: E402
+TEMP_STOP = 65  # deg C; motors' own limits 70-72
 # Stalled = at its cap, short of its target and still (the cap alone is normal: an elbow lifting out of home).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
 MOTORS = [n.split(".")[0] for n in NAMES]
@@ -114,11 +109,10 @@ class Runner:
         self.queue: list = []
         self.chunk = None
         self.settle_since = None
-        self.far_since = None
-        self.last_grip = None
+        self.far_since, self.last_grip = None, None
         self.pending: list = []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
-        self.played, self.retreat_frames, self.contact_ticks, self.contact_start = [], [], 0, None
+        self.played, self.retreat_frames, self.jog_path, self.contact_ticks, self.contact_start = [], [], [], 0, None
         self.lag, self.paced, self.paced_ticks = 0.0, 0, 0  # paced_ticks: frames held in the current chunk
         self.pace_floor, self.pace_last = 0.0, None
         self.last_input, self.home_since = 0.0, None  # home_since: a park settled and nothing moved since
@@ -176,6 +170,7 @@ class Runner:
                 if verb != "load" and digest(self.library) != expected_library:
                     raise ValueError("checked command targets another library")
             self.grip_from = self.grip_from if verb in ("state", "grip", "episode") else None
+            self.jog_path = self.jog_path if verb in ("jog", "state", "episode") else []
             if verb == "stop":
                 self.report(command=line, ok=True)
                 return False
@@ -184,6 +179,8 @@ class Runner:
                 return True
             if self.chunk is not None:
                 raise ValueError(f"chunk {self.chunk} is still running")
+            if getattr(getattr(self.robot, "motion", None), "held", None) and verb != "state":
+                raise ValueError("the guard holds an overloaded joint: the runner is shedding its load first")
             soft = (self.fault or "").startswith("contact")
             if self.fault and verb not in ("park", "state") and not (soft and verb in ("retreat", "jog")):
                 raise ValueError(f"fault ({self.fault}): only park, state or stop"
@@ -219,7 +216,7 @@ class Runner:
                     moved[index] = max(-100.0, min(100.0, moved[index] + delta))
                     if abs(moved[index] - present[index]) > JOG_MAX + SETTLE_TOL:
                         raise ValueError(f"jog would put the target more than {JOG_MAX + SETTLE_TOL} from the joint")
-                self.target = moved
+                self.jog_path, self.target = (self.jog_path or [list(self.target)]) + [list(moved)], moved
             elif verb == "goto" and len(words) == 2:
                 frames = self.library["chunks"].get(words[1])
                 if frames is None:
@@ -272,36 +269,17 @@ class Runner:
 
     def hold(self, present, reason) -> None:
         """Stop where the arm is with torque on (the lag closes) and keep the way back for `retreat`."""
-        chunk = self.chunk
-        self.queue, self.retreat_frames = [], self.played[::-1]
+        chunk, jogging = self.chunk, bool(self.jog_path)
+        self.queue, self.retreat_frames = [], (self.played or self.jog_path[:-1])[::-1]  # a jog's own target pushed
         self.target = list(present[:5]) + [self.target[5]]
         self.fault = reason
-        self.chunk, self.played = None, []
+        self.chunk, self.played, self.jog_path = None, [], []
         if chunk == "park":
             self.last_input = self.clock()  # an idle fold's retry waits idle_retry_s from the hold, not from its start
-        self.report(command=f"run {chunk}", ok=False, error=self.fault, contact=True)
+        self.report(command=f"run {chunk or 'jog'}" if chunk or jogging else "fault", ok=False, error=self.fault, contact=True)
 
     def strained(self, sent, present):
-        """(motor, lag, pwm, cap) of a load-bearing joint whose lag keeps rising while it pushes, or of a wrist roll
-        that stopped moving with its lag rising past ROLL_BLOCK_LAG at any PWM; else None."""
-        lags = [abs(present[i] - sent[n]) if n in sent else 0.0 for i, n in enumerate(NAMES[:5])]
-        self.trend = (self.trend + [[*lags, present[4]]])[-(ROLL_STILL_TICKS + 1):]
-        if len(self.trend) <= STRAIN_TICKS:
-            return None
-        motion = getattr(self.robot, "motion", None)  # the guard's own PWM sample: no extra bus read
-        pwm, limits = getattr(motion, "effort_pwm", None) or {}, getattr(motion, "pwm_limits", None) or {}
-        first, middle = self.trend[-STRAIN_TICKS - 1], self.trend[-STRAIN_TICKS // 2 - 1]
-        for i, motor in enumerate(MOTORS[:4]):
-            rising = first[i] < middle[i] < lags[i] and lags[i] - first[i] >= STRAIN_RISE
-            pushing = motor not in pwm or motor not in limits or abs(pwm[motor]) >= STRAIN_PWM * limits[motor]
-            if lags[i] >= STRAIN_LAG and rising and pushing:
-                return motor, lags[i], pwm.get(motor), limits.get(motor)
-        path = [row[5] for row in self.trend]
-        still = len(path) > ROLL_STILL_TICKS and max(path) - min(path) < ROLL_STILL
-        if (first[4] < middle[4] < lags[4] and lags[4] >= ROLL_BLOCK_LAG and lags[4] - first[4] >= STRAIN_RISE
-                and (still or lags[4] >= STRAIN_LAG)):
-            return MOTORS[4], lags[4], pwm.get(MOTORS[4]), limits.get(MOTORS[4])
-        return None
+        return runner_strain.strained(self, sent, present)
 
     def tick(self) -> None:
         pace_lag, pace_rise = prm.get(self.params, "runner.pace_lag", PACE_LAG), prm.get(self.params, "runner.pace_rise", PACE_RISE)
@@ -317,7 +295,7 @@ class Runner:
             self.target, self.paced, self.pace_last = self.queue.pop(0), 0, None
             if self.chunk is not None:
                 self.played.append(list(self.target))
-        self.trend = [] if self.chunk is None else self.trend
+        self.trend = [] if self.chunk is None and not self.jog_path else self.trend
         sent = self.robot.send_action(dict(zip(NAMES, self.target)))
         present = self.present()
         if self.trace:  # load: the 1 Hz health reading, once, on the tick after it (cell_why: what a stop pressed with)
@@ -331,6 +309,17 @@ class Runner:
                            default=0.0)
             if self.chunk is not None:
                 self.peak_lag, self.over_ticks = max(self.peak_lag, self.lag), self.over_ticks + (self.lag > CONTACT_LAG)
+        motion = getattr(self.robot, "motion", None)
+        held = getattr(motion, "held", None) or {}
+        if held:  # the guard froze an overloaded joint (2026-11-09): stop pushing, shed its load
+            if not (self.fault or "").startswith("contact"):
+                self.hold(present, f"contact (overload-hold on {', '.join(held)} by the guard): lift and elbow shed its load")
+            self.retreat_frames = []  # the way back puts the load back on: park once the guard lets go
+            home = self.library["chunks"].get("home")
+            if home:
+                self.target = runner_strain.shed(self.target, present, sent if isinstance(sent, dict) else {}, home[-1], 0.5 * GUARD_UNITS_PER_S / self.fps)
+            runner_strain.release_when_clear(self, motion, held, self.clock())
+            return
         if (isinstance(sent, dict) and not self.fault and self.chunk is not None
                 and self.chunk.startswith(CONTACT_CHUNKS)):
             lags = [abs(present[i] - sent[name]) if name in sent else 0.0 for i, name in enumerate(NAMES[:5])]
@@ -341,14 +330,14 @@ class Runner:
             self.contact_ticks = self.contact_ticks + 1 if over else 0
             if self.contact_ticks >= prm.get(self.params, "runner.contact_ticks", CONTACT_TICKS):
                 self.hold(present, f"contact in {self.chunk}: a joint lagged the command by {lag:.1f} units")
-        elif isinstance(sent, dict) and (not self.fault or self.chunk == "park") and self.chunk is not None:
-            # a fold out of a hold watches too: it pushed a blocked wrist roll until SETTLE_S ran out (2026-11-03)
+        elif isinstance(sent, dict) and (not self.fault or self.chunk == "park") and (self.chunk is not None or self.jog_path):
+            # a fold out of a hold watches too (2026-11-03), and jogs: arm_a dropped at the guard's cut on a jog path (11-09)
             strain = self.strained(sent, present)
             if strain:  # named a contact: the judge may retreat or jog, and park clears it
                 motor, lag, pwm, limit = strain
                 others = ", ".join(f"{n} {abs(present[i] - sent[f'{n}.pos']):.1f}" for i, n in enumerate(MOTORS[:5])
                                    if n != motor and f"{n}.pos" in sent)  # a joint lagging with it points outside
-                self.hold(present, f"contact in {self.chunk}: {motor} lag rose to {lag:.1f} units at PWM {pwm} of {limit}"
+                self.hold(present, f"contact in {self.chunk or 'jog'}: {motor} lag rose to {lag:.1f} units at PWM {pwm} of {limit}"
                                    f" (lags: {others})")
                 return
         error = max(abs(a - b) for a, b in zip(present[:5], self.target[:5]))
@@ -562,6 +551,7 @@ def main(argv=None):
     # configure), seeded torque ON, 10 deg/s streaming, following-error, effort and fault stops.
     connect_passive(robot, follower=True)
     motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=MotorHealth())
+    motion.shed_load = True  # a guard hold freezes only the held joint: runner_strain.shed moves lift and elbow
     guarded = Guarded(robot, motion)
     try:
         check = load_predict.plan_check(args.load_model, robot_cfg.get("port"), params, library, {j: robot.bus.read("PWM_Limit", j) for j in load_predict.BODY[1:]}) if args.load_model else None

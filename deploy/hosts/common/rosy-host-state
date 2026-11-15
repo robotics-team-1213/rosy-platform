@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rosy host desired state: install, dry-run diff and drift check (D-530).
 
-  sudo python3 deploy/hosts/common/rosy-host-state install <site|model|ai> [--approve TARGET[,TARGET]]...
+  sudo python3 deploy/hosts/common/rosy-host-state install <site|model|ai|cell> [--approve TARGET[,TARGET]]...
   python3 deploy/hosts/common/rosy-host-state install <role> --dry-run   # no root, prints the diff
   rosy-host-state check                                                  # rosy-host-state.timer
 
@@ -32,7 +32,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROLE_DIRS = {"site": "site", "model": "model_pc", "ai": "ai_pc"}
+ROLE_DIRS = {"site": "site", "model": "model_pc", "ai": "ai_pc", "cell": "cell_pc"}
 ROOT = os.environ.get("ROSY_HOST_STATE_ROOT", "")
 LIB = "/usr/local/lib/rosy-host-state"
 STATUS = "/var/lib/rosy-host-state/status.json"

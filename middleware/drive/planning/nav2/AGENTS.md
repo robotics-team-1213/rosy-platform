@@ -26,6 +26,7 @@ Nav2 and SLAM Toolbox launch/config/maps for real robot and Gazebo. ament_cmake.
 |-----------|---------|
 | `navigation/` | Importable D-4 helpers (`frame_prefix`, `params_rewrite`, `profile_limits`) |
 | `launch/` | `hardware.launch.py` plus XML launches: bringup, localization, slam, gz_* (see `launch/AGENTS.md`) |
+| `behavior_trees/` | D-1009 BT XML for `bt_navigator`: 2 Hz replanning, every planner or controller failure retried, short recoveries (clear costmaps, wait 1 s). Wired by `params_rewrite.py` and `gz_multi.launch.py` |
 | `params/` | `nav2_params.yaml`, `mapper_params.yaml` (see `params/AGENTS.md`) |
 | `map/` | Occupancy maps (`my_map`, `pinklab`) (see `map/AGENTS.md`) |
 | `rviz/` | map_building / nav2_view configs (see `rviz/AGENTS.md`) |

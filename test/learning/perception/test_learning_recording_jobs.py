@@ -15,6 +15,8 @@ import learning_recording_jobs as module
 def _setup(tmp_path, monkeypatch):
     python = tmp_path/'python'
     python.touch()
+    # The export's 5 GiB free-space gate reads the real disk; a nearly full test host must not decide these cases.
+    monkeypatch.setattr(module.shutil, 'disk_usage', lambda path: SimpleNamespace(free=1 << 40))
     monkeypatch.setattr(module.subprocess, 'run', lambda *a, **k: SimpleNamespace(returncode=0))
     process = SimpleNamespace(pid=123, returncode=None)
     process.poll = lambda: process.returncode

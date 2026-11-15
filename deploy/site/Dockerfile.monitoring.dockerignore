@@ -1,0 +1,12 @@
+**
+!operations/monitoring/src/**
+!applications/monitoring/web/**
+!shared/web/**
+!contracts/foundation/core_common/__init__.py
+!contracts/foundation/core_common/protocol/__init__.py
+!contracts/foundation/core_common/protocol/connect_reason.py
+!contracts/foundation/core_common/protocol/monitoring.py
+!deploy/site/requirements-monitoring.txt
+!deploy/site/secret_exec.py
+**/__pycache__
+**/.pytest_cache

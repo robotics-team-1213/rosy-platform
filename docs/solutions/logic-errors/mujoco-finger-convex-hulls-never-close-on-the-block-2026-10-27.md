@@ -12,10 +12,11 @@ root_cause: wrong_api
 resolution_type: code_fix
 severity: high
 framework_version: MuJoCo 3.3.7, vendor open_manipulator 0a4af6a9 OMX-F meshes
-tags: [mujoco, convex-hull, gripper, grasp, friction-cone, isaac, d-877, d-866]
+tags: [mujoco, convex-hull, gripper, grasp, friction-cone, isaac, d-877, d-866, geom-distance, clearance]
 applies_when:
   - "a simulator backend imports the OMX-F (or any hooked-finger) URDF meshes as collision"
   - "a grasp in MuJoCo or Isaac closes to its target without stopping on the item"
+  - "a clearance or interference check between two non-convex meshes uses mujoco.mj_geomDistance"
 ---
 
 ## Symptom
@@ -51,7 +52,8 @@ gripper closing all the way to the width-matched target (0.380 rad) instead of s
 ## Next time
 
 - Measure the collision jaw gap against `profile.jaw_gap_m(q)` (`mujoco.mj_geomDistance` between the finger geoms)
-  before tuning friction or gains.
+  before tuning friction or gains. That works for the pad capsules, which are convex; between two **meshes** it
+  measures their hulls too (see the 2026-11-09 section below).
 - The pad definition lives in `tools/sim/omx_cell_world.py` (`PAD_RADIUS`, `PAD_HALF_LENGTH`, `jaw_contact_point()`); both
   backends use it, so a recalibrated contact point moves both.
 
@@ -73,3 +75,29 @@ Isaac 5.1 failed the same probe for three stacked reasons; each hid the next:
 Read back the composed joint attributes (drive type, mimic axis, damping) and the measured finger pair before tuning
 anything; a probe that only reports "not held" cannot tell these apart. Record:
 `docs/validation/omx-sim-grasp-2026-10-27b/`.
+
+## Clearance between meshes is a hull distance too (2026-11-09)
+
+**Symptom.** Checking whether arm_a's printed wrist-camera holder (link5, a U-shaped span) could have pressed on
+link3/link4 when the wrist stalled at 15:08, `mj_geomDistance` gave 6.5 mm at the fault, 0 mm at wrist 40 norm, and
+on a second sweep 12 mm at 58, 0 mm at 61.4, 7 mm at 64; repeat calls on one pair also flipped between ~13 mm and an
+exact 0.0. Two sessions took the 0 mm readings as contact and (a) named the holder as the cause, (b) withdrew ten
+hand-eye poses and filtered a pose generator on them.
+
+**Cause.** `mj_geomDistance` runs the convex collision path, so a mesh is its convex hull. The U-shaped holder's hull
+fills its opening and reaches link4 where the part does not. Readings jump wherever the hull's nearest feature
+changes; the exact 0.0 is overlapping hulls.
+
+**Fix.** Measure clearance between meshes as the nearest distance between their vertices (`scipy.spatial.cKDTree`
+on `mesh_vert` placed by `geom_xpos`/`geom_xmat`; exact point-to-box for box geoms), as `tools/sim/omx_load.py`
+`Arm.clearance_mm` does. Vertex distance over-reads by at most the mesh's local vertex spacing (a few mm on the
+link0 base), which is fine for a warning bound, not for a contact claim.
+
+**Verification.** The same sweep by vertices falls monotonically: 13.3 mm up to wrist 58, 12.8 at the fault (61.4),
+9.8 at 64, 6.0 at 70 (`test/test_omx_load.py` pins monotonic and the flag past the bound). The CAD holder did not
+touch at the fault; the holder explanation is open only for a print, mount or cable that differs from the CAD.
+Record: `docs/validation/omx-load-2026-11-09/result.md`.
+
+**Next time.** Before reading a mesh–mesh distance as contact, check it is monotonic over a sweep. Use hull distance
+only for convex parts (capsules, boxes, pads). Any interference evidence handed to another session or a person
+names how the distance was measured.

@@ -11,6 +11,7 @@ import select
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from types import SimpleNamespace
@@ -206,9 +207,21 @@ def _fleet_server(db, users, workcell_id, instance_id):
 
 @contextmanager
 def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
-                   rig_revision='sim-rig', calibration_revision='cal-7'):
+                   rig_revision='sim-rig', calibration_revision='cal-7', ram_db=False):
     tmp_path.mkdir(parents=True, exist_ok=True)
-    db = tmp_path/'fleet.sqlite3'
+    with ExitStack() as storage:
+        shm = Path('/dev/shm')
+        # Lease issuance commits to SQLite inside the device's unchanged 0.2 s budget. On a busy disk that
+        # fsync alone took 0.16 s of it (2 ms CPU), so tests that do not keep evidence use RAM-backed storage.
+        folder = (Path(storage.enter_context(tempfile.TemporaryDirectory(prefix='rosy-fleet-', dir=shm)))
+                  if ram_db and shm.is_dir() and os.access(shm, os.W_OK) else tmp_path)
+        with _approved_fleet(tmp_path, folder/'fleet.sqlite3', workcell_id, instance_id, policy_revision,
+                             rig_revision, calibration_revision) as fleet:
+            yield fleet
+
+
+@contextmanager
+def _approved_fleet(tmp_path, db, workcell_id, instance_id, policy_revision, rig_revision, calibration_revision):
     names = {'sim-admin-a':'policy-admin', 'sim-admin-b':'policy-admin',
              'sim-operator':'operator', 'sim-device':'service'}
     credentials = {name: secrets.token_urlsafe(32) for name in names}

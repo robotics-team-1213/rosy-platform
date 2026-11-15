@@ -180,6 +180,20 @@ def test_site_map_api_reads_edits_and_activates_with_audit(tmp_path):
     assert ("/api/fleet/site-map/activate", "RESULT", 200) in audit
 
 
+def test_a_tampered_active_row_answers_422_not_a_wrong_map(tmp_path):
+    """D-1010: a row edited outside Fleet keeps its old sha256 - the route refuses it."""
+    import json as _json
+    client, _tasks, store, _robot = _app(tmp_path)
+    body = _json.loads(store._active_row()[1])
+    body["places"][1]["x"] = 9.9
+    with store._db:
+        store._db.execute("UPDATE site_map_versions SET body = ? WHERE version = 1",
+                          (_json.dumps(body),))
+    refused = client.get("/api/fleet/site-map/active", headers=VIEWER)
+    assert refused.status_code == 422
+    assert refused.json()["detail"]["code"] == "SITE_MAP_BODY_HASH_MISMATCH"
+
+
 def test_activation_needs_a_named_operator_and_a_route_step_no_longer_blocks_it(tmp_path):
     client, _tasks, store, robot = _app(tmp_path)
     robot._state = _on_ring_s(store)

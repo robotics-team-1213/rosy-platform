@@ -45,3 +45,7 @@
 - 웹 UI만 바꾼 릴리스도 재측정을 요구한다. 해제 경로만 남기고 UI를 제외하는 것은 후속 검토다.
 
 **기각:** 측정 없는 승인(승인의 내용이 사라진다), 빌드 때 지문 파일 생성(서명된 `SHA256SUMS`로 충분하다), 제외 목록 대신 포함 목록(새 패키지가 조용히 빠진다), 승계 때 표식 다시 쓰기(쓰기 권한이 늘고 롤백 때 어긋난다).
+
+## Addendum 2026-11-09: 정지 뒤 바퀴 토크 꺼짐 보장
+
+geg6에서 `rosy-io` 정지 뒤에도 Dynamixel 토크가 남아 begin이 `motor preflight`로 매번 실패했다. 원인은 systemd(KillMode=control-group)와 `ros2 launch`가 SIGINT를 두 번 보내, 두 번째가 `DynamixelDriver.terminate()`의 `time.sleep` 중 `KeyboardInterrupt`로 닿아 `_disable_all()`이 실행되지 않은 것이다. 결정: (a) `terminate()`는 sleep보다 먼저 토크를 끄고 `bringup.main`은 정리 중 SIGINT/SIGTERM을 무시한다. (b) `rosy-io`·`rosy-navigation`에 `ExecStopPost=+...wheel_torque_off.py`(쓰기 전용, 주소 64=0, ID 1·2, 실패는 journal에 남기고 정지는 막지 않음)를 둔다. SIGKILL·충돌은 (a)가 못 막기 때문이다. begin의 "토크 꺼짐" 프로브 요구는 그대로이며, 두 겹의 보장이 그 요구를 채울 뿐이다. 기록: `docs/solutions/runtime-errors/rosy-io-stop-leaves-wheel-torque-on-repeat-sigint-2026-11-09.md`.

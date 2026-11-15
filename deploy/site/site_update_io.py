@@ -65,10 +65,16 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     return shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))
 
 
+def active_services(inventory, overlays):
+    """Optional-overlay services (own signed image) count only when their overlay is configured."""
+    return tuple(s for s in inventory if (s != 'account' or ACCOUNT_OVERLAY[1] in overlays)
+                 and (s != 'monitoring' or MONITORING_OVERLAY[1] in overlays))
+
+
 def companion_services(overlays, services, configured):
     """Companions reuse a signed image role; legacy Account overlays had only a proxy."""
     companions = set()
-    if MONITORING_OVERLAY[1] in overlays and 'fleet' in services:
+    if MONITORING_OVERLAY[1] in overlays and 'fleet' in services and 'monitoring' not in services:
         companions.add('monitoring')
     if ('account' not in services and tuple(services) in (SERVICES[:3], SERVICES)
             and ACCOUNT_OVERLAY[1] in overlays and 'account' in configured):
@@ -86,7 +92,7 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
     independent_account = 'account' in inventory
     if independent_account and not (image_references or {}).get('account'):
         raise Refused('independent Account signed image reference is missing')
-    services = tuple(s for s in services if s != 'account' or ACCOUNT_OVERLAY[1] in overlays)
+    services = active_services(services, overlays)
     link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
     unit = run(["systemctl", "cat", STACK_UNIT]).stdout
     for line in unit.splitlines():
@@ -118,7 +124,7 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
         raise Refused("Compose service set differs from the signed candidate")
     for service in (*services, *companions):
         image = (configured.get(service) or {}).get("image")
-        owner = service if service in inventory else COMPANIONS.get(service, service)
+        owner = service if service in inventory else COMPANIONS.get(service, service)  # own image wins
         expected = (image_references or {}).get(owner, f"rosy-site-{owner}:{commit}")
         if image != expected:
             raise Refused(f"Compose resolves {service} to {image!r}, not the candidate "

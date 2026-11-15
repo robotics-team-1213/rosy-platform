@@ -585,7 +585,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
                 # 관측이 하나도 없으면 의도가 없다 — 재지 않고 WAITING 으로 둔다.
                 self._update_intended(guard, cap)
                 if cue is not None and cue[0] == "turn":
-                    self._intended = (0.0, cue[1])   # D-422: a pivot is checked on its rotation circle
+                    self._intended = (0.0, cue[1])   # D-422: a pivot is checked on the side it turns into (D-1008)
                 if self._config.body_stop_known:
                     # D-422: 몸 윤곽이 의도 경로를 따라 쓸고 갈 때 첫 접촉까지의 거리.
                     observation = self._observation

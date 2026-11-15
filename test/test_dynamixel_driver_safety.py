@@ -329,3 +329,22 @@ def test_read_health_reports_temperature_limit_voltage_and_error_per_motor(monke
         {"id": 2, "temperature_c": 70, "temperature_limit_c": 72, "input_voltage_v": None,
          "hardware_error": 0x04},
     ]
+
+
+def test_terminate_turns_torque_off_before_any_sleep_a_repeat_sigint_can_interrupt(
+    monkeypatch,
+):
+    events = []
+    driver = _load_driver(monkeypatch, events)
+
+    def interrupted(_seconds):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(sys.modules[type(driver).__module__].time, "sleep", interrupted)
+
+    with pytest.raises(KeyboardInterrupt):
+        driver.terminate()
+
+    assert ("write1", 1, driver.ADDR_TORQUE_ENABLE, 0) in events
+    assert ("write1", 2, driver.ADDR_TORQUE_ENABLE, 0) in events
+    assert events[-1] == ("close",)

@@ -65,7 +65,11 @@ class StuckInput:
     # "clear" (band empty or wider than recovery_rear_clear_m), "blocked", or "unknown"
     # (no geometry / no fresh scan): rear_m None alone cannot tell empty from unknown.
     rear_state: str = "unknown"
-    turn_m: Optional[float] = None
+    turn_m: Optional[float] = None      # radial gap outside the turning circle: reported only
+    # D-1008: travel at the rotation radius before the body, turned toward that side (ccw = left),
+    # touches a return. inf = nothing in the way, None = unknown. A turn is judged on its own side.
+    turn_ccw_m: Optional[float] = None
+    turn_cw_m: Optional[float] = None
     # Rear band behind the body rear that the LiDAR cannot see (range_min, self-mask
     # windows). None = unknown (no range_min, no geometry): never back off.
     rear_blind_m: Optional[float] = None
@@ -83,6 +87,13 @@ class StuckInput:
     last_lane: Optional[dict] = None
     preview_seq: Optional[int] = None
     lane_boundary: Optional[dict] = None   # D-623 aligned camera geometry; inquiry only
+
+
+def turn_blocked(inp: StuckInput, sign: float) -> bool:
+    """D-1008: the side the body turns into has no room (or no scan); the other side never counts."""
+    rooms = ((inp.turn_ccw_m, inp.turn_cw_m) if not sign or math.isnan(sign)
+             else (inp.turn_ccw_m,) if sign > 0 else (inp.turn_cw_m,))
+    return any(room is None or room < _TURN_CLEAR_M for room in rooms)
 
 
 @dataclass(frozen=True)
@@ -303,7 +314,7 @@ class StuckRecovery:
             return "scan_stale"
         if min(inp.linear_ceiling, self._config.recovery_back_speed) <= 0.0:
             return "linear_limit_zero"
-        if abs(yield_turn_rad) > _TURN_SKIP and (inp.turn_m is None or inp.turn_m < _TURN_CLEAR_M):
+        if abs(yield_turn_rad) > _TURN_SKIP and turn_blocked(inp, yield_turn_rad):
             return "turn_blocked"
         return None
 
@@ -350,7 +361,7 @@ class StuckRecovery:
             return "no_scan"
         if inp.scan_age_s > self._config.clearance_stale_s:
             return "scan_stale"
-        if self._phase == TURNING and (inp.turn_m is None or inp.turn_m < _TURN_CLEAR_M):
+        if self._phase == TURNING and turn_blocked(inp, self._angular):
             return "turn_blocked"
         if self._phase == CRAWLING:
             stop = self._config.sector_stop_m if inp.front_stop_m is None else inp.front_stop_m

@@ -226,6 +226,8 @@ def test_registers_give_the_servo_the_session_set():
     assert joints["joint1"]["kp"] == pytest.approx(per_pwm * 640 / 128 * 4096 / (2 * 3.141592653589793), rel=1e-3)
     assert joints["joint2"]["kp"] == pytest.approx(joints["joint1"]["kp"] * 1600 / 640, rel=1e-3)  # the session's P 1600
     assert joints["joint1"]["force"] == pytest.approx(per_pwm * 300, rel=1e-3) and joints["joint2"]["force"] == pytest.approx(per_pwm * 600, rel=1e-3)
+    assert joints["joint4"]["force"] == pytest.approx(0.52 * 250 / 1470, rel=1e-2)  # the current limit, below PWM 300's 0.215
+    assert joints["joint5"]["force"] == pytest.approx(0.52 * 250 / 1470, rel=1e-2)
     assert integral == ["joint3", "joint4"]
     doc = physics.load()
     assert physics.Physics("registers-20261109", doc).joint("arm_a", "joint2")["kp"] == pytest.approx(joints["joint2"]["kp"], rel=1e-3)

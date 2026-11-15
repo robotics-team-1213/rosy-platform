@@ -120,10 +120,12 @@ class DynamixelDriver:
         return True
 
     def terminate(self):
+        # Torque off comes before any sleep: a second SIGINT (systemd signals the
+        # whole cgroup and launch forwards another) interrupted the old sleep
+        # here, so torque stayed on after rosy-io stopped (geg6 2026-11-09).
         try:
             try:
                 self.set_double_rpm(0, 0)
-                time.sleep(0.1)
             except Exception:
                 pass
             self._disable_all()

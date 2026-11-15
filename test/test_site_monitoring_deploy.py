@@ -18,12 +18,12 @@ def _overlay():
     return yaml.safe_load((SITE / "compose.monitoring.yaml").read_text(encoding="utf-8"))
 
 
-def test_monitoring_service_is_hardened_unpublished_and_reuses_the_fleet_image():
+def test_monitoring_service_is_hardened_unpublished_and_has_its_own_image():
     overlay = _overlay()
     assert overlay["x-rosy-site"] == {"monitoring": "1"}
     assert set(overlay["services"]) == {"monitoring", "proxy"}
     service = overlay["services"]["monitoring"]
-    assert service["image"] == "rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}"
+    assert service["image"] == "rosy-site-monitoring:${ROSY_SITE_IMAGE_TAG:-local}"  # D-1001
     assert "ports" not in service and "entrypoint" not in service and "depends_on" not in service
     assert service["networks"] == ["site_backend"]
     assert service["read_only"] is True and service["cap_drop"] == ["ALL"]
@@ -67,15 +67,20 @@ def test_routes_are_imported_inside_the_site_before_the_fleet_catch_all():
     assert "header_up" not in routes  # the reader key passes through, nothing is added
 
 
-def test_fleet_image_carries_monitoring_without_putting_it_on_fleets_import_path():
-    dockerfile = (SITE / "Dockerfile.fleet").read_text(encoding="utf-8")
-    fleet_path = re.search(r"PYTHONPATH=(\S+)", dockerfile).group(1)
-    assert "monitoring" not in fleet_path
-    assert "COPY operations/monitoring/src/ /opt/rosy/src/operations/monitoring/" in dockerfile
-    assert "-m rosy.monitoring.web_assets" in dockerfile and "--output /opt/rosy/monitoring-web" in dockerfile
+def test_monitoring_has_its_own_image_that_carries_no_fleet_code():
+    dockerfile = (SITE / "Dockerfile.monitoring").read_text(encoding="utf-8")
+    assert "PYTHONPATH=/opt/rosy/src/operations/monitoring:/opt/rosy/src/contracts/foundation" in dockerfile
+    assert "operations/fleet" not in dockerfile and "operations/account" not in dockerfile
+    assert "-m rosy.monitoring.web_assets" in dockerfile and "COPY --from=assets /monitoring-web /opt/rosy/monitoring-web" in dockerfile
     assert "install -d -o 10001 -g 10001 -m 0700 /var/lib/rosy-monitoring" in dockerfile
-    ignore = (SITE / "Dockerfile.fleet.dockerignore").read_text(encoding="utf-8").splitlines()
+    assert 'ENTRYPOINT ["python3", "/opt/rosy/secret_exec.py"]' in dockerfile
+    ignore = (SITE / "Dockerfile.monitoring.dockerignore").read_text(encoding="utf-8").splitlines()
+    assert ignore[0] == "**" and not any("fleet" in line or "account" in line for line in ignore)
     assert {"!operations/monitoring/src/**", "!applications/monitoring/web/**", "!shared/web/**"} <= set(ignore)
+    fleet = (SITE / "Dockerfile.fleet").read_text(encoding="utf-8")
+    assert "monitoring" not in fleet  # a Fleet-image defect must not reach the observer
+    assert "monitoring" not in (SITE / "Dockerfile.fleet.dockerignore").read_text(encoding="utf-8")
+    assert "operations/monitoring/src" in (ROOT / ".github/workflows/build-site-candidate.yml").read_text(encoding="utf-8")
 
 
 def test_compose_renders_monitoring_only_with_its_overlay(tmp_path):
@@ -102,5 +107,5 @@ def test_compose_renders_monitoring_only_with_its_overlay(tmp_path):
     assert set(services("-f", str(base))) == {"proxy"}
     rendered = services("-f", str(base), "-f", str(overlay))
     assert set(rendered) == {"proxy", "monitoring"}
-    assert rendered["monitoring"]["image"] == "rosy-site-fleet:" + "a" * 40
+    assert rendered["monitoring"]["image"] == "rosy-site-monitoring:" + "a" * 40
     assert not rendered["monitoring"].get("ports")

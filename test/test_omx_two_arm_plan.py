@@ -20,8 +20,7 @@ def layout():
 
 @pytest.fixture(scope="module")
 def reach(layout):
-    """A fixed reach table: ship hold 1, belt and stern bay by both, plate a by arm_a, plate b lanes 1-2 by arm_b (lane 1 is left out
-    anyway: plate v11 on its bridge puts it under the estimated hull)."""
+    """A fixed reach table: ship hold 1, belt and stern bay by both, plate a by arm_a, plate b lanes 1-2 by arm_b."""
     table = {s: set(BOTH) for s in plan.planning_sites(layout) if layout.sites[s]["kind"] in ("ship", "belt")}
     table.update({f"tmp-a-{i}": {"arm_a"} for i in (1, 2, 3)})
     table.update({"tmp-b-1": {"arm_b"}, "tmp-b-2": {"arm_b"}, "tmp-b-3": set()})
@@ -62,7 +61,7 @@ def test_harbor_order_rehandle_outbound_restore(layout, reach):
     moves, why = plan.harbor_moves(layout, state, dict(cargo_id="bar-3"), reach)  # bottom of row 2 under bar-6 and bar-9
     assert why is None
     assert [(m["cargo_id"], m["phase_label"]) for m in moves] == [("bar-9", "재취급"), ("bar-6", "재취급"), ("bar-3", "반출"), ("bar-6", "복귀"), ("bar-9", "복귀")]
-    assert moves[0]["destination"] == "tmp-b-2"  # row 2 is arm_b's side: its own plate first (lane 1 lies under the hull)
+    assert moves[0]["destination"] == "tmp-b-1"  # row 2 is arm_b's side: its own plate first
     assert moves[2]["destination"].startswith("tmp-a")  # the outbound place is a lane: arm_b's plate is used up, so arm_a's
     assert [m["destination"] for m in moves[3:]] == ["ship-h1r2-l0", "ship-h1r2-l1"]  # down into the freed level, old order kept
 
@@ -87,6 +86,22 @@ def test_two_requests_overlap_on_their_own_sides_and_each_target_leaves_from_a_l
     assert len(out) == 2 and all(r["destination"].startswith("tmp-") for r in out)
     steps = plan.as_steps(rows)
     assert sorted(s["id"] for s in steps if s.get("outbound")) == sorted(f"m{r['move']}" for r in out)  # Pinky clears exactly these
+
+
+def test_two_arms_rearrange_both_outer_rows_at_once_each_reversed(layout, reach):
+    """재배치: each outer row goes out top first and comes back with its bottom in place and the two above swapped; the two rows run on
+    their own sides at the same time."""
+    full = {c: s for c, s, _ in layout.plan_order()}
+    moves, holds = plan.plan_outbound(layout, ("arm_a", "arm_b"), reach, reorder=True)
+    assert not holds and len(moves) == 12 and {m["phase_label"] for m in moves} == {"재취급", "복귀"}
+    end = dict(full, **{m["cargo_id"]: m["destination"] for m in moves})
+    for row in (0, 2):
+        old = sorted((c for c, s in full.items() if layout.sites[s]["row"] == row), key=lambda c: layout.sites[full[c]]["layer"])
+        assert sorted(old, key=lambda c: layout.sites[end[c]]["layer"]) == old[:1] + old[:0:-1]
+    rows, extra = plan.schedule(layout, moves, ("arm_a", "arm_b"))
+    assert not extra
+    zones_never_double_held(rows)
+    assert plan.metrics(rows, extra, ("arm_a", "arm_b"))["overlap_s"] > 0 and {r["arm"] for r in rows} == BOTH
 
 
 def test_a_move_no_arm_of_the_mode_reaches_is_counted_not_moved(layout, reach):

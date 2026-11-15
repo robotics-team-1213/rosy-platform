@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
 - 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정
 - 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
 - 2026-11-07 · 92cb90111c · fix(safety): a battery stop releases itself when charged (D-502 Amendment 2026-11-07)
 - 2026-11-04 · uncommitted · feat(peers): 로봇 간 맵 위치 공유 CORE 조각 v1
-- 2026-11-04 · uncommitted · fix(docking): 후진·계측 도크 혼용 시 오래된 도크 에이전트 가리개 제거 (D-972)
