@@ -151,4 +151,3 @@ D-1028 reserved in another in-flight branch (refs/adr/D-1028), absent from this 
 D-1029 reserved in another in-flight branch (refs/adr/D-1029), absent from this D-1033 branch; remove when its ADR lands
 D-1030 reserved in another in-flight branch (refs/adr/D-1030), absent from this D-1033 branch; remove when its ADR lands
 D-1031 reserved in another in-flight branch (refs/adr/D-1031), absent from this D-1033 branch; remove when its ADR lands
-D-1032 reserved in another in-flight branch (refs/adr/D-1032), absent from this D-1033 branch; remove when its ADR lands
