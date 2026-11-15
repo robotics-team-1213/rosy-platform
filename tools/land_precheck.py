@@ -141,7 +141,7 @@ def resolve_branch(cwd: Path, branch: str | None, prefix: str = "land/") -> tupl
         name = _git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
         if name in ("HEAD", "main") or name.startswith(prefix):
             raise SystemExit(f"[land-async] run it from a topic branch's worktree, not {name!r}")
-        if _git(cwd, "status", "--porcelain", "--untracked-files=no"):
+        if _git(cwd, "status", "--porcelain"):
             raise SystemExit("[land-async] uncommitted changes: commit them first (a landing takes only commits)")
         return name, "HEAD"
     name = branch.removeprefix("refs/heads/")
@@ -151,7 +151,7 @@ def resolve_branch(cwd: Path, branch: str | None, prefix: str = "land/") -> tupl
                       capture_output=True).returncode != 0:
         raise SystemExit(f"[land-async] local branch not found: {name!r}")
     for wt in _checked_out_worktrees(cwd, name):
-        if _git(wt, "status", "--porcelain", "--untracked-files=no"):
+        if _git(wt, "status", "--porcelain"):
             raise SystemExit(f"[land-async] {name} has uncommitted changes in {wt}: commit them first"
                              " (a landing takes only commits)")
     return name, f"refs/heads/{name}"
