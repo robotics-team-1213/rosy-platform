@@ -372,20 +372,25 @@ def test_roll_calls_stop_remote_only_for_stopped_members(repo, monkeypatch):
     (holder / (Path(new["worktree"]).name + ".log")).write_text(
         "[remote-pytest] cafe123456 on ai-pc (~/rosy-test/runs/land-1-new222)\n", encoding="utf-8")
 
-    stopped, ssh_runs = [], []
+    stopped, ssh_runs, events = [], [], []
     real_run = subprocess.run
 
     def fake_run(cmd, *args, **kw):
         if cmd and cmd[0] == "ssh":
             ssh_runs.append((cmd[-5], cmd[-1]))
+            events.append("ssh")
             return subprocess.CompletedProcess(cmd, 0, "", "")
         return real_run(cmd, *args, **kw)
+
+    def fake_stop(pid):
+        stopped.append(pid)
+        events.append("stop")
 
     monkeypatch.setattr(land_rollup.subprocess, "run", fake_run)
     monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
     monkeypatch.setattr(land_rollup, "plan", lambda repo_, rows, tier_of=None: rows)
     monkeypatch.setattr(land_rollup, "adopted", lambda qdir, first: True)
-    monkeypatch.setattr(land_rollup, "stop", stopped.append)
+    monkeypatch.setattr(land_rollup, "stop", fake_stop)
     monkeypatch.setattr(land_rollup.land_queue, "ahead", lambda qdir, t: [old, new])
 
     # Partial merge: b clashed, so old keeps landing b and only new is stopped.
@@ -394,15 +399,18 @@ def test_roll_calls_stop_remote_only_for_stopped_members(repo, monkeypatch):
     assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
     assert stopped == [8]
     assert ssh_runs == [("ai-pc", "land-1-new222")]
+    assert events == ["ssh", "stop"]
 
-    # Full merge: both old and new are stopped, and old's remote run is stopped once.
+    # Full merge: both old and new are stopped, and old's remote run is stopped once before stop(pid).
     stopped.clear()
     ssh_runs.clear()
+    events.clear()
     monkeypatch.setattr(land_rollup, "build", lambda repo_, members, now, urgent="": (
         "land/fix/land-rollup-x", members))
     assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
     assert sorted(stopped) == [7, 8]
     assert ssh_runs == [("model-pc", "land-1-old111"), ("ai-pc", "land-1-new222")]
+    assert events == ["ssh", "ssh", "stop", "stop"]
 
     # Unreachable SSH host never breaks roll().
     def failing_run(cmd, *args, **kw):

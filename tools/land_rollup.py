@@ -402,13 +402,13 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
             (holder / (name.replace("/", "-") + ".split")).write_text(f"re-rolled into {snap}\n", encoding="utf-8")
         else:
             print(f"[rollup] {name} keeps landing: not every member merged here (those ride twice)", flush=True)
+    complete_ids = {id(r) for r in complete}
+    stop_remote(holder, [r for r in merged if id(r) in complete_ids or not r.get("rollup")])
     pids = {int(r["pid"]) for r in complete} | {int(r["pid"]) for r in merged if not r.get("rollup")}
     # shortcut: a FULL waiter that started this apply is our parent; stopping it (taskkill /T) ends us, so last.
     # A relaunched lander (land_prepare.relaunch) is our grandparent: then later stops may be lost; see the log.
     for pid in sorted(pids, key=lambda p: p == os.getppid()):  # only now: the rollup ticket exists
         stop(pid)
-    complete_ids = {id(r) for r in complete}
-    stop_remote(holder, [r for r in merged if id(r) in complete_ids or not r.get("rollup")])
     print(f"[rollup] queued {snap}; stopped {len(pids)} landing(s) for {len(merged)} member(s)", flush=True)
     return 0
 
