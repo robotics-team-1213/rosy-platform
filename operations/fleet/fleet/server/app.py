@@ -205,6 +205,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             mission_model_turn_worker=mission_model_turn_worker,
             localization_service=localization_service, calibration_drift_watch=calibration_drift_watch,
             notification_config=notification_config, identity=identity, log=_LOG,
+            auto_locate=getattr(tracking, "auto_locate", None),
             lane_compliance_period_s=LANE_COMPLIANCE_PERIOD_S)
         try:
             yield

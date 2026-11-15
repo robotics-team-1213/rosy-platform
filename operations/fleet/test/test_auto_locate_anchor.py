@@ -180,12 +180,13 @@ def test_every_consumer_but_the_allowlist_sees_no_auto_anchor():
     assert tracker.pose(T0 + 3, "m", auto_locate=True).state == LOCALIZED
 
 
-def test_the_allowlist_is_exactly_the_trip_runner_and_the_readback():
+def test_the_allowlist_is_exactly_the_trip_runner_the_readback_and_auto_start():
     root = Path(__file__).resolve().parents[1] / "fleet"
     callers = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.py")
                      if "driving_pose" in p.read_text(encoding="utf-8"))
     # The guide shows it read-only (user, 2026-11-13); lane compliance and the rest keep arbitrated_pose.
-    assert callers == ["server/guide_service.py", "server/pose/map_pose_service.py", "server/trips/trip_runner.py"]
+    assert callers == ["server/guide_service.py", "server/pose/auto_locate_service.py",
+                       "server/pose/map_pose_service.py", "server/trips/trip_runner.py"]
 
 
 def test_anchor_age_counts_from_the_camera_not_the_sample():

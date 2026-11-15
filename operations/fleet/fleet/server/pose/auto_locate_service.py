@@ -15,20 +15,26 @@ from typing import Callable, Iterable, Mapping, Optional
 
 from fleet.localization.auto_locate import AlignmentTracker
 from fleet.server.identity_triggers import caution
+from fleet.server.trip_guard import engaged
 
 logger = logging.getLogger("fleet.auto_locate")
 
 SESSION_S = 120.0  # D-691: the phone is awake only this long per request
 RETRY_S = 10.0
+#: D-989 follow-up: a robot the camera cannot see is not blinked forever.
+AUTO_START_RETRY_S = 300.0
 
 
 class AutoLocateService:
-    def __init__(self, tracking, *, map_pose=None, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, tracking, *, map_pose=None, console=None,
+                 clock: Callable[[], float] = time.monotonic) -> None:
         self.tracking = tracking
         self.map_pose = map_pose  # D-989: fed only for robots in fleet.map_pose.auto_locate_robots
+        self.console = console    # D-989 follow-up: online/trip facts for auto_start; None keeps it off
         self._anchor_reason: dict[str, Optional[str]] = {}
         self._clock = clock
         self._until: dict[str, float] = {}
+        self._auto_start_retry: dict[str, float] = {}
         self._asked_at: dict[str, float] = {}
         self._trackers: dict[str, AlignmentTracker] = {}
 
@@ -41,6 +47,37 @@ class AutoLocateService:
                 self._asked_at.pop(robot_id, None)
             self._until[robot_id] = now + SESSION_S
         return self.snapshot()
+
+    def auto_start(self, now: Optional[float] = None) -> list[str]:
+        """D-989 follow-up: open a session for every listed robot Fleet cannot yet place on
+        the site map — the operator route without the press. The only command stays the
+        blink ``start`` already sends; an operator-opened session is left alone."""
+        if self.map_pose is None or self.console is None:
+            return []
+        now = self._clock() if now is None else now
+        started: list[str] = []
+        for robot_id in sorted(self.map_pose.config.auto_locate_robots):
+            if (now < self._auto_start_retry.get(robot_id, 0.0)
+                    or now < self._until.get(robot_id, -1.0)
+                    or not self.map_pose.knows(robot_id)
+                    or not self._auto_start_eligible(robot_id)):
+                continue
+            self.start([robot_id])
+            self._auto_start_retry[robot_id] = now + AUTO_START_RETRY_S
+            started.append(robot_id)
+        if started:
+            logger.info("auto locate: automatic session for %s", started)
+        return started
+
+    def _auto_start_eligible(self, robot_id: str) -> bool:
+        """Online on the hub, not moving for Fleet (trip/formation), and without a driving pose."""
+        record = self.console.hub.registry.find(robot_id)
+        if record is None or not record.online:
+            return False
+        if engaged(self.console, robot_id) is not None or self.console.trip_busy(robot_id):
+            return False  # the blink never interrupts a run
+        pose = self.map_pose.driving_pose(robot_id)
+        return pose is None or pose.state != "LOCALIZED"
 
     def stream_wanted(self) -> bool:
         # shortcut: any open session wakes every source; narrow per source when a site has a second camera.
