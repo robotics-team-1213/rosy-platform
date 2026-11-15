@@ -194,10 +194,11 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
                 status = run(command)
         if status.get("contact") and command == "park":
             # a fold's strain hold at the reach: back off and fold again (home in runs 3-4, 2026-10-28); a second stops
-            run("retreat")
-            status = run("park")
-            if status.get("ok"):
-                continue
+            if "overload-hold" not in (status.get("error") or ""):  # a shed load sags: no backing up from there
+                run("retreat")
+                status = run("park")
+                if status.get("ok"):
+                    continue
         if status.get("contact") and command == "run lift_place":
             # strain after release: backing up brings the open jaws round the box again (2026-10-28 Pinky); fold from here
             run("park")

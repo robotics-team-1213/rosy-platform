@@ -447,7 +447,8 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
     print(f"[remote-pytest] {sha[:10]} on {host} (~/rosy-test/runs/{name})", flush=True)
     lost = None
     try:
-        ship(repo, host, sha, name, memory_history.reserve_gb_all(memory_history.path(repo), invocations))
+        want = wanted(kind, invocations, site=bool(HEADROOM.get(host, {}).get("site")))
+        ship(repo, host, sha, name, memory_history.reserve_gb_all(memory_history.path(repo), [inv for i, inv in enumerate(invocations) if want(i)] if want else invocations))
         deps_sha, dirs = deps(repo, sha, test_tools=test_tools) if test_tools else deps(repo, sha)
         if test_tools:
             blobs = ",".join(git(repo, "rev-parse", f"{sha}:{path}")
@@ -457,9 +458,8 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         recipe = remote_test_tools.render_setup(VENV, test_tools)
         if remote(host, recipe, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"], tries=3).returncode != 0:
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
-        cpu = SITE_CPU_QUOTA if host in SITES else ""
-        k = 0  # job number on this host's run dir
-        pick = host_caps.route(wanted(kind, invocations, site=bool(HEADROOM.get(host, {}).get("site"))), host_caps.room(host, HEADROOM), host_caps.needs(repo, sha, invocations))
+        cpu, k = SITE_CPU_QUOTA if host in SITES else "", 0  # k: job number on this host's run dir
+        pick = host_caps.route(want, host_caps.room(host, HEADROOM), host_caps.needs(repo, sha, invocations))
         take = (lambda: work.take_small(pick, host)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick, host)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)

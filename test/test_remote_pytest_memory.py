@@ -173,3 +173,23 @@ def test_a_run_reserves_its_largest_measured_need_and_full_while_any_is_unmeasur
     with history.open("ab") as out:
         out.write(b'\xff\xfe{"key": "torn\n')  # a torn multibyte write must not crash a run
     assert mh.reserve_gb_all(history, [small, heavy]) == 3 and mh.reserve_gb(history, small) == 1
+
+
+def test_reserve_reads_history_once_and_lane_ship_skips_non_browser_invocations(tmp_path, monkeypatch):
+    history, browser, plain = tmp_path / mh.FILE, ["ROSY_RUN_BROWSER_TESTS=1", "test/a_browser.py"], ["test/b.py"]
+    mh.record(history, browser, "h", 300, "ab" * 20, 1.5)
+    reads = []
+    real_rows = mh._rows
+    monkeypatch.setattr(mh, "_rows", lambda h, inv: reads.append(inv) or real_rows(h, inv))
+    words, _ = mh.reserve(history, browser, ["ROSY_JOB_CORES=6"], "xdist")
+    assert len(reads) == 1 and "ROSY_JOB_RESERVE_GB=1" in words and "ROSY_JOB_RESERVE_CORES=2" in words
+
+    shipped = []
+    monkeypatch.setattr(rp, "HEADROOM", {"h": {"cores": 4.0, "mem": 10.0, "site": False, "light": False}})
+    monkeypatch.setattr(rp, "ship", lambda _r, _h, _s, _n, gb=6: shipped.append(gb))
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
+    monkeypatch.setattr(mh, "path", lambda repo: history)
+    monkeypatch.setattr(rp.remote_job, "run", lambda h, name, k, log, job, inv, *a: log.write_bytes(b"1 passed\n") and 0)
+    assert rp.run_on("h", [browser, plain], [tmp_path / "1.txt", tmp_path / "2.txt"], "ab" * 20, tmp_path, None, kind="lane") == [0, None]
+    assert shipped == [1]  # plain has no history, but a lane never runs it

@@ -336,6 +336,9 @@ def run_auto(
                     **out,
                     "result": f"stopped: {'released' if moved.get('released') else 'holding'} after a stop at {moved['at']}",
                 }
+            parks = [s for s in moved["steps"] if s.get("command") == "park"]
+            if parks and parks[-1].get("contact"):  # 2026-11-14 arm_s: a park overloaded at a far pick; no next attempt from there
+                return {**out, "result": f"stopped: contact at park: {parks[-1].get('error')}"}
             if moved["result"] not in ("empty", "contact", "reinserted"):
                 if moved["result"] in ("fault", "refused") and not gate.blocked:
                     cp.fold(gate, sleep)
