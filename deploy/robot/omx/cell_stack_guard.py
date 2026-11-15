@@ -311,7 +311,9 @@ class CellStackGuard:
         after_top: Any = None,
     ) -> dict[str, Any]:
         """Delegates post-release visual verification to cell_area_zones.verify_stack_outcome."""
-        return caz.verify_stack_outcome(
+        place_area = str(place.get("area") or place.get("area_id") or "pallet").strip().lower()
+        verify = caz.verify_stack_outcome_z_mm if place_area == "pallet" else caz.verify_stack_outcome
+        return verify(
             before_side=before_side,
             after_side=after_side,
             pick=pick,
