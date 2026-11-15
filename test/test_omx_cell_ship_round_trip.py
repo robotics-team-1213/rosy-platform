@@ -523,3 +523,47 @@ def test_a_site_can_grip_a_box_off_its_centre(monkeypatch):
     assert objects[0]["raw_m"] == pytest.approx([0.06, -0.173])
     del config["sites"]["s"]["grip_offset_m"]
     assert auto.observe(cell, config, {}, "s", (0, 0, 10, 10), [])[2][0]["raw_m"] == pytest.approx([0.06, -0.14])
+
+
+def test_jaw_centre_retries_unmerged_narrow_jaws_and_mark_jaws_prefers_near_pair(monkeypatch):
+    # Narrow 36 px jaw pair fused by default 25x25 dilation (merge_px=12) recovers at merge=0
+    (cx, cy, _), = cell_pivot.jaw_centre(*jaw_frames([(282, 300), (318, 300)]))
+    assert (cx, cy) == pytest.approx((300, 300), abs=1)
+
+    # Larger wire-reflection pair far away must not beat the jaw pair matching `near`
+    closed, opened = jaw_frames([(250, 260), (310, 260)])
+    cv2.rectangle(opened, (440, 120), (470, 160), (20, 20, 20), -1)
+    cv2.rectangle(opened, (510, 120), (540, 160), (20, 20, 20), -1)
+    frames = iter([closed, opened] * 4)
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(grip_to=lambda cell, value: True))
+    monkeypatch.setattr(cell_pivot, "settled_frame", lambda *a, **k: next(frames))
+    cfg = {"plan": {}, "jaw_mark": {"centre": True}}
+    assert cell_pivot.mark_jaws(None, cfg, lambda s: None, near=([(280, 260)], 40)) == pytest.approx((280, 260), abs=2)
+
+    # Single changed blob with jaw_mark.centre=True must return None rather than falling back to jaw_blobs
+    single = jaw_frames([(297, 267)])
+    monkeypatch.setattr(cell_pivot, "settled_frame", lambda *a, **k: next(iter_frames))
+    iter_frames = iter([single[0], single[1]] * 4)
+    assert cell_pivot.mark_jaws(None, cfg, lambda s: None, max_marks=2) is None
+
+
+def test_pivot_calibrate_refuses_narrow_yaw_arc(tmp_path, monkeypatch):
+    class FixedState:
+        def __init__(self):
+            self.yaws = iter([-12.0, 10.0, 34.0, 66.0])
+
+        def act(self, cmd):
+            return {"ok": True}
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(
+        write_library=lambda c, a, b, path: path, fold=lambda cell, s: None))
+    import joint_jitter
+    monkeypatch.setattr(joint_jitter, "settled_state", lambda *a, **k: {"state": [0, 0, 0, 0, 0, 56]})
+    cell = FixedState()
+    monkeypatch.setattr(cell_pivot, "mark_jaws", lambda *a, **k: (320.0, 240.0))
+    monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda *a, **k: (0.12, 0.0))
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda *a, **k: (0.10, 0.0, 0.08, next(cell.yaws)))
+    cfg = {"plan": {"approach_m": 0.03}, "coarse": {"z_view": 0.08}, "sites": {"s": {"surface_z": 0.0}}}
+    res = cell_pivot.pivot_calibrate(cell, cfg, (0.10, 0.0), [-12, 10, 34, 66],
+                                     {"sites": {"s": {"homography": [], "z_view": 0.08}}}, "s", tmp_path, lambda _: None, lambda _: None)
+    assert res["result"].startswith("circle refused: yaw arc 78.0 deg")
