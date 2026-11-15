@@ -187,7 +187,7 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     import types
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
-    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None: to_px(cell.at))
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None, **kw: to_px(cell.at))
     points = [[0.10, 0.10], [0.12, 0.12], [0.10, 0.14], [0.14, 0.10], [0.15, 0.15], [0.17, 0.12], [0.30, 0.30]]
 
     class Cell:
@@ -257,7 +257,7 @@ def test_a_remap_recovers_when_its_first_marks_flip_and_reports_what_it_dropped(
             self.i += command.startswith("load")
             return {"ok": True}
 
-    def mark(cell, config, near=None):
+    def mark(cell, config, near=None, **kw):
         gates.append(near)
         p = points[cell.i]
         x, y = to_px(p)
@@ -290,7 +290,7 @@ def test_too_few_marks_that_agree_stop_the_remap_with_no_map(tmp_path, monkeypat
             self.i += command.startswith("load")
             return {"ok": True}
 
-    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None: (
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None, **kw: (
         (to_px(points[cell.i])[0] + SCATTER[cell.i][0], to_px(points[cell.i])[1] + SCATTER[cell.i][1])))
     config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
               "calibrate": {"map_sites": ["pallet"]}}
@@ -319,7 +319,7 @@ def test_a_scene_that_changed_during_the_remap_saves_no_map(tmp_path, monkeypatc
             self.parked |= command == "park"
             return {"ok": True}
 
-    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None: to_px(points[cell.i]))
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None, **kw: to_px(points[cell.i]))
     config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
               "calibrate": {"map_sites": ["pallet"]}}
     with pytest.raises(SystemExit, match="scene changed"):
@@ -332,3 +332,39 @@ def test_a_map_only_a_minority_of_the_marks_agree_on_is_refused():
     assert cc.enough_agree(5, 8) and cc.enough_agree(5, 9)
     assert not cc.enough_agree(5, 10)  # half: either side of the jaws could be the true one
     assert not cc.enough_agree(4, 4)
+
+
+def test_colour_diff_marks_black_finger_over_iso_luma_orange_background():
+    """2026-11-15: black fingers over orange/pink can match in grey luminance; channel-max diff still marks them."""
+    cv2 = pytest.importorskip("cv2")
+    import cell_pivot
+
+    bg, finger = (0, 48, 73), (50, 50, 50)  # both ~50 in BGR->GRAY; B channel differs by 50 > diff_px (30)
+    closed = np.full((200, 200, 3), bg, np.uint8)
+    opened = closed.copy()
+    closed[100:125, 100:125] = finger
+    grey_diff = cv2.absdiff(cv2.cvtColor(closed, cv2.COLOR_BGR2GRAY), cv2.cvtColor(opened, cv2.COLOR_BGR2GRAY))
+    assert int(grey_diff.max()) <= 1
+    assert cell_pivot.jaw_blobs(closed, opened) == []  # the grey mask (settling, jaw axis) is unchanged
+    blobs = cell_pivot.jaw_blobs(closed, opened, colour=True)  # mark_jaws' fallback
+    assert len(blobs) == 1 and blobs[0][:2] == pytest.approx((112.0, 112.0), abs=1.0)
+
+
+def test_mark_jaws_keep_writes_evidence_and_reports_no_changed_blob(tmp_path, monkeypatch):
+    pytest.importorskip("cv2")
+    import json
+    import types
+    import cell_pivot
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(grip_to=lambda cell, v: True))
+    cell = types.SimpleNamespace(frame=lambda cam: np.zeros((100, 100, 3), np.uint8))
+    config = {"plan": {"grip_open": 62.0}, "jaw_mark": {"closed": 50.5, "open": 62.0}}
+    keep_dir, report = tmp_path / "keep", {}
+    assert cell_pivot.mark_jaws(cell, config, sleep=lambda s: None, max_marks=2, keep=keep_dir, report=report) is None
+    assert report["reason"] == "no changed blob"
+    for i in range(2):
+        for suffix in ("closed.jpg", "open.jpg", "mask.png", "json"):
+            name = f"try-{i:02d}.{suffix}" if suffix == "json" else f"try-{i:02d}-{suffix}"
+            assert (keep_dir / name).exists()
+    info = json.loads((keep_dir / "try-00.json").read_text())
+    assert info["blobs"] == [] and info["picked"] is None and info["rejected"] == "no changed blob"
