@@ -263,7 +263,7 @@ main {
 .map-stage[data-map-state="unavailable"] #map-canvas { height: min(30dvh, 18rem); }
 /* 2026-11-14: 영상이 끊겨도 마지막 프레임을 둔다 — 반투명과 왼쪽 아래 시각 기록으로만 낡음을
    알린다(D-220: 색 변화·움직임 없음). 지도 위 그림의 반투명은 canvas globalAlpha가 맡는다. */
-.map-stage[data-camera-stale] > #map-birdseye { opacity: 0.5; }
+.map-stage[data-camera-stale] > #map-birdseye { opacity: var(--disabled-opacity); }
 .map-camera-stamp {
   position: absolute;
   z-index: 3;
