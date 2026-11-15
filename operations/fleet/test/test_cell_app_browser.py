@@ -107,12 +107,13 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     real2sim = {"snapshots": [], "active": {"id": "browser-r2s"}, "physics_candidates": [], "sysid_summary": {}, "stages": []}
     cell_tasks = {
         "tasks": [],
-        "cameras": [{"id": "top", "label": "S5 top", "topic": "/top_camera/image_raw", "url": "/api/fleet/pipeline/cell-camera/top", "fresh": True, "sequence": 7}],
+        "cameras": [{"id": "top", "label": "S5 top", "topic": "/top_camera/image_raw", "fresh": True, "sequence": 7}],
         "cells": {"cell_s": {"gate": {}}, "cell_ab": {"gate": {}}},
         "summary": {"total": 0, "queued": 0, "running": 0, "completed": 0},
     }
 
     seen = set()
+    relay_hits = []
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -126,18 +127,20 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
 
     page.route("**/api/fleet/cell-app/real2sim-pipeline**", serve_real2sim)
     page.route("**/api/fleet/pipeline/cell-tasks**", serve_cell_tasks)
-    page.route("**/api/fleet/pipeline/cell-camera/**", lambda route: route.fulfill(status=204, body=""))
+    page.route("**/api/fleet/vision/sources**", lambda route: route.fulfill(json={"sources": []}))
+    page.route("**/api/fleet/pipeline/cell-camera/**", lambda route: (relay_hits.append(route.request.url), route.abort()))
     _prepare(page)
     show_screen(page, "saved-heading")
 
     expect(page.locator("#cell-tasks-status")).to_contain_text("태스크 원장")
     assert {"real2sim", "cell-tasks"} <= seen, (seen, errors, page.locator("#real2sim-status").inner_text())
     expect(page.locator("#cell-visual-cards .cell-visual-card")).to_have_count(3)
-    expect(page.locator("#cell-camera-matrix .cell-observation-card img[data-base-url$='/top']")).to_have_count(1)
+    expect(page.locator("#cell-camera-matrix .cell-observation-card img[alt='S5 상단(top)']")).to_have_count(1)
     page.locator('#omx-right-inspector [data-inspect-target="arm_b"]').click()
-    expect(page.locator("#omx-right-inspector .omx-inspector-main-cam")).to_have_attribute(
-        "data-base-url", "/api/fleet/pipeline/cell-camera/arm_b_wrist"
-    )
+    expect(page.locator("#omx-right-inspector .omx-inspector-head")).to_contain_text("arm_b")
+    expect(page.locator("#omx-right-inspector .omx-inspector-stage")).to_contain_text("arm_b 손목(근접)")
+    expect(page.locator("#omx-right-inspector .omx-inspector-main-cam")).to_have_count(1)
+    assert not relay_hits, relay_hits
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
