@@ -157,3 +157,8 @@ def test_plan_leverage_and_rgb_only_verify_capture_skip(tmp_path):
     assert rc == 0 and called == []
     written = json.loads((work / "depth-verify.json").read_text(encoding="utf-8"))
     assert written["camera_top"]["depth_capture_skipped"] == "rgb_only_top_camera" and written["eval_verdict"] == "unknown"
+    over = cell_cal_eval.build_cross_verify(
+        {"a": {"depth_surface_z": 0.02, "touch_surface_z": 0.02, "cross_verify_flags": [], "map": {"loo_error_mm": {"max": 1.0}}}},
+        {"sites": {"a": {}}}, [{"stale_map": False, "over_limit": True, "bias_sigma_mm": 1.5}], {"present": True, "stale": False, "tcp": {"z": 0.1}}, None,
+    )
+    assert over["bias"]["verdict"] == "fail" and over["bias"]["over_limit_regions"] == 1 and over["eval_verdict"] == "hold"

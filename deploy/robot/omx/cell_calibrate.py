@@ -104,10 +104,14 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     else:
         out["camera_moved"] = bool(out.get("map_binding_error")) or out.get("reference_mismatch", False)
         out["no_reference"] = True
-    bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
-    for site, xy in targets:
-        if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
-            out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
+    try:
+        bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
+        for site, xy in targets:
+            if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
+                out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
+    except ValueError as exc:
+        out["bias_error"] = str(exc)
+        out["missing_bias"].extend(f"{site}:{xy[0]},{xy[1]}" for site, xy in targets)
     out["missing_map"] = [s for s in map_sites(config) if s not in calibration.get("sites", {})]
     for s in map_sites(config):
         rec = (calibration.get("sites") or {}).get(s) or {}

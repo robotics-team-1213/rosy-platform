@@ -201,8 +201,9 @@ def build_cross_verify(sites_out: dict[str, dict[str, Any]], depth_verify: dict 
     map_v = "fail" if (max_loo is not None and max_loo > loo_limit) else ("warn" if (bind_err or max_loo is None) else "pass")
 
     fresh_bias = sum(1 for r in regions_out if not r.get("stale_map"))
+    over_bias = sum(1 for r in regions_out if r.get("over_limit"))
     bias_sig_warn = any((r.get("bias_sigma_mm") or 0.0) > bias_sig_lim for r in regions_out)
-    bias_v = "fail" if (regions_out and fresh_bias < len(regions_out)) else ("pass" if (regions_out and not bias_sig_warn) else ("warn" if regions_out else "unmeasured"))
+    bias_v = "fail" if (over_bias or (regions_out and fresh_bias < len(regions_out))) else ("pass" if (regions_out and not bias_sig_warn) else ("warn" if regions_out else "unmeasured"))
 
     fk_fresh = bool(live_info.get("present") and not live_info.get("stale") and live_info.get("tcp"))
     fk_v = "pass" if fk_fresh else ("warn" if live_info.get("present") else "unmeasured")
@@ -218,7 +219,7 @@ def build_cross_verify(sites_out: dict[str, dict[str, Any]], depth_verify: dict 
         "depth": {"verdict": depth_v, **cam_top},
         "touch": {"verdict": touch_v, "sites_measured": touch_count, "max_diff_mm": round(max(touch_diffs), 1) if touch_diffs else None},
         "map": {"verdict": map_v, "max_loo_mm": max_loo, "map_bound": not bind_err},
-        "bias": {"verdict": bias_v, "fresh_regions": fresh_bias, "total_regions": len(regions_out), "sigma_advisory": bias_sig_warn},
+        "bias": {"verdict": bias_v, "fresh_regions": fresh_bias, "over_limit_regions": over_bias, "total_regions": len(regions_out), "sigma_advisory": bias_sig_warn},
         "fk": {"verdict": fk_v, "present": bool(live_info.get("present")), "fresh": fk_fresh, "tcp_z_m": (live_info.get("tcp") or {}).get("z")},
         **({"drift": drift} if drift else {}),
     }

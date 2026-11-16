@@ -310,23 +310,27 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
         }
 
     bias_reach_mm = float(prm.default("calibrate.bias_near_mm"))
+    max_bias_mm = float(prm.get(config.get("params"), "pivot.max_bias_mm"))
     regions_out = []
     for r in bias.get("regions") or []:
-        site = r.get("site")
+        site, pt, bmm = r.get("site"), r.get("point_m"), r.get("bias_mm") or [0.0, 0.0]
         site_obj = sites_out.get(site) or {}
         rec = None if site_obj.get("extra") else cell_pivot.map_record(with_maps, site)
         actual_sha = cell_attempts.digest(rec) if rec else None
         stale_map = (actual_sha is None) or (r.get("map_sha") != actual_sha)
         if stale_map:
             hygiene.append({"level": "error", "code": f"stale_bias:{site}", "message": f"bias region ({site}): map_sha 불일치"})
-        pt = r.get("point_m")
-        bmm = r.get("bias_mm") or [0.0, 0.0]
+        bias_mag_mm = round(math.hypot(float(bmm[0]), float(bmm[1])), 2)
+        over_limit = bias_mag_mm > max_bias_mm
+        if over_limit:
+            hygiene.append({"level": "error", "code": f"bias_over_limit:{site}", "message": f"bias region ({site}): |bias|={bias_mag_mm:.1f} mm > {max_bias_mm:.1f} mm"})
         target_z = site_obj.get("surface_z")
         fk_proj = _project_point(rec, camera_top, pt, target_z)
         map_pt = [pt[0] + bmm[0] / 1000.0, pt[1] + bmm[1] / 1000.0] if pt else None
         map_proj = _project_point(rec, camera_top, map_pt, target_z)
         regions_out.append({
             **r, "stale_map": stale_map, "actual_map_sha": actual_sha, "reach_mm": bias_reach_mm,
+            "bias_mag_mm": bias_mag_mm, "over_limit": over_limit,
             "fk_pixel_z_view": fk_proj["pixel_z_view"], "fk_pixel_surface_z": fk_proj["pixel_surface_z"],
             "map_point_m": map_pt, "map_pixel_z_view": map_proj["pixel_z_view"],
             "map_pixel_surface_z": map_proj["pixel_surface_z"],
