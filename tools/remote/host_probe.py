@@ -104,6 +104,10 @@ def current_profile(listing: str) -> list[str]:
     return []
 
 
+FULL = False  # last placement: some host answered but none fits (full), as opposed to none reachable
+FULL_WAIT_S = 12 * 3600.0  # a full pool is waited for this long per placement attempt, then the D-584 failure
+
+
 def placed_hosts(runner, cls: str, hosts: list[str] | None, cores: int) -> list[str]:
     """Measured placement; runner keeps its public API and injectable host/transport settings."""
     runner.refuse_local()
@@ -119,6 +123,8 @@ def placed_hosts(runner, cls: str, hosts: list[str] | None, cores: int) -> list[
     runner.SITES.update(h for h, p in zip(hosts, probes) if p and p.get("site"))
     host_caps.KNOWN.update((h, frozenset(p.get("caps", ()))) for h, p in zip(hosts, probes) if p)
     chosen, notes = runner.place(cls, hosts, probes, cores)
+    global FULL
+    FULL = not chosen and any(probes)  # answered but none fits: full, not unreachable
     for note in notes:
         print(f"[remote-pytest] {note}", file=runner.sys.stderr, flush=True)
     if not chosen and cls == "pytest" and (cores <= runner.NEEDS[cls][0]
