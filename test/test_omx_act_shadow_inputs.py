@@ -9,7 +9,9 @@ import pytest
 
 np = pytest.importorskip("numpy")
 pytest.importorskip("cv2")
-from test_omx_act_shadow import CATALOG, CONFIG, CONT2, ROI, Cell, auto, calibrated_map, cal, cell_attempts, cell_choices, no_sleep  # noqa: E402
+from test_omx_act_shadow import (  # noqa: E402,F401  (the simulated cell, and its autouse operating-profile fixture)
+    CATALOG, CONFIG, CONT2, ROI, Cell, auto, calibrated_map, cal, cell_attempts, cell_choices, no_sleep, simulated_operating_profile,
+)
 
 OMX = Path(__file__).parents[1] / "deploy/robot/omx"
 shadow_mod = auto.cell_act_shadow
