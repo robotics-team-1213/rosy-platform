@@ -3,33 +3,21 @@
 
 Single Responsibility:
   - Isolate camera shift, movable-site shift, joint droop, scene motion, and map/bias residual.
-  - Measure true X/Y TCP via opposing yaw pairs (or 1-yaw advisory fallback) with finger-identity
-    validation, logging `source="visit"` rows to `cal-monitor.jsonl`.
-  - Optionally save bounded `kind="visit"` local bias (never overwriting `pivot` R/phi) only under
-    `D-911` (`--commissioning --person-at-switch --apply`).
+  - Measure true X/Y TCP via opposing yaw pairs (or 1-yaw advisory fallback) with finger-identity validation (`source="visit"`).
+  - Save bounded `kind="visit"` local bias (preserving `pivot` R/phi) only under `D-911` (`--commissioning --person-at-switch --apply`).
 """
 from __future__ import annotations
 
-import argparse
+import argparse, json, math, sys, time
 from datetime import datetime, timezone
-import json
-import math
 from pathlib import Path
-import sys
-import time
 from typing import Any
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cell_attempts  # noqa: E402
-import cell_cal_monitor  # noqa: E402
-import cell_params as prm  # noqa: E402
+import cell_attempts, cell_cal_monitor, cell_params as prm, cell_pivot, cell_pivot_bias as cpb, cell_remap_plan as rp, omx_tcp  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
-import cell_pivot  # noqa: E402
-import cell_pivot_bias as cpb  # noqa: E402
-import cell_remap_plan as rp  # noqa: E402
-import omx_tcp  # noqa: E402
 
 SCHEMA = "rosy.omx-post-eval.v1"
 PAIR_OFFSETS = ((0.0, 180.0), (-60.0, 120.0), (-40.0, 140.0), (-80.0, 100.0), (-90.0, 90.0), (-20.0, 160.0))
@@ -252,21 +240,26 @@ def _track_ok(cell, config: dict, calibration: dict, site: str) -> tuple[bool, d
     return bool(report.get("tracked") and math.hypot(*report.get("shift_px", (0.0, 0.0))) <= lim), report
 
 
-def _visit_common_shift(rows: list[dict[str, Any]], config: dict) -> bool:
-    """Detect common-mode shift across >=2 distinct real sites within one post-eval run."""
-    cfg_sites, vecs = (config.get("sites") or {}), {}
+def _visit_common_shift(rows: list[dict[str, Any]], config: dict) -> tuple[bool, dict[str, Any]]:
+    """Detect common-mode translation or 2D rigid/scale drift across distinct real sites in one post-eval run."""
+    cfg_sites, vecs, pts_r, res_r = (config.get("sites") or {}), {}, [], []
     for r in rows:
         spec = cfg_sites.get(r.get("site") or "") or {}
-        if r.get("status") == "drift" and r.get("accepted") and not spec.get("tier_of") and not spec.get("map_from"):
-            v = r.get("residual_mm")
-            if isinstance(v, list) and len(v) >= 2 and math.hypot(*v) > 0:
+        if r.get("accepted") and not spec.get("tier_of") and not spec.get("map_from") and isinstance(r.get("residual_mm"), list):
+            v, pt = r["residual_mm"], r.get("point_m")
+            if isinstance(pt, list) and len(pt) >= 2 and len(v) >= 2:
+                pts_r.append(pt[:2])
+                res_r.append(v[:2])
+            if r.get("status") == "drift" and len(v) >= 2 and math.hypot(*v) > 0:
                 vecs[f"{r.get('map_sha')}:{r['site']}"] = np.asarray(v, float)
+    rigid = cpb.decompose_rigid_drift(pts_r, res_r, trans_tol_mm=float(prm.get((config or {}).get("params"), "post.tol_mm")))
     vals = list(vecs.values())
-    return len(vals) >= 2 and all(
+    pair_common = len(vals) >= 2 and all(
         float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))) > math.cos(math.radians(45.0))
         and max(np.linalg.norm(a), np.linalg.norm(b)) <= 2.0 * min(np.linalg.norm(a), np.linalg.norm(b))
         for i, a in enumerate(vals) for b in vals[i + 1:]
     )
+    return bool(pair_common or rigid.get("global_drift")), rigid
 
 
 def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply: bool = False,
@@ -307,8 +300,10 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
                                       write_library_fn=write_library_fn, bias_err=bias_err))
 
     drift = cell_cal_monitor.summarize(config, calibration)
-    common_shift = drift.get("pattern") == "common" or _visit_common_shift(rows, config)
-    applied, escalated = [], []
+    v_common, rigid = _visit_common_shift(rows, config)
+    common_shift = drift.get("pattern") == "common" or v_common
+    applied, escalated = (["remap"] if rigid.get("global_drift") else []), []
+    applied, escalated = [], list(applied)
     learn_lim, tol_mm = float(prm.get(params, "auto.bias_learn_max_mm")), float(prm.get(params, "post.tol_mm"))
     for row in rows:
         if row.get("status") != "drift":
@@ -331,7 +326,7 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
 
     lateral = lateral_summary(config, calibration)
     return {"schema": SCHEMA, "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"), "results": rows,
-            "applied": applied, "escalated": list(dict.fromkeys(escalated)), "drift": drift,
+            "applied": applied, "escalated": list(dict.fromkeys(escalated)), "drift": drift, "rigid_drift": rigid,
             "lateral_xy": lateral, "verdict": "escalate" if escalated else lateral["verdict"]}
 
 

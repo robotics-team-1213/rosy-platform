@@ -387,28 +387,18 @@ function renderSitesTable(profile) {
     const looTxt = (Number.isFinite(lmax) ? `${lmax.toFixed(1)}mm` : "-") + (Number.isFinite(sigmaMax) ? ` · ±${sigmaMax.toFixed(1)}` : "");
     const alarmed = (profile.drift?.alarmed_sites || []).includes(name);
 
-    const tdName = document.createElement("td");
-    tdName.textContent = name;
+    const tdName = document.createElement("td"); tdName.textContent = name;
     if (s.extra) tdName.setAttribute("data-level", "warn");
-    const tdZ = document.createElement("td");
-    tdZ.textContent = zTxt;
-    const tdDepth = document.createElement("td");
-    tdDepth.textContent = depthTxt;
-    if ((Number.isFinite(s.depth_diff_mm) && Math.abs(s.depth_diff_mm) > 6) || (Number.isFinite(s.place_vs_start_step_mm) && Math.abs(s.place_vs_start_step_mm) > 8)) {
-      tdDepth.setAttribute("data-level", "warn");
-    } else if (Number.isFinite(s.depth_diff_mm)) {
-      tdDepth.setAttribute("data-level", "ok");
-    }
-    const tdTouch = document.createElement("td");
-    tdTouch.textContent = touchTxt;
+    const tdZ = document.createElement("td"); tdZ.textContent = zTxt;
+    const tdDepth = document.createElement("td"); tdDepth.textContent = depthTxt;
+    if ((Number.isFinite(s.depth_diff_mm) && Math.abs(s.depth_diff_mm) > 6) || (Number.isFinite(s.place_vs_start_step_mm) && Math.abs(s.place_vs_start_step_mm) > 8)) tdDepth.setAttribute("data-level", "warn");
+    else if (Number.isFinite(s.depth_diff_mm)) tdDepth.setAttribute("data-level", "ok");
+    const tdTouch = document.createElement("td"); tdTouch.textContent = touchTxt;
     if (Number.isFinite(s.touch_diff_mm) && Math.abs(s.touch_diff_mm) > 5) tdTouch.setAttribute("data-level", "error");
     else if (Number.isFinite(s.touch_diff_mm)) tdTouch.setAttribute("data-level", "ok");
-    const tdSrc = document.createElement("td");
-    tdSrc.textContent = srcTxt;
-    const tdPts = document.createElement("td");
-    tdPts.textContent = ptsTxt;
-    const tdLoo = document.createElement("td");
-    tdLoo.textContent = looTxt;
+    const tdSrc = document.createElement("td"); tdSrc.textContent = srcTxt;
+    const tdPts = document.createElement("td"); tdPts.textContent = ptsTxt;
+    const tdLoo = document.createElement("td"); tdLoo.textContent = looTxt;
     if (Number.isFinite(lmax) && lmax > 15) tdLoo.setAttribute("data-level", "error");
     else if (Number.isFinite(lmax) && lmax > 5) tdLoo.setAttribute("data-level", "warn");
     const tdNote = document.createElement("td");
@@ -417,10 +407,7 @@ function renderSitesTable(profile) {
     if (alarmed) tdNote.setAttribute("data-level", "warn");
 
     tr.append(tdName, tdZ, tdDepth, tdTouch, tdSrc, tdPts, tdLoo, tdNote);
-    tr.addEventListener("click", () => {
-      state.siteName = name;
-      renderAll();
-    });
+    tr.addEventListener("click", () => { state.siteName = name; renderAll(); });
     tbody.appendChild(tr);
   }
   wrap.appendChild(tbl);
@@ -444,22 +431,14 @@ function renderCanvases() {
 
   const img = loadFrameImage(profile.id, state.frameSource);
   const topRes = renderTopView($("topCanvas"), {
-    profile,
-    siteName: state.siteName,
-    image: img,
-    layers: state.layers,
-    zPlane: state.zPlane,
-    errorScale: state.errorScale,
-    selectedKey: state.selectedKey,
+    profile, siteName: state.siteName, image: img, layers: state.layers,
+    zPlane: state.zPlane, errorScale: state.errorScale, selectedKey: state.selectedKey,
   });
   state.lastTopHitTargets = topRes?.hitTargets || [];
 
   const armRes = renderArmGrid($("armCanvas"), {
-    profile,
-    siteName: state.siteName,
-    layers: state.layers,
-    errorScale: state.errorScale,
-    selectedKey: state.selectedKey,
+    profile, siteName: state.siteName, layers: state.layers,
+    errorScale: state.errorScale, selectedKey: state.selectedKey,
   });
   state.lastArmHitTargets = armRes?.hitTargets || [];
 }

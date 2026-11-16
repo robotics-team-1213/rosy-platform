@@ -124,10 +124,10 @@ def map_plane_jpeg(jpeg: bytes, record: Mapping | None, *, source_id: str, map_i
             get_latest_lens_model,
             warp_undistorted_map_plane,
         )
-        model = get_latest_lens_model(width, height)
+        model = get_latest_lens_model(width, height, calibration.revision)
         if model is None:
-            auto_calibrate_and_trace_world_261026(image)
-            model = get_latest_lens_model(width, height)
+            auto_calibrate_and_trace_world_261026(image, revision=calibration.revision)
+            model = get_latest_lens_model(width, height, calibration.revision) or get_latest_lens_model(width, height)
         if model is not None:
             K, D, _ = model
             image_to_plane = map_to_plane @ np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3)

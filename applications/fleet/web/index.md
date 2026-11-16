@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-16 · uncommitted · fix(console): 활성 지도 버전 변경 시 카메라 추적 보정 동시 갱신
 - 2026-11-14 · uncommitted · 관제 현장 지도 출발은 기체 자기 지도면 차로 운행으로
 - 2026-11-13 · uncommitted · 콘솔 브라우저 계약 복구 (main red)
 - 2026-11-10 · uncommitted · uiux(console): 지도 프레임 다름 보류 문구 (D-1010)
 - 2026-11-08 · uncommitted · fix(accounts): 가입 요청 목록이 실패해도 계정 화면은 그린다
-- 2026-11-08 · uncommitted · feat(fleet-ui): 스테이션 복구 승인 주체 표시

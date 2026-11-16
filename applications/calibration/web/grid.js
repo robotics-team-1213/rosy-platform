@@ -38,60 +38,31 @@ export function parallaxPixel(pixel, fromZ, toZ, camera) {
 }
 
 function drawArrow(ctx, x0, y0, x1, y1, color, headSize = 7, dashed = false) {
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  const len = Math.hypot(dx, dy);
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 2;
+  const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy);
+  ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
   if (dashed) ctx.setLineDash([4, 3]);
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
   if (len >= 4) {
     const ang = Math.atan2(dy, dx);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
+    ctx.beginPath(); ctx.moveTo(x1, y1);
     ctx.lineTo(x1 - headSize * Math.cos(ang - Math.PI / 6), y1 - headSize * Math.sin(ang - Math.PI / 6));
     ctx.lineTo(x1 - headSize * Math.cos(ang + Math.PI / 6), y1 - headSize * Math.sin(ang + Math.PI / 6));
-    ctx.closePath();
-    ctx.fill();
+    ctx.closePath(); ctx.fill();
   }
   ctx.restore();
 }
 
 function drawCross(ctx, x, y, r, color, width = 2) {
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.beginPath();
-  ctx.moveTo(x - r, y - r);
-  ctx.lineTo(x + r, y + r);
-  ctx.moveTo(x - r, y + r);
-  ctx.lineTo(x + r, y - r);
-  ctx.stroke();
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width;
+  ctx.beginPath(); ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r); ctx.moveTo(x - r, y + r); ctx.lineTo(x + r, y - r); ctx.stroke();
   ctx.restore();
 }
 
 function drawDiamond(ctx, x, y, r, strokeColor, fillColor) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(x, y - r);
-  ctx.lineTo(x + r, y);
-  ctx.lineTo(x, y + r);
-  ctx.lineTo(x - r, y);
-  ctx.closePath();
-  if (fillColor) {
-    ctx.fillStyle = fillColor;
-    ctx.fill();
-  }
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.restore();
+  ctx.save(); ctx.beginPath();
+  ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath();
+  if (fillColor) { ctx.fillStyle = fillColor; ctx.fill(); }
+  ctx.strokeStyle = strokeColor; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
 }
 
 function drawBadge(ctx, x, y, text, fg, bg) {
@@ -353,7 +324,7 @@ export function renderTopView(canvas, state) {
     }
   }
 
-  // 5. Bias vectors & optical center & live TCP
+  // 5. Bias vectors, 1-sigma uncertainty & post-eval lateral XY residual vectors
   if (layers.bias) {
     for (const r of profile?.bias?.regions || []) {
       const fkPx = zPlane === "surface" && r.fk_pixel_surface_z ? r.fk_pixel_surface_z : r.fk_pixel_z_view;
@@ -364,6 +335,13 @@ export function renderTopView(canvas, state) {
         drawBadge(ctx, mapPx[0] + 6, mapPx[1], `bias ${r.bias_mm[0]},${r.bias_mm[1]}mm`, col, tone("--scrim"));
         hitTargets.push({ key: `bias:${r.site}`, x: fkPx[0], y: fkPx[1], data: { kind: "bias", ...r } });
       }
+    }
+    for (const [sName, info] of Object.entries(profile?.cross_verify?.lateral_xy?.sites || {})) {
+      const res = info?.residual_mm, anchor = profile?.sites?.[sName]?.place?.arm_m || profile?.sites?.[sName]?.start?.arm_m;
+      if (!Array.isArray(res) || res.length < 2 || !Array.isArray(anchor)) continue;
+      const p0 = projectArm(anchor), p1 = projectArm([anchor[0] + (res[0] * errorScale) / 1000, anchor[1] + (res[1] * errorScale) / 1000]);
+      const col = info.status === "fail" ? tone("--status-crit") : info.status === "advisory" ? tone("--status-warn") : tone("--status-good");
+      if (p0 && p1) drawArrow(ctx, p0[0], p0[1], p1[0], p1[1], col, 6, false);
     }
   }
 
@@ -563,22 +541,35 @@ export function renderArmGrid(canvas, state) {
     }
   }
 
-  // 5. Bias vectors (point_m -> point_m + bias_mm/1000, labeled "map - FK") + reach circle
+  // 5. Bias vectors, 1-sigma uncertainty circle & post-eval lateral XY residual vectors
   if (layers.bias) {
     for (const r of profile?.bias?.regions || []) {
       if (!r.point_m) continue;
       const [fx, fy] = toCanvas(r.point_m[0], r.point_m[1]);
       const [mx, my] = r.map_point_m ? toCanvas(r.map_point_m[0], r.map_point_m[1]) : [fx, fy];
       const col = r.stale_map ? tone("--status-warn") : tone("--series-secondary");
-      ctx.save();
-      ctx.strokeStyle = col;
+      ctx.save(); ctx.strokeStyle = col;
       if (r.stale_map) ctx.setLineDash([4, 3]);
       ctx.globalAlpha = 0.45;
       ctx.beginPath(); ctx.arc(fx, fy, (r.reach_mm / 1000) * pxPerM, 0, Math.PI * 2); ctx.stroke();
+      const sig = Number(r.centre_sigma_mm ?? r.bias_sigma_mm);
+      if (Number.isFinite(sig) && sig > 0) {
+        ctx.setLineDash([2, 2]); ctx.globalAlpha = 0.85;
+        ctx.beginPath(); ctx.arc(fx, fy, Math.max(3, ((sig * errorScale) / 1000) * pxPerM), 0, Math.PI * 2); ctx.stroke();
+      }
       ctx.restore();
       drawArrow(ctx, fx, fy, mx, my, col, 7, r.stale_map);
       drawBadge(ctx, mx + 6, my + 16, `bias(${r.site}) ${r.bias_mm[0]},${r.bias_mm[1]}mm`, col, tone("--scrim"));
       hitTargets.push({ key: `bias:${r.site}`, x: fx, y: fy, data: { kind: "bias", ...r } });
+    }
+    for (const [sName, info] of Object.entries(profile?.cross_verify?.lateral_xy?.sites || {})) {
+      const res = info?.residual_mm, anchor = profile?.sites?.[sName]?.place?.arm_m || profile?.sites?.[sName]?.start?.arm_m;
+      if (!Array.isArray(res) || res.length < 2 || !Array.isArray(anchor)) continue;
+      const [x0, y0] = toCanvas(anchor[0], anchor[1]);
+      const [x1, y1] = toCanvas(anchor[0] + (res[0] * errorScale) / 1000, anchor[1] + (res[1] * errorScale) / 1000);
+      const col = info.status === "fail" ? tone("--status-crit") : info.status === "advisory" ? tone("--status-warn") : tone("--status-good");
+      drawArrow(ctx, x0, y0, x1, y1, col, 6, false);
+      drawBadge(ctx, x1 + 5, y1, `XY ${info.residual_mag_mm ?? ""}mm`, col, tone("--scrim"));
     }
   }
 

@@ -217,3 +217,45 @@ def test_post_eval_1yaw_fallback_is_advisory_and_never_applies(tmp_path, monkeyp
     assert state["moved"] == [0.0]
     assert res["results"][0]["geometry_dependent"] is True and res["results"][0]["status"] == "advisory"
     assert res["applied"] == [] and res["lateral_xy"]["verdict"] == "advisory" and res["lateral_xy"]["lateral_xy_verified"] is False
+
+
+def test_blend_bias_at_weights_by_distance_and_sigma_preserving_pivot_geometry():
+    data = {
+        "schema": cpb.SCHEMA,
+        "regions": [
+            {"site": "floor", "kind": "pivot", "point_m": [0.10, 0.10], "bias_mm": [10.0, 0.0],
+             "radius_mm": 19.5, "phase_deg": 45.0, "centre_sigma_mm": 1.0},
+            {"site": "floor", "kind": "visit", "point_m": [0.14, 0.10], "bias_mm": [2.0, 0.0],
+             "centre_sigma_mm": 2.0},
+        ],
+    }
+    # Default bias_at returns nearest region without blending
+    near = cpb.bias_at(data, "floor", [0.12, 0.10], reach_mm=50.0)
+    assert near["bias_mm"] == [10.0, 0.0]
+    # Midpoint [0.12, 0.10] is 20mm from both; pivot has 2x kind weight and 4x (1/sigma^2) weight -> 8:1 weight ratio
+    blended = cpb.bias_at(data, "floor", [0.12, 0.10], reach_mm=50.0, blend=True)
+    assert blended["blended_n"] == 2 and blended["radius_mm"] == 19.5 and blended["phase_deg"] == 45.0
+    assert blended["bias_mm"][0] == pytest.approx((8.0 * 10.0 + 1.0 * 2.0) / 9.0, abs=0.05)
+
+
+def test_decompose_rigid_drift_detects_camera_rotation_and_escalates_post_eval():
+    pts = [[-0.08, 0.15], [0.08, 0.15], [0.0, 0.23]]
+    th = math.radians(2.5)
+    c = np.mean(np.asarray(pts) * 1000.0, axis=0)
+    res_rot = [[-th * (p[1] * 1000.0 - c[1]), th * (p[0] * 1000.0 - c[0])] for p in pts]
+    dec = cpb.decompose_rigid_drift(pts, res_rot)
+    assert dec["global_drift"] is True and dec["kind"] == "rotation_or_scale"
+    assert dec["rot_deg"] == pytest.approx(2.5, abs=0.1) and dec["explained_ratio"] > 0.95
+
+    rows = [{"site": f"s{i}", "point_m": pts[i], "residual_mm": res_rot[i], "residual_mag_mm": math.hypot(*res_rot[i]),
+             "status": "drift", "accepted": True, "map_sha": "sha1"} for i in range(3)]
+    cfg = {"sites": {f"s{i}": {"place": pts[i]} for i in range(3)}}
+    is_global, info = cell_post_eval._visit_common_shift(rows, cfg)
+    assert is_global is True and info["kind"] == "rotation_or_scale"
+
+
+def test_cell_calibrate_chains_post_eval_and_depth_verify():
+    import cell_calibrate as cc
+
+    chk = {"camera_moved": False, "missing_bias": [], "missing_surface": [], "unverified_xy": True, "missing_depth_verify": True}
+    assert cc.stale(chk) == ["post-eval", "depth-verify"]
