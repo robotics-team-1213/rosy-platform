@@ -75,6 +75,8 @@ class Arm:
     def __init__(self, name, base_xyz, yaw, tcp_x=None, urdf=URDF, cell=CELL_EXAMPLE):
         self.name, self.base, self.yaw = name, np.array(base_xyz, float), float(yaw)
         self.chain, self.tcp = chain(urdf)
+        self.j1_offset_xy = self.chain[0][0][:2].copy()  # URDF link0->joint1 xy; base[:2] is the joint1 axis on PR33_C02_BASE
+        self.chain[0] = (np.array([0., 0., self.chain[0][0][2]]), self.chain[0][1])
         if tcp_x is not None:
             self.tcp = np.array([tcp_x, self.tcp[1], self.tcp[2]])
         self.home, self.limits = plan_values(cell)

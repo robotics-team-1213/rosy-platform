@@ -140,12 +140,12 @@ def checkpoint_step(out):
     return int(last.resolve().name) if last.is_symlink() else None
 
 
-def train(command, out, lerobot_train, log, env, vram_mb=0):
+def train(command, out, lerobot_train, log, env, vram_mb=0, early_stop_fn=None):
     """lerobot-train that steps aside at a checkpoint while an alone test waits, then resumes from it. The total stays the
     round's steps, so the learning-rate schedule is the one an uninterrupted run has. Older checkpoints go: eval reads last."""
     while True:
         gpu_yield.wait_vram(vram_mb, say=functools.partial(print, file=log))
-        trainer, seen, stopped = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True), checkpoint_step(out), False
+        trainer, seen, stopped, solved = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True), checkpoint_step(out), False, None
         try:
             while trainer.poll() is None:
                 time.sleep(TRAIN_POLL_S)
@@ -156,16 +156,21 @@ def train(command, out, lerobot_train, log, env, vram_mb=0):
                 for old in (out / "checkpoints").iterdir():
                     if old.name.isdigit() and int(old.name) < step:  # never one still being written
                         shutil.rmtree(old)
-                if gpu_yield.alone_waiting():
+                if early_stop_fn is not None and early_stop_fn(step, out / "checkpoints/last/pretrained_model"):
+                    stop(trainer)
+                    solved = step
+                elif gpu_yield.alone_waiting():
                     stop(trainer)
                     stopped = True
         finally:  # the trainer has its own session: a round that dies must not leave it on the GPU without a lock
             if trainer.poll() is None:
                 stop(trainer)
+        if solved is not None:
+            return solved
         if not stopped:
             if trainer.returncode:
                 raise subprocess.CalledProcessError(trainer.returncode, command)
-            return
+            return None
         last = checkpoint_step(out) or 0
         for partial in (out / "checkpoints").iterdir():  # a save cut short past last would be written over by the resumed run
             if partial.name.isdigit() and int(partial.name) > last:
@@ -247,36 +252,73 @@ def run_round(args):
                 longest[key] = {k: max(v, longest.get(key, {}).get(k, 0)) for k, v in value.items()} if isinstance(value, dict) else max(longest.get(key, 0), value)
         (run / "steps.json").write_text(json.dumps(dict(longest=longest, spoiled=spoiled, **({"dagger": dagger_totals} if dagger_totals else {}))), encoding="utf-8")
         roots = part_roots + [Path(p) for p in (getattr(args, "extra_dataset", None) or [])]
-        if not roots:
-            raise RuntimeError("collect produced 0 episodes")
-        subprocess.run([args.python, "-c", "import sys; from pathlib import Path; from lerobot.datasets.aggregate import aggregate_datasets as a; p=[Path(x) for x in sys.argv[2:]]; "
-                        "a([f'rosy/part{i}' for i in range(len(p))], 'rosy/omx-two-arm', roots=p, aggr_root=Path(sys.argv[1]))", str(run / "dataset"), *map(str, roots)],
-                       env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
-        info = json.loads((run / "dataset/meta/info.json").read_text(encoding="utf-8"))
-        for part, _ in parts:
-            shutil.rmtree(part, ignore_errors=True)
-        gpu_yield.yield_turn(say=functools.partial(print, file=log))
-        record.update(stage="train", data=dict(episodes=info["total_episodes"], frames=info["total_frames"], spoiled_runs=spoiled, **({"dagger": dagger_totals} if dagger_totals else {})))
-        write_record(run, record)
-        common = [f"--batch_size={recipe['batch_size']}", f"--steps={recipe['steps']}", f"--save_freq={max(500, recipe['steps'] // 20)}", "--log_freq=500",
-                  f"--num_workers={args.train_workers}", "--wandb.enable=false", f"--output_dir={run / 'train'}",
-                  "--tolerance_s=0.001"]
-        dataset = [f"--dataset.repo_id=rosy/omx-two-arm-{round_id}", f"--dataset.root={run / 'dataset'}", "--dataset.video_backend=pyav"]
-        if args.policy == "smolvla":
-            sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "learning/training/omx"))
-            import smolvla_training
-            prepared = smolvla_training.prepare(args.base_model, args.vlm_assets, run / "inputs", device="cuda")
-            (run / "train-config.json").write_text(json.dumps(dict(policy=dict(prepared["policy"], optimizer_lr=args.lr), job_name="omx-two-arm-smolvla")), encoding="utf-8")
-            command = [args.lerobot_train, f"--config_path={run / 'train-config.json'}", *dataset, *common]
-            environment.update(HF_HUB_OFFLINE="1", HF_DATASETS_OFFLINE="1")
+        if getattr(args, "early_stop", True) and getattr(args, "dagger_only", False) and getattr(args, "dagger_model", None) and not roots and dagger_totals.get("recovered", 0) == 0 and dagger_totals.get("recovery_failed", 0) == 0 and dagger_totals.get("passed_skip", 0) > 0:
+            for part, _ in parts:
+                shutil.rmtree(part, ignore_errors=True)
+            ckpt0 = run / "train/checkpoints/000000/pretrained_model"
+            ckpt0.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(args.dagger_model, ckpt0)
+            (run / "train/checkpoints/last").symlink_to("000000")
+            record.update(stage="evaluate", data=dict(episodes=0, frames=0, spoiled_runs=spoiled, dagger=dagger_totals, early_stopped_at_step=0))
+            write_record(run, record)
         else:
-            pretrained = [f"--policy.pretrained_path={args.base_model}"] if args.base_model else []
-            command = [args.lerobot_train, *dataset, "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}",
-                       f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}", "--job_name=omx-two-arm", *pretrained, *common]
-        log.flush()
-        train(command, run / "train", args.lerobot_train, log, environment, vram_mb=VRAM_MB[args.policy])
-        record.update(stage="evaluate")
-        write_record(run, record)
+            if not roots:
+                raise RuntimeError("collect produced 0 episodes")
+            subprocess.run([args.python, "-c", "import sys; from pathlib import Path; from lerobot.datasets.aggregate import aggregate_datasets as a; p=[Path(x) for x in sys.argv[2:]]; "
+                            "a([f'rosy/part{i}' for i in range(len(p))], 'rosy/omx-two-arm', roots=p, aggr_root=Path(sys.argv[1]))", str(run / "dataset"), *map(str, roots)],
+                           env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+            info = json.loads((run / "dataset/meta/info.json").read_text(encoding="utf-8"))
+            for part, _ in parts:
+                shutil.rmtree(part, ignore_errors=True)
+            gpu_yield.yield_turn(say=functools.partial(print, file=log))
+            record.update(stage="train", data=dict(episodes=info["total_episodes"], frames=info["total_frames"], spoiled_runs=spoiled, **({"dagger": dagger_totals} if dagger_totals else {})))
+            write_record(run, record)
+            common = [f"--batch_size={recipe['batch_size']}", f"--steps={recipe['steps']}", f"--save_freq={max(500, recipe['steps'] // 20)}", "--log_freq=500",
+                      f"--num_workers={args.train_workers}", "--wandb.enable=false", f"--output_dir={run / 'train'}",
+                      "--tolerance_s=0.001"]
+            dataset = [f"--dataset.repo_id=rosy/omx-two-arm-{round_id}", f"--dataset.root={run / 'dataset'}", "--dataset.video_backend=pyav"]
+            if args.policy == "smolvla":
+                sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "learning/training/omx"))
+                import smolvla_training
+                prepared = smolvla_training.prepare(args.base_model, args.vlm_assets, run / "inputs", device="cuda")
+                (run / "train-config.json").write_text(json.dumps(dict(policy=dict(prepared["policy"], optimizer_lr=args.lr), job_name="omx-two-arm-smolvla")), encoding="utf-8")
+                command = [args.lerobot_train, f"--config_path={run / 'train-config.json'}", *dataset, *common]
+                environment.update(HF_HUB_OFFLINE="1", HF_DATASETS_OFFLINE="1")
+            else:
+                pretrained = [f"--policy.pretrained_path={args.base_model}"] if args.base_model else []
+                command = [args.lerobot_train, *dataset, "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}",
+                           f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}", "--job_name=omx-two-arm", *pretrained, *common]
+
+            def _probe_early_stop(step, ckpt_dir):
+                if step < getattr(args, "early_stop_min_steps", 0) or not ckpt_dir.is_dir():
+                    return False
+                probe_ckpt = run / "train/early_stop_ckpt"
+                shutil.rmtree(probe_ckpt, ignore_errors=True)
+                shutil.copytree(ckpt_dir, probe_ckpt)
+                probe_out = run / f"eval-step-{step:06d}.json"
+                n_seeds = max(1, int(getattr(args, "early_stop_seeds", 1)))
+                extra_probe = ["--compensate-zero"] if (args.zero_error_deg > 0 and not getattr(args, "compensate_zero", False)) else []
+                probe_env = dict(environment, **({"CUDA_VISIBLE_DEVICES": ""} if args.policy == "act" else {}))
+                rc = subprocess.run([args.python, me, "evaluate", "--model", str(probe_ckpt), "--steps-file", str(run / "steps.json"),
+                                     "--tasks", args.tasks, "--isolated-seeds", str(n_seeds), "--whole-seeds", str(n_seeds),
+                                     "--out", str(probe_out), "--artifacts", str(run / "artifacts"),
+                                     *plan, *chosen, *skilled, *eval_accel, *extra_probe],
+                                    env=probe_env, stdout=log, stderr=subprocess.STDOUT).returncode
+                if rc != 0 or not probe_out.is_file():
+                    return False
+                probe_res = json.loads(probe_out.read_text(encoding="utf-8"))
+                probe_score = summarise(probe_res["rows"], probe_res["whole"])
+                solved = outcome(probe_score, args.skill)["status"] == "passed"
+                print(f"[early-stop] step={step} passed={probe_score['passed']}/{probe_score['n']} solved={solved}", file=log, flush=True)
+                return solved
+
+            log.flush()
+            early_step = train(command, run / "train", args.lerobot_train, log, environment, vram_mb=VRAM_MB[args.policy],
+                               early_stop_fn=_probe_early_stop if getattr(args, "early_stop", True) else None)
+            if early_step is not None:
+                record["data"]["early_stopped_at_step"] = early_step
+            record.update(stage="evaluate")
+            write_record(run, record)
         ckpt_last = str(run / "train/checkpoints/last/pretrained_model")
         judged = [("eval.json", ckpt_last, [])]
         if args.zero_error_deg > 0 and not getattr(args, "compensate_zero", False):
@@ -346,6 +388,9 @@ def main(argv=None):
         else:
             one.add_argument("--no-goal", action="store_true")
             one.add_argument("--extra-dataset", action="append")
+            one.add_argument("--early-stop", action=argparse.BooleanOptionalAction, default=True)
+            one.add_argument("--early-stop-min-steps", type=int, default=0)
+            one.add_argument("--early-stop-seeds", type=int, default=1)
             for flag, kw in dagger_opts:
                 one.add_argument(flag, **kw)
     for flag, kw in (("--root", dict(required=True)), ("--python", dict(default=sys.executable)), ("--lerobot-train", dict(required=True)),

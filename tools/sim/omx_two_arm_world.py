@@ -105,8 +105,9 @@ class World:
                     if (folder / name).exists():
                         shutil.copy(folder / name, Path(self.meshes.name) / (p + name))
             a = self.layout.arms[arm]
+            j0 = a.base - a.R0 @ np.array([*a.j1_offset_xy, 0.])
             out.append(f'<joint name="{p}mount" type="fixed"><parent link="world"/><child link="{p}link0"/>'
-                       f'<origin xyz="{a.base[0]} {a.base[1]} {a.base[2]}" rpy="0 0 {a.yaw}"/></joint>{body}')
+                       f'<origin xyz="{j0[0]} {j0[1]} {j0[2]}" rpy="0 0 {a.yaw}"/></joint>{body}')
         head = f'<mujoco><compiler meshdir="{self.meshes.name}" balanceinertia="true" discardvisual="false" fusestatic="false"/></mujoco>'
         return f'<robot name="two_arm">{head}{"".join(out)}</robot>'
 
@@ -160,6 +161,11 @@ class World:
                 body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="container", pos=[-L.box[0] / 2, -L.box[1] / 2, -L.box[2] / 2],
                               contype=0, conaffinity=0, density=0, rgba=rgba)
         for arm, p in PREFIX.items():
+            for part in spec.body(p + "link0").geoms:  # follower_01_base.stl duplicates PR33_C02_BASE un-mirrored; keep only m11 housing
+                part.contype = part.conaffinity = 0
+                part.rgba = [0, 0, 0, 0]
+            spec.body(p + "link0").add_geom(name=f"{p}m11", type=box, pos=[*L.arms[arm].j1_offset_xy, .035], size=[.014, .028, .021],
+                                            contype=0, conaffinity=0, rgba=[.14, .15, .17, 1])
             for k, (finger, side) in enumerate((("link6", 1), ("link7", -1))):
                 for part in spec.body(p + finger).geoms:
                     part.contype = part.conaffinity = 0

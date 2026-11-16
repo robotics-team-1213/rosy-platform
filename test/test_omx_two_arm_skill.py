@@ -238,3 +238,31 @@ def test_mujoco_recovery_gen_grasp_recovers_after_drifted_prefix():
     verdict = skills._judge_step(t, data, plan, {"step": plan["id"]}, before, start_z, "grasp")
     assert verdict["result"] == "pass", verdict
 
+
+def test_omx_arm_joint1_aligns_with_base_plate_pedestal_and_hides_duplicate_plate():
+    _require_mujoco()
+    import mujoco
+    import omx_two_arm_world as tw
+
+    w = tw.World()
+    data = w.reset()
+    mujoco.mj_forward(w.model, data)
+    for arm, p in tw.PREFIX.items():
+        base_xy = np.asarray(w.layout.arms[arm].base[:2], float)
+        j1_xyz, _, _ = w.layout.arms[arm].frames(w.layout.arms[arm].home)
+        assert np.allclose(j1_xyz[0][:2], base_xy, atol=1e-6)
+        b1_id = w.model.body(f"{p}link1").id
+        assert np.allclose(data.xpos[b1_id, :2], base_xy, atol=1e-6)
+        for gname in (f"{p}plate", f"{p}bridge"):
+            gid = w.model.geom(gname).id
+            origin_xy = w.model.geom_pos[gid, :2] - w.model.mesh_pos[w.model.geom_dataid[gid], :2]
+            assert np.allclose(origin_xy, base_xy, atol=1e-5)
+        b0_id = w.model.body(f"{p}link0").id
+        m11_id = w.model.geom(f"{p}m11").id
+        assert w.model.geom_rgba[m11_id, 3] == pytest.approx(1.0)
+        for gid in range(w.model.ngeom):
+            if w.model.geom_bodyid[gid] == b0_id and gid != m11_id:
+                assert w.model.geom_rgba[gid, 3] == pytest.approx(0.0)
+                assert w.model.geom_contype[gid] == 0 and w.model.geom_conaffinity[gid] == 0
+
+
