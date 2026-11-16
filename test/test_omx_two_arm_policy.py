@@ -401,3 +401,30 @@ def test_collect_and_round_forward_dagger_and_extra_dataset(monkeypatch, tmp_pat
     assert str(tmp_path / "base_ds") in aggr_cmd and not any("part0" in str(c) for c in aggr_cmd)
     train_cmd = next(cmd for kind, cmd in runs if kind == "train")
     assert f"--policy.pretrained_path={ckpt}" in train_cmd
+
+
+def test_train_early_stops_when_checkpoint_solves_problem(monkeypatch, tmp_path):
+    out = tmp_path / "train"
+    ckpt_dir = out / "checkpoints/last/pretrained_model"
+    ckpt_dir.mkdir(parents=True)
+    (out / "checkpoints/001500").mkdir(parents=True)
+    (out / "checkpoints/003000").mkdir(parents=True)
+
+    stopped_pids, seen_steps, steps_seq = [], [], iter([1500, 3000, 3000])
+    fake_proc = types.SimpleNamespace(pid=99999, returncode=-15, poll=lambda: None if not stopped_pids else -15)
+    monkeypatch.setattr(policy, "TRAIN_POLL_S", 0.0)
+    monkeypatch.setattr(policy, "checkpoint_step", lambda _o: next(steps_seq, 3000))
+    monkeypatch.setattr(policy.gpu_yield, "wait_vram", lambda *a, **kw: None)
+    monkeypatch.setattr(policy.gpu_yield, "alone_waiting", lambda: False)
+    monkeypatch.setattr(policy.subprocess, "Popen", lambda *a, **kw: fake_proc)
+    monkeypatch.setattr(policy, "stop", lambda tr: stopped_pids.append(tr.pid))
+
+    with (tmp_path / "train.log").open("w", encoding="utf-8") as log:
+        solved_step = policy.train(
+            ["lerobot-train"], out, "lerobot-train", log, {},
+            early_stop_fn=lambda step, p: seen_steps.append((step, p.name)) or step >= 3000,
+        )
+    assert solved_step == 3000 and stopped_pids == [99999]
+    assert seen_steps == [(3000, "pretrained_model")]
+    assert not (out / "checkpoints/001500").exists() and (out / "checkpoints/003000").exists()
+
