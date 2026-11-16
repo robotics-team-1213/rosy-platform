@@ -309,3 +309,82 @@ def test_evaluate_forwards_flow_steps_and_amp(monkeypatch, tmp_path):
     assert calls[0][2]["cam_jitter"] is True and calls[1] == ("isolated", {"compensate_zero": True})
     assert helpers.resolved_choices({"arm_bases": "measured-194"}, cam_jitter=True)["arm_bases"] == "measured-194"
     assert "wrist_camera" in helpers.resolved_choices({}, cam_jitter=True)
+
+
+def test_collect_and_round_forward_dagger_and_extra_dataset(monkeypatch, tmp_path):
+    round_dir = tmp_path / "r0"
+    ckpt = round_dir / "train/checkpoints/005000/pretrained_model"
+    ckpt.mkdir(parents=True)
+    (round_dir / "steps.json").write_text(json.dumps({"longest": {"s1": 42}, "spoiled": []}), encoding="utf-8")
+
+    fake_ds = types.ModuleType("lerobot.datasets.lerobot_dataset")
+    fake_ds.LeRobotDataset = types.SimpleNamespace(create=lambda *a, **kw: types.SimpleNamespace(finalize=lambda: None))
+    fake_world = types.ModuleType("omx_two_arm_world")
+    fake_world.JOINTS, fake_world.FPS, fake_world.World = ("j1", "j2", "j3", "j4", "j5", "jaw"), 20, lambda layout: types.SimpleNamespace(layout=layout)
+    for name, mod in {
+        "lerobot": types.ModuleType("lerobot"),
+        "lerobot.datasets": types.ModuleType("lerobot.datasets"),
+        "lerobot.datasets.lerobot_dataset": fake_ds,
+        "omx_two_arm_world": fake_world,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+
+    seen_driver, recover_calls, nominal_calls = [], [], []
+
+    from contextlib import nullcontext
+
+    class FakeDriver:
+        torch = types.SimpleNamespace(inference_mode=nullcontext)
+
+        def __init__(self, model, steps_file, choices, **kw):
+            seen_driver.append((model, Path(steps_file), kw))
+            self.world = types.SimpleNamespace(layout=sites.Layout(**helpers.resolved_choices(choices)))
+
+    monkeypatch.setattr(helpers, "Driver", FakeDriver)
+    monkeypatch.setattr(helpers.skills, "disturb", lambda *a, **kw: None)
+    monkeypatch.setattr(helpers.teaching.Teacher, "run_task", lambda *a, **kw: nominal_calls.append(1))
+    monkeypatch.setattr(helpers.skills, "recover", lambda drv, rec, plan, here, skill, prefix_frames=20: recover_calls.append((plan["id"], prefix_frames)) or {"dagger_status": "recovered", "result": "pass"})
+
+    out = tmp_path / "dag_ds"
+    rc = policy.main(["collect", "--seeds", "10", "--tasks", "stack", "--out", str(out), "--skill", "grasp",
+                      "--dagger-model", str(ckpt), "--dagger-prefix-frames", "12", "--dagger-only", "--dagger-device", "cpu"])
+    assert rc == 0 and seen_driver[0][1] == round_dir / "steps.json" and seen_driver[0][2]["device"] == "cpu"
+    assert nominal_calls == [] and len(recover_calls) > 0 and all(pf == 12 for _, pf in recover_calls)
+    assert json.loads((tmp_path / "dag_ds.steps.json").read_text(encoding="utf-8"))["longest"]["s1"] == 42
+
+    popens, runs = [], []
+    fake_gpu_yield = types.SimpleNamespace(yield_turn=lambda **kw: None)
+    monkeypatch.setattr(policy, "gpu_yield", fake_gpu_yield)
+    monkeypatch.setattr(policy.ladder, "require_gpu", lambda *a: None)
+    monkeypatch.setattr(policy, "train", lambda cmd, *a, **kw: runs.append(("train", cmd)))
+
+    def fake_popen(cmd, **kw):
+        popens.append(cmd)
+        part = Path(cmd[cmd.index("--out") + 1])
+        (part.parent / f"{part.name}.steps.json").write_text(json.dumps({"longest": {"s1": 42}, "spoiled": []}), encoding="utf-8")
+        return types.SimpleNamespace(wait=lambda: 0)
+
+    def fake_run(cmd, **kw):
+        runs.append(("run", cmd))
+        if len(cmd) > 2 and cmd[2] == "evaluate":
+            out_eval = Path(cmd[cmd.index("--out") + 1])
+            out_eval.write_text(json.dumps({"rows": [{"task": "stack", "step": "s1", "result": "pass", "lifted": True, "seed": 200000}], "whole": []}), encoding="utf-8")
+        if any("aggregate_datasets" in str(c) for c in cmd):
+            ds_root = Path(cmd[3])
+            (ds_root / "meta").mkdir(parents=True, exist_ok=True)
+            (ds_root / "meta/info.json").write_text(json.dumps({"total_episodes": 12, "total_frames": 900}), encoding="utf-8")
+        return types.SimpleNamespace(returncode=0, stdout="deadbeef")
+
+    monkeypatch.setattr(policy.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(policy.subprocess, "run", fake_run)
+    monkeypatch.setattr(policy.shutil, "rmtree", lambda *a, **kw: None)
+    rc_round = policy.main(["round", "--root", str(tmp_path / "rroot"), "--lerobot-train", "lerobot-train",
+                            "--tasks", "stack", "--seeds", "1", "--workers", "1", "--skill", "grasp",
+                            "--dagger-model", str(ckpt), "--dagger-prefix-frames", "15", "--dagger-only", "--dagger-device", "cpu",
+                            "--extra-dataset", str(tmp_path / "base_ds"), "--base-model", str(ckpt)])
+    assert rc_round == 0
+    assert "--dagger-model" in popens[0] and "--dagger-only" in popens[0] and "--dagger-device" in popens[0]
+    aggr_cmd = next(cmd for kind, cmd in runs if kind == "run" and any("aggregate_datasets" in str(c) for c in cmd))
+    assert str(tmp_path / "base_ds") in aggr_cmd
+    train_cmd = next(cmd for kind, cmd in runs if kind == "train")
+    assert f"--policy.pretrained_path={ckpt}" in train_cmd

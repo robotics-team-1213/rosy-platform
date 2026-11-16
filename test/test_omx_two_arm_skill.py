@@ -116,3 +116,106 @@ def test_skill_argv_forwards_cam_jitter_and_compensate_zero():
     skew = t.skew_for()
     assert "jitter" in skew and len(skew["jitter"]) == 3
 
+
+def test_recover_skips_pass_and_records_only_valid_recoveries(monkeypatch):
+    import types
+    layout = sites.Layout()
+    plan = {"id": "s1", "arm": "arm_b", "container": "c1", "from": "belt", "to": "tmp-b-1"}
+
+    class FakeDs:
+        def __init__(self):
+            self.saved = self.cleared = 0
+
+        def save_episode(self):
+            self.saved += 1
+
+        def clear_episode_buffer(self):
+            self.cleared += 1
+
+    class FakeRec:
+        def __init__(self, ds):
+            self.world = types.SimpleNamespace(layout=layout, pose=lambda d, c: (np.array([0.0, 0.0, 0.1]), 0.0, 0.0))
+            self.layout, self.seed, self.pick_vision, self.belt_skew, self.cam_jitter = layout, 7, False, False, False
+            self.zero_error, self.servo, self.compensate_zero, self.no_goal = {}, {}, False, True
+            self.contacts = {"arm_arm": set(), "arm_other": set(), "pad_neighbour": set()}
+            self.carried, self.goal, self.phase, self.privileged, self.count = None, None, "approach", True, 0
+            self.dataset, self.longest, self.prompt = ds, {"s1": 10}, ""
+            self.goal_during_frames = []
+
+        def fresh(self, here):
+            return object()
+
+        def step_gen(self, data, step, others, ctx):
+            yield np.zeros(6)
+            ctx.phase = "grasp"
+            yield np.zeros(6)
+
+        def frame(self, data, targets, label):
+            if not self.privileged:
+                self.goal_during_frames.append(("prefix", self.goal))
+            elif self.goal is not None:
+                self.count += 1
+                self.goal_during_frames.append(("recover", self.goal))
+
+    driver = types.SimpleNamespace(longest={"s1": 10}, has_goal=False, policy=types.SimpleNamespace(reset=lambda: None),
+                                   act=lambda *a: np.zeros(12, np.float32))
+    monkeypatch.setattr(policy, "observe", lambda *a: (np.zeros(12, np.float32), {}))
+    monkeypatch.setattr(policy, "goal_vector", lambda *a: np.ones(policy.GOAL_SIZE, np.float32))
+    monkeypatch.setattr(skills, "recovery_gen", lambda *a: iter([np.ones(6), np.ones(6)]))
+    monkeypatch.setattr(skills.teaching.Teacher, "fresh", lambda self, h: object())
+
+    # Case 1: passing step skips recovery completely
+    ds = FakeDs()
+    monkeypatch.setattr(skills, "step", lambda *a, **kw: {"result": "pass"})
+    assert skills.recover(driver, FakeRec(ds), plan, {"c1": "belt"}, "grasp")["dagger_status"] == "passed_skip"
+    assert ds.saved == 0 and ds.cleared == 0
+
+    # Case 2: failing step saves only recovery frames (prefix frames had goal=None)
+    rec = FakeRec(ds)
+    monkeypatch.setattr(skills, "step", lambda *a, **kw: {"result": "fail"})
+    monkeypatch.setattr(skills, "_judge_step", lambda *a, **kw: {"result": "pass"})
+    out = skills.recover(driver, rec, plan, {"c1": "belt"}, "grasp", prefix_frames=3)
+    assert out["dagger_status"] == "recovered" and ds.saved == 1 and ds.cleared == 0
+    assert rec.goal_during_frames[:3] == [("prefix", None)] * 3 and rec.goal_during_frames[3:] == [("recover", True)] * 2
+
+    # Case 3: failed recovery clears buffer
+    monkeypatch.setattr(skills, "_judge_step", lambda *a, **kw: {"result": "fail"})
+    out_fail = skills.recover(driver, rec, plan, {"c1": "belt"}, "grasp", prefix_frames=2)
+    assert out_fail["dagger_status"] == "recovery_failed" and ds.saved == 1 and ds.cleared == 1
+
+
+def test_mujoco_recovery_gen_grasp_recovers_after_drifted_prefix():
+    _require_mujoco()
+    import omx_two_arm_tasks as tasks
+    import omx_two_arm_world as tw
+
+    layout = sites.Layout()
+    world = tw.World(layout)
+    task = tasks.get_task(layout, "stack")
+    plan = task["steps"][0]
+    here = dict(task["start"])
+    others = {k: v for k, v in here.items() if k != plan["container"]}
+    idle = {o: layout.sim_arms[o].wait for o in layout.arms if o != plan["arm"]}
+    t = skills.teaching.Teacher(world, seed=1003)
+    skills.disturb(t, 1003, 4., True)
+    data = t.fresh(here)
+    before = {o: world.pose(data, o) for o in others}
+    gen = t.step_gen(data, plan, others, t)
+    t.privileged = True
+    target = next(gen)
+    while t.phase not in skills.SKILLS["grasp"]["phases"]:
+        t.frame(data, {plan["arm"]: target, **idle}, plan["id"])
+        target = next(gen)
+    start_z = world.pose(data, plan["container"])[0][2]
+    t.privileged = False
+    drifted = target.copy()
+    drifted[0] += 0.20
+    drifted[1] += 0.10
+    for _ in range(15):
+        t.frame(data, {plan["arm"]: drifted, **idle}, plan["id"])
+    t.privileged = True
+    for rec_target in skills.recovery_gen(t, data, plan, others, "grasp"):
+        t.frame(data, {plan["arm"]: rec_target, **idle}, plan["id"])
+    verdict = skills._judge_step(t, data, plan, {"step": plan["id"]}, before, start_z, "grasp")
+    assert verdict["result"] == "pass", verdict
+
