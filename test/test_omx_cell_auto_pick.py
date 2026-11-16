@@ -1473,3 +1473,17 @@ def test_dest_map_usable_accepts_z_view_only_with_parallax_geometry():
     assert cae.dest_map_usable is cap.dest_map_usable
 
 
+
+
+def test_a_shifted_end_grasp_still_names_the_box_centre_for_scene_checks():
+    """2026-11-17 arm_s floor->belt: a reachable_ends grasp 20 mm along a 3-cell box was compared, as if it were
+    the box centre, with the re-observed centre, so every such carry held as 'source moved before transfer'."""
+    import cell_pick_geom as geom
+
+    o = {"raw_m": [-0.1154, 0.1497], "long_axis_deg": 76.0, "object": "container-3"}
+    entry = {"length_mm": 90.0, "width_mm": 30.0}
+    ends = geom.reachable_ends(o, entry, {"grasp.end_frac": 1.0})
+    assert len(ends) == 2 and all(abs(e["grasp_shift_mm"]) > 5 for e in ends)
+    for end in ends:
+        assert geom.box_centre(end) == pytest.approx(o["raw_m"], abs=1e-9)
+    assert geom.box_centre(o) == o["raw_m"]
