@@ -308,12 +308,14 @@ def test_the_robot_state_tells_a_console_what_a_manual_drive_may_use(client, ove
     assert (shown["max_linear"], shown["max_angular"]) == (0.2, 0.8)
 
 
-def test_an_operator_names_who_asked_and_the_record_keeps_it(client, overlay):
+def test_an_operator_names_who_asked_but_the_audit_by_is_the_principal(client, overlay):
     tc, svc = client
     body = {"manual_linear": 0.1, "operator_name": "person-a"}
     assert tc.put("/api/v1/safety/speed-limits", headers=OPERATOR, json=body).status_code == 200
     event = [e for e in svc.events.history() if e.type == "config.changed"][-1]
-    assert event.data["by"] == "person-a" and event.data["changes"]["manual_linear"] == [0.15, 0.1]
+    # `by` is the authenticated principal; the typed name is display only and cannot stand in for it.
+    assert event.data["operator_name"] == "person-a" and event.data["by"] != "person-a"
+    assert event.data["by"] and event.data["changes"]["manual_linear"] == [0.15, 0.1]
 
 
 def test_the_limits_route_lets_an_operator_set_only_the_manual_speeds(client, overlay):
