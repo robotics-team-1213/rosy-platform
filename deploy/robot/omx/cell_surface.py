@@ -65,10 +65,17 @@ def main(argv=None):
     ap.add_argument("--z-from", type=float, default=0.10)
     ap.add_argument("--z-to", type=float, default=0.010)
     ap.add_argument("--write", action="store_true", help="store the measured surface_z in the config's site")
+    ap.add_argument("--commissioning", action="store_true", help="arm moves near fixtures during calibration")
+    ap.add_argument("--person-at-switch", action="store_true", help="operator at the e-stop switch (D-911)")
     args = ap.parse_args(argv)
+    if not (args.commissioning and args.person_at_switch):
+        print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)"}))
+        return 2
     config = json.loads(args.config.read_text(encoding="utf-8"))
     plan = json.loads(Path(config["plan_path"]).expanduser().read_text())
-    tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else plan.get("tcp_x_m")
+    import omx_tcp
+
+    tcp_x_m = omx_tcp.config_tcp(config, plan)
     site = config["sites"][args.site]
     x, y = site["place"]
     work = Path(config["work_dir"]).expanduser()

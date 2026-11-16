@@ -284,3 +284,28 @@ def test_collect_no_goal_omits_environment_state_feature(monkeypatch, tmp_path):
     monkeypatch.setattr(policy.teaching.Teacher, "frame", lambda *a: None)
     rec.frame(None, {arm: np.zeros(6, dtype=np.float32) for arm in sites.ARMS}, "s1")
     assert len(ds.frames) == 1 and policy.GOAL not in ds.frames[0] and "observation.state" in ds.frames[0]
+
+
+def test_evaluate_forwards_flow_steps_and_amp(monkeypatch, tmp_path):
+    calls = []
+
+    class FakeDriver:
+        kind = "smolvla"
+
+        def __init__(self, model, steps_file, choices, **kw):
+            calls.append((model, steps_file, kw))
+
+    fake_av = types.ModuleType("av")
+    monkeypatch.setitem(sys.modules, "av", fake_av)
+    monkeypatch.setattr(policy, "Driver", FakeDriver)
+    monkeypatch.setattr(policy.skills, "isolated", lambda *a, **kw: calls.append(("isolated", kw)) or [])
+    out = tmp_path / "eval.json"
+    rc = policy.main(["evaluate", "--model", "m", "--steps-file", "s", "--tasks", "stack", "--skill", "grasp",
+                      "--isolated-seeds", "1", "--flow-steps", "5", "--amp", "--n-action-steps", "8",
+                      "--cam-jitter", "--compensate-zero",
+                      "--out", str(out), "--artifacts", str(tmp_path / "art")])
+    assert rc == 0 and json.loads(out.read_text(encoding="utf-8"))["policy"] == "smolvla"
+    assert calls[0][2]["flow_steps"] == 5 and calls[0][2]["use_amp"] is True and calls[0][2]["n_action_steps"] == 8
+    assert calls[0][2]["cam_jitter"] is True and calls[1] == ("isolated", {"compensate_zero": True})
+    assert helpers.resolved_choices({"arm_bases": "measured-194"}, cam_jitter=True)["arm_bases"] == "measured-194"
+    assert "wrist_camera" in helpers.resolved_choices({}, cam_jitter=True)

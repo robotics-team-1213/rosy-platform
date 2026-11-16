@@ -32,6 +32,7 @@ from cell_calibrate_auto import (  # noqa: E402,F401  (re-exported)
 from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401  (re-exported)
 import cell_calibration as cal  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401  (re-exported)
+from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401  (re-exported)
 import cell_params as prm  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
 import cell_pivot  # noqa: E402
@@ -103,17 +104,21 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     else:
         out["camera_moved"] = bool(out.get("map_binding_error")) or out.get("reference_mismatch", False)
         out["no_reference"] = True
-    bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
-    for site, xy in targets:
-        if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
-            out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
+    try:
+        bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
+        for site, xy in targets:
+            if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
+                out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
+    except ValueError as exc:
+        out["bias_error"] = str(exc)
+        out["missing_bias"].extend(f"{site}:{xy[0]},{xy[1]}" for site, xy in targets)
     out["missing_map"] = [s for s in map_sites(config) if s not in calibration.get("sites", {})]
     for s in map_sites(config):
         rec = (calibration.get("sites") or {}).get(s) or {}
         if rec.get("loo_error_mm") and not map_agrees(rec, params) and len(rec.get("points") or []) >= 5:
             pts = [(tuple(p["pixel"]), tuple(p["arm_m"])) for p in rec["points"]]
             kept = consensus(pts, prm.get(params, "calibrate.consensus_px"))
-            if enough_agree(len(kept), len(pts)) and cal.loo_error_mm(kept)["max"] <= prm.get(
+            if enough_agree(len(kept), len(pts)) and repair_record(config, rec, kept)["loo_error_mm"]["max"] <= prm.get(
                 params, "calibrate.max_loo_mm"
             ):
                 out["consensus_repairable"] = True
@@ -121,6 +126,12 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     for name, site in config["sites"].items():
         if "surface_z" not in site:
             out["missing_surface"].append(name)
+    import cell_cal_monitor
+
+    drift = cell_cal_monitor.summarize(config, calibration)
+    if drift["alarmed_sites"]:
+        out["drift"] = drift
+        out["advisory_todo"] = drift["suggested_advisory"]
     return out
 
 
@@ -129,60 +140,6 @@ def map_sites(config: dict) -> list:
     return config.get("calibrate", {}).get("map_sites") or [
         s for s in ("floor", "pinky", "belt") if s in config["sites"]
     ]
-
-
-def predicted(marks: list, point) -> list | None:
-    """Where the jaws over `point` should show, from an affine fit of three or more (pixel, arm) marks not on one line."""
-    arm = np.array([[a[0], a[1], 1.0] for _, a in marks])
-    if len(marks) < 3 or np.linalg.matrix_rank(arm, tol=1e-3) < 3:
-        return None
-    coef, *_ = np.linalg.lstsq(arm, np.array([m for m, _ in marks], float), rcond=None)
-    return [round(float(v), 1) for v in np.array([point[0], point[1], 1.0]) @ coef]
-
-
-def consensus(marks: list, tol_px: float) -> list:
-    """The largest set of marks one affine map explains."""
-    n = len(marks)
-    if n < 3:
-        return list(marks)
-    ax = np.array([a[0] for _, a in marks], dtype=np.float64)
-    ay = np.array([a[1] for _, a in marks], dtype=np.float64)
-    pu = np.array([m[0] for m, _ in marks], dtype=np.float64)
-    pv = np.array([m[1] for m, _ in marks], dtype=np.float64)
-    idx = np.array(list(itertools.combinations(range(n), 3)), dtype=np.intp)
-    i, j, k = idx[:, 0], idx[:, 1], idx[:, 2]
-    dx1, dy1 = ax[j] - ax[i], ay[j] - ay[i]
-    dx2, dy2 = ax[k] - ax[i], ay[k] - ay[i]
-    det = dx1 * dy2 - dx2 * dy1
-    span = np.maximum(np.hypot(dx1, dy1), np.hypot(dx2, dy2))
-    valid = np.abs(det) > np.maximum(1e-6, 1e-3 * span)
-    if not valid.any():
-        return list(marks)
-    i, j, k = i[valid], j[valid], k[valid]
-    dx1, dy1, dx2, dy2 = dx1[valid], dy1[valid], dx2[valid], dy2[valid]
-    inv_det = 1.0 / det[valid]
-    du1, dv1 = pu[j] - pu[i], pv[j] - pv[i]
-    du2, dv2 = pu[k] - pu[i], pv[k] - pv[i]
-    au = (dy2 * du1 - dy1 * du2) * inv_det
-    bu = (-dx2 * du1 + dx1 * du2) * inv_det
-    av = (dy2 * dv1 - dy1 * dv2) * inv_det
-    bv = (-dx2 * dv1 + dx1 * dv2) * inv_det
-    rx = ax[None, :] - ax[i, None]
-    ry = ay[None, :] - ay[i, None]
-    eu = pu[i, None] + au[:, None] * rx + bu[:, None] * ry - pu[None, :]
-    ev = pv[i, None] + av[:, None] * rx + bv[:, None] * ry - pv[None, :]
-    inliers = (eu * eu + ev * ev) <= (tol_px * tol_px)
-    counts = inliers.sum(axis=1)
-    best_idx = int(np.argmax(counts))
-    if counts[best_idx] == 0:
-        return list(marks)
-    mask = inliers[best_idx]
-    return [m for m, keep in zip(marks, mask) if keep]
-
-
-def enough_agree(kept: int, seen: int) -> bool:
-    """Five marks fit a map, and the majority must agree."""
-    return kept >= 5 and kept * 2 > seen
 
 
 def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None) -> dict:
@@ -285,9 +242,12 @@ def main(argv=None):
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     points = config.get("calibrate", {}).get("map_points", MAP_POINTS)
     if args.plan_only:
+        import cell_map_fit
+
         rows = rp.plan(config, points)
         refused = rp.refusal(rows)
-        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config)}), flush=True)
+        lev = cell_map_fit.plan_leverage(points, config.get("sites") or {})
+        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config), "leverage": lev}), flush=True)
         return 2 if refused else 0
     cal_path = Path(config["calibration_path"]).expanduser()
     calibration = json.loads(cal_path.read_text()) if cal_path.exists() else {"schema": cal.SCHEMA, "sites": {}}
@@ -352,9 +312,7 @@ def main(argv=None):
                 if len(pts) >= 5:
                     kept = consensus(pts, prm.get(config.get("params"), "calibrate.consensus_px"))
                     if enough_agree(len(kept), len(pts)):
-                        rec["homography"] = cal.fit(kept).round(9).tolist()
-                        rec["points"] = [{"pixel": list(p), "arm_m": list(a)} for p, a in kept]
-                        rec["loo_error_mm"] = cal.loo_error_mm(kept)
+                        calibration["sites"][s] = repair_record(config, rec, kept)
             save_bound_map_reference(cal_path, ref_path, calibration, config, reference)
             done.append({"consensus-repair": calibration["sites"][map_sites(config)[0]]["loo_error_mm"]})
         elif step.startswith("pivot-near"):

@@ -186,23 +186,51 @@ def self_calibrate(
     return cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), p), None
 
 
-def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict) -> dict | None:
-    """Learn map bias from top-camera place verification."""
+def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict, calibration: dict | None = None) -> dict | None:
+    """Learn map bias from top-camera place verification (records raw innovation even when rejected)."""
+    import cell_attempts
+    import cell_cal_monitor
+
     p = config.get("params")
     if not prm.get(p, "auto.bias_from_place") or not verify.get("found") or "seen_bias_mm" not in verify:
         return None
     seen, used = verify["seen_bias_mm"], verify["used_bias_mm"]
+    cal_data = calibration
+    if cal_data is None and calibration_path:
+        try:
+            cal_data = __import__("json").loads(Path(calibration_path).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            cal_data = None
+    record = cell_pivot.map_record(cal_data, site) if isinstance(cal_data, dict) else None
+    map_sha = cell_attempts.digest(record) if record is not None else None
+    sigma_mm = math.hypot(
+        float(prm.get(p, "verify.mark_sigma_mm")),
+        float(prm.get(p, "verify.place_sigma_mm")),
+    )
+    valid = True
     try:
         for value in (seen, used):
             cell_pivot.validate_bias({"point_m": place_xy, "bias_mm": value}, p)
     except ValueError:
-        return None
-    if math.dist(seen, used) > prm.get(p, "auto.bias_learn_max_mm"):
+        valid = False
+    resid = ([float(seen[0]) - float(used[0]), float(seen[1]) - float(used[1])]
+             if isinstance(seen, (list, tuple)) and isinstance(used, (list, tuple)) and len(seen) >= 2 and len(used) >= 2 else None)
+    within = valid and math.dist(seen, used) <= prm.get(p, "auto.bias_learn_max_mm")
+    need_sha = record is not None
+    ok = valid and within and (not need_sha or map_sha is not None)
+    cell_cal_monitor.record_observation(
+        config, site=site, map_sha=map_sha, source="place_look", raw_mm=seen, residual_mm=resid,
+        sigma_mm=sigma_mm, accepted=ok,
+        reason=None if ok else ("exceeds_max_bias" if not valid else ("missing_map_sha" if (need_sha and map_sha is None) else "exceeds_bias_learn_max_mm")),
+    )
+    if not ok:
         return None
     region = {
         "site": site,
+        "kind": "place_look",
         "point_m": list(place_xy),
         "bias_mm": seen,
+        **({"map_sha": map_sha} if map_sha is not None else {}),
         "measured": time.strftime("%Y-%m-%d"),
         "source": "place-and-look: the arm set the box here and the top camera saw it",
     }

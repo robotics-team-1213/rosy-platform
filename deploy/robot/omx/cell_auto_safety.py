@@ -175,7 +175,9 @@ def after_failure(config: dict, site: str, target: dict, moved: dict, wrist_on: 
     contact_z = None
     if contact is not None:
         from cell_surface import fk_z
-        contact_z = round(fk_z(contact["state"], config.get("tcp_x_m")), 4)
+        import omx_tcp
+
+        contact_z = round(fk_z(contact["state"], omx_tcp.config_tcp(config)), 4)
     surface = surface_z(config, site)
     diag = cell_diagnose.diagnose(
         moved["result"],

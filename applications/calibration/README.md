@@ -78,6 +78,7 @@ python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/
 ```
 
 - `--store` 기본은 `ROSY_CELL_REQUESTS`. `contracts/foundation`은 체크아웃에서 스스로 찾는다.
+- `--profiles <json>`(또는 `ROSY_CALIBRATION_PROFILES`)을 주면 `모눈종이 · 프로파일` 탭이 열려 각 로봇(`arm_a`, `arm_b`, `arm_s` 등)의 호모그래피·LOO 잔차·`pivot-near` bias·시차 투영(`z_view`/`surface_z`)·실시간 TCP/hold 상태를 읽기 전용으로 점검할 수 있다(`GET /api/calibration/v1/profiles`, `.../profiles/<id>/frame/reference|live`). Account 설정이 있으면 이 경로도 로그인 세션이 있어야 열린다.
 - 관제 PC의 시스템 python3에는 Account 토큰 검증에 쓰는 `joserfc`가 없다(2026-11-13 확인, 로그인 callback에서 서버가 죽었다). 유닛은 전용 venv로 돈다: `python3 -m venv --system-site-packages ~/.local/share/rosy/calibration/venv && ~/.local/share/rosy/calibration/venv/bin/pip install joserfc==1.7.5 cryptography==50.0.0` (pydantic은 시스템 것, `python3-venv` 필요).
 - 읽기 전용 확인: `--account-config` 없이 띄우고 `ssh -L 8776:127.0.0.1:8776 <관제 PC>`로 연다. 이때는 로그인이 없어 답을 받지 않는다.
 - Account 설정이 있으면 목록·상세·그림도 그 site의 로그인 세션이 있어야 보이고, 답은 site 권한 `calibration.operate`가 있어야 한다. 답의 누가는 세션의 이름이다.
