@@ -143,8 +143,12 @@ def pivot_point(cell, config, calibration, site, target_xy) -> tuple[list | None
     """(point, over) for a pivot that can serve `target_xy`: a configured `pivot.points` entry the live view finds
     clear, else the nearest clear surface point, else the target itself when `pivot.over_target` allows.
     2026-11-17 panel: with over_target set, every site went straight to the over-target set (±60 deg, exactly the
-    120 deg MIN_YAW_ARC_DEG, so FK 116 deg failed) and `pivot.points` was never tried; a clear point's full circle
-    comes first now, the over-target pivot only when no clear point is within reach."""
+    120 deg MIN_YAW_ARC_DEG, so FK 116 deg failed) and `pivot.points` was never tried. With `pivot.clear_first` a
+    clear point's full circle comes first and the over-target pivot only when no clear point is within reach; without
+    it an over-target site keeps the reviewed over-target set."""
+    over_ok = _parent_attr("over_target", over_target)(config, site)
+    if over_ok and not clear_first(config):
+        return list(target_xy), True  # the reviewed over-target set until this arm's clear-point circles are checked
     reach_mm = 0.9 * prm.get(config.get("params"), "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
     ap_fn = _parent_attr("auto_pivot_point", auto_pivot_point)
     configured = sorted((tuple(q) for q in (config.get("pivot") or {}).get("points", [])), key=lambda q: math.dist(q, target_xy))
@@ -152,9 +156,16 @@ def pivot_point(cell, config, calibration, site, target_xy) -> tuple[list | None
         found = ap_fn(cell, config, calibration, site, start)
         if found is not None and 1000 * math.dist(found, target_xy) <= reach_mm:
             return list(found), False
-    if _parent_attr("over_target", over_target)(config, site):
+    if over_ok:
         return list(target_xy), True
     return None, False
+
+
+def clear_first(config) -> bool:
+    """Config `pivot.clear_first`: try a clear point's full circle before the over-target set. Off by default: at a
+    packed over-target site that circle is a new real-arm pose set (review 2026-11-17), so an arm turns it on only
+    after the AGENTS four checks for its configured points."""
+    return bool((config.get("pivot") or {}).get("clear_first"))
 
 
 def carried(region: dict) -> bool:
@@ -178,6 +189,8 @@ def self_calibrate(
         if 1000 * math.dist(q, target_xy) <= 0.9 * prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
         and all(1000 * math.dist(q, o["raw_m"]) >= clear_mm for o in objects)
     ]
+    if cell is not None and not clear_first(config) and _parent_attr("over_target", over_target)(config, site):
+        points = [tuple(target_xy)]  # the reviewed order until pivot.clear_first is turned on (see pivot_point)
     if not points and cell is not None:
         ap_fn = _parent_attr("auto_pivot_point", auto_pivot_point)
         found = ap_fn(cell, config, calibration, site, target_xy)

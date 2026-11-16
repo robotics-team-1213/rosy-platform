@@ -622,8 +622,21 @@ def test_check_reports_over_limit_bias_instead_of_crashing(tmp_path):
     assert "pivot-near floor:0.0,0.17" in cc.stale(found)
 
 
-PIVOT_CONFIG = {"params": {"pivot.over_target": 1}, "pivot": {"z_view": 0.1, "points": [[0.15, 0.05]]}, "coarse": {"z_view": 0.118},
-                "sites": {"pallet": {"yaw_deg": 0.0, "surface_z": -0.01}}}
+PIVOT_CONFIG = {"params": {"pivot.over_target": 1}, "pivot": {"z_view": 0.1, "points": [[0.15, 0.05]], "clear_first": True},
+                "coarse": {"z_view": 0.118}, "sites": {"pallet": {"yaw_deg": 0.0, "surface_z": -0.01}}}
+
+
+def test_without_clear_first_an_over_target_site_keeps_the_reviewed_over_target_set(monkeypatch):
+    """Review 2026-11-17: the clear-point circle at a packed over-target site is a new pose set until checked."""
+    tried = []
+    monkeypatch.setattr(cc, "auto_pivot_point", lambda *a: tried.append(a) or (0.15, 0.05))
+    config = {**PIVOT_CONFIG, "pivot": {k: v for k, v in PIVOT_CONFIG["pivot"].items() if k != "clear_first"}}
+    assert cc.pivot_point(object(), config, {}, "pallet", (0.16, 0.06)) == ([0.16, 0.06], True) and tried == []
+    seen = []
+    import cell_pivot
+    monkeypatch.setattr(cell_pivot, "pivot_calibrate", lambda cell, config, point, *a: seen.append(point) or {"result": "stopped"})
+    cc.self_calibrate(object(), config, {}, Path("cal.json"), "pallet", (0.16, 0.06), [], Path("."), {"regions": []}, None, None)
+    assert seen == [(0.16, 0.06)] and tried == []
 
 
 def test_a_clear_point_is_pivoted_with_the_full_circle_before_the_box_is_tried(monkeypatch):
