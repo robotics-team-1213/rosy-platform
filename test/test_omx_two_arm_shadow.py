@@ -4,6 +4,8 @@ import math
 from pathlib import Path
 import sys
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/sim"))
 import omx_two_arm_shadow as shadow  # noqa: E402
 
@@ -44,3 +46,25 @@ def test_executor_candidates_list_smolvla_without_weakening_real_approval():
     assert "smolvla" in cell_executor.EXECUTOR_CANDIDATES
     assert "smolvla" not in cell_executor.APPROVED_REAL_EXECUTORS
     assert cell_executor.APPROVED_REAL_EXECUTORS == frozenset({"ik_chunk"})
+
+
+def _motor_health(arm, ticks):
+    return {"schema_version": "rosy.motor-health.v1", "owner_id": arm,
+            "motors": [{"joint": j, "present_raw": t} for j, t in zip(shadow.HEALTH_JOINTS, ticks)]}
+
+
+def test_health_joints_accepts_motor_health_pair_without_bus_lock():
+    raw = json.dumps(_motor_health("arm_a", [2048., 0., 4095., 1024., 3072.])) + json.dumps(_motor_health("arm_b", [2048.] * 5))
+    joints = shadow.health_joints(raw)
+    assert set(joints) == {"arm_a", "arm_b"}
+    assert shadow.norm_to_rad(joints["arm_a"][1]) == pytest.approx(-math.pi)
+    assert shadow.norm_to_rad(joints["arm_a"][2]) == pytest.approx(4095 * 2 * math.pi / 4096 - math.pi)
+    assert abs(shadow.norm_to_rad(joints["arm_b"][0])) < 1e-2
+
+
+def test_health_joints_refuses_incomplete_motor_health():
+    try:
+        shadow.health_joints(json.dumps(_motor_health("arm_a", [2048.] * 5)))
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError when arm_b motor-health is missing")

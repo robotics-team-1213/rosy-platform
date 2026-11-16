@@ -26,6 +26,7 @@ import omx_two_arm_sites as sites  # noqa: E402
 
 REAL_VIEWS = {"top": "top", "side": "side", "a_wrist": "arm_a_wrist", "b_wrist": "arm_b_wrist"}  # sim view -> site camera label
 REAL_JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")  # joint1..joint5
+HEALTH_JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
 
 
 def norm_to_rad(value):
@@ -33,16 +34,39 @@ def norm_to_rad(value):
     return (np.asarray(value, float) + 100) / 200 * 4095 * 2 * math.pi / 4096 - math.pi
 
 
+def _tick_to_norm(present_raw):
+    value = float(present_raw)
+    if not math.isfinite(value):
+        raise ValueError("non-finite motor tick in motor-health")
+    return value / 4095.0 * 200.0 - 100.0
+
+
 def health_joints(text):
-    """{arm: [5 follower values]} from the pipeline's health stage output (JSON lines)."""
+    """{arm: [5 follower values]} from two_arm_pipeline --stage health JSON lines or motor-health/*.json."""
+    decoder, observed = json.JSONDecoder(), {}
     for line in text.splitlines():
-        try:
-            row = json.loads(line)
-        except ValueError:
-            continue
-        if row.get("stage") == "health":
-            return {bus["arm"]: [bus["motors"][j]["position"] for j in REAL_JOINTS] for bus in row["buses"] if bus["role"] == "follower"}
-    raise ValueError("no health stage in the output")
+        pos, n = 0, len(line)
+        while pos < n:
+            while pos < n and line[pos].isspace():
+                pos += 1
+            if pos >= n or line[pos] != "{":
+                break
+            try:
+                row, end = decoder.raw_decode(line, pos)
+            except ValueError:
+                break
+            pos = end
+            if not isinstance(row, dict):
+                continue
+            if row.get("stage") == "health":
+                return {bus["arm"]: [bus["motors"][j]["position"] for j in REAL_JOINTS] for bus in row["buses"] if bus["role"] == "follower"}
+            if row.get("schema_version") == "rosy.motor-health.v1" and row.get("owner_id") in sites.ARMS:
+                by_joint = {m["joint"]: m["present_raw"] for m in row.get("motors", []) if "joint" in m and "present_raw" in m}
+                if all(j in by_joint for j in HEALTH_JOINTS):
+                    observed[row["owner_id"]] = [_tick_to_norm(by_joint[j]) for j in HEALTH_JOINTS]
+    if all(arm in observed for arm in sites.ARMS):
+        return {arm: observed[arm] for arm in sites.ARMS}
+    raise ValueError("no health stage or complete motor-health pair in the output")
 
 
 def capture(args):
