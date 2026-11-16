@@ -134,8 +134,11 @@ def locate(cell, config: dict, calibration: dict, site: str) -> dict:
             arm = cal.to_arm(record["homography"], pixel)
             fits.append((key, record, arm, outside_mm(record, arm)))
         key, record, (x, y), outside = next((f for f in fits if (f[3] or 0) <= limit), fits[0])
+        chosen_px = cal.parallax((box["cx"], box["cy"]), config["sites"][site]["z"], record["z_view"], config["cameras"][camera]) if "z_view" in record else (box["cx"], box["cy"])
         turn = cal.yaw_sign(record["homography"], (box["cx"], box["cy"])) * wrap90(box["yaw"])
-        sigma = max(0.5, (record.get("loo_error_mm") or {}).get("mean", 5.0))
+        import cell_map_fit
+
+        sigma = cell_map_fit.predict_sigma_mm(record, chosen_px)
         estimates.append({"camera": camera, "pixel": [box["cx"], box["cy"]], "arm_m": [x, y], "turn": turn,
                           "sigma_mm": sigma, "frame": frame, "map": key, "outside_mm": outside,
                           "residual_mm": (record.get("loo_error_mm") or {}).get("max")})

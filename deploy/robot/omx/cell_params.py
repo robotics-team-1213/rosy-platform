@@ -105,6 +105,13 @@ DEFAULTS = {
     "corridor.half_width_mm": (30.0, "mm", 10, 80), "corridor.clear_z_m": (0.10, "m", 0.04, 0.25),
     "corridor.base_m": (0.10, "m", 0.0, 0.2),
     "corridor.min_px": (40, "px", 1, 100000),
+    "verify.depth_diff_mm": (6.0, "mm", 1, 30), "verify.touch_diff_mm": (5.0, "mm", 1, 20),
+    "verify.step_mm": (8.0, "mm", 2, 40), "verify.live_fresh_s": (2.0, "s", 0.5, 10),
+    "verify.plate_diff_mm": (10.0, "mm", 2, 30), "verify.nadir_off_px": (20.0, "px", 5, 120),
+    "verify.mark_sigma_mm": (3.0, "mm", 0.5, 15), "verify.map_sigma_max_mm": (5.0, "mm", 1, 30),
+    "verify.bias_sigma_max_mm": (3.0, "mm", 0.5, 20), "verify.place_sigma_mm": (3.0, "mm", 0.5, 15),
+    "verify.nis_alarm": (9.21, "chi2", 3.0, 30.0), "verify.cusum_k_sigma": (1.0, "sigma", 0.1, 3.0),
+    "verify.cusum_h_sigma": (5.0, "sigma", 1.0, 20.0), "verify.cusum_min_n": (15, "count", 5, 50),
 }
 
 

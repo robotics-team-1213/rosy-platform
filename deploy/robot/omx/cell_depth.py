@@ -21,11 +21,24 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
+
+
+def _run_v4l2_z16(cmd: list[str], timeout_s: float, **kwargs):
+    """Run v4l2-ctl with 'Z16' primary, falling back to 'Z16 ' ONLY on CalledProcessError."""
+    try:
+        return subprocess.run(cmd, timeout=float(timeout_s), check=True, **kwargs)
+    except subprocess.CalledProcessError:
+        fmt = "--set-fmt-video=width=640,height=480,pixelformat=Z16"
+        if fmt not in cmd:
+            raise
+        retry = [f"{fmt} " if part == fmt else part for part in cmd]
+        return subprocess.run(retry, timeout=float(timeout_s), check=True, **kwargs)
 
 
 def capture_top_depth_z16(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-depth", out_raw: Path | None = None,
@@ -39,11 +52,11 @@ def capture_top_depth_z16(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-de
     except OSError:
         return None
     try:
-        captured = subprocess.run(["v4l2-ctl", "-d", dev_path,
-                                   "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
-                                   "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
-                                   f"--stream-to={raw_path}"], timeout=float(timeout_s), check=True,
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        captured = _run_v4l2_z16(["v4l2-ctl", "-d", dev_path,
+                                  "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
+                                  "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
+                                  f"--stream-to={raw_path}"], float(timeout_s),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError):
         return None
     if getattr(captured, "returncode", 0) != 0 or not raw_path.exists() or raw_path.stat().st_size != 640 * 480 * 2:
@@ -86,11 +99,11 @@ def _capture_top_depth_z16_receipt_locked(dev_path: str, out_raw: Path, timeout_
             return None
         started_wall = time.time()
         started = time.monotonic()
-        captured = subprocess.run(["v4l2-ctl", "--verbose", "-d", dev_path,
-                                   "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
-                                   "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
-                                   f"--stream-to={raw_path}"], timeout=float(timeout_s), check=True,
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        captured = _run_v4l2_z16(["v4l2-ctl", "--verbose", "-d", dev_path,
+                                  "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
+                                  "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
+                                  f"--stream-to={raw_path}"], float(timeout_s),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         ended = time.monotonic()
         ended_wall = time.time()
         raw = raw_path.read_bytes()
@@ -325,9 +338,36 @@ def plate_top(heights, to_depth, base_px, radius_px: float = 45.0, plate_mm=(8.0
     return float(np.median(on)) if len(on) >= 4 else None
 
 
+def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | None = None, *,
+                         depth=None, colour=None, live: dict | None = None,
+                         touch_receipts: dict[str, dict] | None = None, now_ts: float | None = None) -> dict:
+    """Delegate post-calibration cross-verification to `cell_cal_eval`."""
+    import cell_cal_eval
+
+    return cell_cal_eval.verify_profile_depth(
+        config, calibration, bias, depth=depth, colour=colour, live=live,
+        touch_receipts=touch_receipts, now_ts=now_ts,
+    )
+
+
+def _fetch_colour_frame(url: str):
+    import cell_cal_eval
+
+    return cell_cal_eval.fetch_colour_frame(url)
+
+
+def _verify_main(argv: list[str]) -> int:
+    import cell_cal_eval
+
+    return cell_cal_eval.verify_main(argv, capture_fn=capture_top_depth_z16)
+
+
 def main(argv=None) -> int:
     import cv2
 
+    tokens = list(sys.argv[1:] if argv is None else argv)
+    if tokens and tokens[0] == "verify":
+        return _verify_main(tokens[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--depth", required=True, help="raw Z16, 640 x 480, mm")
     ap.add_argument("--colour", required=True)

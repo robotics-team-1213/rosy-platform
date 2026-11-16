@@ -66,7 +66,12 @@ def main(argv=None):
     ap.add_argument("--y", type=float, required=True)
     ap.add_argument("--yaw", type=float, required=True)
     ap.add_argument("--band", type=float, default=45.0, help="half width of the yaw band this calibration covers")
+    ap.add_argument("--commissioning", action="store_true", help="arm moves during wrist calibration")
+    ap.add_argument("--person-at-switch", action="store_true", help="operator at the e-stop switch (D-911)")
     args = ap.parse_args(argv)
+    if not (args.commissioning and args.person_at_switch):
+        print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)"}))
+        return 2
     config = json.loads(args.config.read_text(encoding="utf-8"))
     config["params"] = prm.load(config.get("params_path"))["values"]
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
