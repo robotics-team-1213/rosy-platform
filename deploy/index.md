@@ -73,6 +73,7 @@
 - [rosy-fleet-r 컨테이너 핫패치는 secret_bootstrap용 root 시작과 상태 유지형 셀 핸드오프를 지켜야 한다](../docs/solutions/deployment/site-stack-hotpatch-preserves-root-entrypoint-and-stateful-cell-handoff-2026-11-12.md)
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](../docs/solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
 - [OMX bias persistence preserves pivot circles, raw innovations survive window rejections, and NIS/CUSUM uses per-axis 1-sigma with min_n=15](../docs/solutions/logic-errors/omx-bias-persistence-drift-monitor-and-eval-invariants-2026-11-16.md)
+- [OMX Gate replan must refresh state after slow park and accept z_view destination maps with parallax geometry](../docs/solutions/logic-errors/omx-gate-replan-post-park-state-and-z-view-map-2026-11-16.md)
 - [OMX Chunk Runner waits for alignment before start, parks folded wait poses without unfolding, and tolerates legacy Fleet software-stop records](../docs/solutions/logic-errors/omx-start-tracking-folded-park-and-fleet-software-stop-2026-11-15.md)
 
 ## 시험
