@@ -343,35 +343,11 @@ def status(arm: str, link=None) -> dict:
 
 def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None) -> int:
     """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold."""
-    if not note.strip():
-        raise SystemExit("a note of what was checked is required")
-    if token is None:
-        token_file = token_file or default_token_file()
-        if token_file is None or not Path(token_file).is_file():
-            raise SystemExit("an operator --token-file (chmod 600) is required")
-        token_file = Path(token_file)
-        if token_file.stat().st_mode & 0o077:
-            raise SystemExit(f"{token_file} must be readable by its owner only (chmod 600)")
-        token = token_file.read_text(encoding="utf-8").strip()
-    link = link or link_for(arm)
-    if link is None:
-        raise SystemExit(f"{arm}: no Fleet channel configured on this PC (source the observation bridge env)")
-    answer = link.hold()
-    cleared = list(answer.incident_ids)
-    for incident_id in cleared:
-        if cause is not None or basis is not None:
-            try:
-                answer = link.clear(incident_id, note, token, cause=cause, basis=basis)
-            except OSError as exc:
-                if getattr(exc, "code", None) != 422:
-                    raise
-                answer = link.clear(incident_id, note, token)
-        else:
-            answer = link.clear(incident_id, note, token)
-    print(json.dumps({"arm": arm, "cleared": cleared, "held": answer.held,
-                      **({"cause": cause} if cause else {}), **({"basis": basis} if basis else {})}))
-    refuse_if_held(arm, link)  # Fleet's "not held" lifts the local hold file too
-    return 0
+    from omx_incident_fleet import clear_incidents
+
+    return clear_incidents(
+        arm, note, token_file, link or link_for(arm), cause=cause, basis=basis, token=token, refuse_fn=refuse_if_held
+    )
 
 
 def main(argv=None):
