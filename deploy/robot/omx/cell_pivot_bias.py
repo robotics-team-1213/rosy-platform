@@ -29,6 +29,32 @@ def yaw_arc_deg(yaws_deg) -> float:
     return 360.0 - max(gaps)
 
 
+def trim_known_centres(marks, tcps, geometry: dict, max_rms_mm: float):
+    """Per-yaw centres from known jaw geometry; iteratively trims outliers when a majority (>=2) agrees within max_rms_mm."""
+    import numpy as np
+
+    r_m, phase = geometry["radius_mm"] / 1000.0, geometry["phase_deg"]
+    cur_c = [(m[0] - r_m * math.cos(math.radians(t[3] + phase)), m[1] - r_m * math.sin(math.radians(t[3] + phase)))
+             for m, t in zip(marks, tcps)]
+    cur_t = list(tcps)
+    orig_c, orig_t = list(cur_c), list(cur_t)
+    while len(cur_c) >= 3 and (len(cur_c) - 1) * 2 >= len(marks):
+        c0 = [float(v) for v in np.mean(cur_c, axis=0)]
+        if max(1000.0 * math.dist(c, c0) for c in cur_c) <= max_rms_mm:
+            return cur_c, cur_t
+        best = None
+        for k in range(len(cur_c)):
+            sub_c = cur_c[:k] + cur_c[k + 1:]
+            sc = [float(v) for v in np.mean(sub_c, axis=0)]
+            sp = max(1000.0 * math.dist(c, sc) for c in sub_c)
+            if best is None or sp < best[0]:
+                best = (sp, sub_c, cur_t[:k] + cur_t[k + 1:])
+        cur_c, cur_t = best[1], best[2]
+        if best[0] <= max_rms_mm:
+            return cur_c, cur_t
+    return orig_c, orig_t
+
+
 def fit_pivot_yaw(marks_m, yaws_fk_deg, *, mark_sigma_mm: float = 3.0, out_k: float = 2.5) -> dict:
     """Yaw-coupled linear fit `m_i = c + Rot(theta_i) @ g` with outlier trimming (prior-scaled)."""
     import numpy as np

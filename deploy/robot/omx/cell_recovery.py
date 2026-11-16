@@ -24,6 +24,7 @@ import cell_decisions as cd
 import cell_diagnose
 import cell_objects
 import cell_pivot
+import cell_place_fit
 import cell_site_camera
 import cell_why
 from cell_calibration import load as load_calibration
@@ -156,6 +157,8 @@ def main(argv=None) -> int:
     config, cell, calibration_path, work = open_cell(args, True)
     catalog = cell_objects.load_catalog(args.catalog)
     calibration = cell_pivot.with_site_maps(config, load_calibration(calibration_path))
+    # as run_auto does first: `pallet-l1` style destinations exist only after the tier expansion (2026-11-17 ValueError)
+    config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     site_of = {"pick": args.source, "place": auto.parse_dest(config, args.source, args.dest)[0]}
 
     def expected_px(attempt):
