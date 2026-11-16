@@ -42,6 +42,14 @@ def default_owner() -> str:
     return f"{user}@{client}"
 
 
+def _boot_id() -> str | None:
+    """This boot's id (Linux): a pid recorded under another boot names a different process."""
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip() or None
+    except OSError:
+        return None
+
+
 def _pid_alive(pid) -> bool:
     try:
         os.kill(int(pid), 0)
@@ -56,6 +64,8 @@ def live(record: dict, now: float | None = None) -> bool:
     """A lease with a pid lives exactly as long as that process (a 35 min session must stay covered, review
     2026-11-17); a lease without one (claimed ahead of a job) lives until it expires."""
     if record.get("pid") is not None:
+        if record.get("boot_id") and record["boot_id"] != _boot_id():
+            return False  # rebooted since: that pid is gone, whatever now has its number (review 2026-11-17)
         return _pid_alive(record["pid"])
     now = time.time() if now is None else now
     return float(record.get("expires") or 0) > now
@@ -90,7 +100,7 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
         same_live = bool(old and old.get("owner") == owner and live(old, now))
         holder = old.get("pid") if same_live and old.get("pid") is not None else pid  # never drop a live holder's pid
         record = {"schema": SCHEMA, "arm": arm, "owner": owner, "purpose": purpose,
-                  "host": socket.gethostname(), "pid": holder, "revision": revision,
+                  "host": socket.gethostname(), "pid": holder, "boot_id": _boot_id(), "revision": revision,
                   "acquired": old["acquired"] if old and old.get("owner") == owner else now,
                   "expires": now + ttl_s}
         tmp = root / f"{arm}.json.tmp"

@@ -45,6 +45,15 @@ def test_a_lease_with_a_live_process_outlives_its_expiry(tmp_path):
         lease.claim("arm_a", "v@y", root=tmp_path, now=10_000)
 
 
+def test_a_pid_from_before_a_reboot_is_not_live(tmp_path, monkeypatch):
+    """Review 2026-11-17: after a reboot another process may carry the old pid; the boot id tells them apart."""
+    monkeypatch.setattr(lease, "_boot_id", lambda: "boot-1")
+    rec = lease.claim("arm_a", "u@x", pid=os.getpid(), root=tmp_path)
+    assert rec["boot_id"] == "boot-1" and lease.live(rec)
+    monkeypatch.setattr(lease, "_boot_id", lambda: "boot-2")
+    assert not lease.live(rec)
+
+
 def test_the_same_owner_never_replaces_a_live_holders_pid(tmp_path, monkeypatch):
     """A job's engine holds the lease; the record_session it starts (same owner) must not hand it to itself."""
     engine = lease.claim("arm_a", "web:1", "calibration", pid=os.getpid(), root=tmp_path)

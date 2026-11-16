@@ -304,6 +304,10 @@ class Jobs:
     def clear(self, arm, by):
         if arm not in self.arms:
             return 404, {"error": "없는 팔입니다."}
+        with _lock:  # no job of this app can start between the checks and the clear (review 2026-11-17)
+            return self._clear(arm, by)
+
+    def _clear(self, arm, by):
         mine = [a for a in self.assessments() if a.get("arm") == arm]
         newest = max(mine, key=lambda a: a.get("at", 0), default=None)
         if not newest or newest["verdict"] != "clear" or time.time() - newest["at"] > CLEAR_FRESH_S:
