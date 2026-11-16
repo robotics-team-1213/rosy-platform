@@ -11,7 +11,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "applications/calibration"))
+sys.path.insert(0, str(ROOT / "deploy/robot/omx"))
 import calibration_web as web  # noqa: E402
+import cell_calibration_view  # noqa: E402
 import cell_requests as cr  # noqa: E402
 
 REQUEST = dict(id="belt-end-1", kind="measure", item="belt", question="axis to belt end", how=["tape"],
@@ -308,3 +310,32 @@ def test_cross_verify_merges_depth_verify_and_touch_receipts_into_profile_snapsh
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_cell_calibration_view_bundle_flags_over_limit_bias_and_ssrf_urls(tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    cal = work / "cal.json"
+    cal.write_text(json.dumps({"sites": {"pinky": {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}}}))
+    (work / "cal.bias.json").write_text(json.dumps({
+        "schema": "rosy.omx-cell-bias.v1",
+        "regions": [{"site": "pinky", "point_m": [0.03, 0.18], "bias_mm": [26.0, 20.0], "map_sha": "abc"}],
+    }))
+    cfg = tmp_path / "arm_s.json"
+    cfg.write_text(json.dumps({
+        "arm_id": "arm_s", "work_dir": str(work), "calibration_path": str(cal),
+        "sites": {"pinky": {"surface_z": 0.028, "place": [0.02, 0.18]}},
+        "cameras": {"top": {"url": "http://127.0.0.1:8767/frame/arm_s_top.jpg", "height_m": 0.65}},
+    }))
+    reg = tmp_path / "profiles.json"
+    reg.write_text(json.dumps([{"id": "arm_s", "label": "Arm S", "config_path": str(cfg),
+                                "live_frame_url": "http://127.0.0.1:8767/frame/arm_s_top.jpg"}]))
+    entries = cell_calibration_view.load_profile_registry(reg)
+    bundle = cell_calibration_view.build_bundle(entries, now_ts=1000.0)
+    prof = bundle["profiles"][0]
+    assert prof["bias"]["regions"][0]["over_limit"] is True
+    assert prof["cross_verify"]["bias"]["verdict"] == "fail" and prof["cross_verify"]["bias"]["over_limit_regions"] == 1
+    assert prof["cross_verify"]["eval_verdict"] == "hold"
+    assert any(h["code"] == "bias_over_limit:pinky" for h in prof["hygiene"])
+    assert cell_calibration_view.is_allowed_frame_url("http://127.0.0.1:8767/frame/top.jpg") is True
+    assert cell_calibration_view.is_allowed_frame_url("http://169.254.169.254/latest") is False
