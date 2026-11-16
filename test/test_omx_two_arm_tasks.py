@@ -340,3 +340,17 @@ def test_skewed_belt_containers_across_all_three_tiers_have_valid_ik_chains(data
         assert ok and len(path) > 0, f"{step['id']} ({step['arm']}) failed at skew {(dx, dy, yaw_deg)}: {note}"
         here[step["container"]] = step["to"]
 
+
+
+def test_the_choice_set_shares_one_scene_and_differs_only_in_the_container_taken(layout):
+    """2026-11-17: told apart by the goal or the language, never by the scene; each one-step task is a valid plan."""
+    data = tasks.load()
+    choose = {name: task for name, task in data["tasks"].items() if name.startswith("choose-")}
+    assert len(choose) == 6 and all(task["start"] == data["tasks"]["cell-stack"]["start"] for task in choose.values())
+    steps = [task["steps"][0] for task in choose.values()]
+    assert all(len(task["steps"]) == 1 for task in choose.values()) and len({s["id"] for s in steps}) == 6
+    for arm in ("arm_a", "arm_b"):
+        mine = [s for s in steps if s["arm"] == arm]
+        assert len(mine) == 3 and len({s["from"] for s in mine}) == 3 and len({s["to"] for s in mine}) == 1
+    for name in choose:
+        tasks.validate(layout, tasks.get_task(layout, name))

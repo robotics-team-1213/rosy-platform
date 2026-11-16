@@ -4900,6 +4900,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_auto_track_calibration.py` 원격 pytest 및 `rosy-fleet-r` 실호스트 적용 확인.
 - gate 변화: 없음.
 
+## 2026-11-17 · uncommitted · fix(omx-pivot): over-target 110 deg yaw arc, known-geometry 1-outlier trim, and late-stall fit
+- 변경: `cell_pivot.MIN_YAW_ARC_DEG`를 120.0°에서 110.0°로 조정해 `over_target` `range(-60, 61, 20)`(명목 120°) 스윕 시 양단 서보 정착 지연(~3.9°)이 발생해도 원 적합을 허용하고, `cell_pivot_bias.trim_known_centres`로 `known_geometry_bias`에서 3점 이상 중 1점 이상치 제거 및 후반 yaw 접촉 정지 시 기수집 마크 적합을 수행한다.
+- 증거: `test/test_omx_cell_ship_round_trip.py` 및 `test/test_omx_cell_post_eval.py` 원격 pytest 66 passed, `rosy-arm-cell` 실기 3팔(`arm_a`, `arm_b`, `arm_s`) 보정 검증.
+- gate 변화: 없음.
+- CE: 해당 없음.
+
 ## 2026-11-17 · 1598651387 · fix(control-unit): 관제 유닛이 mDNS로 붙고 끊김이 보이게
 - 변경: `deploy/site/control_unit_check.py`·`rosy-control-unit-check.{service,timer}`(R·셀 PC, 5분, host-state·services.yaml 선언), 모든 역할에 `avahi-daemon` 선언, model-watch는 이름이 안 풀리는 꺼진 로봇을 건너뜀, Fleet peer 전이 로그와 `manifest_digest`(API v1.404).
 - 증거: R(`rosy-fleet-r`)·셀(`rosy-arm-cell`) 실호스트에서 검사기 exit 0, R 컨테이너의 Fleet peer 클라이언트가 CELL-A를 `site-2026-11-17-r1`로 AVAILABLE 판정. 호스트 수리(인증서 SAN·manifest 통일·8544 LAN 게시·avahi bind)는 손으로 적용, 백업 `.bak-20261117-mdns`.

@@ -403,10 +403,19 @@ def split_rollup(tree: Path, snap: str, launch=None, reason: str = "") -> None:
 
 def detach(argv: list[str], log: Path, cwd: Path | None = None) -> subprocess.Popen:
     flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    # cwd: the holder, never the caller's worktree, which Windows then cannot delete while the landing runs
-    with open(log, "w", encoding="utf-8") as out:
-        return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                cwd=cwd or log.parent, creationflags=flags, start_new_session=os.name != "nt")
+
+    def spawn(want: int) -> subprocess.Popen:
+        # cwd: the holder, never the caller's worktree, which Windows then cannot delete while the landing runs
+        with open(log, "w", encoding="utf-8") as out:
+            return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                    cwd=cwd or log.parent, creationflags=want, start_new_session=os.name != "nt")
+
+    # CREATE_BREAKAWAY_FROM_JOB (0x01000000) frees the supervisor from the console's job object; a job that
+    # forbids breakaway raises PermissionError/OSError there and the plain detach flags still hold (11-17)
+    try:
+        return spawn(flags | (0x01000000 if os.name == "nt" else 0))
+    except (PermissionError, OSError):
+        return spawn(flags)
 
 
 def _resume_start(cwd: Path, name: str, land_args: list[str], launch):
