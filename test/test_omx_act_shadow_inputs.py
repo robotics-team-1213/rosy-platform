@@ -175,8 +175,9 @@ def test_carry_rows_hold_four_views_and_both_arms_and_the_ik_outcome_is_unchange
     assert set(peer.commands) == {"state"}  # the other arm was only asked for its state
 
 
-@pytest.mark.parametrize("config,peer", [(dict(CONFIG, arm_id="arm_a"), None), (dict(CONFIG, arm_id="arm_s"), Cell([CONT2]))])
-def test_unavailable_inputs_are_a_row_field_and_never_infer(tmp_path, monkeypatch, config, peer):
-    result, rows, policy = run_two_arm(tmp_path, monkeypatch, config, peer)
+@pytest.mark.parametrize("arm_id,with_peer", [("arm_a", False), ("arm_s", True)])
+def test_unavailable_inputs_are_a_row_field_and_never_infer(tmp_path, monkeypatch, arm_id, with_peer):
+    # the config is copied inside the test: the autouse profile fixture binds CONFIG only when the test runs
+    result, rows, policy = run_two_arm(tmp_path, monkeypatch, dict(CONFIG, arm_id=arm_id), Cell([CONT2]) if with_peer else None)
     assert result["result"] == "placed" and rows and not policy.seen
     assert all("inputs_unavailable" in row["error"] and "proposed" not in row and row["missing"] for row in rows)
