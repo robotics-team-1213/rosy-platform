@@ -11,29 +11,11 @@ import cell_act_shadow  # noqa: E402
 import cell_attempts  # noqa: E402
 import cell_auto_record  # noqa: E402
 import cell_auto_evidence  # noqa: E402
-from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
-    CLOSING,
-    choose,
-    observe,
-    plan_pick,
-    save_frame_receipt,
-    verify_placed,
-)
+from cell_auto_pick_plan import CLOSING, choose, observe, plan_pick, save_frame_receipt, verify_placed  # noqa: E402,F401  (re-exported)
 import cell_executor  # noqa: E402
 from cell_auto_safety import (  # noqa: E402, F401
-    PWM_FRACTION,
-    TEMP_STOP_C,
-    Aborted,
-    Guarded,
-    Monitor,
-    after_failure,
-    close_episode,
-    finger_room,
-    object_sized,
-    open_episode,
-    score_pick_candidate,
-    session_caps,
-    square_entry,
+    PWM_FRACTION, TEMP_STOP_C, Aborted, Guarded, Monitor, after_failure, close_episode,
+    finger_room, object_sized, open_episode, score_pick_candidate, session_caps, square_entry,
 )
 from cell_auto_setup import load_config  # noqa: E402,F401
 from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401
