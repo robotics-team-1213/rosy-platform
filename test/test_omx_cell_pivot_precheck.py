@@ -19,7 +19,7 @@ CAL = {"sites": {"belt": {"homography": H, "z_view": 0.08}}}
 def config(**pivot):
     return {"params": None, "plan": {"approach_m": 0.04}, "coarse": {"z_view": 0.118},
             "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240]}},
-            "pivot": {"z_view": 0.08, **pivot}, "sites": {"belt": {"yaw_deg": 0.0, "surface_z": 0.006}}}
+            "pivot": {"z_view": 0.08, **pivot}, "sites": {"belt": {"z": 0.0, "yaw_deg": 0.0, "surface_z": 0.006}}}
 
 
 @pytest.fixture(autouse=True)
