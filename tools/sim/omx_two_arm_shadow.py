@@ -26,6 +26,7 @@ import omx_two_arm_sites as sites  # noqa: E402
 
 REAL_VIEWS = {"top": "top", "side": "side", "a_wrist": "arm_a_wrist", "b_wrist": "arm_b_wrist"}  # sim view -> site camera label
 REAL_JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")  # joint1..joint5
+HEALTH_JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
 
 
 def norm_to_rad(value):
@@ -33,16 +34,39 @@ def norm_to_rad(value):
     return (np.asarray(value, float) + 100) / 200 * 4095 * 2 * math.pi / 4096 - math.pi
 
 
+def _tick_to_norm(present_raw):
+    value = float(present_raw)
+    if not math.isfinite(value):
+        raise ValueError("non-finite motor tick in motor-health")
+    return value / 4095.0 * 200.0 - 100.0
+
+
 def health_joints(text):
-    """{arm: [5 follower values]} from the pipeline's health stage output (JSON lines)."""
+    """{arm: [5 follower values]} from two_arm_pipeline --stage health JSON lines or motor-health/*.json."""
+    decoder, observed = json.JSONDecoder(), {}
     for line in text.splitlines():
-        try:
-            row = json.loads(line)
-        except ValueError:
-            continue
-        if row.get("stage") == "health":
-            return {bus["arm"]: [bus["motors"][j]["position"] for j in REAL_JOINTS] for bus in row["buses"] if bus["role"] == "follower"}
-    raise ValueError("no health stage in the output")
+        pos, n = 0, len(line)
+        while pos < n:
+            while pos < n and line[pos].isspace():
+                pos += 1
+            if pos >= n or line[pos] != "{":
+                break
+            try:
+                row, end = decoder.raw_decode(line, pos)
+            except ValueError:
+                break
+            pos = end
+            if not isinstance(row, dict):
+                continue
+            if row.get("stage") == "health":
+                return {bus["arm"]: [bus["motors"][j]["position"] for j in REAL_JOINTS] for bus in row["buses"] if bus["role"] == "follower"}
+            if row.get("schema_version") == "rosy.motor-health.v1" and row.get("owner_id") in sites.ARMS:
+                by_joint = {m["joint"]: m["present_raw"] for m in row.get("motors", []) if "joint" in m and "present_raw" in m}
+                if all(j in by_joint for j in HEALTH_JOINTS):
+                    observed[row["owner_id"]] = [_tick_to_norm(by_joint[j]) for j in HEALTH_JOINTS]
+    if all(arm in observed for arm in sites.ARMS):
+        return {arm: observed[arm] for arm in sites.ARMS}
+    raise ValueError("no health stage or complete motor-health pair in the output")
 
 
 def capture(args):
@@ -92,6 +116,7 @@ def compare(args):
     from PIL import Image
     import mujoco
     import omx_two_arm_policy as pol
+    import omx_two_arm_skill as skills
     import omx_two_arm_tasks as tasks
     import omx_two_arm_teacher as teaching
     snap = Path(args.snapshot)
@@ -102,7 +127,11 @@ def compare(args):
         make = factory.make_pre_post_processors
         factory.make_pre_post_processors = lambda config, **kw: make(config, preprocessor_overrides={"device_processor": {"device": "cpu"}},
                                                                       postprocessor_overrides={"device_processor": {"device": "cpu"}}, **kw)
-    driver = pol.Driver(args.model, args.steps_file, sites.parse_choices(args.choice))
+    driver = pol.Driver(
+        args.model, args.steps_file, sites.parse_choices(args.choice),
+        n_action_steps=args.n_action_steps, flow_steps=args.flow_steps,
+        use_amp=True if args.amp else None,
+    )
     world, layout = driver.world, driver.layout
     task = tasks.get_task(layout, args.task)
     here, plan = dict(task.get("start", {})), None
@@ -123,15 +152,17 @@ def compare(args):
     mujoco.mj_forward(world.model, data)
     sim = {view: world.render(data, view, pol.SHAPE) for view in teaching.RECORDED}
     real = {view: np.asarray(Image.open(snap / f"{REAL_VIEWS[view]}.jpg").convert("RGB").resize(pol.SHAPE[::-1])) for view in teaching.RECORDED}
-    goal = pol.goal_vector(layout, plan, {k: v for k, v in here.items() if k != plan["container"]})
+    goal = pol.goal_vector(layout, plan, {k: v for k, v in here.items() if k != plan["container"]}) if driver.has_goal else None
+    prompt = args.prompt or (skills.prompt(plan, args.skill) if args.skill else pol.PROMPT)
     with driver.torch.inference_mode():
         out = {}
         for name, images in (("real", real), ("sim", sim)):
             driver.policy.reset()
-            out[name] = driver.act(state, images, goal)
+            out[name] = driver.act(state, images, goal, prompt=prompt)
     deg = lambda v: np.degrees(v).round(1).tolist()  # noqa: E731
     names = [f"{arm}.{j}" for arm in sites.ARMS for j in (*REAL_JOINTS, "gripper")]
-    result = dict(snapshot=str(snap), captured_at=meta["captured_at"], model=str(args.model), task=args.task, step=args.step, arm=plan["arm"], joints=names,
+    result = dict(snapshot=str(snap), captured_at=meta["captured_at"], model=str(args.model), policy_type=driver.kind, prompt=prompt,
+                  task=args.task, step=args.step, arm=plan["arm"], joints=names,
                   state_deg=deg(state), real_deg=deg(out["real"]), sim_deg=deg(out["sim"]), teacher_deg=deg(teacher_t),
                   real_minus_sim_deg=deg(out["real"] - out["sim"]), real_minus_teacher_deg=deg(out["real"] - teacher_t), sim_minus_teacher_deg=deg(out["sim"] - teacher_t),
                   max_abs_real_minus_sim_deg=float(np.degrees(np.abs(out["real"] - out["sim"]).max()).round(1)),
@@ -160,6 +191,11 @@ def main(argv=None):
     m.add_argument("--task", default="outbound")
     m.add_argument("--step", default="m0")
     m.add_argument("--choice", action="append", default=[])
+    m.add_argument("--skill", choices=("grasp", "release"), default=None)
+    m.add_argument("--prompt", default=None)
+    m.add_argument("--flow-steps", type=int, default=None)
+    m.add_argument("--n-action-steps", type=int, default=None)
+    m.add_argument("--amp", action="store_true")
     m.add_argument("--out", required=True)
     args = p.parse_args(argv)
     return capture(args) if args.cmd == "capture" else compare(args)

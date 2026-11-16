@@ -181,7 +181,7 @@ def check(commit: str) -> list[str]:
     return bad
 
 
-CHUNK = 50  # fewer commits than this per extra process cost more to start than they save
+CHUNK = 8  # fewer commits than this per extra process cost more to start than they save
 
 
 def _check_all(commits: list[str]) -> list[list[str]]:
