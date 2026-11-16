@@ -399,6 +399,7 @@ class BackgroundBlobDetector:
         """Work-to-map homography, track mask (255 inside), its pixel count and camera (cached)."""
         key = (calib.image_to_map, calib.image_size, calib.track_bounds_m, calib.hfov_deg, shape)
         if key != self._view_key:
+            had_view = self._view_key is not None
             height, width = shape
             work_to_map = geometry.as_matrix(calib.image_to_map) @ geometry.centre_scale(
                 calib.image_size[0] / width, calib.image_size[1] / height)
@@ -412,6 +413,14 @@ class BackgroundBlobDetector:
             camera = geometry.camera_from_homography(calib.image_to_map, calib.image_size, calib.hfov_deg)
             if camera is not None and camera[2] <= self._robot_height_m:
                 camera = None
-            self._view = (work_to_map, mask, int(np.count_nonzero(mask)), camera)
+            track_px = int(np.count_nonzero(mask))
+            self._view = (work_to_map, mask, track_px, camera)
             self._view_key = key
+            if had_view and self._ready and track_px > 0 and self._shape is not None and shape == self._shape[:2]:
+                # D-547/D-600: reproject background mask and suspects when calibration updates live.
+                self._pending = []
+                if self._unknown is not None:
+                    self.unknown_floor = robot_mask.unknown_circles(self._unknown, work_to_map)
+                self._learn_background(mask)
+                self._find_baked(mask, work_to_map, camera)
         return self._view

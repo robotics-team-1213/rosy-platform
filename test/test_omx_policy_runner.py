@@ -228,6 +228,32 @@ def test_lerobot_adapter_options_and_environment_state(monkeypatch, tmp_path):
     assert batch['observation.environment_state'].shape == (22,) and batch['task'] == 'grasp'
 
 
+def test_prepare_frame_fast_path_converts_images_on_device(monkeypatch):
+    class FakeTensor:
+        def __init__(self, arr, dev='cpu'):
+            self.arr, self.device = np.asarray(arr), dev
+        def unsqueeze(self, dim): return FakeTensor(np.expand_dims(self.arr, dim), self.device)
+        def to(self, dev=None, dtype=None):
+            arr = self.arr.astype(np.float32) if dtype == 'float32' else self.arr
+            return FakeTensor(arr, dev if dev is not None else self.device)
+        def permute(self, *axes): return FakeTensor(np.transpose(self.arr, axes), self.device)
+        def contiguous(self): return self
+        def div_(self, scalar):
+            self.arr = self.arr / scalar
+            return self
+    fake_torch = type('T', (), {'float32': 'float32', 'from_numpy': staticmethod(lambda a: FakeTensor(a))})()
+    fake_prepare = lambda *_a: pytest.fail('slow lerobot prepare should be bypassed')  # noqa: E731
+    fake_prepare.__module__ = 'lerobot.policies.utils'
+    adapter = object.__new__(runner.LeRobotAdapter)
+    adapter._torch, adapter._device, adapter._prepare = fake_torch, 'cuda:0', fake_prepare
+    ro = np.full((2, 3, 3), 255, dtype=np.uint8)
+    ro.setflags(write=False)
+    out = adapter._prepare_frame({'observation.state': np.ones(2, np.float32), 'observation.images.top': ro}, 'grasp')
+    img = out['observation.images.top']
+    assert (img.device, img.arr.shape, img.arr.dtype) == ('cuda:0', (1, 3, 2, 3), np.float32)
+    assert np.allclose(img.arr, 1.0) and out['task'] == 'grasp' and out['robot_type'] == ''
+
+
 def test_target_opened_for_another_type_never_observes():
     adapter, target = Adapter(), Target()
     adapter.policy_type, target.policy_type = 'smolvla', 'act'
