@@ -211,7 +211,7 @@ def main(argv=None, *, _globals: dict | None = None):
                 )
                 Path("session.json").write_text(json.dumps(record, indent=2, default=str))
                 try:
-                    print(json.dumps(omx_incident.after_session(args.arm, ports.get("follower")), default=str)[:2000])
+                    print(json.dumps(omx_incident.after_session(args.arm, ports.get("follower") or ports.get(args.arm)), default=str)[:2000])
                 except Exception as exc:
                     print(f"incident pipeline failed: {exc}")
         finally:

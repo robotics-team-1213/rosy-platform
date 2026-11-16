@@ -271,3 +271,32 @@ def clear_incidents(arm, note, token_file=None, link=None, *, cause=None, basis=
     if refuse_fn is not None:
         refuse_fn(arm, link)
     return 0
+
+
+def verify_baseline_caps(device: str) -> bool:
+    """Read-only bus confirmation that every follower motor is fault-free, torque OFF, and at baseline caps."""
+    from joint_tune import BASELINE, FOLLOWER, SerialBus
+
+    time.sleep(0.3)
+    bus = None
+    try:
+        bus = SerialBus(device, 0)
+        for motor, (exp_model, exp_mode) in FOLLOWER.items():
+            bus.motor = motor
+            if (bus.cleanup_read("model"), bus.cleanup_read("mode")) != (exp_model, exp_mode):
+                return False
+            if bus.cleanup_read("torque") != 0 or bus.cleanup_read("hw_error") != 0:
+                return False
+            if bus.cleanup_read("pwm_limit") != BASELINE["pwm_limit"]:
+                return False
+            if exp_model == 1200 and bus.cleanup_read("current_limit") != BASELINE["current_limit"]:
+                return False
+        return True
+    except Exception:
+        return False
+    finally:
+        if bus is not None:
+            try:
+                bus.close()
+            except Exception:
+                pass

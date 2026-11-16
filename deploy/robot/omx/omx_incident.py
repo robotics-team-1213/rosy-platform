@@ -107,7 +107,11 @@ def after_session(arm: str | None, device: str | None, session=Path("session.jso
     """record_session's end: the pipeline with the reboot on this arm's follower. No arm name: nothing to hold."""
     if not arm:
         return {"incident": None, "reason": "no --arm"}
-    return handle(session, arm, act=reboot_latched(device) if device else None, link=link or link_for(arm))
+    from omx_incident_fleet import verify_baseline_caps
+
+    verify = (lambda: verify_baseline_caps(device)) if device else None
+    return handle(session, arm, act=reboot_latched(device) if device else None, link=link or link_for(arm),
+                  verify_caps=verify)
 
 
 def rows(path, since=0.0):
@@ -230,7 +234,8 @@ def decide(f: dict) -> dict:
             "reason": "; ".join(why) + "; a person checks the arm (jaws, contacts, wedged objects) before torque ON"}
 
 
-def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jsonl"), home=None, link=None) -> dict:
+def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jsonl"), home=None, link=None,
+           verify_caps=None) -> dict:
     """Run the pipeline for one ended session; returns the incident (or {"incident": False})."""
     session = json.loads(Path(session_path).read_text())
     if "safe_end" not in session:  # failed before the bus opened (2026-11-03 23:19: a leader port gone): never reached the arm
@@ -239,6 +244,10 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
         library = json.loads(Path(session["chunks"]["library"]).read_text())
         home = (library.get("chunks", {}).get("home") or [None])[0]
     f = facts(session, home, arm)
+    if (verify_caps and not f["safe_end"] and f["folded"] and not f["latched"]
+            and not f["windup_hits"] and not f["flagged"] and f.get("caps_restored") is not True):
+        if verify_caps():
+            f["caps_verified_restored"] = True
     d = decide(f)
     if not d["actions"] and not d["hold"] and d["reason"] == "no incident sign":
         return {"incident": False}

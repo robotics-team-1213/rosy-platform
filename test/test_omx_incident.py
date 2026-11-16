@@ -623,4 +623,26 @@ def test_telemetry_sync_clears_local_hold_via_machine_sync_without_operator_toke
     assert oi.held("arm_b") is None
 
 
+def test_verified_baseline_caps_releases_clean_folded_arm_without_human_hold(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = session(tmp_path, latched=False, windup=False)
+    data = json.loads(s.read_text())
+    data["safe_end"] = False
+    data["caps_restored"] = ["follower 12 pwm_limit: baseline caps require confirmed follower model/mode and torque OFF"]
+    s.write_text(json.dumps(data))
+
+    held_out = oi.handle(s, "arm_b", link=Link(), verify_caps=lambda: False)
+    assert held_out["decision"]["hold"] is True and oi.held("arm_b") is not None
+    oi.hold_file("arm_b").unlink()
+
+    class NonHoldLink(Link):
+        def post(self, report):
+            from core_common.protocol.arm_incidents import ArmIncidentAccepted
+            return ArmIncidentAccepted(incident_id="a" * 32, hold=hold(bool(report.decision.get("hold"))))
+
+    free_out = oi.handle(s, "arm_b", link=NonHoldLink(), verify_caps=lambda: True)
+    assert free_out["decision"]["hold"] is False and free_out["facts"]["caps_verified_restored"] is True
+    assert oi.held("arm_b") is None
+
+
 
