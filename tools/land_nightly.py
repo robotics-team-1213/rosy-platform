@@ -22,9 +22,12 @@ ROOT = TOOLS.parent
 sys.path[:0] = [str(TOOLS), str(TOOLS / "remote"), str(ROOT / "test")]
 
 import known_failures  # noqa: E402
+import land_browser  # noqa: E402
+import land_cache  # noqa: E402
 import land_checks  # noqa: E402
 import land_mainred  # noqa: E402
 import remote_pytest  # noqa: E402
+from harness import affected_exclusive  # noqa: E402
 
 SUMMARY = re.compile(r"(?m)^=*\s*\d+ (passed|failed|skipped|errors?|xfailed|xpassed)\b.* in [0-9.]+s\b")
 
@@ -72,18 +75,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[nightly] {main_sha[:10]}: unchanged since the last green night, tier skipped", flush=True)
         return 0
     logs = [logdir / f"nightly-{n}.txt" for n in range(len(invocations))]
-    remote_pytest.run(invocations, logs, main_sha, repo=ROOT, label="nightly")
+    codes = remote_pytest.run(invocations, logs, main_sha, repo=ROOT, label="nightly")
+    env = land_cache.env_id(ROOT, main_sha)
+    tree = (land_cache._git(ROOT, "rev-parse", f"{main_sha}^{{tree}}").stdout.strip() if env else "")
     known = {name: why for path in ("test/known_failures.txt", "test/flaky_quarantine.txt") if (ROOT / path).is_file()
              for name, why in known_failures.load_known((ROOT / path).read_text(encoding="utf-8")).items()}
     new = []
-    for inv, log in zip(invocations, logs):
+    for inv, log, code in zip(invocations, logs, codes or [0] * len(invocations)):
         text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
         ids = known_failures.compare(text, known)[0]
         if ids:
             # The env makes recheck and later selections run a browser id instead of skipping it forever.
-            env = [token for token in inv if land_checks.ENV_TOKEN.match(token)]
-            land_mainred.red(ROOT, main_sha, ids, text, env, by="nightly")
+            env_tokens = [token for token in inv if land_checks.ENV_TOKEN.match(token)]
+            land_mainred.red(ROOT, main_sha, ids, text, env_tokens, by="nightly")
             new += ids
+        elif (env and tree and not affected_exclusive.dedicated(inv) and SUMMARY.search(text)
+              and land_cache.unusable(code, log) is None and not land_browser.vacuous(inv, log)):
+            land_cache.record(ROOT, main_sha, tree, env, inv, log)
     print(f"[nightly] {main_sha[:10]}: {len(invocations)} invocation(s), {len(new)} NEW", flush=True)
     for nodeid in new:
         print(f"NEW       {nodeid}")

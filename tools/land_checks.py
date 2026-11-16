@@ -341,6 +341,15 @@ def landed_copy(main_co: Path, argv: list[str]) -> int | None:
 
 
 CAP_POLL_S = 15
+MAX_OVERTIMES = 2
+
+
+def next_overtime(land, args) -> int:
+    """Increment overtime count and stop runaway zombies past MAX_OVERTIMES turns."""
+    nxt = overtimes(land, args) + 1
+    if nxt > MAX_OVERTIMES:
+        raise land.Stop(f"stopped after {MAX_OVERTIMES} overtime handoffs without finishing")
+    return nxt
 
 
 def turn_wanted(land, wt: Path) -> bool:
@@ -408,8 +417,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     head = land.out(wt, "rev-parse", "HEAD")
     if (wt / land.HARNESS).is_file():
         lint_log = logdir / f"lint-{round_no}.txt"
-        key = (str(logdir.resolve()), str(round_no).removeprefix("g"), head, id(land.step),
-               (wt / land.HARNESS).stat().st_mtime_ns)
+        key = (str(wt.resolve()), head, id(land.step), (wt / land.HARNESS).stat().st_mtime_ns)
         with _lint_lock:
             if key in _lint_done:
                 lint_log.write_text(_lint_done[key], encoding="utf-8")

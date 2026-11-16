@@ -160,7 +160,9 @@ def save(config_or_work: dict | Path, profile: dict[str, Any], arm_id: str | Non
     profile = dict(profile, schema=SCHEMA, arm_id=arm, updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     path = profile_path(config_or_work, arm)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(profile, indent=2), encoding="utf-8")
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(profile, indent=2), encoding="utf-8")
+    tmp.replace(path)
     _CAL_CACHE.pop(f"{path}:{arm}", None)
     return path
 

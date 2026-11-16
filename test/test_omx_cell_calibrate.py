@@ -602,3 +602,18 @@ def test_plan_only_accepts_the_arm_a_point_set(tmp_path, monkeypatch, capsys):
     path.write_text(json.dumps(config))
     assert cc.main(["--config", str(path), "auto", "--plan-only"]) == 0
     assert json.loads(capsys.readouterr().out)["reach"] == "no reach check"
+
+
+def test_check_reports_over_limit_bias_instead_of_crashing(tmp_path):
+    pytest.importorskip("cv2")
+    cal_path = tmp_path / "cal.json"
+    cal_path.write_text(json.dumps({"sites": {"floor": {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}}}))
+    cc.cell_pivot.bias_path(cal_path).write_text(json.dumps({
+        "schema": cc.cell_pivot.SCHEMA,
+        "regions": [{"site": "floor", "point_m": [0.0, 0.17], "bias_mm": [26.0, 20.0]}],
+    }))
+    config = {"calibration_path": str(cal_path), "preflight": {}, "sites": {"floor": {"surface_z": 0.006}},
+              "calibrate": {"map_sites": ["floor"]}}
+    found = cc.check(config, json.loads(cal_path.read_text()), [("floor", (0.0, 0.17))], np.zeros((32, 32, 3), np.uint8))
+    assert "max_bias_mm" in found["bias_error"] and found["missing_bias"] == ["floor:0.0,0.17"]
+    assert "pivot-near floor:0.0,0.17" in cc.stale(found)

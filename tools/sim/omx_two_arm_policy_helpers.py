@@ -126,8 +126,13 @@ def plan_tasks(plan_dir, names):
     return {name: dict(json.loads((Path(plan_dir) / f"{name}-two-arm.json").read_text(encoding="utf-8")), name=name) for name in names}
 
 
+def resolved_choices(choices=None, *, pick_vision=False, belt_skew=False, cam_jitter=False):
+    """Merge layout overrides, adding `VISION_SKEW_CHOICES` when vision/skew perturbation is enabled."""
+    return dict(teaching.VISION_SKEW_CHOICES if (pick_vision or belt_skew or cam_jitter) else {}, **(choices or {}))
+
+
 def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0., lag=False, physics=False, *,
-            pick_vision=False, belt_skew=False, no_goal=False):
+            pick_vision=False, belt_skew=False, cam_jitter=False, no_goal=False):
     if skill and plan_dir:
         raise ValueError("a sub-skill is recorded one step at a time, not in concurrent mode")
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -136,7 +141,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
     vector = dict(dtype="float32", shape=(12,), names=joints)
     image = dict(dtype="video", shape=(*SHAPE, 3), names=["height", "width", "channels"])
     goal = dict(dtype="float32", shape=(GOAL_SIZE,), names=[f"goal{i}" for i in range(GOAL_SIZE)])
-    choices = dict(teaching.VISION_SKEW_CHOICES if (pick_vision or belt_skew) else {}, **(choices or {}))
+    choices = resolved_choices(choices, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
     layout = sites.Layout(**choices)
     world = world_mod.World(layout)
     features = {"observation.state": vector, "action": vector, **{f"observation.images.{view}": image for view in teaching.RECORDED}}
@@ -148,7 +153,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
     for seed in seeds:
         for name in names:
             teacher = Recorder(world, dataset, longest, concurrent=planned is not None, skill=skill, no_goal=no_goal,
-                               seed=seed, pick_vision=pick_vision, belt_skew=belt_skew)
+                               seed=seed, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
             skills.disturb(teacher, seed, zero_error_deg, lag, physics)
             teacher.error_draw = (STEP_ERROR_SEED_BASE + 100 * seed + 50 * names.index(name), zero_error_deg, physics)
             teacher.run_task(planned[name] if planned else tasks.get_task(layout, name), isolated=bool(skill) and planned is None)
@@ -163,7 +168,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
 class Driver:
     """Runs plan steps with the model in the teacher's place, under the teacher's judgement."""
 
-    def __init__(self, model, steps_file, choices=None, *, pick_vision=False, belt_skew=False,
+    def __init__(self, model, steps_file, choices=None, *, pick_vision=False, belt_skew=False, cam_jitter=False,
                  ensemble_coeff=None, n_action_steps=None, flow_steps=None, use_amp=None):
         import omx_two_arm_world as world_mod
         import torch
@@ -201,17 +206,19 @@ class Driver:
         else:
             self.has_goal = True
             self.use_amp = False
-        choices = dict(teaching.VISION_SKEW_CHOICES if (pick_vision or belt_skew) else {}, **(choices or {}))
+        choices = resolved_choices(choices, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
         self.layout = sites.Layout(**choices)
         self.world = world_mod.World(self.layout)
         self.longest = json.loads(Path(steps_file).read_text(encoding="utf-8"))["longest"]
         self.pick_vision = pick_vision
         self.belt_skew = belt_skew
+        self.cam_jitter = cam_jitter
 
     def act(self, state, images, goal=None, prompt=PROMPT):
         torch, device = self.torch, self.device
         batch = {"observation.state": torch.from_numpy(state)[None].to(device), "task": [prompt],
-                 **{f"observation.images.{view}": (torch.from_numpy(image).permute(2, 0, 1)[None].float() / 255).to(device) for view, image in images.items()}}
+                 **{f"observation.images.{view}": torch.from_numpy(image if image.flags.writeable else np.array(image, copy=True)).to(device).permute(2, 0, 1)[None].float() / 255
+                    for view, image in images.items()}}
         if self.has_goal:
             if goal is None:
                 raise ValueError("loaded policy expects observation.environment_state goal vector")
@@ -246,7 +253,7 @@ class Driver:
     def concurrent(self, task, seed, sink=None):
         """A whole two-arm task with the model driving both arms."""
         L, w = self.layout, self.world
-        teacher = teaching.Teacher(w, seed=seed, pick_vision=self.pick_vision, belt_skew=self.belt_skew)
+        teacher = teaching.Teacher(w, seed=seed, pick_vision=self.pick_vision, belt_skew=self.belt_skew, cam_jitter=self.cam_jitter)
         here = dict(task.get("start", {}))
         data = teacher.fresh(here)
         queue = {a: [s for s in task["steps"] if s["arm"] == a] for a in L.arms}
@@ -307,7 +314,7 @@ class Driver:
         here, rows = dict(task.get("start", {})), []
         with self.torch.inference_mode():
             for plan in task["steps"]:
-                teacher = teaching.Teacher(self.world, seed=seed + len(rows), pick_vision=self.pick_vision, belt_skew=self.belt_skew)
+                teacher = teaching.Teacher(self.world, seed=seed + len(rows), pick_vision=self.pick_vision, belt_skew=self.belt_skew, cam_jitter=self.cam_jitter)
                 data = teacher.fresh(here)
                 rows.append(dict(self.step(teacher, data, plan, here), task=name, seed=seed))
                 print(json.dumps(rows[-1]), flush=True)
@@ -318,7 +325,7 @@ class Driver:
     def whole(self, name, seed, sink=None):
         """The task through to its first failed step."""
         task = tasks.get_task(self.layout, name)
-        teacher, done, here = teaching.Teacher(self.world, seed=seed, pick_vision=self.pick_vision, belt_skew=self.belt_skew), [], dict(task.get("start", {}))
+        teacher, done, here = teaching.Teacher(self.world, seed=seed, pick_vision=self.pick_vision, belt_skew=self.belt_skew, cam_jitter=self.cam_jitter), [], dict(task.get("start", {}))
         data = teacher.fresh(here)
         with self.torch.inference_mode():
             for plan in task["steps"]:

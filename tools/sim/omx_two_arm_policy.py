@@ -50,6 +50,7 @@ from omx_two_arm_policy_helpers import (  # noqa: E402, F401
     goal_vector,
     observe,
     plan_tasks,
+    resolved_choices,
     sheet,
 )
 import omx_two_arm_sites as sites  # noqa: E402
@@ -77,16 +78,18 @@ def evaluate(args):
     import av
     driver = Driver(args.model, args.steps_file, sites.parse_choices(args.choice),
                     pick_vision=getattr(args, "pick_vision", False), belt_skew=getattr(args, "belt_skew", False),
+                    cam_jitter=getattr(args, "cam_jitter", False),
                     ensemble_coeff=getattr(args, "ensemble_coeff", None), n_action_steps=getattr(args, "n_action_steps", None),
                     flow_steps=getattr(args, "flow_steps", None), use_amp=True if getattr(args, "amp", False) else None)
     rows, runs = [], []
     Path(args.artifacts).mkdir(parents=True, exist_ok=True)
     planned = plan_tasks(args.plan_dir, args.tasks.split(",")) if args.plan_dir else None
     if args.skill:
+        comp_kw = dict(compensate_zero=True) if getattr(args, "compensate_zero", False) else {}
         for name in args.tasks.split(","):
             for k in range(args.isolated_seeds):
                 rows += skills.isolated(driver, name, EVAL_SEED_BASE + 1000 * k, args.skill, args.zero_error_deg, args.servo_lag,
-                                        args.physics_ranges)
+                                        args.physics_ranges, **comp_kw)
         Path(args.out).write_text(json.dumps(dict(rows=rows, whole=[], policy=driver.kind), default=str), encoding="utf-8")
         return 0
     for name in args.tasks.split(","):
@@ -192,11 +195,12 @@ def run_round(args):
     names = args.tasks.split(",")
     if args.skill and args.mode != "steps" or args.policy == "smolvla" and not (args.base_model and args.vlm_assets):
         raise SystemExit("a sub-skill needs --mode steps; SmolVLA needs --base-model and --vlm-assets (local, offline)")
-    parsed_choices = dict(teaching.VISION_SKEW_CHOICES if (getattr(args, "pick_vision", False) or getattr(args, "belt_skew", False)) else {},
-                          **sites.parse_choices(args.choice))
+    parsed_choices = resolved_choices(sites.parse_choices(args.choice), pick_vision=getattr(args, "pick_vision", False),
+                                      belt_skew=getattr(args, "belt_skew", False), cam_jitter=getattr(args, "cam_jitter", False))
     recipe = dict(ladder.RECIPE, steps=args.steps, optimizer_lr=args.lr, batch_size=args.batch_size, mode=args.mode, policy=args.policy,
                   skill=args.skill, zero_error_deg=args.zero_error_deg, servo_lag=args.servo_lag, physics_ranges=args.physics_ranges,
                   pick_vision=bool(getattr(args, "pick_vision", False)), belt_skew=bool(getattr(args, "belt_skew", False)),
+                  cam_jitter=bool(getattr(args, "cam_jitter", False)), compensate_zero=bool(getattr(args, "compensate_zero", False)),
                   no_goal=bool(getattr(args, "no_goal", False)))
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
                   tasks=names, seeds=args.seeds, recipe=recipe, choices=parsed_choices, claim="기하: 도달·순서·충돌(D-947). 실물 근거가 아닙니다.")
@@ -254,11 +258,14 @@ def run_round(args):
         record.update(stage="evaluate")
         write_record(run, record)
         judged = [("eval.json", str(run / "train/checkpoints/last/pretrained_model"))] + ([("eval-ik.json", "ik")] if args.skill else [])
+        eval_accel = [*(["--n-action-steps", str(args.n_action_steps)] if getattr(args, "n_action_steps", None) is not None else []),
+                      *(["--flow-steps", str(args.flow_steps)] if getattr(args, "flow_steps", None) is not None else []),
+                      *(["--amp"] if getattr(args, "amp", False) else [])]
         for out, model in judged:
             gpu_yield.yield_turn(say=functools.partial(print, file=log))
             subprocess.run([args.python, me, "evaluate", "--model", model, "--steps-file", str(run / "steps.json"), "--tasks", args.tasks,
                             "--isolated-seeds", str(args.isolated_seeds), "--whole-seeds", str(args.whole_seeds), "--out", str(run / out), "--artifacts", str(run / "artifacts"),
-                            *plan, *chosen, *skilled], env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+                            *plan, *chosen, *skilled, *eval_accel], env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
     except (RuntimeError, subprocess.CalledProcessError, ValueError) as exc:
         record.update(status="failed", reason=f"{record['stage']} 단계 실패({exc}). round.log를 보세요.", finished_at=now())
         write_record(run, record)
@@ -296,14 +303,14 @@ def main(argv=None):
     for name in ("evaluate", "round"):
         one = commands.add_parser(name)
         for flag, kw in (("--tasks", dict(default=",".join(TASKS))), ("--isolated-seeds", dict(type=int, default=3)),
-                         ("--whole-seeds", dict(type=int, default=3)), ("--choice", dict(action="append"))):
+                         ("--whole-seeds", dict(type=int, default=3)), ("--choice", dict(action="append")),
+                         ("--n-action-steps", dict(type=int)), ("--flow-steps", dict(type=int)), ("--amp", dict(action="store_true"))):
             one.add_argument(flag, **kw)
         skills.options(one)
         if name == "evaluate":
             for flag, kw in (("--model", dict(required=True)), ("--steps-file", dict(required=True)), ("--out", dict(required=True)),
                              ("--artifacts", dict(required=True)), ("--plan-dir", dict(help="judge whole tasks")),
-                             ("--ensemble-coeff", dict(type=float)), ("--n-action-steps", dict(type=int)),
-                             ("--flow-steps", dict(type=int)), ("--amp", dict(action="store_true"))):
+                             ("--ensemble-coeff", dict(type=float))):
                 one.add_argument(flag, **kw)
         else:
             one.add_argument("--no-goal", action="store_true")
@@ -318,7 +325,7 @@ def main(argv=None):
     if args.command == "collect":
         return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir, sites.parse_choices(args.choice),
                        args.skill, args.zero_error_deg, args.servo_lag, args.physics_ranges,
-                       pick_vision=args.pick_vision, belt_skew=args.belt_skew, no_goal=args.no_goal)
+                       pick_vision=args.pick_vision, belt_skew=args.belt_skew, cam_jitter=args.cam_jitter, no_goal=args.no_goal)
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 
 

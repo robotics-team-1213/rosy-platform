@@ -230,3 +230,25 @@ def test_extract_asymmetric_yaw_separation_and_map_offset():
     assert with_offset["yaw_px"] == pytest.approx(0.0)
     assert with_offset["yaw_map"] == pytest.approx(math.pi / 2)
     assert with_offset["yaw_confidence"] == 1.0
+
+
+def test_low_ev_blue_ring_glow_matches_default_fractions():
+    """Under EV -0.3 on ceiling_north, rosy_42 blue glow fills ~0.0065 of the annulus vs <= 0.001 off."""
+    glow = (135, 90, 90)
+
+    def frame(on: bool) -> np.ndarray:
+        image = np.full((240, 320, 3), 90, np.uint8)
+        if on:
+            x, y = int(LEFT.x_px + 1.8 * LEFT.radius_px), int(LEFT.y_px)
+            image[y - 3:y + 3, x - 4:x + 5] = glow  # 54 px in ~8042 px annulus (~0.0067 share)
+        return image
+
+    samples = [sample_frame(frame(_blinking(i / FPS)), captured_at=i / FPS, calibration_revision="r",
+                            blobs=(LEFT, RIGHT), color="blue") for i in range(19)]
+    assert samples[4].lit[0] == pytest.approx(0.0067, abs=0.001)
+    result = _decide(samples)
+    assert result["state"] == "matched" and (result["x"], result["y"]) == (LEFT.map_x, LEFT.map_y)
+    higher = LedConfig(on_fraction=0.02, off_fraction=0.005)
+    assert decide([sample_frame(frame(_blinking(i / FPS)), captured_at=i / FPS, calibration_revision="r",
+                                blobs=(LEFT, RIGHT), color="blue", config=higher) for i in range(19)],
+                  not_before=0.0, not_after=6.0, now=6.0, config=higher)["reason"] == "none"

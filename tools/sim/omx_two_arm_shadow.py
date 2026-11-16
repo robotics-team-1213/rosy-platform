@@ -135,6 +135,44 @@ def teacher_first(world, here, plan, seed=0):
     raise ValueError("the teacher sent no target")
 
 
+def _compare_one(driver, snap_real, meta, plan, here, args, *, Image, mujoco, pol, skills, teaching):
+    world, layout = driver.world, driver.layout
+    # shortcut: the gripper takes the sim wait opening, the real jaw unit is not mapped; upgrade when a jaw calibration exists
+    state = np.concatenate([np.append(norm_to_rad(meta["joints"][arm]), layout.arms[arm].wait[5]) for arm in sites.ARMS]).astype(np.float32)
+    teacher_t = teacher_first(world, here, plan)
+    t_sim = teaching.Teacher(world, seed=0)
+    data = t_sim.fresh(here)
+    if plan["from"] == "belt":
+        t_sim.belt_in(data, plan, {o: layout.sim_arms[o].wait for o in layout.arms if o != plan["arm"]})
+    for k, arm in enumerate(sites.ARMS):
+        data.qpos[world.q[arm]] = state[6 * k:6 * k + 6]
+        data.qpos[world.mimic[arm]] = -state[6 * k + 5]
+    mujoco.mj_forward(world.model, data)
+    sim = {view: world.render(data, view, pol.SHAPE) for view in teaching.RECORDED}
+    goal = pol.goal_vector(layout, plan, {k: v for k, v in here.items() if k != plan["container"]}) if driver.has_goal else None
+    prompt = args.prompt or (skills.prompt(plan, args.skill) if args.skill else pol.PROMPT)
+    with driver.torch.inference_mode():
+        out = {}
+        for name, images in (("real", snap_real), ("sim", sim)):
+            driver.policy.reset()
+            out[name] = driver.act(state, images, goal, prompt=prompt)
+    deg = lambda v: np.degrees(v).round(1).tolist()  # noqa: E731
+    names = [f"{arm}.{j}" for arm in sites.ARMS for j in (*REAL_JOINTS, "gripper")]
+    risks = shadow_risks(
+        plan["arm"], state, out["real"], out["sim"],
+        max_shadow_deg=args.max_shadow_deg, max_idle_deg=args.max_idle_deg,
+    )
+    result = dict(snapshot=str(Path(args.snapshot)), captured_at=meta["captured_at"], model=str(args.model), policy_type=driver.kind, prompt=prompt,
+                  task=args.task, step=plan["id"], arm=plan["arm"], joints=names,
+                  state_deg=deg(state), real_deg=deg(out["real"]), sim_deg=deg(out["sim"]), teacher_deg=deg(teacher_t),
+                  real_minus_sim_deg=deg(out["real"] - out["sim"]), real_minus_teacher_deg=deg(out["real"] - teacher_t), sim_minus_teacher_deg=deg(out["sim"] - teacher_t),
+                  max_abs_real_minus_sim_deg=float(np.degrees(np.abs(out["real"] - out["sim"]).max()).round(1)),
+                  image_mean_abs_diff={view: round(float(np.abs(snap_real[view].astype(int) - sim[view].astype(int)).mean()), 1) for view in teaching.RECORDED},
+                  **risks,
+                  note="L2 shadow: no command reached an arm (D-793); sim scene is the task's nominal start, gripper from the sim wait pose")
+    return result, Image.fromarray(np.vstack([pol.sheet(snap_real), pol.sheet(sim)]))
+
+
 def compare(args):
     from PIL import Image
     import mujoco
@@ -155,53 +193,44 @@ def compare(args):
         n_action_steps=args.n_action_steps, flow_steps=args.flow_steps,
         use_amp=True if args.amp else None,
     )
-    world, layout = driver.world, driver.layout
+    layout = driver.layout
     task = tasks.get_task(layout, args.task)
-    here, plan = dict(task.get("start", {})), None
+    step_ids = [s.strip() for s in args.step.split(",") if s.strip()]
+    if not step_ids:
+        raise SystemExit("at least one --step id is required")
+    here, targets = dict(task.get("start", {})), {}
     for step in task["steps"]:
-        if step["id"] == args.step:
-            plan = step
-            break
+        if step["id"] in step_ids:
+            targets[step["id"]] = (step, dict(here))
         here[step["container"]] = step["to"]
-    if plan is None or plan["from"] == "belt":
-        raise SystemExit(f"{args.task}/{args.step}: not a step of the task, or a belt step (needs the belt feed)")
-    # shortcut: the gripper takes the sim wait opening, the real jaw unit is not mapped; upgrade when a jaw calibration exists
-    state = np.concatenate([np.append(norm_to_rad(meta["joints"][arm]), layout.arms[arm].wait[5]) for arm in sites.ARMS]).astype(np.float32)
-    teacher_t = teacher_first(world, here, plan)
-    data = teaching.Teacher(world, seed=0).fresh(here)
-    for k, arm in enumerate(sites.ARMS):
-        data.qpos[world.q[arm]] = state[6 * k:6 * k + 6]
-        data.qpos[world.mimic[arm]] = -state[6 * k + 5]
-    mujoco.mj_forward(world.model, data)
-    sim = {view: world.render(data, view, pol.SHAPE) for view in teaching.RECORDED}
-    real = {view: np.asarray(Image.open(snap / f"{REAL_VIEWS[view]}.jpg").convert("RGB").resize(pol.SHAPE[::-1])) for view in teaching.RECORDED}
-    goal = pol.goal_vector(layout, plan, {k: v for k, v in here.items() if k != plan["container"]}) if driver.has_goal else None
-    prompt = args.prompt or (skills.prompt(plan, args.skill) if args.skill else pol.PROMPT)
-    with driver.torch.inference_mode():
-        out = {}
-        for name, images in (("real", real), ("sim", sim)):
-            driver.policy.reset()
-            out[name] = driver.act(state, images, goal, prompt=prompt)
-    deg = lambda v: np.degrees(v).round(1).tolist()  # noqa: E731
-    names = [f"{arm}.{j}" for arm in sites.ARMS for j in (*REAL_JOINTS, "gripper")]
-    risks = shadow_risks(
-        plan["arm"], state, out["real"], out["sim"],
-        max_shadow_deg=args.max_shadow_deg, max_idle_deg=args.max_idle_deg,
-    )
-    result = dict(snapshot=str(snap), captured_at=meta["captured_at"], model=str(args.model), policy_type=driver.kind, prompt=prompt,
-                  task=args.task, step=args.step, arm=plan["arm"], joints=names,
-                  state_deg=deg(state), real_deg=deg(out["real"]), sim_deg=deg(out["sim"]), teacher_deg=deg(teacher_t),
-                  real_minus_sim_deg=deg(out["real"] - out["sim"]), real_minus_teacher_deg=deg(out["real"] - teacher_t), sim_minus_teacher_deg=deg(out["sim"] - teacher_t),
-                  max_abs_real_minus_sim_deg=float(np.degrees(np.abs(out["real"] - out["sim"]).max()).round(1)),
-                  image_mean_abs_diff={view: round(float(np.abs(real[view].astype(int) - sim[view].astype(int)).mean()), 1) for view in teaching.RECORDED},
-                  **risks,
-                  note="L2 shadow: no command reached an arm (D-793); sim scene is the task's nominal start, gripper from the sim wait pose")
+    missing = [sid for sid in step_ids if sid not in targets]
+    if missing:
+        raise SystemExit(f"{args.task}/{','.join(missing)}: not a step of the task")
+    real = {view: np.array(Image.open(snap / f"{REAL_VIEWS[view]}.jpg").convert("RGB").resize(pol.SHAPE[::-1]), copy=True)
+            for view in teaching.RECORDED}
     dest = Path(args.out)
     dest.mkdir(parents=True, exist_ok=True)
-    (dest / "shadow.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
-    Image.fromarray(np.vstack([pol.sheet(real), pol.sheet(sim)])).save(dest / "real-over-sim.png")
-    print(json.dumps(result))
-    return 0 if risks["l2_gate"]["passed"] else 2
+    ctx = dict(Image=Image, mujoco=mujoco, pol=pol, skills=skills, teaching=teaching)
+    if len(step_ids) == 1:
+        plan, step_here = targets[step_ids[0]]
+        result, sheet_img = _compare_one(driver, real, meta, plan, step_here, args, **ctx)
+        (dest / "shadow.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
+        sheet_img.save(dest / "real-over-sim.png")
+        print(json.dumps(result))
+        return 0 if result["l2_gate"]["passed"] else 2
+    results, reasons = [], []
+    for sid in step_ids:
+        plan, step_here = targets[sid]
+        result, sheet_img = _compare_one(driver, real, meta, plan, step_here, args, **ctx)
+        (dest / f"{sid}-shadow.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
+        sheet_img.save(dest / f"{sid}-real-over-sim.png")
+        results.append(result)
+        reasons.extend(f"{sid}: {r}" for r in result["l2_gate"]["reasons"])
+    summary = dict(snapshot=str(snap), captured_at=meta["captured_at"], model=str(args.model), policy_type=driver.kind,
+                   task=args.task, steps=results, l2_gate={"passed": not reasons, "reasons": reasons})
+    (dest / "shadow.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    print(json.dumps(summary))
+    return 0 if not reasons else 2
 
 
 def main(argv=None):

@@ -244,6 +244,10 @@ def choose(
                 )
                 continue
         region = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p)
+        if region and "radius_mm" not in region:
+            pivot = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p, pivot_only=True)
+            if pivot:
+                region = {**pivot, "bias_mm": region["bias_mm"], **({"kind": region["kind"]} if "kind" in region else {})}
         bias = region["bias_mm"] if region else [0.0, 0.0]
         held_axis = o["long_axis_deg"] - (yaw if yaw is not None else grasp_yaw(config, site, o, entry, offset))
         places, why = cell_place_fit.options(
