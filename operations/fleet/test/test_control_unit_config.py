@@ -69,3 +69,13 @@ def test_source_mutation_does_not_change_approved_scope():
     tree = load(document)
     document["units"][1]["resources"].append("robot:other")
     assert tree.unit("A").resources == frozenset({"robot:a"})
+
+
+def test_manifest_digest_ignores_order_but_not_content_under_the_same_revision():
+    base = load(topology())
+    reordered = topology()
+    reordered["units"].reverse()
+    assert load(reordered).digest == base.digest
+    changed = topology()
+    changed["units"][1]["resources"] = ["robot:a", "robot:a2"]  # revision string unchanged
+    assert load(changed).revision == base.revision and load(changed).digest != base.digest

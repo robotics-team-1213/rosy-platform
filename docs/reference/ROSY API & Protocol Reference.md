@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.402
+**Version:** v1.404
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -590,7 +590,7 @@ PRT-005 재전송은 원본 event_id·내용·seq를 유지하며 개별 EVENT �
 
 모든 경로는 `/api/fleet/control-unit` 아래다. `GET /overview`는 ControlOverview, `GET /units/{unit_id}`는 ControlUnitDetail, `GET /units/{unit_id}/map`은 ControlMapSnapshot을 반환한다. 로컬 viewer와 명시적으로 정보 공유를 허용받은 직계 부모 service만 자기 subtree를 읽는다. 부모 service의 전체 원장 조회·sibling/임의 URL 조회는 허용하지 않는다. `share_information_with_parent` 기본false, `accept_parent_stop` 기본false로 기존 자격의 권한을 자동 확대하지 않는다.
 
-ControlOverview는 `unit_id,config_revision,units`이며 unit 최대64개·중복 금지다. ControlUnitSummary는 `unit_id,parent,availability,sampled_at,age_s,robots_total,robots_online,tasks_active,map,dispatch,error,stop_pending`이다. availability는 AVAILABLE/STALE/UNAVAILABLE, age는 유한한 비음수 또는 null, timestamp는 timezone-aware다. stale 기준은5초이며 reported age에 수신 후 monotonic 경과를 반영한다. 연결 실패는 관제별 unavailable/stale로 유지한다. dispatch는 기존 authority_epoch/generation 두 정수만 담고 장치 권한·재무장을 부여하지 않는다.
+ControlOverview는 `unit_id,config_revision,manifest_digest,units`이며 unit 최대64개·중복 금지다. `manifest_digest`는 선택(없으면 null)인 정규화 manifest의 sha256 hex 64자로, 직계 자식이 보내면 부모가 자기 digest와 비교해 다르면 그 자식 subtree를 `CONTROL_UNIT_MANIFEST_MISMATCH`로 UNAVAILABLE 처리한다(같은 revision 문자열에 다른 manifest 방지). 필드를 모르는 옛 peer는 보내지 않으며 비교하지 않는다. ControlUnitSummary는 `unit_id,parent,availability,sampled_at,age_s,robots_total,robots_online,tasks_active,map,dispatch,error,stop_pending`이다. availability는 AVAILABLE/STALE/UNAVAILABLE, age는 유한한 비음수 또는 null, timestamp는 timezone-aware다. stale 기준은5초이며 reported age에 수신 후 monotonic 경과를 반영한다. 연결 실패는 관제별 unavailable/stale로 유지한다. dispatch는 기존 authority_epoch/generation 두 정수만 담고 장치 권한·재무장을 부여하지 않는다.
 
 ControlUnitDetail은 같은 owner/config/availability/time와 직접 `robots` 최대256개·`tasks` 최대100개·`tasks_truncated,map,dispatch`를 담는다. ControlRobotInfo는 robot_id/online/state_age_s/mode/battery_percent/estop/pose/evidence만 공유한다. evidence는 pose/battery/safety의 fresh/delayed/disconnected/unavailable/unknown이며 메시지 나이가 센서 신선도를 대신하지 않는다. 미관측/default 값을 실측으로 만들지 않는다. ControlRobotPose의 x/y/yaw는 유한 수치이고 map_id/source/frame(map/odom/unknown)을 보존한다. Task는 task_id/robot_id/status/aware updated_at만 공유하며 actor/request/evidence/reason·개인 Mission/Cell Job은 제외한다. overview/detail/stop snapshot은 유한 JSON128KiB 이하로 제한한다.
 
@@ -4823,6 +4823,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |
 | v1.402 | 2026-11-14 | Additive: Fleet 앞으로/뒤로 한 걸음(`POST /api/fleet/robots/{robot_id}/step`, CORE nudge 미션 재사용) |
 | v1.400 | 2026-11-14 | Additive: Fleet `POST /api/fleet/robots/{robot_id}/goal` `frame: "site"` — 콘솔 현장 지도 클릭을 기체 지도 프레임으로 바꿔 보낸다(D-1003), 증명 없으면 409 |
 | v1.399 | 2026-11-14 | Additive: trip lease `purpose: "charge_return"`(D-1029) — 복귀 중 0.10 m/s 상한, 진행 중 10 % 동작 미룸(5 % 그대로), `battery.critical_deferred` 사건 |

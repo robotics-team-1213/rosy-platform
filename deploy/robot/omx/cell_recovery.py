@@ -157,13 +157,15 @@ def main(argv=None) -> int:
     config, cell, calibration_path, work = open_cell(args, True)
     catalog = cell_objects.load_catalog(args.catalog)
     calibration = cell_pivot.with_site_maps(config, load_calibration(calibration_path))
-    # as run_auto does first: `pallet-l1` style destinations exist only after the tier expansion (2026-11-17 ValueError)
-    config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
-    site_of = {"pick": args.source, "place": auto.parse_dest(config, args.source, args.dest)[0]}
+    # `pallet-l1` style destinations exist only after the tier expansion (2026-11-17 ValueError). Only names and
+    # pixels use the tiered copy: the map binding digests the calibration's sites, so a tiered calibration read as
+    # "top camera calibration changed" and refused every live carry (2026-11-17); run_auto expands tiers itself.
+    tiered, tiered_cal = cell_place_fit.with_tiers(config, calibration, catalog)
+    site_of = {"pick": args.source, "place": auto.parse_dest(tiered, args.source, args.dest)[0]}
 
     def expected_px(attempt):
         plan = attempt.get("plan") or {}
-        points = [auto.predicted_pixel(config, calibration, site_of[k], (plan[k]["x"], plan[k]["y"])) for k in plan if k in site_of]
+        points = [auto.predicted_pixel(tiered, tiered_cal, site_of[k], (plan[k]["x"], plan[k]["y"])) for k in plan if k in site_of]
         return [p for p in points if p is not None]
 
     choices = cell_choices.Choices(work / "choices.json")  # one copy: run_auto's closing-axis records and these share the file
