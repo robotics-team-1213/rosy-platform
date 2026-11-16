@@ -157,7 +157,7 @@ def step(driver, teacher, data, plan, here, skill):
                 teacher.frame(data, {arm: target, **idle}, plan["id"])
                 target = next(gen)
         else:
-            goal = policy.goal_vector(L, plan, others) if getattr(driver, "has_goal", True) else None
+            goal = policy.goal_vector(L, plan, others, getattr(driver, "goal_mode", "joints")) if getattr(driver, "has_goal", True) else None
             said = prompt(plan, skill)
             driver.policy.reset()
             first_bad, last_cmd = None, None
@@ -291,7 +291,7 @@ def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
             return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""), dagger_status="blocked_skip")
         start_z = w.pose(data, c)[0][2]
         recorder.privileged, recorder.goal = False, None
-        goal_driver = policy.goal_vector(L, plan, others) if getattr(driver, "has_goal", True) else None
+        goal_driver = policy.goal_vector(L, plan, others, getattr(driver, "goal_mode", "joints")) if getattr(driver, "has_goal", True) else None
         said = prompt(plan, skill)
         driver.policy.reset()
         ze_obs, ze_bias = _policy_zero(recorder)
@@ -313,7 +313,7 @@ def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
             verdict = dict(row, result="fail", reason="prefix_invalid", dagger_prefix_frames=n_prefix)
             continue
         recorder.privileged = True
-        recorder.goal = True if recorder.no_goal else (goal_driver if goal_driver is not None else policy.goal_vector(L, plan, others))
+        recorder.goal = True if recorder.no_goal else (goal_driver if goal_driver is not None else policy.goal_vector(L, plan, others, recorder.goal_mode))
         recorder.prompt = said
         recorder.count, last_rec = 0, None
         for target in recovery_gen(recorder, data, plan, others, skill):

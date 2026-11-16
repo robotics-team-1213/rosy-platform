@@ -149,7 +149,7 @@ def _compare_one(driver, snap_real, meta, plan, here, args, *, Image, mujoco, po
         data.qpos[world.mimic[arm]] = -state[6 * k + 5]
     mujoco.mj_forward(world.model, data)
     sim = {view: world.render(data, view, pol.SHAPE) for view in teaching.RECORDED}
-    goal = pol.goal_vector(layout, plan, {k: v for k, v in here.items() if k != plan["container"]}) if driver.has_goal else None
+    goal = pol.goal_vector(layout, plan, {k: v for k, v in here.items() if k != plan["container"]}, getattr(driver, "goal_mode", "joints")) if driver.has_goal else None
     prompt = args.prompt or (skills.prompt(plan, args.skill) if args.skill else pol.PROMPT)
     with driver.torch.inference_mode():
         out = {}

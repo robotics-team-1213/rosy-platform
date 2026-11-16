@@ -483,3 +483,42 @@ def test_driver_concurrent_gates_on_sweeps_clear_and_resets_policy_on_step_chang
     assert len(sweep_checks) >= 2 and len(resets) >= 3
 
 
+
+def test_site_goal_names_the_source_and_target_an_admitted_job_carries():
+    """2026-11-17 panel: `--goal site` tells ACT which container (source site) and where (target site) without the IK joints."""
+    layout = sites.Layout()
+    names, size = helpers.site_names(layout), helpers.goal_size(layout, "site")
+    assert size == 2 * (1 + 2 * len(names))
+    task = tasks.get_task(layout, "cell-stack")
+    here, seen = dict(task.get("start", {})), set()
+    for step in task["steps"]:
+        goal = policy.goal_vector(layout, step, here, "site")
+        half = size // 2
+        mine, other = (goal[:half], goal[half:]) if step["arm"] == "arm_a" else (goal[half:], goal[:half])
+        assert goal.shape == (size,) and not other.any() and mine.sum() == 3 and mine[0] == 1
+        assert mine[1 + names.index(step["from"])] == 1 and mine[1 + len(names) + names.index(step["to"])] == 1
+        seen.add(goal.tobytes())
+        here[step["container"]] = step["to"]
+    assert len(seen) == len(task["steps"])  # cell-stack picks among standing containers: each step is told apart
+    with pytest.raises(ValueError, match="goal mode"):
+        helpers.goal_block(layout, task["steps"][0], here, "metres")
+
+
+def test_driver_reads_the_goal_mode_from_the_checkpoint_width(monkeypatch, tmp_path):
+    layout = sites.Layout()
+    width = helpers.goal_size(layout, "site")
+    feature = types.SimpleNamespace(shape=(width,))
+    model_dir, steps_file, seen = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": {}, policy.GOAL: feature})
+    steps_file.write_text(json.dumps({"longest": {}, "goal_mode": "site", "goal_sites": helpers.site_names(layout)}), encoding="utf-8")
+    assert policy.Driver(model_dir, steps_file).goal_mode == "site"
+    steps_file.write_text(json.dumps({"longest": {}, "goal_sites": ["belt"]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="sites"):
+        policy.Driver(model_dir, steps_file)
+    feature.shape = (policy.GOAL_SIZE,)
+    steps_file.write_text(json.dumps({"longest": {}}), encoding="utf-8")
+    assert policy.Driver(model_dir, steps_file).goal_mode == "joints"
+
+
+def test_collect_refuses_site_goal_with_no_goal():
+    with pytest.raises(ValueError, match="--goal"):
+        helpers.collect([1], ["stack"], "unused", no_goal=True, goal_mode="site")
