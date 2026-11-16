@@ -113,6 +113,8 @@ DEFAULTS = {
     "verify.bias_sigma_max_mm": (3.0, "mm", 0.5, 20), "verify.place_sigma_mm": (3.0, "mm", 0.5, 15),
     "verify.nis_alarm": (9.21, "chi2", 3.0, 30.0), "verify.cusum_k_sigma": (1.0, "sigma", 0.1, 3.0),
     "verify.cusum_h_sigma": (5.0, "sigma", 1.0, 20.0), "verify.cusum_min_n": (15, "count", 5, 50),
+    "post.tol_mm": (5.0, "mm", 1.0, 20.0), "post.max_age_s": (86400.0, "s", 60.0, 604800.0),
+    "post.finger_tol_mm": (6.0, "mm", 1.0, 20.0), "post.yaw_pair_tol_deg": (15.0, "deg", 1.0, 45.0),
 }
 
 

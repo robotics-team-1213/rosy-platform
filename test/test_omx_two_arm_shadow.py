@@ -134,3 +134,16 @@ def test_compare_supports_belt_steps_without_blocking(monkeypatch, tmp_path):
     rc = shadow.main(["compare", "--model", "m", "--steps-file", "s", "--snapshot", str(snap),
                       "--task", "stack", "--step", "s1", "--skill", "grasp", "--out", str(tmp_path / "out")])
     assert rc == 0 and belt_calls == ["s1"]
+
+    rc_multi = shadow.main(["compare", "--model", "m", "--steps-file", "s", "--snapshot", str(snap),
+                            "--task", "stack", "--step", "s1,s2", "--skill", "grasp",
+                            "--max-shadow-deg", "5.0", "--out", str(tmp_path / "out_multi")])
+    assert rc_multi == 0 and belt_calls == ["s1", "s1", "s2"]
+    summary = json.loads((tmp_path / "out_multi" / "shadow.json").read_text(encoding="utf-8"))
+    assert [r["step"] for r in summary["steps"]] == ["s1", "s2"] and summary["l2_gate"]["passed"] is True
+    assert summary["ranked_steps"] == ["s1", "s2"]
+    assert (tmp_path / "out_multi" / "s1-shadow.json").is_file() and (tmp_path / "out_multi" / "s2-shadow.json").is_file()
+
+    rc_all = shadow.main(["compare", "--model", "m", "--steps-file", "s", "--snapshot", str(snap),
+                          "--task", "stack", "--step", "all", "--skill", "grasp", "--out", str(tmp_path / "out_all")])
+    assert rc_all == 0 and len(json.loads((tmp_path / "out_all" / "shadow.json").read_text(encoding="utf-8"))["ranked_steps"]) == 9

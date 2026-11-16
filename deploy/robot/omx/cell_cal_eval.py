@@ -26,6 +26,7 @@ import cell_depth  # noqa: E402
 import cell_map_fit  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
+import cell_post_eval  # noqa: E402
 import omx_tcp  # noqa: E402
 
 SCHEMA = "rosy.omx-cal-eval.v1"
@@ -182,7 +183,8 @@ def attach_site_cross_verify(name: str, is_extra: bool, surface_z, dv_site: dict
 
 
 def build_cross_verify(sites_out: dict[str, dict[str, Any]], depth_verify: dict | None, regions_out: list[dict],
-                       live_info: dict, bind_err: str | None, *, params=None, drift: dict | None = None) -> dict[str, Any]:
+                       live_info: dict, bind_err: str | None, *, params=None, drift: dict | None = None,
+                       lateral: dict[str, Any] | None = None) -> dict[str, Any]:
     t_lim = float(prm.get(params, "verify.touch_diff_mm"))
     loo_limit = float(prm.get(params, "calibrate.max_loo_mm"))
     bias_sig_lim = float(prm.get(params, "verify.bias_sigma_max_mm"))
@@ -209,13 +211,16 @@ def build_cross_verify(sites_out: dict[str, dict[str, Any]], depth_verify: dict 
     fk_v = "pass" if fk_fresh else ("warn" if live_info.get("present") else "unmeasured")
     sub = (depth_v, touch_v, map_v)
     drift_alarm = bool((drift or {}).get("alarmed_sites"))
-    overall = "fail" if ("fail" in sub or bias_v == "fail") else ("warn" if ("warn" in (*sub, bias_v) or drift_alarm) else ("pass" if (any_depth or touch_count) else "unmeasured"))
-    eval_v = "hold" if overall == "fail" else ("unknown" if overall == "unmeasured" else ("advisory" if (overall == "warn" or drift_alarm or bias_sig_warn or bias_v == "unmeasured") else "pass"))
+    lat = lateral if lateral is not None else dict((depth_verify or {}).get("lateral_xy") or {})
+    lat_v = lat.get("verdict")
+    overall = "fail" if ("fail" in sub or bias_v == "fail" or lat_v == "fail") else ("warn" if ("warn" in (*sub, bias_v) or drift_alarm or lat_v == "advisory") else ("pass" if (any_depth or touch_count) else "unmeasured"))
+    eval_v = "hold" if overall == "fail" else ("unknown" if overall == "unmeasured" else ("advisory" if (overall == "warn" or drift_alarm or bias_sig_warn or bias_v == "unmeasured" or lat_v == "advisory") else "pass"))
     cam_top = dict((depth_verify or {}).get("camera_top") or {})
     return {
         "schema": SCHEMA, "present": bool(depth_verify or touch_count or (depth_verify or {}).get("sites")),
         "depth_verify_present": bool(depth_verify), "measured": (depth_verify or {}).get("measured"),
-        "verdict": overall, "eval_verdict": eval_v, "lateral_xy_verified": False,
+        "verdict": overall, "eval_verdict": eval_v, "lateral_xy_verified": bool(lat.get("lateral_xy_verified", False)),
+        **({"lateral_xy": lat} if lat else {}),
         "depth": {"verdict": depth_v, **cam_top},
         "touch": {"verdict": touch_v, "sites_measured": touch_count, "max_diff_mm": round(max(touch_diffs), 1) if touch_diffs else None},
         "map": {"verdict": map_v, "max_loo_mm": max_loo, "map_bound": not bind_err},
@@ -249,8 +254,6 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
     cam_report: dict = dict.fromkeys(("cam_to_table_mm", "height_diff_mm", "plate_mm", "cam_to_plate_mm",
                                       "align_scale", "align_shift", "align_edge_px"))
     cam_report["config_height_m"] = cfg_height_m
-    cam_report["lateral_xy_verified"] = False
-
     heights = to_depth = plate_mm = None
     if depth is not None and colour is not None:
         plane = cell_depth.table_plane(depth)
@@ -343,14 +346,16 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
                 fk_report["tcp"] = None
 
     drift = cell_cal_monitor.summarize(config, calibration) if calibration else {"sites": {}, "alarmed_sites": [], "pattern": "none", "suggested_advisory": []}
+    lateral = cell_post_eval.lateral_summary(config, with_maps, now_ts=now) if calibration else {"lateral_xy_verified": False, "verdict": "unmeasured", "sites": {}, "visit_count": 0}
+    cam_report["lateral_xy_verified"] = bool(lateral["lateral_xy_verified"])
     crit_tags = ("depth_diff_gt_6mm", "touch_diff_gt_5mm", "place_vs_start_step_gt_8mm", "stale_bias", "high_loo")
-    verdict = "fail" if any(any(tag in fl for tag in crit_tags) for fl in flags) else ("warn" if (flags or not sites_report) else "pass")
-    eval_verdict = "hold" if verdict == "fail" else ("advisory" if (drift["alarmed_sites"] or (verdict == "warn" and flags != ["missing_depth"])) else ("unknown" if flags == ["missing_depth"] else "pass"))
+    verdict = "fail" if (any(any(tag in fl for tag in crit_tags) for fl in flags) or lateral.get("verdict") == "fail") else ("warn" if (flags or not sites_report or lateral.get("verdict") == "advisory") else "pass")
+    eval_verdict = "hold" if verdict == "fail" else ("advisory" if (drift["alarmed_sites"] or lateral.get("verdict") == "advisory" or (verdict == "warn" and flags != ["missing_depth"])) else ("unknown" if flags == ["missing_depth"] else "pass"))
     return {
         "schema": LEGACY_DEPTH_SCHEMA, "eval_schema": SCHEMA, "arm_id": config.get("arm_id"),
         "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "verdict": verdict, "eval_verdict": eval_verdict, "ok": verdict == "pass", "flags": flags,
-        "camera_top": cam_report, "sites": sites_report, "live_fk": fk_report, "drift": drift,
+        "camera_top": cam_report, "sites": sites_report, "live_fk": fk_report, "drift": drift, "lateral_xy": lateral,
     }
 
 
@@ -371,23 +376,20 @@ def verify_main(argv: list[str], capture_fn=None) -> int:
     dev = str(cam_top.get("device") or "").lower()
     url = str(cam_top.get("url") or "")
     has_depth = cam_top.get("has_depth") is not False and (
-        bool(cam_top.get("depth_device"))
-        or ((not dev or "d435" in dev or "depth" in dev) and not url.lower().endswith("/arm_s_top.jpg"))
+        bool(cam_top.get("depth_device")) or ((not dev or "d435" in dev or "depth" in dev) and not url.lower().endswith("/arm_s_top.jpg"))
     )
     cap = capture_fn or cell_depth.capture_top_depth_z16
     depth = np.fromfile(args.depth, np.uint16).reshape(480, 640) if args.depth else (cap() if (args.capture and has_depth) else None)
-    colour = cv2.imread(str(args.colour)) if args.colour else None
-    if colour is None and args.capture and url:
-        colour = fetch_colour_frame(url)
+    colour = cv2.imread(str(args.colour)) if args.colour else (fetch_colour_frame(url) if (args.capture and url) else None)
     report = verify_profile_depth(config, cal_data, bias, depth=depth, colour=colour)
     if args.capture and not args.depth and not has_depth:
         report["camera_top"]["depth_capture_skipped"] = "rgb_only_top_camera"
     if args.write and config.get("work_dir"):
         work = Path(config["work_dir"]).expanduser()
         work.mkdir(parents=True, exist_ok=True)
-        tmp, out = work / "depth-verify.tmp", work / "depth-verify.json"
+        tmp = work / "depth-verify.tmp"
         tmp.write_text(json.dumps(report, indent=1), encoding="utf-8")
-        tmp.replace(out)
+        tmp.replace(work / "depth-verify.json")
     print(json.dumps(report, indent=1))
     return 0
 

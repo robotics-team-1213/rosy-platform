@@ -201,7 +201,9 @@ def run_round(args):
                   skill=args.skill, zero_error_deg=args.zero_error_deg, servo_lag=args.servo_lag, physics_ranges=args.physics_ranges,
                   pick_vision=bool(getattr(args, "pick_vision", False)), belt_skew=bool(getattr(args, "belt_skew", False)),
                   cam_jitter=bool(getattr(args, "cam_jitter", False)), compensate_zero=bool(getattr(args, "compensate_zero", False)),
-                  no_goal=bool(getattr(args, "no_goal", False)))
+                  no_goal=bool(getattr(args, "no_goal", False)),
+                  dagger_model=getattr(args, "dagger_model", None), dagger_only=bool(getattr(args, "dagger_only", False)),
+                  extra_datasets=list(getattr(args, "extra_dataset", None) or []))
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
                   tasks=names, seeds=args.seeds, recipe=recipe, choices=parsed_choices, claim="기하: 도달·순서·충돌(D-947). 실물 근거가 아닙니다.")
     write_record(run, record)
@@ -211,6 +213,15 @@ def run_round(args):
     skilled = [*skills.argv(args), *(["--pick-vision"] if getattr(args, "pick_vision", False) else []),
                *(["--belt-skew"] if getattr(args, "belt_skew", False) else [])]
     no_goal = ["--no-goal"] if getattr(args, "no_goal", False) else []
+    eval_accel = [*(["--n-action-steps", str(args.n_action_steps)] if getattr(args, "n_action_steps", None) is not None else []),
+                  *(["--flow-steps", str(args.flow_steps)] if getattr(args, "flow_steps", None) is not None else []),
+                  *(["--amp"] if getattr(args, "amp", False) else [])]
+    dagger = [*(["--dagger-model", args.dagger_model, "--dagger-prefix-frames", str(args.dagger_prefix_frames)] if getattr(args, "dagger_model", None) else []),
+              *(["--steps-file", args.steps_file] if getattr(args, "steps_file", None) else []),
+              *(["--dagger-only"] if getattr(args, "dagger_only", False) else []),
+              *(["--dagger-device", args.dagger_device] if getattr(args, "dagger_device", None) else []),
+              *(["--dagger-steps", args.dagger_steps] if getattr(args, "dagger_steps", None) else []),
+              *(eval_accel if getattr(args, "dagger_model", None) else [])]
     try:
         plan = []
         if args.mode == "concurrent":
@@ -219,25 +230,32 @@ def run_round(args):
                            env=dict(environment, PYTHONIOENCODING="utf-8"), stdout=log, stderr=subprocess.STDOUT, check=True)
             plan = ["--plan-dir", str(run / "plan")]
         parts = [(run / f"part{k}", list(range(TRAIN_SEED_BASE + k, TRAIN_SEED_BASE + args.seeds, args.workers))) for k in range(min(args.workers, args.seeds))]
-        running = [subprocess.Popen([args.python, me, "collect", "--seeds", ",".join(map(str, seeds)), "--tasks", args.tasks, "--out", str(part), *plan, *chosen, *skilled, *no_goal],
+        running = [subprocess.Popen([args.python, me, "collect", "--seeds", ",".join(map(str, seeds)), "--tasks", args.tasks, "--out", str(part), *plan, *chosen, *skilled, *no_goal, *dagger],
                                     env=dict(environment, OMP_NUM_THREADS="1"), stdout=log, stderr=subprocess.STDOUT) for part, seeds in parts]
         if any(worker.wait() for worker in running):
             raise RuntimeError("collect")
-        longest, spoiled = {}, []
+        longest, spoiled, dagger_totals, part_roots = {}, [], {}, []
         for part, _ in parts:
             found = json.loads((run / f"{part.name}.steps.json").read_text(encoding="utf-8"))
             spoiled += found["spoiled"]
+            for k, v in (found.get("dagger") or {}).items():
+                dagger_totals[k] = dagger_totals.get(k, 0) + v
+            if found.get("episodes", 1) != 0:
+                part_roots.append(part)
             for key, value in found["longest"].items():
                 longest[key] = {k: max(v, longest.get(key, {}).get(k, 0)) for k, v in value.items()} if isinstance(value, dict) else max(longest.get(key, 0), value)
-        (run / "steps.json").write_text(json.dumps(dict(longest=longest, spoiled=spoiled)), encoding="utf-8")
+        (run / "steps.json").write_text(json.dumps(dict(longest=longest, spoiled=spoiled, **({"dagger": dagger_totals} if dagger_totals else {}))), encoding="utf-8")
+        roots = part_roots + [Path(p) for p in (getattr(args, "extra_dataset", None) or [])]
+        if not roots:
+            raise RuntimeError("collect produced 0 episodes")
         subprocess.run([args.python, "-c", "import sys; from pathlib import Path; from lerobot.datasets.aggregate import aggregate_datasets as a; p=[Path(x) for x in sys.argv[2:]]; "
-                        "a([f'rosy/part{i}' for i in range(len(p))], 'rosy/omx-two-arm', roots=p, aggr_root=Path(sys.argv[1]))", str(run / "dataset"), *[str(part) for part, _ in parts]],
+                        "a([f'rosy/part{i}' for i in range(len(p))], 'rosy/omx-two-arm', roots=p, aggr_root=Path(sys.argv[1]))", str(run / "dataset"), *map(str, roots)],
                        env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
         info = json.loads((run / "dataset/meta/info.json").read_text(encoding="utf-8"))
         for part, _ in parts:
-            shutil.rmtree(part)
+            shutil.rmtree(part, ignore_errors=True)
         gpu_yield.yield_turn(say=functools.partial(print, file=log))
-        record.update(stage="train", data=dict(episodes=info["total_episodes"], frames=info["total_frames"], spoiled_runs=spoiled))
+        record.update(stage="train", data=dict(episodes=info["total_episodes"], frames=info["total_frames"], spoiled_runs=spoiled, **({"dagger": dagger_totals} if dagger_totals else {})))
         write_record(run, record)
         common = [f"--batch_size={recipe['batch_size']}", f"--steps={recipe['steps']}", f"--save_freq={max(500, recipe['steps'] // 20)}", "--log_freq=500",
                   f"--num_workers={args.train_workers}", "--wandb.enable=false", f"--output_dir={run / 'train'}",
@@ -251,8 +269,9 @@ def run_round(args):
             command = [args.lerobot_train, f"--config_path={run / 'train-config.json'}", *dataset, *common]
             environment.update(HF_HUB_OFFLINE="1", HF_DATASETS_OFFLINE="1")
         else:
+            pretrained = [f"--policy.pretrained_path={args.base_model}"] if args.base_model else []
             command = [args.lerobot_train, *dataset, "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}",
-                       f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}", "--job_name=omx-two-arm", *common]
+                       f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}", "--job_name=omx-two-arm", *pretrained, *common]
         log.flush()
         train(command, run / "train", args.lerobot_train, log, environment, vram_mb=VRAM_MB[args.policy])
         record.update(stage="evaluate")
@@ -295,16 +314,21 @@ def run_round(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
+    accel_opts = (("--n-action-steps", dict(type=int)), ("--flow-steps", dict(type=int)), ("--amp", dict(action="store_true")))
+    dagger_opts = (("--dagger-model", dict(help="checkpoint to roll out and harvest Teacher recoveries from failures")),
+                   ("--steps-file", dict(help="steps.json matching --dagger-model (auto-found in ancestors if omitted)")),
+                   ("--dagger-prefix-frames", dict(default="auto")), ("--dagger-only", dict(action="store_true")),
+                   ("--dagger-device", dict(choices=("cpu", "cuda"))), ("--dagger-steps", dict(help="comma-separated step IDs to target")))
     one = commands.add_parser("collect")
     for flag, kw in (("--seeds", dict(required=True)), ("--tasks", dict(default=",".join(TASKS))), ("--out", dict(required=True)),
-                     ("--plan-dir", dict(help="two-arm plans")), ("--choice", dict(action="append")), ("--no-goal", dict(action="store_true"))):
+                     ("--plan-dir", dict(help="two-arm plans")), ("--choice", dict(action="append")), ("--no-goal", dict(action="store_true")),
+                     *accel_opts, *dagger_opts):
         one.add_argument(flag, **kw)
     skills.options(one)
     for name in ("evaluate", "round"):
         one = commands.add_parser(name)
         for flag, kw in (("--tasks", dict(default=",".join(TASKS))), ("--isolated-seeds", dict(type=int, default=3)),
-                         ("--whole-seeds", dict(type=int, default=3)), ("--choice", dict(action="append")),
-                         ("--n-action-steps", dict(type=int)), ("--flow-steps", dict(type=int)), ("--amp", dict(action="store_true"))):
+                         ("--whole-seeds", dict(type=int, default=3)), ("--choice", dict(action="append")), *accel_opts):
             one.add_argument(flag, **kw)
         skills.options(one)
         if name == "evaluate":
@@ -314,6 +338,9 @@ def main(argv=None):
                 one.add_argument(flag, **kw)
         else:
             one.add_argument("--no-goal", action="store_true")
+            one.add_argument("--extra-dataset", action="append")
+            for flag, kw in dagger_opts:
+                one.add_argument(flag, **kw)
     for flag, kw in (("--root", dict(required=True)), ("--python", dict(default=sys.executable)), ("--lerobot-train", dict(required=True)),
                      ("--source-sha", dict()), ("--seeds", dict(type=int, default=30)), ("--workers", dict(type=int, default=6)),
                      ("--train-workers", dict(type=int, default=8)), ("--steps", dict(type=int, default=60000)),
@@ -325,7 +352,11 @@ def main(argv=None):
     if args.command == "collect":
         return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir, sites.parse_choices(args.choice),
                        args.skill, args.zero_error_deg, args.servo_lag, args.physics_ranges,
-                       pick_vision=args.pick_vision, belt_skew=args.belt_skew, cam_jitter=args.cam_jitter, no_goal=args.no_goal)
+                       pick_vision=args.pick_vision, belt_skew=args.belt_skew, cam_jitter=args.cam_jitter,
+                       compensate_zero=args.compensate_zero, no_goal=args.no_goal,
+                       dagger_model=args.dagger_model, steps_file=args.steps_file, dagger_prefix_frames=args.dagger_prefix_frames,
+                       dagger_only=args.dagger_only, dagger_device=args.dagger_device, dagger_steps=args.dagger_steps,
+                       n_action_steps=args.n_action_steps, flow_steps=args.flow_steps, use_amp=True if args.amp else None)
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 
 

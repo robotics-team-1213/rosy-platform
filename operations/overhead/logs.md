@@ -600,3 +600,9 @@
   `ConnectError`(pairing sync·tracking config)은 기존 주기 재시도로 자가 회복되는 그대로다.
 - 증거: 원격 시험으로 확인 뒤 갱신(시험 전 착지 없음).
 - gate 변화: 없음.
+
+## 2026-11-16 · uncommitted · fix(vision): world_261026 자동 보정 천장 조명 반사·충전소 가림 시드 보강 및 1칸 밀림 차단
+
+- 변경: `rosy_vision/world_261026_auto.py` — 천장 형광등 반사로 분홍 충전칸 상단(`bay 3`)이 분리될 때 `pink_main`으로 병합하고, C1·C2 충전소 거치대 및 S1 대기 로봇 가림에도 흔들리지 않는 2D 랜드마크 시드와 외곽 분홍칸(`pts_pb1`·`pts_pb3`) 지지 게이트를 적용해 1칸 밀림(bay aliasing) 국소해를 차단했다.
+- 증거: `test/test_auto_track_calibration.py` 및 `ceiling_north` 실영상 검증(`rms_m = 0.00288`).
+- gate 변화: 없음.

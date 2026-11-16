@@ -236,6 +236,8 @@ function renderInspector() {
   if (Number.isFinite(d.err_dist_mm)) addDtDd(dl, "Dropped 오차", `${d.err_dist_mm} mm (${d.err_px || "?"} px)`);
   if (d.bias_mm) {
     addDtDd(dl, "Bias (map−FK)", `[${d.bias_mm[0]}, ${d.bias_mm[1]}] mm (RMS ${d.rms_mm ?? "?"} mm)`);
+    const sigTxt = Number.isFinite(d.bias_sigma_mm) ? ` · 1σ ±${d.bias_sigma_mm} mm` : "";
+    addDtDd(dl, "Fit / Region", `${d.fit_model || "-"} · radius=${d.radius_mm ?? "-"} mm${sigTxt}`);
     const cnt = d.n ?? d.samples ?? "?";
     addDtDd(dl, "Sample / Map SHA", `${cnt}회 / ${d.map_sha || "-"} (${d.stale_map ? "stale" : "fresh"})`);
   }
@@ -301,6 +303,12 @@ function renderRobotAndBias(profile) {
   setCv("cvTouchTag", "Touch", cv.touch?.verdict, tInfo);
   const mInfo = Number.isFinite(cv.map?.max_loo_mm) ? ` (${cv.map.max_loo_mm}mm)` : "";
   setCv("cvMapTag", "Map", cv.map?.verdict, mInfo);
+  const lat = cv.lateral_xy || {};
+  const xyVerdict = lat.verdict || (cv.lateral_xy_verified === true ? "pass" : "unknown");
+  const maxLatMm = Object.values(lat.sites || {}).reduce(
+    (acc, s) => (Number.isFinite(s?.residual_mag_mm) ? Math.max(acc, s.residual_mag_mm) : acc), -1,
+  );
+  setCv("cvXyTag", "XY", xyVerdict, maxLatMm >= 0 ? ` (max ${maxLatMm}mm)` : "");
   const fInfo = Number.isFinite(cv.fk?.tcp_z_m) ? ` (z=${cv.fk.tcp_z_m}m)` : "";
   setCv("cvFkTag", "FK", cv.fk?.verdict, fInfo);
   const driftAlarm = (drift.alarmed_sites || []).length;
@@ -311,7 +319,7 @@ function renderRobotAndBias(profile) {
   if (Number.isFinite(dCam.cam_to_table_mm)) parts.push(`cam→table=${dCam.cam_to_table_mm}mm (cfg ${dCam.config_height_m ?? "-"}m)`);
   if (Number.isFinite(dCam.cam_to_plate_mm)) parts.push(`cam→plate=${dCam.cam_to_plate_mm}mm`);
   else if (Number.isFinite(dCam.plate_mm)) parts.push(`plate=${dCam.plate_mm}mm`);
-  if (dCam.lateral_xy_verified === false) parts.push("XY미검증");
+  if (!cv.lateral_xy_verified) parts.push(xyVerdict === "unmeasured" || xyVerdict === "unknown" ? "XY미검증" : `XY=${xyVerdict}`);
   if ((drift.suggested_advisory || []).length) parts.push(`권고: ${drift.suggested_advisory.join(", ")}`);
   if (cv.measured) parts.push(`verify ${cv.measured}`);
   $("crossVerifyMeta").textContent = parts.length ? parts.join(" · ") : "depth-verify.json 없음 (surface-*.json / Map / FK만 표시)";
@@ -329,7 +337,8 @@ function renderRobotAndBias(profile) {
   const { tbl, tbody } = makeTable(["Site", "Bias (dx, dy mm)", "RMS", "Samples", "Map SHA"]);
   for (const r of regions) {
     const tr = document.createElement("tr");
-    const cells = [r.site || "-", `${r.bias_mm[0]}, ${r.bias_mm[1]}`, `${r.rms_mm ?? "-"}`, `${r.n ?? r.samples ?? "-"}`];
+    const siteTxt = r.kind && r.kind !== "pivot" ? `${r.site || "-"} (${r.kind})` : (r.site || "-");
+    const cells = [siteTxt, `${r.bias_mm[0]}, ${r.bias_mm[1]}`, `${r.rms_mm ?? "-"}`, `${r.n ?? r.samples ?? "-"}`];
     for (const val of cells) {
       const td = document.createElement("td");
       td.textContent = val;
@@ -378,28 +387,18 @@ function renderSitesTable(profile) {
     const looTxt = (Number.isFinite(lmax) ? `${lmax.toFixed(1)}mm` : "-") + (Number.isFinite(sigmaMax) ? ` · ±${sigmaMax.toFixed(1)}` : "");
     const alarmed = (profile.drift?.alarmed_sites || []).includes(name);
 
-    const tdName = document.createElement("td");
-    tdName.textContent = name;
+    const tdName = document.createElement("td"); tdName.textContent = name;
     if (s.extra) tdName.setAttribute("data-level", "warn");
-    const tdZ = document.createElement("td");
-    tdZ.textContent = zTxt;
-    const tdDepth = document.createElement("td");
-    tdDepth.textContent = depthTxt;
-    if ((Number.isFinite(s.depth_diff_mm) && Math.abs(s.depth_diff_mm) > 6) || (Number.isFinite(s.place_vs_start_step_mm) && Math.abs(s.place_vs_start_step_mm) > 8)) {
-      tdDepth.setAttribute("data-level", "warn");
-    } else if (Number.isFinite(s.depth_diff_mm)) {
-      tdDepth.setAttribute("data-level", "ok");
-    }
-    const tdTouch = document.createElement("td");
-    tdTouch.textContent = touchTxt;
+    const tdZ = document.createElement("td"); tdZ.textContent = zTxt;
+    const tdDepth = document.createElement("td"); tdDepth.textContent = depthTxt;
+    if ((Number.isFinite(s.depth_diff_mm) && Math.abs(s.depth_diff_mm) > 6) || (Number.isFinite(s.place_vs_start_step_mm) && Math.abs(s.place_vs_start_step_mm) > 8)) tdDepth.setAttribute("data-level", "warn");
+    else if (Number.isFinite(s.depth_diff_mm)) tdDepth.setAttribute("data-level", "ok");
+    const tdTouch = document.createElement("td"); tdTouch.textContent = touchTxt;
     if (Number.isFinite(s.touch_diff_mm) && Math.abs(s.touch_diff_mm) > 5) tdTouch.setAttribute("data-level", "error");
     else if (Number.isFinite(s.touch_diff_mm)) tdTouch.setAttribute("data-level", "ok");
-    const tdSrc = document.createElement("td");
-    tdSrc.textContent = srcTxt;
-    const tdPts = document.createElement("td");
-    tdPts.textContent = ptsTxt;
-    const tdLoo = document.createElement("td");
-    tdLoo.textContent = looTxt;
+    const tdSrc = document.createElement("td"); tdSrc.textContent = srcTxt;
+    const tdPts = document.createElement("td"); tdPts.textContent = ptsTxt;
+    const tdLoo = document.createElement("td"); tdLoo.textContent = looTxt;
     if (Number.isFinite(lmax) && lmax > 15) tdLoo.setAttribute("data-level", "error");
     else if (Number.isFinite(lmax) && lmax > 5) tdLoo.setAttribute("data-level", "warn");
     const tdNote = document.createElement("td");
@@ -408,10 +407,7 @@ function renderSitesTable(profile) {
     if (alarmed) tdNote.setAttribute("data-level", "warn");
 
     tr.append(tdName, tdZ, tdDepth, tdTouch, tdSrc, tdPts, tdLoo, tdNote);
-    tr.addEventListener("click", () => {
-      state.siteName = name;
-      renderAll();
-    });
+    tr.addEventListener("click", () => { state.siteName = name; renderAll(); });
     tbody.appendChild(tr);
   }
   wrap.appendChild(tbl);
@@ -435,22 +431,14 @@ function renderCanvases() {
 
   const img = loadFrameImage(profile.id, state.frameSource);
   const topRes = renderTopView($("topCanvas"), {
-    profile,
-    siteName: state.siteName,
-    image: img,
-    layers: state.layers,
-    zPlane: state.zPlane,
-    errorScale: state.errorScale,
-    selectedKey: state.selectedKey,
+    profile, siteName: state.siteName, image: img, layers: state.layers,
+    zPlane: state.zPlane, errorScale: state.errorScale, selectedKey: state.selectedKey,
   });
   state.lastTopHitTargets = topRes?.hitTargets || [];
 
   const armRes = renderArmGrid($("armCanvas"), {
-    profile,
-    siteName: state.siteName,
-    layers: state.layers,
-    errorScale: state.errorScale,
-    selectedKey: state.selectedKey,
+    profile, siteName: state.siteName, layers: state.layers,
+    errorScale: state.errorScale, selectedKey: state.selectedKey,
   });
   state.lastArmHitTargets = armRes?.hitTargets || [];
 }

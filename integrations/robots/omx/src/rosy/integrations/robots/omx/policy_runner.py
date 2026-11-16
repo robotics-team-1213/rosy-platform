@@ -103,6 +103,17 @@ class LeRobotAdapter:
         if self._device.type == 'cuda':
             self._torch.cuda.synchronize(self._device)  # Stage times must include the GPU work, not only its launch.
 
+    def _prepare_frame(self, frame, task):
+        if getattr(self._prepare, '__module__', '') == 'lerobot.policies.utils' and hasattr(self._torch, 'from_numpy'):
+            import numpy as np
+            torch, dev, out = self._torch, self._device, {'task': task or '', 'robot_type': ''}
+            for name, val in frame.items():
+                arr = val if getattr(getattr(val, 'flags', None), 'writeable', True) else np.array(val, copy=True)
+                t = torch.from_numpy(arr).unsqueeze(0).to(dev)
+                out[name] = t.permute(0, 3, 1, 2).contiguous().to(dtype=torch.float32).div_(255.0) if 'image' in name else t
+            return out
+        return self._prepare(frame, self._device, task, None)
+
     def preprocess(self, observation, task):
         """observation: {'positions': [...], 'images': {name: HWC uint8}}; same steps as lerobot predict_action."""
         import numpy as np
@@ -112,7 +123,7 @@ class LeRobotAdapter:
             frame['observation.environment_state'] = np.asarray(observation['environment_state'], dtype=np.float32)
         mode, amp = self._context()
         with mode, amp:
-            batch = self.pre(self._prepare(frame, self._device, task, None))
+            batch = self.pre(self._prepare_frame(frame, task))
         self._sync()
         return batch
 

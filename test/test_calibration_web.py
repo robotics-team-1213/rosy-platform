@@ -296,7 +296,7 @@ def test_cross_verify_merges_depth_verify_and_touch_receipts_into_profile_snapsh
     try:
         _, html = call(url, "/")
         html_txt = html.decode("utf-8")
-        assert "교차 검증 (Eval · Depth · Touch · Map · FK · Drift)" in html_txt and "cvDepthTag" in html_txt and "cvEvalTag" in html_txt and "cvDriftTag" in html_txt
+        assert "교차 검증 (Eval · Depth · Touch · Map · XY · FK · Drift)" in html_txt and "cvDepthTag" in html_txt and "cvEvalTag" in html_txt and "cvXyTag" in html_txt and "cvDriftTag" in html_txt
         status, body = call(url, web.PROFILES_API)
         assert status == 200
         prof = json.loads(body)["profiles"][0]
@@ -338,4 +338,6 @@ def test_cell_calibration_view_bundle_flags_over_limit_bias_and_ssrf_urls(tmp_pa
     assert prof["cross_verify"]["eval_verdict"] == "hold"
     assert any(h["code"] == "bias_over_limit:pinky" for h in prof["hygiene"])
     assert cell_calibration_view.is_allowed_frame_url("http://127.0.0.1:8767/frame/top.jpg") is True
+    grid_js = (Path(web.__file__).resolve().parent / "web" / "grid.js").read_text(encoding="utf-8")
+    assert "cross_verify?.lateral_xy?.sites" in grid_js and "centre_sigma_mm" in grid_js
     assert cell_calibration_view.is_allowed_frame_url("http://169.254.169.254/latest") is False

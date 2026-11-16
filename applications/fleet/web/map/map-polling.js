@@ -30,6 +30,15 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     onMapUnavailable();
   }
 
+  async function refreshCalibrations(life) {
+    try {
+      const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
+      life.check();
+      camera.setCalibrations(result.calibrations || []);
+      calibrationsAt = Date.now();
+    } catch (error) { if (error.name === "AbortError") throw error; camera.setCalibrations([]); }
+  }
+
   async function refreshSiteMap() {
     const life = scope.capture();
     life.check();
@@ -51,12 +60,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
         // The first site draw must use the active map turn; drawing at 0° then turning to 90°
         // makes the whole map jump while the camera and robot map requests are still pending.
         if (!view.map && !auth.locked) showSiteMap();
-        try {
-          const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
-          life.check();
-          camera.setCalibrations(result.calibrations || []);
-          calibrationsAt = Date.now();
-        } catch (error) { if (error.name === "AbortError") return; camera.setCalibrations([]); }
+        await refreshCalibrations(life);
       } else if (!view.map && !auth.locked) {
         showSiteMap();
       }
@@ -120,7 +124,9 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       life.check();
       if (traffic.map_version !== null && traffic.map_version !== view.activeSiteMap?.version) {
         view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
+        view.siteViewTurn = siteViewTurn(view.activeSiteMap);
         life.check();
+        await refreshCalibrations(life);
       }
       view.traffic = traffic;
       // D-613: route observations also reach the queue while a trip runs without a wait cycle.

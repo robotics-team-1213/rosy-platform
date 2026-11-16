@@ -71,11 +71,12 @@ def test_stable_drifted_series_approves_once_and_rate_limits():
     assert first["spread"] <= mod.STABLE_SPREAD_M
     assert first["drift"] > mod.DRIFT_THRESHOLD_M
 
-    second = mod.decide(stable_drifted, now=100_000.0 + 3600.0, last_approved_at=100_000.0)
+    assert mod.MIN_APPROVAL_INTERVAL_S == 600
+    second = mod.decide(stable_drifted, now=100_000.0 + 300.0, last_approved_at=100_000.0)
     assert second["decision"] == "hold"
     assert second["reason"] == "rate_limited"
 
-    forced = mod.decide(stable_drifted, now=100_000.0 + 3600.0, last_approved_at=100_000.0, force=True)
+    forced = mod.decide(stable_drifted, now=100_000.0 + 300.0, last_approved_at=100_000.0, force=True)
     assert forced["decision"] == "approve"
     assert forced["reason"] == "forced"
 
@@ -174,3 +175,140 @@ def test_dry_run_and_mean_approval_in_main(tmp_path, monkeypatch, capsys):
     # Mean of shifts [0.030..0.038] is 0.034, NOT the last solve (0.038).
     assert abs(approved_solved["map_to_image"][2] - (-0.034)) < 1e-6
     assert abs(approved_solved["places"][0]["x"] - 0.134) < 1e-6
+
+
+def test_world_261026_auto_handles_glare_split_and_charger_occlusion():
+    import sys
+    import cv2
+    import numpy as np
+
+    vision_dir = str(ROOT / "operations/overhead")
+    if vision_dir not in sys.path:
+        sys.path.insert(0, vision_dir)
+    from rosy_vision.world_261026_auto import _proj, auto_calibrate_and_trace_world_261026
+
+    synth = np.full((720, 1280, 3), 105, dtype=np.uint8)
+    m2i_syn = np.array([[380.0, 20.0, 640.0], [-15.0, -380.0, 360.0], [-0.05, 0.02, 1.0]])
+
+    def draw_seg(im, p1, p2, col, thick=7):
+        pts = np.array([p1, p2], np.float64)
+        p = np.column_stack([pts, np.ones(2)]) @ m2i_syn.T
+        uv = np.round(p[:, :2] / p[:, 2:3]).astype(np.int32)
+        cv2.line(im, tuple(uv[0]), tuple(uv[1]), col, thick, cv2.LINE_AA)
+
+    for a, b in [
+        ((-1.08, -0.588), (1.08, -0.588)),
+        ((-0.926, -0.364), (0.926, -0.364)),
+        ((-1.10, -0.140), (-0.70, -0.140)),
+        ((-0.56, -0.140), (0.18, -0.140)),
+        ((0.42, -0.140), (1.10, -0.140)),
+        ((-0.69, 0.260), (-0.53, 0.260)),
+        ((0.14, 0.260), (0.30, 0.260)),
+        ((-1.188, -0.50), (-1.188, -0.22)),
+        ((1.188, -0.50), (1.188, -0.22)),
+    ]:
+        draw_seg(synth, a, b, (240, 240, 240))
+    pink_bgr = (180, 130, 245)
+    for a, b in [
+        ((-0.630, -0.045), (-0.596, 0.025)),
+        ((0.258, -0.045), (0.228, 0.025)),
+        ((-0.596, 0.025), (0.228, 0.025)),
+        ((-0.414, 0.025), (-0.414, 0.520)),
+        ((-0.190, 0.025), (-0.190, 0.520)),
+        ((0.032, 0.025), (0.032, 0.520)),
+    ]:
+        draw_seg(synth, a, b, pink_bgr)
+    green_bgr = (90, 170, 70)
+    for a, b in [
+        ((-0.526, 0.260), (-0.526, 0.597)),
+        ((0.148, 0.260), (0.148, 0.597)),
+        ((-0.526, 0.597), (0.148, 0.597)),
+    ]:
+        draw_seg(synth, a, b, green_bgr)
+
+    # Simulate ceiling fluorescent glare cutting across bay 3 and C1 charger covering left top green
+    draw_seg(synth, (-0.15, 0.30), (0.10, 0.18), (250, 250, 250), thick=16)
+    draw_seg(synth, (-0.52, 0.597), (-0.18, 0.597), (105, 105, 105), thick=18)
+
+    fit = auto_calibrate_and_trace_world_261026(synth, revision="paint-r1")
+    assert fit is not None
+    assert fit["rms_m"] < 0.005
+    corners = np.array([[-1.22, -0.61], [1.22, -0.61], [1.22, 0.61], [-1.22, 0.61]])
+    err_px = np.max(np.hypot(*(_proj(fit["map_to_image"], corners) - _proj(m2i_syn, corners)).T))
+    assert err_px < 4.0
+    from rosy_vision.world_261026_auto import get_latest_lens_model
+    assert get_latest_lens_model(1280, 720, "paint-r1") is not None
+    assert get_latest_lens_model(1280, 720, "paint-r2") is None
+
+
+def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    token_file = tmp_path / "auto-calibration.token"
+    token_file.write_text("secret-bearer-token\n", encoding="utf-8")
+    state_file = tmp_path / "state.json"
+    monkeypatch.setenv("ROSY_AUTO_CALIBRATION_TOKEN_FILE", str(token_file))
+    monkeypatch.setattr(mod, "STATE_FILE", state_file)
+
+    ident = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    monkeypatch.setattr(mod, "run_vision_solve", lambda: {
+        "ok": True, "width": 1280, "height": 720, "frame_seq": 10, "rms_m": 0.002,
+        "map_to_image": [1.0, 0.0, -0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "image_to_map": [1.0, 0.0, 0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "places": [{"id": "p1", "x": 0.13, "y": 0.2}], "edges": [],
+    })
+    monkeypatch.setattr(mod, "fetch_fleet_current", lambda _t: {
+        "cur_cal": {"calibration_revision": 1, "map_to_image": ident},
+        "cur_map": {"map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
+    })
+    outcomes = [
+        {"cal_updated": False, "map_updated": False, "map_activate_status": 409, "deferred": True},
+        {"cal_updated": True, "calibration_revision": 2, "map_updated": True, "map_version": 2},
+    ]
+    monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: outcomes.pop(0))
+
+    for _ in range(4):
+        assert mod.main([]) == 0
+        capsys.readouterr()
+    assert mod.main([]) == 0
+    deferred = json.loads(capsys.readouterr().out.strip())
+    assert deferred["status"] == "deferred" and deferred["map_activate_status"] == 409
+    saved = json.loads(state_file.read_text(encoding="utf-8"))
+    assert len(saved["history"]) == 5 and saved["last_approved_at"] is None
+
+    assert mod.main([]) == 0
+    updated = json.loads(capsys.readouterr().out.strip())
+    assert updated["status"] == "updated" and updated["map_updated"] is True
+
+
+def test_auto_track_calibration_service_principal_is_scoped_to_calibration_and_site_map():
+    from hashlib import sha256
+    from types import SimpleNamespace
+    import pytest
+    from fastapi import HTTPException
+    from rosy_account.principal import SitePrincipal
+    from fleet.server.auth.site_auth import build_authorize, build_role_guards
+
+    raw_tok = "a" * 64
+    digest = sha256(raw_tok.encode()).hexdigest()
+    principals = {digest: SitePrincipal("auto-track-calibration", "service")}
+    authorize = build_authorize(None, principals, None)
+    _, require_operator, _, _ = build_role_guards(authorize, principals)
+
+    def req(path: str):
+        return SimpleNamespace(
+            url=SimpleNamespace(path=path),
+            method="GET",
+            state=SimpleNamespace(),
+            cookies={},
+        )
+
+    p_cal = authorize(req("/api/fleet/calibrations"), f"Bearer {raw_tok}")
+    assert require_operator(p_cal).principal_id == "auto-track-calibration"
+    p_map = authorize(req("/api/fleet/site-map/active"), f"Bearer {raw_tok}")
+    assert require_operator(p_map).principal_id == "auto-track-calibration"
+
+    with pytest.raises(HTTPException) as exc:
+        authorize(req("/api/fleet/trips"), f"Bearer {raw_tok}")
+    assert exc.value.status_code == 403
+
+
