@@ -225,8 +225,10 @@ function showFile() {
   render();
 }
 function statusBanner() { banner(data.busy ? '세션이 실행 중입니다. 값은 볼 수 있지만, 끝날 때까지 저장되지 않습니다.' : ''); }
+const BASE = location.pathname.startsWith('/params') ? '/params' : '';
 async function call(path, body) {
-  const response = await fetch(path, body ? {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Cell-Params': '1'}, body: JSON.stringify(body)} : {});
+  const target = path.startsWith('/api/account/') ? path : BASE + path;
+  const response = await fetch(target, body ? {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Cell-Params': '1'}, body: JSON.stringify(body)} : {});
   const value = await response.json();
   if (!response.ok) throw new Error(value.error || `요청 실패 ${response.status}`);
   return value;

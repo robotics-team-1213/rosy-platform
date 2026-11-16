@@ -270,10 +270,18 @@ def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: di
                 allowed.add(urlsplit(account.callback).netloc)
             return self.headers.get("Host") in allowed
 
+        def _norm_path(self):
+            path = urlsplit(self.path).path
+            if path == "/params":
+                return "/"
+            if path.startswith("/params/"):
+                return path[len("/params"):]
+            return path
+
         def do_GET(self):
             if not self.local():
                 return self.reply(403, {"error": "local cell only"})
-            path = urlsplit(self.path).path
+            path = self._norm_path()
             if path.startswith("/api/account/"):
                 return handle_account_route(self, account, "GET", path, self.path)
             if path == "/":
@@ -292,7 +300,7 @@ def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: di
             self.reply(404, {"error": "not found"})
 
         def do_POST(self):
-            path = urlsplit(self.path).path
+            path = self._norm_path()
             if path.startswith("/api/account/") and self.local():
                 return handle_account_route(self, account, "POST", path, self.path)
             # The custom header forces a CORS preflight, so another origin cannot change a value.

@@ -1,6 +1,8 @@
 """The cell task worker never calls the real arm on a refused handoff, and unknown sites and tiers are refused."""
 from __future__ import annotations
 
+import io
+import json
 from pathlib import Path
 import sys
 
@@ -105,3 +107,27 @@ def test_worker_main_seals_legacy_live_jog_by_default(tmp_path: Path, monkeypatc
     assert "sync" in calls
     assert "live_jog" not in calls
     assert not any(c.startswith("POST:/api/fleet/pipeline/cell-tasks/claim") for c in calls)
+
+
+def test_worker_skips_held_arm_before_claim_and_classifies_401(tmp_path: Path) -> None:
+    from urllib.error import HTTPError
+
+    tok = tmp_path / "tok"
+    tok.write_text("short-token-value", encoding="utf-8")
+    calls: list[str] = []
+
+    def _req(method: str, path: str, body):
+        calls.append(f"{method}:{path}")
+        return {"tasks": [{"task_id": "t-held", "cell_id": "cell_ab", "arm_id": "arm_a", "tier": 1}],
+                "human_safety": {"active_estop": False, "human_detected": {}},
+                "cells": {"cell_ab": {"phase": "ARM_IN_BED_ZONE", "active_task_id": "t-held"}}}
+
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+    ctw.poll_and_execute_once(pipe, request_fn=_req, live_act_fn=lambda h: {"ok": True}, prep_dir=tmp_path,
+                              hold_check_fn=lambda arm: {"held": arm == "arm_a", "reason": "open hold"})
+    assert calls == ["GET:/api/fleet/pipeline/cell-tasks?status=QUEUED"]
+
+    err = HTTPError("https://192.168.1.93:8443/api/fleet/pipeline/cell-tasks", 401, "Unauthorized", {}, io.BytesIO(b""))
+    diag = ctw.classify_poll_error(err, tok)
+    assert diag["event"] == "poll_auth_error" and diag["status"] == 401 and diag["token_chars"] == len("short-token-value")
+    assert "short-token-value" not in json.dumps(diag)

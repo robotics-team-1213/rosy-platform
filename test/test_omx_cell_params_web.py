@@ -318,3 +318,20 @@ def test_account_protected_params_web_forwards_core_bearer_to_clear_and_enforces
         running.shutdown()
         running.server_close()
 
+
+def test_params_subpath_serves_ui_and_json_under_shared_origin(path, monkeypatch):
+    import omx_incident
+
+    monkeypatch.setattr(omx_incident, "status", lambda arm: {"arm": arm, "local_held": False, "fleet_held": False, "incident_ids": []})
+    running = web.make_server(files(path), 0, incident_arms=["arm_a"])
+    threading.Thread(target=running.serve_forever, daemon=True).start()
+    try:
+        assert call(running, "GET", "/params")[0] == 200
+        st, page, _ = call(running, "GET", "/params/")
+        assert st == 200 and b"location.pathname.startsWith('/params')" in page
+        assert call(running, "GET", "/params/params.json")[0] == 200
+        assert call(running, "GET", "/params/incidents.json")[0] == 200
+    finally:
+        running.shutdown()
+        running.server_close()
+

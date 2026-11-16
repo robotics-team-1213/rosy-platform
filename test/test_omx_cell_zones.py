@@ -359,3 +359,18 @@ def test_transfer_folded_clears_own_stale_zone_via_confirmed_park_before_first_r
         "park",
     ]
 
+
+def test_same_physical_arm_clears_interrupted_occupancy_after_profile_update_and_confirmed_park(tmp_path):
+    import os
+
+    first = zones(tmp_path, "left")
+    assert first.enter((0.37, 0.2)) == (True, "middle")
+    for fd in first.held.values():
+        os.close(fd)
+    first.held = {}
+    updated = cell_zones.Zones({"zone_side": "left", "params": PARAMS}, CAL, lock_dir=tmp_path,
+                               incidents=tmp_path / "incidents", clock=lambda: 0.0, sleep=lambda s: None)
+    updated.bind({**owner("left"), "robot_config_sha256": "c" * 64, "profile_sha256": "d" * 64}, "2" * 32)
+    updated.leave()
+    assert zones(tmp_path, "right").enter((0.37, 0.2)) == (True, "middle")
+

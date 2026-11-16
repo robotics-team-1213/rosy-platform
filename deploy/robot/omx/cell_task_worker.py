@@ -29,12 +29,21 @@ from cell_camera_telemetry_sync import (
 from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
+from cell_task_exec import (
+    check_arm_hold,
+    classify_poll_error,
+    execute_guarded_cell_task,
+    make_ca_urlopen,
+    resolve_task_arm,
+)
 
 ensure_omx_paths()
 
 
-def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, Any]:
-    return _sync_cell_telemetry(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=urlopen)
+def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR,
+                        *, ca_file: str | Path | None = None) -> dict[str, Any]:
+    opener = make_ca_urlopen(ca_file) if ca_file else urlopen
+    return _sync_cell_telemetry(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=opener)
 
 ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {
     "arm_s": ("s", "with-session-arm-s-live.sh", -1.0),
@@ -179,6 +188,7 @@ def poll_and_execute_once(
     request_fn: Callable[[str, str, dict[str, Any] | None], dict[str, Any]],
     live_act_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     prep_dir: Path = DEFAULT_PREP_DIR,
+    hold_check_fn: Callable[[str], dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Poll Fleet tasks; release only after the actuator reports measured placement."""
     if live_act_fn is None:
@@ -194,6 +204,8 @@ def poll_and_execute_once(
         cell_id = str(task["cell_id"])
         tier = task.get("tier")
         if type(tier) is not int or tier not in (1, 2, 3):
+            continue
+        if hold_check_fn is not None and hold_check_fn(resolve_task_arm(task)).get("held"):
             continue
         claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id})
         if not claimed.get("claimed"):
@@ -308,16 +320,18 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Autonomous Fleet-R -> OMX Cell Task Worker")
     parser.add_argument("--fleet-r-url", default="https://192.168.1.93:8443")
     parser.add_argument("--token-file", default="~/.config/rosy-fleet-r-token")
+    parser.add_argument("--ca-file", default=os.environ.get("ROSY_FLEET_CA_FILE") or os.environ.get("ROSY_OBSERVATION_CA_FILE"))
     parser.add_argument("--work-dir", default="/tmp/rosy-omx-cell-task-worker")
     parser.add_argument("--prep-dir", default=str(DEFAULT_PREP_DIR))
     parser.add_argument("--interval-s", type=float, default=1.5)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--dry-run-hw", action="store_true")
     parser.add_argument("--allow-legacy-live-jog", action="store_true")
+    parser.add_argument("--execute-mode", choices=("sealed", "guarded-pick"), default="sealed")
     args = parser.parse_args(argv)
 
     token = Path(args.token_file).expanduser().read_text(encoding="utf-8").strip()
-    req_fn = make_default_request_fn(args.fleet_r_url, token)
+    req_fn = make_default_request_fn(args.fleet_r_url, token, ca_file=args.ca_file)
     pipeline = FleetModelPipeline(work_dir=Path(args.work_dir))
     prep_dir = Path(args.prep_dir)
     bg_cam_pool = ThreadPoolExecutor(max_workers=1)
@@ -326,32 +340,36 @@ def main(argv: list[str] | None = None) -> None:
     def _trigger_bg_cam_upload() -> None:
         nonlocal bg_cam_fut
         if bg_cam_fut is None or bg_cam_fut.done():
-            bg_cam_fut = bg_cam_pool.submit(sync_cell_telemetry, args.fleet_r_url, token, prep_dir)
+            bg_cam_fut = bg_cam_pool.submit(sync_cell_telemetry, args.fleet_r_url, token, prep_dir, ca_file=args.ca_file)
 
     def _hw_act(handoff: dict[str, Any]) -> dict[str, Any]:
-        arm_id = str(handoff.get("arm_id") or ("arm_s" if handoff.get("cell_id") == "cell_s" else "arm_a"))
+        arm_id = resolve_task_arm(handoff)
         if args.dry_run_hw:
             return {"arm": arm_id, "events_count": 1, "stop_event": {"command": "stop", "ok": True, "folded": True}}
-        if not args.allow_legacy_live_jog:
-            raise RuntimeError("legacy cell_task_worker live jog is sealed; use cell_auto_pick or --dry-run-hw")
-        res = execute_live_hardware_arm(arm_id, prep_dir=prep_dir)
+        if args.execute_mode == "guarded-pick":
+            res = execute_guarded_cell_task(handoff, prep_dir=prep_dir)
+        elif args.allow_legacy_live_jog:
+            res = execute_live_hardware_arm(arm_id, prep_dir=prep_dir)
+        else:
+            raise RuntimeError("legacy cell_task_worker live jog is sealed; use --execute-mode guarded-pick or --dry-run-hw")
         _trigger_bg_cam_upload()
         return res
 
     last_cam_push = 0.0
     while True:
+        sleep_s = max(0.5, float(args.interval_s))
         try:
             now_m = time.monotonic()
             if not args.dry_run_hw and (now_m - last_cam_push) >= 3.0:
                 _trigger_bg_cam_upload()
                 last_cam_push = now_m
-            if args.dry_run_hw or args.allow_legacy_live_jog:
-                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act)
+            if args.dry_run_hw or args.allow_legacy_live_jog or args.execute_mode == "guarded-pick":
+                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, hold_check_fn=check_arm_hold)
             else:
                 runs = []
                 print(json.dumps({
                     "event": "legacy_worker_live_sealed",
-                    "detail": "telemetry sync active; legacy claim/jog disabled without --allow-legacy-live-jog",
+                    "detail": "telemetry sync active; legacy claim/jog disabled without --execute-mode guarded-pick",
                 }), flush=True)
             for r in runs:
                 stop_ev = (r["task"].get("hardware_telemetry") or {}).get("stop_event") or {}
@@ -360,12 +378,15 @@ def main(argv: list[str] | None = None) -> None:
                     "status": r["task"]["status"], "folded": stop_ev.get("folded"), "state": stop_ev.get("state"),
                 }), flush=True)
         except Exception as exc:
-            print(json.dumps({"event": "poll_error", "error": repr(exc)}), flush=True)
+            err = classify_poll_error(exc, args.token_file)
+            if err.get("backoff_s"):
+                sleep_s = max(sleep_s, float(err["backoff_s"]))
+            print(json.dumps(err), flush=True)
         if args.once:
             if bg_cam_fut is not None:
                 bg_cam_fut.result(timeout=10.0)
             break
-        time.sleep(max(0.5, float(args.interval_s)))
+        time.sleep(sleep_s)
 
 
 if __name__ == "__main__":
