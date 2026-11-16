@@ -131,20 +131,26 @@ def resolved_choices(choices=None, *, pick_vision=False, belt_skew=False, cam_ji
     return dict(teaching.VISION_SKEW_CHOICES if (pick_vision or belt_skew or cam_jitter) else {}, **(choices or {}))
 
 
-def _resolve_steps_file(dagger_model, steps_file):
-    if steps_file:
+def _resolve_steps_file(dagger_model, steps_file, name="steps.json"):
+    if steps_file and str(steps_file).strip().lower() != "auto":
         return Path(steps_file)
     for parent in Path(dagger_model).resolve().parents:
-        candidate = parent / "steps.json"
+        candidate = parent / name
         if candidate.is_file():
             return candidate
-    raise ValueError("--dagger-model requires --steps-file (or an ancestor steps.json)")
+    raise ValueError(f"--dagger-model requires --steps-file (or an ancestor {name})")
+
+
+def _failed_steps_from_eval(dagger_model, eval_file):
+    path = _resolve_steps_file(dagger_model, eval_file, name="eval.json")
+    rows = json.loads(path.read_text(encoding="utf-8")).get("rows", [])
+    return {f"{r['task']}/{r['step']}" if "task" in r else r["step"] for r in rows if r.get("result") != "pass"}
 
 
 def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0., lag=False, physics=False, *,
             pick_vision=False, belt_skew=False, cam_jitter=False, compensate_zero=False, no_goal=False,
             dagger_model=None, steps_file=None, dagger_prefix_frames="auto", dagger_only=False, dagger_device=None,
-            dagger_steps=None, n_action_steps=None, flow_steps=None, use_amp=None):
+            dagger_steps=None, dagger_eval_file=None, n_action_steps=None, flow_steps=None, use_amp=None):
     if skill and plan_dir:
         raise ValueError("a sub-skill is recorded one step at a time, not in concurrent mode")
     if dagger_model and not skill:
@@ -161,6 +167,9 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
     layout = sites.Layout(**choices)
     dagger_driver, longest, dagger_counts = None, {}, {}
     step_filter = {s.strip() for s in dagger_steps.split(",") if s.strip()} if isinstance(dagger_steps, str) else (set(dagger_steps) if dagger_steps else None)
+    if dagger_eval_file:
+        eval_failed = _failed_steps_from_eval(dagger_model, dagger_eval_file)
+        step_filter = eval_failed if step_filter is None else (step_filter | eval_failed)
     if dagger_model:
         resolved_steps = _resolve_steps_file(dagger_model, steps_file)
         longest = dict(json.loads(resolved_steps.read_text(encoding="utf-8")).get("longest", {}))
@@ -192,7 +201,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
                 err_seed_base = STEP_ERROR_SEED_BASE + 100 * seed + 50 * names.index(name)
                 with dagger_driver.torch.inference_mode():
                     for idx, plan in enumerate(task["steps"]):
-                        if step_filter is None or plan["id"] in step_filter:
+                        if step_filter is None or plan["id"] in step_filter or f"{name}/{plan['id']}" in step_filter:
                             rec = Recorder(world, dataset, longest, skill=skill, no_goal=no_goal, seed=seed + idx,
                                            pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
                             skills.disturb(rec, err_seed_base + idx, zero_error_deg, lag, physics)
