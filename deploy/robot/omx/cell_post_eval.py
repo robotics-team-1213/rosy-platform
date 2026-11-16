@@ -70,14 +70,12 @@ def select_visit_yaws(config: dict, site: str, point_m, z_view: float, *,
 
 def _clear_point_for_visit(frame, config: dict, calibration: dict, site: str, point_m) -> tuple[bool, str | None]:
     """Check top-view foreground around `point_m` so jaw opening cannot sweep neighbors."""
-    site_cfg = (config.get("sites") or {}).get(site) or {}
-    if frame is None or not (site_cfg.get("auto_roi") or site_cfg.get("surface_px")):
-        return True, None
-    import cv2
-    import cell_calibrate_auto as cca
-    import cell_objects
+    import cv2, cell_calibrate_auto as cca, cell_objects
     from cell_observe import predicted_pixel
 
+    site_cfg = (config.get("sites") or {}).get(site) or {}
+    if frame is None or cca.over_target(config, site) or not (site_cfg.get("auto_roi") or site_cfg.get("surface_px")):
+        return True, None
     roi = tuple(site_cfg.get("auto_roi") or (0, 0, frame.shape[1], frame.shape[0]))
     big = (max(0, roi[0] - 60), max(0, roi[1] - 60), min(frame.shape[1], roi[2] + 60), min(frame.shape[0], roi[3] + 60))
     mask = cell_objects.foreground(frame, big, params=config.get("params"),
@@ -191,17 +189,24 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
     finally:
         fold(cell, sleep)
 
-    scene_ok = not bool((scene_moved_fn or cell_scene_guard.scene_moved)(before, cell.frame("top")))
+    after = cell_pivot.settled_frame(cell, sleep, params=params)
+    scene_ok = not bool((scene_moved_fn or cell_scene_guard.scene_moved)(before, after))
     mark_sig = float(prm.get(params, "verify.mark_sigma_mm"))
     droop_mm = [round(sum(d[0] for d in droops) / len(droops), 2), round(sum(d[1] for d in droops) / len(droops), 2)] if droops else None
     finger_ok, pair_err, half_mm, f_why = True, 0.0, None, None
+    cand = _finger_candidates(pivot_reg, config)
     if not geom_dep and len(marks_arm) == 2:
         finger_ok, pair_err, half_mm, f_why = _finger_identity_ok(marks_arm[0], marks_arm[1], fks[0][3], fks[1][3], pivot_reg, config)
         tcp_map = ((marks_arm[0][0] + marks_arm[1][0]) / 2.0, (marks_arm[0][1] + marks_arm[1][1]) / 2.0)
         fk_xy = ((fks[0][0] + fks[1][0]) / 2.0, (fks[0][1] + fks[1][1]) / 2.0)
         sigma_mm = round(math.hypot(mark_sig / math.sqrt(2.0), (half_mm or 25.0) * abs(math.sin(math.radians(pair_err / 2.0)))), 2)
+        if not finger_ok and f_why == "yaw_pair_gap" and cand and 1000.0 * math.dist(marks_arm[0], marks_arm[1]) <= 2.0 * float(prm.get(params, "post.finger_tol_mm")):
+            exp_pts = [(fk_xy[0] + (float(f["radius_mm"]) / 1000.0) * math.cos(math.radians(fks[0][3] + float(f["phase_deg"]))),
+                        fk_xy[1] + (float(f["radius_mm"]) / 1000.0) * math.sin(math.radians(fks[0][3] + float(f["phase_deg"])))) for f in cand]
+            k = min(range(len(cand)), key=lambda i: math.dist(tcp_map, exp_pts[i]))
+            tcp_map = cell_look.tcp_from_mark(tcp_map, fks[0][3], cand[k])
+            finger_ok, f_why, sigma_mm = True, None, round(max(mark_sig / math.sqrt(2.0), float((pivot_reg or {}).get("bias_sigma_mm") or mark_sig)), 2)
     else:
-        cand = _finger_candidates(pivot_reg, config)
         exp_pts = [(fks[0][0] + (float(f["radius_mm"]) / 1000.0) * math.cos(math.radians(fks[0][3] + float(f["phase_deg"]))),
                     fks[0][1] + (float(f["radius_mm"]) / 1000.0) * math.sin(math.radians(fks[0][3] + float(f["phase_deg"])))) for f in cand]
         k = min(range(len(cand)), key=lambda i: math.dist(marks_arm[0], exp_pts[i]))
