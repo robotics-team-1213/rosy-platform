@@ -338,4 +338,6 @@ def test_cell_calibration_view_bundle_flags_over_limit_bias_and_ssrf_urls(tmp_pa
     assert prof["cross_verify"]["eval_verdict"] == "hold"
     assert any(h["code"] == "bias_over_limit:pinky" for h in prof["hygiene"])
     assert cell_calibration_view.is_allowed_frame_url("http://127.0.0.1:8767/frame/top.jpg") is True
+    grid_js = (Path(web.__file__).resolve().parent / "web" / "grid.js").read_text(encoding="utf-8")
+    assert "cross_verify?.lateral_xy?.sites" in grid_js and "centre_sigma_mm" in grid_js
     assert cell_calibration_view.is_allowed_frame_url("http://169.254.169.254/latest") is False

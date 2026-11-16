@@ -68,10 +68,15 @@ def _load_ref_gray(path: Path):
 def stale(check: dict) -> list:
     """The steps a check result asks for, in dependency order."""
     if check.get("camera_moved") or check.get("missing_map"):
-        return ["remap", "regions"] + [f"pivot-near {t}" for t in check.get("targets", [])]
-    steps = ["consensus-repair"] if check.get("consensus_repairable") else []
-    steps += [f"pivot-near {t}" for t in check.get("missing_bias", [])]
-    steps += [f"surface {s}" for s in check.get("missing_surface", [])]
+        steps = ["remap", "regions"] + [f"pivot-near {t}" for t in check.get("targets", [])]
+    else:
+        steps = ["consensus-repair"] if check.get("consensus_repairable") else []
+        steps += [f"pivot-near {t}" for t in check.get("missing_bias", [])]
+        steps += [f"surface {s}" for s in check.get("missing_surface", [])]
+    if check.get("unverified_xy"):
+        steps.append("post-eval")
+    if check.get("missing_depth_verify"):
+        steps.append("depth-verify")
     return steps
 
 
@@ -127,11 +132,19 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
         if "surface_z" not in site:
             out["missing_surface"].append(name)
     import cell_cal_monitor
+    import cell_post_eval
 
     drift = cell_cal_monitor.summarize(config, calibration)
     if drift["alarmed_sites"]:
         out["drift"] = drift
         out["advisory_todo"] = drift["suggested_advisory"]
+    lat = cell_post_eval.lateral_summary(config, calibration)
+    out["lateral_xy"] = lat["verdict"]
+    cal_cfg = config.get("calibrate") or {}
+    if cal_cfg.get("verify_xy") or lat["verdict"] == "fail":
+        out["unverified_xy"] = not lat["lateral_xy_verified"]
+    if cal_cfg.get("verify_depth") and not (Path(config.get("work_dir", ".")).expanduser() / "depth-verify.json").exists():
+        out["missing_depth_verify"] = True
     return out
 
 
@@ -229,9 +242,10 @@ def main(argv=None):
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
     ap.add_argument("--plan-only", action="store_true", help="print each remap point's IK and verdict; opens no port or camera")
-    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair"], help="auto: run only these step kinds (remap, regions, pivot-near, "
-                    "surface, consensus-repair); a reviewed plan for one step must not run the others. 2026-11-15: a "
+    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair", "post-eval", "depth-verify"], help="auto: run only these step kinds (remap, regions, pivot-near, "
+                    "surface, consensus-repair, post-eval, depth-verify); a reviewed plan for one step must not run the others. 2026-11-15: a "
                     "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
+    ap.add_argument("--verify", action="store_true", help="auto: chain post-eval XY visit and depth-verify after calibration steps")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
     import cv2
@@ -257,6 +271,10 @@ def main(argv=None):
     work.mkdir(parents=True, exist_ok=True)
     found = check(config, calibration, targets, cell.frame("top"), config["params"])
     todo = stale(found)
+    if args.verify:
+        for vstep in ("post-eval", "depth-verify"):
+            if vstep not in todo:
+                todo.append(vstep)
     if args.only:
         todo = [step for step in todo if step.split()[0] in args.only]
     print(json.dumps({"check": found, "todo": todo}, default=str), flush=True)
@@ -344,6 +362,22 @@ def main(argv=None):
             if touched["result"] == "touched":
                 s["surface_z"] = touched["surface_z"]
             done.append({step: touched["result"], "surface_z": touched.get("surface_z")})
+        elif step == "post-eval":
+            import cell_post_eval
+
+            rep = cell_post_eval.run_post_eval(
+                cell, config, calibration, targets=targets or None, apply=True,
+                commissioning=args.commissioning, person_at_switch=args.person_at_switch, work=work,
+            )
+            done.append({"post-eval": rep.get("verdict"), "applied": len(rep.get("applied") or []), "escalated": rep.get("escalated")})
+        elif step == "depth-verify":
+            import cell_cal_eval
+
+            bias_d = cell_pivot.load_bias(cell_pivot.bias_path(cal_path), config.get("params")) if cell_pivot.bias_path(cal_path).exists() else None
+            rep = cell_cal_eval.verify_profile_depth(config, calibration, bias_d, colour=cell.frame("top"))
+            if config.get("work_dir"):
+                (Path(config["work_dir"]).expanduser() / "depth-verify.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
+            done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})
     args.config.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1))
     print(json.dumps({"done": done}, default=str), flush=True)
     return 0
