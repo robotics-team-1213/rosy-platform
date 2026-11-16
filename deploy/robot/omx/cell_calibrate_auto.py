@@ -129,8 +129,11 @@ def over_target(config, site) -> bool:
 
 def pivot_near_yaws(config, site) -> list:
     """Yaws for a pivot near or over a target."""
-    base = config["sites"][site]["yaw_deg"]
+    site_cfg = config["sites"][site]
     ot_fn = _parent_attr("over_target", over_target)
+    if ot_fn(config, site) and site_cfg.get("pivot_yaws"):
+        return list(site_cfg["pivot_yaws"])
+    base = site_cfg["yaw_deg"]
     offsets = range(-60, 61, 20) if ot_fn(config, site) else (-80, -40, 0, 40, 80, 120)
     return [base + d for d in offsets]
 

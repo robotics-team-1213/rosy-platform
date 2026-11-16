@@ -223,6 +223,8 @@ def test_a_pivot_over_a_packed_column_keeps_its_yaws_inside_the_arc_that_marked(
               "coarse": {"z_view": 0.118}, "sites": {"pallet": {"surface_z": -0.01, "yaw_deg": 90}}}
     over = cc.pivot_near_yaws(config, "pallet")
     assert over == [30, 50, 70, 90, 110, 130, 150] and sum(50 <= y <= 130 for y in over) >= 4
+    config["sites"]["pallet"]["pivot_yaws"] = [25, 45, 155]
+    assert cc.pivot_near_yaws(config, "pallet") == [25, 45, 155]
     config["params"]["pivot.over_target"] = 0
     assert cc.pivot_near_yaws(config, "pallet") == [10, 50, 90, 130, 170, 210]
 
