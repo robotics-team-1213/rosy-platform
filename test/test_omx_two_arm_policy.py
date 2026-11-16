@@ -90,6 +90,9 @@ def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
     assert stages["gazebo"]["track"] == "ros2_execution_contract" and stages["gazebo"]["role"] == "ros2_interface_conformance"
 
 
+seen_overrides = []  # make_pre_post_processors keyword arguments the fake Driver deps received
+
+
 def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action_steps=8, ensemble_coeff=None):
     class FakeTensor:
         device = "cpu"
@@ -128,6 +131,7 @@ def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action
     steps_file = tmp_path / "steps.json"
     steps_file.write_text(json.dumps({"longest": {}}), encoding="utf-8")
     seen_batches = []
+    seen_overrides.clear()
 
     class FakePolicy:
         def __init__(self):
@@ -152,7 +156,7 @@ def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action
     fake_act.ACTPolicy = types.SimpleNamespace(from_pretrained=lambda *a, **k: FakePolicy())
     fake_act.ACTTemporalEnsembler = lambda coeff, chunk: ("ensembler", coeff, chunk)
     fake_factory = types.ModuleType("lerobot.policies.factory")
-    fake_factory.make_pre_post_processors = lambda cfg, pretrained_path=None: (lambda b: b, lambda y: y)
+    fake_factory.make_pre_post_processors = lambda cfg, pretrained_path=None, **kw: seen_overrides.append(kw) or (lambda b: b, lambda y: y)
     fake_world = types.ModuleType("omx_two_arm_world")
     fake_world.World = lambda layout: types.SimpleNamespace(layout=layout)
     for name, mod in {
@@ -522,3 +526,11 @@ def test_driver_reads_the_goal_mode_from_the_checkpoint_width(monkeypatch, tmp_p
 def test_collect_refuses_site_goal_with_no_goal():
     with pytest.raises(ValueError, match="--goal"):
         helpers.collect([1], ["stack"], "unused", no_goal=True, goal_mode="site")
+
+
+def test_driver_moves_the_checkpoint_processor_to_its_own_device(monkeypatch, tmp_path):
+    """A checkpoint saved on cuda names cuda in its processor; a cpu Driver (evaluate --device cpu, --dagger-device cpu) must override it."""
+    model_dir, steps_file, _ = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": {}})
+    policy.Driver(model_dir, steps_file, device="cpu")
+    assert seen_overrides[-1] == {"preprocessor_overrides": {"device_processor": {"device": "cpu"}},
+                                  "postprocessor_overrides": {"device_processor": {"device": "cpu"}}}

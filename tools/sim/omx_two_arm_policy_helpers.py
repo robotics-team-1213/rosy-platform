@@ -285,7 +285,10 @@ class Driver:
         elif self.kind != "ik":
             raise ValueError(f"unknown policy type {self.kind}")
         if self.kind != "ik":
-            self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model))
+            # the checkpoint's processor carries the training device (cuda); without this a cpu Driver fails to load
+            self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model),
+                                                           preprocessor_overrides={"device_processor": {"device": str(device)}},
+                                                           postprocessor_overrides={"device_processor": {"device": "cpu"}})
             self.device = next(self.policy.parameters()).device
             self.has_goal = GOAL in (getattr(self.policy.config, "input_features", None) or {})
             dev_type = getattr(self.device, "type", str(self.device))

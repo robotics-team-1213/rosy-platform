@@ -81,7 +81,8 @@ def evaluate(args):
                     pick_vision=getattr(args, "pick_vision", False), belt_skew=getattr(args, "belt_skew", False),
                     cam_jitter=getattr(args, "cam_jitter", False),
                     ensemble_coeff=getattr(args, "ensemble_coeff", None), n_action_steps=getattr(args, "n_action_steps", None),
-                    flow_steps=getattr(args, "flow_steps", None), use_amp=True if getattr(args, "amp", False) else None)
+                    flow_steps=getattr(args, "flow_steps", None), use_amp=True if getattr(args, "amp", False) else None,
+                    device=getattr(args, "device", None))
     rows, runs = [], []
     Path(args.artifacts).mkdir(parents=True, exist_ok=True)
     planned = plan_tasks(args.plan_dir, args.tasks.split(",")) if args.plan_dir else None
@@ -396,7 +397,8 @@ def main(argv=None):
         if name == "evaluate":
             for flag, kw in (("--model", dict(required=True)), ("--steps-file", dict(required=True)), ("--out", dict(required=True)),
                              ("--artifacts", dict(required=True)), ("--plan-dir", dict(help="judge whole tasks")),
-                             ("--ensemble-coeff", dict(type=float))):
+                             ("--ensemble-coeff", dict(type=float)),
+                             ("--device", dict(choices=("cpu", "cuda"), help="cpu leaves a GPU that another job is training on alone"))):
                 one.add_argument(flag, **kw)
         else:
             one.add_argument("--no-goal", action="store_true")
