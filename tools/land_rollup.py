@@ -249,7 +249,9 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
                     raise land.Stop("its snapshot branch is gone")
                 land.merge(wt, candidate, branch, python, False, source=r["branch"])
                 metadata = member_metadata(land_async.holder(repo), {**r, "candidate": candidate})
-                merged.append({**r, **metadata})
+                merged.append({**r, **metadata,
+                               **({"ticket": r["ticket"]} if "ticket" in r else {}),
+                               **({"member_ticket": metadata["ticket"]} if "ticket" in metadata else {})})
             except land.Stop as exc:
                 print(f"[rollup] {r['branch']} left out: {str(exc).splitlines()[0]}", flush=True)
         if len(sources(merged)) < 2:
@@ -268,8 +270,9 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         finally:
             os.environ.pop(land_queue.TICKET_ENV, None)
         (log.parent / (log.name.removesuffix(".log") + ".members")).write_text(
-            json.dumps([{k: r[k] for k in ("branch", "worktree", "candidate", "ticket", "members", "members_error")
-                         if k in r}
+            json.dumps([{**{k: r[k] for k in ("branch", "worktree", "candidate", "ticket", "members", "members_error")
+                         if k in r},
+                         **({"ticket": r["member_ticket"]} if "member_ticket" in r else {})}
                         for r in merged], indent=1),
             encoding="utf-8")
         return snap, merged

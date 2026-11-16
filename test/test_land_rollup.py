@@ -484,4 +484,39 @@ def test_roll_prefers_affected_lane_and_ignores_nonpositive_pid(tmp_path, monkey
     assert seen == [[rows[0]["branch"], rows[2]["branch"]]]
 
 
+def test_build_adopts_unrolled_carrier_ticket_while_preserving_member_ticket(repo, monkeypatch):
+    main, snapshot = repo
+    holder = land_rollup.land_async.holder(main)
+    qdir = land_rollup.land_queue.queue_dir(main)
+    qdir.mkdir(parents=True, exist_ok=True)
+    carrier = qdir / "01794700-1.json"
+    carrier.write_text(json.dumps({"pid": 1}), encoding="utf-8")
+    a = snapshot("fix/a", {"pkg/a.py": "x = 2\n"})
+    b = snapshot("fix/b", {"pkg/b.py": "y = 2\n"})
+    old = snapshot("fix/land-rollup-20261116000000-20261116000000", {"pkg/r.py": "r = 1\n"})
+    old.update(status="preparing", full_wait=True, ticket=carrier.name, pid=7)
+    (holder / (old["branch"].replace("/", "-") + ".members")).write_text(json.dumps([
+        {"branch": a["branch"], "worktree": a["worktree"], "ticket": "t-m1"},
+        {"branch": b["branch"], "worktree": b["worktree"], "ticket": "t-m2"},
+    ]))
+    c = {**snapshot("fix/c", {"pkg/c.py": "z = 2\n"}), "status": "preparing", "full_wait": True,
+         "ticket": "t-new", "pid": 8}
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    members = land_rollup.candidates([old, c], main, host="h", mixed=True)
+    assert len(members) == 3 and members[0]["ticket"] == carrier.name and members[0]["member_ticket"] == "t-m1"
+    monkeypatch.setattr(land_rollup.land, "safety_review", lambda *a, **kw: None)
+    monkeypatch.setattr(land_rollup.land, "size_check", lambda *a, **kw: None)
+    monkeypatch.setattr(land_rollup.land, "step", lambda *a, **kw: None)
+    seen_env, log = [], holder / "land-rollup-test.log"
+
+    def fake_start(wt, argv, now, detach):
+        seen_env.append(land_rollup.os.environ.get(land_rollup.land_queue.TICKET_ENV))
+        return "land/fix/land-rollup-next", log
+
+    land_rollup.build(main, members, NOW, start=fake_start)
+    assert seen_env == [str(carrier)]
+    recorded = json.loads((log.parent / (log.name.removesuffix(".log") + ".members")).read_text(encoding="utf-8"))
+    assert [m["ticket"] for m in recorded] == ["t-m1", "t-m2", "t-new"]
+
+
 
