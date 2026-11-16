@@ -86,3 +86,20 @@ def test_publisher_policy_withdrawal_is_fetched_again_after_successful_staging(
     with pytest.raises(m.Withdrawn):
         client.admit(metadata)
     assert journal.read_bytes() == before
+
+
+@pytest.mark.parametrize("busy", [True, False])
+def test_busy_robot_defers_the_install_without_failing_or_touching_state(
+        prepared, feed, publisher_bootstrap, monkeypatch, busy):
+    m, hub, host, root, state, journal, metadata, _ = distribute(prepared, feed, publisher_bootstrap, monkeypatch)
+    started = []
+    monkeypatch.setattr(m.lifecycle, "start", lambda *a, **k: started.append(a) or dict(pending={"phase": "PREPARED"}))
+    monkeypatch.setattr(m._Policy, "_sample", lambda self: (["robot mode is MANUAL"] if busy else [], None))
+    before = journal.read_bytes()
+    outcome = m.Feed(root, host=host).poll()
+    if busy:
+        assert outcome["outcome"] == "deferred-busy" and outcome["reasons"] == ["robot mode is MANUAL"]
+        assert not started and journal.read_bytes() == before
+    else:
+        assert outcome["outcome"] == "trial-requested" and len(started) == 1
+    assert state.read_state(root)["pending"] is None or not busy
