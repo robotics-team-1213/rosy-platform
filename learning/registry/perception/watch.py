@@ -83,9 +83,11 @@ watcher's venv): the run stops at once, nothing is recorded and no attempt is
 spent, so the timer retries every run until the venv is fixed. A robot push that
 fails with deliver.py's own code (3, 75, 76) is logged with that code; the
 watcher's exit stays one of these, except for a network failure to a robot:
-77 its host name did not resolve (DNS / mDNS), 78 connection refused, timed out or no
+77 its host name did not resolve (DNS / mDNS; since 2026-11-17 only logged and
+recorded, the robot is skipped and the exit stays 0: a powered-off robot is not a unit
+failure), 78 connection refused, timed out or no
 route, 79 host key unknown or changed. These are deliver.py's codes (operator_ssh.py);
-the run exits with the code of the first robot (config order) that failed this way, so
+the run exits with the code of the first robot (config order) that failed with 78 or 79, so
 the unit shows failed and the timer keeps firing. A network failure spends no attempt
 (the robot stays pending, never gave_up) and is recorded per robot in the state file
 under robot_failures {kind, exit, at, count}; the next successful contact clears it.
@@ -478,10 +480,12 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
 
     def net_failure(state: dict, name: str, kind: str, detail: str) -> dict:
         code = operator_ssh.KIND_EXIT[kind]
-        net_exits.append(code)
+        if kind != "dns":  # a name that does not resolve is a powered-off robot: skipped, not a unit failure
+            net_exits.append(code)
         state = record_failure(state, name, kind, code, _now())
         n = state["robot_failures"][name]["count"]
-        print(f"model-watch: {name}: {kind} failure (exit {code}, {n} in a row): {detail}",
+        skip = " - skipped, robot not on the network" if kind == "dns" else ""
+        print(f"model-watch: {name}: {kind} failure (exit {code}, {n} in a row): {detail}{skip}",
               file=sys.stderr)
         save_state(cfg["state_file"], state)
         return state

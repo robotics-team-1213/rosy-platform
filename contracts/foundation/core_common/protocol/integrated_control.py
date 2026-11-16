@@ -78,6 +78,8 @@ class ControlUnitSummary(_Wire):
 class ControlOverview(_Summary):
     unit_id: UnitId
     config_revision: UnitId
+    # Additive: sha256 hex of the canonical manifest; absent from peers that predate it.
+    manifest_digest: str | None = Field(default=None, strict=True, pattern=r"^[0-9a-f]{64}$")
     units: list[ControlUnitSummary] = Field(max_length=64)
 
     @field_validator("units")
