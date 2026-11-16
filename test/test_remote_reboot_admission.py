@@ -194,7 +194,6 @@ mkdir -p "$HOME/rosy-jobs"
     res = _sh(p3 + rj.JOB, env, "r", "d", "", "2", "60", "ROSY_JOB_ALONE=1", "ROSY_JOB_CPU_ALONE=1", "x.py")
     assert res.returncode == 253 and rj.HOLD_DEFERRED + b"\n" in res.stdout
 
-
     # 4) dedicated test/test_platform_g1_timing.py auto-enables CPU_ALONE in JOB without changing invocation words
     (home / "pytest-started").unlink(missing_ok=True)
     res = _sh(p1 + rj.JOB, env, "r", "d", "", "3", "60", "ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py", "-pno:xdist")
