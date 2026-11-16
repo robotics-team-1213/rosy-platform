@@ -34,9 +34,11 @@ from cell_pivot_bias import (  # noqa: E402,F401  (re-exported)
     bias_at,
     bias_path,
     circle_center_sigma_mm,
+    fit_pivot_yaw,
     load_bias,
     save_bias,
     validate_bias,
+    yaw_arc_deg as _yaw_arc_deg,
 )
 
 STILL_PX, DIFF_PX, MIN_BLOB, MAX_BLOB, FOLLOW_PX, AGREE_PX = (
@@ -308,15 +310,6 @@ def known_geometry_bias(marks, tcps, geometry: dict, site: str, record: dict, pa
 MIN_YAW_ARC_DEG = 120.0
 
 
-def _yaw_arc_deg(yaws_deg) -> float:
-    """Span of achieved FK yaws around the circle (360 minus the largest empty gap)."""
-    angles = sorted(y % 360.0 for y in yaws_deg)
-    if len(angles) < 2:
-        return 0.0
-    gaps = [b - a for a, b in zip(angles, angles[1:])] + [360.0 - angles[-1] + angles[0]]
-    return 360.0 - max(gaps)
-
-
 def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: str, work: Path,
                     sleep=time.sleep, log=print) -> dict:
     """Hold the TCP at `point` (x, y metres) over a clear surface at each yaw, mark the jaws, fit the circle.
@@ -371,23 +364,33 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     if arc_deg < MIN_YAW_ARC_DEG:
         return {"result": f"circle refused: yaw arc {round(arc_deg, 1)} deg < {int(MIN_YAW_ARC_DEG)} deg",
                 "yaws_fk_deg": [round(t[3], 1) for t in tcps]}
-    cx, cy, radius, rms = fit_circle(marks)
-    sigma_mm = circle_center_sigma_mm(marks, cx, cy, rms)
-    tx, ty = (float(np.mean([t[i] for t in tcps])) for i in (0, 1))
-    phases = [math.atan2(m[1] - cy, m[0] - cx) - math.radians(t[3]) for m, t in zip(marks, tcps)]
-    phase = math.degrees(math.atan2(np.mean(np.sin(phases)), np.mean(np.cos(phases))))
+    mark_sig = float(prm.get(params, "verify.mark_sigma_mm"))
+    fit = fit_pivot_yaw(marks, [t[3] for t in tcps], mark_sigma_mm=mark_sig)
+    if fit["result"] != "fitted":
+        return {"result": f"circle refused: {fit['why']}", "dropped": fit.get("dropped", 0)}
+    kept = fit["kept_indices"]
+    kept_marks, kept_tcps = [marks[i] for i in kept], [tcps[i] for i in kept]
+    if _yaw_arc_deg([t[3] for t in kept_tcps]) < MIN_YAW_ARC_DEG:
+        return {"result": f"circle refused: yaw arc {round(_yaw_arc_deg([t[3] for t in kept_tcps]), 1)} deg < {int(MIN_YAW_ARC_DEG)} deg",
+                "yaws_fk_deg": [round(t[3], 1) for t in kept_tcps]}
+    cx, cy = fit["centre_m"]
+    radius, phase, rms, sigma_mm = fit["radius_m"], fit["phase_deg"], fit["rms_m"], fit["centre_sigma_mm"]
+    tx, ty = (float(np.mean([t[i] for t in kept_tcps])) for i in (0, 1))
     bias = {"site": site, "kind": "pivot", "point_m": [round(tx, 4), round(ty, 4)],
             "bias_mm": [round(1000 * (cx - tx), 1), round(1000 * (cy - ty), 1)],
-            "radius_mm": round(1000 * radius, 1), "phase_deg": round(phase, 1), "rms_mm": round(1000 * rms, 1),
+            "radius_mm": fit["radius_mm"], "phase_deg": phase, "rms_mm": fit["rms_mm"], "fit_model": "yaw_linear",
             **({"bias_sigma_mm": sigma_mm} if sigma_mm is not None else {}),
-            "yaws_fk_deg": [round(t[3], 1) for t in tcps], "n": len(marks),
+            **({"dropped": fit["dropped"]} if fit["dropped"] else {}),
+            "yaws_fk_deg": [round(t[3], 1) for t in kept_tcps], "n": len(kept_tcps),
             "map_sha": cell_attempts.digest(record), "measured": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    # a circle the marks do not follow is not a bias: next to the Pinky body the marks gave radius 70 mm, rms 13.6 mm
-    # and a 6 cm "bias" (2026-10-28); the mark sits ~19-28 mm off the TCP, so a radius far outside that is refused
+    if len(kept_marks) >= 4:
+        k_cx, k_cy, _, k_rms = fit_circle(kept_marks)
+        k_sig = circle_center_sigma_mm(kept_marks, k_cx, k_cy, k_rms)
+        if k_sig is not None and math.hypot(cx - k_cx, cy - k_cy) * 1000.0 > max(15.0, 3.0 * math.hypot(k_sig, sigma_mm)):
+            return {"result": f"circle refused: yaw/circle mismatch {round(1000 * math.hypot(cx - k_cx, cy - k_cy), 1)} mm", "bias": bias}
     if rms * 1000 > prm.get(params, "pivot.max_rms_mm") or not (
             prm.get(params, "pivot.radius_lo_mm") <= radius * 1000 <= prm.get(params, "pivot.radius_hi_mm")):
         return {"result": f"circle refused: radius {bias['radius_mm']} mm, rms {bias['rms_mm']} mm", "bias": bias}
-    # 2026-11-06: 29.6 mm passed the circle test, the target moved 3 cm over a packed ship and nothing questioned it
     try:
         validate_bias(bias, params)
     except ValueError as exc:

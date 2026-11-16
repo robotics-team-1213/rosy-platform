@@ -50,6 +50,7 @@ def record_observation(
     sigma_mm: float = 3.0,
     accepted: bool = True,
     reason: str | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Append one compact raw innovation row (skips silently when work_dir missing or non-finite)."""
     path = monitor_path(config)
@@ -69,6 +70,7 @@ def record_observation(
         "sigma_mm": round(max(1.0, float(sigma_mm)), 2),
         "accepted": bool(accepted),
         **({"reason": reason} if reason else {}),
+        **({k: v for k, v in extra.items() if k not in ("schema", "ts", "arm_id", "site", "map_sha", "source", "raw_mm", "residual_mm", "sigma_mm", "accepted", "reason")} if extra else {}),
     }
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -296,7 +296,7 @@ def test_cross_verify_merges_depth_verify_and_touch_receipts_into_profile_snapsh
     try:
         _, html = call(url, "/")
         html_txt = html.decode("utf-8")
-        assert "교차 검증 (Eval · Depth · Touch · Map · FK · Drift)" in html_txt and "cvDepthTag" in html_txt and "cvEvalTag" in html_txt and "cvDriftTag" in html_txt
+        assert "교차 검증 (Eval · Depth · Touch · Map · XY · FK · Drift)" in html_txt and "cvDepthTag" in html_txt and "cvEvalTag" in html_txt and "cvXyTag" in html_txt and "cvDriftTag" in html_txt
         status, body = call(url, web.PROFILES_API)
         assert status == 200
         prof = json.loads(body)["profiles"][0]
