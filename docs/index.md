@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-16 · uncommitted · docs: D-1011 독립 검토 반영 — 인계 근거 두 가지, §4 확장 명시, 승인 담당
 - 2026-11-16 · uncommitted · docs: D-1011 공급암 S·적재 셀 컨베이어 끝 인계 관측 ADR (Proposed)
 - 2026-11-10 · uncommitted · docs: D-1010 독립 검토 반영 — 3·6항과 한계 갱신
 - 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
 - 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
-- 2026-11-09 · uncommitted · fix(land): CRLF를 들이는 브랜치 거절, 병합은 -X renormalize
