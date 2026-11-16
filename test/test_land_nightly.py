@@ -33,6 +33,22 @@ def test_the_night_runs_full_plus_every_browser_suite_and_records_new_failures_a
                     (["a/test_x_browser.py::test_b"], ["ROSY_RUN_BROWSER_TESTS=1"], "nightly")]
 
 
+def test_nightly_records_usable_clean_passes_in_land_cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(land_nightly, "_json", lambda *a: [] if "--all-browsers" in a else {"full_invocations": [["pkg/test"]]})
+    monkeypatch.setattr(land_nightly.land_checks, "tmp_dir", lambda name: tmp_path)
+    monkeypatch.setattr(land_nightly, "_main_sha", lambda: "a" * 40)
+    monkeypatch.setattr(land_nightly, "_green_marker", lambda: tmp_path / "green")
+    monkeypatch.setattr(land_nightly.land_mainred, "recheck", lambda *a: None)
+    monkeypatch.setattr(land_nightly.land_cache, "env_id", lambda *a: "env1")
+    monkeypatch.setattr(land_nightly.land_cache, "_git", lambda *a: type("R", (), {"stdout": "b" * 40})())
+    recorded = []
+    monkeypatch.setattr(land_nightly.land_cache, "record", lambda *a: recorded.append(a))
+    monkeypatch.setattr(land_nightly.remote_pytest, "run",
+                        lambda invs, logs, *a, **kw: [p.write_text("1 passed in 0.1s\n") for p in logs] and [0])
+    assert land_nightly.main([]) == 0
+    assert len(recorded) == 1 and recorded[0][4] == ["pkg/test"]
+
+
 def test_a_green_night_is_not_rerun_on_the_same_main(tmp_path, monkeypatch):
     monkeypatch.setattr(land_nightly, "_json", lambda *command: [["test"]] if "--all-browsers" in command
                         else {"full_invocations": [["test"]]})

@@ -1196,8 +1196,8 @@ def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeyp
     monkeypatch.setattr(land, "run_tests", run_tests)
     monkeypatch.setattr(land.land_full, "save", lambda *a: saved.append(a))
     assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1
-    # the selection ran beside the guards (2026-10-27); a failed guard still records nothing and lands nothing
-    assert sorted(phases) == ["gpre", "pre"] and saved == []
+    # Fail fast on guards before full_slot/pre; a failed guard or HEAD move stops before long tests or FULL record
+    assert phases == ["gpre"] and saved == []
     assert git(main, "rev-parse", "HEAD") == before
     assert sorted(qdir.glob("*.json")) == [peer]
     expected = "structural guard failed" if guard_outcome == "failure" else "HEAD changed"

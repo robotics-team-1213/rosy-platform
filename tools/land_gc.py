@@ -119,6 +119,10 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
         if recent and now - max(recent) < QUIET_S:
             out.append(("keep", "log written in the last hour", tree if tree.is_dir() else None, branches))
             continue
+        if (name.startswith("rollup-build-") and tree.is_dir()
+                and ((holder.parent / "rosy-land-rollup.lock").exists() and now - tree.stat().st_mtime < 900)):
+            out.append(("keep", "rollup build active", tree, branches))
+            continue
         if tree.is_dir() and (tree.is_symlink() or str(tree.resolve()) not in registered):
             out.append(("keep", "unregistered directory", tree, branches))
             continue
