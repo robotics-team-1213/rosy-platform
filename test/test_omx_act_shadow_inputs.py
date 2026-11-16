@@ -66,7 +66,7 @@ def test_assemble_follows_the_trained_layout():
     assert state.shape == (12,) and state.dtype == np.float32 and abs(state[6:11]).max() < 2e-3 and state[0] > 0.3 and state[1] < -0.3
     # gripper: units -> jaw gap by the arm's own arm-cal rule -> the sim jaw angle, never the servo angle (75 units is past the stroke)
     assert taken["meta"]["gripper_units"] == {"arm_a": 75.0, "arm_b": 0.0}
-    assert abs(state[5] - inputs.sim_gripper(75, taken["meta"]["gripper_rules"]["arm_a"])) < 1e-6 and abs(state[5] - 1.2) < 1e-3
+    assert abs(state[5] - inputs.sim_gripper(75, taken["meta"]["gripper_rules"]["arm_a"])) < 1e-6 and .3 < state[5] < 1.0
     goal = taken["goal"]  # arm_b's half only: active, one-hot source "a", one-hot target "b"
     assert goal.shape == (10,) and goal[:5].tolist() == [0] * 5 and goal[5:].tolist() == [1, 1, 0, 0, 1]
     assert own.calls.count(("act", "state")) == 1 and peer.calls.count(("act", "state")) == 1

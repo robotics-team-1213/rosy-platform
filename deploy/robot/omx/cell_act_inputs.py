@@ -62,7 +62,8 @@ def sim_gripper(units: float, rule: dict) -> float:
         sys.path.insert(0, isaac)
     import palletizing_gripper as jaw
 
-    return jaw.angle_for_gap_clipped((30 + (units - rule["held_30mm"]) * rule["gap_mm_per_unit"]) / 1000)
+    gap_mm = min(max(30 + (units - rule["held_30mm"]) * rule["gap_mm_per_unit"], 12.), 60.)  # omx_cell_sim.real_q's 12-60 mm
+    return jaw.angle_for_gap_clipped(gap_mm / 1000)
 
 
 def _read_state(cell, arm, rule):
