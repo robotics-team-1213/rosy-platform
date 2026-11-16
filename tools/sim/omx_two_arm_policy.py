@@ -77,7 +77,8 @@ def evaluate(args):
     import av
     driver = Driver(args.model, args.steps_file, sites.parse_choices(args.choice),
                     pick_vision=getattr(args, "pick_vision", False), belt_skew=getattr(args, "belt_skew", False),
-                    ensemble_coeff=getattr(args, "ensemble_coeff", None), n_action_steps=getattr(args, "n_action_steps", None))
+                    ensemble_coeff=getattr(args, "ensemble_coeff", None), n_action_steps=getattr(args, "n_action_steps", None),
+                    flow_steps=getattr(args, "flow_steps", None), use_amp=True if getattr(args, "amp", False) else None)
     rows, runs = [], []
     Path(args.artifacts).mkdir(parents=True, exist_ok=True)
     planned = plan_tasks(args.plan_dir, args.tasks.split(",")) if args.plan_dir else None
@@ -301,7 +302,8 @@ def main(argv=None):
         if name == "evaluate":
             for flag, kw in (("--model", dict(required=True)), ("--steps-file", dict(required=True)), ("--out", dict(required=True)),
                              ("--artifacts", dict(required=True)), ("--plan-dir", dict(help="judge whole tasks")),
-                             ("--ensemble-coeff", dict(type=float)), ("--n-action-steps", dict(type=int))):
+                             ("--ensemble-coeff", dict(type=float)), ("--n-action-steps", dict(type=int)),
+                             ("--flow-steps", dict(type=int)), ("--amp", dict(action="store_true"))):
                 one.add_argument(flag, **kw)
         else:
             one.add_argument("--no-goal", action="store_true")
