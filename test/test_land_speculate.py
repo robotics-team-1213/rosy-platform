@@ -282,3 +282,31 @@ def test_prepare_skips_speculation_unless_asked(queued, monkeypatch):
     land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=True),
                               sys.executable, qdir, ticket, SELECTED, "")
     assert called == []
+
+
+def test_merge_train_predicts_once_for_position_one_turn_holder(queued, monkeypatch):
+    main, wt, base, peer, qdir, ticket, ran, _ = queued
+    peer_ticket = sorted(qdir.glob("*.json"))[0]
+    land.land_queue.set_status(peer_ticket, "waiting")
+    args = land.argparse.Namespace(tests="auto")
+    hook = land.land_prepare.train(land, wt, "feat/x", args, sys.executable, qdir, ticket)
+    calls = []
+    monkeypatch.setattr(spec, "prepare", lambda *a, **k: calls.append(a[6]) or True)
+    naps = []
+
+    def step(_):
+        naps.append(1)
+        if len(naps) == 1:
+            land.land_queue.set_status(peer_ticket, "turn")
+        elif len(naps) >= 3:
+            peer_ticket.unlink(missing_ok=True)
+
+    assert land.land_queue.wait(qdir, ticket, 0, sleep=step, on_ahead=hook) is None
+    assert calls == [ticket] and len(naps) == 3
+
+    monkeypatch.setenv(land.land_prepare.SPECULATE_ENV, "0")
+    calls.clear()
+    hook_off = land.land_prepare.train(land, wt, "feat/x", args, sys.executable, qdir, ticket)
+    hook_off({"branch": "feat/peer"})
+    assert calls == []
+

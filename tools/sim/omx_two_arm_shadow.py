@@ -27,6 +27,29 @@ import omx_two_arm_sites as sites  # noqa: E402
 REAL_VIEWS = {"top": "top", "side": "side", "a_wrist": "arm_a_wrist", "b_wrist": "arm_b_wrist"}  # sim view -> site camera label
 REAL_JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")  # joint1..joint5
 HEALTH_JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
+DEFAULT_HEALTH_CMD = "cat ~/.local/state/rosy/motor-health/arm_a.json ~/.local/state/rosy/motor-health/arm_b.json"
+
+
+def shadow_risks(arm, state_rad, real_rad, sim_rad, *, max_shadow_deg=None, max_idle_deg=None):
+    """Split active-arm vs idle-arm L2 shadow drift and enforce optional Go/No-Go caps."""
+    idx = sites.ARMS.index(arm)
+    active = slice(6 * idx, 6 * idx + 6)
+    idle = slice(6 * (1 - idx), 6 * (1 - idx) + 6)
+    state, real, sim = np.asarray(state_rad, float), np.asarray(real_rad, float), np.asarray(sim_rad, float)
+    active_sim = round(float(np.degrees(np.abs(real[active] - sim[active])).max()), 1)
+    active_step = round(float(np.degrees(np.abs(real[active] - state[active])).max()), 1)
+    idle_delta = round(float(np.degrees(np.abs(real[idle] - state[idle])).max()), 1)
+    reasons = []
+    if max_shadow_deg is not None and active_sim > max_shadow_deg:
+        reasons.append(f"active_arm_shadow_deg {active_sim} > {max_shadow_deg}")
+    if max_idle_deg is not None and idle_delta > max_idle_deg:
+        reasons.append(f"idle_arm_delta_deg {idle_delta} > {max_idle_deg}")
+    return {
+        "active_arm_max_abs_real_minus_sim_deg": active_sim,
+        "active_arm_max_step_deg": active_step,
+        "idle_arm_max_abs_delta_deg": idle_delta,
+        "l2_gate": {"passed": not reasons, "reasons": reasons},
+    }
 
 
 def norm_to_rad(value):
@@ -140,12 +163,15 @@ def compare(args):
             plan = step
             break
         here[step["container"]] = step["to"]
-    if plan is None or plan["from"] == "belt":
-        raise SystemExit(f"{args.task}/{args.step}: not a step of the task, or a belt step (needs the belt feed)")
+    if plan is None:
+        raise SystemExit(f"{args.task}/{args.step}: not a step of the task")
     # shortcut: the gripper takes the sim wait opening, the real jaw unit is not mapped; upgrade when a jaw calibration exists
     state = np.concatenate([np.append(norm_to_rad(meta["joints"][arm]), layout.arms[arm].wait[5]) for arm in sites.ARMS]).astype(np.float32)
     teacher_t = teacher_first(world, here, plan)
-    data = teaching.Teacher(world, seed=0).fresh(here)
+    t_sim = teaching.Teacher(world, seed=0)
+    data = t_sim.fresh(here)
+    if plan["from"] == "belt":
+        t_sim.belt_in(data, plan, {o: layout.sim_arms[o].wait for o in layout.arms if o != plan["arm"]})
     for k, arm in enumerate(sites.ARMS):
         data.qpos[world.q[arm]] = state[6 * k:6 * k + 6]
         data.qpos[world.mimic[arm]] = -state[6 * k + 5]
@@ -161,19 +187,24 @@ def compare(args):
             out[name] = driver.act(state, images, goal, prompt=prompt)
     deg = lambda v: np.degrees(v).round(1).tolist()  # noqa: E731
     names = [f"{arm}.{j}" for arm in sites.ARMS for j in (*REAL_JOINTS, "gripper")]
+    risks = shadow_risks(
+        plan["arm"], state, out["real"], out["sim"],
+        max_shadow_deg=args.max_shadow_deg, max_idle_deg=args.max_idle_deg,
+    )
     result = dict(snapshot=str(snap), captured_at=meta["captured_at"], model=str(args.model), policy_type=driver.kind, prompt=prompt,
                   task=args.task, step=args.step, arm=plan["arm"], joints=names,
                   state_deg=deg(state), real_deg=deg(out["real"]), sim_deg=deg(out["sim"]), teacher_deg=deg(teacher_t),
                   real_minus_sim_deg=deg(out["real"] - out["sim"]), real_minus_teacher_deg=deg(out["real"] - teacher_t), sim_minus_teacher_deg=deg(out["sim"] - teacher_t),
                   max_abs_real_minus_sim_deg=float(np.degrees(np.abs(out["real"] - out["sim"]).max()).round(1)),
                   image_mean_abs_diff={view: round(float(np.abs(real[view].astype(int) - sim[view].astype(int)).mean()), 1) for view in teaching.RECORDED},
+                  **risks,
                   note="L2 shadow: no command reached an arm (D-793); sim scene is the task's nominal start, gripper from the sim wait pose")
     dest = Path(args.out)
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "shadow.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     Image.fromarray(np.vstack([pol.sheet(real), pol.sheet(sim)])).save(dest / "real-over-sim.png")
     print(json.dumps(result))
-    return 0
+    return 0 if risks["l2_gate"]["passed"] else 2
 
 
 def main(argv=None):
@@ -182,7 +213,7 @@ def main(argv=None):
     c = sub.add_parser("capture")
     c.add_argument("--site", required=True)
     c.add_argument("--frames", default="http://127.0.0.1:8767", help="the site's camera view server, as seen on the site")
-    c.add_argument("--health", required=True, help="remote command that prints two_arm_pipeline.py --stage health output")
+    c.add_argument("--health", default=DEFAULT_HEALTH_CMD, help="remote command printing two_arm_pipeline --stage health or motor-health/*.json")
     c.add_argument("--out", required=True)
     m = sub.add_parser("compare")
     m.add_argument("--model", required=True)
@@ -196,6 +227,8 @@ def main(argv=None):
     m.add_argument("--flow-steps", type=int, default=None)
     m.add_argument("--n-action-steps", type=int, default=None)
     m.add_argument("--amp", action="store_true")
+    m.add_argument("--max-shadow-deg", type=float, default=None)
+    m.add_argument("--max-idle-deg", type=float, default=None)
     m.add_argument("--out", required=True)
     args = p.parse_args(argv)
     return capture(args) if args.cmd == "capture" else compare(args)

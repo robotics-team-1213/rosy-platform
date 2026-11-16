@@ -91,3 +91,44 @@ def test_generate_records_handles_title_with_unhashable_frontmatter_dict(tmp_pat
     assert written == ["docs/index.md"]
     assert (tmp_path / "docs/index.md").read_text(encoding="utf-8") == "FromDict/T\n"
 
+
+def test_warm_main_records_missing_non_dedicated_suites(cached, monkeypatch):
+    wt, _, _ = cached
+    (wt / "test/architecture").mkdir(parents=True, exist_ok=True)
+    sha = git(wt, "rev-parse", "HEAD")
+    monkeypatch.setattr(land.land_cache, "env_id", lambda *_: "env1")
+    ran = []
+
+    def fake_run(invs, logs, run_sha, repo=None, label=None):
+        ran.extend(invs)
+        for p in logs:
+            p.write_text("1 passed in 0.1s\n", encoding="utf-8")
+        return [0] * len(invs)
+
+    monkeypatch.setattr(land.remote_pytest, "run", fake_run)
+    done, total = land.land_cache.warm_main(wt, limit=2, main_ref=sha)
+    assert (done, total) == (1, 1) and ran == [["test/architecture"]]
+    assert land.land_cache.warm_main(wt, limit=2, main_ref=sha) == (0, 0)
+
+
+def test_paths_extracts_isolation_envs_skips_ignore_and_batches_is_ancestor(cached, monkeypatch):
+    wt, _, _ = cached
+    head = git(wt, "rev-parse", "HEAD")
+    base = head
+    cache = land.land_cache
+    assert cache._paths(["ROSY_JOB_CORES=6", "ROSY_ALONE_FILES=a/test_a.py,b/test_b.py",
+                         "tools/collect_alone.py", "--ignore=test/test_slow.py"]) == [
+        "a/test_a.py", "b/test_b.py", "tools/collect_alone.py"]
+    assert cache._paths(["ROSY_COLLECT_PATHS=.", "tools/collect_alone.py"]) is None
+    assert cache._paths(["pkg/test", "-k", "only"]) is None
+
+    calls = []
+    real_git = cache._git
+    monkeypatch.setattr(cache, "_git", lambda *a: calls.append(a[1:]) or real_git(*a))
+    cache._anc_cache.clear()
+    cache._anc_neg.clear()
+    assert cache.is_ancestor(wt, base, head) is True
+    assert cache.is_ancestor(wt, base, head) is True
+    assert len(calls) == 1 and calls[0][:2] == ("rev-list", "-n")
+
+

@@ -43,14 +43,13 @@ GATE = "tools/collect_alone.py"
 # The jobs are serial under xdist_plan (tools/ is in serial_suites.txt); the pool takes this budget instead.
 # Collecting a FULL selection's 2,123 files took 347 s with 2 workers, 150 s with 6 (2026-10-26).
 GATE_CORES = 6
+GATE_SHARDS = 4  # shard large gate path sets deterministically across test hosts instead of 315s on one PC
 BUDGET_S = 600
 RECORD = "rosy-land-isolation.jsonl"
 OPEN_AFTER_S = 24 * 3600  # doctor and the turn flag records still open after a night
 TEST_FILE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test)\.py$")  # = affected_tests.TEST_FILE
 ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 REPORT = re.compile(r"^\[isolation\] (complete|incomplete): ?(.*)$", re.MULTILINE)
-# An option word keeps land_cache from narrow reuse (its delta mapping cannot see the files in job words).
-NO_NARROW = "-pno:cacheprovider"
 # remote_pytest.PYTEST_TAIL's options for one file; xdist off: each file already has its own process.
 TAIL = ["-q", "-rfE", "-p", "no:cacheprovider", "-p", "no:xdist", "--rootdir=.", "-pno:launch_testing",
         "-pno:launch_ros"]
@@ -124,12 +123,23 @@ def report_line(files: list[str], done: dict) -> str:
 
 def gate(wt: Path, selection: list[list[str]]) -> list[list[str]]:
     paths = selected_paths(selection)
-    return ([[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_COLLECT_PATHS={','.join(paths)}", GATE, NO_NARROW]]
-            if paths and (wt / GATE).is_file() else [])
+    if not (paths and (wt / GATE).is_file()):
+        return []
+    if len(paths) < GATE_SHARDS * 2:
+        return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_COLLECT_PATHS={','.join(paths)}", GATE]]
+    tracked = tracked_tests(wt, paths)
+    counts = {p: sum(1 for f in tracked if f == p or f.startswith(p + "/")) for p in paths}
+    bins: list[tuple[list[int], list[str]]] = [([0], []) for _ in range(GATE_SHARDS)]
+    for path in sorted(paths, key=lambda p: (-counts[p], p)):
+        total, members = min(bins, key=lambda b: (b[0][0], len(b[1])))
+        total[0] += counts[path]
+        members.append(path)
+    return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_COLLECT_PATHS={','.join(sorted(members))}", GATE]
+            for _, members in bins if members]
 
 
 def job(files: list[str]) -> list[list[str]]:
-    return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_ALONE_FILES={','.join(files)}", GATE, NO_NARROW]] if files else []
+    return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_ALONE_FILES={','.join(files)}", GATE]] if files else []
 
 
 def _selector(wt: Path):
@@ -270,7 +280,8 @@ def _prepare(wt, branch, selection, args, logdir, round_no, run_tests, guards, s
     files, safety = alone_files(wt, selection)
     since = time.time() - 1
     try:
-        batch = guards + gate(wt, selection) + job(files)
+        # Run small targeted alone-files before large collection gate so safety checks never starve behind FULL collection.
+        batch = guards + job(files) + gate(wt, selection)
         done = run_tests(wt, args, batch, logdir, f"g{round_no}") if batch else []
     except BaseException:
         if files:  # a NEW failure or a dead job stops the landing; the files still never ran alone to a pass

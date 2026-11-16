@@ -231,13 +231,17 @@ class Teacher:
                      max_jitter_std_deg=round(math.degrees(self.servo_comp.max_jitter_std_rad[arm]), 3) if self.servo_comp else 0.0)
         return dict(self.verdict(data, step, row, before, ctx), held=held, servo_comp=scomp, worst_ik_error_mm=round(worst * 1000, 2))
 
+    def skew_for(self, step=None):
+        """Next deterministic belt arrival jitter dict `{'jitter': (dx, dy, yaw_rad)}` from `SKEW_CASES`."""
+        dx, dy, y_deg = self.SKEW_CASES[self.skew_i % len(self.SKEW_CASES)]
+        self.skew_i += 1
+        return dict(jitter=(dx, dy, math.radians(y_deg)))
+
     def belt_in_g(self, data, step):
         """The next container arrives; the belt pick pose varies inside the fixture's infeed tolerance, seed 0 is the nominal pose."""
         f, arm = self.layout.fixture, step["arm"]
         if self.belt_skew:
-            dx, dy, y_deg = self.SKEW_CASES[self.skew_i % len(self.SKEW_CASES)]
-            self.skew_i += 1
-            j = (dx, dy, math.radians(y_deg))
+            j = self.skew_for(step)["jitter"]
         else:
             j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
         self.world.put(data, step["container"], "belt", jitter=j)
