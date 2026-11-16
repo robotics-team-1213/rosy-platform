@@ -8,8 +8,11 @@ from urllib.parse import parse_qs, urlsplit
 
 ACCOUNT_COOKIE, FLOW_COOKIE = "rosy_cell_params_account", "rosy_cell_params_flow"
 FOUNDATION = Path(__file__).resolve().parents[3] / "contracts" / "foundation"
-if FOUNDATION.is_dir() and str(FOUNDATION) not in sys.path:
-    sys.path.append(str(FOUNDATION))
+if FOUNDATION.is_dir():
+    f_str = str(FOUNDATION)
+    if f_str in sys.path:
+        sys.path.remove(f_str)
+    sys.path.insert(0, f_str)
 try:
     from core_common.protocol.account_client import AccountUnavailable, browser_session, load_account_client
 except ImportError:  # environments without cryptography stay local-only
@@ -41,10 +44,11 @@ def same_callback_origin(handler, account) -> bool:
 
 def handle_account_route(handler, account, method: str, path: str, query_path: str):
     headers, status, body = [], 200, {}
+    cookie = cookie_value(handler, ACCOUNT_COOKIE) or cookie_value(handler, "rosy_calibration_account")
     try:
         if method == "GET" and path == "/api/account/session":
             if account and browser_session:
-                body, _ = browser_session(account, cookie_value(handler, ACCOUNT_COOKIE))
+                body, _ = browser_session(account, cookie)
             else:
                 body = {"enabled": False, "authenticated": False, "profile": None, "profile_url": None}
         elif method == "GET" and path == "/api/account/login" and account:
@@ -59,7 +63,7 @@ def handle_account_route(handler, account, method: str, path: str, query_path: s
             status = 303
         elif method == "POST" and path == "/api/account/logout" and same_callback_origin(handler, account):
             headers = [set_cookie_header(ACCOUNT_COOKIE, "", 0)]
-            account.logout(cookie_value(handler, ACCOUNT_COOKIE))
+            account.logout(cookie)
         else:
             status, body = 403, {"error": "Account 접근이 거절되었습니다."}
     except AccountUnavailable:
@@ -75,8 +79,12 @@ def authorize_request(handler, account, capabilities=None):
         return None, None
     if capabilities is not None and not same_callback_origin(handler, account):
         return (403, {"error": "등록된 출처에서만 변경할 수 있습니다."}), None
+    cookie = cookie_value(handler, ACCOUNT_COOKIE) or cookie_value(handler, "rosy_calibration_account")
     try:
-        claims, token = account.access_token_for(cookie_value(handler, ACCOUNT_COOKIE))
+        if hasattr(account, "access_token_for"):
+            claims, token = account.access_token_for(cookie)
+        else:
+            claims, token = account.resolve(cookie), None
     except AccountUnavailable:
         return (503, {"error": "Account 서비스에 닿지 않습니다."}), None
     if claims is None:

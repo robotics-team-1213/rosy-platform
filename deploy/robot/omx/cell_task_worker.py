@@ -30,11 +30,7 @@ from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
 from cell_task_exec import (
-    check_arm_hold,
-    classify_poll_error,
-    execute_guarded_cell_task,
-    make_ca_urlopen,
-    resolve_task_arm,
+    check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen, resolve_task_arm,
 )
 
 ensure_omx_paths()
@@ -132,6 +128,9 @@ def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, dict[str
     return acknowledgements
 
 
+_LAST_SAFETY_ERROR: list[Exception | None] = [None]
+
+
 def _bounded_safety_listing(request_fn, *, cell_id: str | None = None, task_id: str | None = None) -> dict | None:
     """Only an explicit fresh Fleet `active_estop=False` can allow an arm task to continue."""
     answer: dict[str, Any] = {}
@@ -140,14 +139,15 @@ def _bounded_safety_listing(request_fn, *, cell_id: str | None = None, task_id: 
     def query() -> None:
         try:
             answer["value"] = request_fn("GET", "/api/fleet/pipeline/cell-tasks?status=QUEUED", None)
-        except Exception:
-            pass
+        except Exception as exc:
+            answer["error"] = exc
         finally:
             finished.set()
 
     threading.Thread(target=query, daemon=True).start()
     if not finished.wait(0.5):
         return None  # shortcut: one timed-out daemon query may finish later; no further poll after this failure
+    _LAST_SAFETY_ERROR[0] = answer.get("error")
     listing = answer.get("value")
     if not isinstance(listing, dict) or not isinstance(listing.get("human_safety"), dict):
         return None
@@ -171,14 +171,11 @@ def _hold_fault(prep_dir: Path, arm_id: str, reason: str) -> dict[str, Any]:
         ack = emergency_stop_arms(prep_dir)
     except Exception:
         ack = {}
-    if not isinstance(ack, dict):
-        ack = {}
+    ack = ack if isinstance(ack, dict) else {}
     suffix = ARM_WRAPPERS.get(arm_id, (None,))[0]
-    relevant = [value for name, value in ack.items() if suffix and name in
-                (f"chunk-io-{suffix}", f"chunk-io-{suffix}-r2s")]
+    relevant = [value for name, value in ack.items() if suffix and name in (f"chunk-io-{suffix}", f"chunk-io-{suffix}-r2s")]
     return {"reason": reason, "hold_ack": ack,
-            "owner_hold_ack_complete": bool(relevant) and all(isinstance(value, dict) and
-                value.get("ok") is True for value in relevant),
+            "owner_hold_ack_complete": bool(relevant) and all(isinstance(v, dict) and v.get("ok") is True for v in relevant),
             "owner_stop_unconfirmed": True}  # command ACK does not measure physical stop or sustained torque
 
 
@@ -364,7 +361,10 @@ def main(argv: list[str] | None = None) -> None:
                 _trigger_bg_cam_upload()
                 last_cam_push = now_m
             if args.dry_run_hw or args.allow_legacy_live_jog or args.execute_mode == "guarded-pick":
+                _LAST_SAFETY_ERROR[0] = None
                 runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, hold_check_fn=check_arm_hold)
+                if not runs and _LAST_SAFETY_ERROR[0] is not None:
+                    raise _LAST_SAFETY_ERROR[0]
             else:
                 runs = []
                 print(json.dumps({
