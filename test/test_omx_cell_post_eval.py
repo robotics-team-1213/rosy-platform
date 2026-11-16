@@ -227,10 +227,10 @@ def test_blend_bias_at_regularized_kernel_and_sequential_save_fusion(tmp_path):
              "radius_mm": 19.5, "phase_deg": 45.0, "centre_sigma_mm": 1.5, "map_sha": "sha_cur"},
             {"site": "floor", "kind": "visit", "point_m": [0.14, 0.10], "bias_mm": [2.0, 0.0],
              "centre_sigma_mm": 2.0, "map_sha": "sha_cur"},
-            # Stale map_sha and duplicate region must be ignored
+            # Stale map_sha and duplicate region must be ignored by blend_bias_at
             {"site": "floor", "kind": "visit", "point_m": [0.14, 0.10], "bias_mm": [2.0, 0.0],
              "centre_sigma_mm": 2.0, "map_sha": "sha_cur"},
-            {"site": "floor", "kind": "visit", "point_m": [0.11, 0.10], "bias_mm": [-20.0, 0.0],
+            {"site": "floor", "kind": "visit", "point_m": [0.15, 0.10], "bias_mm": [-20.0, 0.0],
              "centre_sigma_mm": 1.5, "map_sha": "sha_old"},
         ],
     }

@@ -202,8 +202,8 @@ def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None,
     raw = [r for r in data["regions"] if r["site"] == site and 1000.0 * math.dist(r["point_m"], point_m) <= reach_mm]
     if not raw:
         return None
-    anchor = min(raw, key=lambda r: (round(math.dist(r["point_m"], point_m), 4), 0 if is_pivot_region(r) else 1))
-    target_sha = map_sha if map_sha is not None else anchor.get("map_sha")
+    piv0 = min((r for r in raw if is_pivot_region(r)), key=lambda r: math.dist(r["point_m"], point_m), default=None)
+    target_sha = map_sha or (piv0 and piv0.get("map_sha"))
     seen_keys: set = set()
     near = []
     for r in raw:
@@ -215,9 +215,10 @@ def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None,
             seen_keys.add(k)
             near.append(r)
     if not near:
-        near = [anchor]
+        near = [raw[0]]
+    anchor = min(near, key=lambda r: (round(math.dist(r["point_m"], point_m), 4), 0 if is_pivot_region(r) else 1))
     if len(near) == 1:
-        return {**near[0], "blended_n": 1}
+        return {**anchor, "blended_n": 1}
     wx = wy = wsum = 0.0
     for r in near:
         d_mm = 1000.0 * math.dist(r["point_m"], point_m)
