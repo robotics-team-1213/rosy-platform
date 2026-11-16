@@ -20,7 +20,7 @@ OPERATE = "calibration.operate"
 STEPS = {"check": [], "depth-verify": ["--only", "depth-verify", "--verify"], "pivot-near": ["--only", "pivot-near"],
          "remap": ["--only", "remap"]}
 MOVING = {"pivot-near", "remap"}  # D-911: a person at the power switch
-TARGET = re.compile(r"[A-Za-z0-9_-]{1,64}:-?\d+(\.\d+)?,-?\d+(\.\d+)?")
+TARGET = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}:-?\d+(\.\d+)?,-?\d+(\.\d+)?")  # never starts with '-'
 ARM = re.compile(r"[A-Za-z0-9_-]{1,32}")
 JOB_ID = re.compile(r"[0-9]{8}T[0-9]{6}-[0-9a-f]{6}")
 CLEAR_FRESH_S = 600
@@ -51,7 +51,7 @@ def session_running(arm: str) -> bool:
             args = cmd.read_bytes().decode(errors="replace").replace("\0", " ")
         except OSError:
             continue
-        if "record_session.py" in args and f"--arm {arm}" in args:
+        if "record_session.py" in args and (f"--arm {arm} " in f"{args} " or f"--arm={arm} " in f"{args} "):
             return True
     return False
 
@@ -148,7 +148,21 @@ class Jobs:
     def job_file(self, job_id, ext="json"):
         return self.work / "jobs" / f"{job_id}.{ext}"
 
-    def start(self, body, by):
+    def running(self, arm):
+        """Jobs on the arm whose engine process is still alive (one job per arm, review 2026-11-17)."""
+        alive = []
+        for record in self.jobs():
+            if record.get("arm") == arm and record.get("status") == "running" and record.get("pid"):
+                try:
+                    os.kill(record["pid"], 0)
+                except PermissionError:
+                    pass
+                except (OSError, ValueError):
+                    continue
+                alive.append(record["id"])
+        return alive
+
+    def start(self, body, by, owner_id=None):
         arm, step, targets = body.get("arm"), body.get("step"), body.get("targets", [])
         if arm not in self.arms or step not in STEPS:
             return 422, {"error": f"arm은 {sorted(self.arms)}, step은 {sorted(STEPS)} 중 하나여야 합니다."}
@@ -156,7 +170,7 @@ class Jobs:
             return 422, {"error": "targets는 'site:x,y' 문자열 목록이어야 합니다."}
         if step in MOVING and body.get("person_at_switch") is not True:
             return 422, {"error": "팔이 움직이는 단계는 전원 스위치 앞의 사람이 필요합니다(person_at_switch)."}
-        owner = f"calibration-web:{by}"
+        owner = f"calibration-web:{owner_id or by}"  # the account id: two people may share a display name
         config_path, _ = self.arm_config(arm)
         argv = [self.python, self.engine("cell_calibrate.py"), "--config", str(config_path),
                 "check" if step == "check" else "auto", *STEPS[step]]
@@ -170,19 +184,29 @@ class Jobs:
         (self.work / "jobs").mkdir(parents=True, exist_ok=True)
         lease = self.lease()
         with _lock:
+            if self.running(arm):
+                return 409, {"error": f"{arm}에서 작업이 이미 돌고 있습니다: {', '.join(self.running(arm))}"}
             try:
-                lease.claim(arm, owner, f"calibration {step}", 1800, os.getpid(), self.revision())
+                lease.claim(arm, owner, f"calibration {step}", 1800, None, self.revision())
             except lease.LeaseHeld as exc:
                 return 409, {"error": str(exc)}
             record = {"id": job_id, "arm": arm, "step": step, "targets": targets, "by": by, "revision": self.revision(),
                       "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "pid": None, "status": "running"}
+            proc = None
             try:
                 proc = self.spawn(argv, str(config_path.parent), self.env(arm, owner), self.job_file(job_id, "log"))
-            except OSError as exc:
+                # the lease follows the engine, not this server: a server restart must not free a moving arm
+                lease.claim(arm, owner, f"calibration {step}", 1800, proc.pid, self.revision())
+                record["pid"] = proc.pid
+                self.write(record)
+            except BaseException as exc:  # no finish thread will run: stop the engine first, then free the lease
+                if proc is not None:
+                    proc.terminate()
+                    proc.wait(timeout=30)
                 lease.release(arm, owner)
-                return 500, {"error": f"엔진을 시작하지 못했습니다: {exc}"}
-            record["pid"] = proc.pid
-            self.write(record)
+                if isinstance(exc, Exception):
+                    return 500, {"error": f"엔진을 시작하지 못했습니다: {exc}"}
+                raise
         thread = threading.Thread(target=self.finish, args=(proc, record, owner), daemon=True)
         thread.start()
         self.threads.append(thread)
@@ -244,16 +268,33 @@ class Jobs:
                 continue
         return rows
 
+    def evidence_ok(self, evidence) -> str | None:
+        """None when every item is a file under <work>/evidence whose sha256 matches, with at least one camera frame
+        and one joint reading (review 2026-11-17: refs were taken on trust); else why not."""
+        root = (self.work / "evidence").resolve()
+        for item in evidence:
+            path = (root / item["ref"]).resolve()
+            if root not in path.parents or not path.is_file():
+                return f"근거 파일이 없습니다: {item['ref']}"
+            if hashlib.sha256(path.read_bytes()).hexdigest() != item.get("sha256"):
+                return f"근거 해시가 맞지 않습니다: {item['ref']}"
+        kinds = {item["kind"] for item in evidence}
+        return None if {"frame", "joints"} <= kinds else "카메라 프레임과 관절 상태 근거가 모두 필요합니다."
+
     def assess(self, body, by):
         arm, verdict, reasons, evidence = body.get("arm"), body.get("verdict"), body.get("reasons"), body.get("evidence")
+        model = body.get("model")
         ok = (arm in self.arms and verdict in ("clear", "hold") and isinstance(reasons, str) and 0 < len(reasons) <= REASONS_MAX
-              and isinstance(evidence, list) and evidence
+              and isinstance(model, str) and 0 < len(model) <= 120 and isinstance(evidence, list) and evidence
               and all(isinstance(e, dict) and e.get("kind") in EVIDENCE_KINDS and isinstance(e.get("ref"), str) and e["ref"]
-                      and isinstance(e.get("sha256", ""), str) for e in evidence))
+                      and isinstance(e.get("sha256"), str) for e in evidence))
         if not ok:
-            return 422, {"error": "arm, verdict(clear|hold), reasons, evidence[{kind,ref}]가 필요합니다."}
-        row = {"id": uuid.uuid4().hex[:12], "arm": arm, "verdict": verdict, "reasons": reasons, "evidence": evidence,
-               "by": by, "at": time.time()}
+            return 422, {"error": "arm, verdict(clear|hold), model, reasons, evidence[{kind,ref,sha256}]가 필요합니다."}
+        why = self.evidence_ok(evidence)
+        if why:
+            return 422, {"error": why}
+        row = {"id": uuid.uuid4().hex[:12], "arm": arm, "verdict": verdict, "model": model, "reasons": reasons,
+               "evidence": evidence, "by": by, "at": time.time()}
         with _lock:
             self.work.mkdir(parents=True, exist_ok=True)
             with open(self.work / "assessments.jsonl", "a", encoding="utf-8") as f:
@@ -268,10 +309,10 @@ class Jobs:
         if not newest or newest["verdict"] != "clear" or time.time() - newest["at"] > CLEAR_FRESH_S:
             return 409, {"error": "10분 안의 clear 판정이 가장 최근 판정이어야 합니다."}
         held = (self.lease().status(arm) or {}).get(arm)
-        if held and held.get("live") and held.get("owner") != f"calibration-web:{by}":
-            return 409, {"error": f"다른 주인({held['owner']})의 리스가 살아 있습니다."}
-        if self.probe(arm):
-            return 409, {"error": "이 팔의 record_session이 실행 중입니다."}
+        if held and held.get("live"):  # anyone's, the clearer's own running job included (review 2026-11-17)
+            return 409, {"error": f"{held['owner']}의 리스가 살아 있습니다({held.get('purpose') or '-'})."}
+        if self.running(arm) or self.probe(arm):
+            return 409, {"error": "이 팔에서 작업이나 record_session이 실행 중입니다."}
         out, err = self.incident_tool([self.python, self.engine("omx_incident.py"), "clear", "--arm", arm, "--note",
                                        f"ai-assessment {newest['id']} by {newest['by']}"], 60, self.env(arm, f"calibration-web:{by}"))
         if out is None:
@@ -322,5 +363,5 @@ def handle(handler, method, path):
     body = _body(handler)
     if body is None:
         return handler.json(422, {"error": "JSON 본문이 필요합니다."})
-    return handler.json(*(jobs.start(body, by) if parts[0] == "jobs" else jobs.assess(body, by)))
+    return handler.json(*(jobs.start(body, by, getattr(claims, "sub", None)) if parts[0] == "jobs" else jobs.assess(body, by)))
 

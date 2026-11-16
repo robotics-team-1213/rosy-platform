@@ -17,14 +17,14 @@
 1. **팔 리스.** 팔마다 리스 하나를 둔다(`deploy/robot/omx/cell_arm_lease.py`, 셀 PC 상태 폴더). 리스는 주인(owner), 목적, 만료, 리비전을 적는다.
    - `record_session`은 세션 잠금 직후 리스를 잡는다. 다른 주인의 살아 있는 리스가 있으면 팔을 열지 않고 주인·목적·만료를 말하며 거절한다.
    - 주인은 `ROSY_ARM_LEASE_OWNER`이고, 없으면 사용자·접속지에서 만든다. 같은 주인은 갱신한다.
-   - 만료가 지났거나 세션 프로세스가 죽은 리스는 살아 있지 않다.
+   - 프로세스가 적힌 리스는 그 프로세스가 살아 있는 동안만 산다(만료와 무관; 긴 세션도 덮인다). 프로세스가 없는 리스(작업 시작 전 선점)는 만료까지 산다. 같은 주인이 다시 잡아도 살아 있는 보유 프로세스를 바꾸지 않는다.
 2. **보정 작업 API.** Calibration 앱이 상태판과 작업을 낸다.
    - `GET /api/calibration/status`: 팔별 리스, incident, 설치 리비전, 자리별 지도(LOO·점수·지문)·바이어스·면 높이.
-   - `POST /api/calibration/jobs`: 허용 단계(`check`, `depth-verify`, `pivot-near`, `rebase`, `remap`)만 받는다. `calibration.operate` 세션과 같은 출처가 필요하다. 팔을 움직이는 단계는 요청에 감독 확인(D-911)이 있어야 하고, 앱이 리스를 잡은 뒤 셀 엔진을 돌린다. 결과·로그·리비전을 작업 기록으로 남긴다.
+   - `POST /api/calibration/jobs`: 허용 단계(`check`, `depth-verify`, `pivot-near`, `remap`)만 받는다. `calibration.operate` 세션과 같은 출처가 필요하다. 팔을 움직이는 단계는 요청에 감독 확인(D-911)이 있어야 하고, 앱이 리스를 잡은 뒤 셀 엔진을 돌린다. 리스는 엔진 프로세스를 따른다(앱이 재시작해도 움직이는 팔이 풀리지 않는다). 한 팔에는 작업 하나만 돈다. 결과·로그·리비전을 작업 기록으로 남긴다.
    - 앱은 셀 값을 손으로 쓰지 않는다(D-951 2항). 실행은 엔진(`cell_calibrate.py`)이다.
 3. **AI incident 판정.** 팔 incident 해제는 사람 대신 AI 판정 기록으로 한다.
-   - 판정은 증거(카메라 프레임 해시, 관절 상태, 토크)를 함께 남긴다(`POST /api/calibration/assessments`).
-   - 해제(`POST /api/calibration/incidents/<arm>/clear`)는 10분 안의 `clear` 판정이 있고, 측정 조건이 먼저 통과할 때만 한다: 그 팔에 세션이 없고, 다른 주인의 리스가 없다.
+   - 판정은 판정한 모델 이름과 증거를 함께 남긴다(`POST /api/calibration/assessments`). 증거는 앱 작업 폴더 `evidence/` 아래 실제 파일이고 해시가 맞아야 하며, 카메라 프레임과 관절 상태가 모두 있어야 한다.
+   - 해제(`POST /api/calibration/incidents/<arm>/clear`)는 10분 안의 `clear` 판정이 가장 최근 판정이고, 측정 조건이 먼저 통과할 때만 한다: 그 팔에 살아 있는 리스(누구의 것이든)·작업·세션이 없다.
    - 측정이 거부권을 쥔다. 모델 판정은 측정이 남긴 경우에만 해제한다.
 4. **착지 리비전.** 작업 기록은 실행한 설치 리비전을 적는다. 착지 확인의 강제는 배포 경로(`omx_autoupdate`)의 몫이며 이 결정 범위 밖이다.
 

@@ -37,6 +37,23 @@ def test_dead_pid_is_not_live(tmp_path, monkeypatch):
     assert lease.claim("arm_a", "v@y", root=tmp_path)["owner"] == "v@y"
 
 
+def test_a_lease_with_a_live_process_outlives_its_expiry(tmp_path):
+    """Review 2026-11-17: a 35 min session must stay covered; only a pid-less lease ends at its expiry."""
+    rec = lease.claim("arm_a", "u@x", ttl_s=10, pid=os.getpid(), root=tmp_path, now=100)
+    assert lease.live(rec, now=10_000)
+    with pytest.raises(lease.LeaseHeld):
+        lease.claim("arm_a", "v@y", root=tmp_path, now=10_000)
+
+
+def test_the_same_owner_never_replaces_a_live_holders_pid(tmp_path, monkeypatch):
+    """A job's engine holds the lease; the record_session it starts (same owner) must not hand it to itself."""
+    engine = lease.claim("arm_a", "web:1", "calibration", pid=os.getpid(), root=tmp_path)
+    again = lease.claim("arm_a", "web:1", "record_session", pid=999_999_999, root=tmp_path)
+    assert again["pid"] == engine["pid"] == os.getpid()
+    ahead = lease.claim("arm_b", "web:1", "calibration", root=tmp_path)  # claimed before the engine started
+    assert lease.claim("arm_b", "web:1", "calibration", pid=os.getpid(), root=tmp_path)["pid"] == os.getpid() and ahead["pid"] is None
+
+
 def test_release_never_removes_another_owners_lease(tmp_path):
     lease.claim("arm_a", "u@x", root=tmp_path)
     assert not lease.release("arm_a", "v@y", root=tmp_path)

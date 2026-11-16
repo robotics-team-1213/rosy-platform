@@ -16,7 +16,7 @@ import calibration_jobs as jobs_mod  # noqa: E402
 import calibration_web as web  # noqa: E402
 from test_calibration_web import ORIGIN, Account, call  # noqa: E402
 
-OWNER = "calibration-web:Kim"
+OWNER = "calibration-web:acct-1"  # the account id, not the display name
 
 
 class FakeProc:
@@ -26,8 +26,11 @@ class FakeProc:
         log.write_text('noise\n{"ok": true}\n', encoding="utf-8")
         self.code = code
 
-    def wait(self):
+    def wait(self, timeout=None):
         return self.code
+
+    def terminate(self):
+        pass
 
 
 @pytest.fixture
@@ -114,6 +117,24 @@ def test_job_refused_when_another_owner_holds_the_lease(screen):
     assert status == 409 and "someone@elsewhere" in body["error"] and calls["spawn"] == []
 
 
+def test_one_job_per_arm(screen):
+    url, _, calls, jobs, _ = screen
+    (jobs.work / "jobs").mkdir(parents=True, exist_ok=True)
+    jobs.write({"id": "20261117T020000-abcdef", "arm": "arm_b", "status": "running", "pid": os.getpid(),
+                "started": "2026-11-17T02:00:00Z"})
+    status, body = post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "check"})
+    assert status == 409 and "20261117T020000-abcdef" in body["error"] and calls["spawn"] == []
+
+
+def test_a_failed_record_write_stops_the_engine_and_frees_the_lease(screen, monkeypatch):
+    url, _, calls, jobs, _ = screen
+    stopped = []
+    monkeypatch.setattr(FakeProc, "terminate", lambda self: stopped.append("terminate"), raising=False)
+    monkeypatch.setattr(jobs, "write", lambda record: (_ for _ in ()).throw(OSError("disk full")))
+    status, _ = post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "check"})
+    assert status == 500 and stopped == ["terminate"] and jobs.lease().status().get("arm_b") is None
+
+
 def test_job_runs_engine_and_records_result(screen):
     url, _, calls, jobs, _ = screen
     status, job = post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "pivot-near", "targets": ["belt:0.1,0.2"],
@@ -132,30 +153,51 @@ def test_job_runs_engine_and_records_result(screen):
     assert jobs.lease().status().get("arm_b") is None  # released
 
 
-def assess(url, verdict="clear"):
+def evidence(jobs):
+    import hashlib
+
+    root = jobs.work / "evidence"
+    root.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for kind, name, data in (("frame", "top.jpg", b"jpeg"), ("joints", "joints.json", b'{"state": [0, -58]}')):
+        (root / name).write_bytes(data)
+        rows.append({"kind": kind, "ref": name, "sha256": hashlib.sha256(data).hexdigest()})
+    return rows
+
+
+def assess(url, jobs, verdict="clear", rows=None):
     return post(url, "/api/calibration/assessments", {"arm": "arm_b", "verdict": verdict, "reasons": "frames match",
-                                                      "evidence": [{"kind": "frame", "ref": "top.png", "sha256": "ab"}]})
+                                                      "model": "claude-opus", "evidence": rows or evidence(jobs)})
 
 
 def test_assessment_validation(screen):
-    url, *_ = screen
+    url, _, _, jobs, _ = screen
     assert post(url, "/api/calibration/assessments", {"arm": "arm_b", "verdict": "maybe"})[0] == 422
-    assert assess(url)[0] == 201
+    assert assess(url, jobs)[0] == 201
+    rows = evidence(jobs)
+    assert assess(url, jobs, rows=[{**rows[0], "sha256": "00"}, rows[1]])[0] == 422  # hash does not match the file
+    assert assess(url, jobs, rows=rows[:1])[0] == 422  # a frame alone: joints are required too
+    assert assess(url, jobs, rows=[{**rows[0], "ref": "../../cells.json"}, rows[1]])[0] == 422  # outside evidence/
+    no_model = {"arm": "arm_b", "verdict": "clear", "reasons": "r", "evidence": rows}
+    assert post(url, "/api/calibration/assessments", no_model)[0] == 422
 
 
 def test_clear_needs_fresh_clear_assessment_and_measured_conditions(screen):
     url, _, calls, jobs, cell = screen
     path = "/api/calibration/incidents/arm_b/clear"
     assert post(url, path, {})[0] == 409  # no assessment
-    assess(url, "hold")
+    assess(url, jobs, "hold")
     assert post(url, path, {})[0] == 409  # newest is hold
-    _, row = assess(url)
+    _, row = assess(url, jobs)
     calls["session"] = True
     assert post(url, path, {})[0] == 409 and calls["clear"] == []  # session running
     calls["session"] = False
     jobs.lease().claim("arm_b", "someone@elsewhere", "x", 600, os.getpid(), None)
     assert post(url, path, {})[0] == 409  # foreign lease
     jobs.lease().release("arm_b", "someone@elsewhere")
+    jobs.lease().claim("arm_b", OWNER, "calibration pivot-near", 600, os.getpid(), None)
+    assert post(url, path, {})[0] == 409 and calls["clear"] == []  # the clearer's own job is still moving the arm
+    jobs.lease().release("arm_b", OWNER)
     status, body = post(url, path, {})
     assert status == 200 and body == {"ok": True} and f"ai-assessment {row['id']} by Kim" in calls["clear"][0]
     old = Path(jobs.work / "assessments.jsonl")

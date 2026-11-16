@@ -53,10 +53,12 @@ def _pid_alive(pid) -> bool:
 
 
 def live(record: dict, now: float | None = None) -> bool:
+    """A lease with a pid lives exactly as long as that process (a 35 min session must stay covered, review
+    2026-11-17); a lease without one (claimed ahead of a job) lives until it expires."""
+    if record.get("pid") is not None:
+        return _pid_alive(record["pid"])
     now = time.time() if now is None else now
-    if not float(record.get("expires") or 0) > now:
-        return False
-    return record.get("pid") is None or _pid_alive(record["pid"])
+    return float(record.get("expires") or 0) > now
 
 
 @contextlib.contextmanager
@@ -85,8 +87,10 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
         if old and old.get("owner") != owner and live(old, now):
             until = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(float(old["expires"])))
             raise LeaseHeld(f"arm {arm} held by {old['owner']} for {old.get('purpose') or '-'} until {until}")
+        same_live = bool(old and old.get("owner") == owner and live(old, now))
+        holder = old.get("pid") if same_live and old.get("pid") is not None else pid  # never drop a live holder's pid
         record = {"schema": SCHEMA, "arm": arm, "owner": owner, "purpose": purpose,
-                  "host": socket.gethostname(), "pid": pid, "revision": revision,
+                  "host": socket.gethostname(), "pid": holder, "revision": revision,
                   "acquired": old["acquired"] if old and old.get("owner") == owner else now,
                   "expires": now + ttl_s}
         tmp = root / f"{arm}.json.tmp"
