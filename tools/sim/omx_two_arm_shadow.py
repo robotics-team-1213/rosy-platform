@@ -92,6 +92,7 @@ def compare(args):
     from PIL import Image
     import mujoco
     import omx_two_arm_policy as pol
+    import omx_two_arm_skill as skills
     import omx_two_arm_tasks as tasks
     import omx_two_arm_teacher as teaching
     snap = Path(args.snapshot)
@@ -102,7 +103,11 @@ def compare(args):
         make = factory.make_pre_post_processors
         factory.make_pre_post_processors = lambda config, **kw: make(config, preprocessor_overrides={"device_processor": {"device": "cpu"}},
                                                                       postprocessor_overrides={"device_processor": {"device": "cpu"}}, **kw)
-    driver = pol.Driver(args.model, args.steps_file, sites.parse_choices(args.choice))
+    driver = pol.Driver(
+        args.model, args.steps_file, sites.parse_choices(args.choice),
+        n_action_steps=args.n_action_steps, flow_steps=args.flow_steps,
+        use_amp=True if args.amp else None,
+    )
     world, layout = driver.world, driver.layout
     task = tasks.get_task(layout, args.task)
     here, plan = dict(task.get("start", {})), None
@@ -123,15 +128,17 @@ def compare(args):
     mujoco.mj_forward(world.model, data)
     sim = {view: world.render(data, view, pol.SHAPE) for view in teaching.RECORDED}
     real = {view: np.asarray(Image.open(snap / f"{REAL_VIEWS[view]}.jpg").convert("RGB").resize(pol.SHAPE[::-1])) for view in teaching.RECORDED}
-    goal = pol.goal_vector(layout, plan, {k: v for k, v in here.items() if k != plan["container"]})
+    goal = pol.goal_vector(layout, plan, {k: v for k, v in here.items() if k != plan["container"]}) if driver.has_goal else None
+    prompt = args.prompt or (skills.prompt(plan, args.skill) if args.skill else pol.PROMPT)
     with driver.torch.inference_mode():
         out = {}
         for name, images in (("real", real), ("sim", sim)):
             driver.policy.reset()
-            out[name] = driver.act(state, images, goal)
+            out[name] = driver.act(state, images, goal, prompt=prompt)
     deg = lambda v: np.degrees(v).round(1).tolist()  # noqa: E731
     names = [f"{arm}.{j}" for arm in sites.ARMS for j in (*REAL_JOINTS, "gripper")]
-    result = dict(snapshot=str(snap), captured_at=meta["captured_at"], model=str(args.model), task=args.task, step=args.step, arm=plan["arm"], joints=names,
+    result = dict(snapshot=str(snap), captured_at=meta["captured_at"], model=str(args.model), policy_type=driver.kind, prompt=prompt,
+                  task=args.task, step=args.step, arm=plan["arm"], joints=names,
                   state_deg=deg(state), real_deg=deg(out["real"]), sim_deg=deg(out["sim"]), teacher_deg=deg(teacher_t),
                   real_minus_sim_deg=deg(out["real"] - out["sim"]), real_minus_teacher_deg=deg(out["real"] - teacher_t), sim_minus_teacher_deg=deg(out["sim"] - teacher_t),
                   max_abs_real_minus_sim_deg=float(np.degrees(np.abs(out["real"] - out["sim"]).max()).round(1)),
@@ -160,6 +167,11 @@ def main(argv=None):
     m.add_argument("--task", default="outbound")
     m.add_argument("--step", default="m0")
     m.add_argument("--choice", action="append", default=[])
+    m.add_argument("--skill", choices=("grasp", "release"), default=None)
+    m.add_argument("--prompt", default=None)
+    m.add_argument("--flow-steps", type=int, default=None)
+    m.add_argument("--n-action-steps", type=int, default=None)
+    m.add_argument("--amp", action="store_true")
     m.add_argument("--out", required=True)
     args = p.parse_args(argv)
     return capture(args) if args.cmd == "capture" else compare(args)

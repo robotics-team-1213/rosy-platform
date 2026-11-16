@@ -15,8 +15,8 @@ import time
 
 from rosy.contracts.learning.policy_assets import loading_overrides
 
-#: Policy types the runner may load for execution (D-854 §1). Adding one needs an ADR revision and adapter tests.
-ALLOWED_POLICY_TYPES = frozenset({'act'})
+#: Policy types the runner may load for execution (D-854 §1, Step 6). Adding new ones needs an ADR revision and adapter tests.
+ALLOWED_POLICY_TYPES = frozenset({'act', 'smolvla'})
 #: The latency bench may also time these before they are allowed for execution (D-854 step 5).
 BENCH_POLICY_TYPES = ALLOWED_POLICY_TYPES | {'smolvla'}
 #: D-866 P0 only: types the Gazebo contract probe may send to a SIM CORE before D-854 step 6 allows them.
@@ -51,7 +51,7 @@ class LeRobotAdapter:
     """
 
     def __init__(self, checkpoint, device, *, joint_names, cameras, unit, allowed_types=ALLOWED_POLICY_TYPES,
-                 single_step_override=False):
+                 single_step_override=False, use_amp=None, flow_steps=None, n_action_steps=None):
         from lerobot.configs.policies import PreTrainedConfig
         from lerobot.policies.factory import get_policy_class, make_pre_post_processors
         from lerobot.policies.utils import prepare_observation_for_inference
@@ -59,14 +59,23 @@ class LeRobotAdapter:
 
         if unit not in UNITS:
             raise ValueError('declared policy unit required')
+        if flow_steps is not None and (type(flow_steps) is not int or flow_steps < 1):
+            raise ValueError('positive integer flow_steps required')
         config = PreTrainedConfig.from_pretrained(checkpoint)
         if config.type not in allowed_types or not allowed_types <= BENCH_POLICY_TYPES:
             raise ValueError(f'policy type {config.type} is not allowed (D-854)')
         if getattr(config, 'temporal_ensemble_coeff', None) is not None:
             raise ValueError('temporal ensembling queues actions across observations')
-        # CORE admits one target per observation until action chunks are decided (D-854 §3).
         self.saved_n_action_steps = config.n_action_steps
-        if config.n_action_steps != 1:
+        self.saved_num_steps = getattr(config, 'num_steps', None)
+        if flow_steps is not None and hasattr(config, 'num_steps'):
+            config.num_steps = flow_steps
+        if n_action_steps is not None:
+            if type(n_action_steps) is not int or not 1 <= n_action_steps <= config.chunk_size:
+                raise ValueError('n_action_steps must be an integer in 1..chunk_size')
+            config.n_action_steps = n_action_steps
+        elif config.n_action_steps != 1:
+            # CORE admits one target per observation until action chunks are decided (D-854 §3).
             if not single_step_override:
                 raise ValueError('n_action_steps=1 required; pass single_step_override to bench full inference')
             config.n_action_steps = 1
@@ -78,9 +87,12 @@ class LeRobotAdapter:
         for part in (self.policy, self.pre, self.post):
             part.reset()
         self.policy_type, self.n_action_steps, self.unit = config.type, config.n_action_steps, unit
+        self.num_steps = getattr(config, 'num_steps', None)
         self.joint_names, self.cameras = list(joint_names), list(cameras)
         self._torch, self._device, self._prepare = torch, torch.device(device), prepare_observation_for_inference
-        self.use_amp = bool(config.use_amp) and self._device.type == 'cuda'
+        if use_amp is True and self._device.type != 'cuda':
+            raise ValueError('--amp needs a CUDA device')
+        self.use_amp = (bool(config.use_amp) if use_amp is None else bool(use_amp)) and self._device.type == 'cuda'
 
     def _context(self):
         torch = self._torch
@@ -96,6 +108,8 @@ class LeRobotAdapter:
         import numpy as np
         frame = {'observation.state': np.asarray(observation['positions'], dtype=np.float32),
                  **{f'observation.images.{name}': observation['images'][name] for name in self.cameras}}
+        if observation.get('environment_state') is not None:
+            frame['observation.environment_state'] = np.asarray(observation['environment_state'], dtype=np.float32)
         mode, amp = self._context()
         with mode, amp:
             batch = self.pre(self._prepare(frame, self._device, task, None))
@@ -161,11 +175,13 @@ class CoreArmTarget:
         import numpy as np
         if not client.is_connected:
             raise ValueError('connect the CORE client first')
-        # Execution allows only ALLOWED_POLICY_TYPES. The D-866 P0 probe may send a bench type to a CORE that
+        # Execution allows only ALLOWED_POLICY_TYPES. A SIM probe (D-866 P0) must only drive a CORE that
         # reports simulation; the owner session still enforces its own SIM-only install (D-800).
-        if not (policy_type in ALLOWED_POLICY_TYPES
-                or (sim_probe is True and policy_type in SIM_PROBE_POLICY_TYPES
-                    and client.info.get('simulation') is True)):
+        if sim_probe is True:
+            allowed = policy_type in SIM_PROBE_POLICY_TYPES and client.info.get('simulation') is True
+        else:
+            allowed = policy_type in ALLOWED_POLICY_TYPES
+        if not allowed:
             raise PermissionError(f'policy type {policy_type} may not drive this CORE')
         self.policy_type = policy_type
         self.client, self._np, self.joint_names = client, np, list(client.info['joint_names'])
@@ -253,6 +269,8 @@ def main(argv=None):
     parser.add_argument('--steps', type=int, default=1000)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--amp', action='store_true', help='autocast on CUDA even if the checkpoint saved use_amp=false')
+    parser.add_argument('--flow-steps', type=int, default=None, help='override config.num_steps for flow/diffusion policies')
+    parser.add_argument('--n-action-steps', type=int, default=None, help='override n_action_steps instead of forcing 1')
     args = parser.parse_args(argv)
     if args.out.exists():
         raise SystemExit('report exists; choose a new path')
@@ -262,19 +280,24 @@ def main(argv=None):
         name, size = item.split('=', 1)
         height, width = (int(v) for v in size.lower().split('x'))
         shapes[name] = (height, width)
-    adapter = LeRobotAdapter(args.checkpoint, args.device, joint_names=args.joints, cameras=list(shapes),
-                             unit=args.unit, allowed_types=BENCH_POLICY_TYPES, single_step_override=True)
-    if args.amp:
-        if adapter._device.type != 'cuda':
-            raise SystemExit('--amp needs a CUDA device')
-        adapter.use_amp = True
+    try:
+        adapter = LeRobotAdapter(args.checkpoint, args.device, joint_names=args.joints, cameras=list(shapes),
+                                 unit=args.unit, allowed_types=BENCH_POLICY_TYPES,
+                                 single_step_override=args.n_action_steps is None,
+                                 use_amp=True if args.amp else None, flow_steps=args.flow_steps,
+                                 n_action_steps=args.n_action_steps)
+    except ValueError as exc:
+        if '--amp' in str(exc):
+            raise SystemExit(str(exc)) from exc
+        raise
     report = measure(adapter, SyntheticTarget(args.joints, shapes, args.unit), ActionSpace(args.unit, args.unit),
                      args.task, warmup=args.warmup, steps=args.steps)
     import importlib.metadata as metadata
     import torch
     device = adapter._device
     report.update(policy_type=adapter.policy_type, n_action_steps=adapter.n_action_steps,
-                  saved_n_action_steps=adapter.saved_n_action_steps, use_amp=adapter.use_amp, device=str(device),
+                  saved_n_action_steps=adapter.saved_n_action_steps, num_steps=adapter.num_steps,
+                  saved_num_steps=adapter.saved_num_steps, use_amp=adapter.use_amp, device=str(device),
                   gpu=torch.cuda.get_device_name(device) if device.type == 'cuda' else None,
                   **checkpoint_identity(args.checkpoint), checkpoint_sha256=checkpoint_sha256,
                   versions={k: metadata.version(k) for k in ('lerobot', 'torch')}, cameras=shapes,
