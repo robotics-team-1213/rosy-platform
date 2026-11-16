@@ -111,6 +111,7 @@ class Gate:
                 self.assessment = fresh
                 self.finalized = False
                 self.transitions += 1
+                state = self.cell.act("state")
         if not same_session(state, self.assessment, recovering=recovering):
             faulted = state.get("fault") and same_session(state, self.assessment, recovering=True)
             return {"ok": False, "error": "held: fault" if faulted else "held: session_changed"}

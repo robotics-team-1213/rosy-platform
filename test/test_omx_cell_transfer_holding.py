@@ -115,3 +115,64 @@ def test_return_held_recovers_stale_middle_lock_by_parking_before_above_place():
     out = transfer_folded(gate, "lib.json", closed=48.8, sequence=RETURN_HELD)
     assert out["result"] == "placed", out
     assert gate.commands[:4] == ["load lib.json", "goto above_place", "park", "goto above_place"]
+
+
+def test_commissioning_replan_refreshes_state_after_slow_park(tmp_path, monkeypatch):
+    import types
+    import cell_envelope
+    import cell_transfer
+
+    clock = [1000.0]
+    monkeypatch.setattr(cell_envelope, "time", types.SimpleNamespace(time=lambda: clock[0]))
+    profile_path = tmp_path / "robot-profile.json"
+    profile_path.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1",
+        "device_id": "fixture-device",
+        "instance_id": "fixture-arm",
+        "robot_config_sha256": "c" * 64,
+        "operating_envelope_path": "review.json",
+        "work_dir": ".",
+    }))
+    from cell_robot_profile import load
+
+    binding = load(profile_path)["binding"]
+    config = {
+        "plan": {"lift_m": 0.04}, "profiles": {}, "sites": {}, "cameras": {},
+        "operating_conditions": {
+            "installation_revision": "fixture-install", "object_revision": "fixture-obj",
+            "payload_max_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "fixture-env",
+        },
+        "payload": {"kg": 0.03, "source": "fixture scale"},
+        "operating_envelope_path": str(tmp_path / "review.json"),
+        "work_dir": str(tmp_path),
+        "operating_profile_path": str(profile_path),
+        "_commissioning": {"person_at_switch": True},
+    }
+    home = [0.0, 0.0, 0.0, 0.0, 0.0, 48.8]
+    original, revised = tmp_path / "original.json", tmp_path / "revised.json"
+    spec = {"fps": 30, "chunks": {"home": [home], "above_pick": [home]}}
+    original.write_text(json.dumps(spec))
+    revised.write_text(json.dumps({**spec, "replan": "adjusted pick"}))
+
+    class SlowParkCell:
+        def __init__(self):
+            self.commands = []
+
+        def act(self, command):
+            raw = command.split(" ", 3)[-1] if command.startswith("checked ") else command
+            if raw == "park":
+                clock[0] += 3.0  # parking from above_pick exceeds MAX_GAP_S (0.5 s)
+            self.commands.append(raw)
+            return {
+                "command": raw, "ok": True, "settled": True, "state": home, "t": clock[0],
+                "operating_context": {"scope": "hardware", "sha256": "a" * 64, "session_id": "s1",
+                                      "operating_profile": binding},
+            }
+
+    cell = SlowParkCell()
+    gate = cell_transfer.Gate(cell, config, {})
+    assert gate.open(original, lambda a: None, lambda *a: None) is None
+    assert gate.act(f"load {original}")["ok"] is True
+    status = gate.act(f"load {revised}")
+    assert status["ok"] is True and f"load {revised}" in cell.commands
+

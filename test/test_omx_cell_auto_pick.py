@@ -1472,3 +1472,4 @@ def test_dest_map_usable_accepts_z_view_only_with_parallax_geometry():
     assert cap.dest_map_usable({"cameras": {"top": {"center_px": [297, 361], "height_m": 0.596}}}, z_view) is True
     assert cae.dest_map_usable is cap.dest_map_usable
 
+
