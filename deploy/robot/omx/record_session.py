@@ -354,30 +354,24 @@ class Session:
                 record["leader_gripper_torque_after"] = leader.cleanup_read("torque")
             finally:
                 leader.close()
-        except Exception as exc:
-            record["leader_gripper_torque_after"] = f"error: {exc}"
+        except (Exception, SystemExit) as exc:
+            if isinstance(exc, SystemExit) and self.chunks is None:
+                raise
+            record["leader_gripper_torque_after"] = f"unused: {exc}" if self.chunks is not None else f"error: {exc}"
         log_registers(self, "stop", FOLLOWER)
         failures = self.restore_caps()
         record["caps_restored"] = not failures or failures
         record["torque_off_confirmed"], record["hardware_faults"] = torque_ok, self.hardware_faults
-        record["manual_attention_required"] = (
-            bool(self.hardware_faults)
-            or not torque_ok
-            or bool(failures)
-            or record["leader_gripper_torque_after"] != 0
-        )
+        leader_ok = (record["leader_gripper_torque_after"] == 0 or
+                     (self.chunks is not None and str(record["leader_gripper_torque_after"]).startswith("unused:")))
+        record["manual_attention_required"] = bool(self.hardware_faults) or not torque_ok or bool(failures) or not leader_ok
         for unit in reversed(stopped):
             try:
                 self.systemctl("start", unit)
             except Exception as exc:
                 record.setdefault("service_errors", []).append(f"{unit}: {exc}")
         record["restarted_services"] = stopped
-        record["safe_end"] = (
-            torque_ok
-            and not failures
-            and not self.hardware_faults
-            and record["leader_gripper_torque_after"] == 0
-        )
+        record["safe_end"] = torque_ok and not failures and not self.hardware_faults and leader_ok
         record["ended"] = time.time()
         self.log(step="session", **record)
         if not record["safe_end"]:

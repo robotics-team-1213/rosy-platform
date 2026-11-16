@@ -912,6 +912,22 @@ def test_chunk_mode_skips_unused_leader_alerts_and_faults(tmp_path):
     assert_restored(arm, leader)
 
 
+def test_chunk_mode_allows_unplugged_missing_leader_port(tmp_path):
+    """Follower-only --chunks must not fail safe_end when no physical leader cable is attached."""
+    arm = follower()
+
+    def open_bus(which):
+        if which == "leader":
+            raise SystemExit("a physically confirmed /dev/serial/by-id symlink is required")
+        return arm
+
+    s = m.Session(open_bus=open_bus, systemctl=lambda *a: "", run=lambda c: 0, log=lambda **kw: None,
+                  chunks={"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "x"})
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert record["safe_end"] is True and record["manual_attention_required"] is False
+    assert str(record["leader_gripper_torque_after"]).startswith("unused:")
+
+
 def test_restore_caps_reopens_bus_and_recovers_after_transient_motor_12_glitch(tmp_path):
     arm, leader = follower(), leader_arm()
     original_write = arm.write
