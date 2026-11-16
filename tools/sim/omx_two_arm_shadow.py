@@ -163,12 +163,15 @@ def compare(args):
             plan = step
             break
         here[step["container"]] = step["to"]
-    if plan is None or plan["from"] == "belt":
-        raise SystemExit(f"{args.task}/{args.step}: not a step of the task, or a belt step (needs the belt feed)")
+    if plan is None:
+        raise SystemExit(f"{args.task}/{args.step}: not a step of the task")
     # shortcut: the gripper takes the sim wait opening, the real jaw unit is not mapped; upgrade when a jaw calibration exists
     state = np.concatenate([np.append(norm_to_rad(meta["joints"][arm]), layout.arms[arm].wait[5]) for arm in sites.ARMS]).astype(np.float32)
     teacher_t = teacher_first(world, here, plan)
-    data = teaching.Teacher(world, seed=0).fresh(here)
+    t_sim = teaching.Teacher(world, seed=0)
+    data = t_sim.fresh(here)
+    if plan["from"] == "belt":
+        t_sim.belt_in(data, plan, {o: layout.sim_arms[o].wait for o in layout.arms if o != plan["arm"]})
     for k, arm in enumerate(sites.ARMS):
         data.qpos[world.q[arm]] = state[6 * k:6 * k + 6]
         data.qpos[world.mimic[arm]] = -state[6 * k + 5]
