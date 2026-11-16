@@ -99,6 +99,7 @@ def main_session(tmp_path, monkeypatch):
     import omx_incident
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ROSY_ARM_LEASES", str(tmp_path / "arm-leases"))  # D-1035: never the test host's real leases
     events = []
     lock = SimpleNamespace(closed=False)
 
