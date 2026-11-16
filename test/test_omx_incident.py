@@ -543,4 +543,106 @@ def test_decide_handles_torque_after_open_error_string_without_crashing(tmp_path
     assert "caps not confirmed restored" in out["decision"]["reason"]
 
 
+def test_handle_filters_leader_keys_from_latched_reboot(tmp_path, monkeypatch):
+    """2026-11-16 00:03: leader hw_error recorded 'leader 6' in latched; act() only receives follower ints."""
+    monkeypatch.chdir(tmp_path)
+    s = session(tmp_path, latched=False, windup=False)
+    data = json.loads(s.read_text())
+    data["hardware_faults"] = {"leader 6": {"hw_error": 32}, "13": {"hw_error": 32}}
+    s.write_text(json.dumps(data))
+    called = []
+    out = oi.handle(s, "arm_b", act=lambda ids: called.append(ids) or {"rebooted": ids}, link=Link())
+    assert called == [[13]]
+    assert set(out["facts"]["latched"]) == {"leader 6", "13"}
+
+
+def test_sync_hold_from_fleet_and_clear_with_explicit_core_token_and_healthy_caps(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    oi.keep_hold("arm_b", "caps not confirmed restored")
+    assert oi.held("arm_b")
+
+    class SyncLink(Link):
+        def __init__(self):
+            self.held_flag = True
+            self.cleared = []
+
+        def hold(self):
+            return hold(self.held_flag)
+
+        def clear(self, incident_id, note, token, cause=None, basis=None):
+            self.cleared.append((incident_id, note, token))
+            self.held_flag = False
+            return hold(False)
+
+    link = SyncLink()
+    assert oi.sync_hold_from_fleet("arm_b", link=link) is False
+    assert oi.clear("arm_b", "verified home", link=link, token="jwt.core.token") == 0
+    assert link.cleared == [("a" * 32, "verified home", "jwt.core.token")]
+    assert oi.held("arm_b") is None
+
+    oi.keep_hold("arm_b", "stale")
+    assert oi.sync_hold_from_fleet("arm_b", link=link) is True
+    assert oi.held("arm_b") is None
+
+    # Healthy caps_restored=True must not falsely report "caps not confirmed restored".
+    d = oi.decide({"safe_end": False, "latched": {}, "windup_hits": [], "flagged": [],
+                   "torque_after": {"11": 0}, "caps_restored": True, "folded": True, "stops": []})
+    assert "caps not confirmed restored" not in d["reason"]
+    assert "unsafe session end" in d["reason"]
+
+
+def test_telemetry_sync_clears_local_hold_via_machine_sync_without_operator_token(tmp_path, monkeypatch):
+    import cell_camera_telemetry_sync as sync_mod
+
+    monkeypatch.chdir(tmp_path)
+    oi.keep_hold("arm_b", "caps not confirmed restored")
+    monkeypatch.setattr(oi, "link_for", lambda arm: type("L", (), {
+        "hold": staticmethod(lambda: hold(False)),
+    })())
+
+    class FakeResp:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def read(self):
+            return json.dumps(self.payload).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(req, context=None, timeout=None):
+        if req.full_url.endswith("/state.json"):
+            return FakeResp({})
+        return FakeResp({"ok": True, "pending_clear_arms": {"arm_b": "cleared via Fleet core"}})
+
+    out = sync_mod.sync_cell_telemetry("https://fleet.example:8443", "svc-tok", prep_dir=tmp_path, urlopen_fn=fake_urlopen)
+    assert out["ok"] is True
+    assert oi.held("arm_b") is None
+
+
+def test_verified_baseline_caps_releases_clean_folded_arm_without_human_hold(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = session(tmp_path, latched=False, windup=False)
+    data = json.loads(s.read_text())
+    data["safe_end"] = False
+    data["caps_restored"] = ["follower 12 pwm_limit: baseline caps require confirmed follower model/mode and torque OFF"]
+    s.write_text(json.dumps(data))
+
+    held_out = oi.handle(s, "arm_b", link=Link(), verify_caps=lambda: False)
+    assert held_out["decision"]["hold"] is True and oi.held("arm_b") is not None
+    oi.hold_file("arm_b").unlink()
+
+    class NonHoldLink(Link):
+        def post(self, report):
+            from core_common.protocol.arm_incidents import ArmIncidentAccepted
+            return ArmIncidentAccepted(incident_id="a" * 32, hold=hold(bool(report.decision.get("hold"))))
+
+    free_out = oi.handle(s, "arm_b", link=NonHoldLink(), verify_caps=lambda: True)
+    assert free_out["decision"]["hold"] is False and free_out["facts"]["caps_verified_restored"] is True
+    assert oi.held("arm_b") is None
+
+
 

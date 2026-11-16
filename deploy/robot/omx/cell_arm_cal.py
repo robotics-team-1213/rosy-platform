@@ -160,7 +160,9 @@ def save(config_or_work: dict | Path, profile: dict[str, Any], arm_id: str | Non
     profile = dict(profile, schema=SCHEMA, arm_id=arm, updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     path = profile_path(config_or_work, arm)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(profile, indent=2), encoding="utf-8")
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(profile, indent=2), encoding="utf-8")
+    tmp.replace(path)
     _CAL_CACHE.pop(f"{path}:{arm}", None)
     return path
 
@@ -176,6 +178,8 @@ def apply_to_config(config: dict[str, Any]) -> dict[str, Any]:
         params["wrist.finger_color"] = color_code
     if cal.get("samples", 0) > 0:
         params["gripper.held_30mm"] = round(float(cal["held_30mm"]), 2)
+        if cal.get("gap_mm_per_unit") is not None:
+            params["gripper.gap_mm_per_unit"] = round(float(cal["gap_mm_per_unit"]), 2)
         params["auto.jaw_margin_mm"] = round(float(cal["jaw_margin_mm"]), 2)
         params["auto.jaw_margin_max_mm"] = round(
             max(float(params.get("auto.jaw_margin_max_mm", 8.0)), float(cal["jaw_margin_mm"]) + 0.5), 2

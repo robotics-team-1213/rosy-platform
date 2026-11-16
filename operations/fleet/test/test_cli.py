@@ -87,13 +87,14 @@ def test_console_wires_configured_task_database_into_authenticated_app(tmp_path,
     robots = _write(tmp_path)
     task_db = tmp_path / "fleet.sqlite3"
     captured = {}
-    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app, **kwargs))
     args = cli.parse_args(["console", "--robots", str(robots), "--tasks-db", str(task_db),
                            "--token", "operator-test"])
 
     cli.run_console(args)
 
     assert task_db.is_file()
+    assert captured["timeout_keep_alive"] == 75
     assert captured["app"].state.task_service.store.path == task_db
     assert captured["app"].state.task_service.robot_ids == {
         "rosy_01", "rosy_02", "rosy_03",

@@ -203,12 +203,15 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 raise ValueError("nothing to retreat along")
             keep_open = runner.target[5] > float(runner.library["gripper_closed"]) + EMPTY_MARGIN
             raw = [f[:5] + [runner.target[5]] for f in runner.retreat_frames] if keep_open else list(runner.retreat_frames)
-            if len(raw) > 25 and runner.target is not None:
-                best_i = min(
-                    range(min(len(raw) - 1, 20)),
-                    key=lambda i: max(abs(a - b) for a, b in zip(raw[i][:5], runner.target[:5])),
-                )
-                raw = retime(raw[best_i:], runner.fps, 0.65 * GUARD_UNITS_PER_S, start=runner.target)
+            if runner.target is not None and raw:
+                if len(raw) > 2:
+                    best_i = min(
+                        range(min(len(raw) - 1, 20)),
+                        key=lambda i: max(abs(a - b) for a, b in zip(raw[i][:5], runner.target[:5])),
+                    )
+                    raw = raw[best_i:]
+                hold = [list(runner.target)] * 4
+                raw = hold + retime(raw, runner.fps, 0.25 * GUARD_UNITS_PER_S, start=runner.target)
             runner.queue = raw
             runner.retreat_frames = []
             runner.chunk, runner.settle_since, runner.played = "retreat", None, []
@@ -227,6 +230,8 @@ def dispatch_runner_command(runner, line: str) -> bool:
             runner.plan_check(library)
             runner.library = library
             runner._lib_digest_cache = (id(library), lib_digest)
+            if library.get("holding") is True:
+                runner.holding = True
         elif verb != "state":
             raise ValueError(
                 "commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | human-hold | state | stop"

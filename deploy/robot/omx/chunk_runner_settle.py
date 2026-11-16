@@ -29,6 +29,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
         return
     runner.settle_since = runner.settle_since if runner.settle_since is not None else now
     grasp = runner.chunk.startswith("grasp")
+    release = runner.chunk.startswith("release")
     gripper_still = runner.last_grip is not None and abs(present[5] - runner.last_grip) < 0.3
     runner.last_grip = present[5]
     settle_tol = cr_attr("SETTLE_TOL", SETTLE_TOL)
@@ -46,7 +47,17 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
         settled = error <= settle_tol * 1.15 or body_still or now - runner.settle_since >= settle_s
     else:
         settled = (error <= settle_tol or body_still) and not runner.jitter["shaking"]
-    if (settled and (gripper_still or not grasp)) or now - runner.settle_since >= settle_s:
+    jaws_ready = (
+        gripper_still
+        if grasp
+        else (
+            abs(present[5] - runner.target[5]) <= 0.25
+            or (gripper_still and now - runner.settle_since >= 0.4)
+        )
+        if release
+        else True
+    )
+    if (settled and jaws_ready) or now - runner.settle_since >= settle_s:
         fields = dict(
             command=f"run {runner.chunk}",
             ok=True,

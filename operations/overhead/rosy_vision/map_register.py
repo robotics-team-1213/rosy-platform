@@ -202,11 +202,11 @@ def register_map(image: np.ndarray, paint: MapPaint) -> RegistrationResult:
     height, width = image.shape[:2]
     if width < 64 or height < 64 or width > 8192 or height > 8192:
         raise ValueError("image dimensions are outside the supported range")
-    registration, accepted, reason = _register(image, paint)
-    if not accepted:
-        fallback = _register_world_261026(image, paint)
-        if fallback is not None:
-            registration, accepted, reason = fallback
+    fallback = _register_world_261026(image, paint)
+    if fallback is not None:
+        registration, accepted, reason = fallback
+    else:
+        registration, accepted, reason = _register(image, paint)
     elapsed = (time.perf_counter() - started) * 1000.0
     return RegistrationResult(registration, accepted, reason, elapsed, (width, height))
 

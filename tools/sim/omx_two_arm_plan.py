@@ -59,9 +59,9 @@ def step_swept_poses(layout, arm_name, src, dst, here):
     """Timed world-frame swept capsules [(t_rel, capsules), ...] (links + held box on lift..release), or None if unreachable."""
     import omx_two_arm_tasks as tasks
     z_up = tasks.carry_z(layout, here, src, dst)
-    key = (id(layout), arm_name, src, dst, round(z_up, 4))
+    arm = layout.arms[arm_name]
+    key = (arm_name, tuple(arm.base), round(arm.yaw, 6), src, tuple(layout.sites[src]["xy"]), dst, tuple(layout.sites[dst]["xy"]), round(z_up, 4))
     if key not in _SWEEP_CACHE:
-        arm = layout.arms[arm_name]
         problems, path, _ = tasks.check_reach(layout, dict(id="sweep", container="?", to=dst, arm=arm_name, **{"from": src}), here, arm)
         if problems:
             _SWEEP_CACHE[key] = None

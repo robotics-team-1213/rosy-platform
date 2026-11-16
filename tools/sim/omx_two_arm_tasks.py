@@ -153,12 +153,20 @@ def link_clearance(layout, arm, path, here):
     return best
 
 
+_REACH_CACHE = {}
+
+
 def check_reach(layout, step, here, arm):
     """Reach of one step with the step's arm inside the plan's joint limits. Returns (problems, joint path, approach q)."""
-    ok, approach, path, note = solve_chain(arm, waypoints(layout, step, here), arm.home, roll_floor=layout.roll_floor)
+    wps = waypoints(layout, step, here)
+    key = (arm.name, tuple(np.round(arm.base, 6)), round(arm.yaw, 6), round(float(arm.tcp[0]), 6), round(float(layout.roll_floor), 6),
+           tuple((n, (round(xy[0], 6), round(xy[1], 6)), round(z, 6), round(y, 6), g) for n, xy, z, y, g in wps))
+    if key not in _REACH_CACHE:
+        _REACH_CACHE[key] = solve_chain(arm, wps, arm.home, roll_floor=layout.roll_floor)
+    ok, approach, path, note = _REACH_CACHE[key]
     if not ok:
         return [f"{step['id']}: {arm.name} cannot reach it tool-down inside the plan's joint limits: {note}"], [], None
-    return [], path, approach
+    return [], [q.copy() for q in path], approach.copy()
 
 
 def validate(layout, task, data=None):

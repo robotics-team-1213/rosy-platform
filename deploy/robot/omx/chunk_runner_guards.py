@@ -93,7 +93,9 @@ def evaluate_adaptive_contact_guard(
         contact_start = contact_limits(lags, params)
     vel_allowance = min(1.2, max(0.0, float(step_delta_units) * 0.15))
     lag = max(lags) if lags else 0.0
-    over = any(v > (limit + vel_allowance) for v, limit in zip(lags, contact_start))
+    # Bound real-arm loaded limits (<= 2.35) to 2.35 units (4.23 deg) so coasting stays below the 5 deg hard stop.
+    over = any(v > (min(limit + vel_allowance, 2.35) if limit <= 2.35 else limit + vel_allowance)
+               for v, limit in zip(lags, contact_start))
     new_ticks = contact_ticks + 1 if over else 0
     tripped = new_ticks >= prm.get(params, "runner.contact_ticks", CONTACT_TICKS)
     return contact_start, new_ticks, tripped, lag

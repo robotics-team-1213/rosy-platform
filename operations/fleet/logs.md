@@ -5547,3 +5547,18 @@
 - 변경: `fleet/server/pose/nudge_routes.py`(서버 홀더, `fleet.server.nudge_routes`) `POST /api/fleet/robots/{id}/step` — 이름 있는 운영자만, trip runner·대형·console goal 이 로봇을 쥐고 있으면 409 `STEP_ROBOT_BUSY`, 응답 없음 409 `ROBOT_OFFLINE`, CORE 거부는 502 본문 code 그대로. 실제 주행은 로봇의 CORE 미션 경로(`nudge_forward`/`nudge_backward`, `max_time_s`=거리/0.03+5)에 맡긴다(D-2). 감사 행 `step`. `role_builders.py`가 map-pin 옆에 등록.
 - 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고. 실물 로봇 확인은 미실시.
 - gate 변화: 없음. 안전 경로 검토 요청은 결과 파일에 별도로 남긴다(운동 명령 경로).
+
+## 2026-11-14 · uncommitted · 충전 복귀 이동 (D-1029)
+- 변경: `fleet.station_recovery.dispatch`(기본 false). 승인된 복구 요청이 `TripRunner.start(..., purpose="charge_return")`로 고른 충전 칸까지 trip을 시작하고, 도착하면 lease를 끝내고 `plug_charger` 사람 요청을 보낸다. 실패·거절은 `station_recovery_return` 사건. 새 `station_recovery_dispatch.py`, trip lease 본문 `purpose`.
+- 증거: 원격 `test_station_recovery_dispatch.py`·`test_station_recovery.py`·`test_person_requests.py`·`test_trip_lease.py` 116 통과, trip·cli 시험 679 통과.
+- gate 변화: SOURCE. 실물(20 % 유도 시험·칸 앞 도착)은 미실시.
+
+## 2026-11-14 · uncommitted · 콘솔 현장 지도 목표의 프레임 변환 (D-1003)
+- 변경: `POST /api/fleet/robots/{id}/goal` 선택 필드 `frame: "site"`(v1.400). 콘솔이 현장 지도 보기에서 찍은 목표는 이 필드를 싣고, Fleet이 trip free 목표와 같은 `robot_frame_goal`로 기체 Nav2 지도 프레임으로 바꾼다. 증명이 없으면 409(`SITE_POSE_UNKNOWN`·`SITE_MAP_NOT_ACTIVE`)로 아무것도 보내지 않는다. 격자 보기·다른 호출자는 그대로.
+- 증거: 원격 `test_console_goal_site_frame.py`·`test_server_app.py`·`test_task_api.py` 78 통과.
+- gate 변화: SOURCE. 실물 미실시.
+
+## 2026-11-16 · uncommitted · fix(fleet): auto-track-calibration 서비스 principal 보정·지도 경로 최소 권한 허용
+- 변경: `fleet/server/auth/site_auth.py` — `role: service`, `principal_id: auto-track-calibration` 기계 자격을 `/api/fleet/calibrations` 및 `/api/fleet/site-map/*` 경로로 한정 허용해 Account receiver 모드에서도 호스트 자동 보정 타이머가 인간 세션 위조 없이 동작하도록 연결했다.
+- 증거: 원격 `test_auto_track_calibration.py`·`test_overhead_tracking_api.py` 통과 및 `rosy-fleet-r` 실호스트 적용 확인.
+- gate 변화: 없음.

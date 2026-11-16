@@ -1402,3 +1402,74 @@ def test_gate_validates_zone_entry_and_park_release_across_chained_commands(tmp_
     assert gate.act("chain run lift_place ; park")["ok"]
     assert left == [True]
 
+
+def test_run_return_held_plans_places_and_stops_when_empty(tmp_path):
+    class HeldCell(Cell):
+        def act(self, command):
+            out = super().act(command)
+            if command.endswith("run release_place") or command == "run release_place":
+                self.grip = CONFIG["plan"]["grip_closed"]
+            return {**out, "settled": True, "state": self.q[:5] + [self.grip]}
+
+    config = copy.deepcopy(CONFIG)
+    auto.cell_attempts.start(tmp_path / "attempts.jsonl")
+    config["sites"]["belt"] = {**config["sites"]["pinky"], "place": [0.060, 0.065]}
+    cal_data_path = biased_map(tmp_path)
+    cal.save(cal_data_path, "belt", {
+        "homography": cal.fit([(tray_pixel(x, y), (x, y)) for x in (0.05, 0.072, 0.094) for y in (0.06, 0.10, 0.14)]).tolist(),
+        "loo_error_mm": {"max": 0.1, "mean": 0.1}, "points": [],
+    })
+    cal_data = auto.cell_pivot.with_site_maps(config, cal.load(cal_data_path))
+    # 1. Dry-run plans place onto belt without running the arm
+    dry_cell = HeldCell([CONT2])
+    dry = auto.run_return_held(dry_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path, dry_run=True)
+    assert dry["result"] == "planned" and Path(dry["plan"]["library"]).is_file()
+    dry_lib = json.loads(Path(dry["plan"]["library"]).read_text())
+    assert dry_lib.get("holding") is True
+    desc = dry_lib["chunks"]["descend_place"]
+    assert len(desc) >= 2 and all(
+        max(abs(b - a) for a, b in zip(f0, f1)) <= 0.15 for f0, f1 in zip(desc, desc[1:])
+    )
+    # 2. Holding object at home places onto belt and verifies arrival
+    full_cell = HeldCell([CONT2])
+    full_cell.held = full_cell.objects[0]
+    full_cell.grip = CONFIG["plan"]["grip_closed"] + 5.0
+    placed = auto.run_return_held(full_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path, object_id="container-2")
+    assert placed["result"] == "placed", placed
+    assert placed["verify"]["inside"] is True, placed["verify"]
+    assert full_cell.held is None
+    assert "run grasp_pick" not in full_cell.commands and "run release_place" in full_cell.commands
+    # 3. Empty jaws at home stop at above_place and park cleanly without opening jaws
+    empty_cell = HeldCell([])
+    empty_cell.grip = CONFIG["plan"]["grip_closed"]
+    empty = auto.run_return_held(empty_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path)
+    assert empty["result"] == "empty" and "run release_place" not in empty_cell.commands
+    assert empty_cell.commands[-1] == "park"
+
+
+def test_object_mask_supports_wrapped_multi_range_hsv():
+    import cell_objects as co
+
+    hsv = np.zeros((30, 60, 3), np.uint8)
+    hsv[5:25, 5:25] = (12, 200, 200)     # orange
+    hsv[5:25, 35:55] = (172, 180, 200)   # wrapped pink/coral
+    img = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    multi = [[[0, 100, 110], [25, 255, 255]], [[165, 70, 90], [179, 255, 255]]]
+    om = co.object_mask(img, (0, 0, 60, 30), multi)
+    cm = co.colour_mask(img, (0, 0, 60, 30), multi)
+    assert om[15, 15] > 0 and om[15, 45] > 0
+    assert cm[15, 15] > 0 and cm[15, 45] > 0
+
+
+def test_dest_map_usable_accepts_z_view_only_with_parallax_geometry():
+    import cell_auto_evidence as cae
+    import cell_auto_pick_plan as cap
+
+    fine = {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}
+    z_view = {**fine, "z_view": 0.11}
+    assert cap.dest_map_usable({}, fine) is True
+    assert cap.dest_map_usable({"cameras": {"top": {}}}, z_view) is False
+    assert cap.dest_map_usable({"cameras": {"top": {"center_px": [297, 361], "height_m": 0.596}}}, z_view) is True
+    assert cae.dest_map_usable is cap.dest_map_usable
+
+

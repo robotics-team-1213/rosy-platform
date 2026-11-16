@@ -442,3 +442,31 @@ def test_a_quarantined_timing_flake_is_not_an_isolation_failure():
     other = "test/test_other.py::test_new"
     report = f"FAILED {quarantined} - AssertionError\nFAILED {other} - AssertionError\n2 failed in 1.00s\n"
     assert land_isolation.new_failures(report) == [other]
+
+
+def test_gate_shards_large_selection_and_runs_alone_jobs_first(pair, monkeypatch, tmp_path):
+    ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    for i in range(9):
+        p = pair / f"p{i}" / "test_x.py"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("def test_ok(): pass\n", encoding="utf-8")
+    git(pair, "add", ".")
+    git(pair, *ident, "commit", "-q", "-m", "pkgs")
+    (pair / "tools").mkdir(exist_ok=True)
+    (pair / land_isolation.GATE).write_text("", encoding="utf-8")
+    sel = [[f"p{i}" for i in range(9)]]
+    sharded = land_isolation.gate(pair, sel)
+    assert len(sharded) == land_isolation.GATE_SHARDS
+    seen_paths = [p for inv in sharded for p in inv[1].removeprefix("ROSY_COLLECT_PATHS=").split(",")]
+    assert sorted(seen_paths) == [f"p{i}" for i in range(9)]
+    monkeypatch.setattr(land_isolation, "alone_files", lambda wt, s: (["p0/test_x.py"], set()))
+    calls = []
+    logdir = tmp_path / "logs"
+    logdir.mkdir()
+    args = argparse.Namespace(tests="auto", node=False, no_cache=False, no_queue=False)
+    land_isolation.run(pair, "fix/s", sel, args, logdir, "pre",
+                       fake_round({"gpre": {"run-gpre-1.txt": "[isolation] complete: 1\n"}}, calls),
+                       [["guard"]], prepare=True)
+    batch = calls[0][1]
+    assert batch[0] == ["guard"] and batch[1] == land_isolation.job(["p0/test_x.py"])[0]
+    assert len(batch) == 2 + land_isolation.GATE_SHARDS

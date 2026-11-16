@@ -142,7 +142,9 @@ class Zones:
                     continue
                 record = json.loads(os.read(fd, 4096))
                 if (set(record) == {"schema", "owner", "session_id"} and record["schema"] == SCHEMA
-                        and valid_owner(record["owner"]) and record["owner"] == self.owner
+                        and valid_owner(record["owner"])
+                        and record["owner"]["device_id"] == self.owner["device_id"]
+                        and record["owner"]["instance_id"] == self.owner["instance_id"]
                         and isinstance(record["session_id"], str) and _SESSION_RE.fullmatch(record["session_id"])):
                     os.ftruncate(fd, 0)
                     os.fsync(fd)

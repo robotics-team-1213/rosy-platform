@@ -20,7 +20,7 @@ measured headroom, D-568; an unavailable host stops landing); an auto selection 
 real-Chromium tests ``test/browser_scope.py`` maps the changed paths to. Lint, node and the
 known_failures comparison stay here. A branch on the pre-rewrite history is refused, and NEW failures
 that each pass when rerun alone land as LOAD-FLAKY (D-790, ``land_checks.py``). Never pushes,
-stashes, resets or cleans. A pytest invocation that passed on the same tree (or, when the selector
+resets or cleans; the main checkout's dirty files the landing changes are auto-stashed first. A pytest invocation that passed on the same tree (or, when the selector
 vouches for the delta, an ancestor) is reused from ``land_cache.py`` unless --no-cache. Standard library only.
 """
 
@@ -458,8 +458,9 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 print(f"[plan] then git -C {main_co} merge --ff-only {candidate}  ({branch})")
                 return 0
 
-            delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
-            if tested_main and delta and all(map(record_only, delta)):
+            base_main = tested_main or (full_main if args.tests == "auto" else None)
+            delta = lines(wt, "diff", "--name-only", base_main, main_sha) if base_main else []
+            if base_main and delta and all(map(record_only, delta)):
                 # Only module-scoped suites may skip; root test/ guards read the records themselves.
                 invocations = land_speculate.root_part(invocations)
                 reusable = False  # module suites ran on an earlier candidate, not this one
@@ -505,7 +506,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     land_record.plan(invocations, prepared, available=(wt / land_record.TARGET).is_file())
                 except (ValueError, TypeError, KeyError) as exc:
                     raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
-            on_main(main_co)
+            on_main(main_co); land_checks.stash_main_collisions(main_co, main_sha, candidate)
             ff = git(main_co, "merge", "--ff-only", candidate, check=False, env=MAIN_WRITER_ENV)
             if ff.returncode == 0:
                 land_full.forget(wt, branch)
@@ -532,7 +533,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             if turn_epoch is None or land_queue.turn_started() != turn_epoch:
                 raise Stop("landing turn ownership changed before overtime handoff; ticket left as is")
             land_queue.release(ticket, "turn deadline", started=land_queue.turn_started())
-            args._overtime = land_checks.overtimes(sys.modules[__name__], args) + 1
+            args._overtime = land_checks.next_overtime(sys.modules[__name__], args)
             land_queue.set_status(ticket, "preparing", overtime=args._overtime)
             full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, "")
             continue

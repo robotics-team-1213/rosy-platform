@@ -72,6 +72,8 @@
 - [실험실 PC에서 시뮬 셀 소유자는 장치 없는 namespace와 짧은 소켓 경로로 띄운다](../docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md)
 - [rosy-fleet-r 컨테이너 핫패치는 secret_bootstrap용 root 시작과 상태 유지형 셀 핸드오프를 지켜야 한다](../docs/solutions/deployment/site-stack-hotpatch-preserves-root-entrypoint-and-stateful-cell-handoff-2026-11-12.md)
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](../docs/solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
+- [OMX bias persistence preserves pivot circles, raw innovations survive window rejections, and NIS/CUSUM uses per-axis 1-sigma with min_n=15](../docs/solutions/logic-errors/omx-bias-persistence-drift-monitor-and-eval-invariants-2026-11-16.md)
+- [OMX Gate replan must refresh state after slow park and accept z_view destination maps with parallax geometry](../docs/solutions/logic-errors/omx-gate-replan-post-park-state-and-z-view-map-2026-11-16.md)
 - [OMX Chunk Runner waits for alignment before start, parks folded wait poses without unfolding, and tolerates legacy Fleet software-stop records](../docs/solutions/logic-errors/omx-start-tracking-folded-park-and-fleet-software-stop-2026-11-15.md)
 
 ## 시험
@@ -80,8 +82,8 @@
 
 ## 최근 기록
 
+- 2026-11-17 · uncommitted · fix(omx-pivot): over-target 110 deg yaw arc, known-geometry 1-outlier trim, and late-stall fit
+- 2026-11-16 · uncommitted · fix(deploy): 천장 카메라 자동 트랙 보정 10분 주기 안정화 파이프라인 연결
 - 2026-11-14 · uncommitted · rosy-face 상태 표시등 영속 설정
 - 2026-11-13 · uncommitted · docs(model-pc): 학습 센터 자동 업데이트 절을 퇴역 안내로 교체
 - 2026-11-12 · uncommitted · feat(omx): 호버·하강·캘리브레이션 훅 간 `target["pick"]` 전파 및 다중 프레임 지터 정밀 보정
-- 2026-11-11 · uncommitted · perf(omx): 손목/집게 비전 ROI 슬라이싱, 카메라 유닛 15FPS 정렬, 프로필 캐시 방어 복사 및 실물 데몬 경로 동기화
-- 2026-11-11 · uncommitted · perf(omx): D-1015 궤적·통신·인식·기구학 전 구간 병목 제거 및 실시간 연동 최적화

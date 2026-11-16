@@ -324,7 +324,14 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         git(Path(main).parent, "worktree", "remove", "--force", str(tree), check=False)
         git(Path(main).parent, "branch", "-D", snap, check=False)
         print(f"[land-async] {snap} landed; hidden worktree and snapshot branch removed", flush=True)
-        sys.path.insert(0, str(Path(main).parent / "tools"))  # this copy sits beside the log, its tree is gone:
+        for p in (str(Path(__file__).resolve().parent), str(Path(main).parent / "tools")):
+            if p not in sys.path:
+                sys.path.insert(0, p)  # this copy sits beside the log, its tree is gone
+        try:
+            import worktrees
+            worktrees.prune(Path(main).parent, apply=True, quiet=True)
+        except Exception as exc:  # cleanup must never change the landing's own outcome
+            print(f"[land-async] worktree prune skipped: {exc}", flush=True)
         try:  # main's land_queue (11-14: six landings skipped this with "No module named 'land_queue'")
             # main moved: MAIN-RED stops it cleared go again; never changes this landing's own outcome
             for name in orphans(Path(main).parent):
@@ -396,10 +403,19 @@ def split_rollup(tree: Path, snap: str, launch=None, reason: str = "") -> None:
 
 def detach(argv: list[str], log: Path, cwd: Path | None = None) -> subprocess.Popen:
     flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    # cwd: the holder, never the caller's worktree, which Windows then cannot delete while the landing runs
-    with open(log, "w", encoding="utf-8") as out:
-        return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                cwd=cwd or log.parent, creationflags=flags, start_new_session=os.name != "nt")
+
+    def spawn(want: int) -> subprocess.Popen:
+        # cwd: the holder, never the caller's worktree, which Windows then cannot delete while the landing runs
+        with open(log, "w", encoding="utf-8") as out:
+            return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                    cwd=cwd or log.parent, creationflags=want, start_new_session=os.name != "nt")
+
+    # CREATE_BREAKAWAY_FROM_JOB (0x01000000) frees the supervisor from the console's job object; a job that
+    # forbids breakaway raises PermissionError/OSError there and the plain detach flags still hold (11-17)
+    try:
+        return spawn(flags | (0x01000000 if os.name == "nt" else 0))
+    except (PermissionError, OSError):
+        return spawn(flags)
 
 
 def _resume_start(cwd: Path, name: str, land_args: list[str], launch):

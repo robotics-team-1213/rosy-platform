@@ -66,10 +66,10 @@ def bits(code: int) -> list[str]:
     return [name for bit, name in HW_BITS.items() if code & bit]
 
 
-def refuse_if_held(arm: str | None, link=None) -> None:
-    """Before a session: resend unsent reports, ask Fleet for the hold. Fleet unreachable: refuse only on a local hold."""
+def _probe_hold(arm: str | None, link=None) -> tuple[bool, str | None]:
+    """Send pending reports, ask Fleet for hold, lift local hold on confirmed clear. Returns (held, detail)."""
     if not arm:
-        return
+        return False, None
     link = link or link_for(arm)
     if link and label_box(arm):  # label-only reports go when they can; they never decide the start
         send(arm, link, label_box(arm))
@@ -82,21 +82,36 @@ def refuse_if_held(arm: str | None, link=None) -> None:
             print(f"fleet hold unreachable: {type(exc).__name__}: {str(exc)[:120]}")
     if _effectively_held(answer):
         keep_hold(arm, answer.reason or "arm incident not cleared", answer.incident_ids, "fleet")
-        raise SystemExit(f"{arm} held for a person: {answer.reason} (clear it in the Fleet console)")
+        return True, f"{answer.reason} (clear it in the Fleet console)"
     if answer is not None and sent:
         for gone in (hold_path(arm), INCIDENTS / f"HOLD-{arm}.json"):
             gone.unlink(missing_ok=True)  # only Fleet's "not held", with nothing unsent, lifts a hold
-        return
+        return False, None
     reason = held(arm) or ("an incident report could not be sent to Fleet" if outbox(arm) else None)
-    if reason:
-        raise SystemExit(f"{arm} held for a person: {reason} (Fleet not reached; Fleet clears it)")
+    return (True, f"{reason} (Fleet not reached; Fleet clears it)") if reason else (False, None)
+
+
+def sync_hold_from_fleet(arm: str | None, link=None) -> bool:
+    """Sync local HOLD file against Fleet using machine credentials; True when cleared."""
+    return not _probe_hold(arm, link)[0]
+
+
+def refuse_if_held(arm: str | None, link=None) -> None:
+    """Before a session: resend unsent reports, ask Fleet for the hold. Fleet unreachable: refuse only on a local hold."""
+    is_held, detail = _probe_hold(arm, link)
+    if is_held:
+        raise SystemExit(f"{arm} held for a person: {detail}")
 
 
 def after_session(arm: str | None, device: str | None, session=Path("session.json"), link=None) -> dict:
     """record_session's end: the pipeline with the reboot on this arm's follower. No arm name: nothing to hold."""
     if not arm:
         return {"incident": None, "reason": "no --arm"}
-    return handle(session, arm, act=reboot_latched(device) if device else None, link=link or link_for(arm))
+    from omx_incident_fleet import verify_baseline_caps
+
+    verify = (lambda: verify_baseline_caps(device)) if device else None
+    return handle(session, arm, act=reboot_latched(device) if device else None, link=link or link_for(arm),
+                  verify_caps=verify)
 
 
 def rows(path, since=0.0):
@@ -211,7 +226,7 @@ def decide(f: dict) -> dict:
     if not why and not f["safe_end"]:
         if not off:
             why.append("torque not confirmed OFF")
-        if f.get("caps_restored"):
+        if f.get("caps_restored") is not True:
             why.append("caps not confirmed restored")
         if not why:
             why.append("unsafe session end")
@@ -219,7 +234,8 @@ def decide(f: dict) -> dict:
             "reason": "; ".join(why) + "; a person checks the arm (jaws, contacts, wedged objects) before torque ON"}
 
 
-def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jsonl"), home=None, link=None) -> dict:
+def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jsonl"), home=None, link=None,
+           verify_caps=None) -> dict:
     """Run the pipeline for one ended session; returns the incident (or {"incident": False})."""
     session = json.loads(Path(session_path).read_text())
     if "safe_end" not in session:  # failed before the bus opened (2026-11-03 23:19: a leader port gone): never reached the arm
@@ -228,6 +244,10 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
         library = json.loads(Path(session["chunks"]["library"]).read_text())
         home = (library.get("chunks", {}).get("home") or [None])[0]
     f = facts(session, home, arm)
+    if (verify_caps and not f["safe_end"] and f["folded"] and not f["latched"]
+            and not f["windup_hits"] and not f["flagged"] and f.get("caps_restored") is not True):
+        if verify_caps():
+            f["caps_verified_restored"] = True
     d = decide(f)
     if not d["actions"] and not d["hold"] and d["reason"] == "no incident sign":
         return {"incident": False}
@@ -236,7 +256,8 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
     folder.mkdir(parents=True, exist_ok=True)
     if d["hold"]:  # the local hold exists before any device recovery and before Fleet is asked
         keep_hold(arm, f"{folder}: {d['reason']}"[:380])
-    acted = act([int(m) for m in f["latched"]]) if act and "reboot_latched" in d["actions"] else None
+    follower_ids = [int(m) for m in f["latched"] if str(m).isdigit()]
+    acted = act(follower_ids) if act and follower_ids and "reboot_latched" in d["actions"] else None
     incident = {"schema": "rosy.omx-incident.v1", "arm": arm, "stamp": stamp, "session": str(session_path),
                 "facts": f, "decision": d, "recovery": acted, "reported": False}
     cell_decisions.append(decisions, {
@@ -329,36 +350,13 @@ def status(arm: str, link=None) -> dict:
             "incident_ids": fleet_ids, "fleet_reason": fleet_reason}
 
 
-def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None) -> int:
+def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None) -> int:
     """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold."""
-    if not note.strip():
-        raise SystemExit("a note of what was checked is required")
-    token_file = token_file or default_token_file()
-    if token_file is None or not Path(token_file).is_file():
-        raise SystemExit("an operator --token-file (chmod 600) is required")
-    token_file = Path(token_file)
-    if token_file.stat().st_mode & 0o077:
-        raise SystemExit(f"{token_file} must be readable by its owner only (chmod 600)")
-    link = link or link_for(arm)
-    if link is None:
-        raise SystemExit(f"{arm}: no Fleet channel configured on this PC (source the observation bridge env)")
-    token = token_file.read_text(encoding="utf-8").strip()
-    answer = link.hold()
-    cleared = list(answer.incident_ids)
-    for incident_id in cleared:
-        if cause is not None or basis is not None:
-            try:
-                answer = link.clear(incident_id, note, token, cause=cause, basis=basis)
-            except OSError as exc:
-                if getattr(exc, "code", None) != 422:
-                    raise
-                answer = link.clear(incident_id, note, token)
-        else:
-            answer = link.clear(incident_id, note, token)
-    print(json.dumps({"arm": arm, "cleared": cleared, "held": answer.held,
-                      **({"cause": cause} if cause else {}), **({"basis": basis} if basis else {})}))
-    refuse_if_held(arm, link)  # Fleet's "not held" lifts the local hold file too
-    return 0
+    from omx_incident_fleet import clear_incidents
+
+    return clear_incidents(
+        arm, note, token_file, link or link_for(arm), cause=cause, basis=basis, token=token, refuse_fn=refuse_if_held
+    )
 
 
 def main(argv=None):

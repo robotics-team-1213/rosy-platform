@@ -267,6 +267,21 @@ def test_the_supervisor_never_holds_the_callers_worktree(tmp_path, monkeypatch):
     assert Path(log.read_text(encoding="utf-8").strip()) == log.parent
 
 
+def test_detach_falls_back_when_the_job_object_forbids_breakaway(monkeypatch, tmp_path):
+    seen = []
+
+    def popen(*args, **kwargs):
+        seen.append(flags := kwargs.get("creationflags", 0))
+        if flags & 0x01000000:  # CREATE_BREAKAWAY_FROM_JOB: the parent job object refuses it
+            raise PermissionError(5, "Access is denied.")
+        return object()
+
+    monkeypatch.setattr(tool.subprocess, "Popen", popen)
+    assert tool.detach([sys.executable, "-c", "pass"], tmp_path / "d.log") is not None
+    assert seen == ([0x00000008 | 0x00000200 | 0x01000000, 0x00000008 | 0x00000200]
+                    if os.name == "nt" else [0])
+
+
 def _ticket(main: Path, name: str, **row) -> Path:
     qdir = main / ".git" / "rosy-land-queue"
     qdir.mkdir(exist_ok=True)
@@ -806,3 +821,40 @@ def test_main_branch_option_parses_and_checks_too_big(repo, monkeypatch):
         calls.append((branch, args)) or ("land/feat/plumbing-1", Path("log"))))
     assert tool.main(["--branch=feat/plumbing", "--tests", "auto", "--mixed", "ok"]) == 0
     assert calls == [("feat/plumbing", ["--mixed", "ok"]), ("feat/plumbing", ["--tests", "auto", "--mixed", "ok"])]
+
+
+def test_supervise_prunes_clean_landed_worktrees_and_never_fails_on_prune_error(repo, monkeypatch, capsys):
+    main, dev = repo
+    done = main / ".worktrees" / "done"
+    dirty = main / ".worktrees" / "dirty"
+    _git(main, "worktree", "add", "-q", "-b", "feat/done", str(done), "main")
+    _git(main, "config", "branch.feat/done.description", "owner: t <t@example.invalid>")
+    (done / "done.txt").write_text("done\n", encoding="utf-8")
+    _git(done, "add", "done.txt")
+    _git(done, "commit", "-q", "-m", "done")
+    _git(main, "merge", "-q", "--ff-only", "feat/done")
+    _git(main, "worktree", "add", "-q", "-b", "feat/dirty", str(dirty), "main")
+    (dirty / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+    _git(dirty, "add", "dirty.txt")
+    _git(dirty, "commit", "-q", "-m", "dirty")
+    _git(main, "merge", "-q", "--ff-only", "feat/dirty")
+    (dirty / "wip.txt").write_text("wip\n", encoding="utf-8")
+
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        _git(main, "merge", "-q", "--no-edit", _git(Path(cwd), "rev-parse", "--abbrev-ref", "HEAD"))
+        return 0
+
+    assert tool.supervise(tree, snap, [], run=fake_land) == 0
+    assert not done.exists() and dirty.is_dir()
+
+    (dev / "a.txt").write_text("3\n", encoding="utf-8")
+    _git(dev, "commit", "-qam", "change 2")
+    snap2, log2 = tool.start(dev, [], NOW.replace(second=1), lambda *a: None)
+    tree2 = log2.parent / log2.name.removesuffix(".log")
+    import worktrees
+    monkeypatch.setattr(worktrees, "prune", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("lock held")))
+    assert tool.supervise(tree2, snap2, [], run=fake_land) == 0
+    assert not tree2.exists() and "worktree prune skipped: lock held" in capsys.readouterr().out

@@ -217,24 +217,28 @@ def _only_skipped(log: Path) -> bool:
 def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
                  run, *, tested_sha: str) -> tuple[list[str], str]:
     ids = _ids(wt, verdict)
-    if not ids or len(ids) > MAX_RERUN:
-        return [], f"{len(ids)} NEW id(s); a rerun alone is tried only for 1 to {MAX_RERUN}"
+    files = sorted({i.split("::")[0] for i in ids})
+    if not ids or len(ids) > MAX_RERUN and len(files) > 2:
+        return [], (f"{len(ids)} NEW id(s); a rerun alone is tried only for 1 to {MAX_RERUN}" if not ids else
+                    f"{len(ids)} NEW id(s) across {len(files)} files; a rerun alone is tried only for 1 to"
+                    f" {MAX_RERUN} ids or 1 to 2 files")
+    targets = files if len(ids) > MAX_RERUN else ids  # 11-17: 22 parametrized ids of one file rerun as that file
     safety = _safety(wt, python, ids)
     if safety:
         return [], f"under a safety root, never retried (D-762): {', '.join(safety)}"
     env = [token for token in inv if ENV_TOKEN.match(token)]
-    logs = [logdir / f"alone-{tag}-{i}.txt" for i in range(1, len(ids) + 1)]
+    logs = [logdir / f"alone-{tag}-{i}.txt" for i in range(1, len(targets) + 1)]
     print(f"[land] {len(ids)} NEW failure(s) in {log.name}: rerunning each alone once (D-790)", flush=True)
-    codes = run([[*env, nodeid] for nodeid in ids], logs, tested_sha, repo=wt, label=f"land-alone-{tag}")
-    if len(codes) != len(ids):
+    codes = run([[*env, target] for target in targets], logs, tested_sha, repo=wt, label=f"land-alone-{tag}")
+    if len(codes) != len(targets):
         return [], "incomplete isolated rerun results"
     if _git(wt, "rev-parse", "HEAD").stdout.strip() != tested_sha:
         return [], "HEAD changed during isolated checks; retry the landing"
-    lost = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs)
+    lost = [f"{target} (exit {code}, {alone})" for target, code, alone in zip(targets, codes, logs)
             if code not in (0, 1) or code == 0 and _only_skipped(alone)]
     if lost:  # 4: no such file, 5: nothing collected, 255: host lost, exit 0 by skipping: no verdict, not a second failure
         return [], "the rerun alone gave no verdict: " + "; ".join(lost)
-    again = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code != 0]
+    again = [f"{target} (exit {code}, {alone})" for target, code, alone in zip(targets, codes, logs) if code != 0]
     if again:
         return [], "failed again when run alone: " + "; ".join(again)
     sha = tested_sha
@@ -244,8 +248,10 @@ def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path
     kept = log.with_name(f"{log.stem}-load-flaky-{sha[:10]}{log.suffix}")
     kept.write_bytes(log.read_bytes())
     log = kept
+    alone_for = dict(zip(targets, logs))  # grouped: every id's verdict came from its whole file's rerun
     with open(common / CANDIDATES, "a", encoding="utf-8") as out:
-        for nodeid, alone in zip(ids, logs):
+        for nodeid in ids:
+            alone = alone_for[nodeid if targets is ids else nodeid.partition("::")[0]]
             out.write(f"{nodeid}  # LOAD-FLAKY {day}: failed in {log} on {sha[:10]}, passed alone in {alone};"
                       " review for test/flaky_quarantine.txt (D-762 evidence rules)\n")
     for nodeid in ids:
@@ -340,7 +346,32 @@ def landed_copy(main_co: Path, argv: list[str]) -> int | None:
     return subprocess.run([sys.executable, str(there / "land.py"), *argv], env={**os.environ, OWN_COPY: "1"}).returncode
 
 
+def stash_main_collisions(main_co: Path, main_sha: str, candidate: str) -> list[str]:
+    """Stash main_co's dirty/untracked files the landing also changes (disjoint dirty files stay), for --ff-only."""
+    status = _git(main_co, "-c", "core.quotepath=off", "status", "--porcelain")
+    if not status.stdout.strip():
+        return []
+    changed = set(_git(main_co, "-c", "core.quotepath=off", "diff", "--name-only",
+                       f"{main_sha}..{candidate}").stdout.splitlines())
+    colliding = sorted(p for p in (line[3:].split(" -> ")[-1] for line in status.stdout.splitlines())
+                       if p in changed or any(c.startswith(p.rstrip("/") + "/") for c in changed))
+    if colliding:
+        subprocess.run(["git", "-C", str(main_co), "stash", "push", "-u", "-m",
+                        f"land-auto-stash-{candidate[:10]}", "--", *colliding], check=False, capture_output=True)
+        print(f"[land] auto-stashed {len(colliding)} colliding file(s) in {main_co}: {', '.join(colliding[:5])}")
+    return colliding
+
+
 CAP_POLL_S = 15
+MAX_OVERTIMES = 2
+
+
+def next_overtime(land, args) -> int:
+    """Increment overtime count and stop runaway zombies past MAX_OVERTIMES turns."""
+    nxt = overtimes(land, args) + 1
+    if nxt > MAX_OVERTIMES:
+        raise land.Stop(f"stopped after {MAX_OVERTIMES} overtime handoffs without finishing")
+    return nxt
 
 
 def turn_wanted(land, wt: Path) -> bool:
@@ -408,8 +439,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     head = land.out(wt, "rev-parse", "HEAD")
     if (wt / land.HARNESS).is_file():
         lint_log = logdir / f"lint-{round_no}.txt"
-        key = (str(logdir.resolve()), str(round_no).removeprefix("g"), head, id(land.step),
-               (wt / land.HARNESS).stat().st_mtime_ns)
+        key = (str(wt.resolve()), head, id(land.step), (wt / land.HARNESS).stat().st_mtime_ns)
         with _lint_lock:
             if key in _lint_done:
                 lint_log.write_text(_lint_done[key], encoding="utf-8")

@@ -76,3 +76,37 @@ the projection gate or is silently reverted by the image-layer reconcile; use
 - Runbook §3 rewrite (runtime.env edit → commit_runtime) is a repo change,
   not done in this session.
 - The gate should name the mismatching path in its HOLD output (repo change).
+
+## Recurrence 2026-11-16: five payload files, two robots (y8xs bricked on reboot)
+
+A field session pushed a "unified Nav2 + SLAM pose" fix by writing straight into
+`/opt/rosy/current/install/...` on geg6 and y8xs with `sudo tee` from a PC script
+(three CORE bridge files plus `nav2_params.yaml` and `mapper_params.yaml`). The
+robots kept running. When y8xs was power-cycled, `rosy-release-recover` stopped with
+`OS_RECOVERY_HOLD` and CORE never started, so Fleet showed the robot as disconnected.
+
+- Find the files: `cd /opt/rosy/releases/<id> && sudo sha256sum -c SHA256SUMS | grep -v ': OK$'`
+  listed exactly the five edited paths (the gate still prints no path).
+- Restore: `git show <manifest git_revision>:<repo path>` gave bytes whose sha256 equals
+  the signed expectation for all five; backup of the edited files went to a root-only
+  folder outside the payload, then `sha256sum -c` (bad = 0), `systemctl start
+  rosy-release-recover` -> `RECOVERED`, then the runtime came up and the hub link returned.
+- The same edits were still on the robot that had not rebooted (geg6), so it carried the
+  same trap. Check every robot that received a hand deploy, not only the one that failed.
+- Side finding: `rosy-navigation` and `rosy-io` conflict (both own the motor). Starting
+  `rosy-runtime.target` pulls `rosy-io` up and stops navigation, so starting navigation by
+  hand does not stick on a robot in the default product state.
+- Second cause of navigation dying every minute (found 2026-11-17 on y8xs): the installed
+  release (`2026.11.15-182`) ships `rosy-os-update.service` with `Wants=rosy-io.service`, and
+  `rosy-os-update.timer` fires it every 60 s. Each poll started `rosy-io`, whose `Conflicts=`
+  stopped `rosy-navigation` (journal: `Starting rosy-io` then `Stopping rosy-navigation`, even
+  with outcome `no-update`). main already removed that `Wants=` (90e631297f, "keep OS update
+  polls from starting conflicting I/O") but the signed release the robots run predates it.
+  Until a release carries it, pause only `rosy-os-update.timer` for the mapping session and
+  start it again afterwards; do not edit the unit in place. A busy robot now defers the
+  install (`deferred-busy`) instead of failing the poll (fix/os-update-only-when-idle).
+
+Rule for deploy scripts: never write under `/opt/rosy/current` or `/opt/rosy/releases`.
+A tuning that must reach a robot before the next signed release goes through the supported
+overlay (`/etc/rosy/*.yaml` projected by `commit_runtime`, or the model pointer), or waits
+for the release. A script that verifies `SHA256SUMS` after its copy would have caught this.

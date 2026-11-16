@@ -182,6 +182,37 @@ def test_depth_receipt_refuses_concurrent_capture_of_same_path(tmp_path, monkeyp
     assert raw.read_bytes() == b"other capture"
 
 
+def test_depth_capture_falls_back_to_trailing_space_z16_only_on_called_process_error(tmp_path, monkeypatch):
+    dev, raw = tmp_path / "depth", tmp_path / "depth.raw"
+    dev.touch()
+    seen_fmts = []
+
+    def fallback_on_z16(cmd, **kwargs):
+        fmt = next(part for part in cmd if part.startswith("--set-fmt-video="))
+        out_p = Path(next(part.split("=", 1)[1] for part in cmd if part.startswith("--stream-to=")))
+        seen_fmts.append(fmt)
+        if fmt.endswith("pixelformat=Z16"):
+            raise subprocess.CalledProcessError(1, cmd)
+        np.full((480, 640), 612, dtype=np.uint16).tofile(out_p)
+        stamp = time.monotonic()
+        line = f"cap dqbuf: 0 seq: 1 bytesused: 614400 ts: {stamp:.6f} delta: 166.6 ms fps: 6.00 field: None (ts-monotonic, ts-src-soe)"
+        return subprocess.CompletedProcess(cmd, 0, stderr=line)
+
+    monkeypatch.setattr(czp.cell_depth.subprocess, "run", fallback_on_z16)
+    depth = czp.capture_top_depth_z16(str(dev), raw)
+    assert depth is not None and seen_fmts == [
+        "--set-fmt-video=width=640,height=480,pixelformat=Z16",
+        "--set-fmt-video=width=640,height=480,pixelformat=Z16 ",
+    ]
+    seen_fmts.clear()
+    depth_r, receipt = czp.cell_depth.capture_top_depth_z16_receipt(str(dev), tmp_path / "rec.raw")
+    assert depth_r.shape == (480, 640) and receipt["source_seq"] == 1
+    assert seen_fmts == [
+        "--set-fmt-video=width=640,height=480,pixelformat=Z16",
+        "--set-fmt-video=width=640,height=480,pixelformat=Z16 ",
+    ]
+
+
 def test_one_view_and_uncalibrated_views_remain_unknown():
     assert reconcile_top_and_side_z_mm(None, 30.0)["aligned"] is False
     assert reconcile_top_and_side_z_mm(30.0, None)["dz_mm"] is None

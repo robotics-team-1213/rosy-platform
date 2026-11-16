@@ -40,18 +40,26 @@ WAIT_CAP = 3  # timeout_s multiples a job may wait for room; new jobs stay out m
 # always starts, however large. One flock makes check and lock one step across runs. Waiting keeps the laptop
 # polling (its pid is up), so land_watchdog sees it as alive.
 HOLD_DEFERRED = b"[remote-pytest] admission deferred: gpu/sim hold"
-ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone; DEFER_HOLD='""" + HOLD_DEFERRED.decode() + r"""'
+ROOM_DEFERRED = b"[remote-pytest] admission deferred: host room"
+ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; CA=${ROSY_JOB_CPU_ALONE:-0}; [ "$AL" = 1 ] && X=alone; DEFER_HOLD='""" + HOLD_DEFERRED.decode() + r"""'; DEFER_ROOM='""" + ROOM_DEFERRED.decode() + r"""'
 CAPC=${ROSY_HOST_CORES:-$(nproc)}; CAPG=${ROSY_HOST_GB:-$(awk '/^MemTotal:/{print int($2 / 1048576)}' /proc/meminfo)}
+w_admit0=$(date +%s)
+_sl=0.5
 exec 9> ~/rosy-jobs/.admit
 while :; do
   now=$(date +%s)
   if reboot_soon "$now"; then echo '[remote-pytest] admission deferred: nightly reboot'; exit 253; fi
-  flock 9; uc=0; ug=0; others=0; held=0; pending=0; gh=0
+  flock 9; uc=0; ug=0; others=0; held=0; pending=0; gh=0; sh=0; non_gpu=0; gc=0; gg=0
   for f in ~/rosy-jobs/*.lock; do
     [ -e "$f" ] || continue; read -r p k fc fm < "$f" || true
     kill -0 "$p" 2>/dev/null || continue
-    others=$((others + 1)); [ "$k" = alone ] && held=1; case "$k" in sim|gpu) gh=1;; esac
-    [[ $fc$fm =~ ^[0-9]+$ ]] && { uc=$((uc + fc)); ug=$((ug + fm)); }
+    others=$((others + 1)); [ "$k" = alone ] && held=1
+    [ "$k" = gpu ] || non_gpu=$((non_gpu + 1))
+    case "$k" in sim) gh=1; sh=1;; gpu) gh=1;; esac
+    if [[ $fc$fm =~ ^[0-9]+$ ]]; then
+      uc=$((uc + fc)); ug=$((ug + fm))
+      [ "$k" = gpu ] && { gc=$((gc + fc)); gg=$((gg + fm)); }
+    fi
   done
   for f in ~/rosy-jobs/*.resv; do
     [ -e "$f" ] || continue; read -r t k fc fm < "$f" || true
@@ -61,23 +69,33 @@ while :; do
     [ -e "$f" ] || continue; read -r p < "$f" || true
     [ "$p" != $$ ] && kill -0 "$p" 2>/dev/null && pending=1
   done
-  if [ "$AL" = 1 ]; then ok=$((others == 0))
-  # ROSY_JOB_TURN=1 (xdist_plan.TURN_JOB): the landing holding the turn; never beside an alone job, else at once.
-  elif [ "${ROSY_JOB_TURN:-}" = 1 ]; then ok=$((held == 0))
+  hold=$gh
+  if [ "$AL" = 1 ] && [ "$CA" = 1 ]; then
+    ok=$((non_gpu == 0 && (others == 0 || (uc + RC <= CAPC && ug + G <= CAPG))))
+    # CPU/fsync timing alone job runs beside gpu training when sim is absent and cpu/mem fit.
+    [ "$sh" = 0 ] && [ "$((gc + RC <= CAPC && gg + G <= CAPG))" = 1 ] && hold=0
+  elif [ "$AL" = 1 ]; then ok=$((others == 0))
+  # ROSY_JOB_TURN=1 (xdist_plan.TURN_JOB): prioritized above CAPC/CAPG, capped against 2x overcommit.
+  elif [ "${ROSY_JOB_TURN:-}" = 1 ]; then ok=$((held == 0 && (others == 0 || (uc + RC <= CAPC + 4 && ug + G <= CAPG + 6))))
   else ok=$((held == 0 && pending == 0 && (others == 0 || (uc + RC <= CAPC && ug + G <= CAPG)))); fi
   if [ $ok = 1 ]; then echo "$$ $X $RC $G" > "$L"; rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; break; fi
   # 11-09: behind a training or Gazebo hold (hours) an alone waiter's marker kept every pytest off the host. It
   # waits without the marker, then gives its invocation back to be placed on another host (RebootSoon path).
-  [ "$gh" = 1 ] || unset w0  # the 180 s count is one continuous hold
-  if [ "$AL" = 1 ] && [ "$gh" = 1 ]; then
+  [ "$hold" = 1 ] || unset w0  # the 180 s count is one continuous hold
+  if [ "$AL" = 1 ] && [ "$hold" = 1 ]; then
     rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; : "${w0:=$now}"
     if [ $((now - w0)) -ge "${ROSY_ALONE_HOLD_WAIT_S:-180}" ]; then echo "$DEFER_HOLD"; exit 253; fi
-    sleep 5; continue
+    sleep "$_sl"; case "$_sl" in 0.5) _sl=1;; *) _sl=2;; esac; continue
+  fi
+  if [ "$AL" != 1 ] && [ $((now - w_admit0)) -ge "${ROSY_ADMIT_WAIT_S:-180}" ]; then
+    flock -u 9; echo "$DEFER_ROOM"; exit 253
   fi
   [ "$AL" = 1 ] && echo $$ > ~/rosy-jobs/$$.alone-wait
   flock -u 9
   [ -n "${said:-}" ] || { echo "[remote-pytest] waiting for host room ($others job(s), ${uc}c ${ug}GB in use)"; said=1; }
-  sleep 5
+  sleep "$_sl"
+  if [ "${ROSY_JOB_TURN:-}" = 1 ] || [ "$AL" = 1 ]; then case "$_sl" in 0.5) _sl=1;; *) _sl=2;; esac
+  else case "$_sl" in 0.5) _sl=1;; 1) _sl=2;; 2) _sl=4;; 4) _sl=8;; *) _sl=10;; esac; fi
 done
 [ -n "${said:-}" ] && echo "[remote-pytest] host room after waiting"
 exec 9>&-"""
@@ -112,12 +130,15 @@ export PYTEST_TIMEOUT="${ROSY_PER_TEST_TIMEOUT:-900}"
 # xdist_plan job words: an xdist job's workers and a light host's memory cap, for the lock and MemoryMax.
 # ROSY_JOB_RESERVE_GB: the lock budget placement counts (laptop memory history), apart from the MemoryMax cap.
 # ROSY_JOB_RESERVE_CORES: the lock's cores from the laptop's cpu history; -n stays ROSY_JOB_CORES.
-C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-$M}; RC=${ROSY_JOB_RESERVE_CORES:-$C}
+C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-${ROSY_JOB_MEM_GB:-2}}; RC=${ROSY_JOB_RESERVE_CORES:-$C}
 [[ $C$M$G$RC =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/_MEM_GB/_RESERVE_* must be whole numbers"; exit 2; }
 X=pytest; [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && X=browser  # PROBE counts browser locks per host
+[ -z "${ROSY_JOB_CPU_ALONE:-}" ] && { { [ "${1:-}" = "test/test_platform_g1_timing.py" ] && [ "${ROSY_RUN_BROWSER_TESTS:-}" != 1 ]; } || { [ "${ROSY_BROWSER_ALONE:-}" = 1 ] && [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ]; }; } && ROSY_JOB_CPU_ALONE=1
 """ + ADMIT + "\n" + ISAAC_GPU_GUARD + r"""
 # Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
-[ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
+[ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { compgen -G ~/.cache/ms-playwright/chromium-*/chrome*/chrome >/dev/null 2>&1 \
+  || compgen -G ~/.cache/ms-playwright/chromium_headless_shell-*/chrome*/chrome* >/dev/null 2>&1 \
+  || timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
 umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
 # tmp_path root per job, removed by the EXIT trap: /tmp/pytest-of-<user> garbage filled a host disk (2026-10-26).
@@ -126,9 +147,14 @@ umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 fi
 B=$(mktemp -d /tmp/rosy-pytest-XXXXXX) || exit 1
 # TMPDIR beside the basetemp, not in it (pytest wipes --basetemp at start): TEMP-or-/tmp tests leak otherwise.
 mkdir -m 700 "$B/p" "$B/t"; export TMPDIR=$B/t TEMP=$B/t TMP=$B/t
-# The deps hash names the inputs, not what unpinned pip picked; installed dist-info names do (one per run).
-echo "[remote-pytest] env ${V##*/} freeze $(cd "$V" && ls -d lib/python3*/site-packages/*.dist-info \
-  receiver-crypto/*.dist-info 2>/dev/null | sha256sum | cut -c1-16)"
+# The deps hash names the inputs, not what unpinned pip picked; installed dist-info names do (cached per venv).
+SM=$(stat -c '%y' "$V"/lib/python*/site-packages 2>/dev/null | tr '\n' ';')
+PM=; F=
+[ -r "$V/.freeze-sha" ] && IFS='|' read -r PM F < "$V/.freeze-sha" || true
+[ -n "$F" ] && [ "$PM" = "$SM" ] || { F=$(cd "$V" && ls -d lib/python3*/site-packages/*.dist-info \
+  receiver-crypto/*.dist-info 2>/dev/null | sha256sum | cut -c1-16); \
+  printf '%s|%s\n' "$SM" "$F" > "$V/.freeze-sha.tmp.$$" 2>/dev/null && mv -f "$V/.freeze-sha.tmp.$$" "$V/.freeze-sha" 2>/dev/null || true; }
+echo "[remote-pytest] env ${V##*/} freeze $F"
 # Best-effort lowest, not idle (-c3): idle gets no disk time while any other process writes, so a timing
 # test's SQLite fsync stalled for seconds on a busy AI PC (g1 contact gap p99 4.7-5.7 s, 2026-10-26).
 # The scope's cgroup ends with pytest, so a watcher inside it reads memory.peak (kernel >= 5.19) after pytest is
@@ -347,6 +373,8 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                         raise RebootSoon(f"{host}: nightly reboot admission deferred")
                     if rc == 253 and HOLD_DEFERRED + b"\n" in log.read_bytes():
                         raise RebootSoon(f"{host}: an alone job deferred while other jobs ran; placed elsewhere")
+                    if rc == 253 and ROOM_DEFERRED + b"\n" in log.read_bytes():
+                        raise RebootSoon(f"{host}: admission deferred after room wait; placed elsewhere")
                     wait = max(0.0, admitted - wait_from) if waiting else 0.0  # user@address: only the user part
                     out.write(f"\n{TIMING} host={host.split('@')[0]} start={start_at:.0f} wait_s={wait:.0f}"
                               f" run_s={clock() - admitted:.0f}\n".encode())

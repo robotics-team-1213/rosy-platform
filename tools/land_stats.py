@@ -89,6 +89,8 @@ def daily(rows: list[dict]) -> dict[str, dict]:
         if event == "turn":
             turn_at[pid] = row["t"]
             day["waits"].append(row.get("waited_s", 0) / 60)
+        elif event == "released":
+            turn_at.pop(pid, None)
         elif event in ("landed", "stop"):
             day["landed" if event == "landed" else "stopped"] += 1
             if pid in turn_at:

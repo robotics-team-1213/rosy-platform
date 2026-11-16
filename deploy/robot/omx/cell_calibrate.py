@@ -8,40 +8,31 @@ Single Responsibility:
 """
 from __future__ import annotations
 
-import argparse
-import itertools
-import json
-import math
+import argparse, itertools, json, math, sys, time
 from pathlib import Path
-import sys
-import time
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_calibrate_auto import (  # noqa: E402,F401  (re-exported)
-    auto_pivot_point,
-    carried,
-    clear_point,
-    learn_bias,
-    map_agrees,
-    over_target,
-    pivot_near_yaws,
-    self_calibrate,
-)
-from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401  (re-exported)
-import cell_calibration as cal  # noqa: E402
-from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401  (re-exported)
-import cell_params as prm  # noqa: E402
+from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, map_agrees, over_target, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
+from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401
+import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
+from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
+from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
 from cell_pipeline_io import fold  # noqa: E402
-import cell_pivot  # noqa: E402
-import cell_remap_plan as rp  # noqa: E402
 
 MAP_POINTS = [
     [-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15],
     [-0.06, 0.15], [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17],
 ]  # the 2026-10-28 remap grid
 AT_STOP_S = 1.5  # the most a refused remap move waits for its stop evidence before it folds
+
+
+def depth_capture():
+    """A fresh top D435 Z16 frame (None on a failed capture); the depth-verify step's only depth source."""
+    import cell_depth
+
+    return cell_depth.capture_top_depth_z16()
 
 
 _REF_GRAY_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
@@ -67,10 +58,15 @@ def _load_ref_gray(path: Path):
 def stale(check: dict) -> list:
     """The steps a check result asks for, in dependency order."""
     if check.get("camera_moved") or check.get("missing_map"):
-        return ["remap", "regions"] + [f"pivot-near {t}" for t in check.get("targets", [])]
-    steps = ["consensus-repair"] if check.get("consensus_repairable") else []
-    steps += [f"pivot-near {t}" for t in check.get("missing_bias", [])]
-    steps += [f"surface {s}" for s in check.get("missing_surface", [])]
+        steps = ["remap", "regions"] + [f"pivot-near {t}" for t in check.get("targets", [])]
+    else:
+        steps = ["consensus-repair"] if check.get("consensus_repairable") else []
+        steps += [f"pivot-near {t}" for t in check.get("missing_bias", [])]
+        steps += [f"surface {s}" for s in check.get("missing_surface", [])]
+    if check.get("unverified_xy"):
+        steps.append("post-eval")
+    if check.get("missing_depth_verify"):
+        steps.append("depth-verify")
     return steps
 
 
@@ -103,17 +99,21 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     else:
         out["camera_moved"] = bool(out.get("map_binding_error")) or out.get("reference_mismatch", False)
         out["no_reference"] = True
-    bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
-    for site, xy in targets:
-        if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
-            out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
+    try:
+        bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
+        for site, xy in targets:
+            if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
+                out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
+    except ValueError as exc:
+        out["bias_error"] = str(exc)
+        out["missing_bias"].extend(f"{site}:{xy[0]},{xy[1]}" for site, xy in targets)
     out["missing_map"] = [s for s in map_sites(config) if s not in calibration.get("sites", {})]
     for s in map_sites(config):
         rec = (calibration.get("sites") or {}).get(s) or {}
         if rec.get("loo_error_mm") and not map_agrees(rec, params) and len(rec.get("points") or []) >= 5:
             pts = [(tuple(p["pixel"]), tuple(p["arm_m"])) for p in rec["points"]]
             kept = consensus(pts, prm.get(params, "calibrate.consensus_px"))
-            if enough_agree(len(kept), len(pts)) and cal.loo_error_mm(kept)["max"] <= prm.get(
+            if enough_agree(len(kept), len(pts)) and repair_record(config, rec, kept)["loo_error_mm"]["max"] <= prm.get(
                 params, "calibrate.max_loo_mm"
             ):
                 out["consensus_repairable"] = True
@@ -121,6 +121,20 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     for name, site in config["sites"].items():
         if "surface_z" not in site:
             out["missing_surface"].append(name)
+    import cell_cal_monitor
+    import cell_post_eval
+
+    drift = cell_cal_monitor.summarize(config, calibration)
+    if drift["alarmed_sites"]:
+        out["drift"] = drift
+        out["advisory_todo"] = drift["suggested_advisory"]
+    lat = cell_post_eval.lateral_summary(config, calibration)
+    out["lateral_xy"] = lat["verdict"]
+    cal_cfg = config.get("calibrate") or {}
+    if cal_cfg.get("verify_xy") or lat["verdict"] == "fail":
+        out["unverified_xy"] = not lat["lateral_xy_verified"]
+    if cal_cfg.get("verify_depth") and not (Path(config.get("work_dir", ".")).expanduser() / "depth-verify.json").exists():
+        out["missing_depth_verify"] = True
     return out
 
 
@@ -129,60 +143,6 @@ def map_sites(config: dict) -> list:
     return config.get("calibrate", {}).get("map_sites") or [
         s for s in ("floor", "pinky", "belt") if s in config["sites"]
     ]
-
-
-def predicted(marks: list, point) -> list | None:
-    """Where the jaws over `point` should show, from an affine fit of three or more (pixel, arm) marks not on one line."""
-    arm = np.array([[a[0], a[1], 1.0] for _, a in marks])
-    if len(marks) < 3 or np.linalg.matrix_rank(arm, tol=1e-3) < 3:
-        return None
-    coef, *_ = np.linalg.lstsq(arm, np.array([m for m, _ in marks], float), rcond=None)
-    return [round(float(v), 1) for v in np.array([point[0], point[1], 1.0]) @ coef]
-
-
-def consensus(marks: list, tol_px: float) -> list:
-    """The largest set of marks one affine map explains."""
-    n = len(marks)
-    if n < 3:
-        return list(marks)
-    ax = np.array([a[0] for _, a in marks], dtype=np.float64)
-    ay = np.array([a[1] for _, a in marks], dtype=np.float64)
-    pu = np.array([m[0] for m, _ in marks], dtype=np.float64)
-    pv = np.array([m[1] for m, _ in marks], dtype=np.float64)
-    idx = np.array(list(itertools.combinations(range(n), 3)), dtype=np.intp)
-    i, j, k = idx[:, 0], idx[:, 1], idx[:, 2]
-    dx1, dy1 = ax[j] - ax[i], ay[j] - ay[i]
-    dx2, dy2 = ax[k] - ax[i], ay[k] - ay[i]
-    det = dx1 * dy2 - dx2 * dy1
-    span = np.maximum(np.hypot(dx1, dy1), np.hypot(dx2, dy2))
-    valid = np.abs(det) > np.maximum(1e-6, 1e-3 * span)
-    if not valid.any():
-        return list(marks)
-    i, j, k = i[valid], j[valid], k[valid]
-    dx1, dy1, dx2, dy2 = dx1[valid], dy1[valid], dx2[valid], dy2[valid]
-    inv_det = 1.0 / det[valid]
-    du1, dv1 = pu[j] - pu[i], pv[j] - pv[i]
-    du2, dv2 = pu[k] - pu[i], pv[k] - pv[i]
-    au = (dy2 * du1 - dy1 * du2) * inv_det
-    bu = (-dx2 * du1 + dx1 * du2) * inv_det
-    av = (dy2 * dv1 - dy1 * dv2) * inv_det
-    bv = (-dx2 * dv1 + dx1 * dv2) * inv_det
-    rx = ax[None, :] - ax[i, None]
-    ry = ay[None, :] - ay[i, None]
-    eu = pu[i, None] + au[:, None] * rx + bu[:, None] * ry - pu[None, :]
-    ev = pv[i, None] + av[:, None] * rx + bv[:, None] * ry - pv[None, :]
-    inliers = (eu * eu + ev * ev) <= (tol_px * tol_px)
-    counts = inliers.sum(axis=1)
-    best_idx = int(np.argmax(counts))
-    if counts[best_idx] == 0:
-        return list(marks)
-    mask = inliers[best_idx]
-    return [m for m, keep in zip(marks, mask) if keep]
-
-
-def enough_agree(kept: int, seen: int) -> bool:
-    """Five marks fit a map, and the majority must agree."""
-    return kept >= 5 and kept * 2 > seen
 
 
 def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None) -> dict:
@@ -272,9 +232,10 @@ def main(argv=None):
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
     ap.add_argument("--plan-only", action="store_true", help="print each remap point's IK and verdict; opens no port or camera")
-    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair"], help="auto: run only these step kinds (remap, regions, pivot-near, "
-                    "surface, consensus-repair); a reviewed plan for one step must not run the others. 2026-11-15: a "
+    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair", "post-eval", "depth-verify"], help="auto: run only these step kinds (remap, regions, pivot-near, "
+                    "surface, consensus-repair, post-eval, depth-verify); a reviewed plan for one step must not run the others. 2026-11-15: a "
                     "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
+    ap.add_argument("--verify", action="store_true", help="auto: chain post-eval XY visit and depth-verify after calibration steps")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
     import cv2
@@ -285,9 +246,12 @@ def main(argv=None):
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     points = config.get("calibrate", {}).get("map_points", MAP_POINTS)
     if args.plan_only:
+        import cell_map_fit
+
         rows = rp.plan(config, points)
         refused = rp.refusal(rows)
-        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config)}), flush=True)
+        lev = cell_map_fit.plan_leverage(points, config.get("sites") or {})
+        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config), "leverage": lev}), flush=True)
         return 2 if refused else 0
     cal_path = Path(config["calibration_path"]).expanduser()
     calibration = json.loads(cal_path.read_text()) if cal_path.exists() else {"schema": cal.SCHEMA, "sites": {}}
@@ -297,6 +261,10 @@ def main(argv=None):
     work.mkdir(parents=True, exist_ok=True)
     found = check(config, calibration, targets, cell.frame("top"), config["params"])
     todo = stale(found)
+    if args.verify:
+        for vstep in ("post-eval", "depth-verify"):
+            if vstep not in todo:
+                todo.append(vstep)
     if args.only:
         todo = [step for step in todo if step.split()[0] in args.only]
     print(json.dumps({"check": found, "todo": todo}, default=str), flush=True)
@@ -333,7 +301,13 @@ def main(argv=None):
                     cv2.cvtColor(current, cv2.COLOR_BGR2GRAY),
                 )
             save_bound_map_reference(cal_path, ref_path, calibration, config, current)
-            cell_pivot.bias_path(cal_path).write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}))
+            bp = cell_pivot.bias_path(cal_path)
+            if bp.exists():
+                bp.with_suffix(".json.bak").write_bytes(bp.read_bytes())
+            bp_tmp = bp.with_suffix(".tmp")
+            bp_tmp.write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}), encoding="utf-8")
+            bp_tmp.replace(bp)
+            cell_pivot._BIAS_CACHE.clear()
             done.append({"remap": record["loo_error_mm"]})
         elif step == "regions":
             continue
@@ -352,20 +326,18 @@ def main(argv=None):
                 if len(pts) >= 5:
                     kept = consensus(pts, prm.get(config.get("params"), "calibrate.consensus_px"))
                     if enough_agree(len(kept), len(pts)):
-                        rec["homography"] = cal.fit(kept).round(9).tolist()
-                        rec["points"] = [{"pixel": list(p), "arm_m": list(a)} for p, a in kept]
-                        rec["loo_error_mm"] = cal.loo_error_mm(kept)
+                        calibration["sites"][s] = repair_record(config, rec, kept)
             save_bound_map_reference(cal_path, ref_path, calibration, config, reference)
             done.append({"consensus-repair": calibration["sites"][map_sites(config)[0]]["loo_error_mm"]})
         elif step.startswith("pivot-near"):
             site, xy = step.split()[1].split(":")
             near = tuple(float(v) for v in xy.split(","))
-            point = list(near) if over_target(config, site) else auto_pivot_point(cell, config, calibration, site, near)
+            point, over = pivot_point(cell, config, calibration, site, near)
             if point is None:
                 done.append({step: "no clear point near the target"})
                 continue
             result = cell_pivot.pivot_calibrate(
-                cell, config, point, pivot_near_yaws(config, site), calibration, site, work, time.sleep, lambda row: None
+                cell, config, point, pivot_near_yaws(config, site, over), calibration, site, work, time.sleep, lambda row: None
             )
             if result["result"] == "calibrated":
                 cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"], config.get("params"))
@@ -378,13 +350,42 @@ def main(argv=None):
             if not s.get("place"):
                 done.append({step: "no place point to touch"})
                 continue
-            lib = work / f"surface-{site}.json"
-            lib.write_text(json.dumps(cell_surface.probe_library(config["plan"], *s["place"], s["yaw_deg"], 0.10, 0.010)))
-            touched = cell_surface.touch(cell, lib)
+            tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else config["plan"].get("tcp_x_m")
+            lib = work / f"surface-{site}.library.json"
+            lib.write_text(json.dumps(cell_surface.probe_library(
+                config["plan"], *s["place"], s["yaw_deg"], 0.10, 0.010, tcp_x_m=tcp_x_m)))
+            touched = cell_surface.touch(cell, lib, tcp_x_m=tcp_x_m)
             if touched["result"] == "touched":
                 s["surface_z"] = touched["surface_z"]
+            if config.get("work_dir"):
+                rcp = Path(config["work_dir"]).expanduser() / f"surface-{site}.json"
+                rtmp = rcp.with_suffix(".tmp")
+                rtmp.write_text(json.dumps({"result": touched["result"], "surface_z": touched.get("surface_z"), "site": site,
+                                            "xy": list(s["place"]), "measured": time.strftime("%Y-%m-%d %H:%M"),
+                                            "sets_surface_z": touched["result"] == "touched"}, indent=1), encoding="utf-8")
+                rtmp.replace(rcp)
             done.append({step: touched["result"], "surface_z": touched.get("surface_z")})
-    args.config.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1))
+        elif step == "post-eval":
+            import cell_post_eval
+
+            rep = cell_post_eval.run_post_eval(
+                cell, config, calibration, targets=targets or None, apply=True,
+                commissioning=args.commissioning, person_at_switch=args.person_at_switch, work=work,
+            )
+            done.append({"post-eval": rep.get("verdict"), "applied": len(rep.get("applied") or []), "escalated": rep.get("escalated")})
+        elif step == "depth-verify":
+            import cell_cal_eval
+
+            bias_d = cell_pivot.load_bias(cell_pivot.bias_path(cal_path), config.get("params")) if cell_pivot.bias_path(cal_path).exists() else None
+            # 2026-11-17 panel: this step never passed depth, so it always reported missing_depth on the D435 cells
+            depth = depth_capture() if cell_cal_eval.top_has_depth(config) else None
+            rep = cell_cal_eval.verify_profile_depth(config, calibration, bias_d, depth=depth, colour=cell.frame("top"))
+            if config.get("work_dir"):
+                (Path(config["work_dir"]).expanduser() / "depth-verify.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
+            done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})
+    cfg_tmp = args.config.with_suffix(".tmp")
+    cfg_tmp.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1), encoding="utf-8")
+    cfg_tmp.replace(args.config)
     print(json.dumps({"done": done}, default=str), flush=True)
     return 0
 

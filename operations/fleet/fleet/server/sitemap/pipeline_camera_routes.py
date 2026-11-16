@@ -11,6 +11,47 @@ from fleet.site_rules import SiteRules
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 
 
+def _clear_label(body, key):
+    """An optional clear label from the operator: only a non-empty string of at most 64 chars passes."""
+    value = body.get(key)
+    return value if isinstance(value, str) and value.strip() and len(value) <= 64 else None
+
+
+def _arm_incident_sources(app, arm):
+    """Observation source_id candidates for a pipeline arm; incidents are keyed by source_id (D-971)."""
+    candidates = [f"omx_{arm}", arm]  # fallback: the OMX naming the cell control PCs report under
+    obs = getattr(app.state, "workcell_observations_service", None)
+    snapshot = getattr(obs, "snapshot", None)
+    if not callable(snapshot):
+        return candidates
+    try:
+        cells = snapshot().get("workcells") or []
+    except Exception:
+        return candidates
+    matched = [entry["source_id"] for cell in cells for entry in cell.get("arms") or ()
+               if entry.get("arm_id") == arm
+               or str(entry.get("arm_id") or "").removesuffix("_follower") == arm
+               or entry.get("source_id") in (arm, f"omx_{arm}")]
+    return matched + [c for c in candidates if c not in matched]
+
+
+def _clear_open_arm_incidents(app, arms, note, principal_id, cause, basis):
+    """Clearing the Fleet arm hold also clears that arm's open incident rows in the shared D-971 store."""
+    incidents = getattr(app.state, "arm_incidents", None)
+    if incidents is None:
+        return
+    for arm in arms:
+        for source_id in _arm_incident_sources(app, arm):
+            hold = incidents.hold(source_id)
+            if not hold.held:
+                continue
+            for incident_id in hold.incident_ids:
+                try:  # already cleared or not this arm's row: the first record stands
+                    incidents.clear(source_id, incident_id, note, principal_id, cause=cause, basis=basis)
+                except (KeyError, ValueError):
+                    pass
+
+
 def install_cameras_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
     operator_guard = ctx.operator_guard
@@ -100,9 +141,13 @@ def install_cameras_routes(app, ctx) -> None:
             arms = [target]
         else:
             arms = ["arm_s", "arm_a", "arm_b"]
+        cause, basis = _clear_label(body, "cause"), _clear_label(body, "basis")
+        principal = getattr(request.state, "site_principal", None)
+        principal_id = getattr(principal, "principal_id", None) or "operator"
         for a in arms:
             app.state.arm_holds[a] = {"arm": a, "held": False, "reason": None, "incident_ids": [], "last_cleared_note": note}
             app.state.pending_clear_arms[a] = note
+        _clear_open_arm_incidents(app, arms, note, principal_id, cause, basis)
         return {"ok": True, "cleared_arms": arms, "note": note, "arm_holds": app.state.arm_holds}
 
     @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=proposer_guard)

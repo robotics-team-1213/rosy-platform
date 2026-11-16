@@ -11,7 +11,7 @@ import numpy as np
 
 import cell_params as prm
 import cell_attempts
-from cell_auto_pick_plan import observe, save_frame_receipt
+from cell_auto_pick_plan import dest_map_usable, observe, save_frame_receipt
 from cell_observe import predicted_pixel
 import cell_pivot
 import cell_scene_guard
@@ -168,7 +168,7 @@ def pre_motion_frame(cell, config, calibration, catalog, source, source_roi, sou
                         1000 * math.dist(seen["raw_m"], source_xy) <= tolerance for seen in current_source):
         return before, frame, "source moved before transfer"
     record = cell_pivot.map_record(calibration, dest_site)
-    if dest_roi is None or record is None or "z_view" in record:
+    if dest_roi is None or not dest_map_usable(config, record):
         return before, frame, "destination ROI or fine map missing"
     _, _, current_dest, error = observe(cell, config, calibration, dest_site, dest_roi, catalog,
                                         image=before["image"])

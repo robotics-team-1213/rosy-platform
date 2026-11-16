@@ -237,3 +237,66 @@ def default_token_file() -> Path | None:
     cfg_dir = Path.home() / ".config/rosy"
     matches = sorted(cfg_dir.glob("*-operator-*.token")) if cfg_dir.is_dir() else []
     return matches[0] if len(matches) == 1 else None
+
+
+def clear_incidents(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None, refuse_fn=None) -> int:
+    """Clear every open incident of one arm using explicit Core JWT or 0600 operator token file, then lift local hold."""
+    if not note.strip():
+        raise SystemExit("a note of what was checked is required")
+    if token is None:
+        token_file = token_file or default_token_file()
+        if token_file is None or not Path(token_file).is_file():
+            raise SystemExit("an operator --token-file (chmod 600) is required")
+        token_file = Path(token_file)
+        if token_file.stat().st_mode & 0o077:
+            raise SystemExit(f"{token_file} must be readable by its owner only (chmod 600)")
+        token = token_file.read_text(encoding="utf-8").strip()
+    link = link or link_for(arm)
+    if link is None:
+        raise SystemExit(f"{arm}: no Fleet channel configured on this PC (source the observation bridge env)")
+    answer = link.hold()
+    cleared = list(answer.incident_ids)
+    for incident_id in cleared:
+        if cause is not None or basis is not None:
+            try:
+                answer = link.clear(incident_id, note, token, cause=cause, basis=basis)
+            except OSError as exc:
+                if getattr(exc, "code", None) != 422:
+                    raise
+                answer = link.clear(incident_id, note, token)
+        else:
+            answer = link.clear(incident_id, note, token)
+    print(json.dumps({"arm": arm, "cleared": cleared, "held": answer.held,
+                      **({"cause": cause} if cause else {}), **({"basis": basis} if basis else {})}))
+    if refuse_fn is not None:
+        refuse_fn(arm, link)
+    return 0
+
+
+def verify_baseline_caps(device: str) -> bool:
+    """Read-only bus confirmation that every follower motor is fault-free, torque OFF, and at baseline caps."""
+    from joint_tune import BASELINE, FOLLOWER, SerialBus
+
+    time.sleep(0.3)
+    bus = None
+    try:
+        bus = SerialBus(device, 0)
+        for motor, (exp_model, exp_mode) in FOLLOWER.items():
+            bus.motor = motor
+            if (bus.cleanup_read("model"), bus.cleanup_read("mode")) != (exp_model, exp_mode):
+                return False
+            if bus.cleanup_read("torque") != 0 or bus.cleanup_read("hw_error") != 0:
+                return False
+            if bus.cleanup_read("pwm_limit") != BASELINE["pwm_limit"]:
+                return False
+            if exp_model == 1200 and bus.cleanup_read("current_limit") != BASELINE["current_limit"]:
+                return False
+        return True
+    except Exception:
+        return False
+    finally:
+        if bus is not None:
+            try:
+                bus.close()
+            except Exception:
+                pass

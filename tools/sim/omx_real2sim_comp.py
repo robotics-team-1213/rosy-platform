@@ -245,13 +245,14 @@ class ServoCompensator:
         dq = np.abs(np.asarray(q_to[:5], float) - np.asarray(q_from[:5], float))
         return max(float(base_seconds), min(float(np.max((1.5 / 0.72) * dq / v_terminal)), 16.0))
 
-    def apply(self, data: Any, targets: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    def apply(self, data: Any, targets: dict[str, np.ndarray], *, privileged: bool = False) -> dict[str, np.ndarray]:
         """Return compensated joint targets `{arm: q_cmd_6}` for one physics frame with gravity FF, friction trim, and active jitter damping."""
         m = self.world.model
         out: dict[str, np.ndarray] = {}
         for arm, target in targets.items():
             t = np.asarray(target, float).copy()
-            t[:5] = t[:5] - self.zero_est[arm]
+            if not privileged:
+                t[:5] = t[:5] - self.zero_est[arm]
             q_act = data.qpos[self.world.q[arm][:5]].copy()
             dofs, acts = self.world.arm_dof[arm][:5], self.world.act[arm][:5]
             qvel = data.qvel[dofs]

@@ -8,6 +8,7 @@ this module says what a sub-skill is and judges it. MuJoCo answers geometry only
 """
 import functools
 import json
+import math
 
 import numpy as np
 
@@ -68,6 +69,18 @@ def draw_physics(seed, ranges):
     return servo, zero
 
 
+def zero_error_center(physics=False):
+    """Mean per-arm joint-zero offset of `draw_errors` (non-zero where `--physics-ranges` has a one-sided fitted offset)."""
+    if not physics:
+        return {}
+    ranges, out = physics_ranges(), {}
+    for arm in sites.ARMS:
+        rows = [ranges["arms"][arm][f"joint{i}"] for i in range(1, 6)]
+        if all("zero_offset_deg" in r for r in rows):
+            out[arm] = np.append(np.radians([.5 * (r["zero_offset_deg"]["low"] + r["zero_offset_deg"]["high"]) for r in rows]), 0.)
+    return out
+
+
 def draw_errors(seed, zero_error_deg, physics=False):
     """A seed's joint-zero error: +-deg, or between 0 and the fitted offset where --physics-ranges has one."""
     error = draw_zero_error(seed, zero_error_deg)
@@ -78,6 +91,7 @@ def draw_errors(seed, zero_error_deg, physics=False):
 def disturb(teacher, seed, zero_error_deg, lag, physics=False):
     """A seed's errors: +-deg zero error and lag-derived gains, overridden where --physics-ranges has measured values."""
     teacher.zero_error = draw_errors(seed, zero_error_deg, physics)
+    teacher.zero_center = zero_error_center(physics) if seed and (zero_error_deg or physics) else {}
     teacher.servo = {arm: dict(kp=gain) for arm, gain in draw_servo_gain(seed, lag).items()}
     servo, _ = draw_physics(seed, physics_ranges() if physics else None)
     for arm, values in servo.items():
@@ -86,11 +100,37 @@ def disturb(teacher, seed, zero_error_deg, lag, physics=False):
             teacher.servo[arm][k] = v if mine is None else np.where(np.isnan(v), mine, v)
 
 
+def _policy_zero(teacher):
+    """Residual zero-error dict for `observe` and per-arm command bias when `compensate_zero` is active on a learned policy."""
+    if not (getattr(teacher, "compensate_zero", False) and getattr(teacher, "servo_comp", None) is not None):
+        return teacher.zero_error, {}
+    center = getattr(teacher, "zero_center", None) or {}
+    obs = {a: teacher.zero_error[a] - np.append(teacher.servo_comp.zero_est[a], 0.) + center.get(a, 0.) for a in teacher.zero_error}
+    return obs, center
+
+
 def outcome(score, skill):
     """A sub-skill round has no whole tasks: it passes at the sim acceptance bar."""
     if score["n"] and score["passed"] >= SKILL_PASS * score["n"]:
         return dict(status="passed")
     return dict(status="failed", reason=f"하위 동작 {skill} 성공 {score['passed']}/{score['n']}, 기준 {SKILL_PASS:.0%} 미만입니다.")
+
+
+def _judge_step(teacher, data, plan, row, before, start_z, skill):
+    if SKILLS[skill]["judge"] == "placed":
+        teacher.carried = None
+        return teacher.verdict(data, plan, row, before)
+    w = teacher.world
+    tcp, _ = w.tcp(data, plan["arm"])
+    pos = w.pose(data, plan["container"])[0]
+    rise, in_jaw = float(pos[2] - start_z), float(np.linalg.norm(pos - tcp))
+    moved = teacher.disturbed(data, before, teacher)
+    arm_hits = sorted(f"{a}~{b}" for a, b in teacher.contacts["arm_other"])
+    crash = sorted("~".join(p) for p in teacher.contacts["arm_arm"])
+    held = rise > .015 and in_jaw < .06
+    return dict(row, result="pass" if held and not moved and not arm_hits and not crash else "fail", lifted=held, rise_mm=round(rise * 1000, 1),
+                container_to_tcp_mm=round(in_jaw * 1000, 1), neighbours_disturbed=moved, arm_link_contacts=arm_hits, arm_arm_contacts=crash,
+                first_contact_phase=teacher.first)
 
 
 def step(driver, teacher, data, plan, here, skill):
@@ -111,33 +151,186 @@ def step(driver, teacher, data, plan, here, skill):
         teacher.privileged = False  # from here on commands are in reported angles
         start_z = w.pose(data, c)[0][2]
         if driver.kind == "ik":
+            last_cmd = target
             while teacher.phase in phases:
+                last_cmd = target
                 teacher.frame(data, {arm: target, **idle}, plan["id"])
                 target = next(gen)
         else:
-            goal = policy.goal_vector(L, plan, others) if getattr(driver, "has_goal", True) else None
+            goal = policy.goal_vector(L, plan, others, getattr(driver, "goal_mode", "joints")) if getattr(driver, "has_goal", True) else None
             said = prompt(plan, skill)
             driver.policy.reset()
-            for _ in range(driver.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
-                state, images = policy.observe(w, data, teacher.zero_error)
+            first_bad, last_cmd = None, None
+            ze_obs, ze_bias = _policy_zero(teacher)
+            for sub_t in range(driver.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
+                state, images = policy.observe(w, data, ze_obs)
                 action = driver.act(state, images, goal, said)
                 k = sites.ARMS.index(arm)  # the other arm waits as the teacher had it wait: the model drives only the step's arm
-                teacher.frame(data, {arm: action[k * 6:k * 6 + 6], **idle}, plan["id"])
+                last_cmd = action[k * 6:k * 6 + 6] + ze_bias.get(arm, 0.)
+                teacher.frame(data, {arm: last_cmd, **idle}, plan["id"])
+                if first_bad is None and (teacher.contacts["arm_arm"] or teacher.contacts["arm_other"] or teacher.disturbed(data, before, teacher)):
+                    first_bad = sub_t
+            row["first_bad_subframe"] = first_bad
+        if skill == "release" and last_cmd is not None:
+            teacher.carried, teacher.phase = None, "park"
+            for _ in range(round(.7 * teaching.FPS)):
+                teacher.frame(data, {arm: last_cmd, **idle}, plan["id"])
     except StopIteration as stop:  # blocked or unreachable before the sub-skill began
         return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""))
-    if SKILLS[skill]["judge"] == "placed":
-        teacher.carried = None
-        return teacher.verdict(data, plan, row, before)
-    tcp, _ = w.tcp(data, arm)
-    pos = w.pose(data, c)[0]
-    rise, in_jaw = float(pos[2] - start_z), float(np.linalg.norm(pos - tcp))
-    moved = teacher.disturbed(data, before, teacher)
-    arm_hits = sorted(f"{a}~{b}" for a, b in teacher.contacts["arm_other"])
-    crash = sorted("~".join(p) for p in teacher.contacts["arm_arm"])
-    held = rise > .015 and in_jaw < .06
-    return dict(row, result="pass" if held and not moved and not arm_hits and not crash else "fail", lifted=held, rise_mm=round(rise * 1000, 1),
-                container_to_tcp_mm=round(in_jaw * 1000, 1), neighbours_disturbed=moved, arm_link_contacts=arm_hits, arm_arm_contacts=crash,
-                first_contact_phase=teacher.first)
+    return _judge_step(teacher, data, plan, row, before, start_z, skill)
+
+
+def _tcp_yaw(R, ref_yaw):
+    """Jaw axis yaw nearest `ref_yaw` modulo pi (the jaw is symmetric at 180 deg)."""
+    d = tasks.wrap_pi(math.atan2(-R[0, 1], R[1, 1]) - ref_yaw)
+    return ref_yaw + (d - math.pi if d > math.pi / 2 else d + math.pi if d < -math.pi / 2 else d)
+
+
+def recovery_gen(teacher, data, plan, others, skill):
+    """Yield privileged Teacher joint targets completing `skill` from drifted live arm & container pose."""
+    w, L = teacher.world, teacher.layout
+    arm, c, ik_arm = plan["arm"], plan["container"], L.sim_arms[plan["arm"]]
+    sa, sb = L.sites[plan["from"]], L.sites[plan["to"]]
+    pos_c, yaw_c, _ = w.pose(data, c)
+    wps = tasks.waypoints(L, plan, others, pick=(pos_c[:2], yaw_c), drop=teacher.drop, drop_upper=teacher.drop_upper)
+    phases = SKILLS[skill]["phases"]
+    start_i = next(i for i, wp in enumerate(wps) if wp[0] == phases[0])
+    g_open = teaching.jaw.angle_for_gap(teaching.OPEN_GAP[sa["kind"]])
+    g_to = teaching.jaw.angle_for_gap(teaching.OPEN_GAP[sb["kind"]])
+    g_hold = teaching.jaw.angle_for_gap(teaching.HOLD_GAP)
+    q = teacher.q_now(data, arm)
+    _, p_now, R_now = ik_arm.frames(q)
+    tcp_w, R_w = w.tcp(data, arm)
+    off = R_w.T @ (pos_c - tcp_w) if skill == "release" else None
+    p_from = (pos_c + np.array([0., 0., L.hold_below])) if off is not None else p_now
+    yaw_from = _tcp_yaw(R_now, wps[start_i][3])
+    if skill == "grasp" and abs(float(q[5] - g_open)) > .05:
+        teacher.phase = phases[0]
+        a0 = float(q[5])
+        for i in range(1, 9):
+            yield np.append(q[:5], a0 + (g_open - a0) * i / 8)
+    hover_z = max(float(p_from[2]), wps[0][2] if skill == "grasp" else wps[start_i - 1][2])
+    xy_err = float(np.linalg.norm(p_from[:2] - wps[start_i][1]))
+    if (skill == "release" and (xy_err > .005 or p_now[2] < hover_z - .005)) or (skill == "grasp" and xy_err > .010 and p_now[2] < hover_z - .005):
+        p_hover = np.array([wps[start_i][1][0], wps[start_i][1][1], hover_z])
+        shift0 = None if off is None else (lambda pos, yw, qq: teacher._hold_shift(ik_arm, off, qq, yw, pos))
+        g0 = g_hold if wps[start_i][4] == "hold" else g_open
+        teacher.phase = phases[0]
+        q, _ = yield from teacher.tcp_move_g(teacher, ik_arm, q, p_from, p_hover, yaw_from, wps[start_i][3], g0, 1.0, shift0)
+        p_from, yaw_from = p_hover, wps[start_i][3]
+    for name, xy, z, yaw, grip in wps[start_i:]:
+        if name not in phases:
+            break
+        teacher.phase = name
+        if name in ("close", "release"):
+            a0, a1 = (g_open, g_hold) if name == "close" else (g_hold, g_to)
+            n = round(1.5 * teaching.FPS)
+            for i in range(1, n + 1):
+                yield np.append(q[:5], a0 + (a1 - a0) * i / n)
+            if name == "close":
+                tcp_c, R_c = w.tcp(data, arm)
+                off = R_c.T @ (w.pose(data, c)[0] - tcp_c)
+            else:
+                teacher.carried = None
+            p_from, yaw_from = np.array([*xy, z]), yaw
+        else:
+            p_to = np.array([*xy, z])
+            shift = None if off is None or name in ("grasp", "lift") else (lambda pos, yw, qq: teacher._hold_shift(ik_arm, off, qq, yw, pos))
+            g = g_hold if grip == "hold" else (g_open if name == "grasp" else g_to)
+            seconds = 1.5 if name in ("grasp", "lower", "lift", "retreat") else max(1.5, float(np.linalg.norm(p_to - p_from)) / teaching.CARRY_SPEED)
+            q, _ = yield from teacher.tcp_move_g(teacher, ik_arm, q, p_from, p_to, yaw_from, yaw, g, seconds, shift)
+            p_end = p_to + shift(p_to, yaw, q) if shift is not None else p_to
+            yield from teacher.settle_g(data, arm, q, g, p_end)
+            p_from, yaw_from = p_to, yaw
+
+
+def _candidate_prefixes(prefix_frames, eval_row, horizon, backoff=5, seed=0):
+    bad = eval_row.get("first_bad_subframe")
+    auto = str(prefix_frames).strip().lower() == "auto" or (isinstance(prefix_frames, int) and prefix_frames < 0)
+    if bad is not None:
+        bo = (4, 6, 8)[seed % 3] if (auto and seed) else backoff
+        safe = max(0, int(bad) - bo)
+        raw = [safe, max(0, safe - bo)] if auto else [min(max(0, int(prefix_frames)), safe)]
+    elif auto:
+        base = [min(horizon, max(20, horizon * 2 // 3)), min(horizon, 15)]
+        raw = [min(horizon, max(12, round(horizon * (.45, .60, .75)[seed % 3]))), *base] if seed else base
+    else:
+        raw = [min(max(0, int(prefix_frames)), horizon)]
+    return list(dict.fromkeys(raw))
+
+
+def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
+    """Evaluate `driver` on one step; if it fails, rewind, roll `driver` for `prefix_frames`, then save privileged recovery iff it passes."""
+    import omx_two_arm_policy as policy
+    w, L, arm, c = recorder.world, recorder.layout, plan["arm"], plan["container"]
+    probe = teaching.Teacher(w, seed=recorder.seed, pick_vision=recorder.pick_vision, belt_skew=recorder.belt_skew, cam_jitter=recorder.cam_jitter)
+    probe.zero_error, probe.zero_center = dict(recorder.zero_error), dict(getattr(recorder, "zero_center", {}) or {})
+    probe.servo, probe.compensate_zero = {a: dict(v) for a, v in recorder.servo.items()}, recorder.compensate_zero
+    eval_row = step(driver, probe, probe.fresh(here), plan, here, skill)
+    if eval_row["result"] != "fail":
+        return dict(eval_row, dagger_status="passed_skip" if eval_row["result"] == "pass" else "blocked_skip")
+    others = {k: v for k, v in here.items() if k != c}
+    idle = {o: L.sim_arms[o].wait for o in L.arms if o != arm}
+    row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], skill=skill, lifted=False)
+    phases = SKILLS[skill]["phases"]
+    verdict = dict(row, result="fail")
+    for n_prefix in _candidate_prefixes(prefix_frames, eval_row, driver.longest[plan["id"]], seed=recorder.seed):
+        recorder.rng, recorder.skew_i = np.random.default_rng(recorder.seed), 0
+        recorder.contacts, recorder.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
+        recorder.goal = None
+        data = recorder.fresh(here)
+        before = {o: w.pose(data, o) for o in others}
+        gen = recorder.step_gen(data, plan, others, recorder)
+        recorder.privileged = True
+        try:
+            target = next(gen)
+            while recorder.phase not in phases:
+                recorder.frame(data, {arm: target, **idle}, plan["id"])
+                target = next(gen)
+        except StopIteration as stop:
+            return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""), dagger_status="blocked_skip")
+        start_z = w.pose(data, c)[0][2]
+        recorder.privileged, recorder.goal = False, None
+        goal_driver = policy.goal_vector(L, plan, others, getattr(driver, "goal_mode", "joints")) if getattr(driver, "has_goal", True) else None
+        said = prompt(plan, skill)
+        driver.policy.reset()
+        ze_obs, ze_bias = _policy_zero(recorder)
+        for _ in range(n_prefix):
+            state, images = policy.observe(w, data, ze_obs)
+            action = driver.act(state, images, goal_driver, said)
+            k = sites.ARMS.index(arm)
+            recorder.frame(data, {arm: action[k * 6:k * 6 + 6] + ze_bias.get(arm, 0.), **idle}, plan["id"])
+            if recorder.contacts["arm_arm"] or recorder.contacts["arm_other"]:
+                break
+        pos_c = w.pose(data, c)[0]
+        pre_bad = bool(recorder.contacts["arm_arm"] or recorder.contacts["arm_other"] or (hasattr(recorder, "disturbed") and recorder.disturbed(data, before, recorder)))
+        if not pre_bad and skill == "grasp" and hasattr(w, "model"):
+            pre_bad = float(np.linalg.norm(pos_c[:2] - L.sites[plan["from"]]["xy"])) > .035
+        if not pre_bad and skill == "release" and hasattr(w, "model"):
+            pre_bad = float(np.linalg.norm(pos_c - w.tcp(data, arm)[0])) > .06
+        if pre_bad:
+            recorder.dataset.clear_episode_buffer()
+            verdict = dict(row, result="fail", reason="prefix_invalid", dagger_prefix_frames=n_prefix)
+            continue
+        recorder.privileged = True
+        recorder.goal = True if recorder.no_goal else (goal_driver if goal_driver is not None else policy.goal_vector(L, plan, others, recorder.goal_mode))
+        recorder.prompt = said
+        recorder.count, last_rec = 0, None
+        for target in recovery_gen(recorder, data, plan, others, skill):
+            last_rec = target
+            recorder.frame(data, {arm: target, **idle}, plan["id"])
+        recorder.goal = None
+        if skill == "release" and last_rec is not None:
+            recorder.carried, recorder.phase = None, "park"
+            for _ in range(round(.7 * teaching.FPS)):
+                recorder.frame(data, {arm: last_rec, **idle}, plan["id"])
+        verdict = dict(_judge_step(recorder, data, plan, row, before, start_z, skill), dagger_prefix_frames=n_prefix)
+        if verdict["result"] == "pass" and recorder.count > 0:
+            recorder.dataset.save_episode()
+            recorder.longest[plan["id"]] = max(recorder.longest.get(plan["id"], 0), n_prefix + recorder.count)
+            return dict(verdict, dagger_status="recovered")
+        recorder.dataset.clear_episode_buffer()
+    return dict(verdict, dagger_status="recovery_failed")
 
 
 def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, compensate_zero=False):

@@ -259,6 +259,15 @@ def save_catalog_entry(path, entry: dict) -> list:
     return load_catalog(p)
 
 
+def _hsv_mask(hsv_img, hsv):
+    """Build a uint8 mask from either one `[lo, hi]` pair or a list of `[[lo, hi], ...]` ranges."""
+    ranges = [hsv] if (len(hsv) == 2 and len(hsv[0]) == 3 and isinstance(hsv[0][0], (int, float))) else hsv
+    mask = np.zeros(hsv_img.shape[:2], np.uint8)
+    for lo, hi in ranges:
+        mask |= cv2.inRange(hsv_img, np.array(lo), np.array(hi))
+    return mask
+
+
 def colour_mask(img, roi, hsv):
     """Mask (ROI-sized) of every pixel in the objects' colour range, side faces included, for the finger room: what the
     detector calls an object stands beside the fingers whatever the surface test says (2026-11-01: the ROI median of a
@@ -268,7 +277,7 @@ def colour_mask(img, roi, hsv):
     x0, y0, x1, y1 = roi
     if hsv is None:
         return np.zeros((y1 - y0, x1 - x0), np.uint8)
-    return cv2.inRange(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV), np.array(hsv[0]), np.array(hsv[1]))
+    return _hsv_mask(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV), hsv)
 
 def object_mask(img, roi, hsv, surface_px=None, params=None):
     """Mask (ROI-sized) of the objects by their own colour (OpenCV HSV range, e.g. the green containers): the
@@ -276,7 +285,7 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     20, a box's shadow 34 and the white line saturation 25 (2026-10-29)."""
     x0, y0, x1, y1 = roi
     hsv_img = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1]))
+    mask = _hsv_mask(hsv_img, hsv)
     frac = prm.get(params, "objects.top_v_frac")
     if frac and mask.any():  # top faces only: a side face is the same green, darker by the same ratio in any light
         n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)  # (day: top V 186, side 137; at night, V capped by the exposure limit: 59 / ~40)

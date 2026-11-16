@@ -20,20 +20,25 @@ the next), never deleting work:
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
 import land_async  # noqa: E402
+import land_cache  # noqa: E402
 import land_gc  # noqa: E402
 import land_mainred  # noqa: E402
 import land_queue  # noqa: E402
+import memory_history  # noqa: E402
 import worktrees  # noqa: E402
 
 ALERT_S = 30 * 60  # a main-red id open this long with no owner is called out
 SHOWN = 10  # the oldest open main-red ids the report names
+WARM_BATCH = 8  # missing main invocations warmed during an idle tick
 WORKTREE_IDLE_H = 12  # a worktree nobody touched this long is removed (branch kept, dirty work to refs/wip/)
 RECHECK_STAMP, LOG, REPORT, LOCK = ("rosy-land-tick.recheck", "rosy-land-tick.log", "rosy-land-backlog.txt",
                                      "rosy-land-tick.lock")
@@ -68,17 +73,43 @@ def resume(repo: Path) -> str:
 
 
 def cleanup(repo: Path) -> str:
+    import land_rollup  # noqa: E402
+    memory_history.trim(memory_history.path(repo))  # 2026-11-17: rosy-pytest-memory.jsonl only ever grew
+    qdir, holder, reaped = land_queue.queue_dir(repo), land_async.holder(repo), 0
+    for row in land_queue.expired(qdir):
+        land_rollup.stop_remote(holder, [row])
+        name = Path(str(row.get("worktree") or "")).name or str(row.get("branch") or "").replace("/", "-")
+        if holder.is_dir() and (holder / name).is_dir():
+            (holder / f"{name}.stopped").write_text(f"STOP: EXPIRED (age {row['age']:.0f}s)\n", encoding="utf-8")
+        land_rollup.stop(int(row["pid"]))
+        try:
+            data = json.loads(row["path"].read_text(encoding="utf-8"))
+            if int(data.get("pid") or 0) == int(row["pid"]):
+                row["path"].unlink(missing_ok=True)
+        except (OSError, ValueError):
+            row["path"].unlink(missing_ok=True)
+        reaped += 1
     rows = land_gc.plan(repo, time.time(), 7)
     problems = land_gc.apply(repo, rows)
     # 11-14: 41 worktrees against the 15 cap, 7 of them clean and idle 7-14 h. Lossless ones (landed, orphan) go at
-    # once; an idle one goes after WORKTREE_IDLE_H with its branch kept and dirty work saved under refs/wip/ first.
+    # once; an idle one goes after WORKTREE_IDLE_H (4 h when over CAP) with dirty work saved under refs/wip/ first.
     # prune also sweeps branches: merged ones go, idle unlanded ones move to refs/archive/.
+    wt_root = repo / ".worktrees"
+    over = wt_root.is_dir() and sum(1 for p in wt_root.iterdir() if p.is_dir()) > worktrees.CAP
+    idle_h = min(WORKTREE_IDLE_H, 4) if over else WORKTREE_IDLE_H
     quiet = lambda line: None  # noqa: E731
     gone = worktrees.prune(repo, apply=True, quiet=True, say=quiet)
-    gone += worktrees.prune(repo, apply=True, snapshot=True, everyone=True, idle_hours=WORKTREE_IDLE_H, quiet=True,
-                            say=quiet)
-    return (f"land_gc removed {sum(r[0] != 'keep' for r in rows) - len(problems)}, kept {len(problems)} changed;"
-            f" worktrees removed {gone}")
+    gone += worktrees.prune(repo, apply=True, snapshot=True, everyone=True, idle_hours=idle_h, quiet=True, say=quiet)
+    return (f"reaped {reaped} expired; land_gc removed {sum(r[0] != 'keep' for r in rows) - len(problems)},"
+            f" kept {len(problems)} changed; worktrees removed {gone}")
+
+
+def warm(repo: Path) -> str:
+    """Warm main's cache when no landing is waiting in the queue."""
+    if land_queue.ahead(land_queue.queue_dir(repo), Path("~")):
+        return "queue active; skipped"
+    done, ran = land_cache.warm_main(repo, limit=WARM_BATCH)
+    return f"warmed {done} of {ran}" if ran else "already warm"
 
 
 def report(repo: Path, common: Path, now: float | None = None) -> list[str]:
@@ -108,7 +139,8 @@ def main(argv: list[str] | None = None) -> int:
     steps = [] if "--report" in argv else [("recheck", lambda: recheck(repo, common)), ("resume", lambda: resume(repo)),
                                            ("rollup", lambda: _run(repo, "tools/land_rollup.py", "apply", "--auto",
                                                                    timeout=20 * 60)),
-                                           ("cleanup", lambda: cleanup(repo))]
+                                           ("cleanup", lambda: cleanup(repo)),
+                                           ("warm", lambda: warm(repo))]
     try:
         with land_async.locked(common / LOCK):  # one tick at a time; a long recheck makes the next ones skip
             for name, step in steps:

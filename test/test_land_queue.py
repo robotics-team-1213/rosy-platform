@@ -308,3 +308,26 @@ def test_a_held_ticket_stays_fresh_while_its_process_lives(tmp_path, monkeypatch
     queue._keepalive()
     _t.sleep(0.3)
     assert _t.time() - ticket.stat().st_mtime < 60
+
+
+def test_expired_flags_tickets_past_age_limits_and_skips_self(tmp_path, monkeypatch):
+    monkeypatch.setattr(queue, "pid_alive", lambda pid: True)
+    now = 100_000.0
+    other = queue.take(tmp_path, "feat/old")
+    info = json.loads(other.read_text())
+    info["pid"] = 424242
+    info["start"] = now - (queue.MAX_AGE_S + 10)
+    other.write_text(json.dumps(info))
+    full_wait = queue.take(tmp_path, "feat/full")
+    finfo = json.loads(full_wait.read_text())
+    finfo.update(pid=424243, tier="full", start=now - (queue.MAX_AGE_S + 10))
+    full_wait.write_text(json.dumps(finfo))
+    mine = queue.take(tmp_path, "feat/self")
+    minfo = json.loads(mine.read_text())
+    minfo["start"] = now - (queue.FULL_MAX_AGE_S + 10)
+    mine.write_text(json.dumps(minfo))
+    assert [r["branch"] for r in queue.expired(tmp_path, now)] == ["feat/old"]
+    finfo["start"] = now - (queue.FULL_MAX_AGE_S + 10)
+    full_wait.write_text(json.dumps(finfo))
+    assert [r["branch"] for r in queue.expired(tmp_path, now)] == ["feat/old", "feat/full"]
+

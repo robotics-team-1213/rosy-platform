@@ -202,32 +202,38 @@ class Session:
             self.hardware_faults[key] = {"hw_error": error, "packet_alert": alert}
 
     def restore_caps(self) -> list:
-        """Attempt every cap independently (retrying transient bus timeouts)."""
+        """Attempt every cap independently (retrying transient errors on a freshly reopened bus)."""
         failures = []
         for motor, values in self.baseline().items():
-
-            def restore(bus, motor=motor, values=values):
-                bus.motor = motor
-                for name, value in values.items():
-                    write, read = (
-                        (bus.write, bus.read) if name in SESSION_ONLY else (bus.cleanup_write, bus.cleanup_read)
-                    )
-                    for attempt in range(3):
+            pending, last_err = dict(values), {}
+            for attempt in range(3):
+                def restore(bus, motor=motor, pending=pending, last_err=last_err):
+                    bus.motor = motor
+                    for name, value in list(pending.items()):
+                        write, read = (
+                            (bus.write, bus.read) if name in SESSION_ONLY else (bus.cleanup_write, bus.cleanup_read)
+                        )
                         try:
                             write(name, value)
                             after = read(name)
                             self.note_fault(bus)
                             if after != value:
                                 raise RuntimeError(f"{name} readback {after} != {value}")
-                            break
+                            pending.pop(name, None)
                         except Exception as exc:
-                            if attempt == 2:
-                                failures.append(f"follower {motor} {name}: {exc}")
+                            last_err[name] = exc
 
-            try:
-                self._with_follower(restore)
-            except Exception as exc:
-                failures.append(f"follower {motor}: {exc}")
+                try:
+                    self._with_follower(restore)
+                except Exception as exc:
+                    for name in pending:
+                        last_err.setdefault(name, exc)
+                if not pending:
+                    break
+                if attempt < 2:
+                    self.sleep(0.05)
+            for name in pending:
+                failures.append(f"follower {motor} {name}: {last_err[name]}")
         return failures
 
     def execute(
@@ -260,7 +266,7 @@ class Session:
         pairs = self.pair_sessions(config)
         for session in pairs.values():
             session._with_follower(session.check_idle)
-        if pairs.get("single") is self:
+        if pairs.get("single") is self and not self.chunks:
             record["leader_rebooted"] = self._with_leader(self.clear_leader_alerts)
         stopped = []
         try:
@@ -336,39 +342,36 @@ class Session:
             try:
                 leader.motor = LEADER_GRIPPER
                 leader.cleanup_write("torque", 0)
-                self.note_fault(leader, leader=True)
-                try:
-                    record["leader_rebooted_after"] = self.clear_leader_alerts(leader)
-                except SystemExit as exc:
-                    record["leader_rebooted_after"] = f"error: {exc}"
+                if not self.chunks:
+                    # --chunks runs scripted chunk_runner.py on follower only; keep torque OFF on leader,
+                    # but don't fail safe_end or reboot over an unused sagging 3.4V leader supply.
+                    self.note_fault(leader, leader=True)
+                    try:
+                        record["leader_rebooted_after"] = self.clear_leader_alerts(leader)
+                    except SystemExit as exc:
+                        record["leader_rebooted_after"] = f"error: {exc}"
                 leader.motor = LEADER_GRIPPER
                 record["leader_gripper_torque_after"] = leader.cleanup_read("torque")
             finally:
                 leader.close()
-        except Exception as exc:
-            record["leader_gripper_torque_after"] = f"error: {exc}"
+        except (Exception, SystemExit) as exc:
+            if isinstance(exc, SystemExit) and self.chunks is None:
+                raise
+            record["leader_gripper_torque_after"] = f"unused: {exc}" if self.chunks is not None else f"error: {exc}"
         log_registers(self, "stop", FOLLOWER)
         failures = self.restore_caps()
         record["caps_restored"] = not failures or failures
         record["torque_off_confirmed"], record["hardware_faults"] = torque_ok, self.hardware_faults
-        record["manual_attention_required"] = (
-            bool(self.hardware_faults)
-            or not torque_ok
-            or bool(failures)
-            or record["leader_gripper_torque_after"] != 0
-        )
+        leader_ok = (record["leader_gripper_torque_after"] == 0 or
+                     (self.chunks is not None and str(record["leader_gripper_torque_after"]).startswith("unused:")))
+        record["manual_attention_required"] = bool(self.hardware_faults) or not torque_ok or bool(failures) or not leader_ok
         for unit in reversed(stopped):
             try:
                 self.systemctl("start", unit)
             except Exception as exc:
                 record.setdefault("service_errors", []).append(f"{unit}: {exc}")
         record["restarted_services"] = stopped
-        record["safe_end"] = (
-            torque_ok
-            and not failures
-            and not self.hardware_faults
-            and record["leader_gripper_torque_after"] == 0
-        )
+        record["safe_end"] = torque_ok and not failures and not self.hardware_faults and leader_ok
         record["ended"] = time.time()
         self.log(step="session", **record)
         if not record["safe_end"]:

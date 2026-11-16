@@ -186,6 +186,21 @@ class AccountClient:
             return None
         return self.resolve_session_id(_digest(cookie))
 
+    def access_token_for(self, cookie):
+        """Return (claims, access_token) for an active session (server-to-server use only), or (None, None)."""
+        claims = self.resolve(cookie)
+        if claims is None:
+            return None, None
+        with self.transaction() as db:
+            row = db.execute('SELECT tokens,expires FROM app_account_sessions WHERE id=?', (_digest(cookie),)).fetchone()
+        if row is None or row['expires'] <= self.clock():
+            return None, None
+        try:
+            token = json.loads(self.cipher.decrypt(row['tokens'])).get('access_token')
+        except (ValueError, InvalidToken, KeyError, TypeError):
+            return None, None
+        return (claims, token) if isinstance(token, str) and token.count('.') == 2 else (None, None)
+
     def media_session_active(self, session_id):
         """Strict online D-789 check; no cached/offline authority for live media."""
         if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):

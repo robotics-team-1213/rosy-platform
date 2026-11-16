@@ -31,6 +31,10 @@ def install_workcell_observation_routes(app, service, require_viewer, require_na
         incidents = ArmIncidentStore(task_service and task_service.store.path)
         install_arm_incident_routes(app, service=service, store=incidents, require_viewer=require_viewer,
                                     require_named_operator=require_named_operator, authorize=authorize)
+    if incidents is not None and hasattr(app, "state"):
+        # D-971: the operator's pipeline arm-hold clear reuses this store; source lookup reuses the service.
+        app.state.arm_incidents = incidents
+        app.state.workcell_observations_service = service
 
     def available():
         if service is None:

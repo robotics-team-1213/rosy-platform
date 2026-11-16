@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import time
 from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-params.v1"
@@ -46,7 +47,7 @@ DEFAULTS = {
     "gripper.gap_mm_per_unit": (10.4, "mm", 3, 30),
     "scene.diff": (45, "gray", 5, 255), "scene.min_area_px": (350, "px", 20, 100000), "scene.beyond_px": (60, "px", 10, 300),
     "pivot.max_bias_mm": (25.0, "mm", 1, 200), "calibrate.consensus_px": (15.0, "px", 2, 60),
-    "jaw_centre.merge_px": (12, "px", 0, 40), "jaw_centre.min_side_px": (80, "px", 10, 2000), "jaw_centre.gap_lo_px": (45, "px", 10, 300), "jaw_centre.gap_hi_px": (110, "px", 20, 400),
+    "jaw_centre.merge_px": (12, "px", 0, 40), "jaw_centre.min_side_px": (80, "px", 10, 2000), "jaw_centre.gap_lo_px": (25, "px", 10, 300), "jaw_centre.gap_hi_px": (110, "px", 20, 400),
     "gripper.held_30mm": (52.3, "gripper", 45, 60), "gripper.open_max": (56.0, "gripper", 50, 70),
     "reach.enabled": (1, "flag", 0, 1), "reach.tol_mm": (2.0, "mm", 0.5, 10), "reach.max_iter": (2, "count", 0, 5),
     "reach.max_mm": (20.0, "mm", 2, 50), "reach.gain": (1.0, "ratio", 0.2, 1.0), "reach.samples": (1, "count", 1, 5),
@@ -105,6 +106,15 @@ DEFAULTS = {
     "corridor.half_width_mm": (30.0, "mm", 10, 80), "corridor.clear_z_m": (0.10, "m", 0.04, 0.25),
     "corridor.base_m": (0.10, "m", 0.0, 0.2),
     "corridor.min_px": (40, "px", 1, 100000),
+    "verify.depth_diff_mm": (6.0, "mm", 1, 30), "verify.touch_diff_mm": (5.0, "mm", 1, 20),
+    "verify.step_mm": (8.0, "mm", 2, 40), "verify.live_fresh_s": (2.0, "s", 0.5, 10),
+    "verify.plate_diff_mm": (10.0, "mm", 2, 30), "verify.nadir_off_px": (20.0, "px", 5, 120),
+    "verify.mark_sigma_mm": (3.0, "mm", 0.5, 15), "verify.map_sigma_max_mm": (5.0, "mm", 1, 30),
+    "verify.bias_sigma_max_mm": (3.0, "mm", 0.5, 20), "verify.place_sigma_mm": (3.0, "mm", 0.5, 15),
+    "verify.nis_alarm": (9.21, "chi2", 3.0, 30.0), "verify.cusum_k_sigma": (1.0, "sigma", 0.1, 3.0),
+    "verify.cusum_h_sigma": (5.0, "sigma", 1.0, 20.0), "verify.cusum_min_n": (15, "count", 5, 50),
+    "post.tol_mm": (5.0, "mm", 1.0, 20.0), "post.max_age_s": (86400.0, "s", 60.0, 604800.0),
+    "post.finger_tol_mm": (6.0, "mm", 1.0, 20.0), "post.yaw_pair_tol_deg": (15.0, "deg", 1.0, 45.0),
 }
 
 
@@ -159,13 +169,15 @@ def load(path=None) -> dict:
         return {"values": dict(_DEFAULT_VALUES), "sha": _DEFAULT_SHA}
     p = Path(path)
     st = p.stat()
-    key = (str(p.resolve()), st.st_mtime_ns, st.st_size)
-    cached = _LOAD_CACHE.get(key)
+    stable = abs(time.time_ns() - st.st_mtime_ns) >= 50_000_000
+    key = (str(p.resolve()), st.st_ino, st.st_mtime_ns, st.st_size)
+    cached = _LOAD_CACHE.get(key) if stable else None
     if cached is None:
         chosen = validate(json.loads(p.read_text(encoding="utf-8-sig")))
         values = {name: chosen.get(name, spec[0]) for name, spec in DEFAULTS.items()}
         cached = (values, digest(values))
-        _LOAD_CACHE[key] = cached
+        if stable:
+            _LOAD_CACHE[key] = cached
     return {"values": dict(cached[0]), "sha": cached[1]}
 
 

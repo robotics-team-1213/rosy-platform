@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import threading
@@ -21,12 +22,15 @@ from functools import partial
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
+from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
-for extra in (ROOT / "contracts/foundation", ROOT / "deploy/robot/omx"):
+for extra in (ROOT / "contracts/foundation", ROOT / "deploy/robot/omx", ROOT / "middleware/devices/omx/adapter"):
     if str(extra) not in sys.path:
         sys.path.append(str(extra))
+import cell_calibration_view  # noqa: E402
 import cell_requests  # noqa: E402
 
 try:
@@ -42,8 +46,12 @@ COMMON = ROOT / "shared" / "web"
 OPERATE = "calibration.operate"
 SESSION_COOKIE, FLOW_COOKIE = "rosy_calibration_account", "rosy_calibration_flow"
 API = "/api/calibration/v1/requests"
+PROFILES_API = "/api/calibration/v1/profiles"
 ID = re.compile(r"[A-Za-z0-9_-]{1,96}")
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+FRAME_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png"}
+FRAME_TIMEOUT_S = 1.5
+FRAME_MAX_BYTES = 5 * 1024 * 1024
 NOTE_MAX = 300
 VALUE_MAX = 1e6  # a reading in mm or deg; anything larger is a typing slip, not a measurement
 BODY_MAX = 4096
@@ -73,8 +81,8 @@ def summary(req: dict) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    def __init__(self, *args, store: Path, account=None, **kwargs):
-        self.store, self.account = store, account
+    def __init__(self, *args, store: Path, account=None, profiles_path: Path | None = None, **kwargs):
+        self.store, self.account, self.profiles_path = store, account, profiles_path
         super().__init__(*args, **kwargs)
 
     def log_message(self, *args):
@@ -137,6 +145,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path.startswith("/api/account/"):
                 return self.account_route(method, path)
+            if path.startswith(PROFILES_API):
+                return self.profiles_api(method, path)
             if path.startswith(API):
                 return self.api(method, path)
         except AccountUnavailable:
@@ -254,11 +264,66 @@ class Handler(BaseHTTPRequestHandler):
             return self.json(422, {"error": str(exc)})
         self.json(200, done)
 
+    def _load_profiles(self) -> list[dict]:
+        return cell_calibration_view.load_profile_registry(self.profiles_path)
 
-def make_server(store: Path, port: int = 8776, account=None, host: str = "127.0.0.1") -> ThreadingHTTPServer:
+    def profiles_api(self, method: str, path: str):
+        claims = self.claims()
+        if self.account and not claims:
+            return self.json(401, {"error": "Rosy Account로 로그인해야 합니다."})
+        if method != "GET":
+            return self.json(405, {"error": "읽기 전용 경로입니다."})
+        try:
+            entries = self._load_profiles()
+        except (OSError, ValueError) as exc:
+            return self.json(500, {"error": f"프로파일 레지스트리 오류: {exc}"})
+
+        rest = path.removeprefix(PROFILES_API).strip("/")
+        if not rest:
+            return self.json(200, cell_calibration_view.build_bundle(entries))
+        parts = rest.split("/")
+        if len(parts) == 3 and ID.fullmatch(parts[0]) and parts[1] == "frame" and parts[2] in ("reference", "live"):
+            entry = next((e for e in entries if e.get("id") == parts[0]), None)
+            if entry is None:
+                return self.json(404, {"error": "없는 프로파일입니다."})
+            return self._serve_profile_frame(entry, parts[2])
+        return self.json(404, {"error": "없는 경로입니다."})
+
+    def _serve_profile_frame(self, entry: dict, source: str):
+        target = cell_calibration_view.resolve_frame_target(entry, source)
+        if target.get("kind") == "file":
+            f = target.get("path")
+            if not f or not f.is_file() or f.suffix.lower() not in IMAGE_TYPES:
+                return self.json(404, {"error": "기준 프레임이 없습니다."})
+            return self.send(200, IMAGE_TYPES[f.suffix.lower()], f.read_bytes())
+        if target.get("kind") == "url":
+            url = target.get("url")
+            if not url:
+                return self.json(404, {"error": "카메라 주소가 설정되지 않았습니다."})
+            if not cell_calibration_view.is_allowed_frame_url(url):
+                return self.json(403, {"error": "허용되지 않은 카메라 주소입니다."})
+            try:
+                with urlopen(url, timeout=FRAME_TIMEOUT_S) as resp:  # noqa: S310 - loopback URL validated above
+                    ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                    if ctype not in FRAME_CONTENT_TYPES:
+                        return self.json(502, {"error": "카메라 응답 형식이 올바르지 않습니다."})
+                    body = resp.read(FRAME_MAX_BYTES + 1)
+                    if len(body) > FRAME_MAX_BYTES:
+                        return self.json(502, {"error": "카메라 프레임 크기 상한을 넘었습니다."})
+                    return self.send(200, "image/jpeg" if ctype == "image/jpg" else ctype, body)
+            except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+                return self.json(503, {"error": "카메라 프레임에 닿지 않습니다."})
+        return self.json(404, {"error": "없는 프레임 종류입니다."})
+
+
+def make_server(store: Path, port: int = 8776, account=None, host: str = "127.0.0.1",
+                profiles_path: Path | None = None) -> ThreadingHTTPServer:
     if account and not account.resource.startswith("site:"):
         raise ValueError("Calibration Account requires a site resource")
-    return ThreadingHTTPServer((host, port), partial(Handler, store=Path(store), account=account))
+    return ThreadingHTTPServer(
+        (host, port),
+        partial(Handler, store=Path(store), account=account, profiles_path=profiles_path),
+    )
 
 
 def main(argv=None) -> int:
@@ -266,12 +331,18 @@ def main(argv=None) -> int:
     p.add_argument("--store", type=Path, default=None, help="request store (default ROSY_CELL_REQUESTS)")
     p.add_argument("--port", type=int, default=8776)
     p.add_argument("--account-config", type=Path, help="Rosy Account receiver json; without it the screen is read-only")
+    p.add_argument("--profiles", type=Path, default=None,
+                   help="optional JSON registry of arm profiles for 모눈종이 view (default ROSY_CALIBRATION_PROFILES)")
     args = p.parse_args(argv)
+    profiles = args.profiles
+    if profiles is None:
+        env_p = os.environ.get("ROSY_CALIBRATION_PROFILES", "").strip()
+        profiles = Path(env_p) if env_p else None
     account = None
     if args.account_config:
         from core_common.protocol.account_client import load_account_client
         account = load_account_client(args.account_config, destinations=("/",))
-    server = make_server(args.store or cell_requests.store(), args.port, account)
+    server = make_server(args.store or cell_requests.store(), args.port, account, profiles_path=profiles)
 
     def retry():  # a logout that could not reach Account is retried until it does
         while not stop.wait(20):

@@ -1200,3 +1200,8 @@
 - 변경: `console-goal.js` `commitWorldGoal`: 현장 지도 보기에서 로봇의 `map_id`가 활성 현장 지도가 아니면(실물 Pinky의 SLAM 지도) `/goal` 대신 찍은 장소로 `planTrip`·`startTrip`(카드 운행과 같은 호출). 장소 없음·Fleet 위치 미확정·활성 지도 없음·위치 정보 없음이면 확인 창 전에 이유를 보이고 보내지 않는다. 차로 운행은 `navigation.goal_navigation` 능력을 요구하지 않고, 대형 참여 로봇은 `"trip"` 기준으로 거절. 확인 창이 열린 동안 로봇 지도가 바뀌면 보내지 않는다.
 - 증거: 원격 브라우저 `test_console_card_trips_browser.py`·`test/test_fleet_console_browser.py` 81 통과. 검토 agy·GLM PASS(지적: 활성 지도 없음·확인 중 지도 변경·guide 없음 → 반영).
 - gate 변화: SOURCE. 현장 지도 클릭 자체의 브라우저 시험은 없음.
+
+## 2026-11-16 · uncommitted · fix(console): 활성 지도 버전 변경 시 카메라 추적 보정 동시 갱신
+- 변경: `map/map-polling.js` — `refreshTraffic()`에서 `traffic.map_version` 변경으로 `/api/fleet/site-map/active`를 다시 읽을 때 `refreshCalibrations()`도 함께 호출해, 30초 폴링 지연 없이 새 지도 오버레이와 카메라 정사 보정이 같은 주기에 맞물리도록 수정했다.
+- 증거: `node --test operations/fleet/test/web/map-view.test.mjs` 및 원격 pytest 통과.
+- gate 변화: 없음.

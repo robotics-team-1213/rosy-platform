@@ -11,29 +11,11 @@ import cell_act_shadow  # noqa: E402
 import cell_attempts  # noqa: E402
 import cell_auto_record  # noqa: E402
 import cell_auto_evidence  # noqa: E402
-from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
-    CLOSING,
-    choose,
-    observe,
-    plan_pick,
-    save_frame_receipt,
-    verify_placed,
-)
+from cell_auto_pick_plan import CLOSING, choose, observe, plan_pick, save_frame_receipt, verify_placed  # noqa: E402,F401  (re-exported)
 import cell_executor  # noqa: E402
 from cell_auto_safety import (  # noqa: E402, F401
-    PWM_FRACTION,
-    TEMP_STOP_C,
-    Aborted,
-    Guarded,
-    Monitor,
-    after_failure,
-    close_episode,
-    finger_room,
-    object_sized,
-    open_episode,
-    score_pick_candidate,
-    session_caps,
-    square_entry,
+    PWM_FRACTION, TEMP_STOP_C, Aborted, Guarded, Monitor, after_failure, close_episode,
+    finger_room, object_sized, open_episode, score_pick_candidate, session_caps, square_entry,
 )
 from cell_auto_setup import load_config  # noqa: E402,F401
 from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401
@@ -50,6 +32,7 @@ from cell_pick_geom import across, grasp_depth, grasp_yaw, jaw_open_for, parse_d
 import cell_pipeline as cp  # noqa: E402
 import cell_pivot  # noqa: E402
 import cell_place_fit  # noqa: E402
+from cell_return_held import _plan_return_held, run_return_held  # noqa: E402,F401
 from cell_transfer import FOLDED, STILL_HOLDING_UNITS, Gate, transfer_folded  # noqa: E402,F401
 import cell_wrist_ref  # noqa: E402
 
@@ -154,8 +137,13 @@ def run_auto(
                 target["object"]["raw_m"], objects, work, bias_data, sleep, log,
             )
             bias_data = cell_place_fit.with_tier_biases(config, bias_data)
-            bias_error = (cell_auto_evidence.bias_map_error(config, calibration, bias_data, source,
-                                                            target["object"]["raw_m"]) if "map_pose_frame" in out else None)
+            bias_error = (
+                (
+                    cell_auto_evidence.bias_map_error(config, calibration, bias_data, source, target["object"]["raw_m"])
+                    or cell_auto_evidence.bias_map_error(config, calibration, bias_data, dest_site, place_xy)
+                )
+                if "map_pose_frame" in out else None
+            )
             if bias_error:
                 tried["fail"] = {"stage": "calibrate", "class": bias_error}
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
@@ -268,6 +256,11 @@ def run_auto(
             ):
                 decided = after_failure(config, source, target, moved, wrist is not None, failed_yaws)
                 tried["diagnosis"] = decided
+                tried["compensation"] = cell_diagnose.compensation_feedback(
+                    moved["result"], tried, target.get("bias_mm"),
+                    grip_open=target.get("plan", {}).get("grip_open"),
+                    calibrated_grip_open=(config.get("_arm_calibration") or {}).get("grip_open_30mm"),
+                )
                 if decided["chosen"] in ("ask_person", "probe_surface"):
                     close_episode(cell, episode, False, f"{decided['cause']}: {decided['chosen']}")
                     episode = None
@@ -290,7 +283,7 @@ def run_auto(
                     "measurement",
                     f"placement seen on the {tried['verify']['basis']}",
                 )
-                tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"])
+                tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"], calibration=calibration)
                 cell_executor.outcome(choices, tried["execution"], choice,
                                       tried["verify"].get("verified") is True and tried["verify"].get("inside") is True,
                                       "placement verification")
@@ -317,6 +310,11 @@ def run_auto(
             )
             episode = None
             cd.after(moved, choices.best(CLOSING), attempt + 1 < attempts, guarded.monitor)
+            tried.setdefault("compensation", cell_diagnose.compensation_feedback(
+                moved["result"], tried, target.get("bias_mm"),
+                grip_open=target.get("plan", {}).get("grip_open"),
+                calibrated_grip_open=(config.get("_arm_calibration") or {}).get("grip_open_30mm"),
+            ))
             attempt_id = cell_attempts.record(config, calibration, source, dest, attempt, tried, ledger.t_start, choices)
             cell_act_shadow.record(shadow, shadow_row, attempt_id, moved["result"], moved.get("at"))
             cell_auto_record.capture_problem(config, source, dest, moved)
@@ -361,6 +359,7 @@ def main(argv=None):
     ap.add_argument("--task-id", help="correlate this one carry with a Fleet task; does not authorize completion")
     ap.add_argument("--handoff-lease-id", help="Fleet lease paired with --task-id")
     ap.add_argument("--scenario-id", help="scenario identifier from the cell task")
+    ap.add_argument("--return-held", action="store_true", help="arm already holds an object at home: place it at --dest without picking")
     args = ap.parse_args(argv)
     if args.commissioning != args.person_at_switch:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
@@ -371,10 +370,13 @@ def main(argv=None):
     if dark:
         print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))
         return 1
-    result = run_auto(
-        cell, config, cell_pivot.with_site_maps(config, cal.load(calibration_path)), calibration_path,
-        cell_objects.load_catalog(args.catalog), args.roi, args.source, args.dest, work,
-        cell_choices.Choices(work / "choices.json"), args.dry_run, scenario_id=args.scenario_id,
+    cal_data = cell_pivot.with_site_maps(config, cal.load(calibration_path))
+    cat = cell_objects.load_catalog(args.catalog)
+    result = (
+        run_return_held(cell, config, cal_data, calibration_path, cat, args.roi, args.dest, work, args.dry_run)
+        if args.return_held else
+        run_auto(cell, config, cal_data, calibration_path, cat, args.roi, args.source, args.dest, work,
+                 cell_choices.Choices(work / "choices.json"), args.dry_run, scenario_id=args.scenario_id)
     )
     print(json.dumps(result, indent=1, default=str))
     return 0 if result["result"] in ("placed", "planned") else 1

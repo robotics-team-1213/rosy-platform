@@ -150,13 +150,18 @@ def _ticks(text, name):
 
 def software_stop(facts) -> str | None:
     """Why measured facts show a session ended by a software stop alone (folded, safe end, nothing latched or wound up,
-    every joint on its command), or None. The control PC does not hold on it and Fleet's hold does not count it, so the
-    two sides judge an incident by the same rule; the incident stays listed for a person's cause."""
-    if not isinstance(facts, dict) or facts.get("truncated") or facts.get("safe_end") is not True \
-            or facts.get("folded") is not True or facts.get("latched") or facts.get("windup_hits"):
+    every joint on its command), or when baseline caps were verified restored after a transient teardown check.
+    The control PC does not hold on it and Fleet's hold does not count it; the incident stays listed for a person."""
+    if not isinstance(facts, dict) or facts.get("truncated") or facts.get("folded") is not True \
+            or facts.get("latched") or facts.get("windup_hits"):
         return None
     flagged = facts.get("flagged")
-    if not flagged or not isinstance(flagged, list):
+    if (not flagged and facts.get("caps_verified_restored") is True
+            and isinstance(facts.get("torque_after"), dict) and facts["torque_after"]
+            and all(isinstance(v, int) and not isinstance(v, bool) and v == 0
+                    for v in facts["torque_after"].values())):
+        return "baseline caps confirmed restored on folded torque-OFF bus; nothing physical held it"
+    if facts.get("safe_end") is not True or not flagged or not isinstance(flagged, list):
         return None
     for row in flagged:
         text = str((row or {}).get("error") or (row or {}).get("fault") or "") if isinstance(row, dict) else ""

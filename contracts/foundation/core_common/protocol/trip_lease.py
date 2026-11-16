@@ -12,6 +12,7 @@ from pydantic import BaseModel, model_serializer
 MIN_TTL_S = 1.0
 MAX_TTL_S = 10.0
 DEFAULT_TTL_S = 5.0
+PURPOSES = frozenset({"charge_return"})
 
 
 class TripLeaseError(Exception):
@@ -33,6 +34,7 @@ class TripLeaseStatus(BaseModel):
     since: str
     expires_in_s: float
     job_id: Optional[str] = None  # D-763 6 (v1.236): a job's lease, kept through IDLE between its steps
+    purpose: Optional[str] = None  # D-1029: "charge_return" (low-battery return); null = an ordinary trip
 
 
 class TripLeaseEnded(BaseModel):

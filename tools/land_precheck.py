@@ -81,6 +81,14 @@ def precheck(land, wt: Path, python: str, mixed_ok: str = "") -> None:
     land.safety_review(wt, before, "HEAD", python)
     land.size_check(wt, before, "HEAD", python)
     merged = land.git(wt, "merge-base", "--is-ancestor", before, "HEAD", check=False).returncode == 0
+    if not merged and hasattr(land, "conflict_stages") and hasattr(land, "plan"):
+        tree = land.git(wt, "merge-tree", "--write-tree", "--no-messages",
+                        *getattr(land, "RENORMALIZE", ()), "HEAD", before, check=False)
+        if tree.returncode == 1:
+            manual = land.plan(wt, land.conflict_stages(getattr(tree, "stdout", "") or ""), ("HEAD", before))[1]
+            if manual:
+                raise land.Stop(f"main {before[:10]} conflicts with this branch outside the auto-resolved"
+                                f" records:\n  " + "\n  ".join(manual))
     if (wt / land.HARNESS).is_file():
         try:
             land.step(wt, [python, land.HARNESS, "lint"], None, "lint")

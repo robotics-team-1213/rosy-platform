@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("numpy")
 sys.path.insert(0, str(Path(__file__).parents[1] / "deploy/robot/omx"))
-from cell_transfer import transfer_folded  # noqa: E402
+from cell_transfer import RETURN_HELD, transfer_folded  # noqa: E402
 from cell_envelope import SEQUENCE  # noqa: E402
 
 
@@ -66,3 +66,113 @@ def test_a_park_that_shed_its_load_is_not_backed_up(tmp_path):
     cell = Strained("run lift_pick", "contact (overload-hold on shoulder_lift by the guard): lift and elbow shed its load")
     out = transfer_folded(cell, library)
     assert "retreat" not in cell.sent and out["result"] == "contact" and out["at"] == "park"
+
+
+@pytest.mark.parametrize("jaws, expected", [(53.6, "placed"), (48.9, "empty")])
+def test_return_held_places_when_jaws_hold_box_and_folds_when_empty(tmp_path, jaws, expected):
+    class HeldCell:
+        def __init__(self, hold_jaws):
+            self.jaws, self.sent = hold_jaws, []
+
+        def act(self, command):
+            self.sent.append(command)
+            after_rel = "run release_place" in self.sent
+            return {"ok": True, "state": [0, 0, 0, 0, 0, 48.8 if after_rel else self.jaws]}
+
+    library = tmp_path / "lib.json"
+    library.write_text(json.dumps({"gripper_closed": 48.8, "jaw_empty_stop": 48.8, "chunks": {}}))
+    cell = HeldCell(jaws)
+    out = transfer_folded(cell, library, sequence=RETURN_HELD)
+    assert out["result"] == expected
+    if expected == "placed":
+        assert cell.sent == [f"load {library}", *RETURN_HELD]
+    else:
+        assert "run release_place" not in cell.sent and cell.sent[-1] == "park"
+
+
+def test_return_held_recovers_stale_middle_lock_by_parking_before_above_place():
+    class StaleZoneGate:
+        def __init__(self):
+            self.commands = []
+            self.needs_park = True
+            self.released = False
+
+        def act(self, command):
+            self.commands.append(command)
+            if command == "goto above_place" and self.needs_park:
+                return {
+                    "command": command, "ok": False,
+                    "error": "held: zone: the other arm holds the middle; its guarded owner must park before recovery",
+                }
+            if command == "park":
+                self.needs_park = False
+            if command == "run release_place":
+                self.released = True
+            jaws = 48.8 if self.released else 53.0
+            return {"command": command, "ok": True, "settled": True, "state": [0.0, 0.0, 0.0, 0.0, 0.0, jaws]}
+
+    gate = StaleZoneGate()
+    out = transfer_folded(gate, "lib.json", closed=48.8, sequence=RETURN_HELD)
+    assert out["result"] == "placed", out
+    assert gate.commands[:4] == ["load lib.json", "goto above_place", "park", "goto above_place"]
+
+
+def test_commissioning_replan_refreshes_state_after_slow_park(tmp_path, monkeypatch):
+    import types
+    import cell_envelope
+    import cell_transfer
+
+    clock = [1000.0]
+    monkeypatch.setattr(cell_envelope, "time", types.SimpleNamespace(time=lambda: clock[0]))
+    profile_path = tmp_path / "robot-profile.json"
+    profile_path.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1",
+        "device_id": "fixture-device",
+        "instance_id": "fixture-arm",
+        "robot_config_sha256": "c" * 64,
+        "operating_envelope_path": "review.json",
+        "work_dir": ".",
+    }))
+    from cell_robot_profile import load
+
+    binding = load(profile_path)["binding"]
+    config = {
+        "plan": {"lift_m": 0.04}, "profiles": {}, "sites": {}, "cameras": {},
+        "operating_conditions": {
+            "installation_revision": "fixture-install", "object_revision": "fixture-obj",
+            "payload_max_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "fixture-env",
+        },
+        "payload": {"kg": 0.03, "source": "fixture scale"},
+        "operating_envelope_path": str(tmp_path / "review.json"),
+        "work_dir": str(tmp_path),
+        "operating_profile_path": str(profile_path),
+        "_commissioning": {"person_at_switch": True},
+    }
+    home = [0.0, 0.0, 0.0, 0.0, 0.0, 48.8]
+    original, revised = tmp_path / "original.json", tmp_path / "revised.json"
+    spec = {"fps": 30, "chunks": {"home": [home], "above_pick": [home]}}
+    original.write_text(json.dumps(spec))
+    revised.write_text(json.dumps({**spec, "replan": "adjusted pick"}))
+
+    class SlowParkCell:
+        def __init__(self):
+            self.commands = []
+
+        def act(self, command):
+            raw = command.split(" ", 3)[-1] if command.startswith("checked ") else command
+            if raw == "park":
+                clock[0] += 3.0  # parking from above_pick exceeds MAX_GAP_S (0.5 s)
+            self.commands.append(raw)
+            return {
+                "command": raw, "ok": True, "settled": True, "state": home, "t": clock[0],
+                "operating_context": {"scope": "hardware", "sha256": "a" * 64, "session_id": "s1",
+                                      "operating_profile": binding},
+            }
+
+    cell = SlowParkCell()
+    gate = cell_transfer.Gate(cell, config, {})
+    assert gate.open(original, lambda a: None, lambda *a: None) is None
+    assert gate.act(f"load {original}")["ok"] is True
+    status = gate.act(f"load {revised}")
+    assert status["ok"] is True and f"load {revised}" in cell.commands
+

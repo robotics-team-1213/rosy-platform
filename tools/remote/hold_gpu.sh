@@ -6,5 +6,8 @@
 set -eu
 [[ $1 =~ ^[0-9]+$ && $2 =~ ^[0-9]+$ ]] || { echo "usage: hold_gpu.sh <cores> <GB> <command...>" >&2; exit 2; }
 mkdir -p ~/rosy-jobs && echo "$$ gpu $1 $2" > ~/rosy-jobs/train-$$.lock
+# 2026-11-17: an early-stop probe ran CPU inference at 14 cores under an 8-core lock and pushed every test to serial;
+# children inherit the lock's core budget as their thread pool size unless the caller set one.
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-$1}" MKL_NUM_THREADS="${MKL_NUM_THREADS:-$1}"
 shift 2
 exec "$@"
