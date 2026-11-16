@@ -53,12 +53,42 @@ def test_report_counts_the_backlog_and_names_the_oldest_unowned_reds(tmp_path, m
 def test_cleanup_prunes_lossless_worktrees_then_idle_ones_keeping_their_work(tmp_path, monkeypatch):
     """11-14: 41 worktrees against the 15 cap, 7 clean and idle 7-14 h, removed by hand."""
     calls = []
+    monkeypatch.setattr(land_tick.land_queue, "queue_dir", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_async, "holder", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_queue, "expired", lambda qdir: [])
     monkeypatch.setattr(land_tick.land_gc, "plan", lambda repo, now, days: [("remove", "x", None, [])])
     monkeypatch.setattr(land_tick.land_gc, "apply", lambda repo, rows: [])
     monkeypatch.setattr(land_tick.worktrees, "prune", lambda repo, **k: calls.append(k) or 2)
     assert land_tick.cleanup(tmp_path).endswith("worktrees removed 4")
     assert calls[0]["apply"] and not calls[0].get("snapshot")  # landed and orphan ones: nothing to keep
     assert calls[1]["snapshot"] and calls[1]["everyone"] and calls[1]["idle_hours"] == land_tick.WORKTREE_IDLE_H
+
+
+def test_cleanup_reaps_expired_tickets_and_tightens_idle_hours_when_over_cap(tmp_path, monkeypatch):
+    import json
+    import land_rollup  # noqa: E402
+    wt_root = tmp_path / ".worktrees"
+    for i in range(land_tick.worktrees.CAP + 1):
+        (wt_root / f"wt-{i}").mkdir(parents=True)
+    holder = tmp_path / "holder"
+    (holder / "land-fix-z").mkdir(parents=True)
+    tpath = tmp_path / "01-99.json"
+    tpath.write_text(json.dumps({"pid": 99}))
+    stopped, remote = [], []
+    monkeypatch.setattr(land_tick.land_queue, "queue_dir", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_async, "holder", lambda repo: holder)
+    monkeypatch.setattr(land_tick.land_queue, "expired", lambda qdir: [
+        {"pid": 99, "age": 15000.0, "branch": "land/fix/z", "worktree": str(holder / "land-fix-z"), "path": tpath}])
+    monkeypatch.setattr(land_rollup, "stop_remote", lambda h, rows: remote.append(len(rows)))
+    monkeypatch.setattr(land_rollup, "stop", lambda pid: stopped.append(pid))
+    monkeypatch.setattr(land_tick.land_gc, "plan", lambda repo, now, days: [])
+    monkeypatch.setattr(land_tick.land_gc, "apply", lambda repo, rows: [])
+    calls = []
+    monkeypatch.setattr(land_tick.worktrees, "prune", lambda repo, **k: calls.append(k) or 0)
+    out = land_tick.cleanup(tmp_path)
+    assert "reaped 1 expired" in out and remote == [1] and stopped == [99] and not tpath.exists()
+    assert (holder / "land-fix-z.stopped").read_text().startswith("STOP: EXPIRED")
+    assert calls[1]["idle_hours"] == min(land_tick.WORKTREE_IDLE_H, 4)
 
 
 def test_resume_counts_only_landings_it_relaunched(tmp_path, monkeypatch):
@@ -69,3 +99,12 @@ def test_resume_counts_only_landings_it_relaunched(tmp_path, monkeypatch):
     monkeypatch.setattr(land_tick.land_async, "orphans", lambda repo: ["land-held-1", "land-ok-1"])
     monkeypatch.setattr(land_tick.land_async, "resume", resume)
     assert land_tick.resume(tmp_path) == "resumed 1 of 2: land-ok-1"
+
+
+def test_warm_runs_only_when_queue_is_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(land_tick.land_queue, "queue_dir", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_queue, "ahead", lambda q, t: [{"status": "pending"}])
+    assert land_tick.warm(tmp_path) == "queue active; skipped"
+    monkeypatch.setattr(land_tick.land_queue, "ahead", lambda q, t: [])
+    monkeypatch.setattr(land_tick.land_cache, "warm_main", lambda repo, limit: (3, 4))
+    assert land_tick.warm(tmp_path) == "warmed 3 of 4"

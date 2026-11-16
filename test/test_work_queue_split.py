@@ -31,11 +31,14 @@ def test_measured_long_invocations_split_and_every_test_file_runs_once(tmp_path,
     _tree(tmp_path, monkeypatch)
     multi = ["ROSY_JOB_CORES=6", "pkg/test", "other/test"]
     seen = {tuple(multi): 600.0, ("pkg/test",): 600.0, ("short/test",): 30.0}
-    assert wq.split(tmp_path, [multi], seen) == [["ROSY_JOB_CORES=6", "pkg/test"], ["ROSY_JOB_CORES=6", "other/test"]]
+    unpacked = wq.split(tmp_path, [multi], seen)
+    assert unpacked[-1] == ["ROSY_JOB_CORES=6", "other/test"]
+    assert len(unpacked) == 6 and sorted(w for g in unpacked[:-1] for w in g if w != "ROSY_JOB_CORES=6") == [
+        f"pkg/test/test_{n}.py" for n in "abcde"]
     assert wq.split(tmp_path, [["short/test"]], seen) == [["short/test"]], "under SPLIT_S stays whole"
     assert wq.split(tmp_path, [["never/ran"]], seen) == [["never/ran"]], "a missing path has zero estimated cost"
     groups = wq.split(tmp_path, [["pkg/test"]], seen)
-    assert len(groups) == 3  # ceil(600 / 240)
+    assert len(groups) == 5  # min(ceil(600 / 90), 5 files)
     files = sorted(f for g in groups for f in g)
     assert files == [f"pkg/test/test_{n}.py" for n in "abcde"], "each test file exactly once, helpers not run"
 
@@ -55,14 +58,16 @@ def test_unknown_safe_packets_use_the_existing_byte_cost_at_the_same_threshold(t
 
 def test_unknown_large_directory_uses_existing_balancing_and_cap_and_preserves_measured_history(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
-    for n in "abcdefg":
+    extra = [f"{i:02d}" for i in range(14)]
+    for n in extra:
         (tmp_path / "pkg/test" / f"test_{n}.py").write_bytes(b"x" * (wq.SPLIT_S * wq.BYTES_PER_S))
     packet = ["ROSY_JOB_CORES=2", "pkg/test"]
     groups = wq.split(tmp_path, [packet], {})
     assert len(groups) == wq.MAX_SPLIT
     assert all(g[0] == packet[0] for g in groups)
-    assert sorted(p for g in groups for p in g[1:]) == [f"pkg/test/test_{n}.py" for n in "abcdefg"]
-    assert len(wq.split(tmp_path, [packet], {tuple(packet): 600})) == 3
+    expected = sorted(f"pkg/test/test_{n}.py" for n in [* "abcde", *extra])
+    assert sorted(p for g in groups for p in g[1:]) == expected
+    assert len(wq.split(tmp_path, [packet], {tuple(packet): 600})) == 7
     assert wq.split(tmp_path, [packet], {tuple(packet): 30}) == [packet]
 
 
@@ -127,9 +132,9 @@ def test_history_is_the_median_run_of_each_argv_from_the_events_log(tmp_path):
     assert wq.cost(tmp_path, ["pkg/test"], seen) == 200
 
 
-def test_a_run_may_ask_six_main_workers_of_a_full_host():
+def test_a_run_may_ask_three_main_workers_of_a_full_host():
     room = {"cores": 24.0, "mem": 30.0, "site": False, "light": False}
-    assert wq.MAX_MAIN == 6 and wq.main_workers(room, 20) == 6
+    assert wq.MAX_MAIN == 3 and wq.main_workers(room, 20) == 3
 
 
 def test_an_ignore_word_splits_too_and_the_ignored_file_never_runs(tmp_path, monkeypatch):
@@ -137,10 +142,27 @@ def test_an_ignore_word_splits_too_and_the_ignored_file_never_runs(tmp_path, mon
     _tree(tmp_path, monkeypatch)
     inv = ["pkg/test", "--ignore=pkg/test/test_a.py"]
     groups = wq.split(tmp_path, [inv], {tuple(inv): 600.0})
-    assert len(groups) == 3 and all(g[-1] == "--ignore=pkg/test/test_a.py" for g in groups)
+    assert len(groups) == 4 and all(g[-1] == "--ignore=pkg/test/test_a.py" for g in groups)
     files = sorted(w for g in groups for w in g if not w.startswith("-"))
     assert files == [f"pkg/test/test_{n}.py" for n in "bcde"], "every other test file exactly once"
     other = ["pkg/test", "-k", "x"]
     assert wq.split(tmp_path, [other], {tuple(other): 600.0}) == [other], "any other option keeps it whole"
     bare = ["--ignore=pkg/test/test_a.py"]
     assert wq.split(tmp_path, [bare], {tuple(bare): 600.0}) == [bare], "no path: nothing to split"
+
+
+def test_fleet_weights_and_unpacked_serial_paths_are_preserved(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch, serial="serial/test\n")
+    (tmp_path / "serial/test").mkdir(parents=True)
+    (tmp_path / "serial/test/test_s.py").write_text("x\n")
+    (tmp_path / "operations/fleet/test").mkdir(parents=True)
+    for n in "abc":
+        (tmp_path / "operations/fleet/test" / f"test_{n}.py").write_text("x\n")
+    (tmp_path / "tools/harness").mkdir(parents=True)
+    (tmp_path / wq.FLEET_SECONDS).write_text(json.dumps({"test_a.py": 180.0, "test_b.py": 20.0, "test_c.py": 20.0}))
+    assert wq._fleet_weights(tmp_path) == {"test_a.py": 180.0, "test_b.py": 20.0, "test_c.py": 20.0}
+    assert wq._file_weight(tmp_path, tmp_path / "operations/fleet/test/test_a.py", {"test_a.py": 180.0}) == 180.0
+    fleet_groups = wq.split(tmp_path, [["operations/fleet/test"]], {("operations/fleet/test",): 400.0})
+    assert ["operations/fleet/test/test_a.py"] in fleet_groups and len(fleet_groups) == 3
+    assert wq.split(tmp_path, [["pkg/test", "serial/test"]], {("pkg/test", "serial/test"): 600.0}) == [
+        ["pkg/test", "serial/test"]]

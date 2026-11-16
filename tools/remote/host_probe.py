@@ -121,10 +121,18 @@ def placed_hosts(runner, cls: str, hosts: list[str] | None, cores: int) -> list[
     chosen, notes = runner.place(cls, hosts, probes, cores)
     for note in notes:
         print(f"[remote-pytest] {note}", file=runner.sys.stderr, flush=True)
-    if not chosen and cls == "pytest" and cores <= runner.NEEDS[cls][0]:
-        chosen = [h for h, p in zip(hosts, probes)
-                  if p and p["pytest"] and (not p.get("pytest_blocked") or runner.os.environ.get(runner.xdist_plan.TURN_ENV) == "1")
-                  and not p["busy"] and not runner.disk_full(p) and h not in runner.SITES]
+    if not chosen and cls == "pytest" and (cores <= runner.NEEDS[cls][0]
+                                           or runner.os.environ.get(runner.xdist_plan.TURN_ENV) == "1"):
+        fallback = [(h, p) for h, p in zip(hosts, probes)
+                    if p and p["pytest"] and (not p.get("pytest_blocked") or runner.os.environ.get(runner.xdist_plan.TURN_ENV) == "1")
+                    and not p["busy"] and not runner.disk_full(p) and h not in runner.SITES]
+        fallback.sort(key=lambda hp: (
+            bool(hp[1].get("pytest_blocked")),
+            -min((hp[1]["nproc"] - max(hp[1]["load1"], hp[1]["lock_cores"])) / runner.NEEDS[cls][0],
+                 min(hp[1]["avail_gb"], hp[1]["total_gb"] - hp[1]["lock_gb"]) / runner.NEEDS[cls][1]),
+            -hp[1]["avail_gb"],
+        ))
+        chosen = [h for h, _ in fallback]
         if chosen:
             print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones",
                   file=runner.sys.stderr, flush=True)

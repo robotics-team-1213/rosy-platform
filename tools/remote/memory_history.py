@@ -14,6 +14,7 @@ the hosts' memory, filled the test PCs. Standard library only.
 
 from __future__ import annotations
 
+import functools
 import json
 import math
 import re
@@ -22,7 +23,8 @@ import time
 from pathlib import Path
 
 FILE = "rosy-pytest-memory.jsonl"
-FULL_GB, MARGIN = 6, 1.25
+# Seconds-to-GB: default cgroup MemoryMax (6 GB); unmeasured runs reserve UNKNOWN_GB until recorded.
+FULL_GB, UNKNOWN_GB, MARGIN = 6, 2, 1.25
 PEAK = re.compile(r"^\[remote-pytest\] memory peak (\d+) MiB\r?$", re.M)
 CPU = re.compile(r"^\[remote-pytest\] cpu (\d+) ms over (\d+) ms\r?$", re.M)
 
@@ -70,26 +72,31 @@ def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str,
         out.write(json.dumps(row) + "\n")
 
 
+@functools.lru_cache(maxsize=256)
+def _cached_rows(path_str: str, mtime_ns: int, size: int, want: str) -> tuple[dict, ...]:
+    rows, needle = [], json.dumps(want)
+    # Line by line: every invocation of a landing reads this at once, and the file only grows.
+    with open(path_str, encoding="utf-8", errors="replace") as lines:
+        for line in lines:
+            if needle not in line:
+                continue
+            try:
+                row = json.loads(line)
+                if row["key"] == want:
+                    rows.append(row)
+            except (ValueError, KeyError, TypeError):
+                continue  # a torn or foreign line
+    return tuple(rows)
+
+
 def _rows(history: Path | None, inv: list[str]) -> list[dict]:
-    want, rows = key(inv), []
     if history is None:
-        return rows
-    needle = json.dumps(want)
+        return []
     try:
-        # Line by line: every invocation of a landing reads this at once, and the file only grows.
-        with history.open(encoding="utf-8", errors="replace") as lines:
-            for line in lines:
-                if needle not in line:
-                    continue
-                try:
-                    row = json.loads(line)
-                    if row["key"] == want:
-                        rows.append(row)
-                except (ValueError, KeyError, TypeError):
-                    continue  # a torn or foreign line
+        st = history.stat()
+        return list(_cached_rows(str(history), st.st_mtime_ns, st.st_size, key(inv)))
     except OSError:
-        pass
-    return rows
+        return []
 
 
 def _gb_from_peaks(peaks) -> int:
@@ -125,9 +132,10 @@ def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
                         continue
         except OSError:
             pass
-    if not invs or len(peaks) < len(keys):
-        return FULL_GB
-    return _gb_from_peaks(peaks.values())
+    if not invs:
+        return UNKNOWN_GB
+    measured = _gb_from_peaks(peaks.values()) if peaks else 0
+    return max(measured, UNKNOWN_GB) if len(peaks) < len(keys) else measured
 
 
 def reserve_cores(history: Path | None, inv: list[str], workers: int) -> int:
