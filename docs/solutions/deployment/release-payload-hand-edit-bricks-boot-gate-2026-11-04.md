@@ -96,6 +96,15 @@ robots kept running. When y8xs was power-cycled, `rosy-release-recover` stopped 
 - Side finding: `rosy-navigation` and `rosy-io` conflict (both own the motor). Starting
   `rosy-runtime.target` pulls `rosy-io` up and stops navigation, so starting navigation by
   hand does not stick on a robot in the default product state.
+- Second cause of navigation dying every minute (found 2026-11-17 on y8xs): the installed
+  release (`2026.11.15-182`) ships `rosy-os-update.service` with `Wants=rosy-io.service`, and
+  `rosy-os-update.timer` fires it every 60 s. Each poll started `rosy-io`, whose `Conflicts=`
+  stopped `rosy-navigation` (journal: `Starting rosy-io` then `Stopping rosy-navigation`, even
+  with outcome `no-update`). main already removed that `Wants=` (90e631297f, "keep OS update
+  polls from starting conflicting I/O") but the signed release the robots run predates it.
+  Until a release carries it, pause only `rosy-os-update.timer` for the mapping session and
+  start it again afterwards; do not edit the unit in place. A busy robot now defers the
+  install (`deferred-busy`) instead of failing the poll (fix/os-update-only-when-idle).
 
 Rule for deploy scripts: never write under `/opt/rosy/current` or `/opt/rosy/releases`.
 A tuning that must reach a robot before the next signed release goes through the supported
