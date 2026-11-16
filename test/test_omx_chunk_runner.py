@@ -1355,6 +1355,18 @@ def test_long_chunk_retreat_trims_unreached_lead_frames_and_retimes_smoothly():
     assert ret["state"][1] == pytest.approx(-60.0, abs=0.5)
 
 
+def test_adaptive_contact_guard_caps_loaded_threshold_below_five_deg_stop():
+    import chunk_runner_guards as crg
+
+    _, ticks, tripped, _ = crg.evaluate_adaptive_contact_guard(
+        [0.0, 0.0, 0.0, 2.40, 0.0],
+        contact_start=[1.5, 1.5, 1.5, 2.2, 1.5],
+        contact_ticks=1,
+        step_delta_units=5.0,
+    )
+    assert ticks == 2 and tripped is True
+
+
 def test_hardware_stop_while_extended_folds_home_before_turning_torque_off():
     lib = library()
     lib["chunks"]["home"] = [HOME]

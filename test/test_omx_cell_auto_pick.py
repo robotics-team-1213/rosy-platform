@@ -1446,3 +1446,17 @@ def test_run_return_held_plans_places_and_stops_when_empty(tmp_path):
     assert empty["result"] == "empty" and "run release_place" not in empty_cell.commands
     assert empty_cell.commands[-1] == "park"
 
+
+def test_object_mask_supports_wrapped_multi_range_hsv():
+    import cell_objects as co
+
+    hsv = np.zeros((30, 60, 3), np.uint8)
+    hsv[5:25, 5:25] = (12, 200, 200)     # orange
+    hsv[5:25, 35:55] = (172, 180, 200)   # wrapped pink/coral
+    img = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    multi = [[[0, 100, 110], [25, 255, 255]], [[165, 70, 90], [179, 255, 255]]]
+    om = co.object_mask(img, (0, 0, 60, 30), multi)
+    cm = co.colour_mask(img, (0, 0, 60, 30), multi)
+    assert om[15, 15] > 0 and om[15, 45] > 0
+    assert cm[15, 15] > 0 and cm[15, 45] > 0
+
