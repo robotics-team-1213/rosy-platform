@@ -156,7 +156,9 @@ def run_two_arm(tmp_path, monkeypatch, config, peer, spec=SPEC, policy=None):
     path = calibrated_map(tmp_path, cell)
     result = auto.run_auto(cell, config, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090", tmp_path,
                            cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep, log=lambda row: None, scenario_id="carry-17")
-    return result, [json.loads(line) for line in (tmp_path / "act-shadow.jsonl").read_text().splitlines()], policy
+    log = tmp_path / "act-shadow.jsonl"
+    assert log.exists(), result  # a carry that never reached the shadow capture says why in its result
+    return result, [json.loads(line) for line in log.read_text().splitlines()], policy
 
 
 def test_carry_rows_hold_four_views_and_both_arms_and_the_ik_outcome_is_unchanged(tmp_path, monkeypatch):
