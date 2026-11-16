@@ -151,11 +151,23 @@ def load_bias(path, params=None) -> dict:
     return {**data, "regions": list(data["regions"])}
 
 
-def save_bias(path, bias: dict, params=None) -> None:
-    """Keep one region per site and place within 10 mm; place_look/visit never erase a pivot circle region."""
+def save_bias(path, bias: dict, params=None, *, fuse_local: bool = True) -> None:
+    """Keep one region per site and place within 10 mm; place_look/visit never erase a pivot circle region and fuse sequentially."""
     validate_bias(bias, params)
     data = load_bias(path, params)
     is_local = bias.get("kind") in ("place_look", "visit")
+    if is_local and fuse_local and bias.get("map_sha"):
+        prev = next((r for r in data["regions"] if r["site"] == bias["site"] and r.get("kind") == bias.get("kind")
+                     and r.get("map_sha") == bias.get("map_sha") and math.dist(r["point_m"], bias["point_m"]) <= 0.010), None)
+        if prev is not None:
+            s1 = max(1.5, float(prev.get("centre_sigma_mm") or prev.get("bias_sigma_mm") or 3.5))
+            s2 = max(1.5, float(bias.get("centre_sigma_mm") or bias.get("bias_sigma_mm") or 3.5))
+            w1, w2 = 1.0 / (s1 * s1), 1.0 / (s2 * s2)
+            fused_b = [round((w1 * float(prev["bias_mm"][0]) + w2 * float(bias["bias_mm"][0])) / (w1 + w2), 2),
+                       round((w1 * float(prev["bias_mm"][1]) + w2 * float(bias["bias_mm"][1])) / (w1 + w2), 2)]
+            bias = {**bias, "bias_mm": fused_b, "centre_sigma_mm": round(max(1.5, (w1 + w2) ** -0.5), 2),
+                    "n": min(10, int(prev.get("n") or 1) + 1)}
+            validate_bias(bias, params)
     data["regions"] = [
         r for r in data["regions"]
         if r["site"] != bias["site"]
@@ -181,22 +193,37 @@ def bias_at(data: dict, site: str, point_m, reach_mm: float | None = None, param
     return min(near, key=lambda r: (round(math.dist(r["point_m"], point_m), 4), 0 if is_pivot_region(r) else 1), default=None)
 
 
-def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None, params=None) -> dict | None:
-    """Smooth inverse-distance + inverse-variance (`1/sigma^2`) blended bias across regions within `reach_mm`."""
+def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None, params=None, *,
+                  map_sha: str | None = None) -> dict | None:
+    """Smooth regularized kernel (`1 / (sigma^2 + (d/L)^2)`) blended bias across fresh regions within `reach_mm`."""
     reach_mm = prm.get(params, "pivot.bias_reach_mm", BIAS_REACH_MM) if reach_mm is None else reach_mm
     for region in data["regions"]:
         validate_bias(region, params)
-    near = [r for r in data["regions"] if r["site"] == site and 1000.0 * math.dist(r["point_m"], point_m) <= reach_mm]
-    if not near:
+    raw = [r for r in data["regions"] if r["site"] == site and 1000.0 * math.dist(r["point_m"], point_m) <= reach_mm]
+    if not raw:
         return None
+    piv0 = min((r for r in raw if is_pivot_region(r)), key=lambda r: math.dist(r["point_m"], point_m), default=None)
+    target_sha = map_sha or (piv0 and piv0.get("map_sha"))
+    seen_keys: set = set()
+    near = []
+    for r in raw:
+        if target_sha is not None and r.get("map_sha") is not None and r.get("map_sha") != target_sha:
+            continue
+        k = (round(float(r["point_m"][0]), 4), round(float(r["point_m"][1]), 4),
+             round(float(r["bias_mm"][0]), 2), round(float(r["bias_mm"][1]), 2), r.get("kind"))
+        if k not in seen_keys:
+            seen_keys.add(k)
+            near.append(r)
+    if not near:
+        near = [raw[0]]
     anchor = min(near, key=lambda r: (round(math.dist(r["point_m"], point_m), 4), 0 if is_pivot_region(r) else 1))
     if len(near) == 1:
         return {**anchor, "blended_n": 1}
     wx = wy = wsum = 0.0
     for r in near:
-        d_mm = max(5.0, 1000.0 * math.dist(r["point_m"], point_m))
-        sig = max(1.0, float(r.get("centre_sigma_mm") or r.get("bias_sigma_mm") or r.get("rms_mm") or 3.0))
-        w = (2.0 if is_pivot_region(r) else 1.0) / ((d_mm ** 2) * (sig ** 2))
+        d_mm = 1000.0 * math.dist(r["point_m"], point_m)
+        sig = max(1.5, float(r.get("centre_sigma_mm") or r.get("bias_sigma_mm") or r.get("rms_mm") or 3.0))
+        w = (2.0 if is_pivot_region(r) else 1.0) / (sig * sig + (d_mm / 15.0) ** 2)
         wx += w * float(r["bias_mm"][0])
         wy += w * float(r["bias_mm"][1])
         wsum += w
@@ -205,29 +232,40 @@ def blend_bias_at(data: dict, site: str, point_m, reach_mm: float | None = None,
     return {**base, "bias_mm": [round(wx / wsum, 2), round(wy / wsum, 2)], "blended_n": len(near)}
 
 
-def decompose_rigid_drift(points_m, residuals_mm, *, min_points: int = 3, rot_tol_deg: float = 0.8,
-                          scale_tol: float = 0.015, explain_ratio: float = 0.70, trans_tol_mm: float = 3.5) -> dict:
-    """Decompose multi-site XY residuals into global 2D similarity drift (translation + small rotation/scale)."""
+def decompose_rigid_drift(points_m, residuals_mm, *, min_points: int = 4, rot_tol_deg: float = 0.8,
+                          scale_tol: float = 0.015, explain_ratio: float = 0.70, trans_tol_mm: float = 3.5,
+                          sigma_prior_mm: float = 3.0) -> dict:
+    """Decompose multi-site XY residuals into 3-sigma significant 2D similarity drift (`n >= 4`, `dof >= 4`)."""
     import numpy as np
 
     pts = np.asarray(points_m, float).reshape(-1, 2) * 1000.0
     res = np.asarray(residuals_mm, float).reshape(-1, 2)
-    if len(pts) != len(res) or len(pts) < min_points or not (np.all(np.isfinite(pts)) and np.all(np.isfinite(res))):
+    if len(pts) != len(res) or len(pts) < max(4, int(min_points)) or not (np.all(np.isfinite(pts)) and np.all(np.isfinite(res))):
         return {"global_drift": False, "reason": "insufficient_points", "n": len(pts)}
     dp = pts - pts.mean(axis=0)
-    if float(np.linalg.svd(dp, compute_uv=False)[-1]) < 15.0:
+    if float(np.linalg.svd(dp, compute_uv=False)[-1]) / math.sqrt(len(pts)) < 15.0:
         return {"global_drift": False, "reason": "collinear_points", "n": len(pts)}
     A = np.zeros((2 * len(pts), 4), float)
     A[0::2] = np.c_[np.ones(len(pts)), np.zeros(len(pts)), dp[:, 0], -dp[:, 1]]
     A[1::2] = np.c_[np.zeros(len(pts)), np.ones(len(pts)), dp[:, 1], dp[:, 0]]
-    p, *_ = np.linalg.lstsq(A, res.ravel(), rcond=None)
+    try:
+        p, *_ = np.linalg.lstsq(A, res.ravel(), rcond=None)
+        ata_inv = np.linalg.inv(A.T @ A)
+    except np.linalg.LinAlgError:
+        return {"global_drift": False, "reason": "singular_design", "n": len(pts)}
     tx, ty, s, theta = (float(p[0]), float(p[1]), float(p[2]), float(p[3]))
     tot_ss = float(np.sum(res ** 2))
     err_ss = float(np.sum((res.ravel() - A @ p) ** 2))
+    dof = max(1, 2 * len(pts) - 4)
+    sigma = max(float(sigma_prior_mm), math.sqrt(err_ss / dof))
+    se = sigma * np.sqrt(np.maximum(1e-12, np.diag(ata_inv)))
     explained = max(0.0, 1.0 - err_ss / tot_ss) if tot_ss > 1e-6 else 0.0
     rot_deg, t_mag = math.degrees(theta), math.hypot(tx, ty)
-    rot_or_scale = abs(rot_deg) >= rot_tol_deg or abs(s) >= scale_tol
-    is_global = explained >= explain_ratio and (rot_or_scale or t_mag >= trans_tol_mm)
+    t_sig = t_mag >= trans_tol_mm and (t_mag / max(float(se[0]), float(se[1]))) >= 3.0
+    rot_sig = abs(rot_deg) >= rot_tol_deg and (abs(theta) / float(se[3])) >= 3.0
+    scale_sig = abs(s) >= scale_tol and (abs(s) / float(se[2])) >= 3.0
+    rot_or_scale = rot_sig or scale_sig
+    is_global = explained >= explain_ratio and (rot_or_scale or t_sig)
     return {
         "global_drift": bool(is_global), "kind": "rotation_or_scale" if rot_or_scale else ("translation" if is_global else "local"),
         "translation_mm": [round(tx, 2), round(ty, 2)], "rot_deg": round(rot_deg, 3),

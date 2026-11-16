@@ -219,43 +219,104 @@ def test_post_eval_1yaw_fallback_is_advisory_and_never_applies(tmp_path, monkeyp
     assert res["applied"] == [] and res["lateral_xy"]["verdict"] == "advisory" and res["lateral_xy"]["lateral_xy_verified"] is False
 
 
-def test_blend_bias_at_weights_by_distance_and_sigma_preserving_pivot_geometry():
+def test_blend_bias_at_regularized_kernel_and_sequential_save_fusion(tmp_path):
     data = {
         "schema": cpb.SCHEMA,
         "regions": [
             {"site": "floor", "kind": "pivot", "point_m": [0.10, 0.10], "bias_mm": [10.0, 0.0],
-             "radius_mm": 19.5, "phase_deg": 45.0, "centre_sigma_mm": 1.0},
+             "radius_mm": 19.5, "phase_deg": 45.0, "centre_sigma_mm": 1.5, "map_sha": "sha_cur"},
             {"site": "floor", "kind": "visit", "point_m": [0.14, 0.10], "bias_mm": [2.0, 0.0],
-             "centre_sigma_mm": 2.0},
+             "centre_sigma_mm": 2.0, "map_sha": "sha_cur"},
+            # Stale map_sha and duplicate region must be ignored by blend_bias_at
+            {"site": "floor", "kind": "visit", "point_m": [0.14, 0.10], "bias_mm": [2.0, 0.0],
+             "centre_sigma_mm": 2.0, "map_sha": "sha_cur"},
+            {"site": "floor", "kind": "visit", "point_m": [0.15, 0.10], "bias_mm": [-20.0, 0.0],
+             "centre_sigma_mm": 1.5, "map_sha": "sha_old"},
         ],
     }
-    # Default bias_at returns nearest region without blending
     near = cpb.bias_at(data, "floor", [0.12, 0.10], reach_mm=50.0)
     assert near["bias_mm"] == [10.0, 0.0]
-    # Midpoint [0.12, 0.10] is 20mm from both; pivot has 2x kind weight and 4x (1/sigma^2) weight -> 8:1 weight ratio
     blended = cpb.bias_at(data, "floor", [0.12, 0.10], reach_mm=50.0, blend=True)
+    w_piv = 2.0 / (1.5 ** 2 + (20.0 / 15.0) ** 2)
+    w_vis = 1.0 / (2.0 ** 2 + (20.0 / 15.0) ** 2)
     assert blended["blended_n"] == 2 and blended["radius_mm"] == 19.5 and blended["phase_deg"] == 45.0
-    assert blended["bias_mm"][0] == pytest.approx((8.0 * 10.0 + 1.0 * 2.0) / 9.0, abs=0.05)
+    assert blended["bias_mm"][0] == pytest.approx((w_piv * 10.0 + w_vis * 2.0) / (w_piv + w_vis), abs=0.05)
+
+    # Sequential inverse-variance fusion in save_bias with 1.5mm systematic floor
+    bpath = tmp_path / "cal.bias.json"
+    cpb.save_bias(bpath, {"site": "floor", "kind": "place_look", "point_m": [0.10, 0.10],
+                          "bias_mm": [10.0, 0.0], "centre_sigma_mm": 3.0, "map_sha": "sha1"})
+    cpb.save_bias(bpath, {"site": "floor", "kind": "place_look", "point_m": [0.102, 0.10],
+                          "bias_mm": [6.0, 4.0], "centre_sigma_mm": 3.0, "map_sha": "sha1"})
+    saved = cpb.load_bias(bpath)["regions"]
+    assert len(saved) == 1 and saved[0]["bias_mm"] == [8.0, 2.0] and saved[0]["n"] == 2
+    assert saved[0]["centre_sigma_mm"] == pytest.approx(max(1.5, 3.0 / math.sqrt(2.0)), abs=0.05)
 
 
-def test_decompose_rigid_drift_detects_camera_rotation_and_escalates_post_eval():
-    pts = [[-0.08, 0.15], [0.08, 0.15], [0.0, 0.23]]
-    th = math.radians(2.5)
-    c = np.mean(np.asarray(pts) * 1000.0, axis=0)
-    res_rot = [[-th * (p[1] * 1000.0 - c[1]), th * (p[0] * 1000.0 - c[0])] for p in pts]
-    dec = cpb.decompose_rigid_drift(pts, res_rot)
+def test_decompose_rigid_drift_requires_4_points_and_3sigma_significance():
+    # n=3 is refused (insufficient DOF for 4-parameter similarity fit)
+    pts3 = [[-0.08, 0.15], [0.08, 0.15], [0.0, 0.23]]
+    assert cpb.decompose_rigid_drift(pts3, [[4.0, 1.0], [-4.0, 1.0], [0.0, -3.0]])["global_drift"] is False
+
+    pts4 = [[-0.08, 0.14], [0.08, 0.14], [-0.08, 0.24], [0.08, 0.24]]
+    # Small unstructured noise does not trigger global drift
+    assert cpb.decompose_rigid_drift(pts4, [[2.0, -1.5], [-1.8, 1.2], [1.4, 2.1], [-2.2, -1.0]])["global_drift"] is False
+
+    # True 3.0 deg camera rotation across 4 points triggers rotation_or_scale and escalates
+    th = math.radians(3.0)
+    c = np.mean(np.asarray(pts4) * 1000.0, axis=0)
+    res_rot = [[-th * (p[1] * 1000.0 - c[1]), th * (p[0] * 1000.0 - c[0])] for p in pts4]
+    dec = cpb.decompose_rigid_drift(pts4, res_rot, sigma_prior_mm=1.0)
     assert dec["global_drift"] is True and dec["kind"] == "rotation_or_scale"
-    assert dec["rot_deg"] == pytest.approx(2.5, abs=0.1) and dec["explained_ratio"] > 0.95
+    assert dec["rot_deg"] == pytest.approx(3.0, abs=0.1) and dec["explained_ratio"] > 0.95
 
-    rows = [{"site": f"s{i}", "point_m": pts[i], "residual_mm": res_rot[i], "residual_mag_mm": math.hypot(*res_rot[i]),
-             "status": "drift", "accepted": True, "map_sha": "sha1"} for i in range(3)]
-    cfg = {"sites": {f"s{i}": {"place": pts[i]} for i in range(3)}}
+    rows = [{"site": f"s{i}", "point_m": pts4[i], "residual_mm": res_rot[i], "residual_mag_mm": math.hypot(*res_rot[i]),
+             "status": "drift", "accepted": True, "map_sha": "sha1"} for i in range(4)]
+    cfg = {"sites": {f"s{i}": {"place": pts4[i]} for i in range(4)}}
     is_global, info = cell_post_eval._visit_common_shift(rows, cfg)
     assert is_global is True and info["kind"] == "rotation_or_scale"
 
 
-def test_cell_calibrate_chains_post_eval_and_depth_verify():
+def test_wrist_circular_yaw_band_and_loo_outlier_rescue(tmp_path):
+    import cell_wrist as cw
+    import cell_wrist_cal as cwc
+
+    cal = {"schema": cw.SCHEMA, "arms": {"arm_s": {"camera": "wrist", "bands": [
+        {"yaw_lo": 150.0, "yaw_hi": 210.0, "J": [[1.0, 0.0], [0.0, 1.0]], "ref": {"u": 100, "v": 100}},
+    ]}}}
+    assert cw.band_for(cal, "arm_s", 175.0) is not None
+    assert cw.band_for(cal, "arm_s", -175.0) is not None  # wrapped across +/-180!
+    assert cw.band_for(cal, "arm_s", 90.0) is None
+
+    # 9-hover grid with 1 outlier at corner (-10, -10) rescued via LOO deletion residual
+    xy = [(dx, dy) for dx in (-10.0, 0.0, 10.0) for dy in (-10.0, 0.0, 10.0)]
+    uv = [(200.0 + 3.0 * x, 150.0 - 3.0 * y) for x, y in xy]
+    uv_bad1 = list(uv)
+    uv_bad1[0] = (uv_bad1[0][0] + 45.0, uv_bad1[0][1] - 35.0)
+    fitted = cw.fit(xy, uv_bad1)
+    assert fitted["dropped_index"] == 0 and fitted["rms_px"] < 0.5
+
+    # 2 outliers still refused
+    uv_bad2 = list(uv_bad1)
+    uv_bad2[8] = (uv_bad2[8][0] - 40.0, uv_bad2[8][1] + 40.0)
+    with pytest.raises(ValueError, match="wrist fit refused"):
+        cw.fit(xy, uv_bad2)
+
+    p = tmp_path / "wrist.json"
+    cwc.save(p, "arm_s", 170.0, 30.0, fitted, "wrist")
+    cwc.save(p, "arm_s", -175.0, 30.0, fitted, "wrist")  # overlaps circularly -> replaces previous
+    assert len(json.loads(p.read_text())["arms"]["arm_s"]["bands"]) == 1
+
+
+def test_cell_calibrate_chains_post_eval_and_depth_verify_and_msac_consensus():
     import cell_calibrate as cc
+    import cell_map_fit as cmf
 
     chk = {"camera_moved": False, "missing_bias": [], "missing_surface": [], "unverified_xy": True, "missing_depth_verify": True}
     assert cc.stale(chk) == ["post-eval", "depth-verify"]
+
+    # MSAC consensus rejects near-collinear triple (height < 0.05*span) and picks lowest error set
+    pts = [((100.0 + 1000 * x, 200.0 + 1000 * y), (x, y))
+           for x, y in ((0.0, 0.10), (0.04, 0.1002), (0.08, 0.10), (0.0, 0.18), (0.08, 0.18), (0.04, 0.14))]
+    kept = cmf.consensus(pts, 5.0)
+    assert len(kept) == 6

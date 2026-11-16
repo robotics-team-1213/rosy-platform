@@ -8,35 +8,18 @@ Single Responsibility:
 """
 from __future__ import annotations
 
-import argparse
-import itertools
-import json
-import math
+import argparse, itertools, json, math, sys, time
 from pathlib import Path
-import sys
-import time
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_calibrate_auto import (  # noqa: E402,F401  (re-exported)
-    auto_pivot_point,
-    carried,
-    clear_point,
-    learn_bias,
-    map_agrees,
-    over_target,
-    pivot_near_yaws,
-    self_calibrate,
-)
-from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401  (re-exported)
-import cell_calibration as cal  # noqa: E402
-from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401  (re-exported)
-from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401  (re-exported)
-import cell_params as prm  # noqa: E402
+from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, map_agrees, over_target, pivot_near_yaws, self_calibrate  # noqa: E402,F401
+from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401
+import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
+from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
+from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
 from cell_pipeline_io import fold  # noqa: E402
-import cell_pivot  # noqa: E402
-import cell_remap_plan as rp  # noqa: E402
 
 MAP_POINTS = [
     [-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15],
@@ -311,7 +294,13 @@ def main(argv=None):
                     cv2.cvtColor(current, cv2.COLOR_BGR2GRAY),
                 )
             save_bound_map_reference(cal_path, ref_path, calibration, config, current)
-            cell_pivot.bias_path(cal_path).write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}))
+            bp = cell_pivot.bias_path(cal_path)
+            if bp.exists():
+                bp.with_suffix(".json.bak").write_bytes(bp.read_bytes())
+            bp_tmp = bp.with_suffix(".tmp")
+            bp_tmp.write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}), encoding="utf-8")
+            bp_tmp.replace(bp)
+            cell_pivot._BIAS_CACHE.clear()
             done.append({"remap": record["loo_error_mm"]})
         elif step == "regions":
             continue
@@ -355,12 +344,19 @@ def main(argv=None):
                 done.append({step: "no place point to touch"})
                 continue
             tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else config["plan"].get("tcp_x_m")
-            lib = work / f"surface-{site}.json"
+            lib = work / f"surface-{site}.library.json"
             lib.write_text(json.dumps(cell_surface.probe_library(
                 config["plan"], *s["place"], s["yaw_deg"], 0.10, 0.010, tcp_x_m=tcp_x_m)))
             touched = cell_surface.touch(cell, lib, tcp_x_m=tcp_x_m)
             if touched["result"] == "touched":
                 s["surface_z"] = touched["surface_z"]
+            if config.get("work_dir"):
+                rcp = Path(config["work_dir"]).expanduser() / f"surface-{site}.json"
+                rtmp = rcp.with_suffix(".tmp")
+                rtmp.write_text(json.dumps({"result": touched["result"], "surface_z": touched.get("surface_z"), "site": site,
+                                            "xy": list(s["place"]), "measured": time.strftime("%Y-%m-%d %H:%M"),
+                                            "sets_surface_z": touched["result"] == "touched"}, indent=1), encoding="utf-8")
+                rtmp.replace(rcp)
             done.append({step: touched["result"], "surface_z": touched.get("surface_z")})
         elif step == "post-eval":
             import cell_post_eval
@@ -378,7 +374,9 @@ def main(argv=None):
             if config.get("work_dir"):
                 (Path(config["work_dir"]).expanduser() / "depth-verify.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
             done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})
-    args.config.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1))
+    cfg_tmp = args.config.with_suffix(".tmp")
+    cfg_tmp.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1), encoding="utf-8")
+    cfg_tmp.replace(args.config)
     print(json.dumps({"done": done}, default=str), flush=True)
     return 0
 
