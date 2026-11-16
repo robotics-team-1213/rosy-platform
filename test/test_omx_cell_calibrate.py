@@ -672,5 +672,6 @@ def test_depth_verify_passes_a_fresh_depth_frame_on_a_depth_top_camera(tmp_path,
         path = tmp_path / "config.json"
         path.write_text(json.dumps(config))
         seen.clear()
-        assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify"]) == 0
+        assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify",
+                        "--commissioning", "--person-at-switch"]) == 0
         assert seen["depth"] is expect
