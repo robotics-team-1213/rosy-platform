@@ -1460,3 +1460,15 @@ def test_object_mask_supports_wrapped_multi_range_hsv():
     assert om[15, 15] > 0 and om[15, 45] > 0
     assert cm[15, 15] > 0 and cm[15, 45] > 0
 
+
+def test_dest_map_usable_accepts_z_view_only_with_parallax_geometry():
+    import cell_auto_evidence as cae
+    import cell_auto_pick_plan as cap
+
+    fine = {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}
+    z_view = {**fine, "z_view": 0.11}
+    assert cap.dest_map_usable({}, fine) is True
+    assert cap.dest_map_usable({"cameras": {"top": {}}}, z_view) is False
+    assert cap.dest_map_usable({"cameras": {"top": {"center_px": [297, 361], "height_m": 0.596}}}, z_view) is True
+    assert cae.dest_map_usable is cap.dest_map_usable
+

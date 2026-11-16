@@ -295,6 +295,16 @@ def choose(
     return usable, refused
 
 
+def dest_map_usable(config: dict, record: dict | None) -> bool:
+    """Destination checks accept a box-plane fine map or a z_view map backed by top-camera parallax geometry."""
+    if record is None or not isinstance(record.get("homography"), list):
+        return False
+    if "z_view" not in record:
+        return True
+    top = (config.get("cameras") or {}).get("top") or {}
+    return isinstance(top, dict) and top.get("center_px") is not None and top.get("height_m") is not None
+
+
 def verify_placed(cell, config, calibration, dest_site, place_xy, roi, catalog, bias_data, object_id,
                   before_frame, after_path: Path, source_site, source_xy, source_roi):
     source = getattr(cell, "cell", cell)
@@ -307,7 +317,7 @@ def verify_placed(cell, config, calibration, dest_site, place_xy, roi, catalog, 
     except (OSError, ValueError, KeyError, TypeError):
         return {"found": False, "inside": False, "verified": False, "basis": "unverified: fresh camera frame missing"}
     record = cell_pivot.map_record(calibration, dest_site)
-    if roi is None or record is None or "z_view" in record:
+    if roi is None or not dest_map_usable(config, record):
         return {"found": False, "inside": False, "verified": False,
                 "basis": "unverified: destination ROI or fine map missing", "frame": frame}
     obs_fn = _parent_attr("observe", observe)
