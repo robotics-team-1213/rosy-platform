@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1035 | 셀 팔 리스, Calibration 보정 작업 API, AI 판정 기록으로 팔 incident 해제(D-971 해제 주체 변경). [전문](../adr/D-1035-calibration-arm-lease-jobs-and-ai-incident-assessment.md) | Accepted (2026-11-17, 사용자 결정; 배포·실물 수용 별도) |
 | D-1033 | OMX 1팔·2팔 공통 프로필 정본, 양팔 실행·Fine 탑재 경계 및 카메라 투영 디지털 트윈 운영 규격. [전문](../adr/D-1033-omx-per-arm-profile-bimanual-and-twin-plan.md) | Proposed (2026-11-15, 사용자 지시 + Gemini 4 Hydrogen · GLM-5.3 2라운드 패널 합의; 실물 측정·카메라 복구 및 증분 B·Fine 구현 별도) |
 | D-990 | Monitoring 화면의 Rosy Account 로그인. [전문](../adr/D-990-monitoring-account-receiver.md) | Accepted (2026-11-07, 사용자 지시; Account client 등록·배포·현장 수용 별도) |
 | D-992 | 장비 등록과 Rosy Account 연동. [전문](../adr/D-992-device-enrollment-account-link.md) | Accepted (2026-11-07, 사용자 지시; 현장 활성화·실물 수용 별도) |
