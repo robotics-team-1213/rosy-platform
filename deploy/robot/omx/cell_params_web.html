@@ -74,6 +74,7 @@ details.group > summary .tag { font-weight: 600; font-size: .8125rem; color: var
 </style>
 <header>
   <div class="title"><h1>셀 파라미터</h1><span id="sha" class="quiet mono"></span></div>
+  <div class="bar" id="account-bar" hidden></div>
   <div class="bar">
     <select id="file" aria-label="값 파일"></select>
     <input id="search" type="search" placeholder="이름·근거 검색" aria-label="검색">
@@ -252,14 +253,33 @@ async function loadServo() {
     el('thead', {}, el('tr', {}, ...['모터', ...Object.values(SERVO_KEYS)].map(text => el('th', {scope: 'col', textContent: text})))),
     el('tbody', {}, ...table.motors.map(motor => el('tr', {}, el('th', {scope: 'row', textContent: `${motor.id} ${motor.joint}`}), ...Object.keys(SERVO_KEYS).map(key => servoCell(motor.values[key])))))))));
 }
+async function loadAccount() {
+  const bar = $('account-bar');
+  try {
+    const s = await call('/api/account/session');
+    if (!s.enabled) { bar.hidden = true; return; }
+    bar.hidden = false;
+    if (s.authenticated) {
+      const who = s.profile?.display_name || s.account_id || '사용자';
+      const out = el('button', {type: 'button', textContent: '로그아웃'});
+      out.onclick = async () => { await call('/api/account/logout', {}); location.reload(); };
+      bar.replaceChildren(el('span', {className: 'badge measured', textContent: 'ROSY Core'}), el('span', {className: 'quiet', textContent: who}), out);
+    } else {
+      const link = el('a', {href: '/api/account/login'}, el('button', {type: 'button', className: 'primary', textContent: 'ROSY Account 로그인'}));
+      bar.replaceChildren(el('span', {className: 'badge', textContent: 'ROSY Core'}), el('span', {className: 'quiet', textContent: '운영자 로그인이 필요합니다.'}), link);
+    }
+  } catch { bar.hidden = true; }
+}
 async function loadIncidents() {
   const rows = await call('/incidents.json');
   $('incidents-box').hidden = !rows.length;
   $('incidents').replaceChildren(...rows.map(row => {
     if (row.error) return el('p', {className: 'banner error', textContent: `${row.arm}: ${row.error}`});
-    const badge = el('span', {className: 'badge ' + (row.held ? '' : 'measured'), textContent: row.held ? '홀드 잠김' : '해제됨(정상)'});
-    const info = el('div', {className: 'mono', textContent: `${row.arm} · ${row.reason || '열린 홀드 없음'}`});
-    if (!row.held) return el('div', {className: 'bar'}, badge, info);
+    const held = Boolean(row.held || row.local_held || row.fleet_held);
+    const reason = row.reason || row.fleet_reason || row.local_reason;
+    const badge = el('span', {className: 'badge ' + (held ? '' : 'measured'), textContent: held ? '홀드 잠김' : '해제됨(정상)'});
+    const info = el('div', {className: 'mono', textContent: `${row.arm} · ${reason || '열린 홀드 없음'}`});
+    if (!held) return el('div', {className: 'bar'}, badge, info);
     const note = el('input', {type: 'text', maxLength: 300, placeholder: '직접 확인 및 조치 내용 (필수)'});
     note.setAttribute('aria-label', `${row.arm} 홀드 해제 근거`);
     const btn = el('button', {type: 'button', className: 'primary', textContent: '확인했습니다 · 홀드 해제', disabled: Boolean(data?.busy)});
@@ -326,12 +346,14 @@ $('save').onclick = async () => {
   saving = false; refreshFooter();
 };
 addEventListener('beforeunload', event => { if (Object.keys(draft).length) event.preventDefault(); });
-load().catch(error => banner(error.message, true));
-const refreshServo = () => loadServo().catch(error => { $('servo-box').hidden = false; $('servo').replaceChildren(el('p', {className: 'banner error', textContent: error.message})); });
-const refreshLive = () => { loadIncidents().catch(() => {}); loadAttempts().catch(() => {}); };
-refreshServo();
-refreshLive();
-setInterval(poll, 5000);
-setInterval(() => { if (!document.hidden) { refreshServo(); refreshLive(); } }, 10000);
+loadAccount().then(() => {
+  load().catch(error => banner(error.message, true));
+  const refreshServo = () => loadServo().catch(error => { $('servo-box').hidden = false; $('servo').replaceChildren(el('p', {className: 'banner error', textContent: error.message})); });
+  const refreshLive = () => { loadIncidents().catch(() => {}); loadAttempts().catch(() => {}); };
+  refreshServo();
+  refreshLive();
+  setInterval(poll, 5000);
+  setInterval(() => { if (!document.hidden) { refreshServo(); refreshLive(); } }, 10000);
+});
 </script>
 </html>

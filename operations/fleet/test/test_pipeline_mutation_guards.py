@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 
 from fleet.server.auth.site_auth import build_authorize, build_role_guards
 from fleet.server.pipeline_routes import install_pipeline_routes
+from core_common.protocol.arm_incidents import ArmIncidentReport
+from fleet.server.arm_incidents import ArmIncidentStore
 from rosy_account.principal import SitePrincipal
 
 # Pure compute/preview endpoint without server state mutation.
@@ -101,3 +103,26 @@ def test_cell_quality_arm_holds_are_raise_only_and_pending_clear_waits_for_ack()
     acked = client.post("/api/fleet/pipeline/cell-quality",
                         json={"arm_holds": {"arm_b": {"local_held": False}}}, headers=svc)
     assert "arm_b" not in acked.json()["pending_clear_arms"]
+
+
+def test_arm_holds_clear_also_clears_open_arm_incident_rows():
+    store = ArmIncidentStore()
+    store.report(ArmIncidentReport.model_validate({
+        "source_id": "omx_arm_b", "session_id": "6f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b",
+        "facts": {"latched": {"13": {"hw_error": 32}}, "folded": True},
+        "decision": {"hold": True, "reason": "latched ID 13 overload"}, "frames": []}))
+    assert store.hold("omx_arm_b").held is True
+    app = _app()
+    app.state.arm_incidents = store
+    client = TestClient(app)
+    viewer = client.post("/api/fleet/pipeline/arm-holds/clear", json={"arm_id": "arm_b"},
+                         headers={"Authorization": "Bearer viewer"})
+    assert viewer.status_code == 403
+    res = client.post("/api/fleet/pipeline/arm-holds/clear",
+                      json={"arm_id": "arm_b", "note": "person verified", "cause": "snagged", "basis": "seen"},
+                      headers={"Authorization": "Bearer operator"})
+    assert res.status_code == 200 and res.json()["arm_holds"]["arm_b"]["held"] is False
+    assert store.hold("omx_arm_b").held is False
+    cleared = store.snapshot("omx_arm_b")[0]["cleared"]
+    assert cleared["by"] == "operator" and cleared["note"] == "person verified"
+    assert cleared["cause"] == "snagged" and cleared["basis"] == "seen"

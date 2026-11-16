@@ -345,3 +345,13 @@ def test_http_revoke_failure_preserves_pending_retry_until_recovery(receiver, br
     assert calls[-1][0] == 'revoke'
     with client.transaction() as db:
         assert db.execute('SELECT count(*) FROM app_account_revocations').fetchone()[0] == 0
+
+
+def test_access_token_for_returns_active_jwt_and_none_when_logged_out(receiver):
+    client, _, _, _ = receiver
+    assert client.access_token_for('missing') == (None, None)
+    cookie = session(client)
+    claims, token = client.access_token_for(cookie)
+    assert claims is not None and claims.sub == 'account-1' and token.count('.') == 2
+    client.logout(cookie)
+    assert client.access_token_for(cookie) == (None, None)

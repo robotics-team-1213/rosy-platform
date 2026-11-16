@@ -98,7 +98,9 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
         for arm_id, note in (qout.get("pending_clear_arms") or {}).items():
             try:
                 import omx_incident  # type: ignore
-                omx_incident.clear(str(arm_id), str(note))
+                sync_fn = getattr(omx_incident, "sync_hold_from_fleet", None)
+                if not (callable(sync_fn) and sync_fn(str(arm_id))):
+                    omx_incident.clear(str(arm_id), str(note))
             except Exception:
                 pass
         return qout

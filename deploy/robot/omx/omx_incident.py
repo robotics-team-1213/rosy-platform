@@ -66,10 +66,10 @@ def bits(code: int) -> list[str]:
     return [name for bit, name in HW_BITS.items() if code & bit]
 
 
-def refuse_if_held(arm: str | None, link=None) -> None:
-    """Before a session: resend unsent reports, ask Fleet for the hold. Fleet unreachable: refuse only on a local hold."""
+def _probe_hold(arm: str | None, link=None) -> tuple[bool, str | None]:
+    """Send pending reports, ask Fleet for hold, lift local hold on confirmed clear. Returns (held, detail)."""
     if not arm:
-        return
+        return False, None
     link = link or link_for(arm)
     if link and label_box(arm):  # label-only reports go when they can; they never decide the start
         send(arm, link, label_box(arm))
@@ -82,14 +82,25 @@ def refuse_if_held(arm: str | None, link=None) -> None:
             print(f"fleet hold unreachable: {type(exc).__name__}: {str(exc)[:120]}")
     if _effectively_held(answer):
         keep_hold(arm, answer.reason or "arm incident not cleared", answer.incident_ids, "fleet")
-        raise SystemExit(f"{arm} held for a person: {answer.reason} (clear it in the Fleet console)")
+        return True, f"{answer.reason} (clear it in the Fleet console)"
     if answer is not None and sent:
         for gone in (hold_path(arm), INCIDENTS / f"HOLD-{arm}.json"):
             gone.unlink(missing_ok=True)  # only Fleet's "not held", with nothing unsent, lifts a hold
-        return
+        return False, None
     reason = held(arm) or ("an incident report could not be sent to Fleet" if outbox(arm) else None)
-    if reason:
-        raise SystemExit(f"{arm} held for a person: {reason} (Fleet not reached; Fleet clears it)")
+    return (True, f"{reason} (Fleet not reached; Fleet clears it)") if reason else (False, None)
+
+
+def sync_hold_from_fleet(arm: str | None, link=None) -> bool:
+    """Sync local HOLD file against Fleet using machine credentials; True when cleared."""
+    return not _probe_hold(arm, link)[0]
+
+
+def refuse_if_held(arm: str | None, link=None) -> None:
+    """Before a session: resend unsent reports, ask Fleet for the hold. Fleet unreachable: refuse only on a local hold."""
+    is_held, detail = _probe_hold(arm, link)
+    if is_held:
+        raise SystemExit(f"{arm} held for a person: {detail}")
 
 
 def after_session(arm: str | None, device: str | None, session=Path("session.json"), link=None) -> dict:
@@ -211,7 +222,7 @@ def decide(f: dict) -> dict:
     if not why and not f["safe_end"]:
         if not off:
             why.append("torque not confirmed OFF")
-        if f.get("caps_restored"):
+        if f.get("caps_restored") is not True:
             why.append("caps not confirmed restored")
         if not why:
             why.append("unsafe session end")
@@ -330,20 +341,21 @@ def status(arm: str, link=None) -> dict:
             "incident_ids": fleet_ids, "fleet_reason": fleet_reason}
 
 
-def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None) -> int:
+def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None) -> int:
     """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold."""
     if not note.strip():
         raise SystemExit("a note of what was checked is required")
-    token_file = token_file or default_token_file()
-    if token_file is None or not Path(token_file).is_file():
-        raise SystemExit("an operator --token-file (chmod 600) is required")
-    token_file = Path(token_file)
-    if token_file.stat().st_mode & 0o077:
-        raise SystemExit(f"{token_file} must be readable by its owner only (chmod 600)")
+    if token is None:
+        token_file = token_file or default_token_file()
+        if token_file is None or not Path(token_file).is_file():
+            raise SystemExit("an operator --token-file (chmod 600) is required")
+        token_file = Path(token_file)
+        if token_file.stat().st_mode & 0o077:
+            raise SystemExit(f"{token_file} must be readable by its owner only (chmod 600)")
+        token = token_file.read_text(encoding="utf-8").strip()
     link = link or link_for(arm)
     if link is None:
         raise SystemExit(f"{arm}: no Fleet channel configured on this PC (source the observation bridge env)")
-    token = token_file.read_text(encoding="utf-8").strip()
     answer = link.hold()
     cleared = list(answer.incident_ids)
     for incident_id in cleared:

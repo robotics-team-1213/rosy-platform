@@ -910,3 +910,28 @@ def test_chunk_mode_skips_unused_leader_alerts_and_faults(tmp_path):
     assert "leader_rebooted_after" not in record
     assert leader.writes == [(6, "torque", 0)]
     assert_restored(arm, leader)
+
+
+def test_restore_caps_reopens_bus_and_recovers_after_transient_motor_12_glitch(tmp_path):
+    arm, leader = follower(), leader_arm()
+    original_write = arm.write
+    opens = {"count": 0}
+    orig_with_follower = None
+
+    def flaky_write(name, value):
+        if arm.motor == 12 and name == "pwm_limit" and value == 20 and opens["count"] < 2:
+            raise RuntimeError("transient motor 12 glitch")
+        original_write(name, value)
+
+    arm.write = flaky_write
+    s, _ = session(arm, leader)
+    orig_with_follower = s._with_follower
+
+    def counted_with_follower(fn):
+        opens["count"] += 1
+        return orig_with_follower(fn)
+
+    s._with_follower = counted_with_follower
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert record["caps_restored"] is True and record["safe_end"] is True
+    assert arm.motors[12]["pwm_limit"] == 20

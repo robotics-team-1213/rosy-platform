@@ -25,11 +25,25 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_params as prm  # noqa: E402
+
+ACCOUNT_COOKIE, FLOW_COOKIE = "rosy_cell_params_account", "rosy_cell_params_flow"
+FOUNDATION = Path(__file__).resolve().parents[3] / "contracts" / "foundation"
+if FOUNDATION.is_dir() and str(FOUNDATION) not in sys.path:
+    sys.path.append(str(FOUNDATION))
+try:
+    from core_common.protocol.account_client import AccountUnavailable, browser_session, load_account_client
+except ImportError:  # environments without cryptography stay local-only
+    class AccountUnavailable(Exception):
+        pass
+
+    browser_session = load_account_client = None
 
 PAGE = Path(__file__).with_name("cell_params_web.html")
 # Fail closed: a group or unit not named here stays locked, so a new guard cannot become editable by accident.
@@ -268,7 +282,7 @@ def incidents_table(arms: list[str]) -> list[dict]:
     return out
 
 
-def clear_arm_hold(files: ParamFiles, arms: list[str], body: dict) -> dict:
+def clear_arm_hold(files: ParamFiles, arms: list[str], body: dict, token: str | None = None) -> dict:
     """Clear an arm's open hold via omx_incident.clear when no session is busy."""
     import omx_incident
 
@@ -283,16 +297,33 @@ def clear_arm_hold(files: ParamFiles, arms: list[str], body: dict) -> dict:
     if files.busy():
         raise Conflict("세션이 실행 중이라 홀드를 해제할 수 없습니다.")
     try:
-        omx_incident.clear(arm, note.strip(), cause=cause, basis=basis)
+        kw = {"token": token} if token else {}
+        omx_incident.clear(arm, note.strip(), cause=cause, basis=basis, **kw)
     except SystemExit as exc:
         raise ValueError(str(exc)) from None
     return omx_incident.status(arm)
 
 
+def _cookie(handler, name: str) -> str:
+    jar = SimpleCookie()
+    try:
+        jar.load(handler.headers.get("Cookie", ""))
+        return jar[name].value if name in jar else ""
+    except CookieError:
+        return ""
+
+
+def _set_cookie(name: str, value: str, age: int) -> tuple[str, str]:
+    return ("Set-Cookie", f"{name}={value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={age}")
+
+
 def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: dict | None = None,
-                attempts: dict | None = None, incident_arms: list[str] | None = None):
+                attempts: dict | None = None, incident_arms: list[str] | None = None, account=None):
+    if account and not account.resource.startswith("site:"):
+        raise ValueError("Cell Params Account requires a site resource")
+
     class Handler(BaseHTTPRequestHandler):
-        def reply(self, code, value, kind="application/json"):
+        def reply(self, code, value, kind="application/json", headers=()):
             body = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header("Content-Type", kind)
@@ -301,34 +332,100 @@ def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: di
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; "
                                                         "script-src 'unsafe-inline'; frame-ancestors 'none'")
+            for k, v in headers:
+                self.send_header(k, v)
             self.end_headers()
             self.wfile.write(body)
 
         def local(self):
-            return self.headers.get("Host") in (f"127.0.0.1:{self.server.server_port}",
-                                                f"localhost:{self.server.server_port}")
+            allowed = {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
+            if account:
+                allowed.add(urlsplit(account.callback).netloc)
+            return self.headers.get("Host") in allowed
+
+        def _same_origin(self):
+            if not account:
+                return False
+            cb = urlsplit(account.callback)
+            return self.headers.get("Origin") == f"{cb.scheme}://{cb.netloc}"
+
+        def _claims_and_token(self):
+            if not account:
+                return None, None
+            return account.access_token_for(_cookie(self, ACCOUNT_COOKIE))
+
+        def _account_route(self, method: str, path: str):
+            headers, status, body = [], 200, {}
+            try:
+                if method == "GET" and path == "/api/account/session":
+                    body, _ = browser_session(account, _cookie(self, ACCOUNT_COOKIE)) if (account and browser_session) else ({"enabled": False, "authenticated": False, "profile": None, "profile_url": None}, None)
+                elif method == "GET" and path == "/api/account/login" and account:
+                    flow, target = account.start("/")
+                    headers, status = [_set_cookie(FLOW_COOKIE, flow, 600), ("Location", target)], 303
+                elif method == "GET" and path == "/api/account/callback" and account:
+                    query = parse_qs(urlsplit(self.path).query, max_num_fields=8)
+                    if set(query) != {"state", "code"} or any(len(v) != 1 for v in query.values()):
+                        raise ValueError("Invalid callback")
+                    sess, target = account.finish(_cookie(self, FLOW_COOKIE), query["state"][0], query["code"][0])
+                    headers, status = [_set_cookie(ACCOUNT_COOKIE, sess, 2592000), _set_cookie(FLOW_COOKIE, "", 0), ("Location", target)], 303
+                elif method == "POST" and path == "/api/account/logout" and self._same_origin():
+                    headers = [_set_cookie(ACCOUNT_COOKIE, "", 0)]
+                    account.logout(_cookie(self, ACCOUNT_COOKIE))
+                else:
+                    status, body = 403, {"error": "Account 접근이 거절되었습니다."}
+            except AccountUnavailable:
+                status, body = 503, {"error": "Account 서비스에 닿지 않습니다."}
+            except ValueError:
+                status, body = 401, {"error": "Account 세션이 거절되었습니다."}
+            return self.reply(status, body, headers=headers)
 
         def do_GET(self):
             if not self.local():
                 return self.reply(403, {"error": "local cell only"})
-            if self.path == "/":
+            path = urlsplit(self.path).path
+            if path.startswith("/api/account/"):
+                return self._account_route("GET", path)
+            if path == "/":
                 return self.reply(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-            if self.path == "/params.json":
+            if account:
+                try:
+                    claims, _ = self._claims_and_token()
+                except AccountUnavailable:
+                    return self.reply(503, {"error": "Account 서비스에 닿지 않습니다."})
+                if claims is None:
+                    return self.reply(401, {"error": "ROSY Account 로그인이 필요합니다."})
+            if path == "/params.json":
                 return self.reply(200, files.snapshot())
-            if self.path == "/servo.json":
+            if path == "/servo.json":
                 return self.reply(200, [servo_table(name, *paths) for name, paths in (servo or {}).items()])
-            if self.path == "/attempts.json":
+            if path == "/attempts.json":
                 return self.reply(200, [attempts_table(name, path) for name, path in (attempts or {}).items()])
-            if self.path == "/incidents.json":
+            if path == "/incidents.json":
                 return self.reply(200, incidents_table(list(incident_arms or ())))
             self.reply(404, {"error": "not found"})
 
         def do_POST(self):
+            path = urlsplit(self.path).path
+            if path.startswith("/api/account/") and self.local():
+                return self._account_route("POST", path)
             # The custom header forces a CORS preflight, so another origin cannot change a value.
             if not self.local() or self.headers.get("X-Cell-Params") != "1":
                 return self.reply(403, {"error": "local cell only"})
-            if self.path not in ("/save", "/incidents/clear"):
+            if path not in ("/save", "/incidents/clear"):
                 return self.reply(404, {"error": "not found"})
+            token = None
+            if account:
+                if not self._same_origin():
+                    return self.reply(403, {"error": "등록된 출처에서만 변경할 수 있습니다."})
+                try:
+                    claims, token = self._claims_and_token()
+                except AccountUnavailable:
+                    return self.reply(503, {"error": "Account 서비스에 닿지 않습니다."})
+                if claims is None:
+                    return self.reply(401, {"error": "ROSY Account 로그인이 필요합니다."})
+                needed = ("fleet.operate",) if path == "/incidents/clear" else ("calibration.operate", "fleet.operate")
+                if not any(claims.permits(account.resource, cap) for cap in needed):
+                    return self.reply(403, {"error": "운영 권한이 필요합니다."})
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 if not 0 < length <= 65536:
@@ -336,8 +433,8 @@ def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: di
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError("JSON object required")
-                if self.path == "/incidents/clear":
-                    self.reply(200, clear_arm_hold(files, list(incident_arms or ()), body))
+                if path == "/incidents/clear":
+                    self.reply(200, clear_arm_hold(files, list(incident_arms or ()), body, token=token))
                 else:
                     self.reply(200, files.save(body))
             except Conflict as exc:
@@ -365,6 +462,7 @@ def main(argv=None):
     parser.add_argument("--profile", type=parse_file, action="append", default=[], metavar="NAME=PATH")
     parser.add_argument("--attempts", type=parse_file, action="append", default=[], metavar="NAME=PATH")
     parser.add_argument("--incident-arm", action="append", default=[], metavar="ARM_ID")
+    parser.add_argument("--account-config", type=Path, help="Rosy Account receiver json (optional)")
     parser.add_argument("--port", type=int, default=8772)
     args = parser.parse_args(argv)
     files, caps, profiles, attempts = dict(args.file), dict(args.caps), dict(args.profile), dict(args.attempts)
@@ -378,9 +476,12 @@ def main(argv=None):
             prm.load(path)
         except (OSError, ValueError) as exc:
             parser.error(f"{path}: {exc}")
+    if args.account_config and load_account_client is None:
+        parser.error("cryptography/core_common required for --account-config")
+    account = load_account_client(args.account_config, destinations=("/",)) if args.account_config else None
     server = make_server(ParamFiles(files), args.port,
                          servo={name: (path, profiles.get(name)) for name, path in caps.items()},
-                         attempts=attempts, incident_arms=args.incident_arm)
+                         attempts=attempts, incident_arms=args.incident_arm, account=account)
     from joint_tune import lock_root
 
     # A page with another HOME or ROSY_OMX_HOME would watch a different lock and save during a session.

@@ -202,32 +202,38 @@ class Session:
             self.hardware_faults[key] = {"hw_error": error, "packet_alert": alert}
 
     def restore_caps(self) -> list:
-        """Attempt every cap independently (retrying transient bus timeouts)."""
+        """Attempt every cap independently (retrying transient errors on a freshly reopened bus)."""
         failures = []
         for motor, values in self.baseline().items():
-
-            def restore(bus, motor=motor, values=values):
-                bus.motor = motor
-                for name, value in values.items():
-                    write, read = (
-                        (bus.write, bus.read) if name in SESSION_ONLY else (bus.cleanup_write, bus.cleanup_read)
-                    )
-                    for attempt in range(3):
+            pending, last_err = dict(values), {}
+            for attempt in range(3):
+                def restore(bus, motor=motor, pending=pending, last_err=last_err):
+                    bus.motor = motor
+                    for name, value in list(pending.items()):
+                        write, read = (
+                            (bus.write, bus.read) if name in SESSION_ONLY else (bus.cleanup_write, bus.cleanup_read)
+                        )
                         try:
                             write(name, value)
                             after = read(name)
                             self.note_fault(bus)
                             if after != value:
                                 raise RuntimeError(f"{name} readback {after} != {value}")
-                            break
+                            pending.pop(name, None)
                         except Exception as exc:
-                            if attempt == 2:
-                                failures.append(f"follower {motor} {name}: {exc}")
+                            last_err[name] = exc
 
-            try:
-                self._with_follower(restore)
-            except Exception as exc:
-                failures.append(f"follower {motor}: {exc}")
+                try:
+                    self._with_follower(restore)
+                except Exception as exc:
+                    for name in pending:
+                        last_err.setdefault(name, exc)
+                if not pending:
+                    break
+                if attempt < 2:
+                    self.sleep(0.05)
+            for name in pending:
+                failures.append(f"follower {motor} {name}: {last_err[name]}")
         return failures
 
     def execute(

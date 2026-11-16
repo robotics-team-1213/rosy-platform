@@ -556,4 +556,71 @@ def test_handle_filters_leader_keys_from_latched_reboot(tmp_path, monkeypatch):
     assert set(out["facts"]["latched"]) == {"leader 6", "13"}
 
 
+def test_sync_hold_from_fleet_and_clear_with_explicit_core_token_and_healthy_caps(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    oi.keep_hold("arm_b", "caps not confirmed restored")
+    assert oi.held("arm_b")
+
+    class SyncLink(Link):
+        def __init__(self):
+            self.held_flag = True
+            self.cleared = []
+
+        def hold(self):
+            return hold(self.held_flag)
+
+        def clear(self, incident_id, note, token, cause=None, basis=None):
+            self.cleared.append((incident_id, note, token))
+            self.held_flag = False
+            return hold(False)
+
+    link = SyncLink()
+    assert oi.sync_hold_from_fleet("arm_b", link=link) is False
+    assert oi.clear("arm_b", "verified home", link=link, token="jwt.core.token") == 0
+    assert link.cleared == [("a" * 32, "verified home", "jwt.core.token")]
+    assert oi.held("arm_b") is None
+
+    oi.keep_hold("arm_b", "stale")
+    assert oi.sync_hold_from_fleet("arm_b", link=link) is True
+    assert oi.held("arm_b") is None
+
+    # Healthy caps_restored=True must not falsely report "caps not confirmed restored".
+    d = oi.decide({"safe_end": False, "latched": {}, "windup_hits": [], "flagged": [],
+                   "torque_after": {"11": 0}, "caps_restored": True, "folded": True, "stops": []})
+    assert "caps not confirmed restored" not in d["reason"]
+    assert "unsafe session end" in d["reason"]
+
+
+def test_telemetry_sync_clears_local_hold_via_machine_sync_without_operator_token(tmp_path, monkeypatch):
+    import cell_camera_telemetry_sync as sync_mod
+
+    monkeypatch.chdir(tmp_path)
+    oi.keep_hold("arm_b", "caps not confirmed restored")
+    monkeypatch.setattr(oi, "link_for", lambda arm: type("L", (), {
+        "hold": staticmethod(lambda: hold(False)),
+    })())
+
+    class FakeResp:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def read(self):
+            return json.dumps(self.payload).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(req, context=None, timeout=None):
+        if req.full_url.endswith("/state.json"):
+            return FakeResp({})
+        return FakeResp({"ok": True, "pending_clear_arms": {"arm_b": "cleared via Fleet core"}})
+
+    out = sync_mod.sync_cell_telemetry("https://fleet.example:8443", "svc-tok", prep_dir=tmp_path, urlopen_fn=fake_urlopen)
+    assert out["ok"] is True
+    assert oi.held("arm_b") is None
+
+
 
