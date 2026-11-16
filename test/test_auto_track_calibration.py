@@ -230,12 +230,54 @@ def test_world_261026_auto_handles_glare_split_and_charger_occlusion():
     draw_seg(synth, (-0.15, 0.30), (0.10, 0.18), (250, 250, 250), thick=16)
     draw_seg(synth, (-0.52, 0.597), (-0.18, 0.597), (105, 105, 105), thick=18)
 
-    fit = auto_calibrate_and_trace_world_261026(synth)
+    fit = auto_calibrate_and_trace_world_261026(synth, revision="paint-r1")
     assert fit is not None
     assert fit["rms_m"] < 0.005
     corners = np.array([[-1.22, -0.61], [1.22, -0.61], [1.22, 0.61], [-1.22, 0.61]])
     err_px = np.max(np.hypot(*(_proj(fit["map_to_image"], corners) - _proj(m2i_syn, corners)).T))
     assert err_px < 4.0
+    from rosy_vision.world_261026_auto import get_latest_lens_model
+    assert get_latest_lens_model(1280, 720, "paint-r1") is not None
+    assert get_latest_lens_model(1280, 720, "paint-r2") is None
+
+
+def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    token_file = tmp_path / "auto-calibration.token"
+    token_file.write_text("secret-bearer-token\n", encoding="utf-8")
+    state_file = tmp_path / "state.json"
+    monkeypatch.setenv("ROSY_AUTO_CALIBRATION_TOKEN_FILE", str(token_file))
+    monkeypatch.setattr(mod, "STATE_FILE", state_file)
+
+    ident = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    monkeypatch.setattr(mod, "run_vision_solve", lambda: {
+        "ok": True, "width": 1280, "height": 720, "frame_seq": 10, "rms_m": 0.002,
+        "map_to_image": [1.0, 0.0, -0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "image_to_map": [1.0, 0.0, 0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "places": [{"id": "p1", "x": 0.13, "y": 0.2}], "edges": [],
+    })
+    monkeypatch.setattr(mod, "fetch_fleet_current", lambda _t: {
+        "cur_cal": {"calibration_revision": 1, "map_to_image": ident},
+        "cur_map": {"map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
+    })
+    outcomes = [
+        {"cal_updated": False, "map_updated": False, "map_activate_status": 409, "deferred": True},
+        {"cal_updated": True, "calibration_revision": 2, "map_updated": True, "map_version": 2},
+    ]
+    monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: outcomes.pop(0))
+
+    for _ in range(4):
+        assert mod.main([]) == 0
+        capsys.readouterr()
+    assert mod.main([]) == 0
+    deferred = json.loads(capsys.readouterr().out.strip())
+    assert deferred["status"] == "deferred" and deferred["map_activate_status"] == 409
+    saved = json.loads(state_file.read_text(encoding="utf-8"))
+    assert len(saved["history"]) == 5 and saved["last_approved_at"] is None
+
+    assert mod.main([]) == 0
+    updated = json.loads(capsys.readouterr().out.strip())
+    assert updated["status"] == "updated" and updated["map_updated"] is True
 
 
 def test_auto_track_calibration_service_principal_is_scoped_to_calibration_and_site_map():

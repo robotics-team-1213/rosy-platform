@@ -14,12 +14,18 @@ import time
 import cv2
 import numpy as np
 
-#: Latest solved (K, D, H_undist_to_map) for fast single-pass remap in rectify.map_plane_jpeg.
+#: Latest solved (K, D, H_undist_to_map) and its calibration revision for rectify.map_plane_jpeg.
 _LATEST_LENS_MODEL: dict[tuple[int, int], tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+_LATEST_LENS_REV: dict[tuple[int, int], str | None] = {}
 
 
-def get_latest_lens_model(width: int, height: int) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
-    return _LATEST_LENS_MODEL.get((int(width), int(height)))
+def get_latest_lens_model(
+    width: int, height: int, revision: str | None = None
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    key = (int(width), int(height))
+    if revision is not None and _LATEST_LENS_REV.get(key) != revision:
+        return None
+    return _LATEST_LENS_MODEL.get(key)
 
 
 def default_camera_matrix(width: int, height: int, hfov_deg: float = 67.8) -> np.ndarray:
@@ -137,7 +143,7 @@ def _segment_masks(img: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     return white_mask, green_mask, pink_mask, yellow_mask
 
 
-def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
+def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | None = None) -> dict | None:
     """100% automatic OpenCV 12-DOF calibration + sub-pixel map tracer for ``world_261026``."""
     if img is None or img.ndim != 3 or img.shape[2] != 3:
         return None
@@ -357,6 +363,7 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
         return None
 
     _LATEST_LENS_MODEL[(w, h)] = (K.copy(), D.copy(), image_to_map.copy())
+    _LATEST_LENS_REV[(w, h)] = revision
 
     # 3. Rectify + lens-undistort to top-down map plane and trace sub-pixel places & edges
     min_x, max_x, min_y, max_y = -1.37, 1.37, -0.76, 0.76
