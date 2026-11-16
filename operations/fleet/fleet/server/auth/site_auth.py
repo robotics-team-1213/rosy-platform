@@ -155,6 +155,10 @@ def build_authorize(console_token: Optional[str],
         if (principal.role == "service" and principal.principal_id.startswith("control-unit:")
                 and request.url.path != prefix and not request.url.path.startswith(prefix + "/")):
             raise HTTPException(status_code=403, detail={"code": "CONTROL_UNIT_CREDENTIAL_SCOPE_REQUIRED"})
+        if (principal.role == "service" and principal.principal_id == "auto-track-calibration"
+                and request.url.path != "/api/fleet/calibrations"
+                and not request.url.path.startswith("/api/fleet/site-map/")):
+            raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "calibration scope required"})
         if (principal.password_change_required
                 and request.url.path not in {"/api/fleet/auth/session", "/api/fleet/auth/logout",
                                              "/api/fleet/auth/change-password"}):
@@ -203,7 +207,9 @@ def build_role_guards(authorize, principals: Mapping[str, SitePrincipal], *, nam
         return principal
 
     def require_operator(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
-        if not principal.permits_site("fleet.operate", {"operator"}):
+        if not principal.permits_site("fleet.operate", {"operator"}) and not (
+            principal.role == "service" and principal.principal_id == "auto-track-calibration"
+        ):
             raise HTTPException(status_code=403, detail={"code": "FORBIDDEN",
                                                          "message": "operator role required"})
         return principal

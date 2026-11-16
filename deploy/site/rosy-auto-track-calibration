@@ -18,8 +18,8 @@ CORNERS_M = ((-1.22, -0.61), (1.22, -0.61), (1.22, 0.61), (-1.22, 0.61))
 DRIFT_THRESHOLD_M = 0.015
 MAP_PLACE_THRESHOLD_M = 0.012
 STABILITY_WINDOW = 5
-STABLE_SPREAD_M = 0.01
-MIN_APPROVAL_INTERVAL_S = 6 * 3600
+STABLE_SPREAD_M = 0.025
+MIN_APPROVAL_INTERVAL_S = 10 * 60
 
 
 def apply_3x3(m: list[float], x: float, y: float) -> tuple[float, float]:
@@ -283,23 +283,6 @@ headers = {{"Authorization": f"Bearer {{token}}"}}
 out = {{"cal_updated": False, "map_updated": False}}
 
 with httpx.Client(verify='/run/secrets/site_ca', timeout=15.0) as client:
-    if needs_cal:
-        score = max(0.95, min(0.995, round(1.0 - solved['rms_m'] * 8.0, 3)))
-        body = {{
-            "source_id": "ceiling_north",
-            "map_id": "world_261026",
-            "map_to_image": solved["map_to_image"],
-            "image": {{"width": solved["width"], "height": solved["height"]}},
-            "track_bounds_m": {{"min_x": -1.22, "min_y": -0.61, "max_x": 1.22, "max_y": 0.61}},
-            "fit_score": score,
-            "lens": {{"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}},
-            "frame_seq": solved["frame_seq"],
-        }}
-        r = client.post('https://fleet:8090/api/fleet/calibrations', headers=headers, json=body)
-        r.raise_for_status()
-        out["cal_updated"] = True
-        out["calibration_revision"] = r.json().get("calibration_revision")
-
     if needs_map:
         act_r = client.get('https://fleet:8090/api/fleet/site-map/active', headers=headers)
         if act_r.status_code == 200:
@@ -322,6 +305,24 @@ with httpx.Client(verify='/run/secrets/site_ca', timeout=15.0) as client:
                 out["map_version"] = act_post.json().get("version")
             else:
                 out["map_activate_status"] = act_post.status_code
+                out["deferred"] = True
+
+    if needs_cal and not out.get("deferred"):
+        score = max(0.95, min(0.995, round(1.0 - solved['rms_m'] * 8.0, 3)))
+        body = {{
+            "source_id": "ceiling_north",
+            "map_id": "world_261026",
+            "map_to_image": solved["map_to_image"],
+            "image": {{"width": solved["width"], "height": solved["height"]}},
+            "track_bounds_m": {{"min_x": -1.22, "min_y": -0.61, "max_x": 1.22, "max_y": 0.61}},
+            "fit_score": score,
+            "lens": {{"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}},
+            "frame_seq": solved["frame_seq"],
+        }}
+        r = client.post('https://fleet:8090/api/fleet/calibrations', headers=headers, json=body)
+        r.raise_for_status()
+        out["cal_updated"] = True
+        out["calibration_revision"] = r.json().get("calibration_revision")
 
 print(json.dumps(out))
 """
@@ -450,6 +451,25 @@ def main(argv: list[str] | None = None) -> int:
     needs_cal = force or (old_m2i is None) or (outcome["drift"] > DRIFT_THRESHOLD_M)
     needs_map = force or needs_cal or (place_diff_m > MAP_PLACE_THRESHOLD_M)
     res = apply_fleet_update(token, approved_solve, needs_cal=needs_cal, needs_map=needs_map)
+    if res.get("deferred"):
+        _save_state(STATE_FILE, {
+            "checked_at": now,
+            "cal_revision": cal_rev,
+            "last_approved_at": last_approved_at,
+            "rms_m": approved_solve["rms_m"],
+            "place_diff_m": round(place_diff_m, 4),
+            **outcome,
+            "history": history,
+            "last_update": res,
+        })
+        print(json.dumps({
+            "status": "deferred",
+            "rms_m": approved_solve["rms_m"],
+            "place_diff_m": round(place_diff_m, 4),
+            **outcome,
+            **res,
+        }))
+        return 0
 
     _save_state(STATE_FILE, {
         "checked_at": now,
