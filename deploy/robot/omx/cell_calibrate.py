@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, map_agrees, over_target, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
+from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
 from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401
 import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
@@ -330,18 +330,7 @@ def main(argv=None):
             save_bound_map_reference(cal_path, ref_path, calibration, config, reference)
             done.append({"consensus-repair": calibration["sites"][map_sites(config)[0]]["loo_error_mm"]})
         elif step.startswith("pivot-near"):
-            site, xy = step.split()[1].split(":")
-            near = tuple(float(v) for v in xy.split(","))
-            point, over = pivot_point(cell, config, calibration, site, near)
-            if point is None:
-                done.append({step: "no clear point near the target"})
-                continue
-            result = cell_pivot.pivot_calibrate(
-                cell, config, point, pivot_near_yaws(config, site, over), calibration, site, work, time.sleep, lambda row: None
-            )
-            if result["result"] == "calibrated":
-                cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"], config.get("params"))
-            done.append({step: result["result"], "at": point, "bias": result.get("bias", {}).get("bias_mm")})
+            done.append(pivot_near(cell, config, calibration, cal_path, step, work))  # pivot_precheck before any motion
         elif step.startswith("surface"):
             import cell_surface
 
