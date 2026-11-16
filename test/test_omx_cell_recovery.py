@@ -244,3 +244,26 @@ def test_no_session_and_a_park_overload_are_named_and_never_retried():
     assert dg.attempt_cause("refused") == "no_session" and dg.attempt_cause("refused: source 'x' has no site") == "other"
     assert dg.attempt_cause("stopped: contact at park: contact in park: lag", pile_moved=True) == "park_contact"
     assert dg.RECOVERY["no_session"] == dg.RECOVERY["park_contact"] == ["ask_person"]
+
+
+def test_a_tier_destination_resolves_before_the_carry(monkeypatch):
+    """2026-11-17: `--dest pallet-l1` crashed in parse_dest (ValueError) because main skipped the tier expansion."""
+    import cell_auto_setup
+
+    config = {"sites": {"temp_plate_b": {"surface_z": 0.005, "place": [0.02, -0.16], "yaw_deg": 0.0},
+                        "pallet": {"surface_z": 0.005, "place": [0.14, 0.03], "yaw_deg": 0.0}}}
+    monkeypatch.setattr(cell_auto_setup, "open_cell", lambda args, commissioning: (config, None, Path("cal.json"), Path(".")))
+    monkeypatch.setattr(rc.cell_objects, "load_catalog", lambda path: [])
+    monkeypatch.setattr(rc, "load_calibration", lambda path: {"sites": {}})
+    monkeypatch.setattr(rc.cell_pivot, "with_site_maps", lambda config, calibration: calibration)
+    seen = []
+
+    def parse_dest(config, source, dest):
+        seen.append(dest in config["sites"])
+        raise SystemExit("stop before the carry")
+
+    monkeypatch.setattr(rc.auto, "parse_dest", parse_dest)
+    with pytest.raises(SystemExit):
+        rc.main(["--config", "c.json", "--catalog", "k.json", "--roi", "0", "0", "1", "1", "--from", "temp_plate_b",
+                 "--dest", "pallet-l1", "--commissioning", "--person-at-switch"])
+    assert seen == [True]
