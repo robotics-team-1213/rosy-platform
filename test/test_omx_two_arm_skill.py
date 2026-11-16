@@ -183,6 +183,23 @@ def test_recover_skips_pass_and_records_only_valid_recoveries(monkeypatch):
     out_fail = skills.recover(driver, rec, plan, {"c1": "belt"}, "grasp", prefix_frames=2)
     assert out_fail["dagger_status"] == "recovery_failed" and ds.saved == 1 and ds.cleared == 1
 
+    # Case 4: adaptive pre-contact backoff (`first_bad_subframe`) & retry fallback
+    assert skills._candidate_prefixes("auto", {"first_bad_subframe": 14}, 30) == [9, 4]
+    assert skills._candidate_prefixes("20", {"first_bad_subframe": 12}, 30) == [7]
+    assert skills._candidate_prefixes("auto", {}, 36) == [24, 15]
+    rec_auto = FakeRec(ds)
+    attempts = []
+
+    def judge_second_pass(r, *a):
+        attempts.append(len([x for x in r.goal_during_frames if x[0] == "prefix"]))
+        return {"result": "pass" if len(attempts) == 2 else "fail"}
+
+    monkeypatch.setattr(skills, "step", lambda *a, **kw: {"result": "fail", "first_bad_subframe": 12})
+    monkeypatch.setattr(skills, "_judge_step", judge_second_pass)
+    monkeypatch.setattr(skills, "recovery_gen", lambda *a: iter([np.ones(6), np.ones(6)]))
+    out_auto = skills.recover(driver, rec_auto, plan, {"c1": "belt"}, "grasp", prefix_frames="auto")
+    assert out_auto["dagger_status"] == "recovered" and out_auto["dagger_prefix_frames"] == 2 and ds.saved == 2
+
 
 def test_mujoco_recovery_gen_grasp_recovers_after_drifted_prefix():
     _require_mujoco()
