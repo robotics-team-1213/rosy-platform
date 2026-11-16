@@ -243,7 +243,8 @@ def choose(
                     {"centre_mm": o["centre_mm"], "object": o["object"], "why": "no finger gap on either closing axis"}
                 )
                 continue
-        region = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p)
+        use_blend = bool((config.get("calibrate") or {}).get("blend_bias"))
+        region = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p, blend=use_blend)
         if region and "radius_mm" not in region:
             pivot = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p, pivot_only=True)
             if pivot:
@@ -330,7 +331,8 @@ def verify_placed(cell, config, calibration, dest_site, place_xy, roi, catalog, 
     if error:
         return {"found": False, "inside": False, "verified": False, "basis": f"unverified: {error}",
                 "frame": frame}
-    region = cell_pivot.bias_at(bias_data, dest_site, place_xy, params=config.get("params"))
+    region = cell_pivot.bias_at(bias_data, dest_site, place_xy, params=config.get("params"),
+                                blend=bool((config.get("calibrate") or {}).get("blend_bias")))
     bx, by = region["bias_mm"] if region else (0.0, 0.0)
     tolerance = config.get("verify_tol_mm", 10.0)
     if any(1000 * math.dist((o["raw_m"][0] - bx / 1000, o["raw_m"][1] - by / 1000), place_xy)

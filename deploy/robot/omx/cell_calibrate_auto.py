@@ -230,6 +230,8 @@ def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict
         "kind": "place_look",
         "point_m": list(place_xy),
         "bias_mm": seen,
+        "centre_sigma_mm": round(sigma_mm, 2),
+        "n": 1,
         **({"map_sha": map_sha} if map_sha is not None else {}),
         "measured": time.strftime("%Y-%m-%d"),
         "source": "place-and-look: the arm set the box here and the top camera saw it",

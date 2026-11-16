@@ -221,6 +221,7 @@ def run_round(args):
               *(["--dagger-only"] if getattr(args, "dagger_only", False) else []),
               *(["--dagger-device", args.dagger_device] if getattr(args, "dagger_device", None) else []),
               *(["--dagger-steps", args.dagger_steps] if getattr(args, "dagger_steps", None) else []),
+              *(["--dagger-eval-file", args.dagger_eval_file] if getattr(args, "dagger_eval_file", None) else []),
               *(eval_accel if getattr(args, "dagger_model", None) else [])]
     try:
         plan = []
@@ -276,21 +277,26 @@ def run_round(args):
         train(command, run / "train", args.lerobot_train, log, environment, vram_mb=VRAM_MB[args.policy])
         record.update(stage="evaluate")
         write_record(run, record)
-        judged = [("eval.json", str(run / "train/checkpoints/last/pretrained_model"))] + ([("eval-ik.json", "ik")] if args.skill else [])
-        eval_accel = [*(["--n-action-steps", str(args.n_action_steps)] if getattr(args, "n_action_steps", None) is not None else []),
-                      *(["--flow-steps", str(args.flow_steps)] if getattr(args, "flow_steps", None) is not None else []),
-                      *(["--amp"] if getattr(args, "amp", False) else [])]
-        for out, model in judged:
+        ckpt_last = str(run / "train/checkpoints/last/pretrained_model")
+        judged = [("eval.json", ckpt_last, [])]
+        if args.zero_error_deg > 0 and not getattr(args, "compensate_zero", False):
+            judged.append(("eval-comp.json", ckpt_last, ["--compensate-zero"]))
+        if args.skill:
+            judged.append(("eval-ik.json", "ik", []))
+        for out, model, extra_eval in judged:
             gpu_yield.yield_turn(say=functools.partial(print, file=log))
             subprocess.run([args.python, me, "evaluate", "--model", model, "--steps-file", str(run / "steps.json"), "--tasks", args.tasks,
                             "--isolated-seeds", str(args.isolated_seeds), "--whole-seeds", str(args.whole_seeds), "--out", str(run / out), "--artifacts", str(run / "artifacts"),
-                            *plan, *chosen, *skilled, *eval_accel], env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+                            *plan, *chosen, *skilled, *eval_accel, *extra_eval], env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
     except (RuntimeError, subprocess.CalledProcessError, ValueError) as exc:
         record.update(status="failed", reason=f"{record['stage']} 단계 실패({exc}). round.log를 보세요.", finished_at=now())
         write_record(run, record)
         return 1
     result = json.loads((run / "eval.json").read_text(encoding="utf-8"))
     score = summarise(result["rows"], result["whole"])
+    if (run / "eval-comp.json").is_file():
+        comp = json.loads((run / "eval-comp.json").read_text(encoding="utf-8"))
+        record.update(eval_comp=summarise(comp["rows"], comp["whole"]))
     if args.skill:
         baseline = json.loads((run / "eval-ik.json").read_text(encoding="utf-8"))
         record.update(eval_ik=summarise(baseline["rows"], []))
@@ -318,7 +324,8 @@ def main(argv=None):
     dagger_opts = (("--dagger-model", dict(help="checkpoint to roll out and harvest Teacher recoveries from failures")),
                    ("--steps-file", dict(help="steps.json matching --dagger-model (auto-found in ancestors if omitted)")),
                    ("--dagger-prefix-frames", dict(default="auto")), ("--dagger-only", dict(action="store_true")),
-                   ("--dagger-device", dict(choices=("cpu", "cuda"))), ("--dagger-steps", dict(help="comma-separated step IDs to target")))
+                   ("--dagger-device", dict(choices=("cpu", "cuda"))), ("--dagger-steps", dict(help="comma-separated step IDs to target")),
+                   ("--dagger-eval-file", dict(help="eval.json (or 'auto') to restrict DAgger to failed steps")))
     one = commands.add_parser("collect")
     for flag, kw in (("--seeds", dict(required=True)), ("--tasks", dict(default=",".join(TASKS))), ("--out", dict(required=True)),
                      ("--plan-dir", dict(help="two-arm plans")), ("--choice", dict(action="append")), ("--no-goal", dict(action="store_true")),
@@ -356,6 +363,7 @@ def main(argv=None):
                        compensate_zero=args.compensate_zero, no_goal=args.no_goal,
                        dagger_model=args.dagger_model, steps_file=args.steps_file, dagger_prefix_frames=args.dagger_prefix_frames,
                        dagger_only=args.dagger_only, dagger_device=args.dagger_device, dagger_steps=args.dagger_steps,
+                       dagger_eval_file=args.dagger_eval_file,
                        n_action_steps=args.n_action_steps, flow_steps=args.flow_steps, use_amp=True if args.amp else None)
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 

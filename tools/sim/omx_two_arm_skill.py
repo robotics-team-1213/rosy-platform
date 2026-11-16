@@ -174,8 +174,14 @@ def recovery_gen(teacher, data, plan, others, skill):
     off = R_w.T @ (pos_c - tcp_w) if skill == "release" else None
     p_from = (pos_c + np.array([0., 0., L.hold_below])) if off is not None else p_now
     yaw_from = _tcp_yaw(R_now, wps[start_i][3])
-    hover_z = wps[0][2] if skill == "grasp" else wps[start_i - 1][2]
-    if np.linalg.norm(p_from[:2] - wps[start_i][1]) > .015 and p_now[2] < hover_z - .01:
+    if skill == "grasp" and abs(float(q[5] - g_open)) > .05:
+        teacher.phase = phases[0]
+        a0 = float(q[5])
+        for i in range(1, 9):
+            yield np.append(q[:5], a0 + (g_open - a0) * i / 8)
+    hover_z = max(float(p_from[2]), wps[0][2] if skill == "grasp" else wps[start_i - 1][2])
+    xy_err = float(np.linalg.norm(p_from[:2] - wps[start_i][1]))
+    if (skill == "release" and (xy_err > .005 or p_now[2] < hover_z - .005)) or (skill == "grasp" and xy_err > .010 and p_now[2] < hover_z - .005):
         p_hover = np.array([wps[start_i][1][0], wps[start_i][1][1], hover_z])
         shift0 = None if off is None else (lambda pos, yw, qq: teacher._hold_shift(ik_arm, off, qq, yw, pos))
         g0 = g_hold if wps[start_i][4] == "hold" else g_open
@@ -208,14 +214,16 @@ def recovery_gen(teacher, data, plan, others, skill):
             p_from, yaw_from = p_to, yaw
 
 
-def _candidate_prefixes(prefix_frames, eval_row, horizon, backoff=5):
+def _candidate_prefixes(prefix_frames, eval_row, horizon, backoff=5, seed=0):
     bad = eval_row.get("first_bad_subframe")
     auto = str(prefix_frames).strip().lower() == "auto" or (isinstance(prefix_frames, int) and prefix_frames < 0)
     if bad is not None:
-        safe = max(0, int(bad) - backoff)
-        raw = [safe, max(0, safe - backoff)] if auto else [min(max(0, int(prefix_frames)), safe)]
+        bo = (4, 6, 8)[seed % 3] if (auto and seed) else backoff
+        safe = max(0, int(bad) - bo)
+        raw = [safe, max(0, safe - bo)] if auto else [min(max(0, int(prefix_frames)), safe)]
     elif auto:
-        raw = [min(horizon, max(20, horizon * 2 // 3)), min(horizon, 15)]
+        base = [min(horizon, max(20, horizon * 2 // 3)), min(horizon, 15)]
+        raw = [min(horizon, max(12, round(horizon * (.45, .60, .75)[seed % 3]))), *base] if seed else base
     else:
         raw = [min(max(0, int(prefix_frames)), horizon)]
     return list(dict.fromkeys(raw))
@@ -235,7 +243,7 @@ def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
     row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], skill=skill, lifted=False)
     phases = SKILLS[skill]["phases"]
     verdict = dict(row, result="fail")
-    for n_prefix in _candidate_prefixes(prefix_frames, eval_row, driver.longest[plan["id"]]):
+    for n_prefix in _candidate_prefixes(prefix_frames, eval_row, driver.longest[plan["id"]], seed=recorder.seed):
         recorder.rng, recorder.skew_i = np.random.default_rng(recorder.seed), 0
         recorder.contacts, recorder.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
         recorder.goal = None
