@@ -309,7 +309,11 @@ def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():
     for k in ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3", "ship-h1r1-l0", "belt"):
         assert math.dist(from_snap.sites[k]["xy"], from_named.sites[k]["xy"]) < 1e-6, k
     assert tuple(from_named.arms["arm_b"].base[:2]) == pytest.approx((.107, .164))
-    assert tuple(sites.Layout().arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
+    default = sites.Layout()
+    assert tuple(default.arms["arm_a"].base[:2]) == pytest.approx((.091, -.16825))
+    assert tuple(default.arms["arm_b"].base[:2]) == pytest.approx((.091, .16825))
+    assert default.arms["arm_b"].base[1] - default.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)
+    assert tuple(sites.Layout(arm_bases="surveyed").arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
     assert not any(s.get("blocked") for s in from_named.sites.values())  # tmp-b-1 clears the measured ship by 15.9 mm
     assert sites.WRIST_PHOTO_A["lens_m"][0] > sites.WRIST_PHOTO["lens_m"][0] and sites.WRIST_PHOTO_A["axis_hit_x_m"] > sites.WRIST_PHOTO["axis_hit_x_m"]
     img = np.full((200, 320, 3), (200, 175, 130), np.uint8)  # sky-blue v11 plate background
@@ -489,11 +493,16 @@ def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
         "berth_v16_cradle",
         "berth_v16_bridges",
         "berth_v16_stopper",
+        "berth_v24_cradle",
+        "berth_v24_docks",
+        "berth_v24_stopper",
         "omx_base_plate_a",
         "omx_base_plate_b",
         "temp_slot_bridge_a",
         "temp_slot_bridge_b",
         "temp_slot_plate_v11",
+        "temp_slot_plate_v12_navy",
+        "temp_slot_plate_v12_sky",
         "container_1x3_v3",
     ):
         assert name in source["meshes"] and (sites.SHIP_ASSETS / f"{name}.stl").is_file()
@@ -523,6 +532,77 @@ def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
     assert bundle["stages"][0]["stage"] == "mujoco" and bundle["stages"][0]["stage_order"] == 1
     assert bundle["stages"][1]["stage"] == "isaac" and bundle["stages"][1]["stage_order"] == 2
     assert bundle["stages"][1]["isaac_handoff"]["schema"] == "rosy.omx-isaac-handoff.v1"
+
+
+def test_temp_plate_renders_two_color_v12_cad_oriented_into_bridge():
+    try:
+        import mujoco
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    w = tw.World()
+    m = w.model
+    assert w.layout.choices["temp_lanes"] == "fan" and w.layout.choices["temp_radius_m"] == pytest.approx(0.200)
+    world_q = np.zeros(4)
+    for tag in ("a", "b"):
+        navy_id = m.geom(f"plate_v12_navy_{tag}").id
+        sky_id = m.geom(f"plate_v12_sky_{tag}").id
+        deck_id = m.geom(f"deck_{tag}").id
+        wall_id = m.geom(f"w{tag}1s0").id
+        for gid in (navy_id, sky_id):
+            mq = m.mesh_quat[m.geom_dataid[gid]]
+            mujoco.mju_mulQuat(world_q, m.geom_quat[gid], np.array([mq[0], -mq[1], -mq[2], -mq[3]]))
+            assert np.allclose(world_q, [1.0, 0.0, 0.0, 0.0], atol=1e-4)
+        assert m.geom_rgba[navy_id, 3] == pytest.approx(1.0) and m.geom_rgba[sky_id, 3] == pytest.approx(1.0)
+        assert not np.allclose(m.geom_rgba[navy_id, :3], m.geom_rgba[sky_id, :3])
+        assert m.geom_rgba[deck_id, 3] == pytest.approx(0.0) and m.geom_rgba[wall_id, 3] == pytest.approx(0.0)
+
+
+def test_v24_berth_docks_and_symmetric_194mm_layout_render_without_quay():
+    lay = sites.Layout()
+    assert lay.choices["ship_centre_y_m"] == pytest.approx(0.0)
+    assert lay.choices["berth_kit"] == "v24-docks"
+    fix = lay.ship_fixation()
+    assert fix["arm_a_gap_dy_mm"] == pytest.approx(32.0) and fix["arm_b_gap_dy_mm"] == pytest.approx(32.0)
+    try:
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    m_v24 = tw.World(lay).model
+    names_v24 = {m_v24.geom(i).name for i in range(m_v24.ngeom)}
+    assert {"ship_berth_v24_cradle", "ship_berth_v24_docks", "ship_berth_v24_stopper"} <= names_v24
+    assert "ship_quay" not in names_v24
+    m_v18 = tw.World(sites.Layout(berth_kit="v18-modular-adjustable")).model
+    names_v18 = {m_v18.geom(i).name for i in range(m_v18.ngeom)}
+    assert {"ship_berth_v16_cradle", "ship_berth_v16_bridges", "ship_berth_v16_stopper"} <= names_v18
+    assert "ship_quay" not in names_v18
+
+
+def test_temp_plate_v12_lanes_seat_containers_without_interlane_wall_overlap():
+    try:
+        import mujoco
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    w = tw.World()
+    data = w.reset()
+    lanes = ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3")
+    cids = [cid for cid, _ in w.layout.containers()[:len(lanes)]]
+    for cid, site in zip(cids, lanes):
+        w.put(data, cid, site)
+    for _ in range(int(0.5 / w.model.opt.timestep)):
+        mujoco.mj_step(w.model, data)
+    for cid, site in zip(cids, lanes):
+        pos, _, tilt = w.pose(data, cid)
+        s = w.layout.sites[site]
+        assert np.linalg.norm(pos[:2] - s["xy"]) * 1000 < 0.5, site
+        assert abs(pos[2] - s["z"]) * 1000 < 0.3, site
+        assert tilt < 0.5, site
+
+
 
 
 
