@@ -41,11 +41,13 @@ import palletizing_gripper as jaw  # noqa: E402
 
 
 def zero_est_residual(seed, arm, deg):
-    """A seed's per-joint error of the joint-zero estimate: Gaussian, sigma `deg`, fixed per seed and arm; zeros for the 5 joints at 0."""
-    if not deg:
+    """A seed's per-joint error of the joint-zero estimate: Gaussian, sigma `deg` (one value or one per joint 1-5), fixed per seed
+    and arm; zeros at 0. Per joint because the marker estimator sees j4 worst (about 1.5-2 deg, the rest about 1)."""
+    sigma = np.broadcast_to(np.asarray(deg, float), 5)
+    if not sigma.any():
         return np.zeros(6)
     rng = np.random.default_rng([seed, sites.ARMS.index(arm), 7919])
-    return np.append(np.radians(rng.normal(0., deg, 5)), 0.)
+    return np.append(np.radians(rng.normal(0., 1., 5) * sigma), 0.)
 
 
 class Teacher:
@@ -64,7 +66,7 @@ class Teacher:
         self.hook = frame_hook or (lambda data, label: None)
         self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), "", {}, 0., 0, 0.
         self.others = set()
-        self.zero_error, self.privileged, self.compensate_zero, self.zero_est_noise_deg = {}, True, False, 0.
+        self.zero_error, self.privileged, self.compensate_zero, self.zero_est_noise_deg, self.estimated_prefix = {}, True, False, 0., False
         self.servo = {}
         self.servo_comp = r2s_comp.ServoCompensator(world, FPS) if hasattr(world, "q") else None
         if cam_jitter and hasattr(world, "model"):
