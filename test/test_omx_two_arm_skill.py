@@ -106,9 +106,22 @@ def test_skill_argv_forwards_cam_jitter_and_compensate_zero():
     import argparse
     ap = argparse.ArgumentParser()
     skills.options(ap)
-    args = ap.parse_args(["--skill", "grasp", "--zero-error-deg", "4", "--cam-jitter", "--compensate-zero"])
+    args = ap.parse_args(["--skill", "grasp", "--zero-error-deg", "4", "--cam-jitter", "--compensate-zero", "--zero-est-noise-deg", "0.5"])
     forwarded = skills.argv(args)
     assert "--cam-jitter" in forwarded and "--compensate-zero" in forwarded
+    assert forwarded[forwarded.index("--zero-est-noise-deg") + 1] == "0.5"
+    assert "--zero-est-noise-deg" not in skills.argv(ap.parse_args(["--skill", "grasp", "--compensate-zero"]))
+
+
+def test_zero_estimate_residual_is_oracle_at_zero_and_a_fixed_per_seed_draw_otherwise():
+    teacher_mod = skills.teaching
+    assert not teacher_mod.zero_est_residual(5, "arm_a", 0.).any()
+    a, again = teacher_mod.zero_est_residual(5, "arm_a", 1.), teacher_mod.zero_est_residual(5, "arm_a", 1.)
+    assert np.array_equal(a, again) and a[5] == 0. and np.abs(np.degrees(a[:5])).max() < 5.
+    assert not np.array_equal(a, teacher_mod.zero_est_residual(5, "arm_b", 1.))
+    assert not np.array_equal(a, teacher_mod.zero_est_residual(6, "arm_a", 1.))
+    spread = np.degrees(np.concatenate([teacher_mod.zero_est_residual(s, "arm_a", .5)[:5] for s in range(400)]))
+    assert abs(spread.mean()) < .05 and .45 < spread.std() < .55
     _require_mujoco()
     import omx_two_arm_world as tw
     world = tw.World(sites.Layout())
