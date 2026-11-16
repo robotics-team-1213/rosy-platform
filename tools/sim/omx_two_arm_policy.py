@@ -295,10 +295,15 @@ def run_round(args):
                 probe_ckpt = run / "train/early_stop_ckpt"
                 shutil.rmtree(probe_ckpt, ignore_errors=True)
                 shutil.copytree(ckpt_dir, probe_ckpt)
+                if args.policy == "act":
+                    for fn in ("config.json", "policy_preprocessor.json", "policy_postprocessor.json"):
+                        p = probe_ckpt / fn
+                        if p.is_file():
+                            p.write_text(p.read_text(encoding="utf-8").replace('"cuda"', '"cpu"'), encoding="utf-8")
                 probe_out = run / f"eval-step-{step:06d}.json"
                 n_seeds = max(1, int(getattr(args, "early_stop_seeds", 1)))
                 extra_probe = ["--compensate-zero"] if (args.zero_error_deg > 0 and not getattr(args, "compensate_zero", False)) else []
-                probe_env = dict(environment, **({"CUDA_VISIBLE_DEVICES": ""} if args.policy == "act" else {}))
+                probe_env = dict(environment, **({"CUDA_VISIBLE_DEVICES": "", "OMP_NUM_THREADS": "2", "MKL_NUM_THREADS": "2"} if args.policy == "act" else {}))
                 rc = subprocess.run([args.python, me, "evaluate", "--model", str(probe_ckpt), "--steps-file", str(run / "steps.json"),
                                      "--tasks", args.tasks, "--isolated-seeds", str(n_seeds), "--whole-seeds", str(n_seeds),
                                      "--out", str(probe_out), "--artifacts", str(run / "artifacts"),
@@ -325,6 +330,8 @@ def run_round(args):
             judged.append(("eval-comp.json", ckpt_last, ["--compensate-zero"]))
         if args.skill:
             judged.append(("eval-ik.json", "ik", []))
+            if args.zero_error_deg > 0 and not getattr(args, "compensate_zero", False):
+                judged.append(("eval-ik-comp.json", "ik", ["--compensate-zero"]))
         for out, model, extra_eval in judged:
             gpu_yield.yield_turn(say=functools.partial(print, file=log))
             subprocess.run([args.python, me, "evaluate", "--model", model, "--steps-file", str(run / "steps.json"), "--tasks", args.tasks,
@@ -342,6 +349,9 @@ def run_round(args):
     if args.skill:
         baseline = json.loads((run / "eval-ik.json").read_text(encoding="utf-8"))
         record.update(eval_ik=summarise(baseline["rows"], []))
+        if (run / "eval-ik-comp.json").is_file():
+            ik_comp = json.loads((run / "eval-ik-comp.json").read_text(encoding="utf-8"))
+            record.update(eval_ik_comp=summarise(ik_comp["rows"], []))
     stages = pipeline_stages(score, sites.Layout(**(parsed_choices or {})), result["rows"],
                              pick_vision=getattr(args, "pick_vision", False), belt_skew=getattr(args, "belt_skew", False),
                              gazebo_report=getattr(args, "gazebo_report", None), isaac_report=getattr(args, "isaac_report", None), skill=args.skill)

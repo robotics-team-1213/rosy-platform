@@ -314,12 +314,13 @@ class Driver:
 
     def concurrent(self, task, seed, sink=None):
         """A whole two-arm task with the model driving both arms."""
+        import omx_two_arm_plan as plan_mod
         L, w = self.layout, self.world
         teacher = teaching.Teacher(w, seed=seed, pick_vision=self.pick_vision, belt_skew=self.belt_skew, cam_jitter=self.cam_jitter)
         here = dict(task.get("start", {}))
         data = teacher.fresh(here)
         queue = {a: [s for s in task["steps"] if s["arm"] == a] for a in L.arms}
-        status, held, running, rows = {}, {}, {}, []
+        status, held, running, rows, prev_active = {}, {}, {}, [], ()
         self.policy.reset()
         with self.torch.inference_mode():
             for _ in range(sum(self.longest[f"{task['name']}/{s['id']}"]["frames"] + 15 for s in task["steps"])):
@@ -328,17 +329,33 @@ class Driver:
                     if s is None or not all(status.get(d) == "done" for d in s.get("after", [])) or not all(status.get(d) for d in s.get("after_pick", [])) \
                             or any(z in held for z in set(s["zones"][0]) | set(s["zones"][1])):
                         continue
+                    others = {k: v for k, v in here.items() if k != s["container"]}
+                    if running and not all(
+                        plan_mod.sweeps_clear(
+                            plan_mod.step_swept_poses(L, arm, s["from"], s["to"], others),
+                            (poses_oa := plan_mod.step_swept_poses(L, oa, r["step"]["from"], r["step"]["to"], r["others"]) or [])[
+                                int(len(poses_oa) * min(1.0, r["t"] / max(1, r["budget"]["frames"]))):
+                            ],
+                        )
+                        for oa, r in running.items()
+                    ):
+                        continue
                     queue[arm].pop(0)
                     held.update({z: s["id"] for z in set(s["zones"][0]) | set(s["zones"][1])})
                     if s["from"] == "belt":
                         w.put(data, s["container"], "belt", **(teacher.skew_for(s) if teacher.belt_skew else {}))
-                    ctx, others = teaching.Ctx(arm), {k: v for k, v in here.items() if k != s["container"]}
+                    ctx = teaching.Ctx(arm)
                     ctx.carried = s["container"]
                     budget = self.longest[f"{task['name']}/{s['id']}"]
-                    running[arm] = dict(step=s, ctx=ctx, t=0, budget=budget, block=goal_block(L, s, others) if self.has_goal else None, before={o: w.pose(data, o) for o in others},
-                                        start_z=w.pose(data, s["container"])[0][2], peak=0., pick_only=set(s["zones"][0]) - set(s["zones"][1]))
+                    running[arm] = dict(step=s, ctx=ctx, others=others, t=0, budget=budget, block=goal_block(L, s, others) if self.has_goal else None,
+                                        before={o: w.pose(data, o) for o in others}, start_z=w.pose(data, s["container"])[0][2], peak=0.,
+                                        pick_only=set(s["zones"][0]) - set(s["zones"][1]))
                 if not running and not any(queue.values()):
                     break
+                active = tuple((a, running[a]["step"]["id"]) for a in sorted(running))
+                if active != prev_active:
+                    self.policy.reset()
+                    prev_active = active
                 state, images = observe(w, data)
                 if sink:
                     sink(sheet(images))

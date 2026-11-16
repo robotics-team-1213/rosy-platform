@@ -81,7 +81,7 @@ class Teacher:
         if not self.privileged:
             targets = {arm: t + self.zero_error[arm] if arm in self.zero_error else t for arm, t in targets.items()}
         if self.servo_comp is not None:
-            targets = self.servo_comp.apply(data, targets)
+            targets = self.servo_comp.apply(data, targets, privileged=self.privileged)
         self.world.advance(data, targets)
         both = ctxs is not None
         ctxs = ctxs if both else [self]

@@ -428,3 +428,58 @@ def test_train_early_stops_when_checkpoint_solves_problem(monkeypatch, tmp_path)
     assert seen_steps == [(3000, "pretrained_model")]
     assert not (out / "checkpoints/001500").exists() and (out / "checkpoints/003000").exists()
 
+
+def test_driver_concurrent_gates_on_sweeps_clear_and_resets_policy_on_step_change(monkeypatch):
+    from contextlib import nullcontext
+    import omx_two_arm_plan as plan_mod
+
+    layout = sites.Layout()
+    fake_world = types.SimpleNamespace(
+        layout=layout,
+        put=lambda *a, **kw: None,
+        pose=lambda _d, _c: (np.array([0.0, 0.0, 0.05]), 0.0, 0.0),
+    )
+    resets, sweep_checks = [], []
+
+    class FakeTeacher:
+        def __init__(self, *a, **kw):
+            self.belt_skew = False
+
+        def fresh(self, _here):
+            return object()
+
+        def frame(self, _d, _targets, _lbl, _ctxs):
+            pass
+
+        def verdict(self, _d, _s, row, _before, _ctx):
+            return dict(row, result="pass")
+
+        def off_stand(self, *_a):
+            pass
+
+    drv = object.__new__(helpers.Driver)
+    drv.layout, drv.world = layout, fake_world
+    drv.pick_vision = drv.belt_skew = drv.cam_jitter = drv.has_goal = False
+    drv.torch = types.SimpleNamespace(inference_mode=nullcontext)
+    drv.longest = {"t/s1": {"frames": 2, "picked": 1}, "t/s2": {"frames": 2, "picked": 1}}
+    drv.policy = types.SimpleNamespace(reset=lambda: resets.append(1))
+    drv.act = lambda *a: np.zeros(12, np.float32)
+
+    monkeypatch.setattr(helpers.teaching, "Teacher", FakeTeacher)
+    monkeypatch.setattr(helpers, "observe", lambda *a: (np.zeros(12, np.float32), {}))
+    monkeypatch.setattr(plan_mod, "step_swept_poses", lambda *a: [(0.0, []), (1.0, [])])
+    monkeypatch.setattr(plan_mod, "sweeps_clear", lambda a, b: sweep_checks.append((len(a), len(b))) or len(sweep_checks) > 1)
+
+    task = {
+        "name": "t",
+        "start": {"c1": "ship-h1r0-l0", "c2": "ship-h1r2-l0"},
+        "steps": [
+            {"id": "s1", "arm": "arm_a", "container": "c1", "from": "ship-h1r0-l0", "to": "tmp-a-1", "zones": [["a"], ["a"]]},
+            {"id": "s2", "arm": "arm_b", "container": "c2", "from": "ship-h1r2-l0", "to": "tmp-b-1", "zones": [["b"], ["b"]]},
+        ],
+    }
+    rows, summary = drv.concurrent(task, seed=0)
+    assert summary["completed"] is True and len(rows) == 2
+    assert len(sweep_checks) >= 2 and len(resets) >= 3
+
+

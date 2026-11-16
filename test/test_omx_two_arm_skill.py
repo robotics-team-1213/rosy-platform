@@ -266,3 +266,56 @@ def test_omx_arm_joint1_aligns_with_base_plate_pedestal_and_hides_duplicate_plat
                 assert w.model.geom_contype[gid] == 0 and w.model.geom_conaffinity[gid] == 0
 
 
+def test_servo_compensator_skips_zero_est_when_privileged_and_release_settles(monkeypatch):
+    import types
+    import omx_real2sim_comp as r2s_comp
+
+    layout = sites.Layout()
+    park_frames = []
+    plan = {"id": "s1", "arm": "arm_b", "container": "bar-1", "from": "belt", "to": "ship-h1r1-l0"}
+    fake_t = types.SimpleNamespace(
+        privileged=True, phase="approach", carried="bar-1",
+        zero_error={"arm_a": np.append(np.full(5, 0.02), 0.0), "arm_b": np.append(np.full(5, 0.04), 0.0)},
+        zero_center=skills.zero_error_center(physics=True), compensate_zero=True,
+        servo_comp=types.SimpleNamespace(zero_est={"arm_a": np.full(5, 0.02), "arm_b": np.full(5, 0.04)}),
+        contacts={"arm_arm": set(), "arm_other": set(), "pad_neighbour": set()},
+        disturbed=lambda *a: [],
+        step_gen=lambda *a: iter([np.zeros(6), np.ones(6)]),
+    )
+    ze_obs, ze_bias = skills._policy_zero(fake_t)
+    assert np.allclose(ze_obs["arm_a"], 0.0)
+    assert np.allclose(ze_obs["arm_b"], ze_bias["arm_b"]) and ze_bias["arm_b"][0] > 0.0
+
+    def fake_frame(_d, targets, _lbl):
+        if fake_t.phase == "approach":
+            fake_t.phase = "lower"
+        elif fake_t.phase == "park":
+            park_frames.append((fake_t.carried, targets["arm_b"].copy()))
+
+    fake_t.frame = fake_frame
+    fake_w = types.SimpleNamespace(pose=lambda *a: (np.zeros(3), 0.0, 0.0))
+    drv = types.SimpleNamespace(
+        kind="act", world=fake_w, layout=layout, longest={"s1": 2}, has_goal=False,
+        policy=types.SimpleNamespace(reset=lambda: None), act=lambda *a: np.full(12, 0.25, np.float32),
+    )
+    monkeypatch.setattr(policy, "observe", lambda *a: (np.zeros(12, np.float32), {}))
+    monkeypatch.setattr(skills, "_judge_step", lambda *a: {"result": "pass"})
+    res = skills.step(drv, fake_t, object(), plan, {}, "release")
+    assert res["result"] == "pass" and len(park_frames) == round(0.7 * skills.teaching.FPS)
+    assert all(c is None and np.allclose(cmd, 0.25 + ze_bias["arm_b"]) for c, cmd in park_frames)
+
+    _require_mujoco()
+    import omx_two_arm_world as tw
+
+    w = tw.World()
+    data = w.reset()
+    comp = r2s_comp.ServoCompensator(w, skills.teaching.FPS)
+    comp.zero_est["arm_b"] = np.full(5, 0.05)
+    t_in = {"arm_b": np.zeros(6)}
+    out_priv = comp.apply(data, t_in, privileged=True)["arm_b"]
+    comp.reset_arm("arm_b")
+    out_unpriv = comp.apply(data, t_in, privileged=False)["arm_b"]
+    assert np.allclose(out_priv[:5] - out_unpriv[:5], 0.05, atol=1e-4)
+
+
+
