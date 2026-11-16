@@ -102,4 +102,5 @@ def test_busy_robot_defers_the_install_without_failing_or_touching_state(
         assert not started and journal.read_bytes() == before
     else:
         assert outcome["outcome"] == "trial-requested" and len(started) == 1
-    assert state.read_state(root)["pending"] is None or not busy
+    if busy:
+        assert state.read_state(root)["pending"] is None
