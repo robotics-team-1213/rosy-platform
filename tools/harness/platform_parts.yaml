@@ -1226,6 +1226,13 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/berth_parking_helpers.py  # physical berth-park teleop and Fleet pin (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/ledger/task_dispatch_helpers.py  # site->robot goal frame for road-nav2/berth-park (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
+  - operations/fleet/fleet/server/auth/policy_approval.py  # D-1024 3 learned-policy approval window and lease issuer
+  - operations/fleet/fleet/server/auth/policy_approval_routes.py  # D-1024 3 named-operator approval routes
+  - operations/fleet/fleet/server/auth/policy_delivery.py  # D-1024 3 CORE lease/hold delivery port and ticker
+  - middleware/robot_execution/local/src/rosy/execution/local/policy_lease_push.py  # D-1024 3 device pushed-lease receiver
+  - integrations/robots/omx/src/rosy/integrations/robots/omx/policy_run.py  # D-1024 4 execute/shadow run loop: limit gate, pin, bind
+  - integrations/robots/omx/src/rosy/integrations/robots/omx/core_arm_client.py  # D-800 CORE arm HTTP client: SIM-only gate, observe-only
+  - integrations/robots/omx/src/rosy/integrations/robots/omx/site_shadow.py  # D-1024 1 L2 real-arm shadow: read-only Fleet allow-list, no submit
   - operations/fleet/fleet/server/console/console.py
   - operations/fleet/fleet/server/console/observe.py  # D-430 admission observation extracted from console
   - operations/fleet/fleet/server/console/goal_admission.py  # D-430 pure goal-admission hold shapes (console helper)
@@ -1451,5 +1458,13 @@ safety_anchors:
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
   - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}
+  - {symbol: fleet.server.policy_approval.PolicyApprovals.tick}  # D-1024 3 lease issue only inside the window
+  - {symbol: fleet.server.policy_approval.PolicyApprovals.tick_all}  # D-1024 3 ticker hook; no lease without a delivery port
+  - {symbol: fleet.server.policy_delivery.CoreLeaseDelivery}  # D-1024 3 any non-accepted delivery is a failed delivery
+  - {symbol: rosy.execution.local.policy_lease_push.PushLeaseReceiver}  # D-1024 3 any refusal latches HOLD
+  - {symbol: rosy.integrations.robots.omx.policy_run.execute}  # D-1024 4 limit gate before submit
+  - {symbol: rosy.integrations.robots.omx.core_arm_client.CoreArmClient}  # D-800 SIM-only gate, observe-only
+  - {symbol: rosy.integrations.robots.omx.site_shadow.SiteReader}  # D-1024 1 read-only allow-list of the real-arm shadow
+  - {symbol: fleet.server.policy_approval_routes.install_policy_approval_routes.approve_policy_approval, public: true}
   - {symbol: fleet.server.tether_watch.TetherWatch, public: true}
   - {symbol: fleet.server.tether_watch.map_pose, public: true}
