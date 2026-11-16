@@ -190,6 +190,34 @@ def test_driver_preserves_checkpoint_ensemble_and_detects_goal_feature(monkeypat
     assert d_ens.policy.temporal_ensembler == ("ensembler", 0.01, 100)
 
 
+def test_driver_smolvla_honors_action_and_flow_steps_and_amp(monkeypatch, tmp_path):
+    model_dir, steps_file, _ = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": {}})
+    (model_dir / "config.json").write_text(json.dumps({"type": "smolvla"}), encoding="utf-8")
+
+    class FakeSmolPolicy:
+        def __init__(self):
+            self.config = types.SimpleNamespace(n_action_steps=1, num_steps=10, use_amp=True, input_features={"observation.state": {}})
+        def to(self, _d):
+            return self
+        def eval(self):
+            return self
+        def parameters(self):
+            return iter([types.SimpleNamespace(device="cuda")])
+        def select_action(self, _b):
+            class _Arr:
+                def cpu(self): return self
+                def numpy(self): return np.zeros((1, 12), dtype=np.float32)
+            return _Arr()
+
+    fake_smol = types.ModuleType("lerobot.policies.smolvla.modeling_smolvla")
+    fake_smol.SmolVLAPolicy = types.SimpleNamespace(from_pretrained=lambda *a, **k: FakeSmolPolicy())
+    monkeypatch.setitem(sys.modules, "lerobot.policies.smolvla", types.ModuleType("lerobot.policies.smolvla"))
+    monkeypatch.setitem(sys.modules, "lerobot.policies.smolvla.modeling_smolvla", fake_smol)
+    d = policy.Driver(model_dir, steps_file, n_action_steps=8, flow_steps=5, use_amp=True)
+    assert (d.kind, d.policy.config.n_action_steps, d.policy.config.num_steps, d.use_amp) == ("smolvla", 8, 5, True)
+    assert d.act(np.zeros(12, dtype=np.float32), {"top": np.zeros((4, 4, 3), dtype=np.uint8)}).shape == (12,)
+
+
 def test_driver_requires_and_forwards_goal_when_model_expects_it(monkeypatch, tmp_path):
     model_dir, steps_file, seen = _install_fake_driver_deps(
         monkeypatch, tmp_path, input_features={"observation.state": {}, policy.GOAL: {}}
