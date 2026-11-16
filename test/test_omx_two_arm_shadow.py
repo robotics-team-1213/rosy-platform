@@ -68,3 +68,16 @@ def test_health_joints_refuses_incomplete_motor_health():
     except ValueError:
         return
     raise AssertionError("expected ValueError when arm_b motor-health is missing")
+
+
+def test_shadow_risks_splits_active_and_idle_arms_and_gates():
+    state = [0.0] * 12
+    real = [math.radians(5.0)] + [0.0] * 5 + [math.radians(15.0)] + [0.0] * 5
+    sim = [math.radians(2.0)] + [0.0] * 5 + [0.0] * 6
+    passed = shadow.shadow_risks("arm_a", state, real, sim, max_shadow_deg=5.0, max_idle_deg=20.0)
+    assert passed["active_arm_max_abs_real_minus_sim_deg"] == pytest.approx(3.0)
+    assert passed["active_arm_max_step_deg"] == pytest.approx(5.0)
+    assert passed["idle_arm_max_abs_delta_deg"] == pytest.approx(15.0)
+    assert passed["l2_gate"] == {"passed": True, "reasons": []}
+    failed = shadow.shadow_risks("arm_a", state, real, sim, max_shadow_deg=2.5, max_idle_deg=10.0)
+    assert failed["l2_gate"]["passed"] is False and len(failed["l2_gate"]["reasons"]) == 2
