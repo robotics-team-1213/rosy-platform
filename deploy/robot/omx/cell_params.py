@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import time
 from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-params.v1"
@@ -159,13 +160,15 @@ def load(path=None) -> dict:
         return {"values": dict(_DEFAULT_VALUES), "sha": _DEFAULT_SHA}
     p = Path(path)
     st = p.stat()
-    key = (str(p.resolve()), st.st_mtime_ns, st.st_size)
-    cached = _LOAD_CACHE.get(key)
+    stable = abs(time.time_ns() - st.st_mtime_ns) >= 50_000_000
+    key = (str(p.resolve()), st.st_ino, st.st_mtime_ns, st.st_size)
+    cached = _LOAD_CACHE.get(key) if stable else None
     if cached is None:
         chosen = validate(json.loads(p.read_text(encoding="utf-8-sig")))
         values = {name: chosen.get(name, spec[0]) for name, spec in DEFAULTS.items()}
         cached = (values, digest(values))
-        _LOAD_CACHE[key] = cached
+        if stable:
+            _LOAD_CACHE[key] = cached
     return {"values": dict(cached[0]), "sha": cached[1]}
 
 
