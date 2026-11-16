@@ -175,6 +175,7 @@ def test_a_region_carried_from_another_site_does_not_skip_the_pivot(tmp_path, mo
 
     seen = []
     monkeypatch.setattr(cell_pivot, "pivot_calibrate", lambda cell, config, point, *a: seen.append(point) or {"result": "stopped"})
+    monkeypatch.setattr(cc, "auto_pivot_point", lambda *a: None)  # no clear tray point: over the box is the fallback
     config = {"params": {"pivot.over_target": 1}, "pivot": {}, "coarse": {"z_view": 0.08},
               "sites": {"pinky": {"yaw_deg": -67.8, "surface_z": 0.0467}}}
     region = {"site": "pinky", "point_m": [0.05, 0.2], "bias_mm": [4.2, -2.5], "measured": "2026-10-29",
@@ -619,3 +620,57 @@ def test_check_reports_over_limit_bias_instead_of_crashing(tmp_path):
     found = cc.check(config, json.loads(cal_path.read_text()), [("floor", (0.0, 0.17))], np.zeros((32, 32, 3), np.uint8))
     assert "max_bias_mm" in found["bias_error"] and found["missing_bias"] == ["floor:0.0,0.17"]
     assert "pivot-near floor:0.0,0.17" in cc.stale(found)
+
+
+PIVOT_CONFIG = {"params": {"pivot.over_target": 1}, "pivot": {"z_view": 0.1, "points": [[0.15, 0.05]]}, "coarse": {"z_view": 0.118},
+                "sites": {"pallet": {"yaw_deg": 0.0, "surface_z": -0.01}}}
+
+
+def test_a_clear_point_is_pivoted_with_the_full_circle_before_the_box_is_tried(monkeypatch):
+    """2026-11-17 panel: with over_target on, arm_b went straight over the box (±60 deg = exactly the 120 deg minimum,
+    FK 116 deg refused) and pivot.points was never tried."""
+    tried = []
+    monkeypatch.setattr(cc, "auto_pivot_point", lambda cell, config, cal, site, start: tried.append(tuple(start)) or tuple(start))
+    point, over = cc.pivot_point(object(), PIVOT_CONFIG, {}, "pallet", (0.16, 0.06))
+    assert (point, over) == ([0.15, 0.05], False) and tried == [(0.15, 0.05)]
+    assert cc.pivot_near_yaws(PIVOT_CONFIG, "pallet", over) == [-80, -40, 0, 40, 80, 120]
+
+
+def test_the_box_is_pivoted_over_only_when_no_clear_point_serves_it(monkeypatch):
+    monkeypatch.setattr(cc, "auto_pivot_point", lambda *a: None)
+    point, over = cc.pivot_point(object(), PIVOT_CONFIG, {}, "pallet", (0.16, 0.06))
+    assert (point, over) == ([0.16, 0.06], True)
+    assert cc.pivot_near_yaws(PIVOT_CONFIG, "pallet", over) == [-60, -40, -20, 0, 20, 40, 60]
+    far = {**PIVOT_CONFIG, "params": {"pivot.over_target": 0}}
+    assert cc.pivot_point(object(), far, {}, "pallet", (0.16, 0.06)) == (None, False)
+
+
+def test_a_clear_point_beyond_the_bias_reach_is_not_used(monkeypatch):
+    monkeypatch.setattr(cc, "auto_pivot_point", lambda cell, config, cal, site, start: (start[0] + 0.2, start[1]))
+    assert cc.pivot_point(object(), PIVOT_CONFIG, {}, "pallet", (0.16, 0.06)) == ([0.16, 0.06], True)
+
+
+def test_depth_verify_passes_a_fresh_depth_frame_on_a_depth_top_camera(tmp_path, monkeypatch):
+    """2026-11-17: `auto --only depth-verify` never passed depth, so every D435 cell reported missing_depth."""
+    import cell_cal_eval
+    import cell_pipeline as cp
+
+    frame = np.full((32, 32, 3), 80, np.uint8)
+    depth = np.full((480, 640), 600, np.uint16)
+    seen = {}
+    monkeypatch.setattr(cp, "FifoCell", lambda *_: type("Cell", (), {"frame": lambda self, _: frame})())
+    monkeypatch.setattr(cc, "check", lambda *_: {})
+    monkeypatch.setattr(cc, "stale", lambda *_: [])
+    monkeypatch.setattr(cc, "depth_capture", lambda: depth)
+    monkeypatch.setattr(cell_cal_eval, "verify_profile_depth",
+                        lambda config, cal, bias, **kw: seen.update(kw) or {"verdict": "ok"})
+    (tmp_path / "plan.json").write_text("{}")
+    for device, expect in (("/dev/v4l/by-id/rosy-realsense-d435-color", depth), ("/dev/v4l/by-id/rosy-arm_s_jieli", None)):
+        config = {"sites": {}, "calibration_path": str(tmp_path / "cal.json"), "plan_path": str(tmp_path / "plan.json"),
+                  "work_dir": str(tmp_path), "io": str(tmp_path),
+                  "cameras": {"top": {"url": "http://127.0.0.1:8767/frame/top.jpg", "device": device}}}
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps(config))
+        seen.clear()
+        assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify"]) == 0
+        assert seen["depth"] is expect

@@ -360,6 +360,15 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
     }
 
 
+def top_has_depth(config: dict) -> bool:
+    """Whether the cell's top camera is a depth camera (the D435 of cells A/B), never the plain arm_s top."""
+    cam_top = (config.get("cameras") or {}).get("top") or {}
+    dev, url = str(cam_top.get("device") or "").lower(), str(cam_top.get("url") or "")
+    return cam_top.get("has_depth") is not False and (
+        bool(cam_top.get("depth_device")) or ((not dev or "d435" in dev or "depth" in dev) and not url.lower().endswith("/arm_s_top.jpg"))
+    )
+
+
 def verify_main(argv: list[str], capture_fn=None) -> int:
     import cv2
 
@@ -373,12 +382,8 @@ def verify_main(argv: list[str], capture_fn=None) -> int:
     config = json.loads(args.config.read_text(encoding="utf-8"))
     cal_p = Path(config["calibration_path"]).expanduser() if config.get("calibration_path") else None
     cal_data, bias = load_json_opt(cal_p), (load_json_opt(cell_pivot.bias_path(cal_p)) if cal_p else None)
-    cam_top = (config.get("cameras") or {}).get("top") or {}
-    dev = str(cam_top.get("device") or "").lower()
-    url = str(cam_top.get("url") or "")
-    has_depth = cam_top.get("has_depth") is not False and (
-        bool(cam_top.get("depth_device")) or ((not dev or "d435" in dev or "depth" in dev) and not url.lower().endswith("/arm_s_top.jpg"))
-    )
+    url = str(((config.get("cameras") or {}).get("top") or {}).get("url") or "")
+    has_depth = top_has_depth(config)
     cap = capture_fn or cell_depth.capture_top_depth_z16
     depth = np.fromfile(args.depth, np.uint16).reshape(480, 640) if args.depth else (cap() if (args.capture and has_depth) else None)
     colour = cv2.imread(str(args.colour)) if args.colour else (fetch_colour_frame(url) if (args.capture and url) else None)
