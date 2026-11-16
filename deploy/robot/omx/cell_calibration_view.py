@@ -31,6 +31,7 @@ import cell_calibration as cal  # noqa: E402
 import cell_map_fit  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
+import cell_post_eval  # noqa: E402
 import omx_tcp  # noqa: E402
 
 try:
@@ -343,11 +344,12 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
     ref_record = cell_pivot.map_record(with_maps, ref_site) if ref_site else None
     live_info = cell_cal_eval.parse_live(live, config, plan, ref_record, now_ts=now_ts, joints_tcp_fn=cell_pivot.joints_tcp)
     drift = cell_cal_monitor.summarize(config, calibration)
+    lateral = cell_post_eval.lateral_summary(config, with_maps, now_ts=now_ts)
     for msg in drift.get("suggested_advisory") or ():
         hygiene.append({"level": "warning", "code": f"cal_drift:{drift.get('pattern', 'local')}", "message": msg})
     cross_verify = cell_cal_eval.build_cross_verify(
         sites_out, depth_verify, regions_out, live_info, bind_err,
-        params=config.get("params"), drift=drift,
+        params=config.get("params"), drift=drift, lateral=lateral,
     )
 
     return {
