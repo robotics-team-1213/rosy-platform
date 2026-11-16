@@ -151,7 +151,7 @@ def run_two_arm(tmp_path, monkeypatch, config, peer, spec=SPEC, policy=None):
     policy = policy or binding()
     monkeypatch.setattr(shadow_mod, "load", lambda cfg, work: shadow_mod.Shadow(policy, work, None, spec=spec, peer=peer))
     monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
-    cell_attempts.start(tmp_path / "attempts.jsonl", "r1")
+    cell_attempts.start(tmp_path / "attempts.jsonl", "r1", arm_id=config["arm_id"])  # the gate scopes its ledger by arm
     cell = Cell([CONT2])
     path = calibrated_map(tmp_path, cell)
     result = auto.run_auto(cell, config, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090", tmp_path,
