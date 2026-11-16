@@ -136,11 +136,15 @@ def step(driver, teacher, data, plan, here, skill):
             goal = policy.goal_vector(L, plan, others) if getattr(driver, "has_goal", True) else None
             said = prompt(plan, skill)
             driver.policy.reset()
-            for _ in range(driver.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
+            first_bad = None
+            for sub_t in range(driver.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
                 state, images = policy.observe(w, data, teacher.zero_error)
                 action = driver.act(state, images, goal, said)
                 k = sites.ARMS.index(arm)  # the other arm waits as the teacher had it wait: the model drives only the step's arm
                 teacher.frame(data, {arm: action[k * 6:k * 6 + 6], **idle}, plan["id"])
+                if first_bad is None and (teacher.contacts["arm_arm"] or teacher.contacts["arm_other"] or teacher.disturbed(data, before, teacher)):
+                    first_bad = sub_t
+            row["first_bad_subframe"] = first_bad
     except StopIteration as stop:  # blocked or unreachable before the sub-skill began
         return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""))
     return _judge_step(teacher, data, plan, row, before, start_z, skill)
@@ -204,7 +208,20 @@ def recovery_gen(teacher, data, plan, others, skill):
             p_from, yaw_from = p_to, yaw
 
 
-def recover(driver, recorder, plan, here, skill, prefix_frames=20):
+def _candidate_prefixes(prefix_frames, eval_row, horizon, backoff=5):
+    bad = eval_row.get("first_bad_subframe")
+    auto = str(prefix_frames).strip().lower() == "auto" or (isinstance(prefix_frames, int) and prefix_frames < 0)
+    if bad is not None:
+        safe = max(0, int(bad) - backoff)
+        raw = [safe, max(0, safe - backoff)] if auto else [min(max(0, int(prefix_frames)), safe)]
+    elif auto:
+        raw = [min(horizon, max(20, horizon * 2 // 3)), min(horizon, 15)]
+    else:
+        raw = [min(max(0, int(prefix_frames)), horizon)]
+    return list(dict.fromkeys(raw))
+
+
+def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
     """Evaluate `driver` on one step; if it fails, rewind, roll `driver` for `prefix_frames`, then save privileged recovery iff it passes."""
     import omx_two_arm_policy as policy
     w, L, arm, c = recorder.world, recorder.layout, plan["arm"], plan["container"]
@@ -215,46 +232,59 @@ def recover(driver, recorder, plan, here, skill, prefix_frames=20):
         return dict(eval_row, dagger_status="passed_skip" if eval_row["result"] == "pass" else "blocked_skip")
     others = {k: v for k, v in here.items() if k != c}
     idle = {o: L.sim_arms[o].wait for o in L.arms if o != arm}
-    recorder.contacts, recorder.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
-    recorder.goal = None
-    data = recorder.fresh(here)
-    before = {o: w.pose(data, o) for o in others}
     row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], skill=skill, lifted=False)
-    phases, gen = SKILLS[skill]["phases"], recorder.step_gen(data, plan, others, recorder)
-    recorder.privileged = True
-    try:
-        target = next(gen)
-        while recorder.phase not in phases:
-            recorder.frame(data, {arm: target, **idle}, plan["id"])
+    phases = SKILLS[skill]["phases"]
+    verdict = dict(row, result="fail")
+    for n_prefix in _candidate_prefixes(prefix_frames, eval_row, driver.longest[plan["id"]]):
+        recorder.rng, recorder.skew_i = np.random.default_rng(recorder.seed), 0
+        recorder.contacts, recorder.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
+        recorder.goal = None
+        data = recorder.fresh(here)
+        before = {o: w.pose(data, o) for o in others}
+        gen = recorder.step_gen(data, plan, others, recorder)
+        recorder.privileged = True
+        try:
             target = next(gen)
-    except StopIteration as stop:
-        return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""), dagger_status="blocked_skip")
-    start_z = w.pose(data, c)[0][2]
-    recorder.privileged, recorder.goal = False, None
-    goal_driver = policy.goal_vector(L, plan, others) if getattr(driver, "has_goal", True) else None
-    said = prompt(plan, skill)
-    driver.policy.reset()
-    n_prefix = min(max(0, prefix_frames), driver.longest[plan["id"]])
-    for _ in range(n_prefix):
-        state, images = policy.observe(w, data, recorder.zero_error)
-        action = driver.act(state, images, goal_driver, said)
-        k = sites.ARMS.index(arm)
-        recorder.frame(data, {arm: action[k * 6:k * 6 + 6], **idle}, plan["id"])
-        if recorder.contacts["arm_arm"] or recorder.contacts["arm_other"]:
-            break
-    recorder.privileged = True
-    recorder.goal = True if recorder.no_goal else (goal_driver if goal_driver is not None else policy.goal_vector(L, plan, others))
-    recorder.prompt = said
-    recorder.count = 0
-    for target in recovery_gen(recorder, data, plan, others, skill):
-        recorder.frame(data, {arm: target, **idle}, plan["id"])
-    recorder.goal = None
-    verdict = _judge_step(recorder, data, plan, row, before, start_z, skill)
-    if verdict["result"] == "pass":
-        recorder.dataset.save_episode()
-        recorder.longest[plan["id"]] = max(recorder.longest.get(plan["id"], 0), n_prefix + recorder.count)
-        return dict(verdict, dagger_status="recovered")
-    recorder.dataset.clear_episode_buffer()
+            while recorder.phase not in phases:
+                recorder.frame(data, {arm: target, **idle}, plan["id"])
+                target = next(gen)
+        except StopIteration as stop:
+            return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""), dagger_status="blocked_skip")
+        start_z = w.pose(data, c)[0][2]
+        recorder.privileged, recorder.goal = False, None
+        goal_driver = policy.goal_vector(L, plan, others) if getattr(driver, "has_goal", True) else None
+        said = prompt(plan, skill)
+        driver.policy.reset()
+        for _ in range(n_prefix):
+            state, images = policy.observe(w, data, recorder.zero_error)
+            action = driver.act(state, images, goal_driver, said)
+            k = sites.ARMS.index(arm)
+            recorder.frame(data, {arm: action[k * 6:k * 6 + 6], **idle}, plan["id"])
+            if recorder.contacts["arm_arm"] or recorder.contacts["arm_other"]:
+                break
+        pos_c = w.pose(data, c)[0]
+        pre_bad = bool(recorder.contacts["arm_arm"] or recorder.contacts["arm_other"] or (hasattr(recorder, "disturbed") and recorder.disturbed(data, before, recorder)))
+        if not pre_bad and skill == "grasp" and hasattr(w, "model"):
+            pre_bad = float(np.linalg.norm(pos_c[:2] - L.sites[plan["from"]]["xy"])) > .035
+        if not pre_bad and skill == "release" and hasattr(w, "model"):
+            pre_bad = float(np.linalg.norm(pos_c - w.tcp(data, arm)[0])) > .06
+        if pre_bad:
+            recorder.dataset.clear_episode_buffer()
+            verdict = dict(row, result="fail", reason="prefix_invalid", dagger_prefix_frames=n_prefix)
+            continue
+        recorder.privileged = True
+        recorder.goal = True if recorder.no_goal else (goal_driver if goal_driver is not None else policy.goal_vector(L, plan, others))
+        recorder.prompt = said
+        recorder.count = 0
+        for target in recovery_gen(recorder, data, plan, others, skill):
+            recorder.frame(data, {arm: target, **idle}, plan["id"])
+        recorder.goal = None
+        verdict = dict(_judge_step(recorder, data, plan, row, before, start_z, skill), dagger_prefix_frames=n_prefix)
+        if verdict["result"] == "pass" and recorder.count > 0:
+            recorder.dataset.save_episode()
+            recorder.longest[plan["id"]] = max(recorder.longest.get(plan["id"], 0), n_prefix + recorder.count)
+            return dict(verdict, dagger_status="recovered")
+        recorder.dataset.clear_episode_buffer()
     return dict(verdict, dagger_status="recovery_failed")
 
 

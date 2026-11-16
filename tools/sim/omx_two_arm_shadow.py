@@ -195,7 +195,8 @@ def compare(args):
     )
     layout = driver.layout
     task = tasks.get_task(layout, args.task)
-    step_ids = [s.strip() for s in args.step.split(",") if s.strip()]
+    raw_steps = [s.strip() for s in args.step.split(",") if s.strip()]
+    step_ids = [s["id"] for s in task["steps"]] if raw_steps == ["all"] else raw_steps
     if not step_ids:
         raise SystemExit("at least one --step id is required")
     here, targets = dict(task.get("start", {})), {}
@@ -211,7 +212,7 @@ def compare(args):
     dest = Path(args.out)
     dest.mkdir(parents=True, exist_ok=True)
     ctx = dict(Image=Image, mujoco=mujoco, pol=pol, skills=skills, teaching=teaching)
-    if len(step_ids) == 1:
+    if len(step_ids) == 1 and raw_steps != ["all"]:
         plan, step_here = targets[step_ids[0]]
         result, sheet_img = _compare_one(driver, real, meta, plan, step_here, args, **ctx)
         (dest / "shadow.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
@@ -226,8 +227,9 @@ def compare(args):
         sheet_img.save(dest / f"{sid}-real-over-sim.png")
         results.append(result)
         reasons.extend(f"{sid}: {r}" for r in result["l2_gate"]["reasons"])
+    ranked = [r["step"] for r in sorted(results, key=lambda r: (r["l2_gate"]["passed"], -r["active_arm_max_abs_real_minus_sim_deg"]))]
     summary = dict(snapshot=str(snap), captured_at=meta["captured_at"], model=str(args.model), policy_type=driver.kind,
-                   task=args.task, steps=results, l2_gate={"passed": not reasons, "reasons": reasons})
+                   task=args.task, steps=results, ranked_steps=ranked, l2_gate={"passed": not reasons, "reasons": reasons})
     (dest / "shadow.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps(summary))
     return 0 if not reasons else 2

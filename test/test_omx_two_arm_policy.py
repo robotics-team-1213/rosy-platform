@@ -343,14 +343,19 @@ def test_collect_and_round_forward_dagger_and_extra_dataset(monkeypatch, tmp_pat
     monkeypatch.setattr(helpers, "Driver", FakeDriver)
     monkeypatch.setattr(helpers.skills, "disturb", lambda *a, **kw: None)
     monkeypatch.setattr(helpers.teaching.Teacher, "run_task", lambda *a, **kw: nominal_calls.append(1))
-    monkeypatch.setattr(helpers.skills, "recover", lambda drv, rec, plan, here, skill, prefix_frames=20: recover_calls.append((plan["id"], prefix_frames)) or {"dagger_status": "recovered", "result": "pass"})
+    monkeypatch.setattr(helpers.skills, "recover", lambda drv, rec, plan, here, skill, prefix_frames="auto": recover_calls.append((plan["id"], prefix_frames, rec.compensate_zero)) or {"dagger_status": "recovered", "result": "pass"})
 
     out = tmp_path / "dag_ds"
     rc = policy.main(["collect", "--seeds", "10", "--tasks", "stack", "--out", str(out), "--skill", "grasp",
-                      "--dagger-model", str(ckpt), "--dagger-prefix-frames", "12", "--dagger-only", "--dagger-device", "cpu"])
+                      "--compensate-zero", "--n-action-steps", "8", "--flow-steps", "5", "--amp",
+                      "--dagger-model", str(ckpt), "--dagger-prefix-frames", "12", "--dagger-steps", "s1,s3",
+                      "--dagger-only", "--dagger-device", "cpu"])
     assert rc == 0 and seen_driver[0][1] == round_dir / "steps.json" and seen_driver[0][2]["device"] == "cpu"
-    assert nominal_calls == [] and len(recover_calls) > 0 and all(pf == 12 for _, pf in recover_calls)
-    assert json.loads((tmp_path / "dag_ds.steps.json").read_text(encoding="utf-8"))["longest"]["s1"] == 42
+    assert seen_driver[0][2]["n_action_steps"] == 8 and seen_driver[0][2]["flow_steps"] == 5 and seen_driver[0][2]["use_amp"] is True
+    assert nominal_calls == [] and [sid for sid, _, _ in recover_calls] == ["s1", "s3"]
+    assert all(pf == "12" and cz is True for _, pf, cz in recover_calls)
+    steps_meta = json.loads((tmp_path / "dag_ds.steps.json").read_text(encoding="utf-8"))
+    assert steps_meta["longest"]["s1"] == 42 and steps_meta["dagger"] == {"recovered": 2}
 
     popens, runs = [], []
     fake_gpu_yield = types.SimpleNamespace(yield_turn=lambda **kw: None)
@@ -361,7 +366,7 @@ def test_collect_and_round_forward_dagger_and_extra_dataset(monkeypatch, tmp_pat
     def fake_popen(cmd, **kw):
         popens.append(cmd)
         part = Path(cmd[cmd.index("--out") + 1])
-        (part.parent / f"{part.name}.steps.json").write_text(json.dumps({"longest": {"s1": 42}, "spoiled": []}), encoding="utf-8")
+        (part.parent / f"{part.name}.steps.json").write_text(json.dumps({"longest": {"s1": 42}, "spoiled": [], "episodes": 0, "dagger": {"passed_skip": 9}}), encoding="utf-8")
         return types.SimpleNamespace(wait=lambda: 0)
 
     def fake_run(cmd, **kw):
@@ -380,11 +385,12 @@ def test_collect_and_round_forward_dagger_and_extra_dataset(monkeypatch, tmp_pat
     monkeypatch.setattr(policy.shutil, "rmtree", lambda *a, **kw: None)
     rc_round = policy.main(["round", "--root", str(tmp_path / "rroot"), "--lerobot-train", "lerobot-train",
                             "--tasks", "stack", "--seeds", "1", "--workers", "1", "--skill", "grasp",
-                            "--dagger-model", str(ckpt), "--dagger-prefix-frames", "15", "--dagger-only", "--dagger-device", "cpu",
+                            "--n-action-steps", "8", "--flow-steps", "5", "--amp",
+                            "--dagger-model", str(ckpt), "--dagger-steps", "s1,s2", "--dagger-only", "--dagger-device", "cpu",
                             "--extra-dataset", str(tmp_path / "base_ds"), "--base-model", str(ckpt)])
     assert rc_round == 0
-    assert "--dagger-model" in popens[0] and "--dagger-only" in popens[0] and "--dagger-device" in popens[0]
+    assert "--dagger-model" in popens[0] and "--dagger-steps" in popens[0] and "--flow-steps" in popens[0]
     aggr_cmd = next(cmd for kind, cmd in runs if kind == "run" and any("aggregate_datasets" in str(c) for c in cmd))
-    assert str(tmp_path / "base_ds") in aggr_cmd
+    assert str(tmp_path / "base_ds") in aggr_cmd and not any("part0" in str(c) for c in aggr_cmd)
     train_cmd = next(cmd for kind, cmd in runs if kind == "train")
     assert f"--policy.pretrained_path={ckpt}" in train_cmd
