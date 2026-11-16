@@ -4899,3 +4899,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `deploy/site/rosy-auto-track-calibration`의 승인 쿨다운(`MIN_APPROVAL_INTERVAL_S`)을 6시간에서 10분(`600s`)으로 조정하고, `deploy/site/host-state/rosy-auto-track-calibration.timer` 주기를 2분(`OnUnitActiveSec=2min`, 5회 일관성 창 = 10분)으로 맞춰 트랙·카메라 변동 시 10분 주기로 자동 조정되도록 연결했다.
 - 증거: `test/test_auto_track_calibration.py` 원격 pytest 및 `rosy-fleet-r` 실호스트 적용 확인.
 - gate 변화: 없음.
+
+## 2026-11-17 · 5bc0242b1d · fix(control-unit): 관제 유닛이 mDNS로 붙고 끊김이 보이게
+- 변경: `deploy/site/control_unit_check.py`·`rosy-control-unit-check.{service,timer}`(R·셀 PC, 5분, host-state·services.yaml 선언), 모든 역할에 `avahi-daemon` 선언, model-watch는 이름이 안 풀리는 꺼진 로봇을 건너뜀, Fleet peer 전이 로그와 `manifest_digest`(API v1.404).
+- 증거: R(`rosy-fleet-r`)·셀(`rosy-arm-cell`) 실호스트에서 검사기 exit 0, R 컨테이너의 Fleet peer 클라이언트가 CELL-A를 `site-2026-11-17-r1`로 AVAILABLE 판정. 호스트 수리(인증서 SAN·manifest 통일·8544 LAN 게시·avahi bind)는 손으로 적용, 백업 `.bak-20261117-mdns`.
+- gate 변화: 없음.
