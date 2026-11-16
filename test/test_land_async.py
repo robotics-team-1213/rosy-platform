@@ -267,6 +267,21 @@ def test_the_supervisor_never_holds_the_callers_worktree(tmp_path, monkeypatch):
     assert Path(log.read_text(encoding="utf-8").strip()) == log.parent
 
 
+def test_detach_falls_back_when_the_job_object_forbids_breakaway(monkeypatch, tmp_path):
+    seen = []
+
+    def popen(*args, **kwargs):
+        seen.append(flags := kwargs.get("creationflags", 0))
+        if flags & 0x01000000:  # CREATE_BREAKAWAY_FROM_JOB: the parent job object refuses it
+            raise PermissionError(5, "Access is denied.")
+        return object()
+
+    monkeypatch.setattr(tool.subprocess, "Popen", popen)
+    assert tool.detach([sys.executable, "-c", "pass"], tmp_path / "d.log") is not None
+    assert seen == ([0x00000008 | 0x00000200 | 0x01000000, 0x00000008 | 0x00000200]
+                    if os.name == "nt" else [0])
+
+
 def _ticket(main: Path, name: str, **row) -> Path:
     qdir = main / ".git" / "rosy-land-queue"
     qdir.mkdir(exist_ok=True)

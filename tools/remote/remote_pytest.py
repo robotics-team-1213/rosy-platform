@@ -350,7 +350,6 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         return []
     if stop is not None and stop.is_set():
         return [CANCELLED] * len(invocations)
-    deadline = clock() + wait
     cores = max((int(w[15:]) for inv in invocations for w in itertools.takewhile(ENV_ARG.match, inv)
                  if w.startswith("ROSY_JOB_CORES=") and w[15:].isdigit()), default=0)
     # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
@@ -359,6 +358,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     hosts = placed_hosts("pytest", cores=cores)
     wants = host_caps.needs(repo, sha, invocations)  # HOST_CAPABILITIES a test module declares
     while work.todo and not work.stop.is_set():
+        deadline = clock() + wait  # per placement attempt: productive host time must not eat the D-584 budget
         while not hosts or not host_caps.served(wants, [host_caps.room(h, HEADROOM) for h in hosts]):
             if work.stop.is_set():
                 return cancelled(invocations, [work.codes.get(i) for i in range(len(invocations))])

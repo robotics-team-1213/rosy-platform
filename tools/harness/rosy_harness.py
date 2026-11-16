@@ -362,6 +362,19 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
         elif int(count) > int(config.get("stale_after_commits", 5)):
             warnings.append(f"{name}: {count.strip()} commits touched {path} since last_verified {commit}")
     errors += [f"generated: {p}" for p in check_generated(repo, adr)]
+    for p in sorted((repo / "deploy/robot/omx").glob("*.py")):  # 11-17: the split modules stay under 400 lines
+        if (n := len(p.read_text(encoding="utf-8").splitlines())) >= 400:
+            errors.append(f"deploy/robot/omx/{p.name}: {n} lines (>= 400; split module)")
+    services = repo / "deploy/hosts/services.yaml"
+    if services.is_file():
+        try:
+            declared = yaml.safe_load(services.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as exc:
+            errors.append(f"deploy/hosts/services.yaml: unreadable ({exc})")
+            declared = {}
+        errors += [f"deploy/hosts/services.yaml: {unit}: run {spec.get('run')!r}, want active/timer/oneshot/off"
+                   for units in (declared.get("roles") or {}).values() for unit, spec in units.items()
+                   if not isinstance(spec, dict) or spec.get("run") not in {"active", "timer", "oneshot", "off"}]
     return errors, warnings
 
 
