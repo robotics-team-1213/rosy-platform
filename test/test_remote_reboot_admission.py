@@ -197,7 +197,12 @@ mkdir -p "$HOME/rosy-jobs"
     (home / "pytest-started").unlink(missing_ok=True)
     res = _sh(p1 + rj.JOB, env, "r", "d", "", "3", "60", "ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py", "-pno:xdist")
     assert res.returncode == 0 and (home / "pytest-started").exists(), res.stderr
-    # 5) generic ROSY_JOB_ALONE=1 (e.g. alone browser) still defers beside gpu training
+    # 5) dedicated ROSY_BROWSER_ALONE=1 + ROSY_RUN_BROWSER_TESTS=1 auto-enables CPU_ALONE beside gpu
     (home / "pytest-started").unlink(missing_ok=True)
-    res = _sh(p1 + rj.JOB, env, "r", "d", "", "4", "60", "ROSY_JOB_ALONE=1", "a/test/test_b_browser.py")
+    res = _sh(p1 + rj.JOB, env, "r", "d", "", "4", "60", "ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1",
+              "ROSY_JOB_ALONE=1", "a/test/test_b_browser.py")
+    assert res.returncode == 0 and (home / "pytest-started").exists(), res.stderr
+    # 6) generic ROSY_JOB_ALONE=1 without dedicated CPU-only marker still defers beside gpu training
+    (home / "pytest-started").unlink(missing_ok=True)
+    res = _sh(p1 + rj.JOB, env, "r", "d", "", "5", "60", "ROSY_JOB_ALONE=1", "a/test/test_b_browser.py")
     assert res.returncode == 253 and rj.HOLD_DEFERRED + b"\n" in res.stdout
