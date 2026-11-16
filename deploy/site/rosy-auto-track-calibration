@@ -19,7 +19,7 @@ DRIFT_THRESHOLD_M = 0.015
 MAP_PLACE_THRESHOLD_M = 0.012
 STABILITY_WINDOW = 5
 STABLE_SPREAD_M = 0.01
-MIN_APPROVAL_INTERVAL_S = 6 * 3600
+MIN_APPROVAL_INTERVAL_S = 10 * 60
 
 
 def apply_3x3(m: list[float], x: float, y: float) -> tuple[float, float]:

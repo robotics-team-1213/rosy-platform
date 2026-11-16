@@ -155,7 +155,16 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
     pink_idx = 1 + int(np.argmax(stats_p[1:, cv2.CC_STAT_AREA]))
     if stats_p[pink_idx, cv2.CC_STAT_AREA] < 400:
         return None
+    p_x0, p_y0, p_w0, p_h0, _ = stats_p[pink_idx]
     pink_main = (labels_p == pink_idx).astype(np.uint8) * 255
+    # Merge upper bay components split by ceiling fluorescent glare across bays 2 & 3
+    for i in range(1, num_p):
+        if i == pink_idx or stats_p[i, cv2.CC_STAT_AREA] < 100:
+            continue
+        cx0, cy0, cw0, ch0, _ = stats_p[i]
+        if (cx0 >= p_x0 - 40 and cx0 + cw0 <= p_x0 + p_w0 + 40
+                and cy0 + ch0 <= p_y0 + p_h0 + 20 and cy0 > 0.05 * h):
+            pink_main[labels_p == i] = 255
     py, px = np.nonzero(pink_main)
     p_umin, p_umax = int(px.min()), int(px.max())
     p_vmin, p_vmax = int(py.min()), int(py.max())
@@ -168,7 +177,7 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
         ch = stats_w[i, cv2.CC_STAT_HEIGHT]
         ca = stats_w[i, cv2.CC_STAT_AREA]
         _, cv_c = centroids_w[i]
-        if cv_c > p_vmax and 0.25 * w < cw < 0.72 * w and ch < 0.28 * h and ca > 250:
+        if p_vmax + 0.05 * h < cv_c < p_vmax + 0.28 * h and 0.25 * w < cw < 0.72 * w and ch < 0.28 * h and ca > 250:
             if divider_comp is None or ca > stats_w[divider_comp, cv2.CC_STAT_AREA]:
                 divider_comp = i
 
@@ -180,30 +189,47 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
         q_l, q_r = np.percentile(dx_div, 1.0), np.percentile(dx_div, 99.0)
         u_dl, v_dl = float(dx_div[dx_div <= q_l].mean()), float(dy_div[dx_div <= q_l].mean())
         u_dr, v_dr = float(dx_div[dx_div >= q_r].mean()), float(dy_div[dx_div >= q_r].mean())
-        poly_div = np.polyfit(dx_div, dy_div, 1)
-        src_seed.extend([[-0.926, -0.364], [0.926, -0.364]])
-        dst_seed.extend([[u_dl, v_dl], [u_dr, v_dr]])
-        for frac, mx in [(0.15, -0.65), (0.50, 0.0), (0.85, 0.65)]:
-            u_s = u_dl + frac * (u_dr - u_dl)
-            v_d = int(round(np.polyval(poly_div, u_s)))
-            v_lo, v_hi = min(h, v_d + int(0.06 * h)), min(h, v_d + int(0.24 * h))
-            ys_b = np.nonzero(white_mask[v_lo:v_hi, max(0, int(u_s) - 5):min(w, int(u_s) + 6)])[0]
-            if len(ys_b) >= 4:
-                src_seed.append([mx, -0.588])
-                dst_seed.append([float(u_s), float(np.median(ys_b) + v_lo)])
+        u_span = max(1.0, u_dr - u_dl)
+        left_leg_ok = (p_umax - p_umin) >= 0.38 * u_span
+        p_umin_eff = p_umin if left_leg_ok else int(round(p_umax - 0.433 * u_span))
+        src_seed.extend([[-0.926, -0.364], [0.926, -0.364], [0.258, -0.045], [0.032, 0.520]])
+        dst_seed.extend([
+            [u_dl, v_dl],
+            [u_dr, v_dr],
+            [float(p_umax), float(np.median(py[px >= p_umax - 12]))],
+            [float(np.median(px[py <= p_vmin + 15])), float(p_vmin)],
+        ])
+        if left_leg_ok:
+            src_seed.append([-0.630, -0.045])
+            dst_seed.append([float(p_umin), float(np.median(py[px <= p_umin + 12]))])
+        else:
+            u_gl_lo, u_gl_hi = max(0, p_umin_eff + int(0.05 * u_span)), min(w, p_umin_eff + int(0.12 * u_span))
+            v_gl_lo, v_gl_hi = max(0, p_vmin + int(0.04 * h)), min(h, p_vmax - int(0.08 * h))
+            ys_gl, xs_gl = np.nonzero(green_mask[v_gl_lo:v_gl_hi, u_gl_lo:u_gl_hi])
+            if len(xs_gl) >= 15:
+                src_seed.append([-0.525, 0.350])
+                dst_seed.append([float(np.median(xs_gl) + u_gl_lo), float(np.median(ys_gl) + v_gl_lo)])
     else:
         u_dl, v_dl = float(p_umin - 0.14 * w), float(p_vmax + 0.16 * h)
         u_dr, v_dr = float(p_umax + 0.30 * w), float(p_vmax + 0.21 * h)
+        p_umin_eff = p_umin
 
     g_v_lo = max(0, p_vmin - int(0.09 * h))
     g_v_hi = min(h, p_vmin + int(0.05 * h))
-    for u_frac, mx in [(0.22, -0.45), (0.82, 0.08)]:
-        u_g = int(p_umin + u_frac * (p_umax - p_umin))
-        ys_g = np.nonzero(green_mask[g_v_lo:g_v_hi, max(0, u_g - 20):min(w, u_g + 20)])[0]
-        if len(ys_g) >= 8:
-            v_g = float(np.percentile(ys_g, 20) + g_v_lo)
-            src_seed.append([mx, 0.597])
-            dst_seed.append([float(u_g), v_g])
+    u_g_r = int(p_umin_eff + 0.82 * (p_umax - p_umin_eff))
+    ys_g_r = np.nonzero(green_mask[g_v_lo:g_v_hi, max(0, u_g_r - 20):min(w, u_g_r + 20)])[0]
+    if len(ys_g_r) >= 8:
+        v_g_r = float(np.percentile(ys_g_r, 20) + g_v_lo)
+        src_seed.append([0.08, 0.597])
+        dst_seed.append([float(u_g_r), v_g_r])
+        u_g_l = int(p_umin_eff + 0.22 * (p_umax - p_umin_eff))
+        ys_g_l = np.nonzero(green_mask[g_v_lo:g_v_hi, max(0, u_g_l - 20):min(w, u_g_l + 20)])[0]
+        if len(ys_g_l) >= 8:
+            v_g_l = float(np.percentile(ys_g_l, 20) + g_v_lo)
+            expected_dv = (v_dl - v_dr) * ((u_g_r - u_g_l) / max(1.0, u_dr - u_dl))
+            if abs((v_g_l - v_g_r) - expected_dv) < 25.0:
+                src_seed.append([-0.45, 0.597])
+                dst_seed.append([float(u_g_l), v_g_l])
 
     # Fallback anchors if outer borders are heavily occluded
     if len(src_seed) < 5:
@@ -236,6 +262,7 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
     K = default_camera_matrix(w, h)
     D = np.zeros(4, dtype=np.float64)
     final_r = np.zeros(0, np.float64)
+    pts_pb1 = pts_pb3 = pts_bot = pts_div = pts_top = np.zeros((0, 2), np.float64)
 
     for stage_idx, pad in enumerate((0.055, 0.028, 0.016)):
         pts_bot = _sample_strip_centroids(white_mask, (-1.08, -0.588 - pad, 1.08, -0.588 + pad), map_to_image, "x", 30)
@@ -321,7 +348,9 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
             return None
         final_r = residuals(params, include_reg=False)
 
-    if len(final_r) < 25:
+    # Reject 1-bay aliased or under-constrained fits missing outer pink bays or horizontal lines
+    if (len(final_r) < 25 or len(pts_pb1) < 4 or len(pts_pb3) < 4
+            or len(pts_div) < 10 or len(pts_bot) < 8 or len(pts_top) < 8):
         return None
     rms_m = float(np.sqrt(np.mean(final_r ** 2)))
     if not math.isfinite(rms_m) or rms_m > 0.015:
@@ -443,22 +472,17 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
     s2_y = y_top_line(0.280)
     s2_x = round(float(np.polyval(leg_r_poly, s2_y)), 4)
 
-    u0_s3, u1_s3 = int((0.64 - min_x) * ppm), int((0.75 - min_x) * ppm)
-    v0_s3, v1_s3 = int((max_y - (-0.15)) * ppm), int((max_y - (-0.35)) * ppm)
-    ys_s3, xs_s3 = np.nonzero(yellow_p[v0_s3:v1_s3, u0_s3:u1_s3])
-    s3_x = round(float(px_to_map(np.median(xs_s3) + u0_s3, 0)[0]), 4) if len(xs_s3) >= 15 else 0.6987
+    def _stop_x(mask_s: np.ndarray, x0: float, x1: float, y_hi: float, y_lo_b: float, default: float) -> float:
+        u0, u1 = int((x0 - min_x) * ppm), int((x1 - min_x) * ppm)
+        v0, v1 = int((max_y - y_hi) * ppm), int((max_y - y_lo_b) * ppm)
+        xs = np.nonzero(mask_s[v0:v1, u0:u1])[1]
+        return round(float(px_to_map(np.median(xs) + u0, 0)[0]), 4) if len(xs) >= 15 else default
+
+    s3_x = _stop_x(yellow_p, 0.64, 0.75, -0.15, -0.35, 0.6987)
     s3_y = y_up(s3_x)
-
-    u0_s4, u1_s4 = int((0.10 - min_x) * ppm), int((0.22 - min_x) * ppm)
-    v0_s4, v1_s4 = int((max_y - (-0.40)) * ppm), int((max_y - (-0.54)) * ppm)
-    ys_s4, xs_s4 = np.nonzero(yellow_p[v0_s4:v1_s4, u0_s4:u1_s4])
-    s4_x = round(float(px_to_map(np.median(xs_s4) + u0_s4, 0)[0]), 4) if len(xs_s4) >= 15 else 0.1562
+    s4_x = _stop_x(yellow_p, 0.10, 0.22, -0.40, -0.54, 0.1562)
     s4_y = y_lo(s4_x)
-
-    u0_s5, u1_s5 = int((0.86 - min_x) * ppm), int((0.97 - min_x) * ppm)
-    v0_s5, v1_s5 = int((max_y - (-0.41)) * ppm), int((max_y - (-0.54)) * ppm)
-    ys_s5, xs_s5 = np.nonzero((white_p | yellow_p)[v0_s5:v1_s5, u0_s5:u1_s5])
-    s5_x = round(float(px_to_map(np.median(xs_s5) + u0_s5, 0)[0]), 4) if len(xs_s5) >= 15 else 0.9212
+    s5_x = _stop_x(white_p | yellow_p, 0.86, 0.97, -0.41, -0.54, 0.9212)
     s5_y = y_lo(s5_x)
 
     places = [
@@ -481,62 +505,33 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
         return [[round(cx + rx * math.cos(start + step * i / n), 4),
                  round(cy + ry * math.sin(start + step * i / n), 4)] for i in range(n + 1)]
 
-    y_r_mid = round(0.5 * (y_up(0.926) + y_lo(0.926)), 4)
-    ry_r = round(0.5 * (y_up(0.926) - y_lo(0.926)), 4)
-    y_l_mid = round(0.5 * (y_up(-0.926) + y_lo(-0.926)), 4)
-    ry_l = round(0.5 * (y_up(-0.926) - y_lo(-0.926)), 4)
+    def _edge(eid, frm, to, name, poly, speed=0.15, width=0.2, direction="one_way"):
+        return {"id": eid, "from": frm, "to": to, "direction": direction, "drive_mode": "lane",
+                "name": name, "polyline": poly, "robot_kinds": None, "speed_cap_mps": speed, "width_m": width}
 
-    upper_east_xs = np.linspace(s3_x, s2_x, 6)
-    upper_west_xs = np.linspace(s2_x, s1_x, 10)
-    lower_west_xs = np.linspace(-0.85, s4_x, 9)
-    lower_east_xs = np.linspace(s4_x, s5_x, 7)
+    y_r_mid, ry_r = round(0.5 * (y_up(0.926) + y_lo(0.926)), 4), round(0.5 * (y_up(0.926) - y_lo(0.926)), 4)
+    y_l_mid, ry_l = round(0.5 * (y_up(-0.926) + y_lo(-0.926)), 4), round(0.5 * (y_up(-0.926) - y_lo(-0.926)), 4)
+    upper_east_xs, upper_west_xs = np.linspace(s3_x, s2_x, 6), np.linspace(s2_x, s1_x, 10)
+    lower_west_xs, lower_east_xs = np.linspace(-0.85, s4_x, 9), np.linspace(s4_x, s5_x, 7)
 
     edges = [
-        {"id": "loop_right", "from": "S5", "to": "S3", "direction": "one_way", "drive_mode": "lane", "name": "오른쪽 U턴",
-         "polyline": [[s5_x, s5_y], *_elliptic_arc(0.926, y_r_mid, 0.131, ry_r, -math.pi / 2, math.pi), [s3_x, s3_y]],
-         "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
-        {"id": "upper_east", "from": "S3", "to": "J_in", "direction": "one_way", "drive_mode": "lane", "name": "위 차선 (하역 후 분기)",
-         "polyline": [[round(float(x), 4), y_up(float(x))] for x in upper_east_xs],
-         "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
-        {"id": "upper_west", "from": "J_in", "to": "J_out", "direction": "one_way", "drive_mode": "lane", "name": "위 차선 (주차장 앞 순환)",
-         "polyline": [[round(float(x), 4), y_up(float(x))] for x in upper_west_xs],
-         "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
-        {"id": "loop_left", "from": "J_out", "to": "S4", "direction": "one_way", "drive_mode": "lane",
-         "name": "왼쪽 U턴·아래 서쪽 차선 (S4 정지선까지)",
-         "polyline": [[s1_x, y_up(s1_x)], *_elliptic_arc(-0.926, y_l_mid, 0.131, ry_l, math.pi / 2, math.pi),
-                      *[[round(float(x), 4), y_lo(float(x))] for x in lower_west_xs]],
-         "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
-        {"id": "lower_east", "from": "S4", "to": "S5", "direction": "one_way", "drive_mode": "lane",
-         "name": "아래 동쪽 차선 (S4 -> S5 정지선)",
-         "polyline": [[round(float(x), 4), y_lo(float(x))] for x in lower_east_xs],
-         "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
-        {"id": "park_gate_in", "from": "J_in", "to": "S2", "direction": "one_way", "drive_mode": "lane", "name": "주차장 진입",
-         "polyline": [[s2_x, y_up(s2_x)], [s2_x, s2_y]],
-         "robot_kinds": None, "speed_cap_mps": 0.08, "width_m": 0.15},
-        {"id": "park_in", "from": "S2", "to": "P3", "direction": "one_way", "drive_mode": "lane", "name": "분홍 유도선 (입구)",
-         "polyline": [[s2_x, s2_y], [x_tip_r, y_tip_r], [x_elbow_r, y_elbow_r], [bay_P[2][0], bay_P[2][1]]],
-         "robot_kinds": None, "speed_cap_mps": 0.08, "width_m": 0.15},
-        {"id": "bar_32", "from": "P3", "to": "P2", "direction": "one_way", "drive_mode": "lane", "name": "분홍 유도선",
-         "polyline": [[bay_P[2][0], bay_P[2][1]], [bay_P[1][0], bay_P[1][1]]],
-         "robot_kinds": None, "speed_cap_mps": 0.08, "width_m": 0.15},
-        {"id": "bar_21", "from": "P2", "to": "P1", "direction": "one_way", "drive_mode": "lane", "name": "분홍 유도선",
-         "polyline": [[bay_P[1][0], bay_P[1][1]], [bay_P[0][0], bay_P[0][1]]],
-         "robot_kinds": None, "speed_cap_mps": 0.08, "width_m": 0.15},
-        {"id": "park_out", "from": "P1", "to": "S1", "direction": "one_way", "drive_mode": "lane", "name": "분홍 유도선 (출구)",
-         "polyline": [[bay_P[0][0], bay_P[0][1]], [x_elbow_l, y_elbow_l], [x_tip_l, y_tip_l], [s1_x, s1_y]],
-         "robot_kinds": None, "speed_cap_mps": 0.08, "width_m": 0.15},
-        {"id": "park_gate_out", "from": "S1", "to": "J_out", "direction": "one_way", "drive_mode": "lane", "name": "주차장 합류",
-         "polyline": [[s1_x, s1_y], [s1_x, y_up(s1_x)]],
-         "robot_kinds": None, "speed_cap_mps": 0.08, "width_m": 0.15},
-        {"id": "bay_1", "from": "P1", "to": "C1", "direction": "two_way", "drive_mode": "lane", "name": "칸 1 (후진 진입)",
-         "polyline": bay_polylines[0],
-         "robot_kinds": None, "speed_cap_mps": 0.05, "width_m": 0.18},
-        {"id": "bay_2", "from": "P2", "to": "C2", "direction": "two_way", "drive_mode": "lane", "name": "칸 2 (후진 진입)",
-         "polyline": bay_polylines[1],
-         "robot_kinds": None, "speed_cap_mps": 0.05, "width_m": 0.18},
-        {"id": "bay_3", "from": "P3", "to": "C3", "direction": "two_way", "drive_mode": "lane", "name": "칸 3 (후진 진입)",
-         "polyline": bay_polylines[2],
-         "robot_kinds": None, "speed_cap_mps": 0.05, "width_m": 0.18},
+        _edge("loop_right", "S5", "S3", "오른쪽 U턴",
+              [[s5_x, s5_y], *_elliptic_arc(0.926, y_r_mid, 0.131, ry_r, -math.pi / 2, math.pi), [s3_x, s3_y]]),
+        _edge("upper_east", "S3", "J_in", "위 차선 (하역 후 분기)", [[round(float(x), 4), y_up(float(x))] for x in upper_east_xs]),
+        _edge("upper_west", "J_in", "J_out", "위 차선 (주차장 앞 순환)", [[round(float(x), 4), y_up(float(x))] for x in upper_west_xs]),
+        _edge("loop_left", "J_out", "S4", "왼쪽 U턴·아래 서쪽 차선 (S4 정지선까지)",
+              [[s1_x, y_up(s1_x)], *_elliptic_arc(-0.926, y_l_mid, 0.131, ry_l, math.pi / 2, math.pi),
+               *[[round(float(x), 4), y_lo(float(x))] for x in lower_west_xs]]),
+        _edge("lower_east", "S4", "S5", "아래 동쪽 차선 (S4 -> S5 정지선)", [[round(float(x), 4), y_lo(float(x))] for x in lower_east_xs]),
+        _edge("park_gate_in", "J_in", "S2", "주차장 진입", [[s2_x, y_up(s2_x)], [s2_x, s2_y]], 0.08, 0.15),
+        _edge("park_in", "S2", "P3", "분홍 유도선 (입구)", [[s2_x, s2_y], [x_tip_r, y_tip_r], [x_elbow_r, y_elbow_r], [bay_P[2][0], bay_P[2][1]]], 0.08, 0.15),
+        _edge("bar_32", "P3", "P2", "분홍 유도선", [[bay_P[2][0], bay_P[2][1]], [bay_P[1][0], bay_P[1][1]]], 0.08, 0.15),
+        _edge("bar_21", "P2", "P1", "분홍 유도선", [[bay_P[1][0], bay_P[1][1]], [bay_P[0][0], bay_P[0][1]]], 0.08, 0.15),
+        _edge("park_out", "P1", "S1", "분홍 유도선 (출구)", [[bay_P[0][0], bay_P[0][1]], [x_elbow_l, y_elbow_l], [x_tip_l, y_tip_l], [s1_x, s1_y]], 0.08, 0.15),
+        _edge("park_gate_out", "S1", "J_out", "주차장 합류", [[s1_x, s1_y], [s1_x, y_up(s1_x)]], 0.08, 0.15),
+        _edge("bay_1", "P1", "C1", "칸 1 (후진 진입)", bay_polylines[0], 0.05, 0.18, "two_way"),
+        _edge("bay_2", "P2", "C2", "칸 2 (후진 진입)", bay_polylines[1], 0.05, 0.18, "two_way"),
+        _edge("bay_3", "P3", "C3", "칸 3 (후진 진입)", bay_polylines[2], 0.05, 0.18, "two_way"),
     ]
 
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
