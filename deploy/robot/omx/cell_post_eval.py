@@ -316,6 +316,7 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
                 escalated.append(f"fix_over_limit_bias:{row['site']}")
                 continue
             region = {"site": row["site"], "kind": "visit", "point_m": row["point_m"], "bias_mm": row["raw_bias_mm"],
+                      "centre_sigma_mm": round(float(row.get("sigma_mm") or 3.0), 2), "n": 1,
                       "map_sha": row["map_sha"], "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                       "source": "post-eval opposing-yaw visit"}
             try:

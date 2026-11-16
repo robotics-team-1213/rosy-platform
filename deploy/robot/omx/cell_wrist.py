@@ -58,23 +58,66 @@ def observe(img, hsv_min, hsv_max, params=None, near=None) -> dict:
             "cut": x <= edge or y <= edge or x + bw >= width - edge or y + bh >= height - edge}
 
 
-def fit(xy_mm, uv_px, params=None) -> dict:
-    """Least squares [u, v] = A [x, y] + b over the offset hovers; J = A^-1 maps a pixel shift to arm mm.
-    A poor fit or a near-singular A is refused (nothing is saved from it)."""
-    xy, uv = np.asarray(xy_mm, float), np.asarray(uv_px, float)
+def _fit_once(xy: np.ndarray, uv: np.ndarray):
     X = np.column_stack([xy, np.ones(len(xy))])
     coef, *_ = np.linalg.lstsq(X, uv, rcond=None)
     A, b = coef[:2].T, coef[2]
-    rms = float(np.sqrt(np.mean(np.sum((X @ coef - uv) ** 2, axis=1))))
+    res = X @ coef - uv
+    rms = float(np.sqrt(np.mean(np.sum(res ** 2, axis=1))))
     cond = float(np.linalg.cond(A))
-    if rms > prm.get(params, "wrist.fit_rms_max_px") or not math.isfinite(cond) or cond > 20:
+    return X, A, b, res, rms, cond
+
+
+def fit(xy_mm, uv_px, params=None) -> dict:
+    """Least squares [u, v] = A [x, y] + b over the offset hovers; J = A^-1 maps a pixel shift to arm mm.
+    A poor fit or a near-singular A is refused (with 1-outlier LOO deletion rescue when >=8 hovers exist)."""
+    xy, uv = np.asarray(xy_mm, float), np.asarray(uv_px, float)
+    max_rms = float(prm.get(params, "wrist.fit_rms_max_px"))
+    X, A, b, res, rms, cond = _fit_once(xy, uv)
+    dropped = None
+    if (rms > max_rms or cond > 20) and len(xy) >= 8:
+        try:
+            h = np.clip(np.einsum("ij,jk,ik->i", X, np.linalg.inv(X.T @ X), X), 0.0, 0.9)
+            r_del = np.hypot(res[:, 0], res[:, 1]) / (1.0 - h)
+            k = int(np.argmax(r_del))
+            med = float(np.median(r_del))
+            if r_del[k] > max(2.5 * med, max_rms):
+                mask = np.arange(len(xy)) != k
+                _, A2, b2, _, rms2, cond2 = _fit_once(xy[mask], uv[mask])
+                if rms2 <= min(max_rms, 0.5 * rms) and math.isfinite(cond2) and cond2 <= 20:
+                    A, b, rms, cond, dropped = A2, b2, rms2, cond2, k
+        except np.linalg.LinAlgError:
+            pass
+    if rms > max_rms or not math.isfinite(cond) or cond > 20:
         raise ValueError(f"wrist fit refused: rms {rms:.1f} px, cond {cond:.1f}")
-    return {"A": A.tolist(), "b": b.tolist(), "J": np.linalg.inv(A).tolist(), "rms_px": round(rms, 2), "cond": round(cond, 2)}
+    return {"A": A.tolist(), "b": b.tolist(), "J": np.linalg.inv(A).tolist(), "rms_px": round(rms, 2),
+            "cond": round(cond, 2), **({"dropped_index": dropped} if dropped is not None else {})}
+
+
+def in_yaw_band(yaw_deg: float, lo: float, hi: float) -> bool:
+    """Circular membership in `[lo, hi)` (deg) so bands spanning +/-180 deg match wrapped yaws."""
+    span = float(hi) - float(lo)
+    if span <= 0:
+        span %= 360.0
+    if span >= 360.0:
+        return True
+    return 0.0 <= ((float(yaw_deg) - float(lo)) % 360.0) < span
+
+
+def bands_overlap(lo1: float, hi1: float, lo2: float, hi2: float) -> bool:
+    """True when circular intervals `[lo1, hi1)` and `[lo2, hi2)` share interior points."""
+    s1 = (float(hi1) - float(lo1)) if float(hi1) > float(lo1) else (float(hi1) - float(lo1)) % 360.0
+    s2 = (float(hi2) - float(lo2)) if float(hi2) > float(lo2) else (float(hi2) - float(lo2)) % 360.0
+    if s1 >= 360.0 or s2 >= 360.0:
+        return True
+    m1, m2 = float(lo1) + 0.5 * s1, float(lo2) + 0.5 * s2
+    diff = abs((m1 - m2 + 180.0) % 360.0 - 180.0)
+    return diff < 0.5 * (s1 + s2) - 1e-6
 
 
 def band_for(cal: dict, arm: str, yaw_deg: float):
     for band in (cal.get("arms", {}).get(arm, {}).get("bands") or []):
-        if band["yaw_lo"] <= yaw_deg < band["yaw_hi"]:
+        if in_yaw_band(yaw_deg, band["yaw_lo"], band["yaw_hi"]):
             return band
     return None
 

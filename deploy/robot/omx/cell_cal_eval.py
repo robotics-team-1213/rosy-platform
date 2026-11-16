@@ -324,6 +324,7 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
             "surface_z": surface_z, "place_mm": place_mm, "start_mm": start_mm, "surface_px_mm": surf_px_mm,
             "depth_surface_z_m": depth_z, "depth_diff_mm": depth_diff_mm, "place_vs_start_step_mm": step_mm,
             "touch_surface_z_m": touch_z, "touch_measured": (receipt or {}).get("measured"), "touch_diff_mm": touch_diff_mm,
+            "touch_self_seeded": bool(receipt and receipt.get("sets_surface_z") and touch_diff_mm == 0.0),
             "loo_max_mm": loo_max, "map_sigma_mm": sigma_sum, "bias_fresh": bias_fresh, "flags": site_flags,
         }
 

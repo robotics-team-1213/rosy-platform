@@ -50,11 +50,14 @@ def calibrate(cell, camera: str, hsv, pick: dict, write_library, params=None) ->
 
 
 def save(path: Path, arm: str, yaw: float, half_band: float, body: dict, camera: str) -> dict:
+    path = Path(path)
     data = json.loads(path.read_text()) if path.exists() else {"schema": cw.SCHEMA, "arms": {}}
     entry = data["arms"].setdefault(arm, {"camera": camera, "bands": []})
     band = {"yaw_lo": yaw - half_band, "yaw_hi": yaw + half_band, **body, "measured": time.strftime("%Y-%m-%dT%H:%M:%S")}
-    entry["bands"] = [b for b in entry["bands"] if b["yaw_hi"] <= band["yaw_lo"] or b["yaw_lo"] >= band["yaw_hi"]] + [band]
-    path.write_text(json.dumps(data, indent=1))
+    entry["bands"] = [b for b in entry["bands"] if not cw.bands_overlap(b["yaw_lo"], b["yaw_hi"], band["yaw_lo"], band["yaw_hi"])] + [band]
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=1))
+    tmp.replace(path)
     return band
 
 

@@ -42,7 +42,7 @@ def consensus(marks: list, tol_px: float) -> list:
     dx2, dy2 = ax[k] - ax[i], ay[k] - ay[i]
     det = dx1 * dy2 - dx2 * dy1
     span = np.maximum(np.hypot(dx1, dy1), np.hypot(dx2, dy2))
-    valid = np.abs(det) > np.maximum(1e-6, 1e-3 * span)
+    valid = np.abs(det) > np.maximum(1e-6, 0.05 * (span * span))
     if not valid.any():
         return list(marks)
     i, j, k = i[valid], j[valid], k[valid]
@@ -58,11 +58,16 @@ def consensus(marks: list, tol_px: float) -> list:
     ry = ay[None, :] - ay[i, None]
     eu = pu[i, None] + au[:, None] * rx + bu[:, None] * ry - pu[None, :]
     ev = pv[i, None] + av[:, None] * rx + bv[:, None] * ry - pv[None, :]
-    inliers = (eu * eu + ev * ev) <= (tol_px * tol_px)
+    err_sq = eu * eu + ev * ev
+    tol_sq = float(tol_px * tol_px)
+    inliers = err_sq <= tol_sq
     counts = inliers.sum(axis=1)
-    best_idx = int(np.argmax(counts))
-    if counts[best_idx] == 0:
+    max_c = int(counts.max())
+    if max_c == 0:
         return list(marks)
+    top = np.flatnonzero(counts == max_c)
+    msac = np.sum(np.minimum(err_sq[top], tol_sq), axis=1)
+    best_idx = int(top[int(np.lexsort((-np.abs(det[valid][top]), msac))[0])])
     return [m for m, keep in zip(marks, inliers[best_idx]) if keep]
 
 
