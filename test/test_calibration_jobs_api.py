@@ -10,6 +10,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "applications/calibration"))
+sys.path.insert(0, str(ROOT / "deploy/robot/omx"))
 import calibration_jobs as jobs_mod  # noqa: E402
 import calibration_web as web  # noqa: E402
 from test_calibration_web import ORIGIN, Account, call  # noqa: E402
