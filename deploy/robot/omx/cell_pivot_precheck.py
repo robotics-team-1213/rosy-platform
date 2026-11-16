@@ -26,6 +26,7 @@ import cell_pivot  # noqa: E402
 import omx_tcp  # noqa: E402
 
 GEOMETRY_Z_TOL_M = 0.005
+PLANNED_ARC_TOL_DEG = 0.01
 
 
 def geometry_height_problem(config: dict, site: str) -> str | None:
@@ -99,7 +100,8 @@ def pivot_precheck(config: dict, calibration: dict, site: str, target_xy, yaws, 
                         + (f" (dropped {'; '.join(dropped)})" if dropped else ""))
     elif not (geometry and not geo_problem):
         arc, floor = cell_pivot._yaw_arc_deg(fk_yaws), cell_pivot.MIN_YAW_ARC_DEG + float(pivot.get("arc_margin_deg", 0))
-        if arc < floor:
+        # planner FK rounds (-125.001/-104.999): an exactly-110 set must not fail on float noise; pivot_calibrate stays strict
+        if arc < floor - PLANNED_ARC_TOL_DEG:
             problems.append(f"planned FK yaw arc {arc:.1f} deg < {floor:.0f} deg (MIN_YAW_ARC_DEG "
                             f"{cell_pivot.MIN_YAW_ARC_DEG:.0f} + pivot.arc_margin_deg)")
     return problems

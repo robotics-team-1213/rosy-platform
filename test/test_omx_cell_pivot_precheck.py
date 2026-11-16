@@ -67,6 +67,9 @@ def test_a_short_planned_arc_is_refused_and_the_margin_only_adds():
     assert short and "planned FK yaw arc 100.0 deg < 110 deg" in short[0]
     assert pp.pivot_precheck(config(), CAL, "belt", (0.0, 0.2), [-60, -20, 20, 60], (640, 480)) == []
     assert pp.pivot_precheck(config(arc_margin_deg=15), CAL, "belt", (0.0, 0.2), [-60, -20, 20, 60], (640, 480))
+    # arm_b temp_plate_b: planner FK gives -125.001..-14.999-style ends, an exact 110 set must not fail on rounding
+    assert pp.pivot_precheck(config(), CAL, "belt", (0.0, 0.2), [-55.0, -20, 20, 54.9999], (640, 480)) == []
+    assert pp.pivot_precheck(config(), CAL, "belt", (0.0, 0.2), [-54.9, -20, 20, 54.9], (640, 480))
 
 
 def test_a_geometry_from_another_height_never_takes_the_shortcut(monkeypatch):
