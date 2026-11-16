@@ -64,7 +64,9 @@ def test_assemble_follows_the_trained_layout():
     assert taken["meta"]["camera_sources"] == {"top": "arm_b.top", "side": "arm_b.side", "a_wrist": "arm_a.wrist", "b_wrist": "arm_b.wrist"}
     state = taken["state"]  # arm_a (the peer) first, then arm_b: five joints and the gripper each, radians
     assert state.shape == (12,) and state.dtype == np.float32 and abs(state[6:11]).max() < 2e-3 and state[0] > 0.3 and state[1] < -0.3
-    assert 1.5 < state[5] < 1.6  # gripper 75 of 0..100 through the cell's to_radians
+    # gripper: units -> jaw gap by the arm's own arm-cal rule -> the sim jaw angle, never the servo angle (75 units is past the stroke)
+    assert taken["meta"]["gripper_units"] == {"arm_a": 75.0, "arm_b": 0.0}
+    assert abs(state[5] - inputs.sim_gripper(75, taken["meta"]["gripper_rules"]["arm_a"])) < 1e-6 and abs(state[5] - 1.2) < 1e-3
     goal = taken["goal"]  # arm_b's half only: active, one-hot source "a", one-hot target "b"
     assert goal.shape == (10,) and goal[:5].tolist() == [0] * 5 and goal[5:].tolist() == [1, 1, 0, 0, 1]
     assert own.calls.count(("act", "state")) == 1 and peer.calls.count(("act", "state")) == 1
@@ -181,3 +183,20 @@ def test_unavailable_inputs_are_a_row_field_and_never_infer(tmp_path, monkeypatc
     result, rows, policy = run_two_arm(tmp_path, monkeypatch, dict(CONFIG, arm_id=arm_id), Cell([CONT2]) if with_peer else None)
     assert result["result"] == "placed" and rows and not policy.seen
     assert all("inputs_unavailable" in row["error"] and "proposed" not in row and row["missing"] for row in rows)
+
+
+def test_the_gripper_goes_to_the_sim_jaw_angle_by_each_arms_own_rule(tmp_path):
+    import cell_arm_cal
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "arm-cal-arm_a.json").write_text(json.dumps({"schema": cell_arm_cal.SCHEMA, "held_30mm": 53.4, "gap_mm_per_unit": 5.0}))
+    own_profile = tmp_path / "own.json"  # this cell's arm_b profile by path: must not be taken for the peer arm_a
+    own_profile.write_text(json.dumps({"schema": cell_arm_cal.SCHEMA, "held_30mm": 50.0, "gap_mm_per_unit": 9.0}))
+    config = {"arm_id": "arm_b", "work_dir": str(work), "arm_calibration_path": str(own_profile)}
+    rule = inputs.grip_rule(config, "arm_a")
+    assert rule == {"held_30mm": 53.4, "gap_mm_per_unit": 5.0}
+    assert inputs.grip_rule(config, "arm_b") == {"held_30mm": 50.0, "gap_mm_per_unit": 9.0}
+    held = inputs.sim_gripper(53.4, rule)  # also puts the palletizing jaw module on the path
+    import palletizing_gripper as jaw
+    assert abs(held - jaw.angle_for_gap(.030)) < 1e-9  # held_30mm is the 30 mm container in the jaw
+    assert .3 < held < inputs.sim_gripper(55.0, rule) < 1.0  # inside the sim's trained gripper range 0.34-0.99

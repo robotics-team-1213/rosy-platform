@@ -10,6 +10,8 @@ a camera, an arm state or a goal this cell cannot read makes `Unavailable`, and 
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
+import sys
 import time
 
 import numpy as np
@@ -42,12 +44,34 @@ def _rgb(image):
     return np.ascontiguousarray(cv2.resize(cv2.cvtColor(image, cv2.COLOR_BGR2RGB), SHAPE[::-1], interpolation=cv2.INTER_CUBIC))
 
 
-def _read_state(cell, arm):
+def grip_rule(config: dict, arm: str) -> dict:
+    """The arm's own gripper rule from its arm-cal profile (`cell_arm_cal`): 30 mm held at `held_30mm` units, `gap_mm_per_unit`.
+    The peer's profile is read by its arm id from the work dir: `arm_calibration_path` names this cell's arm only."""
+    import cell_arm_cal
+
+    profile = cell_arm_cal.load(config if arm == config.get("arm_id") else Path(config.get("work_dir", ".")).expanduser(), arm)
+    return {"held_30mm": float(profile["held_30mm"]), "gap_mm_per_unit": float(profile["gap_mm_per_unit"])}
+
+
+def sim_gripper(units: float, rule: dict) -> float:
+    """Follower gripper units -> the sim's gripper_joint_1: the real jaw gap by the arm's rule, posed by the palletizing jaw
+    geometry (the sim's fingers). The servo angle is not it: 2026-11-17 the servo's 50.5 closed read 0.03 rad, the sim's
+    trained gripper range is 0.34-0.99."""
+    isaac = str(Path(__file__).resolve().parents[3] / "learning" / "envs" / "isaac")
+    if isaac not in sys.path:
+        sys.path.insert(0, isaac)
+    import palletizing_gripper as jaw
+
+    return jaw.angle_for_gap_clipped((30 + (units - rule["held_30mm"]) * rule["gap_mm_per_unit"]) / 1000)
+
+
+def _read_state(cell, arm, rule):
     reply = cell.act("state")
     state = reply.get("state") if isinstance(reply, dict) and reply.get("ok") else None
     if state is None or len(state) != len(JOINTS):
         raise Unavailable(f"{arm}: no six-joint state ({reply.get('error') if isinstance(reply, dict) else reply})", [f"state:{arm}"])
-    return [to_radians(state)[name] for name in ("joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1")]
+    body = to_radians(state)  # the follower calibration is the full 0..4095 range on arm_a and arm_b (checked 2026-11-17)
+    return [body[name] for name in ("joint1", "joint2", "joint3", "joint4", "joint5")] + [sim_gripper(float(state[5]), rule)], float(state[5])
 
 
 def goal(spec: dict, binding, arm: str, source, dest):
@@ -99,11 +123,11 @@ def assemble(cell, config: dict, peer, spec: dict, binding, source, dest) -> dic
             raw[view], images[view] = frame.shape[:2], _rgb(frame)
         except Exception as error:  # a camera the cell lacks or cannot read: named, never replaced by a blank image
             missing[view] = f"{owner}.{camera}: {type(error).__name__}: {error}"
-    states = {}
+    states, grip_units, rules = {}, {}, {name: grip_rule(config, name) for name in ARMS}
     for name in ARMS:
         try:
             times.append(time.time())
-            states[name] = _read_state(cells[name], name)
+            states[name], grip_units[name] = _read_state(cells[name], name, rules[name])
         except Unavailable as error:
             missing[f"state:{name}"] = str(error)
     if missing:
@@ -118,5 +142,5 @@ def assemble(cell, config: dict, peer, spec: dict, binding, source, dest) -> dic
     meta = {"views": list(VIEWS), "camera_sources": {v: ".".join(route[v]) for v in VIEWS}, "model_shape": [3, *SHAPE],
             "source_shapes": {v: list(s) for v, s in raw.items()}, "capture_span_s": round(times[-1] - times[0], 3),
             "frames_sha256": {v: hashlib.sha256(images[v].tobytes()).hexdigest() for v in VIEWS},
-            "positions": [float(v) for v in state], "goal": None if vector is None else {"mode": binding.goal_mode, "size": int(vector.size)}}
+            "positions": [float(v) for v in state], "gripper_units": grip_units, "gripper_rules": rules, "goal": None if vector is None else {"mode": binding.goal_mode, "size": int(vector.size)}}
     return {"state": state, "images": images, "goal": vector, "meta": meta}
