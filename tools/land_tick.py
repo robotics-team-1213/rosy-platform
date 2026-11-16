@@ -27,11 +27,13 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
 import land_async  # noqa: E402
 import land_cache  # noqa: E402
 import land_gc  # noqa: E402
 import land_mainred  # noqa: E402
 import land_queue  # noqa: E402
+import memory_history  # noqa: E402
 import worktrees  # noqa: E402
 
 ALERT_S = 30 * 60  # a main-red id open this long with no owner is called out
@@ -72,6 +74,7 @@ def resume(repo: Path) -> str:
 
 def cleanup(repo: Path) -> str:
     import land_rollup  # noqa: E402
+    memory_history.trim(memory_history.path(repo))  # 2026-11-17: rosy-pytest-memory.jsonl only ever grew
     qdir, holder, reaped = land_queue.queue_dir(repo), land_async.holder(repo), 0
     for row in land_queue.expired(qdir):
         land_rollup.stop_remote(holder, [row])

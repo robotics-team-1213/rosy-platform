@@ -15,6 +15,17 @@ def test_the_lock_names_the_job_itself(tmp_path):
     assert seen[1].split()[0] == seen[0]  # exec: the lock's pid is the job's, so it dies with the job
 
 
+def test_children_get_the_lock_cores_as_their_thread_cap_unless_set(tmp_path):
+    env = {k: v for k, v in os.environ.items() if k not in ("OMP_NUM_THREADS", "MKL_NUM_THREADS")}
+    env["HOME"] = str(tmp_path)
+    show = ["bash", "-c", 'echo "$OMP_NUM_THREADS $MKL_NUM_THREADS"']
+    assert subprocess.run(["bash", str(SCRIPT), "8", "12", *show], env=env, capture_output=True, text=True,
+                          check=True).stdout.strip() == "8 8"
+    env["OMP_NUM_THREADS"] = "2"
+    assert subprocess.run(["bash", str(SCRIPT), "8", "12", *show], env=env, capture_output=True, text=True,
+                          check=True).stdout.split()[0] == "2"
+
+
 def test_it_refuses_a_budget_that_is_not_whole_numbers(tmp_path):
     env = {**os.environ, "HOME": str(tmp_path)}
     result = subprocess.run(["bash", str(SCRIPT), "4", "$(reboot)", "true"], env=env, capture_output=True, text=True)

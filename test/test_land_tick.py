@@ -7,8 +7,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
 import land_tick  # noqa: E402
+import memory_history  # noqa: E402
 
 
 def test_recheck_runs_once_per_main_and_only_with_open_ids(tmp_path, monkeypatch):
@@ -108,3 +110,26 @@ def test_warm_runs_only_when_queue_is_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(land_tick.land_queue, "ahead", lambda q, t: [])
     monkeypatch.setattr(land_tick.land_cache, "warm_main", lambda repo, limit: (3, 4))
     assert land_tick.warm(tmp_path) == "warmed 3 of 4"
+
+
+def test_cleanup_trims_the_pytest_memory_history_past_its_cap(tmp_path, monkeypatch):
+    """2026-11-17: rosy-pytest-memory.jsonl only grew; every tick keeps it under memory_history.MAX_ROWS."""
+    small = tmp_path / "small.jsonl"
+    small.write_text("".join(f'{{"key": "{i}"}}\n' for i in range(21)), encoding="utf-8")
+    assert memory_history.trim(small, max_rows=20, keep_rows=15) == 6  # past max_rows: the last keep_rows stay
+    assert memory_history.trim(small, max_rows=20, keep_rows=15) == 0  # at the cap: untouched
+    assert small.read_text(encoding="utf-8").splitlines()[-1] == '{"key": "20"}'
+    assert not small.with_suffix(".jsonl.tmp").exists()  # the rewrite was atomic
+    history = tmp_path / memory_history.FILE
+    history.write_text("".join(f'{{"key": "{i}"}}\n' for i in range(memory_history.MAX_ROWS + 1)),
+                       encoding="utf-8")
+    monkeypatch.setattr(land_tick.land_queue, "queue_dir", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_async, "holder", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_queue, "expired", lambda qdir: [])
+    monkeypatch.setattr(land_tick.land_gc, "plan", lambda repo, now, days: [])
+    monkeypatch.setattr(land_tick.land_gc, "apply", lambda repo, rows: [])
+    monkeypatch.setattr(land_tick.worktrees, "prune", lambda repo, **k: 0)
+    monkeypatch.setattr(memory_history, "path", lambda repo: history)
+    land_tick.cleanup(tmp_path)
+    rows = history.read_text(encoding="utf-8").splitlines()
+    assert len(rows) == memory_history.KEEP_ROWS and rows[-1] == f'{{"key": "{memory_history.MAX_ROWS}"}}'

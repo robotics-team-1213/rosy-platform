@@ -127,15 +127,45 @@ def over_target(config, site) -> bool:
     )
 
 
-def pivot_near_yaws(config, site) -> list:
-    """Yaws for a pivot near or over a target."""
+def pivot_near_yaws(config, site, over: bool | None = None) -> list:
+    """Yaws for a pivot near (`over` False) or over (`over` True) a target; None: as `over_target` allows."""
     site_cfg = config["sites"][site]
-    ot_fn = _parent_attr("over_target", over_target)
-    if ot_fn(config, site) and site_cfg.get("pivot_yaws"):
+    if over is None:
+        over = _parent_attr("over_target", over_target)(config, site)
+    if over and site_cfg.get("pivot_yaws"):
         return list(site_cfg["pivot_yaws"])
     base = site_cfg["yaw_deg"]
-    offsets = range(-60, 61, 20) if ot_fn(config, site) else (-80, -40, 0, 40, 80, 120)
+    offsets = range(-60, 61, 20) if over else (-80, -40, 0, 40, 80, 120)
     return [base + d for d in offsets]
+
+
+def pivot_point(cell, config, calibration, site, target_xy) -> tuple[list | None, bool]:
+    """(point, over) for a pivot that can serve `target_xy`: a configured `pivot.points` entry the live view finds
+    clear, else the nearest clear surface point, else the target itself when `pivot.over_target` allows.
+    2026-11-17 panel: with over_target set, every site went straight to the over-target set (±60 deg, exactly the
+    120 deg MIN_YAW_ARC_DEG, so FK 116 deg failed) and `pivot.points` was never tried. With `pivot.clear_first` a
+    clear point's full circle comes first and the over-target pivot only when no clear point is within reach; without
+    it an over-target site keeps the reviewed over-target set."""
+    over_ok = _parent_attr("over_target", over_target)(config, site)
+    if over_ok and not clear_first(config):
+        return list(target_xy), True  # the reviewed over-target set until this arm's clear-point circles are checked
+    reach_mm = 0.9 * prm.get(config.get("params"), "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
+    ap_fn = _parent_attr("auto_pivot_point", auto_pivot_point)
+    configured = sorted((tuple(q) for q in (config.get("pivot") or {}).get("points", [])), key=lambda q: math.dist(q, target_xy))
+    for start in [q for q in configured if 1000 * math.dist(q, target_xy) <= reach_mm] + [tuple(target_xy)]:
+        found = ap_fn(cell, config, calibration, site, start)
+        if found is not None and 1000 * math.dist(found, target_xy) <= reach_mm:
+            return list(found), False
+    if over_ok:
+        return list(target_xy), True
+    return None, False
+
+
+def clear_first(config) -> bool:
+    """Config `pivot.clear_first`: try a clear point's full circle before the over-target set. Off by default: at a
+    packed over-target site that circle is a new real-arm pose set (review 2026-11-17), so an arm turns it on only
+    after the AGENTS four checks for its configured points."""
+    return bool((config.get("pivot") or {}).get("clear_first"))
 
 
 def carried(region: dict) -> bool:
@@ -159,9 +189,8 @@ def self_calibrate(
         if 1000 * math.dist(q, target_xy) <= 0.9 * prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
         and all(1000 * math.dist(q, o["raw_m"]) >= clear_mm for o in objects)
     ]
-    ot_fn = _parent_attr("over_target", over_target)
-    if cell is not None and ot_fn(config, site):
-        points = [tuple(target_xy)]
+    if cell is not None and not clear_first(config) and _parent_attr("over_target", over_target)(config, site):
+        points = [tuple(target_xy)]  # the reviewed order until pivot.clear_first is turned on (see pivot_point)
     if not points and cell is not None:
         ap_fn = _parent_attr("auto_pivot_point", auto_pivot_point)
         found = ap_fn(cell, config, calibration, site, target_xy)
@@ -169,6 +198,8 @@ def self_calibrate(
         if found and have and math.dist(have["point_m"], target_xy) <= math.dist(found, target_xy) + 0.005:
             return bias_data, None
         points = [found] if found else []
+    if not points and cell is not None and _parent_attr("over_target", over_target)(config, site):
+        points = [tuple(target_xy)]  # 2026-11-17: over the box only when no clear point serves it (see pivot_point)
     if not points:
         if cell_pivot.bias_at(bias_data, site, target_xy, params=p):
             return bias_data, None

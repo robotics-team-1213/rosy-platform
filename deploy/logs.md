@@ -4899,3 +4899,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `deploy/site/rosy-auto-track-calibration`의 승인 쿨다운(`MIN_APPROVAL_INTERVAL_S`)을 6시간에서 10분(`600s`)으로 조정하고, `deploy/site/host-state/rosy-auto-track-calibration.timer` 주기를 2분(`OnUnitActiveSec=2min`, 5회 일관성 창 = 10분)으로 맞춰 트랙·카메라 변동 시 10분 주기로 자동 조정되도록 연결했다.
 - 증거: `test/test_auto_track_calibration.py` 원격 pytest 및 `rosy-fleet-r` 실호스트 적용 확인.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-pivot): over-target 110 deg yaw arc, known-geometry 1-outlier trim, and late-stall fit
+- 변경: `cell_pivot.MIN_YAW_ARC_DEG`를 120.0°에서 110.0°로 조정해 `over_target` `range(-60, 61, 20)`(명목 120°) 스윕 시 양단 서보 정착 지연(~3.9°)이 발생해도 원 적합을 허용하고, `cell_pivot_bias.trim_known_centres`로 `known_geometry_bias`에서 3점 이상 중 1점 이상치 제거 및 후반 yaw 접촉 정지 시 기수집 마크 적합을 수행한다.
+- 증거: `test/test_omx_cell_ship_round_trip.py` 및 `test/test_omx_cell_post_eval.py` 원격 pytest 66 passed, `rosy-arm-cell` 실기 3팔(`arm_a`, `arm_b`, `arm_s`) 보정 검증.
+- gate 변화: 없음.
+- CE: 해당 없음.

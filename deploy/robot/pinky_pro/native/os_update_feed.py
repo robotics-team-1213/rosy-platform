@@ -214,6 +214,9 @@ class Feed:
                 break
             else: return dict(outcome="no-update")
         if not apply: return dict(outcome="staged", release_id=identity)
+        # A busy robot defers; it is not a failure. Staging above is kept and reused by the next poll.
+        busy, _ = _Policy(self.root, self.host)._sample()
+        if busy: return dict(outcome="deferred-busy", release_id=identity, reasons=busy)
         result = lifecycle.start(self.root, bundle, raw, signature, host=self.host, **({"run": run} if run is not None else {}))
         return dict(outcome="trial-requested" if result["pending"] is not None else "source-retained", release_id=identity, state=result)
 
