@@ -133,7 +133,7 @@ export PYTEST_TIMEOUT="${ROSY_PER_TEST_TIMEOUT:-900}"
 C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-${ROSY_JOB_MEM_GB:-2}}; RC=${ROSY_JOB_RESERVE_CORES:-$C}
 [[ $C$M$G$RC =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/_MEM_GB/_RESERVE_* must be whole numbers"; exit 2; }
 X=pytest; [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && X=browser  # PROBE counts browser locks per host
-[ -z "${ROSY_JOB_CPU_ALONE:-}" ] && [ "${1:-}" = "test/test_platform_g1_timing.py" ] && [ "${ROSY_RUN_BROWSER_TESTS:-}" != 1 ] && ROSY_JOB_CPU_ALONE=1
+[ -z "${ROSY_JOB_CPU_ALONE:-}" ] && { { [ "${1:-}" = "test/test_platform_g1_timing.py" ] && [ "${ROSY_RUN_BROWSER_TESTS:-}" != 1 ]; } || { [ "${ROSY_BROWSER_ALONE:-}" = 1 ] && [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ]; }; } && ROSY_JOB_CPU_ALONE=1
 """ + ADMIT + "\n" + ISAAC_GPU_GUARD + r"""
 # Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
 [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { compgen -G ~/.cache/ms-playwright/chromium-*/chrome*/chrome >/dev/null 2>&1 \
