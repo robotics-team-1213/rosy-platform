@@ -37,6 +37,11 @@ def refused(layout, task):
 
 
 def test_both_tasks_validate_with_all_steps(layout, data):
+    assert layout.choices["arm_bases"] == "measured-194"
+    assert layout.choices["ship_spacer_dy_mm"] == pytest.approx(32.0)
+    assert tuple(layout.arms["arm_a"].base[:2]) == pytest.approx((.091, -.16825))
+    assert tuple(layout.arms["arm_b"].base[:2]) == pytest.approx((.091, .16825))
+    assert layout.arms["arm_b"].base[1] - layout.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)
     assert len(tasks.validate(layout, tasks.get_task(layout, "stack", data))) == 9
     assert len(tasks.validate(layout, tasks.get_task(layout, "rehandle", data))) == 12
 
@@ -170,8 +175,8 @@ def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data, monkeyp
     assert not any(s.get("blocked") for s in layout.sites.values())  # the plates where the 11-08 top frame sees them clear the hull
     assert not any(s.get("blocked") for s in sites.Layout(
         temp_lanes="fan", temp_radius_m=.200, ship_centre_y_m=.007).sites.values())
-    monkeypatch.setitem(sites.SCAD, "gap_min", .010)  # pre-v17 fan overlapped the hull
-    layout = sites.Layout(temp_lanes="fan", temp_radius_m=.200, ship_centre_y_m=.007)
+    monkeypatch.setitem(sites.SCAD, "gap_min", .010)  # pre-v17 fan overlapped the hull at the surveyed arm_b base (0.153 m)
+    layout = sites.Layout(arm_bases="surveyed", temp_lanes="fan", temp_radius_m=.200, ship_centre_y_m=.007)
     # The older 10 mm fan gap put lane 1 under the hull; every tier must still be refused.
     assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-b-1", "tmp-b-1-l1", "tmp-b-1-l2"}  # every tier of that lane
     task = dict(supply=[], start={"bar-9": "ship-h1r2-l2"}, name="t", steps=[dict(id="x", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-1", arm="arm_b")])

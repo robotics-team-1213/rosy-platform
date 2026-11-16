@@ -222,9 +222,10 @@ agree, and that the policy joint order equals the target's. A failed stage never
 requests stop when a reply is uncertain. It has three plug-in points:
 
 - `LeRobotAdapter` loads a LeRobot 0.4.4 checkpoint with its saved processors. It follows
-  `predict_action`'s steps, including autocast when the checkpoint sets `use_amp` on CUDA. The caller
-  declares the checkpoint's action unit. Execution allows only `act`; the latency bench may also load
-  `smolvla` until D-854 step 6 allows it.
+  `predict_action`'s steps, including autocast when `--amp` / `use_amp` is active on CUDA, optional
+  `--flow-steps` (`config.num_steps` for flow/diffusion models such as SmolVLA), and optional
+  `observation.environment_state` goal-vector forwarding. Execution allows `act` and `smolvla`
+  (`ALLOWED_POLICY_TYPES`, D-854 Step 6).
 - `ActionSpace` holds only declared unit conversions. Today that is identity; `lerobot_norm_v1` to CORE ROS
   joint rad is refused until the ROS joint to Dynamixel motor map is measured.
 - `CoreArmTarget` speaks CORE arm policy HTTP through a connected `CoreArmClient`.

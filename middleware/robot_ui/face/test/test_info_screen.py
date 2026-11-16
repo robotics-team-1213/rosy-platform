@@ -332,3 +332,29 @@ class TestBootCardRoseMark:
         rose = (231, 150, 243)  # --brand-rose #e796f3
         colours = {colour for _count, colour in image.getcolors(maxcolors=1 << 16)}
         assert rose in colours, f"로즈색 점이 없다: {sorted(c for c in colours if c != _BG)[:8]}"
+
+
+@pytest.mark.parametrize("color,expected_rgb", [
+    ("blue", (0, 110, 255)),
+    ("amber", (255, 165, 0)),
+])
+def test_identify_card_fills_solid_color_and_dispatches_from_card_renderer(color, expected_rgb):
+    import importlib.util
+    import emotion.info_screen as info_screen
+
+    image = info_screen.render_identify_card(color, "rosy-pinky-01")
+    assert image.size == DEFAULT_SIZE
+    counts = {c: n for n, c in image.getcolors(image.width * image.height)}
+    assert counts[expected_rgb] > image.width * image.height * 0.85
+
+    renderer_path = ROOT.parents[2] / "deploy" / "robot" / "pinky_pro" / "native" / "face_card_renderer.py"
+    spec = importlib.util.spec_from_file_location("face_card_renderer", renderer_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    render_card_fn = mod.card_renderer(info_screen)
+
+    dispatched = render_card_fn({
+        "device_name": "rosy-pinky-01",
+        "screen": {"kind": "face", "identify_color": color},
+    })
+    assert ImageChops.difference(dispatched, image).getbbox() is None

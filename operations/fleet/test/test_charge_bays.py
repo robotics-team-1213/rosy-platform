@@ -370,9 +370,6 @@ def test_road_nav2_http_route_dispatches_along_road_polyline(tmp_path):
         headers=auth,
         json={"x": -0.414, "y": 0.47, "yaw": -1.5708, "place_id": "C1", "label": "충전 1"},
     )
-    assert res.status_code == 200
-    body = res.json()
-    assert body["dispatched"] is True and (body["accepted"] or body["queued"])
-    assert body["edges"] == ["park_in", "bar_32", "bar_21", "bay_1"]
-    assert body["places"] == ["P3", "P2", "P1", "C1"]
-    assert len(body["waypoints_site"]) >= 8
+    # No camera sighting, pin or auto-locate fit: the robot's own SLAM pose is not a site pose, so nothing goes out.
+    assert res.status_code == 409 and res.json()["detail"]["code"] == "SITE_POSE_UNKNOWN"
+    assert not any("goal" in str(call) or "navigat" in str(call) for call in bot.log)

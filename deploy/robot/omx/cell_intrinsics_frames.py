@@ -320,7 +320,9 @@ def fitted_map(config: dict, marks: list, z_view: float) -> dict:
         return affine
     lens = json.loads(Path(c["intrinsics"]).expanduser().read_text())
     try:
-        pose = plane_pose_map(marks, z_view, lens["K"], lens.get("dist", [0.0] * 5), c["up"])
+        cam_h = ((config.get("cameras") or {}).get("top") or {}).get("height_m")
+        height = (float(cam_h) - float(z_view)) if cam_h is not None and float(cam_h) > float(z_view) else None
+        pose = plane_pose_map(marks, z_view, lens["K"], lens.get("dist", [0.0] * 5), c["up"], height)
     except ValueError as exc:
         return dict(affine, pose_refused=str(exc)[:120])
     if pose["loo_error_mm"]["max"] > affine["loo_error_mm"]["max"] + POSE_LOO_SLACK_MM:

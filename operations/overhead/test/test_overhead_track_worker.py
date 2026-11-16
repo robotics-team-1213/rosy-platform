@@ -858,3 +858,36 @@ def test_no_tune_step_is_judged_while_an_led_identify_window_is_open():
     asyncio.run(worker.refresh_config())
     _frames(worker, clock, 12)  # inside the window: the tune does not start, nothing is scored
     assert ingest.sent == [] and worker.tuner.status()["state"] == "waiting"
+
+
+def test_report_identity_transforms_yaw_px_to_map_frame_or_none(make_worker, monkeypatch):
+    import math
+    from rosy_vision.track import led_identity
+    from rosy_vision.track.model import Calibration
+
+    worker, client = make_worker()
+    # +x in image maps to +y in map (+90 deg rotation)
+    matrix = (0.0, -0.01, 2.0, 0.01, 0.0, 1.0, 0.0, 0.0, 1.0)
+    calibration = Calibration("ceiling_north", "map_v2_fleet", "cal-v3",
+                              matrix, (640, 360), (0.0, 0.0, 4.0, 4.0), None)
+    verdict = {"state": "matched", "reason": None, "x": 1.0, "y": 2.0, "yaw": 0.0,
+               "captured_at": 103.5, "calibration_revision": "cal-v3",
+               "evidence": {"yaw_px": 0.0, "yaw_map": None}}
+    monkeypatch.setattr(led_identity, "decide", lambda *args, **kwargs: dict(verdict))
+
+    # Without calibration, yaw is None even when yaw_px is present.
+    asyncio.run(worker._report_identity(
+        {"request_id": "req-no-cal", "color": "blue", "not_before": 100.0, "not_after": 104.0}, 104.5))
+    assert client.identity[-1]["yaw"] is None
+
+    # With calibration, yaw_px=0.0 transforms to +pi/2 in map frame.
+    worker._latest_calibration = calibration
+    asyncio.run(worker._report_identity(
+        {"request_id": "req-with-cal", "color": "blue", "not_before": 100.0, "not_after": 104.0}, 104.5))
+    assert client.identity[-1]["yaw"] == pytest.approx(math.pi / 2)
+
+    # When yaw_px is None, yaw is None.
+    verdict["evidence"] = {"yaw_px": None, "yaw_map": None}
+    asyncio.run(worker._report_identity(
+        {"request_id": "req-no-yaw", "color": "blue", "not_before": 100.0, "not_after": 104.0}, 104.5))
+    assert client.identity[-1]["yaw"] is None

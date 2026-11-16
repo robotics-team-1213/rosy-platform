@@ -1,12 +1,16 @@
 """Two-arm ACT tool: what the plan tells the model, and how a round's score is counted. No MuJoCo needed."""
+import json
 from pathlib import Path
 import sys
+import types
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools/sim"))
 import omx_two_arm_policy as policy  # noqa: E402
+import omx_two_arm_policy_helpers as helpers  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 import omx_two_arm_tasks as tasks  # noqa: E402
 
@@ -84,3 +88,199 @@ def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
     assert stages["isaac"]["handoff"]["stage_1_mujoco"]["colours_seen"] == ["orange"]
     assert stages["gazebo"]["status"] == "passed" and stages["gazebo"]["stage_order"] is None
     assert stages["gazebo"]["track"] == "ros2_execution_contract" and stages["gazebo"]["role"] == "ros2_interface_conformance"
+
+
+def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action_steps=8, ensemble_coeff=None):
+    class FakeTensor:
+        device = "cpu"
+
+        def __init__(self, arr):
+            self.arr = np.asarray(arr)
+
+        def __getitem__(self, item):
+            return FakeTensor(self.arr[item])
+
+        def permute(self, *axes):
+            return FakeTensor(np.transpose(self.arr, axes))
+
+        def float(self):
+            return FakeTensor(self.arr.astype(np.float32))
+
+        def __truediv__(self, other):
+            return FakeTensor(self.arr / other)
+
+        def to(self, _device):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return self.arr
+
+    fake_torch = types.ModuleType("torch")
+    fake_torch.cuda = types.SimpleNamespace(is_available=lambda: False)
+    fake_torch.from_numpy = lambda arr: FakeTensor(arr)
+
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text(json.dumps({"type": "act"}), encoding="utf-8")
+    steps_file = tmp_path / "steps.json"
+    steps_file.write_text(json.dumps({"longest": {}}), encoding="utf-8")
+    seen_batches = []
+
+    class FakePolicy:
+        def __init__(self):
+            self.config = types.SimpleNamespace(
+                temporal_ensemble_coeff=ensemble_coeff, n_action_steps=n_action_steps, chunk_size=100, input_features=input_features
+            )
+
+        def to(self, _device):
+            return self
+
+        def eval(self):
+            return self
+
+        def parameters(self):
+            return iter([FakeTensor(np.zeros(1))])
+
+        def select_action(self, batch):
+            seen_batches.append(batch)
+            return FakeTensor(np.zeros((1, 12), dtype=np.float32))
+
+    fake_act = types.ModuleType("lerobot.policies.act.modeling_act")
+    fake_act.ACTPolicy = types.SimpleNamespace(from_pretrained=lambda *a, **k: FakePolicy())
+    fake_act.ACTTemporalEnsembler = lambda coeff, chunk: ("ensembler", coeff, chunk)
+    fake_factory = types.ModuleType("lerobot.policies.factory")
+    fake_factory.make_pre_post_processors = lambda cfg, pretrained_path=None: (lambda b: b, lambda y: y)
+    fake_world = types.ModuleType("omx_two_arm_world")
+    fake_world.World = lambda layout: types.SimpleNamespace(layout=layout)
+    for name, mod in {
+        "torch": fake_torch,
+        "lerobot": types.ModuleType("lerobot"),
+        "lerobot.policies": types.ModuleType("lerobot.policies"),
+        "lerobot.policies.act": types.ModuleType("lerobot.policies.act"),
+        "lerobot.policies.act.modeling_act": fake_act,
+        "lerobot.policies.factory": fake_factory,
+        "omx_two_arm_world": fake_world,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    return model_dir, steps_file, seen_batches
+
+
+def test_driver_preserves_checkpoint_ensemble_and_detects_goal_feature(monkeypatch, tmp_path):
+    """D-1032: default Driver must not force temporal_ensemble_coeff=.01 and only sends GOAL when expected."""
+    model_dir, steps_file, seen = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": {}})
+    d_default = policy.Driver(model_dir, steps_file)
+    assert d_default.policy.config.temporal_ensemble_coeff is None
+    assert d_default.policy.config.n_action_steps == 8
+    assert not hasattr(d_default.policy, "temporal_ensembler")
+    assert d_default.has_goal is False
+
+    state = np.zeros(12, dtype=np.float32)
+    images = {"top": np.zeros((4, 4, 3), dtype=np.uint8)}
+    out = d_default.act(state, images, goal=None)
+    assert out.shape == (12,) and policy.GOAL not in seen[-1]
+
+    d_core = policy.Driver(model_dir, steps_file, n_action_steps=1)
+    assert d_core.policy.config.temporal_ensemble_coeff is None and d_core.policy.config.n_action_steps == 1
+
+    d_ens = policy.Driver(model_dir, steps_file, ensemble_coeff=0.01)
+    assert d_ens.policy.config.temporal_ensemble_coeff == 0.01 and d_ens.policy.config.n_action_steps == 1
+    assert d_ens.policy.temporal_ensembler == ("ensembler", 0.01, 100)
+
+
+def test_driver_smolvla_honors_action_and_flow_steps_and_amp(monkeypatch, tmp_path):
+    model_dir, steps_file, _ = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": {}})
+    (model_dir / "config.json").write_text(json.dumps({"type": "smolvla"}), encoding="utf-8")
+
+    class FakeSmolPolicy:
+        def __init__(self):
+            self.config = types.SimpleNamespace(n_action_steps=1, num_steps=10, use_amp=True, input_features={"observation.state": {}})
+        def to(self, _d):
+            return self
+        def eval(self):
+            return self
+        def parameters(self):
+            return iter([types.SimpleNamespace(device="cuda")])
+        def select_action(self, _b):
+            class _Arr:
+                def cpu(self): return self
+                def numpy(self): return np.zeros((1, 12), dtype=np.float32)
+            return _Arr()
+
+    fake_smol = types.ModuleType("lerobot.policies.smolvla.modeling_smolvla")
+    fake_smol.SmolVLAPolicy = types.SimpleNamespace(from_pretrained=lambda *a, **k: FakeSmolPolicy())
+    monkeypatch.setitem(sys.modules, "lerobot.policies.smolvla", types.ModuleType("lerobot.policies.smolvla"))
+    monkeypatch.setitem(sys.modules, "lerobot.policies.smolvla.modeling_smolvla", fake_smol)
+    d = policy.Driver(model_dir, steps_file, n_action_steps=8, flow_steps=5, use_amp=True)
+    assert (d.kind, d.policy.config.n_action_steps, d.policy.config.num_steps, d.use_amp) == ("smolvla", 8, 5, True)
+    assert d.act(np.zeros(12, dtype=np.float32), {"top": np.zeros((4, 4, 3), dtype=np.uint8)}).shape == (12,)
+
+
+def test_driver_requires_and_forwards_goal_when_model_expects_it(monkeypatch, tmp_path):
+    model_dir, steps_file, seen = _install_fake_driver_deps(
+        monkeypatch, tmp_path, input_features={"observation.state": {}, policy.GOAL: {}}
+    )
+    driver = policy.Driver(model_dir, steps_file)
+    assert driver.has_goal is True
+    state = np.zeros(12, dtype=np.float32)
+    images = {"top": np.zeros((4, 4, 3), dtype=np.uint8)}
+    with pytest.raises(ValueError, match="goal"):
+        driver.act(state, images, goal=None)
+    driver.act(state, images, goal=np.ones(policy.GOAL_SIZE, dtype=np.float32))
+    assert policy.GOAL in seen[-1]
+
+
+def test_collect_no_goal_omits_environment_state_feature(monkeypatch, tmp_path):
+    """D-1032: --no-goal excludes sim-only observation.environment_state(22) from dataset schema and frames."""
+    created = {}
+
+    class FakeDataset:
+        def __init__(self, features):
+            created["features"] = features
+            self.frames = []
+
+        def add_frame(self, row):
+            self.frames.append(row)
+
+        def save_episode(self):
+            pass
+
+        def clear_episode_buffer(self):
+            pass
+
+        def finalize(self):
+            pass
+
+    fake_ds = types.ModuleType("lerobot.datasets.lerobot_dataset")
+    fake_ds.LeRobotDataset = types.SimpleNamespace(create=lambda *a, features=None, **k: FakeDataset(features))
+    fake_world = types.ModuleType("omx_two_arm_world")
+    fake_world.JOINTS = ["j1", "j2", "j3", "j4", "j5", "j6"]
+    fake_world.FPS = 15
+    fake_world.World = lambda layout: types.SimpleNamespace(layout=layout)
+    for name, mod in {
+        "lerobot": types.ModuleType("lerobot"),
+        "lerobot.datasets": types.ModuleType("lerobot.datasets"),
+        "lerobot.datasets.lerobot_dataset": fake_ds,
+        "omx_two_arm_world": fake_world,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    calls = []
+    monkeypatch.setattr(policy.skills, "disturb", lambda *a, **k: None)
+    monkeypatch.setattr(policy.teaching.Teacher, "run_task", lambda self, task, isolated=False, **k: calls.append(isolated))
+
+    policy.collect([0], ["stack"], tmp_path / "ds", no_goal=True)
+    assert calls == [False]
+    assert policy.GOAL not in created["features"] and "observation.state" in created["features"]
+
+    policy.collect([0], ["stack"], tmp_path / "ds_skill", skill="grasp", no_goal=True)
+    assert calls == [False, True]
+
+    ds = FakeDataset(created["features"])
+    rec = policy.Recorder(types.SimpleNamespace(layout=sites.Layout()), ds, {}, no_goal=True)
+    rec.goal = True
+    monkeypatch.setattr(helpers, "observe", lambda *a: (np.zeros(12, dtype=np.float32), {"top": np.zeros((4, 4, 3), dtype=np.uint8)}))
+    monkeypatch.setattr(policy.teaching.Teacher, "frame", lambda *a: None)
+    rec.frame(None, {arm: np.zeros(6, dtype=np.float32) for arm in sites.ARMS}, "s1")
+    assert len(ds.frames) == 1 and policy.GOAL not in ds.frames[0] and "observation.state" in ds.frames[0]

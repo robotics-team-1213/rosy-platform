@@ -88,6 +88,9 @@ class SiteMapStore:
         #: D-982 per-site operating rules: their own versions, the same database and audit rows.
         self.rules = SiteRulesStore(self._db, self._lock, self.clock, self._event,
                                     lambda: {p.id for p in self._cached[1].places} if self._cached else None)
+        from fleet.server.map_binding_store import MapBindingStore
+        #: D-1022 robot map -> site frame bindings: same database and audit rows.
+        self.map_bindings = MapBindingStore(self._db, self._lock, self.clock, self._event)
 
     def close(self) -> None:
         with self._lock:

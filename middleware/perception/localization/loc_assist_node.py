@@ -44,7 +44,7 @@ from . import executor_choice
 from .calibrated_values import calibrated
 from .loc_assist import LocAssist, lane_rules_near, localized_objects, pooled_grid, search
 from .sensing.body import URDF_RADIUS
-from .sensing.loc_candidates import Mount, reference_squares
+from .sensing.loc_candidates import Mount, reference_squares, sensor_from_base
 from .sensing.localization import MapAgreement, planar_yaw
 from perception_runtime.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from perception_runtime.perception.lane_bev import BirdsEye
@@ -239,11 +239,49 @@ class LocAssistNode(Node):
 
     def on_decision(self, msg):
         payload = self._json(msg, 'localization/decision')
-        if payload is not None:
-            out = self.core.on_decision(self.now(), payload)
-            if not out:
-                self.get_logger().debug('repeat of the decision under its 3 s check; ignored')
-            self.publish(out)
+        if payload is None:
+            return
+        if isinstance(payload, dict) and payload.get('source') == 'auto_recovery':
+            self._on_auto_recovery(payload)
+            return
+        out = self.core.on_decision(self.now(), payload)
+        if not out:
+            self.get_logger().debug('repeat of the decision under its 3 s check; ignored')
+        self.publish(out)
+
+    def _on_auto_recovery(self, payload):
+        try:
+            pose = payload['pose']
+            candidate_pose = ((float(pose['x']), float(pose['y']), float(pose['yaw']))
+                              if isinstance(pose, dict) else tuple(float(v) for v in pose))
+            xy = payload['camera_xy']
+            camera_xy = (float(xy['x']), float(xy['y'])) if isinstance(xy, dict) else (float(xy[0]), float(xy[1]))
+            raw_yaw = payload.get('camera_yaw')
+            camera_yaw = None if raw_yaw is None else float(raw_yaw)
+            if len(candidate_pose) != 3:
+                raise ValueError('pose must have 3 elements')
+        except (KeyError, TypeError, ValueError, IndexError):
+            self.get_logger().warning('localization/decision: invalid auto_recovery payload, ignored')
+            return
+        fit = self._auto_recovery_fit(candidate_pose)
+        out, reason = self.core.try_auto_recovery(
+            self.now(), candidate_pose, fit=fit, camera_xy=camera_xy,
+            camera_yaw=camera_yaw, request_id=payload.get('request_id'))
+        if reason:
+            self.get_logger().info(f'auto_recovery rejected: {reason}')
+        self.publish(out)
+
+    def _auto_recovery_fit(self, candidate_pose):
+        if self.field is None or self.scan is None:
+            return 0.0
+        try:
+            mount_tf = self.tf.lookup_transform('base_link', self.scan.header.frame_id, rclpy.time.Time())
+            t = mount_tf.transform.translation
+            mount = Mount(t.x, t.y, yaw(mount_tf.transform.rotation))
+        except Exception:
+            return 0.0
+        ranges, angles = self.scan_arrays(self.scan)
+        return self.field.score(sensor_from_base(candidate_pose, mount), ranges, angles)
 
     def on_suspect(self, msg):
         payload = self._json(msg, 'localization/suspect')

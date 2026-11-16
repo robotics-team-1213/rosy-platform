@@ -163,7 +163,7 @@ def measure(run, prev_path=None, camera_moved_ok=False):
     results["temp_plates"] = tp_first
     tp = results["temp_plates"]
     ab = dict(fk={n: dict(xy=[round(v, 4) for v in a.base[:2]], yaw_deg=round(math.degrees(a.yaw), 1)) for n, a in layout.arms.items()},
-              plate_centre={n: dict(xy=list(xy), yaw_deg=yaw) for n, (xy, yaw) in sites.ARM_BASES_PLATE_CENTRE.items()})
+              plate_centre={n: dict(xy=list(xy), yaw_deg=yaw) for n, (xy, yaw) in sites.ARM_BASES_MEASURED_194.items()})
     cap_file = run / "capture.json"
     snap = dict(schema=SCHEMA, taken_at=json.loads(cap_file.read_text(encoding="utf-8"))["taken_at"] if cap_file.exists() else None,
                 frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
