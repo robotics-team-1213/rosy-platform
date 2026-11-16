@@ -5557,3 +5557,8 @@
 - 변경: `POST /api/fleet/robots/{id}/goal` 선택 필드 `frame: "site"`(v1.400). 콘솔이 현장 지도 보기에서 찍은 목표는 이 필드를 싣고, Fleet이 trip free 목표와 같은 `robot_frame_goal`로 기체 Nav2 지도 프레임으로 바꾼다. 증명이 없으면 409(`SITE_POSE_UNKNOWN`·`SITE_MAP_NOT_ACTIVE`)로 아무것도 보내지 않는다. 격자 보기·다른 호출자는 그대로.
 - 증거: 원격 `test_console_goal_site_frame.py`·`test_server_app.py`·`test_task_api.py` 78 통과.
 - gate 변화: SOURCE. 실물 미실시.
+
+## 2026-11-16 · uncommitted · fix(fleet): auto-track-calibration 서비스 principal 보정·지도 경로 최소 권한 허용
+- 변경: `fleet/server/auth/site_auth.py` — `role: service`, `principal_id: auto-track-calibration` 기계 자격을 `/api/fleet/calibrations` 및 `/api/fleet/site-map/*` 경로로 한정 허용해 Account receiver 모드에서도 호스트 자동 보정 타이머가 인간 세션 위조 없이 동작하도록 연결했다.
+- 증거: 원격 `test_auto_track_calibration.py`·`test_overhead_tracking_api.py` 통과 및 `rosy-fleet-r` 실호스트 적용 확인.
+- gate 변화: 없음.

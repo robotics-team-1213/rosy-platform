@@ -237,3 +237,36 @@ def test_world_261026_auto_handles_glare_split_and_charger_occlusion():
     err_px = np.max(np.hypot(*(_proj(fit["map_to_image"], corners) - _proj(m2i_syn, corners)).T))
     assert err_px < 4.0
 
+
+def test_auto_track_calibration_service_principal_is_scoped_to_calibration_and_site_map():
+    from hashlib import sha256
+    from types import SimpleNamespace
+    import pytest
+    from fastapi import HTTPException
+    from rosy_account.principal import SitePrincipal
+    from fleet.server.auth.site_auth import build_authorize, build_role_guards
+
+    raw_tok = "a" * 64
+    digest = sha256(raw_tok.encode()).hexdigest()
+    principals = {digest: SitePrincipal("auto-track-calibration", "service")}
+    authorize = build_authorize(None, principals, None)
+    _, require_operator, _, _ = build_role_guards(authorize, principals)
+
+    def req(path: str):
+        return SimpleNamespace(
+            url=SimpleNamespace(path=path),
+            method="GET",
+            state=SimpleNamespace(),
+            cookies={},
+        )
+
+    p_cal = authorize(req("/api/fleet/calibrations"), f"Bearer {raw_tok}")
+    assert require_operator(p_cal).principal_id == "auto-track-calibration"
+    p_map = authorize(req("/api/fleet/site-map/active"), f"Bearer {raw_tok}")
+    assert require_operator(p_map).principal_id == "auto-track-calibration"
+
+    with pytest.raises(HTTPException) as exc:
+        authorize(req("/api/fleet/trips"), f"Bearer {raw_tok}")
+    assert exc.value.status_code == 403
+
+
