@@ -40,7 +40,12 @@ def test_grid_is_centred_on_the_mat_frame():
     assert abs(ox + w * res / 2) < 1e-9 and abs(oy + h * res / 2) < 1e-9
 
 
-def test_committed_grid_files_are_what_the_generator_writes(tmp_path):
-    bw.write_map(tmp_path)
-    for name in ("map_world_261026.pgm", "map_world_261026.yaml"):
-        assert (tmp_path / "maps" / name).read_bytes() == (BUNDLE / "maps" / name).read_bytes(), name
+def test_the_generator_does_not_overwrite_a_map_that_is_already_there(tmp_path):
+    maps = tmp_path / "maps"
+    maps.mkdir()
+    saved = "saved: by-hand"
+    (maps / "map_world_261026.yaml").write_text(saved, encoding="utf-8")
+    bw.build(tmp_path)                       # default: the bundle's map files are data, left alone
+    assert (maps / "map_world_261026.yaml").read_text(encoding="utf-8") == saved
+    bw.build(tmp_path, seed_map=True)        # only an explicit seed rewrites them
+    assert "image: map_world_261026.pgm" in (maps / "map_world_261026.yaml").read_text(encoding="utf-8")

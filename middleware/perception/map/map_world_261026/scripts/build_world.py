@@ -281,7 +281,7 @@ def write_map(out: Path) -> None:
         "negate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n", encoding="utf-8", newline="\n")
 
 
-def build(out: Path) -> None:
+def build(out: Path, seed_map: bool = False) -> None:
     tris = read_triangles(SOURCE_STL)
     loop = loop_triangles(tris)
     if not loop or len(loop) == len(tris):
@@ -290,14 +290,18 @@ def build(out: Path) -> None:
     world = out / "worlds" / "map_world_261026.world"
     world.parent.mkdir(parents=True, exist_ok=True)
     world.write_text(world_xml(len(loop)), encoding="utf-8", newline="\n")
-    write_map(out)
+    # The map files are data, not generator output: a saved map dropped in via map_bundle.py is never overwritten.
+    if seed_map or not (out / "maps" / "map_world_261026.yaml").exists():
+        write_map(out)
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=Path, default=BUNDLE)
+    p.add_argument("--seed-map", action="store_true",
+                   help="rewrite maps/ from the design values (default: only when no map is there yet)")
     args = p.parse_args(argv)
-    build(args.out)
+    build(args.out, seed_map=args.seed_map)
     return 0
 
 

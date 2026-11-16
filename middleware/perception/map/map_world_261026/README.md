@@ -26,3 +26,13 @@
 ## Nav2 지도 (2026-11-17)
 
 `maps/map_world_261026.{pgm,yaml}`은 `scripts/build_world.py`가 월드와 함께 만든다(2 cm 격자, 매트 중심 좌표). 매트 안쪽만 비어 있고(254), 벽 링과 **벽 바깥 전부**(가장자리 0.20 m 여유 포함)는 점유(0)다. 벽 링은 월드의 `track_261026` 모델 벽 4개(두께 5 mm, 높이 0.155 m)와 같은 자리다. 벽 바깥 실제 아레나 벽과 OMX 셀은 아직 모델링하지 않았다(실측 전).
+
+**지도는 데이터다.** `maps/`의 파일이 정본이고 생성기는 지도가 없을 때만 처음 한 번 쓴다(`build_world.py --seed-map`으로만 다시 덮는다). 로봇이 SLAM으로 저장한 지도로 바꾸려면:
+
+```bash
+python middleware/perception/map/map_bundle.py check  <저장한 map.yaml>     # 무엇이 문제인지(바깥이 벽이 아님 등)
+python middleware/perception/map/map_bundle.py import <저장한 map.yaml> middleware/perception/map/map_world_261026 \
+    --name map_world_261026 --margin-m 0.20 --source "로봇/날짜/저장 방법"
+```
+
+`import`는 지도 바깥에 점유 여백을 붙여(원점도 같이 옮김) "지도 바깥은 모두 벽" 규칙을 맞추고, 출처와 해시를 `maps/manifest.json`에 남긴다. 규칙을 어기는 지도는 `check`와 시험이 거절한다.
