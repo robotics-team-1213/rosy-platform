@@ -60,7 +60,9 @@ def marking_cell(tmp_path, monkeypatch):
     library.write_text("{}")
     field = cf.Field(config, tmp_path / "catalog.json")
     binding = profiles.load(profile)["binding"]
-    state = {"ok": True, "t": time.time(), "library_sha256": "b" * 64, "state": [0] * 6,
+    created = time.time()
+    # Keep state fresh relative to query time so suite-load pauses past MAX_GAP_S never spoof staleness.
+    state = {"ok": True, "t": created, "library_sha256": "b" * 64, "state": [0] * 6,
         "operating_context": {"scope": "simulation", "session_id": "fixture-session", "sha256": "c" * 64,
                               "operating_profile": binding}}
     sent, queries, reject = [], [], []
@@ -83,7 +85,7 @@ def marking_cell(tmp_path, monkeypatch):
     def act(command, timeout=None):
         if command == "state":
             queries.append(command)
-            return state
+            return {**state, "t": time.time() + (state["t"] - created)}
         return actual_act(command, timeout=timeout)
     monkeypatch.setattr(field.cell, "act", act)
     monkeypatch.setattr(cell_pivot, "settled_frame", lambda *a, **kw: np.zeros((8, 8, 3), np.uint8))
@@ -148,6 +150,8 @@ def test_supervised_marks_use_checked_commands_and_keep_park_recovery(marking_ce
         out = case.field.marks(case.library, "goto above_pick", commissioning=True, person_at_switch=True)
         if failure:
             assert out["result"].startswith("refused")
+        else:
+            assert "blobs" in out, out
     assert all(c.startswith("checked fixture-session ") for c in case.sent)
     revision = digest(json.loads(Path(case.library).read_text()))
     assert [c.split(" ")[2] for c in case.sent] == (
