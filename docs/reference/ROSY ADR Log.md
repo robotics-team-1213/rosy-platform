@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1011 | 공급암 S와 적재 셀(A·B) 사이 컨베이어 끝 인계는 Fleet이 관측으로 판단한다: 판정기는 관측 생산자, 셀의 grasp 성공을 이벤트로 남기고 그 뒤에만 다음 하역. [전문](../adr/D-1011-omx-supply-conveyor-handoff-observation.md) | Proposed (2026-11-16, 사용자 요청; 문서만, 구현 없음. 최종 승인은 관제·셀 담당) |
 | D-1009 | CORE는 pass/stop 점 경로를 한 번에 받아 stop 점에서만 서고, 막힘은 이동을 유지하며 재계획한다. [전문](../adr/D-1009-core-route-drive-pass-and-stop.md) | Accepted (2026-11-10, 사용자 지시; SOURCE·Gazebo SIM까지, 기체 적용·실물 주행 없음, Fleet 연동은 다음 단계) |
 | D-1008 | 몸 주변 안전지대는 실제 진행 방향만 지킨다: 후진 사람 확인 삭제, 제자리 회전은 몸이 돌아 들어가는 쪽만. [전문](../adr/D-1008-heading-only-safety-zone.md) | Accepted (2026-11-09, 사용자 지시; CORE 구현·호스트 시험, 하드웨어 worker 회전 게이트와 실물 적용은 별도) |
 | D-1007 | 카메라 위치에 관계없이 맞추기의 첫 걸음 — 로봇 대응점으로 검토용 보정 후보(유효 구역=대응점 껍질)를 만든다, 오프라인·적용 없음. [전문](../adr/D-1007-robot-driven-calibration-candidates.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·호스트 시험까지, 현장 수용 없음) |
