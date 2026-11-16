@@ -217,7 +217,8 @@ class Driver:
     def act(self, state, images, goal=None, prompt=PROMPT):
         torch, device = self.torch, self.device
         batch = {"observation.state": torch.from_numpy(state)[None].to(device), "task": [prompt],
-                 **{f"observation.images.{view}": (torch.from_numpy(image).permute(2, 0, 1)[None].float() / 255).to(device) for view, image in images.items()}}
+                 **{f"observation.images.{view}": torch.from_numpy(image if image.flags.writeable else np.array(image, copy=True)).to(device).permute(2, 0, 1)[None].float() / 255
+                    for view, image in images.items()}}
         if self.has_goal:
             if goal is None:
                 raise ValueError("loaded policy expects observation.environment_state goal vector")

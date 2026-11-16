@@ -388,7 +388,7 @@ def run_console(args: argparse.Namespace) -> None:
           flush=True)
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning", timeout_keep_alive=75, **tls_options)
 
 
 def run(argv: Optional[Sequence[str]] = None) -> None:

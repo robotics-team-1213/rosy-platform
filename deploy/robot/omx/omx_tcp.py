@@ -24,6 +24,16 @@ def _checked(value, source: str) -> tuple[float, str]:
     return tcp, source
 
 
+def config_tcp(config: dict | None, plan: dict | None = None) -> float | None:
+    """Optional tcp_x_m from cell config first, then plan / config['plan'], without exiting."""
+    if isinstance(config, dict) and config.get("tcp_x_m") is not None:
+        return float(config["tcp_x_m"])
+    src = plan if isinstance(plan, dict) else (config.get("plan") if isinstance(config, dict) else None)
+    if isinstance(src, dict) and src.get("tcp_x_m") is not None:
+        return float(src["tcp_x_m"])
+    return None
+
+
 def resolve_tcp(cell_config=None, plan=None, *, default: float | None = None, env=None) -> tuple[float, str]:
     """-> (tcp_x_m, source); the source is logged. Nothing set and no `default` is a SystemExit, never a guess."""
     env = os.environ if env is None else env

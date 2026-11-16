@@ -48,9 +48,11 @@ def limit_error(config: dict, library: dict) -> str | None:
 def plan_library(config: dict, pick: dict, place: dict, *, check: bool = True) -> dict:
     """The chunk library for a pick and place; refused (SystemExit) when it leaves the arm's joint window."""
     from grasp_planner import Planner
+    import omx_tcp
 
+    tcp_x_m = omx_tcp.config_tcp(config)
     library = Planner(dict(config["plan"], pick=pick, place=place, keep_out=config.get("keep_out"),
-                           **({"tcp_x_m": config["tcp_x_m"]} if "tcp_x_m" in config else {}))).library()
+                           **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))).library()
     error = limit_error(config, library) if check else None
     if error:
         raise SystemExit(error)

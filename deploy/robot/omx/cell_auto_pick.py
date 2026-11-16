@@ -154,8 +154,13 @@ def run_auto(
                 target["object"]["raw_m"], objects, work, bias_data, sleep, log,
             )
             bias_data = cell_place_fit.with_tier_biases(config, bias_data)
-            bias_error = (cell_auto_evidence.bias_map_error(config, calibration, bias_data, source,
-                                                            target["object"]["raw_m"]) if "map_pose_frame" in out else None)
+            bias_error = (
+                (
+                    cell_auto_evidence.bias_map_error(config, calibration, bias_data, source, target["object"]["raw_m"])
+                    or cell_auto_evidence.bias_map_error(config, calibration, bias_data, dest_site, place_xy)
+                )
+                if "map_pose_frame" in out else None
+            )
             if bias_error:
                 tried["fail"] = {"stage": "calibrate", "class": bias_error}
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
@@ -295,7 +300,7 @@ def run_auto(
                     "measurement",
                     f"placement seen on the {tried['verify']['basis']}",
                 )
-                tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"])
+                tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"], calibration=calibration)
                 cell_executor.outcome(choices, tried["execution"], choice,
                                       tried["verify"].get("verified") is True and tried["verify"].get("inside") is True,
                                       "placement verification")
