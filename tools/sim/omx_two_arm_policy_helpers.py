@@ -131,37 +131,90 @@ def resolved_choices(choices=None, *, pick_vision=False, belt_skew=False, cam_ji
     return dict(teaching.VISION_SKEW_CHOICES if (pick_vision or belt_skew or cam_jitter) else {}, **(choices or {}))
 
 
+def _resolve_steps_file(dagger_model, steps_file):
+    if steps_file:
+        return Path(steps_file)
+    for parent in Path(dagger_model).resolve().parents:
+        candidate = parent / "steps.json"
+        if candidate.is_file():
+            return candidate
+    raise ValueError("--dagger-model requires --steps-file (or an ancestor steps.json)")
+
+
 def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0., lag=False, physics=False, *,
-            pick_vision=False, belt_skew=False, cam_jitter=False, no_goal=False):
+            pick_vision=False, belt_skew=False, cam_jitter=False, compensate_zero=False, no_goal=False,
+            dagger_model=None, steps_file=None, dagger_prefix_frames="auto", dagger_only=False, dagger_device=None,
+            dagger_steps=None, n_action_steps=None, flow_steps=None, use_amp=None):
     if skill and plan_dir:
         raise ValueError("a sub-skill is recorded one step at a time, not in concurrent mode")
+    if dagger_model and not skill:
+        raise ValueError("--dagger-model requires --skill")
+    import shutil
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     import omx_two_arm_world as world_mod
     joints = [f"{arm}.{joint}" for arm in sites.ARMS for joint in world_mod.JOINTS]
     vector = dict(dtype="float32", shape=(12,), names=joints)
     image = dict(dtype="video", shape=(*SHAPE, 3), names=["height", "width", "channels"])
     goal = dict(dtype="float32", shape=(GOAL_SIZE,), names=[f"goal{i}" for i in range(GOAL_SIZE)])
+    raw_choices = choices
     choices = resolved_choices(choices, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
     layout = sites.Layout(**choices)
-    world = world_mod.World(layout)
+    dagger_driver, longest, dagger_counts = None, {}, {}
+    step_filter = {s.strip() for s in dagger_steps.split(",") if s.strip()} if isinstance(dagger_steps, str) else (set(dagger_steps) if dagger_steps else None)
+    if dagger_model:
+        resolved_steps = _resolve_steps_file(dagger_model, steps_file)
+        longest = dict(json.loads(resolved_steps.read_text(encoding="utf-8")).get("longest", {}))
+        dagger_driver = Driver(dagger_model, resolved_steps, raw_choices, pick_vision=pick_vision,
+                               belt_skew=belt_skew, cam_jitter=cam_jitter, n_action_steps=n_action_steps,
+                               flow_steps=flow_steps, use_amp=use_amp, device=dagger_device)
+    world = dagger_driver.world if dagger_driver else world_mod.World(layout)
     features = {"observation.state": vector, "action": vector, **{f"observation.images.{view}": image for view in teaching.RECORDED}}
     if not no_goal:
         features[GOAL] = goal
     dataset = LeRobotDataset.create("rosy/omx-two-arm", world_mod.FPS, root=out, robot_type="omx_follower_pair", features=features)
-    longest, spoiled = {}, []
+    spoiled = []
     planned = plan_tasks(plan_dir, names) if plan_dir else None
     for seed in seeds:
         for name in names:
-            teacher = Recorder(world, dataset, longest, concurrent=planned is not None, skill=skill, no_goal=no_goal,
-                               seed=seed, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
-            skills.disturb(teacher, seed, zero_error_deg, lag, physics)
-            teacher.error_draw = (STEP_ERROR_SEED_BASE + 100 * seed + 50 * names.index(name), zero_error_deg, physics)
-            teacher.run_task(planned[name] if planned else tasks.get_task(layout, name), isolated=bool(skill) and planned is None)
-            if teacher.spoiled:
-                spoiled.append(f"{name}:{seed}")
-            print("collected", name, seed, flush=True)
-    dataset.finalize()
-    (Path(out).parent / f"{Path(out).name}.steps.json").write_text(json.dumps(dict(longest=longest, spoiled=spoiled)), encoding="utf-8")
+            if not dagger_only:
+                teacher = Recorder(world, dataset, longest, concurrent=planned is not None, skill=skill, no_goal=no_goal,
+                                   seed=seed, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
+                skills.disturb(teacher, seed, zero_error_deg, lag, physics)
+                teacher.compensate_zero = bool(compensate_zero)
+                teacher.error_draw = (STEP_ERROR_SEED_BASE + 100 * seed + 50 * names.index(name), zero_error_deg, physics)
+                teacher.run_task(planned[name] if planned else tasks.get_task(layout, name), isolated=bool(skill) and planned is None)
+                if teacher.spoiled:
+                    spoiled.append(f"{name}:{seed}")
+                print("collected", name, seed, flush=True)
+            if dagger_driver:
+                task = tasks.get_task(layout, name)
+                here = dict(task.get("start", {}))
+                err_seed_base = STEP_ERROR_SEED_BASE + 100 * seed + 50 * names.index(name)
+                with dagger_driver.torch.inference_mode():
+                    for idx, plan in enumerate(task["steps"]):
+                        if step_filter is None or plan["id"] in step_filter:
+                            rec = Recorder(world, dataset, longest, skill=skill, no_goal=no_goal, seed=seed + idx,
+                                           pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
+                            skills.disturb(rec, err_seed_base + idx, zero_error_deg, lag, physics)
+                            rec.compensate_zero = bool(compensate_zero)
+                            row = skills.recover(dagger_driver, rec, plan, here, skill, prefix_frames=dagger_prefix_frames)
+                            st = row.get("dagger_status", "unknown")
+                            dagger_counts[st] = dagger_counts.get(st, 0) + 1
+                            print("dagger", name, seed, plan["id"], st, row.get("result"), flush=True)
+                        here[plan["container"]] = plan["to"]
+                        if plan.get("outbound"):
+                            here.pop(plan["container"], None)
+    num_episodes = getattr(dataset, "num_episodes", None)
+    if num_episodes == 0:
+        shutil.rmtree(out, ignore_errors=True)
+    else:
+        dataset.finalize()
+    meta = dict(longest=longest, spoiled=spoiled)
+    if num_episodes is not None:
+        meta["episodes"] = int(num_episodes)
+    if dagger_counts:
+        meta["dagger"] = dagger_counts
+    (Path(out).parent / f"{Path(out).name}.steps.json").write_text(json.dumps(meta), encoding="utf-8")
     return 0
 
 
@@ -169,7 +222,7 @@ class Driver:
     """Runs plan steps with the model in the teacher's place, under the teacher's judgement."""
 
     def __init__(self, model, steps_file, choices=None, *, pick_vision=False, belt_skew=False, cam_jitter=False,
-                 ensemble_coeff=None, n_action_steps=None, flow_steps=None, use_amp=None):
+                 ensemble_coeff=None, n_action_steps=None, flow_steps=None, use_amp=None, device=None):
         import omx_two_arm_world as world_mod
         import torch
         from lerobot.policies.factory import make_pre_post_processors
@@ -177,7 +230,7 @@ class Driver:
         if flow_steps is not None and (type(flow_steps) is not int or flow_steps < 1):
             raise ValueError("positive integer flow_steps required")
         self.kind = "ik" if str(model) == "ik" else json.loads((Path(model) / "config.json").read_text(encoding="utf-8"))["type"]
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         if self.kind == "act":
             from lerobot.policies.act.modeling_act import ACTPolicy, ACTTemporalEnsembler
             self.policy = ACTPolicy.from_pretrained(model, local_files_only=True).to(device).eval()
