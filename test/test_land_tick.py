@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -133,3 +135,29 @@ def test_cleanup_trims_the_pytest_memory_history_past_its_cap(tmp_path, monkeypa
     land_tick.cleanup(tmp_path)
     rows = history.read_text(encoding="utf-8").splitlines()
     assert len(rows) == memory_history.KEEP_ROWS and rows[-1] == f'{{"key": "{memory_history.MAX_ROWS}"}}'
+
+
+def test_cleanup_keeps_an_old_ticket_whose_landing_is_still_logging(tmp_path, monkeypatch):
+    """11-17: land_queue.expired counts age from queueing; the tick killed a rollup and a landing mid-test at 4 h."""
+    import json
+    import land_rollup  # noqa: E402
+    holder = tmp_path / "holder"
+    (holder / "land-fix-z").mkdir(parents=True)
+    (holder / "land-fix-z.log").write_text("[remote-pytest] pytest ...
+")
+    tpath = tmp_path / "01-99.json"
+    tpath.write_text(json.dumps({"pid": 99}))
+    stopped = []
+    monkeypatch.setattr(land_tick.land_queue, "queue_dir", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_async, "holder", lambda repo: holder)
+    monkeypatch.setattr(land_tick.land_queue, "expired", lambda qdir: [
+        {"pid": 99, "age": 15000.0, "branch": "land/fix/z", "worktree": str(holder / "land-fix-z"), "path": tpath}])
+    monkeypatch.setattr(land_rollup, "stop_remote", lambda h, rows: None)
+    monkeypatch.setattr(land_rollup, "stop", lambda pid: stopped.append(pid))
+    monkeypatch.setattr(land_tick.land_gc, "plan", lambda repo, now, days: [])
+    monkeypatch.setattr(land_tick.land_gc, "apply", lambda repo, rows: [])
+    monkeypatch.setattr(land_tick.worktrees, "prune", lambda repo, **k: 0)
+    assert "reaped 0 expired" in land_tick.cleanup(tmp_path) and stopped == [] and tpath.exists()
+    old = time.time() - land_tick.ACTIVE_LOG_S - 60
+    os.utime(holder / "land-fix-z.log", (old, old))  # silent for 30 min: stuck, reaped as before
+    assert "reaped 1 expired" in land_tick.cleanup(tmp_path) and stopped == [99]
