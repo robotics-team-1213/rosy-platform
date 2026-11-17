@@ -32,6 +32,22 @@ def load_station_zones(override_path: Path | None = None) -> dict[str, Any]:
     }
 
 
+# Legacy warehouse station ids -> cell site map ids (shared/web/cell-site-map.json).
+# None = no cell place; "not_places:*" = a non-place entry of the map (belt feed).
+_SITE_ALIASES: dict[str, str | None] = {
+    "EXP_S1": "stand:r1-s1",
+    "EXP_S5_PALLET": "stand:r1-s1",
+    "EXP_S3_BELT": "not_places:belt",
+    "STG_C2": None,
+    "STG_S3_WAIT": None,
+}
+
+
+def resolve_site_alias(old_id: str) -> str | None:
+    """Read-only lookup of a legacy station zone id; unknown ids also give None."""
+    return _SITE_ALIASES.get(old_id)
+
+
 def save_station_zones_yaml(yaml_text: str, target_path: Path) -> dict[str, Any]:
     """Validate and persist updated YAML text for staging bays and export stations."""
     parsed = yaml.safe_load(yaml_text)
