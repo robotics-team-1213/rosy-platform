@@ -106,7 +106,7 @@ def test_app_bar_folds_by_the_shell_container_not_the_viewport():
     tabs_sheet = (WEB / "shared/doc-tabs.css").read_text(encoding="utf-8")
     assert "@media" not in header_sheet
     assert set(re.findall(r"@container \(([^)]+)\)", header_sheet)) == {
-        "width < 64rem", "width < 48rem", "width < 30rem"}
+        "width < 64rem", "width < 48rem", "width < 30rem", "width < 24rem"}  # 24rem: the AI launcher yields below 384px (F4)
     assert "container-type" not in header_sheet, "칸은 셸 하나다"
     assert ".fleet-shell { container-type: inline-size;" in tabs_sheet
     assert ".fleet-task-page { container-type: inline-size;" in tabs_sheet
