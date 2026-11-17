@@ -1,0 +1,26 @@
+# D-977 device_trial ARM transfer overlay for a cell Fleet. Off unless added after compose.omx.yaml:
+#   -f compose.yaml -f compose.omx.yaml -f compose.omx-device-trial.yaml
+# Opens the ARM transfer job API (propose, admit, HOLD) under profile device_trial. Nothing moves:
+# the hardware owner still refuses goals until D-977 Decision 4. Without the observer token files
+# there is no observer, so dispatch is impossible.
+# Host files (set in site.env; docs/deployment/control-units.md 「팔 이송 위임」):
+#   ROSY_ARM_TRANSFER_INSTALLATION_FILE  the written installation the owner also reads
+#   ROSY_ARM_TRANSFER_OBSERVER_DIR       holds observer_token (optional)
+services:
+  fleet:
+    environment:
+      ROSY_DEPLOYMENT_PROFILE: device_trial
+      ROSY_ARM_TRANSFER_INSTALLATION: /run/rosy-arm-transfer/installation.json
+      # {"<instance>":{"capability_revision":"..","config_revision":"..","commissioning_revision":".."}}
+      ROSY_FLEET_OMX_GRANT_REVISIONS: "${ROSY_FLEET_OMX_GRANT_REVISIONS:?set ROSY_FLEET_OMX_GRANT_REVISIONS}"
+      # Absent token file = no observer. valid_until is an ISO timestamp with a timezone.
+      ROSY_ADDITIONAL_CREDENTIAL_PATHS: '${ROSY_SITE_ARM_TRANSFER_CREDENTIAL_PATHS:-{}}'
+      ROSY_ARM_TRANSFER_OBSERVER_VALID_UNTIL: "${ROSY_ARM_TRANSFER_OBSERVER_VALID_UNTIL:-}"
+    volumes:
+      - type: bind
+        source: "${ROSY_ARM_TRANSFER_INSTALLATION_FILE:?set ROSY_ARM_TRANSFER_INSTALLATION_FILE}"
+        target: /run/rosy-arm-transfer/installation.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - /etc/rosy/fleet-arm-transfer:/run/rosy-arm-transfer-secrets:ro
