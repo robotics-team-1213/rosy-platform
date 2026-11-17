@@ -32,6 +32,13 @@ export function describeBy(el, id, on) {
   if (ids.length) el.setAttribute("aria-describedby", ids.join(" ")); else el.removeAttribute("aria-describedby");
 }
 
+/** One disabled control + the visible reason it is off (a <ui-button reason> draws it). describedBy: id of a state line to point at. */
+export function setOff(control, off, reason = "", describedBy = "") {
+  control.disabled = Boolean(off);
+  if (off) control.setAttribute("reason", reason); else control.removeAttribute("reason");
+  if (describedBy) control.setAttribute("aria-describedby", describedBy);
+}
+
 export function createCauseLine(group, {line} = {}) {
   const owned = !line;
   if (!line) {

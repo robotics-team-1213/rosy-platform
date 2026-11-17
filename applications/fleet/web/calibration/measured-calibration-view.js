@@ -1,6 +1,6 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
 import {isOperator} from '/console/assets/authorization.js';
-import {setOff} from '/common/control-dom.js';
+import {setOff} from '/common/cause-line.js';
 
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'

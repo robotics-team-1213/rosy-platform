@@ -2,7 +2,7 @@ import {randomUUID} from "/console/assets/uuid.js";
 // Console owns draft/display only; Fleet owns durable requests and all facts.
 import { createVoice } from './assistant-voice.js';
 import {voicePlatform} from '/console/assets/app-runtime.js';
-import {setOff} from '/common/control-dom.js';
+import {setOff} from '/common/cause-line.js';
 export function createDialogue() {
   let identity = null, generation = 0, conversation = randomUUID(), pending = null;
   const rows = [];

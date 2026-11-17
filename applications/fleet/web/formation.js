@@ -3,7 +3,7 @@
 // 그리는 것과 여는 것은 다른 일이다. 서버 기하를 복제하지 않는다.
 // 운영자 말은 공용 표(core_ui_logic.js, D-540 6)에서 온다. 열거값은 title에만.
 import { FORMATION_SHAPE_LABEL, FORMATION_STATE_LABEL, EVIDENCE_LABEL, enumLabel } from "/common/core_ui_logic.js";
-import { setOff as setControlOff } from "/common/control-dom.js";
+import { setOff as setControlOff } from "/common/cause-line.js";
 import { capabilityReason, chooseLeader, motionCommandReason, formationReason, leaderPathKind } from "./motion-readiness.js";
 
 const stateLabel = (state) => enumLabel(FORMATION_STATE_LABEL, state);

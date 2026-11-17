@@ -8,13 +8,6 @@ export function node(tag, text = "", className = "") {
   return result;
 }
 
-// One disabled control + the visible reason it is off (a <ui-button reason> draws it). describedBy: id of a state line to point at.
-export function setOff(control, off, reason = "", describedBy = "") {
-  control.disabled = Boolean(off);
-  if (off) control.setAttribute("reason", reason); else control.removeAttribute("reason");
-  if (describedBy) control.setAttribute("aria-describedby", describedBy);
-}
-
 export function action(label, onClick, kind = "quiet") {
   const button = node("ui-button", label);
   button.setAttribute("kind", kind);
