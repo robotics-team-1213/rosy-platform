@@ -2,6 +2,7 @@ import {randomUUID} from "/console/assets/uuid.js";
 // Console owns draft/display only; Fleet owns durable requests and all facts.
 import { createVoice } from './assistant-voice.js';
 import {voicePlatform} from '/console/assets/app-runtime.js';
+import {setOff} from '/common/control-dom.js';
 export function createDialogue() {
   let identity = null, generation = 0, conversation = randomUUID(), pending = null;
   const rows = [];
@@ -66,11 +67,6 @@ export function createAssistantPanel({scope, call, el, readSelection, onOpen = n
       paint();
     }});
   function clearTimer() { clearTimeout(timer); timer = null; }
-  function setOff(control, off, reason) {
-    control.disabled = off;
-    if (off) control.setAttribute('reason', reason);
-    else control.removeAttribute('reason');
-  }
   function renderEmptyState(hasRows, reason) {
     if (!emptyBox) return;
     emptyBox.hidden = hasRows;

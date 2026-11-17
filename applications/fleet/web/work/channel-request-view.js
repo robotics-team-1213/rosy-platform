@@ -1,5 +1,6 @@
 // Fleet binds the current review and existing Task creation in one transaction.
 import {enumLabel, EVIDENCE_LABEL} from "/common/core_ui_logic.js";
+import {setOff as setControlOff} from "/common/control-dom.js";
 import {workStatus} from "/console/assets/work-view.js";
 const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비", HOLD: "보류", REJECTED: "거절됨", LINKED: "작업 연결"};
 const deliberationState = {PENDING: "대기", RUNNING: "진행 중", ANSWERED: "응답", HOLD: "보류", UNKNOWN: EVIDENCE_LABEL.unavailable, SUPERSEDED: "대체됨"};
@@ -31,11 +32,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     el("channel-review-submit-holder").hidden = review.state !== "READY";
     setOff(el("channel-review-submit"), busy || !canSubmit(review.candidate?.robot_id), reason);
   }
-  function setOff(control, off, reason) {
-    control.disabled = off;
-    if (off) control.setAttribute("reason", reason); else control.removeAttribute("reason");
-    control.setAttribute("aria-describedby", "channel-review-state");
-  }
+  const setOff = (control, off, reason) => setControlOff(control, off, reason, "channel-review-state");
   async function select(row) {
     const current = ++version, life = scope.capture(); panel.hidden = true;
     try {

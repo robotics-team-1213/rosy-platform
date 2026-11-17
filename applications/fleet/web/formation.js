@@ -3,6 +3,7 @@
 // 그리는 것과 여는 것은 다른 일이다. 서버 기하를 복제하지 않는다.
 // 운영자 말은 공용 표(core_ui_logic.js, D-540 6)에서 온다. 열거값은 title에만.
 import { FORMATION_SHAPE_LABEL, FORMATION_STATE_LABEL, EVIDENCE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { setOff as setControlOff } from "/common/control-dom.js";
 import { capabilityReason, chooseLeader, motionCommandReason, formationReason, leaderPathKind } from "./motion-readiness.js";
 
 const stateLabel = (state) => enumLabel(FORMATION_STATE_LABEL, state);
@@ -30,12 +31,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
   el("formation-shape").replaceChildren(...Object.entries(FORMATION_SHAPE_LABEL).map(([value, label]) =>
     Object.assign(new Option(label, value), { title: value })));
   // 꺼진 버튼은 "위 사유"이고 원인은 #formation-why 한 줄이 말한다.
-  function setOff(id, off, reason) {
-    const button = el(id);
-    button.disabled = off;
-    if (off) button.setAttribute("reason", reason);
-    else button.removeAttribute("reason");
-  }
+  const setOff = (id, off, reason) => setControlOff(el(id), off, reason);
 
   // D-540 9: 대형을 열고·바꾸고·재개하는 것은 움직임이다. 해제(formation-stop)는 멈춤이라 열려 있다.
   function setButtons(why, off) {

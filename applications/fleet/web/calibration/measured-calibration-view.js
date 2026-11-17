@@ -1,5 +1,6 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
 import {isOperator} from '/console/assets/authorization.js';
+import {setOff} from '/common/control-dom.js';
 
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'
@@ -56,8 +57,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     return Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a ? {p95_m:a,max_m:b} : null;
   }
   function setEnabled(control, enabled, reason) {
-    control.disabled = !enabled;
-    control.setAttribute('reason', enabled ? '' : reason);
+    setOff(control, !enabled, reason);
     control.setAttribute('title', enabled ? '' : reason);
     control.setAttribute('aria-description', enabled ? '' : reason);
   }

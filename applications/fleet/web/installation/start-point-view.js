@@ -2,6 +2,7 @@
 // 위치는 맵 맞춤의 "위에서 본 지도 좌표" 그림(map-fit-view.js view.mapFitPick)에서 고른다.
 // 고른 점은 목표 발행에 들어가지 않는다.
 import {createPollGate} from '/console/assets/poll-gate.js';
+import {setOff} from '/common/control-dom.js';
 import {NAMED_OPERATOR_REASON, OPERATOR_REASON, isOperator, namedOperatorReason} from '/console/assets/authorization.js';
 
 export function createStartPointView({scope, el, view, call, auth, onChanged}) {
@@ -28,9 +29,7 @@ export function createStartPointView({scope, el, view, call, auth, onChanged}) {
     if (!editable) stopPicking();
   }
   function setEnabled(control,enabled,reason) {
-    control.disabled=!enabled;
-    if (enabled) control.removeAttribute('reason'); else control.setAttribute('reason',reason);
-    control.setAttribute('aria-describedby','start-point-state');
+    setOff(control,!enabled,reason,'start-point-state');
   }
   function populate() {
     stopPicking();
