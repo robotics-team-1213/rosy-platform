@@ -211,3 +211,14 @@ def test_all_json_expands_the_actual_browser_registry_without_fake_changed_paths
     found = json.loads(capsys.readouterr().out)
     assert found == sorted({path for pattern in browser_scope.EVERYTHING for path in browser_scope._expand(pattern)})
     assert found and "tools/land_browser.py" not in found
+
+
+def test_server_cell_file_maps_to_its_two_pages_and_other_server_files_keep_fleet():
+    cell = ["operations/fleet/test/test_cell_app_browser.py", "operations/fleet/test/test_work_overview_browser.py"]
+    assert browser_scope.targets(["operations/fleet/fleet/server/cell/cell_arm_jobs.py"]) == cell
+    whole = set(browser_scope._expand("operations/fleet/test/*_browser.py"))
+    for path in ("operations/fleet/fleet/server/sitemap/pipeline_routes.py",
+                 "operations/fleet/fleet/server/work/work_routes.py"):
+        assert whole <= set(browser_scope.targets([path])), path
+    assert set(cell) < set(browser_scope.targets(["operations/fleet/fleet/server/cell/a.py",
+                                                  "operations/fleet/fleet/server/app.py"]))
