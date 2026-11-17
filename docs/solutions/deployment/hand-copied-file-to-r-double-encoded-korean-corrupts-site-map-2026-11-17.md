@@ -7,7 +7,7 @@ problem_type: data_integrity
 component: site_stack_runtime
 severity: high
 symptoms:
-  - "Fleet 콘솔 지도 호버 카드 제목이 `S3 · S3 ìƒë‹¨ í•˜ì—­ ì •ì§€ì„  (cell_s)`처럼 깨짐(제목은 `${pl.id} · ${pl.name}`)"
+  - "Fleet 콘솔 지도 호버 카드 제목의 한글 이름이 라틴 문자 묶음(UTF-8 바이트를 cp1252로 읽은 모양, 예: `상단`의 첫 바이트 0xEC 0x83 0x81이 `ì`·`ƒ`·제어 문자로 보임)으로 깨짐(제목은 `${pl.id} · ${pl.name}`)"
   - "site_map_versions.body의 places/edges 이름 27개(장소 13, 간선 14)가 v255~v257에서 깨짐"
 root_cause: environment_constraint
 resolution_type: code_and_ops
@@ -23,7 +23,7 @@ applies_when:
 
 ## 증상
 
-Fleet 콘솔 지도 호버 카드의 장소 이름이 UTF-8 바이트를 cp1252로 읽은 모양(`ìƒë‹¨ …`)으로 보였다. 저장소 파일은 모든 커밋에서 깨끗했다.
+Fleet 콘솔 지도 호버 카드의 장소 이름이 UTF-8 바이트를 cp1252로 읽은 모양(한 글자가 라틴 문자 2~3개로 보임)으로 보였다. 저장소 파일은 모든 커밋에서 깨끗했다.
 
 ## 원인
 
