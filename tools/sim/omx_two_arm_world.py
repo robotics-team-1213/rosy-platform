@@ -34,9 +34,13 @@ WRIST_ASSETS = sites.ISAAC / "assets/omx_wrist_camera_b"  # link5 parts in mm, a
 WRIST_PARTS = ("link5_gripper", "gripper_plate_F6", "b16-u16-span-D-holder-assembly")
 FPS = 15
 # the cell as its cameras see it (2026-11-10 top/side frames, G-29): yellow table, light-blue v11 plates with dark lane pads, light-blue ship
-COLOURS = dict(floor=[.37, .43, .37, 1], table=[.58, .47, .21, 1], belt=[.16, .21, .24, 1], plate=[.52, .69, .79, 1],
+# Colours are albedo: this renderer's light multiplies a top-facing surface by about 1.3 (measured on the 11-14 v24 render: table 1.2, hull 1.4, container clipped), so each is the
+# colour wanted in the picture / 1.3 (sky: photo 157/207/240 at hull gain 1.4). Wanted: ship and plates sky #A4DBE8, the PLA of team_p2s_navy_sky.3mf (photo 11-14 00:57 hull median 157/207/240); berth docks, cradle,
+# stopper and bridge v7 black (photo: dark pixels of those parts median 36/35/25), vendor base plate near black (13-20); table 180/133/25 and container 222/109/50 are photo medians.
+COLOURS = dict(floor=[.37, .43, .37, 1], table=[.59, .43, .08, 1], belt=[.16, .18, .19, 1], plate=[.45, .60, .67, 1],
                plate_navy=[.082, .149, .290, 1], plate_sky=[.643, .859, .910, 1], pad=[.08, .09, .1, 1],
-               black=[.12, .12, .13, 1], ship=[.50, .72, .85, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
+               ship=[.45, .60, .67, 1], container=[.62, .31, .14, 1], wall=[.6, .84, 1., 1],  # wall: the room behind the cell in the side frame (11-09)
+               black=[.11, .11, .09, 1], base=[.06, .065, .06, 1])
 
 
 @functools.lru_cache(maxsize=1)
@@ -134,7 +138,7 @@ class World:
             bp_mesh = f"omx_base_plate_{tag}"
             spec.add_mesh(name=bp_mesh, file=self._asset(bp_mesh), scale=[.001] * 3)
             world.add_geom(name=f"{PREFIX[arm]}plate", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=bp_mesh,
-                           pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=[.16, .17, .19, 1])
+                           pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["base"])
             clamp_dy = .01125 if tag == "a" else -.01125
             world.add_geom(name=f"{PREFIX[arm]}clamp", type=box, size=[.015, .0275, .0012],
                            pos=[a.base[0] - .060, a.base[1] + clamp_dy, L.table_z + .0142], contype=0, conaffinity=0, rgba=[.78, .81, .84, 1])
@@ -142,7 +146,7 @@ class World:
                 br_mesh = f"temp_slot_bridge_{tag}"
                 spec.add_mesh(name=br_mesh, file=self._asset(br_mesh), scale=[.001] * 3)
                 world.add_geom(name=f"{PREFIX[arm]}bridge", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=br_mesh,
-                               pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=[.92, .68, .22, 1])
+                               pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["black"])
         self._ship(spec)
         self._temp(spec)
         r08 = c["ship_source"] == "r08-berth"
@@ -246,7 +250,7 @@ class World:
         mesh = mujoco.mjtGeom.mjGEOM_MESH
         visuals = [("hull", COLOURS["ship"]), ("house", COLOURS["ship"])]
         kit = L.choices.get("berth_kit", "v24-docks")
-        if kit == "v24-docks":
+        if kit == "v24-docks":  # 2026-11-14 rated: printed v20 cradles and stopper + the 2 socket-in docking pieces (v24)
             visuals += [
                 ("berth_v24_cradle", COLOURS["black"]),
                 ("berth_v24_docks", COLOURS["black"]),

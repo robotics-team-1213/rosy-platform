@@ -42,7 +42,7 @@ PREFIX = "land/"
 ROLLUP = re.compile(r"land/fix/land-rollup-\d{14}-\d{14}")
 NO_WINDOW = 0x08000000  # subprocess.CREATE_NO_WINDOW, named here so the module imports off Windows too
 QUEUE_FULL = "landing queue full"
-ROOM_WAIT_S = 3 * 3600  # a landing refused only by the queue cap waits this long for room, then stops as before
+ROOM_WAIT_S = 3600  # a landing refused only by the queue cap waits this long without the queue moving, then stops
 FULL_WAIT_S, FULL_POLL_S = 30 * 60, 60  # D-889 addendum 32: a full queue at queue time waits, then stops
 # Laptop commit exhaustion ended four landings at once on 2026-11-06 with these as land.py's last line.
 RESOURCE_SHORTAGE = ("WinError 1450", "WinError 1455", "Out of memory", "MemoryError")
@@ -314,8 +314,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
             time.sleep(RESOURCE_WAIT_S)
             continue
         full = code != 0 and reason.startswith(f"[land] STOP: {QUEUE_FULL} (")
-        if not (full and time.monotonic() < deadline and room(tree, deadline)
-                and time.monotonic() < deadline):
+        if not (full and (deadline := _queue().wait_drain(tree, room, deadline, ROOM_WAIT_S))):
             break
         print(f"[land-async] {snap}: the queue has room again; land.py once more", flush=True)
     landed = subprocess.run(["git", "-C", str(tree), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0
