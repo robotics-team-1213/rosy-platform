@@ -858,3 +858,26 @@ def test_supervise_prunes_clean_landed_worktrees_and_never_fails_on_prune_error(
     monkeypatch.setattr(worktrees, "prune", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("lock held")))
     assert tool.supervise(tree2, snap2, [], run=fake_land) == 0
     assert not tree2.exists() and "worktree prune skipped: lock held" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("verdict", [True, False])
+def test_a_rollup_killed_without_a_verdict_is_not_bisected(repo, monkeypatch, verdict):
+    """11-17: land_tick killed a running rollup's land.py (exit 1, last line mid pytest); the supervisor then split
+    it on that progress line. Only a land.py STOP is a verdict to bisect on."""
+    main, dev = repo
+    snap = "land/fix/land-rollup-20261117000000-20261117000000"
+    _git(main, "branch", snap, "HEAD")
+    tree = tool.holder(main) / snap.replace("/", "-")
+    tool.holder(main).mkdir(exist_ok=True)
+    _git(main, "worktree", "add", "-q", str(tree), snap)
+    (tree.parent / (tree.name + ".members")).write_text("[]", encoding="utf-8")
+    split = []
+    monkeypatch.setattr(tool, "split_rollup", lambda *a, **k: split.append(k))
+    monkeypatch.setattr(tool, "superseded", lambda *a: [])
+
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        stdout.write(("[land] STOP: NEW failure\n" if verdict else "") + "[remote-pytest] serial: browser job\n")
+        return 1
+    tool.supervise(tree, snap, [], run=fake_land)
+    assert bool(split) is verdict
+    assert (tree.parent / (tree.name + ".stopped")).exists()

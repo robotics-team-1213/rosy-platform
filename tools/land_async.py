@@ -343,7 +343,8 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         (tree.parent / (tree.name + ".stopped")).write_text(f"land.py exit {code}; read {tree.name}.log\n",
                                                             encoding="utf-8")
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
-        split_rollup(tree, snap, reason=reason)
+        if any(line.startswith("[land] STOP:") for line in output):  # a killed land.py gave no verdict to bisect on
+            split_rollup(tree, snap, reason=reason)
     superseded(tree, snap)
     return code
 
