@@ -33,9 +33,6 @@ button('샘플 음성 입력', () => dispatchEvent(new CustomEvent('rosy-sample-
 for (const [text, event] of [['AI 답변', 'answer'], ['AI 보류', 'hold'], ['AI 결과 미확인', 'unknown']]) {
   button(text, () => control('advance', {flow_id:'assistant', event}));
 }
-for (const [text, event] of [['AI 팔 제안', 'propose'], ['AI 팔 승인', 'admit'], ['AI 팔 단계', 'step'], ['AI 팔 HOLD', 'hold'], ['AI 팔 실패', 'fail'], ['AI 팔 시간 초과', 'timeout'], ['AI 팔 대체 제안', 'fallback']]) {
-  button(text, () => control('advance', {flow_id:'arm_ai', event}));
-}
 for (const [text, event] of [['위치 다시 찾기', 'relocalize'], ['후보 보고', 'candidates'], ['회전 장애물', 'obstacle'], ['후보 만료', 'expire'], ['후보 확정', 'confirm'], ['확인 통과', 'localized'], ['위치 찾기 실패', 'stop']]) {
   button(text, () => control('advance', {flow_id:'localization', event}));
 }

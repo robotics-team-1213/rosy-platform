@@ -117,3 +117,7 @@
 - 변경: 신규 `dev/sample/localization.py`·`fixtures/localization.json`(로봇 14건, 전 응답 `sample: true`·라벨 `샘플 데이터`), `engine.py`에 `Localization` 연결 4줄, advance flow `localization`(relocalize→candidates→confirm→localized, stop), 개발 패널 단추 5개. 경로·거절은 `fix/fleet-relocalize-operator`의 `relocalize_routes.py`·main의 auto-locate 경로를 그대로 따른다: `GET /api/fleet/auto-locate`, `POST .../auto-locate/{id}/lift-block`, `POST .../robots/{id}/relocalize`(UNKNOWN_ROBOT 404·ROBOT_OFFLINE 409·RELOCALIZE_TRIP_ACTIVE 409·ALREADY_LOCALIZED 409+localization·LOCALIZATION_DISABLED 503), `GET .../robots/{id}/localization`, `POST .../robots/{id}/localization/confirm`(NO_CANDIDATES 409·CANDIDATE_NOT_REPORTED 404·STALE_REQUEST 원문 그대로; `candidate_id`는 현재 보고 인덱스). relocalize·confirm은 운영자 전용이라 조회자는 403이다. 매 advance마다 보고 `request_id`가 바뀌어 오래된 보고로 confirm하면 STALE_REQUEST가 나온다. `localization.age_s`는 샘플 전용 추가 필드다(LocalizationStatus 자체에 Fleet이 믿는 시계는 없다).
 - 증거: 신규 `test/test_dev_sample_localization.py`(원격 시험 결과는 사용자가 따로 기록)
 - gate 변화: 없음(개발 샘플). 위치 패널 UI 채택은 `feat/ui-localization-state` 착지 뒤.
+
+## 2026-11-17 · uncommitted · revert(dev): arm_ai 샘플 제거
+- 변경: `sample/arm_ai.py`·`fixtures/arm-ai.json`·`engine.py` 연결·개발 패널 단추 7개·`test/test_dev_sample_arm_ai.py`를 제거했다. 쓰는 화면(AI 팔 제안 보기)을 이 착지에서 뺐다. 사유: C3 실제 경로 없음, feat/arm-proposal-view로 보관.
+- gate 변화: 없음.

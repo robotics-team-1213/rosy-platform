@@ -182,10 +182,6 @@
       "path": "work/work-view.js",
       "media_type": "application/javascript"
     },
-    "arm-proposal-view.js": {
-      "path": "work/arm-proposal-view.js",
-      "media_type": "application/javascript"
-    },
     "cell-resume-view.js": {
       "path": "work/cell-resume-view.js",
       "media_type": "application/javascript"

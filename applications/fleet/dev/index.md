@@ -25,8 +25,8 @@
 
 ## 최근 기록
 
+- 2026-11-17 · uncommitted · revert(dev): arm_ai 샘플 제거
 - 2026-11-14 · uncommitted · feat(dev): 위치 패널 샘플 시나리오(로봇 14건)
 - 2026-11-14 · uncommitted · feat(dev): arm_ai 샘플 시나리오(제안·스킬 상태 10건)
 - 2026-11-13 · uncommitted · test: station-zones PUT·road-nav2 plan 시험과 마지막 호출 등록
 - 2026-11-13 · uncommitted · fix: 기능표에 pipeline·real2sim·road-nav2 호출 등록
-- 2026-11-08 · uncommitted · fix: 샘플 계정 화면의 가입 요청 목록 연결

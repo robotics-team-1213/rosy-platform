@@ -55,7 +55,6 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/installation/usb-camera.js": 1,  # D-963 USB camera role approval
     "applications/fleet/web/cell/cell.js": 1,
     "applications/fleet/web/work/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
-    "applications/fleet/web/work/arm-proposal-view.js": 1,  # Named-operator AI arm proposal admission.
     "applications/fleet/web/work/arm-transfer-view.js": 2,  # Independent ARM admission and one recovery approval.
     "applications/fleet/web/work/cell-resume-view.js": 4,  # Per-task resume (note, restart confirm), human-hold clear and decision-gate execution.
     "applications/fleet/web/work/trip-proposal-view.js": 1,  # D-908 explicit independent trip admission.

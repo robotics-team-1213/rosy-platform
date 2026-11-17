@@ -608,58 +608,6 @@ def test_late_approval_failure_does_not_disable_a_new_selection(site):
             browser.close()
 
 
-def test_arm_proposal_panel_reads_the_state_table_evidence_line_and_candidate_fold(site):
-    """B2 (계획 6.2 R2·6.4): 고른 팔 제안은 상태 → 핵심 값 → 근거 줄 → 후보 이유 접힘 순서로 선다.
-    근거 줄은 원장이 먼저고 모델 값은 '측정 아님'으로 분리되며, 낡은 근거는 지연 태그 하나다."""
-    from playwright.sync_api import expect, sync_playwright
-
-    from test_arm_skill_browser import arm_api, arm_cases
-
-    task_row = {"source": "task", "source_id": "task-1", "action_kind": "navigate", "status": "RUNNING",
-                "device_id": "rosy_01", "workcell_id": None, "reason": None,
-                "updated_at": "2026-10-12T00:00:00+00:00"}
-    api = arm_api(arm_cases(), **{
-        "/api/fleet/work": {"rows": [task_row], "observed_at": "2026-10-12T00:00:01+00:00",
-                            "tasks_available": True, "missions_available": True, "truncated_sources": []}})
-    with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, api, [], size=(1366, 768))
-        try:
-            page.goto(site + "/console?view=work")
-            for _ in range(80):
-                page.clock.run_for(100)
-                if page.locator("#work-list ui-button").count() == 11:
-                    break
-            # 종류 고르기: 팔 제안만 남는다(작업 큐의 같은 자리, 별도 화면 아니다).
-            page.locator("#work-filter").select_option("arm_proposal")
-            assert page.locator("#work-list ui-button").count() == 10
-            assert "주행" not in page.locator("#work-list").inner_text()
-
-            # 학습 정책 실행 중: readout 띠가 실행기·정책@sha8·단계·리스·관측을 말한다.
-            page.locator("#work-list ui-button").filter(has_text="arm-ai-5").click()
-            expect(page.locator("#arm-proposal-state")).to_contain_text("실행 중 3/5")
-            readout = page.locator("#arm-proposal-readout")
-            for word in ["학습 정책", "act-pick@01234567", "3/5", "12초", "2초 전"]:
-                assert word in readout.inner_text(), word
-            evidence = page.locator("#arm-proposal-evidence").inner_text()
-            assert evidence.index("원장") < evidence.index("모델 자체 값")
-            assert "측정 아님" in evidence
-
-            # 후보 이유는 한 겹 접힘 안에 있고 좌표·관절 같은 실행 선택은 없다(D-228).
-            page.locator('#work-list ui-button[data-work-key="arm|arm-ai-1"]').click()
-            fold = page.locator("#arm-proposal-candidates")
-            fold.locator("summary").click()
-            expect(fold).to_contain_text("2번 칸 — 비어 있고 선언된 대체 도착지가 아님")
-
-            # 낡은 근거(90초 > 60초)는 지연 태그 하나로, 심각도 색과 섞이지 않는다.
-            page.locator("#work-list ui-button").filter(has_text="arm-ai-10").click()
-            line = page.locator("#arm-proposal-evidence")
-            expect(line.locator("ui-tag[data-state=delayed]")).to_have_count(1)
-            expect(line).to_contain_text("지연")
-            assert not errors
-        finally:
-            browser.close()
-
-
 @pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
 @pytest.mark.parametrize("case", ["approve", "viewer", "shared-token", "refused", "unknown"])
 @pytest.mark.parametrize("source", ["mission", "cell_job"])

@@ -49,4 +49,4 @@ html[data-area-pending] #fleet-main { visibility: hidden; }
   #work-strip > div + div { border-inline-start: 0; border-block-start: 1px solid var(--border-subtle); }
 }
 /* F1: 승인 상세 제목으로 옮길 때 고정 머리줄에 가리지 않게 한다. */
-#work-detail-heading, #arm-proposal-heading { scroll-margin-top: calc(var(--appbar-height) + var(--space-4)); }
+#work-detail-heading { scroll-margin-top: calc(var(--appbar-height) + var(--space-4)); }

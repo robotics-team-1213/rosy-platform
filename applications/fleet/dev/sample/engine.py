@@ -20,7 +20,6 @@ from sample.traffic import Traffic
 from sample.incidents import Incidents
 from sample.work import Work
 from sample.control_units import ControlUnits
-from sample.arm_ai import ArmAI
 from sample.localization import Localization
 
 
@@ -53,7 +52,6 @@ class SampleEngine:
             self.traffic = Traffic()
             self.work.formation = self.traffic
             self.incidents = Incidents()
-            self.arm_ai = ArmAI()
             self.localization = Localization()
             self.reads = json.loads((Path(__file__).parent / 'fixtures/normal.json').read_text(encoding='utf-8'))
             self.unhandled = []
@@ -64,7 +62,7 @@ class SampleEngine:
                 self.work.advance_task(event)
                 return
             feature = {'work': self.work, 'assistant': self.assistant, 'cell_jobs': self.cell,
-                       'policy': self.governance, 'traffic': self.traffic, 'arm_ai': self.arm_ai,
+                       'policy': self.governance, 'traffic': self.traffic,
                        'localization': self.localization}.get(flow_id)
             if feature is None:
                 raise ValueError('unknown sample flow')
@@ -124,7 +122,7 @@ class SampleEngine:
         response = self.governance.handle(method, path, payload, actor)
         if response is not None:
             return response
-        for feature in (self.channel, self.control_units, self.incidents, self.arm_ai,
+        for feature in (self.channel, self.control_units, self.incidents,
                         self.localization):
             response = feature.handle(method, path, payload, actor)
             if response is not None:

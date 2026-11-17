@@ -7,8 +7,6 @@ import { createIntegratedControlView } from "/console/assets/integrated-control-
 import {statusTag} from "/common/status-tag.js";
 import {valueText} from "/common/value-text.js";
 import {blankRepeatedUnknown} from "/common/core_ui_logic.js";
-import {sampleTag} from "/common/sample-data.js";
-import {createArmProposalPanel, armProposalLine, skillOf, WAITING_SKILLS} from "/console/assets/arm-proposal-view.js";
 import {createCellResumeView} from "/console/assets/cell-resume-view.js";
 import {createPollGate, isRouteAbsent} from "/console/assets/poll-gate.js";
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
@@ -35,11 +33,11 @@ export const visibleStateOf = row => {
   const state = VISIBLE_FALLBACK[row.status] || null;
   return state === "in_progress" && row.wait?.waiting ? "waiting" : state;
 };
-/** 띠 숫자: 목록이 보이는 원천(작업 행 + 대기 팔 제안)과 같은 것을 센다. 조회 전(rows null)은 null. */
-export const stripCounts = (rows, armCases = []) => {
+/** 띠 숫자: 목록이 보이는 원천과 같은 것을 센다. 조회 전(rows null)은 null. */
+export const stripCounts = rows => {
   if (!rows) return null;
   const n = state => rows.filter(row => visibleStateOf(row) === state).length;
-  return {approval_pending: n("approval_pending") + armCases.filter(item => WAITING_SKILLS.has(item.lifecycle)).length,
+  return {approval_pending: n("approval_pending"),
     in_progress: n("in_progress"), intervention: n("intervention")};
 };
 /** 상세 제목이 화면 밖(고정 머리줄 아래 포함)이면 true. 데스크톱처럼 이미 보이면 옮기지 않는다. */
@@ -77,7 +75,7 @@ export const autoAdmitDetail = (row, policy) => {
   return scope.member ? `범위 안 · 잔여 ${scope.remaining}회 · 범위 ${scope.revision}` : "범위 밖 · 사람 승인";
 };
 
-export function createWorkView({scope, call, el, channelRequestView, approveReason, principal, confirm, armProposals = null}) {
+export function createWorkView({scope, call, el, channelRequestView, approveReason, principal, confirm}) {
   const query = new URLSearchParams(location.search), area = query.get("view") === "work", fresh = area && query.get("show") === "new", active = area && !fresh;
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
@@ -97,18 +95,12 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     approveReason, principal, confirm});
   // The detail panel exists only while a work item is selected (concept: no standing empty panel).
   const context = el("work-context");
-  // B2 (계획 6.2 R2): 팔 제안 상세·승인 칸. 승인은 기명 운영자가 현재 digest·세대로만 보낸다.
-  const armPanel = createArmProposalPanel({scope, call, approveReason, principal, confirm,
-    onAdmitted: async () => { await armProposals?.refresh(); paint(); }});
-  el("work-detail").after(armPanel.element);
-  let armSelected = null, armShown = null;
-  const armCases = () => armProposals?.get()?.cases || [];
-  const clear = () => { detail.replaceChildren(); detail.hidden = false; armPanel.hide(); admit.hidden = true; context.hidden = true; };
+  const clear = () => { detail.replaceChildren(); detail.hidden = false; admit.hidden = true; context.hidden = true; };
   const counts = {pending: el("work-count-pending"), running: el("work-count-running"), blocked: el("work-count-blocked")};
   let allRows = null;
   function paintCounts(all = allRows) {
     allRows = all;
-    const found = stripCounts(all, armCases());
+    const found = stripCounts(all);
     const count = state => found ? found[state] : null;
     // 조회 전(모름)에는 띠가 "정보 없음"을 한 번만 말한다: 첫 칸이 말하고 나머지 칸은 빈칸(D-280 병합).
     // 조회 뒤에는 값이 숫자로 채워지므로 병합은 아는 값을 바꾸지 않는다.
@@ -215,7 +207,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       policyAbsent = false; requestsGate.reset();
     }
     channelRequestView.reset();
-    rows = []; selected = null; armSelected = null; armShown = null; detailVersion++; lastPaintSig = null;
+    rows = []; selected = null; detailVersion++; lastPaintSig = null;
     showKinds();
     newStatus.textContent = message;
     list.replaceChildren(); clear(); paintCounts(null);
@@ -230,7 +222,6 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   }
   function showDetail(row) {
     clear();
-    armSelected = null; armShown = null;
     field("업무", {navigate: "이동", trip: "이동", PICK_PLACE: "파지·배치", CELL_TRANSFER: "팔레트 적재"}[row.action_kind] || "기타 작업");
     field("담당 장치", row.device_id);
     field("작업 공간", row.workcell_id || "주행 지도 · 작업 공간 지정 없음");
@@ -304,19 +295,9 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       selected = null; detailVersion++; clear();
       el("work-evidence").textContent = "필터에 맞는 작업을 선택하세요.";
     }
-    // B2: 팔 제안 선택도 같은 필터 규칙을 따른다(필터가 제안을 숨기면 선택도 지운다).
-    if (armSelected && filter !== "all" && filter !== "arm_proposal") {
-      armSelected = null; armShown = null; armPanel.hide();
-      el("work-evidence").textContent = "필터에 맞는 작업을 선택하세요.";
-    }
     const visibleRows = rows.filter(row => filter === "all" || row.source === filter);
-    paintCounts();  // 팔 제안 조회는 작업 조회와 따로 와서 띠도 목록과 같이 다시 센다
-    // B2 (계획 6.2 R2): 대기 제안 전부가 작업 큐에 서로 나란히 선다. 상태 글자는 C20 표, 새 태그는
-    // 이상일 때 하나뿐이고 샘플 행은 sampleTag()로 이름을 밝힌다(C22).
-    const armShownCases = shown
-      ? (shown.includes("approval_pending") ? armCases().filter(item => WAITING_SKILLS.has(item.lifecycle)) : [])
-      : armCases();
-    const sig = JSON.stringify([filter, selected, armSelected, visibleRows, armShownCases, policy]);
+    paintCounts();
+    const sig = JSON.stringify([filter, selected, visibleRows, policy]);
     if (sig !== lastPaintSig) {
       lastPaintSig = sig;
       const focused = document.activeElement?.closest('[data-work-key]')?.dataset.workKey;
@@ -345,41 +326,10 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
         list.append(item);
         if (focused === workKey(row)) button.focus({preventScroll: true});
       }
-      for (const item of armShownCases) {
-        const entry = document.createElement("li");
-        const button = document.createElement("ui-button");
-        button.setAttribute("kind", "toggle"); button.setAttribute("type", "button");
-        button.dataset.workKey = `arm|${item.id}`;
-        button.setAttribute("data-work-read", "");
-        button.setAttribute("aria-pressed", String(armSelected === item.id));
-        button.title = `${item.title} · ${item.requested_by ?? "정보 없음"} 제안`;
-        button.textContent = armProposalLine(item);
-        button.addEventListener("click", () => showArm(item));
-        entry.append(button);
-        const skill = skillOf(item);
-        if (skill.tag) entry.append(statusTag(skill.tag.state, undefined, {icon: skill.tag.icon}));
-        if (item.sample === true) entry.append(sampleTag());
-        list.append(entry);
-        if (focused === button.dataset.workKey) button.focus({preventScroll: true});
-      }
     }
-    // 조회가 선택한 제안의 새 digest·세대를 가져오면 같은 자리에 다시 그린다(제자리 승인은 없다).
-    const armCase = armSelected && armCases().find(item => item.id === armSelected);
-    if (armCase && armCase !== armShown) { armShown = armCase; armPanel.show(armCase); }
     el("work-empty").hidden = list.childElementCount > 0;
   }
 
-  // B2: 팔 제안 선택은 과업 상세(dl) 대신 제안 패널을 오른쪽 칸에 둔다.
-  function showArm(item) {
-    selected = null; refusal = "";
-    detail.replaceChildren(); detail.hidden = true; admit.hidden = true;
-    armSelected = item.id; armShown = item;
-    armPanel.show(item);
-    el("work-evidence").textContent = item.sample === true
-      ? "샘플 데이터 · 실제 장치와 연결되지 않음" : `제안 ${item.id} · 원장 근거`;
-    context.hidden = false;
-    reveal(armPanel.element.querySelector("#arm-proposal-heading"));  // after unhide: a hidden heading cannot take focus
-  }
   // 승인은 Cell·대화 검토와 같은 원장 경로다: 현재 정지 세대를 읽어 그대로 보내고, 판단은 서버가 한다.
   async function approve() {
     const row = rows.find(row => workKey(row) === selected), life = scope.capture();
@@ -433,10 +383,6 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
         result.cell_jobs_available ? "팔레트 적재 작업 원장" : "팔레트 적재 작업 원장 미설정", "운행 기록"].join(" · ");
       const current = rows.find(row => workKey(row) === selected);
       if (selected && !current) { selected = null; detailVersion++; clear(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
-      if (armSelected && !armCases().some(item => item.id === armSelected)) {
-        armSelected = null; armShown = null; detailVersion++; clear();
-        el("work-evidence").textContent = "선택한 제안이 현재 조회 범위에 없습니다.";
-      }
       if (current) showDetail(current);
       paint();
     } catch (error) {

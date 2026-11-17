@@ -10,7 +10,6 @@ import { createMovePanel } from "./card-trip.js";
 import { createInboxPanel } from "./inbox.js";
 import { createAlertPopup, isOnScreen } from "./alert-popup.js";
 import { createWorkView } from "./work-view.js";
-import { createArmProposalFeed } from "./arm-proposal-view.js";
 import { createChannelRequestView } from "./channel-request-view.js";
 import { createIncidentView } from "./incident-view.js";
 import { createLineStuckPanel } from "./line-stuck.js";
@@ -66,14 +65,10 @@ const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
     && !motionCommandReason(view, robotId, "goal")
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
-// B1/B2: AI 팔 제안 읽기. 예외 큐와 작업 큐가 같은 답을 쓰고, 라우트 없음(404)은 폴링 문이 닫는다.
-const armProposals = createArmProposalFeed({call, gate: createPollGate(),
-  onCases: feed => { view.armProposals = feed; render(); }});
 const workView = createWorkView({scope: pageScope, call, el, channelRequestView,
   confirm: options => confirmedAction.run(options),
   principal: () => auth.principal,
-  approveReason: () => auth.role !== "operator" ? OPERATOR_REASON : namedReason(),
-  armProposals});
+  approveReason: () => auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
 // D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
 const requestedView = area.get("view");
 const workArea = requestedView === "work";
@@ -148,7 +143,6 @@ const view = {
   stateLoaded: false,
   receivedAtMs: null,  // D-493: 마지막 state 응답을 받은 브라우저 시각
   addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
-  armProposals: null,  // B1/B2: GET /api/fleet/arm-proposals 답({sample, cases}) | null(기능 없음)
   isOperator: () => auth.role === "operator" && !namedReason(),
 };
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view,
@@ -565,7 +559,6 @@ render();
 paintSitePath();
 connectionMode();
 refreshAuthorization();
-armProposals.refresh();
 visionView.refreshSources();
 mapView.refreshGuide();
 if (!isMapHidden()) { trackingView.refresh(); platoon.refresh(); }
@@ -588,7 +581,7 @@ pageScope.interval(() => {
   if (plan.siteMap) mapView.refresh();
   if (plan.platoon) platoon.refresh();
   chargeBays.refresh();
-  if (!auth.locked) { formation.refreshFormation(); workView.refresh(); armProposals.refresh(); }
+  if (!auth.locked) { formation.refreshFormation(); workView.refresh(); }
 }, MAP_MS);
 pageScope.interval(() => { if (!document.hidden && !isMapHidden()) trackingView.refresh(); }, TRACKING_MS);
 pageScope.interval(() => { if (!document.hidden && !isMapHidden()) visionView.refreshFrame(); }, 1500);

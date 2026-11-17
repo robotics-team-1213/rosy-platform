@@ -71,13 +71,11 @@ test("D-865 P3: the detail line separates in-scope from human approval", () => {
   assert.equal(autoAdmitDetail({...waiting, status: "RUNNING"}, scopePolicy), null);  // only waiting rows carry the line
 });
 
-test("F9: the strip counts the same sources the list shows (work rows + waiting arm proposals)", async () => {
+test("F9: the strip counts the same rows the list shows", async () => {
   const { stripCounts, outOfView } = await import("../../../../applications/fleet/web/work/work-view.js");
   const rows = [{status: "PROPOSED"}, {status: "RUNNING"}];
-  const arms = [{lifecycle: "proposed"}, {lifecycle: "waiting_approval"}, {lifecycle: "fallback_proposed"}, {lifecycle: "stopped"}];
-  assert.deepEqual(stripCounts(rows, arms), {approval_pending: 4, in_progress: 1, intervention: 0});
-  assert.deepEqual(stripCounts([], arms).approval_pending, 3);
-  assert.equal(stripCounts(null, arms), null);
+  assert.deepEqual(stripCounts(rows), {approval_pending: 1, in_progress: 1, intervention: 0});
+  assert.equal(stripCounts(null), null);
   // F1: a heading already on screen below the sticky bar is not scrolled; one far below is.
   assert.equal(outOfView({top: 200}, 900, 56), false);
   assert.equal(outOfView({top: 2400}, 844, 56), true);

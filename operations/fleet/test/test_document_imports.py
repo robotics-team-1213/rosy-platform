@@ -104,7 +104,6 @@ OWN = {
         "state-age.js",
         "motion-source.js",  # why a robot moves, from proving facts only
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
-        "arm-proposal-view.js",
         "cell-resume-view.js",
         "localization-view.js",
         "robot-camera-tile.js",
