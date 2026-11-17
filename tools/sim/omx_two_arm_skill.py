@@ -150,6 +150,7 @@ def step(driver, teacher, data, plan, here, skill):
             teacher.frame(data, {arm: target, **idle}, plan["id"])
             target = next(gen)
         teacher.privileged = False  # from here on commands are in reported angles
+        idle = {o: t - teacher.zero_error.get(o, 0.) for o, t in idle.items()}  # the waiting arm too: it stays at its true wait pose, its command as recorded
         start_z = w.pose(data, c)[0][2]
         if driver.kind == "ik":
             last_cmd = target
@@ -294,6 +295,7 @@ def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
             return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""), dagger_status="blocked_skip")
         start_z = w.pose(data, c)[0][2]
         recorder.privileged, recorder.goal = False, None
+        idle_reported = {o: t - recorder.zero_error.get(o, 0.) for o, t in idle.items()}
         goal_driver = policy.goal_vector(L, plan, others, getattr(driver, "goal_mode", "joints")) if getattr(driver, "has_goal", True) else None
         said = prompt(plan, skill)
         driver.policy.reset()
@@ -304,7 +306,7 @@ def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
             state = policy.policy_state(driver, recorder, state, track)
             action = driver.act(state, images, goal_driver, said)
             k = sites.ARMS.index(arm)
-            recorder.frame(data, {arm: action[k * 6:k * 6 + 6] + ze_bias.get(arm, 0.), **idle}, plan["id"])
+            recorder.frame(data, {arm: action[k * 6:k * 6 + 6] + ze_bias.get(arm, 0.), **idle_reported}, plan["id"])
             if recorder.contacts["arm_arm"] or recorder.contacts["arm_other"]:
                 break
         pos_c = w.pose(data, c)[0]
