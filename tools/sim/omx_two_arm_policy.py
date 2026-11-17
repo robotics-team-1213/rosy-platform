@@ -36,6 +36,7 @@ import gpu_yield  # noqa: E402
 from omx_two_arm_policy_helpers import (  # noqa: E402, F401
     EVAL_SEED_BASE,
     GOAL,
+    GOAL_MODES,
     GOAL_SIZE,
     PROMPT,
     SHAPE,
@@ -80,7 +81,8 @@ def evaluate(args):
                     pick_vision=getattr(args, "pick_vision", False), belt_skew=getattr(args, "belt_skew", False),
                     cam_jitter=getattr(args, "cam_jitter", False),
                     ensemble_coeff=getattr(args, "ensemble_coeff", None), n_action_steps=getattr(args, "n_action_steps", None),
-                    flow_steps=getattr(args, "flow_steps", None), use_amp=True if getattr(args, "amp", False) else None)
+                    flow_steps=getattr(args, "flow_steps", None), use_amp=True if getattr(args, "amp", False) else None,
+                    device=getattr(args, "device", None))
     rows, runs = [], []
     Path(args.artifacts).mkdir(parents=True, exist_ok=True)
     planned = plan_tasks(args.plan_dir, args.tasks.split(",")) if args.plan_dir else None
@@ -206,7 +208,7 @@ def run_round(args):
                   skill=args.skill, zero_error_deg=args.zero_error_deg, servo_lag=args.servo_lag, physics_ranges=args.physics_ranges,
                   pick_vision=bool(getattr(args, "pick_vision", False)), belt_skew=bool(getattr(args, "belt_skew", False)),
                   cam_jitter=bool(getattr(args, "cam_jitter", False)), compensate_zero=bool(getattr(args, "compensate_zero", False)),
-                  no_goal=bool(getattr(args, "no_goal", False)),
+                  no_goal=bool(getattr(args, "no_goal", False)), goal=getattr(args, "goal", "joints"),
                   dagger_model=getattr(args, "dagger_model", None), dagger_only=bool(getattr(args, "dagger_only", False)),
                   extra_datasets=list(getattr(args, "extra_dataset", None) or []))
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
@@ -217,7 +219,7 @@ def run_round(args):
     chosen = [arg for item in args.choice or [] for arg in ("--choice", item)]
     skilled = [*skills.argv(args), *(["--pick-vision"] if getattr(args, "pick_vision", False) else []),
                *(["--belt-skew"] if getattr(args, "belt_skew", False) else [])]
-    no_goal = ["--no-goal"] if getattr(args, "no_goal", False) else []
+    no_goal = ["--no-goal"] if getattr(args, "no_goal", False) else ["--goal", getattr(args, "goal", "joints")]
     eval_accel = [*(["--n-action-steps", str(args.n_action_steps)] if getattr(args, "n_action_steps", None) is not None else []),
                   *(["--flow-steps", str(args.flow_steps)] if getattr(args, "flow_steps", None) is not None else []),
                   *(["--amp"] if getattr(args, "amp", False) else [])]
@@ -240,17 +242,18 @@ def run_round(args):
                                     env=dict(environment, OMP_NUM_THREADS="1"), stdout=log, stderr=subprocess.STDOUT) for part, seeds in parts]
         if any(worker.wait() for worker in running):
             raise RuntimeError("collect")
-        longest, spoiled, dagger_totals, part_roots = {}, [], {}, []
+        longest, spoiled, dagger_totals, part_roots, goal_meta = {}, [], {}, [], {}
         for part, _ in parts:
             found = json.loads((run / f"{part.name}.steps.json").read_text(encoding="utf-8"))
             spoiled += found["spoiled"]
+            goal_meta.update({k: found[k] for k in ("goal_mode", "goal_sites") if k in found})
             for k, v in (found.get("dagger") or {}).items():
                 dagger_totals[k] = dagger_totals.get(k, 0) + v
             if found.get("episodes", 1) != 0:
                 part_roots.append(part)
             for key, value in found["longest"].items():
                 longest[key] = {k: max(v, longest.get(key, {}).get(k, 0)) for k, v in value.items()} if isinstance(value, dict) else max(longest.get(key, 0), value)
-        (run / "steps.json").write_text(json.dumps(dict(longest=longest, spoiled=spoiled, **({"dagger": dagger_totals} if dagger_totals else {}))), encoding="utf-8")
+        (run / "steps.json").write_text(json.dumps(dict(longest=longest, spoiled=spoiled, **goal_meta, **({"dagger": dagger_totals} if dagger_totals else {}))), encoding="utf-8")
         roots = part_roots + [Path(p) for p in (getattr(args, "extra_dataset", None) or [])]
         if getattr(args, "early_stop", True) and getattr(args, "dagger_only", False) and getattr(args, "dagger_model", None) and not roots and dagger_totals.get("recovered", 0) == 0 and dagger_totals.get("recovery_failed", 0) == 0 and dagger_totals.get("passed_skip", 0) > 0:
             for part, _ in parts:
@@ -295,10 +298,15 @@ def run_round(args):
                 probe_ckpt = run / "train/early_stop_ckpt"
                 shutil.rmtree(probe_ckpt, ignore_errors=True)
                 shutil.copytree(ckpt_dir, probe_ckpt)
+                if args.policy == "act":
+                    for fn in ("config.json", "policy_preprocessor.json", "policy_postprocessor.json"):
+                        p = probe_ckpt / fn
+                        if p.is_file():
+                            p.write_text(p.read_text(encoding="utf-8").replace('"cuda"', '"cpu"'), encoding="utf-8")
                 probe_out = run / f"eval-step-{step:06d}.json"
                 n_seeds = max(1, int(getattr(args, "early_stop_seeds", 1)))
                 extra_probe = ["--compensate-zero"] if (args.zero_error_deg > 0 and not getattr(args, "compensate_zero", False)) else []
-                probe_env = dict(environment, **({"CUDA_VISIBLE_DEVICES": ""} if args.policy == "act" else {}))
+                probe_env = dict(environment, **({"CUDA_VISIBLE_DEVICES": "", "OMP_NUM_THREADS": "2", "MKL_NUM_THREADS": "2"} if args.policy == "act" else {}))
                 rc = subprocess.run([args.python, me, "evaluate", "--model", str(probe_ckpt), "--steps-file", str(run / "steps.json"),
                                      "--tasks", args.tasks, "--isolated-seeds", str(n_seeds), "--whole-seeds", str(n_seeds),
                                      "--out", str(probe_out), "--artifacts", str(run / "artifacts"),
@@ -325,6 +333,8 @@ def run_round(args):
             judged.append(("eval-comp.json", ckpt_last, ["--compensate-zero"]))
         if args.skill:
             judged.append(("eval-ik.json", "ik", []))
+            if args.zero_error_deg > 0 and not getattr(args, "compensate_zero", False):
+                judged.append(("eval-ik-comp.json", "ik", ["--compensate-zero"]))
         for out, model, extra_eval in judged:
             gpu_yield.yield_turn(say=functools.partial(print, file=log))
             subprocess.run([args.python, me, "evaluate", "--model", model, "--steps-file", str(run / "steps.json"), "--tasks", args.tasks,
@@ -342,6 +352,9 @@ def run_round(args):
     if args.skill:
         baseline = json.loads((run / "eval-ik.json").read_text(encoding="utf-8"))
         record.update(eval_ik=summarise(baseline["rows"], []))
+        if (run / "eval-ik-comp.json").is_file():
+            ik_comp = json.loads((run / "eval-ik-comp.json").read_text(encoding="utf-8"))
+            record.update(eval_ik_comp=summarise(ik_comp["rows"], []))
     stages = pipeline_stages(score, sites.Layout(**(parsed_choices or {})), result["rows"],
                              pick_vision=getattr(args, "pick_vision", False), belt_skew=getattr(args, "belt_skew", False),
                              gazebo_report=getattr(args, "gazebo_report", None), isaac_report=getattr(args, "isaac_report", None), skill=args.skill)
@@ -371,6 +384,7 @@ def main(argv=None):
     one = commands.add_parser("collect")
     for flag, kw in (("--seeds", dict(required=True)), ("--tasks", dict(default=",".join(TASKS))), ("--out", dict(required=True)),
                      ("--plan-dir", dict(help="two-arm plans")), ("--choice", dict(action="append")), ("--no-goal", dict(action="store_true")),
+                     ("--goal", dict(default="joints", choices=GOAL_MODES)),
                      *accel_opts, *dagger_opts):
         one.add_argument(flag, **kw)
     skills.options(one)
@@ -383,10 +397,13 @@ def main(argv=None):
         if name == "evaluate":
             for flag, kw in (("--model", dict(required=True)), ("--steps-file", dict(required=True)), ("--out", dict(required=True)),
                              ("--artifacts", dict(required=True)), ("--plan-dir", dict(help="judge whole tasks")),
-                             ("--ensemble-coeff", dict(type=float))):
+                             ("--ensemble-coeff", dict(type=float)),
+                             ("--device", dict(choices=("cpu", "cuda"), help="cpu leaves a GPU that another job is training on alone"))):
                 one.add_argument(flag, **kw)
         else:
             one.add_argument("--no-goal", action="store_true")
+            one.add_argument("--goal", default="joints", choices=GOAL_MODES,
+                             help="site: one-hot source and target site (what an admitted job names), not the IK joints")
             one.add_argument("--extra-dataset", action="append")
             one.add_argument("--early-stop", action=argparse.BooleanOptionalAction, default=True)
             one.add_argument("--early-stop-min-steps", type=int, default=0)
@@ -405,7 +422,7 @@ def main(argv=None):
         return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir, sites.parse_choices(args.choice),
                        args.skill, args.zero_error_deg, args.servo_lag, args.physics_ranges,
                        pick_vision=args.pick_vision, belt_skew=args.belt_skew, cam_jitter=args.cam_jitter,
-                       compensate_zero=args.compensate_zero, no_goal=args.no_goal,
+                       compensate_zero=args.compensate_zero, no_goal=args.no_goal, goal_mode=args.goal,
                        dagger_model=args.dagger_model, steps_file=args.steps_file, dagger_prefix_frames=args.dagger_prefix_frames,
                        dagger_only=args.dagger_only, dagger_device=args.dagger_device, dagger_steps=args.dagger_steps,
                        dagger_eval_file=args.dagger_eval_file,

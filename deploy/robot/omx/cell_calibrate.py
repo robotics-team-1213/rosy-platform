@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, map_agrees, over_target, pivot_near_yaws, self_calibrate  # noqa: E402,F401
+from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
 from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401
 import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
@@ -26,6 +26,13 @@ MAP_POINTS = [
     [-0.06, 0.15], [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17],
 ]  # the 2026-10-28 remap grid
 AT_STOP_S = 1.5  # the most a refused remap move waits for its stop evidence before it folds
+
+
+def depth_capture():
+    """A fresh top D435 Z16 frame (None on a failed capture); the depth-verify step's only depth source."""
+    import cell_depth
+
+    return cell_depth.capture_top_depth_z16()
 
 
 _REF_GRAY_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
@@ -323,18 +330,7 @@ def main(argv=None):
             save_bound_map_reference(cal_path, ref_path, calibration, config, reference)
             done.append({"consensus-repair": calibration["sites"][map_sites(config)[0]]["loo_error_mm"]})
         elif step.startswith("pivot-near"):
-            site, xy = step.split()[1].split(":")
-            near = tuple(float(v) for v in xy.split(","))
-            point = list(near) if over_target(config, site) else auto_pivot_point(cell, config, calibration, site, near)
-            if point is None:
-                done.append({step: "no clear point near the target"})
-                continue
-            result = cell_pivot.pivot_calibrate(
-                cell, config, point, pivot_near_yaws(config, site), calibration, site, work, time.sleep, lambda row: None
-            )
-            if result["result"] == "calibrated":
-                cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"], config.get("params"))
-            done.append({step: result["result"], "at": point, "bias": result.get("bias", {}).get("bias_mm")})
+            done.append(pivot_near(cell, config, calibration, cal_path, step, work))  # pivot_precheck before any motion
         elif step.startswith("surface"):
             import cell_surface
 
@@ -370,7 +366,9 @@ def main(argv=None):
             import cell_cal_eval
 
             bias_d = cell_pivot.load_bias(cell_pivot.bias_path(cal_path), config.get("params")) if cell_pivot.bias_path(cal_path).exists() else None
-            rep = cell_cal_eval.verify_profile_depth(config, calibration, bias_d, colour=cell.frame("top"))
+            # 2026-11-17 panel: this step never passed depth, so it always reported missing_depth on the D435 cells
+            depth = depth_capture() if cell_cal_eval.top_has_depth(config) else None
+            rep = cell_cal_eval.verify_profile_depth(config, calibration, bias_d, depth=depth, colour=cell.frame("top"))
             if config.get("work_dir"):
                 (Path(config["work_dir"]).expanduser() / "depth-verify.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
             done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})

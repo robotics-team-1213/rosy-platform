@@ -82,8 +82,8 @@
 
 ## 최근 기록
 
+- 2026-11-17 · 1598651387 · fix(control-unit): 관제 유닛이 mDNS로 붙고 끊김이 보이게
+- 2026-11-17 · uncommitted · fix(omx-pivot): over-target 110 deg yaw arc, known-geometry 1-outlier trim, and late-stall fit
 - 2026-11-16 · uncommitted · fix(deploy): 천장 카메라 자동 트랙 보정 10분 주기 안정화 파이프라인 연결
 - 2026-11-14 · uncommitted · rosy-face 상태 표시등 영속 설정
 - 2026-11-13 · uncommitted · docs(model-pc): 학습 센터 자동 업데이트 절을 퇴역 안내로 교체
-- 2026-11-12 · uncommitted · feat(omx): 호버·하강·캘리브레이션 훅 간 `target["pick"]` 전파 및 다중 프레임 지터 정밀 보정
-- 2026-11-11 · uncommitted · perf(omx): 손목/집게 비전 ROI 슬라이싱, 카메라 유닛 15FPS 정렬, 프로필 캐시 방어 복사 및 실물 데몬 경로 동기화

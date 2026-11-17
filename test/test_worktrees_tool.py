@@ -769,6 +769,7 @@ def test_stale_history_is_flagged_never_pruned_and_never_a_base(main, monkeypatc
     # 11-14: v2/v3 chains stacked on unlanded branches held 178-189 commits; a base must be in main
     assert worktrees.main(["new", "again", "fix/again", "--from", "feat/old"]) == 1
     assert "not in main yet" in capsys.readouterr().err
+    assert worktrees.rules.unlanded(main, "origin/main") is None  # D-1038 urgent lane base is published work
     git(main, "merge", "-q", "--ff-only", "feat/old")
     assert worktrees.main(["new", "again", "fix/again", "--from", "feat/old"]) == 0
     assert (main / ".worktrees" / "again" / "old.txt").is_file()

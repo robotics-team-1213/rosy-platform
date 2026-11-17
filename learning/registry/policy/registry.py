@@ -13,6 +13,7 @@ import sqlite3
 import sys
 import tempfile
 from dataset_store import DatasetStore
+from sim_l1 import registered_checkpoint_sha256, sim_l1_assessment
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'contracts/learning/src'))
@@ -275,6 +276,24 @@ class Registry:
             self._append(db, 'assessment', revision, stage[0], stage[0], data)
             return data
 
+    def record_sim_l1(self, revision, report):
+        """Append a recomputed sim L1 record (D-1024 1). Same stage; it neither promotes nor grants authority."""
+        self._writable()
+        data = sim_l1_assessment(report)
+        with self._db() as db:
+            events = self._audit(db)
+            stage = db.execute('SELECT stage FROM policies WHERE revision=?', (revision,)).fetchone()
+            if not stage:
+                raise ValueError('policy not registered')
+            root, policy = self._policy(revision)
+            if data['checkpoint_sha256'] != registered_checkpoint_sha256(root, policy):
+                raise ValueError('report checkpoint differs from the registered policy files')
+            if any(e['operation'] == 'assessment' and e['policy_revision'] == revision
+                   and e['data'] == data for e in events):
+                return data
+            self._append(db, 'assessment', revision, stage[0], stage[0], data)
+            return data
+
     def _pinky(self, root, policy):
         reports = []
         for ref in policy['evaluations']:
@@ -361,6 +380,9 @@ def main():
     sub.add_parser('register').add_argument('source', type=Path)
     sub.add_parser('assess-act').add_argument('revision')
     sub.add_parser('assess-pinky').add_argument('revision')
+    sim = sub.add_parser('record-sim-l1')
+    sim.add_argument('revision')
+    sim.add_argument('report', type=Path)
     sub.add_parser('show').add_argument('revision')
     sub.add_parser('history')
     args = parser.parse_args()
@@ -371,6 +393,8 @@ def main():
         result = registry.assess_act(args.revision)
     elif args.command == 'assess-pinky':
         result = registry.assess_pinky(args.revision)
+    elif args.command == 'record-sim-l1':
+        result = registry.record_sim_l1(args.revision, read(args.report))
     elif args.command == 'show':
         result = registry.show(args.revision)
     else:

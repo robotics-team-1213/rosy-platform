@@ -90,6 +90,9 @@ def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
     assert stages["gazebo"]["track"] == "ros2_execution_contract" and stages["gazebo"]["role"] == "ros2_interface_conformance"
 
 
+seen_overrides = []  # make_pre_post_processors keyword arguments the fake Driver deps received
+
+
 def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action_steps=8, ensemble_coeff=None):
     class FakeTensor:
         device = "cpu"
@@ -128,6 +131,7 @@ def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action
     steps_file = tmp_path / "steps.json"
     steps_file.write_text(json.dumps({"longest": {}}), encoding="utf-8")
     seen_batches = []
+    seen_overrides.clear()
 
     class FakePolicy:
         def __init__(self):
@@ -152,7 +156,7 @@ def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action
     fake_act.ACTPolicy = types.SimpleNamespace(from_pretrained=lambda *a, **k: FakePolicy())
     fake_act.ACTTemporalEnsembler = lambda coeff, chunk: ("ensembler", coeff, chunk)
     fake_factory = types.ModuleType("lerobot.policies.factory")
-    fake_factory.make_pre_post_processors = lambda cfg, pretrained_path=None: (lambda b: b, lambda y: y)
+    fake_factory.make_pre_post_processors = lambda cfg, pretrained_path=None, **kw: seen_overrides.append(kw) or (lambda b: b, lambda y: y)
     fake_world = types.ModuleType("omx_two_arm_world")
     fake_world.World = lambda layout: types.SimpleNamespace(layout=layout)
     for name, mod in {
@@ -428,3 +432,105 @@ def test_train_early_stops_when_checkpoint_solves_problem(monkeypatch, tmp_path)
     assert seen_steps == [(3000, "pretrained_model")]
     assert not (out / "checkpoints/001500").exists() and (out / "checkpoints/003000").exists()
 
+
+def test_driver_concurrent_gates_on_sweeps_clear_and_resets_policy_on_step_change(monkeypatch):
+    from contextlib import nullcontext
+    import omx_two_arm_plan as plan_mod
+
+    layout = sites.Layout()
+    fake_world = types.SimpleNamespace(
+        layout=layout,
+        put=lambda *a, **kw: None,
+        pose=lambda _d, _c: (np.array([0.0, 0.0, 0.05]), 0.0, 0.0),
+    )
+    resets, sweep_checks = [], []
+
+    class FakeTeacher:
+        def __init__(self, *a, **kw):
+            self.belt_skew = False
+
+        def fresh(self, _here):
+            return object()
+
+        def frame(self, _d, _targets, _lbl, _ctxs):
+            pass
+
+        def verdict(self, _d, _s, row, _before, _ctx):
+            return dict(row, result="pass")
+
+        def off_stand(self, *_a):
+            pass
+
+    drv = object.__new__(helpers.Driver)
+    drv.layout, drv.world = layout, fake_world
+    drv.pick_vision = drv.belt_skew = drv.cam_jitter = drv.has_goal = False
+    drv.torch = types.SimpleNamespace(inference_mode=nullcontext)
+    drv.longest = {"t/s1": {"frames": 2, "picked": 1}, "t/s2": {"frames": 2, "picked": 1}}
+    drv.policy = types.SimpleNamespace(reset=lambda: resets.append(1))
+    drv.act = lambda *a: np.zeros(12, np.float32)
+
+    monkeypatch.setattr(helpers.teaching, "Teacher", FakeTeacher)
+    monkeypatch.setattr(helpers, "observe", lambda *a: (np.zeros(12, np.float32), {}))
+    monkeypatch.setattr(plan_mod, "step_swept_poses", lambda *a: [(0.0, []), (1.0, [])])
+    monkeypatch.setattr(plan_mod, "sweeps_clear", lambda a, b: sweep_checks.append((len(a), len(b))) or len(sweep_checks) > 1)
+
+    task = {
+        "name": "t",
+        "start": {"c1": "ship-h1r0-l0", "c2": "ship-h1r2-l0"},
+        "steps": [
+            {"id": "s1", "arm": "arm_a", "container": "c1", "from": "ship-h1r0-l0", "to": "tmp-a-1", "zones": [["a"], ["a"]]},
+            {"id": "s2", "arm": "arm_b", "container": "c2", "from": "ship-h1r2-l0", "to": "tmp-b-1", "zones": [["b"], ["b"]]},
+        ],
+    }
+    rows, summary = drv.concurrent(task, seed=0)
+    assert summary["completed"] is True and len(rows) == 2
+    assert len(sweep_checks) >= 2 and len(resets) >= 3
+
+
+
+def test_site_goal_names_the_source_and_target_an_admitted_job_carries():
+    """2026-11-17 panel: `--goal site` tells ACT which container (source site) and where (target site) without the IK joints."""
+    layout = sites.Layout()
+    names, size = helpers.site_names(layout), helpers.goal_size(layout, "site")
+    assert size == 2 * (1 + 2 * len(names))
+    task = tasks.get_task(layout, "cell-stack")
+    here, seen = dict(task.get("start", {})), set()
+    for step in task["steps"]:
+        goal = policy.goal_vector(layout, step, here, "site")
+        half = size // 2
+        mine, other = (goal[:half], goal[half:]) if step["arm"] == "arm_a" else (goal[half:], goal[:half])
+        assert goal.shape == (size,) and not other.any() and mine.sum() == 3 and mine[0] == 1
+        assert mine[1 + names.index(step["from"])] == 1 and mine[1 + len(names) + names.index(step["to"])] == 1
+        seen.add(goal.tobytes())
+        here[step["container"]] = step["to"]
+    assert len(seen) == len(task["steps"])  # cell-stack picks among standing containers: each step is told apart
+    with pytest.raises(ValueError, match="goal mode"):
+        helpers.goal_block(layout, task["steps"][0], here, "metres")
+
+
+def test_driver_reads_the_goal_mode_from_the_checkpoint_width(monkeypatch, tmp_path):
+    layout = sites.Layout()
+    width = helpers.goal_size(layout, "site")
+    feature = types.SimpleNamespace(shape=(width,))
+    model_dir, steps_file, seen = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": {}, policy.GOAL: feature})
+    steps_file.write_text(json.dumps({"longest": {}, "goal_mode": "site", "goal_sites": helpers.site_names(layout)}), encoding="utf-8")
+    assert policy.Driver(model_dir, steps_file).goal_mode == "site"
+    steps_file.write_text(json.dumps({"longest": {}, "goal_sites": ["belt"]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="sites"):
+        policy.Driver(model_dir, steps_file)
+    feature.shape = (policy.GOAL_SIZE,)
+    steps_file.write_text(json.dumps({"longest": {}}), encoding="utf-8")
+    assert policy.Driver(model_dir, steps_file).goal_mode == "joints"
+
+
+def test_collect_refuses_site_goal_with_no_goal():
+    with pytest.raises(ValueError, match="--goal"):
+        helpers.collect([1], ["stack"], "unused", no_goal=True, goal_mode="site")
+
+
+def test_driver_moves_the_checkpoint_processor_to_its_own_device(monkeypatch, tmp_path):
+    """A checkpoint saved on cuda names cuda in its processor; a cpu Driver (evaluate --device cpu, --dagger-device cpu) must override it."""
+    model_dir, steps_file, _ = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": {}})
+    policy.Driver(model_dir, steps_file, device="cpu")
+    assert seen_overrides[-1] == {"preprocessor_overrides": {"device_processor": {"device": "cpu"}},
+                                  "postprocessor_overrides": {"device_processor": {"device": "cpu"}}}

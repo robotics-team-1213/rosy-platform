@@ -19,11 +19,30 @@ PROMPT = "carry the container of this plan step"
 TRAIN_SEED_BASE, EVAL_SEED_BASE = 1000, 200000  # the teacher never saw an evaluation seed
 STEP_ERROR_SEED_BASE = 10 ** 6  # collect's per-step error draws, clear of the training and evaluation seeds
 GOAL_SIZE = 22  # per arm (arm_a, arm_b): active, then the five grasp joints and the five lower joints
+# joints: the teacher's IK joints (needs the sim's site geometry); site: which source and target site by name (an admitted job carries
+# exactly this on the real cell, 2026-11-17 panel), so ACT can be told which container to take without language or privileged state.
+GOAL_MODES = ("joints", "site")
 
 
-def goal_block(layout, step, here):
-    """One arm's part of the goal: 1, then the five joints that grasp at the source and lower onto the target, from the teacher's own IK on
-    the nominal sites. Round 1 gave site metres: sites 36 mm apart differed by 0.36 in an unnormalised input and the model came down 2 cm off."""
+def site_names(layout):
+    return sorted(layout.sites)
+
+
+def goal_size(layout, mode="joints"):
+    return GOAL_SIZE if mode == "joints" else 2 * (1 + 2 * len(site_names(layout)))
+
+
+def goal_block(layout, step, here, mode="joints"):
+    """One arm's part of the goal. `site`: 1, then one-hot source and one-hot target over `site_names`. `joints`: 1, then the five joints
+    that grasp at the source and lower onto the target, from the teacher's own IK on the nominal sites. Round 1 gave site metres: sites
+    36 mm apart differed by 0.36 in an unnormalised input and the model came down 2 cm off."""
+    if mode == "site":
+        names = site_names(layout)
+        out = np.zeros(1 + 2 * len(names), np.float32)
+        out[0], out[1 + names.index(step["from"])], out[1 + len(names) + names.index(step["to"])] = 1., 1., 1.
+        return out
+    if mode != "joints":
+        raise ValueError(f"goal mode {mode!r} not in {GOAL_MODES}")
     arm = layout.sim_arms[step["arm"]]
     wps = tasks.waypoints(layout, step, here)
     ok, _, path, note = tasks.solve_chain(arm, wps, arm.home, roll_floor=layout.roll_floor)
@@ -34,17 +53,17 @@ def goal_block(layout, step, here):
     return np.array([1., *grasp[:5], *lower[:5]], dtype=np.float32)
 
 
-def goal_of(blocks):
+def goal_of(blocks, size=GOAL_SIZE):
     """The goal vector from {arm: block}; an arm without a step has zeros (it waits)."""
-    out = np.zeros(GOAL_SIZE, np.float32)
+    out = np.zeros(size, np.float32)
     for arm, block in blocks.items():
-        k = sites.ARMS.index(arm) * (GOAL_SIZE // 2)
-        out[k:k + GOAL_SIZE // 2] = block
+        k = sites.ARMS.index(arm) * (size // 2)
+        out[k:k + size // 2] = block
     return out
 
 
-def goal_vector(layout, step, here):
-    return goal_of({step["arm"]: goal_block(layout, step, here)})
+def goal_vector(layout, step, here, mode="joints"):
+    return goal_of({step["arm"]: goal_block(layout, step, here, mode)}, goal_size(layout, mode))
 
 
 def observe(world, data, zero_error=None):
@@ -61,10 +80,11 @@ class Recorder(teaching.Teacher):
     """A teacher that saves each passed step as an episode (a failed step spoils the rest of its run), or with `concurrent` one whole
     two-arm task per episode, every frame with both arms' goals, kept only when the whole task passed."""
 
-    def __init__(self, world, dataset, longest, concurrent=False, skill=None, no_goal=False, **options):
+    def __init__(self, world, dataset, longest, concurrent=False, skill=None, no_goal=False, goal_mode="joints", **options):
         super().__init__(world, **options)
         self.dataset, self.longest, self.goal, self.spoiled, self.count = dataset, longest, None, False, 0
         self.concurrent, self.recording, self.blocks, self.skill, self.prompt, self.no_goal = concurrent, False, {}, skill, PROMPT, no_goal
+        self.goal_mode = goal_mode
 
     def frame(self, data, targets, label, ctxs=None):
         goal = self.goal
@@ -74,8 +94,8 @@ class Recorder(teaching.Teacher):
             else:
                 for c in ctxs or []:
                     if c.step["id"] not in self.blocks:
-                        self.blocks[c.step["id"]] = goal_block(self.layout, c.step, c.here)
-                goal = goal_of({c.arm: self.blocks[c.step["id"]] for c in ctxs or []})
+                        self.blocks[c.step["id"]] = goal_block(self.layout, c.step, c.here, self.goal_mode)
+                goal = goal_of({c.arm: self.blocks[c.step["id"]] for c in ctxs or []}, goal_size(self.layout, self.goal_mode))
         if goal is not None and (self.skill is None or self.phase in skills.SKILLS[self.skill]["phases"]):
             state, images = observe(self.world, data, self.zero_error)
             action = np.concatenate([targets[arm] - self.zero_error.get(arm, 0.) for arm in sites.ARMS]).astype(np.float32)
@@ -108,7 +128,7 @@ class Recorder(teaching.Teacher):
         if self.skill and getattr(self, "error_draw", None):
             seed, deg, physics = self.error_draw
             self.error_draw, self.zero_error = (seed + 1, deg, physics), skills.draw_errors(seed, deg, physics)
-        self.goal, self.count = (True if self.no_goal else goal_vector(self.layout, step, here)), 0
+        self.goal, self.count = (True if self.no_goal else goal_vector(self.layout, step, here, self.goal_mode)), 0
         self.prompt = skills.prompt(step, self.skill) if self.skill else PROMPT
         row = super().run_step(data, step, here)
         self.goal = None
@@ -148,9 +168,11 @@ def _failed_steps_from_eval(dagger_model, eval_file):
 
 
 def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0., lag=False, physics=False, *,
-            pick_vision=False, belt_skew=False, cam_jitter=False, compensate_zero=False, no_goal=False,
+            pick_vision=False, belt_skew=False, cam_jitter=False, compensate_zero=False, no_goal=False, goal_mode="joints",
             dagger_model=None, steps_file=None, dagger_prefix_frames="auto", dagger_only=False, dagger_device=None,
             dagger_steps=None, dagger_eval_file=None, n_action_steps=None, flow_steps=None, use_amp=None):
+    if goal_mode not in GOAL_MODES or (no_goal and goal_mode != "joints"):
+        raise ValueError("--goal is one of joints|site and cannot go with --no-goal")
     if skill and plan_dir:
         raise ValueError("a sub-skill is recorded one step at a time, not in concurrent mode")
     if dagger_model and not skill:
@@ -161,10 +183,11 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
     joints = [f"{arm}.{joint}" for arm in sites.ARMS for joint in world_mod.JOINTS]
     vector = dict(dtype="float32", shape=(12,), names=joints)
     image = dict(dtype="video", shape=(*SHAPE, 3), names=["height", "width", "channels"])
-    goal = dict(dtype="float32", shape=(GOAL_SIZE,), names=[f"goal{i}" for i in range(GOAL_SIZE)])
     raw_choices = choices
     choices = resolved_choices(choices, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
     layout = sites.Layout(**choices)
+    size = goal_size(layout, goal_mode)
+    goal = dict(dtype="float32", shape=(size,), names=[f"goal{i}" for i in range(size)])
     dagger_driver, longest, dagger_counts = None, {}, {}
     step_filter = {s.strip() for s in dagger_steps.split(",") if s.strip()} if isinstance(dagger_steps, str) else (set(dagger_steps) if dagger_steps else None)
     if dagger_eval_file:
@@ -187,7 +210,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
         for name in names:
             if not dagger_only:
                 teacher = Recorder(world, dataset, longest, concurrent=planned is not None, skill=skill, no_goal=no_goal,
-                                   seed=seed, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
+                                   goal_mode=goal_mode, seed=seed, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
                 skills.disturb(teacher, seed, zero_error_deg, lag, physics)
                 teacher.compensate_zero = bool(compensate_zero)
                 teacher.error_draw = (STEP_ERROR_SEED_BASE + 100 * seed + 50 * names.index(name), zero_error_deg, physics)
@@ -202,7 +225,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
                 with dagger_driver.torch.inference_mode():
                     for idx, plan in enumerate(task["steps"]):
                         if step_filter is None or plan["id"] in step_filter or f"{name}/{plan['id']}" in step_filter:
-                            rec = Recorder(world, dataset, longest, skill=skill, no_goal=no_goal, seed=seed + idx,
+                            rec = Recorder(world, dataset, longest, skill=skill, no_goal=no_goal, goal_mode=goal_mode, seed=seed + idx,
                                            pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
                             skills.disturb(rec, err_seed_base + idx, zero_error_deg, lag, physics)
                             rec.compensate_zero = bool(compensate_zero)
@@ -218,7 +241,9 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
         shutil.rmtree(out, ignore_errors=True)
     else:
         dataset.finalize()
-    meta = dict(longest=longest, spoiled=spoiled)
+    meta = dict(longest=longest, spoiled=spoiled, goal_mode=None if no_goal else goal_mode)
+    if goal_mode == "site":
+        meta["goal_sites"] = site_names(layout)
     if num_episodes is not None:
         meta["episodes"] = int(num_episodes)
     if dagger_counts:
@@ -260,7 +285,10 @@ class Driver:
         elif self.kind != "ik":
             raise ValueError(f"unknown policy type {self.kind}")
         if self.kind != "ik":
-            self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model))
+            # the checkpoint's processor carries the training device (cuda); without this a cpu Driver fails to load
+            self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model),
+                                                           preprocessor_overrides={"device_processor": {"device": str(device)}},
+                                                           postprocessor_overrides={"device_processor": {"device": "cpu"}})
             self.device = next(self.policy.parameters()).device
             self.has_goal = GOAL in (getattr(self.policy.config, "input_features", None) or {})
             dev_type = getattr(self.device, "type", str(self.device))
@@ -271,7 +299,15 @@ class Driver:
         choices = resolved_choices(choices, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
         self.layout = sites.Layout(**choices)
         self.world = world_mod.World(self.layout)
-        self.longest = json.loads(Path(steps_file).read_text(encoding="utf-8"))["longest"]
+        meta = json.loads(Path(steps_file).read_text(encoding="utf-8"))
+        self.longest = meta["longest"]
+        self.goal_mode = "joints"
+        shape = getattr(self.policy.config.input_features[GOAL], "shape", None) if self.kind != "ik" and self.has_goal else None
+        if shape:  # a checkpoint's PolicyFeature; no shape keeps the old joints meaning
+            size = int(shape[0])
+            self.goal_mode = "joints" if size == GOAL_SIZE else "site"
+            if size != goal_size(self.layout, self.goal_mode) or meta.get("goal_sites", site_names(self.layout)) != site_names(self.layout):
+                raise ValueError(f"the model's {size}-wide goal does not match this layout's sites (choices differ from training?)")
         self.pick_vision = pick_vision
         self.belt_skew = belt_skew
         self.cam_jitter = cam_jitter
@@ -299,7 +335,7 @@ class Driver:
             teacher.belt_in(data, plan, {o: home[o].wait for o in self.layout.arms if o != arm})
         before = {o: world.pose(data, o) for o in here if o != c}
         start_z, peak = world.pose(data, c)[0][2], 0.
-        goal = goal_vector(self.layout, plan, {k: v for k, v in here.items() if k != c}) if self.has_goal else None
+        goal = goal_vector(self.layout, plan, {k: v for k, v in here.items() if k != c}, self.goal_mode) if self.has_goal else None
         self.policy.reset()
         for _ in range(self.longest[plan["id"]] + 15):
             state, images = observe(world, data)
@@ -314,12 +350,13 @@ class Driver:
 
     def concurrent(self, task, seed, sink=None):
         """A whole two-arm task with the model driving both arms."""
+        import omx_two_arm_plan as plan_mod
         L, w = self.layout, self.world
         teacher = teaching.Teacher(w, seed=seed, pick_vision=self.pick_vision, belt_skew=self.belt_skew, cam_jitter=self.cam_jitter)
         here = dict(task.get("start", {}))
         data = teacher.fresh(here)
         queue = {a: [s for s in task["steps"] if s["arm"] == a] for a in L.arms}
-        status, held, running, rows = {}, {}, {}, []
+        status, held, running, rows, prev_active = {}, {}, {}, [], ()
         self.policy.reset()
         with self.torch.inference_mode():
             for _ in range(sum(self.longest[f"{task['name']}/{s['id']}"]["frames"] + 15 for s in task["steps"])):
@@ -328,21 +365,38 @@ class Driver:
                     if s is None or not all(status.get(d) == "done" for d in s.get("after", [])) or not all(status.get(d) for d in s.get("after_pick", [])) \
                             or any(z in held for z in set(s["zones"][0]) | set(s["zones"][1])):
                         continue
+                    others = {k: v for k, v in here.items() if k != s["container"]}
+                    if running and not all(
+                        plan_mod.sweeps_clear(
+                            plan_mod.step_swept_poses(L, arm, s["from"], s["to"], others),
+                            (poses_oa := plan_mod.step_swept_poses(L, oa, r["step"]["from"], r["step"]["to"], r["others"]) or [])[
+                                int(len(poses_oa) * min(1.0, r["t"] / max(1, r["budget"]["frames"]))):
+                            ],
+                        )
+                        for oa, r in running.items()
+                    ):
+                        continue
                     queue[arm].pop(0)
                     held.update({z: s["id"] for z in set(s["zones"][0]) | set(s["zones"][1])})
                     if s["from"] == "belt":
                         w.put(data, s["container"], "belt", **(teacher.skew_for(s) if teacher.belt_skew else {}))
-                    ctx, others = teaching.Ctx(arm), {k: v for k, v in here.items() if k != s["container"]}
+                    ctx = teaching.Ctx(arm)
                     ctx.carried = s["container"]
                     budget = self.longest[f"{task['name']}/{s['id']}"]
-                    running[arm] = dict(step=s, ctx=ctx, t=0, budget=budget, block=goal_block(L, s, others) if self.has_goal else None, before={o: w.pose(data, o) for o in others},
-                                        start_z=w.pose(data, s["container"])[0][2], peak=0., pick_only=set(s["zones"][0]) - set(s["zones"][1]))
+                    running[arm] = dict(step=s, ctx=ctx, others=others, t=0, budget=budget,
+                                        block=goal_block(L, s, others, self.goal_mode) if self.has_goal else None,
+                                        before={o: w.pose(data, o) for o in others}, start_z=w.pose(data, s["container"])[0][2], peak=0.,
+                                        pick_only=set(s["zones"][0]) - set(s["zones"][1]))
                 if not running and not any(queue.values()):
                     break
+                active = tuple((a, running[a]["step"]["id"]) for a in sorted(running))
+                if active != prev_active:
+                    self.policy.reset()
+                    prev_active = active
                 state, images = observe(w, data)
                 if sink:
                     sink(sheet(images))
-                goal = goal_of({arm: r["block"] for arm, r in running.items()}) if self.has_goal else None
+                goal = goal_of({arm: r["block"] for arm, r in running.items()}, goal_size(L, self.goal_mode)) if self.has_goal else None
                 action = self.act(state, images, goal)
                 ctxs = [r["ctx"] for r in running.values()]
                 for c in ctxs:

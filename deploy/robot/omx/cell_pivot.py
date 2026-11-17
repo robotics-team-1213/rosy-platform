@@ -29,16 +29,8 @@ import cell_calibration as cal  # noqa: E402
 import cell_params as prm  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
 from cell_pivot_bias import (  # noqa: E402,F401  (re-exported)
-    BIAS_REACH_MM,
-    SCHEMA,
-    bias_at,
-    bias_path,
-    circle_center_sigma_mm,
-    fit_pivot_yaw,
-    load_bias,
-    save_bias,
-    validate_bias,
-    yaw_arc_deg as _yaw_arc_deg,
+    BIAS_REACH_MM, SCHEMA, bias_at, bias_path, circle_center_sigma_mm, fit_pivot_yaw,
+    load_bias, save_bias, trim_known_centres, validate_bias, yaw_arc_deg as _yaw_arc_deg,
 )
 
 STILL_PX, DIFF_PX, MIN_BLOB, MAX_BLOB, FOLLOW_PX, AGREE_PX = (
@@ -289,25 +281,25 @@ def known_geometry_bias(marks, tcps, geometry: dict, site: str, record: dict, pa
     circle's centre; they must agree, so one wrong blob is refused and never averaged in."""
     if len(marks) < 2:
         return {"result": f"jaws marked at {len(marks)} yaws, need 2 with a known geometry"}
-    radius_m, phase = geometry["radius_mm"] / 1000, geometry["phase_deg"]
-    centres = [(m[0] - radius_m * math.cos(math.radians(t[3] + phase)), m[1] - radius_m * math.sin(math.radians(t[3] + phase)))
-               for m, t in zip(marks, tcps)]
+    max_rms = prm.get(params, "pivot.max_rms_mm")
+    centres, tcps = trim_known_centres(marks, tcps, geometry, max_rms)
     centre = [float(v) for v in np.mean(centres, axis=0)]  # plain floats: validate_bias takes nothing else
     spread = max(1000 * math.dist(c, centre) for c in centres)
     tx, ty = (float(np.mean([t[i] for t in tcps])) for i in (0, 1))
     bias = {"site": site, "kind": "known_geometry", "point_m": [round(tx, 4), round(ty, 4)],
             "bias_mm": [round(1000 * (centre[0] - tx), 1), round(1000 * (centre[1] - ty), 1)],
-            "radius_mm": geometry["radius_mm"], "phase_deg": phase, "rms_mm": round(spread, 1),
-            "yaws_fk_deg": [round(t[3], 1) for t in tcps], "n": len(marks), "geometry_from": geometry.get("measured"),
+            "radius_mm": geometry["radius_mm"], "phase_deg": geometry["phase_deg"], "rms_mm": round(spread, 1),
+            "yaws_fk_deg": [round(t[3], 1) for t in tcps], "n": len(centres), "geometry_from": geometry.get("measured"),
+            **({"dropped": len(marks) - len(centres)} if len(centres) < len(marks) else {}),
             "map_sha": cell_attempts.digest(record), "measured": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    if spread > prm.get(params, "pivot.max_rms_mm"):
+    if spread > max_rms:
         return {"result": f"marks disagree: {round(spread, 1)} mm from their centre", "bias": bias}
     if math.hypot(*bias["bias_mm"]) > prm.get(params, "pivot.max_bias_mm"):
         return {"result": f"bias refused: {bias['bias_mm']} mm is past pivot.max_bias_mm", "bias": bias}
     return {"result": "calibrated", "bias": bias}
 
 
-MIN_YAW_ARC_DEG = 120.0
+MIN_YAW_ARC_DEG = 110.0
 
 
 def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: str, work: Path,
@@ -342,7 +334,11 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
             for command in (f"load {library}", "goto above_pick"):
                 status = cell.act(command)
                 if not status.get("ok"):
-                    return {"result": "stopped", "at": command, "error": status.get("error")}
+                    break
+            if not status.get("ok"):
+                if len(marks) >= (2 if config.get("pivot", {}).get("geometry") else 4):
+                    break
+                return {"result": "stopped", "at": command, "error": status.get("error")}
             import joint_jitter
 
             state = (joint_jitter.settled_state(cell, params) or {}).get("state")
@@ -378,7 +374,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     tx, ty = (float(np.mean([t[i] for t in kept_tcps])) for i in (0, 1))
     bias = {"site": site, "kind": "pivot", "point_m": [round(tx, 4), round(ty, 4)],
             "bias_mm": [round(1000 * (cx - tx), 1), round(1000 * (cy - ty), 1)],
-            "radius_mm": fit["radius_mm"], "phase_deg": phase, "rms_mm": fit["rms_mm"], "fit_model": "yaw_linear",
+            "radius_mm": fit["radius_mm"], "phase_deg": phase, "z_view": z_view, "rms_mm": fit["rms_mm"], "fit_model": "yaw_linear",
             **({"bias_sigma_mm": sigma_mm} if sigma_mm is not None else {}),
             **({"dropped": fit["dropped"]} if fit["dropped"] else {}),
             "yaws_fk_deg": [round(t[3], 1) for t in kept_tcps], "n": len(kept_tcps),
