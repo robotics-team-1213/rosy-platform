@@ -15,6 +15,8 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | File | Description |
 |------|-------------|
 | `README.md` | Current contract, host inventory, multi-workcell preflight, build and probe usage |
+| `run_hardware_owner.py`, `hardware_owner_goals.py` | Hardware owner entrypoint; goals only with an `arm_goals` config for one arm (D-977 4): reviewed library per source>target, presence token, no serial |
+| `rosy-omx-arm-session@.service`, `rosy-omx-attested-producer@.service`, `omx-session.env.example`, `omx-attested-producer.env.example` | device_trial units beside `rosy-omx-owner@.service` (run off, a person starts them): the session is the only bus writer and is never SIGKILLed; the producer posts PRE_DISPATCH only behind a SOURCE_CLEAR |
 | `stack.lock.yaml` | Pins the official ROBOTIS source set to immutable revisions |
 | `fetch_sources.py` | Fetches the locked sources into the build context |
 | `Dockerfile`, `Dockerfile.pilot` | Workstation image and pilot-simulation image |
@@ -79,7 +81,7 @@ One file per step; a step that a parameter turns off returns None and the carry 
 |---|---|---|
 | Before a run | `cell_preflight` (camera shift, other sessions), `cell_calibrate check/auto` (remap, pivot, surface touch; moving steps need `--commissioning --person-at-switch`); `cell_remap_plan` (before a remap moves, every point's IK must stay inside the arm's cell-config `joint_min`/`joint_max`, else the whole run is refused; `auto --plan-only` prints each point's IK and opens no port; arm_b `joint_max wrist_flex.pos` 55.3, 2026-11-14); `cell_pivot_precheck` (before a `pivot-near` moves: jaw marks inside the top frame, planned FK arc, joint window, `pivot.geometry` height; stack configs set `pivot.require_joint_limits`) | — |
 | Look and choose | `cell_objects` (catalogue; objects by their own colour `object_mask` when config `objects.hsv` names it, else surface difference with shadows dropped; touching boxes split by `cell_split`), `cell_auto_pick.choose` (finger gaps, yaw candidates, plan) | `objects.split_touching`, `objects.drop_shadow` |
-| Decision model | `cell_pick_judge` (orders only the candidates the measurement kept; -1 vetoes; no answer keeps the rule order) | absent config `decision_model` |
+| Decision model | `cell_pick_judge` (orders only the candidates the measurement kept; -1 vetoes; no answer keeps the rule order). `--goal` (cell_auto_pick) only logs the operator's goal sentence through the `ask_goal` shadow (`target_goal_shadow`): it never reorders, the existing -1 veto stands, and coordinates stay out of the prompt. | absent config `decision_model` |
 | Location correction | `cell_calibrate.self_calibrate` (pivot near the target, or over it), `cell_pivot` (bias regions), `learn_bias` (from a confirmed place) | `calibrate.bias_near_mm`, `pivot.over_target` |
 | D-911 gate | `cell_transfer.Gate` (every command `checked`; each re-plan assessed) | never |
 | Hooks, assembled | `cell_hooks.pick_hooks` | — |

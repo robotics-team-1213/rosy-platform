@@ -4925,3 +4925,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `side_check`가 pair(두 집게를 함께 본 표시)를 기준 쪽으로 센다(2개 규칙·평균 중심 비교 모두). other 표시가 없으면 비교하지 않는다. `mark_jaws`는 같은 자리에서 일치한 두 시도의 집게 쪽이 다르면 그 yaw를 표시 없음("jaw sides switched between tries")으로 둔다. `validated_<arm>`은 설정의 `arm_id`를 쓰고(셀의 arm_a/arm_b/arm_s 설정 셋 모두 `arm_id` 보유, 읽기 전용 확인), 없거나 모르는 값이면 검증 안 됨으로 본다.
 - 증거: 새 단위 시험(모두 pair, pair+other 혼합과 5 mm 어긋남, 원 경로 6 mm 어긋남 거절, 쪽이 바뀐 시도). 원격 pytest는 아직 돌리지 않았다.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · feat(fleet): 셀 Fleet device_trial 팔 이송 설정 주입 (D-977 2, 항목 1-5)
+- 변경: `fleet.arm_transfer_config`(프로필·설치 파일·grant revision·관측자 토큰 로더)를 `cli.py`에 연결, `deploy/site/compose.omx-device-trial.yaml` 추가. 후보 파일 목록(`build_candidate.py`·`verify_candidate.py`)에 새 overlay 추가(없는 옛 후보는 계속 검증됨). `tools/sim/transfer_installation.py`의 `fleet_installation`은 같은 코드를 쓴다.
+- 증거: 원격 pytest `operations/fleet/test/test_arm_transfer_config.py` 외 (착지 기록 참조).
+- gate 변화: 없음. owner는 목표를 계속 거절한다. 순서: 착지 → 호스트 검증기 설치 → 게시.
+- CE: 해당 없음.
