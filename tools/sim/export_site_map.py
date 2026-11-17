@@ -18,7 +18,7 @@ STATUS = "planned_unverified"
 # Zone ids and the Korean names people read (term source: harborlogi CONTEXT; verdict 2026-11-17).
 ZONES = (("yard", "장치 야드", "보관"), ("temp_a", "임시 장치 A", "임시"), ("temp_b", "임시 장치 B", "임시"), ("stand", "반출대", "반출"))
 STAND_ARMS = ["arm_a"]  # user, 2026-11-17: the stand is reached by arm A only
-NOT_PLACES = (("belt", "공급 경로"), ("supply_s", "공급 작업대 S"), ("ship_stern", "선미"), ("ship_bow", "선수"), ("pinky_tray", "Pinky 짐칸"))
+NOT_PLACES = (("belt", "공급 경로"), ("supply_s", "공급 작업대 S"), ("ship_stern", "선미"), ("ship_bow", "선수"), ("vehicle_tray", "이송 차량 짐칸"))
 # station_zones.yaml ids (values and API unchanged there); null = no place in this map
 LEGACY_STATION_ZONES = {"EXP_S1": "stand:r1-s1", "EXP_S5_PALLET": "stand:r1-s1", "EXP_S3_BELT": "not_places:belt", "STG_C2": None, "STG_S3_WAIT": None}
 

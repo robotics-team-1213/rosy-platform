@@ -533,8 +533,8 @@
    "label": "선수"
   },
   {
-   "id": "pinky_tray",
-   "label": "Pinky 짐칸"
+   "id": "vehicle_tray",
+   "label": "이송 차량 짐칸"
   }
  ],
  "aliases": {
