@@ -249,7 +249,7 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool
     land_queue = _queue()
     # refused before a snapshot exists; a replacement or a rollup adopting a member's ticket adds none
     if not ("--urgent" in land_args or replacements or os.environ.get(land_queue.TICKET_ENV)):
-        if why := land_queue.full(land_queue.queue_dir(cwd)):
+        if why := land_queue.full(land_queue.queue_dir(cwd), land_queue.lane_of(cwd, ref)):
             raise Full(why)
     snap = snapshot_name(branch, now)
     place = holder(cwd)
@@ -279,7 +279,7 @@ def wait_for_room(tree: Path, deadline: float) -> bool:
     sys.path.insert(0, str(tree / "tools"))  # the snapshot's land_queue: this copy runs beside the log
     import land_queue
     while time.monotonic() < deadline:
-        if not land_queue.full(land_queue.queue_dir(tree)):
+        if not land_queue.full(land_queue.queue_dir(tree), land_queue.lane_of(tree)):
             return True
         time.sleep(60)
     return False
