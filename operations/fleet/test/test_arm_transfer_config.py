@@ -117,6 +117,7 @@ def test_owner_down_at_startup_installs_a_placeholder_that_fails_closed(tmp_path
     # the live owner's capability never equals the placeholder, so the store refuses admit and prepare
     assert tuple(installed.capabilities) != tuple(owner.capabilities)
     from fleet.server.physical_transfer_store import PhysicalTransferStore
-    store = PhysicalTransferStore(tmp_path / "j.sqlite3", installation=installed, deployment_profile="device_trial")
+    from types import SimpleNamespace
+    store = SimpleNamespace(installation=installed)  # _check_capabilities reads only .installation
     with pytest.raises(Exception, match="capability or identity changed"):
-        store._check_capabilities(owner.capabilities, store._now_ns(), store._now_ns())
+        PhysicalTransferStore._check_capabilities(store, owner.capabilities, 1, 1)
