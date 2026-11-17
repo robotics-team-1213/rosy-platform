@@ -6,6 +6,7 @@ import base64
 import binascii
 import hashlib
 import json
+import re
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -171,3 +172,61 @@ def software_stop(facts) -> str | None:
                 or set(current) != set(command) or any(abs(current[n] - command[n]) > FOLLOWED_TICKS for n in current):
             return None
     return f"software stop ({stop}) with the arm folded on its command; nothing physical held it"
+
+
+#: D-1039: the one flagged runner row a machine may clear: the guard's strain stop while parking (a joint lagged its
+#: command; the arm then folded home with torque OFF). The whole error must be exactly the runner's text
+#: (deploy/robot/omx/chunk_runner_run.py: "contact in {chunk}: {motor} lag rose to {lag:.1f} units at PWM {pwm} of
+#: {limit} (lags: {joint} {lag:.1f}, ...)"), nothing before or after it. Not the jaws stopping short in park.
+_JOINT = r"(?:shoulder_pan|shoulder_lift|elbow_flex|wrist_flex|wrist_roll)"
+_LAG = r"[0-9]{1,4}\.[0-9]"
+PARK_STRAIN = re.compile(
+    rf"(?:runner: )?contact in park: {_JOINT} lag rose to {_LAG} units at PWM -?[0-9]{{1,4}} of [0-9]{{1,4}}"
+    rf" \(lags: (?:{_JOINT} {_LAG}(?:, {_JOINT} {_LAG}){{0,3}})?\)", re.ASCII)
+
+
+def _park_strain(row) -> bool:
+    """One flagged row of that stop as omx_incident.facts() keeps it (2026-11-17 arm_b, arm_s): the runner's "run park"
+    row carries the text in both error and fault, and the "state" row after it in fault alone. Each set field is
+    exactly the text; when both are set they are the same text; nothing caught, no person needed."""
+    if (not isinstance(row, dict) or row.get("command") not in ("run park", "state") or row.get("caught")
+            or row.get("person_needed")):
+        return False
+    texts = [row.get(k) for k in ("error", "fault") if row.get(k) not in (None, "")]
+    if not texts or not all(isinstance(t, str) for t in texts):  # a list or dict here is unhashable: refuse, never 500
+        return False
+    return len(set(texts)) == 1 and all(PARK_STRAIN.fullmatch(t) is not None for t in texts)
+
+
+def machine_clearable(facts) -> tuple[bool, str]:
+    """D-1039: may an AI assessor service clear this incident without a person? Default deny on the stored measured
+    facts, never looser than the cell's own rule (omx_incident.decide: a latch, a wind-up, a flagged runner row or an
+    unsafe end holds): the keys must be there with their types, the arm folded at a safe end with torque confirmed OFF
+    on every motor and caps confirmed restored, and nothing latched, wound up, stopped on contact or recorded as a
+    motor fault. Flagged runner rows only when every one is exactly a PARK_STRAIN stop (_park_strain). A truncated
+    report lacks the lists and stays with a person."""
+    if not isinstance(facts, dict):
+        return False, "facts unreadable"
+    torque, latched, windup, flagged, stops, faults = (facts.get(k) for k in (
+        "torque_after", "latched", "windup_hits", "flagged", "stops", "fault_records"))
+    if not (isinstance(torque, dict) and isinstance(latched, dict)
+            and all(isinstance(v, list) for v in (windup, flagged, stops, faults))):
+        return False, "facts incomplete (torque_after, latched, windup_hits, flagged, stops, fault_records)"
+    if facts.get("safe_end") is not True or facts.get("folded") is not True:
+        return False, "arm not at a safe end folded at home"
+    if not torque or not all(isinstance(v, int) and not isinstance(v, bool) and v == 0 for v in torque.values()):
+        return False, "torque not confirmed OFF"
+    if facts.get("caps_restored") is not True:
+        return False, "caps not confirmed restored"
+    if latched:
+        return False, "latched hardware error"
+    if windup:
+        return False, "wind-up or snag hit"
+    if not all(_park_strain(r) for r in flagged):
+        return False, "runner flagged the session for a person"
+    if stops:
+        return False, "guard contact stop"
+    if faults:
+        return False, "motor fault record"
+    return True, (("park strain stop, then " if flagged else "")
+                  + "folded safe end, torque OFF, caps restored, nothing latched, wound up or stopped")

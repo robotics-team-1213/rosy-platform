@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import os
 import re
 import sqlite3
 from hashlib import sha256
@@ -23,7 +24,41 @@ AI_PATHS = frozenset({"/api/fleet/ai/facts", "/api/fleet/ai/heartbeat",  # D-577
 # D-971: the AI PC also posts an explanation of one OMX arm incident (stored and shown, never acted on)
 AI_EXPLANATION = re.compile(r"^/api/fleet/workcell-observations/arms/[A-Za-z0-9_-]{1,32}/incidents/[0-9a-f]{32}/explanation$")
 
+# D-1039: an AI assessor service (site_users role service, named in ROSY_FLEET_ARM_ASSESSORS with its arms) posts
+# only an arm incident clear; which incidents it may clear is decided on the stored facts in arm_incidents
+ARM_CLEAR = re.compile(r"^/api/fleet/workcell-observations/arms/[A-Za-z0-9_-]{1,32}/incidents/[0-9a-f]{32}/clear$")
+
 _LOG = logging.getLogger(__name__)
+
+
+def arm_assessors() -> dict:
+    """``id=source,source;id=source``; unset or empty: no assessor (the feature is off)."""
+    out = {}
+    for entry in os.environ.get("ROSY_FLEET_ARM_ASSESSORS", "").split(";"):
+        name, _, arms = entry.partition("=")
+        if name.strip():
+            out[name.strip()] = frozenset(a.strip() for a in arms.split(",") if a.strip())
+    return out
+
+
+def assessor_arms(principal: SitePrincipal) -> Optional[frozenset]:
+    """The arm source ids this principal may clear as an assessor; None when it is not one."""
+    return arm_assessors().get(principal.principal_id) if principal.role == "service" else None
+
+
+def is_arm_assessor(principal: SitePrincipal) -> bool:
+    return assessor_arms(principal) is not None
+
+
+def build_incident_clearer(authorize, require_named_operator):
+    """D-1039: the arm incident clear admits a named operator (as require_named_operator) or a configured assessor."""
+    def require_incident_clearer(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
+        if is_arm_assessor(principal):
+            return principal
+        if not principal.permits_site("fleet.operate", {"operator"}):
+            raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "operator role required"})
+        return require_named_operator(principal)
+    return require_incident_clearer
 
 
 def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
@@ -159,6 +194,9 @@ def build_authorize(console_token: Optional[str],
                 and request.url.path != "/api/fleet/calibrations"
                 and not request.url.path.startswith("/api/fleet/site-map/")):
             raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "calibration scope required"})
+        if is_arm_assessor(principal) and not (request.method == "POST" and ARM_CLEAR.match(request.url.path)):
+            raise HTTPException(status_code=403, detail={"code": "ARM_ASSESSOR_SCOPE_REQUIRED",
+                                                         "message": "an arm assessor may only clear arm incidents"})
         if (principal.password_change_required
                 and request.url.path not in {"/api/fleet/auth/session", "/api/fleet/auth/logout",
                                              "/api/fleet/auth/change-password"}):

@@ -114,7 +114,8 @@ def test_store_is_idempotent_per_session_and_keeps_the_open_explained_cleared_st
         store.clear("arm_b", first, "again", "op-8")
     states = {i["incident_id"]: i for i in store.snapshot("arm_b")}
     assert states[first]["state"] == "cleared" and states[first]["cleared"] == {"by": "op-7", "at": 20.0, "note": "box removed",
-                                                                                "cause": None, "basis": None}
+                                                                                "cause": None, "basis": None,
+                                                                                "kind": "person"}
     assert states[first]["explanation"]["seen"] == "A box in the jaws." and states[other]["state"] == "open"
     assert all("jpeg_b64" not in f for i in states.values() for f in i["frames"])  # no bytes in the console list
     assert store.hold("arm_b").incident_ids == [other]

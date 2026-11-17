@@ -1,0 +1,78 @@
+{
+ "schema": "rosy.omx-incident.v1",
+ "arm": "arm_b",
+ "stamp": "20261117T072127",
+ "session": "session.json",
+ "facts": {
+  "safe_end": true,
+  "latched": {},
+  "torque_after": {
+   "11": 0,
+   "12": 0,
+   "13": 0,
+   "14": 0,
+   "15": 0,
+   "16": 0
+  },
+  "caps_restored": true,
+  "folded": true,
+  "last_state": [
+   0.76,
+   -62.25,
+   53.06,
+   51.65,
+   44.76,
+   48.89
+  ],
+  "flagged": [
+   {
+    "command": "run park",
+    "error": "contact in park: shoulder_lift lag rose to 2.2 units at PWM -336 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.3, wrist_flex 0.1, wrist_roll 0.0)",
+    "fault": "contact in park: shoulder_lift lag rose to 2.2 units at PWM -336 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.3, wrist_flex 0.1, wrist_roll 0.0)",
+    "caught": null,
+    "t": 1794867421.2559116
+   },
+   {
+    "command": "run park",
+    "error": "contact in park: shoulder_lift lag rose to 2.3 units at PWM -305 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.3, wrist_flex 0.1, wrist_roll 0.0)",
+    "fault": "contact in park: shoulder_lift lag rose to 2.3 units at PWM -305 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.3, wrist_flex 0.1, wrist_roll 0.0)",
+    "caught": null,
+    "t": 1794867424.8878767
+   },
+   {
+    "command": "run park",
+    "error": "contact in park: shoulder_lift lag rose to 2.2 units at PWM -305 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.3, wrist_flex 0.1, wrist_roll 0.0)",
+    "fault": "contact in park: shoulder_lift lag rose to 2.2 units at PWM -305 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.3, wrist_flex 0.1, wrist_roll 0.0)",
+    "caught": null,
+    "t": 1794867428.6007342
+   },
+   {
+    "command": "run park",
+    "error": "contact in park: shoulder_lift lag rose to 2.2 units at PWM -336 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.1, wrist_flex 0.1, wrist_roll 0.0)",
+    "fault": "contact in park: shoulder_lift lag rose to 2.2 units at PWM -336 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.1, wrist_flex 0.1, wrist_roll 0.0)",
+    "caught": null,
+    "t": 1794867432.9818306
+   },
+   {
+    "command": "run park",
+    "error": "contact in park: shoulder_lift lag rose to 2.3 units at PWM -360 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.1, wrist_flex 0.0, wrist_roll 0.0)",
+    "fault": "contact in park: shoulder_lift lag rose to 2.3 units at PWM -360 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.1, wrist_flex 0.0, wrist_roll 0.0)",
+    "caught": null,
+    "t": 1794867436.4323306
+   }
+  ],
+  "windup_hits": [],
+  "stop_reading": null,
+  "stops": [],
+  "fault_records": [],
+  "frames": []
+ },
+ "decision": {
+  "actions": [],
+  "hold": true,
+  "offered": [],
+  "reason": "runner: contact in park: shoulder_lift lag rose to 2.3 units at PWM -360 of 600 (lags: shoulder_pan 0.0, elbow_flex 0.1, wrist_flex 0.0, wrist_roll 0.0); a person checks the arm (jaws, contacts, wedged objects) before torque ON"
+ },
+ "recovery": null,
+ "reported": false
+}
