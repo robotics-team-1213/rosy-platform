@@ -125,6 +125,17 @@ def unrolled(repo: Path, row: dict) -> list[dict]:
             for m in members]
 
 
+ROLLUP_LANE_S = 2 * 3600  # D-889 35: a rollup past this no longer holds the lane
+
+
+def in_flight(rows: list[dict], host: str) -> list[dict]:
+    """Rollups on ``host`` whose FULL or turn has started (checking, waiting or in the turn); pending and
+    FULL-waiting ones stay re-rollable (addendum 34), and one older than ROLLUP_LANE_S is stuck, not in flight."""
+    return [r for r in rows if land_async.ROLLUP.fullmatch(r.get("branch") or "") and r.get("host") == host
+            and (r.get("status") in ("turn", "waiting") or (r.get("status") == "preparing" and not r.get("full_wait")))
+            and r.get("age", 0) < ROLLUP_LANE_S]
+
+
 def sources(members: list[dict]) -> set[str]:
     """The landings a rollup combines: a re-rolled rollup counts once."""
     return {m.get("rollup") or m["branch"] for m in members}
@@ -378,14 +389,15 @@ def resume(member: dict) -> None:
                        "--tests", "auto"], tree.parent / (tree.name + ".resume.log"))
 
 
-def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume) -> list:
-    """One level of bisection after a failed rollup: a merge conflict sends every member back alone, a NEW
-    failure re-rolls each half (a half of one lands alone)."""
+def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume, bisect: bool = False) -> list:
+    """After a stopped rollup: only a NEW failure (``bisect``, the supervisor read it from the last STOP line) re-rolls
+    each half (a half of one lands alone); a merge conflict or a stop without a verdict (expiry, lost host, kill)
+    sends every member back alone (D-889 35)."""
     holder = land_async.holder(repo)
     members = json.loads((holder / f"{rollup}.members").read_text(encoding="utf-8"))
     log = holder / f"{rollup}.log"
     text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
-    if "conflicts with this branch" in text or "merge aborted" in text:
+    if not bisect or "conflicts with this branch" in text or "merge aborted" in text:
         halves = [[m] for m in members]
     else:
         halves = [members[: len(members) // 2], members[len(members) // 2:]]
@@ -402,8 +414,9 @@ def main(argv: list[str]) -> int:
     repo = Path(git(Path(__file__).resolve().parent, "rev-parse", "--show-toplevel").stdout.strip())
     qdir = land_queue.queue_dir(repo)
     now = datetime.now(timezone.utc)
-    if argv[:1] == ["split"] and len(argv) == 2:
-        split(repo, argv[1], now)
+    if argv[:1] == ["split"] and len(argv) in (2, 3):  # under the build lock: a half's build must not race an apply
+        with land_async.locked(qdir.parent / "rosy-land-rollup.lock", wait=True):
+            split(repo, argv[1], now, bisect=argv[2:] == ["bisect"])
         return 0
     if argv[:1] != ["apply"]:
         return roll(repo, qdir, now, argv)
@@ -418,7 +431,12 @@ def main(argv: list[str]) -> int:
 def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
     auto = "--auto" in argv  # D-889 23 item 6 / 32: unattended; unmixed, FULL-tier (and safety) landings stay alone
     urgent = argv[argv.index("--urgent") + 1] if "--urgent" in argv[:-1] else ""
-    rows = candidates(land_queue.ahead(qdir, Path("~")), repo)
+    live = land_queue.ahead(qdir, Path("~"))
+    busy = in_flight(live, socket.gethostname())
+    if busy and not urgent:  # D-889 35: one rollup lane; a user's --urgent rollup still builds
+        print(f"[rollup] a rollup is in flight: {busy[0]['branch']}", flush=True)
+        return 0
+    rows = candidates(live, repo)
     # Bundle fast affected landings on their own lane before falling back to mixed FULL rollups.
     members = whole(plan(repo, rows, tier_of=affected))
     if len(sources(members)) < 2 and not (auto and not MIXED):
