@@ -28,7 +28,7 @@ import cell_jaw_axis  # noqa: E402,F401
 import cell_objects  # noqa: E402
 from cell_observe import keep, predicted_pixel, wrap90  # noqa: E402,F401
 import cell_params as prm  # noqa: E402
-from cell_pick_geom import across, grasp_depth, grasp_yaw, jaw_open_for, parse_dest, reachable_ends, surface_z  # noqa: E402,F401
+from cell_pick_geom import across, box_centre, grasp_depth, grasp_yaw, jaw_open_for, parse_dest, reachable_ends, surface_z  # noqa: E402,F401
 import cell_pipeline as cp  # noqa: E402
 import cell_pivot  # noqa: E402
 import cell_place_fit  # noqa: E402
@@ -192,7 +192,7 @@ def run_auto(
             if dry_run:
                 return {**out, "result": "planned"}
             before_frame, frame_record, evidence_error = cell_auto_evidence.pre_motion_frame(
-                cell, config, calibration, catalog, source, roi, o["raw_m"], o["object"],
+                cell, config, calibration, catalog, source, roi, box_centre(o), o["object"],
                 dest_site, droi, place_xy, bias_data, source_frame,
                 work / "frames" / f"{capture_id}-before.jpg")
             if frame_record is not None:
@@ -211,7 +211,7 @@ def run_auto(
             gate = Gate(guarded, config, calibration, sequence=sequence)
             ledger = cell_attempts.ReplanLedger(config, calibration, source, dest, attempt, tried, t0, choices)
             # shadow inference before the gate opens: no delay between the approval and the motion
-            shadow_row = shadow.capture(cell, config, attempt, img) if shadow else None
+            shadow_row = shadow.capture(cell, config, attempt, img, source=source, dest=dest) if shadow else None
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a), ledger.finish)
             if held is not None:
                 tried["envelope"] = held
@@ -220,7 +220,7 @@ def run_auto(
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {held['reason']}"}
             guard = cell_auto_evidence.scene_guard(
-                guarded, config, calibration, source, roi, o["raw_m"], before_frame["image"])
+                guarded, config, calibration, source, roi, box_centre(o), before_frame["image"])
             wrist, capture, pinch, feel = cell_hooks.pick_hooks(
                 same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration, guard
             )
@@ -273,7 +273,7 @@ def run_auto(
                 place_xy = (target["place"]["x"], target["place"]["y"])
                 tried["verify"] = verify_placed(
                     guarded, config, calibration, dest_site, place_xy, droi, catalog, bias_data, o["object"],
-                    before_frame, work / "frames" / f"{capture_id}-after.jpg", source, o["raw_m"], roi,
+                    before_frame, work / "frames" / f"{capture_id}-after.jpg", source, box_centre(o), roi,
                 )
                 cd.emit(
                     "verify",

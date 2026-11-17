@@ -27,7 +27,7 @@ def _camera_layout(cameras):
 
 
 class CoreArmClient:
-    def __init__(self, url, *, token, policy_revision, timeout=2.0):
+    def __init__(self, url, *, token, policy_revision, timeout=2.0, observe_only=False):
         parsed = urlsplit(url)
         if (parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username
                 or parsed.password or parsed.query or parsed.fragment or parsed.path not in ('', '/')
@@ -35,6 +35,8 @@ class CoreArmClient:
                 or not re.fullmatch(r'[0-9a-f]{64}', policy_revision)
                 or type(timeout) not in (int, float) or not math.isfinite(timeout) or timeout <= 0):
             raise ValueError('CORE origin, credential, pinned policy revision and positive timeout required')
+        # Shadow mode (D-1024 2): reads observations, never acts, never stops a teacher's run.
+        self.observe_only = observe_only is True
         self.url, self._token = url.rstrip('/'), token
         self.policy_revision, self.timeout = policy_revision, timeout
         self.info, self._observation_id = None, None
@@ -70,6 +72,8 @@ class CoreArmClient:
         self.info = info
 
     def _stop_best_effort(self):
+        if self.observe_only:
+            return
         try:
             self._request('POST', 'stop')
         except Exception:
@@ -101,6 +105,8 @@ class CoreArmClient:
             raise
 
     def send_action(self, positions):
+        if self.observe_only:
+            raise PermissionError('observe-only client never sends actions')
         if not self.is_connected or self._observation_id is None:
             raise RuntimeError('a fresh CORE observation is required for each action')
         source, self._observation_id = self._observation_id, None
@@ -118,4 +124,5 @@ class CoreArmClient:
         if not self.is_connected:
             return
         self.info, self._observation_id = None, None
-        self._request('POST', 'stop')
+        if not self.observe_only:
+            self._request('POST', 'stop')

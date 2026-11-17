@@ -78,6 +78,7 @@ class FakeGh:
         if signed:
             self.assets.append("release.json.sig")
         self.uploads: list[bytes] = []
+        self.rerun_error = False
         self.calls: list[list[str]] = []
         self.ci_runs = [{"id": 101, "head_sha": COMMIT, "head_branch": "main",
                          "event": "push", "status": "completed", "conclusion": "success"}]
@@ -129,6 +130,11 @@ class FakeGh:
             assert "--clobber" not in args
             self.uploads.append(Path(args[3]).read_bytes())
             self.assets.append("release.json.sig")
+            return self._ok()
+        if args[:2] == ["run", "rerun"]:
+            assert args[2:] == ["101", "--failed", "--repo", REPO]
+            if self.rerun_error:
+                return SimpleNamespace(returncode=1, stdout="", stderr="HTTP 403: Resource not accessible\n")
             return self._ok()
         if args[:2] == ["release", "view"]:
             return self._ok(json.dumps({"name": self.release_name, "body": self.release_body}))
@@ -194,6 +200,27 @@ def test_ci_must_pass_before_signing_and_remains_retryable(tmp_path, keys, case)
                    "status": "completed", "conclusion": "success"}]
     gh.ci_jobs = [{"name": "ci-result", "status": "completed", "conclusion": "success"}]
     assert signer.run() == auto.EXIT_SIGNED
+
+
+def test_red_exact_main_run_gets_one_rerun_request_and_still_refuses(tmp_path, keys):
+    gh = FakeGh()
+    gh.ci_runs[0]["conclusion"] = "failure"
+    signer = auto.AutoSigner(_config(tmp_path, keys), runner=gh)
+    assert signer.run() == auto.EXIT_IDLE and signer.run() == auto.EXIT_IDLE
+    reruns = [call for call in gh.calls if call[:2] == ["run", "rerun"]]
+    assert len(reruns) == 1 and reruns[0][2:4] == ["101", "--failed"]
+    assert gh.uploads == [] and _audit(tmp_path)[-1]["decision"] == "ci-red"
+    assert 101 in json.loads((tmp_path / "state/auto-sign-state.json").read_text())["rerun"]
+
+
+def test_rerun_without_permission_is_logged_and_the_red_stays_red(tmp_path, keys):
+    gh = FakeGh()
+    gh.ci_runs[0]["conclusion"] = "failure"
+    gh.rerun_error = True
+    signer = auto.AutoSigner(_config(tmp_path, keys), runner=gh)
+    assert signer.run() == auto.EXIT_IDLE
+    decisions = [record["decision"] for record in _audit(tmp_path)]
+    assert "ci-rerun-refused" in decisions and decisions[-1] == "ci-red"
 
 
 def test_happy_path_signs_uploads_and_audits(tmp_path, keys):
