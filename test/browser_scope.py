@@ -28,6 +28,7 @@ FLEET_SAMPLE = [
 ]
 FLEET = FLEET_SAMPLE + [
     "test/test_integrated_control_backend_browser.py",
+    "test/test_unit_scope_browser.py",
     "test/test_measured_calibration_browser.py",
     "test/test_motor_health_ui_browser.py",
     "test/test_fleet_workcell_observation_browser.py",

@@ -94,10 +94,10 @@ def test_unit_scope_reads_the_manifest_and_standalone_keeps_everything():
     from test_control_unit_service import MANIFEST
 
     topology = ControlUnitTopology.from_mapping({"revision": "v1", "units": [
-        *MANIFEST["units"], {"id": "CELL-A", "parent": "R", "resources": ["workcell:arm_a"]}]})
+        *MANIFEST["units"], {"id": "ARM-CELL", "parent": "R", "resources": ["workcell:arm_a"]}]})
     assert unit_scope(topology, "R") == {"role": "root", "drive": False, "arms": False, "children": True,
                                          "enrollment": False}
-    assert unit_scope(topology, "CELL-A")["arms"] is True
+    assert unit_scope(topology, "ARM-CELL")["arms"] is True
     assert unit_scope(topology, "B", has_arms=True)["arms"] is True  # an OMX wired to this instance
     assert unit_scope() == {"role": "standalone", "drive": True, "arms": True, "children": False,
                             "enrollment": True}
