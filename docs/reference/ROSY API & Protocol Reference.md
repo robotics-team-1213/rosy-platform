@@ -2930,7 +2930,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 |---|---|---|---|
 | `system.boot` | info | 로봇 | `{version}` |
 | `system.shutdown` | warning | 로봇 | `{}` |
-| `config.changed` | warning | 로봇 | `{key, id, role, deleted, by, changes}` — `key`: `robot.identity` \| `auth.tokens` \| `safety.limits` \| `safety.speed_limits` \| `safety.approved_speed` \| `dds.rmw`. `safety.speed_limits`·`safety.approved_speed` 는 `{key, changes}` 를 싣고(`changes`: 필드 → [이전, 새 값]) 앞의 것은 `by`(설정한 사람의 principal_ref)도 싣는다. `id`·`role` 은 토큰 추가, `id`·`deleted` 는 토큰 삭제·로그아웃, `id` 만은 이름표 변경일 때 실린다. 토큰 원문도, 원문에서 유도된 값도 싣지 않는다 |
+| `config.changed` | warning | 로봇 | `{key, id, role, deleted, by, operator_name, changes}` — `key`: `robot.identity` \| `auth.tokens` \| `safety.limits` \| `safety.speed_limits` \| `safety.approved_speed` \| `dds.rmw`. `safety.speed_limits`·`safety.approved_speed` 는 `{key, changes}` 를 싣고(`changes`: 필드 → [이전, 새 값]) 앞의 것은 `by`(설정한 사람의 principal_ref)와 `operator_name`(콘솔이 보낸 표시용 이름, 감사 주체 아님)도 싣는다. `id`·`role` 은 토큰 추가, `id`·`deleted` 는 토큰 삭제·로그아웃, `id` 만은 이름표 변경일 때 실린다. 토큰 원문도, 원문에서 유도된 값도 싣지 않는다 |
 | `auth.paired` | warning | 로봇 | `{id, role, source, expires_at}` — 로그인 코드로 토큰이 발급됐다(D-193). 코드도 토큰도 싣지 않는다 |
 | `auth.code_burned` | warning | 로봇 | `{code_id, attempts}` — 틀린 시도가 쌓여 로그인 코드를 폐기했다 |
 | `auth.enrollment_code_issued` | warning | 로봇 | `{code_id, role, by}` — 관리자(`by` = 토큰 id)가 등록 코드를 받았다. 코드는 싣지 않는다 |
