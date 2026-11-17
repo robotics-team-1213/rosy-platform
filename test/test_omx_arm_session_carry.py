@@ -297,13 +297,19 @@ def test_commissioning_is_passed_to_a_carry_only_for_a_fresh_token_and_never_fro
     token = tmp_path / "presence"
     open_carry = goals_module.open_carry_for({**SECTION, "presence_token": str(token)}, field=field)
     g = SimpleNamespace(arm_transfer=SimpleNamespace(source="source", target="target", commissioning=True))
-    open_carry(g)
-    assert seen == [False]  # no token file: automatic mode, whatever the grant says
+    with pytest.raises(CarryRefused, match="presence token"):
+        open_carry(g)
+    assert seen == []  # no token file: refused before the cell is opened, whatever the grant says
     _token(token)
     open_carry(g)
-    assert seen == [False, True] and not token.exists()  # consumed on use
-    open_carry(g)
-    assert seen == [False, True, False]
+    assert seen == [True] and not token.exists()  # consumed on use
+    with pytest.raises(CarryRefused):
+        open_carry(g)
+    assert seen == [True]
+    _token(token, age_s=presence_token.MAX_AGE_S + 5)
+    with pytest.raises(CarryRefused):
+        open_carry(g)
+    assert seen == [True]  # a stale token never opens the cell
     with pytest.raises(CarryRefused):  # a pair without a reviewed library never consumes a token
         _token(token)
         open_carry(SimpleNamespace(arm_transfer=SimpleNamespace(source="x", target="y")))

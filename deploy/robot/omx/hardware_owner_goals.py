@@ -11,8 +11,8 @@ FIFO, no new motion code. The source/target names of a grant select a library a 
                 "cell_config": "<cell_auto_pick --config file of this arm>",
                 "libraries": {"source>target": "<reviewed library.json>"}, "presence_token": "<local token file>"}
 
-``--commissioning`` and ``person_at_switch`` are set for a carry only when ``presence_token`` is a fresh single-use file
-a person created at the cell (rosy_agent.presence_token); no wire message can set them.
+Every carry needs ``presence_token``: a fresh single-use file a person created at the cell (rosy_agent.presence_token). It
+sets ``--commissioning`` and ``person_at_switch``; no wire message can. Without it the carry is refused before any command.
 """
 from __future__ import annotations
 
@@ -82,7 +82,10 @@ def open_carry_for(section, *, field=None, presence=None):
         if library is None:
             raise CarryRefused("no reviewed library for this source and target")
         f = field or field_modules()
+        # shortcut: presence token required for every carry because Gate re-plan hooks are not wired; relax only when hooks + finish_attempt are wired
         person_present = presence(section["presence_token"])
+        if not person_present:
+            raise CarryRefused("a fresh local presence token is required for every carry")
         args = SimpleNamespace(config=Path(section["cell_config"]), dry_run=False, task_id=None, handoff_lease_id=None,
                                want_object=None, want_colour=None)
         config, fifo, calibration_path, _work = f.open_cell(args, person_present)
