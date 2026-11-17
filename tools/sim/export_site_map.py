@@ -74,6 +74,7 @@ def build_aliases(zones, L):
     legacy_sim = {t["item"]: t["id"] for s in slots for t in s["tiers"] if t["item"]}
     legacy_sim.update({n: "not_places:belt" for n, s in L.sites.items() if s["kind"] == "belt"})
     legacy_sim.update({n: "not_places:ship_stern" for n, s in L.sites.items() if s["kind"] == "ship" and not s["slots"]})
+    legacy_sim.setdefault("ship-stern-l0", "not_places:ship_stern")  # the sim stopped listing the stern as a site on 11-17
     return dict(legacy_layout={(f"yard-r{s['row']}-c{s['columns'][0]}" if s["id"].startswith("yard:") else f"{s['id'].split(':')[0]}-{s['row']}"): s["id"]
                                   for s in slots},  # feat/cell-ar-twin ids before 11-17: yard-r1-c4, temp_a-2, stand-1
                 legacy_sim=legacy_sim, legacy_station_zones=LEGACY_STATION_ZONES)
