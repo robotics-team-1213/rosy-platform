@@ -154,16 +154,8 @@ def owner_installation_from_environment():
 
 def fleet_installation(written, socket_root):
     """Fleet's TransferInstallation: the written policy plus the running owner's own capability."""
-    from fleet.server.physical_transfer_evidence import PhysicalTransferPolicy
-    from fleet.server.local_action_transport import UnixLocalActionTransport
-    from fleet.server.physical_transfer_store import TransferInstallation
-    installed = PhysicalTransferPolicy.model_validate_json(json.dumps(written['policy']))
-    if installed.digest != written['policy_digest']:
-        raise ValueError('policy digest does not match the written policy')
-    transport = UnixLocalActionTransport(socket_root)
-    capabilities = tuple(transport.transfer_capability(p.instance_id, workcell_id=p.workcell_id)
-                         for p in installed.participants)
-    return TransferInstallation(policy=installed, source='source', target='target', capabilities=capabilities)
+    from fleet.arm_transfer_config import fleet_installation as complete
+    return complete(written, socket_root)
 
 
 def home_joints(spec):
