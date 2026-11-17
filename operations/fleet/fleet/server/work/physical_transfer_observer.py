@@ -171,12 +171,11 @@ class PhysicalObservationService:
                         raise MissionConflict("committed physical evidence cannot be replaced")
                     return
             if body.phase == "PRE_DISPATCH":
-                if self.attestations is not None and not self.attestations.source_clear_valid(mission_id):
-                    raise MissionConflict("device_trial dispatch needs an unexpired, unconsumed operator SOURCE_CLEAR")
+                if self.attestations is not None:
+                    # Fail closed, single use: consumed before dispatch, so a failed dispatch needs a new attestation.
+                    self.attestations.consume_source_clear(mission_id)
                 self.dispatcher.submit(mission_id, observations=samples,
                     authenticated_producer_id=self.observer.producer_id)
-                if self.attestations is not None:
-                    self.attestations.consume_source_clear(mission_id)
             else:
                 capabilities, at = ((), self.store._now_ns()) if prior is not None else self.dispatcher._capabilities()
                 if prior is None:

@@ -57,14 +57,19 @@ def test_valid_attestation_dispatches_once_and_is_consumed(gated):
     assert len(gated.port.submitted) == 1
 
 
-def test_failed_dispatch_keeps_the_attestation_until_it_expires(gated):
+def test_failed_dispatch_still_consumes_the_attestation(gated, monkeypatch):
     mission = approved(gated)
     clear(gated, mission)
     context = gated.client.get(CONTEXT, headers=OBSERVER).json()["context"]
     request = measured(gated, context, phase="PRE_DISPATCH")
-    request["expected_request_digest"] = "0" * 64
+    dispatcher = gated.app.state.arm_transfer_delegate.observation.dispatcher
+
+    def boom(*_args, **_kwargs):
+        raise MissionConflict("dispatch failed")
+    monkeypatch.setattr(dispatcher, "submit", boom)
     assert post(gated, mission, request).status_code == 409
-    assert gated.attestations.source_clear_valid(mission)
+    assert not gated.attestations.source_clear_valid(mission)  # a retry needs a new attestation
+    assert not gated.port.submitted
 
 
 def test_simulation_without_attestations_is_unchanged(rig):
