@@ -105,6 +105,27 @@ def test_resume_counts_only_landings_it_relaunched(tmp_path, monkeypatch):
     assert land_tick.resume(tmp_path) == "resumed 1 of 2: land-ok-1"
 
 
+def test_requeue_relaunches_one_queue_full_stop_once(tmp_path, monkeypatch):
+    """11-18: landings stopped on a full queue sat for days; an owner's own note or another STOP is left alone."""
+    place, seen = tmp_path / "holder", []
+    full, failed = "[land] STOP: landing queue full (12/12", "[land] STOP: NEW failure in test"
+    for name, note, last in (("land-fix-a-20261114000000", "land.py exit 1; read", full),
+                             ("land-fix-b-20261114000000", "stopped by owner: do not resume", full),
+                             ("land-fix-c-20261114000000", "land.py exit 1; read", failed)):
+        (place / name).mkdir(parents=True)
+        (place / (name + ".stopped")).write_text(note, encoding="utf-8")
+        (place / (name + ".log")).write_text(full + "\n" + last + "\n", encoding="utf-8")
+    monkeypatch.setattr(land_tick.land_queue, "queue_dir", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_queue, "full", lambda q: None)
+    monkeypatch.setattr(land_tick.land_async, "holder", lambda repo: place)
+    monkeypatch.setattr(land_tick.land_async, "git", lambda repo, *a: "abc")
+    monkeypatch.setattr(land_tick.land_async, "resume", lambda repo, name, a, d, wait: seen.append(name))
+    assert land_tick.requeue(tmp_path) == "requeued land-fix-a-20261114000000"
+    assert land_tick.requeue(tmp_path) == "nothing to requeue" and seen == ["land-fix-a-20261114000000"]
+    monkeypatch.setattr(land_tick.land_queue, "full", lambda q: "landing queue full (12/12 tickets)")
+    assert land_tick.requeue(tmp_path) == "queue full"
+
+
 def test_warm_runs_only_when_queue_is_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(land_tick.land_queue, "queue_dir", lambda repo: tmp_path)
     monkeypatch.setattr(land_tick.land_queue, "ahead", lambda q, t: [{"status": "pending"}])
