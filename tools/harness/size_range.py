@@ -192,7 +192,7 @@ def metrics_problems(commit: str) -> list[str]:
     if dt.datetime.fromisoformat(_git("log", "-1", "--format=%cI", commit).strip()) < land_metrics_rule.RULE_SINCE:
         return []
     files = _git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", commit).split("\0")
-    diff = _git("diff", "--unified=0", commit + "~1", commit, "--", "tools")
+    diff = _git("diff", "--unified=0", commit + "~1", commit, "--", "tools/*.py")  # code only: a doc line naming land_rollup.py is no trigger
     return land_metrics_rule.violations(_git("log", "-1", "--format=%B", commit), files, diff)
 
 

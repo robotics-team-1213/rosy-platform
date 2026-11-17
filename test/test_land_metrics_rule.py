@@ -52,11 +52,13 @@ def test_size_range_enforces_the_rule_on_new_non_merge_commits(tmp_path, monkeyp
     def git(*args):
         return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout.strip()
 
-    def commit(name, message, when):
+    def commit(name, message, when, extra=()):
         monkeypatch.setenv("GIT_COMMITTER_DATE", when)
         monkeypatch.setenv("GIT_AUTHOR_DATE", when)
         (tmp_path / "tools").mkdir(exist_ok=True)
         (tmp_path / "tools" / name).write_text(message, encoding="utf-8")
+        for extra_name, text in extra:
+            (tmp_path / "tools" / extra_name).write_text(text, encoding="utf-8")
         git("add", "-A")
         git("commit", "-q", "--no-verify", "-m", message)
         return git("rev-parse", "HEAD")
@@ -69,11 +71,16 @@ def test_size_range_enforces_the_rule_on_new_non_merge_commits(tmp_path, monkeyp
     git("checkout", "-q", "-b", "work", base)
     bad = commit("land_c.py", "new work without the line", new)
     good = commit("land_d.py", "new work"+chr(10)*2+"Metrics: before=landed 1/h", new)
+    ok_msg = "new work" + chr(10) * 2 + "Metrics: before=landed 1/h"
+    doc = commit("land_e.py", ok_msg, new, [("AGENTS.md", "| `land_rollup.py` | doc line |" + chr(10))])
+    code = commit("land_f.py", ok_msg, new, [("land_g.py", "x.rollup(common)" + chr(10))])
     git("merge", "-q", "--no-ff", "--no-verify", "-m", "merge without the line", "side")
     merged = git("rev-parse", "HEAD")
     assert size_range.metrics_problems(older) == []  # committed before RULE_SINCE
     assert size_range.metrics_problems(bad) == ["touches the landing pipeline without a 'Metrics: before=...' line"]
     assert size_range.metrics_problems(good) == []
+    assert size_range.metrics_problems(doc) == []  # a doc line naming land_rollup.py is no trigger
+    assert size_range.metrics_problems(code) == ["adds a timer or rollup trigger without a 'Removes: ...' line"]
     assert size_range.metrics_problems(merged) == []  # a merge is skipped
     assert size_range.main([base, bad]) == 1
     assert bad[:7] in capsys.readouterr().err
