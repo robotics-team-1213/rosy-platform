@@ -188,6 +188,8 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
     def run(command):
         status = cell.act(command)
         steps.append({"command": command, **{k: status.get(k) for k in cp.STEP_KEYS}})
+        if command in ("run release_place", "run lift_place") and status.get("trace_receipt"):
+            steps[-1]["trace_receipt"] = status["trace_receipt"]  # byte range of the owner trace: release evidence only
         return status
 
     for command in (f"load {library}", *sequence):  # FOLDED, or cp.SEQUENCE where auto.fold_before_transport is 0
