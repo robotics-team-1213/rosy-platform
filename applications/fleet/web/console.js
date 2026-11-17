@@ -183,6 +183,8 @@ delete document.documentElement.dataset.areaPending;
 inbox.focusInitial();
 pageScope.listen(layoutMedia, "change", layoutConsole);
 pageScope.onResume(layoutConsole);
+// 요소 스크롤은 거품이 없어 캡처로 받는다(넓은 창의 .console-secondary 스크롤 포함).
+for (const type of ["scroll", "resize"]) pageScope.listen(window, type, () => syncQueueToasts(), {capture: true, passive: true});
 
 // 셸은 폴링 운율, inbox.js는 로그 상한을 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 // bad 로그는 #log 기록(live 아님)에 남고, 카드는 호출 실패와 같은 사건이면 alert-popup이 한 장·한 번
@@ -289,6 +291,13 @@ function queuesPanelOnScreen(panel) {
   return isOnScreen(panel.getBoundingClientRect(), clips);
 }
 
+// 큐 행의 긴급 토스트 판정. 폴링 렌더뿐 아니라 스크롤·창 크기 변화로 큐가 화면에 들어올 때도
+// 돈다 — 좁은 화면에서 큐로 내려가도 다음 폴링까지 같은 행의 토스트가 큐 위에 남지 않게(S6).
+function syncQueueToasts() {
+  alertPopup.syncCritRows(el("critical-list"), Boolean(view.stateLoaded && !view.stateUnavailable),
+    { panelVisible: queuesPanelOnScreen(document.querySelector(".queues-panel")) });
+}
+
 function render() {
   // 지도 캔버스는 무장(목표 선택·위치 찍기)했을 때만 누를 수 있는 단추다 — role이 무장 상태를 따라간다.
   // 해제하면 뷰가 소유한 role로 돌린다(사이트 뷰는 img). 계층이 부여한 값을 덮어쓰지 않는다(WCAG 4.1.2).
@@ -350,12 +359,7 @@ function render() {
   robotDock?.sync();
   signals.render();
   roster.fillQueues();
-  const queuesPanel = document.querySelector(".queues-panel");
-  alertPopup.syncCritRows(
-    el("critical-list"),
-    Boolean(view.stateLoaded && !view.stateUnavailable),
-    { panelVisible: queuesPanelOnScreen(queuesPanel) },
-  );
+  syncQueueToasts();
   inbox.refresh();
   roster.syncConvoy();  // D-540 (d) 대형·대열
   if (!el("work-new").hidden) paintMove();
