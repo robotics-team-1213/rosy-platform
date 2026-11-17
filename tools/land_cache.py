@@ -13,6 +13,12 @@ which every worktree of the clone shares. A later run skips an invocation when
   main's delta inside one run) selects none of its paths, is not FULL, deletes or renames
   nothing, and leaves the known-failure lists alone (a shorter list can turn an old pass NEW).
 
+* prior round (D-889 37, ``--tests auto``): the same, also when that range is FULL, but only while no safety path,
+  STAY_FULL trigger, selector or runner tool, registry, root conftest/pyproject/pytest.ini, known-failure list or
+  unmapped path is in it (``_refusal``); the reach is then the selector's own, and nothing is written to the cache.
+  The row's commit need not be an ancestor: the delta is then the exact tree diff from its tree to the candidate's
+  (``_probe``), so a sibling merge of the same branch reuses what main's newer commits did not touch.
+
 Lint, safety-review, size-range and node never come from here. Bad lines are ignored; the file
 is trimmed to its last ``KEEP`` lines past ``MAX_LINES``. ``--no-cache`` disables reuse;
 fresh clean executions still leave evidence for publication.
@@ -41,6 +47,7 @@ CACHE = "rosy-land-cache.jsonl"
 FAILED = "rosy-land-failed.json"  # argv of invocations whose last run had a NEW failure
 MAX_LINES, KEEP = 20000, 15000
 NARROW_COMMITS = 12  # ancestor commits tried for narrow reuse: one selector call each
+REUSED_FROM = "reused_from"  # a row carrying it is never a fresh execution: entries() drops it, publication never sees it
 NARROW = "reused across trees"  # land.py: a narrow reuse is not this candidate's own run (land record)
 LISTS = ("test/known_failures.py", "test/known_failures.txt", "test/flaky_quarantine.txt")
 OID = re.compile(r"[0-9a-f]{40,64}")
@@ -84,7 +91,7 @@ def entries(wt: Path) -> list[dict]:
             entry = json.loads(line)
         except ValueError:
             continue
-        if _valid(entry):
+        if _valid(entry) and REUSED_FROM not in entry:
             found.append(entry)
     return found
 
@@ -210,6 +217,7 @@ def _overlap(a: str, b: str) -> bool:
 
 _delta_lock = threading.RLock()
 _delta_memo: dict[tuple, list[str] | None] = {}
+_via_full: set[tuple[str, str]] = set()  # ranges whose reach came from _full_delta (the log line says so)
 _anc_lock = threading.RLock()
 _anc_cache: dict[tuple[str, str], set[str]] = {}
 _anc_neg: dict[tuple[str, str, str], bool] = {}
@@ -257,8 +265,11 @@ def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[st
     with _delta_lock:
         if key in _delta_memo:
             return _delta_memo[key]
-        if not is_ancestor(wt, base, head):
-            return None
+        orig, sibling = head, not is_ancestor(wt, base, head)
+        if sibling:  # D-889 37: no ancestry, so the exact tree-to-tree diff stands in for it
+            head = _probe(wt, base, head)
+            if head is None:
+                return None
         status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
         rows = [row.split("\t") for row in status.stdout.splitlines() if row]
         if status.returncode or any(r[0] not in ("M", "A") or r[-1] in LISTS for r in rows):
@@ -269,14 +280,31 @@ def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[st
         except Exception as exc:  # a selector failure only means no narrow reuse
             print(f"[cache] selector failed ({exc}); no narrow reuse from {base[:10]}")
             return None
-        if full:
-            invocations = _landed_full(wt, base, head, python, select)
-            if invocations is None:
-                _delta_memo[key] = None
-                return None
+        if full:  # _landed_full reasons over main's landed commits: it needs the ancestry a sibling lacks
+            invocations = None if sibling else _landed_full(wt, base, head, python, select)
+            if invocations is None:  # D-889 37: a FULL range with none of the refused triggers
+                found = _full_delta(wt, base, head, python, [r[-1] for r in rows])
+                if found is not None:
+                    _via_full.add((base, orig))
+                _delta_memo[key] = found
+                return found
         picked = [_paths(inv) for inv in invocations]
         _delta_memo[key] = None if None in picked else [p for paths in picked for p in paths]
+        if sibling and _delta_memo[key] is not None:
+            _via_full.add((base, orig))
         return _delta_memo[key]
+
+
+def _probe(wt: Path, base: str, head: str) -> str | None:
+    """A throwaway commit holding head's tree on top of base: base...probe is then exactly the tree diff
+    base's tree -> head's tree (D-889 37), whatever the two commits' ancestry. Fixed identity and dates, so the
+    same pair always gives the same unreferenced object."""
+    env = {**os.environ, "GIT_AUTHOR_NAME": "probe", "GIT_AUTHOR_EMAIL": "probe@invalid", "GIT_AUTHOR_DATE": "@1 +0000",
+           "GIT_COMMITTER_NAME": "probe", "GIT_COMMITTER_EMAIL": "probe@invalid", "GIT_COMMITTER_DATE": "@1 +0000"}
+    res = subprocess.run(["git", "-C", str(wt), "commit-tree", f"{head}^{{tree}}", "-p", base, "-m", "reuse probe"],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+    out = res.stdout.strip()
+    return out if res.returncode == 0 and OID.fullmatch(out) else None
 
 
 def reach(wt: Path, base: str, head: str, python: str = sys.executable) -> list[str] | None:
@@ -290,23 +318,69 @@ def reach(wt: Path, base: str, head: str, python: str = sys.executable) -> list[
     rows = [row.split("\t") for row in status.stdout.splitlines() if row]
     if status.returncode or any(r[0] not in ("M", "A") or r[-1] in LISTS for r in rows):
         return None
-    run = subprocess.run([python, "tools/harness/rosy_harness.py", "affected", "--base", base, "--head", head, "--json"],
-                         cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                         env={**os.environ, "PYTHONUTF8": "1"})
+    sel = _selection(wt, base, head, python)
     try:
-        sel = json.loads(run.stdout) if run.returncode == 0 else None
         if not sel or sel["mode"] == "full":
             return None
         picked = [_paths(inv) for inv in sel["invocations"]]
-        if str(wt / "test") not in sys.path:
-            sys.path.insert(0, str(wt / "test"))
-        import browser_scope  # noqa: PLC0415 - the tree's own registry
-        import land_guards  # noqa: PLC0415 - the guards read the whole tree: never reused across trees
-        browsers = list(browser_scope.targets([r[-1] for r in rows])) + list(land_guards.GUARDS)
+        browsers = _guards_and_browsers(wt, [r[-1] for r in rows])
     except (ValueError, KeyError, TypeError, ImportError) as exc:
         print(f"[cache] no reuse across {base[:10]}..{head[:10]}: {exc!r}")
         return None
     return None if None in picked else [p for paths in picked for p in paths] + browsers
+
+
+def _selection(wt: Path, base: str, head: str, python: str) -> dict | None:
+    """The D-436 selector's JSON for base..head; None when it fails."""
+    run = subprocess.run([python, "tools/harness/rosy_harness.py", "affected", "--base", base, "--head", head, "--json"],
+                         cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                         env={**os.environ, "PYTHONUTF8": "1"})
+    try:
+        return json.loads(run.stdout) if run.returncode == 0 else None
+    except ValueError:
+        return None
+
+
+def _guards_and_browsers(wt: Path, changed: list[str]) -> list[str]:
+    if str(wt / "test") not in sys.path:
+        sys.path.insert(0, str(wt / "test"))
+    import browser_scope  # noqa: PLC0415 - the tree's own registry
+    import land_guards  # noqa: PLC0415 - the guards read the whole tree: never reused across trees
+    return list(browser_scope.targets(changed)) + list(land_guards.GUARDS)
+
+
+def _refusal(changed: list[str], sel: dict) -> str | None:
+    """D-889 37: why a FULL range may not vouch for an earlier pass (its reach is unknown); None when none applies."""
+    harness = str(Path(__file__).resolve().parent / "harness")
+    if harness not in sys.path:
+        sys.path.insert(0, harness)
+    import affected_tests as at  # noqa: PLC0415
+    import affected_narrow as an  # noqa: PLC0415 - the selector's own lists, not copies
+    for p in changed:
+        if (p in an.REGISTRY_FILES or p in ("conftest.py", "pyproject.toml", "pytest.ini")
+                or any(at._match(p, g) for g in (*an.SELECT_CORE, *an.RUNNER_TOOLS))):
+            return p
+    for e in sel["escalations"]:
+        if e.endswith(at.SAFETY_TRIGGER) or any(e.endswith(t) for t in an.STAY_FULL):
+            return e
+    return f"unmapped {sel['unmapped'][0]}" if sel["unmapped"] else None
+
+
+def _full_delta(wt: Path, base: str, head: str, python: str, changed: list[str]) -> list[str] | None:
+    """D-889 37 (user 2026-11-17: reuse earlier rounds' results): the test paths a FULL base..head reaches as the
+    selector's own guards and directly affected suites, plus browser targets; None on a refusal (``_refusal``)."""
+    try:
+        sel = _selection(wt, base, head, python)
+        why = None if sel is None else _refusal(changed, sel)
+        if sel is None or why:
+            print(f"[cache] no prior-round reuse across {base[:10]}..{head[:10]}: {why or 'selector failed'}")
+            return None
+        picked = [_paths(inv) for inv in sel["local_invocations"]]
+        extra = _guards_and_browsers(wt, changed)
+    except (ValueError, KeyError, TypeError, ImportError) as exc:
+        print(f"[cache] no prior-round reuse across {base[:10]}..{head[:10]}: {exc!r}")
+        return None
+    return None if None in picked else [p for paths in picked for p in paths] + extra
 
 
 def _landed_full(wt: Path, base: str, head: str, python: str, select) -> list[list[str]] | None:
@@ -351,7 +425,7 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     # Dedicated timing rows prove publication, but must never replace a fresh execution.
     known = [e for e in entries(wt) if e["env"] == env and not affected_exclusive.dedicated(e["argv"])]
     exact = {tuple(e["argv"]): e for e in known if e["tree"] == tree}
-    reused, todo = [], []
+    reused, todo, prior = [], [], 0
     for inv in invocations:
         if not affected_exclusive.dedicated(inv) and tuple(inv) in exact:
             reused.append(f"pytest {' '.join(inv)} reused: passed on this tree {tree[:10]} (env {env})")
@@ -363,8 +437,14 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     if todo and args.tests in ("auto", "full") and (wt / "tools/harness/affected_tests.py").is_file():
         wanted = {tuple(inv) for inv in todo if not affected_exclusive.dedicated(inv)}
         ancestors = set(_git(wt, "rev-list", head).stdout.split()) - {head}
-        commits = [c for c in dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted)
-                   if c in ancestors]
+        rowed = list(dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted))
+        commits = [c for c in rowed if c in ancestors]
+        if args.tests == "auto":  # D-889 37: siblings (another merge of the same branch) by exact tree diff, newest first
+            for c in rowed:
+                if len(commits) >= NARROW_COMMITS:
+                    break
+                if c not in ancestors and c != head and _git(wt, "cat-file", "-e", f"{c}^{{commit}}").returncode == 0:
+                    commits.append(c)
         for commit in commits[:NARROW_COMMITS]:
             # explicit FULL: only the strict rule publish_evidence recomputes, never the landed-FULL extension
             delta = (reach(wt, commit, head, python) if args.tests == "full"
@@ -376,10 +456,17 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
                 paths = _paths(inv)
                 if paths and not any(_overlap(p, d) for p in paths for d in delta):
                     todo.remove(inv)
-                    reused.append(f"pytest {' '.join(inv)} {NARROW}: passed on {commit[:10]}; the selector for"
-                                  f" {commit[:10]}..{head[:10]} picks none of its paths (env {env})")
+                    if (commit, head) in _via_full:
+                        prior += 1
+                        reused.append(f"reused {' '.join(inv)} from {commit[:10]} (delta selects none of its paths)")
+                    else:
+                        reused.append(f"pytest {' '.join(inv)} {NARROW}: passed on {commit[:10]}; the selector for"
+                                      f" {commit[:10]}..{head[:10]} picks none of its paths (env {env})")
     for line in reused:
         print(f"[cache] {line}")
+    if reused:
+        import land_events  # noqa: PLC0415 - publish_evidence loads this module in trees that lack it
+        land_events.emit("reuse", reused=len(reused), prior=prior, total=len(invocations))  # the daily [metrics]
 
     return reused, todo, keep
 
