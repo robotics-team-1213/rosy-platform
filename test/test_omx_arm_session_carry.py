@@ -148,7 +148,7 @@ def test_a_phase_is_written_before_its_first_command_and_succeeds_only_from_its_
     submit(owner, grant(owner, installation))
     assert entered.wait(5)
     phases = {p["phase_id"]: p["state"] for p in receipt(owner)["phase_summaries"]}
-    assert phases == {"approach": "SUCCEEDED", "grasp": "RUNNING"}  # intent first; later phases not written yet
+    assert phases == {"approach": "SUCCEEDED", "grasp": "SUBMITTING"}  # intent first, accepted only after the session answered
     release.set()
     assert wait_for(state_is(owner, "SUCCEEDED"))["state"] == "SUCCEEDED"
 
