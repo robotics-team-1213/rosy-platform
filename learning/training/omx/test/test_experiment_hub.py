@@ -97,6 +97,30 @@ def test_upload_route_requires_a_project_hf_connection(tmp_path):
                             {'bundle_id': str(uuid.uuid4()), 'connection_id': 'c'}, c, None, None)
 
 
+def test_upload_route_uses_the_model_allowlist_entry_of_a_team_connection_only(tmp_path, monkeypatch):
+    import omx_center_web
+    c = center(tmp_path)
+    bid = c.hub.prepare(dict(run_id=str(uuid.uuid4()), repo_id='team/omx-act', request_id=str(uuid.uuid4())))['bundle_id']
+    resources, uploads = [], []
+    monkeypatch.setattr(c.hub, 'upload', lambda b, t: uploads.append((b, t)) or {'bundle_id': b})
+
+    class Accounts:
+        sharing = 'project'
+
+        def management_credential(self, principal, connection_id, *, scope, resource=None):
+            resources.append(resource)
+            return {'sharing': self.sharing, 'token': TOKEN}
+
+    accounts, handler = Accounts(), SimpleNamespace(send=lambda value: None)
+    body = {'bundle_id': bid, 'connection_id': 'c'}
+    omx_center_web.post(handler, omx_center_web.PREFIX + '/hub-upload', body, c, accounts=accounts)
+    assert resources == ['model:team/omx-act'] and uploads == [(bid, TOKEN)]
+    accounts.sharing = 'personal'
+    with pytest.raises(ValueError, match='팀 공유'):
+        omx_center_web.post(handler, omx_center_web.PREFIX + '/hub-upload', body, c, accounts=accounts)
+    assert len(uploads) == 1
+
+
 def test_missing_hub_library_fails_the_upload_instead_of_hanging(tmp_path, monkeypatch):
     hub = center(tmp_path).hub
     bid = hub.prepare(dict(run_id=str(uuid.uuid4()), repo_id='team/omx-act', request_id=str(uuid.uuid4())))['bundle_id']

@@ -114,8 +114,11 @@ def post(handler, path, body, center, workspace=None, accounts=None):
         if accounts is None:
             raise ValueError('HF 업로드에는 프로젝트 계정과 HF 연결이 필요합니다.')
         from learning_repos import _credential
+        # Allowlist entries are 'model:<org>/<name>'; the hub only prepares model bundles.
         credential = _credential(accounts, getattr(handler, 'learning_principal', None), body['connection_id'],
-                                 'write-repos', center.hub.repo_of(body['bundle_id']))
+                                 'write-repos', 'model:' + center.hub.repo_of(body['bundle_id']))
+        if credential.get('sharing') != 'project':
+            raise ValueError('HF 업로드는 팀 공유(프로젝트) HF 연결로만 합니다.')
         handler.send(center.hub.upload(body['bundle_id'], credential['token']))
         return True
     name = {PREFIX + '/upload': 'upload',
