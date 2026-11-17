@@ -4931,3 +4931,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `cell_jaw_side.relabel`이 경로 혼합을 거절한 뒤 단일 집게 표시마다 두 집게를 모두 시험하고(pair는 가운데 고정) mark = c + R(yaw) g 적합 rms가 가장 낮은 조합을 고른다. rms 차가 `pivot.side_agree_mm` 안인 조합들의 중심이 그 이상 벌어지면 "jaw sides ambiguous"로 거절한다. 고른 쪽과 원 판정 쪽은 `labels.json`·bias `jaw_sides`에 남는다. 그 뒤 `fit_pivot_yaw`의 split, `side_check`, rms, 반경, bias 가드는 그대로 돈다. 옛 경로는 바뀌지 않는다.
 - 증거: 실물 프레임 재생에서 원 적합 n 7, rms 3.0 mm, 반경 28.1 mm, 버린 표시 0. 이어서 기존 bias 가드가 거절했다(-16.2, 25.1 mm = 29.9 mm > 25). 원격 pytest는 아직 돌리지 않았다.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-post-eval): 마주 보는 yaw가 실제로 마주 볼 때만 짝으로 쓰고, 두 표시의 집게 쪽을 함께 정한다
+- 원인: arm_a post-eval 두 번(01:46 (0.115, 0.034), 17:15 (0.14, 0.039))이 모두 `yaw_pair_gap`으로 거절됐다. 두 visit 라이브러리의 above_pick 관절이 같았다(wrist_roll 8.775 둘 다). top-down IK가 yaw와 yaw+180을 같은 쌍둥이로 풀어 홈에 가까운 wrist_roll을 고르므로 요청 yaw 0/180은 같은 자세다. arm_a wrist_roll 범위(-31~62 단위, 약 167도)로는 180도 차이 자체가 닿지 않는다. raw (-8.8, 51.8) mm는 17:00 pivot yaw 5.6의 같은 집게 blob(-10.2, 52.1)과 1.5 mm 안에서 같다(같은 자세, 같은 집게). 쪽이 바뀐 짝이 아니었다.
+- 변경: `select_visit_yaws`가 각 yaw의 계획 라이브러리 above_pick 프레임 FK yaw를 읽어, 두 계획 yaw가 180 ± `post.yaw_pair_tol_deg` 안일 때만 짝으로 쓴다. 아니면 기존 1-yaw advisory 경로(또는 기하 없으면 skipped)로 간다. 진짜 마주 보는 짝은 `cell_jaw_side.label`(pivot `relabel`의 공동 판정을 떼어 낸 함수)로 두 표시의 집게 쪽을 함께 정한다. 같은 집게면 가운데가 중심이고, 쪽이 바뀌면 두 조합의 중심이 other_mm만큼 갈려 `jaw_sides_ambiguous`로 거절한다. `yaw_pair_gap`·`finger_identity`·rms·bias 가드는 그대로다. 모니터 행·결과에 `jaw_sides`를 남긴다.
+- 증거: 셀 읽기 전용 확인(visit-pallet-0/1.json 관절 동일, cal-monitor 두 행). 새 단위 시험(쌍둥이 계획은 한 번만 이동·advisory, 다른 집게 짝 수용·편향 복원, 바뀐 짝 거절). 원격 pytest 결과는 보고에 적는다.
+- gate 변화: 없음.

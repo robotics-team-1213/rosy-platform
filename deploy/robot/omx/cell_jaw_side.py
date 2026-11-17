@@ -179,46 +179,54 @@ def relabel(marks: list, tcps: list, hows: list, config: dict, frames: Path | No
     Choices within pivot.side_agree_mm of its rms must give the same centre within pivot.side_agree_mm, else refused;
     among those the one with most reference-side marks, then fewest moved, is kept. Every downstream guard (fit_pivot_yaw's split, side_check, rms,
     radius, bias) then runs on the relabelled marks."""
-    from itertools import product
-
     if why := path_check(hows):
         return why
     if not hows or hows[0]["path"] == "old" or any(h.get("side") not in _SHIFT for h in hows):
         return None  # the old path, or a caller that does not say: the marks stay as they are
-    p, geometry = config.get("params"), (config.get("pivot") or {}).get("geometry")
+    geometry = (config.get("pivot") or {}).get("geometry")
     if len(marks) < (2 if geometry else 3):
         return None
-    singles = [i for i, h in enumerate(hows) if h["side"] != "pair"]
+    why, sides, moved, record = label(marks, [t[3] for t in tcps], [h["side"] for h in hows], config.get("params"), geometry)
+    if frames is not None and frames.is_dir() and record:
+        (frames / "labels.json").write_text(json.dumps(dict(record, disc_sides=[h["side"] for h in hows])))
+    if why:
+        return why
+    marks[:] = moved
+    for h, side in zip(hows, sides):
+        h["disc_side"], h["side"] = h["side"], side
+    return None
+
+
+def label(marks: list, yaws: list, sides: list, params=None, geometry: dict | None = None):
+    """(refusal or None, chosen sides, marks moved to the reference jaw's place, record): the joint jaw labelling of
+    `relabel`, for any set of marks of one rigid gripper at FK `yaws` (the pivot's arc, post-eval's opposing pair).
+    `sides` are the starting guesses (ref|other|pair); every single-jaw mark is tried as either jaw."""
+    from itertools import product
+
+    singles = [i for i, s in enumerate(sides) if s != "pair"]
     if len(singles) > MAX_LABELLED:
-        return f"jaw sides unlabelled: {len(singles)} single-jaw marks, at most {MAX_LABELLED}"
-    other_m, other_deg = prm.get(p, "jaw_side.other_mm") / 1000, prm.get(p, "jaw_side.other_deg")
-    yaws = [t[3] for t in tcps]
+        return f"jaw sides unlabelled: {len(singles)} single-jaw marks, at most {MAX_LABELLED}", None, None, None
+    other_m, other_deg = prm.get(params, "jaw_side.other_mm") / 1000, prm.get(params, "jaw_side.other_deg")
     offset = [(other_m * math.cos(math.radians(y + other_deg)), other_m * math.sin(math.radians(y + other_deg))) for y in yaws]
     fits = []
     for choice in product((0.0, 1.0), repeat=len(singles)):
-        shift = [_SHIFT[h["side"]] for h in hows]
+        shift = [_SHIFT[s] for s in sides]
         for i, s in zip(singles, choice):
             shift[i] = s
-        moved = [(m[0] + (_SHIFT[h["side"]] - s) * o[0], m[1] + (_SHIFT[h["side"]] - s) * o[1])
-                 for m, h, s, o in zip(marks, hows, shift, offset)]
+        moved = [(m[0] + (_SHIFT[g] - s) * o[0], m[1] + (_SHIFT[g] - s) * o[1]) for m, g, s, o in zip(marks, sides, shift, offset)]
         rms, centre = _labelled_fit(moved, yaws, geometry)
-        fits.append((rms, sum(s != _SHIFT[h["side"]] for s, h in zip(shift, hows)), shift, moved, centre))
-    tol = prm.get(p, "pivot.side_agree_mm") / 1000
+        fits.append((rms, sum(s != _SHIFT[g] for s, g in zip(shift, sides)), shift, moved, centre))
+    tol = prm.get(params, "pivot.side_agree_mm") / 1000
     best_rms = min(f[0] for f in fits)
     # all near-best choices give one centre (checked below), so their labels move the bias by under tol: take the one
     # with most reference-side marks (with no pair, one jaw at every yaw fits as either jaw), then fewest moved
     near = sorted((f for f in fits if f[0] <= best_rms + tol), key=lambda f: (-f[2].count(0.0) - f[2].count(0.5), f[1], f[0]))
     spread = max(math.dist(f[4], near[0][4]) for f in near)
-    record = {"rms_mm": sorted(round(1000 * f[0], 2) for f in fits)[:4], "disc_sides": [h["side"] for h in hows],
-              "sides": [{0.0: "ref", 1.0: "other", 0.5: "pair"}[s] for s in near[0][2]], "centre_spread_mm": round(1000 * spread, 1)}
-    if frames is not None and frames.is_dir():
-        (frames / "labels.json").write_text(json.dumps(record))
+    chosen = [{0.0: "ref", 1.0: "other", 0.5: "pair"}[s] for s in near[0][2]]
+    record = {"rms_mm": sorted(round(1000 * f[0], 2) for f in fits)[:4], "sides": chosen, "centre_spread_mm": round(1000 * spread, 1)}
     if spread > tol:
-        return f"jaw sides ambiguous: labellings within {1000 * tol:.0f} mm rms put the centre {1000 * spread:.1f} mm apart"
-    marks[:] = near[0][3]
-    for h, side in zip(hows, record["sides"]):
-        h["disc_side"], h["side"] = h["side"], side
-    return None
+        return f"jaw sides ambiguous: labellings within {1000 * tol:.0f} mm rms put the centre {1000 * spread:.1f} mm apart", chosen, None, record
+    return None, chosen, near[0][3], record
 
 
 def side_check(marks, tcps, hows, kept_tcps, radius_mm: float, phase_deg: float, params=None, arm=None):
