@@ -22,6 +22,7 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | `host_inventory.py`, `host-inventory.yaml.example` | Static `rosy.omx-host-inventory.v1` loader and a disabled placement template |
 | `preflight.py` | Multi-workcell preflight over the host inventory |
 | `run_pilot_sim.sh`, `probe_*.py`, `probe_*.sh` | Simulation and pilot probes (vendor owner, Fleet ROS vendor sim, pilot HTTP, pilot recording) |
+| `cell_stack_plan.py` | Pure goal-driven stacking plan `plan_to_goal(layout, state, goal, can, avoid)`: serial moves in `cell_move_order`'s shape, blockers parked top first on temp places, holds `NO_BUFFER`/`UNREACHABLE`/`UNKNOWN_SITE`; not wired to execution |
 | `cell_perception.py`, `cell-profile.example.json` | Cell profile (`rosy.omx-cell-profile.v1`: tray region, box colours, success references, home/transit, tolerances); top-view box centre/yaw, wrist-view box, and the start gate (arm home, box at the reference) before a taught cycle |
 | `grasp_servo.py` | Probe-based wrist correction: a small jog per axis measures how the box moves in the wrist view, then pan/reach/roll steps from that response, with an oscillation guard |
 | `arm_status_bridge.py` | Arm S positions to Fleet's `workcell-observations/arms/{source_id}`: reads `chunk-io/live.json` from `chunk_runner`, converts to radians, posts through `workcell_observation_bridge.ArmSender`. Read only; needs an arm S source and token in the Fleet manifest |
