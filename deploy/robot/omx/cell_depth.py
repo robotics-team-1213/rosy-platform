@@ -29,8 +29,12 @@ from pathlib import Path
 import numpy as np
 
 
+MIN_CAPTURE_S = 13 / 6 + 1.5  # skip 12 + 1 frame at 6 fps: 2.4-2.6 s on the cell; its 11-13 copy's 1.8 s always gave None
+
+
 def _run_v4l2_z16(cmd: list[str], timeout_s: float, **kwargs):
-    """Run v4l2-ctl with 'Z16' primary, falling back to 'Z16 ' ONLY on CalledProcessError."""
+    """Run v4l2-ctl with 'Z16' primary, falling back to 'Z16 ' ONLY on CalledProcessError (v4l2-ctl 1.32 refuses 'Z16')."""
+    timeout_s = max(float(timeout_s), MIN_CAPTURE_S)
     try:
         return subprocess.run(cmd, timeout=float(timeout_s), check=True, **kwargs)
     except subprocess.CalledProcessError:
