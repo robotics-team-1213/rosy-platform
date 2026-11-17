@@ -41,6 +41,7 @@ import worktrees  # noqa: E402
 
 ALERT_S = 30 * 60  # a main-red id open this long with no owner is called out
 SHOWN = 10  # the oldest open main-red ids the report names
+ACTIVE_LOG_S = 30 * 60  # an expired ticket whose landing logged this recently is working, not stuck
 WARM_BATCH = 8  # missing main invocations warmed during an idle tick
 WORKTREE_IDLE_H = 12  # a worktree nobody touched this long is removed (branch kept, dirty work to refs/wip/)
 METRICS_EVERY_S = 24 * 3600  # D-889 36: the pipeline's numbers, once per day
@@ -77,13 +78,23 @@ def resume(repo: Path) -> str:
     return f"resumed {len(done)} of {len(names)}: {', '.join(done)}" if names else "nothing to resume"
 
 
+def active(holder: Path, name: str) -> bool:
+    """The hidden landing's log grew within ACTIVE_LOG_S: it is running, whatever its ticket's age."""
+    try:
+        return time.time() - (holder / f"{name}.log").stat().st_mtime < ACTIVE_LOG_S
+    except OSError:
+        return False
+
+
 def cleanup(repo: Path) -> str:
     import land_rollup  # noqa: E402
     memory_history.trim(memory_history.path(repo))  # 2026-11-17: rosy-pytest-memory.jsonl only ever grew
     qdir, holder, reaped = land_queue.queue_dir(repo), land_async.holder(repo), 0
     for row in land_queue.expired(qdir):
-        land_rollup.stop_remote(holder, [row])
         name = Path(str(row.get("worktree") or "")).name or str(row.get("branch") or "").replace("/", "-")
+        if active(holder, name):
+            continue  # 11-17: age counts from queueing, so 4 h killed a rollup and a landing mid-test; no output = stuck
+        land_rollup.stop_remote(holder, [row])
         if holder.is_dir() and (holder / name).is_dir():
             (holder / f"{name}.stopped").write_text(f"STOP: EXPIRED (age {row['age']:.0f}s)\n", encoding="utf-8")
         land_rollup.stop(int(row["pid"]))
