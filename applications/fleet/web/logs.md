@@ -1,5 +1,8 @@
 # console_source verification log
 
+2026-11-18: S7 반쪽 공용화 마무리 — 토큰 읽기·저장·로그아웃 판정을 `shared/console-token.js`(readToken·storeToken·isSignedOut) 한 곳으로(console-auth·policy-page·password-login·site-map, maintenance는 isSignedOut), goal·berth-park 거절은 목표 핀 글자(`selectedGoal.statusText`)+기록 1줄·토스트 0장(`refuse()`, call `inline:true`; map-pin 거절은 인라인 자리가 console.js 밖이라 토스트 유지), maintenance DB 30초 폴링을 별도 `createPollGate`로, `setOff` 5사본을 `shared/web/cause-line.js` 정본으로, 안내 띠 제목의 두 번째 연결 notice 제거. 새 시험 `test_a_refused_goal_shows_beside_the_goal_pin_with_one_log_line_and_no_toast`.
+- 증거: 원격 Chromium 18개 파일 397 passed·2 failed(`test_console_roles_browser` 지도 높이·옛 '알림' 탭 — 이번 변경과 무관), 마지막 setOff 이동 뒤 7개 파일 150 passed; node 38 passed(measured-calibration·assistant·console-token·site-map); harness lint 오류 0.
+
 2026-11-16: 알림 중복 제거 보강 — `syncCritRows`를 복원해 `.queues-panel`이 보이는 뷰에서만 큐 행의 토스트 중복을 막고, 패널이 숨은 뷰에서는 새 긴급 행을 "긴급 개입 알림" 토스트로 띄운다(해소 시 토스트 자동 닫힘 유지). 노드 시험 `alert-popup.test.mjs`는 (a) 패널 보임→토스트 0장 (b) 패널 숨김→긴급 토스트 1장 (c) 행 해소→토스트 닫힘을 고정한다. `test_robot_dock_panel_browser.py`의 "토스트 무중복" 어설션에 큐 패널 가시 전제를 명시하고, 빈 큐(패널 숨김)에서 긴급 행이 상태 폴링으로 도착하면 패널이 스스로 나타나고 토스트는 중복되지 않는다는 시험을 추가했다(패널 숨김 토스트 분기는 노드 시험이 고정 — `fillQueues`가 같은 render에서 패널을 다시 편다). 판단 문의(알림 탭 `#inbox-messages`·큐 긴급 행), 사건 기록(기록·근거 탭 `#incident-list`), 호출 오류(토스트 카드·벨 개수)는 팝오버 삭제 후에도 각자 표면에 있음을 확인.
 
 2026-11-16: 알림 중복 표면 제거 — 알림 항목은 `.queues-panel` 큐 패널 한 곳에만 그린다. 큐 행을 토스트로 심던 `syncCritRows` 경로를 `alert-popup.js`/`console.js`에서 삭제(일회성 명령·요청 오류 토스트와 1500ms 병합은 유지), `inbox.js`의 알림 센터 팝오버 항목 렌더를 제거하고 벨(`#fleet-inbox`)은 읽음 표시 후 큐 패널로 스크롤·포커스 이동. `#inbox-popover` 요소와 열기 단추 id는 시험 계약으로 유지. 노드 시험 `alert-popup.test.mjs`와 브라우저 시험 3건(dock·queue-inline·fleet-header)의 기대값을 "중복 없음"으로 갱신.
