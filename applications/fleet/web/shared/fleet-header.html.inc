@@ -7,6 +7,7 @@
       <ui-text id="clock" scale="value">--:--:--</ui-text>
     </div>
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
+    {{assistant}}
     <ui-button kind="quiet" id="fleet-inbox" type="button" aria-label="알림 창"><span data-action-icon="notification" data-icon-only="" aria-label="알림"></span><span id="header-unread" hidden></span></ui-button>
     <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
     <!-- D-473 — 개발 접속 경고는 닫힌 계정 단추에서도 보인다. -->

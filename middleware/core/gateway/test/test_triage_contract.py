@@ -79,7 +79,7 @@ def test_no_fault_means_no_headline_and_no_colour():
     """정상에는 색도 자리도 쓰지 않는다 — '이상 없음'을 초록으로 칠하지 않는다."""
     # D-362 P1: telemetry.js renders the headline; the shell only calls it.
     renderer = (WEB_ROOT / "telemetry.js").read_text(encoding="utf-8")
-    assert "node.hidden = !headline;" in renderer, "고장이 없을 때 머리를 숨기지 않는다"
+    assert 'querySelector(".triage-head").hidden = !headline;' in renderer and "node.hidden = !headline && !hitl;" in renderer, "고장이 없을 때 머리를 숨기지 않는다"
     assert "status-good" not in renderer
 
 

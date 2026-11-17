@@ -18,7 +18,9 @@ def _header(name):
 
 
 def test_four_documents_share_one_header():
-    headers = {name: _header(name)[1] for name in DOCS}
+    # The 관제 AI launcher opens the console's own assistant panel, so only the console header carries it (F4).
+    launcher = (WEB / "shared/fleet-assistant-launcher.html.inc").read_text(encoding="utf-8")
+    headers = {name: _header(name)[1].replace(launcher, "") for name in DOCS}
     first = headers["index.html"]
     for name, header in headers.items():
         assert header == first, f"{name} header differs from the console header"

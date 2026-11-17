@@ -26,6 +26,9 @@ def render(root, name):
         if component == 'nav':
             for key in ('console', 'work', 'records', 'map', 'install'):
                 fragment = fragment.replace(' {{'+key+'}}', ' aria-current="page"' if key == PAGES[name] else '')
+        if component == 'header':  # F4: only the console owns the 관제 AI panel the launcher opens
+            launcher = (root/'shared/fleet-assistant-launcher.html.inc').read_text(encoding='utf-8') if PAGES[name] == 'console' else ''
+            fragment = fragment.replace('    {{assistant}}\n', launcher)
         if component == 'document-header':
             brand, title = DOCUMENT_PAGES[name]
             fragment = fragment.replace('{{document-brand}}', brand).replace('{{document-title}}', title)

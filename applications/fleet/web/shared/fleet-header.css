@@ -140,8 +140,8 @@ ui-topbar {
   #user-role { display: none; }
   #fleet-inbox { gap: var(--space-1); }
   #topbar-more { flex-direction: column; gap: 0; }
+  /* a 320px bar holds the word, the inbox, the account button and the stop and nothing more: the AI panel is a desktop and tablet aid */
+  #assistant-toggle { display: none; }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-4); height: var(--space-4); }
 }
-/* a 320px bar holds the word, the inbox, the account button and the stop and nothing more: the AI panel is a desktop and tablet aid */
-@media (width < 30rem) { #assistant-toggle { display: none; } }
