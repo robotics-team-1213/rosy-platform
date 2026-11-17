@@ -361,3 +361,8 @@ def test_check_imports_the_field_modules_when_goals_are_enabled(tmp_path, monkey
     assert called == [1]
     path.write_text(json.dumps(_document()), encoding="utf-8")  # no goals: nothing to import
     assert run_hardware_owner.main(["--config", str(path), "--check"]) == 0 and called == [1]
+
+
+def test_arm_session_unit_can_only_be_started_by_a_person():
+    unit = (ROOT / "deploy/robot/omx/rosy-omx-arm-session@.service").read_text(encoding="utf-8")
+    assert "[Install]" not in unit and "WantedBy" not in unit and "Restart=no" in unit
