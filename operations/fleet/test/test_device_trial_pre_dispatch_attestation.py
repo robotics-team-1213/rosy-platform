@@ -7,8 +7,10 @@ from fleet.server.mission_store import MissionConflict
 from fleet.server.physical_transfer_attestations import OPERATOR_ATTESTED_PRODUCER_ID, PhysicalOperatorAttestations
 from test_arm_transfer_job_api import PATH
 from test_device_trial_arm_transfer import build
+from test_physical_transfer_evidence import geometry, policy  # noqa: F401  (fixtures)
 from test_physical_transfer_store import installation  # noqa: F401
 from test_physical_transfer_observer_api import CONTEXT, OBSERVER, approved, measured, rig  # noqa: F401
+from test_physical_transfer_dispatcher import Port  # noqa: F401
 
 
 @pytest.fixture
