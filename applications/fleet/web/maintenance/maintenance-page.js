@@ -1,7 +1,7 @@
 // D-991 /console/maintenance: PC 상태·조치·이력. 해도 되는지는 그 PC의 도우미가 판단한다.
 import {createFleetClient} from '/common/fleet-client.js';
 import {createPollGate} from '/console/assets/poll-gate.js';
-import {readToken, storeToken} from '/console/assets/console-token.js';
+import {isSignedOut, readToken, storeToken} from '/console/assets/console-token.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
@@ -30,7 +30,7 @@ const dbView = dbRoot ? createDbMaintenance({root: dbRoot, call}) : null;
 const loginLink = document.getElementById('maintenance-login');
 let authenticated = false;
 let connectSeq = 0;
-const gate = createPollGate();
+const gate = createPollGate(), dbGate = createPollGate();  // DB 는 별도 라우트라 따로 닫힌다
 
 function showConnectFailure(error) {
   const forbidden = error?.status === 403;
@@ -54,7 +54,7 @@ async function connect(credentialChange = false) {
   } catch (error) {
     if (seq !== connectSeq) return;
     authenticated = false;
-    if (error?.status === 401) {
+    if (isSignedOut(error)) {
       if (loginLink) loginLink.hidden = false;
       if (token) tokenInput?.setAttribute('aria-invalid', 'true');
       showSignedOut();
@@ -64,7 +64,7 @@ async function connect(credentialChange = false) {
     }
     return;
   }
-  gate.reset();
+  gate.reset(); dbGate.reset();
   await Promise.allSettled([view.refresh(), dbView ? dbView.refresh() : Promise.resolve()]);
 }
 
@@ -90,10 +90,9 @@ const loginForm = createPasswordLogin(document.getElementById('password-login'),
 async function start() {
   await connect(false);
   setInterval(() => {
-    if (!document.hidden && authenticated && gate.due()) {
-      view.refresh().then(gate.ok, (error) => gate.fail(error?.status, error?.code));
-      if (dbView) dbView.refresh().catch(() => {});
-    }
+    if (document.hidden || !authenticated) return;
+    if (gate.due()) view.refresh().then(gate.ok, (error) => gate.fail(error?.status, error?.code));
+    if (dbView && dbGate.due()) dbView.refresh().then(dbGate.ok, (error) => dbGate.fail(error?.status, error?.code));
   }, 30000);
 }
 start();
