@@ -240,7 +240,7 @@ CASES = [
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
-     {"middleware/perception/test", "middleware/core/gateway/test"}),
+     {"middleware/perception/test/test_battery.py", "middleware/core/gateway/test"}),  # import closure narrows it
     ("ADR only -> the ADR Log readers (guards cover the ADR index)",
      ["docs/adr/D-1-sample.md"], "affected", {"test/test_network_topology_contracts.py"}),
     ("doc read by a contract test -> that test too",
@@ -338,7 +338,7 @@ def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
 def test_duplicate_basenames_run_in_separate_invocations(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
-    assert owners["middleware/perception/test"] != owners["middleware/core/gateway/test"]
+    assert owners["middleware/perception/test/test_battery.py"] != owners["middleware/core/gateway/test"]
     repo = affected.Repo.load(sample)
     for inv in sel.invocations:
         names = [PurePosixPath(t).name for p in inv for t in repo.test_files_under(p)]
