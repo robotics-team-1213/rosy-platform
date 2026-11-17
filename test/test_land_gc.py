@@ -361,3 +361,12 @@ def test_active_rollup_build_is_kept_under_lock_and_removed_when_stale_or_unlock
     lock.unlink()
     assert {t.name: a for a, _, t, _ in land_gc.plan(repo, now, 7) if t}[tree.name] == "remove"
 
+
+
+def test_member_of_a_recent_rollup_keeps_its_tree_for_the_split_resume(landing):
+    repo, common, tree, _ = landing  # 2026-11-17: a split rollup's member tree was gone at resume (WinError 267)
+    members = common / land_gc.HOLDER / "land-fix-land-rollup-20261102000002-20261102000002.members"
+    members.write_text(json.dumps([{"branch": "land/feat/protected-20261102000001", "worktree": str(tree)}]))
+    assert [r[:2] for r in land_gc.plan(repo, time.time(), 7)][0] == ("keep", "member of a recent rollup")
+    os.utime(members, (OLD, OLD))
+    assert [r[0] for r in land_gc.plan(repo, time.time(), 7)][0] == "remove"
