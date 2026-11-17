@@ -95,6 +95,15 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: boo
         tip = git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{r['branch']}", check=False).stdout.strip()
         if tip and tip == git(tree, "rev-parse", "HEAD", check=False).stdout.strip():
             found += unrolled(repo, r) if rollup else [r]
+    # 11-18: a plain row already riding a live rollup that is not being unrolled here would ride twice (bay-cycle-tool in 3)
+    taken_by, riding = {r["branch"] for r in found if "rollup" in r}, set()
+    for r in rows:
+        if land_async.ROLLUP.fullmatch(r.get("branch") or "") and r["branch"] not in taken_by:
+            try:
+                riding.update(land_async.member_branches(land_async.holder(repo), r))
+            except SystemExit:  # no readable .members record: nothing known to ride it
+                pass
+    found = [r for r in found if "rollup" in r or r.get("branch") not in riding]
     # Keep only the newest snapshot per logical topic so superseded snapshots never fight or merge twice.
     newest: dict[str, int] = {}
     for idx, row in enumerate(found):

@@ -220,6 +220,17 @@ def test_a_prepared_waiting_ticket_is_not_rolled_up(repo):
     assert land_rollup.candidates([plain, tested, done], main, host="h") == [plain]
 
 
+def test_a_plain_row_riding_a_live_rollup_is_not_rolled_up_again(repo):
+    """11-18: bay-cycle-tool was a member of three live rollups; a rollup not being unrolled still owns its members."""
+    main, snapshot = repo
+    a, b = snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"})
+    live = snapshot("fix/land-rollup-20261118000000-20261118000000", {"pkg/r.py": "r = 1\n"})
+    live.update(status="preparing", ticket="t-live", pid=7)
+    (land_rollup.land_async.holder(main) / (live["branch"].replace("/", "-") + ".members")).write_text(json.dumps(
+        [{"branch": a["branch"], "worktree": a["worktree"], "ticket": "gone"}]))
+    assert land_rollup.candidates([live, a, b], main, host="h") == [b]
+
+
 def test_the_rollup_takes_its_first_members_place_and_the_member_leaves_it(repo, monkeypatch, tmp_path):
     main, snapshot = repo
     qdir = land_rollup.land_queue.queue_dir(main)
