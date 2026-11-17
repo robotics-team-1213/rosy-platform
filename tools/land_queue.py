@@ -318,6 +318,23 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
 CAP = int(os.environ.get("ROSY_LAND_QUEUE_CAP", "12"))
 
 
+def signature(wt: Path) -> tuple[str, ...]:
+    """Ticket names: they change whenever a ticket lands or is released."""
+    return tuple(sorted(p.name for p in queue_dir(wt).glob("[0-9]*.json")))
+
+
+def wait_drain(wt: Path, room, deadline: float, window: float) -> float:
+    """The deadline (moved out by ``window`` while tickets keep leaving) once ``room`` opens, else 0.0."""
+    sig = signature(wt)
+    while time.monotonic() < deadline:
+        if room(wt, deadline) and time.monotonic() < deadline:
+            return deadline
+        if signature(wt) == sig:
+            return 0.0  # nothing landed or was released for a whole wait window
+        sig, deadline = signature(wt), time.monotonic() + window
+    return 0.0
+
+
 def full(qdir: Path) -> str | None:
     """Why a new ordinary ticket is refused, or None while the queue has room."""
     rows = ahead(qdir, Path("~"))

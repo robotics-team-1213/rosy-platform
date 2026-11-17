@@ -46,7 +46,7 @@ import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these resul
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees)
 from land_logs import append_blocks  # noqa: E402,F401  (logs.md: whole entries, date order; tests call it here)
-import land_guards  # noqa: E402  (structural guards before the long round)
+import land_guards, land_quick  # noqa: E402  (structural guards; quick contract run before the ticket)
 import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
 import land_watchdog  # noqa: E402  (a landing with no progress for 30 min stops itself, stacks on file)
 import land_full  # noqa: E402  (a green tier outlives the run that passed it)
@@ -242,14 +242,14 @@ def size_check(wt: Path, base: str, head: str, python: str) -> None:
 
 
 def admit(wt: Path, branch: str, main_sha: str, python: str) -> None:
-    """D-889 S0: merge main and lint before taking a ticket. On 10-26..30 lint errors in a branch's own records
-    stopped 10 landings 12-152 min in, after the prepare slot wait. Only here: once a ticket exists a batch may carry
-    the branch, and moving its tip then would hide that it landed."""
+    """D-889 S0: merge main and lint before taking a ticket (10-26..30: lint stopped 10 landings 12-152 min in). Only
+    here: once a ticket exists a batch may carry the branch, and moving its tip then would hide that it landed."""
     if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
         merge(wt, main_sha, branch, python, False)
     if (wt / HARNESS).is_file():
         step(wt, [python, HARNESS, "lint"], None, "lint")
     secret_scan(wt, main_sha)
+    land_quick.run(sys.modules[__name__], wt, sys.executable)
 
 
 def secret_scan(wt: Path, main_sha: str) -> None:
