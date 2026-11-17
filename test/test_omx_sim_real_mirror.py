@@ -58,6 +58,11 @@ def test_mirror_poses_arms_from_live_rows_and_names_the_missing_one(tmp_path):
     assert np.allclose(data.qpos[world.q["arm_a"]], a["q_rad"], atol=1e-5)
     assert a["target_minus_state_rad"][0] > 0 and a["target_minus_state_tcp_mm"] > 1
     assert np.linalg.norm(a["fk_minus_sim_mm"]) < 5  # same chain and TCP (.0740 both): kin and MuJoCo agree
+    cid = world.model.camera("top").id  # preview's Camera must put a point where the sim render (blend) shows it
+    c = data.cam_xmat[cid].reshape(3, 3).T @ (np.array(a["sim_tcp_m"]) - data.cam_xpos[cid])
+    f = 240 / np.tan(np.radians(world.model.cam_fovy[cid]) / 2)
+    cam = mirror_mod.Camera(world.layout.fixture["real_cameras"]["top"], (480, 640))
+    assert np.allclose(cam.project(a["sim_tcp_m"]), (320 - f * c[0] / c[2], 240 + f * c[1] / c[2]), atol=.5)
     frames = {"top": np.full((480, 640, 3), 90, np.uint8)}
     views = mirror_mod.write_views(world, data, frames, tmp_path / "out")
     assert views["top"] == ["sim_top.png", "blend_top.png"] and views["side"] == ["sim_side.png"]
