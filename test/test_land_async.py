@@ -318,7 +318,7 @@ def test_requeueing_a_head_the_live_snapshot_holds_reuses_it(repo, monkeypatch):
 
 
 @pytest.mark.parametrize("room_after", [2, None])
-def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room_after):
+def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, capsys, room_after):
     _, dev = repo
     checks, clock = [], [0.0]
     monkeypatch.setattr(tool._queue(), "full", lambda qdir: None if room_after and len(checks) >= room_after
@@ -329,8 +329,11 @@ def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room
         assert tool.start(dev, [], NOW, lambda *a: None)[0] == "land/feat/x-20261028044000"
         assert clock[0] == 2 * tool.FULL_POLL_S
     else:
-        with pytest.raises(SystemExit, match="queue full .*waited 30 min"):
+        with pytest.raises(SystemExit) as stop:
             tool.start(dev, [], NOW, lambda *a: None)
+        assert stop.value.code == 3  # not 0: a caller's background command must not read it as queued
+        err = capsys.readouterr().err
+        assert "[land-async] NOT QUEUED: feat/x: landing queue full" in err and "after 30 min" in err
         assert clock[0] >= tool.FULL_WAIT_S and not _git(dev, "branch", "--list", "land/*")
 
 
