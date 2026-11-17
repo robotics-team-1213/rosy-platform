@@ -83,11 +83,15 @@ def evaluate(args):
                     ensemble_coeff=getattr(args, "ensemble_coeff", None), n_action_steps=getattr(args, "n_action_steps", None),
                     flow_steps=getattr(args, "flow_steps", None), use_amp=True if getattr(args, "amp", False) else None,
                     device=getattr(args, "device", None))
+    if getattr(args, "device", None) == "cpu" and "OMP_NUM_THREADS" not in os.environ:
+        driver.torch.set_num_threads(4)  # 11-17: torch's all-core default ran a 93-row eval 12x slower and starved the pytest hosts
     rows, runs = [], []
     Path(args.artifacts).mkdir(parents=True, exist_ok=True)
     planned = plan_tasks(args.plan_dir, args.tasks.split(",")) if args.plan_dir else None
     if args.skill:
-        comp_kw = dict(compensate_zero=True) if getattr(args, "compensate_zero", False) else {}
+        comp_kw = dict(compensate_zero=True, zero_est_noise_deg=getattr(args, "zero_est_noise_deg", 0.)) if getattr(args, "compensate_zero", False) else {}
+        if getattr(args, "estimated_prefix", False):
+            comp_kw["estimated_prefix"] = True
         for name in args.tasks.split(","):
             for k in range(args.isolated_seeds):
                 rows += skills.isolated(driver, name, EVAL_SEED_BASE + 1000 * k, args.skill, args.zero_error_deg, args.servo_lag,
@@ -140,6 +144,12 @@ def write_record(run, record):
 def checkpoint_step(out):
     last = out / "checkpoints" / "last"
     return int(last.resolve().name) if last.is_symlink() else None
+
+
+def two_in_a_row(history, passed):
+    """Early stop on two passing checkpoints in a row: one lucky 1-seed probe must not end a round (11-17)."""
+    history.append(passed)
+    return history[-2:] == [True, True]
 
 
 def train(command, out, lerobot_train, log, env, vram_mb=0, early_stop_fn=None):
@@ -292,6 +302,8 @@ def run_round(args):
                 command = [args.lerobot_train, *dataset, "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}",
                            f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}", "--job_name=omx-two-arm", *pretrained, *common]
 
+            probe_passes = []
+
             def _probe_early_stop(step, ckpt_dir):
                 if step < getattr(args, "early_stop_min_steps", 0) or not ckpt_dir.is_dir():
                     return False
@@ -305,19 +317,19 @@ def run_round(args):
                             p.write_text(p.read_text(encoding="utf-8").replace('"cuda"', '"cpu"'), encoding="utf-8")
                 probe_out = run / f"eval-step-{step:06d}.json"
                 n_seeds = max(1, int(getattr(args, "early_stop_seeds", 1)))
-                extra_probe = ["--compensate-zero"] if (args.zero_error_deg > 0 and not getattr(args, "compensate_zero", False)) else []
                 probe_env = dict(environment, **({"CUDA_VISIBLE_DEVICES": "", "OMP_NUM_THREADS": "2", "MKL_NUM_THREADS": "2"} if args.policy == "act" else {}))
                 rc = subprocess.run([args.python, me, "evaluate", "--model", str(probe_ckpt), "--steps-file", str(run / "steps.json"),
                                      "--tasks", args.tasks, "--isolated-seeds", str(n_seeds), "--whole-seeds", str(n_seeds),
                                      "--out", str(probe_out), "--artifacts", str(run / "artifacts"),
-                                     *plan, *chosen, *skilled, *eval_accel, *extra_probe],
+                                     *plan, *chosen, *skilled, *eval_accel],  # eval.json's own flags (11-17: an oracle --compensate-zero here passed 25/31 where eval.json judged 34/93)
                                     env=probe_env, stdout=log, stderr=subprocess.STDOUT).returncode
                 if rc != 0 or not probe_out.is_file():
-                    return False
+                    return two_in_a_row(probe_passes, False)
                 probe_res = json.loads(probe_out.read_text(encoding="utf-8"))
                 probe_score = summarise(probe_res["rows"], probe_res["whole"])
-                solved = outcome(probe_score, args.skill)["status"] == "passed"
-                print(f"[early-stop] step={step} passed={probe_score['passed']}/{probe_score['n']} solved={solved}", file=log, flush=True)
+                passed = outcome(probe_score, args.skill)["status"] == "passed"
+                solved = two_in_a_row(probe_passes, passed)
+                print(f"[early-stop] step={step} passed={probe_score['passed']}/{probe_score['n']} pass={passed} solved={solved}", file=log, flush=True)
                 return solved
 
             log.flush()

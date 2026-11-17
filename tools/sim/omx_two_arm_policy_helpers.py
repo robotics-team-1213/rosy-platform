@@ -83,6 +83,7 @@ class Recorder(teaching.Teacher):
     def __init__(self, world, dataset, longest, concurrent=False, skill=None, no_goal=False, goal_mode="joints", **options):
         super().__init__(world, **options)
         self.dataset, self.longest, self.goal, self.spoiled, self.count = dataset, longest, None, False, 0
+        self.isolated, self.failed = False, []
         self.concurrent, self.recording, self.blocks, self.skill, self.prompt, self.no_goal = concurrent, False, {}, skill, PROMPT, no_goal
         self.goal_mode = goal_mode
 
@@ -109,6 +110,7 @@ class Recorder(teaching.Teacher):
 
     def run_task(self, task, isolated=False, concurrent=False):
         if not self.concurrent:
+            self.isolated = isolated
             return super().run_task(task, isolated)
         self.recording, self.blocks = True, {}
         result = super().run_task(task, concurrent=True)
@@ -136,8 +138,11 @@ class Recorder(teaching.Teacher):
             self.dataset.save_episode()
             self.longest[step["id"]] = max(self.longest.get(step["id"], 0), self.count)
         else:
-            self.spoiled = True
             self.dataset.clear_episode_buffer()
+            if self.isolated:  # each step starts fresh from the plan's state: a failure spoils only its own episode
+                self.failed.append(step["id"])  # (11-17: whole-run spoiling kept 300 of 915 episodes under servo lag)
+            else:
+                self.spoiled = True
         return row
 
 
@@ -204,7 +209,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
     if not no_goal:
         features[GOAL] = goal
     dataset = LeRobotDataset.create("rosy/omx-two-arm", world_mod.FPS, root=out, robot_type="omx_follower_pair", features=features)
-    spoiled = []
+    spoiled, failed_steps = [], []
     planned = plan_tasks(plan_dir, names) if plan_dir else None
     for seed in seeds:
         for name in names:
@@ -217,6 +222,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
                 teacher.run_task(planned[name] if planned else tasks.get_task(layout, name), isolated=bool(skill) and planned is None)
                 if teacher.spoiled:
                     spoiled.append(f"{name}:{seed}")
+                failed_steps += [f"{name}:{seed}:{sid}" for sid in teacher.failed]
                 print("collected", name, seed, flush=True)
             if dagger_driver:
                 task = tasks.get_task(layout, name)
@@ -241,7 +247,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
         shutil.rmtree(out, ignore_errors=True)
     else:
         dataset.finalize()
-    meta = dict(longest=longest, spoiled=spoiled, goal_mode=None if no_goal else goal_mode)
+    meta = dict(longest=longest, spoiled=spoiled, failed_steps=failed_steps, goal_mode=None if no_goal else goal_mode)
     if goal_mode == "site":
         meta["goal_sites"] = site_names(layout)
     if num_episodes is not None:
