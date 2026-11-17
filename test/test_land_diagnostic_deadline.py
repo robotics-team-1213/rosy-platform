@@ -71,3 +71,50 @@ def test_diagnostic_expiry_releases_the_turn_without_starting_another_check(
     assert diagnostics == (["alone"] if expires_in == "alone" else ["alone", "main"])
     assert land.land_cache.entries(wt) == [], "an incomplete diagnostic must not produce passing evidence"
     assert "on_done raised" not in capsys.readouterr().err, "deadline cancellation is not a broken callback"
+
+
+def test_pass_after_a_verdictless_failure_survives_the_deadline_and_is_reused(cached, monkeypatch):
+    wt, run, _ = cached
+    now, timers = [0], []
+
+    class ClockTimer:
+        def __init__(self, seconds, function):
+            self.function = function
+
+        def start(self):
+            timers.append(self)
+
+        def cancel(self):
+            pass
+
+        def join(self):
+            pass
+
+    def remote(invocations, logs, *args, stop, **kwargs):
+        now[0] = land.TURN_CAP_S + 1
+        timers[0].function()
+        assert stop.is_set()
+        for log, text in zip(logs, [FAILURE, "1 passed in 0.01s\n", "cancelled\n"]):
+            log.parent.mkdir(parents=True, exist_ok=True)
+            log.write_text(text, encoding="utf-8")
+        return [1, 0, land.remote_pytest.CANCELLED]
+
+    def verdict(wt_, inv, *args):
+        if inv == ["pkg/test"]:
+            raise land.land_checks.CancelledError("turn deadline expired during diagnostic checks")
+        return 0, [], ""
+
+    monkeypatch.setattr(threading, "Timer", ClockTimer)
+    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: True)
+    monkeypatch.setattr(land.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(land.land_checks, "verdict", verdict)
+    monkeypatch.setattr(land.remote_pytest, "run", remote)
+    with pytest.raises(land.Overtime):
+        run([["pkg/test"], ["queued/test"], ["late/test"]])
+
+    assert [e["argv"] for e in land.land_cache.entries(wt)] == [["queued/test"]]
+    head = land.out(wt, "rev-parse", "HEAD")
+    args = land.argparse.Namespace(tests="auto", no_cache=False)
+    reused, todo, _ = land.land_cache.split(wt, args, [["pkg/test"], ["queued/test"], ["late/test"]],
+                                            head, land.sys.executable, land.select)
+    assert len(reused) == 1 and todo == [["pkg/test"], ["late/test"]]
