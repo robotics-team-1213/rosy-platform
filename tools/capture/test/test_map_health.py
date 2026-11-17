@@ -75,7 +75,8 @@ def test_compare_identical(tmp_path, capsys):
 
 
 def test_compare_recovers_rotation_and_shift(tmp_path):
-    ma, _, ha, ga = mh.load(write_map(tmp_path, room(), name="a"))
+    big = ["?" * 72] + ["?" + "#" * 70 + "?"] + ["?#" + "." * 68 + "#?"] * 46 + ["?" + "#" * 70 + "?"] + ["?" * 72]
+    ma, _, ha, ga = mh.load(write_map(tmp_path, big, name="a"))
     pts = mh.wall_points(ma, ha, ga)
     ca, sa = math.cos(math.radians(-8)), math.sin(math.radians(-8))
     moved = [(ca * x - sa * y + 0.2, sa * x + ca * y) for x, y in pts]   # b = a rotated -8 deg and shifted 0.2 m
