@@ -758,12 +758,12 @@ main,
 }
 .map-display-status { margin: 0; font-size: var(--text-micro); line-height: var(--leading-label); }
 /* 지도가 없을 때 표시 방식 칩의 잠금 사유(map-tool-lock.js)가 늦게 들어와 머리를 3줄 늘리고 지도를 172px 밀었다(S8).
-   사유는 포인터를 올린 칩 아래 쪽지로만 보인다 — 머리 높이·지도 위치는 사유와 무관하고, 읽기는 aria-describedby 그대로다. */
+   사유는 포인터를 올리거나 키보드 포커스가 들어온 칩 아래 쪽지로만 보인다 — 머리 높이·지도 위치는 사유와 무관하고, 읽기는 aria-describedby 그대로다. */
 .map-display .choice-reason { display: none; }  /* not even a hidden box: it would widen the page at 390px */
-.map-display .choice-chip:hover > .choice-reason:not([hidden]) { display: block; position: absolute; inset-block-start: 100%; inset-inline-end: 0; z-index: 2002;
+.map-display .choice-chip:is(:hover, :focus-within) > .choice-reason:not([hidden]) { display: block; position: absolute; inset-block-start: 100%; inset-inline-end: 0; z-index: 2002;
   inline-size: max-content; max-inline-size: min(32ch, calc(100vw - var(--space-4))); padding: var(--inset-tooltip); border: 1px solid var(--border-strong);
   border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text-primary); white-space: normal; }
-.map-display .choice-chip[data-disabled]:hover { opacity: 1; }  /* the note must not inherit the 0.45 dim */
+.map-display .choice-chip[data-disabled]:is(:hover, :focus-within) { opacity: 1; }  /* the note must not inherit the 0.45 dim */
 /* Map section (ui-pane): a plain stage, no inset of its own; the head is one row, the options fold behind it. */
 .map-section { padding: 0; gap: var(--space-2); }
 .map-head h2 { margin: 0; font: var(--weight-label) var(--text-body)/var(--leading-body) var(--body); }
