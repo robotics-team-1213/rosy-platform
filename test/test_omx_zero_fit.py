@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 np = pytest.importorskip("numpy")
-pytest.importorskip("scipy")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/sim"))
 import omx_zero_fit as zf  # noqa: E402
 

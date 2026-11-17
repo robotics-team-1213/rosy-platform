@@ -22,6 +22,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "middleware/devices/omx/adapter"))
 from omx_adapter.z_profile import OMX_AI_PROFILE_MM, fk_landmarks_mm  # noqa: E402
+from omx_zero_lsq import least_squares, rotvec_matrix  # noqa: E402
 
 BUDGET_DEG = 0.5
 # Gripper landmarks the markers stand in for: on the approach axis (pivot, tcp, stock tip) and off it (wrist camera
@@ -136,17 +137,13 @@ def observe(rng, poses, zero_true, cams, px, q_noise, table_true, base_meas=None
 def bumped(cam, d):
     """Camera turned by rotation vector d[:3] (deg, about the world axes) and shifted by d[3:] mm; degrees and mm
     keep least_squares' relative step (diff_step) sensible for these parameters."""
-    from scipy.spatial.transform import Rotation as Ro
-
-    return Ro.from_rotvec(np.radians(d[:3])).as_matrix() @ cam[0], cam[1] + d[3:], cam[2]
+    return rotvec_matrix(np.radians(d[:3])) @ cam[0], cam[1] + d[3:], cam[2]
 
 
 def fit(reported, obs, cams, px, base_obs=None, base_meas=None, base_px=1.0, cam_prior=(None, None), touch_z=None,
         with_table=False):
     """Solve [zero 5 (+table) + 6 camera DOF per camera] when `base_obs` is given (the tool's way), else the zeros
     only against fixed cameras (the old sim). `cam_prior`: (sigma deg, sigma mm) on the camera deltas, or None."""
-    from scipy.optimize import least_squares
-
     free = base_obs is not None
     n0 = 6 if with_table else 5
 

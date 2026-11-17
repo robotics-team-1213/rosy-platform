@@ -9,7 +9,6 @@ import pytest
 
 np = pytest.importorskip("numpy")
 cv2 = pytest.importorskip("cv2")
-pytest.importorskip("scipy")
 if not hasattr(cv2, "aruco"):
     pytest.skip("OpenCV without aruco", allow_module_level=True)
 ROOT = Path(__file__).resolve().parents[1]

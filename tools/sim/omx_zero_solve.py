@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
-from scipy.optimize import least_squares
+from omx_zero_lsq import least_squares
 
 from omx_zero_model import (cf, PRIOR_DEG, PRIOR_SIGMA_DEG, TABLE_PRIOR_MM, TABLE_SIGMA_MM, marker_points_mm, pixels,
                             tcp_z_mm)
