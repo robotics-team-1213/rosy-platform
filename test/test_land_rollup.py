@@ -205,10 +205,19 @@ def test_ready_landings_roll_up_only_when_their_suites_do_not_overlap(repo):
     rows = [{**snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), "status": "waiting"},
             {**snapshot("fix/b", {"pkg/b.py": "y = 2\n"}), "status": "waiting"},
             snapshot("fix/c", {"pkg/c.py": "z = 2\n"})]
-    assert land_rollup.candidates(rows, main, host="h") == rows, "waiting (ready) tickets are members too"
+    assert land_rollup.candidates(rows, main, host="h") == rows, "waiting tickets without a prepare record are members"
     reach = {"land/fix/a": [["pkg/test/test_a.py"]], "land/fix/b": [["pkg/test"]], "land/fix/c": [["other/test"]]}
     plan = land_rollup.plan(main, rows, lambda r, b: "affected", lambda r, b: reach[b], mixed=True)
     assert [r["branch"] for r in plan] == ["land/fix/a", "land/fix/c"], "b's suites contain a's: b lands alone"
+
+
+def test_a_prepared_waiting_ticket_is_not_rolled_up(repo):
+    """D-889 38, 11-17: a waiting ticket that carries `tested` or tier full_done lands on its own evidence."""
+    main, snapshot = repo
+    plain = snapshot("fix/a", {"pkg/a.py": "x = 2\n"})
+    tested = {**snapshot("fix/b", {"pkg/b.py": "y = 2\n"}), "status": "waiting", "tested": "abc123"}
+    done = {**snapshot("fix/c", {"pkg/c.py": "z = 2\n"}), "status": "waiting", "tier": "full_done"}
+    assert land_rollup.candidates([plain, tested, done], main, host="h") == [plain]
 
 
 def test_the_rollup_takes_its_first_members_place_and_the_member_leaves_it(repo, monkeypatch, tmp_path):

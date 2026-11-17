@@ -81,7 +81,10 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: boo
     for r in rows:
         tree = Path(r.get("worktree") or "")
         # 2026-11-03: a --tests full --no-cache landing for publish evidence was rolled up and ran auto (alone)
-        idle = (r.get("status") in ("pending", "waiting")
+        # D-889 38, 2026-11-17: a waiting ticket with a prepare record already passed its tests; re-rolling it threw that
+        # away (7 prepared tickets re-rolled at 21:3x, one 138 min ready at queue position 2; rollup lead p50 200 min vs 32 min)
+        prepared = r.get("status") == "waiting" and (r.get("tested") or r.get("tier") == "full_done")
+        idle = (r.get("status") in ("pending", "waiting") and not prepared
                 or (mixed and r.get("status") == "preparing" and r.get("full_wait")))  # a FULL waiter runs no test
         rollup = mixed and land_async.ROLLUP.fullmatch(r.get("branch") or "")  # unmixed: a plain row (addendum 23)
         if (not idle or land_async.HOLDER not in tree.parts or r.get("urgent")
