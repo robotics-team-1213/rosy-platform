@@ -29,6 +29,8 @@ from omx_real2sim_helpers import Camera  # noqa: E402
 
 VIEWS = {"top": "top", "side": "side", "a_wrist": "a_wrist", "b_wrist": "b_wrist"}  # real frame name -> World camera
 PATH_BGR = {"arm_a": (255, 160, 0), "arm_b": (0, 120, 255)}
+# the cell layout the real frames match: 2026-11-17 the arm_b jaw tip sat 5.5 mm from FK with it, 27 mm with the Layout defaults
+PRESET = "v24-20261114"
 
 
 def arm_q(units, rule) -> np.ndarray:
@@ -169,11 +171,13 @@ def main(argv=None):
     p.add_argument("--chunk", required=True, help='JSON {"rows": [...], "arm": ...} or {"points": [[x, y, z], ...]}')
     p.add_argument("--frame", action="append", required=True, help="top=PATH")
     p.add_argument("--out", required=True)
+    for one in (m, p):
+        one.add_argument("--preset", default=PRESET, help="omx_two_arm_sites.PRESETS name; '' for the Layout defaults")
     args = parser.parse_args(argv)
     out = Path(args.out)
     import omx_two_arm_world
 
-    world = omx_two_arm_world.World()
+    world = omx_two_arm_world.World(**({"preset": args.preset} if args.preset else {}))
     if args.command == "preview":
         frames = _frames(_pairs(args.frame, "frame"))
         if "top" not in frames:

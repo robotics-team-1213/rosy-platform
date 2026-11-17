@@ -71,6 +71,11 @@ def test_mirror_poses_arms_from_live_rows_and_names_the_missing_one(tmp_path):
     assert report["arms"]["arm_a"]["stale"] and "FileNotFoundError" in report["missing"]["arm_b"]
 
 
+def test_the_default_layout_is_the_photo_measured_v24_cell():
+    layout = sites.Layout(preset=mirror_mod.PRESET)
+    assert layout.choices["arm_bases"] == "docks-photo" and layout.choices["top_camera"] == "2026-11-14"
+
+
 def test_the_mirror_cannot_command_an_arm():
     source = Path(mirror_mod.__file__).read_text(encoding="utf-8")
     for word in ("act(", "torque", "send(", "requests", "socket"):
