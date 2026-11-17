@@ -4943,3 +4943,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 셀 설정 `calibrate.tcp_marks`가 켜지면 `remap`이 점마다 계획 FK yaw와 합의한 시도의 blob 목록(`mark_jaws` report `blobs`)을 모으고, `cell_jaw_side.remap_marks`가 모든 표시를 두 집게로 함께 시험한다(TCP = 가운데, 각 집게 TCP ∓ other_mm/2 at yaw + other_deg). 같은 시도의 두 번째 blob이 반대 집게 자리(other_mm/2 안)에 오면 그 점은 (두 blob 가운데, TCP)로 쓰고 선택을 확정한다. 확정 수와 rms가 같은 조합들의 지도가 pivot.side_agree_mm보다 다르면 지도를 저장하지 않는다. 그 뒤 consensus·enough_agree·LOO·map_agrees는 그대로다. 기록에 `"marks": "tcp"`가 붙고 `jaw_places`는 그 지도에서 기준 집게를 TCP에서 other_mm/2 반대쪽에 둔다. 지도 sha가 바뀌므로 옛 bias는 설계대로 무효다(remap 저장이 bias 파일을 비움).
 - 증거: 11-15 22:25 프레임 재생(222119는 before.jpg만 있어 표시 없음). 8점 모두 유지, 쪽 ref 7·other 1, 짝 4개 확정, rms 3.06 mm(다음 조합 14.25), LOO max 9.6 / mean 4.37 mm(옛 9.55 / 4.8, 옛 지도는 7점). 새 지도로 본 짝 간격 52.1-55.6 mm, 방향 67-91도, 짝 가운데-TCP 0.3-8.7 mm. 17:00 pivot을 새 지도(옛 rebase 변환 적용)로 재생하면 bias (-19.6, -1.2) = 19.6 mm(자유 g) / 16.6 mm(tcp 기하), 옛 지도는 29.8 mm. 한 점씩 뺀 지도에서 x -17~-27 mm로 남는다.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-remap): 집게 쪽 판정이 표시 12개를 넘어도 된다
+- 원인: 실물 arm_a TCP remap(17:47)이 14점을 모두 표시했지만 "jaw sides unlabelled: 14 remap marks, at most 12"로 거절됐다(2**n 전수 탐색의 상한). 두 blob이 보인 3점은 모두 y 0.08 한 줄이었다.
+- 변경: 판정을 `cell_remap_jaws.py`로 옮기고(`cell_jaw_side`가 다시 내보냄) 세 단계로 한다. (1) 두 blob만 본 점이 한 줄이 아닌 3개 이상이면 그 가운데로 지도를 맞추고 각 표시를 지도가 더 가깝게 놓는 집게로 정한다(두 집게까지 거리 차가 pivot.side_agree_mm 이하면 거절). (2) 아니면 12개 이하는 기존 전수 탐색. (3) 12개 초과면 짝 점과 가장 퍼진 점으로 12개 기준을 골라 전수 탐색으로 지도를 얻고 (1)의 가까운 집게 규칙으로 전체를 정한다. 그 뒤 전체로 다시 맞춘다. 거절 조건과 consensus·LOO는 그대로다.
+- 증거: 17:47 실물 14점 재생은 anchored 경로, 14점 모두 other, 짝 3, rms 1.95 mm(다음 조합 12.77), consensus 14/14, LOO max 8.3 / mean 3.99 mm. 이 지도로 17:00 pallet pivot을 재생하면 bias (-0.9, -4.1) = 4.2 mm(자유 g, rms 3.3) / 5.1 mm(tcp 기하). 11-15 22:25 8점은 pairs 경로로 전과 같은 판정(rms 3.06, LOO 9.6 / 4.37). 옛 한 집게 지도는 29.8 mm.
+- gate 변화: 없음.

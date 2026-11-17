@@ -82,8 +82,8 @@
 
 ## 최근 기록
 
+- 2026-11-17 · uncommitted · fix(omx-remap): 집게 쪽 판정이 표시 12개를 넘어도 된다
 - 2026-11-17 · uncommitted · fix(omx-remap): remap 표시를 어느 집게인지 함께 정해 지도가 TCP(두 집게 가운데)를 따르게 한다
 - 2026-11-17 · uncommitted · fix(omx-post-eval): 마주 보는 yaw가 실제로 마주 볼 때만 짝으로 쓰고, 두 표시의 집게 쪽을 함께 정한다
 - 2026-11-17 · uncommitted · fix(omx-pivot): 집게 쪽을 yaw별 원이 아니라 pivot 전체로 정한다
 - 2026-11-17 · uncommitted · fix(omx-pivot): 짝 표시를 기준 쪽으로 세고, 쪽이 바뀐 일치는 표시로 받지 않는다
-- 2026-11-17 · uncommitted · fix(omx-pivot): 한쪽 집게 표시에 독립 검토의 거절 조건을 더한다

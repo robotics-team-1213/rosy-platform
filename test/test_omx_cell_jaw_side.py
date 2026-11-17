@@ -326,3 +326,32 @@ def test_labellings_that_fit_alike_but_move_the_centre_are_refused():
     hows = [{"side": "ref", "path": "discs"} for _ in yaws]
     why = js.relabel(marks, tcps, hows, {"pivot": {"geometry": geo}})
     assert why.startswith("jaw sides ambiguous") and hows[0]["side"] == "ref"  # refused, nothing rewritten
+
+
+GRID14 = [(x, y) for x in (0.11, 0.13, 0.15, 0.17) for y in (0.02, 0.04, 0.06, 0.08)][:14]
+
+
+def _remap_points(shows, pairs, grid=GRID14):
+    """Remap marks at FK yaw 0 through a mirrored 1.4 px/mm camera: the jaw `shows[i]`, both jaws' blobs at `pairs`."""
+    o = (0.054 * math.cos(math.radians(79.0)), 0.054 * math.sin(math.radians(79.0)))
+    px = lambda q: (400 - 1400 * q[0], 200 + 1400 * q[1])  # noqa: E731
+    out = []
+    for i, (t, side) in enumerate(zip(grid, shows)):
+        s = -0.5 if side == "ref" else 0.5
+        jaw, opp = (t[0] + s * o[0], t[1] + s * o[1]), (t[0] - s * o[0], t[1] - s * o[1])
+        p = px(jaw)
+        out.append({"tcp": t, "yaw": 0.0, "pixel": p, "blobs": [[*p, 400.0]] + ([[*px(opp), 400.0]] if i in pairs else [])})
+    return out
+
+
+def test_remap_labelling_scales_past_the_brute_force_cap():
+    """arm_a 2026-11-17 17:47: 14 remap marks refused 'at most 12'. Three pairs not on one line give the map; three on
+    one line (the real remap) anchor a 12-mark brute force; either labels all 14."""
+    shows = ["other"] * 10 + ["ref"] * 4
+    why, marks, rec = js.remap_marks(_remap_points(shows, {0, 5, 13}), None)
+    assert why is None and rec["path"] == "pairs" and rec["sides"] == shows and rec["rms_mm"] < 0.01
+    assert [marks[i][1] for i in (0, 5, 13)] == [GRID14[i] for i in (0, 5, 13)]  # a pair: (middle, TCP)
+    why, _, rec = js.remap_marks(_remap_points(shows, {3, 7, 11}), None)  # 3 pairs, all at y 0.08
+    assert why is None and rec["path"] == "anchored" and rec["sides"] == shows and rec["pairs"] == [3, 7, 11]
+    why, _, rec = js.remap_marks(_remap_points(["ref"] * 14, set()), None)  # one jaw, no pair: either jaw fits
+    assert why.startswith("jaw sides ambiguous") and rec["path"] == "anchored"
