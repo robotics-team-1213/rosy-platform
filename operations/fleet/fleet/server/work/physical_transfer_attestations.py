@@ -66,7 +66,13 @@ class PhysicalOperatorAttestations:
         with closing(self.store._journal._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             now = self.store._now_ns()
-            if connection.execute("UPDATE fleet_physical_operator_attestations SET consumed_at_ns=? WHERE mission_id=? "
+            job = self.store._read(connection, mission_id)
+            row = connection.execute("SELECT request_digest, proposal_digest FROM fleet_physical_operator_attestations "
+                                     "WHERE mission_id=? AND kind='SOURCE_CLEAR'", (mission_id,)).fetchone()
+            matches = (job is not None and row is not None
+                       and (row["request_digest"], row["proposal_digest"]) == (job["request_digest"], job["proposal_digest"]))
+            if not matches or connection.execute(
+                    "UPDATE fleet_physical_operator_attestations SET consumed_at_ns=? WHERE mission_id=? "
                     "AND kind='SOURCE_CLEAR' AND consumed_at_ns IS NULL AND expires_at_ns>?",
                     (now, mission_id, now)).rowcount != 1:
                 raise MissionConflict("device_trial dispatch needs an unexpired, unconsumed operator SOURCE_CLEAR")

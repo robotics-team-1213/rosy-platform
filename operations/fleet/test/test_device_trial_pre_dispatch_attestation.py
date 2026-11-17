@@ -1,4 +1,5 @@
 """D-977 5 (2026-11-17): in device_trial, PRE_DISPATCH needs a live single-use operator SOURCE_CLEAR; other profiles do not."""
+from contextlib import closing
 from types import SimpleNamespace
 
 import pytest
@@ -55,6 +56,20 @@ def test_valid_attestation_dispatches_once_and_is_consumed(gated):
         gated.attestations.consume_source_clear(mission)
     assert post(gated, mission, request).status_code == 200  # replay is idempotent, never a second dispatch
     assert len(gated.port.submitted) == 1
+
+
+def test_consume_rechecks_the_digests_inside_its_transaction(gated):
+    mission = approved(gated)
+    clear(gated, mission)
+    with closing(gated.store._journal._connect()) as connection:  # the job moved on after the attestation was read
+        connection.execute("UPDATE fleet_physical_operator_attestations SET request_digest=? WHERE mission_id=?",
+                           ("f" * 64, mission))
+        connection.commit()
+    with pytest.raises(MissionConflict):
+        gated.attestations.consume_source_clear(mission)
+    with closing(gated.store._journal._connect()) as connection:
+        assert connection.execute("SELECT consumed_at_ns FROM fleet_physical_operator_attestations "
+                                  "WHERE mission_id=?", (mission,)).fetchone()[0] is None
 
 
 def test_failed_dispatch_still_consumes_the_attestation(gated, monkeypatch):
