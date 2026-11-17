@@ -899,3 +899,38 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
                                                 "/api/fleet/trips/t-rosy_03/cancel"}
         assert not errors
         browser.close()
+
+
+def test_a_refused_goal_shows_beside_the_goal_pin_with_one_log_line_and_no_toast(site):
+    """11-18 결정 5: 목표 이동 거절은 목표 핀 글자(로봇 카드) + 기록 1줄, 토스트 0장."""
+    from playwright.sync_api import expect, sync_playwright
+
+    posts = []
+    goal = "/api/fleet/robots/rosy_03/goal"
+    grid = {"map_id": "mock:1", "width": 40, "height": 40, "resolution": 0.05,
+            "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "data": [20] * 1600}
+    api = {**API, "/api/fleet/map": grid}
+    answers = {goal: (409, {"detail": "다른 작업이 이미 진행 중입니다"})}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, answers)
+        for _ in range(10):  # a crit row raised off screen at start is not what this test counts
+            closers = page.locator(".alert-popup-actions ui-button", has_text="닫기")
+            if not closers.count():
+                break
+            closers.last.click()
+        page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_03"]').click()
+        page.locator("#robot-panel-mount [data-goal-robot-id=rosy_03]").click()
+        page.keyboard.press("Enter")
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
+        for _ in range(50):
+            page.clock.run_for(100)
+            if any(path == goal for path, _ in posts):
+                break
+        page.clock.run_for(1500)
+        expect(page.locator("#robot-panel-mount")).to_contain_text("거절")  # beside the pin: the goal strip
+        lines = page.locator("#log > div.bad")
+        expect(lines).to_have_count(1)
+        expect(lines).to_contain_text("목표 이동 거절")
+        expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(0)
+        assert not errors
+        browser.close()

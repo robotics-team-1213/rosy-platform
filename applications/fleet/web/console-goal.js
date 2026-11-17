@@ -9,6 +9,12 @@ import { planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/a
 
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
   toWorld, refreshGuide, queuedReason, drawMap = () => {}, onSelectRobot = () => {} }) {
+  // 결과는 목표 핀 글자(지도 칩·로봇 카드)로 이미 보인다 — 거절은 그 글자 + 기록 1줄, 토스트 없음(11-18 결정 5). 핀이 사라졌으면 일반 경로.
+  function refuse(text, shownText, status = "REFUSED") {
+    const inline = Boolean(view.selectedGoal);
+    if (inline) { view.selectedGoal = { ...view.selectedGoal, status, statusText: shownText, at: Date.now() }; drawMap(); render(); }
+    log(text, "bad", { inline });
+  }
   function disarmGoal(reason) {
     view.selected = null; view.cursor = null; view.hoverWorld = null;
     const canvas = el("map-canvas");
@@ -111,14 +117,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         : !view.guide ? "위치 확인 중: 잠시 뒤 다시 찍으세요"
         : tripPoseReason(view.guide, robotId, view.activeSiteMap);
       if (blocked) {
-        view.selectedGoal = { ...view.selectedGoal, status: "BLOCKED", statusText: blocked, at: Date.now() };
-        drawMap(); render();
-        log(`${robotId} 출발 보류 · ${blocked}`, "bad");
+        refuse(`${robotId} 출발 보류 · ${blocked}`, blocked, "BLOCKED");
         return;
       }
     }
 
     const mapSnapshot = JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]);
+    const refuseGoal = err => { const why = viaTrip ? tripRefusalText(err) : err.message; refuse(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${why}`, `거절 — ${why}`); };
     const siteFrame = !view.map; // the site map view: Fleet converts into the robot's own map frame (D-1003)
     await confirmedAction.run({
       message: viaTrip ? `${robotId}를 ${where}까지 차로로 보낼까요?` : `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`,
@@ -139,16 +144,17 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     focusGoalButton(robotId);
     try {
       if (viaTrip) {
-        const plan = await planTrip(call, robotId, { to: placeId });
+        const tripCall = (path, options) => call(path, { ...options, inline: true });
+        const plan = await planTrip(tripCall, robotId, { to: placeId });
         owner.check();
-        await startTrip(call, plan.plan_id);
+        await startTrip(tripCall, plan.plan_id);
         owner.check();
         log(`${robotId} → ${where} 차로 주행 시작 (Trip ${String(plan.plan_id).slice(0, 8)})`, "good");
         refreshGuide();
         return;
       }
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
-        method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+        inline: true, method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
         body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)), ...(siteFrame ? { frame: "site" } : {}) }), signals: [owner.signal],
       });
       owner.check();
@@ -161,11 +167,11 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       }
       if (task && task.status === "UNKNOWN") {
         view.pendingTasks[robotId] = task;
-        log(`${robotId} task ${task.task_id} UNKNOWN · CORE 결과 수동 확인 필요`, "bad");
+        refuse(`${robotId} task ${task.task_id} UNKNOWN · CORE 결과 수동 확인 필요`, "UNKNOWN · CORE 결과 수동 확인 필요", "UNKNOWN");
         return;
       }
       if (task && task.status !== "ACCEPTED") {
-        log(`${robotId} task ${task.task_id} ${task.status}${task.reason ? ` · ${task.reason}` : ""}`, "bad");
+        refuse(`${robotId} task ${task.task_id} ${task.status}${task.reason ? ` · ${task.reason}` : ""}`, `${task.status}${task.reason ? ` · ${task.reason}` : ""}`);
         return;
       }
       if (task) delete view.pendingTasks[robotId];
@@ -174,9 +180,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       else log(`${robotId} → ${where} 미션 하달`, "good");
       refreshGuide();
     } catch (err) {
-      if (err.name !== "AbortError") log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripRefusalText(err) : err.message}`, "bad");
+      if (err.name !== "AbortError") refuseGoal(err);
     }
-      }, onError: err => log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripRefusalText(err) : err.message}`, "bad"),
+      }, onError: refuseGoal,
     });
   }
 
@@ -199,6 +205,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         && !motionCommandReason(view, robotId, "goal");
     };
     if (!eligible()) return;
+    const refuseBerth = err => refuse(`${robotId} ${modeTitle} 접수 실패 · ${err.message}`, `접수 실패 · ${err.message}`);
     const modeTitle = mode === "forward_and_berth_park" ? `전진 출차(+0.20m) → ${chosenBay} 접안 파킹` : `${chosenBay} 접안 모드 파킹`;
     view.selectedGoal = {
       robotId, x: pt.x, y: pt.y, yaw: -1.5708, placeId: chosenBay, label: modeTitle,
@@ -213,12 +220,12 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       request: async owner => {
     try {
       const res = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/berth-park`, {
-        method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+        inline: true, method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
         body: JSON.stringify({ bay_id: chosenBay, mode, forward_m: 0.20 }), signals: [owner.signal],
       });
       owner.check();
       if (res?.accepted !== true || res?.simulated_dispatch === true) {
-        log(`${robotId} ${modeTitle} 접수 거절 · 명령을 다시 보내지 않았습니다.`, "bad");
+        refuse(`${robotId} ${modeTitle} 접수 거절 · 명령을 다시 보내지 않았습니다.`, "접수 거절 · 명령을 다시 보내지 않았습니다.");
         return;
       }
       if (res?.waypoints_site?.length >= 2) {
@@ -233,9 +240,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       log(`${robotId} ${modeTitle} 시작 (${res?.dock_id || chosenBay} · 레일 내부 ω=0 직진 후진)`, "good");
       refreshGuide();
     } catch (err) {
-      if (err.name !== "AbortError") log(`${robotId} ${modeTitle} 접수 실패 · ${err.message}`, "bad");
+      if (err.name !== "AbortError") refuseBerth(err);
     }
-      }, onError: err => log(`${robotId} ${modeTitle} 접수 실패 · ${err.message}`, "bad"),
+      }, onError: refuseBerth,
     });
   };
 
