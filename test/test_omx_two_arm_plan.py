@@ -21,10 +21,10 @@ def layout():
 
 @pytest.fixture(scope="module")
 def reach(layout):
-    """A fixed reach table: ship hold 1, belt and stern bay by both, plate a by arm_a, plate b lanes 1-2 by arm_b."""
+    """A fixed reach table: ship hold 1 and belt by both, plate a by arm_a, plate b lanes 1-2 by arm_b (and their second tier, the place the stern bay used to add)."""
     table = {s: set(BOTH) for s in plan.planning_sites(layout) if layout.sites[s]["kind"] in ("ship", "belt")}
     table.update({f"tmp-a-{i}": {"arm_a"} for i in (1, 2, 3)})
-    table.update({"tmp-b-1": {"arm_b"}, "tmp-b-2": {"arm_b"}, "tmp-b-3": set()})
+    table.update({"tmp-b-1": {"arm_b"}, "tmp-b-2": {"arm_b"}, "tmp-b-3": set(), "tmp-b-1-l1": {"arm_b"}, "tmp-b-2-l1": {"arm_b"}})
     return plan.table_can(table)
 
 
@@ -100,7 +100,7 @@ def test_shadow_order_never_changes_execution(layout, reach, caplog):
 
 
 def test_one_arm_without_a_temporary_place_in_reach_holds(layout, reach):
-    """arm_b alone has one free lane of its plate and the stern bay: no request finds a lane left for its target once its blockers are
+    """arm_b alone has one free lane of its plate and its second tier: no request finds a lane left for its target once its blockers are
     out (a person or a Pinky trip)."""
     moves, holds = plan.plan_outbound(layout, ("arm_b",), reach)
     assert holds and all(h["reason"] == "NO_STAND_IN_REACH" for h in holds)
@@ -143,19 +143,17 @@ def test_a_move_no_arm_of_the_mode_reaches_is_counted_not_moved(layout, reach):
     assert not rows and extra[0]["cargo_id"] == "bar-1"
 
 
-def test_the_stern_bay_is_a_low_ship_place_across_the_beam(layout):
-    """The outbound place is a temporary lane (set page 23233175, 2026-11-08); the empty stern bay is one more place on the ship."""
-    s = layout.sites["ship-stern-l0"]
-    assert s["kind"] == "ship" and s["layer"] == 0 and s["yaw"] == pytest.approx(1.5708, abs=1e-4)
-    assert "ship-stern-l0" in plan.planning_sites(layout) and not any(v["kind"] == "outbound" for v in layout.sites.values())
-    assert s["xy"][0] == pytest.approx(layout.choices["ship_stern_x_m"] - .025)
+def test_the_stern_bay_is_not_a_place(layout):
+    """Site map decision 2026-11-17: the stern bay is berth geometry only; outbound is the separate stand (r05 chute), not simulated yet."""
+    assert "ship-stern-l0" not in layout.sites and not any(v.get("stack") == "stern" for v in layout.sites.values())
+    assert not any(v["kind"] == "outbound" for v in layout.sites.values())
 
 
 def test_the_validator_gives_the_bottom_of_an_outer_row_to_the_far_arm(layout):
     """Reach is not enough: the near arm's wrist hits the standing middle row (MuJoCo replay 2026-11-08, -1 to -5 mm), the far arm clears it."""
     full = {c: s for c, s, _ in layout.plan_order()}
     here = {c: s for c, s in full.items() if layout.sites[s]["row"] != 0}  # row 0 taken down to bar-2, the middle row standing three high
-    assert plan.validator_can(layout)(full["bar-2"], "ship-stern-l0", here) == {"arm_b"}
+    assert plan.validator_can(layout)(full["bar-2"], "tmp-b-1", here) == {"arm_b"}
 
 
 def test_a_concurrent_replay_carries_order_conveyor_and_zones(layout, reach):
@@ -191,7 +189,7 @@ def test_tier_by_tier_stack_and_cell_stack_schedule_and_replay(layout):
             replays = plan.replay_tasks(layout, res)
             task = replays[f"{key}-two-arm"]
             assert len(task["steps"]) == 3 and all(layout.sites[s["to"]]["layer"] == tier - 1 for s in task["steps"])
-            assert sum(1 for s in task["start"].values() if layout.sites[s]["kind"] == "ship" and s != "ship-stern-l0") == 3 * (tier - 1)
+            assert sum(1 for s in task["start"].values() if layout.sites[s]["kind"] == "ship") == 3 * (tier - 1)
 
 
 def test_outbound_and_rearrange_replay_json_carry_after_zones_and_disjoint_overlap(tmp_path, layout):
