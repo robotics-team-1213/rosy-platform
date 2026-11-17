@@ -1202,3 +1202,13 @@
 - 변경: `core_common/protocol/arm_incidents.py`에 `machine_clearable(facts) -> (bool, reason)`을 `software_stop` 옆에 더했다. 접힌 안전 종료·토크 OFF 확인·래치/감김/조 끼임 없음만 참.
 - 증거: `test/test_arm_incident_machine_clearable.py`; 원격 시험 결과는 이 브랜치 검증에 기록한다.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · 팔 사건 기계 해제 판정 기본 거부 (D-1039 검토)
+- 변경: `machine_clearable`이 필수 키·형태를 요구하고, 실행기 표시 행·접촉 정지·모터 고장 기록·`caps_restored` 미확인을 모두 거부한다(셀 `omx_incident.decide()`보다 느슨하지 않음). `truncated` 분기 제거(잘린 보고는 목록이 없어 거부).
+- 증거: `test/test_arm_incident_machine_clearable.py`; 원격 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · 주차 중 부하 정지 예외 (D-1039)
+- 변경: `machine_clearable`이 표시 행 전부가 `PARK_STRAIN`(주차 중 관절 lag 정지, caught·pushing·session ended 없음)일 때만 그 행을 허용한다. 다른 조건은 그대로.
+- 증거: `omx_incident.facts()`→`report_for()`로 만든 2026-11-17 arm_s 모양 사실이 통과(셀은 보류), caught·pushing 행 추가·접히지 않음·토크 켜짐은 거부. `test/test_arm_incident_machine_clearable.py`; 원격 시험은 이 브랜치 검증에 기록한다.
+- gate 변화: 없음.

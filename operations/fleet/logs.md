@@ -5567,3 +5567,8 @@
 - 변경: `fleet/server/auth/site_auth.py` — `ROSY_FLEET_ARM_ASSESSORS`(기본 `cell-a-ai-assessor`)의 `role: service` principal을 팔 사건 해제 경로 하나로 한정(`ARM_ASSESSOR_SCOPE_REQUIRED`). `recognition/arm_incidents.py` — assessor 해제는 `cause`·`basis` 필수, 저장 사실이 `machine_clearable`을 통과하고 같은 팔·같은 원인 assessor 해제가 24시간 안에 없을 때만(`AI_CLEAR_KIND_REFUSED`·`AI_CLEAR_REPEAT_LIMIT`). 사람 해제는 그대로.
 - 증거: `test/test_arm_incident_assessor.py`; 원격 시험 결과는 이 브랜치 검증에 기록한다. 실물·배포 미실시.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(fleet): D-1039 독립 검토 반영
+- 변경: assessor 목록 기본 비움·팔 지정(`id=source,...;id=...`, `AI_CLEAR_ARM_NOT_ASSIGNED`), 해제 경로 전용 guard `require_incident_clearer`(`require_operator` 원복), 반복 상한을 원인과 상관없이 팔마다 하루 한 번·저장 표시 `cleared_kind='machine'`로 셈, 기계 해제 근거는 `unknown`으로 저장, `cleared.kind` 표시. `machine_clearable`은 기본 거부로 셀 `decide()`보다 느슨하지 않게.
+- 증거: `test/test_arm_incident_assessor.py`; 원격 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음.

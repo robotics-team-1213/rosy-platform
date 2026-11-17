@@ -22,7 +22,7 @@ from core_common.protocol.arm_incidents import (
     ArmIncidentEvidenceFrame, ArmIncidentExplanation, ArmIncidentHold, ArmIncidentReport, machine_clearable,
     software_stop)
 from fleet.server.camera_peer_routes import body as bounded_json
-from fleet.server.site_auth import arm_assessors, is_arm_assessor
+from fleet.server.site_auth import assessor_arms, build_incident_clearer
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 
 LISTED_MAX_AGE_S = 2.0  # backstop only; this store's own writes drop the shared list at once
@@ -31,7 +31,7 @@ CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 ROLES = ("top", "side")
 EVIDENCE_KEEP_S = 14 * 86400  # whole frames of a cleared incident; tip crops, labels and facts stay
 EVIDENCE_BODY_BYTES = ARM_INCIDENT_FRAME_BYTES * 4 // 3 + 4096
-REPEAT_WINDOW_S = 86400  # D-1039: one assessor clear per arm and cause a day; the next of that cause goes to a person
+REPEAT_WINDOW_S = 86400  # D-1039: one machine clear per arm a day, whatever the cause; the next goes to a person
 
 
 class MachineClearRefused(PermissionError):
@@ -72,7 +72,7 @@ class ArmIncidentStore:
                 "sha256 TEXT NOT NULL, jpeg BLOB NOT NULL, PRIMARY KEY (incident_id, role))")
             # the person's cause and its basis (cleared with them), and the frames of the seconds around the stop
             have = {r[1] for r in self._db.execute("PRAGMA table_info(arm_incidents)")}
-            for column in ("true_cause", "label_basis"):
+            for column in ("true_cause", "label_basis", "cleared_kind"):  # cleared_kind: D-1039 'machine', else NULL
                 if column not in have:
                     self._db.execute(f"ALTER TABLE arm_incidents ADD COLUMN {column} TEXT")
             self._db.execute(
@@ -121,10 +121,11 @@ class ArmIncidentStore:
     def accepted(self, source_id, incident_id) -> ArmIncidentAccepted:
         return ArmIncidentAccepted(incident_id=incident_id, hold=self.hold(source_id))
 
-    def clear(self, source_id, incident_id, note, principal_id, cause=None, basis=None, machine_ids=None) -> None:
+    def clear(self, source_id, incident_id, note, principal_id, cause=None, basis=None, machine=False) -> None:
         """KeyError: no such incident for this arm. ValueError: already cleared (the first record stands).
-        machine_ids (D-1039): the AI assessor ids, given when one of them clears; MachineClearRefused when the stored
-        facts or an assessor clear of the same cause on this arm within REPEAT_WINDOW_S keep it for a person."""
+        machine (D-1039): an AI assessor clears; MachineClearRefused when the stored facts or a machine clear of this
+        arm within REPEAT_WINDOW_S keep it for a person. A machine clear is marked and its basis stored as 'unknown',
+        so its cause is never scored as truth."""
         with self._lock, self._db:
             self._listed.clear()
             row = self._db.execute("SELECT cleared_at, facts FROM arm_incidents WHERE incident_id=? AND source_id=?",
@@ -133,18 +134,17 @@ class ArmIncidentStore:
                 raise KeyError(incident_id)
             if row[0] is not None:
                 raise ValueError("already cleared")
-            if machine_ids is not None:
+            if machine:
                 ok, why = machine_clearable(_facts(row[1]))
                 if not ok:
                     raise MachineClearRefused("AI_CLEAR_KIND_REFUSED", why)
-                ids = sorted(machine_ids)
-                if self._db.execute(
-                        f"SELECT 1 FROM arm_incidents WHERE source_id=? AND true_cause IS ? AND cleared_at>=? "
-                        f"AND cleared_by IN ({','.join('?' * len(ids))})",
-                        (source_id, cause, self._wall() - REPEAT_WINDOW_S, *ids)).fetchone():
-                    raise MachineClearRefused("AI_CLEAR_REPEAT_LIMIT", f"an assessor cleared {cause} on this arm today")
-            self._db.execute("UPDATE arm_incidents SET cleared_by=?, cleared_at=?, clear_note=?, true_cause=?, label_basis=? "
-                             "WHERE incident_id=?", (principal_id, self._wall(), note, cause, basis, incident_id))
+                if self._db.execute("SELECT 1 FROM arm_incidents WHERE source_id=? AND cleared_kind='machine' "
+                                    "AND cleared_at>=?", (source_id, self._wall() - REPEAT_WINDOW_S)).fetchone():
+                    raise MachineClearRefused("AI_CLEAR_REPEAT_LIMIT", "a machine clear of this arm in the last 24 h")
+                basis = "unknown"
+            self._db.execute("UPDATE arm_incidents SET cleared_by=?, cleared_at=?, clear_note=?, true_cause=?, label_basis=?, "
+                             "cleared_kind=? WHERE incident_id=?",
+                             (principal_id, self._wall(), note, cause, basis, "machine" if machine else None, incident_id))
             self._expire()
 
     def add_evidence(self, source_id, incident_id, frame: ArmIncidentEvidenceFrame) -> int:
@@ -208,13 +208,14 @@ class ArmIncidentStore:
 
     def _rows(self, where, args, limit=None):
         query = ("SELECT incident_id, source_id, session_id, reported_at, facts, decision, recovery, seen, "
-                 "suspected_cause, model, explained_at, cleared_by, cleared_at, clear_note, true_cause, label_basis FROM arm_incidents "
+                 "suspected_cause, model, explained_at, cleared_by, cleared_at, clear_note, true_cause, label_basis, cleared_kind "
+                 "FROM arm_incidents "
                  f"WHERE {where} ORDER BY reported_at DESC, rowid DESC" + (f" LIMIT {int(limit)}" if limit else ""))
         return self._db.execute(query, args).fetchall()
 
     def _view(self, row, with_bytes):
         (incident_id, source_id, session_id, reported_at, facts, decision, recovery, seen, cause, model, explained_at,
-         cleared_by, cleared_at, note, true_cause, basis) = row
+         cleared_by, cleared_at, note, true_cause, basis, kind) = row
         # the list only needs each frame's size: never read the JPEG blob (up to 200 kB) for it
         frames = self._db.execute(f"SELECT role, sha256, {'jpeg' if with_bytes else 'length(jpeg)'} "
                                   "FROM arm_incident_frames WHERE incident_id=? ORDER BY role DESC",
@@ -227,7 +228,8 @@ class ArmIncidentStore:
                    "seen": seen, "suspected_cause": cause, "model": model, "explained_at": explained_at,
                    "note": "explanation only; it does not decide or move anything"},
                "cleared": None if cleared_at is None else {"by": cleared_by, "at": cleared_at, "note": note,
-                                                           "cause": true_cause, "basis": basis}}
+                                                           "cause": true_cause, "basis": basis,
+                                                           "kind": kind or "person"}}
         out["frames"] = [({"role": r, "sha256": h, "jpeg_b64": base64.b64encode(j).decode()} if with_bytes
                           else {"role": r, "sha256": h, "bytes": j}) for r, h, j in frames]
         out["evidence"] = [{"seq": s, "camera": c, "t_rel_s": t, "kind": k, "sha256": h, "bytes": n} for s, c, t, k, h, n in
@@ -259,6 +261,8 @@ class ArmIncidentStore:
 
 def install_arm_incident_routes(app, *, service, store, require_viewer, require_named_operator, authorize=None):
     base = "/api/fleet/workcell-observations"
+    # D-1039: a named operator or a configured AI assessor; without authorize only a named operator
+    clearer = require_named_operator if authorize is None else build_incident_clearer(authorize, require_named_operator)
 
     def source(source_id, token):
         try:
@@ -295,18 +299,20 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
 
     @app.post(base + "/arms/{source_id}/incidents/{incident_id}/clear", tags=["workcell-observations"])
     async def clear(source_id: str, incident_id: str, request: Request, response: Response,
-                    principal=Depends(require_named_operator)):
+                    principal=Depends(clearer)):
         response.headers["Cache-Control"] = "no-store"
         try:
             note = ArmIncidentClear.model_validate(await bounded_json(request))
         except ValidationError:
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT_CLEAR"}) from None
-        machine = arm_assessors() if is_arm_assessor(principal) else None  # D-1039: a person clears every kind
-        if machine is not None and (note.cause is None or note.basis is None):
+        arms = assessor_arms(principal)  # D-1039: None for a person, who clears every kind
+        if arms is not None and source_id not in arms:
+            raise HTTPException(403, detail={"code": "AI_CLEAR_ARM_NOT_ASSIGNED"})
+        if arms is not None and (note.cause is None or note.basis is None):
             raise HTTPException(422, detail={"code": "AI_CLEAR_CAUSE_REQUIRED"})
         try:
             await asyncio.to_thread(store.clear, source_id, incident_id, note.note, principal.principal_id, note.cause,
-                                    note.basis, machine)
+                                    note.basis, arms is not None)
         except KeyError:
             raise HTTPException(404, detail={"code": "ARM_INCIDENT_UNKNOWN"}) from None
         except ValueError:

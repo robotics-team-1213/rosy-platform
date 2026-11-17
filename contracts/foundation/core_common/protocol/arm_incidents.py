@@ -173,23 +173,49 @@ def software_stop(facts) -> str | None:
     return f"software stop ({stop}) with the arm folded on its command; nothing physical held it"
 
 
+#: D-1039: the one flagged runner row a machine may clear: the guard's strain stop while parking (a joint lagged its
+#: command; the arm then folded home with torque OFF). Not the jaws stopping short in park, which is something held.
+PARK_STRAIN = r"^(?:runner: )?contact in park: [a-z_]+ lag rose to [0-9.]+ units at PWM -?[0-9]+ of [0-9]+"
+
+
+def _park_strain(row) -> bool:
+    import re
+
+    if not isinstance(row, dict) or row.get("caught") or row.get("person_needed"):
+        return False
+    texts = [str(row.get(k) or "") for k in ("error", "fault")]
+    return (re.match(PARK_STRAIN, texts[0] or texts[1]) is not None
+            and not any(word in t for t in texts for word in ("pushing", "session ended", "caught")))
+
+
 def machine_clearable(facts) -> tuple[bool, str]:
-    """D-1039: may an AI assessor service clear this incident without a person? Only on the stored measured facts:
-    a safe end folded at home, torque confirmed OFF on every motor, no latched hardware error, no wind-up or snag hit
-    and no caught jaw. Anything else (and anything unreadable or truncated) stays with a person."""
-    if not isinstance(facts, dict) or facts.get("truncated"):
-        return False, "facts unreadable or truncated"
+    """D-1039: may an AI assessor service clear this incident without a person? Default deny on the stored measured
+    facts, never looser than the cell's own rule (omx_incident.decide: a latch, a wind-up, a flagged runner row or an
+    unsafe end holds): the keys must be there with their types, the arm folded at a safe end with torque confirmed OFF
+    on every motor and caps confirmed restored, and nothing latched, wound up, stopped on contact or recorded as a
+    motor fault. Flagged runner rows only when every one is a PARK_STRAIN stop. A truncated report lacks the lists
+    and stays with a person."""
+    if not isinstance(facts, dict):
+        return False, "facts unreadable"
+    torque, latched, windup, flagged = (facts.get(k) for k in ("torque_after", "latched", "windup_hits", "flagged"))
+    if not (isinstance(torque, dict) and isinstance(latched, dict) and isinstance(windup, list)
+            and isinstance(flagged, list)):
+        return False, "facts incomplete (torque_after, latched, windup_hits, flagged)"
     if facts.get("safe_end") is not True or facts.get("folded") is not True:
         return False, "arm not at a safe end folded at home"
-    torque = facts.get("torque_after")
-    if not isinstance(torque, dict) or not torque or not all(
-            isinstance(v, int) and not isinstance(v, bool) and v == 0 for v in torque.values()):
+    if not torque or not all(isinstance(v, int) and not isinstance(v, bool) and v == 0 for v in torque.values()):
         return False, "torque not confirmed OFF"
-    if facts.get("latched"):
+    if facts.get("caps_restored") is not True:
+        return False, "caps not confirmed restored"
+    if latched:
         return False, "latched hardware error"
-    if facts.get("windup_hits"):
+    if windup:
         return False, "wind-up or snag hit"
-    flagged = facts.get("flagged") or []
-    if not isinstance(flagged, list) or any(not isinstance(r, dict) or r.get("caught") for r in flagged):
-        return False, "caught jaw"
-    return True, "folded safe end, torque OFF, nothing latched, wound up or caught"
+    if not all(_park_strain(r) for r in flagged):
+        return False, "runner flagged the session for a person"
+    for key, why in (("stops", "guard contact stop"), ("fault_records", "motor fault record")):
+        value = facts.get(key)
+        if value is not None and (not isinstance(value, list) or value):
+            return False, why
+    return True, (("park strain stop, then " if flagged else "")
+                  + "folded safe end, torque OFF, caps restored, nothing latched, wound up or stopped")
