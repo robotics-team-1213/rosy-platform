@@ -69,3 +69,10 @@ key was lost, so a new CA was issued and each unit's `tls_ca_file` holds old+new
 keeps the CA of the certificate its Fleet actually serves. Verified: Fleet's own peer client in R's container
 judged CELL-A AVAILABLE on `site-2026-11-17-r1`, and the check passed on both hosts (exit 0). Apply when: a unit
 moves host, a peer certificate is reissued, or the manifest changes.
+
+The reissued cell certificate names only `rosy-arm-cell.local` and `peer-cell-a` (no `IP:127.0.0.1`, which the
+old one had). Same-host clients on the cell PC that dialled `https://127.0.0.1:8543` with the old CA file (arm status
+reporter, observation bridge, incident and hold checks) then failed TLS. They use `https://rosy-arm-cell.local:8543`
+and the unit's old+new CA bundle; the IP SAN is not restored, so a loopback URL fails loudly instead of working on
+one PC only. Before reissuing, list every client of the port (`grep -r :8543` over `/etc/rosy`, `~/.config/rosy`,
+user units) and move each to the name with the new bundle.
