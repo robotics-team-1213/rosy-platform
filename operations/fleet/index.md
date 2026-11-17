@@ -106,7 +106,7 @@
 ## 최근 기록
 
 - 2026-11-18 · uncommitted · refactor(fleet): 가려진 road-nav2 중복 라우트 삭제 — 응답 소유는 berth_parking 한 곳
+- 2026-11-18 · uncommitted · test(fleet): 알림 한 곳에 맞춘 브라우저·노드 시험
 - 2026-11-16 · uncommitted · fix(fleet): auto-track-calibration 서비스 principal 보정·지도 경로 최소 권한 허용
 - 2026-11-15 · uncommitted · ui(fleet): E 위치 상태 Node·브라우저 시험 추가(C19)
 - 2026-11-15 · uncommitted · ui(fleet): H Pinky 앞 카메라 타일 Node·브라우저 시험 추가
-- 2026-11-15 · uncommitted · ui(fleet): B3 아홉 스킬 상태의 로봇 행·상세·3D 시험과 robot-detail Node 시험
