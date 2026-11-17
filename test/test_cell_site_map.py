@@ -62,6 +62,7 @@ def test_yard_row_and_hold_mapping_is_computed_from_slot_records():
 def test_aliases_resolve():
     a = DOC["aliases"]
     assert a["legacy_layout"]["yard-r1-c1"] == "yard:r1-s1"
+    assert a["legacy_layout"]["yard-r1-c4"] == "yard:r1-s2" and a["legacy_layout"]["temp_a-2"] == "temp_a:r2-s1" and a["legacy_layout"]["stand-1"] == "stand:r1-s1"
     assert a["legacy_sim"]["ship-h2r2-l0"] == "yard:r1-s1-t1" and a["legacy_sim"]["ship-stern-l0"] == "not_places:ship_stern"
     assert a["legacy_station_zones"]["EXP_S1"] == "stand:r1-s1" and a["legacy_station_zones"]["STG_C2"] is None
     assert {n["id"] for n in DOC["not_places"]} == {"belt", "supply_s", "ship_stern", "ship_bow", "pinky_tray"}

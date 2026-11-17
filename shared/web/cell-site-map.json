@@ -540,11 +540,18 @@
  "aliases": {
   "legacy_layout": {
    "yard-r1-c1": "yard:r1-s1",
-   "yard-r1-c2": "yard:r1-s2",
+   "yard-r1-c4": "yard:r1-s2",
    "yard-r2-c1": "yard:r2-s1",
-   "yard-r2-c2": "yard:r2-s2",
+   "yard-r2-c4": "yard:r2-s2",
    "yard-r3-c1": "yard:r3-s1",
-   "yard-r3-c2": "yard:r3-s2"
+   "yard-r3-c4": "yard:r3-s2",
+   "temp_a-1": "temp_a:r1-s1",
+   "temp_a-2": "temp_a:r2-s1",
+   "temp_a-3": "temp_a:r3-s1",
+   "temp_b-1": "temp_b:r1-s1",
+   "temp_b-2": "temp_b:r2-s1",
+   "temp_b-3": "temp_b:r3-s1",
+   "stand-1": "stand:r1-s1"
   },
   "legacy_sim": {
    "ship-h2r2-l0": "yard:r1-s1-t1",
