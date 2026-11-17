@@ -141,6 +141,9 @@ def main(argv=None) -> int:
     domain = require_ros_environment()
     settings, config, names = load_config(args.config)
     if args.check:
+        if settings.arm_goals is not None:
+            from hardware_owner_goals import field_modules
+            field_modules()  # a missing numpy or cell module fails here, not at the first goal
         print(json.dumps({"ok": True, "workcell_id": settings.workcell_id,
                           "instance_id": settings.instance_id, "namespace": names.namespace,
                           "trajectory_action": names.trajectory_action,
