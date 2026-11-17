@@ -247,3 +247,16 @@ def test_tracking_needs_the_sighting_sources():
     tracking = TrackingService([_source()], calibrations=TrackingCalibrationStore())
     with pytest.raises(ValueError, match="sighting sources"):
         create_app(FleetConsole([], []), tracking=tracking)
+
+
+def test_lifting_an_auto_locate_block_is_a_named_operator_action(tmp_path):
+    from types import SimpleNamespace
+    with _client(tmp_path) as client:
+        url = "/api/fleet/auto-locate/rosy_01/lift-block"
+        assert client.post(url, headers=_auth(VIEWER_TOKEN)).status_code == 403
+        # no map-pose service behind the session: nothing to lift, and the refusal says why
+        refused = client.post(url, headers=_auth(OPERATOR_TOKEN))
+        assert refused.status_code == 409 and refused.json()["detail"]["code"] == "AUTO_LOCATE_NOT_ENABLED"
+        client.app.state.auto_locate.map_pose = SimpleNamespace(allow_auto_locate=lambda robot_id: robot_id == "rosy_01")
+        lifted = client.post(url, headers=_auth(OPERATOR_TOKEN))
+        assert lifted.status_code == 200 and lifted.json() == {"robot_id": "rosy_01", "anchor_blocked": False}
