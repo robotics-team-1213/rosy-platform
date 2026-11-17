@@ -133,3 +133,21 @@ def test_cleanup_trims_the_pytest_memory_history_past_its_cap(tmp_path, monkeypa
     land_tick.cleanup(tmp_path)
     rows = history.read_text(encoding="utf-8").splitlines()
     assert len(rows) == memory_history.KEEP_ROWS and rows[-1] == f'{{"key": "{memory_history.MAX_ROWS}"}}'
+
+
+def test_metrics_line_is_written_once_per_day(tmp_path):
+    """D-889 36: arrivals, landed, lead p50/p90, turn-deadline releases and rollups, once per 24 h."""
+    import json
+    now, rollup = 1_000_000.0, "land/fix/land-rollup-20261117000000-20261117000001"
+    row = lambda t, event, pid, **kw: json.dumps({"t": t, "event": event, "pid": pid, **kw})  # noqa: E731
+    (tmp_path / land_tick.land_events.EVENTS).write_text("\n".join([
+        row(now - 7200, "queue", 1, branch="a"), row(now - 3600, "landed", 1, branch="a"),
+        row(now - 5400, "queue", 2, branch=rollup), row(now - 1800, "landed", 2, branch=rollup),
+        row(now - 100, "released", 3, branch="b", note="turn deadline"),
+        row(now - 90000, "queue", 9, branch="old")]) + "\n", encoding="utf-8")
+    line = land_tick.metrics(tmp_path, now)
+    assert line == ("[metrics] arrivals 0.08/h, landed 0.08/h, lead p50/p90 60/60 min, turn-deadline releases 1/24h,"
+                    " rollups built 1 landed 1")
+    assert land_tick.metrics(tmp_path, now + 3600) is None  # already written today
+    assert json.loads((tmp_path / land_tick.METRICS_LOG).read_text().splitlines()[-1])["deadline_releases"] == 1
+    assert land_tick.metrics(tmp_path, now + 25 * 3600)

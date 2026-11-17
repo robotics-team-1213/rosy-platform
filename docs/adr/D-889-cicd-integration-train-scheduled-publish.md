@@ -721,3 +721,17 @@
 **검증.** `test/test_land_rollup.py`, `test/test_land_async.py`, `test/test_land_queue.py`를 원격 시험 PC에서 돌린다.
 
 **되돌림.** `ROSY_ROLLUP_MIXED=0`은 추가 33의 되돌림 그대로다. 롤업 뒤에 기다리는 착지가 4시간 만료로 잇달아 죽으면 2시간 예외를 줄인다.
+
+### 추가 36 (2026-11-17): 착지 도구를 바꾸면 숫자를 먼저 적는다 (2026-11-17 롤업 패널)
+
+**왜.** 같은 계열 교훈이 11-01·11-14에 있었는데도 바꾼 뒤 숫자를 재지 않아 되풀이됐다. 롤업을 시작하는 곳이 4곳(land_tick, land_watchdog, `land_prepare.gather`, FULL 대기)까지 늘어 36시간 동안 31개가 만들어지고 4개만 착지했다.
+
+**결정.** 착지 파이프라인(tools/land*.py)을 바꾸는 커밋은 바꾸기 전 숫자(들어온 착지/h, 끝난 착지/h, 착지 p50·p90, 턴 시간 초과 반납/24h, 롤업 생성·착지)를 `Metrics: before=...` 줄에 적는다. land_tick이 24시간마다 같은 숫자를 남기고, 바꾼 뒤 24시간 안에 나빠졌으면 되돌린다. 새 타이머·트리거를 더하는 커밋은 같은 일을 하는 기존 것을 `Removes:` 줄에 적고 함께 지운다. 시간 상한은 실제 작업 시간 분포를 보고 정한다. 근거: 2026-11-17 패널(같은 계열 교훈 11-01·11-14가 있었는데도 착지 뒤 재지 않아 되풀이; 롤업 계기 4곳).
+
+이 커밋이 첫 적용이다. 롤업 트리거는 `land_tick` 한 곳만 남기고 `land_prepare.gather`·`GATHER_S`, FULL 대기의 `ROLL_POLLS` 재시도, `land_watchdog.rollup_due`·`ROLLUP_EVERY_S`를 지웠다. 추가 33·34의 "차례 쥔 watchdog 10분마다"·"FULL 대기 시작 때 한 번"은 이 추가로 대체된다. 새 입장 공식은 더하지 않았다(트리거가 하나일 때의 숫자를 24시간 본 뒤 정한다).
+
+**강제.** 규칙은 `tools/harness/size_range.py`가 `base..head`의 병합 아닌 커밋마다 검사한다(`land_metrics_rule.py`). `land.py`의 precheck와 턴에서 돌므로 로컬 main 기준이다. 커밋 시각이 `RULE_SINCE`(2026-11-17T18:00+09:00) 이후인 커밋만 검사해, 그 전에 시작된 다른 세션의 브랜치는 소급해서 막지 않는다.
+
+**검증.** `test/test_land_metrics_rule.py`(규칙 문장 시험과 임시 저장소의 size_range 시험), `test/test_land_prepare.py`, `test/test_land_queue_flow.py`, `test/test_land_tick.py`를 원격 시험 PC에서 돌린다. 규칙은 `[metrics]` 줄(`rosy-land-backlog.txt`)과 `<git-common-dir>/rosy-land-metrics.jsonl`로 24시간 뒤 확인한다.
+
+**되돌림.** 롤업이 24시간 안에 생성 없이 쌓이기만 하면 이 커밋을 되돌리고(트리거 3곳 복구) 숫자를 다시 잰다. 메시지 규칙 시험이 오탐이면 시험만 고치고 규칙 문장은 유지한다.
