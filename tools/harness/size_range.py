@@ -27,6 +27,7 @@ from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import PurePosixPath
 
+import crlf_rule
 import land_metrics_rule
 import size_limits
 from colcon_roots import colcon_roots
@@ -229,6 +230,10 @@ def main(argv: list[str]) -> int:
             red.append(_git("log", "-1", "--format=%h %s", commit).strip() + "\n    " + "\n    ".join(bad))
     print(f"[size-range] {len(commits)} commit(s) checked")
     for commit in commits:
+        if bad := crlf_rule.problems(commit, _git) if len(_git("rev-list", "--parents", "-n", "1", commit).split()) == 2 else []:
+            print(f"[size-range] {_git('log', '-1', '--format=%h %s', commit).strip()} (CRLF): " + "; ".join(bad),
+                  file=sys.stderr)
+            return 1
         if bad := metrics_problems(commit):
             print(f"[size-range] {_git('log', '-1', '--format=%h %s', commit).strip()} (D-889 36): "
                   + "; ".join(bad) + " (see docs/adr/D-889, addendum 36)", file=sys.stderr)
