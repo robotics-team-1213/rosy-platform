@@ -143,8 +143,7 @@ def test_cleanup_keeps_an_old_ticket_whose_landing_is_still_logging(tmp_path, mo
     import land_rollup  # noqa: E402
     holder = tmp_path / "holder"
     (holder / "land-fix-z").mkdir(parents=True)
-    (holder / "land-fix-z.log").write_text("[remote-pytest] pytest ...
-")
+    (holder / "land-fix-z.log").write_text("[remote-pytest] pytest ..." + chr(10))
     tpath = tmp_path / "01-99.json"
     tpath.write_text(json.dumps({"pid": 99}))
     stopped = []
