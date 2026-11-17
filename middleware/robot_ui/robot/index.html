@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/common/component-controls.css">
+  <link rel="stylesheet" href="/common/choice-controls.css">
   <link rel="stylesheet" href="/dashboard/assets/styles.css">
  <link rel="stylesheet" href="/dashboard/assets/console-detail.css">
   <script type="module" src="/common/ui.js"></script>
@@ -25,7 +26,7 @@
       <ui-brand><a href="/dashboard" aria-label="Rosy Robot 홈"><b>Rosy Robot</b></a></ui-brand>
       <ui-tag id="entry-role" aria-label="접속 권한" hidden></ui-tag>
       <ui-button kind="quiet" id="entry-logout" hidden>로그아웃</ui-button>
-      <ui-button kind="irreversible" id="entry-stop" data-always-live disabled reason="로그인 후 사용할 수 있습니다.">비상 정지</ui-button>
+      <ui-button kind="irreversible" id="entry-stop" data-always-live>비상 정지</ui-button>
       <ui-status id="entry-stop-notice" hidden></ui-status>
     </ui-topbar>
     <main id="entry-main" class="entry-main" tabindex="-1">
@@ -52,14 +53,7 @@
     </ui-brand>
     <div class="topbar-status">
       <span id="clock" class="clock">--:--:--</span>
-      <ui-tag id="connection-badge" status="neutral">
-        <i aria-hidden="true"></i><span>인증 대기</span>
-      </ui-tag>
-      <div class="view-switch" role="group" aria-label="화면 전환">
-        <ui-button kind="segment" id="view-operate" class="view-tab" type="button" aria-pressed="true">운용</ui-button>
-        <ui-button kind="segment" id="view-inspect" class="view-tab" type="button" aria-pressed="false">점검</ui-button>
-      </div>
-      <nav id="surface-bridge" class="surface-bridge" aria-label="역할 화면" hidden></nav>
+      <span id="connection-badge" class="connection-badge" aria-live="off">인증 대기</span>
       <!-- D-193 6: who this browser is, from GET /api/v1/auth/whoami. -->
       <ui-tag id="whoami-badge" class="whoami-badge" hidden>
         <b id="whoami-role"></b><span id="whoami-detail"></span>
@@ -73,16 +67,17 @@
       </ui-button>
     </div>
   </ui-topbar>
-
-  <div id="connection-banner" class="connection-banner" role="alert" hidden>
-    연결이 끊겼습니다 — 재연결 중…
+  <div class="ui-subnav compat-subnav">
+    <div class="view-switch" id="view-switch"></div>
+    <nav id="surface-bridge" class="surface-bridge" aria-label="역할 화면" hidden></nav>
+    <a class="docs-link" href="/pilot">직접 운전</a>
   </div>
 
   <aside id="auth-drawer" class="auth-drawer" aria-labelledby="auth-title">
     <div>
       <h2 id="auth-title">Rosy에 연결</h2>
       <p>로봇 화면(LCD)이나 콘솔에 뜬 8자 로그인 코드로 이 브라우저 전용 키를 받습니다. 코드는 한 번만, 10분 동안 쓸 수 있습니다.</p>
-      <p id="auth-notice" class="form-message" role="status" aria-live="polite"></p>
+      <p id="auth-notice" class="form-message"></p>
     </div>
     <!-- D-432/D-471: 개발 연결 모드 로봇은 코드 없이 1시간 운전자 세션으로 들어간다. -->
     <div id="dev-connect-row" hidden>
@@ -90,37 +85,38 @@
       <div class="auth-row">
         <ui-button kind="primary" id="dev-connect" type="button" class="primary-button">개발 연결로 계속</ui-button>
       </div>
-      <p id="dev-message" class="form-message" role="status" aria-live="polite"></p>
+      <p id="dev-message" class="form-message"></p>
     </div>
     <!-- D-193 6: two tabs, the robot screen code first. -->
-    <div class="view-switch auth-tabs" role="tablist" aria-label="로그인 방법">
-      <ui-button kind="segment" id="auth-tab-code" class="view-tab" type="button" role="tab" aria-selected="true" aria-controls="code-form">로봇 화면 코드</ui-button>
-      <ui-button kind="segment" id="auth-tab-token" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-form">API 토큰</ui-button>
-    </div>
-    <form id="code-form" role="tabpanel" aria-labelledby="auth-tab-code">
+    <div data-auth-tabs></div>
+    <form id="code-form">
       <label for="code-input">로그인 코드</label>
       <div class="auth-row">
         <input class="ui-field" id="code-input" name="code" type="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="ABCD-EFGH" required>
         <ui-button kind="primary" id="code-submit" type="submit" class="primary-button">로그인</ui-button>
       </div>
-      <label for="code-label">이 기기 이름표 (선택)</label>
-      <div class="auth-row">
-        <input class="ui-field" id="code-label" name="label" type="text" maxlength="64" autocomplete="off" placeholder="bay 7 태블릿">
-      </div>
-      <label class="ui-check bench-confirmation" for="code-remember">
-        <input class="ui-field" id="code-remember" type="checkbox">
-        <span>이 브라우저에서 로그인 유지(최대 7일). 끄면 이 탭을 닫을 때 지웁니다.</span>
-      </label>
-      <p id="code-message" class="form-message" role="status" aria-live="polite"></p>
+      <!-- 선택 사항은 접힘이다: 주역은 코드 입력과 로그인 하나. -->
+      <details class="surface-disclosure auth-options">
+        <summary>기기 옵션</summary>
+        <label for="code-label">이 기기 이름표 (선택)</label>
+        <div class="auth-row">
+          <input class="ui-field" id="code-label" name="label" type="text" maxlength="64" autocomplete="off" placeholder="bay 7 태블릿">
+        </div>
+        <label class="ui-check bench-confirmation" for="code-remember">
+          <input class="ui-field" id="code-remember" type="checkbox">
+          <span>이 브라우저에서 로그인 유지(최대 7일). 끄면 이 탭을 닫을 때 지웁니다.</span>
+        </label>
+      </details>
+      <p id="code-message" class="form-message"></p>
     </form>
-    <form id="auth-form" role="tabpanel" aria-labelledby="auth-tab-token" hidden>
+    <form id="auth-form">
       <label for="token-input">API 토큰</label>
       <div class="auth-row">
         <input class="ui-field" id="token-input" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="rosy-…" required>
         <ui-button kind="primary" type="submit" class="primary-button">연결</ui-button>
       </div>
       <p>카드 토큰이나 설정에서 만든 토큰입니다. 키는 이 탭이 열려 있는 동안에만 보관됩니다.</p>
-      <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
+      <p id="auth-message" class="form-message"></p>
     </form>
     <ui-button kind="quiet" id="close-auth" class="drawer-close" type="button" data-action-icon="close" data-icon-only="" aria-label="접속 키 창 닫기"></ui-button>
   </aside>
@@ -130,14 +126,19 @@
     <!-- 운용 — 공간 문법(concept 16 §7.1). 스크롤하지 않는다: 위치가 기억이다.
          내용이 넘치면 감지 영역만 스크롤하고 관측·조작은 고정된다. -->
     <div id="view-operate-panel" class="console">
-      <section id="triage" class="triage" hidden aria-live="polite">
+      <section id="triage" class="triage" hidden>
         <div class="triage-head">
           <div class="triage-copy">
-            <h2 id="triage-title"></h2>
+            <strong id="triage-title" class="triage-title"></strong>
             <p id="triage-detail"></p>
           </div>
         </div>
         <ul id="triage-context" class="triage-context"></ul>
+        <div id="hitl-escalation" class="hitl-escalation" hidden>
+          <h3>운영자 지원 요청</h3>
+          <p>로봇이 자동 판단을 중단하고 사람의 확인을 요청했습니다.</p>
+          <ui-button kind="quiet" type="button" id="teleop-override">저속 직접 제어로 이동</ui-button>
+        </div>
       </section>
 
       <section class="hero-strip" aria-labelledby="robot-heading">
@@ -157,7 +158,7 @@
           <span id="summary-power" class="summary-power" title="배터리 · 전압 · 온도"></span>
           <span class="summary-todo">
             <ui-button kind="quiet" type="button" id="summary-todo-toggle" aria-expanded="false"
-                       aria-controls="summary-todos" disabled>할 일 0</ui-button>
+                       aria-controls="summary-todos" disabled>할 일 없음</ui-button>
             <ul id="summary-todos" class="summary-todos" aria-label="할 일" hidden></ul>
           </span>
         </section>
@@ -169,7 +170,7 @@
         </div>
         <div class="hero-safety" id="safety-indicator">
           <span class="hero-label">안전 회로</span>
-          <strong id="safety-label">UNKNOWN</strong>
+          <strong id="safety-label">확인 전</strong>
           <span id="safety-source">확인 전</span>
         </div>
         <div class="hero-formation" id="hero-formation" hidden>
@@ -182,7 +183,7 @@
       <div class="regions">
         <div class="region region-sense" aria-label="감지">
           <div class="region-head"><h2>감지</h2><span>로봇이 재는 값</span></div>
-        <section class="panel motion-panel" aria-labelledby="motion-heading">
+        <ui-section class="motion-panel" aria-labelledby="motion-heading">
           <div class="panel-heading">
             <div>
               <h2 id="motion-heading">로봇 텔레메트리</h2>
@@ -202,21 +203,21 @@
             <small id="navigation-goal" class="navigation-goal"></small>
             <small id="map-id">map</small>
           </div>
-        </section>
-        <section class="panel capability-panel" aria-labelledby="capability-heading">
+        </ui-section>
+        <ui-section class="capability-panel" aria-labelledby="capability-heading">
           <div class="panel-heading">
             <div>
               <h2 id="capability-heading">기능 가용성</h2>
             </div>
             <ui-tag id="capability-count"></ui-tag>
           </div>
-          <div id="capability-list" class="capability-list" aria-live="polite">
+          <div id="capability-list" class="capability-list">
             <ui-empty>연결 후 기능 계약을 표시합니다.</ui-empty>
           </div>
-        </section>
+        </ui-section>
         <!-- D-201: 차선·교통의 계기값은 "로봇이 재는 값"이다 — 감지 영역의 몫.
              조작 열에는 입력(센서 선택)만 남는다. -->
-        <section class="panel line-follow-panel" aria-labelledby="line-follow-facts-heading">
+        <ui-section class="line-follow-panel" aria-labelledby="line-follow-facts-heading">
           <div class="panel-heading">
             <div>
               <h2 id="line-follow-facts-heading">차선 인식</h2>
@@ -225,34 +226,34 @@
           <dl class="line-follow-facts">
             <div><dt>상태</dt><dd id="line-follow-state">꺼짐</dd></div>
             <div><dt>입력</dt><dd id="line-follow-source">없음</dd></div>
-            <div><dt>오차</dt><dd id="line-follow-error"></dd></div>
-            <div><dt>신뢰도</dt><dd id="line-follow-confidence">0%</dd></div>
-            <div><dt>선속도</dt><dd id="line-follow-linear">0.000 m/s</dd></div>
-            <div><dt>각속도</dt><dd id="line-follow-angular">0.000 rad/s</dd></div>
+            <div><dt>오차</dt><dd id="line-follow-error">정보 없음</dd></div>
+            <div><dt>신뢰도</dt><dd id="line-follow-confidence">정보 없음</dd></div>
+            <div><dt>선속도</dt><dd id="line-follow-linear">정보 없음</dd></div>
+            <div><dt>각속도</dt><dd id="line-follow-angular">정보 없음</dd></div>
           </dl>
-        </section>
-        <section class="panel traffic-facts-panel" aria-labelledby="traffic-facts-heading">
+        </ui-section>
+        <ui-section class="traffic-facts-panel" aria-labelledby="traffic-facts-heading">
           <div class="panel-heading">
             <div>
               <h2 id="traffic-facts-heading">교통 인식</h2>
             </div>
           </div>
           <dl class="traffic-policy-facts">
-            <div><dt>판정</dt><dd id="traffic-policy-state">DISABLED</dd></div>
+            <div><dt>판정</dt><dd id="traffic-policy-state" title="DISABLED">사용 안 함</dd></div>
             <div><dt>신호</dt><dd id="traffic-policy-signal">미수신</dd></div>
             <div><dt>정지선</dt><dd id="traffic-policy-stop-distance">미수신</dd></div>
-            <div><dt>규칙</dt><dd id="traffic-policy-rule">signal_controlled</dd></div>
-            <div><dt>신호 원</dt><dd id="traffic-policy-source">camera</dd></div>
-            <div><dt>scene</dt><dd id="traffic-policy-scene">미확정</dd></div>
-            <div><dt>policy</dt><dd id="traffic-policy-revision">미확정</dd></div>
+            <div><dt>규칙</dt><dd id="traffic-policy-rule" title="signal_controlled">신호 제어</dd></div>
+            <div><dt>신호 원</dt><dd id="traffic-policy-source" title="camera">카메라</dd></div>
+            <div><dt>장면</dt><dd id="traffic-policy-scene">미확정</dd></div>
+            <div><dt>정책</dt><dd id="traffic-policy-revision">미확정</dd></div>
             <div><dt>판정 사유</dt><dd id="traffic-policy-reason">정책 꺼짐</dd></div>
           </dl>
-        </section>
+        </ui-section>
         </div>
 
         <div class="region region-observe" aria-label="관측">
           <div class="region-head"><h2>관측</h2><span>지도 위 현재 위치와 경로</span></div>
-        <section id="vision-panel" class="panel vision-panel" aria-labelledby="vision-heading">
+        <ui-section id="vision-panel" class="vision-panel" aria-labelledby="vision-heading">
           <div class="panel-heading vision-heading">
             <div>
               <h2 id="vision-heading">전방 카메라 · 인식 오버레이</h2>
@@ -271,22 +272,15 @@
             <div><dt>CAPTURE</dt><dd id="vision-captured"></dd></div>
             <div><dt>LATENCY</dt><dd id="vision-age"></dd></div>
           </dl>
-        </section>
-        <section id="field-map-panel" class="panel field-map-panel" aria-labelledby="field-map-heading">
+        </ui-section>
+        <ui-section id="field-map-panel" class="field-map-panel" aria-labelledby="field-map-heading">
           <div class="panel-heading">
             <div>
               <h2 id="field-map-heading">점유 지도</h2>
             </div>
             <div class="map-tools">
-              <div class="map-toolbar" role="group" aria-label="지도 레이어">
-                <ui-button kind="segment" type="button" data-map-layer="occupancy" aria-pressed="true">격자</ui-button>
-                <ui-button kind="segment" type="button" data-map-layer="costmap" aria-pressed="true">코스트</ui-button>
-                <ui-button kind="segment" type="button" data-map-layer="path" aria-pressed="true">경로</ui-button>
-              </div>
-              <div class="map-toolbar" role="group" aria-label="지도 클릭 동작">
-                <ui-button kind="segment" type="button" data-map-click="pose" aria-pressed="true">초기 자세</ui-button>
-                <ui-button kind="segment" type="button" data-map-click="goal" aria-pressed="false">목표</ui-button>
-              </div>
+              <div class="map-toolbar" id="map-layers-host"></div>
+              <div class="map-toolbar" id="map-click-host"></div>
               <p class="map-hint">칸을 찍어 초기 자세를 맞춘 뒤 목표로 바꾸세요.</p>
             </div>
             <ui-tag id="map-status">맵 수신 대기</ui-tag>
@@ -303,12 +297,12 @@
             <li data-swatch="path">경로</li>
             <li data-swatch="robot">로봇</li>
           </ul>
-        </section>
+        </ui-section>
         </div>
 
         <div class="region region-act" aria-label="조작">
           <div class="region-head"><h2>조작</h2><span>로봇을 움직이는 것</span></div>
-        <section class="panel control-panel" aria-labelledby="control-heading">
+        <ui-section class="control-panel" aria-labelledby="control-heading">
           <div class="panel-heading">
             <div>
               <h2 id="control-heading">운영 제어</h2>
@@ -319,30 +313,17 @@
               <span>정지 해제</span><small>관리자 권한 필요</small>
             </ui-button>
           </div>
-          <div class="mode-control" role="group" aria-label="로봇 운전 모드">
-            <ui-button kind="segment" type="button" data-mode="IDLE">대기</ui-button>
-            <ui-button kind="segment" type="button" data-mode="MANUAL">수동</ui-button>
-            <ui-button kind="segment" type="button" data-mode="NAVIGATION" disabled reason="기능 확인 중">자율주행</ui-button>
-          </div>
+          <div class="mode-control" id="mode-choice-host"></div>
           <div class="line-follow-control" aria-labelledby="line-follow-heading">
             <div class="line-follow-copy">
               <h3 id="line-follow-heading">흰색 차선 추종</h3>
               <span>IR 또는 카메라 중 하나만 선택</span>
             </div>
-            <div class="line-follow-modes" role="group" aria-label="차선 인식 센서">
-              <ui-button kind="toggle" type="button" data-line-mode="OFF">꺼짐</ui-button>
-              <ui-button kind="toggle" type="button" data-line-mode="IR_LINE">IR 센서</ui-button>
-              <ui-button kind="toggle" type="button" data-line-mode="CAMERA_LINE">카메라</ui-button>
-            </div>
+            <div class="line-follow-modes" id="line-choice-host"></div>
             <p id="line-follow-reason" class="line-follow-message">꺼짐</p>
           </div>
           <!-- D-201: 정책의 편집(입력·검토본·적용)은 절차다 — 점검 뷰의 현장 설정
                카드로 갔다. 정책의 현재 판정은 감지 영역의 교통 인식 패널에 있다. -->
-          <div id="hitl-escalation" class="hitl-escalation" role="alert" hidden>
-            <h3>운영자 지원 요청</h3>
-            <p>로봇이 자동 판단을 중단하고 사람의 확인을 요청했습니다.</p>
-            <ui-button kind="quiet" type="button" id="teleop-override">저속 직접 제어로 이동</ui-button>
-          </div>
           <div class="teleop-commissioning" aria-labelledby="teleop-heading">
             <div class="teleop-copy">
               <div>
@@ -357,10 +338,10 @@
               <ui-button kind="toggle" type="button" data-teleop="right" data-linear="0" data-angular="-0.1" data-action-icon="right" aria-label="우회전">우회전</ui-button>
             </div>
             <span id="teleop-speed" class="teleop-speed" aria-label="명령 속도"></span>
-            <p id="teleop-message" class="teleop-message" role="status" aria-live="assertive">수동 모드에서 버튼을 누르고 있는 동안만 움직입니다.</p>
+            <p id="teleop-message" class="teleop-message">수동 모드에서 버튼을 누르고 있는 동안만 움직입니다.</p>
           </div>
-          <p id="action-message" class="action-message" role="status" aria-live="assertive">제어 명령 대기 중</p>
-        </section>
+          <p id="action-message" class="action-message">제어 명령 대기 중</p>
+        </ui-section>
         </div>
       </div>
     </div>
@@ -368,7 +349,7 @@
     <!-- 점검 — 절차 문법(concept 16 §7.2). 여기서만 스크롤이 허용된다.
          스크롤이 곧 절차이고, 순서는 기동 순서를 따른다. -->
     <div id="view-inspect-panel" class="inspect" hidden>
-      <section class="panel system-panel" aria-labelledby="system-heading">
+      <section data-surface="flat" class="ui-panel system-panel" aria-labelledby="system-heading">
         <div class="panel-heading">
           <div>
             <h2 id="system-heading">호스트 상태</h2>
@@ -404,10 +385,10 @@
             <small id="temperature-state">센서 확인 중</small>
           </article>
         </div>
-        <p id="runtime-warning" class="runtime-warning" role="status"></p>
+        <p id="runtime-warning" class="runtime-warning"></p>
       </section>
 
-      <section id="host-panel" class="panel host-panel" aria-labelledby="host-heading">
+      <section id="host-panel" data-surface="flat" class="ui-panel host-panel" aria-labelledby="host-heading">
         <div class="panel-heading">
           <div>
             <h2 id="host-heading">네트워크와 릴리스</h2>
@@ -431,7 +412,7 @@
               <div><dt>인터넷</dt><dd id="network-internet"></dd></div>
               <div><dt>같은 WLAN 단말 접근</dt><dd id="network-peer"></dd></div>
             </dl>
-            <p class="host-note" id="network-note" role="status"></p>
+            <p class="host-note" id="network-note"></p>
             <div class="host-actions">
               <ui-button kind="quiet" type="button" id="network-ap-off" data-role="administrator" disabled>AP 끄기</ui-button>
               <ui-button kind="quiet" type="button" id="network-ap-on" data-role="administrator" disabled>AP 켜기</ui-button>
@@ -442,7 +423,7 @@
               <label for="network-psk-input">암호</label>
               <div class="settings-row">
                 <input class="ui-field" id="network-psk-input" name="psk" type="password" maxlength="63" autocomplete="new-password">
-                <ui-button kind="primary" type="button" id="network-connect" class="primary-button" disabled>Wi-Fi 연결</ui-button>
+                <ui-button kind="quiet" type="button" id="network-connect" disabled>Wi-Fi 연결</ui-button>
               </div>
             </form>
             <form id="network-apply-form">
@@ -456,7 +437,7 @@
         </div>
       </section>
 
-      <section id="ros-network-panel" class="panel ros-network-panel" aria-labelledby="ros-network-heading">
+      <section id="ros-network-panel" data-surface="flat" class="ui-panel ros-network-panel" aria-labelledby="ros-network-heading">
         <div class="panel-heading">
           <div>
             <h2 id="ros-network-heading">통신 격리와 연결 지도</h2>
@@ -511,7 +492,7 @@
               <div><dt>config / data schema</dt><dd id="release-schema"></dd></div>
               <div><dt>마지막 실패</dt><dd id="release-failure"></dd></div>
             </dl>
-            <p class="host-note" id="release-note" role="status"></p>
+            <p class="host-note" id="release-note"></p>
             <div class="host-actions">
               <ui-button kind="quiet" type="button" id="release-rollback" data-role="administrator" disabled>
                 이전 릴리스로 롤백
@@ -527,7 +508,7 @@
               <h3 id="commissioning-heading">커미셔닝</h3>
               <ui-tag id="commissioning-mode" data-mode="UNKNOWN"></ui-tag>
             </header>
-            <p class="host-note" id="commissioning-note" role="status">확인 전</p>
+            <p class="host-note" id="commissioning-note">확인 전</p>
           </article>
 
           <!-- D-247: 장치가 붙어 있고 응답하는가. 제품 기능(capability)과는 다른 질문이다. -->
@@ -538,7 +519,7 @@
               <ui-tag id="hardware-measured">측정 전</ui-tag>
             </header>
             <ul id="hardware-list" class="device-list" aria-label="보드 장치 관측"></ul>
-            <p class="host-note" id="hardware-note" role="status">확인 전</p>
+            <p class="host-note" id="hardware-note">확인 전</p>
             <div class="host-actions">
               <ui-button kind="quiet" type="button" id="hardware-refresh" data-role="administrator" disabled>
                 다시 점검
@@ -547,7 +528,7 @@
           </article>
       </div>
 
-      <section id="field-settings-panel" class="panel field-settings-panel" aria-labelledby="field-settings-heading">
+      <section id="field-settings-panel" data-surface="flat" class="ui-panel field-settings-panel" aria-labelledby="field-settings-heading">
         <div class="panel-heading">
           <div>
             <h2 id="field-settings-heading">현장 설정</h2>
@@ -572,9 +553,9 @@
               <input class="ui-field" id="ros-namespace-input" readonly>
               <label for="robot-name-input">이름</label>
               <input class="ui-field" id="robot-name-input" name="robot_name" maxlength="64" placeholder="Rosy 01" autocomplete="off">
-              <ui-button kind="primary" type="button" id="identity-save" class="primary-button" disabled>신원 적용</ui-button>
+              <ui-button kind="quiet" type="button" id="identity-save" disabled>신원 적용</ui-button>
             </form>
-            <p id="identity-message" class="host-note" role="status"></p>
+            <p id="identity-message" class="host-note"></p>
           </article>
 
           <article id="peer-approval-panel" class="settings-card" aria-labelledby="peer-approval-heading" hidden>
@@ -603,9 +584,9 @@
                 <option value="operator">operator</option>
                 <option value="administrator">administrator</option>
               </select>
-              <ui-button kind="primary" type="button" id="token-add" class="primary-button" disabled>토큰 추가</ui-button>
+              <ui-button kind="quiet" type="button" id="token-add" disabled>토큰 추가</ui-button>
             </form>
-            <p id="token-message" class="host-note" role="status"></p>
+            <p id="token-message" class="host-note"></p>
           </article>
 
           <article class="settings-card" aria-labelledby="waypoint-heading">
@@ -618,13 +599,13 @@
               <label for="waypoint-name">이름</label>
               <div class="settings-row">
                 <input class="ui-field" id="waypoint-name" name="name" maxlength="64" required placeholder="zone_a 또는 __home__" autocomplete="off">
-                <ui-button kind="primary" type="button" id="waypoint-save" class="primary-button">현재 위치 저장</ui-button>
+                <ui-button kind="quiet" type="button" id="waypoint-save">현재 위치 저장</ui-button>
               </div>
             </form>
             <ul id="waypoint-list" class="waypoint-list">
               <li><ui-empty>연결 후 웨이포인트를 표시합니다.</ui-empty></li>
             </ul>
-            <p id="waypoint-message" class="host-note" role="status"></p>
+            <p id="waypoint-message" class="host-note"></p>
           </article>
 
           <article class="settings-card" aria-labelledby="limits-heading">
@@ -662,7 +643,7 @@
               </select>
               <ui-button kind="primary" type="button" id="limits-save" class="primary-button" disabled>정책 적용</ui-button>
             </form>
-            <p id="limits-message" class="host-note" role="status"></p>
+            <p id="limits-message" class="host-note"></p>
           </article>
 
           <article class="settings-card" aria-labelledby="slam-heading">
@@ -679,10 +660,10 @@
               <label for="slam-map-name">저장 이름</label>
               <div class="settings-row">
                 <input class="ui-field" id="slam-map-name" name="name" maxlength="64" value="rosy_map" autocomplete="off">
-                <ui-button kind="primary" type="button" id="slam-save" class="primary-button">맵 저장</ui-button>
+                <ui-button kind="quiet" type="button" id="slam-save">맵 저장</ui-button>
               </div>
             </form>
-            <p id="slam-message" class="host-note" role="status"></p>
+            <p id="slam-message" class="host-note"></p>
           </article>
 
           <article class="settings-card" aria-labelledby="dock-heading">
@@ -696,7 +677,7 @@
               <input class="ui-field" id="dock-id" name="id" maxlength="64" required placeholder="dock_1" autocomplete="off">
               <label for="dock-type">기종</label>
               <input class="ui-field" id="dock-type" name="type" maxlength="64" value="rosy_v1" autocomplete="off">
-              <ui-button kind="primary" type="button" id="dock-register" class="primary-button" disabled>도크 등록</ui-button>
+              <ui-button kind="quiet" type="button" id="dock-register" disabled>도크 등록</ui-button>
             </form>
             <ul id="dock-list" class="waypoint-list">
               <li><ui-empty>연결 후 도크를 표시합니다.</ui-empty></li>
@@ -705,7 +686,7 @@
               <ui-button kind="quiet" type="button" id="dock-undock">언도크</ui-button>
               <ui-button kind="quiet" type="button" id="dock-cancel">도킹 취소</ui-button>
             </div>
-            <p id="dock-message" class="host-note" role="status"></p>
+            <p id="dock-message" class="host-note"></p>
           </article>
 
           <article class="settings-card" aria-labelledby="traffic-policy-heading">
@@ -729,15 +710,15 @@
             </div>
             <div class="traffic-policy-actions">
               <ui-button kind="quiet" type="button" id="traffic-policy-stage">정책 검토본 저장</ui-button>
-              <ui-button kind="primary" type="button" id="traffic-policy-apply" class="primary-button">정지 상태에서 적용</ui-button>
+              <ui-button kind="quiet" type="button" id="traffic-policy-apply">정지 상태에서 적용</ui-button>
             </div>
             <div class="simulation-signal-controls" role="group" aria-label="시뮬레이션 신호등 제어">
               <span>SIM 신호</span>
-              <ui-button kind="toggle" type="button" data-simulation-signal="RED" disabled>RED</ui-button>
-              <ui-button kind="toggle" type="button" data-simulation-signal="YELLOW" disabled>YELLOW</ui-button>
-              <ui-button kind="toggle" type="button" data-simulation-signal="GREEN" disabled>GREEN</ui-button>
+              <ui-button kind="quiet" type="button" data-simulation-signal="RED" disabled>RED</ui-button>
+              <ui-button kind="quiet" type="button" data-simulation-signal="YELLOW" disabled>YELLOW</ui-button>
+              <ui-button kind="quiet" type="button" data-simulation-signal="GREEN" disabled>GREEN</ui-button>
             </div>
-            <p id="traffic-policy-message" class="host-note" role="status" aria-live="polite">정책 readback 대기</p>
+            <p id="traffic-policy-message" class="host-note">정책 readback 대기</p>
           </article>
 
           <article class="settings-card" aria-labelledby="fleet-settings-heading">
@@ -754,7 +735,7 @@
         </div>
       </section>
 
-      <section class="panel event-panel" aria-labelledby="event-heading">
+      <section data-surface="flat" class="ui-panel event-panel" aria-labelledby="event-heading">
         <div class="panel-heading">
           <div>
             <h2 id="event-heading">최근 이벤트</h2>

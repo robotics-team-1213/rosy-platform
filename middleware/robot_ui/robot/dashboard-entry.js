@@ -5,12 +5,24 @@ import { api, session, rememberToken, forgetToken, normalizeLoginCode, pairWithC
 import { dashboardReturnTarget, completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";
 import { ROLE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
+import { statusTag } from "/common/status-tag.js";
+import { createBusyScope } from "/common/busy-scope.js";
+import { createStopControl } from "/common/stop-control.js";
 
 const el = id => document.getElementById(id);
 const status = el("entry-status");
 const nav = el("entry-navigation");
 const stop = el("entry-stop");
-let busy = false;
+// Every locked control comes back as it was; the stop is [data-always-live] and is never locked.
+const scope = createBusyScope(document.body);
+actionIcon(el("code-submit"), "login");
+// An error line is a caution tag (the warn glyph belongs to status tags only); the wording stays the same and is never only an icon.
+function codeError(text) {
+  const message = el("code-message");
+  message.replaceChildren();
+  if (!text) return;
+  message.append(statusTag("caution", text));
+}
 let retryUntil = 0;
 let retryTimer = null;
 let expiryTimer = null;
@@ -25,13 +37,11 @@ function setStatus(message, state = "ready") {
 }
 
 function controls() {
-  el("code-submit").disabled = busy || retryUntil > Date.now();
-  el("auth-form").querySelector('ui-button[type="submit"]').disabled = busy;
-  el("entry-retry").disabled = busy;
-  el("entry-logout").disabled = busy;
-  stop.disabled = !session.identity;
-  if (session.identity) stop.removeAttribute("reason");
-  else stop.setAttribute("reason", "로그인 후 사용할 수 있습니다.");
+  // The scope owns `disabled` while it runs (setDisabled records the wanted state), so nothing opens mid-run.
+  scope.setDisabled(el("code-submit"), scope.busy || retryUntil > Date.now());
+  scope.setDisabled(el("auth-form").querySelector('ui-button[type="submit"]'), scope.busy);
+  scope.setDisabled(el("entry-retry"), scope.busy);
+  scope.setDisabled(el("entry-logout"), scope.busy);
 }
 
 function clearDestinations() {
@@ -47,11 +57,10 @@ function renderIdentity() {
   el("auth-drawer").hidden = Boolean(identity);
   el("dev-connect-row").hidden = true;
   document.querySelector(".entry-heading h1").textContent = identity ? "작업을 선택하세요" : "로봇에 연결";
-  document.querySelector(".entry-heading p").textContent = identity ? "로그인이 확인되었습니다. 필요한 작업 화면을 열 수 있습니다." : "로그인한 뒤 수행할 작업을 선택하세요.";
-  if (!identity) {
-    el("entry-stop-notice").hidden = true;
-    el("entry-stop-notice").textContent = "";
-  }
+  // 로그인 전 설명은 로그인 창의 한 문단(8자·10분·한 번)뿐이다. 머리 문단은 로그인 뒤에만 쓴다.
+  const lead = document.querySelector(".entry-heading p");
+  lead.hidden = !identity;
+  lead.textContent = identity ? "로그인이 확인되었습니다. 필요한 작업 화면을 열 수 있습니다." : "";
   if (identity) {
     const role = enumLabel(ROLE_LABEL, identity.role, "역할 정보 없음");
     el("entry-role").textContent = role;
@@ -76,14 +85,17 @@ function renderIdentity() {
 }
 
 async function loadDestinations() {
-  if (busy || !session.authenticated) return;
+  if (scope.busy || !session.authenticated) return;
+  await scope.run(loadAll);
+  controls();
+}
+
+async function loadAll() {
   const attempt = ++generation;
   let identityConfirmed = false;
-  busy = true;
   clearDestinations();
   setStatus("로그인과 작업 화면을 확인하고 있습니다.", "pending");
   el("entry-retry").hidden = true;
-  controls();
   try {
     const identity = await api("/api/v1/auth/whoami", {signal: AbortSignal.timeout(REQUEST_MS)});
     if (attempt !== generation) return;
@@ -131,36 +143,12 @@ async function loadDestinations() {
       el("entry-retry").hidden = false;
     }
     renderIdentity();
-  } finally {
-    busy = false;
-    controls();
   }
 }
-
-function showAuthTab(which) {
-  const code = which === "code";
-  for (const [id, selected] of [["auth-tab-code", code], ["auth-tab-token", !code]]) {
-    el(id).setAttribute("aria-selected", String(selected));
-    el(id).tabIndex = selected ? 0 : -1;
-  }
-  el("code-form").hidden = !code;
-  el("auth-form").hidden = code;
-  el(code ? "code-input" : "token-input").focus();
-}
-
-for (const [id, which] of [["auth-tab-code", "code"], ["auth-tab-token", "token"]]) {
-  el(id).addEventListener("click", () => showAuthTab(which));
-  el(id).addEventListener("keydown", event => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    showAuthTab(event.key === "Home" ? "code" : event.key === "End" ? "token" : which === "code" ? "token" : "code");
-  });
-}
-el("auth-tab-token").tabIndex = -1;
 
 el("auth-form").addEventListener("submit", async event => {
   event.preventDefault();
-  if (busy) return;
+  if (scope.busy) return;
   const token = el("token-input").value.trim();
   if (!token) return;
   rememberToken(token);
@@ -172,26 +160,28 @@ el("auth-form").addEventListener("submit", async event => {
 
 el("code-form").addEventListener("submit", async event => {
   event.preventDefault();
-  if (busy || retryUntil > Date.now()) return;
+  if (scope.busy || retryUntil > Date.now()) return;
   const code = normalizeLoginCode(el("code-input").value);
-  if (code.error) { el("code-message").textContent = code.error; return; }
-  busy = true;
-  controls();
+  if (code.error) { codeError(code.error); return; }
   el("code-message").textContent = "코드를 확인하고 있습니다.";
-  try {
-    await pairWithCode(code.value, {label: el("code-label").value.trim(), persist: el("code-remember").checked,
-      signal: AbortSignal.timeout(REQUEST_MS)});
-    el("code-input").value = "";
-    el("code-message").textContent = "";
-  } catch (error) {
-    el("code-message").textContent = ["TimeoutError", "AbortError"].includes(error.name)
-      ? "코드 확인 시간이 지났습니다. 연결을 확인하고 다시 시도하세요." : error.message;
-    retryUntil = Date.now() + (error.retryAfter || 0) * 1000;
-    clearTimeout(retryTimer);
-    retryTimer = setTimeout(controls, Math.max(0, retryUntil - Date.now()));
-    return;
-  } finally { busy = false; controls(); }
-  await loadDestinations();
+  const ok = await scope.run(async () => {
+    try {
+      await pairWithCode(code.value, {label: el("code-label").value.trim(), persist: el("code-remember").checked,
+        signal: AbortSignal.timeout(REQUEST_MS)});
+      el("code-input").value = "";
+      el("code-message").textContent = "";
+      return true;
+    } catch (error) {
+      codeError(["TimeoutError", "AbortError"].includes(error.name)
+        ? "코드 확인 시간이 지났습니다. 연결을 확인하고 다시 시도하세요." : error.message);
+      retryUntil = Date.now() + (error.retryAfter || 0) * 1000;
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(controls, Math.max(0, retryUntil - Date.now()));
+      return false;
+    }
+  });
+  controls();
+  if (ok) await loadDestinations();
 });
 
 el("entry-retry").addEventListener("click", loadDestinations);
@@ -206,67 +196,67 @@ async function revealDevEntry() {
   el("dev-connect-row").hidden = false;
 }
 el("dev-connect").addEventListener("click", async () => {
-  if (busy || retryUntil > Date.now()) return;
-  busy = true;
-  controls();
+  if (scope.busy || retryUntil > Date.now()) return;
   el("dev-message").textContent = "개발 연결을 확인하고 있습니다.";
-  try {
-    const identity = await developmentSession({signal: AbortSignal.timeout(REQUEST_MS)});
-    el("dev-message").textContent = "";
-    if (identity?.role) el("code-message").textContent = "";
-  } catch (error) {
-    el("dev-message").textContent = ["TimeoutError", "AbortError"].includes(error.name)
-      ? "개발 연결 확인 시간이 지났습니다. 연결을 확인하고 다시 시도하세요." : error.message;
-    retryUntil = Date.now() + (error.retryAfter || 0) * 1000;
-    clearTimeout(retryTimer);
-    retryTimer = setTimeout(controls, Math.max(0, retryUntil - Date.now()));
-    return;
-  } finally { busy = false; controls(); }
-  await loadDestinations();
+  const ok = await scope.run(async () => {
+    try {
+      const identity = await developmentSession({signal: AbortSignal.timeout(REQUEST_MS)});
+      el("dev-message").textContent = "";
+      if (identity?.role) el("code-message").textContent = "";
+      return true;
+    } catch (error) {
+      el("dev-message").textContent = ["TimeoutError", "AbortError"].includes(error.name)
+        ? "개발 연결 확인 시간이 지났습니다. 연결을 확인하고 다시 시도하세요." : error.message;
+      retryUntil = Date.now() + (error.retryAfter || 0) * 1000;
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(controls, Math.max(0, retryUntil - Date.now()));
+      return false;
+    }
+  });
+  controls();
+  if (ok) await loadDestinations();
 });
 
 el("entry-logout").addEventListener("click", async () => {
-  if (busy) return;
-  busy = true;
+  if (scope.busy) return;
+  await scope.run(async () => {
+    try {
+      const deleted = await logout({signal: AbortSignal.timeout(REQUEST_MS)});
+      generation++;
+      clearDestinations();
+      el("entry-retry").hidden = true;
+      setStatus(deleted ? "로그아웃했습니다. 다시 로그인할 수 있습니다." : "이 브라우저에서 접속 키를 지웠습니다. 로봇의 키는 유지됩니다.");
+      el("code-message").textContent = "";
+      el("entry-stop-notice").hidden = true; stopControl.note("", "");  // a stale stop answer does not outlive the login
+      renderIdentity();
+      devEntryProbed = false;
+      revealDevEntry();
+    } catch (error) {
+      setStatus(`로그아웃하지 못했습니다. 연결을 확인하고 다시 시도하세요: ${error.message}`, "error");
+    }
+  });
   controls();
-  try {
-    const deleted = await logout({signal: AbortSignal.timeout(REQUEST_MS)});
-    generation++;
-    clearDestinations();
-    el("entry-retry").hidden = true;
-    setStatus(deleted ? "로그아웃했습니다. 다시 로그인할 수 있습니다." : "이 브라우저에서 접속 키를 지웠습니다. 로봇의 키는 유지됩니다.");
-    el("code-message").textContent = "";
-    renderIdentity();
-    devEntryProbed = false;
-    revealDevEntry();
-  } catch (error) {
-    setStatus(`로그아웃하지 못했습니다. 연결을 확인하고 다시 시도하세요: ${error.message}`, "error");
-  } finally { busy = false; controls(); }
 });
 
-stop.addEventListener("click", async () => {
-  if (!session.identity) return;
-  const attempt = generation;
-  const notice = el("entry-stop-notice");
-  notice.hidden = false;
-  notice.setAttribute("state", "pending");
-  notice.textContent = "비상 정지를 요청하고 있습니다.";
-  try {
-    await api("/api/v1/safety/stop", {method: "POST", signal: AbortSignal.timeout(REQUEST_MS)});
-    if (attempt !== generation) return;
-    let readback = null;
-    try { readback = await api("/api/v1/robot/state", {signal: AbortSignal.timeout(REQUEST_MS)}); } catch (_error) { /* Acknowledgement is distinct from state readback. */ }
-    if (attempt !== generation) return;
-    notice.setAttribute("state", "warning");
-    notice.textContent = readback?.safety?.estop === true || readback?.mode === "SAFE_STOP"
-      ? "비상 정지 요청 접수 · 로봇 정지 상태 확인. 물리 정지는 별도로 확인하세요."
-      : "비상 정지 요청 접수 · 상태 확인 불가. 실제 정지를 확인하세요.";
-  } catch (error) {
-    if (attempt !== generation) return;
-    notice.setAttribute("state", "error");
-    notice.textContent = `비상 정지 실패: ${error.message}. 실제 정지를 확인하세요.`;
+// D-270/C9: stop is for every role, also before login (a viewer's stop is accepted); a refusal is shown as text.
+let stopAttempt = 0;
+const stopControl = createStopControl({button: stop, status: el("entry-stop-notice"), timeoutMs: REQUEST_MS, send: async signal => {
+  const attempt = ++stopAttempt;
+  el("entry-stop-notice").hidden = false;
+  try { await api("/api/v1/safety/stop", {method: "POST", signal}); }
+  catch (error) {
+    if (error.name === "AbortError" || error.name === "TimeoutError") throw error;
+    return {ok: false, status: error.status ?? (session.authenticated ? 0 : 403)};  // no credentials yet: the text says to log in
   }
-});
+  // The request was accepted; whether the robot stopped is the readback, shown only for the newest press.
+  api("/api/v1/robot/state", {signal: AbortSignal.timeout(REQUEST_MS)}).catch(() => null).then(readback => {
+    if (attempt !== stopAttempt) return;
+    stopControl.note(readback?.safety?.estop === true || readback?.mode === "SAFE_STOP"
+      ? "비상 정지 요청 접수 · 로봇 정지 상태 확인. 물리 정지는 별도로 확인하세요."
+      : "비상 정지 요청 접수 · 상태 확인 불가. 실제 정지를 확인하세요.", "warning");
+  });
+  return {ok: true, status: 200};
+}});
 
 window.addEventListener("pagehide", () => { generation++; clearTimeout(retryTimer); clearTimeout(expiryTimer); });
 await restoreAccount();

@@ -147,7 +147,7 @@ def teleop(page, direction: str, seconds: float, stop_timeout_s: float = 3.0) ->
 
 
 def screenshot(page, out: Path, view: str = "operate") -> Path:
-    page.locator(f"#view-{view}").click()
+    page.locator(f"label:has(#view-{view})").click()   # the view switch is a choice group: click its chip
     page.wait_for_timeout(300)
     out.parent.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(out), full_page=True)

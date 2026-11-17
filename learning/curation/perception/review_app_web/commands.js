@@ -1,10 +1,28 @@
-import {openLiveDialog} from '/common/ui.js';
+import {openLiveDialog,actionIcon} from '/common/ui.js';
 
 const trigger=document.createElement('ui-button');
 trigger.id='review-command-open';trigger.setAttribute('kind','quiet');
 trigger.setAttribute('aria-keyshortcuts','Control+K Meta+K');
-trigger.textContent='기능 검색 · Ctrl+K';
-(document.querySelector('.review-flow')||document.querySelector('main')).append(trigger);
+
+trigger.setAttribute('aria-label','기능 검색 · Ctrl+K');trigger.setAttribute('data-ui-tooltip','기능 검색 · Ctrl+K');trigger.textContent='검색';actionIcon(trigger,'search');
+// Icon-only only on a wide mouse surface (rule 10); narrower or touch keeps the label beside the icon.
+const wide=matchMedia('(width >= 64rem) and (hover: hover) and (pointer: fine)');
+const iconControls=[trigger,...document.querySelectorAll('ui-topbar [data-icon-only], .pixel-frame-controls [data-icon-only]')];
+for(const control of iconControls)if(!control.querySelector('.ui-icon-label')){
+  const label=document.createElement('span');label.className='ui-icon-label';
+  label.textContent=control.dataset.themeCycle!==undefined?'테마':control.getAttribute('aria-label');control.append(label);
+}
+const sync=()=>{for(const control of iconControls)control.toggleAttribute('data-icon-only',wide.matches);};sync();wide.onchange=sync;
+// Header icon, never a full-width page button; the pages without a Learning header keep the old seat.
+const entry=document.querySelector('ui-topbar [data-learning-account-entry]');
+if(entry)entry.before(trigger);else(document.querySelector('.review-flow')||document.querySelector('main')).append(trigger);
+// Under 64rem the header stays one row (app, account, theme): search moves to the end of the path bar instead.
+const topbar=document.querySelector('ui-topbar'),pathbar=document.querySelector('.ui-pathbar');
+if(topbar&&pathbar){
+  const narrow=matchMedia('(width < 64rem)');
+  const place=()=>{if(narrow.matches)pathbar.append(trigger);else if(entry)entry.before(trigger);else topbar.append(trigger);};
+  place();narrow.onchange=place;
+}
 const dialog=document.createElement('dialog');
 dialog.id='review-commands';dialog.className='review-commands';dialog.setAttribute('aria-label','기능 검색');
 dialog.innerHTML='<h2>기능 검색</h2><label class="ui-field-label">기능 이름 <input class="ui-field" id="review-command-query" aria-label="기능 검색어" type="text" autocomplete="off"></label><p class="quiet">이름 검색 · ↑/↓ 선택 · Enter 실행 · Esc 닫기. 입력은 선택 후 기존 필드에서 수정합니다.</p><p id="review-command-count" role="status"></p><ul id="review-command-results" aria-label="검색된 기능"></ul>';
@@ -91,3 +109,4 @@ document.addEventListener('keydown',event=>{
   const el=binding[2].map(id=>document.getElementById(id)).find(node=>node&&reachable(node));
   if(el){event.preventDefault();event.stopImmediatePropagation();if(!disabled(el)){document.dispatchEvent(new CustomEvent('review-tool-open',{detail:el}));el.click();}}
 },true);
+

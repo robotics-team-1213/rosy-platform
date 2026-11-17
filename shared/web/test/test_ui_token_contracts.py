@@ -674,3 +674,18 @@ def test_every_signal_lamp_paints_with_the_signal_tokens():
         for path in (repo / root).rglob("*"):
             if path.suffix in (".css", ".js") and "test" not in path.parts and path not in lamp_files:
                 assert not re.search(r"--signal-(go|caution|stop)", path.read_text(encoding="utf-8", errors="ignore")), path
+
+
+def test_selection_mark_clears_3_to_1_on_the_working_surfaces_of_both_themes():
+    """D-1030: --selection is an alias of --series-secondary; the edge must read on the surfaces a row sits on.
+    Not on ground-card and above (dark 2.85): the mark is never placed on those layers."""
+    from test_palette_gates import contrast, resolve
+
+    match = re.search(r"--selection:\s*var\(--([a-z0-9-]+)\)\s*;", tokens_text())
+    assert match, "tokens.css에 --selection 별칭이 없다"
+    for theme in ("dark", "light"):
+        palette = resolve(theme)
+        weak = {surface: round(contrast(palette[match.group(1)], palette[surface]), 2)
+                for surface in ("ground", "ground-deep", "ground-raise", "ground-soft")
+                if contrast(palette[match.group(1)], palette[surface]) < 3.0}
+        assert not weak, f"{theme}: --selection {match.group(1)} 대비 3:1 미만: {weak}"

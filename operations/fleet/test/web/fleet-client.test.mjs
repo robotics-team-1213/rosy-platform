@@ -109,3 +109,31 @@ for (const failure of [Object.freeze(new TypeError('Failed to fetch')),
     assert.equal(sent, 1);
   });
 }
+
+test('401 preserves detail/code and top-level {code, message} errors expose code and message', async () => {
+  const {client: c401} = clientFor(401, {detail: {code: 'SESSION_EXPIRED', detail: 're-login'}});
+  await assert.rejects(c401('/api/fleet/state'), error =>
+    error.status === 401
+    && error.code === 'SESSION_EXPIRED'
+    && error.detail === 're-login'
+    && error.message === '관제 인증이 필요합니다 — 로그인하거나 고급 접속을 확인하세요');
+
+  const {client: c422} = clientFor(422, {code: 'INVALID_SETTING', message: 'out of range'});
+  await assert.rejects(c422('/api/fleet/admin/db-settings', {method: 'PUT'}), error =>
+    error.status === 422
+    && error.code === 'INVALID_SETTING'
+    && error.message === 'out of range');
+
+  const {client: c422List} = clientFor(422, {detail: [{loc: ['body', 'workcell_id'], msg: 'Field required'}]});
+  await assert.rejects(c422List('/api/fleet/arm-transfers/jobs', {method: 'POST'}), error =>
+    error.status === 422
+    && error.message === 'workcell_id: Field required'
+    && Array.isArray(error.detail)
+    && error.detail[0].msg === 'Field required');
+
+  const {client: c409Str} = clientFor(409, {detail: 'ARM_BUSY_CONFLICT'});
+  await assert.rejects(c409Str('/api/fleet/arm-transfers/jobs', {method: 'POST'}), error =>
+    error.status === 409
+    && error.message === 'ARM_BUSY_CONFLICT'
+    && error.detail === 'ARM_BUSY_CONFLICT');
+});

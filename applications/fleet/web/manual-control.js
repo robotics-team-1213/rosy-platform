@@ -1,4 +1,5 @@
 import { createHoldTicker } from "/common/hold-ticker.js";
+import { statusTag } from "/common/status-tag.js";
 import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { robotPoseText, sitePoseText } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
@@ -35,12 +36,11 @@ export function speedText({linear, angular, set, sealed}) {
 
 const evidenceWord = (robot, key) => EVIDENCE_LABEL[robot.state?.evidence?.[key]?.evidence] || EVIDENCE_LABEL.unavailable;
 
-export function createManualControl({scope, view, call, namedReason, confirmedAction, refreshState}) {
+export function createManualControl({scope, view, call, namedReason, confirmedAction, refreshState, onStatusChange = null}) {
   const root = document.createElement("section");
   root.className = "manual-control";
   root.dataset.manualControl = "";
   root.hidden = true;
-  const heading = document.createElement("ui-head");
   // Not in the live region: its age text changes every second.
   const pose = document.createElement("p");
   pose.dataset.manualPose = "";
@@ -79,14 +79,22 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     button.textContent = label;
     button.dataset.manualDirection = direction;
     actions.append(button);
-    return {button, linear, angular};
+    return {direction, button, linear, angular};
   });
-  root.append(heading, pose, reason, actions);
+  // One lock + one cause line for the whole pad; the per-button "위 사유" captions stay as the `reason` attribute
+  // (tests and aria-describedby read it) but are not drawn six times (concept rule 18, CSS .manual-control).
+  const lockMark = statusTag("locked");
+  lockMark.className = "manual-lock";
+  lockMark.hidden = true;
+  root.append(pose, reason, actions);
+  reason.before(lockMark);
   let active = null, pending = null, stopping = null, cancelTimeout = null;
   let failure = "", notice = "", modePending = false, speedPending = false;
+  let lastUpdatedRobotId = null, lastStatusSig = null;
+  const activeRobotId = () => (typeof view.robotSelection?.get === "function" ? view.robotSelection.get() : null);
 
-  function blocked(requireManual = true) {
-    const robot = view.robots.find(row => row.robot_id === view.focusRobot);
+  function blocked(requireManual = true, targetRobotId = activeRobotId()) {
+    const robot = (view.robots || []).find(row => row.robot_id === targetRobotId);
     if (namedReason()) return namedReason();
     if (!scope.capture().current() || document.hidden) return "화면을 다시 열고 상태를 확인하세요.";
     if (view.stateUnavailable) return "관제 상태를 확인할 수 없습니다.";
@@ -118,7 +126,7 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
   // The operator raises or lowers the robot's manual speed here; CORE refuses anything above the signed ceiling.
   for (const {button, sign} of adjust) {
     scope.listen(button, "click", async () => {
-      const robotId = view.focusRobot, robot = view.robots.find(row => row.robot_id === robotId);
+      const robotId = activeRobotId(), robot = view.robots.find(row => row.robot_id === robotId);
       const s = manualSpeeds(robot?.state);
       if (!s.set || !s.max || blocked(false)) return;
       const next = (key) => num(Math.min(s.max[key], Math.max(MIN_SET[key], s.set[key] + sign * STEP[key])));
@@ -133,11 +141,11 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     });
   }
 
-  scope.listen(mode, "click", async () => {
-    const robotId = view.focusRobot, generation = view.dispatchControl?.generation;
-    await confirmedAction.run({message: `${robotId}을 수동 모드로 전환할까요?`, opener: mode,
-      eligible: () => view.focusRobot === robotId && generation === view.dispatchControl?.generation
-        && !blocked(false) && view.robots.find(row => row.robot_id === robotId)?.state?.mode !== "MANUAL",
+  async function requestManualMode(opener = mode) {
+    const robotId = activeRobotId(), generation = view.dispatchControl?.generation;
+    await confirmedAction.run({message: `${robotId}을 수동 모드로 전환할까요?`, opener,
+      eligible: () => activeRobotId() === robotId && generation === view.dispatchControl?.generation
+        && !blocked(false) && (view.robots || []).find(row => row.robot_id === robotId)?.state?.mode !== "MANUAL",
       request: async owner => {
         modePending = true; failure = ""; update();
         try {
@@ -148,7 +156,14 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
           await refreshState();
         } finally { modePending = false; update(); }
       }, onError: error => { failure = `수동 모드 전환 실패: ${error.message}`; update(); }});
-  });
+  }
+
+  function enterManual(target) {
+    const opener = target?.currentTarget || (typeof target?.focus === "function" ? target : mode);
+    return requestManualMode(opener);
+  }
+
+  scope.listen(mode, "click", () => requestManualMode(mode));
 
   function send(robotId, linear, angular) {
     return call("/api/fleet/do", {method: "POST", keepalive: linear === 0 && angular === 0,
@@ -166,7 +181,7 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     immediate.catch(() => null);
     stopping = terminal;
     terminal.catch(error => { failure = `정지 명령 전달 실패 · 비상 정지와 연결을 확인하세요: ${error.message}`; reason.textContent = failure; })
-      .finally(() => { if (stopping === terminal) stopping = null; });
+      .finally(() => { if (stopping === terminal) { stopping = null; onStatusChange?.(); } });
   }
 
   function stop() {
@@ -175,37 +190,62 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     active = null;
     if (view.manualDriveRobot === owner?.robotId) view.manualDriveRobot = null;
     if (!owner) return;
-    owner.button.setAttribute("aria-pressed", "false");
+    owner.releaseAbort?.abort();
+    if (typeof owner.triggerEl?.setAttribute === "function") owner.triggerEl.setAttribute("aria-pressed", "false");
+    if (owner.button && owner.button !== owner.triggerEl) owner.button.setAttribute("aria-pressed", "false");
+    owner.onPressChange?.(false, owner.direction);
     ticker.stop(owner);
     reason.textContent = "정지 명령을 보냈습니다. 로봇의 정지를 확인하세요.";
+    update();
+    onStatusChange?.();
   }
 
   async function tick() {
     if (!active) return;
-    if (blocked() || active.robotId !== view.focusRobot) { stop(); return; }
+    if (blocked() || active.robotId !== activeRobotId()) { stop(); return; }
     if (pending) return;
     const request = send(active.robotId, active.linear, active.angular);
     pending = request;
     try { await request; }
-    catch (error) { stop(); failure = `조종 명령 실패: ${error.message}`; reason.textContent = failure; }
+    catch (error) { stop(); failure = `조종 명령 실패: ${error.message}`; reason.textContent = failure; onStatusChange?.(); }
     finally { if (pending === request) pending = null; }
   }
   const ticker = createHoldTicker({intervalMs: 100, onTick: tick, onZero: terminalZero});
 
-  function start(command, event) {
-    event.preventDefault();
+  function start(command, event, options = {}) {
+    event?.preventDefault?.();
     if (active || blocked()) return;
     failure = ""; notice = "";
-    const speeds = manualSpeeds(view.robots.find(row => row.robot_id === view.focusRobot)?.state);
+    const robotId = activeRobotId();
+    const speeds = manualSpeeds((view.robots || []).find(row => row.robot_id === robotId)?.state);
+    const triggerEl = options.button || event?.currentTarget || command.button;
+    const onPressChange = typeof options.onPressChange === "function" ? options.onPressChange : null;
+    let releaseAbort = null;
+    if (triggerEl && triggerEl !== command.button && typeof triggerEl.addEventListener === "function" && typeof AbortController === "function") {
+      releaseAbort = new AbortController();
+      for (const type of ["pointerup", "pointercancel", "lostpointercapture", "blur"]) {
+        triggerEl.addEventListener(type, stop, {signal: releaseAbort.signal});
+      }
+    }
     active = {...command, linear: command.linear * speeds.linear, angular: command.angular * speeds.angular,
-      robotId: view.focusRobot, generation: view.dispatchControl.generation};
+      robotId, generation: view.dispatchControl.generation, triggerEl, onPressChange, releaseAbort};
     view.manualDriveRobot = active.robotId;  // motion-source.js: this console is the driver
-    command.button.setAttribute("aria-pressed", "true");
-    if (event.pointerId != null) {
-      try { command.button.setPointerCapture(event.pointerId); } catch (_error) { /* Window release also stops. */ }
+    if (typeof triggerEl?.setAttribute === "function") triggerEl.setAttribute("aria-pressed", "true");
+    onPressChange?.(true, command.direction);
+    if (event?.pointerId != null && typeof triggerEl?.setPointerCapture === "function") {
+      try { triggerEl.setPointerCapture(event.pointerId); } catch (_error) { /* Window release also stops. */ }
     }
     cancelTimeout = scope.timeout(() => { stop(); notice = "2초 한도로 멈췄습니다. 계속하려면 다시 누르세요."; }, 2000);
     ticker.start();
+    update();
+    onStatusChange?.();
+  }
+
+  function startDirection(direction, event, options) {
+    const command = buttons.find(item => item.direction === direction);
+    if (!command) return false;
+    start(command, event, options);
+    return Boolean(active);
   }
 
   for (const command of buttons) {
@@ -221,18 +261,56 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
   scope.listen(window, "blur", stop);
   scope.listen(document, "visibilitychange", () => { if (document.hidden) stop(); });
   scope.onDispose(stop);
+  function buildPoseText(id, focused) {
+    const robot = view.stateUnavailable ? null : focused;
+    const guideRow = view.stateUnavailable ? null : (view.guide?.robots || []).find(row => row.robot_id === id);
+    const age = robot && Number.isFinite(robot.state_age_s)
+      ? `상태 ${Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000)}초 전` : "상태 시각 없음";
+    return robot
+      ? [sitePoseText(guideRow) || `위치 ${robotPoseText(robot.state, robot.localization)}`, `위치 관측 ${evidenceWord(robot, "pose")}`, age].join(" · ")
+      : (id ? "상태 확인 불가" : "");
+  }
+
+  function getStatus(robotId = activeRobotId()) {
+    const id = robotId ?? activeRobotId();
+    const focused = (view.robots || []).find(row => row.robot_id === id);
+    const isManual = focused?.state?.mode === "MANUAL";
+    const enterManualWhy = blocked(false, id);
+    const blockReason = blocked(true, id);
+    const shown = manualSpeeds(focused?.state);
+    const isActive = Boolean(id) && active?.robotId === id;
+    return {
+      robotId: id,
+      isManual,
+      canEnterManual: !isManual && !enterManualWhy,
+      canDrive: !blockReason,
+      blockReason,
+      enterManualWhy,
+      speedText: speedText(shown),
+      poseText: buildPoseText(id, focused),
+      notice,
+      failure,
+      activeDirection: isActive ? active.direction : null,
+      isActive,
+    };
+  }
+
   function update() {
-    if (active && (active.robotId !== view.focusRobot || blocked())) stop();
-    root.hidden = !view.focusRobot;
-    heading.textContent = `${view.robotNames?.[view.focusRobot] || view.focusRobot || "로봇"} 수동 조종`;
-    mode.hidden = view.robots.find(row => row.robot_id === view.focusRobot)?.state?.mode === "MANUAL";
+    const robotId = activeRobotId();
+    if (!robotId && !active && !stopping && root.hidden && lastUpdatedRobotId === null) return;
+    if (active && (active.robotId !== robotId || blocked())) stop();
+    root.hidden = !robotId;
+    root.setAttribute("aria-label", `${view.robotNames?.[robotId] || robotId || "로봇"} 수동 조종`);
+    const focused = (view.robots || []).find(row => row.robot_id === robotId);
+    const isManual = focused?.state?.mode === "MANUAL";
+    mode.hidden = isManual;
     const modeWhy = blocked(false);
     mode.disabled = Boolean(modeWhy);
     // One cause, said once in the status line above (DESIGN: 한 원인은 한 번 말한다).
     if (modeWhy) mode.setAttribute("reason", "위 사유");
     else mode.removeAttribute("reason");
     const why = blocked();
-    const focused = view.robots.find(row => row.robot_id === view.focusRobot);
+    lockMark.hidden = !why;
     const shown = manualSpeeds(focused?.state);
     for (const {button} of adjust) {
       button.disabled = Boolean(modeWhy) || speedPending || !shown.set || !shown.max;
@@ -243,13 +321,23 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
       if (why) button.setAttribute("reason", "위 사유");
       else button.removeAttribute("reason");
     }
-    const robot = view.robots.find(row => row.robot_id === view.focusRobot);
-    const guideRow = (view.guide?.robots || []).find(row => row.robot_id === view.focusRobot);
-    const age = robot && Number.isFinite(robot.state_age_s)
-      ? `상태 ${Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000)}초 전` : "상태 시각 없음";
-    pose.textContent = robot ? [sitePoseText(guideRow) || `위치 ${robotPoseText(robot.state, robot.localization)}`, `위치 관측 ${evidenceWord(robot, "pose")}`, age].join(" · ") : "";
-    if (!active && !stopping) reason.textContent = [failure, why].filter(Boolean).join(" · ") || notice || `누르는 동안만 이동 · 최대 2초 · ${speedText(shown)}`;
+    pose.textContent = buildPoseText(robotId, focused);
+    const speed = speedText(shown);
+    if (!active && !stopping) reason.textContent = [failure, why].filter(Boolean).join(" · ") || notice || `누르는 동안만 이동 · 최대 2초 · ${speed}`;
+    const statusSig = JSON.stringify([
+      robotId || null, isManual, modeWhy, why, speed,
+      Boolean(active), active?.direction || null, Boolean(stopping),
+      modePending, speedPending, failure, notice,
+    ]);
+    lastUpdatedRobotId = robotId ?? null;
+    if (statusSig !== lastStatusSig) {
+      lastStatusSig = statusSig;
+      onStatusChange?.();
+    }
   }
-  scope.interval(update, 100);
-  return {root, update, stop};
+  scope.interval(() => {
+    if (!activeRobotId() && !active && !stopping) return;
+    update();
+  }, 1000);
+  return {root, update, stop, getStatus, enterManual, startDirection};
 }

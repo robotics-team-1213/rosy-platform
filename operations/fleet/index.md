@@ -106,7 +106,7 @@
 ## 최근 기록
 
 - 2026-11-16 · uncommitted · fix(fleet): auto-track-calibration 서비스 principal 보정·지도 경로 최소 권한 허용
-- 2026-11-14 · uncommitted · 콘솔 현장 지도 목표의 프레임 변환 (D-1003)
-- 2026-11-14 · uncommitted · 충전 복귀 이동 (D-1029)
-- 2026-11-14 · uncommitted · 앞으로/뒤로 한 걸음 경로
-- 2026-11-11 · uncommitted · 컨테이너 태그 실제 크기 인쇄물 (D-996 6)
+- 2026-11-15 · uncommitted · ui(fleet): E 위치 상태 Node·브라우저 시험 추가(C19)
+- 2026-11-15 · uncommitted · ui(fleet): H Pinky 앞 카메라 타일 Node·브라우저 시험 추가
+- 2026-11-15 · uncommitted · ui(fleet): B3 아홉 스킬 상태의 로봇 행·상세·3D 시험과 robot-detail Node 시험
+- 2026-11-15 · uncommitted · ui(fleet): B2 작업 큐 팔 제안 행과 제안 패널 시험(잠긴 자기 승인·근거 줄)

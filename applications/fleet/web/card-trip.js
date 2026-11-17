@@ -6,10 +6,12 @@
 // `운행 취소` stays on roster.js: it is a stop, open to every operator.
 import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason} from "/console/assets/site-map-model.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
+import { POSE_REFUSALS, enqueuePoseStart } from "/console/assets/localization-view.js";
 import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
 import { ruleJudgeSection } from "./site-rules-judge.js";
+import {getAnnouncer} from "/common/announcer.js";
 
 export { endedTripText, openTrip };
 
@@ -66,8 +68,25 @@ function line(className, text) {
   return node;
 }
 
+/** Pure: what the open form draws right now — roster-presentation compares this on each paint to decide a
+ * redraw, so it is computed from the live form, never stored, and covers every shown value: busy, both
+ * plans (id, expiry crossing, start check), the picks, the rule judge and the error notes. '' when closed. */
+export function cardTripSig(form, now = Date.now() / 1000) {
+  const planKey = (plan) => plan && [plan.plan_id ?? null, plan.expires_at ?? null,
+    plan.start_check?.code ?? null, Boolean(plan.expires_at && now > plan.expires_at)];
+  return form ? JSON.stringify([form.robotId, form.kind || "route", Boolean(form.busy),
+    planKey(form.plan), planKey(form.lapPlan), form.to || "", form.start || "", form.lapStart || "",
+    form.via || "", form.note || "",
+    form.rule && { kind: form.rule.kind, values: form.rule.values, answer: form.rule.answer ?? null,
+      note: form.rule.note ?? null, busy: Boolean(form.rule.busy), draft: Boolean(form.rule.draft) }]) : "";
+}
+
 export function createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason = () => "" }) {
-  let form = null;  // { robotId, to, start, plan, busy, note }: one form open at a time
+  let form = null;  // { robotId, kind, to, start, lapStart, via, plan, lapPlan, busy, note, rule }: one form at a time
+  // D-1117 — 경로 계산 거절은 이 양식에만 보이는 실패다(log를 거치지 않는다). 낭독은 공용 방송기 한 곳이 담당한다.
+  const noteAnnounce = (text) => { if (text && globalThis.document?.body) getAnnouncer().announce(text, {urgent: true}); };
+  // The panel computes its redraw signature from the live form (cardTripSig), so only the reference is kept.
+  function syncTripForm() { view.cardTripForm = form; }
   const gate = (robot) => tripReason(robot, { view, operator: isOperator(), named: namedReason() });
   const ready = (robot) => gate(robot) || (view.guideUnavailable ? "현장 지도 위치 확인 불가"
     : tripPoseReason(view.guide, robot?.robot_id, view.activeSiteMap, robotMapPose(robot)));
@@ -96,12 +115,19 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       const trip = await work();
       life.check();
       view.trafficTrips = [...(view.trafficTrips || []).filter((row) => row.robot_id !== robotId), trip];
+      delete view.tripRefusalByRobot?.[robotId];
       log(`${robotId} ${done}`, "good");
-      if (holder === form) form = null;
+      if (holder === form) { form = null; syncTripForm(); }
     } catch (err) {
       if (err.name === "AbortError") return;
       holder.note = `운행 거절 · ${tripRefusalText(err)}`;
-      log(`${robotId} ${holder.note}`, "bad");
+      const code = err?.code || err?.detail?.code;
+      view.tripRefusalByRobot ??= {};
+      view.tripRefusalByRobot[robotId] = { code: code || "", text: holder.note };
+      if (POSE_REFUSALS.has(code)) {
+        enqueuePoseStart({ view, robotId, code, request: () => send(robotId, holder, work, done) });
+      }
+      log(`${robotId} ${holder.note}`, "bad", { code: code || undefined, status: err?.status });
     } finally {
       if (life.current()) { holder.busy = false; render(); }
     }
@@ -122,6 +148,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     button.addEventListener("click", scope.guard(() => {
       form = open ? null : { robotId: robot.robot_id, kind: "route", to: "", start: "", lapStart: "", via: "", plan: null,
         lapPlan: null, busy: false, note: null };
+      syncTripForm();
       render();
     }));
     return button;
@@ -138,6 +165,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     box.setAttribute("aria-label", `${id} 운행`);
     const kind = pick("작업 종류", value => {
       mine.kind = value;
+      syncTripForm();
       for (const panel of box.querySelectorAll(".trip-mode")) panel.hidden = panel.dataset.tripMode !== value;
     });
     kind.select.dataset.tripKind = id;
@@ -181,6 +209,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       } catch (err) {
         if (err.name === "AbortError") return;
         mine.note = `경로 계산 거절 · ${tripRefusalText(err)}`;
+        noteAnnounce(mine.note);
       } finally {
         if (life.current()) { mine.busy = false; render(); }
       }
@@ -196,7 +225,6 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     once.className = "robot-actions";
     once.append(preview, go);
     const summary = line("hint", mine.plan ? `${planSummaryText(mine.plan)} · 실행하지 않음` : "계산 전 · 실행은 하지 않습니다");
-    summary.setAttribute("role", "status");
 
     const starts = places().filter((place) => place.kind === "start");
     const start = pick("반복 출발 자리", (value) => { mine.start = value; render(); });
@@ -235,6 +263,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       } catch (err) {
         if (err.name === "AbortError") return;
         mine.note = `한 바퀴 계획 거절 · ${tripRefusalText(err)}`;
+        noteAnnounce(mine.note);
       } finally {
         if (life.current()) { mine.busy = false; render(); }
       }
@@ -251,7 +280,6 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     lapActions.append(lapPreview, lapGo);
     const lapSummary = line("hint", mine.lapPlan ? `${planSummaryText(mine.lapPlan)} · 실행하지 않음`
       : "출발 장소에 있는 로봇만 계획할 수 있습니다");
-    lapSummary.setAttribute("role", "status");
 
     box.append(kind.wrap);
     for (const [mode, children] of [["route", [to.wrap, once, summary]],
@@ -264,9 +292,9 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     const loops = loopCapacityText(view.traffic);  // D-517 3: "고리 2/3대"
     if (loops) box.append(line("hint", loops));
     if (mine.note) {
+      // D-1117 — 거절 문구는 양식 안 글자다. 낭독은 noteAnnounce가 이미 한 번 했다.
       const note = line("stuck-result", mine.note);
       note.dataset.kind = "bad";
-      note.setAttribute("role", "alert");
       box.append(note);
     }
     return box;
@@ -323,7 +351,27 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     form = {
       robotId, kind: "route", to: "", start: "", lapStart: "", via: "", plan: null, lapPlan: null, busy: false, note: null,
     };
+    syncTripForm();
   }
 
-  return { toggle, section, syncConvoy, focus, close: () => { form = null; } };
+  return { toggle, section, syncConvoy, focus, close: () => { form = null; syncTripForm(); } };
+}
+
+// D-763 6·9 — 새 작업의 이동은 로봇 카드의 운행 폼(card-trip.js) 그 자체다: 같은 계획·시작 요청, 같은 거절.
+// 이동이 종류 목록에 서는지는 서버의 종류 목록이 정한다(work-view.js showKinds, D-763 9). 꺼진 단추로 보이지 않는다.
+export function createMovePanel({ scope, el, view, getRoster, render }) {
+  scope.listen(el("work-new-move"), "click", ({currentTarget: button}) => {
+    for (const name of ["aria-pressed", "aria-expanded"]) button.setAttribute(name, String(button.getAttribute(name) !== "true"));
+    render();
+  });
+  scope.listen(el("work-move-robot"), "change", () => render());
+  return function paintMove() {
+    const pick = el("work-move-robot"), box = el("work-move-form");
+    el("work-move").hidden = el("work-new-move-item").hidden || el("work-new-move").getAttribute("aria-pressed") !== "true";
+    // 오프라인 로봇도 이유와 함께 올라야 한다 — 선택은 읽기이고, 시작 단추가 잠긴 이유를 보여준다.
+    const id = placeOptions(pick, view.robots.map(row => ({id: row.robot_id})), pick.value, row => view.robotNames?.[row.id] || row.id);
+    const robot = view.stateUnavailable ? null : view.robots.find(row => row.robot_id === id);  // as roster.js
+    el("work-move-state").textContent = robot ? cardTripLine(view, id) : "";
+    if (!el("work-move").hidden) getRoster().paintTrip(box, id);
+  };
 }

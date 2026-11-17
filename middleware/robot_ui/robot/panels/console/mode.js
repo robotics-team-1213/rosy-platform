@@ -1,5 +1,8 @@
 import { MODE_LABEL, operatorModeLabel } from "/common/core_ui_logic.js";
 import { confirmIrreversible } from "/common/ui.js";
+import { statusTag } from "/common/status-tag.js";
+import { createModeChoice } from "/assets/mode-choice.js";
+import { watchStatus } from "/assets/dom.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 // D-359 US-009 — 운용자 글은 공용 MODE_LABEL이다. 열거값은 data-mode와 title에만 남는다.
@@ -11,38 +14,26 @@ const MODES = [
 
 export function mount(root, ctx) {
   const lifetime = new AbortController(); let disposed = false; let confirming = false;
+  // 독립 조작 묶음: 이 구획 자체가 ui-panel raised 하나다(상자 안 상자 없음).
+  root.classList.add("ui-panel"); root.dataset.surface = "raised";
   const head = el("ui-head", "", "운전 모드");
   const modeStatus = el("ui-status", "", "현재 모드를 불러오는 중입니다.");
   const capabilityStatus = el("ui-status", "", "내비게이션 기능을 확인하는 중입니다.");
   const actionStatus = el("ui-status");
+  watchStatus(actionStatus);
   modeStatus.setAttribute("state", "pending"); capabilityStatus.setAttribute("state", "pending"); actionStatus.setAttribute("state", "ready");
-  actionStatus.setAttribute("role", "status");
-  actionStatus.setAttribute("aria-live", "polite");
+  // K20 buttons shared with the compat console (mode-choice.js); the current mode is aria-current, a pick asks first.
   const controls = el("ui-actions", "surface-actions mode-actions");
-  const buttons = new Map();
-  for (const mode of MODES) {
-    const button = el("ui-button", "", mode.label); button.setAttribute("kind", "segment"); button.type = "button";
-    button.setAttribute("aria-label", `${mode.label} 모드`); button.dataset.mode = mode.id; button.disabled = true;
-    button.title = mode.id;
-    controls.append(button); buttons.set(mode.id, button);
-  }
-  root.append(head, modeStatus, capabilityStatus, actionStatus, controls);
+  const modeChoice = createModeChoice({id: "console-mode", element: controls, onPick: (id, opener) => pick(id, opener)});
+  // 막힘은 주황 문장이 아니라 잠금 태그 + 사유 한 줄이다(C1). 쓸 수 있으면 아무것도 보이지 않는다.
+  const lockRow = el("div", "mode-lock"); lockRow.hidden = true;
+  lockRow.append(statusTag("locked", "내비게이션 잠김"), capabilityStatus);
+  root.append(head, modeStatus, lockRow, actionStatus, controls);
   function setStatus(target, text) { if (target.textContent !== text) target.textContent = text; }
   let current = "";
   let navigationAvailable = false;
   let pending = false;
-  function update() {
-    for (const [id, button] of buttons) {
-      button.disabled = pending || !current || id === current || (id === "NAVIGATION" && !navigationAvailable);
-      // D-359 §5.3 — 사유는 같은 조건에서 나온다. 지금 모드는 눌림(aria-pressed)이 말한다.
-      const reason = pending ? "모드 변경 처리 중"
-        : !current ? "현재 모드 확인 중"
-          : id !== current && id === "NAVIGATION" && !navigationAvailable ? "이 로봇에서 쓸 수 없음" : "";
-      if (reason) button.setAttribute("reason", reason);
-      else button.removeAttribute("reason");
-      button.setAttribute("aria-pressed", String(id === current));
-    }
-  }
+  function update() { modeChoice.show({current, pending, navigationAvailable}); }
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (state) => {
     current = state.mode || ""; setStatus(modeStatus, `현재 모드: ${operatorModeLabel(current, "확인 중")}`);
     modeStatus.setAttribute("state", current ? "ready" : "unavailable");
@@ -52,36 +43,36 @@ export function mount(root, ctx) {
     navigationAvailable = caps?.navigation?.goal_navigation === true;
     capabilityStatus.textContent = navigationAvailable
       ? "내비게이션 기능을 쓸 수 있습니다."
-      : `내비게이션을 쓸 수 없습니다.${caps?.navigation?.reason ? ` ${caps.navigation.reason}` : " 현재 실행 모드에서 막혔거나 이 로봇에 없는 기능입니다."}`;
-    capabilityStatus.setAttribute("state", navigationAvailable ? "ready" : "warning");
+      : caps?.navigation?.reason || "현재 실행 모드에서 막힘 또는 이 로봇에 없음";
+    capabilityStatus.setAttribute("state", "ready");
+    lockRow.hidden = navigationAvailable;
     update();
   }, (error) => {
     navigationAvailable = false;
     capabilityStatus.textContent = `내비게이션 기능을 확인할 수 없습니다: ${error.message}`;
     capabilityStatus.setAttribute("state", "error");
+    lockRow.hidden = false;
     update();
   });
-  for (const mode of MODES) {
-    buttons.get(mode.id).addEventListener("click", async () => {
-      const button = buttons.get(mode.id);
-      if (disposed || confirming || button.disabled || pending || (mode.id === "NAVIGATION" && !navigationAvailable)) return;
-      confirming = true; update();
-      const confirmed = await confirmIrreversible({message: mode.prompt, action: `${mode.label} 모드로 변경`, opener: button, signal: lifetime.signal});
-      confirming = false;
-      if (disposed) return;
-      update();
-      if (!confirmed || pending || !current || current === mode.id || (mode.id === "NAVIGATION" && !navigationAvailable)) return;
-      pending = true; update();
-      setStatus(actionStatus, `${mode.label} 모드 요청을 보내는 중입니다.`);
-      actionStatus.setAttribute("state", "pending");
-      // Ask any active hold-to-drive panel to send zero before changing mode.
-      window.dispatchEvent(new Event("rosy:stop-motion"));
-      try {
-        await ctx.api("/api/v1/mode", {method: "POST", body: JSON.stringify({mode: mode.id})});
-        if (!disposed) { actionStatus.setAttribute("state", "ready"); setStatus(actionStatus, `${mode.label} 모드 요청을 로봇이 받았습니다. 현재 모드는 위에서 다시 확인하세요.`); }
-      } catch (error) { if (!disposed) { actionStatus.setAttribute("state", "error"); setStatus(actionStatus, `모드 변경 실패: ${error.message}`); } }
-      finally { if (!disposed) { pending = false; update(); } }
-    });
+  async function pick(id, button) {
+    const mode = MODES.find((item) => item.id === id);
+    if (disposed || confirming || pending || !current || current === id || (id === "NAVIGATION" && !navigationAvailable)) return;
+    confirming = true; update();
+    const confirmed = await confirmIrreversible({message: mode.prompt, action: `${mode.label} 모드로 변경`, opener: button, signal: lifetime.signal});
+    confirming = false;
+    if (disposed) return;
+    update();
+    if (!confirmed || pending || !current || current === id || (id === "NAVIGATION" && !navigationAvailable)) return;
+    pending = true; update();
+    setStatus(actionStatus, `${mode.label} 모드 요청을 보내는 중입니다.`);
+    actionStatus.setAttribute("state", "pending");
+    // Ask any active hold-to-drive panel to send zero before changing mode.
+    window.dispatchEvent(new Event("rosy:stop-motion"));
+    try {
+      await ctx.api("/api/v1/mode", {method: "POST", body: JSON.stringify({mode: id})});
+      if (!disposed) { actionStatus.setAttribute("state", "ready"); setStatus(actionStatus, `${mode.label} 모드 요청을 로봇이 받았습니다. 현재 모드는 위에서 다시 확인하세요.`); }
+    } catch (error) { if (!disposed) { actionStatus.setAttribute("state", "error"); setStatus(actionStatus, `모드 변경 실패: ${error.message}`); } }
+    finally { if (!disposed) { pending = false; update(); } }
   }
   update();
   return () => { disposed = true; lifetime.abort(); stopState(); stopCapabilities(); };

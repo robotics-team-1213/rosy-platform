@@ -1,5 +1,8 @@
 import '/common/account-profile.js';
-import {createAccountSession} from '/common/account-session.js';
+import {actionIcon} from '/common/ui.js';
+import {createAccountGate} from '/common/account-gate.js';
+import {createStopControl} from '/common/stop-control.js';
+import {createConnectionNotice} from '/common/connection-notice.js';
 
 const canvas = document.getElementById("pitch");
 const ctx = canvas.getContext("2d");
@@ -35,42 +38,31 @@ let lastEvidence = null;
 let evidenceAnnouncement = "";
 let receipt = null;
 let lastMatchDetails = "";
-let canOperate = false;
-let account = null;
-let loggingOut = false;
-function showControls() {
-  halt.hidden = !canOperate;
-  halt.disabled = !canOperate;
-  // The Space shortcut only works with operate rights; say so instead of promising it.
-  document.getElementById('halt-hint').hidden = !canOperate;
-  document.getElementById('halt-denied').hidden = canOperate;
-}
-const session = createAccountSession({
-  current: () => account,
-  apply: value => {
-    account = value;
-    canOperate = value.can_operate === true;
-    document.getElementById('account-login').hidden = !value.enabled || value.authenticated;
-    document.getElementById('account-logout').hidden = !value.authenticated;
-    showControls();
+// Reasons the stop cannot be proven: a lock or a minus, then one short line (rule 13: always visible, never a tooltip).
+actionIcon(halt, 'estop');
+actionIcon(document.getElementById('halt-denied'), 'lock');
+actionIcon(document.getElementById('halt-unavailable'), 'minus');
+const lostTag = actionIcon(document.getElementById('lost'), 'warn');
+const lostText = lostTag.querySelector('.ui-icon-label');
+const login = document.getElementById('account-login');
+const logout = document.getElementById('account-logout');
+const stop = createStopControl({button: halt, status: haltStatus});
+const notice = createConnectionNotice(connection);
+// The stop never depends on this: it only chooses which hint is true for the current account state.
+const gate = createAccountGate({
+  stop,
+  onState: ({state, account}) => {
+    if (account) {
+      login.hidden = !account.enabled || account.authenticated;
+      logout.hidden = !account.authenticated;
+    }
+    document.getElementById('halt-hint').hidden = state !== 'operate';
+    document.getElementById('halt-denied').hidden = state === 'operate' || state === 'unavailable';
+    document.getElementById('halt-unavailable').hidden = state !== 'unavailable';
   },
-  changed: () => { document.body.hidden = true; window.location.reload(); },
-  failed: () => { canOperate = false; showControls(); },
-  poll: 0,
 });
-document.getElementById('account-logout').addEventListener('click', async () => {
-  loggingOut = true;
-  session.invalidate();
-  canOperate = false; showControls();
-  try {
-    await session.logout(() => { account = null; }, {signal: AbortSignal.timeout(5000)});
-  } catch (_) { haltStatus.textContent = '중앙 로그아웃 처리가 지연 중입니다.'; }
-  loggingOut = false;
-  await session.restore();
-});
-// Unlike Robot and Pilot, the board keeps probing after a failed first read.
-setInterval(() => { if (!loggingOut) session.restore(); }, 10000);
-session.restore();
+logout.addEventListener('click', () => gate.logout());
+gate.restore();
 
 function setTextIfChanged(element, value) {
   if (element.textContent !== value) element.textContent = value;
@@ -196,7 +188,14 @@ function chips(payload) {
   MARKER_IDS.forEach((id) => {
     const li = document.createElement("li");
     li.textContent = `${id} ${MARKER_LABEL[id] || ""}`.trim();
-    if (seen.has(id)) li.className = "on";
+    if (seen.has(id)) {  // the seen state is also a check mark and a word, never colour alone
+      li.className = "on";
+      actionIcon(li, "check");
+      const word = document.createElement("span");
+      word.className = "sr-only";
+      word.textContent = " 보임";
+      li.append(word);
+    }
     root.append(li);
   });
 }
@@ -205,10 +204,9 @@ function expireMatchEvidence() {
   if (!receipt || lastEvidence !== "fresh") return;
   // Advance the host age by local elapsed time without comparing host/browser clocks.
   if (receipt.age + (performance.now() - receipt.at) / 1000 <= receipt.after) return;
-  connection.dataset.evidence = "delayed";
   setFieldEvidence("delayed");
   const phase = setPhaseEvidence("delayed");
-  setTextIfChanged(connection, "지연 · 마지막 수신 경기 정보");
+  notice.set("delayed", "지연 · 마지막 수신 경기 정보");
   evidenceAnnouncement = connection.textContent;
   lastEvidence = "delayed";
   setTextIfChanged(announcement, `${phase} · ${lastMatchDetails} · ${evidenceAnnouncement}`);
@@ -225,11 +223,10 @@ async function tick() {
     const payload = await res.json();
     if (!payload.field) {
       receipt = null;
-      connection.dataset.evidence = "unavailable";
       lastEvidence = "unavailable";
       setFieldEvidence("unavailable");
       setPhaseEvidence("unavailable");
-      setTextIfChanged(connection, hasMatch ? "경기 데이터 대기 · 마지막 경기 정보" : "경기 데이터 대기 중");
+      notice.set("unavailable", hasMatch ? "경기 데이터 대기 · 마지막 경기 정보" : "경기 데이터 대기 중");
       if (hasMatch) {
         setTextIfChanged(announcement, "경기 데이터 대기 중. 표시된 경기 정보는 마지막 수신 값입니다.");
       }
@@ -245,15 +242,14 @@ async function tick() {
     if (evidence === "fresh") evidence = !timed ? "unavailable" : age > payload.stale_after_s ? "delayed" : "fresh";
     receipt = evidence === "fresh" ? {at: receivedAt, age, after: payload.stale_after_s} : null;
     setFieldEvidence(evidence);
-    connection.dataset.evidence = evidence;
     if (evidence === "fresh") {
-      setTextIfChanged(connection, "\uD638\uC2A4\uD2B8 \uC5F0\uACB0\uB428");
+      notice.set("fresh", "\uD638\uC2A4\uD2B8 \uC5F0\uACB0\uB428");
     } else if (evidence === "delayed") {
       const shown = payload.evidence === "delayed" || !timed ? payload.age_s : age;  // a receipt the host called fresh can be too old by browser time
       const since = typeof shown === "number" ? ` \u00B7 \uB9C8\uC9C0\uB9C9 \uC0DD\uC131 ${shown.toFixed(1)}\uCD08 \uC804` : "";
-      setTextIfChanged(connection, `\uC9C0\uC5F0 \u00B7 \uB9C8\uC9C0\uB9C9 \uC218\uC2E0 \uACBD\uAE30 \uC815\uBCF4${since}`);
+      notice.set("delayed", `\uC9C0\uC5F0 \u00B7 \uB9C8\uC9C0\uB9C9 \uC218\uC2E0 \uACBD\uAE30 \uC815\uBCF4${since}`);
     } else {
-      setTextIfChanged(connection, "\uC2DC\uAC01 \uC815\uBCF4 \uC5C6\uC74C \u00B7 \uB9C8\uC9C0\uB9C9 \uACBD\uAE30 \uC815\uBCF4");
+      notice.set("unavailable", "\uC2DC\uAC01 \uC815\uBCF4 \uC5C6\uC74C \u00B7 \uB9C8\uC9C0\uB9C9 \uACBD\uAE30 \uC815\uBCF4");
     }
     if (evidence !== lastEvidence) {
       evidenceAnnouncement = evidence === "fresh" ? "" : connection.textContent;
@@ -269,9 +265,9 @@ async function tick() {
     const lost = payload.lost_ball || (payload.lost_robots || []).length;
     const lostElement = document.getElementById("lost");
     lostElement.hidden = !lost;
-    lostElement.textContent = payload.lost_ball || payload.reason === "lost_ball"
+    lostText.textContent = payload.lost_ball || payload.reason === "lost_ball"
       ? "공을 잃음" : "로봇을 잃음";
-    lastMatchDetails = `${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}`;
+    lastMatchDetails = `${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostText.textContent}` : ""}`;
     const matchSummary = `${phaseLabel} · ${lastMatchDetails}${evidenceAnnouncement ? ` · ${evidenceAnnouncement}` : ""}`;
     setTextIfChanged(announcement, matchSummary);
     draw(payload);
@@ -295,11 +291,10 @@ async function tick() {
     frame.src = `/frame.jpg?t=${Date.now()}`;
   } catch (_error) {
     receipt = null;
-    connection.dataset.evidence = "disconnected";
     lastEvidence = "disconnected";
     setFieldEvidence("disconnected");
     setPhaseEvidence("disconnected");
-    setTextIfChanged(connection, hasMatch ? "호스트 연결 오류 · 마지막 경기 정보" : "호스트 연결 오류 · 경기 정보 없음");
+    notice.set("disconnected", hasMatch ? "호스트 연결 오류 · 마지막 경기 정보" : "호스트 연결 오류 · 경기 정보 없음");
     setTextIfChanged(announcement, hasMatch
       ? "호스트 연결 오류. 표시된 경기 정보는 마지막 수신 값입니다."
       : "호스트 연결 오류. 경기 정보가 없습니다.");
@@ -308,37 +303,13 @@ async function tick() {
   }
 }
 
-halt.addEventListener("click", async () => {
-  if (halt.disabled || !canOperate) return;
-  const restoreFocus = document.activeElement === halt;
-  halt.disabled = true;
-  haltStatus.dataset.state = "pending";
-  setTextIfChanged(haltStatus, "정지 요청 중");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch("/stop", { method: "POST", signal: controller.signal });
-    if (!res.ok) throw new Error(`stop ${res.status}`);
-    haltStatus.dataset.state = "sent";
-    setTextIfChanged(haltStatus, "정지 요청 접수 · 실제 정지 확인 중");
-  } catch (error) {
-    haltStatus.dataset.state = "error";
-    setTextIfChanged(haltStatus, error.name === "AbortError"
-      ? "정지 요청 시간 초과 · 다시 눌러 재시도하세요"
-      : "정지 요청 실패 · 다시 눌러 재시도하세요");
-  } finally {
-    clearTimeout(timeout);
-    halt.disabled = !canOperate;
-    if (restoreFocus) halt.focus();
-  }
-});
-
 // 초점 문법의 키보드 약속(D-224) — "스페이스도 양쪽을 세운다"가 이제 참이다.
 // 포커스가 컨트롤에 있으면 브라우저가 이미 Space 를 click 으로 바꾼다 —
 // 이중 발사를 막으려 몸에서만 잡는다.
 document.addEventListener("keydown", (event) => {
   if (event.code !== "Space" || event.repeat) return;
   if (event.target.closest("button, ui-button, input, select, textarea, a")) return;
+  if (!gate.canOperate) return;
   event.preventDefault();
   halt.click();
 });

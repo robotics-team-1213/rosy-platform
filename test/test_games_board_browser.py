@@ -144,7 +144,10 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
             page.goto(origin)
             page.locator('#account-login').wait_for(state='visible')
-            assert page.locator('#halt').is_hidden()
+            assert page.locator('#halt').is_visible() and page.locator('#halt').is_enabled()
+            page.locator('#halt').click()
+            page.locator('#halt-status[data-state="error"]').wait_for()
+            assert '운용 권한' in page.locator('#halt-status').inner_text() and not board.stop
             assert page.locator('#halt-hint').is_hidden() and page.locator('#halt-denied').is_visible()
             stop = "async () => (await fetch('/stop', {method:'POST'})).status"
             assert page.evaluate(stop) == 403 and not board.stop
@@ -153,14 +156,14 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             page.locator('#account-logout').wait_for(state='visible')
             expect(page.locator('[data-account-profile]')).to_contain_text('Game Alice')
             assert page.locator('[data-account-profile]').get_attribute('href') == issuer + '/console/profile'
-            assert page.locator('#halt').is_hidden()
+            assert page.locator('#halt').is_visible()
             assert page.evaluate(stop) == 403 and not board.stop
             page.locator('#account-logout').click()
             page.locator('#account-login').wait_for(state='visible')
             assert page.locator('[data-account-profile]').is_hidden()
             state.update(active=True, operate=True)
             page.locator('#account-login').click()
-            page.locator('#halt').wait_for(state='visible')
+            page.locator('#halt-hint').wait_for(state='visible')
             assert page.locator('#halt-hint').is_visible() and page.locator('#halt-denied').is_hidden()
             state['display_name'] = 'Updated Player'
             expect(page.locator('[data-account-profile]')).to_contain_text('Updated Player', timeout=15000)
@@ -171,7 +174,8 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             state['active'] = False
             clock[0] += 11
             assert page.evaluate(stop) == 403 and not board.stop
-            page.locator('#halt').wait_for(state='hidden', timeout=15000)
+            page.locator('#halt-denied').wait_for(state='visible', timeout=15000)
+            assert page.locator('#halt').is_visible() and page.locator('#halt').is_enabled()
             expect(page.locator('#account-login')).to_be_visible()
             expect(page.locator('[data-account-profile]')).to_be_hidden()
             browser.close()
@@ -222,6 +226,8 @@ def test_match_board_renders_published_play_state():
             assert page.locator("#lost").is_hidden()
             assert "필수 마커·공 관측 미완료" in page.locator("#stair1").inner_text()
             assert page.locator("#markers li.on").count() == 4
+            assert page.locator("#markers li.on .ui-icon").count() == 4 and page.locator("#markers li:not(.on) .ui-icon").count() == 0  # only the seen chips carry the check mark
+            assert [t.strip() for t in page.locator("#markers li.on .sr-only").evaluate_all("els => els.map(e => e.textContent)")] == ["보임"] * 4
             assert not errors, f"페이지 오류: {errors}"
             # The shared helper prefixes TEMP unless the output name is absolute.
             shot = (Path(os.environ.get('ROSY_SHOT_DIR') or os.environ.get('TEMP', '/tmp')) / 'games_board_play.png').resolve()
@@ -1008,7 +1014,8 @@ def test_stalled_stop_request_recovers_for_retry(width, height):
             }""")
             page.locator("#halt").click()
             page.locator('#halt-status[data-state="pending"]').wait_for()
-            assert page.locator("#halt").get_attribute("aria-disabled") == "true"
+            # The stop stays live while a request is pending (retry allowed).
+            assert page.locator("#halt").get_attribute("aria-disabled") == "false"
             for state in ("pending", "timeout"):
                 if state == "timeout":
                     page.locator('#halt-status[data-state="error"]').wait_for(timeout=8_000)
@@ -1219,7 +1226,7 @@ def test_board_long_robot_ids_keep_score_columns_inside_viewport(width, height):
             layout = page.evaluate("""() => ({
               overflow: document.documentElement.scrollWidth - innerWidth,
               score: document.querySelector('.score').getBoundingClientRect().toJSON(),
-              columns: [...document.querySelectorAll('.score > div')].map(node => ({
+              columns: [...document.querySelectorAll('.score dl > div')].map(node => ({
                 box: node.getBoundingClientRect().toJSON(),
                 scrollWidth: node.scrollWidth, clientWidth: node.clientWidth,
               })),
@@ -1233,6 +1240,90 @@ def test_board_long_robot_ids_keep_score_columns_inside_viewport(width, height):
                 assert column["scrollWidth"] <= column["clientWidth"], layout
                 assert column["box"]["right"] <= layout["score"]["right"] + 1, layout
             assert not errors, errors
+            browser.close()
+    finally:
+        server.close()
+
+
+def test_halt_stays_live_when_session_change_reload_stalls():
+    """A session change reloads the page; if that reload never completes, #halt stays clickable."""
+    pytest.importorskip("playwright.sync_api")
+    import json
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    revision = [1]
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, 1280, 800, url=url)
+            session = lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({
+                "enabled": True, "authenticated": True, "can_operate": True,
+                "account_id": "alice", "session_family": "f", "revision": revision[0]}))
+            page.route("**/api/account/session", session)
+            page.goto(url, wait_until="domcontentloaded")
+            page.locator("#account-logout").wait_for(state="visible")
+            page.route(url, lambda route: route.fulfill(status=204))  # the reload never replaces the page
+            revision[0] = 2
+            # Locator waits block on the never-finishing navigation; use page-level calls only.
+            page.wait_for_function("() => document.getElementById('halt-status').textContent.includes('다시 불러오는 중')", timeout=15_000)
+            live = page.evaluate("""() => { const h = document.getElementById('halt'), b = h.getBoundingClientRect();
+              return {hidden: h.hidden || document.body.hidden, disabled: h.disabled || h.getAttribute('aria-disabled') === 'true',
+                      x: b.x + b.width / 2, y: b.y + b.height / 2, w: b.width}; }""")
+            assert not live["hidden"] and not live["disabled"] and live["w"] > 0, live
+            page.mouse.click(live["x"], live["y"])
+            page.wait_for_function("() => document.getElementById('halt-status').dataset.state === 'sent'", timeout=8_000)
+            assert board.stop
+            browser.close()
+    finally:
+        server.close()
+
+
+def test_halt_stays_live_and_says_unavailable_when_the_session_read_fails():
+    """A failed account read is 'unavailable', never 'no permission', and never takes the stop away."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, 1280, 800, url=url)
+            page.route("**/api/account/session", lambda route: route.fulfill(status=500, body="down"))
+            page.goto(url)
+            page.locator("#halt-unavailable").wait_for(state="visible")
+            assert page.locator("#halt-denied").is_hidden() and page.locator("#halt-hint").is_hidden()
+            assert page.locator("#halt").is_visible() and page.locator("#halt").is_enabled()
+            page.locator("#halt").click()
+            page.locator('#halt-status[data-state="sent"]').wait_for()
+            assert board.stop
+            browser.close()
+    finally:
+        server.close()
+
+
+def test_a_real_disconnect_is_a_warn_tag_with_the_wifi_icon_never_a_danger_chip():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, 1280, 800, url=url)
+            page.goto(url)
+            page.wait_for_function("() => document.getElementById('connection')?.dataset.evidence === 'unavailable'")
+            assert page.locator("#connection ui-tag").count() == 0
+            page.route("**/overlay.json", lambda route: route.abort())
+            page.wait_for_function("() => document.getElementById('connection')?.dataset.evidence === 'disconnected'")
+            assert page.locator('#connection ui-tag[status="warn"]').count() == 1  # 2026-11-14: a plain disconnect is a warning
+            assert page.locator('#connection ui-tag svg.ui-icon').count() == 1
+            assert page.locator('#connection ui-tag[status="crit"]').count() == 0  # this board never raises a danger flag
             browser.close()
     finally:
         server.close()

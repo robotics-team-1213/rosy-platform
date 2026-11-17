@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-11-13 · uncommitted · fix(ui): HW_TEST_WAIT_MS declared on its own line again (main red)
-- 2026-11-08 · uncommitted · feat(robot-ui): 사람 부탁 카드의 답 버튼
-- 2026-11-07 · uncommitted · uiux(robot): 로그인이 누른 화면으로 돌아오고 뒤로 가기가 갇히지 않는다
-- 2026-11-07 · 11b42b5933 · feat(dashboard): 사람 부탁 카드
-- 2026-11-06 · uncommitted · uiux(robot): 운용자 글에서 CORE 대신 로봇
+- 2026-11-14 · uncommitted · r2: 안전 회로 표시를 한국어로 (R2-03)
+- 2026-11-14 · uncommitted · r2: 안전 회로 live region·triage 제목·열 격자·초점 복귀·직접 운전 링크 (R2-02, R2-04, R2-05, R2-06, R2-07, R2-11)
+- 2026-11-14 · uncommitted · rp-fix: 호환 화면 겹침·미확인·원시 토큰·과밀 정리 (F02, F03, F04, F07, F08, F09, F10, F13)
+- 2026-11-14 · uncommitted · ui-regions R1: 패널 3라운드·안전 검토 반영
+- 2026-11-14 · uncommitted · ui-regions R1: 패널 결론으로 모드·차선 센서를 K1 라디오에서 K20 명령으로

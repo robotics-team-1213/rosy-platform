@@ -2,6 +2,8 @@ import { authHeaders, session } from "/assets/client.js";
 import { createVisionPreview } from "/assets/vision.js";
 import { createCameraCapture, evidenceBody, saveCameraFile } from "/assets/camera-capture.js";
 import { lineDecisionChain } from "/common/core_ui_logic.js";
+import { valueText } from "/common/value-text.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 
@@ -21,7 +23,6 @@ export function mount(root, ctx) {
   status.dataset.evidence = "unavailable"; status.title = "WAITING"; status.setAttribute("status", "neutral");
   const qualityIndicator = el("ui-status", "", "조도가 낮아 차선·물체를 판정할 수 없습니다");
   qualityIndicator.id = "vision-quality"; qualityIndicator.hidden = true; qualityIndicator.setAttribute("state", "warning");
-  qualityIndicator.setAttribute("role", "status"); qualityIndicator.setAttribute("aria-live", "polite");
   const actions = el("ui-actions", "surface-actions surface-camera-actions");
   const expand = el("ui-button", "", "영상 확대"); expand.id = "vision-expand";
   expand.type = "button"; expand.setAttribute("kind", "quiet"); actions.append(expand);
@@ -93,10 +94,10 @@ export function mount(root, ctx) {
     library.addEventListener("toggle", () => { if (library.open) refreshWithFeedback(); });
   }
   const facts = el("dl", "ui-readout");
-  const source = el("dd", "", "—"); source.id = "vision-source";
-  const resolution = el("dd", "", "—"); resolution.id = "vision-resolution";
-  const age = el("dd", "", "—"); age.id = "vision-age";
-  const captured = el("dd", "", "—"); captured.id = "vision-captured";
+  const source = el("dd", "", UNKNOWN); source.id = "vision-source";
+  const resolution = el("dd", "", UNKNOWN); resolution.id = "vision-resolution";
+  const age = el("dd", "", UNKNOWN); age.id = "vision-age";
+  const captured = el("dd", "", UNKNOWN); captured.id = "vision-captured";
   facts.append(el("dt", "", "소스"), source, el("dt", "", "해상도"), resolution,
     el("dt", "", "프레임 나이"), age, el("dt", "", "촬영 시각"), captured);
   const legend = el("details", "surface-camera-legend");
@@ -204,7 +205,7 @@ export function mount(root, ctx) {
   saveLog.addEventListener("click", () => { capture.saveOperations(); });
   const action = (event) => capture.recordAction(event.detail);
   window.addEventListener("rosy:operator-action", action);
-  const preview = createVisionPreview({elements, setText: (id, value) => { elements[id].textContent = value ?? "—"; },
+  const preview = createVisionPreview({elements, setText: (id, value) => { elements[id].textContent = value ?? UNKNOWN; },
     previewMode: () => capture.state().previewMode,
     api: ctx.api, authHeaders, hasToken: () => Boolean(session.authenticated), isHidden: () => document.hidden,
     onQuality: (quality) => {

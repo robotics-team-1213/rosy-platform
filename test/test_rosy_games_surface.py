@@ -124,8 +124,8 @@ def test_two_robot_stop_is_the_last_control_of_the_top_bar():
     web = ROOT / "operations" / "apps" / "games" / "games" / "web"
     html = (web / "index.html").read_text(encoding="utf-8")
     bar = re.search(r"<ui-topbar\b[^>]*>(.*?)</ui-topbar>", html, re.S).group(1)
-    # D-757 exposes the host stop only after a verified games.operate grant.
-    stop = '<ui-button id="halt" kind="irreversible" data-always-live type="button" hidden disabled>두 로봇 정지</ui-button>'
+    # C9: the host stop is always visible and pressable (never hidden or disabled); the account state only picks the hint.
+    stop = '<ui-button id="halt" kind="irreversible" data-always-live type="button">두 로봇 정지</ui-button>'
     assert html.count('id="halt"') == 1 and stop in bar
     controls = re.findall(r"<(?:ui-button|button|a|input|select)\b[^>]*>", bar)
     assert controls and controls[-1].startswith('<ui-button id="halt"')
@@ -133,6 +133,7 @@ def test_two_robot_stop_is_the_last_control_of_the_top_bar():
     title = re.search(r"<b>(.*?)</b>", bar, re.S)
     assert title and re.sub(r"<[^>]+>", "", title.group(1)) == "Games"
     assert title.end() < bar.index("<small>1v1 피치 · 노트북 게임 호스트</small>"), "title, then scope"
+    assert not re.search(r'<ui-button id="halt"[^>]*\b(hidden|disabled)\b', html)
     note = bar.split(stop, 1)[1]
     assert "스페이스 키로도 두 로봇을 세웁니다" in note
     assert '<span id="halt-status" role="status" aria-live="polite"></span>' in note
@@ -140,5 +141,5 @@ def test_two_robot_stop_is_the_last_control_of_the_top_bar():
     assert "halt-row" not in html and "halt-row" not in css
     assert "sticky" not in css, "the stop rides the shared sticky top bar, not a row of its own"
     js = (web / "board.js").read_text(encoding="utf-8")
-    assert 'fetch("/stop", { method: "POST", signal: controller.signal })' in js
+    assert 'createStopControl({button: halt, status: haltStatus})' in js and 'fetch("/stop"' not in js  # C9 owns the request
     assert 'if (event.code !== "Space" || event.repeat) return;' in js and "halt.click();" in js

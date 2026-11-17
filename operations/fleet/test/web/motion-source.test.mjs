@@ -2,7 +2,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { motionSource, movingNow } from "../../../../applications/fleet/web/motion-source.js";
+// "/common/..." imports map to shared/web.
+const { register } = await import("node:module");
+register("./common-loader.mjs", import.meta.url);
+const { motionSource, movingNow } = await import("../../../../applications/fleet/web/motion-source.js");
 
 const T0 = 1_000_000;
 const FRESH = { velocity: { evidence: "fresh" } };
@@ -66,7 +69,7 @@ test("stale state is not shown as live", () => {
 test("velocity evidence that is not fresh gives no verdict on motion", () => {
   const out = src(robot({ evidence: { velocity: { evidence: "delayed" } }, velocity: { linear: 0.1, angular: 0 } }));
   assert.equal(out.key, "unknown");
-  assert.equal(out.text, "출처 확인 불가");
+  assert.equal(out.text, "움직임 정보 없음");
   assert.match(out.title, /속도 근거/);
   assert.equal(movingNow({ velocity: { linear: 0.1, angular: 0 } }, null), null);
 });
@@ -74,7 +77,7 @@ test("velocity evidence that is not fresh gives no verdict on motion", () => {
 test("offline, missing state and Fleet state loss are 확인 불가", () => {
   assert.equal(src(robot({}, { online: false })).key, "unknown");
   assert.equal(src({ robot_id: "a", online: true, state: null }).key, "unknown");
-  assert.equal(src(robot(), view({ stateUnavailable: true })).text, "출처 확인 불가");
+  assert.equal(src(robot(), view({ stateUnavailable: true })).text, "움직임 정보 없음");
 });
 
 test("a proving source wins over a missing velocity, and stale still beats every source", () => {

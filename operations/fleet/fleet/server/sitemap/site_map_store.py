@@ -21,6 +21,7 @@ import uuid
 from pathlib import Path
 from typing import Callable, Optional
 
+from core_common.text_encoding import double_encoded_paths
 from fleet.meet.place import Painted, painted_from
 from fleet.routing.cost import RoutingConfig
 from fleet.routing.graph import Graph, build_graph
@@ -40,6 +41,14 @@ class SiteMapError(ValueError):
         super().__init__(message)
         self.status_code = status_code
         self.code = code
+
+
+def _reject_double_encoded(site_map: SiteMap, **extra: str) -> None:
+    """Write boundary: a name that was decoded and encoded twice (UTF-8 read as cp1252) is never stored."""
+    bad = list(double_encoded_paths({**extra, "map": site_map.body()}))
+    if bad:
+        raise SiteMapError(400, "TEXT_DOUBLE_ENCODED",
+                           f"글자가 두 번 인코딩되어 깨졌습니다. UTF-8로 다시 보내세요: {', '.join(bad[:5])}")
 
 
 class SiteMapStore:
@@ -239,6 +248,7 @@ class SiteMapStore:
 
     def save_profile(self, profile_id: str, *, name: str, site_map: SiteMap,
                      expected_revision: Optional[str], principal_id: str, info: Optional[MapProfileInfo] = None) -> dict:
+        _reject_double_encoded(site_map, name=name)
         self._drawing_reference(site_map)
         row = {"profile_id": profile_id, "name": name, "map": site_map.body(),
                "revision": uuid.uuid4().hex, "saved_by": principal_id, "saved_at": self.clock(),
@@ -273,6 +283,7 @@ class SiteMapStore:
         return {"map": json.loads(row[0]), "revision": row[1], "saved_by": row[2], "saved_at": row[3]}
 
     def save_draft(self, site_map: SiteMap, *, expected_revision: Optional[str], principal_id: str) -> dict:
+        _reject_double_encoded(site_map)
         self._drawing_reference(site_map)
         revision = uuid.uuid4().hex
         with self._lock, self._db:

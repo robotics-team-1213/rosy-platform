@@ -185,10 +185,10 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.comparison_runs:
-            profile = json.loads(args.reviewed_profile.read_text()) if args.reviewed_profile else None
-            manifest = json.loads(args.training_manifest.read_text()) if args.training_manifest else {}
-            result = compare_deliberation(json.loads(args.data.read_text()),
-                json.loads(args.comparison_runs.read_text()), training_sessions=manifest.get('sessions', []),
+            profile = json.loads(args.reviewed_profile.read_text(encoding="utf-8")) if args.reviewed_profile else None
+            manifest = json.loads(args.training_manifest.read_text(encoding="utf-8")) if args.training_manifest else {}
+            result = compare_deliberation(json.loads(args.data.read_text(encoding="utf-8")),
+                json.loads(args.comparison_runs.read_text(encoding="utf-8")), training_sessions=manifest.get('sessions', []),
                 training_recordings=manifest.get('recordings'), reviewed_profile=profile,
                 limits=profile.get('limits') if profile else None, cooperation=args.cooperation)
             print(json.dumps(result, ensure_ascii=False, indent=2))

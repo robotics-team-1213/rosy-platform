@@ -41,11 +41,11 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # Motor health is the shared evidence component, not Robot console layout grammar.
         # D-926 C7: file-picker.css is Fleet's own Korean file picker, shared by install, Cell and site map.
         "index.html": [*shared_sheets, "/common/motor-health.css", "/common/app-shell.css", "/console/assets/styles.css",
-                       "/console/assets/roster.css",
-                       "/common/component-controls.css", "/console/assets/doc-tabs.css",
+                       "/console/assets/roster.css", "/common/robot-dock.css",
+                       "/common/component-controls.css", "/common/choice-controls.css", "/common/readout-strip.css", "/console/assets/doc-tabs.css",
                        "/console/assets/assistant.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
-                       "/console/assets/device-watch.css", "/console/assets/work.css"],
+                       "/console/assets/device-watch.css", "/console/assets/work.css", "/console/assets/alert-popup.css"],
         "installation/install.html": [*shared_sheets, "/common/component-controls.css", "/common/stage-strip.css", "/common/task-chooser.css", "/common/app-shell.css",
                          "/console/assets/styles.css", "/console/assets/file-picker.css", "/console/assets/doc-tabs.css",
                          "/console/assets/fleet-header.css", "/console/assets/password-login.css",

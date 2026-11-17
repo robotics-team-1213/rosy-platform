@@ -42,7 +42,7 @@ MEASURE = """() => {
     roleClipped: document.querySelector('#shell-role').scrollWidth > document.querySelector('#shell-role').clientWidth + 1,
     sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
     estop: box('#shell-estop'),
-    slots: ['observe', 'act', 'sense'].map(name => document.querySelector(`[data-slot="${name}"]`))
+    slots: ['act', 'sense', 'observe'].map(name => document.querySelector(`[data-slot="${name}"]`))
       .filter(Boolean).map(node => node.getBoundingClientRect().toJSON()),
     slotOrder: [...document.querySelectorAll('#surface-main > .surface-slot')].map(node => node.dataset.slot),
     cameraActions: [...document.querySelectorAll('#vision-expand, #vision-record-stop')]
@@ -160,7 +160,7 @@ def test_role_surfaces_keep_the_header_budget_and_the_stop_in_view(tmp_path, wid
         assert _inside(first["estop"], width, height), (surface, first["estop"])
         assert first["sticky"] == "sticky", (surface, first["sticky"])
         if surface == "console":
-            assert first["slotOrder"] == ["banner", "observe", "act", "sense"], (width, first)
+            assert first["slotOrder"] == ["banner", "act", "sense", "observe"], (width, first)
             slots = first["slots"]
             assert slots[0]["top"] < slots[1]["top"] < slots[2]["top"], (width, slots)
             assert max(slot["x"] for slot in slots) - min(slot["x"] for slot in slots) <= 1, (width, slots)

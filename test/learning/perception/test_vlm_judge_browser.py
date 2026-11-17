@@ -59,17 +59,20 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                 expect(page.locator('#vlm-stations')).to_have_class('ui-stage-track')
                 expect(page.locator('#vlm-stations')).to_have_attribute('data-line', 'learning')
                 expect(page.locator('#tab-label').locator('..')).to_have_attribute('data-state', 'now')
+                expect(page.locator('#tab-label')).to_have_attribute('aria-current', 'step')
+                expect(page.locator('#vlm-stations [aria-current="step"]')).to_have_count(1)
+                expect(page.locator('#vlm-stations [aria-pressed]')).to_have_count(0)
                 assert page.locator('#tab-import').evaluate('node => node.hidden === node.parentElement.hidden')
                 expect(page.locator('#vlm-stations [data-state="done"]')).to_have_count(0)
                 expect(page.locator('#vlm-image-message')).to_be_hidden()
                 in_view = '''id => { const r = document.getElementById(id).getBoundingClientRect();
                                      return r.top >= 0 && r.bottom <= innerHeight && r.height > 0; }'''
-                option = page.locator('.vlm-question').first.locator('ui-button').first
+                option = page.locator('.vlm-question').first.locator('select')
                 for width, height in ((1280, 720), (390, 844)):
                     page.set_viewport_size({'width': width, 'height': height})
                     assert page.evaluate(in_view, 'vlm-save') and page.evaluate(in_view, 'vlm-exclude'), width
-                    assert option.bounding_box()['height'] >= 44 and option.get_attribute('kind') == 'toggle'
-                expect(option).to_contain_text('키 1')
+                    assert option.bounding_box()['height'] >= 44 and option.evaluate('el => el.tagName') == 'SELECT'
+                expect(option.locator('option').nth(1)).to_contain_text('키 1')
                 assert page.evaluate('document.getElementById("vlm-image").getBoundingClientRect().top < innerHeight')
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 assert 'qwen' not in page.content()
@@ -77,12 +80,12 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                 page.keyboard.press('1')
                 page.keyboard.press('ArrowDown')
                 page.keyboard.press('2')
-                expect(page.locator('.vlm-question').nth(1).locator('ui-button[data-option="no"]')).to_have_attribute('aria-pressed', 'true')
+                expect(page.locator('.vlm-question').nth(1).locator('select')).to_have_value('no')
                 page.keyboard.press('Enter')
                 expect(page.locator('#vlm-progress')).to_contain_text('목록 1 / 1')
                 expect(page.locator('#vlm-image-message')).to_be_hidden()
-                page.locator('.vlm-question').nth(0).locator('ui-button[data-option="no"]').click()
-                page.locator('.vlm-question').nth(1).locator('ui-button[data-option="unclear"]').click()
+                page.locator('.vlm-question').nth(0).locator('select').select_option('no')
+                page.locator('.vlm-question').nth(1).locator('select').select_option('unclear')
                 page.locator('#vlm-save').click()
                 expect(page.locator('#vlm-image-message')).to_contain_text('이 조건의 사진이 없습니다')
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
@@ -198,8 +201,8 @@ def test_audit_shows_the_consensus_and_records_confirm_and_fix(tmp_path, monkeyp
                 _capture(page, 'vlm-audit-after-human-confirm')
                 page.keyboard.press('e')  # 고침 reveals the options with the consensus preselected
                 expect(page.locator('.vlm-options')).to_have_count(2)
-                expect(page.locator('.vlm-question').nth(0).locator('ui-button[data-option="yes"]')).to_have_attribute('aria-pressed', 'true')
-                page.locator('.vlm-question').nth(0).locator('ui-button[data-option="no"]').click()
+                expect(page.locator('.vlm-question').nth(0).locator('select')).to_have_value('yes')
+                page.locator('.vlm-question').nth(0).locator('select').select_option('no')
                 _capture(page, 'vlm-audit-human-correction')
                 page.locator('#vlm-save').click()
                 expect(page.locator('#vlm-image-message')).to_contain_text('이 조건의 사진이 없습니다')

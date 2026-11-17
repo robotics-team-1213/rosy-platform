@@ -1,0 +1,577 @@
+/* Robot roster, selected workspace and trip controls; Fleet Console feature styles. */
+
+.roster-block { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2) var(--space-3); }
+#fleet-main:has(#robots-overview:not([hidden])) .roster-block { display: none; }
+.roster-block > h2 { margin: 0; }
+.roster-block > :not(h2):not(.ui-action-link) { grid-column: 1 / -1; }
+#discovery-pending { margin: 0; }
+
+.roster { display: flex; flex-direction: column; gap: var(--space-3); }
+.omx-dense-card { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-2); min-width: 0; padding-block: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
+.omx-dense-card > div { min-width: 0; }
+.omx-dense-card strong { font-size: var(--text-label); overflow-wrap: anywhere; }
+.omx-dense-card p { margin: var(--space-1) 0; font-size: var(--text-micro); overflow-wrap: anywhere; }
+.cell-cam-thumb { width: 6rem; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); cursor: zoom-in; }
+.cell-cam-thumb.focused { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; cursor: zoom-out; }
+.omx-card-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.omx-card-actions ui-button { min-width: 0; }
+.omx-right-inspector:not(:empty) { display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; box-sizing: border-box; margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--series-primary); border-radius: var(--radius-panel); background: var(--surface-raised); overflow: hidden; }
+.omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding-bottom: var(--space-1); border-bottom: 1px solid var(--border-subtle); }
+.omx-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.omx-inspector-head strong { font-family: var(--mono); font-size: var(--text-label); color: var(--series-primary); overflow-wrap: anywhere; }
+.omx-inspector-main-cam { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--series-primary); background: var(--surface-flat); cursor: zoom-in; }
+.omx-inspector-main-cam.focused { aspect-ratio: auto; max-height: 60vh; object-fit: contain; cursor: zoom-out; }
+.omx-inspector-single-wrap { display: grid; gap: var(--space-1); min-width: 0; }
+.omx-inspector-dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); min-width: 0; }
+@media (width < 30rem) {
+  .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.omx-inspector-dual-pane { display: grid; gap: var(--space-1); min-width: 0; }
+.omx-inspector-cam-badge { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: center; min-width: 0; }
+@media (width < 30rem) {
+  .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); }
+}
+.omx-inspector-quick-dispatch select { width: 100%; min-width: 0; font-size: var(--text-micro); }
+.omx-inspector-pip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.8rem, 1fr)); gap: var(--space-1); min-width: 0; }
+.omx-inspector-pip { display: grid; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); cursor: pointer; min-width: 0; }
+.omx-inspector-pip.active { border-color: var(--series-primary); background: var(--surface-raised); }
+.omx-inspector-pip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); }
+.omx-inspector-pip small { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omx-inspector-meta { margin: 0; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow-wrap: anywhere; }
+/* 카드는 내용 높이를 지킨다 — 스크롤 칸 안에서 줄어들면 까닭 줄과 버튼이 잘린다. */
+.roster > * { flex-shrink: 0; }
+
+/* The selected robot is one ui-panel (raised); this only keeps it inside its column and gives the readout strip a container. */
+.robot { max-width: 100%; container-type: inline-size; }
+.robot-workspace-card { display: grid; gap: var(--space-3); }
+.robot-detail-main { display: grid; gap: var(--space-2); min-width: 0; align-content: start; }
+.robot-detail-row { border-bottom: 1px solid var(--border-subtle); }
+.robot-detail-3d { min-width: 0; align-self: start; }
+.robot-detail-3d-fold { min-width: 0; }
+.detail-refusal:empty, .detail-now:empty, #detail-localization:empty, #detail-skill:empty { min-width: 0; }
+@media (width >= 64rem) {
+  #robot-workspace .robot-workspace-card { grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem); align-items: start; }
+}
+/* The primary action group follows the facts; the profile, destinations and cell links are the second group. */
+.robot-detail-main > .robot-actions, .robot-detail-main > .card-trip { order: 1; }
+.robot-detail-main > :is(.quick-control-panel, [data-robot-profile], .robot-app-actions, section:not(.detail-now), details) { order: 2; }
+.robot-evidence { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin: 0; color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); }
+.robot-evidence > * + *::before { content: "·"; margin-inline-end: var(--space-2); }
+
+/* D-409 — 컴팩트 카드 요약: 위치·방향은 지도가 말하고 카드는 모드·배터리·안전만.
+   D-417: 칸 질의로 확장 — 뷰포트가 넓어도 칸이 좁으면 접는다(태블릿 세로 768px). */
+/* 오프라인은 흐림이 아니라 조용한 글자와 점선 테다(D-359 §5.5). */
+.robot.offline { color: var(--text-secondary); border-style: dashed; }
+@media (width < 30rem) { .robot .hint { font-size: var(--text-micro); margin: var(--space-1) 0 0; } }
+
+/* D-517 10 — 운행 상태 한 줄. 이름 줄 바로 아래, 값과 같은 mono 글자. */
+.robot .trip-line { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-label); color: var(--text-primary); overflow-wrap: anywhere; }
+/* D-540 3 — 정상 로봇은 한 줄: 이름 · 운행 한 줄 · 배터리. 줄 전체가 펼침 단추다. */
+.robot[data-collapsed] { padding: 0; }
+.robot-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); width: 100%; }
+.robot-line b { font-family: var(--mono); letter-spacing: var(--track-wide); }
+.robot-line .trip-line { flex: 1 1 8rem; margin: 0; min-width: 0; color: var(--text-secondary); }
+
+.facts { margin: 0; }
+.facts dt { display: flex; align-items: center; gap: var(--space-1); }
+/* D-457 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. */
+.facts .ui-icon { width: var(--text-label); height: var(--text-label); }
+.facts dd { margin: 0; }
+.facts strong { font-weight: inherit; }
+.facts .fact-detail { display: block; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); }
+
+/* D-540 (d) — the card's 운행 form: labelled pickers over their action rows, under a hairline. */
+.card-trip { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border-subtle); }
+.card-trip label { display: grid; gap: var(--space-1); font-size: var(--text-label); color: var(--text-secondary); }
+.card-trip select { width: 100%; min-width: 0; }
+.trip-rule { display: grid; gap: var(--space-2); }
+.card-trip p { margin: 0; }
+
+/* 한 열 단: 로봇 목록 머리는 제목 한 줄, 그 아래 전체 주행 취소 한 줄이다(제목이 글자 단위로 접히지 않게). */
+@media (width < 64rem) {
+  .context-panel > [aria-labelledby="roster-heading"] { display: flex; flex-direction: column; }
+  .charge-bays { order: 5; }  /* the OMX cell cards follow the selected robot's status */
+  .roster-block { grid-template-columns: minmax(0, 1fr) auto; }
+  .roster-block > :not(h2):not(.ui-action-link) { grid-column: 1 / -1; }
+}
+
+/* D-651: one map workplane and one selected robot workspace. */
+.roster-summary { margin: 0; font-size: var(--text-label); color: var(--text-secondary); }
+.robot-panel-commands, .robot-panel-settings-body, .robot-panel-arm-status, .robot-panel-arm-commands, .robot-panel-arm-cameras { display: grid; gap: var(--space-2); min-width: 0; }
+.robot-arm-cam { margin: 0; display: grid; gap: var(--space-1); }
+.robot-arm-cam img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); }
+.robot-arm-cam figcaption { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--text-micro); color: var(--text-secondary); }
+.robot-arm-readiness { margin: 0; font-size: var(--text-label); }
+.robot-summary { padding: var(--space-1) var(--space-3); }
+.robot-row-extra { grid-column: 1 / -1; display: grid; gap: var(--space-1); min-width: 0; }
+.robot-summary .robot-line { width: 100%; }
+.robot-summary-evidence { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-secondary); font-size: var(--text-label); overflow-wrap: anywhere; }
+.manual-control { margin-top: var(--space-3); }
+.robot-panel-manual { margin-top: var(--space-2); }
+.robot-panel-manual-lock { display: block; color: var(--text-secondary); font-weight: var(--weight-regular); overflow-wrap: anywhere; }
+.robot-panel-manual-lock:empty { display: none; }
+.manual-control > ui-status { display: inline; }
+.manual-lock { display: inline-flex; vertical-align: middle; margin-inline-end: var(--space-1); color: var(--text-secondary); }
+/* Disabled pad buttons keep their reason attribute but the caption is said once, in the line above. */
+.manual-control ui-button > small[data-reason] { display: none; }
+.manual-control ui-button[disabled][reason]:not([reason=""]) { border-style: solid; }
+.manual-control [data-manual-direction] { touch-action: none; }
+.manual-control [data-manual-pose] { margin: var(--space-2) 0; font-size: var(--text-label); color: var(--text-secondary); overflow-wrap: anywhere; }
+/* 방향 넷은 언제나 2×2다. 폭에 맡기면 1366에서 3+1로 갈린다. */
+.manual-control .robot-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.manual-control [data-manual-mode] { grid-column: 1 / -1; }
+.trip-mode { display: grid; gap: var(--space-2); }
+
+.robot-summary { border-bottom: 1px solid var(--border-subtle); }
+.robot-summary.selected { background: var(--surface-raised); }
+.robot-summary .robot-line { align-items: center; justify-content: space-between; }
+.robot-summary .trip-line { margin: var(--space-1) 0; font-size: var(--text-label); overflow-wrap: anywhere; }
+.robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-1); }
+.robot-list-details { margin-top: var(--space-3); }
+
+.robot-line:focus-visible, .robot-fold:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+
+/* Quick destinations: a flat group inside the robot panel (no box inside the box). */
+.quick-control-panel { display: grid; gap: var(--space-2); min-width: 0; padding-top: var(--space-2); border-top: 1px solid var(--border-subtle); }
+.robot-head b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.quick-header-line { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; min-width: 0; }
+.quick-header-line .hint { margin: 0; }
+.quick-title { font: var(--weight-label) var(--text-label)/var(--leading-label) var(--body); color: var(--text-primary); }
+.quick-chip-row { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+
+/* OMX-AI Workcell Units & Fleet Coordination Cards */
+.omx-fleet-section { display: grid; gap: var(--space-2); min-width: 0; padding-top: var(--space-2); }
+.omx-fleet-grid { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.omx-cell-card { display: grid; gap: var(--space-1); min-width: 0; padding-block: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
+.omx-cell-card.selected .omx-cell-title { text-decoration: underline; }
+.omx-cell-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.omx-cell-title {
+  font-family: var(--mono);
+  font-size: var(--text-label);
+  color: var(--series-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.omx-bars-wrap {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.omx-bars-row { display: flex; justify-content: space-between; gap: var(--space-2); min-width: 0; font-size: var(--text-micro); }
+.omx-bars-row dt { color: var(--text-secondary); }
+.omx-bars-row dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.omx-cell-joints { display: block; font: var(--text-micro)/var(--leading-label) var(--mono); color: var(--text-secondary); overflow-wrap: anywhere; }
+.omx-cell-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+.omx-summary-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.tracker-box {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+.tracker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.tracker-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
+.roi-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-2); min-width: 0; overflow: hidden; }
+.anchor-roi-img { width: 112px; height: 112px; flex-shrink: 0; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--series-primary); background: var(--surface-recessed); }
+.roi-meta { flex: 1 1 11rem; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); overflow: hidden; }
+.roi-status-text, .roi-sub-text {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.omx-cell-summary { color: var(--series-primary); white-space: nowrap; }
+
+/* 지도 오버레이 표시 켜기·끄기 툴바 */
+.map-overlay-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) 0 var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-1);
+}
+
+/* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
+.map-stage { position: relative; }
+.map-hover-card {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 12;
+  max-width: min(21rem, calc(100% - 2 * var(--space-3)));
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-button);
+  border: 1px solid var(--series-primary);
+  background: var(--scrim-solid);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-label);
+}
+.map-stage[data-view="twin3d"] > .map-hover-card {
+  top: calc(var(--space-3) + var(--target-secondary) + var(--space-2));
+}
+.hover-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-1);
+}
+.hover-card-head strong {
+  font-family: var(--mono);
+  font-size: var(--text-body);
+  color: var(--series-primary);
+  overflow-wrap: anywhere;
+}
+.hover-card-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+}
+.hover-card-grid dt {
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  white-space: nowrap;
+}
+.hover-card-grid dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.hover-card-foot {
+  margin: var(--space-1) 0 0;
+  padding-top: var(--space-1);
+  border-top: 1px dashed var(--border-subtle);
+  font-size: var(--text-micro);
+  color: var(--series-goal);
+}
+
+/* Pinky 앞 카메라 타일 (로봇 상세 보조 위치) */
+.robot-detail-camera { margin-top: var(--space-2); }
+.robot-camera-tile {
+  margin: 0;
+  position: relative;
+  aspect-ratio: 4 / 3;
+  max-width: 100%;
+  background: var(--surface-recessed);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+.robot-camera-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.robot-camera-tile[data-state="stale"] .robot-camera-img { opacity: var(--disabled-opacity); }
+.robot-camera-caption {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-micro);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+}
+.robot-camera-tile[data-state="stale"] .robot-camera-caption { color: var(--flag-danger-ink); background: var(--flag-danger-bg); }
+.robot-camera-tile:is([data-state="unregistered"], [data-state="waiting"]) {
+  aspect-ratio: auto;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+}
+.robot-camera-tile:is([data-state="unregistered"], [data-state="waiting"]) .robot-camera-caption {
+  position: static;
+  padding: 0;
+  background: transparent;
+}
+.robot-camera-setup-link {
+  justify-self: start;
+  font-size: var(--text-micro);
+  color: var(--series-primary);
+}
+.robot-camera-setup-link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Interactive live robot overview list inside sidebar (C14 row discipline: hairline rows, never boxed cards) */
+.robot-overview-list { display: grid; gap: var(--space-3); margin-top: var(--space-2); min-width: 0; }
+.robot-overview-group { display: grid; gap: var(--space-1); min-width: 0; }
+.robot-overview-group-title {
+  margin: 0;
+  font: var(--weight-label) var(--text-micro)/var(--leading-label) var(--body);
+  color: var(--text-secondary);
+}
+.robot-overview-items { display: grid; gap: 0; min-width: 0; }
+.robot-overview-item {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--row-dense);
+  display: grid;
+  gap: var(--space-1);
+  text-align: start;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 0;
+  border-block-start: 1px solid var(--border-subtle);
+  border-inline-start: var(--selection-edge) solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: var(--weight-regular) var(--text-label)/var(--leading-label) var(--body);
+  cursor: pointer;
+}
+.robot-overview-item:hover { background: var(--surface-sheen); }
+.robot-overview-item[aria-pressed="true"] {
+  border-inline-start-color: var(--selection);
+  background: var(--surface-flat);
+}
+.robot-overview-item:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.robot-overview-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.robot-overview-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  font-weight: var(--weight-label);
+}
+.robot-overview-name > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.robot-overview-id {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+  font-weight: var(--weight-regular);
+  white-space: nowrap;
+}
+.robot-overview-tags { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-1); min-width: 0; }
+/* 390 mobile: 오른쪽 배지가 이름 열을 8.5rem 바닥 아래로 밀지 않는다(ellipsis 'rosy-pin…' 반전 방지, G3). */
+@media (width < 64rem) {
+  .robot-overview-head { grid-template-columns: minmax(8.5rem, 1fr) auto; }
+}
+.robot-overview-meta {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.robot-overview-task {
+  font-size: var(--text-micro);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Right-docked robot inspector stage: panel opens directly beside right dock so map stays anchored. */
+#fleet-robot-stage.robot-stage { grid-template-columns: minmax(0, 1fr) 56px; }
+#fleet-robot-stage.robot-stage:has(> .robot-panel:not([hidden])) {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem) 56px;
+}
+/* 64-90rem: 세 열(지도·레일·패널 22rem)이 안 들어가 지도 칸이 600px 아래로 줄고 위젯이 줄바꿈한다(1366px에서 지도 559px).
+   패널은 시트처럼 열을 만들지 않고 도크 왼쪽에 겹쳐 뜬다 — 도크·정지 단추는 그대로 닿는다. */
+@media (width >= 64rem) and (width < 90rem) {
+  #fleet-robot-stage.robot-stage:has(> .robot-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr) 56px; }
+  #fleet-robot-stage > .robot-panel {
+    position: fixed;
+    inset-block: var(--appbar-height) 0;
+    inset-inline-end: 56px;
+    inline-size: min(22rem, calc(100vw - 56px));
+    max-height: none;
+    z-index: 4;
+    background: var(--surface-canvas);
+  }
+}
+#fleet-robot-stage > .robot-panel {
+  border-inline-end: 0;
+  border-inline-start: 1px solid var(--border-default);
+}
+@media (width >= 64rem) {
+  #fleet-robot-stage.robot-stage {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  #fleet-robot-stage > .robot-dock {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  #fleet-robot-stage > .robot-panel {
+    height: 100%;
+    max-height: 100%;
+    align-self: stretch;
+  }
+}
+@media (width >= 64rem) and (height >= 40rem) {
+  #fleet-robot-stage > .robot-stage-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+}
+#fleet-robot-stage > .robot-panel .robot-panel-head { padding: var(--space-1) var(--space-3); }
+#fleet-robot-stage > .robot-panel .robot-panel-body { padding: var(--space-1) var(--space-3) var(--space-3); gap: var(--space-1); }
+#fleet-robot-stage .robot-panel-jumps {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--space-1);
+  padding-block: var(--space-1);
+  background: var(--surface-chrome);
+  border-block-end: 1px solid var(--border-subtle);
+}
+#fleet-robot-stage .robot-panel-jump {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body);
+  cursor: pointer;
+}
+@media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  #fleet-robot-stage .robot-panel-jump { min-height: var(--target-tool); }
+}
+#fleet-robot-stage .robot-panel-jump:hover { border-color: var(--control-line); background: var(--surface-sheen); }
+#fleet-robot-stage .robot-panel-jump:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+#fleet-robot-stage > .robot-panel .robot-panel-section { gap: var(--space-1); }
+#fleet-robot-stage > .robot-panel .robot-panel-section + .robot-panel-section { padding-block-start: var(--space-2); }
+#fleet-robot-stage > .robot-panel .robot-panel-foot { padding: var(--space-2) var(--space-3); }
+#fleet-robot-stage .robot-panel-settings-links { display: grid; gap: var(--space-1); min-width: 0; }
+#fleet-robot-stage .robot-panel-wrap > .robot {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+#fleet-robot-stage .robot-panel-wrap .robot-body,
+#fleet-robot-stage .robot-panel-wrap .robot-main,
+#fleet-robot-stage .robot-panel-wrap .robot-detail-main {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+#fleet-robot-stage .robot-panel-wrap .robot-head > b { display: none; }
+#fleet-robot-stage .facts > div { gap: 0; padding: var(--space-1) var(--space-2); }
+#fleet-robot-stage .robot-panel-wrap > .robot p { margin: 0; }
+#fleet-robot-stage [data-robot-profile] {
+  display: grid;
+  gap: var(--space-1);
+  font: var(--weight-regular) var(--text-micro)/var(--leading-compact) var(--body);
+}
+#fleet-robot-stage [data-robot-profile] :is(h4, p, ul, dl) { margin: 0; }
+#fleet-robot-stage [data-robot-profile] > .ui-action-link { margin-top: var(--space-1); justify-self: start; }
+#fleet-robot-stage [data-manual-control] { margin-top: var(--space-1); display: grid; gap: var(--space-1); }
+#fleet-robot-stage [data-manual-pose] { margin: 0; }
+#fleet-robot-stage .manual-control .robot-actions { margin-top: 0; gap: var(--space-1); }
+#fleet-robot-stage .robot-panel-camera,
+#fleet-robot-stage .robot-panel-health,
+#fleet-robot-stage .robot-panel-commands,
+#fleet-robot-stage .robot-panel-settings,
+#fleet-robot-stage .robot-panel-arm-status,
+#fleet-robot-stage .robot-panel-arm-cameras,
+#fleet-robot-stage .robot-panel-arm-commands {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+#fleet-robot-stage .robot-arm-cam { margin: 0; display: grid; gap: var(--space-1); }
+#fleet-robot-stage .robot-arm-cam img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-recessed);
+}
+#fleet-robot-stage .robot-arm-cam img:not([src]),
+#fleet-robot-stage .robot-arm-cam img[src=""] { display: none; }
+#fleet-robot-stage .robot-arm-cam figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+}
+#fleet-robot-stage .robot-arm-cam figcaption ui-tag {
+  max-width: 100%;
+  white-space: normal;
+  line-height: var(--leading-copy);
+}
+@media (width < 64rem) {
+  #fleet-robot-stage.robot-stage,
+  #fleet-robot-stage.robot-stage:has(> .robot-panel:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+  }
+  #fleet-robot-stage > .robot-panel { border-inline-start: 0; }
+  #fleet-main { padding-block: var(--space-2); gap: var(--space-2); }
+}

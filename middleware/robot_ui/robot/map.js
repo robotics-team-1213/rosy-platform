@@ -1,6 +1,7 @@
 // 색은 tokens.css가 소유한다(concept 16 §6, D-72 L1). 캔버스는 CSS 변수를
 // 직접 못 쓰므로 한 번 풀어 둔 표를 쓴다 — 픽셀마다 읽으면 안 된다.
 import { confirmIrreversible } from "/common/ui.js";
+import { LAYER_IDS, CLICK_IDS } from "./map-choices.js";
 const PALETTE_TOKENS = {
   rasterUnknown: "--raster-unknown",
   rasterFree: "--raster-free",
@@ -119,8 +120,7 @@ export function createFieldMap(options) {
   const listenerController = new AbortController();
   let committing = false;
   let resizeObserver = null;
-  const layerButtons = [...(options.layerRoot?.querySelectorAll("[data-map-layer]") || [])];
-  const clickButtons = [...(options.layerRoot?.querySelectorAll("[data-map-click]") || [])];
+  const choices = options.choices;   // createMapChoices(): the layer (K5) and click (K1) groups
 
   const layers = { occupancy: true, costmap: true, path: true };
   let clickMode = "pose";
@@ -196,16 +196,18 @@ export function createFieldMap(options) {
   }
 
   function syncClickButtons() {
-    // D-359 §5.3 — 역할 화면은 공용 안내문을 쓰고, 목표만 막힐 때는 해당 버튼에도 이유를 단다.
-    clickButtons.forEach((button) => {
-      const allowed = canMapClick(button.dataset.mapClick);
-      const reason = allowed ? "" : mapIdMismatch() ? "로봇과 지도 ID 불일치" : (options.goalReason?.(button.dataset.mapClick) || "");
-      button.disabled = !allowed;
-      if (reason) button.setAttribute("reason", reason);
-      else button.removeAttribute("reason");
-      if (allowed) button.setAttribute("aria-pressed", button.dataset.mapClick === clickMode ? "true" : "false");
-      else button.removeAttribute("aria-pressed");
+    if (!choices) return;
+    // D-359 §5.3 — 역할 화면은 공용 안내문을 쓰고, 목표만 막힐 때는 해당 칩에도 이유를 단다.
+    const items = CLICK_IDS.map((mode, at) => {
+      const allowed = canMapClick(mode);
+      const reason = allowed ? "" : mapIdMismatch() ? "로봇과 지도 ID 불일치" : (options.goalReason?.(mode) || "");
+      return {value: mode, label: choices.labels.clicks[at], disabled: !allowed, reason};
     });
+    // setItems() skips a no-op rebuild, so a poll keeps focus. A click mode that stops being allowed (goal during a safe
+    // stop) falls back to the start pose, visibly: the group never shows a mode other than the one a click would use.
+    if (!canMapClick(clickMode) && canMapClick("pose")) clickMode = "pose";
+    choices.clicks.setItems(items); choices.tag();
+    choices.clicks.set(clickMode);
   }
 
   function syncEmpty() {
@@ -390,25 +392,19 @@ export function createFieldMap(options) {
     if (cross) notifyTargetReadout();
   }
 
-  layerButtons.forEach((button) => {
-    const layer = button.dataset.mapLayer;
-    button.setAttribute("aria-pressed", layers[layer] ? "true" : "false");
-    button.addEventListener("click", () => {
-      layers[layer] = !layers[layer];
-      button.setAttribute("aria-pressed", layers[layer] ? "true" : "false");
+  if (choices) {
+    choices.handlers.layers = (values) => {
+      for (const layer of LAYER_IDS) layers[layer] = values.includes(layer);
       rebuildRaster();
       paint();
-    }, {signal: listenerController.signal});
-  });
-
-  clickButtons.forEach((button) => {
-    const mode = button.dataset.mapClick;
-    button.addEventListener("click", () => {
-      if (button.disabled || !canMapClick(mode)) return;
+    };
+    choices.handlers.click = (mode) => {
+      if (!canMapClick(mode)) { syncClickButtons(); return; }
       clickMode = mode;
       syncClickButtons();
-    }, {signal: listenerController.signal});
-  });
+    };
+    choices.layers.set(LAYER_IDS.filter((layer) => layers[layer]));
+  }
   syncClickButtons();
 
   // D-359 §4 — 테마가 바뀌면 새로 고침 없이 다시 칠한다. 색 캐시는 ui.js가 먼저 비운다.

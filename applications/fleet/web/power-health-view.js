@@ -1,3 +1,4 @@
+import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 // D-509: only CORE power evidence can confirm charging. Fleet cache age and
 // browser elapsed time both count; a stale percentage is not a live reading.
 function agoText(sec) {
@@ -5,7 +6,7 @@ function agoText(sec) {
 }
 
 export function powerHealthView(robot, receivedAtMs, nowMs) {
-  const unknown = { battery: "확인 불가", voltage: null, charging: "확인 불가",
+  const unknown = { battery: EVIDENCE_LABEL.unavailable, voltage: null, charging: EVIDENCE_LABEL.unavailable,
     problem: "배터리 값 없음 — 배터리 센서 서비스 확인", note: "" };
   // D-502: the battery latch ends itself on charge; an administrator can still release it earlier.
   const charged = robot.state?.safety?.releases_when_charged === true ? "충전되면 자동으로 풀립니다. 먼저 풀려면 " : "";
@@ -40,12 +41,12 @@ export function powerHealthView(robot, receivedAtMs, nowMs) {
     ? battery.shown_percent : null;
   const reading = held !== null ? held : battery.percent;
   const percent = Number.isFinite(reading) && reading >= 0 && reading <= 100
-    ? `${Math.round(reading)}%` : "확인 불가";
+    ? `${Math.round(reading)}%` : EVIDENCE_LABEL.unavailable;
   const chargeAge = battery.charging_evidence_age_s;
   const chargingLabel = held !== null ? `충전 확인 · ${Math.round(held)}%` : "충전 확인";
   const charging = battery.charging_state !== "confirmed" ? "충전 미확인"
     : Number.isFinite(chargeAge) && chargeAge >= 0 && chargeAge + age + elapsed <= 5
-      ? chargingLabel : "확인 불가";
+      ? chargingLabel : EVIDENCE_LABEL.unavailable;
   let problem = "";
   if (battery.level !== "ok") problem = "배터리 경고 — 충전·절전 확인";
   else if (charging !== "충전 확인" && ["DOCKED", "CHARGING"].includes(robot.state?.docking?.state))

@@ -1,7 +1,8 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,commonDown,panelError,setText} from '/review-alerts.js';
 import '/commands.js';
+import {createBusyScope} from '/common/busy-scope.js';
 const $=id=>document.getElementById(id);
-let token='', manager=false, busy=false, configured=false, running=false, twoArmRunning=false, selected=null, bestId=null;
+let token='', manager=false, configured=false, running=false, twoArmRunning=false, selected=null, bestId=null;
 const STATUS={passed:'✓ 통과',failed:'✕ 실패',blocked:'⊘ 막힘',not_run:'– 실행 안 함',pending:'… 대기',running:'▶ 실행 중',unknown:'? 알 수 없음'};
 const STAGE={mujoco:'Stage 1 · MuJoCo',isaac:'Stage 2 · Isaac',gazebo:'ROS 계약 · Gazebo'};
 const COMPARE={better:'더 좋음 (평가 구간이 겹치지 않고 위쪽)',worse:'더 나쁨 (평가 구간이 겹치지 않고 아래쪽)',
@@ -16,7 +17,7 @@ const SCENE={robot:'팔',jaw:'집게',wrist_camera:'손목 카메라',revision:'
 const RECIPE={policy:'정책',steps:'학습 단계',batch_size:'묶음 크기',chunk_size:'청크',n_action_steps:'행동 단계',optimizer_lr:'학습률'};
 const DATA={episodes:'에피소드',from_failures:'실패에서 가져온 수'};
 function el(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;}
-function notice(id,value){$(id).textContent=value;$(id).hidden=!value;}
+function notice(id,value){setText($(id),value);$(id).hidden=!value;}
 function pairs(names,values){const out=Object.keys(names).filter(key=>values?.[key]!=null).map(key=>`${names[key]} ${values[key]}`);return out.length?out.join(' · '):'기록 없음';}
 function pct(value){return (value*100).toFixed(1)+'%';}
 async function api(path,body){
@@ -26,22 +27,22 @@ async function api(path,body){
   if(!response.ok)throw new Error(value.error||'사다리 연결을 확인하세요.');
   return value;
 }
+const scope=createBusyScope($('ladder-main'));
 function controls(){
   const passed=selected?.stages?.mujoco?.status==='passed';
-  $('ladder-decide').disabled=busy||!manager||!configured||!passed;
-  $('ladder-start').disabled=busy||!manager||!configured||running;
-  $('ladder-two-arm-start').disabled=busy||!manager||!configured||twoArmRunning;
-  $('ladder-compare-start').disabled=busy||!manager||!configured||twoArmRunning;
+  $('ladder-decide').disabled=scope.busy||!manager||!configured||!passed;
+  $('ladder-start').disabled=scope.busy||!manager||!configured||running;
+  $('ladder-two-arm-start').disabled=scope.busy||!manager||!configured||twoArmRunning;
+  $('ladder-compare-start').disabled=scope.busy||!manager||!configured||twoArmRunning;
   $('ladder-decide-round').textContent=selected?.round_id||'없음';
   $('ladder-start-state').textContent=!configured?'학습 사다리가 연결되지 않았습니다. 라운드를 시작할 수 없습니다.':
     running?'다른 라운드가 실행 중입니다. 끝난 뒤 시작할 수 있습니다.':
     manager?'값은 서버에서 한 번 더 확인합니다.':'조회 화면입니다. 시작·판단은 프로젝트 관리 권한이 필요합니다.';
 }
 async function work(operation){
-  if(busy)return;
-  busy=true;controls();notice('ladder-error','');
-  try{await operation();}catch(error){notice('ladder-error',error.message);}
-  finally{busy=false;controls();}
+  notice('ladder-error','');
+  await scope.run(async()=>{try{await operation();}catch(error){notice('ladder-error',panelError(error,''));if(commonDown())notice('ladder-notice','불러오지 못함');}});
+  controls();
 }
 function stageLine(name,stage){
   const line=el('div',undefined,'ladder-stage');line.dataset.status=stage.status;

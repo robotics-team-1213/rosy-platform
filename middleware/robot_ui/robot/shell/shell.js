@@ -10,8 +10,9 @@ import { SURFACE_RAIL as RAIL } from "../surface-navigation.js";
 import { createStore } from "./store.js";
 import { ROLE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
+import { createConnectionNotice } from "/common/connection-notice.js";
 import { dashboardLoginHref } from "../surface-navigation.js";
-import { createNode } from "../dom.js";
+import { announce, createNode } from "../dom.js";
 
 const REFRESH_MS = 5_000;
 const surface = document.body.dataset.surface;
@@ -22,12 +23,24 @@ retry.id = "surface-retry";
 retry.setAttribute("kind", "quiet");
 retry.setAttribute("type", "button");
 const safetyStatus = document.getElementById("safety-mode-status");
+// C25: #shell-notice and #safety-mode-status keep their words but carry no live role; the shared announcer is the one voice.
+// A stop result sets data-tone="stop" first and is read urgently once; every other notice text is read politely on change.
+notice.removeAttribute("role"); safetyStatus?.removeAttribute("role");
+new MutationObserver(() => { announce(notice.textContent, notice.dataset.tone === "stop"); delete notice.dataset.tone; })
+  .observe(notice, { childList: true, characterData: true, subtree: true });
+let saidSafety = "";
+function announceSafety(urgent) {
+  const text = safetyStatus.hidden ? "" : safetyStatus.textContent;
+  if (text === saidSafety) return;
+  saidSafety = text;
+  if (text) announce(text, urgent);
+}
 const store = createStore(api, { session });
 if (surface === "console") {
   const compact = window.matchMedia("(width < 64rem)");
   const main = document.getElementById("surface-main");
   function syncSlotOrder() {
-    const order = compact.matches ? ["observe", "act", "sense"] : ["sense", "observe", "act"];
+    const order = compact.matches ? ["act", "sense", "observe"] : ["sense", "observe", "act"];
     const slots = [...main.querySelectorAll(":scope > .surface-slot:not([data-slot='banner'])")];
     if (slots.every((slot, index) => slot.dataset.slot === order[index])) return;
     const focused = main.contains(document.activeElement) ? document.activeElement : null;
@@ -49,14 +62,17 @@ function renderSafetyMode(state) {
     safetyStatus.hidden = false;
     safetyStatus.setAttribute("state", "warning");
     safetyStatus.textContent = "안전 정지 · 로봇이 정지 상태를 보고했습니다. 이동은 로봇이 막고 있습니다. 해제와 물리 상태는 별도로 확인하세요.";
+    announceSafety(true);
   } else if (typeof state?.mode === "string" && state?.safety?.estop === false) {
     safetyStatus.hidden = true;
     safetyStatus.removeAttribute("state");
     safetyStatus.textContent = "";
+    announceSafety(false);
   } else {
     safetyStatus.hidden = false;
     safetyStatus.setAttribute("state", "warning");
     safetyStatus.textContent = "안전 상태 확인 불가 · 이동 가능 여부를 판단할 수 없습니다.";
+    announceSafety(false);
   }
 }
 
@@ -178,8 +194,10 @@ async function onManifestError(error) {
     showStatus("요청한 화면이 없습니다. 주소를 확인하세요.");
     return;
   }
-  showStatus(`화면 구성을 받지 못했습니다: ${error.message}. 잠시 뒤 다시 시도합니다.`);
-  status.append(retry);
+  const conn = createNode("span", "shell-connection-status");
+  createConnectionNotice(conn).set("disconnected", `화면 구성을 받지 못했습니다: ${error.message}. 잠시 뒤 다시 시도합니다.`);
+  status.hidden = false;
+  status.replaceChildren(conn, retry);
 }
 
 function refresh() {
@@ -194,6 +212,7 @@ retry.addEventListener("click", () => {
 
 document.getElementById("shell-estop").addEventListener("click", async () => {
   notice.tabIndex = 0;
+  notice.dataset.tone = "stop";
   window.dispatchEvent(new Event("rosy:stop-motion"));
   try {
     await api("/api/v1/safety/stop", { method: "POST" });

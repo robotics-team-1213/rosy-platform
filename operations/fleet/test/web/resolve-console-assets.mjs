@@ -20,6 +20,11 @@ function asset(name) {
 }
 
 export async function resolve(specifier, context, nextResolve) {
+  // ui.js registers custom elements and touches `document` at import; node specs only need these names to exist.
+  // shared/web/*.js reach it as "./ui.js".
+  if (specifier === "/common/ui.js" || (specifier === "./ui.js" && context.parentURL?.includes("/shared/web/"))) {
+    return { url: "data:text/javascript,export const actionIcon = () => null, canvasFont = () => '', toggletip = () => null, confirmIrreversible = () => null, openLiveDialog = () => null, readColour = () => '';", shortCircuit: true };
+  }
   if (specifier.startsWith('/common/')) {
     const name = specifier.slice('/common/'.length);
     if (Object.hasOwn(SHARED, name)) {

@@ -28,6 +28,7 @@ FLEET_SAMPLE = [
 ]
 FLEET = FLEET_SAMPLE + [
     "test/test_integrated_control_backend_browser.py",
+    "test/test_unit_scope_browser.py",
     "test/test_measured_calibration_browser.py",
     "test/test_motor_health_ui_browser.py",
     "test/test_fleet_workcell_observation_browser.py",
@@ -48,6 +49,7 @@ FLEET = FLEET_SAMPLE + [
 ROBOT = [
     "test/test_motor_health_ui_browser.py",
     "test/test_dashboard_browser.py",
+    "test/test_dashboard_choice_browser.py",
     "test/test_role_menu_panels_browser.py",
     "test/test_role_surface_states_browser.py",
     "test/test_surface_device_browser.py",
@@ -128,6 +130,8 @@ SCOPE: dict[str, list[str]] = {
     "learning/curation/perception/review_app_web/app.css": LEARNING,
     "learning/curation/perception/review_app_web/commands.js": LEARNING,
     "learning/curation/perception/review_app_web/account-session.js": LEARNING,
+    "learning/curation/perception/review_app_web/review-alerts.js": LEARNING,
+    "learning/curation/perception/review_app_web/review-failures.js": LEARNING,
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STORAGE for name in
        ("omx.html", "omx.js", "omx-journey.js", "omx-profiles.js", "omx-review.js", "omx-export.js")},
     # Their rail and sub-menu are walked by the OMX owner-status and stage browser tests.

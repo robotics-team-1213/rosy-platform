@@ -5,6 +5,8 @@
 import { siteBounds, fitTransform, project } from "./site-layer.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
+import { createChoiceGroup } from "/common/choice-group.js";
+import { lockWithMap } from "./map-tool-lock.js";
 import { createPlaneFeed, planeCalibration, planeCalibrationsFor, planeToMap } from "/console/assets/vision-view.js";
 
 const FRESH_MS = 3000;
@@ -133,6 +135,38 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     ctx.drawImage(image, 0, 0);
     ctx.restore();
   }
+  let floorCache = { key: "", canvas: null, seq: 0 };
+  function renderFloorCanvas(bounds) {
+    const record = calibration();
+    if (!record || !bounds || !cameraFrame) return null;
+    const spanX = bounds.max_x - bounds.min_x, spanY = bounds.max_y - bounds.min_y;
+    if (!(spanX > 0 && spanY > 0)) return null;
+    const pf = planeFrame();
+    const key = [
+      record.source_id, record.map_id, record.calibration_revision,
+      cameraFrame.seq || "", pf?.seq || "", staleAt ? 1 : 0,
+      bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y,
+    ].join("|");
+    if (floorCache.key === key && floorCache.canvas) return floorCache.canvas;
+    const cw = 960;
+    const ch = Math.max(240, Math.round((cw * spanY) / spanX));
+    const canvas = floorCache.canvas || document.createElement("canvas");
+    if (canvas.width !== cw || canvas.height !== ch) {
+      canvas.width = cw;
+      canvas.height = ch;
+    }
+    const fctx = canvas.getContext("2d");
+    fctx.clearRect(0, 0, cw, ch);
+    const toFloorPx = (x, y) => ({
+      x: ((x - bounds.min_x) / spanX) * cw,
+      y: ((bounds.max_y - y) / spanY) * ch,
+    });
+    drawTopDown(fctx, record, bounds, toFloorPx, cw, ch, 1, 0);
+    const seq = floorCache.seq + 1;
+    canvas.floorSeq = seq;
+    floorCache = { key, canvas, seq };
+    return canvas;
+  }
   function drawCorrected() {
     const canvas = el("camera-corrected"), status = el("camera-corrected-status");
     if (!canvas || !status) return;
@@ -149,18 +183,48 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     const toPx = (x, y) => { const p = project(transform, x, y); return {x: p.px, y: p.py}; };
     drawTopDown(ctx, record, bounds, toPx, canvas.width, canvas.height, 1, 0);
   }
-  function redraw() {
-    if (!view.map && view.siteMap) draw();
-    drawCorrected();
-    const status = el("map-display-status");
-    if (status) status.textContent = view.displayMode === "camera"
-      ? cameraFrame ? "교정 전 · 카메라 원본" : "원본 영상 대기 · 신선한 프레임 없음"
-      : view.displayMode === "overlay" && !calibration()
-        ? "교정 영상 없음 · 2D 좌표 표시" : view.displayMode === "overlay"
-          ? `공유 map 좌표 · m · 영상 유효 영역 ${usesPlane() && Number.isFinite(planeFrame()?.observedFraction)
-            ? `${Math.round(planeFrame().observedFraction * 100)}%` : "미확인"}` : "공유 map 좌표 · m";
+  const TWIN_WEBGL_NOTICE = "3D 보기를 열 수 없어 CAD + 실영상으로 전환했습니다";
+  const TWIN_NO_SITEMAP_NOTICE = "사이트 지도가 없어 2D 지도로 표시합니다";
+  function normalizeMode(value) {
+    if (value === "twin3d") {
+      if (view.twinFailed) {
+        view.twinUnavailableNotice = TWIN_WEBGL_NOTICE;
+        return "overlay";
+      }
+      if (!view.siteMap) {
+        view.twinUnavailableNotice = TWIN_NO_SITEMAP_NOTICE;
+        return "coordinates";
+      }
+      view.twinUnavailableNotice = "";
+      return "twin3d";
+    }
+    if (value === "coordinates" || value === "camera") {
+      view.twinUnavailableNotice = "";
+    } else if (value === "overlay" && view.twinUnavailableNotice && !view.twinFailed) {
+      view.twinUnavailableNotice = "";
+    }
+    return value;
   }
 
+  function redraw() {
+    if ((!view.map || view.displayMode === "twin3d") && view.siteMap) draw();
+    drawCorrected();
+    const status = el("map-display-status");
+    if (status) {
+      status.textContent = (view.displayMode === "overlay" || view.displayMode === "coordinates") && view.twinUnavailableNotice
+        ? view.twinUnavailableNotice
+        : view.displayMode === "camera"
+          ? cameraFrame ? "교정 전 · 카메라 원본" : "원본 영상 대기 · 신선한 프레임 없음"
+          : view.displayMode === "twin3d"
+            ? calibration() ? "3D 디지털 트윈 · 실영상 + CAD 정합" : "3D 디지털 트윈 · CAD 가상 맵"
+            : view.displayMode === "overlay" && !calibration()
+              ? "교정 영상 없음 · CAD 가상 좌표 표시" : view.displayMode === "overlay"
+                ? `CAD + 실영상 정합 · m · 영상 유효 영역 ${usesPlane() && Number.isFinite(planeFrame()?.observedFraction)
+                  ? `${Math.round(planeFrame().observedFraction * 100)}%` : "미확인"}` : "CAD 가상 맵 · 공유 map 좌표 (m)";
+    }
+  }
+
+  let modeSetter = (value) => { view.displayMode = normalizeMode(value); redraw(); };
   function setCameraFrame(frame) {
     cameraFrame = keepFrame(cameraFrame, frame);
     redraw();
@@ -170,16 +234,44 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     // D-493: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
     // (#map-birdseye) when there is no map or the operator asks for the large view. CSS picks the place.
     const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
-    const mode = el("map-display-mode");
-    view.displayMode = mode.value || "coordinates";
+    let modeGroup;
     const setMode = (value) => {
-      view.displayMode = value;
-      mode.value = value;
-      stage.dataset.view = value === "camera" ? "camera" : "map";
-      toggle.setAttribute("aria-pressed", String(value === "camera"));
+      const next = normalizeMode(value);
+      view.displayMode = next;
+      modeGroup?.set(next);
+      stage.dataset.displayMode = next;
+      stage.dataset.view = next === "camera" ? "camera" : next === "twin3d" ? "twin3d" : "map";
+      toggle.setAttribute("aria-pressed", String(next === "camera"));
+      if (next !== "twin3d") {
+        const twinCanvas = el("map-twin-canvas");
+        const twinTools = el("map-twin-tools");
+        if (twinCanvas) twinCanvas.hidden = true;
+        if (twinTools) twinTools.hidden = true;
+      }
+      if (next === "overlay" || next === "twin3d" || next === "camera") visionView?.refreshFrame?.();
       redraw();
     };
-    scope.listen(mode, "change", () => setMode(mode.value));
+    modeSetter = setMode;
+    view.setDisplayMode = setMode;
+    const modeItems = [
+      { value: "coordinates", label: "CAD 가상 맵" },
+      { value: "overlay", label: "CAD + 실영상" },
+      { value: "twin3d", label: "3D 디지털 트윈" },
+      { value: "camera", label: "원본 영상만" },
+    ];
+    modeGroup = createChoiceGroup({
+      id: "map-display-mode",
+      label: "지도 표시 방식",
+      mode: "single",
+      items: modeItems,
+      value: "coordinates",
+      onChange: setMode,
+    });
+    el("map-display-slot").replaceChildren(modeGroup.element);
+    lockWithMap({ stage, group: modeGroup, items: modeItems, scope });
+    view.displayMode = modeGroup.value || "coordinates";
+    stage.dataset.displayMode = view.displayMode;
+    scope.onDispose(() => modeGroup.dispose());
     scope.listen(el("camera-comparison"), "toggle", drawCorrected);
     planes = createPlaneFeed({ scope, visionView, onChange: () => {
       if (planes?.current()) keptPlane = planes.current();
@@ -243,5 +335,6 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       updateStamp();
     })));
   }
-  return { calibration, usesPlane, setCalibrations, drawTopDown, setCameraFrame, bindCamera };
+  return { calibration, usesPlane, setCalibrations, drawTopDown, renderFloorCanvas, setCameraFrame, bindCamera,
+    setMode: (value) => modeSetter(value) };
 }

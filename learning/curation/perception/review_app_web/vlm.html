@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ko" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — VLM 판단</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/vlm.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/common/alert-center.css"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/vlm.css">
 <script type="module" src="/vlm.js"></script><link rel="stylesheet" href="/file-picker.css"><script type="module" src="/file-picker.js"></script></head><body><a class="skip-link" href="#vlm-main">VLM 판단으로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
 <ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
@@ -12,11 +12,11 @@
 <!-- review:rail:end --></nav></div>
 <div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>VLM 판단</h1><span class="ui-crumbs" id="learning-tool-path"></span></div><nav class="review-kinds" aria-label="정답 하위 메뉴"><a class="ui-subnav-item" href="/">객체 검수</a><a class="ui-subnav-item" href="/pixels">픽셀 검수</a><a class="ui-subnav-item" href="/incidents">현장 실패 근거</a><a class="ui-subnav-item" href="/learning/omx">로봇암 시범 검수</a><a class="ui-subnav-item" href="/learning/vlm" aria-current="page">VLM 판단</a></nav><main id="vlm-main" class="learning-main vlm-main ui-task-page" tabindex="-1">
 <div class="vlm-tabs"><ol id="vlm-stations" class="ui-stage-track" data-line="learning" aria-label="VLM 판단 작업">
-<li id="vlm-import-stage" hidden class="ui-stage" data-state="todo"><ui-button id="tab-import" kind="quiet" aria-pressed="false" data-tab="import" hidden>가져오기</ui-button></li>
-<li class="ui-stage" data-state="now"><ui-button id="tab-label" kind="quiet" aria-pressed="true" data-tab="label">정답 달기</ui-button></li>
-<li class="ui-stage" data-state="todo"><ui-button id="tab-eval" kind="quiet" aria-pressed="false" data-tab="eval">평가</ui-button></li>
+<li id="vlm-import-stage" hidden class="ui-stage" data-state="todo"><ui-button id="tab-import" kind="quiet" data-tab="import" hidden>가져오기</ui-button></li>
+<li class="ui-stage" data-state="now"><ui-button id="tab-label" kind="quiet" aria-current="step" data-tab="label">정답 달기</ui-button></li>
+<li class="ui-stage" data-state="todo"><ui-button id="tab-eval" kind="quiet" data-tab="eval">평가</ui-button></li>
 </ol></div>
-<ui-status id="vlm-error" state="error" role="alert" hidden></ui-status>
+<div id="page-alerts" class="alert-center-list" aria-label="알림"></div><ui-status id="vlm-error" state="error" hidden></ui-status>
 <section id="panel-label" aria-label="정답 달기">
 <p class="vlm-progress"><span id="vlm-progress" role="status">불러오는 중입니다.</span> <span id="vlm-name" class="quiet"></span></p>
 <p id="vlm-queue" class="vlm-queue quiet" role="status"></p>
@@ -40,6 +40,7 @@
 <p id="vlm-export-status" class="quiet" role="status"></p>
 <div id="vlm-eval" class="vlm-eval" aria-live="polite"></div>
 <pre id="vlm-confusion" class="vlm-confusion" hidden></pre>
+<div class="learning-next-actions"><a class="ui-action-link" data-kind="quiet" href="/learning/evaluate">평가·승격 요청 (/learning/evaluate)</a><a class="ui-action-link" data-kind="quiet" href="/console/policy">Fleet 학습 정책 승인 (/console/policy)</a></div>
 </section>
 <section id="panel-import" aria-label="가져오기" hidden>
 <p>모델 PC의 벤치 결과(rows.jsonl)와 질문 파일(<code>vlm_question_bench.py --dump-questions</code>)을 등록합니다. 같은 사진은 다시 만들지 않고 새 모델 답만 더하며, 사람 정답은 바꾸지 않습니다.</p>

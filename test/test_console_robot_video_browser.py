@@ -17,14 +17,11 @@ from browser_harness import browser_tests_enabled
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="set ROSY_RUN_BROWSER_TESTS=1")
 
 from browser_harness import launch_options, safe_http_server  # noqa: E402
+from fleet.server.static_routes import CONSOLE_ASSETS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = {"/common/webrtc.js": ROOT / "shared/web/webrtc.js",
-         "/common/fleet-client.js": ROOT / "shared/web/fleet-client.js",
-         "/common/request.js": ROOT / "shared/web/request.js",
-         "/console/assets/app-runtime.js": ROOT / "applications/fleet/web/runtime.js",
-         "/console/assets/robot-video.js": ROOT / "applications/fleet/web/shared/robot-video.js",
-         "/console/assets/robot-video.css": ROOT / "applications/fleet/web/shared/robot-video.css"}
+WEB = ROOT / "applications/fleet/web"
+COMMON = ROOT / "shared/web"
 PAGE = b"""<!doctype html><html><head><meta charset="utf-8"></head><body>
 <section class="panel vision-preview"></section>
 <script type="module" src="/console/assets/robot-video.js"></script></body></html>"""
@@ -48,9 +45,12 @@ def _serve():
     class Handler(SimpleHTTPRequestHandler):
         def do_GET(self):
             path = self.path.split("?")[0]
+            target = (COMMON / path[len("/common/"):] if path.startswith("/common/")
+                      else (WEB / CONSOLE_ASSETS[path[len("/console/assets/"):]][0]
+                            if path.startswith("/console/assets/") and path[len("/console/assets/"):] in CONSOLE_ASSETS else None))
             body, kind = (PAGE, "text/html") if path == "/" else (
-                (FILES[path].read_bytes(), "text/css" if path.endswith(".css") else "text/javascript")
-                if path in FILES else (None, None))
+                (target.read_bytes(), "text/css" if path.endswith(".css") else "text/javascript")
+                if target and target.is_file() else (None, None))
             if body is None:
                 self.send_error(404)
                 return
@@ -87,9 +87,11 @@ def _run(origin, robots, *, grant_status=201, steps):
         calls.append((request.method, url.split("127.0.0.1")[-1], request.headers.get("authorization")))
         if url.endswith("/api/fleet/state"):
             return route.fulfill(json={"robots": [{"robot_id": robot} for robot in robots]})
-        robot = url.split("/robots/")[1].split("/")[0]
         if request.method == "DELETE":
             return route.fulfill(status=204, body="")
+        if "/robots/" not in url:
+            return route.fulfill(json={"sources": []})
+        robot = url.split("/robots/")[1].split("/")[0]
         if grant_status != 201:
             return route.fulfill(status=grant_status, json={"detail": {"code": "FORBIDDEN"}})
         return route.fulfill(status=201, json={

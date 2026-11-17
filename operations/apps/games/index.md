@@ -53,8 +53,8 @@
 
 ## 최근 기록
 
+- 2026-11-14 · uncommitted · refactor(games): 경기판을 UI 콘셉트 배치로 정리
+- 2026-11-13 · uncommitted · refactor(games): stop, account gate and connection notice through shared parts
+- 2026-11-13 · uncommitted · Games 보드를 공용 정지·계정·연결 부품으로 이행
 - 2026-11-06 · uncommitted · uiux: 지연 표시에 나이 문구, 폰 폭 피치 아래 빈틈 제거
 - 2026-11-06 · uncommitted · uiux: 정지 권한 없는 조회자의 스페이스 안내 정정
-- 2026-11-02 · uncommitted · D-961 웹 제품 통합
-- 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리, 사용자 지시)
-- 2026-11-01 · uncommitted · 경기 보드 h1 하나(D-945 마지막 미이행 표면)

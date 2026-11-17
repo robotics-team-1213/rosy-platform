@@ -156,7 +156,7 @@ def test_mode_panel_names_modes_in_korean_and_keeps_the_enum_in_title(panel):
     assert status.inner_text() == "현재 모드: 수동"
     assert status.get_attribute("title") == "MANUAL"
     buttons = page.locator("[data-mode]")
-    labels = [text.split("\n")[0] for text in buttons.all_inner_texts()]
+    labels = [text.split(chr(10))[0] for text in buttons.all_inner_texts()]
     assert labels == ["대기", "수동", "내비게이션"]
     assert [buttons.nth(i).get_attribute("title") for i in range(3)] == ["IDLE", "MANUAL", "NAVIGATION"]
     page.locator('[data-mode="NAVIGATION"]').click()
@@ -169,8 +169,9 @@ def test_mode_panel_names_modes_in_korean_and_keeps_the_enum_in_title(panel):
 def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel):
     page = panel("console/overview.js", width=390)
     status = page.locator("#root > ui-status")
-    # D-978 머리 수치 띠(dl[data-form="strip"])와 구분해 근거 요약 dl만 잡는다.
-    summary = page.locator('dl.ui-readout:not([data-form="strip"])')
+    # 알려진 값은 값 띠(dl[data-form="strip"])에 두고, 근거 없는 값은 "근거 없음 N개" 펼침의 dl로 간다.
+    summary = page.locator('dl.ui-readout[data-form="strip"]')
+    unknown = page.locator("details.overview-unknown dl.ui-readout")
     assert status.inner_text() == "로봇 상태를 확인하는 중입니다."
     assert status.get_attribute("state") == "pending" and status.get_attribute("role") == "status"
     assert summary.is_hidden()
@@ -187,11 +188,17 @@ def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel)
     }""")
     rows = summary.locator("dd")
     assert status.is_hidden() and summary.is_visible()
-    assert summary.locator(":scope > dt").count() == summary.locator(":scope > dd").count() == 7
+    # 모드·도크(근거 키 없음 = 연결 끊김)·내비게이션(지연)·위치·배터리는 알려진 값(띠) + 마지막 관측 한 칸,
+    # 값이 없는 전원·충전만 "근거 없음" 펼침으로 간다.
+    assert summary.locator("dt").count() == summary.locator("dd").count() == 6
+    assert unknown.locator("dt").all_text_contents() == ["전원", "충전"]
+    assert unknown.locator("dd").all_text_contents() == ["정보 없음"] * 2
+    assert page.locator("details.overview-unknown > summary").inner_text() == "근거 없음 2개"
+    assert page.locator("[data-calibration-chip]").count() == 0
     mode = summary.locator("dt", has_text="운전 모드").locator("+ dd")
     navigation = summary.locator("dt", has_text="내비게이션").locator("+ dd")
     assert mode.inner_text() == "수동"
-    assert mode.get_attribute("title") == "MANUAL"
+    assert mode.get_attribute("data-ui-tooltip") == "MANUAL"
     assert mode.get_attribute("data-evidence") == "fresh"
     assert navigation.get_attribute("data-evidence") == "delayed"
     assert navigation.inner_text().startswith("지연 · ") and navigation.inner_text().endswith("초 전")
@@ -205,7 +212,7 @@ def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel)
     page.evaluate("""() => __callbacks['/api/v1/robot/state'].onData({mode: 'IDLE', navigation: 'ARRIVED',
       evidence: {navigation: {evidence: 'fresh'}}})""")
     assert navigation.inner_text() == "도착"
-    assert navigation.get_attribute("title") == "ARRIVED"
+    assert navigation.get_attribute("data-ui-tooltip") == "ARRIVED"
     page.evaluate("() => __callbacks['/api/v1/robot/state'].onError(new Error('fixture'))")
     assert "상태를 불러오지 못했습니다" in status.inner_text()
     assert status.get_attribute("state") == "error" and status.is_visible() and summary.is_hidden()
@@ -634,3 +641,24 @@ def test_camera_low_light_is_visibility_failure_with_live_raw_frame(panel):
     page.evaluate("window.cameraQuality=undefined")
     page.locator('#vision-quality').wait_for(state='hidden')
     page.evaluate('__unmount()')
+
+
+def test_mode_panel_buttons_mirror_the_robot_mode_and_a_declined_pick_sends_nothing(panel):
+    """Mode is K20 (panel 11-14): the current mode is aria-current and disabled, a declined pick sends nothing, unknown marks none."""
+    page = panel("console/mode.js")
+    page.evaluate("""() => {
+      __callbacks['/api/v1/robot/state'].onData({mode: 'MANUAL'});
+      __callbacks['/api/v1/system/capabilities'].onData({navigation: {goal_navigation: true}});
+    }""")
+    current = lambda: page.locator("#console-mode [aria-current=true]").evaluate_all("els => els.map(e => e.dataset.mode)")
+    assert current() == ["MANUAL"] and page.locator('[data-mode="MANUAL"]').is_disabled()
+    assert page.locator("[data-mode][aria-pressed]").count() == 0
+    page.locator('[data-mode="IDLE"]').click()
+    page.locator("dialog[open]").wait_for(timeout=5000)
+    page.get_by_role("button", name="취소", exact=True).click()
+    page.wait_for_function('() => !document.querySelector("dialog[open]")')
+    assert current() == ["MANUAL"] and page.evaluate("window.__calls.length") == 0
+    page.evaluate("() => __callbacks['/api/v1/robot/state'].onData({mode: 'SAFE_STOP'})")
+    assert current() == [] and page.locator('[data-mode="IDLE"]').is_enabled()   # a pick stays possible from SAFE_STOP
+    page.evaluate("() => __callbacks['/api/v1/robot/state'].onData({mode: 'IDLE'})")
+    assert current() == ["IDLE"]

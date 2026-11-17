@@ -120,7 +120,7 @@ def test_review_train_retry_stop_and_vector_result(workflow_page):
     expect(page.locator('#workflow-train-start')).to_be_disabled()
     page.locator('#workflow-review-selection').select_option('episodes')
     page.locator('#workflow-train-start').click()
-    expect(page.locator('#workflow-error')).to_contain_text('reply lost')
+    expect(page.locator('#page-alerts')).to_contain_text('reply lost')
     page.locator('#workflow-train-start').click()
     expect(page.locator('#workflow-runs')).to_contain_text('학습 중')
     assert posts[0] == posts[1]
@@ -140,7 +140,7 @@ def test_review_train_retry_stop_and_vector_result(workflow_page):
     expect(page.locator('#workflow-runs')).to_contain_text('0.125')
     expect(page.locator('#workflow-results')).to_contain_text('실물 평가')
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
-        page.get_by_role('tab', name='결과', exact=True).click()
+        page.get_by_role('list', name='과제 작업').get_by_role('link', name='결과', exact=True).click()
         target = Path(output)
         target.mkdir(parents=True, exist_ok=True)
         for theme in ('dark', 'light'):
@@ -223,28 +223,33 @@ def test_integrity_refresh_is_explicit_while_status_polls_use_cache(workflow_pag
     page.wait_for_function("() => window.__workflowRequests.filter(url => url === '/api/learning/tasks/native-inputs').length === 2")
 
 
-def test_task_tabs_keep_one_panel_and_keyboard_selection_across_refresh(workflow_page):
+def test_task_steps_keep_one_panel_and_keyboard_selection_across_refresh(workflow_page):
+    """K10 stepper: ordered links with aria-current=step on the open one (no role=tab); Tab and Enter reach every panel."""
     page, state, base, expect = workflow_page
     selected(state, attached=True)
     page.goto(base + '/learning/tasks?task=' + TASK, wait_until='networkidle')
-    tabs = page.get_by_role('tablist', name='과제 작업')
-    expect(tabs.get_by_role('tab')).to_have_count(5)
-    expect(page.get_by_role('tabpanel')).to_have_count(1)
-    expect(tabs.get_by_role('tab', name='학습', exact=True)).to_have_attribute('aria-selected', 'true')
-    tabs.get_by_role('tab', name='결과', exact=True).click()
+    steps = page.get_by_role('list', name='과제 작업')
+    expect(steps.get_by_role('link')).to_have_count(5)
+    expect(page.locator('[role=tab], [role=tablist], [role=tabpanel]')).to_have_count(0)
+    expect(page.locator('.workflow-panel:visible')).to_have_count(1)
+    expect(steps.get_by_role('link', name='학습', exact=True)).to_have_attribute('aria-current', 'step')
+    expect(steps.locator('[aria-current="step"]')).to_have_count(1)
+    steps.get_by_role('link', name='결과', exact=True).click()
     expect(page).to_have_url(base + '/learning/tasks?task=' + TASK + '#workflow-results')
     expect(page.locator('#workflow-learn')).to_be_hidden()
     page.locator('#workflow-refresh').click()
-    expect(tabs.get_by_role('tab', name='결과', exact=True)).to_have_attribute('aria-selected', 'true')
+    expect(steps.get_by_role('link', name='결과', exact=True)).to_have_attribute('aria-current', 'step')
     page.reload(wait_until='networkidle')
     expect(page.locator('#workflow-results')).to_be_visible()
-    tabs.get_by_role('tab', name='결과', exact=True).focus()
-    page.keyboard.press('Home')
-    expect(tabs.get_by_role('tab', name='준비', exact=True)).to_be_focused()
+    steps.get_by_role('link', name='준비', exact=True).focus()
+    page.keyboard.press('Enter')
     expect(page.locator('#workflow-prepare')).to_be_visible()
-    page.keyboard.press('ArrowRight')
+    expect(steps.get_by_role('link', name='준비', exact=True)).to_have_attribute('aria-current', 'step')
+    page.keyboard.press('Tab')
+    expect(steps.get_by_role('link', name='녹화', exact=True)).to_be_focused()
+    page.keyboard.press('Enter')
     expect(page.locator('#workflow-record')).to_be_visible()
-    expect(page.get_by_role('tabpanel')).to_have_count(1)
+    expect(page.locator('.workflow-panel:visible')).to_have_count(1)
 
 
 def test_launch_stop_pending_and_failed_run_have_distinct_recovery_states(workflow_page):
@@ -273,9 +278,9 @@ def test_reopening_active_task_exposes_status_and_stop(workflow_page):
     flow['runs'] = [{'id':'fixture-run','status':'running','native':True}]
     flow['next_action'] = {'label':'진행 중인 학습 확인','href':'#workflow-results'}
     page.goto(base+'/learning/tasks?task='+TASK,wait_until='networkidle')
-    expect(page.get_by_role('tab',name='결과',exact=True)).to_have_attribute('aria-selected','true')
+    expect(page.get_by_role('list', name='과제 작업').get_by_role('link', name='결과',exact=True)).to_have_attribute('aria-current','step')
     expect(page.get_by_role('button',name='이 학습 중지')).to_be_visible()
-    page.get_by_role('tab',name='학습',exact=True).click()
+    page.get_by_role('list', name='과제 작업').get_by_role('link', name='학습',exact=True).click()
     page.locator('#workflow-next').click()
     expect(page.get_by_role('button',name='이 학습 중지')).to_be_visible()
 
@@ -287,12 +292,12 @@ def test_review_selects_an_explicit_source_shared_with_training(workflow_page):
     state['native_inputs'].append(other)
     flow['inputs'].append(other)
     page.goto(base+'/learning/tasks?task='+TASK,wait_until='networkidle')
-    page.get_by_role('tab',name='검수',exact=True).click()
+    page.get_by_role('list', name='과제 작업').get_by_role('link', name='검수',exact=True).click()
     expect(page.locator('#workflow-review-link')).to_be_hidden()
     page.get_by_label('작업할 시연',exact=True).select_option(other['prepared_id'])
     expect(page.locator('#workflow-review-summary')).to_contain_text('Second demonstration')
     expect(page.locator('#workflow-review-link')).to_have_attribute('href',f'/learning/omx?task={TASK}&prepared={other["prepared_id"]}#dataset-section')
-    page.get_by_role('tab',name='학습',exact=True).click()
+    page.get_by_role('list', name='과제 작업').get_by_role('link', name='학습',exact=True).click()
     page.locator('#workflow-refresh').click()
     expect(page.locator('#workflow-train-source')).to_have_value(other['prepared_id'])
 

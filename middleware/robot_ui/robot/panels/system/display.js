@@ -36,7 +36,7 @@ export function mount(el) {
 
   const note = document.createElement("ui-text");
   note.textContent = "이 브라우저에만 저장됩니다. 시스템은 기기의 색상 모드 설정을 따릅니다.";
-  const state = document.createElement("ui-status"); state.setAttribute("state", "ready"); state.setAttribute("role", "status");
+  const state = document.createElement("ui-status"); state.setAttribute("state", "ready");
   function render() {
     const theme = window.RosyTheme;
     const label = value => theme?.choices.find(choice => choice.value === value)?.label || value;

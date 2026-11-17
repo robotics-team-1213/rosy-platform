@@ -2,9 +2,11 @@
 // Fleet and CORE do not say who sent an accepted teleop (a console and a robot's own dashboard look the same
 // to CORE), so a manual mode or a motion with no proving fact is shown as 확인 불가, never as a guess.
 import { staleAgeS } from "./state-age.js";
+import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 
 const MOVING_LINEAR_MS = 0.01, MOVING_ANGULAR_RS = 0.02;
-const LAB = { unknown: "출처 확인 불가", idle: "정지 · 대기" };
+// What is missing is the motion evidence, said with the shared unknown wording.
+const LAB = { unknown: `움직임 ${EVIDENCE_LABEL.unavailable}`, idle: "정지 · 대기" };
 
 /** True/false when CORE's fresh velocity says so; null when not provable (no state, stale, or evidence not fresh). */
 export function movingNow(state, stale) {

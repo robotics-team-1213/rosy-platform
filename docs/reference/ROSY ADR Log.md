@@ -10,6 +10,8 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1027 | Fleet 좁은 관제 화면의 읽기 순서: 예외, 지도, 로봇 상세 (D-892 부분 대체) | Accepted (2026-11-14) |
+| D-1028 | Robot 운용 콘솔 좁은 화면의 읽기 순서: 머리, 운전 모드, 카메라, 지도 (2026-10-08 모바일 지도 우선 순서 부분 대체) | Accepted (2026-11-14) |
 | D-1035 | 셀 팔 리스, Calibration 보정 작업 API, AI 판정 기록으로 팔 incident 해제(D-971 해제 주체 변경). [전문](../adr/D-1035-calibration-arm-lease-jobs-and-ai-incident-assessment.md) | Accepted (2026-11-17, 사용자 결정; 배포·실물 수용 별도) |
 | D-1024 | OMX 학습 정책의 실물 입회 시험을 하루 안에 연다 — D-793 단계를 줄이되 장치 한계·정지·두 사람 확인은 그대로 둔다. [전문](../adr/D-1024-omx-learned-policy-supervised-real-trial-fast-track.md) | Accepted (2026-11-14, 사용자 지시; 구현·원격 시험, 실물 수용 없음) |
 | D-1034 | 원격·분리 제어 유닛의 중앙 Rosy Account 연동, 터널 브리지, 기계 토큰 분리 및 공용 브라우저 세션. [전문](../adr/D-1034-paired-control-unit-central-account-wiring.md) | Accepted (2026-11-15, 사용자 결정; `cell-a`↔`rosy-fleet-r` 실물 연동 검증·`shared/web` 통합 반영, 서명 compose 템플릿·R 이미지 갱신 별도) |
@@ -28,6 +30,7 @@
 | D-1017 | peer 위치 공유로 지도 자세 앵커 보강 — 카메라·운영자 핀 뒤에서만, 첫 앵커는 DEGRADED. [전문](../adr/D-1017-peer-sighting-map-pose-anchor.md) | Proposed (2026-11-11, 사용자 지시; 구현·원격 시험, 현장 수용 없음) |
 | D-1022 | 기체 SLAM 지도와 현장 지도의 결속 — 실제로 읽은 격자(`map_grid_id`)·현장 지도 버전에 묶인 승인 변환, 벽에서 마커 없이 제안, 켜진 현장의 free 목표는 결속으로만. [전문](../adr/D-1022-robot-map-binding.md) | Proposed (2026-11-14, 사용자 지시; 호스트 시험까지, 실물 미수행) |
 | D-1019 | OMX 운반은 도착지에 자리가 없으면(팔이 움직이기 전 멈춤) 설정에 선언된 대체 도착지로 자동으로 옮긴다 — Gate·D-911은 그대로. [전문](../adr/D-1019-omx-carry-redirects-to-declared-alternate-destinations.md) | Accepted (2026-11-13, 사용자 결정; 코드·원격 시험, 실물 수용 없음) |
+| D-1030 | 선택 표지는 새 색 없이 `--selection`(= `--series-secondary`) 별칭 하나와 굵은 줄·체크로 그린다. [전문](../adr/D-1030-selection-token-and-mark.md) | Accepted (2026-11-14, S0 위임 결정; 화면 채택 별도) |
 | D-1029 | 저전력 충전 복귀: 경고(20 %)에서 Fleet이 충전 칸 앞으로 Nav2로 데려가고, trip lease `purpose: charge_return` 동안 CORE는 10 % 정지를 미루고(5 % 그대로) 0.10 m/s로 상한한다. 칸 앞에서 사람이 꽂는다. [전문](../adr/D-1029-low-battery-fleet-charge-return.md) | Proposed (2026-11-14, 사용자 결정; 호스트 시험까지, 실물 수용 없음) |
 | D-1016 | 등록 로봇 30일 비활동 «삭제 예정» 표시 — 비활성은 토큰 만료 그대로, 해제는 이름 있는 운영자만. [전문](../adr/D-1016-enrollment-idle-removal-pending.md) | Proposed (2026-11-11, 사용자 방침; 구현·호스트 시험, 현장 수용 없음) |
 | D-1015 | OMX 모방학습 대비 실행 속도 병목과 지터링 해소를 위한 시간적 앙상블·동역학 가감속·연속 청크 스트리밍 아키텍처. [전문](../adr/D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md) | Accepted (2026-11-11, 사용자 지시; OMX 어댑터·가드·청크 실행기·서보 하드웨어 프로파일 구현·호스트/원격 시험·실물 팔 배포 반영) |
@@ -121,7 +124,7 @@
 | D-899 | 인증된 이송 복구 요청과 독립 운영자 승인. [전문](../adr/D-899-authenticated-transfer-recovery-intent.md) | Accepted for implementation (2026-10-27) |
 | D-895 | 원래 시도를 보존한 단일 이송 복구 후손. [전문](../adr/D-895-bounded-physical-transfer-recovery-child.md) | Accepted for implementation (2026-10-27) |
 | D-888 | Pinky 전체 OS 업데이트는 bootstrap 영속 입력과 별도 CMS 서명을 사용한다 | Proposed |
-| D-892 | Fleet 모바일 관제의 로봇 상태·작업 우선 배치 | Accepted (2026-10-27) |
+| D-892 | Fleet 모바일 관제의 로봇 상태·작업 우선 배치 (순서는 D-1027로 부분 대체) | Accepted (2026-10-27) |
 | D-891 | Fleet 인식 모델 승격 대기열 — 올린 D-874 묶음을 다시 검사하고 결정만 기록한다 | Proposed (2026-10-26) |
 | D-887 | Signed site service sets and identity-bound retirement | Accepted (2026-10-26) |
 | D-890 | Navigation intent epoch preservation | Accepted (2026-10-26) |

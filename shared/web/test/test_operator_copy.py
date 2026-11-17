@@ -50,6 +50,7 @@ SURFACES = (
     ("middleware/robot_ui/robot", "index.html"),
     ("middleware/robot_ui/robot", "surface.html"),
     ("applications/fleet/web", "*.js"),
+    ("applications/fleet/web/robot", "*.js"),
     ("applications/fleet/web", "*.html"),
     ("operations/apps/games/games/web", "*.js"),
     ("operations/apps/games/games/web", "*.html"),
@@ -370,7 +371,7 @@ def test_the_lint_catches_bare_enums_flowing_to_text():
 
 
 @pytest.mark.parametrize(("rel", "fixed", "regressed"), [
-    ("applications/fleet/web/roster.js", '!robot.online ? "오프라인"', '!robot.online ? "OFFLINE"'),
+    ("applications/fleet/web/robot/roster.js", '!robot.online ? "오프라인"', '!robot.online ? "OFFLINE"'),
     ("middleware/robot_ui/robot/app.js", "`${enumLabel(MODE_LABEL, requestedMode)} 모드로", "`${requestedMode} 모드로"),
     ("middleware/robot_ui/robot/settings.js", "상태 ${enumLabel(DOCK_STATE_LABEL, state)}", "상태 ${state}"),
     ("middleware/robot_ui/robot/panels/console/line-follow.js",
@@ -391,8 +392,6 @@ ENUM_TEXT_ALLOWLIST: dict[tuple[str, str], str] = {
     ("middleware/robot_ui/robot/panels/console/teleop.js", "${readErrors.state}"):
         "an error message keyed by the state endpoint, not a state value",
     ("middleware/robot_ui/robot/panels/host/operations.js", '${data.runtime_mode || "실행 모드 미확인"}'):
-        "runtime mode names core/motor/hardware are the CONCEPTS.md glossary preset names",
-    ("middleware/robot_ui/robot/panels/host/system.js", '${data.runtime_mode || "확인 불가"}'):
         "runtime mode names core/motor/hardware are the CONCEPTS.md glossary preset names",
     ("middleware/robot_ui/robot/panels/host/operations.js", '${data.state || "상태 미확인"}'):
         "Host Agent release state is shown as received; no sanctioned Korean map exists yet",
@@ -421,7 +420,7 @@ def test_every_enum_text_allowlist_entry_still_matches():
 def test_the_lint_sees_every_surface():
     rels = {_rel(path) for path in surface_files()}
     for expected in ("middleware/robot_ui/robot/panels/console/mode.js", "middleware/robot_ui/robot/app.js",
-                     "applications/fleet/web/roster.js", "applications/fleet/web/index.html",
+                     "applications/fleet/web/robot/roster.js", "applications/fleet/web/index.html",
                      "operations/apps/games/games/web/board.js", "operations/apps/games/games/web/index.html"):
         assert expected in rels
 
@@ -495,3 +494,74 @@ def test_one_word_per_meaning_across_every_web_surface():
             if path.suffix in (".js", ".html") and "test" not in path.parts
             for old, new in SAME_MEANING_RETIRED.items() if old in path.read_text(encoding="utf-8-sig")]
     assert not hits, "\n".join(sorted(set(hits)))
+
+
+# 2026-11-15 사용자 결정 — 사람에게 실측을 부탁하는 요청의 이름은 모든 앱에서 "보정 요청" 하나다.
+# 은퇴한 이름: 실측 요청, 실측 교정, 설치·보정. "카메라 설치·보정"과 "보정"만 쓰는 말은 다른 일이라 통과한다.
+# "보정 중"은 요청이 진행 중이라는 상태일 때만 쓴다(이름으로 쓰지 않는다). 글자만으로는 가를 수 없어 이 검사는 보지 않는다.
+CALIBRATION_REQUEST_RETIRED = re.compile(r"실측 요청|실측 교정|(?<!카메라 )설치·보정")
+CALIBRATION_ROOTS = ("applications", "middleware/robot_ui", "learning/curation/perception/review_app_web",
+                     "operations/apps/games/games/web")
+#: (경로, 문구 조각) -> 이유. Fleet 정리가 끝나 비었다.
+CALIBRATION_ALLOWLIST: dict[tuple[str, str], str] = {}
+
+
+def calibration_name_problems(allowlist=None) -> list[tuple[str, int, str]]:
+    allowlist = CALIBRATION_ALLOWLIST if allowlist is None else allowlist
+    out = []
+    for root in CALIBRATION_ROOTS:
+        for path in sorted((REPO / root).rglob("*")):
+            if (path.suffix not in (".js", ".html", ".inc") or "test" in path.parts
+                    or "node_modules" in path.parts or not path.is_file()):
+                continue
+            text = path.read_text(encoding="utf-8-sig")
+            literals = _copy(path) if path.suffix == ".js" else _html_copy(text)
+            for line, literal in literals:
+                if CALIBRATION_REQUEST_RETIRED.search(literal) and not any(
+                        key[0] == _rel(path) and key[1] in literal for key in allowlist):
+                    out.append((_rel(path), line, literal[:100]))
+    return out
+
+
+def _html_copy(text: str) -> list[tuple[int, str]]:
+    parser = _HtmlCopy()
+    parser.feed(text)
+    return parser.found
+
+
+def test_calibration_request_has_one_name():
+    found = calibration_name_problems()
+    assert found == [], "사람에게 실측을 부탁하는 요청은 '보정 요청'이다:\n" + "\n".join(map(str, found))
+
+
+def test_the_calibration_name_lint_sees_retired_names_and_spares_other_uses():
+    for old in ("실측 요청", "실측 교정 승인", "설치·보정", "셀 실측 요청"):
+        assert CALIBRATION_REQUEST_RETIRED.search(old), old
+    for ok in ("보정 요청", "카메라 설치·보정", "보정 중 — 주행 보정", "카메라 보정", "보정"):
+        assert not CALIBRATION_REQUEST_RETIRED.search(ok), ok
+    assert _html_copy('<h1>실측 요청</h1><a aria-label="설치·보정">x</a>') != []
+
+
+def test_every_calibration_allowlist_entry_still_matches():
+    for (rel, needle), reason in CALIBRATION_ALLOWLIST.items():
+        assert reason.strip(), (rel, needle)
+        assert calibration_name_problems({}) and any(
+            r == rel and needle in lit for r, _, lit in calibration_name_problems({})), (rel, needle)
+
+
+FLEET_RETIRED_WORDS = re.compile(r"태스크|기체")
+
+
+def test_fleet_retires_task_and_airframe_words():
+    """R2-20 — Fleet 화면은 '태스크' 대신 '작업', '기체' 대신 '로봇'을 쓴다."""
+    hits = []
+    for path in sorted((REPO / "applications/fleet/web").rglob("*")):
+        if path.suffix not in (".js", ".html") or "test" in path.parts or "node_modules" in path.parts:
+            continue
+        literals = _copy(path) if path.suffix == ".js" else _html_copy(path.read_text(encoding="utf-8-sig"))
+        for line, literal in literals:
+            if FLEET_RETIRED_WORDS.search(literal):
+                hits.append(f"{_rel(path)}:{line}: {literal[:100]}")
+    assert hits == [], "\n".join(hits)
+    assert FLEET_RETIRED_WORDS.search("원클릭 태스크") and FLEET_RETIRED_WORDS.search("기체 관리자")
+    assert not FLEET_RETIRED_WORDS.search("원클릭 작업") and not FLEET_RETIRED_WORDS.search("로봇 관리자")

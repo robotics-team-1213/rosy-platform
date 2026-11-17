@@ -21,6 +21,8 @@ WEB = REPO / "shared" / "web"
 COMPONENTS = WEB / "components.css"
 STAGE_STRIP = WEB / "stage-strip.css"
 READOUT_STRIP = WEB / "readout-strip.css"
+CONTROLS = WEB / "component-controls.css"
+STATUS_TAG = WEB / "status-tag.js"
 APP_SHELL = WEB / "app-shell.css"
 UI = WEB / "ui.js"
 WORKSPACE = WEB / "workspace.js"
@@ -71,11 +73,13 @@ def declared(name: str) -> bool:
     styles = (COMPONENTS.read_text(encoding="utf-8")
               + APP_SHELL.read_text(encoding="utf-8")
               + STAGE_STRIP.read_text(encoding="utf-8")
-              + READOUT_STRIP.read_text(encoding="utf-8"))
+              + READOUT_STRIP.read_text(encoding="utf-8")
+              + CONTROLS.read_text(encoding="utf-8")
+              + (WEB / "choice-controls.css").read_text(encoding="utf-8"))
     if name.startswith("<"):
         return f'"{name.strip("<>")}"' in UI.read_text(encoding="utf-8")
     if name.endswith("()"):
-        return f"function {name[:-2]}" in WORKSPACE.read_text(encoding="utf-8")
+        return any(f"function {name[:-2]}" in path.read_text(encoding="utf-8") for path in (WORKSPACE, STATUS_TAG, WEB / "choice-group.js", WEB / "choice-list.js", WEB / "selection.js"))
     if name.startswith("."):
         class_name, _, rest = name.partition("[")
         attribute = rest.strip("[]")
@@ -197,3 +201,35 @@ def test_screen_head_modules_never_write():
     offenders = [path for path in files if WRITE_REQUEST.search((REPO / path).read_text(encoding="utf-8"))]
     assert offenders == [], f"화면 머리 모듈이 쓰기 요청을 보낸다: {offenders}"
     assert WRITE_REQUEST.search("request(path, {method: 'POST'})") and WRITE_REQUEST.search("api.post(x)")
+
+
+def _panel_rules() -> list[tuple[str, str]]:
+    text = _COMMENT.sub("", CONTROLS.read_text(encoding="utf-8"))
+    return [(selector.strip(), body) for selector, body in _TOP_RULE.findall(text) if ".ui-panel" in selector]
+
+
+def test_ui_panel_is_two_surfaces_and_two_densities_on_role_tokens():
+    """C11: 상자 하나. 테 하나, 표면 둘, 밀도 둘, 역할 토큰만, 움직임 없음. compact는 64rem 이상 마우스 면에서만(D-976)."""
+    rules = _panel_rules()
+    selectors = " ".join(selector for selector, _ in rules)
+    for needed in ('data-surface="raised"', 'data-density="compact"', '[data-slot="value"]'):
+        assert needed in selectors, needed
+    offenders = []
+    for selector, body in rules:
+        for pattern in (RAW_COLOUR, PALETTE):
+            offenders += [f"{selector}: {m.group(0)}" for m in pattern.finditer(body)]
+        if "transition" in body or "animation" in body or "box-shadow" in body:
+            offenders.append(f"{selector}: 움직임·그림자 — 패널은 정적이고 테 하나다")
+    assert offenders == [], offenders
+    css = CONTROLS.read_text(encoding="utf-8")
+    compact = css[css.index('data-density="compact"') - 400:css.index('data-density="compact"')]
+    assert "@media (width >= 64rem) and (hover: hover) and (pointer: fine)" in compact, "compact가 넓은 마우스 면 밖으로 샌다"
+    assert "--target-tool" in css
+
+
+def test_unknown_has_one_shared_wording():
+    """모르는 값은 EVIDENCE_LABEL.unavailable 하나다(D-280). 공용 모듈이 자기 말을 따로 갖지 않는다."""
+    for name in ("motor-health.js", "status-tag.js", "connection-notice.js", "value-text.js"):
+        source = (WEB / name).read_text(encoding="utf-8")
+        assert "EVIDENCE_LABEL" in source, name
+        assert "확인 불가" not in source and "미확인" not in source, f"{name}: 모르는 값 문구를 따로 두었다"

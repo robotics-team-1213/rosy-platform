@@ -1,10 +1,17 @@
 import {createFleetClient} from '/common/fleet-client.js';
-import {confirmIrreversible} from '/common/ui.js';
+import {actionIcon, confirmIrreversible} from '/common/ui.js';
+import {statusTag} from '/common/status-tag.js';
+import {valueText} from '/common/value-text.js';
+import {createBusyScope} from '/common/busy-scope.js';
+import {createCauseLine} from '/common/cause-line.js';
 import {canManageAccounts, canViewAccountSetup, CAPABILITIES, roleGrants} from '/console/assets/account-permissions.js';
 
 const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts', requestsEndpoint = '/api/fleet/auth/access-requests';
-let owner = null, rows = [], requests = [], pending = null, selected = null, busy = false, siteResource = '', shownRole = 'operator';
+let owner = null, rows = [], requests = [], pending = null, selected = null, siteResource = '', shownRole = 'operator', configured = null, opener = null;
 const lifetime = new AbortController();
+const cause = createCauseLine($('account-form'), {line: $('account-cause')}), scope = createBusyScope($('accounts-main'), {status: $('account-status'), cause});
+const backLinks = $('account-back-links'), topbarTheme = document.querySelector('.fleet-document-header ui-topbar [data-theme-cycle]');
+if (backLinks && topbarTheme?.parentElement) topbarTheme.parentElement.insertBefore(backLinks, topbarTheme);
 let invalidated = false;
 function changed() { return Object.assign(new Error(), {code:'ACCOUNT_CHANGED'}); }
 window.addEventListener('storage', event => {
@@ -49,22 +56,11 @@ async function identity() {
   if (invalidated || (owner && owner !== current)) throw changed();
   owner = current; siteResource = session.site_resource; return session;
 }
-async function perform(fn) {
-  if (busy) return;
-  busy = true;
-  for (const button of document.querySelectorAll('ui-button, button')) {
-    button.disabled = true; button.setAttribute('reason', '처리 결과 확인 중');
-  }
-  try { await identity(); await fn(); } catch (error) { fail(error); }
-  finally {
-    busy = false;
-    for (const button of document.querySelectorAll('ui-button, button')) {
-      button.disabled = invalidated; if (!invalidated) button.removeAttribute('reason');
-    }
-  }
-}
+// Only perform() locks the page; the busy scope restores each control exactly and never touches stop or [data-always-live].
+const perform = fn => scope.run(async () => { await identity(); await fn(); }, {label: '처리 결과를 확인하고 있습니다.', onError: fail});
 function grantRow(grant = null) {
   const group = document.createElement('fieldset'), legend = document.createElement('legend');
+  group.className = 'account-grant-row';
   legend.textContent = '대상 자원'; group.append(legend);
   const kindLabel = document.createElement('label'), kind = document.createElement('select');
   kindLabel.textContent = '자원 종류 '; kind.className = 'ui-field'; kind.dataset.grant = 'kind';
@@ -75,7 +71,7 @@ function grantRow(grant = null) {
   const idLabel = document.createElement('label'), id = document.createElement('input');
   idLabel.textContent = ' 식별자 '; id.className = 'ui-field'; id.required = true;
   id.pattern = '[A-Za-z0-9._\\-]{1,96}|\\*'; id.dataset.grant = 'id'; idLabel.append(id); group.append(idLabel);
-  const choices = document.createElement('div'); group.append(choices);
+  const choices = document.createElement('div'); choices.className = 'account-grant-choices'; group.append(choices);
   const draw = (selectedCaps = []) => {
     choices.replaceChildren();
     for (const [value, label] of Object.entries(CAPABILITIES[kind.value])) {
@@ -90,11 +86,29 @@ function grantRow(grant = null) {
   remove.setAttribute('type', 'button'); remove.textContent = '자원 제거';
   remove.addEventListener('click', () => group.remove()); group.append(remove); $('account-grants').append(group);
 }
-function edit(row = null) {
+// Strip numbers: an unknown count is the shared unknown wording, never 0 (C4).
+function drawStrip() {
+  const waiting = requests?.filter(row => row.state === 'pending').length;
+  $('strip-accounts').textContent = valueText(rows.length).text;
+  $('strip-requests').textContent = valueText(requests ? waiting : null).text;
+  $('strip-requests').parentElement.toggleAttribute('data-alert', waiting > 0);
+  $('strip-login').textContent = configured === null ? valueText(null).text : configured ? '적용됨' : '미설정';
+  $('strip-login').parentElement.toggleAttribute('data-alert', configured === false);
+}
+// The editor opens only on an explicit action; below 64rem it replaces the list (ui-primary-detail[data-open]).
+function edit(row = null, {open = false} = {}) {
+  const was = !$('account-editor').hidden;
+  if (open && !was) opener = document.activeElement;  // before data-open hides the list on a phone
+  $('account-editor').hidden = !open; $('account-detail').toggleAttribute('data-open', open);
+  if (open) $('account-heading').focus();
+  // The opener row may be gone after a reload and the busy scope may hold the buttons: fall back to the section.
+  if (!open && was) { (opener?.isConnected && !opener.disabled ? opener : $('accounts-main')).focus?.(); opener = null; }
+  $('account-state').hidden = !row;
+  if (row) $('account-state').replaceChildren(row.enabled ? statusTag('fresh', '사용 중') : statusTag('locked', '정지됨'));
   selected = row; pending = null; clearSecrets();
   $('account-save').textContent = '계정 저장'; $('request-decision').hidden = true;
-  $('account-save').disabled = false; $('account-save').removeAttribute('reason');
-  $('account-role').disabled = false; $('account-role').removeAttribute('reason');
+  // the scope owns `disabled` during a run: this is applied when it ends, not while aria-busy is true
+  cause.set([$('account-save'), $('account-role')], '');
   $('account-heading').textContent = row ? `${row.login} 계정 수정` : '새 계정';
   for (const [id, key] of [['account-name', 'login'], ['account-principal', 'principal_id']]) {
     $(id).value = row?.[key] || ''; $(id).readOnly = !!row;
@@ -104,7 +118,7 @@ function edit(row = null) {
   $('account-password').required = !row; $('account-actions').hidden = !row;
   $('account-grants').replaceChildren(); for (const grant of row?.grants || roleGrants('operator', siteResource)) grantRow(grant);
 }
-async function load() {
+async function load(keepDraft = false) {
   rows = await request(endpoint);
   // the account list must not go blank because the request list failed
   requests = await request(requestsEndpoint).catch(() => null);
@@ -113,16 +127,17 @@ async function load() {
     const item = document.createElement('tr'), button = document.createElement('ui-button');
     button.setAttribute('kind', 'quiet'); button.setAttribute('type', 'button');
     button.textContent = '편집'; button.setAttribute('aria-label', `${row.login} 편집`);
-    button.addEventListener('click', () => edit(row));
-    const tag = document.createElement('ui-tag'); tag.setAttribute('status', row.enabled ? 'neutral' : 'warn');
-    tag.textContent = row.enabled ? '사용 중' : '정지됨';
+    actionIcon(button, 'pencil');
+    button.addEventListener('click', () => edit(row, {open: true}));
+    const tag = row.enabled ? statusTag('fresh', '사용 중') : statusTag('locked', '정지됨');
     for (const value of [row.login, row.principal_id || '—', [...$('account-role').options].find(option => option.value === row.role)?.textContent || row.role || '—', tag, button]) {
       const cell = document.createElement('td'); cell.append(value); item.append(cell);
     }
     $('account-list').append(item);
   }
-  drawRequests();
-  $('account-content').hidden = false; $('account-login').hidden = true; edit();
+  drawRequests(); drawStrip();
+  $('account-content').hidden = false; $('account-login').hidden = true;
+  if (!keepDraft) edit();  // a plain reload keeps the open form; its revision stays old so a conflict still shows as 409
 }
 function grants() {
   return [...$('account-grants').children].map(group => ({
@@ -130,7 +145,9 @@ function grants() {
     capabilities: [...group.querySelectorAll('input[type=checkbox]:checked')].map(input => input.value),
   }));
 }
-$('account-new').addEventListener('click', () => edit());
+$('account-new').addEventListener('click', () => edit(null, {open: true}));
+$('account-close').addEventListener('click', () => edit());
+for (const [id, icon] of [['account-new', 'plus'], ['account-reload', 'refresh'], ['account-setup-reload', 'refresh'], ['account-close', 'back']]) actionIcon($(id), icon);
 $('account-add-grant').addEventListener('click', () => grantRow());
 $('account-role').addEventListener('change', async () => {
   // An existing account may hold hand-tuned grants; replace them only when the admin says so.
@@ -144,9 +161,11 @@ $('account-role').addEventListener('change', async () => {
   shownRole = $('account-role').value;
   $('account-grants').replaceChildren(); for (const grant of roleGrants(shownRole, siteResource)) grantRow(grant);
 });
-$('account-reload').addEventListener('click', () => perform(async () => { await load(); status('최신 계정 상태입니다.'); }));
+$('request-retry').addEventListener('click', () => $('account-reload').click());
+$('account-reload').addEventListener('click', () => perform(async () => { await load(true); status('목록만 새로 읽었습니다. 작성 중인 내용은 그대로 두었습니다.'); }));
 $('account-save').addEventListener('click', () => {
-  if (pending?.login_taken || !$('account-form').reportValidity()) return;
+  if (pending?.login_taken) { status('이미 있는 로그인 ID입니다. 승인할 수 없으니 거절하고 다른 ID를 안내하세요.', 'warning'); return; }
+  if (!$('account-form').reportValidity()) return;
   const target = selected, waiting = pending, body = {role: $('account-role').value, grants: grants()};
   if (waiting) {  // D-993: approval runs the same create/update in one transaction with closing the request
     if (target) body.revision = target.revision;
@@ -164,7 +183,7 @@ $('account-save').addEventListener('click', () => {
   });
 });
 for (const [id, action] of [['account-reset', 'reset-password'], ['account-revoke', 'revoke-sessions']]) {
-  $(id).addEventListener('click', () => {
+  $(id).addEventListener('click', async () => {
     if (!selected) return;
     const target = selected, body = {revision: target.revision};
     if (action === 'reset-password') {
@@ -172,6 +191,10 @@ for (const [id, action] of [['account-reset', 'reset-password'], ['account-revok
       if (!password.value || !password.reportValidity()) return;
       body.password = password.value;
     }
+    const allowed = await confirmIrreversible(action === 'reset-password'
+      ? {message: `"${target.login}" 계정의 비밀번호를 초기화할까요? 입력한 임시 비밀번호로 바뀌고 이 계정의 모든 로그인 세션이 종료됩니다.`, action: '비밀번호 초기화', opener: $(id)}
+      : {message: `"${target.login}" 계정의 모든 앱 로그인 세션을 종료할까요? 이 계정은 모든 앱에서 다시 로그인해야 합니다.`, action: '세션 종료', opener: $(id)});
+    if (!allowed || selected !== target) return;
     clearSecrets();
     perform(async () => {
       await request(`${endpoint}/${target.account_id}/${action}`, {method: 'POST',
@@ -189,6 +212,7 @@ async function setup() {
     const result = await rawRequest('/api/fleet/auth/setup', {signal:lifetime.signal});
     const after = await rawRequest('/api/fleet/auth/session', {signal:lifetime.signal});
     if (invalidated || JSON.stringify(before) !== JSON.stringify(after)) throw changed();
+    configured = result.configured; $('account-apps').hidden = !configured; $('account-setup-reload').hidden = configured;
     $('account-setup-state').textContent = result.configured
       ? `통합 로그인 설정 적용됨 · ${result.issuer}`
       : '통합 로그인이 아직 설정되지 않았습니다. 서버 설치 안내에 따라 활성화하세요.';
@@ -200,7 +224,11 @@ async function setup() {
         const toggle = document.createElement('ui-button');
         toggle.setAttribute('kind', 'quiet');
         toggle.textContent = client.enabled ? '정지' : '다시 사용';
-        toggle.addEventListener('click', () => changeClient(client, {enabled: !client.enabled}));
+        toggle.addEventListener('click', async () => {
+          if (client.enabled && !await confirmIrreversible({action: '앱 정지', opener: toggle,
+            message: `"${client.label}" 앱을 정지할까요? 이 앱의 로그인과 세션 확인이 멈추고, 이 앱을 쓰는 모든 사용자가 로그아웃됩니다.`})) return;
+          changeClient(client, {enabled: !client.enabled});
+        });
         item.append(' ', toggle);
       }
       $('account-clients').append(item);
@@ -208,7 +236,7 @@ async function setup() {
     $('client-form').hidden = !(manages && result.configured);
     $('account-setup').hidden = false; $('account-login').hidden = true;
     if (canManageAccounts(after)) {
-      await perform(async () => { await load(); status('관리할 계정을 선택하거나 새 계정을 만드세요.'); });
+      await perform(async () => { await load(); status(''); });
     } else {
       $('account-content').hidden = true;
       status('최초 서버 설정을 마친 뒤 지정된 계정 관리자로 다시 로그인하세요.', 'warning');
@@ -237,15 +265,15 @@ $('client-add').addEventListener('click', () => perform(async () => {
 $('account-setup-reload').addEventListener('click', setup);
 setup();
 
-const requestState = {pending: ['대기 중', 'neutral'], approved: ['승인됨', 'neutral'], rejected: ['거절됨', 'warn']};
+const requestState = {pending: ['대기 중', 'progress'], approved: ['승인됨', 'fresh'], rejected: ['거절됨', 'caution']};
 function drawRequests() {
   $('request-list').replaceChildren();
-  $('request-empty').textContent = requests ? '대기 중인 요청이 없습니다.' : '요청 목록을 읽지 못했습니다. 새로 고쳐 주세요.';
+  $('request-empty').textContent = requests ? '대기 중인 요청이 없습니다.' : '요청 목록을 읽지 못했습니다. 다시 조회해 주세요.';
   $('request-empty').hidden = !!requests?.some(row => row.state === 'pending');
+  $('request-retry').hidden = !!requests; $('request-table').hidden = !requests?.length;
   for (const row of requests || []) {
-    const item = document.createElement('tr'), tag = document.createElement('ui-tag'), cell = document.createElement('td');
-    tag.setAttribute('status', requestState[row.state][1]);
-    tag.textContent = requestState[row.state][0] + (row.state === 'rejected' && row.reason ? ` · ${row.reason}` : '');
+    const item = document.createElement('tr'), cell = document.createElement('td');
+    const tag = statusTag(requestState[row.state][1], requestState[row.state][0] + (row.state === 'rejected' && row.reason ? ` · ${row.reason}` : ''));
     for (const value of [row.kind === 'grant' ? '기존 계정 권한' : '새 계정', row.requester_name,
         row.username + (row.login_taken && row.state === 'pending' ? ' (이미 있는 ID)' : ''),
         row.resource || '지정 없음', row.note || '—', tag]) {
@@ -263,7 +291,7 @@ function drawRequests() {
 function decide(row) {
   const account = rows.find(candidate => candidate.account_id === row.account_id);
   if (row.kind === 'grant' && !account) { status('요청한 계정을 찾을 수 없습니다. 현재 상태를 다시 조회하세요.', 'warning'); return; }
-  edit(account || null);
+  edit(account || null, {open: true});
   if (!account) { $('account-name').value = row.username; $('account-name').readOnly = true; $('account-principal').value = row.requester_name; }
   if (row.resource && ![...$('account-grants').children].some(group =>
       group.querySelector('[data-grant=kind]').value + ':' + group.querySelector('[data-grant=id]').value === row.resource)) {
@@ -272,8 +300,8 @@ function decide(row) {
   pending = row; $('account-save').textContent = '승인하고 저장';
   $('request-decision').hidden = false; $('request-reason').value = '';
   $('request-decision-text').textContent = `${row.requester_name} (${row.username}) 님의 ${row.kind === 'grant' ? '권한' : '가입'} 요청${row.resource ? ' · ' + row.resource : ''}`;
-  if (row.login_taken) { $('account-save').disabled = true; $('account-save').setAttribute('reason', '이미 있는 로그인 ID라 승인할 수 없습니다. 거절하세요'); }
-  if (account) { $('account-role').disabled = true; $('account-role').setAttribute('reason', '권한 요청 승인은 계정의 역할을 바꾸지 않고 자원별 권한만 저장합니다'); }
+  if (row.login_taken) cause.set([$('account-save')], '이미 있는 로그인 ID라 승인할 수 없습니다. 거절하세요');
+  if (account) cause.set([$('account-role')], '권한 요청 승인은 계정의 역할을 바꾸지 않고 자원별 권한만 저장합니다');
   if (row.login_taken) status('이미 있는 로그인 ID입니다. 승인할 수 없으니 거절하고 다른 ID를 안내하세요.', 'warning');
   $('account-form').scrollIntoView?.({block: 'nearest'});
 }

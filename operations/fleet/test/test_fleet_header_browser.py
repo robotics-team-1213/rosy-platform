@@ -125,6 +125,8 @@ def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp
         page.goto(origin + path)
         expect(page.locator('html')).to_have_attribute('data-theme', theme)
         expect(page.locator('#user-role')).to_have_text('운영자', timeout=15000)
+        if name == 'console':  # the robot dock lives on the console page only (the left panel is the command canon)
+            expect(page.locator('.robot-dock-btn').first).to_be_visible(timeout=15000)  # robot state in: the dock has its final height
         baseline = page.locator('.fleet-header').bounding_box()
         main_y = page.locator('main').first.bounding_box()['y']
 
@@ -137,9 +139,10 @@ def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp
         def check_bar():
             bar = page.locator('.fleet-header').bounding_box()
             stop = page.locator('#estop').bounding_box()
-            assert bar['height'] == pytest.approx(baseline['height'], abs=1)
+            # abs(...) <= 1 avoids pytest.approx racing uvicorn AnyIO threads lazily importing numpy (/console/cell).
+            assert abs(bar['height'] - baseline['height']) <= 1
             assert 64 <= bar['height'] <= 65
-            assert page.locator('main').first.bounding_box()['y'] == pytest.approx(main_y, abs=1)
+            assert abs(page.locator('main').first.bounding_box()['y'] - main_y) <= 1
             assert 0 <= stop['x'] and stop['x'] + stop['width'] <= width
             assert 0 <= stop['y'] and stop['y'] + stop['height'] <= bar['y'] + bar['height']
 
@@ -178,6 +181,9 @@ def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp
         expect(page.locator('#topbar-extra')).to_be_hidden()
         check_bar()
         shot('auth-required')
+        seats = page.evaluate("""() => Object.fromEntries(['link-state', 'clock', 'assistant-toggle', 'fleet-inbox', 'fleet-login', 'topbar-more', 'estop']
+            .map(id => { const r = document.getElementById(id)?.getBoundingClientRect(); return [id, r && [Math.round(r.x), Math.round(r.right), Math.round(r.y), Math.round(r.bottom)]]; }))""")
+        assert seats['topbar-more'][1] <= seats['estop'][0] + 1, ' '.join(f'{k}={v}' for k, v in seats.items())  # the account button never runs under the stop
         page.locator('#topbar-more').click()
         menu = page.locator('#topbar-extra')
         expect(menu).to_be_visible()
@@ -364,9 +370,12 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             if name == "console":
                 count = page.locator('main [aria-labelledby="map-heading"] #online-pill')
                 expect(count).to_have_text("2/3", timeout=15000)
-                offline = page.locator('article.robot-summary[data-robot-id="rosy_03"]').first
-                expect(offline).to_contain_text("닿지 않음: 접속 실패")
+                page.locator('.doc-tabs').get_by_role("link", name="작업", exact=True).click()
+                offline = page.locator('.robot-row[data-robot-id="rosy_03"]').first
+                expect(offline).to_contain_text("닿지 않음: 접속 실패", timeout=15000)
                 assert "undefined" not in page.locator("main").inner_text(), name
+                page.locator('.doc-tabs').get_by_role("link", name="관제", exact=True).click()
+                expect(count).to_have_text("2/3", timeout=15000)
             else:
                 expect(page.locator("#online-pill")).to_have_count(0)
             expect(page.locator("#estop")).to_be_enabled()
@@ -444,7 +453,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     labels.append(label.text_content().strip())
                 assert labels == ["관제", "작업", "기록", "지도", "설치"], (name, width)
                 rail = page.locator(".doc-tabs")
-                expect(rail.get_by_role("link", name="설치·보정", exact=True)).to_have_count(1)
+                expect(rail.get_by_role("link", name="설치", exact=True)).to_have_count(1)
                 expect(rail.get_by_role("link", name="현장 지도", exact=True)).to_have_count(1)
                 expect(page.locator("#fleet-inbox")).to_be_visible()
                 inbox_text = page.locator("#fleet-inbox").text_content().strip()
@@ -486,6 +495,10 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 if shots:
                     page.screenshot(path=str(Path(shots) / f"{name}-{width}x{height}.png"))
             page.locator("#fleet-inbox").click()
+            if name == "console":
+                # 알림 항목은 큐 패널에만: 팝오버는 열리지 않고 사이드바 알림 탭으로 간다
+                expect(page.locator("#inbox-popover")).to_be_hidden()
+                page.get_by_role("tab", name="알림").click()
             expect(page.locator("#context-inbox")).to_be_visible()
             expect(page.locator("#context-inbox-tab")).to_have_attribute("aria-selected", "true")
             assert not errors, (name, errors)
@@ -494,7 +507,8 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
         first = measured[("console", width)]
         for name, _path in DOCS:
             fact = measured[(name, width)]
-            assert fact["ids"] == first["ids"], (name, width)
+            # The 관제 AI launcher opens the console's own assistant panel, so only the console header carries it.
+            assert [i for i in fact["ids"] if i != "assistant-toggle"] == [i for i in first["ids"] if i != "assistant-toggle"], (name, width)
             # Same size and place on every document (a scrollbar may shift x by its width).
             assert fact["stop"][2:] == first["stop"][2:], (name, width, fact["stop"], first["stop"])
             assert abs(fact["stop"][1] - first["stop"][1]) <= 1, (name, width, fact["stop"], first["stop"])
@@ -654,15 +668,15 @@ def test_a_lost_link_is_readable_on_a_phone(tmp_path, text_spacing):
             box, stop = word.bounding_box(), page.locator("#estop").bounding_box()
             assert box["x"] >= 0 and box["x"] + box["width"] <= 320, (name, box)
             bar = page.locator('.fleet-header').bounding_box()
-            assert bar['height'] == pytest.approx(initial_bar['height'], abs=1)
-            assert page.locator('main').first.bounding_box()['y'] == pytest.approx(initial_main_y, abs=1)
+            assert abs(bar['height'] - initial_bar['height']) <= 1
+            assert abs(page.locator('main').first.bounding_box()['y'] - initial_main_y) <= 1
             assert bar['y'] <= box['y'] and box['y'] + box['height'] <= bar['y'] + bar['height']
             identity = page.locator('[data-header-region="identity"]').bounding_box()
             actions = page.locator('[data-header-region="actions"]').bounding_box()
             assert identity['x'] + identity['width'] <= box['x'] + 1
             assert box['x'] + box['width'] <= min(actions['x'], stop['x']) + 1
             assert word.evaluate('node => node.scrollWidth <= node.clientWidth + 1'), metrics
-            assert float(metrics['settled']['#link-state']['dot']['width'].removesuffix('px')) == 8, metrics
+            assert page.locator('#link-state ui-tag').get_attribute('status') == 'warn', metrics  # 2026-11-14: a lost link is a warning (no crit dot)
             for selector in ('#fleet-login', '#topbar-more', '#estop'):
                 control = page.locator(selector).bounding_box()
                 assert control['width'] >= 48 and control['height'] >= 48, (selector, control)

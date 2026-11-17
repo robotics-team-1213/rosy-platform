@@ -10,7 +10,7 @@
 .fleet-workspace > .ui-pathbar strong:empty { display: none; }
 /* D-641: document navigation frames the existing task-owned workspace. */
 .fleet-shell { container-type: inline-size; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 100dvh; }
-.fleet-body { display: grid; grid-template-columns: var(--rail-track) minmax(0, 1fr); min-width: 0; min-height: 0; }
+.fleet-body { display: grid; grid-template-columns: var(--rail-track) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; }
 .fleet-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .fleet-workspace > main { box-sizing: border-box; width: 100%; min-width: 0; }
 .fleet-workspace main { gap: var(--gap-task-page); padding: var(--inset-task-page); }
@@ -25,7 +25,7 @@
 .fleet-body > .doc-tabs > .ui-rail-item { inline-size: var(--size-rail-item); max-inline-size: 100%; min-block-size: var(--size-rail-item); }
 @media (width >= 64rem) and (height >= 40rem) {
   .fleet-shell:has(#fleet-main) { height: 100dvh; }
-  .fleet-workspace > #fleet-main { flex: 1; min-height: 0; }
+  .fleet-workspace #fleet-main { flex: 1; min-height: 0; }
 }
 @container (width < 64rem) {
   .fleet-body { display: flex; flex-direction: column; }

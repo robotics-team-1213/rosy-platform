@@ -1,12 +1,13 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,commonDown,setText} from '/review-alerts.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {createBusyScope} from '/common/busy-scope.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
-let token, session, active = false, pending = false, loginOptions = null;
+let token, session, active = false, loginOptions = null;
 let actionError='',pollError='';
 const connectionChoiceRequired=[false,false];
-const lockedButtons=new Map();
-let pendingOpener=null,pendingFocus=null;
+let pendingFocus=null,pendingOpener=null;
+const CHECKING='로그인 상태를 확인하는 중입니다.';
 const loginFailures = new Map([
   ['account_callback_failed', ['error', '로그인 연결을 완료하지 못했습니다. 로그인 요청이 만료되었거나 확인되지 않았습니다. Rosy Account에서 로그인을 다시 시작하세요.']],
   ['account_unavailable', ['unavailable', '로그인 서비스에 연결할 수 없습니다. 연결을 확인한 뒤 Rosy Account에서 다시 로그인하세요.']],
@@ -23,7 +24,7 @@ const size = n=>`${Number(n || 0).toLocaleString('ko-KR')} bytes`;
 const scopeLabel={'read-repos':'읽기','gated-repos':'제한 자료 읽기','write-repos':'쓰기','manage-repos':'저장소 생성·삭제'};
 function error(message,owner='action') {
   if(owner==='poll')pollError=message||'';else actionError=message||'';
-  $('account-error').textContent=[pollError,actionError].filter(Boolean).join('\n');$('account-error').hidden=!$('account-error').textContent;
+  setText($('account-error'),[pollError,actionError].filter(Boolean).join('\n'));$('account-error').hidden=!$('account-error').textContent;
 }
 function status(text, state) {
   $('account-status').textContent=text; $('account-status').setAttribute('state',state);
@@ -81,45 +82,33 @@ async function api(path, body) {
 function line(parent,text) { const p=document.createElement('p'); p.textContent=text; parent.append(p); return p; }
 function button(parent,label,action) {
   const b=document.createElement('ui-button'); b.setAttribute('type','button'); b.setAttribute('kind','quiet'); b.textContent=label;
-  b.addEventListener('click',()=>perform(action)); parent.append(b);
-  if(pending)lockButton(b);
+  b.addEventListener('click',()=>act(action)); parent.append(b);
 }
-function lockButton(node){if(!lockedButtons.has(node))lockedButtons.set(node,node.disabled);node.disabled=true;}
-async function perform(action,owner='action') {
-  if(pending)return;
-  pending=true; if(owner!=='poll')error('');
-  pendingOpener=document.activeElement;pendingFocus=null;lockedButtons.clear();
-  for(const node of $('accounts-main').querySelectorAll('button,ui-button'))lockButton(node);
-  const previousStatus=$('account-status').textContent,progress=owner==='poll'?'가져오기 상태 확인 중…':'요청 처리 중…';
-  $('account-status').textContent=progress;
-  $('accounts-main').setAttribute('aria-busy','true');
-  try { await action(); } catch(e) {
-    if(active) error(e.message,owner);
-    if($('account-status').getAttribute('state')==='pending') {
-      status('로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
+const scope=createBusyScope($('accounts-main'),{status:$('account-status'),label:'요청 처리 중…'});
+// scope.run locks the screen; this adds the account screen's own error text and returns focus to the rebuilt control.
+async function act(action,owner='action') {
+  if(scope.busy)return;
+  if(owner!=='poll')error('');
+  const opener=pendingOpener=document.activeElement; pendingFocus=null;
+  await scope.run(action,{onError(e) {
+    if(active) error(commonDown()?'':e.message,owner);
+    if($('account-status').textContent===CHECKING) {
+      status(commonDown()?'불러오지 못함':'로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
       $('account-retry').hidden=false;
-    } else error(e.message,owner);
-  }
-  finally {
-    pending=false; $('accounts-main').setAttribute('aria-busy','false');
-    for(const [node,disabled] of lockedButtons)if(node.isConnected)node.disabled=disabled;
-    lockedButtons.clear();
-    if($('account-status').textContent===progress)$('account-status').textContent=previousStatus;
-    if(document.activeElement===document.body||document.activeElement===pendingOpener){
-      const target=pendingFocus?.isConnected?pendingFocus:pendingOpener;
-      if(target?.isConnected&&!target.disabled&&target.getClientRects().length&&document.activeElement!==target)target.focus({preventScroll:true});
-    }
-    pendingOpener=pendingFocus=null;
-  }
+    } else error(commonDown()?'':e.message,owner);
+  }});
+  const target=pendingFocus?.isConnected?pendingFocus:opener;
+  if((document.activeElement===document.body||document.activeElement===opener)&&target?.isConnected&&!target.disabled&&target.getClientRects().length&&document.activeElement!==target)target.focus({preventScroll:true});
+  pendingFocus=pendingOpener=null;
 }
 async function refresh() {
-  status('로그인 상태를 확인하는 중입니다.','pending');
+  status(CHECKING,'pending');
   let options;
   try { options=await api('/api/accounts/options'); }
   catch(e) {
     loginOptions=null; loginControls();
-    status('로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
-    $('login-help').textContent='로그인 연결을 확인할 수 없습니다. 연결 상태를 확인한 뒤 다시 확인하세요.';
+    status(commonDown()?'불러오지 못함':'로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
+    setText($('login-help'),commonDown()?'':'로그인 연결을 확인할 수 없습니다. 연결 상태를 확인한 뒤 다시 확인하세요.');
     throw e;
   }
   loginOptions=options; loginControls();
@@ -178,7 +167,10 @@ async function refresh() {
 async function jobs() {
   if(!active)return;
   const identity=session;
-  const result=await api('/api/learning/imports'), root=$('imports');
+  showJobs(identity,await api('/api/learning/imports'));
+}
+function showJobs(identity,result) {
+  const root=$('imports');
   if(!active||session!==identity)return;
   error('','poll');
   const opened=new Set([...root.querySelectorAll('details[open]')].map(node=>node.dataset.job));
@@ -206,10 +198,10 @@ async function jobs() {
     if(canControl && ['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
       await api('/api/learning/imports/cancel',{id:job.id}); await jobs();
     });
-    if(focusId===job.id){const target=[...row.querySelectorAll('ui-button, button, summary')].find(node=>node.textContent===focusText)||heading;if(pending)pendingFocus=target;else target.focus({preventScroll:true});}
+    if(focusId===job.id){const target=[...row.querySelectorAll('ui-button, button, summary')].find(node=>node.textContent===focusText)||heading;if(scope.busy)pendingFocus=target;else target.focus({preventScroll:true});}
   }
 }
-$('logout').addEventListener('click',()=>perform(async()=>{
+$('logout').addEventListener('click',()=>act(async()=>{
   active=false; $('signed-in').hidden=true;
   for(const id of ['connections','imports','connection','repos','repo-connection']) $(id).replaceChildren();
   try { await api('/api/accounts/logout',{}); } finally { signedOut(); }
@@ -218,13 +210,13 @@ $('logout').addEventListener('click',()=>perform(async()=>{
 async function connectOAuth(purpose) {
   const result=await api('/api/accounts/oauth',{purpose}); window.location.assign(result.url);
 }
-for(const [id,purpose] of [['hf-link','link']]) $(id).addEventListener('click',()=>perform(()=>connectOAuth(purpose)));
-$('connect-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
+for(const [id,purpose] of [['hf-link','link']]) $(id).addEventListener('click',()=>act(()=>connectOAuth(purpose)));
+$('connect-form').addEventListener('submit',event=>{event.preventDefault();act(async()=>{
   const secret=$('provider-token').value; $('provider-token').value='';
   await api('/api/accounts/connect',{token:secret,sharing:$('sharing').value,
     resources:$('resources').value.split('\n').map(x=>x.trim()).filter(Boolean)}); await refresh();
 });});
-$('import-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
+$('import-form').addEventListener('submit',event=>{event.preventDefault();act(async()=>{
   const connection=$('connection').value;if(!connection)throw new Error('가져올 계정을 선택하세요.');
   await api('/api/learning/imports/create',{connection_id:connection,repo_type:$('repo-type').value,
     repo_id:$('repo-id').value.trim(),revision:$('revision').value.trim(),
@@ -251,25 +243,30 @@ async function loadRepos() {
     line(row,`${repo.repo_id} · ${state} · ${repo.sha?repo.sha.slice(0,7):'커밋 없음'}`);
   }
 }
-$('repo-list-form').addEventListener('submit',event=>{event.preventDefault();perform(loadRepos);});
-$('repo-create-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
+$('repo-list-form').addEventListener('submit',event=>{event.preventDefault();act(loadRepos);});
+$('repo-create-form').addEventListener('submit',event=>{event.preventDefault();act(async()=>{
   await api('/api/accounts/repos/create',selectedRepo());
   $('manage-repo-id').value='';
   await loadRepos();
 });});
-$('repo-delete-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
+$('repo-delete-form').addEventListener('submit',event=>{event.preventDefault();act(async()=>{
   const repo=selectedRepo();
   if($('repo-confirm').value.trim()!==repo.repo_id) throw new Error('삭제 확인은 저장소 이름과 같아야 합니다.');
   await api('/api/accounts/repos/delete',{...repo, confirm:repo.repo_id});
   $('repo-confirm').value='';
   await loadRepos();
 });});
-$('reload').addEventListener('click',()=>perform(refresh));
-$('account-retry').addEventListener('click',()=>perform(async()=>{
+$('reload').addEventListener('click',()=>act(refresh));
+$('account-retry').addEventListener('click',()=>act(async()=>{
   loginFailure=null;
   const url=new URL(location.href); url.searchParams.delete('error'); history.replaceState(null,'',url);
   await refresh();
 }));
-setInterval(()=>{if(active&&!pending&&!document.hidden&&$('account-status').getAttribute('state')==='ready')perform(jobs,'poll');},5000);
+// A poll never locks the screen or swallows a click (scope.refresh); an action in flight drops its result.
+setInterval(()=>{
+  if(!active||document.hidden||$('account-status').getAttribute('state')!=='ready')return;
+  const identity=session;
+  scope.refresh(async()=>[identity,await api('/api/learning/imports')],([who,result])=>showJobs(who,result),e=>{if(active)error(commonDown()?'':e.message,'poll');});
+},5000);
 accountShell(false);
-perform(refresh);
+act(refresh);

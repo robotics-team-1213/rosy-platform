@@ -2,7 +2,7 @@
 // 모듈(D-362 P1). 홀드 티커의 100ms 운율과 해제 zero는 여기가 소유하고,
 // 자격 판정(teleopEligible)과 문구도 함께 산다. 셸은 시작·정지 지점과
 // 상태 갱신 시점(updateTeleopControls)만 부른다.
-import { setOff, setText } from "./dom.js";
+import { announce, setOff, setText } from "./dom.js";
 import { api, session, canOperate } from "./client.js";
 import { reasonText } from "./triage.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
@@ -90,7 +90,8 @@ function queueTerminalZero(immediate = false) {
   session.teleopPending = terminal;
   terminal
     .catch((error) => {
-      setText("teleop-message", `정지 전송 실패 · watchdog 대기: ${error.message}`);
+      const failed = `정지 전송 실패 · watchdog 대기: ${error.message}`;
+      setText("teleop-message", failed); announce(failed, true);
     })
     .finally(() => {
       if (session.teleopPending === terminal) session.teleopPending = null;

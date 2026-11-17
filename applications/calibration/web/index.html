@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rosy Calibration — 모눈종이 · 실측 요청</title>
+  <title>Rosy Calibration — 모눈종이 · 보정 요청</title>
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
@@ -20,11 +20,11 @@
     <ui-topbar role="banner">
       <ui-brand href="/" aria-label="Rosy Calibration 홈">
         <b>Calibration</b>
-        <small>모눈종이 · 프로파일 · 실측 요청</small>
+        <small>모눈종이 · 프로파일 · 보정 요청</small>
       </ui-brand>
       <nav class="cal-tabs" role="tablist" aria-label="화면 전환">
         <ui-button id="tabGrid" kind="segment" type="button" role="tab" aria-selected="true" class="active">모눈종이 · 프로파일</ui-button>
-        <ui-button id="tabRequests" kind="segment" type="button" role="tab" aria-selected="false">실측 요청</ui-button>
+        <ui-button id="tabRequests" kind="segment" type="button" role="tab" aria-selected="false">보정 요청</ui-button>
       </nav>
       <span data-spacer></span>
       <ui-button id="btnTheme" kind="quiet" type="button">테마 전환</ui-button>
@@ -193,7 +193,7 @@
       <section id="panelRequests" aria-labelledby="tabRequests" hidden>
         <div class="ui-app-body" data-seats="none">
           <main class="ui-app-main" id="request-main" tabindex="-1">
-            <div class="ui-pathbar"><h1 class="ui-page-heading">실측 요청</h1></div>
+            <div class="ui-pathbar"><h1 class="ui-page-heading">보정 요청</h1></div>
             <div class="ui-stage-grid" data-layout="watch">
               <section class="ui-pane" data-pane="stage" aria-labelledby="detail-heading">
                 <h2 id="detail-heading" class="sr-only">요청 내용</h2>

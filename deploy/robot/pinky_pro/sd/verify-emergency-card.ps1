@@ -32,7 +32,7 @@ if ($DiskInventoryJson -and -not $ReadbackDevice) { Fail "-DiskInventoryJson is 
 if ($ReadbackDevice -match '^\\\\[.?]\\') { Fail "-ReadbackDevice must be a file stand-in, not a device path" }
 
 $Receipt = (Resolve-Path -LiteralPath $Receipt).ProviderPath
-$record = Get-Content -LiteralPath $Receipt -Raw | ConvertFrom-Json
+$record = Get-Content -LiteralPath $Receipt -Raw -Encoding UTF8 | ConvertFrom-Json
 $keys = @($record.PSObject.Properties.Name)
 foreach ($key in @("device_uid", "device_name", "release_id", "image_sha256", "disk_serial", "disk_size", "media_readback")) {
     if ($keys -cnotcontains $key) { Fail "the receipt has no $key" }
@@ -55,7 +55,7 @@ if ($imageHash -cne [string]$record.image_sha256) { Fail "the image in $ReleaseD
 
 # The card is found by the receipt's serial and size, never by a disk number.
 if ($DiskInventoryJson) {
-    $disks = @(Get-Content -LiteralPath $DiskInventoryJson -Raw | ConvertFrom-Json)
+    $disks = @(Get-Content -LiteralPath $DiskInventoryJson -Raw -Encoding UTF8 | ConvertFrom-Json)
 }
 else {
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -80,7 +80,7 @@ try {
     $output = & $PythonExe $verifier --image $image --device $target --stall-seconds $stall --error-json $errorPath `
         --allow-boot-extra rosy-provision --allow-boot-extra rosy-config.yaml
     $exitCode = $LASTEXITCODE
-    $reason = $(if (Test-Path -LiteralPath $errorPath) { [string](Get-Content -LiteralPath $errorPath -Raw | ConvertFrom-Json).error } else { "verifier exit code $exitCode" })
+    $reason = $(if (Test-Path -LiteralPath $errorPath) { [string](Get-Content -LiteralPath $errorPath -Raw -Encoding UTF8 | ConvertFrom-Json).error } else { "verifier exit code $exitCode" })
 }
 finally {
     if (Test-Path -LiteralPath $errorPath) { Remove-Item -LiteralPath $errorPath -Force }

@@ -199,7 +199,7 @@ main { padding: var(--space-3) var(--space-3) var(--space-6); }
     <span class="kv" id="stepBox"><small>시계 점프</small><span class="num" id="step">--</span></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
   </div>
 </header>
-<div class="health" id="health" aria-live="polite">
+<div class="health" id="health">
   <span class="hp" id="h-camera"><i></i><b>카메라</b><span class="num">NO DATA</span></span>
   <span class="hp" id="h-overlay"><i></i><b>오버레이</b><span class="num">NO DATA</span></span>
   <span class="hp" id="h-odom"><i></i><b>오도메트리</b><span class="num">NO DATA</span></span>
@@ -210,13 +210,13 @@ main { padding: var(--space-3) var(--space-3) var(--space-6); }
 </div>
 <main>
 <section id="live" role="tabpanel" aria-labelledby="tab-live" tabindex="0">
-  <div class="banner" id="offline" role="status">
+  <div class="banner" id="offline">
     <span class="dot"></span>
     <div><strong id="offlineTitle">주행 중이 아님 — Gazebo가 꺼져 있습니다</strong>
       <p id="offlineHint">시뮬레이션을 시작하면 자동으로 연결됩니다. 이전 실행은 ‘지난 결과’ 탭에서 볼 수 있습니다.</p></div>
   </div>
   <div class="rail live-panel" id="rail" aria-label="미션 단계"></div>
-  <div class="alert" id="alert" role="alert"></div>
+  <div class="alert" id="alert"></div>
   <div class="grid">
     <div class="col">
       <div class="card live-panel">
@@ -492,6 +492,7 @@ function renderRail(m, clock) {
     ? `${cur.label} ${fmt(clock.sim_s - cur.sim_start, 1)} s 경과` : "";
   const a = $("alert");
   a.textContent = m.alert || ""; a.classList.toggle("show", !!m.alert);
+  say("alert", m.alert);
 }
 function renderClock(c) {
   $("simTime").textContent = c.sim_s === null ? "--" : fmt(c.sim_s, 1, " s");
@@ -595,6 +596,13 @@ function renderParking(k) {
   db.style.width = Math.min(100, (e.dist_m / (2 * e.target_m)) * 100) + "%"; db.className = e.ok_position ? "in" : "";
   hb.style.width = Math.min(100, (Math.abs(e.heading_err_deg) / (2 * e.target_deg)) * 100) + "%"; hb.className = e.ok_heading ? "in" : "";
 }
+// C25: visible banners carry no live role; the shared announcer is the one voice, on change only.
+const lastSaid = {};
+function say(key, text) {
+  if (!text || text === lastSaid[key]) return;
+  lastSaid[key] = text;
+  import("/common/announcer.js").then((m) => m.getAnnouncer().announce(text)).catch(() => {});
+}
 function render(s) {
   document.body.classList.toggle("offline", !s.live);
   $("offline").classList.toggle("show", !s.live);
@@ -602,6 +610,7 @@ function render(s) {
   $("offlineHint").textContent = s.core_api.reachable
     ? "CORE는 응답하지만 카메라·오도메트리·/clock이 없습니다. 시뮬레이션을 시작하면 자동으로 연결됩니다."
     : "시뮬레이션을 시작하면 자동으로 연결됩니다. 이전 실행은 ‘지난 결과’ 탭에서 볼 수 있습니다.";
+  if (!s.live) say("offline", $("offlineTitle").textContent);
   renderClock(s.clock);
   renderHealth(s);
   renderRail(s.mission, s.clock);
@@ -623,6 +632,7 @@ async function poll() {
     $("offline").classList.add("show");
     $("offlineTitle").textContent = "뷰어 서버에 연결할 수 없습니다";
     $("offlineHint").textContent = "lane_live_view.py가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.";
+    say("offline", $("offlineTitle").textContent);
     setHp("h-core", "bad", "NO DATA");
   }
   setTimeout(poll, 330);

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON, applyRoleToControls } from "../../../../applications/fleet/web/shared/authorization.js";
+import { OPERATOR_REASON, SAFETY_NOTE, applyRoleToControls, safetyRefusalText } from "../../../../applications/fleet/web/shared/authorization.js";
 import { createConfirmedAction } from "../../../../applications/fleet/web/confirmed-action.js";
 import { createPageScope } from "../../../../shared/web/scope.js";
 
@@ -80,4 +80,27 @@ test("a button inside a role-lock group shares the group's one note instead of r
   assert.equal(button.getAttribute("reason"), "대형 없음");
   assert.equal(note.hidden, true);
   assert.equal(button.getAttribute("aria-describedby"), null);
+});
+
+test("safety refusals read in Korean; an unnamed session is told to log in by name", () => {
+  assert.equal(SAFETY_NOTE.max, 200);
+  assert.match(safetyRefusalText({status: 422, code: "NOTE_REQUIRED"}), /1~200자/);
+  assert.match(safetyRefusalText({status: 409, code: "RESUME_NEEDS_RESTART_CONFIRM"}), /처음부터/);
+  assert.match(safetyRefusalText({status: 503, code: "SAFETY_AUDIT_UNAVAILABLE"}), /상태는 바뀌지 않았습니다/);
+  assert.equal(safetyRefusalText({status: 403, code: "OPERATOR_IDENTITY_REQUIRED"}), "이름 있는 운영자로 로그인해야 합니다");
+  assert.equal(safetyRefusalText({status: 500, message: "boom"}), "boom");
+});
+
+test("a confirmation with a note hands the trimmed text to the request and sends nothing without it", async () => {
+  const scope = createPageScope({events: new EventTarget()});
+  const auth = {token: '', role: 'operator', principal: 'bob', locked: false};
+  const seen = [];
+  const confirm = async ({note}) => (seen.push(note), seen.length === 1 ? false : "  셀 안에 사람 없음 확인 ");
+  const action = createConfirmedAction({scope, identity: () => ({...auth}), confirm});
+  const sent = [];
+  const options = {message: "m", note: SAFETY_NOTE, opener: null, eligible: () => true, request: async (_, text) => sent.push(text), onError() {}};
+  await action.run(options);
+  await action.run(options);
+  assert.deepEqual(seen, [SAFETY_NOTE, SAFETY_NOTE]);
+  assert.deepEqual(sent, ["  셀 안에 사람 없음 확인 "]);
 });

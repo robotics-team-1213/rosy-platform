@@ -27,6 +27,7 @@ CANVAS_FILES = [
     COMMON / "evidence.js",
     FLEET / "map" / "map-view.js",
     FLEET / "map" / "map-overlays.js",  # D-798 3.2: chips and overlays out of map-view.js
+    FLEET / "map" / "cad-twin-layer.js",  # CAD/URDF floor + robot twin canvas layer
     FLEET / "map" / "map-polling.js",  # D-798 3.2: clears the canvas when no map answers
     FLEET / "map" / "map-datum.js",
     FLEET / "map" / "trail-view.js",
@@ -37,6 +38,7 @@ CANVAS_FILES = [
     FLEET / "shared" / "field-warp.js",
     FLEET / "sitemap" / "site-map.js",
     FLEET / "sitemap" / "site-map-sources.js",
+    FLEET / "robot" / "localization-view.js",
     FLEET / "console.js",
     FLEET / "console-auth.js",  # D-798 3.2: clears the map canvas on lock
     GAMES / "board.js",

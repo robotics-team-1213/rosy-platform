@@ -154,6 +154,7 @@ def _open(playwright, origin, path, posts, answers=None):
 
 
 def _shots(page, name, fits=False):
+    page.wait_for_load_state("load")
     out = os.environ.get("ROSY_SHOT_DIR")
     for width, height in SIZES:
         page.set_viewport_size({"width": width, "height": height})
@@ -169,10 +170,11 @@ def _shots(page, name, fits=False):
             assert stop and stop["x"] >= 0 and stop["y"] >= 0
             assert stop["x"] + stop["width"] <= width and stop["y"] + stop["height"] <= height
             if width == 390 and urlparse(page.url).path == '/console':
-                choice = page.locator('#robot-choice').bounding_box()
-                assert 0 <= choice["y"] and choice["y"] + choice["height"] <= height
+                dock = page.locator('#robot-dock-mount').bounding_box()
                 map_panel = page.locator('[aria-labelledby="map-heading"]')
-                assert choice["y"] < map_panel.bounding_box()["y"]
+                # C23 compact robot dock sits above the map without pushing it out of the first screen.
+                assert 0 <= map_panel.bounding_box()["y"] < height
+                assert dock and dock["y"] < map_panel.bounding_box()["y"]
                 map_panel.scroll_into_view_if_needed()
                 canvas = page.locator('#map-canvas').bounding_box()
                 assert canvas["y"] < height and canvas["y"] + canvas["height"] > 0
@@ -198,9 +200,11 @@ def test_console_traffic_layer_card_line_and_queue_row(site, theme):
             page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
             expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
             page.clock.run_for(1500)  # the first 1 s traffic poll
-            expect(page.locator("#traffic-toggle")).to_be_hidden()
+            traffic_toggle = page.locator("#map-overlay-toggles").get_by_role("button", name="교통·점유")
+            expect(traffic_toggle).to_be_hidden()
             page.locator("#map-options > summary").click()
-            expect(page.locator("#traffic-toggle")).to_be_visible(timeout=15000)
+            expect(traffic_toggle).to_be_visible(timeout=15000)
+            expect(traffic_toggle).to_have_attribute("aria-pressed", "true")
             map_panel = page.locator('[aria-labelledby="map-heading"]')
             expect(map_panel.locator('details details')).to_have_count(0)
             assert map_panel.locator('details').count() < 3
@@ -222,8 +226,10 @@ def test_console_traffic_layer_card_line_and_queue_row(site, theme):
             expect(page.locator("#warning-list")).not_to_contain_text("합류 대기")
             page.clock.run_for(22000)
             expect(page.locator("#warning-list")).to_contain_text("rosy_02: 합류 대기")
-            expect(page.locator('#roster article[data-robot-id="rosy_02"] .trip-line')).to_have_text(
+            page.locator(".doc-tabs").get_by_role("link", name="작업", exact=True).click()
+            expect(page.locator('#roster .robot-row[data-robot-id="rosy_02"] [data-col="task"]')).to_contain_text(
                 "반복 운행 1바퀴째 · 교차로 대기 · rosy_01 통과 중")
+            page.locator(".doc-tabs").get_by_role("link", name="관제", exact=True).click()
             expect(page.locator("#site-path-summary")).to_have_text("Vision 응답 404")
             expect(page.locator("#site-path-summary")).to_have_attribute("data-kind", "warn")
             expect(page.locator("#site-path-list")).to_be_hidden()
@@ -231,18 +237,18 @@ def test_console_traffic_layer_card_line_and_queue_row(site, theme):
             expect(page.locator("#site-path-list")).to_be_visible()
             expect(page.locator("#site-path-list")).to_contain_text("프록시")
             page.locator("#site-path summary").click()
-            page.locator("#map-options > summary").click()
+            # Navigating back to /console already resets #map-options closed before the layout shots.
             _shots(page, f"console-traffic-{theme}", fits=True)
             page.set_viewport_size({"width": 1920, "height": 1080})
             page.locator("#map-options > summary").click()
             expect(page.locator('#trail-range')).to_have_value('600')
             before = page.locator("#map-canvas").evaluate("c => c.toDataURL()")
-            page.locator("#traffic-toggle").click()
-            expect(page.locator("#traffic-toggle")).to_have_attribute("aria-pressed", "false")
-            expect(page.locator("#traffic-toggle")).to_have_text("교통 끔")
+            traffic_toggle.click()
+            expect(traffic_toggle).to_have_attribute("aria-pressed", "false")
             expect(page.locator("#legend-traffic")).to_be_hidden()
             assert page.locator("#map-canvas").evaluate("c => c.toDataURL()") != before
-            page.locator("#traffic-toggle").click()
+            traffic_toggle.click()
+            expect(traffic_toggle).to_have_attribute("aria-pressed", "true")
             expect(page.locator("#legend-traffic")).to_be_visible()
             assert not posts, posts
             assert not errors, errors
@@ -283,7 +289,7 @@ def test_map_context_keeps_place_names_off_the_floor(site):
             }""")
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
-                page.select_option("#map-display-mode", "coordinates")
+                page.locator('#map-display-mode input[value="coordinates"]').check()
                 page.clock.run_for(1500)
                 plane = page.locator("#map-stage").bounding_box()
                 context = page.locator("#map-readouts").bounding_box()
@@ -324,8 +330,8 @@ def test_map_coordinate_disclosure_clears_expired_observations_without_shrinking
                 ["rosy_01", "1.25", "0.75", "마커 관측"])
             page.locator("#map-readouts > summary").click()
             before = page.locator("#map-stage").bounding_box()
-            page.select_option("#map-display-mode", "overlay")
-            page.select_option("#map-display-mode", "coordinates")
+            page.locator('#map-display-mode input[value="overlay"]').check()
+            page.locator('#map-display-mode input[value="coordinates"]').check()
             tracking["sources"][0]["age_ms"] = 2000
             page.clock.run_for(1500)
             after = page.locator("#map-stage").bounding_box()

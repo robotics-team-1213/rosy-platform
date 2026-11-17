@@ -177,7 +177,7 @@ Write-NewTextFile `
     -Text (($hashLines -join [Environment]::NewLine) + [Environment]::NewLine) `
     -Encoding ([Text.Encoding]::ASCII)
 
-$summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+$summary = Get-Content -LiteralPath $summaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($summary.motion_authorized -ne $false) {
     throw "Invalid summary: stationary validation must keep motion_authorized false."
 }

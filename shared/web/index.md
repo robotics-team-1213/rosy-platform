@@ -50,8 +50,8 @@
 
 ## 최근 기록
 
-- 2026-11-06 · uncommitted · uiux: 공용 하위 내비 가장자리 흐림과 현재 항목 중앙 정렬
-- 2026-11-06 · uncommitted · uiux(shared): 눌린 칸은 꺼져 있어도 흐리지 않는다
-- 2026-11-05 · b955085656 · docs(ui): Learning 공용 메뉴 바깥 여백의 후속 증거
-- 2026-11-05 · a27e97c186 · uiux: 동등 하위 화면 메뉴를 공용 subnav로 통일
-- 2026-11-05 · 4c8a3858e0 · 운용 카메라 판단 사슬의 평문 표시
+- 2026-11-15 · uncommitted · patterns.yaml C23/C24 built 전환 (Fleet Stage 2)
+- 2026-11-15 · uncommitted · feat(web): C23 로봇 도크·C24 로봇 패널 부품과 감독 우회 금지 게이트(planned)
+- 2026-11-15 · uncommitted · patterns.yaml C19 built 전환 (Fleet fix E)
+- 2026-11-15 · uncommitted · patterns.yaml C20·C21·C22 built 전환 (Fleet fix B1-B3)
+- 2026-11-15 · uncommitted · 보정 요청 한 이름(R2-19)

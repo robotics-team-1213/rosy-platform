@@ -1,7 +1,7 @@
 // D-792: one photo against one camera setup reference. Dashed = reference, solid = this photo.
 // features (default, no markers): reference outlines mapped by the measured homography.
 // markers (optional): reference marker squares against the detected ones.
-import {accountFetch} from '/account-session.js';
+import {accountFetch,commonDown,panelError,setText} from '/review-alerts.js';
 import {cssColor} from '/common/ui.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
@@ -22,9 +22,9 @@ $('camera-role').onchange=()=>{$('check-pose-field').hidden=$('camera-role').val
 $('camera-role').onchange();
 
 function fail(error,owner='action'){
-  const message=error?(error.message||String(error)):'';
+  const message=error?panelError(error,''):'';
   if(owner==='refresh')refreshError=message;else actionError=message;
-  $('camera-error').textContent=[refreshError,actionError].filter(Boolean).join('\n');
+  setText($('camera-error'),[refreshError,actionError].filter(Boolean).join('\n'));
   $('camera-error').hidden=!$('camera-error').textContent;
 }
 function checking(active){
@@ -140,7 +140,7 @@ $('check-form').onsubmit=async event=>{
     if(generation!==checkGeneration)return;
     result=value;
     show(result.check);draw();
-  }catch(error){if(generation===checkGeneration){fail(error);$('verdict').setAttribute('state','error');$('verdict').textContent='판정하지 못했습니다. 입력을 확인하고 다시 판정하세요.';}}
+  }catch(error){if(generation===checkGeneration){fail(error);$('verdict').setAttribute('state','error');setText($('verdict'),commonDown()?'불러오지 못함':'판정하지 못했습니다. 입력을 확인하고 다시 판정하세요.');}}
   finally{if(generation===checkGeneration)checking(false);}
 };
 $('reference-form').onsubmit=async event=>{
@@ -162,7 +162,7 @@ async function refresh(){
   if(refreshing)return;
   refreshing=true;$('camera-refresh').disabled=true;fail(null,'refresh');invalidate('촬영 기준을 확인하는 중입니다.');
   try{token=(await request('/api/workspace')).token;await loadReferences();}
-  catch(error){fail(error,'refresh');$('verdict').setAttribute('state','error');$('verdict').textContent='촬영 기준을 읽지 못했습니다. 다시 확인을 눌러 주세요.';}
+  catch(error){fail(error,'refresh');$('verdict').setAttribute('state','error');setText($('verdict'),commonDown()?'불러오지 못함':'촬영 기준을 읽지 못했습니다. 다시 확인을 눌러 주세요.');}
   finally{refreshing=false;$('camera-refresh').disabled=false;checking(false);}
 }
 $('camera-refresh').onclick=refresh;

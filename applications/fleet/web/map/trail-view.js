@@ -40,55 +40,126 @@ export function tripFor(trips, robotId) {
   return (mine(trips?.open) || mine(trips?.trips))?.trip_id || null;
 }
 
+function ensureTrailAbort(view) {
+  if (!view.trailFetchAbort || view.trailFetchAbort.signal.aborted) {
+    view.trailFetchAbort = new AbortController();
+  }
+  return view.trailFetchAbort;
+}
+
+function abortTrailFetches(view, includeTether = false) {
+  view.trailFetchAbort?.abort();
+  view.trailFetchAbort = null;
+  view.tripsInFlight = false;
+  view.pathInFlight?.clear();
+  if (includeTether) {
+    view.tetherAbort?.abort();
+    view.tetherAbort = null;
+    view.tetherInFlight = false;
+  }
+}
+
 function pollPaths(view, call, now) {
   if (!call || now - (view.pathAt || 0) < PATH_POLL_MS) return;
   view.pathAt = now;
   view.paths ||= new Map();
+  view.pathInFlight ||= new Set();
   const range = view.trailRange || "120";
-  if (range === "trip" && now - (view.tripsAt || 0) > TRIPS_POLL_MS) {
+  const fetchAbort = ensureTrailAbort(view);
+  const cachedTrips = view.trailTrips || ((view.trafficTrips || view.endedTrips) ? { open: view.trafficTrips || [], trips: view.endedTrips || [] } : null);
+  const tripsFresh = Boolean(cachedTrips) && now - (view.tripsAt || 0) <= TRIPS_POLL_MS;
+  if (range === "trip" && !view.tripsInFlight && !tripsFresh) {
     view.tripsAt = now;
-    call("/api/fleet/trips").then((r) => { view.trailTrips = r; view.pathAt = 0; }, () => {});
+    view.tripsInFlight = true;
+    call("/api/fleet/trips", { signals: [fetchAbort.signal] }).then((r) => {
+      if (fetchAbort.signal.aborted || (view.trailRange || "120") !== range) return;
+      view.trailTrips = r;
+      view.pathAt = 0;
+    }, () => {}).finally(() => {
+      if (view.trailFetchAbort === fetchAbort) view.tripsInFlight = false;
+    });
   }
+  const activeTrips = cachedTrips || view.trailTrips;
   for (const robot of view.robots || []) {
     const id = robot.robot_id, entry = view.paths.get(id);
-    const tripId = range === "trip" ? tripFor(view.trailTrips, id) : null;
-    if (view.trailHidden?.has(id) || entry?.busy || (range === "trip" && !tripId)) {
+    const tripId = range === "trip" ? tripFor(activeTrips, id) : null;
+    if (view.trailHidden?.has(id) || entry?.busy || view.pathInFlight.has(id) || (range === "trip" && !tripId)) {
       if (range === "trip" && !tripId) view.paths.delete(id);
       continue;
     }
     const key = `${range}:${tripId || ""}`;
     if (entry) entry.busy = true;
-    call(`/api/fleet/robots/${encodeURIComponent(id)}/path?${pathQuery(range, tripId, entry, key)}`).then(
+    view.pathInFlight.add(id);
+    call(`/api/fleet/robots/${encodeURIComponent(id)}/path?${pathQuery(range, tripId, entry, key)}`, { signals: [fetchAbort.signal] }).then(
       (body) => {
-        if ((view.trailRange || "120") !== range) return; // 범위를 바꾼 뒤 늦게 온 답
+        if (fetchAbort.signal.aborted || (view.trailRange || "120") !== range) return; // 범위를 바꾼 뒤 늦게 온 답
         view.paths.set(id, mergePath(view.paths.get(id), key, body, range === "trip" ? null : Number(range)));
       },
-      () => {}).finally(() => { const e = view.paths.get(id); if (e) e.busy = false; }); // 실패하면 직전 경로를 둔다
+      () => {}).finally(() => {
+        view.pathInFlight.delete(id);
+        const e = view.paths.get(id);
+        if (e) e.busy = false;
+      }); // 실패하면 직전 경로를 둔다
   }
 }
 
 // 범위 선택과 로봇별 켜고 끄기(index.html #trail-control). 표시 선호라 권한과 무관하다.
-function bindControls(view) {
+function bindControls(view, scope = null) {
   const range = document.getElementById("trail-range"), box = document.getElementById("trail-robots");
   if (!range || !box) return { sync() {} };
   view.trailHidden ||= new Set();
-  range.addEventListener("change", () => { view.trailRange = range.value; view.paths?.clear(); view.pathAt = 0; });
-  let ids = "";
+  const listen = scope?.listen
+    ? (target, type, fn) => scope.listen(target, type, fn)
+    : (target, type, fn) => { target.addEventListener(type, fn); return () => target.removeEventListener(type, fn); };
+  try {
+    const saved = window.sessionStorage?.getItem("rosy-trail-range");
+    if (saved && [...range.options].some((o) => o.value === saved)) {
+      range.value = saved;
+      view.trailRange = saved;
+    }
+  } catch { /* ignore storage unavailable */ }
+  const offRange = listen(range, "change", () => {
+    view.trailRange = range.value;
+    abortTrailFetches(view);
+    view.paths?.clear();
+    view.pathAt = 0;
+    try { window.sessionStorage?.setItem("rosy-trail-range", range.value); } catch { /* ignore */ }
+  });
+  let sig = "";
+  let offCheckboxes = [];
+  const clearCheckboxes = () => {
+    for (const off of offCheckboxes) off?.();
+    offCheckboxes = [];
+  };
+  scope?.onDispose?.(() => {
+    offRange?.();
+    clearCheckboxes();
+    abortTrailFetches(view, true);
+    view.trailUi = null;
+  });
   return {
     sync() {
-      const now = (view.robots || []).map((r) => r.robot_id);
-      if (now.join("\n") === ids) return;
-      ids = now.join("\n");
-      box.replaceChildren(...now.map((id) => {
+      const robots = view.robots || [];
+      const colors = view.colors || [];
+      let nextSig = "";
+      for (let i = 0; i < robots.length; i += 1) {
+        const col = colors.length ? colors[i % colors.length] : "";
+        nextSig += `${i ? "\n" : ""}${robots[i].robot_id}\t${col}`;
+      }
+      if (nextSig === sig) return;
+      sig = nextSig;
+      clearCheckboxes();
+      box.replaceChildren(...robots.map((robot) => {
+        const id = robot.robot_id;
         const label = document.createElement("label"), input = document.createElement("input");
         label.className = "ui-check";
         input.className = "ui-field";
         input.type = "checkbox";
         input.checked = !view.trailHidden.has(id);
-        input.addEventListener("change", () => {
+        offCheckboxes.push(listen(input, "change", () => {
           if (input.checked) view.trailHidden.delete(id); else view.trailHidden.add(id);
           view.paths?.delete(id); view.pathAt = 0;
-        });
+        }));
         label.append(input, ` ${id}`);
         return label;
       }));
@@ -98,14 +169,25 @@ function bindControls(view) {
 
 const DASH = { LOCALIZED: [], DEGRADED: [4, 3], CAMERA_ONLY: [1, 2.5] }; // × lineWidth
 
-let tetherAt = 0;
-export function drawTrails(ctx, view, toPx, lineWidth, call) {
+export function drawTrails(ctx, view, toPx, lineWidth, call, scope = view?.scope || null) {
   const now = Date.now();
-  if (typeof document !== "undefined") (view.trailUi ||= bindControls(view)).sync();
+  if (typeof document !== "undefined" && typeof document.getElementById === "function") {
+    (view.trailUi ||= bindControls(view, scope)).sync();
+  }
   pollPaths(view, call, now);
-  if (call && now - tetherAt > TETHER_POLL_MS) {
-    tetherAt = now;
-    call("/api/fleet/tethers").then((r) => { view.tethers = r.tethers || []; view.watchAge = r.watch_age_s; }, () => {}); // 실패하면 직전 목록을 둔다
+  if (call && !view.tetherInFlight && now - (view.tetherAt || 0) > TETHER_POLL_MS) {
+    view.tetherAt = now;
+    view.tetherInFlight = true;
+    view.tetherAbort?.abort();
+    const tetherAbort = new AbortController();
+    view.tetherAbort = tetherAbort;
+    call("/api/fleet/tethers", { signals: [tetherAbort.signal] }).then((r) => {
+      if (tetherAbort.signal.aborted) return;
+      view.tethers = r.tethers || [];
+      view.watchAge = r.watch_age_s;
+    }, () => {}).finally(() => {
+      if (view.tetherAbort === tetherAbort) view.tetherInFlight = false;
+    }); // 실패하면 직전 목록을 둔다
   }
   const rangeS = (view.trailRange || "120") === "trip" ? null : Number(view.trailRange || "120");
   const mapId = view.map ? view.map.map_id : view.activeSiteMap?.map?.map_id;

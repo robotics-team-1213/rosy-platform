@@ -5,77 +5,35 @@
   --home: #7ec8ff;
   --away: #b6c1cf;
   --pitch-ink: #f4f1ea;
-  --mute: #9aa894;
-  --chip: #24422c;
-  --field: #0c160f;
-  --score-gap: #1c2c1f;
-  --score-well: #122018;
 }
 
 html, body {
   margin: 0;
   min-height: 100%;
-  background: var(--field);
-  color: var(--pitch-ink);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
   font: var(--weight-regular) var(--text-body)/var(--leading-body) var(--body);
-}
-
-.rail {
-  padding: var(--space-4) var(--space-5) var(--space-2);
-}
-
-.kicker {
-  margin: 0;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  font-size: var(--text-label);
-  color: var(--mute);
-}
-
-h1 {
-  margin: var(--space-1) 0 0;
-  font-size: var(--text-title);
-  font-weight: var(--weight-emphasis);
 }
 
 #phase {
   margin: var(--space-1) 0 0;
-  color: var(--mute);
+  color: var(--text-secondary);
 }
 
 #connection {
   margin: var(--space-1) 0 0 auto;
-  color: var(--mute);
+  color: var(--text-secondary);
   font-size: var(--text-label);
 }
 #connection[data-evidence="delayed"], #connection[data-evidence="unavailable"] { color: var(--status-warn); }
-#connection[data-evidence="disconnected"] { color: var(--status-crit); }
+#connection ui-tag { white-space: normal; }
 
 .score {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  margin: 0 var(--space-5) var(--space-3);
-  background: var(--score-gap);
+  margin: var(--space-3) var(--space-5);
 }
 
-.score div {
-  background: var(--score-well);
-  padding: var(--space-3) var(--space-4);
-}
-
-.score span {
-  display: block;
-  overflow-wrap: anywhere;
-  font-size: var(--text-label);
-  color: var(--mute);
-}
-
-.score strong {
-  font-size: var(--text-display);
-  font-variant-numeric: tabular-nums;
-}
+.score dt { overflow-wrap: anywhere; }
+.score .ui-readout dd { font-size: var(--text-display); }
 
 .match-layout {
   display: grid;
@@ -93,37 +51,15 @@ h1 {
   max-width: 720px;
 }
 
-.field-details {
-  display: flex;
-  flex-direction: column;
-  align-self: start;
-  min-width: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--score-gap);
-  border-radius: var(--radius-button);
-  background: var(--score-well);
-}
+.field-details { align-self: start; }
+#lost { align-self: start; }
 
-.field-details h2 {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-body);
-  font-weight: var(--weight-emphasis);
-}
-
-.details-label {
-  margin: 0;
-  color: var(--mute);
-  font-size: var(--text-label);
-}
+.field-details h2 { margin: 0; }
 
 #score-evidence:not([hidden]) {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-3);
-  padding: 0 var(--space-1);
-  background: var(--score-well);
+  margin: var(--space-2) var(--space-5) 0;
   color: var(--status-warn);
-  font-size: var(--text-label);
+  font-size: var(--text-micro);
 }
 
 #pitch {
@@ -151,10 +87,10 @@ h1 {
   max-width: calc(100% - 2 * var(--space-4));
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--mute);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-button);
-  background: var(--score-well);
-  color: var(--pitch-ink);
+  background: var(--surface-raised);
+  color: var(--text-primary);
   font-weight: var(--weight-emphasis);
   text-align: center;
   pointer-events: none;
@@ -192,7 +128,7 @@ h1 {
 /* 경기장 어휘(D-359 §5.2) — 공용 태그가 아니라 마커 칩이다. 글자는 토큰 척도를 쓴다.
    자간은 0이다: 320px 네 칸 격자에서 추적 자간이 칩을 넓히지 않게 한다. */
 .chips li {
-  background: var(--chip);
+  background: var(--surface-raised);
   padding: var(--space-1) var(--space-2);
   font: var(--weight-label) var(--text-label)/var(--leading-label) var(--body);
   letter-spacing: 0;
@@ -200,28 +136,17 @@ h1 {
   white-space: nowrap;
 }
 
+.chips li .ui-icon { margin-inline-end: var(--space-1); vertical-align: middle; }
+
 .chips li.on {
   background: var(--line);
-  color: var(--score-well);
+  color: var(--pitch);
 }
 
 #stair1 {
-  margin: auto 0 0;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--score-gap);
-  color: var(--mute);
-  font-size: var(--text-body);
-}
-
-.lost {
-  display: inline-block;
-  width: fit-content;
-  margin: 0 0 var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-button);
-  background: var(--status-crit);
-  color: var(--text-on-danger);
-  font-weight: var(--weight-label);
+  margin: 0;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 /* D-741 3·4 — 정지는 앱 바의 마지막 조작이다(D-201의 아래 붙박이 줄을 바꾼다). 머리는 붙박이라
@@ -248,14 +173,14 @@ ui-shell[grammar="focal"] ui-topbar {
   gap: 0 var(--space-3);
   grid-column: 1 / -1;
   margin: 0;
-  color: var(--mute);
+  color: var(--text-secondary);
   font-size: var(--text-label);
 }
 
 #halt-status[data-state="pending"],
-#halt-status[data-state="sent"] { color: var(--pitch-ink); }
+#halt-status[data-state="sent"] { color: var(--text-primary); }
 
-#halt-status[data-state="error"] { color: var(--status-crit); }
+#halt-status[data-state="error"] { background: var(--flag-danger-bg); color: var(--flag-danger-ink); padding: 0 var(--space-1); }
 
 #halt { min-width: 96px; }
 #account-login, #account-logout { grid-column: 5; grid-row: 1; }
@@ -277,16 +202,7 @@ ui-shell[grammar="focal"] ui-topbar {
 
   /* start: the leftover viewport height must not stretch the pitch row and open a gap above the panel. */
   .match-layout { grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--space-3); }
-  .field-details { padding: var(--space-3); }
-  .field-details h2 { margin-bottom: var(--space-2); }
   .chips { margin-bottom: var(--space-3); }
-
-  #score-evidence:not([hidden]) {
-    position: static;
-    grid-column: 1 / -1;
-    padding: var(--space-1) var(--space-3);
-    background: var(--score-gap);
-  }
 }
 
 /* D-359 §6.4 — compact 세로 예산: 머리는 창 높이의 20% 이하다. 부제(노트북 게임 호스트)와
@@ -303,6 +219,7 @@ ui-shell[grammar="focal"] ui-topbar {
   #phase { grid-column: 2; grid-row: 1; }
   #account-login, #account-logout { grid-column: 3; }
   #halt { grid-column: 4; }
+  #halt .ui-icon { display: none; }  /* the 20% header budget leaves room for the label only */
   #account-logout { padding-inline: var(--space-1); }
   #connection { grid-column: 1 / 3; grid-row: 2; }
   [data-account-profile] { grid-column: 3 / -1; grid-row: 2; justify-self: end; text-align: end; }
@@ -314,6 +231,3 @@ ui-shell[grammar="focal"] ui-topbar {
   .field-details:has(#lost:not([hidden])) h2 { order: -2; }
   .field-details #lost:not([hidden]) { order: -1; }
 }
-.field-details details { margin-block: var(--space-3); }
-.field-details summary { cursor: pointer; color: var(--pitch-ink); }
-#stair1 { overflow-wrap: anywhere; }

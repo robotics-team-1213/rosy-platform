@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-14 · uncommitted · fix(learning): subnav no longer starves the path bar, shorter pending tooltip
+- 2026-11-13 · uncommitted · fix(learning): 지속 학습 중지는 busy 범위와 무관하게 나간다
+- 2026-11-13 · uncommitted · refactor(learning): review_app_web adopts busy scope, cause line, stop control, value text
+- 2026-11-13 · uncommitted · refactor(learning): review_app_web element style writes through setGeometry
 - 2026-11-09 · uncommitted · feat(sim): 양팔 세계 배경을 실제 방 벽 색으로
-- 2026-11-09 · uncommitted · feat(sim): 양팔 모델 shadow 점검(D-793 L2)
-- 2026-11-09 · uncommitted · fix(sim): 정확히 겹쳐 쌓은 시작 상태가 튀는 문제
-- 2026-11-09 · uncommitted · feat(sim): 동시 학습 라운드에 재배치 장면, 측정 벨트 병합
-- 2026-11-09 · uncommitted · feat(sim): 두 팔이 동시에 하는 재배치 시나리오

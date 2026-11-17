@@ -2,6 +2,7 @@
 // 그린다. 램프 도트는 장치가 보고한 구동값(lamps)이다. failsafe 는 "고장 표시"이고
 // all_red 는 "명령된 정지"다 — 둘을 같은 색으로 뭉뜽그리면 운영자는 장비 고장을
 // 정지 성공으로 읽어 버린다.
+import {enumLabel} from "/common/core_ui_logic.js";
 
 const SIGNAL_INTENT_LABEL = Object.freeze({
   failsafe: "감독 중단", manual: "수동", cycle: "자동 순환",
@@ -46,12 +47,12 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     }
   }
   const SIGNAL_MODE_TAG = {
-    failsafe: { text: "failsafe", cls: "crit" },
-    manual: { text: "manual", cls: "" },
-    cycle: { text: "cycle", cls: "active" },
-    hold: { text: "hold", cls: "" },
-    all_red: { text: "all_red", cls: "warn" },
-    flash_red: { text: "flash_red", cls: "warn" },
+    failsafe: { text: SIGNAL_INTENT_LABEL.failsafe, cls: "crit" },
+    manual: { text: SIGNAL_INTENT_LABEL.manual, cls: "" },
+    cycle: { text: SIGNAL_INTENT_LABEL.cycle, cls: "active" },
+    hold: { text: SIGNAL_INTENT_LABEL.hold, cls: "" },
+    all_red: { text: SIGNAL_INTENT_LABEL.all_red, cls: "warn" },
+    flash_red: { text: SIGNAL_INTENT_LABEL.flash_red, cls: "warn" },
   };
 
   function command(signalId, body, label) {
@@ -84,7 +85,7 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     const spacer = document.createElement("span");
     spacer.className = "spacer";
     head.append(signalName, spacer);
-    const info = SIGNAL_MODE_TAG[row.mode] || { text: row.mode || "—", cls: "" };
+    const info = SIGNAL_MODE_TAG[row.mode] || { text: enumLabel(SIGNAL_INTENT_LABEL, row.mode, "알 수 없음"), cls: "" };
     // D-359 §5.2 — 공용 <ui-tag>. cls가 곧 status 어휘다(active·warn·crit).
     const tag = document.createElement("ui-tag");
     tag.setAttribute("status", (!row.online ? "crit" : info.cls) || "neutral");

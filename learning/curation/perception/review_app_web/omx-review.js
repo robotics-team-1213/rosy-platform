@@ -1,5 +1,5 @@
 // Explicit human labels and source-bound frame reads; source recordings stay immutable.
-import {accountFetch} from '/account-session.js';
+import {accountFetch,panelError} from '/review-alerts.js';
 import {confirmIrreversible} from '/common/ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/omx/center';
 const OBJECT={moved_as_intended:'의도대로 이동',grasp_missed:'집기 실패',dropped:'낙하',displaced:'의도와 다르게 이동',untouched:'변화 없음',unknown:'미정'};
@@ -138,7 +138,7 @@ async function preview(automatic=false){
       if(ticket!==generation)return;image.onload=null;image.onerror=null;$('review-image').replaceWith(image);$('review-frame-status').textContent='선택 프레임의 RGB 이미지를 읽었습니다. 기록 시각은 묶음 보기에서 확인하세요.';
     }
     shownFrame=frame;
-  }catch(error){if(ticket!==generation)return;stopPlayback();clearMedia();$('review-frame-status').textContent=`프레임 읽기 실패: ${error.message}`;}
+  }catch(error){if(ticket!==generation)return;stopPlayback();clearMedia();$('review-frame-status').textContent=`프레임 읽기 실패: ${panelError(error,'불러오지 못함')}`;}
   finally{if(controller===reader){
     frameBusy=false;$('review-viewer').setAttribute('aria-busy','false');
     if(pendingPreview){pendingPreview=false;preview(playing);}else if(ticket===generation&&playing)scheduleNext();
@@ -175,7 +175,7 @@ $('review-open').onclick=async()=>{
     if($('prepared-set').value!==selected)return;
     current=value;pending=null;modified=false;stale=false;loading=false;render();
     $('review-status').textContent=(current.fixture_only?'시험 fixture · 현장 자료 수용 아님. ':'')+`검수 불러옴 · ${current.trainable?.ok?'학습 분할 준비됨':current.trainable?.reason||'학습 준비 안 됨'}`;
-  }catch(error){$('review-status').textContent=`검수 읽기 실패: ${error.message}`;stale=true;cancelViewer();saveReady();publishLoaded();}
+  }catch(error){$('review-status').textContent=`검수 읽기 실패: ${panelError(error,'불러오지 못함')}`;stale=true;cancelViewer();saveReady();publishLoaded();}
   finally{loading=false;$('review-fields').disabled=false;saveReady();preparedChanged();publishLoaded();}
 };
 $('review-episode').onchange=resetFrame;$('review-camera').onchange=()=>preview();$('review-frame').oninput=()=>preview();$('review-view').onchange=()=>preview();
@@ -209,7 +209,7 @@ $('native-review-form').onsubmit=async event=>{
     if(current!==source)return;
     stale=/stale|revision|hash|changed|리비전|해시|원본.*변경/i.test(error.message);
     if(stale)cancelViewer();
-    $('review-status').textContent=`검수 저장 응답: ${error.message}`+(stale?' · 원본을 명시적으로 다시 불러온 뒤 검수하세요.':' · 같은 입력으로 재시도할 수 있습니다.');
+    $('review-status').textContent=`검수 저장 응답: ${panelError(error,'서버 연결 문제')}`+(stale?' · 원본을 명시적으로 다시 불러온 뒤 검수하세요.':' · 같은 입력으로 재시도할 수 있습니다.');
   }finally{saving=false;$('review-fields').disabled=false;saveReady();preparedChanged();publishLoaded();}
 };
 $('prepared-set').addEventListener('change',preparedChanged);

@@ -14,7 +14,7 @@
 .vlm-question[data-focus="true"] { border-color: var(--focus-ring); }
 .vlm-question p { margin: 0 0 var(--space-2); }
 .vlm-question .vlm-en { color: var(--text-secondary); }
-.vlm-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: var(--space-2); }
+.vlm-options { inline-size: 100%; min-block-size: var(--target-secondary); }
 /* The decision bar stays on screen while the page scrolls through the questions (D-542 §2-3). */
 .vlm-decide { position: sticky; bottom: 0; z-index: 1; padding-block: var(--space-2); background: var(--surface-canvas); border-top: 1px solid var(--border-subtle); }
 .vlm-eval .ui-table-scroll { margin-block-end: var(--space-4); }

@@ -97,7 +97,7 @@ def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actio
             expect(panel).to_contain_text("상위 관제 A")
             expect(panel).to_contain_text("목표 X 1 m · Y 2 m · 방향 0 rad")
             expect(panel).to_contain_text("위임 R / job-1")
-            disclosure = panel.locator("summary")
+            disclosure = panel.locator("summary").first
             assert disclosure.bounding_box()["height"] >= 48
             bounds = page.locator("#work-overview").bounding_box()
             action_bounds = panel.get_by_role("button", name="이 관제에서 승인", exact=True).bounding_box()
@@ -153,7 +153,7 @@ def test_unknown_submission_keeps_its_body_and_identity_across_reload(site, outc
             page.goto(site + "/console?view=work")
             page.clock.run_for(1500)
             page.locator("#work-integrations > summary").click()
-            page.locator("#control-unit-work summary").click()
+            page.locator("#control-unit-work summary").first.click()
             page.locator("#control-unit-target_unit").fill("A")
             page.locator("#control-unit-robot_id").fill("a")
             page.locator("#control-unit-x").fill("1")
@@ -173,7 +173,7 @@ def test_unknown_submission_keeps_its_body_and_identity_across_reload(site, outc
             page.reload()
             page.clock.run_for(1500)
             page.locator("#work-integrations > summary").click()
-            page.locator("#control-unit-work summary").click()
+            page.locator("#control-unit-work summary").first.click()
             expect(page.locator("#control-unit-target_unit")).to_have_value("A")
             expect(page.locator("#control-unit-x")).to_have_value("1")
             expect(page.get_by_role("button", name="새 요청 작성", exact=True)).to_be_disabled()

@@ -30,6 +30,12 @@ MEASURE_VIDEO = """(() => {
 })()"""
 
 
+def _tools(page):
+    """종료·정지·설정·영상 보기는 도구 판 안에 있다. 닫혀 있으면 연다."""
+    if page.locator("[data-drive-tools-panel]").is_hidden():
+        page.locator("[data-drive-tools]").click()
+
+
 @pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1333, 760), (1200, 2000), (390, 844), (320, 568)])
@@ -67,10 +73,10 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
                 stick = page.locator("[data-drive-stick]").bounding_box()
                 if viewport[0] == 320:
                     hud = page.locator("[data-drive-hud]").bounding_box()
-                    idle = page.locator("[data-drive-idle]").bounding_box()
-                    assert idle and idle["y"] >= hud["y"] and idle["y"] + idle["height"] <= hud["y"] + hud["height"]
-                    facts = page.locator("[data-drive-facts]").bounding_box()
-                    assert facts and facts["y"] + facts["height"] <= hud["y"] + hud["height"]
+                    # 머리에는 속도·동작·연결 태그와 도구 하나만 남는다. 정지·설정과 사실 띠는 도구 판 안이다.
+                    assert page.locator("[data-drive-tools-panel] [data-drive-idle]").count() == 1
+                    assert page.locator("[data-drive-tools-panel] [data-drive-facts]").count() == 1
+                    assert page.locator("[data-drive-hud] [data-drive-idle], [data-drive-hud] [data-drive-facts]").count() == 0
                     tools = page.locator("[data-drive-tools]").bounding_box()
                     assert tools and tools["y"] + tools["height"] <= hud["y"] + hud["height"]
                 scrolled = page.evaluate("""() => ({
@@ -90,12 +96,9 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
     assert m["videoArea"] > 0.2, f"영상이 너무 작다: {m}"
     if viewport[0] < 480:
         buttons = action_boxes["buttons"]
-        assert len(buttons) == 2, action_boxes
-        assert max(button["width"] for button in buttons) - min(button["width"] for button in buttons) <= 1, action_boxes
+        assert len(buttons) == 1, action_boxes  # 도구 하나
         assert all(button["height"] >= 44 for button in buttons), action_boxes
-        assert abs(buttons[0]["left"] - action_boxes["track"]["left"]) <= 1, action_boxes
-        assert abs(buttons[-1]["right"] - action_boxes["track"]["right"]) <= 1, action_boxes
-        assert abs(buttons[0]["top"] - buttons[1]["top"]) <= 1, action_boxes
+        assert buttons[0]["right"] <= action_boxes["track"]["right"] + 1, action_boxes
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]
                    if "pedal" in box["selector"] or "stick" in box["selector"]), controls
         if viewport[0] == 390:
@@ -126,6 +129,7 @@ def test_camera_direct_views_pan_crop_and_restore_whole_frame(base_url, viewport
         try:
             _enter_drive(page, base_url)
             page.wait_for_function("document.querySelector('[data-drive-frame]').naturalWidth > 0")
+            _tools(page)
             page.click("[data-drive-fill]")
             page.wait_for_function("document.querySelector('[data-screen=drive]').dataset.viewMode === 'full'")
             assert "잘림" in page.inner_text("[data-drive-fact=zoom]")
@@ -139,6 +143,7 @@ def test_camera_direct_views_pan_crop_and_restore_whole_frame(base_url, viewport
             assert frame.evaluate("e => getComputedStyle(e).objectPosition") != before
             assert frame.evaluate("e => e.style.objectPosition") == ""
             assert frame.evaluate("e => e.style.transform") == ""
+            _tools(page)
             page.click("[data-drive-fit]")
             page.wait_for_function("getComputedStyle(document.querySelector('[data-drive-frame]')).objectFit === 'contain'")
             assert page.locator("[data-drive-fact=zoom]").is_hidden()
@@ -209,7 +214,7 @@ def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
     page.wait_for_selector("[data-drive-frame][src]", timeout=10_000)
     script({"state": "TRACKING", "error": 0.4, "confidence": 0.9, "linear": 0.03,
             "angular": -0.32, "reason": "tracking"})
-    page.click("[data-drive-auto]")
+    page.click("label:has([data-drive-auto])")
     box = page.locator("[data-drive-go]").bounding_box()
     page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     page.mouse.down()
@@ -251,7 +256,7 @@ def _arm_auto(page, base_url):
     # 진행은 이 화면이 수동 모드를 잡은 뒤에만 받는다(drive.js `!engaged`). 그 전의 누름은 버려지고 다시 오지 않는다.
     # 조작 응답 표시는 잡은 뒤의 hold 루프만 쓰므로, 그 글이 뜬 것이 잡았다는 화면 증거다.
     page.wait_for_function(ENGAGED)
-    page.click("[data-drive-auto]")
+    page.click("label:has([data-drive-auto])")
     page.wait_for_selector("[data-drive-go]", state="visible")
     dev_server.LINE_FOLLOW_MODE_LOG.clear()
 
@@ -282,7 +287,7 @@ def test_go_pressed_before_manual_mode_is_held_starts_nothing(tablet_page):
             route.continue_()
     page.route("**/api/v1/mode", mode)
     _enter_drive(page, base_url)
-    page.click("[data-drive-auto]")
+    page.click("label:has([data-drive-auto])")
     page.wait_for_selector("[data-drive-go]", state="visible")
     dev_server.LINE_FOLLOW_MODE_LOG.clear()
     page.dispatch_event("[data-drive-go]", "pointerdown")
@@ -374,7 +379,7 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
     if output := os.environ.get("ROSY_SHOT_DIR"):
         Path(output).mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(Path(output) / f"pilot-turn-cue-auto-{width}x{height}.png"))
-    page.click("[data-drive-manual]")
+    page.click("label:has([data-drive-manual])")
     page.wait_for_selector("[data-drive-pivots]", state="visible")
     assert page.locator("[data-drive-scroll-cue]").is_visible() == (width == 320)
     if output:
@@ -399,15 +404,20 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
 @pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_short_phone_hud_uses_existing_tools_panel(tablet_page):
+    """머리는 한 줄(속도·동작·연결 태그·도구)이고, 모델·영상 보기·정지·설정·종료·사실 띠는 어느 폭에서나 도구 판 안이다."""
     base_url, page, errors = tablet_page
     _enter_drive(page, base_url)
+    for width, height in ((500, 844), (320, 568), (390, 844)):
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_function("document.querySelectorAll('[data-drive-tools-panel] details.pilot-models').length === 2")
+        assert page.locator("[data-drive-hud] details.pilot-models").count() == 0
+        for name in ("fit", "fill", "idle", "exit"):
+            assert page.locator(f"[data-drive-tools-panel] [data-drive-{name}]").count() == 1
+            assert page.locator(f"[data-drive-hud] [data-drive-{name}]").count() == 0
+        assert page.locator("[data-drive-tools-panel] [data-drive-fact=cap]").count() == 1
+        hud = page.locator("[data-drive-hud]")
+        assert hud.evaluate("node => node.scrollHeight <= node.clientHeight + 1")
     page.set_viewport_size({"width": 320, "height": 568})
-    page.wait_for_function("document.querySelectorAll('[data-drive-tools-panel] details.pilot-models').length === 2")
-    assert page.locator("[data-drive-hud] details.pilot-models").count() == 0
-    assert page.locator("[data-drive-tools-panel] [data-drive-fit]").count() == 1
-    assert page.locator("[data-drive-tools-panel] [data-drive-fill]").count() == 1
-    hud = page.locator("[data-drive-hud]")
-    assert hud.evaluate("node => node.scrollHeight <= node.clientHeight + 1")
     page.locator("[data-drive-tools]").click()
     panel = page.locator("[data-drive-tools-panel]")
     assert panel.is_visible()
@@ -419,30 +429,12 @@ def test_short_phone_hud_uses_existing_tools_panel(tablet_page):
     panel.locator("details.pilot-models summary").first.click()
     assert panel.locator("details.pilot-models").first.get_attribute("open") is not None
     page.set_viewport_size({"width": 390, "height": 844})
-    page.wait_for_function("document.querySelectorAll('[data-drive-tools-panel] details.pilot-models').length === 2")
     assert panel.is_visible()
     assert page.locator("[data-drive-tools]").get_attribute("aria-expanded") == "true"
-    assert page.locator("[data-drive-tools-panel] [data-drive-fit]").count() == 1
-    assert page.locator("[data-drive-tools-panel] [data-drive-fill]").count() == 1
     assert page.locator("[data-drive-tools-panel] details.pilot-models[open]").count() == 1
     bounds = panel.bounding_box()
     assert bounds["y"] >= 0 and bounds["y"] + bounds["height"] <= 844
-    if output:
-        page.screenshot(path=str(Path(output) / "pilot-tools-390x844.png"))
-    scroll = panel.evaluate("node => { node.scrollTop = node.scrollHeight; return {top: node.scrollTop, height: node.scrollHeight, visible: node.clientHeight}; }")
-    assert scroll["height"] > scroll["visible"] and scroll["top"] > 0, scroll
-    if output:
-        page.screenshot(path=str(Path(output) / "pilot-tools-scroll-390x844.png"))
-    page.set_viewport_size({"width": 500, "height": 844})
-    page.wait_for_function("document.querySelectorAll('[data-drive-hud] details.pilot-models').length === 2")
-    assert panel.is_hidden()
-    assert page.locator("[data-drive-tools]").get_attribute("aria-expanded") == "false"
-    assert page.locator("[data-drive-hud] [data-drive-fit]").count() == 1
-    assert page.locator("[data-drive-hud] [data-drive-fill]").count() == 1
-    assert page.locator("[data-drive-hud] details.pilot-models[open]").count() == 0
     page.set_viewport_size({"width": 320, "height": 568})
-    page.wait_for_function("document.querySelectorAll('[data-drive-tools-panel] details.pilot-models').length === 2")
-    page.locator("[data-drive-tools]").click()
     panel.get_by_text("닫기", exact=True).scroll_into_view_if_needed()
     panel.get_by_text("닫기", exact=True).click()
     assert panel.is_hidden()
@@ -455,16 +447,17 @@ def test_reenter_resets_auto_mode(tablet_page):
     """주행 화면은 같은 section 에 다시 마운트된다 — 나갔다 들어오면 수동(페달)으로 시작한다."""
     base_url, page, errors = tablet_page
     _arm_auto(page, base_url)
-    assert page.get_attribute("[data-drive-auto]", "aria-pressed") == "true"
+    assert page.locator("[data-drive-auto]").is_checked()
+    _tools(page)
     page.click("[data-drive-exit]")
     page.wait_for_selector("[data-drive-enter]")
     page.click("[data-drive-enter]")
     page.wait_for_selector("[data-drive-stick]")
     state = page.evaluate("""(() => {
       const drive = document.querySelector('[data-screen=drive]');
-      return {auto: drive.dataset.autoMode, pressed: document.querySelector('[data-drive-auto]').getAttribute('aria-pressed')};
+      return {auto: drive.dataset.autoMode, checked: document.querySelector('[data-drive-auto]').checked};
     })()""")
-    assert state == {"auto": "off", "pressed": "false"}, state
+    assert state == {"auto": "off", "checked": False}, state
     assert page.locator("[data-drive-pedal=forward]").is_visible()
     assert not page.locator("[data-drive-go]").is_visible()
     assert errors == [], errors
@@ -493,8 +486,16 @@ def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_
         assert "보정 노트북" in reason and "비상 정지" in reason
         assert page.locator("[data-drive-fact=activity]").is_visible()
         page.wait_for_selector("[data-drive-controls][data-locked]")
-        assert page.evaluate("""[...document.querySelectorAll('[data-drive-controls] ui-button')]
-                                .every((b) => b.disabled && b.getAttribute("reason") === "위 사유")""")
+        # C1: one cause line (the band's reason) describes every locked control; presets rebuilt after the lock too.
+        line_id = page.get_attribute("[data-drive-calibration-reason]", "id")
+        assert line_id and page.locator("[data-drive-calibration-reason]").is_visible()
+        assert page.evaluate("""(id) => [...document.querySelectorAll('[data-drive-controls] ui-button')]
+            .every((b) => b.disabled && !b.hasAttribute("reason") && b.getAttribute("aria-describedby").split(" ").includes(id))""", line_id)
+        # K1 radios (speed preset, drive mode) join the same lock and the same cause line as the buttons
+        radios = page.locator("[data-drive-controls] input.choice-radio")
+        assert radios.count() >= 4 and radios.evaluate_all(
+            "(all, id) => all.every((r) => r.disabled && r.getAttribute('aria-describedby').split(' ').includes(id))", line_id)
+        assert page.locator("[data-drive-preset-row] input").count() == 3
         estop = page.locator("ui-topbar ui-button[data-estop]")
         assert estop.is_visible() and not estop.evaluate("(b) => b.disabled")
         page.screenshot(path=str(shots / "pilot-calibration-locked.png"))
@@ -516,6 +517,8 @@ def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_
         page.wait_for_selector("[data-drive-controls]:not([data-locked])")
         assert page.locator("[data-drive-calibration]").is_visible()
         assert "이 기기" in page.inner_text("[data-drive-calibration-reason]")
+        assert page.evaluate("""() => [...document.querySelectorAll('[data-drive-controls] ui-button')]
+            .every((b) => !b.hasAttribute("aria-describedby"))""")
         page.screenshot(path=str(shots / "pilot-calibration-owner.png"))
 
         page.request.post(f"{base_url}/__test__/activity", data="null",
@@ -537,6 +540,7 @@ def test_leaving_while_locked_never_posts_idle_over_the_owner(tablet_page):
         page.request.post(f"{base_url}/__test__/activity", data=_calibrating("someone-else"))
         page.wait_for_selector("[data-drive-controls][data-locked]")
         before = len(page.request.get(f"{base_url}/__test__/mode-log").json())
+        _tools(page)
         page.click("[data-drive-exit]")
         page.wait_for_timeout(500)
         assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == []
@@ -555,6 +559,7 @@ def test_owner_leaving_still_returns_the_mode_to_idle(tablet_page):
         page.wait_for_selector("[data-drive-calibration]:not([hidden])")
         page.wait_for_selector("[data-drive-controls]:not([data-locked])")
         before = len(page.request.get(f"{base_url}/__test__/mode-log").json())
+        _tools(page)
         page.click("[data-drive-exit]")
         page.wait_for_timeout(500)
         assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == ["IDLE"]
@@ -603,6 +608,7 @@ def test_exit_after_a_failed_engage_posts_no_idle(tablet_page):
         before = len(page.request.get(f"{base_url}/__test__/mode-log").json())
         page.click("[data-drive-enter]")
         page.wait_for_selector("[data-drive-blocked]:not([hidden])")
+        _tools(page)
         page.click("[data-drive-exit]")
         page.wait_for_timeout(500)
         assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == []
@@ -1215,43 +1221,46 @@ def test_startup_target_failure_retries_without_pinky_fallback(tablet_page, widt
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-def test_show_code_visible_for_operator_with_upgrade_path_and_working_for_admin(tablet_page):
-    """양방향 연동(D-193 §5): 운영자에게도 항목이 보이고 전환 길을 제공, 관리자는 발급·표시."""
+def test_enrollment_code_is_a_link_to_robot_dashboard_not_issued_here(tablet_page):
+    """D-370:155: 기기 연결 코드 발급은 로봇 대시보드만. Pilot은 링크 한 줄만 보여 주고 발급하지 않는다."""
     base_url, page, errors = tablet_page
-    page.goto(f"{base_url}/pilot")
-    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
-    page.click("form[data-pilot-token-form] ui-button")
-    page.wait_for_selector("[data-drive-enter]")
-    # 운영자: 항목은 보이지만 발급은 CORE 403 — 전환 안내가 떠야 한다.
-    page.locator("[data-show-code]").wait_for(state="visible")
-    page.click("[data-show-code]")
-    page.wait_for_selector("[data-enroll-upgrade]")
-    assert "관리자 권한이 필요합니다" in page.inner_text("[data-enroll-status]")
-    page.click("[data-enroll-upgrade]")
-    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.get_by_text("관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.").wait_for(state="visible")
-    page.evaluate("sessionStorage.clear()")
+    issued = []
+    page.on("request", lambda request: issued.append(request.url) if "enrollment-codes" in request.url else None)
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
     page.fill("form[data-pilot-token-form] ui-field input", "devadmintoken")
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("[data-drive-enter]")
-    page.locator("[data-show-code]").wait_for(state="visible")
-    page.click("[data-show-code]")
-    page.wait_for_selector("[data-enroll-code]")
-    assert page.inner_text("[data-enroll-code]") == "DEMO-C0DE"
-    assert "상대 기기에서 입력하세요" in page.inner_text("[data-enroll-status]")
-    assert page.inner_text("[data-enroll-timer]").startswith("유효 05:0")
-    page.wait_for_timeout(1500)
-    assert page.inner_text("[data-enroll-timer]") != "유효 05:00"
-    assert page.locator("[data-show-code]").is_enabled()
+    guidance = page.locator("[data-enroll-guidance]")
+    guidance.wait_for(state="visible")
+    assert "기기 연결 코드는 로봇 대시보드에서 발급합니다" in guidance.inner_text()
+    assert page.locator("[data-enroll-link]").get_attribute("href") == "/dashboard"
+    assert page.locator("[data-show-code], [data-enroll-code], [data-enroll-timer], [data-enroll-upgrade]").count() == 0
     overflow = page.evaluate(
         "document.documentElement.scrollWidth - document.documentElement.clientWidth")
     assert overflow <= 0, f"가로 넘침 {overflow}px"
-    page.evaluate("sessionStorage.clear()")
-    page.goto(f"{base_url}/pilot")  # 재진입: 카운트다운 타이머가 정리된다
+    assert issued == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_map_button_is_locked_with_reason_until_operator_session(tablet_page):
+    """P3 F6: 운용 지도는 운영자 이상 세션이 확인되기 전·조회 전용일 때 사유와 함께 잠긴다(숨기지 않는다)."""
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.wait_for_timeout(1200)
-    assert page.locator("[data-enroll-timer]").count() == 0
+    button = page.locator("ui-topbar [data-goto='/console']")
+    assert button.is_disabled() and button.get_attribute("reason")
+    page.fill("form[data-pilot-token-form] ui-field input", "devviewertoken")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_function("document.querySelector(\"ui-topbar [data-goto]\").getAttribute(\"reason\").includes(\"운영자 이상\")")
+    assert button.is_visible() and button.is_disabled()
+    assert "운영자 이상" in button.get_attribute("reason")
+    page.evaluate("sessionStorage.clear()")
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_selector("[data-drive-enter]")
+    assert button.is_enabled() and button.get_attribute("reason") is None
     assert errors == [], errors

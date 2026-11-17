@@ -1,8 +1,8 @@
 // Fleet binds the current review and existing Task creation in one transaction.
-import {enumLabel} from "/common/core_ui_logic.js";
+import {enumLabel, EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 import {workStatus} from "/console/assets/work-view.js";
 const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비", HOLD: "보류", REJECTED: "거절됨", LINKED: "작업 연결"};
-const deliberationState = {PENDING: "대기", RUNNING: "진행 중", ANSWERED: "응답", HOLD: "보류", UNKNOWN: "확인 불가", SUPERSEDED: "대체됨"};
+const deliberationState = {PENDING: "대기", RUNNING: "진행 중", ANSWERED: "응답", HOLD: "보류", UNKNOWN: EVIDENCE_LABEL.unavailable, SUPERSEDED: "대체됨"};
 export function createChannelRequestView({scope, call, el, robots, canSubmit, canManage, confirm}) {
   let receipt = null, review = null, version = 0, busy = false, incidentRows = [], modelState = "";
   const panel = el("channel-review"), state = el("channel-review-state");

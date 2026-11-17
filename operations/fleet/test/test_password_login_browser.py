@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, safe_listener
+from browser_harness import browser_tests_enabled, open_token_access, safe_listener
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -24,11 +24,14 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
     from playwright.sync_api import expect, sync_playwright
 
+    from hashlib import sha256
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-only")],
                            [FakeRobot("rosy_01")])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids=console.robot_ids)
-    app = create_app(console, task_service=tasks, site_users={}, site_logins={"alice": {
-        "principal_id": "alice", "role": "operator", "password_scrypt": hash_password("pw-1234")}},
+    app = create_app(console, task_service=tasks, site_users={
+        sha256(b"shared-token").hexdigest(): {"principal_id": "site-console", "role": "viewer", "machine": True}},
+        site_logins={"alice": {
+            "principal_id": "alice", "role": "operator", "password_scrypt": hash_password("pw-1234")}},
         web_common=ROOT / "shared" / "web", start_task_dispatcher=False)
     listener = safe_listener()
     # Chromium keeps Secure cookies from http://localhost (a potentially trustworthy origin).
@@ -109,6 +112,23 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                 expect(page.locator("#user-role")).to_have_text("인증 필요", timeout=15000)
                 expect(page.locator('#fleet-login')).to_be_visible()
                 expect(page.locator('#fleet-account')).to_be_hidden()
+
+                # When unlocked via a non-cookie token while /api/fleet/auth/session returns 401 (receiver mode),
+                # the tab-disconnect button remains visible so the operator can return to #fleet-login.
+                page.route("**/api/fleet/auth/session", lambda route: route.fulfill(
+                    status=401, content_type="application/json",
+                    body='{"detail":{"code":"ACCOUNT_SESSION_REFUSED"}}'))
+                open_token_access(page)
+                page.locator("#console-token").fill("shared-token")
+                page.locator("#token-save").click()
+                expect(page.locator("#user-role")).to_have_attribute("title", "site-console · viewer", timeout=15000)
+                open_token_access(page)
+                expect(logout).to_be_visible()
+                expect(logout).to_have_text("이 탭 접속 해제")
+                expect(logout).to_be_enabled()
+                logout.click()
+                page.unroute("**/api/fleet/auth/session")
+                expect(page.locator("#fleet-login")).to_be_visible()
             finally:
                 browser.close()
     finally:

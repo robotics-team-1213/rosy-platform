@@ -1,11 +1,22 @@
 // 관제 화면의 읽기 갱신: 발행 제어 띠와 재허가, 현장 경로, Fleet 상태 폴링, 전체 주행 취소.
 // 폴링 주기는 셸(console.js)이 쥐고 이 팩토리의 함수를 부른다(D-798 3.2).
 import { namedOperatorReason } from "/console/assets/authorization.js";
+import { statusTag } from "/common/status-tag.js";
 import { noteLink, showFleet } from "/console/assets/fleet-header.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
+import { createLocalizationPoller } from "./localization-view.js";
+
+export const STATE_HOLDOVER_MS = 4500;
+
+// 지도가 숨겨져도 traffic·guide·활성 현장 지도는 계속 읽는다(작업 이동 목적지·위치 판정·로스터가 쓴다).
+// 숨기면 건너뛰는 것은 카메라 목격(sightings)과 지도 전용 화면(platoon·tracking·vision)뿐이다.
+export const mapPollPlan = (hidden) => ({
+  traffic: true, guide: true, siteMap: true,
+  sightings: !hidden, platoon: !hidden, tracking: !hidden, visionFrame: !hidden,
+});
 
 export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi, log, render, confirmedAction,
-  dispatchGate, resetRobotApps, disarmGoal, openCard }) {
+  dispatchGate, resetRobotApps, disarmGoal, openCard, onStateRecovered = null }) {
   // A chooser deep link only reveals/focuses an existing card; it never arms a goal.
   let requestedRobotFocus = new URLSearchParams(location.search).get("robot");
 
@@ -22,6 +33,9 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
     const detail = el("dispatch-control-detail");
     const rearm = el("dispatch-rearm");
     if (!dispatchGate.due()) return view.dispatchControl;
+    if (dispatchInFlight) return view.dispatchControl;
+    const scopeLife = pageScope.capture();
+    dispatchInFlight = true;
     try {
       const state = await call("/api/fleet/dispatch-control", {signals: [life.signal]});
       life.check();
@@ -65,6 +79,8 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       rearm.disabled = true;
       rearm.setAttribute("reason", "발행 상태 확인 불가");
       return null;
+    } finally {
+      if (scopeLife.current()) dispatchInFlight = false;
     }
   }
 
@@ -86,16 +102,40 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
   });
 
   const pathSample = { proxy: null, fleet: null, vision: null };
+  let dispatchInFlight = false;
+  let healthInFlight = false;
   let statePollInFlight = false;
+  let lastStateOkAt = 0;
+  let stateFailCount = 0;
+  let lastSitePathSig = null;
+  const localizationPoller = createLocalizationPoller({
+    scope: pageScope,
+    call,
+    view,
+    isOperator: () => Boolean(view.isOperator?.()),
+    render,
+  });
 
   function paintSitePath() {
     const list = el("site-path-list");
-    const rows = [proxyRow(pathSample.proxy), fleetRow(pathSample.fleet), visionRow(pathSample.vision)];
+    // Fleet에 닿지 않음은 머리말 연결 표시(#link-state) 한 곳이 말한다. 경로 줄은 그 밖의 다리만 적는다.
+    const rows = [proxyRow(pathSample.proxy), fleetRow(pathSample.fleet), visionRow(pathSample.vision)]
+      .filter((row) => !(row.name === "Fleet" && row.kind === "warn"));
     const summary = sitePathSummary(rows);
     const summaryNode = el("site-path-summary");
-    if (summaryNode.textContent !== summary) summaryNode.textContent = summary;
-    summaryNode.dataset.kind = rows.find((row) => row.kind === "crit")?.kind
-      || rows.find((row) => row.kind === "warn")?.kind || "good";
+    const kind = rows.find((row) => row.kind === "crit")?.kind || rows.find((row) => row.kind === "warn")?.kind || "good";
+    if (summaryNode.textContent !== summary || summaryNode.dataset.painted !== kind) {
+      summaryNode.dataset.painted = kind;
+      // A bad path reads as the shared status tag content (glyph + words); the span itself stays the test and a11y hook.
+      if (kind === "good" || summary === "확인 중") summaryNode.textContent = summary;
+      else summaryNode.replaceChildren(...statusTag(kind === "crit" ? "danger" : /끊김/.test(summary) ? "disconnected" : "caution", summary).childNodes);
+    }
+    summaryNode.dataset.kind = kind;
+    const bad = ["warn", "crit"].includes(summaryNode.dataset.kind) && summary !== "확인 중";
+    el("site-path").hidden = !bad;  // a calm path is not shown; only a bad one earns a line (concept rule 18)
+    const sig = rows.map(r => `${r.name}:${r.kind}:${r.word}`).join("|");
+    if (sig === lastSitePathSig) return;
+    lastSitePathSig = sig;
     list.replaceChildren(...rows.map((row) => {
       const item = document.createElement("li");
       const name = document.createElement("b");
@@ -111,6 +151,8 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
 
   async function refreshHealthz() {
     const life = pageScope.capture();
+    if (!life.current() || healthInFlight) return;
+    healthInFlight = true;
     try {
       const response = await fetch("/healthz", { cache: "no-store", signal: life.signal });
       const body = await response.json();
@@ -119,13 +161,22 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
     } catch (err) {
       if (err.name === "AbortError") return;
       pathSample.proxy = { finished: false };
+    } finally {
+      if (life.current()) healthInFlight = false;
     }
     paintSitePath();
   }
   pageScope.onDispose(() => {
     resetRobotApps();
+    dispatchInFlight = false;
+    healthInFlight = false;
     statePollInFlight = false;
-    view.focusRobot = null;
+    lastStateOkAt = 0;
+    stateFailCount = 0;
+    lastSitePathSig = null;
+    view.stateStale = false;
+    view.robotSelection?.set(null, { source: "refresh" });
+    view.mapSelection = null;
     view.pinning = null;
     view.selected = null;
     view.cursor = null;
@@ -147,10 +198,13 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       fleetAnswered = true;
       paintSitePath();
       const motorHealthReceivedAtMs = Date.now();
+      const wasUnavailable = Boolean(view.stateUnavailable || view.stateStale);
+      stateFailCount = 0;
       view.robots = snapshot.robots.map(robot => ({...robot, motorHealthRequestedAtMs, motorHealthReceivedAtMs}));
       view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
-      if (requestedRobotFocus) openCard(requestedRobotFocus);
+      lastStateOkAt = view.receivedAtMs;
       view.stateUnavailable = false;
+      view.stateStale = false;
       view.stateLoaded = true;
       if (view.selected) {
         const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
@@ -160,11 +214,16 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       }
       view.signals = snapshot.signals || {};
       showFleet(snapshot.fleet, snapshot.robots);
+      void localizationPoller.poll();
       render();
+      if (wasUnavailable) onStateRecovered?.();
       if (requestedRobotFocus) {
-        const card = [...el("roster").querySelectorAll("article")]
+        // render() populates robot-dock entries via sync() so opening the card also opens the panel.
+        openCard(requestedRobotFocus);
+        const dockBtn = el("robot-dock-mount")?.querySelector(`[data-robot-id="${CSS.escape(requestedRobotFocus)}"]`);
+        const card = [...(el("robot-panel-mount")?.querySelectorAll("article") || []), ...el("roster").querySelectorAll("article")]
           .find(node => node.dataset.robotId === requestedRobotFocus);
-        if (card) card.focus();
+        (dockBtn || card)?.focus?.();
         requestedRobotFocus = null;
       }
     } catch (err) {
@@ -177,12 +236,24 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       }
       // D-248: 잠금 pill(토큰 필요)을 서버 없음으로 덮지 않는다 — 401의 이유를 남긴다.
       if (auth.locked) return;
+      stateFailCount += 1;
+      const withinHoldover = Boolean(view.stateLoaded) && lastStateOkAt > 0
+        && (Date.now() - lastStateOkAt) < STATE_HOLDOVER_MS;
+      if (withinHoldover) {
+        // 짧은 일시 단절에서는 기존 로봇·지도 표시를 유지하고 2회 연속 실패부터만 부드럽게 지연 알람을 띄운다.
+        view.stateStale = true;
+        view.stateUnavailable = false;
+        render();
+        return;
+      }
+      view.stateStale = false;
       view.stateUnavailable = true;
       if (view.selected) disarmGoal("Fleet 상태를 확인할 수 없어 목표 지정 취소");
       render();
       const pill = el("online-pill");
-      pill.textContent = "Fleet 연결 끊김";
-      pill.setAttribute("status", "crit");
+      // 연결 끊김 문구는 머리말 연결 표시(#link-state) 한 곳만 말한다. pill은 로봇 수라 값을 모를 때 비운다.
+      pill.textContent = "-";
+      pill.setAttribute("status", "neutral");  // 2026-11-14: a disconnect is a warning
     } finally {
       if (life.current()) statePollInFlight = false;
     }

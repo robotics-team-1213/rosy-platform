@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 // 없고 도킹 뷰가 /side_camera를 쓰지 않음을 지킨다.
 import {chargeBayRows, inspectorTargetsFromRows} from "../../../../applications/fleet/web/charge-bays-model.js";
 import {
-  visualCardSpecs, inspectorSpecs, CAMERA_WALL_VIEWS, S3_VIEWS, S5_VIEWS,
+  visualCardSpecs, inspectorSpecs, CAMERA_WALL_VIEWS, S3_VIEWS, CELL_A_VIEWS, CELL_B_VIEWS, S5_VIEWS,
 } from "../../../../applications/fleet/web/cell/cell-real2sim-specs.js";
 
 const body = {
@@ -60,3 +60,55 @@ test("an image bound before it is attached is painted once attached", async () =
   assert.equal(img.hidden, true);  // unregistered source painted, not dropped as detached
   feed.dispose();
 });
+
+test("cell camera names lease the manifest's Vision source ids", async () => {
+  const {createCellFrameFeed} = await import("../../../../applications/fleet/web/shared/cell-frames.js");
+  const leased = [];
+  const call = async (path, init) => {
+    if (path === "/api/fleet/vision/sources") return {sources: ["omx_overhead"]};
+    leased.push(JSON.parse(init.body).source_id);
+    throw Object.assign(new Error("stop"), {status: 403});
+  };
+  const feed = createCellFrameFeed({call});
+  const img = {isConnected: true, hidden: false};
+  feed.bind(img, {source: "top"});
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual(leased, ["omx_overhead"]);
+  feed.dispose();
+});
+
+test("scoped cell workspaces strictly isolate cell_s (arm_s) from cell_ab (arm_a/arm_b) and pinky", () => {
+  const s3Cards = visualCardSpecs(body, {scope: "cell_s"});
+  assert.deepEqual(s3Cards.map(c => c.id), ["cell_s"]);
+  const s3Inspectors = inspectorSpecs(body, {scope: "cell_s"});
+  assert.deepEqual(s3Inspectors.map(s => s.id), ["arm_s"]);
+  assert.deepEqual(s3Inspectors[0].cameraViews.map(v => v.id), ["arm_s_wrist", "arm_s_top"]);
+  assert.ok(!s3Inspectors.flatMap(s => s.buttons).some(b => b.preset?.startsWith("s5_") || b.pinkyAction));
+
+  const s5Cards = visualCardSpecs(body, {scope: "cell_ab"});
+  assert.deepEqual(s5Cards.map(c => c.id), ["cell_ab"]);
+  assert.ok(!s5Cards[0].buttons.some(b => b.preset === "full_s3_to_s5_pipeline" || b.preset?.startsWith("s3_")));
+  const s5Inspectors = inspectorSpecs(body, {scope: "cell_ab"});
+  assert.deepEqual(s5Inspectors.map(s => s.id), ["arm_a", "arm_b"]);
+  assert.ok(s5Inspectors.flatMap(s => s.cameraViews).every(v => ["top", "side", "arm_a_wrist", "arm_b_wrist"].includes(v.id)));
+  assert.ok(!s5Inspectors.flatMap(s => s.buttons).some(b => b.preset?.startsWith("s3_") || b.preset === "full_s3_to_s5_pipeline" || b.pinkyAction));
+  assert.ok(!s5Inspectors.find(s => s.id === "arm_a").buttons.some(b => b.preset === "s5_tier2_arm_b"));
+  assert.ok(!s5Inspectors.find(s => s.id === "arm_b").buttons.some(b => b.preset === "s5_tier1_arm_a" || b.preset === "s5_tier3_arm_a"));
+
+  const cellACards = visualCardSpecs(body, {scope: "cell_a"});
+  assert.deepEqual(cellACards.map(c => c.id), ["cell_a"]);
+  assert.deepEqual(CELL_A_VIEWS.map(v => v.id), ["top", "side", "arm_a_wrist"]);
+  assert.ok(!cellACards[0].cameraViews.some(v => v.id === "arm_b_wrist" || v.id.startsWith("arm_s")));
+  assert.ok(!cellACards[0].buttons.some(b => b.preset === "s5_tier2_arm_b" || b.preset?.startsWith("s3_")));
+  const cellAInspectors = inspectorSpecs(body, {scope: "cell_a"});
+  assert.deepEqual(cellAInspectors.map(s => s.id), ["arm_a"]);
+
+  const cellBCards = visualCardSpecs(body, {scope: "cell_b"});
+  assert.deepEqual(cellBCards.map(c => c.id), ["cell_b"]);
+  assert.deepEqual(CELL_B_VIEWS.map(v => v.id), ["top", "side", "arm_b_wrist"]);
+  assert.ok(!cellBCards[0].cameraViews.some(v => v.id === "arm_a_wrist" || v.id.startsWith("arm_s")));
+  assert.ok(!cellBCards[0].buttons.some(b => b.preset === "s5_tier1_arm_a" || b.preset === "s5_tier3_arm_a" || b.preset?.startsWith("s3_")));
+  const cellBInspectors = inspectorSpecs(body, {scope: "cell_b"});
+  assert.deepEqual(cellBInspectors.map(s => s.id), ["arm_b"]);
+});
+

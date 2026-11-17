@@ -119,19 +119,18 @@ def test_center_read_error_is_visible_from_conversion_stage_and_clears_on_recove
             page.route('**/api/learning/omx/center', center)
             page.goto(empty_learning_center+'/learning/omx#dataset-section', wait_until='networkidle')
             expect = playwright.expect
-            alert = page.locator('#center-read-error')
+            alert = page.locator('#page-alerts')  # a failed read is one page alert (D-1117), not a live region of its own
             expect(alert).to_be_visible()
-            expect(alert).to_have_attribute('role', 'alert')
             expect(alert).to_contain_text('fixture center unavailable')
             expect(page.locator('#center-status')).to_be_visible()
             expect(page.locator('#train-section')).to_be_hidden()
             page.evaluate('document.fonts.ready')
             alert.evaluate('el=>el.scrollIntoView({block:"center"})')
             assert alert.evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=document.querySelector("ui-topbar").getBoundingClientRect().bottom&&r.bottom<=innerHeight;}')
-            capture(page, 'omx-center-read-failure.png', '#center-read-error')
+            capture(page, 'omx-center-read-failure.png', '#page-alerts')
             failed[0] = False
             page.locator('#refresh').click()
-            expect(alert).to_be_hidden()
+            expect(page.locator('#page-alerts .alert-center-card')).to_have_count(0)
             expect(page.locator('#center-status')).to_have_attribute('state', 'ready')
         finally:
             browser.close()
@@ -199,13 +198,13 @@ def test_conversion_poll_retains_pending_stop_and_its_rejection(empty_learning_c
             expect(stop).to_be_disabled()
             assert len(held) == 1
             held.pop().fulfill(status=503, json={'error': 'fixture stop rejected'})
-            expect(page.locator('#export-runs [role="alert"]')).to_have_text('fixture stop rejected')
+            expect(page.locator('#export-runs [data-export-stop-error]')).to_have_text('fixture stop rejected')
             expect(stop).to_be_enabled()
             run['name'] = 'Progress after rejection'
             with page.expect_response('**/api/learning/omx/center'):
                 pass
             expect(page.locator('#export-runs')).to_contain_text(run['name'])
-            expect(page.locator('#export-runs [role="alert"]')).to_have_text('fixture stop rejected')
+            expect(page.locator('#export-runs [data-export-stop-error]')).to_have_text('fixture stop rejected')
         finally:
             browser.close()
 

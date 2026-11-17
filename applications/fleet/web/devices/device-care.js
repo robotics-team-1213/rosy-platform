@@ -86,7 +86,7 @@ export function createDeviceCare({root, scope, call, identity}) {
       const body = event ? {kind: field('kind').value, text: field('text').value}
         : {source_kind, source_id, caution: field('caution').value, characteristics: importedText ?? document};
       const path = `/api/fleet/device-profiles/${encodeURIComponent(selected)}`;
-      await call(path + (event ? '/events' : '/care'), {method: event ? 'POST' : 'PUT', body: JSON.stringify(body)});
+      await call(path + (event ? '/events' : '/care'), {method: event ? 'POST' : 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
       const readback = await call(path + '/care');
       if (!event && (canonical(readback.characteristics) !== canonical(document)
           || readback.caution !== body.caution || readback.source_kind !== source_kind

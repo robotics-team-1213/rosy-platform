@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111113">
-  <title>Rosy Fleet — 설치·보정</title>
+  <title>Rosy Fleet — 설치</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
@@ -35,7 +35,7 @@
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
     <div class="fleet-link-status" data-header-region="status" role="group" aria-label="연결 상태와 시각">
-      <ui-tag id="link-state" variant="inline" status="neutral" data-link="wait">연결 대기</ui-tag>
+      <span id="link-state" role="status" aria-live="polite" data-link="wait">연결 대기</span>
       <ui-text id="clock" scale="value">--:--:--</ui-text>
     </div>
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
@@ -74,10 +74,10 @@
   <!-- fleet:nav:start -->
 <nav class="doc-tabs ui-rail ui-rail-nav" aria-label="Rosy Fleet 문서">
     <a class="ui-rail-item" href="/console" data-action-icon="fleet">관제</a>
-    <a class="ui-rail-item" href="/console?view=work" data-action-icon="list">작업</a>
-    <a class="ui-rail-item" href="/console?view=records" data-action-icon="history">기록</a>
+    <a class="ui-rail-item" href="/console?view=work" data-action-icon="task">작업</a>
+    <a class="ui-rail-item" href="/console?view=records" data-action-icon="list">기록</a>
     <a class="ui-rail-item" href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a class="ui-rail-item" href="/console/install" aria-current="page" data-action-icon="install" aria-label="설치·보정">설치</a>
+    <a class="ui-rail-item" href="/console/install" aria-current="page" data-action-icon="install" aria-label="설치">설치</a>
   </nav>
 <!-- fleet:nav:end -->
   <!-- D-741 6 — 화면 안 이동은 공용 하위 탐색 자리에 선다. 설치 작업 목록은 install.js가 공용 task-chooser로 이 자리에 채운다(robot_ui와 같은 규칙). -->
@@ -86,7 +86,7 @@
   <ui-status id="estop-feedback" hidden></ui-status>
 
   <!-- D-926 2 — 경로 줄: 문서 제목과 현재 화면을 본문 머리에도 보인다(부품은 app-shell.css). -->
-  <div class="ui-pathbar"><h1>설치·보정</h1><strong id="install-screen">장비 찾기</strong></div>
+  <div class="ui-pathbar"><h1>설치</h1><strong id="install-screen">장비 찾기</strong></div>
   <!-- D-975 설치 노선 — 역마다 서버 근거로만 완료를 그린다. 역은 install-line.js가 채운다. -->
   <ol id="install-line" class="ui-stage-track" data-line="fleet" aria-label="설치 진행"></ol>
 
@@ -103,14 +103,14 @@
           <ul id="peer-list" class="peer-list" aria-label="장비 목록" hidden></ul>
           <ui-empty id="peer-empty" role="status">접속 후 장비 목록을 확인하세요.</ui-empty>
         </section>
-            <section id="robot-enrollment" class="panel install-task" aria-labelledby="discovery-heading">
+            <section id="robot-enrollment" class="panel install-task" aria-labelledby="discovery-heading" data-unit-scope="enrollment">
             <div class="robot-head">
               <h2 id="discovery-heading">로봇 등록</h2>
               <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
             </div>
             <p class="hint" title="등록은 로봇 화면의 8자리 코드로 Fleet이 직접 확인합니다">발견 목록</p>
             <p id="enroll-unavailable" class="hint bad" hidden>자격 키를 읽을 수 없음 — 등록을 쓸 수 없습니다.</p>
-            <p id="enroll-alarm" class="enroll-alarm" role="alert" hidden></p>
+            <p id="enroll-alarm" class="enroll-alarm" hidden></p>
             <ul id="discovery-list" class="discovery-list" aria-live="polite" hidden></ul>
             <ui-empty id="discovery-empty">발견 목록을 확인하고 있습니다.</ui-empty>
             <ui-button id="discovery-retry" kind="quiet" type="button">발견 목록 다시 확인</ui-button>
@@ -120,7 +120,7 @@
                 <input class="ui-field" id="enroll-address" inputmode="decimal" autocomplete="off" placeholder="로봇 화면의 IP:8080">
                 <ui-button id="enroll-address-add" kind="quiet" type="button">추가</ui-button>
               </div>
-              <div id="enroll-result" class="enroll-result" aria-live="polite"></div>
+              <div id="enroll-result" class="enroll-result"></div>
               <ul id="enrolled-list" class="enrolled-list"></ul>
               <details class="enroll-help"><summary class="ui-disclosure-row">등록 도움말</summary><ul id="enroll-help"></ul></details>
               <dialog id="enroll-dialog" aria-labelledby="enroll-target">
@@ -139,7 +139,7 @@
             </div>
           </section>
           <section id="device-profiles" class="panel install-task" aria-labelledby="device-profiles-heading">
-            <h2 id="device-profiles-heading">장치 정보</h2>
+            <h2 id="device-profiles-heading" tabindex="-1">장치 정보</h2>
             <p class="hint">이름·모델·구성을 저장합니다. 실제 연결은 별도 확인이 필요하며, 저장으로 로봇 등록·보정·운용을 시작하지 않습니다.</p>
             <div class="ui-form">
               <label class="ui-field-label" for="device-profile-list">저장된 장치
@@ -183,13 +183,13 @@
             <div class="ui-form">
               <label class="ui-field-label">로봇·팔 관측원 연결<select class="ui-field" data-care="source"><option value="">연결 안 함</option></select></label>
               <label class="ui-field-label">항상 표시할 주의사항<textarea class="ui-field" data-care="caution" maxlength="2000" rows="3"></textarea></label>
-              <label class="ui-field-label file-picker">측정 특성 JSON 가져오기<input class="ui-field" data-care="file" type="file" accept="application/json,.json"><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
+              <div class="ui-field-label"><label for="device-care-file">측정 특성 JSON 가져오기</label><div class="file-picker"><input class="ui-field" id="device-care-file" data-care="file" type="file" accept="application/json,.json"><span class="file-picker-button" aria-hidden="true">파일 선택</span><span id="device-care-file-name" data-file-name aria-live="polite">선택한 파일 없음</span></div></div>
             </div>
             <p class="hint" data-care="document">특성 JSON 미등록</p>
             <ui-actions>
               <ui-button kind="quiet" type="button" data-care="export">특성 JSON 내보내기</ui-button>
               <ui-button kind="quiet" type="button" data-care="remove">특성 등록 비우기</ui-button>
-              <ui-button kind="primary" type="button" data-care="save">연결·주의사항·특성 저장</ui-button>
+              <ui-button kind="quiet" type="button" data-care="save">연결·주의사항·특성 저장</ui-button>
             </ui-actions>
             <div class="ui-form">
               <label class="ui-field-label">기록 종류<select class="ui-field" data-care="kind"><option value="fault">고장 관찰</option><option value="caution">주의</option><option value="maintenance">정비</option></select></label>
@@ -198,6 +198,13 @@
             <ui-button kind="quiet" type="button" data-care="add">기록 추가</ui-button>
             <p class="hint" data-care="status" role="status" aria-live="polite">장치 정보를 먼저 선택하세요.</p>
             <section data-care="history" aria-label="저장된 로봇 운용 기록"></section>
+            <p class="hint">장치 프로필·하중 특성 등록 후 실제 셀 운용과 적재 준비는 담당 작업 화면에서 수행합니다.</p>
+            <ui-actions>
+              <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_s">Cell S 작업대 (arm_s)</a>
+              <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_ab">Cell A/B 작업대 (arm_a · arm_b)</a>
+              <a class="ui-action-link" data-kind="quiet" href="/console/cell">팔레트 적재 준비</a>
+              <a class="ui-action-link" data-kind="quiet" href="/console">관제 홈</a>
+            </ui-actions>
           </section>
           <!-- D-341 3–5·11: 콘솔은 6자리 코드를 모른다. 운영자가 폰 화면의 코드를 입력하고,
                설치자가 폰과 이 화면의 사이트 지문·자격 ID를 맞춰 본다. -->
@@ -270,7 +277,7 @@
         </div>
         <div class="vision-controls">
           <label for="vision-source">카메라</label>
-          <select class="ui-field" id="vision-source" disabled aria-label="관제 카메라 선택"></select>
+          <select class="ui-field" id="vision-source" disabled aria-label="관제 카메라 선택"><option value="">카메라 선택 (연결 대기)</option></select>
           <ui-button kind="quiet" id="vision-refresh" type="button" title="영상 새로고침" data-action-icon="refresh"><span class="sr-only">영상 새로고침</span></ui-button>
         </div>
         <div class="vision-frame" id="vision-frame" data-state="waiting">
@@ -348,7 +355,7 @@
             <label>방향 (°) <input class="ui-field" id="start-point-yaw" type="number" min="-180" max="180" step="0.1" value="0" required disabled></label>
           </div>
           <ui-actions><ui-button kind="quiet" id="start-point-pick" type="button" disabled>카메라 평면에서 시작 위치 선택</ui-button>
-            <ui-button kind="primary" id="start-point-save" type="button" disabled>시작점 저장</ui-button>
+            <ui-button kind="quiet" id="start-point-save" type="button" disabled>시작점 저장</ui-button>
             <ui-button kind="quiet" id="start-point-delete" type="button" disabled>시작점 지우기</ui-button></ui-actions>
           <p class="hint" id="start-point-state" role="status">시작점 상태 확인 중</p>
         </section>
@@ -367,14 +374,14 @@
         <section id="measured-calibration" class="install-step measured-calibration" aria-labelledby="measured-heading">
           <h3 id="measured-heading">실측 카메라 교정</h3>
           <p class="hint">촬영·독립 측량 결과를 확인해 지도 미리보기에 적용합니다. 승인 저장과 영상 적용 상태를 따로 확인하세요.</p>
-          <label class="file-picker">교정 묶음 <input class="ui-field" id="measured-bundle" type="file" accept="application/json,.json" disabled><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
+          <label for="measured-bundle">교정 묶음</label><div class="file-picker"><input class="ui-field" id="measured-bundle" type="file" accept="application/json,.json" aria-describedby="measured-bundle-name" disabled><span class="file-picker-button" aria-hidden="true">파일 선택</span><span id="measured-bundle-name" data-file-name aria-live="polite">선택한 파일 없음</span></div>
           <p id="measured-summary" class="hint"></p>
           <div class="measured-limits">
             <label>허용 p95 오차 (m) <input class="ui-field" id="measured-p95" type="number" min="0" step="0.001" required disabled></label>
             <label>허용 최대 오차 (m) <input class="ui-field" id="measured-max" type="number" min="0" step="0.001" required disabled></label>
           </div>
           <ui-actions>
-            <ui-button id="measured-approve" kind="primary" disabled>실측 교정 승인 저장</ui-button>
+            <ui-button id="measured-approve" kind="quiet" disabled>보정 승인 저장</ui-button>
             <ui-button id="measured-revoke" kind="quiet" disabled>승인 철회</ui-button>
             <ui-button id="measured-refresh" kind="quiet" disabled>적용 상태 확인</ui-button>
           </ui-actions>
@@ -384,7 +391,7 @@
             <ui-button id="measured-read" kind="quiet" disabled>확인된 미리보기 읽기</ui-button>
           </ui-actions>
           <p id="measured-state" class="hint" role="status">저장 기록 확인 중</p>
-          <img id="measured-image" alt="실측 교정 지도 미리보기" hidden>
+          <img id="measured-image" alt="보정 지도 미리보기" hidden>
         </section>
         <details id="vision-adjustments" class="vision-adjustments" data-role-lock>
           <summary class="ui-disclosure-row">왜곡 및 사각 보정</summary>
@@ -442,11 +449,17 @@
     </section>
     </section>
 
-    <p class="hint">PC 재부팅과 서비스 재시작은 <a href="/console/maintenance">PC 정비</a>에서 합니다.</p>
+    <p class="hint">이 화면은 장치 등록·승인·교체·보정 전용입니다. PC 재부팅과 서비스 재시작, 셀 보정 인쇄물, 정류장·셀 구역 설정, 실시간 로봇·셀 관제는 담당 화면에서 합니다.</p>
+    <ui-actions>
+      <a class="ui-action-link" data-kind="quiet" href="/console/maintenance">PC 정비</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=prep#print-heading">셀 · 인쇄물</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console/site-map#profile-heading">공간 지도 · 구역 설정</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console">관제</a>
+    </ui-actions>
 
     <section class="panel install-history" aria-labelledby="install-log-heading">
       <h2 id="install-log-heading">설치 기록</h2>
-        <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 설치 이벤트">
+        <div id="log" class="log" aria-label="최근 설치 이벤트">
           <ui-empty>최근 이벤트가 없습니다 — 등록·승인·보정 요청과 결과가 여기에 표시됩니다.</ui-empty>
         </div>
 

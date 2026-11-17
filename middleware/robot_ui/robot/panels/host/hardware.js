@@ -1,3 +1,4 @@
+import { watchStatus } from "/assets/dom.js";
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // D-204 device surface: CORE owns the board probe and short hardware test.
@@ -57,11 +58,9 @@ export function mount(el, ctx) {
   facts.append(measured);
 
   const note = node("p", "hardware-note", "측정 결과를 불러오는 중입니다.");
-  note.setAttribute("role", "status");
   const actionNote = node("p", "hardware-action-note", "");
+  watchStatus(actionNote);
   actionNote.id = "hardware-action-note";
-  actionNote.setAttribute("role", "status");
-  actionNote.setAttribute("aria-live", "polite");
   const list = node("ul", "hardware-device-list");
   list.setAttribute("aria-label", "보드 장치별 상태와 근거");
   const refresh = node("ui-button", "hardware-refresh", "다시 점검");

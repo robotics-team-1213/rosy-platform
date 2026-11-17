@@ -1,5 +1,7 @@
 // One read-only presentation for Fleet and the robot console. Receipt time never replaces sample age.
-const EVIDENCE = {fresh: "실시간", delayed: "지연", disconnected: "연결 끊김", unavailable: "확인 불가"};
+import {EVIDENCE_LABEL} from "./core_ui_logic.js";
+// unknown is the one shared wording (D-280); the others keep this panel's own live wording.
+const EVIDENCE = {fresh: "실시간", delayed: "지연", disconnected: "연결 끊김", unavailable: EVIDENCE_LABEL.unavailable};
 const JOINT = {shoulder_pan: "어깨 회전", shoulder_lift: "어깨 올림", elbow_flex: "팔꿈치",
   wrist_flex: "손목 굽힘", wrist_roll: "손목 회전", gripper: "그리퍼",
   joint1: "어깨 회전", joint2: "어깨 올림", joint3: "팔꿈치", joint4: "손목 굽힘",

@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 from types import SimpleNamespace
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from fleet.charge_bays import ChargeBays
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boundary_separation
@@ -17,6 +17,10 @@ def install_cell_tasks_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
     operator_guard = ctx.operator_guard
     proposer_guard = getattr(ctx, "proposer_guard", operator_guard)
+    proposer_principal = proposer_guard[0].dependency if proposer_guard else (lambda: None)
+    # Creating a task starts arm/Pinky motion within seconds: a named operator, never the shared or service
+    # credential. Bare test apps with no guards at all stay open, as before.
+    create_guard = [*operator_guard, Depends(ctx.named_operator)] if operator_guard else []
     STATION_CAMERA_LINKS = ctx.STATION_CAMERA_LINKS
     _arm_live_catalog = ctx._arm_live_catalog
     zones_override_path = ctx.zones_override_path
@@ -61,7 +65,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 "omx_cells": {cid: station.to_dict() for cid, station in cells.items()}}
 
     @app.post("/api/fleet/pipeline/cell-handoff", dependencies=proposer_guard)
-    async def pipeline_cell_handoff(request: Request):
+    async def pipeline_cell_handoff(request: Request, reporter=Depends(proposer_principal)):
         active = active_map()
         body = await request.json()
         if not isinstance(body, dict):
@@ -97,6 +101,9 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 if task["cell_id"] == cell_id and task["status"] in ("QUEUED", "RUNNING"):
                     task["paused_from_status"] = task["status"]
                     task["status"] = "PAUSED_HUMAN"
+                    task["paused_by"] = getattr(reporter, "principal_id", None)
+                    task["paused_reason"] = str(body.get("reason") or "HUMAN_HOLD")
+                    task["paused_at"] = round(time.time(), 3)
                     _enrich_task_health(task)
         _save_ledger()
         return res
@@ -133,6 +140,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         task_id = str(spec.get("task_id") or f"cell-task-{uuid.uuid4().hex[:8]}")
         if task_id in app.state.omx_cell_tasks:
             raise HTTPException(409, detail={"code": "CELL_TASK_ID_EXISTS"})
+        if _is_human_detected(cell_id):
+            raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE", "cell_id": cell_id})
         tier, pose = checked_task_pose(spec, station)
         default_arm = "arm_s" if cell_id == "cell_s" else ("arm_a" if tier % 2 == 1 else "arm_b")
         arm_id = str(spec.get("arm_id") or default_arm)
@@ -174,7 +183,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         _save_ledger()
         return task
 
-    @app.post("/api/fleet/pipeline/cell-tasks", dependencies=operator_guard)
+    @app.post("/api/fleet/pipeline/cell-tasks", dependencies=create_guard)
     async def create_cell_task(request: Request):
         active = active_map()
         body = await request.json()
@@ -242,6 +251,11 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 "staging_bays": zones_data["staging_bays"],
                 "export_stations": zones_data["export_stations"],
             },
+            # Pending AI proposals for the approval list; the stored payload stays server-side.
+            "decision_proposals": [
+                {"decision_id": p["decision_id"], "proposed_by": p["proposed_by"], "cell": p["cell"],
+                 "created_at": round(p["created_at"], 3), "expires_at": round(p["created_at"] + 600.0, 3)}
+                for p in app.state.decision_proposals.values() if time.time() - p["created_at"] <= 600.0],
             "arm_holds": dict(app.state.arm_holds),
             "arm_live_states": _arm_live_catalog(),
             "station_camera_links": STATION_CAMERA_LINKS,
@@ -255,7 +269,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         task = app.state.omx_cell_tasks.get(task_id)
         if task is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
-        if task.get("status") != "QUEUED":
+        paused_queued = task.get("status") == "PAUSED_HUMAN" and task.get("paused_from_status", "QUEUED") == "QUEUED"
+        if task.get("status") != "QUEUED" and not paused_queued:
             raise HTTPException(409, detail={"code": "CELL_TASK_ALREADY_CLAIMED"})
         cell_id = task["cell_id"]
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
@@ -292,7 +307,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         )
         return {"ok": True, "task": retried, "retried_from": task_id}
 
-    @app.post("/api/fleet/pipeline/pinky-tasks", dependencies=operator_guard)
+    @app.post("/api/fleet/pipeline/pinky-tasks", dependencies=create_guard)
     async def create_pinky_task(request: Request):
         active = active_map()
         body = await request.json()
@@ -312,6 +327,16 @@ def install_cell_tasks_routes(app, ctx) -> None:
         spawned_cell_task = None
         v_cmd = 0.0
         duration_s = 0.0
+        for dock_action, dock_cell in (("dock_s3", "cell_s"), ("dock_and_unload_s3", "cell_s"), ("dock_s5", "cell_ab")):
+            if action == dock_action and _is_human_detected(dock_cell):
+                raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE", "cell_id": dock_cell})
+        if action != "stop_now":
+            if app.state.human_detected.get("all"):
+                raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE", "cell_id": "all"})
+            for cid, cstate in app.state.omx_cell_states.items():
+                docked_id = cstate.get("robot_id") or (cstate.get("docked_robot") or {}).get("robot_id")
+                if docked_id == robot_id and (_is_human_detected(cid) or cstate.get("phase") == "HUMAN_HOLD"):
+                    raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE", "cell_id": cid})
         if action in ("dock_s3", "dock_and_unload_s3"):
             if _aborted("cell_s"):
                 raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})

@@ -218,19 +218,19 @@ def test_current_role_console_names_each_nonfresh_readout_state(tmp_path, eviden
         page.add_init_script(f"sessionStorage.setItem('rosy.dashboard.token', {token!r})")
         page.goto("http://rosy.test/console")
         readout = page.locator('[data-panel="console.overview"] .ui-readout dd')
-        readout.nth(3).wait_for()
+        readout.nth(3).wait_for(state="attached")  # 근거 없음 값은 접힌 펼침 안에 있다
         page.wait_for_timeout(700)
         capture_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(capture_dir / f"console-{evidence}-{width}x{height}.png"))
         summary = page.locator('[data-panel="console.overview"] .ui-readout')
         pose = summary.locator('dt', has_text='현재 위치').locator('+ dd')
         battery = summary.locator('dt', has_text='배터리').locator('+ dd')
-        assert label in pose.inner_text()
-        assert label in battery.inner_text()
+        assert label in pose.text_content()
+        assert label in battery.text_content()
         assert pose.get_attribute("data-evidence") == evidence
         assert battery.get_attribute("data-evidence") == evidence
         if evidence == "delayed":
-            assert "초" in pose.inner_text()
+            assert "초" in pose.text_content()
         assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
         assert errors == []
         browser.close()

@@ -101,6 +101,16 @@
       "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8",
       "pytest_root": ".",
       "result": "10 passed; station-zones PUT (storage redirected to tmp) and road-nav2 plan GET HTTP tests through in-process TestClient; no device evidence"
+    },
+    {
+      "source_revision": "8e559fc061457f5d062cf2a67eaaab67421e3ac0",
+      "pytest_root": ".",
+      "result": "passing HTTP tests for the tracking auto-locate, relocalize, step and arm-transfer create routes behind the 2026-11-17 UI integration calls; in-process TestClient, fake transports; no device evidence"
+    },
+    {
+      "source_revision": "b23d8824ff4525e352942961c1f623525814254d",
+      "pytest_root": ".",
+      "result": "auto-locate block lift (200 and 409) over HTTP; in-process TestClient; no device evidence"
     }
   ],
   "requests": {
@@ -1974,9 +1984,9 @@
       "status": 200,
       "test": [
         "operations/fleet/test/test_pipeline_orchestrator.py",
-        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+        "test_decision_gate_does_not_execute_without_named_operator_approval"
       ],
-      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
     },
     "POST:/api/fleet/pipeline/human-safety-gate": {
       "status": 200,
@@ -1984,7 +1994,7 @@
         "operations/fleet/test/test_pipeline_orchestrator.py",
         "test_cell_tasks_assign_claim_and_complete_lifecycle"
       ],
-      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
     },
     "GET:/api/fleet/pipeline/station-zones": {
       "status": 200,
@@ -2073,6 +2083,94 @@
         "test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_query"
       ],
       "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8"
+    },
+    "POST:/api/fleet/pipeline/human-safety-gate/clear": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
+    },
+    "POST:/api/fleet/pipeline/decision-gate/execute": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
+    },
+    "POST:/api/fleet/pipeline/cell-tasks/{task_id}/resume": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_named_operator_resume_requeues_one_task_and_is_refused_while_held"
+      ],
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
+    },
+    "POST:/api/fleet/arm-transfers/jobs": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_arm_transfer_job_api.py",
+        "test_approval_reads_every_current_capability_then_atomically_claims_without_submit"
+      ],
+      "source_revision": "8e559fc061457f5d062cf2a67eaaab67421e3ac0"
+    },
+    "GET:/api/fleet/auto-locate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_overhead_tracking_api.py",
+        "test_auto_locate_is_an_operator_session_that_wakes_the_camera"
+      ],
+      "source_revision": "8e559fc061457f5d062cf2a67eaaab67421e3ac0"
+    },
+    "POST:/api/fleet/auto-locate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_overhead_tracking_api.py",
+        "test_auto_locate_is_an_operator_session_that_wakes_the_camera"
+      ],
+      "source_revision": "8e559fc061457f5d062cf2a67eaaab67421e3ac0"
+    },
+    "POST:/api/fleet/auto-locate/{robot_id}/lift-block": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_overhead_tracking_api.py",
+        "test_lifting_an_auto_locate_block_is_a_named_operator_action"
+      ],
+      "source_revision": "b23d8824ff4525e352942961c1f623525814254d"
+    },
+    "GET:/api/fleet/robots/{robot_id}/localization": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_relocalize_routes.py",
+        "test_a_press_allows_motion_starts_the_ladder_and_is_audited"
+      ],
+      "source_revision": "8e559fc061457f5d062cf2a67eaaab67421e3ac0"
+    },
+    "POST:/api/fleet/robots/{robot_id}/relocalize": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_relocalize_routes.py",
+        "test_a_press_allows_motion_starts_the_ladder_and_is_audited"
+      ],
+      "source_revision": "8e559fc061457f5d062cf2a67eaaab67421e3ac0"
+    },
+    "POST:/api/fleet/robots/{robot_id}/localization/confirm": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_relocalize_routes.py",
+        "test_confirm_posts_the_reported_candidate_by_index_and_pose"
+      ],
+      "source_revision": "8e559fc061457f5d062cf2a67eaaab67421e3ac0"
+    },
+    "POST:/api/fleet/robots/{robot_id}/step": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_nudge_step.py",
+        "test_a_forward_step_with_a_distance"
+      ],
+      "source_revision": "8e559fc061457f5d062cf2a67eaaab67421e3ac0"
     }
   }
 }

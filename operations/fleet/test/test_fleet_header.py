@@ -18,7 +18,9 @@ def _header(name):
 
 
 def test_four_documents_share_one_header():
-    headers = {name: _header(name)[1] for name in DOCS}
+    # The 관제 AI launcher opens the console's own assistant panel, so only the console header carries it (F4).
+    launcher = (WEB / "shared/fleet-assistant-launcher.html.inc").read_text(encoding="utf-8")
+    headers = {name: _header(name)[1].replace(launcher, "") for name in DOCS}
     first = headers["index.html"]
     for name, header in headers.items():
         assert header == first, f"{name} header differs from the console header"
@@ -104,7 +106,7 @@ def test_app_bar_folds_by_the_shell_container_not_the_viewport():
     tabs_sheet = (WEB / "shared/doc-tabs.css").read_text(encoding="utf-8")
     assert "@media" not in header_sheet
     assert set(re.findall(r"@container \(([^)]+)\)", header_sheet)) == {
-        "width < 64rem", "width < 48rem", "width < 30rem"}
+        "width < 64rem", "width < 48rem", "width < 30rem", "width < 24rem"}  # 24rem: the AI launcher yields below 384px (F4)
     assert "container-type" not in header_sheet, "칸은 셸 하나다"
     assert ".fleet-shell { container-type: inline-size;" in tabs_sheet
     assert ".fleet-task-page { container-type: inline-size;" in tabs_sheet

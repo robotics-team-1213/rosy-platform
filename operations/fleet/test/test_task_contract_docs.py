@@ -20,7 +20,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     execution = (ROOT / "operations/fleet/fleet/server/intent_execution.py").read_text(encoding="utf-8")
     web_root = ROOT / "applications/fleet/web"
     web = (web_root / "console-goal.js").read_text(encoding="utf-8")  # D-798 3.2: goal commit moved here
-    roster = (web_root / "roster.js").read_text(encoding="utf-8")
+    roster = (web_root / "robot/roster.js").read_text(encoding="utf-8")
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 

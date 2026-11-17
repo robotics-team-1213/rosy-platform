@@ -90,6 +90,15 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
         hd = getattr(app.state, "human_detected", None) or {"cell_s": False, "cell_ab": False, "all": False}
         zones_data = load_station_zones(_storage_dir() / "station_zones.yaml")
         arm_live_fn = getattr(app.state, "get_arm_live_catalog", None)
+        inst = getattr(getattr(app.state, "arm_transfer_job_store", None), "installation", None)
+        if inst is not None and inst.policy.primary[0] in cell_evals:
+            cell_evals[inst.policy.primary[0]]["transfer_request"] = {
+                "workcell_id": inst.policy.primary[0],
+                "instance_id": inst.policy.primary[1],
+                "object_ref": inst.policy.object_ref,
+                "source": inst.source,
+                "target": inst.target,
+            }
         return {"map_version": active[0],
                 "contract_version": CONTRACT_VERSION, "omx_cells": cell_evals,
                 "omx_cell_tasks": list((getattr(app.state, "omx_cell_tasks", None) or {}).values()),

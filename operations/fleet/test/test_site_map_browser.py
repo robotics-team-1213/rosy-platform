@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import BODY_FIT, browser_tests_enabled, goto_with_network_change_retry, open_token_access, safe_listener
+from browser_harness import BODY_FIT, assert_layout_geometry, browser_tests_enabled, goto_with_network_change_retry, open_token_access, safe_listener
 
 from test_site_map_trip import _app, _on_ring_s
 
@@ -20,6 +20,14 @@ def show_screen(page, heading):
     page.evaluate("heading => { location.hash = heading }", "#" + heading)
     expect(page.locator(f'.ui-subnav-nav a[href="#{heading}"]')).to_have_attribute('aria-current', 'page')
     expect(page.locator(f'#{heading}')).to_be_visible()
+
+
+def _assert_layout_geometry_desktop_and_390(page, desktop=(1440, 900)):
+    """가드는 호출처의 데스크톱 크기 그대로, 그리고 390×844 모바일 시트에서도 돈다."""
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": desktop[0], "height": desktop[1]})
 
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
@@ -555,6 +563,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     expect(page.locator('.ui-subnav-item[href="#map-heading"]')).to_have_attribute("aria-current", "page")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-fresh-{width}x{height}.png"), full_page=True)
+    _assert_layout_geometry_desktop_and_390(page, desktop=(width, height))
 
     # A place clicked on the map becomes the destination; the list follows it.
     page.locator('[data-place="SE"]').click()
@@ -967,10 +976,9 @@ def test_connected_robot_can_be_selected_after_offline_robot(page_site):
     page, _, _ = page_site
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=200, content_type="application/json",
-        # rosy_60 reports a located map pose: without it the button's state depends on whether
-        # the real /api/fleet/guide poll (no located pose for it) has answered yet.
-        body='{"robots":[{"robot_id":"rosy_99","online":false},{"robot_id":"rosy_60","online":true,"state":'
-             '{"pose":{"x":0,"y":0,"yaw":0},"localization":{"state":"LOCALIZED","pose_frame":"map"}}}]}'))
+        body='{"robots":[{"robot_id":"rosy_99","online":false},{"robot_id":"rosy_60","online":true}]}'))
+    # Connection, not the pose gate (its own tests): no pose guide here, as before /guide reached this fixture.
+    page.route("**/api/fleet/guide", lambda route: route.fulfill(status=404, content_type="application/json", body="{}"))
     open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()

@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
-- 2026-11-07 · uncommitted · Account 세션을 shared/android에서 컴파일
-- 2026-11-07 · uncommitted · uiux(pilot): 로그아웃 상태 뒤로 가기가 로그인에 갇히지 않는다
-- 2026-11-06 · uncommitted · uiux(pilot): 팔 센서 나이 칩 위치, 넓은 화면 녹화 종료 카드
-- 2026-11-06 · uncommitted · uiux: 운전 모드 묶음 테두리, 가로 페달 크기
-- 2026-11-06 · uncommitted · uiux(pilot): 보정 잠금 사유
+- 2026-11-17 · uncommitted · uiux(pilot): 기기 연결 코드 발급 제거, 운용 지도 잠금 (R4)
+- 2026-11-14 · uncommitted · rp-fix: 주행 서랍 높이 제한 및 공용 연결 끊김 표시 채택 (F01, F03)
+- 2026-11-14 · uncommitted · ui-regions P1: 드라이브 키는 모든 폼 컨트롤에서 무시
+- 2026-11-14 · uncommitted · ui-regions P1: 전체 영상/화면 채우기를 K20 명령으로, 운전 모드 한 개짜리 묶음 숨김
+- 2026-11-14 · uncommitted · ui-regions P1: 속도 프리셋·운전 모드·전체/채우기·감도 곡선을 createChoiceGroup으로

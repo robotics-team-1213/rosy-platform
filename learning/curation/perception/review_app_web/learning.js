@@ -1,9 +1,11 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,commonDown,setText} from '/review-alerts.js';
 import { taskRow } from '/common/workspace.js';
 import '/commands.js';
 import { loadStorage, clearStorage } from '/storage.js';
+import {createBusyScope} from '/common/busy-scope.js';
+import {createCauseLine} from '/common/cause-line.js';
 const $=id=>document.getElementById(id);
-let workspace, busy=false, checkedAt=0, readSequence=0, initialNavigation=false;
+let workspace, checkedAt=0, readSequence=0, initialNavigation=false;
 const labels={unchanged:'등록한 파일과 일치',changed:'등록 후 변경됨',missing:'파일 없음',invalid:'읽기 실패'};
 const states={running:'진행 중',reading:'자료 읽는 중',training:'학습 중',failed:'실패',rejected:'품질 거절',reject:'품질 거절',
   ready:'자료 준비 완료',done:'완료',candidate:'학습 후보 저장됨',pass:'보고서 통과',research_only:'연구 결과',research_exported:'연구 결과 저장됨',
@@ -59,14 +61,23 @@ function renderDomains() {
     if(domain.next){const next=text(item,'a',domain.next.label,'ui-action-link domain-next');next.dataset.kind='quiet';next.href=domain.next.href;}
   }
 }
-function setBusy(value) {
-  busy=value;
-  for(const button of document.querySelectorAll('ui-button')) {
-    if(button.closest('#storage-section,ui-topbar'))continue; // Storage owns its controls; the app bar stays usable on errors.
-    button.reason=value?'결과를 확인하는 중입니다':!workspace&&button.id!=='refresh'?'작업 결과를 다시 확인한 뒤 사용하세요.':'';
-    button.disabled=value||(!workspace&&button.id!=='refresh');
-  }
-  for(const id of ['search','kind-filter','state-filter','kind','name','path'])$(id).disabled=value||!workspace;
+// One screen lock (scope) and one cause line per disabled group; the state-driven enables below skip while a run holds the lock.
+const noWork=createCauseLine($('learning-main'),{line:$('learning-cause')}), ownerCause=createCauseLine(document.querySelector('.owner-controls'));
+const scope=createBusyScope($('learning-main'),{status:$('learning-status'),readonly:'input, textarea',cause:[noWork,ownerCause]});
+// Storage owns its controls (storage-settings.js), so it is read after the lock is released, never inside it.
+let storageStale=false;
+const act=async work=>{
+  try{await scope.run(work);}finally{syncControls();}
+  if(!storageStale)return;
+  storageStale=false;
+  try{await loadStorage(request);}catch(error){showUnavailable(error);throw error;}
+};
+function syncControls() {
+  if(scope.busy)return;
+  const buttons=[...document.querySelectorAll('ui-button')].filter(button=>!button.closest('#storage-section,ui-topbar,.owner-controls')&&button.id!=='pipeline-action'&&button.id!=='refresh');
+  noWork.set(buttons,workspace?'':'작업 결과를 다시 확인한 뒤 사용하세요.');
+  $('refresh').disabled=false;
+  for(const id of ['search','kind-filter','state-filter','kind','name','path'])$(id).disabled=!workspace;
   updateControls();
   updatePipelineAction();
 }
@@ -76,9 +87,9 @@ const stageAppearance={waiting:'todo',running:'now',done:'done',attention:'block
 function updatePipelineAction() {
   const next=workspace?.pipeline?.next,button=$('pipeline-action');
   const action=next?.action;
-  button.disabled=busy||!workspace||!action||
+  button.disabled=scope.busy||!workspace||!action||
     (['start','retry'].includes(action)&&!workspace.control?.[`can_${action}`]);
-  button.reason=busy?'요청을 처리하고 있습니다.':!workspace?'최신 결과를 확인하세요.':'';
+  button.reason=!workspace?'최신 결과를 확인하세요.':'';
   $('pipeline-link').hidden=!workspace||!next?.href;
 }
 function renderPipeline() {
@@ -125,11 +136,12 @@ function renderPipeline() {
   updatePipelineAction();
 }
 async function prepareCurrent() {
-  if(busy||workspace?.pipeline?.next?.action!=='prepare')return;
-  setBusy(true);message('learning-error','');
-  try {await request('/api/prepare',{});await load();message('notice','승인 자료를 준비했습니다. 다음 작업을 확인하세요.');}
-  catch(error){message('learning-error',readableError(error));}
-  finally {setBusy(false);}
+  if(scope.busy||workspace?.pipeline?.next?.action!=='prepare')return;
+  await act(async()=>{
+    message('learning-error','');
+    try {await request('/api/prepare',{});await loadWork();message('notice','승인 자료를 준비했습니다. 다음 작업을 확인하세요.');}
+    catch(error){message('learning-error',readableError(error));}
+  });
 }
 function updateControls() {
   const control=workspace?.control,status=$('owner-control-status');
@@ -140,9 +152,11 @@ function updateControls() {
   if(control?.error)status.textContent+=` · ${control.error}`;
   for(const action of ['start','stop','retry']) {
     const button=$(`owner-control-${action}`);
-    button.disabled=busy||!control?.available||!control[`can_${action}`];
-    button.reason=busy?'요청 처리 중입니다':button.disabled?control?.reasons?.[action]||control?.error||'학습 실행기를 연결하세요.':'';
+    const off=!control?.available||!control[`can_${action}`];
+    ownerCause.set(button,off?control?.reasons?.[action]||control?.error||'학습 실행기를 연결하세요.':'');
+    if(scope.busy)button.disabled=true;
   }
+  ownerCause.sync();
 }
 // 홈 상태줄: 실행기·객체 검수 대기·픽셀 검수 대기를 /api/learning 한 번으로 보여준다(GPU 없음).
 function renderHomeStrip() {
@@ -152,25 +166,28 @@ function renderHomeStrip() {
     +` · 객체 검수 대기 ${workspace?.counts?.pending??'?'}장 · 픽셀 검수 대기 ${workspace?.pixel_counts?.pending??'?'}장`;
 }
 async function controlAction(action) {
-  if(busy)return;
-  const version=workspace.control.version;setBusy(true);message('learning-error','');
-  try {
-    await request('/api/learning/control',{action,version});
-    await load();message('notice','실행기 요청을 접수했습니다. 아래 상태와 학습 결과를 확인하세요.');
-    $('owner-control-status')?.focus();
-  } catch(error) {
-    if(error.status===409)await load().catch(()=>{});
-    message('learning-error',readableError(error));
-  } finally {setBusy(false);}
+  if(scope.busy)return;
+  const version=workspace.control.version;
+  await act(async()=>{
+    message('learning-error','');
+    try {
+      await request('/api/learning/control',{action,version});
+      await loadWork();message('notice','실행기 요청을 접수했습니다. 아래 상태와 학습 결과를 확인하세요.');
+      $('owner-control-status')?.focus();
+    } catch(error) {
+      if(error.status===409)await loadWork().catch(()=>{});
+      message('learning-error',readableError(error));
+    }
+  });
 }
 let polling=false, pendingReportRefresh=false;
 setInterval(async()=> {
-  if(busy||polling||!workspace||document.hidden)return;
+  if(scope.busy||polling||!workspace||document.hidden)return;
   polling=true;
   const sequence=readSequence;
   try {
     const value=await request('/api/learning');
-    if(busy||sequence!==readSequence)return;
+    if(scope.busy||sequence!==readSequence)return;
     pendingReportRefresh ||= JSON.stringify(workspace.items)!==JSON.stringify(value.items);
     workspace=value;renderReview();renderPipeline();renderDomains();updateControls();renderHomeStrip();
     if(pendingReportRefresh&&!document.querySelector('dialog[open]')&&$('connection-panel').hidden
@@ -178,7 +195,7 @@ setInterval(async()=> {
       checkedAt=Date.now();render();pendingReportRefresh=false;
     }
   } catch(error) {
-    if(!busy&&sequence===readSequence){showUnavailable(error);setBusy(false);}
+    if(!scope.busy&&sequence===readSequence){showUnavailable(error);syncControls();}
   } finally {polling=false;}
 },5000);
 async function request(path,body) {
@@ -186,7 +203,7 @@ async function request(path,body) {
   if(response.status>=500){const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
   const value=await response.json();if(!response.ok){const error=new Error(response.status===403?'이 작업대의 학습 작업 접근 권한이 없습니다.':'요청 실패 · '+(value.error||'원인을 확인할 수 없습니다.'));error.status=response.status;if(response.status===401||response.status===403)showUnavailable(error);throw error;}return value;
 }
-function showUnavailable(error){clearStorage();workspace=undefined;checkedAt=0;renderPipeline();updateControls();$('home-status-strip').textContent='상태 확인 불가';$('jobs').replaceChildren();$('job-detail-content').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 없습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('review-counts').textContent='검수 상태 확인 불가';$('pixel-counts').textContent='검수 상태 확인 불가';$('review-stage-summary').textContent='등록·승인 상태 확인 불가';$('training-data-state').textContent='학습 데이터 수용 여부 확인 불가';$('preparation-status').textContent='상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
+function showUnavailable(error){clearStorage();workspace=undefined;checkedAt=0;renderPipeline();updateControls();$('home-status-strip').textContent='상태 확인 불가';$('jobs').replaceChildren();$('job-detail-content').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');setText($('learning-status'),commonDown()?'불러오지 못함 · 최신 결과 확인을 눌러 다시 읽으세요.':error.status===403?'학습 작업 권한이 없습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.');$('review-counts').textContent='검수 상태 확인 불가';$('pixel-counts').textContent='검수 상태 확인 불가';$('review-stage-summary').textContent='등록·승인 상태 확인 불가';$('training-data-state').textContent='학습 데이터 수용 여부 확인 불가';$('preparation-status').textContent='상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
 function updateReadAge(){
   if(!checkedAt)return;
   const minutes=Math.floor(Math.max(0,Date.now()-checkedAt)/60000);
@@ -283,18 +300,20 @@ function render() {
     text(details,'p','현재 파일을 읽은 결과입니다. 원본 검증·학습 수용·정책 승격은 해당 도구와 담당자가 확인합니다.');
     const remove=text(details,'ui-button','이 작업 연결 해제');remove.setAttribute('kind','quiet');
     remove.onclick=async()=> {
-      if(busy) return;setBusy(true);message('learning-error','');
-      try {await request('/api/learning/remove',{id:item.id,version:item.version});await load();message('notice','연결을 해제했습니다. 원래 결과 파일은 유지됩니다.');}
-      catch(error) {if(error.status===403)$('learning-status').scrollIntoView({block:'center'});else if(workspace)message('learning-error',`${readableError(error)} · 최신 결과 확인 후 다시 시도하세요.`);}
-      finally {setBusy(false);}
+      await act(async()=>{
+        message('learning-error','');
+        try {await request('/api/learning/remove',{id:item.id,version:item.version});await loadWork();message('notice','연결을 해제했습니다. 원래 결과 파일은 유지됩니다.');}
+        catch(error) {if(error.status===403)$('learning-status').scrollIntoView({block:'center'});else if(workspace)message('learning-error',`${readableError(error)} · 최신 결과 확인 후 다시 시도하세요.`);}
+      });
     };
     $('jobs').append(card);
   }
-  updateReadAge();setBusy(busy);saveFilters();showSection(false);
+  updateReadAge();syncControls();saveFilters();showSection(false);
 }
-async function load() {
+const load=()=>act(loadWork);
+async function loadWork() {
   ++readSequence;
-  workspace=undefined;setBusy(true);$('learning-status').setAttribute('state','pending');$('learning-status').textContent='작업 결과를 확인하는 중입니다.';$('review-counts').textContent='불러오는 중';$('pixel-counts').textContent='불러오는 중';$('review-stage-summary').textContent='등록·승인 상태를 확인하는 중입니다.';$('training-data-state').textContent='학습 데이터 수용 여부를 확인하는 중입니다.';$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=true;$('updated').textContent='';
+  workspace=undefined;$('learning-status').setAttribute('state','pending');$('learning-status').textContent='작업 결과를 확인하는 중입니다.';$('review-counts').textContent='불러오는 중';$('pixel-counts').textContent='불러오는 중';$('review-stage-summary').textContent='등록·승인 상태를 확인하는 중입니다.';$('training-data-state').textContent='학습 데이터 수용 여부를 확인하는 중입니다.';$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=true;$('updated').textContent='';
   $('pipeline').setAttribute('aria-busy','true');$('pipeline-stages').replaceChildren();$('pipeline-records').replaceChildren();$('pipeline-status').textContent='현재 자료와 학습 결과를 연결하는 중입니다.';
   $('home-status-strip').textContent='상태를 확인하는 중입니다.';
   const started=performance.now();const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(seconds>=3)$('learning-status').textContent=`서버 응답 대기 ${seconds}초 · 현재 작업과 보고서 상태를 확인하고 있습니다.`;},1000);
@@ -311,8 +330,8 @@ async function load() {
     for(const [id,key] of [['kind-filter','kind'],['state-filter','state']]) {$(id).value=params.get(key)||'all';if(!$(id).value) $(id).value='all';}
   }
   render();
-  await loadStorage(request);
-  } catch(error) {showUnavailable(error);throw error;} finally {clearInterval(timer);setBusy(false);}
+  storageStale=true;
+  } catch(error) {showUnavailable(error);throw error;} finally {clearInterval(timer);}
   if(!initialNavigation){initialNavigation=true;showSection();}
 
 }
@@ -337,20 +356,21 @@ function renderReview() {
   $('pixel-review-link').querySelector('span').textContent=workspace.pixel_draft_first==null?'픽셀 검수·승인 열기':'픽셀 초안 검수·승인';
 }
 async function register(event) {
-  event.preventDefault();if(busy||!workspace||!$('register').reportValidity()) return;setBusy(true);message('learning-error','');
+  event.preventDefault();if(scope.busy||!workspace||!$('register').reportValidity()) return;
+  await act(async()=>{message('learning-error','');
   try {
     await request('/api/learning/register',{kind:$('kind').value,name:$('name').value,path:$('path').value});
     $('search').value='';$('kind-filter').value='all';$('state-filter').value='all';
-    await load();message('notice','작업 연결을 저장했습니다. 학습 실행과 승인 상태는 바뀌지 않습니다.');
+    await loadWork();message('notice','작업 연결을 저장했습니다. 학습 실행과 승인 상태는 바뀌지 않습니다.');
     $('name').value='';$('path').value='';location.hash='learning-results';
-  } catch(error) {if(error.status===403){message('learning-error',error.message);$('learning-error').scrollIntoView({block:'center'});}else if(workspace)message('learning-error',`${readableError(error)} · 작업 종류와 결과 폴더를 확인하세요.`);} finally {setBusy(false);}
+  } catch(error) {if(error.status===403){message('learning-error',error.message);$('learning-error').scrollIntoView({block:'center'});}else if(workspace)message('learning-error',`${readableError(error)} · 작업 종류와 결과 폴더를 확인하세요.`);}});
 }
 $('register').onsubmit=register;$('connect').onclick=register;
 $('new-task').onclick=()=> {if(!workspace)return;location.hash='connection-panel';showSection();};
 $('kind').onchange=fileHint;
 for(const id of ['search','kind-filter','state-filter']) $(id).addEventListener(id==='search'?'input':'change',render);
 $('reset-filters').onclick=()=> {$('search').value='';$('kind-filter').value='all';$('state-filter').value='all';render();$('search').focus();};
-$('refresh').onclick=()=> {if(busy) return;message('learning-error','');load().catch(()=>{});};
+$('refresh').onclick=()=> {if(scope.busy) return;message('learning-error','');load().catch(()=>{});};
 for(const action of ['start','stop','retry'])$(`owner-control-${action}`).onclick=()=>controlAction(action);
 $('pipeline-action').onclick=()=> {
   const action=workspace?.pipeline?.next?.action;

@@ -134,20 +134,25 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
             expect(page.locator("#user-role")).to_have_text("운영자", timeout=15000)
             page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
             if path == "/console":
-                page.locator("#robot-choice").select_option("rosy_03")
+                page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_03"]').click()
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (path, width)
                 _assert_control(page.locator("#topbar-more"))
                 if path == "/console":
                     _assert_control(page.locator(".queue-row").first)
-                    # Current roster opens one selected robot's controls in its workspace.
-                    page.locator('[data-select-robot-id="rosy_03"]').click()
-                    _assert_control(page.locator("[data-auth-focus]"))
-                    page.locator("[data-auth-focus]").click()
+                    # Ensure rosy_03 panel is open so token link control stays measurable across sizes.
+                    btn = page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_03"]')
+                    if btn.get_attribute("aria-pressed") != "true":
+                        btn.click()
+                    _assert_control(page.locator("#robot-panel-mount [data-auth-focus]"))
+                    page.locator("#robot-panel-mount [data-auth-focus]").click()
                     expect(page.locator("#console-token")).to_be_focused()
                     if page.locator("#topbar-more").is_visible():
                         page.locator("#topbar-more").click()
+                    panel_close = page.locator("#robot-panel-mount .robot-panel-close")
+                    if panel_close.is_visible():
+                        panel_close.click()
                     page.locator("#context-inbox-tab").click()
                     summary = page.locator("#log-panel > summary")
                     for opened in [False, True]:

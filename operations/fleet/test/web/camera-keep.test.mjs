@@ -2,7 +2,60 @@
 // keepFrame(유지 판단)·staleStamp(시각 글자)·bindCamera(끊김 표시 흐름)을 가린다.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCameraBackdrop, keepFrame, staleStamp } from "../../../../applications/fleet/web/map/camera-backdrop.js";
+
+// bindCamera가 모드 묶음(createChoiceGroup)을 만들므로 최소 문서가 필요하다(robot-detail.test.mjs와 같은 스텁).
+function makeEl(tagName) {
+  const attrs = new Map();
+  const classes = new Set();
+  const children = [];
+  const node = {
+    tagName: tagName.toUpperCase(),
+    dataset: {},
+    children,
+    childNodes: children,
+    hidden: false,
+    checked: false,
+    disabled: false,
+    _text: "",
+    get className() { return [...classes].join(" "); },
+    set className(v) { classes.clear(); for (const c of String(v || "").split(/\s+/).filter(Boolean)) classes.add(c); },
+    classList: {
+      add: (...xs) => xs.forEach(x => classes.add(x)),
+      remove: (...xs) => xs.forEach(x => classes.delete(x)),
+      toggle: (x, f) => (f === undefined ? !classes.has(x) : f) ? classes.add(x) : classes.delete(x),
+      contains: x => classes.has(x),
+    },
+    get childElementCount() { return children.length; },
+    get textContent() { return node._text || children.map(c => c.textContent).join(""); },
+    set textContent(v) { node._text = String(v ?? ""); children.length = 0; },
+    setAttribute(k, v) { attrs.set(k, String(v)); if (k === "id") node.id = String(v); },
+    getAttribute(k) { return attrs.has(k) ? attrs.get(k) : null; },
+    removeAttribute(k) { attrs.delete(k); },
+    toggleAttribute(k, force) {
+      const on = force === undefined ? !attrs.has(k) : Boolean(force);
+      if (on) attrs.set(k, ""); else attrs.delete(k);
+      return on;
+    },
+    addEventListener() {},
+    removeEventListener() {},
+    append(...nodes) {
+      for (const n of nodes) {
+        if (!n || typeof n === "string") continue;
+        n.parentElement = node;
+        children.push(n);
+      }
+    },
+    appendChild(n) { node.append(n); return n; },
+    replaceChildren(...nodes) { children.length = 0; node.append(...nodes); },
+    matches() { return false; },
+    closest() { return null; },
+  };
+  return node;
+}
+
+globalThis.document = {createElement: makeEl, getElementById: () => null, addEventListener() {}, removeEventListener() {}};
+
+const { createCameraBackdrop, keepFrame, staleStamp } = await import("../../../../applications/fleet/web/map/camera-backdrop.js");
 
 const frame = { state: "live", seq: 7, source: "ceiling_north", ageMs: 200, url: "blob:frame" };
 
@@ -30,6 +83,7 @@ test("feed drop keeps the last frame marked stale; the next live frame clears th
     "map-stage": stage, "map-camera-stamp": stamp, "map-birdseye": birdseye,
     "birdseye-toggle": { disabled: false, setAttribute() {}, removeAttribute() {} },
     "map-display-mode": { value: "overlay" }, "camera-comparison": { open: false },
+    "map-display-slot": { replaceChildren() {} },
   };
   let handler = null;
   const timers = [];

@@ -124,9 +124,14 @@ def _login(playwright, origin):
 
 
 def _card(page, robot_id):
-    page.locator('[data-context-tab="status"]').click()
-    page.locator("#robot-choice").select_option(robot_id)
-    return page.locator(f'#robot-workspace article[data-robot-id="{robot_id}"]')
+    panel = page.locator(f'#robot-panel-mount[data-robot-id="{robot_id}"]')
+    if panel.count() and panel.is_visible():
+        return panel
+    close_btn = page.locator("#robot-panel-mount .robot-panel-close")
+    if close_btn.count() and close_btn.is_visible():
+        close_btn.click()
+    page.locator(f'#robot-dock-mount .robot-dock-btn[data-robot-id="{robot_id}"]').click()
+    return panel
 
 
 def _raw_words(page):
@@ -157,7 +162,7 @@ def test_selected_robot_links_to_recording_and_formation_without_commands(fleet_
             expect(_card(page, 'rosy_03').locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_03#teach-heading')
             assert posts == before and errors == []
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-            page.locator('#robot-workspace [data-map-recording]').click()
+            page.locator('#robot-panel-mount [data-map-recording]').click()
             expect(page.locator('#teach-robot')).to_have_value('rosy_03')
             expect(page.locator('#teach-target')).to_contain_text('rosy_03')
             assert posts == before and errors == []
@@ -190,7 +195,8 @@ def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_si
             expect(table).to_contain_text("현재 유효한 좌표 없음")
             expect(table).not_to_contain_text("1.25")
             expect(table).to_be_visible()
-            assert page.locator("#map-stage").bounding_box() == map_box
+            assert page.locator("#map-stage").bounding_box() == map_box, (map_box, page.locator("#map-stage").bounding_box(), page.evaluate(
+                "() => { const c = document.querySelector('.console-primary'); return [c.clientHeight, c.scrollHeight, ...[...c.querySelectorAll('.map-section, .map-section > *, .map-section > * > *')].filter(n => n.getBoundingClientRect().height > 0).map(n => [n.tagName.toLowerCase() + '.' + String(n.className).slice(0, 20), Math.round(n.getBoundingClientRect().height)])]; }"))
             body.update(lease_s=1, robots=[{"robot_id": "rosy_01", "status": "MARKER",
                                           "camera": {"x": 1.3, "y": 2.6}}])
             expect(table).to_contain_text("1.30")
@@ -369,7 +375,7 @@ def test_a_hundred_robots_stay_usable(tmp_path):
         with sync_playwright() as playwright:
             browser, page, errors, _posts = _login(playwright, origin)
             # All robot summaries render; only the chosen robot gets command controls.
-            page.wait_for_function("() => document.querySelectorAll('#roster .robot-summary').length === 100",
+            page.wait_for_function("() => document.querySelectorAll('.robot-overview-item').length === 100",
                                    timeout=30000)
             page.evaluate("""() => { window.__lt = []; new PerformanceObserver((list) =>
               window.__lt.push(...list.getEntries().map((e) => e.duration))).observe({type: 'longtask'}); }""")
@@ -377,14 +383,21 @@ def test_a_hundred_robots_stay_usable(tmp_path):
             longest = page.evaluate("Math.max(0, ...window.__lt)")
             assert longest < 250, longest
             assert page.evaluate("document.getElementsByTagName('*').length") < 12000
-            cards = page.locator("#roster article")
+            cards = page.locator(".robot-overview-item")
             assert cards.count() == 100
             assert page.locator("#roster [data-goal-robot-id]").count() == 0
             _card(page, "rosy_001")
-            assert page.locator("#robot-workspace article").count() == 1
-            first = [cards.nth(i).get_attribute("data-robot-id") for i in range(15)]
+            assert page.locator("#robot-panel-mount article").count() == 1
             exceptions = {robot_id for i, robot_id in enumerate(ids) if i % 20 == 7 or i % 10 == 9}
-            assert set(first) == exceptions, first  # the 15 exception cards come first, open
+            # Inside each kind group the exception cards come before every nominal card (R-b).
+            groups = page.evaluate("""() => [...document.querySelectorAll('.robot-overview-group')].map(
+              (g) => [...g.querySelectorAll('.robot-overview-item')].map((b) => b.dataset.robotId))""")
+            assert sum(len(g) for g in groups) == 100, groups
+            for group in groups:
+                flags = [robot_id in exceptions for robot_id in group]
+                assert flags == sorted(flags, reverse=True), group  # no nominal card ahead of an exception
+            assert {r for g in groups for r in g if r in exceptions} == exceptions
+            assert sum(1 for g in groups for r in g if r in exceptions) == 15
             assert page.locator("#critical-list li").first.inner_text().split(":")[0] in exceptions
             head = page.locator("#critical-head small").inner_text() + page.locator("#warning-head small").inner_text()
             assert "외" in head or len(head) < 120, head  # a group head never lists every name
@@ -393,6 +406,9 @@ def test_a_hundred_robots_stay_usable(tmp_path):
                 page.wait_for_timeout(1200)
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
                 assert page.evaluate("document.documentElement.scrollHeight <= innerHeight + 1"), width
+            if page.locator("#robot-panel-mount").is_visible():  # below 90rem the robot panel overlays the rail: close it first
+                page.keyboard.press("Escape")
+                page.wait_for_function("() => document.querySelector('#robot-panel-mount')?.hidden !== false")
             page.get_by_role("tab", name="운영 도구").click()
             page.locator(".formation-form-wrap > summary").click()
             members = page.locator("#formation-members")
@@ -469,10 +485,10 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
             shared = [label for label in labels if label in {"001", "002", "003", "004", "005"}]
             assert len(shared) <= 2, labels                     # one spot: the rest hide instead of stacking
             assert page.evaluate("window.__mapChipsHidden") >= 3
-            page.select_option("#map-display-mode", "camera")
+            page.locator('#map-display-mode input[value="camera"]').check()
             expect(page.locator("#map-canvas")).not_to_be_visible()
             assert page.evaluate("(window.__mapChips || []).every(c => Number.isFinite(c.x) && Number.isFinite(c.y))")
-            page.select_option("#map-display-mode", "coordinates")
+            page.locator('#map-display-mode input[value="coordinates"]').check()
             assert not errors
             browser.close()
     finally:

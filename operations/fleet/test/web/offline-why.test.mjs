@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { offlineWhy } from '../../../../applications/fleet/web/roster-presentation.js';
+import { offlineWhy } from '../../../../applications/fleet/web/robot/roster-presentation.js';
 
 test("Fleet's own hold is not shown as a robot refusal or as unreachable", () => {
   const held = { held: true, reachable: null, code: 'ADDRESS_UNVERIFIED' };

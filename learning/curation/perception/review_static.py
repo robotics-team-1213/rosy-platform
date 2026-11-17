@@ -14,7 +14,7 @@ def get(handler, path):
              '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
              '/storage.js': 'storage.js', '/storage-settings.js': 'storage-settings.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
              '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
-             '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js',
+             '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js', '/review-alerts.js': 'review-alerts.js', '/review-failures.js': 'review-failures.js',
              '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js',
              '/learning/workspaces': 'workspaces.html', '/workspaces.js': 'workspaces.js'}
     name = path.removeprefix('/common/')

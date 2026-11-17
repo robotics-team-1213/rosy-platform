@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rosy Learning — 픽셀 검수</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script><link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/app.css"><script type="module" src="/pixels.js"></script></head>
+<title>Rosy Learning — 픽셀 검수</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script><link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/choice-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/common/readout-strip.css"><link rel="stylesheet" href="/common/alert-center.css"><link rel="stylesheet" href="/app.css"><script type="module" src="/pixels.js"></script></head>
 <body><a class="skip-link" href="#pixel-main">픽셀 검수로 이동</a><ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
 <ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
 <ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
@@ -10,15 +10,13 @@
 <!-- review:rail:end --></nav></div>
 <div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>픽셀 검수</h1><span class="ui-crumbs" id="learning-tool-path"></span></div><nav class="review-kinds" aria-label="정답 하위 메뉴"><a class="ui-subnav-item" href="/">객체 검수</a><a class="ui-subnav-item" href="/pixels" aria-current="page">픽셀 검수</a><a class="ui-subnav-item" href="/incidents">현장 실패 근거</a><a class="ui-subnav-item" href="/learning/omx">로봇암 시범 검수</a><a class="ui-subnav-item" href="/learning/vlm">VLM 판단</a></nav>
 <main class="learning-main" id="pixel-main" tabindex="-1">
+<dl id="pixel-counts" class="ui-readout" data-form="strip" aria-label="픽셀 검수 현황"></dl>
 <h2 id="pixel-title">사진 불러오는 중</h2>
-<ui-status id="pixel-decision" state="ready" role="status" hidden>
+<div id="page-alerts" class="alert-center-list" aria-label="알림"></div><ui-status id="pixel-decision" state="ready" role="status" hidden>
 </ui-status>
-<ui-status id="pixel-error" state="error" role="alert" hidden>
+<ui-status id="pixel-error" state="error" hidden>
 </ui-status>
 <div id="pixel-photo-navigation" class="pixel-frame-controls">
-<label class="ui-field-label">사진 <select id="pixel-frame" class="ui-field">
-</select>
-</label>
 <label class="ui-field-label">마스크 상태 <select id="pixel-filter" class="ui-field">
 <option value="all">전체</option>
 <option value="pending">검수 대기</option>
@@ -28,7 +26,7 @@
 </label>
 <ui-button id="pixel-prev" data-icon-only="" aria-label="이전 사진" data-action-icon="back" kind="quiet">이전 · ←</ui-button>
 <ui-button id="pixel-next" data-icon-only="" aria-label="다음 사진" data-action-icon="next" kind="quiet">다음 · →</ui-button>
-<ui-button id="pixel-next-pending" data-action-icon="next" kind="quiet" title="다음 검수 대기 사진 · N">다음 대기</ui-button>
+<ui-button id="pixel-next-pending" data-action-icon="next" kind="quiet" data-ui-tooltip="다음 대기 사진 · N">다음 대기</ui-button>
 <ui-button id="pixel-reload" data-icon-only="" aria-label="최신 내용 불러오기" data-action-icon="refresh" kind="quiet">최신 내용 불러오기</ui-button>
 </div>
 <ui-empty id="pixel-empty" hidden>
@@ -38,10 +36,8 @@
 <div id="pixel-content">
 <div class="pixel-layout">
 <div class="pixel-editor-column">
-<div id="pixel-tool-rail" class="pixel-tool-rail" role="toolbar" aria-label="픽셀 편집 도구">
-<ui-button id="pixel-flood" data-action-icon="pixels" kind="toggle" aria-pressed="true" title="색상 점 선택 · T">점</ui-button>
-<ui-button id="pixel-brush-tool" data-action-icon="pencil" kind="toggle" aria-pressed="false" title="브러시 · T">브러시</ui-button>
-<ui-button id="pixel-polygon-tool" data-action-icon="area" kind="toggle" aria-pressed="false" title="다각형 영역 · P">영역</ui-button>
+<div id="pixel-tool-rail" class="pixel-tool-rail">
+<div id="pixel-tool-group"></div>
 <ui-button id="pixel-undo" data-action-icon="undo" kind="quiet" aria-label="마지막 픽셀 수정 되돌리기">되돌리기</ui-button>
 </div>
 <section class="pixel-canvas-workspace" aria-label="마스크 편집">
@@ -64,8 +60,8 @@
 <div class="pixel-selection-actions">
 <ui-button id="pixel-sam-run" kind="quiet" hidden>SAM 영역 찾기</ui-button>
 <ui-button id="pixel-sam-cancel" kind="quiet" hidden>계산 취소</ui-button>
-<ui-button id="pixel-sample-apply" data-action-icon="check" kind="quiet" title="선택 영역 적용 · Enter">적용</ui-button>
-<ui-button id="pixel-sample-clear" data-action-icon="trash" kind="quiet" title="선택 취소 · Esc">취소</ui-button>
+<ui-button id="pixel-sample-apply" data-action-icon="check" kind="quiet" data-ui-tooltip="선택 영역 적용 · Enter">적용</ui-button>
+<ui-button id="pixel-sample-clear" data-action-icon="trash" kind="quiet" data-ui-tooltip="선택 취소 · Esc">취소</ui-button>
 </div>
 </div>
 <p id="pixel-tool-hint" class="quiet" role="status" hidden></p>
@@ -101,13 +97,7 @@
 </p>
 </section>
 <section class="pixel-inspector-section" aria-label="픽셀 클래스">
-<label class="ui-field-label">픽셀 클래스 <select id="pixel-class" class="ui-field">
-</select>
-</label>
-<section><h3>클래스 색상·단축 선택</h3>
-<div id="pixel-quick-classes" class="pixel-quick-classes" role="group" aria-label="빠른 픽셀 클래스">
-</div>
-</section>
+<div id="pixel-class"></div>
 </section>
 <div class="pixel-inspector-section pixel-save-actions pixel-save-panel">
 <ui-actions>
@@ -139,9 +129,7 @@
 <span id="pixel-candidate-status" role="status" class="quiet">
 </span>
 <section class="pixel-candidate-choices"><h3>다른 초안·전체 교체</h3>
-<label class="ui-field-label">미리볼 초안 <select id="pixel-candidates" class="ui-field">
-</select>
-</label>
+<div id="pixel-candidates"></div>
 <ui-button id="pixel-apply-candidate" data-action-icon="download" kind="quiet">선택 초안 적용</ui-button>
 </section>
 </div>
@@ -151,18 +139,6 @@
 </figcaption>
 </figure>
 <p class="quiet pixel-candidate-hint">미리보기는 저장되지 않습니다. 적용 후 전체를 다시 확인하고 승인하세요.</p>
-</section>
-<section class="pixel-inspector-section pixel-decision-panel" aria-labelledby="pixel-approval-title">
-<h3 id="pixel-approval-title">픽셀 검수 결정</h3>
-<p class="quiet">완료는 사진 전체와 경계·배경을 확인했다는 검수 기록입니다. 저장하지 않은 수정은 먼저 적용하거나 버리세요.</p>
-<p id="pixel-result-note" role="status" hidden></p>
-<ui-actions>
-<ui-button id="pixel-approve" aria-describedby="pixel-approval-hint" data-action-icon="check" kind="primary">픽셀 검수 승인</ui-button>
-<ui-button id="pixel-exclude" data-action-icon="close" kind="quiet">픽셀 제외</ui-button>
-<ui-button id="pixel-reopen" data-action-icon="undo" kind="quiet">픽셀 재검수</ui-button>
-</ui-actions>
-<p id="pixel-approval-hint" role="status" class="quiet">
-</p>
 </section>
 <div data-review-tool="photos"><section id="pixel-display-options" class="pixel-inspector-section" aria-label="사진 표시"><h3>사진 표시</h3>
 <div class="review-view-bar">
@@ -187,7 +163,7 @@
 <ul id="review-history-events">
 </ul>
 </section></div>
-<div data-review-tool="photos"><section id="pixel-photo-list" class="pixel-inspector-section" aria-label="사진 목록"><h3>사진 목록</h3><nav id="pixel-frames" class="pixel-frame-strip" aria-label="사진 썸네일 선택"></nav></section></div>
+<div data-review-tool="photos"><section id="pixel-photo-list" class="pixel-inspector-section" aria-label="사진 목록"><h3>사진 목록</h3><div id="pixel-frames"></div></section></div>
 <div data-review-tool="help"><section id="pixel-review-info" class="pixel-inspector-section" aria-label="검수 기준·출처"><h3>검수 기준·출처</h3>
 <p id="pixel-class-help" class="quiet">현재 픽셀 클래스와 미검수 영역을 확인하는 중입니다.</p>
 <p id="pixel-map">지도·영상 투영은 미검증입니다. CAD는 참고이며 정답 생성에 쓰지 않습니다.</p>
@@ -221,9 +197,21 @@
 <p>내보내기와 최신 결정 계약</p>
 <details><summary>자료 버전·내보내기 진단</summary><pre id="pixel-export-details">
 </pre></details>
+<div class="learning-next-actions"><a class="ui-action-link" data-kind="quiet" href="/learning#pipeline">인식 자료·학습 실행 (/learning#pipeline)</a><a class="ui-action-link" data-kind="quiet" href="/learning/evaluate">평가·승격 요청 (/learning/evaluate)</a></div>
 </section>
 </section></div>
 </div>
+<section class="pixel-inspector-section pixel-decision-panel ui-panel" data-surface="raised" aria-labelledby="pixel-approval-title">
+<h3 id="pixel-approval-title">픽셀 검수 결정</h3>
+<p id="pixel-result-note" role="status" hidden></p>
+<ui-actions>
+<ui-button id="pixel-approve" aria-describedby="pixel-approval-hint" data-action-icon="check" kind="primary">픽셀 검수 승인</ui-button>
+<ui-button id="pixel-exclude" data-action-icon="close" kind="quiet">픽셀 제외</ui-button>
+<ui-button id="pixel-reopen" data-action-icon="undo" kind="quiet">픽셀 재검수</ui-button>
+</ui-actions>
+<p id="pixel-approval-hint" role="status" class="quiet">
+</p>
+</section>
 </div>
 </div>
 </main>

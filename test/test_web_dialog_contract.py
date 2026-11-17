@@ -56,20 +56,20 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/cell/cell.js": 1,
     "applications/fleet/web/work/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
     "applications/fleet/web/work/arm-transfer-view.js": 2,  # Independent ARM admission and one recovery approval.
+    "applications/fleet/web/work/cell-resume-view.js": 4,  # Per-task resume (note, restart confirm), human-hold clear and decision-gate execution.
     "applications/fleet/web/work/trip-proposal-view.js": 1,  # D-908 explicit independent trip admission.
     "applications/fleet/web/work/policy-page.js": 1,  # D-793 incident lock release
     "applications/fleet/web/confirmed-action.js": 1,
-    "applications/fleet/web/work/policy-page.js": 1,  # D-793 one shared confirm helper for every decision
     # 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision). D-798 3.2 split the shell:
     "applications/fleet/web/console.js": 2,  # Channel and neutral ARM review use the same confirmedAction owner.
     "applications/fleet/web/console-refresh.js": 1,  # dispatch rearm
     "applications/fleet/web/manual-control.js": 1,  # selected robot's fixed MANUAL transition
     "applications/fleet/web/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "applications/fleet/web/maintenance/host-services.js": 1,  # named operator host control, shared confirmation
-    "applications/fleet/web/roster.js": 1,
-    "applications/fleet/web/charge-bays-view.js": 1,  # cancel a running cell task (releases the cell interlock)
+    "applications/fleet/web/robot/roster.js": 1,
+    "applications/fleet/web/cell/cell-real2sim-actions.js": 1,  # 사람 대기 해제 메모 확인(안전, fix/pipeline-gates-safety-land)
     "applications/fleet/web/console-goal.js": 2,  # map goal and place-chip goal confirm the selected robot before dispatch
-    "applications/fleet/web/shared/account-page.js": 2,  # role bundle replaces grants; rejecting an access request (D-993)
+    "applications/fleet/web/shared/account-page.js": 4,  # role bundle, password reset, app disable, request reject (D-993)
     # Activation and profile replacement; D-655 camera replacement moved to its controller.
     "applications/fleet/web/sitemap/site-map.js": 2,
     "applications/fleet/web/sitemap/site-map-camera.js": 1,

@@ -17,15 +17,23 @@ WEB = ROOT / 'middleware' / 'robot_ui' / "robot"
 
 def _module_page(playwright, modules: dict[str, Path], width: int = 390):
     browser, page, errors = open_page(playwright, width, 844)
-    confirmation = ROOT / "shared" / "web" / "confirmation.js"
-    page.route("http://rosy.test/**/confirmation.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=confirmation.read_text(encoding="utf-8")))
-    geometry = ROOT / "shared" / "web" / "live-dialog-geometry.js"
-    page.route("http://rosy.test/**/live-dialog-geometry.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=geometry.read_text(encoding="utf-8")))
-    wiring = ROOT / "shared" / "web" / "ui-wiring.js"
-    page.route("http://rosy.test/**/ui-wiring.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=wiring.read_text(encoding="utf-8")))
+    common_root = (ROOT / "shared" / "web").resolve()
+    web_root = WEB.resolve()
+
+    def _serve_under(root: Path, prefix: str, route) -> None:
+        rel = route.request.url.split(prefix, 1)[1].split("?", 1)[0]
+        target = (root / rel).resolve()
+        if target.is_relative_to(root) and target.is_file():
+            route.fulfill(status=200, content_type="application/javascript", body=target.read_text(encoding="utf-8"))
+        else:
+            route.abort()
+
+    page.route("http://rosy.test/common/**", lambda route: _serve_under(common_root, "/common/", route))
+    page.route("http://rosy.test/assets/**", lambda route: _serve_under(web_root, "/assets/", route))
+    for shared_name in ("confirmation.js", "live-dialog-geometry.js", "ui-wiring.js", "cause-line.js"):
+        body = (common_root / shared_name).read_text(encoding="utf-8")
+        page.route(f"http://rosy.test/**/{shared_name}", lambda route, _req, b=body: route.fulfill(
+            status=200, content_type="application/javascript", body=b))
     page.route(
         "http://rosy.test/panel-test",
         lambda route: route.fulfill(

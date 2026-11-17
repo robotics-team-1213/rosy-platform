@@ -1,22 +1,24 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,commonDown,setText} from '/review-alerts.js';
 import '/common/ui.js';
 import '/commands.js';
 import {createDataTable,createSelectionBar} from '/common/collection-controls.js';
 import {createStatePanel} from '/common/workflow-controls.js';
+import {createBusyScope} from '/common/busy-scope.js';
 const $=id=>document.getElementById(id),API='/api/learning/tasks';
 const KINDS={omx:'OMX 팔',pinky:'Pinky 주행 로봇',manipulator:'팔',mobile:'주행 로봇',other:'기타',robot:'기타 로봇'};
 const kindLabel=kind=>KINDS[kind]||kind,modelLabel=model=>model==='unrecorded'?'모델 미기록':model;
 let owners={status:'pending',robots:[]},ownersLoading=false;
-let state={robots:[],tasks:[],profiles:[],datasets:[],runs:[],methods:{}},token='',loading=false,busy=false,connected=false;
+let state={robots:[],tasks:[],profiles:[],datasets:[],runs:[],methods:{}},token='',loading=false,connected=false;
 const pending=new Map();
 const experienceDrafts=new Map();
 const contextKeys=['task','profile','dataset'];
 let contextQuery=new URLSearchParams(location.search),contextError='',contextLoaded=false;
 let actionError='',refreshError='';
+const stopping=new Set();  // run ids with a stop request in flight
 function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function error(message,owner='action'){
   if(owner==='refresh')refreshError=message||'';else actionError=message||'';
-  const text=[refreshError,actionError].filter(Boolean).join('\n');$('tasks-error').hidden=!text;$('tasks-error').textContent=text;
+  const text=[commonDown()?'':refreshError,actionError].filter(Boolean).join('\n');$('tasks-error').hidden=!text;setText($('tasks-error'),text);
 }
 function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 async function request(path,body){
@@ -48,7 +50,7 @@ const ownerBar=createSelectionBar({id:'owner-selection',onClear:()=>ownerTable.c
 $('owner-robots').append(ownerPanel.element,ownerBar.element,ownerTable.element);ownerBar.set(0,{scope:'Fleet 목록'});
 function renderOwners(){
   const open=owners.robots.filter(r=>!r.registered),states={unconfigured:'unavailable',unauthorized:'forbidden'};
-  if(owners.status!=='ok')ownerPanel.set({state:states[owners.status]||'error',title:owners.status==='unconfigured'?'Fleet 연결 미설정':'Fleet 목록을 읽지 못했습니다',detail:owners.reason});
+  if(owners.status!=='ok')ownerPanel.set({state:states[owners.status]||'error',title:owners.status==='unconfigured'?'Fleet 연결 미설정':'Fleet 목록을 읽지 못했습니다',detail:owners.status==='request'&&commonDown()?'':owners.reason});
   else if(!owners.robots.length)ownerPanel.set({state:'empty',title:'Fleet에 등록된 장치가 없습니다',detail:'Fleet 장치 정보에서 로봇·팔을 먼저 등록한 뒤 다시 확인하세요.'});
   else if(!open.length)ownerPanel.set({state:'empty',title:'새로 등록할 장치가 없습니다',detail:`Fleet 장치 ${owners.robots.length}대가 모두 이 프로젝트에 등록되어 있습니다.`});
   else ownerPanel.set({state:'ready',title:`등록 가능 ${open.length}대 · Fleet 장치 ${owners.robots.length}대`,
@@ -159,21 +161,21 @@ function readiness(){
   $('run-host').textContent=`실행 호스트: ${state.host_id==='model'?'Model PC':state.host_id==='ai'?'AI PC':'미설정'} · 현재 접속한 호스트에서 CPU 학습합니다. 계산 호스트는 실행마다 기록됩니다.`;
   $('run-readiness').textContent=reason||'자료·과제 결속을 검증한 뒤 학습을 시작할 수 있습니다.';
   $('run-data-status').textContent=dataset?`자료 revision ${dataset.revision||'미기록'} · 출처 ${dataset.source||'미기록'}${/synthetic|smoke/i.test(dataset.source||'')?' · 합성 시험 자료이며 실제 수집·성공 증거가 아닙니다.':''}`:'';
-  $('run-start').disabled=busy||!token||!!reason;
+  $('run-start').disabled=scope.busy||!token||!!reason;
   $('task-next').textContent=!state.robots.length?'먼저 학습할 로봇을 등록하세요.':!state.tasks.length?'로봇을 등록했습니다. 과제와 참여 구성을 저장하세요.':!current?'저장 과제를 선택해 자료와 실행 결과를 이어서 확인하세요.':'';
   $('task-next-setup').hidden=!!current;
   $('task-next-setup').textContent=state.tasks.length?'새 과제 만들기':!state.robots.length?'로봇 등록 열기':'과제 만들기 열기';
   updateWorkbenchLinks();
-  $('robot-save').disabled=$('task-import').disabled=busy||!connected||!token;
-  $('task-save').disabled=busy||!connected||!token||!state.robots.length;
-  $('task-export').disabled=busy||!connected||!current;
-  $('sim-context-save').disabled=busy||!connected||!current||!token||!state.sim_configured;
+  $('robot-save').disabled=$('task-import').disabled=scope.busy||!connected||!token;
+  $('task-save').disabled=scope.busy||!connected||!token||!state.robots.length;
+  $('task-export').disabled=scope.busy||!connected||!current;
+  $('sim-context-save').disabled=scope.busy||!connected||!current||!token||!state.sim_configured;
   $('sim-context-readiness').textContent=!current?'참고 기록을 연결할 과제를 선택하세요.':!state.sim_configured?'이 호스트의 SIM 실행 연결을 설정한 뒤 다시 확인하세요.':'서버가 종료 기록을 조회해 과제와 고정합니다. 과제 파일 내보내기에는 이 참고 기록이 포함되지 않습니다.';
   for(const panel of $('task-runs').querySelectorAll('[data-continuous-run]')){
-    const select=panel.querySelector('select'),unavailable=busy||!connected||!token;
+    const select=panel.querySelector('select'),unavailable=scope.busy||!connected||!token;
     select.disabled=unavailable||select.options.length===0;
     panel.querySelector('[data-experience-submit]').disabled=unavailable||!select.value;
-    panel.querySelector('[data-run-stop]').disabled=unavailable;
+    panel.querySelector('[data-run-stop]').disabled=!connected||!token||stopping.has(panel.dataset.continuousRun);  // stop never waits for a busy action
   }
 }
 function continuousControls(run){
@@ -197,7 +199,8 @@ function continuousControls(run){
   });};
   const status=node('p',draft.message||`${run.inputs?.length||0}개 추가 입력 기록 · ${datasets.length?'초기 자료와 이미 입력한 자료는 제외합니다.':'새 경험 자료를 먼저 등록하세요.'}`);status.setAttribute('role','status');
   const stop=node('ui-button','이 지속 학습 중지');stop.setAttribute('kind','quiet');stop.dataset.runStop='';stop.dataset.taskRunAction='stop';
-  stop.onclick=()=>action(async()=>{await request('/api/learning/omx/center/stop',{id:run.id});await refresh();});
+  stop.onclick=async()=>{if(stopping.has(run.id))return;stopping.add(run.id);error('');readiness();  // a stop is a job cancel, independent of the busy scope
+    try{await request('/api/learning/omx/center/stop',{id:run.id});await refresh();}catch(exc){error(exc.message);}finally{stopping.delete(run.id);readiness();}};
   panel.append(node('p','지속 학습은 새 경험을 기다립니다. 추가 입력도 같은 과제·참여 범위를 서버가 검증합니다. 이 호스트의 학습을 중지해도 저장된 모델·평가 파일은 유지됩니다.'),form,status,stop);
   return panel;
 }
@@ -259,7 +262,7 @@ async function refresh(){
     renderRegistered();
     $('tasks-status').textContent=`프로젝트 ${state.project_id} · 과제 ${state.tasks.length}개 · 최신 기록 확인됨`;
     renderTask();
-  }catch(exc){connected=false;error(exc.message,'refresh');$('tasks-status').textContent='연결 실패 · 입력을 유지했습니다. 다시 확인을 누르세요.';readiness();}
+  }catch(exc){connected=false;error(exc.message,'refresh');setText($('tasks-status'),commonDown()?'불러오지 못함 · 입력을 유지했습니다.':'연결 실패 · 입력을 유지했습니다. 다시 확인을 누르세요.');readiness();}
   finally{loading=false;}
 }
 async function save(kind,path,body){
@@ -267,7 +270,8 @@ async function save(kind,path,body){
   const payload=previous?.signature===signature?previous.payload:{...body,request_id:uuid()};pending.set(kind,{signature,payload});
   const result=await request(path,payload);pending.delete(kind);return result;
 }
-async function action(callback){if(busy)return;busy=true;error('');readiness();try{await callback();}catch(exc){error(exc.message);}finally{busy=false;readiness();}}
+const scope=createBusyScope($('tasks-main'));
+async function action(callback){error('');await scope.run(async()=>{try{await callback();}catch(exc){error(exc.message);}});readiness();}
 $('robot-form').onsubmit=event=>{event.preventDefault();action(async()=>{
   const body={name:$('robot-name').value.trim(),kind:$('robot-kind').value.trim(),model_revision:$('robot-model').value.trim(),device_id:$('robot-device').value.trim()};
   await save('robot','/api/learning/robots',body);await refresh();await loadOwners();
@@ -302,4 +306,4 @@ $('tasks-context-reset').onclick=()=>{contextKeys.forEach(key=>contextQuery.dele
 $('task-next-setup').onclick=()=>{const robots=!state.robots.length,setup=$(robots?'robot-setup':'task-setup');setup.open=true;(robots?$('owner-robots').querySelector('input[data-select]')||$('robot-manual-toggle'):setup.querySelector('input')).focus();};
 $('robot-manual-toggle').onclick=()=>{const form=$('robot-form'),open=form.hidden;form.hidden=!open;$('robot-manual-toggle').setAttribute('aria-expanded',String(open));if(open)$('robot-name').focus();};
 $('tasks-refresh').onclick=()=>{error('');refresh();loadOwners();};
-participant();refresh();loadOwners();setInterval(()=>{if(!busy&&!document.hidden)refresh();},5000);
+participant();refresh();loadOwners();setInterval(()=>{if(!scope.busy&&!document.hidden)refresh();},5000);

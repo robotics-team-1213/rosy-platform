@@ -1,4 +1,5 @@
 // Read-only host report interpretation; DOM and control actions stay in host-services.js.
+import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 const STATE_LABEL = {
   ok: "정상",
   bad: "나쁨",
@@ -17,7 +18,7 @@ const STATE_LABEL = {
 export const HOST_LABEL = {site: "관제 PC", ai: "AI PC", model: "모델 PC"};
 
 export function stateLabel(state) {
-  return STATE_LABEL[state] || state || "확인 불가";
+  return STATE_LABEL[state] || state || EVIDENCE_LABEL.unavailable;
 }
 
 export function resourceText(resources) {
@@ -54,7 +55,7 @@ function fresh(report, limit) {
 }
 
 export function driftText(drift) {
-  if (!drift) return "바라는 상태 확인 불가";
+  if (!drift) return `바라는 상태 ${EVIDENCE_LABEL.unavailable}`;
   if (!fresh(drift, 2100)) return "설정 점검 지연 · 마지막 보고를 확인하세요";
   const driftN = (drift.drift || []).length;
   const errorN = (drift.errors || []).length;

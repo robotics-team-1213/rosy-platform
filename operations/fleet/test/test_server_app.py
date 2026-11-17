@@ -653,10 +653,10 @@ def test_console_page_and_its_assets_are_served():
 
 
 def test_install_page_and_its_entry_are_served():
-    """D-410 — 설치·보정 화면은 같은 CSP·자산 규칙 아래 서빙된다."""
+    """D-410 — 설치 화면은 같은 CSP·자산 규칙 아래 서빙된다."""
     client = _client(FakeRobot("rosy_01"))
     page = client.get("/console/install")
-    assert page.status_code == 200 and "설치·보정" in page.text
+    assert page.status_code == 200 and "<h1>설치</h1>" in page.text
     assert "default-src 'self'" in page.headers["content-security-policy"]
     assert client.get("/console/assets/install.js").status_code == 200
     assert client.get("/console/assets/peer-picker.js").status_code == 200

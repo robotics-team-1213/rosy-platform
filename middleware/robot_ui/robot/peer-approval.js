@@ -1,5 +1,6 @@
 // Existing administrator session owns consent; this module never stores credentials.
 import {confirmIrreversible} from '/common/ui.js';
+import {watchStatus} from './dom.js';
 
 export function createReceiverApprovals({root, api, isAdmin, captureLifetime, runConfirmed}) {
   let generation = 0, busy = false, deciding = false;
@@ -80,7 +81,7 @@ export function createReceiverApprovals({root, api, isAdmin, captureLifetime, ru
 export function mountReceiverApprovals(parent, ctx) {
   const root=document.createElement('section'); root.className='ui-readback';
   const heading=document.createElement('h3'); heading.textContent='기기 연결 승인';
-  const message=document.createElement('ui-status'); message.dataset.peerMessage=''; message.setAttribute('role','status');
+  const message=document.createElement('ui-status'); message.dataset.peerMessage=''; watchStatus(message);
   const list=document.createElement('ul'); list.className='diagnostic-list'; list.dataset.peerList=''; list.setAttribute('aria-label','기기 연결 요청');
   root.append(heading,message,list); parent.append(root);
   const lifetime=new AbortController(); let disposed=false;

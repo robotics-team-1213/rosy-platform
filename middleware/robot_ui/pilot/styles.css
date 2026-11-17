@@ -226,15 +226,10 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
 [data-drive-motion][data-kind=drive] { color: var(--nominal); border-color: var(--border-strong); }
 [data-drive-motion][data-kind=pivot] { color: var(--ground-deep); background: var(--status-warn); border-color: var(--status-warn); }
 
-[data-drive-hud] [data-drive-fact=cap] { font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
+[data-drive-facts] [data-drive-fact=cap] { font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
 
 [data-drive-facts] { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
 [data-drive-facts] > span { white-space: nowrap; }
-[data-drive-fact=link][data-state=BLOCKED],
-[data-drive-fact=link][data-state=OFFLINE],
-[data-drive-fact=link][data-state=FORBIDDEN] { color: var(--status-crit); }
-[data-drive-fact=link][data-state=RETRYING] { color: var(--status-warn); }
-[data-drive-fact=link][data-readback=silent] { color: var(--status-warn); }
 [data-drive-fact=latency][data-slow=true] { color: var(--status-warn); }
 [data-drive-fact=activity] { color: var(--status-warn); }
 
@@ -247,7 +242,7 @@ html[data-pilot-shell="android"] ui-topbar [data-goto] { display: none; }
 html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
 [data-drive-tools-panel] {
   position: absolute;
-  top: calc(var(--topbar-height) + var(--space-3));
+  top: calc(var(--space-6) + var(--space-3) + var(--space-2));  /* 도구 단추 아래 */
   right: var(--space-3);
   z-index: 24;
   width: min(25rem, calc(100% - var(--space-3) * 2));
@@ -255,6 +250,8 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   background: var(--ground-raise);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-panel);
+  max-height: calc(100% - var(--space-6) - var(--space-3) * 2 - var(--space-2));
+  overflow: auto;
 }
 [data-drive-tools-panel] ui-actions { margin-top: var(--space-3); flex-wrap: wrap; }
 
@@ -308,11 +305,14 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-button);
 }
-[data-drive-presets] ui-actions { flex-wrap: nowrap; gap: 0; }
-[data-drive-modes] { gap: 0; }
-[data-drive-modes] ui-button { flex: 1 1 0; min-width: 0; }
-[data-drive-presets] ui-button { min-width: 3rem; }
-[data-drive-presets] > ui-text { padding-inline: var(--space-2); }
+/* K1 groups (createChoiceGroup): the legend is the 속도 label, the chips share the frame. */
+[data-drive-presets] .choice-group { display: flex; align-items: center; gap: 0; }
+[data-drive-presets] .choice-items, [data-drive-modes] .choice-items { flex-wrap: nowrap; gap: 0; }
+[data-drive-modes] { gap: 0; width: 100%; }
+[data-drive-modes] .choice-items { width: 100%; }
+[data-drive-modes] .choice-chip { flex: 1 1 0; min-width: 0; justify-content: center; }
+[data-drive-presets] .choice-chip { min-width: 3rem; }
+[data-drive-presets] .choice-label { padding-inline: var(--space-2); }
 
 [data-drive-pedals], [data-drive-pivots] { display: flex; gap: var(--space-2); }
 
@@ -375,24 +375,19 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
-[data-drive-stick-knob][data-knob-x] {
-  transform: translate(
-    calc(-50% + attr(data-knob-x type(<length>), 0px)),
-    calc(-50% + attr(data-knob-y type(<length>), 0px))
-  );
-}
-[data-drive-stick][data-float-x] {
-  translate: attr(data-float-x type(<length>), 0px) attr(data-float-y type(<length>), 0px);
-}
+/* --g-* come from setGeometry (shared/web/geometry.js). They inherit, so the stick (left/top) and
+   its knob (x/y) use different names. Defaults keep the idle centre. */
+[data-drive-stick-knob] { transform: translate(calc(-50% + var(--g-x, 0px)), calc(-50% + var(--g-y, 0px))); }
+[data-drive-stick].floating { translate: var(--g-left, 0px) var(--g-top, 0px); }
 
 /* ---- 입력 조정 패널 ---- */
 [data-inputs-panel] {
   position: absolute;
-  top: calc(var(--topbar-height) + 4.5rem);
+  top: calc(var(--space-6) + var(--space-3) + var(--space-2));  /* 도구 단추 아래 */
   right: var(--space-3);
   width: min(20rem, calc(100vw - var(--space-3) * 2));
-  max-height: calc(100dvh - var(--topbar-height) - 16rem);
-  overflow-y: auto;
+  max-height: calc(100% - var(--space-6) - var(--space-3) * 2 - var(--space-2));
+  overflow: auto;
   padding: var(--space-3);
   display: grid;
   gap: var(--space-2);
@@ -407,7 +402,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
 [data-drive-fact=recording] { font-size: var(--text-label); font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--nominal-quiet); }
 [data-drive-fact=recording][data-state=recording],
 [data-drive-fact=recording][data-state=stopping] { color: var(--status-warn); }
-[data-drive-fact=recording][data-state=refused] { color: var(--status-crit); }
+[data-drive-fact=recording][data-state=refused] { padding: 0 var(--space-1); border-radius: var(--radius-control); background: var(--flag-danger-bg); color: var(--flag-danger-ink); }
 /* 녹화 준비 중: 버튼은 따로 꾸미지 않는다. 표면이 공용 부품을 다시 칠하는 것은
    계약 위반이다(test_surfaces_do_not_repaint_shared_controls, D-194/D-359).
    준비 상태는 HUD 칩([data-drive-fact=recording], 위 규칙)과 토글 눌림이 이미 말한다. */
@@ -459,7 +454,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
 }
 
 /* 조작 버튼·상단 버튼은 한 줄을 지킨다 — 쪼개진 "제자 리" 는 누를 곳을 흐린다 */
-[data-drive-left] ui-button,
+[data-drive-left] ui-button, [data-drive-left] .choice-chip,
 body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 [data-drive-presets] { flex-wrap: nowrap; }
 
@@ -475,18 +470,14 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
   body[data-pilot-screen="preview"] ui-topbar [data-gate-state] { display: none; }
   body[data-pilot-screen="preview"] #pilot-notice { flex: 1 1 100%; min-width: 0; }
   body[data-pilot-screen="preview"] ui-topbar ui-button { flex: 1 1 0; min-width: 0; padding-inline: var(--inset-button-irreversible); white-space: nowrap; }
-  [data-drive-presets] > ui-text { display: none; }
+  [data-drive-presets] .choice-label { display: none; }
   [data-drive-controls] { padding-left: var(--space-3); padding-right: var(--space-3); gap: var(--space-2); }
-  [data-drive-presets] ui-button { min-width: var(--target-secondary); padding-inline: var(--inset-button); }
+  /* Four short chips share a ~160px column: the thick selection edge, bold and border carry "chosen" without the tick. */
+  [data-drive-presets] .choice-chip { min-width: 0; padding-inline: var(--space-2); }
+  [data-drive-presets] .choice-check { display: none; }
   [data-drive-pivots] ui-button { min-width: 0; padding-inline: var(--inset-button); }
   /* 영상 보기 한 쌍과 도구·종료 한 쌍은 각각 같은 가용 폭을 쓴다. */
-  [data-drive-hud] ui-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-    margin-left: 0;
-  }
-  [data-drive-hud] ui-actions ui-button { width: 100%; min-width: 0; white-space: nowrap; }
+  [data-drive-hud] ui-actions ui-button { min-width: 0; white-space: nowrap; }
 }
 
 /* 태블릿 세로·휴대폰 */
@@ -494,6 +485,8 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
   [data-drive-stick] { width: min(40vw, 11rem); }
   [data-drive-pedals] ui-button { min-height: var(--target-primary); min-width: var(--target-primary); }
   [data-drive-pivots] ui-button { min-width: 4.6rem; }
-  [data-drive-hud] [data-drive-fact=cap] { display: none; }
 }
 
+
+/* 도구 판 안 사실 띠(상한·응답·모드·배터리·영상 전송): 머리에서 내려온 보조 수치. 한 줄 근거처럼 읽는다. */
+[data-drive-tools-panel] [data-drive-facts] { margin-top: var(--space-2); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border-subtle); }

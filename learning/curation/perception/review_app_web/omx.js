@@ -1,5 +1,5 @@
 // Prepared demonstrations and host training share the Learning workspace.
-import {accountFetch} from '/account-session.js';
+import {accountFetch,panelError,commonDown,setText} from '/review-alerts.js';
 import {confirmIrreversible} from '/common/ui.js';
 import '/commands.js';
 import '/omx-review.js';
@@ -8,6 +8,7 @@ import {profileDocumentKey} from '/omx-profiles.js';
 import {renderExportRuns} from '/omx-export.js';
 import {initHub,updateHubRuns} from '/omx-hub.js';
 import {initJourney,refreshJourneyContext,applyJourneyContext,selectJourneyProfile,clearJourneyProfile,updateJourneyEvidence,renderJourneyComparison,journeyContext} from '/omx-journey.js';
+import {valueText} from '/common/value-text.js';
 const $=id=>document.getElementById(id);
 const workflowContext=new URLSearchParams(location.search),workflowTask=workflowContext.get('task');
 if(workflowTask&&/^[0-9a-f-]{36}$/.test(workflowTask)){
@@ -160,7 +161,7 @@ function render(set){
   const body=el('tbody');
   for(const e of set.episodes){
     const row=el('tr');
-    [e.episode_index,e.session_id,e.frames,SPLIT[e.split]||e.split,OUTCOME[e.outcome]||e.outcome,e.reviewer||'—',e.reason||'—',camera(e.camera)]
+    [e.episode_index,e.session_id,valueText(e.frames).text,SPLIT[e.split]||e.split,OUTCOME[e.outcome]||e.outcome,e.reviewer||'—',e.reason||'—',camera(e.camera)]
       .forEach(v=>row.append(el('td',v==null?'—':String(v))));
     body.append(row);
   }
@@ -191,7 +192,7 @@ async function load(){
     editors.clear();$('sets').replaceChildren(...value.sets.map(render));
     $('omx-status').setAttribute('state',value.sets.length?'ready':'empty');
     $('omx-status').textContent=value.sets.length?`세트 ${value.sets.length}개`:'연결된 OMX 준비 세트가 없습니다.';
-  }catch(error){preparedReady=false;exportSelection();$('omx-status').setAttribute('state','error');$('omx-status').textContent=error.message||String(error);}
+  }catch(error){preparedReady=false;exportSelection();$('omx-status').setAttribute('state',commonDown()?'empty':'error');setText($('omx-status'),panelError(error));}
   finally{preparedLoading=false;$('refresh').disabled=false;}
 }
 const CENTER='/api/learning/omx/center';
@@ -416,7 +417,7 @@ function renderRuns(){
     const progress=run.progress??{};
     if(online){
       const phase={waiting_for_experience:'경험 대기 중',training:'학습 중'}[progress.phase]||progress.phase||'상태 확인 중';
-      section.append(el('p',`${phase} · 누적 학습 ${progress.total_steps??0}단계 · 정책 버전 ${progress.latest_version??'저장 전'}`));
+      section.append(el('p',`${phase} · 누적 학습 ${valueText(progress.total_steps,{unit:'단계'}).text} · 정책 버전 ${progress.latest_version??'저장 전'}`));
       const inputs=run.inputs||[],counts=status=>inputs.filter(input=>input.status===status).length;
       section.append(el('p',`접수된 입력 ${inputs.length}개 · 입력 대기 ${counts('queued')}개 · 소비 ${counts('consumed')}개 · 거절 ${counts('rejected')}개`));
       if(inputs.length){const details=el('details'),summary=el('summary','입력 대기열·처리 결과');details.append(summary,el('pre',JSON.stringify(inputs,null,2)));section.append(details);}
@@ -452,7 +453,7 @@ async function refreshCenter(){
     renderRuns();selection();updateHubRuns(snapshot.runs);
     $('center-read-error').hidden=true;$('center-read-error').textContent='';
     $('center-status').setAttribute('state','ready');$('center-status').textContent=`데이터 ${snapshot.datasets.length}개 · 작업 ${snapshot.runs.length}개 · ${new Date().toLocaleTimeString('ko-KR')} 확인`;
-  }catch(exc){centerReady=false;updateJourney();ownerRequest++;clearOwner('학습센터 연결을 확인한 뒤 현장 상태를 다시 조회하세요.');$('center-status').setAttribute('state','error');$('center-status').textContent='실행기 연결을 확인하세요. 아래 목록은 이전 확인 결과일 수 있습니다.';$('start').disabled=true;$('center-read-error').hidden=false;$('center-read-error').textContent=exc.message;}
+  }catch(exc){centerReady=false;updateJourney();ownerRequest++;clearOwner('학습센터 연결을 확인한 뒤 현장 상태를 다시 조회하세요.');$('center-status').setAttribute('state',commonDown()?'empty':'error');setText($('center-status'),commonDown()?'불러오지 못함 · 아래 목록은 이전 확인 결과일 수 있습니다.':'실행기 연결을 확인하세요. 아래 목록은 이전 확인 결과일 수 있습니다.');$('start').disabled=true;$('center-read-error').hidden=commonDown();setText($('center-read-error'),commonDown()?'':exc.message);}
   finally{loading=false;}
 }
 function uuid(){

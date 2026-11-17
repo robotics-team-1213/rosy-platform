@@ -1,7 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
-import {createDrawingImport, copyMapTemplate} from '/console/assets/drawing-import.js';
+
+// /console/assets 절대 경로 import 를 단독 node --test 에서도 풀도록 로더를 먼저 건다.
+const { register } = await import('node:module');
+register('./resolve-console-assets.mjs', import.meta.url);
+const {createDrawingImport, copyMapTemplate} = await import('/console/assets/drawing-import.js');
 globalThis.crypto ??= webcrypto;
 
 const transform = {plane: 'xy', unit: 'm', source_origin: [0, 0], map_origin_m: [0, 0], heading_rad: 0, scale: 1};

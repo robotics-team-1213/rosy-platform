@@ -17,11 +17,16 @@ def test_mobile_robot_choice_jump_changes_no_command(site, width):
     with sync_playwright() as pw:
         posts = []
         browser, page, errors = _open(pw, site, API, posts, size=(width, 844))
-        page.get_by_role("button", name="로봇 선택으로 이동", exact=True).click()
-        expect(page.locator("#robot-choice")).to_be_focused()
-        expect(page.locator("#robot-choice")).to_be_in_viewport()
+        dock = page.locator("#robot-dock-mount")
+        expect(dock).to_be_visible()
+        expect(dock).to_be_in_viewport()
+        expect(page.locator("#focus-robot-choice")).to_have_count(0)
+        btn = dock.locator('.robot-dock-btn[data-robot-id="rosy_01"]')
+        btn.focus()
+        expect(btn).to_be_focused()
+        expect(btn).to_be_in_viewport()
         page.clock.run_for(1500)
-        expect(page.locator("#robot-choice")).to_be_focused()
+        expect(btn).to_be_focused()
         if output := os.environ.get("ROSY_SHOT_DIR"):
             Path(output).mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(Path(output) / f"fleet-robot-choice-{width}.png"))

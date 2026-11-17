@@ -79,9 +79,10 @@ export function createStationRecovery({ scope, view, call, log, isOperator, name
       if (err.name === "AbortError") return;
       results.set(robotId, { text: `${robotId} 승인 거절 · ${err.detail?.reason ? REASON[err.detail.reason] || err.detail.reason : err.code || err.message}`, kind: "bad" });
     } finally {
+      busy.delete(robotId);
       if (life.current()) {
-        log(results.get(robotId).text, results.get(robotId).kind);
-        busy.delete(robotId);
+        const last = results.get(robotId);
+        if (last) log(last.text, last.kind);
         refresh();
         render();
       }
@@ -120,12 +121,12 @@ export function createStationRecovery({ scope, view, call, log, isOperator, name
         actions.append(button);
         box.append(actions);
       }
+      // D-1117 — 결과는 누른 단추 옆 글자다(live 역할 없음). 실패 낭독은 log("bad") → 관제 알림 카드의 announcer 한 번이 담당한다.
       const last = results.get(request.robot_id);
       if (last) {
         const line = document.createElement("p");
         line.className = "stuck-result";
         line.dataset.kind = last.kind;
-        line.setAttribute("role", last.kind === "bad" ? "alert" : "status");
         line.textContent = last.text;
         box.append(line);
       }

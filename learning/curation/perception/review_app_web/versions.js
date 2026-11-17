@@ -1,4 +1,4 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,panelError,setText} from '/review-alerts.js';
 import {cssColor} from '/common/ui.js';
 import {actorName} from '/ai-jobs.js';
 // Read-only history. Frame changes invalidate every outstanding response.
@@ -31,7 +31,7 @@ export function showVersions(lane,index){
         const rows=element('ul');for(const box of value.boxes)rows.append(element('li',`${box.label||'미분류'} · [${box.bbox_xyxy.join(', ')}]`));
         preview.append(element('p','현재 화면의 원본 사진·객체와 좌표를 비교하세요.'));preview.append(rows);if(!value.boxes.length)preview.append(element('p','객체 없음'));
       }
-    }catch(error){if(ticket===generation&&request===selection)preview.replaceChildren(element('p',error.message));}
+    }catch(error){if(ticket===generation&&request===selection)preview.replaceChildren(element('p',panelError(error)));}
   }
   async function load(){
     more.disabled=true;message.textContent='이력 불러오는 중…';
@@ -40,7 +40,7 @@ export function showVersions(lane,index){
       if(ticket!==generation)return;
       for(const event of value.events){const item=element('li'),button=element('ui-button',`v${event.version} · ${labels[event.action]||event.action} · ${actorName(event.actor)} · ${event.ts} UTC`);button.onclick=()=>select(event.version);item.append(button);list.append(item);}
       before=value.next_before;more.hidden=before===null;more.textContent='이전 이력 더 보기';message.textContent=list.children.length?'버전을 선택하면 저장된 결과를 조회합니다.':'아직 저장된 이력이 없습니다.';
-    }catch(error){if(ticket===generation)message.textContent=error.message;}
+    }catch(error){if(ticket===generation)setText(message,panelError(error));}
     finally{if(ticket===generation)more.disabled=false;}
   }
   more.onclick=load;

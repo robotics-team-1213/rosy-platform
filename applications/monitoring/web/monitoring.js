@@ -1,9 +1,14 @@
 import { EVIDENCE_LABEL, evidenceAgeText } from './common/core_ui_logic.js';
 import { createAccountSession } from './common/account-session.js';
+import { valueText } from './common/value-text.js';
+import { statusTag } from './common/status-tag.js';
+import { actionIcon } from './common/ui.js';
+import { createPagination } from './common/collection-controls.js';
+import { durationText } from './duration.js';
 import './common/account-profile.js';
 
 const $ = (id) => document.getElementById(id);
-const HEALTH = { OK: '정상', WARNING: '주의', ERROR: '오류', UNKNOWN: '판정 정보 없음' };
+const HEALTH = { OK: '정상', WARNING: '주의', ERROR: '오류', UNKNOWN: EVIDENCE_LABEL.unavailable };
 const KIND = { collector: '수집기', robot: '로봇', host: '호스트', fleet: 'Fleet', service: '서비스' };
 const STAGE = { none: '응답 확인', dns: '이름 해석', connect: '연결', tls: '인증서·TLS', auth: '인증 거절',
   http: 'HTTP 응답', protocol: '응답 형식·시각', timeout: '응답 시간 초과', source: '상태 파일', unknown: '단계 미확인' };
@@ -13,7 +18,7 @@ const state = { key: null, account: null, keyOpen: true, epoch: 0, packet: null,
 const reading = () => state.key || state.account?.can_read;
 const finite = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 const el = (tag, text, className) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; };
-const stamp = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ko-KR') : '시각 정보 없음';
+const stamp = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ko-KR') : EVIDENCE_LABEL.unavailable;
 const seconds = () => Math.max(0, (performance.now() - state.received) / 1000, (Date.now() - state.wall) / 1000) + state.roundTrip;
 
 function evidence(item) {
@@ -22,8 +27,9 @@ function evidence(item) {
   return item.remaining_s - seconds() > 0 ? 'fresh' : 'delayed';
 }
 function evidenceNode(item) {
-  const value = evidence(item);
-  const node = el('small', EVIDENCE_LABEL[value] + evidenceAgeText(finite(item.age_s) ? item.age_s + seconds() : null));
+  const value = evidence(item), text = EVIDENCE_LABEL[value] + evidenceAgeText(finite(item.age_s) ? item.age_s + seconds() : null);
+  // Fresh stays quiet text; every other state is a tag with its icon (concept principle 1).
+  const node = value === 'fresh' ? el('small', text) : statusTag(value === 'unavailable' ? 'unknown' : value, text);
   node.dataset.evidence = value;
   return node;
 }
@@ -33,7 +39,9 @@ function abortReads() {
 }
 function clearRows() {
   for (const id of ['observation-rows', 'link-rows', 'history-rows', 'graph']) $(id).replaceChildren();
-  $('summary').textContent = ''; $('received').textContent = '';
+  for (const id of ['strip-total', 'strip-caution', 'strip-nodata']) $(id).textContent = EVIDENCE_LABEL.unavailable;  // 0 only once the snapshot counts it
+  for (const id of ['strip-caution', 'strip-nodata']) $(id).parentElement.removeAttribute('data-alert');
+  $('strip-received').textContent = EVIDENCE_LABEL.unavailable; $('strip-date').textContent = ''; $('strip-collector').textContent = '';
   state.history = []; state.cursor = 0;
 }
 function syncAccount(entered = false) {
@@ -105,16 +113,25 @@ async function refresh() {
     else { state.stale = true; $('connection-status').textContent = error.status === 403 ? '허용된 사이트를 확인하세요.' : '조회 연결 끊김 · 마지막 자료의 근거를 확인하세요.'; render(); }
   } finally { if (state.job === job) state.job = null; }
 }
-function cell(...children) { const node = el('td'); node.append(...children); return node; }
+function block(...children) { const node = el('div'); node.append(...children); return node; }
 function healthText(item) {
-  return (HEALTH[item.reported_health] || HEALTH.UNKNOWN) + (evidence(item) === 'fresh' || !item.sampled_at ? '' : ' · 마지막 판정');
+  // A judgement with no sample time (sampled_at missing) is unknown, not the last reported label (C4).
+  const fresh = evidence(item) === 'fresh';
+  return valueText(fresh || item.sampled_at ? HEALTH[item.reported_health] || HEALTH.UNKNOWN : null).text + (fresh || !item.sampled_at ? '' : ' · 마지막 판정');
 }
 function healthNode(item) {
-  const known = evidence(item) === 'fresh';
-  return el('span', healthText(item),
-    known && item.reported_health === 'ERROR' ? 'danger' : known && item.reported_health === 'WARNING' ? 'caution' : '');
+  const known = evidence(item) === 'fresh', health = item.reported_health;
+  if (known && health === 'ERROR') return statusTag('danger', HEALTH.ERROR);
+  if (known && health === 'WARNING') return statusTag('caution', HEALTH.WARNING);
+  if (!HEALTH[health] || health === 'UNKNOWN' || !(known || item.sampled_at)) return statusTag('unknown', healthText(item));
+  return el('span', healthText(item));  // a calm normal: words only
 }
+const pager = createPagination({id: 'observation-pager', onChange: (page) => { state.page = page - 1; render(); }});
+$('pager-slot').replaceWith(pager.element);
+const lost = Object.assign(document.createElement('span'), {hidden: true});
+actionIcon(lost, 'wifi'); $('connection-status').before(lost);  // the status words stay; the icon only marks a lost link
 function render() {
+  lost.hidden = !state.stale;
   if (!state.packet) return;
   const packet = state.packet, term = $('search').value.trim().toLocaleLowerCase();
   const own = (node) => node.kind === 'collector' && node.origin_collector === packet.collector_id && node.origin_source === 'collector';
@@ -125,33 +142,38 @@ function render() {
   const pages = Math.max(1, Math.ceil(nodes.length / 50)); state.page = Math.min(state.page, pages - 1);
   const fragment = document.createDocumentFragment();
   for (const node of nodes.slice(state.page * 50, (state.page + 1) * 50)) {
-    const row = el('tr');
-    const owner = cell(el('p', node.label), el('small', KIND[node.kind] || '항목'), el('code', node.id));
+    const row = el('li');
+    const owner = block(el('p', node.label), el('small', KIND[node.kind] || '항목'), el('code', node.id));
     // D-991: a PC is acted on in Fleet's PC maintenance; this screen stays read-only.
-    if (node.kind === 'host') { const link = el('a', 'PC 정비'); link.href = '/console/maintenance'; owner.append(link); }
+    if (node.kind === 'host') { const link = el('a', 'PC 정비'); link.className = 'ui-action-link'; link.dataset.kind = 'quiet'; link.href = '/console/maintenance'; owner.append(link); }
     row.append(owner,
-      cell(healthNode(node), evidenceNode(node)),
-      cell(el('code', node.origin_collector + ' / ' + node.origin_source), el('small', '보고 관측 ' + stamp(node.sampled_at))));
+      block(healthNode(node), evidenceNode(node)),
+      block(el('code', node.origin_collector + ' / ' + node.origin_source), el('small', '보고 관측 ' + stamp(node.sampled_at))));
     fragment.append(row);
   }
-  $('observation-rows').replaceChildren(fragment); $('node-empty').hidden = nodes.length > 0; $('node-table').hidden = nodes.length === 0;
-  $('page-number').textContent = `${state.page + 1} / ${pages}`; $('previous').disabled = state.page === 0; $('next').disabled = state.page + 1 >= pages;
+  $('observation-rows').replaceChildren(fragment); $('node-empty').hidden = nodes.length > 0; $('observation-rows').hidden = nodes.length === 0;
+  pager.set({page: state.page + 1, totalPages: pages});
   const count = all.filter((node) => evidence(node) !== 'fresh').length;
-  $('summary').textContent = `관측 항목 ${all.length}개 · 최신 근거 없는 항목 ${count}개`;
-  $('received').textContent = '조회 수집기 ' + packet.collector_id + ' · 마지막 자료 수신 ' + stamp(new Date(state.wall).toISOString());
+  const caution = all.filter((node) => evidence(node) === 'fresh' && ['ERROR', 'WARNING'].includes(node.reported_health)).length;
+  const counts = {total: all.length, caution, nodata: count};
+  for (const [name, value] of Object.entries(counts)) $('strip-' + name).textContent = String(value);
+  $('strip-caution').parentElement.toggleAttribute('data-alert', caution > 0); $('strip-nodata').parentElement.toggleAttribute('data-alert', count > 0);
+  $('strip-collector').textContent = '수집기 ' + packet.collector_id;
+  $('strip-received').textContent = new Date(state.wall).toLocaleTimeString('ko-KR'); $('strip-date').textContent = new Date(state.wall).toLocaleDateString('ko-KR');
   const map = new Map(packet.nodes.map((node) => [node.id, node]));
   const links = packet.links.filter((link) => !term || [link.id, map.get(link.source_id)?.label, map.get(link.target_id)?.label].join(' ').toLocaleLowerCase().includes(term));
   const rows = document.createDocumentFragment();
   for (const link of links.slice(0, 100)) {
-    const row = el('tr'), fresh = evidence(link) === 'fresh';
-    const outcome = link.reachable === true ? '응답 도달' : link.reachable === false ? '조회 불가 보고' : '도달 정보 없음';
-    row.append(cell(el('p', (map.get(link.source_id)?.label || '원천 미확인') + ' → ' + (map.get(link.target_id)?.label || '대상 미확인')),
+    const row = el('li'), fresh = evidence(link) === 'fresh';
+    const outcome = link.reachable === true ? '응답 도달' : link.reachable === false ? '조회 불가 보고' : null, stage = STAGE[link.failure_stage] || STAGE.unknown;
+    const outcomeText = outcome === null ? EVIDENCE_LABEL.unavailable : outcome + ' · ' + stage;  // no stage after an unknown outcome
+    row.append(block(el('p', (map.get(link.source_id)?.label || '원천 미확인') + ' → ' + (map.get(link.target_id)?.label || '대상 미확인')),
       el('small', (link.kind === 'probe' ? '직접 조회' : '원천 보고') + ' · ' + (TRANSPORT[link.transport] || TRANSPORT.unknown))),
-      cell(el('p', outcome + ' · ' + (STAGE[link.failure_stage] || STAGE.unknown), fresh && link.failure_stage !== 'none' ? 'caution' : ''),
-        el('small', finite(link.duration_ms) ? `응답 ${Math.round(link.duration_ms)}ms` : '응답 시간 미확인')),
-      cell(evidenceNode(link), el('small', '성공 관측 ' + stamp(link.last_success_at)))); rows.append(row);
+      block(fresh && outcome !== null && link.failure_stage !== 'none' ? statusTag('caution', outcomeText) : el('p', outcomeText),
+        el('small', durationText(link.duration_ms))),
+      block(evidenceNode(link), el('small', '성공 관측 ' + stamp(link.last_success_at)))); rows.append(row);
   }
-  $('link-rows').replaceChildren(rows); $('link-empty').hidden = links.length > 0; $('link-table').hidden = links.length === 0;
+  $('link-rows').replaceChildren(rows); $('link-empty').hidden = links.length > 0; $('link-rows').hidden = links.length === 0;
   drawGraph(packet, links, map);
 }
 function svg(tag, attrs, text) { const node = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value)); if (text !== undefined) node.textContent = text; return node; }
@@ -172,7 +194,7 @@ function drawGraph(packet, links, map) {
     const group = svg('g', {}); group.append(svg('title', {}, node.label + ' · ' + id), svg('rect', {x: point.x, y: point.y, width: 190, height: 52, rx: 4}),
       svg('text', {x: point.x + 10, y: point.y + 21}, Array.from(node.label).length > 18 ? Array.from(node.label).slice(0, 17).join('') + '…' : node.label),
       svg('text', {x: point.x + 10, y: point.y + 40, class: 'detail'}, (KIND[node.kind] || '항목') + ' · ' + healthText(node))); graph.append(group); }
-  $('graph-note').textContent = `그림 ${chosen.length}개 경로 · 연결 목록 ${Math.min(links.length, 100)} / ${links.length}개. 검색으로 범위를 좁히세요. 원천 판정의 신선도는 목록에서 확인할 수 있습니다.`;
+  $('graph-note').textContent = `그림 ${chosen.length}개 경로 · 연결 목록 ${Math.min(links.length, 100)} / ${links.length}개 · 판정은 CORE·Fleet·호스트의 보고`;
 }
 async function loadHistory() {
   if (!reading() || !state.site || state.historyJob) return;
@@ -203,15 +225,15 @@ $('logout').addEventListener('click', async () => {
   logout();
   if (signedIn) { session.invalidate(); state.account = {enabled: true, authenticated: false, can_read: false}; }
   syncAccount();
-  if (signedIn) try { await session.logout(() => {}); } catch (error) { $('connection-status').textContent = error.message; }
+  if (signedIn) try { await session.logout(() => {}); } catch (error) { $('connection-status').textContent = '로그아웃 처리가 지연 중입니다. 연결을 확인하세요.'; }
 });
 $('scope-select').addEventListener('change', () => { state.epoch += 1; abortReads(); state.site = $('scope-select').value; state.packet = null; state.page = 0; clearRows(); refresh(); });
 $('search').addEventListener('input', () => { state.page = 0; render(); });
 $('refresh').addEventListener('click', refresh); $('history-next').addEventListener('click', loadHistory);
-$('previous').addEventListener('click', () => { state.page = Math.max(0, state.page - 1); render(); });
-$('next').addEventListener('click', () => { state.page += 1; render(); });
 const resume = () => { if (reading()) { state.stale = true; render(); refresh(); } };
 document.addEventListener('visibilitychange', () => { if (document.hidden) { state.stale = true; render(); } else resume(); });
 window.addEventListener('pageshow', resume); window.addEventListener('focus', resume);
 session.restore();
 setInterval(refresh, 5000); setInterval(() => { if (state.packet) render(); }, 1000);
+const narrow = matchMedia('(width < 64rem)'), folds = () => { for (const fold of document.querySelectorAll('[data-fold]')) fold.open = !narrow.matches; };
+folds(); narrow.addEventListener('change', folds);

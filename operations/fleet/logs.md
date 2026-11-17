@@ -5543,6 +5543,20 @@
 - 증거: 시트를 300 dpi로 그려 OpenCV DICT_4X4_250이 번호·크기(±0.2 mm)대로 되읽음. 한 장에 12 mm 24개, 20 mm 12개 컨테이너. 실물 인쇄·판독률은 미실시.
 - gate 변화: SOURCE. 인쇄 후 자로 확인·판독률 측정은 사람 몫이다.
 
+## 2026-11-13 · uncommitted · fix(fleet-web): account page lets the busy scope own disabled
+- 변경: 계정 페이지 `edit()`가 run 안에서 Save·Role을 미리 풀지 않는다(`scope.release` 삭제, cause 경유 잠금은 run이 끝날 때 적용). `test_account_admin_browser.py`에 실제 계정 화면 busy 시험 추가
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·Fleet 계정 브라우저·monitoring·games·pilot shell: 브랜치 616 passed 12 failed, main 593 passed 12 failed, 실패 목록 동일(main 기존 적색), 브랜치만의 실패 0. size_range 0, lint 0 errors
+- gate 변화: 없음
+- 결정: D1
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · test(fleet-web): typing during a busy run
+- 변경: 계정 화면 busy 시험이 실행 중 글 입력이 바뀌지 않고 끝난 뒤 정확히 복원되는지 확인한다
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·monitoring·Fleet 계정·games·pilot shell·operations/monitoring: 마지막 실행 553 passed 12 failed(전부 main 기존 적색, 브랜치만의 실패 0). size_range 0, lint 0 errors
+- gate 변화: 없음
+- 결정: C2
+- 교훈: 없음
+
 ## 2026-11-14 · uncommitted · 앞으로/뒤로 한 걸음 경로
 - 변경: `fleet/server/pose/nudge_routes.py`(서버 홀더, `fleet.server.nudge_routes`) `POST /api/fleet/robots/{id}/step` — 이름 있는 운영자만, trip runner·대형·console goal 이 로봇을 쥐고 있으면 409 `STEP_ROBOT_BUSY`, 응답 없음 409 `ROBOT_OFFLINE`, CORE 거부는 502 본문 code 그대로. 실제 주행은 로봇의 CORE 미션 경로(`nudge_forward`/`nudge_backward`, `max_time_s`=거리/0.03+5)에 맡긴다(D-2). 감사 행 `step`. `role_builders.py`가 map-pin 옆에 등록.
 - 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고. 실물 로봇 확인은 미실시.
@@ -5557,6 +5571,48 @@
 - 변경: `POST /api/fleet/robots/{id}/goal` 선택 필드 `frame: "site"`(v1.400). 콘솔이 현장 지도 보기에서 찍은 목표는 이 필드를 싣고, Fleet이 trip free 목표와 같은 `robot_frame_goal`로 기체 Nav2 지도 프레임으로 바꾼다. 증명이 없으면 409(`SITE_POSE_UNKNOWN`·`SITE_MAP_NOT_ACTIVE`)로 아무것도 보내지 않는다. 격자 보기·다른 호출자는 그대로.
 - 증거: 원격 `test_console_goal_site_frame.py`·`test_server_app.py`·`test_task_api.py` 78 통과.
 - gate 변화: SOURCE. 실물 미실시.
+
+## 2026-11-15 · uncommitted · test(fleet): Fleet fix slice phase 1 선택자 이전 및 상세/선택 Node 시험
+
+- 변경: `#map-display-mode` 라디오·`#map-overlay-toggles` 토글·`#robot-choice` 제거·`.robot-row` 전환에 맞춰 `operations/fleet/test/` 브라우저 시험 선택자를 이전하고, `operations/fleet/test/web/robot-detail.test.mjs`를 추가했다.
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 468 passed, 0 failed. 브라우저 시험은 원격 대기.
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · test(fleet-web): camera-keep Node 시험이 문서 스텁 없이 무너져 있던 것을 고친다
+
+- 변경: `test/web/camera-keep.test.mjs`의 `bindCamera` 흐름 시험이 `createChoiceGroup`에 필요한 최소 `document` 스텁과 `#map-display-slot` 없이 병합(600ac91fad)되어 Node 전체를 적색으로 만들었다. 단언은 그대로 두고 `robot-detail.test.mjs`와 같은 요소 스텁만 보탰다.
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 479 passed, 0 failed(수정 전 이 시험 1 실패).
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · ui(fleet): B1 AI 팔 제안·스킬 예외 큐 행과 제안 읽기 폴링
+
+- 변경: 신규 `work/arm-proposal-view.js`(dev 샘플 GET /api/fleet/arm-proposals 폴링 `createArmProposalFeed`, 404는 폴링 문이 닫는다)와 `queues.js`의 `armAttention` 연결. 로봇을 막는 승인 대기만 `arm_proposal` 결정 행(펼치면 작업 화면 링크), 측정 실패·정지·시간 초과만 `arm_skill` 행(정지는 crit)으로 예외 큐에 오른다. 막지 않는 대기·정상 수명주기는 오르지 않는다. `console.js`가 같은 답을 view.armProposals에 나르고 5초 폴링한다.
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 479 passed, 0 failed(신규 `arm-proposal-view.test.mjs` 5건 포함). 브라우저 시험 `test_arm_skill_browser.py` 1건 추가(원격 대기).
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · ui(fleet): B2 작업 큐 팔 제안 행과 제안 패널 시험(잠긴 자기 승인·근거 줄)
+
+- 변경: `test_arm_skill_browser.py`에 제안자 자기 승인 잠금(잠금 태그·원인 줄·강제 클릭 무POST), 현재 digest·세대를 실은 승인, 409 PROPOSAL_CHANGED 재전송 금지 시험을, `test_work_overview_browser.py`에 패널 상태·readout 띠·근거 줄(원장 먼저·모델은 측정 아님)·후보 이유 접힘·업무 종류 고르기 시험을 더했다. 모두 dev 샘플 견본 10건을 그대로 쓴다.
+- 증거: 브라우저 시험은 원격 대기(이 변경은 시험 파일만). Node 묶음 479 passed, 0 failed.
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · ui(fleet): B3 아홉 스킬 상태의 로봇 행·상세·3D 시험과 robot-detail Node 시험
+
+- 변경: `test_arm_skill_browser.py`에 아홉 수명주기가 로봇 행 task 글자·`#detail-skill` 한 줄·readout 띠·3D 상태 줄에 같은 C20 표로 오르는지, 정상 상태(제안됨·승인됨·실행 중·측정 성공)에는 스킬 태그가 0개인지, 샘플 상태에 sampleTag가 붙는지를 가린 시험을 더했다. `web/robot-detail.test.mjs`에 행 글자·alarm·#detail-skill·readout Node 시험을 추가했다(요소 스텁이 텍스트 마디와 클래스 선택자를 이해하도록 넓혔다).
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 480 passed, 0 failed. 브라우저 9상태 시험은 원격 대기.
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · ui(fleet): H Pinky 앞 카메라 타일 Node·브라우저 시험 추가
+
+- 변경: `web/robot-camera-tile.test.mjs`(source id 유도, fresh/stale/unregistered, `keepFrame` 유지)와 `test_robot_camera_tile_browser.py`(상세 보조 배치·fresh/stale/unregistered)를 더했다.
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 483 passed, 0 failed. 브라우저 시험은 원격 대기.
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · ui(fleet): E 위치 상태 Node·브라우저 시험 추가(C19)
+
+- 변경: `web/localization-view.test.mjs`(SITE_POSE_UNKNOWN, 대기 출발 1회 발사/정지/시간초과/비위치거절, 폴러 503 중단, 닫힌 게이트 요청자·나이·자동재시도 없음)와 `test_localization_browser.py`(보기전용·낡은 후보·닫힌 게이트)를 추가했다.
+- 증거: Node 시험 통과. 브라우저 시험은 원격 대기.
+- gate 변화: 없음.
 
 ## 2026-11-16 · uncommitted · fix(fleet): auto-track-calibration 서비스 principal 보정·지도 경로 최소 권한 허용
 - 변경: `fleet/server/auth/site_auth.py` — `role: service`, `principal_id: auto-track-calibration` 기계 자격을 `/api/fleet/calibrations` 및 `/api/fleet/site-map/*` 경로로 한정 허용해 Account receiver 모드에서도 호스트 자동 보정 타이머가 인간 세션 위조 없이 동작하도록 연결했다.

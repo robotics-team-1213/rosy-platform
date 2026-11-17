@@ -77,7 +77,7 @@ def test_robot_app_links_preserve_approved_target_without_dispatch(console_url, 
         page.on('request', lambda request: writes.append(request.url)
                 if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') else None)
         page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
-        card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
+        card = page.locator('#robot-panel-mount[data-robot-id="rosy_01"]')
         expect(card.get_by_role('link', name='Rosy Robot · 한 대 관리')).to_have_attribute(
             'href', 'https://robot-one.local:8443/console')
         pilot = card.get_by_role('link', name='Rosy Pilot · 직접 운전')
@@ -85,11 +85,12 @@ def test_robot_app_links_preserve_approved_target_without_dispatch(console_url, 
         expect(pilot).to_be_visible()
         expect(page.locator('#estop')).to_be_visible()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        # Switching apps is ordinary navigation; the target handles its own login/admission.
-        page.route('https://robot-one.local:8443/pilot', lambda route: route.fulfill(
+        # Switching apps opens the approved origin in a new tab; the target handles its own login/admission.
+        page.context.route('https://robot-one.local:8443/pilot', lambda route: route.fulfill(
             status=200, content_type='text/html', body='<h1>Pilot target</h1>'))
-        pilot.click()
-        expect(page).to_have_url('https://robot-one.local:8443/pilot')
+        with page.expect_popup() as popup_info:
+            pilot.click()
+        expect(popup_info.value).to_have_url('https://robot-one.local:8443/pilot')
         assert not [url for url in writes if '/teleop' in url or '/mission' in url or '/goal' in url]
         assert not errors
         browser.close()
@@ -108,7 +109,7 @@ def test_untrusted_robot_target_has_guidance_instead_of_app_links(console_url, c
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
         page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
-        card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
+        card = page.locator('#robot-panel-mount[data-robot-id="rosy_01"]')
         expect(card.locator('[data-robot-app-guidance]')).to_contain_text('승인된 로봇 주소')
         expect(card.locator('[data-robot-app]')).to_have_count(0)
         assert not errors
@@ -122,7 +123,7 @@ def test_robot_app_links_clear_when_directory_becomes_unavailable(console_url):
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
         page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
-        links = page.locator('#robot-workspace [data-robot-app]')
+        links = page.locator('#robot-panel-mount [data-robot-app]')
         expect(links).to_have_count(2)
         api['/api/fleet/peers'] = (503, {'detail': 'directory unavailable'})
         expect(links).to_have_count(0, timeout=12_000)
@@ -138,7 +139,7 @@ def test_robot_app_links_drop_previous_users_directory_before_new_response(conso
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
         page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
-        links = page.locator('#robot-workspace [data-robot-app]')
+        links = page.locator('#robot-panel-mount [data-robot-app]')
         expect(links).to_have_count(2)
         # Hold the next user's directory response: old links must disappear immediately.
         waiting = []
@@ -148,7 +149,7 @@ def test_robot_app_links_drop_previous_users_directory_before_new_response(conso
         with page.expect_request('**/api/fleet/peers'):
             page.locator('#token-save').click()
         expect(links).to_have_count(0)
-        page.locator('#robot-choice').select_option('rosy_01')
+        page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_01"]').click()
         expect(page.locator('[data-robot-app-guidance]')).to_be_visible()
         for route in waiting:
             route.fulfill(json={'peers': []})
@@ -163,7 +164,7 @@ def test_bfcache_return_clears_app_directory_before_session_is_revalidated(conso
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
         page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
-        links = page.locator('#robot-workspace [data-robot-app]')
+        links = page.locator('#robot-panel-mount [data-robot-app]')
         expect(links).to_have_count(2)
         waiting = []
         page.route('**/api/fleet/session', lambda route: waiting.append(route))
@@ -172,7 +173,7 @@ def test_bfcache_return_clears_app_directory_before_session_is_revalidated(conso
           dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
         }''')
         # Existing page cleanup drops selection; reselecting must not revive the old directory.
-        page.locator('#robot-choice').select_option('rosy_01')
+        page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_01"]').click()
         expect(links).to_have_count(0)
         for route in waiting:
             route.fulfill(status=401, json={'detail': {'code': 'TOKEN_REQUIRED'}})
@@ -350,8 +351,9 @@ def test_actual_console_identity_link_focuses_card_without_arming_or_post(consol
         page.wait_for_function("document.activeElement?.dataset.robotId==='rosy_02'")
         expect(page.locator("#context-status")).to_be_visible()
         expect(page.locator('[data-context-tab="status"]')).to_have_attribute("aria-selected", "true")
-        expect(page.locator('#roster article.selected')).to_have_count(1)
-        expect(page.locator('#roster article.selected')).to_have_attribute('data-robot-id', 'rosy_02')
+        expect(page.locator('#robot-panel-mount article')).to_have_count(1)
+        expect(page.locator('#robot-panel-mount article')).to_have_attribute('data-robot-id', 'rosy_02')
+        expect(page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_02"]')).to_have_attribute('aria-pressed', 'true')
         expect(page.locator('#map-canvas')).to_have_class('idle')
         expect(page.locator('#map-canvas')).to_have_attribute('tabindex', '-1')
         expect(page.locator('[data-goal-robot-id="rosy_02"]')).to_have_attribute('aria-pressed', 'false')

@@ -1,9 +1,18 @@
 // 대시보드가 공유하는 DOM 접근과 표시 형식.
 // 여기 있는 함수는 네트워크도 세션도 모르며, 그래서 어느 모듈에서든 안전하게 부를 수 있다.
+import { valueText } from "/common/value-text.js";
+import { getAnnouncer } from "/common/announcer.js";
 
 export const elements = Object.fromEntries(
   [...document.querySelectorAll("[id]")].map((element) => [element.id, element]),
 );
+
+// C25: one voice per document. Visible status text carries no live role; results are announced here, on change only.
+export const announce = (text, urgent = false) => getAnnouncer().announce(text, { urgent });
+export function watchStatus(node) {
+  node.removeAttribute("role"); node.removeAttribute("aria-live"); node.removeAttribute("aria-atomic"); node.dataset.result = "";
+  new MutationObserver(() => announce(node.textContent)).observe(node, { childList: true, characterData: true, subtree: true });
+}
 
 export function createNode(tag, className = "", text) {
   const node = document.createElement(tag);
@@ -54,10 +63,11 @@ export function markRequested() {
   requested = true;
 }
 
-export function setText(id, value, fallback = "—", evidence) {
+export function setText(id, value, fallback = UNKNOWN_VALUE, evidence) {
   const node = elements[id];
   if (!node) return;
-  node.textContent = value ?? (requested ? fallback : "");
+  const next = value ?? (requested ? fallback : "");
+  if (node.textContent !== next) node.textContent = next;
   delete node.dataset.age;
   if (evidence == null) {
     delete node.dataset.evidence;
@@ -88,20 +98,21 @@ export function setText(id, value, fallback = "—", evidence) {
   else node.removeAttribute("title");
 }
 
-// `Number(null)` is 0, so a missing value must be caught before the cast —
-// otherwise "no reading" renders as 0% / 0.00 V, a false alarm (D-82 Law 0).
+// `Number(null)` is 0, so a missing value must be caught before the cast: valueText turns it into the
+// shared "정보 없음" instead of 0% / 0.00 V, a false alarm (D-82 Law 0, D-280).
+export const UNKNOWN_VALUE = valueText(null).text;
+
 export function number(value, digits = 1) {
-  const amount = metricNumber(value);
-  return amount === null ? "—" : amount.toFixed(digits);
+  return valueText(metricNumber(value), {digits}).text;
 }
 
 export function percent(value) {
   const amount = metricNumber(value);
-  return amount === null ? "—" : `${Math.round(amount)}%`;
+  return valueText(amount === null ? null : Math.round(amount), {unit: "%"}).text;
 }
 
 export function bytes(value) {
-  if (!Number.isFinite(Number(value))) return "—";
+  if (!Number.isFinite(Number(value))) return UNKNOWN_VALUE;
   const units = ["B", "KB", "MB", "GB", "TB"];
   let amount = Number(value);
   let unit = 0;
@@ -113,7 +124,7 @@ export function bytes(value) {
 }
 
 export function duration(value) {
-  if (!Number.isFinite(Number(value))) return "—";
+  if (!Number.isFinite(Number(value))) return UNKNOWN_VALUE;
   const total = Math.floor(Number(value));
   const days = Math.floor(total / 86400);
   const hours = Math.floor((total % 86400) / 3600);
@@ -128,7 +139,7 @@ export function setMeter(id, value) {
 
 export function rate(value) {
   const amount = metricNumber(value);
-  return amount === null ? "—" : `${bytes(amount)}/s`;
+  return amount === null ? UNKNOWN_VALUE : `${bytes(amount)}/s`;
 }
 
 export function metricNumber(value) {

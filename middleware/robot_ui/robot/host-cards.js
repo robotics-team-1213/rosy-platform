@@ -1,4 +1,6 @@
 import { createNode, setTagState } from "./dom.js";
+import { valueText } from "/common/value-text.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 
 // 호스트·릴리스·커미셔닝·하드웨어 카드 렌더 (D-262 세 번째 분해). 셸은
 // render*(payload) 호출만 남긴다. 역할 판단(isAdmin)과 커미셔닝 후속
@@ -23,7 +25,7 @@ export function createHostCards({
     if (!chip) return;
     const mode = value || "UNKNOWN";
     setTagState(chip, "mode", mode);
-    chip.textContent = mode === "UNKNOWN" ? "—" : mode;
+    chip.textContent = mode === "UNKNOWN" ? UNKNOWN : mode;
   }
 
   function renderHostNetwork(payload) {
@@ -46,11 +48,11 @@ export function createHostCards({
     const data = payload.data || {};
     setChip("network-mode", data.mode);
     // The SSID is displayable; a PSK never is, and the agent does not send one.
-    setText("network-ssid", data.ssid || "—");
-    setText("network-ap", data.ap_active === true ? "켜짐" : data.ap_active === false ? "꺼짐" : "—");
-    setText("network-ipv4", data.ipv4 || "—");
-    setText("network-route", data.default_route || "—");
-    setText("network-dns", (data.dns || []).join(", ") || "—");
+    setText("network-ssid", data.ssid || UNKNOWN);
+    setText("network-ap", data.ap_active === true ? "켜짐" : data.ap_active === false ? "꺼짐" : UNKNOWN);
+    setText("network-ipv4", data.ipv4 || UNKNOWN);
+    setText("network-route", data.default_route || UNKNOWN);
+    setText("network-dns", (data.dns || []).join(", ") || UNKNOWN);
     setText("network-internet", data.internet ? "도달" : "도달 못함");
     setText("network-peer", data.peer_reachable ? "가능" : "확인 필요");
 
@@ -93,13 +95,13 @@ export function createHostCards({
 
     const data = payload.data || {};
     setChip("release-state", data.state);
-    setText("release-current", data.current || "—");
+    setText("release-current", data.current || UNKNOWN);
     setText("release-previous", data.previous || "없음");
     setText("release-staged", data.staged || "없음");
-    setText("release-revision", (data.git_revision || "").slice(0, 12) || "—");
+    setText("release-revision", (data.git_revision || "").slice(0, 12) || UNKNOWN);
     setText(
       "release-schema",
-      data.config_schema != null ? `${data.config_schema} / ${data.data_schema}` : "—",
+      data.config_schema != null ? `${data.config_schema} / ${data.data_schema}` : UNKNOWN,
     );
     setText("release-failure", data.last_failure || "없음");
 

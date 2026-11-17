@@ -624,3 +624,25 @@
 - 변경: 시뮬 바닥 너머가 검게 보이던 배경을 실제 옆 카메라에 보이는 벽 색(하늘색, 화소 중앙값 152·213·255)의 skybox로 바꿨다. 충돌·계획은 그대로다.
 - 증거: 11:53 실제 옆 화면과 같은 자세 시뮬 옆 화면의 평균 화소 차이가 123에서 68.6으로 줄었다. 탁자·팔이 시뮬에서 더 어둡게 보이는 조명 차이는 남았다. 대기 자세를 실물 접힘(`wait_pose=home`)으로 둔 측정 셀 재생은 적층 9/9, 반출 10/10, 재배치 12/12(두 팔 동시)로 통과했다. 시뮬레이션 화면 근거이며 실물 근거가 아니다(D-947).
 - gate 변화: SOURCE 변경.
+
+## 2026-11-13 · uncommitted · refactor(learning): review_app_web element style writes through setGeometry
+- 변경: 확대 폭·클래스 색 견본·브러시 원·커서·SIM 갤러리의 `el.style` 쓰기를 `setGeometry`/`data-cursor`/CSS로 바꿨다(D1). `uiux/learning-rule-fixes`의 `<table width>` 우회는 가져오지 않았다
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) geometry·patterns·no_element_style·asset_manifest·component_kit·pilot 브라우저·learning 픽셀/검수 브라우저 435 passed 12 failed(971 s). 실패 12건 중 shared_controls 6건과 pilot part2의 4건(전체 파일 순서 의존, 단독은 통과)은 main에서도 같은 실패(main 전체 파일 4 failed 47 passed)이고, 스틱 2건은 float translate를 .floating 때만 적용해 고친 뒤 part2 47 passed 중 같은 4건만 실패. size_range 0, lint 0 errors
+- gate 변화: 없음(동작 동일)
+- 결정: D1
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · refactor(learning): review_app_web adopts busy scope, cause line, stop control, value text
+- 변경: accounts·learning·catalog·omx-hub·ladder·sim·vlm·tasks·workflow·omx-native-train·classes·workspaces·객체/픽셀 검수(app.js·pixels.js)의 화면별 perform/busy 잠금을 `createBusyScope`로 바꾸고 옛 구현(accounts.js perform·lockButton·lockedButtons 등)을 지웠다. learning·catalog·omx 프로필의 비활성 묶음은 `createCauseLine` 한 줄, 모방학습 현재 실행 중지는 `createStopControl`(권한·연결로 막지 않음), 모르는 개수(omx total_steps·vlm 진행·record 프레임·classes 승인 수)는 `valueText`. 배경 조회(계정 5초 폴링)는 `scope.refresh`라 잠그지 않는다. 학습 센터의 저장 현황 읽기는 잠금이 풀린 뒤 한다(저장 화면이 자기 단추를 소유). uiux/learning-rule-fixes에서 F7(워크스페이스 h2)·F8(탭 마크업)·X6 문구·단추 단독 reason만 가져왔고 pointAtCause·`*-cause` id·`<table width>`는 가져오지 않았다. 계정 세션(accounts·account-session.js의 자체 identity fence)과 record·storage*·ai-jobs·camera의 상태 기반 잠금은 옮기지 않았다.
+- 증거: 원격 remote_pytest test/learning/perception 브라우저 포함 3266 passed 10 failed(2203 s) 뒤 실패 6건 수정·재실행(data_recovery·stages·omx_web·accounts 100 passed); 남은 4건은 main에서도 나는 test_review_bridge WAL 거절. shared_controls 6·design_scope hold_still 1은 기반 ac07caf205에서도 같은 7건.
+- gate 변화: 없음(동작 변경은 폴링이 화면을 잠그지 않는 것, aria-busy 속성은 false가 아니라 없음)
+
+## 2026-11-13 · uncommitted · fix(learning): 지속 학습 중지는 busy 범위와 무관하게 나간다
+- 변경: tasks.js의 '이 지속 학습 중지'가 action()/createBusyScope를 거치지 않고 run별 stopping 집합으로만 중복을 막는다(fix/stop-paths-always-live 7a02104f3d 이식). 중지는 작업 취소이지 C9 정지가 아니다.
+- 증거: test_learning_task_recovery_browser.py에 다른 저장이 busy인 동안 중지 요청이 나가는 시험 추가(원격 결과는 통합 브랜치 착지 기록).
+- gate 변화: 없음. 실물 수용은 별도다.
+
+## 2026-11-14 · uncommitted · fix(learning): subnav no longer starves the path bar, shorter pending tooltip
+- 변경: `app.css` 정답 하위 메뉴 열이 `max-content`/`minmax(0,1fr)`로 머리 줄을 먼저 확보한다(5번째 메뉴 "현장 실패 근거"가 800px에서 머리를 169px로 눌러 캔버스가 173px이 됐다), pixels.html 다음 대기 툴팁을 12자 이내로
+- 증거: test_pixel_workspace_browser(통합 병합 뒤 800px 실패 → 재시험), test_icon_gates
+- gate 변화: 없음

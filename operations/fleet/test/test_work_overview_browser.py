@@ -2,7 +2,7 @@
 
 import pytest
 
-from browser_harness import browser_tests_enabled
+from browser_harness import assert_layout_geometry, browser_tests_enabled
 from test_console_queue_inline_browser import API, ON_TOP, _open, _shot, site  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
@@ -16,6 +16,14 @@ def _settle(page, selector):
         if page.locator(selector).count():
             return
         page.clock.run_for(100)
+
+
+def _assert_layout_geometry_desktop_and_390(page, desktop=(1440, 900)):
+    """가드는 호출처의 데스크톱 크기 그대로, 그리고 390×844 모바일 시트에서도 돈다."""
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": desktop[0], "height": desktop[1]})
 
 
 @pytest.mark.parametrize('size', [(320, 568), (1440, 900)])
@@ -345,6 +353,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["전체 작업"]
             assert screens.get_by_role("link", name="새 작업", exact=True).get_attribute("href") == "/console?view=work&show=new"
             assert screens.get_by_role("link", name="학습", exact=True).get_attribute("href") == "/console/learning"
+            _assert_layout_geometry_desktop_and_390(page, desktop=size)
             seat, work = page.locator('.ui-subnav[data-area="work"]').bounding_box(), page.locator("#work-overview").bounding_box()
             if size[0] >= 1024:
                 assert seat["width"] == 232 and seat["x"] + seat["width"] <= work["x"], (seat, work)
@@ -659,7 +668,7 @@ def test_pending_seat_approves_through_the_existing_admit_route(site, size, case
                     assert "omx_wait" not in page.locator("#work-detail").inner_text()
                 else:
                     text = ("승인이 거절됐습니다 · CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER" if case == "refused"
-                            else "승인 결과 미확인 · 다시 보내지 않았습니다. 원장을 확인하세요.")
+                            else "승인 결과 미확인 · 원장 확인 필요")
                     expect(button).to_have_attribute("reason", text)
                     expect(button).to_be_disabled()
                     described = button.get_attribute("aria-describedby")

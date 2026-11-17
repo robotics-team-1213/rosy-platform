@@ -2,7 +2,7 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 로봇암 시범 검수</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/common/alert-center.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/omx.js"></script><link rel="stylesheet" href="/file-picker.css"><script type="module" src="/file-picker.js"></script></head>
 <body><a class="skip-link" href="#omx-main">로봇암 시범 검수로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
@@ -16,16 +16,16 @@
 <main id="omx-main" class="learning-main ui-task-page" tabindex="-1">
 <p class="learning-lede">과제에 맞는 팔 설정과 시연을 준비하고, 검수한 자료로 학습·평가를 이어갑니다.</p>
 <p id="workflow-context" hidden><a id="workflow-return" data-kind="quiet" class="ui-action-link">저장 후 학습 과제로 돌아가기</a></p>
-<ui-status id="omx-status" state="pending" role="status">불러오는 중입니다.</ui-status>
+<div id="page-alerts" class="alert-center-list" aria-label="알림"></div><ui-status id="omx-status" state="pending" role="status">불러오는 중입니다.</ui-status>
 <section class="learning-section learning-panel omx-journey-summary" aria-labelledby="journey-heading"><h2 id="journey-heading">지금 할 일</h2>
-<p id="journey-task-status">학습 과제 연결을 확인하고 있습니다.</p><p id="journey-context-status" role="alert"></p><ui-button id="journey-context-reset" kind="quiet" type="button" hidden>연결 선택 해제하고 다시 고르기</ui-button>
+<p id="journey-task-status">학습 과제 연결을 확인하고 있습니다.</p><p id="journey-context-status" role="status"></p><ui-button id="journey-context-reset" kind="quiet" type="button" hidden>연결 선택 해제하고 다시 고르기</ui-button>
 <p id="journey-goal">과제는 아직 선택하지 않았습니다.</p><p id="journey-data" class="quiet">학습 데이터를 확인하는 중입니다.</p>
 <label class="ui-field-label">이번 과제의 학습 데이터 <select id="dataset" class="ui-field" disabled><option value="">데이터를 불러오는 중</option></select></label>
 <p id="journey-reason" role="status">과제와 자료를 확인하는 중입니다.</p><div class="learning-next-actions"><a id="journey-next" class="ui-action-link" data-kind="quiet" href="#profile-panel">과제와 성공 조건 정하기</a><a id="journey-task-link" class="ui-action-link" data-kind="quiet" href="/learning/tasks/manage">학습 과제 선택·만들기</a></div>
 <section aria-labelledby="learning-entry-heading"><h3 id="learning-entry-heading">로그인·외부 자료 연결 상태</h3>
 <p id="learning-account-state" role="status">로그인과 계정 연결을 확인하는 중입니다.</p>
 <div class="learning-next-actions"><a data-kind="quiet" id="learning-account-link" class="ui-action-link" href="/accounts">로그인·Hugging Face 연결 확인</a><a data-kind="quiet" id="learning-task-link" class="ui-action-link" href="#profile-panel">과제·팔·카메라 설정</a></div>
-</section><ui-status id="center-status" state="pending" role="status">실행기 연결을 확인하는 중입니다.</ui-status><p id="center-read-error" role="alert" hidden></p><p id="center-error" role="alert" hidden></p></section>
+</section><ui-status id="center-status" state="pending" role="status">실행기 연결을 확인하는 중입니다.</ui-status><p id="center-read-error" role="status" hidden></p><p id="center-error" role="status" hidden></p></section>
 <div class="learning-workflow-layout"><nav aria-label="로봇암 학습 단계"><h2 class="ui-section-heading">과제 작업</h2>
 <ol id="omx-sections" class="ui-stage-track" data-line="learning">
 <li class="ui-stage" data-state="todo"><a class="ui-action-link" data-kind="quiet" href="#profile-panel">과제·팔·카메라</a></li>
@@ -44,7 +44,7 @@
 <p class="quiet">학습할 작업 팔을 등록합니다. 리더 팔은 시범·교정 입력 장치로 구분합니다. 입력 순서·단위·카메라 출처와 배치를 확인하세요. 장치 연결·교정·실행 승인은 별도이며, 협동 학습 결과도 실제 협동 동작의 검증이 필요합니다. 현재 native 자료 변환은 팔 1대·6관절을 지원합니다.</p>
 <label class="ui-field-label">저장 프로필 <select id="profile-record" class="ui-field" disabled></select></label>
 <ui-button kind="quiet" id="profiles-refresh" class="ui-field" type="button">프로필 목록 다시 확인</ui-button><ui-button kind="quiet" id="profile-clone" class="ui-field" type="button" disabled>선택 프로필 복사·새 버전 편집</ui-button>
-<ui-button kind="quiet" id="profile-new" class="ui-field" type="button">빈 프로필 작성</ui-button><ui-button kind="quiet" id="profile-import-dataset" class="ui-field" type="button" disabled>현재 데이터 프로필 가져오기</ui-button>
+<ui-status id="profile-action-cause" data-cause hidden></ui-status><ui-button kind="quiet" id="profile-new" class="ui-field" type="button">빈 프로필 작성</ui-button><ui-button kind="quiet" id="profile-import-dataset" class="ui-field" type="button" disabled reason="가져올 현재 데이터 프로필이 없습니다.">현재 데이터 프로필 가져오기</ui-button>
 <ui-button kind="quiet" id="profile-preset-single" type="button" hidden>작업 팔 1대·상단·손목 구성 초안</ui-button><ui-button kind="quiet" id="profile-preset-bimanual" type="button" hidden>작업 팔 2대·상단·각 손목 구성 초안</ui-button><a id="profile-recording-return" data-kind="quiet" class="ui-action-link" href="/learning/record" hidden>시연 녹화로 돌아가기</a>
 <label class="ui-field-label">작업대 장치 목록으로 초안 채우기 <span class="file-picker"><input id="profile-bench" class="ui-field" type="file" accept="application/json,.json" aria-describedby="profile-bench-filename"><span class="file-picker-button" aria-hidden="true">파일 선택</span><span id="profile-bench-filename" data-file-name aria-live="polite">선택한 파일 없음</span></span></label><p id="profile-bench-status" class="quiet" role="status">작업대 화면의 inventory.json(관찰 서비스가 맡은 팔, 카메라 설정)을 불러옵니다. 역할을 모르는 보드는 채우지 않고 알려 줍니다.</p>
 <p id="profiles-status" role="status"></p><details><summary>저장 설정의 식별자·검증 범위</summary><p id="profile-record-meta" class="quiet"></p></details>
@@ -152,7 +152,8 @@
 <div id="comparison" aria-live="polite"></div>
 <section aria-labelledby="followup-heading"><h3 id="followup-heading">평가에서 다음 시연 준비하기</h3><p>오프라인 오차를 보고 확인할 실패 상황과 추가할 시연을 적으세요. 이 계획은 사람의 메모이며 실물 시험·성공률·학습 정답이 아닙니다.</p><form id="followup-form" class="ui-form learning-form"><label class="ui-field-label">근거가 된 학습 결과 <select id="followup-run" class="ui-field" required disabled><option value="">평가 결과 확인 중</option></select></label><label class="ui-field-label">확인할 실패 상황 <textarea id="followup-observation" class="ui-field" maxlength="2000" required></textarea></label><label class="ui-field-label">다음에 수집할 시연·교정 <textarea id="followup-next" class="ui-field" maxlength="2000" required></textarea></label><ui-button id="followup-download" kind="quiet" type="submit" disabled>결과·자료 버전이 담긴 수집 계획 내려받기</ui-button><p id="followup-status" role="status"></p></form><div class="learning-next-actions"><a class="ui-action-link" data-kind="quiet" href="#dataset-section">실패한 시연 다시 검수</a><a class="ui-action-link" data-kind="quiet" href="#capture-section">작업대 수집·자료 전달 확인</a></div></section>
 <h3>같은 과제에서 확인할 항목</h3><p>작업 성공률 · 사람 개입 횟수와 시간 · 초기화 시간 · 낙하 횟수 · 작업 소요 시간을 함께 기록합니다. 팔별 독립 학습과 여러 팔 협동 학습은 따로 평가합니다.</p>
-<ui-empty><h3>실물 정책 적용은 아직 연결되지 않았습니다</h3><p>학습 결과와 버전을 확인한 뒤 장치 한계·제어 전환·중단·관측 연결을 검증해야 합니다. 이 화면의 학습 완료는 실제 팔 실행 승인을 의미하지 않습니다.</p></ui-empty></section>
+<ui-empty><h3>실물 정책 적용은 아직 연결되지 않았습니다</h3><p>학습 결과와 버전을 확인한 뒤 장치 한계·제어 전환·중단·관측 연결을 검증해야 합니다. 이 화면의 학습 완료는 실제 팔 실행 승인을 의미하지 않습니다.</p></ui-empty>
+<details id="real2sim-stage-guide"><summary>Real-to-Sim / Sim-to-Real 2단계 시뮬레이션 검증 및 정책 승인 연결</summary><p class="quiet">실물 셀 작업대(/console/cell)에서 분리된 오프라인 물리 상수 맞춤(SysID) 및 Stage 1(MuJoCo: 파지·재배치·적층 물리 검증) → Stage 2(Isaac Sim: 선박 크래들·다중 카메라·조명 핸드오프) 검증 단계는 이 학습·평가 흐름에서 관리합니다.</p><div class="learning-next-actions"><a class="ui-action-link" data-kind="quiet" href="/console/policy">Fleet 학습 정책 승인 (/console/policy)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_s">Cell S 실물 작업대 (arm_s)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_a">Cell A 실물 작업대 (arm_a)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_b">Cell B 실물 작업대 (arm_b)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_ab">Cell A/B 통합 작업대</a></div></details></section>
 <section id="hub-section" class="learning-section learning-panel" aria-labelledby="hub-heading"><h2 id="hub-heading">8 · Hugging Face 업로드</h2>
 <p class="quiet">끝난 학습 결과의 모델·평가 파일을 팀 HF 연결로 기존 비공개 모델 저장소에 올립니다. 먼저 미리보기로 올릴 파일과 해시를 확인하고, 업로드는 버튼을 누를 때만 일어납니다. 새 저장소 생성과 공개 전환은 하지 않습니다.</p>
 <form id="hub-form" class="ui-form learning-form"><label class="ui-field-label">학습 결과 <select id="hub-run" class="ui-field"></select></label>

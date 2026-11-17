@@ -1,5 +1,11 @@
 # console_source verification log
 
+2026-11-16: 알림 중복 제거 보강 — `syncCritRows`를 복원해 `.queues-panel`이 보이는 뷰에서만 큐 행의 토스트 중복을 막고, 패널이 숨은 뷰에서는 새 긴급 행을 "긴급 개입 알림" 토스트로 띄운다(해소 시 토스트 자동 닫힘 유지). 노드 시험 `alert-popup.test.mjs`는 (a) 패널 보임→토스트 0장 (b) 패널 숨김→긴급 토스트 1장 (c) 행 해소→토스트 닫힘을 고정한다. `test_robot_dock_panel_browser.py`의 "토스트 무중복" 어설션에 큐 패널 가시 전제를 명시하고, 빈 큐(패널 숨김)에서 긴급 행이 상태 폴링으로 도착하면 패널이 스스로 나타나고 토스트는 중복되지 않는다는 시험을 추가했다(패널 숨김 토스트 분기는 노드 시험이 고정 — `fillQueues`가 같은 render에서 패널을 다시 편다). 판단 문의(알림 탭 `#inbox-messages`·큐 긴급 행), 사건 기록(기록·근거 탭 `#incident-list`), 호출 오류(토스트 카드·벨 개수)는 팝오버 삭제 후에도 각자 표면에 있음을 확인.
+
+2026-11-16: 알림 중복 표면 제거 — 알림 항목은 `.queues-panel` 큐 패널 한 곳에만 그린다. 큐 행을 토스트로 심던 `syncCritRows` 경로를 `alert-popup.js`/`console.js`에서 삭제(일회성 명령·요청 오류 토스트와 1500ms 병합은 유지), `inbox.js`의 알림 센터 팝오버 항목 렌더를 제거하고 벨(`#fleet-inbox`)은 읽음 표시 후 큐 패널로 스크롤·포커스 이동. `#inbox-popover` 요소와 열기 단추 id는 시험 계약으로 유지. 노드 시험 `alert-popup.test.mjs`와 브라우저 시험 3건(dock·queue-inline·fleet-header)의 기대값을 "중복 없음"으로 갱신.
+
+2026-11-15: Item I — add per-task pause resume & two-person decision gate approval (`work/cell-resume-view.js`, wired into `work-view.js` & `assets.json`), and align `charge-bays-view.js` / `charge-bays-model.js` to `/api/fleet/pipeline/human-safety-gate/clear` without auto-resume or `auto_execute`; add Node unit & Chromium browser tests (`cell-resume-view.test.mjs`, `test_cell_resume_browser.py`) and sync dialog/import/grammar contracts.
+
 2026-11-14: keep the last ceiling-camera picture on the Fleet map when the feed drops — dimmed (opacity only), with a small bottom-left capture-time stamp (`카메라 HH:MM:SS · N초 전`) until the next live frame replaces it; keepFrame/staleStamp node tests cover the decision. Calibration/planning paths still use fresh frames only. Remote browser/design-gate verification follows.
 
 ## 2026-10-11 · 0702cdb15 · uiux: 선택 로봇의 배정·진행 작업면 (D-651)
@@ -1195,13 +1201,89 @@
 - 변경: console.js가 온라인 로봇이 있으면 오프라인 로봇을 명단에서 빼던 것을 모두 나열하도록 되돌리고 예외 우선 정렬만 남겼다. 지도 안내 문구를 "지도를 찍으면 확인 후 목표를 보냅니다"로 복원했다. console-goal.js는 기본 로봇 rosy_46·가짜 자세 대신 선택된 로봇만 쓰고, 목표 전송을 confirmedAction 확인 뒤 도로·직접 목표 중 하나로만 보낸다. roster-cards.js는 관측되지 않은 OMX 셀을 지어내지 않는다(fix/console-browser-mainred-1113의 f8223f2489·9b4d8d6e95 계열에서 최소 차용). roster.js는 작업 카드를 운영자가 고를 때만 열고(자동 열기·선택 시 목표 받기 자동 켜기 제거), 오프라인 로봇도 선택지에 넣고, 목표 지정 단추가 capabilities.navigation.goal_navigation을 따른다.
 - 증거: 원격 test/test_fleet_console_browser.py 전체 PASS(실패 0), 이전 실패 9개 포함. size_range main HEAD 통과, node --check 통과.
 - gate 변화: MAIN-RED 브라우저 9건 해소. 실물 주행·배포 검증은 후속 gate다.
+## 2026-11-13 · uncommitted · refactor(fleet-web): Account·내 계정 화면이 공용 잠금 범위·원인 줄을 쓴다
+
+- 변경: `account-page.js`의 지역 `perform()`·`busy`·전체 단추 잠금과 `reason` 속성 조작을 지우고 `createBusyScope($('accounts-main'))`·`createCauseLine`으로 바꿨다(헤더 테마 단추는 범위 밖, 되돌림은 잠글 때 상태 그대로). `edit()`는 자기가 되돌린 저장·역할 컨트롤을 `scope.release`로 알린다. 승인 불가·권한 요청 사유는 폼의 원인 줄 하나(`#account-cause`). `profile-page.js`의 `lock()`·`busy`를 지우고 저장·재조회는 `scope.run`, 포커스 재조회는 잠그지 않는 `scope.refresh`(진행 중 저장 클릭을 삼키지 않음).
+- 증거: 원격 Chromium `test_account_admin_browser`·`test_fleet_account_browser`·`test_account_access_requests_browser`·`test_account_deployment`·`test_site_account_image` 포함 210 passed, 1 skipped.
+- gate 변화: 없음. 세션 변경(ACCOUNT_CHANGED)은 내용을 숨기는 것으로 막고 단추를 따로 비활성으로 두지 않는다.
+
+## 2026-11-13 · uncommitted · fix(fleet-web): 계정 화면 확인·빈 상태·용어 (busy 부분 제외)
+- 변경: 비밀번호 초기화·세션 종료·앱 정지는 confirmIrreversible를 거치고, 요청 목록은 빈 상태와 읽기 실패를 가르며 다시 조회 단추를 둔다. 승인 불가는 상태 줄로 알리고, 라벨은 ui-field-label로 입력을 감싸며 '아이디'를 '로그인 ID'로 통일했다. 처리 중 잠금은 이 브랜치의 createBusyScope가 맡으므로 가져오지 않았다.
+- 증거: 원격 test_account_admin_browser 등은 이 브랜치 착지 기록을 따른다(초기화·세션 종료·앱 정지 시험에 확인 클릭 추가).
+- gate 변화: SOURCE 변경. 실제 Account 서버 수용은 별도다.
+
+## 2026-11-14 · uncommitted · uiux(accounts): 계정 화면을 표 + 편집 패널로 재배치
+- 변경: 띠(계정·대기 요청·통합 로그인, valueText), 요청·등록 계정 구획, 행 상태는 statusTag, 편집은 `ui-primary-detail`의 `ui-panel raised`(새 계정·편집·처리에서만 열림, 64rem 미만은 전체 화면+목록으로)로 바꿨다. 통합 로그인 안내는 미설정 때 상태 줄, 설정 뒤에는 등록된 앱 접힘 하나. 긴 안내 문단은 근거 줄 한 줄과 접힘 하나로 줄였다. 상시 안내 문장을 지웠다. Account 번들에 status-tag·value-text·core_ui_logic·readout-strip을 추가했다.
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) games 브라우저·표면, Fleet 계정 브라우저 5종, 절차·작업 페이지 구성, Account 이미지 묶음, shared/web 게이트(patterns·no_element_style·shared_controls·token·layout_canon·surface_titles·icon·design_scope) 322 passed 0 failed(HEAD 직전 코드 커밋 기준). 같은 묶음을 기준(968ceb3472)에서 돌리면 1 failed 2 errors(Account 묶음 누락 건).
+- gate 변화: 없음
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · uiux: Fleet 관제·작업·로봇 상세·지도를 ROSY UI 콘셉트 배치로 (D-1027)
+
+- 변경: 관제 지도를 ui-pane 한 줄 머리로 두고 칩·안내문은 옵션 접힘으로, 오른쪽 열은 예외·로봇 선택·선택 로봇(ui-panel raised)·수동 조종·로봇 행·발행 띠 순서로 바꿨다. 좁은 화면 순서는 현재 개입 → 지도 → 로봇 상세(D-1027, D-892 부분 대체). 게이지 빠른 패널과 지어낸 기본값(100%, 8.76 V, 6축 정상, 고정 좌표)을 지우고 모르는 값은 정보 없음으로 둔다. 연결 끊김은 warn이다. 작업 화면은 집계 띠·근거 한 줄·선택 때만 열리는 상세, 지도 화면은 읽기/편집 하위 내비와 조용한 성공 상태다. 확인 불가 직접 문구 5곳은 EVIDENCE_LABEL로, 기록 레일은 list·작업은 task로 옮겼다.
+- 증거: 원격 pytest 브라우저(Fleet 콘솔 묶음)와 shared/web 시험을 돌렸고 이 변경이 만든 실패는 고쳐 재실행한다(사전 실패: `_enrollment_api` NameError 3, role_surface_states의 rosy.test/assets 로드 5, web_dialog_contract account-page·calibration 핀 1, icon-gate·responsive tier의 robot·learning 위반). 전후 캡처 1440·390은 scratchpad uxconcept/shots-after/fleet-*.png.
+- gate 변화: 없음. 실물·현장·제품 전체 UI/UX 수용은 별도다. DESIGN.md 「조합 어휘」의 strip 사용처(index.html, roster.js) 추가는 공용 쪽 후속이다.
 
 ## 2026-11-14 · uncommitted · 관제 현장 지도 출발은 기체 자기 지도면 차로 운행으로
 - 변경: `console-goal.js` `commitWorldGoal`: 현장 지도 보기에서 로봇의 `map_id`가 활성 현장 지도가 아니면(실물 Pinky의 SLAM 지도) `/goal` 대신 찍은 장소로 `planTrip`·`startTrip`(카드 운행과 같은 호출). 장소 없음·Fleet 위치 미확정·활성 지도 없음·위치 정보 없음이면 확인 창 전에 이유를 보이고 보내지 않는다. 차로 운행은 `navigation.goal_navigation` 능력을 요구하지 않고, 대형 참여 로봇은 `"trip"` 기준으로 거절. 확인 창이 열린 동안 로봇 지도가 바뀌면 보내지 않는다.
 - 증거: 원격 브라우저 `test_console_card_trips_browser.py`·`test/test_fleet_console_browser.py` 81 통과. 검토 agy·GLM PASS(지적: 활성 지도 없음·확인 중 지도 변경·guide 없음 → 반영).
 - gate 변화: SOURCE. 현장 지도 클릭 자체의 브라우저 시험은 없음.
 
+## 2026-11-15 · uncommitted · ui(fleet): Fleet fix slice phase 1 (F03-F19, K5, createSelection, C14/C15 상세)
+
+- 변경: 연결 끊김 안내를 `createConnectionNotice`로 통일(F03)하고, 위치·신뢰도·미확인 값에 `EVIDENCE_LABEL.unavailable`과 유한수 가드를 적용했다(F04). 신호/작업 툴팁의 원시 영문 토큰을 한국어 라벨로 바꿨다(F08). 계정 관리 `fieldset` 평탄화·편집 버튼 `36px` 최소 높이를 맞추고(F10·F19), 작업 다중 문장 힌트를 한 절로 줄여 상세를 `<details>`로 옮겼다(F14). 섹션 제목 `h2` 크기를 `--text-body`로 맞췄다(F18). `#map-display-mode`·`#map-overlay-toggles`를 `createChoiceGroup`으로(F12·K5), 문맥 탭을 `createTabs`로 옮겼으며(C8), `#robot-choice`를 제거하고(F05) 로스터·상세·지도·3D 보기가 `createSelection` 저장소 하나와 `createRobotRow`·`createRobotView`를 공유하도록 바꿨다(F06·C14·C15, `#detail-refusal`·`#detail-now`·`#detail-localization`·`#detail-skill` 빈 슬롯 배치).
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 468 passed, 0 failed (`robot-detail.test.mjs` 추가 포함). `rosy_harness.py lint` 및 `size_range.py main HEAD` 확인. 브라우저는 원격 대기.
+- gate 변화: 없음. 브라우저 회귀·실물 수용은 후속 원격 실행에서 확인한다.
+
+## 2026-11-15 · uncommitted · ui(fleet): B1 AI 팔 제안 예외 큐 행과 제안 읽기 폴링
+
+- 변경: 신규 `work/arm-proposal-view.js`: dev 샘플 GET /api/fleet/arm-proposals를 읽는 `createArmProposalFeed`(라우트 없음 404는 poll-gate가 다음 로그인까지 닫는다)과 순수 판정 `armAttention`·`armProposalLine`·`selfApprovalReason`(제안자 requested_by·proposed_by 어느 쪽이든 본인이면 승인 불가). `queues.js`는 로봇을 막는 승인 대기만 `arm_proposal` 결정 행(펼치면 `/console?view=work&show=pending` 링크)으로, 측정 실패·정지·시간 초과만 `arm_skill` 행(정지·잠금 실패는 crit)으로 예외 큐에 더한다. `assets.json`에 `arm-proposal-view.js` 등록. `console.js`가 답을 `view.armProposals`에 나르고 5초 폴링한다.
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 479 passed, 0 failed(신규 `web/arm-proposal-view.test.mjs` 5건 포함). 브라우저 `test_arm_skill_browser.py` 예외 큐 1건 추가(원격 대기).
+- gate 변화: 없음. 실제 경로(C3)가 들어오면 같은 화면이 그 답을 읽는다.
+
+## 2026-11-15 · uncommitted · ui(fleet): B2 작업 큐 팔 제안 행과 제안 패널(잠긴 자기 승인·현재 digest 승인)
+
+- 변경: `work/arm-proposal-view.js`에 제안 패널 `createArmProposalPanel`(상태 → 핵심 값 → createEvidenceLine 근거 줄 → 승인+C1 원인 줄 → 후보 이유 접힘)을 더했다. 제안자(requested_by·proposed_by)가 본인이면 승인은 잠기고 잠금 태그가 붙는다("제안자는 자기 제안을 승인할 수 없습니다"). 승인은 확인 대화상자를 지나 현재 digest·세대만 실어 보내고, 409 PROPOSAL_CHANGED는 "새 제안을 다시 확인하세요"로 끝난다(자동 재전송 없음). `work/work-view.js`는 팔 제안 행을 작업 큐에 나란히 그리고(승인 대기 화면에서는 대기 제안만), 선택은 과업 상세 대신 제안 패널을 오른쪽 칸에 둔다. `index.html` 업무 종류에 '팔 제안'을 더했다. 거부·'새 제안으로 보내기' 단추는 실제 경로가 없어 만들지 않았다(샘플 엔진은 admit만 안다).
+- 증거: 같은 Node 묶음 479 passed, 0 failed. 브라우저 `test_arm_skill_browser.py` 잠긴 자기 승인·digest 승인 1건, `test_work_overview_browser.py` 패널·근거 줄·후보 접힘 1건 추가(원격 대기).
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · ui(fleet): B3 로봇 행 글자·#detail-skill·3D 상태 줄이 C20 표를 쓴다
+
+- 변경: `roster-presentation.js`의 `fleetRobotProfile`이 `robot.state.arm_skill`를 읽어 스킬 글자를 행 task 글자로, 이상일 때만 alarm 축 태그로 올린다(정상 진행은 태그 없음). `roster-cards.js`의 `#detail-skill`이 스킬 한 줄(수명주기·실행기·단계·가드 readout 띠)을 그리고 샘플 상태면 sampleTag를 붙인다. 3D 상세의 `createRobotView`에 `skill` 글자(실행기·단계)를 넘긴다 — 그림은 그대로(D-220, 제안 목표는 그리지 않는다). patterns.yaml C20·C21·C22를 built로 넘겼다(제품 시험 test_arm_skill_browser·test_work_overview가 실제로 건다).
+- 증거: 같은 Node 묶음 480 passed, 0 failed(`robot-detail.test.mjs` 스킬 시험 추가). 브라우저 9상태 시험 추가(원격 대기). patterns registry 검사에서 이 행들의 조건(adopter import·호출, product_test·hook)을 전부 확인했다.
+- gate 변화: 없음. patterns registry의 남은 적색(C14 행의 adopter 표기, DESIGN.md C19-C22 행의 상태 문구)은 이전 조각이 남긴 것이고 이번 범위 밖이다.
+
+
+## 2026-11-15 · uncommitted · ui(fleet): H Pinky 앞 카메라 타일(Vision 저주파 사진·keepFrame·staleStamp)
+
+- 변경: 새 `robot-camera-tile.js`가 `robot_id`에서 `pinky_<N>_front`를 유도하고 `/api/fleet/vision/sources` 확인·`POST /api/fleet/vision/lease`·프레임 조회를 수행한다. `map/camera-backdrop.js`의 `keepFrame`·`staleStamp`를 그대로 import해 "최신 사진 · n초 전"과 마지막 사진 유지, 미등록 시 "카메라 등록 안 됨"을 표시한다. `roster-cards.js`/`roster.js`는 로봇 상세의 정지 버튼 아래 보조 자리에 타일을 두고, `shared/robot-video.js`는 WebRTC 실패("영상 없음") 시 같은 사진 타일로 대체한다.
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 483 passed, 0 failed. 브라우저 시험 `test_robot_camera_tile_browser.py` 추가(원격 대기).
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · ui(fleet): E 위치 상태·대기 출발·위치 다시 찾기·후보 확정 채택(C19)
+
+- 변경: 새 `localization-view.js`가 `shared/web/localization-state.js`를 채택해 폴러(틱당 `/auto-locate` 1회 + 선택/후보/회전 로봇만 `/localization`, 503 시 중단)·`last_requester`·`wall_now_s`·120초 대기 출발(`queueStep`, 정지/비위치 거절/120초/핀 즉시 해제)·`#detail-refusal`·`#detail-localization`·지도 점선 후보 마커를 연결했다. `shared/trip-display.js`에 `SITE_POSE_UNKNOWN`을 추가했고 `roster-presentation.js` 행 위치 표·`card-trip.js` 포즈 거절 큐·`roster.js` 정지 연동·`console-goal.js` 핀 연동·`map-view.js` 후보 그리기를 이었다. `patterns.yaml` C19를 `built`로 넘겼다.
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 통과. 브라우저 시험 `test_localization_browser.py` 추가(원격 대기).
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · refactor(fleet): move robot detail modules into fleet/web/robot (D-766 unit)
+
+- 변경: D-766 10,000줄 상한(이전 `fleet/web` 10,344줄)을 풀기 위해 `test/architecture/size_units.txt`에 `fleet/web/robot` 단위를 추가하고 `roster.js`, `roster-cards.js`, `roster-presentation.js`, `roster.css`, `localization-view.js`, `localization-badge.js`, `step-nudge.js`, `robot-camera-tile.js`를 `applications/fleet/web/robot/`으로 옮겼다(`__init__.py` 포함 2,482줄, 남은 `fleet/web` 7,863줄). `assets.json`의 파일 경로만 `robot/`으로 바꾸고 `/console/assets/<basename>` 공개 URL과 `index.html` 태그는 유지했다. `AGENTS.md`, `patterns.yaml`, `feature_matrix.json`, Node/Python 시험 경로와 `test_operator_copy.py` 스캔 대상을 갱신했다.
+- 증거: `node --import ./operations/fleet/test/web/register-console-assets.mjs --test operations/fleet/test/web/*.test.mjs` 487 passed, 0 failed; `rosy_harness.py lint` 0 errors; `test_module_structure.py`에서 `fleet/web`·`fleet/web/robot` 크기/단위 검사 통과(기존 `main`의 `review_app_web/app.js` 607줄만 남음); `test_size_tiers.py`, `test_document_placement.py`, `test_console_queues_contract.py`, `test_ui_ownership.py`, `test_task_contract_docs.py` 34 passed; `asset_registry.py` 153 assets/9 pages 로드 확인.
+- gate 변화: 없음. 원격 브라우저/전체 pytest는 미실행.
+
+## 2026-11-15 · uncommitted · ui(fleet): C23/C24 로봇 도크·패널 채택과 C14 작업 개요 이동
+
+- 변경: `robot-dock-binding.js`·`robot-panel-adapters.js`를 연결해 `#robot-dock-mount`(Pinky + OMX arm_s/arm_a/arm_b 도크)와 `#robot-panel-mount`(상태·카메라·명령·설정, AI 도우미 상호 배타, Esc 핀 우선 해제)를 구성했다. `view.focusRobot`을 `view.robotSelection`으로 치환하고 `#focus-robot-choice`·`#robot-workspace`를 제거했으며 C14 `#roster`를 `#work-overview`로 옮기고 우측 `#context-status`에는 `#roster-summary`를 두었다. `robot-panel-adapters.js`에서 오프라인 로봇의 지연 오판 및 `createCellFrameFeed` 호출을 바로잡고, `console-refresh.js` 포커스를 도크/패널 우선으로 고쳤다. `operations/fleet/test/`와 `test/` 브라우저·Node·계약 시험을 이관하고 `test_robot_dock_panel_browser.py`를 추가했다.
+- 증거: Node `shared/web/test/*.test.mjs` 및 `operations/fleet/test/web/*.test.mjs`(494 passed), 계약 시험(`test_patterns_registry.py`, `test_console_queues_contract.py`, `test_document_imports.py`, `test_ui_contract_guards.py`, `test_web_dialog_contract.py`) 및 원격 `ROSY_RUN_BROWSER_TESTS=1` 확인 대기/완료.
+- gate 변화: C23·C24 built 전환.
+- 교훈: 없음
 ## 2026-11-16 · uncommitted · fix(console): 활성 지도 버전 변경 시 카메라 추적 보정 동시 갱신
 - 변경: `map/map-polling.js` — `refreshTraffic()`에서 `traffic.map_version` 변경으로 `/api/fleet/site-map/active`를 다시 읽을 때 `refreshCalibrations()`도 함께 호출해, 30초 폴링 지연 없이 새 지도 오버레이와 카메라 정사 보정이 같은 주기에 맞물리도록 수정했다.
 - 증거: `node --test operations/fleet/test/web/map-view.test.mjs` 및 원격 pytest 통과.
 - gate 변화: 없음.
+## 2026-11-17 · uncommitted · revert(console): AI 팔 제안 보기를 이 착지에서 뺀다
+- 변경: `work/arm-proposal-view.js`와 연결(`console.js`의 armProposals, `index.html`의 팔 제안 필터 항목, `assets.json`, `queues.js` 예외 큐 행, `work-view.js` 제안 패널·띠 합산, `work.css`), 노드·브라우저 시험, 가져오기 허용 목록·대화상자 계약 항목을 제거했다. 사유: C3 실제 경로 없음, feat/arm-proposal-view로 보관. 운영 화면이 없는 경로(`GET /api/fleet/arm-proposals`)를 부르면 feature_matrix가 막는다. 로봇 행 스킬 글자(C20)·`#detail-skill`은 그대로다. 패턴 C21·C22는 제품 시험이 걸던 채택 화면이 제안 보기뿐이라 planned로 되돌렸다.
+- 증거: 노드 547 passed, 0 failed. 원격 시험은 착지 대기.
+- gate 변화: C21·C22 built -> planned(채택 화면이 제안 보기뿐이었다).
+- 교훈: 없음

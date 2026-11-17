@@ -24,6 +24,12 @@ import dev_server  # noqa: E402
 TABLET_VIEWPORTS = [(2000, 1200), (1200, 2000)]
 
 
+def _tools(page):
+    """종료·정지·설정·영상 보기는 도구 판 안에 있다. 닫혀 있으면 연다."""
+    if page.locator("[data-drive-tools-panel]").is_hidden():
+        page.locator("[data-drive-tools]").click()
+
+
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_camera_low_light_warning_keeps_raw_preview_and_clears_on_recovery(tablet_page):
     base_url, page, errors = tablet_page
@@ -116,6 +122,7 @@ def test_pilot_browser_confirmation_records_and_saves_paired_variants(tablet_pag
     assert any(name.endswith('-raw.webm') for name in downloads)
     assert any(name.endswith('-annotated.webm') for name in downloads)
     assert page.locator('[data-evidence-save]').is_enabled()
+    _tools(page)
     page.locator('[data-drive-exit]').click()
     assert errors == [], errors
 
@@ -294,7 +301,7 @@ def test_input_preview_stays_live_after_settings_change_and_escape_closes(tablet
       mountInputs(root, {onClose: () => root.remove()});
     }""")
     page.wait_for_function("document.querySelector('[data-input-preview]').textContent.includes('0.10')")
-    page.get_by_role("button", name="빠름", exact=True).click()
+    page.locator("label:has(input[value=expo])").click()   # curve is a K1 radio group now
     page.evaluate("window.padAxis = 0.8")
     page.wait_for_function("document.querySelector('[data-input-preview]').textContent.includes('0.80')")
     page.get_by_role("button", name="닫기", exact=True).focus()
@@ -373,7 +380,7 @@ def test_camera_can_be_seen_in_emergency_without_engaging_motion(tablet_page, wi
             page.screenshot(path=str(shots / f"pilot-emergency-camera-{width}x{height}.png"))
         assert dev_server.STATE["mode"] == "EMERGENCY"
         assert len(dev_server.MODE_LOG) == before
-        page.click("[data-drive-fill]")
+        page.click("[data-drive-fill]")  # the read-only camera view keeps its own fit/fill buttons
         page.click("[data-drive-fit]")
         page.click("[data-camera-back]")
         page.wait_for_selector("[data-camera-preview]")
@@ -381,14 +388,6 @@ def test_camera_can_be_seen_in_emergency_without_engaging_motion(tablet_page, wi
         assert errors == []
     finally:
         dev_server.STATE["mode"] = previous
-
-
-@pytest.fixture(autouse=True)
-def _default_controls():
-    """D-411 B: every test starts and ends with the default rosy.controls/1 descriptor."""
-    dev_server.CONTROLS.update(items=[dev_server._BASE_CONTROL], omit=False)
-    yield
-    dev_server.CONTROLS.update(items=[dev_server._BASE_CONTROL], omit=False)
 
 
 @pytest.mark.skipif(not browser_tests_enabled(),
@@ -624,11 +623,15 @@ def test_connect_app_bar_is_one_row_from_64rem_and_keeps_the_two_row_stop_below(
     assert told["notice"]["width"] > 0, got
     if width < 1024:
         mark, name_x = (20, 56) if width < 480 else (79, 115)
-        assert quiet["bar"]["height"] == 103 and abs(told["bar"]["height"] - 120) <= 1, got
-        assert _near(quiet["stop"], width - 106, 16, 82, 74), got
-        assert _near(quiet["map"], 76, 42, 82, 48) and _near(quiet["tag"], 24, 58, 44, 32), got
+        # 운용 지도 is locked with its reason until an operator session is confirmed (D-359 5.3), so it is wider and
+        # taller than the bare 82x48 button: the rows below hang from its bottom edge instead of fixed numbers.
+        mp = quiet["map"]
+        assert mp["x"] == 76 and abs(mp["y"] - 42) <= 1 and mp["width"] >= 82 and mp["height"] >= 48, got
+        assert abs(quiet["bar"]["height"] - (mp["bottom"] + 13)) <= 1 and abs(told["bar"]["height"] - quiet["bar"]["height"] - 17) <= 1, got
+        assert _near(quiet["stop"], width - 106, 16, 82, mp["bottom"] - 16), got
+        assert _near(quiet["tag"], 24, mp["bottom"] - 32, 44, 32), got
         assert _near(quiet["name"], name_x, 20, 61, 14) and abs(quiet["mark"]["width"] - mark) <= 1, got
-        assert _near(told["notice"], 24, 94, width - 48, 17), got
+        assert _near(told["notice"], 24, quiet["bar"]["height"] - 9, width - 48, 17), got
     else:
         assert quiet["bar"]["height"] == token and told["bar"]["height"] == token, got
         row = [told[key] for key in ("mark", "name", "notice", "tag", "map", "stop")]
@@ -636,7 +639,7 @@ def test_connect_app_bar_is_one_row_from_64rem_and_keeps_the_two_row_stop_below(
         assert all(left["right"] <= right["x"] + 1 for left, right in zip(row, row[1:])), got
         assert abs(quiet["stop"]["x"] - (width - 106)) <= 1 and quiet["stop"]["right"] <= width, got
         assert quiet["stop"]["width"] >= 81.89 and quiet["stop"]["height"] >= 48, got  # 81.890625x48 before
-        assert quiet["map"]["width"] >= 81.89 and quiet["map"]["height"] >= 48 and _near(quiet["tag"], width - 256, 16, 44, 32), got
+        assert quiet["map"]["width"] >= 81.89 and quiet["map"]["height"] >= 48 and _near(quiet["tag"], quiet["tag"]["x"], 16, 44, 32) and 0 <= quiet["map"]["x"] - quiet["tag"]["right"] <= 16, got
     assert errors == [], errors
 
 
@@ -955,7 +958,7 @@ def test_drive_handoff_opens_real_console_map_in_same_tab(base_url, viewport, tm
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert page.locator("#shell-estop").is_visible()
             spacing = page.evaluate("""() => {
-              const layers = document.querySelector('[aria-label="지도 레이어"]').getBoundingClientRect();
+              const layers = document.querySelector('#console-map-layers').getBoundingClientRect();
               const setup = document.querySelector('.surface-link[href="/setup"]').getBoundingClientRect();
               const status = document.querySelector('#map-status').getBoundingClientRect();
               return {layersBottom: layers.bottom, setupTop: setup.top,
@@ -1002,9 +1005,9 @@ def test_drive_hud_does_not_invent_zero_before_velocity_readback(base_url):
             page.route("**/api/v1/robot/state", lambda route: route.fulfill(status=503, json={}))
             page.route_web_socket("**/ws/state", lambda route: route.on_message(lambda raw: None))
             _enter_drive(page, base_url)
-            assert page.locator("[data-drive-fact=speed]").inner_text() == "—"
+            assert page.locator("[data-drive-fact=speed]").inner_text() == "정보 없음"
             assert page.locator("[data-drive-fact=turn]").inner_text() != "0°/s"
-            assert page.locator("[data-drive-fact=battery]").inner_text() == "—"
+            assert page.locator("[data-drive-fact=battery]").inner_text() == "정보 없음"
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         finally:
             browser.close()
@@ -1036,7 +1039,7 @@ def test_drive_hud_clears_readback_when_open_socket_goes_silent_and_rest_fails(b
             page.wait_for_function("document.querySelector('[data-drive-fact=speed]').textContent === '0.12'")
             page.wait_for_function("document.querySelector('[data-drive-fact=latency]').textContent.startsWith('조작 응답 ')")
             failing["value"] = failure
-            page.wait_for_function("document.querySelector('[data-drive-fact=speed]').textContent === '—'", timeout=5000)
+            page.wait_for_function("document.querySelector('[data-drive-fact=speed]').textContent === '정보 없음'", timeout=5000)
             assert page.locator("[data-drive-fact=battery]").inner_text() != "81%"
             assert page.locator("[data-drive-fact=link]").inner_text() == "상태 수신 없음"
             assert page.locator("ui-topbar [data-estop]").is_visible()
@@ -1088,7 +1091,7 @@ def test_drive_telemetry_evidence_at_declared_widths(base_url, state):
                     assert "지연 · 3초 전" in turn and "지연 · 3초 전" in battery
                 else:
                     label = "연결 끊김" if state == "disconnected" else "정보 없음"
-                    assert speed.inner_text() == "—"
+                    assert speed.inner_text() == "정보 없음"
                     assert label in turn and label in battery
                 assert page.locator("ui-topbar [data-estop]").is_visible()
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -1154,7 +1157,7 @@ def test_drive_screen_fullscreen_with_camera_and_controls(tablet_page):
     assert layout["stick"]["w"] > 100, "스틱이 너무 작다"
     assert layout["pedals"]["w"] > 50 and layout["pivots"]["w"] > 50
     assert layout["hscroll"] is False
-    assert page.locator("[data-drive-preset-row] ui-button").count() == 3
+    assert page.locator("[data-drive-preset-row] input").count() == 3
     # 상한은 CORE 한도(0.15 m/s) × 기본 프리셋 중(0.7)
     assert "0.10 m/s" in page.inner_text("[data-drive-fact=cap]")
     page.wait_for_selector("[data-drive-frame][src]", timeout=10_000)
@@ -1210,7 +1213,7 @@ def test_stick_right_turns_clockwise_pivot_holds_position_and_release_zeroes(tab
 def test_speed_preset_and_fine_change_the_cap(tablet_page):
     base_url, page, errors = tablet_page
     _enter_drive(page, base_url)
-    page.click("[data-drive-preset-row] [data-preset=high]")
+    page.click("[data-drive-preset-row] label:has(input[value=high])")
     assert "0.15 m/s" in page.inner_text("[data-drive-fact=cap]")
     page.click("[data-drive-fine]")
     assert "0.04 m/s" in page.inner_text("[data-drive-fact=cap]")   # 0.15 × 0.3
@@ -1228,6 +1231,9 @@ def test_key_released_while_an_input_has_focus_still_stops(tablet_page):
     log = f"{base_url}/__test__/teleop"
     _click_tool(page, "[data-drive-inputs]")
     page.wait_for_selector("[data-inputs-panel] input[type=range]")
+    # Opening the panel focuses its first control, and drive keys are ignored inside form controls (2026-11-14
+    # decision), so start the press from the page body.
+    page.evaluate("document.activeElement?.blur()")
     page.keyboard.down("KeyW")
     page.wait_for_timeout(400)
     page.focus("[data-inputs-panel] input[type=range]")

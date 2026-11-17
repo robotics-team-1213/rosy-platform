@@ -54,6 +54,7 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                     expect(page.locator('#account-setup')).to_be_hidden()
                     return
                 expect(page.locator("#account-content")).to_be_visible()
+                page.locator("#account-new").click()  # the editor opens only on an explicit action
                 page.locator("#account-name").fill("bob")
                 page.locator("#account-principal").fill("bob")
                 page.locator("#account-password").fill("bob!")
@@ -86,6 +87,7 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 page.get_by_role("button", name="bob 편집", exact=True).click()
                 page.locator("#account-reset-password").fill("bob!")
                 page.locator("#account-reset").click()
+                page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
                 expect(page.locator("#account-status")).to_contain_text("처리했습니다")
                 bob_page = browser.new_page()
                 try:
@@ -102,8 +104,12 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                         expect(bob_page.locator('#profile-grant-list')).to_contain_text(label)
                 finally:
                     bob_page.close()
+                page.locator("#account-new").click()
+                page.locator("#account-name").fill("draft-kept")
                 page.locator("#account-reload").click()
-                expect(page.locator("#account-heading")).to_have_text("새 계정")
+                expect(page.locator("#account-status")).to_contain_text("작성 중인 내용은 그대로")
+                expect(page.locator("#account-name")).to_have_value("draft-kept")
+                page.locator("#account-close").click()  # on a phone the editor covers the list
                 page.get_by_role("button", name="bob 편집", exact=True).click()
                 # An existing account keeps its hand-tuned grants unless the admin confirms the role bundle.
                 page.locator("#account-role").select_option("viewer")
@@ -112,6 +118,7 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 expect(page.locator("#account-role")).to_have_value("operator")
                 expect(page.get_by_label('Vault 조회', exact=True)).to_be_checked()
                 page.locator("#account-revoke").click()
+                page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
                 expect(page.locator("#account-heading")).to_have_text("새 계정")
                 page.get_by_role("button", name="bob 편집", exact=True).click()
                 value = next(c["value"] for c in page.context.cookies() if c["name"] == "rosy_fleet_session")
@@ -121,7 +128,8 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 page.locator("#account-save").click()
                 expect(page.locator("#account-status")).to_contain_text("다른 관리자가 변경했습니다")
                 page.locator("#account-reload").click()
-                expect(page.locator("#account-heading")).to_have_text("새 계정")
+                expect(page.locator("#account-status")).to_contain_text("작성 중인 내용은 그대로")
+                page.locator("#account-close").click()
                 page.get_by_role("button", name="bob 편집", exact=True).click()
                 page.locator("#account-enabled").uncheck()
                 page.locator("#account-save").click()
@@ -137,6 +145,66 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 page.goto(origin + "/console")
                 expect(page.locator("#fleet-accounts")).to_have_js_property("hidden", False)
+            finally:
+                browser.close()
+    finally:
+        server.should_exit = True
+        worker.join(timeout=20)
+        listener.close()
+        assert not worker.is_alive()
+
+
+def test_reload_while_busy_keeps_save_and_role_locked_until_the_run_ends(tmp_path):
+    """C1/C2 on the real account page: load() resets the form inside a busy run, and nothing becomes usable early."""
+    from playwright.sync_api import expect, sync_playwright
+    base, tasks = _app(tmp_path)
+    app = create_app(base.state.console, task_service=tasks, site_users={},
+                     site_logins=_accounts(role='policy-admin'),
+                     web_common=default_web_common(), start_task_dispatcher=False)
+    app.state.password_sessions.bootstrap_accounts("alice", "test-site")
+    listener = safe_listener()
+    origin = f"http://localhost:{listener.getsockname()[1]}"
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
+    worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+    worker.start()
+    try:
+        deadline = time.monotonic() + 20
+        while not server.started and worker.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert server.started
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                page = browser.new_page(viewport={"width": 1100, "height": 844})
+                page.goto(origin + "/console/login?return=%2Fconsole%2Faccounts")
+                page.locator("[data-login=login]").fill("alice")
+                page.locator("[data-login=password]").fill("correct horse")
+                page.locator("[data-login=submit]").click()
+                expect(page.locator("#account-content")).to_be_visible()
+                page.locator("#account-new").click()
+                expect(page.locator("#account-save")).to_be_enabled()
+                # Hold the list read so the run stays busy while load() has not yet reset the form.
+                page.evaluate("""() => { const real = window.fetch; window.fetch = (url, init) =>
+                  String(url).includes('/accounts') && !(init && init.method && init.method !== 'GET')
+                    ? new Promise(done => setTimeout(done, 1500)).then(() => real(url, init)) : real(url, init); }""")
+                page.locator("#account-reload").click()
+                expect(page.locator("#accounts-main")).to_have_attribute("aria-busy", "true")
+                expect(page.locator("#account-save")).to_be_disabled()
+                expect(page.locator("#account-role")).to_be_disabled()
+                expect(page.locator("#account-reload")).to_be_disabled()
+                # text fields are read-only for the run, so typing now cannot change (and load() cannot lose) them
+                before = page.locator("#account-name").input_value()
+                page.locator("#account-name").click()
+                page.keyboard.type("zz")
+                assert page.locator("#account-name").input_value() == before
+                expect(page.locator("#account-name")).to_have_js_property("readOnly", True)
+                expect(page.locator("#accounts-main")).not_to_have_attribute("aria-busy", "true", timeout=15000)
+                # edit() ran inside the run; its target (enabled, no cause) is applied only now.
+                expect(page.locator("#account-save")).to_be_enabled()
+                expect(page.locator("#account-role")).to_be_enabled()
+                expect(page.locator("#account-reload")).to_be_enabled()
+                expect(page.locator("#account-cause")).to_be_hidden()
+                expect(page.locator("#account-name")).to_have_js_property("readOnly", False)  # restored exactly
             finally:
                 browser.close()
     finally:
@@ -174,6 +242,7 @@ def test_manager_registers_and_stops_an_app_in_the_page(tmp_path):
                 page.locator("[data-login=password]").fill("correct horse")
                 page.locator("[data-login=submit]").click()
                 expect(page.locator("#account-clients")).to_contain_text("pilot")
+                page.get_by_text("등록된 앱", exact=True).click()  # the registered-app list is one fold once configured
                 expect(page.locator("#client-form")).to_be_visible()
                 page.locator("#client-id").fill("monitoring")
                 page.locator("#client-redirects").fill(CALLBACK)
@@ -183,6 +252,7 @@ def test_manager_registers_and_stops_an_app_in_the_page(tmp_path):
                 expect(row).to_contain_text("사용 중")
                 assert "monitoring" in authority.clients
                 row.locator("ui-button").click()
+                page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
                 expect(row).to_contain_text("정지됨")
                 assert "monitoring" not in authority.clients
                 # A refused registration keeps the list and what was typed, and Enter does not leave the page.

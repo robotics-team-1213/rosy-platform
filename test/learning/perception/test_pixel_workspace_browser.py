@@ -58,7 +58,7 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
             page.screenshot(path=str(target / f'pixel-workspace-{theme}-{width}.png'), full_page=True)
             (target / f'pixel-workspace-{theme}-{width}.json').write_text(json.dumps(dict(
                 state='pixel workspace layout',theme=theme,renderedTheme=page.locator('html').get_attribute('data-theme'),
-                viewport=page.viewport_size,selected_class=page.locator('#pixel-class').input_value(),
+                viewport=page.viewport_size,selected_class=page.locator('#pixel-class input:checked').input_value(),
                 activeElement=page.evaluate('document.activeElement?.id'),geometry=geometry,
                 filenames=[f'pixel-workspace-{theme}-{width}-viewport.png',f'pixel-workspace-{theme}-{width}.png']),
                 ensure_ascii=False,indent=2),encoding='utf-8')
@@ -80,10 +80,10 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
             assert geometry['tools']['bottom'] <= geometry['canvas']['top'] + 1
             assert geometry['decision']['top'] >= geometry['canvas']['bottom'] - 1
             assert geometry['canvas']['height'] >= 200
-        page.locator('#pixel-class').focus()
-        expect(page.locator('#pixel-class')).to_be_focused()
+        page.locator('#pixel-class input:checked').focus()
+        expect(page.locator('#pixel-class input:checked')).to_be_focused()
         page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
-        focused = page.locator('#pixel-class').bounding_box()
+        focused = page.locator('#pixel-class label:has(input:checked)').bounding_box()
         assert 0 <= focused['y'] < geometry['height']
         assert focused['y'] + focused['height'] <= geometry['height'] + 1
 
@@ -162,3 +162,26 @@ def test_completion_fill_failure_does_not_send_approval(browser_workspace):
     assert review_masks.get(store, 0)['version'] == 1
     assert review_masks.get(store, 0)['status'] == 'pending'
     assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before)
+
+
+@pytest.mark.parametrize('width', [1440, 1262, 1024])
+def test_pixel_toolbar_options_and_canvas_do_not_overlap(browser_workspace, width):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+    rects = page.evaluate('''() => {
+      const box = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
+      return {
+        rail: box('#pixel-tool-rail'),
+        options: box('#pixel-tool-options'),
+        canvas: box('#pixel-canvas'),
+      };
+    }''')
+
+    def intersects(a, b):
+        return a['left'] < b['right'] and a['right'] > b['left'] and a['top'] < b['bottom'] and a['bottom'] > b['top']
+
+    assert not intersects(rects['rail'], rects['options'])
+    assert not intersects(rects['rail'], rects['canvas'])
+    assert not intersects(rects['options'], rects['canvas'])

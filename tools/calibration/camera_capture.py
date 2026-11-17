@@ -63,7 +63,7 @@ class StationaryCapture:
 
 
 def capture():
-    for line in Path('/etc/rosy/runtime.env').read_text().splitlines():
+    for line in Path('/etc/rosy/runtime.env').read_text(encoding='utf-8').splitlines():
         if '=' in line:
             key, value = line.split('=', 1)
             if key in ('ROS_DOMAIN_ID', 'RMW_IMPLEMENTATION', 'CYCLONEDDS_URI', 'ROS_LOCALHOST_ONLY'):
@@ -77,7 +77,7 @@ def capture():
     from control.calibration_camera import run_camera_extrinsic
 
     share = Path('/opt/rosy/current/install/share/pinky_pro/config')
-    geometry = yaml.safe_load((share/'geometry.yaml').read_text())
+    geometry = yaml.safe_load((share/'geometry.yaml').read_text(encoding='utf-8'))
     lidar = geometry['lidar']
     rclpy.init()
     node = rclpy.create_node('camera_autocalib_readonly_' + str(os.getpid()))

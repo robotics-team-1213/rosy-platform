@@ -1,4 +1,5 @@
 import '/common/account-profile.js';
+import { mountAuthTabs } from './auth-tabs.js';
 // Load only the route's owner. A full navigation separates operational listeners.
 function compatibilityRoute() {
   const modes = new URLSearchParams(window.location.search).getAll("view");
@@ -15,6 +16,7 @@ const legacy = document.getElementById("compatibility-shell");
 const drawer = document.getElementById("auth-drawer");
 // Neither route may let an unbound native credential form submit into a URL.
 drawer.inert = true;
+mountAuthTabs(drawer);
 // Keep controls unavailable until their operational listeners are bound.
 legacy.inert = true;
 window.addEventListener("hashchange", () => {

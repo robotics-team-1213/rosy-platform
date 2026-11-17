@@ -147,12 +147,13 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   scope.onDispose(() => {
     cancelFrameExpiry(); pausePreview(); busy = false; refreshTimer?.(); refreshTimer = null;
     lease = null; leaseExpiresAt = 0; draggingPointerId = null;
+    image.removeAttribute?.("src");
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = null;
   });
   function showState(label, kind = "neutral", detail = label) {
     cancelFrameExpiry(); status.textContent = label; status.setAttribute("status", kind); message.textContent = detail;
-    image.hidden = true; stage.hidden = true; cornerOverlay.toggleAttribute("hidden", true); frame.dataset.state = kind;
+    image.hidden = true; image.removeAttribute?.("src"); stage.hidden = true; cornerOverlay.toggleAttribute("hidden", true); frame.dataset.state = kind;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = null;
     for (const listener of frameListeners) listener({ state: "stale", source: select.value });
@@ -259,11 +260,16 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
       selectedSource ||= result.sources[0] || "";
       sourceAvailable = result.sources.includes(selectedSource);
       const names = sourceAvailable || !selectedSource ? result.sources : [selectedSource, ...result.sources];
-      select.replaceChildren(...names.map((source) => {
+      const options = names.length ? names.map((source) => {
         const option = document.createElement("option");
         option.value = source; option.textContent = source === selectedSource && !sourceAvailable ? `${source} · 연결 끊김` : source;
         return option;
-      }));
+      }) : [(() => {
+        const option = document.createElement("option");
+        option.value = ""; option.textContent = "카메라 선택 (연결 대기)";
+        return option;
+      })()];
+      select.replaceChildren(...options);
       select.value = selectedSource; select.disabled = result.sources.length === 0;
       if (previous !== selectedSource) {
         currentLens = null; currentLensInfo = null; planeLease = null; proposalCorners = null;

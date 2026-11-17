@@ -1,7 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
-import {createExtractionReview} from '/console/assets/extraction-review.js';
+
+// /console/assets 절대 경로 import 를 단독 node --test 에서도 풀도록 로더를 먼저 건다.
+const { register } = await import('node:module');
+register('./resolve-console-assets.mjs', import.meta.url);
+const {createExtractionReview} = await import('/console/assets/extraction-review.js');
 globalThis.crypto ??= webcrypto;
 
 const hash = 'b'.repeat(64), asset = 'a'.repeat(64), extraction = 'c'.repeat(64);

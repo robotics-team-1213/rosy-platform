@@ -1,5 +1,7 @@
 import { createFieldMap } from "/assets/map.js";
+import { createMapChoices } from "/assets/map-choices.js";
 import { EVIDENCE_LABEL, HeadlessState, NAVIGATION_LABEL, enumLabel, evidenceAgeText } from "/common/core_ui_logic.js";
+import { announce, watchStatus } from "/assets/dom.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -7,21 +9,15 @@ export function mount(root, ctx) {
   const head = el("ui-head", "", "지도 및 위치");
   const status = el("ui-status", "", "지도를 불러오는 중…"); status.setAttribute("state", "pending");
   const readinessStatus = el("ui-status", "", "로봇 상태·내비게이션 기능·실행 모드를 확인하는 중입니다.");
-  readinessStatus.setAttribute("role", "status"); readinessStatus.setAttribute("aria-live", "polite");
-  const layers = el("ui-actions", "surface-actions map-layer-actions"); layers.setAttribute("aria-label", "지도 레이어");
-  for (const [id, label] of [["occupancy", "점유 지도"], ["costmap", "비용 지도"], ["path", "경로"]]) {
-    const button = el("ui-button", "", label); button.setAttribute("kind", "segment"); button.type = "button"; button.dataset.mapLayer = id; layers.append(button);
-  }
-  const clicks = el("ui-actions", "surface-actions map-click-actions"); clicks.setAttribute("aria-label", "지도 작업");
-  for (const [id, label] of [["pose", "초기 위치 설정"], ["goal", "주행 목표 설정"]]) {
-    const button = el("ui-button", "", label); button.setAttribute("kind", "segment"); button.type = "button"; button.dataset.mapClick = id; clicks.append(button);
-  }
+  // K5 layers + K1 click action: one definition shared with the compat console (map-choices.js).
+  const choices = createMapChoices({id: "console-map", labels: {layers: ["점유 지도", "비용 지도", "경로"], clicks: ["초기 위치 설정", "주행 목표 설정"]}});
+  const layers = choices.layers.element, clicks = choices.clicks.element;
+  layers.classList.add("map-layer-actions"); clicks.classList.add("map-click-actions");
+  for (const group of [layers, clicks]) group.querySelector(".choice-label").classList.add("sr-only");   // keeps the map tall (>= 300 px at 320 px wide); the names stay for assistive tech
   const clickReason = el("p", "surface-message", "내비게이션 지원을 확인하는 중입니다.");
   clickReason.id = "map-action-reason";
   clickReason.setAttribute("role", "note");
-  for (const button of clicks.querySelectorAll("[data-map-click]")) {
-    button.setAttribute("aria-describedby", clickReason.id);
-  }
+  clicks.setAttribute("aria-describedby", clickReason.id);
   const empty = el("ui-empty", "", "지도 데이터를 불러오는 중입니다.");
   empty.hidden = true;
   const canvas = el("canvas", "surface-map-canvas"); canvas.setAttribute("aria-label", "점유 지도. 화살표 키로 십자선을 이동하고 Enter 키로 위치를 선택합니다.");
@@ -29,9 +25,6 @@ export function mount(root, ctx) {
   targetReadout.hidden = true;
   const targetLabel = el("dt", "", "선택 좌표");
   const targetValue = el("dd", "", "지도를 키보드로 선택하세요.");
-  targetValue.setAttribute("role", "status");
-  targetValue.setAttribute("aria-live", "polite");
-  targetValue.setAttribute("aria-atomic", "true");
   targetReadout.append(targetLabel, targetValue);
   const mapStatus = el("ui-status", "", ""); mapStatus.setAttribute("state", "pending");
   mapStatus.id = "map-status";
@@ -39,7 +32,7 @@ export function mount(root, ctx) {
   setupLink.href = "/setup";
   setupLink.hidden = true;
   const action = el("ui-status", "", ""); action.setAttribute("state", "ready");
-  action.setAttribute("role", "status"); action.setAttribute("aria-live", "polite");
+  watchStatus(action);
   // D-359 US-009 — 읽기 실패는 무대 위 같은 ui-empty가 말하고, 그 곁에 다시 시도가 선다.
   const overlay = el("div", "surface-map-overlay");
   const retry = el("ui-button", "", "다시 시도"); retry.setAttribute("kind", "quiet"); retry.type = "button"; retry.hidden = true;
@@ -130,7 +123,7 @@ export function mount(root, ctx) {
   const mayOpenSetup = ctx.role !== "viewer"
     && (ctx.surfaces || []).some((surface) => surface.id === "setup");
   const map = createFieldMap({
-    canvas, empty, status: mapStatus, layerRoot: root, api: ctx.api,
+    canvas, empty, status: mapStatus, choices, api: ctx.api,
     onlyActivePath: true,
     emptyRecoveryLink: setupLink,
     mayOpenSetup,
@@ -194,10 +187,10 @@ export function mount(root, ctx) {
       mapStatus.hidden = failed; // 같은 원인을 무대 밖에서 한 번 더 말하지 않는다.
       if (failed) {
         empty.hidden = false;
-        empty.setAttribute("role", "alert");
         empty.textContent = map.mapState === "forbidden"
           ? "지도 데이터를 볼 권한이 없습니다." : "지도를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.";
-      } else empty.removeAttribute("role");
+        announce(empty.textContent);
+      }
       retry.hidden = !failed || map.mapState === "forbidden";
       // 선택 좌표는 지도가 쓸 수 있을 때만 뜻이 있다.
       if (map.mapState !== "ready") targetReadout.hidden = true;

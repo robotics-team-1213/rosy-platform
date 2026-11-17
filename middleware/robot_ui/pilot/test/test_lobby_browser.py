@@ -321,7 +321,7 @@ def test_emergency_release_confirms_rechecks_and_never_starts_motion(tablet_page
         safety["source"] = "battery_policy"
     page.locator("[data-estop-release]").click()
     if outcome == "stale_before":
-        playwright_sync.expect(page.locator("#pilot-notice")).to_contain_text("해제 보류")
+        playwright_sync.expect(page.locator("#pilot-alerts")).to_contain_text("해제 보류")
         playwright_sync.expect(page.get_by_role("dialog")).to_have_count(0)
     else:
         dialog = page.get_by_role("dialog")
@@ -333,7 +333,7 @@ def test_emergency_release_confirms_rechecks_and_never_starts_motion(tablet_page
         playwright_sync.expect(page.locator("[data-drive-enter]")).to_be_enabled()
         assert requests == ["POST"]
     else:
-        playwright_sync.expect(page.locator("#pilot-notice")).to_contain_text("해제")
+        playwright_sync.expect(page.locator("#pilot-alerts")).to_contain_text("해제")
         assert page.locator("[data-drive-enter]").evaluate("el => el.disabled")
         assert requests == ([] if outcome in ("stale", "stale_before") else ["POST"])
     if outcome in ("stale", "stale_before"):
@@ -365,6 +365,6 @@ def test_emergency_release_shows_battery_context_and_rechecks_its_level(tablet_p
     playwright_sync.expect(dialog).to_contain_text("부족")
     safety["battery"]["level"] = "deep"
     dialog.get_by_text("비상 정지 해제", exact=True).click()
-    playwright_sync.expect(page.locator("#pilot-notice")).to_contain_text("해제")
+    playwright_sync.expect(page.locator("#pilot-alerts")).to_contain_text("해제")
     assert calls == []
     assert errors == [], errors

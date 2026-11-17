@@ -1,6 +1,7 @@
 // D-411 C: gripper widget — 열기/반/닫기, an 열림 % slider and a state badge. Every action is
 // one absolute, bounded goal (OmxSimGripperGoal); the slider sends once, on release.
 import {gripperGoal, gripperPercent, gripperPosition, gripperStateLabel} from "../controls.js";
+import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 
 const PRESETS = [["open", "열기"], ["half", "반"], ["close", "닫기"]];
 const BADGE_STATUS = {holding: "active", unknown: "warn"};
@@ -70,7 +71,8 @@ export function mountGripper(slot, control, session) {
     badge.setAttribute("status", BADGE_STATUS[grip] ?? "neutral");
     const percent = gripperPercent(currentPosition(), g);
     if (!dragging && percent !== null) slider.value = String(percent);
-    const text = `${dragging ? slider.value : percent ?? "—"} %`;
+    const known = dragging || percent !== null && percent !== undefined;
+    const text = known ? `${dragging ? slider.value : percent} %` : EVIDENCE_LABEL.unavailable;
     if (readout.textContent !== text) readout.textContent = text;
   }
 

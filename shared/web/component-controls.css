@@ -10,7 +10,9 @@ a.ui-action-link[data-kind="primary"]:hover { background: color-mix(in oklab, va
 a.ui-action-link:active { box-shadow: inset 0 0 0 var(--focus-ring-width) var(--ground); }
 .ui-control-stack { display: grid; gap: var(--space-3); min-width: 0; align-content: start; }
 .ui-control-stack > :is(h2, h3, p) { margin: 0; }
-.ui-field-error { color: var(--status-crit); font-size: var(--text-label); overflow-wrap: anywhere; }
+/* DESIGN Shapes: a standalone button is as wide as its label, not as its grid column. */
+.ui-control-stack > ui-button, .ui-state-panel > ui-button { justify-self: start; }
+.ui-field-error { display: inline-block; padding: var(--space-1) var(--space-2); border-radius: var(--radius-flag); color: var(--flag-danger-ink); background: var(--flag-danger-bg); font-size: var(--text-label); overflow-wrap: anywhere; }
 .ui-state-panel { display: grid; gap: var(--space-2); padding-block: var(--space-3); border-block: 1px solid var(--border-subtle); }
 .ui-state-panel > p { margin: 0; overflow-wrap: anywhere; }
 .ui-action-bar { display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -48,3 +50,67 @@ a.ui-action-link:active { box-shadow: inset 0 0 0 var(--focus-ring-width) var(--
   .ui-primary-detail[data-open] > section:first-child { display: none; }
   .ui-primary-detail[data-open] > section + section { padding-inline-start: 0; border-inline-start: 0; }
 }
+/* C12 status table: the icon slot of ui-tag (statusTag in status-tag.js). Unknown is a dashed outline, never a calm normal. */
+ui-tag > .ui-icon { width: var(--text-label); height: var(--text-label); }
+ui-tag[data-state="unknown"] { border-style: dashed; }
+/* Principle 1: a calm normal is text only. The border stays solid but invisible so the box size and the status table test do not move. */
+ui-tag[data-state="fresh"] { border-color: transparent; padding-inline: 0; }
+/* C11 ui-panel: one bordered box for an independent object or a control group. Repeated rows and numbers are not panels.
+   Anatomy: header (icon, title, ui-tag) > [data-slot=value] (tnum) > [data-slot=evidence] (micro) > [data-slot=actions]. */
+.ui-panel { box-sizing: border-box; min-width: 0; display: grid; gap: var(--space-3); align-content: start; padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface-flat); overflow-wrap: anywhere; }
+.ui-panel[data-surface="raised"] { border-color: var(--border-default); background: var(--surface-raised); }
+.ui-panel > header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.ui-panel > header > .ui-icon { color: var(--text-secondary); }
+.ui-panel > header > :is(h2, h3, h4) { flex: 1 1 8rem; min-width: 0; margin: 0; font: var(--weight-strong) var(--text-body)/var(--leading-body) var(--body); }
+.ui-panel > [data-slot="value"] { margin: 0; font: var(--weight-strong) var(--text-value)/var(--leading-compact) var(--mono); font-variant-numeric: tabular-nums; }
+.ui-panel > [data-slot="evidence"] { margin: 0; color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); }
+.ui-panel > [data-slot="actions"] { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* compact only where a mouse works at width (D-976); narrower or touch surfaces stay standard. */
+@media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  .ui-panel[data-density="compact"] { gap: var(--space-2); padding: var(--space-3); }
+  .ui-panel[data-density="compact"] > [data-slot="actions"] > :is(ui-button, .ui-action-link) { min-height: var(--target-tool); }
+}
+/* C14 robot row (robot-row.js): arms and mobile robots in one row form. A repeated target is a row, not a box: no border
+   around a row, only a 1px line between. Narrow: two columns, label above value. Wide: one grid line, labels in the head line. */
+.robot-roster { display: grid; gap: var(--space-4); min-width: 0; }
+.robot-group { display: grid; gap: var(--space-2); min-width: 0; --robot-cols: minmax(0, 1.4fr) minmax(6.5rem, 0.9fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(9rem, 1.4fr) auto; }
+.robot-group > .robot-group-title { margin: 0; font: var(--weight-strong) var(--text-body)/var(--leading-body) var(--body); }
+.robot-rows { margin: 0; padding: 0; list-style: none; }
+.robot-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); padding-block: var(--space-3); border-block-start: 1px solid var(--border-subtle); min-width: 0; overflow-wrap: anywhere; }
+.robot-row > [data-col="name"], .robot-row > [data-col="actions"], .robot-row > [data-col="power"] { grid-column: 1 / -1; }
+.robot-cell { display: grid; gap: var(--space-1); align-content: start; justify-items: start; min-width: 0; }
+.robot-cell > ui-tag { max-width: 100%; white-space: normal; line-height: var(--leading-copy); }
+.robot-cell[data-col="actions"] { display: flex; justify-content: flex-end; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.robot-cell-label { color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); }
+.robot-name { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.robot-name > .ui-icon { flex: none; color: var(--text-secondary); }
+/* the sub line carries the robot id (code, not prose): mono keeps ids readable beside tabular values */
+.robot-sub { color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--mono); }
+.robot-value { font: var(--text-label)/var(--leading-copy) var(--body); font-variant-numeric: tabular-nums; }
+.robot-value[data-state="unavailable"] { color: var(--text-secondary); }
+.robot-value > .ui-icon { margin-inline-end: var(--space-1); vertical-align: text-bottom; color: var(--text-secondary); }
+.robot-row-head { display: none; }
+.robot-row > .robot-cell[data-empty] { display: none; }
+@media (width >= 64rem) {
+  .robot-row-head, .robot-row { grid-template-columns: var(--robot-cols); align-items: center; }
+  .robot-row-head { display: grid; gap: var(--space-3); padding-inline: 0; color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); }
+  .robot-row > [data-col="name"], .robot-row > [data-col="actions"], .robot-row > [data-col="power"] { grid-column: auto; }
+  .robot-row .robot-cell-label { display: none; }
+  .robot-cell[data-col="actions"] { flex-wrap: nowrap; } /* 선택 and 자세히 side by side: every row the same height */
+  .robot-row > .robot-cell[data-empty] { display: grid; }
+}
+/* the info toggletip sits at the right edge of the row: open it leftwards so the note cannot widen the page */
+.robot-cell .ui-toggletip-note { inset-inline-start: auto; inset-inline-end: 0; }
+/* C15 robot 3D view (robot-3d.js): size is CSS, the renderer only follows it; the facts line is the text alternative */
+.robot-view { display: grid; gap: var(--space-2); min-width: 0; margin: 0; }
+.robot-view-stage { aspect-ratio: 4 / 3; min-height: 12rem; max-height: 26rem; border: var(--focus-ring-width) solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface-canvas); touch-action: pan-y; cursor: grab; overflow: hidden; }
+/* selected frame: --selection border plus an inset ring (4px in all, the same edge width as a row), so a card layer cannot hide it behind colour alone */
+.robot-view[data-selected] > .robot-view-stage { border-color: var(--selection); box-shadow: inset 0 0 0 var(--focus-ring-width) var(--selection); }
+.robot-view-stage > canvas { display: block; width: 100%; height: 100%; }
+.robot-view-presets { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.robot-view-facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); }
+.robot-view-note { margin: 0; color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); overflow-wrap: anywhere; }
+/* C21 evidence line (evidence-line.js): source word first and bold, a model's own value is dashed and says 측정 아님; tags only for delayed/unknown */
+.evidence-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); margin: 0; color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.evidence-line > span > b { color: var(--text-primary); font-weight: var(--weight-strong); }
+.evidence-line > [data-source="model"] > b, .evidence-line > [data-source="unknown"] > b { color: var(--text-secondary); border-bottom: 1px dashed currentcolor; }

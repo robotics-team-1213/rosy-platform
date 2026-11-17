@@ -1158,3 +1158,69 @@
 - 변경: Cam 소스를 복사하던 `**/account/*.kt`를 빼고 `shared/android/account`를 컴파일한다(D-987).
 - 증거: 원격 결과는 착지 기록을 따른다. 실기 설치 뒤 로그인 유지는 확인하지 않았다.
 - Gate: 없음. CE: 해당 없음 — 소스 위치 이동이다.
+
+## 2026-11-13 · uncommitted · refactor(pilot): stick and arm pad geometry through setGeometry
+- 변경: 스틱 손잡이·떠다니는 스틱·관절 패드 손잡이의 typed `attr()`를 `var(--g-*, 기본값)`으로, 값은 `setGeometry`로 쓴다. `data-knob-*`·`data-float-*` 속성과 해당 CSS 삭제
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) geometry·patterns·no_element_style·asset_manifest·component_kit·pilot 브라우저·learning 픽셀/검수 브라우저 435 passed 12 failed(971 s). 실패 12건 중 shared_controls 6건과 pilot part2의 4건(전체 파일 순서 의존, 단독은 통과)은 main에서도 같은 실패(main 전체 파일 4 failed 47 passed)이고, 스틱 2건은 float translate를 .floating 때만 적용해 고친 뒤 part2 47 passed 중 같은 4건만 실패. size_range 0, lint 0 errors
+- gate 변화: 없음(동작 동일). `data-band`·`data-recordings-*` 등 나머지 typed `attr()`는 남아 있다
+- 결정: D1
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · 분할된 Pilot 브라우저 시험이 기본 조작부 복원을 잃은 것을 되돌림
+- 변경: 모듈 범위 서버를 공유하는 `_default_controls` 자동 복원 fixture를 `test_pilot_browser.py`에서 `test/conftest.py`로 옮겼다. 93461496c6이 시험을 `test_pilot_browser_part2.py`로 나눈 뒤 part2는 이 fixture를 못 받아, 앞선 시험의 `omit: True`가 남아 선언 조작부를 쓰는 4개 시험(자율 토글, 빈 조작부, 한도 0 정지, pivot/fine 없음)이 구 서버 대체 경로를 탔다. 제품 코드와 단언은 그대로다.
+- 증거: main 8b65ceaa0f에서 part2 원격 4 failed·47 passed(위 4개). 수정 뒤 part2+part1 원격 121 passed, exit 0.
+- gate 변화: SOURCE 회귀 복구. 장치 수용은 별도다.
+
+## 2026-11-13 · uncommitted · refactor(pilot): 공용 사유 줄·위험 채움, 오프라인 셸에 geometry.js
+
+- 변경: 주행 보정 잠금(조작부·속도 프리셋)과 차선 인식 적용의 비활성 사유를 `createCauseLine`으로(`reason` 속성·손으로 단 aria-describedby 삭제), 녹화 거절·링크 거부 칩을 위험 채움으로, 팔 녹화 중 글자색은 warn으로, `sw.js` SHELL에 `/common/geometry.js`와 캐시 이름 갱신
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) robot/test·pilot/test·shared_controls·token_contracts·no_element_style: 700 passed 12 failed(889 s)였고, 그 가운데 10건은 main에서도 같은 실패(web_budgets, pilot_app_proxy gradle, shared_controls 6, token_contracts 2)이며 나머지 2건(배너 시험 로드, pilot SHELL에 geometry.js 없음)은 고쳤다. size_range 0, lint 0 errors
+- gate 변화: 없음(동작 동일, 위험 표시는 글자색에서 채움으로). 장치 수용은 별도다.
+
+## 2026-11-13 · uncommitted · fix(pilot): geometry.js in the service worker shell
+- 변경: `sw.js` SHELL에 `/common/geometry.js`를 더했다(`test_shell_assets.py`가 요구)
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·Fleet 계정 브라우저·monitoring·games·pilot shell: 브랜치 616 passed 12 failed, main 593 passed 12 failed, 실패 목록 동일(main 기존 적색), 브랜치만의 실패 0. size_range 0, lint 0 errors
+- gate 변화: 없음
+- 결정: D1
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · feat(pilot): 조종 화면 머리를 속도·동작·연결 태그·도구 하나로
+
+- 변경: `drive-view.js` HUD에서 상한·응답·모드·배터리·영상 전송 사실을 `[data-drive-facts]`로 모아 도구 판으로 옮기고, `정지 · 설정`·`전체 영상`·`화면 채우기`·`조종 종료`·`모델`·`차선 인식` 펼침도 도구 판 안으로(compact 전용 이동 로직 삭제). 연결 사실은 `ui-tag`(정상 중립, 끊김·재연결·무응답은 warn + wifi/history 아이콘)이고 위험 채움 규칙 삭제. 도구 판은 높이를 넘으면 스크롤. `[data-estop]`와 `data-always-live` 정지는 건드리지 않았다
+- 증거: 캡처 `scratchpad/uxconcept/shots-after/pilot-drive-{1440,390}.png`(+tools). 원격 시험은 마지막 실행 기록
+- gate 변화: 없음
+
+## 2026-11-14 · uncommitted · ui-followups: "—" 자리표시를 공용 "정보 없음"으로
+
+- 변경: `drive-view.js`·`drive.js`·`arm.js`·`gripper.js`·`joint_jog.js`·`inputs.js`·`connect.js`·`recording.js`의 "—"를 `EVIDENCE_LABEL.unavailable`로(C4). 최근 접속 "지우기" 단추에 글자를 붙였다. `test_pilot_browser.py` 기대값 갱신.
+- 증거: 원격 시험 결과는 최종 보고.
+- gate 변화: 없음. 아이콘 예외 목록만 줄었다.
+
+## 2026-11-14 · uncommitted · ui-regions P1: 속도 프리셋·운전 모드·전체/채우기·감도 곡선을 createChoiceGroup으로
+
+- 변경: 드라이브 속도 프리셋(`data-drive-preset-row`)·운전 모드(수동/차선 자동)·전체 영상/화면 채우기(드라이브 도구판과 영상 보기 두 곳, `buildFitFill` 하나)·입력 조정의 감도 곡선을 K1 native radio 묶음으로 바꿨다. 입력 조정 판의 속도 프리셋은 조작부와 같은 값이라 지웠다(S2). 정밀·조향 반전은 K21 `kind=toggle`. 로비·토큰 초기화·코드 발급은 명령이라 `kind=quiet`. `data-preset` 손 칩 그룹과 role 없는 `aria-pressed` 배타 흉내를 지웠다. 보정 잠금은 같은 cause line으로 라디오까지 덮는다. 스틱·정지·팔 조깅은 건드리지 않았다. `sw.js` 캐시 키·SHELL에 choice 부품 추가.
+- 증거: 시험을 새 속성으로 옮겼다(`checked` 정확히 하나, 방향키 이동, 보정 잠금이 라디오까지 비활성+같은 cause line). `test_choice_groups_browser.py` 신규. 원격 시험은 최종 보고.
+- gate 변화: `test_choice_controls.py` HAND_CHIP_DEBT에서 pilot drive.js 제거. patterns C17 built.
+
+## 2026-11-14 · uncommitted · ui-regions P1: 전체 영상/화면 채우기를 K20 명령으로, 운전 모드 한 개짜리 묶음 숨김
+
+- 변경: 패널 결론. 배율에는 중간 값이 있어 라디오 둘로 둘 수 없다(둘 다 해제하면 내부 값이 남아 다시 눌러도 동작하지 않는 결함). `buildFitFill`은 `kind=quiet` 단추 둘을 돌려준다. 차선 자동이 없는 로봇은 운전 모드 묶음을 숨긴다. 좁은 화면 운전 모드 칩의 체크 표시를 숨겨 잘림을 막았다.
+- 증거: 시험 `test_fit_fill_are_two_commands_not_a_choice`(중간 배율에서도 동작). 패널 기록 `scratchpad/uxplan/panel-rp/`.
+- gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · ui-regions P1: 드라이브 키는 모든 폼 컨트롤에서 무시
+
+- 변경: 조정자 결정. 초점이 라디오 칩·체크박스·select·range·텍스트·contenteditable에 있거나 IME 조합 중이면 드라이브 키를 무시한다(화살표는 칩을 옮긴다). 초점이 페이지에 있으면 운전한다. 키를 떼면 늘 놓는다. 이전 커밋의 "칩에서도 운전" 결정을 뒤집었다.
+- 증거: `test_arrows_on_a_focused_chip_move_the_chip_and_never_drive_but_the_body_drives`, contenteditable 시험. 원격 시험은 최종 보고.
+- gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · rp-fix: 주행 서랍 높이 제한 및 공용 연결 끊김 표시 채택 (F01, F03)
+
+- 변경: `styles.css`·`layout.css`: `입력 조정(`[data-inputs-panel]`)`과 `영상·녹화·조종 설정(`[data-drive-tools-panel]`)` 서랍의 `max-height`를 도크 위 무대 높이로 제한하고 내부 `overflow: auto` 스크롤을 둬 1440·390 뷰포트에서 모든 조작이 닿도록 했다(F01). `screens/drive-view.js`·`screens/drive.js`: 로컬 `paintLink`를 지우고 공용 `createConnectionNotice`(끊김=warn)를 채택했다(F03).
+- 증거: `drive-view.js`·`drive.js` `node --check` 통과. 브라우저·원격 pytest는 Claude가 실행.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · uiux(pilot): 기기 연결 코드 발급 제거, 운용 지도 잠금 (R4)
+- 변경: 기기 연결 코드 발급은 로봇 대시보드만 맡는다(D-370:155, 2026-11-17 사용자 결정). `screens/show-code.js`는 발급 대신 "기기 연결 코드는 로봇 대시보드에서 발급합니다" 한 줄과 `/dashboard` 링크만 둔다(대시보드에 발급 전용 경로 없음 → 루트). `client.js`의 `requestEnrollmentCode`, dev_server의 발급 엔드포인트, 관리자 코드 전환 길을 지웠다. 로그인·비상 정지 해제는 그대로. `app.js`: 머리 `운용 지도`는 운영자 이상 세션이 확인되기 전·조회 전용이면 `reason`과 함께 잠근다(숨기지 않음). `connect.js`는 차단 화면에서도 `onReady({role})`을 부른다. `sw.js` 캐시 이름을 올렸다.
+- 증거: 독립 Playwright(dev_server)로 잠금 사유(접속 전·조회 전용)·운영자 활성·링크 문구·발급 요청 0건 확인. pytest는 원격에서 실행.
+- gate 변화: 없음.

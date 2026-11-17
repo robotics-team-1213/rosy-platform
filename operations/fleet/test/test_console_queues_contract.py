@@ -13,7 +13,7 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
 CONSOLE = WEB / "console.js"
-ROSTER = WEB / "roster.js"
+ROSTER = WEB / "robot/roster.js"
 QUEUES = WEB / "queues.js"
 INDEX = WEB / "index.html"
 
@@ -62,7 +62,7 @@ def test_the_queues_panel_heads_the_rail():
     assert '<div class="console-primary" data-pane="stage">' in page
     assert '<aside class="console-secondary" data-pane="now"' in page
     assert "const layoutPanels = [document.querySelector('.queues-panel')," in shell
-    assert "const MAP_PANEL = 2;" in shell  # D-892: queue, status summary, map.
+    assert "const MAP_PANEL = 1;" in shell  # D-1027: queue, map, robot context.
 
 
 def test_queue_and_roster_attention_share_one_rule():
@@ -100,7 +100,7 @@ def test_the_rail_is_the_one_scroll_and_decisions_open_in_the_queue():
     index = INDEX.read_text(encoding="utf-8")
     roster = ROSTER.read_text(encoding="utf-8") + QUEUES.read_text(encoding="utf-8")
     assert "#fleet-main > .console-secondary { position: relative; min-height: 0; overflow-y: auto;" in styles
-    assert "ui-shell:has(> #fleet-main) { height: 100dvh; }" in styles
+    assert "ui-shell:has(#fleet-main) { height: 100dvh; }" in styles
     assert "max-height: min(20dvh, 12rem)" not in styles
     assert "#roster { min-height: 0; max-height" not in styles
     assert "#roster { max-height" not in styles
@@ -108,7 +108,7 @@ def test_the_rail_is_the_one_scroll_and_decisions_open_in_the_queue():
     assert "dataset.decisionSlot = row.key;" in roster
     assert 'decision: "stuck"' in roster and 'decision: "replan"' in roster
     assert 'export {mustExpand, selectRobot} from "./roster-cards.js";' in roster
-    assert "export function mustExpand(robot)" in (WEB / 'roster-cards.js').read_text(encoding='utf-8')
+    assert "export function mustExpand(robot)" in (WEB / 'robot/roster-cards.js').read_text(encoding='utf-8')
 
 
 def test_d577_lane_lost_hold_rows_name_the_reason_and_rise_after_the_deadline():

@@ -1,6 +1,9 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,commonDown,panelError,setText} from '/review-alerts.js';
 import '/common/ui.js';
+import {createChoiceList} from '/common/choice-list.js';
 const $=id=>document.getElementById(id);
+const promoteList=createChoiceList({id:'promote-candidates',label:'승격 요청 후보',emptyText:'등록된 인식 학습 결과가 없습니다'});
+$('promote-candidates').replaceWith(promoteList.element);
 const DOMAINS={lane:'Pinky 차로·픽셀',object:'Pinky 객체',omx:'OMX 모방학습',sim:'Isaac SIM',vlm:'VLM 판단',decision:'판단 모델'};
 const requested=new URLSearchParams(location.search).get('domain');
 const domain=DOMAINS[requested]?requested:null;
@@ -58,7 +61,7 @@ async function sim(){
   const block=source('sim');text(block,'h4','최근 SIM 실험');
   text(block,'p','SIM 판정과 과제 성공은 실험 근거일 뿐 승인·승격이 아닙니다.','quiet');
   let runs;
-  try{runs=(await read('/api/learning/sim/runs')).runs;}catch(error){text(block,'p',`없음 · ${error.message}`).dataset.state='not_available';return;}
+  try{runs=(await read('/api/learning/sim/runs')).runs;}catch(error){text(block,'p',`없음 · ${panelError(error)}`).dataset.state='not_available';return;}
   if(!runs.length){text(block,'p','SIM 실험 기록이 없습니다.');return;}
   const when=run=>String(run.updated_at||run.created_at||'');
   const success={true:'성공',false:'실패'};
@@ -71,21 +74,21 @@ async function sim(){
 }
 let token='', refreshing=false, requesting=false, actionError='', refreshError='';
 function fail(error,owner='action'){
-  const message=error?(error.message||String(error)):'';
+  const message=error?panelError(error,''):'';
   if(owner==='refresh')refreshError=message;else actionError=message;
-  $('evaluate-error').textContent=[refreshError,actionError].filter(Boolean).join('\n');
+  setText($('evaluate-error'),[refreshError,actionError].filter(Boolean).join('\n'));
   $('evaluate-error').hidden=!$('evaluate-error').textContent;
 }
 async function promotion(keep){
   // Only the server decides who qualifies; this page shows its reasons and never calls Fleet .
   const data=await read('/api/learning/promotion-requests');
-  $('promote-candidates').replaceChildren();$('promote-requests').replaceChildren();
-  for(const row of data.candidates)text($('promote-candidates'),'li',`${row.name} · ${row.qualified?'요청 가능 · '+row.model_revision:row.reason}`).dataset.state=row.qualified?'done':'blocked';
+  $('promote-requests').replaceChildren();
+  // K3: every candidate in one list; the ones without a passing evaluation are visible but not choosable, with the reason as their second line.
+  promoteList.set(data.candidates.map(row=>({id:row.id,label:row.name,secondary:row.qualified?`요청 가능 · ${row.model_revision}`:row.reason,disabled:!row.qualified})));
+  promoteList.element.hidden=!data.candidates.length;// the status line already says why there is nothing to list
   const ready=data.candidates.filter(row=>row.qualified);
-  $('promote-candidate').replaceChildren(...ready.map(row=>{const option=document.createElement('option');option.value=row.id;option.textContent=`${row.name} · ${row.model_revision}`;return option;}));
-  if(ready.some(row=>row.id===keep))$('promote-candidate').value=keep;
+  const pick=ready.find(row=>row.id===keep)||ready[0];if(pick)promoteList.select(pick.id);
   const reason=ready.length?'':data.candidates.length?'확정 정답 평가를 통과한 후보가 없습니다. 위 거절 이유를 확인하세요.':'등록된 인식 학습 결과가 없습니다. 홈에서 결과 폴더를 등록하세요.';
-  $('promote-pick').hidden=!ready.length;
   $('promote-request').setAttribute('reason',reason||'평가 근거를 확인하는 중입니다.');
   $('promote-status').textContent=reason||`요청 가능한 후보 ${ready.length}개`;
   for(const row of data.requests)text($('promote-requests'),'li',`${row.sha256} · ${row.model_revision} · ${row.requester} · ${row.created_at}`);
@@ -98,7 +101,7 @@ $('promote-request').onclick=async()=>{
   fail(null);$('promote-result').hidden=true;
   $('promote-request-hash').textContent='';
   try{
-    const response=await accountFetch('/api/learning/promotion-requests',{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify({id:$('promote-candidate').value})});
+    const response=await accountFetch('/api/learning/promotion-requests',{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify({id:(promoteList.value||'')})});
     const value=await response.json();
     if(!response.ok)throw new Error(value.error||'승격 요청을 만들지 못했습니다.');
     $('promote-result').textContent='평가 근거를 준비했습니다. Fleet에서 승인권자가 이 요청을 확인하고 승격 제안을 만듭니다.';$('promote-result').hidden=false;
@@ -110,9 +113,9 @@ $('promote-request').onclick=async()=>{
 async function load(){
   if(refreshing||requesting)return;
   refreshing=true;$('evaluate-refresh').disabled=true;fail(null,'refresh');
-  const keep=$('promote-candidate').value;
-  $('evaluate-sources').replaceChildren();$('promote-candidates').replaceChildren();$('promote-requests').replaceChildren();
-  $('promote-pick').hidden=true;$('promote-request').disabled=true;
+  const keep=(promoteList.value||'');
+  $('evaluate-sources').replaceChildren();promoteList.set([]);$('promote-requests').replaceChildren();
+  $('promote-request').disabled=true;
   $('promote-status').textContent='승격 요청 후보를 확인하는 중입니다.';
   $('promote-request').setAttribute('reason',$('promote-status').textContent);
   let promotionReason=null;
@@ -127,8 +130,8 @@ async function load(){
   if(!domain||domain==='sim')await sim();
   if(!$('evaluate-sources').children.length)text($('evaluate-sources'),'p','이 도메인에는 아직 Learning에 연결된 평가 근거가 없습니다.');
   }catch(error){
-    fail(error,'refresh');$('evaluate-filter').textContent='평가 근거를 읽지 못했습니다. 다시 확인을 눌러 주세요.';
-    if(promotionReason===null){$('promote-status').textContent='승격 후보를 읽지 못했습니다. 다시 확인을 눌러 주세요.';$('promote-request').setAttribute('reason',$('promote-status').textContent);}
+    fail(error,'refresh');setText($('evaluate-filter'),commonDown()?'불러오지 못함':'평가 근거를 읽지 못했습니다. 다시 확인을 눌러 주세요.');
+    if(promotionReason===null){setText($('promote-status'),commonDown()?'불러오지 못함':'승격 후보를 읽지 못했습니다. 다시 확인을 눌러 주세요.');$('promote-request').setAttribute('reason',$('promote-status').textContent);}
   }finally{
     refreshing=false;$('evaluate-refresh').disabled=requesting;
     if(promotionReason!==null){$('promote-request').disabled=!!promotionReason||requesting;$('promote-request').setAttribute('reason',promotionReason);}

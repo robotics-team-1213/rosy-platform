@@ -2,10 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
-// The card imports the browser's /assets/dom.js; map it to the file on disk.
+// The card imports the browser's /assets/dom.js, and dom.js imports /common/*; map both to files on disk.
 const dom = new URL("../../dom.js", import.meta.url).href;
+const common = new URL("../../../../../shared/web/", import.meta.url).href;
 register("data:text/javascript," + encodeURIComponent(
-  `export async function resolve(s, c, next) { return s === "/assets/dom.js" ? { url: "${dom}", shortCircuit: true } : next(s, c); }`));
+  `export async function resolve(s, c, next) {
+    if (s === "/assets/dom.js") return { url: "${dom}", shortCircuit: true };
+    if (s.startsWith("/common/")) return { url: "${common}" + s.slice(8), shortCircuit: true };
+    return next(s, c);
+  }`));
 globalThis.document ??= { querySelectorAll: () => [], createElement: () => ({ setAttribute() {}, append() {} }), addEventListener() {} };
 const { personRequestLines, personRequestAnswerable } = await import("../../panels/console/person-request.js");
 

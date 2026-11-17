@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { createRoster, mustExpand } = await import("../../../../applications/fleet/web/roster.js");
+const { createRoster, mustExpand } = await import("../../../../applications/fleet/web/robot/roster.js");
 const { groupRows, groupText, openDecisionKey, queueRowText } = await import("../../../../applications/fleet/web/queues.js");
 const { deadlockView, replanView } = await import("../../../../applications/fleet/web/trip-replan.js");
 

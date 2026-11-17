@@ -194,3 +194,41 @@ def test_direct_development_entry_requires_login_and_stays_signed_out_after_logo
         assert page.request.get(origin + "/api/fleet/session").status == 401
         assert not posts
         page.close()
+
+
+def test_maintenance_page_serializes_db_and_host_requests_without_double_encoding(tmp_path):
+    import json
+    from playwright.sync_api import expect
+
+    logins = {"alice": {"principal_id": "alice", "role": "policy-admin",
+                        "password_scrypt": hash_password("correct horse")}}
+    with _fleet(tmp_path, console_token="registry-only", site_logins=logins,
+                development_sessions=DevelopmentSessions()) as (browser, origin):
+        page = browser.new_page()
+        assert page.request.post(origin + "/api/fleet/auth/login", headers={"Origin": origin},
+                                 data={"login": "alice", "password": "correct horse"}).status == 204
+        host_posts = []
+        page.route("**/api/fleet/hosts", lambda r: r.fulfill(
+            status=200, content_type="application/json",
+            body=json.dumps({"drift": None, "guard": {}, "history": {},
+                             "hosts": [{"host": "site", "units": [], "actions": ["clean-storage"]}]}),
+        ))
+        def handle_control(route):
+            host_posts.append(json.loads(route.request.post_data))
+            route.fulfill(status=200, content_type="application/json", body=json.dumps({"code": "ACCEPTED"}))
+        page.route("**/api/fleet/hosts/site/control", handle_control)
+
+        page.goto(origin + "/console/maintenance")
+        expect(page.locator('#db-maintenance-actions [data-db-action="checkpoint"]')).to_be_visible(timeout=15000)
+        page.locator('#db-maintenance-actions [data-db-action="checkpoint"]').click()
+        expect(page.locator("#db-maintenance-note")).to_contain_text("WAL 체크포인트 완료", timeout=10000)
+
+        page.locator('#db-maintenance-settings button[type="submit"], #db-maintenance-settings ui-button[type="submit"]').click()
+        expect(page.locator("#db-maintenance-note")).to_contain_text("데이터베이스 설정을 저장했습니다.", timeout=10000)
+
+        page.locator("#host-services-commands ui-button", has_text="시험 저장소 정리").click()
+        expect(page.locator("dialog.ui-confirm")).to_be_visible()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+        expect(page.locator("#host-services-note")).to_contain_text("ACCEPTED", timeout=10000)
+        assert host_posts == [{"action": "clean-storage", "unit": None, "operator_confirmed": True}]
+        page.close()

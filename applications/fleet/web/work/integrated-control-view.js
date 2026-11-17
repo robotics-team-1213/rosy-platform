@@ -1,7 +1,9 @@
 import {randomUUID} from "/console/assets/uuid.js";
+import {createPollGate} from "/console/assets/poll-gate.js";
 // Read projections and explicit stop requests share the Work area's existing authentication and lifetime.
 import {fitView} from "/console/assets/site-map-model.js";
 import {EVIDENCE_LABEL, MODE_LABEL, evidenceAgeText} from "/common/core_ui_logic.js";
+import {valueText} from "/common/value-text.js";
 
 const prefix = "/api/fleet/control-unit";
 const availability = {AVAILABLE: "연결됨", STALE: "이전 정보", UNAVAILABLE: "정보 없음"};
@@ -94,13 +96,21 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   evidence.id = "integrated-reconcile-evidence";
   evidence.required = true; evidence.minLength = 16; evidence.maxLength = 2048; evidenceLabel.htmlFor = evidence.id;
   form.append(evidenceLabel, evidence, reconcile); reconcileFold.append(form);
-  panel.append(heading, node("p", "상단 비상 정지는 이 관제의 직접 장치에 적용됩니다. 아래 하위 관제 정지 요청은 관제별 전달 결과를 확인해야 합니다.", "hint"),
-    status, list, selectedName, detail, mapRead, mapInfo, map,
-    node("h3", "선택한 하위 관제의 정지 요청"), node("p", "최신 정지 세대가 있는 관제만 요청에 포함합니다. 정보 없는 관제는 미전달일 수 있습니다. 물리 정지는 미확인입니다.", "hint"),
-    actions, notice, stopIdentity, results, historyFold, reconcileFold);
+  const scopeNote = node("details", "", "ui-disclosure");
+  scopeNote.append(node("summary", "정지 적용 범위 안내"),
+    node("p", "상단 비상 정지는 이 관제의 직접 장치에 적용됩니다. 아래 하위 관제 정지 요청은 관제별 전달 결과를 확인해야 합니다."),
+    node("p", "최신 정지 세대가 있는 관제만 요청에 포함합니다. 정보 없는 관제는 미전달일 수 있습니다. 물리 정지는 미확인입니다."));
+  const intro = node("p", "하위 관제 정지는 관제별 전달 결과를 확인합니다.", "hint"),
+    stopHeading = node("h3", "선택한 하위 관제의 정지 요청");
+  panel.append(heading, intro, status, list, selectedName, detail, mapRead, mapInfo, map,
+    stopHeading, scopeNote, actions, notice, stopIdentity, results, historyFold, reconcileFold);
+  // D-960 §4: a cell keeps only its stop history and the local reconcile (D-862); R reads the tree.
+  for (const part of [intro, list, selectedName, detail, mapRead, mapInfo, map, stopHeading, scopeNote, actions, notice,
+    stopIdentity, results]) part.dataset.unitScope = "root";
   anchor.before(panel);
   let epoch = 0, overview = null, sampled = 0, target = null, inFlight = false, busy = false,
     selection = 0, detailRevision = 0, mapRef = null, pending = null, snapshot = null, reference = null, owner = null;
+  const routeGate = createPollGate();
   const elapsed = () => Math.max(0, (performance.now() - sampled) / 1000);
   const valid = (life, version) => life.current() && version === epoch;
   const localFence = () => {
@@ -129,6 +139,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
     guard(reconcile, reason || (!localFence() ? "이 관제의 최신 정지 세대를 확인하세요" : ""));
   }
   function reset() {
+    routeGate.reset();
     epoch++; selection++; overview = null; target = null; mapRef = null; pending = null; snapshot = null; reference = null;
     list.replaceChildren(); detail.replaceChildren(); map.replaceChildren(); results.replaceChildren(); history.replaceChildren();
     notice.textContent = ""; stopIdentity.textContent = ""; mapInfo.textContent = ""; panel.hidden = true;
@@ -144,10 +155,11 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
       const item = node("li"), choose = button(row.unit_id + " · " + (row.parent ? "직접 상위 " + row.parent : "독립 관제"), true);
       choose.dataset.integratedUnit = row.unit_id; choose.setAttribute("aria-pressed", String(target === row.unit_id));
       choose.setAttribute("kind", "toggle");
-      const info = node("p", (availability[row.availability] || "정보 없음") + evidenceAgeText(age(row, elapsed()))
-        + " · 로봇 " + row.robots_online + "/" + row.robots_total + " · 미완료 작업 " + row.tasks_active
-        + " · 미확인 정지 " + row.stop_pending
-        + (row.sampled_at ? " · 수집 " + new Date(row.sampled_at).toLocaleTimeString() : " · 수집 시각 미확인"), "hint");
+      const info = node("p", (availability[row.availability] || EVIDENCE_LABEL.unavailable) + evidenceAgeText(age(row, elapsed()))
+        + " · 로봇 " + valueText(row.robots_online, {digits: 0}).text + "/" + valueText(row.robots_total, {digits: 0}).text
+        + " · 미완료 작업 " + valueText(row.tasks_active, {digits: 0}).text
+        + " · 미확인 정지 " + valueText(row.stop_pending, {digits: 0}).text
+        + (row.sampled_at ? " · 수집 " + new Date(row.sampled_at).toLocaleTimeString("ko-KR", {hour12: false}) : " · 수집 시각 " + EVIDENCE_LABEL.unavailable), "hint");
       info.dataset.evidence = fresh(row, elapsed()) ? "fresh" : row.availability === "UNAVAILABLE" ? "unavailable" : "delayed";
       choose.addEventListener("click", () => selectUnit(row.unit_id));
       item.append(choose, info); items.set(row.unit_id, item);
@@ -182,11 +194,11 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
         const observed = channel => ["fresh", "delayed"].includes(robot.evidence[channel]);
         row.append(node("span", " · " + (Object.hasOwn(MODE_LABEL, robot.mode) ? MODE_LABEL[robot.mode] : "모드 미확인")));
         for (const [channel, label, text] of [
-          ["battery", "배터리", observed("battery") && Number.isFinite(robot.battery_percent) ? robot.battery_percent + "%" : "미확인"],
-          ["safety", "비상 정지", observed("safety") && typeof robot.estop === "boolean" ? robot.estop ? "켜짐" : "꺼짐" : "미확인"],
-          ["pose", "위치", observed("pose") && robot.pose?.frame === "map" && robot.pose.map_id ? robot.pose.map_id + " · " + robot.pose.x + ", " + robot.pose.y : "미확인"]]) {
-          const evidenceRow = node("span", " · " + label + " " + text + " (" + (EVIDENCE_LABEL[robot.evidence[channel]] || "미확인") + ")");
-          evidenceRow.dataset.evidence = robot.evidence[channel] || "unknown"; row.append(evidenceRow);
+          ["battery", "배터리", observed("battery") ? valueText(robot.battery_percent, {unit: "%", digits: 0}).text : EVIDENCE_LABEL.unavailable],
+          ["safety", "비상 정지", observed("safety") && typeof robot.estop === "boolean" ? robot.estop ? "켜짐" : "꺼짐" : EVIDENCE_LABEL.unavailable],
+          ["pose", "위치", observed("pose") && robot.pose?.frame === "map" && robot.pose.map_id ? robot.pose.map_id + " · " + robot.pose.x + ", " + robot.pose.y : EVIDENCE_LABEL.unavailable]]) {
+          const evidenceRow = node("span", " · " + label + " " + text + " (" + (EVIDENCE_LABEL[robot.evidence[channel]] || EVIDENCE_LABEL.unavailable) + ")");
+          evidenceRow.dataset.evidence = robot.evidence[channel] || "unavailable"; row.append(evidenceRow);
         }
         detail.append(row);
       }
@@ -318,9 +330,11 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   async function refresh() {
     if (!active || inFlight) return;
     if (owner !== principal()) { owner = principal(); reset(); }
+    if (!routeGate.due()) return;
     const life = scope.capture(), version = epoch; inFlight = true;
     try {
       const value = await call(prefix + "/overview"); life.check();
+      routeGate.ok();
       if (!valid(life, version)) return;
       if (overview && (value.unit_id !== overview.unit_id || value.config_revision !== overview.config_revision)) {
         reset(); return;
@@ -333,8 +347,9 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
       paintUnits(); controls(); await Promise.all([readDetail(), readHistory()]);
     } catch (error) {
       if (valid(life, version)) {
+        const absent = routeGate.fail(error.status, error.code) === "absent";
         overview = null; mapRef = null; list.replaceChildren(); detail.replaceChildren(); map.replaceChildren(); controls();
-        panel.hidden = error.status === 404;
+        panel.hidden = error.status === 404 || absent;
         status.textContent = "통합 관제 조회 실패 · 접속 권한과 연결을 확인하세요.";
         if (error.status === 401 || error.status === 403) reset();
       }

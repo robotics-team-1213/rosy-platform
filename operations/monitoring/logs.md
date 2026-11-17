@@ -121,3 +121,48 @@
 - 변경: `account_config`가 있으면 로그인·세션·로그아웃 경로와 `monitoring.read` 판정을 제공한다. 화면은 Account 로그인을 먼저 보이고 조회 키를 비상용으로 접는다. 키 판정과 수집기 사이 조회는 그대로다.
 - 증거: 원격 시험 결과는 착지 기록을 따른다. 실제 Account·site proxy 경유 로그인은 확인하지 못했다.
 - Gate: 없음. 운영 활성화와 DEVICE/FIELD를 주장하지 않는다. CE: 해당 없음 — 새 기능 구현이다.
+
+## 2026-11-13 · uncommitted · fix(monitoring-web): health text and link duration through valueText
+- 변경: 건강 글(`sampled_at` 없으면 정보 없음)과 연결 응답 시간이 `valueText`를 쓰고 지역 대체 문구를 지웠다. `web_assets.py`에 `value-text.js` 등록
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·Fleet 계정 브라우저·monitoring·games·pilot shell: 브랜치 616 passed 12 failed, main 593 passed 12 failed, 실패 목록 동일(main 기존 적색), 브랜치만의 실패 0. size_range 0, lint 0 errors
+- gate 변화: 없음
+- 결정: C4
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · fix(monitoring-web): duration.js and its tests
+- 변경: 연결 응답 시간 글을 `duration.js`(`durationText`, `valueText` 사용)로 옮겨 모름은 '응답 정보 없음', 0은 실제 0ms로 보이게 하고 `web_assets.py`에 등록, `test_monitoring_browser.py`가 확인
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·monitoring 브라우저·operations/monitoring·site_incremental_update·Fleet 계정·games surface: 브랜치 683 passed 12 failed, main 657 passed 12 failed, 실패 목록 동일(main 기존 적색), 브랜치만의 실패 0. size_range 0, lint 0 errors
+- gate 변화: 없음
+- 결정: C4
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · test(monitoring): rendered link rows
+- 변경: `test_monitoring_browser.py` `links` 모드(보고 링크와 직접 조회 링크)로 실제 화면의 응답 시간 칸을 확인한다
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·monitoring·Fleet 계정·games·pilot shell·operations/monitoring: 마지막 실행 553 passed 12 failed(전부 main 기존 적색, 브랜치만의 실패 0). size_range 0, lint 0 errors
+- gate 변화: 없음
+- 결정: C4
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · Monitoring·Calibration 화면 재배치(UI 콘셉트)
+
+- 변경: Monitoring 첫 화면은 수치 띠(관측·주의·근거 없음·마지막 수신)와 관측 표가 주역이고, 조회 연결 구획은 머리 한 줄로, 연결 근거·경로 그림·변경 기록은 표 아래 접힘으로 옮겼다. 판정·신선도는 `statusTag`(정상은 글자만), 390px 표는 행으로 쌓는다. Calibration은 답 입력 `ui-panel raised`, 후보 행(선택됨 `check`), 안내문은 `info` 토글팁, 요청 목록은 64rem 미만 접힘이다. 지운 로컬 CSS: `.connection`·`.summary`·`.section-heading`·`.danger`·`.caution`·`.pager`·`.toolbar`·표 규칙(공용 `ui-data-table`·`ui-list-toolbar`·`ui-pagination`로), 후보·목록 상자 테두리. `web_assets.COMMON`에 `status-tag.js`·`readout-strip.css` 추가.
+- 증거: 1440·390 캡처 전후를 직접 확인했다. 원격 시험 결과는 이 브랜치 보고서에 있다.
+- gate 변화: `test_monitoring_browser.py`의 `.danger` 선택자를 `ui-tag[data-state=danger]`로 바꿨다(단언은 그대로). CE: 해당 없음 — 화면 배치 변경이다.
+
+## 2026-11-14 · uncommitted · Monitoring·Calibration 영역 재구성(K8·K3)
+
+- 변경: Monitoring 관측 목록을 표에서 행 목록(`ul#observation-rows`, 3열이라 K8)으로 옮기고 도구 줄 순서를 다시 조회 → 검색 → 사이트로 맞췄다. Calibration 요청 목록은 손으로 쓴 링크 목록을 `createChoiceList`(K3)와 `createSelection`으로 바꿨고 해시는 직접 링크로 남겼다. 처음으로 `test/test_calibration_browser.py`를 추가했다. patterns C16·C18을 built로 올렸다. Games 마커 칩은 선택이 아니라 관측 표시라 그대로 뒀고 정지 경로는 건드리지 않았다.
+- 증거: 원격 시험 결과는 이 브랜치 보고서에 있다.
+- gate 변화: 없음(옛 마크업을 묶던 단언은 같은 강도로 유지). CE: 해당 없음 — 화면 구조 변경이다.
+
+## 2026-11-14 · uncommitted · Monitoring 공용 페이지 이동과 모름 값 표기
+
+- 변경: 손으로 만든 페이지 이동을 공용 `createPagination`으로 바꾸고 번들에 `collection-controls.js`·`control-dom.js`를 넣었다. 판정·시각·도달을 모를 때 `정보 없음`만 쓰고(단위·단계 뒤붙임 없음), 요약 숫자는 스냅샷이 세기 전까지 0 대신 `정보 없음`이다. 교정 요청 목록은 `{state, text}` 상태 태그(`답함 · 통과`)를 쓴다.
+- 증거: 아래 원격 시험 결과를 보고에 적는다.
+- gate 변화: 없음. CE: 해당 없음 — 평범한 표기·부품 교체다.
+
+## 2026-11-14 · uncommitted · mon-cal-games 2차: 답 안내 운용자 말, 변경 기록 알림, 첫 불러오기 재시도
+
+- 변경: Calibration 읽기 전용 답 안내에서 `cell_requests.py answer` 명령어 문구를 지우고 `답은 셀 PC의 보정 창에서 남깁니다`로 썼다(R2-08). Monitoring 변경 기록 안내(`#history-note`)에 `role="status"`를 달았다(R2-10). Calibration 첫 목록 불러오기가 401 아님으로 실패하면 공용 `createStatePanel`(`error`/`unavailable` + 다시 조회)이 빈 상세 무대를 대신하고, 401은 기존 로그인 안내를 지켰다(R2-09).
+- 증거: `node --check applications/calibration/web/app.js`. 원격 시험 결과는 이 브랜치 보고서에 적는다.
+- gate 변화: 없음(기존 시험 단언은 그대로). CE: 해당 없음 — 문구·상태 패널 교체다.

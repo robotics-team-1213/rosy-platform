@@ -1,6 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import * as geometry from '/console/assets/geometry-edit.js';
+
+// /console/assets 절대 경로 import 를 단독 node --test 에서도 풀도록 로더를 먼저 건다.
+const { register } = await import('node:module');
+register('./resolve-console-assets.mjs', import.meta.url);
+const geometry = await import('/console/assets/geometry-edit.js');
 
 test('explicit split and join preserve inputs and reject invented connections', () => {
   const line = [[0, 0], [2, 0], [3, 1]];

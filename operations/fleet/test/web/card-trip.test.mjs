@@ -5,26 +5,27 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { cancelScope, cardTripLine, endedTripText, tripReason } = await import("../../../../applications/fleet/web/card-trip.js");
-const { createRoster, selectRobot } = await import("../../../../applications/fleet/web/roster.js");
+const { cancelScope, cardTripLine, cardTripSig, endedTripText, tripReason } = await import("../../../../applications/fleet/web/card-trip.js");
+const { createSelection } = await import("../../../../shared/web/selection.js");
+const { createRoster, selectRobot } = await import("../../../../applications/fleet/web/robot/roster.js");
 
 const robot = (estop = false, extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop } }, ...extra });
 const ACTIVE = { version: 4, map: { places: [] } };
 
 test("workspace inspection never arms a goal and a different robot withdraws goal, pin and cursor", () => {
-  const view = { robots: [robot(), { ...robot(), robot_id: "b" }], focusRobot: null, selected: null, pinning: null, cursor: null };
+  const view = { robots: [robot(), { ...robot(), robot_id: "b" }], robotSelection: createSelection(null), selected: null, pinning: null, cursor: null };
   assert.equal(selectRobot(view, "a"), true);
-  assert.equal(view.focusRobot, "a");
+  assert.equal(view.robotSelection.get(), "a");
   assert.equal(view.selected, null);
   Object.assign(view, { selected: "a", pinning: "a", cursor: { col: 4, row: 5 } });
   assert.equal(selectRobot(view, "a"), false);  // polling the same selection does not withdraw an explicit arm
   assert.equal(view.selected, "a");
   assert.equal(selectRobot(view, "missing"), false);
-  assert.equal(view.focusRobot, "a");
+  assert.equal(view.robotSelection.get(), "a");
   assert.equal(selectRobot(view, "b"), true);
-  assert.deepEqual([view.focusRobot, view.selected, view.pinning, view.cursor], ["b", null, null, null]);
+  assert.deepEqual([view.robotSelection.get(), view.selected, view.pinning, view.cursor], ["b", null, null, null]);
   assert.equal(selectRobot(view, null), true);
-  assert.equal(view.focusRobot, null);
+  assert.equal(view.robotSelection.get(), null);
 });
 
 test("trip gate: Fleet state, role, named operator, link, E-stop, safety, active map — first reason wins", () => {
@@ -54,6 +55,38 @@ test("trip gate explains formation conflicts without blocking unrelated robots",
   assert.match(reason('a'), /대형.*해제/);
   assert.match(reason('b'), /대형.*해제/);
   assert.equal(reason('c'), '');
+});
+
+// 회귀(운행 폼이 다시 그려지지 않음): 서명은 그린 시점의 상태로 계산한다. 폼의 모든 표시 값이
+// 서명을 움직여야 하고, 안 바뀐 상태는 같은 서명을 줘야 다시 그림 판정이 변하지 않는다.
+test("cardTripSig reads the live form: every shown value moves it, unchanged state does not", () => {
+  const now = 1000;
+  const form = { robotId: "a", kind: "route", to: "A", start: "", lapStart: "", via: "",
+    plan: null, lapPlan: null, busy: false, note: null, rule: null };
+  assert.equal(cardTripSig(null, now), "");  // no form open: the panel drops the form
+  const opened = cardTripSig(form, now);
+  assert.notEqual(opened, "");
+  form.plan = { plan_id: "p2", expires_at: now + 30 };  // '경로 보기' answer lands
+  assert.notEqual(cardTripSig(form, now), opened);  // (a) 계획 도착 → 다시 그림
+  const planned = cardTripSig(form, now);
+  form.busy = true;
+  assert.notEqual(cardTripSig(form, now), planned);  // (b) busy 토글
+  form.busy = false;
+  form.rule = { kind: "return", values: { percent: 20 }, answer: null, note: null, busy: false, draft: false };
+  const ruled = cardTripSig(form, now);
+  form.rule.kind = "departure";
+  assert.notEqual(cardTripSig(form, now), ruled);  // (c) 규칙 종류 변경
+  form.rule.kind = "return";
+  form.rule.note = "판정을 받지 못했습니다. 다시 눌러 주세요.";
+  assert.notEqual(cardTripSig(form, now), ruled);  // (d) 판정 실패
+  form.rule.note = null;
+  form.rule.answer = { verdict: "go", reason: "within_rules", rules_source: "active" };
+  assert.notEqual(cardTripSig(form, now), ruled);  // 판정 answer
+  form.rule.answer = null;
+  assert.equal(cardTripSig(form, now), ruled);  // 같은 상태로 돌아오면 같은 서명 (순수 함수)
+  const idle = cardTripSig(form, now);
+  assert.equal(cardTripSig(form, now + 1), idle);  // (e) 아무 변화 없음 → 동일
+  assert.notEqual(cardTripSig(form, now + 60), idle);  // 계획 만료(시작 직전 만료 재확인)도 화면에 닿는다
 });
 
 const LOST = { trip_id: "t0", robot_id: "a", state: "stopped", reason: "lease_lost",

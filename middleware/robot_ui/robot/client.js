@@ -1,8 +1,9 @@
 // 세션과 인증된 fetch. 토큰이 사는 유일한 곳이다.
 
-import { elements, tagStatus } from "./dom.js";
+import { elements, announce } from "./dom.js";
 import { classifyOperation } from "./camera-capture.js";
 import { createAccountSession } from "/common/account-session.js";
+import { createConnectionNotice } from "/common/connection-notice.js";
 
 // D-193 6 storage rule. A token without an expiry (card, manual) lives only in
 // sessionStorage. A paired token may go to localStorage, and only when the
@@ -90,15 +91,23 @@ const account = createAccountSession({
 });
 export const restoreAccount = account.restore;
 
-export function setConnection(kind, label) {
+let badgeNotice = null;
+// `state` is the C10 vocabulary and is always given by the caller: only "disconnected" (the link is really down) is a warn tag.
+export function setConnection(_kind, label, state) {
   const badge = elements["connection-badge"];
-  badge.setAttribute("status", tagStatus(kind));
-  badge.querySelector("span").textContent = label;
-  // D-396: 연결 배너 — WebSocket 이 끊기면 topbar 아래 전체 폭으로 알린다.
-  const banner = elements["connection-banner"];
-  if (banner) {
-    banner.hidden = kind === "online";
+  if (badge) {
+    badgeNotice ??= createConnectionNotice(badge);
+    badgeNotice.set(state, label);
+    announceConnection(state, label);
   }
+}
+// C25: the badge is the only connection indicator (a disconnect is a warn tag, C10); one polite announcement per change.
+let lastConnection = null;
+function announceConnection(state, label) {
+  if (state === lastConnection) return;
+  const first = lastConnection === null;
+  lastConnection = state;
+  if (!first || state === "disconnected") announce(label);
 }
 
 /** Keep `token` for this browser. `persist` applies only to a token that expires within 7 days. */

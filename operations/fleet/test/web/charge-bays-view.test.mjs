@@ -143,8 +143,10 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   });
   assert.deepEqual(targets.map(t => t.id), ['arm_s', 'arm_a', 'arm_b', 'cell_s', 'cell_ab', 'rosy_60', 'rosy_40']);
   assert.equal(targets[0].cameraViews[0].id, 'arm_s_wrist');
-  assert.equal(targets[1].cameraViews[0].id, 'arm_a_wrist');
-  assert.equal(targets[2].cameraViews[0].id, 'arm_b_wrist');
+  assert.deepEqual(targets[1].cameraViews.map(v => v.id), ['arm_a_wrist', 'top', 'side']);
+  assert.deepEqual(targets[2].cameraViews.map(v => v.id), ['arm_b_wrist', 'top', 'side']);
+  assert.deepEqual(targets[1].buttons.map(b => b.preset), ['s5_tier1_arm_a', 's5_tier3_arm_a']);
+  assert.deepEqual(targets[2].buttons.map(b => b.preset), ['s5_tier2_arm_b']);
   assert.deepEqual(targets[0].dualPair, ['arm_s_top', 'arm_s_wrist']);
   assert.deepEqual(targets[1].dualPair, ['top', 'arm_a_wrist']);
   assert.deepEqual(targets[2].dualPair, ['top', 'arm_b_wrist']);

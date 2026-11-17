@@ -31,6 +31,7 @@ from fleet.server.arm_transfer_preflight_routes import install_arm_transfer_pref
 from fleet.server.cancel_all import DriveCancelFence
 from fleet.server.console import FleetConsole
 from fleet.server.control_unit_runtime import install_control_unit
+from fleet.server.control_unit_config import unit_scope
 from fleet.server.credential_isolation import assert_credentials_isolated
 from fleet.server.execution_profile_routes import install_execution_profile_routes
 from fleet.server.goal_evidence_service import GoalEvidenceService
@@ -253,6 +254,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         cell_goal_evidence_service, deployment_profile)
     app.state.proposal_store = proposal_store
     app.state.omx_instances, app.state.omx_stop_transport = configured_omx, stop_transport
+    console.control_unit = {"scope": unit_scope()}  # install_control_unit replaces it for a control unit
     app.state.localization_service = localization_service
     if task_service is not None:
         async def release_traffic_task(mission: dict) -> None:
@@ -297,6 +299,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
     app.state.operator_guard = [Depends(require_operator)]  # pipeline mutations
+    app.state.named_operator_dep = require_named_operator  # pipeline hold clear, task resume, gate execute
     app.state.proposer_guard = [Depends(require_proposer)]  # cell worker / telemetry ingress
     from fleet.server.workcell_observation_routes import install_workcell_observation_routes as install_observations
     install_observations(app, workcell_observations, require_viewer, require_named_operator, task_service, authorize)

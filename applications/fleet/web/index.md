@@ -13,7 +13,7 @@
 | D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 |
 | D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 | D-801 | 관제 콘솔 로봇 실시간 영상은 사이트 발급 읽기 위임과 SFU 기본·사이트 PC MCU 모자이크 혼합 토폴로지를 쓴다(D-789 Decision 3 대체) |
-| D-892 | Fleet 모바일 관제의 로봇 상태·작업 우선 배치 |
+| D-892 | Fleet 모바일 관제의 로봇 상태·작업 우선 배치 (순서는 D-1027로 부분 대체) |
 | D-961 | 공용 작업 이동과 작업·인증 화면 구성. [전문](../adr/D-961-shared-task-links-and-page-compositions.md) |
 
 ## 계획·결과 문서
@@ -23,6 +23,7 @@
 ## 교훈 (docs/solutions)
 
 - [A page overflow check can pass while a card clips a child identifier](../../../docs/solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md)
+- [Playwright visibility and scrollWidth checks miss half-width grid traps, sibling badge overlap, and FIELD_PROBE desktop density blocks](../../../docs/solutions/logic-errors/visibility-checks-miss-half-width-grid-traps-and-sibling-overlap-2026-11-16.md)
 
 ## 시험
 
@@ -32,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-17 · uncommitted · revert(console): AI 팔 제안 보기를 이 착지에서 뺀다
 - 2026-11-16 · uncommitted · fix(console): 활성 지도 버전 변경 시 카메라 추적 보정 동시 갱신
-- 2026-11-14 · uncommitted · 관제 현장 지도 출발은 기체 자기 지도면 차로 운행으로
-- 2026-11-13 · uncommitted · 콘솔 브라우저 계약 복구 (main red)
-- 2026-11-10 · uncommitted · uiux(console): 지도 프레임 다름 보류 문구 (D-1010)
-- 2026-11-08 · uncommitted · fix(accounts): 가입 요청 목록이 실패해도 계정 화면은 그린다
+- 2026-11-15 · uncommitted · ui(fleet): C23/C24 로봇 도크·패널 채택과 C14 작업 개요 이동
+- 2026-11-15 · uncommitted · refactor(fleet): move robot detail modules into fleet/web/robot (D-766 unit)
+- 2026-11-15 · uncommitted · ui(fleet): E 위치 상태·대기 출발·위치 다시 찾기·후보 확정 채택(C19)

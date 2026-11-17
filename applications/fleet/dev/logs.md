@@ -105,3 +105,20 @@
 - 변경: `PUT /api/fleet/pipeline/station-zones`(저장소를 tmp로 돌려 쓴 뒤 GET이 반영, 빈·잘못된 YAML은 422)와 `GET .../road-nav2/plan`(실제 응답 모양, 잘못된 쿼리 422) HTTP 시험을 기존 시험 옆에 더하고 두 요청과 호출을 기능표에 등록했다.
 - 증거: 원격 `ROSY_CAPTURE_FLEET_APP_CONTRACTS=1`로 `test_pipeline_orchestrator`·`test_berth_parking_routes` 10 passed(exit 0), 수신 기록 두 건. 첫 시험은 `fleet.server.sitemap` 모듈을 패치해 시험 호스트 `/tmp/station_zones.yaml`을 오염시켰고(기본 구역 시험이 실패), 시험이 import하는 `fleet.server.pipeline_routes`를 패치하도록 고친 뒤 그 파일을 지웠다.
 - gate 변화: PUT은 `read_guard`(viewer)만 요구해 viewer도 구역 YAML을 덮어쓸 수 있다. 시험은 viewer 403을 주장하지 않으며 권한 상향은 별도 결정이다. CE: 해당 없음 — 시험 누락 보강.
+
+## 2026-11-14 · uncommitted · feat(dev): arm_ai 샘플 시나리오(제안·스킬 상태 10건)
+
+- 변경: 신규 `dev/sample/arm_ai.py`·`fixtures/arm-ai.json`(전 건 `sample: true`, 라벨 `샘플 데이터`, 후보는 id·label·reason뿐), `engine.py`에 `ArmAI` 연결 4줄과 advance flow `arm_ai`(propose·admit·step·hold·fail·timeout·fallback), 개발 패널 단추 7개. `GET /api/fleet/arm-proposals`와 `POST .../{id}/admit`(제안자는 자기 제안 승인 403, digest·generation 불일치 409)은 샘플 전용 잠정 이름이고 실제 엔드포인트·명령 권한 변경은 없다. 정지·HOLD에서는 대체가 거절되고 대체는 새 제안 행이다.
+- 증거: 신규 `test/test_dev_sample_arm_ai.py`(아래 커밋 기록의 원격 결과 참조)
+- gate 변화: 없음(개발 샘플). Fleet 화면 채택(B1~B5)은 `feat/ui-relayout-fleet` 착지 뒤.
+
+## 2026-11-14 · uncommitted · feat(dev): 위치 패널 샘플 시나리오(로봇 14건)
+
+- 변경: 신규 `dev/sample/localization.py`·`fixtures/localization.json`(로봇 14건, 전 응답 `sample: true`·라벨 `샘플 데이터`), `engine.py`에 `Localization` 연결 4줄, advance flow `localization`(relocalize→candidates→confirm→localized, stop), 개발 패널 단추 5개. 경로·거절은 `fix/fleet-relocalize-operator`의 `relocalize_routes.py`·main의 auto-locate 경로를 그대로 따른다: `GET /api/fleet/auto-locate`, `POST .../auto-locate/{id}/lift-block`, `POST .../robots/{id}/relocalize`(UNKNOWN_ROBOT 404·ROBOT_OFFLINE 409·RELOCALIZE_TRIP_ACTIVE 409·ALREADY_LOCALIZED 409+localization·LOCALIZATION_DISABLED 503), `GET .../robots/{id}/localization`, `POST .../robots/{id}/localization/confirm`(NO_CANDIDATES 409·CANDIDATE_NOT_REPORTED 404·STALE_REQUEST 원문 그대로; `candidate_id`는 현재 보고 인덱스). relocalize·confirm은 운영자 전용이라 조회자는 403이다. 매 advance마다 보고 `request_id`가 바뀌어 오래된 보고로 confirm하면 STALE_REQUEST가 나온다. `localization.age_s`는 샘플 전용 추가 필드다(LocalizationStatus 자체에 Fleet이 믿는 시계는 없다).
+- 증거: 신규 `test/test_dev_sample_localization.py`(원격 시험 결과는 사용자가 따로 기록)
+- gate 변화: 없음(개발 샘플). 위치 패널 UI 채택은 `feat/ui-localization-state` 착지 뒤.
+
+## 2026-11-17 · uncommitted · revert(dev): arm_ai 샘플 제거
+- 변경: `sample/arm_ai.py`·`fixtures/arm-ai.json`·`engine.py` 연결·개발 패널 단추 7개·`test/test_dev_sample_arm_ai.py`를 제거했다. 쓰는 화면(AI 팔 제안 보기)을 이 착지에서 뺐다. 사유: C3 실제 경로 없음, feat/arm-proposal-view로 보관.
+- 증거: 원격 test_feature_matrix·test_surface_contracts·test_document_imports·browser_scope 통과, 브라우저 4파일 실패 0, node 547 passed(2026-11-17).
+- gate 변화: 없음.

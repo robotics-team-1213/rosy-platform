@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ADMIN_REASON, TWO_PERSON_REASON, executionVerdict, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
+  ADMIN_REASON, TWO_PERSON_REASON, errorText, executionVerdict, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
 } from "../../../../applications/fleet/web/work/policy-model.js";
 
 const RULES = {
@@ -64,4 +64,15 @@ test("the figure strip only counts what the server returned", () => {
   assert.equal(busy.proposals.note, "등록 정책 2개");
   const shadow = policyFigures({...empty, windows: [{active: true, kind: "shadow", expires_ns: 60e9}]}).find(f => f.id === "window");
   assert.equal(shadow.alert, false);
+});
+
+test("errorText translates 404, Not Found, and network failures to Korean", () => {
+  assert.equal(errorText({code: "STAGE_SKIP_REFUSED"}), "단계는 하나씩만 올릴 수 있습니다.");
+  for (const err of [{status: 404, message: "Not Found"}, {status: 404}, new Error("Not Found"), {message: "HTTP 404"}]) {
+    const text = errorText(err);
+    assert.equal(text, "이 Fleet에는 학습 정책 승인 기능이 설정되지 않았습니다.");
+    assert.doesNotMatch(text, /Not Found/);
+  }
+  assert.match(errorText(new TypeError("Failed to fetch")), /연결을 확인하지 못했습니다/);
+  assert.match(errorText(null), /처리 결과를 확인하지 못했습니다/);
 });

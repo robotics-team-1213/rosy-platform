@@ -16,6 +16,16 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='optional Ch
 
 @pytest.fixture
 def entry(tmp_path):
+    yield from _serve_entry(tmp_path, block_sockets=True)
+
+
+@pytest.fixture
+def dashboard(tmp_path):
+    """The same fixture CORE with real WebSockets, for the connection notice."""
+    yield from _serve_entry(tmp_path, block_sockets=False)
+
+
+def _serve_entry(tmp_path, block_sockets):
     spec = importlib.util.spec_from_file_location('entry_core_fixture', Path(__file__).with_name('test_role_g2_browser.py'))
     fixture = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fixture)
@@ -32,7 +42,7 @@ def entry(tmp_path):
         page.set_default_timeout(10_000)
         page.set_default_navigation_timeout(30_000)
         page.on('pageerror', lambda error: state['errors'].append(str(error)))
-        page.add_init_script("window.entrySockets=0;window.WebSocket=class {constructor(){window.entrySockets++;throw new Error('entry must not open sockets')}};")
+        if block_sockets: page.add_init_script("window.entrySockets=0;window.WebSocket=class {constructor(){window.entrySockets++;throw new Error('entry must not open sockets')}};")
 
         def serve(route):
             request = route.request
@@ -152,7 +162,7 @@ def test_entry_invalid_session_clears_links_but_manifest_error_retries(entry):
     expect(page.locator('#auth-drawer')).to_be_visible()
     expect(page.locator('#entry-status')).to_contain_text('다시 로그인')
     assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") is None
-    expect(page.get_by_role('button', name='비상 정지', exact=True)).to_be_disabled()
+    expect(page.get_by_role('button', name='비상 정지', exact=True)).to_be_enabled()  # C9: stop never waits for a login
     assert page.get_by_role('navigation', name='작업 화면').get_by_role('link').count() == 0
     state['whoami_status'], state['manifest_status'] = 200, 503
     page.get_by_role('tab', name='API 토큰', exact=True).click()
@@ -172,6 +182,7 @@ def test_entry_code_pairing_and_local_logout_use_existing_credential_helpers(ent
     expect(page.locator('#auth-drawer')).to_be_visible()
     assert state['calls'] == [('GET', '/api/account/session', None), ('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
+    page.locator('.auth-options > summary').click()  # optional device fields are a disclosure
     page.locator('#code-label').fill('fixture tablet')
     page.locator('#code-remember').check()
     page.locator('#code-submit').click()
@@ -210,7 +221,10 @@ def test_entry_compact_auth_keyboard_and_themes(entry):
         page.set_viewport_size({'width': width, 'height': 844})
         page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
         page.get_by_role('tab', name='로봇 화면 코드', exact=True).focus()
-        page.keyboard.press('ArrowRight')
+        page.keyboard.press('ArrowRight')   # K9 manual activation: the arrow moves focus only
+        expect(page.get_by_role('tab', name='API 토큰', exact=True)).to_be_focused()
+        expect(page.get_by_role('tab', name='API 토큰', exact=True)).to_have_attribute('aria-selected', 'false')
+        page.keyboard.press('Enter')
         expect(page.get_by_role('tab', name='API 토큰', exact=True)).to_have_attribute('aria-selected', 'true')
         expect(page.locator('#token-input')).to_be_focused()
         page.get_by_role('tab', name='로봇 화면 코드', exact=True).click()
@@ -233,6 +247,7 @@ def test_entry_remembers_only_expiring_paired_login_and_revokes_on_logout(entry)
     expect(page.locator('#code-message')).to_contain_text('8자')
     assert state['calls'] == [('GET', '/api/account/session', None), ('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
+    page.locator('.auth-options > summary').click()  # optional device fields are a disclosure
     page.locator('#code-remember').check()
     page.locator('#code-submit').click()
     expect(page.get_by_role('navigation', name='작업 화면')).to_be_visible()
@@ -258,7 +273,7 @@ def test_entry_network_retry_preserves_key_and_stop_ack_does_not_invent_readback
     expect(page.locator('#entry-stop-notice')).to_contain_text('상태 확인 불가')
     state['stop_status'] = 503
     page.get_by_role('button', name='비상 정지', exact=True).click()
-    expect(page.locator('#entry-stop-notice')).to_contain_text('비상 정지 실패')
+    expect(page.locator('#entry-stop-notice')).to_contain_text('정지 요청 거절')
     assert not any(path.endswith('/reset') for _, path, _ in state['calls'])
     assert page.evaluate('window.entrySockets') == 0
 
@@ -274,7 +289,7 @@ def test_entry_expiry_returns_to_authentication_without_operational_poll(entry):
     page.clock.fast_forward(60_001)
     expect(page.locator('#entry-status')).to_contain_text('만료되었습니다')
     expect(page.locator('#auth-drawer')).to_be_visible()
-    expect(page.get_by_role('button', name='비상 정지', exact=True)).to_be_disabled()
+    expect(page.get_by_role('button', name='비상 정지', exact=True)).to_be_enabled()  # C9: stop never waits for a login
     assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") is None
     assert len(state['calls']) == calls
 
@@ -295,7 +310,7 @@ def test_entry_malformed_manifest_is_recoverable_error_not_permission_empty(entr
     expect(page.locator('#entry-status')).to_contain_text('허용된 작업 화면이 없습니다')
 
 
-def test_entry_malformed_identity_cannot_enable_stop_and_unknown_string_role_retries(entry):
+def test_entry_malformed_identity_keeps_stop_pressable_and_unknown_string_role_retries(entry):
     page, state = entry
     state['identity'] = {}
     _open(page)
@@ -303,7 +318,7 @@ def test_entry_malformed_identity_cannot_enable_stop_and_unknown_string_role_ret
         state['identity'] = identity
         page.reload(wait_until='domcontentloaded')
         expect(page.locator('#entry-status')).to_contain_text('로그인을 확인하지 못했습니다')
-        expect(page.locator('#entry-stop')).to_be_disabled()
+        expect(page.locator('#entry-stop')).to_be_enabled()
         expect(page.locator('#auth-drawer')).to_be_visible()
         assert page.locator('#entry-navigation a').count() == 0
     state['identity'] = {'role': 'new_server_role', 'source': 'manual'}
@@ -412,4 +427,73 @@ def test_entry_old_stop_ack_cannot_fetch_state_with_expired_session(entry):
     assert page.evaluate('window.oldStopDecoded') is None
     assert page.evaluate('window.oldStopReadbackTokens') == []
     assert not any(path == '/api/v1/robot/state' for _, path, _ in state['calls'])
-    expect(page.locator('#entry-stop-notice')).to_be_hidden()
+    expect(page.locator('#entry-stop-notice')).not_to_contain_text('로봇 정지 상태 확인')  # no readback claimed for the dropped ack
+
+
+def test_entry_stop_is_pressable_before_login_and_a_refusal_is_text(entry):
+    page, state = entry
+    state['whoami_status'] = 401
+    state['stop_status'] = 403
+    _open(page)
+    stop = page.get_by_role('button', name='비상 정지', exact=True)
+    expect(stop).to_be_enabled()
+    stop.click()
+    expect(page.locator('#entry-stop-notice')).to_contain_text('운용 권한')
+
+
+def test_connection_badge_is_a_warn_tag_only_for_a_real_disconnect(dashboard):
+    # C25: the header badge is the single connection indicator; the old full-width banner is gone.
+    page, state = dashboard
+    # A real browser WebSocket aimed at a port nobody listens on: the browser itself reports the close (1006).
+    page.add_init_script("const Real = WebSocket; window.WebSocket = class extends Real "
+                         "{ constructor(url, protocols) { super(String(url).includes('/ws/state') ? 'ws://127.0.0.1:1/' : url, protocols); } };")
+    page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'fixture-manual');")
+    page.goto('http://rosy.test/dashboard?view=compatibility', wait_until='domcontentloaded')
+    expect(page.locator('#compatibility-shell')).to_have_attribute('data-ready', 'true')
+    # Waiting for sign-in and a plain unknown are calm: no chip, one plain badge.
+    calm = page.evaluate("""async () => {
+      const client = await import('/dashboard/assets/client.js');
+      const read = () => { const b = document.getElementById('connection-badge');
+        return {hidden: b.hidden, danger: Boolean(b.querySelector('ui-tag')), evidence: b.dataset.evidence}; };
+      client.setConnection('online', '값 수신 중', 'fresh'); const online = read();
+      client.setConnection('unknown', '인증 대기', 'auth-wait'); const wait = read();
+      client.setConnection('unknown', '연결 중', 'unavailable'); const unknown = read();
+      return {online, wait, unknown};
+    }""")
+    assert page.locator('#connection-banner').count() == 0
+    for kind in ('online', 'wait', 'unknown'):
+        assert not calm[kind]['danger'], calm
+    assert calm['wait']['evidence'] == 'auth-wait' and calm['unknown']['evidence'] == 'unavailable'
+    # A state message that cannot be parsed is calm too (not a disconnect).
+    parse = page.evaluate("""async () => {
+      const client = await import('/dashboard/assets/client.js');
+      const {createStateSocket} = await import('/dashboard/assets/state-socket.js');
+      const stream = createStateSocket({onState() { throw new Error('bad'); }, poll: async () => {}, onUnauthorized() {}});
+      stream.connect();
+      client.session.socket.dispatchEvent(new MessageEvent('message', {data: 'not json'}));
+      const b = document.getElementById('connection-badge');
+      const result = {hidden: b.hidden, danger: Boolean(b.querySelector('ui-tag')), evidence: b.dataset.evidence};
+      stream.stop();
+      return result;
+    }""")
+    assert parse == {'hidden': False, 'danger': False, 'evidence': 'unavailable'}, parse
+    # The real socket closes: the stream falls back to REST polling, which still delivers values: calm "delayed".
+    page.evaluate("""async () => {
+      const client = await import('/dashboard/assets/client.js');
+      const {createStateSocket} = await import('/dashboard/assets/state-socket.js');
+      // Like app.js: a poll that cannot reach the robot says so through setConnection(..., "disconnected").
+      window.__reach = false;
+      window.__stream = createStateSocket({onState() {}, onUnauthorized() {}, poll: async () => {
+        if (window.__reach) return;
+        try { await fetch('http://127.0.0.1:1/api/v1/robot/state'); } catch (_error) { client.setConnection('error', '연결 확인 필요', 'disconnected'); }
+      }});
+      window.__stream.connect();
+    }""")
+    banner = page.locator('#connection-badge')
+    expect(banner).to_have_attribute('data-evidence', 'delayed')
+    assert banner.locator('ui-tag').count() == 0 and banner.locator('ui-tag[status="crit"]').count() == 0
+    # Only when REST is unreachable as well is it a real disconnect: a warn tag (danger only when the caller flags risk).
+    expect(banner).to_be_visible()
+    expect(banner.locator('ui-tag[status="warn"]')).to_have_text('연결 확인 필요')
+    assert banner.locator('ui-tag[status="crit"]').count() == 0
+    page.evaluate("window.__stream.stop()")

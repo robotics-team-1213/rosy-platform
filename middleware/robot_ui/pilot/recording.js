@@ -96,7 +96,7 @@ export function sheetRows(listing) {
   return (listing?.items ?? []).map((item) => {
     const complete = item.status === "complete";
     const tooBig = complete && Number(item.bytes) > PILOT_FETCH_MAX_BYTES;
-    const duration = item.duration_s == null ? "—" : formatElapsed(item.duration_s);
+    const duration = item.duration_s == null ? "정보 없음" : formatElapsed(item.duration_s);
     return {
       id: item.id,
       title: formatStarted(item.started_at),

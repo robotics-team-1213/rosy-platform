@@ -1,6 +1,8 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,commonDown,panelError,setText} from '/review-alerts.js';
 import '/common/ui.js';
 import '/commands.js';
+import {createStopControl} from '/common/stop-control.js';
+import {createTabs} from '/common/interaction-controls.js';
 const $=id=>document.getElementById(id),API='/api/learning/omx/center';
 const active=new Set(['launching','running','stopping']);
 const labels={launching:'시작 준비 중',running:'실행 중',stopping:'중지 처리 중',failed:'실패',interrupted:'중단됨',cancelled:'취소됨',succeeded:'완료'};
@@ -10,7 +12,7 @@ let study=null,listing={},token='',project='',connected=false,working=false,poll
 let studyId=new URL(location.href).searchParams.get('study')||'',selected=[],manifest=[],matched=false;
 let pending=null,inspectionKey='',splitSaved='',dirty=false,resultSignature='',selectionGeneration=0;
 function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
-function error(message){$('imitate-error').hidden=!message;$('imitate-error').textContent=message||'';}
+function error(message){$('imitate-error').hidden=!message;setText($('imitate-error'),message||'');}
 function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,v=>v.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 function storageKey(){return `rosy.imitation.pending:${project}:${studyId}`;}
 const TRAIN_FIELDS=[['train-steps','steps'],['train-batch','batch_size'],['train-seed','seed'],['train-lr','optimizer_lr'],['train-chunk','chunk_size']];
@@ -18,12 +20,14 @@ function readPending(){try{pending=JSON.parse(localStorage.getItem(storageKey())
 function remember(value){localStorage.setItem(storageKey(),JSON.stringify(value));pending=value;}
 function forget(){localStorage.removeItem(storageKey());pending=null;}
 function setURL(){const u=new URL(location.href);if(studyId)u.searchParams.set('study',studyId);else u.searchParams.delete('study');history.replaceState(null,'',u);}
+// K9: the four faces of one study are createTabs (role=tab is written only by the shared part); each old panel section becomes tab content.
+const tabs=createTabs({id:'imitate',label:'모방학습 단계',onChange:key=>panel(key),tabs:[['upload','자료 올리기'],['inspect','확인·분할'],['learn','ACT 학습'],['results','평가·모델']].map(([key,label])=>{const section=$('panel-'+key),content=document.createElement('div');content.className='imitate-panel';content.append(...section.childNodes);section.remove();return {id:key,label,content,panelId:'panel-'+key};})});
+document.querySelector('.imitate-tabs').replaceWith(tabs.element);
 function panel(name,focus=false){
   if(!panels.includes(name))name='upload';
-  for(const key of panels){$('panel-'+key).hidden=key!==name;$('tab-'+key).setAttribute('aria-selected',String(key===name));$('tab-'+key).tabIndex=key===name?0:-1;}
-  const u=new URL(location.href);u.searchParams.set('panel',name);history.replaceState(null,'',u);if(focus)$('tab-'+name).focus();
+  tabs.select(name);
+  const u=new URL(location.href);u.searchParams.set('panel',name);history.replaceState(null,'',u);if(focus)tabs.element.querySelector('[role=tab][aria-selected=true]').focus();
 }
-for(const name of panels){$('tab-'+name).onclick=()=>panel(name);$('tab-'+name).onkeydown=event=>{let i=panels.indexOf(name);if(event.key==='ArrowRight')i++;else if(event.key==='ArrowLeft')i--;else if(event.key==='Home')i=0;else if(event.key==='End')i=panels.length-1;else return;event.preventDefault();panel(panels[(i+panels.length)%panels.length],true);};}
 async function request(path,body){
   const options={cache:'no-store',signal:AbortSignal.timeout(60000)};
   if(body!==undefined){options.method='POST';options.headers={'Content-Type':'application/json','X-Pinky-Token':token};options.body=JSON.stringify(body);}
@@ -55,7 +59,7 @@ function availability(){
   $('source-folder').disabled=working;$('study-select').disabled=working;$('study-new').disabled=working;
   const current=listing.active_run||(study?.runs||[]).find(r=>active.has(r.status));
   $('active-run').hidden=!current;
-  if(current){$('active-title').textContent=current.execution_mode==='lerobot_inspect'?'현재 실행 · 원본 검사':'현재 실행 · ACT 학습';$('active-progress').textContent=progress(current);$('active-identity').textContent=`실행 ${current.id}${current.study_id&&current.study_id!==studyId?' · 다른 학습 작업':''}`;$('active-stop').dataset.run=current.id;disable('active-stop',!connected?'연결을 다시 확인하세요.':!token?'관리 권한이 필요합니다.':current.status==='stopping'?'중지 처리 중입니다.':'');}
+  if(current){$('active-title').textContent=current.execution_mode==='lerobot_inspect'?'현재 실행 · 원본 검사':'현재 실행 · ACT 학습';$('active-progress').textContent=progress(current);$('active-identity').textContent=`실행 ${current.id}${current.study_id&&current.study_id!==studyId?' · 다른 학습 작업':''}`;$('active-stop').dataset.run=current.id;}
   $('train-host').textContent=`ACT · LeRobot 0.4.4 · CPU · 실행 호스트 ${listing.host_id||'미확인'}`;
 }
 function progress(run){const p=run.progress||{};return `${labels[run.status]||'상태 미확인'} · ${phases[p.phase]||'세부 진행 정보 없음'}${Number.isFinite(p.step)?` · ${p.step} / ${p.steps??run.steps??'?'}단계`:''}`;}
@@ -105,7 +109,7 @@ async function refresh(){
   try{const auth=await request('/api/learning/tasks');if(generation!==resourceGeneration)return;token=auth.token||'';const nextProject=auth.project_id||auth.project?.id||'';if(project!==nextProject){project=nextProject;readPending();}
     const value=await request(API+'/lerobot-studies');if(generation!==resourceGeneration)return;listing=value;
     if(studyId){const id=studyId;try{const selected=await request(API+'/lerobot-study/'+encodeURIComponent(id));if(generation!==resourceGeneration||id!==studyId)return;study=selected;}catch(exc){if(generation!==resourceGeneration)return;if(pending?.kind!=='create')throw exc;}}connected=true;render();}
-  catch(exc){if(generation===resourceGeneration){connected=false;error(`${exc.message} 다시 확인을 눌러 연결을 확인하세요.`);availability();}}
+  catch(exc){if(generation===resourceGeneration){connected=false;error(commonDown()?'':`${exc.message} 다시 확인을 눌러 연결을 확인하세요.`);availability();}}
   finally{polling=false;$('imitate-refresh').disabled=false;if(refreshQueued||generation!==resourceGeneration){refreshQueued=false;void refresh();}}
 }
 const paths=[/^meta\/(info|stats)\.json$/,/^meta\/tasks\.parquet$/,/^meta\/episodes\/chunk-\d{3}\/file-\d{3}\.parquet$/,/^data\/chunk-\d{3}\/file-\d{3}\.parquet$/,/^videos\/observation\.images\.[A-Za-z0-9_-]+\/chunk-\d{3}\/file-\d{3}\.mp4$/,/^(README\.md|LICEN[CS]E|LICENSE\.txt|LICENSE\.md|UPSTREAM_README\.md|source-provenance\.json)$/];
@@ -124,12 +128,12 @@ $('source-folder').onchange=async()=>{
     const original=study?.upload.files||pending?.body.files;
     if(original&&!sameManifest(checked,[...original].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0)))throw new Error('선택한 파일 목록·크기·내용이 저장한 원본과 다릅니다. 같은 폴더를 다시 선택하거나 새 작업을 만드세요.');
     manifest=checked;selected=included;matched=true;$('upload-status').textContent=`${included.length}개 파일 · ${total.toLocaleString()} bytes · 파일 내용 확인됨`;
-  }catch(exc){error(exc.message);}finally{availability();}
+  }catch(exc){error(panelError(exc,''));}finally{availability();}
 };
 async function mutate(kind,path,body){
   if(working)return;working=true;error('');
   try{if(pending&&pending.kind!==kind)throw new Error('이전 요청의 접수 여부를 먼저 확인하세요.');if(!pending)remember({kind,body});availability();const result=await request(API+path,pending.body);forget();$('action-status').textContent='요청 접수를 확인했습니다.';return result;}
-  catch(exc){error(`${exc.message} 같은 요청 다시 확인을 누르면 저장한 요청으로 접수 여부를 확인합니다.`);throw exc;}
+  catch(exc){error(commonDown()?'':`${exc.message} 같은 요청 다시 확인을 누르면 저장한 요청으로 접수 여부를 확인합니다.`);throw exc;}
   finally{working=false;availability();}
 }
 $('upload-start').onclick=async()=>{
@@ -142,13 +146,18 @@ $('upload-start').onclick=async()=>{
       while(offset<entry.size){const bytes=new Uint8Array(await source.file.slice(offset,offset+256*1024).arrayBuffer());let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);const reply=await request(API+'/lerobot-upload',{study_id:studyId,name:entry.name,offset,data:btoa(binary)});if(reply.offset!==offset+bytes.length)throw new Error('업로드 위치가 예상과 다릅니다. 다시 확인 후 같은 폴더로 이어가세요.');offset=reply.offset;entry.offset=offset;study.upload.uploaded_bytes=study.upload.files.reduce((n,f)=>n+f.offset,0);render();}
     }
     $('action-status').textContent='자료 업로드 완료. 확인·분할에서 원본 검사를 시작하세요.';panel('inspect');
-  }catch(exc){error(`${exc.message} 다시 확인 후 같은 폴더로 업로드를 이어갈 수 있습니다.`);}
+  }catch(exc){error(commonDown()?'':`${exc.message} 다시 확인 후 같은 폴더로 업로드를 이어갈 수 있습니다.`);}
   finally{working=false;await refresh();availability();}
 };
 $('inspect-start').onclick=async()=>{if($('inspect-start').disabled)return;try{await mutate('inspect','/lerobot-inspect',{study_id:studyId,request_id:uuid()});await refresh();}catch{}};
 $('split-save').onclick=async()=>{if($('split-save').disabled)return;try{const saved=await mutate('split','/lerobot-split',{study_id:studyId,source_revision:study.source_revision,...splitSelection(),request_id:uuid()});study=saved;dirty=false;splitSaved='';render();}catch{}};
 $('train-start').onclick=async()=>{if($('train-start').disabled)return;try{await mutate('train','/lerobot-run',{study_id:studyId,split_revision:study.split.revision,steps:Number($('train-steps').value),batch_size:Number($('train-batch').value),seed:Number($('train-seed').value),optimizer_lr:Number($('train-lr').value),chunk_size:Number($('train-chunk').value),request_id:uuid()});panel('results');await refresh();}catch{}};
-$('active-stop').onclick=async()=>{if($('active-stop').disabled)return;const id=$('active-stop').dataset.run;$('active-stop').disabled=true;try{await request(API+'/stop',{id});$('action-status').textContent='중지를 요청했습니다. 현재 실행의 처리 결과를 확인하세요.';await refresh();}catch(exc){error(exc.message);}finally{availability();}};
+// The stop is never gated by permission, connection or a running request; a refusal is shown as text (C9).
+createStopControl({button:$('active-stop'),status:$('action-status'),send:async signal=>{
+  const response=await accountFetch(API+'/stop',{method:'POST',signal,headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify({id:$('active-stop').dataset.run})});
+  if(response.ok)void refresh();
+  return response;
+}});
 function reset(){resourceGeneration++;study=null;selected=[];manifest=[];matched=false;inspectionKey=null;splitSaved='';dirty=false;resultSignature='';selectionGeneration++;$('source-folder').value='';$('study-name').value='';$('upload-status').textContent='선택한 자료가 없습니다.';$('upload-progress').value=0;$('upload-excluded').replaceChildren();error('');readPending();setURL();render();}
 $('study-new').onclick=()=>{studyId='';reset();panel('upload');};
 $('study-select').onchange=async()=>{studyId=$('study-select').value;reset();await refresh();};

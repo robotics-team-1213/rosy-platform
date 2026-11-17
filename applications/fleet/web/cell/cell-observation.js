@@ -20,10 +20,15 @@ const element = (tag, text = '') => {
   const node = document.createElement(tag); node.textContent = text; return node;
 };
 const staleArm = entry => {
+  if (entry.stale) return;
+  entry.stale = true;
+  entry.lastSeq = null;
   entry.values.textContent = '최신 피드백 없음'; entry.status.textContent = '수신 대기 · 원본 만료';
   entry.status.setAttribute('state', 'unavailable');
 };
 const staleCamera = entry => {
+  if (entry.stale) return;
+  entry.stale = true;
   entry.image.hidden = true; entry.status.textContent = '최신 영상 없음';
   entry.status.setAttribute('state', 'unavailable');
 };
@@ -68,11 +73,23 @@ export function createCellObservation({request, root, credential = () => ''}) {
   const incidentFrames = new Map();  // D-971: blob URL of each incident frame, fetched once
   let seenFaults = null;
   root.replaceChildren(empty);
-  function paintHealth(entry) {
+  const hostSection = () => root.closest?.('ui-section');
+  const workspaceMode = () => root.closest?.('#cell-main')?.dataset?.cellWorkspace || '';
+  const isPaused = () => (typeof document !== 'undefined' && document.hidden)
+    || Boolean(hostSection()?.hidden)
+    || workspaceMode() === 'prep';
+  function paintHealth(entry, force = false) {
+    const now = performance.now();
+    const isOpen = Boolean(entry.healthDetails?.open);
     const health = entry.health.read();
+    const summaryKey = `${health.evidence}|${health.severity}|${health.label}|${health.status}|${health.lastFault}|`
+      + health.motors.map(m => `${m.id}:${m.hardware_error}:${m.fault}:${m.warnings.length}`).join(',');
+    const changed = summaryKey !== entry.healthSummaryKey;
+    if (!force && !changed && now - (entry.healthPaintedAt || 0) < (isOpen ? 500 : 1000)) return;
+    entry.healthSummaryKey = summaryKey;
     renderMotorHealthSummary(entry.healthSummary, health);
-    if (entry.healthDetails.open) renderMotorHealth(entry.healthView, health);
-    entry.healthPaintedAt = performance.now();
+    if (isOpen) renderMotorHealth(entry.healthView, health);
+    entry.healthPaintedAt = now;
   }
 
   function reset() {
@@ -97,12 +114,15 @@ export function createCellObservation({request, root, credential = () => ''}) {
     empty.textContent = '등록된 작업 셀 관측이 없습니다.';
     for (const cell of workcells) {
       const section = element('section');
+      const cellScope = (cell.workcell_id === 'cell_s' || (cell.arms || []).some(a => a.arm_id === 'arm_s')) ? 'cell_s'
+        : (cell.workcell_id === 'cell_ab' || (cell.arms || []).some(a => a.arm_id === 'arm_a' || a.arm_id === 'arm_b')) ? 'cell_ab' : '';
+      if (cellScope) section.dataset.workcellScope = cellScope;
       section.append(element('h3', cell.label));
       // every camera of the cell side by side, the shared views first; a click enlarges one (2026-11-01)
       const wall = element('div'); wall.className = 'cell-camera-wall';
       const grid = element('div'); grid.className = 'cell-observation-grid';
       for (const arm of cell.arms) {
-        const card = element('article'); card.className = 'cell-observation-card'; card.dataset.armSource = arm.source_id;
+        const card = element('article'); card.className = 'cell-observation-card'; card.dataset.armSource = arm.source_id; card.dataset.armId = arm.arm_id || '';
         const status = element('ui-status'); status.setAttribute('state', 'unavailable');
         const values = element('pre');
         const healthDetails = element('details'), healthSummary = element('summary'), healthView = element('section');
@@ -113,19 +133,21 @@ export function createCellObservation({request, root, credential = () => ''}) {
         const incidents = element('details'), incidentsSummary = element('summary'), incidentsList = element('ol');
         incidentsSummary.className = 'ui-disclosure-row'; incidentsSummary.textContent = '팔 사건 없음';
         incidentsList.className = 'cell-incident-history'; incidents.append(incidentsSummary, incidentsList);
-        const entry = {status, values, expires: 0, health: createMotorHealthState(), healthDetails, healthSummary, healthView,
+        const entry = {status, values, expires: 0, stale: false, lastSeq: null, lastArm: arm,
+          profileKey: `${arm.arm_id || ''}|${arm.source_id}|${arm.binding_sha256 || ''}`,
+          health: createMotorHealthState(), healthDetails, healthSummary, healthView, healthSummaryKey: '',
           history, historySummary, historyList, faults: '', incidents, incidentsSummary, incidentsList, incidentKey: ''};
-        healthDetails.addEventListener('toggle', () => paintHealth(entry));
-        paintHealth(entry); staleArm(entry); arms.set(arm.source_id, entry);
+        healthDetails.addEventListener('toggle', () => paintHealth(entry, true));
+        paintHealth(entry, true); staleArm(entry); arms.set(arm.source_id, entry);
         card.append(element('h4', arm.label), healthDetails, incidents, history, element('ui-text', '엔코더 각도 · rad'), status, values); grid.append(card);
         card.append(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
       }
       const rank = camera => ({overhead: 0, side: 1}[camera.role] ?? 2) + (camera.stream === 'depth' ? 0.5 : 0);
       for (const camera of [...cell.cameras].sort((a, b) => rank(a) - rank(b))) {
-        const card = element('article'); card.className = 'cell-observation-card'; card.dataset.cameraSource = camera.source_id;
+        const card = element('article'); card.className = 'cell-observation-card'; card.dataset.cameraSource = camera.source_id; card.dataset.cameraArm = camera.arm_id || '';
         const status = element('ui-status'); status.setAttribute('state', 'unavailable');
         const image = element('img'); image.alt = `${camera.label} 현재 영상`; image.hidden = true;
-        const entry = {image, status, expires: 0, pending: false, lease: null, identity: null, url: null};
+        const entry = {image, status, expires: 0, pending: false, lease: null, identity: null, url: null, workcellScope: cellScope, cameraArm: camera.arm_id || ''};
         image.onerror = () => staleCamera(entry);
         card.title = '눌러서 크게 보기'; card.tabIndex = 0; card.setAttribute('role', 'button');
         card.setAttribute('aria-pressed', 'false'); card.setAttribute('aria-label', `${camera.label} 크게 보기`);
@@ -142,6 +164,30 @@ export function createCellObservation({request, root, credential = () => ''}) {
       }
       section.append(wall, grid); root.append(section);
     }
+  }
+
+  function syncScope() {
+    const active = workspaceMode();
+    const scoped = ['cell_s', 'cell_a', 'cell_b', 'cell_ab'].includes(active);
+    const sections = [...root.querySelectorAll('section[data-workcell-scope]')];
+    for (const wall of root.querySelectorAll('.cell-camera-wall')) {
+      wall.hidden = scoped;
+    }
+    if (!scoped || !sections.length) {
+      for (const s of sections) s.hidden = false;
+      for (const card of root.querySelectorAll('article[data-arm-id], article[data-camera-arm]')) card.hidden = false;
+      return active === 'prep' ? 'prep' : '';
+    }
+    const targetCell = (active === 'cell_a' || active === 'cell_b') ? 'cell_ab' : active;
+    const targetArm = active === 'cell_a' ? 'arm_a' : active === 'cell_b' ? 'arm_b' : '';
+    for (const s of sections) s.hidden = s.dataset.workcellScope !== targetCell;
+    for (const card of root.querySelectorAll('article[data-arm-id]')) {
+      card.hidden = Boolean(targetArm && card.dataset.armId && card.dataset.armId !== targetArm);
+    }
+    for (const card of root.querySelectorAll('article[data-camera-arm]')) {
+      card.hidden = Boolean(targetArm && card.dataset.cameraArm && card.dataset.cameraArm !== targetArm);
+    }
+    return active;
   }
 
   async function picture(source, entry, scope) {
@@ -187,6 +233,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
       if (!current()) return;
       if (performance.now() >= expires) { staleCamera(entry); return; }
       if (entry.url) URL.revokeObjectURL(entry.url);
+      entry.stale = false;
       entry.image.src = url; entry.url = url; entry.blob = blob; url = null;
       entry.identity = identity; entry.expires = expires; entry.image.hidden = false;
       entry.status.setAttribute('state', 'ready');
@@ -344,22 +391,41 @@ export function createCellObservation({request, root, credential = () => ''}) {
   async function refresh() {
     if (disposed || pending) return;
     if (!life) {
+      const paintProfiles = () => {
+        for (const [source, entry] of arms) {
+          if (!entry.lastArm) continue;
+          root.querySelector(`[data-arm-source="${CSS.escape(source)}"] [data-robot-profile]`)
+            ?.replaceWith(profiles.detail('arm', source, {owner_id: entry.lastArm.arm_id, sha256: entry.lastArm.binding_sha256}));
+        }
+      };
       life = createScope();
-      profiles = createRobotProfiles({call: request, scope: life});
+      profiles = createRobotProfiles({call: request, scope: life, render: paintProfiles});
       const poll = setInterval(refresh, 500);
       const expiry = setInterval(() => {
+        if (isPaused()) return;
+        const scoped = ['cell_s', 'cell_a', 'cell_b', 'cell_ab'].includes(workspaceMode());
         for (const entry of arms.values()) {
           if (performance.now() >= entry.expires) staleArm(entry);
-          if (performance.now() - entry.healthPaintedAt >= 200) paintHealth(entry);
+          if (performance.now() - entry.healthPaintedAt >= 500) paintHealth(entry);
         }
-        for (const entry of cameras.values()) if (performance.now() >= entry.expires) staleCamera(entry);
+        if (!scoped) {
+          for (const entry of cameras.values()) if (performance.now() >= entry.expires) staleCamera(entry);
+        }
       }, 100);
-      // a background tab stops pulling observations and JPEGs; showing it again refreshes at once
-      const wake = () => { if (!document.hidden) void refresh(); };
-      document.addEventListener('visibilitychange', wake);
-      life.onDispose(() => { clearInterval(poll); clearInterval(expiry); document.removeEventListener('visibilitychange', wake); });
+      // a background tab or prep workspace stops pulling observations and JPEGs; showing it again refreshes at once
+      const wake = () => {
+        syncScope();
+        if (!isPaused()) void refresh();
+      };
+      if (typeof document !== 'undefined') document.addEventListener('visibilitychange', wake);
+      if (typeof window !== 'undefined') window.addEventListener('rosy:cell-workspace', wake);
+      life.onDispose(() => {
+        clearInterval(poll); clearInterval(expiry);
+        if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', wake);
+        if (typeof window !== 'undefined') window.removeEventListener('rosy:cell-workspace', wake);
+      });
     }
-    if (document.hidden) return;
+    if (isPaused()) return;
     const scope = life;
     pending = true;
     const observedAt = performance.now();
@@ -368,6 +434,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
       const state = await request('/api/fleet/workcell-observations', {signal: scope.signal, timeoutMs: 1500});
       if (life !== scope || scope.signal.aborted) return;
       build(state.workcells);
+      const activeScope = syncScope();
       // stops already in the history when the page opened have no frames here; later ones get this page's frames
       const liveFaults = new Set(state.workcells.flatMap(cell => cell.arms.flatMap(arm => (arm.faults || []).map(f => f.session_id))));
       seenFaults ??= new Set(liveFaults);
@@ -379,26 +446,46 @@ export function createCellObservation({request, root, credential = () => ''}) {
       empty.textContent = '등록된 작업 셀 관측이 없습니다.';
       for (const cell of state.workcells) for (const arm of cell.arms) {
         const entry = arms.get(arm.source_id);
-        root.querySelector(`[data-arm-source="${CSS.escape(arm.source_id)}"] [data-robot-profile]`)
-          ?.replaceWith(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
+        entry.lastArm = arm;
+        const nextProfileKey = `${arm.arm_id || ''}|${arm.source_id}|${arm.binding_sha256 || ''}`;
+        if (entry.profileKey !== nextProfileKey) {
+          entry.profileKey = nextProfileKey;
+          root.querySelector(`[data-arm-source="${CSS.escape(arm.source_id)}"] [data-robot-profile]`)
+            ?.replaceWith(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
+        }
         // motor_health ages already include source/receipt aging; add only this browser request's transit.
         entry.health.accept(arm.motor_health, {requestedAtMs, receivedAtMs: Date.now()});
-        paintHealth(entry);
+        paintHealth(entry, entry.healthDetails.open);
         paintFaults(entry, arm.faults || []);
         paintIncidents(arm.source_id, entry, arm.incidents || [], scope);
         const age = Math.max(0, arm.source_age_s, arm.receipt_age_s);
         entry.expires = arm.fresh && Number.isFinite(age) ? observedAt + (2 - age) * 1000 : 0;
         if (!arm.positions || performance.now() >= entry.expires) { staleArm(entry); continue; }
-        entry.values.textContent = JSON.stringify(arm.positions, null, 2);
-        entry.status.setAttribute('state', 'ready');
-        entry.status.textContent = `실제 피드백 · #${arm.sequence}`;
+        entry.stale = false;
+        if (arm.sequence == null || entry.lastSeq !== arm.sequence) {
+          entry.lastSeq = arm.sequence ?? null;
+          entry.values.textContent = JSON.stringify(arm.positions, null, 2);
+          entry.status.setAttribute('state', 'ready');
+          entry.status.textContent = `실제 피드백 · #${arm.sequence}`;
+        }
       }
-      for (const [source, entry] of cameras) void picture(source, entry, scope);
+      const skipCameras = activeScope === 'prep' || ['cell_s', 'cell_a', 'cell_b', 'cell_ab'].includes(activeScope);
+      if (!skipCameras) {
+        for (const [source, entry] of cameras) {
+          if (activeScope) {
+            const targetCell = (activeScope === 'cell_a' || activeScope === 'cell_b') ? 'cell_ab' : activeScope;
+            const targetArm = activeScope === 'cell_a' ? 'arm_a' : activeScope === 'cell_b' ? 'arm_b' : '';
+            if (entry.workcellScope && entry.workcellScope !== targetCell) continue;
+            if (targetArm && entry.cameraArm && entry.cameraArm !== targetArm) continue;
+          }
+          void picture(source, entry, scope);
+        }
+      }
     } catch (error) {
       if (life !== scope || scope.signal.aborted) return;
       if (error.status === 401 || error.status === 403) clear();
       else {
-        for (const entry of arms.values()) { entry.health.disconnect(); paintHealth(entry); }
+        for (const entry of arms.values()) { entry.health.disconnect(); paintHealth(entry, true); }
         empty.hidden = false;
         empty.textContent = error.status === 503 ? '관측 구성을 확인할 수 없습니다.' : '관측 연결 확인 중 · 오래된 값은 표시하지 않습니다.';
       }

@@ -124,7 +124,7 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 assert delayed
                 accounts.logout(session)
                 page.locator('#refresh').click()
-                expect(page.locator('#learning-status')).to_contain_text('확인할 수 없습니다')
+                expect(page.locator('#learning-status')).to_contain_text('불러오지 못함')
                 delayed[0].fulfill(status=200, content_type='application/json', body=json.dumps(snapshot))
                 expect(page.locator('#storage-refresh')).to_be_enabled()
                 expect(page.locator('#storage-roots')).to_have_text('')

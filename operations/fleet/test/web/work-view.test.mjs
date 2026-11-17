@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { workKey, workLine, workStatus, autoAdmitScope, policyScopeText, autoAdmitDetail } = await import("../../../../applications/fleet/web/work/work-view.js");
+const { workKey, workLine, workStatus, visibleStateOf, autoAdmitScope, policyScopeText, autoAdmitDetail } = await import("../../../../applications/fleet/web/work/work-view.js");
 
 test("two ledgers can reuse the same ID without sharing selection", () => {
   assert.notEqual(workKey({source: "task", source_id: "same"}), workKey({source: "mission", source_id: "same"}));
@@ -24,6 +24,14 @@ test("D-763 8: a row reads the server's visible state, a wait first, the ledger 
   assert.equal(workLine({...row, wait: {reason: "authority", waiting: false, over_bound: true}}), "운행 · rosy_01 · 대기 상한 넘음 · 통행권");
   assert.equal(workLine({source: "cell_job", device_id: "omx", status: "PROPOSED", visible_state: "approval_pending"}), "팔레트 적재 · omx · 승인 대기");
   assert.equal(workLine({source: "task", device_id: "rosy_02", status: "RUNNING"}), "주행 · rosy_02 · 실행 중");
+  assert.equal(workLine({source: "mission", device_id: "", status: "RUNNING"}), "팔 작업 · 실행 중");
+  assert.equal(workLine({source: "mission", status: "PROPOSED"}), "팔 작업 · 승인 전");
+  assert.equal(visibleStateOf({status: "PROPOSED"}), "approval_pending");
+  assert.equal(visibleStateOf({status: "RUNNING"}), "in_progress");
+  assert.equal(visibleStateOf({status: "HOLD"}), "intervention");
+  assert.equal(visibleStateOf({status: "HOLD", reason: "CANCELLED_BY_OPERATOR"}), "ended");
+  assert.equal(visibleStateOf({status: "RUNNING", wait: {waiting: true}}), "waiting");
+  assert.equal(visibleStateOf({status: "RUNNING", visible_state: "ended"}), "ended");
   assert.equal(workStatus("arrived"), "도착");
   assert.notEqual(workKey({source: "trip", source_id: "same"}), workKey({source: "cell_job", source_id: "same"}));
 });
@@ -61,4 +69,15 @@ test("D-865 P3: the detail line separates in-scope from human approval", () => {
   assert.equal(autoAdmitDetail({...waiting, device_id: "rosy_02"}, scopePolicy), "범위 밖 · 사람 승인");
   assert.equal(autoAdmitDetail(waiting, {...scopePolicy, scope: {...scopePolicy.scope, enabled: false}}), "꺼짐 · 사람 승인");
   assert.equal(autoAdmitDetail({...waiting, status: "RUNNING"}, scopePolicy), null);  // only waiting rows carry the line
+});
+
+test("F9: the strip counts the same rows the list shows", async () => {
+  const { stripCounts, outOfView } = await import("../../../../applications/fleet/web/work/work-view.js");
+  const rows = [{status: "PROPOSED"}, {status: "RUNNING"}];
+  assert.deepEqual(stripCounts(rows), {approval_pending: 1, in_progress: 1, intervention: 0});
+  assert.equal(stripCounts(null), null);
+  // F1: a heading already on screen below the sticky bar is not scrolled; one far below is.
+  assert.equal(outOfView({top: 200}, 900, 56), false);
+  assert.equal(outOfView({top: 2400}, 844, 56), true);
+  assert.equal(outOfView({top: 10}, 844, 56), true);
 });

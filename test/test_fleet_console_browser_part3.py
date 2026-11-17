@@ -5,6 +5,7 @@ from test_fleet_console_browser import (
     MAP_GRID, _robot, SNAPSHOT, FORMATION, API, _open_cards, _open_token_access,
     _open_console, CAMERA_FINGERPRINT, _camera_api, _camera_shot,
 )
+from test_fleet_console_browser_part2 import _enrollment_api
 
 
 WARM_TEXT_CONTRAST = """() => {
@@ -157,7 +158,7 @@ def test_visible_text_meets_the_contrast_floor(console_url):
         # 로스터의 선택 상태를 만든다 — 바닥 붕괴는 선택 카드에서 났다.
         # 선택은 카드가 아니라 '목표 지정' 버튼으로 일어난다(console.js).
         _open_cards(page)
-        page.locator("#robot-workspace article ui-button", has_text="목표 지정").first.click()
+        page.locator("#robot-panel-mount ui-button", has_text="목표 지정").first.click()
         # 경합 하에서 기본 5초를 넘기는 것은 대기의 문제지 대비의 문제가 아니다
         # — 계약은 센서스가 지킨다(2026-09-25 재검증 노트의 플레이크와 같은 계열).
         page.wait_for_function(
@@ -255,7 +256,7 @@ def test_wordmark_stays_on_one_line(console_url, width, height):
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         mark = page.evaluate("""() => {
-          const b = document.querySelector('ui-brand b');
+          const b = document.querySelector('ui-brand b .fleet-wordmark') || document.querySelector('ui-brand b');
           const range = document.createRange(); range.selectNodeContents(b);
           const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
           const text = range.getBoundingClientRect();
@@ -322,25 +323,28 @@ def test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title(console_url):
         browser, page, errors = _open_console(playwright, API)
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        first_tag = page.locator("#robot-workspace article").first.locator(".robot-head ui-tag").first
+        first_tag = page.locator("#robot-panel-mount .robot-head ui-tag").first
         assert first_tag.inner_text() == "내비게이션"
         assert first_tag.get_attribute("title") == "NAVIGATION"
+        page.get_by_role("link", name="작업", exact=True).click()
+        page.locator("#roster .robot-row").first.wait_for()
         assert "NAVIGATION" not in page.inner_text("#roster")
         assert not errors
         browser.close()
 
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
-def test_single_column_tier_puts_exceptions_and_robot_context_before_the_map(console_url, width, height):
-    """D-892: intervention/context/map order and mounted owners survive resizing."""
+def test_single_column_tier_puts_exceptions_then_the_map_then_robot_context(console_url, width, height):
+    """D-1027 (partially supersedes D-892): intervention/map/context order and mounted owners survive resizing."""
     from playwright.sync_api import sync_playwright
 
-    panels = ['.queues-panel', '.console-context', '[aria-labelledby="map-heading"]']
+    # Concept 2026-11-14 rule 6 (replaces D-892's order): exceptions, then the map, then the robot context.
+    panels = ['.queues-panel', '[aria-labelledby="map-heading"]', '.console-context']
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
+        page.wait_for_function("() => document.querySelectorAll('#robot-dock-mount .robot-dock-btn').length > 0")
         assert page.locator('#context-status').is_visible()
         assert page.locator('#context-tools').is_hidden()
         layout = page.evaluate("""selectors => {
@@ -382,7 +386,10 @@ def test_single_column_tier_puts_exceptions_and_robot_context_before_the_map(con
         assert page.locator('#formation-spacing').evaluate('(node) => node === document.activeElement')
         assert page.locator('[data-context-tab="tools"]').get_attribute('aria-selected') == 'true'
         page.locator('[data-context-tab="status"]').click()
-        assert page.locator('#roster').is_visible() and page.locator('#context-tools').is_hidden()
+        assert page.locator('#context-status').is_visible() and page.locator('#context-tools').is_hidden()
+        page.get_by_role("link", name="작업", exact=True).click()
+        page.locator("#roster .robot-row").first.wait_for()
+        assert page.locator('#roster').is_visible()
         assert not errors
         browser.close()
 
@@ -670,20 +677,21 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         banner = page.locator("#address-banner")
         banner.wait_for()
         assert banner.inner_text().startswith("사이트 망 주소가 바뀌었을 수 있습니다")
+        page.get_by_role("link", name="작업", exact=True).click()
         page.wait_for_function(
             "() => document.querySelectorAll('#roster [data-address-reason]').length === 3")
         listed = page.locator("#address-movable li")
         assert listed.count() == 2
         assert "rosy_09 → 10.16.36.20:8080" in listed.nth(0).inner_text()
-        card = page.locator('#roster article[data-robot-id="rosy_09"]')
+        card = page.locator('#roster .robot-row[data-robot-id="rosy_09"]')
         assert "같은 로봇이 10.16.36.20:8080에 보입니다 — 새 주소로 옮기기…" in card.inner_text()
-        static = page.locator('#roster article[data-robot-id="rosy_01"]').inner_text()
+        static = page.locator('#roster .robot-row[data-robot-id="rosy_01"]').inner_text()
         assert "고정 주소 192.0.2.10:8443이(가) 지금 망에 없을 수 있습니다" in static
         # Cards retain readable reasons; address actions belong to the install owner.
-        assert page.evaluate("""() => [...document.querySelectorAll('#roster article')]
+        assert page.evaluate("""() => [...document.querySelectorAll('#roster .robot-row')]
             .every((card) => card.scrollHeight <= card.clientHeight + 1)""")
         assert page.evaluate("""() => {
-            const reason = document.querySelector('#roster article[data-robot-id="rosy_10"] .robot-summary-evidence');
+            const reason = document.querySelector('#roster .robot-row[data-robot-id="rosy_10"] .robot-summary-evidence');
             reason.scrollIntoView({block: 'nearest'});
             const r = reason.getBoundingClientRect();
             const box = document.querySelector('#roster').getBoundingClientRect();
@@ -913,7 +921,7 @@ def test_the_install_document_owns_enrollment_and_calibration(console_url):
 
         shell = page.locator("ui-shell")
         assert shell.get_attribute("grammar") == "procedure"
-        assert "설치·보정" in page.title()
+        assert "설치" in page.title()
         # 설치 문서의 소유물.
         for needle in ("#robot-enrollment", "#camera-link", "#vision-adjustments", "#field-detect"):
             assert page.locator(needle).count() == 1, needle
@@ -1148,7 +1156,7 @@ def test_shared_token_operator_sees_why_motion_is_locked_but_can_still_stop(cons
         page.wait_for_function(f'() => document.querySelector("#dispatch-rearm")?.getAttribute("reason") === "{named}"')
         assert page.locator("#dispatch-rearm").get_attribute("disabled") is not None
         _open_cards(page)
-        goal = page.locator('#robot-workspace ui-button[data-goal-robot-id]').first
+        goal = page.locator('#robot-panel-mount ui-button[data-goal-robot-id]').first
         goal.wait_for()
         page.locator('[data-context-tab="tools"]').click()
         # D-540 6: the block says the cause once; every button it holds says "위 사유".
@@ -1159,7 +1167,7 @@ def test_shared_token_operator_sees_why_motion_is_locked_but_can_still_stop(cons
         assert page.locator("#formation-stop").get_attribute("disabled") is None
         assert page.locator("#estop").get_attribute("disabled") is None
         page.locator('[data-context-tab="status"]').click()
-        cancel = page.locator("#robot-workspace .robot-actions ui-button", has_text="취소").first
+        cancel = page.locator("#robot-panel-mount .robot-actions ui-button", has_text="취소").first
         assert cancel.get_attribute("reason") != named
         assert not errors
         browser.close()

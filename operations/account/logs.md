@@ -121,3 +121,9 @@
 - 후속(검토 반영): 상한을 최근 24시간 대기 요청으로 제한, 중복 키에 이름 포함, 기존 계정 비활성 검사를 같은 트랜잭션 안으로, 깊은 JSON 거절, 승인 불가 요청의 UI 비활성과 이유.
 - 증거: 원격 시험 `operations/fleet/test/test_account_access_requests.py`와 Account·브라우저 묶음. 결과는 착지 기록을 따른다.
 - Gate: 구현 전 단계이며 배포·현장 수용 전. 운영 authority는 바꾸지 않았다. CE: 해당 없음 — 설계 선택은 D-993에 있다.
+
+## 2026-11-14 · uncommitted · fix(account): 번들·이미지 문맥에 status-tag, value-text, core_ui_logic, readout-strip 추가
+- 변경: 계정 관리 화면이 새 공유 부품을 쓰므로 web_assets COMMON, Dockerfile.account COPY, dockerignore 허용, 이미지 시험 목록에 같은 네 파일을 넣었다. 서명 이미지 재빌드가 필요하다(현장 반영 전).
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) games 브라우저·표면, Fleet 계정 브라우저 5종, 절차·작업 페이지 구성, Account 이미지 묶음, shared/web 게이트(patterns·no_element_style·shared_controls·token·layout_canon·surface_titles·icon·design_scope) 322 passed 0 failed(HEAD 직전 코드 커밋 기준). 같은 묶음을 기준(968ceb3472)에서 돌리면 1 failed 2 errors(Account 묶음 누락 건).
+- gate 변화: 없음
+- 교훈: 없음

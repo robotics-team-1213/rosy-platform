@@ -12,43 +12,48 @@ import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
 import { placeRosterCards as place, mustExpand, selectRobot, createRoiPoller,
-  buildQuickControlPanel } from "./roster-cards.js";
+  buildQuickControlPanel, appendDetailSlots, appendDetailCamera, createDetail3dController,
+  leaveTwinOrCameraView } from "./roster-cards.js";
+import { createStepNudge } from "/console/assets/step-nudge.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
 import {createCellFrameFeed} from "/console/assets/cell-frames.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
-import { createRosterSummary, nodeWithText, tag, blockWith, navTag, queuedReason, offlineWhy,
+import { stepQueuedStarts } from "./localization-view.js";
+import { valueText } from "/common/value-text.js";
+import { createRosterSummary, fleetRobotProfile, nodeWithText, tag, blockWith, navTag, queuedReason, offlineWhy,
   IDENTIFY_REASON, LAMP_REASON } from "./roster-presentation.js";
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction, onSelectionChanged = () => {} }) {
   const { attentionItems, fillQueues } = createQueues({ scope, el, view, render, streamEvidence });
   const trip = createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason });
   const motorHealth = createFleetMotorHealth({view, scope});
-  const profiles = createRobotProfiles({call, scope, render});
+  let profileRev = 0;
+  const profiles = createRobotProfiles({call, scope, render: () => { profileRev += 1; render(); }});
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
   const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call, render });
   // 셀 카메라 뷰도 천장 ROI와 같은 Vision 임대로 본다(D-136). Fleet은 바이트를 중계하지 않는다.
   const cellFrames = createCellFrameFeed({ call, scope });
+  const detail3d = createDetail3dController(scope);
+  const stepNudge = createStepNudge({ scope, call, isOperator, namedReason });
+  const uiBtn = (text, kind = "quiet") => { const b = nodeWithText("ui-button", "", text); b.setAttribute("kind", kind); b.type = "button"; return b; };
+  const syncMapPicking = () => {
+    const stageHost = el("fleet-robot-stage");
+    if (stageHost) stageHost.dataset.mapPicking = String(Boolean(view.selected || view.pinning));
+  };
   function openCard(robotId) {
-    if (typeof window !== "undefined" && robotId && typeof window.dispatchEvent === "function") {
-      window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: robotId } }));
-    }
     if (typeof robotId === "string" && (robotId.startsWith("arm_") || robotId.startsWith("cell_"))) {
-      view.focusAnchorId = robotId === "cell_s" ? "arm_s" : (robotId === "cell_ab" ? "arm_a" : robotId);
-      const onlineRobot = view.robots.find((r) => r.online) || view.robots[0];
-      if (onlineRobot && !view.focusRobot) {
-        view.focusRobot = onlineRobot.robot_id;  // D-651: inspecting an arm never arms the map
-      }
-      render();
+      const armId = robotId === "cell_s" ? "arm_s" : (robotId === "cell_ab" || robotId === "cell_a") ? "arm_a" : robotId === "cell_b" ? "arm_b" : robotId;
+      view.focusAnchorId = armId;
+      view.selected = null; view.pinning = null; view.cursor = null;
+      view.robotSelection?.set(armId, { source: "selectRobot" });
+      confirmedAction?.cancel(); trip.close(); onSelectionChanged(); syncMapPicking();
       void refreshRoiPreview();
       return;
     }
     if (selectRobot(view, robotId)) {
-      confirmedAction?.cancel();
-      trip.close();
-      onSelectionChanged();
-      // D-651: 로봇을 고르는 것은 읽기다. 목표 받기는 '목표 지정' 단추로만 켜진다.
-      view.focusAnchorId = view.focusRobot || "rosy_46";
+      confirmedAction?.cancel(); trip.close(); onSelectionChanged(); syncMapPicking();
+      view.focusAnchorId = view.robotSelection?.get() ?? null;
       const stage = el("map-stage");
       const birdseyeToggle = el("birdseye-toggle");
       if (stage && stage.dataset.view === "camera") {
@@ -64,41 +69,34 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     return view.stateUnavailable || mustExpand(robot) || attentionItems(robot).length > 0;
   }
   function workspace() {
-    const box = el("robot-workspace"), choice = el("robot-choice"), empty = el("robot-workspace-empty");
+    const box = el("robot-workspace"), empty = el("robot-workspace-empty");
     if (!box) return;
-    // D-651: 작업 카드는 운영자가 고를 때만 열린다. 연락이 끊긴 로봇도 이유와 함께 고를 수 있다.
-    const selectableRobots = view.robots;
-    if (view.focusRobot && !selectableRobots.some(robot => robot.robot_id === view.focusRobot)) openCard(null);
-    if (choice) {
-      const robotOptions = selectableRobots.map(robot => {
-        const host = view.robotNames?.[robot.robot_id];
-        const label = host && host !== robot.robot_id ? `${robot.robot_id} (${host})` : robot.robot_id;
-        return [robot.robot_id, `🤖 기동 로봇 · ${label}${robot.online ? " · 온라인" : ""}`];
-      });
-      const options = robotOptions;
-      const key = JSON.stringify(options);
-      if (choice.dataset.options !== key) {
-        const first = nodeWithText("option", "", "로봇을 선택하세요"); first.value = "";
-        choice.replaceChildren(first, ...options.map(([id, name]) => { const option = nodeWithText("option", "", name); option.value = id; return option; }));
-        choice.dataset.options = key;
-      }
-      choice.value = view.focusRobot || "";
-    }
-    const index = view.robots.findIndex(robot => robot.robot_id === view.focusRobot);
+    const activeId = view.robotSelection?.get() ?? null;
+    if (activeId && !view.robots.some(robot => robot.robot_id === activeId)) openCard(null);
+    const index = view.robots.findIndex(robot => robot.robot_id === (view.robotSelection?.get() ?? null));
     if (empty) empty.hidden = index >= 0;
+    if (index < 0) detail3d.clear();
     place(box, index >= 0 ? [card(view.robots[index], index)] : []);
   }
-  function card(robot, index) {
+  function card(robot, index, opts = null) {
     const node = document.createElement("article");
     const displayName = view.robotNames?.[robot.robot_id] || robot.robot_id;
-    node.className = `robot robot-workspace-card s${index % view.colors.length}`;
+    node.className = `robot robot-workspace-card ui-panel s${index % view.colors.length}`;
+    node.dataset.surface = "raised";  // the one selected robot (concept: ui-panel raised)
+    node.dataset.density = "compact";
     node.dataset.robotId = robot.robot_id;
     const lagging = !robot.online && robot.link === "degraded";
     if (!view.stateUnavailable && !robot.online && !lagging) node.classList.add("offline");
     if (view.selected === robot.robot_id) node.classList.add("selected");
     node.tabIndex = -1;
+    const mainCol = nodeWithText("div", "robot-detail-main");
     const state = view.stateUnavailable ? {} : (robot.state || {});
     const pose = state.pose;
+    const profile = fleetRobotProfile(robot, view);
+    const nowSlot = appendDetailSlots({ mainCol, profile, robot, view, scope, openCard, render, nodeWithText, call, isOperator, log,
+      onPin: (id) => { view.pinning = id; view.selected = null; view.cursor = null; syncMapPicking(); render(); },
+      onStop: () => cancel.click?.(),
+      split: Boolean(opts?.split) });
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
     const nav = navTag(state, robot.robot_id);
     const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
@@ -106,13 +104,17 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const stateStale = staleAgeS(robot, view.receivedAtMs, Date.now()) !== null;
     const safetyLabel = !robot.online ? "—" : view.stateUnavailable || stateStale ? EVIDENCE_LABEL.unavailable : estop === true ? estopText(state, "비상 정지")
       : estop === false ? "정상" : EVIDENCE_LABEL.unavailable;
-    const goalSafetyReason = view.stateUnavailable
-      ? "Fleet 상태를 확인할 수 없어 목표를 보낼 수 없습니다."
-      : estop === true
-      ? "비상정지가 활성화되어 목표를 보낼 수 없습니다."
-      : estop !== false && robot.online
-        ? "안전 상태를 확인할 수 없어 목표를 보낼 수 없습니다." : "";
-    const head = nodeWithText("div", "robot-head");
+    const goalSafetyReason = view.stateUnavailable ? "Fleet 상태를 확인할 수 없어 목표를 보낼 수 없습니다."
+      : estop === true ? "비상정지가 활성화되어 목표를 보낼 수 없습니다."
+      : estop !== false && robot.online ? "안전 상태를 확인할 수 없어 목표를 보낼 수 없습니다." : "";
+    const head = nodeWithText("header", "robot-head");
+    // One status tag in the head (the mode); neutral facts are quiet inline text on the evidence line below.
+    const evidenceLine = nodeWithText("p", "robot-evidence");
+    const put = (node) => { if (node.textContent === "—") return; (node.getAttribute("variant") === "inline" ? evidenceLine : head).appendChild(node); };
+    const kind = document.createElement("span");
+    kind.setAttribute("aria-hidden", "true");
+    actionIcon(kind, "robot");
+    head.append(kind);
     const robotName = document.createElement("b");
     robotName.textContent = displayName;
     const spacer = nodeWithText("span", "spacer");
@@ -125,11 +127,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       view.stateUnavailable ? "상태 확인 불가" : !robot.online ? "오프라인"
         : laneOn ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}`
           : operatorModeLabel(state.mode),
-      view.stateUnavailable || !robot.online ? "crit" : laneOn && lane.state === "LOST" ? "warn" : "");
+      view.stateUnavailable || !robot.online ? "warn" : laneOn && lane.state === "LOST" ? "warn" : "");
     if (!view.stateUnavailable && robot.online && state.mode) {
       modeTag.title = laneOn ? `${state.mode} · ${lane.mode} ${lane.state || ""}`.trim() : state.mode;
     } else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     if (laneOn) modeTag.dataset.lineFollow = lane.mode;
+    modeTag.removeAttribute("variant");
     head.appendChild(modeTag);
     if (!view.stateUnavailable && robot.online) {
       const powerMode = state.power?.mode;
@@ -138,20 +141,20 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         const powerTag = tag(enumLabel(POWER_MODE_LABEL, powerMode) + (waking ? " · 준비 중" : ""), "");
         powerTag.title = String(powerMode);
         powerTag.dataset.power = String(powerMode);
-        head.appendChild(powerTag);
+        put(powerTag);
       }
       const dock = state.docking?.state;
       if (dock) {
         const dockTag = tag(enumLabel(DOCK_STATE_LABEL, dock), dock === "DOCK_FAILED" ? "crit" : "");
         dockTag.title = String(dock);
         dockTag.dataset.dock = String(dock);
-        head.appendChild(dockTag);
+        put(dockTag);
       }
-      const chargeTag = tag(power.charging === "확인 불가" ? "충전 확인 불가" : power.charging, "");
+      const chargeTag = tag(power.charging === EVIDENCE_LABEL.unavailable ? `충전 ${EVIDENCE_LABEL.unavailable}` : power.charging, "");
       chargeTag.dataset.charging = power.charging;
       const chargeState = robot.power_health?.battery?.charging_state;
       if (typeof chargeState === "string") chargeTag.title = chargeState;
-      head.appendChild(chargeTag);
+      put(chargeTag);
     }
     const link = view.stateUnavailable ? null : linkTag(robot.link);
     const reason = view.stateUnavailable ? null : robot.link_reason;
@@ -162,16 +165,16 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         linkNode.dataset.reason = reason.code;
         linkNode.title = `${reason.message} ${reason.action}`;
       }
-      head.appendChild(linkNode);
+      put(linkNode);
     }
     const unbounded = view.stateUnavailable ? null : ruleMTag(robot.rule_m);
     if (unbounded) {
       const boundNode = tag(unbounded.word, unbounded.kind);
       boundNode.title = unbounded.text;
-      head.appendChild(boundNode);
+      put(boundNode);
     }
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
-    head.appendChild(tag(
+    put(tag(
       view.stateUnavailable ? "—" : robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : nav.text,
       blocked ? "crit" : robot.queued ? "warn" : nav.cls));
     const formation = view.stateUnavailable ? null : view.formation;
@@ -180,13 +183,13 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (role) {
       const roleTag = tag(role, "nav");
       roleTag.dataset.formationRole = role === "대형 리더" ? "leader" : "follower";
-      head.appendChild(roleTag);
+      put(roleTag);
     }
     const evidence = view.stateUnavailable ? null : streamEvidence(view.formation, robot.robot_id);
     if (evidence) {
       const relay = tag(evidence.text, evidence.cls);
       relay.dataset.evidence = evidence.evidence;
-      head.appendChild(relay);
+      put(relay);
     }
     const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
     const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
@@ -194,34 +197,40 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       const locTag = tag(loc.text, loc.cls);
       locTag.title = loc.title;
       locTag.dataset.localization = "";
-      head.appendChild(locTag);
+      put(locTag);
     }
-    node.appendChild(head);
-    if (role) node.appendChild(nodeWithText('p', 'hint',
+    // The state age is evidence for every value below; unknown is never a number.
+    const ageS = Number.isFinite(robot.state_age_s) ? Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000) : null;
+    const seenText = nodeWithText("span", "", view.stateUnavailable ? "" : `상태 ${valueText(ageS, {unit: "초 전"}).text}`);
+    seenText.dataset.fact = "state-age";
+    if (seenText.textContent) evidenceLine.append(seenText);
+    mainCol.appendChild(head);
+    if (evidenceLine.childElementCount) mainCol.appendChild(evidenceLine);
+    if (role) mainCol.appendChild(nodeWithText('p', 'hint',
       `목적지는 리더 ${formation.leader}에게 배정합니다 · 팔로워 ${Object.keys(formation.assignment || {}).filter(id => id !== formation.leader).join(', ') || '없음'}`));
     if (tripLine) {
       const line = nodeWithText("p", "trip-line", tripLine);
       line.dataset.fact = "trip";
-      node.appendChild(line);
+      mainCol.appendChild(line);
     }
-    const facts = nodeWithText("div", "facts");
+    // Header numbers are a readout strip (concept: strip, not boxes). The column head carries the glyph once.
+    const facts = nodeWithText("dl", "facts ui-readout");
+    facts.dataset.form = "strip";
     const battery = power.battery.endsWith("%") && typeof power.voltage === "number"
       ? `${power.battery} · ${power.voltage.toFixed(2)} V`
       : power.note ? `${power.battery} · ${power.note}` : power.battery;
     const rows = [
       ["pose", "위치", robotPoseText(state, robot.localization)],
-      ["yaw", "방향", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
+      ["yaw", "방향", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : valueText(null).text],
       ["battery", "배터리", battery],
       ["safety", "안전", safetyLabel],
     ];
     rows.forEach(([key, label, value]) => {
       const cellEl = document.createElement("div");
       cellEl.dataset.fact = key;
-      const labelEl = document.createElement("span");
-      labelEl.title = label;
-      const srLabel = nodeWithText("span", "sr-only", label);
-      labelEl.appendChild(srLabel);
+      const labelEl = nodeWithText("dt", "", label);
       actionIcon(labelEl, key);
+      const valueBox = document.createElement("dd");
       let valueEl;
       if (label === "안전" && value === "비상 정지") {
         // 무게로 읽히면 안 된다. 공용 어휘인 crit 태그를 재사용한다.
@@ -230,84 +239,81 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         valueEl = document.createElement("strong");
         valueEl.textContent = value;
         if (key === "battery" && typeof power.observedAgeS === "number")
-          valueEl.title = `${power.observedAgeS}초 전`;
+          valueBox.append(valueEl, nodeWithText("small", "fact-detail", `${power.observedAgeS}초 전`));
       }
-      cellEl.append(labelEl, valueEl);
+      if (!valueBox.childElementCount) valueBox.append(valueEl);
+      if (value === EVIDENCE_LABEL.unavailable) valueBox.toggleAttribute("data-note", true);  // unknown is a note, not a reading
+      cellEl.append(labelEl, valueBox);
       const sitePose = key === "pose" && !view.stateUnavailable
         ? sitePoseText((view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id)) : null;
-      if (sitePose) cellEl.append(nodeWithText("small", "fact-detail", sitePose));
+      if (sitePose) valueBox.append(nodeWithText("small", "fact-detail", sitePose));
       facts.appendChild(cellEl);
     });
-    node.appendChild(facts);
+    mainCol.appendChild(facts);
 
+    let quickControlEl = null;
+    let stepNudgeEl = null;
     if (!view.stateUnavailable) {
-      node.appendChild(buildQuickControlPanel({
+      quickControlEl = buildQuickControlPanel({
         robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
         roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames,
-      }));
+      });
+      if (!opts?.split) mainCol.appendChild(quickControlEl);
+      stepNudgeEl = stepNudge.renderPanel({ robot, onUpdate: render }).element;
+      if (!opts?.split) mainCol.appendChild(stepNudgeEl);
     }
 
-    node.appendChild(motorHealth.detail(robot));
-    node.appendChild(profiles.detail("robot", robot.robot_id));
+    const motorHealthEl = motorHealth.detail(robot);
+    const profileDetailEl = profiles.detail("robot", robot.robot_id);
+    mainCol.appendChild(profileDetailEl);
+    if (!opts?.split) mainCol.appendChild(motorHealthEl);
     const context = createRobotAppActions(robot.robot_id, view.robotPeers, nodeWithText);
-    const group = nodeWithText('ui-button', '', '대형·대열 관리');
-    group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
+    const group = uiBtn('대형·대열 관리'); group.dataset.openFormation = '';
     group.addEventListener('click', scope.guard(() => view.openFormationWorkspace?.()));
-    context.append(group); node.appendChild(context);
+    context.append(group);
+    if (!opts?.split) mainCol.appendChild(context);
 
     if (!view.stateUnavailable) {
-      if (power.safetyRelease) node.appendChild(nodeWithText("p", "hint", power.safetyRelease));
+      if (power.safetyRelease) mainCol.appendChild(nodeWithText("p", "hint", power.safetyRelease));
       const diagnostics = Object.entries(stateStale ? {} : state.diagnostics_summary || {})
         .filter(([, status]) => status === "WARNING" || status === "ERROR" || status === "UNKNOWN")
         .map(([name, status]) => `${name}: ${status}`);
-      if (diagnostics.length) node.appendChild(nodeWithText("p", "hint",
-        `진단: ${diagnostics.join(" · ")} — 로봇 진단 확인`));
+      if (diagnostics.length) mainCol.appendChild(nodeWithText("p", "hint", `진단: ${diagnostics.join(" · ")} — 로봇 진단 확인`));
     }
 
     if (!view.stateUnavailable && robot.yielding) {
       // 운영자가 보내지 않은 좌표로 로봇이 움직인다. 이유를 적지 않으면 오작동으로 읽힌다.
-      const why = nodeWithText("p", "hint");
-      why.textContent = `${robot.yielding.for} 가 지나가도록 비켜서는 중 — `
-        + `(${robot.yielding.bay.x.toFixed(2)}, ${robot.yielding.bay.y.toFixed(2)}) 로 물러납니다`;
-      node.appendChild(why);
+      mainCol.appendChild(nodeWithText("p", "hint",
+        `${robot.yielding.for} 가 지나가도록 비켜서는 중 — (${robot.yielding.bay.x.toFixed(2)}, ${robot.yielding.bay.y.toFixed(2)}) 로 물러납니다`));
     }
 
     if (!view.stateUnavailable && robot.queued) {
       // 왜 안 가는지 화면이 말하지 않으면 운영자는 미션이 사라졌다고 읽는다.
-      const why = nodeWithText("p", "hint", queuedReason(robot.queued));
-      node.appendChild(why);
+      mainCol.appendChild(nodeWithText("p", "hint", queuedReason(robot.queued)));
     }
 
     // 한 원인은 한 번 말한다(D-359 §5.3) — 카드 상태 줄이 원인을 이미 말하면
     // 버튼 사유는 "위 사유"로 이 줄을 가리킨다.
-    const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error && !link
-      ? `robot-why-${robot.robot_id}` : null;
-    if (!view.stateUnavailable && !robot.online && robot.error && !link) {
-      const why = nodeWithText("p", "hint");
-      why.textContent = offlineWhy(robot);
+    const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error && !link ? `robot-why-${robot.robot_id}` : null;
+    if (offlineWhyId) {
+      const why = nodeWithText("p", "hint", offlineWhy(robot));
       why.id = offlineWhyId;
-      node.appendChild(why);
+      mainCol.appendChild(why);
     }
 
     // 점검 2026-10-01 — 사이트 망이 바뀌면 오프라인만으로는 까닭을 모른다. 고정 주소가
     // 지금 망에 있는지는 서버가 판정하고(GET /api/fleet/discovery/addresses), 여기는 옮겨 적는다.
-    const address = !view.stateUnavailable && !robot.online
-      ? addressReason(view.addresses?.[robot.robot_id]) : null;
+    const address = !view.stateUnavailable && !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
     if (address) {
-      const why = nodeWithText("p", "hint");
+      const why = nodeWithText("p", "hint", address.text);
       why.dataset.addressReason = view.addresses[robot.robot_id].status;
-      why.textContent = address.text;
-      node.appendChild(why);
+      mainCol.appendChild(why);
     }
 
-    if (link?.text) node.appendChild(nodeWithText("p", "hint", link.text));
+    if (link?.text) mainCol.appendChild(nodeWithText("p", "hint", link.text));
     if (link?.next) {
       if (link.focus === "console-token") {
-        const next = document.createElement("ui-button");
-        next.setAttribute("kind", "quiet");
-        next.dataset.authFocus = "";
-        next.type = "button";
-        next.textContent = link.next;
+        const next = uiBtn(link.next); next.dataset.authFocus = "";
         next.addEventListener("click", scope.guard(() => {
           const token = document.getElementById("console-token");
           const access = document.getElementById("token-access");
@@ -316,81 +322,57 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
           if (more?.getAttribute("aria-expanded") === "false") more.click();
           token?.focus();
         }));
-        node.appendChild(next);
+        mainCol.appendChild(next);
       } else {
-        node.appendChild(nodeWithText("p", "hint", link.next));
+        mainCol.appendChild(nodeWithText("p", "hint", link.next));
       }
     }
 
-    // D-416 — 오프라인 로봇의 마지막 응답 시각: "언제부터 안 됐지?"에 바로 답한다.
     if (!view.stateUnavailable && !robot.online) {
       const seen = nodeWithText("p", "hint");
       seen.dataset.fact = "last-seen";
       const ts = robot.state?.ts;
       if (typeof ts === "number" && ts > 0) {
         const age = Math.max(0, Math.floor((Date.now() / 1000) - ts));
-        seen.textContent = age < 60 ? `마지막 응답: ${age}초 전`
-          : age < 3600 ? `마지막 응답: ${Math.floor(age / 60)}분 전`
-          : `마지막 응답: ${Math.floor(age / 3600)}시간 전`;
-      } else {
-        seen.textContent = "응답 없음";
-      }
-      node.appendChild(seen);
+        seen.textContent = age < 60 ? `마지막 응답: ${age}초 전` : age < 3600 ? `마지막 응답: ${Math.floor(age / 60)}분 전` : `마지막 응답: ${Math.floor(age / 3600)}시간 전`;
+      } else seen.textContent = "응답 없음";
+      mainCol.appendChild(seen);
     }
 
     const actions = nodeWithText("div", "robot-actions");
-    const aim = document.createElement("ui-button");
-    // D-406 — 목표 받기는 토글이다. 눌림(aria-pressed)이 계열 파랑 채움으로 보여
-    // "지금 지도를 찍으면 이 로봇이 움직인다"가 색으로 말해진다.
-    aim.setAttribute("kind", "toggle");
-    aim.type = "button";
+    const aim = uiBtn(view.selected === robot.robot_id ? "지도를 찍으세요" : "목표 지정", "toggle");
     aim.dataset.goalRobotId = robot.robot_id;
-    aim.textContent = view.selected === robot.robot_id ? "지도를 찍으세요" : "목표 지정";
     aim.setAttribute("aria-pressed", view.selected === robot.robot_id ? "true" : "false");
     const currentLineFollow = state.line_follow || {};
     const lineFollowActive = currentLineFollow.mode === "CAMERA_LINE" || currentLineFollow.mode === "IR_LINE";
-    // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
     blockWith(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
-        : capabilityReason(robot.capabilities, 'navigation.goal_navigation')
-          || motionCommandReason(view, robot.robot_id, 'goal')
-          || ((!view.map && !view.siteMap) ? "지도 없음"
-          : estop === true ? "비상정지 중"
-            : estop !== false ? "안전 상태 확인 불가"
-              : lineFollowActive ? "차선 추종 중" : "")));
+        : capabilityReason(robot.capabilities, 'navigation.goal_navigation') || motionCommandReason(view, robot.robot_id, 'goal')
+          || ((!view.map && !view.siteMap) ? "지도 없음" : estop === true ? "비상정지 중" : estop !== false ? "안전 상태 확인 불가" : lineFollowActive ? "차선 추종 중" : "")));
     if (offlineWhyId) aim.setAttribute("aria-describedby", offlineWhyId);
     aim.addEventListener("click", scope.guard(() => {
       view.selected = view.selected === robot.robot_id ? null : robot.robot_id;
-      view.cursor = view.selected && view.map
-        ? { col: Math.floor(view.map.width / 2), row: Math.floor(view.map.height / 2) }
-        : null;
+      view.cursor = view.selected && view.map ? { col: Math.floor(view.map.width / 2), row: Math.floor(view.map.height / 2) } : null;
       const canvas = el("map-canvas");
-      // D-493: a goal pick needs the map, so the large camera view yields.
-      if (view.selected) { el("map-stage").dataset.view = "map"; el("birdseye-toggle").setAttribute("aria-pressed", "false"); }
+      if (view.selected) leaveTwinOrCameraView(view, el);
+      syncMapPicking();
       canvas.classList.toggle("idle", view.selected === null);
       canvas.tabIndex = view.selected ? 0 : -1;
       render();
       if (view.selected) canvas.focus({preventScroll: true});
-      else [...document.querySelectorAll("#robot-workspace ui-button[data-goal-robot-id]")]
+      else [...document.querySelectorAll("#robot-panel-mount ui-button[data-goal-robot-id], #robot-workspace ui-button[data-goal-robot-id]")]
         .find(button => button.dataset.goalRobotId === robot.robot_id)?.focus({preventScroll: true});
     }));
-    // D-593 운영자 핀: 지도에서 이 로봇의 위치(누른 점)와 방향(끈 방향)을 찍어 Fleet 지도 자세의 앵커로 둔다.
-    // 로봇에 아무것도 보내지 않는다. 이름 있는 운영자만, 운행 중이 아닐 때만.
-    const pin = document.createElement("ui-button");
-    pin.setAttribute("kind", "toggle");
-    pin.type = "button";
+    const pin = uiBtn(view.pinning === robot.robot_id ? "위치를 찍고 방향으로 끄세요" : "위치 찍기", "toggle");
     pin.dataset.pinRobotId = robot.robot_id;
-    pin.textContent = view.pinning === robot.robot_id ? "위치를 찍고 방향으로 끄세요" : "위치 찍기";
     pin.setAttribute("aria-pressed", view.pinning === robot.robot_id ? "true" : "false");
     blockWith(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
         : !view.map && !view.siteMap ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
     pin.addEventListener("click", scope.guard(() => {
       view.pinning = view.pinning === robot.robot_id ? null : robot.robot_id;
-      if (view.pinning) {
-        view.selected = null; view.cursor = null;
-        el("map-stage").dataset.view = "map"; el("birdseye-toggle").setAttribute("aria-pressed", "false");
-      }
+      if (view.pinning) { view.selected = null; view.cursor = null; leaveTwinOrCameraView(view, el); }
+      syncMapPicking();
       el("map-canvas").classList.toggle("idle", !view.pinning);
       render();
     }));
@@ -398,71 +380,19 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     // 멈춘다. 멈춤이라 quiet·확인 없음이고 이름 없는 운영자에게도 열려 있다(D-540 9). Fleet의 trip은
     // 로봇이 오프라인이어도 취소할 수 있다.
     const shown = cancelScope(openTrip(view, robot.robot_id), state.line_follow?.mode);
-    const cancel = document.createElement("ui-button");
-    cancel.setAttribute("kind", "quiet");
-    cancel.type = "button";
-    cancel.textContent = "운행 취소";
+    const cancel = uiBtn("운행 취소");
     cancel.title = shown.text;
     cancel.dataset.cancelScope = shown.trip ? "trip" : shown.lane ? "goal-lane" : "goal";
     blockWith(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online && !shown.trip ? (offlineWhyId ? "위 사유" : "로봇 오프라인") : "");
     if (offlineWhyId) cancel.setAttribute("aria-describedby", offlineWhyId);
-    cancel.addEventListener("click", scope.guard(async () => {
-      const life = scope.capture();
-      life.check();
-      // Decide at click time: a card kept across polls (roster.place) may predate the trip.
-      const now = view.robots.find((row) => row.robot_id === robot.robot_id) || robot;
-      const stop = cancelScope(openTrip(view, robot.robot_id), now.state?.line_follow?.mode);
-      try {
-        if (stop.trip) {
-          try {
-            await call(`/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel`, { method: "POST" });
-            life.check();
-            view.trafficTrips = (view.trafficTrips || []).filter((row) => row.trip_id !== stop.trip);
-            render();
-            log(`${robot.robot_id} 운행 취소`, "good");
-            return;
-          } catch (err) {  // the trip may have just ended: the goal cancel below still stops the robot
-            if (err.name === "AbortError") return;
-            log(`${robot.robot_id} 운행 취소 실패 — ${err.message} · 목표 취소를 보냅니다`, "bad");
-          }
-        }
-        const pending = view.pendingTasks[robot.robot_id];
-        if (pending) {
-          const readback = await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}`);
-          life.check();
-          if (readback.task?.status === "QUEUED") {
-            await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`, { method: "POST" });
-            life.check();
-            delete view.pendingTasks[robot.robot_id];
-            render();
-            log(`${robot.robot_id} task ${pending.task_id} QUEUED 취소`, "good");
-            return;
-          }
-          delete view.pendingTasks[robot.robot_id];
-        }
-        await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/cancel`, { method: "POST" });
-        life.check();
-        if (stop.lane) {
-          await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/line-follow`, {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "OFF" }) });
-          life.check();
-        }
-        log(`${robot.robot_id} ${stop.lane ? "목표·차선 추종 취소" : "항법 취소"}`, "good");
-      } catch (err) {
-        if (err.name === "AbortError") return;
-        log(`${robot.robot_id} 취소 실패 — ${err.message}`, "bad");
-      }
-    }));
+    cancel.addEventListener("click", scope.guard(() => stopRobot(robot.robot_id)));
     const lineFollow = state.line_follow || {};
     const cameraFaultLatched = lineFollow.mode === "CAMERA_LINE"
       && lineFollow.state === "LOST"
       && lineFollow.reason === "camera_reselection_required";
     if (cameraFaultLatched || lineFollow.mode === "IR_LINE") {
-      const fallback = document.createElement("ui-button");
-      fallback.setAttribute("kind", "quiet");
-      fallback.type = "button";
-      fallback.textContent = lineFollow.mode === "IR_LINE" ? "IR 차선 추종 끄기" : "IR 차선 추종으로 전환…";
+      const fallback = uiBtn(lineFollow.mode === "IR_LINE" ? "IR 차선 추종 끄기" : "IR 차선 추종으로 전환…");
       blockWith(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
           : !isOperator() ? "운영자 권한이 필요합니다"
@@ -495,10 +425,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       }));
       actions.append(fallback);
     }
-    const identify = document.createElement("ui-button");
-    identify.setAttribute("kind", "quiet");
-    identify.type = "button";
-    identify.textContent = "LED로 찾기";
+    const identify = uiBtn("LED로 찾기");
     blockWith(identify, !isOperator() ? "운영자 권한이 필요합니다"
       : namedReason() ? namedReason()
       : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
@@ -531,27 +458,111 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     actions.append(aim, pin, trip.toggle(robot), cancel, identify, powerButton);
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
-      const move = document.createElement("ui-button");
-      move.setAttribute("kind", "quiet");
-      move.type = "button";
+      const move = uiBtn("새 주소로 옮기기…");
       move.dataset.moveRobotId = robot.robot_id;
-      move.textContent = "새 주소로 옮기기…";
       blockWith(move, moveAddressBlocked());
       move.addEventListener("click", scope.guard(() => moveAddress(robot.robot_id)));
       actions.append(move);
     }
-    node.appendChild(actions);
+    const commandsHost = opts?.split ? nodeWithText("div", "robot-panel-commands") : mainCol;
+    if (opts?.split && nowSlot) commandsHost.appendChild(nowSlot);
+    commandsHost.appendChild(actions);
     const tripForm = view.stateUnavailable ? null : trip.section(robot);
-    if (tripForm) node.appendChild(tripForm);
-    if (goalSafetyReason) {
-      const why = nodeWithText("p", "hint", goalSafetyReason);
-      node.appendChild(why);
+    if (tripForm) commandsHost.appendChild(tripForm);
+    if (goalSafetyReason) commandsHost.appendChild(nodeWithText("p", "hint", goalSafetyReason));
+    if (lineFollowActive) commandsHost.appendChild(nodeWithText("p", "hint",
+      "차선 추종 중에는 목표를 받지 않습니다 · 운행 취소로 차선 추종을 끈 뒤 목표를 지정하세요."));
+    if (opts?.split && stepNudgeEl) commandsHost.appendChild(stepNudgeEl);
+    if (opts?.split && quickControlEl) commandsHost.appendChild(quickControlEl);
+    if (opts?.split) commandsHost.appendChild(context);
+    if (opts?.split && opts.manualRoot) commandsHost.appendChild(opts.manualRoot);
+    const cameraHost = opts?.split ? nodeWithText("div", "robot-panel-camera") : mainCol;
+    appendDetailCamera({ mainCol: cameraHost, robot, call, scope, nodeWithText });
+    const healthHost = opts?.split ? nodeWithText("div", "robot-panel-health") : null;
+    if (healthHost) healthHost.appendChild(motorHealthEl);
+    const settingsHost = opts?.split ? nodeWithText("div", "robot-panel-settings") : node;
+    const settingsCol = opts?.split ? nodeWithText("div", "robot-panel-settings-body") : mainCol;
+    if (opts?.split) {
+      const settingsFacts = nodeWithText("dl", "facts");
+      const addrRow = view.addresses?.[robot.robot_id];
+      const factRows = [["식별자", robot.robot_id]];
+      if (addrRow?.address) factRows.push(["연결 주소", addrRow.address]);
+      for (const [label, value] of factRows) {
+        const box = document.createElement("div");
+        box.append(nodeWithText("dt", "", label), nodeWithText("dd", "", value));
+        settingsFacts.append(box);
+      }
+      const settingsLinks = nodeWithText("div", "robot-panel-settings-links");
+      const rid = encodeURIComponent(robot.robot_id);
+      for (const [href, label] of [
+        [`/console/install?robot=${rid}#install-heading`, "주소·페어링·네트워크 설정"],
+        [`/console/site-map?robot=${rid}`, "지도·원점·캘리브레이션 설정"],
+        [`/console/install?profile=${rid}#device-profiles`, "장치 정보 · 주의사항"],
+      ]) {
+        const link = nodeWithText("a", "ui-action-link", label);
+        link.dataset.kind = "quiet";
+        link.href = href;
+        settingsLinks.append(link);
+      }
+      settingsCol.append(settingsFacts, settingsLinks);
     }
-    if (lineFollowActive) {
-      const why = nodeWithText("p", "hint", "차선 추종 중에는 목표를 받지 않습니다 · 운행 취소로 차선 추종을 끈 뒤 목표를 지정하세요.");
-      node.appendChild(why);
-    }
+    detail3d.mount({ node: settingsHost, mainCol: settingsCol, robot, profile, state, pose, view, nodeWithText });
+    if (opts?.split) { node.appendChild(mainCol); return {
+      status: node, camera: cameraHost, health: healthHost, commands: commandsHost, settings: settingsHost,
+      stop: { label: "주행 취소 · 이 로봇", disabled: cancel.disabled, onStop: () => cancel.click?.() },
+    }; }
     return node;
+  }
+
+  async function stopRobot(robotId) {
+    if (!robotId) return;
+    const life = scope.capture();
+    life.check();
+    view.locStopped ??= {}; view.locStopped[robotId] = true;
+    stepQueuedStarts({ view, stoppedRobotId: robotId, render });
+    // Decide at click time: a card kept across polls (roster.place) may predate the trip.
+    const now = view.robots.find((row) => row.robot_id === robotId) || { robot_id: robotId };
+    const stop = cancelScope(openTrip(view, robotId), now.state?.line_follow?.mode);
+    try {
+      if (stop.trip) {
+        try {
+          await call(`/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel`, { method: "POST" });
+          life.check();
+          view.trafficTrips = (view.trafficTrips || []).filter((row) => row.trip_id !== stop.trip);
+          render();
+          log(`${robotId} 운행 취소`, "good");
+          return;
+        } catch (err) {  // the trip may have just ended: the goal cancel below still stops the robot
+          if (err.name === "AbortError") return;
+          log(`${robotId} 운행 취소 실패 — ${err.message} · 목표 취소를 보냅니다`, "bad");
+        }
+      }
+      const pending = view.pendingTasks[robotId];
+      if (pending) {
+        const readback = await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}`);
+        life.check();
+        if (readback.task?.status === "QUEUED") {
+          await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`, { method: "POST" });
+          life.check();
+          delete view.pendingTasks[robotId];
+          render();
+          log(`${robotId} task ${pending.task_id} QUEUED 취소`, "good");
+          return;
+        }
+        delete view.pendingTasks[robotId];
+      }
+      await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/cancel`, { method: "POST" });
+      life.check();
+      if (stop.lane) {
+        await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-follow`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "OFF" }) });
+        life.check();
+      }
+      log(`${robotId} ${stop.lane ? "목표·차선 추종 취소" : "항법 취소"}`, "good");
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      log(`${robotId} 취소 실패 — ${err.message}`, "bad");
+    }
   }
 
   function openTripForm(robotId) {
@@ -573,6 +584,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     controls()[at]?.focus({preventScroll: true});
   }
 
-  return { card, summary, workspace, place, fillQueues, queuedReason, needsAttention, attentionItems, openCard,
+  return { card, summary, workspace, clear3d: () => detail3d.clear(), place, fillQueues, queuedReason, needsAttention, attentionItems, openCard, stopRobot,
+    profileVersion: () => profileRev, syncProfile: (robotId) => profiles.detail("robot", robotId),
     syncConvoy: trip.syncConvoy, closeTrip: trip.close, openTrip: openTripForm, paintTrip };
 }

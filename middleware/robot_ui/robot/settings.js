@@ -12,6 +12,7 @@ import {
   fillSelect,
   fillTextInput,
   number,
+  UNKNOWN_VALUE,
   setEnabled,
   setFieldMessage,
   setTagState,
@@ -52,8 +53,8 @@ async function settingsRequest({path, body, method = "POST", message, opener, el
 /** 안전 정책 카드의 입력값. 히어로의 E-Stop 표시는 셸이 그린다. */
 export function fillSafetyForm(safety) {
   const limits = safety.limits || {};
-  setText("limit-max-linear", Number.isFinite(Number(limits.max_linear)) ? `${number(limits.max_linear, 2)} m/s` : "—");
-  setText("limit-max-angular", Number.isFinite(Number(limits.max_angular)) ? `${number(limits.max_angular, 2)} rad/s` : "—");
+  setText("limit-max-linear", Number.isFinite(Number(limits.max_linear)) ? `${number(limits.max_linear, 2)} m/s` : UNKNOWN_VALUE);
+  setText("limit-max-angular", Number.isFinite(Number(limits.max_angular)) ? `${number(limits.max_angular, 2)} rad/s` : UNKNOWN_VALUE);
   fillSelect("fleet-loss-policy", safety.fleet_loss_policy);
   fillNumberInput("limit-manual-linear", limits.manual_linear);
   fillNumberInput("limit-manual-angular", limits.manual_angular);

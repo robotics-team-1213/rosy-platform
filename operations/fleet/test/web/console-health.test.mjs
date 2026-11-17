@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { powerHealthView } from '../../../../applications/fleet/web/power-health-view.js';
+// "/common/..." imports map to shared/web (the unknown wording is EVIDENCE_LABEL.unavailable, D-280).
+const { register } = await import('node:module');
+register('./common-loader.mjs', import.meta.url);
+const { powerHealthView } = await import('../../../../applications/fleet/web/power-health-view.js');
 
 function robot(battery = {}) {
   return { online: true, power_health_age_s: 0.2, power_health: {
@@ -21,13 +24,13 @@ test('charging requires fresh CORE evidence and never clears a safety stop', () 
   const held = powerHealthView(robot({ shown_percent: 72.2, percent: 100 }), 1000, 1000);
   assert.equal(held.battery, '72%');
   assert.equal(held.charging, '충전 확인 · 72%');
-  assert.equal(powerHealthView(robot({ evidence: 'stale' }), 1000, 1000).battery, '확인 불가');
-  assert.equal(powerHealthView(robot({ sample_age_s: 4.9 }), 1000, 1200).charging, '확인 불가');
-  assert.equal(powerHealthView(robot({ charging_evidence_age_s: 4.9 }), 1000, 1200).charging, '확인 불가');
-  assert.equal(powerHealthView(robot(), 1000, 7000).charging, '확인 불가');
-  assert.equal(powerHealthView({ ...robot(), online: false }, 1000, 1000).battery, '확인 불가');
+  assert.equal(powerHealthView(robot({ evidence: 'stale' }), 1000, 1000).battery, '정보 없음');
+  assert.equal(powerHealthView(robot({ sample_age_s: 4.9 }), 1000, 1200).charging, '정보 없음');
+  assert.equal(powerHealthView(robot({ charging_evidence_age_s: 4.9 }), 1000, 1200).charging, '정보 없음');
+  assert.equal(powerHealthView(robot(), 1000, 7000).charging, '정보 없음');
+  assert.equal(powerHealthView({ ...robot(), online: false }, 1000, 1000).battery, '정보 없음');
   assert.equal(powerHealthView({ ...robot(), power_health_age_s: NaN }, 1000, 1000).charging,
-    '확인 불가');
+    '정보 없음');
 });
 
 test('battery warning and docked-unconfirmed state give different next checks', () => {
@@ -39,7 +42,7 @@ test('battery warning and docked-unconfirmed state give different next checks', 
 
 test('a missing or late Fleet read is unknown without an attention problem; robot evidence is', () => {
   const noRead = powerHealthView({ ...robot(), power_health: null, power_health_age_s: null }, 1000, 1000);
-  assert.equal(noRead.battery, '확인 불가');
+  assert.equal(noRead.battery, '정보 없음');
   assert.equal(noRead.problem, '');
   assert.equal(powerHealthView(robot(), 1000, 7000).problem, '');
   assert.equal(powerHealthView(robot({ sample_age_s: 4.9 }), 1000, 1200).problem, '');
@@ -50,6 +53,6 @@ test('a missing or late Fleet read is unknown without an attention problem; robo
   const frozen = powerHealthView(robot({ evidence: 'stale', sample_age_s: 48960 }), 1000, 1000);
   assert.equal(frozen.problem, '배터리 값 멈춤 — 센서 연결 확인');
   assert.equal(frozen.note, '값 멈춤 (13.6시간 전)');
-  assert.equal(frozen.battery, '확인 불가');
+  assert.equal(frozen.battery, '정보 없음');
   assert.equal(powerHealthView(robot({ evidence: 'stale', sample_age_s: 48000 }), 1000, 1000).problem, frozen.problem);
 });

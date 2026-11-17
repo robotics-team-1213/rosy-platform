@@ -166,3 +166,70 @@ def test_unbound_routes_return_unavailable_instead_of_false_absence(tmp_path):
 def test_physical_profile_cannot_be_installed_in_a_production_application(installation):
     with pytest.raises(ValueError, match="simulation"):
         create_app(FleetConsole([], []), deployment_profile="production", arm_transfer_installation=installation)
+
+
+def test_charge_bays_exposes_transfer_request_without_leaking_installation_internals(tmp_path, policy):
+    from types import SimpleNamespace
+    from core_common.protocol.arm_transfer import ArmTransferCapability
+    from fleet.routing.graph import build_graph
+    from fleet.server.physical_transfer_evidence import TransferParticipant
+    from fleet.server.physical_transfer_store import TransferInstallation
+    from fleet.site_map import SiteMap
+
+    primary = ("cell_ab", "arm_a")
+    participants = tuple(
+        TransferParticipant(workcell_id=primary[0], instance_id=iid, geometry=policy.participants[0].geometry,
+                            arm_resource_id=f"{primary[0]}.{iid}", calibration_revision="cal-1", transform_revision="tf-1")
+        for iid in ("arm_a", "arm_b")
+    )
+    cell_policy = policy.model_copy(update={
+        "participants": participants,
+        "primary": primary,
+        "zone_resource_ids": ("cell_ab.shared",),
+    })
+    caps = tuple(ArmTransferCapability(
+        action_kind="ARM_TRANSFER", control_mode="fleet_managed",
+        workcell_id=p.workcell_id, instance_id=p.instance_id, journal_id="journal-" + p.instance_id,
+        owner_session_id="session-1", catalog_digest=cell_policy.catalog_digest,
+        bindings_digest=cell_policy.bindings_digest, resource_policy_digest=cell_policy.digest,
+        capability_revision="cap-1", config_revision="config-1",
+    ) for p in cell_policy.participants)
+    installed = TransferInstallation(policy=cell_policy, source="belt", target="pallet", capabilities=caps)
+    db = tmp_path / "fleet.sqlite3"
+    tasks = FleetTaskStore(db)
+    users = {sha256(b"operator-secret").hexdigest(): {"principal_id": "operator", "role": "operator"}}
+    app = create_app(
+        FleetConsole([], []),
+        task_service=FleetTaskService(tasks, robot_ids=()),
+        mission_service=MissionService(MissionStore(db)),
+        proposal_store=ProposalStore(db),
+        site_users=users,
+        deployment_profile="simulation",
+        arm_transfer_installation=installed,
+    )
+    site_map = SiteMap(map_id="arm-transfer-test", places=[
+        {"id": "C1", "name": "C1", "x": 0.0, "y": 0.0, "kind": "charge"},
+        {"id": "C2", "name": "C2", "x": 1.0, "y": 0.0, "kind": "charge"},
+    ], edges=[
+        {"id": "e1", "from": "C1", "to": "C2", "direction": "two_way",
+         "width_m": 0.5, "speed_cap_mps": 0.15, "polyline": [[0.0, 0.0], [1.0, 0.0]]},
+    ])
+    graph = build_graph(site_map)
+    app.state.site_maps = SimpleNamespace(
+        active=lambda: (1, site_map, graph, None),
+        rules=SimpleNamespace(active_rules=lambda: None),
+    )
+    client = TestClient(app)
+    bays = client.get("/api/fleet/charge-bays", headers=headers("operator"))
+    assert bays.status_code == 200
+    tr = bays.json()["omx_cells"]["cell_ab"]["transfer_request"]
+    assert tr == {
+        "workcell_id": "cell_ab",
+        "instance_id": "arm_a",
+        "object_ref": installed.policy.object_ref,
+        "source": "belt",
+        "target": "pallet",
+    }
+    assert not {"resources", "installation", "capabilities", "job_id", "recipe_digest"} & set(tr)
+    created = client.post(PATH, headers=headers("operator"), json={**tr, "request_key": "dock-propose-1"})
+    assert created.status_code == 200 and created.json()["job"]["status"] == "PROPOSED"

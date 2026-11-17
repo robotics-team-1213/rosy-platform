@@ -25,7 +25,7 @@ def test_bar_reads_context_state_map_then_the_always_live_stop():
         '<ui-brand><a href="/pilot" data-pilot-home aria-label="Rosy Pilot 접속 홈">'
         '<b>Pilot</b><small data-pilot-robot hidden></small></a></ui-brand>',
         "<span data-spacer></span>",
-        '<ui-text id="pilot-notice" scale="label" role="status"></ui-text>',
+        '<ui-text id="pilot-notice" scale="label"></ui-text>',
         '<ui-tag data-gate-state aria-label="접속 상태">대기</ui-tag>',
         '<ui-button kind="quiet" type="button" data-goto="/console">운용 지도</ui-button>',
         '<ui-button kind="irreversible" type="button" data-estop data-always-live>비상 정지</ui-button>',

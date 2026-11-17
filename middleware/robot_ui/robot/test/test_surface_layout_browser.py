@@ -118,7 +118,7 @@ def test_desktop_navigation_is_a_rail_beside_the_three_columns(width):
     assert len(items) == 3 and all(above["bottom"] <= below["y"] for above, below in zip(items, items[1:])), items
 
 
-def test_mobile_console_puts_navigation_before_controls_and_camera():
+def test_mobile_console_puts_controls_before_camera_and_map():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = _page(browser, 390, 844)
@@ -128,7 +128,7 @@ def test_mobile_console_puts_navigation_before_controls_and_camera():
         )""")
         browser.close()
 
-    assert positions["observe"] < positions["act"] < positions["sense"]
+    assert positions["act"] < positions["sense"] < positions["observe"]  # D-1028: 머리 → 운전 모드 → 카메라 → 지도
 
 
 def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport():

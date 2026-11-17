@@ -1,7 +1,8 @@
 /* Task geometry belongs to the shared composition; document owners keep their content measure. */
 body { margin: 0; }
 .fleet-document-header ui-brand { container-type: inline-size; flex: 1; }
-.fleet-document-header ui-brand a { flex-wrap: wrap; }
+.fleet-document-header ui-brand a { flex-wrap: wrap; min-height: 24px; }
+.fleet-topbar-links a { display: inline-flex; align-items: center; min-height: 24px; }
 .fleet-document { container-type: inline-size; overflow-wrap: anywhere; }
 .fleet-document:not(.ui-auth-page) { max-inline-size: var(--content-learning-max); }
 .fleet-document > * { min-inline-size: 0; }
@@ -10,3 +11,11 @@ body { margin: 0; }
 #account-list td { white-space: nowrap; }
 /* nowrap 표가 넓어져도 sr-only 머리글 같은 절대 위치 자식이 문서 폭을 늘리지 않게 한다. */
 .ui-table-scroll { position: relative; }
+/* 좁은 화면의 계정 표는 이름·역할·상태만 행으로 둔다(사용자 식별은 편집 패널). */
+@media (width < 64rem) { #account-table :is(th, td):nth-child(2) { display: none; } }
+.fleet-document .ui-list-toolbar > h2 { flex: 1 1 8rem; }
+/* 계정 관리는 표와 편집 패널이 나란히 서므로 작업 폭을 쓴다. */
+#accounts-main.fleet-document:not(.ui-auth-page) { max-inline-size: var(--content-task-max); }
+.fleet-document .ui-state-panel > ui-button { justify-self: start; }
+.fleet-document .ui-task-page > :is(a.ui-action-link, ui-button),
+.fleet-document > :is(a.ui-action-link, ui-button) { justify-self: start; align-self: flex-start; }

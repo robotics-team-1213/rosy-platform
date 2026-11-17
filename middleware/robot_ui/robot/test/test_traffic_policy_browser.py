@@ -146,7 +146,7 @@ def test_readback_missing_and_unknown_values_never_invent_evidence(panel):
     expect(facts).to_contain_text("주행")
     expect(facts).to_contain_text("카메라")
     page.evaluate("window.emit({})")
-    assert set(facts.locator("dd").all_text_contents()) == {"—"}
+    assert set(facts.locator("dd").all_text_contents()) == {"정보 없음"}
     page.evaluate("window.emit({...window.initial,status:{state:'FUTURE_STATE',reason:'future_reason',signal_colour:'BLUE',signal_source_kind:'sensor-x',junction_rule:'future_rule',stop_line_distance_m:0}})")
     for value in ["FUTURE_STATE", "future_reason", "BLUE", "sensor-x", "future_rule", "0.000 m"]:
         expect(facts).to_contain_text(value)

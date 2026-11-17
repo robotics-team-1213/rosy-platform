@@ -40,8 +40,10 @@ def test_console_draws_the_convoy_line_and_card(site, convoy_api):  # noqa: F811
             page.clock.run_for(1500)
             page.wait_for_function("() => window.__trafficLayer?.convoys === 1", timeout=15000)
             page.clock.run_for(5000)  # the roster redraws on its state poll with the traffic it holds
-            expect(page.locator('#roster article[data-robot-id="rosy_02"] .trip-line')).to_have_text(
+            page.locator(".doc-tabs").get_by_role("link", name="작업", exact=True).click()
+            expect(page.locator('#roster .robot-row[data-robot-id="rosy_02"] [data-col="task"]')).to_contain_text(
                 "반복 운행 1바퀴째 · 대열 · rosy_01 뒤 0.5 m")
+            page.locator(".doc-tabs").get_by_role("link", name="관제", exact=True).click()
             _shots(page, "console-convoy", fits=True)
             assert not posts, posts
             assert not errors, errors

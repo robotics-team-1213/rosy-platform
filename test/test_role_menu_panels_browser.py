@@ -13,27 +13,20 @@ WEB = ROOT / 'middleware' / 'robot_ui' / "robot"
 
 def _route_panel_test(page) -> None:
     """Load shared elements used by the dashboard shell."""
-    peer_source = (WEB / "peer-approval.js").read_text(encoding="utf-8")
-    page.route("http://rosy.test/assets/peer-approval.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=peer_source))
-    ui_source = (ROOT / "shared" / "web" / "ui.js").read_text(encoding="utf-8")
-    page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=ui_source))
-    logic_source = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
-    confirmation_source = (ROOT / "shared" / "web" / "confirmation.js").read_text(encoding="utf-8")
-    page.route("http://rosy.test/common/confirmation.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=confirmation_source))
-    geometry_source = (ROOT / "shared" / "web" / "live-dialog-geometry.js").read_text(encoding="utf-8")
-    page.route("http://rosy.test/common/live-dialog-geometry.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=geometry_source))
-    wiring_source = (ROOT / "shared" / "web" / "ui-wiring.js").read_text(encoding="utf-8")
-    page.route("http://rosy.test/common/ui-wiring.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=wiring_source))
-    page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=logic_source))
-    pose_source = (WEB / "panels" / "setup" / "pose-evidence.js").read_text(encoding="utf-8")
-    page.route("http://rosy.test/assets/panels/setup/pose-evidence.js", lambda route: route.fulfill(
-        status=200, content_type="application/javascript", body=pose_source))
+    common_root = (ROOT / "shared" / "web").resolve()
+    web_root = WEB.resolve()
+
+    def _serve_under(root: Path, prefix: str, route) -> None:
+        rel = route.request.url.split(prefix, 1)[1].split("?", 1)[0]
+        target = (root / rel).resolve()
+        if target.is_relative_to(root) and target.is_file():
+            ctype = "text/css" if target.suffix == ".css" else "application/javascript"
+            route.fulfill(status=200, content_type=ctype, body=target.read_text(encoding="utf-8"))
+        else:
+            route.abort()
+
+    page.route("http://rosy.test/common/**", lambda route: _serve_under(common_root, "/common/", route))
+    page.route("http://rosy.test/assets/**", lambda route: _serve_under(web_root, "/assets/", route))
     document = (
         '<!doctype html><html><head>'
         '<script type="module" src="/common/ui.js"></script>'
@@ -460,7 +453,7 @@ def test_admin_host_system_get_failures_clear_only_their_own_readback():
             callbacks[path] = {interval, onData, onError}; return () => {};
           }};
           window.__callbacks = callbacks;
-          window.__unmount = mount(root, {role:'administrator', store, api:async () => ({})});
+          window.__unmount = await mount(root, {role:'administrator', store, api:async () => ({})});
           callbacks['/api/v1/system/runtime'].onData({hostname:'host-fixture',os:{pretty_name:'fixture OS'},architecture:'arm64'});
           callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:'robot-fixture',runtime_mode:'hardware'});
           callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true},slam:true});
@@ -543,9 +536,10 @@ def test_console_mode_feedback_survives_state_and_capability_polling():
         }""")
         assert page.evaluate("window.__callbacks['/api/v1/robot/state'].interval") == 1_000
         assert page.evaluate("window.__callbacks['/api/v1/system/capabilities'].interval") == 5_000
-        status = page.locator("main > ui-status")
+        status = page.locator("main ui-status")
         assert "대기" in status.nth(0).inner_text()
-        assert "내비게이션" in status.nth(1).inner_text()
+        assert page.locator("main .mode-lock").is_hidden()
+        assert "내비게이션" in status.nth(1).text_content()
         page.locator('[data-mode="MANUAL"]').click()
         page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         page.wait_for_function("window.__calls.length === 1")
@@ -555,7 +549,7 @@ def test_console_mode_feedback_survives_state_and_capability_polling():
         assert status.nth(2).inner_text() == pending_feedback
         assert "대기" in status.nth(0).inner_text()
         page.evaluate("window.__resolveMode({accepted:true})")
-        page.wait_for_function("document.querySelectorAll('main > ui-status')[2]?.textContent.includes('로봇이 받았습니다')")
+        page.wait_for_function("document.querySelectorAll('main ui-status')[2]?.textContent.includes('로봇이 받았습니다')")
         accepted_feedback = status.nth(2).inner_text()
         assert "대기" in status.nth(0).inner_text()
         assert "로봇이 받았습니다" in accepted_feedback
@@ -1234,7 +1228,7 @@ def test_admin_host_identity_editor_is_single_and_preserves_save_feedback():
           }};
           const api = () => new Promise(resolve => { window.__resolveIdentity = resolve; });
           window.__callbacks = callbacks;
-          window.__unmount = mount(root, {role:'administrator', store, api});
+          window.__unmount = await mount(root, {role:'administrator', store, api});
           callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:'robot-fixture',runtime_mode:'hardware'});
         }""")
         form = page.locator("main .host-system-detail .ui-form")
@@ -1350,7 +1344,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         page.evaluate("window.__setGrid(true); window.__intervals[10000]()")
         page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('fixture-map')")
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({mode:'IDLE',pose:{x:.5,y:.5,yaw:0},localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}})")
-        page.locator('[data-map-click="goal"]').click()
+        page.locator('label:has([data-map-click="goal"])').click()
         page.locator("canvas").press("Escape")
         page.locator("canvas").press("Enter")
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:false}})")
@@ -1368,7 +1362,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
 
         page.evaluate("window.__failPost(true); window.__intervals[10000]()")
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('로봇이 받았습니다')")
-        page.locator('[data-map-click="goal"]').click()
+        page.locator('label:has([data-map-click="goal"])').click()
         page.locator("canvas").press("Enter")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('fixture goal rejected')")

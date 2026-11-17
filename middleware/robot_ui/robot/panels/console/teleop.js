@@ -1,5 +1,6 @@
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
+import { watchStatus } from "/assets/dom.js";
 
 const TELEOP_INTERVAL_MS = 100;
 const MAX_HOLD_MS = 2_000;
@@ -14,16 +15,16 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "수동 운전");
+  const roleHint = el("p", "quiet", "이 로봇 1대의 현장 시운전 저속 조그(0.03 m/s · 최대 2초) 전용입니다. 연속 1:1 원격 운전·카메라는 /pilot에서, 다중 로봇 경로 지시는 /console에서 합니다.");
   const readinessStatus = el("ui-status", "", "운전 자격을 확인하는 중입니다.");
   const actionStatus = el("ui-status");
-  actionStatus.setAttribute("role", "status");
-  actionStatus.setAttribute("aria-live", "polite");
+  watchStatus(actionStatus);
   const controls = el("div", "surface-teleop-controls"); controls.setAttribute("aria-label", "누르는 동안만 움직이는 저속 운전");
   const buttons = COMMANDS.map((command) => {
     const button = el("ui-button", "", command.label); button.setAttribute("kind", "toggle"); button.setAttribute("size", "primary"); button.type = "button"; button.dataset.linear = String(command.linear); button.dataset.angular = String(command.angular); button.disabled = true;
     button.setAttribute("aria-label", `${command.label}. 누르는 동안에만 저속으로 움직입니다.`); controls.append(button); return button;
   });
-  root.append(head, readinessStatus, actionStatus, controls);
+  root.append(head, roleHint, readinessStatus, actionStatus, controls);
 
   let state = null;
   let capabilities = null;

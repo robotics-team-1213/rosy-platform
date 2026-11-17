@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
-- 2026-11-11 · uncommitted · feat(monitoring): 사람 조회를 Rosy Account로 (D-990)
-- 2026-11-09 · uncommitted · deploy(monitoring): 전용 서명 이미지 rosy-site-monitoring (D-1001 이행 2)
-- 2026-11-08 · uncommitted · foundation 호환 의존 하한
-- 2026-11-07 · uncommitted · uiux(monitoring): 브랜드를 눌러도 조회 키가 사라지지 않는다
-- 2026-11-06 · uncommitted · uiux(monitoring): 연결 그림 카드에 항목 판정 글
+- 2026-11-14 · uncommitted · mon-cal-games 2차: 답 안내 운용자 말, 변경 기록 알림, 첫 불러오기 재시도
+- 2026-11-14 · uncommitted · Monitoring 공용 페이지 이동과 모름 값 표기
+- 2026-11-14 · uncommitted · Monitoring·Calibration 영역 재구성(K8·K3)
+- 2026-11-14 · uncommitted · Monitoring·Calibration 화면 재배치(UI 콘셉트)
+- 2026-11-13 · uncommitted · test(monitoring): rendered link rows

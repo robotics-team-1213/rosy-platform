@@ -57,12 +57,18 @@ export function siteBounds(siteMap, margin = 0.25) {
            max_x: b.max_x + margin, max_y: b.max_y + margin };
 }
 
-// 긴 변을 base px 로 두고 종횡비를 따른다. 캔버스는 CSS object-fit: contain 으로 맞춰진다.
-export function canvasSizeFor(bounds, base = 1200) {
+// 사이트 뷰 스테이지 높이(D-593 개정, 2026-11-17 패널 r10): 폭(=열 폭)과 사이트 비율로 비트맵
+// 높이를 정한다. 순환이 없다 — 높이를 스테이지 rect 에서 읽지 않고 이 계산이 정하며, CSS(styles.css
+// 사이트 스코프)는 캔버스 고유 비율을 그대로 펼친다. minPx/maxPx 는 스테이지 min/max-block-size 의
+// 계산값을 읽은 것(map-view.js). 상한에 잘리면 fitTransform(contain)이 좌우 여백으로 흡수한다 —
+// 사이트는 잘리지 않는다. 90°/270° 화면 방향은 비율을 뒤집는다(drawSiteView 의 fw/fh 와 같은 규칙).
+// availPx: 지도 열에 실제로 남은 높이(D-540: 지도 열은 스크롤하지 않는다). 상한에 더하되 바닥(minPx)은 지킨다.
+export function siteStageHeight(width, bounds, turn = 0, pad = 32, minPx = 200, maxPx = Infinity, availPx = Infinity) {
   const w = Math.max(bounds.max_x - bounds.min_x, 1e-6);
   const h = Math.max(bounds.max_y - bounds.min_y, 1e-6);
-  const ratio = Math.min(1.5, Math.max(0.35, h / w));
-  return { width: base, height: Math.round(base * ratio) };
+  const ratio = turn === 90 || turn === 270 ? w / h : h / w;
+  const cap = Math.max(Math.min(maxPx, availPx), minPx);
+  return Math.round(Math.min(Math.max(Math.round(width * ratio + 2 * pad), minPx), cap));
 }
 
 // map 프레임 m → 캔버스 px. 캔버스 y 는 아래로 자라므로 뒤집는다(격자 뷰와 같은 규칙).

@@ -357,6 +357,11 @@
   /* 포커스는 상태가 아니라 상호작용이다 — status 색을 쓰지 않는다. */
   --focus-ring: var(--series-primary);
 
+  /* 선택은 포커스와 다른 단계다. 표지 = 이 색의 굵은 줄(--space-1) + 체크·`선택됨` 글자(색만으로 알리지 않는다).
+   * 별칭 한 줄: 새 색을 만들지 않는다. 두 테마 작업 바탕(ground·deep·raise·soft) 위 3:1 이상은 시험이 지킨다. */
+  --selection: var(--series-secondary);
+  --selection-edge: var(--space-1);  /* 선택 표식 가장자리 굵기: 하위 탐색 같은 곳이 간격 토큰 대신 쓴다(D-292) */
+
   --flag-caution: var(--status-warn);
   --flag-danger-bg: var(--status-crit);
   --flag-danger-ink: var(--text-on-danger);
@@ -375,7 +380,8 @@
   /* 변하는 숫자는 전부 등폭이다 — 갱신될 때 자릿수가 흔들리면 못 읽는다.
    * 플랫폼마다 하나씩 두어 어디서도 Courier로 떨어지지 않게 한다. */
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Roboto Mono",
-          "DejaVu Sans Mono", "Noto Sans Mono", monospace;
+          "DejaVu Sans Mono", "Noto Sans Mono", "Malgun Gothic",
+          "Apple SD Gothic Neo", "Noto Sans KR", monospace;
 
   /* 크기는 닫힌 집합이다. 바닥은 팔 길이·장갑·관제 모니터에서 읽히는 12px.
    *   micro 단위·각주.      label 이름·짧은 라벨.   body 읽는 글.

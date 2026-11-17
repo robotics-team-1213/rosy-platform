@@ -45,9 +45,10 @@ def test_connected_ui_login_goal_cancel_readback_and_logout(connected_fleet):
 
                     page.goto(origin + '/console')
                     page.locator('[data-context-tab=status]').click()
-                    expect(page.locator('#robot-choice')).to_contain_text('rosy_01')
-                    page.locator('#robot-choice').select_option('rosy_01')
-                    aim = page.locator('#robot-workspace [data-goal-robot-id=rosy_01]')
+                    dock_btn = page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_01"]')
+                    expect(dock_btn).to_be_visible()
+                    dock_btn.click()
+                    aim = page.locator('#robot-panel-mount [data-goal-robot-id=rosy_01]')
                     expect(aim).to_be_enabled()
                     aim.click()
                     page.locator('#map-canvas').press('Enter')
@@ -61,7 +62,7 @@ def test_connected_ui_login_goal_cancel_readback_and_logout(connected_fleet):
                     expect(page.locator('#log')).to_contain_text(identifier)
                     with page.expect_response(lambda response: response.url.endswith(f'/tasks/{identifier}/cancel')
                                               and response.request.method == 'POST') as canceled:
-                        page.locator('#robot-workspace [data-cancel-scope]').click()
+                        page.locator('#robot-panel-mount [data-cancel-scope]').click()
                     assert canceled.value.status == 200
                     expect(page.locator('#log')).to_contain_text('QUEUED 취소')
                     readback = page.request.get(origin + '/api/fleet/tasks/' + identifier)

@@ -196,7 +196,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
    알림은 글이 있을 때만 둘째 줄에 나온다(비상 정지 결과). */
 @media (width < 64rem) {
   body[data-surface="console"] .surface-main {
-    grid-template-areas: "status" "banner" "observe" "act" "sense";
+    grid-template-areas: "status" "banner" "act" "sense" "observe";
   }
   body[data-surface="console"] #surface-status { grid-area: status; }
   body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }
@@ -233,8 +233,10 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   #surface-switch .ui-rail-item:focus-visible { outline-offset: calc(0px - var(--focus-ring-width)); }
   #shell-estop { padding-inline: var(--space-3); }
   .surface-main { gap: var(--space-4); }
-  .surface-actions:is(.map-click-actions, .map-layer-actions, .mode-actions) { flex-direction: row; width: 100%; }
-  .surface-actions:is(.map-click-actions, .map-layer-actions, .mode-actions) > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--inset-button); }
+  .surface-actions.mode-actions { flex-direction: row; width: 100%; }
+  .surface-actions.mode-actions > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--inset-button); }
+  .choice-group:is(.map-click-actions, .map-layer-actions) .choice-items { flex-direction: row; flex-wrap: nowrap; width: 100%; }
+  .choice-group:is(.map-click-actions, .map-layer-actions) :is(.choice-chip, ui-button) { flex: 1; width: auto; min-width: 0; padding-inline: var(--inset-button); justify-content: center; }
 }
 
 @media (width < 23rem) {
@@ -252,3 +254,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     align-items: start;
   }
 }
+
+/* 화면 구성 오류의 연결 알림: 좁은 폭에서 태그가 줄바꿈해 가로 넘침을 만들지 않는다. */
+#surface-status .shell-connection-status { display: block; min-width: 0; overflow-wrap: anywhere; }
+#surface-status .shell-connection-status ui-tag { white-space: normal; max-inline-size: 100%; }

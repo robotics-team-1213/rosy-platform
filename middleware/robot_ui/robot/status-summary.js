@@ -88,7 +88,7 @@ export function createStatusSummary({ elements, onOpenDevice }) {
       if (typeof item.device === "string") row.dataset.device = item.device;
       return row;
     }));
-    toggle.textContent = `할 일 ${items.length}`;
+    toggle.textContent = items.length ? `할 일 ${items.length}` : "할 일 없음";
     toggle.disabled = items.length === 0;
     setOpen(wasOpen);
   }

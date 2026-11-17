@@ -1,10 +1,12 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,commonDown,panelError,setText} from '/review-alerts.js';
 import {taskRow} from '/common/workspace.js';
 import '/commands.js';
+import {createBusyScope} from '/common/busy-scope.js';
 const $=id=>document.getElementById(id),API='/api/learning/tasks',CENTER='/api/learning/omx/center';
 const stages=[['prepare','준비'],['record','직접 조종·녹화'],['review','시연 확인'],['learn','학습'],['results','결과 확인']];
 const statuses={queued:'접수됨',launching:'시작 준비 중',running:'학습 중',stopping:'중지 처리 중',succeeded:'학습 완료',failed:'실패',cancelled:'취소됨'};
-let state={tasks:[],native_inputs:[],workflows:{}},connected=false,busy=false,loading=false;
+let state={tasks:[],native_inputs:[],workflows:{}},connected=false,loading=false;
+const scope=createBusyScope($('workflow-main'));
 const pending=new Map();
 function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function sourceId(row){return row?.prepared_id||row?.id;}
@@ -12,7 +14,7 @@ function current(){return state.tasks.find(t=>t.id===new URL(location.href).sear
 function flow(){return state.workflows?.[current()?.id];}
 function sources(){return flow()?.inputs||[];}
 function selectedSource(){return sources().find(row=>sourceId(row)===$('workflow-train-source').value);}
-function error(message){$('workflow-error').hidden=!message;$('workflow-error').textContent=message||'';}
+function error(message){$('workflow-error').hidden=!message;setText($('workflow-error'),message||'');}
 function uuid(){const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;const h=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 async function request(path,body){
   const options={cache:'no-store'};
@@ -34,7 +36,7 @@ function showStage(key,write=false,focus=false){
   for(const [stage] of stages){
     const selected=stage===key,tab=$('workflow-tab-'+stage);
     if(!tab)continue;
-    tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;
+    if(selected)tab.setAttribute('aria-current','step');else tab.removeAttribute('aria-current');
     $('workflow-'+stage).hidden=!selected;
   }
   if(write)history.replaceState(null,'','#workflow-'+key);
@@ -54,12 +56,12 @@ function selection(){
     !source?'이 과제에 연결한 시연을 선택하세요.':source.error||source.fixture_only?'학습 가능한 원본 시연을 선택하세요.':!review?'학습에 사용할 저장 검수를 명시적으로 선택하세요.':
     !reviewReady?(mode==='segments'?source.segments_trainable?.reason:source.trainable?.reason)||'검수 자료의 학습·평가 분할을 확인하세요.':act?.state!=='available'?act?.reason||'현재 호스트의 ACT 실행 준비를 확인하세요.':'';
   $('workflow-train-reason').textContent=reason||'저장 검수와 원본·과제 구성을 서버가 다시 검증합니다.';
-  $('workflow-train-start').disabled=busy||!!reason;
+  $('workflow-train-start').disabled=scope.busy||!!reason;
   $('workflow-train-start').reason=reason;
   const candidate=(state.native_inputs||[]).find(row=>sourceId(row)===$('workflow-native-source').value);
   const attachReason=!connected?'연결을 다시 확인하세요.':!state.token?'로그인·계정에서 권한을 확인하세요.':!candidate?'연결할 등록 시연을 선택하세요.':!candidate.source_revision?'원본 버전을 확인할 수 없습니다.':sources().some(row=>sourceId(row)===sourceId(candidate))?'이미 이 과제에 연결한 시연입니다.':'';
-  $('workflow-attach').disabled=busy||!!attachReason;$('workflow-attach').reason=attachReason;
-  $('workflow-card-export').disabled=busy||!connected||!state.token||!flow()?.recording?.task_card_export;
+  $('workflow-attach').disabled=scope.busy||!!attachReason;$('workflow-attach').reason=attachReason;
+  $('workflow-card-export').disabled=scope.busy||!connected||!state.token||!flow()?.recording?.task_card_export;
   $('workflow-card-export').reason=!flow()?.recording?.task_card_export?'이 과제의 녹화 준비서 생성이 준비되지 않았습니다.':!connected?'연결을 다시 확인하세요.':!state.token?'로그인·계정에서 권한을 확인하세요.':'';
   const prepared=sourceId(source);
   $('workflow-review-link').hidden=!prepared;
@@ -72,11 +74,11 @@ function selection(){
 }
 function renderRuns(){
   const runs=flow()?.runs||[];
-  const signature=JSON.stringify([runs,busy,connected,!!state.token]);
+  const signature=JSON.stringify([runs,scope.busy,connected,!!state.token]);
   if($('workflow-runs').dataset.content===signature)return;
   $('workflow-runs').dataset.content=signature;
   $('workflow-runs').replaceChildren(...runs.map(run=>{
-    const section=node('section',null,'workflow-card'),heading=node('header',null,'workflow-run-heading'),title=node('div');
+    const section=node('section',null,'ui-panel'),heading=node('header',null,'workflow-run-heading'),title=node('div');
     title.append(node('h4',statuses[run.status]||'상태 확인 필요'),node('p',run.native?'ACT · 원본 시연 학습':'학습 실행'));
     heading.append(title);section.append(heading);
     if(run.error)section.append(node('p',typeof run.error==='string'?run.error:run.error.message||'학습 실행 기록에서 오류를 확인하세요.'));
@@ -92,7 +94,7 @@ function renderRuns(){
       details.append(node('p',evaluation.model_reloaded_in_new_process?'별도 프로세스 모델 재적재 확인됨':'별도 프로세스 모델 재적재 확인 필요'));section.append(details);
     }
     if(['queued','launching','running','stopping'].includes(run.status)){
-      const stop=node('ui-button',run.status==='stopping'?'중지 처리 중':'이 학습 중지');stop.setAttribute('kind','quiet');stop.dataset.alwaysLive='';stop.disabled=busy||!connected||!state.token||run.status==='stopping';
+      const stop=node('ui-button',run.status==='stopping'?'중지 처리 중':'이 학습 중지');stop.setAttribute('kind','quiet');stop.dataset.alwaysLive='';stop.disabled=!connected||!state.token||run.status==='stopping';
       stop.onclick=()=>mutate(async()=>{await request(CENTER+'/stop',{id:run.id});});section.append(stop);
     }
     if(run.status==='succeeded'){
@@ -104,6 +106,10 @@ function renderRuns(){
 }
 function render(){
   const task=current(),journey=flow(),queryTask=new URL(location.href).searchParams.get('task');
+  // With saved tasks the new-task link is a quiet header action; the standing lede is gone (rule 18).
+  const first=state.tasks.length===0;
+  $('workflow-new').dataset.kind=first?'primary':'quiet';
+  if(first)$('workflow-empty').append($('workflow-new'));else $('workflow-refresh').before($('workflow-new'));
   $('workflow-empty').hidden=state.tasks.length>0;$('workflow-tasks').hidden=state.tasks.length===0;
   $('workflow-tasks').replaceChildren(...state.tasks.map(task=>{
     const journey=state.workflows?.[task.id],row=taskRow({title:task.name,subtitle:task.objective||'',status:stages.find(([key])=>key===journey?.stage)?.[1]||'준비 확인',description:journey?.blocked_reason||''});
@@ -119,12 +125,10 @@ function render(){
   if($('workflow-detail').dataset.task!==task.id){
     $('workflow-detail').dataset.task=task.id;delete $('workflow-detail').dataset.panel;
     $('workflow-stage-track').replaceChildren(...stages.map(([key,label],index)=>{
-      const item=node('li',null,'ui-stage'),tab=node('button',key==='record'?'녹화':key==='review'?'검수':key==='results'?'결과':label);
-      item.setAttribute('role','presentation');tab.id='workflow-tab-'+key;tab.type='button';tab.setAttribute('role','tab');tab.setAttribute('aria-controls','workflow-'+key);
-      tab.onclick=()=>showStage(key,true);
-      tab.onkeydown=event=>{const offset=event.key==='ArrowRight'?1:event.key==='ArrowLeft'?-1:null;
-        const next=event.key==='Home'?0:event.key==='End'?stages.length-1:offset===null?null:(index+offset+stages.length)%stages.length;
-        if(next!==null){event.preventDefault();showStage(stages[next][0],true,true);}};
+      // K10: a step is a link to its panel (#workflow-<key>), aria-current=step marks the open one; Tab and Enter are the keyboard.
+      const item=node('li',null,'ui-stage'),tab=node('a',key==='record'?'녹화':key==='review'?'검수':key==='results'?'결과':label);
+      tab.id='workflow-tab-'+key;tab.href='#workflow-'+key;
+      tab.onclick=event=>{event.preventDefault();showStage(key,true);};
       item.append(tab);return item;
     }));
   }
@@ -159,7 +163,7 @@ function render(){
   const completion=journey.completion||{};
   const groups=[['시연 준비',[['recording_complete','녹화'],['review_complete','검수']]],['오프라인 검증',[['training_complete','학습'],['offline_evaluation_complete','오프라인 평가']]],['실물 적용',[['physical_evaluation_complete','실물 평가'],['application_approved','적용 승인']]]];
   $('workflow-completion').replaceChildren(...groups.map(([title,rows])=>{
-    const card=node('section',null,'workflow-card');card.append(node('h4',title));
+    const card=node('section',null,'ui-panel');card.append(node('h4',title));
     const list=node('dl',null,'workflow-readout');for(const [key,label] of rows){const term=node('dt',label),value=node('dd',completion[key]?'완료 근거 있음':'미확인');value.dataset.evidence=key;list.append(term,value);}card.append(list);return card;
   }));
   selection();renderRuns();
@@ -174,21 +178,23 @@ async function refresh(checkSources=false){
     $('workflow-status').textContent=`저장한 과제·학습 상태를 읽었습니다. 자료 확인 시각: ${checkedAt} · 다시 확인으로 갱신`;
     render();
   }
-  catch(exc){connected=false;error(exc.message);if(current()){selection();renderRuns();}}
+  catch(exc){connected=false;error(panelError(exc,''));if(current()){selection();renderRuns();}}
   finally{loading=false;$('workflow-refresh').disabled=false;}
 }
 async function mutate(action){
-  if(busy)return;busy=true;error('');selection();renderRuns();
-  try{await action();await refresh();}
-  catch(exc){error(`${exc.message} 입력을 바꾸지 않고 다시 누르면 같은 요청으로 확인합니다.`);}
-  finally{busy=false;selection();renderRuns();}
+  error('');
+  await scope.run(async()=>{
+    try{await action();await refresh();}
+    catch(exc){error(commonDown()?'':`${exc.message} 입력을 바꾸지 않고 다시 누르면 같은 요청으로 확인합니다.`);}
+  });
+  selection();renderRuns();
 }
 $('workflow-attach-form').onsubmit=event=>{event.preventDefault();if($('workflow-attach').disabled)return;mutate(async()=>{
   const source=(state.native_inputs||[]).find(row=>sourceId(row)===$('workflow-native-source').value);
   if(!pending.has('attach'))pending.set('attach',{task_id:current().id,prepared_id:sourceId(source),source_revision:source.source_revision,request_id:uuid()});
   await request(API+'/native-input',pending.get('attach'));pending.delete('attach');
 });};
-$('workflow-train-form').onsubmit=event=>{event.preventDefault();const chosen=selection();if(!chosen||busy)return;mutate(async()=>{
+$('workflow-train-form').onsubmit=event=>{event.preventDefault();const chosen=selection();if(!chosen||scope.busy)return;mutate(async()=>{
   if(!pending.has('train'))pending.set('train',{...chosen,task_id:current().id,compute_host:state.host_id,steps:Number($('workflow-steps').value),batch_size:Number($('workflow-batch').value),request_id:uuid()});
   await request(CENTER+'/native-run',pending.get('train'));pending.delete('train');showStage('results',true);
 });};
@@ -202,4 +208,4 @@ $('workflow-native-source').onchange=()=>{pending.delete('attach');selection();}
 for(const id of ['workflow-train-source','workflow-review-selection','workflow-steps','workflow-batch'])$(id).addEventListener('input',()=>{pending.delete('train');selection();});
 $('workflow-refresh').onclick=()=>{error('');refresh(true);};
 addEventListener('hashchange',()=>showStage(location.hash.replace('#workflow-','')));
-refresh(true);setInterval(()=>{if(!document.hidden&&!busy)refresh();},5000);
+refresh(true);setInterval(()=>{if(!document.hidden&&!scope.busy)refresh();},5000);

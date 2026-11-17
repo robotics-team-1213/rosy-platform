@@ -1,6 +1,8 @@
 import {randomUUID} from "/console/assets/uuid.js";
+import {owns, unitScope} from "/console/assets/unit-scope.js";
 // Known external proposals keep their neutral contract and independent admission.
 const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
+const CELL_APPROVES = "승인은 이 팔을 맡은 셀 관제 화면에서 합니다";
 const states = {PROPOSED: "독립 운영자 승인 대기", READY: "승인됨 · 실행 준비", RUNNING: "실행 중",
   ACTION_SUCCEEDED: "동작 성공 · 물리 확인 대기", GOAL_CONFIRMED: "물리 목표 확인됨", HOLD: "보류 · 근거 확인 필요"};
 export function armAdmissionReason(job, control, actor, roleReason = "") {
@@ -59,8 +61,10 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
   let job = null, control = null, version = 0, busy = false, attempted = false, initial = false;
   let recovery = null, child = null, recoveryError = "", recoveryAttempted = false;
   function paint() {
-    admit.hidden = !job;
-    const reason = busy ? "요청 처리 중입니다" : !job ? "작업을 먼저 조회하세요" : attempted ? "승인 요청 후 원본을 다시 조회하세요" :
+    // D-960 §2 · D-994: 통합관제 R reads and relays a delegated arm job; its cell's named operator approves.
+    const cellApproves = !owns("arms");
+    panel.hidden = !active || (cellApproves && unitScope()?.role !== "root");
+    admit.hidden = !job || cellApproves;    const reason = busy ? "요청 처리 중입니다" : !job ? "작업을 먼저 조회하세요" : attempted ? "승인 요청 후 원본을 다시 조회하세요" :
       armAdmissionReason(job, control, principal(), approveReason());
     admit.disabled = Boolean(reason); read.disabled = busy; input.readOnly = busy;
     if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
@@ -115,6 +119,22 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
       for (const [key, title] of [["workcell_id", "작업 공간"], ["instance_id", "장치"], ["object_ref", "물체 참조"], ["source", "출발 참조"], ["target", "목표 참조"]]) field(title, job.transfer[key]);
       field("제안 다이제스트", job.proposal_digest); field("조회한 실행 세대", control?.generation);
       field("승인된 실행 세대", job.dispatch_generation); field("사유", job.reason);
+      const isCellS = job.transfer?.workcell_id === "cell_s" || job.transfer?.instance_id === "arm_s";
+      const isCellA = job.transfer?.instance_id === "arm_a";
+      const isCellB = job.transfer?.instance_id === "arm_b";
+      const isCellAb = job.transfer?.workcell_id === "cell_ab";
+      const cellLinkLabel = isCellS ? "Cell S 작업대 열기"
+        : isCellA ? "Cell A 작업대 열기"
+        : isCellB ? "Cell B 작업대 열기"
+        : isCellAb ? "Cell A/B 작업대 열기" : "셀 작업대 열기";
+      const cellLinkHref = isCellS ? "/console/cell?cell=cell_s#observation-heading"
+        : isCellA ? "/console/cell?cell=cell_a#observation-heading"
+        : isCellB ? "/console/cell?cell=cell_b#observation-heading"
+        : isCellAb ? "/console/cell?cell=cell_ab#observation-heading" : "/console/cell#mission-heading";
+      const cellLink = Object.assign(node("a", cellLinkLabel, "ui-action-link"), {href: cellLinkHref});
+      cellLink.dataset.kind = "quiet";
+      const dd = node("dd"); dd.append(cellLink);
+      detail.append(node("dt", "현장 확인"), dd);
     }
     showRecovery(); paint();
   }
@@ -155,7 +175,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
         } catch { recoveryError = "복구 근거를 조회할 수 없습니다. 원본 작업은 보존돼 있습니다. 다시 조회하세요."; }
       }
       if (current !== version || !life.current()) return;
-      state.textContent = `${states[job.status] || "상태 확인 필요"} · 원본을 조회했습니다. ${armAdmissionReason(job, control, principal(), approveReason())}`;
+      state.textContent = `${states[job.status] || "상태 확인 필요"} · 원본을 조회했습니다. ${owns("arms") ? armAdmissionReason(job, control, principal(), approveReason()) : CELL_APPROVES}`;
       show();
     } catch (error) {
       if (!life.current() || current !== version) return;

@@ -2,7 +2,7 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 시연 녹화</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/record.css"><script type="module" src="/record.js"></script></head>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/alert-center.css"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/record.css"><script type="module" src="/record.js"></script></head>
 <body><a class="skip-link" href="#record-main">시연 녹화로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
 <ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
@@ -13,9 +13,9 @@
 <!-- review:rail:end --></nav></div>
 <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="자료 하위 메뉴"><span class="ui-subnav-head">자료</span><a class="ui-subnav-item" href="/catalog">자료 등록</a><a class="ui-subnav-item" href="/learning/record" aria-current="page">시연 녹화</a><a class="ui-subnav-item" href="/learning/imitate">LeRobot 폴더 업로드</a></nav></div>
 <div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>시연 녹화</h1><span class="ui-crumbs" id="learning-tool-path"></span><span data-spacer></span><ui-button id="record-refresh" kind="quiet" data-action-icon="refresh">다시 확인</ui-button></div>
-<main id="record-main" class="learning-main" tabindex="-1"><div class="record-intro"><p class="record-lede">구성을 고르고 시연을 녹화하세요.<br>확인한 회차는 학습 자료로 이어집니다.</p><p id="record-host" class="record-note" role="status">로컬 녹화 호스트를 확인하는 중입니다.</p></div>
+<main id="record-main" class="learning-main" tabindex="-1"><div class="record-intro"><p class="record-lede">구성을 고르고 시연을 녹화하세요.<br>확인한 회차는 학습 자료로 이어집니다.</p><p class="quiet">이 화면은 리더-팔로워 시연 수집·무결성 봉인 전용입니다. 모터 게인·제한 로컬 조정은 벤치 PC <code>cell_params_web.html</code>에서, 현장 셀 운영·배차는 <a href="/console/cell?cell=cell_s">Cell S 공급 작업대 (arm_s)</a> · <a href="/console/cell?cell=cell_a">Cell A 1·3단 작업대 (arm_a)</a> · <a href="/console/cell?cell=cell_b">Cell B 2단 작업대 (arm_b)</a>에서 수행합니다.</p><p id="record-host" class="record-note" role="status">로컬 녹화 호스트를 확인하는 중입니다.</p></div>
 <nav class="record-flow" aria-label="시연 녹화 작업 순서"><a href="#record-setup">구성 준비</a><a href="#record-capture">녹화·확인</a><a href="#record-handoff">학습 자료 전달</a></nav>
-<ui-status id="record-error" state="error" role="alert" hidden></ui-status><p id="record-status" role="status"></p>
+<div id="page-alerts" class="alert-center-list" aria-label="알림"></div><ui-status id="record-error" state="error" hidden></ui-status><p id="record-status" role="status"></p>
 <section id="record-live" class="record-live" aria-label="현재 녹화" hidden><div><h2>현재 녹화</h2><p id="record-live-status" role="status"></p></div><ui-button id="episode-stop" kind="quiet" data-always-live disabled reason="녹화 중인 회차가 없습니다.">현재 회차 정지</ui-button></section>
 <div class="record-session-bar"><label class="ui-field-label" for="record-session">저장한 녹화 세션<select id="record-session" class="ui-field"><option value="">새 세션</option></select></label><ui-button id="record-new" kind="quiet">새 구성·녹화 세션</ui-button></div>
 <section id="record-setup" class="record-section record-setup-panel" aria-labelledby="setup-title"><header class="record-section-heading"><div><h2 id="setup-title">녹화 구성</h2><p class="record-note">저장 구성을 선택하면 시작할 준비가 됩니다. 변경한 장비·배치는 새 세션에 적용합니다.</p></div></header><div class="record-setup-grid"><div>

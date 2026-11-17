@@ -1478,3 +1478,82 @@
 - gate 변화: 없음. SOURCE GO, LOCAL GO 유지(main red 복구)
 - 결정: 없음
 - 교훈: 없음
+## 2026-11-13 · uncommitted · refactor(robot-ui): 공용 연결 배너·위험 채움·사유 줄·busy·값 문구를 쓴다
+
+- 변경: 연결 배너를 `createConnectionNotice`로(진짜 끊김만 위험 칩, 인증 대기·알 수 없음은 조용), 위험 글자색(hero-safety·capability blocked·risk-tape·event severity·온도 crit·HITL 제목)을 `--flag-danger-*` 채움으로, `dashboard-entry.js`의 `busy` 플래그를 `createBusyScope`로, 호스트 패널의 `pointAt()`을 `describeBy`로, `number/percent/rate`의 빠진 값을 `valueText`(정보 없음)로. 정지 버튼과 계정 세션 코드는 동작이 달라 그대로 둔다. 실제 WebSocket 종료 시험 추가
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) robot/test·pilot/test·shared_controls·token_contracts·no_element_style: 700 passed 12 failed(889 s)였고, 그 가운데 10건은 main에서도 같은 실패(web_budgets, pilot_app_proxy gradle, shared_controls 6, token_contracts 2)이며 나머지 2건(배너 시험 로드, pilot SHELL에 geometry.js 없음)은 고쳤다. size_range 0, lint 0 errors
+- gate 변화: 없음(동작 동일, 위험 표시는 글자색에서 채움으로). 장치 수용은 별도다.
+
+## 2026-11-13 · uncommitted · fix(robot-ui): 입구 정지는 로그인 전에도 누른다, 연결 상태는 호출자가 명시한다
+
+- 변경: `entry-stop`을 `createStopControl`로(disabled·사유 삭제, 거절은 글, 접수 뒤 상태 확인은 마지막 누름만). `setConnection(kind, label, state)`가 C10 상태를 호출자에게서 받아 상태 해석 실패·스트림 권한 거부·REST 폴링 전환은 위험 칩이 아니다(한국어 라벨 추측 삭제). `controls()`는 `scope.setDisabled`로, Robot의 남은 '—' 리터럴은 `valueText`로(`host/system.js`는 node 시험이 절대 URL import를 못 풀어 그대로, `enumLabel` 기본값 '—'은 shared라 그대로). 손목 `go` 버튼은 `reason` 복원
+- 증거: 원격 robot/pilot 전체+shared 시험 709 passed 10 failed, 실패 10건은 모두 main과 같은 것(web_budgets, pilot_app_proxy, shared_controls 6, token_contracts 2). 새 시험: 로그인 전 정지 거절 글, 상태 해석 실패·REST 폴링은 위험 칩 아님. Pilot 정지는 이전하지 않았다(아래 보고)
+- gate 변화: 없음. 입구 정지는 이제 로그인 전에도 눌린다(C9, D-270). 장치 수용은 별도다.
+
+## 2026-11-13 · uncommitted · test(robot-ui): 연결 끊김 배너는 경고 태그
+- 변경: 공용 연결 알림이 끊김을 위험이 아닌 경고 태그로 그리게 되어(2026-11-14 결정) 배너 시험이 crit 칩 대신 warn 태그를 확인한다. ros-network의 인터페이스 미확인 문구는 공용 unknown 문구를 쓴다.
+- 증거: 원격 test_dashboard_entry_browser(통합 브랜치 착지 기록).
+- gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · fix(robot-ui): 끊김 배너 표현과 미확인 값 문구 정리
+- 변경: 앞선 기록의 '끊김 = 위험 칩'은 2026-11-14 결정으로 경고 태그가 됐다(배너 시험·주석 갱신, 평온 상태 시험은 어떤 ui-tag도 없음을 확인). host/system.js의 실행 모드 미확인 값은 공용 valueText 문구를 쓴다.
+- 증거: 원격 test_dashboard_entry_browser 통과, 통합 시험은 착지 기록.
+- gate 변화: 없음. 후속(다른 세션 착지 중이라 손대지 않음): Fleet 콘솔 formation.js, power-health-view.js, roster.js, shared/host-health.js, work/channel-request-view.js의 '확인 불가' 값 문구.
+## 2026-11-14 · uncommitted · fix(robot-ui): 끊김 배너는 주의 칩, 모르는 실행 모드는 공용 문구
+
+- 변경: 연결 배너 시험을 `ui-tag[status="warn"]`로(문구 '연결 확인 필요' 그대로), `test_dashboard_package.py`와 `console-detail.css` 주석을 주의 칩 말로, `host/system.js`의 실행 모드 모름 값을 `EVIDENCE_LABEL.unavailable`로(`mount`가 async로 공용 모듈을 읽는다. `runtimeGap`을 읽는 node 시험은 `/common` URL을 못 풀기 때문)
+- 증거: 원격 시험은 이 슬라이스의 마지막 실행에서 확인한다
+- gate 변화: 없음. 끊김은 주의(warn), danger일 때만 위험 채움(2026-11-14 결정).
+
+## 2026-11-14 · uncommitted · feat(robot-ui): Robot 콘솔·입구를 UI 콘셉트 읽는 순서로 다시 배치
+
+- 변경: 콘솔 `overview`를 banner 슬롯(맨 위)으로 올리고 머리(로봇 아이콘·제목·종합 `ui-tag`) + 알려진 값만 `.ui-readout[data-form=strip]`, 근거 없는 값은 "근거 없음 N개" 펼침, 마지막 관측 한 칸, Pilot 링크는 조용한 행동 링크로. `mode`는 `ui-panel raised`이고 내비게이션 막힘은 주황 문장 대신 `locked` 태그 + 사유 한 줄. 모터 상태는 한 줄 요약 + 접힘(`renderMotorHealthSummary`), 주의·고장이면 한 번 펼침. 지도 조작 사유는 근거 줄 글자. 입구는 두 문단을 로그인 창의 한 문단으로, 이름표·로그인 유지는 `기기 옵션` 접힘, 로그인 버튼 `login` 아이콘, 오류 줄 `warn` 아이콘. 삭제: `.panel` 류가 아닌 `overview`의 dt/dd 7행 전부와 로그인 전 머리 문단
+- 증거: 캡처 `scratchpad/uxconcept/shots-after/robot-{console,entry}-{1440,390}.png`. 원격 시험은 이 슬라이스 마지막 실행 기록(아래 항목)
+- gate 변화: 없음. 입구 정지·Pilot 정지 동작은 그대로다.
+
+## 2026-11-14 · uncommitted · fix(robot-ui): icon gate hits become status tags
+- 변경: 입구 코드 오류 줄은 `statusTag("caution")`, 개요 근거 없음 요약은 `statusTag("unknown")`로 그린다(주의·정보 없음 글리프는 상태 태그만 쓴다, test_icon_gates)
+- 증거: 통합 브랜치 재시험(shared/web/test, robot_ui)
+- gate 변화: 없음
+
+## 2026-11-14 · uncommitted · ui-followups: 운용 콘솔 좁은 순서 D-1028, 호환 화면 .panel 12개 정리
+
+- 변경: `shell.js`·`shell.css`: 64rem 미만 순서를 머리 → 운전 모드 → 카메라 → 지도로(D-1028). 시험 네 곳 갱신. `index.html`: `.panel` 12개를 ui-section 7·ui-panel flat 5로, `.panel` 규칙 삭제. 스타일가이드·호스트 패널 아이콘을 `log`/`connect`로.
+- 증거: Playwright 캡처 1440·390은 작업 기록, 원격 시험 결과는 최종 보고.
+- gate 변화: 없음. 아이콘 예외 목록만 줄었다.
+
+## 2026-11-14 · uncommitted · ui-regions R1: 운용 콘솔 호환 화면·콘솔 패널의 고르개를 공용 부품으로
+
+- 변경: 호환 화면 보기 전환(운용/점검)·로봇 운전 모드·차선 센서는 K1 `createChoiceGroup`, 지도 레이어는 K5 토글 묶음, 지도 클릭 동작은 K1, 로그인 방법 탭은 K9 `createTabs`(`auth-tabs.js`, 두 경로 공용). 운전 모드(`mode-choice.js`)와 지도 고르개(`map-choices.js`)는 호환 화면과 콘솔 패널이 같은 정의를 쓴다(S2). 선택 표지는 로봇이 말한 값이고 클릭이 아니다: 고른 즉시 되돌리고 확인·요청을 거쳐 다음 상태가 표지를 옮긴다. 알 수 없는 모드(SAFE_STOP 등)는 아무것도 체크하지 않는다(`choice-show.js`). 차선 센서 "꺼짐"은 정지 경로라 늘 켜 둔다(`data-always-live`). SIM 신호 단추는 명령이라 `kind=quiet`. 호환 화면 모드 NAVIGATION 글자가 "자율주행"에서 공용 MODE_LABEL "내비게이션"으로 바뀐다. 새 자산 4개를 CMake·`core_api_web` 자산 목록에 등록. 손으로 쓴 `role=tab` 중 `shell/mount.js`(확인 게이트가 있는 비동기 전환)와 스타일가이드 아이콘 탭(공용 시험이 방향키 자동 활성을 요구)은 남겼다.
+- 증거: 시험을 새 속성으로 옮겼다(라디오 `checked` 정확히 하나·방향키 이동, 거부한 선택이 되돌아감, 호환 화면과 패널이 같은 로봇 모드, 탭 수동 활성). 원격 시험은 최종 보고.
+- gate 변화: `test_choice_controls.py` ROLE_TAB_DEBT에서 robot/index.html 제거. patterns C8·C17 built.
+
+## 2026-11-14 · uncommitted · ui-regions R1: 패널 결론으로 모드·차선 센서를 K1 라디오에서 K20 명령으로
+
+- 변경: 패널(opencode·agy·Claude)이 라디오가 로봇 보고값을 비추는 방식을 반박했다. 방향키마다 확인창이 뜨고, 아무것도 체크하지 않은 라디오를 다시 누르면 같은 값이라 `onChange`가 안 나가(SAFE_STOP에서 IDLE을 못 고름). 호환 화면·콘솔 패널의 운전 모드와 차선 센서를 `kind=quiet` 명령 줄로 되돌리고 현재 값은 `aria-current`+비활성으로 표시한다. 지도 클릭 동작은 목표가 막히면 시작 자세로 보이게 되돌아간다. 보기 전환·지도 레이어는 K1·K5 그대로.
+- 증거: 시험을 옮겼다(`aria-current`, 거부한 선택은 요청 없음, SAFE_STOP에서도 모드 단추 사용 가능). 패널 기록 `scratchpad/uxplan/panel-rp/`.
+- gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · ui-regions R1: 패널 3라운드·안전 검토 반영
+
+- 변경: Escape 정지는 글자 입력(텍스트·textarea·select·IME 조합)에서만 비켜선다. 라디오·체크박스·range는 정지한다. 현재 값 K20 단추에 상태 표시(굵은 글자·진한 테두리, `--selection` 아님). 현재 차선 센서 단추는 비활성(꺼짐은 늘 활성). 알려진 남은 위험(원래부터 있음): 확인 창을 Esc로 닫으면 같은 Esc가 정지도 건다.
+- 증거: `test_dashboard_choice_browser.py`에 체크박스 초점 Esc는 정지·텍스트 초점은 무시를 추가. 패널 기록 `scratchpad/uxplan/panel-rp/`.
+- gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · rp-fix: 호환 화면 겹침·미확인·원시 토큰·과밀 정리 (F02, F03, F04, F07, F08, F09, F10, F13)
+
+- 변경: `console-detail.css`: 저속 직접 제어 머리를 줄바꿈해 `전진` 행과 겹치지 않게(F02), 주행 대기 글자(`navigation-line b`)를 중립(`--nominal`)으로(F09), `네트워크와 릴리스`의 `.host-card`·`통신 격리`의 `.ros-network-facts`/`.traffic-card`를 테두리 없는 1px 구분선 묶음으로 평탄화(F10). `client.js`·`shell/shell.js`·`index.html`·`styles.css`: 연결 끊김 표시를 공용 `createConnectionNotice`(warn)로 통일(F03). `index.html`·`telemetry.js`·`status-summary.js`·`styles.css`: 미측정/미확인 값의 `0%`/`할 일 0`/단위 접미사를 `정보 없음`·`할 일 없음`으로 교정(F04), 차선·교통 원시 토큰을 공용 한국어 어휘로 옮기고 원문은 `title`에 유지(F08), 점검 스크롤의 부차 `kind="primary"`를 `quiet`로 낮춤(F07, `dock-admin.js` 포함), 호환 상단 바의 탐색을 단일 `.compat-subnav` 자리로 분리(F13).
+- 증거: 수정한 JS 파일 `node --check` 통과. 브라우저·원격 pytest는 Claude가 실행.
+- gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · r2: 안전 회로 live region·triage 제목·열 격자·초점 복귀·직접 운전 링크 (R2-02, R2-04, R2-05, R2-06, R2-07, R2-11)
+
+- 변경: `index.html`·`telemetry.js`: `#safety-indicator`에 `aria-live="polite"`를 추가하고 `renderSafetyHero`에 `dataset.hero` 변경 키 가드를 두어 1 Hz 재방송을 막음(R2-02). `console-detail.css`: `.telemetry-grid` 열을 `repeat(auto-fit, minmax(10ch, 1fr))`로 변경(R2-05). `index.html`·`styles.css`: `#triage-title`을 `h2`에서 `strong.triage-title`로 바꾸고 외형을 유지(R2-04). `app.js`: 접속 키 서랍 열 때 `#code-input`으로, 닫을 때 `#open-auth`로 초점 이동(R2-07). `panels/setup/navigation-approval.js`: `'이 기체의 OS'`를 `'이 로봇의 OS'`로 교정(R2-11). `index.html`: 호환 `.compat-subnav`에 `/pilot`으로 가는 조용한 링크(`직접 운전`) 추가(R2-06 로봇 측). R2-03(`safetyHero` 영문 라벨 한글화)은 `test/test_dashboard_browser_part2.py`의 기존 단언과 충돌해 보류, R2-06 Pilot 측은 `test_pilot_browser.py`·`test_pilot_app_proxy.py`의 `ui-topbar [data-goto]` 단일 선택자 충돌로 보류.
+- 증거: 수정한 JS 파일(`telemetry.js`, `app.js`, `panels/setup/navigation-approval.js`) `node --check` 통과. 원격 pytest는 Claude가 실행.
+- gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · r2: 안전 회로 표시를 한국어로 (R2-03)
+
+- 변경: `telemetry.js` safetyHero 라벨을 정지·정상·하드웨어 꺼짐·하드웨어 무응답·주행 불가·출처 없음·미확인으로, `index.html` 초기값 UNKNOWN을 확인 전으로. 색조·출처 문구·판정 로직은 그대로. `test/test_dashboard_browser_part2.py`의 단언 4곳은 같은 상태를 같은 엄격도로 새 한국어 글자에 맞춤.
+- 증거: 원격 pytest(아래 보고 참조).
+- gate 변화: 없음.

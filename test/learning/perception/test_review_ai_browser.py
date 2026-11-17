@@ -1,8 +1,10 @@
 """Browser proof of AI candidate publication and read-only review history."""
 from contextlib import contextmanager
+import re
 import threading
 
 import pytest
+from browser_picks import choose_pixel_class
 from browser_harness import browser_tests_enabled, free_port
 from review_app import make_server
 from review_ai_jobs import Jobs
@@ -102,8 +104,8 @@ def test_keyboard_ai_draft_publishes_candidate_without_overwriting_review(tmp_pa
         assert store.get(0) == before
         assert jobs.status(0)['jobs'][0]['state'] == 'succeeded'
         command(page, 'AI 결과 목록 조회')
-        expect(page.locator('#model-draft-select option')).to_have_count(1)
-        expect(page.locator('#model-draft-select')).to_contain_text('미인증 로컬 작업자')
+        expect(page.locator('#model-drafts [role=option]')).to_have_count(1)
+        expect(page.locator('#model-drafts')).to_contain_text('미인증 로컬 작업자')
         expect(page.locator('#model-candidates')).to_be_enabled()
         assert store.get(0) == before
         open_action_disclosure(page, '#review-versions')
@@ -123,7 +125,8 @@ def test_no_configuration_explains_disabled_pixel_ai_and_history_missing(tmp_pat
         expect(page.locator('#review-ai-pixel_draft')).to_be_disabled()
         expect(page.locator('#review-ai-mask_check')).to_be_disabled()
         expect(page.locator('#review-ai-jobs')).to_contain_text('AI 실행 설정이 없습니다')
-        assert '설정' in page.locator('#review-ai-mask_check').get_attribute('reason')
+        expect(page.locator('#review-ai-mask_check')).to_have_attribute('aria-describedby', re.compile('cause-'))
+        assert '설정' in page.locator('#review-ai-jobs [data-cause]').text_content()
         open_action_disclosure(page, '#review-versions')
         page.locator('#review-versions').get_by_role('button', name='이력 불러오기', exact=True).click()
         expect(page.locator('#review-versions')).to_contain_text('아직 저장된 이력이 없습니다')
@@ -138,7 +141,7 @@ def test_pixel_unsaved_gesture_blocks_ai_and_result_reload(tmp_path):
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
         expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
         expect(page.locator('#review-ai-mask_check')).to_be_enabled()
-        page.locator('#pixel-class').select_option('0')
+        choose_pixel_class(page, '0')
         page.locator('#pixel-canvas').focus(); page.keyboard.press('t')
         page.keyboard.down('Space'); page.keyboard.press('Alt+ArrowRight'); page.keyboard.up('Space')
         expect(page.locator('#pixel-draft')).to_contain_text('1획')
@@ -167,7 +170,7 @@ def test_mask_check_automatically_refreshes_opinion_without_replacing_unsaved_pi
             assert started.wait(5)
             expect(page.locator('#pixel-vlm-state')).to_contain_text('AI 확인 실행 중')
             if editing:
-                page.locator('#pixel-class').select_option('0')
+                choose_pixel_class(page, '0')
                 page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
                 expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
                 expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
@@ -246,7 +249,7 @@ def test_delayed_old_opinion_response_cannot_replace_new_check_result(tmp_path, 
         before = review_masks.get(store, 0)
         page.locator('#review-ai-mask_check').click()
         expect(page.locator('#pixel-vlm-note')).to_contain_text('Latest saved-mask advice', timeout=15000)
-        page.locator('#pixel-class').select_option('0')
+        choose_pixel_class(page, '0')
         page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
         expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
         expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
@@ -282,7 +285,7 @@ def test_requested_pixel_ai_previews_completion_only_when_editor_is_clean(tmp_pa
             page.locator('#review-ai-pixel_draft').click()
             assert started.wait(5)
             if editing:
-                page.locator('#pixel-class').select_option('0')
+                choose_pixel_class(page, '0')
                 page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
                 expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
                 expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
@@ -293,14 +296,14 @@ def test_requested_pixel_ai_previews_completion_only_when_editor_is_clean(tmp_pa
                 expect(page.locator('#pixel-candidate-preview')).to_be_hidden()
                 expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'false')
                 expect(page.locator('#pixel-draft')).to_have_text(draft)
-                expect(page.locator('#pixel-candidates option')).to_have_count(0)
+                expect(page.locator('#pixel-candidates [role=option]')).to_have_count(0)
                 page.keyboard.press('Escape')
             expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'true')
             expect(page.locator('#pixel-candidate-preview')).to_be_hidden()
             expect(canvas).to_have_js_property('width', 32)
             expect(canvas).to_have_js_property('height', 24)
-            expect(page.locator('#pixel-candidates option')).to_have_count(1)
-            expect(page.locator('#pixel-candidates')).to_have_value(jobs.status(0)['jobs'][0]['result']['candidate_sha256'])
+            expect(page.locator('#pixel-candidates [role=option]')).to_have_count(1)
+            expect(page.locator('#pixel-candidates [role=option][aria-selected=true]')).to_have_attribute('data-id', jobs.status(0)['jobs'][0]['result']['candidate_sha256'])
             assert canvas.evaluate('node => Array.from(node.getContext("2d").getImageData(15,15,1,1).data)') != before_pixel
             assert review_masks.get(store, 0)['version'] == before['version']
             assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before_pixels)
@@ -342,8 +345,8 @@ def test_frame_switch_removes_ai_and_versions_before_delayed_mask_failure(tmp_pa
         expect(page.locator('#review-versions')).to_have_count(1)
         held = []
         page.route('**/api/masks/1', lambda route: held.append(route))
-        open_action_disclosure(page, '.pixel-frame-item[data-index="1"]')
-        page.locator('.pixel-frame-item[data-index="1"]').click()
+        open_action_disclosure(page, '#pixel-frames [role=option][data-id="1"]')
+        page.locator('#pixel-frames [role=option][data-id="1"]').click()
         expect(page.locator('#pixel-vlm-note')).to_have_text('')
         expect(page.locator('#pixel-vlm-details')).to_have_text('')
         expect(page.locator('#pixel-ai-summary')).to_be_hidden()
@@ -356,7 +359,7 @@ def test_frame_switch_removes_ai_and_versions_before_delayed_mask_failure(tmp_pa
         expect(page.locator('#pixel-approve')).to_be_disabled()
         assert len(held) == 1
         held[0].fulfill(status=503, json={'error': 'fixture mask read failed'})
-        expect(page.locator('#pixel-error')).to_contain_text('\uac80\uc218 \uc11c\ube44\uc2a4\ub97c \uc0ac\uc6a9\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4')
+        expect(page.locator('#pixel-error')).to_contain_text('불러오지 못함')
         expect(page.locator('#review-ai-jobs')).to_have_count(0)
         expect(page.locator('#review-versions')).to_have_count(0)
         expect(page.locator('#pixel-canvas')).to_be_hidden()
@@ -391,8 +394,8 @@ def test_dirty_pixel_editor_receives_mixed_check_states_without_consuming_candid
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
         expect(page.locator('#review-ai-pixel_draft')).to_be_enabled()
         before = review_masks.get(store, 0)
-        page.locator('#pixel-class').select_option('0')
-        page.locator('#pixel-brush-tool').click()
+        choose_pixel_class(page, '0')
+        page.locator('#pixel-tool label:has(#pixel-brush-tool)').click()
         page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
         draft = page.locator('#pixel-draft').inner_text()
         jobs.create(0, 'pixel_draft', before['version'], 'fixture-collaborator')
@@ -426,7 +429,7 @@ def test_dirty_pixel_editor_receives_mixed_check_states_without_consuming_candid
             page.get_by_role('button', name='AI 실행 상태 다시 조회', exact=True).click()
             expect(page.locator('#pixel-vlm-state')).to_have_text(title)
             expect(page.locator('#pixel-draft')).to_have_text(draft)
-            expect(page.locator('#pixel-candidates option')).to_have_count(0)
+            expect(page.locator('#pixel-candidates [role=option]')).to_have_count(0)
             expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'false')
             assert review_masks.get(store, 0)['version'] == before['version']
         expect(page.locator('#pixel-vlm-note')).to_contain_text('Fresh collaborator opinion')
@@ -436,7 +439,7 @@ def test_dirty_pixel_editor_receives_mixed_check_states_without_consuming_candid
         page.locator('#pixel-save').click()
         expect(page.locator('#pixel-status')).to_contain_text('v2')
         expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'true')
-        expect(page.locator('#pixel-candidates')).to_have_value(generated['result']['candidate_sha256'])
+        expect(page.locator('#pixel-candidates [role=option][aria-selected=true]')).to_have_attribute('data-id', generated['result']['candidate_sha256'])
         assert len(previews) == 1
         assert review_masks.get(store, 0)['status'] == 'pending'
 
@@ -467,15 +470,15 @@ def test_pixel_result_read_rechecks_dirty_state_after_held_mask_response(tmp_pat
                 result_button.click()
             assert len(held) == 1
             page.get_by_role('navigation', name='픽셀 검수 도구').get_by_role('link', name='사진 검수', exact=True).click()
-            page.locator('#pixel-class').select_option('0')
-            page.locator('#pixel-brush-tool').click()
+            choose_pixel_class(page, '0')
+            page.locator('#pixel-tool label:has(#pixel-brush-tool)').click()
             page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
             draft = page.locator('#pixel-draft').inner_text()
             with page.expect_response('**/api/masks/0'):
                 held.pop().fulfill(json=review_masks.get(store, 0))
             expect(page.locator('#review-ai-jobs')).to_contain_text('AI 결과 목록을 조회했습니다.')
             expect(result_button).to_be_disabled()
-            expect(page.locator('#pixel-candidates option')).to_have_count(0)
+            expect(page.locator('#pixel-candidates [role=option]')).to_have_count(0)
             expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'false')
             expect(page.locator('#pixel-draft')).to_have_text(draft)
             assert review_masks.get(store, 0)['version'] == before['version']
@@ -508,7 +511,7 @@ def test_unsaved_pixel_candidate_preview_blocks_completion_and_shortcut(tmp_path
         expect(page.locator('#pixel-discard')).to_be_enabled()
         generated = jobs.status(0)['jobs'][0]
         assert generated['action'] == 'pixel_draft' and generated['state'] == 'succeeded'
-        expect(page.locator('#pixel-candidates')).to_have_value(generated['result']['candidate_sha256'])
+        expect(page.locator('#pixel-candidates [role=option][aria-selected=true]')).to_have_attribute('data-id', generated['result']['candidate_sha256'])
         assert review_masks.get(store, 0)['version'] == before['version']
         assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), pixels)
         expect(page.locator('#pixel-approve')).to_be_disabled()
@@ -533,11 +536,11 @@ def test_unsaved_pixel_candidate_preview_blocks_completion_and_shortcut(tmp_path
               return {actualTheme:RosyTheme.resolved(),themePreference:RosyTheme.get(),
                 htmlTheme:document.documentElement.dataset.theme,ground:getComputedStyle(document.documentElement).getPropertyValue('--ground').trim(),
                 viewport:{width:innerWidth,height:innerHeight},scroll:{x:scrollX,y:scrollY},overflow:document.documentElement.scrollWidth-innerWidth,
-                candidate:document.querySelector('#pixel-candidates').value,previewPressed:document.querySelector('#pixel-preview-candidate').getAttribute('aria-pressed'),
+                candidate:document.querySelector('#pixel-candidates [aria-selected=true]')?.dataset.id,previewPressed:document.querySelector('#pixel-preview-candidate').getAttribute('aria-pressed'),
                 activeElement:document.activeElement?.id,canvas:rect('#pixel-canvas'),layout:rect('.pixel-layout'),decision:rect('.pixel-review-column'),
                 controls:Object.fromEntries(['pixel-approve','pixel-save','pixel-discard'].map(id=>{const node=document.getElementById(id);
                   return [id,{disabled:node.disabled,disabledAttribute:node.hasAttribute('disabled'),ariaDisabled:node.getAttribute('aria-disabled'),
-                    label:node.textContent.trim(),reason:node.getAttribute('reason'),rect:node.getBoundingClientRect().toJSON()}];}))};
+                    label:node.textContent.trim(),reason:document.getElementById(node.getAttribute('aria-describedby')||'')?.textContent||null,rect:node.getBoundingClientRect().toJSON()}];}))};
             }""")
             stored = review_masks.get(store, 0)
             page.screenshot(path=str(root / f'{name}-viewport.png'))

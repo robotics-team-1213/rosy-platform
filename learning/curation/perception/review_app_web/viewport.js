@@ -1,4 +1,5 @@
 import {actionIcon} from '/common/ui.js';
+import {setGeometry} from '/common/geometry.js';
 
 // The canvas bitmap stays at source resolution. Only its displayed size changes.
 export function reviewViewport(stage, canvas, viewBar, canChange=()=>true, fitHeight=()=>Infinity) {
@@ -11,7 +12,7 @@ export function reviewViewport(stage, canvas, viewBar, canChange=()=>true, fitHe
     button.setAttribute('kind','quiet');
     if(icon==='hand')button.setAttribute('kind','toggle');
     button.setAttribute('aria-label',label);
-    button.title=label;
+    button.setAttribute('data-ui-tooltip',label);
     button.textContent=label.split(' · ')[0];
     actionIcon(button,icon);
     controls.append(button);
@@ -34,8 +35,7 @@ export function reviewViewport(stage, canvas, viewBar, canChange=()=>true, fitHe
     const oldWidth=canvas.getBoundingClientRect().width||base;
     const centerX=(stage.scrollLeft+stage.clientWidth/2)/oldWidth;
     const centerY=(stage.scrollTop+stage.clientHeight/2)/(canvas.getBoundingClientRect().height||1);
-    canvas.style.width=`${base*steps[index]}px`;
-    canvas.style.maxWidth='none';
+    setGeometry(canvas,{width:base*steps[index]});
     stage.scrollLeft=centerX*canvas.getBoundingClientRect().width-stage.clientWidth/2;
     stage.scrollTop=centerY*canvas.getBoundingClientRect().height-stage.clientHeight/2;
     level.value=`${Math.round(steps[index]*100)}%`;

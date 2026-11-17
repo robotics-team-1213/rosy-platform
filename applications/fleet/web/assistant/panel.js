@@ -35,13 +35,25 @@ export function createDialogue() {
 }
 
 const stateText = {PENDING:'요청 접수', RUNNING:'확인 중', ANSWERED:'답변', HOLD:'보류', UNKNOWN:'처리 결과 미확인'};
+const QUICK_PROMPTS = ['현재 로봇 상태 알려줘', '막힘·대기 원인 확인', '안전 정지 상태 요약'];
 
-export function createAssistantPanel({scope, call, el, readSelection}) {
+/** 전송이 꺼진 사유: 서버 응답으로 갈린 연결 상태를 말로 바꾼다(없음 · 준비 중 · 확인 실패 · 확인 전). */
+export const LINK_REASONS = Object.freeze({
+  absent: '이 서버에는 관제 AI가 없습니다.',
+  preparing: '관제 AI가 연결 중입니다. 잠시 후 다시 확인합니다.',
+  failed: '관제 AI 연결 상태를 확인하지 못했습니다. 잠시 후 다시 시도하세요.',
+  unknown: '관제 AI 연결 상태를 확인하는 중입니다.',
+});
+export const linkOf = (result, error) => error ? (error.status === 404 || error.status === 501 ? 'absent' : 'failed')
+  : result?.available ? 'ready' : 'preparing';
+
+export function createAssistantPanel({scope, call, el, readSelection, onOpen = null}) {
   const dialogue = createDialogue();
   const panel = el('assistant-panel'), input = el('assistant-input'), list = el('assistant-messages');
+  const emptyBox = el('assistant-empty');
   const status = el('assistant-state'), toggle = el('assistant-toggle');
-  let identity = null, available = false, timer = null;
-  let listening = false;
+  let identity = null, available = false, link = 'unknown', timer = null;
+  let listening = false, lastScrollSig = '';
   const voiceState = el('assistant-voice-state');
   const voice = createVoice({platform: voicePlatform, onText(text) { if (identity && !dialogue.busy) { input.value = text; input.focus(); } },
     onState(state) {
@@ -59,34 +71,94 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
     if (off) control.setAttribute('reason', reason);
     else control.removeAttribute('reason');
   }
+  function renderEmptyState(hasRows, reason) {
+    if (!emptyBox) return;
+    emptyBox.hidden = hasRows;
+    if (hasRows) { emptyBox.replaceChildren(); return; }
+    const welcome = document.createElement('p');
+    welcome.className = 'assistant-welcome';
+    welcome.textContent = identity
+      ? '현재 로봇·운행·안전 상태를 읽기 전용으로 물어보세요. 실행이나 정지 명령은 수행하지 않습니다.'
+      : '기명 운영자로 로그인하면 로봇 상태 조회와 상황 설명을 요청할 수 있습니다.';
+    const chips = document.createElement('div');
+    chips.className = 'assistant-prompt-chips';
+    for (const prompt of QUICK_PROMPTS) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'assistant-prompt-chip';
+      chip.textContent = prompt;
+      setOff(chip, !identity || dialogue.busy, reason);
+      chip.addEventListener('click', () => {
+        if (!identity || dialogue.busy) return;
+        input.value = prompt;
+        input.focus();
+      });
+      chips.append(chip);
+    }
+    emptyBox.replaceChildren(welcome, chips);
+  }
+  function renderTurn(row) {
+    const turn = document.createElement('li');
+    turn.className = 'assistant-turn';
+    const userBubble = document.createElement('div');
+    userBubble.className = 'assistant-bubble';
+    userBubble.dataset.role = 'user';
+    const userText = document.createElement('p');
+    userText.className = 'assistant-bubble-text';
+    userText.textContent = row.text;
+    userBubble.append(userText);
+
+    const aiBubble = document.createElement('div');
+    aiBubble.className = 'assistant-bubble';
+    aiBubble.dataset.role = 'assistant';
+    const meta = document.createElement('span');
+    meta.className = 'assistant-bubble-meta';
+    meta.textContent = stateText[row.state] || '상태 확인 필요';
+    const answer = document.createElement('p');
+    answer.className = 'assistant-bubble-text';
+    answer.textContent = row.response || stateText[row.state] || '상태 확인 필요';
+    aiBubble.append(meta, answer);
+    if (row.reason) {
+      const reasonEl = document.createElement('small');
+      reasonEl.className = 'assistant-bubble-reason';
+      reasonEl.textContent = row.reason;
+      aiBubble.append(reasonEl);
+    }
+    if (row.facts?.length) {
+      const facts = document.createElement('ul');
+      facts.className = 'assistant-facts';
+      for (const fact of row.facts) {
+        const shown = document.createElement('li');
+        shown.textContent = `${fact.text} · 조회 ${new Date(fact.observed_at * 1000).toLocaleTimeString('ko-KR')}`;
+        facts.append(shown);
+      }
+      aiBubble.append(facts);
+    }
+    turn.append(userBubble, aiBubble);
+    return turn;
+  }
   function paint() {
     const reason = !identity ? '기명 운영자로 로그인해 주세요.' : listening ? '음성 인식을 마쳐 주세요.' : '요청 처리 중입니다.';
     setOff(el('assistant-send'), !identity || !available || dialogue.busy || listening,
-      identity && !available ? '관제 AI 연결 준비 중입니다.' : reason);
+      identity && !available ? LINK_REASONS[link] || LINK_REASONS.unknown : reason);
     setOff(input, !identity || dialogue.busy || listening, reason);
     input.setAttribute('aria-describedby', 'assistant-state assistant-voice-state');
     setOff(el('assistant-dictate'), !identity || dialogue.busy || listening, reason);
     setOff(el('assistant-read'), !identity || listening || !dialogue.rows.some(row => row.state === 'ANSWERED' && row.response),
       !identity || listening ? reason : '읽을 답변이 없습니다.');
     setOff(el('assistant-voice-prepare'), !identity, reason);
-    list.replaceChildren();
-    for (const row of identity ? dialogue.rows : []) {
-      const item = document.createElement('li');
-      const question = document.createElement('p'); question.textContent = '나: '+row.text;
-      const answer = document.createElement('p'); answer.textContent = row.response || stateText[row.state] || '상태 확인 필요';
-      const meta = document.createElement('small'); meta.textContent = stateText[row.state] || '상태 확인 필요';
-      item.append(question, answer, meta);
-      if (row.reason) { const reason = document.createElement('small'); reason.textContent = row.reason; item.append(reason); }
-      if (row.facts?.length) {
-        const facts = document.createElement('ul');
-        for (const fact of row.facts) {
-          const shown = document.createElement('li');
-          shown.textContent = `${fact.text} · 조회 ${new Date(fact.observed_at*1000).toLocaleTimeString('ko-KR')}`;
-          facts.append(shown);
-        }
-        item.append(facts);
-      }
-      list.append(item);
+    const rows = identity ? dialogue.rows : [];
+    renderEmptyState(rows.length > 0, reason);
+    list.replaceChildren(...rows.map(renderTurn));
+    const lastRow = rows.length ? rows[rows.length - 1] : null;
+    const scrollSig = lastRow ? `${rows.length}|${lastRow.request_id}|${lastRow.state}|${lastRow.response || ''}` : '';
+    if (scrollSig && scrollSig !== lastScrollSig) {
+      lastScrollSig = scrollSig;
+      const scroller = list.closest('.assistant-thread') || list;
+      scroller.scrollTop = scroller.scrollHeight;
+      list.scrollTop = list.scrollHeight;
+    } else if (!scrollSig) {
+      lastScrollSig = '';
     }
   }
   async function refreshStatus() {
@@ -95,12 +167,12 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
     try {
       const result = await call('/api/fleet/assistant/status');
       if (owner !== identity) return;
-      available = result.available;
-      status.textContent = available ? '상태 조회와 상황 설명을 요청할 수 있습니다.' : '관제 AI 연결 준비 중입니다. 기존 관제 기능을 이용해 주세요.';
+      link = linkOf(result); available = link === 'ready';
+      status.textContent = available ? '상태 조회와 상황 설명을 요청할 수 있습니다.' : `${LINK_REASONS[link]} 기존 관제 기능을 이용해 주세요.`;
     } catch (error) {
       if (owner !== identity || error.name === 'AbortError') return;
-      available = false;
-      status.textContent = error.status === 403 ? '기명 운영자 접속이 필요합니다.' : '관제 AI 연결 상태를 확인하지 못했습니다.';
+      link = linkOf(null, error); available = false;
+      status.textContent = error.status === 403 ? '기명 운영자 접속이 필요합니다.' : LINK_REASONS[link];
     }
     paint();
   }
@@ -122,7 +194,7 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
     el('assistant-retry').hidden = true;
     status.textContent = '요청을 확인하고 있습니다.'; paint();
     try {
-      const row = await call('/api/fleet/assistant/messages', {method:'POST', body:JSON.stringify(ticket.message)});
+      const row = await call('/api/fleet/assistant/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(ticket.message)});
       if (!dialogue.receive(ticket, row)) return;
       input.value = ''; paint();
       if (dialogue.busy) timer = setTimeout(() => poll(ticket), 1000);
@@ -137,14 +209,19 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
     if (!available || !identity || dialogue.busy || !input.value.trim()) return;
     post(dialogue.begin(input.value, readSelection(), el('assistant-locale').value));
   }
-  function close() {
+  function close(opts = {}) {
+    const restoreFocus = opts?.restoreFocus !== false;
     voice.cancel(); listening = false; paint();
     voiceState.textContent = '';
-    panel.hidden = true; toggle.setAttribute('aria-expanded', 'false'); toggle.focus();
+    if (!panel.hidden) {
+      panel.hidden = true;
+      toggle.setAttribute('aria-expanded', 'false');
+      if (restoreFocus) toggle.focus();
+    }
   }
   scope.listen(toggle, 'click', () => {
     panel.hidden = !panel.hidden; toggle.setAttribute('aria-expanded', String(!panel.hidden));
-    if (!panel.hidden) { refreshStatus(); input.focus(); }
+    if (!panel.hidden) { onOpen?.(); refreshStatus(); input.focus(); }
   });
   scope.listen(el('assistant-close'), 'click', close);
   scope.listen(el('assistant-locale'), 'change', () => {
@@ -152,7 +229,12 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
   });
   scope.listen(panel, 'keydown', event => { if (event.key === 'Escape') close(); });
   scope.listen(el('assistant-send'), 'click', send);
-  scope.listen(input, 'keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send(); } });
+  scope.listen(input, 'keydown', event => {
+    if (event.key === 'Enter' && !event.isComposing && (!event.shiftKey || event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      send();
+    }
+  });
   scope.listen(el('assistant-retry'), 'click', () => { clearTimer(); post(dialogue.retry()); });
   scope.listen(el('assistant-dictate'), 'click', () => { if (identity && !dialogue.busy) voice.start(); });
   scope.listen(el('assistant-dictate-stop'), 'click', () => voice.stop());
@@ -172,17 +254,18 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
   });
   scope.listen(el('assistant-read-stop'), 'click', () => voice.stopSpeaking());
   scope.onDispose(() => {
-    clearTimer(); voice.cancel(); listening = false; identity = null; available = false;
+    clearTimer(); voice.cancel(); listening = false; identity = null; available = false; link = 'unknown';
     input.value = ''; voiceState.textContent = ''; el('assistant-retry').hidden = true;
     status.textContent = '접속을 확인하고 있습니다.'; paint();
   });
   return {
+    close: (opts = {}) => close({ restoreFocus: false, ...opts }),
     setIdentity(auth) {
       const next = !auth.locked && auth.role === 'operator' && auth.principal !== 'site-console' &&
         !auth.principal?.startsWith('development-') ? auth.principal || null : null;
       const changed = dialogue.setIdentity(next);
       if (!changed && identity === next) return;
-      identity = next; available = false; clearTimer(); voice.cancel(); listening = false; input.value = ''; voiceState.textContent = '';
+      identity = next; available = false; link = 'unknown'; clearTimer(); voice.cancel(); listening = false; input.value = ''; voiceState.textContent = '';
       el('assistant-retry').hidden = true; paint();
       status.textContent = identity ? '대화를 열면 연결 상태를 확인합니다.' : '기명 운영자로 로그인해 주세요.';
       if (!panel.hidden) refreshStatus();

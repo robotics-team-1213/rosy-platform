@@ -1,4 +1,4 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,panelError,setText} from '/review-alerts.js';
 import '/common/ui.js';
 const $=id=>document.getElementById(id);
 const LIMIT=256*1024;  // each uploaded object stays under the server's 256 KiB bound
@@ -6,7 +6,7 @@ const STATES={unreviewed:'미검수',review_candidate:'검수 후보',disputed:'
 const FIELDS=[['incident_id','사건'],['robot_id','로봇'],['review_state','검수 상태'],
   ['core_cause','CORE 원인'],['ai_cause_draft','AI 초안 원인'],['reviewed_root_cause','확정 원인']];
 let token='';
-function fail(message){$('incident-error').hidden=!message;$('incident-error').textContent=message||'';}
+function fail(message){$('incident-error').hidden=!message;setText($('incident-error'),message||'');}
 function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 async function read(input,name){
   const file=input.files[0];
@@ -53,6 +53,6 @@ $('incident-form').onsubmit=async event=>{
     const result=await request({incidents,markers});
     render(result);
     $('incident-status').textContent=`사건 ${result.matches.length}건을 묶었습니다. 결과는 저장되지 않습니다.`;
-  }catch(error){fail(error.message||String(error));$('incident-status').textContent='';}
+  }catch(error){fail(panelError(error,''));$('incident-status').textContent='';}
   finally{$('incident-submit').disabled=false;}
 };

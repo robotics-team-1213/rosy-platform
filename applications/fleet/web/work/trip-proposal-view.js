@@ -42,6 +42,12 @@ export function createTripProposalView({scope, call, anchor, active, approveReas
       field("경로", proposal.steps.map(step => [...step.via, step.to].join(" → ")).join(" / "));
       field("제안 다이제스트", proposal.proposal_digest); field("조회한 실행 세대", control?.generation);
       field("승인된 실행 세대", proposal.dispatch_generation); field("생성된 작업", proposal.mission_id);
+      const fleetLink = Object.assign(node("a", "관제 지도에서 로봇·차로 확인", "ui-action-link"), {href: "/console"});
+      fleetLink.dataset.kind = "quiet";
+      const mapLink = Object.assign(node("a", "현장 지도에서 경로 검증", "ui-action-link"), {href: "/console/site-map#trip-heading"});
+      mapLink.dataset.kind = "quiet";
+      const dd = node("dd"); dd.append(fleetLink, " · ", mapLink);
+      detail.append(node("dt", "현장 확인"), dd);
     }
     paint();
   }

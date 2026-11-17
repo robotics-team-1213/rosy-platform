@@ -78,7 +78,7 @@ export function aiLines(stuck) {
   const ai = stuck.ai;
   if (!ai) return [];
   const chip = ai.state === "present" && ai.owner_mode === "owner_busy" ? "AI 판단 없음 (소유자 사용 중)" : AI_STATE_TEXT[ai.state] || "AI 판단 없음";
-  const facts = (stuck.ai_facts || []).map((fact) => `AI 사실 ${fact.kind} · 신뢰도 ${Math.round(fact.confidence * 100)}% · ${fact.source} · 근거 ${JSON.stringify(fact.evidence)}`);
+  const facts = (stuck.ai_facts || []).map((fact) => `AI 사실 ${fact.kind} · 신뢰도 ${Number.isFinite(fact.confidence) ? `${Math.round(fact.confidence * 100)}%` : "정보 없음"} · ${fact.source} · 근거 ${JSON.stringify(fact.evidence)}`);
   const proposal = aiProposalText(stuck.ai_proposal);
   return proposal ? [chip, proposal, ...facts] : [chip, ...facts];
 }
@@ -421,10 +421,11 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       row.className = "stuck-confirm-actions"; row.append(yes, no); box.append(text, row); li.append(box);
     }
 
+    // D-1117 — 판단 결과는 누른 단추 옆 글자다(live 역할 없음). 실패 낭독은 log("bad") → 관제 알림 카드의 announcer 한 번이 담당한다.
     const last = results.get(robotId);
     if (last && last.stuck_id === stuck.stuck_id) {
       const result = document.createElement("div");
-      result.className = "stuck-result"; result.dataset.kind = last.kind; result.setAttribute("role", last.kind === "bad" ? "alert" : "status");
+      result.className = "stuck-result"; result.dataset.kind = last.kind;
       const rawAt = last.kind === "bad" ? last.text.indexOf(" (") : -1;
       result.append(document.createTextNode(rawAt >= 0 ? last.text.slice(0, rawAt) : last.text));
       if (rawAt >= 0) {

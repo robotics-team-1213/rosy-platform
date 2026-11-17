@@ -35,7 +35,7 @@ def test_console_serves_the_tracking_layer_wired_into_the_map_and_shell():
     # well inside it, or every marker expires before the next answer and blinks.
     poll = re.search(r"const TRACKING_MS = (\d+);", shell)
     assert poll and int(poll.group(1)) <= 500
-    assert "trackingView.refresh(), TRACKING_MS)" in shell
+    assert "!isMapHidden()) trackingView.refresh(); }, TRACKING_MS)" in shell  # no polling while the map is hidden
     assert 'import { offsetLabel, preferMarkers } from "./tracking-layer.js";' in map_view
     assert 'layerOn("tracking")' in map_view
     assert '"/api/fleet/calibrations"' in fit_view and "calibrationRequest(" in fit_view

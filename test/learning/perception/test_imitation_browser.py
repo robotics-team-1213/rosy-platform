@@ -116,14 +116,14 @@ def test_split_must_be_saved_and_poll_preserves_edits(imitation_page):
     page.locator('[data-episode="8"]').select_option('validation')
     page.locator('#imitate-refresh').click()
     expect(page.locator('[data-episode="8"]')).to_have_value('validation')
-    page.locator('#tab-learn').click()
+    page.get_by_role('tab', name='ACT 학습', exact=True).click()
     expect(page.locator('#train-start')).to_be_disabled()
-    page.locator('#tab-inspect').click()
+    page.get_by_role('tab', name='확인·분할', exact=True).click()
     page.locator('#split-save').click()
     expect(page.locator('#split-state')).to_contain_text('저장')
     assert posts[0]['validation'] == [8]
     assert posts[0]['source_revision'] == 'source'
-    page.locator('#tab-learn').click()
+    page.get_by_role('tab', name='ACT 학습', exact=True).click()
     expect(page.locator('#train-start')).to_be_enabled()
     page.locator('#train-steps').fill('1234')
     page.locator('#imitate-refresh').click()
@@ -150,14 +150,14 @@ def test_lost_train_reply_reuses_identity_after_reload_and_stop_is_global(imitat
     page.route('**/center/stop', lambda route: (stops.append(route.request.post_data_json), route.fulfill(json={})))
     page.goto(url + '?study=' + STUDY + '&panel=learn')
     page.locator('#train-start').click()
-    expect(page.locator('#imitate-error')).to_contain_text('응답 유실')
+    expect(page.locator('#page-alerts')).to_contain_text('응답 유실')
     page.reload()
     expect(page.locator('#train-start')).to_contain_text('같은')
     page.locator('#train-start').click()
     expect(page.locator('#active-run')).to_contain_text('ACT')
     assert posts[0] == posts[1]
     assert posts[0]['optimizer_lr'] == 0.00001 and posts[0]['chunk_size'] == 4
-    page.locator('#tab-upload').click()
+    page.get_by_role('tab', name='자료 올리기', exact=True).click()
     expect(page.locator('#active-stop')).to_be_visible()
     page.locator('#active-stop').click()
     assert stops == [{'id': RUN}]
@@ -209,3 +209,28 @@ def test_results_show_original_units_reload_and_no_physical_claim(imitation_page
     expect(page.locator('#study-results')).to_contain_text('별도 프로세스')
     expect(page.locator('#study-results')).to_contain_text('실물')
     expect(page.locator('[data-artifact]')).to_have_attribute('href', '/api/learning/omx/center/artifact/' + RUN)
+
+
+def test_study_faces_are_one_shared_tab_widget_with_manual_activation(imitation_page):
+    """K9: createTabs writes role=tab (the page does not); arrows move focus only, Enter activates, one panel shows."""
+    page, study, state, url, expect = imitation_page
+    page.goto(url + '?study=' + STUDY + '&panel=inspect', wait_until='networkidle')
+    expect(page.get_by_role('tablist', name='모방학습 단계').locator('[role=tab]')).to_have_count(4)
+    expect(page.locator('[role=tab][aria-selected=true]')).to_have_count(1)
+    expect(page.get_by_role('tab', name='확인·분할', exact=True)).to_have_attribute('aria-selected', 'true')
+    expect(page.locator('[role=tabpanel]:visible')).to_have_count(1)
+    page.get_by_role('tab', name='확인·분할', exact=True).focus()
+    page.keyboard.press('ArrowRight')
+    expect(page.get_by_role('tab', name='ACT 학습', exact=True)).to_be_focused()
+    expect(page.locator('#panel-inspect')).to_be_visible()  # focus moved, nothing activated yet
+    page.keyboard.press('Enter')
+    expect(page.locator('#panel-learn')).to_be_visible()
+    expect(page.locator('[role=tabpanel]:visible')).to_have_count(1)
+    assert 'panel=learn' in page.url
+
+
+def test_upload_folder_picker_uses_korean_label(imitation_page):
+    page, study, state, url, expect = imitation_page
+    page.goto(url, wait_until='networkidle')
+    expect(page.locator('.file-picker-button')).to_have_text('폴더 고르기')
+    expect(page.get_by_text('No file chosen')).to_have_count(0)

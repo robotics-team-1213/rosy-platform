@@ -1,5 +1,13 @@
 import {test} from 'node:test';
 
+// /console/assets 절대 경로 import 를 단독 node --test 에서도 풀도록 로더를 먼저 건다.
+const { register } = await import('node:module');
+register('./common-loader.mjs', import.meta.url);
+register('./resolve-console-assets.mjs', import.meta.url);
+const {arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, rectangularView, addApproach, removeApproach, mergeCrosswalks} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+const {tripErrorText} = await import('../../../../applications/fleet/web/shared/trip-display.js');
+const {editEdge, editPlace, createSurveyDraft, appendSurveyElement, reviewSurveyDraft, editSurveyElement, removeSurveyElement} = await import('../../../../applications/fleet/web/shared/site-map-edit.js');
+
 test('drawing and candidate failures explain the next action in operator language', async () => {
   const {siteMapErrorText} = await import('/console/assets/site-map-model.js');
   for (const [status, code] of [[422, 'SITE_MAP_DRAWING_INVALID'], [413, 'SITE_MAP_DRAWING_LIMIT'],
@@ -10,13 +18,6 @@ test('drawing and candidate failures explain the next action in operator languag
   }
 });
 import assert from 'node:assert/strict';
-import {arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, rectangularView, addApproach, removeApproach, mergeCrosswalks} from '../../../../applications/fleet/web/shared/site-map-model.js';
-import {tripErrorText} from '../../../../applications/fleet/web/shared/trip-display.js';
-import {
-  editEdge, editPlace,
-  createSurveyDraft, appendSurveyElement, reviewSurveyDraft,
-  editSurveyElement, removeSurveyElement,
-} from '../../../../applications/fleet/web/shared/site-map-edit.js';
 
 const MAP = {
   places: [{id: 'A', name: 'A', x: 0, y: 0, kind: 'junction'}, {id: 'B', name: 'B', x: 2, y: 0, kind: 'park'}],

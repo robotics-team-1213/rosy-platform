@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, launch_options, safe_listener
+from browser_harness import assert_layout_geometry, browser_tests_enabled, launch_options, safe_listener
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -26,6 +26,14 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real
 ROOT = Path(__file__).resolve().parents[3]
 WIDE = [(1920, 1080), (1440, 900), (1024, 768)]
 DECISIONS = ["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]
+
+
+def _assert_layout_geometry_desktop_and_390(page, desktop=(1440, 900)):
+    """가드는 호출처의 데스크톱 크기 그대로, 그리고 390×844 모바일 시트에서도 돈다."""
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": desktop[0], "height": desktop[1]})
 
 
 def _robot(robot_id, online=True, safety=None, **extra):
@@ -243,7 +251,8 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
             side.locator("ui-button[type=submit]").click()
             assert posts[-1][0] == "/api/fleet/incidents/rosy_01/closed-new/review"
             assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
-            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            no_horizontal_overflow(page, "records")
+            _assert_layout_geometry_desktop_and_390(page, desktop=size)
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["height"] >= 48 and stop["y"] + stop["height"] <= size[1]
             _shot(page, f"records-review-{size[0]}.png", full_page=True)
@@ -267,7 +276,7 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
             screen("log")
             expect(page.locator("#log-panel")).to_be_visible()
             assert page.locator("#log-panel").evaluate("node => !node.closest('[role=tabpanel]')")
-            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            no_horizontal_overflow(page, "records")
             assert not errors
         finally:
             browser.close()
@@ -328,6 +337,14 @@ def test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme(site
             page.clock.run_for(2000)
             links = page.get_by_role("navigation", name="기록 화면", exact=True).locator("a")
             expect(links).to_have_count(5)
+            # F1: on a short phone the queue panel is below the fold, so the crit row rises as a toast. It may
+            # never cover the stop button; then it is closed so it does not sit over the sub-nav under test.
+            assert page.locator("#estop").evaluate(ON_TOP)
+            for _ in range(10):  # the popup buttons are ui-button; dismissing one card may raise the next
+                closers = page.locator(".alert-popup-actions ui-button", has_text="닫기")
+                if not closers.count():
+                    break
+                closers.last.click()
             reach = []
             for index in range(5):
                 link = links.nth(index)
@@ -391,6 +408,14 @@ SCROLLERS = """() => [...document.querySelectorAll('body *')].filter((node) => {
 }).map((node) => node.id || node.className)"""
 
 
+def no_horizontal_overflow(page, label=""):
+    """The page never scrolls sideways; a failure names the elements that stick out."""
+    wide = page.evaluate("""() => [document.documentElement.scrollWidth, innerWidth, ...[...document.querySelectorAll('body *')]
+      .filter(n => { const r = n.getBoundingClientRect(); const out = x => x.getBoundingClientRect().right > innerWidth + 1 || x.scrollWidth > innerWidth + 1; return out(n) && ![...n.children].some(out); }).slice(0, 8)
+      .map(n => `${n.tagName.toLowerCase()}#${n.id}.${String(n.className).slice(0, 40)}:${Math.round(n.getBoundingClientRect().right)}`)]""")
+    assert wide[0] <= wide[1], (label, wide)
+
+
 @pytest.mark.parametrize("theme", ["dark", "light"])
 def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
     from playwright.sync_api import expect, sync_playwright
@@ -428,15 +453,18 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
             assert map_after["width"] == pytest.approx(map_before["width"], abs=1)
             assert map_after["height"] == pytest.approx(map_before["height"], abs=1)
             assert page.locator(".queues-panel").evaluate("node => !node.closest('[role=tabpanel]')")
-            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            no_horizontal_overflow(page, width)
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["height"] >= 48 and stop["y"] + stop["height"] <= height
             if width >= 1024:
                 left = page.locator(".console-primary").bounding_box()
                 right = page.locator(".console-secondary").bounding_box()
                 assert left["width"] / right["width"] == pytest.approx(2, abs=0.05)
+                page.locator(".doc-tabs").get_by_role("link", name="작업", exact=True).click()
+                assert page.locator("h1").evaluate("node => getComputedStyle(node).fontSize") == "20px"
                 assert page.locator("#roster-heading").evaluate("node => getComputedStyle(node).fontSize") == "16px"
-                assert page.locator("#map-heading").evaluate("node => getComputedStyle(node).fontSize") == "20px"
+                assert page.locator("#map-heading").evaluate("node => getComputedStyle(node).fontSize") == "16px"
+                page.locator(".doc-tabs").get_by_role("link", name="관제", exact=True).click()
             else:
                 assert page.locator("#fleet-main").evaluate(
                     "node => getComputedStyle(node).gridTemplateColumns.split(' ').length") == 1
@@ -500,9 +528,11 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         assert entry.get_attribute("aria-label") == unread
         button = page.locator("#fleet-inbox")
         assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
-        button.click()
-        expect(page.locator("#context-inbox")).to_be_visible()
+        button.click()  # 벨은 읽음만 표시하고 큐 패널로 간다(중복 표면 제거)
+        expect(page.locator("#inbox-popover")).to_be_hidden()
         expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        page.get_by_role("tab", name="알림").click()
+        expect(page.locator("#context-inbox")).to_be_visible()
         messages = page.locator("#inbox-messages")
         expect(messages).to_contain_text("로봇 문의 (CORE)")
         expect(messages).to_contain_text("AI 제안 대기")
@@ -520,6 +550,8 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         page.clock.run_for(3000)
         assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
         button.click()
+        expect(page.locator("#inbox-popover")).to_be_hidden()
+        page.get_by_role("tab", name="알림").click()
         expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
         assert messages.locator("li > details").get_attribute("open") is not None
         assert messages.locator("details details").get_attribute("open") is not None
@@ -629,7 +661,7 @@ def test_decision_buttons_show_at_rail_scroll_zero_and_the_rail_is_the_one_scrol
                 assert page.evaluate(SCROLLERS) == [], page.evaluate(SCROLLERS)
             assert page.evaluate("""() => [...document.querySelectorAll('.issue-list li, .queue-row')]
               .every((node) => node.scrollWidth <= node.clientWidth + 1)"""), width
-            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+            no_horizontal_overflow(page, width)
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
         assert page.locator("#stuck-panel").count() == 0 and page.locator("#roster-toggle").count() == 0
@@ -685,17 +717,18 @@ def test_compact_robot_list_keeps_all_four_safety_exceptions_visible_beside_the_
                _robot("unknown", safety={}), _robot("calib", calibration={"label": "카메라 보정", "holder": "kim"})]}}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [])
-        card = page.locator('#roster article[data-robot-id="nominal"]')
+        page.locator(".doc-tabs").get_by_role("link", name="작업", exact=True).click()
+        card = page.locator('#roster .robot-row[data-robot-id="nominal"]')
         assert "80%" in card.inner_text()
         for robot_id, evidence in (("rosy_04", "접속 실패"), ("latched", "비상 정지"),
                                    ("unknown", "안전 확인 불가"), ("calib", "보정 진행 중 · 카메라 보정 · kim")):
-            must = page.locator(f'#roster article[data-robot-id="{robot_id}"]')
+            must = page.locator(f'#roster .robot-row[data-robot-id="{robot_id}"]')
             expect(must).to_contain_text(evidence)
             assert must.locator(".robot-fold").count() == 0, robot_id
         card.locator("[data-select-robot-id]").click()
         page.clock.run_for(1500)
-        expect(page.locator('#robot-workspace article[data-robot-id="nominal"]')).to_have_count(1)
-        expect(page.locator('#roster article[data-robot-id="calib"]')).to_contain_text("kim")
+        expect(page.locator('#robot-panel-mount article[data-robot-id="nominal"]')).to_have_count(1)
+        expect(page.locator('#roster .robot-row[data-robot-id="calib"]')).to_contain_text("kim")
         _shot(page, "console-cards-1440x900.png")
         assert not errors
         browser.close()
@@ -783,7 +816,7 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
                 break
         assert ("/api/fleet/trips/t-rosy_02/confirm-replan", None) in posts
 
-        assert page.locator('#robot-workspace article[data-robot-id="rosy_03"]').count() == 0
+        assert page.locator('#robot-panel-mount article[data-robot-id="rosy_03"]').count() == 0
         slot = slot_of("rosy_03")
         assert slot.locator('ui-button[data-replan="confirm"]').get_attribute("reason") == "확인할 바뀐 경로가 없습니다"
         slot.locator('ui-button[data-replan="cancel"]').click()
@@ -795,7 +828,7 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
         before = list(posts)
         page.locator('[data-decision-slot="rosy_03|deadlock"] ui-button[data-replan="card"]').click()
         page.clock.run_for(300)
-        assert page.locator('#robot-workspace article[data-robot-id="rosy_03"]').count() == 1
+        assert page.locator('#robot-panel-mount article[data-robot-id="rosy_03"]').count() == 1
         assert posts == before
         assert {path for path, _ in posts} <= {"/api/fleet/trips/t-rosy_02/confirm-replan",
                                                 "/api/fleet/trips/t-rosy_03/cancel"}

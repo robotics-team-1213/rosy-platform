@@ -1,12 +1,14 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,panelError,setText} from '/review-alerts.js';
 import '/common/ui.js';
+import {createBusyScope} from '/common/busy-scope.js';
+import {valueText} from '/common/value-text.js';
 const $=id=>document.getElementById(id);
 const API='/api/learning/vlm/';
-let token='', editor=true, manager=true, busy=false, list=[], current=null, choices={}, focus=0, imageReady=false, summary=null, revising=false;
+let token='', editor=true, manager=true, list=[], current=null, choices={}, focus=0, imageReady=false, summary=null, revising=false;
 const KINDS={eval:'평가셋',disputed:'의견 갈림',audit:'점검'};
 // D-857 §5: an audit shows the model consensus with 맞음/고침; 고침 reveals the normal options.
 const auditing=()=>current?.kind==='audit'&&!revising;
-function notice(id,value){$(id).textContent=value;$(id).hidden=!value;}
+function notice(id,value){setText($(id),value);$(id).hidden=!value;}
 async function api(path,body){
   const response=await accountFetch(API+path,body===undefined?{cache:'no-store'}:
     {method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify(body)});
@@ -14,30 +16,30 @@ async function api(path,body){
   if(!response.ok)throw new Error(value.error||'VLM 판단 연결을 확인하세요.');
   return value;
 }
+const scope=createBusyScope($('vlm-main'));
 async function work(operation){
-  if(busy)return;
-  busy=true;controls();notice('vlm-error','');
-  try{await operation();}catch(error){notice('vlm-error',error.message);}
-  finally{busy=false;controls();}
+  notice('vlm-error','');
+  await scope.run(async()=>{try{await operation();}catch(error){notice('vlm-error',panelError(error,''));}});
+  controls();
 }
 function complete(){return current&&current.questions.every(q=>choices[q.id]!=null);}
 function controls(){
   const position=current?list.findIndex(row=>row.id===current.id):-1;
   $('vlm-confirm').hidden=$('vlm-fix').hidden=!auditing();$('vlm-save').hidden=auditing();
-  $('vlm-confirm').disabled=busy||!editor||!imageReady||!complete();$('vlm-fix').disabled=busy||!editor;
-  $('vlm-save').disabled=busy||!editor||!imageReady||!complete();
+  $('vlm-confirm').disabled=scope.busy||!editor||!imageReady||!complete();$('vlm-fix').disabled=scope.busy||!editor;
+  $('vlm-save').disabled=scope.busy||!editor||!imageReady||!complete();
   $('vlm-save').setAttribute('reason',!editor?'정답 편집 권한이 필요합니다.':!complete()?'모든 질문에 답하세요.':'');
-  $('vlm-exclude').disabled=busy||!editor||!current;
-  $('vlm-prev').disabled=busy||position<=0;
-  $('vlm-next').disabled=busy||!list.length||position>=list.length-1;
-  $('vlm-next-pending').disabled=busy;
-  for(const button of $('vlm-questions').querySelectorAll('ui-button'))button.disabled=busy||!editor;
-  $('vlm-import').disabled=busy||!manager;
+  $('vlm-exclude').disabled=scope.busy||!editor||!current;
+  $('vlm-prev').disabled=scope.busy||position<=0;
+  $('vlm-next').disabled=scope.busy||!list.length||position>=list.length-1;
+  $('vlm-next-pending').disabled=scope.busy;
+  for(const button of $('vlm-questions').querySelectorAll('ui-button'))button.disabled=scope.busy||!editor;
+  $('vlm-import').disabled=scope.busy||!manager;
 }
 function progress(){
   const done=summary?Object.values(summary.views).reduce((sum,v)=>sum+v.labelled+v.excluded,0):0;
   const position=current?list.findIndex(row=>row.id===current.id)+1:0;
-  $('vlm-progress').textContent=`완료 ${done} / ${summary?.total??0} · 목록 ${position} / ${list.length}`;
+  $('vlm-progress').textContent=`완료 ${summary?.total==null?valueText(null).text:done+' / '+summary.total} · 목록 ${position} / ${list.length}`;
 }
 function renderQuestions(){
   const box=$('vlm-questions');box.replaceChildren();
@@ -50,24 +52,24 @@ function renderQuestions(){
       const shown=document.createElement('p');shown.className='vlm-provisional';shown.textContent=`임시 정답 ${current.provisional[question.id]}`;
       block.append(title,shown);box.append(block);return;
     }
-    const options=document.createElement('div');options.className='vlm-options';options.setAttribute('role','group');
-    options.setAttribute('aria-labelledby',title.id);
-    question.options.forEach((option,number)=>{
-      const button=document.createElement('ui-button');button.setAttribute('kind','toggle');
-      button.setAttribute('aria-pressed',String(choices[question.id]===option));button.dataset.option=option;
-      button.setAttribute('aria-keyshortcuts',String(number+1));
-      const name=document.createElement('span');name.textContent=option;
-      const key=document.createElement('small');key.textContent=`키 ${number+1}`;key.setAttribute('aria-hidden','true');
-      button.append(name,key);
-      button.addEventListener('click',()=>pick(index,option));
-      options.append(button);
+    // K2: an unanswered question is a valid state (saving needs every answer), so the choice is a select with an empty first option;
+    // the 1-9 keys still pick. The answer shows in the select, so reading it never depends on colour.
+    const options=document.createElement('select');options.className='ui-field vlm-options';options.setAttribute('aria-labelledby',title.id);
+    options.append(new Option('선택 안 함',''));
+    question.options.forEach((option,number)=>{const item=new Option(`${option} · 키 ${number+1}`,option);options.append(item);});
+    options.value=choices[question.id]??'';
+    // No re-render here: the select keeps the keyboard focus (the 1-9 shortcuts stay off while a select has it, D-538).
+    options.addEventListener('change',()=>{
+      if(scope.busy||!editor||!current||auditing()){options.value=choices[question.id]??'';return;}// never show an answer that was not recorded
+      focus=index;if(options.value)choices[question.id]=options.value;else delete choices[question.id];
+      notice('vlm-save-status','저장 전 · 바뀐 답이 있습니다.');box.querySelectorAll('.vlm-question').forEach((item,at)=>{item.dataset.focus=String(at===index);});controls();
     });
     block.append(title,options);box.append(block);
   });
 }
 function pick(index,option){
-  if(busy||!editor||!current||auditing())return;
-  focus=index;choices[current.questions[index].id]=option;
+  if(scope.busy||!editor||!current||auditing())return;
+  focus=index;if(option===null)delete choices[current.questions[index].id];else choices[current.questions[index].id]=option;
   notice('vlm-save-status','저장 전 · 바뀐 답이 있습니다.');renderQuestions();controls();
 }
 async function open(id){
@@ -108,7 +110,7 @@ async function save(status){
   if(current&&current.id!==saved)notice('vlm-save-status',`앞 사진 저장됨 · ${status==='labelled'?'정답':'제외'}`);
 }
 function fix(){
-  if(!auditing()||busy||!editor)return;
+  if(!auditing()||scope.busy||!editor)return;
   revising=true;renderQuestions();controls();notice('vlm-save-status','고칠 답을 고른 뒤 저장하세요. 저장하면 확정 정답이 됩니다.');
 }
 function move(step){
@@ -175,7 +177,7 @@ async function importRows(){
 }
 function tab(name){
   for(const button of document.querySelectorAll('.vlm-tabs ui-button')){
-    button.setAttribute('aria-pressed',String(button.dataset.tab===name));
+    if(button.dataset.tab===name)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');
     button.parentElement.dataset.state=button.dataset.tab===name?'now':'todo';
   }
   for(const key of ['label','eval','import'])$('panel-'+key).hidden=key!==name;

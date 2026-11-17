@@ -8,12 +8,12 @@ DOCS = {"index.html": "/console", "install.html": "/console/install", "maintenan
         "site-map.html": "/console/site-map", "cell.html": "/console?view=work",  # D-741 7: Cell은 작업 영역이다
         "policy.html": "/console?view=work"}  # D-926 2: 학습 정책 승인도 작업 영역이다
 ORDER = ["/console", "/console?view=work", "/console?view=records", "/console/site-map", "/console/install"]
-ICONS = ["fleet", "list", "history", "map", "install"]
+ICONS = ["fleet", "task", "list", "map", "install"]  # records=list, work=task: history stays the delayed-evidence glyph
 # D-741 2·6: 아이콘 아래에 짧은 이름을 적는다. 긴 이름은 접근 이름에 남고 보이는 글을 품는다(WCAG 2.5.3).
 LABELS = ["관제", "작업", "기록", "지도", "설치"]
-NAMES = [None, None, None, "현장 지도", "설치·보정"]
+NAMES = [None, None, None, "현장 지도", "설치"]
 # D-741 6: 화면 안 이동은 공용 하위 탐색 자리에 선다. 가로 앵커 줄은 없다.
-SUBNAV = {"site-map.html": ("현장 지도 작업", ["map", "survey", "profile", "camera-draft", "trip", "run", "edit", "reality", "teach"]),
+SUBNAV = {"site-map.html": ("현장 지도 작업", ["map", "reality", "trip", "run", "survey", "profile", "camera-draft", "edit", "teach"]),
           "cell.html": ("작업 화면", ["saved", "recipe", "cell", "preview", "proposal", "mission"])}
 
 
@@ -95,8 +95,8 @@ def test_records_area_screens_and_the_judgment_seat():
         ("", "사건"), ("/console?view=records", "검토할 사건"), ("/console?view=records&amp;show=open", "열린 사건"),
         ("/console?view=records&amp;show=closed", "닫힌 사건"), ("", "AI 판단"),
         ("/console?view=records&amp;show=facts", "AI 상황 사실"), ("/console?view=records&amp;show=log", "관제 기록")]
-    evidence = page[page.index('id="context-evidence"'):]
-    assert evidence.index('class="panel incident-panel"') < evidence.index('id="incident-side"') < evidence.index('id="incident-judgment"')
+    evidence = page[page.index('id="context-evidence-body"'):]
+    assert evidence.index('class="context-block incident-panel"') < evidence.index('id="incident-side"') < evidence.index('id="incident-judgment"')
     view = (WEB / "incident-view.js").read_text(encoding="utf-8")
     assert "/api/fleet/incidents?limit=${records ? 100 : 10}" in view, "the records area reads the same incident API"
     assert "details name" not in view and "detail.name" not in view, "one open fold is kept in script, not by <details name>"
@@ -119,7 +119,7 @@ def test_install_task_list_sits_in_the_shared_subnav_seat():
 def test_every_area_document_heads_the_workspace_with_one_pathbar():
     """D-926 2 — 경로 줄이 문서 제목(h1)과 현재 화면(strong)을 본문 머리에 보인다. h1은 문서에 이 하나뿐이다."""
     docs = {"index.html": ("사이트 관제", '<strong id="console-screen" hidden></strong>'),
-            "install.html": ("설치·보정", '<strong id="install-screen">장비 찾기</strong>'),
+            "install.html": ("설치", '<strong id="install-screen">장비 찾기</strong>'),
             "site-map.html": ("현장 지도", '<strong id="site-map-screen">지도 보기</strong>'),
             "cell.html": ("팔레트 적재 작업 준비", '<strong id="cell-screen">저장된 문서</strong>'),
             "policy.html": ("학습 정책 승인", "<strong>학습</strong>")}

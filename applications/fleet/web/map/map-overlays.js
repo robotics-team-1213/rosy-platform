@@ -3,7 +3,7 @@
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { robotMapPose } from "./localization-badge.js";
 
-export function createMapOverlays({ view, css, font, layerOn, worldToCell, colorOf }) {
+export function createMapOverlays({ view, css, font, layerOn, worldToCell, colorOf, el = () => null }) {
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
 
@@ -255,6 +255,23 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
   function drawCameraTracking(ctx, toPoint, size, lineWidth) {
     if (!layerOn("tracking") || !view.cameraTracking) return;
     const tracking = preferMarkers(view.cameraTracking, layerOn("sightings") ? view.sightings : []);
+    const knownPoints = [];
+    const addKnown = (x, y) => {
+      if (Number.isFinite(x) && Number.isFinite(y)) knownPoints.push({ x, y });
+    };
+    if (layerOn("poses")) {
+      for (const r of view.guide?.robots || []) addKnown(r?.pose?.x, r?.pose?.y);
+    }
+    for (const r of view.robots || []) {
+      const p = r?.pose || r?.state?.pose;
+      addKnown(p?.x, p?.y);
+    }
+    for (const row of tracking.robots || []) addKnown(row?.camera?.x, row?.camera?.y);
+    if (layerOn("sightings")) {
+      for (const s of view.sightings || []) addKnown(s?.x, s?.y);
+    }
+    const hasNearbyKnownRobot = (x, y, maxDist) =>
+      knownPoints.some((p) => Math.hypot(p.x - x, p.y - y) <= maxDist);
     ctx.save();
     ctx.lineWidth = lineWidth;
     for (const row of tracking.robots) {
@@ -284,17 +301,23 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
       }
     }
     // D-600: 배경이 아직 못 본 바닥은 빗금 원 — 로봇이 비키면 Vision 이 채운다.
+    // 옅은 알파와 넓은 빗금 간격으로 역·차로·표식(C1/S1) 가독성을 해치지 않는다.
     ctx.strokeStyle = css("--ink-quiet");
     for (const area of tracking.unknownFloor || []) {
+      if (hasNearbyKnownRobot(area.x, area.y, (area.radiusM || 0.16) + 0.08)) continue;
       const c = toPoint(area.x, area.y), edge = toPoint(area.x + area.radiusM, area.y);
       const r = Math.hypot(edge.x - c.x, edge.y - c.y);
       ctx.save();
+      ctx.globalAlpha = 0.34;
+      ctx.lineWidth = Math.max(0.8, lineWidth * 0.65);
+      ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
       ctx.clip();
       ctx.beginPath();
-      for (let d = -2 * r; d <= 2 * r; d += Math.max(4, lineWidth * 4)) {
+      for (let d = -2 * r; d <= 2 * r; d += Math.max(7, lineWidth * 4.5)) {
         ctx.moveTo(c.x + d - r, c.y + r);
         ctx.lineTo(c.x + d + r, c.y - r);
       }
@@ -302,7 +325,8 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
       ctx.restore();
     }
     ctx.fillStyle = css("--ink-quiet");
-    for (const item of tracking.unknown) {
+    for (const item of tracking.unknown || []) {
+      if (item.markerId === undefined && hasNearbyKnownRobot(item.x, item.y, 0.22)) continue;
       const p = toPoint(item.x, item.y);
       ctx.beginPath();
       ctx.arc(p.x, p.y, size * 0.35, 0, Math.PI * 2);
@@ -377,7 +401,111 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
   }
   const addMarker = (box) => { markerBoxes.push(box); };
 
+  function datumBottomInset() {
+    const isVisible = (node) => {
+      if (!node || node.hidden) return false;
+      if (typeof getComputedStyle === "function") {
+        try { if (getComputedStyle(node).display === "none") return false; } catch (_e) { /* test mock */ }
+      }
+      return true;
+    };
+    const stamp = el("map-camera-stamp"), stampOn = isVisible(stamp) && Boolean(stamp.textContent);
+    const watch = el("device-watch"), ceiling = el("watch-ceiling"), stage = el("map-stage"), birdseye = el("map-birdseye");
+    const watchOnRight = stage?.dataset?.watch === "pip" && isVisible(birdseye)
+      && stage?.dataset?.displayMode !== "overlay" && stage?.dataset?.displayMode !== "twin3d";
+    const watchBottomLeft = isVisible(watch) && isVisible(ceiling) && !watchOnRight;
+    if (stampOn && watchBottomLeft) return 86;
+    if (stampOn) return 40;
+    if (watchBottomLeft) return 68;
+    return 14;
+  }
+
+  function paintPlaceLabels(ctx, labels) {
+    if (!labels.length) return;
+    ctx.save();
+    ctx.font = font("micro");
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    const h = 16, padX = 5;
+    for (const item of labels) {
+      const w = Math.ceil(ctx.measureText(item.pid).width + padX * 2);
+      const x = item.x + 8 + w / 2, y = item.y - 8;
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = css("--scrim-solid");
+      ctx.fillRect(x - w / 2, y - h / 2, w, h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = item.isSelected ? (css("--selection") || css("--series-primary"))
+        : item.isHovered ? css("--series-primary") : css("--surface-line");
+      ctx.lineWidth = (item.isSelected || item.isHovered) ? 1.8 : 0.8;
+      ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+      ctx.fillStyle = item.isCharger ? css("--series-goal") : item.isStation ? css("--status-warn") : css("--ink");
+      ctx.fillText(item.pid, x, y);
+    }
+    ctx.restore();
+  }
+
+  function drawSiteLanesAndPlaces(ctx, toPx, activeMap, placeLabels) {
+    if (!layerOn("lanes") || !view.siteMap?.maps.some((row) => row.map_id === activeMap?.map_id)) return;
+    const labelFont = font("micro");
+    ctx.save();
+    ctx.strokeStyle = css("--series-primary");
+    ctx.fillStyle = css("--ink");
+    ctx.lineWidth = 2;
+    ctx.font = labelFont;
+    for (const edge of activeMap.edges || []) {
+      const dash = edge.drive_mode === "free" ? [6, 4] : [];
+      const traceEdge = () => {
+        ctx.beginPath();
+        edge.polyline.forEach(([x, y], index) => {
+          const p = toPx(x, y);
+          if (index) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
+        });
+      };
+      ctx.save();
+      ctx.setLineDash(dash);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = css("--scrim");
+      ctx.globalAlpha = 0.72;
+      ctx.lineWidth = 4;
+      traceEdge();
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = css("--series-primary");
+      ctx.lineWidth = 2;
+      traceEdge();
+      ctx.stroke();
+      ctx.restore();
+    }
+    for (const place of activeMap.places || []) {
+      const pid = String(place.id), p = toPx(place.x, place.y);
+      const isCharger = pid.startsWith("C"), isStation = pid.startsWith("S");
+      const isHovered = view.hoverEntity?.kind === "place" && String(view.hoverEntity.id) === pid;
+      const isSelected = view.mapSelection?.kind === "place" && String(view.mapSelection.id) === pid;
+      ctx.save();
+      if (isCharger) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
+        ctx.fillStyle = css("--surface-recessed"); ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = css("--series-goal"); ctx.stroke();
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+        ctx.fillStyle = css("--series-goal"); ctx.fill();
+      } else if (isStation) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = css("--status-warn"); ctx.fill();
+        ctx.lineWidth = 1.4; ctx.strokeStyle = css("--surface-recessed"); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = css("--ink-quiet"); ctx.fill();
+      }
+      ctx.restore();
+      if ((layerOn("labels") && (isCharger || isStation)) || isHovered || isSelected) {
+        placeLabels.push({ pid, x: p.x, y: p.y, isCharger, isStation, isHovered, isSelected });
+      }
+    }
+    ctx.restore();
+  }
+
   return { CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, cellOf, activeCall, labelImportant,
     drawFormationOverlay, drawMediation, drawSighting, drawCameraTracking, sitePolygons, tracePolygon, drawCrosswalks,
-    drawSiteOverlay };
+    drawSiteOverlay, datumBottomInset, paintPlaceLabels, drawSiteLanesAndPlaces };
 }

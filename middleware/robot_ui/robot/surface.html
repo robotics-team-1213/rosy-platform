@@ -10,6 +10,7 @@
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/component-controls.css">
+  <link rel="stylesheet" href="/common/choice-controls.css">
   <link rel="stylesheet" href="/common/readout-strip.css">
   <link rel="stylesheet" href="/common/motor-health.css">
   <link rel="stylesheet" href="/common/app-shell.css">
@@ -23,7 +24,7 @@
     <ui-topbar role="banner">
       <ui-brand href="/dashboard" aria-label="Rosy Robot 홈"><b>Rosy Robot</b><small>{{title}}</small></ui-brand>
       <span data-spacer></span>
-      <ui-text id="shell-notice" scale="label" role="status"></ui-text>
+      <ui-text id="shell-notice" scale="label"></ui-text>
       <ui-tag id="shell-role" aria-label="접속 권한">인증 대기</ui-tag>
       <ui-button kind="irreversible" id="shell-estop" data-always-live type="button">비상 정지</ui-button>
     </ui-topbar>
@@ -34,7 +35,7 @@
         <a data-account-profile hidden></a>
         <h1 class="sr-only">Rosy Robot — {{title}}</h1>
         <ui-empty id="surface-status">화면을 불러오는 중입니다.</ui-empty>
-        <ui-status id="safety-mode-status" role="status" hidden></ui-status>
+        <ui-status id="safety-mode-status" hidden></ui-status>
 {{slots}}
       </main>
     </div>

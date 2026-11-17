@@ -26,11 +26,11 @@ def test_roster_layout_keeps_safety_and_trip_controls(site, width, height, theme
         expect(form).to_be_visible()
         expect(page.locator("#estop")).to_be_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-        assert page.locator("#roster article").count() == 4
+        assert page.locator("#roster .robot-summary").count() == 4
         snapshot = page.evaluate("""() => {
           const rules = {};
           for (const selector of ['.roster-block', '.robot-summary', '.robot-summary.selected',
-            '#robot-workspace .robot', '#robot-workspace .facts', '#robot-workspace .card-trip']) {
+            '#robot-panel-mount .robot', '#robot-panel-mount .facts', '#robot-panel-mount .card-trip']) {
             const node = document.querySelector(selector), style = getComputedStyle(node);
             rules[selector] = Object.fromEntries(['display', 'grid-template-columns', 'gap', 'padding',
               'border-left-width', 'border-left-style', 'background-color', 'color', 'font-family', 'font-size']
@@ -38,14 +38,14 @@ def test_roster_layout_keeps_safety_and_trip_controls(site, width, height, theme
           }
           return rules;
         }""")
-        assert snapshot['#robot-workspace .robot']['display'] == 'flex'
-        assert snapshot['#robot-workspace .card-trip']['display'] == 'grid'
+        assert snapshot['#robot-panel-mount .robot']['display'] == 'grid'  # the robot card is one ui-panel (grid)
+        assert snapshot['#robot-panel-mount .card-trip']['display'] == 'grid'
         if output := os.environ.get("ROSY_SHOT_DIR"):
             folder = Path(output)
             folder.mkdir(parents=True, exist_ok=True)
             stem = f"roster-{theme}-{width}x{height}"
             (folder / (stem + ".json")).write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf8")
             page.evaluate("document.fonts.ready")
-            page.locator("#robot-workspace").screenshot(path=str(folder / (stem + ".png")))
+            page.locator("#robot-panel-mount").screenshot(path=str(folder / (stem + ".png")))
         assert not posts and not errors
         browser.close()

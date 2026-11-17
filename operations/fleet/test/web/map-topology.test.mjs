@@ -1,6 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {splitRoad, joinRoads} from '/console/assets/map-topology.js';
+
+// /console/assets 절대 경로 import 를 단독 node --test 에서도 풀도록 로더를 먼저 건다.
+const { register } = await import('node:module');
+register('./resolve-console-assets.mjs', import.meta.url);
+const {splitRoad, joinRoads} = await import('/console/assets/map-topology.js');
 
 const map = () => ({map_id: 'any-floor', places: [
   {id: 'a', name: 'A', x: 0, y: 0}, {id: 'b', name: 'B', x: 2, y: 0}, {id: 'c', name: 'C', x: 4, y: 0}],

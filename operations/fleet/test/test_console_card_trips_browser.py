@@ -50,9 +50,14 @@ PLAN = {"segments": [{"edge_id": "e1"}], "places": [], "actions": [], "length_m"
 
 
 def _card(page, robot_id):
-    page.locator('[data-context-tab="status"]').click()
-    page.locator("#robot-choice").select_option(robot_id)
-    return page.locator(f'#robot-workspace article[data-robot-id="{robot_id}"]')
+    panel = page.locator(f'#robot-panel-mount[data-robot-id="{robot_id}"]')
+    if panel.count() and panel.is_visible():
+        return panel
+    close_btn = page.locator("#robot-panel-mount .robot-panel-close")
+    if close_btn.count() and close_btn.is_visible():
+        close_btn.click()
+    page.locator(f'#robot-dock-mount .robot-dock-btn[data-robot-id="{robot_id}"]').click()
+    return panel
 
 
 def test_running_trip_shows_and_clears_ai_route_warning_without_deadlock(site):
@@ -183,15 +188,17 @@ def test_robot_selection_only_inspects_and_all_offline_safety_evidence_stays_vis
     api = {**API, "/api/fleet/session": {"principal_id": "bob", "role": role}}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts)
-        expect(page.locator("#roster .robot-summary")).to_have_count(4)
+        page.locator('.doc-tabs').get_by_role("link", name="작업", exact=True).click()
+        expect(page.locator("#roster .robot-row")).to_have_count(4)
         assert page.locator("#roster [data-goal-robot-id], #roster [data-trip-open]").count() == 0
         offline = page.locator('#roster [data-robot-id="rosy_04"]')
         expect(offline).to_contain_text("오프라인")
         expect(offline).to_contain_text("접속 실패")
-        expect(page.locator("#robot-workspace article")).to_have_count(0)
-        page.locator('#roster [data-robot-id="rosy_03"]').focus()
+        expect(page.locator("#robot-panel-mount article")).to_have_count(0)
+        page.locator('.doc-tabs').get_by_role("link", name="관제", exact=True).click()
+        page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_03"]').focus()
         page.keyboard.press("Enter")
-        expect(page.locator('#robot-workspace article[data-robot-id="rosy_03"]')).to_have_count(1)
+        expect(page.locator('#robot-panel-mount article[data-robot-id="rosy_03"]')).to_have_count(1)
         if role == "operator":
             for width, height in [(1440, 1000), (390, 844)]:
                 page.set_viewport_size({"width": width, "height": height})
@@ -199,9 +206,12 @@ def test_robot_selection_only_inspects_and_all_offline_safety_evidence_stays_vis
         assert page.locator("#map-canvas").get_attribute("tabindex") == "-1"
         assert page.locator("#map-canvas").evaluate("node => node.classList.contains('idle')")
         card = _card(page, "rosy_04")
-        expect(page.locator("#robot-workspace article")).to_have_count(1)
+        expect(page.locator("#robot-panel-mount article")).to_have_count(1)
         assert card.locator("[data-goal-robot-id]").evaluate("node => node.disabled")
         assert card.locator("[data-trip-open]").evaluate("node => node.disabled")
+        if page.viewport_size["width"] < 1024:
+            page.locator("#robot-panel-mount .robot-panel-close").click()
+        page.locator('.doc-tabs').get_by_role("link", name="작업", exact=True).click()
         expect(offline).to_contain_text("접속 실패")
         if role == "operator":
             rows = [_robot(row["robot_id"], online=False, error={"reachable": False, "code": "ConnectError"})
@@ -277,7 +287,7 @@ def test_workspace_trip_picker_shows_one_mode_and_keeps_destination_across_polls
         kind.select_option("route")
         assert destination.input_value() == "B"
         _card(page, "rosy_03")
-        expect(page.locator("#robot-workspace .card-trip")).to_have_count(0)
+        expect(page.locator("#robot-panel-mount .card-trip")).to_have_count(0)
         assert not posts and not errors
         browser.close()
 
@@ -424,14 +434,15 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
               .filter((node) => node.getBoundingClientRect().height > 0)
               .every((node) => node.scrollWidth <= node.clientWidth + 1 && node.getBoundingClientRect().height < 80)"""), width
             if width >= 1024 and height >= 640:
-                assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary"}, (width, page.evaluate(SCROLLERS))
+                assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary", "robot-panel-body"}, (width, page.evaluate(SCROLLERS))
                 assert page.evaluate("""() => { const primary = document.querySelector('.console-primary');
                   const stage = document.querySelector('#map-stage').getBoundingClientRect();
                   return primary.scrollHeight <= primary.clientHeight + 1 && stage.height >= 200;
                 }"""), (width, height, page.evaluate("""() => {
                   const primary = document.querySelector('.console-primary');
                   return {scroll: primary.scrollHeight, client: primary.clientHeight,
-                    stage: document.querySelector('#map-stage').getBoundingClientRect().height};
+                    stage: document.querySelector('#map-stage').getBoundingClientRect().height,
+                    kids: [...primary.querySelectorAll('.map-section, .map-section > *, .map-section > * > *')].filter(n => n.getBoundingClientRect().height > 0).map(n => n.tagName.toLowerCase() + '.' + String(n.className).slice(0, 20) + '=' + Math.round(n.getBoundingClientRect().height)).join(' ')};
                 }"""))
             elif width >= 1024:
                 assert page.evaluate("document.querySelector('ui-shell').getBoundingClientRect().height > innerHeight")
@@ -443,7 +454,7 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
             # One atomic scroll: a 1 s poll may rebuild the card between a locator's resolve and its action.
-            page.evaluate("document.querySelector('#robot-workspace article[data-robot-id=\"rosy_02\"] .card-trip')"
+            page.evaluate("document.querySelector('#robot-panel-mount article[data-robot-id=\"rosy_02\"] .card-trip')"
                           "?.scrollIntoView({block: 'nearest'})")
             _shot(page, f"card-trip-{width}x{height}.png")
             page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary').scrollTop = 0")
@@ -512,7 +523,8 @@ def test_rail_panels_do_not_overlap(site):  # noqa: F811
               .filter((node) => node.offsetParent && getComputedStyle(node).position !== 'absolute')
               .map((node) => { const r = node.getBoundingClientRect();
                 return [node.className, r.top, r.top + Math.max(r.height, node.scrollHeight)]; })
-              .filter(([, top, bottom]) => bottom > top)""")
+              .filter(([, top, bottom]) => bottom > top)
+                  .sort((a, b) => a[1] - b[1])""")  # visual order: the dispatch strip is last by CSS order
             for (a, _, bottom), (b, top, _) in zip(boxes, boxes[1:]):
                 assert top >= bottom - 1, (width, a, bottom, b, top)
             _shot(page, f"rail-{width}x{height}.png")

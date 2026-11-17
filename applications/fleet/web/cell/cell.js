@@ -4,6 +4,7 @@ import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {getAnnouncer} from '/common/announcer.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 import {createCellObservation} from '/console/assets/cell-observation.js';
@@ -16,9 +17,9 @@ import {createCellFrameFeed} from '/console/assets/cell-frames.js';
 import {createCellLine, createPlanFigures} from '/console/assets/cell-line.js';
 
 const $ = id => document.getElementById(id);
-// D-926 3: each Cell step is its own screen; the first one shows the live cell, its calibration printouts and the saved documents.
+// D-926 3: each Cell step is its own screen; the first one shows the calibration printouts, object catalog and the saved documents.
 bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'saved-heading', mark: 'step',
-  groups: {'saved-heading': ['observation-heading', 'print-heading', 'catalog-heading', 'real2sim-heading', 'saved-heading']}, label: document.getElementById('cell-screen')});
+  groups: {'saved-heading': ['print-heading', 'catalog-heading', 'saved-heading']}, label: document.getElementById('cell-screen')});
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
 let channelReceipt = null, channelReview = null;
@@ -44,15 +45,21 @@ function jobReasonLabel(reason) {
 // Read once: a token typed while the page starts is the person's own 접속, not a stored session.
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
+const revisions = new Map();
+let previewRefs = null, role = null, busy = false, lastBusy = null, lastRole = undefined, cellServiceUnavailable = false, job = null, jobGeneration = null, layoutData = null;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 const catalog = createObjectCatalog({request, $});
 const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy,
-  cellFrames: createCellFrameFeed({call: request})});
+  cellFrames: createCellFrameFeed({call: request}), confirm: confirmIrreversible});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
 bindPrintSheets({request, $});
-window.addEventListener('pagehide', event => { catalog.clear(); real2sim.clear(); event.persisted ? observations.clear() : observations.dispose(); });
+window.addEventListener('pagehide', event => {
+  catalog.clear();
+  event.persisted ? real2sim.clear() : real2sim.dispose();
+  event.persisted ? observations.clear() : observations.dispose();
+});
 window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
 bindEstop(request); bindTopbarToggle(); tickClock(); setInterval(tickClock, 1000); watchFleet(request);
 $('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
@@ -62,8 +69,6 @@ async function api(path, options) {
   if (epoch !== editEpoch) throw new Error('입력 또는 계정이 바뀌었습니다. 현재 문서와 작업 상태를 다시 확인하세요.');
   return result;
 }
-const revisions = new Map();
-let previewRefs = null, role = null, busy = false, cellServiceUnavailable = false, job = null, jobGeneration = null, layoutData = null;
 const commands = ['recipe-save', 'cell-save', 'compile', 'propose', 'admit', 'reconcile', 'resume', 'cancel'];
 const jobActionLabels = {admit: '실행 승인', reconcile: '실제 상태를 대조', resume: '재승인', cancel: '취소'};
 function clearJobSnapshot(summary = '작업 ID로 상태를 확인하세요.') {
@@ -85,11 +90,19 @@ function clearSession() {
 }
 const scopeFilled = () => $('workcell').value.trim() && $('instance').value.trim();
 for (const id of ['workcell', 'instance']) $(id).addEventListener('input', () => refreshControls());
-function refreshControls() {
-  for (const field of document.querySelectorAll('input, textarea, select')) {
-    field.disabled = busy; field.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : ''); field.setAttribute('aria-describedby', 'notice');
+function refreshControls(syncFields = false) {
+  if (syncFields || lastBusy !== busy) {
+    lastBusy = busy;
+    for (const field of document.querySelectorAll('input, textarea, select')) {
+      field.disabled = busy; field.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : ''); field.setAttribute('aria-describedby', 'notice');
+    }
+    for (const control of document.querySelectorAll('[data-document-edit]')) { control.disabled = busy; control.setAttribute('reason', busy ? '요청 처리 중' : ''); }
+    real2sim.syncOperatorButtons();
+    lastRole = role;
+  } else if (lastRole !== role) {
+    lastRole = role;
+    real2sim.syncOperatorButtons();
   }
-  for (const control of document.querySelectorAll('[data-document-edit]')) { control.disabled = busy; control.setAttribute('reason', busy ? '요청 처리 중' : ''); }
   for (const id of ['token-save', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
     const unavailable = cellServiceUnavailable && ['recipe-load', 'cell-load', 'read-job'].includes(id);
     const sessionPending = !role && ['recipe-load', 'cell-load', 'read-job'].includes(id);
@@ -126,10 +139,12 @@ async function action(fn) {
     if (error.status === 403 && error.code !== 'PASSWORD_CHANGE_REQUIRED') showSignedOut({refused: false});
     if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') { showSignedOut(); loginForm.refresh(true); }
     else if (error.status === 409) clearJobSnapshot();
-    $('notice').textContent = error.code === 'PASSWORD_CHANGE_REQUIRED' ? '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요.'
+    const failure = error.code === 'PASSWORD_CHANGE_REQUIRED' ? '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요.'
       : error.status === 403 ? '이 계정에는 팔레트 적재 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
       : error.code === 'CELL_APP_UNCONFIGURED' ? '팔레트 적재 작업을 사용할 수 없습니다. 사이트 설치 담당자에게 팔레트 적재 서비스 구성을 확인해 달라고 요청하세요.'
       : error instanceof SyntaxError ? '문서가 올바른 JSON이 아닙니다. 형식을 확인한 뒤 다시 저장하세요.' : error.message;
+    $('notice').textContent = failure;
+    getAnnouncer().announce(failure, {urgent: true});  // D-1117: 실패는 공용 방송기가 한 번, #notice는 글자만
     if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   } finally {
     busy = false; refreshControls();
@@ -248,17 +263,18 @@ function structuredFields(kind, value) {
       refreshControls();
     } catch { $('notice').textContent = '문서 구조를 확인한 뒤 불러오세요.'; }
   });
-  refreshControls();
+  refreshControls(true);
+}
+function syncDocumentFields(kind) {
+  try { const document = JSON.parse($(kind + '-document').value); if (kind === 'recipe') recipeFields(document); else cellFields(document); }
+  catch { $(kind + '-fields').replaceChildren(); $(kind + '-structure').replaceChildren(); }
 }
 for (const kind of ['recipe', 'cell']) {
   for (const part of ['id', 'document']) $(kind + '-' + part).addEventListener('input', () => {
     editEpoch++; invalidate();
     $(kind + '-revision').setAttribute('state', 'warning');
     $(kind + '-revision').textContent = '수정한 문서 · 저장 전';
-    if (part === 'document') {
-      try { const document = JSON.parse($(kind + '-document').value); if (kind === 'recipe') recipeFields(document); else cellFields(document); }
-      catch { $(kind + '-fields').replaceChildren(); $(kind + '-structure').replaceChildren(); }
-    }
+    if (part === 'document') syncDocumentFields(kind);
   });
   $(kind + '-file').addEventListener('change', async () => {
     const file = $(kind + '-file').files[0];

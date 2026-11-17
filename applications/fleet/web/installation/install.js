@@ -1,4 +1,4 @@
-// D-410 — 설치·보정 화면 엔트리. 운용 셸(console.js)과 같은 모듈을 쓰지만
+// D-410 — 설치 화면 엔트리. 운용 셸(console.js)과 같은 모듈을 쓰지만
 // 로스터·지도·대형·신호등·발행 상태는 없다. 관제 토큰은 같은 세션 저장소
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
 
@@ -142,14 +142,29 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
   el("install-screen").textContent = installTasks.find(task => task.id === id)?.title ?? "";
   // 뒤로 가기가 설치 화면을 벗어나지 않고 앞 작업으로 돌아간다. 주소가 이미 이 작업이면 기록을 늘리지 않는다.
   if ((location.hash.slice(1) || installTasks[0].id) !== id) history.pushState(null, "", `#${id}`);
+  if (id === "robots" && !auth.locked && auth.role) void refreshDiscovery();
 }});
 el("install-chooser").append(taskChooser.element);
 taskChooser.setReady();
+function focusPanelHeading(id) {
+  const heading = el(`${id}-heading`);
+  if (!heading) return;
+  heading.tabIndex = -1;
+  heading.focus({ preventScroll: true });
+}
+async function selectTaskByHash(id) {
+  if (!installTasks.some(task => task.id === id)) return;
+  const switched = await taskChooser.choose(id);
+  if ((switched || taskChooser.selectedId === id) && id === "device-profiles") focusPanelHeading(id);
+}
+pageScope.listen(el("device-profiles"), "focus", () => {
+  if (location.hash === "#device-profiles") focusPanelHeading("device-profiles");
+});
 // 주소의 #작업-id가 첫 화면을 고른다(공유·새로고침 보존). task id ≠ 패널 id라 스크롤 점프도 없다.
 const initialTask = location.hash.slice(1);
-if (installTasks.some(task => task.id === initialTask)) void taskChooser.choose(initialTask);
+if (initialTask) void selectTaskByHash(initialTask);
 // 설치 노선의 역 링크(#작업-id)도 같은 작업을 고른다 — 숨은 패널로의 앵커는 아무 일도 하지 않는다.
-addEventListener("hashchange", () => { const id = location.hash.slice(1) || installTasks[0].id; if (installTasks.some(task => task.id === id)) void taskChooser.choose(id); });
+addEventListener("hashchange", () => { void selectTaskByHash(location.hash.slice(1) || installTasks[0].id); });
 pageScope.subscribe(() => {
   taskChooser.resume();
   return () => { void taskChooser.pause().then(() => { if (pageScope.capture().current()) taskChooser.resume(); }); };
@@ -249,25 +264,42 @@ pageScope.listen(el("console-token"), "keydown", (event) => {
 // 비상 출구다. D-371이 대화상자 위에서 살아 있게 했던 이유를 끝까지 밀었다).
 bindEstop(call, {listen: (node, type, fn) => pageScope.listen(node, type, fn), life: () => pageScope.capture(), log});
 
+const DISCOVERY_STAGE_LABELS = {
+  ready: "준비됨",
+  core_ready: "준비됨",
+  enrolled: "등록됨",
+  booting: "부팅 중",
+  starting: "시작 중",
+  pairing: "연결 대기",
+  pairing_pending: "연결 대기",
+  unconfigured: "설정 대기",
+};
 let discoveryPending = false;
 let scannerLost = false;
+let lastDiscoverySig = null;
 function discoveryState(label, message, tone = "neutral") {
+  lastDiscoverySig = null;
   const status = el("discovery-status");
   status.textContent = label; status.setAttribute("status", tone);
   el("discovery-list").replaceChildren(); el("discovery-list").hidden = true;
   el("discovery-empty").textContent = message; el("discovery-empty").hidden = false;
 }
-pageScope.onDispose(() => { discoveryPending = false; });
+pageScope.onDispose(() => { discoveryPending = false; lastDiscoverySig = null; });
 async function refreshDiscovery() {
   const life = pageScope.capture();
   life.check();
-  if (auth.locked || discoveryPending) return;
+  const robotsActive = taskChooser.selectedId === "robots" || !el("robot-enrollment").hidden;
+  if (auth.locked || discoveryPending || document.hidden || !robotsActive) return;
   discoveryPending = true;
   try {
-    await enrollment.refresh(); life.check();
-    if (!discoveryGate.due()) return;
-    const snapshot = await call("/api/fleet/discovery");
+    const [, discoveryRes] = await Promise.allSettled([
+      enrollment.refresh(),
+      discoveryGate.due() ? call("/api/fleet/discovery") : Promise.resolve(null),
+    ]);
     life.check();
+    if (discoveryRes.status === "rejected") throw discoveryRes.reason;
+    const snapshot = discoveryRes.value;
+    if (!snapshot) return;
     discoveryGate.ok();
     if (!snapshot.scanner_online) {
       const expired = snapshot.scanner_state === "expired";
@@ -280,7 +312,16 @@ async function refreshDiscovery() {
     }
     if (scannerLost) log("발견 검색기 다시 연결됨", "good");
     scannerLost = false;
-    discoveryState(`${snapshot.devices.length}대 발견`, "아직 발견된 로봇이 없습니다. 로봇 전원과 같은 현장 네트워크인지 확인하고 다시 시도하세요.");
+    const status = el("discovery-status");
+    status.textContent = `${snapshot.devices.length}대 발견`;
+    status.setAttribute("status", "neutral");
+    if (!snapshot.devices.length) {
+      discoveryState("0대 발견", "아직 발견된 로봇이 없습니다. 로봇 전원과 같은 현장 네트워크인지 확인하고 다시 시도하세요.");
+      return;
+    }
+    const sig = JSON.stringify([snapshot.devices, auth.role, auth.principal, Boolean(el("enroll-submit")?.disabled)]);
+    if (sig === lastDiscoverySig) return;
+    lastDiscoverySig = sig;
     // D-413 — 발견(mDNS) 장치는 이 화면의 주인공이다: 이름·주소·단계·상태와
     // 곧바로 누르는 등록 버튼(enrollment.decorateDiscoveryRow).
     // 릴리스(YYYY.MM.DD-NNN)는 글자 순서가 곧 날짜 순서다. 발견된 로봇 중 가장 새것보다 낮으면 표시한다.
@@ -291,7 +332,11 @@ async function refreshDiscovery() {
       label.textContent = device.name;
       const detail = document.createElement("small");
       const release = device.release ? ` · ${device.release}${device.release < newest ? " (다른 로봇보다 이전)" : ""}` : "";
-      detail.textContent = `${device.address}:${device.port} · ${device.stage || "부팅 중"}${release}`;
+      const endpoint = device.address && device.port != null && device.port !== ""
+        ? `${device.address}:${device.port}`
+        : (device.address || "주소 없음");
+      const stage = DISCOVERY_STAGE_LABELS[String(device.stage || "").toLowerCase()] || device.stage || "부팅 중";
+      detail.textContent = `${endpoint} · ${stage}${release}`;
       const state = document.createElement("span");
       state.textContent = DISCOVERY_LABELS[device.status] || "확인 필요";
       state.className = `discovery-state ${device.status}`;
@@ -300,7 +345,7 @@ async function refreshDiscovery() {
       return item;
     });
     el("discovery-list").replaceChildren(...rows);
-    el("discovery-list").hidden = !rows.length; el("discovery-empty").hidden = !!rows.length;
+    el("discovery-list").hidden = false; el("discovery-empty").hidden = true;
   } catch (err) {
     if (err.name === "AbortError" || !life.current()) return;
     const absent = discoveryGate.fail(err.status, err.code) === "absent";
@@ -365,7 +410,7 @@ refreshAuthorization();
 visionView.refreshSources();
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => peerPicker.refresh(), MAP_MS);
-pageScope.interval(() => visionView.refreshFrame(), STATE_MS + 500);
+pageScope.interval(() => { if (!document.hidden) visionView.refreshFrame(); }, STATE_MS + 500);
 pageScope.interval(() => installLine.refresh().catch(() => {}), 30000);
 pageScope.interval(() => {
   if (!auth.locked && taskChooser.selectedId === 'device-profiles') deviceProfiles.refresh();

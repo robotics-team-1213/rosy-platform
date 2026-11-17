@@ -21,11 +21,7 @@ import {createCameraDraftPanel} from '/console/assets/site-map-camera-draft.js';
 import {installBandEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
 import {drawFacilities, svgElement as el} from '/console/assets/map-editor.js';
-
-const $ = id => document.getElementById(id);
-const W = 800, H = 480;
-
-// Read once: a token typed while the page starts is the person's own 접속, not a stored session.
+const $ = id => document.getElementById(id), W = 800, H = 480;
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
@@ -33,14 +29,12 @@ const state = {role: null, loadState: 'idle', active: null, draft: null, working
 const ROBOT_POLL_MS = 1000;
 let calibrations = [];
 const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
-  map: () => shown(),
-  places: () => shown()?.places || [], render: () => render(),
+  map: () => shown(), places: () => shown()?.places || [], render: () => render(),
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
 const survey = createSurveyPanel({map: () => shown(), source: () => $('map-source').value, view: () => state.view,
   render: () => render(), reason: () => operatorReason(), hasDraft: () => Boolean(state.dirty || state.draft?.revision),
   begin: () => { if ($('map-source').value !== 'draft') $('map-source').value = 'draft'; clearPlane(); $('trip-pick').checked = false; state.band = null; updatePlaneSources(); },
   changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft'; clearPlane(); state.selected = null; state.band = null; clearPlan(); updatePlaneSources(); }});
-
 const cameraMap = createCameraMapPanel({request, guarded, reason: () => operatorReason(), context: () => [state.working, state.sessionEpoch],
   draft: () => state.draft, dirty: () => state.dirty, notice, reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
 const reality = createRealityPanel({request, guarded, reason: () => operatorReason(), draft: () => state.draft, dirty: () => state.dirty, robots: () => state.robots,
@@ -52,23 +46,14 @@ const authoring = createMapAuthoring({request, svg: $('site-map-svg'), map: show
   begin: () => { survey.cancel(); if ($('map-source').value !== 'draft') $('map-source').value = 'draft'; clearPlane(); $('trip-pick').checked = false; state.band = null; updatePlaneSources(); },
   changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft'; state.selected = null; state.band = null; updatePlaneSources(); clearPlan(); },
   render, notice, epoch: () => state.sessionEpoch});
-
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
-
-function gate(id, reason) {  // '' enables; otherwise the button says why it is off
-  $(id).disabled = Boolean(reason);
-  if (reason) $(id).setAttribute('reason', reason);
-  else $(id).removeAttribute('reason');
-}
-function notice(text) { $('notice').textContent = text; }
+function gate(id, reason) { $(id).disabled = Boolean(reason); if (reason) $(id).setAttribute('reason', reason); else $(id).removeAttribute('reason'); }
+function notice(text) { $('notice').textContent = text; $('notice').hidden = !text; }
 function status(id, text, kind) { $(id).textContent = text; $(id).setAttribute('state', kind); }
 const sourcePanel = createMapSourcesPanel({request, state, shown, calibrations: () => calibrations,
   operatorReason, render, syncButtons, gate, guarded, select, clearPlan, status, W, H});
 const {selectedProfile, loadProfiles, clearPlane, updatePlaneSources} = sourcePanel;
-function shown() {
-  if ($('map-source').value === 'profile') return selectedProfile()?.map;
-  return $('map-source').value === 'draft' ? state.working : state.active?.map;
-}
+function shown() { return $('map-source').value === 'profile' ? selectedProfile()?.map : ($('map-source').value === 'draft' ? state.working : state.active?.map); }
 function operatorReason() { return state.role === 'operator' ? '' : state.role ? OPERATOR_REASON : '관제 접속이 필요합니다'; }
 
 function render() {
@@ -141,9 +126,10 @@ const LABEL_PAD = 24;  // a label with no room above its ring goes below it
 // next place, in this map's frame and view turn. Read-only; redrawn alone so a poll never eats a click.
 function drawRobots() {
   const svg = $('site-map-svg'), map = shown();
+  const placed = [...svg.querySelectorAll('.label')].map(node => node.getBBox());
   svg.querySelector('#robot-layer')?.remove();
   if (!map || !state.view || $('map-source').value !== 'active') return;
-  const layer = el('g', {id: 'robot-layer'}, svg);
+  const layer = el('g', {id: 'robot-layer'}, document.createDocumentFragment());
   const order = (state.guide?.robots || []).map(row => row.robot_id);
   const tint = id => `c${Math.max(0, order.indexOf(id)) % 3 + 1}`;
   const line = points => points.map(([x, y]) => state.view.toPx(x, y).join(',')).join(' ');
@@ -157,7 +143,7 @@ function drawRobots() {
     }
   }
   const toPoint = (x, y) => { const [px, py] = state.view.toPx(x, y); return {x: px, y: py}; };
-  const placed = [...svg.querySelectorAll('.label')].map(node => node.getBBox());
+  const pendingLabels = [];
   for (const {row, p, r, ring, alert, tip} of guideMarks(state.guide, toPoint)) {
     const g = el('g', {class: `robot ${tint(row.robot_id)} ${row.pose.state.toLowerCase()}${row.online ? '' : ' offline'}`,
       'data-robot': row.robot_id, ...(alert ? {'data-alert': alert} : {})}, layer);
@@ -168,17 +154,33 @@ function drawRobots() {
       const deg = Math.atan2(tip.y - p.y, tip.x - p.x) * 180 / Math.PI;
       el('polygon', {class: 'robot-tip', points: '2,0 -7,-5 -7,5', transform: `translate(${tip.x} ${tip.y}) rotate(${deg})`}, g);
     }
-    const label = el('text', {class: 'robot-label', x: p.x, y: p.y - ring - 6}, g);
+    const initY = p.y - ring - 6;
+    const label = el('text', {class: 'robot-label', x: p.x, y: initY}, g);
     label.textContent = poseLabel(row);
-    const half = label.getComputedTextLength() / 2 + 4;  // keep the whole label on the map
-    label.setAttribute('x', Math.min(Math.max(p.x, half), W - half));
-    if (p.y - ring - 6 < 16) label.setAttribute('y', p.y + ring + 16);
+    pendingLabels.push({label, p, ring, initY});
+  }
+  svg.append(layer);
+  if (!pendingLabels.length) return;
+  // Batch SVG text measurements before attribute writes to avoid read/write layout thrashing.
+  const measured = pendingLabels.map(({label, p, ring, initY}) => ({
+    label, p, ring, initY, textLen: label.getComputedTextLength(), box: label.getBBox(),
+  }));
+  const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  const writes = [];
+  for (const {label, p, ring, initY, textLen, box} of measured) {
+    const half = textLen / 2 + 4;  // keep the whole label on the map
+    const x = Math.min(Math.max(p.x, half), W - half);
+    let y = initY < 16 ? p.y + ring + 16 : initY;
+    const boxAt = ny => ({x: box.x + (x - p.x), y: box.y + (ny - initY), width: box.width, height: box.height});
     // Simple pass (shortcut: down only, 4 tries; a dense cluster can still overlap): step off an earlier label.
-    const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
-    for (let tries = 0; tries < 4 && placed.some(o => hit(label.getBBox(), o)); tries++)
-      label.setAttribute('y', Number(label.getAttribute('y')) + label.getBBox().height + 2);
-    label.setAttribute('y', Math.min(Math.max(Number(label.getAttribute('y')), 16), H - 6));  // a robot past the map edge keeps its label on the map
-    placed.push(label.getBBox());
+    for (let tries = 0; tries < 4 && placed.some(o => hit(boxAt(y), o)); tries++) y += box.height + 2;
+    y = Math.min(Math.max(y, 16), H - 6);  // a robot past the map edge keeps its label on the map
+    placed.push(boxAt(y));
+    writes.push({label, x, y, initY});
+  }
+  for (const {label, x, y, initY} of writes) {
+    label.setAttribute('x', x);
+    if (y !== initY) label.setAttribute('y', y);
   }
 }
 
@@ -215,11 +217,7 @@ function select(selection) {
 }
 
 function syncButtons() {
-  authoring.sync();
-  cameraMap.sync();
-  cameraDraft.sync();
-  reality.sync();
-  survey.sync();
+  authoring.sync(); cameraMap.sync(); cameraDraft.sync(); reality.sync(); survey.sync();
   const reason = operatorReason();
   sourcePanel.sync();
   gate('map-view-turn', reason || ($('map-source').value === 'profile' ? '지도 설정을 초안으로 불러오세요' : '') || (!state.working ? '고칠 지도가 없습니다' : ''));
@@ -238,8 +236,7 @@ function syncButtons() {
     : state.draft?.revision
       ? `저장된 초안${state.draft.saved_by ? ` · ${state.draft.saved_by}` : ''}${state.dirty ? ' · 고친 내용 저장 필요' : ''}`
       : (state.dirty ? '저장 안 된 초안' : '저장된 초안 없음'),
-  state.loadState === 'pending' ? 'pending' : state.loadState === 'error' ? 'error'
-    : state.draft?.revision ? 'ready' : 'empty');
+  state.loadState === 'pending' ? 'pending' : state.loadState === 'error' ? 'error' : state.draft?.revision ? 'ready' : 'empty');
   const tripRobot = $('trip-robot');
   const robotReason = state.robotsError ? '로봇 상태 확인 불가 · 다시 접속하세요'
     : !tripRobot.options.length ? '등록된 로봇이 없습니다 · 관리자에게 로봇 등록을 요청하세요'
@@ -251,34 +248,21 @@ function syncButtons() {
   const poseReason = state.guideUnavailable ? '현장 지도 위치 확인 불가' : tripPoseReason(state.guide, tripRobot.value,
     state.active, robotMapPose(state.robots.find(robot => robot.robot_id === tripRobot.value)));
   gate('trip-plan', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || poseReason || (target ? '' : '목적지를 고르세요')));
-  gate('trip-pick', reason);
-  teach.sync();
+  gate('trip-pick', reason); gate('station-zones-save', operatorReason()); teach.sync();
 }
 
-// D-540 4: one read line and the robot layer; operating a trip is the 관제 card's (D-540 3).
+let lastPollSig = null;
 async function pollRobots() {
-  if (state.loadState === 'ready' && !document.hidden) {  // a background tab does not keep reading trips and guide
-    const [tripsRes, guideRes] = await Promise.allSettled([
-      request('/api/fleet/trips'),
-      request('/api/fleet/guide'),
-    ]);
+  if (state.loadState === 'ready' && !document.hidden && $('map-source').value === 'active') {
+    const [tripsRes, guideRes] = await Promise.allSettled([request('/api/fleet/trips'), request('/api/fleet/guide')]);
     if (tripsRes.status === 'fulfilled') {
       state.open = tripsRes.value.open || [];
-      status('trip-run', state.open.length ? `이 지도로 운행 중 · ${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
-        : '진행 중인 운행 없음', state.open.length ? 'pending' : 'empty');
-    } else {
-      status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(tripsRes.reason)}`, 'error');
-    }
-    if (guideRes.status === 'fulfilled') {
-      state.guide = guideRes.value;
-      state.guideUnavailable = false;
-    } else {
-      state.guide = null;
-      state.guideUnavailable = guideRes.reason?.status !== 404;
-    }
-    // The map redraw (view turn, source change) clears the robot layer, so every poll repaints it.
-    drawRobots();
-    syncButtons();
+      status('trip-run', state.open.length ? `이 지도로 운행 중 · ${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}` : '진행 중인 운행 없음', state.open.length ? 'pending' : 'empty');
+    } else status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(tripsRes.reason)}`, 'error');
+    if (guideRes.status === 'fulfilled') { state.guide = guideRes.value; state.guideUnavailable = false; }
+    else { state.guide = null; state.guideUnavailable = guideRes.reason?.status !== 404; }
+    const sig = JSON.stringify([state.open, state.guide?.robots || null, state.guideUnavailable, state.robots, state.active?.version, $('map-source').value]);
+    if (sig !== lastPollSig) { lastPollSig = sig; drawRobots(); syncButtons(); }
   }
   setTimeout(pollRobots, ROBOT_POLL_MS);
 }
@@ -286,16 +270,24 @@ pollRobots();
 
 async function load() {
   state.planEpoch += 1;
+  const [activeRes, draftRes, profilesRes, stateRes, calRes] = await Promise.allSettled([
+    request('/api/fleet/site-map/active'),
+    request('/api/fleet/site-map/draft'),
+    loadProfiles(),
+    request('/api/fleet/state'),
+    request('/api/fleet/calibrations'),
+  ]);
   let active = null;
-  try { active = await request('/api/fleet/site-map/active'); } catch (error) {
-    if (error.status !== 404) throw error;
-  }
-  const draft = await request('/api/fleet/site-map/draft');
-  await loadProfiles();
+  if (activeRes.status === 'fulfilled') active = activeRes.value;
+  else if (activeRes.reason?.status !== 404) throw activeRes.reason;
+  if (draftRes.status === 'rejected') throw draftRes.reason;
+  const draft = draftRes.value;
+  if (profilesRes.status === 'rejected') throw profilesRes.reason;
   let robots = [];
   state.robotsError = false;
-  try { robots = (await request('/api/fleet/state')).robots || []; } catch (error) {
-    if (error.status === 401 || error.status === 403) throw error;
+  if (stateRes.status === 'fulfilled') robots = stateRes.value.robots || [];
+  else {
+    if (stateRes.reason?.status === 401 || stateRes.reason?.status === 403) throw stateRes.reason;
     state.robotsError = true;
   }
   state.active = active;
@@ -305,8 +297,7 @@ async function load() {
     : (active ? JSON.parse(JSON.stringify(active.map)) : null));
   state.dirty = false;
   state.loadState = 'ready';
-  try { calibrations = (await request('/api/fleet/calibrations')).calibrations || []; }
-  catch { calibrations = []; }
+  calibrations = calRes.status === 'fulfilled' ? (calRes.value.calibrations || []) : [];
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
@@ -344,6 +335,7 @@ async function connect(credentialChange = false) {
     + ':is([aria-labelledby="edit-heading"], .map-inspector) select, '
     + ':is([aria-labelledby="edit-heading"], .map-inspector) textarea')].map(field => ({field, value: field.value, checked: field.checked}));
   state.sessionEpoch = (state.sessionEpoch || 0) + 1;
+  lastPollSig = null;
   sourcePanel.reset(); calibrations = [];
   gate('token-save', '접속 중');
   const started = Date.now();
@@ -378,7 +370,7 @@ async function connect(credentialChange = false) {
     notice(localEdit ? '재접속 확인 · 편집 중인 초안을 보존했습니다. 저장 전 최신 서버 초안과 비교하세요.'
       : state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
       : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 지도 만들기에서 기준을 정하거나 저장된 지도 설정을 불러오세요.'
-      : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '지도를 읽었습니다.');
+      : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '');
   } catch (error) {
     if (localEdit) Object.assign(state, localEdit);
     state.loadState = error.status === 401 ? 'idle' : 'error';
@@ -558,16 +550,15 @@ const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home
   groups: {'survey-heading': ['survey-heading', 'drawing-heading'],
     'camera-draft-heading': ['camera-draft-heading', 'drawing-heading', 'survey-heading']},
   label: document.getElementById('site-map-screen')});
+const syncDrawingSection = () => { const d = document.querySelector('ui-section[aria-labelledby="drawing-heading"]'); if (d) d.hidden = ['#reality-heading', '#trip-heading', '#run-heading'].includes(location.hash); };
+addEventListener('hashchange', syncDrawingSection); syncDrawingSection();
 // The map legend promises that picking a place or lane on the view screen opens it for editing.
-$('site-map-svg').addEventListener('click', event => {
-  if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading';
-});
+$('site-map-svg').addEventListener('click', event => { if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading'; });
 // Keyboard: a focused place dot acts like a click (Enter or Space); the redraw drops focus, so put it back.
 $('site-map-svg').addEventListener('keydown', event => {
   const dot = event.target.closest?.('[data-place]');
   if (!dot || !['Enter', ' '].includes(event.key)) return;
-  event.preventDefault();
-  const id = dot.dataset.place;
+  event.preventDefault(); const id = dot.dataset.place;
   dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
   $('site-map-svg').querySelector(`[data-place="${CSS.escape(id)}"]`)?.focus();
 });
@@ -576,11 +567,19 @@ $('console-token').addEventListener('keydown', event => { if (event.key === 'Ent
 developmentToken($('console-token').value).then(token => {
   if (token) { $('console-token').value = token; connect(); }
   // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
-  else loginForm.refresh(true).then(cookie => {
+  else return loginForm.refresh(true).then(cookie => {
     if (cookie || stored) connect();
     else if (!state.role && state.loadState === 'idle') showSignedOut();  // not if someone connected meanwhile
   });
-}).catch(() => {});
+}).catch(error => {
+  if (!state.role && state.loadState === 'idle') {
+    state.loadState = error?.status === 401 ? 'idle' : 'error';
+    showSignedOut();
+    render();
+    syncButtons();
+    notice(siteMapErrorText(error));
+  }
+});
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
 const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
   $('console-token').value = ''; connect(true);
