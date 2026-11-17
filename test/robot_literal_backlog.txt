@@ -90,3 +90,6 @@ operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
 operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py
 operations/fleet/fleet/server/sitemap/pipeline_routes.py
 operations/fleet/fleet/server/tracking/tracking_anchors.py
+shared/web/patterns.yaml
+shared/web/shared-assets.json
+shared/web/meshes/pinky-pro.urdf
