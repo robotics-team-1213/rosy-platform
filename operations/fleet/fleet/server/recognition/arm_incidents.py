@@ -175,11 +175,11 @@ class ArmIncidentStore:
         """KeyError: no such incident. ValueError: already explained or cleared (the first explanation stands)."""
         with self._lock, self._db:
             self._listed.clear()
-            row = self._db.execute("SELECT explained_at, cleared_at FROM arm_incidents WHERE incident_id=? "
-                                   "AND source_id=?", (incident_id, source_id)).fetchone()
+            row = self._db.execute("SELECT explained_at, cleared_at, cleared_by FROM arm_incidents WHERE "
+                                   "incident_id=? AND source_id=?", (incident_id, source_id)).fetchone()
             if row is None:
                 raise KeyError(incident_id)
-            if row[0] is not None or row[1] is not None:
+            if row[0] is not None or (row[1] is not None and row[2] != AUTO_CLEAR_PRINCIPAL):  # auto-cleared still teaches
                 raise ValueError("not open for an explanation")
             self._db.execute("UPDATE arm_incidents SET seen=?, suspected_cause=?, model=?, explained_at=? "
                              "WHERE incident_id=?", (explanation.seen, explanation.suspected_cause,
@@ -224,7 +224,7 @@ class ArmIncidentStore:
     def unexplained(self, limit=8) -> list:
         """For the AI PC: open incidents with frames and no explanation yet, oldest first."""
         with self._lock:
-            rows = self._rows("cleared_at IS NULL AND explained_at IS NULL", (), None)[::-1][:limit]
+            rows = self._rows(f"(cleared_at IS NULL OR cleared_by = '{AUTO_CLEAR_PRINCIPAL}') AND explained_at IS NULL", (), None)[::-1][:limit]
             return [self._view(r, True) for r in rows]
 
     def snapshot(self, source_id) -> list:
