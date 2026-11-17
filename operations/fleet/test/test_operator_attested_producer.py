@@ -80,7 +80,7 @@ def test_valid_source_clear_lets_the_producer_dispatch_once_with_fk_of_measured_
                  {'t': (base + 200_000_000) / 1e9, 'state': [0, 0, 0, 0, 0, 100]},
                  {'t': (base + 300_000_000) / 1e9, 'state': [0, 0, 0, 0, 0, 100]}])
     live = tool.LiveState(gated.installation.policy.primary[1], lambda: next(rows),
-                          gated.installation.policy.source_pose.model_dump(mode='json'), now=lambda: base / 1e9 + .4)
+                          {k: list(getattr(gated.installation.policy.source_pose, k)) for k in ('position_m', 'orientation_xyzw')}, now=lambda: base / 1e9 + .4)
     reply = tool.observe_once(client, live, tool.sim.ArmModel.load(ASSETS), arms, set())
     assert reply['job']['status'] in {'DISPATCHING', 'ACTION_SUBMITTED', 'ACTION_SUCCEEDED', 'DISPATCHED'}
     assert len(gated.port.submitted) == 1
