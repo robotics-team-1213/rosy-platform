@@ -53,6 +53,13 @@ def _ok(status) -> bool:
     return isinstance(status, dict) and status.get("ok") is True and not status.get("contact") and not status.get("fault")
 
 
+def _final_ok(status) -> bool:
+    """The last park must report settled, and the jaw reading the release check judges must exist (else it could not run)."""
+    state = status.get("state")
+    return (_ok(status) and status.get("settled") is True
+            and isinstance(state, (list, tuple)) and len(state) > 5 and state[5] is not None)
+
+
 def _accepted(status) -> bool | None:
     """Did the session take the command (True), refuse it (False), or is it unknown (None)?"""
     error = status.get("error") or ""
@@ -153,8 +160,10 @@ class SessionCarryExecution:
                     self._failed, self._current = f"{phase.upper()}_NOT_ACCEPTED", None
                     return
                 self.recorder.mark_running(phase_id=phase, driver_goal_id=self._goal(phase))
-            if not _ok(status):
-                self._terminal(phase, "FAILED", status)
+            final = self._ptr == len(self._plan) - 1
+            if not (_final_ok(status) if final else _ok(status)):
+                self._terminal(phase, "FAILED", status if not final or not _ok(status) else
+                               {**status, "error": "final park not settled or release check could not run"})
                 self._failed = f"{phase.upper()}_STEP_FAILED"
                 return
             self._statuses.append(status)
@@ -190,7 +199,7 @@ class SessionCarryExecution:
             if phase == "grasp":
                 self._hold_seq = self._sequence_of(status)
             elif phase == "release":
-                self._release_seq = self._sequence_of(status)
+                self._release_seq = self._sequence_of(statuses[0])  # the release step itself, not the final park
             return True
 
     # -- the worker, the watchdog and the end of a carry --------------------------------------------------------

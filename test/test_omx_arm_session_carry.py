@@ -50,7 +50,8 @@ class FakeSession:
             self.gates[command][0].set()
             self.gates[command][1].wait(5)
         reply = self.script.get(command, {"ok": True})
-        return {"t": 100.0 + len(self.commands), "holding": command in ("run grasp_pick", "run lift_pick"), **reply}
+        return {"t": 100.0 + len(self.commands), "holding": command in ("run grasp_pick", "run lift_pick"), "settled": True,
+                "state": [0, 0, 0, 0, 0, 10.0], **reply}
 
     def fold(self):
         self.folds += 1
@@ -295,7 +296,10 @@ def test_commissioning_is_passed_to_a_carry_only_for_a_fresh_token_and_never_fro
         attempts=SimpleNamespace(begin=lambda *a: None), calibration=SimpleNamespace(load=lambda p: {}),
         pivot=SimpleNamespace(with_site_maps=lambda config, cal: cal))
     token = tmp_path / "presence"
-    open_carry = goals_module.open_carry_for({**SECTION, "presence_token": str(token)}, field=field)
+    library = tmp_path / "lib.json"
+    library.write_text('{"jaw_empty_stop": 46.5}')
+    section = {**SECTION, "presence_token": str(token), "libraries": {"source>target": str(library)}}
+    open_carry = goals_module.open_carry_for(section, field=field)
     g = SimpleNamespace(arm_transfer=SimpleNamespace(source="source", target="target", commissioning=True))
     with pytest.raises(CarryRefused, match="presence token"):
         open_carry(g)
@@ -314,3 +318,39 @@ def test_commissioning_is_passed_to_a_carry_only_for_a_fresh_token_and_never_fro
         _token(token)
         open_carry(SimpleNamespace(arm_transfer=SimpleNamespace(source="x", target="y")))
     assert token.exists()
+    _token(token)
+    library.write_text("{}")  # no jaw_empty_stop or gripper_closed: the release check could not run
+    with pytest.raises(CarryRefused, match="release check"):
+        open_carry(g)
+    assert token.exists() and seen == [True]
+
+
+def test_a_final_park_that_is_not_settled_fails_the_release_phase(tmp_path, kin, profile):
+    session = FakeSession()
+    session.script["park"] = {"ok": True, "settled": False}
+    owner, installation, _ = build(tmp_path, kin, profile, session)
+    submit(owner, grant(owner, installation))
+    held = wait_for(state_is(owner, "HOLD"))
+    assert held["phase_summaries"][-1]["state"] == "FAILED" and held["state"] != "SUCCEEDED"
+
+
+def test_a_missing_jaw_reading_means_the_release_check_could_not_run(tmp_path, kin, profile):
+    session = FakeSession()
+    session.script["park"] = {"ok": True, "settled": True, "state": None}
+    owner, installation, _ = build(tmp_path, kin, profile, session)
+    submit(owner, grant(owner, installation))
+    held = wait_for(state_is(owner, "HOLD"))
+    assert held["phase_summaries"][-1]["state"] == "FAILED"
+
+
+def test_release_evidence_is_the_release_step_not_the_final_park(tmp_path, kin, profile, monkeypatch):
+    from rosy_agent import arm_session_carry
+    seen = []
+    original = arm_session_carry.SessionCarryExecution._sequence_of
+    monkeypatch.setattr(arm_session_carry.SessionCarryExecution, "_sequence_of",
+                        lambda self, status: seen.append(status["t"]) or original(self, status))
+    session = FakeSession()
+    owner, installation, _ = build(tmp_path, kin, profile, session)
+    submit(owner, grant(owner, installation))
+    wait_for(state_is(owner, "SUCCEEDED"))
+    assert seen[-1] == 100.0 + session.commands.index("run release_place") + 1  # not the park 2 commands later

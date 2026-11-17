@@ -69,6 +69,16 @@ def field_modules():
                            fold=cp.fold, attempts=cell_attempts, calibration=cell_calibration, pivot=cell_pivot)
 
 
+def release_check_value(library):
+    """The jaw reading transfer_folded judges the release by; None means the check could not run."""
+    try:
+        data = json.loads(Path(library).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    value = data.get("jaw_empty_stop") if isinstance(data, dict) else None
+    return value if value is not None else (data.get("gripper_closed") if isinstance(data, dict) else None)
+
+
 def open_carry_for(section, *, field=None, presence=None):
     """-> open_carry(grant) for rosy_agent.arm_session_carry.ArmGoals. `field` and `presence` are injectable for tests."""
     from rosy_agent.arm_session_carry import Carry, CarryRefused
@@ -81,6 +91,8 @@ def open_carry_for(section, *, field=None, presence=None):
         library = libraries.get(f"{body.source}>{body.target}")
         if library is None:
             raise CarryRefused("no reviewed library for this source and target")
+        if release_check_value(library) is None:
+            raise CarryRefused("the reviewed library has no jaw_empty_stop or gripper_closed: the release check cannot run")
         f = field or field_modules()
         # shortcut: presence token required for every carry because Gate re-plan hooks are not wired; relax only when hooks + finish_attempt are wired
         person_present = presence(section["presence_token"])
