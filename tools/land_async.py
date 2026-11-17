@@ -339,10 +339,10 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         except (SystemExit, Exception) as exc:
             print(f"[land-async] resuming cleared MAIN-RED stops skipped: {exc}", flush=True)
     else:
-        (tree.parent / (tree.name + ".stopped")).write_text(f"land.py exit {code}; read {tree.name}.log\n",
-                                                            encoding="utf-8")
+        (tree.parent / f"{tree.name}.stopped").write_text(f"land.py exit {code}; read {tree.name}.log\n", "utf-8")
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
-        split_rollup(tree, snap, reason=verdict(output))
+        if reason := verdict(output):  # no STOP block: land.py was killed, there is no verdict to split on
+            split_rollup(tree, snap, reason=reason)
     superseded(tree, snap)
     return code
 
