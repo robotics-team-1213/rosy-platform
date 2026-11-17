@@ -1,4 +1,5 @@
 """D-889 17: narrow cache reuse across a range that is FULL only through main's landed commits."""
+import subprocess
 import sys
 from pathlib import Path
 
@@ -42,6 +43,155 @@ def test_a_full_range_through_mains_landed_commits_keeps_untouched_passes(repos,
     assert (todo, bool(done)) == (([], True) if reused else ([["pkg/test"]], False))
     assert ((f"{fix}^", fix, False) in asked) == own_fix, "each own commit of the branch is selected by itself"
     assert any(b == base and landed for b, _, landed in asked) == (not (own_fix and own_full))
+
+
+def _prior_round(repo_pair, changed, sel_extra, monkeypatch, tests="auto"):
+    """D-889 37: a pass on ``base``, then main moves by ``changed`` and this branch adds a FULL commit of its own, so
+    the range is FULL and _landed_full gives up; ``sel_extra`` is what the selector says about base..head."""
+    main, wt = repo_pair
+    commit(wt, {"tools/harness/affected_tests.py": ""}, "harness")
+    land.land_cache.record(wt, git(wt, "rev-parse", "HEAD"), git(wt, "rev-parse", "HEAD^{tree}"), "env1",
+                           ["pkg/test"], Path("log"))
+    commit(main, {changed: "x = 1\n"}, "main moves")
+    git(wt, "merge", "-q", "--no-edit", "main")
+    commit(wt, {"pkg/c.py": "y = 1\n"}, "this branch's FULL fix")
+    sel = {"mode": "full", "escalations": [], "unmapped": [], "local_invocations": [["other/test"]], **sel_extra}
+    monkeypatch.setattr(land.land_cache, "_selection", lambda *a: sel)
+    monkeypatch.setattr(land.land_cache, "_guards_and_browsers", lambda *a: [])
+    events = []
+    monkeypatch.setattr(land.land_events, "emit", lambda kind, **f: events.append((kind, f)))
+
+    def select(wt_, b, python, head=None, landed=False):
+        return [["other/test"]], "FULL"  # the range and the branch's own commit are FULL: no _landed_full
+    args = land.argparse.Namespace(tests=tests, no_cache=False)
+    return land.land_cache.split(wt, args, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable, select), events
+
+
+def test_prior_round_pass_is_reused_over_a_full_range_that_selects_none_of_its_paths(repos, cached, monkeypatch, capsys):
+    (done, todo, _), events = _prior_round(repos, "docs/x.py", {}, monkeypatch)
+    assert todo == [] and len(done) == 1
+    assert "[cache] reused pkg/test from " in capsys.readouterr().out and "(delta selects none of its paths)" in done[0]
+    assert events == [("reuse", {"reused": 1, "prior": 1, "total": 1})]
+
+
+def test_prior_round_pass_reruns_when_the_range_selects_its_paths(repos, cached, monkeypatch):
+    (done, todo, _), events = _prior_round(repos, "docs/x.py", {"local_invocations": [["pkg/test"]]}, monkeypatch)
+    assert todo == [["pkg/test"]] and not done and events == []
+
+
+@pytest.mark.parametrize("changed, sel", [
+    ("docs/x.py", {"escalations": ["m.py: safety path (platform_parts concern: safety)"]}),
+    ("docs/x.py", {"escalations": ["deploy/compose.yaml: deploy compose manifest"]}),
+    ("docs/x.py", {"unmapped": ["docs/x.py"]}),
+    ("tools/harness/affected_x.py", {}),           # SELECT_CORE
+    ("tools/land_selection.py", {}),
+    ("test/known_failures.py", {}),
+    ("test/browser_scope.py", {}),
+    ("tools/remote/remote_pytest.py", {}),         # RUNNER_TOOLS
+    ("tools/land_browser.py", {}),
+    ("tools/harness/platform_parts.yaml", {}),     # REGISTRY_FILES
+    ("tools/harness/harness.yaml", {}),
+    ("conftest.py", {}),
+    ("pyproject.toml", {}),
+    ("test/known_failures.txt", {}),               # LISTS
+    ("test/flaky_quarantine.txt", {}),
+])
+def test_prior_round_reuse_is_refused_wholesale_for_unknown_reach(repos, cached, monkeypatch, changed, sel):
+    (done, todo, _), events = _prior_round(repos, changed, sel, monkeypatch)
+    assert todo == [["pkg/test"]] and not done and events == []
+
+
+def test_prior_round_reuse_is_refused_when_the_range_deletes_a_file(repos, cached, monkeypatch):
+    main, wt = repos
+    commit(main, {"docs/gone.py": "x = 1\n"}, "main adds")
+    git(wt, "merge", "-q", "--no-edit", "main")
+    commit(wt, {"tools/harness/affected_tests.py": ""}, "harness")
+    land.land_cache.record(wt, git(wt, "rev-parse", "HEAD"), git(wt, "rev-parse", "HEAD^{tree}"), "env1",
+                           ["pkg/test"], Path("log"))
+    git(main, "rm", "-q", "docs/gone.py")
+    git(main, "commit", "-q", "-m", "main deletes")
+    git(wt, "merge", "-q", "--no-edit", "main")
+    commit(wt, {"pkg/c.py": "y = 1\n"}, "own")
+    monkeypatch.setattr(land.land_cache, "_selection", lambda *a: {"mode": "full", "escalations": [], "unmapped": [],
+                                                                    "local_invocations": [["other/test"]]})
+    monkeypatch.setattr(land.land_cache, "_guards_and_browsers", lambda *a: [])
+    args = land.argparse.Namespace(tests="auto", no_cache=False)
+    done, todo, _ = land.land_cache.split(wt, args, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable,
+                                          lambda *a, **k: ([["other/test"]], "FULL"))
+    assert todo == [["pkg/test"]] and not done
+
+
+def test_explicit_full_keeps_the_strict_rule_and_never_uses_the_prior_round_rule(repos, cached, monkeypatch):
+    (done, todo, _), events = _prior_round(repos, "docs/x.py", {}, monkeypatch, tests="full")
+    assert todo == [["pkg/test"]] and not done and events == []
+
+
+def _sibling(repo_pair, changed, monkeypatch, select_result):
+    """D-889 37: a pass on merge(old main, branch); main then moves by ``changed`` and the candidate is
+    merge(new main, branch), which does not descend from the recorded commit. Returns (split result, events)."""
+    main, wt = repo_pair
+    commit(wt, {"tools/harness/affected_tests.py": ""}, "harness")
+    commit(wt, {"pkg/c.py": "y = 1\n"}, "branch work")
+    branch = git(wt, "rev-parse", "HEAD")
+    commit(main, {"docs/old.py": "x = 1\n"}, "main before")
+    git(wt, "merge", "-q", "--no-edit", "main")
+    land.land_cache.record(wt, git(wt, "rev-parse", "HEAD"), git(wt, "rev-parse", "HEAD^{tree}"), "env1",
+                           ["pkg/test"], Path("log"))
+    old = git(wt, "rev-parse", "HEAD")
+    git(wt, "reset", "-q", "--hard", branch)
+    commit(main, {changed: "x = 2\n"}, "main after")
+    git(wt, "merge", "-q", "--no-edit", "main")
+    head = git(wt, "rev-parse", "HEAD")
+    assert subprocess.run(["git", "-C", str(wt), "merge-base", "--is-ancestor", old, head]).returncode != 0
+    monkeypatch.setattr(land.land_cache, "_selection",
+                        lambda *a: {"mode": "full", "escalations": [], "unmapped": [], "local_invocations": [["other/test"]]})
+    monkeypatch.setattr(land.land_cache, "_guards_and_browsers", lambda *a: [])
+    events = []
+    monkeypatch.setattr(land.land_events, "emit", lambda kind, **f: events.append((kind, f)))
+    asked = []
+
+    def select(wt_, b, python, head=None, landed=False):
+        asked.append((b, head))
+        return select_result
+    args = land.argparse.Namespace(tests="auto", no_cache=False)
+    return land.land_cache.split(wt, args, [["pkg/test"]], head, sys.executable, select), events, (old, asked)
+
+
+def test_sibling_merge_candidate_reuses_suites_the_new_main_commits_did_not_touch(repos, cached, monkeypatch, capsys):
+    (done, todo, _), events, (old, asked) = _sibling(repos, "docs/x.py", monkeypatch, ([["other/test"]], None))
+    assert todo == [] and len(done) == 1 and "[cache] reused pkg/test from " + old[:10] in capsys.readouterr().out
+    assert events == [("reuse", {"reused": 1, "prior": 1, "total": 1})] and asked and asked[0][0] == old
+
+
+def test_sibling_merge_candidate_reruns_a_suite_the_tree_diff_selects(repos, cached, monkeypatch):
+    (done, todo, _), events, _ = _sibling(repos, "docs/x.py", monkeypatch, ([["pkg/test"]], None))
+    assert todo == [["pkg/test"]] and not done and events == []
+
+
+@pytest.mark.parametrize("changed", ["tools/harness/platform_parts.yaml", "tools/remote/remote_pytest.py", "conftest.py"])
+def test_a_refused_path_in_the_tree_diff_disables_sibling_reuse(repos, cached, monkeypatch, changed):
+    (done, todo, _), events, _ = _sibling(repos, changed, monkeypatch, ([["other/test"]], "FULL"))
+    assert todo == [["pkg/test"]] and not done and events == []
+
+
+def test_a_sibling_row_is_not_used_for_the_explicit_full_rule(repos, cached, monkeypatch):
+    main, wt = repos
+    args_full = land.argparse.Namespace(tests="full", no_cache=False)
+    monkeypatch.setattr(land.land_cache, "_selection",
+                        lambda *a: {"mode": "affected", "escalations": [], "unmapped": [], "invocations": [["other/test"]]})
+    monkeypatch.setattr(land.land_cache, "_guards_and_browsers", lambda *a: [])
+    commit(wt, {"tools/harness/affected_tests.py": ""}, "harness")
+    branch = git(wt, "rev-parse", "HEAD")
+    commit(main, {"docs/old.py": "x = 1\n"}, "main before")
+    git(wt, "merge", "-q", "--no-edit", "main")
+    land.land_cache.record(wt, git(wt, "rev-parse", "HEAD"), git(wt, "rev-parse", "HEAD^{tree}"), "env1",
+                           ["pkg/test"], Path("log"))
+    git(wt, "reset", "-q", "--hard", branch)
+    commit(main, {"docs/x.py": "x = 2\n"}, "main after")
+    git(wt, "merge", "-q", "--no-edit", "main")
+    done, todo, _ = land.land_cache.split(wt, args_full, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable,
+                                          lambda *a, **k: ([["other/test"]], None))
+    assert todo == [["pkg/test"]] and not done
 
 
 def test_narrow_reuse_skips_non_ancestor_sibling_commits_in_shared_cache(cached):

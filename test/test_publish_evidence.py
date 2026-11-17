@@ -25,6 +25,16 @@ def test_canonical_exclusive_full_with_hash_bound_strict_receipt_qualifies(repo)
     assert tool.green_full(local, sha)
 
 
+def test_publication_refuses_cache_rows_marked_reused(repo):
+    """D-889 37: a row carrying reused_from is a reuse, not an execution; land_cache.entries drops it."""
+    local, sha, _ = _timing_proof(repo)
+    assert tool.green_full(local, sha)
+    target = land_cache.path(local)
+    rows = [json.loads(line) for line in target.read_text(encoding="utf-8").splitlines() if line]
+    target.write_text("".join(json.dumps({**row, "reused_from": "0" * 40}) + "\n" for row in rows), encoding="utf-8")
+    assert land_cache.entries(local) == [] and not tool.green_full(local, sha)
+
+
 @pytest.mark.parametrize('damage', ['missing', 'skip', 'partial', 'quarantine', 'hash', 'ignore-only'])
 def test_publication_requires_complete_strict_dedicated_evidence(repo, damage):
     local, sha, log = _timing_proof(repo)
