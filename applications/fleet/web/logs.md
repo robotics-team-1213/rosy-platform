@@ -1283,7 +1283,7 @@
 - 증거: `node --test operations/fleet/test/web/map-view.test.mjs` 및 원격 pytest 통과.
 - gate 변화: 없음.
 ## 2026-11-17 · uncommitted · revert(console): AI 팔 제안 보기를 이 착지에서 뺀다
-- 변경: `work/arm-proposal-view.js`와 연결(`console.js`의 armProposals, `index.html`의 팔 제안 필터 항목, `assets.json`, `queues.js` 예외 큐 행, `work-view.js` 제안 패널·띠 합산, `work.css`), 노드·브라우저 시험, 가져오기 허용 목록·대화상자 계약 항목을 제거했다. 사유: C3 실제 경로 없음, feat/arm-proposal-view로 보관. 운영 화면이 없는 경로(`GET /api/fleet/arm-proposals`)를 부르면 feature_matrix가 막는다. 로봇 행 스킬 글자(C20)·`#detail-skill`은 그대로다. 패턴 C21은 채택 화면이 없어 planned로 되돌렸고 C22는 로봇 행 채택으로 시험을 옮겼다.
+- 변경: `work/arm-proposal-view.js`와 연결(`console.js`의 armProposals, `index.html`의 팔 제안 필터 항목, `assets.json`, `queues.js` 예외 큐 행, `work-view.js` 제안 패널·띠 합산, `work.css`), 노드·브라우저 시험, 가져오기 허용 목록·대화상자 계약 항목을 제거했다. 사유: C3 실제 경로 없음, feat/arm-proposal-view로 보관. 운영 화면이 없는 경로(`GET /api/fleet/arm-proposals`)를 부르면 feature_matrix가 막는다. 로봇 행 스킬 글자(C20)·`#detail-skill`은 그대로다. 패턴 C21·C22는 제품 시험이 걸던 채택 화면이 제안 보기뿐이라 planned로 되돌렸다.
 - 증거: 노드 547 passed, 0 failed. 원격 시험은 착지 대기.
-- gate 변화: C21 built -> planned.
+- gate 변화: C21·C22 built -> planned(채택 화면이 제안 보기뿐이었다).
 - 교훈: 없음
