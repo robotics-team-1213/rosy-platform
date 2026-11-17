@@ -47,7 +47,8 @@ class Owner(CapabilityPort):
 
 def one_arm(installation):
     """D-977 2: the single-arm installation device_trial accepts."""
-    policy = installation.policy.model_copy(update=dict(participants=installation.policy.participants[:1]))
+    policy = installation.policy.model_copy(update=dict(participants=installation.policy.participants[:1],
+                                                         producer_id="operator-attested-producer"))
     caps = tuple(c.model_copy(update=dict(resource_policy_digest=policy.digest)) for c in installation.capabilities[:1])
     return installation.model_copy(update=dict(policy=policy, capabilities=caps))
 
