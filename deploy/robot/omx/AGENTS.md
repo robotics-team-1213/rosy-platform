@@ -15,6 +15,8 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | File | Description |
 |------|-------------|
 | `README.md` | Current contract, host inventory, multi-workcell preflight, build and probe usage |
+| `run_hardware_owner.py`, `hardware_owner_goals.py` | Hardware owner entrypoint; goals only with an `arm_goals` config for one arm (D-977 4): reviewed library per source>target, presence token, no serial |
+| `rosy-omx-arm-session@.service`, `rosy-omx-attested-producer@.service`, `omx-session.env.example`, `omx-attested-producer.env.example` | device_trial units beside `rosy-omx-owner@.service` (run off, a person starts them): the session is the only bus writer and is never SIGKILLed; the producer posts PRE_DISPATCH only behind a SOURCE_CLEAR |
 | `stack.lock.yaml` | Pins the official ROBOTIS source set to immutable revisions |
 | `fetch_sources.py` | Fetches the locked sources into the build context |
 | `Dockerfile`, `Dockerfile.pilot` | Workstation image and pilot-simulation image |

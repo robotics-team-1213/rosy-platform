@@ -6,11 +6,12 @@ Action store and the local stop latch, and the D-336 ``ActionApi``/``UnixActionS
 StopLocal/GetStopState/RearmLocal, GetOwnerState/RecoverOwner, GetAction and GetOwnerIdentity to
 the configured Fleet peer UID.
 
-No goal path exists here: the Action runner is disabled and has no phase runner factory, so
+No goal path exists by default: the Action runner is disabled and has no phase runner factory, so
 SubmitAction is refused before any journal row; there is no HTTP/Pilot surface. The identity
 reports ``simulation: false`` and ``goals_enabled: false`` so Fleet never mistakes this owner for
-the simulation cell. Opening motion needs a measured profile and stop evidence (G3) and a
-separate decision; it is not a flag on this composition.
+the simulation cell. Only ``arm_goals`` (D-977 Decision 4, built from a local device_trial config for
+exactly this instance, with a commissioning record) enables ARM_TRANSFER: the owner then runs the
+field folded carry on the separate arm session (``arm_session_carry``) and still never opens serial.
 
 The local stop latch is the owner's software fence. It does not remove motor power and is not
 an emergency stop.
@@ -26,6 +27,7 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 import re
+from types import SimpleNamespace
 from typing import Any
 
 from core_common.protocol.schemas import StopRequestSource
@@ -38,8 +40,11 @@ from omx_adapter.journal_identity import journal_identity
 from omx_adapter.local_stop import LocalStopController
 from omx_adapter.owner_recovery_api import OwnerRecoveryApi
 
+from .arm_session_carry import ArmGoals, create_session_carry_factory
+
 ALLOWED_OWNERS = ("rule_based",)
 HARDWARE_PROFILE = "omx-hardware-no-goal"
+ARM_GOALS_PROFILE = "omx-hardware-device-trial-arm-transfer"
 _SIM_TOKEN = re.compile(r"(?:^|[-_.])(?:sim|gazebo|gz|isaac)(?:[-_.]|$)", re.IGNORECASE)
 _LOG = logging.getLogger(__name__)
 
@@ -61,6 +66,7 @@ class HardwareOwnerSettings:
     fleet_peer_uid: int
     calibration_revision: str
     commissioning_root: Path | None = None  # D-797 3: the owner reports ``device: true`` from this record
+    arm_goals: dict | None = None  # D-977 4: validated local device_trial goals config (deploy/robot/omx/hardware_owner_goals.py)
 
     def __post_init__(self) -> None:
         for name in ("workcell_id", "instance_id"):
@@ -87,7 +93,8 @@ def build_hardware_owner(settings: HardwareOwnerSettings, owner_config: ArmComma
                          runtime_factory: Callable[[ArmCommandConfig], Any],
                          refuse_second_owner: Callable[[], None],
                          fleet_fence_current: Callable[[int, int], bool],
-                         commissioning_revision: Callable[[], str | None] | None = None) -> HardwareOwner:
+                         commissioning_revision: Callable[[], str | None] | None = None,
+                         arm_goals: ArmGoals | None = None) -> HardwareOwner:
     refuse_second_owner()
     if not owner_config.enabled:
         raise ValueError("hardware owner requires an explicitly enabled, measured owner policy")
@@ -117,12 +124,27 @@ def build_hardware_owner(settings: HardwareOwnerSettings, owner_config: ArmComma
             return False
 
     fleet_uid = settings.fleet_peer_uid
+    factories, capability_current = {}, (lambda _grant: False)
+    if arm_goals is not None:
+        if commissioning_revision is None:
+            raise ValueError("ARM_TRANSFER goals need a commissioning record (device identity)")
+        catalog = arm_goals.installation.bindings.catalog
+        if ((catalog.workcell_id, catalog.instance_id, catalog.calibration_revision)
+                != (settings.workcell_id, settings.instance_id, settings.calibration_revision)):
+            raise ValueError("the ARM transfer catalog was installed for another owner")
+        factories["ARM_TRANSFER"] = create_session_carry_factory(
+            arm_goals, fence=current_fence, submission_fence=stop, admission=admission,
+            goal_port=SimpleNamespace(command_owner=runtime.owner))  # no goal port: the session moves the arm
+        capability_current = lambda grant: (  # noqa: E731
+            getattr(grant, "action_kind", None) == "ARM_TRANSFER" and arm_goals.installation.capability_current(grant))
     runner = ActionRunner(
         store, _NoGoalDriver(), workcell_id=settings.workcell_id, instance_id=settings.instance_id,
         principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={fleet_uid},
-        current_fence=current_fence, capability_current=lambda _grant: False,
-        submission_fence=stop, phase_runner_factories={}, control_admission=admission,
-        enabled=False)
+        current_fence=current_fence, capability_current=capability_current,
+        submission_fence=stop, phase_runner_factories=factories, control_admission=admission,
+        enabled=arm_goals is not None)
+    if arm_goals is not None:
+        admission.enable_managed_transfers(arm_goals.installation.resource_policy_digest)
     stop_api = LocalStopApi(stop, source_by_peer_uid={fleet_uid: StopRequestSource.FLEET},
                             cancel_active=lambda uid: runner.cancel_unresolved(peer_uid=uid),
                             fleet_fence_current=fleet_fence_current)
@@ -131,7 +153,8 @@ def build_hardware_owner(settings: HardwareOwnerSettings, owner_config: ArmComma
     action_api = ActionApi(runner, stop_api=stop_api, recovery_api=recovery_api,
                            live_identity=_device_identity(commissioning_revision), identity={
         "workcell_id": settings.workcell_id, "instance_id": settings.instance_id,
-        "simulation": False, "profile": HARDWARE_PROFILE, "goals_enabled": False,
+        "simulation": False, "profile": HARDWARE_PROFILE if arm_goals is None else ARM_GOALS_PROFILE,
+        "goals_enabled": arm_goals is not None,
         "journal_id": journal_identity(store.path)})
     uds_server = UnixActionServer(
         action_api, Path(settings.socket_root) / settings.instance_id / "control.sock")
@@ -165,5 +188,5 @@ class _NoGoalDriver:
         return None
 
 
-__all__ = ["ALLOWED_OWNERS", "HARDWARE_PROFILE", "HardwareOwner", "HardwareOwnerSettings",
+__all__ = ["ALLOWED_OWNERS", "ARM_GOALS_PROFILE", "ArmGoals", "HARDWARE_PROFILE", "HardwareOwner", "HardwareOwnerSettings",
            "build_hardware_owner"]
