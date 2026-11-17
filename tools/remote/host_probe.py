@@ -23,7 +23,7 @@ REBOOT_CHECK = r"""reboot_soon() {
 }
 """
 
-# One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site sim_held browser_jobs,
+# One line: ROSYPROBE nproc load1 (busy cores over 1 s, not loadavg; key kept) avail_kb total_kb py312 sim busy lock_cores lock_gb site sim_held browser_jobs,
 # then free_kb use% of ~/rosy-test's and /tmp's filesystems (df -Pk; absent from an older probe). Dead-pid
 # locks and expired reservations (<expiry epoch> <class> <cores> <GB>) go; both count toward the budget, and
 # sim_held counts the live ones of class sim or gpu (gpu: SwiftShader browsers are CPU-heavy, robot-4a; remote_sim, --pick sim, a hand-run Gazebo lock), browser_jobs the
@@ -63,7 +63,12 @@ if [ "$b" != 1 ]; then
 fi
 st=0; [ -e "$J/site" ] && st=1
 d=~/rosy-test; [ -d "$d" ] || d=~
-echo "ROSYPROBE $(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
+# 2026-11-17: load1 lags bursts by minutes (model PC load 37 at 72 % idle) and kept hosts "below floor" 112 of 151
+# placements; busy cores over 1 s of /proc/stat (rosy-host-guard-remote's sample) is what is taken now.
+ticks() { awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8+$9, $5+$6}' /proc/stat; }
+t0=$(ticks); sleep 1; t1=$(ticks)
+busy=$(echo "$t0 $t1 $(nproc) $(cut -d' ' -f1 /proc/loadavg)" | awk '{d=$3-$1; print (d > 0 ? sprintf("%.1f", $5*(d-($4-$2))/d) : $6)}')
+echo "ROSYPROBE $(nproc) $busy" \
   "$(awk '/^MemAvailable:/{a=$2} /^MemTotal:/{t=$2} END{print a, t}' /proc/meminfo) $py $s $b $c $m $st $g $w" \
   "$(df -Pk "$d" /tmp 2>/dev/null | awk 'NR>1{sub("%","",$5); printf "%s %s ", $4, $5}')"
 """ + host_caps.PROBE_LINE
