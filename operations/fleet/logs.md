@@ -5562,3 +5562,9 @@
 - 변경: `fleet/server/auth/site_auth.py` — `role: service`, `principal_id: auto-track-calibration` 기계 자격을 `/api/fleet/calibrations` 및 `/api/fleet/site-map/*` 경로로 한정 허용해 Account receiver 모드에서도 호스트 자동 보정 타이머가 인간 세션 위조 없이 동작하도록 연결했다.
 - 증거: 원격 `test_auto_track_calibration.py`·`test_overhead_tracking_api.py` 통과 및 `rosy-fleet-r` 실호스트 적용 확인.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · feat(fleet): POST /api/fleet/detections/anchors 경로 추가
+
+- 변경: `fleet/server/tracking/tracking_routes.py` — Vision의 head tracker 상태를 source 토큰으로 받는 경로(`accept_anchors`, 표시 전용). 신선도·DETECTION_LEASE_S 규칙은 그대로.
+- 증거: `test/test_overhead_tracking_api.py` 경로 집합 고정 갱신 + 토큰·저장 시험.
+- gate 변화: 없음.

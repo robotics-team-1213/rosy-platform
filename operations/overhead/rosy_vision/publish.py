@@ -11,7 +11,7 @@ from pydantic import TypeAdapter
 from core_common.protocol.place_markers import PlaceMarkerPayload
 from core_common.protocol.sightings import SiteSightingPayload
 from core_common.protocol.station_charging import Identifier, StationObservation
-from rosy_vision.track.fleet_client import _body, _request
+from rosy_vision.track.fleet_client import HTTP_LIMITS, _body, _request
 
 
 class SightingPublishError(RuntimeError):
@@ -39,6 +39,7 @@ class SightingPublisher:
             transport=transport,
             follow_redirects=False,
             trust_env=False,
+            limits=HTTP_LIMITS,
         )
 
     async def __aenter__(self) -> "SightingPublisher":

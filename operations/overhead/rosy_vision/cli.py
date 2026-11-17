@@ -206,6 +206,21 @@ def _format_stats_line(source: str, snap: dict) -> str:
     )
 
 
+#: `vision` prints one stats block per source this often (receive keeps STATUS_INTERVAL_S).
+VISION_STATS_INTERVAL_S = 30.0
+
+
+def _vision_stats_lines(ingest, workers) -> list[str]:
+    """Per source: the ingest line (or "no camera connected") and the Fleet POST counters."""
+    lines = []
+    for worker in workers:
+        snap = ingest.stats(worker.source_id)
+        lines.append(f"{worker.source_id}: no camera connected" if snap is None
+                     else _format_stats_line(worker.source_id, snap))
+        lines.append(worker.guard.stats_line())
+    return lines
+
+
 async def _run_receive(args: argparse.Namespace) -> int:
     token = os.environ.get(args.token_env)
     if not token:
@@ -421,8 +436,13 @@ async def _run_vision(args: argparse.Namespace) -> int:
         config_tasks = [ingest.loop_watch.supervised(f"config-sync:{index}",
                                                      tracker.run_config_sync(stop_tracking))
                         for index, tracker in enumerate(trackers)]
+        next_stats = time.monotonic() + VISION_STATS_INTERVAL_S
         try:
             while True:
+                if time.monotonic() >= next_stats:
+                    next_stats = time.monotonic() + VISION_STATS_INTERVAL_S
+                    print("
+".join(_vision_stats_lines(ingest, workers)), flush=True)
                 for worker in workers:
                     try:
                         await worker.process_latest()
