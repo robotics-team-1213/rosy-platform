@@ -6,6 +6,7 @@ The explanation is stored and shown, never acted on. Nothing is deleted."""
 import asyncio
 import base64
 import json
+import os
 import re
 import sqlite3
 import threading
@@ -28,6 +29,13 @@ CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 ROLES = ("top", "side")
 EVIDENCE_KEEP_S = 14 * 86400  # whole frames of a cleared incident; tip crops, labels and facts stay
 EVIDENCE_BODY_BYTES = ARM_INCIDENT_FRAME_BYTES * 4 // 3 + 4096
+AUTO_CLEAR_ENV = "ROSY_FLEET_ARM_INCIDENT_AUTO_CLEAR"  # "0" turns it off
+AUTO_CLEAR_PRINCIPAL = "auto-clear"
+
+
+def auto_clear_enabled() -> bool:
+    # 2026-11-17 user decision (D-971 amendment): every incident kind lifts its Fleet hold record by itself, default on
+    return os.environ.get(AUTO_CLEAR_ENV, "1").strip().lower() not in ("0", "false", "off", "no")
 
 
 def _facts(text: str):
@@ -235,7 +243,14 @@ class ArmIncidentStore:
             return listed
 
 
-def install_arm_incident_routes(app, *, service, store, require_viewer, require_named_operator, authorize=None):
+def _kind(report) -> str:
+    reason = report.decision.get("reason") if isinstance(report.decision, dict) else None
+    return CONTROL.sub(" ", reason)[:120] if isinstance(reason, str) and reason.strip() else "unspecified"
+
+
+def install_arm_incident_routes(app, *, service, store, require_viewer, require_named_operator, authorize=None,
+                                auto_clear=None):
+    auto_clear = auto_clear_enabled() if auto_clear is None else auto_clear
     base = "/api/fleet/workcell-observations"
 
     def source(source_id, token):
@@ -261,7 +276,17 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
         if parsed.source_id != source_id:
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT"})
         # a blocked loop holds every robot's heartbeat reply: store waits run off the loop
-        accepted = await asyncio.to_thread(lambda: store.accepted(source_id, store.report(parsed)))
+        def record():
+            incident_id = store.report(parsed)
+            if auto_clear and incident_id in store.hold(source_id).incident_ids:
+                # the record only: no motion, torque, latch, rearm or resume; those keep their own gates (D-430, D-977 7)
+                try:
+                    store.clear(source_id, incident_id, f"auto-clear: incident {incident_id} {_kind(parsed)}",
+                                AUTO_CLEAR_PRINCIPAL)
+                except (KeyError, ValueError):
+                    pass
+            return store.accepted(source_id, incident_id)
+        accepted = await asyncio.to_thread(record)
         return accepted.model_dump()
 
     @app.get(base + "/arms/{source_id}/hold", tags=["workcell-observations"])

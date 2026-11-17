@@ -56,8 +56,7 @@ def service():
                                 wall=lambda: 100.0, monotonic=lambda: 10.0)
 
 
-@pytest.fixture
-def client(tmp_path):
+def build_client(tmp_path):
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-secret")], [FakeRobot("rosy_01")])
     users = {sha256(token.encode()).hexdigest(): {"principal_id": name, "role": role}
              for token, (name, role) in ROLE_TOKENS.items()}
@@ -66,6 +65,33 @@ def client(tmp_path):
                      start_task_dispatcher=False, site_users=users, cell_job_compiler=None,
                      workcell_observations=service())
     return TestClient(app)
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_FLEET_ARM_INCIDENT_AUTO_CLEAR", "0")  # the console-clear tests below need a held arm
+    return build_client(tmp_path)
+
+
+def test_auto_clear_lifts_only_the_record_as_auto_clear_and_is_off_by_switch(tmp_path, monkeypatch):
+    monkeypatch.delenv("ROSY_FLEET_ARM_INCIDENT_AUTO_CLEAR", raising=False)
+    (tmp_path / "on").mkdir()
+    on = build_client(tmp_path / "on")  # default: on
+    body = post(on).json()
+    assert body["hold"]["held"] is False
+    row = on.app.state.arm_incidents.snapshot("arm_b")[0]
+    assert row["state"] == "cleared" and row["cleared"]["by"] == "auto-clear"
+    assert row["incident_id"] in row["cleared"]["note"] and "latched ID 13 overload" in row["cleared"]["note"]
+    assert post(on).json()["hold"]["held"] is False  # a re-report stays cleared
+    # nothing else moved: resume or dispatch have no new route here, and a person's clear is still the only console path
+    again = on.post(f"{PATH}/arms/arm_b/incidents/{row['incident_id']}/clear", json={"note": "x"},
+                    headers=bearer("operator-token"))
+    assert again.status_code == 409
+    monkeypatch.setenv("ROSY_FLEET_ARM_INCIDENT_AUTO_CLEAR", "0")
+    (tmp_path / "off").mkdir()
+    off = build_client(tmp_path / "off")
+    assert post(off).json()["hold"]["held"] is True
+    assert off.app.state.arm_incidents.snapshot("arm_b")[0]["state"] == "open"
 
 
 def post(client, body=None, source="arm_b", headers=SOURCE):
