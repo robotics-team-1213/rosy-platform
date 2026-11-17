@@ -1,6 +1,7 @@
 // D-960 §4 · D-974 — one rule for what this control-unit screen shows. The server's fleet.scope says what the
 // instance owns (통합관제 R, a cell, or a standalone Fleet). A block tagged data-unit-scope="drive|arms|children|
-// enrollment" stays out of the screen of a unit that does not own it: another unit's screen owns that job.
+// enrollment|root" stays out of the screen of a unit that does not own it: another unit's screen owns that job
+// ("root" marks the integrated-control parts a cell leaves to 통합관제 R).
 // The stop controls are never tagged; every unit keeps its E-stop. No scope (an older server) shows everything.
 const KEYS = ["drive", "arms", "children", "enrollment"];
 const ROLE = {root: "통합관제", cell: "셀 관제", standalone: "단독 관제"};
@@ -23,4 +24,5 @@ export function applyUnitScope(scope, root = globalThis.document?.documentElemen
   if (!root) return;
   root.toggleAttribute("data-unit-scope-ready", current !== null);
   for (const key of KEYS) root.toggleAttribute("data-unit-" + key, owns(key));
+  root.toggleAttribute("data-unit-root", current?.role !== "cell");
 }

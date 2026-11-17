@@ -99,5 +99,5 @@ def test_unit_scope_reads_the_manifest_and_standalone_keeps_everything():
                                          "enrollment": False}
     assert unit_scope(topology, "CELL-A")["arms"] is True
     assert unit_scope(topology, "B", has_arms=True)["arms"] is True  # an OMX wired to this instance
-    assert unit_scope() == {"role": "standalone", "drive": True, "arms": False, "children": False,
+    assert unit_scope() == {"role": "standalone", "drive": True, "arms": True, "children": False,
                             "enrollment": True}

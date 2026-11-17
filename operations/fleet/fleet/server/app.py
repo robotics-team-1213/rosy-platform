@@ -254,7 +254,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         cell_goal_evidence_service, deployment_profile)
     app.state.proposal_store = proposal_store
     app.state.omx_instances, app.state.omx_stop_transport = configured_omx, stop_transport
-    console.control_unit = {"scope": unit_scope(has_arms=bool(configured_omx))}  # install_control_unit replaces it
+    console.control_unit = {"scope": unit_scope()}  # install_control_unit replaces it for a control unit
     app.state.localization_service = localization_service
     if task_service is not None:
         async def release_traffic_task(mission: dict) -> None:

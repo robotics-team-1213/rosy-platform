@@ -149,7 +149,7 @@ ui-topbar {
 /* D-960 §4: a block another control unit owns stays off this unit's screen (unit-scope.js sets the flags). */
 html[data-unit-scope-ready]:not([data-unit-drive]) [data-unit-scope="drive"],
 html[data-unit-scope-ready]:not([data-unit-arms]) [data-unit-scope="arms"],
-html[data-unit-scope-ready]:not([data-unit-children]) [data-unit-scope="children"],
+html[data-unit-scope-ready]:not([data-unit-root]) [data-unit-scope="root"],
 html[data-unit-scope-ready]:not([data-unit-enrollment]) [data-unit-scope="enrollment"],
 html:not([data-unit-scope-ready]) [data-unit-scope="no-arms"],
 html[data-unit-arms] [data-unit-scope="no-arms"] { display: none; }

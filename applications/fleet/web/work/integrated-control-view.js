@@ -104,9 +104,9 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
     stopHeading = node("h3", "선택한 하위 관제의 정지 요청");
   panel.append(heading, intro, status, list, selectedName, detail, mapRead, mapInfo, map,
     stopHeading, scopeNote, actions, notice, stopIdentity, results, historyFold, reconcileFold);
-  // D-960 §4: a unit without children (a cell) keeps only its stop history and the local reconcile (D-862).
+  // D-960 §4: a cell keeps only its stop history and the local reconcile (D-862); R reads the tree.
   for (const part of [intro, list, selectedName, detail, mapRead, mapInfo, map, stopHeading, scopeNote, actions, notice,
-    stopIdentity, results]) part.dataset.unitScope = "children";
+    stopIdentity, results]) part.dataset.unitScope = "root";
   anchor.before(panel);
   let epoch = 0, overview = null, sampled = 0, target = null, inFlight = false, busy = false,
     selection = 0, detailRevision = 0, mapRef = null, pending = null, snapshot = null, reference = null, owner = null;

@@ -105,11 +105,10 @@ class ControlUnitTopology:
 def unit_scope(topology=None, unit_id=None, *, has_arms=False):
     """What this Fleet instance owns, so the console shows only its own unit's surfaces (D-960 §4, D-974).
 
-    Standalone Fleet (no manifest) keeps every drive surface and its local robot enrollment.
+    Standalone Fleet (no manifest) keeps today's whole screen: drive, arm preparation and local enrollment.
     """
     if topology is None:
-        return {"role": "standalone", "drive": True, "arms": bool(has_arms), "children": False,
-                "enrollment": True}
+        return {"role": "standalone", "drive": True, "arms": True, "children": False, "enrollment": True}
     unit = topology.unit(unit_id)
     return {"role": "root" if unit.parent is None else "cell",
             "drive": any(r.startswith("robot:") for r in unit.resources),
