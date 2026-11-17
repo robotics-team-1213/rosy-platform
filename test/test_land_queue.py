@@ -344,3 +344,45 @@ def test_a_rollup_with_a_test_record_gets_the_six_hour_window(tmp_path, monkeypa
         ticket.write_text(json.dumps(info))
     assert [r.get("tested") or r.get("tier") for r in queue.expired(tmp_path, now)] == [None]
 
+
+def test_lane_has_its_own_cap(tmp_path, monkeypatch):
+    monkeypatch.setattr(queue, "CAP", 2)
+    monkeypatch.setattr(queue, "LANE_CAP", 1)
+    queue.take(tmp_path, "feat/a"), queue.take(tmp_path, "feat/b")
+    assert "landing queue full (2/2" in queue.full(tmp_path)
+    assert queue.full(tmp_path, queue.LANE) is None  # ordinary tickets do not fill the lane
+    queue.take(tmp_path, "feat/learn", lane=queue.LANE)
+    assert "learning lane full (1/1" in queue.full(tmp_path, queue.LANE)
+
+
+def test_lane_ticket_passes_waiting_tickets_but_never_a_turn_or_urgent(tmp_path):
+    turn = queue.take(tmp_path, "feat/turn", status="turn")
+    waiting = queue.take(tmp_path, "feat/wait", status="waiting")
+    urgent = queue.take(tmp_path, "feat/urgent", status="waiting", urgent="user: now")
+    lane = queue.take(tmp_path, "feat/learn", status="waiting", lane=queue.LANE)
+    assert [r["branch"] for r in queue.blockers(tmp_path, lane)] == ["feat/turn", "feat/urgent"]
+    urgent.unlink(), turn.unlink()
+    assert queue.blockers(tmp_path, lane) == []
+    assert queue.blockers(tmp_path, waiting) == []  # a later lane ticket never holds an earlier ordinary one
+    plain = queue.take(tmp_path, "feat/plain", status="waiting")
+    assert [r["branch"] for r in queue.blockers(tmp_path, plain)] == ["feat/wait", "feat/learn"]
+
+
+def test_lane_of_reads_the_changed_paths(tmp_path):
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+                       check=True, capture_output=True)
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    git("switch", "-q", "-c", "feat/x")
+    (tmp_path / "learning").mkdir()
+    (tmp_path / "learning" / "a.py").write_text("x = 1\n")
+    git("add", "learning/a.py")
+    git("commit", "-q", "-m", "learning only")
+    assert queue.lane_of(tmp_path) == queue.LANE
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "b.py").write_text("y = 2\n")
+    git("add", "tools/b.py")
+    git("commit", "-q", "-m", "mixed")
+    assert queue.lane_of(tmp_path) == ""
+    assert queue.lane_of(tmp_path, "main") == ""  # nothing changed: not a lane landing
