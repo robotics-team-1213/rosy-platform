@@ -78,11 +78,25 @@ def live(common: Path) -> tuple[set[str], set[str]]:
     return branches - {""}, trees
 
 
+def rollup_members(holder: Path, now: float) -> set[str]:
+    """Hidden trees of members a recent rollup recorded: a split or re-rolled rollup resumes them from these trees."""
+    kept = set()
+    for path in holder.glob("*.members") if holder.is_dir() else ():
+        if now - path.stat().st_mtime > 86400:
+            continue
+        try:
+            kept |= {Path(m["worktree"]).name for m in json.loads(path.read_text(encoding="utf-8"))}
+        except (OSError, ValueError, KeyError, TypeError):
+            continue  # unreadable metadata names nothing; the commit checks below still protect unlanded work
+    return kept
+
+
 def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) -> Plan:
     """(action, reason, hidden tree or None, branches) per leftover; action is remove, keep or log."""
     common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     holder = common / HOLDER
     names, trees = live(common)
+    members = rollup_members(holder, now)
     listing = git(repo, "worktree", "list", "--porcelain")
     registered = {str(Path(line[9:]).resolve()) for line in listing.splitlines()
                   if line.startswith("worktree ")}
@@ -105,6 +119,12 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
         log = holder / f"{name}.log"
         if any(b in names for b in branches) or str(tree.resolve()) in trees:
             out.append(("keep", "live ticket", tree if tree.is_dir() else None, branches))
+            continue
+        if name in members:
+            out.append(("keep", "member of a recent rollup", tree if tree.is_dir() else None, branches))
+            continue
+        if name in members:
+            out.append(("keep", "member of a recent rollup", tree if tree.is_dir() else None, branches))
             continue
         if land_async.running(tree):
             out.append(("keep", "live supervisor", tree if tree.is_dir() else None, branches))
