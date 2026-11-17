@@ -341,6 +341,11 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             # test/learning/perception *.test.mjs today (web/account-session.test.mjs included: CI has no
             # node step and land.py --node only globs test/web), so FULL would add nothing.
             continue
+        folder = affected_narrow.folder_tests(repo, path)  # 2026-11-17: the owning folder before FULL
+        if folder:
+            for test, why in folder.items():
+                add(test, why)
+            continue
         sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
         sel.unmapped.append(path)
 

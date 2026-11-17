@@ -342,6 +342,43 @@ def test_skewed_belt_containers_across_all_three_tiers_have_valid_ik_chains(data
 
 
 
+def test_v24_docks_berth_kit_draws_the_socket_in_docking_pieces():
+    """berth_kit='v24-docks' (rated 2026-11-14): printed v20 cradles + stopper + the two docking pieces, not the quay or the v16 bridges."""
+    import json
+    mujoco = pytest.importorskip("mujoco")
+    import omx_two_arm_world as tw
+    source = json.loads((sites.SHIP_ASSETS / "SOURCE.json").read_text(encoding="utf-8"))["meshes"]
+    for name in ("berth_v24_cradle", "berth_v24_docks", "berth_v24_stopper"):
+        assert name in source and (sites.SHIP_ASSETS / f"{name}.stl").is_file()
+    model = tw.World(sites.Layout(berth_kit="v24-docks")).model
+    names = {mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i) for i in range(model.ngeom)}
+    assert {"ship_berth_v24_cradle", "ship_berth_v24_docks", "ship_berth_v24_stopper"} <= names
+    assert not names & {"ship_quay", "ship_berth_v16_bridges"}
+
+
+def test_preset_cad190_puts_each_axis_166_25_mm_from_the_ship_centreline_and_cad194_stays():
+    for preset, axis in (("v24-20261114-cad190", .16625), ("v24-20261114-cad194", .16825)):
+        layout = sites.Layout(preset=preset)
+        ya, yb = layout.arms["arm_a"].base[1], layout.arms["arm_b"].base[1]
+        assert (yb - ya) / 2 == pytest.approx(axis, abs=1e-6) and (ya + yb) / 2 == pytest.approx(.0015, abs=1e-6)
+    assert sites.Layout(preset="v24-20261114-cad190").choices["arm_bases"] == "cad-190"
+
+
+def test_preset_v24_20261114_bundles_the_photo_pose_with_the_berth_and_yields_to_explicit_choices():
+    layout = sites.Layout(preset="v24-20261114")
+    c = layout.choices
+    assert (c["berth_kit"], c["top_camera"], c["temp_lanes"]) == ("v24-docks", "2026-11-14", "photo-20261114")
+    assert layout.fixture["real_cameras"]["top"]["eye"] == sites.TOP_CAMERA_20261114["eye"]
+    assert layout.sites["tmp-a-2"]["xy"] == pytest.approx(sites.TEMP_LANES_PHOTO_1114["a"][1][0])
+    assert sites.Layout(preset="v24-20261114", ship_stern_x_m=.155).choices["ship_stern_x_m"] == .155
+    # the arms are in the same (table-edge) frame as that day's ship and plates: each plate's lane 2 sits where bridge v7 seats it, 200 mm from its arm
+    for tag, arm in (("a", "arm_a"), ("b", "arm_b")):
+        assert math.dist(layout.sites[f"tmp-{tag}-2"]["xy"], layout.arms[arm].base[:2]) == pytest.approx(.200, abs=.015)
+    assert layout.arms["arm_b"].base[1] - layout.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.1898, abs=.0005)  # as the 11-14 frame measured it (194 is the plan; user: the real cell differs)
+    assert layout.belt_y == pytest.approx(-.003)
+    assert sites.Layout().choices["berth_kit"] == "v24-docks"  # the default scene on main is v24-docks (preset did not leak)
+
+
 def test_the_choice_set_shares_one_scene_and_differs_only_in_the_container_taken(layout):
     """2026-11-17: told apart by the goal or the language, never by the scene; each one-step task is a valid plan."""
     data = tasks.load()

@@ -55,6 +55,17 @@ def trim_known_centres(marks, tcps, geometry: dict, max_rms_mm: float):
     return orig_c, orig_t
 
 
+def fit_circle(points) -> tuple[float, float, float, float]:
+    """Algebraic (Kasa) least squares: centre x, y, radius, rms residual."""
+    import numpy as np
+
+    p = np.asarray(points, float)
+    a = np.c_[2 * p, np.ones(len(p))]
+    (cx, cy, c), *_ = np.linalg.lstsq(a, (p ** 2).sum(axis=1), rcond=None)
+    r = math.sqrt(max(c + cx * cx + cy * cy, 0.0))
+    return float(cx), float(cy), r, float(np.sqrt(np.mean((np.hypot(p[:, 0] - cx, p[:, 1] - cy) - r) ** 2)))
+
+
 def fit_pivot_yaw(marks_m, yaws_fk_deg, *, mark_sigma_mm: float = 3.0, out_k: float = 2.5) -> dict:
     """Yaw-coupled linear fit `m_i = c + Rot(theta_i) @ g` with outlier trimming (prior-scaled)."""
     import numpy as np

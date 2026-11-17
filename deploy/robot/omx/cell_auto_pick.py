@@ -211,7 +211,7 @@ def run_auto(
             gate = Gate(guarded, config, calibration, sequence=sequence)
             ledger = cell_attempts.ReplanLedger(config, calibration, source, dest, attempt, tried, t0, choices)
             # shadow inference before the gate opens: no delay between the approval and the motion
-            shadow_row = shadow.capture(cell, config, attempt, img) if shadow else None
+            shadow_row = shadow.capture(cell, config, attempt, img, source=source, dest=dest) if shadow else None
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a), ledger.finish)
             if held is not None:
                 tried["envelope"] = held
