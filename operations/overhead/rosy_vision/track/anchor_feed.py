@@ -35,14 +35,15 @@ class AnchorFeed:
         self._task: asyncio.Task | None = None
 
     def step(self, image, captured_at, calibration, result, *, processor_revision, seq):
-        """Detection thread: the tracker at its own cadence; returns the (maybe filtered) result."""
+        """Detection thread: the tracker at its own cadence. Display only: the detections Fleet gets are
+        the caller's own ``result``, untouched (the tracker's blob filtering is not applied)."""
         now = self._clock()
         self.sightings = ()
         if now < self._next_at:
             return result
         self._next_at = now + STEP_INTERVAL_S
         try:
-            result, self.sightings, states = self.tracker.step(
+            _, self.sightings, states = self.tracker.step(
                 image, captured_at, calibration, result, source_id=self.source_id, map_id=self.map_id,
                 processor_revision=processor_revision, seq=seq)
         except Exception as exc:  # noqa: BLE001 - display tracking never stops detections

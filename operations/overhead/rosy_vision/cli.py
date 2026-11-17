@@ -441,8 +441,8 @@ async def _run_vision(args: argparse.Namespace) -> int:
             while True:
                 if time.monotonic() >= next_stats:
                     next_stats = time.monotonic() + VISION_STATS_INTERVAL_S
-                    print("
-".join(_vision_stats_lines(ingest, workers)), flush=True)
+                    for line in _vision_stats_lines(ingest, workers):
+                        print(line, flush=True)
                 for worker in workers:
                     try:
                         await worker.process_latest()
