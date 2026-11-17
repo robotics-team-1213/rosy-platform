@@ -1309,3 +1309,8 @@
 - 증거: 노트북 재현 스크립트(D:/DevTemp/ui-refine-1118/shots/s5/*.png, 1366 패널·390 알림 카드 좌표) 16건 전부 실패 → 수정 후 통과. 원격 결과는 D:/DevTemp/ui-refine-1118/r-S5.md.
 - gate 변화: 없음 — 안전 경로(console.js L66·115·419-422, syncCritRows, stopRobot, robot-panel-adapters L311-402)는 건드리지 않았다.
 - 교훈: 없음
+
+## 2026-11-18 · f96e10e006 · fix(fleet): 큐가 화면에 들어오면 그 행의 긴급 토스트가 바로 닫힌다 (S6, G7)
+- 변경: `console.js`의 큐 행 토스트 판정(`syncCritRows` 호출)을 `syncQueueToasts()`로 묶어 폴링 렌더와 함께 window scroll(캡처, 요소 스크롤 포함)·resize에서도 돌린다. 390×844 기록 화면에서 rosy_02 replan 행이 첫 씨앗 뒤에 도착할 때 큐가 사건 목록 아래 화면 밖이라 토스트가 뜨는 것은 명세대로였지만, 아래로 스크롤해 큐가 보여도 다음 상태 폴링까지 토스트가 큐 위에 남았다(G7 358×112). 카드 위치 CSS·`syncCritRows`·G7·메뉴 가림 단언은 그대로.
+- 증거: 진단 커밋(c00fb6cfae, 착지 안 함)으로 G7 위반 카드 = `crit|rosy_02|replan`, 큐 top 588 < 뷰포트 844 확인. 수정 커밋 원격 pytest(ROSY_RUN_BROWSER_TESTS=1, queue_inline·fleet_console 3부·fleet_header) 214 passed·2 failed·0 skipped — 실패는 part3의 기존 실패 2건(offline_robots…·viewer_sees_reasons…). D:/DevTemp/ui-refine-1118/remote-s6/run-1.txt. node alert-popup.test.mjs 13/13.
+- gate 변화: 없음 — 판정 함수와 안전 토스트는 그대로, 판정 시점만 늘었다.
