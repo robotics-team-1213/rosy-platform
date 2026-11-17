@@ -747,3 +747,13 @@
 **관측.** 재사용마다 `[cache] reused <argv> from <sha10> (delta selects none of its paths)` 한 줄과 `land_events`의 `reuse` 이벤트(`reused`·`prior`·`total`)를 남긴다. 이 커밋의 Metrics 줄이 바꾸기 전 숫자다.
 
 **되돌림.** `_delta_paths`의 `_full_delta` 호출 한 곳을 지우면 추가 36 이전 동작이다. 재사용한 라운드가 NEW 실패를 놓쳤다면 즉시 되돌린다.
+
+### 추가 38 (2026-11-17): 시험을 마치고 기다리는 착지는 롤업에 다시 넣지 않는다 (2026-11-17 롤업 패널)
+
+**왜.** 추가 23(2026-11-02)은 "준비된(waiting) 착지도 서로 닿지 않으면 롤업에 묶는다"고 했다. 그러나 `tested`(준비 기록)나 `tier: full_done`을 가진 waiting 착지는 이미 시험을 통과했는데, 롤업에 넣으면 그 증거를 버리고 묶음 FULL을 다시 돈다. 2026-11-17 21시 30분대에 롤업이 준비된 waiting 7개를 다시 묶었고, 그중 하나는 대기열 2번 자리에서 138분째 준비 상태였다. 롤업 선두 p50은 200분, 영향받는 단일 착지 p50은 32분이다(36시간).
+
+**결정.** 추가 23의 "준비된 착지도 롤업에 묶는다"를 좁힌다. `land_rollup.candidates`는 `tested` 또는 `tier: full_done`이 있는 waiting 착지를 후보에서 뺀다. 그런 착지는 자기 증거로 단독 착지한다. pending, 준비 기록 없는 waiting, (섞기 켜짐일 때) FULL 대기 preparing은 그대로 후보이고, 롤업 행의 규칙(추가 33·34·35)도 그대로다. 이 추가는 `fix/land-g-bundle`의 추가 37 뒤에 이어진다. 새 상수·타이머는 없다.
+
+**검증.** `test/test_land_rollup.py`(준비 기록 있는 waiting 두 종류가 후보가 아님), `test/test_land_queue.py`, `test/test_land.py`를 원격 시험 PC에서 돌린다.
+
+**되돌림.** 이 조건 한 줄(`prepared`)을 지우면 추가 23 동작으로 돌아간다. 24시간 안에 단독 착지 대기가 길어지면 되돌리고 숫자를 다시 잰다.
