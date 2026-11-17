@@ -1,4 +1,6 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
+import {isOperator} from '/console/assets/authorization.js';
+
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'
     && headers.get('X-Frame-Rectified') === 'measured-map'
@@ -19,7 +21,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   let busy = false, reading = false, imageURL = null, cancelImageExpiry = null;
   let sourceLifetime = new AbortController();
   const identity = () => `${auth.token}\n${auth.role}\n${auth.principal}`;
-  const operator = () => auth.role === 'operator' && !!auth.principal && !auth.locked;
+  const operator = () => isOperator(auth.role) && !!auth.principal && !auth.locked;
   const visible = () => !root.closest('#camera-calibration').hidden;
 
   function clearImage() {

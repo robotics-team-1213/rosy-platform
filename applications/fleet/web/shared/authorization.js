@@ -7,8 +7,10 @@ export const OPERATOR_REASON = "운영자 권한이 필요합니다";
 // D-540 9: 움직이는 조작은 이름 있는 운영자만. 공유 토큰(site-console)은 보기와 멈춤만 한다.
 export const NAMED_OPERATOR_REASON = "이름 있는 운영자 로그인이 필요합니다";
 
+export const isOperator = (role) => role === "operator";
+
 export function namedOperatorReason(role, principal) {
-  return role === "operator" && (!principal || principal === "site-console") ? NAMED_OPERATOR_REASON : "";
+  return isOperator(role) && (!principal || principal === "site-console") ? NAMED_OPERATOR_REASON : "";
 }
 
 // Human-hold clear and task creation: the server refuses without a bounded note / a named operator
@@ -40,7 +42,7 @@ function describe(control, id, on) {
 }
 
 export function applyRoleToControls(role, controls) {
-  if (role !== "operator") {
+  if (!isOperator(role)) {
     for (const control of controls) {
       if (!previousState.has(control)) {
         previousState.set(control, {

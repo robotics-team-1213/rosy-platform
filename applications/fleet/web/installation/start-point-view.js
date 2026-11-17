@@ -2,6 +2,7 @@
 // 위치는 맵 맞춤의 "위에서 본 지도 좌표" 그림(map-fit-view.js view.mapFitPick)에서 고른다.
 // 고른 점은 목표 발행에 들어가지 않는다.
 import {createPollGate} from '/console/assets/poll-gate.js';
+import {NAMED_OPERATOR_REASON, OPERATOR_REASON, isOperator, namedOperatorReason} from '/console/assets/authorization.js';
 
 export function createStartPointView({scope, el, view, call, auth, onChanged}) {
   const source=el('start-point-source'), message=el('start-point-state'), canvas=el('map-fit-canvas');
@@ -10,7 +11,7 @@ export function createStartPointView({scope, el, view, call, auth, onChanged}) {
   const gate=createPollGate();
   let records=[], points=[], ready=false, picking=false, busy=false, loading=false, serial=0, pendingSource=null;
   // D-540 9: start-point writes need a named operator (not the shared site-console token).
-  const operator=()=>auth.role==='operator' && !auth.locked && !!auth.principal && auth.principal!=='site-console';
+  const operator=()=>isOperator(auth.role) && !auth.locked && !!auth.principal && !namedOperatorReason(auth.role, auth.principal);
   const record=()=>records.find(row=>row.source_id===source.value);
   const point=()=>points.find(row=>row.source_id===source.value);
   function stopPicking() {
@@ -19,7 +20,7 @@ export function createStartPointView({scope, el, view, call, auth, onChanged}) {
   }
   function controls() {
     const editable=operator() && ready && !!record() && !busy;
-    const reason=!operator() ? (auth.role==='operator' ? '이름 있는 운영자 로그인이 필요합니다' : '운영자 권한이 필요합니다') : busy ? '시작점 저장 처리 중' : '승인된 무마커 보정과 서버 연결이 필요합니다';
+    const reason=!operator() ? (isOperator(auth.role) ? NAMED_OPERATOR_REASON : OPERATOR_REASON) : busy ? '시작점 저장 처리 중' : '승인된 무마커 보정과 서버 연결이 필요합니다';
     setEnabled(pick,editable,reason); setEnabled(save,editable,reason);
     setEnabled(remove,editable && !!point(),point() ? reason : '저장한 시작점이 없습니다');
     setEnabled(source,operator() && !busy && !!records.length,reason);

@@ -1,4 +1,5 @@
 // Incident evidence display, human review and export; transport/session stay in console.js.
+import { isOperator } from "/console/assets/authorization.js";
 import { CAUSE_LABEL, DECISION_LABEL } from "./line-stuck.js";
 
 const INCIDENT_CAUSES = {
@@ -173,7 +174,7 @@ async function refreshIncidents() {
       incidentLine(side, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
         : "사람 검토: 아직 없음");
       if (latest) incidentLine(raw, `검토자 ${latest.principal_id} · 원인 ${latest.root_cause}`);
-      if (auth.role === "operator") {
+      if (isOperator(auth.role)) {
         if (!report.closed_at && !report.handoff && report.judgment_revision) {
           const claim = document.createElement('ui-button');
           claim.setAttribute('kind', 'quiet');
@@ -235,7 +236,7 @@ async function refreshIncidents() {
       incidentLine(side, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
         : "사람 검토: 아직 없음");
       if (latest) incidentLine(raw, `검토자 ${latest.principal_id} · 원인 ${latest.root_cause}`);
-      if (auth.role === "operator") side.append(incidentReviewForm(report,
+      if (isOperator(auth.role)) side.append(incidentReviewForm(report,
         `/api/fleet/incidents/facts/${ai.fact_row}/review`));
       detail.append(raw);
       trafficList.append(item);
