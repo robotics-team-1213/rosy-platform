@@ -77,6 +77,16 @@ def test_begin_measures_the_motors_with_torque_free_and_moves_to_motor(root):
     assert ops.ran("hold") and ops.ran("acquire") and ops.ran("release")
 
 
+def test_every_core_restart_first_clears_the_camera_start_limit(root):
+    ops = Ops(root)
+    host.begin(root, ops)
+    host.cancel(root, ops)
+    restarts = [i for i, c in enumerate(ops.calls) if c[1:] == ("restart", "rosy-core.service")]
+    assert len(restarts) >= 2
+    for i in restarts:
+        assert ops.calls[i - 1] == ("systemctl", "reset-failed", "rosy-camera.service")
+
+
 def test_a_failed_commit_restores_the_runtime_begin_found(root):
     before = (root / host.RUNTIME).read_bytes()
     ops = Ops(root, fail=COMMIT)

@@ -127,6 +127,9 @@ def _check(ops, *argv):
 
 
 def _restart(ops, units):
+    # Restarting CORE also restarts rosy-camera (Requires=); its StartLimitBurst=3/300 s then fails the camera for good
+    # after three quick mode changes (y8xs 2026-11-17 13:18). A planned restart must not spend that budget.
+    ops.run("systemctl", "reset-failed", "rosy-camera.service")
     _check(ops, "systemctl", "restart", "rosy-core.service")
     for unit in units:
         _check(ops, "systemctl", "start", unit)
