@@ -52,7 +52,8 @@ def wrap_pi(angle):
 
 def carry_z(layout, here, a, b):
     """TCP height for moving between sites a and b: above every seated container and both ends."""
-    tops = [layout.sites[s]["z"] for s in here.values() if layout.sites[s]["kind"] == "ship"]
+    # temp stacks count too: an upper temp layer left the choose-bar-9 carry 32 mm under its neighbour's top (11-18)
+    tops = [layout.sites[s]["z"] for s in here.values() if layout.sites[s]["kind"] != "belt"]
     return max([layout.sites[a]["z"], layout.sites[b]["z"], *tops]) + layout.box[2] + CARRY_CLEAR + layout.hold_below
 
 
