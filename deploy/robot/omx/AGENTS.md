@@ -4,7 +4,7 @@
 # omx
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-11-17
 
 ## Purpose
 
@@ -46,6 +46,7 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | `cell_decisions.py`, `decisions.example.jsonl` | One `rosy.omx-cell-decision.v1` row per auto-pick decision point in `work_dir/decisions.jsonl` (target chosen/refused per object, bias region reused or pivot, closing-axis candidate with its ledger, safety abort with rule/joint/value/limit, retry or stop, verify verdict), linked to `attempts.jsonl` by `attempt_id` and carrying knowledge ids, params digest and code revision. A person's correction is a row (`note --stage --text [--supersedes]`). `export` joins outcomes into training/context examples labelled validated_by_outcome / corrected_by_person / unvalidated (verified and partial knowledge only); `export --context` prints the digest `judge_seat.Seat(context=decisions.jsonl)` takes as background (config `decision_context`; measurement still vetoes). No file started, old behaviour. Tests in `test/test_omx_cell_auto_pick.py` |
 | `cell_choices.py` | Competing values (taught, measured, sim) with their real outcomes; the best record for the purpose is used, the others kept |
 | `cell_record.py` | `cell_pipeline --stage record`: one located A/B cycle recorded through `record_session --replay` in its own run folder, each episode labelled held/empty from the recorded jaws, the reset checked by the top camera |
+| `cell_record_producer.py` | Read-only Rosy Learning recording producers for the cell: both arms' `chunk-io/live.json` (measured state and the targets the runner already sent, follower units, the arm's `grip_rule` frozen in the descriptor) and the four viewer cameras into the `learning-recording.md` file contract at the sim's 15 FPS; never opens the command FIFO (AST-tested). Run units and the registration layout are in the module docstring. Test `test/test_omx_cell_record_producer.py` |
 | `cell_cases.py`, `cell_case_suite.py` | Problem cases of the cell as simulator scenarios: the real stops (`REAL`) and every `cases.jsonl` row with a `scene`; the suite replays each as an Isaac `arm-s-cell-case` run on the model PC and says which still match the real outcome (known Isaac gaps reported as such). Exit 1 before the real arm repeats a case that no longer matches. `cell_cases.py --aim-sweep`: candidates with the pick aimed 0-15 mm off the box along and across the jaw yaw, to measure the grasp tolerance |
 | `isaac_cell_frames.py` | The cell's top-down chunk plan aimed at the Isaac scene's box and place point, every 30 fps frame kept (`rosy.omx-isaac-cell-frames.v1`), for the Isaac run worker |
 | `motion_profile.py` | Smooth joint-space motion under the guard's limits: synchronised trapezoids, blended corners (overlap capped), exact rest points; `retime` eases a planner's IK path in and out |
