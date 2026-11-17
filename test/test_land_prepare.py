@@ -627,10 +627,8 @@ def test_full_pretests_beyond_max_full_wait_for_older_ones_and_affected_ones_do_
         naps.append(1)
         queue.set_status(older[0], "waiting")  # its pretest ended: the turn's wait, no longer preparing
 
-    rolls = []
-    prep.full_slot(tmp_path, mine, sleep=finish_one, roll=lambda: rolls.append(1))
+    prep.full_slot(tmp_path, mine, sleep=finish_one)
     assert naps == [1] and json.loads(mine.read_text())["tier"] == "full"
-    assert rolls == [1], "D-889 34: a new FULL waiter starts one rollup of every waiter, once"
     later = queue.take(tmp_path, "feat/later", status="preparing")
     queue.set_status(later, "preparing", tier="")  # an affected pretest never counts against FULL ones
     urgent = queue.take(tmp_path, "feat/urgent", status="preparing", urgent="hotfix")
@@ -698,29 +696,14 @@ def test_overtime_merges_affected_anchor_instead_of_dropping_own_invocations(rep
     assert ["own/test"] in saved["invocations"] and ["delta/test"] in saved["invocations"]
 
 
-def test_a_snapshot_ticket_gathers_as_pending_then_starts_one_rollup(tmp_path, monkeypatch):
-    """11-10..11-14: 243 rollups found "fewer than two pending"; a ticket was pending for one poll."""
+def test_waiting_starts_no_rollup_land_tick_is_the_only_trigger():
+    """D-889 36: 11-10..11-17 had four rollup triggers; a waiting or pending landing starts none."""
+    import inspect
     prep = land.land_prepare
-    monkeypatch.setattr(prep.land_queue, "touch", lambda ticket: None)
-    now = [0.0]
-    sleeps, rolls = [], []
-
-    def sleep(s):
-        sleeps.append(s)
-        now[0] += s
-
-    def ticket(**row):
-        path = tmp_path / f"{len(rolls)}-{len(sleeps)}.json"
-        path.write_text(json.dumps({"branch": "land/feat/x-20261114000000",
-                                    "worktree": str(tmp_path / ".git" / "rosy-land-wt" / "x"), **row}))
-        return path
-
-    prep.gather(ticket(), sleep, lambda: rolls.append(now[0]), clock=lambda: now[0])
-    assert rolls == [prep.GATHER_S] and sum(sleeps) == prep.GATHER_S
-    for row in ({"urgent": "now"}, {"alone": True}, {"branch": "land/fix/land-rollup-20261114000000-20261114000001"},
-                {"worktree": str(tmp_path / ".worktrees" / "x")}):  # urgent, alone, a rollup, a plain land.py run
-        prep.gather(ticket(**row), sleep, lambda: rolls.append(now[0]), clock=lambda: now[0])
-    assert len(rolls) == 1
+    assert not hasattr(prep, "gather") and not hasattr(prep, "GATHER_S") and not hasattr(prep, "ROLL_POLLS")
+    for fn in (prep.slot, prep.full_slot):
+        assert "roll" not in inspect.signature(fn).parameters
+    assert not hasattr(land.land_watchdog, "rollup_due") and not hasattr(land.land_watchdog, "ROLLUP_EVERY_S")
 
 
 def test_prepare_checks_conflicts_after_pretest_and_guards_relaunch(tmp_path, monkeypatch):
