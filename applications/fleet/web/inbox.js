@@ -5,6 +5,7 @@
 import { createTabs } from "/common/interaction-controls.js";
 import { CAUSE_LABEL, DECISION_LABEL, aiProposalText, fleetAnswerText } from "./line-stuck.js";
 import { showInboxCount } from "/console/assets/fleet-header.js";
+import { getAnnouncer } from "/common/announcer.js";
 
 const LOG_MAX = 120;
 
@@ -43,9 +44,10 @@ export function createInboxPanel({scope, el, readView}) {
   // 벨(#fleet-inbox): 큐가 이 화면에 보이면 그리로 포커스, 아니면 막지 않아 /console?queue=1로 간다.
   scope.listen(document, "rosy:inbox", event => {
     const queue = queuePanel();
-    if (!queue || (queue.checkVisibility && !queue.checkVisibility())) return;
-    event.preventDefault();
-    focusQueue(queue);
+    if (!queue) return;
+    event.preventDefault();  // already on the console: never reload it (a reload drops drafts and open inputs)
+    if (queue.checkVisibility && !queue.checkVisibility()) getAnnouncer().announce("열린 개입 요망이 없습니다");
+    else focusQueue(queue);
   });
 
   // 벨 숫자 = 큐의 열린 개입 행 수. 탭·기록과 무관하다.

@@ -94,6 +94,7 @@ def test_each_unit_screen_shows_only_its_own_jobs(unit_fleet):
 
             page.goto(origin + "/console/install")
             expect(page.locator("#robot-enrollment")).to_be_hidden()  # a manifest fixes the roster on both
+            expect(page.locator("#robot-enrollment-tab")).to_be_hidden()  # and its task tab leaves the chooser
             assert errors == [], errors
         finally:
             browser.close()

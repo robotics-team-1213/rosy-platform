@@ -24,6 +24,7 @@ import { createFleetClient } from "/common/fleet-client.js";
 import { createPasswordLogin } from "./password-login.js";
 import { createPageScope } from "/common/scope.js";
 import { createTaskChooser } from "/common/task-chooser.js";
+import { owns } from "/console/assets/unit-scope.js";
 import {createDeviceCare} from '/console/assets/device-care.js';
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 import { bindEstop, bindTopbarToggle, showSession, showSignedOut, stopNotice, tickClock, watchFleet } from "/console/assets/fleet-header.js";
@@ -146,6 +147,7 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
   if (id === "robots" && !auth.locked && auth.role) void refreshDiscovery();
 }});
 el("install-chooser").append(taskChooser.element);
+el("robot-enrollment-tab").dataset.unitScope = "enrollment";  // D-960 §4: a control unit's roster is fixed
 taskChooser.setReady();
 function focusPanelHeading(id) {
   const heading = el(`${id}-heading`);
@@ -285,7 +287,7 @@ pageScope.onDispose(() => { discoveryPending = false; lastDiscoverySig = null; }
 async function refreshDiscovery() {
   const life = pageScope.capture();
   life.check();
-  const robotsActive = taskChooser.selectedId === "robots" || !el("robot-enrollment").hidden;
+  const robotsActive = owns("enrollment") && (taskChooser.selectedId === "robots" || !el("robot-enrollment").hidden);
   if (auth.locked || discoveryPending || document.hidden || !robotsActive) return;
   discoveryPending = true;
   try {

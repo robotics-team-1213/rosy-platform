@@ -158,7 +158,8 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
       try { control = await call("/api/fleet/dispatch-control"); life.check(); }
       catch { control = null; }
       if (current !== version || !life.current()) return;
-      if (["RUNNING", "HOLD", "ACTION_SUCCEEDED", "GOAL_CONFIRMED"].includes(job.status)) {
+      // Recovery lives on the cell that owns the arm; 통합관제 R relays no /recovery route (D-960 §2).
+      if (owns("arms") && ["RUNNING", "HOLD", "ACTION_SUCCEEDED", "GOAL_CONFIRMED"].includes(job.status)) {
         try {
           const result = await call(`/api/fleet/arm-transfers/jobs/${encodeURIComponent(id)}/recovery`); life.check();
           if (current !== version) return;
