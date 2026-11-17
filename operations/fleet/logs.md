@@ -5563,6 +5563,12 @@
 - 증거: 원격 `test_auto_track_calibration.py`·`test_overhead_tracking_api.py` 통과 및 `rosy-fleet-r` 실호스트 적용 확인.
 - gate 변화: 없음.
 
+## 2026-11-17 · uncommitted · feat(fleet): POST /api/fleet/detections/anchors 경로 추가
+
+- 변경: `fleet/server/tracking/tracking_routes.py` — Vision의 head tracker 상태를 source 토큰으로 받는 경로(`accept_anchors`, 표시 전용). 신선도·DETECTION_LEASE_S 규칙은 그대로.
+- 증거: `test/test_overhead_tracking_api.py` 경로 집합 고정 갱신 + 토큰·저장 시험.
+- gate 변화: 없음.
+
 ## 2026-11-17 · uncommitted · feat(fleet): AI assessor 서비스 자격의 안전한 팔 사건 해제 (D-1039)
 - 변경: `fleet/server/auth/site_auth.py` — `ROSY_FLEET_ARM_ASSESSORS`(기본 `cell-a-ai-assessor`)의 `role: service` principal을 팔 사건 해제 경로 하나로 한정(`ARM_ASSESSOR_SCOPE_REQUIRED`). `recognition/arm_incidents.py` — assessor 해제는 `cause`·`basis` 필수, 저장 사실이 `machine_clearable`을 통과하고 같은 팔·같은 원인 assessor 해제가 24시간 안에 없을 때만(`AI_CLEAR_KIND_REFUSED`·`AI_CLEAR_REPEAT_LIMIT`). 사람 해제는 그대로.
 - 증거: `test/test_arm_incident_assessor.py`; 원격 시험 결과는 이 브랜치 검증에 기록한다. 실물·배포 미실시.

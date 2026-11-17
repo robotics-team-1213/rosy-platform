@@ -107,6 +107,6 @@
 
 - 2026-11-17 · uncommitted · fix(fleet): D-1039 독립 검토 반영
 - 2026-11-17 · uncommitted · feat(fleet): AI assessor 서비스 자격의 안전한 팔 사건 해제 (D-1039)
+- 2026-11-17 · uncommitted · feat(fleet): POST /api/fleet/detections/anchors 경로 추가
 - 2026-11-16 · uncommitted · fix(fleet): auto-track-calibration 서비스 principal 보정·지도 경로 최소 권한 허용
 - 2026-11-14 · uncommitted · 콘솔 현장 지도 목표의 프레임 변환 (D-1003)
-- 2026-11-14 · uncommitted · 충전 복귀 이동 (D-1029)

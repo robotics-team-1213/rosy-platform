@@ -181,7 +181,8 @@ class _Detector:
 def _run(publisher, sighted=frozenset(), camera=CAMERA, extra_markers=None):
     client = _Client()
     worker = TrackWorker(camera=camera, ingest=_Ingest(), client=client, detector=_Detector(),
-                         decode=lambda jpeg: np.zeros((720, 1280, 3), np.uint8), sightings=publisher)
+                         decode=lambda jpeg: np.zeros((720, 1280, 3), np.uint8), sightings=publisher,
+                         clock=lambda: 1_790_000_000.3)  # the frame's own time: not stale
     try:
         asyncio.run(worker.refresh_config())
         frame = SimpleNamespace(header=SimpleNamespace(seq=12022), jpeg=b"jpeg",

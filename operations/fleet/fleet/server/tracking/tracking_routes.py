@@ -112,6 +112,14 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
         except TrackingError as exc:
             raise _http(exc) from exc
 
+    @app.post("/api/fleet/detections/anchors", tags=["tracking"])
+    async def submit_anchor_states(body: dict, authorization: Optional[str] = Header(default=None)) -> dict:
+        """Vision's display-only head-tracker states; the source token is checked in accept_anchors."""
+        try:
+            return tracking.accept_anchors(authorization, body)
+        except TrackingError as exc:
+            raise _http(exc) from exc
+
     @app.get("/api/fleet/detections/config", tags=["tracking"])
     async def detection_config(authorization: Optional[str] = Header(default=None),
                                include_preview: bool = False) -> dict:

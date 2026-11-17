@@ -17,6 +17,12 @@ from core_common.protocol.overhead_detections import OverheadDetectionsPayload
 DETECTIONS_PATH = "/api/fleet/detections"
 CONFIG_PATH = "/api/fleet/detections/config"
 IDENTITY_PATH = "/api/fleet/detections/identity"  # D-472: verdict numbers only, no image
+ANCHORS_PATH = "/api/fleet/detections/anchors"  # display-only head-tracker states
+#: A pooled connection idle longer than this is closed here, before the peer can: Fleet's uvicorn
+#: keep-alive is 75 s and Caddy's idle pool about 90 s, and a request sent onto a connection the
+#: server just closed aborts (RemoteProtocolError, measured every ~5 min on R, 2026-11-17).
+KEEPALIVE_EXPIRY_S = 30.0
+HTTP_LIMITS = httpx.Limits(keepalive_expiry=KEEPALIVE_EXPIRY_S)
 
 
 class TrackPublishError(RuntimeError):
@@ -37,7 +43,8 @@ class TrackClient:
             raise ValueError("detection source token is required")
         self._authorization = f"Bearer {source_token}"
         self._client = httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout_s,
-                                         transport=transport, follow_redirects=False)
+                                         transport=transport, follow_redirects=False,
+                                         limits=HTTP_LIMITS)
 
     async def __aenter__(self) -> "TrackClient":
         return self
@@ -53,6 +60,11 @@ class TrackClient:
                                   json=payload.model_dump(mode="json"),
                                   headers={"Authorization": self._authorization})
         return _body(response, "DETECTION_HTTP_ERROR", "BAD_RESPONSE")
+
+    async def publish_anchors(self, body: dict[str, Any]) -> dict[str, Any]:
+        response = await _request(self._client, "POST", ANCHORS_PATH, json=body,
+                                  headers={"Authorization": self._authorization})
+        return _body(response, "ANCHORS_HTTP_ERROR", "BAD_RESPONSE")
 
     async def publish_identity(self, body: dict[str, Any]) -> dict[str, Any]:
         response = await _request(self._client, "POST", IDENTITY_PATH, json=body,
