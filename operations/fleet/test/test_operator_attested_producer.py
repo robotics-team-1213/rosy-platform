@@ -50,7 +50,7 @@ def test_a_foreign_producer_context_is_refused(tool):
 def test_stale_or_unmoving_live_state_is_refused(tool):
     row = {'t': 100.0, 'state': [0, 0, 0, 0, 0, 100]}
     live = tool.LiveState('arm-a', lambda: row, {'position_m': [0, 0, .2], 'orientation_xyzw': [0, 0, 0, 1]},
-                          now=lambda: 100.1)
+                          now=lambda: 100.1, grip_open=56.0)
     with pytest.raises(TimeoutError):  # first read has no previous row to take joint rates from
         live()
     with pytest.raises(TimeoutError):  # same stamp: the session has not advanced
@@ -58,6 +58,10 @@ def test_stale_or_unmoving_live_state_is_refused(tool):
     row['t'] = 100.1
     state = live()
     assert state['owners']['arm-a']['gripper_state'] == 'OPEN' and state['owners']['arm-a']['held_state'] == 'NONE'
+    live.grip_open = None  # no calibrated open value: never claim OPEN
+    row['t'] = 100.15
+    live.now = lambda: 100.2
+    assert live()['owners']['arm-a']['gripper_state'] == 'UNKNOWN'
     live.now = lambda: 200.0
     row['t'] = 100.2
     with pytest.raises(TimeoutError):
@@ -82,7 +86,7 @@ def test_valid_source_clear_lets_the_producer_dispatch_once_with_fk_of_measured_
                  {'t': (base + 200_000_000) / 1e9, 'state': [0, 0, 0, 0, 0, 100]},
                  {'t': (base + 300_000_000) / 1e9, 'state': [0, 0, 0, 0, 0, 100]}])
     live = tool.LiveState(ids[0], lambda: next(rows),
-                          {k: list(getattr(gated.installation.policy.source_pose, k)) for k in ('position_m', 'orientation_xyzw')}, now=lambda: base / 1e9 + .4)
+                          {k: list(getattr(gated.installation.policy.source_pose, k)) for k in ('position_m', 'orientation_xyzw')}, now=lambda: base / 1e9 + .4, grip_open=56.0)
     inner = live
 
     def live():

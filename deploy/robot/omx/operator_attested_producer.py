@@ -10,7 +10,7 @@ refuses any context whose producer id is not `operator-attested-producer`. What 
 Read only: it never commands the arm. POST_ACTION is not its job.
 
   ROSY_TRANSFER_OBSERVER_TOKEN=... operator_attested_producer.py --origin https://<fleet> --assets <open_manipulator_description> \
-      --installation <written installation.json> --live chunk-io/live.json [--calibration omx_follower_arm.json] run
+      --installation <written installation.json> --live chunk-io/live.json [--calibration omx_follower_arm.json] [--pipeline cell-pipeline.json] run
 """
 import argparse
 import json
@@ -26,14 +26,15 @@ from arm_status_bridge import JOINTS, STALE_S, to_radians  # noqa: E402
 import transfer_observer as sim  # noqa: E402
 
 PRODUCER_ID = 'operator-attested-producer'
-OPEN_GRIPPER_MIN = 60  # shortcut: LeRobot gripper units 0..100; below this the gripper is reported UNKNOWN, never CLOSED
+OPEN_TOLERANCE = 1.0  # gripper units; the same slack cell_area_vision_align.py allows below `grip_open`
 
 
 class LiveState:
     """The sim observer's state document, built from the runner's live row; joint rates by differencing reads."""
 
-    def __init__(self, instance, live, source_pose, calibration=None, now=time.time):
+    def __init__(self, instance, live, source_pose, calibration=None, now=time.time, grip_open=None):
         self.instance, self.live, self.pose, self.calibration, self.now = instance, live, source_pose, calibration, now
+        self.grip_open = grip_open  # the arm's own pipeline `coarse.grip_open`; None means the open value is unknown
         self.previous = None
 
     def __call__(self):
@@ -47,7 +48,7 @@ class LiveState:
             raise TimeoutError('arm session live state has not advanced')
         rates = [(positions[j] - before[1][j]) / (t - before[0]) for j in JOINTS]
         observed = int(t * 1e9)
-        gripper = 'OPEN' if row['state'][-1] >= OPEN_GRIPPER_MIN else 'UNKNOWN'
+        gripper = 'OPEN' if self.grip_open is not None and row['state'][-1] >= self.grip_open - OPEN_TOLERANCE else 'UNKNOWN'
         return {'schema': sim.STATE_SCHEMA, 'object': {**self.pose, 'observed_at_ns': observed},
                 'owners': {self.instance: {'joint_names': list(JOINTS), 'positions_rad': [positions[j] for j in JOINTS],
                     'velocities_rad_s': rates, 'observed_at_ns': observed, 'sequence': int(t * 1000),
@@ -71,6 +72,7 @@ def main(argv=None):
     parser.add_argument('--installation', required=True, type=Path)
     parser.add_argument('--live', required=True, type=Path)
     parser.add_argument('--calibration', type=Path)
+    parser.add_argument('--pipeline', type=Path, help='the cell pipeline config; its coarse.grip_open is the open jaw value')
     parser.add_argument('--poll-s', type=float, default=.25)
     parser.add_argument('command', choices=('run', 'once'))
     args = parser.parse_args(argv)
@@ -81,9 +83,10 @@ def main(argv=None):
         client = sim.Client(args.origin, os.environ.get('ROSY_TRANSFER_OBSERVER_TOKEN', ''))
         model, bases = sim.ArmModel.load(args.assets), written['bases']
         calibration = json.loads(args.calibration.read_text()) if args.calibration else None
-    except (OSError, ValueError, KeyError) as error:
+        grip_open = float(json.loads(args.pipeline.read_text(encoding='utf-8-sig'))['coarse']['grip_open']) if args.pipeline else None
+    except (OSError, ValueError, KeyError, TypeError) as error:
         parser.exit(2, f'operator-attested producer refused its configuration: {type(error).__name__}\n')
-    state = LiveState(instance, lambda: json.loads(args.live.read_text()), pose, calibration)
+    state = LiveState(instance, lambda: json.loads(args.live.read_text()), pose, calibration, grip_open=grip_open)
     seen = set()
     while True:
         try:
