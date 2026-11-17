@@ -383,8 +383,7 @@ def video(cell, seeds, out, model=None):
 def real_q(state):
     """The real arm's six values (normalised joints, gripper 0-100) as this model's joint1-5 and gripper_joint_1 radians."""
     gap = float(np.clip((30 + (state[5] - 52.3) * 10.4) / 1000, .012, .06))  # cell_params mm rule; a 2026-11-07 top-view reading disagrees
-    gap = min(max(gap, jaw.gap_m(-.2)), jaw.gap_m(1.2))  # a wide-open real reading past the modelled stroke poses fully open
-    return np.append(norm_to_rad(state[:5]), jaw.angle_for_gap(gap))
+    return np.append(norm_to_rad(state[:5]), jaw.angle_for_gap_clipped(gap))
 
 
 def compare(cell, state_path, out):
