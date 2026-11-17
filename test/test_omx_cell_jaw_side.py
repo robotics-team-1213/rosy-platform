@@ -164,7 +164,7 @@ def test_a_wrong_other_jaw_offset_is_refused_by_the_side_balance_and_other_only_
     assert res["result"].startswith("jaw sides disagree") and res["bias"]["rms_mm"] <= 5.0  # spread alone passed
     others = [{"side": "other", "path": "discs"}] * 4
     res = cell_pivot.known_geometry_bias(good, tcps, GEO, "s", {"homography": []}, None, others, "arm_a")
-    assert res["result"].startswith("jaw sides unvalidated: 0 reference-jaw marks")
+    assert res["result"].startswith("jaw sides unvalidated: 0 reference-side marks")
     res = cell_pivot.known_geometry_bias(good, tcps, GEO, "s", {"homography": []}, {"jaw_side.validated_arm_a": 1}, others, "arm_a")
     assert res["result"] == "calibrated"
     assert cell_pivot.known_geometry_bias(good, tcps, GEO, "s", {"homography": []})["result"] == "calibrated"  # no sides: as before
@@ -226,3 +226,57 @@ def test_pivot_frames_keep_the_newest_per_site(tmp_path):
     assert new.name.startswith("floor-") and len(new.name.split("-")[-1]) == 6
     assert sorted(d.name for d in root.iterdir()) == ["floor-20261117-120002-000000", "floor-20261117-120003-000000",
                                                       "floorx-20261117-120000-000000"]
+
+
+def test_pair_marks_count_as_the_reference_side_and_are_compared_with_other_marks():
+    yaws = [-60.0, -30.0, 0.0, 30.0]
+    tcps = [(0.07, -0.1, 0.1, y) for y in yaws]
+    good = marks_for(yaws)
+    pairs = [{"side": "pair", "path": "discs"}] * 4
+    res = cell_pivot.known_geometry_bias(good, tcps, GEO, "s", {"homography": []}, None, pairs, "arm_a")
+    assert res["result"] == "calibrated" and res["bias"]["jaw_sides"] == ["pair"] * 4  # all pairs: as before
+    mix = [{"side": s, "path": "discs"} for s in ("pair", "other", "pair", "other")]
+    assert cell_pivot.known_geometry_bias(good, tcps, GEO, "s", {"homography": []}, None, mix, "arm_a")["result"] == "calibrated"
+    off = [m if h["side"] == "pair" else (m[0], m[1] - 0.005) for m, h in zip(good, mix)]
+    res = cell_pivot.known_geometry_bias(off, tcps, GEO, "s", {"homography": []}, None, mix, "arm_a")
+    assert res["result"].startswith("jaw sides disagree")
+    one = [{"side": s, "path": "discs"} for s in ("pair", "other", "other", "other")]
+    res = cell_pivot.known_geometry_bias(good, tcps, GEO, "s", {"homography": []}, None, one, None)  # no arm_id: not validated
+    assert res["result"].startswith("jaw sides unvalidated: 1 reference-side marks")
+
+
+def test_the_circle_path_refuses_disagreeing_sides(tmp_path, monkeypatch):
+    yaws, seen = [-75.0, -45.0, -15.0, 15.0, 45.0, 75.0], {}
+
+    def run(sides, shift_m, work):
+        order = iter(range(6))
+
+        def mark(cell, config, sleep, report=None, jaws=None, **kw):
+            k = next(order)
+            a = math.radians(yaws[k] + 30.0)  # marks on a 20 mm circle about (0.11, 0.16): bias 10, 10 mm
+            seen["arm"] = (0.11 + 0.020 * math.cos(a) + (shift_m if sides[k] == "other" else 0.0), 0.16 + 0.020 * math.sin(a))
+            report.update(reason=None, side=sides[k])
+            return (100.0, 150.0)
+
+        monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda *a, **k: seen["arm"])
+        return pivot_rig(monkeypatch, work, mark)
+
+    assert run(["ref", "pair"] * 3, 0.0, tmp_path / "a")["result"] == "calibrated"
+    assert run(["ref", "other"] * 3, 0.0, tmp_path / "b")["result"] == "calibrated"
+    res = run(["ref", "other"] * 3, 0.006, tmp_path / "c")  # the other jaw's offset 6 mm wrong
+    assert res["result"].startswith("jaw sides disagree") and res["bias"]["jaw_sides"] == ["ref", "other"] * 3
+    assert res["bias"]["rms_mm"] <= 5.0  # the circle's own rms guard let it through
+
+
+def test_tries_that_agree_in_place_but_switch_jaw_give_no_mark(monkeypatch):
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(grip_to=lambda cell, value: True))
+    ref_seen, other_seen = frames((REF[0] + 2, REF[1])), frames((OTHER[0] + 2, OTHER[1]))  # the same place, either jaw
+    seq = iter([*ref_seen, *other_seen] * 3)
+    monkeypatch.setattr(cell_pivot, "settled_frame", lambda *a, **k: next(seq))
+    report = {}
+    assert cell_pivot.mark_jaws(None, {"plan": {}}, lambda s: None, jaws=jaws(), report=report) is None
+    assert report["reason"] == "jaw sides switched between tries"
+    seq = iter([*ref_seen, *ref_seen] * 3)
+    report = {}
+    assert cell_pivot.mark_jaws(None, {"plan": {}}, lambda s: None, jaws=jaws(), report=report) == pytest.approx(
+        (REF[0] + 2, REF[1]), abs=1) and report["side"] == "ref"

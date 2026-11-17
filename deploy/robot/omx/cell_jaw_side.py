@@ -148,8 +148,10 @@ def path_check(hows) -> str | None:
 
 def side_check(marks, tcps, hows, kept_tcps, radius_mm: float, phase_deg: float, params=None, arm=None):
     """(refusal or None, the kept marks' sides). Each kept mark gives the TCP centre: mark - radius at FK yaw + phase.
-    A wrong jaw_side offset moves only the other jaw's marks, so their mean centre must lie within pivot.side_agree_mm
-    of the reference jaw's; and without `jaw_side.validated_<arm>` at least 2 reference-jaw marks must be kept."""
+    A wrong jaw_side offset moves the other jaw's marks, so their mean centre must lie within pivot.side_agree_mm of
+    the reference side's (ref and pair marks: a pair is both jaws seen); and without `jaw_side.validated_<arm>` at
+    least 2 reference-side marks must be kept. `arm` is the config's `arm_id` (arm_a/arm_b/arm_s on the cell);
+    absent or unknown, the arm counts as not validated."""
     if not hows:
         return None, []
     idx = [next(i for i, t in enumerate(tcps) if t is k) for k in kept_tcps]  # trim keeps the same tuples
@@ -158,16 +160,16 @@ def side_check(marks, tcps, hows, kept_tcps, radius_mm: float, phase_deg: float,
         return None, sides
     r, centres = radius_mm / 1000, {"ref": [], "other": []}
     for i, side in zip(idx, sides):
-        if side in centres:
+        if side in ("ref", "pair", "other"):
             a = math.radians(tcps[i][3] + phase_deg)
-            centres[side].append((marks[i][0] - r * math.cos(a), marks[i][1] - r * math.sin(a)))
+            centres["other" if side == "other" else "ref"].append((marks[i][0] - r * math.cos(a), marks[i][1] - r * math.sin(a)))
     key = f"jaw_side.validated_{arm}"
     if len(centres["ref"]) < 2 and not (key in prm.DEFAULTS and prm.get(params, key)):
-        return f"jaw sides unvalidated: {len(centres['ref'])} reference-jaw marks, need 2 ({key} off)", sides
+        return f"jaw sides unvalidated: {len(centres['ref'])} reference-side marks, need 2 ({key} off)", sides
     if centres["ref"] and centres["other"]:
         gap = 1000 * math.dist(np.mean(centres["ref"], axis=0), np.mean(centres["other"], axis=0))
         if gap > prm.get(params, "pivot.side_agree_mm"):
-            return f"jaw sides disagree: the other jaw's marks {gap:.1f} mm from the reference jaw's", sides
+            return f"jaw sides disagree: the other jaw's marks {gap:.1f} mm from the reference side's", sides
     return None, sides
 
 

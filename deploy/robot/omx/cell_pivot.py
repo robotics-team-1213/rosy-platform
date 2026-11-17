@@ -160,7 +160,7 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
     import cell_pipeline as cp
 
     mark_cfg, p = config.get("jaw_mark", {}), config.get("params")
-    closed_to, marks = mark_cfg.get("closed", prm.get(p, "pivot.grip_closed")), []
+    closed_to, marks, sides = mark_cfg.get("closed", prm.get(p, "pivot.grip_closed")), [], []
     follow, agree = prm.get(p, "pivot.follow_px", FOLLOW_PX), prm.get(p, "pivot.agree_px", AGREE_PX)
     keep_dir, saw_blobs = (Path(keep) if keep is not None else None), False
 
@@ -173,8 +173,7 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
         if not cp.grip_to(cell, closed_to):
             return fail("grip_to failed")
         closed = settled_frame(cell, sleep, clock, params=p)
-        # the mark's own opening, not the pick's: a pick opened only to its box width (53.84 against 50.5 closed)
-        # moved the jaws too little to leave a blob, and every look at the hover saw nothing (2026-10-29)
+        # the mark's own opening: a pick's (53.84 vs 50.5 closed) left no blob and every hover look saw nothing (10-29)
         if not cp.grip_to(cell, mark_open(config)):
             return fail("grip_to failed")
         now = settled_frame(cell, sleep, clock, params=p)
@@ -204,18 +203,23 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
             rejected = None if pick else "blobs outside near"
         else:
             pick, rejected = max(all_blobs, key=lambda b: b[2], default=None), None
-        agreed = pick is not None and any(math.dist(pick[:2], m) <= agree for m in marks)
+        side = pick[3] if pick is not None and len(pick) > 3 else None
+        close = [s for m, s in zip(marks, sides) if pick is not None and math.dist(pick[:2], m) <= agree]
+        agreed = bool(close) and all(s == side for s in close)  # one place read as both jaws: which one is unknown
         if pick is not None and not agreed:
-            rejected = "awaiting agreement"
+            rejected = "jaw sides switched" if close else "awaiting agreement"
         if keep_dir is not None:
             mask = _changed_mask(closed, now, prm.get(p, "pivot.diff_px", DIFF_PX), used_colour)
             _save_mark_try(keep_dir, idx, closed, now, mask, all_blobs, pick, rejected)
+        if close and not agreed:
+            return fail("jaw sides switched between tries")
         if agreed:
             if report is not None:
-                report.update(reason=None, side=pick[3] if len(pick) > 3 else None)
+                report.update(reason=None, side=side)
             return pick[0], pick[1]
         if pick is not None:
             marks.append(pick[:2])
+            sides.append(side)
     if marks:
         return fail("tries disagree")
     return fail("blobs outside near" if saw_blobs else "no changed blob")
