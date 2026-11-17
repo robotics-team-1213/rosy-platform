@@ -71,7 +71,7 @@ def test_nine_skill_states_reach_the_robot_row_the_detail_slot_and_the_3d_facts(
                 expect(detail.locator(".detail-skill-line ui-tag[data-state]")).to_have_count(1)
                 expect(row.locator('[data-col="alarm"] ui-tag')).to_have_count(1)
             # 3D 상태 줄: 실행기(·단계) 글자만, 제안 목표를 그리지 않는다.
-            expect(page.locator(".robot-view")).to_have_count(1)
+            expect(page.locator(".robot-detail-3d .robot-view")).to_have_count(1)
             facts = page.locator(".robot-view .robot-view-facts")
             if lifecycle == "running":
                 expect(facts).to_contain_text("규칙 운반")

@@ -1393,3 +1393,10 @@
 - 증거: `applications/fleet/web/robot/robot-dock-binding.js` 채택, `operations/fleet/test/test_robot_dock_panel_browser.py` 추가, `shared/web/test/test_patterns_registry.py` 및 Node 단위 시험 통과.
 - gate 변화: planned -> built (forbid 게이트로 감독 우회 경로 차단 유지)
 - 교훈: 없음
+
+## 2026-11-18 · uncommitted · refactor(ui): shared parts, registry and tokens match what the code does (S3)
+- 변경: patterns.yaml C12·C15·C22를 built로(제품 사용 확인, C15·C12·C22 product_test는 팔 스킬 시험), C25 adopters에 Learning 추가와 debt(Fleet 카드·Robot #triage 예외) 기록. DESIGN.md 머리 C1–C25, C9에 "앱이 정지를 끄지 않는다"(Fleet 머리 예외 명시), C25에 벨 규칙, Fleet 벨 문장을 열린 개입 수로. 쓰지 않던 `.ui-sidebar`·`--shadow-base`와 robot-dock.css의 갤러리 전용 클래스(kv·ev·cam·cause·demo-map)를 지우거나 component-gallery.css로 옮김. 시험: test_shared_dedupe.py(.sr-only 한 곳, 읽는 곳 없는 토큰, 갤러리 전용 CSS 분리), test_patterns_registry.py(DESIGN 번호=등록부, planned 행을 제품이 쓰면 실패). test_arm_skill_browser.py의 3D 단언을 `.robot-detail-3d .robot-view`로 좁혀 C15 product_hook을 건다.
+- 증거: 노트북 python으로 새 시험 함수와 test_patterns_registry 전체를 직접 호출해 통과. 원격 결과는 커밋 해시와 함께 r-S3.md.
+- gate 변화: C12·C15·C22 planned -> built; 새 정적 게이트 2개
+- 결정: 비상 정지 권한(운영자만)은 바꾸지 않음(11-18)
+- 교훈: 없음

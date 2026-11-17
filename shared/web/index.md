@@ -50,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-11-18 · uncommitted · refactor(ui): shared parts, registry and tokens match what the code does (S3)
 - 2026-11-15 · uncommitted · patterns.yaml C23/C24 built 전환 (Fleet Stage 2)
 - 2026-11-15 · uncommitted · feat(web): C23 로봇 도크·C24 로봇 패널 부품과 감독 우회 금지 게이트(planned)
 - 2026-11-15 · uncommitted · patterns.yaml C19 built 전환 (Fleet fix E)
 - 2026-11-15 · uncommitted · patterns.yaml C20·C21·C22 built 전환 (Fleet fix B1-B3)
-- 2026-11-15 · uncommitted · 보정 요청 한 이름(R2-19)

@@ -28,7 +28,6 @@ colors:
   raster-uncertain: "#43484e"
   raster-occupied: "#b0b4ba"
   brand-rose: "#e796f3"
-  shadow-base: "#000000"
 typography:
   display:
     fontFamily: "ui-monospace, SF Mono, Cascadia Mono, Consolas, Roboto Mono, DejaVu Sans Mono, Noto Sans Mono, monospace"
@@ -232,7 +231,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 앱 바의 알림·계정과 접속·새로고침·확대·내보내기 같은 반복 도구 단추는 아이콘 단독을 기본으로 하고 이름은 접근성 트리와 공용 툴팁으로 제공한다. 탐색 레일과 본문의 맥락 탭은 아이콘과 이름을 함께 보인다(D-741, [D-926](docs/adr/D-926-ui-reading-order-depth-and-wording.md)). 알림 숫자와 필수 상태·위험·실행 결과는 숨기지 않는다.
 
-Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `실시간`·`지연`·`연결 끊김` 가운데 하나와 로컬 시각이고 브라우저와 Fleet 사이의 것이다. 알림 단추는 종과 읽지 않은 수다. 계정 단추는 역할 이름을 달고, 그 아래에 계정·화면 표시·토큰 접속이 있다. 개발 연결 표지는 닫힌 계정 단추에서도 보인다. 로봇 연결 수는 앱 바가 아니라 관제 화면의 지도 머리에 있다. 알림 열기·메시지 읽음·개입 해소는 별개다([D-741](docs/adr/D-741-unified-app-shell-seats.md) 3항, D-668의 테마 순환과 인라인 값 표현은 그대로 쓴다).
+Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `실시간`·`지연`·`연결 끊김` 가운데 하나와 로컬 시각이고 브라우저와 Fleet 사이의 것이다. 알림 단추는 종과 열린 개입 수(큐의 긴급·주의 행)다. 누르면 어느 Fleet 화면에서든 관제 큐 패널로 간다(2026-11-18). 계정 단추는 역할 이름을 달고, 그 아래에 계정·화면 표시·토큰 접속이 있다. 개발 연결 표지는 닫힌 계정 단추에서도 보인다. 로봇 연결 수는 앱 바가 아니라 관제 화면의 지도 머리에 있다. 알림 열기·메시지 읽음·개입 해소는 별개다([D-741](docs/adr/D-741-unified-app-shell-seats.md) 3항, D-668의 테마 순환과 인라인 값 표현은 그대로 쓴다).
 
 플랫폼 정체성은 [D-654](docs/adr/D-654-rosy-platform-route-mark.md)의 경로 R 심볼을 사용한다. `shared/web/brand/mark.svg`가 기하의 정본이며 공용 `ui-brand`가 기존 장미색과 글자 토큰으로 표시한다. 제품 이름·역할 아이콘·조작 아이콘의 목적은 서로 구분한다. 상태와 승인 여부를 플랫폼 색이나 심볼로 표현하지 않는다.
 
@@ -274,7 +273,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 - **바탕 사다리** (`ground-deep` → `ground` → `ground-raise` → `ground-soft` → `ground-card` → `ground-card-2`): `deep`에서 `card-2`로 갈수록 잉크 쪽이다. 상단바는 `ground-deep`, 페이지는 `ground`, 평평한 면은 `ground-soft`, 솟은 면은 `ground-card`, 눌림은 `ground-card-2`다.
 - **잉크** (`ink`, `ink-quiet`): 글자. `ink`는 정상 값·주 명령 채움, `ink-quiet`는 라벨·단위·보조.
 - **지도 래스터** (`raster-*`): 무채색, 밝기가 미지 → 비어 있음 → 불확실 → 점유 순으로 단조다.
-- **그림자 바탕** (`shadow-base`): 팔레트 닫힌 키로 남긴다. 지금 화면에 그림자는 없다(D-926 6: 쓰지 않는 음영 토큰 삭제).
+- 그림자 토큰은 없다(`shadow-base`는 쓰는 곳이 없어 2026-11-18에 지웠다). 그림자가 필요해지면 그때 팔레트 키로 다시 정한다.
 
 ### 세 층 토큰
 
@@ -473,7 +472,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 | 절차 단계 | `.ui-stage-track` · `.ui-stage` | `applications/fleet/web/installation/install.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `learning/curation/perception/review_app_web/learning.html` · `learning/curation/perception/review_app_web/index.html` · `learning/curation/perception/review_app_web/pixels.html` · `learning/curation/perception/review_app_web/omx.html` · `learning/curation/perception/review_app_web/vlm.html` |
 | 화면 머리 수치 띠 | `.ui-readout[data-form="strip"]` | `shared/web/component-gallery.html` · `applications/fleet/web/accounts.html` · `applications/fleet/web/index.html` · `applications/fleet/web/robot/roster.js` · `applications/fleet/web/robot/roster-cards.js` · `applications/fleet/web/work/policy.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `middleware/robot_ui/robot/panels/host/system.js` · `middleware/robot_ui/robot/panels/console/overview.js` · `applications/monitoring/web/index.html` · `learning/curation/perception/review_app_web/index.html` · `learning/curation/perception/review_app_web/pixels.html` · `operations/apps/games/games/web/index.html` |
 | 증거 블록 | `<ui-evidence>` · `<ui-empty>` | 로봇 카드, Fleet 큐 |
-| 절차 작업 열 | `.ui-sidebar` | 설치·정비, Fleet 작업 선택 |
+| 절차 작업 열 | `--sidebar-track` | 설치·정비, Fleet 작업 선택 |
 | 매체 칸 | `.ui-pane[data-pane]` | 로봇 셸, 감지·카메라 |
 | 독립 대상·조작 묶음 상자 | `.ui-panel` | 견본(채택 화면은 Fleet 관제부터 옮긴다) |
 | 상태 표시(아이콘+톤) | `statusTag()` | 견본, 연결 배너 |
@@ -486,12 +485,12 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 - Fleet은 맥락 / 연결 / 알림·나 / 정지 네 영역의 한 줄 앱 바를 쓴다(D-741 3·5항). 높이는 `--appbar-height`에 아래 1px 선을 더한 값이고 320px까지 한 줄이다. 접힘은 셸 칸의 폭에 답한다: 64rem 아래에서 현장 이름과 래치 부제, 48rem 아래에서 시계와 평상 연결 글, 30rem 아래에서 워드마크 글과 계정 단추의 역할 글이 접힌다(역할은 단추의 접근 이름에 남는다). 48rem 아래에서 평상이 아닌 연결 글(`연결 대기`·`지연`·`연결 끊김`)은 앱 바 아래 자기 줄에 선다. 계정·화면 표시·토큰 접속은 계정 단추 아래에 접고, 접속이 필요할 때 저절로 펼친다. 문서 이동은 탐색 레일이 맡고 푸터는 없다.
 - 워드마크는 한 줄이다. 칸이 모자라면 표면이 이름 칸에 `container-type: inline-size`를 주고 글자가 칸에 맞게 줄어든다(상한 title).
 
-### 사이드바 — `.ui-sidebar` (D-466)
+### 사이드바 — `--sidebar-track` (D-466)
 - 절차 작업을 고르는 열이다. 로봇 작업 준비·설치·정비의 작업 레일과 Fleet 설치 작업 선택이 그 열이다.
 - 넓은 단(64rem 이상)의 폭은 `--sidebar-track` 하나다. 그 미만에서는 레일을 숨기고 선택 필드를 보여 준다.
 - 화면 전환, 입구의 작업 화면 목록, 명렬, 지도, 감지·관측·조작 열은 사이드바가 아니다. 화면 전환은 머리의 cluster이거나, 공용 셸을 쓰는 표면에서는 탐색 레일이다(D-741 6항).
 
-### 공용 패턴 C1–C12와 동적 값 (D1)
+### 공용 패턴 C1–C25와 동적 값 (D1)
 
 정본 목록은 [`shared/web/patterns.yaml`](shared/web/patterns.yaml)(패턴 → 부품 → 게이트)이고 게이트 시험이 읽는다. 같은 필요가 두 화면에 나오면 화면별 해결 대신 이 부품을 쓴다.
 
@@ -505,7 +504,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 | C6 | 위험 표시 | `ui-tag status=crit` / `--flag-danger-*` 채움. 빨간 글자 금지(D-202) |
 | C7 | 되돌릴 수 없는 동작 | `confirmIrreversible` + 목록의 POST는 확인 없이 못 보낸다 |
 | C8 | 탭 | `createTabs` 하나. `role="tab"` 직접 작성 금지. 옵션: `onChange`·`select`(조용함)·`label`, `beforeChange(next, current)`(동기·비동기 거부권, 대기 중 `aria-busy`), 탭별 `disabled`+`reason`(탭 줄 아래 원인 한 줄, 화살표가 건너뜀), `icon`·`iconOnly`(label이 접근성 이름), `activation: "manual"`(기본)·`"automatic"`(화살표가 곧 활성화) |
-| C9 | 정지 | `createStopControl`(`stop-control.js`). 권한·busy·reload·계정 상태와 무관하게 항상 보이고 눌리며 누를 때마다 보낸다. 거절은 글로 말하고 `보냄`은 `멈춤`이 아니다. `accept(response)`로 더 엄격한 증거(예: 본문 `estop === true`)를 요구할 수 있고 못 받으면 실패 글이다 |
+| C9 | 정지 | `createStopControl`(`stop-control.js`). 권한·busy·reload·계정 상태와 무관하게 항상 보이고 눌리며 누를 때마다 보낸다. 앱이 역할·세션으로 정지를 끄지 않고 서버 403은 글로 보인다(알려진 예외: Fleet 머리 `#estop`은 아직 권한 없으면 꺼진다, 별도 결정 전까지 이 슬라이스가 바꾸지 않는다). 거절은 글로 말하고 `보냄`은 `멈춤`이 아니다. `accept(response)`로 더 엄격한 증거(예: 본문 `estop === true`)를 요구할 수 있고 못 받으면 실패 글이다 |
 | C10 | 연결 배너 | `createConnectionNotice`(`connection-notice.js`). 끊김은 주의(`ui-tag status=warn` + `wifi` 아이콘 + 글). 호출자가 실제 운용 위험을 알 때만 `set(state, text, {danger: true})`로 위험 채움. 인증 대기·모름은 차분한 글(2026-11-14, 예전 D2 대체) |
 | C11 | 독립 대상·조작 상자 | `.ui-panel[data-surface=flat\|raised][data-density=standard\|compact]`(`component-controls.css`). 테 하나, 읽는 순서 제목·`ui-tag`·핵심 값(tnum)·근거 줄·행동(주 하나+보조 하나). `compact`는 64rem 이상 마우스 면만(D-976). 반복 행·수치는 상자가 아니라 행·띠. 카드 속 카드·카드 전체 위험 채움 금지 |
 | C12 | 상태 표 | `statusTag(state, text?)`(`status-tag.js`). 정상은 아이콘 없이 조용, 지연 `history`·끊김 `wifi`(warn), 모름 `minus`+점선 테, 주의 `warn`, 위험 `safety`/`estop`(tag만 crit 채움), 잠김 `lock`. 모르는 값 문구는 `EVIDENCE_LABEL.unavailable`(정보 없음) 하나 |
@@ -521,7 +520,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 | C22 | 샘플 데이터 | 실제가 아닌 행은 `sample: true`를 싣고 화면 영역 머리에 `sampleTag()`(`샘플 데이터`, `sample-data.js`)를 둔다. 후보는 `{id, label, reason}`뿐이고 좌표·관절·실행기 선택 필드를 갖지 않는다(`armAiCaseProblems`가 검사). 제안자는 자기 제안을 승인하지 못한다(AI·Assistant 제안 포함): 거절 견본을 둔다. 3D는 상태 줄 글자(`skill`)만 늘리고 제안됐지만 실행되지 않은 목표는 그리지 않는다 |
 | C23 | 로봇 도크 | `createRobotDock({selection, profiles, onToggle, kinds})`(`robot-dock.js`, 순수부 `robot-dock-model.js`). 로봇 한 대 = 아이콘+짧은 id(42·45 / S·A·B) 단추 하나, 이동로봇 / 구분 / 로봇암 순. 지연(`history`)·끊김(`wifi`)·경보(`warn`·`estop`) 표지는 **정상이 아닐 때만** 모서리에 붙고 정상은 맨 아이콘이다. 단추는 `aria-pressed`(패널이 이 로봇을 연 동안), 선택 표지는 `--selection` 줄(한 `createSelection`, 지도·패널과 같은 값). 64rem 이상 오른쪽 56 px 세로 띠, 미만 지도 머리 아래 가로 한 줄(목표 44 px, 글자 id 유지). 도크는 우측 열의 로봇 행 목록(고르개)을 L1에서 대체하고, 행 목록(C14)은 작업 화면 단위 목록으로 내린다(S2 한 값 한 고르개). 금지: 도크 아이콘만으로 위험 동사 실행, 지도 클릭·행 선택으로 패널 열기(열기는 도크 아이콘만), 도크와 별개로 같은 선택을 가진 두 번째 고르개 |
 | C24 | 로봇 패널 | `createRobotPanel({selection, onClose, sections, stop, resolve})`(`robot-panel.js`). 껍데기만 공용이다: 머리(이름·신선도 태그·닫기), 상태, 카메라, 명령, 설정(읽기 전용, 접히는 것은 이것뿐), 하단 고정 정지 줄. 구획 내용은 화면이 주입한다(어댑터). 64rem 이상 스테이지 그리드 왼쪽에 `minmax(18rem, 22rem)` 열을 더하는 밀기(덮지 않음, 비모달), 미만 **머리 아래** 전체 화면 시트(머리의 전체 비상 정지를 덮지 않는다). 열면 포커스는 제목(`tabindex=-1`), 같은 아이콘·닫기·Esc로 닫고 연 아이콘으로 돌아간다. 패널이 열려 있을 때만 선택을 따라가고 닫힌 채 선택이 바뀌어도 열지 않는다. 한 번에 패널 하나. 정지: 이동로봇은 `주행 취소 · 이 로봇`(상시 활성, `data-always-live`), 팔은 단추 없이 `팔 단독 정지 없음 · 위 머리의 전체 비상 정지를 쓴다` 한 줄. 금지: 패널·도크 모듈과 채택 어댑터의 `/api/fleet/pipeline/` 감독 우회 경로 호출(`pipeline/decision-gate`·`human-safety-gate`·`vision-auto-check`·`station-zones/dispatch`·`arm-holds/clear`; `patterns.yaml`의 `forbid`가 소스를 읽어 막는다), 토크·전원·가드·홀드 해제 단추(T4는 사람), 패널 안 승인(승인은 작업 큐 한 곳) |
-| C25 | 알림 한 표면 | `createAlertCenter({listEl, toastEl, bellEl, announcer, isOnScreen})`(`alert-center.js`, 규칙은 순수부 `createAlertStore`)와 `getAnnouncer()`(`announcer.js`). 같은 key는 한 항목(×N), 일회성 실패는 1500 ms 병합, 목록 상한 12. 토스트는 목록이 화면 밖일 때 새 safety·crit와 목록에 없는 일회성 실패 둘뿐이고 warn·info는 토스트 없음. `resolve(key)`가 항목·토스트·벨 개수를 한 번에 닫고 safety는 `acknowledge` 전에는 안 닫는다. 방송은 페이지당 polite 1·assertive 1(announcer)이 하고 토스트 영역엔 aria-live가 없다. 앱은 알림 배너·토스트·live 영역을 새로 만들지 않는다(정적 게이트 `alert-surface.test.mjs`, 이행 목록 A1-A4) |
+| C25 | 알림 한 표면 | `createAlertCenter({listEl, toastEl, bellEl, announcer, isOnScreen})`(`alert-center.js`, 규칙은 순수부 `createAlertStore`)와 `getAnnouncer()`(`announcer.js`). 같은 key는 한 항목(×N), 일회성 실패는 1500 ms 병합, 목록 상한 12. 토스트는 목록이 화면 밖일 때 새 safety·crit와 목록에 없는 일회성 실패 둘뿐이고 warn·info는 토스트 없음. `resolve(key)`가 항목·토스트·벨 개수를 한 번에 닫고 safety는 `acknowledge` 전에는 안 닫는다. 방송은 페이지당 polite 1·assertive 1(announcer)이 하고 토스트 영역엔 aria-live가 없다. 벨 개수는 그 앱 목록의 미해결 항목 수 하나다(Fleet은 큐의 긴급·주의 행). 읽음·미읽음을 더하지 않고 누르면 목록으로 간다. 「알림」 이름과 아이콘은 목록 하나에만 쓴다. 이행 예외(`patterns.yaml` C25 debt): Fleet 카드는 `createAlertStore`만 쓰고 Robot 대시보드 `#triage`·`#hitl-escalation`은 손으로 그린다. 앱은 알림 배너·토스트·live 영역을 새로 만들지 않는다(정적 게이트 `alert-surface.test.mjs`, 이행 목록 A1-A4) |
 
 패턴이 만들어졌는지(`planned`·`built`)는 [`shared/web/patterns.yaml`](shared/web/patterns.yaml)만 말한다. 이 표의 C행에는 상태 낱말을 적지 않고, `test_patterns_registry.py`가 지킨다.
 

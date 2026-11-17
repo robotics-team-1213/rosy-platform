@@ -198,3 +198,25 @@ def test_the_forbid_gate_sees_strings_and_ignores_comments():
     assert forbidden_hits('"/api/fleet/pipeline/cell-tasks/7/resume"', ["pipeline/cell-tasks/*/resume"]) == ["pipeline/cell-tasks/*/resume"]
     for row in (row for row in ROWS if row["id"] in ("C23", "C24")):
         assert set(row.get("forbid", [])) >= {"pipeline/decision-gate", "human-safety-gate", "vision-auto-check", "station-zones/dispatch", "arm-holds/clear", "pipeline/cell-tasks/*/resume", "human-safety-gate/clear", "decision-gate/execute"}, row["id"]
+
+
+# --- registry and DESIGN.md must describe the same parts (2026-11-18) ----------------------------------------------
+
+def test_design_and_registry_list_the_same_pattern_numbers():
+    in_design = {int(n) for n in re.findall(r"^\| C(\d+) \|", DESIGN, re.M)}
+    in_registry = {int(row["id"][1:]) for row in ROWS}
+    assert in_design - in_registry == {13}, "DESIGN.md C rows without a registry row (only C13, a rule, may lack one)"
+    assert in_registry <= in_design
+    assert f"공용 패턴 C1–C{max(in_design)}" in DESIGN, "DESIGN.md heading range is stale"
+
+
+def test_a_planned_row_is_not_already_used_by_a_product_file():
+    """planned means 'nothing uses it yet'. A product file that imports the part says the row is stale."""
+    for row in (row for row in ROWS if row["status"] == "planned"):
+        module = row["module"]
+        if not module.endswith(".js"):
+            continue
+        users = [p for p in REPO.rglob("*.js") if p.name != module and "node_modules" not in p.parts and ".worktrees" not in p.parts
+                 and "/test/" not in p.as_posix() and "gallery" not in p.name and "vendor" not in p.parts
+                 and re.search(rf"import[^;]*{re.escape(row['export'])}[^;]*{re.escape(module)}", p.read_text(encoding="utf-8", errors="ignore"))]
+        assert not users, f"{row['id']} is planned but {[u.relative_to(REPO).as_posix() for u in users]} import it"
