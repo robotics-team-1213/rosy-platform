@@ -246,6 +246,13 @@ def test_the_belt_end_and_centreline_come_from_its_strip():
     assert got["end_x_m"] == pytest.approx(end, abs=.003)
     assert got["centre_y_m"] == pytest.approx(y, abs=.003)
     assert got["width_m"] == pytest.approx(2 * half, abs=.006)
+    assert "end_occluded" not in got
+    # a container waiting at the stop hides the strip's end (2026-11-14 real frame: the end read 60 mm past the stop)
+    top = layout.belt_top + sites.CONTAINER[layout.choices["ship_source"]][2]
+    box = [cam.project((x, yy, top)) for x, yy in ((end, y - .045), (end + .03, y - .045), (end + .03, y + .045), (end, y + .045))]
+    cv2.fillPoly(img, [np.round(box).astype(np.int32)], (20, 110, 240))
+    hidden = r2s.measure_belt(img, layout)
+    assert hidden["end_occluded"] and hidden["end_x_m"] > end + .015 and hidden["end_at_most_x_m"] == pytest.approx(end, abs=.006)
 
 
 def test_layout_takes_the_belt_from_a_snapshot(tmp_path):
@@ -331,15 +338,15 @@ def test_online_camera_anchor_calibration_and_servo_compensator_correct_drift():
     moved_dict = r2s_comp.perturbed_camera_dict(base_cam, **r2s_comp.DEFAULT_CAM_JITTER)
     cam_moved = r2s.Camera(moved_dict, (480, 640))
 
-    # Render synthetic top frame from the perturbed camera with 6 dark lane pads, belt strip, and a skewed belt container
+    # Render synthetic top frame (pads 90 mm long as printed, the anchor length) from the perturbed camera with 6 dark lane pads, belt strip, and a skewed belt container
     img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
     pad_z = layout.deck_z + .0006
     for tag in ("a", "b"):
         for k in (1, 2, 3):
             s = layout.sites[f"tmp-{tag}-{k}"]
             x, y, yaw = s["xy"][0], s["xy"][1], s["yaw"]
-            corners = [cam_moved.project((x + a * .048 * math.cos(yaw) - b * .015 * math.sin(yaw),
-                                          y + a * .048 * math.sin(yaw) + b * .015 * math.cos(yaw), pad_z))
+            corners = [cam_moved.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                          y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), pad_z))
                        for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
             cv2.fillPoly(img, [np.round(corners).astype(np.int32)], (25, 25, 25))
     bx, by = layout.belt_stop_x + .005, layout.belt_y
