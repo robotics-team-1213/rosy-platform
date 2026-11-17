@@ -271,6 +271,13 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
         if command in ("run grasp_pick", "run lift_pick") and status.get("holding") and grasp_check is not None:
             checked = grasp_check(command, status, run)
             steps.append({"command": "grasp_debate", "at": command, **{k: checked.get(k) for k in ("verdict", "recovery_chunk", "dx_mm", "dy_mm", "reason", "telemetry", "vision", "debate")}})
+            if checked.get("verdict") == "empty":
+                # 2026-11-17 arm_s floor: jaws closed on air (48.91, empty stop 49.0) passed the runner's holding test,
+                # the debate said "empty" twice, and the carry still went on to the belt
+                if command == "run grasp_pick":
+                    run("run lift_pick")
+                run("park")
+                return {"result": "empty", "at": command, "grasp_debate": checked, "steps": steps}
             if checked.get("verdict") == "reinsert_and_park":
                 run("park")
                 return {"result": "reinserted", "at": command, "grasp_debate": checked, "steps": steps}
