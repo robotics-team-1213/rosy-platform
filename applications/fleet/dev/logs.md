@@ -120,4 +120,5 @@
 
 ## 2026-11-17 · uncommitted · revert(dev): arm_ai 샘플 제거
 - 변경: `sample/arm_ai.py`·`fixtures/arm-ai.json`·`engine.py` 연결·개발 패널 단추 7개·`test/test_dev_sample_arm_ai.py`를 제거했다. 쓰는 화면(AI 팔 제안 보기)을 이 착지에서 뺐다. 사유: C3 실제 경로 없음, feat/arm-proposal-view로 보관.
+- 증거: 원격 test_feature_matrix·test_surface_contracts·test_document_imports·browser_scope 통과, 브라우저 4파일 실패 0, node 547 passed(2026-11-17).
 - gate 변화: 없음.
