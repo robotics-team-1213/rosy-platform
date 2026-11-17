@@ -106,9 +106,22 @@ def test_skill_argv_forwards_cam_jitter_and_compensate_zero():
     import argparse
     ap = argparse.ArgumentParser()
     skills.options(ap)
-    args = ap.parse_args(["--skill", "grasp", "--zero-error-deg", "4", "--cam-jitter", "--compensate-zero"])
+    args = ap.parse_args(["--skill", "grasp", "--zero-error-deg", "4", "--cam-jitter", "--compensate-zero", "--zero-est-noise-deg", "0.5"])
     forwarded = skills.argv(args)
     assert "--cam-jitter" in forwarded and "--compensate-zero" in forwarded
+    assert forwarded[forwarded.index("--zero-est-noise-deg") + 1] == "0.5"
+    assert "--zero-est-noise-deg" not in skills.argv(ap.parse_args(["--skill", "grasp", "--compensate-zero"]))
+
+
+def test_zero_estimate_residual_is_oracle_at_zero_and_a_fixed_per_seed_draw_otherwise():
+    teacher_mod = skills.teaching
+    assert not teacher_mod.zero_est_residual(5, "arm_a", 0.).any()
+    a, again = teacher_mod.zero_est_residual(5, "arm_a", 1.), teacher_mod.zero_est_residual(5, "arm_a", 1.)
+    assert np.array_equal(a, again) and a[5] == 0. and np.abs(np.degrees(a[:5])).max() < 5.
+    assert not np.array_equal(a, teacher_mod.zero_est_residual(5, "arm_b", 1.))
+    assert not np.array_equal(a, teacher_mod.zero_est_residual(6, "arm_a", 1.))
+    spread = np.degrees(np.concatenate([teacher_mod.zero_est_residual(s, "arm_a", .5)[:5] for s in range(400)]))
+    assert abs(spread.mean()) < .05 and .45 < spread.std() < .55
     _require_mujoco()
     import omx_two_arm_world as tw
     world = tw.World(sites.Layout())
@@ -319,3 +332,26 @@ def test_servo_compensator_skips_zero_est_when_privileged_and_release_settles(mo
 
 
 
+
+
+def test_zero_estimate_noise_takes_one_sigma_or_one_per_joint():
+    assert skills.noise_degrees("0.5") == .5 and skills.noise_degrees("1,1,1,2,1") == (1., 1., 1., 2., 1.)
+    for bad in ("1,2", "-1"):
+        with pytest.raises(ValueError):
+            skills.noise_degrees(bad)
+    draws = np.degrees(np.array([skills.teaching.zero_est_residual(s, "arm_b", (1., 1., 1., 2., 1.))[:5] for s in range(400)]))
+    assert 1.8 < draws[:, 3].std() < 2.2 and all(.85 < draws[:, j].std() < 1.15 for j in (0, 1, 2, 4))
+
+
+def test_skill_argv_forwards_per_joint_noise_and_the_estimated_prefix():
+    import argparse
+    ap = argparse.ArgumentParser()
+    skills.options(ap)
+    forwarded = skills.argv(ap.parse_args(["--skill", "grasp", "--compensate-zero", "--zero-est-noise-deg", "1,1,1,2,1", "--estimated-prefix"]))
+    assert forwarded[forwarded.index("--zero-est-noise-deg") + 1] == "1.0,1.0,1.0,2.0,1.0" and "--estimated-prefix" in forwarded
+    assert "--estimated-prefix" not in skills.argv(ap.parse_args(["--skill", "grasp"]))
+
+
+def test_early_stop_needs_two_passing_checkpoints_in_a_row():
+    seen = []
+    assert [policy.two_in_a_row(seen, p) for p in (True, False, True, True)] == [False, False, False, True]

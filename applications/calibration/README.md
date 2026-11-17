@@ -90,3 +90,18 @@ python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/
 2. Account: client `rosy-calibration`(resource `site:<id>`, callback `https://<관제 PC tailnet 이름>:9449/api/account/callback`)을 R 호스트의 Account에 등록하고, receiver 설정을 관제 PC `~/.config/rosy/calibration/receiver.json`에 둔다(세션 키는 다시 만들지 않는다). 했다. 관제 PC는 Account에 SSH 터널(`rosy-account-tunnel.service`)로 닿는다. R의 443 방화벽은 손대지 않는다(점검이 실패하면 site proxy가 멈춘다).
 3. 배포: 착지한 sha를 `tools/remote/omx_hotfix.py`로 관제 PC에 풀고(이 앱이 포함된다), 위 venv를 만든 뒤 사용자 유닛 `rosy-calibration-web.service`(이 폴더)를 `~/.config/systemd/user/`에 **복사**해 켠다. 링크하면 systemd가 버전 폴더(`omx-tools-<sha>`)로 풀어 다음 갱신 뒤 깨진다. 2026-11-13 배포함(그 전까지 미설치, issuer·`/etc/hosts`가 옛 이름이었다).
 4. 권한: 모든 receiver를 새 `calibration.operate` 목록으로 먼저 배포한 뒤(옛 receiver는 모르는 capability의 토큰을 거절한다, D-990) 답할 사람에게 관리자가 부여한다. 그 전에는 로그인한 사람도 보기만 한다.
+
+## 작업 API (D-1035)
+
+`--cells <cells.json>`을 주면 켜지고(없으면 404), 구현은 `calibration_jobs.py`다. 앱은 셀 값을 쓰지 않고 엔진(`cell_calibrate.py`)을 팔 리스 아래에서 돌린다.
+
+```
+{"tools": "<omx tools 루트, 예 ~/rosy-test/omx-tools-current>", "python": "<엔진 python>", "work": "<작업 기록 폴더>",
+ "arms": {"arm_b": {"config": "<셀 설정 json>", "session": "<with-session 래퍼 또는 빈 값>", "env": {}}}}
+```
+
+- `GET /api/calibration/status`: 팔별 리스, incident(읽기 전용 `omx_incident.py status`), 설치 리비전, 자리별 지도(점 수·LOO·지문)·면 높이·바이어스.
+- `POST /api/calibration/jobs {arm, step, targets, person_at_switch}`: 단계는 `check`, `depth-verify`, `pivot-near`, `remap`만(그 밖은 422). 팔을 움직이는 `pivot-near`·`remap`은 `person_at_switch: true`가 없으면 422(D-911). 리스를 다른 주인이 쥐면 409. 202와 작업 기록; `GET /api/calibration/jobs`, `.../jobs/<id>`(로그 끝 4000자)로 본다.
+- `POST /api/calibration/assessments {arm, verdict: clear|hold, reasons, evidence[{kind: frame|joints|torque, ref, sha256?}]}`: `<work>/assessments.jsonl`에 쌓는다.
+- `POST /api/calibration/incidents/<arm>/clear`: 10분 안의 최신 판정이 `clear`이고, 다른 주인의 리스와 실행 중인 `record_session`이 없을 때만 `omx_incident.py clear`를 부른다(측정이 먼저, 모델 판정만으로는 해제하지 않는다).
+- 쓰기 경로는 모두 같은 출처 + `calibration.operate` 세션이 필요하다.
