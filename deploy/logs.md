@@ -4915,3 +4915,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `cell_jaw_side.py`(새 모듈)가 FK yaw로 기준 집게·다른 집게의 화소를 예측하고, 열림-닫힘 차분을 두 예측 원(`jaw_side.roi_px`) 안과 D435 높이 띠 안으로만 제한한다. 다른 집게 원의 blob은 기준 집게 자리로 옮긴다. `pivot_calibrate`는 yaw마다 시도 프레임·`jaws.json`·`depth.raw`를 `work/pivot-frames/`에 남긴다. `cell_depth`의 v4l2 시간 한도는 13프레임(6 fps)보다 짧아지지 않는다(셀 배포본 11-13의 1.8 s가 늘 None을 냄). 원 적합과 모든 pivot 가드는 그대로다.
 - 증거: 저장된 remap 시도 73개(arm_a 16, arm_b 57) 오프라인 재생에서 기준 화소 15 px 안: 이전 19/73 → 이후 65/73(arm_b 먼 점 0/36 → 36/36), arm_s 대조군 32/32 유지. 재생 스크립트는 저장소 밖(`D:/DevTemp/jaw-loc/replay.py`). 원격 pytest는 아직 돌리지 않았다.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-pivot): 한쪽 집게 표시에 독립 검토의 거절 조건을 더한다
+- 변경: 표시마다 집게 쪽(ref/other/pair)과 경로(old/discs/band)를 시도 json·`jaws.json`·bias 기록에 남긴다. 경로가 섞인 pivot, 기준·다른 집게 표시의 평균 TCP 중심이 `pivot.side_agree_mm`(3 mm)보다 벌어진 pivot, 기준 집게 표시가 2개 미만인 pivot(`jaw_side.validated_<arm>`이 꺼져 있을 때)을 자유 원·known-geometry 두 경로 모두에서 거절한다. 깊이 띠는 `jaw_side.depth_band`로 기본 꺼짐(깊이 원본은 계속 저장), pivot 프레임 폴더는 마이크로초 표기·사이트별 최근 `pivot.keep_frames`(20)개만 남긴다. `fit_circle`은 `cell_pivot_bias`로 옮겼다(재노출). 기존 가드는 그대로다.
+- 증거: 새 단위 시험(겹친 원, 원 안의 고정 blob이 반경 가드로 거절, 잘못된 오프셋 6 mm가 퍼짐 가드는 통과하고 쪽 균형 가드에서 거절, 경로 혼합 거절, 깊이 띠 기본 꺼짐, 프레임 보존). 원격 pytest는 아직 돌리지 않았다.
+- gate 변화: 없음.

@@ -89,7 +89,9 @@ def height_band(heights, jaw_mm: float, params=None) -> np.ndarray:
 
 def pivot_jaws(cell, config: dict, record: dict, site: str, fk, keep: Path) -> dict | None:
     """mark_jaws' `jaws` at this pivot yaw from the measured FK (x, y, z, yaw), or None (the old path) when the map
-    cannot place the jaws. A top depth camera's frame is kept as `keep/depth.raw` and limits the discs to the band."""
+    cannot place the jaws. A top depth camera's frame is kept as `keep/depth.raw`; it limits the discs to the height
+    band only with `jaw_side.depth_band` (off until a real pivot's saved depth has been looked at, 2026-11-17 review).
+    A failed capture with the band on leaves this yaw unbanded, recorded, and path_check refuses the mix."""
     if fk is None:
         return None
     p = config.get("params")
@@ -108,7 +110,8 @@ def pivot_jaws(cell, config: dict, record: dict, site: str, fk, keep: Path) -> d
         import cell_depth
 
         depth = cell_depth.capture_top_depth_z16(out_raw=keep / "depth.raw")
-        if depth is not None:
+        info["depth"] = {"saved": depth is not None, "band": False}
+        if depth is not None and prm.get(p, "jaw_side.depth_band"):
             import cv2
 
             colour = cell.frame("top")
@@ -116,9 +119,71 @@ def pivot_jaws(cell, config: dict, record: dict, site: str, fk, keep: Path) -> d
             heights, table_mm = heights_in_colour(depth, colour)
             jaw_mm = table_mm - 1000 * (float(top["height_m"]) - float(fk[2]))  # camera above the arm's zero
             jaws["band"] = height_band(heights, jaw_mm, p)
-            info["depth"] = {"jaw_mm": round(jaw_mm, 1), "table_mm": round(table_mm, 1)}
+            info["depth"].update(band=True, jaw_mm=round(jaw_mm, 1), table_mm=round(table_mm, 1))
     (keep / "jaws.json").write_text(json.dumps(info))
     return jaws
+
+
+def mark_at(cell, config: dict, sleep, record: dict, site: str, fk, keep: Path, near):
+    """One pivot yaw's jaw mark and how it was found: (pixel or None, {"side": ref|other|pair|None, "path":
+    old|discs|band}); the side and path are added to `keep/jaws.json` beside the tries."""
+    import cell_pivot
+
+    jaws, report = pivot_jaws(cell, config, record, site, fk, keep), {}
+    pixel = cell_pivot.mark_jaws(cell, config, sleep, near=near, keep=keep, jaws=jaws, report=report)
+    how = {"side": report.get("side") if pixel is not None else None,
+           "path": "old" if jaws is None else "band" if jaws["band"] is not None else "discs"}
+    if jaws is not None:
+        info = json.loads((keep / "jaws.json").read_text())
+        info.update(how, mark_px=pixel and [round(float(v), 1) for v in pixel], reason=report.get("reason"))
+        (keep / "jaws.json").write_text(json.dumps(info))
+    return pixel, how
+
+
+def path_check(hows) -> str | None:
+    """A pivot whose yaws were marked different ways (old path, discs, discs + depth band) is refused, not fitted."""
+    paths = sorted({h["path"] for h in hows})
+    return f"jaw paths mixed: {', '.join(paths)}" if len(paths) > 1 else None
+
+
+def side_check(marks, tcps, hows, kept_tcps, radius_mm: float, phase_deg: float, params=None, arm=None):
+    """(refusal or None, the kept marks' sides). Each kept mark gives the TCP centre: mark - radius at FK yaw + phase.
+    A wrong jaw_side offset moves only the other jaw's marks, so their mean centre must lie within pivot.side_agree_mm
+    of the reference jaw's; and without `jaw_side.validated_<arm>` at least 2 reference-jaw marks must be kept."""
+    if not hows:
+        return None, []
+    idx = [next(i for i, t in enumerate(tcps) if t is k) for k in kept_tcps]  # trim keeps the same tuples
+    sides = [hows[i]["side"] for i in idx]
+    if not any(sides):  # old path, or a caller that does not say
+        return None, sides
+    r, centres = radius_mm / 1000, {"ref": [], "other": []}
+    for i, side in zip(idx, sides):
+        if side in centres:
+            a = math.radians(tcps[i][3] + phase_deg)
+            centres[side].append((marks[i][0] - r * math.cos(a), marks[i][1] - r * math.sin(a)))
+    key = f"jaw_side.validated_{arm}"
+    if len(centres["ref"]) < 2 and not (key in prm.DEFAULTS and prm.get(params, key)):
+        return f"jaw sides unvalidated: {len(centres['ref'])} reference-jaw marks, need 2 ({key} off)", sides
+    if centres["ref"] and centres["other"]:
+        gap = 1000 * math.dist(np.mean(centres["ref"], axis=0), np.mean(centres["other"], axis=0))
+        if gap > prm.get(params, "pivot.side_agree_mm"):
+            return f"jaw sides disagree: the other jaw's marks {gap:.1f} mm from the reference jaw's", sides
+    return None, sides
+
+
+def frames_dir(work, site: str, params=None) -> Path:
+    """A new `work/pivot-frames/<site>-<stamp to the microsecond>` for this pivot; only the newest pivot.keep_frames
+    of that site stay (the oldest are removed first)."""
+    import glob
+    import re
+    import shutil
+    from datetime import datetime
+
+    root, name = Path(work) / "pivot-frames", re.compile(re.escape(site) + r"-\d{8}-\d{6}-\d{6}$")
+    old = sorted(d for d in root.glob(glob.escape(site) + "-*") if d.is_dir() and name.match(d.name)) if root.is_dir() else []
+    for d in old[:max(0, len(old) - int(prm.get(params, "pivot.keep_frames")) + 1)]:
+        shutil.rmtree(d, ignore_errors=True)
+    return root / f"{site}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
 
 
 def _side(blob, places, radius_px):
@@ -129,7 +194,7 @@ def _side(blob, places, radius_px):
 
 
 def marks(closed, opened, params=None, colour: bool = False, jaws: dict | None = None) -> list:
-    """[(cx, cy, area)]: jaw marks found inside the jaws' discs (and band), each moved to the reference jaw's place
+    """[(cx, cy, area, side)]: jaw marks found inside the jaws' discs (and band), each moved to the reference jaw's place
     (or the jaws' middle). A pair needs one side at each jaw; otherwise every single blob is the jaw nearest it."""
     import cv2
     import cell_pivot
@@ -143,11 +208,11 @@ def marks(closed, opened, params=None, colour: bool = False, jaws: dict | None =
     out = []
     for a, b in cell_pivot._jaw_pairs(closed, opened, params, colour, within=within):
         if {_side(a, places, r), _side(b, places, r)} == {0, 1}:
-            out.append(((a[0] + b[0]) / 2 - mid[0] + to[0], (a[1] + b[1]) / 2 - mid[1] + to[1], a[2] + b[2]))
+            out.append(((a[0] + b[0]) / 2 - mid[0] + to[0], (a[1] + b[1]) / 2 - mid[1] + to[1], a[2] + b[2], "pair"))
     if out:
         return out
     for blob in cell_pivot.jaw_blobs(closed, opened, params, colour, within=within):
         k = _side(blob, places, r)
         if k is not None:
-            out.append((blob[0] - places[k][0] + to[0], blob[1] - places[k][1] + to[1], blob[2]))
+            out.append((blob[0] - places[k][0] + to[0], blob[1] - places[k][1] + to[1], blob[2], ("ref", "other")[k]))
     return out

@@ -31,7 +31,7 @@ import cell_params as prm  # noqa: E402
 import cell_jaw_side  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
 from cell_pivot_bias import (  # noqa: E402,F401  (re-exported)
-    BIAS_REACH_MM, SCHEMA, bias_at, bias_path, circle_center_sigma_mm, fit_pivot_yaw,
+    BIAS_REACH_MM, SCHEMA, bias_at, bias_path, circle_center_sigma_mm, fit_circle, fit_pivot_yaw,
     load_bias, save_bias, trim_known_centres, validate_bias, yaw_arc_deg as _yaw_arc_deg,
 )
 
@@ -145,7 +145,7 @@ def _save_mark_try(keep_dir: Path, idx: int, closed, now, mask, all_blobs: list,
         "try": idx,
         "blobs": [{"cx": round(float(b[0]), 2), "cy": round(float(b[1]), 2), "area": int(b[2])} for b in all_blobs],
         "picked": [round(float(pick[0]), 2), round(float(pick[1]), 2), int(pick[2])] if pick else None,
-        "rejected": rejected,
+        "rejected": rejected, "side": pick[3] if pick is not None and len(pick) > 3 else None,
     }
     (keep_dir / f"try-{idx:02d}.json").write_text(json.dumps(info))
 
@@ -212,22 +212,13 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
             _save_mark_try(keep_dir, idx, closed, now, mask, all_blobs, pick, rejected)
         if agreed:
             if report is not None:
-                report["reason"] = None
+                report.update(reason=None, side=pick[3] if len(pick) > 3 else None)
             return pick[0], pick[1]
         if pick is not None:
             marks.append(pick[:2])
     if marks:
         return fail("tries disagree")
     return fail("blobs outside near" if saw_blobs else "no changed blob")
-
-
-def fit_circle(points) -> tuple[float, float, float, float]:
-    """Algebraic (Kasa) least squares: centre x, y, radius, rms residual."""
-    p = np.asarray(points, float)
-    a = np.c_[2 * p, np.ones(len(p))]
-    (cx, cy, c), *_ = np.linalg.lstsq(a, (p ** 2).sum(axis=1), rcond=None)
-    r = math.sqrt(max(c + cx * cx + cy * cy, 0.0))
-    return float(cx), float(cy), r, float(np.sqrt(np.mean((np.hypot(p[:, 0] - cx, p[:, 1] - cy) - r) ** 2)))
 
 
 def map_record(calibration: dict, site: str) -> dict | None:
@@ -280,14 +271,16 @@ def joints_tcp(state, tcp_x_m: float | None = None):
     return fk.x, fk.y, fk.z, math.degrees(fk.yaw)
 
 
-def known_geometry_bias(marks, tcps, geometry: dict, site: str, record: dict, params=None) -> dict:
+def known_geometry_bias(marks, tcps, geometry: dict, site: str, record: dict, params=None, hows=None, arm=None) -> dict:
     """The bias from marks over a narrow yaw arc, with the jaw mark's radius and phase from a full circle measured on
     this arm. Where a stalling wrist leaves too few yaws for a circle (arm_b 2026-11-06), each mark still gives the
     circle's centre; they must agree, so one wrong blob is refused and never averaged in."""
     if len(marks) < 2:
         return {"result": f"jaws marked at {len(marks)} yaws, need 2 with a known geometry"}
     max_rms = prm.get(params, "pivot.max_rms_mm")
-    centres, tcps = trim_known_centres(marks, tcps, geometry, max_rms)
+    centres, kept_tcps = trim_known_centres(marks, tcps, geometry, max_rms)
+    why, sides = cell_jaw_side.side_check(marks, tcps, hows, kept_tcps, geometry["radius_mm"], geometry["phase_deg"], params, arm)
+    tcps = kept_tcps
     centre = [float(v) for v in np.mean(centres, axis=0)]  # plain floats: validate_bias takes nothing else
     spread = max(1000 * math.dist(c, centre) for c in centres)
     tx, ty = (float(np.mean([t[i] for t in tcps])) for i in (0, 1))
@@ -295,13 +288,14 @@ def known_geometry_bias(marks, tcps, geometry: dict, site: str, record: dict, pa
             "bias_mm": [round(1000 * (centre[0] - tx), 1), round(1000 * (centre[1] - ty), 1)],
             "radius_mm": geometry["radius_mm"], "phase_deg": geometry["phase_deg"], "rms_mm": round(spread, 1),
             "yaws_fk_deg": [round(t[3], 1) for t in tcps], "n": len(centres), "geometry_from": geometry.get("measured"),
+            **({"jaw_sides": sides} if sides else {}),
             **({"dropped": len(marks) - len(centres)} if len(centres) < len(marks) else {}),
             "map_sha": cell_attempts.digest(record), "measured": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if spread > max_rms:
         return {"result": f"marks disagree: {round(spread, 1)} mm from their centre", "bias": bias}
     if math.hypot(*bias["bias_mm"]) > prm.get(params, "pivot.max_bias_mm"):
         return {"result": f"bias refused: {bias['bias_mm']} mm is past pivot.max_bias_mm", "bias": bias}
-    return {"result": "calibrated", "bias": bias}
+    return {"result": why, "bias": bias} if why else {"result": "calibrated", "bias": bias}
 
 
 MIN_YAW_ARC_DEG = 110.0
@@ -320,9 +314,9 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else (config.get("plan") or {}).get("tcp_x_m")
     z_view = pivot_z_view(config, site)
     expected_near = cell_jaw_side.near_tcp(record, config, site, point, z_view, prm.get(params, "pivot.follow_px", FOLLOW_PX) + 40)
-    frames = work / "pivot-frames" / f"{site}-{time.strftime('%Y%m%d-%H%M%S')}"  # every try kept for replay, as remap does
+    frames = cell_jaw_side.frames_dir(work, site, params)  # every try kept for replay, as remap does
     view = {"x": point[0], "y": point[1], "z": round(z_view - config["plan"]["approach_m"], 4)}
-    marks, tcps = [], []
+    marks, tcps, hows = [], [], []
     try:
         for i, yaw in enumerate(yaws):
             try:
@@ -343,20 +337,21 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
 
             state = (joint_jitter.settled_state(cell, params) or {}).get("state")
             fk = None if state is None else joints_tcp(state, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
-            keep = frames / f"{i:02d}"
-            pixel = mark_jaws(cell, config, sleep, near=expected_near, keep=keep,
-                              jaws=cell_jaw_side.pivot_jaws(cell, config, record, site, fk, keep))
+            pixel, how = cell_jaw_side.mark_at(cell, config, sleep, record, site, fk, frames / f"{i:02d}", expected_near)
             log({"pivot": yaw, "mark_px": pixel})
             if fk is None or pixel is None:
                 continue
             x, y, z, fk_yaw = fk
             marks.append(mark_to_arm(record, config, site, pixel, z))
             tcps.append((x, y, z, fk_yaw))
+            hows.append(how)
     finally:
         fold(cell, sleep)
+    if why := cell_jaw_side.path_check(hows):  # 2026-11-17 review: a yaw the discs could not place is not mixed in
+        return {"result": why}
     geometry = config.get("pivot", {}).get("geometry")
     if geometry is not None:
-        return known_geometry_bias(marks, tcps, geometry, site, record, params)
+        return known_geometry_bias(marks, tcps, geometry, site, record, params, hows, config.get("arm_id"))
     if len(marks) < 4:
         return {"result": f"jaws marked at {len(marks)} yaws, need 4"}
     arc_deg = _yaw_arc_deg([t[3] for t in tcps])
@@ -375,7 +370,8 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     cx, cy = fit["centre_m"]
     radius, phase, rms, sigma_mm = fit["radius_m"], fit["phase_deg"], fit["rms_m"], fit["centre_sigma_mm"]
     tx, ty = (float(np.mean([t[i] for t in kept_tcps])) for i in (0, 1))
-    bias = {"site": site, "kind": "pivot", "point_m": [round(tx, 4), round(ty, 4)],
+    why, sides = cell_jaw_side.side_check(marks, tcps, hows, kept_tcps, fit["radius_mm"], phase, params, config.get("arm_id"))
+    bias = {"site": site, "kind": "pivot", **({"jaw_sides": sides} if sides else {}), "point_m": [round(tx, 4), round(ty, 4)],
             "bias_mm": [round(1000 * (cx - tx), 1), round(1000 * (cy - ty), 1)],
             "radius_mm": fit["radius_mm"], "phase_deg": phase, "z_view": z_view, "rms_mm": fit["rms_mm"], "fit_model": "yaw_linear",
             **({"bias_sigma_mm": sigma_mm} if sigma_mm is not None else {}),
@@ -390,6 +386,8 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     if rms * 1000 > prm.get(params, "pivot.max_rms_mm") or not (
             prm.get(params, "pivot.radius_lo_mm") <= radius * 1000 <= prm.get(params, "pivot.radius_hi_mm")):
         return {"result": f"circle refused: radius {bias['radius_mm']} mm, rms {bias['rms_mm']} mm", "bias": bias}
+    if why:
+        return {"result": why, "bias": bias}
     try:
         validate_bias(bias, params)
     except ValueError as exc:

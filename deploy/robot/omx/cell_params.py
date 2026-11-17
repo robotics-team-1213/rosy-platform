@@ -49,6 +49,8 @@ DEFAULTS = {
     "pivot.max_bias_mm": (25.0, "mm", 1, 200), "calibrate.consensus_px": (15.0, "px", 2, 60),
     "jaw_side.other_mm": (54.0, "mm", 20, 90), "jaw_side.other_deg": (79.0, "deg", -180, 360), "jaw_side.roi_px": (45.0, "px", 10, 200),
     "jaw_side.band_mm": (18.0, "mm", 5, 60), "jaw_side.above_mm": (74.0, "mm", 0, 200),
+    "jaw_side.depth_band": (0, "flag", 0, 1), "jaw_side.validated_arm_a": (0, "flag", 0, 1), "jaw_side.validated_arm_b": (0, "flag", 0, 1),
+    "jaw_side.validated_arm_s": (0, "flag", 0, 1), "pivot.side_agree_mm": (3.0, "mm", 0.5, 20), "pivot.keep_frames": (20, "count", 1, 500),
     "jaw_centre.merge_px": (12, "px", 0, 40), "jaw_centre.min_side_px": (80, "px", 10, 2000), "jaw_centre.gap_lo_px": (25, "px", 10, 300), "jaw_centre.gap_hi_px": (110, "px", 20, 400),
     "gripper.held_30mm": (52.3, "gripper", 45, 60), "gripper.open_max": (56.0, "gripper", 50, 70),
     "reach.enabled": (1, "flag", 0, 1), "reach.tol_mm": (2.0, "mm", 0.5, 10), "reach.max_iter": (2, "count", 0, 5),

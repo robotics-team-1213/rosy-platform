@@ -1027,5 +1027,41 @@
   "unit": "mm",
   "source": "theory",
   "evidence": "tcp_x_m 0.074: the gripper from the TCP up to the wrist axis, whose linkage also changes when the jaws open"
+ },
+ "jaw_side.depth_band": {
+  "value": 0,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-11-17 independent review of the one-visible-jaw pivot (disagree for a first real pivot): off until a real pivot's saved depth.raw has been looked at; the band is untested on jaw frames"
+ },
+ "jaw_side.validated_arm_a": {
+  "value": 0,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-11-17 independent review of the one-visible-jaw pivot (disagree for a first real pivot): a bias from other-jaw marks alone rests on jaw_side.other_mm/other_deg; on after a real arm_a pivot shows both sides agree"
+ },
+ "jaw_side.validated_arm_b": {
+  "value": 0,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-11-17 independent review of the one-visible-jaw pivot (disagree for a first real pivot): as arm_a"
+ },
+ "jaw_side.validated_arm_s": {
+  "value": 0,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-11-17 independent review of the one-visible-jaw pivot (disagree for a first real pivot): as arm_a"
+ },
+ "pivot.side_agree_mm": {
+  "value": 3.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-11-17 independent review of the one-visible-jaw pivot (disagree for a first real pivot): reference- and other-jaw marks' mean TCP centres; verify.mark_sigma_mm is 3 mm"
+ },
+ "pivot.keep_frames": {
+  "value": 20,
+  "unit": "count",
+  "source": "default",
+  "evidence": "2026-11-17 independent review of the one-visible-jaw pivot (disagree for a first real pivot): newest pivot-frame folders kept per site (one pivot of 6-7 yaws with depth is a few MB)"
  }
 }
