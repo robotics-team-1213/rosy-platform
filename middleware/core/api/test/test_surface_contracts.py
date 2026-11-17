@@ -62,7 +62,7 @@ def test_shell_and_panel_files_stay_inside_their_line_budget():
 def test_every_registered_panel_module_exports_mount():
     registry = load_registry(WEB / "panels.yaml", WEB)
     missing = [p.module for p in registry.panels
-               if not re.search(r"export (async )?function mount\(", (WEB / p.module).read_text(encoding="utf-8-sig")]
+               if not re.search(r"export (async )?function mount\(", (WEB / p.module).read_text(encoding="utf-8-sig"))]
     assert not missing, missing
 
 
