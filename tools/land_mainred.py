@@ -262,7 +262,8 @@ def landed(wt: Path, sha: str, branch: str) -> list[str]:
 
 def recheck(wt: Path, main_sha: str, run, logdir: Path) -> list[str]:
     """Run each open id on ``main_sha`` alone; close the ones that pass there or whose test file is gone, and return
-    them. Only a landing's own selection closed an id before, so ids nothing selected stayed red for days after the
+    them. An id pytest no longer finds in its file is gone too (11-18: a renamed test sat open 3 days unowned).
+    Only a landing's own selection closed an id before, so ids nothing selected stayed red for days after the
     fix (2026-11-07: 11 open, the oldest from 10-28, some of deleted files). A failing or unreachable id stays open."""
     # 2026-11-08 02:55: a recheck at sha 0000… read every file as gone and closed 7 ids whose files were on main.
     if _git(wt, "cat-file", "-e", f"{main_sha}^{{commit}}").returncode:
@@ -292,6 +293,9 @@ def recheck(wt: Path, main_sha: str, run, logdir: Path) -> list[str]:
             text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
             if re.search(rf"^PASSED {re.escape(nodeid)}\s*$", text, re.M):
                 settle(nodeid, "passed on main")
+                closed.append(nodeid)
+            elif re.search(rf"^ERROR: not found: \S*{re.escape(nodeid)}\s*$", text, re.M):
+                settle(nodeid, "test gone from its file")
                 closed.append(nodeid)
     return closed
 
