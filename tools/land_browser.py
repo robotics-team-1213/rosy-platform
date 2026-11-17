@@ -20,7 +20,8 @@ from remote_pytest import ALONE_ENV, BROWSER_ENV
 # 2026-10-26 FULL: 4 chunks took 878/772/536/487 s (2673 s); 8 bring a chunk near 5 min. 12 since 2026-10-31: FULL
 # rounds' 8 chunks ran up to 14 min each (60-163 min in all), the tail of the round; 12 spread over the wider lanes.
 # 2026-11-16: 12-13 files/chunk still ran 600-839s tail; 20 cuts files/chunk toward ~7-8 while keeping stable argv keys.
-CHUNKS = 20
+# 2026-11-17: 30, the last chunks queued 1.7-3.0 ks behind the lane cap (panel G); smaller chunks fill 3 lanes evenly.
+CHUNKS = 30
 # Load-sensitive: their ids failed under load and passed alone (test/flaky_quarantine.txt LOAD-FLAKY rows), so
 # they run in one chunk with no lane job of the same run beside it.
 ALONE = frozenset({
