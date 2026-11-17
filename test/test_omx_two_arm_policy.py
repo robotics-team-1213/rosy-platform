@@ -534,3 +534,17 @@ def test_driver_moves_the_checkpoint_processor_to_its_own_device(monkeypatch, tm
     policy.Driver(model_dir, steps_file, device="cpu")
     assert seen_overrides[-1] == {"preprocessor_overrides": {"device_processor": {"device": "cpu"}},
                                   "postprocessor_overrides": {"device_processor": {"device": "cpu"}}}
+
+
+def test_an_isolated_collect_drops_only_the_failed_step_and_a_whole_run_drops_the_rest(monkeypatch):
+    from types import SimpleNamespace
+    for isolated, saved_n in ((True, 2), (False, 1)):
+        results, saved, cleared = iter(["pass", "fail", "pass"]), [], []
+        monkeypatch.setattr(helpers.teaching.Teacher, "run_step", lambda self, data, step, here: {"result": next(results)})
+        rec = helpers.Recorder.__new__(helpers.Recorder)
+        rec.dataset = SimpleNamespace(save_episode=lambda: saved.append(1), clear_episode_buffer=lambda: cleared.append(1))
+        rec.skill, rec.no_goal, rec.longest, rec.spoiled, rec.failed, rec.isolated, rec.count = None, True, {}, False, [], isolated, 0
+        for i in range(3):
+            rec.run_step(None, {"id": f"s{i}"}, {})
+        assert len(saved) == saved_n and len(cleared) == 3 - saved_n
+        assert (rec.failed, rec.spoiled) == ((["s1"], False) if isolated else ([], True))
