@@ -107,14 +107,12 @@ GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
 MONITORING = ["test/test_monitoring_browser.py"]
-CALIBRATION = ["test/test_calibration_browser.py"]
 RECOVERY = ["test/test_network_recovery_browser.py"]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + CALIBRATION + RECOVERY
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY
 
 SCOPE: dict[str, list[str]] = {
     "applications/monitoring/": MONITORING,
     "operations/monitoring/": MONITORING,
-    "applications/calibration/": CALIBRATION,
     "applications/fleet/dev/": FLEET_SAMPLE + ["operations/fleet/test/test_app_connected_browser.py"],
     "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
