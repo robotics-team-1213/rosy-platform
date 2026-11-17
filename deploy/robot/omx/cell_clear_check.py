@@ -132,7 +132,7 @@ def main(argv=None):
     ap.add_argument("--model-url", default="http://127.0.0.1:11434")
     ap.add_argument("--model", default="qwen3-vl:8b-instruct")
     ap.add_argument("--out", type=Path)
-    ap.add_argument("--fleet", help="Fleet base URL for the bird view, e.g. https://127.0.0.1:8543")
+    ap.add_argument("--fleet", help="Fleet base URL for the bird view, e.g. https://rosy-arm-cell.local:8543")
     ap.add_argument("--token-file", type=Path, help="operator bearer for --fleet")
     ap.add_argument("--scene-source", default="omx_overhead", help="Fleet vision source of the whole-cell view")
     args = ap.parse_args(argv)
