@@ -735,3 +735,15 @@
 **검증.** `test/test_land_metrics_rule.py`(규칙 문장 시험과 임시 저장소의 size_range 시험), `test/test_land_prepare.py`, `test/test_land_queue_flow.py`, `test/test_land_tick.py`를 원격 시험 PC에서 돌린다. 규칙은 `[metrics]` 줄(`rosy-land-backlog.txt`)과 `<git-common-dir>/rosy-land-metrics.jsonl`로 24시간 뒤 확인한다.
 
 **되돌림.** 롤업이 24시간 안에 생성 없이 쌓이기만 하면 이 커밋을 되돌리고(트리거 3곳 복구) 숫자를 다시 잰다. 메시지 규칙 시험이 오탐이면 시험만 고치고 규칙 문장은 유지한다.
+
+### 추가 37 (2026-11-17): 이전 라운드의 통과를 FULL 범위에서도 재사용한다 (사용자 결정 2026-11-17)
+
+**왜.** 사용자: "이전 라운드 결과 재사용이 가장 빠르고 정확한 것 같다, 계획 세우고 바로 진행". 48시간에 FULL 크기 라운드 29개 중 12개가 main이 움직인 뒤 같은 스위트를 다시 돈 것이었고 `land_cache` 재사용은 0/1386이었다. `reach()`·`_delta_paths`는 범위가 FULL이면 재사용을 포기했다.
+
+**결정.** `--tests auto`에서 통과한 호출을 다시 돌리지 않는 조건은 (1) argv와 환경(deps 해시)이 같고 (2) 기록된 커밋의 트리부터 후보의 트리까지의 정확한 트리 차이에서(조상이면 기존 범위와 같다) (3) 그 차이에서 선택기가 그 호출의 경로를 하나도 고르지 않는 것이다. 범위가 FULL이어도 (3)은 선택기의 `local_invocations`(가드와 직접 영향 스위트)와 브라우저 대상으로 판단한다. 단, 범위에 다음이 하나라도 있으면 이 라운드의 새 재사용을 전부 거부하고 이전 동작으로 돌아간다. 안전 경로(SAFETY_TRIGGER, D-430), STAY_FULL 트리거(고정 의존성·compose·이미지/네이티브 매니페스트·소스 레이아웃), SELECT_CORE·RUNNER_TOOLS 파일, REGISTRY_FILES, 루트 conftest·pyproject·pytest.ini, `test/known_failures.*`·`flaky_quarantine.txt`, 삭제·이름 변경, 매핑 없는 경로(unmapped). 목록은 `affected_narrow`·`affected_tests`의 상수를 그대로 쓴다.
+
+**한계.** 안전한 FULL 범위는 위 목록에 걸리지 않는 FULL뿐이라 실제로는 드물다(main 최근 80커밋 중 FULL은 2개, 모두 안전 경로·선택기). 가장 큰 막힘은 후보에 조상 관계의 기록 행이 없는 것(최근 큰 커밋 25개 중 16개)이었고, 같은 날 후속으로 조상 요구를 버렸다. 기록 행의 커밋이 조상이 아니어도(같은 브랜치를 새 main에 다시 합친 형제 병합 커밋) 그 행의 트리와 후보의 트리 사이 `git diff`가 두 트리의 모든 차이이므로, 조상 관계가 주던 보증(차이 밖은 같은 내용)을 트리 비교가 그대로 준다. 선택기는 `-p 기록커밋`을 부모로 후보 트리를 얹은 버려지는 커밋(`_probe`)을 넣어 그 차이만 본다. 이 길은 `--tests auto`에서만 쓰며 거부 목록·deps 해시·argv 규칙은 같다. 조상이 아닌 행이 선택기 호출을 최대 `NARROW_COMMITS`개까지 쓴다. 폐쇄(import 그래프) 재사용은 조상 검사를 넓혀 이 브랜치가 만든 실패를 가릴 수 있어 쓰지 않는다. 명시적 `--tests full`(게시 증거)은 `reach()`의 엄격한 규칙 그대로이며, 재사용은 캐시 행을 쓰지 않고 `reused_from` 표시가 있는 행은 `entries()`가 버리므로 `publish_evidence`는 재사용을 증거로 받지 않는다.
+
+**관측.** 재사용마다 `[cache] reused <argv> from <sha10> (delta selects none of its paths)` 한 줄과 `land_events`의 `reuse` 이벤트(`reused`·`prior`·`total`)를 남긴다. 이 커밋의 Metrics 줄이 바꾸기 전 숫자다.
+
+**되돌림.** `_delta_paths`의 `_full_delta` 호출 한 곳을 지우면 추가 36 이전 동작이다. 재사용한 라운드가 NEW 실패를 놓쳤다면 즉시 되돌린다.
