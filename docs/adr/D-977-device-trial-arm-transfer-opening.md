@@ -39,7 +39,7 @@
    - **하달 뒤 확인:** "물체가 `target`에 놓였다"는 `operator_attested`로 기록해 Harbor가 읽는다. 작업 상태는 `ACTION_SUCCEEDED`까지만 가고 `GOAL_CONFIRMED`는 자동 근거 생산자나 별도 결정이 있어야 한다. 사람 확인이 Fleet의 목표 확인을 대신하지 않으므로 D-328 §1·§4와 충돌하지 않는다. 업무 완료 판단은 Harbor 몫이다(D-856 §3).
    - 근거 레코드는 확인자 principal·시각·근거 출처를 남기고, 자동 근거와 한 화면에서 같은 신뢰로 보이지 않게 구분 표시한다. 자동 생산자가 등록되면 `operator_attested` 허용은 설정에서 끈다.
 6. **위임(D-965).** 현장 R은 `ARM_TRANSFER` 제안을 D-855 위임으로 셀에 넘긴다. 위임 종류 추가(`ControlNavigationCandidate`에 팔 작업)는 후속 구현이고, 그 전에는 R이 접수하지 않고 앱은 HOLD로 다룬다. 한 Fleet이 팔과 Pinky를 함께 소유하는 개발 구성에서는 그 Fleet이 직접 접수한다.
-7. **정지·rearm.** 정지 해제와 rearm은 셀 화면의 사람만 한다(D-430, D-965). 앱과 R은 해제 경로가 아니다. owner 정지 래치와 Fleet 펜스(`authority_epoch`·`dispatch_generation`)는 지금 규칙 그대로다. 단 Fleet 팔 사건 보류의 **기록** 해제는 2026-11-17 사용자 결정으로 자동이며(D-971 개정), 래치·rearm·재개는 이 항 그대로 사람만 한다.
+7. **정지·rearm.** 정지 해제와 rearm은 셀 화면의 사람만 한다(D-430, D-965). 앱과 R은 해제 경로가 아니다. owner 정지 래치와 Fleet 펜스(`authority_epoch`·`dispatch_generation`)는 지금 규칙 그대로다.
 8. **첫 실물 동작은 사용자 입회.** 토크 ON, 첫 `SubmitAction`은 S5 실물 수용 절차(D-797 §8, D-403 §7)에서 사용자가 보는 앞에서 한다. 이 결정은 그 절차를 대신하지 않는다. 2026-11-17 결정: 첫 실동작은 arm_s 바닥→벨트 한 번, 사용자 입회. `--commissioning`은 사용자가 셀에서 만든 단기·1회용 로컬 입회 토큰이 있을 때만 켜고 wire 메시지로는 켜지 않으며, 새로 발급한 기명 운영자 토큰으로 admit한다. Gate의 비전 재계획 훅(wrist·pinch·feel)과 `finish_attempt`가 아직 연결되지 않았으므로, 그 전까지 `device_trial`의 모든 운반은 이 입회 토큰이 필요하다(없거나 낡으면 `CarryRefused`로 명령 전에 거절). 훅이 연결되면 완화한다.
 
 ### 기존 결정과의 관계
