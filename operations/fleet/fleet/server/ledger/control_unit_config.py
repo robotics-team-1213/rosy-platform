@@ -100,3 +100,19 @@ class ControlUnitTopology:
                 return current.unit_id
             current = self.unit(current.parent)
         raise ValueError("CONTROL_UNIT_OUTSIDE_SCOPE")
+
+
+def unit_scope(topology=None, unit_id=None, *, has_arms=False):
+    """What this Fleet instance owns, so the console shows only its own unit's surfaces (D-960 §4, D-974).
+
+    Standalone Fleet (no manifest) keeps every drive surface and its local robot enrollment.
+    """
+    if topology is None:
+        return {"role": "standalone", "drive": True, "arms": bool(has_arms), "children": False,
+                "enrollment": True}
+    unit = topology.unit(unit_id)
+    return {"role": "root" if unit.parent is None else "cell",
+            "drive": any(r.startswith("robot:") for r in unit.resources),
+            "arms": bool(has_arms) or any(r.startswith("workcell:") for r in unit.resources),
+            "children": any(u.parent == unit.unit_id for u in topology.units.values()),
+            "enrollment": False}  # a manifest fixes the robot roster (enrollment.owned_robot_ids)

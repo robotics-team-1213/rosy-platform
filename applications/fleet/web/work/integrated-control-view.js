@@ -100,10 +100,13 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   scopeNote.append(node("summary", "정지 적용 범위 안내"),
     node("p", "상단 비상 정지는 이 관제의 직접 장치에 적용됩니다. 아래 하위 관제 정지 요청은 관제별 전달 결과를 확인해야 합니다."),
     node("p", "최신 정지 세대가 있는 관제만 요청에 포함합니다. 정보 없는 관제는 미전달일 수 있습니다. 물리 정지는 미확인입니다."));
-  panel.append(heading, node("p", "하위 관제 정지는 관제별 전달 결과를 확인합니다.", "hint"),
-    status, list, selectedName, detail, mapRead, mapInfo, map,
-    node("h3", "선택한 하위 관제의 정지 요청"), scopeNote,
-    actions, notice, stopIdentity, results, historyFold, reconcileFold);
+  const intro = node("p", "하위 관제 정지는 관제별 전달 결과를 확인합니다.", "hint"),
+    stopHeading = node("h3", "선택한 하위 관제의 정지 요청");
+  panel.append(heading, intro, status, list, selectedName, detail, mapRead, mapInfo, map,
+    stopHeading, scopeNote, actions, notice, stopIdentity, results, historyFold, reconcileFold);
+  // D-960 §4: a unit without children (a cell) keeps only its stop history and the local reconcile (D-862).
+  for (const part of [intro, list, selectedName, detail, mapRead, mapInfo, map, stopHeading, scopeNote, actions, notice,
+    stopIdentity, results]) part.dataset.unitScope = "children";
   anchor.before(panel);
   let epoch = 0, overview = null, sampled = 0, target = null, inFlight = false, busy = false,
     selection = 0, detailRevision = 0, mapRef = null, pending = null, snapshot = null, reference = null, owner = null;

@@ -154,6 +154,10 @@
       "path": "shared/fleet-header.js",
       "media_type": "application/javascript"
     },
+    "unit-scope.js": {
+      "path": "shared/unit-scope.js",
+      "media_type": "application/javascript"
+    },
     "styles.css": {
       "path": "shared/styles.css",
       "media_type": "text/css"

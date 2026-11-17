@@ -11,7 +11,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 import yaml
 
-from fleet.server.control_unit_config import ControlUnitTopology, _identifier, canonical_unit_id
+from fleet.server.control_unit_config import ControlUnitTopology, _identifier, canonical_unit_id, unit_scope
 
 
 @dataclass(frozen=True)
@@ -248,7 +248,8 @@ def install_control_unit(app, path, *, tasks, console, principals, named_logins,
     if enrollment is not None:  # a robot enrolled outside the manifest would stop the next start
         resources = config.topology.unit(config.unit_id).resources
         enrollment.owned_robot_ids = frozenset(r[6:] for r in resources if r.startswith("robot:"))
-    console.control_unit = {"unit": config.unit_id, "root": config.topology.unit(config.unit_id).parent is None}
+    console.control_unit = {"unit": config.unit_id, "root": config.topology.unit(config.unit_id).parent is None,
+                            "scope": unit_scope(config.topology, config.unit_id, has_arms=bool(configured_omx))}
     store = ControlUnitStore(tasks.store.path, unit_id=config.unit_id)
     # ARM routes install after this; read their store when a delegated arm proposal arrives (D-965).
     service = ControlUnitService(config.topology, store, tasks, console, peer=None,

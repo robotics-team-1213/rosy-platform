@@ -106,8 +106,10 @@ test("a control-unit instance is named by its unit, not the shared pairing name 
   assert.equal(nodes["fleet-name"].textContent, "rosy-site");
   showFleet({name: "rosy-site", unit: "R", root: true, online: 0, total: 0});
   assert.equal(nodes["fleet-name"].textContent, "통합관제 R");
-  showFleet({name: "rosy-site", unit: "ARM-CELL", root: false, online: 0, total: 0});
+  showFleet({name: "rosy-site", unit: "ARM-CELL", root: false, online: 0, total: 0,
+    scope: {role: "cell", drive: false, arms: true, children: false, enrollment: false}});
   assert.equal(nodes["fleet-name"].textContent, "ARM-CELL");
+  assert.equal(nodes["fleet-name"].title, "셀 관제 · 맡은 일: 팔 셀");  // D-960 §4: what this screen owns
 });
 
 test("role words are Korean; English stays out of the text", () => {

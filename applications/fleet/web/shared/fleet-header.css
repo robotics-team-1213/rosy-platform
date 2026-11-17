@@ -146,3 +146,10 @@ ui-topbar {
 }
 /* below 384px the logged-out bar (word, status, login, account, stop) has no room for a sixth 48px target: the AI panel stays reachable from 390px up (F4) */
 @container (width < 24rem) { #assistant-toggle { display: none; } }
+/* D-960 §4: a block another control unit owns stays off this unit's screen (unit-scope.js sets the flags). */
+html[data-unit-scope-ready]:not([data-unit-drive]) [data-unit-scope="drive"],
+html[data-unit-scope-ready]:not([data-unit-arms]) [data-unit-scope="arms"],
+html[data-unit-scope-ready]:not([data-unit-children]) [data-unit-scope="children"],
+html[data-unit-scope-ready]:not([data-unit-enrollment]) [data-unit-scope="enrollment"],
+html:not([data-unit-scope-ready]) [data-unit-scope="no-arms"],
+html[data-unit-arms] [data-unit-scope="no-arms"] { display: none; }

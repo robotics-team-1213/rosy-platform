@@ -85,3 +85,19 @@ def test_state_names_the_instance_by_its_control_unit(tmp_path):
     with TestClient(application(tmp_path)) as client:
         fleet = client.get("/api/fleet/state", headers={"Authorization": "Bearer viewer-token"}).json()["fleet"]
     assert (fleet["unit"], fleet["root"]) == ("A1", False)
+    # D-960 §4: the screen hides what this unit does not own; A1 drives a1 and has no arm or child.
+    assert fleet["scope"] == {"role": "cell", "drive": True, "arms": False, "children": False, "enrollment": False}
+
+
+def test_unit_scope_reads_the_manifest_and_standalone_keeps_everything():
+    from fleet.server.control_unit_config import ControlUnitTopology, unit_scope
+    from test_control_unit_service import MANIFEST
+
+    topology = ControlUnitTopology.from_mapping({"revision": "v1", "units": [
+        *MANIFEST["units"], {"id": "CELL-A", "parent": "R", "resources": ["workcell:arm_a"]}]})
+    assert unit_scope(topology, "R") == {"role": "root", "drive": False, "arms": False, "children": True,
+                                         "enrollment": False}
+    assert unit_scope(topology, "CELL-A")["arms"] is True
+    assert unit_scope(topology, "B", has_arms=True)["arms"] is True  # an OMX wired to this instance
+    assert unit_scope() == {"role": "standalone", "drive": True, "arms": False, "children": False,
+                            "enrollment": True}

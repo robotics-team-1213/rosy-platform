@@ -214,7 +214,7 @@
         <p>현재 만들 수 있는 작업이 없습니다. 관제 연결과 권한·사이트 설정을 확인하세요.</p>
         <div class="actions">
           <a class="ui-action-link" data-kind="quiet" href="/console">관제 지도로 이동</a>
-          <a class="ui-action-link" data-kind="quiet" href="/console/cell">팔레트 적재 작업대</a>
+          <a class="ui-action-link" data-kind="quiet" href="/console/cell" data-unit-scope="arms">팔레트 적재 작업대</a>
         </div>
       </ui-empty>
     </section>
@@ -381,7 +381,7 @@
             <ul id="site-path-list"></ul>
           </details>
         </div>
-        <details class="charge-bays" id="charge-bays-fold">
+        <details class="charge-bays" id="charge-bays-fold" data-unit-scope="drive">
           <summary class="ui-disclosure-row"><span id="charge-bays-heading">충전 칸 · 셀 인계 상태 (보기 전용)</span><ui-tag id="charge-bays-state" status="neutral">—</ui-tag></summary>
           <ul id="charge-bay-rows" class="charge-bay-rows"></ul>
           <p class="hint" id="charge-bays-hint" hidden></p>
@@ -432,7 +432,7 @@
       </section>
       <section class="context-block ops-block" aria-labelledby="fleet-operations-heading">
         <h2 id="fleet-operations-heading">대형·신호·기록</h2>
-        <div class="formation" aria-labelledby="formation-heading" data-role-lock>
+        <div class="formation" aria-labelledby="formation-heading" data-role-lock data-unit-scope="drive">
           <div class="robot-head">
             <h3 id="formation-heading">대형·대열</h3>
             <span class="spacer"></span>
@@ -495,7 +495,7 @@
           <p class="hint" id="signals-hint" hidden></p>
         </div>
 
-        <div class="charge-bays" aria-labelledby="platoon-heading">
+        <div class="charge-bays" aria-labelledby="platoon-heading" data-unit-scope="drive">
           <div class="robot-head">
             <h3 id="platoon-heading">대열 간격</h3>
             <span class="spacer"></span>

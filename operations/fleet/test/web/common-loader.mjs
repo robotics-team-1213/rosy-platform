@@ -8,6 +8,9 @@ export async function resolve(specifier, context, next) {
   if (specifier === "/console/assets/authorization.js") {
     return next(new URL("../../../../applications/fleet/web/shared/authorization.js", import.meta.url).href, context);
   }
+  if (specifier === "/console/assets/unit-scope.js") {
+    return next(new URL("../../../../applications/fleet/web/shared/unit-scope.js", import.meta.url).href, context);
+  }
   if (specifier === "/console/assets/poll-gate.js") {
     return next(new URL("../../../../applications/fleet/web/shared/poll-gate.js", import.meta.url).href, context);
   }

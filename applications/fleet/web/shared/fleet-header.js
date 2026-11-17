@@ -5,6 +5,7 @@ import "/common/ui.js";  // wires the `[data-theme-cycle]` button
 import {createConnectionNotice} from "/common/connection-notice.js";
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {renderAccountApps, roleLabel} from "/common/account-profile.js";
+import {applyUnitScope, scopeSummary} from "/console/assets/unit-scope.js";
 export {roleLabel};
 
 export const SESSION_REASON = "접속이 필요합니다";
@@ -160,6 +161,8 @@ export function showSignedOut({refused = true} = {}) {
 export function showFleet(fleet, robots = null) {
   // D-974: an instance in a control-unit tree is named by its unit (R and ARM-CELL share one host).
   $("fleet-name").textContent = fleet.unit ? (fleet.root ? `통합관제 ${fleet.unit}` : fleet.unit) : fleet.name || "사이트";
+  applyUnitScope(fleet.scope);  // D-960 §4: hide jobs another unit's screen owns
+  $("fleet-name").title = scopeSummary(fleet.scope);
   const pill = $("online-pill");
   if (!pill) return;  // 연결 수는 관제 문서에만 있다(D-741 3)
   delete pill.dataset.locked;
