@@ -57,6 +57,7 @@ class Repo:
     _texts: dict[str, str] = field(default_factory=dict)
     _imports: dict[str, set[str]] = field(default_factory=dict)
     _tokens: dict[str, set[str]] = field(default_factory=dict)
+    _importers: dict[str, list[str]] = field(default_factory=dict)
     _cat: list = field(default_factory=list)  # one `git cat-file --batch` process for `rev`
 
     @classmethod
@@ -166,8 +167,8 @@ class Repo:
         return {name: source for name, source in names.items() if name not in IGNORED_BASENAMES}
 
 
-    def local_importers(self, path: str) -> set[str]:
-        """Stems of the non-test modules beside ``path`` that import it, directly or through each other.
+    def local_importers(self, path: str, depth: int | None = None) -> set[str]:
+        """Stems of the non-test modules beside ``path`` that import it (``depth`` hops; None = closure).
 
         A test that loads experiment_center reaches experiment_hub through it; without this the hub was
         "unknown -> full" in 17 landings on 2026-11-01, and 9 learning modules had the same gap (D-889 21)."""
@@ -176,20 +177,76 @@ class Repo:
                     and t != path and not TEST_FILE.search(t)]
         found: set[str] = set()
         frontier = {p.stem}
-        while frontier:
-            stem = frontier.pop()
-            for sibling in siblings:
-                name = PurePosixPath(sibling).stem
-                if name not in found and stem in self.imports(sibling):
-                    found.add(name)
-                    frontier.add(name)
+        hops = 0
+        while frontier and (depth is None or hops < depth):
+            reached: set[str] = set()
+            for stem in frontier:
+                for sibling in siblings:
+                    name = PurePosixPath(sibling).stem
+                    if name not in found and stem in self.imports(sibling):
+                        found.add(name)
+                        reached.add(name)
+            frontier, hops = reached, hops + 1
         return found
+
+    def dotted(self, path: str) -> str | None:
+        """Runtime import name of a changed ``.py`` below its owning root (``fleet.pipeline.x``); None if unresolved."""
+        if not path.endswith(".py") or PurePosixPath(path).name == "__init__.py":
+            return None
+        roots = [r for r in self.safety_roots if r.get("import_prefix") and path.startswith(r["path"].rstrip("/") + "/")]
+        if not roots:
+            return None
+        root = max(roots, key=lambda r: len(r["path"]))
+        rel = path[len(root["path"].rstrip("/")) + 1:-3]
+        rel = rel.removeprefix("src/")
+        for key, package in sorted((root.get("source_packages") or {}).items(), key=lambda kv: -len(kv[0])):
+            if key == "" or rel.startswith(key.rstrip("/") + "/"):
+                rest = rel[len(key):].strip("/") if key else rel
+                return f"{package}.{PurePosixPath(rest).name}"  # a source package is flattened to its stem
+        name = rel.replace("/", ".")
+        return name if any(name == p or name.startswith(p + ".") for p in root["import_prefix"]) else None
+
+    def _reaches(self, path: str, name: str) -> bool:
+        imports = self.imports(path)
+        parent, _, last = name.rpartition(".")
+        return (name in imports or any(i.startswith(name + ".") for i in imports)
+                or bool(parent and parent in imports and last in self.tokens(path)))
+
+    def imports_changed(self, path: str, changed: list[str]) -> bool:
+        """Does ``path`` import a changed module by name, through its parent package, or through one importer?"""
+        for changed_path in changed:
+            name = self.dotted(changed_path)
+            if not name:
+                continue
+            parent, _, last = name.rpartition(".")
+            if parent and parent in self.imports(path):
+                init = str(PurePosixPath(changed_path).parent / "__init__.py")
+                if last in self.tokens(path) or (init in self.tracked and last in self.tokens(init)):
+                    return True
+            if self._reaches(path, name) or any(self._reaches(path, hop) for hop in self._hops(changed_path, name)):
+                return True
+        return False
+
+    def _relative(self, path: str, changed_path: str) -> bool:
+        """A sibling re-exporting the changed module with ``from .x import`` (the IMPORT scan skips relative forms)."""
+        if PurePosixPath(path).parent != PurePosixPath(changed_path).parent:
+            return False
+        last = re.escape(PurePosixPath(changed_path).stem)
+        return bool(re.search(rf"^\s*from\s+\.{last}\b|^\s*from\s+\.\s+import\b.*\b{last}\b",
+                              self.text(path), re.MULTILINE))
+
+    def _hops(self, changed_path: str, name: str) -> list[str]:
+        if changed_path not in self._importers:
+            self._importers[changed_path] = [h for t in self.tracked if t.endswith(".py") and t != changed_path
+                                             and not TEST_FILE.search(t) and (h := self.dotted(t))
+                                             and (self._reaches(t, name) or self._relative(t, changed_path))]
+        return self._importers[changed_path]
 
     def basename_unique(self, path: str) -> bool:
         name = PurePosixPath(path).name
         return sum(1 for t in self.tracked if PurePosixPath(t).name == name) == 1
 
-    def referencing_tests(self, path: str) -> list[str]:
+    def referencing_tests(self, path: str, closure: bool = False) -> list[str]:
         """Test files that name `path`.
 
         By repo path, by a basename unique in the repository, by a helper import,
@@ -207,7 +264,7 @@ class Repo:
             parts = (p.name, p.parent.name)
         simple_parts = bool(parts and all(re.fullmatch(r"[\w.-]+", token) for token in parts))
         helper = p.stem if p.suffix == ".py" and not TEST_FILE.search(path) else None
-        helpers = {helper} | self.local_importers(path) if helper else set()
+        helpers = {helper} | self.local_importers(path, None if closure else 1) if helper else set()
         found = []
         for test in self.test_files:
             if test == path:
@@ -219,4 +276,6 @@ class Repo:
                                    else all(re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])", text)
                                             for token in parts)))):
                 found.append(test)
+        if not found and helper and not closure:  # the 2-hop chain: 2026-11-01 unknown -> full guard
+            return self.referencing_tests(path, True)
         return found
