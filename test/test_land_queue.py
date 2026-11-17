@@ -331,3 +331,16 @@ def test_expired_flags_tickets_past_age_limits_and_skips_self(tmp_path, monkeypa
     full_wait.write_text(json.dumps(finfo))
     assert [r["branch"] for r in queue.expired(tmp_path, now)] == ["feat/old", "feat/full"]
 
+
+def test_a_rollup_with_a_test_record_gets_the_six_hour_window(tmp_path, monkeypatch):
+    """D-889 35: 224327 was killed 4 h in, after its FULL passed."""
+    monkeypatch.setattr(queue, "pid_alive", lambda pid: True)
+    now = 100_000.0
+    rollup = "land/fix/land-rollup-20261117000000-20261117000000"
+    for n, extra in enumerate(({}, {"tested": "abc"}, {"tier": "full_done"})):
+        ticket = queue.take(tmp_path, f"{rollup}-{n}")
+        info = json.loads(ticket.read_text())
+        info.update(pid=424250 + n, start=now - (queue.MAX_AGE_S + 10), **extra)
+        ticket.write_text(json.dumps(info))
+    assert [r.get("tested") or r.get("tier") for r in queue.expired(tmp_path, now)] == [None]
+
