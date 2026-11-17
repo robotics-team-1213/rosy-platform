@@ -343,7 +343,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         (tree.parent / (tree.name + ".stopped")).write_text(f"land.py exit {code}; read {tree.name}.log\n",
                                                             encoding="utf-8")
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
-        split_rollup(tree, snap, reason=reason)
+        split_rollup(tree, snap, reason=verdict(output))
     superseded(tree, snap)
     return code
 
@@ -385,28 +385,42 @@ def lost_host(output: list[str]) -> bool:
     return bool(stops) and all(LOST_HOST in line for line in stops)
 
 
+def verdict(output: list[str]) -> str:
+    """land.py's last STOP block, not a progress line; a lost host leads it."""
+    starts = [i for i, line in enumerate(output) if line.startswith("[land] STOP:")]
+    return (LOST_HOST + "\n" if lost_host(output) else "") + "\n".join(output[starts[-1]:] if starts else [])
+
+
 def split_rollup(tree: Path, snap: str, launch=None, reason: str = "") -> None:
-    """A stopped rollup bisects itself (D-889 addendum 33): main's ``land_rollup.py split`` re-rolls each half and
-    sends a half of one back alone, so passing members still land and the failing one stops with its own reason."""
-    if (not ROLLUP.fullmatch(snap) or os.environ.get("ROSY_ROLLUP_MIXED", "1") == "0"
-            or not (tree.parent / (tree.name + ".members")).is_file() or any(m in reason for m in NO_SPLIT)):
-        return
-    done = tree.parent / (tree.name + ".split")
-    if done.exists():  # a resumed or retried supervisor never queues the halves twice
+    """A stopped rollup is taken apart (D-889 addenda 33, 35): only a NEW failure in ``reason`` (verdict()) bisects
+    it; any other stop queues the members alone."""
+    head, done = reason.partition("\n")[0], tree.parent / (tree.name + ".split")  # done: a retry never splits twice
+    if (not ROLLUP.fullmatch(snap) or os.environ.get("ROSY_ROLLUP_MIXED", "1") == "0" or done.exists()
+            or not (tree.parent / (tree.name + ".members")).is_file() or any(m in head for m in NO_SPLIT)):
         return
     done.write_text(reason + "\n", encoding="utf-8")
     main = Path(git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")).parent
-    print(f"[land-async] {snap}: splitting the rollup into halves", flush=True)
-    (launch or detach)([sys.executable, "-X", "utf8", str(main / "tools" / "land_rollup.py"), "split", tree.name],
+    print(f"[land-async] {snap}: taking the rollup apart", flush=True)
+    (launch or detach)([sys.executable, "-X", "utf8", str(main / "tools" / "land_rollup.py"), "split", tree.name,
+                        *(["bisect"] if "NEW failure" in reason else [])],
                        tree.parent / (tree.name + ".split.log"), main)  # main's cwd: older land_rollup reads it
 
 
 def detach(argv: list[str], log: Path, cwd: Path | None = None) -> subprocess.Popen:
     flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    # cwd: the holder, never the caller's worktree, which Windows then cannot delete while the landing runs
-    with open(log, "w", encoding="utf-8") as out:
-        return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                cwd=cwd or log.parent, creationflags=flags, start_new_session=os.name != "nt")
+
+    def spawn(want: int) -> subprocess.Popen:
+        # cwd: the holder, never the caller's worktree, which Windows then cannot delete while the landing runs
+        with open(log, "w", encoding="utf-8") as out:
+            return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                    cwd=cwd or log.parent, creationflags=want, start_new_session=os.name != "nt")
+
+    # CREATE_BREAKAWAY_FROM_JOB (0x01000000) frees the supervisor from the console's job object; a job that
+    # forbids breakaway raises PermissionError/OSError there and the plain detach flags still hold (11-17)
+    try:
+        return spawn(flags | (0x01000000 if os.name == "nt" else 0))
+    except (PermissionError, OSError):
+        return spawn(flags)
 
 
 def _resume_start(cwd: Path, name: str, land_args: list[str], launch):

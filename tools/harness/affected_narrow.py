@@ -42,12 +42,19 @@ SELF_TEST = re.compile(r"^test/test_(land|remote_|affected|known_failures|worktr
                        r"|host_(?:admission|probe|caps)|lab_hosts"
                        r"|ci_dependencies)[^/]*\.py$")
 
-#: Panel 2026-11-09: the code that picks or runs every other landing's tests keeps FULL (design 0.7 rule 8: a
-#: gate never tests itself with a selection it made). The rest of the gate tools take the self-test tier.
-SELECT_CORE = ("tools/harness/affected_*.py", "tools/land_selection.py", "tools/land_browser.py",
-               "test/known_failures.py", "test/browser_scope.py",
-               *(f"tools/remote/{name}.py" for name in ("remote_pytest", "remote_job", "remote_test_tools",
-                                                       "work_queue", "xdist_plan")))
+#: Panel 2026-11-09: the code that CHOOSES or JUDGES tests keeps FULL (design 0.7 rule 8: a gate never tests
+#: itself with a selection it made). Panel 2026-11-17: 34 of 55 FULL landings in 36 h escalated only because they
+#: touched a tool that merely RUNS tests (RUNNER_TOOLS); those take the self-test tier plus CANARY. The nightly
+#: complete FULL and the pre-publish green FULL (D-868) are the net.
+SELECT_CORE = ("tools/harness/affected_*.py", "tools/land_selection.py", "test/known_failures.py",
+               "test/browser_scope.py")
+RUNNER_TOOLS = ("tools/land_browser.py",
+                *(f"tools/remote/{name}.py" for name in ("remote_pytest", "remote_job", "remote_test_tools",
+                                                        "work_queue", "xdist_plan")))
+#: Real product suites from different areas a runner change must still drive through the changed runner. No
+#: browser canary: browser tests are chosen by land.py (test/browser_scope.py + ROSY_RUN_BROWSER_TESTS=1), not by
+#: this selection, so one cannot be named here; the nightly run covers the browsers.
+CANARY = ("contracts/foundation/test", "operations/world/test", "middleware/media/test")
 
 
 def legacy() -> bool:
@@ -71,6 +78,9 @@ def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
             if SELF_TEST.match(test):
                 add(test, f"selector self-test tier ({path})")
         add(ARCHITECTURE, f"selector self-test tier ({path})")
+        if any(at._match(path, p) for p in RUNNER_TOOLS):
+            for suite in CANARY:
+                add(suite, f"runner canary ({path})")
         return "own"
     if "/" not in path or any(trigger.endswith(t) for t in STAY_FULL):
         return None  # a root conftest, pyproject or pytest.ini reaches every suite
@@ -78,6 +88,33 @@ def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
         add(str(PurePosixPath(path).parent), f"conftest scope ({path})")
         return "own"
     return "own" if trigger.endswith("CI workflow") else "graph"  # lab runs execute no workflow
+
+
+def folder_tests(repo: at.Repo, path: str) -> dict[str, str]:
+    """Tests for a path no module, import root or test names, from its owning folder; {} keeps it FULL.
+
+    The longest platform_parts root holding the path contributes its tests; so do the tests beside the path
+    (its folder or its `test/`) and the tests of a sibling source that names the file (a script its launcher
+    mentions, 2026-11-17: `tools/register_publish_merge_task.ps1` is named only by `tools/publish_main.py`)."""
+    parent = str(PurePosixPath(path).parent)
+    if parent == ".":
+        return {}  # a repo-root file has no owning folder
+    found: dict[str, str] = {}
+    roots = [r for r, _ in repo.owners if at._under(path, r)]
+    if roots:
+        root = max(roots, key=len)
+        for test in repo.test_files_under(root):
+            found[test] = f"owning folder {root} ({path})"
+    for test in repo.test_files:
+        if str(PurePosixPath(test).parent) in (parent, f"{parent}/test"):
+            found.setdefault(test, f"beside {path}")
+    name = PurePosixPath(path).name
+    for sibling in repo.tracked:
+        if (sibling != path and sibling.endswith(".py") and str(PurePosixPath(sibling).parent) == parent
+                and not at.TEST_FILE.search(sibling) and name in repo.text(sibling)):
+            for test in repo.referencing_tests(sibling):
+                found.setdefault(test, f"references {sibling}, which names {path}")
+    return found
 
 
 def add_readers(repo: at.Repo, path: str, trigger: str, add, changed=(), base_text=None) -> str | None:

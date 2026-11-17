@@ -1489,3 +1489,12 @@ def test_single_file_is_serial_and_freeze_sha_cached_in_job_script(monkeypatch):
     assert xp.serial_reason(["pkg/test/test_a.py"], []) == "single test file"
     assert xp.serial_reason(["pkg/test/test_a.py", "pkg/test/test_b.py"], []) is None
     assert ".freeze-sha" in rj.JOB and "_sl=0.5" in rj.ADMIT
+
+
+def test_reboot_soon_gets_a_fresh_d584_wait_budget(monkeypatch, tmp_path):
+    def job(h, path):  # 2026-11-17: 590 s of productive runs, then RebootSoon; the next wait needs a fresh budget
+        if now[0] < 580: now[0] += 590; raise rj.RebootSoon("nightly reboot")
+        return 0
+    now = [0.0]; _fake_hosts(monkeypatch, tmp_path, ["a@1"], job)
+    monkeypatch.setattr(rp, "probe", lambda h, seen=[]: seen.append(1) or (host() if len(seen) != 2 else None))
+    assert rp.run([["x"]], [tmp_path / "l"], wait=600, poll=30, sleep=lambda s: None, clock=lambda: now[0]) == [0]

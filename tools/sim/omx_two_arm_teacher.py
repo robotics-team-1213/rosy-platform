@@ -40,6 +40,16 @@ from omx_two_arm_teacher_stages import (  # noqa: E402, F401
 import palletizing_gripper as jaw  # noqa: E402
 
 
+def zero_est_residual(seed, arm, deg):
+    """A seed's per-joint error of the joint-zero estimate: Gaussian, sigma `deg` (one value or one per joint 1-5), fixed per seed
+    and arm; zeros at 0. Per joint because the marker estimator sees j4 worst (about 1.5-2 deg, the rest about 1)."""
+    sigma = np.broadcast_to(np.asarray(deg, float), 5)
+    if not sigma.any():
+        return np.zeros(6)
+    rng = np.random.default_rng([seed, sites.ARMS.index(arm), 7919])
+    return np.append(np.radians(rng.normal(0., 1., 5) * sigma), 0.)
+
+
 class Teacher:
     SKEW_CASES = (
         (.006, .006, 18.), (.005, -.006, -16.), (.004, .005, -12.),
@@ -56,7 +66,7 @@ class Teacher:
         self.hook = frame_hook or (lambda data, label: None)
         self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), "", {}, 0., 0, 0.
         self.others = set()
-        self.zero_error, self.privileged, self.compensate_zero = {}, True, False
+        self.zero_error, self.privileged, self.compensate_zero, self.zero_est_noise_deg, self.estimated_prefix = {}, True, False, 0., False
         self.servo = {}
         self.servo_comp = r2s_comp.ServoCompensator(world, FPS) if hasattr(world, "q") else None
         if cam_jitter and hasattr(world, "model"):
@@ -81,7 +91,7 @@ class Teacher:
         if not self.privileged:
             targets = {arm: t + self.zero_error[arm] if arm in self.zero_error else t for arm, t in targets.items()}
         if self.servo_comp is not None:
-            targets = self.servo_comp.apply(data, targets)
+            targets = self.servo_comp.apply(data, targets, privileged=self.privileged)
         self.world.advance(data, targets)
         both = ctxs is not None
         ctxs = ctxs if both else [self]
@@ -306,7 +316,8 @@ class Teacher:
                 for a in L.arms:
                     q_true = self.q_now(data, a)
                     q_rep = q_true - self.zero_error.get(a, np.zeros(6))
-                    self.servo_comp.calibrate_zero_offset(a, q_true, q_rep)
+                    # an estimator, not the truth: zero_est = zero_error + the estimate's residual (0 deg = oracle)
+                    self.servo_comp.calibrate_zero_offset(a, q_true + zero_est_residual(self.seed, a, self.zero_est_noise_deg), q_rep)
         for cid, site in here.items():
             j = (0., 0., 0.) if self.seed == 0 or site == "belt" else (*self.rng.uniform(-1, 1, 2) * .0003, float(self.rng.uniform(-1, 1)) * math.radians(.5))
             w.put(data, cid, site, jitter=j)

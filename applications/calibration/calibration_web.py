@@ -32,6 +32,7 @@ for extra in (ROOT / "contracts/foundation", ROOT / "deploy/robot/omx", ROOT / "
         sys.path.append(str(extra))
 import cell_calibration_view  # noqa: E402
 import cell_requests  # noqa: E402
+import calibration_jobs  # noqa: E402
 
 try:
     from core_common.protocol.account_client import AccountUnavailable, browser_session
@@ -47,6 +48,7 @@ OPERATE = "calibration.operate"
 SESSION_COOKIE, FLOW_COOKIE = "rosy_calibration_account", "rosy_calibration_flow"
 API = "/api/calibration/v1/requests"
 PROFILES_API = "/api/calibration/v1/profiles"
+JOBS_API = ("/api/calibration/status", "/api/calibration/jobs", "/api/calibration/assessments", "/api/calibration/incidents/")
 ID = re.compile(r"[A-Za-z0-9_-]{1,96}")
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 FRAME_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png"}
@@ -81,8 +83,8 @@ def summary(req: dict) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    def __init__(self, *args, store: Path, account=None, profiles_path: Path | None = None, **kwargs):
-        self.store, self.account, self.profiles_path = store, account, profiles_path
+    def __init__(self, *args, store: Path, account=None, profiles_path: Path | None = None, jobs=None, **kwargs):
+        self.store, self.account, self.profiles_path, self.jobs = store, account, profiles_path, jobs
         super().__init__(*args, **kwargs)
 
     def log_message(self, *args):
@@ -131,6 +133,10 @@ class Handler(BaseHTTPRequestHandler):
     def can_operate(self, claims):
         return bool(claims and claims.permits(self.account.resource, OPERATE))
 
+    def by_name(self, claims):
+        profile = self.account.profile(_cookie(self, SESSION_COOKIE))
+        return profile["display_name"] if profile else claims.sub
+
     # --- routes -------------------------------------------------------------------------------------------------
     def do_GET(self):
         self.dispatch("GET")
@@ -145,6 +151,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path.startswith("/api/account/"):
                 return self.account_route(method, path)
+            if self.jobs and path.startswith(JOBS_API):
+                return calibration_jobs.handle(self, method, path)
             if path.startswith(PROFILES_API):
                 return self.profiles_api(method, path)
             if path.startswith(API):
@@ -317,12 +325,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def make_server(store: Path, port: int = 8776, account=None, host: str = "127.0.0.1",
-                profiles_path: Path | None = None) -> ThreadingHTTPServer:
+                profiles_path: Path | None = None, cells: Path | None = None, **hooks) -> ThreadingHTTPServer:
     if account and not account.resource.startswith("site:"):
         raise ValueError("Calibration Account requires a site resource")
     return ThreadingHTTPServer(
         (host, port),
-        partial(Handler, store=Path(store), account=account, profiles_path=profiles_path),
+        partial(Handler, store=Path(store), account=account, profiles_path=profiles_path,
+                jobs=calibration_jobs.Jobs(cells, **hooks) if cells else None),
     )
 
 
@@ -333,6 +342,7 @@ def main(argv=None) -> int:
     p.add_argument("--account-config", type=Path, help="Rosy Account receiver json; without it the screen is read-only")
     p.add_argument("--profiles", type=Path, default=None,
                    help="optional JSON registry of arm profiles for 모눈종이 view (default ROSY_CALIBRATION_PROFILES)")
+    p.add_argument("--cells", type=Path, help="cells.json (tools, python, work, arms): turns on status, jobs, assessments (D-1035)")
     args = p.parse_args(argv)
     profiles = args.profiles
     if profiles is None:
@@ -342,7 +352,7 @@ def main(argv=None) -> int:
     if args.account_config:
         from core_common.protocol.account_client import load_account_client
         account = load_account_client(args.account_config, destinations=("/",))
-    server = make_server(args.store or cell_requests.store(), args.port, account, profiles_path=profiles)
+    server = make_server(args.store or cell_requests.store(), args.port, account, profiles_path=profiles, cells=args.cells)
 
     def retry():  # a logout that could not reach Account is retried until it does
         while not stop.wait(20):
