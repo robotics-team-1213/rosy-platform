@@ -21,14 +21,18 @@ from pathlib import Path
 from types import SimpleNamespace
 
 SECTION_KEYS = {"device_trial_arms", "installation", "installation_spec", "cell_config", "libraries", "presence_token"}
+OPTIONAL_KEYS = {"deadline_s"}  # whole-carry limit, default arm_session_carry.DEADLINE_S (300 s, a proposal not a measurement)
 
 
 def parse(section, *, instance_id: str, commissioning_root) -> dict | None:
     """None without a section; otherwise the section, or ValueError. Run by --check, so a bad file never starts."""
     if section is None:
         return None
-    if not isinstance(section, dict) or set(section) != SECTION_KEYS:
-        raise ValueError(f"arm_goals must hold exactly {sorted(SECTION_KEYS)}")
+    if not isinstance(section, dict) or not SECTION_KEYS <= set(section) <= SECTION_KEYS | OPTIONAL_KEYS:
+        raise ValueError(f"arm_goals must hold exactly {sorted(SECTION_KEYS)} (and optionally {sorted(OPTIONAL_KEYS)})")
+    deadline = section.get("deadline_s")
+    if "deadline_s" in section and (isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or deadline <= 0):
+        raise ValueError("arm_goals.deadline_s must be a positive number of seconds")
     if section["device_trial_arms"] != [instance_id]:
         raise ValueError("device_trial goals must name exactly the one arm this owner serves")
     if commissioning_root is None:
@@ -117,4 +121,6 @@ def build(settings, *, field=None, presence=None):
     if section is None:
         return None
     from rosy_agent.arm_session_carry import ArmGoals
-    return ArmGoals(load_installation(section), open_carry_for(section, field=field, presence=presence))
+    # deadline_s must be set from measured chunk durations of this arm's carry; the 300 s default is only a proposal.
+    timing = {"deadline_s": float(section["deadline_s"])} if "deadline_s" in section else None
+    return ArmGoals(load_installation(section), open_carry_for(section, field=field, presence=presence), timing)

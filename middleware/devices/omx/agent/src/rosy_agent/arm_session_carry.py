@@ -26,6 +26,7 @@ _LOG = logging.getLogger(__name__)
 PHASES = ("approach", "grasp", "transfer", "release")
 PHASE_LENGTHS = (3, 2, 3, 3)  # load+goto+descend | grasp+lift | park+goto+descend | release+lift+park
 RESULT_SOURCE = "omx-session-step"
+# DEADLINE_S is a proposal; the owner config (arm_goals.deadline_s) must set it from measured chunk durations.
 POLL_S, FENCE_LOSS_S, DEADLINE_S = 0.25, 3.0, 300.0
 
 

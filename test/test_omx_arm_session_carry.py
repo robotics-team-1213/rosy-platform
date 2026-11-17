@@ -354,3 +354,22 @@ def test_release_evidence_is_the_release_step_not_the_final_park(tmp_path, kin, 
     submit(owner, grant(owner, installation))
     wait_for(state_is(owner, "SUCCEEDED"))
     assert seen[-1] == 100.0 + session.commands.index("run release_place") + 1  # not the park 2 commands later
+
+
+def test_deadline_is_configurable_from_the_goals_section_and_defaults_to_300():
+    parse = lambda section: goals_module.parse(section, instance_id="omx_cell_a_01", commissioning_root="/c")  # noqa: E731
+    assert parse({**SECTION, "deadline_s": 120})["deadline_s"] == 120 and parse(SECTION) == SECTION
+    for bad in (0, -5, "300", True):
+        with pytest.raises(ValueError, match="deadline_s"):
+            parse({**SECTION, "deadline_s": bad})
+    installed = SimpleNamespace(bindings=None)
+    settings = SimpleNamespace(arm_goals={**SECTION, "deadline_s": 120})
+    monkey = goals_module.load_installation
+    goals_module.load_installation = lambda section: installed
+    try:
+        assert goals_module.build(settings).timing == {"deadline_s": 120.0}
+        assert goals_module.build(SimpleNamespace(arm_goals=SECTION)).timing is None
+    finally:
+        goals_module.load_installation = monkey
+    from rosy_agent import arm_session_carry
+    assert arm_session_carry.DEADLINE_S == 300.0
