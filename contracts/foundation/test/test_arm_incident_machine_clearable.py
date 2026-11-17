@@ -111,3 +111,9 @@ def test_only_park_strain_stops_are_machine_clearable_flagged_rows():
 def test_everything_else_stays_with_a_person(facts, why):
     ok, reason = machine_clearable(facts)
     assert ok is False and why in reason
+
+
+def test_a_non_string_error_or_fault_is_refused_not_raised():
+    for bad in ([PARK_ERROR], {"text": PARK_ERROR}, 7):
+        assert machine_clearable({**SAFE, "flagged": [park(error=bad, fault=bad)]})[0] is False
+        assert machine_clearable({**SAFE, "flagged": [park(fault=bad)]})[0] is False

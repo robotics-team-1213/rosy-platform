@@ -193,8 +193,9 @@ def _park_strain(row) -> bool:
             or row.get("person_needed")):
         return False
     texts = [row.get(k) for k in ("error", "fault") if row.get(k) not in (None, "")]
-    return (bool(texts) and len(set(texts)) == 1
-            and all(isinstance(t, str) and PARK_STRAIN.fullmatch(t) is not None for t in texts))
+    if not texts or not all(isinstance(t, str) for t in texts):  # a list or dict here is unhashable: refuse, never 500
+        return False
+    return len(set(texts)) == 1 and all(PARK_STRAIN.fullmatch(t) is not None for t in texts)
 
 
 def machine_clearable(facts) -> tuple[bool, str]:
