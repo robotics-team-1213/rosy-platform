@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath
 from affected_pack import IGNORED_BASENAMES, MAX_INVOCATION_CHARS, SelectionError, pack  # noqa: F401
 from affected_repo import HARNESS, IMPORT, TEST_FILE, Repo, _git, _match, _under  # noqa: F401  (re-exported)
 
+import affected_closure
 import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
 import affected_exclusive
 import safety_review  # D-430 5 judge, reused so the selector and the trailer rule agree
@@ -248,6 +249,15 @@ def _outside_ci_matrix(paths: list[str]) -> list[str]:
 
 
 
+def _narrowed_tests(repo: Repo, path: str, test: str) -> list[str] | None:
+    """D-436 addendum: a registered test directory narrows to the files whose import closure reaches `path`."""
+    if test.endswith(".py") or not repo.exists(test) or TEST_FILE.search(path):
+        return None
+    if "_closure" not in vars(repo):
+        repo._closure = affected_closure.Closure(repo)
+    return affected_closure.narrow(repo, path, test, repo._closure)
+
+
 def select(repo: Repo, changed: list[str], moved: list[str] = (),
            harness_texts: tuple[str, str] | None = None, base_text=None) -> Selection:
     """`harness_texts`: ``harness.yaml`` at the merge base and at head; without it that file is FULL.
@@ -328,7 +338,9 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                     broad_fallback_modules[module["name"]] = module
             else:
                 for test in tests:
-                    add(test, f"module {module['name']} ({path})")
+                    kept = None if safety_review.is_safety(path, repo.safety_roots, repo.safety_modules)                         else _narrowed_tests(repo, path, test)
+                    for one in kept or [test]:
+                        add(one, f"module {module['name']} ({path})" + (" [import closure]" if kept else ""))
             continue
         prefixes = repo.prefixes_under(path)
         importing = [t for t in repo.test_files if prefixes and repo.imports_prefix(t, prefixes)]
