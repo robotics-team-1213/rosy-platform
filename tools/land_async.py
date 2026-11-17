@@ -42,7 +42,7 @@ PREFIX = "land/"
 ROLLUP = re.compile(r"land/fix/land-rollup-\d{14}-\d{14}")
 NO_WINDOW = 0x08000000  # subprocess.CREATE_NO_WINDOW, named here so the module imports off Windows too
 QUEUE_FULL = "landing queue full"
-ROOM_WAIT_S = 3 * 3600  # a landing refused only by the queue cap waits this long for room, then stops as before
+ROOM_WAIT_S = 3600  # a landing refused only by the queue cap waits this long without the queue moving, then stops
 FULL_WAIT_S, FULL_POLL_S = 30 * 60, 60  # D-889 addendum 32: a full queue at queue time waits, then stops
 # Laptop commit exhaustion ended four landings at once on 2026-11-06 with these as land.py's last line.
 RESOURCE_SHORTAGE = ("WinError 1450", "WinError 1455", "Out of memory", "MemoryError")
@@ -314,8 +314,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
             time.sleep(RESOURCE_WAIT_S)
             continue
         full = code != 0 and reason.startswith(f"[land] STOP: {QUEUE_FULL} (")
-        if not (full and time.monotonic() < deadline and room(tree, deadline)
-                and time.monotonic() < deadline):
+        if not (full and (deadline := _queue().wait_drain(tree, room, deadline, ROOM_WAIT_S))):
             break
         print(f"[land-async] {snap}: the queue has room again; land.py once more", flush=True)
     landed = subprocess.run(["git", "-C", str(tree), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0
@@ -343,7 +342,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         (tree.parent / (tree.name + ".stopped")).write_text(f"land.py exit {code}; read {tree.name}.log\n",
                                                             encoding="utf-8")
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
-        split_rollup(tree, snap, reason=reason)
+        split_rollup(tree, snap, reason=verdict(output))
     superseded(tree, snap)
     return code
 
@@ -385,19 +384,24 @@ def lost_host(output: list[str]) -> bool:
     return bool(stops) and all(LOST_HOST in line for line in stops)
 
 
+def verdict(output: list[str]) -> str:
+    """land.py's last STOP block, not a progress line; a lost host leads it."""
+    starts = [i for i, line in enumerate(output) if line.startswith("[land] STOP:")]
+    return (LOST_HOST + "\n" if lost_host(output) else "") + "\n".join(output[starts[-1]:] if starts else [])
+
+
 def split_rollup(tree: Path, snap: str, launch=None, reason: str = "") -> None:
-    """A stopped rollup bisects itself (D-889 addendum 33): main's ``land_rollup.py split`` re-rolls each half and
-    sends a half of one back alone, so passing members still land and the failing one stops with its own reason."""
-    if (not ROLLUP.fullmatch(snap) or os.environ.get("ROSY_ROLLUP_MIXED", "1") == "0"
-            or not (tree.parent / (tree.name + ".members")).is_file() or any(m in reason for m in NO_SPLIT)):
-        return
-    done = tree.parent / (tree.name + ".split")
-    if done.exists():  # a resumed or retried supervisor never queues the halves twice
+    """A stopped rollup is taken apart (D-889 addenda 33, 35): only a NEW failure in ``reason`` (verdict()) bisects
+    it; any other stop queues the members alone."""
+    head, done = reason.partition("\n")[0], tree.parent / (tree.name + ".split")  # done: a retry never splits twice
+    if (not ROLLUP.fullmatch(snap) or os.environ.get("ROSY_ROLLUP_MIXED", "1") == "0" or done.exists()
+            or not (tree.parent / (tree.name + ".members")).is_file() or any(m in head for m in NO_SPLIT)):
         return
     done.write_text(reason + "\n", encoding="utf-8")
     main = Path(git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")).parent
-    print(f"[land-async] {snap}: splitting the rollup into halves", flush=True)
-    (launch or detach)([sys.executable, "-X", "utf8", str(main / "tools" / "land_rollup.py"), "split", tree.name],
+    print(f"[land-async] {snap}: taking the rollup apart", flush=True)
+    (launch or detach)([sys.executable, "-X", "utf8", str(main / "tools" / "land_rollup.py"), "split", tree.name,
+                        *(["bisect"] if "NEW failure" in reason else [])],
                        tree.parent / (tree.name + ".split.log"), main)  # main's cwd: older land_rollup reads it
 
 

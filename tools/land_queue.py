@@ -228,7 +228,10 @@ def expired(qdir: Path, now: float | None = None) -> list[dict]:
         pid = int(row.get("pid") or 0)
         if pid in (0, os.getpid()):
             continue
-        limit = FULL_MAX_AGE_S if (row.get("tier") == "full" or row.get("full_wait")) else MAX_AGE_S
+        # D-889 35: a rollup holding a test record is mid-work like a FULL waiter (224327 was killed 4 h in, after its FULL)
+        rolled = (row.get("branch") or "").startswith("land/fix/land-rollup-") and (
+            row.get("tested") or row.get("tier") == "full_done")
+        limit = FULL_MAX_AGE_S if (row.get("tier") == "full" or row.get("full_wait") or rolled) else MAX_AGE_S
         if row["age"] > limit:
             out.append({**row, "path": qdir / row["ticket"]})
     return out
@@ -313,6 +316,23 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
 # Backpressure: at most CAP live tickets. A queue of 34 (2026-10-31, ~2 landings/h) meant ~15 h of waiting, every
 # landing ahead moved main under the rest, and old lander code lingered for hours; past CAP a landing is refused.
 CAP = int(os.environ.get("ROSY_LAND_QUEUE_CAP", "12"))
+
+
+def signature(wt: Path) -> tuple[str, ...]:
+    """Ticket names: they change whenever a ticket lands or is released."""
+    return tuple(sorted(p.name for p in queue_dir(wt).glob("[0-9]*.json")))
+
+
+def wait_drain(wt: Path, room, deadline: float, window: float) -> float:
+    """The deadline (moved out by ``window`` while tickets keep leaving) once ``room`` opens, else 0.0."""
+    sig = signature(wt)
+    while time.monotonic() < deadline:
+        if room(wt, deadline) and time.monotonic() < deadline:
+            return deadline
+        if signature(wt) == sig:
+            return 0.0  # nothing landed or was released for a whole wait window
+        sig, deadline = signature(wt), time.monotonic() + window
+    return 0.0
 
 
 def full(qdir: Path) -> str | None:

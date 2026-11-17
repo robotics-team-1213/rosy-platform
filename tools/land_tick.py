@@ -7,13 +7,14 @@ the next), never deleting work:
 
 1. main-red recheck: when main moved since the last tick and ids are open, run them on main (``land_mainred
    recheck``); ids that pass close, which is what lets the landings stopped on them go again.
-2. resume: orphaned landings and MAIN-RED stops main has cleared (``land_async.orphans``); resumed together they
-   gather and roll up as one landing (``land_prepare.gather``).
-3. rollup: ``land_rollup apply --auto`` for pending landings that fit together.
+2. resume: orphaned landings and MAIN-RED stops main has cleared (``land_async.orphans``).
+3. rollup: ``land_rollup apply --auto`` for pending landings that fit together. The only rollup trigger (D-889 36).
 4. cleanup: ``land_gc`` (lossless), worktrees (landed and orphan ones at once, any idle WORKTREE_IDLE_H with its
    branch kept and dirty work under refs/wip/) and the branch sweep (merged go, idle unlanded to refs/archive/).
 5. report: ``<git-common-dir>/rosy-land-backlog.txt``, the queue, stops by kind and open main-red ids with age and
-   owner. An unowned main-red id older than ALERT_S is the line a person or agent acts on.
+   owner. An unowned main-red id older than ALERT_S is the line a person or agent acts on. Once per 24 h it adds a
+   ``[metrics]`` line (arrivals, landed, lead p50/p90, turn-deadline releases, rollups) and a row in
+   ``rosy-land-metrics.jsonl``: the "before" and "after" numbers a land-tool commit cites (D-889 36).
 
     python tools/land_tick.py [--report]        # --report: step 5 only
 """
@@ -32,7 +33,9 @@ import land_async  # noqa: E402
 import land_cache  # noqa: E402
 import land_gc  # noqa: E402
 import land_mainred  # noqa: E402
+import land_events  # noqa: E402
 import land_queue  # noqa: E402
+import land_stats  # noqa: E402
 import memory_history  # noqa: E402
 import worktrees  # noqa: E402
 
@@ -40,6 +43,8 @@ ALERT_S = 30 * 60  # a main-red id open this long with no owner is called out
 SHOWN = 10  # the oldest open main-red ids the report names
 WARM_BATCH = 8  # missing main invocations warmed during an idle tick
 WORKTREE_IDLE_H = 12  # a worktree nobody touched this long is removed (branch kept, dirty work to refs/wip/)
+METRICS_EVERY_S = 24 * 3600  # D-889 36: the pipeline's numbers, once per day
+METRICS_LOG = "rosy-land-metrics.jsonl"
 RECHECK_STAMP, LOG, REPORT, LOCK = ("rosy-land-tick.recheck", "rosy-land-tick.log", "rosy-land-backlog.txt",
                                      "rosy-land-tick.lock")
 
@@ -112,6 +117,21 @@ def warm(repo: Path) -> str:
     return f"warmed {done} of {ran}" if ran else "already warm"
 
 
+def metrics(common: Path, now: float) -> str | None:
+    """The [metrics] line once per METRICS_EVERY_S, also appended as one json row to METRICS_LOG; None otherwise."""
+    log = common / METRICS_LOG
+    try:
+        last = json.loads(log.read_text(encoding="utf-8").splitlines()[-1])["t"]
+    except (OSError, IndexError, ValueError, KeyError):
+        last = 0
+    if now - last < METRICS_EVERY_S:
+        return None
+    found = land_stats.metrics(land_events.read(common / land_events.EVENTS), now - METRICS_EVERY_S, now)
+    with log.open("a", encoding="utf-8") as out:
+        out.write(json.dumps({"t": now, **found}) + "\n")
+    return land_stats.metrics_line(found)
+
+
 def report(repo: Path, common: Path, now: float | None = None) -> list[str]:
     now = time.time() if now is None else now
     rows = land_queue.ahead(land_queue.queue_dir(repo), Path("~"))
@@ -128,6 +148,8 @@ def report(repo: Path, common: Path, now: float | None = None) -> list[str]:
                  + (" (ALERT)" if alerts else ""))
     for nodeid, s in opened[:SHOWN]:  # 11-14: 160 open ids, most never rechecked after main healed them
         lines.append(f"[backlog]   {nodeid} open {(now - (s['since'] or now)) / 60:.0f} min, owner {s['owner'] or 'none'}")
+    if line := metrics(common, now):
+        lines.append(line)
     (common / REPORT).write_text("\n".join(lines) + "\n", encoding="utf-8")
     return lines
 
