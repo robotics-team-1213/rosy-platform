@@ -22,6 +22,10 @@ install(FILES
   dom.js
   host-cards.js
   map.js
+  map-choices.js
+  mode-choice.js
+  choice-show.js
+  auth-tabs.js
   ros-network.js
   settings.js
   status-summary.js

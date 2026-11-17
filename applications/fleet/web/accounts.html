@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/component-controls.css">
+  <link rel="stylesheet" href="/common/readout-strip.css">
   <link rel="stylesheet" href="/console/assets/fleet-document.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
@@ -16,31 +17,39 @@
   <!-- fleet:document-header:start -->
 <header class="fleet-document-header"><ui-topbar><ui-brand href="/console"><b>Rosy Account</b><small>계정 관리</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar></header>
 <!-- fleet:document-header:end -->
+  <nav id="account-back-links" class="fleet-topbar-links" aria-label="이동"><a href="/console">관제로 돌아가기</a> · <a href="/console/profile">내 계정</a></nav>
   <main id="accounts-main" class="fleet-login-main fleet-document ui-task-page" tabindex="-1">
     <h1 class="ui-page-heading">계정 관리</h1>
+    <p class="hint">현장 통합 로그인·앱 등록·사용자별 자원 권한 정본입니다. Learning의 개인 Hugging Face 토큰·외부 데이터셋 가져오기는 Learning 계정 화면에서, 개별 로봇의 로컬 API 토큰은 로봇 설치 화면에서 다룹니다.</p>
     <ui-status id="account-status" state="pending" role="status">관리 권한을 확인하고 있습니다.</ui-status>
     <a class="ui-action-link" data-kind="primary" id="account-login" href="/console/login?return=%2Fconsole%2Faccounts" hidden>로그인</a>
-    <section id="account-setup" hidden aria-labelledby="account-setup-heading">
-      <h2 id="account-setup-heading">통합 로그인과 앱 연결</h2>
-      <p id="account-setup-state" role="status"></p>
+    <ui-section id="account-setup" hidden aria-labelledby="account-setup-heading">
+      <h2 id="account-setup-heading" class="ui-section-heading">통합 로그인과 앱 연결</h2>
+      <div class="ui-state-panel">
+        <p id="account-setup-state" role="status"></p>
+        <ui-button id="account-setup-reload" kind="quiet">연결 설정 다시 조회</ui-button>
+      </div>
+      <details id="account-apps" class="ui-disclosure" hidden>
+      <summary>등록된 앱</summary>
       <ul id="account-clients" aria-label="등록된 앱"></ul>
       <form id="client-form" class="password-login-form" hidden>
         <h3>앱 등록</h3>
-        <label for="client-id">앱 식별자</label>
-        <input id="client-id" class="ui-field password-login-field" autocomplete="off" required maxlength="96">
-        <label for="client-label">표시 이름 · 비우면 앱 식별자</label>
-        <input id="client-label" class="ui-field password-login-field" autocomplete="off" maxlength="96">
-        <label for="client-home">시작 주소 · https, 비우면 앱 목록에 나오지 않음</label>
-        <input id="client-home" class="ui-field password-login-field" type="url" autocomplete="off" maxlength="2048">
-        <label for="client-redirects">복귀 주소 · 한 줄에 하나, https만</label>
-        <textarea id="client-redirects" class="ui-field password-login-field" rows="2" required></textarea>
-        <label for="client-resources">자원 · 한 줄에 하나, 예: site:현장, robot:로봇, project:프로젝트</label>
-        <textarea id="client-resources" class="ui-field password-login-field" rows="2" required></textarea>
+        <label class="ui-field-label" for="client-id">앱 식별자
+        <input id="client-id" class="ui-field password-login-field" autocomplete="off" required maxlength="96"></label>
+        <label class="ui-field-label" for="client-label">표시 이름 · 비우면 앱 식별자
+        <input id="client-label" class="ui-field password-login-field" autocomplete="off" maxlength="96"></label>
+        <label class="ui-field-label" for="client-home">시작 주소 · https, 비우면 앱 목록에 나오지 않음
+        <input id="client-home" class="ui-field password-login-field" type="url" autocomplete="off" maxlength="2048"></label>
+        <label class="ui-field-label" for="client-redirects">복귀 주소 · 한 줄에 하나, https만
+        <textarea id="client-redirects" class="ui-field password-login-field" rows="2" required></textarea></label>
+        <label class="ui-field-label" for="client-resources">자원 · 한 줄에 하나, 예: site:현장, robot:로봇, project:프로젝트
+        <textarea id="client-resources" class="ui-field password-login-field" rows="2" required></textarea></label>
         <ui-button id="client-add" kind="quiet" type="button">앱 등록</ui-button>
       </form>
-      <p>앱 등록은 로그인 성공을 뜻하지 않습니다. 각 앱에서 로그인한 뒤 표시 이름 변경과 권한 회수가 반영되는지 확인하세요.</p>
-      <details>
+      </details>
+      <details class="ui-disclosure">
         <summary>최초 설정과 앱 추가 방법</summary>
+        <p>앱 등록은 로그인 성공을 뜻하지 않습니다. 각 앱에서 로그인한 뒤 표시 이름 변경과 권한 회수가 반영되는지 확인하세요.</p>
         <ol>
           <li>서버 관리자가 기존 계정 정보와 권한 DB를 백업하고, 공통 HTTPS 주소와 인증서를 준비합니다. 모바일 앱은 신뢰할 수 있는 인증서와 443 포트가 필요합니다.</li>
           <li>기존 로그인 ID를 첫 계정 관리자로 지정하고, 앱별 복귀 주소와 현장·로봇·프로젝트 자원을 등록합니다. 기존 사용자를 새로 만들거나 비밀번호를 초기화하지 않습니다.</li>
@@ -48,63 +57,87 @@
           <li>이 화면에서 등록을 확인하고 아래에서 사용자별 자원 권한을 부여합니다. Android 앱은 설치된 앱의 서명과 로그인 복귀 연결도 확인합니다.</li>
         </ol>
         <p>서버 작업에는 서버 관리자 권한이 필요합니다. 비밀번호와 서명 키는 이 화면에 입력하지 않습니다.</p>
-        <a href="https://github.com/robotics-team-1213/rosy-platform/blob/main/deploy/site/README.md#rosy-account-activation-d-757" target="_blank" rel="noopener noreferrer">서버 설치 안내</a>
+        <a class="ui-action-link" data-kind="quiet" href="https://github.com/robotics-team-1213/rosy-platform/blob/main/deploy/site/README.md#rosy-account-activation-d-757" target="_blank" rel="noopener noreferrer">서버 설치 안내</a>
       </details>
-      <ui-button id="account-setup-reload" kind="quiet">연결 설정 다시 조회</ui-button>
-    </section>
+    </ui-section>
     <div id="account-content" hidden>
-      <p>변경은 즉시 적용되며 대상 계정의 기존 로그인 세션이 종료됩니다. 마지막 관리자는 정지하거나 관리 권한을 제거할 수 없습니다.</p>
-      <ui-button id="account-reload" kind="quiet">현재 상태 다시 조회</ui-button>
-      <section id="request-section" aria-labelledby="request-heading">
-        <h2 id="request-heading">가입·권한 요청</h2>
-        <p id="request-empty" hidden>대기 중인 요청이 없습니다.</p>
-        <div class="ui-table-scroll" role="region" aria-label="가입·권한 요청 표" tabindex="0">
-          <table class="ui-data-table" aria-label="가입·권한 요청"><thead><tr><th scope="col">구분</th><th scope="col">이름</th><th scope="col">로그인 ID</th><th scope="col">요청 대상</th><th scope="col">남긴 말</th><th scope="col">상태</th><th scope="col"><span class="sr-only">처리</span></th></tr></thead>
-            <tbody id="request-list"></tbody></table>
-        </div>
-        <div id="request-decision" hidden>
-          <p id="request-decision-text"></p>
-          <p>승인하면 아래 계정 양식의 내용 그대로 계정과 권한이 저장됩니다. 요청만으로는 어떤 권한도 생기지 않습니다. 새 계정은 임시 비밀번호를 정해 신청자에게 직접 알려 주세요.</p>
-          <label for="request-reason">거절 사유 · 거절할 때만 필요</label>
-          <input id="request-reason" class="ui-field password-login-field" maxlength="300" autocomplete="off">
-          <ui-button id="request-reject" kind="quiet" type="button">거절…</ui-button>
-          <ui-button id="request-cancel" kind="quiet" type="button">처리 취소</ui-button>
-        </div>
-      </section>
-      <div class="ui-table-scroll" role="region" aria-label="등록 계정 표" tabindex="0">
-        <table class="ui-data-table" aria-label="등록 계정"><thead><tr><th scope="col">로그인 ID</th><th scope="col">사용자 식별</th><th scope="col">기본 역할</th><th scope="col">상태</th><th scope="col"><span class="sr-only">편집</span></th></tr></thead>
-          <tbody id="account-list"></tbody></table>
+      <dl class="ui-readout" data-form="strip">
+        <div><dt>계정</dt><dd id="strip-accounts">—</dd></div>
+        <div><dt>대기 요청</dt><dd id="strip-requests">—</dd></div>
+        <div><dt>통합 로그인</dt><dd id="strip-login">—</dd></div>
+      </dl>
+      <div class="ui-list-toolbar"><ui-button id="account-reload" kind="quiet">현재 상태 다시 조회</ui-button></div>
+      <div id="account-detail" class="ui-primary-detail">
+        <section id="account-main" aria-label="계정 목록">
+          <ui-section id="request-section" aria-labelledby="request-heading">
+            <h2 id="request-heading" class="ui-section-heading">가입·권한 요청</h2>
+            <ui-empty id="request-empty" hidden>대기 중인 요청이 없습니다.</ui-empty>
+            <ui-button id="request-retry" kind="quiet" type="button" hidden>요청 목록 다시 조회</ui-button>
+            <div id="request-table" class="ui-table-scroll" role="region" aria-label="가입·권한 요청 표" tabindex="0">
+              <table class="ui-data-table" aria-label="가입·권한 요청"><thead><tr><th scope="col">구분</th><th scope="col">이름</th><th scope="col">로그인 ID</th><th scope="col">요청 대상</th><th scope="col">남긴 말</th><th scope="col">상태</th><th scope="col"><span class="sr-only">처리</span></th></tr></thead>
+                <tbody id="request-list"></tbody></table>
+            </div>
+          </ui-section>
+          <ui-section aria-labelledby="accounts-heading">
+            <div class="ui-list-toolbar">
+              <h2 id="accounts-heading" class="ui-section-heading">등록 계정</h2>
+              <ui-button id="account-new" kind="quiet">새 계정</ui-button>
+            </div>
+            <div class="ui-table-scroll" role="region" aria-label="등록 계정 표" tabindex="0">
+              <table id="account-table" class="ui-data-table" aria-label="등록 계정"><thead><tr><th scope="col">로그인 ID</th><th scope="col">사용자 식별</th><th scope="col">기본 역할</th><th scope="col">상태</th><th scope="col"><span class="sr-only">편집</span></th></tr></thead>
+                <tbody id="account-list"></tbody></table>
+            </div>
+          </ui-section>
+        </section>
+        <section id="account-editor" class="ui-panel" data-surface="raised" aria-labelledby="account-heading" hidden>
+          <header>
+            <h2 id="account-heading" tabindex="-1">새 계정</h2>
+            <span id="account-state" hidden></span>
+            <ui-button id="account-close" kind="quiet" type="button">목록으로</ui-button>
+          </header>
+          <p data-slot="evidence">저장하면 대상 계정의 기존 로그인 세션이 종료됩니다 · 마지막 관리자는 정지하거나 관리 권한을 뺄 수 없음</p>
+          <div id="request-decision" hidden>
+            <p id="request-decision-text"></p>
+            <p data-slot="evidence">승인하면 아래 양식 그대로 저장됩니다 · 요청만으로는 권한이 생기지 않음</p>
+            <label class="ui-field-label" for="request-reason">거절 사유 · 거절할 때만 필요
+            <input id="request-reason" class="ui-field password-login-field" maxlength="300" autocomplete="off"></label>
+            <ui-button id="request-reject" kind="quiet" type="button">거절…</ui-button>
+            <ui-button id="request-cancel" kind="quiet" type="button">처리 취소</ui-button>
+          </div>
+          <form id="account-form" class="password-login-form">
+            <label class="ui-field-label" for="account-name">로그인 ID
+            <input id="account-name" class="ui-field password-login-field" autocomplete="off" required maxlength="96"></label>
+            <label class="ui-field-label" for="account-principal">사용자 식별 이름
+            <input id="account-principal" class="ui-field password-login-field" autocomplete="off" required maxlength="96"></label>
+            <label class="ui-field-label" for="account-role">역할
+            <select id="account-role" class="ui-field"><option value="viewer">보기 전용</option><option value="operator">운영자</option><option value="policy-admin">관리자</option></select></label>
+            <p data-slot="evidence">역할을 고르면 아래 자원별 권한이 그 묶음으로 바뀝니다</p>
+            <label class="ui-check"><input id="account-enabled" class="ui-field" type="checkbox" checked> 계정 사용</label>
+            <div id="account-initial-password">
+              <label class="ui-field-label" for="account-password">임시 비밀번호 · 사용자가 첫 로그인에서 변경
+              <input id="account-password" class="ui-field password-login-field" type="password" autocomplete="new-password" minlength="2" maxlength="1024"></label>
+            </div>
+            <h3>자원별 권한</h3>
+            <p data-slot="evidence">조작 권한과 조회 권한은 별개입니다 · 식별자 <code>*</code>는 모든 로봇 또는 모든 프로젝트</p>
+            <details class="ui-disclosure">
+              <summary>역할별 권한 묶음 안내</summary>
+              <p>보기 전용은 조회만, 운영자는 팀원 기본 권한, 관리자는 계정·정책·카메라·로봇 관리와 학습 승인·게시까지 모든 권한입니다. 저장되는 것은 아래 권한이며, 역할을 고른 뒤 자원별로 더 조정할 수 있습니다.</p>
+              <p>팀원 기본 권한에는 모든 핑키의 조회·주행·카메라 확인 등 일반 운용 기능이 포함됩니다. 계정·로봇 관리 권한은 별도로 부여합니다.</p>
+            </details>
+            <div id="account-grants"></div>
+            <ui-button id="account-add-grant" kind="quiet" type="button">자원 추가</ui-button>
+            <ui-button id="account-save" kind="primary" type="button">계정 저장</ui-button>
+            <ui-status id="account-cause" data-cause hidden></ui-status>
+          </form>
+          <section id="account-actions" hidden aria-label="선택 계정 보안 작업">
+            <h3>비밀번호 초기화</h3>
+            <label class="ui-field-label" for="account-reset-password">새 임시 비밀번호
+            <input id="account-reset-password" class="ui-field password-login-field" type="password" autocomplete="new-password" minlength="2" maxlength="1024"></label>
+            <ui-button id="account-reset" kind="quiet">초기화 및 모든 세션 종료</ui-button>
+            <h3>세션 회수</h3><ui-button id="account-revoke" kind="quiet">모든 앱의 로그인 세션 종료</ui-button>
+          </section>
+        </section>
       </div>
-      <ui-button id="account-new" kind="quiet">새 계정</ui-button>
-      <h2 id="account-heading">새 계정</h2>
-      <form id="account-form" class="password-login-form">
-        <label for="account-name">로그인 ID</label>
-        <input id="account-name" class="ui-field password-login-field" autocomplete="off" required maxlength="96">
-        <label for="account-principal">사용자 식별 이름</label>
-        <input id="account-principal" class="ui-field password-login-field" autocomplete="off" required maxlength="96">
-        <label for="account-role">역할</label>
-        <select id="account-role" class="ui-field"><option value="viewer">조회자</option><option value="operator">운영자</option><option value="policy-admin">관리자</option></select>
-        <p>역할을 고르면 아래 자원별 권한이 그 역할의 묶음으로 바뀝니다. 조회자는 조회만, 운영자는 팀원 기본 권한, 관리자는 계정·정책·카메라·로봇 관리와 학습 승인·게시까지 모든 권한입니다. 저장되는 것은 아래 권한이며, 역할을 고른 뒤 자원별로 더 조정할 수 있습니다.</p>
-        <label class="ui-check"><input id="account-enabled" class="ui-field" type="checkbox" checked> 계정 사용</label>
-        <div id="account-initial-password">
-          <label for="account-password">임시 비밀번호 · 사용자가 첫 로그인에서 변경</label>
-          <input id="account-password" class="ui-field password-login-field" type="password" autocomplete="new-password" minlength="2" maxlength="1024">
-        </div>
-        <h3>자원별 권한</h3>
-        <p>조작 권한과 조회 권한은 별개입니다. 필요한 조회 권한도 함께 선택하세요. 식별자 <code>*</code>는 모든 로봇 또는 모든 프로젝트입니다.</p>
-        <p>팀원 기본 권한에는 모든 핑키의 조회·주행·카메라 확인 등 일반 운용 기능이 포함됩니다. 계정·기체 관리 권한은 별도로 부여합니다.</p>
-        <div id="account-grants"></div>
-        <ui-button id="account-add-grant" kind="quiet" type="button">자원 추가</ui-button>
-        <ui-button id="account-save" kind="primary" type="button">계정 저장</ui-button>
-      </form>
-      <section id="account-actions" hidden aria-label="선택 계정 보안 작업">
-        <h3>비밀번호 초기화</h3>
-        <label for="account-reset-password">새 임시 비밀번호</label>
-        <input id="account-reset-password" class="ui-field password-login-field" type="password" autocomplete="new-password" minlength="2" maxlength="1024">
-        <ui-button id="account-reset" kind="quiet">초기화 및 모든 세션 종료</ui-button>
-        <h3>세션 회수</h3><ui-button id="account-revoke" kind="quiet">모든 앱의 로그인 세션 종료</ui-button>
-      </section>
     </div>
-    <p><a href="/console">관제로 돌아가기</a> · <a href="/console/profile">내 계정</a></p>
   </main>
 </ui-shell></body></html>

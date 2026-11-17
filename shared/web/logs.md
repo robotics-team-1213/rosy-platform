@@ -1019,7 +1019,6 @@
 - 증거: `git grep`으로 소비처 없음 확인, 대비 시험은 `--surface-line`만 본다.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-10-31 · uncommitted · capture-wall 표면 등록과 캔버스 계약 준수
 
 - 변경: `surfaces.yaml`에 다중 녹화 벽(`tools/capture/multi_record.html`)을 `capture-wall`(dev)로 등록하고 캔버스 팔레트 계약 목록에 올렸다. 페이지는 참조 `./` 접두, 범위 제목 `Rosy 개발 — 함께 녹화`, 캔버스 색·글꼴을 `window.RosyPalette`로 읽도록 바뀌었고 `multi_record.py`는 `ui.js`와 의존 모듈 셋을 세션 `common/`에 복사한다(D-937).
@@ -1033,13 +1032,11 @@
 - 증거: node --test 403 passed, robot_ui 호출처 무변경. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · step 자리 표식
 
 - 변경: `app-shell.css`의 하위 탐색 현재 표식이 `aria-current="step"`(같은 문서 안 현재 단계, D-926 3)도 `page`와 같은 장미색 wash로 그린다. 빈 표식으로 단계가 보이지 않던 Cell 화면이 시각 표시를 얻는다.
 - 증거: Fleet Cell 화면 Chromium 실측(단계 배경 렌더 확인). 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · D-945 레이아웃 계약 시험
 
@@ -1047,13 +1044,11 @@
 - 증거: 정적 단정 전 통과(로컬 파일 검사). 원격 pytest는 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · D-945 focal 표면 검사 추가
 
 - 변경: `test_layout_canon.py`에 focal 문법(Pilot)의 순서·skip link 검사와 로봇 대시보드의 topbar-first·skip link 검사를 넣었다(대시보드 경로 줄 이행 유예의 근거를 주석으로 남김).
 - 증거: 정적 단정 전 통과. 원격 pytest는 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · 착지 시험 반영: 표식 토큰 true 인정, 검수 페이지 원복
 
@@ -1061,13 +1056,11 @@
 - 증거: test_layout_canon 전 통과, 검수 페이지 6건 완전 원복(net diff 0), node --test 403 passed. 원격 시험은 재착지 전 기록.
 - Gate: 없음. CE: 해당 없음 — 착지 시험이 계약 충돌을 잡은 사례로, 교훈은 아래 CE 판단 참조.
 
-
 ## 2026-11-01 · uncommitted · focal 검사에 경기 보드 포함
 
 - 변경: `test_layout_canon.py`의 focal 표면 검사가 Pilot·경기 보드 모두의 순서·skip link·h1 하나(sr-only 허용)를 검사한다.
 - 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · 대시보드 두 상태 셸 h1 검사 추가
 
@@ -1075,20 +1068,17 @@
 - 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-02 · uncommitted · D-945 마무리 — 22rem 칸 경계 허가, 조작 표면 noscript·style 속성 계약
 
 - 변경: Fleet 좁은 좌석 하위 탐색 줄바꿈의 `@container (width >= 22rem)`를 `surfaces.yaml` console `container_breakpoints`에 근거와 함께 등록했다(`test_responsive_tiers`가 미허가 값으로 거절하던 것). `test_layout_canon.py`에 조작 표면 noscript 의무와 style 속성 금지 검사를 더했다.
 - 증거: 로컬 대조에서 main 대비 추가 실패가 `test_responsive_tiers` 하나였고 등록 뒤 통과. 원격 시험은 착지 기록.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-02 · uncommitted · 공용 skip-link·sr-only 단일화, 같은 뜻 한 말 계약
 
 - 변경: 로봇·Fleet 로그인·모니터링의 `.skip-link` 재정의와 Pilot의 `.sr-only` 재정의를 지우고 `components.css` 정본만 쓴다(세 표면이 z-index·채움·숨김 방식이 제각각이었다). `test_shared_controls.py` 덧칠 검사 대상에 `skip-link`를 더했다. `test_operator_copy.py`에 표면 전체(검수·Pilot 포함) '같은 뜻 한 말' 검사를 두고 첫 항목으로 '권한이 거부'→'권한이 없습니다'를 정했다.
 - 증거: 원격 계약 시험. 감사 백로그는 `docs/validation/fleet-ui-consistency-2026-11-01/README.md`.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · 신호기 등 역할 토큰 (D-525 보강, 사용자 결정)
 
@@ -1103,14 +1093,12 @@
 - Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
 - Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
 
-
 ## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
 
 - Change: Common Account role labels retain their exact values and Fleet named export. Final reduced bundle and identity TLS/browser consumers passed after branding and maintenance closure; no additional shared behavior changed.
 - Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
 - Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
 - Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
-
 
 ## 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
 
@@ -1221,3 +1209,187 @@
 - 변경: 좁은 폭에서 가로로 밀리는 .ui-rail-nav/.ui-subnav-nav가 가려진 쪽 가장자리를 흐리게 하고(ui-wiring.js가 data-more 표시), 현재 항목을 가로로만 중앙에 둔다. 토큰 추가 없음.
 - 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-13 · uncommitted · feat(web): setGeometry, patterns.yaml, element-style gate over all surfaces
+- 변경: `geometry.js`(`setGeometry`, `--g-*`만 쓰는 유일한 `.style` 예외), `patterns.yaml`(C1~C10, C5 built), `test_geometry.py`(검증 단위 + 실제 CSP 브라우저), `test_patterns_registry.py`, `test_no_element_style.py`(ROOTS를 surfaces.yaml에서, 예외 목록은 이유와 함께), 갤러리 견본, 매니페스트·CMake 등록
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) geometry·patterns·no_element_style·asset_manifest·component_kit·pilot 브라우저·learning 픽셀/검수 브라우저 435 passed 12 failed(971 s). 실패 12건 중 shared_controls 6건과 pilot part2의 4건(전체 파일 순서 의존, 단독은 통과)은 main에서도 같은 실패(main 전체 파일 4 failed 47 passed)이고, 스틱 2건은 float translate를 .floating 때만 적용해 고친 뒤 part2 47 passed 중 같은 4건만 실패. size_range 0, lint 0 errors
+- gate 변화: 동적 값 게이트가 모양 검사에서 사용 검사로 옮겨 감(등록된 모든 웹 표면 대상). 기존 로컬 실패 13건은 main과 동일
+- 결정: D1·D3(계획 2026-11-13-ui-shared-patterns.md §5)
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · 공용 부품 C9 정지·C3 계정·C10 연결 표시
+
+- 변경: stop-control.js(createStopControl: 항상 보이고 눌림, 거절은 글, 매번 전송, 접수는 정지 확인이 아님), account-gate.js(createAccountGate: operate/signed-in/view/unavailable, 읽기 실패는 unavailable, 세션 변경 중에도 정지 유지), connection-notice.js(createConnectionNotice: 끊김만 ui-tag crit, 인증 대기·모름은 차분한 글). 자산 목록·CMake 등록, 갤러리 견본 추가.
+- 증거: test_component_kit_browser.py 두 시험 추가(원격 실행은 커밋 기록 참조). 첫 이행은 Games 보드.
+- gate 변화: 없음
+
+## 2026-11-13 · uncommitted · feat(web): 공용 잠금 범위·원인 줄·모르는 값 부품 (C2·C1·C4)
+
+- 변경: `busy-scope.js`(createBusyScope: 범위 안 단추·select 상태를 스냅샷해 잠그고 정확히 복원, aria-busy·상태 줄, 정지·`[data-always-live]` 항상 제외, 배경 `refresh`는 잠그지 않고 사용자 동작을 삼키지 않음), `cause-line.js`(createCauseLine: 묶음당 보이는 원인 줄 하나, `disabled` 변화마다 aria-describedby 재동기화, 비면 `[hidden]`; `describeBy`), `value-text.js`(valueText·renderValue: 없음→EVIDENCE_LABEL.unavailable, 오래됨→시각, 0은 0). `ui-button reason`은 단독 단추 전용으로 두고 aria-describedby 편집을 `describeBy`에 위임. 견본 `component-gallery`에 잠금·원인·값 구역. `shared-assets.json`·CMake에 세 모듈 등록, `ui.js`가 `cause-line.js`를 읽으므로 Account 이미지·Account/Monitoring 번들·pilot 셸 캐시·capture 벽 목록에도 등록.
+- 증거: `test_busy_cause_browser.py`(원격 Chromium 6건: 정확한 복원·정지 상시 활성·초안 유지·배경 조회가 저장을 삼키지 않음·원인 줄 재동기화·모르는 값), `test_value_text.py`(node 2건). `test_shared_controls.py::test_disabled_reason_is_a_shared_button_attribute`는 describeBy 위임을 보도록 맞췄다(약화 아님).
+- gate 변화: 없음(신규 부품, 첫 사용처는 Fleet Account). 정적 게이트(`.disabled =` 금지 등)는 slice C·후속.
+
+## 2026-11-13 · uncommitted · fix(web): review fixes (no observers, C4 adopter, adoption gate, sw shell)
+- 변경: stop-control·cause-line의 MutationObserver 삭제(소유자가 명시 동기화: busy-scope `cause` 옵션), Monitoring 건강 글이 `valueText` 사용, `patterns.yaml`에 adopters·debt와 도입 게이트, Games 표면 시험을 C9 계약으로, 옮긴 문서 링크, pilot `sw.js` SHELL에 geometry.js
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·games·pilot·learning·fleet 계정·monitoring 묶음 1318 passed 19 failed(branch) 대 1300 passed 17 failed(main). branch만의 실패 2건(pilot shell SHELL 목록, 정지 견본이 자가 복구에 기대던 시험)은 고쳐 재실행 44 passed
+- gate 변화: built 부품은 제품 도입 파일이 없으면 실패
+- 결정: D1·D3
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · fix(web): busy-scope owns disabled during a run, adoption gate checks calls and product tests
+- 변경: `busy-scope.js` `setDisabled`와 `cause-line.js` `bind()`로 run 중 잠금 상태를 scope가 소유(`release` 삭제), `patterns.yaml` built 행마다 `product_test`, `test_patterns_registry.py`가 호출 지점과 제품 시험 존재를 요구, 갤러리 C1+C2 사례, 로그아웃 지연 안내가 `error` 상태를 설정
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·Fleet 계정 브라우저·monitoring·games·pilot shell: 브랜치 616 passed 12 failed, main 593 passed 12 failed, 실패 목록 동일(main 기존 적색), 브랜치만의 실패 0. size_range 0, lint 0 errors
+- gate 변화: built 부품은 호출하는 제품 도입 파일과 제품 화면 시험이 없으면 실패
+- 결정: D1·D3
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · fix(web): readonly-locked controls take recorded disabled targets; product_hook ties tests to adopters
+- 변경: `busy-scope.js`가 `readonly`로 잠근 입력에도 run 중 기록된 disabled 목표를 복원 때 적용, `patterns.yaml`·`test_patterns_registry.py`에 `product_hook`(시험 본문과 adopter 화면 폴더 양쪽에 나오는 id), 갤러리 입력 사례
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·monitoring 브라우저·operations/monitoring·site_incremental_update·Fleet 계정·games surface: 브랜치 683 passed 12 failed, main 657 passed 12 failed, 실패 목록 동일(main 기존 적색), 브랜치만의 실패 0. size_range 0, lint 0 errors
+- gate 변화: product_test가 adopter 화면과 무관하면 실패
+- 결정: D1·D3
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · feat(web): busy text lock, stop accept(), cause-line pruning, stricter adoption gate
+- 변경: `busy-scope.js`가 글 입력·textarea를 기본 읽기 전용으로 잠그고 체크·라디오·파일은 disabled로 잠금(`[data-busy-editable]`로 제외, 중복 제거, 끝나면 목록 비움), `stop-control.js` `accept(response)`와 note가 진행 중 정지 응답을 버리지 않음, `cause-line.js` sync가 문서에서 빠진 컨트롤을 잊고 `size` 노출, `account-gate.js` `dispose()`, `test_patterns_registry.py`가 주석·문자열 호출·skip·이웃 시험 차용을 거절(자체 시험 포함), 갤러리 사례
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·monitoring·Fleet 계정·games·pilot shell·operations/monitoring: 마지막 실행 553 passed 12 failed(전부 main 기존 적색, 브랜치만의 실패 0). size_range 0, lint 0 errors
+- gate 변화: 채택 게이트가 호출 지점과 locator에 쓰인 hook을 요구
+- 결정: D1·D3
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · fix(shared-web): alert 상태는 polite로 낮추지 않고, 오류 칸은 채움, 앱 메뉴는 48px, 모르는 역할은 미확인
+- 변경: ui-status가 role=alert이면 aria-live=polite를 붙이지 않는다(test_shared_controls의 고정 문장을 같은 강도로 갱신). .ui-field-error를 D-202 위험 채움(--flag-danger-bg/ink)으로, 계정 앱 메뉴 summary·링크에 --target-secondary 높이를, roleLabel의 알 수 없는 역할을 "알 수 없는 역할"로 바꿨다(D-280, fleet-header 시험 갱신). A15(비활성 ui-button의 키보드 접근)는 전역 탭 순서가 바뀌어 이번 묶음에서 제외했다.
+- 증거: 원격 shared/web/test와 fleet-header node 시험 결과는 이 브랜치 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·스크린리더 수용은 별도다.
+
+## 2026-11-13 · uncommitted · chore(web): patterns.yaml adopter 갱신과 이행 부채 기록
+- 변경: Learning·Robot/Pilot 이행 결과로 C1·C2·C4·C5·C9·C10 adopters를 정리하고, 이행 부채(C3 계정 세션: 자체 세션 코드, C9 Pilot [data-estop]: 늦은 정지 응답이 새 알림을 덮지 않아야 하는 시험)를 이유와 함께 적었다. 알 수 없는 역할 표시는 EVIDENCE_LABEL.unavailable을 쓴다.
+- 증거: 원격 shared/web/test(통합 브랜치 착지 기록).
+- gate 변화: test_migration_debt는 C5 debt만 스타일 예외 목록과 대조한다.
+
+## 2026-11-14 · uncommitted · feat(web): ui-panel, status table, warn disconnect notice, one unknown wording
+- 변경: `component-controls.css`(`.ui-panel` flat|raised x standard|compact, compact는 64rem 이상 마우스 면만, `ui-tag` 아이콘 자리·모름 점선 테), `status-tag.js`(statusTag: 여덟 상태 -> 아이콘+톤), `ui.js` actionIcon에 warn·lock·info, `connection-notice.js`(끊김=warn+wifi 아이콘+글, `{danger:true`일 때만 crit), `motor-health.js`(모름 문구를 EVIDENCE_LABEL로), 견본 `#panels`, patterns.yaml C11·C12(planned), DESIGN.md 콘셉트·C10~C12·조합 어휘 두 줄
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·games·motor-health UI: 새 시험 외 실패 12건은 main과 같은 Fleet 파일(cell.css·console-goal.js 등) 기존 실패
+- gate 변화: test_content_vocabulary에 패널 시트(역할 토큰·정적·compact 조건)와 모름 문구 하나 게이트, 어휘 표 시험이 component-controls.css·status-tag.js를 본다
+- 결정: 2026-11-14 사용자(연결 끊김은 주의, 예전 D2 대체)
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · feat(web): 38 new action glyphs, icon sheet, toggletip
+- 변경: `ui.js`(글리프 표를 호이스팅 `icons()`로, `actionIconNames()`·`toggletip()`, 91종), `components.css`(툴팁·토글팁 공통 면), 갤러리 `#icons`(16/20/24px 전 글리프, 툴팁·토글팁 견본), DESIGN.md C13
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test + pilot test_shell_assets: 새 시험(아이콘 모음·툴팁 규칙·토글팁) 통과, 실패 12건은 main과 같은 집합(diff 동일)
+- gate 변화: test_action_icon_contract가 `icons()` 표를 읽음, 갤러리 시험에 전 글리프 수·툴팁 hover/focus/Escape·토글팁 시험 추가
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · feat(web): icon catalog and static icon/tooltip gates
+- 변경: `ui.js`(`ICON_CATALOG` 범주·한국어 이름 93종, `disk`·`model`·`cell` 글리프 다시 그림), `test/test_icon_gates.py`(카탈로그·상태 글리프 1:1·title 금지·아이콘 단독 이름·툴팁·내비/삭제 동사·details 중첩·툴팁 길이·상태 글리프 재사용, 예외 목록은 줄이기만), DESIGN.md C13 문구
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test, 실패 12건은 main과 같은 집합. 예외 수: title 0, name 0, verb 7, details 0, tooltip 1, status 10
+- gate 변화: test_icon_gates 신설(카탈로그 2 + 정적 게이트 6)
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · fix(web): section heading weight, strip readout adopters listed
+- 변경: `components.css` `.ui-section-heading` 굵기 `--weight-medium` → `--weight-label`(본문 400 옆에서 절 제목이 흐렸다, 크기·굵기로 `.ui-page-heading`보다 낮은 위계는 유지), DESIGN.md 「조합 어휘」 수치 띠 줄에 채택 화면 6곳 추가
+- 증거: `test_screen_head_parts_are_listed_where_they_are_used`의 계산 결과와 표가 같다. 원격 시험은 통합 실행 기록 참조
+- gate 변화: 없음
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · ui-followups: 하위 메뉴 많음 형태, log 글리프, 갤러리 견본
+
+- 변경: `app-shell.css`/`ui-wiring.js`: 하위 메뉴 링크 7개 이상은 64rem 미만에서 한 줄 가로 스크롤(`data-many`). `ui.js`: `log` 글리프(nav 기록). 갤러리에 하위 메뉴 많음·ui-primary-detail 견본. `test_icon_gates.py` 예외 목록에서 styleguide·host 패널·connect 지우기·툴팁 항목을 지웠다.
+- 증거: `test_subnav_many_browser.py` 새 시험, 원격 실행 결과는 최종 보고.
+- gate 변화: 없음. 아이콘 예외 목록만 줄었다.
+
+## 2026-11-14 · uncommitted · feat(web): 로봇 행 공용 부품 C14(계획)
+
+- 변경: `robot-profile.js`(순수 `robotProfile`·`groupRobots`), `robot-row.js`(`createRobotRow`·`createRobotRoster`), `component-controls.css` 행 규칙, 갤러리 「로봇 행」, `shared-assets.json`·`CMakeLists.txt`, `patterns.yaml` C14(planned)·DESIGN.md 표 행, 시험 `robot-profile.test.mjs`·`test_robot_profile.py`·갤러리 브라우저 시험. 제품 채택은 아직 없다(Fleet 로스터는 다음 조각).
+- 증거: 아래 원격 시험 기록 참고. 갤러리 1440·390 화면 확인.
+- gate 변화: 없음(C14는 planned라 레지스트리 built 검사 대상 아님).
+
+## 2026-11-14 · uncommitted · feat(web): S0 선택 부품(createChoiceList·createChoiceGroup·createSelection)과 `--selection`
+- 변경: 신규 `choice-list.js`·`choice-group.js`·`choice-logic.js`·`selection.js`·`robot-options.js`·`choice-controls.css`, `createTabs`에 `label`·`onChange`·`select`·`value`, `createRobotRoster`에 선택적 `selection`, `tokens.css`에 `--selection`(D-1030), 갤러리 「선택 부품」, `patterns.yaml` C16~C18(planned), DESIGN.md 행, `robot-row` 선택 채움 제거
+- 증거: 원격 `shared/web/test`(ROSY_RUN_BROWSER_TESTS=1) 기준 480 passed/12 failed → 513 passed/12 failed(같은 12개, 신규 실패 0, ai 호스트 2026-11-14); node `choice.test.mjs` 7건; size_range·lint 종료 0
+- gate 변화: 없음(planned 행, 제품 채택 전)
+- 결정: D-1030
+
+## 2026-11-14 · uncommitted · feat(web): C15 shared robot 3D view (planned, gallery only)
+- 변경: `robot-3d.js`·`robot-3d-model.js`, `vendor/three.*.min.js`(r183.2 MIT), `meshes/`(`tools/robot_meshes.py`가 생성, 268 KB), 갤러리 「로봇 3D 보기」, `.robot-row[data-selected]` 강조선, patterns C15·DESIGN C15, 매니페스트·CMake·manifest 시험에 vendor/meshes 폴더와 stl·urdf 형식
+- 증거: `test_robot_3d.py`(node 6 + 생성물 일치·예산·three 고정), `test_robot_3d_browser.py`(실제 WebGL 캔버스 픽셀, 선택 강조색, 키보드 회전, 테마 재칠, 유휴 시 프레임 0, 지연 로드, WebGL 없음 대체)
+- gate 변화: 없음(web 예산은 줄 수만이고 min.js는 6줄, 기존 예산 변경 없음)
+- 결정: 선택 강조색은 기존 `--focus-ring` 하나, 연속 렌더 없음
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · feat(web): S0b 선택 부품 갭(allowEmpty·탭 거부권/사유/아이콘만/자동 활성·폴링 안전 setItems·항목 status 문구·좁은 칩·입력 히트 타깃)
+- 변경: `choice-group.js`(allowEmpty, 같으면 다시 짓지 않음, 포커스 복원), `choice-list.js`(status 객체, 변경 없으면 건너뜀), `interaction-controls.js`(createTabs beforeChange·disabled+reason·icon/iconOnly·activation·dispose), `choice-logic.js`, `choice-controls.css`(30rem 미만 칩, 라디오 투명 덮개), 공용 모듈 import를 `./x.js`로(account-gate·connection-notice·control-dom·form-controls·workspace·component-gallery), DESIGN.md C행에서 planned/built 낱말 제거
+- 증거: 원격 `shared/web/test`(browser) 결과는 아래 최종 줄; node 9건; size_range·lint 0
+- gate 변화: 정적 게이트 2건 추가(`/common/` 절대 경로 금지, DESIGN.md C행 상태 낱말 금지)
+- 결정: D-1030 이어짐(새 ADR 없음)
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · fix(web): 하위 탐색 활성 표식과 조용한 정상 태그, 단독 단추 폭
+- 변경: `app-shell.css` 하위 탐색 활성 항목에서 `--brand-rose-wash`를 빼고 `--surface-flat` + `--selection` 안쪽 가장자리(choice-controls와 같은 표식)로 바꾼다(brand-rose는 워드마크·역할 레일 전용). `component-controls.css`: `ui-tag[data-state="fresh"]` 테두리색 투명·안쪽 여백 0(정상은 글자만, 테두리 스타일은 solid 그대로라 상태표 시험 불변), `.ui-control-stack`·`.ui-state-panel`의 직계 `ui-button`은 `justify-self:start`(폭은 라벨 길이).
+- 증거: UX 대화(agy·Claude) F11·F09·F17, 원격 시험 결과는 커밋 뒤 기록
+- gate 변화: 없음
+
+## 2026-11-14 · uncommitted · feat(web): C19 위치 상태 순수 어댑터(localization-state.js)와 견본
+
+- 변경: `localization-state.js`(순수 `localizationState`·`refusalText`·`queueStep`·`confirmRequest`·`LOC_TEXT`·`REFUSAL_TEXT`), `test/localization-state.test.mjs`, `CMakeLists.txt`·`shared-assets.json`, 갤러리 `#localization-state`(상태 8종+의심, 확정 전 후보 SVG 표지), `patterns.yaml` C19(planned)·`DESIGN.md` C19 행
+- 증거: `node --test shared/web/test/localization-state.test.mjs` 8건 통과; `size_range.py`·`rosy_harness.py lint` 확인
+- gate 변화: 없음(planned 행, 제품 채택 전)
+
+## 2026-11-14 · uncommitted · feat(web): K20 현재 값 단추 공용 스타일(aria-current="true")
+- 변경: `components.css`에 `ui-button[aria-current="true"]` 규칙 추가(비활성 흐림 제외, `--weight-strong` 굵은 글자 + `--selection-edge`/`--text-primary` 아래 안쪽 밑줄), `component-gallery.html` `#k20-current` 견본·`test_choice_gaps_browser.py` 브라우저 시험·`DESIGN.md` K20 항목 추가.
+- 증거: `rosy_harness.py lint` 0 errors, 원격 시험은 커밋 뒤 실행
+- gate 변화: 없음
+
+## 2026-11-14 · uncommitted · feat(web): C20-C22 팔 스킬 상태·근거 줄·샘플 데이터 계약(planned)
+- 변경: 신규 `skill-state.js`(`skillState`, 순수)·`evidence-line.js`(`createEvidenceLine`)·`sample-data.js`(`sampleTag`·`armAiCaseProblems`), `component-controls.css` `.evidence-line`, `robot-3d.js`·`robot-3d-model.js`의 `skill` 글자(상태 줄만, 그림 무변경), 갤러리 「AI 제안·스킬 상태」, `patterns.yaml` C20~C22(planned), DESIGN.md 행. C13은 DESIGN 규칙이고 레지스트리 행이 없는 것이 의도라 공백이 아니다(`test_patterns_registry.py` 주석).
+- 증거: node `skill-state.test.mjs`·`robot-3d-model.test.mjs` 14건; 원격 `shared/web/test`(ROSY_RUN_BROWSER_TESTS=1, ai 호스트) 546 passed/2 failed(둘 중 `test_responsive_tiers`는 이 변경이 건드리지 않은 `surface-panels.css`, 3D 개수 시험은 갤러리 3D 개수 5가 6이 되어 견본을 `#ai-skill-3d`로 옮겨 해결)
+- gate 변화: 없음(planned 행, 제품 채택 전)
+- 결정: 설계 2026-11-14-rosy-vla-decision-ai-command.md 6절, 사용자 결정 5항(제안자≠승인자, 대체는 새 제안+기명 승인)
+
+## 2026-11-14 · uncommitted · fix(web): 연결 알림을 공손한 라이브 영역으로 만든다(C7)
+- 변경: `createConnectionNotice`가 element에 `role="status"`·`aria-live="polite"`를 단다(호출자가 이미 role이나 aria-live를 정했으면 그대로 둔다). Games가 건네는 plain `p`도 끊김·대기를 화면 낭독기에 알린다. 노드 단위시험 `connection-notice.test.mjs`(+pytest 실행기 `test_connection_notice.py`) 추가.
+- 증거: `node --check` 두 파일, `node --test shared/web/test/connection-notice.test.mjs` 2 passed(2026-11-14 Windows). 나머지 원격 시험은 커밋 뒤 실행.
+- gate 변화: 없음
+
+## 2026-11-14 · uncommitted · feat(web): C20-C22 (C19는 위치 상태, 병합 때 번호를 한 칸씩 올림) 팔 스킬 상태·근거 줄·샘플 데이터 계약(planned)
+- 변경: 신규 `skill-state.js`(`skillState`, 순수)·`evidence-line.js`(`createEvidenceLine`)·`sample-data.js`(`sampleTag`·`armAiCaseProblems`), `component-controls.css` `.evidence-line`, `robot-3d.js`·`robot-3d-model.js`의 `skill` 글자(상태 줄만, 그림 무변경), 갤러리 「AI 제안·스킬 상태」, `patterns.yaml` C19~C21(planned), DESIGN.md 행. C13은 DESIGN 규칙이고 레지스트리 행이 없는 것이 의도라 공백이 아니다(`test_patterns_registry.py` 주석).
+- 증거: node `skill-state.test.mjs`·`robot-3d-model.test.mjs` 14건; 원격 `shared/web/test`(ROSY_RUN_BROWSER_TESTS=1, ai 호스트) 546 passed/2 failed(둘 중 `test_responsive_tiers`는 이 변경이 건드리지 않은 `surface-panels.css`, 3D 개수 시험은 갤러리 3D 개수 5가 6이 되어 견본을 `#ai-skill-3d`로 옮겨 해결)
+- gate 변화: 없음(planned 행, 제품 채택 전)
+- 결정: 설계 2026-11-14-rosy-vla-decision-ai-command.md 6절, 사용자 결정 5항(제안자≠승인자, 대체는 새 제안+기명 승인)
+
+## 2026-11-15 · uncommitted · chore(shared-web): Fleet 채택에 따른 부채 목록·patterns.yaml 갱신
+
+- 변경: `shared/web/test/test_choice_controls.py`의 `ROLE_TAB_DEBT`·`HAND_CHIP_DEBT`에서 `applications/fleet/web/` 항목을 제거하고, `shared/web/patterns.yaml`의 `C10`(adopter 추가)·`C14`·`C17`(status: built, Fleet 제품 시험 연결)을 갱신했다.
+- 증거: `rosy_harness.py lint` 및 `node --test` 확인.
+- gate 변화: 없음.
+
+## 2026-11-15 · uncommitted · 보정 요청 한 이름(R2-19)
+- 변경: `DESIGN.md` 운용자 말에 `보정 요청`(은퇴: 실측 요청·설치·보정·실측 교정, `보정 중`은 진행 상태만)과 로봇 대시보드 안전 칸 한국어 규칙을 적었다. `test_operator_copy.py`에 은퇴한 이름을 모든 앱 글에서 막는 검사를 더했다. Fleet 문구는 allowlist로 두고 Fleet 브랜치가 지운다.
+- 증거: 원격 pytest (아래 보고 참조)
+- gate 변화: operator copy gate에 보정 요청 이름 검사 추가.
+- 결정: 2026-11-15 사용자 결정.
+- 교훈: 없음
+
+## 2026-11-15 · uncommitted · patterns.yaml C20·C21·C22 built 전환 (Fleet fix B1-B3)
+- 변경: C20(skillState)·C21(createEvidenceLine)·C22(sampleTag) 행을 built로 넘기고 product_test·product_hook·adopters를 적었다. 제품 시험과 채택 파일은 Fleet fix 조각(operations/fleet/test/test_arm_skill_browser.py, test_work_overview_browser.py, applications/fleet/web)이 갖는다.
+- 증거: test_patterns_registry 검사에서 이 세 행의 조건(export·gate 파일·adopter import·호출·product_test·hook) 전부 확인. 남은 registry 적색(C14 행 adopter 표기, DESIGN.md C19-C22 상태 문구)은 이전 조각 소유다.
+- gate 변화: 없음.
+- 교훈: 없음
+
+## 2026-11-15 · uncommitted · patterns.yaml C19 built 전환 (Fleet fix E)
+- 변경: C19(`localizationState`) 행을 `built`로 넘기고 `product_test`·`product_hook`·`adopters`를 적었다.
+- 증거: `applications/fleet/web/localization-view.js` 채택과 `operations/fleet/test/test_localization_browser.py` 추가.
+- gate 변화: 없음.
+- 교훈: 없음
+
+## 2026-11-15 · uncommitted · feat(web): C23 로봇 도크·C24 로봇 패널 부품과 감독 우회 금지 게이트(planned)
+- 변경: 신규 `robot-dock.js`(`createRobotDock`)·`robot-dock-model.js`(순수)·`robot-panel.js`(`createRobotPanel`, `links.taskRow` 링크 빌더)·`robot-dock.css`·갤러리 「로봇 도크와 패널」(`robot-dock-gallery.js`), 브라우저 시험 2개, node 단위 시험. `patterns.yaml` C23·C24 planned 행에 `forbid`(pipeline 감독 우회 경로, 와일드카드 지원)를 두고 `test_patterns_registry.py`가 모듈과 채택 파일을 읽는다. 병합 중 C19 중복을 풀어 스킬 상태·근거 줄·샘플 데이터를 C20-C22로 올림.
+- 증거: 결과는 아래 최종 줄과 작업 보고(원격 `shared/web/test`, ROSY_RUN_BROWSER_TESTS=1).
+- gate 변화: 없음(planned 행, 제품 채택 전)
+- 교훈: 없음
+
+## 2026-11-15 · uncommitted · patterns.yaml C23/C24 built 전환 (Fleet Stage 2)
+- 변경: C23(`createRobotDock`)·C24(`createRobotPanel`) 행을 `built`로 전환하고 `product_test: operations/fleet/test/test_robot_dock_panel_browser.py::test_dock_and_panel_render_pinky_and_arms_with_layouts_and_exclusion`, `product_hook`(`robot-dock-mount` / `robot-panel-mount`), `adopters: [applications/fleet/web/robot/robot-dock-binding.js]`를 기록했다. F06 `choice-controls.css`를 정리했다.
+- 증거: `applications/fleet/web/robot/robot-dock-binding.js` 채택, `operations/fleet/test/test_robot_dock_panel_browser.py` 추가, `shared/web/test/test_patterns_registry.py` 및 Node 단위 시험 통과.
+- gate 변화: planned -> built (forbid 게이트로 감독 우회 경로 차단 유지)
+- 교훈: 없음

@@ -35,6 +35,18 @@ def base_url():
     listener.close()
 
 
+@pytest.fixture(autouse=True)
+def _default_controls():
+    """D-411 B: every test (in every pilot browser module) starts and ends with the default rosy.controls/1."""
+    def reset():
+        dev_server = sys.modules.get("dev_server")  # only once base_url has imported it
+        if dev_server:
+            dev_server.CONTROLS.update(items=[dev_server._BASE_CONTROL], omit=False)
+    reset()
+    yield
+    reset()
+
+
 @pytest.fixture
 def tablet_page(base_url):
     playwright_sync = pytest.importorskip("playwright.sync_api", reason="Playwright 없음")

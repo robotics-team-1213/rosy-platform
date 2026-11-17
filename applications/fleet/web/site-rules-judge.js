@@ -66,7 +66,6 @@ function pick(label, choices, value, onChange) {
 /** The disclosure for one trip form; `mine.rule` keeps the picks and the last answer across renders. */
 export function ruleJudgeSection({ mine, robot, call, scope, render }) {
   const rule = mine.rule ||= { kind: "return", values: {}, answer: null, note: null, busy: false, draft: false };
-  const kind = RULE_KINDS[rule.kind];
   const box = document.createElement("div");
   box.className = "trip-rule";
   const kinds = document.createElement("label");
@@ -75,23 +74,53 @@ export function ruleJudgeSection({ mine, robot, call, scope, render }) {
   kindSelect.dataset.ruleKind = robot.robot_id;
   kindSelect.replaceChildren(...Object.entries(RULE_KINDS).map(([id, spec]) => new Option(spec.label, id)));
   kindSelect.value = rule.kind;
-  kindSelect.addEventListener("change", () => { Object.assign(rule, { kind: kindSelect.value, values: {}, answer: null, note: null }); render(); });
-  kinds.append("현장 규칙 판정", kindSelect);
-  box.append(kinds);
   const fresh = robot.power_health?.battery?.evidence === "fresh" ? robot.power_health.battery.percent : null;
-  const values = {};
-  for (const [key, label, choices, fallback] of kind.picks) {
-    const start = key === "percent" && fresh !== null ? choices.reduce((a, b) => Math.abs(b - fresh) < Math.abs(a - fresh) ? b : a) : fallback;
-    values[key] = key in rule.values ? rule.values[key] : start;
-    box.append(pick(label, choices, values[key], (value) => { rule.values[key] = values[key] = value; rule.answer = null; }));
+  const out = document.createElement("p");
+  out.className = "hint";
+  out.setAttribute("role", "status");
+  // A select with focus holds the panel's redraw, so the kind select patches its own pick rows and every
+  // pick resets the stale answer line in place — the same rule state a redraw would read.
+  let values = {};
+  const picks = document.createElement("div");
+  picks.className = "trip-rule";
+  function buildPicks() {
+    values = {};
+    picks.replaceChildren();
+    for (const [key, label, choices, fallback] of RULE_KINDS[rule.kind].picks) {
+      const start = key === "percent" && fresh !== null ? choices.reduce((a, b) => Math.abs(b - fresh) < Math.abs(a - fresh) ? b : a) : fallback;
+      values[key] = key in rule.values ? rule.values[key] : start;
+      picks.append(pick(label, choices, values[key], (value) => { rule.values[key] = values[key] = value; rule.answer = null; paintOut(); }));
+    }
   }
+  function paintOut() {
+    if (rule.answer) {
+      const tag = document.createElement("ui-tag");
+      tag.setAttribute("status", (VERDICT[rule.answer.verdict] || [])[1] || "neutral");
+      tag.textContent = ruleAnswerText(rule.answer);
+      const source = { given: "입력한", draft: "초안", active: "활성", default: "기본값(문서 없음)" }[rule.answer.rules_source] || "";
+      const open = rule.answer.detail?.enforced === false ? " · 편대 시작은 아직 이 한도로 막지 않음" : "";
+      out.replaceChildren(tag, ` 규칙: ${source} · 보내지 않음${open}`);
+    } else {
+      out.textContent = rule.note || "가정 상태로 묻는 판정입니다 · 로봇에 보내지 않습니다";
+    }
+  }
+  kindSelect.addEventListener("change", () => {
+    Object.assign(rule, { kind: kindSelect.value, values: {}, answer: null, note: null });
+    buildPicks();
+    paintOut();
+    render();
+  });
+  buildPicks();
+  paintOut();
+  kinds.append("현장 규칙 판정", kindSelect);
+  box.append(kinds, picks);
   const draft = document.createElement("label");
   draft.className = "ui-check";
   const check = document.createElement("input");
   check.className = "ui-field";
   check.type = "checkbox";
   check.checked = rule.draft;
-  check.addEventListener("change", () => { rule.draft = check.checked; rule.answer = null; });
+  check.addEventListener("change", () => { rule.draft = check.checked; rule.answer = null; paintOut(); });
   const draftText = document.createElement("span");
   draftText.textContent = "저장한 초안 규칙으로";
   draft.append(check, draftText);
@@ -118,19 +147,6 @@ export function ruleJudgeSection({ mine, robot, call, scope, render }) {
   }));
   ask.disabled = rule.busy;
   ask.setAttribute("reason", "판정 중");
-  const out = document.createElement("p");
-  out.className = "hint";
-  out.setAttribute("role", "status");
-  if (rule.answer) {
-    const tag = document.createElement("ui-tag");
-    tag.setAttribute("status", (VERDICT[rule.answer.verdict] || [])[1] || "neutral");
-    tag.textContent = ruleAnswerText(rule.answer);
-    const source = { given: "입력한", draft: "초안", active: "활성", default: "기본값(문서 없음)" }[rule.answer.rules_source] || "";
-    const open = rule.answer.detail?.enforced === false ? " · 편대 시작은 아직 이 한도로 막지 않음" : "";
-    out.append(tag, ` 규칙: ${source} · 보내지 않음${open}`);
-  } else {
-    out.textContent = rule.note || "가정 상태로 묻는 판정입니다 · 로봇에 보내지 않습니다";
-  }
   box.append(draft, ask, out);
   return box;
 }

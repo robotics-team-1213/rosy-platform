@@ -1,5 +1,6 @@
 import {node, input, select, afterFormReset} from "./control-dom.js";
-import {confirmIrreversible} from "/common/ui.js";
+import {confirmIrreversible} from "./ui.js";
+import {getAnnouncer} from "./announcer.js";
 
 // Errors augment existing native fields; the caller still owns validation and saving.
 export function createFormErrors(form, summary) {
@@ -48,10 +49,11 @@ export function createFormErrors(form, summary) {
         item.append(link); list.append(item);
       }
       summary.hidden = !owned.size;
-      summary.setAttribute("role", "alert");
       summary.append(list);
       summary.tabIndex = -1;
       if (focus && owned.size) (firstControl || summary).focus();
+      // C25: the summary is plain visible text; the shared announcer reads it once (urgent only on a submit failure).
+      if (owned.size) getAnnouncer(summary.ownerDocument).announce(`입력 오류 ${owned.size}건: ${[...list.children].map(item => item.textContent).join(", ")}`, {urgent: focus});
       return !owned.size;
     },
   };

@@ -2,7 +2,7 @@
 // 대기 요약을 가진다. 지도 오버레이(drawFormationOverlay)는 console.js에 남는다 —
 // 그리는 것과 여는 것은 다른 일이다. 서버 기하를 복제하지 않는다.
 // 운영자 말은 공용 표(core_ui_logic.js, D-540 6)에서 온다. 열거값은 title에만.
-import { FORMATION_SHAPE_LABEL, FORMATION_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { FORMATION_SHAPE_LABEL, FORMATION_STATE_LABEL, EVIDENCE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { capabilityReason, chooseLeader, motionCommandReason, formationReason, leaderPathKind } from "./motion-readiness.js";
 
 const stateLabel = (state) => enumLabel(FORMATION_STATE_LABEL, state);
@@ -248,7 +248,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       view.formation = null;
       view.formationUnavailable = true;
       const state = el("formation-state");
-      state.textContent = "확인 불가";
+      state.textContent = EVIDENCE_LABEL.unavailable;
       state.removeAttribute("title");
       state.setAttribute("status", "warn");
       el("formation-detail").textContent = "대형 상태를 읽지 못했습니다 · 새 상태를 기다리는 중. Fleet 연결을 확인하세요.";

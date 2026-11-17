@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { createRoster } = await import("../../../../applications/fleet/web/roster.js");
+const { createRoster } = await import("../../../../applications/fleet/web/robot/roster.js");
 
 const view = { robots: [], formation: null, stateUnavailable: false, receivedAtMs: Date.now(), trafficTrips: [] };
 const { attentionItems } = createRoster({ scope: { onDispose() {}, interval() {} }, view, streamEvidence: () => null });

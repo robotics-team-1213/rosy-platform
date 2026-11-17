@@ -2,7 +2,7 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 로봇·과제 학습</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/alert-center.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/tasks.js"></script></head>
 <body><a class="skip-link" href="#tasks-main">로봇·과제 학습으로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
@@ -14,8 +14,8 @@
 <!-- review:rail:end --></nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="학습 하위 메뉴"><span class="ui-subnav-head">학습</span><a class="ui-subnav-item" href="/learning/tasks" id="task-workflow-link">학습 과제</a><a class="ui-subnav-item" href="/learning/tasks/manage" aria-current="page">전문가 설정</a><a class="ui-subnav-item" href="/learning#pipeline">인식 학습</a><a class="ui-subnav-item" href="/learning/sim">SIM 실험</a><a class="ui-subnav-item" href="/learning/ladder">학습 사다리</a></nav></div>
 <div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>로봇·과제 학습</h1><span class="ui-crumbs" id="learning-tool-path"></span><span data-spacer></span><ui-button id="tasks-refresh" kind="quiet" data-action-icon="refresh">다시 확인</ui-button></div><main id="tasks-main" class="learning-main ui-task-page" tabindex="-1">
 <p class="learning-lede">과제를 선택하고 시범 자료로 학습을 실행한 뒤, 같은 과제에서 결과를 비교하고 교정 자료를 준비합니다.</p>
-<ui-status id="tasks-error" state="error" role="alert" hidden></ui-status><p id="tasks-status" role="status">작업 공간 연결을 확인하는 중입니다.</p><a id="tasks-login" class="ui-action-link" data-kind="quiet" href="/accounts" hidden>로그인·계정에서 권한 확인</a>
-<div id="tasks-context-error" hidden><ui-status id="tasks-context-message" state="error" role="alert"></ui-status><ui-button id="tasks-context-reset" kind="quiet">링크의 선택 초기화</ui-button></div>
+<div id="page-alerts" class="alert-center-list" aria-label="알림"></div><ui-status id="tasks-error" state="error" hidden></ui-status><p id="tasks-status" role="status">작업 공간 연결을 확인하는 중입니다.</p><a id="tasks-login" class="ui-action-link" data-kind="quiet" href="/accounts" hidden>로그인·계정에서 권한 확인</a>
+<div id="tasks-context-error" hidden><ui-status id="tasks-context-message" state="error"></ui-status><ui-button id="tasks-context-reset" kind="quiet">링크의 선택 초기화</ui-button></div>
 <p id="task-next" role="status"></p><ui-button id="task-next-setup" kind="quiet">과제 만들기 열기</ui-button>
 <section id="task-run-section" class="learning-section" aria-labelledby="run-title"><h2 id="run-title">과제 선택·자료·학습 시작</h2>
 <label class="ui-field-label">저장 과제 <select id="task-select" class="ui-field"><option value="">과제 선택</option></select></label><div id="selected-task" aria-live="polite"></div>
@@ -29,8 +29,8 @@
 <p id="run-host" role="status"></p><p id="run-readiness" role="status"></p><p id="run-data-status" class="quiet"></p>
 <p><a id="task-workbench-review" class="ui-action-link" data-kind="quiet" data-workbench-section="dataset-section" href="/learning/omx#dataset-section">시범 검수·자료 등록</a> · 자료의 과제·프로필·참여 범위는 실행 전에 서버에서 다시 확인합니다. 기존 자료는 첫 실행에서 이 과제에 고정하여 사후 연결됩니다. 수집 당시의 과제를 입증하지는 않습니다.</p>
 <ui-button id="run-start" kind="primary" type="submit" disabled>선택 과제 학습 시작</ui-button></form></section>
-<section id="task-results-section" class="learning-section" aria-labelledby="results-title"><h2 id="results-title">이 과제의 실행·평가 결과</h2><p class="quiet">저장된 실행 기록은 다시 접속해도 확인할 수 있습니다. 실행 중인 지속 학습에는 경험 자료를 추가하거나 학습을 중지할 수 있습니다. 중지는 이 호스트의 학습 실행기에만 적용됩니다. 합성 시험 결과는 실물 연결이나 현장 수용을 뜻하지 않습니다.</p><p><a id="task-workbench-training" class="ui-action-link" data-kind="quiet" data-workbench-section="train-section" href="/learning/omx#train-section">선택 자료의 학습 준비·작업대 확인</a></p><div id="task-runs" aria-live="polite"></div></section>
-<details id="robot-setup" class="learning-section" open><summary id="robots-title">학습할 로봇 등록·목록</summary>
+<section id="task-results-section" class="learning-section" aria-labelledby="results-title"><h2 id="results-title">이 과제의 실행·평가 결과</h2><p class="quiet">저장된 실행 기록은 다시 접속해도 확인할 수 있습니다. 실행 중인 지속 학습에는 경험 자료를 추가하거나 학습을 중지할 수 있습니다. 중지는 이 호스트의 학습 실행기에만 적용됩니다. 합성 시험 결과는 실물 연결이나 현장 수용을 뜻하지 않습니다.</p><p><a id="task-workbench-training" class="ui-action-link" data-kind="quiet" data-workbench-section="train-section" href="/learning/omx#train-section">선택 자료의 학습 준비·작업대 확인</a></p><div class="learning-next-actions"><a class="ui-action-link" data-kind="quiet" href="/learning/evaluate">평가·승격 요청 (/learning/evaluate)</a><a class="ui-action-link" data-kind="quiet" href="/console/policy">Fleet 학습 정책 승인 (/console/policy)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_s">Cell S · S3 공급 (arm_s)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_a">Cell A · S5 1·3단 (arm_a)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_b">Cell B · S5 2단 (arm_b)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_ab">Cell A/B · S5 2암 통합 (cell_ab)</a></div><div id="task-runs" aria-live="polite"></div></section>
+<details id="robot-setup" class="learning-section"><summary id="robots-title">학습할 로봇 등록·목록</summary>
 <p class="quiet">Fleet에 이미 등록된 로봇·팔을 골라 학습 대상으로 등록합니다. 목록에 있다는 것은 연결·제어 권한 확인이 아니며, 정책 학습 실행은 OMX만 지원합니다.</p>
 <h3 id="owner-title">Fleet 등록 장치</h3><div id="owner-robots" aria-labelledby="owner-title"></div><p id="owner-detail" class="quiet" role="status"></p>
 <h3 id="registered-title">이 프로젝트의 학습 로봇</h3><div id="robots" aria-labelledby="registered-title"></div>

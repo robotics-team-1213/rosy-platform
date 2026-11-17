@@ -1,5 +1,6 @@
 // Fleet device discovery, approved app directory and address guidance; no registration writes.
 import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
+import {getAnnouncer} from "/common/announcer.js";
 
 // Navigation uses the authenticated peer directory, never a discovered URL or a guessed port.
 export function robotAppLinks(robotId, peers = []) {
@@ -36,7 +37,8 @@ export function createRobotAppActions(robotId, peers, nodeWithText) {
     const link = nodeWithText('a', '', app.label);
     link.href = app.href;
     link.dataset.robotApp = app.app;
-    link.rel = "noreferrer";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
     context.append(link);
   }
   if (!appLinks.length) {
@@ -137,6 +139,8 @@ export function createDeviceDiscovery({pageScope, auth, discoveryGate, view, cal
   // 이동 안내는 그 화면으로 가는 링크로만 말한다.
   function moveLink() {
     const node = document.createElement("a");
+    node.className = "ui-action-link";
+    node.dataset.kind = "quiet";
     node.href = "/console/install";
     node.textContent = "설치 화면에서 이동";
     return node;
@@ -153,10 +157,22 @@ export function createDeviceDiscovery({pageScope, auth, discoveryGate, view, cal
       if (_err.name === "AbortError") return;
       payload = null;
     }
-    const banner = el("address-banner");
+    // D-1117 — 재부여 안내는 #address-drift 칸의 첫 줄(이 코드가 만든 p). 문서의 독립 role=alert 배너는 없다.
     const text = renumberBanner(payload, view.robots);
-    banner.hidden = !text;
-    if (text && banner.textContent !== text) banner.textContent = text;
+    const drift = el("address-drift");
+    let note = drift?.querySelector("[data-address-note]") ?? null;
+    if (text) {
+      if (!note && drift) {
+        note = document.createElement("p");
+        note.dataset.addressNote = "";
+        note.className = "enroll-alarm";
+        drift.prepend(note);
+      }
+      if (note?.textContent !== text) {
+        note.textContent = text;
+        if (globalThis.document?.body) getAnnouncer().announce(text);  // 지속 경고는 warn: polite 한 번
+      }
+    } else note?.remove();
     // 옮길 수 있는 로봇마다 한 줄과 그 로봇의 지름길. 옮기기마다 그 로봇의 화면 코드를 묻는다.
     const movable = movableRobots(payload);
     const next = JSON.stringify([payload?.robots || [], auth.role, auth.principal]);

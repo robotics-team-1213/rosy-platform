@@ -4,7 +4,7 @@ import pytest
 
 from browser_harness import browser_tests_enabled
 from console_browser_site import console_url  # noqa: F401
-from test_fleet_console_browser import _open_cards, _open_console
+from test_fleet_console_browser import _open_cards as _open_panel, _open_console
 from test_fleet_manual_control_browser import _api
 
 pytestmark = pytest.mark.skipif(
@@ -13,6 +13,13 @@ pytestmark = pytest.mark.skipif(
 
 LIMITS = {"manual_linear": 0.12, "manual_angular": 0.5, "set_linear": 0.12, "set_angular": 0.5,
           "approved_linear": None, "approved_angular": None, "max_linear": 0.2, "max_angular": 0.8}
+
+def _open_cards(page, robot_id=None):
+    """Open the robot panel, then its closed-by-default 수동 조종 section (single place for the pad)."""
+    _open_panel(page, robot_id)
+    details = page.locator("#robot-panel-mount details.robot-panel-manual")
+    if not details.evaluate("node => node.open"):
+        details.locator("> summary").click()
 
 
 def _api_with(limits):

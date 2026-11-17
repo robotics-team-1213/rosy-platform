@@ -78,7 +78,7 @@ if ($PythonExe -match '[\\/]') { $PythonExe = ConvertTo-FullPath $PythonExe }
 if (-not $EvidenceDir) { $EvidenceDir = Split-Path -Parent $PlanPath }
 $EvidenceDir = (Resolve-Path -LiteralPath $EvidenceDir).ProviderPath
 
-$plan = Get-Content -LiteralPath $PlanPath -Raw | ConvertFrom-Json
+$plan = Get-Content -LiteralPath $PlanPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if ([string]$plan.mode -cne "PLAN_ONLY") { Fail "the plan must be a PLAN_ONLY plan from prepare-rosy-sd.ps1 -PlanOnly -PlanPath" }
 $releaseId = [string]$plan.release_id
 $deviceName = [string]$plan.device_name

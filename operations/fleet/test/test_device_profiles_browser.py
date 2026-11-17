@@ -5,11 +5,19 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
-from browser_harness import browser_tests_enabled, launch_options
+from browser_harness import assert_layout_geometry, browser_tests_enabled, launch_options
 from test_console_queue_inline_browser import site  # noqa: F401
 
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in Chromium scenario')
+
+
+def _assert_layout_geometry_desktop_and_390(page, desktop=(1440, 900)):
+    """가드는 호출처의 데스크톱 크기 그대로, 그리고 390×844 모바일 시트에서도 돈다."""
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": desktop[0], "height": desktop[1]})
 
 
 @pytest.mark.parametrize('width', [1440, 390])
@@ -81,6 +89,7 @@ def test_installation_device_information_save_reload_and_viewer_guard(site, widt
                 assert not writes
             expect(page.locator('#estop')).to_be_visible()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            _assert_layout_geometry_desktop_and_390(page, desktop=(width, 1000 if width > 1000 else 844))
             if output := os.environ.get('ROSY_SHOT_DIR'):
                 folder = Path(output)
                 folder.mkdir(parents=True, exist_ok=True)

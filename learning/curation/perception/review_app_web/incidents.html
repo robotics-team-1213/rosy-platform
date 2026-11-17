@@ -2,7 +2,7 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 현장 실패 근거</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/common/alert-center.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/incidents.js"></script></head>
 <body><a class="skip-link" href="#incidents-main">현장 실패 근거로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
@@ -17,12 +17,13 @@
 <section class="learning-section" aria-labelledby="incidents-title">
 <h2 id="incidents-title">현장 실패 근거</h2>
 <p class="quiet">Fleet에서 내보낸 사건 내보내기(incidents.json)와 녹화 stuck 마커(stuck_markers.json)를 묶어 사건별 근거를 확인합니다. 이 화면은 아무것도 저장하지 않고, 정답 라벨이나 픽셀 검수 승인을 만들지 않습니다.</p>
+<p class="quiet">실시간 사건 대응·원인 판정과 <code>incidents.json</code> 내보내기는 <a href="/console?view=records">Fleet 기록·사건 (/console?view=records)</a>에서 수행합니다.</p>
 <form id="incident-form" class="ui-form learning-form">
 <label class="ui-field-label">Fleet 사건 내보내기 (incidents.json) <input id="incident-incidents" class="ui-field" type="file" accept=".json,application/json" required></label>
 <label class="ui-field-label">녹화 stuck 마커 (stuck_markers.json) <input id="incident-markers" class="ui-field" type="file" accept=".json,application/json" required></label>
 <ui-actions><ui-button id="incident-submit" kind="primary" type="submit">근거 묶기</ui-button></ui-actions>
 </form>
-<ui-status id="incident-error" state="error" role="alert" hidden></ui-status>
+<div id="page-alerts" class="alert-center-list" aria-label="알림"></div><ui-status id="incident-error" state="error" hidden></ui-status>
 <p id="incident-status" role="status"></p>
 <div id="incident-results" aria-live="polite"></div>
 <ui-actions><a id="incident-download" class="ui-action-link" data-kind="quiet" download="incident-feedback.json" hidden>결과 JSON 내려받기</a></ui-actions>

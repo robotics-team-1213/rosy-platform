@@ -247,7 +247,7 @@ function Read-DiskInventory([string]$FixturePath) {
         if (-not (Test-Path -LiteralPath $FixturePath -PathType Leaf)) {
             Fail "disk inventory fixture is missing"
         }
-        return @((Get-Content -LiteralPath $FixturePath -Raw | ConvertFrom-Json) | ForEach-Object { Complete-DiskSerial $_ })
+        return @((Get-Content -LiteralPath $FixturePath -Raw -Encoding UTF8 | ConvertFrom-Json) | ForEach-Object { Complete-DiskSerial $_ })
     }
     return @(Get-Disk | Select-Object Number, FriendlyName, SerialNumber, UniqueId, Size, BusType, IsBoot, IsSystem, IsOffline, IsReadOnly, Signature, Guid, NumberOfPartitions |
         ForEach-Object { Complete-DiskSerial $_ })
@@ -645,7 +645,7 @@ $emergencyReceipt = $false
 if ($ReprovisionReceipt) {
     if (-not (Test-Path -LiteralPath $ReprovisionReceipt -PathType Leaf)) { Fail "reprovision receipt is missing" }
     try {
-        $reprovision = Get-Content -LiteralPath $ReprovisionReceipt -Raw | ConvertFrom-Json
+        $reprovision = Get-Content -LiteralPath $ReprovisionReceipt -Raw -Encoding UTF8 | ConvertFrom-Json
     }
     catch {
         Fail "reprovision receipt is not valid JSON"
@@ -720,7 +720,7 @@ if ($reprovision -and $reprovision.PSObject.Properties["personalization"]) {
 $accountTrust = $null
 if ($AccountTrustFile) {
     try {
-        $accountTrust = Get-Content -LiteralPath $AccountTrustFile -Raw | ConvertFrom-Json
+        $accountTrust = Get-Content -LiteralPath $AccountTrustFile -Raw -Encoding UTF8 | ConvertFrom-Json
     }
     catch {
         Fail "AccountTrustFile is not valid JSON"
@@ -740,7 +740,7 @@ if ($PlanPath -and $PlanOnly -and (Test-Path -LiteralPath $PlanPath)) {
 if ($PlanPath -and -not $PlanOnly) {
     if (-not (Test-Path -LiteralPath $PlanPath -PathType Leaf)) { Fail "reviewed plan is missing" }
     try {
-        $reviewedPlan = Get-Content -LiteralPath $PlanPath -Raw | ConvertFrom-Json
+        $reviewedPlan = Get-Content -LiteralPath $PlanPath -Raw -Encoding UTF8 | ConvertFrom-Json
     }
     catch {
         Fail "reviewed plan is not valid JSON"
@@ -946,7 +946,7 @@ $verification = $null
 # The release is proven; what can still fail here is the plan, registry or arguments.
 $script:nextHint = "correct the reported plan, registry or argument, then re-run"
 
-$registry = Get-Content -LiteralPath $RegistryJson -Raw | ConvertFrom-Json
+$registry = Get-Content -LiteralPath $RegistryJson -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($DeviceName -or $DeviceUid) {
     if (-not $DeviceName -or -not $DeviceUid) { Fail "DeviceName and DeviceUid must be supplied together" }
 }
@@ -1626,7 +1626,7 @@ else {
         $mediaReadbackOutput = $(if (Test-Path -LiteralPath $readbackOutputPath -PathType Leaf) { Get-Content -LiteralPath $readbackOutputPath -Raw } else { "" })
         $readbackError = $null
         if (Test-Path -LiteralPath $readbackErrorPath -PathType Leaf) {
-            try { $readbackError = Get-Content -LiteralPath $readbackErrorPath -Raw | ConvertFrom-Json } catch { $readbackError = $null }
+            try { $readbackError = Get-Content -LiteralPath $readbackErrorPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $readbackError = $null }
         }
     }
     finally {
@@ -1753,7 +1753,7 @@ try {
     Move-Item -LiteralPath $bundleTargetTemp -Destination $bundleTarget
     # The bundle is on the card; the readback would now see it as an extra file,
     # so from here on a failure needs a full rewrite, not -ResumeAfterWrite.
-    $bundleReceipt = Get-Content -LiteralPath $bundleReceiptTemp -Raw | ConvertFrom-Json
+    $bundleReceipt = Get-Content -LiteralPath $bundleReceiptTemp -Raw -Encoding UTF8 | ConvertFrom-Json
     # D-176: an editable settings file next to the bundle; never overwrite one a person edited.
     $configTarget = Join-Path $bootRoot "rosy-config.yaml"
     if (-not (Test-Path -LiteralPath $configTarget)) {

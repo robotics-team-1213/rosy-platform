@@ -2080,7 +2080,7 @@
         "applications/fleet/web/line-stuck.js",
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/map/trail-view.js",
-        "applications/fleet/web/roster.js",
+        "applications/fleet/web/robot/roster.js",
         "applications/fleet/web/shared/fleet-header.js",
         "applications/fleet/web/shared/power-action.js",
         "applications/fleet/web/shared/robot-video.js",
@@ -2271,7 +2271,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
+          "consumer": "applications/fleet/web/robot/roster.js",
           "expression": "/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/cancel",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -2279,7 +2279,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
+          "consumer": "applications/fleet/web/robot/roster.js",
           "expression": "/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/line-follow",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -2287,7 +2287,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
+          "consumer": "applications/fleet/web/robot/roster.js",
           "expression": "/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/identify",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -3169,7 +3169,7 @@
       "consumers": [
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/map/trail-view.js",
-        "applications/fleet/web/roster.js",
+        "applications/fleet/web/robot/roster.js",
         "applications/fleet/web/shared/site-map-model.js",
         "applications/fleet/web/signals.js",
         "applications/fleet/web/sitemap/site-map.js",
@@ -3195,7 +3195,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
+          "consumer": "applications/fleet/web/robot/roster.js",
           "expression": "/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -3203,7 +3203,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
+          "consumer": "applications/fleet/web/robot/roster.js",
           "expression": "/api/fleet/tasks/${encodeURIComponent(pending.task_id)}",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -3211,7 +3211,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
+          "consumer": "applications/fleet/web/robot/roster.js",
           "expression": "/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -4172,6 +4172,14 @@
         },
         {
           "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/human-safety-gate/clear",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/human-safety-gate/clear"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
           "expression": "/api/fleet/pipeline/station-zones/dispatch",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -4611,6 +4619,57 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/pipeline/station-zones"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/human-safety-gate/clear",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/human-safety-gate/clear",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "clear_human_safety_gate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/human-safety-gate/clear"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/decision-gate/execute",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/decision-gate/execute",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "execute_pipeline_decision_gate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/decision-gate/execute"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-tasks/{task_id}/resume",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-tasks/{task_id}/resume",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "resume_cell_task",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-tasks/{task_id}/resume"
         }
       ],
       "flows": [
@@ -4990,6 +5049,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/pipeline/human-safety-gate"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/human-safety-gate/clear",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/human-safety-gate/clear"
           ]
         },
         {
@@ -6514,7 +6581,7 @@
         "applications/fleet/web/installation/start-point-view.js",
         "applications/fleet/web/installation/tracking-relearn.js",
         "applications/fleet/web/map/map-polling.js",
-        "applications/fleet/web/roster.js",
+        "applications/fleet/web/robot/roster.js",
         "applications/fleet/web/sitemap/site-map-teach.js",
         "applications/fleet/web/sitemap/site-map.js",
         "applications/fleet/web/tracking-view.js"
@@ -6633,7 +6700,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster.js",
+          "consumer": "applications/fleet/web/robot/roster.js",
           "expression": "/api/fleet/tracking/identity",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -7369,7 +7436,7 @@
         "applications/fleet/web/sitemap/site-map-sources.js",
         "applications/fleet/web/cell/cell-observation.js",
         "applications/fleet/web/shared/cell-frames.js",
-        "applications/fleet/web/roster-cards.js"
+        "applications/fleet/web/robot/roster-cards.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -7480,7 +7547,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/roster-cards.js",
+          "consumer": "applications/fleet/web/robot/roster-cards.js",
           "expression": "/api/fleet/vision/lease",
           "resolution": "literal-or-template",
           "request_ids": [

@@ -4,6 +4,8 @@
 
 import {createAutoSession, intentView} from "../autonomy.js";
 import {MODE_LABEL} from "/common/core_ui_logic.js";
+import {createCauseLine} from "/common/cause-line.js";
+import {getAnnouncer} from "/common/announcer.js";
 
 const DEG = 180 / Math.PI;
 const PAINT_LABEL = {learned: "학습 모델", denoise: "OpenCV 반사 제거", threshold: "기존 검출"};
@@ -103,8 +105,7 @@ export function mountAutoMode({drive, element, apiGet, releaseAll, onIdle, block
   function takeover() {
     if (auto.active()) auto.release("takeover");
     drive.dataset.autoMode = "off";
-    element.autoToggle?.setAttribute("aria-pressed", "false");
-    element.manual?.setAttribute("aria-pressed", "true");
+    element.modeGroup?.set("manual");
   }
   if (element.go) {
     element.go.addEventListener("pointerdown", (event) => {
@@ -124,20 +125,11 @@ export function mountAutoMode({drive, element, apiGet, releaseAll, onIdle, block
     }
     element.go.addEventListener("contextmenu", (event) => event.preventDefault());
   }
-  if (element.autoToggle) {
-    element.autoToggle.addEventListener("click", () => {
-      const on = drive.dataset.autoMode !== "on";
-      if (!on) takeover();
-      drive.dataset.autoMode = on ? "on" : "off";
-      element.autoToggle.setAttribute("aria-pressed", String(on));
-      element.manual?.setAttribute("aria-pressed", String(!on));
-    });
-  }
-  element.manual?.addEventListener("click", () => {
+  // K1 운전 모드: native radio 의 change 만 모드를 바꾼다(set() 은 change 를 내지 않는다).
+  element.modeGroup?.element.addEventListener("change", (event) => {
+    if (event.target.value === "auto") { drive.dataset.autoMode = "on"; return; }
     takeover();
     drive.dataset.autoMode = "off";
-    element.autoToggle?.setAttribute("aria-pressed", "false");
-    element.manual.setAttribute("aria-pressed", "true");
   });
 
   return {
@@ -159,20 +151,16 @@ export function mountLanePerception(root, {apiGet, onPending = () => {}, blocked
   }
   const apply = document.createElement("ui-button"); apply.textContent = "인식 적용";
   apply.type = "button"; apply.setAttribute("kind", "quiet"); apply.dataset.laneApply = "";
-  const status = document.createElement("ui-status"); status.textContent = "차선 인식 설정 확인 중"; status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite"); status.dataset.lanePerceptionStatus = "";
-  const disabledReason = document.createElement("ui-status"); disabledReason.id = "pilot-lane-perception-reason";
-  select.setAttribute("aria-describedby", disabledReason.id);
+  const status = document.createElement("ui-status"); status.textContent = "차선 인식 설정 확인 중"; status.setAttribute("role", "none"); status.setAttribute("aria-live", "off"); status.dataset.lanePerceptionStatus = "";
+  const disabledReason = document.createElement("ui-status"); disabledReason.id = "pilot-lane-perception-reason"; disabledReason.setAttribute("role", "none"); disabledReason.setAttribute("aria-live", "off");
   panel.append(summary, select, apply, status, disabledReason); root.append(panel);
+  const cause = createCauseLine(panel, {line: disabledReason});
   let config = null, idle = false, idleAt = 0, admin = false, pending = false, disposed = false, dirty = false;
   select.addEventListener("change", () => { dirty = true; });
   function render() {
     const reason = pending ? "인식 적용 중" : !config ? "인식 설정을 확인할 수 없습니다" : !admin
       ? "관리자 권한이 필요합니다" : !idle || Date.now() - idleAt > 2000 || blocked() ? "정지 · 설정 버튼으로 멈춘 뒤 적용하세요" : "";
-    apply.disabled = Boolean(reason); select.disabled = Boolean(reason);
-    if (reason) apply.setAttribute("reason", reason); else apply.removeAttribute("reason");
-    if (reason) select.setAttribute("reason", reason); else select.removeAttribute("reason");
-    disabledReason.textContent = reason; disabledReason.hidden = !reason;
+    cause.set([apply, select], reason);
     if (config) summary.textContent = `차선 인식 · 설정 ${PAINT_LABEL[config.paint_source]}`;
   }
   async function refresh() {
@@ -213,6 +201,7 @@ export function mountLanePerception(root, {apiGet, onPending = () => {}, blocked
       status.textContent = `설정 적용: ${PAINT_LABEL[config.paint_source]} · 실제 추론: ${actualPaintText(config)}`;
     } catch (error) {
       status.textContent = `인식 적용 실패: ${error.message} · 설정을 다시 확인하세요`;
+      getAnnouncer(document).announce(status.textContent);  // 실패만 낭독, 나머지 상태 글은 표시만
       config = null;
     } finally { pending = false; onPending(false); render(); }
   });

@@ -7,7 +7,7 @@ import {pinkyCore} from "./drivers/pinky_core.js";
 import {omxSim} from "./drivers/omx_sim.js";
 import {mountConnect} from "./screens/connect.js";
 import {mountDrive} from "./screens/drive.js";
-import {postJson, inPilotApp, prepareConsoleSession} from "./client.js";
+import {postJson, inPilotApp, prepareConsoleSession, pilotNotice, announce} from "./client.js";
 import {mountArm} from "./screens/arm.js";
 import {readControls, widgetPlan, fallbackPinkyControls, profileFromBaseVelocity} from "./controls.js";
 
@@ -24,8 +24,7 @@ let stopGeneration = 0;
 
 function generalNotice(message) {
   stopGeneration++;
-  const notice = document.querySelector("#pilot-notice");
-  if (notice) { notice.removeAttribute("data-stop-state"); notice.textContent = message; }
+  pilotNotice().say(message);
 }
 
 function showConnect() {
@@ -34,8 +33,23 @@ function showConnect() {
   document.body.dataset.pilotScreen = "connect";
   driveRoot.hidden = true;
   connectRoot.hidden = false;
-  mountConnect(connectRoot, {onEnter: showDrive});
+  gateMap(null);
+  mountConnect(connectRoot, {onEnter: showDrive, onReady: ({role}) => gateMap(role)});
 }
+
+// 운용 지도(/console)는 운영자 이상 세션이 확인된 때만 연다. 숨기지 않고 사유를 붙여 잠근다(D-359 §5.3).
+const MAP_ROLES = ["operator", "administrator"];
+function gateMap(role) {
+  const open = MAP_ROLES.includes(role);
+  for (const button of document.querySelectorAll('[data-goto="/console"]')) {
+    button.disabled = !open;
+    if (open) button.removeAttribute("reason");
+    else button.setAttribute("reason", role
+      ? "운영자 이상 권한이 있어야 운용 지도를 열 수 있습니다"
+      : "로봇에 접속하고 운영자 권한을 확인한 뒤 열 수 있습니다");
+  }
+}
+gateMap(null);
 
 brandHome.addEventListener("click", (event) => {
   if (simTarget) {
@@ -92,6 +106,7 @@ for (const button of document.querySelectorAll("[data-estop]")) {
     const paint = (state, message) => {
       if (!notice || generation !== stopGeneration || simTarget || (state !== "pending" && !notice.hasAttribute("data-stop-state"))) return;
       notice.dataset.stopState = state; notice.textContent = message;
+      if (state !== "pending") announce(message, {urgent: state !== "received"});  // 정지 결과는 공용 announcer 한 곳
     };
     const unknown = () => paint("unknown", "비상 정지 결과 확인 불가 · 로봇 상태와 연결을 즉시 확인하세요.");
     paint("pending", "비상 정지 요청 중…");

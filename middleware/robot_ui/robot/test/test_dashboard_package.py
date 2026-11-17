@@ -30,11 +30,12 @@ def test_the_formation_cell_hides_when_the_robot_has_no_role():
 def test_the_mode_control_speaks_korean():
     """D-396: 모드 버튼과 히어로가 한국어로 말한다 (운용자의 언어)."""
     html = (ROOT / "index.html").read_text(encoding="utf-8")
-    assert ">대기</ui-button>" in html
-    assert ">수동</ui-button>" in html
-    assert ">자율주행</ui-button>" in html
-    assert ">IDLE</ui-button>" not in html
-    assert ">MANUAL</ui-button>" not in html
+    # The mode group is one shared K1 part (mode-choice.js); its chips take the operator words from MODE_LABEL.
+    choice = (ROOT / "mode-choice.js").read_text(encoding="utf-8")
+    labels = (ROOT.parents[2] / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+    assert "MODE_LABEL[mode]" in choice and 'id="mode-choice-host"' in html
+    assert 'IDLE: "대기"' in labels and 'MANUAL: "수동"' in labels and 'NAVIGATION: "내비게이션"' in labels
+    assert ">IDLE</ui-button>" not in html and ">MANUAL</ui-button>" not in html
     # 히어로는 운용 말(SAFE_STOP 포함)을 쓴다. 원본 모드 문자열을 그대로 찍지 않는다.
     js = (ROOT / "app.js").read_text(encoding="utf-8")
     assert 'operatorModeLabel(state.mode)' in js
@@ -45,7 +46,7 @@ def test_escape_key_stops_the_robot_immediately():
     """D-396: Escape 키 = 즉시 비상정지 — 확인창 없음, 입력 필드 무시."""
     js = (ROOT / "app.js").read_text(encoding="utf-8")
     assert 'event.key !== "Escape"' in js
-    assert '"INPUT" || tag === "TEXTAREA"' in js  # 입력 필드 가드
+    assert 'event.isComposing' in js  # 입력 필드 가드
     assert 'estop === true' in js  # 이미 정지 상태면 재발동 안 함
     assert 'safety/stop' in js  # 실제 API 호출
     # Escape 핸들러 블록에 confirm 이 없다 — 위급 순간의 장벽은 위험하다
@@ -75,14 +76,14 @@ def test_the_teleop_pad_shows_commanded_speed():
     assert "m/s" in teleop and "rad/s" in teleop
 
 
-def test_the_connection_banner_alerts_when_disconnected():
-    """D-396: 연결 배너 — WebSocket 끊김 시 topbar 아래 전체 폭."""
+def test_the_connection_badge_is_the_only_connection_indicator():
+    """C25: 연결 상태는 머리말 배지 하나(배너 복사본 없음), 변경 때만 announcer로 한 번 알린다."""
     html = (ROOT / "index.html").read_text(encoding="utf-8")
-    assert 'id="connection-banner"' in html
-    assert "connection-banner" in html
+    assert 'id="connection-badge"' in html
+    assert "connection-banner" not in html
     client = (ROOT / "client.js").read_text(encoding="utf-8")
-    assert "connection-banner" in client
-    assert 'kind === "online"' in client  # online 일 때만 숨김
+    assert "connection-banner" not in client and "announce(label)" in client
+    assert "createConnectionNotice" in client  # C10: 진짜 끊김만 경고 태그, 인증 대기·알 수 없음은 조용히
 
 
 def test_the_action_message_clears_after_five_seconds():
@@ -169,18 +170,18 @@ def test_map_interaction_controls_explain_and_enforce_the_operator_boundary():
     shell = (ROOT / "shell" / "shell.css").read_text(encoding="utf-8")
     shared_controls = (ROOT.parents[2] / "shared" / "web" / "components.css").read_text(encoding="utf-8")
     assert 'ctx.role === "operator" || ctx.role === "administrator"' in script
-    assert 'button.disabled = !allowed' in field_map
-    assert 'button.setAttribute("aria-describedby", clickReason.id)' in script
+    assert 'disabled: !allowed' in field_map
+    assert 'clicks.setAttribute("aria-describedby", clickReason.id)' in script
     assert "위치·주행 목표 설정에는 운용자 권한이 필요합니다." in script
     assert 'canGoal: canMapAction' in script
     assert 'mode !== "goal" || (!safeStopped() && goalPoseReady())' in script
-    assert 'el("ui-actions", "surface-actions map-layer-actions")' in script
-    assert 'el("ui-actions", "surface-actions map-click-actions")' in script
+    assert 'createMapChoices(' in script and 'layers.classList.add("map-layer-actions")' in script
+    assert 'clicks.classList.add("map-click-actions")' in script
     panel_styles = (ROOT / "panels" / "surface-panels.css").read_text(encoding="utf-8")
     assert ".surface-link[hidden]" not in panel_styles  # components.css owns [hidden]
     assert 'ui-button[kind="segment"][aria-pressed="true"]' in shared_controls
     assert "#shell-estop { flex: none; white-space: nowrap; }" in shell
-    assert ".surface-actions:is(.map-click-actions, .map-layer-actions, .mode-actions) > ui-button { flex: 1;" in shell
+    assert ".choice-group:is(.map-click-actions, .map-layer-actions) :is(.choice-chip, ui-button) { flex: 1;" in shell
 
 
 def test_every_module_the_shell_imports_is_installed_and_served():

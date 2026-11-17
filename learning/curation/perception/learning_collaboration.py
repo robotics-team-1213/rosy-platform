@@ -144,7 +144,7 @@ class Collaboration:
             handler.extra_headers.append(('Location', target))
             handler.send(b'',303)
             return True
-        if path in ('/accounts', '/accounts.js', '/account-session.js', '/commands.js', '/app.css') or path.startswith('/common/'):
+        if path in ('/accounts', '/accounts.js', '/account-session.js', '/review-alerts.js', '/review-failures.js', '/commands.js', '/app.css') or path.startswith('/common/'):
             return False
         if path == '/api/accounts/options':
             handler.send({'enabled': True, 'oauth': self.oauth is not None,

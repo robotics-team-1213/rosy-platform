@@ -116,11 +116,19 @@ surfaces:
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
     container_breakpoints:
+      - value: 20rem
+        reason: 좁은 맥락 칸에서 context-tabs를 2×2 격자로 접어 탭 이름 잘림을 막는다(applications/fleet/web/shared/styles.css)
+      - value: 24rem
+        reason: 좁은 OMX 우측 검사 칸에서 .omx-inspector-quick-dispatch 버튼을 한 열로 쌓는다(applications/fleet/web/cell/cell.css)
       - value: 48rem
         reason: 한 줄 앱 바가 시계와 평상 연결 글(실시간)을 접는 셸 칸 폭 — 그 아래에서는 맥락·알림·계정·비상 정지가 한 줄에 서려면 연결 자리가 비어야 한다. 공용 셸의 본문 접힘과 같은 값이다(D-741 5항)
       - value: 60rem
         reason: 현장 지도·Cell 본문(main)이 두 열로 서는 칸 폭 — 레일과 하위 탐색(304px) 옆 1024·1100 창의 본문(688·764px)은 한 열이고, 스크롤바가 있는 1366 노트북 창(1349, 본문 1013px)은 두 열이다. 64rem이면 그 노트북이 한 열이 된다(D-741 2항)
     breakpoints:
+      - value: 80rem
+        reason: 64-80rem 창에서 선택 막대의 조종 패드와 단추 두 개가 한 줄에 들어가도록 지도 칸 비율을 8:3으로 두고 줄 간격을 좁힌다.
+      - value: 90rem
+        reason: 64-90rem 창에서는 세 열이 안 들어가 로봇 패널이 레일을 밀지 않고 도크 왼쪽에 겹쳐 뜬다(지도 칸 폭 보존).
       - value: 95rem
         reason: 현장 지도 검사 칸(360px)을 오른쪽에 두면서 지도 라벨 12px와 좌표 선택 여백을 보존하는 최소 창 폭이다. 그 아래는 검사 칸을 지도 아래에 쌓는다. 1519·1520·1920px 두 테마 브라우저 기하 검사로 확인한다.
       - value: 110rem
@@ -199,8 +207,8 @@ surfaces:
     medium: web
     ports:
       - {port: 8776, source: applications/calibration/calibration_web.py}
-    audience: 관제 PC 옆 셀 작업자 — 줄자·감독 시험으로 실측 요청에 답하는 사람 (D-951 덧붙임·D-1004)
-    role: Rosy Calibration — 셀 보정이 사람에게 묻는 실측 요청을 보여 주고 답을 받는다. 답은 후보 판정일 뿐 셀 값을 쓰지 않는다. 로그인한 세션이 보고, calibration.operate가 답한다 (D-951·D-1004).
+    audience: 관제 PC 옆 셀 작업자 — 줄자·감독 시험으로 보정 요청에 답하는 사람 (D-951 덧붙임·D-1004)
+    role: Rosy Calibration — 셀 보정이 사람에게 묻는 보정 요청을 보여 주고 답을 받는다. 답은 후보 판정일 뿐 셀 값을 쓰지 않는다. 로그인한 세션이 보고, calibration.operate가 답한다 (D-951·D-1004).
     owns: [calibration-request-answer]
     grammar: procedure
     contracts: [shared_controls, typography_focus, dialog]

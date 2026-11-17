@@ -244,7 +244,7 @@ if (-not $Rollback) {
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         Fail "manifest.json is missing from the release: $releaseDirResolved"
     }
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $releaseId = [string]$manifest.release_id
     if ($releaseId -notmatch '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$') {
         Fail "manifest.json release_id is not YYYY.MM.DD-NNN: $releaseId"

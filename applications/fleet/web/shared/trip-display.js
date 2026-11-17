@@ -1,4 +1,5 @@
 // Fleet trip display vocabulary and explanations; no DOM, geometry or requests.
+import { REFUSAL_TEXT } from '/common/localization-state.js';
 
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
 /** D-517 5 (M4) Fleet resolver decisions for a wait cycle. */
@@ -31,6 +32,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_ARRIVE_YAW_UNREACHABLE: '그 방향으로 도착하는 차로가 없습니다',
   TRIP_NO_ACTIVE_MAP: '활성 지도가 없습니다',
   TRIP_POSE_UNTRUSTED: '현장 지도 위치를 확인할 수 없습니다 · 위치와 관측 갱신을 확인하세요',
+  SITE_POSE_UNKNOWN: REFUSAL_TEXT.SITE_POSE_UNKNOWN,
   TRIP_BATTERY_UNCONFIRMED: '배터리 상태를 확인할 수 없거나 너무 낮아 출발할 수 없습니다 · 배터리 근거와 충전을 확인하세요',
   TRIP_PLAN_FAILED: '이 지도에서 경로 계산이 실패했습니다 · 관리자에게 알리세요',
   TRIP_JOB_NOT_FOUND: '해당하는 이송 작업이 없습니다 · 접수 키와 권한을 확인하세요',

@@ -3,50 +3,40 @@ body { margin: 0; background: var(--surface-canvas); color: var(--text-primary);
 ::selection { background: var(--surface-raised); color: var(--text-primary); }
 :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 input { caret-color: var(--text-primary); }
-h2 { margin: 0; font-size: var(--text-value); line-height: var(--leading-body); }
 p { margin: var(--space-2) 0; }
-.quiet, footer { color: var(--text-secondary); font-size: var(--text-label); }
-section { margin-bottom: var(--space-6); }
-main > section { margin-bottom: 0; }
-.connection { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: start; padding-bottom: var(--space-5); border-bottom: 1px solid var(--border-default); }
-.connection > div { flex: 1 1 16rem; }
-.connection form { flex: 1 1 24rem; min-width: 0; }
+.quiet { color: var(--text-secondary); font-size: var(--text-label); }
+main { display: grid; gap: var(--space-4); align-content: start; }
+#workspace { display: grid; gap: var(--space-4); container-type: inline-size; }
+.connection-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.connection-line p { margin: 0; }
+.connection-line .ui-icon { color: var(--status-warn); }
 .login-fields { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
-.login-fields input { flex: 1; min-width: 0; }
-.toolbar { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: end; margin-bottom: var(--space-4); }
-.toolbar label { display: grid; gap: var(--space-1); }
-.search-field { flex: 1 1 16rem; }
-.summary { font-weight: var(--weight-strong); }
-.section-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; margin-bottom: var(--space-3); padding-top: var(--space-4); }
-.section-heading p { margin: 0; }
-.graph-scroll { max-width: 100%; overflow: auto; border-block: 1px solid var(--border-default); background: var(--surface-flat); scrollbar-color: var(--text-secondary) var(--surface-flat); }
-#graph { display: block; min-width: 40rem; }  /* 원래 크기로 둔다. 늘리면 표가 첫 화면 밖으로 밀린다. */
+.login-fields input { flex: 1; min-width: 0; max-width: 32rem; }
+.ui-list-toolbar > label { display: grid; gap: var(--space-1); flex: 0 1 auto; }
+.ui-list-toolbar > .search-field { flex: 1 1 16rem; }
+.graph-scroll { max-width: 100%; overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); }
+#graph { display: block; min-width: 40rem; }
 #graph .edge { fill: none; stroke: var(--text-secondary); stroke-width: 1.5; }
-#graph .edge.problem { stroke: var(--flag-caution); stroke-width: 2; }
+#graph .edge.problem { stroke: var(--status-warn); stroke-width: 2; }
 #graph .edge.old { stroke-dasharray: 4 5; }
-#graph rect { fill: var(--ground); stroke: var(--border-default); }
+#graph rect { fill: var(--surface-canvas); stroke: var(--border-default); }
 #graph text { fill: var(--text-primary); font: var(--text-label) var(--body); }
 #graph .detail { fill: var(--text-secondary); font-size: var(--text-micro); }
-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-th { text-align: left; color: var(--text-secondary); font-size: var(--text-label); font-weight: var(--weight-strong); }
-th, td { padding: var(--space-3) var(--space-2); vertical-align: top; border-bottom: 1px solid var(--border-default); overflow-wrap: anywhere; }
-th:first-child, td:first-child { width: 30%; padding-left: 0; }
-td:last-child, th:last-child { padding-right: 0; }
-td p { margin: 0 0 var(--space-1); }
-td small, td code { display: block; font-size: var(--text-micro); color: var(--text-secondary); }
+.observation-rows { list-style: none; margin: 0; padding: 0; }
+.observation-rows > li { display: grid; grid-template-columns: 3fr 2fr 3fr; gap: var(--space-2); padding: var(--space-2); border-bottom: 1px solid var(--border-default); overflow-wrap: anywhere; }
+.observation-rows > li > div p { margin: 0 0 var(--space-1); }
+.observation-rows > li > div :is(small, code) { display: block; font-size: var(--text-micro); color: var(--text-secondary); }
+.observation-rows > li > div ui-tag { margin-bottom: var(--space-1); }
+summary > h2 { display: inline; }
 code, time { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.danger { display: inline-block; padding: 0 var(--space-1); background: var(--flag-danger-bg); color: var(--flag-danger-ink); border-radius: var(--radius-control); }
-.caution { color: var(--flag-caution); }
-.pager { display: flex; align-items: center; justify-content: end; gap: var(--space-3); margin-top: var(--space-3); }
 #history-rows { padding-left: var(--space-5); }
 #history-rows li { padding: var(--space-2) 0; border-bottom: 1px solid var(--border-default); overflow-wrap: anywhere; }
-footer { margin-top: var(--space-6); border-top: 1px solid var(--border-default); padding-top: var(--space-4); max-width: 75ch; }
 @media (width < 30rem) {
-  .connection { gap: var(--space-3); }
-  .connection > div, .connection form { flex-basis: 100%; }
-  .toolbar label, .toolbar ui-button { flex: 1 1 100%; min-width: 0; }
-  th, td { padding-block: var(--space-3); padding-inline: var(--space-1); font-size: var(--text-label); }
-  .pager { justify-content: space-between; }
-  .pager ui-button { padding-inline: var(--space-2); }
+  .login-fields { flex-direction: column; }
+  .ui-list-toolbar > label, .ui-list-toolbar > ui-button { flex: 1 1 100%; min-width: 0; }
+  .ui-pagination > span { flex: 0 0 auto; }
+  .ui-pagination { justify-content: space-between; flex-wrap: nowrap; }
+  .observation-rows > li { grid-template-columns: minmax(0, 1fr) auto; }
+  .observation-rows > li > div:last-child { grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

@@ -3,6 +3,8 @@
 
 import { SEVERITY_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { createNode } from "/assets/dom.js";
+import { valueText } from "/common/value-text.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 const LIMIT = 10;
 const REFRESH_MS = 5_000;
 
@@ -22,7 +24,7 @@ function emptyRow(message) {
 
 function eventRow(event) {
   const row = document.createElement("li");
-  const time = createNode("time", "event-time", event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : "—");
+  const time = createNode("time", "event-time", event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : UNKNOWN);
   const type = createNode("span", "event-type", event.type || "이벤트 유형 미확인");
   const severity = document.createElement("span");
   const level = event.severity;

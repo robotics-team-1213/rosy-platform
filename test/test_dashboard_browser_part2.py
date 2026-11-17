@@ -22,7 +22,7 @@ def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'"
         )
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.locator("#dds-cyclone-apply").click()
         dialog = page.locator("dialog.ui-confirm")
         dialog.wait_for()
@@ -85,7 +85,7 @@ def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
-            "document.getElementById('safety-label')?.textContent === 'HW OFF'"
+            "document.getElementById('safety-label')?.textContent === '하드웨어 꺼짐'"
         )
         page.wait_for_function(
             "document.getElementById('capability-count')?.textContent === '0 / 5'"
@@ -141,7 +141,7 @@ def test_hardware_runtime_with_a_silent_safety_source_never_claims_ready():
         page.wait_for_function(
             "document.getElementById('triage-title')?.textContent === '안전 회로 수신 끊김'"
         )
-        assert page.locator("#safety-label").inner_text() == "UNVERIFIED"
+        assert page.locator("#safety-label").inner_text() == "미확인"
         assert page.locator("#safety-source").inner_text() == "안전 회로 수신 끊김"
         browser.close()
 
@@ -194,7 +194,7 @@ def test_no_motion_hardware_runtime_is_on_and_says_the_drive_is_off():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
-            "document.getElementById('safety-label')?.textContent === 'NO DRIVE'"
+            "document.getElementById('safety-label')?.textContent === '주행 불가'"
         )
         page.wait_for_function(
             "document.getElementById('capability-count')?.textContent === '0 / 5'"
@@ -283,7 +283,7 @@ def test_compatibility_map_trust_tracks_localization_and_recovers(viewport):
             page.screenshot(path=str(shots / f"compat-map-suspect-{viewport[0]}x{viewport[1]}.png"), full_page=True)
         expect(page.locator('[data-map-click=goal]')).to_be_disabled()
         expect(page.locator('[data-map-click=pose]')).to_be_enabled()
-        assert page.locator('[data-map-click=goal]').get_attribute('reason') == '위치 추정 확인 후 가능'
+        expect(page.locator('label:has([data-map-click=goal]) .choice-reason')).to_have_text('위치 추정 확인 후 가능')
         assert page.evaluate(blue_pixels) == 0
         page.evaluate("""async () => {
           const {session}=await import('/dashboard/assets/client.js');
@@ -301,7 +301,7 @@ def test_compatibility_map_trust_tracks_localization_and_recovers(viewport):
         }""")
         expect(page.locator('[data-map-click=goal]')).to_be_disabled()
         expect(page.locator('[data-map-click=pose]')).to_be_enabled()
-        assert page.locator('[data-map-click=goal]').get_attribute('reason') == '안전 정지 중 주행 목표 불가'
+        expect(page.locator('label:has([data-map-click=goal]) .choice-reason')).to_have_text('안전 정지 중 주행 목표 불가')
         assert page.evaluate(blue_pixels) == 0
         assert errors == []
         browser.close()
@@ -358,7 +358,7 @@ def test_api_estop_does_not_claim_a_motor_power_cut():
         assert "모터 전원이 끊겼" not in banner
         assert "현장에서 해제" not in banner
         assert "소프트웨어 정지" in page.locator("#triage-detail").inner_text()
-        assert page.locator("#safety-label").inner_text() == "STOPPED"
+        assert page.locator("#safety-label").inner_text() == "정지"
         assert page.locator("#safety-source").inner_text() == "API 비상정지 (operator)"
         # The runtime reason comes first and SAFE_STOP is still shown.
         capabilities = page.locator("#capability-list").inner_text()
@@ -511,7 +511,7 @@ def test_visible_type_scale_is_closed(state_init):
         page.evaluate(f"window.STEPS = {TYPE_STEPS}")
         off = page.evaluate(OFF_SCALE_CENSUS)
         # 점검 뷰(절차 문법)도 같은 계단을 쓴다 — 편집 UI가 살고 있는 곳이다.
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.wait_for_timeout(300)
         off += page.evaluate(OFF_SCALE_CENSUS)
         browser.close()
@@ -584,7 +584,7 @@ def test_visible_text_meets_the_contrast_floor(state_init):
         )
         page.wait_for_timeout(700)
         offenders = page.evaluate(TEXT_FLOOR_CENSUS)
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.wait_for_timeout(300)
         offenders += page.evaluate(TEXT_FLOOR_CENSUS)
         browser.close()
@@ -628,7 +628,7 @@ def test_no_visible_element_moves():
         )
         page.wait_for_timeout(700)
         moving = page.evaluate(MOTION_CENSUS)
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.wait_for_timeout(300)
         moving += page.evaluate(MOTION_CENSUS)
         browser.close()
@@ -693,10 +693,11 @@ def test_login_code_pairs_this_tab_and_shows_who_is_logged_in():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         # The code tab is the default and the token form is hidden.
         assert "open" in page.locator("#auth-drawer").get_attribute("class")
-        assert page.locator("#auth-tab-code").get_attribute("aria-selected") == "true"
+        assert page.locator("#auth-login-tab-0").get_attribute("aria-selected") == "true"
         assert page.locator("#auth-form").is_hidden()
         assert page.locator("#whoami-badge").is_hidden()
         page.locator("#code-input").fill(" abcd efgh ")
+        page.locator(".auth-options > summary").click()  # optional device fields are a disclosure
         page.locator("#code-label").fill("bay 7 tablet")
         page.locator("#code-submit").click()
         page.wait_for_function(
@@ -729,6 +730,7 @@ def test_keep_me_logged_in_puts_only_the_expiring_paired_token_in_local_storage(
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.locator("#code-input").fill("ABCD-EFGH")
+        page.locator(".auth-options > summary").click()  # optional device fields are a disclosure
         page.locator("#code-remember").check()
         page.locator("#code-submit").click()
         page.wait_for_function(
@@ -740,7 +742,7 @@ def test_keep_me_logged_in_puts_only_the_expiring_paired_token_in_local_storage(
         assert set(remembered) == {"token", "expires_at"}
         # A pasted (non-expiring) token replaces it and lives in this tab only.
         page.locator("#open-auth").click()
-        page.locator("#auth-tab-token").click()
+        page.locator("#auth-login-tab-1").click()
         page.locator("#token-input").fill("operator-test-token")
         page.locator("#auth-form [type=submit]").click()
         page.wait_for_function(
@@ -938,6 +940,7 @@ def test_a_paired_token_expiring_beyond_seven_days_is_not_remembered():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.locator("#code-input").fill("ABCD-EFGH")
+        page.locator(".auth-options > summary").click()  # optional device fields are a disclosure
         page.locator("#code-remember").check()
         page.locator("#code-submit").click()
         page.wait_for_function(
@@ -1004,7 +1007,7 @@ def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         rows = page.evaluate(
             "[...document.querySelectorAll('#hardware-list .device-row')].map((row) => ({"
@@ -1057,7 +1060,7 @@ def test_a_viewer_sees_the_device_card_but_cannot_rerun_the_probe():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         assert page.locator("#hardware-refresh").is_disabled()
         browser.close()
@@ -1071,7 +1074,7 @@ def test_no_probe_result_yet_is_said_not_blanked():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.wait_for_function(
             "document.getElementById('hardware-card')?.dataset.available === 'false'")
         assert page.locator("#hardware-note").inner_text() == "장치 점검 결과가 아직 없습니다"
@@ -1088,7 +1091,7 @@ def test_an_administrator_tests_the_buzzer_and_records_what_was_heard():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         # Only the buzzer and the lamp have a test, and the lamp without a driver cannot start one.
         # D-359 §5.3: the disabled reason is a <small data-reason> inside the button, so the label
@@ -1142,7 +1145,7 @@ def test_a_viewer_gets_no_buzzer_or_lamp_test():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         assert page.locator("#hardware-list .device-actions").count() == 0
         assert page.locator("#hardware-list [data-hw-action]").count() == 0
@@ -1164,7 +1167,7 @@ def test_the_test_buttons_keep_the_inspect_view_inside_the_screen_width(viewport
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.wait_for_function(
             "document.querySelectorAll(\"#hardware-list [data-hw-action='observed']\").length === 1")
         fit = page.evaluate(
@@ -1237,7 +1240,7 @@ def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
         canvas.focus()
         canvas.press("ArrowRight")
         canvas.press("ArrowDown")
-        page.click('[data-map-click="goal"]')
+        page.click('label:has([data-map-click="goal"])')
         canvas.focus()
         canvas.press("Enter")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()

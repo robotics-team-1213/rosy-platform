@@ -1,4 +1,4 @@
-﻿// D-683: pages own authority and drafts; this component owns cookie login and verified logout.
+// D-683: pages own authority and drafts; this component owns cookie login and verified logout.
 import {actionIcon} from '/common/ui.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
@@ -9,7 +9,7 @@ const sessionRequest = createFleetClient({credential: () => document.getElementB
   ?? sessionStorage.getItem('rosy-console-token') ?? ''});
 const FORM = `
   <form class="password-login-form ui-form" data-login="form" aria-label="계정 로그인">
-    <label class="ui-field-label" for="fleet-login-name">아이디
+    <label class="ui-field-label" for="fleet-login-name">로그인 ID
     <input id="fleet-login-name" class="ui-field password-login-field" data-login="login" autocomplete="username"
            autocapitalize="none" spellcheck="false" required></label>
     <label class="ui-field-label" for="fleet-login-password">비밀번호
@@ -17,30 +17,30 @@ const FORM = `
            autocomplete="current-password" required></label>
     <label class="ui-check password-login-remember"><input class="ui-field" type="checkbox" data-login="remember"> 이 브라우저 기억(30일)</label>
     <ui-button kind="primary" type="button" data-login="submit">로그인</ui-button>
-    <ui-status state="error" data-login="error" role="alert" hidden></ui-status>
+    <ui-status state="error" data-login="error" hidden></ui-status>
   </form>`;
 const WHO = `<div class="password-login-who" data-login="who">
   <span data-login="principal"></span>
   <ui-button kind="quiet" type="button" data-login="logout" data-action-icon="logout">로그아웃</ui-button>
-  <ui-status state="error" data-login="error" role="alert" hidden></ui-status>
+  <ui-status state="error" data-login="error" hidden></ui-status>
 </div>`;
 const CHANGE = `
   <form class="password-login-form ui-form" data-login="form" aria-label="첫 로그인 비밀번호 변경">
     <p>첫 로그인입니다. 새 비밀번호를 설정해야 현장 업무를 사용할 수 있습니다.</p>
-    <label class="ui-field-label" for="fleet-new-password">새 비밀번호 · 8자 이상, 아이디와 다르게
+    <label class="ui-field-label" for="fleet-new-password">새 비밀번호 · 8자 이상, 로그인 ID와 다르게
     <input id="fleet-new-password" class="ui-field password-login-field" data-login="password" type="password"
            autocomplete="new-password" minlength="8" maxlength="1024" required></label>
     <label class="ui-field-label" for="fleet-confirm-password">새 비밀번호 확인
     <input id="fleet-confirm-password" class="ui-field password-login-field" data-login="confirm" type="password"
            autocomplete="new-password" minlength="8" maxlength="1024" required></label>
     <ui-button kind="primary" type="button" data-login="submit">비밀번호 변경</ui-button>
-    <ui-status state="error" data-login="error" role="alert" hidden></ui-status>
+    <ui-status state="error" data-login="error" hidden></ui-status>
   </form>`;
 
 function failureText(error) {
-  if (error?.status === 401) return '아이디 또는 비밀번호가 맞지 않습니다.';
+  if (error?.status === 401) return '로그인 ID 또는 비밀번호가 맞지 않습니다.';
   if (error?.status === 429) return '실패가 많아 잠시 막혔습니다. 1분 뒤 다시 시도하세요.';
-  return '로그인 결과를 확인할 수 없습니다. 관제 PC 연결을 확인한 뒤 다시 확인하세요.';
+  return '로그인 결과를 확인할 수 없습니다. 네트워크 연결과 서버 상태를 확인한 뒤 다시 시도하세요.';
 }
 
 export function createPasswordLogin(host, {onChange = () => {}, standalone = false, autoContinue = true} = {}) {
@@ -153,7 +153,17 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
           changing = false; host.innerHTML = FORM; bindForm(); part('login').focus();
           errorText('로그인이 만료됐습니다. 다시 로그인해 비밀번호 변경 상태를 확인하세요.');
         }
-        if (!standalone) host.hidden = true;
+        if (!standalone) {
+          paintLoginWords('로그인');
+          host.hidden = locked;
+          if (!locked) {
+            part('principal').textContent = '';
+            paintLogout(part('logout'));
+            part('logout').title = '서버 토큰은 폐기하지 않습니다';
+            part('logout').disabled = false;
+            part('logout').removeAttribute('reason');
+          }
+        }
       } else if (standalone) {
         host.hidden = false;
         document.getElementById('login-availability').hidden = true;
@@ -187,11 +197,15 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         if (changing && session.password_change_required !== false) throw new Error('Password change not verified');
         verified(session);
       } catch (error) {
+        if (!changing && error?.status === 409 && error?.code === 'ACCOUNT_LOGIN_REDIRECT') {
+          location.assign((error?.detail?.login_url || '/api/fleet/auth/login') + location.search);
+          return;
+        }
         if (changing && error?.status === 401) {
           changing = false; host.innerHTML = FORM; bindForm(); part('login').focus();
           errorText('로그인이 만료됐습니다. 다시 로그인해 비밀번호 변경 상태를 확인하세요.');
         } else errorText(changing ? (error?.status === 422 || error?.status === 400
-          ? '8자 이상이며 아이디와 다른 새 비밀번호를 입력하세요.'
+          ? '8자 이상이며 로그인 ID와 다른 새 비밀번호를 입력하세요.'
           : '비밀번호 변경 결과를 확인할 수 없습니다. 연결을 확인한 뒤 화면을 새로고침해 계정 상태를 확인하세요.') : failureText(error));
       } finally {
         password.value = ''; if (confirmation) confirmation.value = '';

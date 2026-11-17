@@ -8,6 +8,7 @@ export const CELL_TASKS_PATH = '/api/fleet/pipeline/cell-tasks';
 export const PINKY_TASKS_PATH = '/api/fleet/pipeline/pinky-tasks';
 export const DECISION_GATE_PATH = '/api/fleet/pipeline/decision-gate';
 export const HUMAN_SAFETY_PATH = '/api/fleet/pipeline/human-safety-gate';
+export const HUMAN_SAFETY_CLEAR_PATH = '/api/fleet/pipeline/human-safety-gate/clear';
 export const STATION_ZONES_PATH = '/api/fleet/pipeline/station-zones';
 export const STATION_ZONES_DISPATCH_PATH = '/api/fleet/pipeline/station-zones/dispatch';
 export const CABLE_GUARD_PATH = '/api/fleet/pipeline/cable-guard';
@@ -21,6 +22,16 @@ export const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, r
 export const S3_VIEWS = [
   {id: 'arm_s_top', label: 'S3 상단(arm_s_top)', source: 'arm_s_top'},
   {id: 'arm_s_wrist', label: 'arm_s 손목', source: 'arm_s_wrist'},
+];
+export const CELL_A_VIEWS = [
+  {id: 'top', label: 'S5 상단(top)', source: 'top'},
+  {id: 'side', label: '측면(A/B · side)', source: 'side'},
+  {id: 'arm_a_wrist', label: 'arm_a 손목', source: 'arm_a_wrist'},
+];
+export const CELL_B_VIEWS = [
+  {id: 'top', label: 'S5 상단(top)', source: 'top'},
+  {id: 'side', label: '측면(A/B · side)', source: 'side'},
+  {id: 'arm_b_wrist', label: 'arm_b 손목', source: 'arm_b_wrist'},
 ];
 export const S5_VIEWS = [
   {id: 'top', label: 'S5 상단(top)', source: 'top'},
@@ -56,8 +67,9 @@ export function readoutPairs(body) {
   const sysid = body.sysid_summary || {};
   const worst = Array.isArray(cam.worst_mm) && cam.worst_mm.length ? Math.max(...cam.worst_mm).toFixed(1) : '0.0';
   const bestRms = sysid.best_holdout_rms_deg != null ? `${sysid.best_holdout_rms_deg}° (${sysid.best_fit_id || '—'})` : '미측정';
+  const bridgeVer = typeof cad.temp_bridge === 'string' ? cad.temp_bridge : (cad.temp_bridge?.version || 'v7');
   return [
-    ['CAD 대장 · 3D 메쉬', `${cad.revision || '—'} · STL ${cad.mesh_count ?? 0}개 (${cad.berth_kit || 'v16-modular'} / 다리 ${cad.temp_bridge || 'v7'} / 판 ${cad.temp_plate || 'v11'})`],
+    ['CAD 대장 · 3D 메쉬', `${cad.revision || '—'} · STL ${cad.mesh_count ?? 0}개 (${cad.berth_kit || 'v16-modular'} / 다리 ${bridgeVer} / 판 ${cad.temp_plate || 'v11'})`],
     ['선박 고정 (v16 스페이서)', `팔 A ${fix.arm_a_gap_dy_mm ?? '—'} mm · 팔 B ${fix.arm_b_gap_dy_mm ?? '—'} mm (공칭 ${fix.nominal_spacer_dy_mm ?? 39} mm) · yaw ${fix.within_v16_yaw_budget ? '예산 내' : '초과'}`],
     ['오목 벨트 스토퍼 (2 cm 하향)', `벨트 코↔스토퍼 ${fix.belt_to_stopper_flat_mm ?? '—'} mm · 하향 ${fix.stopper_drop_mm ?? 20} mm`],
     ['위 카메라 패드 검산', `패드 ${cam.pads ?? 0}개 · 최대 오차 ${worst} mm (${cam.within_3mm ? '정상 <=3 mm' : '재측량 필요 G-19'})`],
@@ -129,7 +141,7 @@ export function cellTaskSummaryPairs(body) {
   const s3 = cells.cell_s?.gate || {};
   const s5 = cells.cell_ab?.gate || {};
   return [
-    ['OMX 태스크 원장', `전체 ${s.total ?? 0}건 · 대기 ${s.queued ?? 0}건 · 실행 중 ${s.running ?? 0}건 · 완료 ${s.completed ?? 0}건`],
+    ['OMX 작업 원장', `전체 ${s.total ?? 0}건 · 대기 ${s.queued ?? 0}건 · 실행 중 ${s.running ?? 0}건 · 완료 ${s.completed ?? 0}건`],
     ['cell_s (S3 · arm_s)', `${s3.phase || 'IDLE'} · AMR 잠금 ${s3.amr_motion_inhibited ? 'ON' : 'OFF'}`],
     ['cell_ab (S5 · arm_a/arm_b)', `${s5.phase || 'IDLE'} · AMR 잠금 ${s5.amr_motion_inhibited ? 'ON' : 'OFF'}`],
   ];
@@ -154,7 +166,7 @@ export function cellTaskRows(body) {
   });
 }
 
-export function visualCardSpecs(body = {}) {
+export function visualCardSpecs(body = {}, {scope = null} = {}) {
   const tasks = Array.isArray(body?.tasks) ? body.tasks : [];
   const pinkyTasks = Array.isArray(body?.pinky_tasks) ? body.pinky_tasks : [];
   const cells = body?.cells || {};
@@ -168,7 +180,7 @@ export function visualCardSpecs(body = {}) {
     const decTxt = dec ? `Decision: ${dec.choice} (${dec.reason})` : '';
     if (!task) {
       return {
-        last_task: '대기 중 (최근 태스크 없음)',
+        last_task: '대기 중 (최근 작업 없음)',
         folded_state: ['folded: true (홈 대기)', decTxt].filter(Boolean).join(' · '),
         task_id: null,
         status: null,
@@ -227,7 +239,7 @@ export function visualCardSpecs(body = {}) {
   ]
     .filter(z => !['STG_C2', 'STG_S3_WAIT', 'EXP_S1'].includes(z.id))
     .map(z => ({label: `${z.label} (YAML: ${z.id})`, zoneId: z.id}));
-  return [
+  const allCards = [
     {
       id: 'cell_s',
       title: 'cell_s · S3 하역 셔틀 (arm_s)',
@@ -245,7 +257,7 @@ export function visualCardSpecs(body = {}) {
         {label: '반출대3 반출 (YAML: EXP_S3_BELT)', zoneId: 'EXP_S3_BELT'},
         ...extraExportForCell('cell_s', ['EXP_S3_BELT']),
         {
-          label: s3Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          label: s3Human ? '사람 이탈 · 정지 해제 (재개는 작업별)' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'cell_s',
           humanDetected: !s3Human,
         },
@@ -266,11 +278,11 @@ export function visualCardSpecs(body = {}) {
         {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_ab'},
         {label: '2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
         {label: '3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
-        {label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
+        ...(scope === 'cell_ab' ? [] : [{label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'}]),
         {label: '반출대2 반출 (YAML: EXP_S5_PALLET)', zoneId: 'EXP_S5_PALLET'},
         ...extraExportForCell('cell_ab', ['EXP_S5_PALLET']),
         {
-          label: s5Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          label: s5Human ? '사람 이탈 · 정지 해제 (재개는 작업별)' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'cell_ab',
           humanDetected: !s5Human,
         },
@@ -288,7 +300,7 @@ export function visualCardSpecs(body = {}) {
       last_task: lastPinky ? `${lastPinky.task_id} · ${lastPinky.action} -> ${lastPinky.target_place}` : 'S3 도킹 및 미세이동 준비 완료',
       folded_state: [
         anyHuman
-          ? '사람 감지 비상정지 (HUMAN_HOLD · 이탈 시 자동 재개)'
+          ? '사람 감지 비상정지 (HUMAN_HOLD · 이탈 후 작업별 수동 재개)'
           : (s3Gate.amr_motion_inhibited
               ? 'AMR 이동 잠금 (팔 작업 중)'
               : (cableTangled ? '케이블 보호 미세이동 모드 (최대 1.5cm · 0.02m/s)' : '정상 주행 모드 (선 꼬임 보호 해제)')),
@@ -312,17 +324,44 @@ export function visualCardSpecs(body = {}) {
         {label: '충전소(C1)', pinkyAction: 'charge_c1'},
         {label: '출구(S1) 출발', pinkyAction: 'depart_s1'},
         {
-          label: anyHuman ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          label: anyHuman ? '사람 이탈 · 정지 해제 (재개는 작업별)' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'all',
           humanDetected: !anyHuman,
         },
       ],
     },
   ];
+  if (scope === 'cell_s') return allCards.filter(c => c.id === 'cell_s');
+  if (scope === 'cell_a') {
+    const c = allCards.find(x => x.id === 'cell_ab');
+    return c ? [{
+      ...c,
+      id: 'cell_a',
+      title: 'cell_a · S5 1·3층 적재 (arm_a)',
+      cameraViews: CELL_A_VIEWS.map(v => ({...v})),
+      buttons: c.buttons
+        .filter(b => b.preset !== 's5_tier2_arm_b' && b.preset !== 'full_s3_to_s5_pipeline')
+        .map(b => b.clearArmHold ? {...b, label: '팔 홀드 점검·해제 (arm_a)', clearArmHold: 'arm_a'} : b),
+    }] : [];
+  }
+  if (scope === 'cell_b') {
+    const c = allCards.find(x => x.id === 'cell_ab');
+    return c ? [{
+      ...c,
+      id: 'cell_b',
+      title: 'cell_b · S5 2층 적재·반출 (arm_b)',
+      cameraViews: CELL_B_VIEWS.map(v => ({...v})),
+      buttons: c.buttons
+        .filter(b => b.preset !== 's5_tier1_arm_a' && b.preset !== 's5_tier3_arm_a' && b.preset !== 'full_s3_to_s5_pipeline')
+        .map(b => b.clearArmHold ? {...b, label: '팔 홀드 점검·해제 (arm_b)', clearArmHold: 'arm_b'} : b),
+    }] : [];
+  }
+  if (scope === 'cell_ab') return allCards.filter(c => c.id === 'cell_ab');
+  return allCards;
 }
 
-export function inspectorSpecs(body = {}) {
-  const cards = visualCardSpecs(body);
+export function inspectorSpecs(body = {}, {scope = null} = {}) {
+  const cards = visualCardSpecs(body, {scope: scope === 'cell_ab' || scope === 'cell_a' || scope === 'cell_b' ? 'cell_ab' : null});
   const s3Card = cards.find(c => c.id === 'cell_s') || {};
   const s5Card = cards.find(c => c.id === 'cell_ab') || {};
   const pinkyCard = cards.find(c => c.id === 'pinky') || {};
@@ -366,7 +405,7 @@ export function inspectorSpecs(body = {}) {
     robot_id: robotId,
     ...(b.decisionSubject ? {decisionSubject: robotId} : {}),
   }));
-  return [
+  const allSpecs = [
     {
       id: 'arm_s',
       cell_id: 'cell_s',
@@ -378,12 +417,11 @@ export function inspectorSpecs(body = {}) {
       cameraViews: [
         {id: 'arm_s_wrist', label: 'arm_s 손목(근접)', source: 'arm_s_wrist'},
         {id: 'arm_s_top', label: 'S3 상단(탑뷰)', source: 'arm_s_top'},
-        dockView('rosy_46'),
       ],
       telemetryRows: [
-        ['셀 위상 · 연계역', `${s3Card.phase || 'IDLE'} · 정류장 S3 · AMR 잠금 ${s3Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+        ['셀 위상 · 인터락', `${s3Card.phase || 'IDLE'} · 정류장 S3 · 도킹 핑키 구동 잠금 ${s3Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
         ['실시간 관절 · 온도', armJointSnapshot('arm_s', s3Card.folded_state)],
-        ['최근 태스크', s3Card.last_task || '대기 중'],
+        ['최근 작업', s3Card.last_task || '대기 중'],
         ['팔 홀드 · 안전', holdText('arm_s')],
       ],
       buttons: (s3Card.buttons || []).map(b => b.clearArmHold ? {...b, clearArmHold: 'arm_s'} : b),
@@ -395,7 +433,7 @@ export function inspectorSpecs(body = {}) {
       dualPair: ['top', 'arm_a_wrist'],
       shortTab: '🦾 arm_a (S5)',
       title: '🦾 OMX-AI #1 · arm_a (cell_ab · S5 1·3층 적재)',
-      badge: `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
+      badge: `${s5Card.phase || 'IDLE'} · 협동 통로 감시`,
       cameraViews: [
         {id: 'arm_a_wrist', label: 'arm_a 손목(근접)', source: 'arm_a_wrist'},
         {id: 'top', label: 'S5 상단(탑뷰)', source: 'top'},
@@ -403,12 +441,14 @@ export function inspectorSpecs(body = {}) {
         {id: 'arm_b_wrist', label: 'arm_b 손목(교차)', source: 'arm_b_wrist'},
       ],
       telemetryRows: [
-        ['셀 위상 · 연계역', `${s5Card.phase || 'IDLE'} · 정류장 S2/S5 · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+        ['셀 위상 · 협동 통로', `${s5Card.phase || 'IDLE'} · 1·3단 적재 · 두 팔 공유 통로 감시`],
         ['실시간 관절 · 온도', armJointSnapshot('arm_a', s5Card.folded_state)],
-        ['최근 태스크', s5Card.last_task || '대기 중'],
+        ['최근 작업', s5Card.last_task || '대기 중'],
         ['팔 홀드 · 안전', holdText('arm_a')],
       ],
-      buttons: (s5Card.buttons || []).map(b => b.clearArmHold ? {...b, label: '팔 홀드 점검·해제 (arm_a)', clearArmHold: 'arm_a'} : b),
+      buttons: (s5Card.buttons || [])
+        .filter(b => b.preset !== 's5_tier2_arm_b' && b.preset !== 'full_s3_to_s5_pipeline')
+        .map(b => b.clearArmHold ? {...b, label: '팔 홀드 점검·해제 (arm_a)', clearArmHold: 'arm_a'} : b),
     },
     {
       id: 'arm_b',
@@ -417,7 +457,7 @@ export function inspectorSpecs(body = {}) {
       dualPair: ['top', 'arm_b_wrist'],
       shortTab: '🦾 arm_b (S5)',
       title: '🦾 OMX-AI #2 · arm_b (cell_ab · S5 2층 적재 · 반출)',
-      badge: `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
+      badge: `${s5Card.phase || 'IDLE'} · 협동 통로 감시`,
       cameraViews: [
         {id: 'arm_b_wrist', label: 'arm_b 손목(근접)', source: 'arm_b_wrist'},
         {id: 'top', label: 'S5 상단(탑뷰)', source: 'top'},
@@ -425,12 +465,14 @@ export function inspectorSpecs(body = {}) {
         {id: 'arm_a_wrist', label: 'arm_a 손목(교차)', source: 'arm_a_wrist'},
       ],
       telemetryRows: [
-        ['셀 위상 · 연계역', `${s5Card.phase || 'IDLE'} · 정류장 S5 · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+        ['셀 위상 · 협동 통로', `${s5Card.phase || 'IDLE'} · 2단 적재·반출 · 두 팔 공유 통로 감시`],
         ['실시간 관절 · 온도', armJointSnapshot('arm_b', s5Card.folded_state)],
-        ['최근 태스크', s5Card.last_task || '대기 중'],
+        ['최근 작업', s5Card.last_task || '대기 중'],
         ['팔 홀드 · 안전', holdText('arm_b')],
       ],
-      buttons: (s5Card.buttons || []).map(b => b.clearArmHold ? {...b, label: '팔 홀드 점검·해제 (arm_b)', clearArmHold: 'arm_b'} : b),
+      buttons: (s5Card.buttons || [])
+        .filter(b => b.preset !== 's5_tier1_arm_a' && b.preset !== 's5_tier3_arm_a' && b.preset !== 'full_s3_to_s5_pipeline')
+        .map(b => b.clearArmHold ? {...b, label: '팔 홀드 점검·해제 (arm_b)', clearArmHold: 'arm_b'} : b),
     },
     {
       id: 'cell_s',
@@ -441,7 +483,7 @@ export function inspectorSpecs(body = {}) {
       telemetryRows: [
         ['셀 위상 · 잠금', `${s3Card.phase || 'IDLE'} · AMR 잠금 ${s3Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
         ['관절 · 상태', s3Card.folded_state || '대기 중'],
-        ['최근 태스크', s3Card.last_task || '대기 중'],
+        ['최근 작업', s3Card.last_task || '대기 중'],
       ],
       buttons: s3Card.buttons || [],
     },
@@ -454,7 +496,7 @@ export function inspectorSpecs(body = {}) {
       telemetryRows: [
         ['셀 위상 · 잠금', `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
         ['관절 · 상태', s5Card.folded_state || '대기 중'],
-        ['최근 태스크', s5Card.last_task || '대기 중'],
+        ['최근 작업', s5Card.last_task || '대기 중'],
       ],
       buttons: s5Card.buttons || [],
     },
@@ -473,4 +515,21 @@ export function inspectorSpecs(body = {}) {
       buttons: pinkyButtonsFor(rid),
     })),
   ];
+  if (scope === 'cell_s') return allSpecs.filter(s => s.id === 'arm_s');
+  if (scope === 'cell_a') {
+    return allSpecs.filter(s => s.id === 'arm_a').map(s => ({
+      ...s,
+      cameraViews: s.cameraViews.filter(v => v.id !== 'arm_b_wrist'),
+      buttons: s.buttons.filter(b => b.preset !== 's5_tier2_arm_b' && b.preset !== 'full_s3_to_s5_pipeline'),
+    }));
+  }
+  if (scope === 'cell_b') {
+    return allSpecs.filter(s => s.id === 'arm_b').map(s => ({
+      ...s,
+      cameraViews: s.cameraViews.filter(v => v.id !== 'arm_a_wrist'),
+      buttons: s.buttons.filter(b => b.preset !== 's5_tier1_arm_a' && b.preset !== 's5_tier3_arm_a' && b.preset !== 'full_s3_to_s5_pipeline'),
+    }));
+  }
+  if (scope === 'cell_ab') return allSpecs.filter(s => s.id === 'arm_a' || s.id === 'arm_b');
+  return allSpecs;
 }

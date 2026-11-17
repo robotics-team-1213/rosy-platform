@@ -2,7 +2,7 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 계정과 외부 자료</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/alert-center.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/accounts.js"></script></head>
 <body><a class="skip-link" href="#accounts-main">계정과 자료로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
@@ -15,8 +15,8 @@
 <div class="ui-app-main">
 <main id="accounts-main" class="learning-main ui-task-page ui-auth-page" tabindex="-1">
 <h1 id="account-title" class="ui-page-heading">Learning에 로그인</h1>
-<ui-status id="account-status" state="pending" role="status">설정을 확인하는 중입니다.</ui-status>
-<ui-status id="account-error" state="error" role="alert" hidden></ui-status>
+<div id="page-alerts" class="alert-center-list" aria-label="알림"></div><ui-status id="account-status" state="pending" role="status">설정을 확인하는 중입니다.</ui-status>
+<ui-status id="account-error" state="error" hidden></ui-status>
 <section id="login-panel" class="ui-control-stack" aria-labelledby="account-title">
 <p id="login-help">로그인 연결을 확인하고 있습니다.</p>
 <a id="account-login" class="ui-action-link" data-kind="primary" hidden href="/api/account/login?return=/accounts">Rosy Account로 로그인</a></section>
@@ -34,6 +34,7 @@
 <ui-button kind="primary" type="submit">계정 확인 후 연결</ui-button></form></details></section>
 <section id="import-panel" class="learning-section"><h2>외부 자료 가져오기</h2>
 <p class="quiet">고정 버전으로 내려받아 검수 대기 자료로 보관합니다. 자료 이용 조건은 별도로 확인하세요.</p>
+<p class="quiet">가져온 자료의 검수·정답 배정은 <a href="/catalog#hf-heading">자료 등록 (/catalog)</a>과 <a href="/learning/imitate">모방학습 (/learning/imitate)</a>에서 이어가며, Fleet 중앙 계정·권한 관리는 <a href="/console/accounts">중앙 계정 관리 (/console/accounts)</a>에서 다룹니다.</p>
 <form id="import-form" class="ui-form learning-form">
 <label class="ui-field-label">사용 계정<select id="connection" class="ui-field" required></select></label>
 <label class="ui-field-label">자료 종류<select id="repo-type" class="ui-field"><option value="dataset">데이터셋</option><option value="model">모델</option></select></label>

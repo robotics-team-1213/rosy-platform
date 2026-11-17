@@ -1,3 +1,5 @@
+import { valueText } from "/common/value-text.js";
+import { watchStatus } from "/assets/dom.js";
 // Administrator readback for host runtime, identity and advertised CORE capabilities.
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -48,7 +50,9 @@ function fields(body, values) {
   }
 }
 
-export function mount(root, ctx) {
+// The shared wording is loaded inside mount: runtimeGap is imported by a node test that cannot resolve /common URLs.
+export async function mount(root, ctx) {
+  const {EVIDENCE_LABEL} = await import("/common/core_ui_logic.js");
   const head = el("ui-head", "", "시스템 및 기능 상태");
   const runtime = section("호스트 런타임");
   const identity = section("로봇 신원");
@@ -62,9 +66,8 @@ export function mount(root, ctx) {
   const detail = el("details", "surface-disclosure host-system-detail");
   detail.append(el("summary", "", "호스트·로봇 신원·기능 세부 정보 및 이름 변경"), runtime.wrap, identity.wrap, capabilities.wrap);
   const message = el("ui-status", "", "");
+  watchStatus(message);
   message.hidden = true;
-  message.setAttribute("role", "status");
-  message.setAttribute("aria-live", "polite");
   let identityInput = null;
   let identityDirty = false;
   let savedName = null;
@@ -161,7 +164,7 @@ export function mount(root, ctx) {
         identityInput.value = currentName;
       }
     }
-    identityStatus.textContent = `${data.robot_name || data.name || data.robot_id || "로봇 이름 미확인"} · 실행 모드 ${data.runtime_mode || "확인 불가"}`;
+    identityStatus.textContent = `${data.robot_name || data.name || data.robot_id || "로봇 이름 미확인"} · 실행 모드 ${data.runtime_mode || valueText(null).text}`;
     identityStatus.setAttribute("state", "ready");
   }, (error) => {
     fields(identity.body, []);

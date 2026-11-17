@@ -170,6 +170,47 @@ export function evidenceAgeText(seconds) {
   return ` · ${age}초 전`;
 }
 
+// D-280: 알 수 없음 문구(확인 불가·정보 없음·미확인)는 모르는 값의 표식이다. 한 표면이 같은 표식을 여러 번
+// 말하지 않는다 — 첫 표식만 남기고 뒤따르는 표식은 빈칸으로 합치고 아는 값은 그대로 둔다(값 지어내기 금지).
+const UNKNOWN_TEXT = /확인 불가|정보 없음|미확인/;
+
+/** Pure: 이 글이 알 수 없음 표식인가(D-280). */
+export function isUnknownText(text) {
+  return typeof text === "string" && UNKNOWN_TEXT.test(text);
+}
+
+/** Pure: 한 행의 알 수 없음 표식을 첫 칸 하나로 합친다 — 나머지는 빈칸, 아는 값은 그대로. */
+export function blankRepeatedUnknown(texts) {
+  let shown = false;
+  return texts.map((text) => {
+    if (!isUnknownText(text)) return text;
+    if (shown) return "";
+    shown = true;
+    return text;
+  });
+}
+
+const REPEATED_AGE_TAIL = /^(.*)\s·\s(\d+(?:\.\d+)?)(초|분|시간)\s전$/;
+const AGE_UNIT_S = Object.freeze({초: 1, 분: 60, 시간: 3600});
+
+/** Pure: C14 행의 조용한 칸 글자. 대표 칸(연결 태그, robot-profile linkOf)이 이미 말한 지연 나이와 같은
+ *  나이의 접미는 하위 칸에서 빼고, 알 수 없음은 행에 한 번만 합친다. 단위가 다르면 초로 환산해 비교하고
+ *  반올림은 양쪽 다 정수 초 Math.round 하나로 한다. 칸의 나이가 다르면 그 칸의 사실이므로 남는다. */
+export function quietRowTexts(link, texts) {
+  const saidS = link?.state === "delayed" && Number.isFinite(link?.ageS) ? Math.round(link.ageS) : null;
+  const seen = new Set();  // 같은 나이는 첫 칸에만 남긴다(연결 상태와 무관). 유일한 나이·다른 나이는 그대로.
+  const quiet = (text) => {
+    if (typeof text !== "string") return text;
+    const hit = text.match(REPEATED_AGE_TAIL);
+    if (!hit) return text;
+    const s = Math.round(Number(hit[2]) * AGE_UNIT_S[hit[3]]);
+    if (s === saidS || seen.has(s)) return hit[1];
+    seen.add(s);
+    return text;
+  };
+  return blankRepeatedUnknown(texts.map(quiet));
+}
+
 /** Korean word for an enum value; an unknown value is shown as received, never hidden. */
 export function enumLabel(labels, value, fallback = "—") {
   if (value === undefined || value === null || value === "") return fallback;

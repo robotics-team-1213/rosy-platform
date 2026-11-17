@@ -30,9 +30,9 @@ def _installed_files() -> set[str]:
 
 def test_every_manifest_asset_exists_as_a_plain_file():
     for name in ASSETS:
-        # One level only: D-370 role icons and D-654 brand assets are listed by name.
+        # One level only: D-370 role icons, D-654 brand assets, C15 vendored three.js and robot meshes are listed by name.
         folder, _, base = name.rpartition("/")
-        assert folder in ("", "icons", "brand") and base and not base.startswith("."), name
+        assert folder in ("", "icons", "brand", "vendor", "meshes") and base and not base.startswith("."), name
         assert ".." not in name and "\\" not in name, name
         assert (WEB / name).is_file(), f"manifest names a missing file: {name}"
 
@@ -56,7 +56,7 @@ def test_no_installed_file_uses_a_release_metadata_name():
 
 def test_media_types_are_canonical():
     allowed = {".css": "text/css", ".html": "text/html", ".js": "text/javascript",
-               ".svg": "image/svg+xml"}
+               ".svg": "image/svg+xml", ".stl": "model/stl", ".urdf": "application/xml"}
     for name, media in ASSETS.items():
         assert media == allowed[Path(name).suffix], (name, media)
 

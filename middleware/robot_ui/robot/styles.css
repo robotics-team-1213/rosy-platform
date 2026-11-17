@@ -81,6 +81,9 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   font-size: var(--text-micro);
   font-weight: var(--weight-regular);
 }
+.telemetry-grid article:has(strong:is([data-pending], [data-evidence="unavailable"], [data-evidence="disconnected"])) small {
+  display: none;
+}
 
 /* ===========================================================================
    1. 공용 어휘 — 이 화면이 아는 조작과 표시는 이게 전부다
@@ -124,8 +127,8 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .waypoint-actions ui-button { flex: 1 1 auto; }
 
 /* ---- 필드·태그 — 얼굴은 components.css의 공용 필드·태그다(D-359 §5.1·§5.2).
-   여기는 자리와 연결 표시 점만 정한다. */
-#connection-badge i { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: currentColor; }
+   여기는 자리만 정한다. */
+.connection-badge { font-size: var(--text-label); color: var(--nominal-quiet); }
 
 
 
@@ -155,19 +158,9 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .panel-heading h2, .panel-heading h3 { margin: 0; flex: none; }
 .panel-heading ui-tag { flex: none; }
 
-/* 패널은 기본적으로 그릇이 아니다 — 같은 면 위의 묶음일 뿐이다.
-   카드 대접은 카드가 맞는 점검 뷰에서만 준다(§4). */
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-.panel > * { margin: 0; }
+/* 운용 뷰의 묶음은 ui-section(상자 없음)이고, 상자는 독립 대상인 점검 뷰의 ui-panel 하나뿐이다(콘셉트 상자 네 가지). */
+ui-section { gap: var(--space-2); min-height: 0; margin: 0; }
+ui-section > * { margin: 0; }
 
 /* ===========================================================================
    2. 껍질 — 두 문법이 공유하는 테두리
@@ -218,9 +211,18 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .surface-bridge a:hover { color: var(--text-primary); background: var(--surface-flat); }
 .surface-bridge a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
-.view-switch { display: inline-flex; border: 1px solid var(--control-line); border-radius: var(--radius-button); overflow: hidden; }
-/* Paint comes from the shared segment kind; the switch only spaces its tabs. */
-.view-tab { padding: 0 var(--space-4); }
+/* The view switch is a K1 choice group (telemetry.js mountViewChoice); the chips paint themselves. */
+.view-switch { display: inline-flex; }
+.compat-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--surface-line);
+  background: var(--surface-recessed);
+}
 
 .auth-drawer {
   position: fixed;
@@ -241,7 +243,6 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .auth-row { display: flex; gap: var(--space-2); }
 .auth-row input { flex: 1; }
 .auth-drawer form { display: grid; gap: var(--space-2); }
-.auth-tabs { justify-self: start; }
 /* The checkbox row keeps its sentence case inside the drawer's label rule. */
 .auth-drawer .bench-confirmation { display: flex; margin: 0; text-transform: none; letter-spacing: 0; font-weight: var(--weight-regular); }
 .auth-row input#code-input { text-transform: uppercase; letter-spacing: var(--track-label); }
@@ -381,7 +382,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 .triage-head { min-width: 0; }
 .triage-copy { display: flex; align-items: baseline; gap: var(--space-3); min-width: 0; }
-.triage-copy h2 { flex: none; margin: 0; font: var(--weight-strong) var(--text-body)/var(--leading-body) var(--body); }
+.triage-copy .triage-title { flex: none; margin: 0; font: var(--weight-strong) var(--text-body)/var(--leading-body) var(--body); }
 /* 설명은 제목 옆에 붙는다. 넘치면 자른다 — 전문은 분류 머리가 아니라 이벤트
    기록의 몫이다. */
 .triage-copy p {

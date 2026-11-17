@@ -1,7 +1,8 @@
-// D-540 2 / D-741 3 — the one Rosy Fleet app bar. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar>
+// D-540 2 / D-741 3 — the one Rosy Fleet app bar. 관제·설치·현장 지도·Cell carry the same <ui-topbar>
 // markup (test_fleet_header.py pins it) and drive it only through this module: link word and clock, alerts
 // count, role words on the account button, development badge, the account fold and the one E-stop rule.
 import "/common/ui.js";  // wires the `[data-theme-cycle]` button
+import {createConnectionNotice} from "/common/connection-notice.js";
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {renderAccountApps, roleLabel} from "/common/account-profile.js";
 export {roleLabel};
@@ -12,9 +13,15 @@ const $ = id => document.getElementById(id);
 // D-741 3 — 브라우저와 Fleet 사이의 연결. 답이 오면 실시간, LATE_MS 넘게 새 답이 없으면 지연,
 // 요청이 닿지 않았거나 서버가 5xx로 답하면 연결 끊김이다. 401·403은 서버가 답한 것이라 실시간이다.
 // 로봇과의 연결은 여기 것이 아니다. 그것은 관제 화면의 연결 수와 로봇 카드가 말한다.
-const LINK = {wait: ["연결 대기", "neutral"], live: ["실시간", "neutral"], late: ["지연", "warn"], down: ["연결 끊김", "crit"]};
+const LINK = {
+  wait: ["연결 대기", "unavailable"],
+  live: ["실시간", "fresh"],
+  late: ["지연", "delayed"],
+  down: ["연결 끊김", "disconnected"],  // 2026-11-14 decision: a disconnect is a warning (wifi glyph), not an alarm
+};
 export const LATE_MS = 12000;  // 5초 조회 두 번을 놓치고 2초
 let answeredAt = null, linkFailed = false;
+let linkNoticeTarget = null, linkNotice = null;
 export function linkState(now = Date.now()) {
   if (linkFailed) return "down";
   if (answeredAt === null) return "wait";
@@ -22,11 +29,11 @@ export function linkState(now = Date.now()) {
 }
 function paintLink(now) {
   const tag = $("link-state"), state = linkState(now);
+  if (tag !== linkNoticeTarget) { linkNoticeTarget = tag; linkNotice = createConnectionNotice(tag); }
   tag.title = LINK[state][0];
   if (tag.dataset.link === state) return;
   tag.dataset.link = state;
-  tag.textContent = LINK[state][0];
-  tag.setAttribute("status", LINK[state][1]);
+  linkNotice.set(LINK[state][1], LINK[state][0]);
 }
 export function noteLink(error = null, now = Date.now()) {
   if (error?.name === "AbortError") return;
@@ -159,10 +166,10 @@ export function showFleet(fleet, robots = null) {
   // A robot answering late (link "degraded") still counts as connected on the pill.
   const linked = robots ? robots.filter(robot => robot.online || robot.link === "degraded").length : fleet.online;
   pill.textContent = `${linked}/${fleet.total}`;
-  pill.setAttribute("status", fleet.online === fleet.total ? "neutral" : linked === fleet.total ? "warn" : "crit");
+  pill.setAttribute("status", fleet.online === fleet.total ? "neutral" : "warn");  // offline robots are a disconnect: a warning, never the alarm fill (2026-11-14)
 }
 
-// Pages without their own state poll (설치·보정, 현장 지도, Cell) read Fleet every 5 s for the site name
+// Pages without their own state poll (설치, 현장 지도, Cell) read Fleet every 5 s for the site name
 // and the link word. They show no robot count.
 export function watchFleet(request, {every = 5000, interval = setInterval} = {}) {
   request("/api/fleet/auth/connection").then(showConnection).catch(() => {});

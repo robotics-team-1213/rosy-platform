@@ -41,3 +41,25 @@ import os
 if os.environ.get('ROSY_CAPTURE_FLEET_APP_CONTRACTS') == '1':
     sys.path.append(str(SRC.parent / 'applications/fleet/test'))
     from backend_evidence import fleet_contract_probe, pytest_runtest_logreport, pytest_terminal_summary
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolated_pipeline_storage_dir(tmp_path, monkeypatch):
+    """Keep pipeline ledger/audit/zones files out of /tmp for every Fleet test.
+
+    fleet.server.__path__ is extended with the holder dirs, so `fleet.server.pipeline_routes` and
+    `fleet.server.sitemap.pipeline_routes` are two module objects for one file, each with its own
+    `_storage_dir`; the two route modules below also bound it by name at import. Patch all of them.
+    """
+    import importlib
+    for mod in ("fleet.server.pipeline_routes", "fleet.server.sitemap.pipeline_routes",
+                "fleet.server.charge_bay_routes", "fleet.server.sitemap.pipeline_gate_routes"):
+        try:
+            m = importlib.import_module(mod)
+        except ImportError:
+            continue
+        if hasattr(m, "_storage_dir"):
+            monkeypatch.setattr(m, "_storage_dir", lambda: tmp_path)

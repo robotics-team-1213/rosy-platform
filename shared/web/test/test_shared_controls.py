@@ -103,7 +103,7 @@ def test_shared_status_component_owns_accessibility_and_palette_states():
     assert declaration
     assert set(re.findall(r'"([a-z]+)"', declaration.group(1))) == states
     assert 'if (!this.hasAttribute("role")) this.setAttribute("role", "status")' in script
-    assert 'if (!this.hasAttribute("aria-live")) this.setAttribute("aria-live", "polite")' in script
+    assert 'if (!this.hasAttribute("aria-live") && this.getAttribute("role") !== "alert") this.setAttribute("aria-live", "polite")' in script
     assert "ui-status[state=\"warning\"]" in css
     assert "[hidden] { display: none !important; }" in css
     assert "color: var(--status-warn)" in css
@@ -149,10 +149,12 @@ def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
     assert "ui-actions" in script and "ui-actions" in css
     assert "gap: var(--gap-actions)" in css[css.index("ui-actions {"):]
     dashboard = ROOT / 'middleware' / 'robot_ui' / "robot" / "panels"
-    owners = ("console/docking.js", "console/mode.js", "console/map.js", "host/operations.js", "setup/localization.js")
+    owners = ("console/docking.js", "console/mode.js", "host/operations.js", "setup/localization.js")
     for owner in owners:
         source = (dashboard / owner).read_text(encoding="utf-8")
         assert 'el("ui-actions"' in source, owner
+    # the map panel's two groups are createChoiceGroup parts (K5 layers, K1 click action), not hand-made action rows
+    assert "createMapChoices(" in (dashboard / "console" / "map.js").read_text(encoding="utf-8")
     teleop = (dashboard / "console" / "teleop.js").read_text(encoding="utf-8")
     assert 'setAttribute("size", "primary")' in teleop
     panel_css = (dashboard / "surface-panels.css").read_text(encoding="utf-8")
@@ -760,7 +762,6 @@ DISABLED_WITHOUT_REASON = {
     ("middleware/robot_ui/robot/panels/console/camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
     ("middleware/robot_ui/robot/panels/console/docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
     ("middleware/robot_ui/robot/panels/console/docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
-    ("middleware/robot_ui/robot/panels/console/mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
     ("middleware/robot_ui/robot/panels/console/teleop.js", "button.disabled = true;"): INITIAL,
     ("middleware/robot_ui/robot/panels/console/teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",
     ("middleware/robot_ui/robot/panels/console/teleop.js", "button.disabled = !eligible();"): NOTE + " (readinessStatus)",
@@ -906,7 +907,9 @@ def test_disabled_reason_is_a_shared_button_attribute():
     button = script.split("class UiButton extends HTMLElement", 1)[1].split("\nclass ", 1)[0]
     observed = button.split("observedAttributes", 1)[1].split("}", 1)[0]
     assert '"reason"' in observed
-    assert "aria-describedby" in button and "dataset.reason" in button
+    # aria-describedby is edited in one place, cause-line.js describeBy(); the button delegates to it (C1).
+    assert "describeBy(this, id, on)" in button and "dataset.reason" in button
+    assert "aria-describedby" in (COMMON / "cause-line.js").read_text(encoding="utf-8")
     assert "ui-button > small[data-reason]" in COMPONENTS.read_text(encoding="utf-8")
     offenders = []
     for path in _product_texts():
@@ -916,3 +919,23 @@ def test_disabled_reason_is_a_shared_button_attribute():
             if re.search(r"\.title\s*=\s*[^;]*(?:비활성|제한|없습니다|필요)", line):
                 offenders.append(f"{path.name}:{number}")
     assert not offenders, f"title만으로 비활성 사유를 말한다: {offenders}"
+
+
+def test_roster_block_universal_full_width_and_overview_rows_not_cards():
+    """Structural prevention gate: .roster-block spans all non-header children across 1 / -1,
+    .robot-overview-item is a hairline row (not a 4-sided box), and .queue does not nest a 4-sided box inside .queues-panel."""
+    roster_css = (ROOT / "applications/fleet/web/robot/roster.css").read_text(encoding="utf-8")
+    styles_css = (ROOT / "applications/fleet/web/shared/styles.css").read_text(encoding="utf-8")
+    assert ".roster-block > :not(h2):not(.ui-action-link) { grid-column: 1 / -1; }" in roster_css
+    item_block = re.search(r"\.robot-overview-item\s*\{([^}]*)\}", roster_css)
+    assert item_block, ".robot-overview-item rule missing"
+    assert "border: 0;" in item_block.group(1) and "border-block-start: 1px solid var(--border-subtle);" in item_block.group(1)
+    head_block = re.search(r"\.robot-overview-head\s*\{([^}]*)\}", roster_css)
+    assert head_block and "grid-template-columns: minmax(0, 1fr) auto;" in head_block.group(1)
+    # 모바일 바닥 오버라이드: 64rem 미만에서 이름 열이 8.5rem 아래로 내려가지 않는다(ellipsis 반전 방지, G3).
+    mobile_head = re.search(r"@media\s*\(width\s*<\s*64rem\)\s*\{[^}]*\.robot-overview-head\s*\{([^}]*)\}", roster_css)
+    assert mobile_head and "grid-template-columns: minmax(8.5rem, 1fr) auto;" in mobile_head.group(1), \
+        "mobile .robot-overview-head 8.5rem floor override missing"
+    queue_block = re.search(r"\.queue\s*\{([^}]*)\}", styles_css)
+    assert queue_block and "border: 0;" in queue_block.group(1) and "border-inline-start:" in queue_block.group(1)
+

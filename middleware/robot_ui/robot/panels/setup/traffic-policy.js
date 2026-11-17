@@ -1,6 +1,8 @@
 import { confirmIrreversible } from "/common/ui.js";
 import { enumLabel, TRAFFIC_MODE_LABEL, TRAFFIC_STATE_LABEL, TRAFFIC_REASON_LABEL,
   TRAFFIC_SIGNAL_LABEL, TRAFFIC_SOURCE_LABEL, TRAFFIC_RULE_LABEL } from "/common/core_ui_logic.js";
+import { valueText } from "/common/value-text.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 
 // D-359: short request locks have live feedback; lasting locks give a reason.
 function setOff(control, off, reason = "") {
@@ -42,7 +44,7 @@ export function mount(root, ctx) {
   const facts = {};
   for (const [key, title] of [["state", "판정"], ["reason", "판정 사유"], ["signal", "신호"],
     ["stop", "정지선"], ["rule", "정지선 규칙"], ["source", "신호원"], ["scene", "도로 장면"], ["revision", "적용 정책"]]) {
-    const row = el("div", ""); row.append(el("dt", "", title)); facts[key] = el("dd", "", "—"); row.append(facts[key]); state.append(row);
+    const row = el("div", ""); row.append(el("dt", "", title)); facts[key] = el("dd", "", UNKNOWN); row.append(facts[key]); state.append(row);
   }
   const pollStatus = result(); pollStatus.hidden = false; pollStatus.textContent = "현재 정책 정보 대기";
   currentSection.append(state, pollStatus);
@@ -100,13 +102,13 @@ export function mount(root, ctx) {
     for (const [key, labels, value] of [["state", TRAFFIC_STATE_LABEL, status.state], ["reason", TRAFFIC_REASON_LABEL, status.reason],
       ["signal", TRAFFIC_SIGNAL_LABEL, status.signal_conflict === true ? "CONFLICT" : status.signal_colour],
       ["rule", TRAFFIC_RULE_LABEL, status.junction_rule], ["source", TRAFFIC_SOURCE_LABEL, status.signal_source_kind]]) {
-      facts[key].textContent = enumLabel(labels, value); facts[key].title = value ?? "";
+      facts[key].textContent = enumLabel(labels, value, UNKNOWN); facts[key].title = value ?? "";
     }
     if (status.signal_head_frozen === true) facts.source.textContent += " · 갱신 중단";
     facts.stop.textContent = typeof status.stop_line_distance_m === "number" && Number.isFinite(status.stop_line_distance_m)
-      ? `${status.stop_line_distance_m.toFixed(3)} m` : "—";
-    facts.scene.textContent = status.scene_revision || "—"; facts.revision.textContent = status.policy_revision || "—";
-    reviewed.textContent = current.staged ? `검토본: ${current.staged.policy_revision ?? "—"}` : "저장된 검토본 없음";
+      ? `${status.stop_line_distance_m.toFixed(3)} m` : UNKNOWN;
+    facts.scene.textContent = status.scene_revision || UNKNOWN; facts.revision.textContent = status.policy_revision || UNKNOWN;
+    reviewed.textContent = current.staged ? `검토본: ${current.staged.policy_revision ?? UNKNOWN}` : "저장된 검토본 없음";
     feedback(pollStatus, readbackKnown ? "" : "현재 정책 정보를 확인할 수 없습니다", "unavailable");
     renderDraft(); renderControls();
   }

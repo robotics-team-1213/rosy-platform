@@ -78,6 +78,7 @@ fleet/web/sitemap
 fleet/web/installation
 fleet/web/map
 fleet/web/cell
+fleet/web/robot
 fleet/fleet/server/tracking
 fleet/fleet/server/evidence
 fleet/fleet/server/sitemap

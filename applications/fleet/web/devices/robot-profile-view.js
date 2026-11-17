@@ -75,6 +75,19 @@ export function paintProfile(root, profile, {elapsedS = 0, unavailable = false, 
   link.className = 'ui-action-link';
   link.dataset.kind = 'quiet';
   root.append(link);
+  if (profile?.source_kind === 'arm') {
+    const isCellS = profile.source_id === 'arm_s';
+    const isCellA = profile.source_id === 'arm_a';
+    const isCellB = profile.source_id === 'arm_b';
+    const cellLink = node('a', isCellS ? 'Cell S 작업대 열기' : isCellA ? 'Cell A 작업대 열기' : isCellB ? 'Cell B 작업대 열기' : '셀 작업대 열기');
+    cellLink.href = isCellS ? '/console/cell?cell=cell_s#observation-heading'
+      : isCellA ? '/console/cell?cell=cell_a#observation-heading'
+      : isCellB ? '/console/cell?cell=cell_b#observation-heading'
+      : '/console/cell#observation-heading';
+    cellLink.className = 'ui-action-link';
+    cellLink.dataset.kind = 'quiet';
+    root.append(' ', cellLink);
+  }
 }
 
 export function createRobotProfiles({call, scope, render = () => {}}) {
@@ -87,17 +100,20 @@ export function createRobotProfiles({call, scope, render = () => {}}) {
     let entry = cache.get(key);
     if (!entry) { entry = {next: 0, received: performance.now(), profile: null}; cache.set(key, entry); }
     if (!disposed && !entry.pending && performance.now() >= entry.next) {
-      entry.pending = true; entry.next = performance.now() + 1000;
+      entry.pending = true; entry.next = performance.now() + 2000;
       const started = performance.now();
+      const prevSig = entry.sig || "";
       void call(`/api/fleet/device-profile-sources/${key}`).then(({profile, source_binding_status, device_id}) => {
         if (disposed) return;
         entry.profile = profile; entry.received = started; entry.unavailable = false;
         entry.bindingStatus = source_binding_status; entry.editDeviceId = device_id;
+        entry.sig = JSON.stringify([profile ?? null, source_binding_status ?? null, device_id ?? null, false]);
       }).catch(() => {
         entry.profile = null; entry.bindingStatus = null; entry.unavailable = true;
-        entry.next = performance.now() + 5000;
+        entry.next = performance.now() + 10000;
+        entry.sig = "unavailable";
       })
-        .finally(() => { entry.pending = false; if (!disposed) render(); });
+        .finally(() => { entry.pending = false; if (!disposed && entry.sig !== prevSig) render(); });
     }
     const mismatch = profileBindingMismatch(entry.profile, expectedBinding);
     paintProfile(root, mismatch ? null : entry.profile, {elapsedS: (performance.now() - entry.received) / 1000,

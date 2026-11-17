@@ -1,3 +1,4 @@
+import {createCauseLine} from '/common/cause-line.js';
 // Requests always use the saved revision; completion never reloads the editor.
 let generation=0,timer=null,autoTimer=null,updateButtons=()=>{};
 const autoAttempts=new Set();
@@ -16,6 +17,7 @@ export function showAI(lane,index,request,context,results){
   resetAI();const ticket=generation,panel=element('section'),title=element('h3','AI 초안과 확인'),controls=element('div'),message=element('p'),jobs=element('ul'),provenance=element('details'),provenanceRows=element('div');
   panel.id='review-ai-jobs';panel.className='review-history';panel.setAttribute('aria-label','AI 실행');controls.className='review-ai-actions';message.setAttribute('role','status');
   provenance.id='review-ai-provenance';provenance.append(element('summary','AI 요청·모델 정보'),provenanceRows);
+  const causeLine=element('ui-status');causeLine.dataset.cause='';
   panel.append(title,element('p','저장된 버전으로 요청합니다. 결과는 후보·참고 의견이며 사람이 확인한 뒤 적용·승인합니다.'),controls,message,jobs,provenance);
   if(lane==='object')document.querySelector('#save-status').after(panel);
   else document.querySelector('.pixel-vlm-feedback').append(panel);
@@ -24,12 +26,13 @@ export function showAI(lane,index,request,context,results){
   const seenStates=new Map(),changedJobs=new Map(),noticedDrafts=new Set();
   const generationState=lane==='pixel'?document.getElementById('pixel-ai-generation-state'):null;
   for(const action of allowed){const button=element('ui-button',lane==='pixel'?(action==='mask_check'?'현재 사진 AI 검사':'현재 사진 AI 초안'):actions[action]);button.id=`review-ai-${action}`;const host=lane==='pixel'?document.getElementById(action==='mask_check'?'pixel-mask-check-controls':'pixel-draft-create-controls'):null;(host||controls).append(button);buttons.push([button,action]);button.onclick=()=>run(action);}
+  // One cause line for the whole AI request group; the status paragraph below keeps only results and errors.
+  const cause=createCauseLine(panel,{line:causeLine});panel.insertBefore(causeLine,message);
   const refresh=element('ui-button','AI 실행 상태 다시 조회'),result=element('ui-button','AI 결과 목록 조회');controls.append(refresh,result);
   updateButtons=()=>{
     const current=context(),blocked=!current||current.blocked;
-    for(const [button,action] of buttons){const capability=status?.actions?.[action];const reason=pending?'요청 중입니다.':blocked?'현재 편집을 저장하거나 마친 뒤 요청하세요.':!status?'실행 설정 확인 중입니다.':status.can_request===false?'AI 실행 권한이 없는 읽기 전용 계정입니다.':status.busy||status.jobs.some(active)?'현재 작업이 끝난 뒤 요청하세요.':!capability?.available?capability?.reason||'AI 실행 설정을 확인하세요.':capability.reason;button.disabled=!!reason;button.setAttribute('reason',reason||'');}
-    refresh.disabled=pending;result.disabled=pending||blocked;
-    result.setAttribute('reason',blocked?'현재 편집을 저장하거나 마친 뒤 조회하세요.':'');
+    for(const [button,action] of buttons){const capability=status?.actions?.[action];const reason=pending?'요청 중입니다.':blocked?'현재 편집을 저장하거나 마친 뒤 요청하세요.':!status?'실행 설정 확인 중입니다.':status.can_request===false?'AI 실행 권한이 없는 읽기 전용 계정입니다.':status.busy||status.jobs.some(active)?'현재 작업이 끝난 뒤 요청하세요.':!capability?.available?capability?.reason||'AI 실행 설정을 확인하세요.':capability.reason;cause.set([button],reason||'');}
+    refresh.disabled=pending;cause.set([result],pending||blocked?(blocked?'현재 편집을 저장하거나 마친 뒤 조회하세요.':'요청 중입니다.'):'');cause.sync();
     if(lane==='pixel'){updateAuto();void deliverChanges();}
   };
   function generationMessage(text){if(generationState){generationState.textContent=text;generationState.hidden=!text;}}
@@ -84,7 +87,7 @@ export function showAI(lane,index,request,context,results){
       if(active(job)){const cancel=element('ui-button','이 AI 작업 취소');cancel.disabled=pending;cancel.onclick=()=>send(`/api/review-ai-cancel/${job.id}`,{});row.append(cancel);}
       jobs.append(row);
     }
-    message.textContent=status.reason||(!jobs.children.length?'이 사진에서 실행한 AI 작업이 없습니다.':'결과를 조회해도 현재 라벨은 자동 변경되지 않습니다.');updateAI();
+    message.textContent=(status.reason&&buttons.some(([button])=>button.disabled))?'':status.reason||(!jobs.children.length?'이 사진에서 실행한 AI 작업이 없습니다.':'결과를 조회해도 현재 라벨은 자동 변경되지 않습니다.');updateAI();
   }
   async function load(){
     clearTimeout(timer);timer=null;

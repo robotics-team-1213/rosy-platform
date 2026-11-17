@@ -101,7 +101,8 @@ def test_rounds_detail_decision_and_start(tmp_path, width, session):
                 expect(learned).to_contain_text('단계별 통과 20 / 63')
                 expect(learned).to_contain_text('3×3×3 적층 전체 · 시드 1: 2 / 9 단계에서 멈춤')
                 expect(learned).to_contain_text('한 번도 통과하지 못한 단계: stack/s2')
-                body = page.locator('main').inner_text()
+                # the links to the Fleet approval screens are navigation, not an approval control on this page
+                body = page.locator('main').evaluate("main => { const copy = main.cloneNode(true); copy.querySelectorAll('.learning-next-actions').forEach(node => node.remove()); return copy.textContent; }")
                 assert '승인' not in body and '승격' not in body
                 if session == 'reader':
                     expect(page.locator('#ladder-decide')).to_be_disabled()

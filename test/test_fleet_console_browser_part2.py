@@ -52,14 +52,14 @@ def test_stale_camera_calibration_keeps_the_frozen_picture_and_warns(console_url
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         # The 1 s tracking poll keeps the network busy; networkidle never comes (timed out on main too).
         page.goto(console_url, wait_until="domcontentloaded")
-        page.select_option("#map-display-mode", "overlay")
+        page.locator('#map-display-mode input[value="overlay"]').check()
         page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남')",
             timeout=20000)
         tag = page.inner_text("#map-tag")
         assert "paint-test" in tag, tag
-        page.select_option("#map-display-mode", "overlay")
+        page.locator('#map-display-mode input[value="overlay"]').check()
         # 수락된 보정의 실영상(빨강)이 사이트 안에 그대로 있다. 표본 점은 로봇 차이 선(0.2→0.8 대각선)과
         # 0.5 m 격자를 피한다(siteBounds 0.25 여유, fitTransform pad 32, 화면 회전 없음).
         pixel = page.evaluate("""async () => {
@@ -124,7 +124,7 @@ def test_server_checked_calibration_drift_warns_without_any_robot(console_url):
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
-        page.select_option("#map-display-mode", "overlay")
+        page.locator('#map-display-mode input[value="overlay"]').check()
         page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-calibration-status')?.textContent.includes('카메라 교정 어긋남(자동 검사)')",
@@ -192,7 +192,7 @@ def test_robot_sample_drift_outranks_the_server_check(console_url):
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="domcontentloaded")
-        page.select_option("#map-display-mode", "overlay")
+        page.locator('#map-display-mode input[value="overlay"]').check()
         page.locator("#map-options > summary").click()
         page.wait_for_function(
             "() => document.querySelector('#map-calibration-status')?.textContent.includes('정지 로봇 관측 차이')",
@@ -333,17 +333,19 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
         _open_cards(page)
+        page.get_by_role("link", name="작업", exact=True).click()
+        page.locator("#roster .robot-row").first.wait_for()
         # D-540 3: every card is listed, exceptions first (rosy_03), then the robots' own order.
         page.keyboard.press("ArrowDown")
         page.wait_for_function(
             "() => document.activeElement"
-            " && document.activeElement.matches('#roster article')"
+            " && document.activeElement.matches('#roster .robot-row')"
             " && document.activeElement.querySelector('b')?.textContent === 'rosy_03'"
         )
         page.evaluate("() => { window.__focusedCard = document.activeElement; }")
         page.wait_for_function("() => !window.__focusedCard.isConnected", timeout=3000)
         assert page.evaluate(
-            "() => document.activeElement.matches('#roster article')"
+            "() => document.activeElement.matches('#roster .robot-row')"
             " && document.activeElement.querySelector('b')?.textContent === 'rosy_03'"
         )
         page.keyboard.press("ArrowDown")
@@ -351,9 +353,9 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
             "() => document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
         )
         page.keyboard.press("Enter")
-        page.wait_for_function("() => document.querySelector('#robot-choice')?.value === 'rosy_01'")
+        page.wait_for_function("() => document.querySelector('#roster [data-select-robot-id=\"rosy_01\"]')?.getAttribute('aria-pressed') === 'true'")
         assert page.locator('.robot.selected').count() == 0
-        page.locator('#robot-workspace ui-button[data-goal-robot-id]').click()
+        page.locator('#robot-panel-mount ui-button[data-goal-robot-id]').click()
         page.wait_for_function(
             "() => document.querySelectorAll('.robot.selected').length === 1"
             " && document.querySelector('.robot.selected b')?.textContent === 'rosy_01'"
@@ -439,7 +441,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
                                               init_script="window.confirm = () => true")
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        page.wait_for_function("() => document.querySelectorAll('#robot-workspace article').length > 0")
+        page.wait_for_function("() => document.querySelectorAll('#robot-panel-mount[data-robot-id]').length > 0")
         page.wait_for_function("() => !document.querySelector('[data-goal-robot-id=rosy_01]')?.disabled")
         page.locator('[data-goal-robot-id="rosy_01"]').click()
         canvas_box = page.locator("#map-canvas").bounding_box()
@@ -452,7 +454,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
         assert "QUEUED" in page.inner_text("#log")
         assert "#1" in page.inner_text("#log")
         page.locator('[data-context-tab="status"]').click()
-        page.locator("#robot-workspace article").filter(has_text="rosy_01").locator("ui-button[data-cancel-scope]").click()
+        page.locator('#robot-panel-mount[data-robot-id="rosy_01"] ui-button[data-cancel-scope]').click()
         page.wait_for_timeout(200)
         assert not errors
         browser.close()
@@ -514,7 +516,7 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
             "/api/fleet/formation": {"active": False, "state": "IDLE"},
         })
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
+        page.wait_for_function("() => document.querySelectorAll('#robot-dock-mount .robot-dock-btn').length > 0")
         # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
         assert page.locator(".queues-panel").is_hidden()
         browser.close()
@@ -553,13 +555,13 @@ FLEET_FIT_PROBE = """() => {
     docOverflow: document.documentElement.scrollHeight - window.innerHeight,
     primary: inside('.console-primary'),
     secondary: inside('.console-secondary'),
-    mapPanel: inside('.panel[aria-labelledby="map-heading"]'),
+    mapPanel: inside('[aria-labelledby="map-heading"]'),
     mapCanvas: inside('#map-canvas'),
     visionFrame: inside('#vision-frame'),
     visionPreview: inside('.vision-preview'),
     signals: inside('.signals'),
     formation: inside('.formation'),
-    rosterPanel: inside('.panel[aria-labelledby="roster-heading"]'),
+    rosterPanel: inside('[aria-labelledby="roster-heading"]'),
     stop: inside('#estop'),
     roster: inside('#roster'),
     rosterHeading: inside('#roster-heading'),
@@ -587,6 +589,9 @@ def test_console_fits_the_declared_viewport(console_url):
         page.locator('[data-context-tab="tools"]').click()
         tools_fit = page.evaluate(FLEET_FIT_PROBE)
         page.locator('[data-context-tab="status"]').click()
+        page.get_by_role("link", name="작업", exact=True).click()
+        page.locator("#roster .robot-row").first.wait_for()
+        work_fit = page.evaluate(FLEET_FIT_PROBE)
         assert not errors
         save_temp_screenshot(page, "fleet_console_fit.png")
         browser.close()
@@ -598,15 +603,17 @@ def test_console_fits_the_declared_viewport(console_url):
     assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 2) <= 0.03, fit  # D-629: map 2 : rail 1
     # D-540 3 replaces D-493's 1920 rail fit: the rail is the one scroll, its first panels start on screen.
     assert fit["rosterPanel"]["top"] < fit["vh"], fit
-    for name in ("mapCanvas", "roster", "rosterPanel", "stop"):
+    for name in ("mapCanvas", "stop", "rosterPanel"):
         assert fit[name]["width"] > 0 and fit[name]["height"] > 0, fit
+    for name in ("roster", "rosterPreceding"):
+        assert work_fit[name]["width"] > 0 and work_fit[name]["height"] > 0, work_fit
     for name in ("signals", "formation", "visionPreview"):
         assert tools_fit[name]["width"] > 0 and tools_fit[name]["height"] > 0, tools_fit
     assert tools_fit["visionFrame"]["height"] == 0, tools_fit  # No camera source in this fixture.
     assert fit["stop"]["width"] >= 48 and fit["stop"]["height"] >= 48, fit
     assert fit["stop"]["top"] >= 0 and fit["stop"]["bottom"] <= fit["vh"], fit
-    assert fit["rosterPreceding"]["top"] >= fit["rosterHeading"]["bottom"], fit
-    assert fit["roster"]["top"] - fit["rosterPreceding"]["bottom"] <= 24, fit
+    assert work_fit["roster"]["top"] >= work_fit["rosterPreceding"]["bottom"], work_fit
+    assert work_fit["roster"]["top"] - work_fit["rosterPreceding"]["bottom"] <= 24, work_fit
     assert fit["rosterPanel"]["height"] <= 0.75 * fit["vh"], fit
 
 
@@ -629,14 +636,19 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 2) <= 0.03, fit  # D-629: map 2 : rail 1
         assert fit["stop"]["bottom"] <= fit["vh"]
         if scenario == "delayed":
+            page.get_by_role("link", name="작업", exact=True).click()
+            page.locator("#roster .robot-row").first.wait_for()
+            page.wait_for_function("() => document.querySelector('#roster')?.innerText.includes('지연')")
             assert "지연" in page.inner_text("#roster")
             # D-540 3: the roster has no scroll of its own; the rail is the one scroll.
             assert page.locator("#roster").evaluate("e => e.scrollHeight <= e.clientHeight")
         elif scenario == "disconnected":
-            assert "닿지 않음" in page.inner_text("#roster")
             assert page.locator(".queues-panel").is_visible()
             # D-493: the queue lives in the rail, so the map stays the main view.
             assert fit["mapCanvas"]["height"] >= 0.5 * fit["vh"]
+            page.get_by_role("link", name="작업", exact=True).click()
+            page.locator("#roster .robot-row").first.wait_for()
+            assert "닿지 않음" in page.inner_text("#roster")
         else:
             page.locator('[data-context-tab="tools"]').click()
             assert page.locator("#formation-role-lock").is_visible()
@@ -1032,11 +1044,14 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         browser, page, errors = _open_console(playwright, API)
         page.set_viewport_size({"width": width, "height": 844})
         page.goto(console_url, wait_until="networkidle")
-        assert page.locator('#roster article').first.get_attribute('data-robot-id') == 'rosy_03'
-        assert page.locator('#robot-workspace article').count() == 0
+        page.get_by_role("link", name="작업", exact=True).click()
+        page.locator("#roster .robot-row").first.wait_for()
+        assert page.locator('#roster .robot-row').first.get_attribute('data-robot-id') == 'rosy_03'
+        page.get_by_role("link", name="관제", exact=True).click()
+        assert page.locator('#robot-panel-mount[data-robot-id]').count() == 0
         _open_cards(page, 'rosy_03')
         save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
-        actions = page.locator("#robot-workspace article .robot-actions:has([data-goal-robot-id])")
+        actions = page.locator("#robot-panel-mount .robot-actions:has([data-goal-robot-id])")
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
             "buttons[0].parentElement.getBoundingClientRect().width]")
@@ -1044,6 +1059,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         assert len(action_widths) == 6 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
         assert all(w <= actions_width + 1 for w in action_widths), action_widths
         _open_cards(page)
+        page.evaluate("window.scrollTo(0, 0)")
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
         layout = page.evaluate("""() => ({
           overflow: document.documentElement.scrollWidth - innerWidth,
@@ -1151,7 +1167,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
             roleText: document.querySelector('#user-role').textContent.trim(),
             moreName: document.querySelector('#topbar-more').getAttribute('aria-label'),
             status: shown('#online-pill'), clock: shown('#clock'),
-            footer: !!document.querySelector('footer'),
+            footer: !!document.querySelector('body > footer, main footer'),
             clockInHeader: !!document.querySelector('ui-topbar #clock')};
         }"""
         folded = page.evaluate(probe)

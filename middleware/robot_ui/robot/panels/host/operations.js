@@ -1,5 +1,8 @@
 import { actionIcon, confirmIrreversible } from "/common/ui.js";
+import { describeBy } from "/common/cause-line.js";
 import { NETWORK_MODE_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import { valueText } from "/common/value-text.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
@@ -33,12 +36,6 @@ const NETWORK_JOB = "rosy.network.pending";
 function networkObservation(data) {
   return data.observed || (data.request_id ? {} : data);
 }
-function pointAt(button, note, on) {
-  const ids = (button.getAttribute("aria-describedby") || "").split(/\s+/).filter((id) => id && id !== note.id);
-  if (on) ids.unshift(note.id);
-  if (ids.length) button.setAttribute("aria-describedby", ids.join(" "));
-  else button.removeAttribute("aria-describedby");
-}
 
 function card(title, path, interval, ctx, describe, summarize) {
   const wrap = el("section", "ui-readback");
@@ -71,7 +68,7 @@ function card(title, path, interval, ctx, describe, summarize) {
   function appendRow(label, value) {
     const row = el("tr");
     const header = el("th", "", label); header.scope = "row";
-    row.append(header, el("td", "", value == null || value === "" ? "—" : String(value)));
+    row.append(header, el("td", "", value == null || value === "" ? UNKNOWN : String(value)));
     body.append(row);
   }
   function clearReadout() {
@@ -172,7 +169,7 @@ export function mount(root, ctx) {
   const field = el("input", "ui-field"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
   const ssidLabel = el("label", "ui-field-label", "Wi-Fi 이름 (SSID)"); ssidLabel.append(ssid);
   const accessLabel = el("label", "ui-field-label", "Wi-Fi 암호 (8~63자)"); accessLabel.append(field);
-  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; actionIcon(connect, "wifi"); connectForm.append(ssidLabel, accessLabel, connect); networkActions.append(connectForm, advanced);
+  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; actionIcon(connect, "connect"); connectForm.append(ssidLabel, accessLabel, connect); networkActions.append(connectForm, advanced);
   const networkNote = el("ui-status", "", "호스트 에이전트 상태 확인 전에는 네트워크 작업을 쓸 수 없습니다."); networkNote.setAttribute("state", "pending"); networkActions.append(networkNote);
   const networkResult = el("ui-status"); networkResult.hidden = true; networkResult.setAttribute("state", "ready"); networkResult.setAttribute("role", "status"); networkActions.append(networkResult);
   networkNote.id = `host-network-note-${++noteSerial}`;
@@ -192,7 +189,7 @@ export function mount(root, ctx) {
     const blocked = !enabled && !networkPending;
     for (const control of [profile, ssid, field, sta, relay, applyProfile, connect]) {
       if (control.tagName === "UI-BUTTON") setOff(control, !enabled || networkPending, networkPending ? "" : SEE_ABOVE);
-      pointAt(control, networkNote, blocked);
+      describeBy(control, networkNote.id, blocked);
     }
     if (blocked) {
       networkNote.textContent = agentBlock(network.wrap, "네트워크");
@@ -269,7 +266,7 @@ export function mount(root, ctx) {
       agent || (releasePending ? "" : held ? "복구 보류 중" : "이전 릴리스 없음"));
     setOff(clearHold, releasePending || release.wrap.dataset.available !== "true" || !held,
       agent || (releasePending ? "" : "보류 없음"));
-    for (const button of [rollback, clearHold]) pointAt(button, releaseNote, Boolean(agent));
+    for (const button of [rollback, clearHold]) describeBy(button, releaseNote.id, Boolean(agent));
     if (agent) {
       releaseNote.textContent = agentBlock(release.wrap, "릴리스");
       releaseNote.setAttribute("state", "unavailable");
@@ -292,14 +289,14 @@ export function mount(root, ctx) {
       const relOff = release.wrap.dataset.available !== "true" && !releasePending;
       networkNote.hidden = !netOff && !networkPending;
       releaseNote.hidden = !relOff && !releasePending;
-      for (const control of [profile, ssid, field, sta, relay, applyProfile, connect]) { pointAt(control, groupNote, false); pointAt(control, networkNote, netOff); }
-      for (const button of [rollback, clearHold]) { pointAt(button, groupNote, false); pointAt(button, releaseNote, relOff); }
+      for (const control of [profile, ssid, field, sta, relay, applyProfile, connect]) { describeBy(control, groupNote.id, false); describeBy(control, networkNote.id, netOff); }
+      for (const button of [rollback, clearHold]) { describeBy(button, groupNote.id, false); describeBy(button, releaseNote.id, relOff); }
       return;
     }
     groupNote.textContent = agentBlock(network.wrap, "네트워크·릴리스");
     networkNote.hidden = true; releaseNote.hidden = true;
-    for (const control of [profile, ssid, field, sta, relay, applyProfile, connect]) { pointAt(control, networkNote, false); pointAt(control, groupNote, true); }
-    for (const button of [rollback, clearHold]) { pointAt(button, releaseNote, false); pointAt(button, groupNote, true); }
+    for (const control of [profile, ssid, field, sta, relay, applyProfile, connect]) { describeBy(control, networkNote.id, false); describeBy(control, groupNote.id, true); }
+    for (const button of [rollback, clearHold]) { describeBy(button, releaseNote.id, false); describeBy(button, groupNote.id, true); }
   };
   release.onUpdate(syncReleaseActions);
   syncReleaseActions();

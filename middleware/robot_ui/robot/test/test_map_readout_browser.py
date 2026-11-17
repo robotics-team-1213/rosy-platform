@@ -25,8 +25,8 @@ class _Handler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(REPO_ROOT), **kwargs)
 
     def translate_path(self, path):
-        if path == "/assets/map.js":
-            return str(ROOT / "map.js")
+        if path.startswith("/assets/") and "/" not in path.removeprefix("/assets/"):
+            return str(ROOT / path.removeprefix("/assets/"))
         if path.startswith("/common/"):
             return str(REPO_ROOT / "shared" / "web" / path.removeprefix("/common/"))
         return super().translate_path(path)

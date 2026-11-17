@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRosterSummary, heatChip } from '../../../../applications/fleet/web/roster-presentation.js';
+
+// roster-presentation 은 /common·/console/assets 를 import 한다: 단독 node --test 도 그대로 돌게 로더를 먼저 건다.
+const { register } = await import('node:module');
+register('./common-loader.mjs', import.meta.url);
+register('./resolve-console-assets.mjs', import.meta.url);
+const { createRosterSummary, heatChip } = await import('../../../../applications/fleet/web/robot/roster-presentation.js');
 
 test('the card shows heat only when CORE slows or stops the robot', () => {
   assert.deepEqual(heatChip({ safety: { thermal: 'warm' } }), ['열: 감속', 'warn']);
@@ -15,8 +20,9 @@ test('rendered thermal chips follow robot freshness and recover with fresh state
     constructor(tag) {
       this.tag = tag; this.children = []; this.dataset = {}; this.classList = { add() {} };
     }
-    append(...children) { this.children.push(...children); }
+    append(...children) { this.children.push(...children.filter(c => c && typeof c === 'object')); }
     setAttribute() {}
+    toggleAttribute() {}
     addEventListener() {}
   }
   const previousDocument = globalThis.document;

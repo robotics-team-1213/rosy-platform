@@ -9,6 +9,7 @@ import {
   elements,
   metricNumber,
   number,
+  UNKNOWN_VALUE,
   percent,
   rate,
   setEnabled,
@@ -17,8 +18,10 @@ import {
   setTagState,
   setText,
   svgText,
+  announce,
 } from "./dom.js";
 import { api, session } from "./client.js";
+import { createChoiceGroup } from "/common/choice-group.js";
 import {
   CONFIGURED_REASONS,
   CORE_ONLY_TEXT,
@@ -29,7 +32,19 @@ import {
 } from "./triage.js";
 import { fillIdentityForm } from "./settings.js";
 import { createRosNetwork } from "./ros-network.js";
-import { HeadlessState, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import {
+  HeadlessState,
+  EVIDENCE_LABEL,
+  LINE_STATE_LABEL,
+  TRAFFIC_STATE_LABEL,
+  TRAFFIC_REASON_LABEL,
+  TRAFFIC_SIGNAL_LABEL,
+  TRAFFIC_SOURCE_LABEL,
+  TRAFFIC_RULE_LABEL,
+  enumLabel,
+} from "/common/core_ui_logic.js";
+import { valueText } from "/common/value-text.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 
 const CAPABILITY_LABEL = Object.freeze({
   "mobility.move": "이동",
@@ -46,14 +61,22 @@ const PRESENTATION_LABEL = Object.freeze({
   blocked: "막힘",
   not_provided: "없음",
 });
-const LINE_WORD = Object.freeze({
+const LINE_REASON_LABEL = Object.freeze({
+  ...LINE_STATE_LABEL,
+  ...TRAFFIC_REASON_LABEL,
   OFF: "꺼짐",
   mode_off: "꺼짐",
   policy_disabled: "정책 꺼짐",
 });
+const SIGNAL_SOURCE_LABEL = Object.freeze({ ...TRAFFIC_SOURCE_LABEL, frozen: "고정됨" });
 
 function knownWord(table, value) {
   return Object.hasOwn(table, value) ? table[value] : String(value ?? "");
+}
+
+function setEnumText(id, labels, value) {
+  setText(id, enumLabel(labels, value, UNKNOWN));
+  if (elements[id] && value != null && value !== "") elements[id].title = String(value);
 }
 
 export const TELEMETRY_CHANNELS = Object.freeze({
@@ -84,8 +107,8 @@ export function renderRobotInfo(info) {
   // 계보줄: 누구인지·무엇으로 돌아가는지를 한 줄로. 버전은 정체성의 일부다 —
   // "지금 뭘 돌리고 있나"는 운용 첫 화면에서 답해야 한다(D-280).
   const lineage = [
-    info.robot_id || "—",
-    info.hardware_model || "unknown model",
+    info.robot_id || UNKNOWN,
+    info.hardware_model || "기종 정보 없음",
     info.software_version ? `v${info.software_version}` : null,
     info.runtime_mode || "core",
   ].filter(Boolean);
@@ -94,6 +117,7 @@ export function renderRobotInfo(info) {
 }
 
 let triageSeen = {};
+let triageSpoken = "";
 
 // 라인 추종 버튼 상태 — 대기 중 플래그는 셸의 클릭 핸들러가 바꾼다.
 export const lineFollow = { pending: false };
@@ -105,46 +129,66 @@ export function lineFollowStartReady() {
     && session.robotState?.safety?.estop === false;
 }
 
+// Line sensor (꺼짐 / IR / 카메라): K20 commands (panel 2026-11-14): each press is a confirmed request, the mode the robot
+// reports is the current button (aria-current). "꺼짐" is the stop of line following: readiness and pending requests never
+// disable it (always live); only app.js updateLegacyLineControls still disables it for a login without operator rights.
+export const LINE_MODE_LABEL = { OFF: "꺼짐", IR_LINE: "IR 센서", CAMERA_LINE: "카메라" };
+const lineButtons = new Map();
+let lineMode = "OFF";
+export function mountLineChoice(host, onPick) {
+  const group = document.createElement("ui-actions"); group.id = "line-choice"; group.setAttribute("aria-label", "차선 인식 센서");
+  for (const [mode, label] of Object.entries(LINE_MODE_LABEL)) {
+    const button = document.createElement("ui-button"); button.setAttribute("kind", "quiet"); button.type = "button";
+    button.textContent = label; button.dataset.lineMode = mode;
+    if (mode === "OFF") button.dataset.alwaysLive = "";
+    button.addEventListener("click", () => { if (!button.disabled) onPick(mode, button); });
+    lineButtons.set(mode, button); group.append(button);
+  }
+  host.append(group);
+}
+
 export function updateLineFollowButtons() {
-  document.querySelectorAll("[data-line-mode]").forEach((button) => {
-    const enabling = button.dataset.lineMode !== "OFF";
+  for (const [mode, button] of lineButtons) {
+    const blocked = mode !== "OFF" && !lineFollow.pending && !lineFollowStartReady();
     // 요청 중(lineFollow.pending)은 짧은 잠금이라 사유 없이 끈다.
-    setOff(button, lineFollow.pending || (enabling && !lineFollowStartReady()),
-      !enabling || lineFollow.pending ? "" : !["operator", "administrator"].includes(session.role) ? "운용자 권한 필요"
-        : session.robotState?.safety?.estop === true ? "비상정지 중"
-          : session.robotState?.safety?.estop !== false ? "비상정지 상태 확인 필요" : "구동 준비 확인 필요");
-  });
+    const reason = !blocked ? "" : !["operator", "administrator"].includes(session.role) ? "운용자 권한 필요"
+      : session.robotState?.safety?.estop === true ? "비상정지 중"
+        : session.robotState?.safety?.estop !== false ? "비상정지 상태 확인 필요" : "구동 준비 확인 필요";
+    // The sensor that is already current asks for nothing (K20); 꺼짐 stays enabled whatever the readiness or a pending request says.
+    setOff(button, mode !== "OFF" && (lineFollow.pending || blocked || mode === lineMode), reason);
+    if (mode === lineMode) button.setAttribute("aria-current", "true"); else button.removeAttribute("aria-current");
+  }
 }
 
 export function renderLineFollow(status = {}) {
   const mode = status.mode || "OFF";
-  setText("line-follow-state", knownWord(LINE_WORD, status.state || "OFF"));
-  setText("line-follow-source", status.source || "없음");
-  setText("line-follow-error", Number.isFinite(Number(status.error)) ? number(status.error, 3) : "—");
-  setText("line-follow-confidence", percent((Number(status.confidence) || 0) * 100));
-  setText("line-follow-linear", `${number(status.linear || 0, 3)} m/s`);
-  setText("line-follow-angular", `${number(status.angular || 0, 3)} rad/s`);
-  setText("line-follow-reason", knownWord(LINE_WORD, status.reason || "mode_off"));
-  document.querySelectorAll("[data-line-mode]").forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.lineMode === mode));
-  });
+  setEnumText("line-follow-state", LINE_STATE_LABEL, status.state || "OFF");
+  const source = status.source;
+  setText("line-follow-source", source ? enumLabel(TRAFFIC_SOURCE_LABEL, source, source) : "없음");
+  if (elements["line-follow-source"] && source) elements["line-follow-source"].title = source;
+  setText("line-follow-error", status.error != null && Number.isFinite(Number(status.error)) ? number(status.error, 3) : UNKNOWN);
+  setText("line-follow-confidence", status.confidence != null && Number.isFinite(Number(status.confidence)) ? percent(Number(status.confidence) * 100) : UNKNOWN);
+  setText("line-follow-linear", status.linear != null && Number.isFinite(Number(status.linear)) ? `${number(status.linear, 3)} m/s` : UNKNOWN);
+  setText("line-follow-angular", status.angular != null && Number.isFinite(Number(status.angular)) ? `${number(status.angular, 3)} rad/s` : UNKNOWN);
+  setEnumText("line-follow-reason", LINE_REASON_LABEL, status.reason || "mode_off");
+  lineMode = mode;
   updateLineFollowButtons();
 }
 
 export function renderTrafficStatus(status = {}) {
-  setText("traffic-policy-state", status.state || "DISABLED");
-  setText("traffic-policy-reason", knownWord(LINE_WORD, status.reason || "policy_disabled"));
-  setText("traffic-policy-signal", status.signal_conflict ? "CONFLICT" : (status.signal_colour || "—"));
+  setEnumText("traffic-policy-state", TRAFFIC_STATE_LABEL, status.state || "DISABLED");
+  setEnumText("traffic-policy-reason", TRAFFIC_REASON_LABEL, status.reason || "policy_disabled");
+  setEnumText("traffic-policy-signal", TRAFFIC_SIGNAL_LABEL, status.signal_conflict ? "CONFLICT" : status.signal_colour);
   setText(
     "traffic-policy-stop-distance",
-    Number.isFinite(Number(status.stop_line_distance_m))
+    status.stop_line_distance_m != null && Number.isFinite(Number(status.stop_line_distance_m))
       ? `${number(status.stop_line_distance_m, 3)} m`
-      : "—",
+      : UNKNOWN,
   );
-  setText("traffic-policy-rule", status.junction_rule || "signal_controlled");
-  setText("traffic-policy-source", status.signal_head_frozen ? "frozen" : (status.signal_source_kind || "camera"));
-  setText("traffic-policy-scene", status.scene_revision || "—");
-  setText("traffic-policy-revision", status.policy_revision || "—");
+  setEnumText("traffic-policy-rule", TRAFFIC_RULE_LABEL, status.junction_rule || "signal_controlled");
+  setEnumText("traffic-policy-source", SIGNAL_SOURCE_LABEL, status.signal_head_frozen ? "frozen" : (status.signal_source_kind || "camera"));
+  setText("traffic-policy-scene", status.scene_revision || UNKNOWN);
+  setText("traffic-policy-revision", status.policy_revision || UNKNOWN);
 }
 
 let trafficPolicyReadback = null;
@@ -185,20 +229,29 @@ export function renderTrafficPolicy(readback = {}) {
   }
   const message = readback.staged
     ? `검토 대기: ${readback.staged.policy_revision}`
-    : `적용됨: ${readback.active?.policy_revision || "—"}`;
+    : `적용됨: ${readback.active?.policy_revision || UNKNOWN}`;
   setText("traffic-policy-message", message);
   updateTrafficPolicyControls();
 }
 
 // 두 문법은 한 화면에 섞이지 않는다(concept 16 §4 L2). 운용은 공간이고
 // 스크롤하지 않으며, 점검은 절차이고 스크롤이 곧 절차다.
+let viewGroup = null;
 export function showView(view) {
   const operate = view !== "inspect";
   elements["view-operate-panel"].hidden = !operate;
   elements["view-inspect-panel"].hidden = operate;
-  elements["view-operate"].setAttribute("aria-pressed", String(operate));
-  elements["view-inspect"].setAttribute("aria-pressed", String(!operate));
+  viewGroup?.set(operate ? "operate" : "inspect");
   document.body.dataset.view = operate ? "operate" : "inspect";
+}
+
+// K1 view switch (운용 / 점검): native radios; the inputs keep the ids #view-operate and #view-inspect.
+export function mountViewChoice(host) {
+  viewGroup = createChoiceGroup({id: "view-choice", label: "화면 전환", mode: "single", value: "operate", onChange: showView,
+    items: [{value: "operate", label: "운용"}, {value: "inspect", label: "점검"}]});
+  viewGroup.element.querySelector("legend").classList.add("sr-only");
+  for (const input of viewGroup.element.querySelectorAll("input")) { input.id = `view-${input.value}`; elements[input.id] = input; }
+  host.append(viewGroup.element);
 }
 
 export function renderTriage() {
@@ -213,8 +266,18 @@ export function renderTriage() {
   triageSeen = seenAt;
 
   // 고장이 없으면 자리를 비운다 — "이상 없음"을 초록으로 칠하지 않는다.
-  node.hidden = !headline;
+  // The operator-help request is one more row of this list (C25), not a box of its own.
+  const hitl = session.robotState?.hitl_requested === true;
+  elements["hitl-escalation"].hidden = !hitl;
+  node.hidden = !headline && !hitl;
+  node.querySelector(".triage-head").hidden = !headline;
+  const spoken = [headline && `${headline.title}. ${headline.detail}`, hitl && "운영자 지원 요청: 로봇이 사람의 확인을 요청했습니다."].filter(Boolean).join(" ");
+  if (spoken !== triageSpoken) {  // once per change; hazard and help requests are urgent
+    triageSpoken = spoken;
+    if (spoken) announce(spoken, hitl || headline?.category === "hazard");
+  }
   if (!headline) {
+    delete node.dataset.category;
     elements["triage-context"].replaceChildren();
     return;
   }
@@ -241,24 +304,24 @@ export function renderTriage() {
 // configured mode string: rosy-io is started by hand under `core` (D-192).
 export function safetyHero(state, runtimeMode, source, runtime) {
   if (state?.safety?.estop) {
-    return { tone: "danger", label: "STOPPED", source: estopFault(source).title };
+    return { tone: "danger", label: "정지", source: estopFault(source).title };
   }
   const judged = evidenceOf(state, "safety");
-  if (judged === "fresh") return { tone: "safe", label: "READY", source: "주행 회로 정상" };
+  if (judged === "fresh") return { tone: "safe", label: "정상", source: "주행 회로 정상" };
   if (judged === "unavailable") {
     const hardware = runtime?.hardware ?? (runtimeMode === "core" ? "off" : "on");
-    if (hardware === "off") return { tone: "unverified", label: "HW OFF", source: CORE_ONLY_TEXT };
+    if (hardware === "off") return { tone: "unverified", label: "하드웨어 꺼짐", source: CORE_ONLY_TEXT };
     if (hardware === "silent") {
-      return { tone: "unverified", label: "HW SILENT", source: "하드웨어 런타임 신호 끊김" };
+      return { tone: "unverified", label: "하드웨어 무응답", source: "하드웨어 런타임 신호 끊김" };
     }
     if (runtime?.drive === "disabled") {
-      return { tone: "unverified", label: "NO DRIVE", source: DRIVE_DISABLED_TEXT };
+      return { tone: "unverified", label: "주행 불가", source: DRIVE_DISABLED_TEXT };
     }
-    return { tone: "unverified", label: "NO SOURCE", source: "안전 회로 출처 없음" };
+    return { tone: "unverified", label: "출처 없음", source: "안전 회로 출처 없음" };
   }
   return {
     tone: "unverified",
-    label: "UNVERIFIED",
+    label: "미확인",
     source: judged === "delayed" ? `안전 회로 ${EVIDENCE_LABEL.delayed}` : "안전 회로 수신 끊김",
   };
 }
@@ -268,7 +331,13 @@ export function renderSafetyHero() {
   const hero = safetyHero(
     session.robotState, session.runtimeMode, session.safetySource, session.capabilities?.runtime,
   );
-  elements["safety-indicator"].className = `hero-safety ${hero.tone}`;
+  const indicator = elements["safety-indicator"];
+  const key = `${hero.tone}|${hero.label}|${hero.source}`;
+  const prior = indicator.dataset.hero;
+  if (prior === key) return;
+  indicator.dataset.hero = key;
+  if (prior || hero.tone === "danger") announce(`안전 회로 ${hero.label}: ${hero.source}`, hero.tone === "danger");
+  indicator.className = `hero-safety ${hero.tone}`;
   setText("safety-label", hero.label);
   setText("safety-source", hero.source);
 }
@@ -294,7 +363,8 @@ export function renderCapabilityPanels(capabilities) {
   const slamChip = elements["slam-capability"];
   if (slamChip) {
     setTagState(slamChip, "mode", slamOn ? "AVAILABLE" : "HOLD");
-    slamChip.textContent = slamOn ? "AVAILABLE" : "HOLD";
+    slamChip.textContent = slamOn ? "사용 가능" : "대기";
+    slamChip.title = slamOn ? "AVAILABLE" : "HOLD";
   }
   setEnabled("slam-start", slamOn, "SLAM을 쓸 수 없음");
   setEnabled("slam-stop", slamOn, "SLAM을 쓸 수 없음");
@@ -352,7 +422,7 @@ export function renderRuntime(runtime) {
   setText("uptime", duration(runtime.uptime_seconds));
 
   setText("cpu-value", percent(runtime.cpu?.usage_percent));
-  setText("cpu-detail", `load ${number(runtime.cpu?.load_1, 2)} / ${runtime.cpu?.logical_count ?? "—"} cores`);
+  setText("cpu-detail", `load ${number(runtime.cpu?.load_1, 2)} / ${runtime.cpu?.logical_count ?? UNKNOWN} cores`);
   setMeter("cpu-bar", runtime.cpu?.usage_percent);
 
   setText("memory-value", percent(runtime.memory?.used_percent));
@@ -360,11 +430,11 @@ export function renderRuntime(runtime) {
   setMeter("memory-bar", runtime.memory?.used_percent);
 
   setText("storage-value", percent(runtime.storage?.used_percent));
-  setText("storage-detail", `${bytes(runtime.storage?.free_bytes)} free · ${runtime.storage?.path || "—"}`);
+  setText("storage-detail", `${bytes(runtime.storage?.free_bytes)} free · ${runtime.storage?.path || UNKNOWN}`);
   setMeter("storage-bar", runtime.storage?.used_percent);
 
   const temperature = runtime.temperature_c;
-  setText("temperature", Number.isFinite(Number(temperature)) ? `${number(temperature, 1)}°` : null);
+  setText("temperature", temperature != null && Number.isFinite(Number(temperature)) ? `${number(temperature, 1)}°` : null);
   setText("temperature-state", temperature == null ? "센서 없음" : temperature >= 80 ? "고온 경고" : temperature >= 70 ? "주의" : "정상 범위");
   const tempCard = elements.temperature?.closest(".temperature-card");
   if (tempCard) {
@@ -389,7 +459,7 @@ export function renderEvents(payload) {
   }
   events.forEach((event) => {
     const row = document.createElement("li");
-    const time = createNode("time", "event-time", event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : "—");
+    const time = createNode("time", "event-time", event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : UNKNOWN);
     const type = createNode("span", "event-type", event.type || "unknown.event");
     const severity = createNode("span", `event-severity ${event.severity || "info"}`, (event.severity || "info").toUpperCase());
     // D-396: 심각도 색 — 위험은 채움, 주의는 텍스트 색, info 는 뮤트.

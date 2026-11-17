@@ -2,8 +2,10 @@
 // localStorage 관리를 쓰고, 미리보기는 연결된 게임패드 축의 실시간 매핑이다.
 
 import {inputConfig, saveInputConfig, stickMap} from "../input-state.js";
+import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
+import {createChoiceGroup} from "/common/choice-group.js";
 
-export function mountInputs(root, {onClose, onChange} = {}) {
+export function mountInputs(root, {onClose} = {}) {
   let config = inputConfig();
   let previewNode;
   let previewTimer;
@@ -28,21 +30,6 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     const head = el("ui-head", "입력 조정");
     const grid = el("ui-grid", null, {columns: "1"});
 
-    const presetCell = el("div");
-    presetCell.append(el("ui-text", "속도 프리셋", {scale: "label"}));
-    const presets = el("ui-actions");
-    for (const [name, label] of [["low", "저속"], ["mid", "보통"], ["high", "빠름"]]) {
-      const button = el("ui-button", label, {type: "button", "aria-pressed": String(config.preset === name)});
-      button.setAttribute("kind", "segment");
-      button.addEventListener("click", () => {
-        config = saveInputConfig({preset: name});
-        onChange?.();
-        for(const child of presets.children)child.setAttribute('aria-pressed',String(child===button));
-      });
-      presets.append(button);
-    }
-    presetCell.append(presets);
-
     const deadLabel = el("ui-text", `데드존 ${Number(config.deadzone ?? 0.12).toFixed(2)}`, {scale: "label"});
     const dead = el("input", null, {type: "range", min: "0", max: "0.6", step: "0.02",
                                     "aria-label": "데드존", value: String(config.deadzone ?? 0.12)});
@@ -54,35 +41,27 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     const deadCell = el("div");
     deadCell.append(deadLabel, dead, el("p", "중앙 부근의 작은 움직임을 무시합니다. 값이 클수록 더 움직여야 반응합니다."));
 
+    // K1: 감도 곡선은 폼 밖 즉시 효과의 짧은 배타 선택. 속도 프리셋은 조작부(drive.js)에 한 곳만 둔다(S2).
+    const curves = createChoiceGroup({id: "input-curve", label: "감도 곡선", mode: "single", value: config.curve,
+      items: [{value: "linear", label: "직선"}, {value: "expo", label: "중앙 섬세"}],
+      onChange: (name) => { config = saveInputConfig({curve: name}); }});
     const curveCell = el("div");
-    curveCell.append(el("ui-text", "감도 곡선", {scale: "label"}));
-    const curves = el("ui-actions");
-    for (const [name, label] of [["linear", "직선"], ["expo", "중앙 섬세"]]) {
-      const button = el("ui-button", label, {type: "button", "aria-pressed": String(config.curve === name)});
-      button.setAttribute("kind", "segment");
-      button.addEventListener("click", () => {
-        config = saveInputConfig({curve: name});
-        for(const child of curves.children)child.setAttribute('aria-pressed',String(child===button));
-      });
-      curves.append(button);
-    }
-    curveCell.append(curves);
+    curveCell.append(curves.element);
 
-    const invertButton = el("ui-button", config.invertAngular ? "반전 켜짐" : "반전 꺼짐",
-      {type: "button", "aria-pressed": String(Boolean(config.invertAngular))});
-    invertButton.setAttribute("kind", "segment");
+    // K21: 독립 켜기·끄기 하나. 보이는 라벨은 바뀌지 않고 aria-pressed 가 상태를 말한다.
+    const invertButton = el("ui-button", "조향 반전", {type: "button", "aria-pressed": String(Boolean(config.invertAngular))});
+    invertButton.setAttribute("kind", "toggle");
     invertButton.addEventListener("click", () => {
       config = saveInputConfig({invertAngular: !config.invertAngular});
-      invertButton.setAttribute('aria-pressed',String(Boolean(config.invertAngular)));
-      invertButton.textContent=config.invertAngular?'반전 켜짐':'반전 꺼짐';
+      invertButton.setAttribute("aria-pressed", String(Boolean(config.invertAngular)));
     });
     const invertCell = el("div");
-    invertCell.append(el("ui-text", "조향 반전", {scale: "label"}), invertButton);
+    invertCell.append(invertButton);
 
-    grid.append(presetCell, deadCell, curveCell, invertCell);
+    grid.append(deadCell, curveCell, invertCell);
 
     const previewLabel = el("ui-text", "게임패드 입력 미리보기", {scale: "label"});
-    const preview = el("ui-text", "—", {scale: "value", "data-input-preview": ""});
+    const preview = el("ui-text", EVIDENCE_LABEL.unavailable, {scale: "value", "data-input-preview": ""});
 
     const close = el("ui-button", "닫기", {type: "button"});
     close.setAttribute("kind", "quiet");
@@ -90,7 +69,7 @@ export function mountInputs(root, {onClose, onChange} = {}) {
 
     root.replaceChildren(head, el("p", "설정은 바로 저장됩니다. 미리보기만으로 로봇은 움직이지 않습니다."), grid, previewLabel, preview, close);
     previewNode = preview;
-    return presets.querySelector('[aria-pressed="true"]')||close;
+    return dead;
   }
 
   render().focus();

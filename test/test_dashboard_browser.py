@@ -606,7 +606,7 @@ def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'"
         )
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.locator("#field-settings-panel").scroll_into_view_if_needed()
         assert page.locator("#robot-number-input").input_value() == "1"
         assert page.locator("#ros-domain-input").input_value() == "41"
@@ -688,7 +688,7 @@ def test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('robot-mode')?.textContent === '수동'")
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         delete = page.locator('li[data-name="zone_a"] [data-waypoint-action="delete"]')
         delete.wait_for()
         assert page.locator("#emergency-stop").get_attribute("data-always-live") is not None
@@ -723,7 +723,7 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
         )
         # D-201 — 정책 편집은 점검 뷰(절차 문법)의 현장 설정 카드에 산다.
         page.wait_for_selector('#compatibility-shell[data-ready="true"]')
-        page.locator("#view-inspect").click()
+        page.locator("label:has(#view-inspect)").click()
         page.locator("#traffic-policy-revision-input").fill(
             "traffic-policy-v2")
         page.locator("#traffic-policy-mode").select_option("ENFORCED")
@@ -829,7 +829,7 @@ def test_camera_preview_is_cleared_when_reauthentication_fails():
             "document.getElementById('vision-stage')?.dataset.state === 'live'"
         )
         page.locator("#open-auth").click()
-        page.locator("#auth-tab-token").click()
+        page.locator("#auth-login-tab-1").click()
         page.locator("#token-input").fill("bad-token")
         page.locator("#auth-form [type=submit]").click()
         page.wait_for_function(
@@ -965,13 +965,16 @@ def test_compatibility_controls_wait_for_their_handlers():
         page.route("**/app.js", lambda route: held.append(route))
         try:
             page.goto("http://rosy.test/dashboard#compatibility", wait_until="commit")
-            inspect = page.locator("#view-inspect")
-            inspect.wait_for(state="visible")
+            inspect = page.locator("label:has(#view-inspect)")
             page.wait_for_function("!document.getElementById('compatibility-shell').hidden")
             assert len(held) == 1, "The actual module request must remain pending"
+            # the view switch is mounted by app.js: until then there is no chip to click, and the shell stays inert
+            assert page.locator("#view-switch").count() == 1 and inspect.count() == 0
+            assert page.evaluate("document.getElementById('compatibility-shell').inert") is True
             with pytest.raises(PlaywrightTimeoutError):
                 inspect.click(timeout=250)
             held.pop().fallback()
+            inspect.wait_for(state="visible")
             inspect.click()
             page.wait_for_function("!document.getElementById('view-inspect-panel').hidden")
             assert page.locator("#dds-rmw").is_visible()
@@ -1004,7 +1007,7 @@ def test_console_state_matrix_renders_each_state(state):
             "network-provisioning",
             "runtime-unavailable",
         ):
-            page.locator("#view-inspect").click()
+            page.locator("label:has(#view-inspect)").click()
         if state == "unauthorized":
             page.wait_for_function(
                 "document.getElementById('auth-drawer')?.classList.contains('open')"
@@ -1100,7 +1103,7 @@ def test_compatibility_settings_confirmation_preserves_stop_and_rechecks_named_t
         browser, page = _launch_page(playwright, extra_init=WAYPOINT_ROW_INIT)
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_selector('#compatibility-shell[data-ready="true"]')
-        page.locator('#view-inspect').click()
+        page.locator('label:has(#view-inspect)').click()
         page.locator('li[data-name="zone_a"]').wait_for()
         page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;}")
         page.locator('#waypoint-name').fill('zone_a')
@@ -1112,7 +1115,7 @@ def test_compatibility_settings_confirmation_preserves_stop_and_rechecks_named_t
         assert page.evaluate("__apiCalls.some(c=>c.path==='/api/v1/safety/stop')")
         if dialog.count():
             dialog.locator('ui-button[kind=quiet]').click()
-        page.locator('#view-inspect').click()
+        page.locator('label:has(#view-inspect)').click()
         page.locator('#waypoint-save').click()
         page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.robotState.pose.x=9;session.robotState.map_id='changed-map';}")
         dialog.locator('ui-button[kind=irreversible]').click()
@@ -1130,7 +1133,7 @@ def test_compatibility_slam_start_reports_session_acceptance(width, height):
         browser, page = _launch_page(playwright, width=width, height=height)
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_selector('#compatibility-shell[data-ready="true"]')
-        page.locator('#view-inspect').click()
+        page.locator('label:has(#view-inspect)').click()
         page.locator('#slam-start').click()
         page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
         expect(page.locator('#slam-message')).to_have_text('맵핑 세션을 수락했습니다. 지도 갱신은 확인되지 않았습니다.')
@@ -1151,7 +1154,7 @@ def test_compatibility_traffic_confirmation_abort_releases_new_owner_without_old
         browser, page = _launch_page(playwright)
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_selector('#compatibility-shell[data-ready="true"]')
-        page.locator('#view-inspect').click()
+        page.locator('label:has(#view-inspect)').click()
         page.locator('#traffic-policy-revision-input').fill('guarded-policy-a')
         page.locator('#traffic-policy-stage').click()
         page.wait_for_function('() => !document.querySelector("#traffic-policy-apply").disabled')
@@ -1223,7 +1226,7 @@ def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion(
         expect(page.locator('[data-line-mode=IR_LINE]')).to_be_disabled()
         page.evaluate('finishOff()')
         page.wait_for_function("!document.querySelector('[data-line-mode=IR_LINE]').disabled")
-        expect(page.locator('[data-line-mode=OFF]')).to_have_attribute('aria-pressed','true')
+        expect(page.locator('[data-line-mode=OFF]')).to_have_attribute('aria-current','true')
         browser.close()
 
 @pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
@@ -1237,13 +1240,14 @@ def test_compatibility_lane_follow_uses_drive_readiness_without_nav2(viewport):
         """)
         page.goto("http://rosy.test/dashboard#compatibility")
         button = page.locator('[data-line-mode="IR_LINE"]')
+        chip = button
         page.wait_for_function("document.querySelector('#robot-mode')?.textContent === '수동'")
         if output := os.environ.get("ROSY_SCREENSHOT_DIR"):
             shots = Path(output)
             shots.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(shots / f"lane-follow-no-nav2-{viewport[0]}x{viewport[1]}.png"), full_page=True)
         expect(button).to_be_enabled()
-        button.click()
+        chip.click()
         dialog = page.locator("dialog.ui-confirm")
         expect(dialog).to_have_count(1)
         page.evaluate("""async () => {
@@ -1264,7 +1268,7 @@ def test_compatibility_lane_follow_uses_drive_readiness_without_nav2(viewport):
           session.capabilities.runtime.drive = 'ready';
           updateLineFollowButtons();
         }""")
-        button.click()
+        chip.click()
         dialog.locator("ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__apiCalls.some(call => call.path === '/api/v1/line-follow/mode' && call.body.mode === 'IR_LINE')")
         browser.close()
@@ -1280,7 +1284,7 @@ def test_compatibility_confirmation_rechecks_capability_and_network_targets():
         page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.capabilities.navigation.goal_navigation=false;}")
         dialog.locator('ui-button[kind=irreversible]').click()
         assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/mode').length") == 0
-        page.locator('#view-inspect').click()
+        page.locator('label:has(#view-inspect)').click()
         page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;document.querySelector('#network-card').dataset.available='true';document.querySelector('#network-connect').disabled=false;document.querySelector('#network-apply').disabled=false;}")
         page.locator('#network-ssid-input').fill('fixture-a')
         page.locator('#network-psk-input').fill('fixture-secret')
@@ -1315,7 +1319,7 @@ def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks(v
         page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
         page.wait_for_function("typeof finishOldMode==='function'")
         page.locator('#open-auth').click()
-        page.locator('#auth-tab-token').click()
+        page.locator('#auth-login-tab-1').click()
         page.locator('#token-input').fill('replacement-fixture-token')
         page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
         page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")
@@ -1325,7 +1329,7 @@ def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks(v
         assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/robot/state').length") == before
         assert '모드 요청을 전송했습니다' not in page.locator('#action-message').inner_text()
         page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
-        page.locator('[data-map-click=goal]').click()
+        page.locator('label:has([data-map-click=goal])').click()
         page.locator('#map-canvas').focus()
         page.locator('#map-canvas').press('Enter')
         expect(page.locator('dialog.ui-confirm')).to_have_count(1)
@@ -1351,7 +1355,7 @@ def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks(v
             page.evaluate("""() => {const prior=fetch;let first=true;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/map')&&first?(first=false,new Promise((resolve,reject)=>{window.finishMap=()=>resolve(new Response(JSON.stringify({width:2,height:2,resolution:1,origin:{x:0,y:0,yaw:0},data:[100,100,100,100],map_id:'obsolete-map'})));window.failMap=()=>reject(new Error('obsolete map failure'));})):prior(url,options);slowTick();}""")
             page.wait_for_function("typeof finishMap==='function'")
             page.locator('#open-auth').click()
-            page.locator('#auth-tab-token').click()
+            page.locator('#auth-login-tab-1').click()
             page.locator('#token-input').fill(f'next-fixture-token-{failed}')
             page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
             page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")

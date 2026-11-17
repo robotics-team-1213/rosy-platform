@@ -3,6 +3,8 @@
 // 않는다. 토큰을 URL·쿠키·콘솔에 남기지 않는다.
 
 import { accountKey as sharedAccountKey, createAccountSession } from "/common/account-session.js";
+import {createAlertCenter} from "/common/alert-center.js";
+import {getAnnouncer} from "/common/announcer.js";
 
 const KEY = "rosy.pilot.token";
 export let account = null;
@@ -153,9 +155,38 @@ export async function developmentSession() {
   return result;
 }
 
-// 등록 코드 발급(D-193 §5, 관리자만). 화면이 없는 상대 기기와 연동할 때
-// 이 태블릿에 코드를 크게 보여 주고 상대 기기에서 입력한다.
-// 입력 방향(상대 화면 코드 → 이 태블릿 입력)은 pairWithCode 가 맡는다.
-export async function requestEnrollmentCode(role = "operator") {
-  return postJson("/api/v1/auth/enrollment-codes", {role});
+// --- 알림 한 표면(D-1117 A3) ---
+// 한 줄(#pilot-notice)은 일반 안내만 쓴다. 지속 알림(비상 정지 해제 보류 등)은 앱당 목록 하나(#pilot-alerts, C25)에 둔다.
+// 켜진 안전·위험·경고(또는 정지 결과)가 있으면 일반 안내는 그것을 덮지 못한다. 낭독은 공용 announcer 한 곳이다.
+const STICKY = new Set(["safety", "crit", "warn"]);
+const STOP_RESULTS = new Set(["received", "refused", "unknown"]);
+
+export function createNotice({line, center}) {
+  const blocked = () => center.getItems().some((item) => STICKY.has(item.kind))
+    || STOP_RESULTS.has(line?.dataset?.stopState);
+  return {
+    blocked,
+    // 일반 안내. 빈 글자는 줄을 비운다(화면 전환). 값이 같으면 다시 쓰지 않는다.
+    say(text) {
+      if (!line) return false;
+      if (text && blocked()) return false;
+      line.removeAttribute("data-stop-state");
+      if (line.textContent !== text) line.textContent = text;
+      return true;
+    },
+    alert(key, kind, message, title = "") { center.publish({kind, key, message, title}); },
+    clear(key) { center.resolve(key); },
+  };
 }
+
+let shared = null;
+export function pilotNotice() {
+  return shared ??= createNotice({
+    line: document.querySelector("#pilot-notice"),
+    center: createAlertCenter({listEl: document.querySelector("#pilot-alerts"), toastEl: null,
+      announcer: getAnnouncer(document), isOnScreen: () => true}),
+  });
+}
+
+// 한 사건 한 번 낭독: 폴링이 같은 글을 다시 써도 announcer 가 바뀔 때만 읽는다.
+export const announce = (text, options) => getAnnouncer(document).announce(text, options);

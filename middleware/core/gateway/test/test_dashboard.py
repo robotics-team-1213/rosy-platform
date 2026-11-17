@@ -98,7 +98,7 @@ def test_dashboard_shell_is_served_with_accessible_landmarks(dashboard_client):
     assert "Rosy Robot" in response.text
     assert "<main" in response.text
     assert 'aria-label="Rosy Robot 상태"' in response.text
-    assert 'data-mode="NAVIGATION" disabled' in response.text
+    assert 'id="mode-choice-host"' in response.text  # K1 mode group (mode-choice.js) mounts here
     assert "https://" not in response.text
 
 
@@ -182,8 +182,12 @@ def test_dashboard_exposes_exclusive_ir_and_camera_line_follow_modes():
     html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
     script = dashboard_js()
 
+    # K20 buttons (telemetry.js mountLineChoice) carry data-line-mode, 꺼짐 is never disabled
+    assert 'id="line-choice-host"' in html
+    telemetry = (WEB_ROOT / "telemetry.js").read_text(encoding="utf-8")
     for mode in ("OFF", "IR_LINE", "CAMERA_LINE"):
-        assert f'data-line-mode="{mode}"' in html
+        assert f"{mode}:" in telemetry
+    assert 'button.dataset.alwaysLive' in telemetry
     for element_id in (
         "line-follow-state", "line-follow-source", "line-follow-error",
         "line-follow-confidence", "line-follow-linear", "line-follow-angular",
@@ -329,11 +333,11 @@ def test_dashboard_draws_occupancy_map_path_and_click_goal():
     ):
         assert f'id="{element_id}"' in html
     assert 'aria-label="점유 격자 지도"' in html
-    assert 'data-map-layer="occupancy"' in html
-    assert 'data-map-layer="costmap"' in html
-    assert 'data-map-layer="path"' in html
-    assert 'data-map-click="pose"' in html
-    assert 'data-map-click="goal"' in html
+    # K5 layers + K1 click action come from map-choices.js; the page only has the two hosts
+    assert 'id="map-layers-host"' in html and 'id="map-click-host"' in html
+    choices = (WEB_ROOT / "map-choices.js").read_text(encoding="utf-8")
+    assert 'mode: "toggle"' in choices and 'mode: "single"' in choices
+    assert 'dataset.mapLayer' in choices and 'dataset.mapClick' in choices
     assert "초기 자세" in html
     assert "/api/v1/localization/initialpose" in mapper
     assert "/api/v1/navigation/goal" in mapper
@@ -393,13 +397,13 @@ def test_dashboard_field_settings_use_click_handlers_not_form_submit():
     assert 'id="limits-save"' in settings
     assert 'id="dock-register"' in settings
     assert 'id="limits-save" class="primary-button" disabled' in html
-    assert 'id="dock-register" class="primary-button" disabled' in html
-    assert 'id="identity-save" class="primary-button" disabled' in html
+    assert 'id="dock-register" disabled' in html
+    assert 'id="identity-save" disabled' in html
     assert 'id="robot-id-input"' in html
     assert "readonly" in html.split('id="robot-id-input"', 1)[1].split(">", 1)[0]
     assert "JSON.stringify({ robot_name: robotName })" in script
     assert "robot_id: robotId" not in script
-    assert 'id="token-add" class="primary-button" disabled' in html
+    assert 'id="token-add" disabled' in html
     assert 'id="slam-save"' in settings
     assert '["waypoint-save"]?.addEventListener("click"' in script
     assert '["limits-save"]?.addEventListener("click"' in script
@@ -635,9 +639,11 @@ def test_dashboard_login_has_code_and_token_tabs_and_a_whoami_badge():
     html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
     script = dashboard_js()
     drawer = html.split('id="auth-drawer"', 1)[1].split("</aside>", 1)[0]
-    assert drawer.index('id="auth-tab-code"') < drawer.index('id="auth-tab-token"')
-    assert 'id="auth-tab-code" class="view-tab" type="button" role="tab" aria-selected="true"' in drawer
-    assert 'id="auth-form" role="tabpanel" aria-labelledby="auth-tab-token" hidden' in drawer
+    # K9: the tabs are createTabs (auth-tabs.js); the markup only holds the slot and the two forms, code first
+    assert 'role="tab"' not in drawer and "data-auth-tabs" in drawer
+    assert drawer.index('id="code-form"') < drawer.index('id="auth-form"')
+    tabs = (WEB_ROOT / "auth-tabs.js").read_text(encoding="utf-8")
+    assert "createTabs" in tabs and tabs.index('"code"') < tabs.index('"token"')
     assert 'id="code-input"' in drawer and 'id="code-remember" type="checkbox"' in drawer
     assert 'id="whoami-badge"' in html and 'id="logout"' in html
     assert "/api/v1/auth/pair" in script

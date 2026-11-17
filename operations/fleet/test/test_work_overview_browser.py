@@ -2,7 +2,7 @@
 
 import pytest
 
-from browser_harness import browser_tests_enabled
+from browser_harness import assert_layout_geometry, browser_tests_enabled
 from test_console_queue_inline_browser import API, ON_TOP, _open, _shot, site  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
@@ -16,6 +16,14 @@ def _settle(page, selector):
         if page.locator(selector).count():
             return
         page.clock.run_for(100)
+
+
+def _assert_layout_geometry_desktop_and_390(page, desktop=(1440, 900)):
+    """가드는 호출처의 데스크톱 크기 그대로, 그리고 390×844 모바일 시트에서도 돈다."""
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert_layout_geometry(page)
+    page.set_viewport_size({"width": desktop[0], "height": desktop[1]})
 
 
 @pytest.mark.parametrize('size', [(320, 568), (1440, 900)])
@@ -345,6 +353,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["전체 작업"]
             assert screens.get_by_role("link", name="새 작업", exact=True).get_attribute("href") == "/console?view=work&show=new"
             assert screens.get_by_role("link", name="학습", exact=True).get_attribute("href") == "/console/learning"
+            _assert_layout_geometry_desktop_and_390(page, desktop=size)
             seat, work = page.locator('.ui-subnav[data-area="work"]').bounding_box(), page.locator("#work-overview").bounding_box()
             if size[0] >= 1024:
                 assert seat["width"] == 232 and seat["x"] + seat["width"] <= work["x"], (seat, work)
@@ -599,6 +608,58 @@ def test_late_approval_failure_does_not_disable_a_new_selection(site):
             browser.close()
 
 
+def test_arm_proposal_panel_reads_the_state_table_evidence_line_and_candidate_fold(site):
+    """B2 (계획 6.2 R2·6.4): 고른 팔 제안은 상태 → 핵심 값 → 근거 줄 → 후보 이유 접힘 순서로 선다.
+    근거 줄은 원장이 먼저고 모델 값은 '측정 아님'으로 분리되며, 낡은 근거는 지연 태그 하나다."""
+    from playwright.sync_api import expect, sync_playwright
+
+    from test_arm_skill_browser import arm_api, arm_cases
+
+    task_row = {"source": "task", "source_id": "task-1", "action_kind": "navigate", "status": "RUNNING",
+                "device_id": "rosy_01", "workcell_id": None, "reason": None,
+                "updated_at": "2026-10-12T00:00:00+00:00"}
+    api = arm_api(arm_cases(), **{
+        "/api/fleet/work": {"rows": [task_row], "observed_at": "2026-10-12T00:00:01+00:00",
+                            "tasks_available": True, "missions_available": True, "truncated_sources": []}})
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [], size=(1366, 768))
+        try:
+            page.goto(site + "/console?view=work")
+            for _ in range(80):
+                page.clock.run_for(100)
+                if page.locator("#work-list ui-button").count() == 11:
+                    break
+            # 종류 고르기: 팔 제안만 남는다(작업 큐의 같은 자리, 별도 화면 아니다).
+            page.locator("#work-filter").select_option("arm_proposal")
+            assert page.locator("#work-list ui-button").count() == 10
+            assert "주행" not in page.locator("#work-list").inner_text()
+
+            # 학습 정책 실행 중: readout 띠가 실행기·정책@sha8·단계·리스·관측을 말한다.
+            page.locator("#work-list ui-button").filter(has_text="arm-ai-5").click()
+            expect(page.locator("#arm-proposal-state")).to_contain_text("실행 중 3/5")
+            readout = page.locator("#arm-proposal-readout")
+            for word in ["학습 정책", "act-pick@01234567", "3/5", "12초", "2초 전"]:
+                assert word in readout.inner_text(), word
+            evidence = page.locator("#arm-proposal-evidence").inner_text()
+            assert evidence.index("원장") < evidence.index("모델 자체 값")
+            assert "측정 아님" in evidence
+
+            # 후보 이유는 한 겹 접힘 안에 있고 좌표·관절 같은 실행 선택은 없다(D-228).
+            page.locator('#work-list ui-button[data-work-key="arm|arm-ai-1"]').click()
+            fold = page.locator("#arm-proposal-candidates")
+            fold.locator("summary").click()
+            expect(fold).to_contain_text("2번 칸 — 비어 있고 선언된 대체 도착지가 아님")
+
+            # 낡은 근거(90초 > 60초)는 지연 태그 하나로, 심각도 색과 섞이지 않는다.
+            page.locator("#work-list ui-button").filter(has_text="arm-ai-10").click()
+            line = page.locator("#arm-proposal-evidence")
+            expect(line.locator("ui-tag[data-state=delayed]")).to_have_count(1)
+            expect(line).to_contain_text("지연")
+            assert not errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
 @pytest.mark.parametrize("case", ["approve", "viewer", "shared-token", "refused", "unknown"])
 @pytest.mark.parametrize("source", ["mission", "cell_job"])
@@ -659,7 +720,7 @@ def test_pending_seat_approves_through_the_existing_admit_route(site, size, case
                     assert "omx_wait" not in page.locator("#work-detail").inner_text()
                 else:
                     text = ("승인이 거절됐습니다 · CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER" if case == "refused"
-                            else "승인 결과 미확인 · 다시 보내지 않았습니다. 원장을 확인하세요.")
+                            else "승인 결과 미확인 · 원장 확인 필요")
                     expect(button).to_have_attribute("reason", text)
                     expect(button).to_be_disabled()
                     described = button.get_attribute("aria-describedby")

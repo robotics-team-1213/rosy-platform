@@ -54,8 +54,10 @@ TRACKING_PROBE = """(ids) => Object.fromEntries(ids.map((id) => {
 }))"""
 
 FIELD_PROBE = """() => {
-  const floor = parseFloat(getComputedStyle(document.documentElement)
-    .getPropertyValue('--target-secondary'));
+  const rootStyle = getComputedStyle(document.documentElement);
+  const floor = parseFloat(rootStyle.getPropertyValue('--target-secondary'));
+  const denseFloor = parseFloat(rootStyle.getPropertyValue('--row-dense')) || 34;
+  const desktopFine = matchMedia('(min-width: 64rem) and (hover: hover) and (pointer: fine)').matches;
   const bad = [];
   for (const field of document.querySelectorAll('input, select, textarea')) {
     if (field.type === 'hidden' || field.closest('ui-field')) continue;
@@ -63,7 +65,10 @@ FIELD_PROBE = """() => {
     if (!field.classList.contains('ui-field')) { bad.push(`${name}: no ui-field`); continue; }
     const box = field.type === 'checkbox' || field.type === 'radio' ? field.closest('label') : field;
     const minHeight = box ? parseFloat(getComputedStyle(box).minHeight) : 0;
-    if (!(minHeight >= floor)) bad.push(`${name}: min-height ${minHeight}`);
+    const expected = (desktopFine && box?.classList.contains('choice-chip') && box.closest('.map-display'))
+      ? denseFloor
+      : floor;
+    if (!(minHeight >= expected)) bad.push(`${name}: min-height ${minHeight}`);
   }
   return {floor, count: document.querySelectorAll('input, select, textarea').length, bad};
 }"""
@@ -327,12 +332,15 @@ def test_no_hangul_text_on_a_surface_is_tracked(page, path):
     page.wait_for_timeout(300)
     tracked = page.evaluate("""() => {
       const hangul = /[㄰-㆏가-힯]/;
+      const bodyFont = getComputedStyle(document.body).fontFamily;
       const bad = [];
       for (const el of document.body.querySelectorAll('*')) {
         const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.data).join('');
         if (!hangul.test(own)) continue;
-        const spacing = getComputedStyle(el).letterSpacing;
+        const cs = getComputedStyle(el);
+        const spacing = cs.letterSpacing;
         if (spacing !== 'normal' && parseFloat(spacing) !== 0) bad.push(`${own.trim().slice(0, 20)}: ${spacing}`);
+        if (cs.fontFamily !== bodyFont) bad.push(`${own.trim().slice(0, 20)}: font=${cs.fontFamily}`);
       }
       return bad;
     }""")

@@ -197,6 +197,16 @@ async function refreshIncidents() {
         side.append(incidentReviewForm(report,
           `/api/fleet/incidents/${encodeURIComponent(report.robot_ids[0])}/${encodeURIComponent(report.stuck_id)}/review`));
       }
+      if (records) {
+        const nav = Object.assign(document.createElement("div"), {className: "incident-role-links"}), actions = document.createElement("ui-actions");
+        nav.append(Object.assign(document.createElement("small"), {textContent: "담당 조치 화면 · 이 화면은 사건 증거·원인 기록 전용입니다."}), actions);
+        for (const [href, textContent] of [["/console", "관제에서 로봇 현재 상태 보기"], ["/console/install#device-profiles", "장치 운용·고장 기록"], ["/learning/incidents", "Learning 현장 실패 근거 묶기"]]) {
+          const link = Object.assign(document.createElement("a"), {className: "ui-action-link", href, textContent});
+          link.dataset.kind = "quiet";
+          actions.append(link);
+        }
+        side.append(nav);
+      }
       detail.append(raw);
       list.append(item);
       if (!linkedFocused && report.robot_ids[0] === linkedRobot && report.stuck_id === linkedIncident) {
@@ -217,7 +227,7 @@ async function refreshIncidents() {
            livelock: "반복 경로 정체", stalled: "운행 정체", unknown_occupancy_long: "위치 불명 점유 지속"}[report.classification]
           || "상황 분류 미확인";
       incidentSummary(summary, report, `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")}`, side);
-      incidentLine(detail, `AI 분석 참고 · 신뢰도 ${Math.round(ai.confidence * 100)}% · 조치 명령과 별도입니다.`);
+      incidentLine(detail, `AI 분석 참고 · 신뢰도 ${Number.isFinite(ai.confidence) ? `${Math.round(ai.confidence * 100)}%` : "정보 없음"} · 조치 명령과 별도입니다.`);
       incidentLine(raw, `AI ${ai.source} · ${ai.stage} · 분류 ${report.classification}`);
       incidentLine(raw, `측정값: ${JSON.stringify(ai.value)} · 근거: ${JSON.stringify(ai.evidence)}`);
       incidentLine(detail, "CORE·Rosy Cam: 이 AI 사실과 연결된 영속 표본 없음");

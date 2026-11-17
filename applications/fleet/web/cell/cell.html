@@ -33,7 +33,7 @@
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
     <div class="fleet-link-status" data-header-region="status" role="group" aria-label="연결 상태와 시각">
-      <ui-tag id="link-state" variant="inline" status="neutral" data-link="wait">연결 대기</ui-tag>
+      <span id="link-state" role="status" aria-live="polite" data-link="wait">연결 대기</span>
       <ui-text id="clock" scale="value">--:--:--</ui-text>
     </div>
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
@@ -72,10 +72,10 @@
   <!-- fleet:nav:start -->
 <nav class="doc-tabs ui-rail ui-rail-nav" aria-label="Rosy Fleet 문서">
     <a class="ui-rail-item" href="/console" data-action-icon="fleet">관제</a>
-    <a class="ui-rail-item" href="/console?view=work" aria-current="page" data-action-icon="list">작업</a>
-    <a class="ui-rail-item" href="/console?view=records" data-action-icon="history">기록</a>
+    <a class="ui-rail-item" href="/console?view=work" aria-current="page" data-action-icon="task">작업</a>
+    <a class="ui-rail-item" href="/console?view=records" data-action-icon="list">기록</a>
     <a class="ui-rail-item" href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a class="ui-rail-item" href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
+    <a class="ui-rail-item" href="/console/install" data-action-icon="install" aria-label="설치">설치</a>
   </nav>
 <!-- fleet:nav:end -->
   <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="작업 화면">
@@ -104,16 +104,18 @@
     <div class="cell-intro">
       <ui-text id="cell-purpose">레시피와 작업대 설정으로 적재 계획을 미리 보고 Fleet에 작업을 제안합니다. 승인·진행은 그 단계에서, 로봇 상태·예외 확인은 관제에서 합니다.</ui-text>
     </div>
-    <ui-text id="notice" role="status" aria-live="polite">운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.</ui-text>
-    <ui-section aria-labelledby="observation-heading">
-      <ui-head><h2 class="ui-section-heading" id="observation-heading">작업 셀 실제 관측</h2></ui-head>
-      <ui-text>읽기 전용 · 엔코더 각도와 원본 영상입니다. 팔과 카메라의 대응은 설정 기준이며 보정·동작 수용과 별개입니다.</ui-text>
-      <div id="workcell-observations"></div>
-    </ui-section>
+    <div id="cell-workspace-switcher" class="actions" role="group" aria-label="셀 작업대 역할 전환">
+      <ui-button kind="primary" type="button" data-cell-workspace="prep" aria-pressed="true">팔레트 적재 준비</ui-button>
+      <ui-button kind="quiet" type="button" data-cell-workspace="cell_s" aria-pressed="false">Cell S · S3 공급 (arm_s)</ui-button>
+      <ui-button kind="quiet" type="button" data-cell-workspace="cell_a" aria-pressed="false">Cell A · S5 1·3단 (arm_a)</ui-button>
+      <ui-button kind="quiet" type="button" data-cell-workspace="cell_b" aria-pressed="false">Cell B · S5 2단 (arm_b)</ui-button>
+      <ui-button kind="quiet" type="button" data-cell-workspace="cell_ab" aria-pressed="false">Cell A/B · S5 2암 통합</ui-button>
+    </div>
+    <ui-text id="notice">운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.</ui-text>
     <ui-section aria-labelledby="print-heading">
       <ui-head><h2 class="ui-section-heading" id="print-heading">보정 인쇄물</h2></ui-head>
       <ui-text>실제 크기 PDF입니다. 100%(맞춤 없이)로 인쇄하고 종이의 50 mm 막대를 자로 확인하세요. 팔마다 마커 번호가 다릅니다. 팔 번호를 골라 그 팔의 그리퍼 · 받침대 · 면 마커를 한 장으로 받습니다. 마커는 둘레의 얇은 실선대로 정확히 자르고 흰 테두리는 남깁니다.</ui-text>
-      <label for="print-arm">팔 번호</label><select class="ui-field" id="print-arm" aria-label="마커를 인쇄할 팔 번호"><option value="1">팔 1 (마커 50~64)</option><option value="2">팔 2 (마커 65~79)</option><option value="3">팔 3 (마커 80~94)</option></select>
+      <label for="print-arm">팔 번호</label><select class="ui-field" id="print-arm" aria-label="마커를 인쇄할 팔 번호"><option value="1">팔 1 · arm_s (cell_s · 마커 50~64)</option><option value="2">팔 2 · arm_a (cell_ab 1·3단 · 마커 65~79)</option><option value="3">팔 3 · arm_b (cell_ab 2단 · 마커 80~94)</option></select>
       <label for="print-tag-ids">컨테이너 태그 번호</label><input class="ui-field" id="print-tag-ids" value="100" aria-describedby="print-tag-help"><label for="print-tag-size">태그 크기</label><select class="ui-field" id="print-tag-size"><option value="12">12 mm (1칸 컨테이너)</option><option value="20">20 mm</option></select>
       <ui-text id="print-tag-help">태그 번호는 100~199를 쉼표로 적습니다. 번호마다 지붕용과 옆면용 두 장이 나옵니다. 같은 컨테이너의 지붕과 옆면에 하나씩 붙입니다.</ui-text>
       <div class="actions"><ui-button id="print-arm-markers" kind="quiet">팔 마커 PDF</ui-button><ui-button id="print-container-tags" kind="quiet">컨테이너 태그 PDF</ui-button><ui-button id="print-charuco" kind="quiet">ChArUco 보정판 PDF</ui-button><ui-button id="print-checkerboard" kind="quiet">체커보드 PDF</ui-button></div>
@@ -189,109 +191,53 @@
       <ul id="sheet-progress" aria-label="작업자 슬립시트 삽입 확인"></ul>
       <details><summary class="ui-disclosure-row">진행 원장 상세</summary><pre id="job-state" aria-label="작업 상태와 진행 원장"></pre></details>
     </ui-section>
-    <ui-section aria-labelledby="real2sim-heading">
-      <ui-head><h2 class="ui-section-heading" id="real2sim-heading">실물↔시뮬 파이프라인 (Real-to-Sim / Sim-to-Real)</h2></ui-head>
-      <ui-text>실물 탑뷰 스냅샷, Confluence CAD(r08 선체 · v16 선박 고정 키트 · 2 cm 하향 오목 벨트 스토퍼 · PR33_C02_BASE · v7 다리 · v11 판), 쌍둥이(Twin)·SysID 물리 상수 맞춤, 그리고 Stage 1(MuJoCo) → Stage 2(Isaac Sim) 직렬 검증 파이프라인 상태를 한곳에서 확인·평가하고 실행 큐에 등록합니다.</ui-text>
-      <div class="scope">
-        <label for="real2sim-snapshot">활성 스냅샷<select class="ui-field" id="real2sim-snapshot" aria-label="활성 스냅샷"></select></label>
-        <label for="real2sim-prev">비교 기준 스냅샷<select class="ui-field" id="real2sim-prev" aria-label="비교 기준 스냅샷"></select></label>
-        <label for="real2sim-berth-kit">선박 고정 키트<select class="ui-field" id="real2sim-berth-kit" aria-label="선박 고정 키트"><option value="v16-modular">v16-modular (Confluence 일체형 크래들·스페이서·2cm 스토퍼)</option><option value="legacy-plate">legacy-plate (구형 돌기 판)</option></select></label>
-        <label for="real2sim-spacer-dy">스페이서 간격 Δy (mm)<select class="ui-field" id="real2sim-spacer-dy" aria-label="스페이서 간격"><option value="39" selected>39 mm (공칭)</option><option value="35">35 mm</option><option value="43">43 mm</option></select></label>
-        <label for="real2sim-stern-hook">선미 훅 오프셋 (mm)<select class="ui-field" id="real2sim-stern-hook" aria-label="선미 훅 오프셋"><option value="0" selected>0 mm</option><option value="5">5 mm</option><option value="10">10 mm</option></select></label>
-        <label for="real2sim-physics">물리 상수 후보<select class="ui-field" id="real2sim-physics" aria-label="물리 상수 후보"><option value="servo-antijitter-20261112">servo-antijitter-20261112</option><option value="servo-friction-20261109">servo-friction-20261109</option><option value="twin-kp-20261109">twin-kp-20261109</option><option value="design">design</option></select></label>
-        <label for="real2sim-fit-id">SysID 검증 리포트<select class="ui-field" id="real2sim-fit-id" aria-label="SysID 검증 리포트"><option value="fit-servo-run3">fit-servo-run3</option></select></label>
-        <label for="real2sim-promote-name">승격 후보 이름<input class="ui-field" id="real2sim-promote-name" placeholder="예: servo-friction-v2" autocomplete="off" aria-label="승격 후보 이름"></label>
-      </div>
-      <div class="actions">
-        <ui-button id="real2sim-refresh" kind="quiet" type="button">파이프라인 새로고침</ui-button>
-        <ui-button id="real2sim-evaluate" kind="primary" type="button" disabled>Stage 1→2 핸드오프 평가</ui-button>
-        <ui-button id="real2sim-run" kind="primary" type="button" disabled>파이프라인 실행 큐 등록</ui-button>
-        <ui-button id="real2sim-promote" kind="quiet" type="button" disabled>SysID 물리 후보 승격</ui-button>
-      </div>
-      <ui-text id="real2sim-status" role="status" aria-live="polite">접속하면 실물↔시뮬 파이프라인 상태를 확인할 수 있습니다.</ui-text>
-      <dl id="real2sim-figures" class="ui-readout" data-form="strip" aria-label="실물-시뮬 정합 요약" hidden></dl>
-      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
-        <table id="real2sim-loop-table" class="ui-data-table" aria-label="7단계 실물-시뮬 반복 루프" hidden>
-          <thead><tr><th scope="col">단계</th><th scope="col">항목</th><th scope="col">도구</th><th scope="col">상태</th><th scope="col">측정·검증 근거</th></tr></thead>
-          <tbody id="real2sim-loop-rows"></tbody>
-        </table>
-      </div>
-      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
-        <table id="real2sim-stage-table" class="ui-data-table" aria-label="시뮬레이션 트랙 및 단계" hidden>
-          <thead><tr><th scope="col">순서</th><th scope="col">시뮬레이터</th><th scope="col">트랙</th><th scope="col">역할</th><th scope="col">대상 단계·핸드오프</th></tr></thead>
-          <tbody id="real2sim-stage-rows"></tbody>
-        </table>
-      </div>
-      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
-        <table id="real2sim-sysid-table" class="ui-data-table" aria-label="쌍둥이 및 물리 상수 맞춤(SysID) 검증 결과" hidden>
-          <thead><tr><th scope="col">Fit ID</th><th scope="col">팔 / 기준</th><th scope="col">맞춤 상수</th><th scope="col">보류 RMS (deg)</th><th scope="col">판정</th><th scope="col">근거</th></tr></thead>
-          <tbody id="real2sim-sysid-rows"></tbody>
-        </table>
-      </div>
-      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
-        <table id="real2sim-survey-table" class="ui-data-table" aria-label="다음 물리 상수 실험 우선순위 (omx_sysid survey)" hidden>
-          <thead><tr><th scope="col">상수</th><th scope="col">불확실도 폭</th><th scope="col">현재 출처</th><th scope="col">권장 실험 (D-911)</th></tr></thead>
-          <tbody id="real2sim-survey-rows"></tbody>
-        </table>
-      </div>
-      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
-        <table id="real2sim-runs-table" class="ui-data-table" aria-label="파이프라인 실행 큐 및 이력" hidden>
-          <thead><tr><th scope="col">실행 ID</th><th scope="col">상태</th><th scope="col">스냅샷·설정</th><th scope="col">재실행 단계</th><th scope="col">원격 실행 명령</th></tr></thead>
-          <tbody id="real2sim-runs-rows"></tbody>
-        </table>
-      </div>
-      <div class="scope" aria-label="OMX 셀 실시간 태스크 할당 및 제어">
-        <label for="cell-task-preset">원클릭 태스크 프리셋<select class="ui-field" id="cell-task-preset" aria-label="원클릭 태스크 프리셋">
+    <ui-section id="real2sim-section" aria-labelledby="real2sim-heading" hidden>
+      <ui-head><h2 class="ui-section-heading" id="real2sim-heading">Cell S · S3 공급 작업대 (arm_s 단독 · Pinky 하역 인터락)</h2></ui-head>
+      <ui-text id="real2sim-status" role="status" aria-live="polite" hidden></ui-text>
+      <div class="scope" aria-label="OMX 셀 실시간 작업 할당 및 제어">
+        <label for="cell-task-preset">원클릭 작업 프리셋<select class="ui-field" id="cell-task-preset" aria-label="원클릭 작업 프리셋">
           <option value="s3_shuttle">S3 셔틀 (arm_s: Pinky -> Belt)</option>
           <option value="s3_auto_recover_or_shuttle">S3 자동 감지·복구 셔틀 (arm_s: Auto ROI -> Belt)</option>
           <option value="s3_recover_belt_far">S3 이탈 복구 (arm_s: Belt-Far -> Belt)</option>
           <option value="s3_recover_floor_front">S3 바닥 복구 (arm_s: Floor-Front -> Belt)</option>
-          <option value="s5_tier1_arm_a">S5 적재 1층 (arm_a: Belt -> Pallet L0)</option>
-          <option value="s5_tier2_arm_b">S5 적재 2층 (arm_b: Belt -> Pallet L1)</option>
-          <option value="s5_tier3_arm_a">S5 적재 3층 (arm_a: Belt -> Pallet L2)</option>
-          <option value="export_s3_belt">반출대 3 반출 (EXP_S3_BELT · arm_s)</option>
-          <option value="export_s5_pallet">반출대 2 반출 (EXP_S5_PALLET · arm_b)</option>
-          <option value="full_s3_to_s5_pipeline">연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)</option>
         </select></label>
         <label for="cell-task-cell">작업 셀<select class="ui-field" id="cell-task-cell" aria-label="작업 셀"><option value="cell_s">cell_s (S3 · arm_s)</option><option value="cell_ab">cell_ab (S5 · arm_a / arm_b)</option></select></label>
         <label for="cell-task-arm">실행 팔<select class="ui-field" id="cell-task-arm" aria-label="실행 팔"><option value="arm_s">arm_s</option><option value="arm_a">arm_a</option><option value="arm_b">arm_b</option></select></label>
-        <label for="cell-task-tier">적재 층 (Tier)<select class="ui-field" id="cell-task-tier" aria-label="적재 층"><option value="1">1층 (Tier 1)</option><option value="2">2층 (Tier 2)</option><option value="3">3층 (Tier 3)</option></select></label>
-        <label for="cell-task-displaced">이탈 용기 복구 위치<select class="ui-field" id="cell-task-displaced" aria-label="이탈 용기 복구 위치"><option value="">없음 (정위치)</option><option value="belt_far">belt_far (벨트 원거리 이탈)</option><option value="floor_front">floor_front (전방 바닥 낙하)</option></select></label>
+        <label id="cell-task-tier-field" for="cell-task-tier">적재 층 (Tier)<select class="ui-field" id="cell-task-tier" aria-label="적재 층"><option value="1">1층 (Tier 1)</option><option value="2">2층 (Tier 2)</option><option value="3">3층 (Tier 3)</option></select></label>
+        <label id="cell-task-displaced-field" for="cell-task-displaced">이탈 용기 복구 위치<select class="ui-field" id="cell-task-displaced" aria-label="이탈 용기 복구 위치"><option value="">없음 (정위치)</option><option value="belt_far">belt_far (벨트 원거리 이탈)</option><option value="floor_front">floor_front (전방 바닥 낙하)</option></select></label>
       </div>
       <div class="actions">
-        <ui-button id="cell-task-refresh" kind="quiet" type="button">셀 태스크 새로고침</ui-button>
-        <ui-button id="cell-task-preset-run" kind="primary" type="button">프리셋 태스크 즉시 실행</ui-button>
-        <ui-button id="cell-task-create" kind="quiet" type="button">맞춤 태스크 큐 등록</ui-button>
+        <ui-button id="cell-task-refresh" kind="quiet" type="button">셀 작업 새로고침</ui-button>
+        <ui-button id="cell-task-preset-run" kind="primary" type="button">프리셋 작업 즉시 실행</ui-button>
+        <ui-button id="cell-task-create" kind="quiet" type="button">맞춤 작업 큐 등록</ui-button>
         <ui-button id="cell-vision-auto-check" kind="quiet" type="button">카메라 비전 자동 점검</ui-button>
-        <ui-button id="cell-cable-guard-toggle" kind="quiet" type="button">선 꼬임 보호 토글</ui-button>
         <ui-button id="cell-live-stream-toggle" kind="quiet" type="button">실시간 카메라 자동갱신 (ON · 2초)</ui-button>
       </div>
-      <ui-text id="cell-tasks-status" role="status" aria-live="polite">접속하면 OMX 셀(cell_s · cell_ab) 태스크 큐와 실물 실행 상태를 확인할 수 있습니다.</ui-text>
+      <ui-text id="cell-tasks-status" role="status" aria-live="polite">접속하면 선택한 OMX 셀 작업대의 작업 큐와 실물 실행 상태를 확인할 수 있습니다.</ui-text>
       <div class="cell-split-workspace" id="cell-split-workspace">
         <div class="cell-split-main">
-          <div id="cell-visual-cards" class="cell-visual-card-grid" aria-label="OMX 셀 및 핑키 실시간 카메라·제어 카드"></div>
-          <details id="cell-camera-matrix-panel" open><summary class="ui-disclosure-row">실시간 셀·도킹 카메라 월 (S3 상단·손목 · 천장 Cam 도킹 확대 · S5 상단·측면·손목 · 클릭 시 우측 인스펙터 연동 및 확대)</summary>
-            <div id="cell-camera-matrix" class="cell-camera-wall" aria-label="실시간 셀·도킹 카메라 월"></div>
+          <div id="cell-visual-cards" class="cell-visual-card-grid" aria-label="선택한 OMX 셀 실시간 카메라·제어 카드"></div>
+          <details id="cell-camera-matrix-panel"><summary class="ui-disclosure-row">실시간 셀 카메라 월 (현재 셀 작업대 전용 카메라 · 클릭 시 우측 인스펙터 연동 및 확대)</summary>
+            <div id="cell-camera-matrix" class="cell-camera-wall" aria-label="실시간 셀 카메라 월"></div>
           </details>
         </div>
-        <aside id="omx-right-inspector" class="omx-right-inspector" aria-label="선택한 로봇·OMX AI 실시간 카메라 및 제어 인스펙터"></aside>
+        <aside id="omx-right-inspector" class="omx-right-inspector" aria-label="선택한 OMX 셀 실시간 카메라 및 제어 인스펙터"></aside>
       </div>
-      <dl id="cell-tasks-figures" class="ui-readout" data-form="strip" aria-label="OMX 셀 및 태스크 요약" hidden></dl>
+      <details><summary class="ui-disclosure-row">실물-시뮬 정합 요약 (CAD · SysID)</summary>
+        <dl id="real2sim-figures" class="ui-readout" aria-label="실물-시뮬 정합 요약" hidden></dl>
+      </details>
+      <dl id="cell-tasks-figures" class="ui-readout" data-form="strip" aria-label="OMX 셀 및 작업 요약" hidden></dl>
       <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
-        <table id="cell-tasks-table" class="ui-data-table" aria-label="OMX 셀 태스크 실행 원장" hidden>
-          <thead><tr><th scope="col">태스크 ID</th><th scope="col">셀 / 팔</th><th scope="col">경로 · 복구</th><th scope="col">상태</th><th scope="col">실물 홈 복귀 (folded · 엔코더)</th></tr></thead>
+        <table id="cell-tasks-table" class="ui-data-table" aria-label="OMX 셀 작업 실행 원장" hidden>
+          <thead><tr><th scope="col">작업 ID</th><th scope="col">셀 / 팔</th><th scope="col">경로 · 복구</th><th scope="col">상태</th><th scope="col">실물 홈 복귀 (folded · 엔코더)</th></tr></thead>
           <tbody id="cell-tasks-rows"></tbody>
         </table>
       </div>
-      <details><summary class="ui-disclosure-row">임시칸·반출대 맵 구역 설정 편집 · YAML (rosy.station-zones.v1)</summary>
-        <label for="station-zones-yaml">임시칸(staging_bays) · 반출대(export_stations) YAML</label>
-        <textarea class="ui-field" id="station-zones-yaml" rows="12" spellcheck="false"></textarea>
-        <div class="actions">
-          <ui-button id="station-zones-load" kind="quiet" type="button">YAML 불러오기</ui-button>
-          <ui-button id="station-zones-save" kind="primary" type="button">YAML 저장 및 카드 즉시 반영</ui-button>
-        </div>
-      </details>
-      <details><summary class="ui-disclosure-row">Stage 2 Isaac Sim 핸드오프 명세 (rosy.omx-isaac-handoff.v1)</summary><pre id="real2sim-handoff" aria-label="Isaac Sim 핸드오프 JSON"></pre></details>
+    </ui-section>
+    <ui-section aria-labelledby="observation-heading">
+      <ui-head><h2 class="ui-section-heading" id="observation-heading">작업 셀 실제 관측</h2></ui-head>
+      <ui-text>읽기 전용 · 엔코더 각도와 원본 영상입니다. 팔과 카메라의 대응은 설정 기준이며 보정·동작 수용과 별개입니다.</ui-text>
+      <div id="workcell-observations"></div>
     </ui-section>
   </main>
   </div>

@@ -1,9 +1,12 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,panelError,setText} from '/review-alerts.js';
 import '/common/ui.js';
 import '/commands.js';
+import {createBusyScope} from '/common/busy-scope.js';
+import {valueText} from '/common/value-text.js';
 const $=id=>document.getElementById(id),query=new URLSearchParams(location.search);
 $('kind').value=query.get('kind')==='pixel'?'pixel':'object';
-let current,rows=[],busy=false;
+let current,rows=[];
+const scope=createBusyScope($('classes-main'));
 const colorHex=color=>'#'+(color||[128,128,128]).map(v=>v.toString(16).padStart(2,'0')).join('');
 async function request(path,body) {
   const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':current.token},body:JSON.stringify(body)}:{});
@@ -16,10 +19,10 @@ function impact() {
   return changed?(current?.approved_count||0):0;
 }
 function update() {
-  $('impact').textContent=`작업공간 전체 · 승인 ${current?.approved_count||0}건 중 ${impact()}건을 검수 대기로 돌립니다. 원본 라벨과 승인 기록은 보존됩니다.`;
-  $('apply').disabled=busy||!current||!$('confirm').checked;
-  $('kind').disabled=busy;$('add').disabled=busy||!current||rows.length>=255;$('reload').disabled=busy;
-  for(const fieldset of $('rows').children)fieldset.disabled=busy;
+  $('impact').textContent=`작업공간 전체 · ${current?.approved_count==null?'승인 '+valueText(null).text:`승인 ${current.approved_count}건 중 ${impact()}건을 검수 대기로 돌립니다`}. 원본 라벨과 승인 기록은 보존됩니다.`;
+  $('apply').disabled=scope.busy||!current||!$('confirm').checked;
+  $('kind').disabled=scope.busy;$('add').disabled=scope.busy||!current||rows.length>=255;$('reload').disabled=scope.busy;
+  for(const fieldset of $('rows').children)fieldset.disabled=scope.busy;
 }
 function render() {
   $('rows').replaceChildren();
@@ -43,14 +46,14 @@ function render() {
   update();
 }
 async function load() {
-  busy=true;update();$('error').textContent='';$('confirm').checked=false;
-  try {
+  $('error').textContent='';$('confirm').checked=false;
+  await scope.run(async()=>{try {
     current=await request('/api/classes?kind='+$('kind').value);rows=structuredClone(current.binding?.classes||[]);
     $('workspace').textContent=`${current.workspace_label} · 프로젝트 ${current.workspace_id}`;
     const back=new URL($('kind').value==='pixel'?'/pixels':'/',location.origin);if(query.has('folder_id'))back.searchParams.set('folder_id',query.get('folder_id'));$('back').href=back.pathname+back.search;
     render();
-  }catch(error){current=undefined;$('error').textContent=error.message;}
-  finally{busy=false;update();}
+  }catch(error){current=undefined;setText($('error'),panelError(error,'불러오지 못함'));}});
+  update();
 }
 $('add').onclick=()=>{
   const used=new Set(rows.map(row=>row.index));let index=0;while(used.has(index))index++;
@@ -58,10 +61,10 @@ $('add').onclick=()=>{
 };
 $('confirm').onchange=update;$('kind').onchange=load;$('reload').onclick=load;
 $('form').onsubmit=async event=>{
-  event.preventDefault();if(busy||!current||!$('confirm').checked)return;
-  busy=true;update();$('error').textContent='';
-  try{await request('/api/classes/revisions',{kind:$('kind').value,classes:rows,expected_sha:current.expected_sha,expected_impact:impact(),confirm:true});$('result').textContent='클래스 개정을 저장했습니다. 검수 화면을 새로 열어 사용하세요.';await load();}
-  catch(error){$('error').textContent=error.message;$('confirm').checked=false;}
-  finally{busy=false;update();}
+  event.preventDefault();if(scope.busy||!current||!$('confirm').checked)return;
+  $('error').textContent='';
+  await scope.run(async()=>{try{await request('/api/classes/revisions',{kind:$('kind').value,classes:rows,expected_sha:current.expected_sha,expected_impact:impact(),confirm:true});$('result').textContent='클래스 개정을 저장했습니다. 검수 화면을 새로 열어 사용하세요.';await load();}
+  catch(error){setText($('error'),panelError(error,'서버 연결 문제로 저장하지 못했습니다.'));$('confirm').checked=false;}
+  });update();
 };
 load();

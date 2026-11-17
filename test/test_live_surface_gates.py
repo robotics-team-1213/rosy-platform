@@ -131,7 +131,7 @@ def test_live_dashboard_keeps_the_craft_contracts():
         page.goto(url, wait_until="domcontentloaded", timeout=20_000)
         page.wait_for_timeout(2_000)
         _censuses(page, f"{_host_of(url)} operate", failures)
-        switch = page.locator("#view-inspect")
+        switch = page.locator("label:has(#view-inspect)")
         if switch.count():
             switch.click()
             page.wait_for_timeout(800)

@@ -130,15 +130,21 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     page.route("**/api/fleet/vision/sources**", lambda route: route.fulfill(json={"sources": []}))
     page.route("**/api/fleet/pipeline/cell-camera/**", lambda route: (relay_hits.append(route.request.url), route.abort()))
     _prepare(page)
-    show_screen(page, "saved-heading")
+    # The A/B workspace owns the task ledger and the arm inspector; opening it by URL connects with that workspace active.
+    page.goto(page.url.split("#")[0].split("?")[0] + "?cell=cell_ab")
+    open_token_access(page)
+    page.locator("#console-token").fill("operator-secret")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_have_attribute("title", "operator-1 · operator")
 
-    expect(page.locator("#cell-tasks-status")).to_contain_text("태스크 원장")
+    expect(page.locator("#cell-tasks-status")).to_contain_text("작업 원장")
     assert {"real2sim", "cell-tasks"} <= seen, (seen, errors, page.locator("#real2sim-status").inner_text())
-    expect(page.locator("#cell-visual-cards .cell-visual-card")).to_have_count(3)
+    expect(page.locator("#cell-visual-cards .cell-visual-card")).to_have_count(1)  # the A/B workspace shows only its own visual card
+    page.locator("#cell-camera-matrix-panel > summary").click()  # the camera wall renders its scope's views once opened
     expect(page.locator("#cell-camera-matrix .cell-observation-card img[alt='S5 상단(top)']")).to_have_count(1)
     page.locator('#omx-right-inspector [data-inspect-target="arm_b"]').click()
     expect(page.locator("#omx-right-inspector .omx-inspector-head")).to_contain_text("arm_b")
-    expect(page.locator("#omx-right-inspector .omx-inspector-stage")).to_contain_text("arm_b 손목(근접)")
+    expect(page.locator("#omx-right-inspector .omx-inspector-stage").first).to_contain_text("arm_b 손목(근접)")
     expect(page.locator("#omx-right-inspector .omx-inspector-main-cam")).to_have_count(1)
     assert not relay_hits, relay_hits
 

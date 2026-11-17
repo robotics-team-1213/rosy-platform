@@ -1,5 +1,6 @@
 // D-986 — 항법 재승인 카드. 판단은 모두 /api/v1/navigation/approval이 하고, 여기는 그 위의 화면이다.
 import { confirmIrreversible } from "/common/ui.js";
+import { watchStatus } from "/assets/dom.js";
 
 const BASE = "/api/v1/navigation/approval";
 const HOLD_MS = 100;
@@ -20,8 +21,9 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 export function mount(root, ctx) {
   let disposed = false; let holdTimer = null; let lossTimer = null; let phase = ""; let holding = false;
   const summary = el("ui-status", "", "승인 상태를 불러오는 중입니다.");
-  const action = el("ui-status"); action.setAttribute("role", "status"); action.setAttribute("aria-live", "polite");
+  const action = el("ui-status");
   const controls = el("ui-actions", "surface-actions");
+  watchStatus(action);
   const begin = el("ui-button", "", "측정 시작"); begin.setAttribute("kind", "primary");
   const cancel = el("ui-button", "", "측정 취소"); cancel.setAttribute("kind", "quiet");
   const sealButton = el("ui-button", "", "봉인"); sealButton.setAttribute("kind", "primary");
@@ -91,7 +93,7 @@ export function mount(root, ctx) {
     if (last?.reason && !holding) say(`직전 시험을 인정하지 않았습니다: ${last.reason}`, "error");
     else if (data.reason) say(data.reason, phase === "FAILED" ? "error" : "ready");
     else if (phase === "MEASURING" && data.measuring_expires_in_s != null) say(`측정은 ${Math.ceil(data.measuring_expires_in_s / 60)}분 뒤 자동으로 취소됩니다. 충전 선을 뺀 채로 지켜봐 주세요.`);
-    if (data.os_update_stops_navigation) summary.textContent += " 이 기체의 OS는 항법을 1분 안에 멈춥니다. OS 업데이트가 필요합니다. 측정은 영향받지 않습니다.";
+    if (data.os_update_stops_navigation) summary.textContent += " 이 로봇의 OS는 항법을 1분 안에 멈춥니다. OS 업데이트가 필요합니다. 측정은 영향받지 않습니다.";
     const rows = data.trials || [];
     for (const item of buttons) {
       const row = rows.find((candidate) => candidate.direction === item.trial.direction && candidate.stop_cause === item.trial.stop_cause);

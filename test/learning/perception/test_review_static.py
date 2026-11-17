@@ -12,7 +12,9 @@ def test_review_static_routes_and_task_editor_survive_center_composition(tmp_pat
     with running(tmp_path, enabled=enabled) as (base, _):
         for path, marker in [('/learning/tasks', b'/workflow.js'),
                              ('/learning/tasks/manage', b'/tasks.js'),
-                             ('/classes', b'/classes.js'), ('/common/tokens.css', b'--')]:
+                             ('/classes', b'/classes.js'), ('/common/tokens.css', b'--'),
+                             ('/review-alerts.js', b'api-unreachable'), ('/common/announcer.js', b'getAnnouncer'),
+                             ('/common/alert-center.js', b'createAlertCenter'), ('/common/alert-center.css', b'alert-center')]:
             with urllib.request.urlopen(base+path) as response:
                 assert response.status == 200 and marker in response.read()
                 assert response.headers['X-Content-Type-Options'] == 'nosniff'

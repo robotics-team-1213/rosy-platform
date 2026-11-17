@@ -13,7 +13,6 @@ body[data-dashboard-entry] #auth-drawer {
 }
 body[data-dashboard-entry] #auth-drawer > div:first-child h2 { display: none; }
 body[data-dashboard-entry] #close-auth { display: none; }
-body[data-dashboard-entry] .auth-tabs { flex-wrap: wrap; }
 body[data-dashboard-entry] .auth-row { flex-wrap: wrap; min-width: 0; }
 body[data-dashboard-entry] .auth-row input { min-width: 0; width: 100%; }
 body[data-dashboard-entry] .auth-drawer label { font: var(--weight-label) var(--text-label)/var(--leading-copy) var(--body); text-transform: none; }
@@ -25,6 +24,7 @@ body[data-dashboard-entry] .auth-drawer .bench-confirmation { font-weight: var(-
 #entry-navigation a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 @media (width < 30rem) {
   .entry-main { padding: var(--space-4); }
+  body[data-dashboard-entry] .auth-row { flex-direction: column; align-items: stretch; }
   .entry-topbar { gap: var(--space-2); }
   .entry-topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "brand role stop" "logout logout stop" "notice notice notice"; }
   .entry-topbar ui-brand { grid-area: brand; min-width: 0; container-type: inline-size; }
@@ -33,3 +33,8 @@ body[data-dashboard-entry] .auth-drawer .bench-confirmation { font-weight: var(-
   .entry-topbar #entry-logout { grid-area: logout; justify-self: start; }
   .entry-topbar #entry-stop-notice { grid-area: notice; }
 }
+/* 선택 옵션 접힘 안은 같은 간격으로 쌓는다. */
+body[data-dashboard-entry] .auth-options { display: grid; gap: var(--space-2); }
+body[data-dashboard-entry] .auth-options[open] > summary { margin-bottom: var(--space-2); }
+body[data-dashboard-entry] #code-message:empty { display: none; }
+body[data-dashboard-entry] #code-message { display: flex; align-items: center; gap: var(--space-2); color: var(--status-warn); }

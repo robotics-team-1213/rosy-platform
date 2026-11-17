@@ -1,6 +1,7 @@
 // Guided input declarations; saved versions never acquire device authority.
-import {accountFetch} from '/account-session.js';
+import {accountFetch,panelError,setText} from '/review-alerts.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {createCauseLine} from '/common/cause-line.js';
 const $=id=>document.getElementById(id),recordingStore=new URL(location.href).searchParams.get('profile-store')==='recording';
 const API=recordingStore?'/api/learning/recording':'/api/learning/omx/center';
 const PURPOSES=['policy','record','reward','evaluation','monitor'];
@@ -116,7 +117,7 @@ function select(label,value,key,values,update){
 function orderButtons(section,items,index,kind){
   for(const [action,label,offset] of [['up','위로',-1],['down','아래로',1],['remove','삭제',0]]){
     const button=el('ui-button',`${kind} ${index+1} ${label}`);button.type='button';button.setAttribute('kind','quiet');button.dataset.action=action;
-    button.disabled=action==='up'&&index===0||action==='down'&&index===items.length-1;
+    button.disabled=action==='up'&&index===0||action==='down'&&index===items.length-1;button.reason=!button.disabled?'':action==='up'?'첫 항목입니다.':'마지막 항목입니다.';
     button.onclick=()=>{if(saving)return;if(action==='remove')items.splice(index,1);else{const [item]=items.splice(index,1);items.splice(index+offset,0,item);}edited();render();};section.append(button);
   }
 }
@@ -135,7 +136,7 @@ function renderArms(){
         arm.action_limits??=arm.joint_names.map(()=>['','']);arm.action_limits[joint]??=['',''];arm.action_limits[joint][side]=value;
       },{type:'number'}));
     });orderButtons(section,draft.arms,index,'팔');return section;
-  }));$('profile-add-arm').disabled=draft.arms.length>=32;
+  }));$('profile-add-arm').disabled=draft.arms.length>=32;$('profile-add-arm').reason=$('profile-add-arm').disabled?'팔은 32개까지 추가할 수 있습니다.':'';
 }
 function renderCameras(){
   $('profile-cameras').replaceChildren(...draft.cameras.map((camera,index)=>{
@@ -148,14 +149,15 @@ function renderCameras(){
     for(const purpose of PURPOSES){const label=el('label',purpose),input=el('input');label.className='ui-check';input.className='ui-field';input.type='checkbox';input.dataset.purpose=purpose;input.checked=camera.purposes.includes(purpose);
       input.onchange=()=>{camera.purposes=PURPOSES.filter(p=>purposes.querySelector(`[data-purpose="${p}"]`).checked);edited();};label.prepend(input);purposes.append(label);}
     section.append(purposes);orderButtons(section,draft.cameras,index,'카메라');return section;
-  }));$('profile-add-camera').disabled=draft.cameras.length>=64;
+  }));$('profile-add-camera').disabled=draft.cameras.length>=64;$('profile-add-camera').reason=$('profile-add-camera').disabled?'카메라는 64개까지 추가할 수 있습니다.':'';
 }
 function render(){
   for(const key of ['name','task','mode'])$('profile-'+key).value=draft[key];$('profile-bounds').checked=draft.schema.endsWith('/2');renderArms();renderCameras();diff();
 }
 function record(){return records.find(row=>row.id===$('profile-record').value);}
+const savedCause=createCauseLine($('profile-record-meta').parentElement,{line:$('profile-action-cause')});
 function recordSelection(){
-  const selected=record();$('profile-clone').disabled=!selected;$('profile-use').disabled=!selected;
+  const selected=record();savedCause.set([$('profile-clone'),$('profile-use')],selected?'':'저장 프로필을 먼저 선택하세요.');
   $('profile-record-meta').textContent=selected?`저장 ID ${selected.id} · revision ${selected.revision} · 작성자 ${JSON.stringify(selected.created_by)} · 실물 배치 검증 안 됨 · 정책 실행 승인 안 됨`:'';
   const link=$('profile-download');link.setAttribute('aria-disabled',String(!selected));
   if(selected){link.href=API+'/profile/'+encodeURIComponent(selected.id);link.download=`omx-profile-${selected.id}.json`;}else{link.removeAttribute('href');link.removeAttribute('download');}
@@ -166,7 +168,7 @@ async function loadProfiles(selectedId){
     $('profile-record').replaceChildren(...(records.length?records.map(row=>{const option=el('option',`${row.profile.name} · ${row.id}`);option.value=row.id;return option;}):[new Option('저장된 프로필 없음','')]));
     if(records.some(row=>row.id===previous))$('profile-record').value=previous;
     $('profile-record').disabled=!records.length;recordSelection();$('profiles-status').textContent=`저장 프로필 ${records.length}개 · 편집 중인 입력은 유지됩니다.`;
-  }catch(error){$('profiles-status').textContent=`프로필 목록 사용 불가: ${error.message}`;}
+  }catch(error){const detail=panelError(error,'');setText($('profiles-status'),'프로필 목록 사용 불가'+(detail?`: ${detail}`:''));}
 }
 for(const key of ['name','task','mode'])$('profile-'+key).addEventListener(key==='mode'?'change':'input',()=>{draft[key]=$('profile-'+key).value;edited();});
 $('profile-bounds').onchange=()=>{draft.schema='rosy.omx.learning-profile/'+($('profile-bounds').checked?'2':'1');edited();render();};
@@ -185,7 +187,7 @@ async function preset(kind){
   location.hash='profile-panel';$('profiles-status').textContent='미검증 구성 초안 · 실제 출처·관절·단위·해상도를 직접 확인하세요. 팔·카메라 수와 순서·역할은 계속 편집할 수 있습니다.';
 }
 for(const kind of ['single','bimanual']){const button=$('profile-preset-'+kind);if(button){button.hidden=!recordingStore;button.onclick=()=>preset(kind);}}
-document.addEventListener('omx-dataset-profile',event=>{datasetProfile=event.detail;$('profile-import-dataset').disabled=!datasetProfile?.schema;});
+document.addEventListener('omx-dataset-profile',event=>{datasetProfile=event.detail;$('profile-import-dataset').disabled=!datasetProfile?.schema;$('profile-import-dataset').reason=datasetProfile?.schema?'':'가져올 현재 데이터 프로필이 없습니다.';});
 $('profile-bench').onchange=async()=>{
   const file=$('profile-bench').files[0];$('profile-bench').value='';if(saving||!file)return;
   try{

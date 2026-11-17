@@ -29,7 +29,7 @@
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
     <div class="fleet-link-status" data-header-region="status" role="group" aria-label="연결 상태와 시각">
-      <ui-tag id="link-state" variant="inline" status="neutral" data-link="wait">연결 대기</ui-tag>
+      <span id="link-state" role="status" aria-live="polite" data-link="wait">연결 대기</span>
       <ui-text id="clock" scale="value">--:--:--</ui-text>
     </div>
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
@@ -67,10 +67,10 @@
   <!-- fleet:nav:start -->
 <nav class="doc-tabs ui-rail ui-rail-nav" aria-label="Rosy Fleet 문서">
     <a class="ui-rail-item" href="/console" data-action-icon="fleet">관제</a>
-    <a class="ui-rail-item" href="/console?view=work" aria-current="page" data-action-icon="list">작업</a>
-    <a class="ui-rail-item" href="/console?view=records" data-action-icon="history">기록</a>
+    <a class="ui-rail-item" href="/console?view=work" aria-current="page" data-action-icon="task">작업</a>
+    <a class="ui-rail-item" href="/console?view=records" data-action-icon="list">기록</a>
     <a class="ui-rail-item" href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a class="ui-rail-item" href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
+    <a class="ui-rail-item" href="/console/install" data-action-icon="install" aria-label="설치">설치</a>
   </nav>
 <!-- fleet:nav:end -->
   <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="작업 화면">
@@ -92,11 +92,18 @@
     <details><summary class="ui-disclosure-row">단계와 승인 규칙</summary>
       <p>단계는 관리자 승인으로 하나씩 오르고, 실물을 움직이는 단계(3단계·제한 사용)는 제안한 사람과 다른 관리자가 승인합니다.
         실물 실행은 승인 창이 열린 동안에만 이어지고, 확인 요청이나 사고가 생기면 1–2초 안에 멈춥니다.</p></details>
+    <div class="actions" role="group" aria-label="관련 책임 화면 이동">
+      <a class="ui-action-link" data-kind="quiet" href="/console/learning">오프라인 시연 검수·학습 (Learning)</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_s">Cell S 작업대 (arm_s · S3 공급)</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_a">Cell A 작업대 (arm_a · S5 1·3단)</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_b">Cell B 작업대 (arm_b · S5 2단)</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_ab">Cell A/B 작업대 (2암 통합)</a>
+    </div>
     <label for="policy-workcell" class="ui-field-label" hidden>작업셀</label>
     <select id="policy-workcell" class="ui-field" aria-describedby="policy-verdict" hidden></select>
     <ui-status id="policy-verdict" state="pending" role="status">상태를 확인하고 있습니다.</ui-status>
     <a class="ui-action-link" data-kind="primary" id="policy-login" href="/console/login?return=%2Fconsole%2Fpolicy" hidden>로그인</a>
-    <ui-status id="policy-message" role="alert" hidden></ui-status>
+    <ui-status id="policy-message" hidden></ui-status>
 
     <div id="policy-content" hidden>
     <dl id="policy-figures" class="ui-readout" data-form="strip" aria-label="정책 실행 요약"></dl>

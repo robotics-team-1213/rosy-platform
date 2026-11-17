@@ -6,10 +6,13 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+from urllib.parse import quote
 
 import pytest
 
 SYSTEM = Path(__file__).resolve().parents[1] / "panels" / "host" / "system.js"
+DOM = Path(__file__).resolve().parents[1] / "dom.js"
+COMMON = Path(__file__).resolve().parents[4] / "shared" / "web"
 ALL_KEYS = ["os_release", "hostname", "uptime", "load", "cpu", "memory", "temperature",
             "storage", "network_counters"]
 
@@ -18,7 +21,15 @@ def _gap(unavailable):
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed")
-    script = (f'import {{ runtimeGap }} from {json.dumps(SYSTEM.as_uri())};\n'
+    # system.js imports the dashboard's served names (/common/*, /assets/dom.js); a loader hook maps them to the files.
+    hook = ("export async function resolve(s, c, next) {"
+            f" if (s === '/assets/dom.js') return {{ url: {json.dumps(DOM.as_uri())}, shortCircuit: true }};"
+            f" if (s.startsWith('/common/')) return {{ url: {json.dumps(COMMON.as_uri() + '/')} + s.slice(8), shortCircuit: true }};"
+            " return next(s, c); }")
+    script = ('import { register } from "node:module";\n'
+              f"register({json.dumps('data:text/javascript,' + quote(hook))});\n"
+              "globalThis.document ??= { querySelectorAll: () => [], addEventListener() {}, createElement: () => ({ setAttribute() {}, append() {} }) };\n"
+              f'const {{ runtimeGap }} = await import({json.dumps(SYSTEM.as_uri())});\n'
               f"console.log(JSON.stringify(runtimeGap({json.dumps(unavailable)})));\n")
     result = subprocess.run([node, "--input-type=module", "--eval", script], check=True,
                             capture_output=True, text=True, encoding="utf-8")

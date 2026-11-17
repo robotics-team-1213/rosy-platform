@@ -1,6 +1,7 @@
 """Real Chromium reads the independent Monitoring backend; never intercept its API."""
 
 import json
+import re
 import asyncio
 import os
 from pathlib import Path
@@ -58,10 +59,12 @@ def monitoring_backend(tmp_path, request):
 
     mode = getattr(request, 'param', None)
     web_root = None
-    if mode in {'account', 'web', 'xss', 'delayed', 'unavailable', 'empty', 'error', 'disconnected', 'prefix'}:
+    if mode in {'links', 'account', 'web', 'xss', 'delayed', 'unavailable', 'empty', 'error', 'disconnected', 'prefix'}:
         from rosy.monitoring.web_assets import build_web
         web_root = tmp_path / 'web'
         build_web(ROOT, web_root)
+    listener = safe_listener()
+    origin = f'http://127.0.0.1:{listener.getsockname()[1]}'
     sources, paths = [], {}
     for site in ('a', 'b'):
         path = tmp_path / f'host-{site}.json'
@@ -74,6 +77,11 @@ def monitoring_backend(tmp_path, request):
             sources.append({'id': f'host-{site}', 'site_id': f'site-{site}', 'kind': 'host_state', 'path': str(path), 'label': label})
         if mode == 'unavailable' and site == 'a':
             path.unlink()
+    if mode == 'links':  # a reported link (no duration) and a direct probe of this server (measured duration)
+        guard = tmp_path / 'guard.json'
+        guard.write_text(json.dumps({'rosy-guard': {'time': int(time.time()), 'state': 'ok'}}))
+        sources.append({'id': 'guard-a', 'site_id': 'site-a', 'kind': 'host_guard', 'path': str(guard), 'selector': 'rosy-guard', 'label': '검증 가드 A'})
+        sources.append({'id': 'self-a', 'site_id': 'site-a', 'kind': 'http', 'url': origin + '/health', 'label': '검증 서비스 A'})
     config = MonitoringConfig(collector_id='browser-monitoring', site_id='site-a', sources=sources,
                               readers=[{'principal_id': f'operator-{site}', 'token_env': f'READ_{site.upper()}',
                                         'sites': [f'site-{site}']} for site in ('a', 'b')])
@@ -92,8 +100,6 @@ def monitoring_backend(tmp_path, request):
             while not slow.release.is_set() and time.monotonic() < until:
                 await asyncio.sleep(0.01)
         return response
-    listener = safe_listener()
-    origin = f'http://127.0.0.1:{listener.getsockname()[1]}'
     if account:
         account.callback = origin + '/api/monitoring/v1/account/callback'
     async def prefix_gateway(scope, receive, send):
@@ -145,6 +151,31 @@ def read(page, path, key):
         headers: key ? {Authorization: 'Bearer ' + key} : {}});
       return {status: response.status, cache: response.headers.get('cache-control'), body: await response.json()};
     }''', {'path': path, 'key': key})
+
+
+@pytest.mark.parametrize('monitoring_backend', ['links'], indirect=True)
+def test_rendered_link_rows_show_unknown_duration_and_a_measured_one(monitoring_backend, monitoring_page):
+    """The real page renders the real backend's links: a report has no duration, a direct probe has one."""
+    from playwright.sync_api import expect
+    page = monitoring_page
+    page.goto(monitoring_backend.origin + '/')
+    login(page, KEY_A)
+    rows = page.locator('#link-rows li')
+    expect(rows.filter(has_text='원천 보고').locator('small', has_text='응답 정보 없음')).to_have_count(1, timeout=20000)
+    probe = rows.filter(has_text='직접 조회').locator('small', has_text=re.compile('^응답 '))
+    expect(probe.first).to_be_visible()
+    texts = probe.all_inner_texts()  # every direct probe (file reads and the HTTP one) has a measured duration
+    assert texts and all(re.fullmatch('응답 [0-9]+ms', text) for text in texts), texts  # 0ms is a real 0, never the unknown text
+
+
+@pytest.mark.parametrize('monitoring_backend', ['web'], indirect=True)
+def test_link_duration_is_unknown_when_missing_and_a_real_zero_when_zero(monitoring_backend, monitoring_page):
+    """Pins durationText only. Known limit: a rendered cell showing a real 0 ms is not pinned (no way to force a measured 0
+    without intercepting the API); the rendered-row test covers unknown and measured numbers."""
+    page = monitoring_page
+    page.goto(monitoring_backend.origin + '/')
+    texts = page.evaluate("import('/duration.js').then(m => [null, undefined, Number.NaN, -1, 0, 12.4].map(m.durationText))")
+    assert texts == ['응답 정보 없음', '응답 정보 없음', '응답 정보 없음', '응답 정보 없음', '응답 0ms', '응답 12ms']
 
 
 def test_browser_reads_scoped_cache_without_fleet(monitoring_page):
@@ -210,6 +241,10 @@ def test_actual_status_ui_is_scoped_responsive_and_read_only(monitoring_backend,
     expect(page.locator('#observation-rows')).to_contain_text('host-a')
     expect(page.locator('#observation-rows')).not_to_contain_text('host-b')
     expect(page.locator('#graph .edge')).to_have_count(1)
+    expect(page.locator('#observation-pager-page')).to_have_text('1 / 1')  # one page, both ends disabled
+    expect(page.locator('#observation-pager-previous')).to_be_disabled()
+    expect(page.locator('#observation-pager-next')).to_be_disabled()
+    assert page.locator('#observation-rows > li').count() >= 1 and page.locator('#observation-rows tr').count() == 0
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     assert KEY_A not in page.content() and 'private owner detail' not in page.content()
     assert page.evaluate('Object.values(localStorage).every(value => !value.includes("a".repeat(32)))')
@@ -293,7 +328,10 @@ def test_declared_g2_evidence_states_use_the_actual_backend(monitoring_backend, 
         if mode == 'delayed':
             expect(page.locator('#observation-rows [data-evidence=delayed]')).to_contain_text('초 전')
         if mode == 'error':
-            expect(page.locator('#observation-rows .danger')).to_contain_text('오류')
+            expect(page.locator('#observation-rows ui-tag[data-state=danger]')).to_contain_text('오류')
+        if mode == 'unavailable':  # C4: no sample time means unknown, never a reported label such as 정상
+            expect(page.locator('#observation-rows')).to_contain_text('정보 없음')
+            expect(page.locator('#observation-rows')).not_to_contain_text('정상')
     capture(page, 'fresh' if mode == 'web' else mode)
     if mode == 'web':
         # A modified selector still goes through the real server's scope boundary.

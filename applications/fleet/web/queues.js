@@ -12,6 +12,7 @@ import {tripEndText, tripWaitText} from "/console/assets/trip-display.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
 import { recoveryHeadline } from "./station-recovery.js";
 import { personHeadline, requestsFor } from "./person-request.js";
+import { armAttention } from "/console/assets/arm-proposal-view.js";
 
 function nodeWithText(tagName, className = "", text) {
   const node = document.createElement(tagName);
@@ -290,12 +291,27 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
         list.push({ ...item, robotId: r.robot_id, key });
       }
     }
+    // B1: AI 팔 제안·스킬 행은 로봇에 매이지 않는다(robotId 없는 행). 막는 건만 여기 오른다.
+    for (const item of armAttention(view.armProposals)) {
+      (item.severity === "crit" ? rows.crit : rows.warn).push({...item, robotId: ""});
+    }
     rows.crit.sort((a, b) => Number(Boolean(b.overdue)) - Number(Boolean(a.overdue)));   // stable: overdue first
     rows.warn = groupRows(rows.warn);
     const decisions = [...rows.crit, ...rows.warn].filter((row) => row.decision).map((row) => row.key);
     const open = openDecisionKey(decisions, view.queueChoice);
     syncRows(critList, rows.crit, open);
     syncRows(warnList, rows.warn, open);
+    // B1 (계획 6.2 R1): 막는 AI 제안 행은 펼쳐지면 작업 큐의 같은 제안으로 간다. 승인은 L2 자리에서만.
+    for (const list of [critList, warnList]) {
+      for (const body of list.querySelectorAll("[data-decision-slot]")) {
+        if (!body.dataset.decisionSlot.startsWith("arm-proposal|") || body.childElementCount) continue;
+        const link = document.createElement("a");
+        link.className = "ui-disclosure-row";
+        link.href = "/console?view=work&show=pending";
+        link.textContent = "작업 화면에서 승인";
+        body.append(link);
+      }
+    }
     setTriageHead("warning-head", "주의 요망", rows.warn);
     setTriageHead("critical-head", "최우선 개입 요망", rows.crit);
 

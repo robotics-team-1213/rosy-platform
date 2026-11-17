@@ -115,6 +115,22 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
       for (const [key, title] of [["workcell_id", "작업 공간"], ["instance_id", "장치"], ["object_ref", "물체 참조"], ["source", "출발 참조"], ["target", "목표 참조"]]) field(title, job.transfer[key]);
       field("제안 다이제스트", job.proposal_digest); field("조회한 실행 세대", control?.generation);
       field("승인된 실행 세대", job.dispatch_generation); field("사유", job.reason);
+      const isCellS = job.transfer?.workcell_id === "cell_s" || job.transfer?.instance_id === "arm_s";
+      const isCellA = job.transfer?.instance_id === "arm_a";
+      const isCellB = job.transfer?.instance_id === "arm_b";
+      const isCellAb = job.transfer?.workcell_id === "cell_ab";
+      const cellLinkLabel = isCellS ? "Cell S 작업대 열기"
+        : isCellA ? "Cell A 작업대 열기"
+        : isCellB ? "Cell B 작업대 열기"
+        : isCellAb ? "Cell A/B 작업대 열기" : "셀 작업대 열기";
+      const cellLinkHref = isCellS ? "/console/cell?cell=cell_s#observation-heading"
+        : isCellA ? "/console/cell?cell=cell_a#observation-heading"
+        : isCellB ? "/console/cell?cell=cell_b#observation-heading"
+        : isCellAb ? "/console/cell?cell=cell_ab#observation-heading" : "/console/cell#mission-heading";
+      const cellLink = Object.assign(node("a", cellLinkLabel, "ui-action-link"), {href: cellLinkHref});
+      cellLink.dataset.kind = "quiet";
+      const dd = node("dd"); dd.append(cellLink);
+      detail.append(node("dt", "현장 확인"), dd);
     }
     showRecovery(); paint();
   }

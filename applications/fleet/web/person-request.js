@@ -73,8 +73,11 @@ export function createPersonRequests({ scope, view, call, log, isOperator, named
     busy.add(request.id);
     render();
     try {
-      await call(`/api/fleet/person-requests/${encodeURIComponent(request.id)}/answer`,
-        { method: "POST", body: JSON.stringify({ answer: verdict }) });
+      await call(`/api/fleet/person-requests/${encodeURIComponent(request.id)}/answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: verdict }),
+      });
       life.check();
       results.set(request.id, { text: `${request.robot_id} 사람 부탁에 "${verdict === "done" ? "했어요" : "못 해요"}"로 답함`, kind: "good" });
     } catch (err) {
@@ -128,12 +131,12 @@ export function createPersonRequests({ scope, view, call, log, isOperator, named
       cannot.dataset.personAnswer = "cannot";
       actions.append(done, cannot);
       box.append(actions);
+      // D-1117 — 결과는 누른 단추 옆 글자다(live 역할 없음). 실패 낭독은 log("bad") → 관제 알림 카드의 announcer 한 번이 담당한다.
       const last = results.get(request.id);
       if (last) {
         const line = document.createElement("p");
         line.className = "stuck-result";
         line.dataset.kind = last.kind;
-        line.setAttribute("role", last.kind === "bad" ? "alert" : "status");
         line.textContent = last.text;
         box.append(line);
       }

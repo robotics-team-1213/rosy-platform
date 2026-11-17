@@ -36,7 +36,7 @@ function renderExportRun(run,{states,request,refresh,selectDataset}){
   }
   if(['queued','running'].includes(run.status)){
     const stop=el('ui-button','이 변환 중지');stop.dataset.exportAction='stop';stop.type='button';stop.setAttribute('kind','quiet');
-    const status=el('p');status.setAttribute('role','alert');
+    const status=el('p');status.dataset.exportStopError='';status.setAttribute('role','status');
     const operation=stopStates.get(run.id)||{pending:false,error:''};stopStates.set(run.id,operation);
     operation.render=()=>{stop.disabled=operation.pending;status.textContent=operation.error;};operation.render();
     stop.onclick=async()=>{

@@ -6,8 +6,33 @@ import { noRobotServesGrid } from "./motion-readiness.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
 export function createMapPolling({ scope, el, view, auth, call, camera, draw, layerOn, onMapChanged, onMapUnavailable,
-  onTrafficChanged }) {
+  onTrafficChanged, onSiteMapLoaded = null }) {
+  const MAP_HOLDOVER_MS = 15000;
+  const GUIDE_HOLDOVER_MS = 5000;
+  const SIGHTINGS_HOLDOVER_MS = 3500;
   let calibrationsAt = 0;
+  let mapLostAt = 0;
+  let guideLostAt = 0;
+  let sightingsLostAt = 0;
+  let siteMapInFlight = false;
+  let siteMapGen = 0;
+  let siteMapAbort = null;
+  let mapInFlight = false;
+  scope.onDispose(() => {
+    siteMapInFlight = false;
+    siteMapGen += 1;
+    siteMapAbort?.abort();
+    siteMapAbort = null;
+    mapInFlight = false;
+  });
+  let prevGuideSig = null;
+  let prevTrafficSig = null;
+
+  function clearMapHold() {
+    mapLostAt = 0;
+    view.mapStaleAt = 0;
+    delete el("map-stage").dataset.mapStale;
+  }
 
   function syncLegend(mode) {
     el("map-legend").hidden = mode === "none";
@@ -30,6 +55,13 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     onMapUnavailable();
   }
 
+  function notifySiteMapLoaded(life) {
+    if (typeof onSiteMapLoaded !== "function") return;
+    Promise.resolve().then(() => {
+      if (life.current()) return onSiteMapLoaded(view.siteMap, view.activeSiteMap);
+    }).catch(() => {});
+  }
+
   async function refreshCalibrations(life) {
     try {
       const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
@@ -40,38 +72,65 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
   }
 
   async function refreshSiteMap() {
+    if (siteMapInFlight) return false;
     const life = scope.capture();
-    life.check();
+    if (!life.current()) return false;
+    const gen = siteMapGen;
+    siteMapAbort?.abort();
+    siteMapAbort = typeof AbortController === "function" ? new AbortController() : null;
+    const signals = [life.signal, siteMapAbort?.signal].filter(Boolean);
+    siteMapInFlight = true;
+    let showedSite = false;
     try {
-      const siteMap = await call("/api/fleet/site-map");
+      const needCalib = Date.now() - calibrationsAt > 30000;
+      const [siteMapRes, activeRes, calibRes] = await Promise.allSettled([
+        call("/api/fleet/site-map", { signals }),
+        ...(needCalib ? [
+          call("/api/fleet/site-map/active", { signals }),
+          call("/api/fleet/calibrations", { signals }),
+        ] : []),
+      ]);
+      if (gen !== siteMapGen) return showedSite;
       life.check();
-      view.siteMap = siteMap;
+      if (siteMapRes.status === "rejected") throw siteMapRes.reason;
+      view.siteMap = siteMapRes.value;
       el("map-stage").dataset.siteMap = "configured";
-      if (Date.now() - calibrationsAt > 30000) {
+      if (needCalib) {
         // D-513 7: 활성 현장 지도의 화면 방향. 지도가 없거나(404/409) 읽지 못하면 기본 방향.
-        try {
-          view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
+        if (activeRes.status === "fulfilled") {
+          view.activeSiteMap = activeRes.value;
           view.siteViewTurn = siteViewTurn(view.activeSiteMap);
-          life.check();
-        } catch (error) {
-          if (error.name === "AbortError") return;
-          if (error.status === 404 || error.status === 409) { view.siteViewTurn = 0; view.activeSiteMap = null; } // no active map; else keep the last turn
+        } else {
+          const error = activeRes.reason;
+          if (error?.name === "AbortError" || gen !== siteMapGen) return showedSite;
+          if (error?.status === 404 || error?.status === 409) { view.siteViewTurn = 0; view.activeSiteMap = null; } // no active map; else keep the last turn
         }
-        // The first site draw must use the active map turn; drawing at 0° then turning to 90°
-        // makes the whole map jump while the camera and robot map requests are still pending.
-        if (!view.map && !auth.locked) showSiteMap();
-        await refreshCalibrations(life);
-      } else if (!view.map && !auth.locked) {
-        showSiteMap();
+        if (calibRes.status === "fulfilled") {
+          camera.setCalibrations(calibRes.value.calibrations || []);
+          calibrationsAt = Date.now();
+        } else {
+          const error = calibRes.reason;
+          if (error?.name === "AbortError" || gen !== siteMapGen) return showedSite;
+          if (!calibrationsAt || error?.status === 404 || error?.status === 401 || error?.status === 403) {
+            camera.setCalibrations([]);
+          }
+        }
       }
+      notifySiteMapLoaded(life);
+      // The first site draw must use the active map turn; drawing at 0° then turning to 90°
+      // makes the whole map jump while the camera and robot map requests are still pending.
+      if (!view.map && !auth.locked) { showSiteMap(); showedSite = true; }
     } catch (err) {
-      if (err.name === "AbortError") return;
+      if (err.name === "AbortError" || gen !== siteMapGen) return showedSite;
       // NO_SITE_MAP — 카메라 사각형이 설정되지 않은 현장이다. 일시 실패면 직전 사각형을 둔다.
       if (err.status === 404 && err.code === "NO_SITE_MAP") {
         view.siteMap = null;
         el("map-stage").dataset.siteMap = "none";
       }
+    } finally {
+      if (life.current() && gen === siteMapGen) siteMapInFlight = false;
     }
+    return showedSite;
   }
 
   // NO_MAP(지도를 내는 로봇 없음)은 기능 미설정이 아니라 "아직 없음"이다. 로봇이 나중에
@@ -87,7 +146,17 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
   // D-536: 로봇 상황(1 s, 교통 표와 같은 주기). 모르는 라우트(404)면 다음 로그인까지 묻지 않는다.
   const guideGate = createPollGate();
   let guideInFlight = false;
-  scope.onDispose(() => { guideInFlight = false; });
+  scope.onDispose(() => {
+    siteMapInFlight = false;
+    mapInFlight = false;
+    guideInFlight = false;
+    prevGuideSig = null;
+    prevTrafficSig = null;
+    guideLostAt = 0;
+    sightingsLostAt = 0;
+    view.guideStale = false;
+    clearMapHold();
+  });
   async function refreshGuide() {
     const life = scope.capture();
     life.check();
@@ -95,17 +164,44 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     guideInFlight = true;
     try {
       view.guide = await call("/api/fleet/guide", { signals: [life.signal] });
+      if (Array.isArray(view.guide?.anchors)) view.anchors = view.guide.anchors;
       life.check();
+      guideLostAt = 0;
+      view.guideStale = false;
       view.guideUnavailable = false;
       guideGate.ok();
     } catch (err) {
       if (err.name === "AbortError") return;
-      view.guide = null;
-      view.guideUnavailable = guideGate.fail(err.status, err.code) !== "absent";
+      const failure = guideGate.fail(err.status, err.code);
+      if (view.guide && failure === "retry") {
+        guideLostAt ||= Date.now();
+        if (Date.now() - guideLostAt < GUIDE_HOLDOVER_MS) {
+          view.guideStale = true;
+          view.guideUnavailable = false;
+        } else {
+          guideLostAt = 0;
+          view.guide = null;
+          view.guideStale = false;
+          view.guideUnavailable = true;
+        }
+      } else {
+        guideLostAt = 0;
+        view.guide = null;
+        view.guideStale = false;
+        view.guideUnavailable = failure !== "absent";
+      }
     } finally {
       if (life.current()) guideInFlight = false;
     }
-    onTrafficChanged();  // the roster's exception queue reads view.guide too
+    const nextSig = JSON.stringify([
+      Boolean(view.guideStale),
+      Boolean(view.guideUnavailable),
+      view.guide ?? null,
+    ]);
+    if (nextSig !== prevGuideSig) {
+      prevGuideSig = nextSig;
+      onTrafficChanged();  // the roster's exception queue reads view.guide too
+    }
   }
   async function refreshTraffic() {
     const life = scope.capture();
@@ -117,21 +213,38 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       life.check();
       trafficGate.ok();
       // D-540 (d): one more read after the last trip closes keeps why it ended (view.endedTrips, newest first).
-      const trips = traffic.robots.length || view.trafficTrips?.length
-        ? await call("/api/fleet/trips", { signals: [life.signal] }) : { open: [], trips: view.endedTrips };
+      const fetchedTrips = Boolean(traffic.robots.length || view.trafficTrips?.length);
+      const needActiveMap = traffic.map_version !== null && traffic.map_version !== view.activeSiteMap?.version;
+      const needAiNow = Boolean(traffic.wait_cycle?.length);
+      const [tripsRes, activeRes, aiRes] = await Promise.allSettled([
+        fetchedTrips ? call("/api/fleet/trips", { signals: [life.signal] }) : { open: [], trips: view.endedTrips },
+        needActiveMap ? call("/api/fleet/site-map/active", { signals: [life.signal] }) : null,
+        // D-613: route observations also reach the queue while a trip runs without a wait cycle.
+        needAiNow ? call("/api/fleet/ai", { signals: [life.signal] }).catch(() => null) : null,
+      ]);
+      life.check();
+      if (tripsRes.status === "rejected") throw tripsRes.reason;
+      if (needActiveMap && activeRes.status === "rejected") throw activeRes.reason;
+      const trips = tripsRes.value;
+      const tripIdKey = (row) => `${(row?.open || []).map((t) => t.trip_id).join(",")}|${(row?.trips || []).map((t) => t.trip_id).join(",")}`;
+      const prevTripKey = tripIdKey(view.trailTrips || { open: view.trafficTrips, trips: view.endedTrips });
       view.trafficTrips = trips.open || [];
       view.endedTrips = trips.trips || [];
-      life.check();
-      if (traffic.map_version !== null && traffic.map_version !== view.activeSiteMap?.version) {
-        view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
+      if (fetchedTrips) {
+        view.trailTrips = { open: view.trafficTrips, trips: view.endedTrips };
+        view.tripsAt = Date.now();
+      }
+      if (tripIdKey(view.trailTrips || { open: view.trafficTrips, trips: view.endedTrips }) !== prevTripKey) view.pathAt = 0;
+      if (needActiveMap) {
+        view.activeSiteMap = activeRes.value;
         view.siteViewTurn = siteViewTurn(view.activeSiteMap);
-        life.check();
+        notifySiteMapLoaded(life);
         await refreshCalibrations(life);
       }
       view.traffic = traffic;
-      // D-613: route observations also reach the queue while a trip runs without a wait cycle.
-      const ai = traffic.wait_cycle?.length || view.trafficTrips.length
-        ? await call("/api/fleet/ai", { signals: [life.signal] }).catch(() => null) : null;
+      const ai = needAiNow
+        ? (aiRes.status === "fulfilled" ? aiRes.value : null)
+        : (view.trafficTrips.length ? await call("/api/fleet/ai", { signals: [life.signal] }).catch(() => null) : null);
       life.check();
       view.trafficAi = ai?.facts || [];
     } catch (err) {
@@ -141,48 +254,66 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       if (life.current()) trafficInFlight = false;
     }
     view.trafficClock = trafficClock(view.trafficClock, view.traffic, Date.now());
-    el("traffic-toggle").hidden = !view.traffic?.units?.length;
-    onTrafficChanged();
+    view.trafficLoaded = true;
+    const nextSig = JSON.stringify([
+      view.traffic ?? null,
+      view.trafficTrips ?? null,
+      view.endedTrips ?? null,
+      view.trafficAi ?? null,
+      view.activeSiteMap?.version ?? null,
+    ]);
+    if (nextSig !== prevTrafficSig) {
+      prevTrafficSig = nextSig;
+      onTrafficChanged();
+    }
   }
-  scope.listen(el("traffic-toggle"), "click", () => {
-    const on = !layerOn("traffic");
-    view.layers = { ...view.layers, traffic: on };
-    el("traffic-toggle").setAttribute("aria-pressed", String(on));
-    el("traffic-toggle").textContent = on ? "교통 켬" : "교통 끔";  // the quiet button has no pressed look
-    draw();
-  });
 
   function resetPolling() {
     trafficGate.reset();
     mapGate.reset();
     sightingsUnavailable = false;
+    siteMapInFlight = false;
+    siteMapGen += 1;
+    siteMapAbort?.abort();
+    siteMapAbort = null;
+    mapInFlight = false;
+    prevGuideSig = null;
+    prevTrafficSig = null;
+    guideLostAt = 0;
+    sightingsLostAt = 0;
+    view.guideStale = false;
+    clearMapHold();
   }
 
   async function refresh() {
     const life = scope.capture();
-    life.check();
-    if (auth.locked) return;
+    if (!life.current()) return;
+    if (auth.locked || siteMapInFlight) return;
     sightingsUnavailable = false;
-    await refreshSiteMap();
-    life.check();
+    const showedSite = await refreshSiteMap();
+    if (!life.current()) return;
     // The activated site frame stays the coordinate basis when robots start or stop serving SLAM grids.
     if (!auth.locked && view.siteMap?.maps?.some(map => map.map_id === view.activeSiteMap?.map?.map_id)) {
+      clearMapHold();
       view.map = null;
-      showSiteMap();
+      if (!showedSite) showSiteMap();
       return;
     }
     // Fleet unreachable: say so now, not after a slow NO_MAP retry.
     if (view.stateUnavailable) mapGate.reset();
     if (auth.locked || !mapGate.due()) return;
+    if (mapInFlight) return;
+    mapInFlight = true;
     let mapFailure = "retry";
     try {
       // The same answer as Fleet's NO_MAP, without a request that can only 404.
       // Fleet itself unreachable: say so (the stale robot list must not blame the robots) instead of asking.
       if (view.stateUnavailable) throw new Error("FLEET_UNREACHABLE");
       if (noRobotServesGrid(view.robots)) throw Object.assign(new Error("NO_MAP"), { status: 404, code: "NO_MAP" });
-      const grid = await call("/api/fleet/map");
+      const grid = await call("/api/fleet/map", { signals: [life.signal] });
       life.check();
       mapGate.ok();
+      clearMapHold();
       view.map = grid;
       el("map-stage").dataset.mapState = "ready";
       el("map-empty").hidden = true;
@@ -192,9 +323,28 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       onMapChanged();
     } catch (err) {
       if (err.name === "AbortError") return;
+      if (auth.locked) {
+        clearMapHold();
+        view.map = null;
+        return;
+      }
+      mapFailure = mapGate.fail(err.status, err.code);
+      if (view.map && mapFailure === "retry") {
+        // 일시 연결 끊김에서는 이전 지도를 일정 시간 유지해 화면이 갑자기 비지 않게 한다.
+        mapLostAt ||= Date.now();
+        if (Date.now() - mapLostAt < MAP_HOLDOVER_MS) {
+          view.mapStaleAt = mapLostAt;
+          el("map-stage").dataset.mapStale = "true";
+          el("map-stage").dataset.mapState = "ready";
+          el("map-empty").hidden = true;
+          el("map-canvas").removeAttribute("aria-hidden");
+          syncLegend("grid");
+          draw();
+          return;
+        }
+      }
+      clearMapHold();
       view.map = null;
-      if (auth.locked) return;
-      if (!auth.locked) mapFailure = mapGate.fail(err.status, err.code);
       if (view.siteMap && !auth.locked) {
         // 점유 격자 없이 카메라 사각형만 있다 — 관측 전용 뷰. 목표 지정은 계속 막힌다.
         showSiteMap();
@@ -223,6 +373,8 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       syncLegend("none");
       el("map-tag").textContent = "맵 없음";
       onMapUnavailable();
+    } finally {
+      if (life.current()) mapInFlight = false;
     }
   }
 
@@ -238,16 +390,25 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     if (auth.locked || sightingsInFlight || sightingsUnavailable || !view.siteMap) return;
     sightingsInFlight = true;
     let next = [];
+    let failed = false;
     try {
-      next = classifySightings(await call("/api/fleet/sightings"));
+      next = classifySightings(await call("/api/fleet/sightings", { signals: [life.signal] }));
       life.check();
+      sightingsLostAt = 0;
     } catch (err) {
       if (err.name === "AbortError") return;
-      // 일시 실패도 옛 관측을 남기지 않는다.
       if (err.status === 404) sightingsUnavailable = true;
+      failed = true;
     } finally {
       if (life.current()) sightingsInFlight = false;
     }
+    if (failed && !sightingsUnavailable && view.sightings?.length) {
+      sightingsLostAt ||= Date.now();
+      if (Date.now() - sightingsLostAt < SIGHTINGS_HOLDOVER_MS) {
+        next = view.sightings;
+      }
+    }
+    if (!next.length && failed) sightingsLostAt = 0;
     const unchanged = JSON.stringify(next) === JSON.stringify(view.sightings);
     view.sightings = next;
     if (unchanged && !next.length) return; // 빈 채로 그대로면 격자를 다시 칠하지 않는다

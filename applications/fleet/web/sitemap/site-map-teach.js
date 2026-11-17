@@ -117,8 +117,10 @@ export function createTeachPanel(host) {
 
   async function act(work, done) {
     try {
+      $('notice').hidden = false;
       $('notice').textContent = (await work()) || done;
     } catch (error) {
+      $('notice').hidden = false;
       $('notice').textContent = `가르치기 거절 · ${siteMapErrorText(error)}`;
     }
     sync();

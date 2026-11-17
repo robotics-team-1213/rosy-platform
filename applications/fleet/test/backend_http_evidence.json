@@ -1974,9 +1974,9 @@
       "status": 200,
       "test": [
         "operations/fleet/test/test_pipeline_orchestrator.py",
-        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+        "test_decision_gate_does_not_execute_without_named_operator_approval"
       ],
-      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
     },
     "POST:/api/fleet/pipeline/human-safety-gate": {
       "status": 200,
@@ -1984,7 +1984,7 @@
         "operations/fleet/test/test_pipeline_orchestrator.py",
         "test_cell_tasks_assign_claim_and_complete_lifecycle"
       ],
-      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
     },
     "GET:/api/fleet/pipeline/station-zones": {
       "status": 200,
@@ -2073,6 +2073,30 @@
         "test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_query"
       ],
       "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8"
+    },
+    "POST:/api/fleet/pipeline/human-safety-gate/clear": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
+    },
+    "POST:/api/fleet/pipeline/decision-gate/execute": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
+    },
+    "POST:/api/fleet/pipeline/cell-tasks/{task_id}/resume": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_named_operator_resume_requeues_one_task_and_is_refused_while_held"
+      ],
+      "source_revision": "fc4d730bc1938b1ebf4412daba720232f905957a"
     }
   }
 }

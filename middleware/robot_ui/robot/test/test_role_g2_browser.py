@@ -671,10 +671,10 @@ def test_console_mode_feedback_full_shell_captures(tmp_path):
                 button.click()
                 page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("""document.querySelector(
-              '[data-panel="console.mode"] [role="status"]:last-of-type'
+              '[data-panel="console.mode"] [data-result]:last-of-type'
             )?.textContent.length > 0""")
             mode_status = page.locator('[data-panel="console.mode"] ui-status').nth(0)
-            action_status = page.locator('[data-panel="console.mode"] ui-status[role="status"]').last
+            action_status = page.locator('[data-panel="console.mode"] ui-status[data-result]').last
             assert "대기" in mode_status.inner_text()  # US-009: MODE_LABEL, enum in title
             assert "로봇이 받았습니다" in action_status.inner_text(), action_status.inner_text()
             assert posts == [{"path": "/api/v1/mode", "body": {"mode": "MANUAL"}}]
@@ -683,7 +683,7 @@ def test_console_mode_feedback_full_shell_captures(tmp_path):
             measured = page.evaluate("""() => ({
               overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
               eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
-              action: [...document.querySelectorAll('[data-panel="console.mode"] [role="status"]')].at(-1)?.textContent || '',
+              action: [...document.querySelectorAll('[data-panel="console.mode"] [data-result]')].at(-1)?.textContent || '',
               mode: document.querySelector('[data-panel="console.mode"] ui-status')?.textContent || '',
             })""")
             assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
@@ -771,10 +771,10 @@ def test_console_teleop_feedback_full_shell_captures(tmp_path):
               button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1}));
               setTimeout(() => button.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:1})), 180);
             }""")
-            page.wait_for_function("document.querySelector('[data-panel=\"console.teleop\"] ui-status[role=\"status\"]:last-of-type')?.textContent.length > 0")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.teleop\"] ui-status[data-result]:last-of-type')?.textContent.length > 0")
             page.wait_for_timeout(250)
             assert posts and posts[-1]["body"] == {"linear": 0, "angular": 0}, posts
-            action_feedback = panel.locator('ui-status[role="status"]').last
+            action_feedback = panel.locator('ui-status[data-result]').last
             readiness_status = panel.locator("ui-status").first
             release_text = action_feedback.inner_text()
             phase["fail_state"] = True
@@ -787,7 +787,7 @@ def test_console_teleop_feedback_full_shell_captures(tmp_path):
               overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
               eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
               readiness: document.querySelector('[data-panel="console.teleop"] ui-status')?.textContent || '',
-              action: [...document.querySelectorAll('[data-panel="console.teleop"] ui-status[role="status"]')].at(-1)?.textContent || '',
+              action: [...document.querySelectorAll('[data-panel="console.teleop"] ui-status[data-result]')].at(-1)?.textContent || '',
             })""")
             assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
             records.append({"viewport": f"{width}x{height}", "image": filename,
@@ -884,7 +884,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-button')?.disabled === false")
             line_panel.locator("ui-button").first.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
-            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status[role=status]:last-of-type')?.textContent.includes('로봇이 받았습니다')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status[data-result]:last-of-type')?.textContent.includes('로봇이 받았습니다')")
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status')?.textContent.includes('서버가 요청을 처리하지 못했습니다')")
             line_filename = f"operator-console-line-follow-{width}x{height}.png"
             page.screenshot(path=str(capture_dir / line_filename), full_page=True)
@@ -892,7 +892,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
               eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
               readback: document.querySelector('[data-panel="console.line_follow"] ui-status')?.textContent || '',
-              action: [...document.querySelectorAll('[data-panel="console.line_follow"] > ui-status[role="status"]')].at(-1)?.textContent || '',
+              action: [...document.querySelectorAll('[data-panel="console.line_follow"] > ui-status[data-result]')].at(-1)?.textContent || '',
             })""")
             assert line_measured["overflowX"] == 0 and line_measured["eStopVisible"]
             assert "서버가 요청을 처리하지 못했습니다" in line_measured["readback"] and "로봇이 받았습니다" in line_measured["action"]
@@ -908,7 +908,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             dock_panel.locator("select").select_option("dock-b")
             dock_panel.locator("ui-button").first.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
-            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status[role=status]:last-of-type')?.textContent.includes('로봇이 받았습니다')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status[data-result]:last-of-type')?.textContent.includes('로봇이 받았습니다')")
             page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status')?.textContent.includes('도킹 컨트롤러가 준비되지 않았습니다')")
             assert dock_panel.locator("select").input_value() == "dock-b"
             assert len(posts) == 1, posts
@@ -918,7 +918,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
               eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
               dockReadback: document.querySelector('[data-panel="console.docking"] ui-status')?.textContent || '',
-              dockAction: [...document.querySelectorAll('[data-panel="console.docking"] ui-status[role="status"]')].at(-1)?.textContent || '',
+              dockAction: [...document.querySelectorAll('[data-panel="console.docking"] ui-status[data-result]')].at(-1)?.textContent || '',
             })""")
             assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
             assert "도킹 컨트롤러가 준비되지 않았습니다" in measured["dockReadback"] and "로봇이 받았습니다" in measured["dockAction"]
@@ -997,7 +997,7 @@ def test_console_map_data_and_action_feedback_full_shell_captures(tmp_path):
             page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
             assert panel.locator('[data-map-click="goal"]').is_disabled()
             panel.locator("canvas").click(position={"x":40,"y":40})
-            action = panel.locator('ui-status[role="status"]').last
+            action = panel.locator('ui-status[data-result]').last
             assert action.inner_text()
             assert posts == []
             filename = f"operator-console-map-data-action-{width}x{height}.png"
@@ -1176,8 +1176,8 @@ def test_admin_identity_editor_poll_feedback_full_shell_captures(tmp_path):
             assert identity_input.input_value() == "draft-pinky"
 
             form.evaluate("node => node.requestSubmit()")
-            feedback = host.locator(".host-system-detail ui-status[role='status']")
-            page.wait_for_function("document.querySelector('[data-panel=\"host.system\"] .host-system-detail ui-status[role=\"status\"]')?.getAttribute('state') === 'ready'")
+            feedback = host.locator(".host-system-detail ui-status[data-result]")
+            page.wait_for_function("document.querySelector('[data-panel=\"host.system\"] .host-system-detail ui-status[data-result]')?.getAttribute('state') === 'ready'")
             receipt = feedback.inner_text()
             reads_after_receipt = reads["count"]
             page.wait_for_timeout(450)
@@ -1194,7 +1194,7 @@ def test_admin_identity_editor_poll_feedback_full_shell_captures(tmp_path):
               formCount:document.querySelectorAll('[data-panel="host.system"] .host-system-detail .ui-form').length,
               value:document.querySelector('[data-panel="host.system"] [name="robot_name"]')?.value||'',
               readback:document.querySelector('[data-panel="host.system"] .host-system-overview ui-status')?.textContent||'',
-              feedback:document.querySelector('[data-panel="host.system"] .host-system-detail ui-status[role="status"]')?.textContent||'',
+              feedback:document.querySelector('[data-panel="host.system"] .host-system-detail ui-status[data-result]')?.textContent||'',
             })""")
             assert result["overflowX"] == 0 and result["eStopVisible"] and errors == [], result
             assert result["formCount"] == 1 and result["value"] == "draft-pinky" and result["feedback"] == receipt
@@ -1350,10 +1350,10 @@ def test_console_navigation_stage_local_captures(tmp_path):
               canvasTop: document.querySelector('.surface-map-canvas').getBoundingClientRect().top,
               canvasHeight: document.querySelector('.surface-map-canvas').getBoundingClientRect().height,
               stageTop: document.querySelector('.surface-map-stage').getBoundingClientRect().top,
-              clicksBottom: document.querySelector('[aria-label="지도 작업"]').getBoundingClientRect().bottom,
-              clickButtons: [...document.querySelectorAll('[aria-label="지도 작업"] ui-button')]
+              clicksBottom: document.querySelector('#console-map-click').getBoundingClientRect().bottom,
+              clickButtons: [...document.querySelectorAll('#console-map-click .choice-chip')]
                 .map(button => ({top: button.getBoundingClientRect().top, height: button.getBoundingClientRect().height})),
-              layersTop: document.querySelector('[aria-label="지도 레이어"]').getBoundingClientRect().top,
+              layersTop: document.querySelector('#console-map-layers').getBoundingClientRect().top,
             })""")
             assert result["overflowX"] == 0 and result["eStopVisible"] and errors == [], result
             assert result["clicksBottom"] <= result["canvasTop"], result
@@ -1361,9 +1361,10 @@ def test_console_navigation_stage_local_captures(tmp_path):
             assert all(button["height"] >= 48 for button in result["clickButtons"]), result
             assert result["layersTop"] >= result["canvasTop"] + result["canvasHeight"], result
             if viewport[0] < 1024:
-                assert result["mapTop"] < result["actionTop"] < result["cameraTop"], result
-                assert result["slotOrder"] == ["banner", "observe", "act", "sense"], result
-                assert result["canvasTop"] < 270, result
+                # D-1028(2026-11-14 읽는 순서 명세 6번): 좁은 화면은 머리 → 운전 모드 → 카메라 → 지도다. 정지는 머리에서 늘 첫 자리다.
+                assert result["actionTop"] < result["cameraTop"] < result["mapTop"], result
+                assert result["slotOrder"] == ["banner", "act", "sense", "observe"], result
+                assert result["actionTop"] < viewport[1], result  # 운전 모드가 첫 화면에 보인다
                 if viewport[0] == 320:
                     assert result["stageTop"] >= result["canvasTop"] + result["canvasHeight"], result
             else:
@@ -1400,7 +1401,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
               && document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 주행 상태 확인 필요')""")
             assert page.locator("#shell-estop").is_visible()
             assert "안전 정지 중" in page.locator("#map-action-reason").inner_text()
-            assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "안전 정지 중 주행 목표 불가"
+            assert page.locator('label:has([data-map-click="goal"]) .choice-reason').inner_text() == "안전 정지 중 주행 목표 불가"
             page.wait_for_function("""() => document.querySelector('[data-panel="console.overview"] .ui-readout')?.textContent.includes('안전 정지 적용')""")
             stop_image = f"operator-console-navigation-safe-stop-{viewport[0]}x{viewport[1]}.png"
             page.screenshot(path=str(capture_dir / stop_image), full_page=True)
@@ -1438,10 +1439,10 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 assert "위치 추정 · 위치 확인 필요" in stage.inner_text()
                 assert "주행 · 주행 중 보고 · 위치 확인 필요" in stage.inner_text()
                 assert "주행 목표를 막았습니다" in page.locator("#map-action-reason").inner_text()
-                assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "위치 추정 확인 후 가능"
+                assert page.locator('label:has([data-map-click="goal"]) .choice-reason').inner_text() == "위치 추정 확인 후 가능"
                 assert page.evaluate(blue_pixels) == 0
-                # D-978 머리 수치 띠(dl[data-form="strip"])와 구분해 근거 요약 dl만 잡는다.
-                overview = page.locator('[data-panel="console.overview"] .ui-readout:not([data-form="strip"])')
+                # 알려진 값은 머리 띠에, 근거 없는 값은 "근거 없음" 펼침 목록에 있다. 둘 다 같은 패널의 dl이다.
+                overview = page.locator('[data-panel="console.overview"] dl.ui-readout')
                 overview_navigation = overview.locator('dt', has_text='내비게이션').locator('+ dd')
                 overview_pose = overview.locator('dt', has_text='현재 위치').locator('+ dd')
                 page.wait_for_function("""() => document.querySelector('[data-panel="console.overview"] .ui-readout')?.textContent.includes('위치 확인 필요')""")
@@ -1484,7 +1485,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 page.locator(".surface-map-canvas").focus()
                 page.set_viewport_size({"width": 390, "height": 844})
                 page.wait_for_function("""() => [...document.querySelectorAll('#surface-main > .surface-slot')]
-                  .map(slot => slot.dataset.slot).join(',') === 'banner,observe,act,sense'""")
+                  .map(slot => slot.dataset.slot).join(',') === 'banner,act,sense,observe'""")
                 assert page.evaluate("document.activeElement?.classList.contains('surface-map-canvas')")
                 page.set_viewport_size({"width": 1366, "height": 768})
                 page.wait_for_function("""() => [...document.querySelectorAll('#surface-main > .surface-slot')]

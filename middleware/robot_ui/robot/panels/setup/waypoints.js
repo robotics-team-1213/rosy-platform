@@ -2,6 +2,7 @@ import { HeadlessState } from "/common/core_ui_logic.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
 import { createNode } from "/assets/dom.js";
 import { createFormErrors } from "/common/form-controls.js";
+import { watchStatus } from "/assets/dom.js";
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 export function mount(el, ctx) {
@@ -24,14 +25,12 @@ export function mount(el, ctx) {
   errorSummary.hidden = true;
   const errors = createFormErrors(form, errorSummary);
   const message = document.createElement("p");
-  message.setAttribute("role", "status");
   message.textContent = "현재 위치의 최신 상태를 기다리는 중입니다.";
+  watchStatus(message);
   const saveStatus = document.createElement("p");
-  saveStatus.setAttribute("role", "status");
-  saveStatus.setAttribute("aria-live", "polite");
+  watchStatus(saveStatus);
   const listStatus = document.createElement("p");
-  listStatus.setAttribute("role", "status");
-  listStatus.setAttribute("aria-live", "polite");
+  watchStatus(listStatus);
   const list = createNode("ul", "waypoint-list");
   list.hidden = true;
   const emptyNote = createNode("ui-empty", "", "저장된 웨이포인트가 없습니다.");

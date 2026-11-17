@@ -1,7 +1,7 @@
 [hidden] { display: none !important; }
 a { color: var(--text-primary); text-underline-offset: 0.2em; }
 .ui-page-heading { margin: 0; font: var(--weight-strong) var(--text-title)/var(--leading-label) var(--body); }
-.ui-section-heading { margin: 0; font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body); }
+.ui-section-heading { margin: 0; font: var(--weight-label) var(--text-body)/var(--leading-body) var(--body); }
 .ui-disclosure-row { box-sizing: border-box; min-height: var(--target-secondary); padding: var(--inset-button); color: var(--text-primary); background: var(--surface-canvas); border: 1px solid var(--control-line); border-radius: var(--radius-button); font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: start; cursor: pointer; }
 .ui-disclosure-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .ui-disclosure-row:disabled, .ui-disclosure-row[aria-disabled="true"] { color: var(--text-secondary); border-style: dashed; border-color: var(--surface-line); cursor: not-allowed; }
@@ -25,10 +25,14 @@ a { color: var(--text-primary); text-underline-offset: 0.2em; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .ui-icon { display: inline-block; width: var(--text-value); height: var(--text-value); flex: none; }
 [data-icon-only] > .ui-icon-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.ui-tooltip { position: fixed; pointer-events: none; left: attr(data-ui-tip-x px, 0px); top: attr(data-ui-tip-y px, 0px); z-index: 2002; max-width: min(32ch, calc(100vw - var(--space-4))); padding: var(--inset-tooltip); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text-primary); font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--body); overflow-wrap: anywhere; }
+.ui-tooltip, .ui-toggletip-note { z-index: 2002; max-width: min(32ch, calc(100vw - var(--space-4))); padding: var(--inset-tooltip); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text-primary); font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--body); overflow-wrap: anywhere; }
+.ui-tooltip { position: fixed; pointer-events: none; left: attr(data-ui-tip-x px, 0px); top: attr(data-ui-tip-y px, 0px); }
+.ui-toggletip { position: relative; display: inline-flex; }
+.ui-toggletip-note { position: absolute; inset-block-start: 100%; inset-inline-start: 0; inline-size: max-content; }
+.ui-toggletip-note:empty { display: none; }
 .skip-link { position: fixed; z-index: 1000; top: var(--space-2); left: var(--space-2); padding: var(--inset-skip-link); color: var(--text-primary); background: var(--surface-canvas); border: var(--focus-ring-width) solid var(--focus-ring); border-radius: var(--radius-button); transform: translateY(-150%); }
 .skip-link:focus-visible { transform: none; }
-[data-hangul] { --mono: var(--body); --track-label: 0; --track-wide: 0; --track-state: 0; letter-spacing: var(--track-state); }
+[data-hangul], :has(> .ui-icon-label[data-hangul]) { --mono: var(--body); --track-label: 0; --track-wide: 0; --track-state: 0; font-family: var(--body); letter-spacing: var(--track-state); }
 body { word-break: keep-all; overflow-wrap: break-word; }
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 ui-button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; gap: var(--gap-button-content); min-width: var(--target-secondary); min-height: var(--target-secondary); margin: 0; padding: 0 var(--inset-button); border: 1px solid var(--control-line); border-radius: var(--radius-button); color: var(--text-primary); background: transparent; font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: center; cursor: pointer; user-select: none; }
@@ -60,7 +64,8 @@ ui-button[kind="toggle"][data-active="true"] small { color: var(--button-primary
 ui-button[data-kind-missing] { outline: var(--contract-mark-width) solid var(--status-crit); }
 ui-button[data-size-missing] { outline: var(--contract-mark-width) solid var(--status-crit); }
 ui-button[disabled] { cursor: not-allowed; }
-ui-button[disabled]:is(:not([reason]), [reason=""]):not([aria-pressed="true"], [aria-selected="true"]) { opacity: var(--disabled-opacity); }
+ui-button[disabled]:is(:not([reason]), [reason=""]):not([aria-pressed="true"], [aria-selected="true"], [aria-current="true"]) { opacity: var(--disabled-opacity); }
+ui-button[aria-current="true"] { color: var(--text-primary); font-weight: var(--weight-strong); box-shadow: inset 0 calc(-1 * var(--selection-edge)) 0 var(--text-primary); }
 ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):hover { color: var(--text-primary); border-color: var(--ink); }
 ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):active { color: var(--text-primary); background: var(--ground-card-2); }
 ui-button[kind="primary"]:not([disabled]):hover { background: color-mix(in oklab, var(--button-primary-bg) 88%, var(--ground)); }
@@ -88,7 +93,7 @@ ui-field { width: 100%; }
 input.ui-field,
 select.ui-field,
 textarea.ui-field { min-width: 0; max-width: 100%; }
-input.ui-field:disabled:not([type="checkbox"]),
+input.ui-field:disabled:not([type="checkbox"], [type="file"]),
 select.ui-field:disabled,
 textarea.ui-field:disabled { cursor: not-allowed; opacity: var(--disabled-opacity); }
 .ui-field::placeholder,
@@ -125,7 +130,7 @@ ui-tag[status="warn"] { color: var(--status-warn); border-color: var(--status-wa
 ui-tag[status="crit"] { color: var(--text-on-danger); border-color: transparent; background: var(--status-crit); }
 ui-tag[variant="inline"] { min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
 ui-tag[variant="inline"][status="crit"] { color: var(--text-primary); }
-ui-tag[variant="inline"][status="crit"]::before { content: ""; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: var(--status-crit); }
+ui-tag[variant="inline"][status="crit"]:not(:has(> .ui-icon))::before { content: ""; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: var(--status-crit); }
 ui-text { font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body); color: var(--text-primary); }
 ui-text[scale="unit"] { font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono); letter-spacing: var(--track-label); color: var(--nominal-quiet); }
 ui-text[scale="label"] { font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--nominal-quiet); }
@@ -196,7 +201,7 @@ ui-brand b { display: inline-flex; align-items: center; gap: var(--gap-brand); c
 ui-brand b::before { content: ""; flex: 0 0 1em; width: 1em; height: 1em; background: currentColor; mask: url("brand/mark.svg") center / contain no-repeat; }
 ui-brand small { color: var(--nominal-quiet); font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono); letter-spacing: var(--track-label); }
 ui-section { display: flex; flex-direction: column; gap: var(--gap-section); min-width: 0; }
-ui-section > [role="status"]:empty { display: contents; }
+ui-section > :is([role="status"], [data-result]):empty { display: contents; }
 .ui-confirm-scrim { position: fixed; z-index: 2000; inset: 0; background: var(--scrim); }
 .ui-confirm-scrim[data-clip] { clip-path: attr(data-clip type(*), none); }
 dialog.ui-live-dialog,

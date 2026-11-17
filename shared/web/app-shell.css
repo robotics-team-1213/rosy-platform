@@ -16,8 +16,9 @@
 .ui-subnav-nav { display: flex; flex-direction: column; gap: var(--gap-rail); padding: var(--inset-subnav); }
 .ui-subnav-head { padding: var(--inset-button); color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); }
 .ui-subnav-item { flex: none; display: flex; align-items: center; justify-content: flex-start; min-block-size: var(--target-secondary); padding: var(--inset-button); border: 0; border-radius: var(--radius-button); appearance: none; background: transparent; color: var(--text-secondary); font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: start; text-decoration: none; white-space: nowrap; cursor: pointer; }
-/* D-926 3 — 'step'는 같은 문서 안 현재 단계다. 'page'와 같은 자리 표식을 쓴다(빈칸 무표식은 아니한다). */
-.ui-subnav-item[aria-current="page"], .ui-subnav-item[aria-current="step"], .ui-subnav-item[aria-current="location"], .ui-subnav-item[aria-selected="true"] { background: var(--brand-rose-wash); color: var(--text-primary); }
+/* D-926 3 — 'step'는 같은 문서 안 현재 단계다. 'page'와 같은 자리 표식을 쓴다(빈칸 무표식은 아니한다).
+   brand-rose는 워드마크·역할 레일 전용(DESIGN Primary)이므로 하위 탐색 활성 표식은 공용 선택 표식(--selection)과 중립 바탕을 쓴다. */
+.ui-subnav-item[aria-current="page"], .ui-subnav-item[aria-current="step"], .ui-subnav-item[aria-current="location"], .ui-subnav-item[aria-selected="true"] { background: var(--surface-flat); color: var(--text-primary); font-weight: var(--weight-strong); box-shadow: inset var(--selection-edge) 0 0 var(--selection); }
 .ui-subnav-item:disabled { cursor: not-allowed; opacity: var(--disabled-opacity); }
 .ui-subnav-item:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
@@ -55,6 +56,8 @@
   .ui-rail-nav[data-more~="start"], .ui-subnav-nav[data-more~="start"] { box-shadow: inset var(--focus-ring-width) 0 0 var(--border-default); }
   .ui-rail-nav[data-more="start end"], .ui-subnav-nav[data-more="start end"] { box-shadow: inset var(--focus-ring-width) 0 0 var(--border-default), inset calc(0px - var(--focus-ring-width)) 0 0 var(--border-default); }
   .ui-subnav-head { display: none; }
+  /* Many links (ui-wiring.js sets data-many at 7+) stay one scrolling row like the rail, not a tall wrapped block: every link stays a real, clickable anchor. */
+  .ui-subnav-nav[data-many] { flex-wrap: nowrap; overflow-x: auto; }
   .ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(0, 1fr) var(--context-track); grid-template-rows: auto; align-content: start; grid-template-areas: "stage now" "cam now" "sense sense"; }
 }
 

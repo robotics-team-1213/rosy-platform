@@ -68,7 +68,10 @@ function markMore(nav) {
   const more = [nav.scrollLeft > 1 && "start", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1 && "end"].filter(Boolean).join(" ");
   if (more) nav.setAttribute("data-more", more); else nav.removeAttribute("data-more");
 }
-const markAll = () => document.querySelectorAll(NAV).forEach(markMore);
+// Seven or more sub-links is "many": the CSS turns the wrapped block into one scrolling row (below 64rem).
+const MANY_LINKS = 7;
+const markMany = nav => nav.toggleAttribute("data-many", nav.matches(".ui-subnav-nav") && nav.querySelectorAll(".ui-subnav-item").length >= MANY_LINKS);
+const markAll = () => document.querySelectorAll(NAV).forEach(nav => { markMore(nav); markMany(nav); });
 document.addEventListener("scroll", event => { if (event.target instanceof Element && event.target.matches(NAV)) markMore(event.target); }, {capture: true, passive: true});
 window.addEventListener("resize", markAll);
 new MutationObserver(markAll).observe(document, {subtree: true, childList: true});

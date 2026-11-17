@@ -28,6 +28,8 @@ class _Handler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         if path.startswith("/common/"):
             return str(WEB_COMMON / path.removeprefix("/common/"))
+        if path == "/assets/dom.js":  # panels import the dashboard's dom.js by its served name
+            return str(ROOT / "dom.js")
         return super().translate_path(path)
 
     def do_GET(self):

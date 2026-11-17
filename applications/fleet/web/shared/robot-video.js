@@ -7,6 +7,7 @@
 
 import {createFleetClient} from "/common/fleet-client.js";
 import {openRobotCamera} from "/console/assets/app-runtime.js";
+import {mountRobotCameraTile} from "/console/assets/robot-camera-tile.js";
 
 export const MAX_TILES = 6;
 
@@ -28,7 +29,7 @@ function el(doc, tag, text, attrs = {}) {
 }
 
 export function createRobotVideo({doc = document, call, open = openRobotCamera, fetchImpl}) {
-  let sessions = [], running = null;
+  let sessions = [], cameraTiles = [], running = null;
   const grantPath = (robot, suffix = "") => `/api/fleet/robots/${encodeURIComponent(robot)}/media-grant${suffix}`;
 
   function show(view, robot, state) {
@@ -56,7 +57,12 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
       }));
     } catch (error) {
       show(view, robot, {state: "lost"});
-      if (error?.status === 403) label.textContent = `${robot} · 영상 권한 없음`;
+      if (error?.status === 403) {
+        label.textContent = `${robot} · 영상 권한 없음`;
+      } else if (error?.message !== "stopped") {
+        view.tile.replaceChildren();
+        cameraTiles.push(mountRobotCameraTile({host: view.tile, robotId: robot, call, doc}));
+      }
       if (grant && error?.message !== "stopped") call(grantPath(robot, `/${grant.grant_id}`), {method: "DELETE"}).catch(() => {});
     }
   }
@@ -71,6 +77,7 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
     },
     stop() {
       sessions.splice(0).forEach((session) => session.close("stopped"));
+      cameraTiles.splice(0).forEach((tile) => tile.stop());
       running?.stage.replaceChildren();
       running = null;
     },

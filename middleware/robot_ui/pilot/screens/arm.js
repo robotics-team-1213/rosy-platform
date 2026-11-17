@@ -5,6 +5,9 @@ import {homeStep} from "../arm-stick.js";
 import {composeControls} from "./compose.js";
 import {mountJointJog} from "../widgets/joint_jog.js";
 import {mountGripper} from "../widgets/gripper.js";
+import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
+import {getAnnouncer} from "/common/announcer.js";
+const announce = (text) => getAnnouncer(document).announce(text);
 
 const TERMINAL = ["SUCCEEDED", "REJECTED", "CANCELED", "UNKNOWN_HOLD"];
 const GOAL_POLL_MS = 250;   // a settled goal is seen before the 1 s heartbeat (sequential jog)
@@ -48,17 +51,40 @@ export function mountArm(root, target, driver) {
   let home = profileHome;
   if (!home) try { home = JSON.parse(stored("localStorage", homeKey) ?? "null"); } catch { home = null; }
 
-  root.innerHTML = `<header class="arm-head"><h2>OMX-AI Gazebo 연습</h2>
-      <p>시뮬레이션 전용 · 실제 로봇과 연결되지 않습니다.</p></header>
+  let armRoleId = [target.arm_id, target.instance_id, new URLSearchParams(location.search).get("arm")]
+    .find(id => id === "arm_s" || id === "arm_a" || id === "arm_b") || "arm_s";
+  const ARM_ROLE_META = {
+    arm_s: {
+      badge: "Cell S · S3 공급 (arm_s)",
+      placeholder: "예: 핑키 상판 용기를 집어 컨베이어 벨트 투입 표시 안에 놓기 · 성공: 벨트 안착 · 실패: 낙하, 시간 초과",
+    },
+    arm_a: {
+      badge: "Cell A · S5 1·3단 (arm_a)",
+      placeholder: "예: 컨베이어 용기를 집어 팔레트 1·3단 표시 안에 적층하기 · 성공: 정위치 적층 · 실패: 낙하, 시간 초과",
+    },
+    arm_b: {
+      badge: "Cell B · S5 2단 (arm_b)",
+      placeholder: "예: 컨베이어 용기를 집어 팔레트 2단 교차 위치에 적층하기 · 성공: 정위치 적층 · 실패: 낙하, 시간 초과",
+    },
+  };
+  const armRoleMeta = ARM_ROLE_META[armRoleId];
+
+  root.innerHTML = `<header class="arm-head"><h2 data-sim-role-title>OMX-AI Gazebo 연습 · ${armRoleMeta.badge}</h2>
+      <p>시뮬레이션 전용 · 실제 로봇과 연결되지 않습니다. 실물 셀 운영은 <a href="/console/cell?cell=cell_s">Cell S (arm_s · S3 공급)</a> · <a href="/console/cell?cell=cell_a">Cell A (arm_a · S5 1·3단)</a> · <a href="/console/cell?cell=cell_b">Cell B (arm_b · S5 2단)</a> 작업대에서, 시연 검수·모방학습은 <a href="/learning/imitate">Rosy Learning (/learning/imitate)</a>에서 수행합니다.</p>
+      <div class="arm-step-actions" role="group" aria-label="연습 셀 역할 선택">
+        <ui-button kind="${armRoleId === "arm_s" ? "primary" : "quiet"}" type="button" data-sim-role="arm_s" aria-pressed="${armRoleId === "arm_s"}">Cell S · S3 공급 (arm_s)</ui-button>
+        <ui-button kind="${armRoleId === "arm_a" ? "primary" : "quiet"}" type="button" data-sim-role="arm_a" aria-pressed="${armRoleId === "arm_a"}">Cell A · S5 1·3단 (arm_a)</ui-button>
+        <ui-button kind="${armRoleId === "arm_b" ? "primary" : "quiet"}" type="button" data-sim-role="arm_b" aria-pressed="${armRoleId === "arm_b"}">Cell B · S5 2단 (arm_b)</ui-button>
+      </div></header>
     <div data-sim-pair><label>화면에 표시된 페어링 코드 <input class="ui-field" data-sim-code autocomplete="off"></label>
       <ui-button kind="primary" type="button" data-sim-connect>연결</ui-button></div>
-    <div class="arm-status-row"><p data-sim-status role="status" aria-live="polite">연결 대기</p>
+    <div class="arm-status-row"><p data-sim-status>연결 대기</p>
       <span class="arm-chip" data-sim-sensor-age data-state="stale">수신 대기</span></div>
     <div class="arm-console" data-sim-controls hidden>
       <section class="arm-view" aria-label="작업 공간">
         <figure class="arm-camera" ${target.recording ? "" : "hidden"}>
           <img data-sim-camera alt="Gazebo 작업 공간" width="320" height="240" hidden>
-          <figcaption data-sim-camera-status role="status">영상 확인 중</figcaption>
+          <figcaption data-sim-camera-status>영상 확인 중</figcaption>
         </figure>
         <section class="arm-sensors" aria-labelledby="arm-sensors-head">
           <div class="arm-sensors-head"><h3 id="arm-sensors-head">센서 값</h3></div>
@@ -81,7 +107,7 @@ export function mountArm(root, target, driver) {
         <p class="arm-hint">시작 자세로 맞추고, 과제를 적고, 녹화한 뒤 결과를 골라 끝냅니다. 영상·관절 값·수락된 조작 목표가 함께 남습니다.</p>
         <ol class="arm-steps">
           <li data-sim-step="home"><h4>시작 자세</h4>
-            <p class="arm-hint" data-sim-home-status role="status">저장된 시작 자세가 없습니다. 팔을 원하는 자세로 옮긴 뒤 저장하세요.</p>
+            <p class="arm-hint" data-sim-home-status>저장된 시작 자세가 없습니다. 팔을 원하는 자세로 옮긴 뒤 저장하세요.</p>
             <p class="arm-hint" data-sim-home-source ${profileHome ? "" : "hidden"}>이 기계의 시연 프로파일에 정해진 시작 자세입니다.</p>
             <div class="arm-step-actions">
               <ui-button kind="quiet" type="button" data-sim-home-save ${profileHome ? "hidden" : ""}>현재 자세를 시작 자세로 저장</ui-button>
@@ -90,11 +116,11 @@ export function mountArm(root, target, driver) {
           <li data-sim-step="task" ${target.recording ? "" : "hidden"}><h4>과제 설명</h4>
             <label>무엇을 하는 시연인가요
               <textarea class="ui-field" data-sim-task maxlength="300" rows="3"
-                placeholder="예: 파란 상자를 집어 벨트 표시 안에 놓기 · 성공: 표시 안에 놓임 · 실패: 떨어뜨림, 시간 초과"></textarea></label>
+                placeholder="${armRoleMeta.placeholder}"></textarea></label>
             <p class="arm-hint" data-sim-task-count>0 / 300 · 다음 기록에도 그대로 남습니다</p></li>
           <li data-sim-step="record" ${target.recording ? "" : "hidden"}><h4>녹화</h4>
             <ui-button kind="primary" type="button" data-sim-record-start>녹화 시작</ui-button>
-            <p class="arm-record-status" data-sim-record-status role="status">기록 대기</p></li>
+            <p class="arm-record-status" data-sim-record-status>기록 대기</p></li>
           <li data-sim-step="stop" ${target.recording ? "" : "hidden"}><h4>종료하고 결과 남기기</h4>
             <p class="arm-record-status" data-sim-record-live data-state="recording" aria-hidden="true" hidden></p>
             <div class="arm-step-actions">
@@ -110,11 +136,27 @@ export function mountArm(root, target, driver) {
   const $ = (selector) => root.querySelector(selector);
   const controls = $("[data-sim-controls]");
   const status = $("[data-sim-status]");
+  for (const roleBtn of root.querySelectorAll("[data-sim-role]")) {
+    roleBtn.addEventListener("click", () => {
+      const nextRole = roleBtn.getAttribute("data-sim-role");
+      if (!ARM_ROLE_META[nextRole]) return;
+      armRoleId = nextRole;
+      const meta = ARM_ROLE_META[nextRole];
+      const titleEl = $("[data-sim-role-title]");
+      if (titleEl) titleEl.textContent = `OMX-AI Gazebo 연습 · ${meta.badge}`;
+      const taskEl = $("[data-sim-task]");
+      if (taskEl) taskEl.placeholder = meta.placeholder;
+      for (const b of root.querySelectorAll("[data-sim-role]")) {
+        const activeRole = b.getAttribute("data-sim-role") === nextRole;
+        b.setAttribute("kind", activeRole ? "primary" : "quiet");
+        b.setAttribute("aria-pressed", String(activeRole));
+      }
+    });
+  }
   const cancel = $("[data-sim-cancel]");
 
-  // The status line is a live region: write it only when the text changes (no re-announcing
-  // the same "명령 RUNNING" every 250 ms poll).
-  function setStatus(text) { if (status.textContent !== text) status.textContent = text; }
+  // Write only when the text changes (no re-announcing the same "명령 RUNNING" every 250 ms poll); the shared announcer is the one voice.
+  function setStatus(text) { if (status.textContent !== text) { status.textContent = text; announce(text); } }
   function notify(update) {
     cancel.disabled = !active;
     if (active) cancel.removeAttribute("reason"); else cancel.setAttribute("reason", "진행 중 명령 없음");
@@ -252,19 +294,19 @@ export function mountArm(root, target, driver) {
     const ranges = Object.fromEntries((jogItem()?.joints ?? []).map((joint) => [joint.name, joint]));
     const rows = armJoints().map((name) => {
       const value = state?.positions?.[name];
-      if (!Number.isFinite(value)) return row([name, "값 없음", "—", "—"]);
+      if (!Number.isFinite(value)) return row([name, EVIDENCE_LABEL.unavailable, EVIDENCE_LABEL.unavailable, EVIDENCE_LABEL.unavailable]);
       const range = ranges[name];
       const goal = home?.[name];
       const left = Number.isFinite(goal) ? goal - value : null;
       return row([name, `${deg(value)} (${value.toFixed(3)} rad)`,
                   meter(value, range?.lower, range?.upper, `${name} 범위 ${deg(range?.lower ?? 0)} ~ ${deg(range?.upper ?? 0)}`),
-                  left === null ? "—" : Math.abs(left) <= 0.01 ? "맞음" : `${left > 0 ? "+" : ""}${deg(left)}`]);
+                  left === null ? EVIDENCE_LABEL.unavailable : Math.abs(left) <= 0.01 ? "맞음" : `${left > 0 ? "+" : ""}${deg(left)}`]);
     });
     const g = state?.gripper;
     if (g) {
       const percent = gripperPercent(g.position, g);
-      rows.push(row([`${g.joint} (그리퍼)`, percent === null ? "값 없음" : `열림 ${percent}% · ${gripperStateLabel(g.state)}`,
-                     percent === null ? "—" : meter(percent, 0, 100, `그리퍼 열림 ${percent}%`), "—"]));
+      rows.push(row([`${g.joint} (그리퍼)`, percent === null ? EVIDENCE_LABEL.unavailable : `열림 ${percent}% · ${gripperStateLabel(g.state)}`,
+                     percent === null ? EVIDENCE_LABEL.unavailable : meter(percent, 0, 100, `그리퍼 열림 ${percent}%`), EVIDENCE_LABEL.unavailable]));
     }
     $("[data-sim-sensors]").replaceChildren(...rows);
   }

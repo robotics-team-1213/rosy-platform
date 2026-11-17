@@ -48,7 +48,7 @@ def test_login_entry_and_unconfigured_panel_recover_when_accounts_connect(tmp_pa
                 expect(page.locator('#account-setup')).to_be_hidden()
                 page.route('**/api/accounts/options', lambda route: route.fulfill(status=503, json={'error': 'connection unavailable'}))
                 page.reload(wait_until='domcontentloaded')
-                expect(page.locator('#login-help')).to_contain_text('연결을 확인할 수 없습니다')
+                expect(page.locator('#page-alerts')).to_contain_text('계정 설정을 확인하세요')  # one page alert names the cause
                 expect(page.locator('#account-login')).to_be_hidden()
                 assert not posts
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -145,7 +145,7 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 expect(page.locator('#account-retry')).to_be_visible()
                 with page.expect_response('**/api/accounts/options'):
                     page.locator('#account-retry').click()
-                expect(page.locator('#account-status')).to_contain_text('로그인 상태를 확인할 수 없습니다')
+                expect(page.locator('#account-status')).to_contain_text('불러오지 못함')
                 expect(page.locator('#account-retry')).to_be_visible()
                 page.unroute('**/api/accounts/options')
                 page.goto(origin + '/api/account/callback?state=expired&code=expired')
@@ -222,7 +222,7 @@ def test_account_path_follows_real_session_without_losing_drafts_or_focus(tmp_pa
                 page.add_init_script('localStorage.setItem("rosy.theme", "' + theme + '")')
 
                 def auth_frame():
-                    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+                    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
                     expect(page.locator('.ui-app-body')).to_have_attribute('data-seats', 'none')
                     expect(page.locator('#accounts-main.ui-auth-page > h1:first-child')).to_have_text('Learning에 로그인')
                     expect(page.locator('h1')).to_have_count(1)
@@ -233,7 +233,7 @@ def test_account_path_follows_real_session_without_losing_drafts_or_focus(tmp_pa
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
                 def signed_frame():
-                    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+                    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
                     expect(page.locator('.ui-app-body')).to_have_attribute('data-seats', 'rail')
                     expect(page.locator('.ui-app-main > .ui-pathbar > #account-title')).to_have_text('계정과 연결')
                     expect(page.locator('h1')).to_have_count(1)
@@ -497,7 +497,7 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                 page.route('**/api/accounts/session', lambda route: route.fulfill(
                     status=503, content_type='application/json', body='{"error":"temporarily unavailable"}'))
                 page.locator('#reload').click()
-                expect(page.locator('#account-error')).to_contain_text('temporarily unavailable')
+                expect(page.locator('#page-alerts')).to_contain_text('temporarily unavailable')
                 expect(page.locator('#login-panel')).to_be_hidden()
                 page.unroute('**/api/accounts/session')
                 page.locator('#reload').click()

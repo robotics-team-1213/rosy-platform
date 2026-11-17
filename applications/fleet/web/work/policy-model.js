@@ -102,5 +102,13 @@ export function errorText(error) {
     WINDOW_TOO_LONG: '승인 창 길이가 허용 범위를 넘습니다.',
     PROPOSAL_ALREADY_PENDING: '이미 결정을 기다리는 제안이 있습니다.',
   };
-  return known[error?.code] || error?.message || '처리 결과를 확인하지 못했습니다. 현재 상태를 다시 조회하세요.';
+  if (known[error?.code]) return known[error.code];
+  const msg = String(error?.message || '').trim();
+  if (error?.status === 404 || /^(?:not found|http 404)$/i.test(msg)) {
+    return '이 Fleet에는 학습 정책 승인 기능이 설정되지 않았습니다.';
+  }
+  if (!error?.code && !error?.status && /Failed to fetch|NetworkError|Load failed|ERR_/i.test(msg)) {
+    return '관제 연결을 확인하지 못했습니다. 네트워크를 확인한 뒤 현재 상태를 다시 조회하세요.';
+  }
+  return msg || '처리 결과를 확인하지 못했습니다. 현재 상태를 다시 조회하세요.';
 }

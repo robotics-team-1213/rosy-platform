@@ -1,4 +1,4 @@
-// D-540 5: 설치·보정 `카메라 설치·보정`의 시작점(D-513). 운영자가 지도 기준 하나를 저장한다.
+// D-540 5: 설치 `카메라 설치·보정`의 시작점(D-513). 운영자가 지도 기준 하나를 저장한다.
 // 위치는 맵 맞춤의 "위에서 본 지도 좌표" 그림(map-fit-view.js view.mapFitPick)에서 고른다.
 // 고른 점은 목표 발행에 들어가지 않는다.
 import {createPollGate} from '/console/assets/poll-gate.js';

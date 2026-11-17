@@ -1,0 +1,217 @@
+/* C23 robot dock + C24 robot panel + stage push/sheet layout (D-220 still, tokens only). */
+.robot-stage { display: grid; grid-template-columns: minmax(0, 1fr) 56px; min-width: 0; min-height: 0; }
+.robot-stage:has(> .robot-panel:not([hidden])) { grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr) 56px; }
+.robot-stage-main { min-width: 0; min-height: 0; display: grid; gap: var(--space-3); align-content: start; }
+
+/* C23 dock: vertical strip on >=64rem, horizontal row above main on <64rem */
+.robot-dock { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; border-inline-start: 1px solid var(--border-default); background: var(--surface-chrome); }
+.robot-dock-group { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); width: 100%; min-width: 0; }
+.robot-dock-group + .robot-dock-group { padding-block-start: var(--space-2); border-block-start: 1px solid var(--border-default); }
+.robot-dock-label { color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--body); }
+
+.robot-dock-btn {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0;
+  width: var(--target-secondary);
+  min-width: 44px;
+  min-height: var(--target-secondary);
+  padding: var(--space-1);
+  border: 0;
+  border-inline-start: var(--selection-edge) solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-primary);
+  font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono);
+  cursor: pointer;
+}
+.robot-dock-btn:hover { background: var(--surface-sheen); }
+.robot-dock-btn:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+/* --selection requires --surface-flat or lighter for 3:1 contrast in both themes */
+.robot-dock-btn[aria-pressed="true"] { background: var(--surface-flat); }
+.robot-dock-btn[data-selected] { border-inline-start-color: var(--selection); }
+.robot-dock-icon { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.robot-dock-icon > .ui-icon { width: var(--text-title); height: var(--text-title); }
+.robot-dock-id { white-space: nowrap; font-variant-numeric: tabular-nums; line-height: var(--leading-flat); }
+
+.robot-dock-mark {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px;
+  border-radius: var(--radius-flag);
+  pointer-events: none;
+}
+.robot-dock-mark > .ui-icon { width: var(--text-label); height: var(--text-label); }
+.robot-dock-mark[data-mark-kind="alarm"] { top: 2px; inset-inline-end: 2px; }
+.robot-dock-mark[data-mark-kind="link"] { bottom: 2px; inset-inline-end: 2px; }
+.robot-dock-mark:is([data-state="delayed"], [data-state="disconnected"], [data-state="caution"]) { color: var(--status-warn); }
+.robot-dock-mark[data-state="unknown"] { color: var(--text-secondary); }
+.robot-dock-mark[data-state="danger"] { background: var(--status-crit); color: var(--text-on-danger); }
+
+/* C24 panel: push column on >=64rem, full-screen sheet below header on <64rem */
+.robot-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-inline-end: 1px solid var(--border-default);
+  background: var(--surface-chrome);
+}
+@media (width >= 64rem) {
+  .robot-panel {
+    position: sticky;
+    top: var(--appbar-height);
+    align-self: start;
+    max-height: calc(100dvh - var(--appbar-height));
+  }
+}
+.robot-panel[hidden] { display: none; }
+.robot-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--border-subtle);
+}
+.robot-panel-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font: var(--weight-strong) var(--text-body)/var(--leading-label) var(--body);
+  overflow-wrap: anywhere;
+}
+.robot-panel-title:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.robot-panel-link, .robot-panel-close { flex: none; }
+
+.robot-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+.robot-panel-jumps {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--space-1);
+  padding-block: var(--space-1);
+  background: var(--surface-chrome);
+  border-block-end: 1px solid var(--border-subtle);
+}
+.robot-panel-jump {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body);
+  cursor: pointer;
+}
+@media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  .robot-panel-jump { min-height: var(--target-tool); }
+}
+.robot-panel-jump:hover { border-color: var(--control-line); background: var(--surface-sheen); }
+.robot-panel-jump:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.robot-panel-section { min-width: 0; display: grid; gap: var(--space-2); scroll-margin-top: calc(var(--target-secondary) + var(--space-3)); }
+.robot-panel-section + .robot-panel-section { padding-block-start: var(--space-3); border-block-start: 1px solid var(--border-subtle); }
+.robot-panel-section > h3 { margin: 0; color: var(--text-secondary); font: var(--weight-label) var(--text-label)/var(--leading-label) var(--body); }
+details.robot-panel-section > summary {
+  min-height: var(--target-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font: var(--weight-label) var(--text-label)/var(--leading-label) var(--body);
+  cursor: pointer;
+}
+
+.robot-panel-kv {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font: var(--weight-regular) var(--text-label)/var(--leading-label) var(--body);
+}
+.robot-panel-kv dt { color: var(--text-secondary); }
+.robot-panel-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.robot-panel-ev { grid-column: 2; color: var(--text-secondary); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--body); }
+
+.robot-panel-cam {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--surface-canvas);
+  color: var(--text-secondary);
+  font: var(--weight-regular) var(--text-label)/var(--leading-label) var(--body);
+}
+.robot-panel-cam-stamp { position: absolute; inset-inline: var(--space-2); bottom: var(--space-2); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--body); }
+.robot-panel-cause { margin: 0; color: var(--text-secondary); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--body); }
+
+.robot-panel-foot {
+  flex: none;
+  padding: var(--space-3) var(--space-4);
+  border-block-start: 1px solid var(--border-default);
+  background: var(--surface-chrome);
+  display: grid;
+  gap: var(--space-1);
+}
+.robot-panel-foot[hidden] { display: none; }
+.robot-panel-stop { width: 100%; }
+.robot-panel-stop-note { margin: 0; color: var(--text-secondary); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--body); }
+
+/* Gallery map placeholder */
+.robot-demo-map {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--surface-chrome);
+}
+.robot-demo-map h3 { margin: 0; font: var(--weight-strong) var(--text-body)/var(--leading-label) var(--body); }
+.robot-demo-map-list { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.robot-demo-map-btn {
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--control-line);
+  border-inline-start: var(--selection-edge) solid var(--control-line);
+  border-radius: var(--radius-button);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
+  cursor: pointer;
+}
+.robot-demo-map-btn:hover { border-color: var(--text-primary); }
+.robot-demo-map-btn[data-selected] { border-color: var(--selection); border-inline-start-color: var(--selection); font-weight: var(--weight-strong); }
+.robot-demo-map-btn:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.robot-demo-note { margin: 0; color: var(--text-secondary); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--body); }
+
+@media (width < 64rem) {
+  .robot-stage, .robot-stage:has(> .robot-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .robot-dock { order: -1; flex-direction: row; align-items: stretch; gap: var(--space-2); padding: var(--space-2) 0; border-inline-start: 0; border-block-end: 1px solid var(--border-subtle); overflow-x: auto; }
+  .robot-dock-group { flex-direction: row; flex: 1 1 auto; width: auto; align-items: stretch; }
+  .robot-dock-group + .robot-dock-group { padding-block-start: 0; border-block-start: 0; padding-inline-start: var(--space-2); border-inline-start: 1px solid var(--border-default); }
+  .robot-dock-label { display: none; }
+  .robot-dock-btn { flex: 1 1 0; width: auto; min-width: 44px; border-inline-start: 0; border-block-end: var(--selection-edge) solid transparent; }
+  .robot-dock-btn[data-selected] { border-block-end-color: var(--selection); }
+  .robot-panel { position: fixed; inset: var(--appbar-height) 0 0 0; z-index: 4; border-inline-end: 0; background: var(--surface-canvas); }
+}

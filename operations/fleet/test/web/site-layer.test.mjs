@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines,
+  classifySightings, siteBounds, siteStageHeight, fitTransform, project, gridLines,
   SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, quarterTurn, cameraScreenToMap, mapUpTurn, siteViewTurn,
 } from "../../../../applications/fleet/web/map/site-layer.js";
 
@@ -47,8 +47,7 @@ test("site bounds cover every rectangle with a margin", () => {
 
 test("fit keeps metres square and flips y so +y points up the canvas", () => {
   const bounds = { min_x: 0, min_y: 0, max_x: 4, max_y: 2 };
-  const { width, height } = canvasSizeFor(bounds, 1000);
-  assert.deepEqual([width, height], [1000, 500]);
+  const width = 1000, height = 500;
   const t = fitTransform(bounds, width, height, 50);
   const origin = project(t, 0, 0);
   const corner = project(t, 4, 2);
@@ -123,4 +122,28 @@ test("D-513 7: the site map's view turn comes from the active map, else 0", () =
   assert.equal(siteViewTurn({ map: { view_turn_deg: 45 } }), 0);
   assert.equal(siteViewTurn({ map: {} }), 0);
   assert.equal(siteViewTurn(null), 0);
+});
+
+test("siteStageHeight sizes the stage from width and site ratio, clamped by the CSS bounds", () => {
+  const box = (w, h) => ({ min_x: 0, min_y: 0, max_x: w, max_y: h });
+  // 5:1 사이트(6×1.2 m) + siteBounds 마진 0.25 → 6.5×1.7: 폭 1000px 면 1000*(1.7/6.5)+2*32.
+  const wide = siteBounds({ maps: [{ polygon_m: [[0, 0], [6, 0], [6, 1.2], [0, 1.2]] }] });
+  assert.equal(siteStageHeight(1000, wide, 0, 32, 200, 3000), 326);
+  // 아주 납작한 사이트는 바닥에 걸린다(사이트는 contain 로 좌우 여백에 맞춰 들어간다).
+  assert.equal(siteStageHeight(1000, box(100, 1), 0, 32, 200, 736), 200);
+  // 세로로 긴 사이트는 상한에, 90°/270° 화면 방향은 비율을 뒤집는다(drawSiteView 의 fw/fh 규칙).
+  assert.equal(siteStageHeight(800, box(2, 10), 0, 32, 200, 736), 736);
+  assert.equal(siteStageHeight(800, box(2, 10), 90, 32, 200, 736), 224);
+  assert.equal(siteStageHeight(800, box(2, 10), 270, 32, 200, 736), 224);
+  // 여백 pad 도 높이에 들어간다(fitTransform pad 와 같은 값).
+  assert.equal(siteStageHeight(1000, box(5, 1), 0, 48, 0, 3000), 296);
+  // maxPx 가 없으면(상한 none) 비율을 그대로 따른다.
+  assert.equal(siteStageHeight(1000, box(1, 1), 0, 0, 200, Infinity), 1000);
+});
+
+test("siteStageHeight caps at the room left in the map column but keeps the floor", () => {
+  const box = (w, h) => ({ min_x: 0, min_y: 0, max_x: w, max_y: h });
+  assert.equal(siteStageHeight(800, box(2, 10), 0, 32, 200, 736, 400), 400);
+  assert.equal(siteStageHeight(800, box(2, 10), 0, 32, 200, 736, 50), 200);
+  assert.equal(siteStageHeight(800, box(2, 10), 0, 32, 200, 736, Infinity), 736);
 });

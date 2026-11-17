@@ -1,0 +1,55 @@
+/* C25 alert center: cards for the one alert list and the rare toast. Tokens only, no animation (D-220). */
+.alert-center-list,
+.alert-center-toasts {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  min-width: 0;
+}
+.alert-center-list:empty,
+.alert-center-toasts:empty { display: none; }
+.alert-center-toasts {
+  position: fixed;
+  inset-block-end: var(--space-4);
+  inset-inline-start: var(--space-4);
+  z-index: 15;
+  inline-size: min(24rem, calc(100vw - 2 * var(--space-4)));
+  max-block-size: min(18rem, calc(100dvh - var(--appbar-height) - var(--space-6)));
+  overflow-y: auto;
+}
+.alert-center-card {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface-chrome);
+  color: var(--text-primary);
+}
+.alert-center-card[data-kind="safety"],
+.alert-center-card[data-kind="crit"] { border-color: var(--status-crit); }
+.alert-center-card[data-kind="warn"] { border-color: var(--status-warn); }
+.alert-center-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.alert-center-meta {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.alert-center-count {
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-flag);
+  background: var(--surface-raised);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+}
+.alert-center-message { margin: 0; font-size: var(--text-label); overflow-wrap: anywhere; }
+.alert-center-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
+.alert-center-actions:not(:has(ui-button:not([hidden]))) { display: none; }

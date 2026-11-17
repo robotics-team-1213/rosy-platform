@@ -2115,6 +2115,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 
 로봇(rosy_core)이 제공하는 엔드포인트. Base: `http://<robot-host>:8080`
 
+`GET /api/v1` 은 발견용 루트로 `{name:"core", api_versions:["v1"]}` 를 돌려준다. 역할 의존성이 없다.
+
 ## 5.1 System
 
 | Method | Path | Role | 요구사항 |
@@ -2132,6 +2134,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/ui/surfaces/{surface}` | Viewer+ | D-263/D-265/D-283 — 역할별 화면 매니페스트. `console`/`setup`/`device`; 해당 화면 최소 역할보다 낮으면 403, 인증 실패 401, 미등록 화면 404. 응답은 현재 역할이 열 수 있는 기반 화면 목록과 현재 화면의 CAP-001·inventory 필터 패널, 구조 revision이다. console act 패널은 선택형 `action_group` (`drive`, `docking`, `line_follow`)을 담을 수 있으며, capability가 없거나 `not_provided` inventory인 panel과 그룹은 응답에서 생략한다. 메뉴는 패널 수와 독립이다. REST 응답 모델 `UiSurfaceManifest`; Fleet envelope `protocol_version`은 1.0 유지 |
 | POST | `/api/v1/auth/logout` | Viewer | D-193 — 호출자 자신의 `pair-*` 토큰을 지운다(204). 다른 출처의 토큰은 409 — 설정 화면에서 회수한다 |
 | POST | `/api/v1/auth/enrollment-codes` | Admin | D-193 (payload: `{role}`, 기본 `operator`) — 다른 기기용 로그인 코드 `201 {code, code_id, role, expires_in_s}`, 5분, CORE 메모리에만. 역할은 호출자 이하(넘으면 403). 이 코드로 받은 토큰의 출처는 `pair-admin` 이고 만료는 발급자 토큰의 만료를 넘지 않는다. 발급자 토큰이 회수·만료되면 코드도 무효다 |
+| POST | `/api/v1/system/dds/cyclone` | Admin | D-123 (payload: `{confirmed, idempotency_key?}`) — **재부팅한다.** `confirmed` 가 아니면 400 `CONFIRMATION_REQUIRED`. Cyclone DDS 의도를 로컬 오버레이에 저장(실패 500 `INTERNAL_ERROR`)한 뒤 Host Agent `system.reboot` 로 넘긴다 |
 
 ## 5.2 Robot 상태·센서
 
@@ -2261,6 +2264,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 |---|---|---|---|
 | GET | `/api/v1/events?since_seq=N&types=...` | Viewer | EVT-003 |
 | GET | `/api/v1/diagnostics` | Viewer | DIAG-001 — `{health, components}`. `health` 는 최악값 롤업, 수집 전이면 `UNKNOWN` |
+| GET | `/api/v1/diagnostics/control-adapter` | Admin | 제어 어댑터의 보정 묶음 메타데이터 `{enabled, policy_revision, calibration_revision, calibration_digest}`(어댑터가 없으면 `enabled:false`, 나머지 null). 매개변수·비밀값은 싣지 않는다. 아래 `{component}` 보다 먼저 등록돼 이 이름은 Viewer 진단이 아니다 |
 | GET | `/api/v1/diagnostics/{component}` | Viewer | DIAG-001 — 모르는 이름은 404. `/metrics` 의 `rosy_diagnostics_health` 와 같은 출처다 |
 | GET | `/api/v1/logs/audit` | Admin | LOG-001 — `{events, log}`. `log` 은 `{writable, write_failures, write_failures_total, prune_failures, prune_skipped, serialize_failures, last_write_error, last_prune_error, last_skip_reason, last_serialize_error, dir_sync_failures, last_dir_sync_error}`: 기록이 멈추어 있으면 짧은 목록과 구분되지 않으므로, 이 로그를 믿어도 되는지 함께 답한다. `write_failures` 는 **연속** 실패(지금 쓸 수 있는가), `write_failures_total` 은 부팅 이후 누적이라 되돌아가지 않는다. `prune_failures` 는 기록이 아니라 보존 정리가 실패한 횟수다 — 기록은 남고 있으나 파일이 30 일보다 길게 자라는 중이라 경보 기준이 다르다. `serialize_failures` 는 이벤트 `data` 가 JSON 이 될 수 없어 그 값을 `repr` 로 바꿔 남긴 횟수다(기록은 남았다 — 발행한 쪽의 결함). `dir_sync_failures` 는 정리의 바꿔 끼우기는 끝났는데 그 뒤 디렉터리 fsync 가 실패한 횟수다(정리 실패가 아니다 — 정전이 이름 바꾸기를 되돌려도 옛 파일이 남는다). 사유는 채널별로 나누어 남기며(하나로 두면 정리 실패가 디스크 부족이라는 사유를 덮어쓴다) 성공했다고 지우지 않는다. 스키마로도 JSON 으로도 읽을 수 없는 줄은 삭제하지 않고 감사 로그 옆 `audit.jsonl.quarantine` 으로 바이트 그대로 옮긴다 |
 | GET | `/metrics` | 내부/모니터링 | OBS-101 (Prometheus 형식, 토큰 면제는 배포 정책). `rosy_audit_write_failures_consecutive` 가 0 이 아니면 LOG-001 감사 기록이 남지 않고 있다 |
@@ -2288,6 +2292,7 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 |---|---|---|---|
 | GET | `/api/v1/host/network` | Viewer | NET-001 — 현재 모드와 도달성. SSID 는 싣되 PSK 는 절대 싣지 않는다 |
 | POST | `/api/v1/host/network/apply` | Admin | NET-001 (payload: `{profile_id, confirmed, idempotency_key?}`) — 등록된 NetworkManager 프로파일로 전환. PSK 는 호스트에 남고 CORE 에 들어오지 않는다 |
+| POST | `/api/v1/host/network/mode` | Admin | NET-001 (payload: `{mode, confirmed, idempotency_key?}`, `mode` 는 `SITE_STA`(AP 끔) \| `RELAY_AP_STA`(AP 켬)) — Host Agent `network.set_mode` 로 넘긴다. CORE 는 nmcli 를 부르지 않는다(D-22) |
 | GET | `/api/v1/host/release` | Viewer | OPS — current/previous/staged 와 마지막 실패 사유 |
 | POST | `/api/v1/host/release/install` | Admin | OPS — 서명 검증된 릴리스 설치 |
 | POST | `/api/v1/host/release/rollback` | Admin | OPS — previous 로 복귀 |

@@ -3,6 +3,8 @@
 // 같은 팩토리 모양이다.
 
 import { setTagState } from "./dom.js";
+import { valueText } from "/common/value-text.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 
 export function createRosNetwork({
   elements, setText, metricNumber, rate, svgText, history,
@@ -101,9 +103,9 @@ export function createRosNetwork({
       network_visible: "NETWORK VISIBLE",
       unknown: "UNKNOWN",
     };
-    setText("dds-isolation", isolationLabels[graph.isolation?.mode] || "—");
-    setText("dds-interface", graph.isolation?.interface ? `interface ${graph.isolation.interface}` : "인터페이스 확인 불가");
-    setText("dds-rmw", graph.rmw || "—");
+    setText("dds-isolation", isolationLabels[graph.isolation?.mode] || UNKNOWN);
+    setText("dds-interface", graph.isolation?.interface ? `interface ${graph.isolation.interface}` : `인터페이스 ${UNKNOWN}`);
+    setText("dds-rmw", graph.rmw || UNKNOWN);
     setText("ros-node-count", graph.node_count);
     setText("ros-topic-count", graph.topic_count);
     setText("network-rx-rate", rate(throughput.rx_bytes_per_second));

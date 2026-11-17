@@ -11,6 +11,23 @@ export function namedOperatorReason(role, principal) {
   return role === "operator" && (!principal || principal === "site-console") ? NAMED_OPERATOR_REASON : "";
 }
 
+// Human-hold clear and task creation: the server refuses without a bounded note / a named operator
+// (pipeline_gate_routes.py). The note is typed by the operator each time; nothing here fills one in.
+export const SAFETY_NOTE = {label: "확인한 내용", max: 200};
+
+const SAFETY_REFUSALS = {
+  NOTE_REQUIRED: "확인한 내용을 1~200자로 적어야 합니다",
+  RESUME_NEEDS_RESTART_CONFIRM: "실행 중에 멈춘 작업입니다. 처음부터 다시 시작해야 합니다",
+  SAFETY_AUDIT_UNAVAILABLE: "안전 감사 기록을 쓸 수 없어 요청을 거절했습니다. 상태는 바뀌지 않았습니다",
+};
+
+export function safetyRefusalText(error) {
+  const known = SAFETY_REFUSALS[error?.code];
+  if (known) return known;
+  if (error?.status === 403 || error?.code === "OPERATOR_IDENTITY_REQUIRED") return "이름 있는 운영자로 로그인해야 합니다";
+  return error?.message || "요청이 거절되었습니다";
+}
+
 function lockNote(control) {
   return control.closest?.("[data-role-lock]")?.querySelector(".role-lock-note") || null;
 }

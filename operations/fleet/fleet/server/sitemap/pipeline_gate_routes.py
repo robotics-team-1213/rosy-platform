@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
+import os
 import time
 import uuid
 from pathlib import Path
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from fleet.pipeline import resolve_omx_cells
 from fleet.pipeline.station_zones import load_station_zones, save_station_zones_yaml
 
@@ -14,6 +16,9 @@ from fleet.server.sitemap.pipeline_task_input import checked_finite_float
 def install_gates_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
     operator_guard = ctx.operator_guard
+    proposer_guard = ctx.proposer_guard
+    proposer_principal = proposer_guard[0].dependency if proposer_guard else (lambda: None)
+    audit_path = ctx.audit_path
     zones_override_path = ctx.zones_override_path
     _save_ledger = ctx._save_ledger
     _is_human_detected = ctx._is_human_detected
@@ -24,6 +29,43 @@ def install_gates_routes(app, ctx) -> None:
         return state.get("phase") == "ABORTED" or state.get("prev_phase") == "ABORTED"
     CELL_TASK_PRESETS = ctx.CELL_TASK_PRESETS
     _enqueue_one_task = ctx._enqueue_one_task
+    named_operator = ctx.named_operator
+    operator_principal = ctx.operator_principal
+    PROPOSAL_TTL_S = 600.0
+    NOTE_MAX = 200
+
+    def _note(body: dict) -> str:
+        note = body.get("note")
+        note = note.strip() if isinstance(note, str) else ""
+        if not note or len(note) > NOTE_MAX:
+            raise HTTPException(422, detail={"code": "NOTE_REQUIRED", "max_length": NOTE_MAX, "message":
+                                             "확인 내용을 1~200자로 적어야 합니다"})
+        return note
+
+    def _audit(action: str, principal, **fields) -> dict:
+        row = {"ts": round(time.time(), 3), "action": action,
+               "principal": getattr(principal, "principal_id", None), **fields}
+        # Every row is appended to a durable jsonl (the ledger keeps only the last 100); an unwritable
+        # audit refuses the action, because the caller audits before changing any state.
+        if audit_path is not None:
+            try:
+                with audit_path.open("a", encoding="utf-8") as stream:
+                    stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            except Exception as exc:
+                raise HTTPException(503, detail={"code": "SAFETY_AUDIT_UNAVAILABLE"}) from exc
+        app.state.pipeline_safety_audit.append(row)
+        return row
+
+    def _pause_for_human(task: dict, principal, reason: str) -> None:
+        task["paused_from_status"] = task["status"]
+        task["status"] = "PAUSED_HUMAN"
+        task["paused_by"] = getattr(principal, "principal_id", None)
+        task["paused_reason"] = reason
+        task["paused_at"] = round(time.time(), 3)
+        _enrich_task_health(task)
+
     @app.get("/api/fleet/pipeline/human-safety-gate", dependencies=read_guard)
     async def get_human_safety_gate():
         return {
@@ -34,9 +76,9 @@ def install_gates_routes(app, ctx) -> None:
             "paused_tasks": [t["task_id"] for t in app.state.omx_cell_tasks.values() if t["status"] == "PAUSED_HUMAN"],
         }
 
-    @app.post("/api/fleet/pipeline/human-safety-gate", dependencies=operator_guard)
-    async def set_human_safety_gate(request: Request):
-        active = active_map()
+    @app.post("/api/fleet/pipeline/human-safety-gate", dependencies=proposer_guard)
+    async def set_human_safety_gate(request: Request, raiser=Depends(proposer_principal)):
+        # Raise-only: a service (vision, supervision) may stop the cell; it can never clear, resume or execute.
         body = await request.json()
         target_cell = str(body.get("cell_id") or "all")
         if target_cell not in ("cell_s", "cell_ab", "all"):
@@ -45,8 +87,27 @@ def install_gates_routes(app, ctx) -> None:
             detected = not _is_human_detected(None if target_cell == "all" else target_cell)
         else:
             detected = bool(body.get("human_detected", True))
-        if not detected:
-            raise HTTPException(409, detail={"code": "HUMAN_CLEAR_EVIDENCE_UNAVAILABLE"})
+        if not detected:  # fail-safe direction only: clearing a hold is a named-operator action
+            raise HTTPException(409, detail={"code": "USE_CLEAR_ROUTE", "message":
+                                             "clear a human hold with POST /api/fleet/pipeline/human-safety-gate/clear"})
+        return _apply_gate(body, target_cell, True, raiser)
+
+    @app.post("/api/fleet/pipeline/human-safety-gate/clear")
+    async def clear_human_safety_gate(request: Request, principal=Depends(named_operator)):
+        body = await request.json()
+        target_cell = str(body.get("cell_id") or "all")
+        if target_cell not in ("cell_s", "cell_ab", "all"):
+            target_cell = "all"
+        note = _note(body)
+        affected = ["cell_s", "cell_ab"] if target_cell == "all" else [target_cell]
+        _audit("human_hold_cleared", principal, cell_id=target_cell, note=note,
+               operator_name=str(body.get("operator_name") or "")[:80] or None,
+               paused_tasks=[t["task_id"] for t in app.state.omx_cell_tasks.values()
+                             if t["cell_id"] in affected and t["status"] == "PAUSED_HUMAN"])
+        return _apply_gate(body, target_cell, False, principal)
+
+    def _apply_gate(body: dict, target_cell: str, detected: bool, principal) -> dict:
+        active = active_map()
         affected_cells = ["cell_s", "cell_ab"] if target_cell == "all" else [target_cell]
         if target_cell == "all":
             app.state.human_detected = {"cell_s": detected, "cell_ab": detected, "all": detected}
@@ -56,7 +117,6 @@ def install_gates_routes(app, ctx) -> None:
 
         stations = resolve_omx_cells(active[1], active[2])
         paused_tasks: list[str] = []
-        resumed_tasks: list[str] = []
         pinky_estop = None
 
         if detected:
@@ -80,9 +140,7 @@ def install_gates_routes(app, ctx) -> None:
                 }
             for t in app.state.omx_cell_tasks.values():
                 if t["cell_id"] in affected_cells and t["status"] in ("QUEUED", "RUNNING"):
-                    t["paused_from_status"] = t["status"]
-                    t["status"] = "PAUSED_HUMAN"
-                    _enrich_task_health(t)
+                    _pause_for_human(t, principal, str(body.get("reason") or "HUMAN_DETECTED_ESTOP"))
                     paused_tasks.append(t["task_id"])
             pid = f"pinky-estop-{uuid.uuid4().hex[:6]}"
             pinky_estop = {
@@ -101,23 +159,12 @@ def install_gates_routes(app, ctx) -> None:
             }
             app.state.pinky_tasks[pid] = pinky_estop
         else:
-            for t in app.state.omx_cell_tasks.values():
-                if t["cell_id"] in affected_cells and t["status"] == "PAUSED_HUMAN":
-                    t["status"] = "ABORTED" if t.get("paused_from_status") == "RUNNING" else "QUEUED"
-                    _enrich_task_health(t)
-                    if t["status"] == "QUEUED":
-                        resumed_tasks.append(t["task_id"])
+            # Clear the flag only. Paused tasks stay PAUSED_HUMAN until a named operator resumes each one.
             for cid in affected_cells:
                 prev = dict(app.state.omx_cell_states.get(cid) or {})
-                held = prev.get("prev_phase") in ("ARM_IN_BED_ZONE", "ABORTED")
-                restored_phase = "ABORTED" if held else (prev.get("prev_phase") if prev.get("prev_phase") in ("CLAIMED", "RELEASED") else "IDLE")
-                app.state.omx_cell_states[cid] = {
-                    **prev,
-                    "phase": restored_phase,
-                    "amr_motion_inhibited": restored_phase in ("CLAIMED", "ARM_IN_BED_ZONE", "ABORTED"),
-                    "reason": "HUMAN_CLEARED_AUTO_RESUME",
-                }
-            _evaluate_decision(target_cell if target_cell != "all" else "cell_s", "arm_target", {"human_detected": False})
+                if prev.get("phase") == "HUMAN_HOLD":
+                    app.state.omx_cell_states[cid] = {**prev, "phase": "RELEASED", "amr_motion_inhibited": False,
+                                                      "reason": "HUMAN_CLEARED_AWAITING_RESUME"}
 
         _save_ledger()
         return {
@@ -125,10 +172,48 @@ def install_gates_routes(app, ctx) -> None:
             "human_detected": dict(app.state.human_detected),
             "active_estop": _is_human_detected(),
             "paused_tasks": paused_tasks,
-            "resumed_tasks": resumed_tasks,
+            "resumed_tasks": [],
+            "still_paused_tasks": [t["task_id"] for t in app.state.omx_cell_tasks.values()
+                                   if t["cell_id"] in affected_cells and t["status"] == "PAUSED_HUMAN"],
             "pinky_estop": pinky_estop,
             "cells": {cid: app.state.omx_cell_states.get(cid) for cid in ("cell_s", "cell_ab")},
         }
+
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/resume")
+    async def resume_cell_task(task_id: str, request: Request, principal=Depends(named_operator)):
+        try:
+            body = await request.json()
+        except ValueError:
+            body = {}
+        body = body if isinstance(body, dict) else {}
+        task = app.state.omx_cell_tasks.get(task_id)
+        if task is None:
+            raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
+        if task["status"] != "PAUSED_HUMAN":
+            raise HTTPException(409, detail={"code": "NOT_PAUSED_HUMAN", "status": task["status"]})
+        cell_id = task["cell_id"]
+        if _is_human_detected(cell_id) or (app.state.omx_cell_states.get(cell_id) or {}).get("phase") == "HUMAN_HOLD":
+            raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE", "cell_id": cell_id})
+        if _aborted(cell_id):
+            raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD", "cell_id": cell_id})
+        live = app.state.arm_live_states or {}
+        held_arms = [arm for arm, hold in app.state.arm_holds.items() if hold.get("held")
+                     and (arm == task.get("arm_id") or (live.get(arm) or {}).get("cell_id") == cell_id)]
+        if held_arms:
+            raise HTTPException(409, detail={"code": "ARM_HOLD_ACTIVE", "arms": held_arms})
+        if task.get("paused_from_status") == "RUNNING" and body.get("restart_from_start") is not True:
+            raise HTTPException(409, detail={"code": "RESUME_NEEDS_RESTART_CONFIRM", "message":
+                                             "이 작업은 실행 중에 멈췄습니다. 처음부터 다시 시작하려면 restart_from_start: true 로 확인하세요"})
+        note = _note(body)
+        _audit("task_resumed", principal, task_id=task_id, cell_id=cell_id, note=note,
+               restart_from_start=task.get("paused_from_status") == "RUNNING")
+        task["status"] = "QUEUED"
+        task["resumed_by"] = getattr(principal, "principal_id", None)
+        task["resumed_at"] = round(time.time(), 3)
+        task["resume_note"] = note
+        _enrich_task_health(task)
+        _save_ledger()
+        return {"ok": True, "task": task}
 
     @app.get("/api/fleet/pipeline/station-zones", dependencies=read_guard)
     async def get_station_zones():
@@ -209,7 +294,7 @@ def install_gates_routes(app, ctx) -> None:
         return {"ok": True, "cable_tangled": app.state.cable_tangled, "decision": dec}
 
     @app.post("/api/fleet/pipeline/vision-auto-check", dependencies=operator_guard)
-    async def run_vision_auto_check(request: Request):
+    async def run_vision_auto_check(request: Request, caller=Depends(operator_principal)):
         active = active_map()
         body = await request.json()
         cell_id = str(body.get("cell_id") or "cell_s")
@@ -222,6 +307,7 @@ def install_gates_routes(app, ctx) -> None:
                 snap_bytes = snap_file.stat().st_size
                 break
         intrusion_score = float(body.get("intrusion_score", 0.05))
+        # Body values may only raise the hold; clearing is the named operator's human-safety-gate/clear.
         human_detected = bool(body["human_detected"]) if "human_detected" in body else (intrusion_score >= 0.35)
         if not human_detected:
             raise HTTPException(409, detail={"code": "VISION_CLEAR_EVIDENCE_UNAVAILABLE"})
@@ -232,7 +318,6 @@ def install_gates_routes(app, ctx) -> None:
 
         was_detected = _is_human_detected(None if cell_id == "all" else cell_id)
         paused_tasks: list[str] = []
-        resumed_tasks: list[str] = []
         affected_cells = ["cell_s", "cell_ab"] if cell_id == "all" else [cell_id]
         stations = resolve_omx_cells(active[1], active[2])
 
@@ -259,29 +344,8 @@ def install_gates_routes(app, ctx) -> None:
             app.state.human_detected["all"] = bool(app.state.human_detected.get("cell_s") and app.state.human_detected.get("cell_ab"))
             for t in app.state.omx_cell_tasks.values():
                 if t["cell_id"] in affected_cells and t["status"] in ("QUEUED", "RUNNING"):
-                    t["paused_from_status"] = t["status"]
-                    t["status"] = "PAUSED_HUMAN"
-                    _enrich_task_health(t)
+                    _pause_for_human(t, caller, "VISION_HUMAN_DETECTED_ESTOP")
                     paused_tasks.append(t["task_id"])
-        elif was_detected:
-            for cid in affected_cells:
-                app.state.human_detected[cid] = False
-            app.state.human_detected["all"] = False
-            for t in app.state.omx_cell_tasks.values():
-                if t["cell_id"] in affected_cells and t["status"] == "PAUSED_HUMAN":
-                    t["status"] = "ABORTED" if t.get("paused_from_status") == "RUNNING" else "QUEUED"
-                    _enrich_task_health(t)
-                    if t["status"] == "QUEUED":
-                        resumed_tasks.append(t["task_id"])
-            for cid in affected_cells:
-                prev = dict(app.state.omx_cell_states.get(cid) or {})
-                restored_phase = "ABORTED" if prev.get("prev_phase") in ("ARM_IN_BED_ZONE", "ABORTED") else (prev.get("prev_phase") if prev.get("prev_phase") in ("CLAIMED", "RELEASED") else "IDLE")
-                app.state.omx_cell_states[cid] = {
-                    **prev,
-                    "phase": restored_phase,
-                    "amr_motion_inhibited": restored_phase in ("CLAIMED", "ARM_IN_BED_ZONE", "ABORTED"),
-                    "reason": "VISION_HUMAN_CLEARED_AUTO_RESUME",
-                }
 
         dec = _evaluate_decision(
             cell_id if cell_id != "all" else "cell_s",
@@ -298,7 +362,8 @@ def install_gates_routes(app, ctx) -> None:
             "active_estop": _is_human_detected(),
             "detected_displaced_site": app.state.detected_displaced_site,
             "paused_tasks": paused_tasks,
-            "resumed_tasks": resumed_tasks,
+            "resumed_tasks": [],
+            "hold_retained": was_detected and not human_detected,
             "vision": {
                 "cell_id": cell_id,
                 "human_detected": human_detected,
@@ -309,7 +374,7 @@ def install_gates_routes(app, ctx) -> None:
             "safety_event": {
                 "active_estop": _is_human_detected(),
                 "paused_tasks": paused_tasks,
-                "resumed_tasks": resumed_tasks,
+                "resumed_tasks": [],
             },
             "decision": dec,
         }
@@ -326,12 +391,41 @@ def install_gates_routes(app, ctx) -> None:
         }
 
     @app.post("/api/fleet/pipeline/decision-gate", dependencies=operator_guard)
-    async def run_pipeline_decision_gate(request: Request):
-        active = active_map()
+    async def run_pipeline_decision_gate(request: Request, proposer=Depends(operator_principal)):
         body = await request.json()
+        if body.get("auto_execute"):
+            raise HTTPException(409, detail={"code": "USE_EXECUTE_ROUTE", "message":
+                                             "execute with POST /api/fleet/pipeline/decision-gate/execute"})
+        res = _run_decision(body, False, None)
+        now = time.time()
+        proposals = app.state.decision_proposals
+        for key in [k for k, v in proposals.items() if now - v["created_at"] > PROPOSAL_TTL_S]:
+            del proposals[key]
+        proposals[res["decision"]["decision_id"]] = {
+            "decision_id": res["decision"]["decision_id"], "proposed_by": getattr(proposer, "principal_id", None),
+            "cell": str(body.get("subject_id") or "cell_s"), "payload": body, "created_at": now}
+        return res
+
+    @app.post("/api/fleet/pipeline/decision-gate/execute")
+    async def execute_pipeline_decision_gate(request: Request, principal=Depends(named_operator)):
+        # Executing spawns a claimable arm task: a named operator approves a stored proposal,
+        # and not the one who proposed it. The proposer is never read from this request.
+        body = await request.json()
+        proposal = app.state.decision_proposals.get(str(body.get("decision_id") or ""))
+        if proposal is None or time.time() - proposal["created_at"] > PROPOSAL_TTL_S:
+            raise HTTPException(404, detail={"code": "UNKNOWN_OR_EXPIRED_PROPOSAL"})
+        who = getattr(principal, "principal_id", None)
+        if not proposal["proposed_by"] or not who or who == proposal["proposed_by"]:
+            raise HTTPException(403, detail={"code": "PROPOSER_IS_APPROVER",
+                                             "message": "다른 운영자의 승인 필요"})
+        res = _run_decision(proposal["payload"], True, principal)
+        del app.state.decision_proposals[proposal["decision_id"]]
+        return res
+
+    def _run_decision(body: dict, auto_execute: bool, approver) -> dict:
+        active = active_map()
         subject_id = str(body.get("subject_id") or "cell_s")
         domain = body.get("domain")
-        auto_execute = bool(body.get("auto_execute", True))
         dec = _evaluate_decision(subject_id, domain, body.get("facts") or body)
         spawned_cell_task = None
         pinky_task = None
@@ -343,6 +437,7 @@ def install_gates_routes(app, ctx) -> None:
             if dec["domain"] == "arm_target" and dec.get("auto_preset"):
                 preset_spec = CELL_TASK_PRESETS[dec["auto_preset"]]
                 spawned_cell_task = _enqueue_one_task(active, {**preset_spec, "cable_guard_micro": dec["cable_guard_micro"]})
+                spawned_cell_task["approved_by"] = getattr(approver, "principal_id", None)
             elif dec["domain"] == "line_follow" and dec.get("auto_pinky_action"):
                 act = dec["auto_pinky_action"]
                 rid = subject_id if subject_id.startswith("rosy_") else "rosy_46"
@@ -359,7 +454,6 @@ def install_gates_routes(app, ctx) -> None:
                     if _aborted("cell_s"):
                         raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
                     target_place, v_cmd, dur = "S3", max_speed_mps, round(max_step_m / max_speed_mps, 2)
-                    spawned_cell_task = _enqueue_one_task(active, {**CELL_TASK_PRESETS["s3_shuttle"], "robot_id": rid})
                 pid = f"pinky-dec-{uuid.uuid4().hex[:6]}"
                 pinky_task = {
                     "task_id": pid,
@@ -377,6 +471,8 @@ def install_gates_routes(app, ctx) -> None:
                 }
                 app.state.pinky_tasks[pid] = pinky_task
                 _save_ledger()
+        if spawned_cell_task:
+            _save_ledger()  # persists approved_by
         return {
             "ok": True,
             "decision": dec,

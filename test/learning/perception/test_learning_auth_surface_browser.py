@@ -57,7 +57,10 @@ def test_anonymous_account_entry_separates_login_from_denied_access(tmp_path, wi
                     api.expect(page.locator("#account-retry")).to_be_visible()
                     api.expect(status).to_contain_text("접근할 권한이 없습니다")
                     assert page.url == origin + "/accounts"
-                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                wide = page.evaluate("""() => [document.documentElement.scrollWidth, innerWidth, ...[...document.querySelectorAll('body *')]
+                    .filter(n => { const out = x => x.getBoundingClientRect().right > innerWidth + 1 || x.scrollWidth > innerWidth + 1; return out(n) && ![...n.children].some(out); })
+                    .slice(0, 6).map(n => `${n.tagName.toLowerCase()}#${n.id}.${String(n.className).slice(0, 30)}`)]""")
+                assert wide[0] <= wide[1], wide
                 assert not errors, errors
             finally:
                 browser.close()

@@ -1,8 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createEditHistory} from '/console/assets/edit-history.js';
-import {editSurveyElement} from '/console/assets/site-map-edit.js';
-import {replaceVertex, removeVertex, mapPoint} from '/console/assets/geometry-edit.js';
+
+// /console/assets 절대 경로 import 를 단독 node --test 에서도 풀도록 로더를 먼저 건다.
+const { register } = await import('node:module');
+register('./resolve-console-assets.mjs', import.meta.url);
+const {createEditHistory} = await import('/console/assets/edit-history.js');
+const {editSurveyElement} = await import('/console/assets/site-map-edit.js');
+const {replaceVertex, removeVertex, mapPoint} = await import('/console/assets/geometry-edit.js');
 
 test('geometry primitives know only finite points and preserve their input', () => {
   const line = [[-2000, 5], [0, 1], [3, 4]];

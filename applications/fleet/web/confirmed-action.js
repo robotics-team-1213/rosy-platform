@@ -6,7 +6,8 @@ export function createConfirmedAction({scope, identity, confirm}) {
     held.controller.abort(); held = null;
   }
   scope.onDispose(() => cancel());
-  async function run({message, opener, eligible, request, onError, kind = ""}) {
+  // With `note`, the confirmation also asks for it and request(owner, text) receives the trimmed text.
+  async function run({message, opener, eligible, request, onError, kind = "", note = null, action = "요청 전송"}) {
     const caller = identity();
     if (held || caller.locked || caller.role !== "operator" || !eligible()) return;
     const life = scope.capture(), controller = new AbortController();
@@ -16,8 +17,9 @@ export function createConfirmedAction({scope, identity, confirm}) {
     owner.check = () => { if (!owner.current()) throw new DOMException("Command owner changed", "AbortError"); };
     held = owner;
     try {
-      if (!await confirm({message, action: "요청 전송", opener, signal: owner.signal}) || !owner.current() || !eligible()) return;
-      await request(owner);
+      const answer = await confirm({message, action, opener, signal: owner.signal, ...(note ? {note} : {})});
+      if (!answer || !owner.current() || !eligible()) return;
+      await request(owner, answer);
     } catch (error) { if (owner.current()) onError(error); }
     finally { if (held === owner) held = null; }
   }

@@ -11,11 +11,14 @@ const {
   showConnection, showInboxCount, showSession, showSignedOut, tickClock, watchFleet,
 } = await import("../../../../applications/fleet/web/shared/fleet-header.js");
 
-function fakeNode(id) {
+function fakeNode(id, tagName = "div") {
   const attributes = new Map();
   return {
-    id, hidden: false, disabled: false, textContent: "", dataset: {}, listeners: {}, children: [],
-    contains(node) { return node === this || this.children.some(child => child.contains(node)); },
+    id, localName: tagName, hidden: false, disabled: false, textContent: "", dataset: {}, listeners: {}, children: [],
+    get firstElementChild() { return this.children.find(child => typeof child === "object" && child !== null) || null; },
+    append(...items) { for (const item of items) if (typeof item === "string") this.textContent += item; else { this.children.push(item); this.textContent += item.textContent || ""; } },
+    replaceChildren(...items) { this.children = []; this.textContent = ""; this.append(...items); },
+    contains(node) { return node === this || this.children.some(child => child.contains?.(node)); },
     focus() { document.activeElement = this; },
     getAttribute: name => (attributes.has(name) ? attributes.get(name) : null),
     setAttribute: (name, value) => attributes.set(name, String(value)),
@@ -37,6 +40,8 @@ function fakeHeader() {
   nodes["token-access"].children.push(nodes["console-token"], nodes["token-save"]);
   const body = fakeNode("body");
   globalThis.document = {body, activeElement: body, listeners: {}, getElementById: id => nodes[id],
+    createElement: tag => fakeNode("", tag),
+    createElementNS: (_ns, tag) => fakeNode("", tag),
     addEventListener(type, fn) { this.listeners[type] = fn; }};
   return nodes;
 }
@@ -109,7 +114,7 @@ test("role words are Korean; English stays out of the text", () => {
   assert.equal(roleLabel("operator"), "운영자");
   assert.equal(roleLabel("viewer"), "보기 전용");
   assert.equal(roleLabel("policy-admin"), "관리자");
-  assert.equal(roleLabel("nobody"), "권한 없음");
+  assert.equal(roleLabel("nobody"), "정보 없음");
 });
 
 test("a session shows its Korean role and title identity; a development session shows the badge", () => {
@@ -190,14 +195,16 @@ test("the link word follows Fleet's answers: live, late after LATE_MS, down on a
   assert.equal(nodes["link-state"].textContent, "실시간");
   noteLink(Object.assign(new Error("bad gateway"), {status: 502}), 3000);
   assert.equal(nodes["link-state"].textContent, "연결 끊김");
-  assert.equal(nodes["link-state"].getAttribute("status"), "crit");
+  assert.equal(nodes["link-state"].getAttribute("role"), "status");
+  assert.equal(nodes["link-state"].getAttribute("aria-live"), "polite");
+  assert.equal(nodes["link-state"].firstElementChild.getAttribute("status"), "warn");  // 2026-11-14: a disconnect is a warning
   noteLink(new TypeError("fetch failed"), 4000);
   assert.equal(linkState(4000), "down");
   noteLink(Object.assign(new Error("aborted"), {name: "AbortError"}), 5000);
   assert.equal(linkState(5000), "down");  // an aborted read says nothing either way
   noteLink(null, 6000);
   assert.equal(nodes["link-state"].textContent, "실시간");
-  assert.equal(nodes["link-state"].getAttribute("status"), "neutral");
+  assert.equal(nodes["link-state"].dataset.evidence, "fresh");
 });
 
 test("the clock tick writes the time and repaints the link word when answers stop", () => {
@@ -206,7 +213,7 @@ test("the clock tick writes the time and repaints the link word when answers sto
   tickClock();
   assert.match(nodes.clock.textContent, /^\d\d:\d\d:\d\d$/);
   assert.equal(nodes["link-state"].textContent, "지연");
-  assert.equal(nodes["link-state"].getAttribute("status"), "warn");
+  assert.equal(nodes["link-state"].dataset.evidence, "delayed");
 });
 
 test("only the request feeds the link word: a paint error after an answer is not a lost link", async () => {

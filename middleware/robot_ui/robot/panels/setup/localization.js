@@ -1,4 +1,5 @@
 import { confirmIrreversible } from "/common/ui.js";
+import { watchStatus } from "/assets/dom.js";
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Operator setup actions use the same capability and API authority as CORE.
@@ -21,8 +22,9 @@ export function mount(root, ctx) {
   const head = el("ui-head", "", "위치 설정 및 맵 준비");
   const capabilityStatus = el("ui-status", "", "기능 지원 여부를 확인하는 중입니다.");
   const actionStatus = el("ui-status");
-  const slamStatus = el("ui-status"); slamStatus.setAttribute("role", "status"); slamStatus.setAttribute("aria-live", "polite");
+  const slamStatus = el("ui-status");
   const lifetime = new AbortController(); let disposed = false; let confirming = false;
+  watchStatus(slamStatus);
 
   const poseForm = el("form", "ui-form");
   const poseSection = el("section", "ui-readback");

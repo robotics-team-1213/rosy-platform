@@ -4,7 +4,7 @@
 /** The robot the map is already about: the open card, else the armed goal, else the only robot. */
 export function shownRobot(view) {
   const robots = Array.isArray(view?.robots) ? view.robots.filter((robot) => robot && robot.robot_id) : [];
-  const wanted = view?.focusRobot || view?.selected || "";
+  const wanted = (typeof view?.robotSelection?.get === "function" ? view.robotSelection.get() : null) || view?.selected || "";
   const named = wanted ? robots.find((robot) => robot.robot_id === wanted) : null;
   if (named) return named;
   return robots.length === 1 ? robots[0] : null;
@@ -17,6 +17,11 @@ export function createDeviceWatch({ scope, el, view }) {
   function syncCeiling() {
     const frame = el("map-birdseye");
     const live = Boolean(frame && !frame.hidden);
+    const mode = stage?.dataset?.displayMode || view?.displayMode || "coordinates";
+    const hideCeiling = mode === "overlay" || mode === "camera" || mode === "twin3d" || stage?.dataset?.view === "camera" || !live;
+    ceiling.hidden = hideCeiling;
+    const watchBox = el("device-watch");
+    if (watchBox) watchBox.hidden = hideCeiling;
     ceiling.setAttribute("aria-pressed", String(stage.dataset.watch !== "off"));
     ceiling.disabled = !live;
     if (live) ceiling.removeAttribute("reason");

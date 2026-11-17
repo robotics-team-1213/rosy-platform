@@ -72,7 +72,7 @@ def test_integrated_units_owned_evidence_and_readonly_map_keep_local_stop_visibl
             choose.click()
             expect(page.locator("#integrated-control-detail")).to_contain_text("a1")
             expect(page.locator("#integrated-control-detail")).to_contain_text("배터리 72% (최신)")
-            expect(page.locator("#integrated-control-detail")).to_contain_text("위치 미확인 (정보 없음)")
+            expect(page.locator("#integrated-control-detail")).to_contain_text("위치 정보 없음 (정보 없음)")
             expect(page.locator("#integrated-control-detail")).to_contain_text("owned-task")
             expect(page.locator("#integrated-control-detail")).to_contain_text("이전 작업 더 있음")
             panel.get_by_role("button", name="선택 관제 지도 보기", exact=True).click()
@@ -87,7 +87,7 @@ def test_integrated_units_owned_evidence_and_readonly_map_keep_local_stop_visibl
             api[PREFIX + "/units/A1"]["robots"][0]["evidence"]["battery"] = "unavailable"
             page.locator("#work-refresh").evaluate("node => node.click()")
             page.clock.run_for(1000)
-            expect(page.locator("#integrated-control-detail")).to_contain_text("배터리 미확인 (정보 없음)")
+            expect(page.locator("#integrated-control-detail")).to_contain_text("배터리 정보 없음 (정보 없음)")
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             page.evaluate("window.scrollTo(0, 0)")
             box = page.locator("#estop").bounding_box()

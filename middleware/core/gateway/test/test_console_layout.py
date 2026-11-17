@@ -115,7 +115,7 @@ def test_the_irreversible_control_comes_first_in_the_act_region():
 def test_the_view_switch_is_wired_and_defaults_to_operate():
     app = APP.read_text(encoding="utf-8")
     assert 'showView("operate")' in app, "기본 뷰를 운용으로 두지 않는다"
-    assert 'elements["view-inspect"].addEventListener' in app
+    assert 'mountViewChoice(elements["view-switch"])' in app
     # D-362 P1: the renderer module owns writing the body's view state.
     telemetry = (WEB_ROOT / "telemetry.js").read_text(encoding="utf-8")
     assert 'document.body.dataset.view' in telemetry, "꼬리말 규칙이 기대는 페이지 상태가 없다"
@@ -130,7 +130,7 @@ def test_the_map_tools_stay_off_the_raster():
     markup = html()
     panel = markup.split('id="field-map-panel"')[1].split("</section>")[0]
     stage = panel.split('class="map-stage"')[1].split("</div>")[0]
-    assert panel.count('class="map-toolbar"') == 2, "지도 툴바가 둘이 아니다"
+    assert panel.count('class="map-toolbar"') == 2, "지도 툴바가 둘이 아니다"  # the two group hosts (map-choices.js)
     assert "map-toolbar" not in stage, "툴바가 지도 무대 안에서 격자를 가린다"
     assert 'id="map-legend"' not in stage, "범례가 캔버스 위에 있다"
     assert panel.index('class="map-stage"') < panel.index('id="map-legend"')

@@ -378,7 +378,7 @@ def test_keyboard_tabs_menu_and_panel_restore_focus(gallery):
 
 def test_initial_tab_order_skips_inactive_tab_after_custom_elements_connect(gallery):
     page = gallery
-    assert page.locator('[role="tab"]').evaluate_all("nodes => nodes.map(node => node.tabIndex)") == [0, -1]
+    assert page.locator('#tabs-mount [role="tab"]').evaluate_all("nodes => nodes.map(node => node.tabIndex)") == [0, -1]
     page.locator("#context-tab-0").focus()
     page.keyboard.press("Tab")
     assert page.evaluate("document.activeElement.id") != "context-tab-1"
@@ -463,6 +463,8 @@ def test_group_errors_describe_all_radios_and_focus_enabled_member(gallery):
         const fields = [...form.querySelectorAll('input')];
         const result = {threw:false, focused:document.activeElement.id,
           invalid:fields.map(field => field.getAttribute('aria-invalid')),
+          summaryRole:summary.getAttribute('role'), summaryText:summary.textContent,
+          said:document.querySelector('[role=alert][aria-live=assertive]')?.textContent || '',
           descriptions:fields.map(field => (field.getAttribute('aria-describedby') || '').split(/\\s+/)
             .map(id => document.getElementById(id)?.textContent || '').join(' '))};
         errors.clear(); result.help = fields[1].getAttribute('aria-describedby');
@@ -473,6 +475,9 @@ def test_group_errors_describe_all_radios_and_focus_enabled_member(gallery):
     assert not result["threw"], result
     assert result["focused"] == "radio-b"
     assert result["invalid"] == ["true", "true"]
+    # one voice (C25): the visible summary carries no role; the shared announcer reads it once, urgent.
+    assert result["summaryRole"] is None and "하나를 선택하세요" in result["summaryText"]
+    assert "하나를 선택하세요" in result["said"]
     assert all("하나를 선택하세요" in value for value in result["descriptions"])
     assert result["help"] == "radio-help"
 
@@ -544,3 +549,175 @@ def test_gallery_responsive_actions_and_safety(gallery, width, height, theme):
         page.screenshot(path=str(Path(output) / f"component-confirm-{theme}-{width}x{height}.png"))
     stop.click()
     expect(page.locator("dialog")).not_to_be_visible()
+
+
+def test_stop_stays_live_refusal_is_text_and_accept_is_not_a_stop(gallery):
+    from playwright.sync_api import expect
+    page, stop, result = gallery, gallery.locator("#gallery-stop"), gallery.locator("#stop-result")
+    # Nothing repairs a hidden stop (no observer): the control is live from creation and the owners never touch it.
+    expect(stop).to_be_visible()
+    expect(stop).to_be_enabled()
+    expect(stop).to_have_attribute("aria-disabled", "false")
+    page.locator("#stop-refuse").check()
+    stop.click()
+    expect(result).to_contain_text("정지 요청 거절 · 운용 권한")
+    page.locator("#stop-refuse").uncheck()
+    stop.click()  # a second press sends again
+    expect(result).to_contain_text("정지 요청 접수 · 실제 정지 확인 중")
+    assert "정지됨" not in result.inner_text() and "정지 완료" not in result.inner_text()
+
+
+def test_a_note_never_discards_a_stop_answer_still_in_flight(gallery):
+    from playwright.sync_api import expect
+    page, result = gallery, gallery.locator("#stop-result")
+    page.locator("#stop-refuse").check()
+    page.locator("#stop-slow").check()
+    page.locator("#gallery-stop").click()
+    page.locator("#stop-note").click()  # a logout/reload note lands before the refusal arrives
+    expect(result).to_contain_text("합성 안내")
+    expect(result).to_contain_text("정지 요청 거절 · 운용 권한")  # the refusal is still shown when it arrives
+
+
+def test_account_states_and_connection_notice_keep_unknown_separate(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    expect(page.locator("#gate-unavailable")).to_have_text("계정 확인 불가 · 권한 없음 아님")
+    expect(page.locator("#gate-view")).to_have_text("로그인 안 됨 · 조회만")
+    crit = page.locator("#stop-account-connection ui-tag[status='crit']")
+    expect(crit).to_have_count(1)  # only the caller-raised danger sample is a fill (2026-11-14: a plain disconnect is a warning)
+    expect(crit).to_have_text("연결 끊김 · 주행 중")
+    assert page.locator("#notice-disconnected-danger").get_attribute("data-evidence") == "disconnected"
+    plain = page.locator("#notice-disconnected ui-tag")
+    expect(plain).to_have_count(1)
+    expect(plain).to_have_attribute("status", "warn")
+    expect(plain).to_have_text("연결 끊김")
+    expect(plain.locator("svg.ui-icon")).to_have_count(1)
+    for state in ("fresh", "delayed", "auth-wait", "unavailable"):
+        expect(page.locator(f"#notice-{state} ui-tag")).to_have_count(0)
+        expect(page.locator(f"#notice-{state}")).to_have_attribute("data-evidence", state)
+
+
+def test_a_stop_answer_the_caller_does_not_accept_is_never_shown_as_sent(gallery):
+    from playwright.sync_api import expect
+    page, result = gallery, gallery.locator("#stop-result")
+    page.locator("#stop-no-estop").check()  # 200 OK, but the body does not say estop === true
+    page.locator("#gallery-stop").click()
+    expect(result).to_contain_text("정지 요청 실패")
+    assert "접수" not in result.inner_text()
+    page.locator("#stop-no-estop").uncheck()
+    page.locator("#gallery-stop").click()
+    expect(result).to_contain_text("정지 요청 접수 · 실제 정지 확인 중")
+
+
+def test_status_table_maps_eight_states_to_icon_and_tone(gallery):
+    from playwright.sync_api import expect
+    tags = gallery.locator("#status-tags ui-tag")
+    expect(tags).to_have_count(8)
+    got = {tag.get_attribute("data-state"): (tag.get_attribute("status"), tag.locator("svg.ui-icon").count()) for tag in tags.all()}
+    assert got == {"fresh": ("neutral", 0), "progress": ("active", 0), "delayed": ("warn", 1), "disconnected": ("warn", 1),
+                   "unknown": ("neutral", 1), "caution": ("warn", 1), "danger": ("crit", 1), "locked": ("neutral", 1)}, got
+    for tag in tags.all():
+        assert tag.inner_text().strip(), "the text always stays beside the icon"
+    expect(gallery.locator("#status-tags ui-tag[data-state=unknown]")).to_have_text("정보 없음")
+    border = lambda state: gallery.locator(f"#status-tags ui-tag[data-state={state}]").evaluate("el => getComputedStyle(el).borderStyle")
+    assert border("unknown") == "dashed" and border("fresh") == "solid"
+    fill = lambda state: gallery.locator(f"#status-tags ui-tag[data-state={state}]").evaluate("el => getComputedStyle(el).backgroundColor")
+    assert fill("danger") != "rgba(0, 0, 0, 0)" and fill("fresh") == "rgba(0, 0, 0, 0)" and fill("disconnected") == "rgba(0, 0, 0, 0)"
+
+
+def test_ui_panel_surfaces_and_density_follow_the_width(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    panels = page.locator("#panel-stand .ui-panel")
+    expect(panels).to_have_count(4)
+    style = lambda sel, prop: page.locator(sel).evaluate(f"el => getComputedStyle(el).{prop}")
+    assert style("[aria-labelledby=pn-1]", "backgroundColor") != style("[aria-labelledby=pn-2]", "backgroundColor")
+    value = "#panel-stand [data-surface=flat][data-density=standard] > [data-slot=value]"
+    assert "tabular-nums" in style(value, "fontVariantNumeric")
+    pad = lambda density: float(style(f"#panel-stand [data-surface=flat][data-density={density}]", "paddingTop").removesuffix("px"))
+    assert pad("compact") < pad("standard")  # 1366 px wide mouse surface
+    page.set_viewport_size({"width": 600, "height": 800})
+    assert pad("compact") == pad("standard"), "below 64rem compact falls back to standard (D-976)"
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    for state in ("pending", "empty", "error"):
+        expect(page.locator(f"#panel-state-{state}")).to_be_visible()
+    assert page.locator("#strip-example > div").count() == 4
+
+
+def test_icon_sheet_lists_every_glyph_and_tooltip_rules_hold(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    names = page.evaluate("import('/common/ui.js').then(m => m.actionIconNames())")
+    assert len(names) >= 93 and "arm" in names and "cpu" in names
+    expect(page.locator("#icon-sheet li")).to_have_count(len(names))
+    # Hover shows the accessible name; the pointer may rest on the tooltip (WCAG 1.4.13); Escape dismisses.
+    page.hover("#tip-icon-only")
+    expect(page.locator(".ui-tooltip")).to_have_text("주소 복사")
+    box = page.locator(".ui-tooltip").bounding_box()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    expect(page.locator(".ui-tooltip")).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(page.locator(".ui-tooltip")).to_be_hidden()
+    # Keyboard focus shows it as well.
+    page.mouse.move(0, 0)
+    page.focus("#tip-icon-label")
+    page.focus("#tip-icon-only")
+    expect(page.locator(".ui-tooltip")).to_have_text("주소 복사")
+
+
+def test_toggletip_opens_on_click_and_closes_on_escape_or_outside_click(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    note = page.locator("#toggletip-mount .ui-toggletip-note")
+    expect(note).to_have_attribute("role", "status")
+    expect(note).to_be_hidden()
+    page.click("#toggletip-button")
+    expect(note).to_contain_text("Fleet 직접 조회")
+    page.keyboard.press("Escape")
+    expect(note).to_be_hidden()
+    page.click("#toggletip-button")
+    page.mouse.click(5, 5)
+    expect(note).to_be_hidden()
+
+
+def test_robot_rows_show_arms_and_mobile_robots_in_one_quiet_row_form(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    expect(page.locator("#robot-roster-mount .robot-group-title")).to_have_text(["로봇암 (3)", "이동로봇 (6)"])
+    rows = page.locator("#robot-roster-mount .robot-row")
+    expect(rows).to_have_count(9)
+    # one form: every row, arm or mobile, has the same seven columns in the same order
+    cols = [[c.get_attribute("data-col") for c in row.locator(":scope > .robot-cell").all()] for row in rows.all()]
+    assert all(c == ["name", "link", "power", "task", "place", "alarm", "actions"] for c in cols), cols
+    row = lambda robot_id: page.locator(f'#robot-roster-mount [data-robot-id="{robot_id}"]')
+    # normal is quiet: a fresh link and no alarm draw no tag
+    assert row("arm_a").locator("ui-tag").count() == 0 and row("rosy_40").locator("ui-tag").count() == 0
+    # freshness and severity are different columns and different tags
+    expect(row("arm_s").locator('[data-col=link] ui-tag')).to_have_attribute("data-state", "delayed")
+    expect(row("rosy_43").locator('[data-col=link] ui-tag')).to_have_attribute("data-state", "disconnected")
+    expect(row("rosy_44").locator('[data-col=power] .robot-value')).to_have_text("정보 없음")
+    expect(row("rosy_44").locator('[data-col=link] ui-tag')).to_have_attribute("data-state", "unknown")
+    page.set_viewport_size({"width": 1440, "height": 900})
+    heights = {row(i).evaluate("el => Math.round(el.getBoundingClientRect().height)") for i in ("arm_a", "arm_b", "rosy_40", "rosy_41")}
+    assert len(heights) == 1, f"rows with and without 자세히 differ in height at 1440: {heights}"
+    expect(row("rosy_41").locator('[data-col=alarm] ui-tag')).to_have_attribute("data-state", "caution")
+    expect(row("rosy_45").locator('[data-col=alarm] ui-tag')).to_have_attribute("data-state", "danger")
+    expect(row("arm_b").locator('[data-col=power] .robot-value')).to_contain_text("토크 꺼짐")
+    # the selection toggle keeps the pinned markup and the toggletip carries the secondary text
+    expect(row("rosy_40").locator("ui-button[data-select-robot-id=rosy_40]")).to_have_attribute("aria-pressed", "true")
+    expect(row("arm_a").locator(".ui-toggletip ui-button")).to_contain_text("자세히")
+    row("arm_a").locator(".ui-toggletip ui-button").click()
+    expect(row("arm_a").locator(".ui-toggletip-note")).to_contain_text("서보 12.0 V")
+    # a repeated target is a row: no box around it, only the line between rows
+    assert row("arm_a").evaluate("el => getComputedStyle(el).borderLeftWidth") == "0px"
+    for width in (1440, 390):
+        page.set_viewport_size({"width": width, "height": 900})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+        if output := os.environ.get("ROSY_SHOT_DIR"):
+            Path(output).mkdir(parents=True, exist_ok=True)
+            page.locator("#robot-rows").screenshot(path=str(Path(output) / f"robot-rows-{width}.png"))
+    labels = page.locator("#robot-roster-mount .robot-row-head").first
+    assert labels.evaluate("el => getComputedStyle(el).display") == "none"  # 390: the cell labels show instead
+    assert row("arm_a").locator("[data-col=power] .robot-cell-label").is_visible()
+    assert not row("arm_a").locator("[data-col=link]").is_visible(), "a calm row shows no bare 연결 label at 390"
+    assert row("arm_s").locator("[data-col=link]").is_visible()

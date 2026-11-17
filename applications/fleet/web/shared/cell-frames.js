@@ -6,14 +6,48 @@ import {frameBadge} from './vision-view.js';
 
 export const CEILING_SOURCE = 'ceiling_north';
 export const UNREGISTERED_TEXT = '영상 원본 미등록';
+// Cell camera name -> its Vision source id in the workcell observation manifest (the cell PC
+// observation bridge publishes these). side and arm_s_* are listed once the manifest carries them.
+export const VISION_SOURCE = {top: 'omx_overhead', arm_a_wrist: 'omx_wrist_a', arm_b_wrist: 'omx_wrist_b',
+  side: 'omx_side', arm_s_top: 'omx_arm_s_top', arm_s_wrist: 'omx_arm_s_wrist'};
 const LIST_REFRESH_MS = 30000;
 const LEASE_MARGIN_MS = 8000;
+const REQUEST_TIMEOUT_MS = 2000;
+const CONCURRENCY = 4;
+
+function isNodeHidden(node) {
+  if (!node || typeof node.closest !== 'function') return false;
+  return Boolean(node.closest('[hidden], details:not([open])'));
+}
+
+function createFetchSignal(parentSignal, timeoutMs) {
+  const timeout = typeof AbortSignal === 'function' ? AbortSignal.timeout?.(timeoutMs) : undefined;
+  if (timeout && (!parentSignal || typeof AbortSignal.any === 'function')) {
+    return {signal: parentSignal ? AbortSignal.any([parentSignal, timeout]) : timeout, cleanup: () => {}};
+  }
+  if (typeof AbortController !== 'function') return {signal: parentSignal, cleanup: () => {}};
+  const local = new AbortController();
+  const onAbort = () => local.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) onAbort();
+    else parentSignal.addEventListener('abort', onAbort, {once: true});
+  }
+  const timer = setTimeout(() => local.abort(), timeoutMs);
+  return {
+    signal: local.signal,
+    cleanup() {
+      clearTimeout(timer);
+      parentSignal?.removeEventListener('abort', onAbort);
+    },
+  };
+}
 
 export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now = Date.now}) {
   const watchers = new Map();
   const seen = new WeakSet();  // nodes painted while connected  // key -> {key, view, imgs:Set, badges:Set, lease, url, state}
   let sources = null, sourcesAt = -Infinity, listing = null;
-  let running = true, busy = false, timer = null;
+  let running = true, disposed = false, busy = false, timer = null, tickQueued = false;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
 
   const stateText = (label, detail) => [label, detail].filter(Boolean).join(' · ');
 
@@ -22,10 +56,37 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     let watcher = watchers.get(key);
     if (!watcher) {
       watcher = {key, view, imgs: new Set(), badges: new Set(), badgeLabel: '', lease: null,
-        url: null, state: {kind: 'neutral', label: '영상 수신 대기', text: '영상 수신 대기'}};
+        url: null, lastSeq: null, capturedAtMs: null, captured_epoch_s: null, ageMs: null,
+        state: {kind: 'neutral', label: '영상 수신 대기', text: '영상 수신 대기'}};
       watchers.set(key, watcher);
     }
     return watcher;
+  }
+
+  function dropWatcherIfEmpty(watcher) {
+    if (watcher.imgs.size || watcher.badges.size) return false;
+    if (watcher.url) URL.revokeObjectURL(watcher.url);
+    watcher.url = null;
+    watchers.delete(watcher.key);
+    return true;
+  }
+
+  function pruneWatchers() {
+    for (const watcher of [...watchers.values()]) {
+      for (const img of watcher.imgs) {
+        if (img.isConnected) seen.add(img);
+        else if (seen.has(img)) watcher.imgs.delete(img);
+      }
+      for (const badge of watcher.badges) {
+        if (badge.isConnected) seen.add(badge);
+        else if (seen.has(badge)) watcher.badges.delete(badge);
+      }
+      dropWatcherIfEmpty(watcher);
+    }
+  }
+
+  function isWatcherHidden(watcher) {
+    return [...watcher.imgs].every(isNodeHidden) && [...watcher.badges].every(isNodeHidden);
   }
 
   function paint(watcher) {
@@ -34,22 +95,20 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
       if (!img.isConnected) { if (seen.has(img)) watcher.imgs.delete(img); continue; }
       seen.add(img);
       img.hidden = watcher.state.kind === 'unregistered';
-      if (watcher.url) img.src = watcher.url;
+      if (watcher.url && img.src !== watcher.url) img.src = watcher.url;
     }
+    const badgeText = [watcher.badgeLabel, watcher.state.text].filter(Boolean).join(' · ');
     for (const badge of watcher.badges) {
       if (!badge.isConnected) { if (seen.has(badge)) watcher.badges.delete(badge); continue; }
       seen.add(badge);
-      badge.textContent = [watcher.badgeLabel, watcher.state.text].filter(Boolean).join(' · ');
+      if (badge.textContent !== badgeText) badge.textContent = badgeText;
     }
-    if (!watcher.imgs.size && !watcher.badges.size) {
-      if (watcher.url) URL.revokeObjectURL(watcher.url);
-      watchers.delete(watcher.key);
-    }
+    dropWatcherIfEmpty(watcher);
   }
 
   async function ensureSources() {
     if (sources !== null && now() - sourcesAt < LIST_REFRESH_MS) return sources;
-    listing ??= call('/api/fleet/vision/sources')
+    listing ??= call('/api/fleet/vision/sources', controller ? {signals: [controller.signal]} : undefined)
       .then(res => { sources = new Set(res?.sources || []); sourcesAt = now(); })
       .catch(() => {})
       .finally(() => { listing = null; });
@@ -60,6 +119,8 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     const issued = await call('/api/fleet/vision/lease', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({source_id: source}),
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      ...(controller ? {signals: [controller.signal]} : {}),
     });
     const target = new URL(issued?.frame_path || '', location.origin);
     if (target.origin !== location.origin || target.username || target.password) {
@@ -69,10 +130,25 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
       expiresAt: now() + Math.max(1, (issued?.expires_in_s || 60)) * 1000 - LEASE_MARGIN_MS};
   }
 
+  function updateTimingFromHeaders(watcher, headers) {
+    const rawAge = headers?.get?.('X-Frame-Age-Ms');
+    const ageMs = rawAge !== null && rawAge !== undefined && rawAge !== '' ? Number(rawAge) : NaN;
+    const rawCapturedAt = headers?.get?.('X-Frame-Captured-At');
+    const capturedEpochS = rawCapturedAt !== null && rawCapturedAt !== undefined && rawCapturedAt !== ''
+      ? Number(rawCapturedAt) : NaN;
+    watcher.ageMs = Number.isFinite(ageMs) ? ageMs : null;
+    watcher.captured_epoch_s = Number.isFinite(capturedEpochS) ? capturedEpochS : null;
+    watcher.capturedAtMs = Number.isFinite(capturedEpochS)
+      ? capturedEpochS * 1000
+      : (Number.isFinite(ageMs) ? now() - ageMs : now());
+  }
+
   async function refreshOne(watcher) {
-    const source = watcher.view.roiTarget ? CEILING_SOURCE : watcher.view.source;
+    if (disposed || !running) return;
+    const source = watcher.view.roiTarget ? CEILING_SOURCE : (VISION_SOURCE[watcher.view.source] || watcher.view.source);
     if (!watcher.view.roiTarget) {
       await ensureSources();
+      if (disposed || !running) return;
       if (sources !== null && !sources.has(source)) {
         watcher.state = {kind: 'unregistered', label: UNREGISTERED_TEXT,
           text: `${UNREGISTERED_TEXT} · Vision 카메라 목록에 ${source}가 없습니다`};
@@ -84,56 +160,101 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
       }
     }
     if (!watcher.lease || now() >= watcher.lease.expiresAt) watcher.lease = await leaseFor(source);
+    if (disposed || !running) return;
     const url = watcher.view.roiTarget
       ? `/api/vision/sources/${CEILING_SOURCE}/roi/${encodeURIComponent(watcher.view.roiTarget)}`
       : watcher.lease.framePath;
-    const response = await fetch(url, {
-      headers: {Authorization: `Bearer ${watcher.lease.token}`},
-      credentials: 'omit', cache: 'no-store',
-    });
-    if (response.status === 401) { watcher.lease = null; return; }
-    if (response.status === 429) return;  // one frame budget per viewer and source
-    if (watcher.view.roiTarget) {
-      if (!response.ok) return;
+    const {signal, cleanup} = createFetchSignal(controller?.signal, REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        headers: {Authorization: `Bearer ${watcher.lease.token}`},
+        credentials: 'omit', cache: 'no-store',
+        ...(signal ? {signal} : {}),
+      });
+      if (disposed || !running) return;
+      if (response.status === 401) { watcher.lease = null; return; }
+      if (response.status === 429) return;  // one frame budget per viewer and source
+      const seq = response.headers?.get?.('X-Frame-Seq');
+      if (watcher.view.roiTarget) {
+        if (!response.ok) return;
+        if (seq && seq === watcher.lastSeq && watcher.url) {
+          updateTimingFromHeaders(watcher, response.headers);
+          watcher.state = {kind: 'good', label: '천장 Cam 확대 추적', text: `천장 Cam 확대 추적 (${CEILING_SOURCE})`};
+          return paint(watcher);
+        }
+        const blob = await response.blob();
+        if (disposed || !running || !blob || !blob.size) return;
+        const next = URL.createObjectURL(blob);
+        if (watcher.url) URL.revokeObjectURL(watcher.url);
+        watcher.url = next;
+        watcher.lastSeq = seq || null;
+        updateTimingFromHeaders(watcher, response.headers);
+        watcher.state = {kind: 'good', label: '천장 Cam 확대 추적', text: `천장 Cam 확대 추적 (${CEILING_SOURCE})`};
+        return paint(watcher);
+      }
+      const badge = frameBadge({ok: response.ok, status: response.status,
+        ageMs: response.headers?.get?.('X-Frame-Age-Ms'), frameState: response.headers?.get?.('X-Frame-State'), rectified: false});
+      if (!response.ok || badge.state !== 'live') {
+        watcher.state = {kind: badge.kind, label: badge.label, text: stateText(badge.label, badge.detail)};
+        return paint(watcher);
+      }
+      if (seq && seq === watcher.lastSeq && watcher.url) {
+        updateTimingFromHeaders(watcher, response.headers);
+        watcher.state = {kind: 'good', label: '원본 최신 프레임',
+          text: `원본 최신 프레임${seq ? ` · #${seq}` : ''}`};
+        return paint(watcher);
+      }
       const blob = await response.blob();
-      if (!blob || !blob.size) return;
+      if (disposed || !running) return;
       const next = URL.createObjectURL(blob);
       if (watcher.url) URL.revokeObjectURL(watcher.url);
       watcher.url = next;
-      watcher.state = {kind: 'good', label: '천장 Cam 확대 추적', text: `천장 Cam 확대 추적 (${CEILING_SOURCE})`};
-      return paint(watcher);
+      watcher.lastSeq = seq || null;
+      updateTimingFromHeaders(watcher, response.headers);
+      watcher.state = {kind: 'good', label: '원본 최신 프레임',
+        text: `원본 최신 프레임${seq ? ` · #${seq}` : ''}`};
+      paint(watcher);
+    } finally {
+      cleanup();
     }
-    const seq = response.headers.get('X-Frame-Seq');
-    const badge = frameBadge({ok: response.ok, status: response.status,
-      ageMs: response.headers.get('X-Frame-Age-Ms'), frameState: response.headers.get('X-Frame-State'), rectified: false});
-    if (!response.ok || badge.state !== 'live') {
-      watcher.state = {kind: badge.kind, label: badge.label, text: stateText(badge.label, badge.detail)};
-      return paint(watcher);
-    }
-    const blob = await response.blob();
-    const next = URL.createObjectURL(blob);
-    if (watcher.url) URL.revokeObjectURL(watcher.url);
-    watcher.url = next;
-    watcher.state = {kind: 'good', label: '원본 최신 프레임',
-      text: `원본 최신 프레임${seq ? ` · #${seq}` : ''}`};
-    paint(watcher);
   }
 
   async function tick() {
-    if (busy || !running) return;
+    if (busy || !running || disposed) return;
     if (typeof document !== 'undefined' && document.hidden) return;
     busy = true;
-    for (const watcher of [...watchers.values()]) {
-      try {
-        await refreshOne(watcher);
-      } catch (error) {
-        const label = error?.status === 401 || error?.status === 403 ? '영상 권한 없음' : '영상 연결 확인 중';
-        watcher.state = {kind: 'warn', label, text: label};
-        paint(watcher);
-      }
+    try {
+      pruneWatchers();
+      const queue = [...watchers.values()].filter(watcher => !isWatcherHidden(watcher));
+      let cursor = 0;
+      const workerCount = Math.min(CONCURRENCY, queue.length);
+      await Promise.all(Array.from({length: workerCount}, async () => {
+        while (cursor < queue.length && !disposed && running) {
+          const watcher = queue[cursor++];
+          try {
+            await refreshOne(watcher);
+          } catch (error) {
+            if (disposed || !running) break;
+            const label = error?.status === 401 || error?.status === 403 ? '영상 권한 없음' : '영상 연결 확인 중';
+            watcher.state = {kind: 'warn', label, text: label};
+            paint(watcher);
+          }
+        }
+      }));
+    } finally {
+      busy = false;
+      if (!watchers.size || disposed || !running) stopTimer();
     }
-    busy = false;
-    if (!watchers.size) stopTimer();
+  }
+
+  function scheduleTick() {
+    if (!tickQueued) {
+      tickQueued = true;
+      queueMicrotask(() => {
+        tickQueued = false;
+        void tick();
+      });
+    }
   }
 
   function stopTimer() {
@@ -156,10 +277,7 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
       if (other === watcher) continue;
       if (img) other.imgs.delete(img);
       if (badge) other.badges.delete(badge);
-      if (!other.imgs.size && !other.badges.size) {
-        if (other.url) URL.revokeObjectURL(other.url);
-        watchers.delete(other.key);
-      }
+      dropWatcherIfEmpty(other);
     }
     if (img) watcher.imgs.add(img);
     if (badge) {
@@ -168,17 +286,20 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     }
     paint(watcher);
     startTimer();
-    void tick();
+    scheduleTick();
   }
 
   function setRunning(next) {
     running = Boolean(next);
-    if (running) { startTimer(); void tick(); }
+    if (running) { startTimer(); scheduleTick(); }
     else stopTimer();
   }
 
   function dispose() {
+    disposed = true;
+    running = false;
     stopTimer();
+    controller?.abort();
     for (const watcher of watchers.values()) if (watcher.url) URL.revokeObjectURL(watcher.url);
     watchers.clear();
   }

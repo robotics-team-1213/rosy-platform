@@ -124,16 +124,19 @@ def test_failed_read_finishes_and_recovers_without_losing_input(workspace, surfa
     state['status'] = status
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(origin + '/learning/' + surface + ('?domain=lane' if surface == 'evaluate' else ''))
-    expect(page.locator('#' + surface + '-error')).to_be_visible()
     status_node = page.locator('#verdict' if surface == 'camera' else '#promote-status')
-    expect(status_node).to_contain_text('다시 확인')
+    # 401 and 5xx are one page alert (D-1117) and the panel stays quiet; a 403 is a refusal the panel states itself.
+    shown = page.locator('#' + surface + '-error') if status == 403 else page.locator('#page-alerts')
+    expect(shown).to_be_visible()
+    expect(status_node).to_contain_text('다시 확인' if status == 403 else '불러오지 못함')
     if surface == 'camera':
         page.locator('details summary').click()
         page.fill('#camera-identity', 'keep fixture input')
-    page.locator('#' + surface + '-error').scroll_into_view_if_needed()
+    shown.scroll_into_view_if_needed()
     capture(page, f'read-error-{surface}-{status}-{width}')
     state['status'] = 200
     page.locator('#' + surface + '-refresh').click()
+    expect(page.locator('#page-alerts .alert-center-card')).to_have_count(0)
     expect(page.locator('#' + surface + '-error')).to_be_hidden()
     expect(status_node).not_to_contain_text('확인하는 중')
     if surface == 'camera':
@@ -150,7 +153,7 @@ def test_promotion_error_and_receipt_describe_the_latest_attempt(workspace):
     page, state, origin, expect = workspace
     state['candidates'] = [{'id': 'fixture', 'name': 'fixture', 'qualified': True, 'model_revision': 'fixture'}]
     page.goto(origin + '/learning/evaluate?domain=lane')
-    button, error, receipt = page.locator('#promote-request'), page.locator('#evaluate-error'), page.locator('#promote-result')
+    button, error, receipt = page.locator('#promote-request'), page.locator('#page-alerts'), page.locator('#promote-result')
     button.click()
     expect(error).to_contain_text('fixture save rejected')
     page.locator('#evaluate-refresh').click()
@@ -207,5 +210,5 @@ def test_promotion_stays_disabled_until_the_read_cycle_finishes(workspace):
     held[0].fulfill(json={'total': 0})
     expect(button).to_be_enabled()
     button.click()
-    expect(page.locator('#evaluate-error')).to_contain_text('fixture save rejected')
+    expect(page.locator('#page-alerts')).to_contain_text('fixture save rejected')
     assert state['posts'] == 1

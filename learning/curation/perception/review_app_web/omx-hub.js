@@ -1,17 +1,22 @@
+import {createBusyScope} from '/common/busy-scope.js';
+import {commonDown,panelError} from '/review-alerts.js';
 // D-943 §4: preview a finished model's files, then upload them with the project's HF connection.
 const $=id=>document.getElementById(id);
 const STATE={prepared:'미리보기 완료 · 업로드 전',uploading:'업로드 중',uploaded:'업로드 완료',failed:'업로드 실패'};
-let request,uuid,pending=null,busy=false;
+let request,uuid,pending=null,hasRuns=false;
+const scope=createBusyScope($('hub-form'),{status:$('hub-status'),label:'묶음을 만드는 중입니다.'});
 function el(tag,text){const node=document.createElement(tag);if(text!=null)node.textContent=text;return node;}
 export function initHub(options){
   ({request,uuid}=options);
   $('hub-form').oninput=()=>{pending=null;};
   $('hub-form').onsubmit=async event=>{
-    event.preventDefault();if(busy)return;busy=true;$('hub-preview').disabled=true;$('hub-status').textContent='묶음을 만드는 중입니다.';
-    pending??={run_id:$('hub-run').value,repo_id:$('hub-repo').value.trim(),request_id:uuid()};
-    try{await request('/api/learning/omx/center/hub-prepare',pending);pending=null;$('hub-status').textContent='미리보기를 만들었습니다. 파일을 확인한 뒤 업로드하세요.';await refreshHub();}
-    catch(exc){$('hub-status').textContent=`미리보기 실패: ${exc.message}`;}
-    finally{busy=false;$('hub-preview').disabled=false;}
+    event.preventDefault();
+    await scope.run(async()=>{
+      pending??={run_id:$('hub-run').value,repo_id:$('hub-repo').value.trim(),request_id:uuid()};
+      try{await request('/api/learning/omx/center/hub-prepare',pending);pending=null;$('hub-status').textContent='미리보기를 만들었습니다. 파일을 확인한 뒤 업로드하세요.';await refreshHub();}
+      catch(exc){$('hub-status').textContent=`미리보기 실패: ${panelError(exc,'서버 연결 문제')}`;}
+    });
+    $('hub-preview').disabled=!hasRuns;
   };
   loadConnections();
 }
@@ -28,12 +33,12 @@ export function updateHubRuns(runs){
   $('hub-run').replaceChildren(...(done.length?done.map(run=>{const option=el('option',`${run.method==='act'?'ACT':'SAC'} · ${run.id.slice(0,8)} · 데이터 ${run.dataset_id.slice(0,8)}`);option.value=run.id;return option;})
     :[el('option','끝난 학습 결과가 없습니다')]));
   if(done.some(run=>run.id===chosen))$('hub-run').value=chosen;
-  $('hub-preview').disabled=busy||!done.length;
+  hasRuns=done.length>0;if(!scope.busy)$('hub-preview').disabled=!hasRuns;
   refreshHub();
 }
 async function refreshHub(){
   let bundles=[];
-  try{bundles=(await request('/api/learning/omx/center/hub')).bundles;}catch(exc){$('hub-bundles').replaceChildren(el('p',`업로드 기록을 읽지 못했습니다: ${exc.message}`));return;}
+  try{bundles=(await request('/api/learning/omx/center/hub')).bundles;}catch(exc){$('hub-bundles').replaceChildren(el('p',commonDown()?'불러오지 못함':`업로드 기록을 읽지 못했습니다: ${exc.message}`));return;}
   $('hub-bundles').replaceChildren(...(bundles.length?bundles.map(renderBundle):[el('p','미리보기한 묶음이 없습니다.')]));
 }
 function renderBundle(bundle){
@@ -46,7 +51,7 @@ function renderBundle(bundle){
     const upload=el('ui-button','이 파일들을 HF에 업로드');upload.type='button';upload.setAttribute('kind','quiet');upload.disabled=$('hub-connection').disabled;
     upload.onclick=async()=>{upload.disabled=true;
       try{await request('/api/learning/omx/center/hub-upload',{bundle_id:bundle.bundle_id,connection_id:$('hub-connection').value});await refreshHub();}
-      catch(exc){section.append(el('p',`업로드 요청 실패: ${exc.message}`));upload.disabled=false;}};
+      catch(exc){section.append(el('p',`업로드 요청 실패: ${panelError(exc,'서버 연결 문제')}`));upload.disabled=false;}};
     section.append(upload);
   }
   if(bundle.state==='uploading')setTimeout(refreshHub,3000);

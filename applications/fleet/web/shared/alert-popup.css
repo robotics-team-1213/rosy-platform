@@ -1,0 +1,203 @@
+/* Notification bell popover and non-modal error/alert popup stack. */
+
+/* Dedicated notification bell popover anchored directly below topbar actions. */
+.inbox-popover:not([hidden]) {
+  position: absolute;
+  inset-block-start: calc(100% + 2px);
+  inset-inline-end: var(--space-3);
+  z-index: 16;
+  box-sizing: border-box;
+  inline-size: min(26rem, calc(100vw - 2 * var(--space-3)));
+  max-block-size: min(32rem, calc(100dvh - var(--appbar-height) - var(--space-4)));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface-chrome);
+  color: var(--text-primary);
+}
+.inbox-popover-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--border-subtle);
+}
+.inbox-popover-head h2 { margin: 0; font: var(--weight-strong) var(--text-body)/var(--leading-label) var(--body); }
+.inbox-popover-head .spacer { flex: 1; }
+.inbox-popover-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2);
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+.inbox-popover-item {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+.inbox-popover-item[data-severity="crit"] { border-color: var(--status-crit); }
+.inbox-popover-item[data-severity="warn"] { border-color: var(--status-warn); }
+.inbox-popover-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+}
+.inbox-popover-title { margin: 0; font-size: var(--text-label); color: var(--text-primary); overflow-wrap: anywhere; }
+.inbox-popover-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
+.inbox-popover-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-block-start: 1px solid var(--border-subtle);
+}
+.inbox-popover-foot > .hint { min-width: 0; overflow-wrap: anywhere; }
+.inbox-popover-foot > ui-button { flex-shrink: 0; white-space: nowrap; }
+.inbox-popover-empty { margin: 0; padding: var(--space-3); text-align: center; color: var(--text-secondary); font-size: var(--text-label); }
+
+/* Non-modal floating error & critical alert popups: anchored bottom-start of primary stage on desktop so it never collides with .queues-panel, #robot-panel-mount, or topbar popovers. */
+.alert-popup-region {
+  position: fixed;
+  inset-block-start: auto;
+  inset-block-end: var(--space-4);
+  inset-inline-start: calc(var(--rail-track) + var(--space-4));
+  inset-inline-end: auto;
+  z-index: 15;
+  display: grid;
+  gap: var(--space-2);
+  inline-size: min(24rem, calc(100vw - var(--context-track) - var(--rail-track) - 56px - 3 * var(--space-4)));
+  max-block-size: min(18rem, calc(100dvh - var(--appbar-height) - var(--space-6)));
+  overflow-y: auto;
+  pointer-events: none;
+}
+body:has(.fleet-body > .ui-subnav:not([hidden])) .alert-popup-region {
+  inset-inline-start: calc(var(--rail-track) + var(--subnav-track) + var(--space-4));
+}
+.alert-popup-region:empty { display: none; }
+body:has(#inbox-popover:not([hidden]), #topbar-extra[data-open="true"]) .alert-popup-region { display: none; }
+.alert-popup-card {
+  pointer-events: auto;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--status-crit);
+  border-radius: var(--radius-panel);
+  background: var(--surface-chrome);
+  color: var(--text-primary);
+}
+.alert-popup-card[data-severity="warn"] { border-color: var(--status-warn); }
+.alert-popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.alert-popup-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.alert-popup-code {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.alert-popup-count,
+.alert-popup-queue {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-flag);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-primary);
+}
+.alert-popup-queue {
+  background: var(--surface-flat);
+  color: var(--text-secondary);
+}
+.alert-popup-time {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.alert-popup-message {
+  margin: 0;
+  font-size: var(--text-label);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.alert-popup-path {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.alert-popup-detail > summary {
+  cursor: pointer;
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+}
+.alert-popup-raw {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2);
+  max-block-size: 9rem;
+  overflow: auto;
+  border-radius: var(--radius-control);
+  background: var(--surface-recessed);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.alert-popup-next {
+  margin: var(--space-1) 0 0;
+  padding-block-start: var(--space-1);
+  border-block-start: 1px solid var(--border-subtle);
+  font-size: var(--text-micro);
+  line-height: var(--leading-label);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.alert-popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-block-start: var(--space-1);
+}
+@media (width < 64rem) {
+  .alert-popup-region,
+  body:has(.fleet-body > .ui-subnav:not([hidden])) .alert-popup-region {
+    inset-block-start: calc(var(--appbar-height) + var(--space-2));
+    inset-block-end: auto;
+    inset-inline: var(--space-3);
+    inline-size: auto;
+    max-block-size: min(16rem, 42dvh);
+  }
+  body:has(#robot-panel-mount:not([hidden]), #assistant-panel:not([hidden])) .alert-popup-region {
+    display: none;
+  }
+}

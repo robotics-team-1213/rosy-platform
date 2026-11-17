@@ -1,7 +1,10 @@
+import { valueText } from "/common/value-text.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 import { DOCK_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { confirmIrreversible } from "/common/ui.js";
+import { watchStatus } from "/assets/dom.js";
 // Console owns motion commands; setup owns teaching and dock inventory.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -11,9 +14,8 @@ export function mount(root, ctx) {
   const statusMessage = el("ui-status", "", "도킹 상태를 확인하는 중입니다.");
   const dockListStatus = el("ui-status", "", "도크 목록을 불러오는 중입니다.");
   const actionStatus = el("ui-status");
+  watchStatus(actionStatus);
   statusMessage.setAttribute("state", "pending"); dockListStatus.setAttribute("state", "pending"); actionStatus.setAttribute("state", "ready");
-  actionStatus.setAttribute("role", "status");
-  actionStatus.setAttribute("aria-live", "polite");
   const facts = el("dl", "ui-readout");
   const form = el("div", "ui-form");
   const label = el("label", "ui-field-label", "도킹 위치");
@@ -46,8 +48,8 @@ export function mount(root, ctx) {
     currentState = data.state;
     facts.replaceChildren(el("dt", "", "기능 지원"), el("dd", "", supported ? "사용 가능" : "제한 또는 미지원"),
       el("dt", "", "상태"), Object.assign(el("dd", "", enumLabel(DOCK_STATE_LABEL, data.state)), {title: data.state || ""}),
-      el("dt", "", "현재 도크"), el("dd", "", data.dock_id || "—"),
-      el("dt", "", "단계"), el("dd", "", data.phase || "—"),
+      el("dt", "", "현재 도크"), el("dd", "", data.dock_id || UNKNOWN),
+      el("dt", "", "단계"), el("dd", "", data.phase || UNKNOWN),
       el("dt", "", "오류"), el("dd", "", data.error || "없음"));
     enableActions();
   }

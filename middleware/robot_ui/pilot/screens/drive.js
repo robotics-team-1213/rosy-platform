@@ -1,4 +1,6 @@
-import {postJson, whoami, api as apiGet, authHeaders, token} from "../client.js";
+import {postJson, whoami, api as apiGet, authHeaders, token, announce} from "../client.js";
+import {setGeometry} from "/common/geometry.js";
+import {createCauseLine} from "/common/cause-line.js";
 import {mountDriveVideo} from "./drive-video.js";
 import {createDeviceSession} from "../link.js";
 import {createModelStatus, renderModels} from "../models.js";
@@ -13,12 +15,12 @@ import {mountAutoMode, mountLanePerception} from "./drive-auto.js";
 import {mountRobotRecording, mountBrowserRecording} from "./robot-recording.js";
 import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
-import {el, mountDriveView, buildStage, buildControls, actionIcon} from "./drive-view.js";
+import {el, mountDriveView, buildStage, buildControls, buildFitFill, actionIcon} from "./drive-view.js";
+import {createConnectionNotice} from "/common/connection-notice.js";
 import {classifyOperation, saveCameraFile} from "/common/evidence.js";
-import {HeadlessState, MODE_LABEL, evidenceAgeText, operatorModeLabel} from "/common/core_ui_logic.js";
+import {EVIDENCE_LABEL, HeadlessState, MODE_LABEL, evidenceAgeText, operatorModeLabel} from "/common/core_ui_logic.js";
 
 const LOOP_MS = 100, STATE_POLL_MS = 500, MODE_TIMEOUT_MS = 3000, READBACK_GAP_MS = 2 * STATE_POLL_MS, DEG = 180 / Math.PI;
-const PRESET_LABEL = {low: "저속", mid: "보통", high: "빠름"};
 const LINK_LABEL = {
   CONNECTING: "상태 연결 중", OPEN: "상태 수신", RETRYING: "상태 재연결 중",
   FORBIDDEN: "상태 접근 거부", OFFLINE: "상태 연결 끊김", BLOCKED: "조종 차단",
@@ -30,7 +32,8 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   const element = {}, drive = root;
   let engaged = false, disposed = false, engagePromise = null, modeHeld = false, perceptionPending = false;
 
-  root.replaceChildren(buildStage(), buildControls(profile));
+  const controls = buildControls(profile);
+  root.replaceChildren(buildStage(), controls);
   if (unsupported.length) {
     const notes = el("div", null, {"data-drive-unsupported": ""});
     for (const control of unsupported) notes.append(el("p", `지원하지 않는 조작부 · ${control.label || control.kind}`, {"data-control-unsupported": ""}));
@@ -45,12 +48,13 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     latency: "[data-drive-fact=latency]", cap: "[data-drive-fact=cap]", visibility: "[data-drive-visibility]",
     motion: "[data-drive-motion]", blocked: "[data-drive-blocked]", blockedReason: "[data-drive-blocked-reason]",
     retake: "[data-drive-retake]", view: "[data-drive-view]", zoomFact: "[data-drive-fact=zoom]",
-    go: "[data-drive-go]", autoToggle: "[data-drive-auto]", manual: "[data-drive-manual]",
+    go: "[data-drive-go]",
     intent: "[data-drive-intent]", intentTarget: "[data-intent-target]", intentSteer: "[data-intent-steer]",
     controls: "[data-drive-controls]", calibration: "[data-drive-calibration]",
     calibrationTitle: "[data-drive-calibration-title]", calibrationReason: "[data-drive-calibration-reason]",
     activity: "[data-drive-fact=activity]",
   })) element[key] = root.querySelector(selector);
+  element.modeGroup = controls.modeGroup;
 
   function showMode(mode) { element.mode.textContent = operatorModeLabel(mode, "확인 필요"); element.mode.title = mode; }
   function ageText(frame, channel) {
@@ -64,12 +68,13 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       && typeof velocity?.angular === "number" && Number.isFinite(velocity.angular);
     const velocityState = !frame ? "disconnected" : usableVelocity ? evidence.evidenceOf("velocity") : "unavailable";
     element.speed.dataset.evidence = velocityState; element.turn.dataset.evidence = velocityState;
+    element.speed.nextElementSibling.hidden = !(velocityState === "fresh" || velocityState === "delayed"); // no "정보 없음 m/s"
     if (velocityState === "fresh" || velocityState === "delayed") {
       element.speed.textContent = Math.abs(velocity.linear).toFixed(2);
       const turn = velocity.angular * DEG, direction = turn > 0.5 ? "좌 " : turn < -0.5 ? "우 " : "";
       element.turn.textContent = `${direction}${Math.abs(turn).toFixed(0)}°/s${velocityState === "delayed" ? ` · 지연${ageText(frame, "velocity")}` : ""}`;
     } else {
-      element.speed.textContent = "—";
+      element.speed.textContent = EVIDENCE_LABEL.unavailable;
       element.turn.textContent = velocityState === "disconnected" ? "속도 연결 끊김" : "속도 정보 없음";
     }
     const percent = frame?.battery?.percent;
@@ -89,22 +94,37 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     }).catch(() => { whoamiTimer = setTimeout(() => askWhoami(Math.min(delayMs * 2, 15000)), delayMs); });
   }
   askWhoami();
+  // One cause line for every control the calibration lock disables (the reason text sits in the stage band).
+  const cause = createCauseLine(element.controls, {line: element.calibrationReason});
+  let reasonText = "";
+  // 연결 태그: 공용 createConnectionNotice(C10) — 정상·대기는 조용한 글자, 끊김은 warn 태그.
+  const linkNotice = createConnectionNotice(element.state);
+  function paintLink(text) {
+    const tag = element.state, ds = tag.dataset;
+    const state = ds.readback === "silent" || ["RETRYING", "OFFLINE", "FORBIDDEN"].includes(ds.state)
+      ? "disconnected" : ds.state === "OPEN" ? "fresh" : "unavailable";
+    linkNotice.set(state, text);
+  }
+  // 보정 잠금은 단추와 K1 라디오(속도·운전 모드)를 함께 덮는다.
+  const driveButtons = () => [...element.controls.querySelectorAll("ui-button, input.choice-radio")];
+  // The band also tells the reason when another token's calibration is active but does not lock this one.
+  function paintReason() { if (!calibrationLocked) { element.calibrationReason.textContent = reasonText; element.calibrationReason.hidden = !reasonText; } }
+  function setCause(controls, text) { cause.set(controls, text); paintReason(); }
   function renderActivity(activity) {
     lastActivity = activity ?? null;
     const view = calibrationView(lastActivity, myTokenId, identityPending);
     element.calibration.hidden = !view.active; element.activity.hidden = !view.active;
     element.calibrationTitle.textContent = view.text;
-    element.calibrationReason.textContent = view.active ? `${view.reason}${view.remaining == null ? "" : ` · 유지 ${view.remaining}초`}` : "";
+    if (view.active) announce(view.text);  // 바뀔 때만 낭독(공용 announcer)
+    reasonText = view.active ? `${view.reason}${view.remaining == null ? "" : ` · 유지 ${view.remaining}초`}` : "";
     element.calibration.dataset.locked = String(view.locked);
     const lock = view.active && view.locked;
-    if (lock === calibrationLocked) return;
+    if (lock) setCause(driveButtons(), reasonText);  // the text may change (유지 N초) while locked
+    if (lock === calibrationLocked) { paintReason(); return; }
     calibrationLocked = lock;
     if (lock) { releaseAll(); auto?.release("calibration"); }
     element.controls.toggleAttribute("data-locked", lock); element.controls.setAttribute("aria-disabled", String(lock));
-    for (const button of element.controls.querySelectorAll("ui-button")) {
-      button.disabled = lock;
-      if (lock) button.setAttribute("reason", "위 사유"); else button.removeAttribute("reason");
-    }
+    if (!lock) setCause(driveButtons(), "");
   }
   let lastSocketReadbackAt = -Infinity;
   const session = createDeviceSession({
@@ -117,15 +137,14 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     schedule: (fn, ms) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); },
     postJson, whoami,
     onState: (state) => {
-      element.state.textContent = LINK_LABEL[state] ?? "상태 확인 필요";
-      element.state.dataset.state = state; element.state.title = state;
-      delete element.state.dataset.readback;
-      if (["RETRYING", "OFFLINE", "FORBIDDEN"].includes(state)) { renderTelemetry(null); element.mode.textContent = "—"; }
+      element.state.dataset.state = state;
+      delete element.state.dataset.readback; paintLink(LINK_LABEL[state] ?? "상태 확인 필요");
+      if (["RETRYING", "OFFLINE", "FORBIDDEN"].includes(state)) { renderTelemetry(null); element.mode.textContent = EVIDENCE_LABEL.unavailable; }
     },
     onSnapshot: (frame) => {
       lastSocketReadbackAt = Date.now();
       delete element.state.dataset.readback;
-      element.state.textContent = LINK_LABEL[session.state()] ?? "상태 수신";
+      paintLink(LINK_LABEL[session.state()] ?? "상태 수신");
       renderTelemetry(frame);
       if (frame?.mode) showMode(frame.mode);
       if (frame && "activity" in frame) renderActivity(frame.activity);
@@ -162,13 +181,11 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     const mag = Math.hypot(dx, dy);
     if (mag > 1) { dx /= mag; dy /= mag; }
     setStickInput(dx, -dy);
-    element.knob.setAttribute("data-knob-x", `${dx * radius * 0.62}px`);
-    element.knob.setAttribute("data-knob-y", `${dy * radius * 0.62}px`);
+    setGeometry(element.knob, {x: dx * radius * 0.62, y: dy * radius * 0.62});
   }
   function releaseStick() {
     stickPointer = null; origin = null; setStickInput(0, 0);
-    element.knob.removeAttribute("data-knob-x"); element.knob.removeAttribute("data-knob-y");
-    stick.removeAttribute("data-float-x"); stick.removeAttribute("data-float-y");
+    setGeometry(element.knob, {x: null, y: null}); setGeometry(stick, {left: null, top: null});
     stick.classList.remove("active", "floating");
   }
   stick.addEventListener("pointerdown", (event) => {
@@ -184,7 +201,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
       const tx = clamp(event.clientX - centre.x, column.left - rect.left, column.right - rect.right);
       const ty = clamp(event.clientY - centre.y, column.top - rect.top, column.bottom - rect.bottom);
-      stick.classList.add("floating"); stick.setAttribute("data-float-x", `${tx}px`); stick.setAttribute("data-float-y", `${ty}px`);
+      stick.classList.add("floating"); setGeometry(stick, {left: tx, top: ty});
     }
     applyStick(event);
   });
@@ -215,7 +232,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     onPending(value) {
       perceptionPending = value;
       if (element.go) {
-        element.go.disabled = value || calibrationLocked;
+        element.go.disabled = value || calibrationLocked; cause.sync();
         if (value) element.go.setAttribute("reason", "인식 적용 중"); else element.go.removeAttribute("reason");
       }
     },
@@ -223,7 +240,6 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   });
   const idleButton = el("ui-button", "정지 · 설정", {type: "button", kind: "quiet", "data-drive-idle": ""});
   idleButton.setAttribute("kind", "quiet");
-  element.hud.append(idleButton);
   idleButton.addEventListener("click", async () => {
     if (perceptionPending || calibrationLocked || auto.active()) return;
     engaged = false; releaseAll(); clearKeys(); releaseStick();
@@ -233,7 +249,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     showBlocked(response?.status === 200 ? "정지 · 설정 중 — 다시 잡으면 수동 운전" : "정지 모드 확인 실패 — 상태를 확인하세요");
     perception.refresh();
   });
-  function takeover() { auto.takeover(); }
+  function takeover() { auto.takeover(); if (calibrationLocked) setCause(driveButtons(), reasonText); }
 
   const keys = {up: false, down: false, left: false, right: false, pivotLeft: false, pivotRight: false};
   const KEY_MAP = {ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down",
@@ -243,7 +259,10 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     const key = KEY_MAP[event.code];
     if (!key) return;
     if (event.type === "keyup") { keys[key] = false; return; }
-    if (event.target?.closest?.("input, textarea, select, summary")) return;
+    // Drive keys are ignored while focus is on any form control (radio chip, checkbox, select, range, text), a
+    // contenteditable, or during IME composition: arrows then move between chips (APG radio group) and never move the
+    // robot by accident (coordinator decision 2026-11-14: unintended motion is worse than the keyboard cost).
+    if (event.isComposing || event.target?.isContentEditable || event.target?.closest?.("input, textarea, select, summary")) return;
     keys[key] = true; event.preventDefault();
   };
   window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKey);
@@ -332,12 +351,12 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     const state = await apiGet("/api/v1/robot/state", {timeoutMs: READBACK_GAP_MS}).catch(() => null);
     if (Date.now() - lastSocketReadbackAt < READBACK_GAP_MS) return;
     if (!state || state.status !== 200) {
-      renderTelemetry(null); element.mode.textContent = "—";
-      if (session.state() === "OPEN") { element.state.textContent = "상태 수신 없음"; element.state.dataset.readback = "silent"; }
+      renderTelemetry(null); element.mode.textContent = EVIDENCE_LABEL.unavailable;
+      if (session.state() === "OPEN") { element.state.dataset.readback = "silent"; paintLink("상태 수신 없음"); }
       return;
     }
     delete element.state.dataset.readback;
-    element.state.textContent = LINK_LABEL[session.state()] ?? "상태 수신";
+    paintLink(LINK_LABEL[session.state()] ?? "상태 수신");
     renderTelemetry(state.body);
     if (state.body?.mode) showMode(state.body.mode);
     renderActivity(state.body?.activity);
@@ -367,12 +386,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   const zoomButton = el("ui-button", "확대 맞춤", {type: "button", "data-drive-zoom": ""});
   zoomButton.setAttribute("kind", "quiet"); zoomButton.addEventListener("click", () => view.cycleZoom());
   element.zoomButton = zoomButton;
-  const fitButton = el("ui-button", "전체 영상", {type: "button", "data-drive-fit": "", "aria-label": "전체 영상 · 잘림 없이 보기"});
-  fitButton.setAttribute("kind", "segment"); actionIcon(fitButton, "fit"); fitButton.setAttribute("kind", "segment");
-  element.fitButton = fitButton; fitButton.addEventListener("click", () => view.setZoom(1));
-  const fillButton = el("ui-button", "화면 채우기", {type: "button", "data-drive-fill": "", "aria-label": "화면 채우기 · 확대 후 드래그하여 보기"});
-  fillButton.setAttribute("kind", "segment"); actionIcon(fillButton, "expand"); fillButton.setAttribute("kind", "segment");
-  element.fillButton = fillButton; fillButton.addEventListener("click", () => view.setZoom("full"));
+  const [fitButton, fillButton] = buildFitFill(view);
   const inputsButton = el("ui-button", "입력", {type: "button", "data-drive-inputs": ""});
   inputsButton.setAttribute("kind", "quiet");
   let inputsPanel = null, closeInputs = null;
@@ -383,7 +397,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     root.querySelector("[data-drive-stage]").append(inputsPanel);
     closeInputs = mountInputs(inputsPanel, {onClose: () => {
       inputsPanel?.remove(); inputsPanel = null; closeInputs = null; renderInputs(); toolsButton.focus();
-    }, onChange: renderInputs});
+    }});
   });
   const exit = el("ui-button", "조종 종료", {type: "button", "data-drive-exit": ""});
   exit.setAttribute("kind", "quiet"); exit.addEventListener("click", () => teardown());
@@ -397,7 +411,10 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   const tools = el("section", null, {id: "pilot-drive-tools", "data-drive-tools-panel": "", "aria-label": "영상과 조종 도구", hidden: ""});
   const toolsActions = el("ui-actions");
   toolsActions.append(zoomButton, browserLabel, shotButton, recordButton, saveVideo, robotRecordButton, recordingsButton, inputsButton);
-  tools.append(el("ui-text", "영상·녹화·조종 설정", {scale: "label"}), toolsActions);
+  tools.append(
+    el("ui-text", "영상·녹화·조종 설정 (1:1 직접 수동 운전 전용 · 다중 로봇 배차·경로 관제는 운용 콘솔 /console 에서 수행)", {scale: "label"}),
+    toolsActions,
+  );
   const closeTools = el("ui-button", "닫기", {kind: "quiet", type: "button"});
   closeTools.setAttribute("kind", "quiet");
   function hideTools() { tools.hidden = true; toolsButton.setAttribute("aria-expanded", "false"); }
@@ -409,34 +426,28 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   });
   root.querySelector("[data-drive-stage]").append(tools);
   recordingsButton.addEventListener("click", hideTools);
-  actionIcon(exit, "back"); actions.append(fitButton, fillButton, toolsButton, exit);
+  // 머리에는 도구 하나만 남는다. 영상 보기·정지·설정·종료·모델·사실 띠는 모두 도구 판 안이다.
+  actionIcon(exit, "back"); actions.append(toolsButton);
+  toolsActions.prepend(idleButton, fitButton, fillButton);
+  const consoleLink = el("a", "운용 콘솔 (/console)", {class: "ui-action-link", "data-kind": "quiet", href: "/console"});
+  toolsActions.insertBefore(consoleLink, closeTools);
+  toolsActions.insertBefore(exit, closeTools);
+  const facts = element.hud.querySelector("[data-drive-facts]"), lanePanel = element.hud.querySelectorAll("details.pilot-models")[1];
+  tools.insertBefore(facts, tools.querySelector("ui-actions"));
+  tools.insertBefore(modelPanel, toolsActions); tools.insertBefore(lanePanel, toolsActions);
   element.hud.append(recordingFact, actions);
-  const compactHud = window.matchMedia("(width < 30rem)"), lanePanel = element.hud.querySelectorAll("details.pilot-models")[1];
-  function placeCompactTools() {
-    hideTools(); modelPanel.open = false; lanePanel.open = false;
-    if (compactHud.matches) {
-      tools.insertBefore(modelPanel, toolsActions); tools.insertBefore(lanePanel, toolsActions); toolsActions.prepend(fitButton, fillButton);
-    } else {
-      element.hud.insertBefore(modelPanel, idleButton); element.hud.insertBefore(lanePanel, idleButton); actions.prepend(fitButton, fillButton);
-    }
-  }
-  compactHud.addEventListener("change", placeCompactTools); placeCompactTools();
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
     sheetHost: root, anchor: element.hud, save: saveCameraFile, returnFocus: toolsButton,
   });
   view.applyZoom();
 
+  const presetGroup = controls.presetGroup;
+  presetGroup.element.addEventListener("change", (event) => { saveInputConfig({preset: event.target.value}); renderInputs(); });
   function renderInputs() {
-    const config = inputConfig(), row = root.querySelector("[data-drive-preset-row]");
-    row.replaceChildren();
-    for (const name of ["low", "mid", "high"]) {
-      const button = el("ui-button", PRESET_LABEL[name], {type: "button", "data-preset": name});
-      button.setAttribute("kind", "segment"); button.setAttribute("aria-pressed", String(config.preset === name));
-      button.disabled = calibrationLocked;
-      button.addEventListener("click", () => { saveInputConfig({preset: name}); renderInputs(); });
-      row.append(button);
-    }
+    const config = inputConfig();
+    presetGroup.set(config.preset);
+    if (calibrationLocked) setCause(driveButtons(), reasonText);  // repaint re-enables radios; keep them in the lock
     element.fine?.setAttribute("aria-pressed", String(Boolean(config.fine)));
     renderCap();
   }
@@ -457,7 +468,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     const detail = response?.body?.detail;
     showBlocked(`수동 모드 전환 실패 — ${detail?.message ?? detail ?? response?.status ?? "연결 없음"}`);
   }
-  function showBlocked(message) { element.blockedReason.textContent = message; element.blocked.hidden = false; }
+  function showBlocked(message) { element.blockedReason.textContent = message; const fresh = element.blocked.hidden; element.blocked.hidden = false; if (fresh) announce(message, {urgent: true}); }
   function hideBlocked() { element.blocked.hidden = true; }
   element.retake.addEventListener("click", () => { engagePromise = engage(); });
   engagePromise = engage();
@@ -478,7 +489,6 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     });
     clearTimeout(whoamiTimer);
     driveVideo.stop(); vision.stop(); models.stop(); perception.dispose();
-    compactHud.removeEventListener("change", placeCompactTools);
     window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKey);
     window.removeEventListener("blur", onBlur); window.removeEventListener("focusin", onFocusIn);
     root.removeEventListener("contextmenu", blockContextMenu); view.close();

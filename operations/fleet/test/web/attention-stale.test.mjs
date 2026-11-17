@@ -28,7 +28,7 @@ test("offline, missing field and never-received views are not judged", () => {
 // The real attentionItems, with the browser's "/common/..." imports mapped to shared/web.
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
-const { createRoster } = await import("../../../../applications/fleet/web/roster.js");
+const { createRoster } = await import("../../../../applications/fleet/web/robot/roster.js");
 
 const view = { robots: [], formation: null, stateUnavailable: false, receivedAtMs: null };
 const { attentionItems } = createRoster({ scope: {onDispose() {}, interval() {}}, view, streamEvidence: () => null });

@@ -1,11 +1,13 @@
 // D-411 B: joint jog widget — a two-axis pad mapped to two joints, plus ± buttons for one
 // joint. Bounded goals only, one at a time (D-390 §2); no 100 ms stream for the arm.
 // Releasing the pad stops new goals; the goal already sent (<= max_step_rad) finishes.
+import {setGeometry} from "/common/geometry.js";
+import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 import {axesFromOffset, createArmJogger, limitStep} from "../arm-stick.js";
 
 const BUTTON_STEP_RAD = 0.02;   // legacy per-press step; the pad scales up to max_step_rad
 const KEY_AXES = {ArrowRight: {x: 1, y: 0}, ArrowLeft: {x: -1, y: 0}, ArrowUp: {x: 0, y: 1}, ArrowDown: {x: 0, y: -1}};
-const fmt = (value) => (Number.isFinite(value) ? value.toFixed(2) : "—");
+const fmt = (value) => (Number.isFinite(value) ? value.toFixed(2) : EVIDENCE_LABEL.unavailable);
 const PAD_IDLE = "누르는 동안 이동";
 
 function node(tag, attrs = {}, text = "") {
@@ -131,8 +133,7 @@ export function mountJointJog(slot, control, session) {
   }
   function moveKnob(axes) {
     // the knob (38% wide) stays inside the ring: its centre travels at most 31% from the middle
-    knob.setAttribute("data-knob-x", `${50 + axes.x * 31}%`);
-    knob.setAttribute("data-knob-y", `${50 - axes.y * 31}%`);
+    setGeometry(knob, {x: `${50 + axes.x * 31}%`, y: `${50 - axes.y * 31}%`});
   }
   function axesFor(event) {
     const box = pad.getBoundingClientRect();

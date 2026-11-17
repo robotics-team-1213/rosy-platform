@@ -10,8 +10,8 @@ from urllib.parse import urljoin, urlsplit
 from .static import ASSETS, PAGES
 
 COMMON = ('tokens.css', 'app-shell.css', 'components.css', 'component-controls.css', 'theme.js', 'ui.js', 'ui-wiring.js',
-          'confirmation.js', 'live-dialog-geometry.js', 'fleet-client.js', 'request.js',
-          'account-profile.js', 'icons/console.svg', 'brand/mark.svg')
+          'confirmation.js', 'live-dialog-geometry.js', 'cause-line.js', 'busy-scope.js', 'fleet-client.js', 'request.js',
+          'account-profile.js', 'status-tag.js', 'value-text.js', 'core_ui_logic.js', 'readout-strip.css', 'icons/console.svg', 'brand/mark.svg')
 
 
 class _Resources(HTMLParser):

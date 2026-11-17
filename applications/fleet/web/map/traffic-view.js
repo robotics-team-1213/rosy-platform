@@ -5,8 +5,70 @@ import { trafficDrawing } from "/console/assets/site-map-model.js";
 // D-517 10 교통 층 — 블록 띠(점유 채움·허가 테두리·불명 빗금), 구역 윤곽과 "점유 a/b · 대기 n",
 // 로봇마다 통행권 끝 가로 표시. 미터 좌표를 toPoint 하나로 그려 화면 방향·위에서 본 보기를 그대로 따른다.
 // 테두리는 굵은 선에서 가는 선을 지운 따로 그린 판이라 밑의 실영상을 덮지 않는다.
+let cachedHatch = { color: null, canvas: null, ctx: null, pattern: null };
+let cachedOutline = { doc: null, canvas: null };
+let cachedDrawing = null;
+
+function getOutlineCanvas(w, h) {
+  const doc = typeof document !== "undefined" ? document : null;
+  if (!cachedOutline.canvas || cachedOutline.doc !== doc) {
+    cachedOutline = { doc, canvas: document.createElement("canvas") };
+  }
+  const sheet = cachedOutline.canvas;
+  if (!(sheet.width >= w)) sheet.width = w;
+  if (!(sheet.height >= h)) sheet.height = h;
+  return sheet;
+}
+
+function resolveTrafficDrawing(view, on, reuse = false) {
+  if (!on) {
+    if (!reuse) cachedDrawing = null;
+    return null;
+  }
+  const edges = view.activeSiteMap?.map?.edges;
+  if (reuse && cachedDrawing && cachedDrawing.view === view
+    && cachedDrawing.traffic === view.traffic
+    && cachedDrawing.siteMap === view.activeSiteMap
+    && cachedDrawing.edges === edges
+    && cachedDrawing.trips === view.trafficTrips) {
+    return cachedDrawing.drawing;
+  }
+  const drawing = trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips);
+  cachedDrawing = { view, traffic: view.traffic, siteMap: view.activeSiteMap, edges, trips: view.trafficTrips, drawing };
+  return drawing;
+}
+
+function currentTrafficStatusSig(status) {
+  if (status.childNodes?.length) return [...status.childNodes].map((node) => node.textContent || "").join("\n");
+  if (Array.isArray(status.rows)) return status.rows.map((node) => node.textContent || "").join("\n");
+  return status.textContent || "";
+}
+
+function hatchPatternFor(ctx, warnColor) {
+  if (cachedHatch.canvas && cachedHatch.color === warnColor && cachedHatch.ctx === ctx) {
+    return cachedHatch.pattern;
+  }
+  let canvas = cachedHatch.canvas;
+  if (!canvas || cachedHatch.color !== warnColor) {
+    canvas = canvas || document.createElement("canvas");
+    canvas.width = canvas.height = 8;
+    const h = canvas.getContext("2d");
+    if (typeof h?.clearRect === "function") h.clearRect(0, 0, 8, 8);
+    h.strokeStyle = warnColor;
+    h.lineWidth = 2;
+    h.beginPath();
+    h.moveTo(0, 8); h.lineTo(8, 0);
+    h.moveTo(-2, 2); h.lineTo(2, -2);
+    h.moveTo(6, 10); h.lineTo(10, 6);
+    h.stroke();
+  }
+  const pattern = ctx.createPattern(canvas, "repeat");
+  cachedHatch = { color: warnColor, canvas, ctx, pattern };
+  return pattern;
+}
+
 export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on }) {
-  const drawing = on ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
+  const drawing = resolveTrafficDrawing(view, on, false);
   el("legend-traffic").hidden = !drawing || !(drawing.bands.length || drawing.zones.length || drawing.signals.length);
   const status = el("map-traffic-status");
   if (status) {
@@ -17,11 +79,15 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
       ...drawing.zones.map(zone => `${zone.unit} · ${zone.label}`),
       ...drawing.signals.map(stop => `가상 · ${stop.signal} · ${stop.approach} · ${stop.text}`),
     ] : [];
-    status.replaceChildren(...(labels.length ? labels : [on ? drawing ? "점유·신호 없음" : "교통 상태 대기" : "교통 표시 꺼짐"]).map(text => {
-      const row = document.createElement("li");
-      row.textContent = text;
-      return row;
-    }));
+    const rows = labels.length ? labels : [on ? drawing ? "점유·신호 없음" : "교통 상태 대기" : "교통 표시 꺼짐"];
+    const sig = rows.join("\n");
+    if (currentTrafficStatusSig(status) !== sig) {
+      status.replaceChildren(...rows.map(text => {
+        const row = document.createElement("li");
+        row.textContent = text;
+        return row;
+      }));
+    }
   }
   if (!drawing) return;
   const band = Math.max(6, Math.min(16, 0.09 * pxPerM));
@@ -30,9 +96,12 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
     points.forEach(([x, y], i) => { const p = toPoint(x, y); if (i) target.lineTo(p.x, p.y); else target.moveTo(p.x, p.y); });
   };
   const outline = (lines, colour, width, edge, dash = []) => {
-    const sheet = document.createElement("canvas");
-    sheet.width = ctx.canvas.width; sheet.height = ctx.canvas.height;
+    const w = ctx.canvas.width, h = ctx.canvas.height;
+    const sheet = getOutlineCanvas(w, h);
     const o = sheet.getContext("2d");
+    o.setTransform(1, 0, 0, 1, 0, 0);
+    o.clearRect?.(0, 0, sheet.width, sheet.height);
+    o.globalCompositeOperation = "source-over";
     o.setTransform(ctx.getTransform());
     o.lineJoin = "round";
     o.strokeStyle = colour;
@@ -44,26 +113,25 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
     o.lineWidth = width - 2 * edge;
     o.lineCap = "round";
     for (const line of lines) { trace(o, line); o.stroke(); }
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(sheet, 0, 0); ctx.restore();
+    o.globalCompositeOperation = "source-over";
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(sheet, 0, 0, w, h, 0, 0, w, h);
+    ctx.restore();
   };
   for (const zone of drawing.zones) outline(zone.lines, css("--ink-quiet"), band + 10, 2);
-  const hatch = document.createElement("canvas");
-  hatch.width = hatch.height = 8;
-  const h = hatch.getContext("2d");
-  h.strokeStyle = css("--status-warn"); h.lineWidth = 2;
-  h.beginPath(); h.moveTo(0, 8); h.lineTo(8, 0); h.moveTo(-2, 2); h.lineTo(2, -2); h.moveTo(6, 10); h.lineTo(10, 6); h.stroke();
+  const warnColor = css("--status-warn");
   ctx.save();
   ctx.lineCap = "butt"; ctx.lineJoin = "round"; ctx.lineWidth = band;
   for (const item of drawing.bands) {
     if (item.state === "GRANTED") continue;
     trace(ctx, item.points);
-    ctx.strokeStyle = item.state === "OCCUPIED" ? colorOf(item.robot) : ctx.createPattern(hatch, "repeat");
+    ctx.strokeStyle = item.state === "OCCUPIED" ? colorOf(item.robot) : hatchPatternFor(ctx, warnColor);
     ctx.globalAlpha = item.state === "OCCUPIED" ? 0.9 : 1;
     ctx.stroke();
   }
   ctx.restore();
   for (const item of drawing.bands.filter((b) => b.state === "GRANTED")) outline([item.points], colorOf(item.robot), band, 2);
-  for (const item of drawing.bands.filter((b) => b.state === "UNKNOWN")) outline([item.points], css("--status-warn"), band, 1.5, [4, 3]);
+  for (const item of drawing.bands.filter((b) => b.state === "UNKNOWN")) outline([item.points], warnColor, band, 1.5, [4, 3]);
   ctx.save();
   ctx.lineCap = "round";
   // 대열(M3): 앞 로봇에서 팔로워로 가는 가는 선 하나, 리더 색. 띠 위, 통행권 표시 아래.
@@ -112,7 +180,7 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
 
 // Small dashed lamps mark virtual signals; names and state stay in the readout.
 export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
-  const drawing = on ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
+  const drawing = resolveTrafficDrawing(view, on, true);
   if (!drawing?.signals?.length) return;
   const lampColour = { green: css("--signal-go"), yellow: css("--signal-caution"), red: css("--signal-stop") };
   for (const stop of drawing.signals) {

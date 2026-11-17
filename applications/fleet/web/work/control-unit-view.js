@@ -1,4 +1,5 @@
 import {randomUUID} from "/console/assets/uuid.js";
+import {createPollGate} from "/console/assets/poll-gate.js";
 // Control-unit candidates remain separate from local Task execution and physical stop evidence.
 const labels = {PENDING: "현장 승인 대기", APPROVING: "승인 접수 · 작업 결속 확인 중", REQUESTED: "요청 접수",
   QUEUED: "실행 대기", ACCEPTED: "장치 수락", RUNNING: "실행 중", UNKNOWN: "실행 결과 미확인",
@@ -40,11 +41,15 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
     actions = node("div", "", "ui-actions"), disclosure = node("details", "", "ui-disclosure");
   actions.append(send, fresh); form.append(actions);
   disclosure.append(node("summary", "관제에 작업 요청"), form);
+  const cancelNote = node("details", "", "ui-disclosure");
+  cancelNote.append(node("summary", "취소 요청 안내"),
+    node("p", "취소 요청은 실제 정지 확인과 별개입니다. 소유 관제의 작업 결과와 장치 근거를 확인하세요."));
   panel.append(heading, context, state, list, disclosure, notice,
-    node("p", "취소 요청은 실제 정지 확인과 별개입니다. 소유 관제의 작업 결과와 장치 근거를 확인하세요.", "hint"));
+    node("p", "취소 요청은 실제 정지 확인과 별개입니다.", "hint"), cancelNote);
   anchor.before(panel);
   let revision = 0, inFlight = false, busy = false, available = false, unit = null, identity = randomUUID();
   let draft = null, draftKey = null;
+  const routeGate = createPollGate();
   function saveDraft() {
     sessionStorage.setItem(draftKey, JSON.stringify(draft));
   }
@@ -72,6 +77,7 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
     draftControls();
   }
   function reset() {
+    routeGate.reset();
     revision++; available = false; unit = null; panel.hidden = true; list.replaceChildren(); notice.textContent = "";
     identity = randomUUID(); form.reset();
     draft = null; draftKey = null; draftControls();
@@ -140,7 +146,27 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
         node("p", reply.stale ? "소유 관제 연결을 확인하세요 · 이전 결과입니다." :
           `원장 확인 ${new Date(row.updated_at).toLocaleString()}`, "hint"));
       const path = `/api/fleet/control-unit/delegations/${encodeURIComponent(row.origin_id)}/${encodeURIComponent(row.delegation_id)}`;
-      if (transfer) item.append(node("p", "ARM 승인은 대상 셀의 작업 원장에서 진행합니다.", "hint"));
+      if (transfer) {
+        const hint = node("p", "ARM 승인은 대상 셀의 작업 원장에서 진행합니다.", "hint");
+        const wc = transfer.workcell_id;
+        const arm = transfer.instance_id;
+        const target = arm === "arm_s" || wc === "cell_s" ? "cell_s"
+          : arm === "arm_a" ? "cell_a"
+          : arm === "arm_b" ? "cell_b"
+          : wc === "cell_ab" ? "cell_ab" : null;
+        if (target) {
+          const label = target === "cell_s" ? "Cell S 작업대 열기"
+            : target === "cell_a" ? "Cell A 작업대 열기"
+            : target === "cell_b" ? "Cell B 작업대 열기"
+            : "Cell A/B 작업대 열기";
+          const link = Object.assign(node("a", label, "ui-action-link"), {
+            href: `/console/cell?cell=${encodeURIComponent(target)}#observation-heading`,
+          });
+          link.dataset.kind = "quiet";
+          hint.append(" · ", link);
+        }
+        item.append(hint);
+      }
       if (!transfer && row.request.target_unit === unit.unit_id && !row.local_task_id && !terminal.has(row.status)) {
         const approve = button("이 관제에서 승인", "primary");
         approve.dataset.delegationAction = JSON.stringify([row.origin_id, row.delegation_id, "approve"]);
@@ -165,11 +191,12 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
     }
   }
   async function refresh() {
-    if (!active || inFlight || busy) return;
+    if (!active || inFlight || busy || !routeGate.due()) return;
     const life = scope.capture(), version = revision; inFlight = true;
     try {
       const summary = await call("/api/fleet/control-unit"); life.check();
       const result = await call("/api/fleet/control-unit/delegations"); life.check();
+      routeGate.ok();
       if (version !== revision) return;
       unit = summary; available = true; panel.hidden = false;
       loadDraft();
@@ -185,8 +212,9 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
       paint(result.delegations); controls();
     } catch (error) {
       if (life.current() && version === revision) {
+        const absent = routeGate.fail(error.status, error.code) === "absent";
         available = false; list.replaceChildren(); controls();
-        if (!unit && error.status === 404) panel.hidden = true;
+        if ((!unit && error.status === 404) || absent) panel.hidden = true;
         else { panel.hidden = false; state.textContent = "관제 원장 조회 실패 · 접속 권한과 연결을 확인하세요."; }
       }
     } finally { inFlight = false; }

@@ -25,9 +25,15 @@
 !shared/web/ui-wiring.js
 !shared/web/confirmation.js
 !shared/web/live-dialog-geometry.js
+!shared/web/cause-line.js
+!shared/web/busy-scope.js
 !shared/web/fleet-client.js
 !shared/web/request.js
 !shared/web/account-profile.js
+!shared/web/status-tag.js
+!shared/web/value-text.js
+!shared/web/core_ui_logic.js
+!shared/web/readout-strip.css
 !shared/web/icons/console.svg
 !shared/web/brand/mark.svg
 !deploy/site/requirements-account.txt

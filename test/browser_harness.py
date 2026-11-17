@@ -206,3 +206,198 @@ def confirm_irreversible(page, accept=True):
     dialog.wait_for(state='visible')
     dialog.locator('ui-button[kind="irreversible"]' if accept else 'ui-button:has-text("취소")').click()
     dialog.wait_for(state='hidden')
+
+
+LAYOUT_GEOMETRY_PROBE = """() => {
+  const seen = (node) => Boolean(
+    node && node.nodeType === 1
+    && node.checkVisibility?.({visibilityProperty: true})
+    && node.getClientRects().length > 0
+  );
+  const violations = [];
+  const labelOf = (node) => {
+    if (!node) return 'null';
+    const id = node.id ? `#${node.id}` : '';
+    const cls = typeof node.className === 'string' && node.className.trim()
+      ? '.' + node.className.trim().split(/\\s+/).slice(0, 2).join('.')
+      : '';
+    return `${node.tagName.toLowerCase()}${id}${cls}`;
+  };
+  const allowed = (node, rule) => {
+    const attr = node?.closest?.(`[data-geometry-allow*="${rule}"]`);
+    return Boolean(attr);
+  };
+
+  // G1: Under-fill in vertical stack containers (e.g. #robot-overview-list trapped in column 1 of .roster-block)
+  for (const stack of document.querySelectorAll('.roster-block, .console-secondary, .context-panel, .robot-overview-list, .robot-overview-group')) {
+    if (!seen(stack)) continue;
+    const sStyle = getComputedStyle(stack);
+    const padX = (parseFloat(sStyle.paddingLeft) || 0) + (parseFloat(sStyle.paddingRight) || 0);
+    const innerW = stack.clientWidth - padX;
+    if (innerW < 120) continue;
+    const kids = [...stack.children].filter((k) => seen(k) && ![' absolute', ' fixed'].includes(' ' + getComputedStyle(k).position));
+    for (const child of kids) {
+      if (allowed(child, 'G1')) continue;
+      if (!child.matches('section, ul, ol, dl, details, .robot-overview-list, .robot-overview-group, .robot-overview-items, .queues-panel, .console-context')) continue;
+      const r = child.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      const hasRowPeer = kids.some((peer) => {
+        if (peer === child) return false;
+        const pr = peer.getBoundingClientRect();
+        return Math.min(r.bottom, pr.bottom) - Math.max(r.top, pr.top) > 2;
+      });
+      if (hasRowPeer) continue;
+      if (r.width < innerW * 0.92 && (innerW - r.width) > 12) {
+        violations.push(`G1 underfill: ${labelOf(child)} width ${Math.round(r.width)}px < 92% of ${labelOf(stack)} innerWidth ${Math.round(innerW)}px`);
+      }
+    }
+  }
+
+  // G2: Sibling overlap & right-edge overflow in header/item rows (roster rows and the app topbar too)
+  for (const row of document.querySelectorAll('.robot-overview-head, .robot-head, .map-head, .omx-cell-top, .robot-row, ui-topbar')) {
+    if (!seen(row) || allowed(row, 'G2')) continue;
+    const rowRect = row.getBoundingClientRect();
+    // Only an explicit horizontal-scroll component (data-scroll-x) skips the right-edge check.
+    const scrollsX = row.hasAttribute('data-scroll-x');
+    const kids = [...row.children].filter((k) => {
+      if (!seen(k) || k.classList.contains('sr-only') || k.classList.contains('spacer')) return false;
+      const ks = getComputedStyle(k);
+      return ks.position !== 'absolute' && ks.position !== 'fixed' && ks.pointerEvents !== 'none';
+    });
+    for (let i = 0; i < kids.length; i += 1) {
+      const a = kids[i], ar = a.getBoundingClientRect();
+      if (!scrollsX && ar.right > rowRect.right + 2) {
+        violations.push(`G2 overflow: ${labelOf(a)} right ${Math.round(ar.right)} > ${labelOf(row)} right ${Math.round(rowRect.right)}`);
+      }
+      for (let j = i + 1; j < kids.length; j += 1) {
+        const b = kids[j], br = b.getBoundingClientRect();
+        const ox = Math.min(ar.right, br.right) - Math.max(ar.left, br.left);
+        const oy = Math.min(ar.bottom, br.bottom) - Math.max(ar.top, br.top);
+        if (ox > 2 && oy > 2 && ox * oy > 4) {
+          violations.push(`G2 overlap: ${labelOf(a)} and ${labelOf(b)} in ${labelOf(row)} overlap by ${Math.round(ox)}x${Math.round(oy)}px`);
+        }
+      }
+    }
+  }
+
+  // G3: Crushed robot names / badges (> 2.2 lines, or nowrap clipping below 10 visible chars)
+  for (const node of document.querySelectorAll('.robot-overview-name > strong, .robot-name > b')) {
+    if (!seen(node) || allowed(node, 'G3')) continue;
+    const r = node.getBoundingClientRect();
+    const s = getComputedStyle(node);
+    const padY = (parseFloat(s.paddingTop) || 0) + (parseFloat(s.paddingBottom) || 0) + (parseFloat(s.borderTopWidth) || 0) + (parseFloat(s.borderBottomWidth) || 0);
+    const lh = parseFloat(s.lineHeight) || ((parseFloat(s.fontSize) || 14) * 1.25);
+    const lines = (r.height - padY) / lh;
+    if (lines > 2.2) {
+      violations.push(`G3 crushed-text: ${labelOf(node)} ("${node.textContent.trim().slice(0, 24)}") wrapped into ${lines.toFixed(1)} lines`);
+    }
+    const text = (node.textContent || '').trim();
+    const shown = text.length * node.clientWidth / node.scrollWidth;
+    if (text && node.scrollWidth > node.clientWidth + 1 && shown < 10) {
+      violations.push(`G3 clipped-text: ${labelOf(node)} ("${text.slice(0, 24)}") clipped to ~${Math.max(0, Math.round(shown))} of ${text.length} chars`);
+    }
+  }
+
+  // G4: Box-in-box nesting depth <= 2 for 4-sided bordered layout containers
+  const isBorderedBox = (node) => {
+    if (!seen(node) || allowed(node, 'G4')) return false;
+    if (node.matches('button, ui-button, input, select, textarea, label, ui-tag, table, th, td, canvas, svg, .map-stage, .vision-frame')) return false;
+    const r = node.getBoundingClientRect();
+    if (r.width < 48 || r.height < 36 || r.width * r.height < 3600) return false;
+    const s = getComputedStyle(node);
+    const sides = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].map((v) => parseFloat(v) || 0);
+    if (Math.min(...sides) < 1) return false;
+    const colors = [s.borderTopColor, s.borderRightColor, s.borderBottomColor, s.borderLeftColor];
+    return colors.every((c) => c && c !== 'transparent' && !/rgba?\\([^)]*,\\s*0(?:\\.0+)?\\)/.test(c));
+  };
+  for (const node of document.querySelectorAll('main div, main section, main article, main aside, main details, main ul, main li')) {
+    if (!isBorderedBox(node)) continue;
+    const chain = [labelOf(node)];
+    let cur = node.parentElement;
+    while (cur && cur !== document.body) {
+      if (isBorderedBox(cur)) chain.unshift(labelOf(cur));
+      cur = cur.parentElement;
+    }
+    if (chain.length > 2) {
+      violations.push(`G4 box-in-box (${chain.length} levels): ${chain.join(' > ')}`);
+    }
+  }
+
+  // G5: Floating launcher (#assistant-fab) vs #robot-dock-mount / #estop / open robot sheet (#robot-panel-mount) collision.
+  // 모바일 시트가 열리면 CSS가 실행기를 visibility:hidden으로 물러나게 하므로 seen()이 잡고,
+  // 단추가 시트 바닥의 비상 정지·주행 취소 단추를 덮으면 이 검사가 위반으로 돌린다.
+  const openDialog = document.querySelector('dialog[open], [role="dialog"]:not([hidden])');
+  if (!openDialog) {
+    const fab = document.getElementById('assistant-fab');
+    if (seen(fab) && !allowed(fab, 'G5')) {
+      const fr = fab.getBoundingClientRect();
+      for (const id of ['robot-dock-mount', 'estop', 'robot-panel-mount']) {
+        const target = document.getElementById(id);
+        if (!seen(target)) continue;
+        const tr = target.getBoundingClientRect();
+        const ox = Math.min(fr.right, tr.right) - Math.max(fr.left, tr.left);
+        const oy = Math.min(fr.bottom, tr.bottom) - Math.max(fr.top, tr.top);
+        if (ox > 2 && oy > 2) {
+          violations.push(`G5 floating-dock-collision: #assistant-fab overlaps #${id} by ${Math.round(ox)}x${Math.round(oy)}px`);
+        }
+      }
+    }
+  }
+
+  // G6-fn-begin
+  // Full phrases (label + age) repeated 2+ times; same number under different labels is fine.
+  const repeatedFreshness = (raw) => {
+    const re = /\\d+(?:\\.\\d+)?\\s*(?:초|분|시간)\\s*전/g;
+    const text = raw.replace(/\\s+/g, ' ');
+    const stamps = text.match(re) || [];
+    const gaps = text.split(re);
+    const counts = new Map();
+    stamps.forEach((stamp, i) => {
+      const label = (gaps[i].match(/(?:[가-힣A-Za-z]+ )?[가-힣A-Za-z]+ ?: ?$|[가-힣A-Za-z]+ ?$|· ?$/) || [''])[0];
+      const phrase = (label + stamp).trim();
+      counts.set(phrase, (counts.get(phrase) || 0) + 1);
+    });
+    return [...counts].filter(([, n]) => n > 1).map(([phrase, count]) => ({ phrase, count }));
+  };
+  // G6-fn-end
+
+  // G6: Duplicate freshness timestamp inside a single robot overview/roster row (visible text only)
+  for (const item of document.querySelectorAll('.robot-overview-item, .robot-row')) {
+    if (!seen(item) || allowed(item, 'G6')) continue;
+    const visible = item.cloneNode(true);
+    visible.querySelectorAll('.sr-only, [aria-hidden="true"]').forEach((hidden) => hidden.remove());
+    const hits = repeatedFreshness(visible.textContent || '');
+    if (hits.length) {
+      violations.push(`G6 duplicate-freshness: ${labelOf(item)} (${item.dataset.robotId || ''}) repeats freshness ${hits.reduce((n, h) => n + h.count, 0)} times: ${hits.map((h) => `${h.phrase} x${h.count}`).join(', ')}`);
+    }
+  }
+
+  // G7: Alert toast region must never overlap right-column, drawer, popover, or stage-head surfaces
+  const region = document.getElementById('alert-popup-region');
+  if (region && region.childElementCount > 0 && !allowed(region, 'G7')) {
+    const rr = region.getBoundingClientRect();
+    if (rr.width > 0 && rr.height > 0) {
+      for (const sel of ['.queues-panel', '#robot-panel-mount', '#inbox-popover', '#topbar-extra[data-open="true"]', '#assistant-panel:not([hidden])', '.map-head']) {
+        for (const node of document.querySelectorAll(sel)) {
+          if (!seen(node)) continue;
+          const tr = node.getBoundingClientRect();
+          const ox = Math.min(rr.right, tr.right) - Math.max(rr.left, tr.left);
+          const oy = Math.min(rr.bottom, tr.bottom) - Math.max(rr.top, tr.top);
+          if (ox > 2 && oy > 2) {
+            violations.push(`G7 alert-overlap: #alert-popup-region overlaps ${labelOf(node)} by ${Math.round(ox)}x${Math.round(oy)}px`);
+          }
+        }
+      }
+    }
+  }
+
+  return violations;
+}"""
+
+
+def assert_layout_geometry(page) -> None:
+    """Assert G1-G7 rendered geometry invariants (underfill, sibling overlap/overflow, crushed text, box-in-box, assistant-fab collision, duplicate freshness age, alert-region overlap)."""
+    page.evaluate("() => document.fonts ? document.fonts.ready.then(() => null) : null")
+    violations = page.evaluate(LAYOUT_GEOMETRY_PROBE)
+    assert violations == [], "Layout geometry violations:\n  - " + "\n  - ".join(violations)
+

@@ -54,16 +54,19 @@ async function post(path, body) {
     const response = await fetch(API + path, { method: 'POST', body: body });
     if (!response.ok) {
       const result = await response.json();
-      setTxt('calibrationerror', result.error || '명령을 실행할 수 없습니다.');
+      const reason = result.error || '로봇이 요청을 거부했습니다';
+      const moveCommand = !!S.pendingCommand;
       S.pendingCommand = null;
-      setTxt('commandstatus', '명령 실패 · ' + (result.error || '로봇이 요청을 거부했습니다'));
+      if (moveCommand) setTxt('commandstatus', '명령 실패 · ' + reason, true);
+      else setTxt('calibrationerror', reason);
       return false;
     }
     return true;
   } catch (e) {
+    const moveCommand = !!S.pendingCommand;
     S.pendingCommand = null;
-    setTxt('commandstatus', '명령 실패 · 로봇 연결을 확인해 주세요');
-    setTxt('calibrationerror', '로봇 연결을 확인해 주세요.');
+    if (moveCommand) setTxt('commandstatus', '명령 실패 · 로봇 연결을 확인해 주세요', true);
+    else setTxt('calibrationerror', '로봇 연결을 확인해 주세요.');
   }
   return false;
 }
@@ -309,9 +312,16 @@ const api = {
   goal: xy => post('/goal', xy),
   tw: (x, z) => post('/teleop', JSON.stringify({ x: x, z: z })),
 };
-function setTxt(id, t) {
+// C25: the shared announcer is the one live voice; elements marked data-announce are read on change only.
+const announcerReady = import('/common/announcer.js').then(m => m.getAnnouncer()).catch(() => null);
+function setTxt(id, t, urgent) {
   const el = $(id);
-  if (el && el.textContent !== t) el.textContent = t;
+  if (!el || el.textContent === t) return;
+  el.textContent = t;
+  if (t && el.hasAttribute('data-announce')) {
+    const loud = urgent || el.dataset.announce === 'urgent';
+    announcerReady.then(a => a && a.announce(t, {urgent: loud}));
+  }
 }
 function setCls(id, cls, on) {
   const el = $(id);

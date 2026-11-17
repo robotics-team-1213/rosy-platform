@@ -4,11 +4,18 @@ import pytest
 
 from browser_harness import browser_tests_enabled
 from console_browser_site import console_url  # noqa: F401
-from test_fleet_console_browser import MAP_GRID, _open_cards, _open_console, _robot
+from test_fleet_console_browser import MAP_GRID, _open_cards as _open_panel, _open_console, _robot
 
 pytestmark = pytest.mark.skipif(
     not browser_tests_enabled(), reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium",
 )
+
+def _open_cards(page, robot_id=None):
+    """Open the robot panel, then its closed-by-default 수동 조종 section (single place for the pad)."""
+    _open_panel(page, robot_id)
+    details = page.locator("#robot-panel-mount details.robot-panel-manual")
+    if not details.evaluate("node => node.open"):
+        details.locator("> summary").click()
 
 
 def _api():
@@ -98,7 +105,7 @@ def test_selected_robot_hold_ends_with_zero(console_url, ending):
         elif ending == "blur":
             page.evaluate("window.dispatchEvent(new Event('blur'))")
         elif ending == "selection":
-            page.locator("#robot-choice").select_option("rosy_46")
+            page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_46"]').click()
         elif ending == "keyboard":
             page.keyboard.up("Space")
         elif ending == "cancel":
@@ -109,7 +116,10 @@ def test_selected_robot_hold_ends_with_zero(console_url, ending):
             page.evaluate("window.dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}))")
         else:
             page.wait_for_timeout(2100)
-        expect(button).to_have_attribute("aria-pressed", "false")
+        if ending == "pagehide":
+            expect(page.locator("#robot-panel-mount")).to_be_hidden()
+        else:
+            expect(button).to_have_attribute("aria-pressed", "false")
         page.wait_for_timeout(250)
         assert sent[-1] == {"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0}
         assert all(row["robot"] == "rosy_45" for row in sent)
@@ -168,7 +178,7 @@ def test_late_drive_response_is_followed_by_zero_for_original_robot(console_url)
         page.mouse.down()
         page.wait_for_timeout(250)
         assert len(held) == 1
-        page.locator("#robot-choice").select_option("rosy_46")
+        page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_46"]').click()
         page.wait_for_timeout(150)
         assert sent[-1]["robot"] == "rosy_45" and sent[-1]["linear"] == 0
         zeros = sum(row["linear"] == 0 for row in sent)
@@ -244,7 +254,7 @@ def test_manual_confirmation_rechecks_target_and_safety(console_url, changed):
         dialog = page.locator('dialog.ui-confirm')
         expect(dialog).to_have_count(1)
         if changed == "selection":
-            page.locator('#robot-choice').select_option('rosy_46')
+            api["/api/fleet/state"]["robots"].pop(0)
             expect(dialog).to_have_count(0)
         else:
             if changed == "generation":

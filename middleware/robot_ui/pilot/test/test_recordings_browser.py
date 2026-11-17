@@ -6,10 +6,16 @@ from uuid import uuid4
 import pytest
 from browser_harness import browser_tests_enabled
 from test_pilot_browser import (
-    ROBOT_RECORDING_ID, ROBOT_RECORD_STOP, _click_tool, _default_controls,
+    ROBOT_RECORDING_ID, ROBOT_RECORD_STOP, _click_tool,
     _enter_drive, _enter_recording_drive, _eventually, _open_sheet, _recordings,
     _settled_polls, playwright_sync,
 )
+
+
+def _tools(page):
+    """종료·정지·설정·영상 보기는 도구 판 안에 있다. 닫혀 있으면 연다."""
+    if page.locator("[data-drive-tools-panel]").is_hidden():
+        page.locator("[data-drive-tools]").click()
 
 
 def _capture_recording_view(page, name):
@@ -160,6 +166,7 @@ def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
     page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'idle'")
     _click_tool(page, toggle)
     page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    _tools(page)
     page.click("[data-drive-exit]")                        # 준비 중에 나가도 이 기기 녹화는 멈춘다
     assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop", "start", "stop",
                                                                       "start", "stop"])
@@ -173,6 +180,7 @@ def test_leaving_drive_stops_the_robot_recording_this_device_started(tablet_page
     _enter_recording_drive(page, base_url)
     _click_tool(page, "[data-robot-record]")
     page.wait_for_function(ROBOT_RECORD_STOP)
+    _tools(page)
     page.click("[data-drive-exit]")
     assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop"])
     assert errors == [], errors
@@ -210,6 +218,7 @@ def test_another_devices_recording_is_neither_stopped_nor_stoppable_here(tablet_
     page.wait_for_function(ROBOT_RECORD_STOP)
     _click_tool(page, "[data-robot-record]")
     page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('다른 기기가 시작한')")
+    _tools(page)
     page.click("[data-drive-exit]")
     assert _settled_polls(page, base_url)
     assert _recordings(page, base_url)["log"] == []
@@ -266,6 +275,7 @@ def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how,
         if how == "cancel":
             page.keyboard.press("Enter")
         else:
+            _tools(page)
             page.click("[data-drive-exit]")
         assert _eventually(lambda: "archive_aborted" in _recordings(page, base_url)["log"]), \
             _recordings(page, base_url)

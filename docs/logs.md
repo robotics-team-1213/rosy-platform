@@ -14858,6 +14858,17 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest `test/test_update_ops.py` 예정.
 - gate 변화: 없음.
 
+## 2026-11-13 · uncommitted · docs(ui): DESIGN.md C1-C10 table, details moved to reference
+- 변경: `DESIGN.md`에 공용 패턴 C1~C10 표와 D1 동적 값 정책을 넣고, 600줄을 지키려고 몇 절을 `docs/reference/ui-design-details.md`로 옮겼다(내용 그대로, 자리에 링크)
+- 증거: `DESIGN.md` 588줄, `rosy_harness.py lint` 0 errors
+- gate 변화: 없음
+- 결정: D1·D3
+- 교훈: 없음
+
+## 2026-11-13 · uncommitted · docs(api): API 참조에 빠진 CORE 경로 4개 추가
+- 변경: `POST /api/v1/host/network/mode`(5.7), `POST /api/v1/system/dds/cyclone`(5.1, 재부팅), `GET /api/v1/diagnostics/control-adapter`(5.6, Admin — `{component}`보다 먼저 등록), `GET /api/v1` 루트 한 줄. 코드가 이미 제공하던 경로의 문서 누락(규칙 점검 API-3~6, 2026-11-13 두 모델 교차 검증).
+- 증거: host.py:147-162, system.py:362-379, observability.py:56-73, app.py:266-268을 직접 읽고 역할·본문·응답을 옮겼다. 계약 변경 없음이라 버전을 올리지 않는다.
+- gate 변화: 없음. 등록 경로와 §5 카탈로그를 대조하는 시험은 없다(후속 후보).
 ## 2026-11-14 · uncommitted · CORE 상태 표시등 API 계약
 - 변경: API 참조 v1.394에 상태 표시등 GET/PUT·거절·영속 인계·이벤트를 추가했다.
 - 증거: CORE 원격 시험과 프로토콜 정합 검증은 브랜치 결과에 기록한다.
@@ -14873,6 +14884,17 @@ osy-d395-s1d\`.
 - 증거: `test/test_remote_pytest.py::test_a_failed_temp_ref_delete_does_not_fail_the_ship`(원격, 수정 전 실패 확인). 사례 land-chore-publish-full-20261114-1230-20261114042845: 삭제 exit 1 traceback으로 정지, 시험 판정 없음. 삭제가 실패한 원인은 미확인.
 - gate 변화: 없음.
 
+## 2026-11-14 · uncommitted · D-1027 Fleet 좁은 관제 화면 순서
+
+- 변경: D-892의 좁은 화면 순서만 D-1027로 부분 대체한다(현재 개입 → 지도 → 로봇 상세). 이전 결정 본문은 보존하고 새 결정·색인·DESIGN 참조·반응형 DOM(`console.js`)·회귀 시험을 함께 맞췄다. 근거는 승인된 ROSY UI 콘셉트 깊이 규칙 6과 화면 명세 1절이다.
+- 증거: ADR 번호는 `adr_reserve.py`로 선점했다. ADR Log의 UTF-8 BOM·CRLF를 유지했다. 원격 재검증은 진행 중이다.
+- gate 변화: 없음. Accepted는 실물·현장 또는 제품 전체 UI/UX 수용을 뜻하지 않는다.
+
+## 2026-11-14 · uncommitted · D-1028 Robot 운용 콘솔 좁은 화면 순서
+
+- 변경: 2026-10-08 검토의 모바일 지도 우선 순서만 D-1028로 부분 대체한다(머리 → 운전 모드 → 카메라 → 지도). `shell.js` DOM 순서와 `shell.css` 격자 영역, 이 순서를 지키던 시험 네 곳을 같은 결정으로 맞췄다. 정지는 머리에서 늘 활성이다.
+- 증거: ADR 번호는 `adr_reserve.py`로 선점했다. 패널(Claude·opencode·agy) 결정표는 작업 기록에 있다. 원격 시험 결과는 최종 보고에 적는다.
+- gate 변화: 없음. Accepted는 실물·현장 수용을 뜻하지 않는다.
 ## 2026-11-14 · uncommitted · API 참조 v1.401 재위치화 경로
 - 변경: 운영자 재위치화 누름·상태 뷰·후보 확인 세 경로와 무인 바퀴 운동 금지를 API 참조 v1.401로 기록했다.
 - 증거: 원격 pytest(시험 PC) — 보고서 참고.

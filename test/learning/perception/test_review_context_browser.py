@@ -3,6 +3,7 @@ import json
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from browser_picks import choose_pixel_class
 
 from browser_harness import browser_tests_enabled
 from test_review_flow_browser import browser_workspace
@@ -40,7 +41,7 @@ def test_folder_selection_reloads_scoped_frames_and_clears_stale_navigation(brow
     assert page.locator('#review-folder option').all_text_contents() == ['첫 자료', '다음 자료', '전체 자료']
     assert '/private/' not in page.locator('[aria-label="검수 작업 범위"]').inner_html()
     if path == '/pixels':
-        page.locator('#pixel-class').select_option('3')
+        choose_pixel_class(page, '3')
         page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
         expect(page.locator('#review-folder')).to_be_disabled()
         page.keyboard.press('Escape')

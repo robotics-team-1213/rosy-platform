@@ -4,6 +4,7 @@ import json
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from browser_picks import choose_pixel_class
 
 from browser_harness import browser_tests_enabled
 from review_app import make_server
@@ -25,8 +26,8 @@ def test_next_pending_locks_editing_until_both_lookups_finish(browser_workspace,
     if pixel:
         review_masks.bind_classes(store, CLASSES)
         page.goto(base + '/pixels?frame=0', wait_until='networkidle')
-        page.locator('#pixel-class').select_option('4')
-        page.locator('#pixel-brush-tool').click()
+        choose_pixel_class(page, '4')
+        page.locator('#pixel-tool label:has(#pixel-brush-tool)').click()
     else:
         page.goto(base + '/?frame=0', wait_until='networkidle')
         page.locator('#reopen').click()
@@ -118,17 +119,17 @@ def test_review_page_bounds_and_deep_link(tmp_path, path, strip, next_button, ti
             if path == '/pixels':
                 page.locator('.review-tool-nav a[href="#pixel-display-options"]').click()
             playwright.expect(page.locator(title)).to_have_text('사진 60' + (' 픽셀 검수' if path == '/pixels' else ''))
-            playwright.expect(page.locator(f'{strip} [data-index="{first_id + 59 * stride}"]')).to_contain_text('사진 60')
+            playwright.expect(page.locator(f'{strip} [data-id="{first_id + 59 * stride}"]')).to_contain_text('사진 60')
             playwright.expect(page.locator(next_button)).to_be_enabled()
-            assert page.locator(strip + ' .frame-thumb').count() == 60
+            assert page.locator(strip + ' .choice-thumb').count() == 60
             page.locator(next_button).click()
             playwright.expect(page.locator(title)).to_have_text('사진 61' + (' 픽셀 검수' if path == '/pixels' else ''))
             assert parse_qs(urlparse(page.url).query)['frame'] == [str(first_id + 60 * stride)]
-            playwright.expect(page.locator(f'{strip} [data-index="{first_id + 60 * stride}"]')).to_contain_text('사진 61')
+            playwright.expect(page.locator(f'{strip} [data-id="{first_id + 60 * stride}"]')).to_contain_text('사진 61')
             if path == '/pixels':
-                playwright.expect(page.locator('#pixel-frame option:checked')).to_contain_text('사진 61')
+                playwright.expect(page.locator('#pixel-frames [role=option][aria-selected=true]')).to_contain_text('사진 61')
             playwright.expect(page.locator(next_button)).to_be_enabled()
-            assert page.locator(strip + ' .frame-thumb').count() == 60
+            assert page.locator(strip + ' .choice-thumb').count() == 60
             page.locator('#pixel-prev' if path == '/pixels' else '#prev-frame').click()
             playwright.expect(page.locator(title)).to_have_text('사진 60' + (' 픽셀 검수' if path == '/pixels' else ''))
             playwright.expect(page.locator(next_button)).to_be_enabled()
@@ -136,7 +137,7 @@ def test_review_page_bounds_and_deep_link(tmp_path, path, strip, next_button, ti
             playwright.expect(page.locator(title)).to_have_text('사진 61' + (' 픽셀 검수' if path == '/pixels' else ''))
             page.get_by_text('다음 60장', exact=True).click()
             playwright.expect(page.locator(title)).to_have_text('사진 121' + (' 픽셀 검수' if path == '/pixels' else ''))
-            assert page.locator(strip + ' .frame-thumb').count() == 5
+            assert page.locator(strip + ' .choice-thumb').count() == 5
             page.get_by_text('이전 60장', exact=True).click()
             playwright.expect(page.locator(title)).to_have_text('사진 61' + (' 픽셀 검수' if path == '/pixels' else ''))
             with store.connect() as db:
@@ -148,11 +149,11 @@ def test_review_page_bounds_and_deep_link(tmp_path, path, strip, next_button, ti
                                    [('approved', first_id + index * stride) for index in range(10)])
             page.locator('#pixel-filter' if path == '/pixels' else '#filter').select_option('pending')
             playwright.expect(page.locator(title)).to_have_text('사진 51' + (' 픽셀 검수' if path == '/pixels' else ''))
-            playwright.expect(page.locator(f'{strip} [data-index="{first_id + 10 * stride}"]')).to_contain_text('사진 1')
-            playwright.expect(page.locator(f'{strip} [data-index="{first_id + 60 * stride}"]')).to_contain_text('사진 51')
+            playwright.expect(page.locator(f'{strip} [data-id="{first_id + 10 * stride}"]')).to_contain_text('사진 1')
+            playwright.expect(page.locator(f'{strip} [data-id="{first_id + 60 * stride}"]')).to_contain_text('사진 51')
             assert parse_qs(urlparse(page.url).query)['frame'] == [str(first_id + 60 * stride)]
             if path == '/pixels':
-                playwright.expect(page.locator('#pixel-frame option:checked')).to_contain_text('사진 51')
+                playwright.expect(page.locator('#pixel-frames [role=option][aria-selected=true]')).to_contain_text('사진 51')
                 page.locator('.review-tool-nav a[href="#pixel-review"]').click()
                 page.locator('#pixel-exclude').click()
                 playwright.expect(page.locator('#pixel-decision')).to_contain_text('사진 51 픽셀 제외')

@@ -227,6 +227,18 @@ export function createMapSourcesPanel({request, state, shown, calibrations, oper
     $('plane-source').replaceChildren();
     $('map-profile').replaceChildren();
   }
+  const stationZonesPath = '/api/fleet/pipeline/station-zones';
+  $('station-zones-load')?.addEventListener('click', () => guarded(async () => {
+    const res = await request(stationZonesPath);
+    $('station-zones-yaml').value = res.yaml || res.yaml_text || '';
+    $('station-zones-status').textContent = `station_zones.yaml 불러오기 완료 (임시칸 ${(res.staging_bays || []).length}개 · 반출대 ${(res.export_stations || []).length}개)`;
+  }));
+  $('station-zones-save')?.addEventListener('click', () => guarded(async () => {
+    if (operatorReason()) return;
+    const yaml = $('station-zones-yaml')?.value || '';
+    const res = await request(stationZonesPath, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({yaml, yaml_text: yaml})});
+    $('station-zones-status').textContent = `station_zones.yaml 저장·반영 완료 (임시칸 ${(res.staging_bays || []).length}개 · 반출대 ${(res.export_stations || []).length}개)`;
+  }));
   return {selectedProfile, loadProfiles, clearPlane, updatePlaneSources, drawBackground, renderStatus, pick, sync, reset, profileInputs, profileInfo,
     profile: id => profiles.find(row => row.profile_id === id)};
 }

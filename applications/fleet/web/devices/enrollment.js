@@ -4,6 +4,7 @@
 
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createRequest } from "/common/request.js";
+import {getAnnouncer} from "/common/announcer.js";
 
 const ALARM_TEXT = {
   ROBOT_ADDRESS_UNVERIFIED: "주행 중 로봇의 주소가 바뀜 — 상태를 모름",
@@ -190,7 +191,7 @@ export function discoveryActions(device, manage, blockedUntil, now) {
 
 export const HELP = [
   "운영자 동작: 로봇 전원 켜기 → 등록 → 로봇 화면의 8자 입력. SSH·파일 편집·재시작이 없습니다.",
-  "SSH 연결이 필요하면 해당 핑키 웹의 설치·정비 → 보안 및 안전 정책에서 기체 관리자에게 접속 설정을 요청하세요.",
+  "SSH 연결이 필요하면 해당 핑키 웹의 설치·정비 → 보안 및 안전 정책에서 로봇 관리자에게 접속 설정을 요청하세요.",
   "LCD가 있고 카드 login.boot_code가 기본(operator)인 로봇만 이렇게 됩니다. 그 밖에는 관리자 등록 코드나 SSH rosy-login-code가 코드의 출처입니다.",
   "비상정지 해제: 로봇 앞에서 안전을 확인 → 행의 '비상정지 해제…' → 그 로봇 정지 화면의 'Release code' 8자. 해제만 하는 코드라 로그인은 되지 않습니다.",
   "새 화면 코드는 부팅마다 하나입니다: 첫 등록, 토큰 만료(현 이미지 7일), 코드를 소모한 실패 뒤마다 전원 재투입이나 관리자 코드가 필요합니다.",
@@ -202,6 +203,8 @@ export const HELP = [
 // 이 파일은 node 시험이 import하므로 DOM 모듈을 정적으로 끌어오지 않는다.
 export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, onMoved, candidateAddress }) {
   const el = (id) => document.getElementById(id);
+  // D-1117 — 결과·경보의 낭독은 문서의 방송기 한 곳이 담당한다(화면 글자는 그대로).
+  const say = (text, {urgent = false} = {}) => { if (text && globalThis.document?.body) getAnnouncer().announce(text, {urgent}); };
   const request = createRequest({credential: () => new Headers(headers()).get("Authorization")?.slice(7) || ""});
   const state = { listing: null, blockedUntil: 0, target: null, busy: false, candidatePending: false, candidateEpoch: 0 };
   function cancelCandidate() { state.candidateEpoch++; state.candidatePending = false; }
@@ -248,6 +251,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
 
   function showResult(lines, bad) {
     const box = el("enroll-result");
+    if (bad) say(lines.join(" "), {urgent: true});  // 명령 실패: 방송기가 즉시 한 번
     if (!box) return;
     box.replaceChildren(...lines.map((line) => {
       const p = document.createElement("p");
@@ -470,8 +474,13 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     list.replaceChildren(...rows);
     const alarms = listing.alarms || [];
     const banner = el("enroll-alarm");
-    banner.hidden = alarms.length === 0;
-    banner.textContent = alarms.map((a) => `${a.robot_id}: ${ALARM_TEXT[a.code] || ALARM_TEXT.ROBOT_ADDRESS_UNVERIFIED}`).join(" · ");
+    const alarmText = alarms.map((a) => `${a.robot_id}: ${ALARM_TEXT[a.code] || ALARM_TEXT.ROBOT_ADDRESS_UNVERIFIED}`).join(" · ");
+    if (banner) {
+      const changed = banner.textContent !== alarmText;
+      banner.hidden = alarms.length === 0;
+      banner.textContent = alarmText;
+      if (changed && alarmText) say(alarmText, {urgent: true});  // 안전 경보: 사람이 확인할 때까지 글자는 남는다
+    }
     const addBlocked = !manage || Date.now() < state.blockedUntil;
     el("enroll-address-add").disabled = addBlocked;
     if (addBlocked) el("enroll-address-add").setAttribute("reason", !manage ? "운영자 권한이 필요합니다" : "잠시 뒤 다시 시도");

@@ -231,11 +231,11 @@ test("cell task refresh renders across the main/views module split", async () =>
     dataset: {}, style: {}, hidden: false, value: "", textContent: "", className: "",
     append() {}, appendChild() {}, replaceChildren() {}, addEventListener() {}, remove() {},
     setAttribute() {}, removeAttribute() {}, toggleAttribute() {},
-    querySelector: () => null, querySelectorAll: () => [],
+    querySelector: () => null, querySelectorAll: () => [], children: [],
     classList: {add() {}, remove() {}, toggle() {}},
   });
   const previous = globalThis.document;
-  globalThis.document = {createElement: node, querySelectorAll: () => []};
+  globalThis.document = {createElement: node, querySelector: () => null, querySelectorAll: () => []};
   try {
     const els = {};
     const pipeline = createReal2SimPipeline({
@@ -244,7 +244,7 @@ test("cell task refresh renders across the main/views module split", async () =>
       isOperator: () => true,
     });
     await pipeline.refreshCellTasks();
-    assert.match(els["cell-tasks-status"].textContent, /OMX 셀 태스크 원장/);
+    assert.match(els["cell-tasks-status"].textContent, /작업 원장: 0건/);
   } finally {
     globalThis.document = previous;
   }

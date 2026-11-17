@@ -13,7 +13,9 @@ main { word-break: keep-all; overflow-wrap: break-word; }
 .plane-tools-body { display: grid; gap: var(--space-3); padding-block: var(--space-2); }
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 label.inline { display: inline-flex; flex: none; flex-wrap: wrap; max-width: 100%; align-items: center; gap: var(--space-2); }
-ui-head:has(label.inline) { flex-wrap: wrap; align-items: center; }
+.map-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-heading); width: 100%; min-width: 0; }
+.map-head > h2 { margin-inline-end: auto; }
+#site-map-head > [data-rule] { display: none; }
 .ui-field:not([type="checkbox"], label.inline > *) { width: 100%; }  /* components.css caps fields at 100%; an inline label's select keeps its own width */
 a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -83,3 +85,6 @@ a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outl
 .legend-terms { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 0; }
 .legend-terms dt { color: var(--text-secondary); font-weight: var(--weight-label); white-space: nowrap; }
 .legend-terms dd { margin: 0; color: var(--text-primary); }
+
+/* Re-layout (concept 2026-11-14): the import is a secondary action, not a full-width bar; the inspector is a ui-panel. */
+#import-crosswalks { justify-self: start; }

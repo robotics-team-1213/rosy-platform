@@ -142,21 +142,21 @@
           <ui-button kind="quiet" type="button" data-post="/estop" data-val="release">해제</ui-button>
         </div>
       </div>
-      <p id="commandstatus" class="command-status" role="status" aria-live="polite">명령 대기 · 시작은 직접 선택합니다</p>
+      <p id="commandstatus" class="command-status" data-announce>명령 대기 · 시작은 직접 선택합니다</p>
 
     <div class="block" id="calibrationcard">
       <h3>자동 시작 보정</h3>
-      <p class="hint" id="calibrationstatus" role="status">교정 노드 연결 대기</p>
-      <p class="command-status" id="calibrationpartial" role="status" aria-live="polite" hidden>부분 센싱 · IMU 제외 · 미교정 · 주행 불가. 정지 상태에서 나머지 센서만 확인합니다.</p>
-      <p class="command-status" id="calibrationexistingstatus" role="status" aria-live="polite" hidden></p>
-      <p class="command-status" id="calibrationlimitedstatus" role="status" aria-live="polite" hidden></p>
+      <p class="hint" id="calibrationstatus">교정 노드 연결 대기</p>
+      <p class="command-status" id="calibrationpartial" hidden>부분 센싱 · IMU 제외 · 미교정 · 주행 불가. 정지 상태에서 나머지 센서만 확인합니다.</p>
+      <p class="command-status" id="calibrationexistingstatus" hidden></p>
+      <p class="command-status" id="calibrationlimitedstatus" hidden></p>
       <progress id="calibrationprogress" value="0" max="9" aria-label="정상 검사 수"></progress>
-      <p class="hint" id="calibrationsummary" aria-live="polite">센서 검사 대기</p>
-      <p class="hint" id="calibrationenvironment" aria-live="polite">환경 여유 측정 대기</p>
+      <p class="hint" id="calibrationsummary">센서 검사 대기</p>
+      <p class="hint" id="calibrationenvironment">환경 여유 측정 대기</p>
       <fieldset>
         <legend>카메라 지면 거리 보정</legend>
         <label class="switchrow"><div><span>카메라 지면 거리 보정 사용</span><small>검증된 호모그래피만 · 세션 동안만 적용</small></div><input id="camera_ground_toggle" type="checkbox" role="switch" aria-label="카메라 지면 거리 보정 사용" disabled></label>
-        <p class="hint" id="camera_ground_status" role="status">카메라 보정 상태 대기</p>
+        <p class="hint" id="camera_ground_status">카메라 보정 상태 대기</p>
         <label><input id="camera_ground_check_profile_loaded" type="checkbox" disabled> 프로필 로드</label>
         <label><input id="camera_ground_check_image_contract" type="checkbox" disabled> 해상도·회전·카메라 프로필 일치</label>
         <label><input id="camera_ground_check_intrinsic_calibration" type="checkbox" disabled> 내부 보정·왜곡 제거점 계약</label>
@@ -178,16 +178,16 @@
         <ui-button kind="quiet" type="button" id="calibrationmotion" data-calibration="validate_motion" disabled>4초 저속 이동 검증</ui-button>
         <ui-button kind="quiet" type="button" data-calibration="abort">검증 중단</ui-button>
       </div>
-      <p class="command-status" id="calibrationpartialreason" role="status" aria-live="polite" hidden></p>
-      <div id="calibrationerror" role="alert"></div>
+      <p class="command-status" id="calibrationpartialreason" hidden></p>
+      <div id="calibrationerror" data-announce="urgent"></div>
     </div>
 
       <div class="block">
         <h3>주행</h3>
         <div class="sub first">
           <h4>지도 기반</h4>
-          <p class="hint" id="navready" role="status">지도와 위치 확인 중…</p>
-          <p class="hint" id="navmotion" role="status">실시간 안전 판단 수신 대기</p>
+          <p class="hint" id="navready">지도와 위치 확인 중…</p>
+          <p class="hint" id="navmotion">실시간 안전 판단 수신 대기</p>
           <label for="navstrategy">탐색 방법</label>
           <select id="navstrategy">
             <option value="gain">정보량 우선 · 새 영역 / 이동 거리</option>
@@ -201,8 +201,8 @@
           <input id="navstall" type="number" min="10" max="600" value="90" step="1">
           <p class="hint">대기·회복을 포함한 실제 시간입니다. 정체 제한 동안 2cm 이상 이동하지 못하면 정지합니다. 브라우저를 닫아도 제한은 유지됩니다.</p>
           <ui-button kind="quiet" type="button" id="navsessionstart" disabled>선택한 방법으로 시작</ui-button>
-          <p class="hint" id="navsessionstatus" role="status">실행 상태 확인 중…</p>
-          <p class="hint" id="navsessionerror" role="alert"></p>
+          <p class="hint" id="navsessionstatus">실행 상태 확인 중…</p>
+          <p class="hint" id="navsessionerror" data-announce="urgent"></p>
           <details><summary>시간 제한 없는 기존 실행</summary>
           <div class="btnrow">
             <ui-button kind="quiet" type="button" id="navexplore" data-post="/wander"
@@ -229,7 +229,7 @@
 
       <div class="block" id="mappingcard">
         <h3>매핑</h3>
-        <p class="hint" id="mappingstatus" role="status">매핑 상태 확인 중…</p>
+        <p class="hint" id="mappingstatus">매핑 상태 확인 중…</p>
         <label class="switchrow"><div><span>지도 수집</span><small>끄면 자동 주행 정지 · 지도는 유지</small></div><input id="mappingtoggle" type="checkbox" role="switch" aria-label="지도 수집" disabled></label>
         <div class="btnrow">
           <ui-button kind="quiet" type="button" id="mapsave" disabled>지도 PNG 저장</ui-button>
@@ -238,13 +238,13 @@
         </div>
         <p class="hint stack-top flush-bottom">초기화하면 주행을 정지하고 지도
           수집을 일시정지합니다. 다시 배치한 뒤 재개하세요.</p>
-        <div class="mapping-error" id="mappingerror" role="alert"></div>
+        <div class="mapping-error" id="mappingerror" data-announce="urgent"></div>
       </div>
 
       <div class="block" id="displaycard">
         <h3>화면 설정</h3>
         <label class="switchrow"><div><span>카메라 영상 표시</span><small>이 화면의 영상 수신 · 카메라 전원과 별개</small></div><input id="cameratoggle" type="checkbox" role="switch" aria-label="카메라 영상 표시" checked></label>
-        <p id="previewstatus" class="hint" role="status">영상 수신 대기</p>
+        <p id="previewstatus" class="hint">영상 수신 대기</p>
       </div>
 
       <div class="block">

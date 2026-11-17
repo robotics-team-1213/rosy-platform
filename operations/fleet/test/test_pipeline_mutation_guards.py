@@ -19,6 +19,7 @@ VIEWER_MAY_POST = {
 SERVICE_MAY_POST = VIEWER_MAY_POST | {
     ("POST", "/api/fleet/pipeline/cell-quality"),
     ("POST", "/api/fleet/pipeline/cell-handoff"),
+    ("POST", "/api/fleet/pipeline/human-safety-gate"),  # raise-only; clear/resume/execute stay operator-only
     ("POST", "/api/fleet/pipeline/cell-tasks/claim"),
     ("POST", "/api/fleet/pipeline/cell-tasks/{task_id}/complete"),
 }
@@ -30,9 +31,10 @@ def _app():
         for t in ("viewer", "service", "operator")
     }
     authorize = build_authorize(None, principals, None)
-    require_viewer, require_operator, _, require_proposer = build_role_guards(authorize, principals)
+    require_viewer, require_operator, require_named, require_proposer = build_role_guards(authorize, principals)
     app = FastAPI()
     app.state.operator_guard = [Depends(require_operator)]
+    app.state.named_operator_dep = require_named
     app.state.proposer_guard = [Depends(require_proposer)]
     maps = SimpleNamespace(active=lambda: None, rules=SimpleNamespace(active_rules=lambda: None))
     install_pipeline_routes(app, site_maps=maps, read_guard=[Depends(require_viewer)])

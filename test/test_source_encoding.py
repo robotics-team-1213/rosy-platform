@@ -40,3 +40,24 @@ def test_no_active_tracked_python_file_starts_with_a_bom():
             if handle.read(3) == BOM:
                 offenders.append(path.relative_to(ROOT).as_posix())
     assert not offenders, f"strip the UTF-8 BOM from: {offenders}"
+
+
+TEXT_SUFFIXES = (".py", ".md", ".js", ".mjs", ".json", ".yaml", ".yml", ".html", ".css", ".ts", ".tsx",
+                 ".ps1", ".sh", ".toml", ".txt")
+
+
+def test_no_tracked_text_file_holds_double_encoded_text():
+    """UTF-8 read as cp1252 and saved again (Hangul turned into Latin-1 look-alikes) never lands."""
+    from core_common.text_encoding import looks_double_encoded
+
+    out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
+    offenders = []
+    for name in out.decode("utf-8").split("\0"):
+        if not name.endswith(TEXT_SUFFIXES) or not (ROOT / name).is_file():
+            continue
+        try:
+            text = (ROOT / name).read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        offenders += [f"{name}:{i}" for i, line in enumerate(text.splitlines(), 1) if looks_double_encoded(line)]
+    assert not offenders, f"re-save as UTF-8 from the original text: {offenders[:20]}"

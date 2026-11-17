@@ -1,4 +1,36 @@
+import {createCauseLine} from '/common/cause-line.js';
+import {setGeometry} from '/common/geometry.js';
+// Phone decision bar (screen spec 9): the bar is the last child of the layout, sticky at the bottom. Its height goes to --g-height on the
+// root, where app.css turns it into scroll-padding, so focus and scrollIntoView (and Playwright's auto-scroll) land above the bar.
+export function pinDecisionBar(bar) {
+  const publish = () => setGeometry(document.documentElement, {height: bar.offsetHeight});
+  new ResizeObserver(publish).observe(bar); publish();
+}
 // Each editor keeps only one bounded page of labels and thumbnails in memory.
+// Photo picker rows -> a createChoiceList. The shared list builds its thumbnails eagerly (src before loading), which would fetch every
+// original of a 60-photo page (D-469). So the thumbnails are added here with loading=lazy, and only when the membership changes; a
+// status change just rewrites the second line.
+export function showPhotos(list, rows) {
+  const element = list.element, key = rows.map(row => `${row.id}|${row.label}`).join(',');
+  if (element.dataset.key !== key || (rows.length && !element.querySelector('.choice-option'))) {
+    element.dataset.key = key;
+    list.set(rows.map(({thumb, ...row}) => row));
+    element.querySelectorAll('.choice-option').forEach((option, at) => {
+      const image = document.createElement('img'); image.loading = 'lazy'; image.alt = ''; image.className = 'choice-thumb'; image.src = rows[at].thumb;
+      option.querySelector('.choice-body').prepend(image);
+    });
+  }
+  element.querySelectorAll('.choice-option').forEach((option, at) => { const line = option.querySelector('.choice-secondary'); if (line) line.textContent = rows[at].secondary; });
+}
+// Keep the open photo inside the list's own scroll box (the old strip did this); only when the open photo changes and the list is on screen.
+export function revealOpen(list) {
+  const box = list.element, open = box.querySelector('[aria-selected="true"]');
+  if (!open || box.dataset.shown === open.dataset.id) return;
+  const outer = box.getBoundingClientRect(), inner = open.getBoundingClientRect();
+  if (!outer.height) return;
+  box.dataset.shown = open.dataset.id;
+  if (inner.top < outer.top || inner.bottom > outer.bottom) box.scrollTop += inner.top - outer.top - (outer.height - inner.height) / 2;
+}
 export function frameOrdinal(workspace,index) {
   const position=workspace.frames.findIndex(row=>row.index===index);
   return position<0?'—':workspace.page.offset+position+1;
@@ -32,5 +64,39 @@ export function pageControls(anchor, move) {
     previous.disabled=locked||!page||page.offset===0;
     next.disabled=locked||!page||page.offset+page.limit>=page.total;
     label.textContent=page?`${page.total? page.offset+1:0}–${Math.min(page.offset+page.limit,page.total)} / ${page.total}장`:'';
+  };
+}
+// C1 cause lines for the review screens. `groups` is [[groupSelector, hostSelector?, lineSelector?]]: each group element gets ONE
+// cause line (an existing status paragraph via lineSelector, else a new one in the group or host). A control outside every group
+// is a standalone button and keeps its own <ui-button reason>. why() records the reason but never changes `disabled`:
+// the screens compute that themselves, and the line only shows reasons of controls that are disabled right now.
+export function reasonLines(groups) {
+  const lines = new Map();
+  function lineFor(control) {
+    for (const [selector, hostSelector, lineSelector] of groups) {
+      const group = control.closest(selector);
+      if (!group) continue;
+      if (!lines.has(group)) {
+        let line = lineSelector ? document.querySelector(lineSelector) : null;
+        if (!line && hostSelector) {
+          line = document.createElement('ui-status'); line.dataset.cause = ''; line.hidden = true;
+          document.querySelector(hostSelector).prepend(line);
+        }
+        lines.set(group, createCauseLine(group, {line}));
+      }
+      return lines.get(group);
+    }
+    return null;
+  }
+  return {
+    why(control, text = '') {
+      control.dataset.why = text;
+      const cause = lineFor(control);
+      if (!cause) { control.reason = text; return; }
+      const disabled = control.disabled;
+      control.removeAttribute('reason');
+      cause.set([control], text); control.disabled = disabled;
+    },
+    sync() { for (const cause of lines.values()) cause.sync(); },
   };
 }

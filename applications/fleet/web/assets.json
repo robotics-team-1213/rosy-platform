@@ -42,6 +42,14 @@
       "path": "manual-control.js",
       "media_type": "application/javascript"
     },
+    "alert-popup.js": {
+      "path": "alert-popup.js",
+      "media_type": "application/javascript"
+    },
+    "alert-popup.css": {
+      "path": "shared/alert-popup.css",
+      "media_type": "text/css"
+    },
     "fleet-document.css": {
       "path": "shared/fleet-document.css",
       "media_type": "text/css"
@@ -107,7 +115,11 @@
       "media_type": "application/javascript"
     },
     "roster-cards.js": {
-      "path": "roster-cards.js",
+      "path": "robot/roster-cards.js",
+      "media_type": "application/javascript"
+    },
+    "step-nudge.js": {
+      "path": "robot/step-nudge.js",
       "media_type": "application/javascript"
     },
     "learning.css": {
@@ -168,6 +180,14 @@
     },
     "work-view.js": {
       "path": "work/work-view.js",
+      "media_type": "application/javascript"
+    },
+    "arm-proposal-view.js": {
+      "path": "work/arm-proposal-view.js",
+      "media_type": "application/javascript"
+    },
+    "cell-resume-view.js": {
+      "path": "work/cell-resume-view.js",
       "media_type": "application/javascript"
     },
     "integrated-control-view.js": {
@@ -351,7 +371,7 @@
       "media_type": "application/javascript"
     },
     "localization-badge.js": {
-      "path": "localization-badge.js",
+      "path": "robot/localization-badge.js",
       "media_type": "application/javascript"
     },
     "camera-warp.js": {
@@ -378,6 +398,10 @@
       "path": "map/map-overlays.js",
       "media_type": "application/javascript"
     },
+    "map-tool-lock.js": {
+      "path": "map/map-tool-lock.js",
+      "media_type": "application/javascript"
+    },
     "map-polling.js": {
       "path": "map/map-polling.js",
       "media_type": "application/javascript"
@@ -391,15 +415,15 @@
       "media_type": "application/javascript"
     },
     "roster.css": {
-      "path": "roster.css",
+      "path": "robot/roster.css",
       "media_type": "text/css"
     },
     "roster-presentation.js": {
-      "path": "roster-presentation.js",
+      "path": "robot/roster-presentation.js",
       "media_type": "application/javascript"
     },
     "roster.js": {
-      "path": "roster.js",
+      "path": "robot/roster.js",
       "media_type": "application/javascript"
     },
     "queues.js": {
@@ -594,6 +618,26 @@
       "path": "shared/vision-view.js",
       "media_type": "application/javascript"
     },
+    "localization-view.js": {
+      "path": "robot/localization-view.js",
+      "media_type": "application/javascript"
+    },
+    "robot-camera-tile.js": {
+      "path": "robot/robot-camera-tile.js",
+      "media_type": "application/javascript"
+    },
+    "robot-dock-binding.js": {
+      "path": "robot/robot-dock-binding.js",
+      "media_type": "application/javascript"
+    },
+    "overview-order.js": {
+      "path": "robot/overview-order.js",
+      "media_type": "application/javascript"
+    },
+    "robot-panel-adapters.js": {
+      "path": "robot/robot-panel-adapters.js",
+      "media_type": "application/javascript"
+    },
     "robot-video.js": {
       "path": "shared/robot-video.js",
       "media_type": "application/javascript"
@@ -633,6 +677,10 @@
     "device-care.js": {
       "path": "devices/device-care.js",
       "media_type": "text/javascript"
+    },
+    "cad-twin-layer.js": {
+      "path": "map/cad-twin-layer.js",
+      "media_type": "application/javascript"
     }
   }
 }

@@ -151,7 +151,7 @@ def fill_import(page):
 def ready_accounts(page, origin, expect):
     page.goto(origin + '/accounts')
     expect(page.locator('#account-status')).to_have_attribute('state', 'ready')
-    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
 
 
 def test_account_write_error_survives_the_automatic_read_and_clears_on_retry(workspace):
@@ -160,23 +160,23 @@ def test_account_write_error_survives_the_automatic_read_and_clears_on_retry(wor
     ready_accounts(page, origin, expect)
     retry = page.locator('#imports').get_by_role('button', name='같은 버전 재시도', exact=True)
     retry.click()
-    expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
-    page.locator('#account-error').scroll_into_view_if_needed()
+    expect(page.locator('#page-alerts')).to_contain_text('fixture operation rejected')
+    page.locator('#page-alerts').scroll_into_view_if_needed()
     capture(page, 'account-operation-error')
     count = state['gets']
     page.wait_for_timeout(5500)
     assert state['gets'] > count
-    expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
+    expect(page.locator('#page-alerts')).to_contain_text('fixture operation rejected')
     state['status'] = 503
     page.wait_for_timeout(5500)
-    expect(page.locator('#account-error')).to_contain_text('fixture list unavailable')
+    expect(page.locator('#page-alerts')).to_contain_text('fixture operation rejected')  # the page alert keeps the first cause
     state['status'] = 200
     page.wait_for_timeout(5500)
-    expect(page.locator('#account-error')).not_to_contain_text('fixture list unavailable')
-    expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
+    expect(page.locator('#page-alerts')).not_to_contain_text('fixture list unavailable')
+    expect(page.locator('#page-alerts')).to_contain_text('fixture operation rejected')
     state['post_status'] = 200
     retry.click()
-    expect(page.locator('#account-error')).to_be_hidden()
+    expect(page.locator('#page-alerts .alert-center-card')).to_have_count(0)
     assert len(state['posts']) == 2
 
 
@@ -188,17 +188,17 @@ def test_account_refresh_keeps_both_selected_connections_and_request_identity(wo
     fill_import(page)
     page.fill('#manage-repo-id', 'fixture/keep')
     page.locator('#reload').click()
-    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
     for key in ['connection', 'repo-connection']: expect(page.locator('#' + key)).to_have_value('b')
     for key in ['connection', 'repo-connection']:
         page.locator('#' + key).scroll_into_view_if_needed()
         capture(page, 'account-preserved-' + key)
     expect(page.locator('#repo-id')).to_have_value('fixture/data')
     page.locator('#import-form').evaluate('form => form.requestSubmit()')
-    expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
+    expect(page.locator('#page-alerts')).to_contain_text('fixture operation rejected')
     assert state['posts'][-1][1]['connection_id'] == 'b'
     page.locator('#repo-create-form').evaluate('form => form.requestSubmit()')
-    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
     assert state['posts'][-1][0].endswith('/repos/create') and state['posts'][-1][1]['connection_id'] == 'b'
 
 
@@ -211,7 +211,7 @@ def test_removed_connection_requires_a_new_explicit_choice(workspace):
     page.fill('#manage-repo-id', 'fixture/keep')
     state['connections'] = [CONNECTIONS[0]]
     page.locator('#reload').click()
-    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
     for key in ['connection', 'repo-connection']: expect(page.locator('#' + key)).to_have_value('')
     for key in ['connection', 'repo-connection']:
         page.locator('#' + key).scroll_into_view_if_needed()
@@ -221,7 +221,7 @@ def test_removed_connection_requires_a_new_explicit_choice(workspace):
     expect(page.locator('#account-error')).to_contain_text('관리 계정을 선택하세요')
     assert not state['posts']
     page.locator('#reload').click()
-    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
     for key in ['connection', 'repo-connection']: expect(page.locator('#' + key)).to_have_value('')
 
 
@@ -231,11 +231,11 @@ def test_first_available_connection_can_be_selected_after_initial_empty_state(wo
     ready_accounts(page, origin, expect)
     state['connections'] = [CONNECTIONS[0]]
     page.locator('#reload').click()
-    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
     for key in ['connection', 'repo-connection']: expect(page.locator('#' + key)).to_have_value('a')
 
 
-def test_slow_account_poll_locks_actions_but_keeps_the_typed_request(workspace):
+def test_slow_account_poll_never_locks_actions_and_keeps_the_typed_request(workspace):
     page, state, origin, expect = workspace
     ready_accounts(page, origin, expect)
     fill_import(page)
@@ -244,14 +244,13 @@ def test_slow_account_poll_locks_actions_but_keeps_the_typed_request(workspace):
     state['hold_get'] = True
     page.wait_for_timeout(5500)
     assert len(state['held_get']) == 1
-    expect(page.locator('#import-form ui-button[type=submit]')).to_be_disabled()
-    expect(page.locator('#repo-delete-form ui-button[type=submit]')).to_be_disabled()
-    expect(page.locator('#reload')).to_be_disabled()
-    expect(page.locator('#repo-id')).to_be_enabled()
+    # A background read never locks (C2 refresh): controls stay live, the screen is not busy.
+    expect(page.locator('#import-form ui-button[type=submit]')).to_be_enabled()
+    expect(page.locator('#repo-delete-form ui-button[type=submit]')).to_be_enabled()
+    expect(page.locator('#reload')).to_be_enabled()
+    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
     expect(page.locator('#repo-id')).to_be_focused()
-    expect(page.locator('#account-status')).to_contain_text('가져오기 상태 확인 중')
-    page.locator('#import-form').evaluate('form => form.requestSubmit()')
-    assert not state['posts']
+    expect(page.locator('#account-status')).not_to_contain_text('가져오기 상태 확인 중')
     capture(page, 'account-poll-pending')
     state['hold_get'] = False
     state['held_get'].pop().fulfill(json={'jobs': state['jobs']})
@@ -260,7 +259,7 @@ def test_slow_account_poll_locks_actions_but_keeps_the_typed_request(workspace):
     expect(page.locator('#connection')).to_have_value('b')
     expect(page.locator('#repo-id')).to_be_focused()
     page.locator('#import-form').evaluate('form => form.requestSubmit()')
-    expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
+    expect(page.locator('#page-alerts')).to_contain_text('fixture operation rejected')
     assert len(state['posts']) == 1 and state['posts'][0][1]['connection_id'] == 'b'
 
 
@@ -273,7 +272,7 @@ def test_account_poll_restores_replaced_job_control_without_stealing_focus(works
     retry.focus()
     state['hold_get'] = True
     page.wait_for_timeout(5500)
-    expect(retry).to_be_disabled()
+    expect(retry).to_be_enabled()
     theme = page.locator('ui-topbar [data-theme-cycle]')
     if move_focus: theme.focus()
     assert len(state['held_get']) == 1
@@ -299,7 +298,7 @@ def test_account_action_that_replaces_its_button_returns_to_the_job_status(works
     if move_focus: theme.focus()
     state['jobs'][0]['status'] = after
     state['held_post'].pop().fulfill(json={})
-    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    expect(page.locator('#accounts-main')).not_to_have_attribute('aria-busy', 'true')
     row_status = page.locator('#imports article > p[tabindex="-1"]')
     expect(theme if move_focus else row_status).to_be_focused()
     assert len(state['posts']) == 1

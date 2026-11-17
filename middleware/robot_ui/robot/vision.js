@@ -4,6 +4,8 @@
 import { EVIDENCE_LABEL, evidenceAgeText } from "/common/core_ui_logic.js";
 import {fetchCameraPair} from "/common/evidence.js";
 import {MEDIA_GRANT_PATH, openCamera, requestMediaGrant} from "/common/webrtc.js";
+import { valueText } from "/common/value-text.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 
 const WEBRTC_RETRY_MS = 15000, WEBRTC_RETRY_MAX_MS = 300000, GRAB_MS = 420;
 
@@ -47,13 +49,13 @@ export function createVisionPreview({
       renderEvidence("delayed", hasNumber(status.age_ms)
         ? `${EVIDENCE_LABEL.delayed}${evidenceAgeText(Math.max(0, Number(status.age_ms) / 1000))}` : EVIDENCE_LABEL.delayed, "STALE");
     } else renderEvidence("unavailable", "수신 대기", "WAITING");
-    setText("vision-source", status.source || "—");
+    setText("vision-source", status.source || UNKNOWN);
     setText("vision-resolution", status.width && status.height
-      ? `${status.width}×${status.height}` : "—");
+      ? `${status.width}×${status.height}` : UNKNOWN);
     setText("vision-age", hasNumber(status.age_ms)
-      ? `${Math.round(Number(status.age_ms))} ms` : "—");
+      ? `${Math.round(Number(status.age_ms))} ms` : UNKNOWN);
     setText("vision-captured", hasNumber(status.captured_at)
-      ? `${Number(status.captured_at).toFixed(3)} s` : "—");
+      ? `${Number(status.captured_at).toFixed(3)} s` : UNKNOWN);
   }
 
   async function refresh() {
@@ -117,9 +119,9 @@ export function createVisionPreview({
       setText("vision-source", status.source || "UNKNOWN");
       setText("vision-resolution", `${status.width || 0}×${status.height || 0}`);
       setText("vision-age", hasNumber(status.age_ms)
-        ? `${Math.round(status.age_ms)} ms` : "—");
+        ? `${Math.round(status.age_ms)} ms` : UNKNOWN);
       setText("vision-captured", hasNumber(status.captured_at)
-        ? `${Number(status.captured_at).toFixed(3)} s` : "—");
+        ? `${Number(status.captured_at).toFixed(3)} s` : UNKNOWN);
       elements["vision-frame"].hidden = false;
       elements["vision-empty"].hidden = true;
       elements["vision-stage"].dataset.state = "live";
@@ -207,8 +209,8 @@ export function createVisionPreview({
         state.state === "live" ? "실시간" : EVIDENCE_LABEL.delayed, state.state === "live" ? "LIVE" : "STALE");
       setText("vision-source", `WEBRTC ${state.fps}fps`);
       setText("vision-resolution", `${video.videoWidth || 0}×${video.videoHeight || 0}`);
-      setText("vision-age", hasNumber(state.ageMs) ? `${Math.round(state.ageMs)} ms` : "—");
-      setText("vision-captured", hasNumber(state.capturedMs) ? `${(state.capturedMs / 1000).toFixed(3)} s` : "—");
+      setText("vision-age", hasNumber(state.ageMs) ? `${Math.round(state.ageMs)} ms` : UNKNOWN);
+      setText("vision-captured", hasNumber(state.capturedMs) ? `${(state.capturedMs / 1000).toFixed(3)} s` : UNKNOWN);
       if (state.state === "live") grab(state).catch(() => {});
     } else if (state.state === "hidden") {
       video.hidden = true;

@@ -1,5 +1,8 @@
 import { enumLabel, LINE_STATE_LABEL } from "/common/core_ui_logic.js";
 import { confirmIrreversible } from "/common/ui.js";
+import { valueText } from "/common/value-text.js";
+import { watchStatus } from "/assets/dom.js";
+const UNKNOWN = valueText(null).text;  // one wording for a missing value (D-280)
 
 // D-359 US-009 — 추종 모드 열거값은 요청 본문과 title에만, 운용자 글은 한국어다.
 const LINE_MODE_LABEL = Object.freeze({ OFF: "꺼짐", IR_LINE: "적외선 센서", CAMERA_LINE: "카메라" });
@@ -44,9 +47,8 @@ export function mount(root, ctx) {
   const modeStatus = el("ui-status", "", "차선 추종 상태를 읽는 중입니다.");
   const capabilityStatus = el("ui-status", "", "구동 준비를 확인하는 중입니다.");
   const actionStatus = el("ui-status");
+  watchStatus(actionStatus);
   modeStatus.setAttribute("state", "pending"); capabilityStatus.setAttribute("state", "pending"); actionStatus.setAttribute("state", "ready");
-  actionStatus.setAttribute("role", "status");
-  actionStatus.setAttribute("aria-live", "polite");
   const facts = el("dl", "ui-readout");
   const form = el("div", "ui-form");
   const label = el("label", "ui-field-label", "추종 모드");
@@ -63,7 +65,6 @@ export function mount(root, ctx) {
   const adviceName = el("span", "line-signal-name"); const adviceText = el("strong", "line-signal-text");
   const adviceStop = el("span", "line-signal-stop");
   const adviceNote = el("small", "line-signal-note", "참고 표시 · 통과 허가는 관제 authority(통행권)가 정합니다");
-  adviceText.setAttribute("role", "status");
   advice.append(adviceKind, adviceLamp, adviceName, adviceText, adviceStop, adviceNote);
   form.append(label, start, stop); root.append(head, modeStatus, capabilityStatus, actionStatus, advice, facts, form);
   const perceptionLabel = el("label", "ui-field-label", "차선 인식 방식");
@@ -74,7 +75,7 @@ export function mount(root, ctx) {
   perceptionLabel.append(perceptionSelect);
   const perceptionApply = el("ui-button", "", "인식 적용"); perceptionApply.type = "button";
   perceptionApply.setAttribute("kind", "quiet");
-  const perceptionStatus = el("ui-status", "", "차선 인식 설정 확인 중"); perceptionStatus.setAttribute("role", "status");
+  const perceptionStatus = el("ui-status", "", "차선 인식 설정 확인 중");
   const perceptionReason = el("ui-status", "", ""); perceptionReason.id = "lane-perception-reason";
   perceptionSelect.setAttribute("aria-describedby", perceptionReason.id);
   const perceptionForm = el("div", "ui-form"); perceptionForm.append(perceptionLabel, perceptionApply, perceptionStatus, perceptionReason); root.append(perceptionForm);
@@ -99,9 +100,9 @@ export function mount(root, ctx) {
       modeFact.title = current.mode || "OFF";
       facts.replaceChildren(el("dt", "", "모드"), modeFact,
         el("dt", "", "상태"), Object.assign(el("dd", "", enumLabel(LINE_STATE_LABEL, current.state)), {title: current.state || ""}),
-        el("dt", "", "센서"), el("dd", "", current.source || "—"),
-        el("dt", "", "추종 오차"), el("dd", "", current.error == null ? "—" : Number(current.error).toFixed(3)),
-        el("dt", "", "신뢰도"), el("dd", "", current.confidence == null ? "—" : `${Math.round(Number(current.confidence) * 100)}%`),
+        el("dt", "", "센서"), el("dd", "", current.source || UNKNOWN),
+        el("dt", "", "추종 오차"), el("dd", "", current.error == null ? UNKNOWN : Number(current.error).toFixed(3)),
+        el("dt", "", "신뢰도"), el("dd", "", current.confidence == null ? UNKNOWN : `${Math.round(Number(current.confidence) * 100)}%`),
         el("dt", "", "중지 사유"), Object.assign(el("dd", "", enumLabel(LINE_STATE_LABEL, current.reason)), {title: current.reason || ""}));
     } else facts.replaceChildren(el("dt", "", "상태"), el("dd", "", "확인 불가 · 다시 확인 중"));
     // 요청 중(pending)은 짧은 잠금이라 사유 없이 끈다.

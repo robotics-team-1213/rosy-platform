@@ -101,7 +101,7 @@ export function createDeviceProfiles({root, scope, call, identity, care = null})
     try {
       const {device_id, ...body} = payload;
       const path = `/api/fleet/device-profiles/${encodeURIComponent(device_id)}`;
-      await call(path, {method: 'PUT', body: JSON.stringify(body)});
+      await call(path, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
       const saved = await call(path);
       if (JSON.stringify(profilePayload({...saved, hardware_ids: saved.hardware_ids.join('\n')})) !== JSON.stringify(payload)) {
         throw new Error('SAVED_VALUES_DIFFER');

@@ -1,6 +1,7 @@
 // Display-only account context. Authorization remains with the receiving service.
+import {EVIDENCE_LABEL} from "./core_ui_logic.js";
 const ROLE = {operator: "운영자", viewer: "보기 전용", "policy-admin": "관리자"};
-export const roleLabel = role => ROLE[role] || "권한 없음";
+export const roleLabel = role => ROLE[role] || EVIDENCE_LABEL.unavailable;
 
 export function profileView(session) {
   if (session?.authenticated !== true || !session.account_id) return null;

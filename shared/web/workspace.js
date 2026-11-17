@@ -1,5 +1,5 @@
 // D-461: opt-in task rows, composed from existing ROSY controls. Text only.
-import '/common/ui.js';
+import './ui.js';
 
 export function taskRow({title, subtitle = '', status = '', attention = false, description = ''}) {
   const row = document.createElement('article');

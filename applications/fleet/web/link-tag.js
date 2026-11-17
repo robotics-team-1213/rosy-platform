@@ -1,7 +1,8 @@
 // D-499. The caller passes the server `link` word. Unknown words render nothing.
 
 const TAGS = {
-  unreachable: { word: "닿지 않음", kind: "crit", text: null, next: "다음: 주소 확인", focus: null },
+  unreachable: { word: "닿지 않음", kind: "warn",  // a disconnect is a warning (2026-11-14); the caller raises it only for a moving robot
+    text: null, next: "다음: 주소 확인", focus: null },
   moved: { word: "주소 이동", kind: "warn", text: null, next: null, focus: null },
   degraded: { word: "응답 지연", kind: "warn", text: "로봇이 잠시 답하지 않습니다. 10초 넘게 이어지면 닿지 않음으로 바뀝니다.", next: null, focus: null },
   "tls-refused": {

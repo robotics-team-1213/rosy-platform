@@ -25,7 +25,7 @@ def test_emergency_stop_chip_stays_inside_the_robot_card(console_url):
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
-        card = page.locator("#robot-workspace article").filter(has_text="rosy_01")
+        card = page.locator("#robot-panel-mount article").filter(has_text="rosy_01")
         safety = card.locator('[data-fact="safety"]')
         assert "비상 정지" in safety.inner_text()
         measured = safety.evaluate("""node => {

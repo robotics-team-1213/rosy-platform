@@ -15,9 +15,6 @@ export function mount(root, ctx) {
   const status = el("ui-status", "", "pose와 도크 목록을 불러오는 중입니다.");
   const gate = el("ui-status", "", "");
   gate.id = "dock-registration-gate";
-  gate.setAttribute("role", "status");
-  gate.setAttribute("aria-live", "polite");
-  gate.setAttribute("aria-atomic", "true");
   gate.hidden = true;
   const registrationNotice = el("ui-status", "", "");
   registrationNotice.setAttribute("aria-atomic", "true");
@@ -33,13 +30,11 @@ export function mount(root, ctx) {
   detectorLabel.append(detector);
   const tag = input("태그 ID (태그 관측)", "tag_id", "number"); tag.control.min = "0"; tag.control.step = "1";
   const tagSize = input("태그 크기 m (태그 관측)", "tag_size_m", "number"); tagSize.control.min = "0.001"; tagSize.control.step = "any";
-  const add = el("ui-button", "", "현재 위치에 도크 등록"); add.setAttribute("kind", "primary"); add.type = "submit";
+  const add = el("ui-button", "", "현재 위치에 도크 등록"); add.setAttribute("kind", "quiet"); add.type = "submit";
   add.setAttribute("aria-describedby", gate.id);
   add.disabled = true;
   form.append(idField.label, typeField.label, detectorLabel, tag.label, tagSize.label, add);
   const listStatus = el("ui-status", "", "");
-  listStatus.setAttribute("role", "status");
-  listStatus.setAttribute("aria-live", "polite");
   const list = el("ul", "waypoint-list"); list.setAttribute("aria-label", "도크 유형과 등록 위치");
   const emptyNote = el("ui-empty", "", "등록된 도크가 없습니다."); emptyNote.hidden = true;
   root.append(head, status, form, gate, registrationNotice, knownTypes, listStatus, list, emptyNote);

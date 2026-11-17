@@ -91,8 +91,8 @@ def test_hidden_document_cancels_reads_and_commands_and_restores_only_reads(cons
         asset = "console.js" if document == "index.html" else "install.js"
         assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / CONSOLE_ASSETS[asset][0]).read_bytes()
         if held.startswith("/api/vision/"):
-            page.locator('[data-context-tab="status"]').click()
-            assert page.locator("#context-status").is_visible()
+            page.locator('[data-context-tab="tools"]').click()
+            assert page.locator("#context-tools").is_visible()
             page.wait_for_function("document.querySelector('#vision-source').value === 'camera'")
             page.evaluate("() => { for (const tick of [...__polls.values()]) tick(); }")
         page.wait_for_function("window.__pending.length === 1")
@@ -116,8 +116,9 @@ def test_hidden_document_cancels_reads_and_commands_and_restores_only_reads(cons
         page.wait_for_function("document.querySelector('#user-role').title === 'fresh-role · operator'")
         assert page.evaluate("__requests.length") > count
         if document == "index.html":
-            assert page.locator("#context-status").is_visible()
-            assert page.locator('[data-context-tab="status"]').get_attribute("aria-selected") == "true"
+            expected_tab = "tools" if held.startswith("/api/vision/") else "status"
+            assert page.locator(f"#context-{expected_tab}").is_visible()
+            assert page.locator(f'[data-context-tab="{expected_tab}"]').get_attribute("aria-selected") == "true"
         assert page.evaluate("__polls.size") == polls
         assert page.evaluate("__observers.size") == observers
         page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")

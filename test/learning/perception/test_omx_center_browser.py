@@ -104,7 +104,7 @@ def test_native_review_preview_explicit_confirmation_retry_and_stale_reload(tmp_
                 page.locator('#review-confirmed').check()
                 _capture(page, 'omx-review-explicitly-confirmed')
                 page.locator('#review-save').click()
-                expect(page.locator('#review-status')).to_contain_text('reply lost')
+                expect(page.locator('#review-status')).to_contain_text('서버 연결 문제')  # quiet panel; the page alert names the cause
                 _capture(page, 'omx-review-retry-needed')
                 page.locator('#review-save').click()
                 expect(page.locator('#review-status')).to_contain_text(saved_id)
@@ -120,7 +120,7 @@ def test_native_review_preview_explicit_confirmation_retry_and_stale_reload(tmp_
                 expect(page.locator('[data-episode="0"] [data-field="reason"]')).to_have_value('new unsaved reason')
                 page.locator('#review-confirmed').check()
                 page.locator('#review-save').click()
-                expect(page.locator('#review-status')).to_contain_text('stale source revision')
+                expect(page.locator('#review-status')).to_contain_text('다시 불러온 뒤 검수하세요')
                 expect(page.locator('#review-save')).to_be_disabled()
                 _capture(page, 'omx-review-stale')
                 departures = []

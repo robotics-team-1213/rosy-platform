@@ -32,7 +32,7 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
 
   function startRestFallback() {
     if (session.fallbackTimer) return;
-    setConnection("error", "REST 폴링 전환");
+    setConnection("error", "REST 폴링 전환", "delayed");  // values still arrive by REST: not a disconnect
     session.fallbackTimer = setInterval(poll, 2000);
   }
 
@@ -87,9 +87,9 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
         }, RECONNECT_STABLE_MS);
         clearInterval(session.fallbackTimer);
         session.fallbackTimer = null;
-        setConnection("online", "값 수신 중");
+        setConnection("online", "값 수신 중", "fresh");
       }
-      try { onState(JSON.parse(event.data)); } catch (_error) { setConnection("error", "상태 해석 실패"); }
+      try { onState(JSON.parse(event.data)); } catch (_error) { setConnection("error", "상태 해석 실패", "unavailable"); }
     });
     socket.addEventListener("close", (event) => {
       if (socket !== session.socket) return;
@@ -103,7 +103,7 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
         verifyAfterSocketRefusal();
       } else if (event.code === 4403) {
         // Authenticated but not allowed: retrying cannot change that.
-        setConnection("error", "상태 스트림 권한 없음 · REST 폴링");
+        setConnection("error", "상태 스트림 권한 없음 · REST 폴링", "unavailable");
       } else {
         // 1013 (first-message slots full) arrives as 1006 before accept; both wait.
         scheduleReconnect();

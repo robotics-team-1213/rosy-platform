@@ -7,7 +7,7 @@
 // 그린다. 관측은 속이 빈 점선 고리로, CORE TF pose(채운 삼각형)와 섞지 않는다.
 
 import {
-  siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
+  siteBounds, siteStageHeight, fitTransform, project, gridLines, GRID_STEP_M,
   streamEvidence, quarterTurn,
 } from "./site-layer.js";
 import { createCameraBackdrop } from "./camera-backdrop.js";
@@ -17,65 +17,82 @@ import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
 import { drawGuide } from "/console/assets/guide-layer.js";
 import { robotMapPose } from "./localization-badge.js";
+import { createChoiceGroup } from "/common/choice-group.js";
+import { lockWithMap } from "./map-tool-lock.js";
+import { drawLocalizationCandidates } from "/console/assets/localization-view.js";
 import { drawMapDatum } from "./map-datum.js";
+import { createCadTwinLayer } from "./cad-twin-layer.js";
+import { createSiteTwin3d } from "/common/site-twin-3d.js";
 
 // Map label: the short id ("rosy_012" -> "012").
 const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
 
-export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
+export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {},
+  onSelectRobotFromMap = null, onSelectPlaceFromMap = null, onSelectPoint = null, onHoverEntity = null }) {
+  view.twinUnavailableNotice = view.twinUnavailableNotice || "";
+  view.twinFailed = Boolean(view.twinFailed);
   const camera = createCameraBackdrop({ scope, el, view, draw });
+  const setDisplayMode = (mode) => {
+    camera.setMode(mode);
+    const stage = el("map-stage");
+    if (stage) {
+      stage.dataset.displayMode = view.displayMode;
+      stage.dataset.view = view.displayMode === "camera" ? "camera" : view.displayMode === "twin3d" ? "twin3d" : "map";
+    }
+  };
+  view.setDisplayMode = setDisplayMode;
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
   const font = (role, displayScale = 1) => window.RosyPalette.canvasFont(role, "mono", displayScale);
+  const cadTwin = createCadTwinLayer({ scope, call, css, view, onLoaded: () => draw() });
+  let twin3d = null;
+  let twinFailed = false;
+  scope.onDispose(() => { twin3d?.dispose?.(); twin3d = null; });
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // D-360 레이어 토글. 기본은 모두 켜고, 상단 #map-overlay-toggles 버튼으로 전체 또는 개별 층을 즉시 켜고 끈다.
   if (!view.layers) {
-    view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: true, tracking: true };
+    view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, cad: true, site: true, grid: true, sightings: true, tracking: true };
   }
   const layerOn = (key) => view.layers?.[key] !== false;
-  const toggleBar = el("map-overlay-toggles");
-  if (toggleBar) {
-    const syncToggleButtons = () => {
-      const subKeys = ["poses", "omx", "lanes", "traffic", "labels"];
-      const anyOn = subKeys.some((k) => view.layers[k] !== false);
-      for (const btn of toggleBar.querySelectorAll("[data-layer-toggle]")) {
-        const k = btn.dataset.layerToggle;
-        if (k === "all") {
-          btn.setAttribute("aria-pressed", String(anyOn));
-          btn.textContent = anyOn ? "전체 표시 켬" : "전체 표시 끔";
-        } else {
-          btn.setAttribute("aria-pressed", String(view.layers[k] !== false));
-        }
-      }
-      const legacyTraffic = el("traffic-toggle");
-      if (legacyTraffic) {
-        legacyTraffic.setAttribute("aria-pressed", String(view.layers.traffic !== false));
-        legacyTraffic.textContent = view.layers.traffic !== false ? "교통 켬" : "교통 끔";
-      }
-    };
-    scope.listen(toggleBar, "click", (event) => {
-      const btn = event.target.closest("[data-layer-toggle]");
-      if (!btn) return;
-      const key = btn.dataset.layerToggle;
-      if (key === "all") {
-        const subKeys = ["poses", "omx", "lanes", "traffic", "labels", "site", "grid", "sightings", "tracking"];
-        const nextVal = !["poses", "omx", "lanes", "traffic", "labels"].some((k) => view.layers[k] !== false);
-        for (const k of subKeys) view.layers[k] = nextVal;
-      } else {
-        view.layers[key] = !(view.layers[key] !== false);
-      }
-      syncToggleButtons();
-      draw();
+  const toggleSlot = el("map-overlay-slot");
+  if (toggleSlot) {
+    const layerItems = [
+      { value: "poses", label: "로봇·경로" },
+      { value: "omx", label: "OMX-AI" },
+      { value: "lanes", label: "도로·장소" },
+      { value: "cad", label: "CAD 모델" },
+      { value: "traffic", label: "교통·점유" },
+      { value: "labels", label: "라벨" },
+    ];
+    const layerGroup = createChoiceGroup({
+      id: "map-overlay-toggles",
+      label: "지도 오버레이 표시",
+      mode: "toggle",
+      master: { label: "전체" },
+      items: layerItems,
+      value: layerItems.map(item => item.value).filter(key => view.layers[key] !== false),
+      onChange: (values) => {
+        const anyOn = values.length > 0;
+        for (const item of layerItems) view.layers[item.value] = values.includes(item.value);
+        view.layers.site = anyOn;
+        view.layers.grid = anyOn;
+        view.layers.sightings = view.layers.poses;
+        view.layers.tracking = view.layers.poses;
+        draw();
+      },
     });
-    // #traffic-toggle clicks are handled by map-polling.js; a second handler here would cancel the first.
-    syncToggleButtons();
+    toggleSlot.replaceWith(layerGroup.element);
+    lockWithMap({ stage: el("map-stage"), group: layerGroup, items: layerItems, scope });
+    scope.onDispose(() => layerGroup.dispose());
   }
   const {
     CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, cellOf, activeCall, labelImportant,
     drawFormationOverlay, drawMediation, drawSighting, drawCameraTracking, sitePolygons, tracePolygon, drawCrosswalks,
-    drawSiteOverlay,
-  } = createMapOverlays({ view, css, font, layerOn, worldToCell, colorOf });
+    drawSiteOverlay, datumBottomInset, paintPlaceLabels, drawSiteLanesAndPlaces,
+  } = createMapOverlays({ view, css, font, layerOn, worldToCell, colorOf, el });
 
+  let gridRasterCache = { grid: null, themeKey: "", canvas: null };
+  let lastPlaceListSig = "";
   function paintGrid(grid) {
     const canvas = el("map-canvas");
     const { width, height } = grid;
@@ -83,49 +100,49 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // to remain legible when a small grid is stretched across the console.
     const displaySize = Math.min(canvas.clientWidth || 1600, canvas.clientHeight || 1600) * (window.devicePixelRatio || 1);
     const scale = Math.min(10, Math.max(1, Math.round(displaySize / Math.max(width, height))));
-    canvas.width = width * scale;
-    canvas.height = height * scale;
+    const nextW = width * scale, nextH = height * scale;
+    if (canvas.width !== nextW) canvas.width = nextW;
+    if (canvas.height !== nextH) canvas.height = nextH;
     const ctx = canvas.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    const image = ctx.createImageData(width, height);
     // 로봇 지도(dashboard map.js)와 같은 raster 토큰이다 — 두 화면의 지형 색이 같다.
     const tone = window.RosyPalette.readPalette({
       unknown: "--raster-unknown", free: "--raster-free",
       uncertain: "--raster-uncertain", occupied: "--raster-occupied",
     });
-    for (let row = 0; row < height; row += 1) {
-      for (let col = 0; col < width; col += 1) {
-        const value = grid.data[row * width + col];
-        const rgb = value === GRID.UNKNOWN || value < 0 ? tone.unknown
-          : value >= GRID.OCCUPIED_MIN ? tone.occupied
-            : value <= GRID.FREE_MAX ? tone.free : tone.uncertain;
-        const pixel = ((height - 1 - row) * width + col) * 4;
-        image.data[pixel] = rgb[0];
-        image.data[pixel + 1] = rgb[1];
-        image.data[pixel + 2] = rgb[2];
-        image.data[pixel + 3] = 255;
+    const themeKey = `${tone.unknown.join(",")}|${tone.free.join(",")}|${tone.uncertain.join(",")}|${tone.occupied.join(",")}`;
+    if (gridRasterCache.grid !== grid || gridRasterCache.themeKey !== themeKey || !gridRasterCache.canvas) {
+      const image = ctx.createImageData(width, height);
+      for (let row = 0; row < height; row += 1) {
+        for (let col = 0; col < width; col += 1) {
+          const value = grid.data[row * width + col];
+          const rgb = value === GRID.UNKNOWN || value < 0 ? tone.unknown
+            : value >= GRID.OCCUPIED_MIN ? tone.occupied
+              : value <= GRID.FREE_MAX ? tone.free : tone.uncertain;
+          const pixel = ((height - 1 - row) * width + col) * 4;
+          image.data[pixel] = rgb[0];
+          image.data[pixel + 1] = rgb[1];
+          image.data[pixel + 2] = rgb[2];
+          image.data[pixel + 3] = 255;
+        }
       }
+      const cells = gridRasterCache.canvas || document.createElement("canvas");
+      cells.width = width;
+      cells.height = height;
+      cells.getContext("2d").putImageData(image, 0, 0);
+      gridRasterCache = { grid, themeKey, canvas: cells };
     }
-    const cells = document.createElement("canvas");
-    cells.width = width;
-    cells.height = height;
-    cells.getContext("2d").putImageData(image, 0, 0);
-    ctx.drawImage(cells, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(gridRasterCache.canvas, 0, 0, canvas.width, canvas.height);
     ctx.scale(scale, scale); // following geometry keeps using map-cell coordinates
   }
 
   function worldToCell(grid, x, y) {
-    return {
-      col: (x - grid.origin.x) / grid.resolution,
-      row: (y - grid.origin.y) / grid.resolution,
-    };
+    return { col: (x - grid.origin.x) / grid.resolution, row: (y - grid.origin.y) / grid.resolution };
   }
 
   function toWorld(grid, col, row) {
-    return {
-      x: grid.origin.x + (col + 0.5) * grid.resolution,
-      y: grid.origin.y + (row + 0.5) * grid.resolution,
-    };
+    return { x: grid.origin.x + (col + 0.5) * grid.resolution, y: grid.origin.y + (row + 0.5) * grid.resolution };
   }
 
   function colorOf(robotId) {
@@ -133,33 +150,61 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     return view.colors[(index >= 0 ? index : 0) % view.colors.length];
   }
 
+  // 사이트 뷰 스테이지 높이는 CSS(styles.css 사이트 스코프)가 min/max-block-size 로 정하고,
+  // 이 그림은 그 경계 안에서 폭×사이트 비율로 비트맵 높이를 계산해 고유 비율을 맞춘다.
+  // 계산값이 없는 환경(node 시험)은 데스크톱 기본(바닥 12.5rem, 상한 46rem)을 쓴다.
+  function stageSizeLimits(stage) {
+    const win = stage?.ownerDocument?.defaultView;
+    if (!win?.getComputedStyle) return { minPx: 200, maxPx: 736 };
+    const cs = win.getComputedStyle(stage);
+    const px = (value, fallback) => { const n = parseFloat(value); return Number.isFinite(n) ? n : fallback; };
+    return { minPx: px(cs.minBlockSize, 200), maxPx: px(cs.maxBlockSize, Infinity) };
+  }
+
+  // D-540: 지도 열(.console-primary)은 스크롤하지 않는다. 열 높이에서 스테이지 밖 블록·간격을 뺀
+  // 남은 높이를 읽는다(읽기만 — 스타일 주입 없음). 고정 프레임(데스크톱)이 아니면 제한 없음.
+  function stageAvailPx(stage) {
+    const win = stage?.ownerDocument?.defaultView;
+    const col = stage?.closest?.(".console-primary");
+    if (!col || !win?.matchMedia?.("(width >= 64rem) and (height >= 40rem)").matches || !col.clientHeight) return Infinity;
+    const kids = [...col.children].map((c) => c.getBoundingClientRect()).filter((r) => r.height > 0);
+    if (!kids.length) return Infinity;
+    const cs = win.getComputedStyle(col);
+    const used = Math.max(...kids.map((r) => r.bottom)) - Math.min(...kids.map((r) => r.top));
+    const other = used - stage.getBoundingClientRect().height;
+    return col.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0) - other;
+  }
+
   // 점유 격자가 없을 때: 사이트 사각형에 맞춘 미터 축척 뷰. 목표 지정은 받지 않는다.
   function drawSiteView() {
     const bounds = siteBounds(view.siteMap);
     if (!bounds) return;
+    const stage = el("map-stage");
     const canvas = el("map-canvas");
     const calibration = camera.calibration();
     // 교정 낡음(카메라 재조준): 정지 로봇의 관측 차이가 계속 클 때(tracking-view). D-595: 이것은
     // 진단 경고일 뿐이다 — 그림은 수락된 보정으로 그대로 두고(폴링마다 바뀌지 않게) 경고만 얹는다.
-    // 보정을 바꾸는 것은 설치·보정의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
+    // 보정을 바꾸는 것은 설치의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
     const cameraOn = view.displayMode === "overlay" && Boolean(calibration);
-    // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
-    // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
-    const rect = canvas.getBoundingClientRect();
-    const fallback = canvasSizeFor(bounds, 800);
+    // 비트맵 크기(D-593 개정): 폭은 스테이지 폭(=열 폭), 높이는 폭×사이트 비율+여백(siteStageHeight).
+    // 스테이지 높이를 읽지 않아 순환이 없다. 스테이지를 아직 모르면(숨김 등) 기본 높이로 대신한다.
     // D-515: 실영상도 지도 미터 뷰(+y 위) 위에 위에서 본 직사각형으로 편다. 지도 방향이 화면
     // 방향이라 따로 돌리지 않고(D-513 7의 mapUpTurn 불필요), 클릭도 미터 뷰를 그대로 거꾸로 푼다.
-    const width = rect.width > 0 ? rect.width : fallback.width;
-    const height = rect.height > 0 ? rect.height : fallback.height;
+    const rect = stage.getBoundingClientRect();
+    const width = rect.width > 0 ? rect.width : (canvas.clientWidth || 800);
+    const rot = view.siteViewTurn || 0;
+    const { minPx, maxPx } = stageSizeLimits(stage);
+    const height = siteStageHeight(width, bounds, rot, 32, minPx, maxPx, stageAvailPx(stage));
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
+    const targetW = Math.round(width * dpr);
+    const targetH = Math.round(height * dpr);
+    if (canvas.width !== targetW) canvas.width = targetW;
+    if (canvas.height !== targetH) canvas.height = targetH;
     const ctx = canvas.getContext("2d");
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
     // 돌린다. 돌린 상자 크기에 맞춰 넣고, 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로
     // 돌리므로 글자는 똑바로 선다.
-    const rot = view.siteViewTurn || 0;
     const side = rot === 90 || rot === 270;
     const fw = side ? height : width, fh = side ? width : height;
     const t = fitTransform(bounds, fw, fh, 32);
@@ -204,62 +249,32 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
-    if (layerOn("site") && layerOn("labels")) {
-      drawMapDatum(ctx, toPx, bounds, {css});
-    }
-
+    const placeLabels = [];
     const activeMap = view.activeSiteMap?.map;
-    if (layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id)) {
-      ctx.save();
-      ctx.strokeStyle = css("--series-primary");
-      ctx.fillStyle = css("--ink");
-      ctx.lineWidth = 2;
-      ctx.font = labelFont;
-      for (const edge of activeMap.edges || []) {
-        ctx.setLineDash(edge.drive_mode === "free" ? [6, 4] : []);
-        ctx.beginPath();
-        edge.polyline.forEach(([x, y], index) => {
-          const p = toPx(x, y);
-          if (index) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
-        });
-        ctx.stroke();
-      }
-      // Distinct semantic place markers: C1~C3 (charging bays), S1~S5 (stations), P1~P3 / J_* (junctions)
-      for (const place of activeMap.places || []) {
-        const pid = String(place.id);
-        const p = toPx(place.x, place.y);
-        const isCharger = pid.startsWith("C");
-        const isStation = pid.startsWith("S");
-        const isHovered = view.hoverEntity?.kind === "place" && view.hoverEntity.id === place.id;
-        ctx.save();
-        if (isCharger) {
-          ctx.beginPath(); ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
-          ctx.fillStyle = css("--surface-recessed"); ctx.fill();
-          ctx.lineWidth = 2; ctx.strokeStyle = css("--series-goal"); ctx.stroke();
-          ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = css("--series-goal"); ctx.fill();
-        } else if (isStation) {
-          ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
-          ctx.fillStyle = css("--status-warn"); ctx.fill();
-          ctx.lineWidth = 1.4; ctx.strokeStyle = css("--surface-recessed"); ctx.stroke();
-        } else {
-          ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-          ctx.fillStyle = css("--ink-quiet"); ctx.fill();
-        }
-        ctx.restore();
-        if ((layerOn("labels") && (isCharger || isStation)) || isHovered) {
-          ctx.fillText(pid, p.x + 7, p.y - 6);
-        }
-      }
-      ctx.restore();
+    if (layerOn("cad")) {
+      cadTwin.drawFloorCad(ctx, toPx, activeMap, { overlayMode: cameraOn });
     }
+    drawSiteLanesAndPlaces(ctx, toPx, activeMap, placeLabels);
     drawCrosswalks(ctx, toPx, 1.5);
     if (layerOn("poses")) drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
     guide(ctx, toPx);
+    if (layerOn("cad")) {
+      cadTwin.drawRobotCadModels(ctx, toPx, {
+        guide: view.guide,
+        anchors: view.anchors,
+        chargeBaysPlan: view.chargeBaysPlan,
+        overlayMode: cameraOn,
+        focusedRobotId: view.robotSelection?.get?.() || view.focusAnchorId || null,
+      });
+    }
     if (layerOn("sightings")) {
       for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
+    }
+    paintPlaceLabels(ctx, placeLabels);
+    if (layerOn("site") && layerOn("labels")) {
+      drawMapDatum(ctx, toPx, bounds, {css, insetBottom: datumBottomInset(), hoverWorld: view.hoverWorld});
     }
     flushChips(ctx);
   }
@@ -269,7 +284,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   // D-536: 로봇 몸체 원·방향·불확실성 고리와 안내 목표. "로봇" 층을 따른다.
   const guide = (ctx, toPoint) => {
     // Guide chips start with the robot id ("rosy_01 · ±0.05 m"): exceptions and the selected robot always show.
-    const focusedRobotId = view.focusRobot || view.selected || null;
+    const focusedRobotId = (typeof view.robotSelection?.get === "function" ? view.robotSelection.get() : null) || view.selected || null;
     const chip = (c, g, x, y, text, tone) => drawChip(c, g, x, y, text, tone,
       Boolean(focusedRobotId && String(text).includes(focusedRobotId)) || labelImportant(String(text).split(" · ")[0]));
     drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip: chip, on: layerOn("poses"), focusedRobotId, view });
@@ -283,18 +298,21 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     return `카메라 관측 ${observed.size}/${Math.max(view.robots.length, observed.size)}대`;
   }
 
-
   function draw() {
     const activeMap = view.activeSiteMap?.map;
     const places = layerOn("lanes") && view.siteMap?.maps.some(row => row.map_id === activeMap?.map_id) ? activeMap.places || [] : [];
     const placeList = el("map-places");
     if (placeList) {
+      const placeSig = places.map((place) => `${place.name} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`).join("\n");
       placeList.hidden = !places.length;
-      placeList.replaceChildren(...places.map(place => {
-        const row = document.createElement("li");
-        row.textContent = `${place.name} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
-        return row;
-      }));
+      if (placeSig !== lastPlaceListSig) {
+        lastPlaceListSig = placeSig;
+        placeList.replaceChildren(...places.map(place => {
+          const row = document.createElement("li");
+          row.textContent = `${place.name} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
+          return row;
+        }));
+      }
     }
     const calibrationStatus = el("map-calibration-status");
     if (calibrationStatus) {
@@ -308,6 +326,118 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     if (view.call && Date.now() >= view.call.until) view.call = null;
     const callLabel = view.call ? ` · 호출 ${view.call.robot_id}` : "";
+    const staleMapLabel = view.mapStaleAt
+      ? `이전 지도 유지 (${Math.max(1, Math.round((Date.now() - view.mapStaleAt) / 1000))}초 전)`
+      : "";
+    const holdParts = [];
+    if (view.stateStale) holdParts.push("연결 지연");
+    if (staleMapLabel) holdParts.push(staleMapLabel);
+    else if (view.guideStale) holdParts.push("경로 안내 지연");
+    const holdLabel = holdParts.length ? ` · ${holdParts.join(" · ")}` : "";
+    const twinCanvas = el("map-twin-canvas");
+    const twinTools = el("map-twin-tools");
+    if (view.siteMap && view.twinUnavailableNotice === "사이트 지도가 없어 2D 지도로 표시합니다") {
+      view.twinUnavailableNotice = "";
+    }
+    if (view.displayMode === "twin3d" && !view.siteMap) {
+      (view.setDisplayMode || setDisplayMode)("coordinates");
+    }
+    const wantTwin = view.displayMode === "twin3d" && !twinFailed && Boolean(view.siteMap);
+    const wasTwinHidden = Boolean(twinCanvas?.hidden);
+    if (twinCanvas) twinCanvas.hidden = !wantTwin;
+    if (twinTools) twinTools.hidden = !wantTwin;
+    if (wantTwin && twinCanvas && view.siteMap) {
+      const bounds = siteBounds(view.siteMap);
+      if (bounds) {
+        const enrichHoverEntity = (entity) => {
+          if (!entity) return null;
+          if (entity.kind === "pinky" && !entity.guideRow) {
+            const guideRow = (view.guide?.robots || []).find((r) => r.robot_id === entity.id)
+              || (view.robots || []).find((r) => r.robot_id === entity.id) || null;
+            return { ...entity, guideRow };
+          }
+          if (entity.kind === "omx_ai" && !entity.anchor) {
+            const anchors = Array.isArray(view.anchors) ? view.anchors : (view.guide?.anchors || []);
+            const anchor = anchors.find((a) => a.target_id === entity.id) || null;
+            return { ...entity, anchor };
+          }
+          return entity;
+        };
+        if (!twin3d) {
+          const instance = createSiteTwin3d({
+            canvas: twinCanvas,
+            onSelectRobot: ({ id }) => {
+              view.mapSelection = null;
+              if (onSelectRobotFromMap) onSelectRobotFromMap(id);
+              else { view.robotSelection?.set?.(id, { source: "map" }); onTrafficChanged(); draw(); }
+            },
+            onSelectPlace: (place) => {
+              view.mapSelection = { kind: "place", id: String(place.id), place };
+              if (onSelectPlaceFromMap) onSelectPlaceFromMap(place);
+              else { onTrafficChanged(); draw(); }
+            },
+            onSelectPoint: (pt) => {
+              if (!pt) return;
+              const same = view.mapSelection?.kind === "point"
+                && Math.hypot(view.mapSelection.x - pt.x, view.mapSelection.y - pt.y) < 0.08;
+              view.mapSelection = same ? null : { kind: "point", x: pt.x, y: pt.y };
+              if (onSelectPoint) onSelectPoint(pt);
+              else { onTrafficChanged(); draw(); }
+            },
+            onHover: (entity, clientX, clientY) => {
+              const enriched = enrichHoverEntity(entity);
+              const prevKey = view.hoverEntity ? `${view.hoverEntity.kind}:${view.hoverEntity.id}` : "";
+              const nextKey = enriched ? `${enriched.kind}:${enriched.id}` : "";
+              view.hoverEntity = enriched;
+              if (onHoverEntity) onHoverEntity(enriched, clientX, clientY);
+              else if (prevKey !== nextKey) { onTrafficChanged(); draw(); }
+            },
+            onUnavailable: () => {
+              twinFailed = true;
+              view.twinFailed = true;
+              view.twinUnavailableNotice = "3D 보기를 열 수 없어 CAD + 실영상으로 전환했습니다";
+              const activeTwin = twin3d;
+              twin3d = null;
+              activeTwin?.dispose?.();
+              if (twinCanvas) twinCanvas.hidden = true;
+              if (twinTools) twinTools.hidden = true;
+              if (view.displayMode === "twin3d") (view.setDisplayMode || setDisplayMode)("overlay");
+              const status = el("map-display-status");
+              if (status) status.textContent = view.twinUnavailableNotice;
+              draw();
+            },
+          });
+          if (twinFailed) instance.dispose?.();
+          else twin3d = instance;
+        }
+        if (twin3d) {
+          if (wasTwinHidden) twin3d.resize?.();
+          const activeMap = view.activeSiteMap?.map || null;
+          void cadTwin.ensureSiteLanes(activeMap?.map_id ?? null);
+          const twinRobots = (view.robots || []).map((row) => {
+            const pose = (row.pose && (!row.pose.pose_frame || row.pose.pose_frame === "map"))
+              ? row.pose : robotMapPose(row);
+            const stale = Boolean(row.stale || row.state?.evidence?.pose?.evidence === "delayed");
+            return { ...row, pose, state: pose ? row.state : null, stale };
+          });
+          twin3d.render({
+            bounds,
+            turnDeg: view.siteViewTurn || 0,
+            activeMap,
+            siteLanes: cadTwin.getSiteLanes(),
+            guide: view.guide,
+            guideStale: Boolean(view.guideStale),
+            robots: twinRobots,
+            anchors: view.anchors,
+            chargeBaysPlan: view.chargeBaysPlan,
+            cameraCanvas: camera.renderFloorCanvas(bounds),
+            focusedRobotId: view.robotSelection?.get?.() || view.focusAnchorId || null,
+            selectedPlaceId: view.mapSelection?.kind === "place" ? String(view.mapSelection.id) : null,
+            hoveredEntity: view.hoverEntity || null,
+          });
+        }
+      }
+    }
     const grid = view.map;
     if (!grid && !view.siteMap) drawTraffic(null, null, 0, {view: {}, el, on: true});
     resetChips();
@@ -320,22 +450,38 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
           + (camera.calibration()
             ? ` · ${camera.usesPlane() ? "Rosy Cam 평면 영상" : "브라우저 보정(대체)"} · ${camera.calibration().calibration_revision}`
               + (view.trackingDrift ? " · 카메라 교정 어긋남 — 맵 고정 다시 필요" : "") : "")
-          + callLabel;
+          + holdLabel + callLabel;
         el("map-canvas").setAttribute("aria-label",
-          `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 로봇 선택 후 지도를 클릭하여 목표를 지정하세요.`
+          `천장 카메라 사이트 지도 — ${describeSightings()}${holdLabel}${callLabel}. 로봇 선택 후 지도를 클릭하여 목표를 지정하세요.`
           + (view.trackingDrift ? " 카메라 교정이 어긋난 것 같습니다. 그림은 수락된 보정 그대로이며 맵 고정을 다시 하세요." : ""));
       }
       return;
     }
     const canvas = el("map-canvas");
     const ctx = canvas.getContext("2d");
+    const paintGridDatum = (hoverWorld) => drawMapDatum(ctx, (x, y) => {
+      const cell = cellOf(grid, x, y);
+      return {x: cell.cx, y: cell.cy};
+    }, {
+      min_x: grid.origin.x, min_y: grid.origin.y,
+      max_x: grid.origin.x + grid.width * grid.resolution,
+      max_y: grid.origin.y + grid.height * grid.resolution,
+    }, {
+      css,
+      insetBottom: datumBottomInset(),
+      hoverWorld,
+    });
     paintGrid(grid);
     if (view.stateUnavailable) {
-      el("map-tag").textContent = `로봇 위치 확인 불가${callLabel}`;
-      canvas.setAttribute("aria-label", `로봇 위치 확인 불가${callLabel} — Fleet 상태 연결을 확인하세요`);
+      drawSiteOverlay(ctx, grid);
+      paintGridDatum(view.hoverWorld);
+      flushChips(ctx);
+      const staleNote = staleMapLabel ? ` · ${staleMapLabel}` : "";
+      el("map-tag").textContent = `로봇 위치 확인 불가${staleNote}${callLabel}`;
+      canvas.setAttribute("aria-label", `로봇 위치 확인 불가${staleNote}${callLabel} — Fleet 상태 연결을 확인하세요`);
       return;
     }
-    el("map-tag").textContent = `${grid.width}×${grid.height} · ${grid.map_id || "map"}${callLabel}`;
+    el("map-tag").textContent = `${grid.width}×${grid.height} · ${grid.map_id || "map"}${holdLabel}${callLabel}`;
     canvas.setAttribute("aria-label", view.call
       ? `지도에서 로봇 목표 위치 선택. 호출 ${view.call.robot_id}`
       : "지도에서 로봇 목표 위치 선택");
@@ -375,6 +521,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         ctx.strokeStyle = css("--status-warn");
         ctx.stroke();
       }
+      if (view.robotSelection?.get?.() === robot.robot_id) {
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 1.55, 0, Math.PI * 2);
+        ctx.lineWidth = 0.45;
+        ctx.strokeStyle = css("--selection") || css("--series-primary");
+        ctx.stroke();
+      }
       ctx.restore();
       if (activeCall(robot.robot_id)) {
         drawChip(ctx, grid, cx, cy - labelOffset, `호출 ${robot.robot_id}`, "warn");
@@ -398,18 +552,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     for (const [x, y, robotId] of labels) drawChip(ctx, grid, x, y, shortId(robotId), undefined, labelImportant(robotId));
     traffic(ctx, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 1 / grid.resolution);
     guide(ctx, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; });
+    drawLocalizationCandidates({ ctx, view, toPoint: (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, css });
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
     // US-009 — 원점 글자(x·y·0,0)도 글자다. 선을 다 그린 뒤, 칩 바로 앞에 칠해 선이 글자를 지나지 않는다.
-    drawMapDatum(ctx, (x, y) => {
-      const cell = cellOf(grid, x, y);
-      return {x: cell.cx, y: cell.cy};
-    }, {
-      min_x: grid.origin.x, min_y: grid.origin.y,
-      max_x: grid.origin.x + grid.width * grid.resolution,
-      max_y: grid.origin.y + grid.height * grid.resolution,
-    }, {css});
+    paintGridDatum(view.selected && view.cursor ? toWorld(grid, view.cursor.col, view.cursor.row) : view.hoverWorld);
     flushChips(ctx);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
@@ -430,10 +578,22 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
   }
 
+  const presetIso = el("twin-preset-iso");
+  const presetTop = el("twin-preset-top");
+  const presetReset = el("twin-preset-reset");
+  if (presetIso) scope.listen(presetIso, "click", () => twin3d?.setPreset?.("iso"));
+  if (presetTop) scope.listen(presetTop, "click", () => twin3d?.setPreset?.("top"));
+  if (presetReset) scope.listen(presetReset, "click", () => twin3d?.setPreset?.("reset"));
+
   // 사이트 사각형·격자·교통·상황·관측 폴링은 map-polling.js가 가진다. 이 뷰를 다시 그리게 draw를 건넨다.
   const { refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling } = createMapPolling({ scope, el, view,
-    auth, call, camera, draw, layerOn, onMapChanged, onMapUnavailable, onTrafficChanged });
+    auth, call, camera, draw, layerOn, onMapChanged, onMapUnavailable, onTrafficChanged,
+    onSiteMapLoaded: (siteMap) => {
+      const mapId = view.activeSiteMap?.map?.map_id ?? siteMap?.maps?.[0]?.map_id ?? null;
+      void cadTwin.preload(mapId);
+    } });
 
   return { draw, refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling, toWorld, streamEvidence,
-    setCameraFrame: camera.setCameraFrame, bindCamera: camera.bindCamera };
+    setCameraFrame: camera.setCameraFrame, bindCamera: camera.bindCamera, setDisplayMode,
+    twinPreset: (name) => twin3d?.setPreset?.(name) };
 }

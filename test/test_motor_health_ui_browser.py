@@ -45,6 +45,7 @@ def test_fleet_summary_and_selected_robot_share_motor_detail(console_url, width)
         browser,page,errors = _open_console(playwright,api)
         page.set_viewport_size({'width':width,'height':844 if width<1000 else 900})
         page.goto(console_url,wait_until='networkidle')
+        page.get_by_role("link", name="작업", exact=True).click()
         page.locator('#roster [data-motor-robot="omx_local"]').wait_for()
         assert '모터 주의' in page.inner_text('#roster')
         assert '주의 모터 1개' in page.inner_text('#roster')
@@ -52,8 +53,8 @@ def test_fleet_summary_and_selected_robot_share_motor_detail(console_url, width)
         local_label(page)
         page.locator('#local-evidence').evaluate("label => label.id = 'local-summary-evidence'")
         save_temp_screenshot(page,f'motor_health_fleet_LOCAL_summary_{width}.png',full_page=True)
-        page.locator('[data-select-robot-id="omx_local"]').click()
-        panel=page.locator('#robot-workspace .motor-health')
+        page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="omx_local"]').click()
+        panel=page.locator('#robot-panel-mount .motor-health')
         panel.wait_for()
         assert panel.locator('tbody tr').count()==10
         assert 'PWM 사용률 높음' in panel.inner_text()
@@ -66,7 +67,7 @@ def test_fleet_summary_and_selected_robot_share_motor_detail(console_url, width)
         if scroll.evaluate('element=>element.scrollWidth>element.clientWidth'):
             page.wait_for_function("document.activeElement.classList.contains('motor-health-scroll') && document.activeElement.scrollLeft>0")
         scroll.evaluate('element=>element.scrollLeft=0')
-        local_label(page, '#robot-workspace .motor-health')
+        local_label(page, '#robot-panel-mount .motor-health')
         page.locator('#local-evidence').scroll_into_view_if_needed()
         save_temp_screenshot(page,f'motor_health_fleet_LOCAL_{width}.png')
         assert errors==[]
@@ -182,7 +183,7 @@ def test_cell_arm_health_uses_shared_view_without_double_aging_and_retains_fault
         expect(card.locator('.motor-health')).to_have_attribute('data-evidence','disconnected',timeout=6000)
         assert 'hardware overload' in card.inner_text()
         payload['hold']=False;payload['missing']=True
-        expect(card.locator('.motor-health-summary')).to_contain_text('확인 불가')
+        expect(card.locator('.motor-health-summary')).to_contain_text('정보 없음')
         assert 'hardware overload' in card.inner_text()
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         card.scroll_into_view_if_needed()
@@ -261,38 +262,39 @@ def test_cell_releases_expired_fault_frames_across_all_arms_and_disposes_survivo
 
 @pytest.mark.parametrize('focus', ['table','select'])
 def test_kept_fleet_card_reads_current_fault_and_offline_row(console_url,focus):
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import expect, sync_playwright
     robot = _robot('omx_local', {'x':1,'y':1,'yaw':0}, motor_health=health(),motor_health_age_s=.1)
     api = {'/api/fleet/state':{'fleet':{'online':1,'total':1},'robots':[robot]},
            '/api/fleet/map':MAP_GRID,'/api/fleet/formation':{'active':False}}
     with sync_playwright() as playwright:
         browser,page,errors = _open_console(playwright,api)
         page.goto(console_url,wait_until='networkidle')
-        page.locator('[data-select-robot-id="omx_local"]').click()
-        panel = page.locator('#robot-workspace .motor-health')
+        page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="omx_local"]').click()
+        panel = page.locator('#robot-panel-mount .motor-health')
         panel.wait_for()
         if focus == 'select':
             # The retained form path is shared with a destination picker; this LOCAL field has no command handler.
             page.evaluate("""() => {const select=document.createElement('select');select.id='local-picker';
               const option=document.createElement('option');option.textContent='LOCAL';select.append(option);
-              document.querySelector('#robot-workspace article').append(select);select.focus();}""")
+              document.querySelector('#robot-panel-mount article').append(select);select.focus();}""")
         else:
             panel.locator('.motor-health-scroll').focus()
-        page.evaluate("window.__kept=document.querySelector('#robot-workspace article')")
+        page.evaluate("window.__kept=document.querySelector('#robot-panel-mount article')")
         robot['motor_health'] = health(status='fault')
-        page.wait_for_function("document.querySelector('#robot-workspace .motor-health').textContent.includes('hardware overload')")
-        assert '주의 모터 1개' in page.inner_text('#roster')
-        assert 'hardware overload' in page.inner_text('#roster')
-        assert page.evaluate("window.__kept===document.querySelector('#robot-workspace article')")
+        page.wait_for_function("document.querySelector('#robot-panel-mount .motor-health').textContent.includes('hardware overload')")
+        assert page.evaluate("window.__kept===document.querySelector('#robot-panel-mount article')")
         if focus == 'table':
-            local_label(page, '#robot-workspace .motor-health')
+            local_label(page, '#robot-panel-mount .motor-health')
             page.locator('#local-evidence').scroll_into_view_if_needed()
             save_temp_screenshot(page,'motor_health_fleet_LOCAL_fault_1920.png')
         robot['online'] = False
-        page.wait_for_function("document.querySelector('#robot-workspace .motor-health').dataset.evidence==='disconnected'")
+        page.wait_for_function("document.querySelector('#robot-panel-mount .motor-health').dataset.evidence==='disconnected'")
         assert 'hardware overload' in panel.inner_text()
         if focus == 'table':
             save_temp_screenshot(page,'motor_health_fleet_LOCAL_disconnected_1920.png')
+        page.get_by_role("link", name="작업", exact=True).click()
+        expect(page.locator('#roster')).to_contain_text('주의 모터 1개')
+        expect(page.locator('#roster')).to_contain_text('hardware overload')
         assert errors == []
         browser.close()
 
@@ -310,7 +312,7 @@ def test_slow_response_counts_browser_transit_against_sample_freshness(console_u
               return fetchNow(url,options);
             }; })();"""
             browser,page,errors=_open_console(playwright,api,init_script=script)
-            page.goto(console_url,wait_until='domcontentloaded')
+            page.goto(console_url + "?view=work", wait_until='domcontentloaded')
             summary=page.locator('#roster [data-motor-robot="omx_local"]')
             summary.wait_for()
             assert summary.get_attribute('data-evidence')=='delayed'
@@ -396,17 +398,18 @@ def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(conso
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
+        page.get_by_role("link", name="작업", exact=True).click()
         _open_cards(page)
-        card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
-        summary = page.locator('#roster article[data-robot-id="rosy_01"]')
+        card = page.locator('#robot-panel-mount article[data-robot-id="rosy_01"]')
+        summary = page.locator('#roster [data-robot-id="rosy_01"]')
         heat = summary.get_by_text(label, exact=True)
         expect(heat).to_be_visible()
-        page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=battery] strong')?.textContent === '63%'")
+        page.wait_for_function("() => document.querySelector('#robot-panel-mount [data-fact=battery] strong')?.textContent === '63%'")
         assert "충전 확인" in card.locator('[data-charging]').inner_text()
 
         robot["power_health_age_s"] = 6.0
-        page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=battery] strong')?.textContent === '확인 불가'")
-        assert card.locator('[data-charging]').get_attribute("data-charging") == "확인 불가"
+        page.wait_for_function("() => document.querySelector('#robot-panel-mount [data-fact=battery] strong')?.textContent === '정보 없음'")
+        assert card.locator('[data-charging]').get_attribute("data-charging") == "정보 없음"
 
         robot["power_health_age_s"] = 0.2
         robot["state_age_s"] = 10.0
@@ -424,7 +427,7 @@ def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(conso
         api["/api/fleet/state"]["fleet"]["online"] = 1
         expect(heat).to_be_visible()
         robot["state"]["safety"]["estop"] = True
-        page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=safety]')?.textContent.includes('비상 정지')")
+        page.wait_for_function("() => document.querySelector('#robot-panel-mount [data-fact=safety]')?.textContent.includes('비상 정지')")
         assert "충전 확인" in card.locator('[data-charging]').inner_text()
         assert "비상정지 해제…" in card.inner_text()
         assert not errors

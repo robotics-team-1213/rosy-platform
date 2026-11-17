@@ -67,6 +67,8 @@ def playback_page(tmp_path):
             browser = p.chromium.launch(headless=True)
             try:
                 page = browser.new_page()
+                # The fixture server has no center hub; an unanswered poll would pin the common page alert and quiet every panel.
+                page.route('**/api/learning/omx/center/hub', lambda route: route.fulfill(status=404, json={'error': 'no hub in this fixture'}))
                 page.add_init_script("""const originalFetch=window.fetch;
                   window.fetch=(url,options)=>originalFetch(url,String(url).includes('/review-frame-set/')?
                     {...options,signal:undefined}:options);""")
@@ -345,7 +347,7 @@ def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(p
     page.locator('#reviewer').fill('Human Reviewer')
     page.locator('#review-confirmed').check()
     page.locator('#review-save').click()
-    expect(page.locator('#review-status')).to_contain_text('reply lost')
+    expect(page.locator('#review-status')).to_contain_text('서버 연결 문제')  # a lost reply is a connection failure
     expect(reason).to_have_value('corrected human judgment')
     expect(page.locator('#native-export')).to_be_disabled()
     with page.expect_request('**/center/review'):

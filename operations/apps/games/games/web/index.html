@@ -6,6 +6,8 @@
   <title>Rosy Games — 경기 보드</title>
   <link rel="stylesheet" href="/common/tokens.css">
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/component-controls.css">
+  <link rel="stylesheet" href="/common/readout-strip.css">
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/board.js"></script>
@@ -24,42 +26,45 @@
     <a id="account-login" href="/api/account/login" hidden>Rosy Account 로그인</a>
     <a data-account-profile hidden></a>
     <ui-button id="account-logout" kind="quiet" type="button" hidden>로그아웃</ui-button>
-    <ui-button id="halt" kind="irreversible" data-always-live type="button" hidden disabled>두 로봇 정지</ui-button>
+    <ui-button id="halt" kind="irreversible" data-always-live type="button">두 로봇 정지</ui-button>
     <p class="halt-note">
       <span id="halt-hint" hidden>스페이스 키로도 두 로봇을 세웁니다</span>
-      <span id="halt-denied">정지는 운용 권한이 있는 계정으로 로그인해야 할 수 있습니다</span>
+      <span id="halt-denied" hidden>정지 요청은 운용 권한 계정만 받습니다</span>
+      <span id="halt-unavailable">계정 확인 불가 · 정지는 계속 누를 수 있습니다</span>
       <span id="halt-status" role="status" aria-live="polite"></span>
     </p>
   </ui-topbar>
+  <p id="score-evidence" hidden>마지막 수신 점수</p>
   <section class="score" aria-label="점수">
-    <span id="score-evidence" hidden>마지막 수신 점수</span>
-    <div>
-      <span id="home-name">홈</span>
-      <strong id="home-score">—</strong>
-    </div>
-    <div>
-      <span id="away-name">원정</span>
-      <strong id="away-score">—</strong>
-    </div>
+    <dl class="ui-readout" data-form="strip">
+      <div>
+        <dt id="home-name">홈</dt>
+        <dd id="home-score">—</dd>
+      </div>
+      <div>
+        <dt id="away-name">원정</dt>
+        <dd id="away-score">—</dd>
+      </div>
+    </dl>
   </section>
   <p id="match-announcement" class="sr-only" role="status" aria-live="polite"></p>
   <main id="match-main" class="match-layout" aria-label="경기 필드와 관측" tabindex="-1">
     <h1 class="sr-only">Rosy Games — 경기 운영</h1>
-    <div class="field-media">
+    <div class="field-media ui-pane">
       <div class="pitch-wrap" id="pitch-wrap">
         <canvas id="pitch" width="720" height="480" aria-label="필드 미터 보드" aria-describedby="field-evidence"></canvas>
         <p id="field-evidence">경기장 정보 대기 중</p>
       </div>
     </div>
-    <aside class="field-details" aria-label="필드 관측">
-      <h2>필드 관측</h2>
+    <ui-section class="field-details" role="region" aria-label="필드 관측">
+      <h2 class="ui-section-heading">필드 관측</h2>
       <p id="stair1">마커·공 관측 정보 대기 · 운용 승인 아님</p>
-      <details><summary>마커 ID 자세히</summary>
+      <ui-tag id="lost" status="warn" hidden>유실</ui-tag>
+      <details class="ui-disclosure"><summary>마커 ID 자세히</summary>
         <ul id="markers" class="chips" aria-label="보이는 마커"></ul>
+        <img id="frame" alt="천장 프레임" hidden>
       </details>
-      <p id="lost" class="lost" hidden>유실</p>
-      <img id="frame" alt="천장 프레임" hidden>
-    </aside>
+    </ui-section>
   </main>
   </ui-shell>
 </body>

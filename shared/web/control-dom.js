@@ -1,5 +1,5 @@
 // Small DOM builders shared by compositions; content is always text, never HTML.
-import "/common/ui.js";
+import "./ui.js";
 
 export function node(tag, text = "", className = "") {
   const result = document.createElement(tag);

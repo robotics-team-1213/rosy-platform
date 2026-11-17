@@ -12,7 +12,7 @@ panels:
   - id: console.overview
     title: 로봇 상태
     surface: console
-    slot: sense
+    slot: banner
     order: 10
     module: panels/console/overview.js
     css: [panels/surface-panels.css]

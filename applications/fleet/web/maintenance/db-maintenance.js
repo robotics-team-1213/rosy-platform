@@ -37,6 +37,23 @@ export function createDbMaintenance({root, call}) {
   const note = root.querySelector("#db-maintenance-note");
   let lastActionResult = null;
   let actionsRendered = false;
+  let lastSettingsSig = "";
+  let settingsDirty = false;
+
+  function clearControls() {
+    actionsBox.replaceChildren();
+    settingsBox.replaceChildren();
+    actionsRendered = false;
+    lastSettingsSig = "";
+    settingsDirty = false;
+  }
+
+  function clear(label = "확인 전", tone = "neutral", message = "") {
+    clearControls();
+    status.textContent = label;
+    status.setAttribute("status", tone);
+    report.replaceChildren(...(message ? [node("p", "hint", message)] : []));
+  }
 
   function say(text, state) {
     note.textContent = text;
@@ -84,7 +101,7 @@ export function createDbMaintenance({root, call}) {
     const warn = (fleet.wal_bytes || 0) > 67108864 || (fleet.fragmentation_pct || 0) > 25 || (pg.configured && !pg.reachable);
     const ok = Boolean(fleet.configured) && fleet.journal_mode === "wal" && !warn;
     status.textContent = ok ? "정상" : warn ? "주의" : "점검 필요";
-    status.setAttribute("status", ok ? "ok" : "warn");
+    status.setAttribute("status", ok ? "neutral" : "warn");
   }
 
   function paintActions() {
@@ -106,10 +123,22 @@ export function createDbMaintenance({root, call}) {
   }
 
   function paintSettings(settings = {}) {
+    const normalized = Object.fromEntries(
+      SETTING_FIELDS.map(([key, , , , fallback]) => [key, settings[key] ?? fallback]),
+    );
+    const sig = JSON.stringify(normalized);
+    const active = settingsBox.ownerDocument?.activeElement;
+    const inputFocused = Boolean(active && settingsBox.contains(active) && active.localName === "input");
+    if (settingsBox.childElementCount > 0 && (sig === lastSettingsSig || inputFocused || settingsDirty)) {
+      return;
+    }
+    lastSettingsSig = sig;
+    settingsDirty = false;
+
     const form = node("form", "install-step");
     form.append(node("h3", "", "데이터베이스 보존·체크포인트 설정"));
     const inputs = {};
-    for (const [key, label, min, max, fallback] of SETTING_FIELDS) {
+    for (const [key, label, min, max] of SETTING_FIELDS) {
       const wrap = node("label", "field-row");
       wrap.append(node("span", "", label));
       const input = node("input", "ui-field");
@@ -117,7 +146,8 @@ export function createDbMaintenance({root, call}) {
       input.name = key;
       input.min = String(min);
       input.max = String(max);
-      input.value = String(settings[key] ?? fallback);
+      input.value = String(normalized[key]);
+      input.addEventListener("input", () => { settingsDirty = true; });
       wrap.append(input);
       form.append(wrap);
       inputs[key] = input;
@@ -133,8 +163,14 @@ export function createDbMaintenance({root, call}) {
       const body = {};
       for (const [key] of SETTING_FIELDS) body[key] = Number.parseInt(inputs[key].value, 10);
       try {
-        await call("/api/fleet/admin/db-settings", {method: "PUT", body});
-        say("데이터베이스 설정을 저장했습니다.", "ok");
+        await call("/api/fleet/admin/db-settings", {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body),
+        });
+        settingsDirty = false;
+        lastSettingsSig = "";
+        say("데이터베이스 설정을 저장했습니다.", "ready");
         await refresh();
       } catch (error) {
         say(`데이터베이스 설정 저장 실패 (${error.detail?.code || error.code || error.status || "오류"})`, "error");
@@ -146,9 +182,13 @@ export function createDbMaintenance({root, call}) {
   async function runAction(action, label) {
     say("");
     try {
-      const answer = await call("/api/fleet/admin/db-maintenance", {method: "POST", body: {action}});
+      const answer = await call("/api/fleet/admin/db-maintenance", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({action}),
+      });
       lastActionResult = answer;
-      say(`${label} 완료 (${answer.ok ? "정상" : answer.error || "점검 필요"})`, answer.ok ? "ok" : "error");
+      say(`${label} 완료 (${answer.ok ? "정상" : answer.error || "점검 필요"})`, answer.ok ? "ready" : "error");
       await refresh();
     } catch (error) {
       say(`${label} 거절 (${error.detail?.code || error.code || error.status || "오류"})`, "error");
@@ -163,19 +203,12 @@ export function createDbMaintenance({root, call}) {
       paintSettings(body.settings || {});
     } catch (error) {
       if (error.status === 403 || error.detail?.code === "ACCOUNT_ADMIN_REQUIRED" || error.code === "ACCOUNT_ADMIN_REQUIRED") {
-        status.textContent = "권한 필요";
-        status.setAttribute("status", "neutral");
-        report.replaceChildren(node("p", "hint", "데이터베이스 설정과 자체 시험은 계정 관리자(accounts.manage) 로그인 세션이 필요합니다."));
-        actionsBox.replaceChildren();
-        settingsBox.replaceChildren();
-        actionsRendered = false;
+        clear("권한 필요", "neutral", "데이터베이스 설정과 자체 시험은 계정 관리자 로그인 세션이 필요합니다.");
         return;
       }
-      status.textContent = "점검 실패";
-      status.setAttribute("status", "warn");
-      report.replaceChildren(node("p", "hint", "데이터베이스 상태를 읽지 못했습니다."));
+      clear("점검 실패", "warn", "데이터베이스 상태를 읽지 못했습니다.");
     }
   }
 
-  return {refresh};
+  return {refresh, clear};
 }

@@ -17,7 +17,7 @@ def test_roster_styles_belong_to_the_console_feature_and_are_served():
     from test_site_map_api import _client
 
     registry = json.loads((WEB / "assets.json").read_text(encoding="utf8"))
-    assert registry["assets"].get("roster.css") == {"path": "roster.css", "media_type": "text/css"}
+    assert registry["assets"].get("roster.css") == {"path": "robot/roster.css", "media_type": "text/css"}
     response = _client().get("/console/assets/roster.css")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/css")

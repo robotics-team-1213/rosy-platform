@@ -1,7 +1,8 @@
-import {accountFetch} from '/account-session.js';
+import {accountFetch,commonDown,panelError,setText} from '/review-alerts.js';
 import '/commands.js';
+import {createBusyScope} from '/common/busy-scope.js';
 const $=id=>document.getElementById(id);
-let token='', manager=false, busy=false, source='', checked=null, selected=null, pending=null;
+let token='', manager=false, source='', checked=null, selected=null, pending=null;
 const terminal=new Set(['SUCCEEDED','FAILED','STOPPED']);
 const labels={PENDING:'준비 중',RUNNING:'실행 중',STOP_REQUESTED:'종료 확인 중',UNKNOWN:'확인 필요',SUCCEEDED:'실행 완료',FAILED:'실패',STOPPED:'중단'};
 const artifactLabels={'import-report':'모델 검사 보고서 열기','contact-report':'접촉 왕복 보고서 열기',pinky_initial:'Pinky 초기 위치',out_lift:'첫 파지·들기',conveyor_settle:'컨베이어 안착',back_lift:'복귀 파지·들기',pinky_settle:'Pinky 원위치 안착',
@@ -14,7 +15,7 @@ function artifactLabel(id){
   return match?match[2]+numbered[match[1]]:artifactLabels[id];
 }
 function el(tag,text){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node;}
-function notice(id,value){$(id).textContent=value;$(id).hidden=!value;}
+function notice(id,value){setText($(id),value);$(id).hidden=!value;}
 async function api(action,body){
   const response=await accountFetch('/api/learning/sim/'+action,body===undefined?{cache:'no-store'}:
     {method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify(body)});
@@ -22,18 +23,18 @@ async function api(action,body){
   if(!response.ok)throw new Error(value.error||'실험 연결을 확인하세요.');
   return value;
 }
+const scope=createBusyScope($('sim-main'));
 function controls(){
-  $('sim-check').disabled=busy||!manager;
-  $('sim-start').disabled=busy||!manager||!checked;
-  $('sim-stop').disabled=busy||!manager||!selected||terminal.has(selected.status)||selected.status==='PENDING';
-  $('sim-replay').disabled=busy||!manager||!selected||!terminal.has(selected.status)||selected.input?.source_sha!==source;
-  $('sim-seed').disabled=busy; $('sim-scenario').disabled=busy;
+  $('sim-check').disabled=scope.busy||!manager;
+  $('sim-start').disabled=scope.busy||!manager||!checked;
+  $('sim-stop').disabled=scope.busy||!manager||!selected||terminal.has(selected.status)||selected.status==='PENDING';
+  $('sim-replay').disabled=scope.busy||!manager||!selected||!terminal.has(selected.status)||selected.input?.source_sha!==source;
+  $('sim-seed').disabled=scope.busy; $('sim-scenario').disabled=scope.busy;
 }
 async function work(operation){
-  if(busy)return;
-  busy=true;controls();notice('sim-error','');
-  try{await operation();}catch(error){notice('sim-error',error.message);}
-  finally{busy=false;controls();}
+  notice('sim-error','');
+  await scope.run(async()=>{try{await operation();}catch(error){notice('sim-error',panelError(error,''));if(commonDown())notice('sim-notice','불러오지 못함');}});
+  controls();
 }
 function config(){
   const seed=Number($('sim-seed').value);
@@ -54,7 +55,7 @@ function detail(row){
     const href=`/api/learning/sim/runs/${row.run_id}/artifacts/${file.id}`;
     const link=el('a',label);link.href=href;
     const item=el(/report$/.test(file.id)?'p':'figure');
-    if(file.id==='mapped-video'){const video=el('video');video.controls=true;video.preload='metadata';video.src=href;video.style.maxWidth='100%';item.append(video);}
+    if(file.id==='mapped-video'){const video=el('video');video.controls=true;video.preload='metadata';video.src=href;item.append(video);}
     else if(item.tagName==='FIGURE'){const image=el('img');image.loading='lazy';image.alt=label;image.src=href;item.append(image);}
     if(item.tagName==='FIGURE'){const caption=el('figcaption');caption.append(link);item.append(caption);}else item.append(link);
     $('sim-artifacts').append(item);
@@ -80,7 +81,7 @@ function compare(runId,ids){
       view.src=`/api/learning/sim/runs/${runId}/artifacts/${photo.sim_view}`;sim.append(view);
     }else sim.append(el('p',runId?'이 실행에는 같은 방향 시뮬레이션 그림이 없습니다.':'실행 기록을 선택하면 같은 방향 시뮬레이션 그림을 놓습니다.'));
     sim.append(el('figcaption','시뮬레이션 · '+(photo.sim_view?artifactLabel(photo.sim_view):'같은 방향 없음')));
-    const pair=el('div');pair.className='omx-review-gallery';pair.style.marginBlockEnd='var(--space-3)';pair.append(real,sim);$('sim-compare').append(pair);
+    const pair=el('div');pair.className='omx-review-gallery';pair.append(real,sim);$('sim-compare').append(pair);
   }
 }
 function ledger(value){

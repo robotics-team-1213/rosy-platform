@@ -33,7 +33,7 @@ export function deadlockView(traffic, trip, aiFacts, robotId, { operator, named 
   const facts = [...newest.values()];
   lines.push(...(facts.length ? facts.map((fact) => `AI 참고 · ${AI_FACT_LABEL[fact.kind] || fact.kind}`
     + `${fact.kind === "wait_cycle_confirmed" && fact.value?.fleet_agrees === false ? " (Fleet 순환과 불일치)" : ""}`
-    + ` · ${fact.robot_ids.join(", ")} · 신뢰도 ${Math.round(fact.confidence * 100)}%`) : ["AI 사실 없음"]));
+    + ` · ${fact.robot_ids.join(", ")} · 신뢰도 ${Number.isFinite(fact.confidence) ? `${Math.round(fact.confidence * 100)}%` : "정보 없음"}`) : ["AI 사실 없음"]));
   const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : "";
   const held = trip?.hold?.reason === "replan" && trip.hold.plan;
   return { lines, confirmReason: lock || named || (!trip ? "열린 운행이 없습니다" : held ? "" : "확인할 바뀐 경로가 없습니다"),
@@ -87,12 +87,12 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
       actions.append(node);
     }
     box.append(actions);
+    // D-1117 — 결과는 누른 단추 옆 글자다(live 역할 없음). 실패 낭독은 log("bad") → 관제 알림 카드의 announcer 한 번이 담당한다.
     const last = trip && results.get(trip.trip_id);
     if (last) {
       const line = document.createElement("p");
       line.className = "stuck-result";
       line.dataset.kind = last.kind;
-      line.setAttribute("role", last.kind === "bad" ? "alert" : "status");
       line.textContent = last.text;
       box.append(line);
     }
@@ -127,7 +127,9 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
           [quietButton("운행 취소"), "cancel", spec.cancelReason, () => send(trip, "cancel", "운행을 취소했습니다")],
           [quietButton("로봇 카드 열기"), "card", "", () => {
             openCard(robotId);
-            document.querySelector(`article[data-robot-id="${CSS.escape(robotId)}"]`)?.scrollIntoView({ block: "nearest" });
+            const card = [...document.querySelectorAll(`article[data-robot-id="${CSS.escape(robotId)}"]`)]
+              .find((node) => !node.closest("[hidden]"));
+            card?.scrollIntoView({ block: "nearest" });
           }]]));
     }
   }

@@ -27,7 +27,7 @@
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
     <div class="fleet-link-status" data-header-region="status" role="group" aria-label="연결 상태와 시각">
-      <ui-tag id="link-state" variant="inline" status="neutral" data-link="wait">연결 대기</ui-tag>
+      <span id="link-state" role="status" aria-live="polite" data-link="wait">연결 대기</span>
       <ui-text id="clock" scale="value">--:--:--</ui-text>
     </div>
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
@@ -65,14 +65,14 @@
   <!-- fleet:nav:start -->
 <nav class="doc-tabs ui-rail ui-rail-nav" aria-label="Rosy Fleet 문서">
     <a class="ui-rail-item" href="/console" data-action-icon="fleet">관제</a>
-    <a class="ui-rail-item" href="/console?view=work" data-action-icon="list">작업</a>
-    <a class="ui-rail-item" href="/console?view=records" data-action-icon="history">기록</a>
+    <a class="ui-rail-item" href="/console?view=work" data-action-icon="task">작업</a>
+    <a class="ui-rail-item" href="/console?view=records" data-action-icon="list">기록</a>
     <a class="ui-rail-item" href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a class="ui-rail-item" href="/console/install" aria-current="page" data-action-icon="install" aria-label="설치·보정">설치</a>
+    <a class="ui-rail-item" href="/console/install" aria-current="page" data-action-icon="install" aria-label="설치">설치</a>
   </nav>
 <!-- fleet:nav:end -->
   <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="설치 화면">
-    <a class="ui-subnav-item" href="/console/install">설치·보정</a>
+    <a class="ui-subnav-item" href="/console/install">설치</a>
     <a class="ui-subnav-item" href="/console/maintenance" aria-current="page">PC 정비</a>
   </nav></div>
   <div class="fleet-workspace">
@@ -95,6 +95,15 @@
       <div id="db-maintenance-settings"></div>
       <ui-status id="db-maintenance-note" hidden></ui-status>
     </section>
+    <p class="hint">이 화면은 호스트 PC 자원·예약 재부팅과 DB 원장 무결성 정비 전용입니다. 장치 프로필·보정, 사고·원장 감사, 셀 작업대, 로봇·셀 실시간 상태는 담당 화면에서 확인합니다.</p>
+    <ui-actions>
+      <a class="ui-action-link" data-kind="quiet" href="/console/install#device-profiles">설치 · 장치 정보</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console?view=records">기록</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_s">Cell S</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_a">Cell A</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_b">Cell B</a>
+      <a class="ui-action-link" data-kind="quiet" href="/console">관제</a>
+    </ui-actions>
   </main>
   </div>
   </div>

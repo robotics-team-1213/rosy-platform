@@ -1,7 +1,7 @@
 // D-540 4: the site map and the 관제 map draw the same /guide marks; the view turn rotates them.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {guideMarks, poseLabel} from '../../../../applications/fleet/web/shared/guide-layer.js';
+import {drawGuide, guideMarks, poseLabel} from '../../../../applications/fleet/web/shared/guide-layer.js';
 import {fitView} from '../../../../applications/fleet/web/shared/site-map-model.js';
 
 const MAP = {places: [{id: 'A', x: 0, y: 0}, {id: 'B', x: 2, y: 1.2}], edges: []};
@@ -63,4 +63,99 @@ test('an offline robot says so in its label', () => {
   assert.match(poseLabel({robot_id: 'rosy_1', online: false, pose: {u_m: 0.02, state: 'LOCALIZED'}}), /연결 끊김/);
   assert.match(poseLabel({robot_id: 'rosy_1', online: false}), /위치 모름 · 연결 끊김/);
   assert.doesNotMatch(poseLabel({robot_id: 'rosy_1', online: true, pose: {u_m: 0.02, state: 'LOCALIZED'}}), /연결 끊김/);
+});
+
+function recordingCtx() {
+  const strokes = [], arcs = [], chips = [];
+  const ctx = {
+    globalAlpha: 1, lineWidth: 1, strokeStyle: '', fillStyle: '', lineJoin: '', lineCap: '',
+    save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, fill() {}, rect() {},
+    setLineDash() {},
+    arc(x, y, r) { arcs.push({x, y, r, strokeStyle: ctx.strokeStyle, lineWidth: ctx.lineWidth}); },
+    stroke() { strokes.push({strokeStyle: ctx.strokeStyle, lineWidth: ctx.lineWidth}); },
+  };
+  return {ctx, strokes, arcs, chips, drawChip: (_c, _g, x, y, text, tone) => chips.push({x, y, text, tone})};
+}
+
+const TOKEN_CSS = (name) => ({
+  '--selection': 'token-sel',
+  '--series-primary': 'token-pri',
+  '--status-warn': 'token-warn',
+  '--series-goal': 'token-goal',
+  '--ink': 'token-ink',
+  '--surface-recessed': 'token-rec',
+  '--scrim-solid': 'token-scrim',
+}[name] || '');
+
+test('drawGuide renders view.mapSelection for selected place and point without throwing', () => {
+  const toPoint = points(0);
+  const placeRec = recordingCtx();
+  drawGuide(placeRec.ctx, toPoint, {
+    guide: {robots: []},
+    css: TOKEN_CSS,
+    colorOf: () => 'token-robot',
+    drawChip: placeRec.drawChip,
+    on: true,
+    view: {mapSelection: {kind: 'place', place: {id: 'A', x: 0.4, y: 0.5}}},
+  });
+  assert.ok(placeRec.arcs.some((a) => a.r === 10));
+  assert.ok(placeRec.strokes.some((s) => s.strokeStyle === 'token-sel' && s.lineWidth === 2.4));
+
+  const pointRec = recordingCtx();
+  drawGuide(pointRec.ctx, toPoint, {
+    guide: {robots: []},
+    css: TOKEN_CSS,
+    colorOf: () => 'token-robot',
+    drawChip: pointRec.drawChip,
+    on: true,
+    view: {mapSelection: {kind: 'point', point: {x: 1.25, y: 0.75}}},
+  });
+  assert.ok(pointRec.arcs.some((a) => a.r === 10));
+  assert.ok(pointRec.strokes.some((s) => s.strokeStyle === 'token-sel'));
+  assert.ok(pointRec.chips.some((c) => c.text === '(1.25, 0.75) m'));
+
+  // When selectedGoal already pins the exact spot, avoid duplicating the empty-point crosshair pill
+  const pinnedRec = recordingCtx();
+  drawGuide(pinnedRec.ctx, toPoint, {
+    guide: {robots: []},
+    css: TOKEN_CSS,
+    colorOf: () => 'token-robot',
+    drawChip: pinnedRec.drawChip,
+    on: true,
+    view: {
+      selectedGoal: {x: 1.25, y: 0.75, at: Date.now()},
+      mapSelection: {kind: 'point', point: {x: 1.25, y: 0.75}},
+    },
+  });
+  assert.ok(!pinnedRec.chips.some((c) => c.text === '(1.25, 0.75) m'));
+});
+
+test('drawGuide draws outer selection rings for selected Pinky and OMX-AI using --selection with fallback', () => {
+  const toPoint = points(0);
+  const rec = recordingCtx();
+  drawGuide(rec.ctx, toPoint, {
+    guide: GUIDE,
+    css: TOKEN_CSS,
+    colorOf: () => 'token-robot',
+    drawChip: rec.drawChip,
+    on: true,
+    focusedRobotId: 'rosy_01',
+    view: {
+      focusAnchorId: 'arm_a',
+      anchors: [{kind: 'omx_ai', target_id: 'arm_a', base_x: 0.2, base_y: 0.2, head_x: 0.3, head_y: 0.25}],
+    },
+  });
+  assert.ok(rec.strokes.some((s) => s.strokeStyle === 'token-sel' && s.lineWidth === 2.2));
+  // Fallback to --series-primary when css('--selection') returns empty
+  const fallbackRec = recordingCtx();
+  drawGuide(fallbackRec.ctx, toPoint, {
+    guide: GUIDE,
+    css: (name) => (name === '--selection' ? '' : TOKEN_CSS(name)),
+    colorOf: () => 'token-robot',
+    drawChip: fallbackRec.drawChip,
+    on: true,
+    focusedRobotId: 'rosy_01',
+    view: {mapSelection: {kind: 'place', place: {id: 'A', x: 0, y: 0}}},
+  });
+  assert.ok(fallbackRec.strokes.some((s) => s.strokeStyle === 'token-pri' && s.lineWidth === 2.4));
 });

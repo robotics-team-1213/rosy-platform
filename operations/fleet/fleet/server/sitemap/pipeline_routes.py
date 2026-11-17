@@ -17,6 +17,11 @@ from .pipeline_ledger import write_ledger
 from .pipeline_task_input import finite_json_value
 
 
+# Production callers omit audit_path and get the durable jsonl in the storage dir; only a caller that
+# passes audit_path=None (unit tests) runs without a file, so the audit cannot be skipped by accident.
+_DEFAULT_AUDIT_PATH = object()
+
+
 def _storage_dir() -> Path:
     var_lib = Path("/var/lib/rosy")
     if var_lib.is_dir() and os.access(var_lib, os.W_OK):
@@ -37,7 +42,7 @@ def _enrich_task_health(task: dict) -> dict:
     elif status == "RUNNING":
         substage = "Grasp → Lift → Place 실행 중"
     elif status == "PAUSED_HUMAN":
-        substage = "사람 감지 비상정지 대기 (이탈 시 자동 재개)"
+        substage = "사람 감지 비상정지 대기 (이탈 후 운영자 재개 필요)"
     elif status in ("CANCELLED", "ABORTED"):
         substage = "작업 취소·중단 (인터락 해제)"
     else:
@@ -53,12 +58,11 @@ def _enrich_task_health(task: dict) -> dict:
 
 def install_pipeline_routes(
     app, *, console=None, site_maps=None, read_guard=(), operator_guard=None, proposer_guard=None,
-    amr_evidence_fn=None, omx_evidence_fn=None,
+    amr_evidence_fn=None, omx_evidence_fn=None, audit_path=_DEFAULT_AUDIT_PATH,
 ) -> None:
     if getattr(app.state, "_pipeline_routes_installed", False):
         return
     app.state._pipeline_routes_installed = True
-
     def _deny_missing_guard():
         raise HTTPException(403, detail={"code": "OPERATOR_GUARD_MISSING"})
 
@@ -69,6 +73,12 @@ def install_pipeline_routes(
     operator_guard = resolved_operator
     resolved_proposer = proposer_guard if proposer_guard is not None else getattr(app.state, "proposer_guard", None)
     proposer_guard = resolved_proposer if resolved_proposer is not None else operator_guard
+    # Named-operator dependency (returns the principal); an app that never wired one fails closed.
+    named_operator = getattr(app.state, "named_operator_dep", None) or _deny_missing_guard
+    # The caller's principal on operator routes (None for bare test apps without guards).
+    operator_principal = operator_guard[0].dependency if operator_guard else (lambda: None)
+    app.state.decision_proposals = getattr(app.state, "decision_proposals", None) or {}
+    app.state.pipeline_safety_audit = getattr(app.state, "pipeline_safety_audit", None) or []
     app.state.omx_cell_states = getattr(app.state, "omx_cell_states", None) or {}
     app.state.omx_cell_tasks = getattr(app.state, "omx_cell_tasks", None) or {}
     app.state.pinky_tasks = getattr(app.state, "pinky_tasks", None) or {}
@@ -170,6 +180,7 @@ def install_pipeline_routes(
                 "detected_displaced_site": app.state.detected_displaced_site,
                 "cable_tangled": app.state.cable_tangled,
                 "human_detected": app.state.human_detected,
+                "safety_audit": app.state.pipeline_safety_audit[-100:],
             })
         except Exception as exc:
             app.state._pipeline_ledger_fault = True
@@ -217,7 +228,7 @@ def install_pipeline_routes(
             app.state.cable_tangled = bool(ov["tangled"])
         if "displaced_to" in ov and ov["displaced_to"] in ("belt_far", "floor_front", None, ""):
             app.state.detected_displaced_site = ov["displaced_to"] or None
-        if "human_detected" in ov and ov["human_detected"] is not None:
+        if ov.get("human_detected"):  # raise-only: a facts body never clears a human hold
             key = subject_id if subject_id in ("cell_s", "cell_ab") else "all"
             app.state.human_detected[key] = True
         tangled = bool(app.state.cable_tangled)
@@ -360,9 +371,11 @@ def install_pipeline_routes(
     ctx = SimpleNamespace(
         STATION_CAMERA_LINKS=STATION_CAMERA_LINKS, _arm_live_catalog=_arm_live_catalog,
         zones_override_path=zones_override_path, _save_ledger=_save_ledger,
+        audit_path=storage_dir / "rosy-pipeline-safety-audit.jsonl" if audit_path is _DEFAULT_AUDIT_PATH else audit_path,
         _is_human_detected=_is_human_detected, _evaluate_decision=_evaluate_decision,
         inputs=inputs, rules=rules, active_map=active_map, read_guard=read_guard,
         operator_guard=operator_guard, proposer_guard=proposer_guard,
+        named_operator=named_operator, operator_principal=operator_principal,
         _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn,
     )
     install_cell_tasks_routes(app, ctx)

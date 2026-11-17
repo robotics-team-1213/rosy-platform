@@ -1,4 +1,4 @@
-// D-457 관제 카메라 추적 상태줄. "배경 다시 학습"은 설치·보정 문서의 tracking-relearn.js 다(D-540 5). 그림은 map-view.js 가 view.cameraTracking 으로 그린다.
+// D-457 관제 카메라 추적 상태줄. "배경 다시 학습"은 설치 문서의 tracking-relearn.js 다(D-540 5). 그림은 map-view.js 가 view.cameraTracking 으로 그린다.
 // 표시 전용 — 목표·교통정리·미션에 넘기지 않는다.
 
 import { classifyTracking, trackingStatusLine, positionRows, displayLeaseMs,
@@ -20,11 +20,13 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
   let coordinatePanel = false;
 
   // 응답이 없으면 빈 층이다 — 지난 고리·선·상태를 남기지 않는다. 그림이 바뀌었을 때만 지도를 다시 그린다.
-  function show(body, elapsedMs = 0) {
+  function show(body, elapsedMs = 0, { expireOnly = false } = {}) {
     cancelExpiry();
     cancelExpiry = () => {};
+    const priorUnknownFloor = expireOnly ? (view.cameraTracking?.unknownFloor || []) : [];
     const remaining = displayLeaseMs(body, elapsedMs);
     const next = classifyTracking(remaining > 0 ? body : null);
+    if (expireOnly && priorUnknownFloor.length) next.unknownFloor = priorUnknownFloor;
     const changed = JSON.stringify(next) !== JSON.stringify(view.cameraTracking);
     view.cameraTracking = next;
     // 교정 낡음 표본은 실제 폴링 응답마다 한 번만 쌓는다. 수명 만료 show(null)은 연속을
@@ -57,7 +59,7 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
     if (changed) onChanged();
     if (next.robots.length || next.unknown.length) {
       cancelExpiry = scope.timeout(() => {
-        show(null);
+        show(null, 0, { expireOnly: true });
         line.dataset.state = "warn";
         line.textContent = "관제 카메라 추적: 위치 수명 만료 — 새 관측을 기다립니다";
       }, remaining);

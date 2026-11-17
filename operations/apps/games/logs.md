@@ -451,3 +451,22 @@
 - 변경: 브라우저가 늦다고 판정한 경우에도 '마지막 생성 N초 전'을 보이고, 좁은 폭 .match-layout을 align-content:start로. 팀 표시 이름은 보드 자료에 없어 id 유지.
 - 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-13 · uncommitted · Games 보드를 공용 정지·계정·연결 부품으로 이행
+
+- 변경: 정지(요청·거절 사유·항상 활성), 계정 상태(조회 실패는 '확인 불가', 권한 없음 아님; 세션 변경 reload 중에도 정지 유지), #connection을 shared/web의 createStopControl·createAccountGate·createConnectionNotice로 옮기고 지역 구현을 삭제. 끊김만 위험 칩(ui-tag crit). fix/stop-paths-always-live의 동작(403/503 문구, 정지 항상 표시, danger 채움)을 포함.
+- 증거: test/test_games_board_browser.py(fix 브랜치 시험 + 조회 실패·위험 칩 시험 추가)
+- gate 변화: 없음
+
+## 2026-11-13 · uncommitted · refactor(games): stop, account gate and connection notice through shared parts
+- 변경: `board.js`의 지역 정지 요청·세션 잠금·연결 칩을 `createStopControl`·`createAccountGate`·`createConnectionNotice`로 바꿨다. 정지 단추는 숨김·비활성이 아니다. `test/test_rosy_games_surface.py`가 그 계약을 본다
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) shared/web/test·Fleet 계정 브라우저·monitoring·games·pilot shell: 브랜치 616 passed 12 failed, main 593 passed 12 failed, 실패 목록 동일(main 기존 적색), 브랜치만의 실패 0. size_range 0, lint 0 errors
+- gate 변화: 없음
+- 결정: C3·C9·C10
+- 교훈: 없음
+
+## 2026-11-14 · uncommitted · refactor(games): 경기판을 UI 콘셉트 배치로 정리
+- 변경: 점수를 `ui-readout[data-form=strip]`, 필드 관측을 `ui-section`, 경기장 칸을 `ui-pane`으로 바꾸고 녹색 칩·상자 CSS를 지웠다(녹색은 경기장 면만). 유실은 채움 단락에서 warn `ui-tag`+warn 아이콘으로, 정지에 estop 아이콘(좁은 폭에서는 글자만), 정지 불가 사유에 lock·minus 아이콘과 짧은 문장을 붙였다. `마지막 수신 점수` 근거 줄은 점수 위로 옮겼다(시험이 순서를 고정). `#stair1`의 '운용 승인 아님' 문장은 시험이 정확한 글자를 고정해 태그로 옮기지 못했다.
+- 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) games 브라우저·표면, Fleet 계정 브라우저 5종, 절차·작업 페이지 구성, Account 이미지 묶음, shared/web 게이트(patterns·no_element_style·shared_controls·token·layout_canon·surface_titles·icon·design_scope) 322 passed 0 failed(HEAD 직전 코드 커밋 기준). 같은 묶음을 기준(968ceb3472)에서 돌리면 1 failed 2 errors(Account 묶음 누락 건).
+- gate 변화: 없음
+- 교훈: 없음

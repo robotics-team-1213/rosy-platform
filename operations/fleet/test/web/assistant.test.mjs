@@ -48,3 +48,13 @@ test('signing out clears the draft request and prevents submission', () => {
   assert.equal(state.retry(), null);
   assert.throws(() => state.begin('안녕'), /IDENTITY/);
 });
+
+test('F5: send-off reason tells "no assistant on this server" from "connecting" from "check failed"', async () => {
+  const { linkOf, LINK_REASONS } = await import('../../../../applications/fleet/web/assistant/panel.js');
+  assert.equal(linkOf({available: true}), 'ready');
+  assert.equal(linkOf({available: false, reason: 'ASSISTANT_NOT_ADMITTED'}), 'preparing');
+  assert.equal(linkOf(null, {status: 404}), 'absent');
+  assert.equal(linkOf(null, {status: 502}), 'failed');
+  assert.match(LINK_REASONS.absent, /이 서버에는 관제 AI가 없/);
+  assert.match(LINK_REASONS.preparing, /연결 중/);
+});

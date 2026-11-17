@@ -3,7 +3,7 @@
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
     <div class="fleet-link-status" data-header-region="status" role="group" aria-label="연결 상태와 시각">
-      <ui-tag id="link-state" variant="inline" status="neutral" data-link="wait">연결 대기</ui-tag>
+      <span id="link-state" role="status" aria-live="polite" data-link="wait">연결 대기</span>
       <ui-text id="clock" scale="value">--:--:--</ui-text>
     </div>
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">

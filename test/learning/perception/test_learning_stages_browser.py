@@ -138,7 +138,7 @@ def test_workspaces_page_lists_this_center_first_then_same_tab_links(tmp_path, w
         expect(entries).to_have_count(3)
         expect(entries.nth(0).locator('ui-tag')).to_have_text('이 센터')
         assert entries.nth(0).locator('a').count() == 0
-        expect(entries.nth(1).locator('h3')).to_have_text('<b>v13 주행 학습</b>')
+        expect(entries.nth(1).locator('h2')).to_have_text('<b>v13 주행 학습</b>')
         assert entries.nth(1).locator('b').count() == 0
         expect(entries.nth(1).locator('ui-tag')).to_have_text('학습')
         expect(entries.nth(1)).to_contain_text('인식 학습 루프가')
@@ -182,8 +182,8 @@ def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_works
     expect(page.locator('#pixel-flow [data-state="done"]')).to_have_count(0)
     page.keyboard.press('Shift+/')
     expect(page.locator('#pixel-keys')).to_be_visible()
-    page.locator('#pixel-brush-tool').click()
-    expect(page.locator('#pixel-brush-tool')).to_have_attribute('aria-pressed', 'true')
+    page.locator('#pixel-tool label:has(#pixel-brush-tool)').click()
+    expect(page.locator('#pixel-brush-tool')).to_be_checked()
     expect(page.locator('#pixel-keyboard-help')).to_contain_text('Alt+방향키')
     expect(page.locator('#pixel-keyboard-help')).to_contain_text('Space')
     assert store.get(0)['status'] == 'approved'

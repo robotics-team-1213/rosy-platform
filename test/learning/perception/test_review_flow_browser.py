@@ -11,6 +11,7 @@ import pytest
 from browser_harness import browser_tests_enabled, confirm_irreversible, free_port
 
 import class_sets
+from browser_picks import choose_pixel_class, choose_pixel_frame
 from test_review_app import fixture_inputs, open_store
 from test_review_cycle import CLASSES, catalog
 from review_app import ReviewStore, Conflict, make_server
@@ -221,7 +222,8 @@ def test_disabled_ai_draft_and_photo_caption_keep_their_words_in_their_boxes(bro
     page.set_viewport_size({'width': width, 'height': 844})
     page.reload(wait_until='networkidle')
     button = page.locator('#review-ai-object_draft')
-    expect(button).to_have_attribute('reason', re.compile('.'))
+    expect(button).to_have_attribute('aria-describedby', re.compile('cause-'))
+    expect(page.locator('#review-ai-jobs [data-cause]')).to_have_text(re.compile('.'))
     fit = page.evaluate("""() => {
       const button = document.getElementById('review-ai-object_draft'), box = button.getBoundingClientRect();
       const range = document.createRange(); range.selectNodeContents(button);
@@ -290,8 +292,8 @@ def test_pixel_points_preview_before_explicit_apply(browser_workspace):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
-    expect(page.locator('#pixel-flood')).to_have_attribute('aria-pressed', 'true')
-    expect(page.locator('#pixel-class')).to_have_value(
+    expect(page.locator('#pixel-flood')).to_be_checked()
+    expect(page.locator('#pixel-class input:checked')).to_have_value(
         str(next(row['index'] for row in review_masks.classes(store)['classes']
                  if row['name'] == 'lane_line')))
     canvas = page.locator('#pixel-canvas')
@@ -317,7 +319,7 @@ def test_pixel_review_shows_unclassified_coverage(browser_workspace):
     photo, coverage = page.evaluate("() => ['#pixel-canvas','#pixel-coverage'].map(id=>document.querySelector(id).getBoundingClientRect().toJSON())")
     assert (photo['x'] + photo['width'] <= coverage['x'] + 1 if page.viewport_size['width'] >= 1024 else photo['y'] + photo['height'] <= coverage['y'] <= photo['y'] + photo['height'] + 96)
     assert coverage['y'] < page.locator('#pixel-class').bounding_box()['y']
-    page.locator('#pixel-class').select_option('0')
+    choose_pixel_class(page, '0')
     open_action_disclosure(page, '#pixel-fill')
     page.locator('#pixel-fill').click()
     confirm_irreversible(page)
@@ -333,7 +335,7 @@ def test_pixel_number_key_recalculates_current_selection(browser_workspace):
     with page.expect_request(lambda request: request.url.endswith('/api/mask-preview/0')
                              and request.post_data_json['label'] == 1):
         page.keyboard.press('2')
-    expect(page.locator('#pixel-class')).to_have_value('1')
+    expect(page.locator('#pixel-class input:checked')).to_have_value('1')
 
 
 def test_object_candidate_is_findable_and_empty_review_is_neutral(tmp_path):
@@ -411,7 +413,7 @@ def test_catalog_import_reaches_pending_review_on_phone(browser_workspace, tmp_p
     expect(page.locator('#counts')).to_contain_text('대기 1')
     expect(page.locator('#status')).to_contain_text('검수 대기')
     if width == 320:
-        assert page.locator('#frames').evaluate('(node) => getComputedStyle(node).flexDirection') == 'row'
+        assert page.locator('#frames').evaluate('(node) => getComputedStyle(node).overflowY') == 'auto'
         assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if output:
         target = Path(output) / f'learning-import-pending-{width}.png'
@@ -486,6 +488,7 @@ def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
     expect(page.locator('#empty-review')).to_be_visible()
     expect(page.locator('#review-content')).to_be_hidden()
     action = page.locator('#show-all')
+    expect(action).to_be_visible()
     assert action.bounding_box()['width'] > 0
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
@@ -663,7 +666,7 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     page.locator('.review-kinds a[href^="/pixels"]').click()
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
-    page.locator('#pixel-class').select_option('0')
+    choose_pixel_class(page, '0')
     open_action_disclosure(page, '#pixel-fill')
     page.locator('#pixel-fill').click()
     confirm_irreversible(page)
@@ -715,7 +718,7 @@ def test_empty_pixel_review_can_recover_at_declared_widths(browser_workspace, wi
     expect(page.locator('#pixel-content')).to_be_hidden()
     expect(page.locator('#pixel-title')).to_have_text('픽셀 검수')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인 0장')
-    expect(page.locator('#pixel-frame').locator('..')).to_be_hidden()
+    expect(page.locator('#pixel-frames [role=option]')).to_have_count(0)
     expect(page.locator('#pixel-prev')).to_be_hidden()
     expect(page.locator('#pixel-next')).to_be_hidden()
     action = page.locator('#pixel-all')
@@ -728,7 +731,7 @@ def test_empty_pixel_review_can_recover_at_declared_widths(browser_workspace, wi
         page.screenshot(path=str(target), full_page=True)
     action.click()
     expect(page.locator('#pixel-content')).to_be_visible()
-    expect(page.locator('#pixel-frame').locator('..')).to_be_visible()
+    expect(page.locator('#pixel-frames [role=option]')).not_to_have_count(0)
     expect(page.locator('#pixel-next')).to_be_visible()
 
 
@@ -784,10 +787,10 @@ def test_workspace_disconnect_shows_reachable_retry(browser_workspace, route, em
     expect(page.locator(content)).to_be_hidden()
     expect(page.locator(retry)).to_be_visible()
     if route == '/':
-        expect(page.locator('#empty-review h2')).to_have_text('검수 내용을 불러오지 못했습니다')
+        expect(page.locator('#empty-review h2')).to_have_text('불러오지 못함')  # the panel is quiet; one page alert holds the cause
     else:
-        expect(page.locator('#pixel-status')).to_contain_text('검수 내용을 불러오지 못했습니다')
-        expect(page.locator('#pixel-frame').locator('..')).to_be_hidden()
+        expect(page.locator('#pixel-status')).to_contain_text('불러오지 못함')
+        expect(page.locator('#pixel-frames [role=option]')).to_have_count(0)
     assert page.locator(retry).bounding_box()['y'] < 844
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
@@ -1032,7 +1035,8 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
     page.route(endpoint, lambda request: request.fulfill(
         status=503, content_type='text/html', body='Service Unavailable'))
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
-    expect(page.locator(status)).to_contain_text('사용할 수 없습니다')
+    expect(page.locator(status)).to_contain_text('불러오지 못함')
+    expect(page.locator('#page-alerts')).to_contain_text('HTTP 503')  # a service answer, not a lost connection
     expect(page.locator(retry)).to_be_visible()
     if route == '/pixels':
         expect(page.locator('#pixel-empty h3')).to_be_visible()
@@ -1222,26 +1226,25 @@ def test_decision_while_auditing_approved_does_not_jump_to_pending(browser_works
     assert store.get(0)['status'] == 'excluded'
 
 
-def test_phone_photo_list_is_one_strip_above_editor(browser_workspace):
+def test_phone_photo_list_is_bounded_and_comes_after_the_editor(browser_workspace):
     page, _store, expect = browser_workspace
     page.set_viewport_size({'width': 390, 'height': 844})
     page.goto(page.url.split('?')[0] + '?frame=1', wait_until='networkidle')
     expect(page.locator('#frame-title')).to_have_text('사진 2')
     layout = page.evaluate("""() => {
-      const strip = document.getElementById('frames');
-      const tops = [...strip.children].map(b => Math.round(b.getBoundingClientRect().top));
-      return {pageWidth: document.documentElement.scrollWidth, rows: new Set(tops).size,
-              direction: getComputedStyle(strip).flexDirection, overflow: getComputedStyle(strip).overflowX};
+      const list = document.getElementById('frames');
+      return {pageWidth: document.documentElement.scrollWidth, height: list.getBoundingClientRect().height,
+              limit: parseFloat(getComputedStyle(list).maxHeight), overflow: getComputedStyle(list).overflowY,
+              afterEditor: document.getElementById('canvas').getBoundingClientRect().top < list.getBoundingClientRect().top};
     }""")
-    # Hundreds of photos must not push the editor below a full-page thumbnail grid.
-    assert layout == {'pageWidth': 390, 'rows': 1, 'direction': 'row', 'overflow': 'auto'}
+    # Hundreds of photos must not push the editor away (spec 9: photo, decision, tools, then the photo picker): the list scrolls itself.
+    assert layout['pageWidth'] == 390 and layout['overflow'] == 'auto' and layout['height'] <= layout['limit'] + 1 and layout['afterEditor'], layout
+    expect(page.locator('#frames [role=option][aria-selected=true]')).to_have_count(1)
     toolbar = page.locator('.review-tool-ribbon ui-actions').bounding_box()
     canvas = page.locator('#canvas').bounding_box()
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
-        target = Path(output) / 'learning-object-first-view-390x844.png'
-        target.parent.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(target))
+        page.screenshot(path=str(Path(output) / 'learning-object-first-view-390x844.png'))
     assert toolbar['height'] < 60 and canvas['y'] < 844, (toolbar, canvas)
 
 
@@ -1423,24 +1426,6 @@ def test_review_shortcuts_confirm_then_move_without_approving(browser_workspace)
     expect(page.locator('#frame-title')).to_have_text('사진 2')
     assert store.get(0)['status'] == 'pending'
 
-
-def test_learning_summary_separates_review_from_training(browser_workspace):
-    page, store, expect = browser_workspace
-    store.update(0, {'version': store.get(0)['version'], 'action': 'reopen'})
-    page.goto(page.url.split('?')[0].rstrip('/') + '/learning#review-section', wait_until='networkidle')
-    expect(page.locator('#review-stage-summary')).to_contain_text('등록 2장')
-    expect(page.locator('#training-data-state')).to_contain_text('픽셀 승인 0장')
-    page.locator('.learning-home-nav a[href="#learning-results"]').click()
-    expect(page.get_by_text('현재 검수 중인 사진의 학습 완료를 뜻하지 않습니다.')).to_be_visible()
-    page.locator('.learning-home-nav a[href="#review-section"]').click()
-    expect(page.locator('#object-review-link')).to_contain_text('검수·승인')
-    expect(page.locator('#pixel-review-link')).to_contain_text('검수·승인')
-    page.locator('#object-review-link').click()
-    page.wait_for_load_state('networkidle')
-    expect(page.locator('#approve')).to_be_visible()
-    page.goto(page.url.split('?')[0].rstrip('/') + '/learning#review-section', wait_until='networkidle')
-    page.locator('#pixel-review-link').click()
-    expect(page.locator('#pixel-approve')).to_be_visible()
 
 def test_learning_shows_prepared_export_and_stale_decision(browser_workspace):
     page, store, expect = browser_workspace

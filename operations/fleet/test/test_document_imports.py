@@ -56,12 +56,15 @@ OWN = {
         "trip-proposal-view.js",  # D-908: neutral trip admission belongs to Console.
         "integrated-control-view.js",  # D-862: unit information and stop requests belong to Console.
         "inbox.js",  # D-632: console notification and context view owner
+        "alert-popup.js",  # Non-modal error and alert popup stack owned by Console.
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view
         "connection-view.js",
         "formation.js",
         "map-view.js",
         "map-overlays.js",  # D-798 3.2: map-view.js overlay drawing
+        "map-tool-lock.js",  # map tools stay locked until a map exists (camera-backdrop.js, map-view.js)
         "map-polling.js",  # D-798 3.2: map-view.js polling
+        "cad-twin-layer.js",  # top-down CAD + URDF/STL twin overlay on map-view.js
         "console-auth.js",  # D-798 3.2: console.js lock, session and token handling
         "console-goal.js",  # D-798 3.2: console.js goal targeting and operator pin
         "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
@@ -101,6 +104,14 @@ OWN = {
         "state-age.js",
         "motion-source.js",  # why a robot moves, from proving facts only
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
+        "arm-proposal-view.js",
+        "cell-resume-view.js",
+        "localization-view.js",
+        "robot-camera-tile.js",
+        "robot-dock-binding.js",
+        "overview-order.js",  # R-b: problem robots first in the overview list
+        "robot-panel-adapters.js",
+        "step-nudge.js",
     },
     "install.js": {
         "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.

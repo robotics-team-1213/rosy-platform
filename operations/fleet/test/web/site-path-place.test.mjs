@@ -4,17 +4,20 @@ import { readFileSync } from "node:fs";
 
 const root = new URL("../../../../applications/fleet/web/", import.meta.url);
 const html = readFileSync(new URL("index.html", root), "utf8");
-const roster = readFileSync(new URL("roster.js", root), "utf8");
+const roster = readFileSync(new URL("robot/roster.js", root), "utf8");
 const consoleJs = readFileSync(new URL("console.js", root), "utf8");
 // D-798 3.2: the site-path paint and the /healthz read live in console-refresh.js.
 const refreshJs = readFileSync(new URL("console-refresh.js", root), "utf8");
 const vision = readFileSync(new URL("shared/vision-view.js", root), "utf8");
 
-test("the site path block sits in the roster panel above the robot list", () => {
-  const panel = html.slice(html.indexOf('aria-labelledby="roster-heading"'), html.indexOf('aria-labelledby="vision-heading"'));
+test("the site path block sits in the roster panel while C14 #roster moves to work-overview", () => {
+  const rosterIdx = html.indexOf('aria-labelledby="roster-heading"');
+  const panel = html.slice(rosterIdx, html.indexOf('aria-labelledby="vision-heading"'));
   const pathAt = panel.indexOf('id="site-path"');
-  const listAt = panel.indexOf('id="roster"');
-  assert.ok(pathAt > 0 && pathAt < listAt);
+  const workAt = html.indexOf('id="work-overview"');
+  const listAt = html.indexOf('id="roster"');
+  assert.ok(pathAt > 0);
+  assert.ok(workAt > 0 && listAt > workAt && listAt < rosterIdx);
   assert.equal(html.includes("/api/v1/host/network"), false);
 });
 

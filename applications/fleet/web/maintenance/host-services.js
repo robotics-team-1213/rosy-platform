@@ -35,10 +35,10 @@ function reportRows(body) {
     const card = node("section", "install-step");
     card.dataset.host = name;
     card.dataset.state = healthy ? "ok" : "unverified";
-    const head = node("div", "robot-head");
+    const head = node("ui-head");
     const tag = node("ui-tag", "", label);
-    tag.setAttribute("status", healthy ? "ok" : "warn");
-    head.append(node("h3", "", hostLabel(name)), tag);
+    tag.setAttribute("status", healthy ? "neutral" : "warn");
+    head.append(node("h3", "ui-section-heading", hostLabel(name)), tag);
     card.append(head);
     const received = Number.isFinite(row.time) ? new Date(row.time * 1000).toLocaleString() : "없음";
     card.append(node("p", "hint", `마지막 호스트 점검 ${received}`));
@@ -72,6 +72,18 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
   const note = root.querySelector("#host-services-note");
   let commandKey = "";
 
+  function clearCommands() {
+    commandKey = "";
+    commands.replaceChildren();
+  }
+
+  function clear(label = "확인 전", tone = "neutral", message = "") {
+    clearCommands();
+    status.textContent = label;
+    status.setAttribute("status", tone);
+    report.replaceChildren(...(message ? [node("p", "hint", message)] : []));
+  }
+
   function say(text, state) {
     note.textContent = text;
     note.hidden = !text;
@@ -91,14 +103,14 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
     }
     const allHealthy = rows.every((row) => row.dataset.state === "ok");
     status.textContent = allHealthy ? `PC ${rows.length}대 정상` : "PC별 점검 결과를 확인하세요";
-    status.setAttribute("status", allHealthy ? "ok" : "warn");
+    status.setAttribute("status", allHealthy ? "neutral" : "warn");
   }
 
   function paintCommands(hosts) {
     commands.replaceChildren();
     for (const host of hosts) {
       const block = node("section", "install-step");
-      block.append(node("h3", "", HOST_LABEL[host.host] || host.host));
+      block.append(node("h3", "ui-section-heading", HOST_LABEL[host.host] || host.host));
       const actions = node("ui-actions");
       const reboot = node("ui-button", "", "10분 뒤 재부팅");
       reboot.setAttribute("kind", "quiet");
@@ -139,7 +151,7 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
         method: "POST",
         body: {action, unit, operator_confirmed: true},
       });
-      say(`${HOST_LABEL[host] || host} ${action} 접수 (${answer.code || "ACCEPTED"})`, "ok");
+      say(`${HOST_LABEL[host] || host} ${action} 접수 (${answer.code || "ACCEPTED"})`, "ready");
     } catch (error) {
       const code = error.detail?.code || error.code || "";
       if (code === "HOST_JOBS_ACTIVE") {
@@ -159,14 +171,15 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
 
   // A viewer may not read /api/fleet/hosts; it still sees each PC's update state and release (D-871).
   function paintSummary(body) {
+    clearCommands();
     const cards = (body.hosts || []).map((host) => {
       const card = node("section", "install-step");
       card.dataset.host = host.host;
       card.dataset.state = host.state;
-      const head = node("div", "robot-head");
+      const head = node("ui-head");
       const tag = node("ui-tag", "", host.state === "ok" ? "업데이트 정상" : host.state === "frozen" ? "업데이트 동결" : "확인 필요");
-      tag.setAttribute("status", host.state === "ok" ? "ok" : "warn");
-      head.append(node("h3", "", hostLabel(host.host)), tag);
+      tag.setAttribute("status", host.state === "ok" ? "neutral" : "warn");
+      head.append(node("h3", "ui-section-heading", hostLabel(host.host)), tag);
       card.append(head);
       for (const line of updateLines(host)) card.append(node("p", "hint", line));
       return card;
@@ -174,7 +187,7 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
     report.replaceChildren(node("p", "hint", `현장 관제 아래 PC ${cards.length}대 · 업데이트 요약`), ...cards);
     const allOk = cards.every((card) => card.dataset.state === "ok");
     status.textContent = allOk ? `업데이트 PC ${cards.length}대 정상` : "PC별 업데이트 상태를 확인하세요";
-    status.setAttribute("status", allOk ? "ok" : "warn");
+    status.setAttribute("status", allOk ? "neutral" : "warn");
   }
 
   async function refresh() {
@@ -189,12 +202,10 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
           // fall through to the connection message
         }
       }
-      status.textContent = "호스트 점검 결과를 읽지 못했습니다";
-      status.setAttribute("status", "warn");
-      report.replaceChildren(node("p", "hint", "연결 실패 · 최신 PC 상태를 확인할 수 없습니다."));
+      clear("호스트 점검 결과를 읽지 못했습니다", "warn", "연결 실패 · 최신 PC 상태를 확인할 수 없습니다.");
       throw error;
     }
   }
 
-  return {refresh};
+  return {refresh, clear};
 }

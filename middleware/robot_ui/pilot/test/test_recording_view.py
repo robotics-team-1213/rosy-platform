@@ -96,7 +96,7 @@ def test_sheet_rows_follow_the_download_gate():
     assert out[1][0]["canFetch"] is True and out[1][0]["reason"] == ""
     assert out[1][0]["detail"] == "1:00 · 1.0 KB · 받음"
     assert out[1][1]["canFetch"] is False and out[1][1]["reason"] == "끝나지 않은 녹화입니다"
-    assert out[1][1]["detail"] == "— · 5 B"
+    assert out[1][1]["detail"] == "정보 없음 · 5 B"
     assert out[1][2]["reason"] == "녹화 중입니다" and out[1][2]["title"] == "bad"
     assert out[2] == [] and out[3] == []
 

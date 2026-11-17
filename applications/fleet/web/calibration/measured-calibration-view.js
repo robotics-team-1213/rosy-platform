@@ -66,7 +66,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const operable = editable && !reading;
     const editReason = pending ? pendingReason : '이름 있는 운영자 권한이 필요합니다.';
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
-    setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
+    setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 보정을 승인 저장하세요.');
     setEnabled(buttons.approve,operable && !!candidate && candidate.evidence_kind === 'measured'
       && !!limits() && candidate.source_id === source,
       !operable ? editReason : '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
@@ -96,7 +96,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   }
   async function readState(t) {
     const body = await call('/api/fleet/calibrations?purpose=preview',{signals:[t.signal]}); t.check();
-    if (body.use !== 'preview-only') throw new Error('이 서버는 실측 교정 미리보기를 지원하지 않습니다.');
+    if (body.use !== 'preview-only') throw new Error('이 서버는 보정 미리보기를 지원하지 않습니다.');
     const next = body.calibrations?.find(row => row.source_id === t.source) || null;
     if (next?.calibration_revision !== record?.calibration_revision) { clearImage(); conditions.checked = false; }
     const previousSession = status?.session_id;
@@ -105,7 +105,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       const lease = await grant(t);
       const response = await fetch(lease.url.href.replace(/\/frame$/,'/measured-status'), {
         signal:t.signal,credentials:'omit',redirect:'error',cache:'no-store',headers:{Authorization:`Bearer ${lease.lease}`}});
-      if (!response.ok) throw new Error('실측 교정 적용 상태를 읽지 못했습니다.');
+      if (!response.ok) throw new Error('보정 적용 상태를 읽지 못했습니다.');
       const result = await response.json(); t.check();
       if (result.source_id !== t.source) throw new Error('카메라 상태의 출처가 다릅니다.');
       status = result;
@@ -138,7 +138,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   }
   function failure(error,t) {
     if (error.name === 'AbortError' || !t.current()) return;
-    clearImage(); message.textContent = `실측 교정 확인 실패: ${error.message}`;
+    clearImage(); message.textContent = `보정 확인 실패: ${error.message}`;
   }
   async function action(fn) {
     if (busy || reading) return;

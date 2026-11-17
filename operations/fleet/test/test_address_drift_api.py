@@ -132,7 +132,7 @@ def test_console_serves_the_address_module_and_wires_the_banner():
     assert module.status_code == 200
     assert "export function addressReason" in module.text
     page = client.get("/console").text
-    assert 'id="address-banner"' in page and 'role="alert"' in page
+    assert 'id="address-drift"' in page and 'id="address-banner"' not in page  # D-1117: no standalone role=alert banner
     shell = client.get("/console/assets/console.js").text
     assert "/api/fleet/discovery/addresses" in shell
     roster = client.get("/console/assets/roster.js").text

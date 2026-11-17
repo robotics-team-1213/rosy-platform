@@ -30,20 +30,25 @@ def test_opening_input_settings_moves_focus_inside_and_escape_returns_to_tools(t
 
 
 @pytest.mark.parametrize('width', [320, 768, 1440])
-@pytest.mark.parametrize('label', ['빠름', '중앙 섬세', '반전 꺼짐'])
-def test_input_setting_changes_preserve_the_same_focused_control(tablet_page, width, label):
+@pytest.mark.parametrize('role,label', [('radio', '중앙 섬세'), ('button', '조향 반전')])
+def test_input_setting_changes_preserve_the_same_focused_control(tablet_page, width, role, label):
     origin, page, errors = tablet_page
     page.set_viewport_size({'width': width, 'height': 900})
     panel = open_inputs(page, origin)
-    button = panel.get_by_role('button', name=label, exact=True)
-    button.focus()
-    handle = button.element_handle()
+    control = panel.get_by_role(role, name=label, exact=True)
+    control.focus()
+    handle = control.element_handle()
     page.keyboard.press('Space')
     assert handle.evaluate('n => n.isConnected && n === document.activeElement')
-    assert handle.get_attribute('aria-pressed') == 'true'
+    # curve = K1 native radio (checked, exactly one in its group); invert = K21 toggle (aria-pressed)
+    if role == 'radio':
+        assert handle.evaluate('n => n.checked')
+        assert panel.locator('#input-curve input:checked').count() == 1
+    else:
+        assert handle.get_attribute('aria-pressed') == 'true'
     if value := os.environ.get('ROSY_SHOT_DIR'):
         root = Path(value).expanduser(); root.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(root / f'inputs-{width}-{label}.png'))
+        page.screenshot(path=str(root / f'inputs-{width}-{role}-{label}.png'))
     page.keyboard.press('Escape')
     expect(panel).to_have_count(0)
     expect(page.locator('[data-drive-tools]')).to_be_focused()

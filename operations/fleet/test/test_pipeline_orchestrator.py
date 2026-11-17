@@ -5,6 +5,7 @@ import os
 import stat
 import time
 
+import pytest
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
@@ -318,7 +319,7 @@ def test_human_safety_gate_cannot_clear_hold_from_caller_boolean():
             "cell_id": "cell_s", **fields,
         })
         assert cleared.status_code == 409
-        assert cleared.json()["detail"]["code"] == "HUMAN_CLEAR_EVIDENCE_UNAVAILABLE"
+        assert cleared.json()["detail"]["code"] == "USE_CLEAR_ROUTE"
         state = client.get("/api/fleet/pipeline/cell-tasks").json()
         assert state["human_safety"]["human_detected"]["cell_s"] is True
         assert next(t for t in state["tasks"] if t["task_id"] == "held-task")["status"] == "PAUSED_HUMAN"
@@ -595,8 +596,9 @@ def test_pinky_dock_and_return_do_not_fabricate_claim_or_release():
     graph = build_graph(site_map)
     maps = SimpleNamespace(active=lambda: (1, site_map, graph, None))
     app = FastAPI()
+    _wire_test_operators(app)
     install_pipeline_routes(app, site_maps=maps)
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-Op": "alice"})  # task creation needs a named operator
 
     assert client.post("/api/fleet/pipeline/pinky-tasks", json={
         "robot_id": "pinky_1", "action": "dock_and_unload_s3",
@@ -623,16 +625,25 @@ def test_pinky_dock_and_return_do_not_fabricate_claim_or_release():
     assert len(app.state.pinky_tasks) == queued_before
     assert len(app.state.omx_cell_tasks) == cells_before
     app.state.human_detected["cell_s"] = False  # Simulate an old ledger missing the flag; the phase still holds.
-    refused_decision = client.post("/api/fleet/pipeline/decision-gate", json={
+    auto_refused = client.post("/api/fleet/pipeline/decision-gate", json={
         "subject_id": "cell_ab", "domain": "arm_target", "auto_execute": True,
     })
+    assert auto_refused.status_code == 409 and auto_refused.json()["detail"]["code"] == "USE_EXECUTE_ROUTE"
+    arm_prop = client.post("/api/fleet/pipeline/decision-gate", json={
+        "subject_id": "cell_ab", "domain": "arm_target",
+    }, headers={"X-Op": "bob"}).json()
+    refused_decision = client.post("/api/fleet/pipeline/decision-gate/execute", json={
+        "decision_id": arm_prop["decision"]["decision_id"],
+    }, headers={"X-Op": "alice"})
     assert refused_decision.status_code == 409
     assert refused_decision.json()["detail"]["code"] == "HUMAN_HOLD_ACTIVE"
     assert len(app.state.omx_cell_tasks) == cells_before
-    decision = client.post("/api/fleet/pipeline/decision-gate", json={
-        "subject_id": "rosy_46", "domain": "line_follow", "auto_execute": True,
-        "facts": {"tangled": True},
-    })
+    pinky_prop = client.post("/api/fleet/pipeline/decision-gate", json={
+        "subject_id": "rosy_46", "domain": "line_follow", "facts": {"tangled": True},
+    }, headers={"X-Op": "bob"}).json()
+    decision = client.post("/api/fleet/pipeline/decision-gate/execute", json={
+        "decision_id": pinky_prop["decision"]["decision_id"],
+    }, headers={"X-Op": "alice"})
     assert decision.status_code == 200
     assert decision.json()["pinky_task"]["v_cmd_mps"] == 0.0
     assert len(app.state.omx_cell_tasks) == cells_before
@@ -667,10 +678,11 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
                            rules=SimpleNamespace(active_rules=lambda: None))
     app = FastAPI()
     app.state.site_maps = maps
+    _wire_test_operators(app)
     owner_evidence = {}
     install_pipeline_routes(app, site_maps=maps, amr_evidence_fn=_measured_amr,
                             omx_evidence_fn=lambda task: owner_evidence.get(task["task_id"]))
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-Op": "alice"})  # task creation needs a named operator
 
     created = client.post("/api/fleet/pipeline/cell-tasks", json={
         "task_id": "fleet-r-cell-s-01",
@@ -780,23 +792,56 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert abs(micro_resp["pinky_task"]["v_cmd_mps"]) <= 0.02
     assert micro_resp["decision"]["schema"] == "rosy.omx-cell-decision.v1"
 
-    dec_arm = client.post(
+    arm_prop = client.post(
         "/api/fleet/pipeline/decision-gate",
-        json={"subject_id": "cell_s", "domain": "arm_target", "displaced_to": "floor_front", "auto_execute": True},
+        json={"subject_id": "cell_s", "domain": "arm_target", "displaced_to": "floor_front"},
+        headers={"X-Op": "bob"},
+    ).json()
+    dec_arm = client.post(
+        "/api/fleet/pipeline/decision-gate/execute",
+        json={"decision_id": arm_prop["decision"]["decision_id"]},
+        headers={"X-Op": "alice"},
     ).json()
     assert dec_arm["ok"] is True
     assert dec_arm["decision"]["choice"] == "object_reacquire"
     assert dec_arm["executed"]["task"]["displaced_to"] == "floor_front"
 
-    dec_pinky = client.post(
+    pinky_prop = client.post(
         "/api/fleet/pipeline/decision-gate",
-        json={"subject_id": "rosy_46", "domain": "line_follow", "tangled": True, "auto_execute": True},
+        json={"subject_id": "rosy_46", "domain": "line_follow", "tangled": True},
+        headers={"X-Op": "bob"},
+    ).json()
+    dec_pinky = client.post(
+        "/api/fleet/pipeline/decision-gate/execute",
+        json={"decision_id": pinky_prop["decision"]["decision_id"]},
+        headers={"X-Op": "alice"},
     ).json()
     assert dec_pinky["ok"] is True
     assert dec_pinky["decision"]["choice"] == "back_and_retry"
     assert dec_pinky["decision"]["recommended_action"] == "micro_forward_2cm"
     assert dec_pinky["executed"]["pinky_task"]["max_step_m"] <= 0.02
     assert dec_pinky["executed"]["pinky_task"]["status"] == "QUEUED"
+
+    # Human safety E-Stop -> pause queued tasks -> block claim -> human clears -> tasks stay paused
+    estop_on = client.post(
+        "/api/fleet/pipeline/human-safety-gate",
+        json={"cell_id": "cell_s", "human_detected": True, "robot_id": "rosy_46"},
+    ).json()
+    assert estop_on["ok"] is True and estop_on["active_estop"] is True
+    assert len(estop_on["paused_tasks"]) >= 1
+    assert estop_on["pinky_estop"]["v_cmd_mps"] == 0.0
+
+    blocked_claim = client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_s"}).json()
+    assert blocked_claim["claimed"] is False and blocked_claim["blocked_by_human"] is True
+
+    estop_off = client.post(
+        "/api/fleet/pipeline/human-safety-gate/clear",
+        json={"cell_id": "cell_s", "robot_id": "rosy_46", "note": "셀 안에 아무도 없음 확인"},
+        headers={"X-Op": "alice"},
+    ).json()
+    assert estop_off["ok"] is True and estop_off["active_estop"] is False
+    assert estop_off["resumed_tasks"] == []
+    assert set(estop_off["still_paused_tasks"]) == set(estop_on["paused_tasks"])
 
     # YAML station zones (staging_bays + export_stations) & immediate dispatch
     zones = client.get("/api/fleet/pipeline/station-zones").json()
@@ -918,3 +963,292 @@ staging_bays:
     invalid = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": "- not-a-mapping"})
     assert invalid.status_code == 422 and invalid.json()["detail"]["code"] == "INVALID_STATION_ZONES_YAML"
     assert [z["id"] for z in client.get("/api/fleet/pipeline/station-zones").json()["staging_bays"]] == ["STG_TEST"]
+
+
+def _wire_test_operators(app):
+    """Attach header-driven operator and named-operator guards for FastAPI pipeline tests."""
+    from fastapi import Header
+    from rosy_account.principal import SitePrincipal
+
+    def operator_dep(x_op: str = Header(default="operator-default")):
+        return SitePrincipal(principal_id=x_op, role="operator")
+
+    def named_operator(x_op: str = Header(default="")):
+        if not x_op:
+            raise HTTPException(403, detail={"code": "OPERATOR_IDENTITY_REQUIRED"})
+        return SitePrincipal(principal_id=x_op, role="operator")
+
+    app.state.operator_guard = [Depends(operator_dep)]
+    app.state.named_operator_dep = named_operator
+
+
+def _gate_client(named=True, audit_path=None):
+    site_map = _map()
+    graph = build_graph(site_map)
+    maps = SimpleNamespace(active=lambda: (1, site_map, graph, None),
+                           rules=SimpleNamespace(active_rules=lambda: None))
+    app = FastAPI()
+    app.state.site_maps = maps
+    if named:  # stands in for require_named_operator: the X-Op header names the operator
+        _wire_test_operators(app)
+    install_pipeline_routes(app, site_maps=maps, audit_path=audit_path)  # None: no durable file; a path: persisted
+    return app, TestClient(app)
+
+
+def _paused_cell_s_task(client):
+    task = client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle", "task_id": "t1"},
+                       headers={"X-Op": "alice"}).json()["task"]
+    held = client.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s"}).json()
+    assert held["paused_tasks"] == [task["task_id"]] and held["active_estop"] is True
+    return task["task_id"]
+
+
+def test_clearing_human_hold_keeps_tasks_paused_and_claim_empty():
+    app, client = _gate_client()
+    tid = _paused_cell_s_task(client)
+    # The old route no longer clears (including toggle); the clear route needs a named operator.
+    assert client.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s", "human_detected": False}).status_code == 409
+    assert client.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s", "toggle": True}).status_code == 409
+    assert client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s"}).status_code == 403
+    assert client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s"},
+                       headers={"X-Op": "alice"}).status_code == 422  # a note is required
+    cleared = client.post("/api/fleet/pipeline/human-safety-gate/clear",
+                          json={"cell_id": "cell_s", "note": "확인함", "operator_name": "Typed Name"},
+                          headers={"X-Op": "alice"}).json()
+    assert cleared["active_estop"] is False and cleared["resumed_tasks"] == []
+    assert app.state.omx_cell_tasks[tid]["status"] == "PAUSED_HUMAN"
+    assert client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_s"}).json() == {"claimed": False, "task": None}
+    assert app.state.omx_cell_states["cell_s"]["phase"] != "CLAIMED"
+    audit = app.state.pipeline_safety_audit[-1]
+    assert audit["principal"] == "alice" and audit["note"] == "확인함" and audit["operator_name"] == "Typed Name"
+
+
+def test_named_operator_resume_requeues_one_task_and_is_refused_while_held():
+    app, client = _gate_client()
+    tid = _paused_cell_s_task(client)
+    hdr = {"X-Op": "alice"}
+    assert client.post(f"/api/fleet/pipeline/cell-tasks/{tid}/resume").status_code == 403
+    refused = client.post(f"/api/fleet/pipeline/cell-tasks/{tid}/resume", headers=hdr)
+    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "HUMAN_HOLD_ACTIVE"
+    client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s", "note": "ok"}, headers=hdr)
+    client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle", "task_id": "t2"}, headers=hdr)
+    app.state.omx_cell_tasks["t2"]["status"] = "PAUSED_HUMAN"
+    assert client.post(f"/api/fleet/pipeline/cell-tasks/{tid}/resume", headers=hdr).status_code == 422  # note
+    ok = client.post(f"/api/fleet/pipeline/cell-tasks/{tid}/resume", json={"note": "작업 대기열로 복귀"}, headers=hdr).json()
+    assert ok["task"]["status"] == "QUEUED" and ok["task"]["resumed_by"] == "alice"
+    assert app.state.omx_cell_tasks["t2"]["status"] == "PAUSED_HUMAN"  # one task only
+    assert client.post(f"/api/fleet/pipeline/cell-tasks/{tid}/resume", json={"note": "again"}, headers=hdr).status_code == 409
+    assert client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_s"}).json()["task"]["task_id"] == tid
+
+
+def test_vision_auto_check_can_only_raise_the_hold():
+    app, client = _gate_client()
+    tid = _paused_cell_s_task(client)
+    for body in ({"human_detected": False}, {"intrusion_score": 0.01}, {"human_detected": False, "intrusion_score": 0.0}):
+        res = client.post("/api/fleet/pipeline/vision-auto-check", json={"cell_id": "cell_s", **body})
+        assert res.status_code == 409 and res.json()["detail"]["code"] == "VISION_CLEAR_EVIDENCE_UNAVAILABLE"
+    assert app.state.human_detected["cell_s"] is True
+    assert app.state.omx_cell_tasks[tid]["status"] == "PAUSED_HUMAN"
+    # A facts body to decision-gate cannot clear it either.
+    client.post("/api/fleet/pipeline/decision-gate", json={"subject_id": "cell_s", "human_detected": False})
+    assert app.state.human_detected["cell_s"] is True
+    app.state.human_detected["cell_s"] = False
+    raised = client.post("/api/fleet/pipeline/vision-auto-check", json={"cell_id": "cell_s", "human_detected": True}).json()
+    assert raised["active_estop"] is True
+
+
+def test_decision_gate_does_not_execute_without_named_operator_approval():
+    app, client = _gate_client()
+    body = {"subject_id": "cell_s", "domain": "arm_target", "displaced_to": "floor_front"}
+    proposed = client.post("/api/fleet/pipeline/decision-gate", json=body, headers={"X-Op": "bob"}).json()
+    did = proposed["decision"]["decision_id"]
+    assert proposed["decision"]["auto_preset"] and proposed["spawned_cell_task"] is None
+    assert not app.state.omx_cell_tasks
+    assert client.post("/api/fleet/pipeline/decision-gate", json={**body, "auto_execute": True}).status_code == 409
+    assert client.post("/api/fleet/pipeline/decision-gate/execute", json={"decision_id": did}).status_code == 403
+    assert client.post("/api/fleet/pipeline/decision-gate/execute", json={"decision_id": "missing"}, headers={"X-Op": "alice"}).status_code == 404
+    same = client.post("/api/fleet/pipeline/decision-gate/execute",
+                       json={"decision_id": did, "proposed_by": "alice"}, headers={"X-Op": "bob"})
+    assert same.status_code == 403 and same.json()["detail"]["code"] == "PROPOSER_IS_APPROVER"
+    assert not app.state.omx_cell_tasks
+    done = client.post("/api/fleet/pipeline/decision-gate/execute",
+                       json={"decision_id": did, "proposed_by": "alice"}, headers={"X-Op": "alice"}).json()
+    assert done["spawned_cell_task"]["approved_by"] == "alice"
+
+
+def test_human_hold_blocks_cell_and_pinky_task_mutations_and_missing_guard_fails_closed():
+    _, bare = _gate_client(named=False)
+    for path, payload in (("/api/fleet/pipeline/human-safety-gate/clear", {"cell_id": "cell_s"}),
+                          ("/api/fleet/pipeline/cell-tasks/t1/resume", {}),
+                          ("/api/fleet/pipeline/decision-gate/execute", {"decision_id": "d1"})):
+        res = bare.post(path, json=payload)
+        assert res.status_code == 403 and res.json()["detail"]["code"] == "OPERATOR_GUARD_MISSING"
+
+    app, client = _gate_client()
+    tid = _paused_cell_s_task(client)
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle"},
+                       headers={"X-Op": "alice"}).status_code == 409
+    for action in ("dock_s3", "micro_forward_2cm", "depart_s1"):
+        res = client.post("/api/fleet/pipeline/pinky-tasks", json={"robot_id": "rosy_46", "action": action},
+                          headers={"X-Op": "alice"})
+        assert res.status_code == 409 and res.json()["detail"]["code"] == "HUMAN_HOLD_ACTIVE"
+        assert app.state.omx_cell_states["cell_s"]["phase"] == "HUMAN_HOLD"
+    assert client.post("/api/fleet/pipeline/pinky-tasks", json={"robot_id": "rosy_46", "action": "stop_now"},
+                       headers={"X-Op": "alice"}).status_code == 200
+    assert client.post(f"/api/fleet/pipeline/cell-tasks/{tid}/cancel").status_code == 200
+    assert app.state.omx_cell_states["cell_s"]["phase"] == "HUMAN_HOLD"
+
+
+def test_service_principal_cannot_clear_resume_or_execute_but_can_raise_a_hold():
+    from fastapi import Depends, Header
+    from fleet.server.auth.site_auth import build_role_guards
+    from rosy_account.principal import SitePrincipal
+
+    def authorize(x_role: str = Header(default="service")):
+        return SitePrincipal(principal_id=f"{x_role}-1", role=x_role)
+    principals = {"op": SitePrincipal(principal_id="op", role="operator")}
+    _, require_operator, require_named, require_proposer = build_role_guards(authorize, principals)
+    site_map = _map()
+    maps = SimpleNamespace(active=lambda: (1, site_map, build_graph(site_map), None),
+                           rules=SimpleNamespace(active_rules=lambda: None))
+    app = FastAPI()
+    app.state.site_maps = maps
+    app.state.operator_guard = [Depends(require_operator)]
+    app.state.named_operator_dep = require_named
+    app.state.proposer_guard = [Depends(require_proposer)]
+    install_pipeline_routes(app, site_maps=maps)
+    client = TestClient(app)
+    op = {"X-Role": "operator"}
+    # A service principal cannot create tasks; an operator can.
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle", "task_id": "t1"}).status_code == 403
+    assert client.post("/api/fleet/pipeline/pinky-tasks", json={"action": "dock_s3"}).status_code == 403
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle", "task_id": "t1"}, headers=op).status_code == 200
+    # A service principal may raise a hold (raise-only guard), never clear, resume or execute.
+    assert client.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s"}).status_code == 200
+    assert client.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s", "human_detected": False}).status_code == 409
+    assert client.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s"}, headers={"X-Role": "viewer"}).status_code == 403
+    for path, body in (("/api/fleet/pipeline/human-safety-gate/clear", {"cell_id": "cell_s", "note": "x"}),
+                       ("/api/fleet/pipeline/cell-tasks/t1/resume", {"note": "x"}),
+                       ("/api/fleet/pipeline/decision-gate/execute", {"subject_id": "cell_s"})):
+        assert client.post(path, json=body).status_code == 403
+    assert app.state.human_detected["cell_s"] is True
+    assert app.state.omx_cell_tasks["t1"]["status"] == "PAUSED_HUMAN"
+    assert app.state.omx_cell_tasks["t1"]["paused_by"] == "service-1"
+    assert client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s", "note": "ok"}, headers=op).status_code == 200
+
+
+def _resumable(client, app, status_before="QUEUED"):
+    tid = _paused_cell_s_task(client)
+    app.state.omx_cell_tasks[tid]["paused_from_status"] = status_before
+    client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s", "note": "clear"},
+                headers={"X-Op": "alice"})
+    return tid, {"X-Op": "alice"}
+
+
+def _resume(client, tid, hdr, **body):
+    return client.post(f"/api/fleet/pipeline/cell-tasks/{tid}/resume", json={"note": "ok", **body}, headers=hdr)
+
+
+def test_resume_refused_for_arm_hold_aborted_cell_and_running_without_restart_confirm():
+    app, client = _gate_client()
+    tid, hdr = _resumable(client, app)
+    app.state.arm_holds["arm_s"]["held"] = True
+    held = _resume(client, tid, hdr)
+    assert held.status_code == 409 and held.json()["detail"]["code"] == "ARM_HOLD_ACTIVE"
+    app.state.arm_holds["arm_s"]["held"] = False
+    app.state.omx_cell_states["cell_s"]["prev_phase"] = "ABORTED"
+    aborted = _resume(client, tid, hdr)
+    assert aborted.status_code == 409 and aborted.json()["detail"]["code"] == "CELL_ABORTED_HOLD"
+    app.state.omx_cell_states["cell_s"]["prev_phase"] = "IDLE"
+    app.state.omx_cell_states["cell_s"]["phase"] = "HUMAN_HOLD"
+    assert _resume(client, tid, hdr).json()["detail"]["code"] == "HUMAN_HOLD_ACTIVE"
+    app.state.omx_cell_states["cell_s"]["phase"] = "RELEASED"
+    assert app.state.omx_cell_tasks[tid]["status"] == "PAUSED_HUMAN"
+    assert _resume(client, tid, hdr).status_code == 200
+
+    app2, client2 = _gate_client()
+    tid2, hdr2 = _resumable(client2, app2, status_before="RUNNING")
+    for body in ({}, {"restart_from_start": False}, {"restart_from_start": "true"}):
+        res = _resume(client2, tid2, hdr2, **body)
+        assert res.status_code == 409 and res.json()["detail"]["code"] == "RESUME_NEEDS_RESTART_CONFIRM"
+    assert app2.state.omx_cell_tasks[tid2]["status"] == "PAUSED_HUMAN"
+    ok = _resume(client2, tid2, hdr2, restart_from_start=True)
+    assert ok.status_code == 200 and ok.json()["task"]["status"] == "QUEUED"
+    assert app2.state.pipeline_safety_audit[-1]["restart_from_start"] is True
+
+
+def test_clear_and_resume_need_a_bounded_note():
+    app, client = _gate_client()
+    tid = _paused_cell_s_task(client)
+    hdr = {"X-Op": "alice"}
+    for note in (None, "", "   ", "x" * 201, 5):
+        res = client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s", "note": note}, headers=hdr)
+        assert res.status_code == 422 and res.json()["detail"]["code"] == "NOTE_REQUIRED"
+    assert app.state.human_detected["cell_s"] is True  # a refused clear changes nothing
+    client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s", "note": "ok"}, headers=hdr)
+    assert client.post(f"/api/fleet/pipeline/cell-tasks/{tid}/resume", json={"note": " "}, headers=hdr).status_code == 422
+    assert app.state.omx_cell_tasks[tid]["status"] == "PAUSED_HUMAN"
+
+
+def test_safety_audit_rows_are_appended_beyond_the_ledger_window(tmp_path, monkeypatch):
+    import json as _json
+    app, client = _gate_client(audit_path=tmp_path / "rosy-pipeline-safety-audit.jsonl")
+    client.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s"})
+    for i in range(3):
+        assert client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s", "note": f"n{i}"},
+                           headers={"X-Op": "alice"}).status_code == 200
+    rows = [_json.loads(line) for line in (tmp_path / "rosy-pipeline-safety-audit.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["note"] for r in rows] == ["n0", "n1", "n2"] and rows[0]["principal"] == "alice"
+    (tmp_path / "rosy-pipeline-safety-audit.jsonl").unlink()
+    (tmp_path / "rosy-pipeline-safety-audit.jsonl").mkdir()  # unwritable audit: the clear is refused, state kept
+    client.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s"})
+    res = client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s", "note": "x"}, headers={"X-Op": "alice"})
+    assert res.status_code == 503 and res.json()["detail"]["code"] == "SAFETY_AUDIT_UNAVAILABLE"
+    assert app.state.human_detected["cell_s"] is True
+
+
+def test_audit_path_none_keeps_memory_rows_without_a_file_and_default_wiring_sets_a_path(tmp_path, monkeypatch):
+    app, client = _gate_client(audit_path=None)
+    client.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s"})
+    assert client.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s", "note": "ok"},
+                       headers={"X-Op": "alice"}).status_code == 200
+    assert [r["note"] for r in app.state.pipeline_safety_audit] == ["ok"] and not list(tmp_path.iterdir())
+    # Production callers omit audit_path: the durable file is then the default, in the storage dir.
+    # fleet.server.pipeline_routes is a second module object for the same file, so patch and call the sitemap one.
+    from fleet.server.sitemap import pipeline_routes as routes
+    monkeypatch.setattr(routes, "_storage_dir", lambda: tmp_path)
+    maps = SimpleNamespace(active=lambda: (1, _map(), build_graph(_map()), None),
+                           rules=SimpleNamespace(active_rules=lambda: None))
+    prod = FastAPI()
+    _wire_test_operators(prod)
+    routes.install_pipeline_routes(prod, site_maps=maps)
+    pc = TestClient(prod)
+    pc.post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s"})
+    assert pc.post("/api/fleet/pipeline/human-safety-gate/clear", json={"cell_id": "cell_s", "note": "ok"},
+                   headers={"X-Op": "alice"}).status_code == 200
+    assert (tmp_path / "rosy-pipeline-safety-audit.jsonl").is_file()
+
+
+def test_task_creation_needs_a_named_operator_and_proposals_are_listed_without_payload():
+    app, client = _gate_client()
+    shared = {"preset": "s3_shuttle", "task_id": "n1"}
+    assert client.post("/api/fleet/pipeline/cell-tasks", json=shared).status_code == 403
+    assert client.post("/api/fleet/pipeline/pinky-tasks", json={"action": "dock_s3"}).status_code == 403
+    assert not app.state.omx_cell_tasks and not app.state.pinky_tasks
+    assert client.post("/api/fleet/pipeline/cell-tasks", json=shared, headers={"X-Op": "alice"}).status_code == 200
+    assert client.post("/api/fleet/pipeline/pinky-tasks", json={"action": "dock_s3"}, headers={"X-Op": "alice"}).status_code == 200
+    proposed = client.post("/api/fleet/pipeline/decision-gate", headers={"X-Op": "bob"},
+                           json={"subject_id": "cell_s", "domain": "arm_target", "displaced_to": "floor_front"}).json()
+    listed = client.get("/api/fleet/pipeline/cell-tasks").json()["decision_proposals"]
+    assert [(p["decision_id"], p["proposed_by"], p["cell"]) for p in listed] == [
+        (proposed["decision"]["decision_id"], "bob", "cell_s")]
+    assert "payload" not in listed[0] and listed[0]["expires_at"] > listed[0]["created_at"]
+    app.state.decision_proposals[listed[0]["decision_id"]]["created_at"] -= 601
+    assert client.get("/api/fleet/pipeline/cell-tasks").json()["decision_proposals"] == []
+
+
+def test_paused_tasks_record_who_and_why():
+    app, client = _gate_client()
+    tid = _paused_cell_s_task(client)
+    task = app.state.omx_cell_tasks[tid]
+    assert task["paused_by"] == "operator-default" and task["paused_reason"] == "HUMAN_DETECTED_ESTOP" and task["paused_at"]

@@ -60,7 +60,7 @@ def test_automatic_read_recovery_clears_only_the_read_error(task_page, status):
     page, state, url, errors = task_page
     state['status'] = status
     page.goto(url)
-    expect(page.locator('#tasks-error')).to_be_visible()
+    expect(page.locator('#page-alerts')).to_be_visible()
     capture(page, f'read-error-{status}')
     state['status'] = 200
     expect(page.locator('#tasks-status')).to_contain_text('최신 기록 확인됨', timeout=9000)
@@ -81,10 +81,10 @@ def test_failed_save_message_survives_successful_background_reads(task_page):
     page.locator('#robot-save').click()
     expect(page.locator('#tasks-error')).to_contain_text('fixture save rejected')
     state['status'] = 503
-    expect(page.locator('#tasks-error')).to_contain_text('fixture read failed', timeout=9000)
+    expect(page.locator('#tasks-status')).to_contain_text('불러오지 못함', timeout=9000)  # a failed read is quiet in its panel
     state['status'] = 200
     expect(page.locator('#tasks-status')).to_contain_text('최신 기록 확인됨', timeout=9000)
-    expect(page.locator('#tasks-error')).to_contain_text('fixture save rejected')
+    expect(page.locator('#page-alerts')).to_contain_text('fixture save rejected')  # the save failure outlives the reads
     assert not errors
 
 
@@ -131,3 +131,26 @@ def test_review_shell_is_in_the_first_response_without_javascript(task_page, wid
         if route in ['/accounts', '/learning/tasks', '/catalog', '/learning/evaluate']:
             capture(page, f'shell-{width}-' + route.rsplit('/', 1)[-1])
         page.close()
+
+
+def test_continuous_run_stop_goes_out_while_another_action_is_busy(task_page):
+    """A stop is a job cancel: it must not wait for, or be dropped by, the busy scope of a pending save."""
+    page, state, url, errors = task_page
+    stops = []
+    def stop(route):
+        stops.append(route.request.post_data); route.fulfill(status=200, json={})
+    page.route('**/api/learning/omx/center/experience', lambda route: None)  # the busy action never answers
+    page.route('**/api/learning/omx/center/stop', stop)
+    page.goto(url)
+    page.select_option('#task-select', 'task-1')
+    panel = page.locator('[data-continuous-run="run-1"]')
+    panel.locator('select').select_option('extra')
+    panel.locator('[data-experience-submit]').click()
+    expect(page.locator('#tasks-main')).to_have_attribute('aria-busy', 'true')
+    expect(panel.locator('[data-run-stop]')).to_be_enabled()
+    panel.locator('[data-run-stop]').click()
+    for _ in range(50):
+        if stops: break
+        page.wait_for_timeout(100)
+    assert len(stops) == 1 and 'run-1' in stops[0], stops
+    assert not errors

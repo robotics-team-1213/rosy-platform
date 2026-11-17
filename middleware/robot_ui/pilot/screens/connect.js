@@ -29,12 +29,12 @@ function removeRecentEntry(host) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
 }
 
-import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp, postJson} from "../client.js";
+import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp, postJson, pilotNotice} from "../client.js";
 import {account, authenticated, restoreAccount, accountLogout} from '../client.js';
 import {driverFor} from "../drivers/registry.js";
 import {mountShowCode} from "./show-code.js";
 import {createVisionPreview, createWhepView} from "../vision.js";
-import {mountDriveView, actionIcon} from "./drive-view.js";
+import {mountDriveView, buildFitFill, actionIcon} from "./drive-view.js";
 import {HeadlessState, EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 import {confirmIrreversible} from "/common/ui.js";
 
@@ -52,10 +52,10 @@ function setTag(word) {
   if (tag) tag.textContent = word;
 }
 
-function notice(text) {
-  const node = document.querySelector("#pilot-notice");
-  if (node) { node.removeAttribute("data-stop-state"); node.textContent = text; }
-}
+// 일반 안내 한 줄. 켜진 안전·경고 알림이 있으면 이 글은 그것을 덮지 못한다(client.js createNotice).
+function notice(text) { pilotNotice().say(text); }
+// 지속 알림은 앱당 목록 하나로: 같은 key는 한 항목, 해소되면 닫는다.
+function alertHold(message) { pilotNotice().alert("estop-release", "crit", message, "비상 정지"); }
 
 function appendAccountLogout(actions) {
   if (!account?.authenticated) return;
@@ -107,7 +107,7 @@ async function refreshLobby(host) {
       seen.add(fqdn);
       const go = el("ui-button", hostname, {type: "button", "data-lobby-room": room.hostname,
         "data-lobby-url": target.href});
-      go.setAttribute("kind", "segment");
+      go.setAttribute("kind", "quiet");   // moves to another robot: a command, not a choice chip (K20)
       go.addEventListener("click", () => location.assign(target.href));
       list.append(go);
     }
@@ -161,8 +161,8 @@ function renderRecentList(root, onConnect) {
       if (token()) onConnect();
       else renderTokenForm(root, onConnect, `${entry.label || entry.host} — 로그인 코드를 입력하세요.`);
     });
-    const remove = el("ui-button", null, {type: "button", "data-recent-remove": entry.host, "data-icon-only": "",
-                                          "aria-label": "최근 접속에서 지우기"});
+    const remove = el("ui-button", "지우기", {type: "button", "data-recent-remove": entry.host,
+                                            "aria-label": "최근 접속에서 지우기"});
     remove.setAttribute("kind", "quiet");
     actionIcon(remove, "close");
     remove.addEventListener("click", (e) => {
@@ -212,7 +212,7 @@ async function showConnection(host, root, onConnect) {
   if (offer.mode !== "development") return;
   const button = el("ui-button", "개발 연결로 계속", {type: "button", "data-dev-connect": ""});
   button.setAttribute("kind", "primary");
-  const status = el("ui-status", "", {role: "status", "data-dev-status": ""});
+  const status = el("ui-status", "", {role: "none", "aria-live": "off", "data-dev-status": ""});
   button.addEventListener("click", async () => {
     button.disabled = true;
     status.textContent = "개발 연결 확인 중…";
@@ -296,7 +296,7 @@ function renderTokenForm(root, onConnect, message) {
   form.addEventListener("submit", (e) => { e.preventDefault(); connect(); });
 
   root.append(divider, form);
-  if (message) root.append(el("ui-status", message, {role: "status"}));
+  if (message) root.append(el("ui-status", message, {role: "none", "aria-live": "off"}));
   const recent = renderRecentList(root, onConnect);
   if (recent) root.append(recent);
   const lobby = el("div", null, {"data-lobby-list": ""});
@@ -310,7 +310,7 @@ function renderAppSession(root) {
   root.replaceChildren(
     el("ui-head", "접속", {id: "pilot-gate-heading"}),
     el("ui-status", "이 화면의 연결은 Rosy Pilot 앱이 엽니다. 위쪽 로봇 목록에서 로봇을 다시 선택하세요.",
-      {role: "status", "data-app-session": ""}),
+      {role: "none", "aria-live": "off", "data-app-session": ""}),
   );
 }
 
@@ -319,7 +319,7 @@ function renderOffline(root, onConnect) {
   notice("CORE 에 연결할 수 없습니다");
   root.replaceChildren(
     el("ui-head", "접속", {id: "pilot-gate-heading"}),
-    el("ui-status", "네트워크와 로봇 전원을 확인하세요.", {role: "status"}),
+    el("ui-status", "네트워크와 로봇 전원을 확인하세요.", {role: "none", "aria-live": "off"}),
   );
   const retry = el("ui-button", "다시 시도", {type: "button"});
   retry.setAttribute("kind", "quiet");
@@ -346,13 +346,14 @@ function emergencyRelease(role, safety, onReleased) {
   release.addEventListener("click", async () => {
     if (release.disabled) return;
     release.disabled = true;
+    pilotNotice().clear("estop-release");  // 이번 시도의 결과만 남긴다
     const credential = token(), identity = account;
     const current = () => release.isConnected && token() === credential && account === identity;
     try {
       const before = await api("/api/v1/safety/state", {timeoutMs: 5000});
       if (!current()) return;
       const context = before.ok && releaseContext(before.body);
-      if (!context) { notice("비상 정지 해제 보류 · 현재 정지 사유와 배터리 상태를 확인할 수 없습니다."); return; }
+      if (!context) { alertHold("비상 정지 해제 보류 · 현재 정지 사유와 배터리 상태를 확인할 수 없습니다."); return; }
       if (!await confirmIrreversible({message: `${context.detail}주변 안전을 확인했고 비상 정지를 해제할까요? 해제 후에도 주행은 별도로 시작해야 합니다.`,
         action: "비상 정지 해제", opener: release}) || !current()) return;
       const [latest, me] = await Promise.all([
@@ -361,12 +362,12 @@ function emergencyRelease(role, safety, onReleased) {
       if (!current()) return;
       if (!latest.ok || !me.ok || me.body?.role !== "administrator"
         || releaseContext(latest.body)?.key !== context.key) {
-        notice("비상 정지 해제 보류 · 관리자 권한과 최신 안전 상태를 다시 확인하세요."); return;
+        alertHold("비상 정지 해제 보류 · 관리자 권한과 최신 안전 상태를 다시 확인하세요."); return;
       }
       const result = await postJson("/api/v1/safety/release", {}, {timeoutMs: 5000});
       if (!current()) return;
       if (!result.ok || result.body?.estop !== false) {
-        notice("비상 정지 해제 요청이 거절되었거나 결과를 확인하지 못했습니다. 로봇 상태와 관리자 권한을 확인하세요."); return;
+        alertHold("비상 정지 해제 요청이 거절되었거나 결과를 확인하지 못했습니다. 로봇 상태와 관리자 권한을 확인하세요."); return;
       }
       const [after, owner] = await Promise.all([
         api("/api/v1/robot/state", {timeoutMs: 5000}), api("/api/v1/safety/state", {timeoutMs: 5000}),
@@ -374,11 +375,11 @@ function emergencyRelease(role, safety, onReleased) {
       if (!current()) return;
       if (!after.ok || !owner.ok || owner.body?.estop !== false || after.body?.safety?.estop !== false
         || after.body?.mode !== "IDLE") {
-        notice("비상 정지 해제 결과 확인 불가 · 로봇 상태를 다시 확인하세요."); return;
+        alertHold("비상 정지 해제 결과 확인 불가 · 로봇 상태를 다시 확인하세요."); return;
       }
       await onReleased();
     } catch {
-      if (current()) notice("비상 정지 해제 결과 확인 불가 · 로봇 상태와 연결을 확인하세요.");
+      if (current()) alertHold("비상 정지 해제 결과 확인 불가 · 로봇 상태와 연결을 확인하세요.");
     } finally {
       if (current()) release.disabled = false;
     }
@@ -391,6 +392,7 @@ async function check(root, onReady, onEnter) {
   root.__enrollDispose?.();
   const gate = driverFor(DRIVER_KIND);
   setTag("확인 중");
+  for (const key of ["estop-release", "estop-active"]) pilotNotice().clear(key);
   notice("");
   root.replaceChildren(
     el("ui-head", "접속", {id: "pilot-gate-heading"}),
@@ -416,8 +418,10 @@ async function check(root, onReady, onEnter) {
   }
 
   const caps = await fetchCapabilities();
-  const verdict = gate.assessGate({role: account?.authenticated && !account.capabilities.includes('robot.operate') ? 'viewer' : me.body?.role, capabilities: caps.body ?? {}});
+  const role = account?.authenticated && !account.capabilities.includes("robot.operate") ? "viewer" : me.body?.role;
+  const verdict = gate.assessGate({role, capabilities: caps.body ?? {}});
   if (!verdict.allowed) {
+    onReady?.({role});  // 차단돼도 세션 권한은 확인됐다(운용 지도 잠금 판정용)
     setTag("차단");
     notice("진입이 차단되었습니다");
     const pairs = [
@@ -425,7 +429,7 @@ async function check(root, onReady, onEnter) {
       ...(root.__pilotRobotId ? [["로봇", root.__pilotRobotId]] : []),
       ["사용 권한", ROLE_LABEL[me.body?.role] ?? "확인 필요"],
     ];
-    const statuses = verdict.reasons.map((r) => el("ui-status", gate.describeReason(r), {role: "status"}));
+    const statuses = verdict.reasons.map((r) => el("ui-status", gate.describeReason(r), {role: "none", "aria-live": "off"}));
     const actions = el("ui-actions");
     const retry = el("ui-button", "다시 시도", {type: "button"});
     retry.setAttribute("kind", "quiet");
@@ -433,7 +437,7 @@ async function check(root, onReady, onEnter) {
     actions.append(retry);
     if (!inPilotApp() && !account?.authenticated) {
       const reset = el("ui-button", "토큰 초기화", {type: "button"});
-      reset.setAttribute("kind", "segment");
+      reset.setAttribute("kind", "quiet");
       reset.addEventListener("click", () => {
         clearToken();
         renderTokenForm(root, () => check(root, onReady, onEnter));
@@ -463,7 +467,8 @@ async function check(root, onReady, onEnter) {
     enter.disabled = true;
     enter.reason = "비상 정지 중에는 주행을 시작할 수 없습니다";
     setTag("비상 정지 중");
-    notice("로봇에 연결됐습니다 · 비상 정지 중");
+    notice("");  // 위의 "조종 준비 완료"를 거둔다: 비상 정지 중에는 준비 안내가 없다
+    pilotNotice().alert("estop-active", "crit", "로봇에 연결됐습니다 · 비상 정지 중", "비상 정지");
   }
   const camera = el("ui-button", "카메라 보기", {type: "button", kind: "primary", "data-camera-preview": ""});
   camera.setAttribute("kind", "primary");
@@ -485,15 +490,9 @@ async function check(root, onReady, onEnter) {
     actions,
   );
   // 연동 코드는 브라우저 접속의 두 번째 연결이다. 앱은 자기 세션만 쓴다.
-  if (!inPilotApp() && !account?.authenticated) {
-    mountShowCode(root, () => {
-      clearToken();
-      renderTokenForm(root, () => check(root, onReady, onEnter),
-        "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
-    });
-  }
+  if (!inPilotApp() && !account?.authenticated) mountShowCode(root);
   appendAccountLogout(actions);
-  onReady?.({role: me.body?.role});
+  onReady?.({role});
 }
 
 function showCamera(root, onBack) {
@@ -512,21 +511,12 @@ function showCamera(root, onBack) {
   const elements = {frame, hud, view, zoomFact};
   const layout = mountDriveView(arena, elements);
   const actions = el("ui-actions");
-  const fitButton = el("ui-button", "전체 영상", {kind: "segment", type: "button", "data-drive-fit": ""});
-  fitButton.setAttribute("kind", "segment");
-  actionIcon(fitButton, "fit");
-  elements.fitButton = fitButton;
-  const fillButton = el("ui-button", "화면 채우기", {kind: "segment", type: "button", "data-drive-fill": ""});
-  fillButton.setAttribute("kind", "segment");
-  actionIcon(fillButton, "expand");
-  elements.fillButton = fillButton;
-  elements.fitButton.addEventListener("click", () => layout.setZoom(1));
-  elements.fillButton.addEventListener("click", () => layout.setZoom("full"));
+  const [fitButton, fillButton] = buildFitFill(layout);
   const back = el("ui-button", "접속 화면으로", {kind: "quiet", type: "button", "data-camera-back": ""});
   back.setAttribute("kind", "quiet");
   actionIcon(back, "back");
   back.addEventListener("click", onBack);
-  actions.append(elements.fitButton, elements.fillButton, back);
+  actions.append(fitButton, fillButton, back);
   hud.append(description, zoomFact, actions);
   layout.setZoom(1);
   const preview = createVisionPreview({
@@ -538,7 +528,7 @@ function showCamera(root, onBack) {
     },
     onFrame: (url, meta) => {
       frame.src = url; frame.hidden = false; empty.hidden = true;
-      description.textContent = `카메라 · ${meta.width ?? "—"}×${meta.height ?? "—"} · 조종하지 않는 보기`;
+      description.textContent = `카메라 · ${meta.width && meta.height ? `${meta.width}×${meta.height}` : EVIDENCE_LABEL.unavailable} · 조종하지 않는 보기`;
     },
     onUnavailable: (message) => { frame.hidden = true; empty.hidden = false; empty.textContent = message; },
   });

@@ -38,9 +38,9 @@ def test_robot_information_precedes_actions_and_failed_refresh_is_visible(site, 
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts, size=(width, 1000))
         try:
-            page.locator('#roster [data-select-robot-id="rosy_01"]').click()
+            page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_01"]').click()
             page.clock.run_for(1500)
-            card = page.locator('#robot-workspace article')
+            card = page.locator('#robot-panel-mount')
             info = card.locator('[data-robot-profile]')
             expect(info).to_contain_text('2·3번 관절 하중 주의')
             expect(info).to_contain_text('최근 하중 분석 없음')
@@ -54,7 +54,7 @@ def test_robot_information_precedes_actions_and_failed_refresh_is_visible(site, 
             expect(info.locator('a')).to_have_attribute('href', '/console/install?profile=arm-one#device-profiles')
             expect(page.locator('#estop')).to_be_visible()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-            assert card.locator(':scope > .robot-actions > ui-button').evaluate_all(
+            assert card.locator('.robot-actions > ui-button').evaluate_all(
                 'buttons => buttons.length > 0 && buttons.every(button => button.getBoundingClientRect().width >= 110)')
             shot(page, f'robot-profile-{width}.png')
             del api['/api/fleet/device-profile-sources/robot/rosy_01']

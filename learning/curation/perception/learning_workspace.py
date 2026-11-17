@@ -125,7 +125,6 @@ class Workspace:
     def __init__(self, db):
         self.db = Path(db)
         with closing(self._connect()) as conn, conn:
-            conn.execute('PRAGMA journal_mode=WAL')
             conn.execute('''CREATE TABLE IF NOT EXISTS learning_links
                 (id TEXT PRIMARY KEY, kind TEXT, name TEXT, path TEXT, hashes TEXT,
                  version INTEGER, UNIQUE(kind,path))''')

@@ -16,10 +16,11 @@ SESSION = ("login:", "account:", "logout:")
 
 
 def test_action_icon_names_cover_fleet_chrome_and_keep_screen_reader_text():
-    body = UI.read_text(encoding="utf-8").split("export function actionIcon", 1)[1]
+    source = UI.read_text(encoding="utf-8")
+    body = source.split("function icons() {", 1)[1]
     for name in (*CHROME, *SESSION):
         assert name in body, name
-    assert "sr-only" in body
+    assert "sr-only" in source
     # One name, one glyph: tools (wrench) and settings (sliders) once differed only by coordinates.
     glyphs = re.findall(r'^\s+"?([\w-]+)"?: "([^"]+)",$', body.split("};", 1)[0], re.M)
     paths = [d for _, d in glyphs]

@@ -6,7 +6,7 @@
 
 import {createVisionPreview} from "../vision.js";
 import {createCameraCapture, saveCameraFile} from "/common/evidence.js";
-import {api, apiBlob} from "../client.js";
+import {api, apiBlob, announce} from "../client.js";
 import {el, actionIcon} from "./drive-view.js";
 import {RECORDING_POLL_MS, continueRecording, errorText, recordingView, sheetNotice, sheetRows} from "../recording.js";
 
@@ -363,6 +363,7 @@ export function mountBrowserRecording({element, apiGet, authHeaders}) {
       element.visibility.hidden = !(quality?.valid === false && ["low_light", "overexposed"].includes(quality?.reason));
       element.visibility.textContent = quality?.reason === "overexposed"
         ? "과노출 · 차선 정보 확인 불가" : "조도가 낮아 차선·물체를 판정할 수 없습니다";
+      if (!element.visibility.hidden) announce(element.visibility.textContent);
     },
     fetchFrame: async (path) => {
       const response = await fetch(path, {headers: authHeaders(), cache: "no-store"});

@@ -41,18 +41,18 @@ def test_real_uploaded_study_completes_the_learning_pipeline():
                 expect(page.locator('#upload-start')).to_be_enabled(timeout=180000)
                 page.locator('#upload-start').click()
                 expect(page.locator('#upload-status')).to_contain_text('bytes',timeout=180000)
-                expect(page.locator('#tab-inspect')).to_have_attribute('aria-selected','true',timeout=600000)
+                expect(page.get_by_role('tab', name='확인·분할', exact=True)).to_have_attribute('aria-selected','true',timeout=600000)
             uid=page.evaluate("new URL(location.href).searchParams.get('study')")
             def snapshot():
                 return page.evaluate('async path=>(await fetch(path)).json()',api+'/lerobot-study/'+uid)
             study=snapshot()
             if study['status']=='uploading':
-                page.locator('#tab-upload').click()
+                page.get_by_role('tab', name='자료 올리기', exact=True).click()
                 page.locator('#source-folder').set_input_files(str(source))
                 expect(page.locator('#upload-start')).to_be_enabled(timeout=180000)
                 page.locator('#upload-start').click()
-                expect(page.locator('#tab-inspect')).to_have_attribute('aria-selected','true',timeout=600000)
-            page.locator('#tab-inspect').click()
+                expect(page.get_by_role('tab', name='확인·분할', exact=True)).to_have_attribute('aria-selected','true',timeout=600000)
+            page.get_by_role('tab', name='확인·분할', exact=True).click()
             if not study['inspection']:
                 expect(page.locator('#inspect-start')).to_be_enabled(timeout=60000)
                 page.locator('#inspect-start').click()
@@ -69,14 +69,14 @@ def test_real_uploaded_study_completes_the_learning_pipeline():
             assert {k:study['split'][k] for k in ('train','validation','eval')}==dict(train=list(range(8)),validation=[8],eval=[9])
             runs=[r for r in study['runs'] if r['execution_mode']=='lerobot_train']
             if not runs:
-                page.locator('#tab-learn').click()
+                page.get_by_role('tab', name='ACT 학습', exact=True).click()
                 page.locator('#train-steps').fill('1000')
                 page.locator('#train-batch').fill('4')
                 page.locator('#train-seed').fill('7')
                 expect(page.locator('#train-start')).to_be_enabled()
                 page.locator('#train-start').click()
                 expect(page.locator('#study-results')).to_contain_text('ACT',timeout=60000)
-            page.locator('#tab-results').click()
+            page.get_by_role('tab', name='평가·모델', exact=True).click()
             expect(page.locator('#study-results [data-artifact]')).to_be_visible(timeout=2400000)
             study=snapshot()
             runs=[r for r in study['runs'] if r['execution_mode']=='lerobot_train']

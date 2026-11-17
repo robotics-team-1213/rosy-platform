@@ -2,7 +2,7 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 평가·승격</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/choice-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/alert-center.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/evaluate.js"></script></head>
 <body><a class="skip-link" href="#evaluate-main">평가·승격으로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
@@ -14,20 +14,20 @@
 <!-- review:rail:end --></nav></div>
 <div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>평가·승격</h1><span class="ui-crumbs" id="learning-tool-path"></span></div>
 <main id="evaluate-main" class="learning-main ui-task-page" tabindex="-1">
-<ui-status id="evaluate-error" state="error" role="alert" hidden></ui-status>
+<div id="page-alerts" class="alert-center-list" aria-label="알림"></div><ui-status id="evaluate-error" state="error" hidden></ui-status>
 <ui-actions><ui-button id="evaluate-refresh" kind="quiet" type="button" data-action-icon="refresh">다시 확인</ui-button></ui-actions>
 <div class="ui-stage-grid" data-layout="watch" data-order="stage-first">
 <section class="learning-section ui-pane" data-pane="stage" aria-labelledby="sources-title">
 <h2 id="sources-title">지금 있는 평가 근거</h2><p id="evaluate-filter" class="quiet" role="status">평가 근거를 불러오는 중입니다.</p>
-<p class="quiet">읽기 전용입니다. 지표와 모델 합의(임시 정답)는 측정값이며 무엇도 승인하지 않습니다. 승격 평가에는 사람이 확정한 정답만 씁니다.</p>
+<p class="quiet">읽기 전용입니다.</p><details><summary>자세히</summary><p class="quiet">지표와 모델 합의(임시 정답)는 측정값이며 무엇도 승인하지 않습니다. 승격 평가에는 사람이 확정한 정답만 씁니다.</p></details>
 <div id="evaluate-sources" class="evaluate-sources" aria-live="polite"></div>
 </section>
 <section class="learning-section ui-pane" data-pane="now" aria-labelledby="promote-title">
 <h2 id="promote-title">승격 요청</h2>
-<p>승격 승인과 배포는 Fleet에서 승인권자가 합니다. Learning은 확정 정답 평가 근거를 모아 넘기는 데까지입니다.</p>
+<p>승격 승인과 배포는 Fleet에서 승인권자가 합니다.</p><details><summary>자세히</summary><p>Learning은 확정 정답 평가 근거를 모아 넘기는 데까지입니다.</p></details>
+<div class="learning-next-actions"><a class="ui-action-link" data-kind="quiet" href="/console/policy">Fleet 학습 정책 승인 (/console/policy) 열기</a><a class="ui-action-link" data-kind="quiet" href="/console?view=work&amp;show=pending">Fleet 승인 대기 작업 열기</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_s">Cell S · S3 공급 (arm_s)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_a">Cell A · S5 1·3단 (arm_a)</a><a class="ui-action-link" data-kind="quiet" href="/console/cell?cell=cell_b">Cell B · S5 2단 (arm_b)</a></div>
 <p id="promote-status" role="status">승격 요청 후보를 확인하는 중입니다.</p>
-<ul id="promote-candidates" class="evaluate-runs"></ul>
-<label id="promote-pick" hidden>후보 <select id="promote-candidate" class="ui-field"></select></label>
+<div id="promote-candidates"></div>
 <ui-button id="promote-request" kind="quiet" disabled reason="승격 요청 후보를 확인하는 중입니다.">승격 요청</ui-button>
 <p id="promote-result" role="status" hidden></p>
 <details id="promotion-diagnostics"><summary>보낸 승격 요청·식별자 진단</summary><p id="promote-request-hash"></p><ul id="promote-requests" class="evaluate-runs"></ul></details>
