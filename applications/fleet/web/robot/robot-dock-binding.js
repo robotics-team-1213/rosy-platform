@@ -122,7 +122,7 @@ export function createRobotDockBinding({
         const linkSig = `${tagState}:${link.text}`;
         if (linkSlot.dataset.linkSig !== linkSig) {
           linkSlot.dataset.linkSig = linkSig;
-          linkSlot.replaceChildren(statusTag(tagState, link.text, tagState === "disconnected" ? { danger: true } : undefined));
+          linkSlot.replaceChildren(statusTag(tagState, link.text));
         }
         linkSlot.hidden = false;
       } else {
@@ -400,7 +400,7 @@ export function createRobotDockBinding({
           } else {
             if (profile.link.state !== "fresh") {
               const linkState = profile.link.state === "unavailable" ? "unknown" : profile.link.state;
-              tags.append(statusTag(linkState, profile.link.text, linkState === "disconnected" ? { danger: true } : undefined));
+              tags.append(statusTag(linkState, profile.link.text));
             }
             if (profile.alarm) {
               tags.append(statusTag(profile.alarm.tag, profile.alarm.text, profile.alarm.icon ? { icon: profile.alarm.icon } : undefined));
