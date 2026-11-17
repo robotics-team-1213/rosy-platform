@@ -374,7 +374,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     tx, ty = (float(np.mean([t[i] for t in kept_tcps])) for i in (0, 1))
     bias = {"site": site, "kind": "pivot", "point_m": [round(tx, 4), round(ty, 4)],
             "bias_mm": [round(1000 * (cx - tx), 1), round(1000 * (cy - ty), 1)],
-            "radius_mm": fit["radius_mm"], "phase_deg": phase, "rms_mm": fit["rms_mm"], "fit_model": "yaw_linear",
+            "radius_mm": fit["radius_mm"], "phase_deg": phase, "z_view": z_view, "rms_mm": fit["rms_mm"], "fit_model": "yaw_linear",
             **({"bias_sigma_mm": sigma_mm} if sigma_mm is not None else {}),
             **({"dropped": fit["dropped"]} if fit["dropped"] else {}),
             "yaws_fk_deg": [round(t[3], 1) for t in kept_tcps], "n": len(kept_tcps),
