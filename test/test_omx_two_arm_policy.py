@@ -565,3 +565,9 @@ def test_skill_argv_forwards_state_history():
     policy.skills.options(ap)
     assert "--state-history" in policy.skills.argv(ap.parse_args(["--skill", "grasp", "--state-history"]))
     assert "--state-history" not in policy.skills.argv(ap.parse_args(["--skill", "grasp"]))
+
+
+def test_the_policy_module_exports_every_helper_the_skill_calls_through_it():
+    import re, inspect
+    used = set(re.findall(r"(?<![.\w])policy\.([a-z_]+)\(", inspect.getsource(policy.skills)))
+    assert used and all(hasattr(policy, name) for name in used), used - set(dir(policy))  # 11-17: command_history missing crashed every probe

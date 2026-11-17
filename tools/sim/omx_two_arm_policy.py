@@ -46,6 +46,7 @@ from omx_two_arm_policy_helpers import (  # noqa: E402, F401
     Driver,
     Recorder,
     collect,
+    command_history,
     goal_block,
     goal_of,
     goal_vector,
