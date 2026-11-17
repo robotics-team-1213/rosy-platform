@@ -161,6 +161,28 @@ def pivot_point(cell, config, calibration, site, target_xy) -> tuple[list | None
     return None, False
 
 
+def pivot_near(cell, config, calibration, cal_path, step: str, work) -> dict:
+    """One `pivot-near <site>:<x>,<y>` step. 2026-11-17 panel r6: every failure that night (marks off the frame top,
+    a short FK arc, a geometry from another height) was found only by the guards after the arm moved, so
+    `cell_pivot_precheck` judges the plan first and a problem sends no arm command at all."""
+    import cell_pivot_precheck
+
+    site, xy = step.split()[1].split(":")
+    near = tuple(float(v) for v in xy.split(","))
+    point, over = _parent_attr("pivot_point", pivot_point)(cell, config, calibration, site, near)
+    if point is None:
+        return {step: "no clear point near the target"}
+    yaws = _parent_attr("pivot_near_yaws", pivot_near_yaws)(config, site, over)
+    frame_wh = None if ((config.get("cameras") or {}).get("top") or {}).get("frame_wh") else cell.frame("top").shape[1::-1]
+    problems = cell_pivot_precheck.pivot_precheck(config, calibration, site, point, yaws, frame_wh)
+    if problems:
+        return {step: "precheck refused: " + "; ".join(problems), "at": point}
+    result = cell_pivot.pivot_calibrate(cell, config, point, yaws, calibration, site, work, time.sleep, lambda row: None)
+    if result["result"] == "calibrated":
+        cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"], config.get("params"))
+    return {step: result["result"], "at": point, "bias": result.get("bias", {}).get("bias_mm")}
+
+
 def clear_first(config) -> bool:
     """Config `pivot.clear_first`: try a clear point's full circle before the over-target set. Off by default: at a
     packed over-target site that circle is a new real-arm pose set (review 2026-11-17), so an arm turns it on only

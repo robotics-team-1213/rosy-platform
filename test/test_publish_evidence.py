@@ -349,3 +349,19 @@ def test_normal_ros_only_skip_and_approved_quarantine_rerun_keep_existing_verdic
                             encoding="utf-8")
     _record_updated_log(local, Path(logs[0]))
     assert tool.green_full(local, sha)
+
+
+def test_the_newest_green_nightly_stays_a_candidate_ancestor_beyond_the_recent_window(repo):
+    local, _ = repo
+    nightly = _commit(local, "app.py", "nightly")
+    rows = [{"commit": nightly, "tree": _git(local, "rev-parse", f"{nightly}^{{tree}}"), "argv": ["test"]}]
+    for i in range(land_cache.NARROW_COMMITS + 2):
+        sha = _commit(local, "app.py", f"later {i}")
+        tree = _git(local, "rev-parse", f"{sha}^{{tree}}")
+        rows += [{"commit": sha, "tree": tree, "argv": [f"a{i}"]}, {"commit": sha, "tree": tree, "argv": [f"b{i}"]}]
+    head = _commit(local, "app.py", "head")
+    kept = lambda: {row["commit"] for row in tool.publish_evidence.ancestor_rows(tool, local, head, rows, recent=3)}
+    assert nightly not in kept()
+    common = Path(_git(local, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    (common / "rosy-nightly-green").write_text(nightly + "\n", encoding="utf-8")
+    assert nightly in kept() and len(kept()) <= land_cache.NARROW_COMMITS

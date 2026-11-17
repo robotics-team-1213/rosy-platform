@@ -37,6 +37,8 @@ SUCCESS; --apply then runs ``gh pr merge --merge --match-head-commit <head>``, f
 sync-back: origin/main is now M(old origin, SHA) and local main has usually moved past the SHA, so a
 fast-forward is impossible; ``git merge origin/main`` in a fresh worktree and ``land.py`` (exit 3 instead
 when merge-tree finds code conflicts). PRs are never closed, reopened or force-pushed.
+``--merge-when-green auto`` (D-1038, the scheduled task ``tools/register_publish_merge_task.ps1``)
+picks the single open ``publish/main-`` PR itself (none: exit 0; several: exit 7); every check above is unchanged.
 
 Exit codes: 0 done, planned (dry run), nothing to publish or not due | 1 git/gh failure, Safety-Review
 range red, ci-result failed or a refusal (branch exists, PR not a publish PR) | 2 usage | 3 sync needs
@@ -69,6 +71,7 @@ sys.path.insert(0, str(TOOLS / "hooks"))
 import land_record  # noqa: E402  (green land.py results per landed commit)
 sys.path.insert(0, str(TOOLS))
 import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a handle still holds)
+import urgent_lane  # noqa: E402  (D-1038: evidence for urgent/ PRs)
 import publish_evidence  # noqa: E402  (canonical plan and exact executed proof)
 SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(SCANNER))
@@ -345,10 +348,13 @@ def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime) -> str:
     view = json.loads(run_gh(repo, "pr", "view", pr, "--json",
                              "state,headRefName,headRefOid,mergeable,mergeStateStatus,statusCheckRollup"))
     head = view["headRefOid"]
-    if view["state"] != "OPEN" or not view["headRefName"].startswith(PREFIX):
-        raise Stop(1, f"PR {pr} is not an open {PREFIX} PR ({view['state']} {view['headRefName']})")
-    if not green_full(repo, head):
-        raise Stop(1, f"PR {pr} head {head[:10]} has no green FULL land record here; not merging")
+    urgent = view["headRefName"].startswith(urgent_lane.PREFIX)
+    if view["state"] != "OPEN" or not (view["headRefName"].startswith(PREFIX) or urgent):
+        raise Stop(1, f"PR {pr} is not an open {PREFIX} or {urgent_lane.PREFIX} PR ({view['state']} {view['headRefName']})")
+    # D-1038: an urgent PR's FULL land record is replaced by its remote affected + mapped-browser evidence file.
+    if not (urgent_lane.verified(repo, head) if urgent else green_full(repo, head)):
+        raise Stop(1, f"PR {pr} head {head[:10]} has no green {'urgent evidence' if urgent else 'FULL land record'}"
+                      " here; not merging")
     if view["mergeable"] == "CONFLICTING" or view["mergeStateStatus"] in ("DIRTY", "BEHIND"):
         raise Stop(6, f"sync needed: PR {pr} is {view['mergeable']}/{view['mergeStateStatus']}")
     if view["mergeable"] != "MERGEABLE":
@@ -385,12 +391,22 @@ def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime) -> str:
            + sync_commands(now)
 
 
+def open_publish_pr(repo: Path) -> str | None:
+    """The one open ``publish/main-`` PR number for the scheduled merge (D-1038); None when there is none."""
+    rows = json.loads(run_gh(repo, "pr", "list", "--state", "open", "--base", "main", "--json",
+                             "number,headRefName", "--limit", "100") or "[]")
+    found = [str(r["number"]) for r in rows if str(r.get("headRefName", "")).startswith(PREFIX)]
+    if len(found) > 1:
+        raise Stop(7, f"{len(found)} open {PREFIX} PRs ({', '.join(found)}); merge one by number")
+    return found[0] if found else None
+
+
 def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="push/open the PR or merge (default: dry run)")
     parser.add_argument("--min-hours", type=float, default=6.0)
     parser.add_argument("--force-blocked", metavar="REASON", help="publish now: a teammate PR waits on it")
-    parser.add_argument("--merge-when-green", metavar="PR")
+    parser.add_argument("--merge-when-green", metavar="PR", help="PR number, or 'auto' for the single open publish PR")
     parser.add_argument("--secret-scan", metavar="SHA", help="only the per-commit secret scan of origin/main..SHA")
     parser.add_argument("--repo", type=Path, default=Path.cwd(), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -399,7 +415,9 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
         if args.secret_scan:
             message = secret_gate(args.repo, git(args.repo, "rev-parse", f"{args.secret_scan}^{{commit}}").stdout.strip())
         elif args.merge_when_green:
-            message = merge_when_green(args.repo, args.merge_when_green, args.apply, now)
+            number = open_publish_pr(args.repo) if args.merge_when_green == "auto" else args.merge_when_green
+            message = (merge_when_green(args.repo, number, args.apply, now) if number
+                       else f"no open {PREFIX} PR to merge")
         else:
             message = publish(args.repo, args, now)
     except Stop as stop:
