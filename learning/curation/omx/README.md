@@ -385,3 +385,18 @@ python learning/training/omx/act_job.py --dataset <new-output> --out <new-traini
 
 결과의 offline 지표는 실물 과제 성공률·승격·실행 승인이 아니다. 원본 녹화의 카메라 시각 정합은 녹화 시각
 기준이며, 이 변환·학습 경로는 장치·ROS에 연결하지 않는다.
+
+## 두 팔 실물 녹화를 시뮬 데이터와 섞어 학습하기
+
+Rosy Learning 생산자(`arm_a`, `arm_b`, `cam_top`, `cam_side`, `cam_a_wrist`, `cam_b_wrist`, 파일 계약은 `learning/curation/perception/docs/learning-recording.md`)가 남긴 IK 운반을 시뮬 `collect`와 **같은 feature·fps(15)** 의 LeRobot 데이터셋으로 바꾼다. 읽기 전용이며 장치·FIFO·네트워크에 닿지 않는다.
+
+```bash
+python learning/curation/omx/two_arm_export.py <source_root> <new-dataset> --attempts <arm의 attempts.jsonl> --arm arm_a --clock-offset <monotonic-wall 초> [--goal-sites a,b,c --site-map map.json]
+python learning/curation/omx/two_arm_export.py <source_root> <new-dataset> --windows windows.json   # [{episode_id, t_start, t_end, outcome[, goal]}]
+```
+
+- **변환:** 값은 `deploy/robot/omx/cell_act_inputs.py`의 `to_radians`·`sim_gripper`·`_rgb`를 그대로 쓴다(복사 없음). `action`은 runner가 guard 뒤에 보낸 목표(`accepted_reference`)다. feature는 `omx_two_arm_policy_helpers.dataset_features`, `collect`가 쓰는 함수다. goal은 창마다 `goal`을 주면 `observation.environment_state`로 들어가며, `--goal-sites`를 주면 `cell_act_inputs.goal`의 site goal을 만든다.
+- **성공 판정:** attempts.jsonl의 `outcome == "placed"`(셀이 검증한 결과) 또는 사람의 `success`만 넣는다. 그 밖의 결과·시험 실패·무효 회차는 `rejected`에 이유와 함께 남는다. 창의 시각은 생산자의 `host-monotonic` 시계이고 attempts의 시각은 벽시계이므로 `--clock-offset`(같은 순간의 monotonic − wall)을 사람이 준다.
+- **표본화:** 시뮬 fps에 맞춘 격자에서 각 생산자의 직전 event를 쓴다(보간 없음). event가 0.15초(2박)보다 오래됐거나 여섯 event의 시각 차가 0.10초(1.5박)를 넘는 틱은 버리고 개수를 `<dataset>.steps.json`의 `real.dropped_ticks`에 남긴다. 버린 틱이 10%를 넘거나 연속 3틱 이상 비면 그 운반은 빠진다.
+- **섞어 학습:** `omx_two_arm_policy.py round --extra-dataset <real> [--extra-dataset-weight N]`. 추가 데이터셋은 시뮬 조각과 한 번에 `aggregate_datasets`로 합쳐져 같은 학습에 들어간다. 비중은 추가 데이터셋을 N번 반복해 주며(정수, 하나면 전체, 여럿이면 `--extra-dataset` 순서대로), 라운드 기록 `data.mix`에 weight·프레임 수·비율이 남는다. feature·fps·robot_type·goal 방식이 다르면 합치기 전에 어느 데이터셋의 무엇이 다른지 알려 주며 거부한다.
+- 한계: 실물과 시뮬 영상의 차이(조명·렌즈·배치), 15 fps 격자에 비해 runner의 live 갱신이 약 10 Hz인 점, 벽시계↔monotonic 시계 변환은 이 변환이 해결하지 않는다.

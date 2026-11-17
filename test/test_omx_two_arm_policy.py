@@ -366,6 +366,8 @@ def test_collect_and_round_forward_dagger_and_extra_dataset(monkeypatch, tmp_pat
     steps_meta = json.loads((tmp_path / "dag_ds.steps.json").read_text(encoding="utf-8"))
     assert steps_meta["longest"]["s1"] == 42 and steps_meta["dagger"] == {"recovered": 2}
 
+    (tmp_path / "base_ds/meta").mkdir(parents=True)  # an extra dataset must be a real LeRobot dataset (omx_two_arm_mix checks it before aggregating)
+    (tmp_path / "base_ds/meta/info.json").write_text(json.dumps({"features": {}, "fps": 15, "robot_type": "omx_follower_pair", "total_frames": 30}), encoding="utf-8")
     popens, runs = [], []
     fake_gpu_yield = types.SimpleNamespace(yield_turn=lambda **kw: None)
     monkeypatch.setattr(policy, "gpu_yield", fake_gpu_yield)
@@ -396,13 +398,13 @@ def test_collect_and_round_forward_dagger_and_extra_dataset(monkeypatch, tmp_pat
                             "--tasks", "stack", "--seeds", "1", "--workers", "1", "--skill", "grasp", "--zero-error-deg", "4",
                             "--n-action-steps", "8", "--flow-steps", "5", "--amp",
                             "--dagger-model", str(ckpt), "--dagger-eval-file", "auto", "--dagger-only", "--dagger-device", "cpu",
-                            "--extra-dataset", str(tmp_path / "base_ds"), "--base-model", str(ckpt)])
+                            "--extra-dataset", str(tmp_path / "base_ds"), "--extra-dataset-weight", "3", "--base-model", str(ckpt)])
     assert rc_round == 0
     assert "--dagger-model" in popens[0] and "--dagger-eval-file" in popens[0] and "--flow-steps" in popens[0]
     eval_cmds = [cmd for kind, cmd in runs if kind == "run" and len(cmd) > 2 and cmd[2] == "evaluate"]
     assert any("eval-comp.json" in str(c) for cmd in eval_cmds for c in cmd)
     aggr_cmd = next(cmd for kind, cmd in runs if kind == "run" and any("aggregate_datasets" in str(c) for c in cmd))
-    assert str(tmp_path / "base_ds") in aggr_cmd and not any("part0" in str(c) for c in aggr_cmd)
+    assert aggr_cmd.count(str(tmp_path / "base_ds")) == 3 and not any("part0" in str(c) for c in aggr_cmd)  # weight 3 = three copies in the mix
     train_cmd = next(cmd for kind, cmd in runs if kind == "train")
     assert f"--policy.pretrained_path={ckpt}" in train_cmd
 
