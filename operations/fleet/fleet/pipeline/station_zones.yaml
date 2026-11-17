@@ -1,3 +1,5 @@
+# Legacy warehouse station names (STG_*, EXP_*). The cell container place map is
+# shared/web/cell-site-map.json; resolve_site_alias() in station_zones.py maps these ids to it.
 schema: rosy.station-zones.v1
 site_id: world_261026
 staging_bays:
