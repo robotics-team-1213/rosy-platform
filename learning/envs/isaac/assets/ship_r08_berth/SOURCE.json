@@ -1,5 +1,5 @@
 {
- "source": "Rosy/docs/research/ship-modular-2026-11-03: compact-ship-r08 (v15) + ship-berth (v15 quay & v16 berth-modular + belt-concave-stopper), rosy-modeling/parts/omx-temp-slot (bridge v7 + plate v11) + PR33_C02_BASE, containers v3 body + real_door.py",
+ "source": "Rosy/docs/research/ship-modular-2026-11-03: compact-ship-r08 (v15) + ship-berth (v15 quay & v16 berth-modular + belt-concave-stopper), berth-keyed v24 docking pieces, rosy-modeling/parts/omx-temp-slot (bridge v7 + plate v11) + PR33_C02_BASE, containers v3 body + real_door.py",
  "frame": "ship: x stern->bow, y port, z table, mm; arm_base/bridge: fixture axes at joint1 on table, mm; plate_v11: fixture axes at lane-2 on table, mm; container: body x 0..90 (doors +x), z 0..34.4",
  "meshes": {
   "hull": {
