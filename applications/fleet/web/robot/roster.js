@@ -7,13 +7,13 @@ import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag, ruleMTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText } from "./localization-badge.js";
 import { capabilityReason, estopText, motionCommandReason } from "./motion-readiness.js";
-import { staleAgeS } from "./state-age.js";
+import { staleAgeS, stateAgeS, lastSeenText } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
 import { placeRosterCards as place, mustExpand, selectRobot, createRoiPoller,
   buildQuickControlPanel, appendDetailSlots, appendDetailCamera, createDetail3dController,
-  leaveTwinOrCameraView } from "./roster-cards.js";
+  leaveTwinOrCameraView, leaveCameraView } from "./roster-cards.js";
 import { createStepNudge } from "/console/assets/step-nudge.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
@@ -54,12 +54,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (selectRobot(view, robotId)) {
       confirmedAction?.cancel(); trip.close(); onSelectionChanged(); syncMapPicking();
       view.focusAnchorId = view.robotSelection?.get() ?? null;
-      const stage = el("map-stage");
-      const birdseyeToggle = el("birdseye-toggle");
-      if (stage && stage.dataset.view === "camera") {
-        stage.dataset.view = "map";
-        birdseyeToggle?.setAttribute("aria-pressed", "false");
-      }
+      leaveCameraView(view, el);  // 선택은 카메라 보기만 닫는다 — 트윈 3D는 유지한다
       const canvas = el("map-canvas");
       canvas.classList.toggle("idle", !view.selected && !view.pinning);
       canvas.tabIndex = view.selected ? 0 : -1;
@@ -67,16 +62,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   }
   function needsAttention(robot) {
     return view.stateUnavailable || mustExpand(robot) || attentionItems(robot).length > 0;
-  }
-  function workspace() {
-    const box = el("robot-workspace"), empty = el("robot-workspace-empty");
-    if (!box) return;
-    const activeId = view.robotSelection?.get() ?? null;
-    if (activeId && !view.robots.some(robot => robot.robot_id === activeId)) openCard(null);
-    const index = view.robots.findIndex(robot => robot.robot_id === (view.robotSelection?.get() ?? null));
-    if (empty) empty.hidden = index >= 0;
-    if (index < 0) detail3d.clear();
-    place(box, index >= 0 ? [card(view.robots[index], index)] : []);
   }
   function card(robot, index, opts = null) {
     const node = document.createElement("article");
@@ -200,7 +185,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       put(locTag);
     }
     // The state age is evidence for every value below; unknown is never a number.
-    const ageS = Number.isFinite(robot.state_age_s) ? Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000) : null;
+    const ageS = stateAgeS(robot, view.receivedAtMs, Date.now());
     const seenText = nodeWithText("span", "", view.stateUnavailable ? "" : `상태 ${valueText(ageS, {unit: "초 전"}).text}`);
     seenText.dataset.fact = "state-age";
     if (seenText.textContent) evidenceLine.append(seenText);
@@ -329,13 +314,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     }
 
     if (!view.stateUnavailable && !robot.online) {
-      const seen = nodeWithText("p", "hint");
+      const seen = nodeWithText("p", "hint", lastSeenText(robot, Date.now()));
       seen.dataset.fact = "last-seen";
-      const ts = robot.state?.ts;
-      if (typeof ts === "number" && ts > 0) {
-        const age = Math.max(0, Math.floor((Date.now() / 1000) - ts));
-        seen.textContent = age < 60 ? `마지막 응답: ${age}초 전` : age < 3600 ? `마지막 응답: ${Math.floor(age / 60)}분 전` : `마지막 응답: ${Math.floor(age / 3600)}시간 전`;
-      } else seen.textContent = "응답 없음";
       mainCol.appendChild(seen);
     }
 
@@ -584,7 +564,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     controls()[at]?.focus({preventScroll: true});
   }
 
-  return { card, summary, workspace, clear3d: () => detail3d.clear(), place, fillQueues, queuedReason, needsAttention, attentionItems, openCard, stopRobot,
+  return { card, summary, clear3d: () => detail3d.clear(), place, fillQueues, queuedReason, needsAttention, attentionItems, openCard, stopRobot,
     profileVersion: () => profileRev, syncProfile: (robotId) => profiles.detail("robot", robotId),
     syncConvoy: trip.syncConvoy, closeTrip: trip.close, openTrip: openTripForm, paintTrip };
 }

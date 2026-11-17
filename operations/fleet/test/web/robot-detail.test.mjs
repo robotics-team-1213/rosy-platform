@@ -155,10 +155,6 @@ test("selectRobot syncs createSelection and clears map pick state", () => {
 });
 
 test("robot detail renders C14 row, phase-2 slots, pinned battery 63%, and one C15 3D view", () => {
-  const ws = makeEl("div"); ws.id = "robot-workspace";
-  const empty = makeEl("div"); empty.id = "robot-workspace-empty";
-  byId.set("robot-workspace", ws);
-  byId.set("robot-workspace-empty", empty);
   const selection = createSelection("rosy_01");
   const view = {
     robots: [{
@@ -201,10 +197,8 @@ test("robot detail renders C14 row, phase-2 slots, pinned battery 63%, and one C
     isOperator: () => true,
     confirmedAction: { cancel() {} },
   });
-  roster.workspace();
-  assert.equal(empty.hidden, true);
-  assert.equal(ws.children.length, 1);
-  const card = ws.children[0];
+  // 2026-11-18: #robot-workspace 컨테이너는 없다(roster.js workspace() 삭제) — 산 카드 API로 검증한다.
+  const card = roster.card(view.robots[0], 0);
   assert.equal(card.querySelectorAll(".robot-row").length, 1);
   assert.equal(card.querySelectorAll(".robot-view").length, 1);
   for (const id of ["detail-refusal", "detail-now", "detail-localization", "detail-skill"]) {
@@ -230,10 +224,6 @@ test("a running arm skill is the robot row's task text with no tag; #detail-skil
     { stateUnavailable: false, receivedAtMs: Date.now(), trafficTrips: [] });
   assert.deepEqual(stopped.alarm, { level: "danger", text: "정지 · HOLD", tag: "danger" });
 
-  const ws = makeEl("div"); ws.id = "robot-workspace";
-  byId.set("robot-workspace", ws);
-  const empty = makeEl("div"); empty.id = "robot-workspace-empty";
-  byId.set("robot-workspace-empty", empty);
   const view = { robots: [robot], selected: null, pinning: null, cursor: null,
     colors: ["#111"], formation: null, stateUnavailable: false, receivedAtMs: Date.now(), trafficTrips: [],
     pendingTasks: {}, robotPeers: [], robotNames: {}, addresses: {}, robotSelection: createSelection("arm_a") };
@@ -243,8 +233,7 @@ test("a running arm skill is the robot row's task text with no tag; #detail-skil
   const roster = createRoster({ scope, el: (id) => byId.get(id) || null, view, log() {},
     call: async () => ({}), render() {}, streamEvidence: () => null, isOperator: () => true,
     confirmedAction: { cancel() {} } });
-  roster.workspace();
-  const card = ws.children[0];
+  const card = roster.card(robot, 0);
   const skillSlot = card.querySelector("#detail-skill");
   assert.ok(skillSlot.querySelector(".detail-skill-line").textContent.includes("실행 중 3/5"));
   assert.ok(skillSlot.querySelector("[data-sample]"), "샘플 상태는 sampleTag가 이름을 밝힌다");

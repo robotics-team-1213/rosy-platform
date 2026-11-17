@@ -3,7 +3,6 @@ import { statusTag } from "/common/status-tag.js";
 import { valueText } from "/common/value-text.js";
 import { robotProfile } from "/common/robot-profile.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
-import { mountRobotCameraTile } from "/console/assets/robot-camera-tile.js";
 import { randomUUID } from "/console/assets/uuid.js";
 import { fleetRobotProfile } from "./roster-presentation.js";
 import { CELL_PHASE } from "/console/assets/charge-bays-model.js";
@@ -178,7 +177,7 @@ function armCommandContext(profile, detail, { operator = false, named = false } 
   return { readiness, missionId, taskId, cancelReason, sig };
 }
 
-export function armCommandsSig(profile, detail, auth = {}) {
+function armCommandsSig(profile, detail, auth = {}) {
   return armCommandContext(profile, detail, auth).sig;
 }
 
@@ -458,8 +457,4 @@ export function buildArmSections({ call, view, isOperator, namedReason, refresh,
   }
 
   return { status, camera, commands, commandsSig, settings, reset };
-}
-
-export function mountPinkyCamera(host, robotId, call, scope) {
-  return mountRobotCameraTile({ host, robotId, call, scope });
 }

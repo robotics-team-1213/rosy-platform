@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-18 · uncommitted · refactor(fleet): 죽은 코드·중복 제거 — workspace 잔재·카메라 복귀·상태 나이·마지막 응답·셀 카메라 목록 한 곳으로
 - 2026-11-17 · uncommitted · revert(console): AI 팔 제안 보기를 이 착지에서 뺀다
 - 2026-11-16 · uncommitted · fix(console): 활성 지도 버전 변경 시 카메라 추적 보정 동시 갱신
 - 2026-11-15 · uncommitted · ui(fleet): C23/C24 로봇 도크·패널 채택과 C14 작업 개요 이동
 - 2026-11-15 · uncommitted · refactor(fleet): move robot detail modules into fleet/web/robot (D-766 unit)
-- 2026-11-15 · uncommitted · ui(fleet): E 위치 상태·대기 출발·위치 다시 찾기·후보 확정 채택(C19)

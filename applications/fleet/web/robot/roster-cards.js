@@ -5,6 +5,7 @@ import { createRobotRow } from "/common/robot-row.js";
 import { skillState } from "/common/skill-state.js";
 import { isSample, sampleTag } from "/common/sample-data.js";
 import { renderRefusalSlot, renderLocalizationSlot } from "/console/assets/localization-view.js";
+import { armCameraSpecs } from "./robot-panel-adapters.js";
 export { createDetail3dController, appendDetailCamera } from "./roster-presentation.js";
 
 /** D-651: all four safety exceptions remain visible in the compact list, ahead of nominal robots. */
@@ -13,14 +14,22 @@ export function mustExpand(robot) {
   return !robot.online || !robot.state || estop !== false || Boolean(robot.calibration);
 }
 
-export function leaveTwinOrCameraView(view, el) {
-  if (view.displayMode === "twin3d" && typeof view.setDisplayMode === "function") {
-    view.setDisplayMode("coordinates");
-  } else {
-    const stage = el("map-stage");
-    if (stage) stage.dataset.view = "map";
-  }
+// 카메라·트윈 보기에서 지도로 되돌리는 길은 이 한 곳이다(r-C §3.1 3곳 중복 통합).
+// 목표·위치 고정은 지도를 봐야 하므로 트윈도 나가고, 로봇 선택은 카메라만 닫는다.
+function backToMap(view, el) {
+  if (typeof view.setDisplayMode === "function") view.setDisplayMode("coordinates");
+  else { const stage = el("map-stage"); if (stage) stage.dataset.view = "map"; }
   el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
+}
+const inStageView = (view, el, modes) =>
+  modes.includes(view.displayMode) || modes.includes(el("map-stage")?.dataset?.view);
+
+export function leaveTwinOrCameraView(view, el) {
+  if (inStageView(view, el, ["camera", "twin3d"])) backToMap(view, el);
+}
+
+export function leaveCameraView(view, el) {
+  if (inStageView(view, el, ["camera"])) backToMap(view, el);
 }
 
 /** Inspection is UI-only. Switching robots withdraws every pending map interaction. */
@@ -40,7 +49,7 @@ export function selectRobot(view, robotId) {
 // A focused picker or motor table keeps its card across polling updates.
 export function placeRosterCards(box, cards) {
   const focus = document.activeElement;
-  const focused = focus?.matches("select, .motor-health-scroll") ? focus.closest("#robot-panel-mount article, #robot-workspace article") : null;
+  const focused = focus?.matches("select, .motor-health-scroll") ? focus.closest("#robot-panel-mount article") : null;
   const keep = focused?.parentElement === box ? focused : null;
   if (keep) {
     const current = cards.find(node => node.dataset.robotId === keep.dataset.robotId);
@@ -385,24 +394,9 @@ export function buildQuickControlPanel({
   trackerBox.appendChild(trackerHead);
 
   // 셀 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
-  // Pinky 도킹은 천장 Cam ROI 확대로 위에서 본다.
-  const camViewsForAnchor = activeAnchor.target_id === "arm_a"
-    ? [
-        { id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist" },
-        { id: "top", label: "S5 상단", source: "top" },
-        { id: "side", label: "셀 측면 (A/B)", source: "side" },
-      ]
-    : activeAnchor.target_id === "arm_b"
-    ? [
-        { id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist" },
-        { id: "top", label: "S5 상단", source: "top" },
-        { id: "side", label: "셀 측면 (A/B)", source: "side" },
-      ]
-    : activeAnchor.target_id === "arm_s"
-    ? [
-        { id: "arm_s_wrist", label: "arm_s 손목", source: "arm_s_wrist" },
-        { id: "arm_s_top", label: "S3 상단", source: "arm_s_top" },
-      ]
+  // Pinky 도킹은 천장 Cam ROI 확대로 위에서 본다. 팔 카메라 목록은 armCameraSpecs 한 곳이 정본이다.
+  const camViewsForAnchor = activeAnchor.target_id.startsWith("arm_")
+    ? armCameraSpecs(activeAnchor.target_id)
     : [
         { id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: activeAnchor.target_id },
         { id: "arm_s_top", label: "S3 상단", source: "arm_s_top" },

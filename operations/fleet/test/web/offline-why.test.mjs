@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { offlineWhy } from '../../../../applications/fleet/web/robot/roster-presentation.js';
+
+// roster-presentation 은 /common·/console/assets 를 import 한다: 단독 node --test 도 그대로 돌게 로더를 먼저 건다.
+const { register } = await import('node:module');
+register('./common-loader.mjs', import.meta.url);
+register('./resolve-console-assets.mjs', import.meta.url);
+const { offlineWhy } = await import('../../../../applications/fleet/web/robot/roster-presentation.js');
 
 test("Fleet's own hold is not shown as a robot refusal or as unreachable", () => {
   const held = { held: true, reachable: null, code: 'ADDRESS_UNVERIFIED' };

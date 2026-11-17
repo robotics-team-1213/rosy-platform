@@ -12,7 +12,7 @@ import { linkTag } from "./link-tag.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { robotAppLinks } from "/console/assets/device-discovery.js";
 import { positionTag, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
-import { staleAgeS } from "./state-age.js";
+import { staleAgeS, stateAgeS, lastSeenText } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { cardTripLine, cardTripSig, openTrip } from "./card-trip.js";
 import { estopText } from "./motion-readiness.js";
@@ -146,15 +146,13 @@ export function queuedReason(queued) {
 
 // B3 (계획 6.2 R3): 로봇 상태의 arm_skill는 C20 표를 그대로 지난다. 실행 중 스킬은 행 글자(태그 없음),
 // 이상일 때만 alarm 축에 태그가 붙는다. 모르는 수명주기는 글자 '정보 없음'으로만 남는다.
-export function robotSkill(robot) {
+function robotSkill(robot) {
   return robot?.state?.arm_skill ? skillState(robot.state.arm_skill) : null;
 }
 
 export function fleetRobotProfile(robot, view, nowMs = Date.now()) {
   const state = view.stateUnavailable ? {} : robot.state || {};
-  const ageS = Number.isFinite(robot.state_age_s)
-    ? Math.round(robot.state_age_s + Math.max(0, nowMs - (view.receivedAtMs ?? nowMs)) / 1000)
-    : null;
+  const ageS = stateAgeS(robot, view.receivedAtMs, nowMs);
   const batteryPct = robot.power_health?.battery?.percent ?? state.battery?.percent ?? null;
   const voltage = robot.power_health?.battery?.voltage ?? state.battery?.voltage ?? null;
   const charging = Boolean(robot.power_health?.battery?.charging_state === "CHARGING" || state.battery?.charging);
@@ -371,8 +369,7 @@ export function refreshPinkyAges(statusEl, robot, view, nowMs) {
   if (!statusEl || !robot) return;
   const ageEl = statusEl.querySelector('[data-fact="state-age"]');
   if (ageEl) {
-    const ageS = Number.isFinite(robot.state_age_s)
-      ? Math.round(robot.state_age_s + Math.max(0, nowMs - (view.receivedAtMs ?? nowMs)) / 1000) : null;
+    const ageS = stateAgeS(robot, view.receivedAtMs, nowMs);
     const nextText = view.stateUnavailable ? "" : `상태 ${valueText(ageS, { unit: "초 전" }).text}`;
     if (ageEl.textContent !== nextText) ageEl.textContent = nextText;
   }
@@ -386,14 +383,7 @@ export function refreshPinkyAges(statusEl, robot, view, nowMs) {
   }
   const lastSeenEl = statusEl.querySelector('[data-fact="last-seen"]');
   if (lastSeenEl && !view.stateUnavailable && !robot.online) {
-    const ts = robot.state?.ts;
-    let nextText = "응답 없음";
-    if (typeof ts === "number" && ts > 0) {
-      const age = Math.max(0, Math.floor((nowMs / 1000) - ts));
-      nextText = age < 60 ? `마지막 응답: ${age}초 전`
-        : age < 3600 ? `마지막 응답: ${Math.floor(age / 60)}분 전`
-        : `마지막 응답: ${Math.floor(age / 3600)}시간 전`;
-    }
+    const nextText = lastSeenText(robot, nowMs);
     if (lastSeenEl.textContent !== nextText) lastSeenEl.textContent = nextText;
   }
 }

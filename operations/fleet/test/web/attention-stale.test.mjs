@@ -1,10 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { STALE_STATE_S, staleAgeS } from "../../../../applications/fleet/web/state-age.js";
+import { STALE_STATE_S, staleAgeS, stateAgeS, lastSeenText } from "../../../../applications/fleet/web/state-age.js";
 
 const T0 = 1_000_000;
 const row = (extra) => ({ robot_id: "a", online: true, state_age_s: 0.4, ...extra });
+
+test("stateAgeS: server age plus receive lag, rounded; unknown stays null (card/summary one source)", () => {
+  assert.equal(stateAgeS(row({ state_age_s: 2.4 }), T0, T0 + 2600), 5);
+  assert.equal(stateAgeS(row({ state_age_s: 2.4 }), T0, T0 - 9999), 2);  // 서버·브라우저 시계 차는 쓰지 않는다
+  assert.equal(stateAgeS(row({ state_age_s: null }), T0, T0 + 60000), null);
+  assert.equal(stateAgeS({ robot_id: "a" }, undefined, T0), null);
+});
+
+test("lastSeenText: 초·분·시간 포맷과 '응답 없음' (offline 로봇 마지막 응답 한 곳 포맷)", () => {
+  const at = (ts) => ({ state: { ts } });
+  assert.equal(lastSeenText(at(1_700_000_000), 1_700_000_000 * 1000 + 59_000), "마지막 응답: 59초 전");
+  assert.equal(lastSeenText(at(1_700_000_000), 1_700_000_000 * 1000 + 120_000), "마지막 응답: 2분 전");
+  assert.equal(lastSeenText(at(1_700_000_000), 1_700_000_000 * 1000 + 7_200_000), "마지막 응답: 2시간 전");
+  assert.equal(lastSeenText({ state: { ts: 0 } }, T0), "응답 없음");
+  assert.equal(lastSeenText({}, T0), "응답 없음");
+});
 
 test("hub row 2.5 s old + received 3 s ago is stale (5.5 s)", () => {
   assert.equal(STALE_STATE_S, 5);
@@ -28,6 +44,7 @@ test("offline, missing field and never-received views are not judged", () => {
 // The real attentionItems, with the browser's "/common/..." imports mapped to shared/web.
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
+register("./resolve-console-assets.mjs", import.meta.url);  // roster.js also reads /console/assets/*
 const { createRoster } = await import("../../../../applications/fleet/web/robot/roster.js");
 
 const view = { robots: [], formation: null, stateUnavailable: false, receivedAtMs: null };

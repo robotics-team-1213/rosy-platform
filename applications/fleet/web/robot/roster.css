@@ -50,9 +50,6 @@
 .robot-detail-3d { min-width: 0; align-self: start; }
 .robot-detail-3d-fold { min-width: 0; }
 .detail-refusal:empty, .detail-now:empty, #detail-localization:empty, #detail-skill:empty { min-width: 0; }
-@media (width >= 64rem) {
-  #robot-workspace .robot-workspace-card { grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem); align-items: start; }
-}
 /* The primary action group follows the facts; the profile, destinations and cell links are the second group. */
 .robot-detail-main > .robot-actions, .robot-detail-main > .card-trip { order: 1; }
 .robot-detail-main > :is(.quick-control-panel, [data-robot-profile], .robot-app-actions, section:not(.detail-now), details) { order: 2; }

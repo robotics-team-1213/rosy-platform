@@ -5,6 +5,7 @@ import { createFormation } from "./formation.js";
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
+import { leaveCameraView } from "./roster-cards.js";
 import { createManualControl } from "./manual-control.js";
 import { createMovePanel } from "./card-trip.js";
 import { createInboxPanel } from "./inbox.js";
@@ -481,12 +482,7 @@ pageScope.onDispose(view.robotSelection.subscribe((id, meta) => {
     roster.closeTrip?.();
     clearPinStart();
     if (typeof id === "string" && !id.startsWith("arm_")) {
-      const stage = el("map-stage");
-      if (view.displayMode === "camera" || stage?.dataset?.view === "camera") {
-        if (typeof view.setDisplayMode === "function") view.setDisplayMode("coordinates");
-        else if (stage) stage.dataset.view = "map";
-        el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
-      }
+      leaveCameraView(view, el);  // 선택은 카메라 보기만 닫는다 — 트윈 3D는 유지한다
       const canvas = el("map-canvas");
       if (canvas) { canvas.classList.toggle("idle", true); canvas.tabIndex = -1; }
     }
