@@ -124,8 +124,9 @@ body:has(#topbar-extra[data-open="true"]) .alert-popup-region { display: none; }
 @media (width < 64rem) {
   .alert-popup-region,
   body:has(.fleet-body > .ui-subnav:not([hidden])) .alert-popup-region {
-    inset-block-start: calc(var(--appbar-height) + var(--space-2));
-    inset-block-end: auto;
+    /* Below 64rem the document rail is a row under the app bar; the popup sits at the bottom so it never covers navigation. */
+    inset-block-start: auto;
+    inset-block-end: var(--space-3);
     inset-inline: var(--space-3);
     inline-size: auto;
     max-block-size: min(16rem, 42dvh);

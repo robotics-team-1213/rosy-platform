@@ -343,7 +343,14 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
             " && document.activeElement.querySelector('b')?.textContent === 'rosy_03'"
         )
         page.evaluate("() => { window.__focusedCard = document.activeElement; }")
-        page.wait_for_function("() => !window.__focusedCard.isConnected", timeout=3000)
+        # console.js redraws the roster only when its signature changes, so change one fact (battery) to
+        # force the redraw that replaces the focused row; focus must follow the robot to the new row.
+        import copy
+        changed = copy.deepcopy(SNAPSHOT)
+        changed["robots"][2]["state"]["battery"]["percent"] = 89
+        assert changed["robots"][2]["robot_id"] == "rosy_03"
+        api["/api/fleet/state"] = changed
+        page.wait_for_function("() => !window.__focusedCard.isConnected", timeout=8000)
         assert page.evaluate(
             "() => document.activeElement.matches('#roster .robot-row')"
             " && document.activeElement.querySelector('b')?.textContent === 'rosy_03'"

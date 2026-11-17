@@ -423,11 +423,13 @@
    패널은 시트처럼 열을 만들지 않고 도크 왼쪽에 겹쳐 뜬다 — 도크·정지 단추는 그대로 닿는다. */
 @media (width >= 64rem) and (width < 90rem) {
   #fleet-robot-stage.robot-stage:has(> .robot-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr) 56px; }
-  #fleet-robot-stage > .robot-panel {
+  /* .robot-stage outranks the later (width >= 64rem) height: 100%: a 100dvh fixed sheet would be shifted up under the app bar. */
+  #fleet-robot-stage.robot-stage > .robot-panel {
     position: fixed;
     inset-block: var(--appbar-height) 0;
     inset-inline-end: 56px;
     inline-size: min(22rem, calc(100vw - 56px));
+    height: auto;
     max-height: none;
     z-index: 4;
     background: var(--surface-canvas);

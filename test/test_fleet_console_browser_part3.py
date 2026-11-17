@@ -884,7 +884,8 @@ def test_the_install_document_owns_enrollment_and_calibration(console_url):
     """
     from playwright.sync_api import sync_playwright
 
-    install_url = console_url.rsplit("/", 1)[0] + "/install.html"
+    # 등록 목록은 로봇 등록 작업(#robots)이 열려 있을 때만 읽는다(install.js robotsActive).
+    install_url = console_url.rsplit("/", 1)[0] + "/install.html#robots"
     errors: list[str] = []
     with sync_playwright() as p:
         browser = p.chromium.launch()

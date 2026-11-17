@@ -370,11 +370,14 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
         page.goto(console_url, wait_until="networkidle")
+        # UI 통합(console-refresh.js): the pill is the robot count, so an unknown count reads "-" and the
+        # failure is named by the rail summary and the map tag instead of a second "연결 끊김" word.
         page.wait_for_function(
-            "() => document.getElementById('online-pill')?.textContent"
-            " === 'Fleet 연결 끊김'"
+            "() => document.getElementById('online-pill')?.textContent === '-'"
+            " && document.getElementById('roster-summary')?.textContent.includes('Fleet 상태 확인 불가')"
         )
-        assert page.locator("#online-pill").get_attribute("status") == "warn"  # 2026-11-14: a disconnect is a warning
+        assert page.locator("#online-pill").get_attribute("status") == "neutral"  # no stale count, never the alarm fill
+        assert "로봇 위치 확인 불가" in page.locator("#map-tag").text_content()
         page.get_by_role("link", name="작업", exact=True).click()
         page.get_by_text("Fleet 상태를 확인할 수 없습니다").first.wait_for()
         assert "Fleet 상태를 확인할 수 없습니다" in page.inner_text("#roster")
@@ -487,7 +490,8 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
         _open_cards(page)
         page.wait_for_function("() => document.querySelector('#robot-panel-mount')?.textContent.includes('1.00')")
         api["/api/fleet/state"] = (500, {"detail": "gather failed"})
-        page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === 'Fleet 연결 끊김'"
+        # The pill is a robot count: unknown reads "-"; the robot panel and the map tag name the loss.
+        page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '-'"
                                " && document.querySelector('#robot-panel-mount')?.textContent.includes('상태 확인 불가')")
         assert not errors
         assert "1.00" not in page.inner_text("#robot-panel-mount")
@@ -1108,7 +1112,8 @@ def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_u
     }
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
-        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        # The install document polls discovery only while its 로봇 등록 task is open (#robots).
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html#robots", wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.10')")
 
         api["/api/fleet/discovery"] = (503, {"detail": {"code": "SCANNER_UNAVAILABLE"}})
@@ -1156,7 +1161,8 @@ def test_expired_scanner_lease_raises_an_alarm_and_clears_on_return(console_url)
     }
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
-        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        # The install document polls discovery only while its 로봇 등록 task is open (#robots).
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html#robots", wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '검색기 연결 대기'")
         assert page.get_attribute("#discovery-status", "status") == "warn"
 
@@ -1212,7 +1218,9 @@ def test_map_surface_explains_missing_map_and_recovers_without_stale_canvas(cons
         assert "지도를 찍으면" in page.inner_text("#hint")
 
         api["/api/fleet/map"] = (503, {"detail": {"code": "MAP_UNAVAILABLE"}})
-        page.wait_for_function("() => document.querySelector('#map-empty')?.hidden === false", timeout=7000)
+        # map-polling.js keeps the last map for MAP_HOLDOVER_MS (15 s) and says so on the tag; then it must clear.
+        page.wait_for_function("() => document.querySelector('#map-tag')?.textContent.includes('이전 지도 유지')", timeout=7000)
+        page.wait_for_function("() => document.querySelector('#map-empty')?.hidden === false", timeout=25000)
         assert page.locator(".legend").is_hidden()
         assert page.locator("#map-canvas").get_attribute("aria-hidden") == "true"
         assert page.evaluate("document.querySelector('#map-canvas').getContext('2d').getImageData(0, 0, 1, 1).data[3]") == 0

@@ -375,7 +375,8 @@ function render() {
     view.robots.map((r) => r.robot_id).join(","),
     view.robotSelection?.get?.() || "", view.mapSelection?.kind || "", view.selected || "",
   ].join("|");
-  if (roleApplyKey !== lastRoleApplyKey) {
+  // A non-operator re-applies every paint: formation/convoy renders put their own reasons back on locked buttons.
+  if (roleApplyKey !== lastRoleApplyKey || auth.role !== "operator") {
     lastRoleApplyKey = roleApplyKey;
     applyRoleToControls(auth.role, operatorControls());
   }

@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-18 · uncommitted · fix(fleet): UI 통합이 깨뜨린 브라우저 시험 16건 — 제품 퇴행 3건 고침, 옛 구조 가정 시험 13건 맞춤
 - 2026-11-18 · uncommitted · refactor(fleet): 횡단 관심사 정리 — 끊김 warn·폴링 게이트·역할 판정·토큰 저장 한 곳으로
 - 2026-11-18 · uncommitted · refactor(fleet): 죽은 코드·중복 제거 — workspace 잔재·카메라 복귀·상태 나이·마지막 응답·셀 카메라 목록 한 곳으로
 - 2026-11-18 · uncommitted · ui(fleet): 알림 한 곳 — 벨은 열린 개입 수, '알림' 탭·팝오버·읽음 삭제, 인라인 결과는 토스트 없음
 - 2026-11-17 · uncommitted · revert(console): AI 팔 제안 보기를 이 착지에서 뺀다
-- 2026-11-16 · uncommitted · fix(console): 활성 지도 버전 변경 시 카메라 추적 보정 동시 갱신
