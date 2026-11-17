@@ -6,6 +6,7 @@ model, or for "ik" the same IK, commands in the angles the arm reports, which ar
 fit found 1-4 deg), with per-joint servo lag (0.10-0.34 s measured, one 0.16 s in the plain sim). omx_two_arm_policy.py records and trains;
 this module says what a sub-skill is and judges it. MuJoCo answers geometry only (D-947); no learned policy reaches the real arm (D-793).
 """
+from collections import deque
 import functools
 import json
 import math
@@ -162,10 +163,10 @@ def step(driver, teacher, data, plan, here, skill):
             driver.policy.reset()
             first_bad, last_cmd = None, None
             ze_obs, ze_bias = _policy_zero(teacher)
+            track = deque(maxlen=getattr(driver, "track", 0))  # --track-history: from the hand-over, padded with its frame
             for sub_t in range(driver.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
                 state, images = policy.observe(w, data, ze_obs)
-                if getattr(driver, "history", False):
-                    state = np.concatenate([state, policy.command_history(teacher, state)])
+                state = policy.policy_state(driver, teacher, state, track)
                 action = driver.act(state, images, goal, said)
                 k = sites.ARMS.index(arm)  # the other arm waits as the teacher had it wait: the model drives only the step's arm
                 last_cmd = action[k * 6:k * 6 + 6] + ze_bias.get(arm, 0.)
@@ -297,8 +298,10 @@ def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
         said = prompt(plan, skill)
         driver.policy.reset()
         ze_obs, ze_bias = _policy_zero(recorder)
+        track = deque(maxlen=getattr(driver, "track", 0))
         for _ in range(n_prefix):
             state, images = policy.observe(w, data, ze_obs)
+            state = policy.policy_state(driver, recorder, state, track)
             action = driver.act(state, images, goal_driver, said)
             k = sites.ARMS.index(arm)
             recorder.frame(data, {arm: action[k * 6:k * 6 + 6] + ze_bias.get(arm, 0.), **idle}, plan["id"])
@@ -370,6 +373,10 @@ def options(parser):
                         help="with --compensate-zero: per-seed Gaussian error (sigma, deg) of the zero estimate, one value or five (joints 1-5); 0 is the oracle")
     parser.add_argument("--state-history", action="store_true",
                         help="collect: the state also carries each arm's last joint command (the policy then sees its servo's lag)")
+    parser.add_argument("--track-history", type=int, default=0, metavar="K",
+                        help="collect: the state also carries K frames of each arm's tracking error (last command - state), not with --state-history")
+    parser.add_argument("--delta-action", action="store_true",
+                        help="collect: arm joints are learned as action - state (the zero error cancels); grippers stay absolute")
     parser.add_argument("--estimated-prefix", action="store_true",
                         help="judge: the IK before the sub-skill also runs on reported angles (+ the zero estimate with --compensate-zero), as on the real cell")
     parser.add_argument("--skill", choices=sorted(SKILLS), help="learn and judge only this part of each step; the teacher's IK does the rest")
@@ -386,7 +393,9 @@ def argv(args):
               *(["--compensate-zero"] if getattr(args, "compensate_zero", False) else []),
               *(["--zero-est-noise-deg", ",".join(map(str, np.atleast_1d(args.zero_est_noise_deg)))] if np.any(getattr(args, "zero_est_noise_deg", 0.)) else []),
               *(["--estimated-prefix"] if getattr(args, "estimated_prefix", False) else []),
-              *(["--state-history"] if getattr(args, "state_history", False) else [])]
+              *(["--state-history"] if getattr(args, "state_history", False) else []),
+              *(["--track-history", str(args.track_history)] if getattr(args, "track_history", 0) else []),
+              *(["--delta-action"] if getattr(args, "delta_action", False) else [])]
     flags = [*(["--servo-lag"] if args.servo_lag else []), *(["--physics-ranges"] if args.physics_ranges else [])]
     return [*(["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg), *flags] if args.skill else []), *vision]
 
