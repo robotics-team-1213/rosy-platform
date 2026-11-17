@@ -4,7 +4,7 @@ Description=ROSY OMX %i arm motion session (chunk_runner: the only bus writer, D
 [Service]
 # The session that folds the arm home and turns torque OFF when idle (D-911). It runs in its own unit and cgroup, never
 # inside rosy-omx-owner@.service, so stopping or killing the owner never takes the safety moves with it. The owner only
-# writes commands into its FIFO. Started by a person for a device_trial (no [Install]: enabling it can never autostart a torque-on session); never restarted by systemd, and never SIGKILLed:
+# writes commands into its FIFO. Started by a person for a device_trial (no install section: enabling it can never autostart a torque-on session); never restarted by systemd, and never SIGKILLed:
 # a stop sends SIGINT and waits for the session to fold home (record_session protects its own signals).
 Type=simple
 EnvironmentFile=%h/.config/rosy/omx-session-%i.env
