@@ -129,7 +129,7 @@ def _judge_step(teacher, data, plan, row, before, start_z, skill):
     crash = sorted("~".join(p) for p in teacher.contacts["arm_arm"])
     held = rise > .015 and in_jaw < .06
     return dict(row, result="pass" if held and not moved and not arm_hits and not crash else "fail", lifted=held, rise_mm=round(rise * 1000, 1),
-                container_to_tcp_mm=round(in_jaw * 1000, 1), neighbours_disturbed=moved, arm_link_contacts=arm_hits, arm_arm_contacts=crash,
+                container_to_tcp_mm=round(in_jaw * 1000, 1), container_to_tcp_xyz_mm=[round(float(v) * 1000, 1) for v in pos - tcp], neighbours_disturbed=moved, arm_link_contacts=arm_hits, arm_arm_contacts=crash,
                 first_contact_phase=teacher.first)
 
 
@@ -142,7 +142,7 @@ def step(driver, teacher, data, plan, here, skill):
     before = {o: w.pose(data, o) for o in others}
     row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], skill=skill, lifted=False)
     phases, gen = SKILLS[skill]["phases"], teacher.step_gen(data, plan, others, teacher)
-    teacher.privileged = True
+    teacher.privileged = not getattr(teacher, "estimated_prefix", False)  # the real cell reaches the sub-skill on its zero estimate too
     try:
         target = next(gen)
         while teacher.phase not in phases:
@@ -333,7 +333,7 @@ def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
     return dict(verdict, dagger_status="recovery_failed")
 
 
-def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, compensate_zero=False):
+def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, compensate_zero=False, zero_est_noise_deg=0., estimated_prefix=False):
     """Each step of a task from the plan's nominal state with its own errors, the sub-skill judged alone."""
     task = tasks.get_task(driver.layout, name)
     here, rows = dict(task.get("start", {})), []
@@ -342,7 +342,7 @@ def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, c
             teacher = teaching.Teacher(driver.world, seed=seed + len(rows), pick_vision=getattr(driver, "pick_vision", False),
                                        belt_skew=getattr(driver, "belt_skew", False), cam_jitter=getattr(driver, "cam_jitter", False))
             disturb(teacher, seed + len(rows), zero_error_deg, lag, physics)
-            teacher.compensate_zero = bool(compensate_zero)
+            teacher.compensate_zero, teacher.zero_est_noise_deg, teacher.estimated_prefix = bool(compensate_zero), zero_est_noise_deg, bool(estimated_prefix)
             data = teacher.fresh(here)  # step_gen brings a belt container in itself
             rows.append(dict(step(driver, teacher, data, plan, here, skill), task=name, seed=seed))
             print(json.dumps(rows[-1], default=str), flush=True)
@@ -351,11 +351,23 @@ def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, c
     return rows
 
 
+def noise_degrees(text):
+    """--zero-est-noise-deg: one sigma for all five joints, or five comma-separated ones."""
+    values = tuple(float(v) for v in text.split(","))
+    if len(values) not in (1, 5) or min(values) < 0:
+        raise ValueError(text)
+    return values[0] if len(values) == 1 else values
+
+
 def options(parser):
     parser.add_argument("--pick-vision", action="store_true", help="infer belt pick pose from top camera")
     parser.add_argument("--belt-skew", action="store_true", help="spawn skewed/offset containers on belt")
     parser.add_argument("--cam-jitter", action="store_true", help="perturb physical top camera pose and self-calibrate online")
     parser.add_argument("--compensate-zero", action="store_true", help="calibrate and compensate joint-zero error online (G-20)")
+    parser.add_argument("--zero-est-noise-deg", type=noise_degrees, default=0.,
+                        help="with --compensate-zero: per-seed Gaussian error (sigma, deg) of the zero estimate, one value or five (joints 1-5); 0 is the oracle")
+    parser.add_argument("--estimated-prefix", action="store_true",
+                        help="judge: the IK before the sub-skill also runs on reported angles (+ the zero estimate with --compensate-zero), as on the real cell")
     parser.add_argument("--skill", choices=sorted(SKILLS), help="learn and judge only this part of each step; the teacher's IK does the rest")
     parser.add_argument("--zero-error-deg", type=float, default=0., help="per-seed joint-zero calibration error, uniform within +-deg (the twin fit found up to 4)")
     parser.add_argument("--servo-lag", action="store_true", help="per-seed per-joint servo lag in the measured 0.10-0.34 s")
@@ -367,7 +379,9 @@ def argv(args):
     vision = [*(["--pick-vision"] if getattr(args, "pick_vision", False) else []),
               *(["--belt-skew"] if getattr(args, "belt_skew", False) else []),
               *(["--cam-jitter"] if getattr(args, "cam_jitter", False) else []),
-              *(["--compensate-zero"] if getattr(args, "compensate_zero", False) else [])]
+              *(["--compensate-zero"] if getattr(args, "compensate_zero", False) else []),
+              *(["--zero-est-noise-deg", ",".join(map(str, np.atleast_1d(args.zero_est_noise_deg)))] if np.any(getattr(args, "zero_est_noise_deg", 0.)) else []),
+              *(["--estimated-prefix"] if getattr(args, "estimated_prefix", False) else [])]
     flags = [*(["--servo-lag"] if args.servo_lag else []), *(["--physics-ranges"] if args.physics_ranges else [])]
     return [*(["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg), *flags] if args.skill else []), *vision]
 
