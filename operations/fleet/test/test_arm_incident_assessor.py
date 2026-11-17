@@ -47,7 +47,10 @@ def service():
                 "joint_topic": f"/omx_commissioning/{name}/joint_states", "joint_names": ["joint1"],
                 "token_env": f"{name.upper()}_TOKEN", "credential_sha256": sha256(secret.encode()).hexdigest()}
     manifest = WorkcellObservationManifest.model_validate({"schema": "rosy.workcell-observations/1", "workcells": [{
-        "workcell_id": "bench", "label": "Bench", "arms": [arm("arm_b", "arm-b-secret")], "cameras": []}]})
+        "workcell_id": "bench", "label": "Bench", "arms": [arm("arm_b", "arm-b-secret")],
+        "cameras": [{"source_id": "top", "label": "Top", "role": "overhead", "arm_id": None,
+                     "image_topic": "/top/image_raw", "device_path": "/dev/v4l/by-id/top", "token_env": "TOP_TOKEN",
+                     "credential_sha256": sha256(b"top-secret").hexdigest()}]}]})
     return WorkcellObservations(manifest, {"arm_b": "arm-b-secret"}, wall=lambda: 100.0, monotonic=lambda: 10.0)
 
 

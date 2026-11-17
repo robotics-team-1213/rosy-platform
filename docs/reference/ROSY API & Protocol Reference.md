@@ -4827,6 +4827,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.406 | 2026-11-17 | Additive (D-1039): AI assessor 서비스 자격이 팔 사건 해제 경로만 부른다. `cause`·`basis` 필수(422 `AI_CLEAR_CAUSE_REQUIRED`), 저장 사실이 `machine_clearable`을 통과하지 않으면 403 `AI_CLEAR_KIND_REFUSED`, 같은 팔·같은 원인 assessor 해제 24시간 안이면 403 `AI_CLEAR_REPEAT_LIMIT`, 다른 경로는 403 `ARM_ASSESSOR_SCOPE_REQUIRED`. 사람 해제는 그대로. |
 | v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |
 | v1.402 | 2026-11-14 | Additive: Fleet 앞으로/뒤로 한 걸음(`POST /api/fleet/robots/{robot_id}/step`, CORE nudge 미션 재사용) |
 | v1.400 | 2026-11-14 | Additive: Fleet `POST /api/fleet/robots/{robot_id}/goal` `frame: "site"` — 콘솔 현장 지도 클릭을 기체 지도 프레임으로 바꿔 보낸다(D-1003), 증명 없으면 409 |
