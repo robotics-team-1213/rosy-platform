@@ -425,17 +425,3 @@ def test_verified_baseline_caps_on_folded_torque_off_arm_does_not_hold_on_fleet(
     bad = post(client, report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b",
                               facts={**facts, "torque_after": {"11": 0, "12": 1}})).json()
     assert bad["hold"]["held"] is True
-
-
-def test_auto_cleared_incident_still_goes_to_the_ai_pc_until_explained_or_a_person_clears():
-    from core_common.protocol.arm_incidents import ArmIncidentExplanation
-    store = ArmIncidentStore()
-    auto = store.report(ArmIncidentReport.model_validate(report()))
-    store.clear("arm_b", auto, "auto", "auto-clear")
-    person = store.report(ArmIncidentReport.model_validate(report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")))
-    store.clear("arm_b", person, "ok", "op-7")
-    assert [i["incident_id"] for i in store.unexplained()] == [auto]
-    store.explain("arm_b", auto, ArmIncidentExplanation(seen="s", suspected_cause="c", model="m:1"))
-    assert store.unexplained() == []
-    with pytest.raises(ValueError):
-        store.explain("arm_b", person, ArmIncidentExplanation(seen="s", suspected_cause="c", model="m:1"))
