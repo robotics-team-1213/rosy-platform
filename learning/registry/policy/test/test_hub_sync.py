@@ -147,3 +147,13 @@ def test_interrupted_readback_retries_same_commit_and_rejects_corruption(module,
     assert not (bundle / 'receipt.json').exists()
     receipt = module.upload_bundle(bundle, api=hub, operation=SimpleNamespace, downloader=download)
     assert receipt['bytes_verified'] and hub.uploads == 1
+
+
+def test_upload_without_explicit_token_never_uses_host_login(module, bundle, monkeypatch):
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', None)  # would fail differently if reached
+    with pytest.raises(ValueError, match='explicit team HF token'):
+        module.upload_bundle(bundle)
+    monkeypatch.setattr(sys, 'argv', ['hub_sync.py', 'upload', str(bundle)])
+    with pytest.raises(SystemExit):  # --token-file is required
+        module.main()
+    assert not (bundle / 'upload.json').exists()
