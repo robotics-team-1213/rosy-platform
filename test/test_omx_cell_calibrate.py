@@ -431,6 +431,63 @@ def test_a_scene_that_changed_during_the_remap_saves_no_map(tmp_path, monkeypatc
     assert "before.jpg" in kept and "after.jpg" in kept and "07.jpg" in kept
 
 
+def _tcp_remap(tmp_path, monkeypatch, shows, pairs):
+    """A remap over GRID at FK yaw 0 whose mark is the jaw `shows[i]` (ref|other), with both jaws' blobs at `pairs`."""
+    import types
+
+    def write(c, pose, _place, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"chunks": {"above_pick": [[pose["x"], pose["y"], pose["z"], pose["yaw_deg"], 0.0]]}}))
+        return path
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=write))
+    monkeypatch.setattr(cc.cell_pivot, "joints_tcp", lambda s, **k: tuple(s[:4]))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    o = (0.054 * math.cos(math.radians(79.0)), 0.054 * math.sin(math.radians(79.0)))
+    jaw = {"ref": -0.5, "other": 0.5}
+
+    class Cell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            return np.zeros((48, 64, 3), np.uint8)
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            return {"ok": True}
+
+    def mark(cell, config, near=None, report=None, **kw):
+        p, i = points[cell.i], cell.i
+        seen = [to_px((p[0] + s * o[0], p[1] + s * o[1])) for s in ((jaw[shows[i]], -jaw[shows[i]]) if i in pairs else (jaw[shows[i]],))]
+        report.update(reason=None, side=None, blobs=[[x, y, 400.0] for x, y in seen])
+        return seen[0]
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", mark)
+    config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
+              "calibrate": {"map_sites": ["pallet"], "tcp_marks": True}}
+    return cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=lambda row: None), points
+
+
+def test_a_tcp_remap_labels_the_seen_jaw_at_every_point_and_maps_the_tcp(tmp_path, monkeypatch):
+    """arm_a 2026-11-15: the remap marks were one jaw 28 mm off the TCP (one point the other jaw), so every pivot bias
+    held that offset (29.9 mm, refused). Labelled jointly, a pair fixing which jaw is which, the map is the TCP's."""
+    shows = ["ref", "ref", "other", "ref", "ref", "other", "ref", "ref"]
+    record, points = _tcp_remap(tmp_path, monkeypatch, shows, pairs={4, 6})
+    assert record["marks"] == "tcp" and len(record["points"]) == 8 and record["loo_error_mm"]["max"] < 0.5
+    H = np.array(record["homography"])
+    for p in points:  # the TCP's pixel (the jaws' middle) maps to the TCP
+        assert 1000 * math.dist(cc.cal.to_arm(H, to_px(p)), p) < 0.5
+    labels = json.loads(next((tmp_path / "remap-frames").iterdir()).joinpath("labels.json").read_text())
+    assert labels["sides"] == shows and labels["pairs"] == [4, 6] and labels["why"] is None
+
+
+def test_a_tcp_remap_that_cannot_tell_the_jaws_apart_saves_no_map(tmp_path, monkeypatch):
+    # one yaw, one jaw everywhere, no pair: "all ref" and "all other" fit alike and put the map 54 mm apart
+    with pytest.raises(SystemExit, match="jaw sides ambiguous"):
+        _tcp_remap(tmp_path, monkeypatch, ["ref"] * 8, pairs=set())
+
+
 def test_a_map_only_a_minority_of_the_marks_agree_on_is_refused():
     assert cc.enough_agree(5, 8) and cc.enough_agree(5, 9)
     assert not cc.enough_agree(5, 10)  # half: either side of the jaws could be the true one

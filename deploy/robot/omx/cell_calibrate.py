@@ -156,6 +156,7 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     import cell_scene_guard
 
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
+    tcp_marks, seen_jaws = bool((config.get("calibrate") or {}).get("tcp_marks")), []
     frames = work / "remap-frames" / time.strftime("%Y%m%d-%H%M%S")
     frames.mkdir(parents=True, exist_ok=True)
     before = cell.frame("top")
@@ -200,6 +201,12 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         row = {"point": [x, y], "mark": mark, "near": near}
         if mark is None and report.get("reason"):
             row["why"] = report["reason"]
+        if mark and tcp_marks:
+            fk_yaw = planned_yaw(lib, config)
+            if fk_yaw is None:
+                row["why"], mark = "no planned FK yaw for the jaw labelling", None
+            else:
+                seen_jaws.append({"tcp": (x, y), "yaw": fk_yaw, "pixel": tuple(mark), "blobs": report.get("blobs") or []})
         log(row)
         if mark:
             marks.append((mark, (x, y)))
@@ -209,6 +216,14 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     moved = cell_scene_guard.scene_moved(before, after)
     if moved:
         raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
+    if tcp_marks:  # each mark's arm point is the place of the jaw it is, so the map maps the TCP (jaws' middle)
+        import cell_jaw_side
+
+        why, marks, labels = cell_jaw_side.remap_marks(seen_jaws, config.get("params"))
+        (frames / "labels.json").write_text(json.dumps({"why": why, **(labels or {})}))
+        log({"jaw_labels": labels, "refused": why})
+        if why:
+            raise SystemExit(f"remap: {why}; no map saved; views in {frames}")
     seen, marks = marks, consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
     dropped = [{"pixel": list(p), "arm_m": list(a)} for p, a in seen if (p, a) not in marks]
     if dropped:
@@ -222,7 +237,20 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks],
         "loo_error_mm": cal.loo_error_mm(marks),
         "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        **({"marks": "tcp"} if tcp_marks else {}),
     })
+
+
+def planned_yaw(library: Path, config: dict) -> float | None:
+    """FK yaw of a library's above_pick frame (the top-down IK may plan the 180-deg twin), or None."""
+    import omx_tcp
+
+    tcp_x_m = omx_tcp.config_tcp(config, config.get("plan"))
+    try:
+        frame = json.loads(Path(library).read_text(encoding="utf-8"))["chunks"]["above_pick"][0][:5]
+        return float(cell_pivot.joints_tcp(frame, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))[3])
+    except (OSError, KeyError, IndexError, TypeError, ValueError):
+        return None
 
 
 def main(argv=None):

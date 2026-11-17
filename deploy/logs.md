@@ -4937,3 +4937,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `select_visit_yaws`가 각 yaw의 계획 라이브러리 above_pick 프레임 FK yaw를 읽어, 두 계획 yaw가 180 ± `post.yaw_pair_tol_deg` 안일 때만 짝으로 쓴다. 아니면 기존 1-yaw advisory 경로(또는 기하 없으면 skipped)로 간다. 진짜 마주 보는 짝은 `cell_jaw_side.label`(pivot `relabel`의 공동 판정을 떼어 낸 함수)로 두 표시의 집게 쪽을 함께 정한다. 같은 집게면 가운데가 중심이고, 쪽이 바뀌면 두 조합의 중심이 other_mm만큼 갈려 `jaw_sides_ambiguous`로 거절한다. `yaw_pair_gap`·`finger_identity`·rms·bias 가드는 그대로다. 모니터 행·결과에 `jaw_sides`를 남긴다.
 - 증거: 셀 읽기 전용 확인(visit-pallet-0/1.json 관절 동일, cal-monitor 두 행). 새 단위 시험(쌍둥이 계획은 한 번만 이동·advisory, 다른 집게 짝 수용·편향 복원, 바뀐 짝 거절). 원격 pytest 결과는 보고에 적는다.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-remap): remap 표시를 어느 집게인지 함께 정해 지도가 TCP(두 집게 가운데)를 따르게 한다
+- 원인: 11-15 arm_a remap 표시 8개 중 7개는 위쪽 집게, 1개는 아래쪽 집게였다(그 점은 consensus가 버림). 지도는 한 집게를 TCP로 놓아 약 27 mm(y) 어긋났고, 17:00 pivot bias 29.9 mm가 그 오프셋을 품었다.
+- 변경: 셀 설정 `calibrate.tcp_marks`가 켜지면 `remap`이 점마다 계획 FK yaw와 합의한 시도의 blob 목록(`mark_jaws` report `blobs`)을 모으고, `cell_jaw_side.remap_marks`가 모든 표시를 두 집게로 함께 시험한다(TCP = 가운데, 각 집게 TCP ∓ other_mm/2 at yaw + other_deg). 같은 시도의 두 번째 blob이 반대 집게 자리(other_mm/2 안)에 오면 그 점은 (두 blob 가운데, TCP)로 쓰고 선택을 확정한다. 확정 수와 rms가 같은 조합들의 지도가 pivot.side_agree_mm보다 다르면 지도를 저장하지 않는다. 그 뒤 consensus·enough_agree·LOO·map_agrees는 그대로다. 기록에 `"marks": "tcp"`가 붙고 `jaw_places`는 그 지도에서 기준 집게를 TCP에서 other_mm/2 반대쪽에 둔다. 지도 sha가 바뀌므로 옛 bias는 설계대로 무효다(remap 저장이 bias 파일을 비움).
+- 증거: 11-15 22:25 프레임 재생(222119는 before.jpg만 있어 표시 없음). 8점 모두 유지, 쪽 ref 7·other 1, 짝 4개 확정, rms 3.06 mm(다음 조합 14.25), LOO max 9.6 / mean 4.37 mm(옛 9.55 / 4.8, 옛 지도는 7점). 새 지도로 본 짝 간격 52.1-55.6 mm, 방향 67-91도, 짝 가운데-TCP 0.3-8.7 mm. 17:00 pivot을 새 지도(옛 rebase 변환 적용)로 재생하면 bias (-19.6, -1.2) = 19.6 mm(자유 g) / 16.6 mm(tcp 기하), 옛 지도는 29.8 mm. 한 점씩 뺀 지도에서 x -17~-27 mm로 남는다.
+- gate 변화: 없음.

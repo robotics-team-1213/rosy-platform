@@ -71,6 +71,9 @@ def test_the_side_follows_the_fk_yaw_through_the_jaw_model():
     assert other == pytest.approx((150, 100))
     geo = dict(config, pivot={"geometry": {"radius_mm": 20.0, "phase_deg": 0.0}})
     assert js.jaw_places(record, geo, "s", (0.2, 0.1), 0.0, 0.1)[0] == pytest.approx((220, 100))
+    # a TCP map (remap marks labelled to the jaws' middle): each jaw half the spacing off the TCP
+    ref, other = js.jaw_places(dict(record, marks="tcp"), config, "s", (0.2, 0.1), 0.0, 0.1)
+    assert ref == pytest.approx((200, 75)) and other == pytest.approx((200, 125))
 
 
 def test_both_jaws_seen_keep_the_two_jaw_pair_and_one_pair_side_off_a_jaw_does_not_count():

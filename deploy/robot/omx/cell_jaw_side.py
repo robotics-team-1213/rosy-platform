@@ -44,6 +44,8 @@ def jaw_places(record: dict, config: dict, site: str, tcp_xy, yaw_deg: float, z:
     import cell_pivot
 
     p, geo = config.get("params"), (config.get("pivot") or {}).get("geometry") or {}
+    if not geo and record.get("marks") == "tcp":  # a TCP map: the reference jaw is half the spacing off the middle
+        geo = tcp_geometry(p)
     a = math.radians(yaw_deg + geo.get("phase_deg", 0.0))
     ref = (tcp_xy[0] + geo.get("radius_mm", 0.0) / 1000 * math.cos(a), tcp_xy[1] + geo.get("radius_mm", 0.0) / 1000 * math.sin(a))
     b, r = math.radians(yaw_deg + prm.get(p, "jaw_side.other_deg")), prm.get(p, "jaw_side.other_mm") / 1000
@@ -227,6 +229,75 @@ def label(marks: list, yaws: list, sides: list, params=None, geometry: dict | No
     if spread > tol:
         return f"jaw sides ambiguous: labellings within {1000 * tol:.0f} mm rms put the centre {1000 * spread:.1f} mm apart", chosen, None, record
     return None, chosen, near[0][3], record
+
+
+MAX_REMAP = 12  # remap points labelled jointly (2**12 affine fits)
+
+
+def tcp_geometry(params=None) -> dict:
+    """The reference jaw about the TCP when the TCP is the jaws' middle: half of jaw_side.other_mm, opposite the other
+    jaw (a `pivot.geometry` for maps whose marks are the TCP, record "marks": "tcp")."""
+    return {"radius_mm": prm.get(params, "jaw_side.other_mm") / 2, "phase_deg": prm.get(params, "jaw_side.other_deg") + 180.0}
+
+
+def remap_marks(points: list, params=None):
+    """(refusal or None, [(pixel, arm_m)], record): remap marks whose arm point is where the seen jaw really was.
+
+    A remap mark is one jaw (or both), not the TCP; the 2026-11-15 arm_a map followed one jaw 28 mm off the TCP and
+    every pivot bias then held that offset. With the TCP the jaws' middle, the reference jaw stands at TCP - o/2 and
+    the other at TCP + o/2 (o = jaw_side.other_mm at FK yaw + other_deg). Every point's mark is tried as either jaw,
+    an affine map is fitted to (pixel, jaw place) for each choice, and a second blob of the same try that the map puts
+    within other_mm/2 of the opposite jaw confirms the choice; the most confirmed, then lowest-rms choice is kept. A
+    confirmed point becomes (middle of both blobs, TCP), the rest (mark, its jaw's place). Choices as confirmed and
+    within pivot.side_agree_mm rms whose maps differ by more than that at any mark are refused: at one yaw "all one
+    jaw" and "all the other" fit alike and only a seen pair tells them apart. `points`: {"tcp", "yaw", "pixel", "blobs"}."""
+    from itertools import product
+
+    n = len(points)
+    if n > MAX_REMAP:
+        return f"jaw sides unlabelled: {n} remap marks, at most {MAX_REMAP}", None, None
+    if n < 3:
+        return None, [(tuple(q["pixel"]), tuple(q["tcp"])) for q in points], None  # too few for a map; the caller refuses
+    other_m, other_deg = prm.get(params, "jaw_side.other_mm") / 1000, prm.get(params, "jaw_side.other_deg")
+    o = np.array([(other_m * math.cos(math.radians(q["yaw"] + other_deg)), other_m * math.sin(math.radians(q["yaw"] + other_deg)))
+                  for q in points])
+    tcp = np.array([q["tcp"] for q in points], float)
+    A = np.array([[q["pixel"][0], q["pixel"][1], 1.0] for q in points], float)
+    if np.linalg.matrix_rank(A) < 3:
+        return "remap marks degenerate (collinear or repeated)", None, None
+    pinv = np.linalg.pinv(A)
+    others = [[b for b in q.get("blobs") or [] if math.dist(b[:2], q["pixel"]) > 1.0] for q in points]
+    fits = []
+    for choice in product((-0.5, 0.5), repeat=n):
+        s = np.array(choice)[:, None]
+        coef = pinv @ (tcp + s * o)  # 3x2: arm = [u v 1] @ coef
+        rms = math.sqrt(float(np.mean(np.sum((A @ coef - (tcp + s * o)) ** 2, axis=1))))
+        partners = {}
+        for i, blobs in enumerate(others):
+            want = tcp[i] - s[i] * o[i]
+            gaps = [(math.dist(np.array([b[0], b[1], 1.0]) @ coef, want), b) for b in blobs]
+            gap, b = min(gaps, key=lambda g: g[0], default=(math.inf, None))
+            if gap <= other_m / 2:
+                partners[i] = b
+        fits.append((-len(partners), rms, choice, coef, partners))
+    tol = prm.get(params, "pivot.side_agree_mm") / 1000
+    fits.sort(key=lambda f: (f[0], f[1]))
+    best = fits[0]
+    near = [f for f in fits if f[0] == best[0] and f[1] <= best[1] + tol]
+    spread = max(float(np.max(np.linalg.norm(A @ f[3] - A @ best[3], axis=1))) for f in near)
+    record = {"sides": ["ref" if c < 0 else "other" for c in best[2]], "pairs": sorted(best[4]), "rms_mm": round(1000 * best[1], 2),
+              "next_rms_mm": [round(1000 * f[1], 2) for f in fits[1:4]], "map_spread_mm": round(1000 * spread, 1)}
+    if spread > tol:
+        return (f"jaw sides ambiguous: {len(near)} labellings with {-best[0]} seen pairs within {1000 * tol:.0f} mm rms "
+                f"put the map {1000 * spread:.1f} mm apart"), None, record
+    marks = []
+    for i, q in enumerate(points):
+        if i in best[4]:
+            b = best[4][i]
+            marks.append((((q["pixel"][0] + b[0]) / 2, (q["pixel"][1] + b[1]) / 2), tuple(q["tcp"])))
+        else:
+            marks.append((tuple(q["pixel"]), tuple(float(v) for v in tcp[i] + best[2][i] * o[i])))
+    return None, marks, record
 
 
 def side_check(marks, tcps, hows, kept_tcps, radius_mm: float, phase_deg: float, params=None, arm=None):

@@ -1002,13 +1002,13 @@
   "value": 54.0,
   "unit": "mm",
   "source": "measured",
-  "evidence": "2026-11-17 replay of 73 saved remap tries (arm_a 20261115-222550, arm_b 20261116-110919): the other jaw's blob 57.8 mm (arm_a, n 11) and 52.3 mm (arm_b far points, n 36) from the reference jaw"
+  "evidence": "2026-11-17 replay of 73 saved remap tries (arm_a 20261115-222550, arm_b 20261116-110919): the other jaw's blob 57.8 mm (arm_a, n 11) and 52.3 mm (arm_b far points, n 36) from the reference jaw. 2026-11-17 TCP-labelled arm_a remap replay (remap_marks, 4 seen pairs, map rms 3.1 mm): 52.1, 52.3, 55.1, 55.2, 55.6 mm through the TCP map, pair middles 0.3-8.7 mm from the TCP; the TCP = jaws' middle model (each jaw other_mm/2 from the TCP) holds"
  },
  "jaw_side.other_deg": {
   "value": 79.0,
   "unit": "deg",
   "source": "measured",
-  "evidence": "2026-11-17 replay of 73 saved remap tries (arm_a 20261115-222550, arm_b 20261116-110919): at FK yaw + 78.1 (arm_a, remap yaw 0) and + 78.9 deg (arm_b, remap yaw -90); either arm's value alone put the other arm's marks within 15 px"
+  "evidence": "2026-11-17 replay of 73 saved remap tries (arm_a 20261115-222550, arm_b 20261116-110919): at FK yaw + 78.1 (arm_a, remap yaw 0) and + 78.9 deg (arm_b, remap yaw -90); either arm's value alone put the other arm's marks within 15 px. 2026-11-17 TCP-labelled arm_a remap replay: 67.0, 79.4, 87.7, 90.6 deg (and -98.4 = 81.6 seen from the other jaw) through the TCP map; arm_a 17:00 pivot free fit (no jaw params) 71 deg, 53.6 mm"
  },
  "jaw_side.roi_px": {
   "value": 45.0,
