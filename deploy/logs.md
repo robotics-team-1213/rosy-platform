@@ -4910,3 +4910,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `deploy/site/control_unit_check.py`·`rosy-control-unit-check.{service,timer}`(R·셀 PC, 5분, host-state·services.yaml 선언), 모든 역할에 `avahi-daemon` 선언, model-watch는 이름이 안 풀리는 꺼진 로봇을 건너뜀, Fleet peer 전이 로그와 `manifest_digest`(API v1.404).
 - 증거: R(`rosy-fleet-r`)·셀(`rosy-arm-cell`) 실호스트에서 검사기 exit 0, R 컨테이너의 Fleet peer 클라이언트가 CELL-A를 `site-2026-11-17-r1`로 AVAILABLE 판정. 호스트 수리(인증서 SAN·manifest 통일·8544 LAN 게시·avahi bind)는 손으로 적용, 백업 `.bak-20261117-mdns`.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · feat(omx-pivot): 위에서 집게 하나만 보여도 pivot 표시를 찾는다
+- 변경: `cell_jaw_side.py`(새 모듈)가 FK yaw로 기준 집게·다른 집게의 화소를 예측하고, 열림-닫힘 차분을 두 예측 원(`jaw_side.roi_px`) 안과 D435 높이 띠 안으로만 제한한다. 다른 집게 원의 blob은 기준 집게 자리로 옮긴다. `pivot_calibrate`는 yaw마다 시도 프레임·`jaws.json`·`depth.raw`를 `work/pivot-frames/`에 남긴다. `cell_depth`의 v4l2 시간 한도는 13프레임(6 fps)보다 짧아지지 않는다(셀 배포본 11-13의 1.8 s가 늘 None을 냄). 원 적합과 모든 pivot 가드는 그대로다.
+- 증거: 저장된 remap 시도 73개(arm_a 16, arm_b 57) 오프라인 재생에서 기준 화소 15 px 안: 이전 19/73 → 이후 65/73(arm_b 먼 점 0/36 → 36/36), arm_s 대조군 32/32 유지. 재생 스크립트는 저장소 밖(`D:/DevTemp/jaw-loc/replay.py`). 원격 pytest는 아직 돌리지 않았다.
+- gate 변화: 없음.

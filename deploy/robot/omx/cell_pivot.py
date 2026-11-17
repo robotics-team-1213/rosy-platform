@@ -19,6 +19,7 @@ import math
 import sys
 import time
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_attempts  # noqa: E402
 import cell_calibration as cal  # noqa: E402
 import cell_params as prm  # noqa: E402
+import cell_jaw_side  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
 from cell_pivot_bias import (  # noqa: E402,F401  (re-exported)
     BIAS_REACH_MM, SCHEMA, bias_at, bias_path, circle_center_sigma_mm, fit_pivot_yaw,
@@ -60,12 +62,13 @@ def settled_frame(cell, sleep=time.sleep, clock=time.monotonic, limit_s: float |
         before = now
 
 
-def jaw_blobs(closed, opened, params=None, colour: bool = False) -> list:
-    """(cx, cy, area) of the changed blobs of plausible size; [] when the frames barely differ."""
+def jaw_blobs(closed, opened, params=None, colour: bool = False, within=None) -> list:
+    """(cx, cy, area) of the changed blobs of plausible size (only inside the `within` mask); [] when barely any change."""
     import cv2
 
     diff_px, max_blob = prm.get(params, "pivot.diff_px", DIFF_PX), prm.get(params, "pivot.max_blob", MAX_BLOB)
     mask = _changed_mask(closed, opened, diff_px, colour)
+    mask = mask if within is None else cv2.bitwise_and(mask, within)
     if int(np.count_nonzero(mask)) <= diff_px:
         return []
     # pieces this close are one mark: over a box top the gripper body hid the fingers and the open-closed change came
@@ -85,11 +88,12 @@ def jaw_blobs(closed, opened, params=None, colour: bool = False) -> list:
     return blobs
 
 
-def _jaw_pairs(closed, opened, params=None, colour: bool = False) -> list:
+def _jaw_pairs(closed, opened, params=None, colour: bool = False, within=None) -> list:
     """Pairs of changed-finger blobs matching the gap window; retries unmerged when dilation fuses narrow jaws."""
     import cv2
 
     mask = _changed_mask(closed, opened, prm.get(params, "pivot.diff_px", DIFF_PX), colour)
+    mask = mask if within is None else cv2.bitwise_and(mask, within)
     min_side = prm.get(params, "jaw_centre.min_side_px")
     gap_lo, gap_hi = prm.get(params, "jaw_centre.gap_lo_px"), prm.get(params, "jaw_centre.gap_hi_px")
     cfg_merge = int(prm.get(params, "jaw_centre.merge_px"))
@@ -147,11 +151,12 @@ def _save_mark_try(keep_dir: Path, idx: int, closed, now, mask, all_blobs: list,
 
 
 def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6, near=None,
-              keep=None, report: dict | None = None):
+              keep=None, report: dict | None = None, jaws: dict | None = None):
     """The jaw mark in the top view as (cx, cy), or None when no two marks agree. `near` = ([pixel, ...], radius_px):
     only blobs that close to one of the places the jaws should show count, nearest first - with the arm stretched out,
     opening the jaws shook the whole link and the largest changed blob was not the jaws (2026-10-29, a look 30 mm off).
-    Several places: either finger can be the one the camera sees (cell_look)."""
+    Several places: either finger can be the one the camera sees (cell_look). `jaws` (cell_jaw_side.pivot_jaws): one
+    visible jaw, found only in discs around both predicted jaws and moved to the reference jaw's place."""
     import cell_pipeline as cp
 
     mark_cfg, p = config.get("jaw_mark", {}), config.get("params")
@@ -174,7 +179,7 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
             return fail("grip_to failed")
         now = settled_frame(cell, sleep, clock, params=p)
         explicit_colour = mark_cfg.get("colour")
-        detect = jaw_centres if mark_cfg.get("centre") else jaw_blobs
+        detect = partial(cell_jaw_side.marks, jaws=jaws) if jaws is not None else jaw_centres if mark_cfg.get("centre") else jaw_blobs
         if explicit_colour is not None:
             used_colour = bool(explicit_colour)
             all_blobs = detect(closed, now, p, colour=used_colour)
@@ -314,13 +319,8 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     params = config.get("params")
     tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else (config.get("plan") or {}).get("tcp_x_m")
     z_view = pivot_z_view(config, site)
-    expected_near = None
-    H = record.get("homography")
-    if isinstance(H, list) and len(H) == 3 and "top" in (config.get("cameras") or {}):
-        try:
-            expected_near = ([mark_pixel(record, config, site, point, z_view)], prm.get(params, "pivot.follow_px", FOLLOW_PX) + 40)
-        except (np.linalg.LinAlgError, KeyError, TypeError, ValueError, ZeroDivisionError):
-            expected_near = None
+    expected_near = cell_jaw_side.near_tcp(record, config, site, point, z_view, prm.get(params, "pivot.follow_px", FOLLOW_PX) + 40)
+    frames = work / "pivot-frames" / f"{site}-{time.strftime('%Y%m%d-%H%M%S')}"  # every try kept for replay, as remap does
     view = {"x": point[0], "y": point[1], "z": round(z_view - config["plan"]["approach_m"], 4)}
     marks, tcps = [], []
     try:
@@ -342,11 +342,14 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
             import joint_jitter
 
             state = (joint_jitter.settled_state(cell, params) or {}).get("state")
-            pixel = mark_jaws(cell, config, sleep, near=expected_near)
+            fk = None if state is None else joints_tcp(state, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
+            keep = frames / f"{i:02d}"
+            pixel = mark_jaws(cell, config, sleep, near=expected_near, keep=keep,
+                              jaws=cell_jaw_side.pivot_jaws(cell, config, record, site, fk, keep))
             log({"pivot": yaw, "mark_px": pixel})
-            if state is None or pixel is None:
+            if fk is None or pixel is None:
                 continue
-            x, y, z, fk_yaw = joints_tcp(state, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
+            x, y, z, fk_yaw = fk
             marks.append(mark_to_arm(record, config, site, pixel, z))
             tcps.append((x, y, z, fk_yaw))
     finally:

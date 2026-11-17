@@ -997,5 +997,35 @@
   "unit": "m",
   "source": "measured",
   "evidence": "2026-10-29: the floor's 0.08 view is 0.074 above its surface; over the Pinky tray an absolute 0.08 knocked a box off"
+ },
+ "jaw_side.other_mm": {
+  "value": 54.0,
+  "unit": "mm",
+  "source": "measured",
+  "evidence": "2026-11-17 replay of 73 saved remap tries (arm_a 20261115-222550, arm_b 20261116-110919): the other jaw's blob 57.8 mm (arm_a, n 11) and 52.3 mm (arm_b far points, n 36) from the reference jaw"
+ },
+ "jaw_side.other_deg": {
+  "value": 79.0,
+  "unit": "deg",
+  "source": "measured",
+  "evidence": "2026-11-17 replay of 73 saved remap tries (arm_a 20261115-222550, arm_b 20261116-110919): at FK yaw + 78.1 (arm_a, remap yaw 0) and + 78.9 deg (arm_b, remap yaw -90); either arm's value alone put the other arm's marks within 15 px"
+ },
+ "jaw_side.roi_px": {
+  "value": 45.0,
+  "unit": "px",
+  "source": "tuned",
+  "evidence": "2026-11-17 replay of 73 saved remap tries (arm_a 20261115-222550, arm_b 20261116-110919): 35/45 px kept 14/16, 15/21, 36/36 within 15 px; 60 px let a wrong blob into arm_b (spread 12 px). Covers the unknown reference-jaw radius (about 20 mm) when pivot.geometry is not stated"
+ },
+ "jaw_side.band_mm": {
+  "value": 18.0,
+  "unit": "mm",
+  "source": "theory",
+  "evidence": "2026-11-17 live D435: temporal depth noise p99 5.3 mm; container tops 45-60 mm under the jaws at z_view 0.10-0.125. Not yet tested on saved jaw depth frames"
+ },
+ "jaw_side.above_mm": {
+  "value": 74.0,
+  "unit": "mm",
+  "source": "theory",
+  "evidence": "tcp_x_m 0.074: the gripper from the TCP up to the wrist axis, whose linkage also changes when the jaws open"
  }
 }
