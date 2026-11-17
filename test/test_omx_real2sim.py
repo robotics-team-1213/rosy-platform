@@ -222,7 +222,7 @@ def test_layout_takes_the_ship_from_a_snapshot(tmp_path):
     path = tmp_path / "snap.json"
     path.write_text(json.dumps(s), encoding="utf-8")
     base, moved = sites.Layout(), sites.Layout(cell_snapshot=str(path), ship_pose="snapshot")
-    a, b = base.sites["ship-stern-l0"]["xy"], moved.sites["ship-stern-l0"]["xy"]
+    a, b = base.sites["ship-h1r1-l0"]["xy"], moved.sites["ship-h1r1-l0"]["xy"]
     assert b[0] - a[0] == pytest.approx(.1705 - base.choices["ship_stern_x_m"], abs=1e-6)
     assert b[1] - a[1] == pytest.approx(-.011 - base.choices["ship_centre_y_m"], abs=1e-6)
     with pytest.raises(ValueError, match="no measured ship"):
