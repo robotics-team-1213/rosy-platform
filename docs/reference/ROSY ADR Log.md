@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1024 | OMX 학습 정책의 실물 입회 시험을 하루 안에 연다 — D-793 단계를 줄이되 장치 한계·정지·두 사람 확인은 그대로 둔다. [전문](../adr/D-1024-omx-learned-policy-supervised-real-trial-fast-track.md) | Accepted (2026-11-14, 사용자 지시; 구현·원격 시험, 실물 수용 없음) |
 | D-1034 | 원격·분리 제어 유닛의 중앙 Rosy Account 연동, 터널 브리지, 기계 토큰 분리 및 공용 브라우저 세션. [전문](../adr/D-1034-paired-control-unit-central-account-wiring.md) | Accepted (2026-11-15, 사용자 결정; `cell-a`↔`rosy-fleet-r` 실물 연동 검증·`shared/web` 통합 반영, 서명 compose 템플릿·R 이미지 갱신 별도) |
 | D-1033 | OMX 1팔·2팔 공통 프로필 정본, 양팔 실행·Fine 탑재 경계 및 카메라 투영 디지털 트윈 운영 규격. [전문](../adr/D-1033-omx-per-arm-profile-bimanual-and-twin-plan.md) | Proposed (2026-11-15, 사용자 지시 + Gemini 4 Hydrogen · GLM-5.3 2라운드 패널 합의; 실물 측정·카메라 복구 및 증분 B·Fine 구현 별도) |
 | D-990 | Monitoring 화면의 Rosy Account 로그인. [전문](../adr/D-990-monitoring-account-receiver.md) | Accepted (2026-11-07, 사용자 지시; Account client 등록·배포·현장 수용 별도) |

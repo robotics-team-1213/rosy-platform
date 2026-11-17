@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sqlite3
 from contextlib import AsyncExitStack, asynccontextmanager
 from functools import partial
@@ -276,6 +277,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         pairing_sync_token=pairing_sync_token, workcell_observations=workcell_observations,
         goal_evidence_service=goal_evidence_service, cell_goal_registry=cell_goal_registry,
         cell_goal_evidence_service=cell_goal_evidence_service, sightings=sightings, policy_evidence=policy_evidence)
+    from fleet.server.credential_isolation import assert_lease_tokens_isolated
+    assert_lease_tokens_isolated(os.environ, (*other_tokens, console_token))
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import install_cell_goal_evidence_routes
         install_cell_goal_evidence_routes(app, cell_goal_evidence_service)
