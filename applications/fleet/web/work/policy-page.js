@@ -1,5 +1,6 @@
 // D-793 /console/policy: 학습 정책 단계·승인 창·확인 요청·사고 잠금. 규칙은 서버가 판단한다.
 import {createFleetClient} from '/common/fleet-client.js';
+import {createPollGate} from '/console/assets/poll-gate.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {loginHref} from '/console/assets/login-return.js';
@@ -177,11 +178,13 @@ function render() {
 }
 
 let refreshing = false;
+const gate = createPollGate();
 async function refresh() {
-  if (!workcell() || refreshing) return;  // a slow answer must not stack 2 s polls on top of each other
+  if (!workcell() || refreshing || !gate.due()) return;  // a slow answer must not stack 2 s polls on top of each other
   refreshing = true;
-  try { state = await request(base()); render(); }
+  try { state = await request(base()); gate.ok(); render(); }
   catch (error) {
+    gate.fail(error.status, error.code);
     $('policy-content').hidden = true;
     $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable');
   } finally { refreshing = false; }
@@ -232,6 +235,7 @@ async function start() {
       $('policy-verdict').textContent = '설정된 OMX 작업셀이 없습니다. 사이트 설치 담당자에게 작업셀 등록을 요청하세요.';
       $('policy-verdict').setAttribute('state', 'empty'); return;
     }
+    gate.reset();
     await refresh();
     setInterval(() => { if (!document.hidden) refresh(); }, 2000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });

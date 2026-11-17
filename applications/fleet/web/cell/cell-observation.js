@@ -1,4 +1,5 @@
 import {createScope} from '/common/scope.js';
+import {createPollGate} from '/console/assets/poll-gate.js';
 import {frameBadge} from '/console/assets/vision-view.js';
 import {createRobotProfiles} from '/console/assets/robot-profile-view.js';
 import {createMotorHealthState, jointLabel, renderMotorHealth, renderMotorHealthSummary} from '/common/motor-health.js';
@@ -66,6 +67,7 @@ export const incidentLines = incident => {
 export function createCellObservation({request, root, credential = () => ''}) {
   const empty = element('ui-empty', '접속하면 작업 셀의 실제 관측을 확인할 수 있습니다.');
   let life = null, pending = false, layout = '', disposed = false;
+  const gate = createPollGate(); // 관측 라우트가 없는 Fleet 은 로그인 전까지 두드리지 않는다
   let profiles = null;
   const arms = new Map(), cameras = new Map();
   // camera frames this browser held when a guard stop arrived, by session; the field PC keeps its own copies
@@ -102,7 +104,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
     empty.hidden = false; root.replaceChildren(empty);
   }
   function clear() {
-    life?.dispose(); life = null; pending = false;
+    life?.dispose(); life = null; pending = false; gate.reset();
     reset(); empty.textContent = '접속하면 작업 셀의 실제 관측을 확인할 수 있습니다.';
   }
   function build(workcells) {
@@ -389,7 +391,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
   }
 
   async function refresh() {
-    if (disposed || pending) return;
+    if (disposed || pending || !gate.due()) return;
     if (!life) {
       const paintProfiles = () => {
         for (const [source, entry] of arms) {
@@ -433,6 +435,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
     try {
       const state = await request('/api/fleet/workcell-observations', {signal: scope.signal, timeoutMs: 1500});
       if (life !== scope || scope.signal.aborted) return;
+      gate.ok();
       build(state.workcells);
       const activeScope = syncScope();
       // stops already in the history when the page opened have no frames here; later ones get this page's frames
@@ -485,6 +488,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
       if (life !== scope || scope.signal.aborted) return;
       if (error.status === 401 || error.status === 403) clear();
       else {
+        gate.fail(error.status, error.code);
         for (const entry of arms.values()) { entry.health.disconnect(); paintHealth(entry, true); }
         empty.hidden = false;
         empty.textContent = error.status === 503 ? '관측 구성을 확인할 수 없습니다.' : '관측 연결 확인 중 · 오래된 값은 표시하지 않습니다.';

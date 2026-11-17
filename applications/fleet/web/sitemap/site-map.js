@@ -3,6 +3,7 @@ import {OPERATOR_REASON} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
 // and preview a D-490 trip plan. D-540 4: robots are drawn read-only; trips start and stop on the 관제 robot card.
 import {createFleetClient} from '/common/fleet-client.js';
+import {createPollGate} from '/console/assets/poll-gate.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
@@ -252,9 +253,12 @@ function syncButtons() {
 }
 
 let lastPollSig = null;
+const tripsGate = createPollGate(), guideGate = createPollGate(); // 꺼진 기능은 다음 load() 까지 두드리지 않는다
 async function pollRobots() {
   if (state.loadState === 'ready' && !document.hidden && $('map-source').value === 'active') {
-    const [tripsRes, guideRes] = await Promise.allSettled([request('/api/fleet/trips'), request('/api/fleet/guide')]);
+    const gated = (gate, path) => !gate.due() ? Promise.reject(Object.assign(new Error('route absent'), {status: 404})) // 닫힌 문 = 라우트 없음
+      : request(path).then(value => { gate.ok(); return value; }, error => { gate.fail(error.status, error.code); throw error; });
+    const [tripsRes, guideRes] = await Promise.allSettled([gated(tripsGate, '/api/fleet/trips'), gated(guideGate, '/api/fleet/guide')]);
     if (tripsRes.status === 'fulfilled') {
       state.open = tripsRes.value.open || [];
       status('trip-run', state.open.length ? `이 지도로 운행 중 · ${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}` : '진행 중인 운행 없음', state.open.length ? 'pending' : 'empty');
@@ -269,7 +273,7 @@ async function pollRobots() {
 pollRobots();
 
 async function load() {
-  state.planEpoch += 1;
+  state.planEpoch += 1; tripsGate.reset(); guideGate.reset();
   const [activeRes, draftRes, profilesRes, stateRes, calRes] = await Promise.allSettled([
     request('/api/fleet/site-map/active'),
     request('/api/fleet/site-map/draft'),
