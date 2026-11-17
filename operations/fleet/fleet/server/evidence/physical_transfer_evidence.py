@@ -10,9 +10,10 @@ import json
 import math
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import Field, field_serializer, model_validator
 
 from core_common.protocol.arm_transfer import ArmJournalId
+from core_common.protocol.arm_transfer_observations import _Closed
 from core_common.protocol.arm_transfer_preflight import ArmDigest, ArmPhysicalRef
 from rosy.world.state.projections.omx_geometry import ArmGeometry
 from rosy.world.state.projections.physical_transfer import Bounds3, PhysicalPose, TransferObservation
@@ -23,10 +24,6 @@ Counter = Annotated[int, Field(strict=True, ge=0, lt=2**63)]
 Nonnegative = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
 Scope = tuple[ArmPhysicalRef, ArmPhysicalRef]
 ResourceId = Annotated[ArmPhysicalRef, Field(max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
-
-
-class _Closed(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
 
 class TransferParticipant(_Closed):

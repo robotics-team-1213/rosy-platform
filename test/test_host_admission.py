@@ -27,12 +27,12 @@ FULL = {"cores": 20.0, "mem": 22.0, "site": False, "light": False}
 def test_a_full_host_gets_up_to_max_main_workers_and_each_job_sizes_xdist_from_its_share():
     rooms = {"a": dict(FULL), "small": {**FULL, "cores": 4.0, "mem": 3.0}, "light": {**FULL, "light": True}}
     plan = wq.workers(["a", "small", "light"], [["x"]] * 10, rooms)
-    assert plan.count(("a", "any")) == wq.MAX_MAIN == 6 and rooms["a"]["share"] == 6
+    assert plan.count(("a", "any")) == wq.MAX_MAIN == 3 and rooms["a"]["share"] == 3
     assert plan.count(("small", "any")) == 1 and "share" not in rooms["small"]  # 3 GB: room for one more only
     assert plan.count(("light", "any")) == 1
     assert wq.workers(["b"], [["x"]] * 2, {"b": dict(FULL)}).count(("b", "any")) == 2, "never more than the jobs"
     words, extra, note = xp.plan(["pkg/test"], rooms["a"], [])
-    assert words == ["ROSY_JOB_CORES=3"] and extra[:2] == ["-n", "3"] and "1/6 of the host" in note
+    assert words == ["ROSY_JOB_CORES=6"] and extra[:2] == ["-n", "6"] and "1/3 of the host" in note
     assert xp.plan(["pkg/test"], FULL, [])[0] == [f"ROSY_JOB_CORES={xp.MAX_WORKERS}"], "one worker: whole host"
 
 
@@ -178,3 +178,23 @@ def test_turn_rounds_and_urgent_landings_mark_their_jobs_to_skip_host_queues(mon
     monkeypatch.setattr(land.land_checks, "run_tests", lambda *a, **k: seen.append(land.os.environ[land.TURN_ENV]))
     land.run_tests(Path("."), argparse.Namespace(urgent=urgent), [], Path("."), round_no)
     assert seen == [marked] and land.os.environ[land.TURN_ENV] == ""
+
+
+def test_fallback_hosts_prefer_higher_free_capacity_and_unblocked(monkeypatch):
+    import remote_pytest as rp
+
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "tight@1 blocked@2 roomier@3")
+    monkeypatch.setenv(xp.TURN_ENV, "1")
+    monkeypatch.setattr(rp, "SITES", set())
+    monkeypatch.setattr(rp, "check_tailscale_profile", lambda *a, **k: None)
+    probes = {
+        "tight@1": {"nproc": 4, "load1": 2.0, "avail_gb": 1.5, "total_gb": 8.0, "pytest": True,
+                    "pytest_blocked": False, "sim": False, "busy": False, "lock_cores": 0, "lock_gb": 0, "site": False},
+        "blocked@2": {"nproc": 16, "load1": 0.0, "avail_gb": 3.5, "total_gb": 32.0, "pytest": True,
+                      "pytest_blocked": True, "sim": False, "busy": False, "lock_cores": 0, "lock_gb": 0, "site": False},
+        "roomier@3": {"nproc": 12, "load1": 0.0, "avail_gb": 3.0, "total_gb": 32.0, "pytest": True,
+                      "pytest_blocked": False, "sim": False, "busy": False, "lock_cores": 0, "lock_gb": 0, "site": False},
+    }
+    monkeypatch.setattr(rp, "probe", probes.get)
+    assert rp.placed_hosts("pytest") == ["roomier@3", "tight@1", "blocked@2"]

@@ -31,9 +31,12 @@ class _DynamixelMotion:
 
     def _send(self, q: Sequence[float]) -> None:
         self._check_fence()
-        limits, vel = self.config.position_limits, self._vel
-        for name, value in zip(self.config.joint_names, q):
-            lower, upper = limits[name]
+        vel = self._vel
+        limit_pairs = getattr(self, "_limit_pairs", None)
+        if limit_pairs is None:
+            limit_pairs = tuple((name, *self.config.position_limits[name])
+                                for name in self.config.joint_names)
+        for (name, lower, upper), value in zip(limit_pairs, q):
             if not lower <= value <= upper:
                 raise _Hold(f"JOINT_LIMIT: {name}")
         outside = self._outside_workspace(q)

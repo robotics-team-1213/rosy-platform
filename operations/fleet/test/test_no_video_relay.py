@@ -26,6 +26,9 @@ DRAWING_IMPORTS = {
 
 FORBIDDEN_ROUTE = re.compile(r"video|stream|camera|preview|proxy|relay|mjpeg|jpeg|image",
                              re.IGNORECASE)
+ALLOWED_GEOMETRY_ROUTES = frozenset({
+    "/api/fleet/site-map/draft-from-camera",  # v1.385: JSON geometry candidate validation only, no image/video bytes
+})
 
 
 def _prod_files():
@@ -69,7 +72,7 @@ def test_fleet_server_has_no_video_relay_routes():
     app = create_app(FleetConsole(endpoints, [FakeRobot("rosy_01")]))
     paths = sorted({route.path for route in app.routes if hasattr(route, "path")})
     assert paths, "no routes enumerated — the guard is vacuous"
-    hit = [path for path in paths if FORBIDDEN_ROUTE.search(path)]
+    hit = [path for path in paths if path not in ALLOWED_GEOMETRY_ROUTES and FORBIDDEN_ROUTE.search(path)]
     assert not hit, f"fleet server exposes video relay routes: {hit}"
 
 
@@ -87,5 +90,5 @@ def test_pairing_enabled_fleet_still_has_no_video_relay_routes(tmp_path):
                      pairing_sync_token="sync-" + "secret-1")
     paths = sorted({route.path for route in app.routes if hasattr(route, "path")})
     assert any(path.startswith("/api/fleet/pairing/v1/") for path in paths)
-    hit = [path for path in paths if FORBIDDEN_ROUTE.search(path)]
+    hit = [path for path in paths if path not in ALLOWED_GEOMETRY_ROUTES and FORBIDDEN_ROUTE.search(path)]
     assert not hit, f"fleet server exposes video relay routes: {hit}"

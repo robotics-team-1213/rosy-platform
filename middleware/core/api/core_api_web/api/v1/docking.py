@@ -61,6 +61,7 @@ class DockTypeRequest(BaseModel):
     acquire_creep_m: float = 0.0
     backoff_m: float | None = None
     undock_turn_rad: float = 0.0
+    rail_entry_m: float = 0.45
 
 
 class DockRequest(BaseModel):

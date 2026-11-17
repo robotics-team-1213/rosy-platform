@@ -18,7 +18,7 @@ POSES = dict(a=(-.0378, -.1672, math.radians(1.)), b=(-.0334, .1474, math.radian
 COVERED = dict(a=2, b=1)  # a container sits in this lane, the others show their dark pad
 
 
-def frame(layout, hide=()):
+def frame(layout, hide=(), skew=None):
     img = np.full((480, 640, 3), (60, 200, 200), np.uint8)  # the yellow table (hue 30, clear of the orange mask's < 22)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
@@ -28,6 +28,7 @@ def frame(layout, hide=()):
                 continue
             (x, y), yaw = r2s.place(local, pose)
             on_top = k == COVERED[tag]
+            yaw += math.radians((skew or {}).get((tag, k), 0.))
             z = layout.deck_z + (box_h if on_top else 0.)
             corners = [cam.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
                                     y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), z))
@@ -55,6 +56,16 @@ def test_plates_are_found_with_their_covered_lane():
             assert abs(lane["yaw_deg"] - math.degrees(yaw)) < 1.5, (tag, k)
         assert lanes[COVERED[tag]]["source"] == "container"
     assert max(got["camera_check"]["worst_mm"]) < 3
+
+
+def test_a_container_turned_in_its_lane_is_unseated_and_a_straight_one_is_not():
+    layout = sites.Layout()
+    plates = r2s.measure_temp_plates(frame(layout), layout)
+    assert r2s.unseated_containers(frame(layout), layout, plates) == []
+    img = frame(layout, skew={("a", COVERED["a"]): 14.})  # 2026-11-14: arm_a's temp container sat about 14 deg across its lane
+    prev = dict(plates={t: p["lanes"] for t, p in plates["plates"].items()}, shape=plates["shape"])
+    got = r2s.unseated_containers(img, layout, r2s.measure_temp_plates(img, layout, prev))
+    assert [(u["plate"], u["lane"]) for u in got] == [("a", COVERED["a"])] and 12 < got[0]["turn_deg"] < 16
 
 
 def test_a_plate_seen_by_one_lane_comes_from_the_previous_shape():
@@ -149,6 +160,49 @@ def test_pads_cut_short_still_hold_their_lane():
         assert abs(lane["yaw_deg"] - math.degrees(truth("b", k)[1])) < 1.
 
 
+def test_white_printed_lane_labels_across_a_pad_do_not_split_it():
+    layout = sites.Layout()
+    img = frame(layout)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    for t, k in (("a", 1), ("b", 2), ("b", 3)):  # 2026-11-10 live cell: white R1/R3 labels & dots split pads in two
+        (x, y), yaw = truth(t, k)
+        stripe = [cam.project((x + a * .002 * math.cos(yaw) - b * .017 * math.sin(yaw),
+                               y + a * .002 * math.sin(yaw) + b * .017 * math.cos(yaw), layout.deck_z))
+                  for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        cv2.fillPoly(img, [np.round(stripe).astype(np.int32)], (245, 245, 245))
+    got = r2s.measure_temp_plates(img, layout)
+    assert got["plates"]["a"]["seen"] == 3 and got["plates"]["b"]["seen"] == 3
+
+
+def test_yellow_containers_and_bottom_clipped_v11_plates_are_measured():
+    layout = sites.Layout()
+    first = r2s.measure_temp_plates(frame(layout), layout)
+    prev = dict(plates={t: p["lanes"] for t, p in first["plates"].items()}, shape=first["shape"])
+    v11 = dict(step_deg=17.0, radius_m=.203)
+    poses = dict(a=(-.0933, -.1676, 0.), b=(-.0906, .1668, 0.))
+    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
+    for tag, pose in poses.items():
+        for k, local in r2s.plate_lanes(v11).items():
+            (x, y), yaw = r2s.place(local, pose)
+            on_top = k == 2 or (tag == "a" and k == 3)
+            z = layout.deck_z + (box_h if on_top else 0.)
+            bgr = (30, 195, 220) if k == 2 else (40, 110, 240) if on_top else (30, 30, 30)  # yellow (H 26) in lane 2, orange in a-3
+            corners = [cam.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                    y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), z))
+                       for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+            cv2.fillPoly(img, [np.round(corners).astype(np.int32)], bgr)
+    got = r2s.measure_temp_plates(img, layout, prev)
+    assert got["shape"]["step_deg"] == pytest.approx(17.0, abs=1.)
+    for tag, pose in poses.items():
+        assert got["plates"][tag]["seen"] == 3
+        lanes = {l["lane"]: l for l in got["plates"][tag]["lanes"]}
+        assert "container" in lanes[2]["source"]
+        for k, local in r2s.plate_lanes(v11).items():
+            assert math.dist(lanes[k]["xy"], r2s.place(local, pose)[0]) < .004, (tag, k)
+
+
 def test_the_ship_is_found_where_its_hull_lies():
     layout = sites.Layout()
     img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
@@ -192,6 +246,13 @@ def test_the_belt_end_and_centreline_come_from_its_strip():
     assert got["end_x_m"] == pytest.approx(end, abs=.003)
     assert got["centre_y_m"] == pytest.approx(y, abs=.003)
     assert got["width_m"] == pytest.approx(2 * half, abs=.006)
+    assert "end_occluded" not in got
+    # a container waiting at the stop hides the strip's end (2026-11-14 real frame: the end read 60 mm past the stop)
+    top = layout.belt_top + sites.CONTAINER[layout.choices["ship_source"]][2]
+    box = [cam.project((x, yy, top)) for x, yy in ((end, y - .045), (end + .03, y - .045), (end + .03, y + .045), (end, y + .045))]
+    cv2.fillPoly(img, [np.round(box).astype(np.int32)], (20, 110, 240))
+    hidden = r2s.measure_belt(img, layout)
+    assert hidden["end_occluded"] and hidden["end_x_m"] > end + .015 and hidden["end_at_most_x_m"] == pytest.approx(end, abs=.006)
 
 
 def test_layout_takes_the_belt_from_a_snapshot(tmp_path):
@@ -246,3 +307,313 @@ def test_a_moved_top_camera_is_caught_on_the_far_band(tmp_path, monkeypatch):
     name = anchor.remember(path)
     assert name == anchor.digest(path) and anchor.reference(name).read_bytes() == path.read_bytes()
     assert anchor.reference("sha256:" + "0" * 64) is None
+
+
+def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():
+    snap_path = "deploy/robot/omx/sim/cell_snapshots/20261110-1231.json"
+    from_snap = sites.Layout(cell_snapshot=snap_path, temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot", arm_bases="snapshot")
+    from_named = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110", arm_bases="plate-centre")
+    for k in ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3", "ship-h1r1-l0", "belt"):
+        assert math.dist(from_snap.sites[k]["xy"], from_named.sites[k]["xy"]) < 1e-6, k
+    assert tuple(from_named.arms["arm_b"].base[:2]) == pytest.approx((.107, .164))
+    default = sites.Layout()
+    assert tuple(default.arms["arm_a"].base[:2]) == pytest.approx((.091, -.16825))
+    assert tuple(default.arms["arm_b"].base[:2]) == pytest.approx((.091, .16825))
+    assert default.arms["arm_b"].base[1] - default.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)
+    assert tuple(sites.Layout(arm_bases="surveyed").arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
+    assert not any(s.get("blocked") for s in from_named.sites.values())  # tmp-b-1 clears the measured ship by 15.9 mm
+    assert sites.WRIST_PHOTO_A["lens_m"][0] > sites.WRIST_PHOTO["lens_m"][0] and sites.WRIST_PHOTO_A["axis_hit_x_m"] > sites.WRIST_PHOTO["axis_hit_x_m"]
+    img = np.full((200, 320, 3), (200, 175, 130), np.uint8)  # sky-blue v11 plate background
+    for i, bgr in enumerate(((30, 120, 235), (25, 220, 240), (50, 180, 50), (160, 40, 180))):  # orange, yellow, green, purple
+        cv2.rectangle(img, (20 + 70 * i, 60), (65 + 70 * i, 120), bgr, -1)
+    assert sum(k == "container" for k, _ in r2s.blobs(img)) == 4
+
+
+def test_online_camera_anchor_calibration_and_servo_compensator_correct_drift():
+    import omx_real2sim_comp as r2s_comp
+
+    layout = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                          arm_bases="plate-centre", top_camera="2026-11-10")
+    base_cam = layout.fixture["real_cameras"]["top"]
+    moved_dict = r2s_comp.perturbed_camera_dict(base_cam, **r2s_comp.DEFAULT_CAM_JITTER)
+    cam_moved = r2s.Camera(moved_dict, (480, 640))
+
+    # Render synthetic top frame (pads 90 mm long as printed, the anchor length) from the perturbed camera with 6 dark lane pads, belt strip, and a skewed belt container
+    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    pad_z = layout.deck_z + .0006
+    for tag in ("a", "b"):
+        for k in (1, 2, 3):
+            s = layout.sites[f"tmp-{tag}-{k}"]
+            x, y, yaw = s["xy"][0], s["xy"][1], s["yaw"]
+            corners = [cam_moved.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                          y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), pad_z))
+                       for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+            cv2.fillPoly(img, [np.round(corners).astype(np.int32)], (25, 25, 25))
+    bx, by = layout.belt_stop_x + .005, layout.belt_y
+    belt_poly = [cam_moved.project((x, yy, layout.belt_top))
+                 for x, yy in ((bx, by - .0425), (bx + .295, by - .0425), (bx + .295, by + .0425), (bx, by + .0425))]
+    cv2.fillPoly(img, [np.round(belt_poly).astype(np.int32)], (35, 35, 35))
+    sa = layout.sites["belt"]
+    true_xy = (sa["xy"][0] + .006, sa["xy"][1] + .006)
+    true_yaw = math.radians(18.0)
+    top_z = sa["z"] + layout.box[2] / 2
+    box_poly = [cam_moved.project((true_xy[0] + a * .045 * math.cos(true_yaw) - b * .015 * math.sin(true_yaw),
+                                   true_xy[1] + a * .045 * math.sin(true_yaw) + b * .015 * math.cos(true_yaw), top_z))
+                for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    cv2.fillPoly(img, [np.round(box_poly).astype(np.int32)], (35, 115, 235))
+
+    seen = r2s_comp.perceive_container(img, sa, true_xy, true_yaw, layout)
+    assert seen is not None
+    _, _, info = seen
+    assert info["camera_comp"]["moved"] is True
+    assert info["camera_comp"]["raw_xy_err_mm"] > 15.0
+    assert info["xy_err_mm"] < 3.0
+    assert info["yaw_err_deg"] < 1.0
+
+
+def test_tilted_bottom_clipped_temp_lane_and_servo_zero_offset_compensation():
+    import omx_real2sim_comp as r2s_comp
+
+    layout = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                          arm_bases="plate-centre", top_camera="2026-11-10")
+    base_cam = layout.fixture["real_cameras"]["top"]
+    moved_dict = r2s_comp.perturbed_camera_dict(base_cam, **r2s_comp.DEFAULT_CAM_JITTER)
+    cam_moved = r2s.Camera(moved_dict, (480, 640))
+
+    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    bx, by = layout.belt_stop_x + .005, layout.belt_y
+    belt_poly = [cam_moved.project((x, yy, layout.belt_top))
+                 for x, yy in ((bx, by - .0425), (bx + .295, by - .0425), (bx + .295, by + .0425), (bx, by + .0425))]
+    cv2.fillPoly(img, [np.round(belt_poly).astype(np.int32)], (35, 35, 35))
+
+    # Simulate cell-stack start where all 6 temp lanes have seated containers (covering the dark pads),
+    # and tilted outer lanes (tmp-a-1, tmp-b-3 at +-17 deg) are clipped at row 479.
+    here = {
+        "bar-1": "tmp-a-1", "bar-2": "tmp-a-1-l1", "bar-3": "tmp-a-2",
+        "bar-4": "tmp-a-3", "bar-5": "tmp-b-1", "bar-6": "tmp-b-2", "bar-7": "tmp-b-3",
+    }
+    colours = {
+        "tmp-a-1": (35, 115, 235), "tmp-a-1-l1": (50, 180, 50), "tmp-a-2": (25, 220, 240),
+        "tmp-a-3": (160, 40, 180), "tmp-b-1": (35, 35, 225), "tmp-b-2": (50, 180, 50),
+        "tmp-b-3": (35, 115, 235),
+    }
+    for sname in ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3", "tmp-a-1-l1"):
+        s = layout.sites[sname]
+        x, y, yaw, top_z = s["xy"][0], s["xy"][1], s["yaw"], s["z"] + layout.box[2] / 2
+        poly = [cam_moved.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                   y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), top_z))
+                for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        cv2.fillPoly(img, [np.round(poly).astype(np.int32)], colours[sname])
+
+    sa = layout.sites["tmp-a-1-l1"]
+    seen = r2s_comp.perceive_container(img, sa, sa["xy"], sa["yaw"], layout, here=here)
+    assert seen is not None
+    _, _, info = seen
+    assert info["size_mm"] == pytest.approx([90.0, 30.0], abs=1.0)
+    assert info["xy_err_mm"] < 2.5
+    assert info["yaw_err_deg"] < 1.5
+
+    # Lighting-shift / similar-colour test: warm container (H~19) touching a large yellow-orange table (H~21)
+    # under dimmed exposure, separated by 3D step edge and live Lab background suppression.
+    lit = np.full((480, 640, 3), (42, 96, 122), np.uint8)  # warm table under shifted lighting (H=21)
+    cv2.fillPoly(lit, [np.round(belt_poly).astype(np.int32)], (30, 30, 30))
+    for sname in ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3"):
+        s = layout.sites[sname]
+        x, y, yaw, top_z = s["xy"][0], s["xy"][1], s["yaw"], s["z"] + layout.box[2] / 2
+        poly = [cam_moved.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                   y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), top_z))
+                for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        pts_i = np.round(poly).astype(np.int32)
+        cv2.fillPoly(lit, [pts_i], (32, 118, 175))  # warm shifted orange (H=19) directly on H=21 table
+
+    sa_l0 = layout.sites["tmp-a-1"]
+    seen_lit = r2s_comp.perceive_container(
+        lit, sa_l0, sa_l0["xy"], sa_l0["yaw"], layout,
+        here={k: v for k, v in here.items() if v != "tmp-a-1-l1"},
+    )
+    assert seen_lit is not None
+    assert seen_lit[2]["size_mm"][0] == pytest.approx(90.0, abs=1.0)
+    assert seen_lit[2]["size_mm"][1] == pytest.approx(30.0, abs=1.5)
+    assert seen_lit[2]["xy_err_mm"] < 2.5
+
+    # Real 2026-11-10 camera shift test: frame rendered with moved 2026-11-10 camera, perceived with old 2026-11-03 camera.
+    layout_old_cam = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                                  arm_bases="plate-centre", top_camera="2026-11-03")
+    sa_a2 = layout_old_cam.sites["tmp-a-2"]
+    seen_shift = r2s_comp.perceive_container(img, sa_a2, sa_a2["xy"], sa_a2["yaw"], layout_old_cam, here=here)
+    assert seen_shift is not None
+    assert seen_shift[2]["camera_comp"]["raw_xy_err_mm"] > 20.0
+    assert seen_shift[2]["xy_err_mm"] < 3.0
+
+
+def test_servo_antijitter_physics_candidate_and_compensator_jitter_z_sag():
+    import omx_physics
+    import omx_real2sim_comp as r2s_comp
+
+    cand = omx_physics.Physics("servo-antijitter-20261112")
+    assert cand.joint("arm_b", "joint2")["kp"] == pytest.approx(8.416)
+    assert cand.joint("arm_b", "joint2")["frictionloss"] == pytest.approx(0.042635)
+
+    class _DummyModel:
+        actuator_forcerange = np.tile([[0.0, 3.0]], (10, 1))
+        dof_damping = np.full(10, 0.25)
+        dof_frictionloss = np.full(10, 0.03)
+        actuator_gainprm = np.tile([[8.416, 0.0, 0.0]], (10, 1))
+
+    class _DummyWorld:
+        model = _DummyModel()
+        q = {"arm_a": np.arange(0, 6), "arm_b": np.arange(6, 12)}
+        arm_dof = {"arm_a": np.arange(0, 6), "arm_b": np.arange(0, 6)}
+        act = {"arm_a": np.arange(0, 6), "arm_b": np.arange(0, 6)}
+        hold_dof = {"arm_a": [2, 3], "arm_b": [2, 3]}
+
+        @staticmethod
+        def tcp(_data, _arm):
+            return np.array([0.15, -0.04, 0.010]), np.eye(3)
+
+    class _DummyData:
+        qpos = np.zeros(12)
+        qvel = np.zeros(10)
+        qfrc_bias = np.zeros(10)
+
+    comp = r2s_comp.ServoCompensator(_DummyWorld(), fps=15)
+    d = _DummyData()
+    for k in range(10):
+        d.qpos[1] = (-1) ** k * 0.008
+        d.qvel[1] = (-1) ** k * 0.10
+        comp.apply(d, {"arm_a": np.zeros(6)})
+    jit = comp.jitter_state("arm_a")
+    assert jit["shaking"] is True
+    assert comp.damped_frames["arm_a"] >= 1
+    assert comp.is_settled("arm_a", q_err=0.002, q_vel=0.0, tcp_ok=True) is False
+    q_avg = comp.settled_q(d, "arm_a")
+    assert abs(float(q_avg[1])) < abs(float(d.qpos[1]))
+    p_comp = comp.compensate_z_target(d, "arm_a", np.array([0.15, -0.04, 0.018]))
+    assert float(p_comp[2]) > 0.018
+
+
+def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
+    source = json.loads((sites.SHIP_ASSETS / "SOURCE.json").read_text(encoding="utf-8"))
+    for name in (
+        "hull",
+        "house",
+        "berth_v16_cradle",
+        "berth_v16_bridges",
+        "berth_v16_stopper",
+        "berth_v24_cradle",
+        "berth_v24_docks",
+        "berth_v24_stopper",
+        "omx_base_plate_a",
+        "omx_base_plate_b",
+        "temp_slot_bridge_a",
+        "temp_slot_bridge_b",
+        "temp_slot_plate_v11",
+        "temp_slot_plate_v12_navy",
+        "temp_slot_plate_v12_sky",
+        "container_1x3_v3",
+    ):
+        assert name in source["meshes"] and (sites.SHIP_ASSETS / f"{name}.stl").is_file()
+    lay = sites.Layout(
+        arm_bases="plate-centre",
+        ship_pose="berth-v16",
+        berth_kit="v16-modular",
+        temp_bridge="v7",
+        ship_spacer_dy_mm=39.0,
+        ship_stern_hook_mm=5.0,
+    )
+    fix = lay.ship_fixation(ship_yaw_deg=0.12)
+    assert fix["berth_kit"] == "v16-modular" and fix["temp_bridge"] == "v7"
+    assert fix["arm_a_gap_dy_mm"] == pytest.approx(27.75, abs=0.5)
+    assert fix["arm_b_gap_dy_mm"] == pytest.approx(27.75, abs=0.5)
+    assert fix["stern_hook_mm"] == pytest.approx(5.0)
+    assert fix["within_v16_yaw_budget"] is True
+    snap_fix = r2s.measure_ship_fixation(
+        dict(stern_x_m=0.178, centre_y_m=-0.001, yaw_deg=0.15),
+        dict(end_x_m=0.2115, centre_y_m=-0.0226, width_m=0.0885),
+        lay,
+    )
+    assert "arm_b_gap_dy_mm" in snap_fix and "belt_to_stopper_flat_mm" in snap_fix
+    snap_20261110 = r2s.ROOT / "deploy/robot/omx/sim/cell_snapshots/20261110-1231.json"
+    bundle = r2s.run_pipeline(snap_20261110)
+    assert bundle["schema"] == "rosy.omx-real2sim-pipeline.v1"
+    assert bundle["stages"][0]["stage"] == "mujoco" and bundle["stages"][0]["stage_order"] == 1
+    assert bundle["stages"][1]["stage"] == "isaac" and bundle["stages"][1]["stage_order"] == 2
+    assert bundle["stages"][1]["isaac_handoff"]["schema"] == "rosy.omx-isaac-handoff.v1"
+
+
+def test_temp_plate_renders_two_color_v12_cad_oriented_into_bridge():
+    try:
+        import mujoco
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    w = tw.World()
+    m = w.model
+    assert w.layout.choices["temp_lanes"] == "fan" and w.layout.choices["temp_radius_m"] == pytest.approx(0.200)
+    world_q = np.zeros(4)
+    for tag in ("a", "b"):
+        navy_id = m.geom(f"plate_v12_navy_{tag}").id
+        sky_id = m.geom(f"plate_v12_sky_{tag}").id
+        deck_id = m.geom(f"deck_{tag}").id
+        wall_id = m.geom(f"w{tag}1s0").id
+        for gid in (navy_id, sky_id):
+            mq = m.mesh_quat[m.geom_dataid[gid]]
+            mujoco.mju_mulQuat(world_q, m.geom_quat[gid], np.array([mq[0], -mq[1], -mq[2], -mq[3]]))
+            assert np.allclose(world_q, [1.0, 0.0, 0.0, 0.0], atol=1e-4)
+        assert m.geom_rgba[navy_id, 3] == pytest.approx(1.0) and m.geom_rgba[sky_id, 3] == pytest.approx(1.0)
+        assert not np.allclose(m.geom_rgba[navy_id, :3], m.geom_rgba[sky_id, :3])
+        assert m.geom_rgba[deck_id, 3] == pytest.approx(0.0) and m.geom_rgba[wall_id, 3] == pytest.approx(0.0)
+
+
+def test_v24_berth_docks_and_symmetric_194mm_layout_render_without_quay():
+    lay = sites.Layout()
+    assert lay.choices["ship_centre_y_m"] == pytest.approx(0.0)
+    assert lay.choices["berth_kit"] == "v24-docks"
+    fix = lay.ship_fixation()
+    assert fix["arm_a_gap_dy_mm"] == pytest.approx(32.0) and fix["arm_b_gap_dy_mm"] == pytest.approx(32.0)
+    try:
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    m_v24 = tw.World(lay).model
+    names_v24 = {m_v24.geom(i).name for i in range(m_v24.ngeom)}
+    assert {"ship_berth_v24_cradle", "ship_berth_v24_docks", "ship_berth_v24_stopper"} <= names_v24
+    assert "ship_quay" not in names_v24
+    m_v18 = tw.World(sites.Layout(berth_kit="v18-modular-adjustable")).model
+    names_v18 = {m_v18.geom(i).name for i in range(m_v18.ngeom)}
+    assert {"ship_berth_v16_cradle", "ship_berth_v16_bridges", "ship_berth_v16_stopper"} <= names_v18
+    assert "ship_quay" not in names_v18
+
+
+def test_temp_plate_v12_lanes_seat_containers_without_interlane_wall_overlap():
+    try:
+        import mujoco
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    w = tw.World()
+    data = w.reset()
+    lanes = ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3")
+    cids = [cid for cid, _ in w.layout.containers()[:len(lanes)]]
+    for cid, site in zip(cids, lanes):
+        w.put(data, cid, site)
+    for _ in range(int(0.5 / w.model.opt.timestep)):
+        mujoco.mj_step(w.model, data)
+    for cid, site in zip(cids, lanes):
+        pos, _, tilt = w.pose(data, cid)
+        s = w.layout.sites[site]
+        assert np.linalg.norm(pos[:2] - s["xy"]) * 1000 < 0.5, site
+        assert abs(pos[2] - s["z"]) * 1000 < 0.3, site
+        assert tilt < 0.5, site
+
+
+
+
+
+
+
+
+

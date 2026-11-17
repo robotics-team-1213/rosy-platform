@@ -1,20 +1,19 @@
 """Installed simulation or device_trial proposal/admission HTTP; no claim release (D-977)."""
 import asyncio
 import logging
-import sqlite3
 import time
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException
 
 from core_common.protocol.arm_transfer import ArmActionId, ArmTransferCapability
 from core_common.protocol.arm_transfer_jobs import (
     ArmTransferRequest, ArmTransferRequestKey, ArmTransferJobCreate, ArmTransferJobAdmit, ArmTransferJobResponse,
 )
+from fleet.server.arm_transfer_http import call_arm_transfer_domain, require_write_origin
 from .local_action_transport import LocalActionUnavailable, UnixLocalActionTransport
 from .mission_store import MissionConflict
 from .physical_transfer_attestations import PhysicalOperatorAttestations
 from .physical_transfer_store import ARM_TRANSFER_PROFILES, PhysicalTransferStore
-from core_common.protocol.account_access import same_origin
 
 
 _log = logging.getLogger("fleet.arm_transfer_policy_admission")
@@ -89,7 +88,7 @@ class DelegatedArmJobs:
 def install_arm_transfer_job_routes(app, *, installation, deployment_profile, task_store, transport,
                                     socket_root, require_proposer, require_viewer, require_named_operator,
                                     observer, console, principals, other_tokens, other_services, registries,
-                                    policy_admission_core=None, grant_revisions=None):
+                                    policy_admission_core=None, grant_revisions=None, intake=None):
     store = reader = None
     commissioning = {}
     if installation is not None:
@@ -124,6 +123,26 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
         service = PhysicalObservationService(dispatcher, observer)
     app.state.arm_transfer_dispatcher = dispatcher
     app.state.arm_transfer_delegate = None if store is None else DelegatedArmJobs(store, service)
+    if intake is not None:  # D-996 5: an arrived trip's object_ref becomes the supply arm's proposal
+        from .intake_transfer import intake_loop, validate_intake
+        validate_intake(intake, store)
+        app.state.intake = intake  # the readings route maps tags with it (port_event_routes)
+
+        @app.on_event("startup")
+        async def intake_start():
+            trips = getattr(app.state, "trip_proposal_store", None)
+            if trips is None:
+                _log.warning("intake proposals are off: trip proposals are not installed")
+                return
+            app.state.intake_task = asyncio.create_task(intake_loop(
+                trips, store, intake, _log, port_store=getattr(app.state, "port_event_store", None)))
+
+        @app.on_event("shutdown")
+        async def intake_stop():
+            task = getattr(app.state, "intake_task", None)
+            if task is not None:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
     control = getattr(app.state, "control_unit", None)
 
     async def check_parent(mission_id):
@@ -173,27 +192,17 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
         return store
 
     async def call(function, *, parent_mission_id=None):
-        try:
+        async def _run():
             if parent_mission_id is None:
                 result = await asyncio.to_thread(function)
             else:
                 checked_at = await check_parent(parent_mission_id)
                 result = await asyncio.to_thread(function, checked_at)
             return ArmTransferJobResponse.model_validate(result)
-        except KeyError:
-            raise HTTPException(404, detail={"code": "ARM_TRANSFER_JOB_NOT_FOUND"}) from None
-        except PermissionError:
-            raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"}) from None
-        except MissionConflict:
-            raise HTTPException(409, detail={"code": "ARM_TRANSFER_JOB_CONFLICT"}) from None
-        except (LocalActionUnavailable, OSError, sqlite3.Error, ValueError):
-            raise HTTPException(503, detail={"code": "ARM_TRANSFER_JOB_UNAVAILABLE"}) from None
+        return await call_arm_transfer_domain(_run)
 
     path = "/api/fleet/arm-transfers/jobs"
-
-    def write_origin(request: Request):
-        if request.headers.get("origin") is not None and not same_origin(request):
-            raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"})
+    write_origin = require_write_origin
 
     observer_auth = install_physical_observer_routes(app, service=service, task_store=task_store, job_view=_view,
         require_viewer=require_viewer, require_proposer=require_proposer, write_origin=write_origin)

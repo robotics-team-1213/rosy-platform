@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 
 SCHEMA_VERSION = 1
+MAX_STOP_LATENCY_S = 0.65  # native/mapping_approval.MAX_STOP_LATENCY_S is canonical; a test pins the pair
 GATES = ('G0', 'G1', 'G2', 'G3', 'G4', 'G5')
 _REVISION = re.compile(r'^[0-9a-f]{40}$')
 _SHA256 = re.compile(r'^[0-9a-f]{64}$')
@@ -288,7 +289,7 @@ def _validate_g4(record, session):
             raise ValueError('G4 requires deadman trials 1 and 2')
         seen.add((direction, index))
         _number(trial['stop_latency_s'], 'G4 deadman stop latency',
-                minimum=0.0, maximum=0.65)
+                minimum=0.0, maximum=MAX_STOP_LATENCY_S)
         _zero_velocity(trial['final_velocity'], 'G4 deadman final velocity')
         if trial['passed'] is not True:
             raise ValueError('G4 deadman trial must pass')

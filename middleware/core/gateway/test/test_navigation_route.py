@@ -354,11 +354,14 @@ def test_bridge_builds_through_poses_only_for_a_leg_with_pass_points(monkeypatch
         class Goal(Msg):
             pass
 
-    monkeypatch.setitem(sys.modules, "geometry_msgs", types.ModuleType("geometry_msgs"))
-    monkeypatch.setitem(sys.modules, "geometry_msgs.msg", types.SimpleNamespace(PoseStamped=Pose))
-    monkeypatch.setitem(sys.modules, "nav2_msgs", types.ModuleType("nav2_msgs"))
-    monkeypatch.setitem(sys.modules, "nav2_msgs.action",
-                        types.SimpleNamespace(NavigateThroughPoses=Through, NavigateToPose=ToPose))
+    geom = types.ModuleType("geometry_msgs")
+    geom.msg = types.SimpleNamespace(PoseStamped=Pose)
+    nav2 = types.ModuleType("nav2_msgs")
+    nav2.action = types.SimpleNamespace(NavigateThroughPoses=Through, NavigateToPose=ToPose)
+    monkeypatch.setitem(sys.modules, "geometry_msgs", geom)
+    monkeypatch.setitem(sys.modules, "geometry_msgs.msg", geom.msg)
+    monkeypatch.setitem(sys.modules, "nav2_msgs", nav2)
+    monkeypatch.setitem(sys.modules, "nav2_msgs.action", nav2.action)
     sys.modules.pop("core.bridge.nav_goal", None)
     # test_bridge_timers imports ros_bridge against its permissive stubs, which
     # imports this module and leaves the parent package attribute bound to that
@@ -376,3 +379,5 @@ def test_bridge_builds_through_poses_only_for_a_leg_with_pass_points(monkeypatch
     assert through and isinstance(goal, Through.Goal)
     assert [p.pose.position.x for p in goal.poses] == [1, 2, 3] and goal.poses[0].header.frame_id == "map"
     sys.modules.pop("core.bridge.nav_goal", None)
+    if hasattr(core.bridge, "nav_goal"):
+        delattr(core.bridge, "nav_goal")

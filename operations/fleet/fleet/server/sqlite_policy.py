@@ -6,6 +6,16 @@ import sqlite3
 
 
 BUSY_TIMEOUT_MS = 5_000
+_WAL_AUTOCHECKPOINT_PAGES: int | None = None
+
+
+def set_wal_autocheckpoint(pages: int | None) -> None:
+    global _WAL_AUTOCHECKPOINT_PAGES
+    _WAL_AUTOCHECKPOINT_PAGES = pages
+
+
+def get_wal_autocheckpoint() -> int | None:
+    return _WAL_AUTOCHECKPOINT_PAGES
 
 
 def configure_connection(connection: sqlite3.Connection) -> sqlite3.Connection:
@@ -13,6 +23,8 @@ def configure_connection(connection: sqlite3.Connection) -> sqlite3.Connection:
     connection.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
     connection.execute("PRAGMA foreign_keys=ON")
     connection.execute("PRAGMA synchronous=FULL")
+    if _WAL_AUTOCHECKPOINT_PAGES is not None:
+        connection.execute(f"PRAGMA wal_autocheckpoint={int(_WAL_AUTOCHECKPOINT_PAGES)}")
     return connection
 
 
@@ -23,4 +35,5 @@ def enable_wal(connection: sqlite3.Connection) -> None:
         raise RuntimeError(f"SQLite WAL mode is required, got {mode!r}")
 
 
-__all__ = ["BUSY_TIMEOUT_MS", "configure_connection", "enable_wal"]
+__all__ = ["BUSY_TIMEOUT_MS", "configure_connection", "enable_wal",
+           "set_wal_autocheckpoint", "get_wal_autocheckpoint"]

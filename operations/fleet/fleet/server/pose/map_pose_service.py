@@ -22,7 +22,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
-from rosy.world.state.projections.map_pose import (MapPose, MapPoseConfig, MapPoseTracker,
+from rosy.world.state.projections.map_pose import (LOCALIZED, MapPose, MapPoseConfig, MapPoseTracker,
                                          odom_from_snapshot, sighting_from_row)
 from fleet.swarm.transport import RobotApiError
 
@@ -115,7 +115,9 @@ class MapPoseService:
             return
         tracker = self._tracker(sighting.robot_id)
         if tracker is not None:
-            tracker.add_sighting(sighting, self._wall(), self.active_map_id())
+            now_wall = self._wall()
+            active_map = self.active_map_id()
+            tracker.add_sighting(sighting, now_wall, active_map)
 
     def auto_locate_enabled(self, robot_id: str) -> bool:
         return robot_id in self.config.auto_locate_robots
@@ -161,7 +163,12 @@ class MapPoseService:
     def _observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
         if not self._source_scopes.unqualified(robot_id):
             return
-        if not isinstance(state, Mapping) or state.get("odom_pose") is None:
+        if not isinstance(state, Mapping):
+            return
+        peers = state.get("peers")
+        if isinstance(peers, list):
+            self._observe_peers(peers)
+        if state.get("odom_pose") is None:
             return                  # a robot before D-494 2: nothing to count
         tracker = self._tracker(robot_id)
         if tracker is None:
@@ -170,7 +177,30 @@ class MapPoseService:
         if sample is None:
             tracker.refuse_odom("malformed")
         else:
-            tracker.add_odom(sample, self._wall())
+            now_wall = self._wall()
+            tracker.add_odom(sample, now_wall)
+
+    def _observe_peers(self, rows: Iterable[Mapping]) -> None:
+        """D-1017: poses other robots report about this site's robots (`StateSnapshot.peers`).
+        A LOCALIZED claim anchors its robot only while the camera and a fresh operator pin
+        are quiet; `MapPoseTracker.add_peer` refuses everything else."""
+        now = self._wall()
+        active = self.active_map_id()
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            robot_id, pose = row.get("robot_id"), row.get("pose")
+            if (not isinstance(robot_id, str) or not isinstance(pose, Mapping)
+                    or row.get("localization_state") != LOCALIZED):
+                continue
+            values = (pose.get("x"), pose.get("y"), pose.get("yaw"), row.get("age_s", 0.0))
+            if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                       for v in values) or row.get("age_s", 0.0) < 0:
+                continue
+            tracker = self._tracker(robot_id)
+            if tracker is not None:
+                tracker.add_peer((float(pose["x"]), float(pose["y"]), float(pose["yaw"])),
+                                 now - float(row["age_s"]), now, row.get("map_id"), active)
 
     async def state(self, robot_id: str, max_age_s: float = TRIP_READ_AGE_S, after: int = 0) -> Mapping:
         """D-760 8: the robot's REST state, one read per robot shared by every Fleet loop (app.py
@@ -290,7 +320,12 @@ class MapPoseService:
         """The robot's map pose for trip execution and the D-511 lane-compliance monitor
         (D-511 2 widens D-494 3); None for a robot not on the roster."""
         tracker = self._tracker(robot_id)
-        return tracker.pose(self._wall(), self.active_map_id()) if tracker is not None else None
+        if tracker is None:
+            return None
+        now_wall = self._wall()
+        active_map = self.active_map_id()
+        pose = tracker.pose(now_wall, active_map)
+        return pose
 
     def stuck_pose(self, robot_id: str) -> Optional[dict]:
         """D-577 1: R3's pose input. `sourced` = a sighting ever reached this robot's tracker, so an
@@ -356,6 +391,16 @@ def install_map_pin_route(app, *, service: MapPoseService, require_named_operato
             "before": None if before is None else {
                 "state": before.state, "anchor_source": before.anchor_source,
                 "x": before.x, "y": before.y, "yaw": before.yaw}})
+        tracking_svc = getattr(getattr(app, "state", None), "tracking", None)
+        if tracking_svc is not None and hasattr(tracking_svc, "set_anchor"):
+            try:
+                tracking_svc.set_anchor(
+                    {"target_id": robot_id, "kind": "pinky", "base_x": body.x, "base_y": body.y, "base_yaw": body.yaw},
+                    principal_id=principal.principal_id,
+                )
+            except Exception:
+                pass
         logger.info("map pose: %s pinned by %s at (%.3f, %.3f, %.3f) map %s",
                     robot_id, principal.principal_id, body.x, body.y, body.yaw, pose.map_id)
         return {"robot_id": robot_id, **asdict(pose)}
+

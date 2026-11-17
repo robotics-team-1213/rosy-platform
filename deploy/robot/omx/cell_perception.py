@@ -55,7 +55,7 @@ def top_box(img, profile, roi=None) -> dict:
 
     spec = profile["top_box"]
     x0, y0, x1, y1 = roi or spec["roi"]
-    roi = img[y0:y1, x0:x1].astype(int)
+    roi = img[y0:y1, x0:x1].astype(np.int16)
     b, g, r = roi[..., 0], roi[..., 1], roi[..., 2]
     lo, hi, below = spec["bgr_min"], spec["bgr_max"], spec.get("green_below", 0)
     mask = ((b >= lo[0]) & (b <= hi[0]) & (g >= lo[1]) & (g <= hi[1]) & (r >= lo[2]) & (r <= hi[2])
@@ -64,7 +64,9 @@ def top_box(img, profile, roi=None) -> dict:
     if found is None:
         return {"found": False}
     blob, stats, _ = found
-    pts = np.column_stack(np.nonzero(blob))[:, ::-1].astype(np.float32)
+    bx, by, bw, bh = (int(v) for v in stats[:4])
+    sub_y, sub_x = np.nonzero(blob[by:by + bh, bx:bx + bw])
+    pts = np.column_stack([sub_x + bx, sub_y + by]).astype(np.float32)
     (cx, cy), (w, h), angle = cv2.minAreaRect(pts)
     return {"found": True, "cx": round(cx + x0, 1), "cy": round(cy + y0, 1), "w": round(w), "h": round(h),
             "yaw": round(float(angle) % 90, 1), "area": int(stats[4])}
@@ -81,8 +83,9 @@ def wrist_box(img, profile) -> dict:
     mask = cv2.inRange(hsv, tuple(spec["hsv_min"]), tuple(spec["hsv_max"]))
     shade = spec.get("shade")
     if shade:  # in the arm's shadow the brown box reads dark mauve: low saturation, green below red and blue
-        b, g, r = (c.astype(int) for c in cv2.split(img))
-        s, v = hsv[..., 1].astype(int), hsv[..., 2].astype(int)
+        bgr16 = img.astype(np.int16)
+        b, g, r = bgr16[..., 0], bgr16[..., 1], bgr16[..., 2]
+        s, v = hsv[..., 1], hsv[..., 2]
         dark = ((s >= shade["s"][0]) & (s <= shade["s"][1]) & (v >= shade["v"][0]) & (v <= shade["v"][1])
                 & (g < r - shade["green_below_red"]) & (g < b - shade["green_below_blue"]))
         mask = cv2.bitwise_or(mask, (dark * 255).astype(np.uint8))
@@ -104,11 +107,14 @@ def _lower_edge_tilt(blob, x, w):
 
     if w < 40:
         return None
-    columns = range(x + w // 6, x + w - w // 6)
-    lows = [(c, int(np.nonzero(blob[:, c])[0].max())) for c in columns if blob[:, c].any()]
-    if len(lows) < 20:
+    c0, c1 = x + w // 6, x + w - w // 6
+    sub = blob[:, c0:c1]
+    has_px = sub.any(axis=0)
+    if int(has_px.sum()) < 20:
         return None
-    xs, ys = np.array(lows, dtype=float).T
+    cols = np.nonzero(has_px)[0]
+    xs = (cols + c0).astype(float)
+    ys = ((sub.shape[0] - 1) - np.argmax(sub[::-1, cols], axis=0)).astype(float)
     return round(float(np.degrees(np.arctan(np.polyfit(xs, ys, 1)[0]))), 1)
 
 

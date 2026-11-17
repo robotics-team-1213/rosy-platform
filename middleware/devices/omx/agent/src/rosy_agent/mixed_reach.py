@@ -43,10 +43,18 @@ class IkReach:
         self.bases = {role: tuple(float(v) for v in base) for role, base in bases.items()}
         if any(len(base) != 3 or not all(math.isfinite(v) for v in base) for base in self.bases.values()):
             raise ValueError("each arm base is a finite (x, y, yaw)")
+        self._base_trig = {
+            role: (bx, by, byaw, math.cos(byaw), math.sin(byaw))
+            for role, (bx, by, byaw) in self.bases.items()
+        }
         self.kinematics, self.limits = kinematics, limits
 
     def solve(self, role: str, pose: Any) -> IkResult:
-        return self.kinematics.solve_top_down(pose_in_base(self.bases[role], pose), self.limits)
+        bx, by, byaw, c, s = self._base_trig[role]
+        dx, dy = float(pose.x) - bx, float(pose.y) - by
+        target = TopDownPose(c * dx + s * dy, -s * dx + c * dy, float(pose.z),
+                             math.remainder(float(pose.yaw) - byaw, math.tau))
+        return self.kinematics.solve_top_down(target, self.limits)
 
     def __call__(self, role: str, pose: Any) -> bool:
         return self.solve(role, pose).ok

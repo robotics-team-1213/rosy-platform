@@ -150,3 +150,85 @@ def test_the_best_round_comes_only_from_a_person_s_replace_decision(tmp_path):
         stream.write(json.dumps(dict(verdict="replace", round_id=row["round_id"])) + "\n")
         stream.write(json.dumps(dict(verdict="keep", round_id="20261107T000000-00000000")) + "\n")
     assert ladder.best_round(tmp_path) == row["round_id"]
+
+
+def test_gazebo_contract_stage_judges_conformance_samples_and_reports(tmp_path):
+    import sys
+    sys.path.insert(0, str(ROOT / "tools/sim"))
+    joints = ("joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1")
+    samples = dict(
+        joint_states=[(i * 25_000_000, joints, [0.0] * 6) for i in range(45)],
+        cameras={name: [(i * 100_000_000, "rgb8", 240, 320) for i in range(12)] for name in ("top", "front")},
+        clock=[i * 10_000_000 for i in range(100)],
+        objects={"box_a": [(0.2, 0.0, 0.1), (0.201, 0.0, 0.1)]},
+        stop=dict(accepted=True, cancel_acknowledged=True, travel_before_rad=0.08, travel_after_rad=0.002),
+    )
+    stage = ladder.judge_gazebo_contract(samples)
+    assert stage["status"] == "passed" and stage["claim"] == "ROS 실행 계약" and stage["reason"] is None
+    bad_report = tmp_path / "gazebo-fail.json"
+    bad_report.write_text(json.dumps(dict(failures=["clock: must advance without going back"], shape=[240, 320], camera_hz=5.0)), encoding="utf-8")
+    failed = ladder.judge_gazebo_contract(bad_report)
+    assert failed["status"] == "failed" and "clock" in failed["reason"]
+    row = fresh(tmp_path)
+    row["stages"]["gazebo"] = stage
+    ladder.write_round(tmp_path, row)
+
+
+def test_isaac_stage_judges_suite_reports_and_handoff(tmp_path):
+    handoff = dict(schema="rosy.omx-isaac-handoff.v1", cases=[dict(id="mujoco-handoff-s1", sim=dict(expect="completed"))])
+    pending = ladder.judge_isaac_stage(handoff)
+    assert pending["status"] == "pending" and pending["result"]["prepared_cases"] == ["mujoco-handoff-s1"]
+    suite_pass = dict(sha="a" * 40, rows=[dict(id="skew-t1-s1", expect="completed", run_id="r1", status="SUCCEEDED", result="completed", matches=True, judgement=dict(result="completed"))])
+    passed = ladder.judge_isaac_stage(suite_pass)
+    assert passed["status"] == "passed" and passed["run_id"] == "r1" and passed["result"]["matched"] == 1
+    candidate_pass = dict(sha="a" * 40, rows=[dict(id="mujoco-stack-s1-bar-1", expect=None, run_id="r-cand", status="SUCCEEDED", result="placed", matches=None, judgement=dict(result="placed"))])
+    assert ladder.judge_isaac_stage(candidate_pass)["status"] == "passed"
+    candidate_fail = dict(sha="a" * 40, rows=[dict(id="mujoco-stack-s1-bar-1", expect=None, run_id="r-drop", status="SUCCEEDED", result="dropped", matches=None, judgement=dict(result="dropped"))])
+    assert ladder.judge_isaac_stage(candidate_fail)["status"] == "failed"
+    single_placed = dict(run_id="r-single", judgement=dict(result="placed", lifted_samples=143))
+    assert ladder.judge_isaac_stage(single_placed)["status"] == "passed"
+    stack_pass = dict(schema="rosy.omx-container-stack/1", run_id="r-stack3", task_success=True,
+                      fixture=dict(layers=3, row_order=[1, 0, 2], case="nominal-palletizing-v21-ship-surveyed-skew-20261110"),
+                      trials=[dict(layers=[dict(item=i, opened_sample={}) for i in range(9)])])
+    stack_judged = ladder.judge_isaac_stage(stack_pass)
+    assert stack_judged["status"] == "passed" and stack_judged["scenario"] == "omx-map-container-stack"
+    assert stack_judged["result"]["placed"] == 9 and stack_judged["result"]["planned"] == 9
+    combined = ladder.judge_isaac_stage(dict(suite=candidate_pass, container_stack=stack_pass))
+    assert combined["status"] == "passed" and combined["scenario"] == "arm-s-cell-case+omx-map-container-stack"
+    suite_fail = dict(sha="a" * 40, rows=[dict(id="skew-t1-s1", expect="completed", run_id="r2", status="SUCCEEDED", result="dropped", matches=False, judgement=dict(result="dropped"))])
+    failed = ladder.judge_isaac_stage(suite_fail)
+    assert failed["status"] == "failed" and "skew-t1-s1" in failed["reason"]
+    row = fresh(tmp_path)
+    assert list(row["stages"])[:2] == ["mujoco", "isaac"]
+    assert row["stages"]["mujoco"]["stage_order"] == 1 and row["stages"]["isaac"]["stage_order"] == 2
+    assert row["stages"]["gazebo"]["stage_order"] is None and row["stages"]["gazebo"]["track"] == "ros2_execution_contract"
+    row["stages"]["isaac"] = passed
+    ladder.write_round(tmp_path, row)
+
+
+def test_two_arm_run_isaac_chains_stage1_mujoco_into_stage2_isaac_suite(tmp_path):
+    result = dict(steps=9, steps_pass=9, final_ok=9, final_total=9, completed=True, roll_below_floor_steps=[], note="geometry only", rows=[])
+    handoff = dict(schema="rosy.omx-mujoco-isaac-handoff.v1", stage_2_isaac=dict(
+        two_arm_scenario="omx-map-container-stack",
+        two_arm_config=dict(seed=0, layers=3, case="nominal-palletizing-v21-ship-surveyed-skew-20261110"),
+        single_arm_cases=[dict(id="mujoco-stack-s1-bar-1", sim=dict(box=[0.0, 0.0, 0.0], place="belt", grasp_turn=0.0, expect=None))]))
+    suite = dict(schema="rosy.omx-cell-case-suite.v1", cases=handoff["stage_2_isaac"]["single_arm_cases"])
+    suite_report = dict(sha="a" * 40, rows=[dict(id="mujoco-stack-s1-bar-1", expect=None, run_id="r-auto", status="SUCCEEDED", result="placed", matches=None, judgement=dict(result="placed"))])
+    (tmp_path / "result.json").write_text(json.dumps(result), encoding="utf-8")
+    (tmp_path / "handoff.json").write_text(json.dumps(handoff), encoding="utf-8")
+    (tmp_path / "suite.json").write_text(json.dumps(suite), encoding="utf-8")
+    (tmp_path / "suite-report.json").write_text(json.dumps(suite_report), encoding="utf-8")
+    python = stub_python(tmp_path, (
+        f'case "$1" in '
+        f'*omx_two_arm_teacher.py) cp {tmp_path}/result.json "$7/stack-elliptic-seed0.json"; cp {tmp_path}/handoff.json "$7/isaac-handoff.json"; mkdir -p "$7/artifacts" && touch "$7/artifacts/top.png";; '
+        f'*cell_cases.py) cp {tmp_path}/suite.json "$5";; '
+        f'*cell_case_suite.py) mkdir -p "$7" && cp {tmp_path}/suite-report.json "$7/suite-report.json";; '
+        f'esac'
+    ))
+    args = type("Args", (), dict(root=str(tmp_path / "root"), python=python, task="stack", seed=0, source_sha="a" * 40,
+                                 pick_vision=False, belt_skew=False, choice=None, isaac_handoff=False,
+                                 run_isaac="suite", isaac_only=["mujoco-stack-s1-bar-1"], gazebo_report=None, isaac_report=None))
+    assert ladder.run_two_arm(args) == 0
+    record = json.loads(next((tmp_path / "root/two_arm").glob("*/run.json")).read_text(encoding="utf-8"))
+    assert record["stages"]["mujoco"]["status"] == "passed"
+    assert record["stages"]["isaac"]["status"] == "passed" and record["stages"]["isaac"]["run_id"] == "r-auto"

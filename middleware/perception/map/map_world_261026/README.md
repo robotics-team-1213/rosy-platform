@@ -7,6 +7,9 @@
 | `tools/calibration/extract_world_paint.py` | 월드 STL(약 85 MB, Git 밖)에서 매트 위 1 mm 차선 페인트 윗면만 뽑아 ROS 좌표(m, 매트 중심)로 바꾼다. 원본 sha256은 스크립트에 고정되어 있다. |
 | `meshes/road_lines.stl` | 생성된 차선 페인트 |
 | `meshes/road_lines.json` | 원본 해시, 매트 크기, 페인트 면적 |
+| `scripts/build_world.py` | 결정적 월드 생성기(D-1013 게이트 b). 루프 도색은 `road_lines.stl`의 y ≤ 0.20 부분집합(천장 정합 수락 분량), 주차 구역은 그래프 v7의 분홍 유도선·칸 세로선(visual)과 칸별 레일·받침 collision. 재생성 후 diff로만 변경한다. |
+| `meshes/road_lines_loop.stl` | 생성된 루프 도색(주차 구역 제외) |
+| `worlds/map_world_261026.world` | 생성된 Gazebo 월드. 소비 런치: `gz_sim`의 `map_261026_bay_lane.launch.py`(keep 모드, paint_source pink) |
 
 원본 CAD 보관 위치: 작업 공간 `Rosy/docs/research/map-world-261026/`(Git 밖).
 
@@ -18,4 +21,18 @@
 - 주차 구역(y > 0.20 m)을 뺀 페인트: 수락됐다. recall 0.85, precision 0.91, coverage 0.97.
 - 실제 주차 구역 모양은 CAD와 다르다. 실물은 분홍 3칸에 아래 막대가 있고, CAD는 흰 칸막이 2개와 점선이다. 오른쪽 아래 정지선 일부는 실물에 없다.
 
-남은 일: 주차 구역 실측 반영, 차선 그래프(`lane_rules.yaml`·places·edges), 사이트 지도 JSON, 카메라 설정·배포, Nav2 지도.
+남은 일: 주차 구역 실측 반영, 차선 그래프(`lane_rules.yaml`·places·edges), 사이트 지도 JSON, 카메라 설정·배포.
+
+## Nav2 지도 (2026-11-17)
+
+`maps/map_world_261026.{pgm,yaml}`은 `scripts/build_world.py`가 월드와 함께 만든다(2 cm 격자, 매트 중심 좌표). 매트 안쪽만 비어 있고(254), 벽 링과 **벽 바깥 전부**(가장자리 0.20 m 여유 포함)는 점유(0)다. 벽 링은 월드의 `track_261026` 모델 벽 4개(두께 5 mm, 높이 0.155 m)와 같은 자리다. 벽 바깥 실제 아레나 벽과 OMX 셀은 아직 모델링하지 않았다(실측 전).
+
+**지도는 데이터다.** `maps/`의 파일이 정본이고 생성기는 지도가 없을 때만 처음 한 번 쓴다(`build_world.py --seed-map`으로만 다시 덮는다). 로봇이 SLAM으로 저장한 지도로 바꾸려면:
+
+```bash
+python middleware/perception/map/map_bundle.py check  <저장한 map.yaml>     # 무엇이 문제인지(바깥이 벽이 아님 등)
+python middleware/perception/map/map_bundle.py import <저장한 map.yaml> middleware/perception/map/map_world_261026 \
+    --name map_world_261026 --margin-m 0.20 --source "로봇/날짜/저장 방법"
+```
+
+`import`는 지도 바깥에 점유 여백을 붙여(원점도 같이 옮김) "지도 바깥은 모두 벽" 규칙을 맞추고, 출처와 해시를 `maps/manifest.json`에 남긴다. 규칙을 어기는 지도는 `check`와 시험이 거절한다.

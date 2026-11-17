@@ -37,6 +37,11 @@ def refused(layout, task):
 
 
 def test_both_tasks_validate_with_all_steps(layout, data):
+    assert layout.choices["arm_bases"] == "measured-194"
+    assert layout.choices["ship_spacer_dy_mm"] == pytest.approx(32.0)
+    assert tuple(layout.arms["arm_a"].base[:2]) == pytest.approx((.091, -.16825))
+    assert tuple(layout.arms["arm_b"].base[:2]) == pytest.approx((.091, .16825))
+    assert layout.arms["arm_b"].base[1] - layout.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)
     assert len(tasks.validate(layout, tasks.get_task(layout, "stack", data))) == 9
     assert len(tasks.validate(layout, tasks.get_task(layout, "rehandle", data))) == 12
 
@@ -166,11 +171,13 @@ def test_the_photo_plates_stand_where_the_top_camera_saw_them():
         assert np.hypot(*np.subtract(top_camera_pixels(layout, layout.sites[site]["xy"]), pixel)) < 5, site
 
 
-def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
+def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data, monkeypatch):
     assert not any(s.get("blocked") for s in layout.sites.values())  # the plates where the 11-08 top frame sees them clear the hull
-    layout = sites.Layout(temp_lanes="fan", temp_radius_m=.200, ship_centre_y_m=.007)  # plate v11 on its bridge, the ship as estimated before
-    """Plate v11 where its bridge seats it reaches 20 mm over the estimated r08 hull at arm_b (MuJoCo: the container sat 5 mm up, 7 deg
-    tilted on lane 1). Such a lane is no place until the base plate yaw and the ship are measured."""
+    assert not any(s.get("blocked") for s in sites.Layout(
+        temp_lanes="fan", temp_radius_m=.200, ship_centre_y_m=.007).sites.values())
+    monkeypatch.setitem(sites.SCAD, "gap_min", .010)  # pre-v17 fan overlapped the hull at the surveyed arm_b base (0.153 m)
+    layout = sites.Layout(arm_bases="surveyed", temp_lanes="fan", temp_radius_m=.200, ship_centre_y_m=.007)
+    # The older 10 mm fan gap put lane 1 under the hull; every tier must still be refused.
     assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-b-1", "tmp-b-1-l1", "tmp-b-1-l2"}  # every tier of that lane
     task = dict(supply=[], start={"bar-9": "ship-h1r2-l2"}, name="t", steps=[dict(id="x", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-1", arm="arm_b")])
     assert "tmp-b-1 is under the ship hull" in refused(layout, task)
@@ -179,7 +186,7 @@ def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
 def test_temp_lanes_follow_the_scad_fan_and_point_at_the_arm():
     layout = sites.Layout(temp_lanes="fan", temp_radius_m=.200, ship_source="fixture-studs")
     width, length, flare, fan, angles = sites.lane_geometry(.200)
-    assert width == pytest.approx(.0308) and length == pytest.approx(.096) and math.degrees(fan) == pytest.approx(17.3, abs=.1) and angles[1] == 0
+    assert width == pytest.approx(.0308) and length == pytest.approx(.096) and math.degrees(fan) == pytest.approx(13.8, abs=.1) and angles[1] == 0
     assert layout.choices["temp_lanes"] == "fan" and layout.choices["temp_radius_m"] == .200  # plate v11 on its bridge (Confluence 23233175)
     for tag, arm in (("a", "arm_a"), ("b", "arm_b")):
         base = layout.arms[arm].base[:2]
@@ -289,3 +296,98 @@ def test_a_temporary_lane_stacks_three_tiers_on_something(layout):
     tasks.validate(layout, dict(supply=[], start=start, name="t", steps=stacked))
     assert "taken from under" in refused(layout, dict(supply=[], start=start, name="t", steps=stacked + [
         dict(id="c", container="bar-9", **{"from": "tmp-b-2"}, to="ship-h1r2-l2", arm="arm_b")]))
+
+
+def test_stack_and_cell_stack_divide_into_three_validated_tier_stages(layout, data):
+    """Both belt stacking and cell-plate stacking split into 1단 (l0), 2단 (l1), and 3단 (l2), each starting on the lower tiers."""
+    assert len(tasks.validate(layout, tasks.get_task(layout, "cell-stack", data))) == 9
+    for base in ("stack", "cell-stack"):
+        seen = {}
+        for tier in tasks.TIERS:
+            sub = tasks.get_task(layout, f"{base}-t{tier}", data)
+            assert sub["tier"] == tier and sub["layer"] == tier - 1 and len(sub["steps"]) == 3
+            assert all(layout.sites[s["to"]]["layer"] == tier - 1 for s in sub["steps"])
+            for c, s in seen.items():
+                assert sub["start"][c] == s  # earlier tiers stand underneath this tier
+            assert len(tasks.validate(layout, sub, data)) == 3
+            for s in sub["steps"]:
+                seen[s["container"]] = s["to"]
+    t2 = tasks.get_task(layout, "cell-stack-t2", data)
+    assert [s["from"] for s in t2["steps"]] == ["tmp-a-2", "tmp-a-1", "tmp-b-2"]
+    for snap in ("deploy/robot/omx/sim/cell_snapshots/20261108-2257.json",
+                 "deploy/robot/omx/sim/cell_snapshots/20261110-1231.json"):
+        snap_layout = sites.Layout(cell_snapshot=snap, temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot")
+        snap_records = tasks.validate(snap_layout, tasks.get_task(snap_layout, "cell-stack", data))
+        assert len(snap_records) == 9 and not any(r["roll_below_floor"] for r in snap_records)
+
+
+def test_skewed_belt_containers_across_all_three_tiers_have_valid_ik_chains(data):
+    """Every skewed/offset belt arrival in Teacher.SKEW_CASES across tiers 1..3 (s1..s9) solves cleanly without mid-air 180 deg flips."""
+    import omx_two_arm_teacher as teacher_mod
+
+    L = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                     arm_bases="plate-centre", container_colours="multi")
+    assert L.choices["container_colours"] == "multi"
+    task = tasks.get_task(L, "stack", data)
+    here = {}
+    belt_xy, belt_yaw = L.sites["belt"]["xy"], L.sites["belt"]["yaw"]
+    for i, step in enumerate(task["steps"]):
+        dx, dy, yaw_deg = teacher_mod.Teacher.SKEW_CASES[i % len(teacher_mod.Teacher.SKEW_CASES)]
+        pick = ((belt_xy[0] + dx, belt_xy[1] + dy), belt_yaw + math.radians(yaw_deg))
+        wps = tasks.waypoints(L, step, here, pick=pick)
+        arm = L.sim_arms[step["arm"]]
+        ok, q_app, path, note = tasks.solve_chain(arm, wps, arm.home, roll_floor=L.roll_floor)
+        assert ok and len(path) > 0, f"{step['id']} ({step['arm']}) failed at skew {(dx, dy, yaw_deg)}: {note}"
+        here[step["container"]] = step["to"]
+
+
+
+def test_v24_docks_berth_kit_draws_the_socket_in_docking_pieces():
+    """berth_kit='v24-docks' (rated 2026-11-14): printed v20 cradles + stopper + the two docking pieces, not the quay or the v16 bridges."""
+    import json
+    mujoco = pytest.importorskip("mujoco")
+    import omx_two_arm_world as tw
+    source = json.loads((sites.SHIP_ASSETS / "SOURCE.json").read_text(encoding="utf-8"))["meshes"]
+    for name in ("berth_v24_cradle", "berth_v24_docks", "berth_v24_stopper"):
+        assert name in source and (sites.SHIP_ASSETS / f"{name}.stl").is_file()
+    model = tw.World(sites.Layout(berth_kit="v24-docks")).model
+    names = {mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i) for i in range(model.ngeom)}
+    assert {"ship_berth_v24_cradle", "ship_berth_v24_docks", "ship_berth_v24_stopper"} <= names
+    assert not names & {"ship_quay", "ship_berth_v16_bridges"}
+
+
+def test_preset_cad190_puts_each_axis_166_25_mm_from_the_ship_centreline_and_cad194_stays():
+    for preset, axis in (("v24-20261114-cad190", .16625), ("v24-20261114-cad194", .16825)):
+        layout = sites.Layout(preset=preset)
+        ya, yb = layout.arms["arm_a"].base[1], layout.arms["arm_b"].base[1]
+        assert (yb - ya) / 2 == pytest.approx(axis, abs=1e-6) and (ya + yb) / 2 == pytest.approx(.0015, abs=1e-6)
+    assert sites.Layout(preset="v24-20261114-cad190").choices["arm_bases"] == "cad-190"
+
+
+def test_preset_v24_20261114_bundles_the_photo_pose_with_the_berth_and_yields_to_explicit_choices():
+    layout = sites.Layout(preset="v24-20261114")
+    c = layout.choices
+    assert (c["berth_kit"], c["top_camera"], c["temp_lanes"]) == ("v24-docks", "2026-11-14", "photo-20261114")
+    assert layout.fixture["real_cameras"]["top"]["eye"] == sites.TOP_CAMERA_20261114["eye"]
+    assert layout.sites["tmp-a-2"]["xy"] == pytest.approx(sites.TEMP_LANES_PHOTO_1114["a"][1][0])
+    assert sites.Layout(preset="v24-20261114", ship_stern_x_m=.155).choices["ship_stern_x_m"] == .155
+    # the arms are in the same (table-edge) frame as that day's ship and plates: each plate's lane 2 sits where bridge v7 seats it, 200 mm from its arm
+    for tag, arm in (("a", "arm_a"), ("b", "arm_b")):
+        assert math.dist(layout.sites[f"tmp-{tag}-2"]["xy"], layout.arms[arm].base[:2]) == pytest.approx(.200, abs=.015)
+    assert layout.arms["arm_b"].base[1] - layout.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.1898, abs=.0005)  # as the 11-14 frame measured it (194 is the plan; user: the real cell differs)
+    assert layout.belt_y == pytest.approx(-.003)
+    assert sites.Layout().choices["berth_kit"] == "v24-docks"  # the default scene on main is v24-docks (preset did not leak)
+
+
+def test_the_choice_set_shares_one_scene_and_differs_only_in_the_container_taken(layout):
+    """2026-11-17: told apart by the goal or the language, never by the scene; each one-step task is a valid plan."""
+    data = tasks.load()
+    choose = {name: task for name, task in data["tasks"].items() if name.startswith("choose-")}
+    assert len(choose) == 6 and all(task["start"] == data["tasks"]["cell-stack"]["start"] for task in choose.values())
+    steps = [task["steps"][0] for task in choose.values()]
+    assert all(len(task["steps"]) == 1 for task in choose.values()) and len({s["id"] for s in steps}) == 6
+    for arm in ("arm_a", "arm_b"):
+        mine = [s for s in steps if s["arm"] == arm]
+        assert len(mine) == 3 and len({s["from"] for s in mine}) == 3 and len({s["to"] for s in mine}) == 1
+    for name in choose:
+        tasks.validate(layout, tasks.get_task(layout, name))

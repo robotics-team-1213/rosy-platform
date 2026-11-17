@@ -25,11 +25,17 @@ from .gripper import GRIPPER_TOLERANCE_RAD, STILL_RAD, STILL_WINDOW_S, gripper_s
 
 JOG_MAX_STEP_RAD = BOUNDED_JOG_MAX_STEP_RAD
 JOG_DURATION_S = 0.4
+_URDF_JOINTS_CACHE: dict[tuple[Path, int, int], list[dict]] = {}
 
 
 def _urdf_joints(path: Path | str) -> list[dict]:
-    document = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    return [joint for joint in [*document["joints"], *document.get("gripper_joints", ())] if "urdf_limit" in joint]
+    target = Path(path).resolve()
+    stat = target.stat()
+    key = (target, stat.st_mtime_ns, stat.st_size)
+    if key not in _URDF_JOINTS_CACHE:
+        document = yaml.safe_load(target.read_text(encoding="utf-8"))
+        _URDF_JOINTS_CACHE[key] = [joint for joint in [*document["joints"], *document.get("gripper_joints", ())] if "urdf_limit" in joint]
+    return list(_URDF_JOINTS_CACHE[key])
 
 
 def urdf_position_limits(path: Path | str = DEFAULT_KINEMATICS_PATH) -> dict[str, tuple[float, float]]:
@@ -106,6 +112,9 @@ class PilotSimRuntime:
                 raise ValueError("gripper preload must be within the stroke")
         self.gripper_velocity = None if gripper_velocity is None else float(gripper_velocity)
         self.gripper_preload = None if gripper_preload is None else float(gripper_preload)
+        self._jog_joint_tuple = (tuple(self.joint_names) if self._gripper_spec is None else
+                                 tuple(name for name in self.joint_names if name != self.gripper))
+        self._jog_joint_set = frozenset(self._jog_joint_tuple)
         self._gripper_goal: tuple[str, float] | None = None   # (command_id, target)
         self._gripper_stall: float | None = None              # readback when that goal SUCCEEDED
         self._hold_pending = False                            # re-issue the squeeze after a holding close
@@ -226,7 +235,7 @@ class PilotSimRuntime:
             raise ValueError("demonstration profile schema differs")
         pose = {str(name): float(value) for name, value in (document.get("start_pose") or {}).items()}
         for name, value in pose.items():
-            if name not in self._jog_joints():
+            if name not in self._jog_joint_set:
                 raise ValueError(f"{name}: start pose names a joint Pilot does not jog")
             lower, upper = self._offered[name]
             if not lower <= value <= upper:
@@ -238,9 +247,7 @@ class PilotSimRuntime:
         self.task = task
 
     def _jog_joints(self) -> tuple[str, ...]:
-        if self._gripper_spec is None:
-            return tuple(self.joint_names)
-        return tuple(name for name in self.joint_names if name != self.gripper)
+        return self._jog_joint_tuple
 
     def _held_gripper_target(self) -> float | None:
         """Gripper target for an arm goal after a finished gripper goal (None = keep readback).
@@ -276,7 +283,7 @@ class PilotSimRuntime:
                 return "joint_limit"
             return ""
 
-        admitted = "" if jog.joint in self._jog_joints() else "joint_not_admitted"
+        admitted = "" if jog.joint in self._jog_joint_set else "joint_not_admitted"
         return self._dispatch(jog.request_id, jog.instance_id, jog.state_sequence, jog.duration_s,
                               place, admitted, jog.seat_id)
 

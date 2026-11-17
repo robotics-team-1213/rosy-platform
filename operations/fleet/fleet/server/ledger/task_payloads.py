@@ -1,20 +1,15 @@
 """Finite, bounded, credential-free payload encoding for Fleet task records."""
 import json
-import re
 from collections.abc import Mapping
 
-_SENSITIVE_FIELD = re.compile(
-    r"(?:passwo?rd|passwd|psk|passphrase|secret|token|credential|authorization|"
-    r"api[_-]?key|private[_-]?key|bearer)",
-    re.IGNORECASE,
-)
+from core_common.audit_fields import is_credential_field
 
 
 def safe_json(value: object) -> str:
     def inspect(child: object) -> None:
         if isinstance(child, Mapping):
             for key, nested in child.items():
-                if _SENSITIVE_FIELD.search(str(key)):
+                if is_credential_field(key):
                     raise ValueError("task records cannot contain credential fields")
                 inspect(nested)
         elif isinstance(child, (list, tuple)):

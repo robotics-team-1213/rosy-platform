@@ -1,10 +1,12 @@
 # SIM cell model inventory: what the simulated cell is built from and how it differs from the real cell.
 # Learning → SIM 실험 shows this file read-only; change it by commit (this file is the one source).
+# 아래 사진·카메라 조사는 cell A/B(arm_a, arm_b, 정류장 S5)만 다룬다. cell S(arm_s, 정류장 S3)는
+# 측면 카메라가 없고(arm_s_top·arm_s_wrist뿐) 이 파일에 사진 기록도 없다.
 # Real-cell photos stay out of Git (public repository): register the file name here and put the file in
 # cell-photos/ beside the private SIM operator configuration on the review host.
 # Physics constants (servo gains, joint damping, container mass and friction) are candidates in cell_physics.yaml beside this file.
 schema: rosy.cell-model-inventory/1
-checked_at: '2026-11-03'
+checked_at: '2026-11-15'
 models:
   - id: gripper
     name: 그리퍼(OMX 팔레타이징 조 v2.1)
@@ -13,17 +15,17 @@ models:
     measured: 손가락 판 두께 약 1.1~2.0 mm, 길이 약 18 mm, 폭 40 mm, 패드 사이 29.977 mm @ 0.35 rad, TCP x 0.0740 m(원본 0.09193). 출처 URDF 메시 직접 측정
     differs: 양팔 시뮬레이션(omx_two_arm_world)은 v2.1 조, TCP 0.0740을 쓴다(2026-11-09 확인). 설치된 조가 이 STL과 같은지와 터치값 0.0885는 미해명(sim2real G-22)
   - id: ship_plate
-    name: 배 모양 판(본선)
-    cad: {file: null, sha256: null}
+    name: 본선(r08 v15) 및 모듈형 접안·고정 구조(v16 berth-modular)
+    cad: {file: berth_v16_cradle.stl, sha256: null}
     sim: reflected
-    measured: 팀 CAD(KAN-108, ship_plate.py). 실물 top 영상의 돌기 격자 36 mm 6×6과 fixture가 약 1 px로 겹친다(셀 실측 2026-11-03)
-    differs: 시뮬레이션은 선미를 첫 돌기 줄 뒤 16 mm, 뱃머리를 x 198 mm에서 자른다(실물은 50.6 mm 뒤·뾰족한 뱃머리)
+    measured: Confluence 23592971·23234388 정격 선박 r08(v15, 316×130 mm, 3 mm 부양) + v16 모듈형 일체형 접안 요람(berth-cradle-stern/mid/bow) + OMX 받침판 간격 브리지(berth-spacer-bridge-a/b, 정격 Δy 39.0 mm [35/39/43 mm], Δx -8/0/+8 mm, 반복 정밀도 RSS ±0.32 mm, 최대 선수미 회전 ±0.19°) + 선미 탁자 끝 후크(0/5/10 mm) + 2 cm 하향 박형 컨베이어 오목 스토퍼(berth-belt-concave-stopper, 입구 62 mm·평면 44 mm·깊이 9 mm). 구형 돌기 격자 판(KAN-108, ship_plate.py)도 호환 지원
+    differs: MuJoCo(omx_two_arm_world)와 Isaac(stacking_scene) 모두 r08 선체·선실·v16 일체형 요람·받침판 간격 브리지·2 cm 하향 오목 벨트 스토퍼 메시를 반영한다(berth_kit=v16-modular, sim2real G-18)
   - id: temp_plate
-    name: 임시 칸 판(두 장)
-    cad: {file: null, sha256: null}
+    name: 임시 칸 판(v12 두 장, 남색+하늘 2색) 및 3-프롱 정렬 브리지(v7)
+    cad: {file: temp_slot_plate_v12_navy.stl, sha256: null}
     sim: reflected
-    measured: 위 카메라 프레임에서 칸 패드·놓인 컨테이너를 판 윗면으로 되투영해 판마다 부채꼴 하나로 맞춤(omx_real2sim measure). 스냅샷 deploy/robot/omx/sim/cell_snapshots/. 2026-11-08 판 모양 단계 13.6°, 반지름 217 mm, 팔 축에서 약 146 mm
-    differs: 설계(SCAD v11, 다리 v7에서 200 mm)와 모양·자리가 다르다. 판은 고정돼 있지 않아 옮길 때마다 다시 잰다. 시뮬은 스냅샷을 선택지 temp_lanes=snapshot으로 읽는다(sim2real G-17)
+    measured: Confluence 23233175·15368863·23232928 판 v12(남색 바닥+하늘색 유도벽 2색 분리, F1~F4 기준점, 설계 반지름 200 mm·단계 13.76°·폭 169.7 mm) + 정렬 브리지 v7(temp_slot_bridge_a/b.stl, PR33_C02_BASE 양끝 Ø13 카운터보어 결합 3-프롱 소켓). 위 카메라 프레임에서 칸 패드·컨테이너를 되투영해 맞춤(omx_real2sim measure)
+    differs: MuJoCo(omx_two_arm_world)·Isaac(stacking_scene) 모두 판 v12 2색 STL(navy+sky, F1~F4·소켓 귀 3곳)과 브리지 v7 STL을 200 mm 브리지 정격(temp_lanes=fan, temp_radius_m=0.200)으로 맞춰 그린다(sim2real G-17)
   - id: workbench
     name: 작업대
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
@@ -37,11 +39,11 @@ models:
     measured: 폭 약 100 mm(World STL). 벨트 끝 컨테이너 윗면이 작업대보다 25.8 mm 낮다(D435 깊이 6회 중앙값, arm_b 적층 설정 2026-11-03 05:32), 곧 벨트 면은 작업대 약 56 mm·판 윗면 약 64 mm 아래
     differs: 양팔 시뮬레이션은 자 측정값(작업대 아래 55 mm, CHOICES belt_height=ruler)을 쓴다(2026-11-09 확인). fixture의 벨트 면(실물보다 약 28 mm 높음)은 선택지 fixture로 남음
   - id: arm_base
-    name: 팔 베이스(두 대)
-    cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
+    name: 팔 베이스(OMX-AI PR33_C02_BASE 두 대)
+    cad: {file: omx_base_plate_b.stl, sha256: null}
     sim: reflected
-    measured: 두 베이스 중심 사이 약 330 mm(World STL). 셀 실측 2026-11-03(surveyed) arm_b 관절 1 기준 (0.104, 0.153) m, yaw -94.3°(FK 맞춤 3.1 px), 받침 판 중심 arm_b (0.107, 0.164)·arm_a (0.116, -0.164)
-    differs: 실물 받침이 fixture (0.08, ±0.165)보다 선미 쪽(+x)으로 24~36 mm, arm_b는 중심선 쪽으로 12 mm. fixture는 CAD 값 유지, 채택은 도달·충돌 비교 뒤(D-947 2)
+    measured: 벤더 CAD(PR33_C02_BASE, 150×120×13 mm, 앞쪽 중앙 은색 사다리꼴 금속 클램프 + 양끝 Ø13 카운터보어 x=+38.75/-61.25 mm, 안쪽 벽 관절축에서 71.25 mm). 공칭 내측 판 간격 194.0 mm(실측 193~195 mm → |y_bp|=97.0 mm, arm_a (0.091, -0.16825)·arm_b (0.091, 0.16825) m); 2026-11-03 surveyed FK arm_b (0.104, 0.153) m·yaw -94.3°(3.1 px)
+    differs: MuJoCo·Isaac 모두 120×120 임시 상자 대신 실제 PR33_C02_BASE(150×120×13 mm) 메시와 앞쪽 중앙 은색 고정 클램프를 표시한다(sim2real G-21)
   - id: container
     name: 컨테이너
     cad: {file: null, sha256: null}
@@ -58,8 +60,8 @@ models:
     name: 위쪽 카메라(RealSense D435)
     cad: {file: null, sha256: null}
     sim: stand_in
-    measured: 2026-11-03 640×480 컬러. 자세(fixture 좌표) (-0.041, 0.037, 0.662) m, 판 위 588 mm, 선미 쪽으로 13.1° 기움, f 615 px(D435 일반값) 돌기 25개 PnP 0.58 px
-    differs: 양팔 시뮬레이션은 이 자세로 top 카메라를 둔다(omx_two_arm_world, 2026-11-09 확인). 측량 사이에는 임시판 칸 크기로만 확인한다(sim2real G-19)
+    measured: 2026-11-10 USB3 재연결 뒤 재측량(640×480 컬러). 자세(fixture 좌표) (-0.0334, 0.0493, 0.6613) m, focus (0.0804, 0.0086, 0.1762) m, up (0.9737, 0.0296, 0.226), f 615 px(다중 평면 61점 PnP 중앙값 0.74 px, p90 1.39 px, 독립 hold-out 21점 중앙값 0.92 px·최대 1.84 px; 2026-11-03 돌기 25개 PnP 0.58 px 대비 -56 px, -17 px, 2.8° 이동)
+    differs: 양팔 시뮬레이션은 이 자세로 top 카메라를 둔다(omx_two_arm_sites top_camera=2026-11-10, omx_two_arm_world). 측량 사이에는 원거리 정적 앵커(omx_cell_anchor)와 임시판 칸 크기로 확인한다(sim2real G-19)
   - id: camera_side
     name: 옆 카메라(Jieli)
     cad: {file: null, sha256: null}
@@ -69,13 +71,13 @@ models:
   - id: camera_wrist
     name: 손목 카메라 둘(Innomaker)
     cad: {file: null, sha256: null}
-    sim: none
-    measured: front가 Innomaker 1.3
-    differs: arm_a 손목 서비스는 404
+    sim: reflected
+    measured: Innomaker 1080P USB2.0(640×480, D 홀더 r06 장착). 2026-11-08·2026-11-10 실물 손목 프레임의 조 윤곽으로 팔별 렌즈 위치·시선 교점 맞춤(WRIST_PHOTO_A, WRIST_PHOTO_B)
+    differs: 양팔 시뮬레이션(omx_two_arm_world)은 D 홀더 메시와 팔별 맞춤 자세(wrist_camera=photo-20261108·photo-20261110)를 쓴다. 다자세 hand-eye는 미수행(sim2real G-24)
 # Measured cell layout: the numbers tools read (ship_stack_sites, real-cell site planning). The map may change a little;
 # re-measure and bump `revision`, keep the old one in git. Heights: work table top = 0, mm. Positions: fixture frame, m.
 layout:
-  revision: ship-cell-2026-11-03
+  revision: ship-cell-2026-11-15
   heights_mm:
     arm_b_base_plate: {value: 12, source: ruler, measured: '2026-11-03'}
     ship_plate_top: {value: 8, source: ruler, measured: '2026-11-03'}
@@ -83,14 +85,28 @@ layout:
     leveling_spot_table: {value: 0, source: assumed, note: 'table top; the 170 entered was the plate-centre-to-bow distance'}
     belt_end_surface: {value: -55, source: ruler, measured: '2026-11-03', check: 'D435 depth put it about -56'}
     container: {value: 30, source: ruler, measured: '2026-11-03'}
+  ship_fixation:
+    berth_kit: v16-modular
+    confluence_pages: ['23592971', '23234388', '23233175']
+    lift_mm: 3.0
+    hull_half_beam_mm: 65.0
+    hull_in_cradle_clearance_mm: 0.20
+    spacer_dy_nominal_mm: 32.0
+    spacer_dy_steps_mm: [30.0, 31.0, 32.0, 32.5, 33.0, 34.0, 35.0]
+    spacer_dx_steps_mm: [-8.0, 0.0, 8.0]
+    stern_hook_steps_mm: [0.0, 5.0, 10.0]
+    repeatability_rss_mm: 0.32
+    max_hull_yaw_deg: 0.19
+    belt_concave_stopper: {drop_mm: 20.0, mouth_mm: 62.0, flat_mm: 44.0, depth_mm: 9.0, wall_mm: 3.5}
+    temp_bridge: {version: v7, seat_r_mm: 200.0, fan_step_deg: 17.34, repeatability_rss_mm: 0.65}
   plate_centre_to_bow_mm: {value: [170, 220], source: user estimate, note: 'bow narrows to a point over this stretch; CAD 198-244'}
   arm_bases_m:
-    arm_a: {xy: [0.116, -0.164], yaw_deg: 90.0, source: 'top frame, base plate centre (no FK)'}
-    arm_b: {xy: [0.104, 0.153], yaw_deg: -94.3, source: 'FK of live joint states, 3.1 px'}
+    arm_a: {xy: [0.091, -0.16825], yaw_deg: 90.0, source: 'nominal 194.0 mm inner gap between PR33_C02_BASE plates (|y_bp|=97.0 mm, CAD 71.25 mm)'}
+    arm_b: {xy: [0.091, 0.16825], yaw_deg: -90.0, source: 'nominal 194.0 mm inner gap between PR33_C02_BASE plates (|y_bp|=97.0 mm, CAD 71.25 mm); 2026-11-03 FK was [0.104, 0.153]'}
   cameras:
-    top: {eye: [-0.0411, 0.0374, 0.6652], focus: [0.0722, 0.0401, 0.1783], up: [0.974, 0.0071, 0.2266], f_px: 615, residual_px: 0.58}
+    top: {eye: [-0.0334, 0.0493, 0.6613], focus: [0.0804, 0.0086, 0.1762], up: [0.9737, 0.0296, 0.226], f_px: 615, residual_px: 0.74, holdout_px: 0.92, measured: '2026-11-10'}
     side: {eye: [-0.5078, 0.0019, 0.1471], focus: [-0.0082, -0.0166, 0.1445], up: [0.0061, 0.0257, 0.9997], f_px: 950, residual_px: 2.8}
-  top_camera_parallax_centre_px: [322, 383]
+  top_camera_parallax_centre_px: [265, 383]
   evidence: docs/validation/omx-cell-survey-2026-11-03/result.md
 photos:
   - id: ceiling
@@ -129,8 +145,8 @@ person_tasks:
     why: arm_a를 실물로 움직일 수 없다
     status: open
   - task: RealSense를 USB 3.0 포트에 직결
-    why: USB 2.0이라 424×240만 나온다
-    status: open
+    why: USB 2.0이라 424×240만 나온다(2026-11-10 USB 3.0 재연결 및 위 카메라 재측량 완료)
+    status: done
   - task: 리더 팔 두 대의 짝 지정
     why: 원격 조종 기록에서 어느 팔을 따르는지 정해야 한다
     status: open

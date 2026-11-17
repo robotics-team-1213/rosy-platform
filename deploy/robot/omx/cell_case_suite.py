@@ -65,7 +65,10 @@ def run_case(case: dict, sha: str, out: Path, *, poll=20.0, max_wait=3600.0, sle
             sleep(poll)
             row = call("status", "--receipt", str(receipt))
             row = row.get("run", row)
-        refused = row["status"] == "FAILED" and "admission" in json.dumps(row.get("error") or "")
+        if row.get("status") == "FAILED" and "error" not in row and "result" not in row:
+            row = call("status", "--receipt", str(receipt))
+            row = row.get("run", row)
+        refused = row["status"] == "FAILED" and "admission" in json.dumps(row.get("error") or row.get("result") or "")
         if not refused or clock() - began >= max_wait:
             break
         sleep(max(poll, 60.0))  # another owner holds the GPU; the worker admits only an idle one

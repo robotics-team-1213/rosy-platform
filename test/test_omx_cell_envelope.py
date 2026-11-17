@@ -51,7 +51,8 @@ def approve(tmp_path, envelope, task, outcomes=("placed", "placed"), *, sequence
     rows = [{"schema": "rosy.omx-cell-attempt.v1", "attempt_id": f"trial-{i}",
              "envelope": {**result, "mode": "commissioning", "status": "commissioning", "allowed": True},
              "outcome": outcome,
-             "verify": {"inside": outcome == "placed"}, "transfer": {"result": outcome}}
+             "verify": {"inside": outcome == "placed", "verified": outcome == "placed"},
+             "transfer": {"result": outcome}}
             for i, outcome in enumerate(outcomes)]
     attempts = tmp_path / "attempts.jsonl"
     attempts.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
@@ -124,7 +125,11 @@ def test_reviewed_gate_load_keeps_its_own_durable_intent(tmp_path, task, envelop
     assert gate.open(path, lambda a: cell_attempts.begin(config, a)) is None
     pending = attempts.with_suffix(".pending.json")
     original = pending.read_bytes()
-    assert gate.act(f"load {path}")["ok"]
+    state["t"] = 100.01
+    state["trace_receipt"] = {"status": "ok", "source": "owner-trace.jsonl"}
+    loaded = gate.act(f"load {path}")
+    assert loaded["ok"] and loaded["pre_state_trace"] == {
+        "t": 100.01, "trace_receipt": state["trace_receipt"]}
     state["operating_context"]["session_id"] = "other-session"
     assert not gate.act(f"load {path}")["ok"]
     state["operating_context"]["session_id"] = "fixture-session"
@@ -217,6 +222,20 @@ def test_failures_stay_in_the_denominator_and_new_failures_revoke(tmp_path, task
     with attempts.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps(row) + "\n")
     assert envelope.assess(*task, now=100.01)["reason"] == "runtime_failure"
+
+
+def test_unverified_commissioning_placement_cannot_approve_automatic_task(tmp_path, task, envelope):
+    attempts, document = approve(tmp_path, envelope, task)
+    rows = [json.loads(line) for line in attempts.read_text().splitlines()]
+    rows[0]["verify"]["verified"] = False
+    attempts.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    document["reviews"][0]["attempts_sha256"] = envelope.digest(rows)
+    Path(task[0]["operating_envelope_path"]).write_text(json.dumps(document))
+
+    result = envelope.assess(*task, now=100.01)
+    assert result["status"] == "failed"
+    assert result["successes"] == 1
+    assert envelope.review_candidates(rows)[result["task_sha256"]]["successes"] == 1
 
 
 def test_commissioning_is_explicit_and_never_a_verified_result(task, envelope):
@@ -390,19 +409,25 @@ def test_fifo_checked_command_accepts_the_runners_inner_command_ack(tmp_path, en
     status = tmp_path / "chunk-status.jsonl"
     status.write_text("")
     sent = []
+    completed = {"command": "load plan.json", "ok": True,
+                 "operating_context": {"session_id": "fixture-session"},
+                 "library_sha256": "a" * 64, "fault": None}
 
     def write(fd, payload):
         sent.append(payload.decode().strip())
         with status.open("a") as stream:
-            stream.write(json.dumps({"command": "load plan.json", "ok": True}) + "\n")
+            stream.write(json.dumps(completed) + "\n")
         return len(payload)
 
     monkeypatch.setattr(transport.os, "open", lambda *a, **kw: 42)
     monkeypatch.setattr(transport.os, "write", write)
     monkeypatch.setattr(transport.os, "close", lambda fd: None)
-    result = transport.FifoCell(tmp_path, {}).checked("load plan.json", {
+    cell = transport.FifoCell(tmp_path, {})
+    result = cell.checked("load plan.json", {
         "session_id": "fixture-session", "library_sha256": "a" * 64})
     assert result["ok"]
+    assert cell._cached_state == completed
+    assert cell._cached_state_mono > 0
     assert sent == [f"checked fixture-session {'a' * 64} load plan.json"]
 
 
@@ -437,6 +462,42 @@ def test_supervised_fifo_motion_cannot_bypass_the_selected_device(tmp_path, task
         assert result["ok"] and sent == ["state", f"checked fixture-session {'a' * 64} jog shoulder_pan.pos 1"]
 
 
+def test_fifo_reuses_recent_valid_state_and_invalidates_on_load(tmp_path, task, monkeypatch):
+    import time
+
+    transport = importlib.import_module("cell_pipeline_io")
+    state = copy.deepcopy(task[3])
+    selected = copy.deepcopy(state["operating_context"]["operating_profile"])
+    state.update(t=time.time(), command="state", library_sha256="a" * 64)
+    cell = transport.FifoCell(tmp_path, {}, operating_profile=selected)
+    sent = []
+    clock = [100.0]
+    monkeypatch.setattr(transport.time, "monotonic", lambda: clock[0])
+    completed = dict(state, command="jog shoulder_pan.pos 1")
+
+    def send(command, timeout=None):
+        sent.append(command)
+        if command == "state":
+            return state
+        if command.endswith("jog shoulder_pan.pos 1"):
+            clock[0] += cell.state_cache_ttl_s + 1
+            return completed
+        return {"ok": True, "command": command}
+
+    monkeypatch.setattr(cell, "_send", send)
+    monkeypatch.setattr(cell, "_cached_library_digest", lambda path: "b" * 64)
+    assert cell.act("jog shoulder_pan.pos 1")["ok"]
+    assert cell._cached_state is completed
+    assert cell._cached_state_mono == clock[0]
+    assert cell.act("jog shoulder_pan.pos 1")["ok"]
+    assert sent.count("state") == 1
+    assert cell.act("load plan.json")["ok"]
+    assert cell._cached_state is None
+    assert sent.count("state") == 2
+    assert cell.act("jog shoulder_pan.pos 1")["ok"]
+    assert sent.count("state") == 3
+
+
 def test_shipped_envelope_and_condition_templates_cannot_enable_automatic_motion(task, envelope):
     document = json.loads((OMX / "cell-envelope.example.json").read_text())
     assert document["schema"] == envelope.SCHEMA and document["reviews"] == []
@@ -444,3 +505,45 @@ def test_shipped_envelope_and_condition_templates_cannot_enable_automatic_motion
     config, calibration, library, state = task
     config["operating_conditions"] = template["operating_conditions"]
     assert not envelope.assess(config, calibration, library, state, now=100.01)["allowed"]
+
+
+def test_runtime_context_uses_batch_sync_read_on_real_dynamixel_bus(envelope):
+    @dataclass
+    class Calibration:
+        range_min: int = 0
+        range_max: int = 4095
+
+    sync_calls = []
+
+    class RealBus:
+        model_ctrl_table = {}
+        motors = {name: SimpleNamespace(id=11 + i, model="xl430-w250" if i < 3 else "xl330-m288")
+                  for i, name in enumerate(envelope.NAMES)}
+        calibration = {name: Calibration() for name in envelope.NAMES}
+
+        def sync_read(self, register, motors=None, *, normalize=True, num_retry=0):
+            sync_calls.append((register, tuple(motors), normalize, num_retry))
+            return {n: 20 for n in motors}
+
+    ctx = envelope.runtime_context({"id": "fixture-arm"}, RealBus(), 30)
+    assert ctx["scope"] == "hardware" and len(ctx["sha256"]) == 64
+    assert len(sync_calls) == 8
+    assert ("Current_Limit", ("wrist_flex", "wrist_roll", "gripper"), False, 2) in sync_calls
+
+
+def test_profile_cache_returns_defensive_copies_and_assess_reuses_library_sha256(task, envelope):
+    from cell_robot_profile import load
+
+    config, calibration, library, state = task
+    first = load(config["operating_profile_path"])
+    first["servo"]["11"] = {"mutated": True}
+    first["binding"]["device_id"] = "mutated-device"
+    second = load(config["operating_profile_path"])
+    assert "11" not in second["servo"]
+    assert second["binding"]["device_id"] != "mutated-device"
+
+    custom_sha = "f" * 64
+    assessed = envelope.assess(config, calibration, library, state, now=100.01, library_sha256=custom_sha)
+    assert assessed["library_sha256"] == custom_sha
+    unit_text = (OMX / "rosy-omx-camera@.service").read_text(encoding="utf-8")
+    assert '${ROSY_CAMERA_MAX_FPS:-15}' in unit_text

@@ -41,8 +41,9 @@ class RuleSelectionStore(CoreEventStore):
         with closing(self._connect()) as db, db:
             db.executemany('INSERT INTO fleet_rule_selections(robot_id,received_at,payload_json) VALUES(?,?,?)', values)
             db.execute('DELETE FROM fleet_rule_selections WHERE received_at < ?', (now - self.retention_s,))
-            db.execute('''DELETE FROM fleet_rule_selections WHERE selection_id <= COALESCE(
-                (SELECT selection_id FROM fleet_rule_selections ORDER BY selection_id DESC LIMIT 1 OFFSET ?),0)''',
+            # AUTOINCREMENT ids never repeat, so MAX(id) bounds the cap without walking 100k payload rows.
+            db.execute('''DELETE FROM fleet_rule_selections WHERE selection_id <=
+                (SELECT COALESCE(MAX(selection_id), 0) FROM fleet_rule_selections) - ?''',
                        (self.max_rows,))
         return [json.loads(item[2]) for item in values]
 

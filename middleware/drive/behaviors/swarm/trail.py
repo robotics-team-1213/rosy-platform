@@ -27,6 +27,21 @@ MAX_CRUMBS = 2000
 JOIN_MAX_M = 1.5
 #: 자취에서 이만큼 벗어나면 따라가지 않는다 (m). 위치가 튀었거나 밀렸다.
 LOST_M = 0.30
+#: 자취 밖일 때 지키는 최소 전진 속도 (m/s). 서서 기다리면 대형이 그대로 끝난다
+#: (2026-11-11 formation-lane run 8: 팔로워가 0.70 m 벗어나 영구 정지). 상한이 아니라
+#: 바닥이다 — gap 제어가 그보다 빨리 가라고 하면 그 속도를 따르고, 가속 한계는 그대로 건다.
+REJOIN_MPS = 0.10
+#: 돌아올 수 있는 최대 이탈 (m). 이보다 멀면 기하로 메우지 않고 선다 — 자리가 틀렸다.
+REJOIN_MAX_M = 1.0
+#: 돌아오는 동안에도 리더 꼬리에서 이만큼은 남긴다 (m). 이보다 가까우면 붙지 않고
+#: 그 자리에 서서 리더가 지나가기를 기다린다 — 밀면 접촉이다.
+REJOIN_MIN_CLEAR_M = 0.25
+#: 자취 밖으로 나간 채 이 시간이 지나면 손을 뗀다 (s). 그 전에는 기하가 돌아온다 —
+#: 한 번 벗어난 표본이 대형을 영구 정지시키면 안 된다 (run 8, 2026-11-11).
+LOST_HOLD_S = 3.0
+#: 리더 표본이 계속 이어지지 못한 채 이 시간이 지나면 재지역화로 본다 (s). 한 표본의
+#: 튐은 버리고 다음 표본을 받는다; 진짜 도약은 10 Hz 에서 매 표본이 계속 튄다.
+JUMP_HOLD_S = 1.0
 #: 팔로워 진행 위치는 지금 위치에서 이 경로 거리 앞까지만 찾는다 (m). 자취가 스스로
 #: 겹치는 곳(고리)에서 뒤쪽 통과 지점으로 건너뛰지 않게 한다.
 SEARCH_AHEAD_M = 0.5
@@ -128,28 +143,43 @@ class Trail:
 
 def trail_twist(trail: Trail, x: float, y: float, yaw: float, *, gap: float, max_speed: float,
                 max_angular: float, prev_linear: float, dt: float,
-                lookahead: float = LOOKAHEAD_M) -> tuple[float, float, Optional[str]]:
-    """(linear, angular, hold 사유). 사유가 None 이면 달리거나 gap 에 닿아 서 있는 것이다."""
+                lookahead: float = LOOKAHEAD_M) -> tuple[float, float, Optional[str], float]:
+    """(linear, angular, 사유, 자취까지 거리). 사유가 None 이면 달리거나 gap 에 닿아 서 있다.
+
+    `trail_rejoin` 은 자취 밖에서 돌아오는 중이라는 뜻이지 정지가 아니다. 한 표본의
+    이탈로 편대를 끝내지 않으려면 기하가 스스로 돌아와야 하고, 오래 못 돌아오면
+    SwarmManager 가 `trail_lost` 로 세운다. `trail_lost` 는 기하로 메울 수 없는
+    이탈(REJOIN_MAX_M 초과)이다.
+    """
     s, off = trail.locate(x, y)
+    remaining = trail.leader_s - s
+    reason = None
     if off > LOST_M:
-        return 0.0, 0.0, "trail_lost"
-    linear = min(max_speed, K_GAP * (trail.leader_s - s - gap),
-                 max(0.0, prev_linear) + ACCEL_MPS2 * max(0.0, dt))
+        reason = "trail_rejoin" if off <= REJOIN_MAX_M else "trail_lost"
+    linear = min(max_speed, K_GAP * (remaining - gap))
+    if reason == "trail_rejoin" and remaining > REJOIN_MIN_CLEAR_M:
+        # 붙는 동안은 gap 제어를 잠시 무시한다. 옆으로 붙으려면 앞으로 가야 한다.
+        # 리더 꼬리에 붙어 있으면(clearance 이하) 밀지 않고 그 자리에 선다.
+        linear = max(linear, REJOIN_MPS)
+    # 가속 한계는 복귀 바닥에도 건다 — 50 ms 에 0 → 0.10 m/s 는 1.5 m/s² 다.
+    linear = min(linear, max(0.0, prev_linear) + ACCEL_MPS2 * max(0.0, dt))
+    if reason == "trail_lost":
+        return 0.0, 0.0, reason, off
     if linear < MIN_LINEAR:
-        return 0.0, 0.0, None
+        return 0.0, 0.0, reason, off
     gx, gy = trail.point_at(min(s + lookahead, trail.leader_s))
     dx, dy = gx - x, gy - y
     reach = math.hypot(dx, dy)
     if reach < 1e-6:
-        return 0.0, 0.0, None
+        return 0.0, 0.0, reason, off
     alpha = math.atan2(dy, dx) - yaw
     alpha = math.atan2(math.sin(alpha), math.cos(alpha))
     if abs(alpha) > math.pi / 2:
         # 자취가 등 뒤에 있다(시작 자세가 틀어졌다). 제자리에서 돌아 세운다.
-        return 0.0, math.copysign(max_angular, alpha), None
+        return 0.0, math.copysign(max_angular, alpha), reason, off
     angular = 2.0 * linear * math.sin(alpha) / reach
     if abs(angular) > max_angular:
         # 곡률을 지킨다: 회전을 자르면 바깥으로 밀리니 속도를 같이 줄인다.
         linear *= max_angular / abs(angular)
         angular = math.copysign(max_angular, angular)
-    return linear, angular, None
+    return linear, angular, reason, off

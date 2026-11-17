@@ -9,16 +9,158 @@ heights come from the depth image instead:
   along a row of objects standing in one line, as the cell's did on 2026-11-01;
 - an arm's FK zero is the top of the plate it stands on, read in a ring around its base.
 
-The D435 runs without its SDK here (USB 2.0, v4l2 Z16), so its intrinsics are nominal (`FOCAL_PX`).
+The D435 runs without its SDK here (USB 3.0, v4l2 Z16); its intrinsics are nominal (`FOCAL_PX`).
 
     python cell_depth.py --depth d.raw --colour c.jpg --px 345,80 --px 330,320   # read only
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
 
 import numpy as np
+
+
+MIN_CAPTURE_S = 13 / 6 + 1.5  # skip 12 + 1 frame at 6 fps: 2.4-2.6 s on the cell; its 11-13 copy's 1.8 s always gave None
+
+
+def _run_v4l2_z16(cmd: list[str], timeout_s: float, **kwargs):
+    """Run v4l2-ctl with 'Z16' primary, falling back to 'Z16 ' ONLY on CalledProcessError (v4l2-ctl 1.32 refuses 'Z16')."""
+    timeout_s = max(float(timeout_s), MIN_CAPTURE_S)
+    try:
+        return subprocess.run(cmd, timeout=float(timeout_s), check=True, **kwargs)
+    except subprocess.CalledProcessError:
+        fmt = "--set-fmt-video=width=640,height=480,pixelformat=Z16"
+        if fmt not in cmd:
+            raise
+        retry = [f"{fmt} " if part == fmt else part for part in cmd]
+        return subprocess.run(retry, timeout=float(timeout_s), check=True, **kwargs)
+
+
+def capture_top_depth_z16(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-depth", out_raw: Path | None = None,
+                          *, timeout_s: float = 12.0) -> np.ndarray | None:
+    """Capture a fresh warmed 640x480 Z16 frame; never reuse old raw on capture failure."""
+    raw_path = Path(out_raw) if out_raw is not None else Path(tempfile.gettempdir()) / "rosy-top-depth-z16.raw"
+    if not Path(dev_path).exists():
+        return None
+    try:
+        raw_path.unlink(missing_ok=True)
+    except OSError:
+        return None
+    try:
+        captured = _run_v4l2_z16(["v4l2-ctl", "-d", dev_path,
+                                  "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
+                                  "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
+                                  f"--stream-to={raw_path}"], float(timeout_s),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if getattr(captured, "returncode", 0) != 0 or not raw_path.exists() or raw_path.stat().st_size != 640 * 480 * 2:
+        return None
+    arr = np.fromfile(raw_path, dtype=np.uint16)
+    return arr.reshape(480, 640) if float((arr > 0).mean()) >= 0.40 else None
+
+
+def capture_top_depth_z16_receipt(dev_path: str, out_raw: Path, *, timeout_s: float = 12.0) -> tuple[np.ndarray, dict] | None:
+    """Capture one Z16 frame with the V4L2 start-of-exposure stamp from the same buffer."""
+    lock_path = Path(out_raw).with_suffix(Path(out_raw).suffix + ".lock")
+    # shortcut: a crash leaves this path locked; use a unique output path per attempt until owner cleanup exists.
+    try:
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except OSError:
+        return None
+    try:
+        return _capture_top_depth_z16_receipt_locked(dev_path, out_raw, timeout_s)
+    finally:
+        os.close(lock_fd)
+        lock_path.unlink(missing_ok=True)
+
+
+def _sync_parent(path: Path) -> None:
+    if os.name == "posix":
+        fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
+def _capture_top_depth_z16_receipt_locked(dev_path: str, out_raw: Path, timeout_s: float) -> tuple[np.ndarray, dict] | None:
+    raw_path = Path(out_raw)
+    receipt_path = raw_path.with_suffix(raw_path.suffix + ".receipt.json")
+    try:
+        raw_path.unlink(missing_ok=True)
+        receipt_path.unlink(missing_ok=True)
+        if not Path(dev_path).exists():
+            return None
+        started_wall = time.time()
+        started = time.monotonic()
+        captured = _run_v4l2_z16(["v4l2-ctl", "--verbose", "-d", dev_path,
+                                  "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
+                                  "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
+                                  f"--stream-to={raw_path}"], float(timeout_s),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        ended = time.monotonic()
+        ended_wall = time.time()
+        raw = raw_path.read_bytes()
+    except (OSError, subprocess.SubprocessError):
+        raw_path.unlink(missing_ok=True)
+        return None
+    lines = [line for line in (captured.stderr or "").splitlines() if "cap dqbuf:" in line]
+    last = lines[-1] if lines else ""
+    match = re.search(r"seq:\s*(\d+).*?bytesused:\s*(\d+).*?ts:\s*([0-9.]+)", last)
+    if (captured.returncode != 0 or len(raw) != 640 * 480 * 2 or match is None or int(match.group(2)) != len(raw)
+            or "ts-monotonic, ts-src-soe" not in last):
+        raw_path.unlink(missing_ok=True)
+        return None
+    stamp = float(match.group(3))
+    depth = np.frombuffer(raw, dtype="<u2").reshape(480, 640)
+    valid = float((depth > 0).mean())
+    if not started - 0.5 <= stamp <= ended + 0.5 or valid < 0.40:
+        raw_path.unlink(missing_ok=True)
+        return None
+    start_offset, end_offset = started_wall - started, ended_wall - ended
+    if abs(start_offset - end_offset) > 0.5:
+        raw_path.unlink(missing_ok=True)
+        return None
+    try:
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        boot_id = None
+    receipt = {"source_seq": int(match.group(1)), "exposure_monotonic_s": stamp,
+               "source_seq_scope": "per_v4l2_capture_stream",
+               "capture_started_monotonic_s": started, "capture_ended_monotonic_s": ended,
+               "capture_started_wall_s": started_wall, "capture_ended_wall_s": ended_wall,
+               "exposure_wall_estimate_s": stamp + (start_offset + end_offset) / 2,
+               "wall_bridge_uncertainty_s": abs(start_offset - end_offset) / 2 + 0.01,
+               "boot_id": boot_id,
+               "clock_semantics": "v4l2_monotonic_start_of_exposure", "raw_sha256": hashlib.sha256(raw).hexdigest(),
+               "valid_depth_ratio": valid, "raw_path": str(raw_path)}
+    pending = receipt_path.with_suffix(receipt_path.suffix + ".pending")
+    try:
+        with raw_path.open("rb+") as saved_raw:
+            os.fsync(saved_raw.fileno())
+        _sync_parent(raw_path)
+        with pending.open("w", encoding="utf-8") as saved_receipt:
+            json.dump(receipt, saved_receipt, allow_nan=False)
+            saved_receipt.flush()
+            os.fsync(saved_receipt.fileno())
+        pending.replace(receipt_path)
+        _sync_parent(receipt_path)
+    except OSError:
+        pending.unlink(missing_ok=True)
+        raw_path.unlink(missing_ok=True)
+        receipt_path.unlink(missing_ok=True)
+        return None
+    return depth, receipt
 
 FOCAL_PX = 385.0  # D435 depth at 640 x 480, nominal
 PLANE_MM = 4.0
@@ -28,23 +170,43 @@ RAISED_MM = (18.0, 120.0)  # what stands up from the table: containers, stacks (
 def points(depth, focal: float = FOCAL_PX):
     """(h, w, 3) camera-frame points in mm; zero depth (no return) stays zero."""
     h, w = depth.shape
-    ys, xs = np.mgrid[0:h, 0:w]
     z = depth.astype(float)
-    return np.dstack([(xs - w / 2) * z / focal, (ys - h / 2) * z / focal, z])
+    z_f = z / focal
+    return np.dstack([(np.arange(w) - w / 2)[None, :] * z_f, (np.arange(h) - h / 2)[:, None] * z_f, z])
 
 
 def _ransac(pts, tol_mm: float, tries: int, rng):
     """(unit normal, a point on it), inlier count: the plane with the most points within `tol_mm`."""
-    best, count = None, -1
+    normals, points_a = [], []
     for _ in range(tries):
         a, b, c = pts[rng.choice(len(pts), 3, replace=False)]
-        n = np.cross(b - a, c - a)
-        if np.linalg.norm(n) < 1e-9:
+        u, v = b - a, c - a
+        nx = float(u[1] * v[2] - u[2] * v[1])
+        ny = float(u[2] * v[0] - u[0] * v[2])
+        nz = float(u[0] * v[1] - u[1] * v[0])
+        norm = (nx * nx + ny * ny + nz * nz) ** 0.5
+        if norm < 1e-9:
             continue
-        n = n / np.linalg.norm(n)
-        k = int((np.abs((pts - a) @ n) < tol_mm).sum())
-        if k > count:
-            best, count = (n if n[2] < 0 else -n, a), k
+        inv = -1.0 / norm if nz > 0 else 1.0 / norm
+        normals.append((nx * inv, ny * inv, nz * inv))
+        points_a.append(a)
+    if not normals:
+        return None, -1
+    best, count = None, -1
+    n_mat = np.asarray(normals, float)
+    a_mat = np.asarray(points_a, float)
+    offsets = np.sum(a_mat * n_mat, axis=1)
+    for start in range(0, len(n_mat), 32):
+        nb = n_mat[start:start + 32]
+        ob = offsets[start:start + 32]
+        diff = pts @ nb.T
+        np.subtract(diff, ob, out=diff)
+        np.abs(diff, out=diff)
+        counts = (diff < tol_mm).sum(axis=0)
+        idx = int(np.argmax(counts))
+        if int(counts[idx]) > count:
+            count = int(counts[idx])
+            best = (nb[idx], a_mat[start + idx])
     return best, count
 
 
@@ -53,15 +215,19 @@ def table_plane(depth, tol_mm: float = PLANE_MM, tries: int = 400, seed: int = 0
     surface about 60 mm under the table, sometimes larger than it: of the two largest parallel planes the higher one is
     the table when it holds `share` of the larger's points (2026-11-01: the pallet read 75 mm in one frame, 10 in the
     next, as the plane flipped between them)."""
-    pts = points(depth)[depth > 0][::7]
+    h, w = depth.shape
+    ys, xs = np.nonzero(depth > 0)
+    ys, xs = ys[::7], xs[::7]
+    z = depth[ys, xs].astype(float)
+    pts = np.column_stack(((xs - w / 2) * (z / FOCAL_PX), (ys - h / 2) * (z / FOCAL_PX), z))
     rng = np.random.default_rng(seed)
     (n, a), k = _ransac(pts, tol_mm, tries, rng)
-    rest = pts[np.abs((pts - a) @ n) >= tol_mm]
+    rest = pts[np.abs(pts @ n - float(a @ n)) >= tol_mm]
     if len(rest) >= 3:
         (n2, a2), k2 = _ransac(rest, tol_mm, tries, rng)
         if k2 >= share * k and (a2 - a) @ n > 5 * tol_mm and abs(n2 @ n) > 0.98:
             n, a = n2, a2
-    near = pts[np.abs((pts - a) @ n) < tol_mm]
+    near = pts[np.abs(pts @ n - float(a @ n)) < tol_mm]
     _, _, vt = np.linalg.svd(np.c_[near, np.ones(len(near))], full_matrices=False)
     normal, offset = vt[-1][:3], vt[-1][3]
     scale = np.linalg.norm(normal)
@@ -74,7 +240,11 @@ def table_plane(depth, tol_mm: float = PLANE_MM, tries: int = 400, seed: int = 0
 def height_map(depth, plane) -> np.ndarray:
     """mm above the table plane; NaN where the camera had no return."""
     normal, offset = plane
-    return np.where(depth > 0, points(depth) @ normal + offset, np.nan)
+    h, w = depth.shape
+    ray_dot = ((np.arange(w) - w / 2) * (normal[0] / FOCAL_PX))[None, :] + (
+        (np.arange(h) - h / 2) * (normal[1] / FOCAL_PX) + normal[2]
+    )[:, None]
+    return np.where(depth > 0, depth * ray_dot + offset, np.nan)
 
 
 def align(object_mask, heights, scales=np.arange(0.55, 0.86, 0.01), step: int = 2) -> tuple[np.ndarray, float]:
@@ -123,22 +293,36 @@ def align_edges(colour, heights, scales=np.arange(0.55, 0.86, 0.01), reach: int 
     grey = colour if colour.ndim == 2 else cv2.cvtColor(colour, cv2.COLOR_BGR2GRAY)
     ys, xs = np.nonzero(cv2.Canny(cv2.GaussianBlur(grey, (5, 5), 0), 40, 120))
     pts = np.c_[xs, ys].astype(float)[::3]
-    dist = cv2.distanceTransform((depth_edges == 0).astype(np.uint8), cv2.DIST_L2, 3)
+    dist = np.minimum(cv2.distanceTransform((depth_edges == 0).astype(np.uint8), cv2.DIST_L2, 3), 15.0)
     h, w = heights.shape
+    min_ok = int(np.ceil(0.7 * len(pts)))
 
-    def cost(s, tx, ty):
-        u, v = pts[:, 0] * s + tx, pts[:, 1] * s + ty
-        ok = (u >= 0) & (u < w - 1) & (v >= 0) & (v < h - 1)
-        if not len(pts) or ok.mean() < 0.7:
-            return float("inf")
-        return float(np.mean(np.minimum(dist[v[ok].astype(int), u[ok].astype(int)], 15.0)))
+    def search_scale(s, tx_range, ty_range):
+        if not len(pts):
+            return (float("inf"), s, tx_range[0], ty_range[0])
+        u0, v0 = pts[:, 0] * s, pts[:, 1] * s
+        ui0, vi0 = np.floor(u0).astype(int), np.floor(v0).astype(int)
+        best_s = (float("inf"), s, tx_range[0], ty_range[0])
+        for tx in tx_range:
+            ok_u = (u0 >= -tx) & (u0 < w - 1 - tx)
+            if int(ok_u.sum()) < min_ok:
+                continue
+            ui = ui0 + tx
+            for ty in ty_range:
+                ok = ok_u & (v0 >= -ty) & (v0 < h - 1 - ty)
+                k = int(ok.sum())
+                if k >= min_ok:
+                    c_val = float(dist[vi0[ok] + ty, ui[ok]].sum()) / k
+                    if c_val < best_s[0]:
+                        best_s = (c_val, s, tx, ty)
+        return best_s
 
-    best = min((cost(s, tx, ty), s, tx, ty) for s in scales  # shifts within `reach` px of a centred view
-               for tx in range(int(w * (1 - s) / 2) - reach, int(w * (1 - s) / 2) + reach + 1, 3)
-               for ty in range(int(h * (1 - s) / 2) - reach, int(h * (1 - s) / 2) + reach + 1, 3))
+    best = min(search_scale(s, range(int(w * (1 - s) / 2) - reach, int(w * (1 - s) / 2) + reach + 1, 3),
+                            range(int(h * (1 - s) / 2) - reach, int(h * (1 - s) / 2) + reach + 1, 3))
+               for s in scales)
     _, s, tx, ty = best
-    c, s, tx, ty = min((cost(s2, tx2, ty2), s2, tx2, ty2) for s2 in np.arange(s - 0.01, s + 0.011, 0.002)
-                       for tx2 in range(tx - 3, tx + 4) for ty2 in range(ty - 3, ty + 4))
+    c, s, tx, ty = min(search_scale(s2, range(tx - 3, tx + 4), range(ty - 3, ty + 4))
+                       for s2 in np.arange(s - 0.01, s + 0.011, 0.002))
     return np.float32([[s, 0, tx], [0, s, ty]]), c
 
 
@@ -158,9 +342,36 @@ def plate_top(heights, to_depth, base_px, radius_px: float = 45.0, plate_mm=(8.0
     return float(np.median(on)) if len(on) >= 4 else None
 
 
+def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | None = None, *,
+                         depth=None, colour=None, live: dict | None = None,
+                         touch_receipts: dict[str, dict] | None = None, now_ts: float | None = None) -> dict:
+    """Delegate post-calibration cross-verification to `cell_cal_eval`."""
+    import cell_cal_eval
+
+    return cell_cal_eval.verify_profile_depth(
+        config, calibration, bias, depth=depth, colour=colour, live=live,
+        touch_receipts=touch_receipts, now_ts=now_ts,
+    )
+
+
+def _fetch_colour_frame(url: str):
+    import cell_cal_eval
+
+    return cell_cal_eval.fetch_colour_frame(url)
+
+
+def _verify_main(argv: list[str]) -> int:
+    import cell_cal_eval
+
+    return cell_cal_eval.verify_main(argv, capture_fn=capture_top_depth_z16)
+
+
 def main(argv=None) -> int:
     import cv2
 
+    tokens = list(sys.argv[1:] if argv is None else argv)
+    if tokens and tokens[0] == "verify":
+        return _verify_main(tokens[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--depth", required=True, help="raw Z16, 640 x 480, mm")
     ap.add_argument("--colour", required=True)

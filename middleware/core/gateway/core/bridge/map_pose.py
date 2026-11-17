@@ -44,6 +44,16 @@ class MapPoseLease:
         bridge._svc.state.expire_pose(frame='map')
 
 
+#: slam_toolbox future-dates map->odom by transform_timeout (0.4 s in mapper_params.yaml).
+MAX_FUTURE_TF_NS = 500_000_000
+
+
+def _future_ns(bridge):
+    """Future-dated TF is a slam_toolbox habit only; every other backend keeps zero tolerance."""
+    runtime = bridge._svc.config.get('runtime') or {}
+    return MAX_FUTURE_TF_NS if str(runtime.get('navigation_backend', '')).strip().lower() == 'slam' else 0
+
+
 def invalidate_map_pose(bridge):
     """Map/lifecycle delivery invalidates in-flight TF reads before processing."""
     lease = bridge._map_pose_lease
@@ -54,7 +64,7 @@ def invalidate_map_pose(bridge):
         lease._reject(bridge)
         try:
             _, _, ros = lease._clocks(bridge)
-            lease._floor = max(lease._floor, ros)
+            lease._floor = max(lease._floor, ros + _future_ns(bridge))  # also retire TF already dated ahead
         except Exception:
             lease._bad_clock = True
 
@@ -117,9 +127,10 @@ def receive_map_pose(bridge, lookup):
             if sample is None or (frame, child) != (bridge._map_frame, bridge._base_frame):
                 raise ValueError('TF read no longer matches its original frames')
             stamp, x, y, yaw = sample
-            if stamp > ros or stamp <= lease._floor or stamp < lease._stamp:
+            if stamp > ros + _future_ns(bridge) or stamp <= lease._floor or stamp < lease._stamp:
                 raise ValueError('future, consumed or reversed TF')
-            capture = math.nextafter(before-(ros-stamp)/1_000_000_000, -math.inf)
+            eff_stamp = min(stamp, ros)
+            capture = math.nextafter(before-(ros-eff_stamp)/1_000_000_000, -math.inf)
             if stamp == lease._stamp:
                 capture = min(capture, lease._capture)
             else:
@@ -130,10 +141,11 @@ def receive_map_pose(bridge, lookup):
             def age_at_commit():
                 nonlocal capture
                 _, final, source_now = lease._clocks(bridge)
-                capture = min(capture, math.nextafter(before-(source_now-stamp)/1_000_000_000, -math.inf))
+                eff_now = max(eff_stamp, source_now)
+                capture = min(capture, math.nextafter(before-(eff_now-eff_stamp)/1_000_000_000, -math.inf))
                 if odom_owns_pose(capture, final):
                     raise ValueError('original TF expired before state commit')
-                return final-capture
+                return max(0.0, final-capture)
             bridge._svc.state._record_map_pose(x, y, yaw, source_key=lease._state_key,
                                                age_at_commit=age_at_commit)
             lease._capture = capture

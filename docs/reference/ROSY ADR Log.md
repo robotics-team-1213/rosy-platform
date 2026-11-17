@@ -10,6 +10,29 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1035 | 셀 팔 리스, Calibration 보정 작업 API, AI 판정 기록으로 팔 incident 해제(D-971 해제 주체 변경). [전문](../adr/D-1035-calibration-arm-lease-jobs-and-ai-incident-assessment.md) | Accepted (2026-11-17, 사용자 결정; 배포·실물 수용 별도) |
+| D-1024 | OMX 학습 정책의 실물 입회 시험을 하루 안에 연다 — D-793 단계를 줄이되 장치 한계·정지·두 사람 확인은 그대로 둔다. [전문](../adr/D-1024-omx-learned-policy-supervised-real-trial-fast-track.md) | Accepted (2026-11-14, 사용자 지시; 구현·원격 시험, 실물 수용 없음) |
+| D-1034 | 원격·분리 제어 유닛의 중앙 Rosy Account 연동, 터널 브리지, 기계 토큰 분리 및 공용 브라우저 세션. [전문](../adr/D-1034-paired-control-unit-central-account-wiring.md) | Accepted (2026-11-15, 사용자 결정; `cell-a`↔`rosy-fleet-r` 실물 연동 검증·`shared/web` 통합 반영, 서명 compose 템플릿·R 이미지 갱신 별도) |
+| D-1033 | OMX 1팔·2팔 공통 프로필 정본, 양팔 실행·Fine 탑재 경계 및 카메라 투영 디지털 트윈 운영 규격. [전문](../adr/D-1033-omx-per-arm-profile-bimanual-and-twin-plan.md) | Proposed (2026-11-15, 사용자 지시 + Gemini 4 Hydrogen · GLM-5.3 2라운드 패널 합의; 실물 측정·카메라 복구 및 증분 B·Fine 구현 별도) |
+| D-990 | Monitoring 화면의 Rosy Account 로그인. [전문](../adr/D-990-monitoring-account-receiver.md) | Accepted (2026-11-07, 사용자 지시; Account client 등록·배포·현장 수용 별도) |
+| D-992 | 장비 등록과 Rosy Account 연동. [전문](../adr/D-992-device-enrollment-account-link.md) | Accepted (2026-11-07, 사용자 지시; 현장 활성화·실물 수용 별도) |
+| D-996 | 셀 사실은 항만 사건 4개로만 Harbor에 가고, 화물 신원은 판독값으로만 맞춘다 — S load는 Fleet ARM_TRANSFER 제안, container_tag 100~199, R relay는 직계 셀만. [전문](../adr/D-996-harbor-port-events-and-intake-identity.md) | Proposed (2026-11-08, 사용자 결정 D1~D7; 시뮬레이션 프로필 구현, 실물·마커 판독률 수용 전) |
+| D-998 | 전환 전 알림 전달의 HTTP·기계 자격·독립 원장. [전문](../adr/D-998-notification-delivery-http-journal.md) | Accepted (2026-11-08, D-997 단계별 구현 지시; 배포·발송 owner 전환·실제 채널 수용 별도) |
+| D-1004 | Calibration 화면은 Account 로그인으로 열고, 실측 요청의 답은 calibration.operate가 한다. [전문](../adr/D-1004-calibration-screen-and-operate-capability.md) | Accepted (2026-11-09, 사용자 결정; 구현·시험, 배포·HTTPS·실계정 수용은 별도) |
+| D-1005 | 속도 한도는 서명된 상한 안에서 운영자가 정하고, 봉인된 측정 속도를 넘지 못한다. D-986의 "속도·이동 한도는 바꾸지 않는다"를 개정한다. [전문](../adr/D-1005-speed-limits-operator-settable-under-signed-ceiling.md) | Accepted (2026-11-09, 사용자 지시; 코드·호스트 시험까지, 실물 수용은 아직 없다) |
+| D-1011 | 팔 셀 식별자를 CELL-A/cell-a에서 ARM-CELL/arm-cell로 바꾼다 — 입력은 구 id를 별칭으로 받고, 원장은 감사와 함께 한 번 재작성한다. [전문](../adr/D-1011-arm-cell-identifier-rename.md) | Accepted (2026-11-10, 사용자 결정; 코드·시험·호스트 스크립트, 실제 호스트 전환·현장 수용 별도) |
+| D-1032 | OMX 두 팔 집기 정책(`omx_two_arm_policy`) CORE 계약 정렬 — `--no-goal` 기본 경로 및 평가 시 `temporal_ensemble_coeff` 강제 덮어쓰기 제거. [전문](../adr/D-1032-omx-two-arm-grasp-policy-no-goal-no-eval-ensemble.md) | Proposed (2026-11-15, Phase A 시뮬 진단 패치·평가 대기; Phase B 재학습·실물 승격 별도) |
+| D-1036 | 게시 증거를 야간 FULL에서 얻는다 — 야간 착지 기록·최근 야간 조상 유지·빨간 CI 재실행 한 번. [전문](../adr/D-1036-publish-evidence-from-nightly-full.md) | Proposed (2026-11-17) |
+| D-1038 | 게시 PR 예약 병합·review-gate 추가 전용 면제·긴급 차선 (2026-11-17 사용자 승인). [전문](../adr/D-1038-scheduled-publish-merge-review-gate-append-only-and-urgent-lane.md) | Proposed (2026-11-17) |
+| D-1021 | ROSY 공통: 값마다 소유자 하나, 신원은 Account, 배치는 비공개 현장 배치 지도 — 다섯 층·정본 표·변경 절차·완료 네 상태. [전문](../adr/D-1021-one-owner-per-value-identity-in-account-placement-in-site-map.md) | Accepted (2026-11-13, 사용자 승인; 일부 구현·운영 수용 별도) |
+| D-1017 | peer 위치 공유로 지도 자세 앵커 보강 — 카메라·운영자 핀 뒤에서만, 첫 앵커는 DEGRADED. [전문](../adr/D-1017-peer-sighting-map-pose-anchor.md) | Proposed (2026-11-11, 사용자 지시; 구현·원격 시험, 현장 수용 없음) |
+| D-1022 | 기체 SLAM 지도와 현장 지도의 결속 — 실제로 읽은 격자(`map_grid_id`)·현장 지도 버전에 묶인 승인 변환, 벽에서 마커 없이 제안, 켜진 현장의 free 목표는 결속으로만. [전문](../adr/D-1022-robot-map-binding.md) | Proposed (2026-11-14, 사용자 지시; 호스트 시험까지, 실물 미수행) |
+| D-1019 | OMX 운반은 도착지에 자리가 없으면(팔이 움직이기 전 멈춤) 설정에 선언된 대체 도착지로 자동으로 옮긴다 — Gate·D-911은 그대로. [전문](../adr/D-1019-omx-carry-redirects-to-declared-alternate-destinations.md) | Accepted (2026-11-13, 사용자 결정; 코드·원격 시험, 실물 수용 없음) |
+| D-1029 | 저전력 충전 복귀: 경고(20 %)에서 Fleet이 충전 칸 앞으로 Nav2로 데려가고, trip lease `purpose: charge_return` 동안 CORE는 10 % 정지를 미루고(5 % 그대로) 0.10 m/s로 상한한다. 칸 앞에서 사람이 꽂는다. [전문](../adr/D-1029-low-battery-fleet-charge-return.md) | Proposed (2026-11-14, 사용자 결정; 호스트 시험까지, 실물 수용 없음) |
+| D-1016 | 등록 로봇 30일 비활동 «삭제 예정» 표시 — 비활성은 토큰 만료 그대로, 해제는 이름 있는 운영자만. [전문](../adr/D-1016-enrollment-idle-removal-pending.md) | Proposed (2026-11-11, 사용자 방침; 구현·호스트 시험, 현장 수용 없음) |
+| D-1015 | OMX 모방학습 대비 실행 속도 병목과 지터링 해소를 위한 시간적 앙상블·동역학 가감속·연속 청크 스트리밍 아키텍처. [전문](../adr/D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md) | Accepted (2026-11-11, 사용자 지시; OMX 어댑터·가드·청크 실행기·서보 하드웨어 프로파일 구현·호스트/원격 시험·실물 팔 배포 반영) |
+| D-1014 | OMX 통합 구역·3차원 좌표(AreaXYZ) 체계 및 ROSY 미들웨어 → rosy-cell 적층 지시 계약. [전문](../adr/D-1014-unified-area-xyz-coordinate-directive-from-middleware-to-cell.md) | Accepted (2026-11-11, 사용자 확인; 미들웨어 좌표·지시 계약, rosy-cell 실행기, 호스트·실물 3단 적층 검증 포함) |
+| D-1013 | 충전 칸 pit-in·pit-out은 분홍 유도선 카메라 폐루프다 — 맵 좌표는 교차점까지, 끊김은 예측기·게이트·코스트 예산으로 막는다 (D-941·D-950 후보 채택). [전문](../adr/D-1013-charge-bay-pink-line-pit-flow.md) | Accepted (2026-11-10, 사용자 토론으로 구조 확정; 키네마틱 시뮬 게이트 통과 — 권장 이득과 구현 조건은 9항, Gazebo·실물 수용·Safety-Review는 별도) |
 | D-1009 | CORE는 pass/stop 점 경로를 한 번에 받아 stop 점에서만 서고, 막힘은 이동을 유지하며 재계획한다. [전문](../adr/D-1009-core-route-drive-pass-and-stop.md) | Accepted (2026-11-10, 사용자 지시; SOURCE·Gazebo SIM까지, 기체 적용·실물 주행 없음, Fleet 연동은 다음 단계) |
 | D-1008 | 몸 주변 안전지대는 실제 진행 방향만 지킨다: 후진 사람 확인 삭제, 제자리 회전은 몸이 돌아 들어가는 쪽만. [전문](../adr/D-1008-heading-only-safety-zone.md) | Accepted (2026-11-09, 사용자 지시; CORE 구현·호스트 시험, 하드웨어 worker 회전 게이트와 실물 적용은 별도) |
 | D-1007 | 카메라 위치에 관계없이 맞추기의 첫 걸음 — 로봇 대응점으로 검토용 보정 후보(유효 구역=대응점 껍질)를 만든다, 오프라인·적용 없음. [전문](../adr/D-1007-robot-driven-calibration-candidates.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·호스트 시험까지, 현장 수용 없음) |
@@ -984,6 +1007,7 @@
 | D-915 | Immutable physical evidence export with measured joint provenance | Accepted |
 | D-916 | Atomic raw source stamps on validated OMX joint snapshots | Accepted |
 | D-945 | 모든 표면이 같은 뼈대를 쓰는 자리 규칙 | Accepted |
+| D-1012 | OMX 시뮬레이션·학습 파이프라인은 Stage 1(MuJoCo 기하·비전·ACT 학습) → Stage 2(Isaac Sim PhysX 접촉·슬립·안착 확증) 직렬 2단계로 잇고, Gazebo는 별도 ROS 2 실행 계약 점검 트랙으로 분리한다 | Accepted (2026-11-10, 사용자 결정; 코드·단위 시험 반영, 실물 수용 별도) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

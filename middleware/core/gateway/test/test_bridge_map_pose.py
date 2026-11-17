@@ -276,3 +276,50 @@ def test_state_timer_delegates_before_localization_without_retimestamping_inline
                for n in ast.walk(tick))
     assert not any(isinstance(n, ast.Assign) and any(isinstance(t, ast.Attribute) and t.attr == '_map_pose_ts'
                    for t in n.targets) for n in ast.walk(tick))
+
+
+def test_slam_toolbox_future_dated_map_to_odom_is_accepted_within_its_transform_timeout(pose):
+    r = pose                                   # ROS clock 20.0 s; slam_toolbox stamps map->odom up to 0.4 s ahead
+    r.svc.config.setdefault("runtime", {})["navigation_backend"] = "slam"
+    assert receive(r, transform(20400000000))
+    x, y, yaw, frame, age = r.svc.state.pose_sample()
+    assert (x, y, frame) == (1., 2., 'map') and age >= 0.0
+    assert not odom_owns_pose(r.bridge._map_pose_ts, r.line[0])
+
+
+def test_a_transform_dated_past_the_slam_tolerance_is_still_refused(pose):
+    r = pose
+    assert not receive(r, transform(20600000000))      # 0.6 s ahead: beyond MAX_FUTURE_TF_NS
+    assert r.svc.state.pose_sample()[:4] == (-5., -6., 0., 'odom')
+
+
+def _slam(r):
+    r.svc.config.setdefault("runtime", {})["navigation_backend"] = "slam"
+
+
+def test_future_dated_tf_is_refused_unless_the_backend_is_slam(pose):
+    assert not receive(pose, transform(20400000000))
+    _slam(pose)
+    assert receive(pose, transform(20400000000))
+
+
+def test_invalidation_retires_a_future_dated_tf_read_before_it(pose):
+    from core.bridge.map_pose import invalidate_map_pose
+    r = pose
+    _slam(r)
+    assert receive(r, transform(20400000000))
+    invalidate_map_pose(r.bridge)
+    r.ros[0] = 20100000000
+    assert not receive(r, transform(20400000000, x=9.))      # same pre-invalidation TF must not come back
+    assert odom_owns_pose(r.bridge._map_pose_ts, r.line[0])
+
+
+def test_slam_stall_future_tf_does_not_renew_and_expires(pose):
+    r = pose
+    _slam(r)
+    assert receive(r, transform(20400000000))
+    r.ros[0], r.line[0] = 20400000000, 10.4
+    receive(r, transform(20400000000))                        # SLAM died: same stamp again
+    r.ros[0], r.line[0] = 22500000000, 12.5
+    receive(r, transform(20400000000))
+    assert odom_owns_pose(r.bridge._map_pose_ts, r.line[0])

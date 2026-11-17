@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
-- 2026-11-10 · uncommitted · docs: D-1010 독립 검토 반영 — 3·6항과 한계 갱신
-- 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
-- 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
-- 2026-11-09 · uncommitted · fix(land): CRLF를 들이는 브랜치 거절, 병합은 -X renormalize
-- 2026-11-09 · uncommitted · fix(git): `* text=auto`로 텍스트는 늘 LF로 저장
+- 2026-11-14 · uncommitted · D-1029 저전력 충전 복귀
+- 2026-11-14 · uncommitted · fleet: D-1022 기체 SLAM 지도–현장 지도 결속
+- 2026-11-14 · uncommitted · API 참조 v1.401 재위치화 경로
+- 2026-11-14 · uncommitted · fix(tools): 임시 ref 삭제 실패가 원격 시험 실행을 죽이지 않음
+- 2026-11-14 · uncommitted · fix(tools): main_red가 alone 계열 NEW id를 파일 단위로 main에서 다시 돌림

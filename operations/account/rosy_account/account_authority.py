@@ -1,7 +1,7 @@
 """D-757 OAuthlib code/PKCE authority with transactional one-use credentials."""
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from hashlib import sha256
 import json
 import logging
@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from oauthlib.oauth2 import RequestValidator, WebApplicationServer, OAuth2Error
 from core_common.protocol.account_access import grants_for, sign_access, verify_access
+from rosy_account.client_registry import SCHEMA as CLIENT_SCHEMA, https_url as _https, import_first, list_clients, validate_client
 
 NO_STORE = {'Cache-Control': 'no-store', 'Pragma': 'no-cache'}
 # OAuthlib's debug messages contain raw grant/refresh credentials.
@@ -33,29 +34,20 @@ def _form(body):
     return {key: values[0] for key, values in fields.items()}
 
 
-def _https(value):
-    parsed = urlsplit(value)
-    return (parsed.scheme == 'https' and bool(parsed.hostname) and not parsed.username
-            and not parsed.password and not parsed.fragment)
-
-
 class AccountAuthority:
     def __init__(self, path, *, issuer, private_key, key_id, clients,
-                 resolve_family, revoke_family, clock=time.time, trusted_public_keys=None):
+                 resolve_family, revoke_family, clock=time.time, trusted_public_keys=None,
+                 registrar_token_sha256=None):
         from joserfc.jwk import OKPKey
         if not _https(issuer) or urlsplit(issuer).query:
             raise ValueError('invalid account issuer')
         for client, settings in clients.items():
-            if (not re.fullmatch(r'[A-Za-z0-9._-]{1,96}', client)
-                    or set(settings) != {'redirect_uris', 'resources'}
-                    or not settings['redirect_uris'] or not settings['resources']
-                    or any(not _https(uri) or urlsplit(uri).query for uri in settings['redirect_uris'])
-                    or any(not re.fullmatch(r'(site|robot|project):[A-Za-z0-9._-]{1,96}', resource)
-                           for resource in settings['resources'])):
+            if set(settings) != {'redirect_uris', 'resources'}:
                 raise ValueError('invalid account client registration')
+            validate_client(client, settings['redirect_uris'], settings['resources'])
         self.path, self.issuer, self.private_key, self.key_id = path, issuer.rstrip('/'), private_key, key_id
-        self.clients, self.resolve_family, self.revoke_family = clients, resolve_family, revoke_family
-        self.clock = clock
+        self.resolve_family, self.revoke_family = resolve_family, revoke_family
+        self.clock, self.registrar_token_sha256 = clock, registrar_token_sha256
         key = OKPKey.import_key(private_key)
         self.public_keys = dict(trusted_public_keys or {})
         public = key.as_pem(private=False)
@@ -75,7 +67,23 @@ class AccountAuthority:
                 CREATE TABLE IF NOT EXISTS account_oauth_access (
                     digest TEXT PRIMARY KEY,client TEXT,family TEXT,revision INTEGER,
                     resource TEXT,expires REAL);
-            ''')
+            ''' + CLIENT_SCHEMA)
+        with self.transaction() as db:
+            import_first(db, clients)
+
+    @property
+    def clients(self):
+        """Enabled apps, read per request: a change or stop applies at once and without a restart (D-955 2)."""
+        with closing(sqlite3.connect(self.path, timeout=1)) as db:
+            return {name: {'redirect_uris': json.loads(uris), 'resources': json.loads(resources)}
+                    for name, uris, resources in db.execute(
+                        'SELECT client_id,redirect_uris,resources FROM account_clients WHERE enabled=1')}
+
+    def list_clients(self):
+        """Every app, stopped ones included; a read connection, so it never queues behind a writer."""
+        with closing(sqlite3.connect(self.path, timeout=1)) as db:
+            db.row_factory = sqlite3.Row
+            return list_clients(db)
 
     @contextmanager
     def transaction(self):
@@ -182,6 +190,17 @@ class AccountAuthority:
             _, context = found
             return {key: context[key] for key in ('account_id', 'login', 'display_name')}
 
+    def apps(self, token):
+        """Running apps this person holds a grant for, with an address to open (D-955 step 4)."""
+        with self.transaction() as db:
+            found = self._access_context(db, token)
+            if found is None:
+                return None
+            grants = found[1]['grants']
+        return [{key: client[key] for key in ('client_id', 'label', 'home_url')} for client in self.list_clients()
+                if client['enabled'] and client['home_url']
+                and any(grants_for(grants, resource) for resource in client['resources'])]
+
     def revoke(self, token):
         if not isinstance(token, str) or len(token) > 16384:
             return
@@ -209,7 +228,7 @@ class _Validator(RequestValidator):
         return False  # Only explicitly registered first-party public clients are supported.
 
     def validate_redirect_uri(self, client_id, redirect_uri, request, *args, **kwargs):
-        return redirect_uri in self.a.clients[client_id]['redirect_uris']
+        return redirect_uri in self.a.clients.get(client_id, {}).get('redirect_uris', [])
 
     def get_default_redirect_uri(self, client_id, request, *args, **kwargs):
         return None
@@ -221,7 +240,7 @@ class _Validator(RequestValidator):
         return grant_type in {'authorization_code', 'refresh_token'}
 
     def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
-        return (len(scopes) == 1 and scopes[0] in self.a.clients[client_id]['resources']
+        return (len(scopes) == 1 and scopes[0] in self.a.clients.get(client_id, {}).get('resources', [])
                 and grants_for(request.user['grants'], scopes[0]))
 
     def get_default_scopes(self, client_id, request, *args, **kwargs):

@@ -60,17 +60,27 @@ def _default_connect(dsn: str) -> Any:
     return importlib.import_module("psycopg").connect(dsn)
 
 
+def _default_pool(dsn: str) -> Any:
+    """A small site-side pool; psycopg_pool is an optional extra of psycopg."""
+    pool = importlib.import_module("psycopg_pool").ConnectionPool
+    return pool(dsn, min_size=1, max_size=4, max_lifetime=3600, timeout=5.0, open=True)
+
+
 class ContextLog:
     """Append-only Postgres sink for terminal advisory runs (D-796).
 
     ``connect`` is injectable for tests; when omitted, psycopg is imported on
     first use. ``password_file`` is a Docker secret path read at connect time so
     no password is ever stored in the process environment or a config file.
+    Without an explicit ``connect`` a lazy ``psycopg_pool.ConnectionPool`` serves
+    repeated writes; when psycopg_pool is not installed each write falls back to
+    a one-shot connection instead.
     """
 
     def __init__(self, host: str, database: str, user: str, *, port: int = 5432,
                  password_file: Optional[Path | str] = None,
-                 connect: Optional[Callable[[str], Any]] = None) -> None:
+                 connect: Optional[Callable[[str], Any]] = None,
+                 pool_factory: Optional[Callable[[str], Any]] = None) -> None:
         if not host or not database or not user:
             raise ValueError("context log needs host, database and user")
         if not isinstance(port, int) or not 1 <= port <= 65535:
@@ -78,6 +88,18 @@ class ContextLog:
         self.host, self.database, self.user, self.port = host, database, user, port
         self.password_file = password_file
         self._connect = connect or _default_connect
+        # An explicit connect without a pool keeps the original per-call behavior.
+        self._one_shot = connect is not None and pool_factory is None
+        self._pool_factory = pool_factory
+        self._pool: Optional[Any] = None
+        self._pool_unavailable = False
+        self._ready = False
+
+    def close(self) -> None:
+        """Close the pooled connections, if any; the next write opens a new pool."""
+        if self._pool is not None:
+            self._pool.close()
+            self._pool = None
         self._ready = False
 
     def _dsn(self) -> str:
@@ -91,7 +113,31 @@ class ContextLog:
         return " ".join(f"{name}={value}" for name, value in options.items())
 
     def _connect_and(self, work: Callable[[Any], None]) -> None:
-        conn = self._connect(self._dsn())
+        if not self._one_shot:
+            self._with_pool(work)
+            return
+        self._run_work(self._connect(self._dsn()), work)
+
+    def _with_pool(self, work: Callable[[Any], None]) -> None:
+        if self._pool is None and not self._pool_unavailable:
+            try:
+                self._pool = (self._pool_factory or _default_pool)(self._dsn())
+            except ImportError:
+                # psycopg_pool is an optional extra; a one-shot connection keeps D-796 best-effort.
+                self._pool_unavailable = True
+        if self._pool is None:
+            self._run_work(self._connect(self._dsn()), work)
+            return
+        with self._pool.connection() as conn:
+            try:
+                work(conn)
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+
+    @staticmethod
+    def _run_work(conn: Any, work: Callable[[Any], None]) -> None:
         try:
             work(conn)
             conn.commit()

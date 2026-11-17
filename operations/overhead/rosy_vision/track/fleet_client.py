@@ -49,18 +49,20 @@ class TrackClient:
         await self._client.aclose()
 
     async def publish(self, payload: OverheadDetectionsPayload) -> dict[str, Any]:
-        response = await self._client.post(DETECTIONS_PATH, json=payload.model_dump(mode="json"),
-                                           headers={"Authorization": self._authorization})
+        response = await _request(self._client, "POST", DETECTIONS_PATH,
+                                  json=payload.model_dump(mode="json"),
+                                  headers={"Authorization": self._authorization})
         return _body(response, "DETECTION_HTTP_ERROR", "BAD_RESPONSE")
 
     async def publish_identity(self, body: dict[str, Any]) -> dict[str, Any]:
-        response = await self._client.post(IDENTITY_PATH, json=body,
-                                           headers={"Authorization": self._authorization})
+        response = await _request(self._client, "POST", IDENTITY_PATH, json=body,
+                                  headers={"Authorization": self._authorization})
         return _body(response, "IDENTITY_HTTP_ERROR", "BAD_RESPONSE")
 
     async def fetch_config(self) -> dict[str, Any]:
-        response = await self._client.get(CONFIG_PATH, params={'include_preview': 'true'},
-                                          headers={"Authorization": self._authorization})
+        response = await _request(self._client, "GET", CONFIG_PATH,
+                                  params={'include_preview': 'true'},
+                                  headers={"Authorization": self._authorization})
         body = _body(response, "CONFIG_HTTP_ERROR", "CONFIG_BAD_RESPONSE")
         calibration = body.get("calibration")
         if (not isinstance(body.get("source_id"), str) or not isinstance(body.get("map_id"), str)
@@ -71,9 +73,24 @@ class TrackClient:
         return body
 
     async def publish_preview_status(self, body):
-        response = await self._client.post('/api/fleet/detections/preview-status', json=body,
-                                           headers={'Authorization': self._authorization})
+        response = await _request(self._client, "POST", '/api/fleet/detections/preview-status',
+                                  json=body, headers={'Authorization': self._authorization})
         return _body(response, 'PREVIEW_STATUS_HTTP_ERROR', 'BAD_RESPONSE')
+
+
+async def _request(client: httpx.AsyncClient, method: str, path: str, **kwargs) -> httpx.Response:
+    """One retry on a dropped pooled keep-alive connection.
+
+    The server closes idle connections on its own schedule, so a request sent onto a
+    just-closed pooled connection dies with RemoteProtocolError (measured ~daily on
+    the vision worker, 2026-11-11). Every body sent through here is state-replacing
+    or refused by Fleet as stale on the second arrival, so one fresh retry is safe."""
+    for attempt in (0, 1):
+        try:
+            return await client.request(method, path, **kwargs)
+        except httpx.RemoteProtocolError:
+            if attempt:
+                raise
 
 
 def _body(response: httpx.Response, error_code: str, bad_code: str, *,

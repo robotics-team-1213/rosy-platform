@@ -21,20 +21,26 @@ RESOLVE_TIMEOUT_S = 4.0
 class _HostLookups:
     """Keep timed-out NSS work owned across callers and event loops."""
 
-    def __init__(self, *, workers=4, max_hosts=64, ttl_s=2.0, clock=time.monotonic):
+    def __init__(self, *, workers=8, max_hosts=64, ttl_s=2.0, failure_ttl_s=None, clock=time.monotonic):
         self.executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix='rosy-host-dns')
         self.max_hosts = max_hosts
         self.ttl_s = ttl_s
+        self.failure_ttl_s = max(ttl_s, 10.0) if failure_ttl_s is None else failure_ttl_s
         self.clock = clock
         self.lock = threading.Lock()
         self.entries = {}
+
+    def _entry_ttl(self, future) -> float:
+        if future.done() and not future.cancelled() and future.exception() is not None:
+            return self.failure_ttl_s
+        return self.ttl_s
 
     def get(self, host, port):
         key = (host, port)
         with self.lock:
             now = self.clock()
-            expired = [name for name, (_, finished) in self.entries.items()
-                       if finished is not None and now - finished >= self.ttl_s]
+            expired = [name for name, (done, finished) in self.entries.items()
+                       if finished is not None and now - finished >= self._entry_ttl(done)]
             for name in expired:
                 del self.entries[name]
             if key in self.entries:

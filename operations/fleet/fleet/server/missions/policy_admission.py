@@ -29,6 +29,9 @@ from core_common.protocol.policy_admission import (
 ALLOWED_STEP_APPROVAL_KINDS = frozenset({"one_person", "arm_transfer"})
 AUDIT_LIMIT = 100
 
+#: D-996 5: the intake proposer (fleet.server.intake_transfer) is never inside an unattended scope
+INTAKE_PROPOSER = "fleet-intake"
+
 
 @dataclass(frozen=True)
 class PolicyAdmissionSettings:
@@ -62,6 +65,8 @@ class PolicyAdmissionSettings:
         proposers = section.get("proposers") or []
         if not isinstance(proposers, list) or any(not isinstance(p, str) or not p for p in proposers):
             raise ValueError("proposers must be a list of principal ids")
+        if INTAKE_PROPOSER in proposers:
+            raise ValueError(f"{INTAKE_PROPOSER} proposals are approved by a named operator only (D-996 5)")
         scope_revision = section.get("scope_revision", "none")
         if not isinstance(scope_revision, str) or not scope_revision:
             raise ValueError("scope_revision must be a non-empty string")
@@ -165,6 +170,8 @@ class PolicyAdmissionCore:
             # D-938: the second person of two_person is the named operator who switched the scope on.
             if self._enabled_by is None:
                 return "SCOPE_NOT_ACKNOWLEDGED"
+            if proposer == INTAKE_PROPOSER:  # D-996 5: Fleet's own intake proposal waits for a named operator
+                return "INTAKE_NEEDS_NAMED_APPROVAL"
             if proposer not in self._settings.proposers:
                 return "PROPOSER_OUT_OF_SCOPE"
             if proposer == self._enabled_by:

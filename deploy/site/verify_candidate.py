@@ -38,15 +38,22 @@ REQUIRED_DEPLOYMENT_FILES = (
     "compose.account.yaml", "Caddyfile.account",
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
+    "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
+    "rosy-pg-backup-check.service", "rosy-pg-backup-check.timer",
     "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",  # D-1001: R renews from the signed release
+    "account_login_check.py", "rosy-site-account-login-check.service", "rosy-site-account-login-check.timer",  # R logs in to every app every 30 min
     "sign_candidate.py", "verify_candidate.py",
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
 ACCOUNT_TLS_FILES = ("account_tls_renew.py", "account-tls.env.example",
                      "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer")
+LOGIN_CHECK_FILES = ("account_login_check.py", "rosy-site-account-login-check.service",
+                     "rosy-site-account-login-check.timer")
 ACCOUNT_BACKUP_FILES = ("compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
                         "rosy-account-backup-check.service", "rosy-account-backup-check.timer")
+PG_BACKUP_FILES = ("compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
+                   "rosy-pg-backup-check.service", "rosy-pg-backup-check.timer")
 MONITORING_DEPLOYMENT_FILES = ("compose.monitoring.yaml", "Caddyfile.monitoring")  # D-936
 SERVICES = ("fleet", "vision", "proxy", "postgres")
 ACCOUNT_SERVICES = (*SERVICES, "account")
@@ -139,6 +146,18 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         required.difference_update(ACCOUNT_BACKUP_FILES)
     if not set(hashes) & set(ACCOUNT_TLS_FILES):
         required.difference_update(ACCOUNT_TLS_FILES)  # earlier signed candidates; a half group stays required
+    if not set(hashes) & set(LOGIN_CHECK_FILES):
+        required.difference_update(LOGIN_CHECK_FILES)  # earlier signed candidates; a half group stays required
+    # PostgreSQL maintenance needs no new image: the mirrored postgres image is
+    # part of the base inventory. Earlier candidates without the group stay
+    # valid for rollback; a candidate with the signed postgres image ships the
+    # group whole.
+    if not (isinstance(manifest.get('images'), dict) and 'postgres' in manifest['images']):
+        if set(hashes) & set(PG_BACKUP_FILES):
+            raise CandidateVerificationError('PostgreSQL maintenance requires the signed postgres image inventory')
+        required.difference_update(PG_BACKUP_FILES)
+    elif not set(hashes) & set(PG_BACKUP_FILES):
+        required.difference_update(PG_BACKUP_FILES)
     if "compose.omx.yaml" not in hashes:
         required.discard("compose.omx.yaml")
     if "compose.workcell.yaml" not in hashes:

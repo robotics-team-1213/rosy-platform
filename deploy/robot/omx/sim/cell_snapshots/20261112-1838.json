@@ -1,0 +1,197 @@
+{
+ "schema": "rosy.omx-cell-snapshot.v1",
+ "taken_at": "2026-11-12T09:37:56+00:00",
+ "frames": {
+  "top": "sha256:981f45c7ad7bb70db4ecc463ff72c22e25ef3c23a1e48dbbd3942c2434c6443f",
+  "side": "sha256:a0091ef666182f5257a3501c0c79425a0ad0914b7cfb2fddc33959d602d29708",
+  "arm_a_wrist": "sha256:35e37009ecdffa5f9f33ec4f19b1c36f0d8e22a4c9e89b96df3f8b3ae7b14d35",
+  "arm_b_wrist": "sha256:b6bbe0e5e4ac602eeb053a63d2a64b135b3465c8c9d048b874ebdec609da2b3d"
+ },
+ "camera": {
+  "top": {
+   "eye": [
+    -0.056,
+    0.075,
+    0.6429
+   ],
+   "focus": [
+    0.0437,
+    0.0687,
+    0.1762
+   ],
+   "up": [
+    0.9735,
+    0.0674,
+    0.2185
+   ],
+   "f_px": 615.0,
+   "width": 640,
+   "height": 480
+  }
+ },
+ "camera_motion": {
+  "checked": true,
+  "moved": true,
+  "dx_px": 75.0,
+  "dy_px": -100.9,
+  "rotation_deg": 6.18,
+  "scale": 1.0672,
+  "inliers": 11
+ },
+ "items": {
+  "temp_plates": {
+   "plates": {
+    "a": [
+     {
+      "lane": 1,
+      "xy": [
+       -0.0772,
+       -0.2222
+      ],
+      "yaw_deg": 18.9,
+      "source": "plate-fit",
+      "residual_mm": null
+     },
+     {
+      "lane": 2,
+      "xy": [
+       -0.0878,
+       -0.1636
+      ],
+      "yaw_deg": 1.7,
+      "source": "pad",
+      "residual_mm": 0.2
+     },
+     {
+      "lane": 3,
+      "xy": [
+       -0.0806,
+       -0.1044
+      ],
+      "yaw_deg": -15.5,
+      "source": "pad",
+      "residual_mm": 0.2
+     }
+    ],
+    "b": [
+     {
+      "lane": 1,
+      "xy": [
+       -0.084,
+       0.1042
+      ],
+      "yaw_deg": 19.8,
+      "source": "pad",
+      "residual_mm": 2.2
+     },
+     {
+      "lane": 2,
+      "xy": [
+       -0.0956,
+       0.1626
+      ],
+      "yaw_deg": 2.6,
+      "source": "pad",
+      "residual_mm": 1.0
+     },
+     {
+      "lane": 3,
+      "xy": [
+       -0.0894,
+       0.2219
+      ],
+      "yaw_deg": -14.6,
+      "source": "pad",
+      "residual_mm": 3.0
+     }
+    ]
+   },
+   "seen": {
+    "a": 2,
+    "b": 3
+   },
+   "errors": {},
+   "shape": {
+    "step_deg": 17.2,
+    "radius_m": 0.1992,
+    "from": "plate a, two clean pads"
+   },
+   "camera_check": {
+    "pads": 5,
+    "worst_mm": [
+     2.7,
+     1.4
+    ]
+   }
+  },
+  "ship": {
+   "stern_x_m": 0.173,
+   "centre_y_m": 0.006,
+   "yaw_deg": 0.23,
+   "iou": 0.826,
+   "model": "r08"
+  },
+  "belt": {
+   "end_x_m": 0.2079,
+   "centre_y_m": 0.0137,
+   "width_m": 0.0827
+  },
+  "arm_bases": {
+   "fk": {
+    "arm_a": {
+     "xy": [
+      0.116,
+      -0.164
+     ],
+     "yaw_deg": 90.0
+    },
+    "arm_b": {
+     "xy": [
+      0.104,
+      0.153
+     ],
+     "yaw_deg": -94.3
+    }
+   },
+   "plate_centre": {
+    "arm_a": {
+     "xy": [
+      0.116,
+      -0.164
+     ],
+     "yaw_deg": 90.0
+    },
+    "arm_b": {
+     "xy": [
+      0.107,
+      0.164
+     ],
+     "yaw_deg": -90.0
+    }
+   }
+  },
+  "ship_fixation": {
+   "berth_kit": "v16-modular",
+   "temp_bridge": "v7",
+   "spacer_dy_nominal_mm": 39.0,
+   "spacer_dx_mm": 0.0,
+   "stern_hook_mm": 0.0,
+   "arm_a_gap_dy_mm": 33.75,
+   "arm_b_gap_dy_mm": 10.75,
+   "nearest_spacer_step_mm": {
+    "arm_a": 35.0,
+    "arm_b": 35.0
+   },
+   "hull_yaw_deg": 0.23,
+   "within_v16_yaw_budget": true,
+   "stopper_flat_x_m": 0.1805,
+   "stopper_tip_x_m": 0.1895,
+   "belt_to_stopper_flat_mm": 27.4,
+   "repeatability_rss_mm": 0.32,
+   "nominal_spacer_dy_mm": 39.0,
+   "stopper_drop_mm": 20.0,
+   "measured_stern_x_m": 0.173,
+   "measured_centre_y_m": 0.006
+  }
+ }
+}

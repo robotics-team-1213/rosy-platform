@@ -1,5 +1,6 @@
 import asyncio
 import json
+from contextlib import nullcontext
 
 import pytest
 
@@ -41,6 +42,22 @@ def factory(*, fail=False):
         return connections[-1]
 
     return connections, connect
+
+
+class FakePool:
+    """Minimal pool double: hands out one shared connection and never closes it."""
+
+    def __init__(self, connection):
+        self.connection_object = connection
+        self.acquires = 0
+        self.closed = 0
+
+    def connection(self):
+        self.acquires += 1
+        return nullcontext(self.connection_object)
+
+    def close(self):
+        self.closed += 1
 
 
 def run_result(result):
@@ -117,6 +134,81 @@ def test_a_failing_store_returns_false_and_rolls_back_without_raising():
     log = ContextLog("postgres", "rosy_context", "rosy", connect=unreachable)
     assert log.record_run(subject_id="r1", case_id="c1", generation="g1",
                           policy_id="deliberation-v1", result={"state": "CANDIDATE"}) is False
+
+
+def test_pool_factory_builds_lazily_and_reuses_one_connection():
+    pools, dsns = [], []
+
+    def pool_factory(dsn):
+        dsns.append(dsn)
+        pool = FakePool(FakeConnection())
+        pools.append(pool)
+        return pool
+
+    log = ContextLog("postgres", "rosy_context", "rosy", pool_factory=pool_factory)
+    assert pools == []  # the pool is not built until the first write
+
+    assert log.record_run(subject_id="r1", case_id="c1", generation="g1",
+                          policy_id="p1", result={"state": "CANDIDATE"}) is True
+    assert log.record_run(subject_id="r1", case_id="c2", generation="g1",
+                          policy_id="p1", result={"state": "CANDIDATE"}) is True
+
+    assert len(pools) == 1  # one pool, built once
+    assert dsns == ["host=postgres port=5432 dbname=rosy_context user=rosy connect_timeout=5"]
+    connection = pools[0].connection_object
+    assert pools[0].acquires == 3  # schema once, then the two inserts
+    assert connection.commits == 3
+    assert connection.closed is False  # the pool owns closing, not the ContextLog
+    assert sum(call[0].startswith("INSERT") for call in connection.calls) == 2
+
+
+def test_pool_path_rolls_back_and_reports_failure():
+    pools = []
+
+    def pool_factory(dsn):
+        pool = FakePool(FakeConnection(fail=True))
+        pools.append(pool)
+        return pool
+
+    log = ContextLog("postgres", "rosy_context", "rosy", pool_factory=pool_factory)
+    assert log.record_run(subject_id="r1", case_id="c1", generation="g1",
+                          policy_id="p1", result={"state": "CANDIDATE"}) is False
+    assert pools[0].connection_object.rollbacks == 1
+    assert pools[0].connection_object.commits == 0
+
+
+def test_close_closes_the_pool_and_the_next_write_reopens_one():
+    pools = []
+
+    def pool_factory(dsn):
+        pool = FakePool(FakeConnection())
+        pools.append(pool)
+        return pool
+
+    log = ContextLog("postgres", "rosy_context", "rosy", pool_factory=pool_factory)
+    assert log.record_run(subject_id="r1", case_id="c1", generation="g1",
+                          policy_id="p1", result={"state": "CANDIDATE"}) is True
+    log.close()
+    assert pools[0].closed == 1
+    assert log._pool is None and log._ready is False
+
+    assert log.record_run(subject_id="r1", case_id="c2", generation="g1",
+                          policy_id="p1", result={"state": "CANDIDATE"}) is True
+    assert len(pools) == 2 and pools[1].closed == 0
+
+
+def test_a_missing_psycopg_pool_falls_back_to_one_shot_connections():
+    connections, connect = factory()
+
+    def broken(dsn):
+        raise ModuleNotFoundError("No module named 'psycopg_pool'")
+
+    log = ContextLog("postgres", "rosy_context", "rosy", connect=connect, pool_factory=broken)
+    assert log.record_run(subject_id="r1", case_id="c1", generation="g1",
+                          policy_id="p1", result={"state": "CANDIDATE"}) is True
+    assert log._pool is None and log._pool_unavailable is True
+    assert len(connections) == 2  # schema + insert, each on its own connection
+    assert all(conn.closed for conn in connections)
 
 
 def test_journal_mirrors_only_the_terminal_run(tmp_path):

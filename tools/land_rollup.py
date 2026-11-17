@@ -32,12 +32,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import Counter
 import socket
 import subprocess
 import sys
+import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -90,12 +92,20 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: boo
         tip = git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{r['branch']}", check=False).stdout.strip()
         if tip and tip == git(tree, "rev-parse", "HEAD", check=False).stdout.strip():
             found += unrolled(repo, r) if rollup else [r]
-    return found
+    # Keep only the newest snapshot per logical topic so superseded snapshots never fight or merge twice.
+    newest: dict[str, int] = {}
+    for idx, row in enumerate(found):
+        b = row.get("branch") or ""
+        topic = re.sub(r"-\d{14}(-batch\d+-k\d+)?$", "", b.removeprefix(land_async.PREFIX)) if b.startswith(land_async.PREFIX) else b
+        if topic not in newest or b > (found[newest[topic]].get("branch") or ""):
+            newest[topic] = idx
+    keep_idx = set(newest.values())
+    return [row for idx, row in enumerate(found) if idx in keep_idx]
 
 
 def unrolled(repo: Path, row: dict) -> list[dict]:
-    """A rollup's recorded members, each on its own kept snapshot, carrying the rollup's ticket and pid (D-889
-    addendum 34); none when its record is unreadable, nested or names a snapshot that is gone: it lands as it is."""
+    """A rollup's recorded members, each on its own kept snapshot, carrying the rollup's live ticket in ``ticket``
+    and keeping the original member ticket in ``member_ticket`` for frozen metadata; none when unreadable or gone."""
     try:
         members = json.loads((land_async.holder(repo) / (row["branch"].replace("/", "-") + ".members")).read_text(
             encoding="utf-8"))
@@ -109,8 +119,21 @@ def unrolled(repo: Path, row: dict) -> list[dict]:
         return []
     keep = ("branch", "worktree", "candidate")
     return [{**{k: m[k] for k in keep if k in m}, "status": row.get("status"), "host": row.get("host"),
-             "pid": row.get("pid"), "ticket": row.get("ticket"), "rollup": row["branch"], "rollup_size": len(members)}
+             "pid": row.get("pid"), "ticket": row.get("ticket"),
+             **({"member_ticket": m["ticket"]} if m.get("ticket") else {}),
+             "rollup": row["branch"], "rollup_size": len(members)}
             for m in members]
+
+
+ROLLUP_LANE_S = 2 * 3600  # D-889 35: a rollup past this no longer holds the lane
+
+
+def in_flight(rows: list[dict], host: str) -> list[dict]:
+    """Rollups on ``host`` whose FULL or turn has started (checking, waiting or in the turn); pending and
+    FULL-waiting ones stay re-rollable (addendum 34), and one older than ROLLUP_LANE_S is stuck, not in flight."""
+    return [r for r in rows if land_async.ROLLUP.fullmatch(r.get("branch") or "") and r.get("host") == host
+            and (r.get("status") in ("turn", "waiting") or (r.get("status") == "preparing" and not r.get("full_wait")))
+            and r.get("age", 0) < ROLLUP_LANE_S]
 
 
 def sources(members: list[dict]) -> set[str]:
@@ -135,6 +158,22 @@ def reach(repo: Path, branch: str) -> list[list[str]]:
     return sel["local_invocations"] if sel["mode"] == "full" else sel["invocations"]
 
 
+def _folded_tree(repo: Path, tree: str, resolved: dict[str, bytes]) -> str:
+    """Return ``tree`` with auto-resolved file blobs replaced in a temporary index (repo untouched)."""
+    if not resolved:
+        return tree
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        subprocess.run(["git", "-C", str(repo), "read-tree", tree], env=env, check=True, capture_output=True)
+        for path, data in resolved.items():
+            oid = subprocess.run(["git", "-C", str(repo), "hash-object", "-w", f"--path={path}", "--stdin"],
+                                 input=data, check=True, capture_output=True).stdout.decode().strip()
+            subprocess.run(["git", "-C", str(repo), "update-index", "--cacheinfo", f"100644,{oid},{path}"],
+                           env=env, check=True, capture_output=True)
+        return subprocess.run(["git", "-C", str(repo), "write-tree"], env=env, check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+
 def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach, mixed: bool | None = None) -> list[dict]:
     """Members, in queue order, merging together onto main; fewer than two means no rollup. Unmixed: one tier,
     no safety member. Mixed (addendum 33): any tier; with a FULL or safety member the rollup runs FULL, which
@@ -156,11 +195,12 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach, mixed: bool
             continue
         res = git(repo, "merge-tree", "--write-tree", "--no-messages", cur, r["branch"], check=False)
         if res.returncode == 1:
-            _, manual = land_merge.plan(repo, land_merge.conflict_stages(res.stdout), (cur, r["branch"]))
-            if manual:
+            conflicts = land_merge.conflict_stages(res.stdout)
+            resolved, manual = land_merge.plan(repo, conflicts, (cur, r["branch"]))
+            if not conflicts or manual:
                 continue
-            # shortcut: an auto-resolvable member is not folded into ``cur``, so a later clash with it is found
-            # only by apply's real merge (which then leaves that later member out); fold it in if that bites.
+            tree = _folded_tree(repo, res.stdout.splitlines()[0].strip(), resolved)
+            cur = git(repo, "commit-tree", tree, "-p", cur, "-p", r["branch"], "-m", "rollup plan").stdout.strip()
         elif res.returncode == 0:
             tree = res.stdout.split()[0]
             cur = git(repo, "commit-tree", tree, "-p", cur, "-p", r["branch"], "-m", "rollup plan").stdout.strip()
@@ -178,6 +218,8 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach, mixed: bool
 def member_metadata(place: Path, member: dict, ancestors=()) -> dict:
     """Keep direct owners, embedding frozen child metadata before their sidecars can be collected."""
     data = {k: member[k] for k in ("branch", "worktree", "candidate", "ticket", "members_error") if k in member}
+    if member.get("member_ticket"):
+        data["ticket"] = member["member_ticket"]
     branch = data["branch"]
     if not land_async.ROLLUP.fullmatch(branch):
         if "members" in member:
@@ -211,10 +253,16 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         merged = []
         for r in members:
             try:
-                candidate = git(repo, "rev-parse", r["branch"]).stdout.strip()
+                # 11-14: a split crashed on a member whose snapshot branch was gone; its recorded commit still merges
+                candidate = (git(repo, "rev-parse", "-q", "--verify", r["branch"], check=False).stdout.strip()
+                             or r.get("candidate"))
+                if not candidate:
+                    raise land.Stop("its snapshot branch is gone")
                 land.merge(wt, candidate, branch, python, False, source=r["branch"])
                 metadata = member_metadata(land_async.holder(repo), {**r, "candidate": candidate})
-                merged.append({**r, **metadata})
+                merged.append({**r, **metadata,
+                               **({"ticket": r["ticket"]} if "ticket" in r else {}),
+                               **({"member_ticket": metadata["ticket"]} if "ticket" in metadata else {})})
             except land.Stop as exc:
                 print(f"[rollup] {r['branch']} left out: {str(exc).splitlines()[0]}", flush=True)
         if len(sources(merged)) < 2:
@@ -224,7 +272,7 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         land.size_check(wt, "main", "HEAD", python)
         if (wt / land.HARNESS).is_file():
             land.step(wt, [python, land.HARNESS, "lint"], None, "lint")
-        first = lead(merged).get("ticket")  # D-889 23: the rollup takes its first member's place in the queue
+        first = lead(merged).get("ticket")  # D-889 23: take its lead carrier's place
         if first:
             os.environ[land_queue.TICKET_ENV] = str(land_queue.queue_dir(repo) / first)
         try:
@@ -233,8 +281,9 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         finally:
             os.environ.pop(land_queue.TICKET_ENV, None)
         (log.parent / (log.name.removesuffix(".log") + ".members")).write_text(
-            json.dumps([{k: r[k] for k in ("branch", "worktree", "candidate", "ticket", "members", "members_error")
-                         if k in r}
+            json.dumps([{**{k: r[k] for k in ("branch", "worktree", "candidate", "ticket", "members", "members_error")
+                         if k in r},
+                         **({"ticket": r["member_ticket"]} if "member_ticket" in r else {})}
                         for r in merged], indent=1),
             encoding="utf-8")
         return snap, merged
@@ -256,14 +305,76 @@ def adopted(qdir: Path, first: dict, wait: float = 180, sleep=time.sleep, clock=
     return False
 
 
+REMOTE_SSH = ("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+              "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2")
+REMOTE_RUN = re.compile(
+    r"\[remote-pytest\]\s+[0-9a-fA-F]+\s+on\s+([A-Za-z0-9._@-]+)\s+\(~/rosy-test/runs/([A-Za-z0-9._-]+)\)"
+)
+REMOTE_STOP_SCRIPT = r"""rm -f ~/rosy-jobs/"$1".resv
+[ -d ~/rosy-test/runs/"$1".jobs ] || exit 0
+for f in ~/rosy-test/runs/"$1".jobs/*.pid; do
+  [ -f "$f" ] || continue
+  read -r p < "$f" || continue
+  case $p in ''|*[!0-9]*) continue;; esac
+  kill -0 "$p" 2>/dev/null && kill -TERM -- "-$p" 2>/dev/null || true
+done
+rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".*.lock ~/rosy-jobs/"$1".resv
+"""
+
+
+def remote_runs(holder: Path, rows: list[dict]) -> list[tuple[str, str]]:
+    """Remote (host, run_name) pairs logged by ``rows`` under ``holder``, deduplicated in order."""
+    names: list[str] = []
+    for r in rows:
+        name = (r["rollup"].replace("/", "-") if r.get("rollup")
+                else Path(str(r.get("worktree") or "")).name or str(r.get("branch") or "").replace("/", "-"))
+        if name and name not in names:
+            names.append(name)
+    found: list[tuple[str, str]] = []
+    for name in names:
+        for suffix in (".log", ".resume.log"):
+            log = holder / (name + suffix)
+            if not log.is_file():
+                continue
+            try:
+                text = log.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for match in REMOTE_RUN.finditer(text):
+                pair = (match.group(1), match.group(2))
+                if pair not in found:
+                    found.append(pair)
+    return found
+
+
+def stop_remote(holder: Path, rows: list[dict], run=None) -> int:
+    """Best-effort TERM and lock cleanup for orphaned remote pytest runs of stopped rows; never raises."""
+    run = subprocess.run if run is None else run
+    payload = REMOTE_STOP_SCRIPT.replace("\r\n", "\n").encode("utf-8")
+    stopped = 0
+    for host, run_name in remote_runs(holder, rows):
+        cmd = [*REMOTE_SSH, host, "bash", "-s", "--", run_name]
+        try:
+            res = run(cmd, input=payload, capture_output=True, timeout=10)
+            if getattr(res, "returncode", 0) == 0:
+                stopped += 1
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return stopped
+
+
 def stop(pid: int) -> None:
     """End a member's land.py; its supervisor keeps the snapshot and hidden tree (land_async)."""
-    # shortcut: the member's remote jobs already running finish on their own; kill them too if hosts stay full.
+    if pid <= 0:
+        return
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
     else:
         try:
-            os.kill(pid, 15)
+            if os.getpgid(pid) == pid:
+                os.killpg(pid, 15)
+            else:
+                os.kill(pid, 15)
         except OSError:
             pass
 
@@ -278,20 +389,23 @@ def resume(member: dict) -> None:
                        "--tests", "auto"], tree.parent / (tree.name + ".resume.log"))
 
 
-def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume) -> list:
-    """One level of bisection after a failed rollup: a merge conflict sends every member back alone, a NEW
-    failure re-rolls each half (a half of one lands alone)."""
+def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume, bisect: bool = False) -> list:
+    """After a stopped rollup: only a NEW failure (``bisect``, the supervisor read it from the last STOP line) re-rolls
+    each half (a half of one lands alone); a merge conflict or a stop without a verdict (expiry, lost host, kill)
+    sends every member back alone (D-889 35)."""
     holder = land_async.holder(repo)
     members = json.loads((holder / f"{rollup}.members").read_text(encoding="utf-8"))
     log = holder / f"{rollup}.log"
     text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
-    if "conflicts with this branch" in text or "merge aborted" in text:
+    if not bisect or "conflicts with this branch" in text or "merge aborted" in text:
         halves = [[m] for m in members]
     else:
         halves = [members[: len(members) // 2], members[len(members) // 2:]]
     done = []
-    for half in (h for h in halves if h):
-        done.append(resumer(half[0]) if len(half) == 1 else builder(repo, half, now))
+    # 11-14 04:50: both halves got now's stamp, so the second build found fix/land-rollup-<stamp> taken and crashed,
+    # stranding its five members: each half is built one second after the one before
+    for n, half in enumerate(h for h in halves if h):
+        done.append(resumer(half[0]) if len(half) == 1 else builder(repo, half, now + timedelta(seconds=n)))
     return done
 
 
@@ -300,8 +414,9 @@ def main(argv: list[str]) -> int:
     repo = Path(git(Path(__file__).resolve().parent, "rev-parse", "--show-toplevel").stdout.strip())
     qdir = land_queue.queue_dir(repo)
     now = datetime.now(timezone.utc)
-    if argv[:1] == ["split"] and len(argv) == 2:
-        split(repo, argv[1], now)
+    if argv[:1] == ["split"] and len(argv) in (2, 3):  # under the build lock: a half's build must not race an apply
+        with land_async.locked(qdir.parent / "rosy-land-rollup.lock", wait=True):
+            split(repo, argv[1], now, bisect=argv[2:] == ["bisect"])
         return 0
     if argv[:1] != ["apply"]:
         return roll(repo, qdir, now, argv)
@@ -316,9 +431,16 @@ def main(argv: list[str]) -> int:
 def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
     auto = "--auto" in argv  # D-889 23 item 6 / 32: unattended; unmixed, FULL-tier (and safety) landings stay alone
     urgent = argv[argv.index("--urgent") + 1] if "--urgent" in argv[:-1] else ""
-    members = plan(repo, candidates(land_queue.ahead(qdir, Path("~")), repo),
-                   tier_of=affected if auto and not MIXED else tier)
-    members = whole(members)
+    live = land_queue.ahead(qdir, Path("~"))
+    busy = in_flight(live, socket.gethostname())
+    if busy and not urgent:  # D-889 35: one rollup lane; a user's --urgent rollup still builds
+        print(f"[rollup] a rollup is in flight: {busy[0]['branch']}", flush=True)
+        return 0
+    rows = candidates(live, repo)
+    # Bundle fast affected landings on their own lane before falling back to mixed FULL rollups.
+    members = whole(plan(repo, rows, tier_of=affected))
+    if len(sources(members)) < 2 and not (auto and not MIXED):
+        members = whole(plan(repo, rows, tier_of=tier))
     if len(sources(members)) < 2:  # a rollup re-rolled with nothing new would only restart its own FULL
         members = []
     if not members:
@@ -338,7 +460,10 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
             (holder / (name.replace("/", "-") + ".split")).write_text(f"re-rolled into {snap}\n", encoding="utf-8")
         else:
             print(f"[rollup] {name} keeps landing: not every member merged here (those ride twice)", flush=True)
-    pids = {int(r["pid"]) for r in complete} | {int(r["pid"]) for r in merged if not r.get("rollup")}
+    complete_ids = {id(r) for r in complete}
+    stop_remote(holder, [r for r in merged if id(r) in complete_ids or not r.get("rollup")])
+    pids = {int(r["pid"]) for r in complete if r.get("pid")} | {
+        int(r["pid"]) for r in merged if not r.get("rollup") and r.get("pid")}
     # shortcut: a FULL waiter that started this apply is our parent; stopping it (taskkill /T) ends us, so last.
     # A relaunched lander (land_prepare.relaunch) is our grandparent: then later stops may be lost; see the log.
     for pid in sorted(pids, key=lambda p: p == os.getppid()):  # only now: the rollup ticket exists

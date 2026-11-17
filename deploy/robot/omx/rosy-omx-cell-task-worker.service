@@ -1,0 +1,15 @@
+[Unit]
+Description=ROSY Autonomous OMX Cell Task Worker (Fleet-R <-> arm_s, arm_a, arm_b)
+After=network-online.target rosy-omx-observation-bridge.service
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.config/rosy/omx-observation-bridge.env
+Environment=TOOLS_ROOT=%h/rosy-test/omx-tools-current
+Environment=PYTHONPATH=%h/rosy-test/omx-tools-current:%h/rosy-test/omx-tools-current/deploy/robot/omx:%h/rosy-test/omx-tools-current/middleware/devices/omx/adapter:%h/rosy-test/omx-tools-current/operations/overhead:%h/rosy-test/omx-tools-current/contracts/foundation
+ExecStart=%h/rosy-omx/current-env/bin/python %h/rosy-test/omx-tools-current/deploy/robot/omx/cell_task_worker.py --fleet-r-url https://192.168.1.93:8443 --token-file %h/.config/rosy-fleet-r-token --ca-file %h/.config/rosy/control-peers-ca.pem --execute-mode guarded-pick --interval-s 1.5
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

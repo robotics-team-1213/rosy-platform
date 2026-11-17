@@ -56,9 +56,52 @@ def tray_pixel(x, y):  # arm metres -> top-camera pixel at the box's height: tur
 @pytest.mark.parametrize("tolerance,inside", [(None, False), (10, False), (20, True), (0, False)])
 def test_fine_map_verification_uses_the_effective_tolerance(monkeypatch, tolerance, inside):
     monkeypatch.setattr(m, "locate", lambda *args: {"found": True, "arm_m": [0.015, 0]})
+    monkeypatch.setattr(m, "map_check", lambda *args: None)
     config = {} if tolerance is None else {"verify_tol_mm": tolerance}
     calibration = {"sites": {m.record_key("pinky", "top"): {}}}
     assert m.verify(object(), config, "pinky", calibration, intended=[0, 0])["inside"] is inside
+
+
+def test_fine_map_verification_refuses_extrapolated_camera_estimates(monkeypatch):
+    calibration = {"sites": {m.record_key("pinky", "top"): {}}}
+    monkeypatch.setattr(m, "locate", lambda *args: {"found": True, "arm_m": [0.0, 0.0], "estimates": []})
+    monkeypatch.setattr(m, "map_check", lambda *args: "top: box outside fitted points")
+    result = m.verify(object(), {}, "pinky", calibration, intended=[0.0, 0.0])
+    assert result["found"] and result["inside"] is False and result["verified"] is False
+
+
+def test_map_check_requires_at_least_one_camera_estimate():
+    assert m.map_check({}, {"found": True, "estimates": []}) == "no camera map estimate"
+
+
+def test_visible_box_without_fine_map_does_not_verify_placement(monkeypatch):
+    monkeypatch.setattr(m, "see", lambda *args: {"found": True, "cx": 100, "cy": 200})
+
+    class Camera:
+        def frame(self, camera):
+            assert camera == "top"
+            return object()
+
+    config = dict(CONFIG)
+    config.pop("_commissioning")
+    result = m.verify(Camera(), config, "pinky", calibration={"sites": {}})
+    assert result["found"] is True
+    assert result["inside"] is False
+    assert result["verified"] is False
+    assert "unverified" in result["basis"]
+
+    trial = m.verify(Camera(), CONFIG, "pinky", calibration={"sites": {}})
+    assert trial["inside"] is True  # supervised calibration may continue
+    assert trial["verified"] is False  # never a physical acceptance receipt
+    assert cell_attempts.classify({"locate": {"found": True}, "transfer": {"result": "placed"},
+                                   "verify": trial})[0] == "unverified"
+    assert cell_attempts.classify({"locate": {"found": True}, "transfer": {"result": "placed"},
+                                   "verify": {"inside": True}})[0] == "unverified"
+    receipt = m.public_stage_result("transfer", {"result": "placed", "position_verified": False})
+    assert receipt["result"] == "unverified" and receipt["transfer_result"] == "placed"
+    assert m.public_stage_result("verify", trial)["result"] == "unverified"
+    assert m.public_stage_result("verify", {"found": True, "inside": False, "verified": True})["result"] == "unverified"
+    assert m.public_stage_result("reset", {"result": "placed", "already": True})["result"] == "unverified"
 
 
 @pytest.mark.parametrize("value", [True, -1, float("nan"), float("inf"), "10", None])
@@ -145,6 +188,7 @@ class Cell:
         if not self.held and camera not in self.blind:
             on_belt = self.box[0] > 0.12
             pixel = {("top", False): tray_pixel, ("top", True): belt_pixel,
+                     ("side", False): rosy_tray_pixel, ("side", True): rosy_belt_pixel,
                      ("rosy", False): rosy_tray_pixel, ("rosy", True): rosy_belt_pixel}[camera, on_belt]
             u, v = pixel(*self.box)
             colour = (127, 119, 142) if on_belt else (110, 95, 115)
@@ -243,6 +287,27 @@ def test_pending_intent_survives_a_restart_and_only_its_own_completion_clears_it
     assert pending.exists()
 
 
+def test_single_carry_task_binding_is_durable_but_not_completion_evidence(tmp_path, monkeypatch):
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    path = tmp_path / "attempts.jsonl"
+    with pytest.raises(ValueError, match="must be supplied together"):
+        cell_attempts.start(path, "unbound", task_id="fleet-task")
+    cell_attempts.start(path, "bound", task_id="fleet-task", handoff_lease_id="lease-1")
+    assessment = {"mode": "automatic", "allowed": True, "task_sha256": "a" * 64}
+    config = {**CONFIG, "work_dir": str(tmp_path)}
+    cell_attempts.begin(config, assessment)
+    pending = json.loads(path.with_suffix(".pending.json").read_text())
+    assert pending["task_binding"] == {"task_id": "fleet-task", "handoff_lease_id": "lease-1"}
+    tried = {"locate": {"found": True}, "envelope": assessment,
+             "transfer": {"result": "placed"}, "verify": {"inside": True}}
+    assert cell_attempts.record(config, {}, "pinky", "belt", 0, tried, time.time()) == "bound-001"
+    row = json.loads(path.read_text().splitlines()[0])
+    assert row["task_binding"] == pending["task_binding"]
+    assert row["attempt_id"] == pending["attempt_id"]
+    assert not path.with_suffix(".pending.json").exists()
+    assert "verification" not in row  # top-only owner verification cannot satisfy Fleet side/top/Z release
+
+
 def test_reviewed_automatic_transfer_uses_live_ledger_and_a_failure_revokes_it(tmp_path, monkeypatch):
     from cell_envelope import SCHEMA, digest
 
@@ -304,7 +369,8 @@ def test_one_run_calibrates_both_surfaces_then_cycles_and_ends_where_it_started(
     result = m.run(cell, CONFIG, tmp_path / "cal.json", tmp_path, cycles=2, log=quiet)
     assert result["result"] == "done", json.dumps(result)[:600]
     sites = json.loads((tmp_path / "cal.json").read_text())["sites"]
-    assert set(sites) == {"pinky", "belt"} and all(s["loo_error_mm"]["max"] < 3 for s in sites.values())
+    assert set(sites) == {"pinky", "pinky@side", "belt", "belt@side"}
+    assert all(s["loo_error_mm"]["max"] < 3 for s in sites.values())
     assert sites["pinky"]["wrist"]["samples"] >= 5  # what aligned looks like in the wrist view
     assert math.dist(cell.box, START) < 0.004
     assert [s["episode"] for s in result["steps"] if "episode" in s] == ["A", "B", "A", "B"]
@@ -334,7 +400,7 @@ def test_a_second_fixed_camera_carries_on_when_the_top_camera_cannot_see_the_box
     config["profiles"]["rosy"] = PROFILE
     calibration = calibrated(tmp_path, config)
     assert {"pinky@rosy", "belt@rosy"} <= set(calibration["sites"])
-    cell = Cell((0.080, 0.100), blind={"top"})
+    cell = Cell((0.080, 0.100), blind={"top", "side"})
     found = m.locate(cell, config, calibration, "pinky")
     assert found["found"] and [e["camera"] for e in found["estimates"]] == ["rosy"]
     assert math.dist(found["arm_m"], (0.080, 0.100)) < 0.003 and "top: box not seen" in found["missing"]
@@ -404,7 +470,7 @@ def test_receipts_written_before_the_attempt_log_still_give_rows_by_position(tmp
     receipts = tmp_path / "receipts"
     receipts.mkdir()
     near = {"locate": {"found": True, "arm_m": [0.072, 0.106]}, "transfer": {"result": "placed"},
-            "verify": {"inside": True}}
+            "verify": {"inside": True, "verified": True}}
     far = {"locate": {"found": True, "arm_m": [0.090, 0.090]}, "transfer": {"result": "contact", "at": "run descend_pick"}}
     (receipts / "a-reset.json").write_text(json.dumps({"stage": "reset", "from": "pinky", "to": "pinky",
                                                        "attempts": [far, near]}))
@@ -428,6 +494,17 @@ def test_a_survey_sees_where_the_jaws_end_over_the_box_and_never_descends(tmp_pa
     assert row["outcome"] == "surveyed" and row["survey"]["offset_mm"] == result["survey"]["offset_mm"]
     position = cell_attempts.summary([row])["by_position"]["pinky x80 y100 mm"]
     assert position["tried"] == 1 and position["jaw_offset_mm"] == [result["survey"]["offset_mm"]]
+
+
+def test_survey_refuses_an_untrusted_map_before_moving(tmp_path, monkeypatch):
+    calibration = calibrated(tmp_path)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    cell_attempts.start(tmp_path / "attempts.jsonl", "run1")
+    monkeypatch.setattr(cell_survey, "map_check", lambda *args: "side: box outside fitted points")
+    cell = Cell(START)
+    result = cell_survey.survey(cell, CONFIG, calibration, "pinky", tmp_path)
+    assert result["result"] == "map refused" and cell.commands == []
+    assert result["map_error"] == "side: box outside fitted points"
 
 
 def test_the_arm_error_is_the_measured_joints_against_the_sent_ones_through_fk():
@@ -468,7 +545,7 @@ def test_a_fault_stops_at_once_and_the_seat_parks_without_asking_a_model(tmp_pat
 
 def test_a_box_no_camera_can_see_is_never_grasped(tmp_path):
     calibration = calibrated(tmp_path)
-    cell = Cell(START, blind={"top"})
+    cell = Cell(START, blind={"top", "side"})
     moved = m.move(cell, CONFIG, calibration, "pinky", "belt", tmp_path)
     assert moved["result"].startswith("stopped: abort") and not any(c.startswith("goto") for c in cell.commands)
 
@@ -485,6 +562,21 @@ def test_jaws_that_stop_short_at_their_end_count_as_arrived():
 
     assert m.grip_to(Jaws(), 47.0, sleep=sleep, clock=lambda: clock[0])
     assert clock[0] < 2.0  # about a second of standing still, not the whole timeout
+
+
+def test_jaws_read_once_a_second_are_waited_for_until_they_arrive():
+    """2026-11-13 arm_s: the session's state held one jaw value about a second while the jaws opened 3 units/s."""
+    clock = [0.0]
+
+    class Jaws:
+        def act(self, command):
+            return {"ok": True, "state": [0, 0, 0, 0, 0, min(57.0, 50.0 + 3.0 * int(clock[0]))]}
+
+    def sleep(seconds):
+        clock[0] += seconds
+
+    assert m.grip_to(Jaws(), 57.0, sleep=sleep, clock=lambda: clock[0])
+    assert clock[0] >= 2.0  # 0.6 s of an unchanged reading returned at 0.6 s with the jaws at 50
 
 
 def test_taught_and_measured_start_references_compete_and_the_one_that_held_is_used(tmp_path):
@@ -581,6 +673,7 @@ def test_a_moved_box_outside_the_map_gets_a_remap_proposal_and_is_followed_once_
     cell = Cell(box)
     moved = m.move(cell, CONFIG, copy.deepcopy(calibration), "pinky", "belt", tmp_path / "a")
     assert moved["result"].startswith("stopped: remap proposed")
+    assert moved["attempts"][0]["locate"]["map_usable"] is False
     assert not any(c.startswith(("load", "goto", "grip")) for c in cell.commands)  # a proposal moves nothing
     row = json.loads((tmp_path / "a" / "cases.jsonl").read_text().splitlines()[0])
     seen = row["detection"]["maps"][0]
@@ -612,7 +705,11 @@ def test_a_site_local_map_file_is_used_where_it_holds_the_box_and_the_fine_map_e
     config = copy.deepcopy(CONFIG)
     config["sites"]["pinky"]["local_map"] = str(tmp_path / "local-map.json")
     loaded = m.load_maps(tmp_path / "cal.json", config)
+    loaded["sites"]["pinky@side"]["homography"][0][2] += 0.02
     found = m.locate(Cell((0.080, 0.070)), config, loaded, "pinky")
     assert found["estimates"][0]["map"] == "pinky~local" and m.map_check(config, found) is None
     assert math.dist(found["arm_m"], (0.080, 0.070)) < 0.002
+    assert found["map_usable"] is True
+    side = next(e for e in found["estimates"] if e["camera"] == "side")
+    assert side["outside_mm"] > config.get("map_extent_mm", 10.0)  # kept as evidence, excluded from fusion
     assert m.locate(Cell(START), config, loaded, "pinky")["estimates"][0]["map"] == "pinky"

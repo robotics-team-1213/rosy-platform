@@ -8,3 +8,9 @@ class LampIdentifyRequest(BaseModel):
     """A short, display-only LED challenge (color None: the robot's own); the face owner may refuse it."""
     model_config = ConfigDict(extra="forbid")
     color: Optional[Literal["blue", "amber"]] = None
+
+
+class LampStatusPatternsRequest(BaseModel):
+    """Persistently enable or suppress the normal state lamp patterns."""
+    model_config = ConfigDict(extra="forbid")
+    status_patterns: Literal["on", "off"]

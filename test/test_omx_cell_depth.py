@@ -80,3 +80,92 @@ def test_a_larger_surface_under_the_table_does_not_become_the_table():
     heights = cd.height_map(depth, cd.table_plane(depth))
     assert np.nanmedian(heights[400:470, 400:600]) == pytest.approx(0.0, abs=1.5)
     assert np.nanmedian(heights[400:470, 50:300]) == pytest.approx(-60.0, abs=2.0)
+
+
+def test_verify_profile_depth_checks_depth_touch_and_keeps_legacy_cli(tmp_path, capsys):
+    import json
+
+    depth, colour = scene()
+    raw_path, img_path = tmp_path / "top.raw", tmp_path / "top.jpg"
+    depth.tofile(raw_path)
+    cv2.imwrite(str(img_path), colour)
+    # Legacy CLI (--depth --colour --px) remains intact
+    assert cd.main(["--depth", str(raw_path), "--colour", str(img_path), "--px", "315,210", "--base", "150,380"]) == 0
+    legacy = json.loads(capsys.readouterr().out)
+    assert legacy["heights_mm"]["315,210"] == pytest.approx(76.0, abs=4.0) and legacy["plates_mm"]["150,380"] == pytest.approx(20.0, abs=4.0)
+
+    # plate at (150, 380) is 20 mm above table; empty table pixel (450, 300) is -0.020 m rel plate, box (315, 210) is +0.056 m rel plate
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "surface-table_bay.json").write_text(json.dumps({"result": "touched", "surface_z": -0.020, "measured": "2026-11-16 00:00"}))
+    (work / "surface-no_contact_bay.json").write_text(json.dumps({"result": "no contact", "site": "no_contact_bay"}))
+    # Identity homography on colour px: pixel = [450 + x*1000, 300 + y*1000]
+    cal = {"schema": "rosy.omx-cell-calibration.v1", "sites": {"table_bay": {
+        "z_view": 0.0, "loo_error_mm": {"max": 2.4, "mean": 1.2},
+        "homography": [[0.001, 0.0, -0.45], [0.0, 0.001, -0.30], [0.0, 0.0, 1.0]],
+    }}}
+    cfg = {
+        "arm_id": "arm_test", "work_dir": str(work), "calibration_path": str(tmp_path / "cal.json"),
+        "cameras": {"top": {"height_m": 0.62, "plate_px": [150, 380]}},
+        "calibrate": {"map_sites": ["table_bay"]},
+        "sites": {
+            "table_bay": {"surface_z": -0.020, "start": [0.0, 0.0], "place": [0.02, 0.0]},
+            "occupied_box": {"map_from": "table_bay", "surface_z": -0.020, "start": [0.0, 0.0], "place": [-0.135, -0.09]},
+            "no_contact_bay": {"map_from": "table_bay", "surface_z": -0.020, "start": [0.0, 0.0], "place": [0.02, 0.0]},
+        },
+    }
+    (tmp_path / "cal.json").write_text(json.dumps(cal))
+    cfg_path = tmp_path / "cfg.json"
+    cfg_path.write_text(json.dumps(cfg))
+
+    assert cd.main(["verify", "--config", str(cfg_path), "--depth", str(raw_path), "--colour", str(img_path), "--write"]) == 0
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["schema"] == "rosy.omx-cell-depth-verify.v1" and (work / "depth-verify.json").is_file()
+    assert rep["camera_top"]["plate_mm"] == pytest.approx(20.0, abs=3.0)
+    assert rep["sites"]["table_bay"]["flags"] == [] and abs(rep["sites"]["table_bay"]["depth_diff_mm"]) <= 6.0
+    assert rep["sites"]["no_contact_bay"]["touch_surface_z_m"] is None
+    assert "depth_diff_gt_6mm" in rep["sites"]["occupied_box"]["flags"]
+    assert "place_vs_start_step_gt_8mm" in rep["sites"]["occupied_box"]["flags"]
+    assert rep["verdict"] == "fail"
+
+
+def test_verify_profile_depth_handles_polygon_surface_px_and_fetch_errors():
+    depth, colour = scene()
+    # Box in scene() sits around colour px (315, 210) at +76 mm above table (+56 mm above 20 mm plate)
+    cfg = {
+        "arm_id": "arm_poly",
+        "cameras": {"top": {"height_m": 0.62, "plate_px": [150, 380]}},
+        "sites": {
+            "belt_poly": {
+                "surface_z": 0.056,
+                "surface_px": [[302, 198], [328, 198], [328, 222], [302, 222]],
+            },
+        },
+    }
+    rep = cd.verify_profile_depth(cfg, None, depth=depth, colour=colour)
+    site = rep["sites"]["belt_poly"]
+    assert site["surface_px_mm"] == pytest.approx(76.0, abs=4.0)
+    assert site["place_mm"] == pytest.approx(76.0, abs=4.0)
+    assert site["depth_surface_z_m"] == pytest.approx(0.056, abs=0.005)
+    assert site["flags"] == []
+    assert cd._fetch_colour_frame("file:///etc/passwd") is None
+    assert cd._fetch_colour_frame("http://127.0.0.1:9/no-such.jpg") is None
+
+
+def test_a_short_capture_timeout_is_raised_to_the_frames_it_must_wait_for(tmp_path, monkeypatch):
+    """The cell's 11-13 copy gave v4l2-ctl 1.8 s for 13 frames at 6 fps (2.4-2.6 s measured): always None."""
+    import subprocess
+
+    dev, raw = tmp_path / "depth", tmp_path / "depth.raw"
+    dev.touch()
+    seen = []
+
+    def run(cmd, timeout, **kwargs):
+        seen.append(timeout)
+        np.full((480, 640), 610, np.uint16).tofile(raw)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(cd.subprocess, "run", run)
+    assert cd.capture_top_depth_z16(str(dev), raw, timeout_s=1.8) is not None
+    assert seen == [cd.MIN_CAPTURE_S] and cd.MIN_CAPTURE_S > 13 / 6
+    assert cd.capture_top_depth_z16(str(dev), raw, timeout_s=12.0) is not None and seen[-1] == 12.0

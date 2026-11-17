@@ -73,6 +73,10 @@ def test_only_landings_with_nothing_unique_and_no_live_ticket_are_removed(tmp_pa
     unlanded = hidden(repo, holder, "land/feat/unlanded-20261101000002", extra=True)
     alive = hidden(repo, holder, "land/feat/alive-20261101000003", extra=True)
     fresh = hidden(repo, holder, "land/feat/fresh-20261101000004", log_age=time.time())
+    red = hidden(repo, holder, "land/feat/red-20261101000005", log_age=time.time() - 2 * 86400)
+    red_log = holder / f"{red.name}.log"
+    red_log.write_text("[land] STOP: NEW failure in t.py; MAIN-RED: every NEW id already failed on main\n")
+    os.utime(red_log, (time.time() - 2 * 86400,) * 2)
     git(repo, "branch", "land/v2-hand-made")  # not a land_async snapshot: never touched
     (common / "rosy-land-queue").mkdir()
     (common / "rosy-land-queue" / "01-1.json").write_text(json.dumps(
@@ -87,6 +91,8 @@ def test_only_landings_with_nothing_unique_and_no_live_ticket_are_removed(tmp_pa
     assert verdict["land-feat-unlanded-20261101000002"] == ("keep", "unlanded work (1 commit(s) not in main)")
     assert verdict["land-feat-alive-20261101000003"] == ("keep", "live ticket")
     assert verdict["land-feat-fresh-20261101000004"] == ("keep", "log written in the last hour")
+    # 11-14: nothing unique (its branch holds it), but land_async.orphans resumes this snapshot once main clears
+    assert verdict["land-feat-red-20261101000005"] == ("keep", "stopped on MAIN-RED; resumes itself")
     assert verdict[str(gone)][0] == "log"
 
     assert land_gc.apply(repo, rows) == []
@@ -314,3 +320,44 @@ def test_old_landing_scratch_goes_but_a_live_or_recent_one_stays(landing, tmp_pa
     assert not old.exists() and recent.exists() and live.exists() and kept.exists()
     monkeypatch.setenv("ROSY_LAND_TMP", str(scratch.parent))  # a root not named rosy-land is never swept
     assert not [row for row in land_gc.plan(repo, time.time(), 7) if row[0] == "tmp"]
+
+
+def test_an_archived_source_branch_still_covers_its_snapshot(tmp_path):
+    """worktree_rules.archive_abandoned moves an idle source to refs/archive/; its snapshot is not unlanded work."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "t@t")
+    git(repo, "config", "user.name", "t")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "base")
+    holder = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")) / land_gc.HOLDER
+    holder.mkdir()
+    tree = hidden(repo, holder, "land/feat/arch-20261101000001", extra=True)
+    head = git(tree, "rev-parse", "HEAD")
+    verdict = {t.name: reason for _, reason, t, _ in land_gc.plan(repo, time.time(), 7) if t}
+    assert verdict[tree.name] == "unlanded work (1 commit(s) not in main)"
+    git(repo, "update-ref", f"refs/archive/feat/arch@{head[:10]}", head)
+    verdict = {t.name: (action, reason) for action, reason, t, _ in land_gc.plan(repo, time.time(), 7) if t}
+    assert verdict[tree.name] == ("remove", "landed or nothing unique")
+
+
+def test_active_rollup_build_is_kept_under_lock_and_removed_when_stale_or_unlocked(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "t@t")
+    git(repo, "config", "user.name", "t")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "base")
+    common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    holder = common / land_gc.HOLDER
+    holder.mkdir()
+    tree = hidden(repo, holder, "rollup-build-20261116000000")
+    lock = common / "rosy-land-rollup.lock"
+    lock.write_text("busy")
+    now = time.time()
+    os.utime(tree, (now, now))
+    assert {t.name: a for a, _, t, _ in land_gc.plan(repo, now, 7) if t}[tree.name] == "keep"
+    assert {t.name: a for a, _, t, _ in land_gc.plan(repo, now + 1000, 7) if t}[tree.name] == "remove"
+    lock.unlink()
+    assert {t.name: a for a, _, t, _ in land_gc.plan(repo, now, 7) if t}[tree.name] == "remove"
+

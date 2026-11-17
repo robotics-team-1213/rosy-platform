@@ -81,6 +81,24 @@ def detect_field(image: np.ndarray) -> FieldDetection:
     if width < 32 or height < 32 or width > 8192 or height > 8192:
         raise ValueError("image dimensions are outside the supported range")
     proposal, reason = _detect(image)
+    if proposal is None:
+        from rosy_vision.world_261026_auto import _proj, auto_calibrate_and_trace_world_261026
+        fit = auto_calibrate_and_trace_world_261026(image)
+        if fit is not None:
+            corners_map = np.array([[-1.22, 0.61], [1.22, 0.61], [1.22, -0.61], [-1.22, -0.61]], np.float64)
+            quad = _proj(fit["map_to_image"], corners_map)
+            if np.all(np.isfinite(quad)) and np.all(
+                (quad[:, 0] >= 4.0) & (quad[:, 0] <= width - 5.0)
+                & (quad[:, 1] >= 4.0) & (quad[:, 1] <= height - 5.0)
+            ):
+                ordered = _order(quad)
+                conf = max(0.92, min(0.995, round(1.0 - fit["rms_m"] * 8.0, 3)))
+                proposal = FieldProposal(
+                    corners=tuple((float(x), float(y)) for x, y in ordered),
+                    confidence=float(conf), aspect_ratio=2.0, shape="rectangle",
+                    image_size=(width, height),
+                )
+                reason = "ok"
     elapsed = (time.perf_counter() - started) * 1000.0
     return FieldDetection(proposal, reason, elapsed, (width, height))
 

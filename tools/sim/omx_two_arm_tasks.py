@@ -5,6 +5,7 @@ container sits where, and checks every step before anything moves: the source ho
 free and supported, a temporary plate never holds more than its lanes, both ends and the carry between them are reachable by the step's arm
 inside the plan's joint limits, and the moving arm keeps clear of the other arm parked at home. Geometry only (D-947).
 """
+import copy
 import json
 import math
 from pathlib import Path
@@ -22,6 +23,9 @@ RELEASE_DROP = .005     # fixture stack_release_clearance_m; layer 0 rests on st
 RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only needed while single-contact deck meshes made boxes creep; see omx_two_arm_world)
 LINK_MARGIN = .004      # link3 and link4 (the wrist) must clear every standing container by this much; MuJoCo: failures sat at -3 to -6 mm, passes at +8 mm or more
 CAPACITY = 3 * sites_mod.TEMP_TIERS  # containers per temporary plate: 3 lanes (3 x 1 each), 3 tiers (plate v11)
+TIERS = (1, 2, 3)       # 1단 (layer 0), 2단 (layer 1), 3단 (layer 2)
+_TASK_LOAD_CACHE = {}  # (resolved path, mtime_ns, size) -> parsed task file; load() hands out deep copies
+_CLEARANCE_T = np.linspace(0, 1, 8)[:, None]  # clearance()'s capsule sample parameters, shared by every call
 
 
 class PlanRefused(ValueError):
@@ -33,7 +37,13 @@ class PlanRefused(ValueError):
 
 
 def load(path=TASK_FILE):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    """The task file dict, as a deep copy of the cached parse (callers mutate their task dicts)."""
+    p = Path(path)
+    st = p.stat()
+    key = (str(p.resolve()), st.st_mtime_ns, st.st_size)
+    if key not in _TASK_LOAD_CACHE:
+        _TASK_LOAD_CACHE[key] = json.loads(p.read_text(encoding="utf-8"))
+    return copy.deepcopy(_TASK_LOAD_CACHE[key])
 
 
 def wrap_pi(angle):
@@ -62,74 +72,101 @@ def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEA
 def clearance(moving, idle_pose, q_path, idle):
     """Smallest centreline distance between the moving arm along q_path and the idle arm parked at idle_pose (capsule stand-in)."""
     def points(arm, q):
-        seg = arm.segments(q)
-        return np.vstack([seg[i] + (seg[i + 1] - seg[i]) * t for i in range(len(seg) - 1) for t in np.linspace(0, 1, 8)])
+        seg = np.asarray(arm.segments(q))[:, None, :]  # base, j1..j5, TCP, one column per segment
+        a, b = seg[:-1], seg[1:]
+        return (a + (b - a) * _CLEARANCE_T).reshape(-1, 3)  # 8 samples per segment, by broadcast
     fixed = points(idle, idle_pose)
-    return min(float(np.linalg.norm(points(moving, q)[:, None] - fixed[None], axis=2).min()) for q in q_path)
+    best = min(((points(moving, q)[:, None, :] - fixed) ** 2).sum(axis=2).min() for q in q_path)
+    return math.sqrt(best)  # one sqrt at the end: the smallest squared distance wins
 
 
 def solve_chain(arm, wps, q0, samples=12, roll_floor=None, branch="best"):
     """Walk the waypoints with continuous IK (warm start, as the teacher moves). The jaw closes the same way turned 180 deg, so joint5 has
-    two branches: seeds on both are tried and the branch whose joint5 stays highest above roll_floor wins (a path needing joint5 past its
-    limit on one branch is solved on the other). branch="other" takes the second-best branch (the jaw turned 180 deg), for the feasibility matrix. Returns (ok, approach q, joint path, note)."""
+    two branches and a carry can also turn the symmetric container +-180 deg when the shortest turn drives joint5 below roll_floor.
+    branch="other" takes the second-best branch (the jaw turned 180 deg), for the feasibility matrix. Returns (ok, approach q, joint path, note)."""
     note, found = "no branch converged", []
-    for j5 in (q0[4], -1.5, -.4, 0., .8, 1.5, 1.9):
-        seed = np.array(q0, float)
-        seed[4] = j5
-        first = np.array([*wps[0][1], wps[0][2]])
-        ok, q, err = arm.reach(seed, first, wps[0][3])
-        if not ok:
-            note = f"approach {err * 1000:.1f} mm short at x {first[0]:.3f} y {first[1]:.3f} z {first[2]:.3f}"
-            continue
-        approach, path, last, yaw_last, failed = q, [q.copy()], first, wps[0][3], None
-        for name, xy, z, yaw, _ in wps[1:]:
-            target = np.array([*xy, z])
-            for s in np.linspace(0, 1, samples + 1)[1:]:
-                q, e_pos, e_rot = arm.ik(q, last + (target - last) * s, yaw_last + (yaw - yaw_last) * s, 40)
-                if e_pos > 1e-3 or e_rot > .03:
-                    failed = f"{name} {e_pos * 1000:.1f} mm / {e_rot:.2f} rad off at x {xy[0]:.3f} y {xy[1]:.3f} z {z:.3f}"
+    turns = (0., -math.pi, math.pi) if branch == "best" and len(wps) >= 8 and roll_floor is not None else (0.,)
+    for turn in turns:
+        trial = list(wps[:4]) + [(n, xy, z, y + turn, g) for n, xy, z, y, g in wps[4:]] if turn else list(wps)
+        for j5 in (q0[4], -1.5, -.4, 0., .8, 1.5, 1.9):
+            seed = np.array(q0, float)
+            seed[4] = j5
+            first = np.array([*trial[0][1], trial[0][2]])
+            ok, q, err = arm.reach(seed, first, trial[0][3])
+            if not ok:
+                note = f"approach {err * 1000:.1f} mm short at x {first[0]:.3f} y {first[1]:.3f} z {first[2]:.3f}"
+                continue
+            approach, path, last, yaw_last, failed = q, [q.copy()], first, trial[0][3], None
+            for name, xy, z, yaw, _ in trial[1:]:
+                target = np.array([*xy, z])
+                for s in np.linspace(0, 1, samples + 1)[1:]:
+                    q, e_pos, e_rot = arm.ik(q, last + (target - last) * s, yaw_last + (yaw - yaw_last) * s, 40)
+                    if e_pos > 1e-3 or e_rot > .03:
+                        failed = f"{name} {e_pos * 1000:.1f} mm / {e_rot:.2f} rad off at x {xy[0]:.3f} y {xy[1]:.3f} z {z:.3f}"
+                        break
+                    path.append(q.copy())
+                if failed:
                     break
-                path.append(q.copy())
+                last, yaw_last = target, yaw
             if failed:
+                note = failed
+                continue
+            found.append((min(float(p[4]) for p in path), approach, path, trial))
+            found = [f for k, f in enumerate(found) if all(abs(f[1][4] - g[1][4]) > .3 or f[3] is not g[3] for g in found[:k])]  # one entry per distinct branch
+            if branch == "best" and roll_floor is not None and found[-1][0] >= roll_floor:
                 break
-            last, yaw_last = target, yaw
-        if failed:
-            note = failed
-            continue
-        found.append((min(float(p[4]) for p in path), approach, path))
-        found = [f for k, f in enumerate(found) if all(abs(f[1][4] - g[1][4]) > .3 for g in found[:k])]  # one entry per distinct branch
-        if branch == "best" and roll_floor is not None and found[-1][0] >= roll_floor:
+        if not found or (branch == "best" and (roll_floor is None or max(f[0] for f in found) >= roll_floor)):
             break
     found.sort(key=lambda f: -f[0])
     pick = 0 if branch == "best" else 1
-    return (True, found[pick][1], found[pick][2], None) if len(found) > pick else (False, None, [], note if not found else "no second branch")
+    if len(found) <= pick:
+        return False, None, [], note if not found else "no second branch"
+    if isinstance(wps, list):
+        wps[:] = found[pick][3]
+    return True, found[pick][1], found[pick][2], None
 
 
 def link_clearance(layout, arm, path, here):
     """Smallest distance (m) from the link3 and link4 meshes along the joint path to any container standing on a site in `here`
     (container name -> site): vertex samples of the real URDF meshes against the container boxes (layout.box). Negative means inside."""
-    boxes = [(np.array([*layout.sites[s]["xy"], layout.sites[s]["z"]]), layout.sites[s]["yaw"]) for s in here.values() if s != "belt"]
+    half_box = np.asarray(layout.box, float) * .5
+    boxes = [(np.array([*layout.sites[s]["xy"], layout.sites[s]["z"]]), math.cos(-layout.sites[s]["yaw"]), math.sin(-layout.sites[s]["yaw"]))
+             for s in here.values() if s != "belt"]  # centres and rotation precomputed once, not per link per q
     points = {n: kin.link_points(n) for n in ("link3", "link4")}
     best = 1e9
     for q in path:
+        poses = arm.link_poses(q)  # link3 and link4 share this one pass
         for i, name in ((2, "link3"), (3, "link4")):
-            R, p = arm.link_poses(q)[i]
+            R, p = poses[i]
             world = points[name] @ R.T + p
-            for c, yaw in boxes:
+            for c, cs, sn in boxes:
                 d = world - c
-                cs, sn = math.cos(-yaw), math.sin(-yaw)
-                local = np.stack([cs * d[:, 0] - sn * d[:, 1], sn * d[:, 0] + cs * d[:, 1], d[:, 2]], 1)
-                q_ = np.abs(local) - np.array(layout.box) / 2
-                best = min(best, float((np.linalg.norm(np.maximum(q_, 0), axis=1) + np.minimum(q_.max(1), 0)).min()))
+                local = np.empty_like(d)
+                local[:, 0] = cs * d[:, 0] - sn * d[:, 1]
+                local[:, 1] = sn * d[:, 0] + cs * d[:, 1]
+                local[:, 2] = d[:, 2]
+                q_ = np.abs(local) - half_box
+                gx, gy, gz = np.maximum(q_[:, 0], 0), np.maximum(q_[:, 1], 0), np.maximum(q_[:, 2], 0)
+                m = float((np.sqrt(gx * gx + gy * gy + gz * gz) + np.minimum(q_.max(1), 0)).min())
+                if m < best:
+                    best = m
     return best
+
+
+_REACH_CACHE = {}
 
 
 def check_reach(layout, step, here, arm):
     """Reach of one step with the step's arm inside the plan's joint limits. Returns (problems, joint path, approach q)."""
-    ok, approach, path, note = solve_chain(arm, waypoints(layout, step, here), arm.home, roll_floor=layout.roll_floor)
+    wps = waypoints(layout, step, here)
+    key = (arm.name, tuple(np.round(arm.base, 6)), round(arm.yaw, 6), round(float(arm.tcp[0]), 6), round(float(layout.roll_floor), 6),
+           tuple((n, (round(xy[0], 6), round(xy[1], 6)), round(z, 6), round(y, 6), g) for n, xy, z, y, g in wps))
+    if key not in _REACH_CACHE:
+        _REACH_CACHE[key] = solve_chain(arm, wps, arm.home, roll_floor=layout.roll_floor)
+    ok, approach, path, note = _REACH_CACHE[key]
     if not ok:
         return [f"{step['id']}: {arm.name} cannot reach it tool-down inside the plan's joint limits: {note}"], [], None
-    return [], path, approach
+    return [], [q.copy() for q in path], approach.copy()
 
 
 def validate(layout, task, data=None):
@@ -197,7 +234,32 @@ def validate(layout, task, data=None):
     return records
 
 
-def get_task(layout, name, data=None):
-    """Task dict by name with its start state; `stack` and `rehandle` come from the data file."""
+def tier_task(layout, task, tier: int):
+    """Slice a multi-tier stacking task into one tier stage (1 = 1단/l0, 2 = 2단/l1, 3 = 3단/l2): earlier tiers are rolled
+    forward into `start` so tier 2 stands on tier 1 and tier 3 stands on tiers 1-2."""
+    if tier not in TIERS:
+        raise ValueError(f"tier must be in {TIERS}, got {tier!r}")
+    layer = tier - 1
+    here, supply, steps = dict(task.get("start", {})), list(task.get("supply", [])), []
+    for s in task["steps"]:
+        target_layer = layout.sites[s["to"]].get("layer", 0)
+        if target_layer < layer and not steps:
+            if s["from"] == "belt" and s["container"] in supply:
+                supply.remove(s["container"])
+            here[s["container"]] = s["to"]
+            if s.get("outbound"):
+                here.pop(s["container"], None)
+        elif target_layer == layer:
+            steps.append(dict(s))
+    kept_belt = {s["container"] for s in steps if s["from"] == "belt"}
+    return dict(task, name=f"{task.get('name', 'task')}-t{tier}", tier=tier, layer=layer,
+                supply=[c for c in supply if c in kept_belt], start=here, steps=steps)
+
+
+def get_task(layout, name, data=None, tier: int | None = None):
+    """Task dict by name with its start state; `stack`, `cell-stack`, `rehandle` and `<task>-t{1|2|3}` come from the data file."""
     data = data or load()
-    return dict(data["tasks"][name], name=name)
+    if name not in data["tasks"] and len(name) > 3 and name[-3:-1] == "-t" and name[-1].isdigit():
+        name, tier = name[:-3], int(name[-1]) if tier is None else tier
+    task = dict(data["tasks"][name], name=name)
+    return tier_task(layout, task, tier) if tier is not None else task

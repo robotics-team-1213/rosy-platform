@@ -13,6 +13,8 @@ AUTHORITY_TABLES = (
     'rosy_account_authority', 'rosy_accounts', 'rosy_account_sessions', 'rosy_account_audit',
     'account_oauth_codes', 'account_oauth_refresh', 'account_oauth_access',
 )
+# D-955 step 2: absent from older sources, where the protected JSON seeds the registry on first start.
+OPTIONAL_TABLES = ('account_clients', 'account_client_audit')
 
 
 def validate_authority(db, *, now=None):
@@ -87,7 +89,8 @@ def migrate_authority(source, target):
                 raise ValueError('source does not contain all ten Account authority tables')
             counts = {}
             with closing(sqlite3.connect(target)) as new, new:
-                for table in AUTHORITY_TABLES:
+                tables = AUTHORITY_TABLES + tuple(table for table in OPTIONAL_TABLES if table in schemas)
+                for table in tables:
                     new.execute(schemas[table])
                     rows = old.execute(f'SELECT * FROM {table}').fetchall()
                     columns = len(old.execute(f'PRAGMA table_info({table})').fetchall())
@@ -98,7 +101,7 @@ def migrate_authority(source, target):
                     counts[table] = len(rows)
                 for table, sql in old.execute(
                         "SELECT tbl_name,sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL"):
-                    if table in AUTHORITY_TABLES:
+                    if table in tables:
                         new.execute(sql)
                 if new.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                     raise ValueError('Account migration integrity check failed')

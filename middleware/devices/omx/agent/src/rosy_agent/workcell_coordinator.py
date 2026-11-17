@@ -18,6 +18,7 @@ from typing import Any, Callable, Mapping, Protocol
 
 _LOG = logging.getLogger(__name__)
 _HEALTHY = frozenset({"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED"})
+_ACTIVE_OR_HELD = _HEALTHY | frozenset({"UNKNOWN", "HOLD"})
 _FAILED = frozenset({"FAILED", "CANCELED", "HOLD"})
 _ARRIVED = frozenset({"waiting", "released"})
 _ENDED = frozenset({"SUCCEEDED", "FAILED", "CANCELED"})
@@ -111,7 +112,7 @@ class WorkcellCoordinator:
             if actions is None:
                 continue
             self._known[instance] = {action_id for action_id, view in actions.items()
-                                     if view.get("action_state") in _HEALTHY | {"UNKNOWN", "HOLD"}}
+                                     if view.get("action_state") in _ACTIVE_OR_HELD}
             for view in actions.values():
                 if view.get("pair_id"):
                     pairs.setdefault(view["pair_id"], {})[instance] = view
@@ -125,7 +126,7 @@ class WorkcellCoordinator:
             for instance, view in remembered.items():
                 arms.setdefault(instance, view)
         self._ended = {pair_id: self._ended[pair_id] for pair_id in pairs
-                       if any(view.get("action_state") in _HEALTHY | {"UNKNOWN", "HOLD"}
+                       if any(view.get("action_state") in _ACTIVE_OR_HELD
                               for view in pairs[pair_id].values())}
         decisions: list[dict[str, Any]] = []
         for pair_id, arms in pairs.items():

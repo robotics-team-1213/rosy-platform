@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from core_common.protocol.account_client import AccountClient, AccountDenied, AccountUnavailable
 
 ROOT = Path(__file__).resolve().parents[4]
-for directory in (ROOT/'operations/fleet', ROOT/'test'):
+for directory in (ROOT/'operations/fleet', ROOT/'operations/account', ROOT/'test'):
     sys.path.insert(0, str(directory))
 
 
@@ -22,7 +22,7 @@ for directory in (ROOT/'operations/fleet', ROOT/'test'):
 def pipeline(tmp_path, core_client):
     from fleet.server.app import create_app
     from fleet.server.console import FleetConsole
-    from fleet.server.site_users import hash_password
+    from rosy_account.site_users import hash_password
     from fleet.server.task_service import FleetTaskService
     from fleet.server.task_store import FleetTaskStore
     from browser_harness import safe_listener
@@ -75,7 +75,7 @@ def test_login_returns_only_to_known_robot_surfaces(pipeline, target, status):
 
 def test_login_callback_refresh_revoke_and_core_scope(pipeline):
     core, fleet, sessions, login, receiver, clock = pipeline
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     fleet.cookies.set(COOKIE, login())
     start = core.get('/api/account/login?return=/dashboard', follow_redirects=False)
     assert start.status_code == 303
@@ -129,7 +129,7 @@ def test_login_callback_refresh_revoke_and_core_scope(pipeline):
 @pytest.fixture
 def authenticated_pipeline(pipeline):
     core, fleet, _, login, _, _ = pipeline
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     fleet.cookies.set(COOKIE, login())
     start = core.get('/api/account/login?return=/dashboard', follow_redirects=False)
     authorization = fleet.get(start.headers['location'], follow_redirects=False)
@@ -139,7 +139,7 @@ def authenticated_pipeline(pipeline):
 
 def test_logout_outage_returns_pending_and_clears_cookie(authenticated_pipeline):
     core, fleet, sessions, _, receiver, _ = authenticated_pipeline
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     central_cookie = fleet.cookies[COOKIE]
     original = receiver.post
 
@@ -163,7 +163,7 @@ def test_logout_outage_returns_pending_and_clears_cookie(authenticated_pipeline)
 def test_core_lifespan_retries_pending_revocation(authenticated_pipeline, monkeypatch):
     import threading
     core, fleet, sessions, _, receiver, _ = authenticated_pipeline
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     central_cookie = fleet.cookies[COOKIE]
     original = receiver.post
 
@@ -190,7 +190,7 @@ def test_core_lifespan_retries_pending_revocation(authenticated_pipeline, monkey
 
 def test_pending_logout_does_not_revoke_new_login_family(authenticated_pipeline):
     core, fleet, sessions, login, receiver, _ = authenticated_pipeline
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     old_cookie = fleet.cookies[COOKIE]
     original = receiver.post
 
@@ -220,7 +220,7 @@ def test_account_media_revalidation_denies_authority_outage_and_revocation(
     from core_api_web.api.media_binding import install_media
     from test_media_grant_api import configured_media
     core, fleet, sessions, _, receiver, _ = authenticated_pipeline
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     install_media(core.app, {'vision': {'media': configured_media(tmp_path)}}, core.app.state.core)
     origin = {'Origin': str(core.base_url).rstrip('/')}
     path = '/api/v1/vision/media/grants'

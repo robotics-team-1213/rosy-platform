@@ -698,6 +698,8 @@ def test_a_literal_that_looks_like_an_event_is_either_emitted_or_declared():
         "robot.identity": "config.changed 의 key 값",
         "auth.tokens": "config.changed 의 key 값",
         "dds.rmw": "config.changed 의 key 값",
+        "safety.speed_limits": "config.changed 의 key 값",
+        "safety.approved_speed": "config.changed 의 key 값",
         "_rosy._tcp": "DNS-SD 서비스 유형 (core_common.protocol.discovery_txt, emit 아님)",
         "rosy.sensor_provider": "importlib entry-point group (control_sensor_adapter)",
         "adc.battery": "D-247 hardware.json 장치 id (api/v1/host.py 토픽 판정 표)",
@@ -705,6 +707,11 @@ def test_a_literal_that_looks_like_an_event_is_either_emitted_or_declared():
         "pi.power": "D-247 hardware.json 장치 id (D-260 core_common.robot_state 할 일 규칙)",
         "network.status": "호스트 에이전트 명령 (host_agent ALLOWLIST, emit 아님)",
         "release.status": "호스트 에이전트 명령 (host_agent ALLOWLIST, emit 아님)",
+        "discord.com": "D-661 Discord 웹훅 호스트 이름 (core_common.notification_channels, emit 아님)",
+        "container.received_at_intake": "D-996 항만 사건 kind (core_common.protocol.port_events, Fleet 원장, 로봇 emit 아님)",
+        "container.stored": "D-996 항만 사건 kind (core_common.protocol.port_events, Fleet 원장, 로봇 emit 아님)",
+        "container.handling_failed": "D-996 항만 사건 kind (core_common.protocol.port_events, Fleet 원장, 로봇 emit 아님)",
+        "vehicle.release_permitted": "D-996 항만 사건 kind (core_common.protocol.port_events, Fleet 원장, 로봇 emit 아님)",
     }
     names = {site.name for site in emitted()}
 

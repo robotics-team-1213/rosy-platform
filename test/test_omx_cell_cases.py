@@ -77,6 +77,27 @@ def test_a_busy_gpu_is_waited_out_and_the_judgement_compared_with_the_real_outco
                                ("SUCCEEDED", None)], report={"result": "frame_contact"})
     row = suite_runner.run_case(case, "f" * 40, tmp_path, sleep=lambda s: None, call=call)
     assert calls.count("start") == 2 and row["matches"] is True and row["status"] == "SUCCEEDED"
+    # Real remote_isaac status puts admission_refused under result.reason when start returns FAILED without error.
+    real_queue = [
+        {"run_id": "r-refused", "status": "FAILED"},
+        {"run_id": "r-refused", "status": "FAILED", "result": {"reason": "admission_refused", "judgement": {"result": "admission_refused"}}},
+        {"run_id": "r-ok", "status": "SUCCEEDED", "result": {"judgement": {"result": "frame_contact"}}},
+    ]
+    real_calls = []
+
+    def real_call(action, *args):
+        real_calls.append(action)
+        if action == "check":
+            return {"input_sha256": "ab" * 32}
+        if action in ("start", "status"):
+            return real_queue.pop(0)
+        folder = Path(args[args.index("--receipt") + 1]).parent / "snap2"
+        folder.mkdir(exist_ok=True)
+        (folder / suite_runner.REPORT).write_text(json.dumps({"judgement": {"result": "frame_contact"}}))
+        return {"snapshot_directory": str(folder)}
+
+    row2 = suite_runner.run_case(case, "f" * 40, tmp_path / "real", sleep=lambda s: None, call=real_call)
+    assert real_calls.count("start") == 2 and row2["status"] == "SUCCEEDED" and row2["matches"] is True
 
 
 def test_a_run_without_a_published_report_fails_the_suite(tmp_path):
@@ -119,3 +140,52 @@ def test_a_case_may_add_an_aim_but_only_a_small_finite_one():
     for bad in ([0.03, 0.0], [0.0], [float("nan"), 0.0], "0,0"):
         with pytest.raises(ValueError):
             F.check_case(dict(case, aim=bad))
+
+
+def test_mujoco_stage1_to_isaac_stage2_handoff_validates_both_single_and_two_arm_isaac_configs(tmp_path, monkeypatch):
+    """Stage 1 (MuJoCo geometry/vision/IK screening) exports rosy.omx-mujoco-isaac-handoff.v1 which Stage 2 (Isaac PhysX
+    contact/pad-slip/seating confirmation) accepts for both omx-map-container-stack and arm-s-cell-case."""
+    root = Path(__file__).parents[1]
+    monkeypatch.syspath_prepend(str(root / "tools/sim"))
+    monkeypatch.syspath_prepend(str(root / "learning/envs/isaac"))
+    import omx_two_arm_sites as sites
+    import omx_two_arm_teacher as teacher
+    import run_catalog
+
+    for c in cases.skew_vision_cases():
+        norm = run_catalog.normalize("arm-s-cell-case", {"seed": 0, "case": c["sim"]})
+        assert norm["scenario"] == "case" and norm["case"]["grasp_turn"] == c["sim"]["box"][2]
+
+    layout = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                          arm_bases="plate-centre", container_colours="multi")
+    mujoco_result = {
+        "task": "stack", "steps": 9, "steps_pass": 9, "completed": True,
+        "rows": [
+            {"step": "s1", "container": "bar-1", "vision_pick": {"colour": "orange", "xy_err_mm": 0.50, "yaw_err_deg": 0.04,
+             "seen_xy": [0.2665, -0.0166], "seen_yaw_deg": 18.0, "size_mm": [90.0, 30.0]},
+             "pose": {"ok": True, "xy_mm": 0.5, "yaw_deg": 0.0}, "worst_ik_error_mm": 0.2},
+            {"step": "s2", "container": "bar-2", "vision_pick": {"colour": "green", "xy_err_mm": 0.63, "yaw_err_deg": 0.05,
+             "seen_xy": [0.2655, -0.0286], "seen_yaw_deg": -16.0, "size_mm": [90.0, 30.0]},
+             "pose": {"ok": True, "xy_mm": 0.2, "yaw_deg": 0.0}, "worst_ik_error_mm": 0.2},
+        ],
+    }
+    handoff = teacher.isaac_handoff(mujoco_result, layout, seed=42)
+    assert handoff["schema"] == "rosy.omx-mujoco-isaac-handoff.v1"
+    assert handoff["stage_1_mujoco"]["role"] == "geometry_vision_ik_and_collision_screening"
+    assert handoff["stage_1_mujoco"]["colours_seen"] == ["orange", "green"]
+    assert handoff["stage_2_isaac"]["role"] == "physx_contact_pad_slip_and_seating_confirmation"
+    assert handoff["stage_2_isaac"]["ready"] is True
+
+    two_arm_norm = run_catalog.normalize(handoff["stage_2_isaac"]["two_arm_scenario"], handoff["stage_2_isaac"]["two_arm_config"])
+    assert two_arm_norm["case"] == "nominal-palletizing-v21-ship-surveyed-skew-20261110" and two_arm_norm["layers"] == 3
+
+    handoff_file = tmp_path / "handoff.json"
+    suite_file = tmp_path / "isaac-suite.json"
+    handoff_file.write_text(json.dumps(handoff), encoding="utf-8")
+    cases.main(["--mujoco-handoff", str(handoff_file), "--out", str(suite_file)])
+    suite_data = json.loads(suite_file.read_text(encoding="utf-8"))
+    assert len(suite_data["cases"]) == 2
+    for c in suite_data["cases"]:
+        norm = run_catalog.normalize("arm-s-cell-case", {"seed": 0, "case": c["sim"]})
+        assert norm["case"]["grasp_turn"] in (18.0, -16.0)
+

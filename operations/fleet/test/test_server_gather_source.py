@@ -224,6 +224,29 @@ def test_snapshot_marks_when_each_state_was_observed():
     assert "_state_mono" not in rows["rosy_03"]
 
 
+def test_snapshot_refreshes_hub_state_updated_during_slow_rest_gather():
+    clock = FakeClock()
+    hub_robot, slow_rest = FakeRobot("rosy_01"), FakeRobot("rosy_02")
+    console = _console(hub_robot, slow_rest, clock=clock)
+    row = console.hub.registry.record("rosy_01")
+    row.online, row.snapshot = True, StateSnapshot(robot_id="rosy_01", seq=1)
+    row.last_heartbeat_monotonic = clock() - 2.5
+
+    orig_state = slow_rest.state
+
+    async def slow_state():
+        clock.advance(2.0)
+        row.snapshot = StateSnapshot(robot_id="rosy_01", seq=3)
+        row.last_heartbeat_monotonic = clock() - 0.1
+        return await orig_state()
+
+    slow_rest.state = slow_state
+    rows = {r["robot_id"]: r for r in run(console.snapshot())["robots"]}
+
+    assert rows["rosy_01"]["state"]["seq"] == 3
+    assert rows["rosy_01"]["_state_mono"] == row.last_heartbeat_monotonic
+
+
 def test_state_route_ages_a_cached_hub_row_and_hides_the_internal_stamp(tmp_path):
     from test_line_stuck_api import VIEWER, _auth, _console as _stuck_console, _named_app
 

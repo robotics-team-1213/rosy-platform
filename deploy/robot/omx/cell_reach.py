@@ -9,28 +9,46 @@ if it is off, re-plan the pick by that offset and hover again (feedforward), up 
 from __future__ import annotations
 
 import math
+import time
 
 import cell_params as prm
 
 
-def fk_xy(state: list) -> tuple:
+def fk_xy(state: list, tcp_x_m: float | None = None) -> tuple:
     from grasp_planner import load_kinematics, norm_to_rad
 
-    kin, _, _ = load_kinematics(None)
+    kin, _, _ = load_kinematics(None, tcp_x_m=tcp_x_m)
     k = kin.fk([norm_to_rad(v) for v in state[:5]])
     return k.x, k.y
 
 
-def correct(cell, aim_xy, replan, params=None, fk=fk_xy) -> dict:
+def correct(cell, aim_xy, replan, params=None, fk=fk_xy, sleep=time.sleep) -> dict:
     """{verdict: pass|refuse, dx_mm, dy_mm, total_mm, iterations}; dx/dy is the offset added to the pick."""
     tol, top = prm.get(params, "reach.tol_mm"), prm.get(params, "reach.max_mm")
+    base_samples = int(prm.get(params, "reach.samples", 1))
     dx = dy = 0.0
     rows = []
     for i in range(int(prm.get(params, "reach.max_iter")) + 1):
-        status = cell.act("state")
-        x, y = fk(status["state"])
+        status = cell.act("state") or {}
+        if status.get("state") is None:
+            return {"verdict": "refuse", "why": "no arm state", "dx_mm": round(dx, 1), "dy_mm": round(dy, 1), "total_mm": round(math.hypot(dx, dy), 1), "iterations": rows}
+        shaking = bool((status.get("jitter") or {}).get("shaking"))
+        n_samples = max(base_samples, 3 if shaking else 1)
+        states = [status["state"]]
+        for _ in range(n_samples - 1):
+            if sleep is not None and status.get("t") is not None:
+                sleep(0.015)
+            nxt = (cell.act("state") or {}).get("state")
+            if nxt is not None:
+                states.append(nxt)
+        pts = [fk(s) for s in states]
+        x = sum(p[0] for p in pts) / len(pts)
+        y = sum(p[1] for p in pts) / len(pts)
         ex, ey = 1000 * (aim_xy[0] - x), 1000 * (aim_xy[1] - y)
-        rows.append({"iteration": i, "error_mm": [round(ex, 1), round(ey, 1)]})
+        row = {"iteration": i, "error_mm": [round(ex, 1), round(ey, 1)]}
+        if len(states) > 1:
+            row["samples"] = len(states)
+        rows.append(row)
         if math.hypot(ex, ey) <= tol:
             return {"verdict": "pass", "dx_mm": round(dx, 1), "dy_mm": round(dy, 1), "total_mm": round(math.hypot(dx, dy), 1), "iterations": rows}
         if i == int(prm.get(params, "reach.max_iter")) or math.hypot(dx + ex, dy + ey) > top:
@@ -54,12 +72,24 @@ def hook(config: dict, cell, target: dict, write_library):
     from pathlib import Path
 
     work = Path(config["work_dir"]).expanduser()
+    import omx_tcp
 
-    def replan(dx_mm, dy_mm):
-        pick = dict(target["pick"], x=round(target["pick"]["x"] + dx_mm / 1000, 4), y=round(target["pick"]["y"] + dy_mm / 1000, 4))
-        return write_library(config, pick, target["place"], work / "reach-replan.json")
+    tcp_x_m = omx_tcp.config_tcp(config)
+    fk_fn = fk_xy if tcp_x_m is None else (lambda s: fk_xy(s, tcp_x_m))
 
-    return lambda: correct(cell, (target["pick"]["x"], target["pick"]["y"]), replan, params)
+    def run():
+        base_pick = dict(target["pick"])
+
+        def replan(dx_mm, dy_mm):
+            pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))
+            target["pick"] = pick
+            return write_library(config, pick, target["place"], work / "reach-replan.json")
+
+        if tcp_x_m is None:
+            return correct(cell, (base_pick["x"], base_pick["y"]), replan, params)
+        return correct(cell, (base_pick["x"], base_pick["y"]), replan, params, fk=fk_fn)
+
+    return run
 
 
 def chain(*hooks):

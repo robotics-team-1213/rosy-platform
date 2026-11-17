@@ -4714,6 +4714,20 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
 
+## 2026-11-07 · uncommitted · feat(account): D-992 활성화 배선
+
+- 변경: Fleet compose가 `ROSY_ACCOUNT_LINK_CONFIG`를 넘기고, SD 프로비저닝 묶음 `fleet.account_trust`(`prepare-rosy-sd.ps1 -AccountTrustFile`)가 첫 부팅에 CORE `auth.account_trust`로 들어간다. 재이미징은 영수증 값을 유지한다.
+- 증거: 원격 시험 `test/test_sd_personalization.py`·`test/test_first_boot_provisioning.py`·`test/test_site_account_deploy.py`.
+- gate 변화: 없음 — 현장 활성화 전이다.
+- CE: 해당 없음 — 새 배선이며 해결한 장애가 없다.
+
+## 2026-11-07 · uncommitted · feat(account): Harbor site capability (D-955 7)
+
+- 변경: site capability `harbor.view`·`harbor.operate`·`harbor.field`·`harbor.admin`을 더하고, 팀원 기본 묶음에 앞의 셋, 조회 묶음에 `harbor.view`를 넣었다. Android 수신기 허용 목록을 같이 고쳤고, 계정 프로토콜 문서에 「바깥 앱 수신 계약」 절을 더했다.
+- 증거: 원격 시험 `contracts/foundation/test/test_account_access.py`·`operations/fleet/test/test_account_admin_browser.py`.
+- gate 변화: 없음 — Harbor 쪽 수신기는 팀 저장소 PR이다.
+- CE: 해당 없음 — 새 권한이며 해결한 장애가 없다.
+
 ## 2026-11-07 · 11b42b5933 · feat(rosy-face): 사람 부탁 도착 소리와 15초 반복
 - 변경: `PersonAsk`(`rosy_face_parts.py`)가 기존 `call` 패턴을 도착 때 한 번, 같은 id가 보이는 동안 15 s마다. 정지·실패 화면이면 소리 없음, ROSY_BUZZER_ENABLED는 Buzzer 그대로.
 - 증거: `test/test_rosy_face_person.py`(도착·반복 시각, 답·만료 뒤 멈춤, 화면 우선순위). 실제 스피커 확인은 하지 않았다.
@@ -4828,4 +4842,86 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
 - 시험(원격 rosy, 88f207b22f+): test_site_db_maintenance.py·test_site_ledger_backup_deploy.py·test_site_account_backup.py 58 passed, known_failures NEW 0(2026-11-10).
 - 증거: R fleet.sqlite3 관측(2026-11-10, `Rosy/docs/workspace-records/2026-11-10/fleet-hub-comm-check.md`) — fleet_api_audit 346,685행·sighting_audit 160,892행·파일 665MB, 기존 prune_ledger는 두 표를 덮지 않음.
+- gate 변화: 없음.
+
+## 2026-11-10 · uncommitted · feat(omx): 실물 팔 지터링 완화 및 청크 블렌딩 파이프라인 구축
+- 변경: (1) `omx-ai-follower-tuning.json`의 몸통 5관절(`11`–`15`)에 하드웨어 램프 프로파일 `acc=8, vel=20`을 복원해 저속 구간 틱 양자화(`int(v)`)로 인한 계단식 스냅(`sent_stall` 89%, `pres_rev` 47회)을 서보 온칩 S-curve로 평활화한다. (2) `guarded_native._check_effort`가 실물 `DynamixelMotorsBus`에서 5회 개별 `read` 대신 단일 패킷 `sync_read("Present_PWM", ...)`를 사용해 5Hz 버스 지연 스파이크(`p95_dt` 55ms -> 35ms)를 제거한다. (3) `grasp_planner.stream`과 `chunk_runner`(`chain <step1> ; <step2>`)가 `chain_path`/`blend_chunks`로 정점 정지 없이 구간을 이어 흐르게 하고, 부하 정적 처짐(`2.05–2.20` units)에서 몸통 정지(`body_still < 0.08`) 시 `SETTLE_S`(2.5s) 타임아웃 대기를 즉시 통과시킨다. `FifoCell.act` 폴링 주기를 100ms에서 20ms로 줄였다.
+- 증거: `robttt` 실물 텔레메트리(`trace-arm_b-20261110-200027.jsonl`, `session.jsonl`) 정량 분석 및 원격 pytest 검증.
+- gate 변화: 없음(가드 한계 5°/10°/s 및 토크 OFF 불변).
+- CE: 새 교훈 기록 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.
+
+## 2026-11-10 · uncommitted · refactor(omx): cell_auto_pick 600줄 한도 복귀 — 순수 집기 기하를 cell_pick_geom으로 분리
+- 변경: `cell_auto_pick.py`에서 순수 함수 7개(`grasp_depth`·`surface_z`·`parse_dest`·`grasp_yaw`·`across`·`jaw_open_for`·`reachable_ends`, 63줄)를 새 모듈 `cell_pick_geom.py`로 옮기고 `cell_auto_pick`이 이름을 그대로 재수출한다(호출자·시험의 `auto.*` 접근 불변). 코드는 바이트 단위로 동일하게 옮겼고 동작 변경은 없다. `cell_auto_pick.py` 605→544줄.
+- 이유: main의 `cell_auto_pick.py`가 bc989974c3부터 605줄로 D-766 한도(600)를 넘어, 그 뒤 착지되는 모든 병합 커밋의 size-range 검사가 멈춘다(2026-11-10 feat/map-reality-check 착지 거절로 확인). omx AGENTS의 원칙("각 단계는 자기 모듈에서, cell_auto_pick은 순서만")을 따라 집기 기하를 분리했다.
+- 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
+- 증거: 이동한 함수 7개 본문이 main과 바이트 동일함을 정규식 추출 비교로 확인(2026-11-10), `py_compile` 통과, `size_range.py main HEAD` 통과(cell_auto_pick 605→544줄).
+- gate 변화: 없음(코드 이동만, 장치·현장 수용 별도).
+
+## 2026-11-10 · uncommitted · fix(omx): 재삽입(unstable_grasp) 회복 시나리오 추가 — main MAIN-RED 복구
+- 변경: `cell_failure_scenarios.py` SCENARIOS에 "stopped: reinserted" 원인(`cell_diagnose.ATTEMPT_CAUSES`의 `unstable_grasp`, bc989974c3 추가)을 다루는 시나리오 1건. 첫 시도 reinserted → 표의 첫 동작 `observe_again` → 다음 `placed`. 기대 동작은 `cell_recovery.carry`(cause `unstable_grasp` → `options` 첫 동작)와 `World`(넷째 원소 없음 → why "unknown") 경로를 읽어 정했다.
+- 이유: `test/test_omx_cell_failure_scenarios.py::test_the_scenarios_cover_every_cause_in_the_table`이 main 78b700784b에서 실패(MAIN-RED, RECOVERY의 `unstable_grasp`을 덮는 시나리오 없음). 이 빨간불이 이후 모든 착지를 막는다(2026-11-10 두 착지 정지로 확인).
+- 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
+- 증거: land.py MAIN-RED 판정 기록(`main-pre-pre-1.txt`, 2026-11-10), `py_compile` 통과. 로컬 실행은 cell_zones의 fcntl(Linux 전용)로 불가해 원격으로만 확인한다.
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · perf(omx): D-1015 궤적·통신·인식·기구학 전 구간 병목 제거 및 실시간 연동 최적화
+- 변경: (1) `motion_profile.retime` 코사인 가감속, `grasp_planner.flow`/`transit_path` TRANSIT 위 부드러운 전환, `commissioning_view.py` `HTTP/1.1` Keep-Alive·`ETag`/`304 Not Modified`·MJPEG(`/stream/<label>.mjpg`). (2) `cell_pipeline_io.py` 영구 `HTTPConnection` + `ETag` 프레임 디코드 캐시(`3.78ms -> 0.22ms`) 및 5ms FIFO 폴링, `chunk_runner.py`·`arm_status_bridge.py` 10Hz 상태 주기와 `_library_digest` 캐시(`1.59ms -> 0.00014ms`), `workcell_observation_bridge.py` HTTPS Keep-Alive + `TCP_NODELAY`. (3) `cell_wrist.py`·`cell_perception.py` 바운딩 박스 슬라이싱·센트로이드 직결, `cell_frame.py`·`cell_marks.py` `ArucoDetector` 캐시, `cell_calibration.py` 2D 행렬식 전환(NumPy 2.0 경고 108건 제거), `cell_params.py`·`cell_envelope.py`·`cell_robot_profile.py`·`cell_transfer.py` 설정 캐시, `kinematics.py` 3x3 행렬 언롤링(`Planner.library()` `226.1ms -> 63.2ms`, 3.58x 가속).
+- 증거: `robttt@100.82.51.8` 실물 벤치마크 및 원격 pytest(`ai`·`rosy`) 통과.
+- gate 변화: 없음(가드 안전 한계 5°/10°/s·토크 OFF 불변).
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.
+
+## 2026-11-11 · uncommitted · perf(omx): 손목/집게 비전 ROI 슬라이싱, 카메라 유닛 15FPS 정렬, 프로필 캐시 방어 복사 및 실물 데몬 경로 동기화
+- 변경: (1) `cell_fingers.py`(`_dark_pads`, `_white_pads`, `on_surface_blob`)와 `cell_pinch.py`(`measure`)에서 전체 프레임 색공간 변환(`BGR2GRAY`/`BGR2HSV`/`BGR2LAB`) 및 `cv2.dilate` 대신 하단 1/3 ROI 및 블롭 바운딩 박스(12px 마진) 선(先) 슬라이싱을 적용해 `finger_offset_mm` 소요 시간을 `4.15ms -> 3.27ms`로 단축했다. (2) `cell_envelope.assess(..., library_sha256=...)`가 `Gate._load_library`의 사전 계산 해시를 재사용하고, `cell_robot_profile.load()`가 `servo`·`binding` 방어적 복사본을 반환하도록 보강했다. (3) `rosy-omx-camera@.service` 기본 FPS를 `camera_source.py`와 동일한 `${ROSY_CAMERA_MAX_FPS:-15}`로 맞추고, `robttt@100.82.51.8`의 `omx-camera-readiness.env`(`ROSY_CAMERA_PIPELINE_ROOT`) 및 라이브 데몬(`8767` `HTTP/1.1` + `ETag` `304`, `0.30ms`)을 동기화·재시작했다.
+- 증거: `robttt@100.82.51.8` 라이브 포트 `8767` `FifoCell.frame` 실측(`24.45ms -> 0.30~0.37ms`) 및 원격 pytest 통과.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.
+
+## 2026-11-12 · uncommitted · feat(omx): 호버·하강·캘리브레이션 훅 간 `target["pick"]` 전파 및 다중 프레임 지터 정밀 보정
+- 변경: (1) `cell_hooks.pick_hooks` 체인(`cell_reach` -> `cell_look` -> `cell_wrist_ref` -> `cell_fingers` -> `cell_wrist` -> `cell_pinch` -> `cell_feel` -> `cell_grasp_debate`)에서 `cell_reach.hook`, `cell_wrist_ref.ref_hook`, `cell_wrist.hook`, `cell_pinch.hook`, `cell_feel.feel_hook`가 실행 시점(`run()`)의 최신 `target["pick"]`을 `base_pick`으로 캡처하고 재계획 시 `target["pick"] = pick`을 갱신하도록 수정해, 앞 단계 훅의 비전·핀치 정렬 결과가 다음 훅에서 초기화되거나 반복 루프 내 오프셋이 중복 누적되던 문제를 해결했다. (2) `cell_wrist.median_view`와 `cell_wrist_ref._median_blob`(`ref_servo`, `height_check`, `capture_reference`)이 `reach.samples` 설정에 맞춰 다중 프레임 중앙값을 취하고, `cell_pivot.pivot_calibrate`가 `joint_jitter.settled_state`로 흔들림 시 3회 관절 평균을 사용하며, `cell_look.look`이 다중 샘플 수(`samples`)를 기록하고 `cell_reach.check_and_correct`가 누락된 `state`를 안전하게 거절하도록 보강했다. (3) `cell_feel.feel_hook`이 `status.get("contact_z")` 직접 보고와 FK 기반 접촉 높이를 모두 지원해 `contact_z + 4 mm` Z축 복구를 수행한다. (4) `deploy/robot/omx/` 전 모듈을 480줄 미만의 단일 책임 모듈(`cell_auto_safety`, `cell_finger_container`, `cell_fleet_handoff`, `cell_grasp_dynamics`, `cell_grasp_judges`, `cell_object_pose`, `cell_pipeline_stages`, `cell_stack_guard`, `cell_upkeep_checks`, `chunk_runner_commands`, `chunk_runner_guards`, `guarded_native_cli`, `joint_tune_lock`, `omx_autoupdate_host`, `omx_incident_fleet`, `probe_cell_transfer_grant`, `record_session_helpers`, `vla_handover_broker`, `vla_handover_stages`, `workcell_incident_client`)로 분리·재수출하고 5/6/7-DOF 기구학 및 동적 벨트 인터셉트·촉각 순응 검증을 `test_omx_control_modularization.py`로 통합했다.
+- 증거: 원격 pytest (`tools/remote/remote_pytest.py`) `test_omx_control_modularization.py`, `test_omx_area_xyz.py`, `test_omx_cell_look.py`, `test_omx_cell_pinch.py`, `test_omx_cell_wrist.py`, `test_omx_tier_stack_problem_recovery.py`, `test_omx_joint_jitter.py`, `test_omx_chunk_runner.py` 외 19개 스위트 검증.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/sim-passes-with-wrong-layout-until-real-camera-overlay-2026-11-07.md`.
+
+
+## 2026-11-13 · uncommitted · docs(model-pc): 학습 센터 자동 업데이트 절을 퇴역 안내로 교체
+
+- 변경: `deploy/model_pc/README.md`의 학습 센터 자동 업데이트(D-871) 절에서 살아있는 설치·활성 안내를 지우고 퇴역 안내로 교체했다. 후보 `rosy-learning-center.service`(모델 PC 8769·AI PC 8770)는 2026-10-31 퇴역, 데이터는 합성 자료만으로 보존, 현행 유일 센터는 8768 `rosy-edge-review`(D-857)이며 `rosy-review-release-update`로 갱신한다. 2026-10-23 교훈의 `applies_when`도 역사 기록으로 고쳤다. `install_learning_center.py`·`learning_center_update.py`는 그대로 둔다.
+- 증거: 원격 pytest `test/test_update_ops.py` 예정.
+- gate 변화: 없음. 문서만 바꿨다.
+- CE: 해당 없음.
+
+## 2026-11-14 · uncommitted · rosy-face 상태 표시등 영속 설정
+- 변경: CORE용 영속 공유 디렉터리를 native unit에서 만들고 rosy-face가 설정을 매 표시 단계마다 읽는다. 기존 부팅·안전 표시가 우선한다.
+- 증거: native systemd·rosy-face 원격 계약 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음. ARM64·장치 LED 수용은 별도다.
+
+## 2026-11-16 · uncommitted · fix(deploy): 천장 카메라 자동 트랙 보정 10분 주기 안정화 파이프라인 연결
+- 변경: `deploy/site/rosy-auto-track-calibration`의 승인 쿨다운(`MIN_APPROVAL_INTERVAL_S`)을 6시간에서 10분(`600s`)으로 조정하고, `deploy/site/host-state/rosy-auto-track-calibration.timer` 주기를 2분(`OnUnitActiveSec=2min`, 5회 일관성 창 = 10분)으로 맞춰 트랙·카메라 변동 시 10분 주기로 자동 조정되도록 연결했다.
+- 증거: `test/test_auto_track_calibration.py` 원격 pytest 및 `rosy-fleet-r` 실호스트 적용 확인.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-pivot): over-target 110 deg yaw arc, known-geometry 1-outlier trim, and late-stall fit
+- 변경: `cell_pivot.MIN_YAW_ARC_DEG`를 120.0°에서 110.0°로 조정해 `over_target` `range(-60, 61, 20)`(명목 120°) 스윕 시 양단 서보 정착 지연(~3.9°)이 발생해도 원 적합을 허용하고, `cell_pivot_bias.trim_known_centres`로 `known_geometry_bias`에서 3점 이상 중 1점 이상치 제거 및 후반 yaw 접촉 정지 시 기수집 마크 적합을 수행한다.
+- 증거: `test/test_omx_cell_ship_round_trip.py` 및 `test/test_omx_cell_post_eval.py` 원격 pytest 66 passed, `rosy-arm-cell` 실기 3팔(`arm_a`, `arm_b`, `arm_s`) 보정 검증.
+- gate 변화: 없음.
+- CE: 해당 없음.
+
+## 2026-11-17 · 1598651387 · fix(control-unit): 관제 유닛이 mDNS로 붙고 끊김이 보이게
+- 변경: `deploy/site/control_unit_check.py`·`rosy-control-unit-check.{service,timer}`(R·셀 PC, 5분, host-state·services.yaml 선언), 모든 역할에 `avahi-daemon` 선언, model-watch는 이름이 안 풀리는 꺼진 로봇을 건너뜀, Fleet peer 전이 로그와 `manifest_digest`(API v1.404).
+- 증거: R(`rosy-fleet-r`)·셀(`rosy-arm-cell`) 실호스트에서 검사기 exit 0, R 컨테이너의 Fleet peer 클라이언트가 CELL-A를 `site-2026-11-17-r1`로 AVAILABLE 판정. 호스트 수리(인증서 SAN·manifest 통일·8544 LAN 게시·avahi bind)는 손으로 적용, 백업 `.bak-20261117-mdns`.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · feat(omx-pivot): 위에서 집게 하나만 보여도 pivot 표시를 찾는다
+- 변경: `cell_jaw_side.py`(새 모듈)가 FK yaw로 기준 집게·다른 집게의 화소를 예측하고, 열림-닫힘 차분을 두 예측 원(`jaw_side.roi_px`) 안과 D435 높이 띠 안으로만 제한한다. 다른 집게 원의 blob은 기준 집게 자리로 옮긴다. `pivot_calibrate`는 yaw마다 시도 프레임·`jaws.json`·`depth.raw`를 `work/pivot-frames/`에 남긴다. `cell_depth`의 v4l2 시간 한도는 13프레임(6 fps)보다 짧아지지 않는다(셀 배포본 11-13의 1.8 s가 늘 None을 냄). 원 적합과 모든 pivot 가드는 그대로다.
+- 증거: 저장된 remap 시도 73개(arm_a 16, arm_b 57) 오프라인 재생에서 기준 화소 15 px 안: 이전 19/73 → 이후 65/73(arm_b 먼 점 0/36 → 36/36), arm_s 대조군 32/32 유지. 재생 스크립트는 저장소 밖(`D:/DevTemp/jaw-loc/replay.py`). 원격 pytest는 아직 돌리지 않았다.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-pivot): 한쪽 집게 표시에 독립 검토의 거절 조건을 더한다
+- 변경: 표시마다 집게 쪽(ref/other/pair)과 경로(old/discs/band)를 시도 json·`jaws.json`·bias 기록에 남긴다. 경로가 섞인 pivot, 기준·다른 집게 표시의 평균 TCP 중심이 `pivot.side_agree_mm`(3 mm)보다 벌어진 pivot, 기준 집게 표시가 2개 미만인 pivot(`jaw_side.validated_<arm>`이 꺼져 있을 때)을 자유 원·known-geometry 두 경로 모두에서 거절한다. 깊이 띠는 `jaw_side.depth_band`로 기본 꺼짐(깊이 원본은 계속 저장), pivot 프레임 폴더는 마이크로초 표기·사이트별 최근 `pivot.keep_frames`(20)개만 남긴다. `fit_circle`은 `cell_pivot_bias`로 옮겼다(재노출). 기존 가드는 그대로다.
+- 증거: 새 단위 시험(겹친 원, 원 안의 고정 blob이 반경 가드로 거절, 잘못된 오프셋 6 mm가 퍼짐 가드는 통과하고 쪽 균형 가드에서 거절, 경로 혼합 거절, 깊이 띠 기본 꺼짐, 프레임 보존). 원격 pytest는 아직 돌리지 않았다.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-pivot): 짝 표시를 기준 쪽으로 세고, 쪽이 바뀐 일치는 표시로 받지 않는다
+- 변경: `side_check`가 pair(두 집게를 함께 본 표시)를 기준 쪽으로 센다(2개 규칙·평균 중심 비교 모두). other 표시가 없으면 비교하지 않는다. `mark_jaws`는 같은 자리에서 일치한 두 시도의 집게 쪽이 다르면 그 yaw를 표시 없음("jaw sides switched between tries")으로 둔다. `validated_<arm>`은 설정의 `arm_id`를 쓰고(셀의 arm_a/arm_b/arm_s 설정 셋 모두 `arm_id` 보유, 읽기 전용 확인), 없거나 모르는 값이면 검증 안 됨으로 본다.
+- 증거: 새 단위 시험(모두 pair, pair+other 혼합과 5 mm 어긋남, 원 경로 6 mm 어긋남 거절, 쪽이 바뀐 시도). 원격 pytest는 아직 돌리지 않았다.
 - gate 변화: 없음.

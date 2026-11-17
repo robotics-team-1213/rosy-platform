@@ -36,6 +36,7 @@ CAMERA_LAUNCHES = (
     "integrations/simulation/gazebo/launch/map_v2_fleet_multi_real.launch.py",
     "integrations/simulation/gazebo/launch/map_v2_fleet_lane.launch.py",
     "integrations/simulation/gazebo/launch/map_v2_fleet_real.launch.py",
+    "integrations/simulation/gazebo/launch/map_261026_bay_lane.launch.py",
 )
 
 

@@ -91,7 +91,12 @@ export function createExtractionPanel(host) {
     const response = await review.run({method: $('extract-method').value,
       crop_px: ['extract-x0', 'extract-y0', 'extract-x1', 'extract-y1'].map(number),
       settings: {min_line_length_px: number('extract-min-length'), tolerance_px: number('extract-tolerance')}});
-    status(response.candidates.length ? `${response.candidates.length}개 후보 · 용도를 정하고 필요한 후보만 확인하세요`
+    if (response.candidates.length) {
+      const first = response.candidates[0];
+      review.select(first.candidate_id);
+      if (!$('extract-kind').value) $('extract-kind').value = first.closed ? 'exclusion' : 'road';
+    }
+    status(response.candidates.length ? `${response.candidates.length}개 후보 추출 완료 · 후보를 고르고 [선택 후보를 초안에 반영]을 누르세요`
       : '선택한 범위에서 후보를 찾지 못했습니다. 범위·설정을 바꾸거나 직접 그리세요');
   }));
   $('extract-cancel').addEventListener('click', () => { review.cancel(); status('후보를 취소했습니다. 초안은 그대로입니다'); sync(); host.render(); });
@@ -129,7 +134,12 @@ export function createExtractionPanel(host) {
       lastResult = result;
       $('extract-candidate').replaceChildren(new Option('후보 선택', ''), ...(result?.candidates || [])
         .map((c, i) => new Option(`${i + 1} · ${c.closed ? '윤곽' : '선'} · ${c.geometry_px.length}점${c.is_hole ? ' · 구멍 경계' : ''}`, c.candidate_id)));
-      $('extract-geometry').value = '';
+      if (selected && [...$('extract-candidate').options].some(o => o.value === selected)) {
+        $('extract-candidate').value = selected;
+        $('extract-geometry').value = review.state().geometry.map(p => p.join(',')).join('\n');
+      } else {
+        $('extract-geometry').value = '';
+      }
     }
     const places = context.draft?.places || [], signature = JSON.stringify(places.map(p => [p.id, p.name]));
     if (signature !== placeSignature) {
@@ -137,8 +147,10 @@ export function createExtractionPanel(host) {
       for (const id of ['extract-from', 'extract-to']) {
         const value = $(id).value;
         $(id).replaceChildren(new Option('장소 선택', ''), ...places.map(p => new Option(p.name, p.id)));
-        $(id).value = value;
+        if ([...$(id).options].some(o => o.value === value && value)) $(id).value = value;
       }
+      if (!$('extract-from').value && places[0]) $('extract-from').value = places[0].id;
+      if (!$('extract-to').value && places.length > 1) $('extract-to').value = places[1].id;
     }
   }
   return {sync, destroy: review.cancel,

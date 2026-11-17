@@ -21,7 +21,7 @@ from fakes import FakeRelay, FakeRobot, fresh_power_health
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapStore
-from fleet.server.site_users import hash_password
+from rosy_account.site_users import hash_password
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint

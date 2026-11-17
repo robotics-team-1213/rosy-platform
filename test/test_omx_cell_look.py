@@ -149,3 +149,83 @@ def test_the_mark_room_is_free_only_when_the_whole_opened_gap_is_free_and_inside
     # a box too near the edge of what the camera view covers: past it is unknown, not free
     edge = fr.jaw_margin(np.zeros((200, 300), np.uint8), (0, 0, 300, 200), lambda p: (60 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000), box)
     assert min(edge["mark_half_mm"]) < 60
+
+
+def test_pick_hooks_skips_crowded_look_when_reach_and_calibrated_bias_region_already_measure_position(monkeypatch):
+    import cell_hooks
+    import cell_reach
+
+    monkeypatch.setattr(cell_reach, "hook", lambda *a, **k: (lambda: {"verdict": "pass", "dx_mm": -1.1, "dy_mm": 0.2, "total_mm": 1.1}))
+    cal = {"sites": {"pallet~coarse": {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}}}
+    cfg = {"params": {"look.enabled": 1, "reach.enabled": 1}, "plan": {"grip_open": 56}, "work_dir": "."}
+    crowded_obj = {"raw_m": [0.1269, -0.1082], "mark_half_mm": [24.3, 20.3], "width_mm": 30.0, "length_mm": 90.0}
+    target_ok = {"pick": {"x": 0.1269, "y": -0.1082, "yaw_deg": 0.0}, "place": {}, "object": crowded_obj, "entry": crowded_obj,
+                 "bias_region": {"radius_mm": 0.0, "phase_deg": 0.0, "rms_mm": 0.4}}
+    wrist_ok, _, _, _ = cell_hooks.pick_hooks(cfg, Mute(), target_ok, None, "pallet", "pallet-l1", calibration=cal)
+    res_ok = wrist_ok()
+    assert res_ok["verdict"] == "skipped" and res_ok["hooks"][0]["verdict"] == "pass" and res_ok["hooks"][-1]["verdict"] == "skipped"
+
+    target_uncal = dict(target_ok, bias_region={"radius_mm": 30.0, "phase_deg": 60.0, "rms_mm": 8.5})
+    wrist_uncal, _, _, _ = cell_hooks.pick_hooks(cfg, Mute(), target_uncal, None, "pallet", "pallet-l1", calibration=cal)
+    assert wrist_uncal()["verdict"] == "refuse"
+
+
+def test_settled_state_averages_three_samples_when_jitter_shaking(monkeypatch):
+    import joint_jitter
+
+    class ShakyLookArm:
+        def __init__(self):
+            self.rows = [
+                {"ok": True, "state": [10.0, -20.0, 30.0, 40.0, 50.0, 56.0], "target": [10.0, -20.0, 30.0, 40.0, 50.0, 56.0], "jitter": {"shaking": True}},
+                {"ok": True, "state": [13.0, -23.0, 30.0, 40.0, 50.0, 56.0], "target": [10.0, -20.0, 30.0, 40.0, 50.0, 56.0], "jitter": {"shaking": True}},
+                {"ok": True, "state": [7.0, -17.0, 30.0, 40.0, 50.0, 56.0], "target": [10.0, -20.0, 30.0, 40.0, 50.0, 56.0], "jitter": {"shaking": False}},
+            ]
+
+        def act(self, cmd):
+            assert cmd == "state"
+            return self.rows.pop(0)
+
+    out = joint_jitter.settled_state(ShakyLookArm())
+    assert out["samples"] == 3
+    assert out["state"][:2] == pytest.approx([10.0, -20.0])
+
+
+def test_pivot_calibrate_uses_settled_state_when_shaking(tmp_path, monkeypatch):
+    class ShakyPivotArm:
+        def __init__(self):
+            self.commands = []
+            self.state_idx = 0
+
+        def act(self, cmd):
+            self.commands.append(cmd)
+            if cmd == "state":
+                self.state_idx += 1
+                # Oscillates +3 / -3 / 0 around [10, -20, 30, 40, 50, 56]
+                delta = (3.0, -3.0, 0.0)[(self.state_idx - 1) % 3]
+                return {"ok": True, "state": [10.0 + delta, -20.0 - delta, 30.0, 40.0, 50.0, 56.0], "jitter": {"shaking": True}}
+            return {"ok": True, "state": [0.0] * 6}
+
+    seen_states = []
+    monkeypatch.setattr(cell_pivot, "write_library", lambda *a, **k: tmp_path / "p.json", raising=False)
+    import cell_pipeline as cp
+    monkeypatch.setattr(cp, "write_library", lambda *a, **k: tmp_path / "p.json")
+    monkeypatch.setattr(cell_pivot, "mark_jaws", lambda *a, **k: (320.0, 240.0))
+    monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda *a, **k: (0.12, 0.15))
+    monkeypatch.setattr(cell_pivot, "fold", lambda *a, **k: None)
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda state, *a, **k: seen_states.append(list(state[:2])) or (0.10, 0.15, 0.08, 0.0))
+
+    cfg = {
+        "plan": {"approach_m": 0.03, "home": [0.0] * 5},
+        "coarse": {"z_view": 0.08},
+        "sites": {"floor": {"z": 0.0, "surface_z": 0.0}},
+        "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240]}},
+        "pivot": {"geometry": {"radius_mm": 20.0, "phase_deg": 0.0}},
+    }
+    cal = {"sites": {"floor~coarse": {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}}}
+    res = cell_pivot.pivot_calibrate(ShakyPivotArm(), cfg, (0.10, 0.15), [0.0, 45.0], cal, "floor", tmp_path, sleep=lambda _: None, log=lambda _: None)
+    assert res["result"] == "calibrated"
+    assert len(seen_states) == 2
+    assert seen_states[0] == pytest.approx([10.0, -20.0])
+    assert seen_states[1] == pytest.approx([10.0, -20.0])
+
+

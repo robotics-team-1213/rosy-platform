@@ -37,6 +37,7 @@ EDGE_ADAPTERS = {
     "control.web_map_control": "slam_toolbox reset/pause service client for web_node",
     "control.sensor_provider": "D-126 entry point core loads; it constructs the sensor-only ROS worker",
     "control.safety.ros_edges": "SafetyNode's ROS edge mixin: clock, TF lookups, messages and the drive-sign parameter write for the ROS-free safety mixins (D-171, split from node.py by D-766)",
+    "control.line_observer_helpers": "LineObserverNode's ROS edge helper: builds and publishes the std_msgs/String line_observation JSON message (split from line_observer_node.py by D-766)",
     "control.camera_region_range": "D-423 mixin of camera_detect_node: owns the LaserScan subscription; the geometry is ROS-free in sensing.perception.region_range",
     "control.camera_power": "camera node mixin: owns the power/devices subscription and the ready report; the decisions are ROS-free in camera_power_gate",
 }

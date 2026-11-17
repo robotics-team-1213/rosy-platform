@@ -87,13 +87,14 @@ def test_console_wires_configured_task_database_into_authenticated_app(tmp_path,
     robots = _write(tmp_path)
     task_db = tmp_path / "fleet.sqlite3"
     captured = {}
-    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app, **kwargs))
     args = cli.parse_args(["console", "--robots", str(robots), "--tasks-db", str(task_db),
                            "--token", "operator-test"])
 
     cli.run_console(args)
 
     assert task_db.is_file()
+    assert captured["timeout_keep_alive"] == 75
     assert captured["app"].state.task_service.store.path == task_db
     assert captured["app"].state.task_service.robot_ids == {
         "rosy_01", "rosy_02", "rosy_03",
@@ -649,7 +650,7 @@ def test_console_development_mode_needs_both_the_flag_and_the_deployment(
         tmp_path, monkeypatch, deployment, mode, expected):
     # D-473 1: a missing or mismatched setting never falls back to development mode.
     monkeypatch.setenv("ROSY_DEPLOYMENT", deployment)
-    from fleet.server.site_users import hash_password
+    from rosy_account.site_users import hash_password
     users_file = tmp_path / "site-users.yaml"
     users_file.write_text(yaml.safe_dump({"users": [{"login": "alice", "principal_id": "alice",
                             "role": "operator", "password_scrypt": hash_password("correct horse")}]}), encoding="utf-8")

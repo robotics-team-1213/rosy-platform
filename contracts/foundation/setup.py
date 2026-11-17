@@ -4,7 +4,7 @@ package_name = 'core_common'
 
 setup(
     name=package_name,
-    version='0.0.2',
+    version='0.0.3',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -13,7 +13,7 @@ setup(
         ('share/' + package_name + '/config',
             ['config/rosy_default.yaml', 'config/rosy_dev_auth.yaml']),
     ],
-    install_requires=['setuptools', 'pydantic>=2.0', 'joserfc==1.7.5'],
+    install_requires=['setuptools', 'pydantic>=2.0', 'joserfc==1.7.5', 'httpx>=0.27,<1'],
     zip_safe=True,
     maintainer='Dev',
     maintainer_email='dev@rosy.com',

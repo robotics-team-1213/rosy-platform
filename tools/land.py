@@ -20,7 +20,7 @@ measured headroom, D-568; an unavailable host stops landing); an auto selection 
 real-Chromium tests ``test/browser_scope.py`` maps the changed paths to. Lint, node and the
 known_failures comparison stay here. A branch on the pre-rewrite history is refused, and NEW failures
 that each pass when rerun alone land as LOAD-FLAKY (D-790, ``land_checks.py``). Never pushes,
-stashes, resets or cleans. A pytest invocation that passed on the same tree (or, when the selector
+resets or cleans; the main checkout's dirty files the landing changes are auto-stashed first. A pytest invocation that passed on the same tree (or, when the selector
 vouches for the delta, an ancestor) is reused from ``land_cache.py`` unless --no-cache. Standard library only.
 """
 
@@ -46,7 +46,7 @@ import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these resul
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees)
 from land_logs import append_blocks  # noqa: E402,F401  (logs.md: whole entries, date order; tests call it here)
-import land_guards  # noqa: E402  (structural guards before the long round)
+import land_guards, land_quick  # noqa: E402  (structural guards; quick contract run before the ticket)
 import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
 import land_watchdog  # noqa: E402  (a landing with no progress for 30 min stops itself, stacks on file)
 import land_full  # noqa: E402  (a green tier outlives the run that passed it)
@@ -72,6 +72,7 @@ SCANNER_DIR = "deploy/robot/pinky_pro/release"  # its scanner; admission runs it
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
+MAIN_WRITER_ENV = {**ENV, "ROSY_MAIN_WRITER": "land"}  # tools/hooks/reference-transaction lets only this move main
 RENORMALIZE = ("-X", "renormalize")  # merges clean CRLF->LF per side first: line endings alone never conflict (11-09)
 
 TURN_CAP_S = 1200  # D-889 26 (20 min): the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
@@ -89,9 +90,9 @@ class Stop(Exception):
 class Overtime(Stop): """The turn exhausted its budget; remaining checks prepare outside the lock."""
 
 
-def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+def git(cwd: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     result = subprocess.run(["git", "-c", "core.quotepath=off", "-C", str(cwd), *args],
-                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env or ENV)
     if check and result.returncode != 0:
         raise Stop(f"git {' '.join(args)} failed:\n{result.stdout}{result.stderr}".rstrip())
     return result
@@ -241,14 +242,14 @@ def size_check(wt: Path, base: str, head: str, python: str) -> None:
 
 
 def admit(wt: Path, branch: str, main_sha: str, python: str) -> None:
-    """D-889 S0: merge main and lint before taking a ticket. On 10-26..30 lint errors in a branch's own records
-    stopped 10 landings 12-152 min in, after the prepare slot wait. Only here: once a ticket exists a batch may carry
-    the branch, and moving its tip then would hide that it landed."""
+    """D-889 S0: merge main and lint before taking a ticket (10-26..30: lint stopped 10 landings 12-152 min in). Only
+    here: once a ticket exists a batch may carry the branch, and moving its tip then would hide that it landed."""
     if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
         merge(wt, main_sha, branch, python, False)
     if (wt / HARNESS).is_file():
         step(wt, [python, HARNESS, "lint"], None, "lint")
     secret_scan(wt, main_sha)
+    land_quick.run(sys.modules[__name__], wt, sys.executable)
 
 
 def secret_scan(wt: Path, main_sha: str) -> None:
@@ -457,8 +458,9 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 print(f"[plan] then git -C {main_co} merge --ff-only {candidate}  ({branch})")
                 return 0
 
-            delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
-            if tested_main and all(map(record_only, delta)):
+            base_main = tested_main or (full_main if args.tests == "auto" else None)
+            delta = lines(wt, "diff", "--name-only", base_main, main_sha) if base_main else []
+            if base_main and delta and all(map(record_only, delta)):
                 # Only module-scoped suites may skip; root test/ guards read the records themselves.
                 invocations = land_speculate.root_part(invocations)
                 reusable = False  # module suites ran on an earlier candidate, not this one
@@ -504,8 +506,8 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     land_record.plan(invocations, prepared, available=(wt / land_record.TARGET).is_file())
                 except (ValueError, TypeError, KeyError) as exc:
                     raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
-            on_main(main_co)
-            ff = git(main_co, "merge", "--ff-only", candidate, check=False)
+            on_main(main_co); land_checks.stash_main_collisions(main_co, main_sha, candidate)
+            ff = git(main_co, "merge", "--ff-only", candidate, check=False, env=MAIN_WRITER_ENV)
             if ff.returncode == 0:
                 land_full.forget(wt, branch)
                 landed = out(main_co, "rev-parse", "HEAD")
@@ -531,7 +533,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             if turn_epoch is None or land_queue.turn_started() != turn_epoch:
                 raise Stop("landing turn ownership changed before overtime handoff; ticket left as is")
             land_queue.release(ticket, "turn deadline", started=land_queue.turn_started())
-            args._overtime = land_checks.overtimes(sys.modules[__name__], args) + 1
+            args._overtime = land_checks.next_overtime(sys.modules[__name__], args)
             land_queue.set_status(ticket, "preparing", overtime=args._overtime)
             full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, "")
             continue

@@ -22,7 +22,7 @@ middleware/drive/runtime/goal_escape.py
 middleware/perception/sensor_nodes/ir_adc_node.py
 middleware/perception/sensors/line_observation/line_observer_node.py
 middleware/perception/localization/loc_assist_node.py
-middleware/drive/motion_limits/adapter/node.py
+middleware/drive/motion_limits/adapter/node_helpers.py
 middleware/perception/sensors/sensing/body.py
 middleware/perception/sensors/sensing/dock_tag.py
 middleware/perception/sensors/sensing/ir_adc.py
@@ -72,3 +72,21 @@ contracts/learning/src/rosy/contracts/learning/artifacts.py
 # D-449: preserved recording schema and Episode body validator; binds Pinky provenance only, grants no command authority. Product-profile registration remains the eventual owner.
 contracts/learning/src/rosy/contracts/learning/pinky.py
 operations/fleet/fleet/traffic/lane_traffic.py
+middleware/perception/observers/bay_line_observer_node.py
+operations/fleet/fleet/pipeline/__init__.py
+operations/fleet/fleet/pipeline/omx_cell_policy.py
+operations/fleet/fleet/pipeline/orchestrator.py
+operations/fleet/fleet/pipeline/pinky_policy.py
+operations/fleet/fleet/localization/lane_compliance.py
+operations/fleet/fleet/server/console/charge_bay_routes.py
+operations/fleet/fleet/server/pose/map_pose_service.py
+operations/overhead/rosy_vision/track/anchor_head_tracker.py
+# 2026-11-13 main red: functional "pinky" cell/camera/robot-kind ids that landed in 8b65ceaa0f/fec389d9c7 (and the pipeline_routes split); shrink with the de-Pinky plan.
+contracts/learning/src/rosy/contracts/learning/promotion_request.py
+operations/fleet/fleet/pipeline/station_zones.yaml
+operations/fleet/fleet/server/cell/cell_real2sim_helpers.py
+operations/fleet/fleet/server/ledger/berth_parking_helpers.py
+operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
+operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py
+operations/fleet/fleet/server/sitemap/pipeline_routes.py
+operations/fleet/fleet/server/tracking/tracking_anchors.py

@@ -78,12 +78,27 @@ def wrap_angle(value: float) -> float:
 
 
 def _matmul(a: Matrix, b: Matrix) -> Matrix:
-    return tuple(tuple(sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3))
-                 for i in range(3))  # type: ignore[return-value]
+    a00, a01, a02 = a[0]
+    a10, a11, a12 = a[1]
+    a20, a21, a22 = a[2]
+    b00, b01, b02 = b[0]
+    b10, b11, b12 = b[1]
+    b20, b21, b22 = b[2]
+    return (
+        (a00 * b00 + a01 * b10 + a02 * b20, a00 * b01 + a01 * b11 + a02 * b21, a00 * b02 + a01 * b12 + a02 * b22),
+        (a10 * b00 + a11 * b10 + a12 * b20, a10 * b01 + a11 * b11 + a12 * b21, a10 * b02 + a11 * b12 + a12 * b22),
+        (a20 * b00 + a21 * b10 + a22 * b20, a20 * b01 + a21 * b11 + a22 * b21, a20 * b02 + a21 * b12 + a22 * b22),
+    )
 
 
 def _matvec(a: Matrix, v: Sequence[float]) -> tuple[float, float, float]:
-    return tuple(sum(a[i][k] * v[k] for k in range(3)) for i in range(3))  # type: ignore[return-value]
+    v0, v1, v2 = v[0], v[1], v[2]
+    a0, a1, a2 = a[0], a[1], a[2]
+    return (
+        a0[0] * v0 + a0[1] * v1 + a0[2] * v2,
+        a1[0] * v0 + a1[1] * v1 + a1[2] * v2,
+        a2[0] * v0 + a2[1] * v1 + a2[2] * v2,
+    )
 
 
 def _rpy(roll: float, pitch: float, yaw: float) -> Matrix:
@@ -106,6 +121,7 @@ def _axis_angle(axis: Sequence[float], angle: float) -> Matrix:
 
 _IDENTITY: Matrix = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 WAYPOINT_DISCONTINUITY = "WAYPOINT_DISCONTINUITY"
+_KINEMATICS_CACHE: dict[tuple[type[OmxKinematics], Path, int, int], OmxKinematics] = {}
 
 
 class LineRejected(ValueError):
@@ -149,13 +165,19 @@ class OmxKinematics:
 
     @classmethod
     def load(cls, path: Path | str | None = None) -> "OmxKinematics":
-        if path is None:
-            path = _default_kinematics_path()
-        with open(path, encoding="utf-8") as handle:
+        target = _default_kinematics_path() if path is None else Path(path)
+        stat = target.stat()
+        key = (cls, target.resolve(), stat.st_mtime_ns, stat.st_size)
+        cached = _KINEMATICS_CACHE.get(key)
+        if cached is not None:
+            return cached
+        with open(target, encoding="utf-8") as handle:
             document = yaml.safe_load(handle)
         if not isinstance(document, Mapping):
             raise ValueError("kinematics document must be a mapping")
-        return cls(document)
+        instance = cls(document)
+        _KINEMATICS_CACHE[key] = instance
+        return instance
 
     @property
     def planning_scene_revision(self) -> str:
@@ -196,21 +218,23 @@ class OmxKinematics:
     def fk(self, joints: Sequence[float]) -> TcpPose:
         if len(joints) != 5:
             raise ValueError("FK requires joint1..joint5")
-        q = [_finite("joint", value) for value in joints]
+        if type(joints) is tuple and all(type(v) is float and math.isfinite(v) for v in joints):
+            q: Sequence[float] = joints
+        else:
+            q = [_finite("joint", value) for value in joints]
         rotation: Matrix = _IDENTITY
-        position = (0.0, 0.0, 0.0)
+        px, py, pz = 0.0, 0.0, 0.0
         index = 0
         for joint in self.chain:
-            offset = _matvec(rotation, joint.xyz)
-            position = tuple(p + o for p, o in zip(position, offset))  # type: ignore[assignment]
-            rotation = _matmul(rotation, _rpy(*joint.rpy))
+            ox, oy, oz = _matvec(rotation, joint.xyz)
+            px, py, pz = px + ox, py + oy, pz + oz
             if joint.axis is not None:
                 rotation = _matmul(rotation, _axis_angle(joint.axis, q[index]))
                 index += 1
         approach = (rotation[0][0], rotation[1][0], rotation[2][0])
         error = math.acos(max(-1.0, min(1.0, -approach[2])))
         yaw = math.atan2(rotation[1][2], rotation[0][2])
-        return TcpPose(position[0], position[1], position[2], yaw, error, rotation)
+        return TcpPose(px, py, pz, yaw, error, rotation)
 
     def link_points(self, joints: Sequence[float], fingertip_m: float = 0.0,
                     ) -> tuple[list[tuple[float, float, float]], tuple[float, float, float]]:
@@ -218,16 +242,19 @@ class OmxKinematics:
 
         The chain has zero origin rpy (checked at load), so each joint is offset then rotated."""
         rotation: Matrix = _IDENTITY
-        position, points, index = (0.0, 0.0, 0.0), [], 0
+        px, py, pz = 0.0, 0.0, 0.0
+        points, index = [], 0
         for joint in self.chain:
-            position = tuple(p + o for p, o in zip(position, _matvec(rotation, joint.xyz)))  # type: ignore[assignment]
+            ox, oy, oz = _matvec(rotation, joint.xyz)
+            px, py, pz = px + ox, py + oy, pz + oz
             if joint.name != "joint1":
-                points.append(position)
+                points.append((px, py, pz))
             if joint.axis is not None:
                 rotation = _matmul(rotation, _axis_angle(joint.axis, joints[index]))
                 index += 1
-        approach = (rotation[0][0], rotation[1][0], rotation[2][0])
-        return points + [tuple(p + a * fingertip_m for p, a in zip(position, approach))], approach
+        ax, ay, az = rotation[0][0], rotation[1][0], rotation[2][0]
+        approach = (ax, ay, az)
+        return points + [(px + ax * fingertip_m, py + ay * fingertip_m, pz + az * fingertip_m)], approach
 
     def solve_line(self, start_joints: Sequence[float], start: TopDownPose, end_xyz: Sequence[float],
                    limits: IkLimits, *, count: int, max_joint_step_rad: float,
@@ -241,16 +268,18 @@ class OmxKinematics:
         samples, previous = [], tuple(start_joints)
         for i in range(1, count + 1):
             s = i / count
-            pose = TopDownPose(x0 + (x1 - x0) * s, y0 + (y1 - y0) * s, z0 + (z1 - z0) * s,
+            pose = TopDownPose((1.0 - s) * x0 + s * x1, (1.0 - s) * y0 + s * y1, (1.0 - s) * z0 + s * z1,
                                start.yaw + yaw_delta * s)
             result = self.solve_top_down(pose, limits, reference_q5=previous[4])
-            where = f"({pose.x:.4f}, {pose.y:.4f}, {pose.z:.4f}, yaw {pose.yaw:.3f})"
             if not result.ok:
+                where = f"({pose.x:.4f}, {pose.y:.4f}, {pose.z:.4f}, yaw {pose.yaw:.3f})"
                 raise LineRejected(result.reason, i, f"{where} {result.detail}")
             fk = self.fk(result.joints)
-            if math.dist((fk.x, fk.y, fk.z), (pose.x, pose.y, pose.z)) > 1e-6:
+            if math.hypot(fk.x - pose.x, fk.y - pose.y, fk.z - pose.z) > 1e-6:
+                where = f"({pose.x:.4f}, {pose.y:.4f}, {pose.z:.4f}, yaw {pose.yaw:.3f})"
                 raise LineRejected(IK_OUTSIDE_WORKSPACE, i, f"{where} FK check of waypoint failed")
             if max(abs(a - b) for a, b in zip(result.joints, previous)) > max_joint_step_rad:
+                where = f"({pose.x:.4f}, {pose.y:.4f}, {pose.z:.4f}, yaw {pose.yaw:.3f})"
                 raise LineRejected(WAYPOINT_DISCONTINUITY, i, f"{where} joint jump")
             samples.append(result.joints)
             previous = result.joints
@@ -303,6 +332,10 @@ class OmxKinematics:
         if any(value < low or value > high for value, low, high in zip(
                 position, limits.workspace_min_m, limits.workspace_max_m)):
             return IkResult(IK_OUTSIDE_WORKSPACE, detail="TCP target outside workspace bounds")
+        pos_limits = limits.position_limits
+        arm_limits = (pos_limits["joint1"], pos_limits["joint2"],
+                      pos_limits["joint3"], pos_limits["joint4"])
+        lower5, upper5 = pos_limits["joint5"]
         candidates = []
         failure: tuple[str, str] | None = None
         arm_in_limits = False
@@ -312,16 +345,14 @@ class OmxKinematics:
             if solved is None:
                 failure = failure or (reason, detail)
                 continue
-            if any(not (limits.position_limits[name][0] <= value <= limits.position_limits[name][1])
-                   for name, value in zip(ARM_JOINTS[:4], solved)):
+            if any(not (low <= value <= high) for (low, high), value in zip(arm_limits, solved)):
                 failure = failure or (IK_JOINT_LIMIT, "joint1..joint4 outside profile limits")
                 continue
             arm_in_limits = True
-            lower, upper = limits.position_limits["joint5"]
             base_q5 = wrap_angle(solved[0] - candidate_pose.yaw)
             for turns in (-1, 0, 1):
                 q5 = base_q5 + turns * 2.0 * math.pi
-                if lower <= q5 <= upper:
+                if lower5 <= q5 <= upper5:
                     candidates.append((abs(q5 - reference), solved + (q5,), candidate_pose.yaw))
         if candidates:
             _, joints, yaw = min(candidates, key=lambda item: item[0])

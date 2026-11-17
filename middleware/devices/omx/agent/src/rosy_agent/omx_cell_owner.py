@@ -346,10 +346,10 @@ def sim_gripper_observation(owner: CellOwner, state: Any, grant: Any) -> Gripper
             raise RuntimeError("the grant's recipe/item is not accepted on this owner")
         width, item = geometry["grasp_width_m"], transfer.item
     close_q = owner.profile.gripper_close_for_width(width)
-    threshold = (owner.profile.gripper_contact_for_width(width) - close_q) / 2
+    contact_q = owner.profile.gripper_contact_for_width(width)
+    threshold = (contact_q - close_q) / 2
     q = state.positions[owner.profile.gripper_joint]
     opened = abs(q - owner.profile.gripper_open) <= owner.profile.start_state_tolerance_rad
-    contact_q = owner.profile.gripper_contact_for_width(width)
     present = not opened and close_q + threshold <= q <= contact_q + threshold
     readback_state = "OPEN" if opened else ("CLOSED" if q <= contact_q + threshold else "UNKNOWN")
     return GripperObservation(owner.settings.workcell_id, owner.settings.instance_id,

@@ -461,12 +461,19 @@ def test_admin_can_update_manual_speed_limits(client):
     assert svc.safety.limits.manual_linear == pytest.approx(0.10)
     assert "config.changed" in [event.type for event in svc.events.history()]
 
-    denied = tc.put("/api/v1/safety/limits", json={"manual_linear": 0.05}, headers=OPERATOR)
-    assert denied.status_code == 403
+    # D-1005: an operator sets the manual speeds; the battery and Fleet-loss policy stay the administrator's.
+    assert tc.put("/api/v1/safety/limits", json={"manual_linear": 0.05}, headers=OPERATOR).status_code == 200
+    assert svc.safety.limits.manual_linear == pytest.approx(0.05)
+    assert tc.put("/api/v1/safety/limits", json={"manual_linear": 0.06, "fleet_loss_policy": "HOLD"},
+                  headers=OPERATOR).status_code == 403
+    assert tc.put("/api/v1/safety/limits", json={"battery_warning_percent": 30}, headers=OPERATOR).status_code == 403
+    assert tc.put("/api/v1/safety/limits", json={"manual_linear": 0.05}, headers=VIEWER).status_code == 403
+    assert tc.put("/api/v1/safety/limits", json={"manual_linear": 0.10}, headers=ADMIN).status_code == 200
 
-    clipped = tc.put("/api/v1/safety/limits", json={"manual_linear": ceiling + 1.0}, headers=ADMIN)
-    assert clipped.status_code == 200
-    assert clipped.json()["limits"]["manual_linear"] == pytest.approx(ceiling)
+    # D-1005: above the signed ceiling is refused, not clipped, and nothing changes.
+    refused = tc.put("/api/v1/safety/limits", json={"manual_linear": ceiling + 1.0}, headers=ADMIN)
+    assert refused.status_code == 400
+    assert svc.safety.limits.manual_linear == pytest.approx(0.10)
 
 
 def test_safety_state_includes_battery_policy(client):

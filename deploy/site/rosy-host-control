@@ -139,21 +139,21 @@ exec 9>"$STATE/lock"
 flock 9
 
 case "$ROLE:$ACTION:$UNIT" in
-  site:reboot:|ai:reboot:|model:reboot:)
+  site:reboot:|ai:reboot:|model:reboot:|cell:reboot:)
     schedule_reboot
     ;;
-  site:reboot-if-free:|ai:reboot-if-free:|model:reboot-if-free:)
+  site:reboot-if-free:|ai:reboot-if-free:|model:reboot-if-free:|cell:reboot-if-free:)
     [ -z "$(scheduled_usec)" ] || refuse "a reboot is already scheduled" 3
     if arm_session_held; then refuse "an arm session is running" 6; fi
     if jobs_live; then refuse "a job is running on this PC" 7; fi
     schedule_reboot
     ;;
-  site:nightly-gate:|ai:nightly-gate:|model:nightly-gate:)
+  site:nightly-gate:|ai:nightly-gate:|model:nightly-gate:|cell:nightly-gate:)
     # rosy-nightly-reboot.service asks before its warning and again just before the reboot; it schedules nothing.
     if arm_session_held; then refuse "an arm session is running" 6; fi
     if jobs_live; then refuse "a job is running on this PC" 7; fi
     ;;
-  site:recheck-reboot:|ai:recheck-reboot:|model:recheck-reboot:)
+  site:recheck-reboot:|ai:recheck-reboot:|model:recheck-reboot:|cell:recheck-reboot:)
     mine=$(cat "$STATE/reboot" 2>/dev/null || true)
     if [ -n "$mine" ] && [ "$mine" = "$(scheduled_usec)" ] && arm_session_held; then
       shutdown -c "Rosy Service Control: an arm session began, the reboot is cancelled."
@@ -161,7 +161,7 @@ case "$ROLE:$ACTION:$UNIT" in
       log "result=cancelled(arm session)"
     fi
     ;;
-  site:cancel-reboot:|ai:cancel-reboot:|model:cancel-reboot:)
+  site:cancel-reboot:|ai:cancel-reboot:|model:cancel-reboot:|cell:cancel-reboot:)
     mine=$(cat "$STATE/reboot" 2>/dev/null || true)
     [ -n "$mine" ] && [ "$mine" = "$(scheduled_usec)" ] || refuse "no reboot scheduled by Service Control" 4
     shutdown -c
@@ -192,7 +192,7 @@ case "$ROLE:$ACTION:$UNIT" in
   model:restart-unit:rosy-tensorboard.service)
     restart_user_unit
     ;;
-  ai:clean-storage:|model:clean-storage:)
+  ai:clean-storage:|model:clean-storage:|cell:clean-storage:)
     # D-883: start the rosy-ops lab storage service once; host_storage.py owns what is kept.
     owner=$(cat "$CONF/units-user" 2>/dev/null || true)
     [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"

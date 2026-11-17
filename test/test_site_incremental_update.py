@@ -151,6 +151,9 @@ def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, chan
         if s == 'account':
             maintenance = (output / 'deploy/site/compose.account-backup.yaml').read_text()
             assert f'rosy-site-account:{COMMIT}' in maintenance
+        if s == 'postgres':
+            maintenance = (output / 'deploy/site/compose.pg-backup.yaml').read_text()
+            assert f'rosy-site-postgres:{COMMIT}' in maintenance
 
 
 def test_runtime_reconciles_incremental_stack_without_down_or_restart(tmp_path):

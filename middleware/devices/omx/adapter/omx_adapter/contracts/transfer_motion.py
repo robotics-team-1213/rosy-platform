@@ -102,10 +102,18 @@ class ArmPlanningProfile:
 
     @classmethod
     def load(cls, path: Path | str) -> "ArmPlanningProfile":
+        target = Path(path)
+        stat = target.stat()
+        key = (cls, target.resolve(), stat.st_mtime_ns, stat.st_size)
+        cached = _PROFILE_CACHE.get(key)
+        if cached is not None:
+            return cached
         # LF-normalised so a CRLF checkout yields the same revision.
-        raw = Path(path).read_bytes().replace(b"\r\n", b"\n")
+        raw = target.read_bytes().replace(b"\r\n", b"\n")
         document = yaml.safe_load(raw.decode("utf-8"))
-        return cls.from_mapping(document, revision=hashlib.sha256(raw).hexdigest())
+        profile = cls.from_mapping(document, revision=hashlib.sha256(raw).hexdigest())
+        _PROFILE_CACHE[key] = profile
+        return profile
 
     @classmethod
     def from_mapping(cls, document: object, *, revision: str) -> "ArmPlanningProfile":
@@ -266,11 +274,15 @@ class ArmPlanningProfile:
         return target
 
     def ik_limits(self) -> IkLimits:
-        return IkLimits(
-            position_limits={name: self.position_limits[name] for name in ARM_JOINTS},
-            workspace_min_m=self.workspace_min_m, workspace_max_m=self.workspace_max_m,
-            singularity_radius_m=self.singularity_radius_m,
-        )
+        cached = getattr(self, "_cached_ik_limits", None)
+        if cached is None:
+            cached = IkLimits(
+                position_limits=MappingProxyType({name: self.position_limits[name] for name in ARM_JOINTS}),
+                workspace_min_m=self.workspace_min_m, workspace_max_m=self.workspace_max_m,
+                singularity_radius_m=self.singularity_radius_m,
+            )
+            object.__setattr__(self, "_cached_ik_limits", cached)
+        return cached
 
     def start_state_tolerances(self, phase_id: str | None = None) -> dict[str, float]:
         """Every planned joint. PickPlaceRunner skips the gripper only after grasp (D-402 §3d).
@@ -376,6 +388,9 @@ class TransferMotionPlan:
         object.__setattr__(self, "gripper_joint_names", grippers)
 
 
+_PROFILE_CACHE: dict[tuple[type[ArmPlanningProfile], Path, int, int], ArmPlanningProfile] = {}
+
+
 class TransferPlanRejected(ValueError):
     """Planning HOLD with a typed reason; no partial plan exists."""
 
@@ -398,6 +413,9 @@ def validate_transfer_motion_plan(plan: TransferMotionPlan, profile: ArmPlanning
         raise ValueError("plan timestamp is from the future")
     if plan.gripper_joint_names != (profile.gripper_joint,):
         raise ValueError("plan gripper joints do not match the profile")
+    limits = tuple((name, profile.position_limits[name][0], profile.position_limits[name][1],
+                    profile.velocity_limits[name] + 1e-9, profile.acceleration_limits[name] + 1e-9)
+                   for name in profile.joint_names)
     for phase in plan.phases:
         if phase.joint_names != profile.joint_names:
             raise ValueError("planned joint map does not match the profile")
@@ -406,9 +424,7 @@ def validate_transfer_motion_plan(plan: TransferMotionPlan, profile: ArmPlanning
         for point in phase.points:
             if point.velocities is None or point.accelerations is None:
                 raise ValueError("planned points must carry velocities and accelerations")
-            for name, q, v, a in zip(phase.joint_names, point.positions,
-                                     point.velocities, point.accelerations):
-                lower, upper = profile.position_limits[name]
-                if (not lower <= q <= upper or abs(v) > profile.velocity_limits[name] + 1e-9
-                        or abs(a) > profile.acceleration_limits[name] + 1e-9):
+            for (name, lower, upper, v_limit, a_limit), q, v, a in zip(
+                    limits, point.positions, point.velocities, point.accelerations):
+                if not lower <= q <= upper or abs(v) > v_limit or abs(a) > a_limit:
                     raise ValueError(f"{phase.phase_id} point exceeds {name} limits")

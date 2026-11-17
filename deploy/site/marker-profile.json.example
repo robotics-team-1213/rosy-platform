@@ -11,7 +11,9 @@
     {"owner": "robots", "dictionary": "DICT_4X4_50", "ids": [40, 49], "decision": "D-562"},
     {"owner": "arm_slot_1", "dictionary": "DICT_4X4_100", "ids": [50, 64], "decision": "D-954 2"},
     {"owner": "arm_slot_2", "dictionary": "DICT_4X4_100", "ids": [65, 79], "decision": "D-954 2"},
-    {"owner": "arm_slot_3", "dictionary": "DICT_4X4_100", "ids": [80, 94], "decision": "D-954 2"}
+    {"owner": "arm_slot_3", "dictionary": "DICT_4X4_100", "ids": [80, 94], "decision": "D-954 2"},
+    {"owner": "container_tags", "dictionary": "DICT_4X4_250", "ids": [100, 199], "decision": "D-996 6"}
   ],
+  "container_tags": {"100": "EXAMPLE-CONTAINER-0001", "101": "EXAMPLE-CONTAINER-0002"},
   "arms": {"1": "S", "2": "A", "3": "B"}
 }

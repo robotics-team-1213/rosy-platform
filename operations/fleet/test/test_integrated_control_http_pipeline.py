@@ -146,7 +146,10 @@ class Cluster:
                       for token, identity, role in [
                           ("operator-" + unit, "named-" + unit, "operator"),
                           ("viewer-" + unit, "reader-" + unit, "viewer"),
-                          ("ai-" + unit, "observer-" + unit, "ai_observer")]
+                          ("ai-" + unit, "observer-" + unit, "ai_observer"),
+                          # same tail as the parent's control-unit principal, without the prefix
+                          ("spoof-" + unit, "xcontrol-unit:" + (
+                              config.topology.unit(unit).parent or unit), "service")]
                       + [(edge(other, unit), "control-unit:" + other, "service") for other in config.peers]}
         authorize = build_authorize(None, principals, tasks)
         viewer, _, named, _ = build_role_guards(authorize, principals)
@@ -251,6 +254,19 @@ def test_parent_information_and_stop_require_opt_in_and_directional_credentials(
             body = c.body("A") | {"origin_id": "R"}
             assert (await c.post("A", "stop-inbox", body, edge("R", "A"))).status_code == 403
             assert (await c.get("A", "overview", "viewer-A")).status_code == 200
+            assert all(not calls for calls in c.stop_calls.values())
+    asyncio.run(exercise())
+
+
+def test_service_principal_without_the_control_unit_prefix_cannot_pose_as_the_parent(tmp_path):
+    async def exercise():
+        async with cluster(tmp_path) as c:
+            # "xcontrol-unit:R" ends with the parent's exact control-unit principal id
+            # ("control-unit:R" without its prefix), so prefix-blind slicing would accept it.
+            assert c.nodes["A"].config.topology.unit("A").parent == "R"
+            body = c.body("A") | {"origin_id": "R"}
+            assert (await c.post("A", "stop-inbox", body, "spoof-A")).status_code == 403
+            assert (await c.get("A", "overview", "spoof-A")).status_code == 403
             assert all(not calls for calls in c.stop_calls.values())
     asyncio.run(exercise())
 

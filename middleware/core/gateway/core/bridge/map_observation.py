@@ -24,12 +24,18 @@ def _original(msg):
         _stamp(msg.header.stamp), _stamp(info.map_load_time))
 
 
+def _is_slam_update(svc) -> bool:
+    backend = str((svc.config.get("runtime") or {}).get("navigation_backend", "")).strip().lower()
+    return backend == "slam"
+
+
 def receive_map(bridge, msg, *, warn):
     svc = bridge._svc
-    source = svc.nav._map_evidence
+    slam_update = _is_slam_update(svc)
+    source = None if slam_update else svc.nav._map_evidence
     fence = svc.command._execution_fence
     parent = None if fence is None else fence._ledger._current
-    if source is not None and parent is not None:
+    if not slam_update and source is not None and parent is not None:
         fence.request_stop(parent)
     token = None
     if source is not None:
@@ -40,16 +46,22 @@ def receive_map(bridge, msg, *, warn):
         except Exception:
             stamp = load = None
         token = source.begin(stamp, load)
-    map_pose.invalidate_map_pose(bridge)
+    if not slam_update:
+        map_pose.invalidate_map_pose(bridge)
     try:
-        if source is not None and not source.complete(token, _original(msg)):
+        if slam_update:
+            _original(msg)  # a live SLAM grid is still bounds/length/timestamp checked, only the stop is skipped
+        elif source is not None and not source.complete(token, _original(msg)):
             return False
         grid = translate.grid_from_occupancy(msg)
         current = svc.state.map_id
-        map_id = occupancy_map_id(grid) if current is None or str(current).startswith('occupancy:') else current
+        grid_id = occupancy_map_id(grid)
+        if slam_update:
+            map_id = current if (current and not str(current).startswith("occupancy:")) else f"slam:{svc.identity.robot_id}"
+        else:
+            map_id = grid_id if current is None or str(current).startswith('occupancy:') else current
         svc.maps.set_map(grid, map_id=map_id)
-        if map_id != current:
-            svc.state.set_map_id(map_id)
+        svc.state.set_map_id(map_id, grid_id)  # same map_id keeps the odom token; the grid id always follows
         return True
     except Exception as exc:
         if source is not None:

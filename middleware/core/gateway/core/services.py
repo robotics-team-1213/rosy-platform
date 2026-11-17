@@ -292,7 +292,8 @@ class CoreServices:
             status = traffic_policy.reset("estop")
             state.set_traffic_policy(status)
         safety.estop_listeners.append(reset_traffic_policy)
-        trip_lease = build_trip_lease(events, state, modes, safety, line_follow, command, nav)
+        trip_lease = build_trip_lease(events, state, modes, safety, line_follow, command, nav,
+                                      float(safety_cfg.get("charge_return_linear", 0.10)))
         if station_docking is not None:
             station_docking.return_lease_probe = trip_lease.matches_nowait
         runtime_probe = HostRuntimeProbe(
@@ -302,6 +303,9 @@ class CoreServices:
         localization, loc_mission = wire_assist(events, lambda: identity.robot_id, nav=nav, line_follow=line_follow,
             command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy,
             mission_config=mission_config(config.get("localization_mission")))
+        if str(navigation_backend or "").strip().lower() == "slam":
+            from core.slam_localization import slam_localization_provider
+            state.set_localization_provider(slam_localization_provider(state, state._localization_provider))
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.junction_signal_request = line_follow.junction_signal_request
         fleet_agent.junction_signal_answer = line_follow.junction_signal_answer

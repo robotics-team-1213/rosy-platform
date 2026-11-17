@@ -9,6 +9,7 @@ Exit 0 only when every check passes; each failure says what to do.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -17,6 +18,15 @@ import urllib.request
 from pathlib import Path
 
 import cell_params as prm
+
+
+def reference_matches(path: Path | None, expected_sha256: str | None) -> bool:
+    if not expected_sha256:
+        return True
+    try:
+        return path is not None and hashlib.sha256(path.read_bytes()).hexdigest() == expected_sha256
+    except OSError:
+        return False
 
 
 def lights(frames: dict, params=None) -> list:
@@ -64,22 +74,43 @@ def ready(frame, config: dict, run=subprocess.run, wait=time.sleep) -> list:
     return [f"{name}: {why}" for name, ok, why in lights({c: frame(c) for c in config["cameras"]}, params) if not ok]
 
 
+_ORB = None
+_BF = None
+_REF_ORB_CACHE: dict = {}
+
+
 def camera_shift_px(reference, current) -> dict:
     """Largest displacement of the image grid between the map's reference frame and now (ORB + RANSAC homography)."""
     import cv2
     import numpy as np
 
-    orb = cv2.ORB_create(3000)
-    k1, d1 = orb.detectAndCompute(reference, None)
-    k2, d2 = orb.detectAndCompute(current, None)
+    global _ORB, _BF
+    if _ORB is None:
+        _ORB = cv2.ORB_create(3000)
+        _BF = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    h, w = reference.shape[:2]
+    sig = (id(reference), h, w, int(reference[0, 0]), int(reference[h >> 1, w >> 1]), int(reference[-1, -1]))
+    cached = _REF_ORB_CACHE.get(sig)
+    if cached is not None and cached[0] is reference:
+        pts1, d1 = cached[1], cached[2]
+    else:
+        k1, d1 = _ORB.detectAndCompute(reference, None)
+        pts1 = np.float32([kp.pt for kp in k1]) if k1 else None
+        _REF_ORB_CACHE.clear()
+        _REF_ORB_CACHE[sig] = (reference, pts1, d1)
+    if reference is current or (current.shape == reference.shape and np.array_equal(reference, current)):
+        if d1 is None:
+            return {"ok": False, "why": "no features"}
+        return {"ok": True, "max_px": 0.0, "inliers": int(len(pts1))}
+    k2, d2 = _ORB.detectAndCompute(current, None)
     if d1 is None or d2 is None:
         return {"ok": False, "why": "no features"}
-    matches = sorted(cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(d1, d2), key=lambda m: m.distance)[:600]
+    matches = sorted(_BF.match(d1, d2), key=lambda m: m.distance)[:600]
     if len(matches) < 30:
         return {"ok": False, "why": f"{len(matches)} matches"}
-    H, inliers = cv2.findHomography(np.float32([k1[m.queryIdx].pt for m in matches]),
-                                    np.float32([k2[m.trainIdx].pt for m in matches]), cv2.RANSAC, 3.0)
-    h, w = reference.shape[:2]
+    q_idx = [m.queryIdx for m in matches]
+    p2 = np.float32([k2[m.trainIdx].pt for m in matches])
+    H, inliers = cv2.findHomography(pts1[q_idx], p2, cv2.RANSAC, 3.0)
     grid = np.float32([[[x, y]] for x in (0.1 * w, 0.5 * w, 0.9 * w) for y in (0.1 * h, 0.5 * h, 0.9 * h)])
     moved = np.linalg.norm(cv2.perspectiveTransform(grid, H) - grid, axis=2)
     return {"ok": True, "max_px": round(float(moved.max()), 1), "inliers": int(inliers.sum())}
@@ -105,9 +136,25 @@ def checks(config: dict, viewer: str, max_shift_px: float, fetch=None, run=subpr
     except OSError:
         cur = None
     out += lights({"top": cur}, config.get("params"))
-    ref_path = (config.get("preflight") or {}).get("reference_top")
-    if cur is not None and ref_path and Path(ref_path).expanduser().exists():
-        ref = cv2.imread(str(Path(ref_path).expanduser()), cv2.IMREAD_GRAYSCALE)
+    preflight = config.get("preflight") or {}
+    ref_path = Path(preflight["reference_top"]).expanduser() if preflight.get("reference_top") else None
+    expected_ref_hash = preflight.get("reference_sha256")
+    map_error = None
+    if config.get("calibration_path"):
+        from cell_auto_evidence import bound_map_error
+        try:
+            bound = json.loads(Path(config["calibration_path"]).expanduser().read_text())
+            raw_reference = ref_path.read_bytes() if ref_path else b""
+        except (OSError, ValueError):
+            bound, raw_reference = {}, b""
+        expected_ref_hash = bound.get("reference_top_sha256") if isinstance(bound, dict) else None
+        map_error = bound_map_error(bound if isinstance(bound, dict) else {}, config, raw_reference)
+    if map_error:
+        out.append(("top camera pose", False, map_error))
+    elif not reference_matches(ref_path, expected_ref_hash):
+        out.append(("top camera pose", False, "reference image hash differs from the bound map: restore the map reference"))
+    elif cur is not None and ref_path and ref_path.exists():
+        ref = cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE)
         shift = camera_shift_px(ref, cur)
         ok = shift["ok"] and shift["max_px"] <= max_shift_px
         out.append(("top camera pose", ok, f"{shift}" + ("" if ok else ": the map is stale - remap (layout_map) and re-pivot before any motion")))

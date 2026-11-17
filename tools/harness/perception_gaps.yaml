@@ -45,8 +45,8 @@ spots:
     born: "device:2026-10-10"
     evidence:
       - middleware/perception/sensors/line_observation/line_observer_node.py:134
-      - middleware/perception/sensors/line_observation/line_observer_node.py:530
-      - middleware/perception/sensors/line_observation/line_observer_node.py:635
+      - middleware/perception/sensors/line_observation/line_observer_node.py:433
+      - middleware/perception/sensors/line_observation/line_observer_helpers.py:54
       - middleware/perception/front_camera/perception/lane_containment.py:72-74
       - middleware/drive/behaviors/line_follow/crosswalk/zone.py:45-48
     replay: unbuilt

@@ -150,3 +150,15 @@ candidates:
     gravity_hold:
     - joint3
     - joint4
+  servo-antijitter-20261112:
+    base: servo-friction-20261109
+    source: registers
+    date: '2026-11-12'
+    method: Position_P_Gain from deploy/robot/omx/omx-ai-follower-tuning.json (joint2
+      P=1000 anti-jitter boom damping per D-951 6, joint1/3/4/5 P=1200/1200/1000/800)
+      combined with fitted servo-friction-20261109 frictionloss and damping
+    evidence: deploy/robot/omx/omx-ai-follower-tuning.json
+    joints:
+      joint2:
+        kp: 8.416
+

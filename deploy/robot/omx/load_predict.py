@@ -40,11 +40,27 @@ def cell(pose):
     return ",".join(str(round(pose[i] / CELL)) for i in (1, 2, 3))
 
 
+_MODEL_CACHE: dict[str, tuple[int, int, dict]] = {}
+
+
 def load(path):
-    model = json.loads(Path(path).read_text(encoding="utf-8-sig"))
-    if model.get("schema") != SCHEMA or not isinstance(model.get("arms"), dict):
-        raise ValueError(f"not a {SCHEMA} file")
-    return model
+    p = Path(path)
+    try:
+        st = p.stat()
+        key = str(p)
+        cached = _MODEL_CACHE.get(key)
+        if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+            return cached[2]
+        model = json.loads(p.read_text(encoding="utf-8-sig"))
+        if model.get("schema") != SCHEMA or not isinstance(model.get("arms"), dict):
+            raise ValueError(f"not a {SCHEMA} file")
+        _MODEL_CACHE[key] = (st.st_mtime_ns, st.st_size, model)
+        return model
+    except OSError:
+        model = json.loads(p.read_text(encoding="utf-8-sig"))
+        if model.get("schema") != SCHEMA or not isinstance(model.get("arms"), dict):
+            raise ValueError(f"not a {SCHEMA} file")
+        return model
 
 
 def arm_for(model, port):
@@ -58,13 +74,21 @@ def predict(arm, pose):
 
 
 def unknown_reason(arm, pose, min_cell):
-    if arm["cells"].get(cell(pose), 0) < min_cell:
-        return "lift/elbow/wrist " + cell(pose) + " cell has fewer than " + str(min_cell) + " standstill samples"
+    c = cell(pose)
+    if arm["cells"].get(c, 0) < min_cell:
+        return "lift/elbow/wrist " + c + " cell has fewer than " + str(min_cell) + " standstill samples"
     for i, j in ((0, "shoulder_pan"), (4, "wrist_roll")):
         lo, hi = arm["range"][j]
         if not lo - CELL <= pose[i] <= hi + CELL:
             return f"{j} {pose[i]:.1f} outside the logged {lo:.1f}..{hi:.1f}"
     return None
+
+
+def gravity_pwm(arm, pose, min_cell: int = 5) -> dict[str, float]:
+    """Predicted standstill gravity-hold PWM per pitch joint when `pose` lies in a covered cell; else `{}`."""
+    if not arm or unknown_reason(arm, pose, min_cell) is not None:
+        return {}
+    return predict(arm, pose)
 
 
 def check_chunk(arm, frames, fps, params=None, caps=None):
@@ -120,6 +144,7 @@ def plan_check(path, port, params, library, caps=None):
         return None
     model = load(path)
     check = lambda lib: refuse(model, port, lib, params, caps)  # noqa: E731
+    check.arm = model["arms"].get(arm_for(model, port))
     try:
         check(library)
     except ValueError as exc:

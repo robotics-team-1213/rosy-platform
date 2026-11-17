@@ -5,7 +5,7 @@ import shutil
 import tempfile
 
 
-COMMON = ('tokens.css', 'components.css', 'component-controls.css', 'app-shell.css', 'theme.js', 'core_ui_logic.js',
+COMMON = ('account-session.js', 'account-profile.js', 'account-apps.css', 'tokens.css', 'components.css', 'component-controls.css', 'app-shell.css', 'theme.js', 'core_ui_logic.js',
           'ui.js', 'ui-wiring.js', 'confirmation.js', 'live-dialog-geometry.js', 'brand/mark.svg')
 ASSETS = {'/': 'index.html', '/monitoring.js': 'monitoring.js', '/monitoring.css': 'monitoring.css',
           **{f'/common/{name}': f'common/{name}' for name in COMMON}}

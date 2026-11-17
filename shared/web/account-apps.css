@@ -1,0 +1,8 @@
+.account-apps { position: relative; }
+.account-apps > summary { cursor: pointer; }
+.account-apps > ul {
+  position: absolute; right: 0; z-index: 10; min-width: 12rem; max-height: 60vh; overflow: auto;
+  margin: 0; padding: var(--space-2); list-style: none;
+  background: var(--surface-raised); border: 1px solid var(--border-default); border-radius: var(--radius-control);
+}
+.account-apps a { display: block; padding: var(--space-2); }

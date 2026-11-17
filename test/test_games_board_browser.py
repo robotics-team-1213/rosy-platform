@@ -43,6 +43,9 @@ class _LayoutAccount:
     def profile(self, _cookie):
         return None
 
+    def apps(self, _cookie):
+        return []
+
     def resolve(self, _cookie):
         from types import SimpleNamespace
         return SimpleNamespace(sub='layout-account', sid='family', rev=1, aud='site:one', grants=[], permits=lambda resource, capability:
@@ -93,6 +96,8 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
     state = {'active': True, 'operate': False, 'challenge': '', 'display_name':'Game Alice'}
 
     def authority(endpoint, fields):
+        if endpoint == 'apps':
+            return {'apps': []}
         if endpoint == 'userinfo':
             return {'account_id':'alice', 'login':'alice', 'display_name':state['display_name']}
         if endpoint == 'introspect':

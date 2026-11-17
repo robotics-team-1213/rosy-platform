@@ -10,10 +10,15 @@ from guarded_native import NativeJointMotion, NAMES, close_device, connect_passi
 from motor_health import MotorHealth
 
 ARMS = ("arm_a", "arm_b")
+_ACTION_POS_KEYS = tuple(f"{arm}.{n}.pos" for arm in ARMS for n in NAMES)
+_ARM_PREFIX = {arm: f"{arm}." for arm in ARMS}
 
 
 def prefixed(name, values):
-    return {name + "." + key: value for key, value in values.items()}
+    prefix = _ARM_PREFIX.get(name)
+    if prefix is None:
+        prefix = name + "."
+    return {prefix + key: value for key, value in values.items()}
 
 
 class BimanualMotion:
@@ -24,11 +29,11 @@ class BimanualMotion:
 
     def send(self, action):
         try:
-            finite_values(action, [arm + "." + n + ".pos" for arm in ARMS for n in NAMES])
+            finite_values(action, _ACTION_POS_KEYS)
             prepared = {}
             for arm in ARMS:
-                values = {key.removeprefix(arm + "."): value for key, value in action.items()
-                          if key.startswith(arm + ".")}
+                values = {key.removeprefix(_ARM_PREFIX[arm]): value for key, value in action.items()
+                          if key.startswith(_ARM_PREFIX[arm])}
                 try:
                     prepared[arm] = self.motions[arm].prepare(values)
                 except ValueError as exc:

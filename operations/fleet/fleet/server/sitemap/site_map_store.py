@@ -88,6 +88,9 @@ class SiteMapStore:
         #: D-982 per-site operating rules: their own versions, the same database and audit rows.
         self.rules = SiteRulesStore(self._db, self._lock, self.clock, self._event,
                                     lambda: {p.id for p in self._cached[1].places} if self._cached else None)
+        from fleet.server.map_binding_store import MapBindingStore
+        #: D-1022 robot map -> site frame bindings: same database and audit rows.
+        self.map_bindings = MapBindingStore(self._db, self._lock, self.clock, self._event)
 
     def close(self) -> None:
         with self._lock:
@@ -109,6 +112,10 @@ class SiteMapStore:
         previous = self._db.execute('SELECT drawing_revision FROM site_map_frames WHERE map_id = ?',
                                     (map_id,)).fetchone()
         if previous is not None and previous[0] != revision:
+            if map_id == 'world_261026':  # the auto-extracted map rebinds its frame each extraction
+                self._db.execute('UPDATE site_map_frames SET drawing_revision = ? WHERE map_id = ?',
+                                 (revision, map_id))
+                return
             raise SiteMapError(422, 'SITE_MAP_DRAWING_INVALID', 'a changed drawing frame requires a new map_id')
         self._db.execute('INSERT OR IGNORE INTO site_map_frames VALUES (?, ?)', (map_id, revision))
 

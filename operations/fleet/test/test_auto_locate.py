@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from fleet.localization.auto_locate import (ALIGNED, DEGRADED, UNKNOWN, AlignmentTracker, fit_rigid,
-                                            heading_from_peers)
+from fleet.localization.auto_locate import (ALIGNED, DEGRADED, UNKNOWN, AlignmentTracker, RecoveryWindow,
+                                            fit_rigid, heading_from_peers, recovery_window)
 from fleet.server.auto_locate_service import AutoLocateService
 
 YAW, TX, TY = 0.7, 1.2, -0.4
@@ -18,9 +18,12 @@ def to_site(x, y, yaw=YAW, tx=TX, ty=TY):
     return c * x - s * y + tx, s * x + c * y + ty
 
 
-def track(x, y, *, age=0.1, revision="r1", state="CONFIRMED"):
-    return {"state": state, "reason": None, "x": x, "y": y, "age_s": age, "map_id": "world",
-            "calibration_revision": revision, "source_id": "ceiling_north"}
+def track(x, y, *, age=0.1, revision="r1", state="CONFIRMED", yaw_cam=None):
+    out = {"state": state, "reason": None, "x": x, "y": y, "age_s": age, "map_id": "world",
+           "calibration_revision": revision, "source_id": "ceiling_north"}
+    if yaw_cam is not None:
+        out["yaw_cam"] = yaw_cam
+    return out
 
 
 def robot(x, y, yaw=0.0, *, loc="LOCALIZED", frame="map", map_id="slam", objects=(), stamp=None):
@@ -256,3 +259,162 @@ def test_a_new_session_clears_a_degraded_latch_and_the_same_session_does_not():
     now[0] = 121.0
     locate.start(["a"])
     assert locate.snapshot()["robots"][0]["state"] == UNKNOWN
+
+
+def test_yaw_cam_aligns_a_standing_robot_from_a_single_observation():
+    tracker = AlignmentTracker("r1")
+    slam_yaw = 0.25
+    x, y = to_site(0.5, 0.5)
+    tracker.observe(0.0, track(x, y, yaw_cam=slam_yaw + YAW), robot(0.5, 0.5, slam_yaw), {})
+    view = tracker.view(0.0)
+    assert (view["state"], view["evidence"]) == (ALIGNED, "cam_heading")
+    assert view["transform"]["yaw"] == pytest.approx(YAW, abs=1e-3)
+    assert (view["transform"]["tx"], view["transform"]["ty"]) == pytest.approx((TX, TY), abs=1e-3)
+
+
+@pytest.mark.parametrize("bad_yaw", [None, float("nan"), float("inf"), True])
+def test_invalid_yaw_cam_does_not_align_a_standing_robot(bad_yaw):
+    tracker = AlignmentTracker("r1")
+    x, y = to_site(0.5, 0.5)
+    t = track(x, y)
+    if bad_yaw is not None:
+        t["yaw_cam"] = bad_yaw
+    tracker.observe(0.0, t, robot(0.5, 0.5, 0.1), {})
+    assert tracker.view(0.0)["state"] == UNKNOWN
+
+
+def test_yaw_cam_disagreement_latches_degraded():
+    tracker = AlignmentTracker("r1")
+    x, y = to_site(0.5, 0.5)
+    tracker.observe(0.0, track(x, y, yaw_cam=YAW), robot(0.5, 0.5, 0.0), {})
+    assert tracker.view(0.0)["state"] == ALIGNED
+    tracker.observe(1.0, track(x, y, yaw_cam=YAW + math.radians(30.0)), robot(0.5, 0.5, 0.0), {})
+    assert (tracker.view(1.0)["state"], tracker.view(1.0)["reason"]) == (DEGRADED, "CAMERA_DISAGREES")
+    tracker.observe(2.0, track(x, y, yaw_cam=YAW), robot(0.5, 0.5, 0.0), {})
+    assert tracker.view(2.0)["state"] == DEGRADED
+
+
+def test_yaw_cam_position_and_drive_disagreements_latch_degraded():
+    tracker = AlignmentTracker("r1")
+    x, y = to_site(0.0, 0.0)
+    tracker.observe(0.0, track(x, y, yaw_cam=YAW + math.radians(45.0)), robot(0.0, 0.0, 0.0), {})
+    assert tracker.view(0.0)["state"] == ALIGNED
+    for i, (px, py) in enumerate(PATH[1:], start=1):
+        tracker.observe(float(i), track(*to_site(px, py)), robot(px, py), {})
+    assert tracker.view(3.0)["state"] == DEGRADED
+
+    pos_tracker = AlignmentTracker("r2")
+    pos_tracker.observe(0.0, track(x, y, yaw_cam=YAW), robot(0.0, 0.0, 0.0), {})
+    pos_tracker.observe(1.0, track(x + 0.3, y, yaw_cam=YAW), robot(0.0, 0.0, 0.0), {})
+    assert (pos_tracker.view(1.0)["state"], pos_tracker.view(1.0)["reason"]) == (DEGRADED, "CAMERA_DISAGREES")
+
+
+def test_recovery_window_with_yaw_cam_bay_prior_and_unknown_fallback():
+    known = recovery_window(1.0, 2.0, yaw_cam=0.4)
+    assert known == RecoveryWindow(1.0, 2.0, 0.4, xy_radius_m=0.35, yaw_radius_rad=pytest.approx(math.radians(25.0)))
+
+    bay = (0.5, 1.5, 1.5, 2.5)
+    in_bay = recovery_window(1.0, 2.0, None, bay_bounds=bay)
+    assert in_bay == RecoveryWindow(1.0, 2.0, -math.pi / 2, xy_radius_m=0.35,
+                                    yaw_radius_rad=pytest.approx(math.radians(25.0)))
+
+    outside = recovery_window(3.0, 2.0, None, bay_bounds=bay)
+    assert outside == RecoveryWindow(3.0, 2.0, None, xy_radius_m=0.35, yaw_radius_rad=math.pi)
+
+    nan_fallback = recovery_window(3.0, 2.0, float("nan"))
+    assert nan_fallback == RecoveryWindow(3.0, 2.0, None, xy_radius_m=0.35, yaw_radius_rad=math.pi)
+
+
+def test_alignment_tracker_accepts_track_yaw_from_confirmed_track_pose():
+    tracker = AlignmentTracker("r1")
+    slam_yaw = 0.25
+    x, y = to_site(0.5, 0.5)
+    t = track(x, y)
+    t["yaw"] = slam_yaw + YAW
+    tracker.observe(0.0, t, robot(0.5, 0.5, slam_yaw), {})
+    view = tracker.view(0.0)
+    assert (view["state"], view["evidence"]) == (ALIGNED, "cam_heading")
+    assert view["transform"]["yaw"] == pytest.approx(YAW, abs=1e-3)
+
+
+def test_service_recovery_window_uses_confirmed_track_and_peer_fallback():
+    locate, tracking = service(lambda: 0.0)
+    assert locate.recovery_window("a") is None
+
+    tracking.identity.tracks["a"] = {"state": "CONFIRMED", "x": 1.2, "y": 2.3, "yaw": 0.4}
+    win = locate.recovery_window("a")
+    assert win == RecoveryWindow(1.2, 2.3, 0.4, xy_radius_m=0.35, yaw_radius_rad=pytest.approx(math.radians(25.0)))
+
+    tracking.identity.tracks.clear()
+    tracking.robot_state = lambda rid: (
+        robot(0.0, 0.0) | {"peers": [{"robot_id": "a", "localization_state": "LOCALIZED",
+                                      "pose": {"x": 1.0, "y": 2.0, "yaw": None}, "age_s": 0.2}]}
+        if rid == "b" else robot(0.0, 0.0)
+    )
+    bay_win = locate.recovery_window("a", bay_bounds=(0.5, 1.5, 1.5, 2.5))
+    assert bay_win == RecoveryWindow(1.0, 2.0, -math.pi / 2, xy_radius_m=0.35,
+                                     yaw_radius_rad=pytest.approx(math.radians(25.0)))
+
+
+# --- D-989 follow-up: Fleet opens the session by itself (auto_start) ---
+
+class FakeMapPose:
+    def __init__(self, *, robots=("a", "b"), auto=(), poses=None):
+        self.config = SimpleNamespace(auto_locate_robots=tuple(auto))
+        self._robots, self._poses = set(robots), (poses or {})
+
+    def knows(self, robot_id):
+        return robot_id in self._robots
+
+    def driving_pose(self, robot_id):
+        return self._poses.get(robot_id)
+
+    def auto_locate_enabled(self, robot_id):
+        return robot_id in self.config.auto_locate_robots
+
+    def auto_locate_blocked(self, robot_id):
+        return False
+
+
+def fake_console(online=("a", "b"), busy=()):
+    def find(robot_id):
+        return SimpleNamespace(online=True) if robot_id in online else None
+
+    return SimpleNamespace(
+        hub=SimpleNamespace(registry=SimpleNamespace(find=find)),
+        trip_busy=lambda robot_id: robot_id in busy, trip_goal_sent_at={},
+        goal_leases=SimpleNamespace(pending=set()), _goal_busy=set(), _goals={},
+        _seen={}, _queued={}, _yielding={}, _formation_members=lambda: [], _formation_leader=None)
+
+
+def auto_service(clock, map_pose, console):
+    tracking = SimpleNamespace(identity=None, sources=[], robot_state=lambda rid: None)
+    return AutoLocateService(tracking, map_pose=map_pose, console=console, clock=clock)
+
+
+def test_auto_start_opens_a_session_for_an_online_unlocated_listed_robot():
+    now = [0.0]
+    locate = auto_service(lambda: now[0], FakeMapPose(auto=("a",)), fake_console())
+    assert locate.auto_start() == ["a"]
+    assert locate.stream_wanted() is True
+
+
+def test_auto_start_skips_localized_offline_unlisted_trip_and_unknown_robots():
+    map_pose = FakeMapPose(robots=("a", "b", "c", "d", "e"),  # f is listed but not on the roster
+                           auto=("a", "b", "c", "d", "f"),
+                           poses={"a": SimpleNamespace(state="LOCALIZED")})
+    locate = auto_service(lambda: 0.0, map_pose,
+                          fake_console(online=("c", "d", "e", "f"), busy=("c",)))
+    assert locate.auto_start() == ["d"]  # a localized, b offline, c on a trip, e unlisted, f unknown
+
+
+def test_auto_start_backs_off_per_robot_and_starts_again_after_300_s():
+    now = [0.0]
+    locate = auto_service(lambda: now[0], FakeMapPose(auto=("a",)), fake_console())
+    assert locate.auto_start() == ["a"]
+    now[0] = 200.0  # the session is over but the backoff is not
+    assert locate.auto_start() == []
+    now[0] = 299.0
+    assert locate.auto_start() == []
+    now[0] = 300.0
+    assert locate.auto_start() == ["a"]

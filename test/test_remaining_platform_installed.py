@@ -158,7 +158,7 @@ for distribution in distributions.values():
             assert dependency.version in requirement.specifier, (distribution.metadata['Name'], raw_requirement)
 execution_requirements = {(canonicalize_name(r.name), str(r.specifier), tuple(sorted(r.extras)), r.marker, r.url)
                           for r in map(Requirement, importlib.metadata.requires('rosy-execution'))}
-assert ('core-common', '==0.0.2', (), None, None) in execution_requirements, execution_requirements
+assert ('core-common', '>=0.0.2', (), None, None) in execution_requirements, execution_requirements
 from datetime import datetime, timezone
 projected = project_progress({
     'mission': {'status': 'ACTION_SUCCEEDED', 'updated_at': '1970-01-01T00:01:40+00:00',
@@ -184,8 +184,8 @@ assert ('rosy-account', '==0.1.0', (), None, None) in fleet_requirements, fleet_
 foundation_floor = [r for r in map(Requirement, importlib.metadata.requires('fleet'))
                     if canonicalize_name(r.name) == 'core-common']
 assert len(foundation_floor) == 1
-assert '0.0.1' not in foundation_floor[0].specifier
-assert '0.0.2' in foundation_floor[0].specifier
+assert '0.0.2' not in foundation_floor[0].specifier
+assert '0.0.3' in foundation_floor[0].specifier
 api_floor = [r for r in map(Requirement, importlib.metadata.requires('core_api_web'))
              if canonicalize_name(r.name) == 'core-common']
 assert len(api_floor) == 1

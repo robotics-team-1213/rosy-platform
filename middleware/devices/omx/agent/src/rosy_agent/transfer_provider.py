@@ -243,6 +243,9 @@ def create_omx_cell_transfer_phase_factory(
     """
     from omx_adapter.pick_place.pick_place_runner import PickPlaceRunner
 
+    skill = TransferSkill()
+    base_tolerances = profile.start_state_tolerances()
+
     def planner_for_grant(grant: FleetCellTransferGrant) -> OMXAnalyticTransferPlanner:
         return OMXAnalyticTransferPlanner(
             grant, profile=profile, planner=planner, execution_state=execution_state,
@@ -264,14 +267,14 @@ def create_omx_cell_transfer_phase_factory(
             goal_port=goal_port, submission_fence=submission_fence,
             phase_gate=gate, current_fence=current_fence,
             current_execution_state=execution_state,
-            start_state_tolerances=profile.start_state_tolerances(),
+            start_state_tolerances=dict(base_tolerances),
             max_joint_state_age_s=profile.max_joint_state_age_s,
             monotonic=monotonic, now=now, cell_profile=profile,
             gripper_readback=readback or gripper_readback, held_object_id=grant.cell_transfer.item,
         )
 
     phase_factory = create_cell_transfer_phase_factory(
-        skill=TransferSkill(), planner_for_grant=planner_for_grant,
+        skill=skill, planner_for_grant=planner_for_grant,
         executor_for_grant=executor_for_grant,
     )
     if gripper_sensor_revision is None:
@@ -303,7 +306,7 @@ def create_omx_cell_transfer_phase_factory(
             return observation
 
         create_phase = create_cell_transfer_phase_factory(
-            skill=TransferSkill(), planner_for_grant=planner_for_grant,
+            skill=skill, planner_for_grant=planner_for_grant,
             executor_for_grant=lambda accepted, journal, planned: executor_for_grant(
                 accepted, journal, planned, workflow, scoped_readback),
         )

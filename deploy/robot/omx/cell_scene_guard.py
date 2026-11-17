@@ -15,19 +15,29 @@ import numpy as np
 import cell_params as prm
 
 
-def moved_blobs(before, after, roi, base_px, target_px, params=None) -> list:
+def _blur_roi(frame, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
+    return cv2.GaussianBlur(cv2.cvtColor(frame[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY), (5, 5), 0).astype(np.int16)
+
+
+def _beyond_mask(x0: int, y0: int, x1: int, y1: int, base_px, target_px, beyond_px: float) -> np.ndarray:
+    away = np.array(target_px, float) - np.array(base_px, float)
+    away /= np.linalg.norm(away)
+    along = ((np.arange(x0, x1) - target_px[0]) * away[0])[None, :] + ((np.arange(y0, y1) - target_px[1]) * away[1])[:, None]
+    return along < beyond_px
+
+
+def moved_blobs(before, after, roi, base_px, target_px, params=None, _pre=None) -> list:
     """Changed regions of the ROI past the target from the base: [{"px", "area"}], largest first. A shift of the whole
     picture's brightness is taken out first: the lab's exposure moves between frames."""
     x0, y0, x1, y1 = (int(v) for v in roi)
-    gray = [cv2.GaussianBlur(cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY), (5, 5), 0).astype(np.int16)
-            for f in (before, after)]
-    diff = gray[1] - gray[0]
+    if _pre is None:
+        g0 = _blur_roi(before, x0, y0, x1, y1)
+        near = _beyond_mask(x0, y0, x1, y1, base_px, target_px, prm.get(params, "scene.beyond_px"))
+    else:
+        g0, near = _pre
+    diff = _blur_roi(after, x0, y0, x1, y1) - g0
     mask = (np.abs(diff - int(np.median(diff))) > prm.get(params, "scene.diff")).astype(np.uint8)
-    away = np.array(target_px, float) - np.array(base_px, float)
-    away /= np.linalg.norm(away)
-    ys, xs = np.mgrid[y0:y1, x0:x1]
-    along = (xs - target_px[0]) * away[0] + (ys - target_px[1]) * away[1]
-    mask[along < prm.get(params, "scene.beyond_px")] = 0
+    mask[near] = 0
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     n, _, stats, centres = cv2.connectedComponentsWithStats(mask)
     blobs = [{"px": [round(float(centres[i][0]) + x0), round(float(centres[i][1]) + y0)], "area": int(stats[i, 4])}
@@ -35,11 +45,14 @@ def moved_blobs(before, after, roi, base_px, target_px, params=None) -> list:
     return sorted(blobs, key=lambda b: -b["area"])
 
 
-def scene_moved(before, after) -> list:
+def scene_moved(before, after, ignore=()) -> list:
     """Regions that differ between two whole top views taken with the arms folded: [area, x0, y0, x1, y1]. Folded, the arm is in
-    both views, so unlike moved_blobs the whole frame can be compared."""
+    both views, so unlike moved_blobs the whole frame can be compared. `ignore` rects ([x0, y0, x1, y1]) always change, like
+    the running belt (2026-11-14 arm_s: its 11364 px blob read as a moved pile)."""
     diff = cv2.GaussianBlur(cv2.absdiff(before, after), (5, 5), 0).max(2)
     mask = cv2.morphologyEx((diff > 45).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    for x0, y0, x1, y1 in ignore:
+        mask[max(int(y0), 0):int(y1), max(int(x0), 0):int(x1)] = 0
     n, _, stats, _ = cv2.connectedComponentsWithStats(mask)
     return [[int(stats[i, 4]), int(stats[i, 0]), int(stats[i, 1]), int(stats[i, 0] + stats[i, 2]), int(stats[i, 1] + stats[i, 3])]
             for i in range(1, n) if stats[i, 4] > 150]
@@ -48,12 +61,16 @@ def scene_moved(before, after) -> list:
 def hook(cell, config: dict, before, roi, base_px, target_px):
     """The hover hook; no pixel for the base or the target means nothing can be compared, so the carry does not go on."""
     params = config.get("params")
+    pre = None
+    if before is not None and base_px is not None and target_px is not None:
+        x0, y0, x1, y1 = (int(v) for v in roi)
+        pre = (_blur_roi(before, x0, y0, x1, y1), _beyond_mask(x0, y0, x1, y1, base_px, target_px, prm.get(params, "scene.beyond_px")))
 
     def run() -> dict:
         out = {"dx_mm": 0.0, "dy_mm": 0.0, "total_mm": 0.0}
         if base_px is None or target_px is None:
             return {**out, "verdict": "refuse", "why": "scene guard: the base or the target has no pixel"}
-        moved = moved_blobs(before, cell.frame("top"), roi, base_px, target_px, params)
+        moved = moved_blobs(before, cell.frame("top"), roi, base_px, target_px, params, _pre=pre)
         if moved:
             return {**out, "verdict": "refuse", "why": f"scene changed past the arm: {moved[:3]}", "moved": moved[:3]}
         return {**out, "verdict": "pass"}

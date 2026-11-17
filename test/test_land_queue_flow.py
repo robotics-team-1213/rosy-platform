@@ -4,10 +4,8 @@ the watchdog's rollup schedule and the stage numbers."""
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import sys
-import time
 from types import SimpleNamespace
 
 import pytest
@@ -18,7 +16,6 @@ sys.path.insert(0, str(ROOT / "tools"))
 import land_merge  # noqa: E402
 import land_precheck  # noqa: E402
 import land_stats  # noqa: E402
-import land_watchdog  # noqa: E402
 
 HEAD = b"# Ref\n\n**Version:** v1.%d\n\n"
 OLD = b"### v1.10 old\n\n- old fact\n\n## 1. Rules\n\nbody\n"
@@ -89,6 +86,7 @@ def test_land_async_hands_the_mixed_words_to_the_precheck(monkeypatch, tmp_path)
     import land_async
     seen = []
     monkeypatch.setattr(land_async.subprocess, "call", lambda argv, **k: seen.append(argv) or 1)
+    monkeypatch.setattr(land_async, "too_big", lambda cwd: None)  # the size gate has its own test
     assert land_async.main(["--tests", "auto", "--mixed", "user said so"]) == 1
     assert seen[0][-3:] == ["--precheck", "--mixed", "user said so"]
 
@@ -97,30 +95,6 @@ def test_the_unattended_rollup_takes_affected_tier_members_only(monkeypatch):
     import land_rollup
     monkeypatch.setattr(land_rollup, "tier", lambda repo, branch: {"a": "affected", "f": "full"}.get(branch))
     assert [land_rollup.affected(None, b) for b in ("a", "f", "safety")] == ["affected", None, None]
-
-
-def test_only_the_turn_holder_starts_the_rollup_once_per_half_hour(tmp_path, monkeypatch):
-    common = tmp_path / ".git"
-    common.mkdir()
-    ticket = common / "t.json"
-    ticket.write_text("{}", encoding="utf-8")
-    events = SimpleNamespace(_where={"path": common / "rosy-land-events.jsonl"})
-    owner = {"turn": False}
-    queue = SimpleNamespace(_held=[ticket], owns_turn=lambda t: owner["turn"])
-    now = [time.time()]
-    assert land_watchdog.rollup_due(events, queue, now=lambda: now[0]) is None  # not in its turn
-    owner["turn"] = True
-    assert land_watchdog.rollup_due(events, queue, now=lambda: now[0]) == common  # first one: claims the stamp
-    assert land_watchdog.rollup_due(events, queue, now=lambda: now[0]) is None  # just claimed
-    stamp = common / land_watchdog.STAMP
-    os.utime(stamp, (now[0] - 10, now[0] - 10))
-    assert land_watchdog.rollup_due(events, queue, now=lambda: now[0]) is None  # ran 10 s ago
-    os.utime(stamp, (now[0] - land_watchdog.ROLLUP_EVERY_S - 1,) * 2)
-    assert land_watchdog.rollup_due(events, queue, now=lambda: now[0]) == common
-    started = []
-    land_watchdog.rollup(common, popen=lambda argv, **kw: started.append((argv, kw["cwd"])))
-    (argv, cwd), = started
-    assert argv[-3:] == [str(tmp_path / "tools" / "land_rollup.py"), "apply", "--auto"] and cwd == tmp_path
 
 
 def test_land_stats_shows_the_stage_times_and_how_far_behind_main_a_change_was_queued():
@@ -139,5 +113,6 @@ def test_land_async_also_takes_the_mixed_words_in_equals_form(monkeypatch):
     import land_async
     seen = []
     monkeypatch.setattr(land_async.subprocess, "call", lambda argv, **k: seen.append(argv) or 1)
+    monkeypatch.setattr(land_async, "too_big", lambda cwd: None)  # the size gate has its own test
     assert land_async.main(["--mixed=user said so", "--tests", "auto"]) == 1
     assert seen[0][-2:] == ["--precheck", "--mixed=user said so"]

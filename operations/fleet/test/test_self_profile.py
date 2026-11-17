@@ -7,8 +7,8 @@ import threading
 from test_password_session import (
     CHANGE, COOKIE, ORIGIN, TOKEN, TYPED, _accounts, _app, _bootstrap, _client, _login,
 )
-from fleet.server.password_session import PasswordSessions
-from fleet.server import password_session as session_module
+from rosy_account.password_session import PasswordSessions
+from rosy_account import password_session as session_module
 
 PROFILE = "/api/fleet/auth/profile"
 NEW_PASSWORD = "correct horse battery staple"

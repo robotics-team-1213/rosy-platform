@@ -124,6 +124,19 @@ def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeyp
         (expected[rows[i]["branch"]], rows[i]["ticket"]) for i in (0, 2)]
 
 
+def test_build_merges_a_member_whose_snapshot_branch_is_gone_from_its_recorded_commit(repo):
+    main, snapshot = repo
+    rows = [snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"}),
+            snapshot("fix/c", {"pkg/c.py": "z = 2\n"})]
+    rows[1]["candidate"] = git(main, "rev-parse", rows[1]["branch"])
+    for row in rows[1:]:  # b keeps its recorded commit, c has none: left out, never a crash
+        git(main, "worktree", "remove", "--force", row["worktree"])
+        git(main, "branch", "-D", row["branch"])
+    log = land_rollup.land_async.holder(main) / "land-fix-land-rollup-y.log"
+    _, merged = land_rollup.build(main, rows, NOW, start=lambda *a: ("land/fix/land-rollup-y", log))
+    assert [r["branch"] for r in merged] == ["land/fix/a", "land/fix/b"]
+
+
 def test_build_rejects_duplicate_branches_from_legacy_queue_rows(repo):
     main, snapshot = repo
     row = snapshot("fix/a", {"pkg/a.py": "x = 2\n"})
@@ -182,7 +195,7 @@ def test_a_failed_rollup_splits_in_halves_or_sends_members_back_alone(tmp_path, 
     (holder / "land-r.log").write_text(log)
     monkeypatch.setattr(land_rollup.land_async, "holder", lambda repo: holder)
     seen = land_rollup.split(tmp_path, "land-r", NOW, builder=lambda repo, half, now: [m["branch"] for m in half],
-                             resumer=lambda m: [m["branch"]])
+                             resumer=lambda m: [m["branch"]], bisect=True)
     assert seen == groups
 
 
@@ -258,3 +271,282 @@ def test_a_rollup_whose_full_has_not_started_rerolls_with_new_waiters(repo, monk
     marker.unlink()
     land_rollup.roll(main, holder.parent / "q", NOW, ["apply"])
     assert stopped == [8] and not marker.exists(), "the old rollup keeps landing b"
+
+
+def test_a_stop_without_a_new_failure_requeues_members_instead_of_halves(tmp_path, monkeypatch):
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    (holder / "land-r.members").write_text(json.dumps([{"branch": n, "worktree": n} for n in "abc"]))
+    (holder / "land-r.log").write_text("[remote-pytest] serial: browser job")  # killed: no verdict
+    monkeypatch.setattr(land_rollup.land_async, "holder", lambda repo: holder)
+    kw = dict(builder=lambda repo, half, now: pytest.fail("no halves"), resumer=lambda m: m["branch"])
+    assert land_rollup.split(tmp_path, "land-r", NOW, **kw) == ["a", "b", "c"]
+
+
+def test_one_rollup_lane_blocks_a_new_build_until_it_is_stuck_or_not_yet_checking(repo, monkeypatch):
+    main, snapshot = repo
+    qdir = land_rollup.land_async.holder(main).parent / "q"
+    name = "land/fix/land-rollup-20261117000000-20261117000000"
+    plain = {**snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), "ticket": "t1"}
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    monkeypatch.setattr(land_rollup, "build", lambda *a, **k: pytest.fail("a rollup is in flight"))
+    monkeypatch.setattr(land_rollup, "plan", lambda r, rows, tier_of=None: rows)
+    for status, extra, age in (("turn", {}, 60), ("waiting", {}, 60), ("preparing", {}, 60)):
+        row = dict(branch=name, status=status, host="h", ticket="t0", age=age, **extra)
+        monkeypatch.setattr(land_rollup.land_queue, "ahead", lambda q, t, row=row: [row, plain])
+        assert land_rollup.roll(main, qdir, NOW, ["apply"]) == 0
+    live = [dict(branch=name, status="preparing", host="h", full_wait=True, age=60),
+            dict(branch=name, status="pending", host="h", age=60),
+            dict(branch=name, status="turn", host="other", age=60),
+            dict(branch=name, status="turn", host="h", age=land_rollup.ROLLUP_LANE_S + 1)]
+    assert land_rollup.in_flight(live, "h") == []
+    assert len(land_rollup.in_flight([{**live[3], "age": 60}], "h")) == 1
+
+
+def test_the_halves_of_a_split_get_distinct_build_stamps(tmp_path, monkeypatch):
+    """11-14 04:50: both halves got the same stamp; the second build found its branch taken and five members waited."""
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    (holder / "land-r.members").write_text(json.dumps([{"branch": n, "worktree": n} for n in "abcd"]))
+    (holder / "land-r.log").write_text("[land] STOP: NEW failure in pkg/test")
+    monkeypatch.setattr(land_rollup.land_async, "holder", lambda repo: holder)
+    stamps = land_rollup.split(tmp_path, "land-r", NOW, builder=lambda repo, half, now: f"{now:%Y%m%d%H%M%S}",
+                               resumer=lambda m: None, bisect=True)
+    assert len(stamps) == 2 and stamps[0] != stamps[1]
+
+
+def test_remote_runs_extracts_and_deduplicates_from_log_and_resume_log(tmp_path):
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    (holder / "land-fix-a.log").write_text(
+        "[remote-pytest] deadbeef12 on model-pc (~/rosy-test/runs/land-1-aaa111)\n"
+        "[remote-pytest] bad line without path\n"
+        "[remote-pytest] deadbeef12 on ai-pc (~/rosy-test/runs/land-1-bbb222)\n",
+        encoding="utf-8",
+    )
+    (holder / "land-fix-a.resume.log").write_text(
+        "[remote-pytest] deadbeef12 on model-pc (~/rosy-test/runs/land-1-aaa111)\n"
+        "[remote-pytest] cafe567890 on model-pc (~/rosy-test/runs/land-2-ccc333)\n",
+        encoding="utf-8",
+    )
+    rollup_name = "land/fix/land-rollup-20261109000000-20261109000000"
+    (holder / (rollup_name.replace("/", "-") + ".log")).write_text(
+        "[remote-pytest] 0123456789 on rosy@ai-pc (~/rosy-test/runs/land-1-ddd444)\n"
+        "[remote-pytest] 0123456789 on rosy@ai-pc (~/rosy-test/runs/land-1-ddd444)\n",
+        encoding="utf-8",
+    )
+    rows = [
+        {"branch": "land/fix/a", "worktree": str(holder / "land-fix-a")},
+        {"branch": "land/fix/b", "worktree": str(holder / "land-fix-b"), "rollup": rollup_name},
+        {"branch": "land/fix/c", "worktree": str(holder / "land-fix-c"), "rollup": rollup_name},
+        {"branch": "land/fix/missing", "worktree": str(holder / "land-fix-missing")},
+    ]
+    assert land_rollup.remote_runs(holder, rows) == [
+        ("model-pc", "land-1-aaa111"),
+        ("ai-pc", "land-1-bbb222"),
+        ("model-pc", "land-2-ccc333"),
+        ("rosy@ai-pc", "land-1-ddd444"),
+    ]
+
+
+def test_stop_remote_invokes_ssh_and_survives_unreachable_hosts(tmp_path, monkeypatch):
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    (holder / "land-fix-a.log").write_text(
+        "[remote-pytest] deadbeef12 on dead-host (~/rosy-test/runs/land-1-111111)\n"
+        "[remote-pytest] deadbeef12 on err-host (~/rosy-test/runs/land-1-222222)\n"
+        "[remote-pytest] deadbeef12 on live-host (~/rosy-test/runs/land-1-333333)\n",
+        encoding="utf-8",
+    )
+    rows = [{"branch": "land/fix/a", "worktree": str(holder / "land-fix-a")}]
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append((cmd, kw))
+        host = cmd[-5]  # [ssh, -o..., host, bash, -s, --, run_name]
+        if host == "dead-host":
+            raise subprocess.TimeoutExpired(cmd, 10)
+        if host == "err-host":
+            raise OSError("ssh unavailable")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(land_rollup.subprocess, "run", fake_run)
+    assert land_rollup.stop_remote(holder, rows) == 1
+    assert [c[0][-5] for c in calls] == ["dead-host", "err-host", "live-host"]
+    assert [c[0][-1] for c in calls] == ["land-1-111111", "land-1-222222", "land-1-333333"]
+    cmd, kw = calls[2]
+    assert cmd[:9] == ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                       "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2"]
+    assert cmd[10:] == ["bash", "-s", "--", "land-1-333333"]
+    assert kw["timeout"] == 10
+    script = kw["input"].decode("utf-8")
+    assert "\r" not in script  # Windows text=True would turn \n into \r\n and break remote bash
+    assert '[ -d ~/rosy-test/runs/"$1".jobs ] || exit 0' in script
+    assert 'kill -TERM -- "-$p"' in script
+    for pat in ('~/rosy-jobs/"$1".lock', '~/rosy-jobs/"$1".*.lock', '~/rosy-jobs/"$1".resv'):
+        assert pat in script
+
+
+def test_roll_calls_stop_remote_only_for_stopped_members(repo, monkeypatch):
+    main, snapshot = repo
+    holder = land_rollup.land_async.holder(main)
+    a, b = snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"})
+    old = snapshot("fix/land-rollup-20261109000000-20261109000000", {"pkg/r.py": "r = 1\n"})
+    old.update(status="preparing", full_wait=True, ticket="t-old", pid=7)
+    (holder / (old["branch"].replace("/", "-") + ".members")).write_text(json.dumps(
+        [{"branch": m["branch"], "worktree": m["worktree"], "ticket": "gone"} for m in (a, b)]))
+    (holder / (old["branch"].replace("/", "-") + ".log")).write_text(
+        "[remote-pytest] deadbeef12 on model-pc (~/rosy-test/runs/land-1-old111)\n", encoding="utf-8")
+    new = {**snapshot("fix/c", {"pkg/c.py": "z = 2\n"}), "status": "preparing", "full_wait": True,
+           "ticket": "t-new", "pid": 8}
+    (holder / (Path(new["worktree"]).name + ".log")).write_text(
+        "[remote-pytest] cafe123456 on ai-pc (~/rosy-test/runs/land-1-new222)\n", encoding="utf-8")
+
+    stopped, ssh_runs, events = [], [], []
+    real_run = subprocess.run
+
+    def fake_run(cmd, *args, **kw):
+        if cmd and cmd[0] == "ssh":
+            ssh_runs.append((cmd[-5], cmd[-1]))
+            events.append("ssh")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return real_run(cmd, *args, **kw)
+
+    def fake_stop(pid):
+        stopped.append(pid)
+        events.append("stop")
+
+    monkeypatch.setattr(land_rollup.subprocess, "run", fake_run)
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    monkeypatch.setattr(land_rollup, "plan", lambda repo_, rows, tier_of=None: rows)
+    monkeypatch.setattr(land_rollup, "adopted", lambda qdir, first: True)
+    monkeypatch.setattr(land_rollup, "stop", fake_stop)
+    monkeypatch.setattr(land_rollup.land_queue, "ahead", lambda qdir, t: [old, new])
+
+    # Partial merge: b clashed, so old keeps landing b and only new is stopped.
+    monkeypatch.setattr(land_rollup, "build", lambda repo_, members, now, urgent="": (
+        "land/fix/land-rollup-y", [m for m in members if m["branch"] != "land/fix/b"]))
+    assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
+    assert stopped == [8]
+    assert ssh_runs == [("ai-pc", "land-1-new222")]
+    assert events == ["ssh", "stop"]
+
+    # Full merge: both old and new are stopped, and old's remote run is stopped once before stop(pid).
+    stopped.clear()
+    ssh_runs.clear()
+    events.clear()
+    monkeypatch.setattr(land_rollup, "build", lambda repo_, members, now, urgent="": (
+        "land/fix/land-rollup-x", members))
+    assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
+    assert sorted(stopped) == [7, 8]
+    assert ssh_runs == [("model-pc", "land-1-old111"), ("ai-pc", "land-1-new222")]
+    assert events == ["ssh", "ssh", "stop", "stop"]
+
+    # Unreachable SSH host never breaks roll().
+    def failing_run(cmd, *args, **kw):
+        if cmd and cmd[0] == "ssh":
+            raise subprocess.TimeoutExpired(cmd, 10)
+        return real_run(cmd, *args, **kw)
+
+    monkeypatch.setattr(land_rollup.subprocess, "run", failing_run)
+    assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
+
+
+def test_candidates_deduplicate_topics_and_unrolled_keeps_carrier_ticket(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    holder = repo / ".git" / "rosy-land-wt"
+    (holder / "r").mkdir(parents=True)
+    (holder / "m1").mkdir()
+    (holder / "m2").mkdir()
+    (holder / "land-fix-land-rollup-20261116000000-20261116000000.members").write_text(json.dumps([
+        {"branch": "land/fix/a-20261116000000", "worktree": str(holder / "m1"), "candidate": "c1", "ticket": "t-m1"},
+        {"branch": "land/fix/b-20261116000000", "worktree": str(holder / "m2"), "candidate": "c2", "ticket": "t-m2"},
+    ]))
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    monkeypatch.setattr(land_rollup.land_async, "holder", lambda r: holder)
+    monkeypatch.setattr(land_rollup, "git", lambda tree, *a, **kw: subprocess.CompletedProcess(a, 0, "abc\n", ""))
+    rows = [
+        {"branch": "land/fix/x-20261116000000", "worktree": str(holder / "m1"), "status": "pending", "host": "h",
+         "ticket": "t-old"},
+        {"branch": "land/fix/x-20261116000001", "worktree": str(holder / "m2"), "status": "pending", "host": "h",
+         "ticket": "t-new"},
+        {"branch": "land/fix/land-rollup-20261116000000-20261116000000", "worktree": str(holder / "r"),
+         "status": "pending", "host": "h", "ticket": "t-roll"},
+    ]
+    found = land_rollup.candidates(rows, repo, mixed=True)
+    assert [r["branch"] for r in found] == [
+        "land/fix/x-20261116000001", "land/fix/a-20261116000000", "land/fix/b-20261116000000"]
+    assert found[1]["ticket"] == "t-roll" and found[1]["member_ticket"] == "t-m1"
+    assert land_rollup.member_metadata(holder, found[1])["ticket"] == "t-m1"
+
+
+def test_roll_prefers_affected_lane_and_ignores_nonpositive_pid(tmp_path, monkeypatch):
+    land_rollup.stop(0)
+    land_rollup.stop(-1)
+    repo = tmp_path / "repo"
+    holder = repo / ".git" / "rosy-land-wt"
+    for name in ("a1", "a2", "f1"):
+        (holder / name).mkdir(parents=True)
+    rows = [
+        {"branch": "land/fix/a1-20261116000001", "worktree": str(holder / "a1"), "status": "pending", "host": "h",
+         "pid": 0, "ticket": "t1"},
+        {"branch": "land/fix/f1-20261116000002", "worktree": str(holder / "f1"), "status": "pending", "host": "h",
+         "pid": 100, "ticket": "t2"},
+        {"branch": "land/fix/a2-20261116000003", "worktree": str(holder / "a2"), "status": "pending", "host": "h",
+         "pid": 200, "ticket": "t3"},
+    ]
+    tiers = {rows[0]["branch"]: "affected", rows[1]["branch"]: "full", rows[2]["branch"]: "affected"}
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    monkeypatch.setattr(land_rollup.land_queue, "ahead", lambda q, t: rows)
+    monkeypatch.setattr(land_rollup, "candidates", lambda r, p: r)
+    seen = []
+
+    def fake_plan(r, candidate_rows, tier_of=None):
+        got = [row for row in candidate_rows if tier_of(r, row["branch"]) is not None]
+        seen.append([row["branch"] for row in got])
+        return got
+
+    monkeypatch.setattr(land_rollup, "plan", fake_plan)
+    monkeypatch.setattr(land_rollup, "tier", lambda r, b: tiers[b])
+    monkeypatch.setattr(land_rollup, "affected", lambda r, b: "affected" if tiers[b] == "affected" else None)
+    monkeypatch.setattr(land_rollup, "MIXED", True)
+    assert land_rollup.roll(repo, holder.parent / "q", NOW, []) == 0
+    assert seen == [[rows[0]["branch"], rows[2]["branch"]]]
+
+
+def test_build_adopts_unrolled_carrier_ticket_while_preserving_member_ticket(repo, monkeypatch):
+    main, snapshot = repo
+    holder = land_rollup.land_async.holder(main)
+    qdir = land_rollup.land_queue.queue_dir(main)
+    qdir.mkdir(parents=True, exist_ok=True)
+    carrier = qdir / "01794700-1.json"
+    carrier.write_text(json.dumps({"pid": 1}), encoding="utf-8")
+    a = snapshot("fix/a", {"pkg/a.py": "x = 2\n"})
+    b = snapshot("fix/b", {"pkg/b.py": "y = 2\n"})
+    old = snapshot("fix/land-rollup-20261116000000-20261116000000", {"pkg/r.py": "r = 1\n"})
+    old.update(status="preparing", full_wait=True, ticket=carrier.name, pid=7)
+    (holder / (old["branch"].replace("/", "-") + ".members")).write_text(json.dumps([
+        {"branch": a["branch"], "worktree": a["worktree"], "ticket": "t-m1"},
+        {"branch": b["branch"], "worktree": b["worktree"], "ticket": "t-m2"},
+    ]))
+    c = {**snapshot("fix/c", {"pkg/c.py": "z = 2\n"}), "status": "preparing", "full_wait": True,
+         "ticket": "t-new", "pid": 8}
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    members = land_rollup.candidates([old, c], main, host="h", mixed=True)
+    assert len(members) == 3 and members[0]["ticket"] == carrier.name and members[0]["member_ticket"] == "t-m1"
+    monkeypatch.setattr(land_rollup.land, "safety_review", lambda *a, **kw: None)
+    monkeypatch.setattr(land_rollup.land, "size_check", lambda *a, **kw: None)
+    monkeypatch.setattr(land_rollup.land, "step", lambda *a, **kw: None)
+    seen_env, log = [], holder / "land-rollup-test.log"
+
+    def fake_start(wt, argv, now, detach):
+        seen_env.append(land_rollup.os.environ.get(land_rollup.land_queue.TICKET_ENV))
+        return "land/fix/land-rollup-next", log
+
+    land_rollup.build(main, members, NOW, start=fake_start)
+    assert seen_env == [str(carrier)]
+    recorded = json.loads((log.parent / (log.name.removesuffix(".log") + ".members")).read_text(encoding="utf-8"))
+    assert [m["ticket"] for m in recorded] == ["t-m1", "t-m2", "t-new"]
+
+
+

@@ -1,9 +1,6 @@
 """Execute one live, measured escape proposal within the existing mission."""
 import math
-
-
-def _number(value):
-    return type(value) in (int,float) and math.isfinite(value)
+from core_common.calibration_store import _real as _number
 
 
 class ExecutionEscape:

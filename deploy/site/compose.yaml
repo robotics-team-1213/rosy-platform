@@ -105,6 +105,8 @@ services:
       ROSY_DEPLOYMENT: "${ROSY_DEPLOYMENT:-}"
       ROSY_ACCOUNT_CONFIG: ""
       ROSY_FLEET_ACCOUNT_CLIENT_CONFIG: "${ROSY_FLEET_ACCOUNT_CLIENT_CONFIG:-}"
+      # D-992: e.g. /run/rosy-fleet-account/link.json; empty leaves robots' Account link off.
+      ROSY_ACCOUNT_LINK_CONFIG: "${ROSY_ACCOUNT_LINK_CONFIG:-}"
       # D-801: e.g. /run/rosy-fleet-media/fleet-media.json; empty keeps site robot media grants off.
       ROSY_FLEET_MEDIA_CONFIG: "${ROSY_FLEET_MEDIA_CONFIG:-}"
       ROSY_LEARNING_APPS_CONFIG: "${ROSY_LEARNING_APPS_CONFIG:-}"

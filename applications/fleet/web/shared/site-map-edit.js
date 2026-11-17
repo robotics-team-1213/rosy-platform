@@ -41,16 +41,41 @@ export function appendSurveyElement(map, item) {
     const [x, y] = geometry[0];
     next.places.push({id, name: name.trim(), kind, x, y, ...(Number.isFinite(item.yaw) ? {yaw: item.yaw} : {})});
   } else if (kind === 'road') {
-    const start = next.places.find(p => p.id === item.from), end = next.places.find(p => p.id === item.to);
-    if (!start || !end || start.id === end.id || geometry.length < 2)
-      throw new Error('서로 다른 시작·끝 장소와 도로 선을 지정하세요');
+    if (geometry.length < 2) throw new Error('도로 선은 두 점 이상 찍으세요');
+    const nearestPlace = (pt, excludeId = null) => {
+      let best = null, bestDist = 0.18;
+      for (const p of next.places) {
+        if (p.id === excludeId) continue;
+        const d = Math.hypot(p.x - pt[0], p.y - pt[1]);
+        if (d <= bestDist) { bestDist = d; best = p; }
+      }
+      return best;
+    };
+    const makeJunction = (pt, label) => {
+      let n = 1;
+      while (next.places.some(p => p.id === `P_draw_${n}`)) n++;
+      const pid = `P_draw_${n}`;
+      const place = {id: pid, name: `${label} ${n}`, kind: 'junction',
+        x: Math.round(pt[0] * 1000) / 1000, y: Math.round(pt[1] * 1000) / 1000};
+      next.places.push(place);
+      return place;
+    };
+    let start = next.places.find(p => p.id === item.from);
+    let end = next.places.find(p => p.id === item.to);
+    if (!start || (end && start.id === end.id)) {
+      start = nearestPlace(geometry[0], end?.id) || makeJunction(geometry[0], '교차점');
+    }
+    if (!end || start.id === end.id) {
+      end = nearestPlace(geometry.at(-1), start.id) || makeJunction(geometry.at(-1), '교차점');
+    }
     if (!(item.width_m > 0 && item.width_m <= 10) || !Number.isFinite(item.width_m)
         || !['one_way', 'two_way'].includes(item.direction)) throw new Error('차로 폭과 통행 방향을 확인하세요');
-    if (Math.hypot(geometry[0][0] - start.x, geometry[0][1] - start.y) > .05
-        || Math.hypot(geometry.at(-1)[0] - end.x, geometry.at(-1)[1] - end.y) > .05)
-      throw new Error('도로 선의 양 끝을 지정한 장소에 맞추세요');
-    next.edges.push({id, ...(name.trim() ? {name: name.trim()} : {}), from: start.id, to: end.id, polyline: [[start.x, start.y], ...geometry.slice(1, -1), [end.x, end.y]],
-      width_m: item.width_m, direction: item.direction, drive_mode: 'lane', speed_cap_mps: .03,
+    const startSnap = Math.hypot(geometry[0][0] - start.x, geometry[0][1] - start.y) <= 0.15;
+    const endSnap = Math.hypot(geometry.at(-1)[0] - end.x, geometry.at(-1)[1] - end.y) <= 0.15;
+    const mid = geometry.slice(startSnap ? 1 : 0, endSnap ? -1 : geometry.length).slice(0, 30);
+    const poly = [[start.x, start.y], ...mid, [end.x, end.y]];
+    next.edges.push({id, ...(name.trim() ? {name: name.trim()} : {}), from: start.id, to: end.id, polyline: poly,
+      width_m: item.width_m, direction: item.direction, drive_mode: 'lane', speed_cap_mps: .2,
       evidence: {source: 'operator', status: 'observed', reference_revision: next.survey.revision, note: ''}});
   } else if (['traffic_signal', 'stop_line', 'landmark', 'exclusion'].includes(kind)) {
     const required = {traffic_signal: 1, stop_line: 2, landmark: 1}[kind];

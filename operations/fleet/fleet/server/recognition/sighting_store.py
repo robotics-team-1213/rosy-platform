@@ -39,6 +39,8 @@ class SightingStore:
                 );
                 CREATE INDEX IF NOT EXISTS sighting_audit_robot_captured
                     ON sighting_audit(robot_id, captured_at);
+                CREATE INDEX IF NOT EXISTS sighting_audit_received
+                    ON sighting_audit(received_at);
                 PRAGMA user_version=1;
                 """
             )

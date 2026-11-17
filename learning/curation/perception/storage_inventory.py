@@ -77,10 +77,16 @@ class StorageInventory:
         self.fingerprint = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
         self.lock, self.cached, self.cached_at = threading.RLock(), None, 0
         self.max_entries, self.scan_seconds = 100000, 5
-        with sqlite3.connect(self.db) as conn:
+        with self._connect() as conn:
             conn.execute('''CREATE TABLE IF NOT EXISTS storage_samples
                 (project TEXT, config TEXT, root TEXT, day INTEGER, measured REAL, bytes INTEGER,
                  PRIMARY KEY(project,config,root,day))''')
+
+    def _connect(self):
+        conn = sqlite3.connect(self.db, timeout=30)
+        for p in ('journal_mode=WAL', 'synchronous=NORMAL', 'foreign_keys=ON', 'busy_timeout=5000'):
+            conn.execute(f'PRAGMA {p}')
+        return conn
 
     def _scan(self, definition, budget):
         row = {key: definition[key] for key in ('id', 'label', 'role')}
@@ -134,7 +140,7 @@ class StorageInventory:
                 return copy.deepcopy(self.cached)
             budget = [0, time.monotonic() + self.scan_seconds]
             rows = [self._scan(root, budget) for root in self.config['roots']]
-            with sqlite3.connect(self.db) as conn:
+            with self._connect() as conn:
                 for row in rows:
                     if row['status'] != 'ready': continue
                     conn.execute('INSERT OR REPLACE INTO storage_samples VALUES(?,?,?,?,?,?)',

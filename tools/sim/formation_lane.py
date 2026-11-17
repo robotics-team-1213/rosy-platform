@@ -223,6 +223,119 @@ async def goal(leader, pose, mark) -> str:
         await asyncio.sleep(0.5)
 
 
+#: Run 8 (2026-11-09) left one question open: the follower left the leader's trail (0.70 m off, then
+#: `trail_lost`) and nobody recorded which frame lied — the leader's relayed map pose (AMCL jump the
+#: trail cannot bridge) or the follower's own map pose. These recorders answer it on the next run.
+SWARM_POLL_S = 0.5
+
+
+async def record_leader_pose(endpoint, fh, mark) -> None:
+    """The leader's own pose socket — exactly the stream the relay forwards to the followers."""
+    import websockets
+    url = endpoint.base_url.replace('http', 'ws', 1) + f'/ws/swarm/pose?token={endpoint.token}'
+    try:
+        async with websockets.connect(url) as ws:
+            while True:
+                p = json.loads(await ws.recv()).get('payload', {})
+                fh.write(json.dumps({'t': time.monotonic(), 'kind': 'leader_pose', 'x': p.get('x'), 'y': p.get('y'),
+                                     'yaw': p.get('yaw'), 'frame': p.get('frame')}) + '\n')
+                fh.flush()
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - recording must never stop the run
+        mark('leader_pose_recorder_ended', repr(exc)[:160])
+
+
+async def record_followers(clients, follower_ids, fh) -> None:
+    """Each follower's own view every SWARM_POLL_S: trail progress, hold reason, stream age."""
+    while True:
+        for rid in follower_ids:
+            try:
+                s = await clients[rid].swarm_state()
+                row = {'t': time.monotonic(), 'kind': 'swarm', 'robot': rid, 'holding': s.get('holding'),
+                       'stream_age_s': s.get('stream_age_s'), 'trail': s.get('trail')}
+            except Exception as exc:  # noqa: BLE001 - keep polling the others
+                row = {'t': time.monotonic(), 'kind': 'swarm', 'robot': rid, 'error': repr(exc)[:160]}
+            fh.write(json.dumps(row) + '\n')
+        fh.flush()
+        await asyncio.sleep(SWARM_POLL_S)
+
+
+def _p95(values: list[float]):
+    if not values:
+        return None
+    ordered = sorted(abs(v) for v in values)
+    return round(ordered[int(0.95 * (len(ordered) - 1))], 3)
+
+
+def analyze_swarm(swarm_rows: list[dict], truth, leader: str, followers: list[str], spacing: float) -> dict:
+    """Pure: the follower's own trail view against Gazebo truth, and the leader stream's jumps.
+
+    `frame_disagree` is the same physical gap measured twice — once from the follower's swarm/state
+    (`leader_s - progress`) and once from truth (leader arc minus follower arc). It is zero when both
+    robots' map poses agree with truth; a big value names the frame that lied, which is the run-8
+    question. `leader_jump_excess` over ~0.3 m between neighbouring samples is the relayed stream
+    jump the trail refuses (`reference_stream` bridge bound).
+    """
+    lead = truth.rows[leader]
+    path: list = []
+    for r in lead:
+        if not path or math.dist((r[2], r[3]), path[-1]) > 0.005:
+            path.append((r[2], r[3]))
+    lead_arc = [_project(path, r[2], r[3])[0] for r in lead]
+    out: dict = {}
+    for rank, rid in enumerate(followers, start=1):
+        own, disagree, holds, ages, holding = [], [], {}, [], 0
+        for row in swarm_rows:
+            trail = row.get('trail') if row.get('kind') == 'swarm' and row.get('robot') == rid else None
+            if not isinstance(trail, dict) or trail.get('leader_s') is None or trail.get('progress') is None:
+                if row.get('kind') == 'swarm' and row.get('robot') == rid:
+                    if row.get('holding'):
+                        holding += 1
+                    if isinstance(row.get('stream_age_s'), (int, float)):
+                        ages.append(row['stream_age_s'])
+                    if row.get('error'):
+                        holds['poll_error'] = holds.get('poll_error', 0) + 1
+                continue
+            i = min(range(len(lead)), key=lambda k: abs(lead[k][0] - row['t']))
+            near = min(truth.rows[rid], key=lambda r: abs(r[0] - row['t']))
+            s = _project(path, near[2], near[3])[0]
+            if s < 0.02 or s > lead_arc[-1] - 0.02:
+                continue  # spawned behind the leader's first recorded point: truth cannot see the gap yet
+            own_err = trail['leader_s'] - trail['progress'] - spacing * rank
+            truth_err = lead_arc[i] - s - spacing * rank
+            own.append(own_err)
+            disagree.append(own_err - truth_err)
+            if row.get('holding'):
+                holding += 1
+            if isinstance(row.get('stream_age_s'), (int, float)):
+                ages.append(row['stream_age_s'])
+            reason = trail.get('hold_reason')
+            if reason:
+                holds[reason] = holds.get(reason, 0) + 1
+        out[rid] = {'samples': len(own), 'own_gap_p95_abs_m': _p95(own), 'own_gap_max_abs_m':
+                    round(max((abs(v) for v in own), default=0.0), 3),
+                    'frame_disagree_p95_abs_m': _p95(disagree), 'frame_disagree_max_abs_m':
+                    round(max((abs(v) for v in disagree), default=0.0), 3),
+                    'holding_samples': holding, 'stream_age_max_s': round(max(ages, default=0.0), 3),
+                    'hold_reasons': holds}
+    poses = [r for r in swarm_rows if r.get('kind') == 'leader_pose'
+             and isinstance(r.get('x'), (int, float)) and isinstance(r.get('y'), (int, float))]
+    excesses = []
+    for a, b in zip(poses, poses[1:]):
+        dt = b['t'] - a['t']
+        if not 0.0 < dt <= 1.5:
+            continue
+        ta = min(lead, key=lambda r: abs(r[0] - a['t']), default=None)
+        tb = min(lead, key=lambda r: abs(r[0] - b['t']), default=None)
+        if ta is None or tb is None:
+            continue
+        truth_step = math.dist(ta[2:4], tb[2:4])
+        excesses.append(math.dist((a['x'], a['y']), (b['x'], b['y'])) - truth_step)
+    return {'followers': out, 'leader_pose': {'samples': len(poses), 'jump_excess_max_m':
+            round(max(excesses, default=0.0), 3), 'jump_excess_over_0p3': sum(1 for e in excesses if e > 0.3)}}
+
+
 async def main_async(args) -> int:
     from fleet.bench import Formation, FormationSession, FormationSpec, HttpRobotClient, SessionState, load_robots
     out = Path(args.out)
@@ -267,7 +380,7 @@ async def main_async(args) -> int:
               'domain': reservations.ros_domain_id, 'ports': list(reservations.api_ports), 'render': args.render}
     sim = subprocess.Popen(launch, env=env, stdout=(out / 'launch.log').open('w'), stderr=subprocess.STDOUT)
     truth = Truth(names, out / 'truth.jsonl')
-    clients, session = {}, None
+    clients, session, recorders, swarm_fh = {}, None, [], None
     try:
         manifest = None
         for _ in range(int(args.boot_s)):
@@ -290,6 +403,11 @@ async def main_async(args) -> int:
         session = FormationSession(leader, followers, FormationSpec(Formation.TRAIL, spacing=args.spacing,
                                                                      max_speed=args.max_speed),
                                    member_order=names)
+        swarm_fh = (out / 'swarm.jsonl').open('w', encoding='utf-8')
+        recorders = [
+            asyncio.create_task(record_leader_pose(next(r for r in robots if r.robot_id == leader_id), swarm_fh, mark)),
+            asyncio.create_task(record_followers(clients, follower_ids, swarm_fh)),
+        ]
         await session.start()
         mark('armed', {k: vars(v) for k, v in (session.assignment or {}).items()}, state=session.state.value)
         nav = []
@@ -344,6 +462,12 @@ async def main_async(args) -> int:
                 await session.stop()
         except Exception as exc:  # noqa: BLE001
             mark('stop_failed', repr(exc)[:200])
+        for recorder in recorders:
+            recorder.cancel()
+        if recorders:
+            await asyncio.gather(*recorders, return_exceptions=True)
+        if swarm_fh is not None:
+            swarm_fh.close()
         await asyncio.sleep(1.0)
         truth.close()
         for c in clients.values():
@@ -355,6 +479,10 @@ async def main_async(args) -> int:
             sim.kill()
         events.close()
     result['score'] = score(truth, leader_id, follower_ids, args.spacing, marks)
+    swarm_rows = [json.loads(line) for line in (out / 'swarm.jsonl').read_text(encoding='utf-8').splitlines()
+                  if line.strip()]
+    result['swarm'] = analyze_swarm(swarm_rows, truth, leader_id, follower_ids, args.spacing)
+    mark('swarm', result['swarm'])
     gaps = result['score']['followers'].values()
     lost = result.get('follower_lost') or {}
     result['checks'] = {

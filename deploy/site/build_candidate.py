@@ -31,7 +31,10 @@ DEPLOY_FILES = (
     "compose.account.yaml", "Caddyfile.account",
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
+    "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
+    "rosy-pg-backup-check.service", "rosy-pg-backup-check.timer",
     "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",  # D-1001: R renews from the signed release
+    "account_login_check.py", "rosy-site-account-login-check.service", "rosy-site-account-login-check.timer",  # R logs in to every app every 30 min
     "sign_candidate.py", "verify_candidate.py",
 )
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)

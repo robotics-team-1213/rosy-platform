@@ -172,6 +172,19 @@ def test_keep_out_counts_the_elbow_capsule_not_only_the_gripper(planned):
         assert planner.body_x(frame) >= max(points[0][0], points[1][0], points[2][0]) + LINK_RADIUS_M - 1e-12
 
 
+def test_keep_out_reuses_capsules_when_only_wrist_roll_changes(monkeypatch):
+    planner = m.Planner(dict(PLAN, keep_out={"x_max_m": 0.30}))
+    frame = list(PLAN["home"]) + [PLAN["grip_open"]]
+    rolled = frame.copy()
+    rolled[4] += 10.0
+    calls = []
+    monkeypatch.setattr(planner, "body_x", lambda f: calls.append(f) or 0.20)
+    monkeypatch.setattr(planner, "travel", lambda chunks, transit: [frame, rolled])
+
+    planner.keep_out({"home": [frame, rolled]})
+    assert len(calls) == 1
+
+
 FAR_TRANSIT = {"shoulder_lift.pos": -15.0, "elbow_flex.pos": 5.0, "wrist_flex.pos": 46.0}
 
 
@@ -208,6 +221,17 @@ def test_a_jaw_tcp_from_the_environment_moves_the_tip_and_a_wild_one_is_refused(
     monkeypatch.setenv("ROSY_OMX_TCP_X_M", "0.3")
     with pytest.raises(SystemExit, match="jaw range"):
         m.load_kinematics(None)
+    monkeypatch.delenv("ROSY_OMX_TCP_X_M", raising=False)
+    from_plan = m.Planner(dict(PLAN, tcp_x_m=0.0885)).kin.fk(q)
+    assert abs(math.dist((stock.x, stock.y, stock.z), (from_plan.x, from_plan.y, from_plan.z)) - (0.09193 - 0.0885)) < 1e-6
+
+
+def test_descent_to_exact_workspace_floor_with_40mm_approach_does_not_underflow():
+    """2026-11-10 real2sim: 0.045 + (0.005 - 0.045) * 1.0 was 0.0049999999999999975 < workspace_min_m[2] (0.005)."""
+    pick = {"x": 0.1269, "y": -0.1082, "z": 0.005, "yaw_deg": -80.9}
+    planner = m.Planner(dict(PLAN, tcp_x_m=0.0885, approach_m=0.04, pick=pick))
+    lib = planner.library()
+    assert lib["source"]["reach"]["pick"]["approach_m"] == pytest.approx(0.04, abs=1e-3)
 
 
 @pytest.mark.parametrize("name", ["descend_guard_frac", "lift_guard_frac"])
@@ -216,3 +240,43 @@ def test_a_pace_past_the_guard_or_at_nothing_is_refused(name):
     for bad in (1.2, 0, -0.5):
         with pytest.raises(ValueError, match=name):
             m.Planner({**PLAN, name: bad}).guard_pace(name)
+
+
+def test_load_kinematics_caches_parsed_kinematics_and_deduplicates_sys_path():
+    before_len = len(sys.path)
+    kin1, _, _ = m.load_kinematics(None, 0.0885)
+    kin2, _, _ = m.load_kinematics(None, 0.0885)
+    assert kin1 is kin2
+    assert len(sys.path) <= before_len + 1
+
+
+def test_feasible_pre_filters_endpoints_and_hold_eases_gripper_smoothly():
+    planner = m.Planner(PLAN)
+    assert planner.feasible() is True
+    assert planner.feasible(pick=dict(PLAN["pick"], x=0.45, y=0.45)) is False
+    # Half-cosine gripper hold starts and ends with smaller steps than its midpoint peak
+    frames = planner.hold([0.0] * 5 + [56.0], 1.0, grip_from=56.0, grip_to=46.0)
+    steps = [abs(b[5] - a[5]) for a, b in zip([[0.0] * 5 + [56.0]] + frames, frames)]
+    assert steps[0] < max(steps) * 0.5 and steps[-1] < max(steps) * 0.5
+    assert frames[-1][5] == 46.0
+
+
+
+def test_the_park_closes_to_where_this_arms_empty_jaws_stop():
+    """2026-11-13 arm_s: empty jaws stop at 48.8; parking to 46.5 read as 'something in them' three times."""
+    assert m.Planner(PLAN).library()["gripper_closed"] == PLAN["grip_closed"]
+    library = m.Planner(dict(PLAN, jaw_empty_stop=49.0)).library()
+    assert library["gripper_closed"] == library["jaw_empty_stop"] == 49.0
+    assert library["chunks"]["grasp_pick"][-1][5] == PLAN["grip_closed"]  # the grasp still squeezes to the command
+
+
+def test_plan_tcp_x_m_wins_over_env_and_records_in_library(monkeypatch):
+    """D-1033: plan['tcp_x_m'] is canonical during planning even when ROSY_OMX_TCP_X_M is set for another arm."""
+    q = [0.0, -0.3, 0.4, 1.2, 0.0]
+    monkeypatch.setenv("ROSY_OMX_TCP_X_M", "0.0740")
+    explicit = m.Planner(dict(PLAN, tcp_x_m=0.0885))
+    env_only = m.load_kinematics(None)[0]
+    assert explicit.kin.fk(q).x != pytest.approx(env_only.fk(q).x, abs=1e-4)
+    assert explicit.library()["tcp_x_m"] == pytest.approx(0.0885)
+    with pytest.raises(SystemExit, match="jaw range"):
+        m.load_kinematics(None, 0.0)

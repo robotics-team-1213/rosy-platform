@@ -21,6 +21,8 @@ import numpy as np
 import cell_params as prm
 
 SCHEMA = "rosy.omx-wrist-cal.v1"
+_KERNEL_3X3 = np.ones((3, 3), np.uint8)
+_CAL_CACHE = {}  # (path, mtime_ns, size) -> parsed cal json; hook() runs for every pick
 
 
 def observe(img, hsv_min, hsv_max, params=None, near=None) -> dict:
@@ -30,48 +32,92 @@ def observe(img, hsv_min, hsv_max, params=None, near=None) -> dict:
     import cv2
 
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    mask = cv2.morphologyEx(cv2.inRange(hsv, np.array(hsv_min), np.array(hsv_max)), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
+    mask = cv2.morphologyEx(cv2.inRange(hsv, np.array(hsv_min), np.array(hsv_max)), cv2.MORPH_OPEN, _KERNEL_3X3)
+    n, labels, stats, centroids_cc = cv2.connectedComponentsWithStats(mask)
     if n < 2:
         return {"found": False}
     areas = stats[1:, cv2.CC_STAT_AREA]
     sizeable = [i + 1 for i, a in enumerate(areas) if a >= 0.2 * areas.max()]
-    centroids = {i: np.array(np.nonzero(labels == i)[::-1]).mean(axis=1) for i in sizeable}
+    centroids = {i: centroids_cc[i] for i in sizeable}
     big = (min(sizeable, key=lambda i: np.hypot(*(centroids[i] - near))) if near is not None
            else int(np.argmax(areas)) + 1)
     if big not in centroids:
-        centroids[big] = np.array(np.nonzero(labels == big)[::-1]).mean(axis=1)
-    pts = np.column_stack(np.nonzero(labels == big))[:, ::-1].astype(np.float32)
-    (_, _), (w, h), _ = cv2.minAreaRect(pts)
-    vals, vecs = np.linalg.eigh(np.cov((pts - pts.mean(axis=0)).T))  # long axis: the principal direction
-    long_axis = vecs[:, int(np.argmax(vals))]
+        centroids[big] = centroids_cc[big]
     x, y, bw, bh = (int(v) for v in stats[big, :4])
+    sub_y, sub_x = np.nonzero(labels[y:y + bh, x:x + bw] == big)
+    pts = np.column_stack([sub_x + x, sub_y + y]).astype(np.float32)
+    (_, _), (w, h), _ = cv2.minAreaRect(pts)
+    d = pts - pts.mean(axis=0)
+    c_xx, c_xy, c_yy = (float(np.mean(d[:, 0] * d[:, 0])), float(np.mean(d[:, 0] * d[:, 1])), float(np.mean(d[:, 1] * d[:, 1])))
     edge = prm.get(params, "wrist.edge_margin_px")
     height, width = mask.shape
     return {"found": True, "cx": float(pts[:, 0].mean()), "cy": float(pts[:, 1].mean()), "area": int(areas[big - 1]),
-            "axis_deg": float(np.degrees(np.arctan2(long_axis[1], long_axis[0])) % 180),
+            "axis_deg": float(np.degrees(0.5 * math.atan2(2 * c_xy, c_xx - c_yy)) % 180),  # covariance's principal axis, closed form
             "fill": float(areas[big - 1] / max(w * h, 1.0)),
             "blobs": 1 + sum(1 for i in sizeable if i != big and np.hypot(*(centroids[i] - centroids[big])) <= 1.2 * max(bw, bh)),
             "cut": x <= edge or y <= edge or x + bw >= width - edge or y + bh >= height - edge}
 
 
-def fit(xy_mm, uv_px, params=None) -> dict:
-    """Least squares [u, v] = A [x, y] + b over the offset hovers; J = A^-1 maps a pixel shift to arm mm.
-    A poor fit or a near-singular A is refused (nothing is saved from it)."""
-    xy, uv = np.asarray(xy_mm, float), np.asarray(uv_px, float)
+def _fit_once(xy: np.ndarray, uv: np.ndarray):
     X = np.column_stack([xy, np.ones(len(xy))])
     coef, *_ = np.linalg.lstsq(X, uv, rcond=None)
     A, b = coef[:2].T, coef[2]
-    rms = float(np.sqrt(np.mean(np.sum((X @ coef - uv) ** 2, axis=1))))
+    res = X @ coef - uv
+    rms = float(np.sqrt(np.mean(np.sum(res ** 2, axis=1))))
     cond = float(np.linalg.cond(A))
-    if rms > prm.get(params, "wrist.fit_rms_max_px") or not math.isfinite(cond) or cond > 20:
+    return X, A, b, res, rms, cond
+
+
+def fit(xy_mm, uv_px, params=None) -> dict:
+    """Least squares [u, v] = A [x, y] + b over the offset hovers; J = A^-1 maps a pixel shift to arm mm.
+    A poor fit or a near-singular A is refused (with 1-outlier LOO deletion rescue when >=8 hovers exist)."""
+    xy, uv = np.asarray(xy_mm, float), np.asarray(uv_px, float)
+    max_rms = float(prm.get(params, "wrist.fit_rms_max_px"))
+    X, A, b, res, rms, cond = _fit_once(xy, uv)
+    dropped = None
+    if (rms > max_rms or cond > 20) and len(xy) >= 8:
+        try:
+            h = np.clip(np.einsum("ij,jk,ik->i", X, np.linalg.inv(X.T @ X), X), 0.0, 0.9)
+            r_del = np.hypot(res[:, 0], res[:, 1]) / (1.0 - h)
+            k = int(np.argmax(r_del))
+            med = float(np.median(r_del))
+            if r_del[k] > max(2.5 * med, max_rms):
+                mask = np.arange(len(xy)) != k
+                _, A2, b2, _, rms2, cond2 = _fit_once(xy[mask], uv[mask])
+                if rms2 <= min(max_rms, 0.5 * rms) and math.isfinite(cond2) and cond2 <= 20:
+                    A, b, rms, cond, dropped = A2, b2, rms2, cond2, k
+        except np.linalg.LinAlgError:
+            pass
+    if rms > max_rms or not math.isfinite(cond) or cond > 20:
         raise ValueError(f"wrist fit refused: rms {rms:.1f} px, cond {cond:.1f}")
-    return {"A": A.tolist(), "b": b.tolist(), "J": np.linalg.inv(A).tolist(), "rms_px": round(rms, 2), "cond": round(cond, 2)}
+    return {"A": A.tolist(), "b": b.tolist(), "J": np.linalg.inv(A).tolist(), "rms_px": round(rms, 2),
+            "cond": round(cond, 2), **({"dropped_index": dropped} if dropped is not None else {})}
+
+
+def in_yaw_band(yaw_deg: float, lo: float, hi: float) -> bool:
+    """Circular membership in `[lo, hi)` (deg) so bands spanning +/-180 deg match wrapped yaws."""
+    span = float(hi) - float(lo)
+    if span <= 0:
+        span %= 360.0
+    if span >= 360.0:
+        return True
+    return 0.0 <= ((float(yaw_deg) - float(lo)) % 360.0) < span
+
+
+def bands_overlap(lo1: float, hi1: float, lo2: float, hi2: float) -> bool:
+    """True when circular intervals `[lo1, hi1)` and `[lo2, hi2)` share interior points."""
+    s1 = (float(hi1) - float(lo1)) if float(hi1) > float(lo1) else (float(hi1) - float(lo1)) % 360.0
+    s2 = (float(hi2) - float(lo2)) if float(hi2) > float(lo2) else (float(hi2) - float(lo2)) % 360.0
+    if s1 >= 360.0 or s2 >= 360.0:
+        return True
+    m1, m2 = float(lo1) + 0.5 * s1, float(lo2) + 0.5 * s2
+    diff = abs((m1 - m2 + 180.0) % 360.0 - 180.0)
+    return diff < 0.5 * (s1 + s2) - 1e-6
 
 
 def band_for(cal: dict, arm: str, yaw_deg: float):
     for band in (cal.get("arms", {}).get(arm, {}).get("bands") or []):
-        if band["yaw_lo"] <= yaw_deg < band["yaw_hi"]:
+        if in_yaw_band(yaw_deg, band["yaw_lo"], band["yaw_hi"]):
             return band
     return None
 
@@ -108,8 +154,9 @@ def judge(obs: dict, band: dict, params=None, total_mm: float = 0.0) -> dict:
 
 
 def median_view(cell, camera: str, hsv, params, frames: int = 3, near=None) -> dict:
-    """Three frames; any frame without the container makes the view not found (a hand or a shadow passing)."""
-    seen = [observe(cell.frame(camera), hsv[0], hsv[1], params, near) for _ in range(frames)]
+    """Three (or reach.samples) frames; any frame without the container makes the view not found (a hand or a shadow passing)."""
+    n_frames = max(int(frames), int(prm.get(params, "reach.samples", 1)))
+    seen = [observe(cell.frame(camera), hsv[0], hsv[1], params, near) for _ in range(n_frames)]
     if not all(s.get("found") for s in seen):
         return {"found": False}
     med = {k: float(np.median([s[k] for s in seen])) for k in ("cx", "cy", "area", "axis_deg", "fill")}
@@ -142,6 +189,18 @@ def align(cell, camera: str, band: dict, hsv, replan, params=None, emit=None) ->
             "iterations": rows}
 
 
+def _load_cal(path: Path) -> dict:
+    """The parsed cal file, {} when missing, cached by content stamp."""
+    try:
+        st = path.stat()
+    except OSError:
+        return {}
+    key = (str(path), st.st_mtime_ns, st.st_size)
+    if key not in _CAL_CACHE:
+        _CAL_CACHE[key] = json.loads(path.read_text())
+    return _CAL_CACHE[key]
+
+
 def hook(config: dict, cell, target: dict, write_library, emit=None):
     """The callable transfer_folded runs after `goto above_pick`, or None (disabled, or this arm/yaw is uncalibrated:
     the pick runs as before and the attempt row says why)."""
@@ -149,17 +208,23 @@ def hook(config: dict, cell, target: dict, write_library, emit=None):
     if not prm.get(params, "wrist.enabled") or not spec.get("cal_path"):
         return None
     path = Path(spec["cal_path"]).expanduser()
-    cal = json.loads(path.read_text()) if path.exists() else {}
+    cal = _load_cal(path)
     if cal and cal.get("schema") != SCHEMA:
         raise SystemExit(f"{path}: not a {SCHEMA} file")
     band = band_for(cal, config.get("arm_id", "arm_s"), target["pick"]["yaw_deg"])
     if band is None:
         return None
     work = Path(config["work_dir"]).expanduser()
-
-    def replan(dx_mm, dy_mm):
-        pick = dict(target["pick"], x=round(target["pick"]["x"] + dx_mm / 1000, 4), y=round(target["pick"]["y"] + dy_mm / 1000, 4))
-        return write_library(config, pick, target["place"], work / "wrist-replan.json")
-
     camera = (config.get("arms", {}).get(config.get("arm_id", "arm_s"), {}) or {}).get("wrist_camera", spec.get("camera", "wrist"))
-    return lambda: align(cell, camera, band, (spec["hsv_min"], spec["hsv_max"]), replan, params, emit)
+
+    def run():
+        base_pick = dict(target["pick"])
+
+        def replan(dx_mm, dy_mm):
+            pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))
+            target["pick"] = pick
+            return write_library(config, pick, target["place"], work / "wrist-replan.json")
+
+        return align(cell, camera, band, (spec["hsv_min"], spec["hsv_max"]), replan, params, emit)
+
+    return run

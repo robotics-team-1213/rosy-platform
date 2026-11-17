@@ -58,8 +58,8 @@ import remote_test_tools  # noqa: E402
 import host_caps, host_probe  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, current_profile, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
-from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, history,  # noqa: E402,F401
-                        small_only, stranded, upgrade_watch, wanted, workers)
+from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, order, history,  # noqa: E402,F401
+                        small_first, small_only, stranded, upgrade_watch, wanted, workers)
 
 CANCELLED = remote_job.CANCELLED
 
@@ -89,11 +89,10 @@ NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
 LIGHT_GB = {"pytest": 4}
 HEADROOM: dict[str, dict] = {}  # place(): measured free cores/GB of each placed host, for xdist_plan
 BLOCKED: set[str] = set()  # place(): reachable hosts left out for an alone job, for workers()
-SITE_RESERVE = (2, 4)
+SITE_RESERVE = (1, 2)
 SITE_CPU_QUOTA = "400%"
-# Seconds a placement reservation (~/rosy-jobs/<name>.resv) counts before the job lock replaces it:
-# pytest waits up to 600 s for the repo lock and 3600 s for a venv build; --pick gives the script 10 min.
-RESERVE_S = {"pytest": 4500, "pick": 600}
+# Seconds a placement reservation (~/rosy-jobs/<name>.resv) counts before the job lock replaces it.
+RESERVE_S = {"pytest": 900, "pick": 600}
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
@@ -214,7 +213,7 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
             BLOCKED.discard(host)
             continue
         site = host in SITES or p.get("site", False)
-        cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
+        cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - ((2 if cls == "sim" else SITE_RESERVE[0]) if site else 0)
         mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
         why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else "alone job running or waiting"
                if cls == "pytest" and p.get("pytest_blocked") else f"no {cls} capability" if not p[cls]
@@ -230,7 +229,8 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
                               "sim_held": p.get("sim_held", 0), "browser_jobs": p.get("browser_jobs", 0), "caps": p.get("caps", ())}
             ranked.append((site, mem < need_m, -min(cores / need_c, mem / need_m), i, host))
     ranked.sort()
-    return [r[-1] for r in ranked if not r[0]] or [r[-1] for r in ranked], notes
+    non_site = [r[-1] for r in ranked if not r[0]]
+    return (non_site + [r[-1] for r in ranked if r[0]] if not any(not r[0] and not r[1] for r in ranked) else non_site) or [r[-1] for r in ranked], notes
 
 
 LOCAL_REFUSED = ("[remote-pytest] {what} is removed (D-584): tests never run on the operator laptop."
@@ -313,7 +313,7 @@ def ship(repo: Path, host: str, sha: str, name: str, gb: int = NEEDS["pytest"][1
                                  + result.stderr.decode(errors="replace"))
             print(f"[remote-pytest] {host} lacks {base[:10]}; sending the full history", flush=True)
     finally:
-        git(repo, "update-ref", "-d", ref)
+        subprocess.run(["git", "-C", str(repo), "update-ref", "-d", ref], capture_output=True)  # leftover ref is harmless
 
 
 def capture(command: list[str], log: Path, cwd: Path | None = None) -> int:
@@ -350,26 +350,26 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         return []
     if stop is not None and stop.is_set():
         return [CANCELLED] * len(invocations)
-    deadline = clock() + wait
     cores = max((int(w[15:]) for inv in invocations for w in itertools.takewhile(ENV_ARG.match, inv)
                  if w.startswith("ROSY_JOB_CORES=") and w[15:].isdigit()), default=0)
     # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
-    work = Work(sorted(range(len(invocations)), key=lambda i, s=history(repo): -cost(repo, invocations[i], s)), on_done, stop=stop)
+    work = Work(sorted(range(len(invocations)), key=lambda i, s=history(repo): order(repo, invocations[i], s)), on_done, stop=stop)
     reruns = {}  # Work index -> original failure and the remaining quarantine rerun; never a completed code
-    hosts = placed_hosts("pytest", cores=cores)
+    host_probe.FULL = False; hosts = placed_hosts("pytest", cores=cores)  # FULL: only a real placement may say "full"
     wants = host_caps.needs(repo, sha, invocations)  # HOST_CAPABILITIES a test module declares
     while work.todo and not work.stop.is_set():
-        while not hosts or not host_caps.served(wants, [HEADROOM.get(h, {}) for h in hosts]):
+        deadline, hard = clock() + wait, clock() + host_probe.FULL_WAIT_S  # per placement attempt: productive host time must not eat the D-584 budget
+        while not hosts or not host_caps.served(wants, [host_caps.room(h, HEADROOM) for h in hosts]):
             if work.stop.is_set():
                 return cancelled(invocations, [work.codes.get(i) for i in range(len(invocations))])
-            if clock() + poll > deadline:
+            if clock() + poll > deadline and not (host_probe.FULL and clock() < hard):  # reachable but full keeps waiting
                 raise SystemExit(f"[remote-pytest] no test host reachable (D-584) after {wait:.0f} s;"
                                  " the tests did not run. Report them as not run; do not land or push.")
-            print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
+            print(f"[remote-pytest] {'hosts full' if host_probe.FULL else 'no test host reachable'}; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
             sleep(poll)
             hosts = placed_hosts("pytest", cores=cores)
         plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split(), BLOCKED)
-        plan = host_caps.cover(plan, hosts, wants, HEADROOM)  # workers() cuts by count, not by capability
+        plan = host_caps.cover(plan, hosts, wants, {h: host_caps.room(h, HEADROOM) for h in hosts})  # workers() cuts by count, not by capability
         if len(plan) == 1 and not work.codes and not reruns and not small_only(plan, HEADROOM):
             try:
                 codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
@@ -403,7 +403,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
             ok = list(pool.map(attempt, plan))
         while work.todo and not work.stop.is_set():
             working = [h for (h, _), good in zip(plan, ok) if good and h not in work.lost and h not in deferred]
-            host_caps.strand(work, wants, [HEADROOM.get(h, {}) for h in working])
+            host_caps.strand(work, wants, [host_caps.room(h, HEADROOM) for h in working])
             if not working:
                 if deferred:
                     hosts = [h for h in placed_hosts("pytest", cores=cores) if h not in deferred]
@@ -447,7 +447,8 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
     print(f"[remote-pytest] {sha[:10]} on {host} (~/rosy-test/runs/{name})", flush=True)
     lost = None
     try:
-        ship(repo, host, sha, name, memory_history.reserve_gb_all(memory_history.path(repo), invocations))
+        want = wanted(kind, invocations, site=bool(HEADROOM.get(host, {}).get("site")))
+        ship(repo, host, sha, name, memory_history.reserve_gb_all(memory_history.path(repo), [inv for i, inv in enumerate(invocations) if want(i)] if want else invocations))
         deps_sha, dirs = deps(repo, sha, test_tools=test_tools) if test_tools else deps(repo, sha)
         if test_tools:
             blobs = ",".join(git(repo, "rev-parse", f"{sha}:{path}")
@@ -457,10 +458,9 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         recipe = remote_test_tools.render_setup(VENV, test_tools)
         if remote(host, recipe, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"], tries=3).returncode != 0:
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
-        cpu = SITE_CPU_QUOTA if host in SITES else ""
-        k = 0  # job number on this host's run dir
-        pick = host_caps.route(wanted(kind, invocations, site=bool(HEADROOM.get(host, {}).get("site"))), HEADROOM.get(host), host_caps.needs(repo, sha, invocations))
-        take = (lambda: work.take_small(pick, host)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick, host)
+        cpu, k = SITE_CPU_QUOTA if host in SITES else "", 0  # k: job number on this host's run dir
+        pick = host_caps.route(want, host_caps.room(host, HEADROOM), host_caps.needs(repo, sha, invocations))
+        take = (lambda: work.take_small(pick, host)) if small_first(HEADROOM.get(host)) else lambda: work.take(pick, host)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)

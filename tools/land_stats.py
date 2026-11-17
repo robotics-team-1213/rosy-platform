@@ -89,6 +89,8 @@ def daily(rows: list[dict]) -> dict[str, dict]:
         if event == "turn":
             turn_at[pid] = row["t"]
             day["waits"].append(row.get("waited_s", 0) / 60)
+        elif event == "released":
+            turn_at.pop(pid, None)
         elif event in ("landed", "stop"):
             day["landed" if event == "landed" else "stopped"] += 1
             if pid in turn_at:
@@ -124,6 +126,46 @@ def daily(rows: list[dict]) -> dict[str, dict]:
                      **{f"{k}_{q}": percentile(day["stages"][k], v) for k in STAGES
                         for q, v in (("p50", .5), ("p90", .9))}}
     return out
+
+
+ROLLUP_BRANCH = "land/fix/land-rollup-"
+
+
+def metrics(rows: list[dict], t0: float, t1: float) -> dict:
+    """D-889 36: the pipeline's numbers over [t0, t1): arrivals/h, landed/h, lead p50/p90 (queue to landed, min),
+    turn-deadline releases, rollups built (any event on a rollup branch) and landed."""
+    hours = (t1 - t0) / 3600
+    queued: dict = {}
+    leads, rollups, landed_rollups, arrivals, landed, deadline = [], set(), set(), 0, 0, 0
+    for r in rows:
+        if r["t"] >= t1:
+            continue
+        event, branch = r["event"], r.get("branch") or ""
+        if event == "queue":
+            queued[r.get("pid")] = r["t"]
+            arrivals += r["t"] >= t0
+        if r["t"] < t0:
+            continue
+        if branch.startswith(ROLLUP_BRANCH):
+            rollups.add(branch)
+        if event == "landed":
+            landed += 1
+            if branch.startswith(ROLLUP_BRANCH):
+                landed_rollups.add(branch)
+            if r.get("pid") in queued:
+                leads.append((r["t"] - queued[r["pid"]]) / 60)
+        elif event == "released" and "turn deadline" in str(r.get("note")):
+            deadline += 1
+    return {"arrivals_per_h": round(arrivals / hours, 2), "landed_per_h": round(landed / hours, 2),
+            "lead_p50_min": percentile(leads, .5), "lead_p90_min": percentile(leads, .9),
+            "deadline_releases": deadline, "rollups_built": len(rollups), "rollups_landed": len(landed_rollups)}
+
+
+def metrics_line(m: dict) -> str:
+    fmt = lambda v: "-" if v is None else f"{v:.0f}"  # noqa: E731
+    return (f"[metrics] arrivals {m['arrivals_per_h']}/h, landed {m['landed_per_h']}/h, lead p50/p90"
+            f" {fmt(m['lead_p50_min'])}/{fmt(m['lead_p90_min'])} min, turn-deadline releases {m['deadline_releases']}/24h,"
+            f" rollups built {m['rollups_built']} landed {m['rollups_landed']}")
 
 
 def main(argv=None) -> int:

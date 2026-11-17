@@ -124,10 +124,19 @@ def read_report(root, name, baseline=None):
 class Workspace:
     def __init__(self, db):
         self.db = Path(db)
-        with closing(sqlite3.connect(self.db)) as conn, conn:
+        with closing(self._connect()) as conn, conn:
+            conn.execute('PRAGMA journal_mode=WAL')
             conn.execute('''CREATE TABLE IF NOT EXISTS learning_links
                 (id TEXT PRIMARY KEY, kind TEXT, name TEXT, path TEXT, hashes TEXT,
                  version INTEGER, UNIQUE(kind,path))''')
+
+    def _connect(self):
+        conn = sqlite3.connect(self.db)
+        conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA foreign_keys=ON')
+        conn.execute('PRAGMA busy_timeout=30000')
+        conn.execute('PRAGMA synchronous=NORMAL')
+        return conn
 
     def inspect(self, row):
         root = Path(row[3])
@@ -137,7 +146,7 @@ class Workspace:
                 'reports': reports, 'qualified': False, 'next': KINDS[row[1]]['next']}
 
     def list(self):
-        with closing(sqlite3.connect(self.db)) as conn, conn:
+        with closing(self._connect()) as conn, conn:
             rows = conn.execute('SELECT * FROM learning_links ORDER BY rowid DESC').fetchall()
         return [self.inspect(row) for row in rows]
 
@@ -154,7 +163,7 @@ class Workspace:
         raise ValueError('이 작업대에는 수동 학습 제어가 연결되어 있지 않습니다.')
 
     def image(self, identifier, name):
-        with closing(sqlite3.connect(self.db)) as conn, conn:
+        with closing(self._connect()) as conn, conn:
             row = conn.execute('SELECT * FROM learning_links WHERE id=?', (identifier,)).fetchone()
         if row is None:
             raise ValueError('unknown learning result')
@@ -187,7 +196,7 @@ class Workspace:
         row = (uuid.uuid4().hex, kind, name.strip(), str(root),
                json.dumps({r['name']: r['sha256'] for r in reports if 'sha256' in r}), 1)
         try:
-            with closing(sqlite3.connect(self.db)) as conn, conn:
+            with closing(self._connect()) as conn, conn:
                 conn.execute('INSERT INTO learning_links VALUES (?,?,?,?,?,?)', row)
         except sqlite3.IntegrityError as exc:
             raise ValueError('result directory already registered for this kind') from exc
@@ -196,7 +205,7 @@ class Workspace:
     def remove(self, body):
         if not isinstance(body.get('id'), str) or type(body.get('version')) is not int:
             raise ValueError('id and integer version required')
-        with closing(sqlite3.connect(self.db)) as conn, conn:
+        with closing(self._connect()) as conn, conn:
             deleted = conn.execute('DELETE FROM learning_links WHERE id=? AND version=?',
                                    (body['id'], body['version'])).rowcount
             if not deleted:

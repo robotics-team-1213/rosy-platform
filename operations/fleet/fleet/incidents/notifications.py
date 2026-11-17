@@ -6,7 +6,6 @@ import asyncio
 import hashlib
 import json
 import logging
-import math
 import os
 import re
 import time
@@ -16,57 +15,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
-import httpx
 import yaml
+from core_common.notification_channels import Channel, send_channel
 
 from fleet.incidents.handoff import judgment_revision
 from fleet.incidents.final_review import final_current, final_facts, managed_case
-
-
-class _RedactProviderURL(logging.Filter):
-    def filter(self, record):
-        message = record.getMessage()
-        cleaned = re.sub(r'https://(?:discord\.com/api/webhooks/|hooks\.slack\.com/services/|api\.telegram\.org/bot)[^\s"\']+',
-                         '[notification destination redacted]', message)
-        if cleaned != message:
-            record.msg, record.args = cleaned, ()
-        return True
-
-
-logging.getLogger('httpx').addFilter(_RedactProviderURL())
-
-
-@dataclass(frozen=True)
-class Channel:
-    kind: str
-    endpoint: str = field(repr=False)
-    chat_id: str | int | None = field(default=None, repr=False)
-
-    def __post_init__(self):
-        if not isinstance(self.endpoint, str):
-            raise ValueError('invalid notification destination')
-        patterns = {
-            'discord': ('discord.com', r'/api/webhooks/[0-9]+/[A-Za-z0-9_.-]+'),
-            'slack': ('hooks.slack.com', r'/services/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+'),
-            'telegram': ('api.telegram.org', r'/bot[0-9]+:[A-Za-z0-9_-]+/sendMessage'),
-        }
-        target = urlsplit(self.endpoint)
-        expected = patterns.get(self.kind)
-        if (expected is None or target.scheme != 'https' or target.netloc != expected[0]
-                or target.query or target.fragment or not re.fullmatch(expected[1], target.path)
-                or (self.kind == 'telegram' and (type(self.chat_id) not in (str, int)
-                    or not re.fullmatch(r'-?[0-9]+|@[A-Za-z0-9_]+', str(self.chat_id))))):
-            raise ValueError('invalid notification destination')
-
-    @property
-    def fingerprint(self):
-        return hashlib.sha256((self.endpoint + '\0' + str(self.chat_id or '')).encode()).hexdigest()
+from fleet.incidents.notification_client import (
+    RemoteNotificationSink,
+    build_delivery_request,
+    should_run_embedded_notification_worker,
+)
 
 
 @dataclass(frozen=True)
 class NotificationConfig:
     console_url: str
     channels: tuple[Channel, ...]
+    remote_url: str | None = field(default=None, compare=False)
+    owner_token: str | None = field(default=None, repr=False, compare=False)
+    remote_sink: RemoteNotificationSink | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
         if not isinstance(self.console_url, str):
@@ -234,12 +201,130 @@ class NotificationOutbox:
 
 
 class NotificationWorker:
-    def __init__(self, outbox, config, http, *, board, snapshot=None, clock=time.time):
+    def __init__(self, outbox, config, http, *, board, snapshot=None, clock=time.time,
+                 sink: RemoteNotificationSink | None = None):
         self.outbox, self.config, self.http = outbox, config, http
         self.board = board
         self.snapshot, self.clock = snapshot, clock
+        self.sink = sink
+
+    @staticmethod
+    def _render_text(row, facts) -> str:
+        text = (f"ROSY {facts['kind']} · {facts['robot_id']} · {facts['stuck_id']}\n"
+                f"{facts.get('necessity', '관측 종료')} · {facts['reason']}\n"
+                f"담당: {facts['owner'] or '미인수'} · 관측: {facts['observed_at']} · 통지 기한: {facts['expires_at']}\n"
+                f"검토 알림 · 조치 허가/실제 해소는 별도 확인\n{facts['console_link']}")
+        if row['kind'] == 'FINAL_REVIEW':
+            text += (f"\n자동 처리: 호출 {facts['calls']} · 관측 {facts['observations']}"
+                     f" · 비용 상태 {facts['cost_status']} · 기록/예약 microUSD "
+                     f"{facts['spent_micros']}/{facts['reserved_micros']}"
+                     f"\n프로파일 {facts['profile_sha256']} · 관측 {facts['observation_revision']}"
+                     f"\n정책 원래 {facts['original_policy_revision']} · 현재 {facts['current_policy_revision']}")
+        return text
+
+    async def _verify_dequeued(self, row, facts) -> bool:
+        if self.clock() >= row['expires_at']:
+            await asyncio.to_thread(self.outbox.finish, row, 'EXPIRED', 'DELIVERY_EXPIRED_BEFORE_HTTP', now=self.clock())
+            return False
+        # Event-loop state is checked after dequeue; no await separates this check and HTTP entry.
+        if row['kind'] in ('OPEN', 'FINAL_REVIEW'):
+            receipt = self.board.judgment_view(row['robot_id'])
+            with closing(self.outbox._log._connect()) as connection:
+                parent = managed_case(connection, row['robot_id'], row['stuck_id'])
+                ledger_current = (final_current(connection, row['robot_id'], row['stuck_id'], facts['scope_json'],
+                                                self.clock(), receipt=receipt) if row['kind'] == 'FINAL_REVIEW'
+                                  else parent is None or parent['state'] not in ('ACTIVE', 'HOLD'))
+            if (ledger_current is None and self.board.is_open(row['robot_id'], row['stuck_id'])
+                    and (row['robot_id'], row['stuck_id']) not in self.board._handoff_pending):
+                await asyncio.to_thread(self.outbox.defer, row, now=self.clock())
+                return False
+            if (not self.board.is_open(row['robot_id'], row['stuck_id']) or receipt is None
+                    or not ledger_current or row['kind'] == 'OPEN' and judgment_revision(receipt) != row['judgment_revision']
+                    or (row['robot_id'], row['stuck_id']) in self.board._handoff_pending):
+                await asyncio.to_thread(self.outbox.finish, row, 'SUPERSEDED', 'INCIDENT_CHANGED_BEFORE_HTTP', now=self.clock())
+                return False
+        return True
+
+    async def verify_delivery_owner(self, _profile, request) -> bool | None:
+        if self.clock() >= request.expires_at:
+            return False
+        if request.kind in ('OPEN', 'FINAL_REVIEW'):
+            receipt = self.board.judgment_view(request.subject_id)
+            if not self.board.is_open(request.subject_id, request.occurrence_id):
+                return False
+            if (request.subject_id, request.occurrence_id) in self.board._handoff_pending or receipt is None:
+                return False
+            with closing(self.outbox._log._connect()) as connection:
+                owner = connection.execute(
+                    'SELECT 1 FROM fleet_incident_claims WHERE robot_id=? AND stuck_id=?',
+                    (request.subject_id, request.occurrence_id),
+                ).fetchone()
+                if owner is not None:
+                    return False
+                if request.kind == 'OPEN':
+                    parent = managed_case(connection, request.subject_id, request.occurrence_id)
+                    if parent is not None and parent['state'] in ('ACTIVE', 'HOLD'):
+                        return False
+                    if judgment_revision(receipt) != request.revision:
+                        return False
+        return True
+
+    async def forward_once(self, sink: RemoteNotificationSink | None = None):
+        target_sink = sink or self.sink
+        if target_sink is None:
+            raise ValueError('remote notification sink required')
+        if self.snapshot is not None:
+            await self.snapshot()
+        for _ in self.config.channels:
+            row = await asyncio.to_thread(self.outbox.claim_due, self.clock(), self.config)
+            if row is None:
+                break
+            facts = json.loads(row['payload'])
+            if not await self._verify_dequeued(row, facts):
+                continue
+            payload = build_delivery_request(row, facts)
+            try:
+                receipt_data = await asyncio.to_thread(target_sink.submit_delivery, payload)
+            except asyncio.CancelledError:
+                await asyncio.shield(asyncio.to_thread(self.outbox.finish, row, 'UNKNOWN', 'WORKER_CANCELLED', now=self.clock()))
+                raise
+            except Exception:
+                await asyncio.to_thread(self.outbox.finish, row, 'UNKNOWN', 'REMOTE_DELIVERY_UNKNOWN', now=self.clock())
+                continue
+            remote_state = receipt_data.get('state') if isinstance(receipt_data, dict) else None
+            remote_id = receipt_data.get('notification_id') if isinstance(receipt_data, dict) else None
+            if remote_state in ('PENDING', 'RETRY', 'SENDING', 'SENT') and remote_id == payload['notification_id']:
+                await asyncio.to_thread(
+                    self.outbox.finish,
+                    row,
+                    'SENT',
+                    'REMOTE_ACCEPTED',
+                    now=self.clock(),
+                    provider_id=remote_id,
+                )
+            elif remote_state in ('EXPIRED', 'SUPERSEDED', 'FAILED'):
+                await asyncio.to_thread(
+                    self.outbox.finish,
+                    row,
+                    remote_state,
+                    f'REMOTE_{remote_state}',
+                    now=self.clock(),
+                    provider_id=remote_id,
+                )
+            else:
+                await asyncio.to_thread(
+                    self.outbox.finish,
+                    row,
+                    'UNKNOWN',
+                    'REMOTE_DELIVERY_UNKNOWN',
+                    now=self.clock(),
+                    provider_id=remote_id,
+                )
 
     async def run_once(self):
+        if self.sink is not None:
+            await self.forward_once(self.sink)
+            return
         if self.snapshot is not None:
             await self.snapshot()
         for _ in self.config.channels:
@@ -248,84 +333,22 @@ class NotificationWorker:
                 break
             channel = next(channel for channel in self.config.channels if channel.kind == row['channel'])
             facts = json.loads(row['payload'])
-            text = (f"ROSY {facts['kind']} · {facts['robot_id']} · {facts['stuck_id']}\n"
-                    f"{facts.get('necessity', '관측 종료')} · {facts['reason']}\n"
-                    f"담당: {facts['owner'] or '미인수'} · 관측: {facts['observed_at']} · 통지 기한: {facts['expires_at']}\n"
-                    f"검토 알림 · 조치 허가/실제 해소는 별도 확인\n{facts['console_link']}")
-            if row['kind'] == 'FINAL_REVIEW':
-                text += (f"\n자동 처리: 호출 {facts['calls']} · 관측 {facts['observations']}"
-                         f" · 비용 상태 {facts['cost_status']} · 기록/예약 microUSD "
-                         f"{facts['spent_micros']}/{facts['reserved_micros']}"
-                         f"\n프로파일 {facts['profile_sha256']} · 관측 {facts['observation_revision']}"
-                         f"\n정책 원래 {facts['original_policy_revision']} · 현재 {facts['current_policy_revision']}")
-            payload = {'content': text, 'allowed_mentions': {'parse': []}, 'flags': 4}
-            params = {'wait': 'true'} if channel.kind == 'discord' else None
-            if channel.kind == 'slack':
-                payload = {'text': text, 'blocks': [{'type': 'section', 'text': {'type': 'plain_text', 'text': text}}],
-                           'unfurl_links': False, 'unfurl_media': False}
-            elif channel.kind == 'telegram':
-                payload = {'chat_id': channel.chat_id, 'text': text, 'link_preview_options': {'is_disabled': True}}
-            state, code, provider_id, retry_after = 'UNKNOWN', 'PROVIDER_OUTCOME_UNKNOWN', None, 60
-            if self.clock() >= row['expires_at']:
-                await asyncio.to_thread(self.outbox.finish, row, 'EXPIRED', 'DELIVERY_EXPIRED_BEFORE_HTTP', now=self.clock())
+            text = self._render_text(row, facts)
+            if not await self._verify_dequeued(row, facts):
                 continue
-            # Event-loop state is checked after dequeue; no await separates this check and HTTP entry.
-            if row['kind'] in ('OPEN', 'FINAL_REVIEW'):
-                receipt = self.board.judgment_view(row['robot_id'])
-                with closing(self.outbox._log._connect()) as connection:
-                    parent = managed_case(connection, row['robot_id'], row['stuck_id'])
-                    ledger_current = (final_current(connection, row['robot_id'], row['stuck_id'], facts['scope_json'],
-                                                    self.clock(), receipt=receipt) if row['kind'] == 'FINAL_REVIEW'
-                                      else parent is None or parent['state'] not in ('ACTIVE', 'HOLD'))
-                if (ledger_current is None and self.board.is_open(row['robot_id'], row['stuck_id'])
-                        and (row['robot_id'], row['stuck_id']) not in self.board._handoff_pending):
-                    await asyncio.to_thread(self.outbox.defer, row, now=self.clock())
-                    continue
-                if (not self.board.is_open(row['robot_id'], row['stuck_id']) or receipt is None
-                        or not ledger_current or row['kind'] == 'OPEN' and judgment_revision(receipt) != row['judgment_revision']
-                        or (row['robot_id'], row['stuck_id']) in self.board._handoff_pending):
-                    await asyncio.to_thread(self.outbox.finish, row, 'SUPERSEDED', 'INCIDENT_CHANGED_BEFORE_HTTP', now=self.clock())
-                    continue
             try:
-                response = await self.http.post(channel.endpoint, json=payload, params=params,
-                                                timeout=5, follow_redirects=False)
-                if response.status_code == 429:
-                    state, code = 'RETRY', 'PROVIDER_RATE_LIMIT'
-                    delay = response.headers.get('Retry-After', '60')
-                    if channel.kind == 'telegram':
-                        delay = response.json().get('parameters', {}).get('retry_after', delay)
-                    try:
-                        delay = float(delay)
-                        retry_after = max(60, delay) if math.isfinite(delay) else 60
-                    except (ValueError, TypeError):
-                        pass
-                elif response.status_code == 200:
-                    if channel.kind == 'slack' and response.text.strip() == 'ok':
-                        state, code = 'SENT', 'PROVIDER_ACCEPTED'
-                    elif channel.kind == 'discord':
-                        provider_id = response.json().get('id')
-                        if isinstance(provider_id, str) and re.fullmatch(r'[0-9]{1,32}', provider_id):
-                            state, code = 'SENT', 'PROVIDER_ACCEPTED'
-                        else:
-                            provider_id = None
-                    elif channel.kind == 'telegram':
-                        body = response.json()
-                        value = (body.get('result') or {}).get('message_id')
-                        if body.get('ok') is True and type(value) is int and value >= 0:
-                            provider_id, state, code = str(value), 'SENT', 'PROVIDER_ACCEPTED'
-                elif 400 <= response.status_code < 500:
-                    state, code = 'FAILED', 'PROVIDER_REFUSED'
-            except (httpx.ConnectError, httpx.ConnectTimeout):
-                state, code = 'RETRY', 'PROVIDER_UNREACHABLE'
+                state, code, provider_id, retry_after = await send_channel(self.http, channel, text)
             except asyncio.CancelledError:
                 await asyncio.shield(asyncio.to_thread(self.outbox.finish, row, 'UNKNOWN', 'WORKER_CANCELLED', now=self.clock()))
                 raise
-            except (httpx.HTTPError, OSError, ValueError, TypeError, AttributeError):
-                pass
             await asyncio.to_thread(self.outbox.finish, row, state, code, now=self.clock(),
                                     provider_id=provider_id, retry_after=retry_after)
 
     async def run(self):
+        if not should_run_embedded_notification_worker(
+            getattr(self.config, 'remote_url', None) or os.environ.get('ROSY_NOTIFICATIONS_URL')
+        ):
+            return
         while True:
             try:
                 await self.run_once()

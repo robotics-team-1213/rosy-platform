@@ -74,6 +74,9 @@ LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 # Maps are written by slam_toolbox in rosy-navigation; CORE only reads them back.
 ReadWritePaths=/run/rosy
+# Persistent status-lamp policy shared read-only with rosy-face.
+ExecStartPre=-+/usr/bin/install -d -m 2750 -o rosy-core -g rosy-display /var/lib/rosy/lamp-control
+ReadWritePaths=-/var/lib/rosy/lamp-control
 # D-483: the peer-request approval code hand-over to rosy-face. A payload release never
 # updates the image's /etc/tmpfiles.d (sync-image-layer only syncs units, udev, modprobe and
 # native-runtime), so root creates it before every start. "-": a card without the

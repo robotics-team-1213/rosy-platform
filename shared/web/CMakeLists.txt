@@ -31,6 +31,7 @@ install(FILES
   scope.js
   fleet-client.js
   account-profile.js
+  account-apps.css
   account-session.js
   control-dom.js
   form-controls.js

@@ -15,8 +15,8 @@ from fleet.localization.stuck_heading import reassess
 from fleet.server.auto_locate_service import AutoLocateService
 from fleet.server.map_pose_service import MapPoseService
 from fleet.server.trip_runner import TripRunner
-from rosy.world.state.projections.map_pose import (AUTO_LOCATE, DEGRADED, LOCALIZED, UNKNOWN, MapPoseConfig,
-                                                   MapPoseTracker, OdomSample, Sighting)
+from rosy.world.state.projections.map_pose import (AUTO_LOCATE, DEGRADED, LOCALIZED, PEER, UNKNOWN,
+                                                   MapPoseConfig, MapPoseTracker, OdomSample, Sighting)
 
 T0 = 1_700_000_000.0
 ON = MapPoseConfig(auto_locate_robots=("r1",))
@@ -180,11 +180,13 @@ def test_every_consumer_but_the_allowlist_sees_no_auto_anchor():
     assert tracker.pose(T0 + 3, "m", auto_locate=True).state == LOCALIZED
 
 
-def test_the_allowlist_is_exactly_the_trip_runner_and_the_readback():
+def test_the_allowlist_is_exactly_the_trip_runner_the_readback_and_auto_start():
     root = Path(__file__).resolve().parents[1] / "fleet"
     callers = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.py")
                      if "driving_pose" in p.read_text(encoding="utf-8"))
-    assert callers == ["server/pose/map_pose_service.py", "server/trips/trip_runner.py"]
+    # The guide shows it read-only (user, 2026-11-13); lane compliance and the rest keep arbitrated_pose.
+    assert callers == ["server/guide_service.py", "server/pose/auto_locate_service.py",
+                       "server/pose/map_pose_service.py", "server/trips/trip_runner.py"]
 
 
 def test_anchor_age_counts_from_the_camera_not_the_sample():
@@ -476,3 +478,65 @@ def test_a_robot_that_is_on_gets_a_stop_on_loss_even_on_a_free_arc():
     assert runner._auto_locate_on("r1") is False
     runner._poses = object()
     assert runner._auto_locate_on("r1") is False
+
+
+def test_a_peer_anchor_cannot_lift_the_auto_locate_block():
+    """D-1017/D-989: a relayed self-pose is not independent evidence, so it cannot unblock auto-locate."""
+    tracker = localized()
+    tracker.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 4), T0 + 4)
+    tracker.add_sighting(sighting(4, x=1.3), T0 + 4, "m")            # independent disagreement: block on
+    assert tracker.auto_blocked is True
+    tracker.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 15), T0 + 15)    # the camera has been quiet 11 s
+    assert tracker.add_peer((1.3, 2.0, 0.0), T0 + 15, T0 + 15, "m", "m") is None
+    assert tracker.pose(T0 + 15, "m").anchor_source == "peer"
+    assert feed(tracker, 16, x=1.3) == "INDEPENDENT_ANCHOR_DISAGREES"
+    assert tracker.auto_blocked is True                               # only a camera/pin anchor or an operator lifts
+
+
+def test_a_disagreeing_peer_claim_does_not_block_auto_locate():
+    """D-1017/D-989: a peer jump degrades the pose like any sample but never sets the auto-locate block."""
+    tracker = localized()
+    tracker.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 15), T0 + 15)
+    assert tracker.add_peer((9.9, 9.9, 0.0), T0 + 15, T0 + 15, "m", "m") is None
+    assert tracker.pose(T0 + 15, "m").state == DEGRADED              # the jump itself still reads
+    assert tracker.auto_blocked is False
+
+
+def test_an_enabled_robot_keeps_a_session_without_an_operator():
+    rig = Rig()
+    rig.locate._until.clear()  # as after a Fleet restart: nobody opened a session
+    rig.tick()
+    assert rig.locate.stream_wanted() is True
+
+
+def test_a_robot_that_is_off_gets_no_session_by_itself():
+    rig = Rig(MapPoseConfig())
+    rig.locate._until.clear()
+    rig.tick()
+    assert rig.locate.stream_wanted() is False
+
+
+def test_a_degraded_fit_is_not_reopened_by_config():
+    rig = Rig()
+    rig.fit.fail("DISAGREE")
+    rig.locate._until.clear()
+    rig.tick()
+    assert rig.locate.stream_wanted() is False
+    assert rig.locate._trackers["r1"] is rig.fit  # the latch survives; only an operator session clears it
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_no_robot_gets_a_preset_world_261026_pin(enabled):
+    config = MapPoseConfig(auto_locate_robots=("rosy_46",) if enabled else ())
+    service = MapPoseService(lambda: ["rosy_46"], config=config, wall=lambda: T0, map_id=lambda: "world_261026")
+    service.observe_state("rosy_46", {"odom_pose": {"x": 0.0, "y": 0.0, "yaw": 0.0, "stamp": T0}})
+    assert service.arbitrated_pose("rosy_46").state == UNKNOWN  # unknown until measured, never a preset bay
+
+
+def test_the_guide_shows_the_auto_located_pose():
+    from fleet.server.guide_service import GuideService
+    rig, pose = localized_rig()
+    guide = GuideService.__new__(GuideService)
+    guide._poses = rig.map_pose
+    assert guide._display_pose("r1").anchor_source == AUTO_LOCATE
+    assert rig.map_pose.arbitrated_pose("r1").state == UNKNOWN  # other consumers still do not see it

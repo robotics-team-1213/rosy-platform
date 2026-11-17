@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import re
 import json
+import re
 import subprocess
+import sys
 from pathlib import Path
 
 INFRA = ("3221225786", "1073807364", "unusable", "exited 124", "timed out", "lost contact")
@@ -223,11 +225,14 @@ def member_origins(rows: list[dict], common: Path, members, sha: str, landed_at:
             oid = candidate.get("candidate", "")
             if not re.fullmatch(r"[0-9a-f]{40,64}", oid) or not sha:
                 continue
-            proof = subprocess.run(["git", "--git-dir", str(common), "merge-base", "--is-ancestor", oid, sha],
-                                   capture_output=True)
+            tools_dir = str(Path(__file__).resolve().parent)
+            if tools_dir not in sys.path:
+                sys.path.insert(0, tools_dir)
+            import land_cache  # noqa: PLC0415
+            ok = land_cache.is_ancestor(common, oid, sha, git_dir=True)
             eligible = [q for q in origins if q.get("ticket") == m["ticket"]] if m.get("ticket") else [
                 q for q in origins if q["t"] <= candidate.get("t", landed_at)]
-            if proof.returncode == 0 and eligible:
+            if ok and eligible:
                 origin = max(eligible, key=lambda q: q["t"])
                 if origin.get("ticket"):
                     found = dict(branch=branch, ticket=origin["ticket"], candidate=oid)

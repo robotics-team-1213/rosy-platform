@@ -394,9 +394,12 @@ def status(root, ops):
     try:
         found = mapping_approval.check(root, runtime_mode="hardware")
         approval = {"valid": True, "carried": "measured_release_id" in found,
-                    "measured_release_id": found.get("measured_release_id", found["release_id"]), "reason": ""}
+                    "measured_release_id": found.get("measured_release_id", found["release_id"]), "reason": "",
+                    "measured_linear_mps": found.get("measured_linear_mps"),
+                    "measured_angular_rps": found.get("measured_angular_rps")}
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        approval = {"valid": False, "carried": False, "measured_release_id": None, "reason": str(exc)[:200]}
+        approval = {"valid": False, "carried": False, "measured_release_id": None, "reason": str(exc)[:200],
+                    "measured_linear_mps": None, "measured_angular_rps": None}
     env = _env(root)
     return {"phase": phase, "reason": state.get("reason", ""), "approval": approval,
             "needs_measurement": not approval["valid"], "runtime_mode": _value(env, "ROSY_RUNTIME_MODE"),

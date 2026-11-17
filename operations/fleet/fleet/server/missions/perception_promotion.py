@@ -20,7 +20,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from rosy.contracts.learning.promotion_request import decision_encoded, encoded, sign, validate
 
-from fleet.server.account_config import _protected
+from rosy_account.account_config import _protected
 from fleet.server.policy_governance import GovernanceError, PolicyGovernanceStore
 from fleet.server.policy_governance_routes import _Confirmed
 

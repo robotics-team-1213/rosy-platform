@@ -112,7 +112,7 @@ def simulate(seed=581, duration=34.0):
         v_l, w_l = leader_twist(t)
         if k % round(CONTROL_PERIOD / DT) == 0:
             if trail is not None:
-                linear, angular, reason = trail_twist(
+                linear, angular, reason, _off = trail_twist(
                     trail, *follower.odom, gap=GAP, max_speed=0.2, max_angular=MAX_W,
                     prev_linear=linear, dt=CONTROL_PERIOD)
                 assert reason is None

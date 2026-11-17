@@ -33,7 +33,7 @@ def test_a_reading_outside_every_tolerance_supports_neither(tmp_path, value, ver
 def test_one_answer_per_request(tmp_path):
     cr.open_request(measure(), root=tmp_path)
     cr.answer("belt-end-1", by="op", value=215, root=tmp_path)
-    with pytest.raises(ValueError, match="already answered"):
+    with pytest.raises(cr.AlreadyAnswered, match="already answered"):
         cr.answer("belt-end-1", by="op", value=156, root=tmp_path)
     with pytest.raises(ValueError, match="exists"):
         cr.open_request(measure(), root=tmp_path)
@@ -81,3 +81,10 @@ def test_the_command_line_round_trip(tmp_path, monkeypatch, capsys):
     assert cr.main(["answer", "belt-end-1", "--value", "214", "--by", "operator"]) == 0
     assert json.loads(capsys.readouterr().out.splitlines()[-1])["verdict"] == "camera"
     assert cr.main(["answer", "belt-end-1", "--value", "214", "--by", "operator"]) == 2
+
+
+def test_an_unreadable_file_does_not_hide_the_other_requests(tmp_path, capsys):
+    cr.open_request(measure(), root=tmp_path)
+    (tmp_path / "half-written.json").write_text('{"schema": "rosy.cell-req', encoding="utf-8")
+    assert [r["id"] for r in cr.listing(tmp_path)] == ["belt-end-1"]
+    assert "half-written.json" in capsys.readouterr().err

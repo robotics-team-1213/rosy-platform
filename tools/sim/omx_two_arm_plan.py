@@ -18,35 +18,84 @@ Durations are the teacher's segment times (TIMING), the same yardstick for every
 """
 import argparse
 import json
+import math
 from pathlib import Path
 import sys
 
-import numpy as np
-
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+_ADAPTER = str(Path(__file__).resolve().parents[2] / "middleware" / "devices" / "omx" / "adapter")
+if _ADAPTER not in sys.path:
+    sys.path.append(_ADAPTER)
 import omx_two_arm_sites as sites_mod  # noqa: E402
+from omx_adapter.coordination import _clearance_at_least  # noqa: E402
+from omx_adapter.swept_volume import capsules as _arm_capsules  # noqa: E402
 
-HARBOR_ARMS = {"A": "arm_a", "B": "arm_b"}
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deploy/robot/omx"))
+from cell_move_order import HARBOR_ARMS, harbor_moves, planning_sites, resolve_order, stack_key, temp_spots, zone  # noqa: E402
 # The teacher's own segment times (omx_two_arm_teacher.run_step): pick = approach 2.5 + grasp, close, lift 1.5 each; carry at CARRY_SPEED;
 # place = lower, release, retreat 1.5 each; park 2.5 + 0.7 back to the waiting pose (no zone held). belt_gap_s: conveyor spacing (ASSUMED).
 TIMING = dict(speed=.05, pick=7., place=4.5, park=3.2, belt_gap_s=6.)
 SIDE = {"arm_a": "a", "arm_b": "b"}
 REORDER_WIDTH = 4
+SWEEP_MARGIN_M = 0.02
+SWEEP_SLACK_S = 1.5
+_SWEEP_CACHE = {}
 
 
-def zone(layout, site):
-    s = layout.sites[site]
-    if s["kind"] == "temp":
-        return s["plate"]
-    if s["kind"] == "ship":
-        return "a" if s["row"] == 0 else "b" if s["row"] == 2 else "mid"
-    return "mid"  # conveyor end
+class _ArmKin:
+    """Adapts omx_two_arm_kin.Arm.frames(q) to omx_adapter.swept_volume.capsules's link_points()."""
+
+    def __init__(self, arm):
+        self._arm = arm
+
+    def link_points(self, joints, fingertip_m=0.0):
+        pts, tcp, R = self._arm.frames(joints)
+        ax = (float(R[0, 0]), float(R[1, 0]), float(R[2, 0]))
+        tip = (float(tcp[0] + ax[0] * fingertip_m), float(tcp[1] + ax[1] * fingertip_m), float(tcp[2] + ax[2] * fingertip_m))
+        return [tuple(float(v) for v in p) for p in (*pts[1:5], tcp)] + [tip], ax
 
 
-def planning_sites(layout):
-    """Sites the plans use: all but ship hold 2, which the arms reach at grasp height but not on the validated carry from the conveyor
-    (omx_two_arm_tasks refuses it with the stern at the table edge), and temporary lanes under the hull."""
-    return [s for s, v in layout.sites.items() if not v.get("blocked") and (v["kind"] != "ship" or v["stack"].startswith("h1") or v["stack"] == "stern")]
+def step_swept_poses(layout, arm_name, src, dst, here):
+    """Timed world-frame swept capsules [(t_rel, capsules), ...] (links + held box on lift..release), or None if unreachable."""
+    import omx_two_arm_tasks as tasks
+    z_up = tasks.carry_z(layout, here, src, dst)
+    arm = layout.arms[arm_name]
+    key = (arm_name, tuple(arm.base), round(arm.yaw, 6), src, tuple(layout.sites[src]["xy"]), dst, tuple(layout.sites[dst]["xy"]), round(z_up, 4))
+    if key not in _SWEEP_CACHE:
+        problems, path, _ = tasks.check_reach(layout, dict(id="sweep", container="?", to=dst, arm=arm_name, **{"from": src}), here, arm)
+        if problems:
+            _SWEEP_CACHE[key] = None
+        else:
+            _, t_carry, _ = duration(layout, src, dst)
+            seg_t = (0.0, 2.5, 4.0, 5.5, 7.0, 7.0 + t_carry, 8.5 + t_carry, 10.0 + t_carry, 11.5 + t_carry)
+            wait_q = getattr(arm, "wait", arm.home)
+            n_wait = 6
+            qs_t = [(2.5 * k / n_wait, wait_q + (path[0] - wait_q) * (k / n_wait), False) for k in range(n_wait)]
+            ts = [seg_t[1]]
+            for s in range(7):
+                dt = (seg_t[s + 2] - seg_t[s + 1]) / 12
+                ts.extend(seg_t[s + 1] + dt * (k + 1) for k in range(12))
+            # solve_chain samples 12 steps per segment across 7 segments: indices 25..72 are lift through release (carrying the box).
+            qs_t.extend((t, q, 24 < i <= 72) for i, (t, q) in enumerate(zip(ts, path)))
+            t_retreat = seg_t[-1]
+            qs_t.extend((t_retreat + 2.5 * k / n_wait, path[-1] + (wait_q - path[-1]) * (k / n_wait), False) for k in range(1, n_wait + 1))
+            qs_t.append((t_retreat + TIMING["park"], wait_q, False))
+            kin = _ArmKin(arm)
+            item = (layout.hold_below + layout.box[2] / 2, math.hypot(*layout.box[:2]) / 2)
+            _SWEEP_CACHE[key] = [(t, _arm_capsules(kin, q, fingertip_m=0.015, item=item if held else None)) for t, q, held in qs_t]
+    return _SWEEP_CACHE[key]
+
+
+def sweeps_clear(poses_a, poses_b, margin_m=SWEEP_MARGIN_M, ta=0.0, tb=0.0, slack_s=None):
+    """True when both arms' swept-volume capsule sequences keep >= `margin_m` apart (optionally within `slack_s` of each other)."""
+    if not poses_a or not poses_b:
+        return False
+    if slack_s is None:
+        return _clearance_at_least([c for _, c in poses_a], [c for _, c in poses_b], margin_m)
+    return all(_clearance_at_least([c1], [c2], margin_m)
+               for t1, c1 in poses_a for t2, c2 in poses_b if abs((ta + t1) - (tb + t2)) <= slack_s)
+
+
 
 
 def validator_can(layout):
@@ -73,101 +122,21 @@ def table_can(table):
     return lambda src, dst, here: table.get(src, set()) & table.get(dst, set())
 
 
-def stack_key(layout, site):
-    s = layout.sites[site]
-    return s.get("stack", site)
-
-
-def harbor_moves(layout, state, request, can, avoid=()):
-    """Harbor-shaped moves for one outbound request on `state` (cargo -> site): every container above the target, top first, to a free
-    temporary lane or free supported ship site, the target to a free lane of a temporary plate (the outbound place: Harbor names the lane
-    per job, here the first that works), then the blockers back into the target's stack from its bottom,
-    in their old order; the first complete plan wins (depth first, as harbor/spatial.plan_spatial searches complete plans). Each move
-    carries `arms`, every arm that can do it in the state it runs in. Returns (moves, None) or (None, HOLD reason).
-    `reorder` (재배치): the target stays; it and everything above it go out top first and come back in a new order (see finish)."""
-    target, reorder = request["cargo_id"], request.get("reorder", False)
-    if target not in state:
-        return None, "OUTBOUND_NOT_OBSERVED"
-    site = state[target]
-    key, base = stack_key(layout, site), layout.sites[site].get("layer", 0)
-    blockers = sorted((c for c, s in state.items() if stack_key(layout, s) == key and (layout.sites[s].get("layer", 0) > base or reorder and c == target)),
-                      key=lambda c: -layout.sites[state[c]]["layer"])
-    failures = []
-
-    def step(cur, cargo, b, phase):
-        a, here = cur[cargo], {c: s for c, s in cur.items() if c != cargo}
-        found = [h for h, name in HARBOR_ARMS.items() if name in can(a, b, here)]
-        if not found:
-            return None
-        return dict(cargo_id=cargo, source=a, destination=b, primary_arm=found[0], alternate_arms=found[1:], phase_label=phase,
-                    arms=[HARBOR_ARMS[h] for h in found])
-
-    def seat(i):
-        return next(s for s, v in layout.sites.items() if v.get("stack") == key and v["layer"] == base + i)
-
-    def finish(cur, moves):
-        """Outbound to the first free lane that lets the whole job finish, then the blockers back, lowest first into the target's freed
-        level; None when an arm is missing on the way. A reorder puts the old bottom back first, then the rest top first (the containers
-        above it reversed): only the bottom needs the far arm, the rest stays with the near arm on its own side, so the two rows overlap."""
-        if reorder:
-            return put(cur, moves, [(c, seat(i), "복귀") for i, c in enumerate(blockers[-1:] + blockers[:-1])])
-        lanes = sorted(s for s in planning_sites(layout) if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
-                       and s not in cur.values() and s not in avoid)
-        if not lanes:
-            failures.append("NO_FREE_OUTBOUND_LANE")
-        return next((done for stand in lanes if (done := put(cur, moves, [(target, stand, "반출")] + [
-            (c, seat(i), "복귀") for i, c in enumerate(reversed(blockers))]))), None)
-
-    def put(cur, moves, places):
-        for cargo, b, phase in places:
-            m = step(cur, cargo, b, phase)
-            if m is None:
-                failures.append("NO_STAND_IN_REACH" if phase == "반출" else "NO_ARM_FOR_RESTORE")
-                return None
-            moves, cur = moves + [m], {**cur, cargo: b}
-        return moves
-
-    def search(i, cur, moves):
-        """Blockers top first, each to a temporary place (same zone first); back up and try the next place when a later move has no arm
-        (a blocker left where only the near arm reaches cannot come back under its wrist)."""
-        if i == len(blockers):
-            return finish(cur, moves)
-        cargo = blockers[i]
-        occupied = set(cur.values()) - {cur[cargo]}  # it does not hold itself up
-        options = sorted((t for t in temp_spots(layout, occupied, set(avoid)) if stack_key(layout, t) != key),
-                         key=lambda t: zone(layout, t) != zone(layout, cur[cargo]))
-        for t in options[:REORDER_WIDTH] if reorder else options:  # shortcut: a reorder tries the first places only (three levels of every place took >10 min on the validator), widen if a plan Harbor would find is missed
-            m = step(cur, cargo, t, "재취급")
-            if m is not None and (found := search(i + 1, {**cur, cargo: t}, moves + [m])):
-                return found
-        failures.append("NO_TEMPORARY_SPACE_IN_REACH")
-        return None
-
-    moves = search(0, dict(state), [])
-    return (moves, None) if moves else (None, failures[0] if failures else "NO_LEGAL_PLAN")
-
-
-def temp_spots(layout, occupied, avoid=frozenset()):
-    """Temporary places in Harbor's order: the free temporary lane tiers on something (bottom tier first), then free ship sites standing
-    on an occupied one (another 장치 칸)."""
-    used = occupied | avoid
-    names = planning_sites(layout)
-    spots = [s for s in names for v in [layout.sites[s]] if v["kind"] in ("temp", "ship") and s not in used
-             and (v["layer"] == 0 or layout.stack_at.get((v["stack"], v["layer"] - 1)) in occupied)]
-    return sorted(spots, key=lambda s: (layout.sites[s]["kind"] != "temp", layout.sites[s]["layer"], s))
 
 
 def duration(layout, a, b):
     """(pick, carry, place) seconds."""
-    xy = lambda s: np.array(layout.sites[s]["xy"])  # noqa: E731
-    return TIMING["pick"], float(np.linalg.norm(xy(a) - xy(b))) / TIMING["speed"], TIMING["place"]
+    ax, ay = layout.sites[a]["xy"]
+    bx, by = layout.sites[b]["xy"]
+    return TIMING["pick"], math.hypot(ax - bx, ay - by) / TIMING["speed"], TIMING["place"]
 
 
-def schedule(layout, moves, arms, belt_arrivals=None):
+def schedule(layout, moves, arms, belt_arrivals=None, start=None):
     """List-schedule `moves` (Harbor order) on `arms`. Returns rows (move, arm, start, pick_end, end, zones) and the extra transports."""
     free = {a: 0. for a in arms}
     busy = {}  # zone -> [(start, end)]
-    done, rows, extra = {}, [], []
+    done, rows, extra, scheduled = {}, [], [], []
+    here = dict(start or {})
     last_pick = 0.
     for k, m in enumerate(moves):
         a, b = m["source"], m["destination"]
@@ -182,32 +151,43 @@ def schedule(layout, moves, arms, belt_arrivals=None):
             continue
         t_pick, t_carry, t_place = duration(layout, a, b)
         t_src, t_end = t_pick + t_carry, t_pick + t_carry + t_place  # the source zones stay held through the carry, the target zones from the lift
+        here_step = {c: s for c, s in here.items() if c != m["cargo_id"]}
         best = None
         for arm in able:
             za, zb = zone(layout, a), zone(layout, b)
             hold_a = {za} | ({"mid"} if za not in ("mid", SIDE[arm]) else set())
             cross = za in ("a", "b") and zb in ("a", "b") and za != zb  # side to side passes over the middle
             hold_b = {zb} | ({"mid"} if zb not in ("mid", SIDE[arm]) or cross else set())
+            poses = step_swept_poses(layout, arm, a, b, here_step) if len(arms) > 1 else None
             t = max(ready, free[arm])
             while True:
                 clash = [e for z in hold_a for s, e in busy.get(z, []) if s < t + t_src and t < e] + \
                         [e for z in hold_b for s, e in busy.get(z, []) if s < t + t_end and t + t_pick < e]
+                if poses is not None:
+                    t_park = t + t_end + TIMING["park"]
+                    if any(oa != arm and s < t_park and t < e and not sweeps_clear(poses, op, ta=t, tb=s, slack_s=SWEEP_SLACK_S)
+                           for oa, s, e, op in scheduled):
+                        clash.append(t + 0.5)
                 if not clash:
                     break
                 t = min(clash)
             primary = HARBOR_ARMS.get(m.get("primary_arm")) == arm
             if best is None or (t, not primary) < (best[1], not best[4]):
-                best = (arm, t, hold_a, hold_b, primary)
-        arm, t, hold_a, hold_b, _ = best
+                best = (arm, t, hold_a, hold_b, primary, poses)
+        arm, t, hold_a, hold_b, _, poses = best
         for z in hold_a:
             busy.setdefault(z, []).append((t, t + t_src))
         for z in hold_b:
             busy.setdefault(z, []).append((t + t_pick, t + t_end))
+        if poses is not None:
+            scheduled.append((arm, t, t + t_end + TIMING["park"], poses))
+        here[m["cargo_id"]] = b
         done[k] = t + t_end
         free[arm] = done[k] + TIMING["park"]
         if a == "belt":
             last_pick = t + t_pick
         rows.append(dict(move=k, cargo_id=m["cargo_id"], source=a, destination=b, phase=m.get("phase_label", "장치"), arm=arm,
+                         **({"order_source": m["order_source"]} if "order_source" in m else {}),
                          start=round(t, 2), pick_end=round(t + t_pick, 2), carry_end=round(t + t_src, 2), end=round(t + t_end, 2),
                          zones=[sorted(hold_a), sorted(hold_b)]))
     return rows, extra
@@ -229,14 +209,42 @@ def metrics(rows, extra, arms):
                 extra_transports=len(extra))
 
 
-def stack_moves(layout, can):
-    """장치: the stack plan's containers come one by one on the conveyor, each to its site (Harbor's 장치 order), arm left open."""
-    moves, here = [], {}
+CELL_STACK_START = {
+    "bar-1": "tmp-a-2-l1", "bar-2": "tmp-a-1-l1", "bar-3": "tmp-b-2-l1",
+    "bar-4": "tmp-a-2", "bar-5": "tmp-a-1", "bar-6": "tmp-b-2",
+    "bar-7": "ship-stern-l0", "bar-8": "tmp-a-3", "bar-9": "tmp-b-3",
+}
+
+
+def tier_start(layout, tier: int | None = None, start: dict | None = None) -> dict:
+    """Start state before `tier` (1 = 1단/l0, 2 = 2단/l1, 3 = 3단/l2): earlier tiers are already seated on the ship."""
+    here = dict(start or {})
+    if tier is not None:
+        for c, s, _ in layout.plan_order():
+            if layout.sites[s]["layer"] < tier - 1:
+                here[c] = s
+    return here
+
+
+def stack_moves(layout, can, tier: int | None = None, start: dict | None = None):
+    """장치: the stack plan's containers go to their ship sites (from the conveyor when `start` is None, else from their sites in `start`);
+    with `tier` in (1, 2, 3), only that tier (1단/2단/3단) is moved, standing on the lower tiers."""
+    moves, here = [], dict(start or {})
     for c, s, _ in layout.plan_order():
-        moves.append(dict(cargo_id=c, source="belt", destination=s, primary_arm=None, alternate_arms=[], phase_label="장치",
-                          arms=sorted(can("belt", s, here))))
-        here[c] = s
+        layer = layout.sites[s]["layer"]
+        src = here.get(c, "belt")
+        if tier is None or layer == tier - 1:
+            others = {k: v for k, v in here.items() if k != c}
+            moves.append(dict(cargo_id=c, source=src, destination=s, primary_arm=None, alternate_arms=[], phase_label="장치",
+                              tier=layer + 1, arms=sorted(can(src, s, others))))
+        if tier is None or layer <= tier - 1:
+            here[c] = s
     return moves
+
+
+def cell_stack_moves(layout, can, tier: int | None = None):
+    """Stack the nine containers already placed on the cell's temporary plates and stern bay into hold 1 (optionally one tier)."""
+    return stack_moves(layout, can, tier=tier, start=CELL_STACK_START)
 
 
 def outbound_requests(layout):
@@ -248,7 +256,7 @@ def outbound_requests(layout):
 MODES = {"one-arm A": ("arm_a",), "one-arm B": ("arm_b",), "two-arm": ("arm_a", "arm_b")}
 
 
-def plan_outbound(layout, arms, can, reorder=False):
+def plan_outbound(layout, arms, can, reorder=False, orders=None, suggester=None):
     """Harbor plans each request on the state the previous one leaves, with the arms this mode has; a request with no legal plan is a
     HOLD (a person or an extra transport). Requests after the first avoid the first one's temporary places so they can overlap.
     `reorder`: the same two outer rows are rearranged in place (재배치: emptied, the bottom back, the two above it swapped) instead of
@@ -257,10 +265,12 @@ def plan_outbound(layout, arms, can, reorder=False):
     mode_can = lambda a, b, here: can(a, b, here) & set(arms)  # noqa: E731
     moves, holds, avoid = [], [], set()
     for request in outbound_requests(layout):
-        found, why = harbor_moves(layout, state, dict(request, reorder=reorder), mode_can, avoid)
-        if found is None:
+        plan, why = resolve_order((orders or {}).get(request["cargo_id"], {}), layout, state,
+                                  dict(request, reorder=reorder), mode_can, avoid, suggester=suggester)
+        if plan is None:
             holds.append(dict(request=request["cargo_id"], reason=why))
             continue
+        found = [dict(move, order_source=plan["order_source"]) for move in plan["moves"]]
         avoid |= {m["destination"] for m in found if m["phase_label"] == "재취급"}  # an outbound lane is shared in turn (same-site order)
         for m in found:
             state[m["cargo_id"]] = m["destination"]
@@ -270,17 +280,21 @@ def plan_outbound(layout, arms, can, reorder=False):
     return moves, holds
 
 
-def compare(layout, scenario, can=None):
+def compare(layout, scenario, can=None, tier: int | None = None):
     can = can or validator_can(layout)
     out = {}
+    full_ship = {c: s for c, s, _ in layout.plan_order()}
     for mode, arms in MODES.items():
         result = {}
         if scenario in ("stack", "both", "all"):
-            rows, extra = schedule(layout, stack_moves(layout, can), arms)
-            result["stack"] = dict(metrics(rows, extra, arms), timeline=rows, extra=extra)
+            rows, extra = schedule(layout, stack_moves(layout, can, tier=tier), arms, start=tier_start(layout, tier))
+            result["stack" if tier is None else f"stack-t{tier}"] = dict(metrics(rows, extra, arms), timeline=rows, extra=extra)
+        if scenario in ("cell-stack",):
+            rows, extra = schedule(layout, cell_stack_moves(layout, can, tier=tier), arms, start=tier_start(layout, tier, CELL_STACK_START))
+            result["cell-stack" if tier is None else f"cell-stack-t{tier}"] = dict(metrics(rows, extra, arms), timeline=rows, extra=extra)
         for name in [n for n in ("outbound", "rearrange") if scenario in (n, "all") or scenario == "both" and n == "outbound"]:
             moves, holds = plan_outbound(layout, arms, can, reorder=name == "rearrange")
-            rows, extra = schedule(layout, moves, arms)
+            rows, extra = schedule(layout, moves, arms, start=full_ship)
             result[name] = dict(metrics(rows, extra, arms), holds=holds, timeline=rows, extra=extra)
         out[mode] = result
     return out
@@ -315,23 +329,30 @@ def replay_tasks(layout, result):
                                   after_pick=[f"m{prev[-1]['move']}"] if row["source"] == "belt" and prev else [],
                                   zones=row["zones"], planned_start_s=row["start"], **outbound(row)))
             steps.sort(key=lambda st: (st["planned_start_s"], st["id"]))
-            stack = name == "stack"
-            out[f"{name}-{mode.replace(' ', '-')}"] = dict(
-                name=f"{name} {mode}", supply=[c for c, _, _ in layout.plan_order()] if stack else [],
-                start={} if stack else {c: s for c, s, _ in layout.plan_order()}, steps=steps)
+            tier = int(name[-1]) if len(name) > 2 and name[-2:] in ("t1", "t2", "t3") else None
+            base = name[:-3] if tier is not None else name
+            if base == "stack":
+                start, supply = tier_start(layout, tier), [row["cargo_id"] for row in belt]
+            elif base == "cell-stack":
+                start, supply = tier_start(layout, tier, CELL_STACK_START), []
+            else:
+                start, supply = {c: s for c, s, _ in layout.plan_order()}, []
+            out[f"{name}-{mode.replace(' ', '-')}"] = dict(name=f"{name} {mode}", supply=supply, start=start, steps=steps)
     return out
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("command", choices=["compare"])
-    p.add_argument("--scenario", default="both", choices=["stack", "outbound", "rearrange", "both", "all"], help="both: stack and outbound; all: also rearrange")
+    p.add_argument("--scenario", default="both", choices=["stack", "cell-stack", "outbound", "rearrange", "both", "all"],
+                   help="both: stack and outbound; all: also rearrange")
+    p.add_argument("--tier", type=int, choices=[1, 2, 3], help="stack only tier 1 (1단/l0), 2 (2단/l1), or 3 (3단/l2)")
     p.add_argument("--out")
     p.add_argument("--replay-dir", help="write one teacher task JSON per scenario and mode here (omx_two_arm_teacher.py run plan --plan FILE)")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (e.g. a measured cell snapshot)")
     a = p.parse_args(argv)
     layout = sites_mod.Layout(**sites_mod.parse_choices(a.choice))
-    result = compare(layout, a.scenario)
+    result = compare(layout, a.scenario, tier=a.tier)
     if a.replay_dir:
         Path(a.replay_dir).mkdir(parents=True, exist_ok=True)
         for name, task in replay_tasks(layout, result).items():

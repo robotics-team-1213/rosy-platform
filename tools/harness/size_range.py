@@ -9,6 +9,8 @@ base. Only what the commit touched is reported: its changed files, the units and
 hold them, and its changed ratchet rows (every key when it changed ``size_units.txt``). A commit
 whose tree has no ``size_ratchet.txt`` (before D-766) is skipped. So "grow past the limit, split
 in a later commit" is red on the growing commit even when the branch tip is green.
+
+It also applies the D-889 addendum 36 message rule (``land_metrics_rule``) to each non-merge commit.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import PurePosixPath
 
+import land_metrics_rule
 import size_limits
 from colcon_roots import colcon_roots
 
@@ -151,7 +154,11 @@ def check(commit: str) -> list[str]:
             for key, count in limits.parse_ratchet(_show(other, limits.RATCHET))[0].items():
                 base_rows[key] = max(count, base_rows.get(key, count))
     counts, over, owner = measure_commit(commit, units, limits)
-    listing = (_git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", parent, commit)
+    # A merge is checked on the paths it changed against every parent (-c): 11-13 17 landings stopped on
+    # "Merge branch 'main'" for files main itself had over the limit, which the merge only carried.
+    listing = (_git("diff-tree", "-z", "-c", "--no-commit-id", "--name-only", "--no-renames", "-r", commit)
+               if len(parents) > 1 else
+               _git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", parent, commit)
                if parent else _git("ls-tree", "-z", "-r", "--name-only", commit))
     changed = [path for path in listing.split("\0") if path]
     keys = None
@@ -177,7 +184,18 @@ def check(commit: str) -> list[str]:
     return bad
 
 
-CHUNK = 50  # fewer commits than this per extra process cost more to start than they save
+def metrics_problems(commit: str) -> list[str]:
+    """D-889 36 for one non-merge commit committed since ``RULE_SINCE`` (see land_metrics_rule)."""
+    if len(_git("rev-list", "--parents", "-n", "1", commit).split()) != 2:
+        return []
+    if dt.datetime.fromisoformat(_git("log", "-1", "--format=%cI", commit).strip()) < land_metrics_rule.RULE_SINCE:
+        return []
+    files = _git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", commit).split("\0")
+    diff = _git("diff", "--unified=0", commit + "~1", commit, "--", "tools")
+    return land_metrics_rule.violations(_git("log", "-1", "--format=%B", commit), files, diff)
+
+
+CHUNK = 8  # fewer commits than this per extra process cost more to start than they save
 
 
 def _check_all(commits: list[str]) -> list[list[str]]:
@@ -210,6 +228,11 @@ def main(argv: list[str]) -> int:
         if bad:
             red.append(_git("log", "-1", "--format=%h %s", commit).strip() + "\n    " + "\n    ".join(bad))
     print(f"[size-range] {len(commits)} commit(s) checked")
+    for commit in commits:
+        if bad := metrics_problems(commit):
+            print(f"[size-range] {_git('log', '-1', '--format=%h %s', commit).strip()} (D-889 36): "
+                  + "; ".join(bad) + " (see docs/adr/D-889, addendum 36)", file=sys.stderr)
+            return 1
     if red:
         print("[size-range] commits that do not pass the D-766 size rule on their own (split in the same"
               " commit or an earlier one):\n" + "\n".join(red), file=sys.stderr)

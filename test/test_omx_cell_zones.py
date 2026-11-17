@@ -332,3 +332,45 @@ def test_the_peer_hold_is_found_in_the_default_hold_directory(tmp_path, monkeypa
     omx_incident.keep_hold("arm_a", "elbow overload")
     ok, why = z.enter((0.37, 0.2))
     assert not ok and "peer HOLD" in why
+
+
+def test_transfer_folded_clears_own_stale_zone_via_confirmed_park_before_first_reach(tmp_path, monkeypatch):
+    import os
+
+    first, _ = held_gate(tmp_path, monkeypatch)
+    for fd in first.zones.held.values():
+        os.close(fd)
+    first.zones.held = {}
+
+    recovered, cell = held_gate(tmp_path, monkeypatch, claim=False)
+    lib = tmp_path / "lib.json"
+    lib.write_text(json.dumps({
+        "source": {"pick": {"x": 0.37, "y": 0.2}, "place": {"x": 0.30, "y": 0.2}},
+        "chunks": {"home": [[0] * 6], "grasp_pick": [[0, 0, 0, 0, 0, 45.0]]},
+    }))
+    cell.park = {"ok": True, "settled": True, "state": [0] * 6}
+    res = cell_transfer.transfer_folded(recovered, lib, sequence=("goto above_pick", "park"))
+    assert res["result"] == "placed"
+    assert [s["command"] for s in res["steps"]] == [
+        f"load {lib}",
+        "goto above_pick",
+        "park",
+        "goto above_pick",
+        "park",
+    ]
+
+
+def test_same_physical_arm_clears_interrupted_occupancy_after_profile_update_and_confirmed_park(tmp_path):
+    import os
+
+    first = zones(tmp_path, "left")
+    assert first.enter((0.37, 0.2)) == (True, "middle")
+    for fd in first.held.values():
+        os.close(fd)
+    first.held = {}
+    updated = cell_zones.Zones({"zone_side": "left", "params": PARAMS}, CAL, lock_dir=tmp_path,
+                               incidents=tmp_path / "incidents", clock=lambda: 0.0, sleep=lambda s: None)
+    updated.bind({**owner("left"), "robot_config_sha256": "c" * 64, "profile_sha256": "d" * 64}, "2" * 32)
+    updated.leave()
+    assert zones(tmp_path, "right").enter((0.37, 0.2)) == (True, "middle")
+

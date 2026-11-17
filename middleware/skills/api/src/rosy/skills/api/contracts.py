@@ -5,11 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rosy.contracts.skill import SkillInvocation
-
-
-def _identifier(value: str, field: str) -> None:
-    if not isinstance(value, str) or not value or value != value.strip():
-        raise ValueError(f"{field} must be a non-empty trimmed string")
+from rosy.contracts.skill.invocation import _identifier
 
 
 def _unique_identifiers(values: tuple[str, ...], field: str, *, allow_empty: bool = False) -> None:

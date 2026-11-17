@@ -79,7 +79,7 @@ def test_cell_document_reads_keep_saved_identity_and_digest(tmp_path):
 
 def test_managed_account_reset_and_revoke_are_http_transactions(tmp_path):
     from test_password_session import _app, _client, _login, ORIGIN, TYPED
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     app, _ = _app(tmp_path)
     app.state.password_sessions.bootstrap_accounts('alice', 'test-site')
     client = _client(app)

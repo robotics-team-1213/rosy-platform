@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from deploy.site.candidate_signing import sign_manifest_bytes
-from deploy.site.verify_candidate import CandidateVerificationError, verify_candidate
+from deploy.site.verify_candidate import PG_BACKUP_FILES, CandidateVerificationError, verify_candidate
 from test_site_candidate_signing import site_keys
 from test_site_candidate_verifier import COMMIT, TEST_KEY_ID, candidate, _write_images_tar
 
@@ -24,6 +24,11 @@ def signed_variant(candidate, site_keys, services):
     ids = _write_images_tar(root / "images.tar", services=services)
     path = root / "release.json"
     manifest = json.loads(path.read_text())
+    if "postgres" not in services:
+        # an earlier signed candidate predates the pg-backup group; the verifier refuses that
+        # group's files without the signed postgres image, so the legacy set ships without them.
+        for name in PG_BACKUP_FILES:
+            manifest["deployment_file_sha256"].pop(name, None)
     manifest["images"] = {}
     for service in services:
         sbom = root / "sbom" / f"{service}.spdx"

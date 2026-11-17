@@ -59,3 +59,84 @@ def test_an_occupied_tray_is_refused():
 def test_no_surface_polygon_keeps_the_configured_point():
     fits, why = pf.options({"sites": {"dest": {"yaw_deg": -14.4}}, "params": None}, "dest", (0.12, 0.08), 0.0, C3, PX)
     assert (fits, why) == ([((0.12, 0.08), -14.4)], None)
+
+
+def test_with_tiers_expands_three_tiers_and_upper_tiers_require_support():
+    tray = [[60, 60], [140, 60], [140, 140], [60, 140]]
+    cfg, cal = pf.with_tiers({"sites": {"dest": {"yaw_deg": 0.0, "surface_z": -0.01, "surface_px": tray}}, "params": None},
+                             {"sites": {"dest": {"homography": "H"}}}, [{"top_height_mm": 32.4}])
+    assert [cfg["sites"][f"dest-l{k}"]["surface_z"] for k in (0, 1, 2)] == pytest.approx([-0.01, 0.0224, 0.0548])
+    assert [cfg["sites"][f"dest-l{k}"]["tier"] for k in (0, 1, 2)] == [1, 2, 3]
+    assert all(cal["sites"][f"dest-l{k}"] == {"homography": "H"} for k in (0, 1, 2))
+    empty, occupied = np.zeros((100, 100), np.uint8), np.ones((100, 100), np.uint8)
+    roi, box = (50, 50, 150, 150), {"length_mm": 30, "width_mm": 30}
+    # 1단 (dest-l0): accepted when empty, refused when occupied
+    assert pf.options(cfg, "dest-l0", (0.0, 0.0), 0.0, box, PX, empty, roi)[1] is None
+    assert "already there" in pf.options(cfg, "dest-l0", (0.0, 0.0), 0.0, box, PX, occupied, roi)[1]
+    # 2단 (dest-l1) and 3단 (dest-l2): refused when empty, accepted when the lower tier supports it
+    for upper in ("dest-l1", "dest-l2"):
+        assert "nothing under it" in pf.options(cfg, upper, (0.0, 0.0), 0.0, box, PX, empty, roi)[1]
+        fits, why = pf.options(cfg, upper, (0.0, 0.0), 0.0, box, PX, occupied, roi)
+        assert why is None and fits[0] == ((0.0, 0.0), 0.0)
+    # Real cell (pallet yaw_deg=0.0, 1단 30x90 container standing along y at x in [-15, 15], y in [-45, 45]):
+    # a 2단 3-cell must align with the 1단 container (yaw 90/-90), not sit crosswise (yaw 0) overhanging empty air
+    wide_tray = [[40, 40], [160, 40], [160, 160], [40, 160]]
+    cfg_wide, _ = pf.with_tiers({"sites": {"dest": {"yaw_deg": 0.0, "surface_z": -0.01, "surface_px": wide_tray}}, "params": None})
+    bar_along_y = np.zeros((160, 160), np.uint8)
+    bar_along_y[55:145, 85:115] = 1  # 30 mm wide in x (cols 85..115), 90 mm long in y (rows 55..145) around (100, 100)
+    fits_bar, why_bar = pf.options(cfg_wide, "dest-l1", (0.0, 0.0), 0.0, C3, PX, bar_along_y, (0, 0, 160, 160))
+    assert why_bar is None and fits_bar[0][1] in (90.0, -90.0)
+
+
+def test_overload_hold_contact_waits_for_load_shedding_before_parking(monkeypatch, tmp_path):
+    """2026-11-10 real2sim: after an overload-hold contact, chunk_runner sheds load before accepting park."""
+    import cell_pipeline_io as cpio
+    import cell_transfer as ct
+
+    monkeypatch.setattr(ct.cp.time, "sleep", lambda _: None)
+    replies = [
+        {"ok": True},  # load
+        {"ok": False, "contact": True, "error": "contact (overload-hold on wrist_flex by the guard): lift and elbow shed its load"},
+        {"ok": False, "error": "the guard holds an overloaded joint: the runner is shedding its load first"},
+        {"ok": True, "settled": True},  # park succeeds once shedding finishes
+    ]
+    seen = []
+
+    class SheddingCell:
+        def act(self, cmd):
+            seen.append(cmd)
+            return replies.pop(0)
+
+    out = ct.transfer_folded(SheddingCell(), tmp_path / "lib.json", closed=48.8)
+    assert out["result"] == "contact" and seen == [f"load {tmp_path / 'lib.json'}", "goto above_pick", "park", "park"]
+    fold_replies = [
+        {"ok": False, "error": "the guard holds an overloaded joint: the runner is shedding its load first"},
+        {"ok": True, "settled": True},
+    ]
+    assert cpio.fold(type("C", (), {"act": lambda self, _: fold_replies.pop(0)})(), sleep=lambda _: None)["ok"] is True
+
+
+def test_restore_caps_retries_transient_bus_timeout():
+    """2026-11-10 real2sim: restore_caps hit transient comm -3001 on readback while the write succeeded."""
+    import record_session as rs
+
+    class FlakyBus:
+        motor = 11
+        flaky = {(11, "pwm_limit"): 1, (12, "pwm_limit"): 2}
+        regs = {m: {"pwm_limit": 20, "current_limit": 50, "hw_error": 0} for m in rs.FOLLOWER}
+
+        def cleanup_write(self, name, value):
+            self.regs[self.motor][name] = value
+
+        def cleanup_read(self, name):
+            left = self.flaky.get((self.motor, name), 0)
+            if left > 0:
+                self.flaky[(self.motor, name)] = left - 1
+                raise RuntimeError("cleanup: comm -3001 error 0")
+            return self.regs[self.motor][name]
+
+        def close(self):
+            pass
+
+    s = rs.Session(open_bus=lambda _: FlakyBus(), systemctl=lambda *_: "", run=lambda *_: 0, log=lambda **_: None)
+    assert s.restore_caps() == []

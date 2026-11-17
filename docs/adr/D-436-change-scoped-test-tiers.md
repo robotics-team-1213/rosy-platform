@@ -61,10 +61,11 @@
 | 바뀐 것 | 착지 시험 |
 |---|---|
 | 관문 도구·harness 가운데 시험을 고르거나 돌리지 않는 것(`tools/land_queue.py`·`land_async.py`·`land_stats.py` 등, `tools/hooks/**`, `tools/remote/host_probe.py` 등) | FULL 대신 선택기 자체 시험 묶음: `affected_narrow.SELF_TEST`(land·remote·affected·known_failures·publish·worktree·pre_push·host_probe·lab_hosts 등 시험)와 `test/architecture`, 경로를 이름으로 읽는 시험, 상시 묶음. 관문 모듈을 import하는 루트 시험이 이 이름 패턴에서 빠지면 `test_affected_tiers`가 실패한다 |
-| 시험을 고르거나 돌리는 코드(`affected_narrow.SELECT_CORE`: `tools/harness/affected_*.py`, `land_selection.py`, `land_browser.py`, `remote_pytest`·`remote_job`·`remote_test_tools`·`work_queue`·`xdist_plan`, `test/known_failures.py`, `test/browser_scope.py`) | FULL 유지. 설계 0.7 규칙 8(관문은 자기가 고른 선택으로 자기를 시험하지 않는다) |
+| 시험을 고르거나 판정하는 코드(`affected_narrow.SELECT_CORE`: `tools/harness/affected_*.py`, `land_selection.py`, `test/known_failures.py`, `test/browser_scope.py`) | FULL 유지. 설계 0.7 규칙 8(관문은 자기가 고른 선택으로 자기를 시험하지 않는다) |
+| 시험을 돌리기만 하는 코드(`affected_narrow.RUNNER_TOOLS`: `land_browser.py`, `remote_pytest`·`remote_job`·`remote_test_tools`·`work_queue`·`xdist_plan`) (2026-11-17 패널: 36시간 FULL 착지 55건 중 34건이 이 경로만) | 자체 시험 tier + 고정 canary 3개(`affected_narrow.CANARY`, 브라우저 canary 없음: 브라우저는 `land.py`가 `browser_scope`로 따로 고른다). 야간 FULL이 그물 |
 | 안전 경로(`concern: safety`, `safety_modules`) | FULL 유지(D-889 6). 정적 import 도달로는 안전 값을 설정·YAML·웹 정적 파일·IDL로 읽는 쪽을 찾지 못한다 |
 | 공용 기반·ROS IDL·하위 conftest·패키징·CI workflow·architecture | 경로의 모듈 suite, 한 단계 역의존(import), 읽는 시험; 하위 conftest는 그 폴더 전체 |
-| 미분류, 폴더 이동·모듈 삭제, 의존성 고정, deploy compose·image·native manifest, source layout, 루트 conftest·pyproject·pytest.ini | FULL 유지(영향 범위를 모름) |
+| 미분류(소유 폴더 시험이 하나도 없을 때만; 있으면 그 폴더 root·옆 시험·그 파일을 이름으로 부르는 형제 소스의 시험, 2026-11-17), 폴더 이동·모듈 삭제, 의존성 고정, deploy compose·image·native manifest, source layout, 루트 conftest·pyproject·pytest.ini | FULL 유지(영향 범위를 모름) |
 
 - 그물: 야간 FULL(`tools/land_nightly.py`, `--full` + 모든 브라우저 suite)과 게시 전 녹색 FULL(D-868, `publish_evidence.py`)은 그대로다. 명시 `--tests full`도 그대로다(게시 증거). GitHub PR의 범위 계산은 이전 규칙을 쓴다(`ci.yml`이 `ROSY_FULL_LEGACY=1`). 좁힌 착지가 놓친 실패는 야간 FULL이 `land_mainred`에 `by: nightly`와 main sha로 남기고, 그 뒤 착지는 기존 main 빨강 이월로 지나간다. 어느 착지가 깼는지는 지금 자동으로 짚지 않는다(전 녹색 야간..main 범위를 사람이 본다).
 - 남는 FULL 단축: 실험실 FULL 계획에서 같은 파일을 두 번 돌리지 않는다(`affected_tests._once`, 29→25 호출). `work_queue.split`은 `--ignore=`만 붙은 호출도 나눈다(루트 `test`가 측정 시간대로 최대 6조각, 무시 파일은 어느 조각에도 없다).

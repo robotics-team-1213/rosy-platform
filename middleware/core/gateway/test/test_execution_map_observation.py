@@ -211,3 +211,26 @@ def test_native_mapping_attempt_still_rejects_before_source_or_backend_mutation(
         elif operation == 'save': r.svc.nav.save_map()
         else: r.svc.nav.reset_mapping()
     assert r.binding.map_snapshot() == original and not r.svc.nav.mapping_active
+
+
+def test_slam_backend_live_map_updates_keep_one_map_id_and_still_store_the_grid(core_client):
+    from core.bridge.map_observation import receive_map
+    _, svc = core_client()
+    svc.config.setdefault("runtime", {})["navigation_backend"] = "slam"
+    ids = []
+    for stamp in (1, 2, 3):             # slam_toolbox republishes /map as it grows; none is "a new map"
+        assert receive_map(NS(_svc=svc, _map_pose_lease=None), message(stamp), warn=lambda _: None)
+        ids.append(svc.state.map_id)
+    assert len(set(ids)) == 1 and ids[0].startswith("slam:") and not ids[0].startswith("occupancy:")
+    assert svc.maps.get_map()["data"] == message().data
+
+
+def test_slam_backend_still_refuses_a_malformed_live_map(core_client):
+    from core.bridge.map_observation import receive_map
+    _, svc = core_client()
+    svc.config.setdefault("runtime", {})["navigation_backend"] = "slam"
+    bad = message(1)
+    bad.data = bad.data[:-1]                     # data length != width*height
+    warnings = []
+    assert not receive_map(NS(_svc=svc, _map_pose_lease=None), bad, warn=warnings.append)
+    assert warnings

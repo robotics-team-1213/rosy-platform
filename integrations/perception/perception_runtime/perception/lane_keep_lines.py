@@ -11,6 +11,8 @@ import math
 import cv2
 import numpy as np
 
+from core_common.calibration_store import FLOOR_PINK_DEFAULTS, read_floor_paint_gate
+
 
 #: Half the painted line width. The keeper fits the paint centre; the containment payload
 #: sends the paint's inner (drivable) edge, so each boundary moves this far toward the lane,
@@ -48,6 +50,16 @@ CARPET_ROW_EXCESS = 20
 MIN_CONTRAST = 40
 CONTRAST_HEADROOM = 0.35
 MAX_SATURATION = 80
+#: D-1013 magenta guide tape (261026 parking mat) for the pink paint source.
+#: OpenCV H is 0-180. The real tape is paler than the sim's: 2026-11-14 rosy_42's
+#: front camera read it H 172-175, S 49-78 (the ceiling phone H 167-172, S 40-74),
+#: so the old H <= 170, S >= 80 gate caught 0 % of it and the white mask took 72 %.
+#: The hue band keeps orange (H 5-25) and yellow out; value keeps shadow noise out.
+#: The white mask drops this gate too, since the tape's S overlaps MAX_SATURATION.
+PINK_H_LOW = FLOOR_PINK_DEFAULTS["pink_h_low"]
+PINK_H_HIGH = FLOOR_PINK_DEFAULTS["pink_h_high"]
+PINK_MIN_SATURATION = FLOOR_PINK_DEFAULTS["pink_min_saturation"]
+PINK_MIN_VALUE = FLOOR_PINK_DEFAULTS["pink_min_value"]
 #: Walls: runs brighter than this (V channel, blue tape included) that start
 #: this many rows above the horizon; bases median-filtered over this many columns.
 WALL_START_ABOVE_HORIZON_PX = 4
@@ -90,8 +102,10 @@ def floor_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
     reference = np.minimum(reference, float(np.median(floor)) + CARPET_ROW_EXCESS)
     threshold = reference + np.maximum(MIN_CONTRAST, CONTRAST_HEADROOM * (255.0 - reference))
     # Coloured paint and overlays (and their blended, paler edges) are not tape.
-    coloured = cv2.dilate((saturation[top:] > MAX_SATURATION).astype(np.uint8),
-                          np.ones((5, 5), np.uint8))
+    coloured = saturation[top:] > MAX_SATURATION
+    if bgr.ndim == 3:
+        coloured |= _pink(hsv[top:])
+    coloured = cv2.dilate(coloured.astype(np.uint8), np.ones((5, 5), np.uint8))
     lit = (floor >= threshold[:, None]) & (coloured == 0)
     mask[top:] = lit
     # Walls: a bright run through the row just above the horizon, followed down.
@@ -317,6 +331,33 @@ def drop_small_components(mask: np.ndarray) -> np.ndarray:
     keep = np.zeros(count, bool)
     keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= DENOISE_MIN_AREA_PX
     return keep[labels].astype(np.uint8)
+
+
+_PINK_GATE = None
+
+
+def pink_gate() -> tuple:
+    """(low, high) HSV bounds of the pink tape for this robot's camera: its accepted ``floor_paint``
+    calibration record (measured from its own frames) or the constants above. Read once per process."""
+    global _PINK_GATE
+    if _PINK_GATE is None:
+        _PINK_GATE = read_floor_paint_gate()
+    return _PINK_GATE
+
+
+def _pink(hsv: np.ndarray) -> np.ndarray:
+    return cv2.inRange(hsv, *pink_gate()) > 0
+
+
+def floor_pink_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
+    """uint8 0/1 mask of the magenta guide tape below the horizon (D-1013 bay pit-in).
+
+    HSV gate, not brightness: a shadow only drops V and the grey carpet keeps S
+    low, so both stay out; white lane paint stays desaturated and stays out too,
+    so both paint kinds can share one frame."""
+    mask = _pink(cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)).astype(np.uint8)
+    mask[:max(0, min(mask.shape[0], int(math.ceil(horizon_row)) + HORIZON_MARGIN_PX))] = 0
+    return drop_small_components(mask)
 
 
 def clean_learned_mask(mask: np.ndarray, horizon_row: float) -> np.ndarray:

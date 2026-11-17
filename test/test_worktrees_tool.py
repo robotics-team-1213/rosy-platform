@@ -233,14 +233,14 @@ def test_locked_worktree_is_never_removed(main):
 def test_idle_threshold_is_respected(main):
     wt = add(main, "fresh", owner=PEER)  # merged-looking, but no commit of its own landed: the 72 h rule
     landed = add(main, "landed", commit=True, merge=True, owner=PEER)
+    dirty = add(main, "dirty", commit=True, merge=True, owner=PEER)
+    (dirty / "wip.txt").write_text("wip", encoding="utf-8")
     now = time.time()
-    assert worktrees.prune(main, apply=True, snapshot=True, now=now) == 0
-    assert worktrees.prune(main, apply=True, snapshot=True, now=now + 0.9 * HOUR) == 0
-    assert landed.is_dir()
-    assert worktrees.prune(main, apply=True, now=now + 1.1 * HOUR) == 1  # D-790: landed and clean, anyone's, 1 h
-    assert not landed.exists() and wt.is_dir()
+    assert worktrees.prune(main, apply=True, now=now) == 1  # clean landed (any owner) goes at once
+    assert not landed.exists() and wt.is_dir() and dirty.is_dir()
+    assert worktrees.prune(main, apply=True, snapshot=True, now=now + 1.1 * HOUR) == 0  # dirty landed waits 72 h
     assert worktrees.prune(main, apply=True, snapshot=True, now=now + 71 * HOUR) == 0
-    assert wt.is_dir()
+    assert wt.is_dir() and dirty.is_dir()
 
 
 def test_idle_counts_uncommitted_files_and_the_given_threshold(main):
@@ -375,8 +375,9 @@ def test_status_names_a_verdict_per_worktree(main, capsys):
     assert "yes   needs snapshot" in verdict["open"]
     assert "-     locked" in verdict["held"]
     assert worktrees.main(["status"]) == 0
-    assert all("-     active" in line for line in capsys.readouterr().out.splitlines()
-               if line.split()[0] in ("done", "open"))
+    verdict = {line.split()[0]: line for line in capsys.readouterr().out.splitlines()}
+    assert "yes   removable" in verdict["done"]
+    assert "-     active" in verdict["open"]
 
 
 def test_new_creates_below_the_cap_and_refuses_at_it(main, monkeypatch, capsys):
@@ -618,41 +619,44 @@ def test_land_continues_when_the_prune_fails(main, landing, monkeypatch, capsys)
     assert done.is_dir() and git(main, "rev-parse", "main") == git(topic, "rev-parse", "HEAD")
 
 
-# --- owner fast path and non-worktree entries under .worktrees/ ---------------------
+# --- zero-wait landed cleanup and non-worktree entries under .worktrees/ -------------
 
-def test_owner_fast_path_takes_only_the_callers_landed_clean_worktree(main, capsys):
+def test_zero_wait_takes_any_owners_landed_clean_worktree(main, capsys):
     now = time.time()  # everything was made seconds ago
     mine = add(main, "mine", commit=True, merge=True)
     peer = add(main, "peer", commit=True, merge=True, owner=PEER)
-    empty = add(main, "empty")  # never committed: its tip is main's, so "merged" without any work landed
     other = add(main, "sess", commit=True, merge=True, owner=f"{ME}; session other")
+    bare = add(main, "bare", commit=True, merge=True, owner=None)
+    empty = add(main, "empty")  # never committed: its tip is main's, so "merged" without any work landed
     blind = add(main, "blind", commit=True, merge=True)
     (main / ".git" / "logs" / "refs" / "heads" / "feat" / "blind").unlink()  # no reflog: no evidence
     assert worktrees.main(["status"], now=now) == 0
     line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
-    assert "yes   removable" in line["mine"]
-    assert all("-     active" in line[name] for name in ("peer", "empty", "sess", "blind"))
-    assert worktrees.prune(main, now=now) == 1  # dry run
-    assert mine.is_dir()
-    assert worktrees.prune(main, apply=True, now=now) == 1
-    assert not mine.exists() and "refs/heads/feat/mine" not in refs(main, "refs/heads/feat")
-    assert all(wt.is_dir() for wt in (peer, empty, other, blind))
-    assert worktrees.prune(main, apply=True, now=now + 0.5 * HOUR) == 0
-    assert worktrees.prune(main, apply=True, now=now + 2 * HOUR) == 2  # D-790: anyone's landed one after 1 h
-    assert not peer.exists() and not other.exists() and empty.is_dir() and blind.is_dir()
+    assert all("yes   removable" in line[name] for name in ("mine", "peer", "sess", "bare"))
+    assert all("-     active" in line[name] for name in ("empty", "blind"))
+    assert worktrees.prune(main, now=now) == 4  # dry run
+    assert all(wt.is_dir() for wt in (mine, peer, other, bare))
+    assert worktrees.prune(main, apply=True, now=now) == 4
+    assert not any(wt.exists() for wt in (mine, peer, other, bare))
+    for branch in ("feat/mine", "feat/peer", "feat/sess", "feat/bare"):
+        assert f"refs/heads/{branch}" not in refs(main, "refs/heads/feat")
+    assert empty.is_dir() and blind.is_dir()
     assert worktrees.prune(main, apply=True, now=now + 71 * HOUR) == 0
     assert worktrees.prune(main, apply=True, now=now + 73 * HOUR) == 2  # no landing evidence: the 72 h rule
-    assert not any(wt.exists() for wt in (peer, empty, other, blind))
+    assert not empty.exists() and not blind.exists()
 
 
-def test_owner_fast_path_waits_for_a_dirty_worktree_and_the_current_one(main, monkeypatch):
+def test_zero_wait_waits_for_a_dirty_worktree_and_the_current_one(main, monkeypatch):
     now = time.time()
     dirty = add(main, "dirty", commit=True, merge=True)
     (dirty / "note.txt").write_text("wip", encoding="utf-8")
+    peer_dirty = add(main, "peer-dirty", commit=True, merge=True, owner=PEER)
+    (peer_dirty / "wip.txt").write_text("wip", encoding="utf-8")
     here = add(main, "here", commit=True, merge=True)
     monkeypatch.chdir(here)
     assert worktrees.main(["prune", "--snapshot", "--apply"], now=now) == 0
-    assert dirty.is_dir() and here.is_dir()
+    assert worktrees.main(["prune", "--apply"], now=LATER) == 0  # lossless never drops landed-dirty
+    assert dirty.is_dir() and peer_dirty.is_dir() and here.is_dir()
 
 
 def test_dot_directories_and_plain_files_under_worktrees_are_not_worktrees(main, monkeypatch, capsys):
@@ -762,8 +766,30 @@ def test_stale_history_is_flagged_never_pruned_and_never_a_base(main, monkeypatc
     assert "more than 0 commits not in main" in worktrees.rules.stale_history(main, "feat/old")
     monkeypatch.setattr(worktrees.rules, "STALE_COMMITS", 2000)
     assert worktrees.rules.stale_history(main, "feat/old") is None
+    # 11-14: v2/v3 chains stacked on unlanded branches held 178-189 commits; a base must be in main
+    assert worktrees.main(["new", "again", "fix/again", "--from", "feat/old"]) == 1
+    assert "not in main yet" in capsys.readouterr().err
+    assert worktrees.rules.unlanded(main, "origin/main") is None  # D-1038 urgent lane base is published work
+    git(main, "merge", "-q", "--ff-only", "feat/old")
     assert worktrees.main(["new", "again", "fix/again", "--from", "feat/old"]) == 0
     assert (main / ".worktrees" / "again" / "old.txt").is_file()
+
+
+def test_prune_archives_unlanded_branches_idle_without_a_worktree_and_loses_nothing(main, capsys):
+    """11-14: 270 branches not in main, 219 with no worktree, 95 idle over 7 days."""
+    wt = add(main, "idle", commit=True)
+    sha = git(wt, "rev-parse", "HEAD")
+    git(main, "worktree", "remove", str(wt))
+    add(main, "busy", commit=True)  # checked out: never archived
+    later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
+    assert worktrees.rules.archive_abandoned(main, time.time(), apply=True) == 0  # recent: kept
+    worktrees.prune(main, now=later)
+    assert "would archive 1 unlanded branch(es)" in capsys.readouterr().out
+    assert "refs/heads/feat/idle" in refs(main, "refs/heads")
+    worktrees.prune(main, apply=True, now=later)
+    assert "archived 1 unlanded branch(es)" in capsys.readouterr().out
+    assert "refs/heads/feat/idle" not in refs(main, "refs/heads") and "refs/heads/feat/busy" in refs(main, "refs/heads")
+    assert git(main, "rev-parse", f"refs/archive/feat/idle@{sha[:10]}") == sha
 
 
 def test_new_records_the_owner_override_and_status_names_unknown_owners(main, capsys):

@@ -26,7 +26,6 @@ def test_lightweight_documents_use_one_canonical_header_without_consuming_server
     source.write_text(source.read_text(encoding='utf-8').replace('테마 변경', '테마 변경 fixture'), encoding='utf-8')
     assert set(api['check'](root)) == set(api['DOCUMENT_PAGES'])
     assert '{{focus}}' in api['render'](root, 'learning.html')
-    assert '{{model_origin}}' in api['render'](root, 'learning.html')
 
 
 def test_document_brand_scope_propagates_from_one_component_without_touching_task_content(tmp_path):

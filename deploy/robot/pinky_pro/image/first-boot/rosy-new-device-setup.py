@@ -34,7 +34,7 @@ def response(path: str, status_path: Path) -> tuple[int, dict[str, str], bytes]:
 
     candidate = status.get("device_name")
     name = candidate if isinstance(candidate, str) and DEVICE_NAME.fullmatch(candidate) else "New Rosy device"
-    page = f"""<!doctype html>
+    page = rf"""<!doctype html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">

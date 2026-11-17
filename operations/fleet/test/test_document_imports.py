@@ -33,6 +33,7 @@ SHARED = {
     "map-fit.js",
     "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
+    "cell-frames.js",  # D-136: Vision-lease cell camera frames shared by Console and Cell.
     "power-action.js",  # D-440 6: the robot card's sleep / wake button, out of roster.js
     "area-first.js",
     "area-nav.js",  # D-741 6·7: the address view picks the area (rail and sub-nav state)
@@ -65,6 +66,7 @@ OWN = {
         "console-goal.js",  # D-798 3.2: console.js goal targeting and operator pin
         "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
         "roster.js",
+        "roster-workspace.js",
         "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
         "motor-health-view.js",  # Fleet robot rows adapt shared read-only motor evidence.
@@ -92,6 +94,7 @@ OWN = {
         "localization-badge.js",
         "power-health-view.js",
         "charge-bays-view.js",  # D-941: read-only charge bay plan
+        "charge-bays-model.js",  # its DOM-free display model
         "person-request.js",  # D-721 Amendment: 사람 부탁 queue row
         "station-recovery.js",  # D-721 Amendment: station recovery request row
         "platoon-view.js",  # D-941: read-only loop gaps
@@ -124,6 +127,10 @@ OWN = {
         "file-picker.js",  # D-926 C7: one Korean file picker
         "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
         "cell-object-catalog.js",  # 물체 카탈로그(무게) 읽기 전용
+        "cell-real2sim.js",  # 실물↔시뮬(Real-to-Sim / Sim-to-Real) 파이프라인 상태 및 핸드오프 평가
+        "cell-real2sim-specs.js",  # split from cell-real2sim.js
+        "cell-real2sim-actions.js",  # split from cell-real2sim.js
+        "cell-real2sim-views.js",  # split from cell-real2sim.js
         "cell-line.js",  # D-975: 준비 노선(응답이 채운 요소만 읽음)
     },
     "site-map.js": {
@@ -132,6 +139,9 @@ OWN = {
         "site-map-teach.js",
         "site-map-survey.js",
         "site-map-camera.js",
+        "site-map-reality.js",  # map vs D-594 drive: report and one draft correction
+        "site-map-camera-draft.js",  # Vision draft-map candidates become the first draft
+        "site-map-bands.js",  # D-766 split: the four crosswalk waiting-band buttons
         "site-map-sources.js",  # Map profile selection and read-only camera-plane presentation.
         "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
         "subnav-screens.js",  # D-926 3: sub-nav moves between screens

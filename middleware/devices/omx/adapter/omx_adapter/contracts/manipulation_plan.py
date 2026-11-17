@@ -42,6 +42,8 @@ def _finite(name: str, value: object, *, positive: bool = False) -> float:
 def _vector(name: str, value: object, length: int) -> tuple[float, ...]:
     if not isinstance(value, (tuple, list)) or len(value) != length:
         raise ValueError(f"{name} must contain {length} values")
+    if type(value) is tuple and all(type(item) is float and math.isfinite(item) for item in value):
+        return value
     return tuple(_finite(name, item) for item in value)
 
 
@@ -144,17 +146,28 @@ class JointTrajectoryPoint:
     accelerations: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "time_from_start_s", _finite(
-            "time_from_start_s", self.time_from_start_s, positive=True
-        ))
-        if not isinstance(self.positions, (tuple, list)) or not self.positions:
+        t = self.time_from_start_s
+        if type(t) is not float or not (math.isfinite(t) and t > 0):
+            object.__setattr__(self, "time_from_start_s", _finite(
+                "time_from_start_s", t, positive=True
+            ))
+        pos = self.positions
+        if not isinstance(pos, (tuple, list)) or not pos:
             raise ValueError("positions must contain one value per joint")
-        count = len(self.positions)
-        object.__setattr__(self, "positions", _vector("positions", self.positions, count))
-        for name in ("velocities", "accelerations"):
-            values = getattr(self, name)
-            if values is not None:
-                object.__setattr__(self, name, _vector(name, values, count))
+        count = len(pos)
+        checked_pos = _vector("positions", pos, count)
+        if checked_pos is not pos:
+            object.__setattr__(self, "positions", checked_pos)
+        vel = self.velocities
+        if vel is not None:
+            checked_vel = _vector("velocities", vel, count)
+            if checked_vel is not vel:
+                object.__setattr__(self, "velocities", checked_vel)
+        acc = self.accelerations
+        if acc is not None:
+            checked_acc = _vector("accelerations", acc, count)
+            if checked_acc is not acc:
+                object.__setattr__(self, "accelerations", checked_acc)
 
 
 @dataclass(frozen=True)

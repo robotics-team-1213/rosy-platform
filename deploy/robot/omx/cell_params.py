@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import time
 from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-params.v1"
@@ -46,10 +47,14 @@ DEFAULTS = {
     "gripper.gap_mm_per_unit": (10.4, "mm", 3, 30),
     "scene.diff": (45, "gray", 5, 255), "scene.min_area_px": (350, "px", 20, 100000), "scene.beyond_px": (60, "px", 10, 300),
     "pivot.max_bias_mm": (25.0, "mm", 1, 200), "calibrate.consensus_px": (15.0, "px", 2, 60),
-    "jaw_centre.merge_px": (12, "px", 0, 40), "jaw_centre.min_side_px": (80, "px", 10, 2000), "jaw_centre.gap_lo_px": (45, "px", 10, 300), "jaw_centre.gap_hi_px": (110, "px", 20, 400),
+    "jaw_side.other_mm": (54.0, "mm", 20, 90), "jaw_side.other_deg": (79.0, "deg", -180, 360), "jaw_side.roi_px": (45.0, "px", 10, 200),
+    "jaw_side.band_mm": (18.0, "mm", 5, 60), "jaw_side.above_mm": (74.0, "mm", 0, 200),
+    "jaw_side.depth_band": (0, "flag", 0, 1), "jaw_side.validated_arm_a": (0, "flag", 0, 1), "jaw_side.validated_arm_b": (0, "flag", 0, 1),
+    "jaw_side.validated_arm_s": (0, "flag", 0, 1), "pivot.side_agree_mm": (3.0, "mm", 0.5, 20), "pivot.keep_frames": (20, "count", 1, 500),
+    "jaw_centre.merge_px": (12, "px", 0, 40), "jaw_centre.min_side_px": (80, "px", 10, 2000), "jaw_centre.gap_lo_px": (25, "px", 10, 300), "jaw_centre.gap_hi_px": (110, "px", 20, 400),
     "gripper.held_30mm": (52.3, "gripper", 45, 60), "gripper.open_max": (56.0, "gripper", 50, 70),
     "reach.enabled": (1, "flag", 0, 1), "reach.tol_mm": (2.0, "mm", 0.5, 10), "reach.max_iter": (2, "count", 0, 5),
-    "reach.max_mm": (20.0, "mm", 2, 50), "reach.gain": (1.0, "ratio", 0.2, 1.0),
+    "reach.max_mm": (20.0, "mm", 2, 50), "reach.gain": (1.0, "ratio", 0.2, 1.0), "reach.samples": (1, "count", 1, 5),
     "wrist.enabled": (0, "flag", 0, 1), "wrist.finger_servo": (0, "flag", 0, 1), "wrist.neutral_ring_chroma": (20.0, "lab", 2, 60),
     "wrist.min_blob_px": (3000, "px", 100, 200000), "wrist.servo_gain": (0.5, "ratio", 0.1, 1.0), "wrist.servo_across": (0, "flag", 0, 1), "wrist.ref_servo": (1, "flag", 0, 1),
     "wrist.probe_mm": (6.0, "mm", 2, 15), "wrist.ref_tol_px": (12.0, "px", 3, 60), "wrist.ref_estimate": (1, "flag", 0, 1),
@@ -69,10 +74,20 @@ DEFAULTS = {
     "objects.drop_shadow": (1, "flag", 0, 1), "objects.shadow_tol": (12.0, "lab", 2, 40), "objects.shadow_min_light": (0.45, "ratio", 0.1, 0.9),
     "objects.top_v_frac": (0.8, "ratio", 0, 0.95), "objects.side_retry_v_frac": (0.75, "ratio", 0, 0.95),
     "grasp.end_frac": (0.7, "ratio", 0, 1),
+    "wrist.finger_color": (0, "mode", 0, 2),
+    "grasp.stability_check": (1, "flag", 0, 1),
+    "grasp.shallow_tol_units": (1.2, "gripper", 0.2, 5.0),
+    "grasp.wedged_tol_units": (0.7, "gripper", 0.2, 5.0),
+    "grasp.max_skew_mm": (4.0, "mm", 1.0, 20.0),
+    "grasp.max_reinsert": (1, "count", 0, 5),
+    "grasp.min_stable_current_ma": (0.0, "mA", 0.0, 600.0),
+    "grasp.vision_after_grasp": (0, "flag", 0, 1),
+    "grasp.reach_on_reinsert": (0, "flag", 0, 1),
+    "wrist.parallax_px": (0.0, "px", -100.0, 100.0),
     "objects.split_touching": (1, "flag", 0, 1), "objects.split_peak_frac": (0.6, "ratio", 0.3, 0.9),
     "objects.split_max": (6, "count", 2, 9), "objects.split_gap_mm": (8.0, "mm", 0, 20), "objects.split_stagger_mm": (20.0, "mm", 0, 40),
     "pivot.over_target": (0, "flag", 0, 1), "pivot.over_top_mm": (30.0, "mm", 5, 120), "pivot.over_clear_mm": (30.0, "mm", 10, 100),
-    "feel.enabled": (1, "flag", 0, 1), "feel.step_mm": (12.0, "mm", 3, 30), "feel.tries": (4, "count", 0, 6),
+    "feel.enabled": (1, "flag", 0, 1), "feel.step_mm": (12.0, "mm", 3, 30), "feel.tries": (4, "count", 0, 6), "feel.z_step_mm": (0.0, "mm", 0, 30),
     "push.height_m": (0.012, "m", 0.005, 0.03), "push.speed_m_s": (0.010, "m/s", 0.003, 0.03),
     "push.gap_mm": (10.0, "mm", 3, 40),
     "runner.pace_lag": (1.6, "joint_unit", 0.1, 5), "runner.pace_rise": (0.3, "joint_unit", 0, 5),
@@ -87,11 +102,23 @@ DEFAULTS = {
     "jitter.hold_std": (0.4, "joint_unit", 0.05, 3), "jitter.hold_flips_hz": (3.0, "hz", 0.5, 15),
     "jitter.move_std": (0.3, "joint_unit", 0.05, 3), "jitter.move_flips_hz": (4.0, "hz", 0.5, 15),
     "jitter.pwm_std": (25, "pwm", 5, 300), "jitter.pwm_flips_hz": (1.2, "hz", 0.3, 4),
+    "jitter.sway_mm": (1.5, "mm", 0.3, 20), "jitter.sway_deg": (1.0, "deg", 0.2, 10),
+    "runner.pitch_hold_gain": (0.0, "ratio", 0, 0.5), "runner.pitch_hold_max": (0.5, "joint_unit", 0, 1.0),
+    "runner.speed_adapt": (0, "flag", 0, 1), "runner.speed_min": (0.4, "ratio", 0.2, 1.0),
     "loadcheck.risky_share": (0.5, "ratio", 0.2, 0.95), "loadcheck.min_cell": (20, "count", 1, 1000),
     "loadcheck.refuse_unknown": (0, "flag", 0, 1),
     "corridor.half_width_mm": (30.0, "mm", 10, 80), "corridor.clear_z_m": (0.10, "m", 0.04, 0.25),
     "corridor.base_m": (0.10, "m", 0.0, 0.2),
     "corridor.min_px": (40, "px", 1, 100000),
+    "verify.depth_diff_mm": (6.0, "mm", 1, 30), "verify.touch_diff_mm": (5.0, "mm", 1, 20),
+    "verify.step_mm": (8.0, "mm", 2, 40), "verify.live_fresh_s": (2.0, "s", 0.5, 10),
+    "verify.plate_diff_mm": (10.0, "mm", 2, 30), "verify.nadir_off_px": (20.0, "px", 5, 120),
+    "verify.mark_sigma_mm": (3.0, "mm", 0.5, 15), "verify.map_sigma_max_mm": (5.0, "mm", 1, 30),
+    "verify.bias_sigma_max_mm": (3.0, "mm", 0.5, 20), "verify.place_sigma_mm": (3.0, "mm", 0.5, 15),
+    "verify.nis_alarm": (9.21, "chi2", 3.0, 30.0), "verify.cusum_k_sigma": (1.0, "sigma", 0.1, 3.0),
+    "verify.cusum_h_sigma": (5.0, "sigma", 1.0, 20.0), "verify.cusum_min_n": (15, "count", 5, 50),
+    "post.tol_mm": (5.0, "mm", 1.0, 20.0), "post.max_age_s": (86400.0, "s", 60.0, 604800.0),
+    "post.finger_tol_mm": (6.0, "mm", 1.0, 20.0), "post.yaw_pair_tol_deg": (15.0, "deg", 1.0, 45.0),
 }
 
 
@@ -135,11 +162,27 @@ def validate(data: dict) -> dict:
     return values
 
 
+_DEFAULT_VALUES = {name: spec[0] for name, spec in DEFAULTS.items()}
+_DEFAULT_SHA = hashlib.sha256(json.dumps(_DEFAULT_VALUES, sort_keys=True).encode()).hexdigest()[:12]
+_LOAD_CACHE: dict[tuple[str, int, int], tuple[dict, str]] = {}
+
+
 def load(path=None) -> dict:
     """{"values": every parameter (the file's, else the default), "sha": digest of those effective values}."""
-    chosen = validate(json.loads(Path(path).read_text(encoding="utf-8-sig"))) if path else {}
-    values = {name: chosen.get(name, spec[0]) for name, spec in DEFAULTS.items()}
-    return {"values": values, "sha": digest(values)}
+    if not path:
+        return {"values": dict(_DEFAULT_VALUES), "sha": _DEFAULT_SHA}
+    p = Path(path)
+    st = p.stat()
+    stable = abs(time.time_ns() - st.st_mtime_ns) >= 50_000_000
+    key = (str(p.resolve()), st.st_ino, st.st_mtime_ns, st.st_size)
+    cached = _LOAD_CACHE.get(key) if stable else None
+    if cached is None:
+        chosen = validate(json.loads(p.read_text(encoding="utf-8-sig")))
+        values = {name: chosen.get(name, spec[0]) for name, spec in DEFAULTS.items()}
+        cached = (values, digest(values))
+        if stable:
+            _LOAD_CACHE[key] = cached
+    return {"values": dict(cached[0]), "sha": cached[1]}
 
 
 if __name__ == "__main__":

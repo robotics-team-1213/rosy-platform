@@ -61,13 +61,13 @@ def test_legacy_callers_use_the_installed_functions(monkeypatch):
     runner = importlib.import_module("chunk_runner")
     teacher = importlib.import_module("teach_trajectory")
     legacy_profile = importlib.import_module("motion_profile")
-    for name in ("load_library", "transit_path", "park_path", "too_fast"):
+    for name in ("load_library", "transit_path", "park_path", "chain_path", "too_fast"):
         assert getattr(runner, name) is getattr(chunks, name)
     assert teacher.too_fast is chunks.too_fast
     assert runner.NAMES is teacher.NAMES is chunks.NAMES
     assert runner.TRANSIT is chunks.TRANSIT
     assert runner.PARK_SPEED == teacher.GUARD_UNITS_PER_S == chunks.GUARD_UNITS_PER_S
-    for name in ("trapezoid", "progress", "smooth", "retime"):
+    for name in ("trapezoid", "progress", "eased", "eased_progress", "flow", "blend_chunks", "smooth", "retime"):
         assert getattr(legacy_profile, name) is getattr(profile, name)
 
 

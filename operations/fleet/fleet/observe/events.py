@@ -11,14 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
 
+from core_common.audit_fields import is_credential_field
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 
 MAX_EVENT_BYTES = 64 * 1024
-_SENSITIVE_FIELD = re.compile(
-    r"(?:passwo?rd|passwd|psk|passphrase|secret|token|credential|authorization|"
-    r"api[_-]?key|private[_-]?key|bearer)",
-    re.IGNORECASE,
-)
 _PRIVATE_KEY = re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----")
 
 
@@ -29,7 +25,7 @@ class EventRejected(ValueError):
 def _contains_sensitive_field(value: object) -> bool:
     if isinstance(value, Mapping):
         return any(
-            _SENSITIVE_FIELD.search(str(key)) or _contains_sensitive_field(child)
+            is_credential_field(key) or _contains_sensitive_field(child)
             for key, child in value.items()
         )
     if isinstance(value, list):
@@ -61,6 +57,8 @@ class CoreEventStore:
                 );
                 CREATE INDEX IF NOT EXISTS core_event_audit_robot_cursor
                     ON core_event_audit(robot_id, audit_id);
+                CREATE INDEX IF NOT EXISTS core_event_audit_received
+                    ON core_event_audit(received_at);
                 """
             )
         if os.name != "nt":
@@ -130,6 +128,14 @@ class CoreEventStore:
             }
             for row in rows
         ]
+
+    def last_received_times(self) -> dict[str, str]:
+        """Latest `received_at` per robot (D-1016 enrollment idle marking reads this)."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT robot_id, MAX(received_at) FROM core_event_audit GROUP BY robot_id"
+            ).fetchall()
+        return {row[0]: row[1] for row in rows}
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0)

@@ -714,3 +714,21 @@ def test_the_actuator_stops_a_joint_that_holds_its_load_at_the_cap():
             bus.advance()
             now[0] += 0.1
             actuator.check_effort({name: 2028 for name in BODY})
+
+
+def test_leader_actuator_check_effort_uses_sync_read_on_dynamixel_bus():
+    bus = Bus(leader=True, pwm_limit=330)
+    bus.model_ctrl_table = {}
+    actuator = actuator_module.LeaderActuator(bus)
+    actuator.admit(pwm=150, current=100)
+    actuator.enable()
+    actuator.seed({name: 2028 for name in BODY})
+    sync_calls = []
+
+    def sync_read(register, motors=None, *, normalize=True, num_retry=0):
+        sync_calls.append((register, tuple(motors or ()), normalize, num_retry))
+        return {name: bus.pwm[name] for name in (motors or NAMES)}
+
+    bus.sync_read = sync_read
+    actuator.check_effort({name: 2028 for name in BODY})
+    assert sync_calls == [("Present_PWM", BODY, False, 2)]

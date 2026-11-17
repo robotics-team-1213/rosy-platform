@@ -1,4 +1,5 @@
 """Exercise Account's own page composition, including its first-password browser flow."""
+import json
 import threading
 import time
 from urllib.parse import quote, urlencode
@@ -25,7 +26,8 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
     listener = safe_listener()
     origin = f'https://localhost:{listener.getsockname()[1]}'
     callback = origin + '/registered-fleet-callback'
-    app.state.account_authority.clients['fleet']['redirect_uris'] = [callback]
+    with app.state.account_authority.transaction() as db:  # D-955 2: clients are registry rows read per request
+        db.execute("UPDATE account_clients SET redirect_uris=? WHERE client_id='fleet'", (json.dumps([callback]),))
     @app.get('/registered-fleet-callback')
     def callback_page():
         return HTMLResponse('<h1>Registered callback</h1>')

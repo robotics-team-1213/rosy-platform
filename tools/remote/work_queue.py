@@ -38,10 +38,10 @@ ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 # FULL round carried 60-163 min of browser chunks and the hosts ran at load ~5 of 24 cores; each PC's JOB
 # admission (remote_job.ADMIT, since 10-28) now holds the cores and GB, and LOAD-FLAKY ids keep their ALONE chunk.
 # ROSY_BROWSER_PER_HOST overrides it to measure.
-BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "4"))
+BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "2"))
 # 6 since 2026-11-01: FULL rounds ran their invocations at 0.4-0.7x parallelism (sum run_s / wall), the tail queued
 # behind the run's own workers for 60-117 min; each PC's JOB admission still bounds cores and GB.
-MAX_MAIN = 6  # main workers one run may ask of a full host (1 restores one-at-a-time)
+MAX_MAIN = 3  # main workers one run may ask of a full host; 3 avoids diluting xdist headroom down to -n 2
 MAIN_CORES, MAIN_GB = 2, 2  # headroom one more main worker needs
 SKIP_ALONE = "!"  # workers(): a worker kind on a host other than the host_alone suites' one
 # Suites that need a lab PC's own environment (the pinned learner venv under ~/.local/share/rosy-learning-center,
@@ -130,20 +130,21 @@ def main_workers(room: dict, jobs: int) -> int:
 
 
 def wanted(kind: str, invocations: list[list[str]], site: bool = False):
-    """The Work.take filter of a worker kind (None: anything); a site PC's worker never takes a LAB_ONLY one."""
+    """The Work.take filter of a worker kind (None: anything); a site PC never takes LAB_ONLY or host_alone."""
     pick = _wanted(kind, invocations)
     if not site:
         return pick
-    return lambda i: not lab_only(invocations[i]) and (pick is None or pick(i))
+    return lambda i: not lab_only(invocations[i]) and not host_alone(invocations[i]) and (pick is None or pick(i))
 
 
 def stranded(work: "Work", invocations: list[list[str]], hosts: list[str], headroom: dict) -> bool:
-    """With only site PCs left and only LAB_ONLY invocations queued, mark those not run (LOST_EXIT: no lab PC had
-    room, D-584), never a failure; True when it did. Otherwise a site worker that takes nothing would loop."""
-    if not all((headroom.get(h) or {}).get("site") for h in hosts) or not all(lab_only(invocations[i]) for i in work.todo):
+    """With only site PCs left and only LAB_ONLY or host_alone invocations queued, mark those not run (LOST_EXIT:
+    no lab PC had room, D-584), never a failure; True when it did. Otherwise a site worker would loop."""
+    if (not hosts or not work.todo or not all((headroom.get(h) or {}).get("site") for h in hosts)
+            or not all(lab_only(invocations[i]) or host_alone(invocations[i]) for i in work.todo)):
         return False
     for i in work.todo:
-        print(f"[remote-pytest] not run: {' '.join(invocations[i])} needs a lab PC (work_queue.LAB_ONLY)",
+        print(f"[remote-pytest] not run: {' '.join(invocations[i])} needs a lab PC (work_queue.LAB_ONLY / host_alone)",
               file=sys.stderr, flush=True)
         work.codes[i] = LOST_EXIT
     work.todo.clear()
@@ -231,9 +232,14 @@ class Work:
 UPGRADE_S = 300  # how often a run on small hosts only looks for a lab PC again
 
 
+def small_first(room: dict | None) -> bool:
+    """True for a light or site host that pulls smallest queued invocations first."""
+    return bool(room and (room.get("light") or room.get("site")))
+
+
 def small_only(plan: list[tuple[str, str]], headroom: dict) -> bool:
     """Every worker's host is the site PC or a light one (place(): the lab PCs were full or held)."""
-    return all((headroom.get(h) or {}).get("site") or (headroom.get(h) or {}).get("light") for h, _ in plan)
+    return all(small_first(headroom.get(h)) for h, _ in plan)
 
 
 def upgrade_watch(work: Work, plan, headroom: dict, place, deferred: set, every: float = UPGRADE_S):
@@ -292,9 +298,25 @@ class Gate:
                 self._cv.notify_all()
 
 
-SPLIT_S = 240  # an invocation whose median run exceeds this is split (2026-11-01: 30 min combined invocations)
-MAX_SPLIT = 6
+SPLIT_S = 90  # an invocation whose median run exceeds this is split (Wave-3A: tighter tail splitting)
+MAX_SPLIT = 12
 BYTES_PER_S = 2000  # shortcut: rough test-code bytes per run second for invocations with no history; replace if it misorders
+FLEET_SECONDS = "tools/harness/fleet_test_seconds.json"
+
+
+def _fleet_weights(repo: Path) -> dict[str, float]:
+    try:
+        data = json.loads((repo / FLEET_SECONDS).read_text(encoding="utf-8"))
+        return {str(k): float(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _file_weight(repo: Path, path: Path, fleet: dict[str, float]) -> float:
+    rel = path.relative_to(repo).as_posix()
+    if rel.startswith("operations/fleet/test/") and path.name in fleet:
+        return max(1.0, fleet[path.name])
+    return path.stat().st_size / BYTES_PER_S
 
 
 @functools.lru_cache(maxsize=4)
@@ -323,13 +345,46 @@ def history(repo: Path) -> dict[tuple, float]:
     return _history(str(events), events.stat().st_mtime)
 
 
+@functools.lru_cache(maxsize=4)
+def _fail_rates(events: str, mtime: float) -> dict[tuple, float]:
+    """Share of an argv's finished runs (not cancelled) that ended new or flaky, from the landing events log."""
+    seen = collections.defaultdict(lambda: [0, 0])
+    with open(events, encoding="utf-8") as f:
+        for line in f:
+            if '"tests"' not in line:
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if row.get("event") == "tests" and row.get("verdict") in ("pass", "new", "flaky"):
+                seen[tuple(row.get("argv") or ())][0] += row["verdict"] != "pass"
+                seen[tuple(row.get("argv") or ())][1] += 1
+    return {argv: bad / total for argv, (bad, total) in seen.items()}
+
+
+def order(repo: Path, inv: list[str], seen: dict) -> tuple:
+    """Fail-fast start order: short invocations first, likeliest to fail per second first; long ones by cost after."""
+    run_s = cost(repo, inv, seen)
+    if run_s > SPLIT_S:
+        return (1, -run_s)
+    common = subprocess.run(["git", "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            capture_output=True, text=True).stdout.strip()
+    events = Path(common) / "rosy-land-events.jsonl" if common else None
+    rates = _fail_rates(str(events), events.stat().st_mtime) if events and events.is_file() else {}
+    return (0, -(rates.get(tuple(inv), 0.0) + 0.01) / max(run_s, 5.0))
+
+
 def cost(repo: Path, inv: list[str], seen: dict | None = None) -> float:
     """Expected run seconds: the measured median when this argv ran before, else test-file bytes / BYTES_PER_S."""
     seen = history(repo) if seen is None else seen
     if tuple(inv) in seen:
         return seen[tuple(inv)]
+    rest = inv[len(list(itertools.takewhile(ENV_WORD.match, inv))):]
+    if rest and tuple(rest) in seen:
+        return seen[tuple(rest)]
     total = 0
-    for word in inv:
+    for word in rest:
         path = repo / word.split("::", 1)[0]
         files = path.rglob("*.py") if path.is_dir() else [path]
         total += sum(f.stat().st_size for f in files if f.is_file())
@@ -339,42 +394,53 @@ def cost(repo: Path, inv: list[str], seen: dict | None = None) -> float:
 def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) -> list[list[str]]:
     """Long invocations as smaller ones the hosts can run side by side; every test still runs exactly once.
 
-    One estimated at least SPLIT_S splits into one invocation per path, and a single directory into up to MAX_SPLIT
-    balanced file groups. Browser chunks (land_browser chunks them), alone/isolation runs, node ids, own -n and
-    serial_suites.txt paths stay whole."""
+    One estimated at least SPLIT_S unpacks multi-path invocations first, then splits large single directories into up
+    to MAX_SPLIT balanced file groups. Browser chunks (land_browser chunks them), alone/isolation runs, node ids, own
+    -n and serial_suites.txt paths stay whole."""
     seen = history(repo) if seen is None else seen
     serial = load_serial(SERIAL_FILE.read_text(encoding="utf-8")) if SERIAL_FILE.is_file() else []
-    out = []
+    fleet = _fleet_weights(repo)
+
+    def whole(inv: list[str], env: list[str], rest: list[str], paths: list[str], ignores: list[str]) -> bool:
+        return (cost(repo, inv, seen) < SPLIT_S or not paths
+                or any(w.startswith(("ROSY_RUN_BROWSER_TESTS", "ROSY_ALONE", "ROSY_JOB_ALONE", "ROSY_COLLECT"))
+                       for w in env)
+                or len(paths) + len(ignores) != len(rest)
+                or any("::" in p or "collect_alone" in p for p in paths)
+                or bool(serial_reason(inv, serial)))
+
+    expanded: list[list[str]] = []
     for inv in invocations:
         env = list(itertools.takewhile(ENV_WORD.match, inv))
         rest = inv[len(env):]
         paths = [w for w in rest if not w.startswith("-")]
-        # 2026-11-09: --ignore words go to every part, so `test --ignore=<g1 timing>` (11 min median, 71 min worst in
-        # a FULL, the longest pole) splits too; any other option keeps the invocation whole.
+        ignores = [w for w in rest if w.startswith("--ignore=")]
+        if len(paths) > 1 and not whole(inv, env, rest, paths, ignores):
+            expanded += [[*env, p, *ignores] for p in paths]
+        else:
+            expanded.append(inv)
+    out = []
+    for inv in expanded:
+        env = list(itertools.takewhile(ENV_WORD.match, inv))
+        rest = inv[len(env):]
+        paths = [w for w in rest if not w.startswith("-")]
         ignores = [w for w in rest if w.startswith("--ignore=")]
         ignored = [w.split("=", 1)[1].rstrip("/") for w in ignores]
         seconds = cost(repo, inv, seen)  # measured history first, the same byte estimate as dispatch for cold packets
-        whole = (seconds < SPLIT_S or not paths or any(w.startswith(("ROSY_RUN_BROWSER_TESTS", "ROSY_ALONE",
-                 "ROSY_JOB_ALONE", "ROSY_COLLECT")) for w in env) or len(paths) + len(ignores) != len(rest)
-                 or any("::" in p or "collect_alone" in p for p in paths) or serial_reason(inv, serial))
-        if whole:
+        if whole(inv, env, rest, paths, ignores) or len(paths) != 1 or not (repo / paths[0]).is_dir():
             out.append(inv)
-        elif len(paths) > 1:
-            out += [[*env, p, *ignores] for p in paths]
-        elif (repo / paths[0]).is_dir():
-            files = sorted((f for f in (repo / paths[0]).rglob("*.py")
-                            if (f.name.startswith("test_") or f.name.endswith("_test.py"))
-                            and not any(f.relative_to(repo).as_posix() == i
-                                        or f.relative_to(repo).as_posix().startswith(i + "/") for i in ignored)),
-                           key=lambda f: -f.stat().st_size)
-            n = min(MAX_SPLIT, math.ceil(seconds / SPLIT_S), len(files))
-            groups, sizes = [[] for _ in range(n)], [0] * n
-            for f in files:  # largest first into the lightest group
-                i = sizes.index(min(sizes))
-                groups[i].append(f.relative_to(repo).as_posix())
-                sizes[i] += f.stat().st_size
-            out += [[*env, *sorted(g), *ignores] for g in groups if g] if n > 1 else [inv]
-        else:
-            out.append(inv)
+            continue
+        files = sorted((f for f in (repo / paths[0]).rglob("*.py")
+                        if (f.name.startswith("test_") or f.name.endswith("_test.py"))
+                        and not any(f.relative_to(repo).as_posix() == i
+                                    or f.relative_to(repo).as_posix().startswith(i + "/") for i in ignored)),
+                       key=lambda f: -_file_weight(repo, f, fleet))
+        n = min(MAX_SPLIT, math.ceil(seconds / SPLIT_S), len(files))
+        groups, weights = [[] for _ in range(n)], [0.0] * n
+        for f in files:  # heaviest first into the lightest group
+            i = weights.index(min(weights))
+            groups[i].append(f.relative_to(repo).as_posix())
+            weights[i] += _file_weight(repo, f, fleet)
+        out += [[*env, *sorted(g), *ignores] for g in groups if g] if n > 1 else [inv]
     return [list(inv) for inv in dict.fromkeys(map(tuple, out))]
 

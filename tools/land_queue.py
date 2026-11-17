@@ -27,7 +27,9 @@ from pathlib import Path
 
 QUEUE = "rosy-land-queue"
 STALE_AFTER = 3 * 3600  # seconds without a refresh; one FULL round takes 30-90 min, the holder refreshes per round
-POLL = 10.0
+MAX_AGE_S = int(os.environ.get("ROSY_LAND_MAX_AGE_S", str(4 * 3600)))
+FULL_MAX_AGE_S = int(os.environ.get("ROSY_LAND_FULL_MAX_AGE_S", str(6 * 3600)))
+POLL = 2.0
 TICKET_ENV = "ROSY_LAND_TICKET"  # land_prepare.relaunch hands its ticket to main's land.py in a child process
 REPORT_EVERY = 300.0  # seconds between unchanged position lines
 # A waiting ticket tested over the current main passes an earlier waiting one tested over an older main (that one
@@ -218,6 +220,23 @@ def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
     return found
 
 
+def expired(qdir: Path, now: float | None = None) -> list[dict]:
+    """Live tickets whose immutable ``start`` timestamp exceeded MAX_AGE_S (FULL/full_wait: FULL_MAX_AGE_S)."""
+    now = time.time() if now is None else now
+    out = []
+    for row in ahead(qdir, Path("~"), now):
+        pid = int(row.get("pid") or 0)
+        if pid in (0, os.getpid()):
+            continue
+        # D-889 35: a rollup holding a test record is mid-work like a FULL waiter (224327 was killed 4 h in, after its FULL)
+        rolled = (row.get("branch") or "").startswith("land/fix/land-rollup-") and (
+            row.get("tested") or row.get("tier") == "full_done")
+        limit = FULL_MAX_AGE_S if (row.get("tier") == "full" or row.get("full_wait") or rolled) else MAX_AGE_S
+        if row["age"] > limit:
+            out.append({**row, "path": qdir / row["ticket"]})
+    return out
+
+
 def describe(rows: list[dict]) -> str:
     return ", ".join(f"{r.get('branch', '?')} ({r.get('status', 'waiting')}, pid {r.get('pid', '?')} on "
                      f"{r.get('host', '?')}, {r['age'] / 60:.0f} min)" for r in rows)
@@ -256,7 +275,7 @@ def touch(ticket: Path | None = None) -> None:
 
 
 def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None,
-         done=None, form=None, tested: str | None = None, changed=None) -> str | None:
+         done=None, form=None, tested: str | None = None, changed=None, on_ahead=None) -> str | None:
     """Mark ``ticket`` waiting; return None once nothing blocks it (``blockers``), marked as in its turn;
     QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop.
     ``"landed"`` as soon as ``done()`` is true (a batch landed this branch), ``"batch"`` when ``form(rows)``
@@ -279,6 +298,8 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
             return None
         if form and form(rows):
             return "batch"
+        if on_ahead and len(rows) == 1 and rows[0].get("status") == "turn":
+            on_ahead(rows[0])
         if len(rows) != said or clock() - last >= REPORT_EVERY:
             print(f"[queue] position {len(rows) + 1}; ahead: {describe(rows)}", flush=True)
             said, last = len(rows), clock()
@@ -295,6 +316,23 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
 # Backpressure: at most CAP live tickets. A queue of 34 (2026-10-31, ~2 landings/h) meant ~15 h of waiting, every
 # landing ahead moved main under the rest, and old lander code lingered for hours; past CAP a landing is refused.
 CAP = int(os.environ.get("ROSY_LAND_QUEUE_CAP", "12"))
+
+
+def signature(wt: Path) -> tuple[str, ...]:
+    """Ticket names: they change whenever a ticket lands or is released."""
+    return tuple(sorted(p.name for p in queue_dir(wt).glob("[0-9]*.json")))
+
+
+def wait_drain(wt: Path, room, deadline: float, window: float) -> float:
+    """The deadline (moved out by ``window`` while tickets keep leaving) once ``room`` opens, else 0.0."""
+    sig = signature(wt)
+    while time.monotonic() < deadline:
+        if room(wt, deadline) and time.monotonic() < deadline:
+            return deadline
+        if signature(wt) == sig:
+            return 0.0  # nothing landed or was released for a whole wait window
+        sig, deadline = signature(wt), time.monotonic() + window
+    return 0.0
 
 
 def full(qdir: Path) -> str | None:

@@ -32,13 +32,15 @@ MIN_PX = 40  # smaller blobs are noise or a shadow edge
 def runs(tcp, clear_z: float = CLEAR_Z_M, base_m: float = BASE_M) -> tuple[list, list]:
     """(low, high): runs of consecutive TCP points (x, y) below / above `clear_z`, outside the base disc."""
     out, run, level = {True: [], False: []}, [], None
+    base_m2 = base_m * base_m
     for x, y, z in tcp:
         low = z < clear_z
-        if np.hypot(x, y) < base_m or low != level:
+        inside_base = (x * x + y * y) < base_m2
+        if inside_base or low != level:
             if run:
                 out[level].append(run)
             run, level = [], low
-        if np.hypot(x, y) >= base_m:
+        if not inside_base:
             run.append((x, y))
     if run:
         out[level].append(run)
@@ -50,13 +52,14 @@ def corridor(paths, to_px, shape, roi, half_mm: float = HALF_WIDTH_MM) -> np.nda
     import cv2
 
     out = np.zeros(shape[:2], np.uint8)
+    rx0, ry0 = roi[0], roi[1]
     for run in paths:
         pixels = [to_px(p) for p in run]
         if any(p is None for p in pixels):
             continue  # off the map: no view to check against; check() counts it
-        a, b = np.asarray(pixels[0], float), np.asarray(to_px((run[0][0] + 0.01, run[0][1])), float)
-        width = max(1, int(round(2 * half_mm * np.linalg.norm(b - a) / 10.0)))
-        line = np.round(np.asarray(pixels, float) - [roi[0], roi[1]]).astype(np.int32)
+        a, b = pixels[0], to_px((run[0][0] + 0.01, run[0][1]))
+        width = max(1, int(round(2 * half_mm * (((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5) / 10.0)))
+        line = np.round(np.asarray(pixels, float) - [rx0, ry0]).astype(np.int32)
         cv2.polylines(out, [line], False, 1, width)
         for p in line:  # a straight descent is one point and still has its footprint
             cv2.circle(out, (int(p[0]), int(p[1])), width // 2, 1, -1)
@@ -96,7 +99,7 @@ def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params
     get = lambda k, d: prm.get(params, k, d)  # noqa: E731
     low, high = runs(tcp, get("corridor.clear_z_m", CLEAR_Z_M), get("corridor.base_m", BASE_M))
     off_map = sum(to_px(p) is None for run in low + high for p in run)
-    work = [to_px(p) for p in (pick_xy, stack_xy) if p is not None and to_px(p) is not None]
+    work = [px for p in (pick_xy, stack_xy) if p is not None and (px := to_px(p)) is not None]
     mask = without_blobs(mask, roi, work) > 0
     half, min_px = get("corridor.half_width_mm", HALF_WIDTH_MM), get("corridor.min_px", MIN_PX)
     unknown = mask & ~(known > 0) if known is not None else mask

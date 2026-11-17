@@ -11,7 +11,7 @@ import pytest
 from core_common.protocol.localization import CandidateReport, LocalizationStatus
 
 from control.loc_assist import (COVARIANCE, LocAssist, lane_rules_near, localized_objects, pooled_grid,
-                                search)
+                                search, verify_recovery_pose)
 from control.sensing.loc_candidates import PoseCandidate, sensor_from_base
 from loc_world import MOUNT, SQUARES, field, scan
 
@@ -141,7 +141,8 @@ def test_each_source_injects_with_its_own_covariance(source, fields):
 
 def test_covariance_table_matches_the_contract():
     assert COVARIANCE == {'candidate': (.05, .1), 'human': (.15, .3),
-                          'overhead': (.10, .2), 'homing_ref': (.05, .1)}
+                          'overhead': (.10, .2), 'homing_ref': (.05, .1),
+                          'auto_recovery': (.08, .15)}
 
 
 def test_decision_inject_three_seconds_then_localized():
@@ -724,3 +725,146 @@ def test_a_failed_check_reports_its_rejection_not_checking():
     a.on_decision(2., decision('r-1', 2.))
     status = one(a.tick(2.7), 'state')['status']
     assert status['state'] == 'SUSPECT' and status['reason'] == 'inject_rejected'
+
+
+# --- Phase 4: Path B bounded-window auto-recovery safety gate ----------------
+
+
+def test_auto_recovery_accepts_verified_pose_when_stationary():
+    assert verify_recovery_pose((1.0, 2.0, 0.1), fit=.90, camera_xy=(1.05, 2.05), camera_yaw=0.0) == (True, None)
+    # Wrapped yaw near +/- pi within 20 deg is accepted.
+    assert verify_recovery_pose((1.0, 2.0, math.pi - .05), fit=.85, camera_xy=(1.0, 2.0),
+                                camera_yaw=-math.pi + .05) == (True, None)
+
+    a = core()
+    a.on_twist(1.0, 0., 0.)
+    out, reason = a.try_auto_recovery(1.0, (1.0, 2.0, 0.1), fit=.90, camera_xy=(1.05, 2.05),
+                                        camera_yaw=0.0, request_id='rec-1')
+    assert reason is None
+    inject = one(out, 'inject')
+    assert inject.pose == (1.0, 2.0, 0.1)
+    assert (inject.xy_std, inject.yaw_std) == COVARIANCE['auto_recovery']
+    assert inject.source == 'auto_recovery' and inject.request_id == 'rec-1'
+
+
+def test_auto_recovery_rejects_fit_low():
+    assert verify_recovery_pose((1.0, 2.0, 0.0), fit=.84, camera_xy=(1.0, 2.0)) == (False, 'fit_low')
+    a = core()
+    a.on_twist(1.0, 0., 0.)
+    out, reason = a.try_auto_recovery(1.0, (1.0, 2.0, 0.0), fit=.84, camera_xy=(1.0, 2.0))
+    assert out == [] and reason == 'fit_low'
+
+
+def test_auto_recovery_rejects_xy_mismatch():
+    assert verify_recovery_pose((1.0, 2.0, 0.0), fit=.95, camera_xy=(1.16, 2.0)) == (False, 'xy_mismatch')
+    a = core()
+    a.on_twist(1.0, 0., 0.)
+    out, reason = a.try_auto_recovery(1.0, (1.0, 2.0, 0.0), fit=.95, camera_xy=(1.16, 2.0))
+    assert out == [] and reason == 'xy_mismatch'
+
+
+def test_auto_recovery_rejects_yaw_mismatch():
+    assert verify_recovery_pose((1.0, 2.0, math.radians(21.0)), fit=.95,
+                                camera_xy=(1.0, 2.0), camera_yaw=0.0) == (False, 'yaw_mismatch')
+    a = core()
+    a.on_twist(1.0, 0., 0.)
+    out, reason = a.try_auto_recovery(1.0, (1.0, 2.0, math.radians(21.0)), fit=.95,
+                                        camera_xy=(1.0, 2.0), camera_yaw=0.0)
+    assert out == [] and reason == 'yaw_mismatch'
+
+
+def test_auto_recovery_refuses_when_held_or_not_settled():
+    a = still_core()
+    a.on_twist(1.0, 0., 0.)
+    a.on_pickup(1.0, True)
+    out, reason = a.try_auto_recovery(1.0, (1.0, 2.0, 0.0), fit=.95, camera_xy=(1.0, 2.0))
+    assert out == [] and reason == 'held'
+
+    b = still_core()
+    b.on_twist(.9, .2, 0.)
+    out, reason = b.try_auto_recovery(1.0, (1.0, 2.0, 0.0), fit=.95, camera_xy=(1.0, 2.0))
+    assert out == [] and reason == 'not_settled'
+
+
+def _loc_assist_node_module(monkeypatch):
+    import importlib
+    import sys
+    import types
+
+    if 'rclpy' not in sys.modules:
+        rclpy_mod = types.ModuleType('rclpy')
+        rclpy_mod.time = types.SimpleNamespace(Time=lambda: None)
+        stubs = {
+            'rclpy': rclpy_mod,
+            'rclpy.node': types.SimpleNamespace(Node=object),
+            'rclpy.qos': types.SimpleNamespace(
+                DurabilityPolicy=types.SimpleNamespace(TRANSIENT_LOCAL=None), QoSProfile=lambda **_: None,
+                ReliabilityPolicy=types.SimpleNamespace(RELIABLE=None), qos_profile_sensor_data=None),
+            'rclpy.time': rclpy_mod.time,
+            'geometry_msgs': types.ModuleType('geometry_msgs'),
+            'geometry_msgs.msg': types.SimpleNamespace(PoseWithCovarianceStamped=None),
+            'nav_msgs': types.ModuleType('nav_msgs'),
+            'nav_msgs.msg': types.SimpleNamespace(OccupancyGrid=None, Odometry=None),
+            'sensor_msgs': types.ModuleType('sensor_msgs'),
+            'sensor_msgs.msg': types.SimpleNamespace(Image=None, LaserScan=None),
+            'std_msgs': types.ModuleType('std_msgs'),
+            'std_msgs.msg': types.SimpleNamespace(Bool=None, String=None),
+            'tf2_ros': types.SimpleNamespace(TransformListener=None, Buffer=object),
+        }
+        for name, mod in stubs.items():
+            monkeypatch.setitem(sys.modules, name, mod)
+    monkeypatch.delitem(sys.modules, 'control.loc_assist_node', raising=False)
+    return importlib.import_module('control.loc_assist_node')
+
+
+def test_node_on_decision_wires_auto_recovery_and_preserves_other_sources(monkeypatch):
+    import json
+    from types import SimpleNamespace
+
+    node_mod = _loc_assist_node_module(monkeypatch)
+    truth = (TRUTH.x, TRUTH.y, TRUTH.yaw)
+    ranges, angles = scan(truth, beams=640)
+    scan_msg = SimpleNamespace(
+        header=SimpleNamespace(frame_id='base_scan'),
+        ranges=np.where(np.isfinite(ranges), ranges, 10.0),
+        angle_min=float(angles[0]),
+        angle_increment=float(angles[1] - angles[0]),
+        range_min=0.05,
+        range_max=8.0,
+    )
+    mount_tf = SimpleNamespace(transform=SimpleNamespace(
+        translation=SimpleNamespace(x=MOUNT.x, y=MOUNT.y),
+        rotation=SimpleNamespace(x=0.0, y=0.0, z=math.sin(MOUNT.yaw / 2), w=math.cos(MOUNT.yaw / 2)),
+    ))
+    published = []
+    node = node_mod.LocAssistNode.__new__(node_mod.LocAssistNode)
+    node.core = core()
+    node.core.on_twist(1.0, 0.0, 0.0)
+    node.field = field()
+    node.scan = scan_msg
+    node.tf = SimpleNamespace(lookup_transform=lambda *_a: mount_tf)
+    node.p = lambda k: {'scan_stride': 4}[k]
+    node.now = lambda: 1.0
+    node.get_logger = lambda: SimpleNamespace(info=lambda *_: None, warning=lambda *_: None, debug=lambda *_: None)
+    node.publish = published.append
+
+    # 1) auto_recovery with ready field+scan computes fit via MapAgreement and injects.
+    node.on_decision(SimpleNamespace(data=json.dumps({
+        'source': 'auto_recovery', 'request_id': 'ar-1',
+        'pose': {'x': TRUTH.x, 'y': TRUTH.y, 'yaw': TRUTH.yaw},
+        'camera_xy': [TRUTH.x, TRUTH.y], 'camera_yaw': TRUTH.yaw,
+    })))
+    inject = one(published[-1], 'inject')
+    assert inject.source == 'auto_recovery' and inject.request_id == 'ar-1'
+
+    # 2) auto_recovery without field/scan falls back to fit=0.0 (fit_low -> []).
+    node.field = None
+    node.on_decision(SimpleNamespace(data=json.dumps({
+        'source': 'auto_recovery', 'pose': [TRUTH.x, TRUTH.y, TRUTH.yaw], 'camera_xy': [TRUTH.x, TRUTH.y],
+    })))
+    assert published[-1] == []
+
+    # 3) Other sources still go through core.on_decision untouched.
+    candidates_ready(node.core, now=1.0)
+    node.on_decision(SimpleNamespace(data=json.dumps(decision('r-1', 1.5))))
+    assert one(published[-1], 'inject').source == 'candidate'

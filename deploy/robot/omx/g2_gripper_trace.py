@@ -8,6 +8,9 @@ import time
 
 LIMIT = 2**63 - 1
 
+_ID_RE = re.compile(r"[A-Za-z0-9_.:-]{1,128}\Z")
+_DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
+
 
 def _number(value):
     if type(value) not in (int, float) or not math.isfinite(value) or abs(value) > LIMIT:
@@ -20,11 +23,11 @@ def _integer(value):
 
 
 def _identifier(value):
-    return value if type(value) is str and re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value) else None
+    return value if type(value) is str and _ID_RE.match(value) else None
 
 
 def _digest(value):
-    return value if type(value) is str and re.fullmatch(r"[0-9a-f]{64}", value) else None
+    return value if type(value) is str and _DIGEST_RE.match(value) else None
 
 
 def _write_record(path, record):

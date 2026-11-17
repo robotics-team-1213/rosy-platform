@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Service Control (D-524) on one Ubuntu host: site, ai, or model. Run once on each PC:
+# Service Control (D-524) on one Ubuntu host: site, ai, model, or cell. Run once on each PC:
 #
-#   sudo deploy/site/install-host-control.sh --role site|ai|model [--dry-run] \
+#   sudo deploy/site/install-host-control.sh --role site|ai|model|cell [--dry-run] \
 #        [--fleet-key "ssh-ed25519 AAAA... rosy-host-control" --from "<site PC address>,<docker subnet>"] \
 #        [--make-fleet-key] [--units-user NAME]
 #
@@ -50,7 +50,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-case "$ROLE" in site|ai|model) ;; *) echo "--role site|ai|model is required" >&2; exit 2 ;; esac
+case "$ROLE" in site|ai|model|cell) ;; *) echo "--role site|ai|model|cell is required" >&2; exit 2 ;; esac
 if [ -n "$FLEET_KEY" ] && ! [[ "$FROM" =~ ^[0-9A-Fa-f.:/,*?-]+$ ]]; then
   echo "--fleet-key needs --from \"<site PC address>,<docker subnet>\"" >&2; exit 2
 fi

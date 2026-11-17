@@ -13,7 +13,7 @@ from fleet.server.console import FleetConsole
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_store import MissionStore
 from fleet.server.proposal_store import ProposalStore
-from fleet.server.site_users import hash_password
+from rosy_account.site_users import hash_password
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 

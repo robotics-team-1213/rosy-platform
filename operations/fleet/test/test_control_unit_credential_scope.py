@@ -81,7 +81,7 @@ def test_similar_prefix_does_not_pass_authorization_boundary(tmp_path):
 
 
 def test_state_names_the_instance_by_its_control_unit(tmp_path):
-    # D-974: R and CELL-A share fleet_name on one host; the header tells them apart by unit.
+    # D-974: R and ARM-CELL share fleet_name on one host; the header tells them apart by unit.
     with TestClient(application(tmp_path)) as client:
         fleet = client.get("/api/fleet/state", headers={"Authorization": "Bearer viewer-token"}).json()["fleet"]
     assert (fleet["unit"], fleet["root"]) == ("A1", False)

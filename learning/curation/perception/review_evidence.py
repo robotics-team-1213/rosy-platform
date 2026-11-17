@@ -1,5 +1,4 @@
 """Current-decision authority and verified nominal CAD references (no projection)."""
-import hashlib
 import json
 import uuid
 import re
@@ -8,16 +7,13 @@ from pathlib import Path
 
 import yaml
 
+from review_authority import _sha as sha
 import review_masks
 import review_sam_assistance
 
 
 def encoded(value):
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False) + '\n').encode('utf-8')
-
-
-def sha(raw):
-    return hashlib.sha256(raw).hexdigest()
 
 
 def human_review(frame):

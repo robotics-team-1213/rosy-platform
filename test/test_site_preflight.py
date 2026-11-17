@@ -4,6 +4,7 @@ import datetime
 import importlib.util
 import ipaddress
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -284,6 +285,61 @@ def test_vendored_ca_check_agrees_with_core_common_on_site_link_vectors():
     assert compared >= 5
 
 
+def test_site_preflight_and_site_link_der_tlv_and_children_parity():
+    sys.path.insert(0, str(ROOT / "contracts/foundation"))
+    try:
+        from core_common.protocol import site_link
+    finally:
+        sys.path.pop(0)
+    module = _module()
+
+    valid_sequences = [
+        b"\x30\x00",
+        b"\x30\x03\x01\x01\xff",
+        b"\x30\x06\x01\x01\xff\x02\x01\x00",
+        b"\x30\x81\x80" + (b"\x04\x02ab" * 32),
+        b"\x30\x82\x01\x00" + (b"\x04\x02ab" * 64),
+    ]
+    for data in valid_sequences:
+        tlv_preflight = module._tlv(data, 0, len(data))
+        tlv_contract = site_link._tlv(data, 0, len(data))
+        assert tlv_preflight == tlv_contract
+        _, start, end = tlv_preflight
+        assert module._children(data, start, end) == site_link._children(data, start, end)
+
+    # Non-minimal long-form length with small payload is accepted identically by both minimal walkers.
+    non_minimal = b"\x04\x81\x01a"
+    assert module._tlv(non_minimal, 0, len(non_minimal)) == site_link._tlv(non_minimal, 0, len(non_minimal))
+
+    invalid_tlv_inputs = [
+        b"",                                        # truncated tag/length header
+        b"\x30",                                    # truncated length byte
+        b"\x30\x80",                                # indefinite length (count == 0)
+        b"\x30\x85\x00\x00\x00\x00\x01\x00",        # >4-byte long-form length (count > 4)
+        b"\x30\x82\x01",                            # truncated long-form length bytes
+        b"\x30\x04\x01\x01",                        # truncated content (short form)
+        b"\x04\x81\x04abc",                         # truncated content (long form)
+    ]
+    for bad in invalid_tlv_inputs:
+        with pytest.raises(module._DerError) as exc_preflight:
+            module._tlv(bad, 0, len(bad))
+        with pytest.raises(site_link._DerError) as exc_contract:
+            site_link._tlv(bad, 0, len(bad))
+        assert str(exc_preflight.value) == str(exc_contract.value)
+
+    invalid_children_inputs = [
+        b"\x01\x01\xff\x02",                        # trailing 1-byte tag after valid child
+        b"\x01\x01\xff\x02\x02\x00",                # truncated second child
+        b"\x01\x01\xff\x30\x80",                    # indefinite-length second child
+    ]
+    for bad in invalid_children_inputs:
+        with pytest.raises(module._DerError) as exc_preflight:
+            module._children(bad, 0, len(bad))
+        with pytest.raises(site_link._DerError) as exc_contract:
+            site_link._children(bad, 0, len(bad))
+        assert str(exc_preflight.value) == str(exc_contract.value)
+
+
 # --- review fixes: systemd unit forms, env file syntax, every Caddy site block ---
 
 def test_unit_continuation_prefix_and_bare_dollar_var_expand_like_systemd(tmp_path):
@@ -411,3 +467,73 @@ def test_shipped_units_wire_the_pairing_switch():
     stack = (SITE_DIR / "rosy-site-stack.service").read_text(encoding="utf-8")
     # unbraced $VAR is zero words when empty, so "off" adds nothing to up and down
     assert stack.count(" $ROSY_SITE_PAIRING_COMPOSE ") == 2
+
+
+def test_no_redirect_handlers_never_follow_redirects():
+    extra_paths = (
+        str(ROOT / "contracts/foundation"),
+        str(ROOT / "operations/site_ui/media/src"),
+        str(ROOT / "middleware/media/src"),
+        str(ROOT / "integrations/robots/omx/src"),
+    )
+    for path in extra_paths:
+        sys.path.insert(0, path)
+    try:
+        from core_common.protocol.account_client import _NoRedirect as AccountNoRedirect
+        from rosy.integrations.robots.omx.core_arm_client import _NoRedirect as ArmNoRedirect
+        from rosy_media.backend import _NoRedirect as MediaBackendNoRedirect
+        from rosy_media_edge.whip import _NoRedirect as WhipNoRedirect
+    finally:
+        for _ in extra_paths:
+            sys.path.pop(0)
+
+    for cls in (AccountNoRedirect, MediaBackendNoRedirect, WhipNoRedirect, ArmNoRedirect):
+        handler = cls()
+        for code in (301, 302, 303, 307, 308):
+            assert handler.redirect_request(
+                None, None, code, "redirect", {}, "https://example.invalid",
+            ) is None
+
+
+
+@pytest.mark.skipif(not hasattr(os, "getuid"), reason="needs POSIX owners")
+def test_container_secrets_name_unreadable_paths_without_contents(tmp_path):
+    check = _module().check_container_secrets
+    sdir = tmp_path / "monitoring"
+    sdir.mkdir()
+    key = sdir / "site_read"
+    key.write_text("TOPSECRETVALUE", encoding="ascii")
+    env = {"ROSY_SITE_MONITORING_SECRETS_DIR": str(sdir)}
+    me, group = sdir.stat().st_uid, sdir.stat().st_gid
+    sdir.chmod(0o700)
+    key.chmod(0o600)
+    assert check({})["ok"]                                  # overlay off: nothing mounted
+    owner = check(env, uid=me)                              # the container user owns it
+    assert owner["ok"]
+    stranger = check(env, uid=me + 1, gid=group + 1)        # root:root 0700/0600 seen from uid 10001
+    assert not stranger["ok"] and str(sdir) in stranger["reason"] and str(key) in stranger["reason"]
+    assert "TOPSECRETVALUE" not in stranger["reason"]
+    sdir.chmod(0o750)
+    key.chmod(0o440)
+    assert check(env, uid=me + 1, gid=group)["ok"]          # group 10001, 0750 / 0440
+    key.chmod(0o400)
+    assert not check(env, uid=me + 1, gid=group)["ok"]      # group cannot read the file
+    assert not check({"ROSY_SITE_MONITORING_SECRETS_DIR": str(tmp_path / "gone")})["ok"]
+
+
+@pytest.mark.skipif(not hasattr(os, "getuid") or os.getuid() == 0, reason="needs a non-root POSIX user")
+def test_container_secrets_tell_a_non_root_run_to_run_the_checker_as_root(tmp_path):
+    check = _module().check_container_secrets
+    sdir = tmp_path / "monitoring"
+    sdir.mkdir()
+    sdir.chmod(0)
+    try:
+        result = check({"ROSY_SITE_MONITORING_SECRETS_DIR": str(sdir)})
+    finally:
+        sdir.chmod(0o700)
+    assert not result["ok"] and "as root" in result["fix"]
+
+
+def test_container_secrets_docstring_states_who_runs_it_and_what_it_simulates():
+    doc = _module().check_container_secrets.__doc__
+    assert "root" in doc and "10001" in doc and "mode bits" in doc and "not recursive" in doc

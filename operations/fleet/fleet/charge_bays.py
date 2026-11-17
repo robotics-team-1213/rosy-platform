@@ -39,7 +39,8 @@ class RobotView:
     percent: Optional[float]
     voltage: Optional[float]
     pose: Optional[tuple[float, float]]   # map x, y; None when not localized
-    on_trip: bool
+    on_trip: bool = False
+    yaw: Optional[float] = None           # body heading (rad) when localized, else None
 
 
 def thresholds_of(site_maps) -> tuple[float, float]:
@@ -116,31 +117,61 @@ class ChargeBays:
                 if visit.connected_at is None and r.voltage - min(v for _, v in visit.volts) >= RISE_V:
                     visit.connected_at = now
 
-    def plan(self, robots: Iterable[RobotView], bays: list[Bay]) -> dict:
+    def plan(self, robots: Iterable[RobotView], bays: list[Bay], graph=None, site_rules=None) -> dict:
+        from fleet.localization.lane_compliance import evaluate_bay_dock
+        from fleet.routing.road_path import (
+            arbitrate_corridor_departure,
+            plan_road_path,
+            regional_corridor_for_map,
+        )
+        from fleet.routing.snap import PlanError
         robots = sorted(robots, key=lambda r: (r.percent is None, r.percent or 0.0, r.robot_id))
         go_percent, leave_percent = self.thresholds()
         held = {v.bay: rid for rid, v in self._visits.items()}
         # a robot with no visit that is offline or unlocated may be sitting in any bay (e.g. after a restart)
         blind = any(not r.online or r.pose is None for r in robots if r.robot_id not in self._visits)
+        dock_evals: dict[str, dict] = {}
+        if graph is not None:
+            for r in robots:
+                if r.online and r.pose is not None:
+                    ev = evaluate_bay_dock(r.pose[0], r.pose[1], r.yaw, None, graph)
+                    if ev is not None:
+                        dock_evals[r.robot_id] = ev
         rows, actions = [], []
         for r in robots:
             visit = self._visits.get(r.robot_id)
+            ev = dock_evals.get(r.robot_id)
             if visit is not None:
-                actions.append(self._in_bay(r.robot_id, visit, leave_percent))
+                actions.append(self._in_bay(r.robot_id, visit, leave_percent, ev))
             elif not r.online:
                 continue
             elif r.percent is None:
-                actions.append({"robot_id": r.robot_id, "action": "wait", "reason": "battery_unknown"})
+                row = {"robot_id": r.robot_id, "action": "wait", "reason": "battery_unknown"}
+                actions.append({**row, "docking": ev} if ev is not None else row)
             elif r.percent <= go_percent:
                 free = next((b.id for b in bays if b.id not in held), None)
                 if r.on_trip:
-                    actions.append({"robot_id": r.robot_id, "action": "after_trip", "reason": "low_battery"})
+                    row = {"robot_id": r.robot_id, "action": "after_trip", "reason": "low_battery"}
                 elif free is None or blind:
-                    actions.append({"robot_id": r.robot_id, "action": "wait",
-                                    "reason": "no_free_bay" if free is None else "bay_unknown"})
+                    row = {"robot_id": r.robot_id, "action": "wait",
+                           "reason": "no_free_bay" if free is None else "bay_unknown"}
                 else:
                     held[free] = r.robot_id
-                    actions.append({"robot_id": r.robot_id, "action": "go", "bay": free, "reason": "low_battery"})
+                    row = {"robot_id": r.robot_id, "action": "go", "bay": free, "reason": "low_battery"}
+                    if graph is not None and r.pose is not None and free in graph.places:
+                        try:
+                            ap = plan_road_path(graph, (r.pose[0], r.pose[1], r.yaw), free)
+                            row["approach_route"] = ap.to_dict()
+                        except PlanError:
+                            pass
+                actions.append({**row, "docking": ev} if ev is not None else row)
+        corridor = None
+        if graph is not None:
+            rule = regional_corridor_for_map(graph, bays, site_rules=site_rules)
+            if rule is not None:
+                actions, corridor = arbitrate_corridor_departure(
+                    rule, graph, actions, robots, self._visits
+                )
         for b in bays:
             rid = held.get(b.id)
             visit = self._visits.get(rid) if rid else None
@@ -148,16 +179,26 @@ class ChargeBays:
                                                  "unknown" if visit.lost_at is not None else
                                                  "charging" if visit.connected_at is not None else "arrived")
             rows.append({"bay": b.id, "x": b.x, "y": b.y, "state": state, "robot_id": rid})
-        return {"thresholds": {"go_percent": go_percent, "leave_percent": leave_percent,
-                               "rate_pct_per_min": self.rate}, "bays": rows, "actions": actions,
-                "dispatch": False}
+        out = {"thresholds": {"go_percent": go_percent, "leave_percent": leave_percent,
+                              "rate_pct_per_min": self.rate}, "bays": rows, "actions": actions,
+               "dispatch": False}
+        if graph is not None:
+            out["docking"] = dock_evals
+            if corridor is not None:
+                out["corridor"] = corridor
+        return out
 
-    def _in_bay(self, robot_id: str, visit: _Visit, leave_percent: float) -> dict:
+    def _in_bay(self, robot_id: str, visit: _Visit, leave_percent: float,
+                dock_eval: Optional[dict] = None) -> dict:
         row = {"robot_id": robot_id, "bay": visit.bay, "arrived_percent": visit.arrived_percent,
                "in_bay_s": round(self._now - visit.since, 1)}
+        if dock_eval is not None:
+            row["docking"] = dock_eval
         if visit.lost_at is not None:
             return {**row, "action": "stay", "reason": "pose_unknown"}
         if visit.connected_at is None:
+            if dock_eval is not None and dock_eval.get("verdict") == "RETRY_FROM_P":
+                return {**row, "action": "reseat", "reason": "misaligned_on_bay"}
             reseat = self._now - visit.since >= SETTLE_S
             return {**row, "action": "reseat" if reseat else "stay",
                     "reason": "usb_not_connected" if reseat else "connecting"}

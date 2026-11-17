@@ -117,8 +117,7 @@ class HFTransport:
                 raise ValueError('invalid provider length')
             while True:
                 chunk = response.read(1024 ** 2)
-                if not chunk:
-                    break
+                if not chunk: break
                 yield chunk
 
 
@@ -188,6 +187,7 @@ class LearningImports:
         self._safe(self.db_path)
         db = sqlite3.connect(self.db_path, timeout=10)
         try:
+            for p in ('journal_mode=WAL', 'synchronous=NORMAL', 'foreign_keys=ON', 'busy_timeout=5000'): db.execute('PRAGMA ' + p)
             with db:
                 db.execute('BEGIN IMMEDIATE')
                 yield db

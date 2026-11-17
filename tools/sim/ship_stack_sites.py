@@ -53,13 +53,21 @@ def sites(arm, plate_z, table_z, case=CASE):
         row, layer = item['cell'][1], item['cell'][2]
         name = f'stack-r{row}-l{layer}'
         if item['arm'] != k:
-            order.append(dict(item=i, site=name, arm='arm_a' if item['arm'] == 0 else 'arm_b', other_arm=True))
+            order.append(dict(item=i, site=name, row=row, layer=layer, tier=layer+1,
+                              arm='arm_a' if item['arm'] == 0 else 'arm_b', other_arm=True))
             continue
         out[name] = dict(place=to_arm(item['target'], base, yaw), surface_z=round(plate_z+layer*BOX_H, 4),
-                         yaw_deg=round(wrap180(-math.degrees(yaw)), 1), source=f'isaac plan item {i}',
-                         scope='SIM_PLAN_NOT_REVIEWED_D911')
-        order.append(dict(item=i, site=name, arm=arm, steps=[['beltend', f'level-{arm}'], [f'level-{arm}', name]]))
+                         layer=layer, tier=layer+1, yaw_deg=round(wrap180(-math.degrees(yaw)), 1),
+                         source=f'isaac plan item {i}', scope='SIM_PLAN_NOT_REVIEWED_D911')
+        order.append(dict(item=i, site=name, row=row, layer=layer, tier=layer+1, arm=arm,
+                          steps=[['beltend', f'level-{arm}'], [f'level-{arm}', name]]))
     return out, order
+
+
+def by_tier(order, tier=None):
+    """Group or filter the stack order by tier (1 = 1단/l0, 2 = 2단/l1, 3 = 3단/l2)."""
+    tiers = {t: [s for s in order if s.get('tier', int(s['site'][-1])+1) == t] for t in (1, 2, 3)}
+    return tiers[tier] if tier is not None else tiers
 
 
 def main(argv=None):
@@ -67,6 +75,7 @@ def main(argv=None):
     p.add_argument('--arm', choices=sorted(ARMS), required=True)
     p.add_argument('--plate-surface-z', type=float, help='ship plate top in the arm frame (default: the inventory layout)')
     p.add_argument('--table-surface-z', type=float, help='table top at the leveling spot in the arm frame (default: layout)')
+    p.add_argument('--tier', type=int, choices=[1, 2, 3], help='filter order to tier 1 (1단/l0), 2 (2단/l1), or 3 (3단/l2)')
     p.add_argument('--case', default=CASE)
     p.add_argument('--config', default='<cell-config.json>')
     a = p.parse_args(argv)
@@ -75,7 +84,8 @@ def main(argv=None):
                          table_z if a.table_surface_z is None else a.table_surface_z, a.case)
     for step in order:
         step['commands'] = [f'cell_auto_pick.py --config {a.config} --from {s} --dest {d}' for s, d in step.get('steps', [])]
-    print(json.dumps(dict(case=a.case, arm=a.arm, sites=found, order=order,
+    kept = by_tier(order, a.tier) if a.tier is not None else order
+    print(json.dumps(dict(case=a.case, arm=a.arm, tier=a.tier, sites=found, order=kept, tiers=by_tier(order),
                           note='each command is one supervised D-911 stage; the other arm\'s items wait'), indent=1))
 
 

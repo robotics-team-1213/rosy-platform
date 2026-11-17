@@ -44,6 +44,7 @@ $files = @(
     "deploy/robot/pinky_pro/native/rosy_transfer.py",
     "tools/release/prepare_payload_release.py",
     "tools/release/publish_payload_release.py",
+    "tools/release/publish_payload_release_helpers.py",
     "tools/release/payload_inspection.py",
     "tools/release/make_delta_release.py",
     "tools/harness/colcon_roots.py",

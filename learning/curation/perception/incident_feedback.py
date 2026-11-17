@@ -57,6 +57,9 @@ def bind(incidents: dict, markers: dict) -> dict:
         reviews = row.get("reviews") or []
         if not isinstance(reviews, list):
             raise ValueError("incident reviews must be a list")
+        if (not isinstance(evidence, dict) or not isinstance(evidence.get("ai_facts") or [], list)
+                or not isinstance(evidence.get("core") or {}, dict)):
+            raise ValueError("incident evidence shape differs")
         causes = set()
         for review in reviews:
             if (not isinstance(review, dict) or review.get("root_cause") not in CAUSES

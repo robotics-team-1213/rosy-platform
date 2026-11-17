@@ -187,3 +187,19 @@ def test_the_devices_updater_ships_the_bind_units():
     units = json.loads((OMX / "omx-devices-autoupdate.json.example").read_text(encoding="utf-8"))["unit_files"]
     for name in ("rosy-omx-cameras-bind.service", "rosy-omx-cameras-bind.timer"):
         assert f"deploy/robot/omx/{name}" in units and (OMX / name).is_file()
+
+
+def test_sync_readiness_aligns_camera_devices_with_their_unit_roles(tmp_path):
+    reg = registry(tmp_path, [TOP, A_WRIST])
+    prof = {
+        "viewer_url": "http://127.0.0.1:8767",
+        "cameras": {
+            "top": {"device": TOP["device"], "candidates": []},
+            "front": {"device": "/dev/v4l/by-id/rosy-arm_a_wrist", "unit": "arm_a_wrist", "candidates": []},
+        },
+    }
+    updated, changed = oc.sync_readiness(reg, prof)
+    assert changed == [{"role": "front", "unit": "arm_a_wrist",
+                        "from": "/dev/v4l/by-id/rosy-arm_a_wrist", "to": A_WRIST["device"]}]
+    assert updated["cameras"]["front"]["device"] == A_WRIST["device"]
+    assert oc.sync_readiness(reg, updated)[1] == []

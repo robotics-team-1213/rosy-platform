@@ -154,3 +154,51 @@ def test_reconnect_rechecks_live_hints_without_identity_or_token_downgrade(tmp_p
     assert all(p[1:] == ("fleet-a.local", ca) for p in probes)
     assert len(sessions) == len(connections) and events.cleaned
     assert not agent.connected and not agent.enabled
+
+
+def test_transient_health_probe_failure_retries_instead_of_disabling_agent(tmp_path, monkeypatch):
+    import core_features.fleet_agent.agent as module
+    from core_features.fleet_agent.discovery import DiscoveryUnavailable
+    import websockets
+
+    ca = tmp_path / "ca.crt"
+    ca.write_text("fixture")
+    row = candidate("192.0.2.10")
+    probes, tokens = [], []
+    events = Events()
+
+    class Cache:
+        def wait(self, kind, *, timeout_s):
+            return [row]
+
+    def probe(*args):
+        probes.append(args)
+        if len(probes) == 1:
+            raise DiscoveryUnavailable("Fleet HTTPS health probe failed")
+
+    class Socket:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            pass
+
+    class SessionAgent(FleetAgent):
+        async def _session(self, _ws, token):
+            tokens.append(token)
+            self.enabled = False
+            return "done"
+
+    agent = SessionAgent(None, events, config(ca), SimpleNamespace())
+    monkeypatch.setattr(module, "locate_fleet", lambda host, ca_file: locate_fleet(host, ca_file, cache=Cache(), probe=probe))
+    monkeypatch.setattr(module.ssl, "create_default_context", lambda **_kw: object())
+    monkeypatch.setattr(module, "retry_delay", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(websockets, "connect", lambda *_args, **_kwargs: Socket())
+
+    async def exercise():
+        agent.start()
+        await asyncio.wait_for(agent._task, 2)
+
+    asyncio.run(exercise())
+    assert len(probes) == 2 and tokens == ["approved-token"]
+

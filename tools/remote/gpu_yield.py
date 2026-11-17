@@ -5,7 +5,10 @@ job only on an empty host, with every pytest queued behind it (2026-11-09: three
 A job calls yield_turn() where it can stop (between stages, after a checkpoint): with an alone job waiting it moves its
 lock aside, waits until no alone job waits or runs, and puts the lock back under the .admit flock remote_job admits with.
 """
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore[assignment]
 import os
 import subprocess
 import time

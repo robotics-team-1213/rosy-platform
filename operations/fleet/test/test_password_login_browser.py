@@ -11,7 +11,7 @@ from browser_harness import browser_tests_enabled, safe_listener
 from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
-from fleet.server.site_users import hash_password
+from rosy_account.site_users import hash_password
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint

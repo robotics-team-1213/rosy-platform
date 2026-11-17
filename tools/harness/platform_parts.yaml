@@ -690,6 +690,15 @@ roots:
     note: D-962 independent Account identity, session, grant and revocation authority. No Fleet ledger or device command authority.
     concern: other
     capability: platform
+  - path: operations/notifications
+    layout_target: operations/notifications
+    part: operations
+    d427_target: operations/notifications
+    wave: none
+    import_prefix: [rosy.notifications]
+    note: D-998 pre-cutover delivery journal and fixed-channel transport; producers retain business outboxes and last-moment validity. No deployed service or device authority.
+    concern: other
+    capability: platform
   - path: operations/monitoring
     layout_target: operations/monitoring
     part: operations
@@ -1018,6 +1027,13 @@ roots:
     wave: none
     concern: other
     capability: platform
+  - path: tools/ops
+    part: tools
+    d427_target: tools/ops
+    wave: none
+    note: Host-maintenance stage scripts run by people on the lab PCs (D-1011 arm-cell rename, dry-run first); never shipped.
+    concern: other
+    capability: platform
   - path: tools/remote
     part: tools
     d427_target: tools/remote
@@ -1125,6 +1141,7 @@ safety_modules:
   - middleware/core/gateway/core/bridge/odometry.py
   - middleware/core/api/core_api_web/api/v1/station_docking.py  # D-772 authenticated session handover
   - middleware/drive/behaviors/docking/manager.py  # D-772 native admission and no-motion binding fence
+  - middleware/drive/behaviors/docking/manager_helpers.py  # split from manager.py by 93461496c6 (D-430 panel 2026-11-13)
   - middleware/drive/behaviors/docking/admission.py
   - middleware/drive/behaviors/docking/agent.py
   - middleware/drive/behaviors/docking/native_status.py
@@ -1173,6 +1190,7 @@ safety_modules:
   - operations/overhead/rosy_vision/station_installation.py
   - operations/overhead/rosy_vision/station_vision.py
   - operations/overhead/rosy_vision/ingest.py
+  - operations/overhead/rosy_vision/ingest_helpers.py  # split from ingest.py by 93461496c6 (D-430 panel 2026-11-13)
   - middleware/drive/behaviors/line_follow/body_stop.py
   - middleware/drive/behaviors/line_follow/clearance.py
   - middleware/drive/behaviors/line_follow/authority.py  # D-517/D-760 movement authority under the trip lease
@@ -1204,13 +1222,24 @@ safety_modules:
   - operations/fleet/fleet/server/cancel_all_store.py
   - operations/fleet/fleet/server/local_stop_transport.py
   - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
+  - operations/fleet/fleet/server/ledger/berth_parking_routes.py  # road-nav2/berth-park motion moved here by 973faf9de9 (D-430 panel 2026-11-13)
+  - operations/fleet/fleet/server/ledger/berth_parking_helpers.py  # physical berth-park teleop and Fleet pin (D-430 panel 2026-11-13)
+  - operations/fleet/fleet/server/ledger/task_dispatch_helpers.py  # site->robot goal frame for road-nav2/berth-park (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
+  - operations/fleet/fleet/server/auth/policy_approval.py  # D-1024 3 learned-policy approval window and lease issuer
+  - operations/fleet/fleet/server/auth/policy_approval_routes.py  # D-1024 3 named-operator approval routes
+  - operations/fleet/fleet/server/auth/policy_delivery.py  # D-1024 3 CORE lease/hold delivery port and ticker
+  - middleware/robot_execution/local/src/rosy/execution/local/policy_lease_push.py  # D-1024 3 device pushed-lease receiver
+  - integrations/robots/omx/src/rosy/integrations/robots/omx/policy_run.py  # D-1024 4 execute/shadow run loop: limit gate, pin, bind
+  - integrations/robots/omx/src/rosy/integrations/robots/omx/core_arm_client.py  # D-800 CORE arm HTTP client: SIM-only gate, observe-only
+  - integrations/robots/omx/src/rosy/integrations/robots/omx/site_shadow.py  # D-1024 1 L2 real-arm shadow: read-only Fleet allow-list, no submit
   - operations/fleet/fleet/server/console/console.py
   - operations/fleet/fleet/server/console/observe.py  # D-430 admission observation extracted from console
   - operations/fleet/fleet/server/console/goal_admission.py  # D-430 pure goal-admission hold shapes (console helper)
   - operations/fleet/fleet/server/console/degraded_reroute.py  # ADR-1000 MSN-004 stop-then-reroute of degraded robots (console helper)
   - operations/fleet/fleet/server/console/estop_fanout.py  # whole-site E-stop delivery: concurrent, short re-sends, formation release beside it (console helper)
   - operations/fleet/fleet/server/console/traffic_arbitration.py  # D-766 console.py split 2026-11-01: route claims, yield, localization holds, cancel (FleetConsole mixin)
+  - operations/fleet/fleet/server/console/traffic_arbitration_helpers.py  # D-766 traffic_arbitration.py split: state remember, snapshot traffic release, localization holds
   - operations/fleet/fleet/server/console/formation_control.py  # D-766 console.py split 2026-11-01: formation session, follower set, leader hand-off (FleetConsole mixin)
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
@@ -1230,6 +1259,7 @@ safety_anchors:
   - {symbol: fleet.server.degraded_reroute.reroute_degraded}  # ADR-1000 MSN-004 stop-then-reroute (console helper)
   - {symbol: fleet.server.estop_fanout.stop_robots}  # E-stop delivery to every robot (console helper)
   - {symbol: fleet.server.traffic_arbitration.TrafficArbitration}  # moved from console.py: yield/hold/cancel (FleetConsole mixin)
+  - {symbol: fleet.server.traffic_arbitration_helpers.run_snapshot_traffic}  # traffic_arbitration helper: snapshot release and localization hold
   - {symbol: fleet.server.formation_control.FormationControl}  # moved from console.py: formation session (FleetConsole mixin)
   - {symbol: fleet.server.estop_fanout.deliver}  # one robot's E-stop with short re-sends (console helper)
   - {symbol: fleet.swarm.session_lifecycle.FormationLifecycle, public: true}
@@ -1274,6 +1304,7 @@ safety_anchors:
   - {symbol: core_features.state.manager.StateManager, public: true}  # Existing CORE DI import; receipt remains private.
   - {symbol: core_api_web.api.v1.station_docking.station_dock}
   - {symbol: core_features.docking.manager.DockingManager}
+  - {symbol: core_features.docking.manager_helpers.DockingPhasesMixin}  # docking phases split from manager.py (93461496c6)
   - {symbol: core_features.docking.admission.dock_target}
   - {symbol: core_features.docking.agent.DockAgent}
   - {symbol: core_features.docking.native_status.readback}
@@ -1338,6 +1369,7 @@ safety_anchors:
   - {symbol: rosy_vision.ingest.IngestServer._send_demand}
   - {symbol: rosy_vision.ingest.IngestServer.stop_measurements}
   - {symbol: rosy_vision.ingest.IngestServer._preview_response}
+  - {symbol: rosy_vision.ingest_helpers._preview_response}  # split from ingest.py (93461496c6)
   - {symbol: rosy.execution.local.omx_policy.OwnerPolicySession}
   - {symbol: rosy.execution.local.core_arm_policy.CoreArmPolicyPort}
   - {symbol: rosy.execution.local.policy_lease.MAX_LEASE_DURATION_NS}
@@ -1416,9 +1448,23 @@ safety_anchors:
   - {symbol: fleet.server.cancel_all_store.matching_tag, public: true}
   - {symbol: fleet.server.local_stop_transport.UnixLocalStopTransport, public: true}
   - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
+  - {symbol: fleet.server.berth_parking_routes.install_berth_parking_routes, public: true}  # road-nav2 / berth-park motion routes (973faf9de9)
+  - {symbol: fleet.server.berth_parking_helpers.BERTH_SUCCESS_REASONS}  # only measured stop-face endings count as parked
+  - {symbol: fleet.server.berth_parking_helpers.BAY_DOCK_SPECS, public: true}
+  - {symbol: fleet.server.berth_parking_helpers._execute_physical_berth_park, public: true}
+  - {symbol: fleet.server.berth_parking_helpers._pin_robot_on_fleet, public: true}
+  - {symbol: fleet.server.task_dispatch_helpers.compute_road_plan}  # refuses without measured site and robot poses
   - {symbol: fleet.server.goal_lease.GoalLeases}  # D-550 10 goal lease (Safety-Review)
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
   - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}
+  - {symbol: fleet.server.policy_approval.PolicyApprovals.tick}  # D-1024 3 lease issue only inside the window
+  - {symbol: fleet.server.policy_approval.PolicyApprovals.tick_all}  # D-1024 3 ticker hook; no lease without a delivery port
+  - {symbol: fleet.server.policy_delivery.CoreLeaseDelivery}  # D-1024 3 any non-accepted delivery is a failed delivery
+  - {symbol: rosy.execution.local.policy_lease_push.PushLeaseReceiver}  # D-1024 3 any refusal latches HOLD
+  - {symbol: rosy.integrations.robots.omx.policy_run.execute}  # D-1024 4 limit gate before submit
+  - {symbol: rosy.integrations.robots.omx.core_arm_client.CoreArmClient}  # D-800 SIM-only gate, observe-only
+  - {symbol: rosy.integrations.robots.omx.site_shadow.SiteReader}  # D-1024 1 read-only allow-list of the real-arm shadow
+  - {symbol: fleet.server.policy_approval_routes.install_policy_approval_routes.approve_policy_approval, public: true}
   - {symbol: fleet.server.tether_watch.TetherWatch, public: true}
   - {symbol: fleet.server.tether_watch.map_pose, public: true}

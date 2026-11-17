@@ -53,8 +53,10 @@ class RosTrajectoryActionHandle(ActionHandle):
         goal = FollowJointTrajectory.Goal()
         goal.trajectory.joint_names = list(command.joint_names)
         points = []
+        Duration_cls = Duration
+        Point_cls = JointTrajectoryPoint
         for planned in command.trajectory_points:
-            point = JointTrajectoryPoint()
+            point = Point_cls()
             point.positions = list(planned.positions)
             if planned.velocities is not None:
                 point.velocities = list(planned.velocities)
@@ -63,7 +65,7 @@ class RosTrajectoryActionHandle(ActionHandle):
             total_ns = round(planned.time_from_start_s * 1_000_000_000)
             if total_ns < 1:
                 raise ValueError("trajectory point time is below one nanosecond")
-            point.time_from_start = Duration(nanoseconds=total_ns).to_msg()
+            point.time_from_start = Duration_cls(nanoseconds=total_ns).to_msg()
             points.append(point)
         goal.trajectory.points = points
 

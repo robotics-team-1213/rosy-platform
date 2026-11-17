@@ -6,10 +6,13 @@ import { PRINT_SHEETS, pdfBytes, sheetPath } from "../../../../applications/flee
 test("each print sheet asks the cell-app print route with its own parameters", () => {
   assert.deepEqual(PRINT_SHEETS.map((sheet) => sheetPath(sheet, "3")), [
     "/api/fleet/cell-app/print-sheets/arm-markers?arm=3",
+    "/api/fleet/cell-app/print-sheets/container-tags?ids=100&sizes_mm=12",
     "/api/fleet/cell-app/print-sheets/charuco?",
     "/api/fleet/cell-app/print-sheets/checkerboard?cols=8&rows=6&square_mm=15",
   ]);
   assert.equal(sheetPath(PRINT_SHEETS[0]), "/api/fleet/cell-app/print-sheets/arm-markers?arm=1");
+  assert.equal(sheetPath(PRINT_SHEETS[1], "1", {ids: "100,101", size: "20"}),
+    "/api/fleet/cell-app/print-sheets/container-tags?ids=100%2C101&sizes_mm=20");
 });
 
 test("the base64 body becomes the PDF's bytes", () => {

@@ -32,8 +32,9 @@ from collections import defaultdict
 from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-decision.v1"
-APPLIES = {"target": ["objects", "map"], "bias": ["map"], "closing_axis": ["grasp"], "safety": ["lift", "idle"],
-           "retry": ["grasp"], "verify": ["map"], "wrist_align": ["grasp", "map"], "failure": ["grasp", "map"], "push": ["push", "objects", "map"], "push_outcome": ["push"]}
+_CODE_NAME = Path(__file__).resolve().parents[3].name
+APPLIES = {"target": ["objects", "map"], "target_judge": ["objects", "map"], "bias": ["map"], "closing_axis": ["grasp"], "safety": ["lift", "idle"],
+           "grasp_stability": ["grasp", "lift", "safety"], "retry": ["grasp"], "verify": ["map"], "wrist_align": ["grasp", "map"], "failure": ["grasp", "map"], "push": ["push", "objects", "map"], "push_outcome": ["push"]}
 RUN = {"path": None, "knowledge": None, "n": 0, "frame": None}  # set by start(); path None = no decision rows
 
 
@@ -69,7 +70,7 @@ def emit(stage: str, facts: dict, options: list, chosen, by: str, reason: str, a
         "stage": stage, "facts": facts, "options": options, "chosen": chosen, "by": by, "reason": reason,
         "frames": [RUN["frame"]] if RUN["frame"] else [], "knowledge_ids": [e["id"] for e in notes],
         "knowledge_sha": RUN["knowledge"] and RUN["knowledge"]["sha"], "params_sha": ca.RUN["params_sha"], "arm_id": ca.RUN["arm_id"],
-        "code": Path(__file__).resolve().parents[3].name, "t": round(time.time(), 3)})
+        "code": _CODE_NAME, "t": round(time.time(), 3)})
     return f"{ca.RUN['run_id']}-d{RUN['n']:03d}"
 
 
@@ -106,9 +107,9 @@ def after(moved: dict, better, more: bool, monitor=None):
     if moved["result"] == "placed":
         return None
     steps, at = moved["steps"], moved.get("at")
-    again = moved["result"] in ("empty", "contact") and more
+    again = moved["result"] in ("empty", "contact", "reinserted") and more
     chosen = {"retry_with": better} if again else "stop"
-    if any(s.get("holding") for s in steps) and not str(at).endswith("grasp_pick"):
+    if moved["result"] != "reinserted" and any(s.get("holding") for s in steps) and not str(at).endswith("grasp_pick"):
         sensed = next((s for s in reversed(steps) if s.get("state") and s.get("target")), {})
         gaps = [abs(a - b) for a, b in zip(sensed.get("state", [])[:5], sensed.get("target", [])[:5])]
         lag = re.search(r"by ([0-9.]+) units", str(moved.get("error") or ""))
@@ -171,7 +172,11 @@ def join(decisions: list, attempts: list) -> list[dict]:
         if d["by"] == "person":
             items.append({"row": d, "outcome": None, "label": "corrected_by_person", "from": by_id.get(d.get("supersedes"))})
             continue
-        a = out.get(later(d["attempt_id"]) if d["stage"] == "retry" else d["attempt_id"])  # a retry is judged by the next attempt
+        next_id = later(d["attempt_id"]) if d["stage"] == "retry" else d["attempt_id"]
+        a = out.get(next_id)
+        while d["stage"] == "retry" and a and a["result"] == "replanned":
+            next_id = later(next_id)  # a reviewed library change did not try the retry candidate
+            a = out.get(next_id)
         good = None if a is None else (a["placed"] if d["stage"] == "verify" else a["held"] if d["stage"] != "safety" else None)
         items.append({"row": d, "outcome": a and a["result"], "label": "validated_by_outcome" if good else "unvalidated", "from": None})
     return items

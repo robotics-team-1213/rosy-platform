@@ -25,19 +25,25 @@ def free_mm(mask, roi, pixel_fn, start, direction, across_offsets, reach_mm: flo
     reach_mm when nothing is met. Foreground running on from `start` up to own_mm is the object's own; a 1 mm gap
     does not end that run (a slightly skewed outline starts the side face a step out on one pad edge). With
     outside_blocks, what the mask does not cover (past the roi or the image) is not known free but a hit."""
-    d = np.asarray(direction, float)
-    n = np.array([-d[1], d[0]])
+    sx, sy = float(start[0]), float(start[1])
+    dx, dy = float(direction[0]) / 1000.0, float(direction[1]) / 1000.0
+    nx, ny = -dy, dx
+    h, w = mask.shape[:2]
+    rx0, ry0 = roi[0], roi[1]
     t, clear = step_mm, 0.0
     while t <= reach_mm:
         hit = False
+        tx, ty = sx + t * dx, sy + t * dy
         for s in across_offsets:
-            px = pixel_fn(tuple(np.asarray(start, float) + (t * d + s * n) / 1000))
+            px = pixel_fn((tx + s * nx, ty + s * ny))
             if px is None:
                 hit = hit or outside_blocks
                 continue
-            col, row = round(px[0]) - roi[0], round(px[1]) - roi[1]
-            inside = 1 <= row < mask.shape[0] - 1 and 1 <= col < mask.shape[1] - 1
+            col, row = round(px[0]) - rx0, round(px[1]) - ry0
+            inside = 1 <= row < h - 1 and 1 <= col < w - 1
             hit = hit or (not inside and outside_blocks) or (inside and bool(mask[row - 1:row + 2, col - 1:col + 2].any()))
+            if hit and not (clear < 2.0 and t <= own_mm):
+                return t - step_mm
         leaving = clear < 2.0
         if hit and not (leaving and t <= own_mm):
             return t - step_mm
@@ -90,7 +96,8 @@ def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, p
     35 of 64 real attempts put a finger on the box (2026-10-30)."""
     finger, pad = prm.get(params, "auto.finger_mm"), prm.get(params, "auto.finger_pad_mm")
     least = prm.get(params, "auto.min_jaw_margin_mm")
-    own = prm.get(params, "auto.own_side_mm")
+    # a stacked box shows the side faces of the layers under it too (2026-11-13 arm_s, the top of two on Pinky read 5 mm free)
+    own = prm.get(params, "auto.own_side_mm") * (1 + o.get("layers_below", 0))
     u = math.radians(o["long_axis_deg"] if closing_deg is None else closing_deg - 90)
     across = np.array([-math.sin(u), math.cos(u)])
     half = (o["width_mm"] if closing_deg is None else max(o["width_mm"], o["length_mm"])) / 2
@@ -101,6 +108,11 @@ def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, p
     free = [free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across, (-pad / 2, 0.0, pad / 2),
                     most + finger + 2.0, own_mm=own, outside_blocks=True) for side in (-1, 1)]  # unseen is not free: a roi cut to one box passed a neighbour 7 times (2026-11-06)
     margin = min(most, min(free) - finger)
+    # no room only because a side is past the view: the object is at the frame's edge, not packed (2026-11-13 arm_s, a box on
+    # Pinky at the top edge after the camera moved), so no push is planned for it
+    unseen = margin < least and min(most, min(free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across,
+                                                      (-pad / 2, 0.0, pad / 2), most + finger + 2.0, own_mm=own)
+                                              for side in (-1, 1)) - finger) >= least
     # the jaw mark opens wider than any pick (62 against open_max 56): its own room, from the box's centre, kept with it
-    return {"margin_mm": round(margin, 1) if margin >= least else None, "free_mm": [round(f, 1) for f in free],
+    return {"margin_mm": round(margin, 1) if margin >= least else None, "free_mm": [round(f, 1) for f in free], "unseen": unseen,
             "mark_half_mm": mark_room(mask, roi, pixel_fn, centre, across, half, params, own_mm=own)}

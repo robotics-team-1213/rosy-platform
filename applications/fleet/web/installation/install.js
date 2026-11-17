@@ -64,7 +64,7 @@ function operatorControls() {
     .filter(control => !control.closest(".ui-task-chooser")
       && !control.closest("#device-profiles")
       && !control.closest("#peer-picker")
-      && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel"].includes(control.id));
+      && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel", "camera-manual-draw"].includes(control.id));
 }
 
 function applyRole() {
@@ -328,6 +328,7 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
     showSession(identity, {credentialChange});
     applyRole();
     await Promise.allSettled([
+      call("/api/fleet/site-map").then((sm) => { view.siteMap = sm; fieldView.render(); }).catch(() => {}),
       cameraPairing.refresh({ credentials: true }),
       cameraPeer.refresh(),
       usbCamera.refresh(),

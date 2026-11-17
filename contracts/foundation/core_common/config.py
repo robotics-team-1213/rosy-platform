@@ -71,6 +71,11 @@ def fleet_link_path() -> Path:
     return Path(env) if env else Path.home() / ".rosy" / "fleet-link.yaml"
 
 
+def account_receiver_path() -> Path:
+    """D-992 Account receiver settings Fleet delivered, in the same private directory as the link."""
+    return fleet_link_path().with_name("account-receiver.json")
+
+
 def fleet_link_ca_path() -> Path:
     path = fleet_link_path()
     return path.with_name(path.stem + "-ca.pem")
@@ -126,6 +131,9 @@ def _write_private(path: Path, text: str) -> None:
     except Exception:
         tmp.unlink(missing_ok=True)
         raise
+
+
+write_private = _write_private
 
 
 def write_fleet_link(pairing_token: str, expected_hostname: str, ca_pem: str) -> dict[str, Any]:

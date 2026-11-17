@@ -16,6 +16,10 @@ from g2_ports import write_json
 _KINDS = frozenset({"TERMINAL_UNKNOWN", "GOAL_ACCEPTANCE_UNKNOWN"})
 _WATCHDOG_REASONS = frozenset({"action_timeout", "joint_state_stale", "action_wall_timeout",
                               "joint_state_stale_wall_clock"})
+_REJECTION_CODES = frozenset({"STAMP_REJECTED", "SOURCE_STALE", "ARRAY_SHAPE", "NONFINITE",
+                              "INPUT_INVALID"})
+_ERROR_TYPES = frozenset({"TypeError", "ValueError", "OverflowError"})
+_WATCHDOG_ALL_REASONS = _WATCHDOG_REASONS | frozenset({"owner_clock_jumped_back"})
 
 
 def _text(value, limit=160):
@@ -49,8 +53,8 @@ def _intake_facts(value):
               ("stamp_ns", "source_now_ns", "prior_accepted_stamp_ns")}
     result.update({key: _number(value.get(key)) for key in ("received_at", "wall_received_at")})
     result["accepted"] = value.get("accepted") if type(value.get("accepted")) is bool else None
-    for key, allowed in (("rejection_code", {"STAMP_REJECTED", "SOURCE_STALE", "ARRAY_SHAPE", "NONFINITE", "INPUT_INVALID"}),
-                         ("error_type", {"TypeError", "ValueError", "OverflowError"})):
+    for key, allowed in (("rejection_code", _REJECTION_CODES),
+                         ("error_type", _ERROR_TYPES)):
         item = value.get(key)
         if type(item) is str and item in allowed:
             result[key] = item
@@ -68,8 +72,7 @@ def _decision_intake(value):
     accepted = getattr(value, "accepted", None)
     result["accepted"] = accepted if type(accepted) is bool else None
     code = getattr(value, "rejection_code", None)
-    codes = {"STAMP_REJECTED", "SOURCE_STALE", "ARRAY_SHAPE", "NONFINITE", "INPUT_INVALID"}
-    result["rejection_code"] = code if type(code) is str and code in codes else None
+    result["rejection_code"] = code if type(code) is str and code in _REJECTION_CODES else None
     return result
 
 
@@ -83,7 +86,7 @@ def _watchdog_transition(value, command_id):
                "action_timeout_s", "wall_clock_bound_factor")}
     reason = getattr(value, "reason", None)
     result["reason"] = (reason if type(reason) is str
-                        and reason in _WATCHDOG_REASONS | {"owner_clock_jumped_back"} else None)
+                        and reason in _WATCHDOG_ALL_REASONS else None)
     captured_command = getattr(value, "command_id", None)
     result["command_id"] = _text(captured_command, 256)
     truncated = getattr(value, "command_id_truncated", None)

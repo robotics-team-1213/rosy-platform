@@ -1858,3 +1858,17 @@
 - 재발 방지: 새 홀더가 `SPLIT_CODE_PREFIXES`에서 빠지면 실패하는 시험을 `test/test_model_review_release.py`에 추가했다.
 - gate 변화: 없음. 소스 배치만 바뀜. 로봇 이미지 빌드와 실물 기동은 미실행이다.
 - CE: 해당 없음.
+
+## 2026-11-11 · 1e35310e23 · feat(sim,perception): 261026 bay world generator and pink paint wiring (D-1013 gate b)
+- 변경: `map/map_world_261026/scripts/build_world.py` 신규 생성기 — 루프 도색은 측정 CAD `road_lines.stl`의 y ≤ 0.20 부분집합(2026-10-31 천장 정합 수락 분량)으로 `meshes/road_lines_loop.stl`, 주차 구역은 그래프 v7의 분홍 유도선·칸 세로선(visual)과 칸별 레일·받침 collision. 생성물 `worlds/map_world_261026.world`·`README.md`. `sensors/line_observation/line_observer_node.py`에 paint_source 'pink' 분기(상태 없음, 흰 페인트 폴백 없음). 시험 `test_map_world_261026_scene.py` 5건
+- 증거: 원격 pytest(ai PC) 4파일 14 passed, exit 0 (run 1e35310e23-a2f4a9, 첫 실행 1e35310e23 2실패는 시험 코드 경계 오차·pose 요소 읽기 오류로 1e35310e23에서 수정)
+- gate 변화: 없음
+- 결정: D-1013 9항 (b)의 기반 슬라이스. 칸 pit-in 코어 접근(approach "line")과 Gazebo 실구동 검증은 다음 브랜치
+- 교훈: 없음
+
+## 2026-11-11 · 76b74fd91b · feat(perception): bay line observer - pink tape to the virtual dock (D-1013)
+- 변경: `sensors/sensing/bay_line_observer.py` 신규(ROS-free) — 분홍 마스크(floor_pink_mask)를 선언 Gazebo 기하로 지면 투영·SVD 직선 적합해 선을 가상 도크로 만든다: x=멈춤면까지 잔여(남쪽 끝 거리 + site 상수 line_total_m, 원시야 밖에서 along_measured=false), y=선의 횡, yaw=칸 안쪽 축. `observers/bay_line_observer_node.py`(얇은 노드, GAZEBO+use_sim_time 아니면 fail-closed), setup.py 진입점, robot_literal_backlog 행(PINKY 기본값 가족), 시험 9건(중심·횡·방위·원시야 감쇠·무선·점·그림자 테이프·기하 거부·포장핀)
+- 증거: 원격 pytest(ai PC) test_bay_line_observer·test_robot_literals·test_map_261026_bay_launch·test_dock_observer 21 passed 1 skip exit 0 (76b74fd91b; 오프셋 부호·테이프 두께 렌더·±π 비교는 로컬 순수 모듈 왕복으로 잡아 수정)
+- gate 변화: 없음
+- 결정: D-1013 관측 반쪽. baydock 코어(approach "line")는 별도 브랜치에서 독립 리뷰 대기 중 — along_measured 플래그 소비는 그 브랜치가 잇는다
+- 교훈: 없음

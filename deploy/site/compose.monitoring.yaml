@@ -24,6 +24,8 @@ services:
       - 0.0.0.0
     environment:
       PYTHONPATH: /opt/rosy/src/operations/monitoring:/opt/rosy/src/contracts/foundation
+      # D-990: the Account receiver verifies a site-CA issuer; sources name ca_bundle themselves.
+      SSL_CERT_FILE: /run/secrets/site_ca
       ROSY_CREDENTIAL_PATHS: '{"MONITORING_SITE_READ":"/run/rosy-monitoring-secrets/site_read","MONITORING_FLEET_UPSTREAM":"/run/rosy-monitoring-secrets/fleet_upstream"}'
     volumes:
       - type: bind

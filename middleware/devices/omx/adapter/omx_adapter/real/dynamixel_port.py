@@ -66,6 +66,8 @@ class TrippableFence(StopFence, Protocol):
 
 
 Planner = Callable[[ActionGrant], Sequence[Mapping[str, object]]]
+_SCALAR_TYPES = (int, float)
+_VALID_GRIP_VALUES = frozenset({"open", "close"})
 
 
 class DynamixelPort(_DynamixelMotion):
@@ -95,6 +97,10 @@ class DynamixelPort(_DynamixelMotion):
         claims.acquire(self.instance, device)
         try:
             self.bus, self.hw, self.config = bus, hardware, config
+            self._limit_pairs = tuple(
+                (name, self.config.position_limits[name][0], self.config.position_limits[name][1])
+                for name in self.config.joint_names
+            )
             self.store, self.planner, self.stop_fence = store, planner, stop_fence
             self.evidence = load_motion_evidence(store, config)
             self.tracking = tracking
@@ -182,7 +188,6 @@ class DynamixelPort(_DynamixelMotion):
     def _plan_refusal(self, steps: Sequence[Mapping[str, object]]) -> str | None:
         if not steps:
             return "PLAN_EMPTY"
-        limits = self.config.position_limits
         last_close = None
         for index, step in enumerate(steps):
             if not isinstance(step, Mapping) or len(step) != 1:
@@ -191,18 +196,17 @@ class DynamixelPort(_DynamixelMotion):
             if kind == "policy":
                 return "POLICY_REFUSED_ON_HARDWARE (D-793)"
             if kind == "pose":
-                if (not isinstance(value, (list, tuple)) or len(value) != len(limits)
-                        or not all(type(v) in (int, float) and math.isfinite(v) for v in value)):
+                if (not isinstance(value, (list, tuple)) or len(value) != len(self._limit_pairs)
+                        or not all(type(v) in _SCALAR_TYPES and math.isfinite(v) for v in value)):
                     return "PLAN_POSE_INVALID"
-                for name, q in zip(self.config.joint_names, value):
-                    lower, upper = limits[name]
+                for (name, lower, upper), q in zip(self._limit_pairs, value):
                     if not lower <= q <= upper:
                         return f"JOINT_LIMIT: {name}"
                 outside = self._outside_workspace(value)
                 if outside:
                     return outside
             elif kind == "grip":
-                if value not in ("open", "close"):
+                if not isinstance(value, str) or value not in _VALID_GRIP_VALUES:
                     return "PLAN_STEP_UNSUPPORTED"
                 if value == "close":
                     last_close = index

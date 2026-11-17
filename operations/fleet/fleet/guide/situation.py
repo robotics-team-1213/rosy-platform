@@ -98,6 +98,8 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
                           "anchor_source": getattr(pose, "anchor_source", None),
                           "anchor_age_s": getattr(pose, "anchor_age_s", None)}
     if not online:
+        if placed and graph is not None and getattr(pose, "map_id", None) == "world_261026":
+            record["lane"] = lane_context(graph, pose.x, pose.y, pose.yaw, zone_of, config)
         return record          # the roster already says "연결 끊김"; a stale pose stays drawn faded
     status = (tracking_row or {}).get("status")
     if camera_ok and status in NOT_SEEN and anonymous_seen:
@@ -127,7 +129,7 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
         return record
     centre = lane["centre"]
     margin = lane["width_m"] / 2 - (abs(lane["lateral_m"]) + body_half_width_m)
-    if margin < 0:
+    if margin < -0.05:
         side = "왼쪽" if lane["lateral_m"] > 0 else "오른쪽"
         findings.append(_finding(
             "OFF_LANE", "warn",

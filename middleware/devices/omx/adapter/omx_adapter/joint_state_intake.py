@@ -26,6 +26,8 @@ def _time(value):
 class JointStateIntake:
     def __init__(self, config):
         self.config = config
+        self._joint_names = tuple(config.joint_names)
+        self._joint_name_set = frozenset(self._joint_names)
         self._last_stamp_ns = 0
         self._sequence = 0
         self._last_received_at = None
@@ -62,10 +64,10 @@ class JointStateIntake:
         if age_s > self.config.max_joint_state_age_s:
             raise ValueError("joint state source is stale")
         if (len(names) != len(positions) or len(set(names)) != len(names)
-                or not set(self.config.joint_names) <= set(names)):
+                or not self._joint_name_set <= set(names)):
             raise ValueError("joint state arrays must be complete and unambiguous")
         reported = dict(zip(names, positions))
-        values = {name: reported[name] for name in self.config.joint_names}
+        values = {name: reported[name] for name in self._joint_names}
         if any(isinstance(value, bool) or not math.isfinite(value) for value in values.values()):
             raise ValueError("joint state positions must be finite")
         snapshot = JointStateSnapshot(

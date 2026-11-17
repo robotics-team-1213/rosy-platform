@@ -105,29 +105,64 @@ D-966 reserved in another in-flight branch (refs/adr/D-966), absent from this D-
 D-967 reserved in another in-flight branch (refs/adr/D-967), absent from this D-968 branch; remove when its ADR lands
 D-980 unused; the reservation tool counted an uncommitted draft and gave D-981
 D-984 reserved in another in-flight branch (refs/adr/D-984), absent from this D-985 branch; remove when its ADR lands
-D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-991 branch; remove when its ADR lands
-D-990 reserved in another in-flight branch (refs/adr/D-990), absent from this D-991 branch; remove when its ADR lands
+D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-990 branch
 D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-993 branch; remove when its ADR lands
-D-990 reserved in another in-flight branch (refs/adr/D-990), absent from this D-993 branch; remove when its ADR lands
-D-992 reserved in another in-flight branch (refs/adr/D-992), absent from this D-993 branch; remove when its ADR lands
 D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-994 branch; remove when its ADR lands
-D-990 reserved in another in-flight branch (refs/adr/D-990), absent from this D-994 branch; remove when its ADR lands
-D-992 reserved in another in-flight branch (refs/adr/D-992), absent from this D-994 branch; remove when its ADR lands
-D-996 reserved in another in-flight branch (refs/adr/D-996), absent from this D-997 branch; remove when its ADR lands
+D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-998 branch; remove when its ADR lands
+D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-996 branch; remove when its ADR lands
+D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-998 branch; remove when its ADR lands
+D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-991 branch; remove when its ADR lands
+D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-993 branch; remove when its ADR lands
+D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-994 branch; remove when its ADR lands
 
 D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-989 branch; remove when its ADR lands
-D-998 reserved in another in-flight branch (refs/adr/D-998), absent from this D-1001 branch; remove when its ADR lands
+D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1004 branch; remove when its ADR lands
 D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1001 branch; remove when its ADR lands
 
-D-998 reserved in another in-flight branch (refs/adr/D-998), absent from this D-1002 branch; remove when its ADR lands
 
 
 D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1002 branch; remove when its ADR lands
 
-D-998 reserved in another in-flight branch (refs/adr/D-998), absent from this D-999 branch; remove when its ADR lands
-D-998 reserved in another in-flight branch (refs/adr/D-998), absent from this D-1003 branch; remove when its ADR lands
 D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1003 branch; remove when its ADR lands
-D-1004 reserved in another in-flight branch (refs/adr/D-1004), absent from this D-1008 branch; remove when its ADR lands
-D-1005 reserved in another in-flight branch (refs/adr/D-1005), absent from this D-1008 branch; remove when its ADR lands
-D-1004 reserved in another in-flight branch (refs/adr/D-1004), absent from this D-1006 branch; remove when its ADR lands
-D-1005 reserved in another in-flight branch (refs/adr/D-1005), absent from this D-1006 branch; remove when its ADR lands
+D-1018 reserved in another in-flight branch (refs/adr/D-1018), absent from this D-1022 branch; remove when its ADR lands
+D-1020 reserved in another in-flight branch (refs/adr/D-1020), absent from this D-1022 branch; remove when its ADR lands
+
+D-1018 reserved in another in-flight branch (refs/adr/D-1018), absent from this D-1024 branch; remove when its ADR lands
+
+
+D-1020 reserved in another in-flight branch (refs/adr/D-1020), absent from this D-1024 branch; remove when its ADR lands
+
+D-1023 reserved in another in-flight branch (refs/adr/D-1023), absent from this D-1024 branch; remove when its ADR lands
+D-1018 reserved in another in-flight branch (refs/adr/D-1018), absent from this D-1021 branch; remove when its ADR lands
+
+
+D-1020 reserved in another in-flight branch (refs/adr/D-1020), absent from this D-1021 branch; remove when its ADR lands
+D-1018 reserved in another in-flight branch (refs/adr/D-1018, OMX real-arm manual jog), absent from this D-1019 branch; remove when its ADR lands
+D-1023 reserved in another in-flight branch (refs/adr/D-1023, omx admitted arm-transfer), absent from this D-1034 branch; remove when its ADR lands
+D-1025 reserved in another in-flight branch (refs/adr/D-1025, sensor-verified navigation reapproval), absent from this D-1034 branch; remove when its ADR lands
+D-1026 reserved in another in-flight branch (refs/adr/D-1026, dev overlay PYTHONPATH), absent from this D-1034 branch; remove when its ADR lands
+D-1027 reserved in another in-flight branch (refs/adr/D-1027, Fleet narrow-screen order), absent from this D-1034 branch; remove when its ADR lands
+D-1028 reserved in another in-flight branch (refs/adr/D-1028, Robot console narrow-screen order), absent from this D-1034 branch; remove when its ADR lands
+D-1030 reserved in another in-flight branch (refs/adr/D-1030, selection token), absent from this D-1034 branch; remove when its ADR lands
+D-1031 reserved in another in-flight branch (refs/adr/D-1031, robot release channel), absent from this D-1034 branch; remove when its ADR lands
+D-1023 reserved in another in-flight branch (refs/adr/D-1023), absent from this D-1029 branch; remove when its ADR lands
+D-1025 reserved in another in-flight branch (refs/adr/D-1025), absent from this D-1029 branch; remove when its ADR lands
+D-1026 reserved in another in-flight branch (refs/adr/D-1026), absent from this D-1029 branch; remove when its ADR lands
+D-1027 reserved in another in-flight branch (refs/adr/D-1027), absent from this D-1029 branch; remove when its ADR lands
+D-1028 reserved in another in-flight branch (refs/adr/D-1028), absent from this D-1029 branch; remove when its ADR lands
+
+D-1023 reserved in another in-flight branch (refs/adr/D-1023), absent from this D-1032 branch; remove when its ADR lands
+D-1025 reserved in another in-flight branch (refs/adr/D-1025), absent from this D-1032 branch; remove when its ADR lands
+D-1026 reserved in another in-flight branch (refs/adr/D-1026), absent from this D-1032 branch; remove when its ADR lands
+D-1027 reserved in another in-flight branch (refs/adr/D-1027), absent from this D-1032 branch; remove when its ADR lands
+D-1028 reserved in another in-flight branch (refs/adr/D-1028), absent from this D-1032 branch; remove when its ADR lands
+D-1030 reserved in another in-flight branch (refs/adr/D-1030), absent from this D-1032 branch; remove when its ADR lands
+D-1031 reserved in another in-flight branch (refs/adr/D-1031), absent from this D-1032 branch; remove when its ADR lands
+D-1023 reserved in another in-flight branch (refs/adr/D-1023), absent from this D-1033 branch; remove when its ADR lands
+D-1025 reserved in another in-flight branch (refs/adr/D-1025), absent from this D-1033 branch; remove when its ADR lands
+D-1026 reserved in another in-flight branch (refs/adr/D-1026), absent from this D-1033 branch; remove when its ADR lands
+D-1027 reserved in another in-flight branch (refs/adr/D-1027), absent from this D-1033 branch; remove when its ADR lands
+D-1028 reserved in another in-flight branch (refs/adr/D-1028), absent from this D-1033 branch; remove when its ADR lands
+D-1030 reserved in another in-flight branch (refs/adr/D-1030), absent from this D-1033 branch; remove when its ADR lands
+D-1031 reserved in another in-flight branch (refs/adr/D-1031), absent from this D-1033 branch; remove when its ADR lands
+D-1037 reserved in another in-flight branch (refs/adr/D-1037), absent from this publish branch; remove when its ADR lands

@@ -79,7 +79,7 @@ def _resync_and_rerun(error: ImportError) -> None:
 
 try:
     import rosy_claim  # noqa: E402
-    from auto_update_host import (API_BASE, APPLY_MAX_TRANSIENT, CLAIM_HOLDER, CLAIM_TTL_S, CORE_DOWN_NOTE,
+    from auto_update_host import (API_BASE, APPLY_MAX_TRANSIENT, branch_build_fallback, CLAIM_HOLDER, CLAIM_TTL_S, CORE_DOWN_NOTE,
         Definitive, ESCALATED_REASON, Host, Http, NATIVE_RUNTIME, parse_z, PRECHECK_BUSY_EXIT, _read_json,
         RELEASES, RunBusy, RUNTIME_ENV, STUCK_AFTER_S, STUCK_REASON, UpdateError, UPDATES, _z)  # noqa: E402
     # Re-exported: tests and tools read these as rosy_auto_update.<name>.
@@ -304,6 +304,7 @@ class Updater(UpdaterRecords, UpdaterStage, UpdaterApply):
                 self._mark_failed(state, item, "operator rolled back")
                 self._history("operator_rolled_back", item, f"current is {current}")
         self._expire_hold()
+        state["branch_fallback"] = None  # only this run's choice may step down (review: no stale exception)
         backoff = parse_z(state.get("backoff_until"))
         if backoff is not None and self.host.now() < backoff:
             raise UpdateError(f"GITHUB_BACKOFF: not asking GitHub until {_z(backoff)}")
@@ -317,6 +318,9 @@ class Updater(UpdaterRecords, UpdaterStage, UpdaterApply):
                              if item["release_id"] > current and item["release_id"] not in failed
                              and item["release_id"] not in withdrawn),
                             key=lambda item: item["release_id"], reverse=True)
+        fallback = [] if candidates else branch_build_fallback(self.root, current, releases, failed, withdrawn)
+        state["branch_fallback"] = fallback[0]["release_id"] if fallback else None
+        candidates = candidates or fallback
         skipped = []
         for release in candidates:
             try:

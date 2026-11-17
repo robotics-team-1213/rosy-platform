@@ -99,6 +99,7 @@ def main_session(tmp_path, monkeypatch):
     import omx_incident
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ROSY_ARM_LEASES", str(tmp_path / "arm-leases"))  # D-1035: never the test host's real leases
     events = []
     lock = SimpleNamespace(closed=False)
 
@@ -893,3 +894,61 @@ def test_a_session_may_give_a_joint_an_i_gain_and_restores_it(tmp_path):
     path.write_text(path.read_text().replace('"i": 200', '"i": 5000'))
     with pytest.raises(SystemExit, match="i 0..1600"):
         m.load_caps(path)
+
+
+def test_chunk_mode_skips_unused_leader_alerts_and_faults(tmp_path):
+    """chunk_runner never opens or energizes the leader; a sagging 3.4V leader alert must not block or fail safe_end."""
+    arm, leader = follower(), leader_arm()
+    leader.motors[6].update({"alert": True, "sticky": True, "hw_error": 1})
+    seen = []
+    s, _ = session(arm, leader, run=lambda command: seen.append(command) or 0)
+    s.chunks = {"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "x"}
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert Path(seen[0][1]).name == "chunk_runner.py"
+    assert record["safe_end"] is True
+    assert record["hardware_faults"] == {}
+    assert "leader_rebooted" not in record
+    assert "leader_rebooted_after" not in record
+    assert leader.writes == [(6, "torque", 0)]
+    assert_restored(arm, leader)
+
+
+def test_chunk_mode_allows_unplugged_missing_leader_port(tmp_path):
+    """Follower-only --chunks must not fail safe_end when no physical leader cable is attached."""
+    arm = follower()
+
+    def open_bus(which):
+        if which == "leader":
+            raise SystemExit("a physically confirmed /dev/serial/by-id symlink is required")
+        return arm
+
+    s = m.Session(open_bus=open_bus, systemctl=lambda *a: "", run=lambda c: 0, log=lambda **kw: None,
+                  chunks={"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "x"})
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert record["safe_end"] is True and record["manual_attention_required"] is False
+    assert str(record["leader_gripper_torque_after"]).startswith("unused:")
+
+
+def test_restore_caps_reopens_bus_and_recovers_after_transient_motor_12_glitch(tmp_path):
+    arm, leader = follower(), leader_arm()
+    original_write = arm.write
+    opens = {"count": 0}
+    orig_with_follower = None
+
+    def flaky_write(name, value):
+        if arm.motor == 12 and name == "pwm_limit" and value == 20 and opens["count"] < 2:
+            raise RuntimeError("transient motor 12 glitch")
+        original_write(name, value)
+
+    arm.write = flaky_write
+    s, _ = session(arm, leader)
+    orig_with_follower = s._with_follower
+
+    def counted_with_follower(fn):
+        opens["count"] += 1
+        return orig_with_follower(fn)
+
+    s._with_follower = counted_with_follower
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert record["caps_restored"] is True and record["safe_end"] is True
+    assert arm.motors[12]["pwm_limit"] == 20

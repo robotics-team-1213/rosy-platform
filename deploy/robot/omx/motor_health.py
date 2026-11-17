@@ -126,21 +126,38 @@ class MotorHealth:
             raise ValueError("stale motor health sample (>0.5 seconds)")
         bus, motors, violations = motion.follower, [], []
         port = getattr(bus, "port", None)
+        batch = "read" not in vars(bus) and hasattr(bus, "model_ctrl_table")
+        if batch:
+            names = list(state["limits"])
+            temps = bus.sync_read("Present_Temperature", names, normalize=False, num_retry=2)
+            volts = bus.sync_read("Present_Input_Voltage", names, normalize=False, num_retry=2)
+            hw_errs = bus.sync_read("Hardware_Error_Status", names, normalize=False, num_retry=2)
+            torques = bus.sync_read("Torque_Enable", names, normalize=False, num_retry=2)
         for name, limits in state["limits"].items():
             present = self.number(current.get(name), name + " position")
             command = int(self.number(motion.command.get(name), name + " command"))
             effort = (bus.read("Present_PWM", name, normalize=False) if name == "gripper" else pwm.get(name))
             effort = self.number(effort, name + " PWM")
-            temperature, voltage, unsafe = self.health(bus, name, limits)
+            if batch:
+                temperature = self.number(temps.get(name), "temperature")
+                voltage = self.number(volts.get(name), "voltage")
+                unsafe = []
+                if temperature >= limits["temperature_limit_c"]:
+                    unsafe.append(f"{name}: temperature {temperature} >= configured limit {limits['temperature_limit_c']}")
+                if not limits["min_voltage_raw"] <= voltage <= limits["max_voltage_raw"]:
+                    unsafe.append(f"{name}: voltage {voltage} outside configured limits "
+                                  f"{limits['min_voltage_raw']}..{limits['max_voltage_raw']} (0.1 V)")
+            else:
+                temperature, voltage, unsafe = self.health(bus, name, limits)
             hardware_error = torque_enabled = None
             if not unsafe:
-                hardware_error = bus.read('Hardware_Error_Status', name, normalize=False)
+                hardware_error = hw_errs.get(name) if batch else bus.read('Hardware_Error_Status', name, normalize=False)
                 if type(hardware_error) is not int or not 0 <= hardware_error <= 255:
                     raise ValueError(f'{name}: invalid measured hardware status')
                 if hardware_error:
                     unsafe.append(f'{name}: hardware error {hardware_error}')
                 else:
-                    torque_raw = bus.read('Torque_Enable', name, normalize=False)
+                    torque_raw = torques.get(name) if batch else bus.read('Torque_Enable', name, normalize=False)
                     if type(torque_raw) is not int or torque_raw not in (0, 1):
                         raise ValueError(f'{name}: invalid measured torque state')
                     torque_enabled = bool(torque_raw)

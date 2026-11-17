@@ -17,6 +17,7 @@ from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
 from core_common.config import ConfigError, patch_local_config
+from core_api_web.api.v1.speed_settings import SETTINGS, SpeedSettingError, apply, validate
 
 
 logger = logging.getLogger(__name__)
@@ -154,6 +155,14 @@ def _safety_payload(svc: CoreServicesLike) -> dict:
             "max_angular": svc.safety.limits.max_angular,
             "manual_linear": svc.safety.limits.manual_linear,
             "manual_angular": svc.safety.limits.manual_angular,
+            # D-1005: sealed measured speeds (null: nothing binds), what drives now, the trial settings.
+            "approved_linear": svc.safety.limits.approved_linear,
+            "approved_angular": svc.safety.limits.approved_angular,
+            "effective_manual_linear": min(svc.safety.limits.manual_linear, svc.safety.limits.approved_caps()[0]),
+            "effective_manual_angular": min(svc.safety.limits.manual_angular, svc.safety.limits.approved_caps()[1]),
+            "trial_linear": svc.safety.limits.approval_linear,
+            "trial_angular": svc.safety.limits.approval_angular,
+            "trial_travel_m": svc.safety.limits.approval_travel_m,
         },
         "battery": {
             "warning_percent": battery.warning_percent,
@@ -215,16 +224,55 @@ def _apply_safety_patch(svc: CoreServicesLike, patch: dict) -> None:
         )
 
 
+class SpeedLimitsRequest(BaseModel):
+    """D-1005: every field optional; an empty request changes nothing."""
+    model_config = {"extra": "forbid"}
+    manual_linear: float | None = None
+    manual_angular: float | None = None
+    trial_linear: float | None = None
+    trial_angular: float | None = None
+    trial_travel_m: float | None = None
+    operator_name: str | None = Field(default=None, max_length=80)  # a console names who asked (recorded only)
+
+
+@safety_router.put("/speed-limits")
+def safety_speed_limits(body: SpeedLimitsRequest, auth: AuthContext = Depends(operator),
+                        svc: CoreServicesLike = Depends(get_services)):
+    require_calibration_owner(svc, auth, "speed limits change")
+    asked = {name: getattr(body, name) for name in SETTINGS if getattr(body, name) is not None}
+    try:
+        values = validate(asked, svc.safety.limits)
+    except SpeedSettingError as exc:
+        raise ApiError("VALIDATION_ERROR", 400, str(exc))
+    if not values:
+        return _safety_payload(svc)
+    try:
+        patch_local_config({"safety": values})
+    except (ConfigError, OSError) as exc:
+        raise ApiError("INTERNAL_ERROR", 500, f"failed to persist speed limits: {exc}")
+    changes = apply(svc.safety.limits, values)
+    svc.config.setdefault("safety", {}).update(values)
+    svc.events.publish("config.changed", severity="warning", source="api",
+                       data={"key": "safety.speed_limits", "by": body.operator_name or auth.principal_ref, "changes": changes})
+    return _safety_payload(svc)
+
+
 @safety_router.put("/limits")
-def safety_limits(body: LimitsRequest, auth: AuthContext = Depends(admin),
+def safety_limits(body: LimitsRequest, auth: AuthContext = Depends(operator),
                   svc: CoreServicesLike = Depends(get_services)):
+    # D-1005: an operator may set the manual speeds; battery and Fleet-loss policy stay the administrator's.
+    if body.model_fields_set - {"manual_linear", "manual_angular"} and not auth.allows_role("administrator"):
+        raise ApiError("FORBIDDEN", 403, "requires administrator role")
     # D-321 addendum: the owner calibrates against these limits; nobody else moves them.
     require_calibration_owner(svc, auth, "safety limits change")
     patch_safety: dict = {}
-    if body.manual_linear is not None:
-        patch_safety["manual_linear"] = min(body.manual_linear, svc.safety.limits.max_linear)
-    if body.manual_angular is not None:
-        patch_safety["manual_angular"] = min(body.manual_angular, svc.safety.limits.max_angular)
+    # D-1005: above the signed ceiling is refused, never clipped to it.
+    asked = {name: getattr(body, name) for name in ("manual_linear", "manual_angular")
+             if getattr(body, name) is not None}
+    try:
+        patch_safety.update(validate(asked, svc.safety.limits))
+    except SpeedSettingError as exc:
+        raise ApiError("VALIDATION_ERROR", 400, str(exc))
     if body.fleet_loss_policy is not None:
         policy = body.fleet_loss_policy
         if policy == "CONTINUE_CURRENT_NAVIGATION":
@@ -262,7 +310,8 @@ def safety_limits(body: LimitsRequest, auth: AuthContext = Depends(admin),
     _apply_safety_patch(svc, patch_safety)
     svc.config.setdefault("safety", {}).update(patch_safety)
     svc.events.publish("config.changed", severity="warning", source="api",
-                       data={"key": "safety.limits"})
+                       data={"key": "safety.limits", "by": auth.principal_ref,
+                             "changes": {k: v for k, v in patch_safety.items() if k.startswith("manual_")}})
     payload = _safety_payload(svc)
     if patch_safety.get("fleet_loss_policy") == "RETURN_HOME":
         # D-419: accepted, but every paired robot on this policy drives home at once when

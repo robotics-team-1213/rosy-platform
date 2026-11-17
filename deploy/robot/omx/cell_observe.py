@@ -72,6 +72,11 @@ def outside_mm(record: dict, arm) -> float | None:
     return round(1000 * math.hypot(dx, dy), 1)
 
 
+def map_usable(config: dict, estimate: dict) -> bool:
+    return ((estimate.get("outside_mm") or 0) <= config.get("map_extent_mm", 10.0)
+            and (estimate.get("residual_mm") or 0) <= config.get("map_residual_mm", 10.0))
+
+
 def load_maps(path, config: dict) -> dict:
     """The calibration file, with a site-local map kept as its own file (sites.<site>.local_map, one record
     of the calibration form) as `<site>~local` unless the file already has a newer one from a re-map."""
@@ -96,8 +101,9 @@ def save_maps(calibration_path: Path, result: dict) -> bool:
 
 def locate(cell, config: dict, calibration: dict, site: str) -> dict:
     """Every fixed camera with a map for `site` estimates the box, weighted by its map's leave-one-out
-    error. One camera that cannot see the box does not stop the others. Each camera uses the first of its
-    maps whose fitted points the box lies within (map_extent_mm), else its best map, marked as outside.
+    error. Estimates outside their mapped extent or residual limit remain in evidence, but do not skew a
+    valid camera's arm position. One camera that cannot see the box does not stop the others. Each camera
+    uses the first of its maps whose fitted points the box lies within (map_extent_mm), else its best map.
     A camera with a model (cell_frame, D-933) re-solves its pose from the base markers in the same frame and
     uses the ray instead of the maps; with no base marker in view it falls back to the maps when there are any."""
     estimates, missing = [], []
@@ -128,24 +134,30 @@ def locate(cell, config: dict, calibration: dict, site: str) -> dict:
             arm = cal.to_arm(record["homography"], pixel)
             fits.append((key, record, arm, outside_mm(record, arm)))
         key, record, (x, y), outside = next((f for f in fits if (f[3] or 0) <= limit), fits[0])
+        chosen_px = cal.parallax((box["cx"], box["cy"]), config["sites"][site]["z"], record["z_view"], config["cameras"][camera]) if "z_view" in record else (box["cx"], box["cy"])
         turn = cal.yaw_sign(record["homography"], (box["cx"], box["cy"])) * wrap90(box["yaw"])
-        sigma = max(0.5, (record.get("loo_error_mm") or {}).get("mean", 5.0))
+        import cell_map_fit
+
+        sigma = cell_map_fit.predict_sigma_mm(record, chosen_px)
         estimates.append({"camera": camera, "pixel": [box["cx"], box["cy"]], "arm_m": [x, y], "turn": turn,
                           "sigma_mm": sigma, "frame": frame, "map": key, "outside_mm": outside,
                           "residual_mm": (record.get("loo_error_mm") or {}).get("max")})
     if not estimates:
         return {"found": False, "error": "; ".join(missing) or "no fixed camera configured"}
-    weights = [1 / e["sigma_mm"] ** 2 for e in estimates]
+    usable = [e for e in estimates if map_usable(config, e)]
+    weighted = usable or estimates
+    weights = [1 / e["sigma_mm"] ** 2 for e in weighted]
 
     def mean(values):
         return sum(w * v for w, v in zip(weights, values)) / sum(weights)
 
-    x, y = mean([e["arm_m"][0] for e in estimates]), mean([e["arm_m"][1] for e in estimates])
-    turn = mean([e["turn"] for e in estimates])
+    x, y = mean([e["arm_m"][0] for e in weighted]), mean([e["arm_m"][1] for e in weighted])
+    turn = mean([e["turn"] for e in weighted])
     return {"found": True, "observed": datetime.now(timezone.utc).isoformat(), "arm_m": [round(x, 4), round(y, 4)],
             "turn_deg": round(turn, 1),
             "yaw_deg": round(config["sites"][site]["yaw_deg"] + turn, 1),
-            "sigma_mm": round(1 / math.sqrt(sum(weights)), 2), "estimates": estimates, "missing": missing}
+            "sigma_mm": round(1 / math.sqrt(sum(weights)), 2), "estimates": estimates, "missing": missing,
+            "map_usable": bool(usable)}
 
 
 def model_estimate(config: dict, model: dict, site: str, box: dict) -> dict | None:
@@ -162,15 +174,18 @@ def model_estimate(config: dict, model: dict, site: str, box: dict) -> dict | No
 
 
 def map_check(config: dict, found: dict, calibration: dict | None = None) -> str | None:
-    """Why the map that put this box in arm x, y should not be trusted for a grasp here, or None: the box
-    lies outside every map's fitted points by more than map_extent_mm, or the map's leave-one-out error
-    is above map_residual_mm. With `calibration`, also a scene that changed since the map or detection (cell_scene)."""
-    for e in found.get("estimates", []):
+    """Why no usable estimate can locate this box, or None: all maps exceed extent/residual limits, or
+    the usable camera's scene changed since the map or detection (cell_scene)."""
+    estimates = found.get("estimates", [])
+    if not estimates:
+        return "no camera map estimate"
+    usable = [e for e in estimates if map_usable(config, e)]
+    if estimates and not usable:
+        e = estimates[0]
         if (e.get("outside_mm") or 0) > config.get("map_extent_mm", 10.0):
             return f"{e['camera']}: box {e['outside_mm']} mm outside the points of map {e['map']}"
-        if (e.get("residual_mm") or 0) > config.get("map_residual_mm", 10.0):
-            return f"{e['camera']}: map {e['map']} leave-one-out error {e['residual_mm']} mm"
-    return scene_check(config, calibration, found) if calibration else None
+        return f"{e['camera']}: map {e['map']} leave-one-out error {e['residual_mm']} mm"
+    return scene_check(config, calibration, {**found, "estimates": usable}) if calibration else None
 
 
 def detection(found: dict) -> dict:
@@ -183,10 +198,19 @@ def detection(found: dict) -> dict:
 def hover_check(cell, config: dict, calibration: dict, site: str) -> dict:
     """Right above the box, before descending: does the wrist camera see the box where it sat in the
     hovers over boxes placed at known points (learned in calibration)? Unknown until learned."""
+    import statistics
     import cell_perception as cp
 
+    samples = max(1, int(((config.get("params") or {}).get("reach") or {}).get("samples", 1)))
     img = cell.frame("wrist")
     box = cp.wrist_box(img, config["profiles"]["top"])
+    if samples > 1:
+        boxes = [b for b in [box, *(cp.wrist_box(cell.frame("wrist"), config["profiles"]["top"]) for _ in range(samples - 1))] if b.get("found")]
+        if boxes:
+            box = {**boxes[-1], "found": True,
+                   "cx": round(statistics.median(b["cx"] for b in boxes), 1),
+                   "cy": round(statistics.median(b["cy"] for b in boxes), 1),
+                   "area": round(statistics.median(b["area"] for b in boxes), 1)}
     seen = {k: box.get(k) for k in ("found", "cx", "cy", "area", "tilt")}
     seen["frame"] = keep(f"hover-{site}-wrist", img)
     learned = (calibration["sites"].get(site) or {}).get("wrist")

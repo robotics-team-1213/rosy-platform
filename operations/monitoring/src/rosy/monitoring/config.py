@@ -77,6 +77,7 @@ class MonitoringConfig(MonitoringModel):
     readers: Annotated[tuple[ReaderConfig, ...], Field(min_length=1, max_length=128)]
     sources: Annotated[tuple[SourceConfig, ...], Field(max_length=128)] = ()
     ca_bundle: Path | None = None
+    account_config: Path | None = None  # D-990: the Rosy Account receiver JSON; absent keeps reader keys only
 
     @field_validator("ca_bundle")
     @classmethod

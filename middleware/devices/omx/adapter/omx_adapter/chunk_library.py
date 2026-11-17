@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 
-from .motion_profile import flow
+from .motion_profile import TemporalChunkEnsembler, blend_chunks, flow, receding_horizon_splice
 
 # The guard streams at most 10 deg/s; 5 native units/s keeps every joint under 9 deg/s.
 GUARD_UNITS_PER_S = 5.0
@@ -33,11 +33,31 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     turn pan/roll to the goal there, descend into the goal body pose, then set the goal's jaws.
     `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S).
     `speed` is the fraction of the guard speed (a plan's transit_speed)."""
-    transit = TRANSIT if transit is None else transit
+    if (
+        start[1] >= -35.0
+        and goal[1] >= -35.0
+        and abs(start[0] - goal[0]) <= 15.0
+        and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 24.0
+        and abs(start[4] - goal[4]) <= 45.0
+    ):
+        return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.25,
+                    rise_speed=RISE_SPEED)
+    if transit is None:
+        transit = (
+            {1: max(TRANSIT[1], min(start[1], goal[1], -16.0) - 5.0), 2: TRANSIT[2], 3: TRANSIT[3]}
+            if start[1] > -22.0 and goal[1] > -22.0 and abs(start[0] - goal[0]) <= 15.0
+            else TRANSIT
+        )
     waypoints = [list(start)]
     waypoints.append(waypoints[-1][:5] + [grip_transit])
     waypoints.append([transit.get(i, v) for i, v in enumerate(waypoints[-1])])
-    waypoints.append([goal[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])])
+    turn = [goal[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])]
+    if goal[1] <= waypoints[-1][1] and max(abs(turn[i] - waypoints[-1][i]) for i in (0, 4)) <= 8.0:
+        waypoints.append(list(goal[:5]) + [grip_transit])
+        waypoints.append(list(goal[:6]))
+        return flow(waypoints, fps, speed * PARK_SPEED, blend=[False, False, True, False, False], blend_s=0.6,
+                    rise_speed=RISE_SPEED)
+    waypoints.append(turn)
     waypoints.append(list(goal[:5]) + [grip_transit])
     waypoints.append(list(goal[:6]))
     # One flowing move, eased in and out (no jerk step), the lift rising no faster than RISE_SPEED: the turn
@@ -47,10 +67,39 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
                 rise_speed=RISE_SPEED)
 
 
+def chain_path(steps: list[list], fps: int, blend_s: float = 0.25) -> list:
+    """Blend a list of non-empty frame sequences so consecutive body chunks flow without dead stops."""
+    out: list = []
+    for frames in steps:
+        if not frames:
+            continue
+        out = blend_chunks(out, frames, fps, blend_s=blend_s, vmax=GUARD_UNITS_PER_S) if out else [list(f) for f in frames]
+    return out
+
+
 def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None,
               speed: float = 0.85) -> list:
-    """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed)."""
-    return transit_path(start, list(home[:5]) + [closed], closed, fps, transit, speed)
+    """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed);
+    stay folded for near-home or already-folded pan turns (`wait` side -> `home`) instead of unfolding."""
+    goal = list(home[:5]) + [closed]
+    near_home = max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 5.0 and abs(start[5] - closed) <= 5.0
+    folded_pose = (
+        start[1] <= -50.0
+        and goal[1] <= -50.0
+        and max(abs(a - b) for a, b in zip(start[1:4], goal[1:4])) <= 10.0
+        and abs(start[0] - goal[0]) <= 70.0
+        and abs(start[4] - goal[4]) <= 45.0
+    )
+    if near_home or folded_pose:
+        waypoints = (
+            [list(start), list(start[:5]) + [closed], goal]
+            if abs(start[5] - closed) > 5.0
+            else [list(start), goal]
+        )
+        rate = (0.5 if abs(start[0] - goal[0]) <= 12.0 else 1.0) * speed * PARK_SPEED
+        return flow(waypoints, fps, rate, blend=[False] * len(waypoints), blend_s=0.2,
+                    rise_speed=RISE_SPEED)
+    return transit_path(start, goal, closed, fps, transit, speed)
 
 
 def load_library(path: Path) -> dict:

@@ -123,10 +123,15 @@ export function mountRobotVideoPanel({doc = document} = {}) {
   async function loadRobots() {
     try {
       const snapshot = await call("/api/fleet/state");
-      const ids = (snapshot.robots ?? []).map((robot) => robot.robot_id).filter(Boolean);
-      picker.replaceChildren(picker.firstChild, ...ids.map((id) => {
+      const all = (snapshot.robots ?? []).filter((robot) => robot?.robot_id);
+      const active = all.filter((robot) => robot.online || robot.link === "degraded");
+      const rows = active.length ? active : all;
+      picker.replaceChildren(picker.firstChild, ...rows.map((robot, idx) => {
+        const id = robot.robot_id;
         const label = el(doc, "label", null);
-        label.append(el(doc, "input", null, {type: "checkbox", value: id, "data-robot-video-choice": id}), ` ${id}`);
+        const input = el(doc, "input", null, {type: "checkbox", value: id, "data-robot-video-choice": id});
+        if (active.length === 1 && idx === 0) input.checked = true;
+        label.append(input, ` ${id}`);
         return label;
       }));
     } catch { status.textContent = "로봇 목록을 불러오지 못했습니다."; }

@@ -56,3 +56,19 @@ def test_untrusted_tls_failure_or_wrong_advertisement_is_not_a_site(tmp_path):
 
     with pytest.raises(ValueError, match='TLS identity mismatch'):
         locate_fleet('fleet-a.local', ca, cache=Cache([candidate()]), probe=reject)
+
+
+def test_shared_cache_miss_falls_back_to_avahi_with_pinned_probe(tmp_path, monkeypatch):
+    import core_common.discover as discover_mod
+    import core_features.fleet_agent.discovery as fleet_discovery
+
+    ca = tmp_path / 'ca.crt'
+    ca.write_text('fixture')
+    probed = []
+    monkeypatch.setattr(fleet_discovery, 'get_shared_cache', lambda: Cache([]))
+    monkeypatch.setattr(discover_mod, '_via_avahi', lambda service, timeout: [candidate()])
+    url = locate_fleet('fleet-a.local', ca, probe=lambda *args: probed.append(args))
+    assert url == 'https://fleet-a.local:9443'
+    assert probed == [({'hostname': 'fleet-a.local', 'address': '192.168.1.20', 'port': 9443},
+                       'fleet-a.local', ca)]
+

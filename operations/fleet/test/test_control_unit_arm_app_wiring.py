@@ -22,7 +22,7 @@ from test_physical_transfer_store import installation  # noqa: F401
 
 MANIFEST = {"revision": "v1", "units": [
     {"id": "R", "resources": ["robot:p1"]},
-    {"id": "CELL-A", "parent": "R", "resources": ["workcell:w-1"]}]}
+    {"id": "ARM-CELL", "parent": "R", "resources": ["workcell:w-1"]}]}
 HARBOR = {"Authorization": "Bearer harbor-token"}
 OPERATOR = {"Authorization": "Bearer op-token"}
 JOBS = "http://r.test/api/fleet/arm-transfers/jobs"
@@ -64,14 +64,14 @@ def site(tmp_path, monkeypatch, installation):
     console = FleetConsole([RobotEndpoint("p1", "http://robot.invalid", "device-token")], [FakeRobot("p1")])
     apps["r.test"] = create_app(
         console, task_service=FleetTaskService(FleetTaskStore(r_db), robot_ids=console.robot_ids),
-        start_task_dispatcher=False, control_unit_config=config(tmp_path, "R", "CELL-A", "http://cell.test"),
+        start_task_dispatcher=False, control_unit_config=config(tmp_path, "R", "ARM-CELL", "http://cell.test"),
         site_users=users(("harbor-token", "harbor", "service"), ("op-token", "operator-r", "operator"),
-                         ("peer-CELL-A", "control-unit:CELL-A", "service")))
+                         ("peer-ARM-CELL", "control-unit:ARM-CELL", "service")))
     apps["cell.test"] = create_app(
         FleetConsole([], []), task_service=FleetTaskService(FleetTaskStore(cell_db), robot_ids=()),
         mission_service=MissionService(MissionStore(cell_db)), proposal_store=ProposalStore(cell_db),
         start_task_dispatcher=False, deployment_profile="simulation", arm_transfer_installation=installation,
-        omx_stop_transport=StopPort(), control_unit_config=config(tmp_path, "CELL-A", "R", "http://r.test"),
+        omx_stop_transport=StopPort(), control_unit_config=config(tmp_path, "ARM-CELL", "R", "http://r.test"),
         site_users=users(("op-token", "operator-a", "operator"), ("peer-R", "control-unit:R", "service")))
     apps["seen"] = seen
     return apps

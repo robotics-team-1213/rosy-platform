@@ -121,9 +121,9 @@ def test_listing_shows_candidates_and_decisions_without_paths_or_tokens_and_hide
 
 
 def test_usb_decision_accepts_named_operator_cookie_but_keeps_viewer_and_csrf_guards(parts, tmp_path):
-    from fleet.server.password_session import COOKIE, PasswordSessions
+    from rosy_account.password_session import COOKIE, PasswordSessions
     from fleet.server.site_auth import build_authorize, build_role_guards
-    from fleet.server.site_users import hash_password
+    from rosy_account.site_users import hash_password
 
     original, store, _, _ = parts
     send(original, report(KEY))

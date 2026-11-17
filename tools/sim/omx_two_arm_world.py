@@ -7,6 +7,7 @@ capacity, D-947). Contact and friction numbers are not results.
 
     MUJOCO_GL=egl python tools/sim/omx_two_arm_world.py render OUT_DIR      # scene PNGs to compare with reality
 """
+import functools
 import json
 import math
 import os
@@ -32,9 +33,34 @@ PREFIX = {"arm_a": "a_", "arm_b": "b_"}
 WRIST_ASSETS = sites.ISAAC / "assets/omx_wrist_camera_b"  # link5 parts in mm, as stacking_scene.WRIST_PARTS draws them in Isaac
 WRIST_PARTS = ("link5_gripper", "gripper_plate_F6", "b16-u16-span-D-holder-assembly")
 FPS = 15
-# the cell as its top camera sees it (median pixels of the 11-09 top frame): yellow table, white plates with dark lane pads, light-blue ship
-COLOURS = dict(floor=[.45, .5, .55, 1], table=[.74, .64, .35, 1], belt=[.2, .25, .28, 1], plate=[.88, .89, .9, 1], pad=[.08, .09, .1, 1],
-               ship=[.6, .85, .97, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
+# the cell as its cameras see it (2026-11-10 top/side frames, G-29): yellow table, light-blue v11 plates with dark lane pads, light-blue ship
+# Colours are albedo: this renderer's light multiplies a top-facing surface by about 1.3 (measured on the 11-14 v24 render: table 1.2, hull 1.4, container clipped), so each is the
+# colour wanted in the picture / 1.3 (sky: photo 157/207/240 at hull gain 1.4). Wanted: ship and plates sky #A4DBE8, the PLA of team_p2s_navy_sky.3mf (photo 11-14 00:57 hull median 157/207/240); berth docks, cradle,
+# stopper and bridge v7 black (photo: dark pixels of those parts median 36/35/25), vendor base plate near black (13-20); table 180/133/25 and container 222/109/50 are photo medians.
+COLOURS = dict(floor=[.37, .43, .37, 1], table=[.59, .43, .08, 1], belt=[.16, .18, .19, 1], plate=[.45, .60, .67, 1],
+               plate_navy=[.082, .149, .290, 1], plate_sky=[.643, .859, .910, 1], pad=[.08, .09, .1, 1],
+               ship=[.45, .60, .67, 1], container=[.62, .31, .14, 1], wall=[.6, .84, 1., 1],  # wall: the room behind the cell in the side frame (11-09)
+               black=[.11, .11, .09, 1], base=[.06, .065, .06, 1])
+
+
+@functools.lru_cache(maxsize=1)
+def _parsed_two_arm_urdf_template():
+    text = jaw.URDF.read_text(encoding="utf-8")
+    text = re.sub(r"<(gazebo|ros2_control)\b.*?</\1>", "", text, flags=re.S)
+    for pattern in (r'<joint name="end_effector_joint".*?</joint>', r'<link name="end_effector_link">.*?</link>',
+                    r'<joint name="world_fixed".*?</joint>', r'<link name="world"/>'):
+        text = re.sub(pattern, "", text, flags=re.S)
+    inner = re.search(r"<robot\b[^>]*>(.*)</robot>", text, flags=re.S).group(1)
+    arms = {}
+    for arm, p in PREFIX.items():
+        body = re.sub(r'(<(?:link|joint)\s+name=")', r"\1" + p, inner)
+        body = re.sub(r'(<(?:parent|child)\s+link=")', r"\1" + p, body)
+        body = re.sub(r'(<mimic\s+joint=")', r"\1" + p, body)
+        pairs = tuple(re.findall(r'<joint\s[^>]*>.*?<parent link="([^"]+)"/>\s*<child link="([^"]+)"/>', body, flags=re.S))
+        mesh_names = tuple(set(re.findall(r"package://[a-z_]+/meshes/omx_f/([^\"]+)", body)))
+        body = re.sub(r"package://[a-z_]+/meshes/omx_f/", p, body)
+        arms[arm] = body, pairs, mesh_names
+    return arms
 
 
 def prism(polygon, z0, z1):
@@ -73,26 +99,19 @@ class World:
 
     # -- model ---------------------------------------------------------------------------------------------------------------
     def _urdf(self):
-        text = jaw.URDF.read_text(encoding="utf-8")
-        text = re.sub(r"<(gazebo|ros2_control)\b.*?</\1>", "", text, flags=re.S)
-        for pattern in (r'<joint name="end_effector_joint".*?</joint>', r'<link name="end_effector_link">.*?</link>',
-                        r'<joint name="world_fixed".*?</joint>', r'<link name="world"/>'):
-            text = re.sub(pattern, "", text, flags=re.S)
-        inner = re.search(r"<robot\b[^>]*>(.*)</robot>", text, flags=re.S).group(1)
         out = ['<link name="world"/>']
+        arms = _parsed_two_arm_urdf_template()
         for arm, p in PREFIX.items():
-            body = re.sub(r'(<(?:link|joint)\s+name=")', r"\1" + p, inner)
-            body = re.sub(r'(<(?:parent|child)\s+link=")', r"\1" + p, body)
-            body = re.sub(r'(<mimic\s+joint=")', r"\1" + p, body)
-            self.pairs[arm] = re.findall(r'<joint\s[^>]*>.*?<parent link="([^"]+)"/>\s*<child link="([^"]+)"/>', body, flags=re.S)
-            for name in set(re.findall(r"package://[a-z_]+/meshes/omx_f/([^\"]+)", body)):
+            body, pairs, mesh_names = arms[arm]
+            self.pairs[arm] = list(pairs)
+            for name in mesh_names:
                 for folder in MESHES:
                     if (folder / name).exists():
                         shutil.copy(folder / name, Path(self.meshes.name) / (p + name))
-            body = re.sub(r"package://[a-z_]+/meshes/omx_f/", "" + p, body)
             a = self.layout.arms[arm]
+            j0 = a.base - a.R0 @ np.array([*a.j1_offset_xy, 0.])
             out.append(f'<joint name="{p}mount" type="fixed"><parent link="world"/><child link="{p}link0"/>'
-                       f'<origin xyz="{a.base[0]} {a.base[1]} {a.base[2]}" rpy="0 0 {a.yaw}"/></joint>{body}')
+                       f'<origin xyz="{j0[0]} {j0[1]} {j0[2]}" rpy="0 0 {a.yaw}"/></joint>{body}')
         head = f'<mujoco><compiler meshdir="{self.meshes.name}" balanceinertia="true" discardvisual="false" fusestatic="false"/></mujoco>'
         return f'<robot name="two_arm">{head}{"".join(out)}</robot>'
 
@@ -114,8 +133,20 @@ class World:
         bx, by = L.belt_stop_x, L.belt_y
         world.add_geom(name="belt", type=box, size=[.15, .0425, .002], pos=[bx + .15, by, L.belt_top - .002], rgba=COLOURS["belt"])
         world.add_geom(name="belt_stop", type=box, size=[.002, .0425, .004], pos=[bx, by, L.belt_top + .004], rgba=[.6, .6, .6, 1])
-        for arm, a in L.arms.items():  # the 12 mm base plate under each arm (size ASSUMED 120 mm square, visual only)
-            world.add_geom(name=f"{PREFIX[arm]}plate", type=box, size=[.06, .06, .006], pos=[*a.base[:2], a.base[2] - .006], contype=0, conaffinity=0, rgba=[.2, .2, .2, 1])
+        for arm, a in L.arms.items():  # OMX-AI PR33_C02_BASE (150x120x13 mm) + front-center silver clamp + bridge v7
+            tag = arm[-1]
+            bp_mesh = f"omx_base_plate_{tag}"
+            spec.add_mesh(name=bp_mesh, file=self._asset(bp_mesh), scale=[.001] * 3)
+            world.add_geom(name=f"{PREFIX[arm]}plate", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=bp_mesh,
+                           pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["base"])
+            clamp_dy = .01125 if tag == "a" else -.01125
+            world.add_geom(name=f"{PREFIX[arm]}clamp", type=box, size=[.015, .0275, .0012],
+                           pos=[a.base[0] - .060, a.base[1] + clamp_dy, L.table_z + .0142], contype=0, conaffinity=0, rgba=[.78, .81, .84, 1])
+            if c.get("temp_bridge", "v7") == "v7":
+                br_mesh = f"temp_slot_bridge_{tag}"
+                spec.add_mesh(name=br_mesh, file=self._asset(br_mesh), scale=[.001] * 3)
+                world.add_geom(name=f"{PREFIX[arm]}bridge", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=br_mesh,
+                               pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["black"])
         self._ship(spec)
         self._temp(spec)
         r08 = c["ship_source"] == "r08-berth"
@@ -123,15 +154,22 @@ class World:
             spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
         phys = self.physics
         held = phys.container()
+        palette = (COLOURS["container"], [.18, .72, .24, 1], [.88, .14, .28, 1], [.62, .20, .86, 1])
         for k, (cid, _) in enumerate(L.containers()):
+            rgba = palette[k % len(palette)] if c.get("container_colours") == "multi" else COLOURS["container"]
             body = world.add_body(name=cid, pos=[-1.4, 1.0 + .1 * k, .05])
             body.add_freejoint(name=cid)
             body.add_geom(name=cid, type=box, size=[s / 2 for s in L.box], mass=held["mass"], condim=4, friction=held["friction"], priority=held.get("priority", 0),
-                          rgba=[.85, .35, .08, 0 if r08 else 1])
+                          rgba=[*rgba[:3], 0 if r08 else 1])
             if r08:  # the printed body with its doors, drawn over the collision box (body x 0..90, the box centre at 45, 14.99, 16.2 mm)
                 body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="container", pos=[-L.box[0] / 2, -L.box[1] / 2, -L.box[2] / 2],
-                              contype=0, conaffinity=0, density=0, rgba=COLOURS["container"])
+                              contype=0, conaffinity=0, density=0, rgba=rgba)
         for arm, p in PREFIX.items():
+            for part in spec.body(p + "link0").geoms:  # follower_01_base.stl duplicates PR33_C02_BASE un-mirrored; keep only m11 housing
+                part.contype = part.conaffinity = 0
+                part.rgba = [0, 0, 0, 0]
+            spec.body(p + "link0").add_geom(name=f"{p}m11", type=box, pos=[*L.arms[arm].j1_offset_xy, .035], size=[.014, .028, .021],
+                                            contype=0, conaffinity=0, rgba=[.14, .15, .17, 1])
             for k, (finger, side) in enumerate((("link6", 1), ("link7", -1))):
                 for part in spec.body(p + finger).geoms:
                     part.contype = part.conaffinity = 0
@@ -150,7 +188,8 @@ class World:
             spec.add_equality(type=mujoco.mjtEq.mjEQ_JOINT, name1=p + "gripper_joint_2", name2=p + "gripper_joint_1", data=([0, -1, 0, 0, 0] + [0] * 7)[:mujoco.mjNEQDATA])
             if self.wrist != "none":
                 self._wrist(spec, p)
-        world.add_light(pos=[.1, 0, 1.2], dir=[0, 0, -1], diffuse=[.8, .8, .8])
+        spec.visual.headlight.ambient, spec.visual.headlight.diffuse, spec.visual.headlight.specular = [.28] * 3, [.42] * 3, [.05] * 3
+        world.add_light(pos=[.1, 0, 1.2], dir=[0, 0, -1], diffuse=[.68, .68, .68], specular=[.06, .06, .06])
         real = f["real_cameras"]
         for name, cam in (("top", real["top"]), ("side", real["side"])):
             right, up = camera_axes(cam["eye"], cam["focus"], cam["up"])
@@ -164,10 +203,12 @@ class World:
         if self.wrist == "stock":
             cell = json.loads(kin.CELL_EXAMPLE.read_text(encoding="utf-8"))["wrist_camera"]
             base.update(lens_m=cell["lens_m"], axis_hit_x_m=cell["axis_hit_x_m"])
-        if self.wrist == "photo-20261108":
+        elif self.wrist == "photo-20261108":
             base.update(sites.WRIST_PHOTO)
+        elif self.wrist == "photo-20261110":
+            base.update(sites.WRIST_PHOTO_A if p == "a_" else sites.WRIST_PHOTO)
         link5 = spec.body(p + "link5")
-        if self.wrist in ("v21-b", "photo-20261108"):  # the printed D holder: link5 is the team's parts, not the stock mesh with ROBOTIS frame F9 (both see and collide)
+        if self.wrist in ("v21-b", "photo-20261108", "photo-20261110"):  # the printed D holder: link5 is the team's parts, not the stock mesh with ROBOTIS frame F9 (both see and collide)
             for part in link5.geoms:
                 part.contype = part.conaffinity = 0
                 part.rgba = [0, 0, 0, 0]
@@ -207,7 +248,23 @@ class World:
         x0, y0, z0 = sites.ship_cell(L, 0, 0)
         turn = [0, 0, 0, 1]  # ship x runs to -x of the fixture frame
         mesh = mujoco.mjtGeom.mjGEOM_MESH
-        for name, rgba in (("hull", COLOURS["ship"]), ("house", COLOURS["ship"]), ("quay", [.88, .48, .16, 1])):
+        visuals = [("hull", COLOURS["ship"]), ("house", COLOURS["ship"])]
+        kit = L.choices.get("berth_kit", "v24-docks")
+        if kit == "v24-docks":  # 2026-11-14 rated: printed v20 cradles and stopper + the 2 socket-in docking pieces (v24)
+            visuals += [
+                ("berth_v24_cradle", COLOURS["black"]),
+                ("berth_v24_docks", COLOURS["black"]),
+                ("berth_v24_stopper", COLOURS["black"]),
+            ]
+        elif kit in ("v16-modular", "v17-modular-tight", "v18-modular-adjustable"):
+            visuals += [
+                ("berth_v16_cradle", [.88, .48, .16, 1]),
+                ("berth_v16_bridges", [.92, .68, .22, 1]),
+                ("berth_v16_stopper", [.22, .62, .52, 1]),
+            ]
+        else:
+            visuals.append(("quay", [.88, .48, .16, 1]))
+        for name, rgba in visuals:
             spec.add_mesh(name=f"ship_{name}", file=self._asset(name), scale=[.001] * 3)
             world.add_geom(name=f"ship_{name}", type=mesh, meshname=f"ship_{name}", pos=[x0, y0, z0], quat=turn, contype=0, conaffinity=0, rgba=rgba)
         for name in ("cx_bow", "cx_house"):
@@ -238,27 +295,58 @@ class World:
                                    size=[H["length"] / 2 * mm, (y_out - y_in) / 2 * mm, tall / 2 * mm], rgba=[0, 0, 0, 0])
 
     def _temp(self, spec):
-        """Both temporary plates: a convex deck, and per lane the vertical 0.6 mm seat plus the 45 degree funnel as four convex walls (SCAD v7)."""
+        """Both temporary plates: pocket-clipped collision walls (invisible when CAD STL visuals are shown) + CAD STLs + lane pads."""
         L, S = self.layout, sites.SCAD
-        width, length, _, _, _ = sites.lane_geometry(L.choices["temp_radius_m"])
+        src = L.choices["temp_source"]
+        use_stl = src != "procedural"
+        width, length, flare, _, _ = sites.lane_geometry(L.choices["temp_radius_m"])
         seat, catch, rim = S["seat_h"], S["catch"], S["rim"]
-        section = lambda h: [(h, 0), (h, seat), (h + catch, seat + catch), (h + catch + rim, seat + catch), (h + catch + rim, 0)]  # noqa: E731
-        deck_z = L.deck_z
-        spec.add_mesh(name="wall_side", uservert=wall(section(width / 2), length + 2 * (catch + rim), True))
-        spec.add_mesh(name="wall_end", uservert=wall(section(length / 2), width + 2 * (catch + rim), False))
+        hl, hw, deck_z = length / 2, width / 2, L.deck_z
+        max_out = hw + flare + catch + rim
+        stl_layers = (("temp_slot_plate_v11", COLOURS["plate"]),) if src == "scad-v11" else (
+            ("temp_slot_plate_v12_navy", COLOURS["plate_navy"]),
+            ("temp_slot_plate_v12_sky", COLOURS["plate_sky"]),
+        )
+        if use_stl:
+            for mesh_name, _ in stl_layers:
+                spec.add_mesh(name=mesh_name, file=self._asset(mesh_name), scale=[.001] * 3)
+        proxy_rgba = [0, 0, 0, 0] if use_stl else COLOURS["plate"]
         for tag, plate in L.plates.items():
             spec.add_mesh(name=f"deck_{tag}", uservert=prism(plate["outline"], deck_z - S["deck_t"], deck_z))
-            colour = COLOURS["plate"]
-            spec.worldbody.add_geom(name=f"deck_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"deck_{tag}", rgba=colour)
-            for i, (xy, yaw) in enumerate(plate["lanes"], 1):
-                spec.worldbody.add_geom(name=f"lane{tag}{i}", type=mujoco.mjtGeom.mjGEOM_BOX, pos=[*xy, deck_z + .0003], size=[length / 2, width / 2, .0003],
-                                        quat=[math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)], contype=0, conaffinity=0, rgba=COLOURS["pad"])
-                for mesh, turn in (("wall_side", 0), ("wall_side", math.pi), ("wall_end", 0), ("wall_end", math.pi)):
-                    a = yaw + turn
-                    spec.worldbody.add_geom(name=f"w{tag}{i}{mesh[5]}{int(turn > 0)}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=mesh,
-                                            pos=[*xy, deck_z], quat=[math.cos(a / 2), 0, 0, math.sin(a / 2)], rgba=colour)
-        if L.choices["temp_source"] == "stl":
-            raise NotImplementedError("temp_source=stl: pass the downloaded STL as a visual mesh here; collision stays the SCAD shape")
+            spec.worldbody.add_geom(name=f"deck_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"deck_{tag}", rgba=proxy_rgba)
+            mid_xy, _ = plate["lanes"][1]
+            arm_xy = L.arms[f"arm_{tag}"].base[:2]
+            stl_yaw = math.atan2(mid_xy[1] - arm_xy[1], mid_xy[0] - arm_xy[0]) - math.pi  # STL ears point +x (for -x direction)
+            stl_quat = [math.cos(stl_yaw / 2), 0, 0, math.sin(stl_yaw / 2)]
+            if use_stl:
+                for mesh_name, rgba in stl_layers:
+                    suffix = mesh_name.removeprefix("temp_slot_plate_")
+                    spec.worldbody.add_geom(name=f"plate_{suffix}_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=mesh_name,
+                                            pos=[*mid_xy, deck_z - S["deck_t"]], quat=stl_quat, contype=0, conaffinity=0, rgba=rgba)
+            frames = [(np.array(xy), np.array([math.cos(y), math.sin(y)]), np.array([-math.sin(y), math.cos(y)]), y) for xy, y in plate["lanes"]]
+            for i, (xy, long, side, yaw) in enumerate(frames, 1):
+                quat = [math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
+                spec.worldbody.add_geom(name=f"lane{tag}{i}", type=mujoco.mjtGeom.mjGEOM_BOX, pos=[*xy, deck_z + .0003],
+                                        size=[S["cont_l"] / 2, S["cont_w"] / 2, .0003], quat=quat, contype=0, conaffinity=0, rgba=COLOURS["pad"])
+                def lim(u, sg, xy=xy, long=long, side=side, i=i):
+                    return min([max_out] + [.5 * float(np.linalg.norm((xy + u * long - ox) - ((xy + u * long - ox) @ ol) * ol))
+                                            for j, (ox, ol, _, _) in enumerate(frames, 1) if j != i and float((ox - xy) @ (sg * side)) > 0])
+
+                def sec_side(u, sg, lim=lim):
+                    yi, lm = hw + flare * abs(u) / hl, lim(u, sg)
+                    rs, yo = min(catch, max(0., lm - yi)), min(yi + catch + rim, lm)
+                    return [c for pt in ((yi, 0), (yi, seat), (yi + rs, seat + rs), (yo, seat + rs), (yo, 0)) for c in (u, sg * pt[0], pt[1])]
+                for sg in (-1, 1):
+                    for k, (u0, u1) in enumerate(((-hl, -hl / 2), (-hl / 2, 0.), (0., hl / 2), (hl / 2, hl))):
+                        nm = f"w{tag}{i}s{int(sg > 0)}" + (f"_{k}" if k else "")
+                        spec.add_mesh(name=nm, uservert=sec_side(u0, sg) + sec_side(u1, sg))
+                        spec.worldbody.add_geom(name=nm, type=mujoco.mjtGeom.mjGEOM_MESH, meshname=nm, pos=[*xy, deck_z], quat=quat, rgba=proxy_rgba)
+                for es in (-1, 1):
+                    nm = f"w{tag}{i}e{int(es > 0)}"
+                    v0, v1 = -lim(es * hl, -1), lim(es * hl, 1)
+                    pts = ((hl, 0), (hl, seat), (hl + catch, seat + catch), (hl + catch + rim, seat + catch), (hl + catch + rim, 0))
+                    spec.add_mesh(name=nm, uservert=[c for v in (v0, v1) for u, z in pts for c in (es * u, v, z)])
+                    spec.worldbody.add_geom(name=nm, type=mujoco.mjtGeom.mjGEOM_MESH, meshname=nm, pos=[*xy, deck_z], quat=quat, rgba=proxy_rgba)
 
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):

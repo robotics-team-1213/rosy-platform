@@ -20,37 +20,47 @@ class Segment(NamedTuple):
     poses: list  # each pose is a list of capsules (a, b, radius), all in one common frame
 
 
-def _dot(u, v):
-    return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
-
-
-def _sub(u, v):
-    return (u[0] - v[0], u[1] - v[1], u[2] - v[2])
-
-
 def line_distance(p1, q1, p2, q2) -> float:
     """Closest distance between segments p1-q1 and p2-q2 (Ericson, Real-Time Collision Detection 5.1.9)."""
-    d1, d2, r = _sub(q1, p1), _sub(q2, p2), _sub(p1, p2)
-    a, e, f = _dot(d1, d1), _dot(d2, d2), _dot(d2, r)
+    d1x, d1y, d1z = q1[0] - p1[0], q1[1] - p1[1], q1[2] - p1[2]
+    d2x, d2y, d2z = q2[0] - p2[0], q2[1] - p2[1], q2[2] - p2[2]
+    rx, ry, rz = p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]
+    a = d1x * d1x + d1y * d1y + d1z * d1z
+    e = d2x * d2x + d2y * d2y + d2z * d2z
+    f = d2x * rx + d2y * ry + d2z * rz
     if a <= 1e-12 and e <= 1e-12:
         s = t = 0.0
     elif a <= 1e-12:
-        s, t = 0.0, min(max(f / e, 0.0), 1.0)
+        s, t = 0.0, f / e
+        if t < 0.0:
+            t = 0.0
+        elif t > 1.0:
+            t = 1.0
     else:
-        c = _dot(d1, r)
+        c = d1x * rx + d1y * ry + d1z * rz
         if e <= 1e-12:
-            s, t = min(max(-c / a, 0.0), 1.0), 0.0
+            s, t = -c / a, 0.0
         else:
-            b = _dot(d1, d2)
+            b = d1x * d2x + d1y * d2y + d1z * d2z
             denom = a * e - b * b
-            s = min(max((b * f - c * e) / denom, 0.0), 1.0) if denom > 1e-12 else 0.0
+            s = (b * f - c * e) / denom if denom > 1e-12 else 0.0
+            if s < 0.0:
+                s = 0.0
+            elif s > 1.0:
+                s = 1.0
             t = (b * s + f) / e
             if t < 0.0:
-                s, t = min(max(-c / a, 0.0), 1.0), 0.0
+                s, t = -c / a, 0.0
             elif t > 1.0:
-                s, t = min(max((b - c) / a, 0.0), 1.0), 1.0
-    gap = tuple(p1[k] + d1[k] * s - p2[k] - d2[k] * t for k in range(3))
-    return math.sqrt(_dot(gap, gap))
+                s, t = (b - c) / a, 1.0
+        if s < 0.0:
+            s = 0.0
+        elif s > 1.0:
+            s = 1.0
+    gx = p1[0] + d1x * s - p2[0] - d2x * t
+    gy = p1[1] + d1y * s - p2[1] - d2y * t
+    gz = p1[2] + d1z * s - p2[2] - d2z * t
+    return math.hypot(gx, gy, gz)
 
 
 def clearance(poses_a, poses_b) -> float:
@@ -58,6 +68,16 @@ def clearance(poses_a, poses_b) -> float:
     return min(line_distance(a1, a2, b1, b2) - ra - rb
                for pose_a in poses_a for a1, a2, ra in pose_a
                for pose_b in poses_b for b1, b2, rb in pose_b)
+
+
+def _clearance_at_least(poses_a, poses_b, margin_m) -> bool:
+    for pose_a in poses_a:
+        for a1, a2, ra in pose_a:
+            for pose_b in poses_b:
+                for b1, b2, rb in pose_b:
+                    if line_distance(a1, a2, b1, b2) - ra - rb < margin_m:
+                        return False
+    return True
 
 
 def plan(a: list, b: list, margin_m: float, start=(0, 0)):
@@ -69,7 +89,7 @@ def plan(a: list, b: list, margin_m: float, start=(0, 0)):
 
     def free(key, poses_a, poses_b):
         if key not in memo:
-            memo[key] = clearance(poses_a, poses_b) >= margin_m
+            memo[key] = _clearance_at_least(poses_a, poses_b, margin_m)
         return memo[key]
 
     def edges(i, j):
@@ -154,12 +174,17 @@ def rendezvous(a: list, b: list, margin_m: float, max_meets: int = 4):
     rest_a = [s.poses[:1] for s in a] + [a[-1].poses[-1:]]
     rest_b = [s.poses[:1] for s in b] + [b[-1].poses[-1:]]
     memo = {}
+    cum_a, cum_b = [0.0], [0.0]
+    for segment in a:
+        cum_a.append(cum_a[-1] + segment.duration_s)
+    for segment in b:
+        cum_b.append(cum_b[-1] + segment.duration_s)
 
     def pair(x, y):  # x: a's segment index or ("rest", i); y likewise
         if (x, y) not in memo:
             poses_a = rest_a[x[1]] if isinstance(x, tuple) else a[x].poses
             poses_b = rest_b[y[1]] if isinstance(y, tuple) else b[y].poses
-            memo[x, y] = clearance(poses_a, poses_b) >= margin_m
+            memo[x, y] = _clearance_at_least(poses_a, poses_b, margin_m)
         return memo[x, y]
 
     def block_free(i, j, i2, j2):
@@ -185,7 +210,7 @@ def rendezvous(a: list, b: list, margin_m: float, max_meets: int = 4):
                 if (i2, j2) == (i, j) or ((i2, j2) != goal and used >= max_meets) or not block_free(i, j, i2, j2):
                     continue
                 to = (i2, j2, used + ((i2, j2) != goal))
-                total = cost + max(sum(s.duration_s for s in a[i:i2]), sum(s.duration_s for s in b[j:j2]))
+                total = cost + max(cum_a[i2] - cum_a[i], cum_b[j2] - cum_b[j])
                 if total < best.get(to, math.inf):
                     best[to], came[to] = total, node
                     heapq.heappush(heap, (total, to))

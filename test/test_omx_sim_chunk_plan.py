@@ -99,16 +99,16 @@ def test_the_sim_replays_frame_for_frame_what_chunk_runner_streams():
     library = planner.library()
     sys.path.insert(0, str(OMX))
     try:
-        from chunk_runner import NAMES as RUNNER_NAMES, transit_path
+        from chunk_runner import NAMES as RUNNER_NAMES, chain_path, transit_path
     finally:
         sys.path.remove(str(OMX))
     transit = {RUNNER_NAMES.index(k): float(v) for k, v in library["transit"].items()}
     goto = lambda held, chunk: transit_path(held, chunk[0], library["gripper_closed"], library["fps"],  # noqa: E731
                                             transit, library["transit_speed"])
-    c, home = library["chunks"], list(planner.plan["home"]) + [planner.plan["grip_open"]]
-    streamed = goto(home, c["above_pick"]) + c["descend_pick"] + c["grasp_pick"] + c["lift_pick"]
-    streamed += goto(streamed[-1], c["above_place"]) + c["descend_place"] + c["release_place"] + c["lift_place"]
-    streamed += goto(streamed[-1], [home])
+    c, home, fps = library["chunks"], list(planner.plan["home"]) + [planner.plan["grip_open"]], library["fps"]
+    streamed = chain_path([goto(home, c["above_pick"]), c["descend_pick"]], fps) + c["grasp_pick"]
+    streamed += chain_path([c["lift_pick"], goto(c["lift_pick"][-1], c["above_place"]), c["descend_place"]], fps)
+    streamed += c["release_place"] + chain_path([c["lift_place"], goto(c["lift_place"][-1], [home])], fps)
     phases = m.phases(planner, NAMES, "gripper_joint_1", 0.0)
     replayed = [p.positions for phase in phases for p in phase.points]
     expected = [tuple(grasp_planner.norm_to_rad(v) for v in f[:5]) + (f[5] / 100,) for f in streamed]

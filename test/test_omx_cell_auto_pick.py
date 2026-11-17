@@ -2,6 +2,7 @@
 yaw (so the pivot circle is real), a map with a known bias, an object that is held only when the hidden
 closing axis matches the candidate, side faces drawn the way the top camera sees them."""
 import copy
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -88,6 +89,7 @@ def draw(img, o, colour=(60, 160, 60)):
 class Cell:
     def __init__(self, objects, true_closing=0.0, temp=40):
         self.objects, self.true_closing, self.temp = [dict(o) for o in objects], true_closing, temp
+        self.frame_seq = 0
         self.q, self.grip, self.library, self.held, self.commands = None, 56.0, None, None, []
         self.q = list(CONFIG["plan"]["home"])
 
@@ -104,6 +106,7 @@ class Cell:
             self.library = json.loads(Path(command.split(" ", 1)[1]).read_text())
         elif command == "goto above_pick":
             self.q = list(self.library["chunks"]["above_pick"][0][:5])
+            self.grip = CONFIG["plan"]["grip_open"]
         elif command.startswith("grip "):
             self.grip = max(48.5, float(command.split()[1]))
         elif command == "state":
@@ -112,6 +115,11 @@ class Cell:
                     "health": {"temp_c": [self.temp] * 6, "pwm": [10] * 6, "current_ma": [0] * 6}}
         elif command == "park":
             self.q = list(CONFIG["plan"]["home"])
+            if self.held is None:
+                self.grip = max(48.5, CONFIG["plan"]["grip_closed"])
+            return {"command": command, "ok": True, "settled": True,
+                    "state": self.q[:5] + [self.grip], "t": time.time(),
+                    "operating_context": dict(SESSION)}
         elif command == "run grasp_pick":
             x, y, _, yaw = self.fk()
             for o in self.objects:
@@ -139,11 +147,34 @@ class Cell:
             cv2.rectangle(img, (round(u) - 12, round(v) - 12), (round(u) + 12, round(v) + 12), (20, 20, 20), -1)
         return img
 
+    def frame_receipt(self, camera, *, previous=None):
+        self.frame_seq += 1
+        image = self.frame(camera)
+        ok, encoded = cv2.imencode(".jpg", image)
+        assert ok
+        return {"image": image, "jpeg_bytes": encoded.tobytes(),
+                "jpeg_sha256": hashlib.sha256(encoded.tobytes()).hexdigest(),
+                "source_seq": self.frame_seq, "source_stamp": time.time(), "camera": camera}
+
 
 def biased_map(tmp_path):
     points = [(tray_pixel(x, y), (x + BIAS[0], y + BIAS[1])) for x in (0.05, 0.072, 0.094) for y in (0.08, 0.106, 0.132)]
     path = tmp_path / "cal.json"
     cal.save(path, "pinky", {"homography": cal.fit(points).tolist(), "loo_error_mm": {"max": 0.1, "mean": 0.1}, "points": []})
+    return path
+
+
+def calibrated_map(tmp_path, cell):
+    """A measured map and matching stored pivot regions; live picks do not calibrate during a carry."""
+    path = biased_map(tmp_path)
+    _, _, seen, error = auto.observe(cell, CONFIG, cal.load(path), "pinky", ROI, CATALOG)
+    assert error is None and seen
+    map_sha = cell_attempts.digest(cell_pivot.map_record(cal.load(path), "pinky"))
+    for obj in seen:
+        cell_pivot.save_bias(cell_pivot.bias_path(path), {
+            "site": "pinky", "point_m": list(obj["raw_m"]),
+            "bias_mm": [1000 * BIAS[0], 1000 * BIAS[1]], "map_sha": map_sha,
+            "measured": "fixture calibration"})
     return path
 
 
@@ -162,6 +193,9 @@ def test_pivot_circle_recovers_the_map_bias_and_the_linkage_geometry(tmp_path):
     assert result["result"] == "calibrated" and bias["n"] == 6
     assert bias["bias_mm"] == pytest.approx([1000 * BIAS[0], 1000 * BIAS[1]], abs=1.0)
     assert bias["radius_mm"] == pytest.approx(18.8, abs=1.0) and bias["phase_deg"] == pytest.approx(53, abs=3)
+    kept = tmp_path.glob("pivot-frames/pinky-*/0[0-5]")  # every yaw's tries kept for replay (2026-11-17: none were)
+    assert sorted(p.name for p in kept) == ["00", "01", "02", "03", "04", "05"]
+    assert all((p / "try-00-open.jpg").exists() and (p / "jaws.json").exists() for p in tmp_path.glob("pivot-frames/pinky-*/0*"))
     cell_pivot.save_bias(cell_pivot.bias_path(path), bias)
     assert cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(path)), "pinky", (0.072, 0.120))
     assert cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(path)), "pinky", (0.2, 0.2)) is None
@@ -176,38 +210,153 @@ def test_a_circle_outside_the_linkage_radius_is_refused_not_saved(tmp_path):
 
 
 def test_hidden_closing_axis_candidates_compete_and_every_attempt_is_a_row(tmp_path, monkeypatch):
-    path, cell = biased_map(tmp_path), Cell([CONT2])
+    cell = Cell([CONT2])
+    path = calibrated_map(tmp_path, cell)
+    monkeypatch.setattr(auto.cell_executor, "EXECUTOR_CANDIDATES", ("act", "ik_chunk", "smolvla"))
     monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
     cell_attempts.start(tmp_path / "attempts.jsonl", "r1")
     choices = cell_choices.Choices(tmp_path / "choices.json")
     result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090", tmp_path, choices,
-                           sleep=no_sleep, log=lambda row: None)
+                           sleep=no_sleep, log=lambda row: None, scenario_id="carry-17")
     assert result["result"] == "placed", json.dumps(result, default=str)[:800]
     assert choices.best(auto.CLOSING) == 0  # theory (90) was tried first, came back empty, lost to the alternative
     assert [(c["value"], c["ok"], c["tries"]) for c in choices.data["values"][auto.CLOSING]] == [(90, 0, 1), (0, 1, 1)]
     assert math.dist((CONT2["x"], CONT2["y"]), (0.060, 0.090)) > 0.02 and cell.objects[0]["x"] == pytest.approx(0.060, abs=0.006)
     assert cell.objects[0]["y"] == pytest.approx(0.090, abs=0.006)
     rows = [json.loads(line) for line in (tmp_path / "attempts.jsonl").read_text().splitlines()]
-    assert [(r["outcome"], r["fail_stage"]) for r in rows] == [("failed", "grasp"), ("placed", None)]
-    assert [r["auto"]["closing_axis_offset_deg"] for r in rows] == [90, 0]
-    assert rows[1]["auto"]["bias_mm"] == pytest.approx([1000 * BIAS[0], 1000 * BIAS[1]], abs=1.5)
-    assert rows[1]["verify"]["basis"] == "map" and rows[1]["verify"]["inside"]
+    assert [(r["outcome"], r["fail_stage"]) for r in rows] == [
+        ("failed", "replan")] * 4 + [("failed", "grasp"), ("placed", None)]
+    assert [r["transfer"]["result"] for r in rows] == ["replanned"] * 4 + ["empty", "placed"]
+    assert [r["auto"]["closing_axis_offset_deg"] for r in rows] == [90] * 5 + [0]
+    assert rows[-1]["auto"]["bias_mm"] == pytest.approx([1000 * BIAS[0], 1000 * BIAS[1]], abs=1.5)
+    assert rows[-1]["verify"]["basis"] == "map" and rows[-1]["verify"]["inside"]
+    for frame in (rows[-1]["source_frame"], rows[-1]["before_frame"], rows[-1]["verify"]["frame"]):
+        assert hashlib.sha256(Path(frame["path"]).read_bytes()).hexdigest() == frame["jpeg_sha256"]
+    assert [r["scenario_id"] for r in rows] == ["carry-17"] * 6
+    assert [r["execution"]["executor"] for r in rows] == ["ik_chunk"] * 6
+    assert all(r["execution"]["candidates"] == ["ik_chunk"] and r["execution"]["propensity"] == 1.0 for r in rows)
+    assert [r["execution"]["outcome"] for r in rows[-2:]] == ["failed", "succeeded"]
+    assert [(c["ok"], c["tries"]) for c in choices.data["values"]["exec.pick_place"]] == [(1, 2)]
     assert cell_pivot.bias_path(path).exists() and cell.commands.count("park") >= 2 and cell.commands[-1] == "park"
-    assert rows[1]["envelope"]["payload"] == {"kg": 0.03, "source": "catalogue mass of the empty object",
+    assert rows[-1]["envelope"]["payload"] == {"kg": 0.03, "source": "catalogue mass of the empty object",
                                              "object": "container-2", "bound_kg": 0.05}  # D-935: kept for learning
 
 
-def test_an_object_without_an_enrolled_mass_is_held_before_any_motion(tmp_path):
+def test_missing_destination_roi_or_map_never_verifies_placed_box(tmp_path):
     path, cell = biased_map(tmp_path), Cell([CONT2])
+    before = cell.frame_receipt("top")
+    calibration = cal.load(path)
+    for index, (roi, mapped) in enumerate(((None, calibration), (ROI, {"sites": {}}))):
+        result = auto.verify_placed(cell, CONFIG, mapped, "pinky", (0.060, 0.090), roi,
+                                    CATALOG, {}, "container-2", before, tmp_path / f"after-{index}.jpg",
+                                    "pinky", (0.072, 0.120), ROI)
+        assert result["inside"] is False and result["verified"] is False
+        assert "unverified" in result["basis"]
+        assert hashlib.sha256(Path(result["frame"]["path"]).read_bytes()).hexdigest() == result["frame"]["jpeg_sha256"]
+
+
+def test_stale_destination_frame_stops_supervised_carry(tmp_path, monkeypatch):
+    cell = Cell([CONT2], true_closing=90)
+    path = calibrated_map(tmp_path, cell)
+    fresh = cell.frame_receipt
+    calls = 0
+
+    def stale(camera, *, previous=None):
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise ValueError("source frame has not advanced")
+        return fresh(camera, previous=previous)
+
+    monkeypatch.setattr(cell, "frame_receipt", stale)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    cell_attempts.start(tmp_path / "attempts.jsonl", "stale-frame")
+    choices = cell_choices.Choices(tmp_path / "choices.json")
+    result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090",
+                           tmp_path, choices, sleep=no_sleep)
+    assert result["result"] == "stopped: placement unverified"
+    attempt = json.loads((tmp_path / "attempts.jsonl").read_text().splitlines()[-1])
+    assert attempt["verify"]["inside"] is False and attempt["verify"]["verified"] is False
+    assert all(candidate["tries"] == 0 and candidate["ok"] == 0
+               for candidate in choices.data["values"][auto.CLOSING])
+
+
+def test_preexisting_identical_container_cannot_verify_a_transfer(tmp_path):
+    path = biased_map(tmp_path)
+    destination = (0.060, 0.070)
+    cell = Cell([CONT2, dict(CONT2, x=destination[0], y=destination[1])])
+    before = cell.frame_receipt("top")
+    bias = {"regions": [{"site": "pinky", "point_m": list(destination),
+                         "bias_mm": [1000 * BIAS[0], 1000 * BIAS[1]]}]}
+    _, _, before_objects, error = auto.observe(cell, CONFIG, cal.load(path), "pinky", ROI, CATALOG,
+                                               image=before["image"])
+    assert error is None and any(1000 * math.dist((o["raw_m"][0] - BIAS[0],
+                                                    o["raw_m"][1] - BIAS[1]), destination) < 10
+                                 for o in before_objects)
+    result = auto.verify_placed(cell, CONFIG, cal.load(path), "pinky", destination, ROI,
+                                CATALOG, bias, "container-2", before, tmp_path / "after.jpg",
+                                "pinky", (0.072, 0.120), ROI)
+    assert result["inside"] is False and result["verified"] is False
+    assert "occupied before transfer" in result["basis"]
+
+
+def test_source_still_occupied_cannot_verify_placement(tmp_path):
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    before = cell.frame_receipt("top")
+    _, _, seen, error = auto.observe(cell, CONFIG, cal.load(path), "pinky", ROI, CATALOG,
+                                     image=before["image"])
+    assert error is None and seen
+    result = auto.verify_placed(cell, CONFIG, cal.load(path), "pinky", (0.060, 0.090), ROI,
+                                CATALOG, {"regions": []}, "container-2", before, tmp_path / "after.jpg",
+                                "pinky", seen[0]["raw_m"], ROI)
+    assert result["inside"] is False and result["verified"] is False
+    assert "source still occupied" in result["basis"]
+
+
+def test_no_fresh_frame_source_holds_before_arm_motion(tmp_path, monkeypatch):
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    monkeypatch.setattr(cell, "frame_receipt", None)
+    result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090",
+                           tmp_path, cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep)
+    assert result["result"] == "held: fresh source frame unavailable"
+    assert "run grasp_pick" not in cell.commands
+
+
+def test_object_moved_between_planning_and_motion_is_held(tmp_path, monkeypatch):
+    cell = Cell([CONT2])
+    path = calibrated_map(tmp_path, cell)
+    fresh = cell.frame_receipt
+    calls = 0
+
+    def moved(camera, *, previous=None):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            cell.objects[0]["x"] += 0.030
+        return fresh(camera, previous=previous)
+
+    monkeypatch.setattr(cell, "frame_receipt", moved)
+    result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090",
+                           tmp_path, cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep)
+    assert result["result"] == "held: source moved before transfer"
+    assert "run grasp_pick" not in cell.commands
+
+
+def test_an_object_without_an_enrolled_mass_is_held_before_any_motion(tmp_path):
+    cell = Cell([CONT2])
+    path = calibrated_map(tmp_path, cell)
     unweighed = [dict(e, mass_kg=None) for e in CATALOG]  # D-935: an unknown payload, like an unknown object
+    choices = cell_choices.Choices(tmp_path / "choices.json")
     result = auto.run_auto(cell, CONFIG, cal.load(path), path, unweighed, ROI, "pinky", "0.060,0.090", tmp_path,
-                           cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep, log=lambda row: None)
+                           choices, sleep=no_sleep, log=lambda row: None)
     assert result["result"] == "held: payload_unknown"
+    assert [(c["value"], c["tries"]) for c in choices.data["values"]["exec.pick_place"]] == [("ik_chunk", 0)]
     assert not {"run descend_pick", "run grasp_pick"} & set(cell.commands)  # the pick never started
 
 
 def test_a_square_object_does_not_compete_and_is_picked_with_the_site_yaw(tmp_path):
-    path, cell = biased_map(tmp_path), Cell([{"x": 0.072, "y": 0.120, "long": 3.0, "length": 30, "width": 30}])
+    cell = Cell([{"x": 0.072, "y": 0.120, "long": 3.0, "length": 30, "width": 30}])
+    path = calibrated_map(tmp_path, cell)
     choices = cell_choices.Choices(tmp_path / "choices.json")
     result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090", tmp_path, choices,
                            sleep=no_sleep, log=lambda row: None)
@@ -229,7 +378,8 @@ def test_dry_run_only_observes_chooses_and_plans(tmp_path):
 
 
 def test_a_hot_motor_aborts_by_parking_and_stopping(tmp_path):
-    path, cell = biased_map(tmp_path), Cell([CONT2], temp=56)
+    cell = Cell([CONT2], temp=56)
+    path = calibrated_map(tmp_path, cell)
     result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090", tmp_path,
                            cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep, log=lambda row: None)
     assert result["result"].startswith("aborted: motor temperature 56") and cell.commands[-1] == "park"
@@ -244,7 +394,7 @@ def test_a_runner_that_does_not_answer_refuses_to_start(tmp_path):
     path = biased_map(tmp_path)
     result = auto.run_auto(Dead([CONT2]), CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "belt", tmp_path,
                            cell_choices.Choices(tmp_path / "choices.json"))
-    assert result["result"] == "refused"
+    assert result["result"] == "held: state unavailable before camera map check"
 
 
 def test_a_site_without_a_place_spot_is_refused_as_a_destination_before_anything_runs(tmp_path):
@@ -349,7 +499,7 @@ def run_started(tmp_path, monkeypatch, cell, knowledge=None):
     cell_attempts.start(tmp_path / "attempts.jsonl", "r1")
     cell_decisions.start(tmp_path / "decisions.jsonl", knowledge)
     monkeypatch.setitem(auto.cp.KEEP, "dir", tmp_path / "frames")
-    path = biased_map(tmp_path)
+    path = calibrated_map(tmp_path, cell)
     result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090", tmp_path,
                            cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep, log=lambda row: None)
     return result, cell_decisions.read(tmp_path / "decisions.jsonl"), cell_decisions.read(tmp_path / "attempts.jsonl")
@@ -359,16 +509,18 @@ def test_every_decision_point_writes_a_row_linked_to_its_attempt(tmp_path, monke
     result, rows, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]), str(OMX / "cell-knowledge.example.json"))
     assert result["result"] == "placed"
     assert [(r["attempt_id"][-3:], r["stage"]) for r in rows] == [
-        ("001", "target"), ("001", "bias"), ("001", "target"), ("001", "closing_axis"), ("001", "failure"), ("001", "retry"),
-        ("002", "target"), ("002", "bias"), ("002", "closing_axis"), ("002", "verify")]
-    assert {r["attempt_id"] for r in rows} == {a["attempt_id"] for a in attempts}
-    target, bias, _, closing, failure, retry = rows[:6]
+        ("001", "target"), ("001", "bias"), ("001", "closing_axis"), ("005", "failure"), ("005", "retry"),
+        ("006", "target"), ("006", "bias"), ("006", "closing_axis"), ("006", "verify")]
+    assert {r["attempt_id"] for r in rows} == {attempts[i]["attempt_id"] for i in (0, 4, 5)}
+    assert [a["fail_stage"] for a in attempts] == ["replan"] * 4 + ["grasp", None]
+    target, bias, closing, failure, retry = rows[:5]
     assert failure["facts"]["result"] == "empty" and failure["chosen"] == "observe_again"
     assert target["facts"]["objects"][0]["catalogue"] == "container-2" and target["chosen"]["object"] == "container-2"
-    assert bias["chosen"] == "pivot circle" and rows[7]["chosen"] == "reuse saved region" and rows[7]["facts"]["region_bias_mm"]
+    assert bias["chosen"] == rows[6]["chosen"] == "reuse saved region"
+    assert bias["facts"]["region_bias_mm"] and rows[6]["facts"]["region_bias_mm"]
     assert (closing["chosen"], [c["value"] for c in closing["facts"]["ledger"]]) == (90, [90, 0]) and closing["by"] == "measurement"
-    assert retry["chosen"] == {"retry_with": 0} and rows[8]["chosen"] == 0
-    assert rows[9]["chosen"] is True and rows[9]["facts"]["basis"] == "map"
+    assert retry["chosen"] == {"retry_with": 0} and rows[7]["chosen"] == 0
+    assert rows[8]["chosen"] is True and rows[8]["facts"]["basis"] == "map"
     assert all(r["schema"] == cell_decisions.SCHEMA and r["params_sha"] and r["code"] and r["t"] for r in rows)
     assert rows[0]["knowledge_sha"] and rows[0]["knowledge_ids"]  # the knowledge this stage selected
     assert len(rows[0]["frames"]) == 1
@@ -376,11 +528,57 @@ def test_every_decision_point_writes_a_row_linked_to_its_attempt(tmp_path, monke
 
 def test_a_safety_abort_row_names_the_rule_the_value_and_the_limit(tmp_path, monkeypatch):
     result, rows, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2], temp=56))
-    assert result["result"].startswith("aborted") and attempts == []
+    # A mapped cell needs no pivot circle, so the first guarded motion is the carry itself: the abort lands
+    # after the executor choice and leaves one stopped row, not a learned outcome.
+    assert result["result"].startswith("aborted") and [a["execution"]["outcome"] for a in attempts] == ["stopped"]
+    assert all(c["tries"] == 0 for c in cell_choices.Choices(tmp_path / "choices.json").data["values"].get("exec.pick_place", []))
     safety = [r for r in rows if r["stage"] == "safety"]
     assert len(safety) == 1 and safety[0]["facts"]["rule"] == "motor temperature"
     assert (safety[0]["facts"]["value"], safety[0]["facts"]["limit"]) == (56, 55.0) and safety[0]["chosen"] == "park and stop"
     assert [e["outcome"] for e in cell_decisions.export(rows, attempts, None) if e["input"]["stage"] == "safety"] == ["aborted"]
+
+
+def test_guard_abort_after_executor_choice_records_stopped_without_learning(tmp_path, monkeypatch):
+    def abort(*args, **kwargs):
+        raise auto.Aborted("stale live state")
+
+    monkeypatch.setattr(auto, "transfer_folded", abort)
+    result, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert result["result"] == "aborted: stale live state"
+    assert len(attempts) == 1
+    assert attempts[0]["execution"]["outcome"] == "stopped"
+    assert attempts[0]["execution"]["executor"] == "ik_chunk"
+    assert all(c["tries"] == 0 for c in cell_choices.Choices(tmp_path / "choices.json").data["values"].get("exec.pick_place", []))
+
+
+@pytest.mark.parametrize("transfer_result", ["empty", "misaligned", "reinserted", "still holding"])
+def test_completed_transfer_failures_update_executor_ledger(tmp_path, monkeypatch, transfer_result):
+    monkeypatch.setattr(auto, "transfer_folded", lambda *args, **kwargs: {
+        "result": transfer_result, "at": "run grasp_pick", "steps": []})
+    _, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert attempts
+    assert all(row["execution"]["outcome"] == "failed" for row in attempts)
+    choice = cell_choices.Choices(tmp_path / "choices.json").data["values"]["exec.pick_place"][0]
+    assert (choice["tries"], choice["ok"]) == (len(attempts), 0)
+
+
+@pytest.mark.parametrize("transfer_result", ["empty", "misaligned", "reinserted"])
+def test_a_park_that_ended_in_contact_stops_the_run(tmp_path, monkeypatch, transfer_result):
+    """2026-11-14 arm_s: the park after a refused wrist overloaded shoulder_lift and the arm sagged onto the box, but the
+    transfer said "misaligned" and the next attempt would have started from there."""
+    park = {"command": "park", "ok": False, "contact": True, "error": "contact in park: shoulder_lift lag rose to 2.3 units"}
+    monkeypatch.setattr(auto, "transfer_folded", lambda *args, **kwargs: {"result": transfer_result, "at": "wrist", "steps": [park]})
+    result, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert result["result"] == "stopped: contact at park: contact in park: shoulder_lift lag rose to 2.3 units" and len(attempts) == 1
+
+
+@pytest.mark.parametrize("transfer_result", ["contact", "fault", "refused"])
+def test_guard_fault_and_refusal_stops_do_not_update_executor_ledger(tmp_path, monkeypatch, transfer_result):
+    monkeypatch.setattr(auto, "transfer_folded", lambda *args, **kwargs: {
+        "result": transfer_result, "at": "run grasp_pick", "steps": []})
+    _, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert attempts[0]["execution"]["outcome"] == "stopped"
+    assert all(c["tries"] == 0 for c in cell_choices.Choices(tmp_path / "choices.json").data["values"].get("exec.pick_place", []))
 
 
 def test_exported_labels_follow_the_outcome_and_a_person_correction_replaces_the_row(tmp_path, monkeypatch):
@@ -388,9 +586,10 @@ def test_exported_labels_follow_the_outcome_and_a_person_correction_replaces_the
     path = tmp_path / "decisions.jsonl"
     first_closing = next(r for r in rows if r["stage"] == "closing_axis")
     labels = {(e["attempt_id"][-3:], e["input"]["stage"]): (e["label"], e["outcome"]) for e in cell_decisions.export(rows, attempts, None)}
-    assert labels[("001", "closing_axis")] == ("unvalidated", "empty")  # the empty grasp does not validate candidate 90
-    assert labels[("001", "retry")][0] == "validated_by_outcome"  # the next attempt held with candidate 0
-    assert labels[("002", "closing_axis")][0] == labels[("002", "verify")][0] == "validated_by_outcome"
+    assert labels[("001", "closing_axis")] == ("unvalidated", "replanned")  # the first library hash closes before the grasp
+    assert any(a.get("transfer", {}).get("result") == "empty" for a in attempts)  # the later empty grasp stays audited
+    assert labels[("005", "retry")] == ("validated_by_outcome", "placed")  # the next physical attempt held candidate 0
+    assert labels[("006", "closing_axis")][0] == labels[("006", "verify")][0] == "validated_by_outcome"
     cell_decisions.note(path, "closing_axis", "closing is along tool x here", chosen=0, supersedes=first_closing["decision_id"])
     cell_decisions.main(["note", "--decisions", str(path), "--stage", "target", "--text", "use the upper containers"])
     out = cell_decisions.export(cell_decisions.read(path), attempts, None)
@@ -458,6 +657,8 @@ def test_a_stop_in_transport_with_the_object_held_is_its_own_decision_point(tmp_
             return super().act(command)
 
     result, rows, attempts = run_started(tmp_path, monkeypatch, Strain([dict(CONT2)], true_closing=90.0))
+    assert attempts[0]["execution"]["outcome"] == "stopped"
+    assert all(c["tries"] == 0 for c in cell_choices.Choices(tmp_path / "choices.json").data["values"].get("exec.pick_place", []))
     stop = next(r for r in rows if r["stage"] == "transport_stop")
     assert stop["facts"]["holding"] is True and stop["facts"]["joint"] == 2 and stop["facts"]["lag_units"] == 2.2
     assert stop["facts"]["at"] == "goto above_place" and stop["facts"]["pwm_last_checked"] == [10] * 6
@@ -620,7 +821,8 @@ def test_the_boxs_own_side_face_past_its_outline_is_not_a_neighbour_but_a_touchi
     # the outline removal leaves a 1 mm gap before the strip: still the box's own
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == 16.0
     mask[121:150, 70:131] = 255  # a second box touching it: the foreground runs on
-    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
+    room = auto.finger_room(mask, (0, 0, 200, 200), px, box)
+    assert room["margin_mm"] is None and not room["unseen"]  # a neighbour, not the view's edge
 
 
 def test_a_whole_surface_in_view_is_not_a_finger_obstacle_but_a_box_is():
@@ -704,6 +906,279 @@ def test_the_gate_refuses_a_replan_the_review_does_not_cover(tmp_path):
     gate.config["operating_envelope_path"] = str(tmp_path / "missing-envelope.json")
     refused = gate.act(f"load {lib}")
     assert refused["ok"] is False and refused["error"].startswith("held: ") and not cell.commands[-1].startswith("load")
+
+
+@pytest.mark.parametrize("settled,load_ok,audit_ok,scope_changed", [
+    (True, True, True, False), (False, True, True, False), (True, False, True, False),
+    (True, True, False, False), (True, True, True, True)])
+def test_commissioning_replan_rotates_exact_hash_after_confirmed_home(tmp_path, monkeypatch, settled, load_ok,
+                                                                       audit_ok, scope_changed):
+    import cell_transfer
+
+    home = list(CONFIG["plan"]["home"]) + [56.0]
+    original, revised = tmp_path / "original.json", tmp_path / "revised.json"
+    spec = {"fps": 30, "chunks": {"home": [home], "above_pick": [home]}}
+    original.write_text(json.dumps(spec))
+    revised.write_text(json.dumps({**spec, "replan": "adjusted pick"}))
+
+    class ReplanCell(Cell):
+        def act(self, command):
+            raw = command.split(" ", 3)[-1] if command.startswith("checked ") else command
+            status = super().act(command)
+            if raw == "park":
+                status.update(settled=settled, state=self.q[:5] + [self.grip], t=time.time(),
+                              operating_context=dict(SESSION))
+            if raw == f"load {revised}" and not load_ok:
+                status["ok"] = False
+            return status
+
+    cell = ReplanCell([])
+    config = dict(CONFIG, _payload={"kg": 0.03, "source": "catalogue"})
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    attempts = tmp_path / "attempts.jsonl"
+    cell_attempts.start(attempts, "replan")
+    tried = {"locate": {"found": True}}
+    ledger = cell_attempts.ReplanLedger(config, {}, "pinky", "pinky", 0, tried, time.time(), None)
+    def finish(*args):
+        if not audit_ok:
+            raise OSError("attempt ledger unavailable")
+        return ledger.finish(*args)
+    gate = cell_transfer.Gate(cell, config, {})
+    assert gate.open(original, lambda assessment: cell_attempts.begin(config, assessment), finish) is None
+    assert gate.act(f"load {original}")["ok"]
+    assert gate.act("goto above_pick")["ok"]
+    before = json.loads(attempts.with_suffix(".pending.json").read_text())
+    if scope_changed:
+        gate.config = dict(config, operating_conditions={**config["operating_conditions"],
+                                                         "object_revision": "changed"})
+    status = gate.act(f"load {revised}")
+    if scope_changed:
+        assert status["ok"] is False and "reviewed_scope_changed" in status["error"]
+        assert not attempts.exists() and before == json.loads(attempts.with_suffix(".pending.json").read_text())
+        assert "park" not in cell.commands and f"load {revised}" not in cell.commands
+        return
+    if not settled:
+        assert status["ok"] is False and "home_unconfirmed" in status["error"]
+        assert not attempts.exists() and before == json.loads(attempts.with_suffix(".pending.json").read_text())
+        assert f"load {revised}" not in cell.commands
+        sent = list(cell.commands)
+        assert not gate.act("park")["ok"] and not gate.act("retreat")["ok"] and cell.commands == sent
+        return
+    if not audit_ok:
+        assert status["ok"] is False and "audit_unavailable" in status["error"]
+        assert not attempts.exists() and before == json.loads(attempts.with_suffix(".pending.json").read_text())
+        sent = list(cell.commands)
+        assert not gate.act("park")["ok"] and not gate.act("retreat")["ok"] and cell.commands == sent
+        return
+    rows = [json.loads(line) for line in attempts.read_text().splitlines()]
+    assert rows[0]["outcome"] == "failed" and rows[0]["fail_class"] == "replanned"
+    assert rows[0]["envelope"]["library_sha256"] == before["envelope"]["library_sha256"]
+    assert cell.commands.index("park") < cell.commands.index(f"load {revised}")
+    if not load_ok:
+        assert status["ok"] is False and gate.finalized and not attempts.with_suffix(".pending.json").exists()
+        assert [row["fail_class"] for row in rows] == ["replanned", "load_refused"]
+        sent = list(cell.commands)
+        assert not gate.act("park")["ok"] and not gate.act("retreat")["ok"] and cell.commands == sent
+        return
+    assert status["ok"] and len(rows) == 1
+    pending = json.loads(attempts.with_suffix(".pending.json").read_text())
+    assert pending["envelope"]["library_sha256"] == gate.assessment["library_sha256"]
+    assert pending["envelope"]["library_sha256"] != before["envelope"]["library_sha256"]
+    assert gate.act("goto above_pick")["ok"]
+    assert gate.history[0]["command"] == f"load {revised}"
+
+
+def test_auto_pick_keeps_old_pending_when_replan_home_is_unconfirmed(tmp_path, monkeypatch):
+    cell = Cell([CONT2])
+    path = calibrated_map(tmp_path, cell)
+    actual = cell.act
+
+    def unconfirmed_park(command):
+        status = actual(command)
+        return {**status, "settled": False} if command.endswith(" park") else status
+
+    monkeypatch.setattr(cell, "act", unconfirmed_park)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    attempts = tmp_path / "attempts.jsonl"
+    cell_attempts.start(attempts, "unsettled-home")
+
+    def unsettled(gate, library, **_):
+        assert gate.act(f"load {library}")["ok"]
+        revised = tmp_path / "revised.json"
+        revised.write_text(json.dumps({**json.loads(Path(library).read_text()), "replan_test": True}))
+        status = gate.act(f"load {revised}")
+        assert status["ok"] is False and "home_unconfirmed" in status["error"]
+        return {"result": "refused", "at": "load", "steps": [{"command": f"load {revised}"}]}
+
+    monkeypatch.setattr(auto, "transfer_folded", unsettled)
+    result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090",
+                           tmp_path, cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep)
+    assert result["result"] == "held: supervised audit transition"
+    assert attempts.with_suffix(".pending.json").exists()
+    assert not attempts.exists()
+
+
+def test_auto_pick_exception_after_gate_parks_with_checked_hash(tmp_path, monkeypatch):
+    cell = Cell([CONT2])
+    path = calibrated_map(tmp_path, cell)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    cell_attempts.start(tmp_path / "attempts.jsonl", "checked-exception")
+    wire = []
+
+    def interrupted(gate, library, **_):
+        raw = gate.cell.cell
+        actual = raw.act
+
+        def watched(command):
+            wire.append(command)
+            return actual(command)
+
+        raw.act = watched
+        assert gate.act(f"load {library}")["ok"]
+        raise RuntimeError("hook library write failed")
+
+    monkeypatch.setattr(auto, "transfer_folded", interrupted)
+    with pytest.raises(RuntimeError, match="hook library write failed"):
+        auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090",
+                      tmp_path, cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep)
+    assert any(command.startswith("checked ") and command.endswith(" park") for command in wire)
+    assert "park" not in wire
+
+
+def test_missing_pivot_bias_holds_before_unaudited_calibration_motion(tmp_path):
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090",
+                           tmp_path, cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep)
+    assert result["result"].startswith("held: needs a pivot")
+    assert "separate audited calibration required" in result["result"]
+    assert not any(command.startswith(("load ", "goto ", "run ")) or command == "park"
+                   for command in cell.commands)
+
+
+def test_pre_gate_exception_does_not_send_raw_park(tmp_path, monkeypatch):
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    wire, actual = [], cell.act
+
+    def watched(command):
+        wire.append(command)
+        return actual(command)
+
+    monkeypatch.setattr(cell, "act", watched)
+    monkeypatch.setattr(auto, "self_calibrate", lambda *args: (_ for _ in ()).throw(RuntimeError("calibration failed")))
+    with pytest.raises(RuntimeError, match="calibration failed"):
+        auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090",
+                      tmp_path, cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep)
+    assert not any(command == "park" or command.startswith("checked ") for command in wire)
+
+
+@pytest.mark.parametrize("case", ["missing", "legacy", "moved", "swapped", "map_changed", "memory_changed", "tier_changed", "bound"])
+def test_hardware_camera_map_pose_holds_before_motion(tmp_path, monkeypatch, case):
+    import cell_calibrate
+    import cell_preflight
+
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    actual = cell.act
+
+    def hardware_state(command):
+        status = actual(command)
+        if command == "state":
+            status["operating_context"] = {**SESSION, "scope": "hardware"}
+        return status
+
+    monkeypatch.setattr(cell, "act", hardware_state)
+    ref_path = tmp_path / "map-reference.jpg"
+    config = dict(CONFIG, preflight={"reference_top": str(ref_path)} if case != "missing" else {})
+    if case == "legacy":
+        assert cv2.imwrite(str(ref_path), cell.frame("top"))
+    elif case != "missing":
+        cell_calibrate.save_bound_map_reference(path, ref_path, cal.load(path), config, cell.frame("top"))
+        if case == "swapped":
+            assert cv2.imwrite(str(ref_path), np.zeros_like(cell.frame("top")))
+        if case == "map_changed":
+            changed = cal.load(path)
+            changed["sites"]["pinky"]["note"] = "map changed without new binding"
+            path.write_text(json.dumps(changed))
+        monkeypatch.setattr(cell_preflight, "camera_shift_px", lambda *_: {
+            "ok": True, "max_px": 10000 if case == "moved" else 0})
+    active_cal = cal.load(path)
+    if case == "memory_changed":
+        active_cal["sites"]["pinky"]["note"] = "stale in-memory map"
+    if case == "tier_changed":
+        active_cal["sites"]["pinky-l2"] = {**active_cal["sites"]["pinky"], "note": "stale tier map"}
+    result = auto.run_auto(cell, config, active_cal, path, CATALOG, ROI, "pinky", "0.060,0.090",
+                           tmp_path, cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep)
+    expected = {"missing": "held: top camera map reference unavailable",
+                "legacy": "held: top camera map binding unavailable",
+                "moved": "held: top camera moved since map reference",
+                "swapped": "held: top camera map reference changed",
+                "map_changed": "held: top camera calibration changed",
+                "memory_changed": "held: top camera calibration changed",
+                "tier_changed": "held: top camera calibration changed"}
+    assert result["result"].startswith(expected.get(case, "held: needs a pivot"))
+    assert hashlib.sha256(Path(result["map_pose_frame"]["path"]).read_bytes()).hexdigest() == result["map_pose_frame"]["jpeg_sha256"]
+    assert not any(command.startswith(("load ", "goto ", "run ")) or command == "park"
+                   for command in cell.commands)
+
+
+def test_hardware_reference_pose_uses_the_bytes_whose_hash_was_checked(tmp_path, monkeypatch):
+    import cell_calibrate
+    import cell_preflight
+
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    ref_path = tmp_path / "map-reference.jpg"
+    config = dict(CONFIG, preflight={"reference_top": str(ref_path)})
+    current = cell.frame("top")
+    cell_calibrate.save_bound_map_reference(path, ref_path, cal.load(path), config, np.zeros_like(current))
+    bound_bytes = ref_path.read_bytes()
+    assert cv2.imwrite(str(ref_path), current)
+    original_read = Path.read_bytes
+    monkeypatch.setattr(Path, "read_bytes", lambda self: bound_bytes if self == ref_path else original_read(self))
+    actual = cell.act
+
+    def hardware_state(command):
+        status = actual(command)
+        if command == "state":
+            status["operating_context"] = {**SESSION, "scope": "hardware"}
+        return status
+
+    monkeypatch.setattr(cell, "act", hardware_state)
+    monkeypatch.setattr(cell_preflight, "camera_shift_px", lambda reference, live: {
+        "ok": abs(float(reference.mean()) - float(live.mean())) < 5, "max_px": 0})
+    result = auto.run_auto(cell, config, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090",
+                           tmp_path, cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep)
+    assert result["result"] == "held: top camera moved since map reference"
+    assert not any(command.startswith(("load ", "goto ", "run ")) or command == "park"
+                   for command in cell.commands)
+
+
+def test_hardware_stored_bias_from_another_map_holds_before_motion(tmp_path, monkeypatch):
+    import cell_calibrate
+    import cell_preflight
+
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    ref_path = tmp_path / "map-reference.jpg"
+    config = dict(CONFIG, preflight={"reference_top": str(ref_path)})
+    cell_calibrate.save_bound_map_reference(path, ref_path, cal.load(path), config, cell.frame("top"))
+    _, _, seen, error = auto.observe(cell, config, cal.load(path), "pinky", ROI, CATALOG)
+    assert error is None and seen
+    cell_pivot.save_bias(cell_pivot.bias_path(path), {
+        "site": "pinky", "point_m": list(seen[0]["raw_m"]), "bias_mm": [0.0, 0.0],
+        "map_sha": "old-map", "measured": "before remap"})
+    actual = cell.act
+
+    def hardware_state(command):
+        status = actual(command)
+        if command == "state":
+            status["operating_context"] = {**SESSION, "scope": "hardware"}
+        return status
+
+    monkeypatch.setattr(cell, "act", hardware_state)
+    monkeypatch.setattr(cell_preflight, "camera_shift_px", lambda *_: {"ok": True, "max_px": 0})
+    result = auto.run_auto(cell, config, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090",
+                           tmp_path, cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep)
+    assert result["result"] == "held: stored pivot bias belongs to another map"
+    assert not any(command.startswith(("load ", "goto ", "run ")) or command == "park"
+                   for command in cell.commands)
 
 
 def test_two_candidates_keep_their_own_libraries(tmp_path):
@@ -853,3 +1328,165 @@ def test_a_box_held_by_its_ends_needs_room_past_its_ends_not_beside_it():
     wide = {**auto.prm.load()["values"], "gripper.open_max": 62.0}  # the field's arm_b: opens ~131 mm
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"], wide)["margin_mm"] is not None
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"])["margin_mm"] is None  # 68 mm < 90
+
+
+def test_three_tier_pick_and_place_plans_each_tier_height_and_checks_support(tmp_path):
+    """1단 (l0), 2단 (l1), and 3단 (l2) expand from a base site, step pick/place z by container height, and require lower-tier support."""
+    path = biased_map(tmp_path)
+    config = copy.deepcopy(CONFIG)
+    config["sites"]["stack"] = {**config["sites"]["pinky"], "surface_z": 0.015, "place": [0.060, 0.065], "map_from": "pinky"}
+    cal_data = auto.cell_pivot.with_site_maps(config, cal.load(path))
+    # 1단 (stack-l0): empty destination is accepted at base surface_z (0.015 -> place z 0.034 with height 0.015 + place_dz 0.004)
+    r1 = auto.run_auto(Cell([CONT2]), config, cal_data, path, CATALOG, ROI, "pinky-l0", "stack-l0", tmp_path,
+                       cell_choices.Choices(tmp_path / "c1.json"), dry_run=True)
+    assert r1["result"] == "planned"
+    assert r1["attempts"][0]["plan"]["pick"]["z"] == pytest.approx(0.060, abs=1e-4)
+    assert r1["attempts"][0]["plan"]["place"]["z"] == pytest.approx(0.034, abs=1e-4)
+    # 2단 (stack-l1) without a 1단 container at (0.060, 0.065) is refused
+    empty_t2 = auto.run_auto(Cell([CONT2]), config, cal_data, path, CATALOG, ROI, "pinky-l0", "stack-l1", tmp_path,
+                             cell_choices.Choices(tmp_path / "c2.json"), dry_run=True)
+    assert empty_t2["result"] == "stopped: no usable object"
+    assert "nothing under it" in empty_t2["attempts"][0]["refused"][0]["why"]
+    # With a supporting container seated at (0.060, 0.065), 2단 (l1: z 0.064) and 3단 (l2: z 0.094) both plan cleanly
+    supported = [CONT2, {"x": 0.060 - BIAS[0], "y": 0.065 - BIAS[1], "long": 30.0, "length": 60, "width": 30}]
+    for tier, expected_z in (("stack-l1", 0.064), ("stack-l2", 0.094)):
+        rt = auto.run_auto(Cell(supported), config, cal_data, path, CATALOG, ROI, "pinky-l0", tier, tmp_path,
+                           cell_choices.Choices(tmp_path / f"{tier}.json"), dry_run=True)
+        assert rt["result"] == "planned" and rt["attempts"][0]["plan"]["place"]["z"] == pytest.approx(expected_z, abs=1e-4)
+
+
+def test_gate_and_guarded_share_state_query_per_checked_command(tmp_path):
+    path = biased_map(tmp_path)
+    cell = Cell([CONT2])
+    guarded = auto.Guarded(cell, CONFIG)
+    gate = auto.Gate(guarded, dict(CONFIG, _payload={"kg": 0.03, "source": "catalogue"}), cal.load(path))
+    lib_path = tmp_path / "lib.json"
+    lib_path.write_text(json.dumps({"fps": 30, "chunks": {"home": [list(CONFIG["plan"]["home"])],
+                                                          "above_pick": [list(CONFIG["plan"]["home"])]}}))
+    assert gate.open(lib_path, lambda a: None) is None
+    cell.commands.clear()
+    assert gate.act(f"load {lib_path}")["ok"]
+    assert cell.commands == ["state", f"load {lib_path}"]
+    cell.commands.clear()
+    assert gate.act("goto above_pick")["ok"]
+    # Gate's state query is reused by Guarded.monitor.check() instead of issuing a second state round-trip
+    assert cell.commands == ["state", "goto above_pick"]
+
+
+def test_gate_validates_zone_entry_and_park_release_across_chained_commands(tmp_path):
+    path = biased_map(tmp_path)
+    cell = Cell([CONT2])
+    guarded = auto.Guarded(cell, CONFIG)
+    gate = auto.Gate(guarded, dict(CONFIG, _payload={"kg": 0.03, "source": "catalogue"}), cal.load(path))
+    home6 = list(CONFIG["plan"]["home"]) + [56.0]
+    lib_path = tmp_path / "lib.json"
+    lib_path.write_text(json.dumps({
+        "fps": 30,
+        "source": {"pick": {"x": 0.072, "y": 0.120}, "place": {"x": 0.060, "y": 0.090}},
+        "chunks": {"home": [home6], "above_place": [home6], "descend_place": [home6], "lift_place": [home6]}
+    }))
+    assert gate.open(lib_path, lambda a: None) is None
+    assert gate.act(f"load {lib_path}")["ok"]
+    entered, left = [], []
+    gate.zones = type("Z", (), {
+        "bind": lambda self, p, s: None,
+        "enter": lambda self, xy: (entered.append(xy) or True, "ok"),
+        "leave": lambda self: left.append(True),
+    })()
+    cell.act = lambda cmd: (
+        {"command": "state", "ok": True, "state": home6, "t": time.time(),
+         "operating_context": dict(SESSION), "health": {"temp_c": [40] * 6, "pwm": [10] * 6, "current_ma": [0] * 6}}
+        if cmd == "state" else
+        {"command": cmd, "ok": True, "settled": True, "state": home6, "t": time.time(),
+         "operating_context": dict(SESSION), "library_sha256": gate.assessment["library_sha256"]}
+    )
+    assert gate.act("chain goto above_place ; run descend_place")["ok"]
+    assert entered == [(0.060, 0.090)]
+    assert gate.act("chain run lift_place ; park")["ok"]
+    assert left == [True]
+
+
+def test_run_return_held_plans_places_and_stops_when_empty(tmp_path):
+    class HeldCell(Cell):
+        def act(self, command):
+            out = super().act(command)
+            if command.endswith("run release_place") or command == "run release_place":
+                self.grip = CONFIG["plan"]["grip_closed"]
+            return {**out, "settled": True, "state": self.q[:5] + [self.grip]}
+
+    config = copy.deepcopy(CONFIG)
+    auto.cell_attempts.start(tmp_path / "attempts.jsonl")
+    config["sites"]["belt"] = {**config["sites"]["pinky"], "place": [0.060, 0.065]}
+    cal_data_path = biased_map(tmp_path)
+    cal.save(cal_data_path, "belt", {
+        "homography": cal.fit([(tray_pixel(x, y), (x, y)) for x in (0.05, 0.072, 0.094) for y in (0.06, 0.10, 0.14)]).tolist(),
+        "loo_error_mm": {"max": 0.1, "mean": 0.1}, "points": [],
+    })
+    cal_data = auto.cell_pivot.with_site_maps(config, cal.load(cal_data_path))
+    # 1. Dry-run plans place onto belt without running the arm
+    dry_cell = HeldCell([CONT2])
+    dry = auto.run_return_held(dry_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path, dry_run=True)
+    assert dry["result"] == "planned" and Path(dry["plan"]["library"]).is_file()
+    dry_lib = json.loads(Path(dry["plan"]["library"]).read_text())
+    assert dry_lib.get("holding") is True
+    desc = dry_lib["chunks"]["descend_place"]
+    assert len(desc) >= 2 and all(
+        max(abs(b - a) for a, b in zip(f0, f1)) <= 0.15 for f0, f1 in zip(desc, desc[1:])
+    )
+    # 2. Holding object at home places onto belt and verifies arrival
+    full_cell = HeldCell([CONT2])
+    full_cell.held = full_cell.objects[0]
+    full_cell.grip = CONFIG["plan"]["grip_closed"] + 5.0
+    placed = auto.run_return_held(full_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path, object_id="container-2")
+    assert placed["result"] == "placed", placed
+    assert placed["verify"]["inside"] is True, placed["verify"]
+    assert full_cell.held is None
+    assert "run grasp_pick" not in full_cell.commands and "run release_place" in full_cell.commands
+    # 3. Empty jaws at home stop at above_place and park cleanly without opening jaws
+    empty_cell = HeldCell([])
+    empty_cell.grip = CONFIG["plan"]["grip_closed"]
+    empty = auto.run_return_held(empty_cell, config, cal_data, cal_data_path, CATALOG, ROI, "belt", tmp_path)
+    assert empty["result"] == "empty" and "run release_place" not in empty_cell.commands
+    assert empty_cell.commands[-1] == "park"
+
+
+def test_object_mask_supports_wrapped_multi_range_hsv():
+    import cell_objects as co
+
+    hsv = np.zeros((30, 60, 3), np.uint8)
+    hsv[5:25, 5:25] = (12, 200, 200)     # orange
+    hsv[5:25, 35:55] = (172, 180, 200)   # wrapped pink/coral
+    img = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    multi = [[[0, 100, 110], [25, 255, 255]], [[165, 70, 90], [179, 255, 255]]]
+    om = co.object_mask(img, (0, 0, 60, 30), multi)
+    cm = co.colour_mask(img, (0, 0, 60, 30), multi)
+    assert om[15, 15] > 0 and om[15, 45] > 0
+    assert cm[15, 15] > 0 and cm[15, 45] > 0
+
+
+def test_dest_map_usable_accepts_z_view_only_with_parallax_geometry():
+    import cell_auto_evidence as cae
+    import cell_auto_pick_plan as cap
+
+    fine = {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}
+    z_view = {**fine, "z_view": 0.11}
+    assert cap.dest_map_usable({}, fine) is True
+    assert cap.dest_map_usable({"cameras": {"top": {}}}, z_view) is False
+    assert cap.dest_map_usable({"cameras": {"top": {"center_px": [297, 361], "height_m": 0.596}}}, z_view) is True
+    assert cae.dest_map_usable is cap.dest_map_usable
+
+
+
+
+def test_a_shifted_end_grasp_still_names_the_box_centre_for_scene_checks():
+    """2026-11-17 arm_s floor->belt: a reachable_ends grasp 20 mm along a 3-cell box was compared, as if it were
+    the box centre, with the re-observed centre, so every such carry held as 'source moved before transfer'."""
+    import cell_pick_geom as geom
+
+    o = {"raw_m": [-0.1154, 0.1497], "long_axis_deg": 76.0, "object": "container-3"}
+    entry = {"length_mm": 90.0, "width_mm": 30.0}
+    ends = geom.reachable_ends(o, entry, {"grasp.end_frac": 1.0})
+    assert len(ends) == 2 and all(abs(e["grasp_shift_mm"]) > 5 for e in ends)
+    for end in ends:
+        assert geom.box_centre(end) == pytest.approx(o["raw_m"], abs=1e-9)
+    assert geom.box_centre(o) == o["raw_m"]

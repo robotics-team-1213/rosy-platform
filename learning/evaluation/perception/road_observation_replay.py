@@ -1,6 +1,5 @@
 """D-673 truth-free file diagnostics; no device delivery, admission or commands."""
 from pathlib import Path
-import hashlib
 import json
 import math
 
@@ -8,6 +7,7 @@ from road_fitness_replay import _snapshot
 import cv2
 import numpy as np
 import store
+from review_authority import _sha
 from review_evidence import safe_file, valid_digest
 from perception_runtime.perception.learned.manifest import load_manifest, verify_files, _parse_input, check_revision
 from perception_runtime.perception.learned.runner import LaneSegModel
@@ -21,10 +21,6 @@ INPUT_FIELDS = {'schema', 'model_manifest_sha256', 'image', 'image_sha256',
                 'image_snapshot', 'anchor_snapshot', 'seed_pixels', 'now_ns'}
 PIXEL_LIMIT = 1_000_000
 BYTE_LIMIT = 64 * 1024 * 1024
-
-
-def _sha(raw):
-    return hashlib.sha256(raw).hexdigest()
 
 
 def run(model_folder, *, inputs, max_age_ns):

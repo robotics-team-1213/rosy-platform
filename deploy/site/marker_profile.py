@@ -5,6 +5,9 @@ DICT_4X4_50, _100, _250 and _1000 share their first ids (id n is the same pictur
 per family on the id itself. An allocation with "use": "calibration" is a sheet held up only while calibrating
 (the ChArUco board); its shared ids are warnings, not errors.
 
+"container_tags" maps a container tag id (owner container_tags, D-996 6) to the object_ref a business app declared.
+ROSY owns this table; an app never sees the tag id.
+
   marker_profile.py check PROFILE.json [--site-cameras /etc/rosy/site/site-cameras.yaml]
 """
 from __future__ import annotations
@@ -63,7 +66,32 @@ def check(profile: dict) -> tuple[list[str], list[str]]:
     for slot in profile.get("arms") or {}:
         if f"arm_slot_{slot}" not in names:
             errors.append(f"arms names slot {slot} but no arm_slot_{slot} allocation")
+    errors += _check_tags(profile, {owner: ids for owner, _, ids, _ in rows})
     return errors, warnings
+
+
+def _check_tags(profile: dict, ids_of: dict) -> list[str]:
+    tags = profile.get("container_tags") or {}
+    if not tags:
+        return []
+    if "container_tags" not in ids_of:
+        return ["container_tags names tags but there is no container_tags allocation"]
+    errors, refs = [], {}
+    for key, ref in tags.items():
+        if not (str(key).isdigit() and int(key) in ids_of["container_tags"]):
+            errors.append(f"container tag {key!r} is not a container_tags id")
+        elif not (isinstance(ref, str) and 0 < len(ref) <= 128 and ref.strip() == ref):
+            errors.append(f"container tag {key}: object_ref must be 1-128 characters without edge spaces")
+        elif ref in refs:
+            errors.append(f"container tags {refs[ref]} and {key} name the same object_ref")
+        else:
+            refs[ref] = key
+    return errors
+
+
+def object_ref_of(profile: dict, tag: int) -> str | None:
+    """The object_ref a checked profile gives a container tag, or None when the tag is not in the table."""
+    return (profile.get("container_tags") or {}).get(str(tag))
 
 
 def check_cameras(profile: dict, cameras: dict) -> list[str]:
