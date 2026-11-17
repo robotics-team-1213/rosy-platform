@@ -48,6 +48,7 @@ FLEET = FLEET_SAMPLE + [
 ROBOT = [
     "test/test_motor_health_ui_browser.py",
     "test/test_dashboard_browser.py",
+    "test/test_dashboard_choice_browser.py",
     "test/test_role_menu_panels_browser.py",
     "test/test_role_surface_states_browser.py",
     "test/test_surface_device_browser.py",
