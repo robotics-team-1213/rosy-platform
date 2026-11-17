@@ -596,13 +596,13 @@ def test_known_geometry_trims_one_outlier_and_pivot_fits_before_late_stall(tmp_p
     monkeypatch.setattr(joint_jitter, "settled_state", lambda *a, **k: {"state": [0, 0, 0, 0, 0, 56]})
     arm = LateStallArm()
     cur = {}
-    def fake_mark(*a, **k):
+    def fake_fk(*a, **k):  # once per reached yaw, before the jaws are marked (the jaw model needs the FK yaw)
         m, y = next(arm.pts)
         cur["m"], cur["y"] = m, y
-        return (320.0, 240.0)
-    monkeypatch.setattr(cell_pivot, "mark_jaws", fake_mark)
+        return (0.07, -0.1, 0.1, y)
+    monkeypatch.setattr(cell_pivot, "mark_jaws", lambda *a, **k: (320.0, 240.0))
     monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda *a, **k: cur["m"])
-    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda *a, **k: (0.07, -0.1, 0.1, cur["y"]))
+    monkeypatch.setattr(cell_pivot, "joints_tcp", fake_fk)
     cfg = {"plan": {"approach_m": 0.03}, "coarse": {"z_view": 0.08}, "sites": {"s": {"surface_z": 0.0}},
            "pivot": {"geometry": GEOMETRY}}
     out = cell_pivot.pivot_calibrate(arm, cfg, (0.07, -0.1), yaws,

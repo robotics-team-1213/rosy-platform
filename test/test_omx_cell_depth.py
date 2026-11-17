@@ -150,3 +150,22 @@ def test_verify_profile_depth_handles_polygon_surface_px_and_fetch_errors():
     assert site["flags"] == []
     assert cd._fetch_colour_frame("file:///etc/passwd") is None
     assert cd._fetch_colour_frame("http://127.0.0.1:9/no-such.jpg") is None
+
+
+def test_a_short_capture_timeout_is_raised_to_the_frames_it_must_wait_for(tmp_path, monkeypatch):
+    """The cell's 11-13 copy gave v4l2-ctl 1.8 s for 13 frames at 6 fps (2.4-2.6 s measured): always None."""
+    import subprocess
+
+    dev, raw = tmp_path / "depth", tmp_path / "depth.raw"
+    dev.touch()
+    seen = []
+
+    def run(cmd, timeout, **kwargs):
+        seen.append(timeout)
+        np.full((480, 640), 610, np.uint16).tofile(raw)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(cd.subprocess, "run", run)
+    assert cd.capture_top_depth_z16(str(dev), raw, timeout_s=1.8) is not None
+    assert seen == [cd.MIN_CAPTURE_S] and cd.MIN_CAPTURE_S > 13 / 6
+    assert cd.capture_top_depth_z16(str(dev), raw, timeout_s=12.0) is not None and seen[-1] == 12.0
