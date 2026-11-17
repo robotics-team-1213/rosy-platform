@@ -684,10 +684,9 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
     monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd, **kwargs: ran.append(cmd) or Done())
     assert affected.run(sample, sel) == 0
     local = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
-    # core_common's own suite and its direct reverse dependent (sensing imports core_common)
-    # run locally; the rest of the full tier stays on GitHub.
-    assert local == GUARDS | {"test/test_rosy_ssh_enroll.py", "contracts/foundation/test",
-                              "middleware/perception/test"}, "FULL stays on GitHub by default"
+    # core_common's own suite runs locally; orphan.py is imported by nobody (dotted-name match, 2026-11-17),
+    # so no reverse dependent joins; the rest of the full tier stays on GitHub.
+    assert local == GUARDS | {"test/test_rosy_ssh_enroll.py", "contracts/foundation/test"}, "FULL stays on GitHub by default"
     assert "test" not in local and "middleware/core/gateway/test" not in local
     ran.clear()
     affected.run(sample, sel, allow_full=True)
