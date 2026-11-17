@@ -306,11 +306,11 @@ def test_evaluate_forwards_flow_steps_and_amp(monkeypatch, tmp_path):
     out = tmp_path / "eval.json"
     rc = policy.main(["evaluate", "--model", "m", "--steps-file", "s", "--tasks", "stack", "--skill", "grasp",
                       "--isolated-seeds", "1", "--flow-steps", "5", "--amp", "--n-action-steps", "8",
-                      "--cam-jitter", "--compensate-zero",
+                      "--cam-jitter", "--compensate-zero", "--zero-est-noise-deg", "0.5",
                       "--out", str(out), "--artifacts", str(tmp_path / "art")])
     assert rc == 0 and json.loads(out.read_text(encoding="utf-8"))["policy"] == "smolvla"
     assert calls[0][2]["flow_steps"] == 5 and calls[0][2]["use_amp"] is True and calls[0][2]["n_action_steps"] == 8
-    assert calls[0][2]["cam_jitter"] is True and calls[1] == ("isolated", {"compensate_zero": True})
+    assert calls[0][2]["cam_jitter"] is True and calls[1] == ("isolated", {"compensate_zero": True, "zero_est_noise_deg": .5})
     assert helpers.resolved_choices({"arm_bases": "measured-194"}, cam_jitter=True)["arm_bases"] == "measured-194"
     assert "wrist_camera" in helpers.resolved_choices({}, cam_jitter=True)
 
