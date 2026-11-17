@@ -92,7 +92,7 @@ def test_valid_source_clear_lets_the_producer_dispatch_once_with_fk_of_measured_
     with pytest.raises(TimeoutError):  # the first poll only primes the joint rates; the next poll posts
         live()
     reply = tool.observe_once(client, live, tool.sim.ArmModel.load(ASSETS), arms, set())
-    assert reply['job']['status'] in {'DISPATCHING', 'ACTION_SUBMITTED', 'ACTION_SUCCEEDED', 'DISPATCHED'}
+    assert reply['job']['status'] == 'RUNNING'
     assert len(gated.port.submitted) == 1
     assert not gated.attestations.source_clear_valid(mission)
     assert client.context() is None or client.context()['phase'] != 'PRE_DISPATCH'
