@@ -146,6 +146,81 @@ def path_check(hows) -> str | None:
     return f"jaw paths mixed: {', '.join(paths)}" if len(paths) > 1 else None
 
 
+_SHIFT = {"ref": 0.0, "other": 1.0, "pair": 0.5}  # how far along the other jaw's offset each kind of mark was seen
+MAX_LABELLED = 10  # single-jaw marks searched jointly (2**10 small fits)
+
+
+def _labelled_fit(marks, yaws, geometry):
+    """(rms m, centre) of mark = c + R(yaw) g, g free, or fixed by `geometry` (radius_mm, phase_deg)."""
+    rows, rhs = [], []
+    for (mx, my), yaw in zip(marks, yaws):
+        c, s = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+        if geometry:
+            a, r = math.radians(yaw + geometry["phase_deg"]), geometry["radius_mm"] / 1000
+            rows += [[1, 0], [0, 1]]
+            rhs += [mx - r * math.cos(a), my - r * math.sin(a)]
+        else:
+            rows += [[1, 0, c, -s], [0, 1, s, c]]
+            rhs += [mx, my]
+    J, y = np.asarray(rows, float), np.asarray(rhs, float)
+    p, *_ = np.linalg.lstsq(J, y, rcond=None)
+    return math.sqrt(float(np.mean(np.sum((J @ p - y).reshape(-1, 2) ** 2, axis=1)))), (float(p[0]), float(p[1]))
+
+
+def relabel(marks: list, tcps: list, hows: list, config: dict, frames: Path | None = None) -> str | None:
+    """Refusal or None; on the disc path, rewrites `marks` and each how's side in place.
+
+    The discs say which jaw a blob is from the FK TCP through the map, but the map's own jaw offset and bias (about
+    30 mm on arm_a 2026-11-17) and the reference jaw's radius are not in that prediction. On the first real pivot the
+    one visible jaw sat in the reference disc at three yaws and in the other's at two, so two marks were moved by the
+    other-jaw offset and three were not, and fit_pivot_yaw refused "marks split". The jaws are one rigid gripper, so the
+    sides are chosen for all yaws together: every single-jaw mark is tried as either jaw (a pair stays the middle), each
+    choice is fitted as mark = c + R(yaw) g (g from pivot.geometry when stated), and the lowest-rms choice is kept.
+    Choices within pivot.side_agree_mm of its rms must give the same centre within pivot.side_agree_mm, else refused;
+    among those the one with most reference-side marks, then fewest moved, is kept. Every downstream guard (fit_pivot_yaw's split, side_check, rms,
+    radius, bias) then runs on the relabelled marks."""
+    from itertools import product
+
+    if why := path_check(hows):
+        return why
+    if not hows or hows[0]["path"] == "old" or any(h.get("side") not in _SHIFT for h in hows):
+        return None  # the old path, or a caller that does not say: the marks stay as they are
+    p, geometry = config.get("params"), (config.get("pivot") or {}).get("geometry")
+    if len(marks) < (2 if geometry else 3):
+        return None
+    singles = [i for i, h in enumerate(hows) if h["side"] != "pair"]
+    if len(singles) > MAX_LABELLED:
+        return f"jaw sides unlabelled: {len(singles)} single-jaw marks, at most {MAX_LABELLED}"
+    other_m, other_deg = prm.get(p, "jaw_side.other_mm") / 1000, prm.get(p, "jaw_side.other_deg")
+    yaws = [t[3] for t in tcps]
+    offset = [(other_m * math.cos(math.radians(y + other_deg)), other_m * math.sin(math.radians(y + other_deg))) for y in yaws]
+    fits = []
+    for choice in product((0.0, 1.0), repeat=len(singles)):
+        shift = [_SHIFT[h["side"]] for h in hows]
+        for i, s in zip(singles, choice):
+            shift[i] = s
+        moved = [(m[0] + (_SHIFT[h["side"]] - s) * o[0], m[1] + (_SHIFT[h["side"]] - s) * o[1])
+                 for m, h, s, o in zip(marks, hows, shift, offset)]
+        rms, centre = _labelled_fit(moved, yaws, geometry)
+        fits.append((rms, sum(s != _SHIFT[h["side"]] for s, h in zip(shift, hows)), shift, moved, centre))
+    tol = prm.get(p, "pivot.side_agree_mm") / 1000
+    best_rms = min(f[0] for f in fits)
+    # all near-best choices give one centre (checked below), so their labels move the bias by under tol: take the one
+    # with most reference-side marks (with no pair, one jaw at every yaw fits as either jaw), then fewest moved
+    near = sorted((f for f in fits if f[0] <= best_rms + tol), key=lambda f: (-f[2].count(0.0) - f[2].count(0.5), f[1], f[0]))
+    spread = max(math.dist(f[4], near[0][4]) for f in near)
+    record = {"rms_mm": sorted(round(1000 * f[0], 2) for f in fits)[:4], "disc_sides": [h["side"] for h in hows],
+              "sides": [{0.0: "ref", 1.0: "other", 0.5: "pair"}[s] for s in near[0][2]], "centre_spread_mm": round(1000 * spread, 1)}
+    if frames is not None and frames.is_dir():
+        (frames / "labels.json").write_text(json.dumps(record))
+    if spread > tol:
+        return f"jaw sides ambiguous: labellings within {1000 * tol:.0f} mm rms put the centre {1000 * spread:.1f} mm apart"
+    marks[:] = near[0][3]
+    for h, side in zip(hows, record["sides"]):
+        h["disc_side"], h["side"] = h["side"], side
+    return None
+
+
 def side_check(marks, tcps, hows, kept_tcps, radius_mm: float, phase_deg: float, params=None, arm=None):
     """(refusal or None, the kept marks' sides). Each kept mark gives the TCP centre: mark - radius at FK yaw + phase.
     A wrong jaw_side offset moves the other jaw's marks, so their mean centre must lie within pivot.side_agree_mm of
