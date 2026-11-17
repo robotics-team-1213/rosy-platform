@@ -209,7 +209,7 @@ def test_a_landing_recovers_after_a_resource_shortage(repo, monkeypatch):
 def test_expired_room_deadline_refuses_even_a_free_queue(repo, monkeypatch):
     _, dev = repo
     monkeypatch.setattr(tool.time, "monotonic", lambda: 11)
-    monkeypatch.setattr(tool._queue(), "full", lambda qdir: None)
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": None)
     assert not tool.wait_for_room(dev, 10)
 
 
@@ -321,7 +321,7 @@ def test_requeueing_a_head_the_live_snapshot_holds_reuses_it(repo, monkeypatch):
 def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room_after):
     _, dev = repo
     checks, clock = [], [0.0]
-    monkeypatch.setattr(tool._queue(), "full", lambda qdir: None if room_after and len(checks) >= room_after
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": None if room_after and len(checks) >= room_after
                         else checks.append(1) or "landing queue full (12/12 tickets)")
     monkeypatch.setattr(tool.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(tool.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
@@ -747,7 +747,7 @@ def test_a_waiter_never_replaces_a_landing_that_started_while_it_waited(repo, mo
     main, dev = repo
     state = {"full": True}
 
-    def full(qdir):
+    def full(qdir, lane=""):
         if state["full"]:
             state["full"] = False
             _ticket(main, "0001", branch="land/feat/x-20261028050000")  # queued meanwhile, from a newer HEAD
