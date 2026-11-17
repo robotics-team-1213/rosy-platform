@@ -5,6 +5,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import land_nightly  # noqa: E402
+import land_record  # noqa: E402  (tools/hooks, put on sys.path by land_nightly)
+from publish_fixtures import BROWSERS, FULL  # noqa: E402
+from test_publish_main import _commit, repo, tool  # noqa: E402,F401
 
 
 def test_the_night_runs_full_plus_every_browser_suite_and_records_new_failures_as_main_red(tmp_path, monkeypatch):
@@ -73,3 +76,43 @@ def test_a_green_night_is_not_rerun_on_the_same_main(tmp_path, monkeypatch):
     sha[0] = "b" * 40
     assert land_nightly.main([]) == 0
     assert runs == ["b" * 40]
+
+
+def _night(local, monkeypatch, tmp_path, sha, failing=False):
+    monkeypatch.setattr(land_nightly, "ROOT", local)
+    calls = []
+    monkeypatch.setattr(land_nightly, "_json", lambda *c: calls.append(c) or ([i for i in BROWSERS] if "--all-browsers" in c
+                                                                              else {"full_invocations": FULL[:3]}))
+    monkeypatch.setattr(land_nightly, "_main_sha", lambda: sha)
+    monkeypatch.setattr(land_nightly, "_green_marker", lambda: tmp_path / "green")
+    monkeypatch.setattr(land_nightly.land_checks, "tmp_dir", lambda name: tmp_path)
+    monkeypatch.setattr(land_nightly.land_mainred, "recheck", lambda *a: None)
+    monkeypatch.setattr(land_nightly.land_mainred, "red", lambda *a, **k: None)
+
+    def run(invs, logs, *a, **k):
+        for n, (inv, log) in enumerate(zip(invs, logs)):
+            receipt = ("[g1-timing-gate] expected=1 collected=1 passed=1 skipped=0 clean=1" + chr(10)
+                       if land_nightly.affected_exclusive.dedicated(inv) else "")
+            bad = "FAILED test/test_a.py::test_new - boom" + chr(10) + "1 failed in 0.1s" if failing and n == 1 else ""
+            log.write_text(receipt + (bad or "1 passed in 0.01s") + chr(10), encoding="utf-8")
+        return [1 if failing and n == 1 else 0 for n in range(len(invs))]
+    monkeypatch.setattr(land_nightly.remote_pytest, "run", run)
+    return calls
+
+
+def test_a_green_night_writes_the_full_record_publication_qualifies(repo, tmp_path, monkeypatch):
+    local, _ = repo
+    sha = _commit(local, "app.py", "night")
+    calls = _night(local, monkeypatch, tmp_path, sha)
+    assert land_nightly.main([]) == 0
+    assert ("--base", sha, "--head", sha) == tuple(calls[0][calls[0].index("--base"):calls[0].index("--base") + 4])
+    assert land_record.read(local, sha)["tier"] == "full"
+    assert tool.green_full(local, sha)
+
+
+def test_a_night_with_a_new_failure_writes_no_land_record(repo, tmp_path, monkeypatch):
+    local, _ = repo
+    sha = _commit(local, "app.py", "red night")
+    _night(local, monkeypatch, tmp_path, sha, failing=True)
+    assert land_nightly.main([]) == 1
+    assert land_record.read(local, sha) is None
