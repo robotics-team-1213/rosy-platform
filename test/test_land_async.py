@@ -865,12 +865,8 @@ def test_a_rollup_killed_without_a_verdict_is_not_bisected(repo, monkeypatch, ve
     """11-17: land_tick killed a running rollup's land.py (exit 1, last line mid pytest); the supervisor then split
     it on that progress line. Only a land.py STOP is a verdict to bisect on."""
     main, dev = repo
-    snap = "land/fix/land-rollup-20261117000000-20261117000000"
-    _git(main, "branch", snap, "HEAD")
-    tree = tool.holder(main) / snap.replace("/", "-")
-    tool.holder(main).mkdir(exist_ok=True)
-    _git(main, "worktree", "add", "-q", str(tree), snap)
-    (tree.parent / (tree.name + ".members")).write_text("[]", encoding="utf-8")
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
     split = []
     monkeypatch.setattr(tool, "split_rollup", lambda *a, **k: split.append(k))
     monkeypatch.setattr(tool, "superseded", lambda *a: [])
