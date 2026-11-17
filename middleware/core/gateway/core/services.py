@@ -303,6 +303,9 @@ class CoreServices:
         localization, loc_mission = wire_assist(events, lambda: identity.robot_id, nav=nav, line_follow=line_follow,
             command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy,
             mission_config=mission_config(config.get("localization_mission")))
+        if str(navigation_backend or "").strip().lower() == "slam":
+            from core.slam_localization import slam_localization_provider
+            state.set_localization_provider(slam_localization_provider(state, state._localization_provider))
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.junction_signal_request = line_follow.junction_signal_request
         fleet_agent.junction_signal_answer = line_follow.junction_signal_answer
