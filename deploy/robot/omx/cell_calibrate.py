@@ -202,7 +202,7 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         if mark is None and report.get("reason"):
             row["why"] = report["reason"]
         if mark and tcp_marks:
-            fk_yaw = planned_yaw(lib, config)
+            fk_yaw = rp.planned_yaw(lib, config)
             if fk_yaw is None:
                 row["why"], mark = "no planned FK yaw for the jaw labelling", None
             else:
@@ -239,18 +239,6 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
         **({"marks": "tcp"} if tcp_marks else {}),
     })
-
-
-def planned_yaw(library: Path, config: dict) -> float | None:
-    """FK yaw of a library's above_pick frame (the top-down IK may plan the 180-deg twin), or None."""
-    import omx_tcp
-
-    tcp_x_m = omx_tcp.config_tcp(config, config.get("plan"))
-    try:
-        frame = json.loads(Path(library).read_text(encoding="utf-8"))["chunks"]["above_pick"][0][:5]
-        return float(cell_pivot.joints_tcp(frame, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))[3])
-    except (OSError, KeyError, IndexError, TypeError, ValueError):
-        return None
 
 
 def main(argv=None):
