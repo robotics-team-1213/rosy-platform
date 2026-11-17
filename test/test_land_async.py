@@ -132,6 +132,21 @@ def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     assert (tree.parent / (tree.name + ".stopped")).exists() is not lands
 
 
+def test_a_supervisor_copy_beside_its_log_finds_mains_land_queue(tmp_path, monkeypatch):
+    """11-18: the copy in <git-common-dir>/rosy-land-wt crashed with "No module named 'land_queue'" on a full queue."""
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "land_queue.py").write_text("WHERE = 'main tools'\n")
+    copy = tmp_path / ".git" / "rosy-land-wt" / "land-fix-x-20261118000000.land_async.py"
+    copy.parent.mkdir(parents=True)
+    copy.write_bytes((ROOT / "tools" / "land_async.py").read_bytes())
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.delitem(sys.modules, "land_queue", raising=False)
+    spec = importlib.util.spec_from_file_location("land_async_copy", copy)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module._queue().WHERE == "main tools"
+
+
 @pytest.mark.parametrize("room", [True, False])
 def test_a_landing_refused_only_by_a_full_queue_waits_for_room(repo, room):
     """start() saw room, another session took the last slot first: wait and run land.py again, not stop."""

@@ -123,7 +123,7 @@ def snapshot_name(branch: str, now: datetime) -> str:
 
 
 def _queue():
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    sys.path[:0] = [str(Path(__file__).resolve().parent), str(Path(__file__).resolve().parents[2] / "tools")]
     import land_queue
     return land_queue
 
