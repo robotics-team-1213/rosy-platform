@@ -59,12 +59,15 @@ CI_FULL_MATRIX = (
         ["learning/curation/omx/test"], ["learning/curation/pinky/test"],
         ["learning/training/world_model/test"], ["learning/evaluation/world_model/test"],
         ["operations/prediction/world_model/test"]], "ros": "none"},
-    {"name": "core-domain", "invocations": [[
-        "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
-        "shared/web/test", "contracts/foundation/test",
-        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"], [
+    # 2026-11-18: core-domain was CI's longest runner (pytest step 16.5 and 22.4 min of a 25 min budget, runs
+    # 43769060136 and 42596065578); the gateway suite and the rest now run on two runners, same tests.
+    {"name": "core-domain", "invocations": [["middleware/core/gateway/test"], [
         "middleware/core/gateway/test/test_account_pipeline.py"
     ]], "ros": "none"},
+    {"name": "core-services", "invocations": [[
+        "middleware/core/events/test", "middleware/core/services/test",
+        "shared/web/test", "contracts/foundation/test",
+        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"]], "ros": "none"},
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["middleware/perception/test"]], "ros": "none", "gating": False},
     {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
