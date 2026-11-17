@@ -1197,3 +1197,8 @@
 - 변경: `LampStatusPatternsRequest`의 허용 값과 추가 키 거부를 canonical protocol schema에 정의했다.
 - 증거: CORE 원격 계약·protocol 시험 결과는 이 브랜치 검증에 기록한다.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · 팔 사건 기계 해제 판정 (D-1039)
+- 변경: `core_common/protocol/arm_incidents.py`에 `machine_clearable(facts) -> (bool, reason)`을 `software_stop` 옆에 더했다. 접힌 안전 종료·토크 OFF 확인·래치/감김/조 끼임 없음만 참.
+- 증거: `test/test_arm_incident_machine_clearable.py`; 원격 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음.

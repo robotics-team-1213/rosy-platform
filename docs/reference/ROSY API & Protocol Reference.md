@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.404
+**Version:** v1.406
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.406 AI assessor의 팔 사건 해제 (D-1039)
+
+`POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear`를 이름 있는 운영자 외에 AI assessor 서비스 자격(`site_users` `role: service`, id가 `ROSY_FLEET_ARM_ASSESSORS`에 듦, 기본 `cell-a-ai-assessor`)도 부를 수 있다(additive). assessor는 이 경로 외 모든 경로에서 403 `ARM_ASSESSOR_SCOPE_REQUIRED`다. assessor 해제는 `note`·`cause`·`basis`가 모두 필요하고(없으면 422 `AI_CLEAR_CAUSE_REQUIRED`), 저장된 사실이 `core_common.protocol.arm_incidents.machine_clearable`(접힌 안전 종료, 모든 모터 토크 0, 래치·감김·조 끼임 없음, 잘리지 않은 사실)을 통과하지 않으면 403 `AI_CLEAR_KIND_REFUSED`, 같은 팔에서 assessor가 같은 `cause`로 24시간 안에 이미 해제했으면 403 `AI_CLEAR_REPEAT_LIMIT`다(사람 해제는 세지 않음). 사건 행의 `cleared.by`가 assessor id다. 사람 해제는 바뀌지 않는다.
 
 ### v1.402 Fleet 앞으로/뒤로 한 걸음 (CORE nudge 미션 재사용)
 
@@ -683,7 +687,7 @@ It does not enable a physical owner, command, calibration or motion admission.
 | `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents` | D-971. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentReport` `{source_id,session_id,facts,decision,recovery?,frames<=2 [{role top\|side,sha256,jpeg_b64}]}`, `facts`/`decision`/`recovery` each a finite JSON object of at most 12,288 bytes and depth 6, each frame a JPEG of at most 200,000 bytes whose sha256 Fleet recomputes; body limit 700,000 bytes (413); `source_id` must equal the path (422) | 200 `{incident_id,hold:{held,incident_ids<=64,reason}}`; no-store. The same `(source_id, session_id)` returns the same incident |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/hold` | D-971. Source-bound `X-Workcell-Observation-Token` | 200 `{held,incident_ids,reason}`; held while an incident of that arm is not cleared; no-store |
-| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator (`require_named_operator`); body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared. Records who, when, the note and the person's cause with its basis; nothing is deleted |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator (`require_named_operator`), or (v1.406, D-1039) an AI assessor service principal that may call only this route; body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists; an assessor must send both) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared; assessor only: 422 `AI_CLEAR_CAUSE_REQUIRED`, 403 `AI_CLEAR_KIND_REFUSED` (stored facts fail `machine_clearable`), 403 `AI_CLEAR_REPEAT_LIMIT` (an assessor cleared the same cause on this arm within 24 h). Records who, when, the note and the cause with its basis; nothing is deleted |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence` | v1.375. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentEvidenceFrame {camera, t_rel_s, kind full\|tip, sha256, jpeg_b64}`, one JPEG of at most 200,000 bytes whose sha256 Fleet recomputes | 200 `{incident_id, seq}`; the same sha256 is the same frame; 404 unknown incident of that arm; 409 24 frames already; 413 body; no-store |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence/{seq}` | v1.375. Existing Fleet viewer authentication | `image/jpeg`; no-store; 404 unknown or expired (whole frames 14 days after clearing) |
 | `GET /api/fleet/workcell-observations/arm-incidents/labelled` | v1.375. `ai_observer` only | `{incidents:[...]}` cleared incidents with a recorded cause, newest first (at most 200), frame lists without bytes; no-store |

@@ -371,7 +371,9 @@ def main(argv=None):
     c = sub.add_parser("clear", help="a named operator clears this arm's open incidents over the Fleet API")
     c.add_argument("--arm", required=True)
     c.add_argument("--note", required=True, help="what the person checked on the arm")
-    c.add_argument("--token-file", type=Path, help="the operator's own Fleet bearer (0600); defaults to ~/.config/rosy/*-operator-*.token")
+    c.add_argument("--token-file", type=Path,
+                   help="the operator's or AI assessor's own Fleet bearer (0600); defaults to $ROSY_OPERATOR_TOKEN_FILE, "
+                        "$ROSY_ARM_ASSESSOR_TOKEN_FILE, then ~/.config/rosy/*-operator-*.token")
     c.add_argument("--cause", help="optional structured stop cause (API v1.375)")
     c.add_argument("--basis", help="optional cause basis: repeat, measured, seen, unknown (API v1.375)")
     args = parser.parse_args(argv)

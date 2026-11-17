@@ -171,3 +171,25 @@ def software_stop(facts) -> str | None:
                 or set(current) != set(command) or any(abs(current[n] - command[n]) > FOLLOWED_TICKS for n in current):
             return None
     return f"software stop ({stop}) with the arm folded on its command; nothing physical held it"
+
+
+def machine_clearable(facts) -> tuple[bool, str]:
+    """D-1039: may an AI assessor service clear this incident without a person? Only on the stored measured facts:
+    a safe end folded at home, torque confirmed OFF on every motor, no latched hardware error, no wind-up or snag hit
+    and no caught jaw. Anything else (and anything unreadable or truncated) stays with a person."""
+    if not isinstance(facts, dict) or facts.get("truncated"):
+        return False, "facts unreadable or truncated"
+    if facts.get("safe_end") is not True or facts.get("folded") is not True:
+        return False, "arm not at a safe end folded at home"
+    torque = facts.get("torque_after")
+    if not isinstance(torque, dict) or not torque or not all(
+            isinstance(v, int) and not isinstance(v, bool) and v == 0 for v in torque.values()):
+        return False, "torque not confirmed OFF"
+    if facts.get("latched"):
+        return False, "latched hardware error"
+    if facts.get("windup_hits"):
+        return False, "wind-up or snag hit"
+    flagged = facts.get("flagged") or []
+    if not isinstance(flagged, list) or any(not isinstance(r, dict) or r.get("caught") for r in flagged):
+        return False, "caught jaw"
+    return True, "folded safe end, torque OFF, nothing latched, wound up or caught"
