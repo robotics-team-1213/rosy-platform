@@ -108,7 +108,7 @@ def test_the_irreversible_control_comes_first_in_the_act_region():
     """비상정지가 teleop 뒤에 있으면 화면 밖으로 밀린다 — 실제로 y=832였다.
     자리도 탭 순서도 첫째여야 한다."""
     markup = html()
-    control = markup.split('class="panel control-panel"')[1].split("</section>")[0]
+    control = markup.split('class="control-panel"')[1].split("</ui-section>")[0]
     assert control.index("safety-actions") < control.index("teleop-commissioning")
 
 

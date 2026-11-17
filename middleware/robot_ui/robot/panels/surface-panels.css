@@ -140,11 +140,11 @@ body[data-surface="console"] #vision-stage:fullscreen .surface-camera-frame,
 #map-action-reason { margin: 0; color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); }
 /* 머리는 낮게: 1행 제목 | 보조 행동, 2행 값 띠 | 근거 없음. 좁은 칸에서는 세로로 쌓는다. */
 [data-panel="console.overview"] { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-2) var(--space-3); }
-[data-panel="console.overview"] > :not(.overview-head, .overview-unknown, ui-actions, .ui-readout) { grid-column: 1 / -1; }
+[data-panel="console.overview"] > :not(.overview-head, .overview-unknown, .overview-actions, .ui-readout) { grid-column: 1 / -1; }
 [data-panel="console.overview"] > .overview-head { grid-column: 1; grid-row: 1; }
-[data-panel="console.overview"] > ui-actions { grid-column: 2; grid-row: 1; }
+[data-panel="console.overview"] > .overview-actions { grid-column: 2; grid-row: 1; }
 [data-panel="console.overview"] > .ui-readout { grid-column: 1; grid-row: 2; }
 [data-panel="console.overview"] > .overview-unknown { grid-column: 2; grid-row: 2; min-width: 0; }
 @container (width < 30rem) {
-  [data-panel="console.overview"] > :is(.overview-head, ui-actions, .ui-readout, .overview-unknown) { grid-column: 1 / -1; grid-row: auto; }
+  [data-panel="console.overview"] > :is(.overview-head, .overview-actions, .ui-readout, .overview-unknown) { grid-column: 1 / -1; grid-row: auto; }
 }

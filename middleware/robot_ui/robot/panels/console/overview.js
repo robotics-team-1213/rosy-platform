@@ -136,7 +136,7 @@ export function mount(el, ctx) {
     status.hidden = false;
   }
   // 보조 행동 하나: 직접 운전은 밑줄 링크가 아니라 조용한 행동 링크다.
-  const apps = createNode("ui-actions");
+  const apps = createNode("ui-actions", "overview-actions");
   const pilot = createNode("a", "ui-action-link", "Rosy Pilot · 직접 운전");
   pilot.href = "/pilot";
   pilot.dataset.kind = "quiet";
