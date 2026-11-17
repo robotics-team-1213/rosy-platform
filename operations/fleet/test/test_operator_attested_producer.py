@@ -69,7 +69,8 @@ def test_valid_source_clear_lets_the_producer_dispatch_once_with_fk_of_measured_
     mission = approved(gated)
     client = tool.sim.Client('http://127.0.0.1:8765', TOKEN)
     client.opener = ApiTransport(gated)
-    arms = {gated.installation.policy.primary[1]: BASES[0]}
+    ids = [p.instance_id for p in gated.installation.policy.participants]
+    arms = dict(zip(ids, BASES))  # the sim rig installs two arms; the device_trial cell has one
     assert client.context() is None  # no SOURCE_CLEAR: Fleet shows nothing, so the producer cannot act
     assert tool.observe_once(client, None, None, arms, set()) is None
     clear(gated, mission)
@@ -80,8 +81,14 @@ def test_valid_source_clear_lets_the_producer_dispatch_once_with_fk_of_measured_
                  {'t': (base + 100_000_000) / 1e9, 'state': [0, 0, 0, 0, 0, 100]},
                  {'t': (base + 200_000_000) / 1e9, 'state': [0, 0, 0, 0, 0, 100]},
                  {'t': (base + 300_000_000) / 1e9, 'state': [0, 0, 0, 0, 0, 100]}])
-    live = tool.LiveState(gated.installation.policy.primary[1], lambda: next(rows),
+    live = tool.LiveState(ids[0], lambda: next(rows),
                           {k: list(getattr(gated.installation.policy.source_pose, k)) for k in ('position_m', 'orientation_xyzw')}, now=lambda: base / 1e9 + .4)
+    inner = live
+
+    def live():
+        state = inner()
+        state['owners'] = {i: state['owners'][ids[0]] for i in ids}
+        return state
     with pytest.raises(TimeoutError):  # the first poll only primes the joint rates; the next poll posts
         live()
     reply = tool.observe_once(client, live, tool.sim.ArmModel.load(ASSETS), arms, set())
