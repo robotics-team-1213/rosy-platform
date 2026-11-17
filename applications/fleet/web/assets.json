@@ -46,6 +46,10 @@
       "path": "alert-popup.js",
       "media_type": "application/javascript"
     },
+    "alert-policy.js": {
+      "path": "alert-policy.js",
+      "media_type": "application/javascript"
+    },
     "alert-popup.css": {
       "path": "shared/alert-popup.css",
       "media_type": "text/css"

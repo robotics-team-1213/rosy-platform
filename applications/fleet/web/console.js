@@ -145,10 +145,9 @@ const view = {
   addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
   isOperator: () => auth.role === "operator" && !namedReason(),
 };
-const inbox = createInboxPanel({scope: pageScope, el, readView: () => view,
-  getAlerts: () => alertPopup?.getItems() || []});
+const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
 const alertPopup = createAlertPopup({ mount: el("alert-popup-region"), onNavigate: navigateFromAlert,
-  onChange: () => inbox?.refresh(), announcer: getAnnouncer() });
+  announcer: getAnnouncer() });
 // The map usage note is a one-line toggletip beside the title (touch and keyboard reach it), not standing copy.
 toggletip(el("map-help"), "로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다");
 const robotsOverview = el("robots-overview");
@@ -162,7 +161,7 @@ const isMapHidden = () => Boolean(
 );
 if (recordsArea) {
   el("incident-side").hidden = false;
-  if (inbox.choice !== "inbox") inbox.select("evidence");
+  inbox.select("evidence");
 }
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
@@ -187,11 +186,13 @@ pageScope.onResume(layoutConsole);
 // 셸은 폴링 운율, inbox.js는 로그 상한을 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 // bad 로그는 #log 기록(live 아님)에 남고, 카드는 호출 실패와 같은 사건이면 alert-popup이 한 장·한 번
 // 낭독으로 합친다(D-1117). 로그 창과 카드의 이중 낭독은 #log의 live 역할을 뺀 것으로 끊었다.
+// {inline: true}: 결과를 누른 행 안 글자로 이미 보여 주는 모듈의 로그 — 기록 1줄과 한 번 낭독만, 토스트 없음(11-18 결정 5).
 const log = (text, kind, popupMeta = null) => {
   inbox.log(text, kind);
-  if (kind === "bad") alertPopup.pushLogError(text, popupMeta);
+  if (kind === "bad" && popupMeta?.inline) getAnnouncer()?.announce(text);
+  else if (kind === "bad") alertPopup.pushLogError(text, popupMeta);
 };
-alertPopup.attachWindowErrors(pageScope);
+alertPopup.attachWindowErrors(pageScope, log);
 
 const fleetApi = createFleetClient({ credential: () => auth.token });
 // D-741 3 — any answer keeps the link word live. Only the state poll may call it down: Fleet answers
@@ -208,7 +209,8 @@ function isStateWithinHoldover(path) {
   return Boolean(view.stateStale && withinWindow);
 }
 
-async function call(path, options = {}) {
+// options.inline: 호출한 쪽이 결과를 행 안에 보여 준다 — 실패를 토스트로 다시 알리지 않는다(어디에 보일지는 결과를 가진 쪽이 정한다).
+async function call(path, {inline = false, ...options} = {}) {
   const task = pageScope.capture();
   task.check();
   const cameraPreview = path === "/api/fleet/vision/sources" || path === "/api/fleet/vision/lease";
@@ -222,7 +224,7 @@ async function call(path, options = {}) {
   } catch (error) {
     task.check();
     if ((error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') && !cameraPreview) markLocked();
-    if (!(cameraPreview && error.code === "VISION_PREVIEW_DISABLED") && typeof alertPopup !== "undefined") {
+    if (!inline && !(cameraPreview && error.code === "VISION_PREVIEW_DISABLED") && typeof alertPopup !== "undefined") {
       alertPopup.pushCallError(path, options, error, auth.locked, {
         isStaleHoldover: isStateWithinHoldover(path),
       });

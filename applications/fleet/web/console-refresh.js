@@ -2,6 +2,7 @@
 // 폴링 주기는 셸(console.js)이 쥐고 이 팩토리의 함수를 부른다(D-798 3.2).
 import { namedOperatorReason } from "/console/assets/authorization.js";
 import { statusTag } from "/common/status-tag.js";
+import { getAnnouncer } from "/common/announcer.js";
 import { noteLink, showFleet } from "/console/assets/fleet-header.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
 import { createLocalizationPoller } from "./localization-view.js";
@@ -42,7 +43,8 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       dispatchGate.ok();
       view.dispatchControl = state;
       // D-493 — 띠의 글은 알릴 상태가 있을 때만 보인다(styles.css가 data-state로 접는다).
-      el("dispatch-control").dataset.state = state.dispatch_enabled ? "enabled"
+      const band = el("dispatch-control"), was = band.dataset.state;
+      band.dataset.state = state.dispatch_enabled ? "enabled"
         : state.reason === "PROCESS_RESTARTED" ? "restarted" : "latched";
       if (state.dispatch_enabled) {
         title.textContent = "발행 허용";
@@ -54,6 +56,8 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
         title.textContent = "정지 래치로 발행 차단";
         detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개 · 미확정 동작 ${state.unresolved_actions}개`;
       }
+      // 띠는 live가 아니다(11-18) — 발행 허용·차단이 실제로 바뀔 때만 한 번 낭독한다.
+      if (["enabled", "restarted", "latched"].includes(was) && was !== band.dataset.state) getAnnouncer()?.announce(title.textContent);
       rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
       // D-540 9: 재허가는 대기 작업을 다시 움직이므로 이름 있는 운영자만.
       const rearmNamed = namedOperatorReason(auth.role, auth.principal);

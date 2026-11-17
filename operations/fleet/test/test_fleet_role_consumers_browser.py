@@ -153,7 +153,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                     panel_close = page.locator("#robot-panel-mount .robot-panel-close")
                     if panel_close.is_visible():
                         panel_close.click()
-                    page.locator("#context-inbox-tab").click()
+                    page.locator("#context-evidence-tab").click()
                     summary = page.locator("#log-panel > summary")
                     for opened in [False, True]:
                         page.locator("#log-panel").evaluate("(node, open) => node.open = open", opened)

@@ -240,7 +240,9 @@ export function alertsDue(seen, robots) {
   return due;
 }
 
-function browserAlert(text) {
+// 화면을 보고 있으면 큐 행과 낭독이 이미 말한다 — 소리·OS 알림은 탭이 가려졌을 때만(11-18 결정 4).
+export function browserAlert(text, doc = globalThis.document) {
+  if (!doc?.hidden) return;
   try {
     const audio = new AudioContext(), tone = audio.createOscillator();
     tone.connect(audio.destination); tone.start(); tone.stop(audio.currentTime + 0.2); tone.onended = () => audio.close();
@@ -291,7 +293,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     confirming.delete(robotId); busy.add(robotId); render();
     try {
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/decision`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stuck_id: stuckId, decision }),
+        inline: true, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stuck_id: stuckId, decision }),
       });
       life.check();
       const text = outcomeText(robotId, decision, result.result);
@@ -299,7 +301,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     } catch (err) {
       if (err.name === "AbortError") return;
       const text = refusalText(robotId, decision, err);
-      results.set(robotId, { stuck_id: stuckId, text, kind: "bad" }); log(text, "bad");
+      results.set(robotId, { stuck_id: stuckId, text, kind: "bad" }); log(text, "bad", { inline: true });
     } finally {
       if (life.current()) { busy.delete(robotId); render(); }
     }
@@ -307,7 +309,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
 
   function choose(robotId, stuckId, decision) {
     call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/claim`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stuck_id: stuckId }),
+      inline: true, method: "POST",  // 맡음 표시 실패는 이어지는 판단 결과 글자가 말한다 headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stuck_id: stuckId }),
     }).catch(() => {});
     if (needsConfirm(decision)) { confirming.set(robotId, { stuck_id: stuckId, decision }); render("confirm-yes", robotId); return; }
     send(robotId, stuckId, decision);
@@ -421,7 +423,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       row.className = "stuck-confirm-actions"; row.append(yes, no); box.append(text, row); li.append(box);
     }
 
-    // D-1117 — 판단 결과는 누른 단추 옆 글자다(live 역할 없음). 실패 낭독은 log("bad") → 관제 알림 카드의 announcer 한 번이 담당한다.
+    // D-1117 — 판단 결과는 누른 단추 옆 글자다(live 역할 없음). 실패는 기록 1줄과 한 번 낭독(log의 inline), 토스트는 띄우지 않는다(11-18 결정 5).
     const last = results.get(robotId);
     if (last && last.stuck_id === stuck.stuck_id) {
       const result = document.createElement("div");

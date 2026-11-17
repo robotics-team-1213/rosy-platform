@@ -72,7 +72,7 @@ export function createStationRecovery({ scope, view, call, log, isOperator, name
     busy.add(robotId);
     render();
     try {
-      const done = await call(`/api/fleet/station-recovery/${encodeURIComponent(robotId)}/approve`, { method: "POST" });
+      const done = await call(`/api/fleet/station-recovery/${encodeURIComponent(robotId)}/approve`, { inline: true, method: "POST" });
       life.check();
       results.set(robotId, { text: `${robotId} 승인 기록됨${done.started ? "" : " · 로봇은 움직이지 않았습니다"}`, kind: "good" });
     } catch (err) {
@@ -82,7 +82,7 @@ export function createStationRecovery({ scope, view, call, log, isOperator, name
       busy.delete(robotId);
       if (life.current()) {
         const last = results.get(robotId);
-        if (last) log(last.text, last.kind);
+        if (last) log(last.text, last.kind, { inline: true });
         refresh();
         render();
       }
@@ -121,7 +121,7 @@ export function createStationRecovery({ scope, view, call, log, isOperator, name
         actions.append(button);
         box.append(actions);
       }
-      // D-1117 — 결과는 누른 단추 옆 글자다(live 역할 없음). 실패 낭독은 log("bad") → 관제 알림 카드의 announcer 한 번이 담당한다.
+      // D-1117 — 결과는 누른 단추 옆 글자다(live 역할 없음). 실패는 기록 1줄과 한 번 낭독(log의 inline), 토스트는 띄우지 않는다(11-18 결정 5).
       const last = results.get(request.robot_id);
       if (last) {
         const line = document.createElement("p");

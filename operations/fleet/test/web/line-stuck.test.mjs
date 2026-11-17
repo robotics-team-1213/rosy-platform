@@ -8,7 +8,7 @@ register("./resolve-console-assets.mjs", import.meta.url);
 const {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, aiProposalText, chainRows, alertsDue, confirmText, decisionButtons, evidenceCaption,
   needsConfirm, outcomeText, pendingStucks, rearText, refusalText, resolverText, stuckFacts,
-  previewFresh, headingText, fleetAnswerText, stuckSummary, judgmentText,
+  previewFresh, headingText, fleetAnswerText, stuckSummary, judgmentText, browserAlert,
 } = await import("../../../../applications/fleet/web/line-stuck.js");
 
 const STUCK = {
@@ -270,4 +270,19 @@ test("D-577 연동 상태: resolver, credential presence, AI PC heartbeat and ho
   assert.equal(chainRows({ status: { state: "absent", age_s: null }, chain: { resolver: false, robots: [] } })[1][1],
     "없음 (신호 받은 적 없음)");
   assert.deepEqual(chainRows(null), [["연동", "확인할 수 없음"]]);
+});
+
+test("sound and OS notification fire only while the tab is hidden (11-18 decision 4)", (t) => {
+  const origNotification = globalThis.Notification, origAudio = globalThis.AudioContext;
+  t.after(() => { globalThis.Notification = origNotification; globalThis.AudioContext = origAudio; });
+  const shown = [];
+  let tones = 0;
+  globalThis.AudioContext = class { constructor() { tones += 1; throw new Error("no device"); } };
+  globalThis.Notification = class { constructor(title, opts) { shown.push([title, opts.body]); } };
+  globalThis.Notification.permission = "granted";
+  browserAlert("rosy_01: 판단 요청", { hidden: false });
+  assert.deepEqual([tones, shown.length], [0, 0]);
+  browserAlert("rosy_01: 판단 요청", { hidden: true });
+  assert.equal(tones, 1);
+  assert.deepEqual(shown, [["ROSY 판단 요청", "rosy_01: 판단 요청"]]);
 });

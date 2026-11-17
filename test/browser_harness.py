@@ -377,7 +377,7 @@ LAYOUT_GEOMETRY_PROBE = """() => {
   if (region && region.childElementCount > 0 && !allowed(region, 'G7')) {
     const rr = region.getBoundingClientRect();
     if (rr.width > 0 && rr.height > 0) {
-      for (const sel of ['.queues-panel', '#robot-panel-mount', '#inbox-popover', '#topbar-extra[data-open="true"]', '#assistant-panel:not([hidden])', '.map-head']) {
+      for (const sel of ['.queues-panel', '#robot-panel-mount', '#topbar-extra[data-open="true"]', '#assistant-panel:not([hidden])', '.map-head']) {
         for (const node of document.querySelectorAll(sel)) {
           if (!seen(node)) continue;
           const tr = node.getBoundingClientRect();

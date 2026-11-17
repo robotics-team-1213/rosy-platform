@@ -1,8 +1,7 @@
-// D-632: view-only notification owner; transport and polling stay in the console shell.
-// 2026-11-16 중복 표면 제거: 알림 항목은 .queues-panel 한 곳에만 그린다. #inbox-popover 요소와
-// 열기 단추 id는 시험 계약으로 남겼지만 이 모듈은 항목을 그리지 않고, 벨은 큐 패널로 데려간다.
-// 2026-11-17 D-1117: #inbox-messages는 큐 행이 이미 말하는 stuckSummary 요약을 다시 쓰지
-// 않고 로봇별 전달 기록(영수증·4단계·원본 JSON)만 그린다.
+// D-632: view-only context tabs and the request log; transport and polling stay in the console shell.
+// 11-18 알림 한 곳: 알림은 .queues-panel 한 곳이다. 벨 숫자는 그 큐의 열린 행 수(긴급+주의)이고 '읽음'은 없다.
+// 벨은 큐 패널로 데려간다. '알림' 탭은 없앴고 판단 전달 기록(#inbox-messages)과 기록(#log)은 '기록·근거' 탭에 있다.
+// D-1117: #inbox-messages는 큐 행이 이미 말하는 stuckSummary 요약을 다시 쓰지 않고 로봇별 전달 기록만 그린다.
 import { createTabs } from "/common/interaction-controls.js";
 import { CAUSE_LABEL, DECISION_LABEL, aiProposalText, fleetAnswerText } from "./line-stuck.js";
 import { showInboxCount } from "/console/assets/fleet-header.js";
@@ -24,57 +23,48 @@ function stuckMessageJson(stuck) {
   }, null, 2);
 }
 
-export function createInboxPanel({scope, el, readView, getAlerts = () => []}) {
-  let contextChoice = new URLSearchParams(location.search).get("inbox") === "1" ? "inbox" : "status";
-  const inboxAttention = new Map();
-  const stuckSignatures = new Map();
-  let lastLogMessage = "";
+export function createInboxPanel({scope, el, readView}) {
+  const params = new URLSearchParams(location.search);
+  // ?inbox=1은 예전 '알림' 탭 링크(판단 전달 기록) — 이제 '기록·근거' 탭이다. ?queue=1은 다른 Fleet 문서의 벨.
+  let contextChoice = params.get("inbox") === "1" ? "evidence" : "status";
+  let wantsQueue = params.get("queue") === "1";  // focus the queue once its first state has painted
 
-  function ensureQueueFocusable() {
+  function queuePanel() {
     const queue = typeof document !== "undefined" ? document.querySelector?.(".queues-panel") : null;
     if (queue && !queue.hasAttribute?.("tabindex")) queue.tabIndex = -1;
     return queue;
   }
-  ensureQueueFocusable();
-
-  function markAllRead() {
-    for (const item of inboxAttention.values()) item.unread = false;
-    el("log").querySelectorAll('[data-unread]').forEach(line => delete line.dataset.unread);
-  }
-
-  // 벨(열기 단추 #fleet-inbox)은 목록을 다시 그리지 않고 큐 패널로 스크롤·포커스를 옮긴다.
-  scope.listen(document, "rosy:inbox", event => {
-    event.preventDefault();
-    markAllRead();
-    paintInbox();
-    const queue = ensureQueueFocusable();
+  function focusQueue(queue = queuePanel()) {
     queue?.scrollIntoView({block: "nearest"});
     queue?.focus({preventScroll: true});
+  }
+  queuePanel();
+
+  // 벨(#fleet-inbox): 큐가 이 화면에 보이면 그리로 포커스, 아니면 막지 않아 /console?queue=1로 간다.
+  scope.listen(document, "rosy:inbox", event => {
+    const queue = queuePanel();
+    if (!queue || (queue.checkVisibility && !queue.checkVisibility())) return;
+    event.preventDefault();
+    focusQueue(queue);
   });
 
-  function paintInbox() {
-    if (contextChoice === "inbox") markAllRead();
-    const alertCount = contextChoice === "inbox" ? 0 : getAlerts().length;
-    const count = [...inboxAttention.values()].filter(item => item.unread).length
-      + el("log").querySelectorAll('[data-unread]').length
-      + alertCount;
-    showInboxCount(count);
+  // 벨 숫자 = 큐의 열린 개입 행 수. 탭·기록과 무관하다.
+  function paintBell() {
+    showInboxCount(document.querySelectorAll('#critical-list > li[data-key], #warning-list > li[data-key]').length);
   }
-  const tabKeys = ["status", "inbox", "evidence", "tools"];
+  const tabKeys = ["status", "evidence", "tools"];
   const tabs = createTabs({
     id: "context",
     label: "관제 상세 보기",
     activation: "automatic",
     tabs: [
       { id: "status", panelId: "context-status", label: "로봇·작업", icon: "robot", content: el("context-status-body") || el("context-status") },
-      { id: "inbox", panelId: "context-inbox", label: "알림", icon: "notification", content: el("context-inbox-body") || el("context-inbox") },
       { id: "evidence", panelId: "context-evidence", label: "기록·근거", icon: "list", content: el("context-evidence-body") || el("context-evidence") },
       { id: "tools", panelId: "context-tools", label: "운영 도구", icon: "tools", content: el("context-tools-body") || el("context-tools") },
     ],
     onChange: (key) => {
       contextChoice = key;
-      if (key === "inbox") refreshInbox();
-      else paintInbox();
+      refreshInbox();
     },
   });
   tabs.element.querySelector('[role="tablist"]')?.classList.add("context-tabs");
@@ -92,42 +82,20 @@ export function createInboxPanel({scope, el, readView, getAlerts = () => []}) {
   if (contextChoice !== "status") tabs.select(contextChoice);
 
   function refreshInbox() {
-    const rows = [...document.querySelectorAll('#critical-list > li, #warning-list > li')];
-    const keys = new Set();
-    for (const row of rows) {
-      const key = row.dataset.key;
-      if (!key) continue;
-      keys.add(key);
-      const text = (row.querySelector('.queue-row') || row).textContent.trim();
-      const signature = text.replace(/\d+/g, "#");
-      const old = inboxAttention.get(key);
-      if (!old || old.signature !== signature) inboxAttention.set(key, {signature, unread: true});
-    }
-    for (const key of inboxAttention.keys()) if (!keys.has(key)) inboxAttention.delete(key);
     paintInboxMessages();
-    paintInbox();
+    paintBell();
+    if (wantsQueue && readView().stateLoaded) { wantsQueue = false; focusQueue(); }
   }
 
   function paintInboxMessages() {
     const view = readView();
     const stuckRobots = view.stateUnavailable ? [] : (view.robots || []).filter(robot => robot.line_stuck);
-    const activeRobotIds = new Set();
     const messagesByRobot = new Map();
     for (const robot of stuckRobots) {
-      activeRobotIds.add(robot.robot_id);
       const message = stuckMessageJson(robot.line_stuck);
       messagesByRobot.set(robot.robot_id, message);
-      if (stuckSignatures.get(robot.robot_id) !== message) {
-        stuckSignatures.set(robot.robot_id, message);
-        if (contextChoice !== "inbox") {
-          const attention = inboxAttention.get(`${robot.robot_id}|stuck`);
-          if (attention) attention.unread = true;
-        }
-      }
     }
-    for (const id of stuckSignatures.keys()) if (!activeRobotIds.has(id)) stuckSignatures.delete(id);
-
-    if (contextChoice !== "inbox") return;
+    if (contextChoice !== "evidence") return;
     const list = el("inbox-messages");
     if (view.stateUnavailable) {
       list.textContent = "상태 갱신 실패 · 현재 전달 기록을 확인할 수 없습니다.";
@@ -194,46 +162,31 @@ export function createInboxPanel({scope, el, readView, getAlerts = () => []}) {
     contextChoice = choice;
     tabs.select(choice);
     if (focus) tabButtons[tabKeys.indexOf(choice)]?.focus({preventScroll: true});
-    if (choice === "inbox") refreshInbox();
-    else paintInbox();
+    refreshInbox();
   }
-  // A result link must reveal its destination before native anchor scrolling.
-  scope.listen(el("cancel-all-details"), "click", () => selectContext("inbox"));
-  scope.listen(el("inbox-evidence"), "click", () => {
-    selectContext("evidence");
-    el("context-evidence").focus({preventScroll: true});
-  });
-  function markLog(line, text, kind) {
-    const signature = `${kind || ""}:${text}`;
-    if (contextChoice !== "inbox" && signature !== lastLogMessage) line.dataset.unread = "true";
-    lastLogMessage = signature;
-  }
+  scope.listen(el("cancel-all-details"), "click", () => selectContext("evidence"));
   function log(text, kind) {
     const line = document.createElement("div");
     if (kind) line.className = kind;
-    markLog(line, text, kind);
     const now = new Date().toTimeString().slice(0, 8);
     line.textContent = `${now}  ${text}`;
     const box = el("log");
     box.querySelector("ui-empty")?.remove();
     box.prepend(line);
     while (box.childElementCount > LOG_MAX) box.lastElementChild.remove();
-    paintInbox();
   }
 
   scope.listen(el("log-clear"), "click", () => {
     const box = el("log");
     box.replaceChildren(document.createElement("ui-empty"));
     box.firstChild.textContent = "지웠습니다.";
-    lastLogMessage = "";
-    paintInbox();
     el("cancel-all-details").hidden = true;
   });
   return {refresh: refreshInbox, log,
     focusInitial() {
-      if (contextChoice !== "inbox") return;
-      el("context-inbox").focus();
-      el("context-inbox").scrollIntoView({block: "nearest"});
+      if (contextChoice !== "evidence") return;
+      el("context-evidence").focus();
+      el("context-evidence").scrollIntoView({block: "nearest"});
     },
     select: selectContext, get choice() { return contextChoice; }};
 }

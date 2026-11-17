@@ -43,18 +43,19 @@ export function noteLink(error = null, now = Date.now()) {
   paintLink(now);
 }
 
-// The alerts button is static markup on every Fleet document; only the console owns the unread count.
+// The bell is static markup on every Fleet document. It goes to the console's intervention queue (11-18):
+// the console focuses .queues-panel itself; any other document opens /console?queue=1.
 function openInbox() {
   const request = new CustomEvent("rosy:inbox", {cancelable: true});
-  if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
+  if (document.dispatchEvent(request)) location.assign("/console?queue=1");
 }
+// count = open intervention rows in the console queue (긴급+주의). There is no read state.
 export function showInboxCount(count) {
   const inbox = $("fleet-inbox"), unread = $("header-unread");
   unread.textContent = count ? String(count) : "";
   unread.hidden = !count;
-  inbox.setAttribute("aria-label", `알림 창 · 미확인 메시지 ${count}개`);
-  inbox.setAttribute("data-ui-tooltip", `${inbox.getAttribute("aria-label")} · 읽음은 개입 해소가 아닙니다`);
-  inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
+  inbox.setAttribute("aria-label", `개입 요망 ${count}건 · 큐로 이동`);
+  inbox.setAttribute("data-ui-tooltip", inbox.getAttribute("aria-label"));
 }
 
 // The one E-stop rule. `session` is undefined while unknown (loading, Fleet unreachable), null after a 401,

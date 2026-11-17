@@ -58,6 +58,7 @@ OWN = {
         "integrated-control-view.js",  # D-862: unit information and stop requests belong to Console.
         "inbox.js",  # D-632: console notification and context view owner
         "alert-popup.js",  # Non-modal error and alert popup stack owned by Console.
+        "alert-policy.js",  # 11-18 SRP: which Fleet failures become a toast (alert-popup.js draws it).
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view
         "connection-view.js",
         "formation.js",

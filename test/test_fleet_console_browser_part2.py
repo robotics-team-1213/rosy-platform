@@ -383,7 +383,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         browser, page, errors = _open_console(playwright, api, posts=posts,
                                                init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
-        page.locator('[data-context-tab="inbox"]').click()
+        page.locator('[data-context-tab="evidence"]').click()
         assert page.locator("#log ui-empty").inner_text() == "최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다."
         page.locator('[data-context-tab="status"]').click()
         _open_cards(page, "rosy_02")
@@ -416,7 +416,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         assert page.locator("#log ui-empty").count() == 0
         assert page.locator(".robot.selected").count() == 0
         assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_02"
-        page.locator('[data-context-tab="inbox"]').click()
+        page.locator('[data-context-tab="evidence"]').click()
         assert page.locator("#log").is_visible()
         assert not errors
         browser.close()
@@ -450,7 +450,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
                          canvas_box["y"] + canvas_box["height"] / 2)
         page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('task-queued-123')")
-        page.locator('[data-context-tab="inbox"]').click()
+        page.locator('[data-context-tab="evidence"]').click()
         assert "QUEUED" in page.inner_text("#log")
         assert "#1" in page.inner_text("#log")
         page.locator('[data-context-tab="status"]').click()

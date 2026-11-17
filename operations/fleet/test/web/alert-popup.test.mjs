@@ -380,3 +380,23 @@ test("390x844: 고정 앱바(64) 아래로 스크롤해 지나친 큐 패널은 
   assert.equal(popup.getItems().length, 1);
   assert.equal(popup.getItems()[0].key, "crit|rosy_03|hitl");
 });
+
+test("a screen runtime error is a log line for diagnosis, never a toast (11-18 decision 3)", (t) => {
+  withFakeDoc(t);
+  const origWindow = globalThis.window;
+  globalThis.window = {};
+  t.after(() => { globalThis.window = origWindow; });
+  const mount = fakeNode("section");
+  const popup = createAlertPopup({ mount });
+  const handlers = {}, logged = [];
+  popup.attachWindowErrors({ listen: (_node, type, fn) => { handlers[type] = fn; } }, (...args) => logged.push(args));
+  handlers.error({ message: "x is undefined", error: new TypeError("x is undefined") });
+  handlers.unhandledrejection({ reason: new Error("late promise") });
+  handlers.unhandledrejection({ reason: Object.assign(new Error("gone"), { name: "AbortError" }) });
+  assert.equal(popup.getItems().length, 0);
+  assert.equal(mount.children.length, 0);
+  assert.deepEqual(logged.map(([text, kind, meta]) => [text, kind, meta?.silent]), [
+    ["화면 런타임 오류 — x is undefined", "bad", true],
+    ["비동기 처리 오류 — late promise", "bad", true],
+  ]);
+});

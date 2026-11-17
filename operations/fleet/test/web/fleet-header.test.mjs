@@ -94,6 +94,7 @@ test("message counts update one summary value without replacing its connection o
   showInboxCount(4);
   assert.equal(nodes["online-pill"].textContent, "2/3");
   assert.equal(nodes["header-unread"].textContent, "4");
+  assert.equal(nodes["fleet-inbox"].getAttribute("aria-label"), "개입 요망 4건 · 큐로 이동");  // 11-18: 열린 개입 수, 읽음 없음
   assert.equal(nodes["header-unread"].hidden, false);
   showInboxCount(0);
   assert.equal(nodes["header-unread"].hidden, true);

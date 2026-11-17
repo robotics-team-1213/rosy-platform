@@ -434,10 +434,7 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
             page.evaluate("scrollTo(0, 0)")
             _shot(page, f"context-status-{theme}-{width}x{height}.png")
             status.focus()
-            status.press("ArrowRight")
-            expect(page.get_by_role("tab", name="알림", exact=True)).to_be_focused()
-            expect(page.locator("#context-inbox")).to_be_visible()
-            page.get_by_role("tab", name="알림", exact=True).press("ArrowRight")
+            status.press("ArrowRight")  # 11-18: '알림' 탭은 없다 — 다음 탭이 기록·근거다
             expect(page.get_by_role("tab", name="기록·근거")).to_be_focused()
             expect(page.locator("#context-evidence")).to_be_visible()
             expect(page.locator("#context-status")).not_to_be_visible()
@@ -510,7 +507,12 @@ def test_current_evidence_is_folded_and_keeps_keyboard_context_across_poll(site,
         browser.close()
 
 
-def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
+BELL_COUNT = "document.querySelectorAll('#critical-list > li[data-key], #warning-list > li[data-key]').length"
+
+
+def test_bell_counts_open_queue_rows_and_the_records_tab_shows_message_stages(site):
+    """11-18 알림 한 곳: 벨 숫자 = 큐의 열린 긴급+주의 행 수, '읽음' 없음. 벨은 큐 패널로 데려가고
+    판단 전달 기록은 '기록·근거' 탭에 있다. 팝오버와 '알림' 탭은 없다."""
     from playwright.sync_api import expect, sync_playwright
 
     stuck = {**STUCK, "inquiry": {"version": "situation-inquiry-v1", "problem_id": STUCK["stuck_id"],
@@ -522,18 +524,22 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
     posts = []
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts)
-        entry = page.locator("#topbar-more")
-        unread = entry.get_attribute("aria-label")
-        entry.click()
-        assert entry.get_attribute("aria-label") == unread
+        expect(page.locator("#inbox-popover")).to_have_count(0)
+        expect(page.get_by_role("tab", name="알림", exact=True)).to_have_count(0)
+        rows = page.evaluate(BELL_COUNT)
+        assert rows >= 2, rows  # rosy_01 판단 요청(긴급) + rosy_04 끊김(주의)
         button = page.locator("#fleet-inbox")
-        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
-        button.click()  # 벨은 읽음만 표시하고 큐 패널로 간다(중복 표면 제거)
-        expect(page.locator("#inbox-popover")).to_be_hidden()
-        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
-        page.get_by_role("tab", name="알림").click()
-        expect(page.locator("#context-inbox")).to_be_visible()
+        label = f"개입 요망 {rows}건 · 큐로 이동"
+        expect(button).to_have_attribute("aria-label", label)
+        expect(page.locator("#header-unread")).to_have_text(str(rows))
+        button.click()
+        expect(page.locator(".queues-panel")).to_be_focused()
+        expect(button).to_have_attribute("aria-label", label)  # 누른다고 개입이 해소되지 않는다
+        page.get_by_role("tab", name="기록·근거").click()
+        expect(page.locator("#context-evidence")).to_be_visible()
+        expect(button).to_have_attribute("aria-label", label)  # 탭을 바꿔도 같다
         messages = page.locator("#inbox-messages")
+        assert messages.evaluate("node => node.closest('[role=tabpanel]').id") == "context-evidence"
         expect(messages).to_contain_text("로봇 문의 (CORE)")
         expect(messages).to_contain_text("AI 제안 대기")
         expect(messages).to_contain_text("CORE 수락 · 복구 완료는 별도 확인")
@@ -545,13 +551,11 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         expect(messages.locator("pre")).to_contain_text("situation-inquiry-v1")
         page.get_by_role("tab", name="로봇·작업").click()
         page.clock.run_for(6000)
-        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        expect(button).to_have_attribute("aria-label", label)
         stuck["fleet_answer"] = {"decision": "RESUME", "tier": "ai", "accepted": False, "code": "EMERGENCY_ACTIVE"}
         page.clock.run_for(3000)
-        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
-        button.click()
-        expect(page.locator("#inbox-popover")).to_be_hidden()
-        page.get_by_role("tab", name="알림").click()
+        expect(button).to_have_attribute("aria-label", label)  # 같은 개입의 새 소식은 숫자를 바꾸지 않는다
+        page.get_by_role("tab", name="기록·근거").click()
         expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
         assert messages.locator("li > details").get_attribute("open") is not None
         assert messages.locator("details details").get_attribute("open") is not None
@@ -568,7 +572,68 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         page.clock.run_for(4000)
         expect(messages.locator("dd").nth(3)).to_have_text("CORE 전달·응답 기록 없음 · 실행 완료 미확인")
         assert not posts and not errors
-        _shot(page, "context-inbox-message-stages.png")
+        _shot(page, "context-evidence-message-stages.png")
+        browser.close()
+
+
+def test_a_refused_queue_answer_shows_in_its_row_and_one_log_line_never_a_toast(site):
+    """11-18 결정 5: 인라인 결과가 있는 명령 실패는 행 안 글자 1 + 기록 1줄, 토스트 0, 벨 숫자 그대로.
+    claim과 decision 둘 다 409(r-A 실측과 같은 최악의 모의 응답)."""
+    from playwright.sync_api import expect, sync_playwright
+
+    refused = (409, {"detail": {"code": "STUCK_ID_MISMATCH", "message": "closed"}})
+    answers = {"/api/fleet/robots/rosy_01/line-stuck/claim": refused,
+               "/api/fleet/robots/rosy_01/line-stuck/decision": refused}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, API, posts, answers)
+        before = page.locator("#fleet-inbox").get_attribute("aria-label")
+        slot = page.locator('[data-decision-slot="rosy_01|stuck"]')
+        slot.locator('ui-button[data-decision="WAIT"]').click()
+        for _ in range(50):  # the answer lands on the real network clock
+            page.clock.run_for(100)
+            if slot.locator(".stuck-result").count():
+                break
+        expect(slot.locator('.stuck-result[data-kind="bad"]')).to_have_count(1)
+        expect(slot.locator(".stuck-result")).to_contain_text("거부")
+        assert ("/api/fleet/robots/rosy_01/line-stuck/decision",
+                json.dumps({"stuck_id": "stuck-abc", "decision": "WAIT"}, separators=(",", ":"))) in posts
+        page.clock.run_for(1500)
+        expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(0)
+        lines = page.locator("#log > div.bad")
+        expect(lines).to_have_count(1)
+        expect(lines).to_contain_text("rosy_01")
+        expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", before)
+        _shot(page, "queue-refusal-inline-only.png")
+        assert not errors
+        browser.close()
+
+
+def test_a_failed_command_without_an_inline_result_raises_exactly_one_toast(site):
+    """인라인 결과가 없는 명령 실패(전체 정지 응답 503)는 토스트 정확히 1장 — 호출 오류와 이어지는 기록이 한 장에 합쳐진다."""
+    from playwright.sync_api import expect, sync_playwright
+
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, API, posts,
+                                      {"/api/fleet/estop": (503, {"detail": {"code": "ROBOT_UNREACHABLE"}})})
+        for _ in range(10):  # a crit row raised off screen at start is not what this test counts
+            closers = page.locator(".alert-popup-actions ui-button", has_text="닫기")
+            if not closers.count():
+                break
+            closers.last.click()
+        expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(0)
+        page.locator("#estop").click()
+        for _ in range(50):
+            page.clock.run_for(100)
+            if page.locator("#alert-popup-region .alert-popup-card").count():
+                break
+        page.clock.run_for(500)
+        expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(1)
+        expect(page.locator(".alert-popup-queue")).to_have_count(0)  # no "외 N건"
+        expect(page.locator("#estop-feedback")).to_be_visible()  # the stop result stays beside the button too
+        assert ("/api/fleet/estop", None) in posts
+        assert not errors
         browser.close()
 
 

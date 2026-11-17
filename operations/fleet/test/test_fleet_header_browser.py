@@ -458,7 +458,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 expect(page.locator("#fleet-inbox")).to_be_visible()
                 inbox_text = page.locator("#fleet-inbox").text_content().strip()
                 assert not inbox_text or inbox_text.isdecimal(), inbox_text
-                expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("알림 창"))
+                expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("개입 요망"))
                 # D-926: context tabs show icon above a one-line name, like the rail.
                 for tab in page.locator(".context-tabs [role=tab]").all():
                     tab_label = tab.locator(".ui-icon-label")
@@ -495,12 +495,12 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 if shots:
                     page.screenshot(path=str(Path(shots) / f"{name}-{width}x{height}.png"))
             page.locator("#fleet-inbox").click()
-            if name == "console":
-                # 알림 항목은 큐 패널에만: 팝오버는 열리지 않고 사이드바 알림 탭으로 간다
-                expect(page.locator("#inbox-popover")).to_be_hidden()
-                page.get_by_role("tab", name="알림").click()
-            expect(page.locator("#context-inbox")).to_be_visible()
-            expect(page.locator("#context-inbox-tab")).to_have_attribute("aria-selected", "true")
+            # 11-18: 벨은 어느 Fleet 문서에서든 관제의 개입 큐 패널로 데려간다(팝오버·'알림' 탭 없음).
+            if name != "console":
+                page.wait_for_url(re.compile(r"/console\?queue=1$"))
+            expect(page.locator(".queues-panel")).to_be_focused()
+            expect(page.locator("#inbox-popover")).to_have_count(0)
+            expect(page.get_by_role("tab", name="알림", exact=True)).to_have_count(0)
             assert not errors, (name, errors)
             page.close()
     for width, _height in SIZES:

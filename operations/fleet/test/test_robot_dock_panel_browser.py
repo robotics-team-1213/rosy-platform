@@ -258,7 +258,7 @@ def test_map_click_bell_focuses_queues_and_error_popup_flow(site):
             expect(page.locator(".queues-panel")).to_be_visible()
             expect(page.locator("#warning-list li, #critical-list li").first).to_be_visible()
             expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(0)
-            expect(page.locator("#inbox-popover")).to_be_hidden()
+            expect(page.locator("#inbox-popover")).to_have_count(0)
 
             page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
 
@@ -297,8 +297,7 @@ def test_map_click_bell_focuses_queues_and_error_popup_flow(site):
             expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(0)
 
             page.locator("#fleet-inbox").click()
-            expect(page.locator("#inbox-popover")).to_be_hidden()
-            expect(page.locator("#inbox-popover .inbox-popover-item")).to_have_count(0)
+            expect(page.locator("#inbox-popover")).to_have_count(0)  # 11-18: the popover is gone
             expect(page.locator(".queues-panel")).to_be_focused()
             assert not errors
         finally:

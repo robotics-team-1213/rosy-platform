@@ -74,7 +74,7 @@ export function createPersonRequests({ scope, view, call, log, isOperator, named
     render();
     try {
       await call(`/api/fleet/person-requests/${encodeURIComponent(request.id)}/answer`, {
-        method: "POST",
+        inline: true, method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answer: verdict }),
       });
@@ -85,7 +85,7 @@ export function createPersonRequests({ scope, view, call, log, isOperator, named
       results.set(request.id, { text: `${request.robot_id} 답을 기록하지 못함 · ${err.code || err.message}`, kind: "bad" });
     } finally {
       if (life.current()) {
-        log(results.get(request.id).text, results.get(request.id).kind);
+        log(results.get(request.id).text, results.get(request.id).kind, { inline: true });
         busy.delete(request.id);
         refresh();
         render();
@@ -131,7 +131,7 @@ export function createPersonRequests({ scope, view, call, log, isOperator, named
       cannot.dataset.personAnswer = "cannot";
       actions.append(done, cannot);
       box.append(actions);
-      // D-1117 — 결과는 누른 단추 옆 글자다(live 역할 없음). 실패 낭독은 log("bad") → 관제 알림 카드의 announcer 한 번이 담당한다.
+      // D-1117 — 결과는 누른 단추 옆 글자다(live 역할 없음). 실패는 기록 1줄과 한 번 낭독(log의 inline), 토스트는 띄우지 않는다(11-18 결정 5).
       const last = results.get(request.id);
       if (last) {
         const line = document.createElement("p");

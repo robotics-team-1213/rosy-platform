@@ -75,7 +75,6 @@
     </div>
   </ui-topbar>
 <!-- fleet:header:end -->
-  <section id="inbox-popover" class="inbox-popover" role="dialog" aria-modal="false" aria-labelledby="inbox-popover-title" hidden></section>
   </header>
   <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
@@ -275,10 +274,10 @@
         </div>
         <!-- 2026-11-14 — 영상이 끊겨도 마지막 프레임을 두고, 그 찍은 시각을 왼쪽 아래에 작게 남긴다. -->
         <p id="map-camera-stamp" class="map-camera-stamp" hidden></p>
-        <div id="map-hover-card" class="map-hover-card" role="status" aria-live="polite" hidden></div>
+        <div id="map-hover-card" class="map-hover-card" hidden></div>
       </div>
       </div>
-      <section id="map-selection-bar" class="ui-panel map-selection-bar" aria-live="polite" hidden>
+      <section id="map-selection-bar" class="ui-panel map-selection-bar" hidden>
         <div class="map-selection-head">
           <div class="map-selection-title">
             <ui-tag id="map-sel-kind" variant="inline" status="neutral">선택</ui-tag>
@@ -329,7 +328,7 @@
         <span id="legend-tracking" hidden><i class="sw tracking"></i>관제 카메라 추적</span>
         <span id="legend-traffic" hidden><i class="sw traffic-occupied"></i>블록 점유 <i class="sw traffic-granted"></i>허가 <i class="sw traffic-unknown"></i>위치 불명</span>
       </div>
-      <p class="hint" id="hint" aria-live="polite"></p>
+      <p class="hint" id="hint"></p>
 
     </section>
     </div>
@@ -377,7 +376,7 @@
             <ul id="address-movable" class="address-movable" aria-label="새 주소로 옮길 수 있는 로봇"></ul>
           </div>
           <details id="site-path" class="site-path">
-            <summary class="ui-disclosure-row" id="site-path-heading">관제 경로 · <span id="site-path-summary" role="status" aria-live="polite">확인 중</span></summary>
+            <summary class="ui-disclosure-row" id="site-path-heading">관제 경로 · <span id="site-path-summary">확인 중</span></summary>
             <ul id="site-path-list"></ul>
           </details>
         </div>
@@ -525,10 +524,9 @@
 
       </section>
         </div>
-        <div class="context-panel" id="context-inbox-body">
+        <div class="context-panel" id="context-evidence-body">
           <section class="context-block" aria-labelledby="inbox-heading">
             <h2 id="inbox-heading">판단 전달 · 기록</h2>
-            <p class="hint">개입 요망과 새 알림은 오른쪽 위 알림 벨에서 확인합니다. 사건 당시 근거는 <a id="inbox-evidence" href="#incident-heading">사건 기록</a>에서 봅니다.</p>
             <h3>전달된 판단 메시지</h3>
             <ul id="inbox-messages" class="issue-list"></ul>
           </section>
@@ -541,8 +539,6 @@
             <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
           </div>
         </details>
-        </div>
-        <div class="context-panel" id="context-evidence-body">
 
       <section class="context-block incident-panel" aria-labelledby="incident-heading">
         <h2 id="incident-heading">사건 기록</h2>
@@ -565,8 +561,7 @@
       </section>
         </div>
       </section>
-      <section id="dispatch-control" class="dispatch-control" role="status"
-                   aria-live="polite" aria-labelledby="dispatch-control-title">
+      <section id="dispatch-control" class="dispatch-control" aria-labelledby="dispatch-control-title">
             <div>
               <strong id="dispatch-control-title">발행 상태 확인 중</strong>
               <small id="dispatch-control-detail">대기 작업과 정지 세대를 읽고 있습니다.</small>

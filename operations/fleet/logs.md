@@ -5618,3 +5618,8 @@
 - 변경: `fleet/server/auth/site_auth.py` — `role: service`, `principal_id: auto-track-calibration` 기계 자격을 `/api/fleet/calibrations` 및 `/api/fleet/site-map/*` 경로로 한정 허용해 Account receiver 모드에서도 호스트 자동 보정 타이머가 인간 세션 위조 없이 동작하도록 연결했다.
 - 증거: 원격 `test_auto_track_calibration.py`·`test_overhead_tracking_api.py` 통과 및 `rosy-fleet-r` 실호스트 적용 확인.
 - gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · test(fleet): 알림 한 곳에 맞춘 브라우저·노드 시험
+- 변경: `test_console_queue_inline_browser.py` 읽음 시험을 "벨 = 열린 큐 행 수, 기록·근거 탭의 전달 기록"으로 바꾸고, "인라인 결과 있는 409 → 행 1·기록 1·토스트 0"과 "인라인 결과 없는 전체 정지 503 → 토스트 정확히 1장"을 더했다. `test_fleet_header_browser.py`는 모든 Fleet 문서의 벨이 `.queues-panel` 포커스(다른 문서는 `/console?queue=1`)에 닿는지 본다. `#inbox-popover`·`#context-inbox`·`data-context-tab="inbox"`를 쓰던 시험(`test_robot_dock_panel_browser.py`, `test_fleet_role_consumers_browser.py`, 루트 `test/test_fleet_console_browser*.py`, `browser_harness.py`)은 없어진 요소 대신 '기록·근거' 탭과 `to_have_count(0)`으로 단언한다(동작이 바뀌어 단언을 고침, 강도 유지). 새 `web/fleet-alert-surface.test.mjs` 정적 게이트.
+- 증거: 노드 649 passed, 0 failed. 원격 브라우저 결과는 applications/fleet/web/logs.md 다음 항목·r-S1.md.
+- gate 변화: 없음.

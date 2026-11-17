@@ -591,7 +591,7 @@ def test_fleet_estop_partial_and_unknown_are_visible_on_phone(console_url, page_
         save_temp_screenshot(page, f"fleet_estop_{'partial' if isinstance(response, dict) else 'unknown'}_{page_file[:-5]}_320.png")
         if isinstance(response, dict):
             if page_file == "index.html":
-                page.locator('[data-context-tab="inbox"]').click()
+                page.locator('[data-context-tab="evidence"]').click()
             assert "rosy_02" in page.locator("#log").inner_text()
         assert page.evaluate("() => window.__confirms.length") == 0
         assert not errors
@@ -747,7 +747,7 @@ def test_fleet_cancel_all_runs_at_once_and_logs_each_robot_honestly(console_url,
         details = page.locator("#cancel-all-details")
         assert details.is_visible() and details.get_attribute("href") == "#log"
         details.click()
-        assert page.locator("#context-inbox").is_visible()
+        assert page.locator("#context-evidence").is_visible()
         assert page.evaluate("location.hash") == "#log"
         assert page.locator("#log").is_visible()
         page.locator("#log").get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for(state="visible")
@@ -954,7 +954,7 @@ def test_armed_goal_is_withdrawn_when_safety_becomes_unknown(console_url):
         assert page.locator("#map-canvas").get_attribute("tabindex") == "-1"
         page.keyboard.press("Enter")
         assert not any(method == "POST" and path.endswith("/goal") for method, path in posts)
-        page.locator('[data-context-tab="inbox"]').click()
+        page.locator('[data-context-tab="evidence"]').click()
         assert "목표 지정 취소" in page.inner_text("#log")
         assert not errors
         browser.close()

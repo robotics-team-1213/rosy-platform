@@ -2114,7 +2114,7 @@
         "applications/fleet/web/shared/stuck-evidence.js",
         "applications/fleet/web/sitemap/site-map.js",
         "applications/fleet/web/work/work-view.js",
-        "applications/fleet/web/alert-popup.js",
+        "applications/fleet/web/alert-policy.js",
         "applications/fleet/web/robot/localization-view.js",
         "applications/fleet/web/robot/step-nudge.js"
       ],
@@ -2416,7 +2416,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/alert-popup.js",
+          "consumer": "applications/fleet/web/alert-policy.js",
           "expression": "/api/fleet/state",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -7725,7 +7725,7 @@
         "applications/fleet/web/cell/cell-observation.js",
         "applications/fleet/web/shared/cell-frames.js",
         "applications/fleet/web/robot/roster-cards.js",
-        "applications/fleet/web/alert-popup.js",
+        "applications/fleet/web/alert-policy.js",
         "applications/fleet/web/robot/robot-camera-tile.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
@@ -7853,7 +7853,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/alert-popup.js",
+          "consumer": "applications/fleet/web/alert-policy.js",
           "expression": "/api/fleet/vision/sources",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -7861,7 +7861,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/alert-popup.js",
+          "consumer": "applications/fleet/web/alert-policy.js",
           "expression": "/api/fleet/vision/lease",
           "resolution": "literal-or-template",
           "request_ids": [

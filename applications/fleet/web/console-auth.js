@@ -20,7 +20,7 @@ export function navigateConsoleAlert(target, { el, getInbox, getRoster, render }
     render?.();
   }
   if (target.kind === "stuck") {
-    inbox?.select("inbox");
+    inbox?.select("evidence");
     const row = [...(el("inbox-messages")?.children || [])].find((li) => li.dataset.robotId === target.robotId);
     const fold = row?.querySelector("details");
     if (fold) {
@@ -57,7 +57,7 @@ export function navigateConsoleAlert(target, { el, getInbox, getRoster, render }
     return;
   }
   if (target.kind === "log") {
-    inbox?.select("inbox");
+    inbox?.select("evidence");
     const logPanel = el("log-panel");
     if (logPanel) {
       logPanel.open = true;

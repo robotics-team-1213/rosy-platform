@@ -358,10 +358,10 @@ def test_single_column_tier_puts_exceptions_then_the_map_then_robot_context(cons
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         page.evaluate("""selectors => {
           window.retainedPanels = selectors.map(sel => document.querySelector(sel));
-          window.retainedOwners = ['#roster', '#context-status', '#context-tools', '#context-evidence', '#context-inbox'].map(sel => document.querySelector(sel));
+          window.retainedOwners = ['#roster', '#context-status', '#context-tools', '#context-evidence'].map(sel => document.querySelector(sel));
         }""", panels)
-        page.locator('[data-context-tab="inbox"]').click()
-        assert page.locator('#context-inbox').is_visible()
+        page.locator('[data-context-tab="evidence"]').click()
+        assert page.locator('#context-evidence').is_visible()
         assert page.locator('.queues-panel').is_visible() and page.locator('#map-stage').is_visible()
         page.locator('[data-context-tab="tools"]').click()
         page.locator('.formation-form-wrap > summary').click()
@@ -380,7 +380,7 @@ def test_single_column_tier_puts_exceptions_then_the_map_then_robot_context(cons
           const nodes = selectors.map(sel => document.querySelector(sel));
           return nodes.every((node, i) => node === window.retainedPanels[i])
             && nodes.slice(1).every((node, i) => Boolean(nodes[i].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING))
-            && ['#roster', '#context-status', '#context-tools', '#context-evidence', '#context-inbox'].every((sel, i) => document.querySelector(sel) === window.retainedOwners[i]);
+            && ['#roster', '#context-status', '#context-tools', '#context-evidence'].every((sel, i) => document.querySelector(sel) === window.retainedOwners[i]);
         }""", panels)
         assert page.locator('#formation-spacing').input_value() == '1.7'
         assert page.locator('#formation-spacing').evaluate('(node) => node === document.activeElement')
