@@ -4926,14 +4926,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 새 단위 시험(모두 pair, pair+other 혼합과 5 mm 어긋남, 원 경로 6 mm 어긋남 거절, 쪽이 바뀐 시도). 원격 pytest는 아직 돌리지 않았다.
 - gate 변화: 없음.
 
-## 2026-11-17 · uncommitted · fix(omx-pivot): 집게 쪽을 yaw별 원이 아니라 pivot 전체로 정한다
-- 원인: 첫 실물 arm_a pallet pivot(17:00, 7 yaw 모두 discs)이 `fit_pivot_yaw`의 "finger switch suspected: marks split"(버린 표시 4/7)로 거절됐다. 원 판정은 FK TCP를 지도에 넣은 자리만 보아, 지도 자체의 집게 오프셋·bias(여기서 약 30 mm)를 모른다. 같은 한 집게가 yaw -82~-39에서는 기준 원에, -16~+6에서는 다른 집게 원에 들어가 두 표시만 54 mm 옮겨졌다. 표시를 모두 같은 집게로 보면 rms 3.0 mm, 원 판정대로면 12.9 mm다.
-- 변경: `cell_jaw_side.relabel`이 경로 혼합을 거절한 뒤 단일 집게 표시마다 두 집게를 모두 시험하고(pair는 가운데 고정) mark = c + R(yaw) g 적합 rms가 가장 낮은 조합을 고른다. rms 차가 `pivot.side_agree_mm` 안인 조합들의 중심이 그 이상 벌어지면 "jaw sides ambiguous"로 거절한다. 고른 쪽과 원 판정 쪽은 `labels.json`·bias `jaw_sides`에 남는다. 그 뒤 `fit_pivot_yaw`의 split, `side_check`, rms, 반경, bias 가드는 그대로 돈다. 옛 경로는 바뀌지 않는다.
-- 증거: 실물 프레임 재생에서 원 적합 n 7, rms 3.0 mm, 반경 28.1 mm, 버린 표시 0. 이어서 기존 bias 가드가 거절했다(-16.2, 25.1 mm = 29.9 mm > 25). 원격 pytest는 아직 돌리지 않았다.
-- gate 변화: 없음.
-
 ## 2026-11-17 · uncommitted · feat(fleet): 셀 Fleet device_trial 팔 이송 설정 주입 (D-977 2, 항목 1-5)
 - 변경: `fleet.arm_transfer_config`(프로필·설치 파일·grant revision·관측자 토큰 로더)를 `cli.py`에 연결, `deploy/site/compose.omx-device-trial.yaml` 추가. 후보 파일 목록(`build_candidate.py`·`verify_candidate.py`)에 새 overlay 추가(없는 옛 후보는 계속 검증됨). `tools/sim/transfer_installation.py`의 `fleet_installation`은 같은 코드를 쓴다.
 - 증거: 원격 pytest `operations/fleet/test/test_arm_transfer_config.py` 외 (착지 기록 참조).
 - gate 변화: 없음. owner는 목표를 계속 거절한다. 순서: 착지 → 호스트 검증기 설치 → 게시.
 - CE: 해당 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-pivot): 집게 쪽을 yaw별 원이 아니라 pivot 전체로 정한다
+- 원인: 첫 실물 arm_a pallet pivot(17:00, 7 yaw 모두 discs)이 `fit_pivot_yaw`의 "finger switch suspected: marks split"(버린 표시 4/7)로 거절됐다. 원 판정은 FK TCP를 지도에 넣은 자리만 보아, 지도 자체의 집게 오프셋·bias(여기서 약 30 mm)를 모른다. 같은 한 집게가 yaw -82~-39에서는 기준 원에, -16~+6에서는 다른 집게 원에 들어가 두 표시만 54 mm 옮겨졌다. 표시를 모두 같은 집게로 보면 rms 3.0 mm, 원 판정대로면 12.9 mm다.
+- 변경: `cell_jaw_side.relabel`이 경로 혼합을 거절한 뒤 단일 집게 표시마다 두 집게를 모두 시험하고(pair는 가운데 고정) mark = c + R(yaw) g 적합 rms가 가장 낮은 조합을 고른다. rms 차가 `pivot.side_agree_mm` 안인 조합들의 중심이 그 이상 벌어지면 "jaw sides ambiguous"로 거절한다. 고른 쪽과 원 판정 쪽은 `labels.json`·bias `jaw_sides`에 남는다. 그 뒤 `fit_pivot_yaw`의 split, `side_check`, rms, 반경, bias 가드는 그대로 돈다. 옛 경로는 바뀌지 않는다.
+- 증거: 실물 프레임 재생에서 원 적합 n 7, rms 3.0 mm, 반경 28.1 mm, 버린 표시 0. 이어서 기존 bias 가드가 거절했다(-16.2, 25.1 mm = 29.9 mm > 25). 원격 pytest는 아직 돌리지 않았다.
+- gate 변화: 없음.

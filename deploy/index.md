@@ -82,8 +82,8 @@
 
 ## 최근 기록
 
-- 2026-11-17 · uncommitted · feat(fleet): 셀 Fleet device_trial 팔 이송 설정 주입 (D-977 2, 항목 1-5)
 - 2026-11-17 · uncommitted · fix(omx-pivot): 집게 쪽을 yaw별 원이 아니라 pivot 전체로 정한다
+- 2026-11-17 · uncommitted · feat(fleet): 셀 Fleet device_trial 팔 이송 설정 주입 (D-977 2, 항목 1-5)
 - 2026-11-17 · uncommitted · fix(omx-pivot): 짝 표시를 기준 쪽으로 세고, 쪽이 바뀐 일치는 표시로 받지 않는다
 - 2026-11-17 · uncommitted · fix(omx-pivot): 한쪽 집게 표시에 독립 검토의 거절 조건을 더한다
 - 2026-11-17 · uncommitted · feat(omx-pivot): 위에서 집게 하나만 보여도 pivot 표시를 찾는다
