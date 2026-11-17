@@ -4910,3 +4910,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `deploy/site/control_unit_check.py`·`rosy-control-unit-check.{service,timer}`(R·셀 PC, 5분, host-state·services.yaml 선언), 모든 역할에 `avahi-daemon` 선언, model-watch는 이름이 안 풀리는 꺼진 로봇을 건너뜀, Fleet peer 전이 로그와 `manifest_digest`(API v1.404).
 - 증거: R(`rosy-fleet-r`)·셀(`rosy-arm-cell`) 실호스트에서 검사기 exit 0, R 컨테이너의 Fleet peer 클라이언트가 CELL-A를 `site-2026-11-17-r1`로 AVAILABLE 판정. 호스트 수리(인증서 SAN·manifest 통일·8544 LAN 게시·avahi bind)는 손으로 적용, 백업 `.bak-20261117-mdns`.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · feat(fleet): 셀 Fleet device_trial 팔 이송 설정 주입 (D-977 2, 항목 1-5)
+- 변경: `fleet.arm_transfer_config`(프로필·설치 파일·grant revision·관측자 토큰 로더)를 `cli.py`에 연결, `deploy/site/compose.omx-device-trial.yaml` 추가. 후보 파일 목록(`build_candidate.py`·`verify_candidate.py`)에 새 overlay 추가(없는 옛 후보는 계속 검증됨). `tools/sim/transfer_installation.py`의 `fleet_installation`은 같은 코드를 쓴다.
+- 증거: 원격 pytest `operations/fleet/test/test_arm_transfer_config.py` 외 (착지 기록 참조).
+- gate 변화: 없음. owner는 목표를 계속 거절한다. 순서: 착지 → 호스트 검증기 설치 → 게시.
+- CE: 해당 없음.
