@@ -51,7 +51,7 @@
 | D-993 | Account 가입·권한 요청. [전문](../adr/D-993-account-access-requests.md) | Accepted (2026-11-07, 사용자 요청; 구현·시험의 수용이며 배포·현장 수용은 별도) |
 | D-987 | 공통 서비스의 정의와 카탈로그. [전문](../adr/D-987-common-services-catalog.md) | Accepted (2026-11-07, 사용자 지시; 서비스 배포·현장 수용 별도) |
 | D-973 | 검수 작업공간의 명시적 관리자 클래스 개정. [전문](../adr/D-973-explicit-managed-review-class-revisions.md) | Accepted (2026-11-03, 사용자 요청; 실제 클래스 변경·재검수 수용 별도) |
-| D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | 부분 Accepted(Fleet 쪽 개방), owner 목표 수락은 Proposed |
+| D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | 부분 Accepted(Fleet 쪽 개방), owner 목표 수락·하달 전 운영자 확인 Accepted(2026-11-17), 위임 종류는 Proposed |
 | D-985 | 접속된 Pinky는 언제나 최신 payload로 스스로 올라간다: 봉인은 hold가 아니고, 이미지·미분류 경로와 꺼진 기체, 시작하지 않은 카나리가 배달을 멈추지 않으며 OS Release는 게시만 한다. [전문](../adr/D-985-pinky-always-self-updates-to-latest-payload.md) | Accepted (2026-11-07) |
 | D-986 | 항법 승인은 측정이 같으면 새 릴리스로 이어지고, 로그인한 운영자가 API로 끝낸다. [전문](../adr/D-986-navigation-approval-flow-and-motion-fingerprint.md) | Accepted (2026-11-07) |
 | D-982 | 현장마다 다른 운영 규칙은 데이터 문서 하나로 두고, 가정 상태로 "감·대기·거절"을 미리 묻는다. [전문](../adr/D-982-site-operating-rules-document-and-decision-api.md) | Proposed (2026-11-07, 사용자 요청; 1·2단계 구현, 시뮬·실물 수용 없음) |
