@@ -1317,3 +1317,8 @@
 - 변경: `console.js`의 큐 행 토스트 판정(`syncCritRows` 호출)을 `syncQueueToasts()`로 묶어 폴링 렌더와 함께 window scroll(캡처, 요소 스크롤 포함)·resize에서도 돌린다. 390×844 기록 화면에서 rosy_02 replan 행이 첫 씨앗 뒤에 도착할 때 큐가 사건 목록 아래 화면 밖이라 토스트가 뜨는 것은 명세대로였지만, 아래로 스크롤해 큐가 보여도 다음 상태 폴링까지 토스트가 큐 위에 남았다(G7 358×112). 카드 위치 CSS·`syncCritRows`·G7·메뉴 가림 단언은 그대로.
 - 증거: 진단 커밋(c00fb6cfae, 착지 안 함)으로 G7 위반 카드 = `crit|rosy_02|replan`, 큐 top 588 < 뷰포트 844 확인. 수정 커밋 원격 pytest(ROSY_RUN_BROWSER_TESTS=1, queue_inline·fleet_console 3부·fleet_header) 214 passed·2 failed·0 skipped — 실패는 part3의 기존 실패 2건(offline_robots…·viewer_sees_reasons…). D:/DevTemp/ui-refine-1118/remote-s6/run-1.txt. node alert-popup.test.mjs 13/13.
 - gate 변화: 없음 — 판정 함수와 안전 토스트는 그대로, 판정 시점만 늘었다.
+
+## 2026-11-18 · e448b74292 · fix(fleet): 지도 잠금 사유가 지도 머리를 늘려 지도를 밀지 않는다 (S8)
+- 변경: 지도가 없을 때(`data-map-state=unavailable`) `map-tool-lock.js`가 표시 방식 칩마다 긴 잠금 사유(`.choice-reason`)를 보이게 해 `.map-head`가 48→220px로 늘고, `#map-stage`가 321px·y 247에서 바닥 200px·y 419로 밀렸다(좌표 표는 원인 아님 — `.map-readouts-content`는 이미 16rem 고정). `shared/styles.css`에서 `.map-display .choice-reason`은 박스 없이 두고(display:none, aria-describedby 그대로) 칩에 포인터를 올리면 칩 아래 툴팁 토큰 쪽지로 띄운다(끝 쪽 정렬, 흐린 칩은 hover 때 불투명). 첫 판(visibility:hidden)은 390px에서 가로 넘침을 만들어 display:none으로 고쳤다.
+- 증거: 진단 커밋(3be32a8998, 착지 안 함)으로 `map_box` 측정 직후 머리 220·표시 방식 fieldset 148 확인. 수정 커밋 원격 pytest(ROSY_RUN_BROWSER_TESTS=1, fleet_console 3부·console_roles·queue_inline·fleet_header·robot_dock_panel) 236 passed·2 failed — 실패는 part3 기존 2건(offline_robots…·viewer_sees_reasons…, 부모 bf7c00e32f에서도 같은 실패). D:/DevTemp/remote-pytest/e448b7429217/run-1.txt, 기준선 D:/DevTemp/remote-pytest/bf7c00e32f9f/run-1.txt. harness lint 오류 0.
+- gate 변화: 없음 — 표시만. console.js·alert-*·잠금 판정(map-tool-lock.js)은 그대로.
