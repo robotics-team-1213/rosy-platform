@@ -59,6 +59,12 @@ lamp is blinking) is still reported as its guess. After the window everything ru
 D-600: every learn leaves out the regions Fleet says robots stand on (``set_occupied``, the
 union over the learn's frames) and fills unknown floor later (robot_mask.py). The kept frames
 carry their unknown-floor mask, so a restart keeps filling; ``unknown_floor`` reports it.
+
+Panel 2026-11-18 (shape cue, stage 1): every frame is also searched for the Pinky shape (teal wheel
+pair, dark body, shape_cue.py), which needs no background. A robot found that way is reported even
+while learning or after MOG2 absorbed it, merged with a background blob within SHAPE_MERGE_M (the
+higher score is kept; footprint the nominal 2 x rotation radius), and its region is left out of
+learning and filling like Fleet's occupied regions. The heading it measures is only logged.
 """
 
 from __future__ import annotations
@@ -70,7 +76,7 @@ import math
 import cv2
 import numpy as np
 
-from rosy_vision.track import background_blob_helpers, geometry, robot_mask
+from rosy_vision.track import background_blob_helpers, geometry, robot_mask, shape_cue
 from rosy_vision.track.background_blob_helpers import (  # noqa: F401
     BAKED_DARK_RATIO,
     BAKED_MATCH_MAX_FOREGROUND,
@@ -113,14 +119,18 @@ ASPECT_TOLERANCE = 0.01
 #: the background brightness, with the same colour, is a shadow and dropped; darker is foreground.
 SHADOW_TAU = 0.5
 _FOREGROUND = 200  # MOG2 mask: 255 foreground, 127 shadow, 0 background
+#: A shape-cue robot and a background blob closer than this on the floor are one robot.
+SHAPE_MERGE_M = 0.08
+#: Work pixels around a shape-cue robot kept out of learning and filling, in body radii.
+SHAPE_KEEP_OUT = 1.5
 
 
 class BackgroundBlobDetector:
     """One detector per camera source, called from a single thread (it holds MOG2 state).
 
     Known limit: robots that touch or nearly touch (a gap the closing step fills) merge into
-    one blob whose floor-equivalent diameter is above the window (0.26 m), so neither is
-    detected while they are that close.
+    one blob whose floor-equivalent diameter is above the window (0.26 m); only the shape cue
+    (both wheels visible) reports them then.
     """
 
     processor_revision = PROCESSOR_REVISION
@@ -237,13 +247,17 @@ class BackgroundBlobDetector:
                 self._ready = self._kept = True
                 self._learn_background(mask)
                 self._find_baked(mask, work_to_map, camera)
+        shapes, shape_px = self._shapes(image, mask, work_to_map, camera)
+        # Panel 2026-11-18: robots seen by shape are reported while learning (status OK, as worker
+        # does for ArUco markers); an empty learn frame stays LEARNING.
+        learning = DetectorResult(tuple(shapes[:MAX_DETECTIONS]), "OK") if shapes else DetectorResult((), "LEARNING")
         held = frame.captured_at <= self._hold_until
         if not self._ready and held:
-            return DetectorResult((), "LEARNING")  # D-596 1: a blinking robot must not be learned
+            return learning  # D-596 1: a blinking robot must not be learned
         if not self._ready:
             self._model.apply(image, learningRate=-1)
             self._frames.append(cv2.bitwise_and(image, image, mask=self._keep_mask(mask)))
-            occupied = self._occupied_mask(work_to_map, mask, camera)
+            occupied = self._occupied_mask(work_to_map, mask, camera) | shape_px  # robots by shape too
             self._learn_occupied = occupied if self._learn_occupied is None else self._learn_occupied | occupied
             if self._first_at is None or frame.captured_at < self._first_at:
                 self._first_at = frame.captured_at  # first frame, or the clock stepped back
@@ -265,7 +279,7 @@ class BackgroundBlobDetector:
                         logger.warning("background not kept path=%s error=%s", self._store.path, type(exc).__name__)
                 self._learn_background(mask)
                 self._find_baked(mask, work_to_map, camera)
-            return DetectorResult((), "LEARNING")
+            return learning
         raw = self._model.apply(image, learningRate=0)
         foreground = np.where(raw >= _FOREGROUND, 255, 0).astype(np.uint8)
         foreground = cv2.morphologyEx(cv2.bitwise_and(foreground, mask), cv2.MORPH_OPEN, _OPEN_KERNEL)
@@ -314,10 +328,18 @@ class BackgroundBlobDetector:
             if detection is not None:
                 found.append(detection)
         self._pending = pending
+        for shape in shapes:  # MOG2 forgot or merged a robot the shape cue still sees
+            near = next((k for k, d in enumerate(found)
+                         if math.hypot(d.x - shape.x, d.y - shape.y) <= SHAPE_MERGE_M), None)
+            if near is None:
+                found.append(shape)
+            elif shape.score > found[near].score:
+                found[near] = shape
         filled = None
         # D-600 fill; D-596 1: never inside an identify window (a blinking robot is not floor).
         if self._unknown is not None and not held:
-            ready = robot_mask.fill_ready(image, self._unknown, self._occupied_mask(work_to_map, mask, camera),
+            occupied = self._occupied_mask(work_to_map, mask, camera) | shape_px
+            ready = robot_mask.fill_ready(image, self._unknown, occupied,
                                           self._dark_level, self._fill_streak)
             if ready.any() and frame.captured_at - self._fill_at >= robot_mask.FILL_EVERY_S:
                 self._fill_at, filled = frame.captured_at, ready
@@ -355,6 +377,25 @@ class BackgroundBlobDetector:
         if camera is not None:
             x, y = geometry.parallax_correct((x, y), camera, self._robot_height_m)
         return Detection(x=float(x), y=float(y), footprint_m=diameter, score=self._score(diameter))
+
+    def _shapes(self, image: np.ndarray, mask: np.ndarray, work_to_map, camera):
+        """Shape-cue robots (shape_cue.py) as detections, and their keep-out work pixels."""
+        keep_out = np.zeros(mask.shape, bool)
+        found = []
+        for robot in shape_cue.find_robots(image, mask):
+            point = geometry.apply(work_to_map, [[robot.u, robot.v]])[0]
+            if not np.all(np.isfinite(point)):
+                continue
+            x, y = float(point[0]), float(point[1])
+            if camera is not None:
+                x, y = geometry.parallax_correct((x, y), camera, self._robot_height_m)
+            found.append(Detection(x=float(x), y=float(y), footprint_m=_NOMINAL_M, score=robot.score))
+            disc = np.zeros(mask.shape, np.uint8)
+            cv2.circle(disc, (round(robot.u), round(robot.v)), max(1, round(SHAPE_KEEP_OUT * robot.radius_px)), 1, -1)
+            keep_out |= disc > 0
+            logger.debug("shape cue x=%.3f y=%.3f heading_mod180=%s score=%.2f",
+                         x, y, robot.heading_mod180, robot.score)
+        return found, keep_out & (mask > 0)
 
     _learn_background = background_blob_helpers._learn_background
     _find_baked = background_blob_helpers._find_baked
