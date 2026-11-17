@@ -267,6 +267,21 @@ def test_the_supervisor_never_holds_the_callers_worktree(tmp_path, monkeypatch):
     assert Path(log.read_text(encoding="utf-8").strip()) == log.parent
 
 
+def test_detach_falls_back_when_the_job_object_forbids_breakaway(monkeypatch, tmp_path):
+    seen = []
+
+    def popen(*args, **kwargs):
+        seen.append(flags := kwargs.get("creationflags", 0))
+        if flags & 0x01000000:  # CREATE_BREAKAWAY_FROM_JOB: the parent job object refuses it
+            raise PermissionError(5, "Access is denied.")
+        return object()
+
+    monkeypatch.setattr(tool.subprocess, "Popen", popen)
+    assert tool.detach([sys.executable, "-c", "pass"], tmp_path / "d.log") is not None
+    assert seen == ([0x00000008 | 0x00000200 | 0x01000000, 0x00000008 | 0x00000200]
+                    if os.name == "nt" else [0])
+
+
 def _ticket(main: Path, name: str, **row) -> Path:
     qdir = main / ".git" / "rosy-land-queue"
     qdir.mkdir(exist_ok=True)
@@ -755,7 +770,7 @@ def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatc
     rollup = "land/fix/land-rollup-20261109000000-20261109000000"
     monkeypatch.setattr(tool, "git", lambda cwd, *a, **k: str(repo / ".git"))
     seen = []
-    launch = lambda argv, log, cwd=None: seen.append((argv[-2:], log.name, cwd))  # noqa: E731
+    launch = lambda argv, log, cwd=None: seen.append((argv[4:], log.name, cwd))  # noqa: E731
     tool.split_rollup(tree, rollup, launch)
     assert seen == [], "no .members record: not a rollup land_rollup built"
     (tree.parent / (tree.name + ".members")).write_text("[]", encoding="utf-8")
@@ -766,9 +781,15 @@ def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatc
     monkeypatch.delenv("ROSY_ROLLUP_MIXED")
     tool.split_rollup(tree, rollup, launch, reason="[land] STOP: landing queue full (12/12 tickets)")
     assert seen == [], "halves would stop on the same full queue"
-    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")
+    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure in a (log x); not landing")
     tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")  # a retried supervisor
+    assert seen == [(["split", tree.name, "bisect"], tree.name + ".split.log", repo)]
+    (tree.parent / (tree.name + ".split")).unlink()
+    seen.clear()
+    tool.split_rollup(tree, rollup, launch, reason="")  # killed or expired: no verdict, members go back alone
     assert seen == [(["split", tree.name], tree.name + ".split.log", repo)]
+    assert tool.verdict(["[land] STOP: x", "pytest a (log l)", "[remote-pytest] progress"]).startswith("[land] STOP: x")
+    assert tool.verdict(["[remote-pytest] serial: browser job"]) == ""
 
 
 def test_branch_option_queues_without_a_branch_worktree_and_checks_errors(repo, monkeypatch):

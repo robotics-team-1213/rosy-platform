@@ -37,3 +37,8 @@ approval=autocal file /usr/local/sbin/rosy-auto-track-calibration deploy/site/ro
 approval=autocal file /etc/systemd/system/rosy-auto-track-calibration.service role/rosy-auto-track-calibration.service
 approval=autocal file /etc/systemd/system/rosy-auto-track-calibration.timer role/rosy-auto-track-calibration.timer
 approval=autocal enabled rosy-auto-track-calibration.timer
+# 2026-11-17: both control-unit hosts (R and the cell PC) check their peer links through mDNS every 5 minutes.
+safe file /usr/local/sbin/rosy-control-unit-check deploy/site/control_unit_check.py 0755
+safe file /etc/systemd/system/rosy-control-unit-check.service deploy/site/rosy-control-unit-check.service
+safe file /etc/systemd/system/rosy-control-unit-check.timer deploy/site/rosy-control-unit-check.timer
+safe enabled rosy-control-unit-check.timer

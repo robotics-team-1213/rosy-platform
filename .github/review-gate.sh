@@ -10,11 +10,15 @@ set -euo pipefail
 shopt -s inherit_errexit   # a failing git log inside $(...) must fail the gate, not read as "no overlap"
 since=$(date -u -d "${WINDOW_DAYS:-14} days ago" +%Y-%m-%dT%H:%M:%SZ)
 skip=" $AUTHOR ${IGNORE:-} "
-pr_files=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[].filename')
-if [ -z "$pr_files" ]; then
+pr_rows=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[] | "\(.filename)\t\(.deletions)"')
+if [ -z "$pr_rows" ]; then
   echo "PR changes no files: review not required"
   exit 0
 fi
+# D-1038: the shared journals and indexes only ever get lines appended; a PR that adds to them without deleting or
+# editing a line (zero deletions in its diff of that path) does not "meet" anyone there. Any edited or deleted line counts.
+pr_files=$(awk -F'\t' '$2 == 0 && ($1 == "docs/logs.md" || $1 == "docs/index.md" || $1 == "docs/reference/ROSY ADR Log.md" \
+  || $1 == "tools/harness/adr_gaps.txt") { next } { print $1 }' <<<"$pr_rows")
 # Commit -> login comes from GitHub (git identities do not name accounts); files come from one git log.
 logins=$(gh api "repos/$REPO/commits?sha=main&since=$since&per_page=100" --paginate \
   --jq '.[] | select(.author != null and .author.type == "User") | "\(.sha)\t\(.author.login)"' |

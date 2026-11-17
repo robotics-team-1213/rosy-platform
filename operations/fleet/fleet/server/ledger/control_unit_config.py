@@ -1,6 +1,8 @@
 """Validated, immutable direct ownership for independent and nested Fleet units."""
 
 from dataclasses import dataclass
+from hashlib import sha256
+import json
 import re
 from types import MappingProxyType
 from typing import Mapping
@@ -32,6 +34,8 @@ class ControlUnit:
 class ControlUnitTopology:
     revision: str
     units: Mapping[str, ControlUnit]
+    # sha256 of the canonical parsed manifest; equal revisions with different manifests differ here.
+    digest: str = ""
 
     @classmethod
     def from_mapping(cls, document):
@@ -70,7 +74,11 @@ class ControlUnitTopology:
                 if current.parent is not None and current.parent not in units:
                     raise ValueError("UNKNOWN_CONTROL_UNIT_PARENT")
                 current = units.get(current.parent)
-        return cls(revision, MappingProxyType(units))
+        canonical = {"revision": revision, "units": [
+            {"id": u.unit_id, "parent": u.parent, "resources": sorted(u.resources)}
+            for u in sorted(units.values(), key=lambda u: u.unit_id)]}
+        digest = sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return cls(revision, MappingProxyType(units), digest)
 
     def unit(self, unit_id):
         try:

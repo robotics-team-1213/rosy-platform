@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.402
+**Version:** v1.404
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -16,6 +16,30 @@ Fleet `POST /api/fleet/robots/{robot_id}/step` (이름 있는 운영자): `{dire
 ### v1.399 trip lease 목적 `charge_return` (D-1029)
 
 `PUT /api/v1/trip-lease` 본문에 선택 필드 `purpose`를 더한다(additive). 허용 값은 `"charge_return"` 하나이고, 다른 값은 400 `VALIDATION_ERROR`, 같은 `lease_id` 갱신에서 목적을 바꾸면 409 `CONFLICT`다. lease 상태(`TripLeaseStatus`)에 `purpose`(없으면 null)를 보인다. 충전 복귀 lease가 살아 있는 동안 CORE는 모든 범위의 선속도 상한을 `safety.charge_return_linear`(기본 0.10 m/s)로 낮추고, 내비게이션이 진행 중이면 배터리 10 % 동작(`STOP`·`RETURN_HOME`)을 미루며 `battery.critical_deferred` 사건을 남긴다. 복귀가 끝나거나 lease가 끝났는데 아직 10 % 이하면 `battery_policy` E-Stop을 건다. 5 % `battery_deep` E-Stop은 바뀌지 않는다.
+
+### v1.398 CORE arm lease and hold delivery (D-1024 3)
+
+Additive. `POST /api/v1/arm/lease` and `POST /api/v1/arm/hold` let Fleet's approval window feed the owner session's lease and HOLD through CORE. They exist only on a CORE whose arm policy port has a pushed-lease receiver and a Fleet principal distinct from the runner's principal; otherwise 403 `ARM_POLICY_FORBIDDEN`. SIM owner only: the real owner allow-list (D-785) and the tracked-config ban on `learned_policy` (D-442) are unchanged.
+
+| Method and path | Contract |
+|---|---|
+| `POST /api/v1/arm/lease` | Fleet principal only (the runner's principal gets 403, and the Fleet principal cannot observe or act). Body `{lease_id, episode_id, workcell_id, policy_digest (64 hex), rig_revision, calibration_revision, ttl_s, seq (integer >= 1), window_remaining_s}`, extra fields and `ttl_s` outside (0, 2] 400. The device converts `ttl_s` to an owner-monotonic lease at receipt, never past the episode deadline it derives once from `window_remaining_s` (a delayed grant can only shorten its lease), and refuses any `seq` not above the last one of that episode (replay) with HOLD. It renews the session. Any refusal (scope or digest differs, ttl over the installed budget, a different lease or episode, clock fault, session refusal) latches HOLD and returns 409 `ARM_POLICY_CONFLICT`; nothing re-arms. 200 `{accepted, lease_expires_at_ns}`. |
+| `POST /api/v1/arm/hold` | Fleet principal or the runner's principal (HOLD only removes authority). Body `{reason}` 1-96 chars (else 400). 200 `{hold_reason}`; the session cancels its active goal and stays on HOLD. |
+
+A window that stops renewing needs no call: the device lease runs out, and the runtime watchdog's poll holds the session and cancels the active goal. The Fleet principal's token is refused on every CORE route except `/api/v1/arm/lease`, `/hold` and `/stop` (D-807). State is memory only; a CORE restart drops every lease.
+
+### v1.397 Fleet learned-policy approval window (D-1024 3)
+
+Additive. Named-operator Fleet routes record a human approval window for one OMX learned policy; they never move an arm and do not widen any owner allow-list (D-442, D-785).
+
+| Method and path | Contract |
+|---|---|
+| `POST /api/fleet/policy-approvals` | Configured named operator proposes. Body `{workcell_id, policy_digest (64 hex), rig_revision, calibration_revision, scope, window_minutes}`; `window_minutes` is a strict integer 1-30, default 15; extra fields 422; unknown workcell 404. The proposer is the authenticated principal, never a body field. 201 returns the approval (`id`, `state: proposed`). |
+| `POST /api/fleet/policy-approvals/{id}/approve` | Configured named operator. The approver must be a different principal (case-insensitive) than the proposer: 403 `PROPOSER_APPROVER_MUST_DIFFER`. Only a proposal younger than 15 min and with no other open window on that workcell can be approved (409 `APPROVAL_STATE_CONFLICT`). Approval starts the window clock (`state: active`). While no lease delivery port is installed the approval is refused with 409 `APPROVAL_STATE_CONFLICT` and the proposal stays `proposed`, so a window nobody can enforce never opens. |
+| `POST /api/fleet/policy-approvals/{id}/abort` | Configured named operator. Ends the window; later leases are refused. A window that is already `ended`, `held`, `expired` or `aborted` answers 409 `APPROVAL_STATE_CONFLICT`. |
+| `GET /api/fleet/policy-approvals` | Viewer. `{approvals, lease_delivery_connected}`. State is memory only; a Fleet restart drops every window. |
+
+The issuer behind the window grants a 1 s lease (cap 2 s), renews it at half period only inside the window, never past the window end, and requests HOLD when the window ends, is aborted, a renewal cannot be delivered, or the monotonic clock reads non-finite or backwards (all windows are held until Fleet restarts). A due window ends and requests HOLD on any read or tick, not only when a ticker runs; a HOLD request that fails is retried on the next read or tick. There is no auto re-approval. `lease_delivery_connected` is false until a delivery port to the OMX owner is installed; with none installed no window opens and no lease is ever issued. States: `proposed`, `active`, `ended`, `held`, `aborted`, `expired`.
 
 ### v1.394 CORE 상태 표시등 패턴 제어
 
@@ -566,7 +590,7 @@ PRT-005 재전송은 원본 event_id·내용·seq를 유지하며 개별 EVENT �
 
 모든 경로는 `/api/fleet/control-unit` 아래다. `GET /overview`는 ControlOverview, `GET /units/{unit_id}`는 ControlUnitDetail, `GET /units/{unit_id}/map`은 ControlMapSnapshot을 반환한다. 로컬 viewer와 명시적으로 정보 공유를 허용받은 직계 부모 service만 자기 subtree를 읽는다. 부모 service의 전체 원장 조회·sibling/임의 URL 조회는 허용하지 않는다. `share_information_with_parent` 기본false, `accept_parent_stop` 기본false로 기존 자격의 권한을 자동 확대하지 않는다.
 
-ControlOverview는 `unit_id,config_revision,units`이며 unit 최대64개·중복 금지다. ControlUnitSummary는 `unit_id,parent,availability,sampled_at,age_s,robots_total,robots_online,tasks_active,map,dispatch,error,stop_pending`이다. availability는 AVAILABLE/STALE/UNAVAILABLE, age는 유한한 비음수 또는 null, timestamp는 timezone-aware다. stale 기준은5초이며 reported age에 수신 후 monotonic 경과를 반영한다. 연결 실패는 관제별 unavailable/stale로 유지한다. dispatch는 기존 authority_epoch/generation 두 정수만 담고 장치 권한·재무장을 부여하지 않는다.
+ControlOverview는 `unit_id,config_revision,manifest_digest,units`이며 unit 최대64개·중복 금지다. `manifest_digest`는 선택(없으면 null)인 정규화 manifest의 sha256 hex 64자로, 직계 자식이 보내면 부모가 자기 digest와 비교해 다르면 그 자식 subtree를 `CONTROL_UNIT_MANIFEST_MISMATCH`로 UNAVAILABLE 처리한다(같은 revision 문자열에 다른 manifest 방지). 필드를 모르는 옛 peer는 보내지 않으며 비교하지 않는다. ControlUnitSummary는 `unit_id,parent,availability,sampled_at,age_s,robots_total,robots_online,tasks_active,map,dispatch,error,stop_pending`이다. availability는 AVAILABLE/STALE/UNAVAILABLE, age는 유한한 비음수 또는 null, timestamp는 timezone-aware다. stale 기준은5초이며 reported age에 수신 후 monotonic 경과를 반영한다. 연결 실패는 관제별 unavailable/stale로 유지한다. dispatch는 기존 authority_epoch/generation 두 정수만 담고 장치 권한·재무장을 부여하지 않는다.
 
 ControlUnitDetail은 같은 owner/config/availability/time와 직접 `robots` 최대256개·`tasks` 최대100개·`tasks_truncated,map,dispatch`를 담는다. ControlRobotInfo는 robot_id/online/state_age_s/mode/battery_percent/estop/pose/evidence만 공유한다. evidence는 pose/battery/safety의 fresh/delayed/disconnected/unavailable/unknown이며 메시지 나이가 센서 신선도를 대신하지 않는다. 미관측/default 값을 실측으로 만들지 않는다. ControlRobotPose의 x/y/yaw는 유한 수치이고 map_id/source/frame(map/odom/unknown)을 보존한다. Task는 task_id/robot_id/status/aware updated_at만 공유하며 actor/request/evidence/reason·개인 Mission/Cell Job은 제외한다. overview/detail/stop snapshot은 유한 JSON128KiB 이하로 제한한다.
 
@@ -1356,6 +1380,7 @@ port supports an explicitly installed SIM session only.
 | `POST /api/v1/arm/observations` | `{policy_revision}` | opaque `observation_id`, same revision, `positions` (joint→rad), `cameras: [{name, shape, rgb_base64, received_at_ns, frame_sha256}]` (owner-monotonic receipt time, SHA-256 of the RGB bytes) in installed order over one joint snapshot (one-camera policy also `camera`); bytes are interleaved RGB uint8 HWC. Every frame binds the action and its age |
 | `POST /api/v1/arm/actions` | `{policy_revision, observation_id, positions}` | 202 owner decision `{accepted, state, reason, command_id, cancel_outcome}`; admission is not completion |
 | `POST /api/v1/arm/stop` | none | `local_stop`, `hold_reason`, `physical_stop_verified: false` |
+| `POST /api/v1/arm/lease` · `POST /api/v1/arm/hold` | see v1.398 | Fleet-pushed execution lease and HOLD (D-1024 3), separate Fleet principal |
 
 The first three paths require the session's installed authenticated token ID.
 Stop is open to every operator. Revision: 64 lowercase hex characters; targets:
@@ -4798,9 +4823,12 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |
 | v1.402 | 2026-11-14 | Additive: Fleet 앞으로/뒤로 한 걸음(`POST /api/fleet/robots/{robot_id}/step`, CORE nudge 미션 재사용) |
 | v1.400 | 2026-11-14 | Additive: Fleet `POST /api/fleet/robots/{robot_id}/goal` `frame: "site"` — 콘솔 현장 지도 클릭을 기체 지도 프레임으로 바꿔 보낸다(D-1003), 증명 없으면 409 |
 | v1.399 | 2026-11-14 | Additive: trip lease `purpose: "charge_return"`(D-1029) — 복귀 중 0.10 m/s 상한, 진행 중 10 % 동작 미룸(5 % 그대로), `battery.critical_deferred` 사건 |
+| v1.398 | 2026-11-14 | Additive (D-1024 3): `POST /api/v1/arm/lease` and `POST /api/v1/arm/hold` deliver Fleet's approval-window lease and HOLD to the owner session through CORE (separate Fleet principal, SIM owner only). |
+| v1.397 | 2026-11-14 | Additive (D-1024 3): `/api/fleet/policy-approvals` propose·approve·abort·list for the learned-policy approval window (proposer != approver principal, window 1-30 min default 15, approval refused without a delivery port). |
 | v1.394 | 2026-11-14 | Additive: CORE 상태 표시등 패턴 GET/PUT, `LAMP_BUSY` 보호, 영속 rosy-face 설정 및 `lamp.status_patterns_changed`. 로봇 payload에서 적용 |
 | v1.393 | 2026-11-14 | Additive (D-1022, feat/robot-map-binding): `StateSnapshot.map_grid_id` — 기체가 실제로 읽은 점유 격자의 `occupancy_map_id`(`occupancy:` + 해시, 격자가 없으면 null). Fleet 기체 지도 결속: `GET /api/fleet/robots/{robot_id}/map-binding`(활성·이력·`matches`·`reason`·`robot_grid_id`, 맞으면 `slam_site_pose`, Fleet 카메라 자세가 있으면 `camera_site_pose`·`slam_camera_gap_m`), `POST …/map-binding`(이름 있는 운영자, `{pairs: [{site:[x,y], robot:[x,y]}] ≥3, holdout ≥1}`; Fleet가 다시 맞춘다; 409 `RESIDUAL`·`MIRRORED`·`SPAN`·`HOLDOUT`·`ROBOT_NOT_LOCALIZED`·`NO_GRID_ID`, 422 `BAD_POINTS`), `DELETE …/map-binding`(철회), `POST …/map-binding/propose`(`{seed_site:[x,y], arena?}` → 기체 지도 벽에서 마커 없이 짝 제안, 422 `NO_WALLS`·`WALLS_MISMATCH`·`SEED_AMBIGUOUS`·`ARENA_REQUIRED`). 사이트 설정 `fleet.trip.map_binding_required: true`면 free 목표는 결속으로만 변환하고, 없거나 맞지 않으면 trip이 `map_frame`으로 정지하며 `detail.binding`에 사유(`MAP_BINDING_REQUIRED`·`MAP_BINDING_SITE_CHANGED`·`MAP_BINDING_GRID_CHANGED`·`ROBOT_NOT_LOCALIZED`)를 싣는다. 기본은 꺼짐(기존 동작 그대로). |
 | v1.385 | 2026-11-11 | Additive: 카메라로 초안 만들기(`POST /api/fleet/site-map/draft-from-camera`, Vision draft-map 후보→검증된 초안 본문, 쓰기 없음)와 카메라까지 겹친 대조(`POST .../reality-check` camera 삼각측량, `drive_outlier`면 apply 거절). Vision `draft-map` 보기 추가. 설계 docs/plans/2026-11-11-camera-draft-map-design.md |

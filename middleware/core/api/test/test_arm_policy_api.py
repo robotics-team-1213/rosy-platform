@@ -32,7 +32,9 @@ def setup_api(tmp_path):
         safety=SimpleNamespace(estop=False, estop_listeners=[])))
     auth = SimpleNamespace(token_id='operator-a', role='operator')
     app.dependency_overrides[operator] = lambda: auth
-    return TestClient(app), session, driver, clock, authority, auth
+    client = TestClient(app)
+    client.port = port
+    return client, session, driver, clock, authority, auth
 
 
 def observation(client, session):

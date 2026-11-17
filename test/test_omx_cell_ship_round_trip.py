@@ -567,3 +567,44 @@ def test_pivot_calibrate_refuses_narrow_yaw_arc(tmp_path, monkeypatch):
     res = cell_pivot.pivot_calibrate(cell, cfg, (0.10, 0.0), [-12, 10, 34, 66],
                                      {"sites": {"s": {"homography": [], "z_view": 0.08}}}, "s", tmp_path, lambda _: None, lambda _: None)
     assert res["result"].startswith("circle refused: yaw arc 78.0 deg")
+
+
+def test_known_geometry_trims_one_outlier_and_pivot_fits_before_late_stall(tmp_path, monkeypatch):
+    yaws = [-105.0, -90.0, -75.0, -60.0]
+    marks = marks_at((0.08, -0.09), yaws)
+    marks[2] = (marks[2][0] + 0.035, marks[2][1] - 0.025)
+    tcps = [(0.07, -0.1, 0.1, y) for y in yaws]
+    res = cell_pivot.known_geometry_bias(marks, tcps, GEOMETRY, "s", {"homography": []})
+    assert res["result"] == "calibrated" and res["bias"]["dropped"] == 1 and res["bias"]["n"] == 3
+    assert res["bias"]["bias_mm"] == pytest.approx([10.0, 10.0], abs=0.2)
+
+    class LateStallArm:
+        def __init__(self):
+            self.calls = 0
+            self.pts = iter(zip(marks_at((0.08, -0.09), yaws[:3]), yaws[:3]))
+
+        def act(self, cmd):
+            if cmd == "goto above_pick":
+                self.calls += 1
+                if self.calls == 4:
+                    return {"ok": False, "error": "contact"}
+            return {"ok": True}
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(
+        write_library=lambda c, a, b, path: path, fold=lambda cell, s: None))
+    import joint_jitter
+    monkeypatch.setattr(joint_jitter, "settled_state", lambda *a, **k: {"state": [0, 0, 0, 0, 0, 56]})
+    arm = LateStallArm()
+    cur = {}
+    def fake_fk(*a, **k):  # once per reached yaw, before the jaws are marked (the jaw model needs the FK yaw)
+        m, y = next(arm.pts)
+        cur["m"], cur["y"] = m, y
+        return (0.07, -0.1, 0.1, y)
+    monkeypatch.setattr(cell_pivot, "mark_jaws", lambda *a, **k: (320.0, 240.0))
+    monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda *a, **k: cur["m"])
+    monkeypatch.setattr(cell_pivot, "joints_tcp", fake_fk)
+    cfg = {"plan": {"approach_m": 0.03}, "coarse": {"z_view": 0.08}, "sites": {"s": {"surface_z": 0.0}},
+           "pivot": {"geometry": GEOMETRY}}
+    out = cell_pivot.pivot_calibrate(arm, cfg, (0.07, -0.1), yaws,
+                                     {"sites": {"s": {"homography": [], "z_view": 0.08}}}, "s", tmp_path, lambda _: None, lambda _: None)
+    assert out["result"] == "calibrated" and out["bias"]["n"] == 3

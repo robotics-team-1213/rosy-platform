@@ -20,7 +20,7 @@ measured headroom, D-568; an unavailable host stops landing); an auto selection 
 real-Chromium tests ``test/browser_scope.py`` maps the changed paths to. Lint, node and the
 known_failures comparison stay here. A branch on the pre-rewrite history is refused, and NEW failures
 that each pass when rerun alone land as LOAD-FLAKY (D-790, ``land_checks.py``). Never pushes,
-stashes, resets or cleans. A pytest invocation that passed on the same tree (or, when the selector
+resets or cleans; the main checkout's dirty files the landing changes are auto-stashed first. A pytest invocation that passed on the same tree (or, when the selector
 vouches for the delta, an ancestor) is reused from ``land_cache.py`` unless --no-cache. Standard library only.
 """
 
@@ -506,7 +506,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     land_record.plan(invocations, prepared, available=(wt / land_record.TARGET).is_file())
                 except (ValueError, TypeError, KeyError) as exc:
                     raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
-            on_main(main_co)
+            on_main(main_co); land_checks.stash_main_collisions(main_co, main_sha, candidate)
             ff = git(main_co, "merge", "--ff-only", candidate, check=False, env=MAIN_WRITER_ENV)
             if ff.returncode == 0:
                 land_full.forget(wt, branch)

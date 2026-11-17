@@ -109,7 +109,11 @@ roles:
     rosy-user-mdns-bridge.timer: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
+    rosy-control-unit-check.service: {run: oneshot, channel: copy, template: deploy/site/rosy-control-unit-check.service, note: "installed by the host-state manifest (control-unit peer links through mDNS, 2026-11-17)", doc: deploy/site/README.md}
+    rosy-control-unit-check.timer: {run: timer, channel: copy, template: deploy/site/rosy-control-unit-check.timer, note: "installed by the host-state manifest (control-unit peer links through mDNS, 2026-11-17)", doc: deploy/site/README.md}
   omx:
+    rosy-control-unit-check.service: {run: oneshot, channel: copy, template: deploy/site/rosy-control-unit-check.service, note: "installed by the host-state manifest (control-unit peer links through mDNS, 2026-11-17)", doc: deploy/site/README.md}
+    rosy-control-unit-check.timer: {run: timer, channel: copy, template: deploy/site/rosy-control-unit-check.timer, note: "installed by the host-state manifest (control-unit peer links through mDNS, 2026-11-17)", doc: deploy/site/README.md}
     rosy-omx-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.service, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-omx-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-omx-devices-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-devices-autoupdate.service, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}

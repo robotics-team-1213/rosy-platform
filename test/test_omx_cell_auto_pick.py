@@ -193,6 +193,9 @@ def test_pivot_circle_recovers_the_map_bias_and_the_linkage_geometry(tmp_path):
     assert result["result"] == "calibrated" and bias["n"] == 6
     assert bias["bias_mm"] == pytest.approx([1000 * BIAS[0], 1000 * BIAS[1]], abs=1.0)
     assert bias["radius_mm"] == pytest.approx(18.8, abs=1.0) and bias["phase_deg"] == pytest.approx(53, abs=3)
+    kept = tmp_path.glob("pivot-frames/pinky-*/0[0-5]")  # every yaw's tries kept for replay (2026-11-17: none were)
+    assert sorted(p.name for p in kept) == ["00", "01", "02", "03", "04", "05"]
+    assert all((p / "try-00-open.jpg").exists() and (p / "jaws.json").exists() for p in tmp_path.glob("pivot-frames/pinky-*/0*"))
     cell_pivot.save_bias(cell_pivot.bias_path(path), bias)
     assert cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(path)), "pinky", (0.072, 0.120))
     assert cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(path)), "pinky", (0.2, 0.2)) is None
@@ -1473,3 +1476,17 @@ def test_dest_map_usable_accepts_z_view_only_with_parallax_geometry():
     assert cae.dest_map_usable is cap.dest_map_usable
 
 
+
+
+def test_a_shifted_end_grasp_still_names_the_box_centre_for_scene_checks():
+    """2026-11-17 arm_s floor->belt: a reachable_ends grasp 20 mm along a 3-cell box was compared, as if it were
+    the box centre, with the re-observed centre, so every such carry held as 'source moved before transfer'."""
+    import cell_pick_geom as geom
+
+    o = {"raw_m": [-0.1154, 0.1497], "long_axis_deg": 76.0, "object": "container-3"}
+    entry = {"length_mm": 90.0, "width_mm": 30.0}
+    ends = geom.reachable_ends(o, entry, {"grasp.end_frac": 1.0})
+    assert len(ends) == 2 and all(abs(e["grasp_shift_mm"]) > 5 for e in ends)
+    for end in ends:
+        assert geom.box_centre(end) == pytest.approx(o["raw_m"], abs=1e-9)
+    assert geom.box_centre(o) == o["raw_m"]

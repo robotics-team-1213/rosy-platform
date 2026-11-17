@@ -8,6 +8,9 @@ safe file /etc/systemd/system/rosy-host-state.timer common/rosy-host-state.timer
 safe enabled rosy-host-state.timer
 safe file /etc/systemd/logind.conf.d/rosy-no-lid-suspend.conf common/rosy-no-lid-suspend.conf
 safe enabled tailscaled.service
+# Every ROSY host always advertises its <name>.local (2026-11-17 rule): units, robots and tools reach each
+# other by those names, and the control-unit peer check needs avahi-daemon.
+safe enabled avahi-daemon.service
 safe linger
 report masked sleep.target
 report masked suspend.target

@@ -9,7 +9,8 @@ same argv, reserves ``MARGIN`` times its highest recorded peak in whole GB (at l
 MemoryMax stays 6 GB either way, so a wrong guess only lets one more job onto a host, it never kills one.
 Measured 2026-10-26 over 140 scopes: median 0.3 GB, p90 3.1 GB, max 5.7 GB. 2026-10-27 over 763 argvs (3,077
 runs) the highest peak per argv was median 292 MiB, p90 852 MiB, while 99% reserved 3 GB: the reservations, not
-the hosts' memory, filled the test PCs. Standard library only.
+the hosts' memory, filled the test PCs. Past MAX_ROWS rows the file is trimmed to its last KEEP_ROWS
+(land_tick). Standard library only.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import functools
 import json
 import math
+import os
 import re
 import subprocess
 import time
@@ -25,6 +27,8 @@ from pathlib import Path
 FILE = "rosy-pytest-memory.jsonl"
 # Seconds-to-GB: default cgroup MemoryMax (6 GB); unmeasured runs reserve UNKNOWN_GB until recorded.
 FULL_GB, UNKNOWN_GB, MARGIN = 6, 2, 1.25
+# Past MAX_ROWS rows the file is rewritten to its last KEEP_ROWS (trim, called by land_tick every 10 min).
+MAX_ROWS, KEEP_ROWS = 20_000, 15_000
 PEAK = re.compile(r"^\[remote-pytest\] memory peak (\d+) MiB\r?$", re.M)
 CPU = re.compile(r"^\[remote-pytest\] cpu (\d+) ms over (\d+) ms\r?$", re.M)
 
@@ -70,6 +74,24 @@ def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str,
            **(timing or {})}
     with history.open("a", encoding="utf-8") as out:
         out.write(json.dumps(row) + "\n")
+
+
+def trim(history: Path | None, max_rows: int = MAX_ROWS, keep_rows: int = KEEP_ROWS) -> int:
+    """Rewrite history to its last keep_rows rows once past max_rows; the dropped count, else 0."""
+    if history is None:
+        return 0
+    try:
+        with history.open(encoding="utf-8", errors="replace") as src:
+            rows = src.readlines()
+    except OSError:
+        return 0
+    if len(rows) <= max_rows:
+        return 0
+    kept, tmp = rows[-keep_rows:], history.with_suffix(".jsonl.tmp")
+    tmp.write_text("".join(kept), encoding="utf-8")
+    os.replace(tmp, history)
+    _cached_rows.cache_clear()
+    return len(rows) - len(kept)
 
 
 @functools.lru_cache(maxsize=256)
