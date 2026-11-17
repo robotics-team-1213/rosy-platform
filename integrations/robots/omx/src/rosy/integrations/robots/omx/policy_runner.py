@@ -142,7 +142,8 @@ class LeRobotAdapter:
 
 
 def check_output(values, joint_names):
-    if len(values) != len(joint_names) or not all(math.isfinite(v) for v in values):
+    if (len(values) != len(joint_names)
+            or not all(type(v) in (int, float) and math.isfinite(v) for v in values)):  # bool is not a joint value
         raise ValueError('policy output differs from the installed joints')
     return values
 
@@ -158,8 +159,11 @@ def check_binding(adapter, target, space):
         raise ValueError('target was opened for another policy type')
 
 
-def step(adapter, target, space, task, clock=time.perf_counter_ns):
-    """One observe -> infer -> submit cycle; returns the per-stage nanoseconds. A failure never submits."""
+def step(adapter, target, space, task, clock=time.perf_counter_ns, guard=None):
+    """One observe -> infer -> submit cycle; returns the per-stage nanoseconds. A failure never submits.
+
+    guard(values, observed_positions) runs before submit and refuses a target by raising (D-1024 limits).
+    """
     check_binding(adapter, target, space)
     marks = [clock()]
     observation = target.observe()
@@ -170,6 +174,8 @@ def step(adapter, target, space, task, clock=time.perf_counter_ns):
     marks.append(clock())
     values = space(adapter.postprocess(action))
     marks.append(clock())
+    if guard is not None:
+        guard(values, observation['positions'])
     target.submit(dict(zip(adapter.joint_names, values)))
     marks.append(clock())
     return {stage: b - a for stage, a, b in zip(STAGES, marks, marks[1:])}
@@ -248,10 +254,16 @@ def measure(adapter, target, space, task, *, warmup, steps, clock=time.perf_coun
     return dict(first_step=first, warmup=warmup, steps=steps, stages=summarize(samples))
 
 
-def checkpoint_digest(path):
-    """sha256 over every file's relative path and bytes, so the report names exactly what ran (D-854 §2)."""
+def checkpoint_digest(path, *, allow_symlinks=True):
+    """sha256 over every file's relative path and bytes, so the report names exactly what ran (D-854 §2).
+
+    Execution pins pass allow_symlinks=False: a link could be repointed after the hash. The bench keeps the default
+    because a Hugging Face cache snapshot is made of links.
+    """
     digest = hashlib.sha256()
     root = Path(path)
+    if not allow_symlinks and (root.is_symlink() or any(p.is_symlink() for p in root.rglob('*'))):
+        raise ValueError('a pinned checkpoint must not contain symlinks')
     files = sorted(p for p in root.rglob('*') if p.is_file() and '.cache' not in p.relative_to(root).parts) if root.is_dir() else []
     if not files:
         raise ValueError('a local checkpoint directory with files is required')  # a Hub ID would hash nothing
