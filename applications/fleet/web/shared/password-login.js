@@ -1,12 +1,13 @@
 // D-683: pages own authority and drafts; this component owns cookie login and verified logout.
 import {actionIcon} from '/common/ui.js';
+import {readToken, storeToken} from '/console/assets/console-token.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
 import {canViewAccountSetup} from '/console/assets/account-permissions.js';
 
 const cookieRequest = createFleetClient();
 const sessionRequest = createFleetClient({credential: () => document.getElementById('console-token')?.value
-  ?? sessionStorage.getItem('rosy-console-token') ?? ''});
+  ?? readToken()});
 const FORM = `
   <form class="password-login-form ui-form" data-login="form" aria-label="계정 로그인">
     <label class="ui-field-label" for="fleet-login-name">로그인 ID
@@ -192,7 +193,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
           body: JSON.stringify(changing ? {password: password.value} : {
             login: part('login').value.trim(), password: password.value, remember: part('remember').checked}),
         });
-        sessionStorage.removeItem('rosy-console-token');
+        storeToken('');
         const session = await cookieRequest('/api/fleet/auth/session');
         if (changing && session.password_change_required !== false) throw new Error('Password change not verified');
         verified(session);
@@ -236,7 +237,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         cookie = true;
         cookiePrincipal = session.principal_id;
         cookieRole = session.role;
-        sessionStorage.removeItem('rosy-console-token');
+        storeToken('');
         onChange(true);
       } catch (error) {
         if (error?.status === 401 && cookie) {
@@ -256,7 +257,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
             throw new Error('Session still exists');
           } catch (error) { if (error?.status !== 401) throw error; }
         }
-        sessionStorage.removeItem('rosy-console-token');
+        storeToken('');
         cookie = false; cookiePrincipal = cookieRole = null;
         try { localStorage.setItem('rosy.fleet.account.identity', ''); } catch {}
         host.hidden = true;

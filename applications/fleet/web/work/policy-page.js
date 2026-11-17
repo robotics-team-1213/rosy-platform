@@ -1,6 +1,7 @@
 // D-793 /console/policy: 학습 정책 단계·승인 창·확인 요청·사고 잠금. 규칙은 서버가 판단한다.
 import {createFleetClient} from '/common/fleet-client.js';
 import {createPollGate} from '/console/assets/poll-gate.js';
+import {isSignedOut, readToken} from '/console/assets/console-token.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {loginHref} from '/console/assets/login-return.js';
@@ -11,7 +12,7 @@ import {
 } from '/console/assets/policy-model.js';
 
 // A development or token session lives in this tab's storage, not a cookie (same as the other work pages).
-let token = sessionStorage.getItem('rosy-console-token') || '';
+let token = readToken();
 const request = createFleetClient({credential: () => token, origin: location.origin}), $ = id => document.getElementById(id);
 $('fleet-login').href = loginHref(location);  // This page has no password-login component to return here.
 // D-926 2: the same app bar as the other work screens, so the emergency stop and account stay in reach here.
@@ -241,8 +242,8 @@ async function start() {
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   } catch (error) {
     $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable');
-    $('policy-login').hidden = error.status !== 401;
-    if (error.status === 401) showSignedOut();
+    $('policy-login').hidden = !isSignedOut(error);
+    if (isSignedOut(error)) showSignedOut();
   }
 }
 start();

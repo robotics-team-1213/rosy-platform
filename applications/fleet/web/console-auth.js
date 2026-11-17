@@ -3,6 +3,7 @@
 import { applyRoleToControls, OPERATOR_REASON } from "/console/assets/authorization.js";
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { createPasswordLogin } from "./password-login.js";
+import { isSignedOut, storeToken } from "/console/assets/console-token.js";
 import { showConnection, showSession, showSignedOut, stopNotice } from "/console/assets/fleet-header.js";
 
 const MAP_STATION_ARM = { S2: "arm_a", S3: "arm_s", S5: "arm_b" };
@@ -330,7 +331,7 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
       render();
     } catch (_err) {
       if (_err.name === "AbortError") return;
-      if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
+      if (!auth.locked) markLocked(isSignedOut(_err) ? "auth" : "connection");
     }
   }
 
@@ -350,11 +351,7 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     auth.role = null;
     applyRoleToControls(null, operatorControls());
     incidents.reset();
-    if (auth.token) {
-      sessionStorage.setItem("rosy-console-token", auth.token);
-    } else {
-      sessionStorage.removeItem("rosy-console-token");
-    }
+    storeToken(auth.token);
     visionView.reset();
     trackingView.reset();
     trackingView.refresh();

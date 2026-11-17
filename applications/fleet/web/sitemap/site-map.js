@@ -1,4 +1,5 @@
 import {createMapSourcesPanel} from '/console/assets/site-map-sources.js';
+import {isSignedOut, readToken, storeToken} from '/console/assets/console-token.js';
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
 // and preview a D-490 trip plan. D-540 4: robots are drawn read-only; trips start and stop on the 관제 robot card.
@@ -23,7 +24,7 @@ import {installBandEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
 import {drawFacilities, svgElement as el} from '/console/assets/map-editor.js';
 const $ = id => document.getElementById(id), W = 800, H = 480;
-const stored = sessionStorage.getItem('rosy-console-token') || '';
+const stored = readToken();
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, robots: [], open: [], guide: null, guideUnavailable: false, band: null};
@@ -291,7 +292,7 @@ async function load() {
   state.robotsError = false;
   if (stateRes.status === 'fulfilled') robots = stateRes.value.robots || [];
   else {
-    if (stateRes.reason?.status === 401 || stateRes.reason?.status === 403) throw stateRes.reason;
+    if (isSignedOut(stateRes.reason) || stateRes.reason?.status === 403) throw stateRes.reason;
     state.robotsError = true;
   }
   state.active = active;
@@ -360,7 +361,7 @@ async function connect(credentialChange = false) {
   notice('접속 중 · 0초 경과');
   try {
     const session = await request('/api/fleet/session');
-    sessionStorage.setItem('rosy-console-token', $('console-token').value);
+    storeToken($('console-token').value);
     state.role = session.role;
     showSession(session, {credentialChange});
     loginForm.refresh(false);
@@ -377,12 +378,12 @@ async function connect(credentialChange = false) {
       : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '');
   } catch (error) {
     if (localEdit) Object.assign(state, localEdit);
-    state.loadState = error.status === 401 ? 'idle' : 'error';
-    if (error.status === 401 || error.status === 403) {
+    state.loadState = isSignedOut(error) ? 'idle' : 'error';
+    if (isSignedOut(error) || error.status === 403) {
       state.role = null;
       showSignedOut();
     }
-    if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') loginForm.refresh(true);
+    if (isSignedOut(error)) loginForm.refresh(true);
     render();
     if (localEdit) select(state.selected);
     syncButtons();
@@ -577,7 +578,7 @@ developmentToken($('console-token').value).then(token => {
   });
 }).catch(error => {
   if (!state.role && state.loadState === 'idle') {
-    state.loadState = error?.status === 401 ? 'idle' : 'error';
+    state.loadState = isSignedOut(error) ? 'idle' : 'error';
     showSignedOut();
     render();
     syncButtons();
