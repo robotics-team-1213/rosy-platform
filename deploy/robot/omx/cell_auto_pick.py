@@ -53,6 +53,7 @@ def run_auto(
     log=print,
     attempts=None,
     scenario_id=None,
+    goal=None,
 ) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
@@ -121,6 +122,15 @@ def run_auto(
                 judged = cell_pick_judge.ask(config.get("debate_models") or config["decision_model"], img, usable)
                 cd.emit("target_judge", {"candidates": len(usable)}, list(range(len(usable))) + [-1], judged["choice"], judged["by"], judged["reason"])
                 usable = [usable[i] for i in judged["order"]]
+            if goal and usable and (config.get("debate_models") or config.get("decision_model")):
+                try:
+                    import cell_pick_judge
+
+                    reading = cell_pick_judge.ask_goal(config.get("debate_models") or config["decision_model"], usable, goal)
+                    cd.emit("target_goal_shadow", {"goal": str(goal)[:200], "candidates": len(usable)},
+                            list(range(len(usable))) + [-1], reading["choice"], "shadow", reading["reason"])
+                except Exception as exc:  # shadow must never stop or reorder a carry
+                    log(f"goal shadow skipped: {exc}")
             row = {"observed": len(objects), "refused": refused}
             out["attempts"].append(row)
             if error or not usable:
@@ -359,6 +369,7 @@ def main(argv=None):
     ap.add_argument("--task-id", help="correlate this one carry with a Fleet task; does not authorize completion")
     ap.add_argument("--handoff-lease-id", help="Fleet lease paired with --task-id")
     ap.add_argument("--scenario-id", help="scenario identifier from the cell task")
+    ap.add_argument("--goal", help="operator goal sentence; shadow only: the model's reading is logged, the carry order is unchanged")
     ap.add_argument("--return-held", action="store_true", help="arm already holds an object at home: place it at --dest without picking")
     args = ap.parse_args(argv)
     if args.commissioning != args.person_at_switch:
@@ -376,7 +387,7 @@ def main(argv=None):
         run_return_held(cell, config, cal_data, calibration_path, cat, args.roi, args.dest, work, args.dry_run)
         if args.return_held else
         run_auto(cell, config, cal_data, calibration_path, cat, args.roi, args.source, args.dest, work,
-                 cell_choices.Choices(work / "choices.json"), args.dry_run, scenario_id=args.scenario_id)
+                 cell_choices.Choices(work / "choices.json"), args.dry_run, scenario_id=args.scenario_id, goal=args.goal)
     )
     print(json.dumps(result, indent=1, default=str))
     return 0 if result["result"] in ("placed", "planned") else 1
