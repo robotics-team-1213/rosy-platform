@@ -66,6 +66,16 @@ def goal_vector(layout, step, here, mode="joints"):
     return goal_of({step["arm"]: goal_block(layout, step, here, mode)}, goal_size(layout, mode))
 
 
+def dataset_features(joints, views, size=None):
+    """The LeRobot features of a two-arm dataset: `collect` and the real-recording export (learning/curation/omx/two_arm_export.py) both build them here."""
+    vector = dict(dtype="float32", shape=(len(joints),), names=list(joints))
+    image = dict(dtype="video", shape=(*SHAPE, 3), names=["height", "width", "channels"])
+    features = {"observation.state": vector, "action": vector, **{f"observation.images.{view}": image for view in views}}
+    if size:
+        features[GOAL] = dict(dtype="float32", shape=(size,), names=[f"goal{i}" for i in range(size)])
+    return features
+
+
 def observe(world, data, zero_error=None):
     """The joints as the arm reports them (true minus its calibration error) and the four cameras."""
     state = np.concatenate([data.qpos[world.q[arm]] - (zero_error or {}).get(arm, 0.) for arm in sites.ARMS]).astype(np.float32)
@@ -181,13 +191,9 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     import omx_two_arm_world as world_mod
     joints = [f"{arm}.{joint}" for arm in sites.ARMS for joint in world_mod.JOINTS]
-    vector = dict(dtype="float32", shape=(12,), names=joints)
-    image = dict(dtype="video", shape=(*SHAPE, 3), names=["height", "width", "channels"])
     raw_choices = choices
     choices = resolved_choices(choices, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
     layout = sites.Layout(**choices)
-    size = goal_size(layout, goal_mode)
-    goal = dict(dtype="float32", shape=(size,), names=[f"goal{i}" for i in range(size)])
     dagger_driver, longest, dagger_counts = None, {}, {}
     step_filter = {s.strip() for s in dagger_steps.split(",") if s.strip()} if isinstance(dagger_steps, str) else (set(dagger_steps) if dagger_steps else None)
     if dagger_eval_file:
@@ -200,9 +206,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
                                belt_skew=belt_skew, cam_jitter=cam_jitter, n_action_steps=n_action_steps,
                                flow_steps=flow_steps, use_amp=use_amp, device=dagger_device)
     world = dagger_driver.world if dagger_driver else world_mod.World(layout)
-    features = {"observation.state": vector, "action": vector, **{f"observation.images.{view}": image for view in teaching.RECORDED}}
-    if not no_goal:
-        features[GOAL] = goal
+    features = dataset_features(joints, teaching.RECORDED, None if no_goal else goal_size(layout, goal_mode))
     dataset = LeRobotDataset.create("rosy/omx-two-arm", world_mod.FPS, root=out, robot_type="omx_follower_pair", features=features)
     spoiled = []
     planned = plan_tasks(plan_dir, names) if plan_dir else None
