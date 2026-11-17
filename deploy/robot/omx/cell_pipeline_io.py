@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -75,6 +76,9 @@ def fold(cell, sleep=time.sleep, wait_s: float = 2.0) -> dict:
     return cell.act("park")
 
 
+FIFO_WRITE_LOCK = threading.Lock()
+
+
 class FifoCell:
     """The running chunk_runner (command FIFO + status file) and the read-only camera viewer."""
 
@@ -140,12 +144,13 @@ class FifoCell:
         expected = command.split(" ", 3)[-1] if command.startswith("checked ") else command
         status_path = self.io / "chunk-status.jsonl"
         start = status_path.stat().st_size if status_path.exists() else 0
-        try:  # non-blocking: never hand a command to a later runner
-            fd = os.open(self.io / "chunk-cmd", os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
-        except OSError:
-            return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
-        os.write(fd, (command + "\n").encode())
-        os.close(fd)
+        with FIFO_WRITE_LOCK:  # the hardware owner's cancel fold writes `park` from another thread (D-977 4)
+            try:  # non-blocking: never hand a command to a later runner
+                fd = os.open(self.io / "chunk-cmd", os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
+            except OSError:
+                return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
+            os.write(fd, (command + "\n").encode())
+            os.close(fd)
         deadline = time.monotonic() + (self.timeout_s if timeout is None else timeout)
         while time.monotonic() < deadline:
             if status_path.exists():

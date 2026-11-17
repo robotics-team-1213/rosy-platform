@@ -1,0 +1,17 @@
+[Unit]
+Description=ROSY OMX %i operator-attested PRE_DISPATCH producer (device_trial, D-977 5)
+
+[Service]
+# Read only: it posts PRE_DISPATCH facts for a job only while a named operator's single-use SOURCE_CLEAR is valid, from the
+# policy source pose and the arm session's own measured joints. It never commands the arm.
+Type=simple
+EnvironmentFile=%h/.config/rosy/omx-attested-producer-%i.env
+ExecStart=/bin/bash -c 'exec "$OMX_PRODUCER_PYTHON" "$OMX/operator_attested_producer.py" --origin "$ROSY_FLEET_ORIGIN" --assets "$OMX_PRODUCER_ASSETS" --installation "$OMX_PRODUCER_INSTALLATION" --live "$OMX_PRODUCER_LIVE" --calibration "$OMX_PRODUCER_CALIBRATION" --pipeline "$OMX_PRODUCER_PIPELINE" run'
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+UMask=0077
+MemoryMax=512M
+
+[Install]
+WantedBy=default.target
