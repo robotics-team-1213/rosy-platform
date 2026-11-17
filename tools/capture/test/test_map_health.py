@@ -1,4 +1,6 @@
 """map_health: synthetic maps (clean, empty, speckle, opening, compare) and the real SLAM maps when present."""
+import json
+import math
 import sys
 from pathlib import Path
 
@@ -66,15 +68,19 @@ def test_bad_resolution_fails_unless_allowed(tmp_path):
     assert "resolution" not in " ".join(mh.verdict(rep, allow_resolution=0.1)["reasons"])
 
 
-def test_compare_overlap(tmp_path, capsys):
+def test_compare_identical(tmp_path, capsys):
     a = write_map(tmp_path, room(), name="a")
-    b = write_map(tmp_path, room(), name="b")
-    assert mh.main([str(a), "--compare", str(b)]) == 0
-    assert '"overlap_a_in_b": 1.0' in capsys.readouterr().out
-    shifted = write_map(tmp_path, ["?" * 30] * 8 + room()[:22], name="c")
-    ma, _, ha, ga = mh.load(a)
-    mc, _, hc, gc = mh.load(shifted)
-    assert mh.overlap(mh.walls_world(ma, ha, ga), mh.walls_world(mc, hc, gc)) < 0.5
+    assert mh.main([str(a), "--compare", str(a)]) == 0
+    assert '"overlap": 1.0' in capsys.readouterr().out
+
+
+def test_compare_recovers_rotation_and_shift(tmp_path):
+    ma, _, ha, ga = mh.load(write_map(tmp_path, room(), name="a"))
+    pts = mh.wall_points(ma, ha, ga)
+    ca, sa = math.cos(math.radians(-8)), math.sin(math.radians(-8))
+    moved = [(ca * x - sa * y + 0.2, sa * x + ca * y) for x, y in pts]   # b = a rotated -8 deg and shifted 0.2 m
+    ov, rot, tx, ty, ov0 = mh.align(pts, moved, 0.05)
+    assert ov >= 0.9 and abs(rot + 8) <= 2 and ov0 < ov, (ov, rot, tx, ty, ov0)
 
 
 REAL = Path("D:/DevTemp/slam-map")
@@ -84,4 +90,4 @@ REAL = Path("D:/DevTemp/slam-map")
 def test_real_maps(capsys):
     assert mh.main([str(REAL / "fresh1.yaml"), "--compare", str(REAL / "unwind1_map.yaml")]) == 0
     out = capsys.readouterr().out
-    assert '"resolution": 0.05' in out and '"overlap_a_in_b"' in out
+    assert '"resolution": 0.05' in out and json.loads(out)["compare"]["overlap"] >= 0.9

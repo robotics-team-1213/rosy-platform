@@ -118,18 +118,37 @@ def verdict(rep, allow_resolution=None):
     return {"verdict": "fail" if fail else "warn" if warn else "ok", "reasons": fail + warn}
 
 
-def walls_world(meta, h, grid):
-    """Occupied cells as integer (ix, iy) on the world grid so two maps align by origin."""
+def wall_points(meta, h, grid):
+    """Occupied cell centres in world metres (map origin is the bottom-left corner, pgm row 0 is the top)."""
     res, (ox, oy) = meta["resolution"], meta["origin"][:2]
-    return {(round(ox / res) + c, round(oy / res) + (h - 1 - r))
-            for r, row in enumerate(grid) for c, v in enumerate(row) if v == OCC}
+    return [(ox + (c + .5) * res, oy + (h - 1 - r + .5) * res) for r, row in enumerate(grid) for c, v in enumerate(row) if v == OCC]
 
 
-def overlap(a, b):
-    """Fraction of a's wall cells with a b wall within 1 cell (Chebyshev)."""
-    if not a:
-        return 0.0
-    return sum(1 for x, y in a if any((x + dx, y + dy) in b for dx in (-1, 0, 1) for dy in (-1, 0, 1))) / len(a)
+def _dilated(pts, res):
+    """Cell indices within 1 cell of any wall point, so a match is one set lookup."""
+    return {(int(x // res) + i, int(y // res) + j) for x, y in pts for i in (-1, 0, 1) for j in (-1, 0, 1)}
+
+
+def _score(pts, tab, res, deg, tx, ty):
+    import math
+    ca, sa = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    return sum(1 for x, y in pts if (int((ca * x - sa * y + tx) // res), int((sa * x + ca * y + ty) // res)) in tab) / len(pts)
+
+
+def align(a, b, res, max_deg=30, max_t=0.3):
+    """Rigid search of a's walls into b's frame (rotation about the world origin, then shift): coarse grid, then refine.
+    Returns (overlap, rotation_deg, tx_m, ty_m, origin_only_overlap). Wall cells are matched within 1 cell."""
+    if not a or not b:
+        return 0.0, 0.0, 0.0, 0.0, 0.0
+    tab = _dilated(b, res)
+    frange = lambda c, half, st: [c + k * st for k in range(-round(half / st), round(half / st) + 1)]
+    best = max((_score(a, tab, res, d, tx, ty), -abs(d) - abs(tx) - abs(ty), d, tx, ty)
+               for d in frange(0, max_deg, 2) for tx in frange(0, max_t, .1) for ty in frange(0, max_t, .1))
+    _, _, d0, x0, y0 = best
+    best = max((_score(a, tab, res, d, tx, ty), -abs(d - d0) - abs(tx - x0) - abs(ty - y0), d, tx, ty)
+               for d in frange(d0, 2, .5) for tx in frange(x0, .1, .025) for ty in frange(y0, .1, .025))
+    return (round(best[0], 3), round(best[2], 2), round(best[3], 3), round(best[4], 3),
+            round(_score(a, tab, res, 0, 0, 0), 3))
 
 
 def main(argv=None):
@@ -143,9 +162,9 @@ def main(argv=None):
     rep.update(verdict(rep, a.allow_resolution))
     if a.compare:
         m2, _, h2, g2 = load(a.compare)
-        wa, wb = walls_world(meta, h, grid), walls_world(m2, h2, g2)
-        rep["compare"] = {"other": a.compare, "overlap_a_in_b": round(overlap(wa, wb), 3),
-                          "overlap_b_in_a": round(overlap(wb, wa), 3)}
+        ov, rot, tx, ty, ov0 = align(wall_points(meta, h, grid), wall_points(m2, h2, g2), meta["resolution"])
+        rep["compare"] = {"other": a.compare, "overlap": ov, "rotation_deg": rot, "tx_m": tx, "ty_m": ty,
+                          "origin_only_overlap": ov0}
     print(json.dumps(rep, indent=2))
     return 1 if rep["verdict"] == "fail" else 0
 
