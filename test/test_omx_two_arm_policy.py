@@ -366,6 +366,8 @@ def test_collect_and_round_forward_dagger_and_extra_dataset(monkeypatch, tmp_pat
     steps_meta = json.loads((tmp_path / "dag_ds.steps.json").read_text(encoding="utf-8"))
     assert steps_meta["longest"]["s1"] == 42 and steps_meta["dagger"] == {"recovered": 2}
 
+    (tmp_path / "base_ds/meta").mkdir(parents=True)  # an extra dataset must be a real LeRobot dataset (omx_two_arm_mix checks it before aggregating)
+    (tmp_path / "base_ds/meta/info.json").write_text(json.dumps({"features": {}, "fps": 15, "robot_type": "omx_follower_pair", "total_frames": 30}), encoding="utf-8")
     popens, runs = [], []
     fake_gpu_yield = types.SimpleNamespace(yield_turn=lambda **kw: None)
     monkeypatch.setattr(policy, "gpu_yield", fake_gpu_yield)
@@ -396,13 +398,13 @@ def test_collect_and_round_forward_dagger_and_extra_dataset(monkeypatch, tmp_pat
                             "--tasks", "stack", "--seeds", "1", "--workers", "1", "--skill", "grasp", "--zero-error-deg", "4",
                             "--n-action-steps", "8", "--flow-steps", "5", "--amp",
                             "--dagger-model", str(ckpt), "--dagger-eval-file", "auto", "--dagger-only", "--dagger-device", "cpu",
-                            "--extra-dataset", str(tmp_path / "base_ds"), "--base-model", str(ckpt)])
+                            "--extra-dataset", str(tmp_path / "base_ds"), "--extra-dataset-weight", "3", "--base-model", str(ckpt)])
     assert rc_round == 0
     assert "--dagger-model" in popens[0] and "--dagger-eval-file" in popens[0] and "--flow-steps" in popens[0]
     eval_cmds = [cmd for kind, cmd in runs if kind == "run" and len(cmd) > 2 and cmd[2] == "evaluate"]
     assert any("eval-comp.json" in str(c) for cmd in eval_cmds for c in cmd)
     aggr_cmd = next(cmd for kind, cmd in runs if kind == "run" and any("aggregate_datasets" in str(c) for c in cmd))
-    assert str(tmp_path / "base_ds") in aggr_cmd and not any("part0" in str(c) for c in aggr_cmd)
+    assert aggr_cmd.count(str(tmp_path / "base_ds")) == 3 and not any("part0" in str(c) for c in aggr_cmd)  # weight 3 = three copies in the mix
     train_cmd = next(cmd for kind, cmd in runs if kind == "train")
     assert f"--policy.pretrained_path={ckpt}" in train_cmd
 
@@ -548,3 +550,101 @@ def test_an_isolated_collect_drops_only_the_failed_step_and_a_whole_run_drops_th
             rec.run_step(None, {"id": f"s{i}"}, {})
         assert len(saved) == saved_n and len(cleared) == 3 - saved_n
         assert (rec.failed, rec.spoiled) == ((["s1"], False) if isolated else ([], True))
+
+
+def test_state_history_appends_each_arms_last_command_or_repeats_its_state():
+    from types import SimpleNamespace
+    state = np.arange(12, dtype=np.float32)
+    teacher = SimpleNamespace(last_cmd={"arm_b": np.full(6, 9.)})
+    history = helpers.command_history(teacher, state)
+    assert history.dtype == np.float32 and history.shape == (12,)
+    assert history[:6].tolist() == state[:6].tolist() and history[6:].tolist() == [9.] * 6  # arm_a never commanded: its state
+
+
+def test_skill_argv_forwards_state_history():
+    import argparse
+    ap = argparse.ArgumentParser()
+    policy.skills.options(ap)
+    assert "--state-history" in policy.skills.argv(ap.parse_args(["--skill", "grasp", "--state-history"]))
+    assert "--state-history" not in policy.skills.argv(ap.parse_args(["--skill", "grasp"]))
+
+
+def test_the_policy_module_exports_every_helper_the_skill_calls_through_it():
+    import re, inspect
+    used = set(re.findall(r"(?<![.\w])policy\.([a-z_]+)\(", inspect.getsource(policy.skills)))
+    assert used and all(hasattr(policy, name) for name in used), used - set(dir(policy))  # 11-17: command_history missing crashed every probe
+
+
+def test_delta_action_names_keep_grippers_absolute():
+    joints = [f"{arm}.{j}" for arm in sites.ARMS for j in ("joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1")]
+    seen, done = helpers.feature_names(joints, track_history=2, delta_action=True)
+    assert len(seen) == 36 and seen[12] == f"err0.{joints[0]}" and seen[24] == f"err1.{joints[0]}"
+    mask = helpers.delta_mask(done)
+    assert mask.tolist() == [True] * 5 + [False] + [True] * 5 + [False]  # grippers stay absolute
+    assert helpers.delta_mask(helpers.feature_names(joints)[1]) is None
+
+
+def test_delta_label_and_driver_inverse_round_trip_with_zero_error():
+    from types import SimpleNamespace
+    rng = np.random.default_rng(0)
+    z, qpos, target = rng.normal(size=12), rng.normal(size=12), rng.normal(size=12)
+    mask = np.array(([True] * 5 + [False]) * 2)
+    state = (qpos - z).astype(np.float32)
+    label = np.where(mask, (target - z) - state, target - z)  # as Recorder.frame makes it
+    driver = SimpleNamespace(delta=mask, post=lambda y: y, pre=lambda b: b, has_goal=False, device="cpu", torch=SimpleNamespace(from_numpy=_Arr),
+                             policy=SimpleNamespace(select_action=lambda b: SimpleNamespace(cpu=lambda: SimpleNamespace(numpy=lambda: label[None]))))
+    out = helpers.Driver.act(driver, state, {})
+    assert np.allclose(out, target - z, atol=1e-6)  # the reported-angle command, grippers untouched
+
+
+class _Arr:
+    def __init__(self, a):
+        self.a = a
+
+    def __getitem__(self, item):
+        return self
+
+    def to(self, _device):
+        return self
+
+
+def test_tracking_buffer_pads_with_the_first_frame_and_keeps_newest_first():
+    from collections import deque
+    from types import SimpleNamespace
+    owner, teacher, track = SimpleNamespace(track=3), SimpleNamespace(last_cmd={}), deque(maxlen=3)
+    state = np.zeros(12, np.float32)
+    first = helpers.policy_state(owner, teacher, state, track)
+    assert first.shape == (48,) and not first[12:].any()  # never commanded: error 0, padded three times
+    teacher.last_cmd = {"arm_a": np.full(6, 1.), "arm_b": np.full(6, 2.)}
+    out = helpers.policy_state(owner, teacher, state + .5, track)
+    assert out[12:24].tolist() == [.5] * 6 + [1.5] * 6 and not out[24:].any()  # newest first, older frames behind
+    teacher.last_cmd = {"arm_a": np.full(6, 3.), "arm_b": np.full(6, 3.)}
+    out = helpers.policy_state(owner, teacher, state, track)
+    assert out[12:24].tolist() == [3.] * 12 and out[24:36].tolist() == [.5] * 6 + [1.5] * 6 and not out[36:].any()
+    assert helpers.policy_state(SimpleNamespace(), teacher, state, deque(maxlen=0)) is state
+
+
+def test_driver_reads_tracking_and_delta_from_the_dataset_names_and_refuses_delta_with_ensembling(monkeypatch, tmp_path):
+    model_dir, steps_file, _ = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": types.SimpleNamespace(shape=(36,))})
+    joints = [f"{arm}.{j}" for arm in sites.ARMS for j in ("j1", "j2", "j3", "j4", "j5", "gripper_joint_1")]
+    seen, done = helpers.feature_names(joints, track_history=2, delta_action=True)
+    steps_file.write_text(json.dumps({"longest": {}, "state_names": seen, "action_names": done}), encoding="utf-8")
+    d = policy.Driver(model_dir, steps_file)
+    assert (d.track, d.history) == (2, False) and d.delta.tolist() == [True] * 5 + [False] + [True] * 5 + [False]
+    with pytest.raises(ValueError, match="ensembl"):
+        policy.Driver(model_dir, steps_file, ensemble_coeff=.01)
+    steps_file.write_text(json.dumps({"longest": {}}), encoding="utf-8")
+    d = policy.Driver(model_dir, steps_file)
+    assert d.delta is None and getattr(d, "track", 0) == 0
+
+
+def test_skill_argv_forwards_track_history_and_delta_action():
+    import argparse
+    ap = argparse.ArgumentParser()
+    policy.skills.options(ap)
+    out = policy.skills.argv(ap.parse_args(["--skill", "grasp", "--track-history", "4", "--delta-action"]))
+    assert out[out.index("--track-history") + 1] == "4" and "--delta-action" in out
+    out = policy.skills.argv(ap.parse_args(["--skill", "grasp"]))
+    assert "--track-history" not in out and "--delta-action" not in out
+    with pytest.raises(ValueError, match="--track-history"):
+        helpers.collect([1], ["stack"], "unused", state_history=True, track_history=2)
