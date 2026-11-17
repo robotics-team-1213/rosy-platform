@@ -37,8 +37,10 @@ ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 # the cap counts every run's browser jobs, so 2 per host left 4 browser slots for all preparing landings while a
 # FULL round carried 60-163 min of browser chunks and the hosts ran at load ~5 of 24 cores; each PC's JOB
 # admission (remote_job.ADMIT, since 10-28) now holds the cores and GB, and LOAD-FLAKY ids keep their ALONE chunk.
+# 2 since 2026-11-16, 3 on 2026-11-17 (panel G): the FULL browser tail queued 1.7-3.0 ks behind that cap, and the 2 was
+# set while placement read load1, fixed the same day (1 s busy cores). One step to 3 before measuring 4.
 # ROSY_BROWSER_PER_HOST overrides it to measure.
-BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "2"))
+BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "3"))
 # 6 since 2026-11-01: FULL rounds ran their invocations at 0.4-0.7x parallelism (sum run_s / wall), the tail queued
 # behind the run's own workers for 60-117 min; each PC's JOB admission still bounds cores and GB.
 MAX_MAIN = 3  # main workers one run may ask of a full host; 3 avoids diluting xdist headroom down to -n 2
@@ -359,6 +361,13 @@ def cost(repo: Path, inv: list[str], seen: dict | None = None) -> float:
         files = path.rglob("*.py") if path.is_dir() else [path]
         total += sum(f.stat().st_size for f in files if f.is_file())
     return total / BYTES_PER_S
+
+
+def queue_order(repo: Path, invocations: list[list[str]]) -> list[int]:
+    """Indices in dispatch order: the ROSY_BROWSER_ALONE chunk first (it waits for idle lanes, so queued late it held
+    the FULL tail), then largest expected seconds first."""
+    seen = history(repo)
+    return sorted(range(len(invocations)), key=lambda i: (ALONE_ENV not in invocations[i], -cost(repo, invocations[i], seen)))
 
 
 def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) -> list[list[str]]:

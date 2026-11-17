@@ -589,8 +589,8 @@ def test_a_full_hosts_default_lanes_take_four_of_a_full_rounds_browser_chunks():
     """2026-10-31: the per-host cap counts every run's browser jobs; 2 prevents browser exhaustion."""
     room = {"cores": 18, "mem": 18, "site": False, "light": False}
     b = [rp.BROWSER_ENV, "t/a_browser.py"]
-    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": dict(room)}).count(("a", "lane")) == 2
-    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": {**room, "browser_jobs": 1}}).count(("a", "lane")) == 1
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": dict(room)}).count(("a", "lane")) == 3
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": {**room, "browser_jobs": 2}}).count(("a", "lane")) == 1
 
 
 def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do_not(monkeypatch):

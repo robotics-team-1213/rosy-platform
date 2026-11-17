@@ -47,6 +47,14 @@ def test_alone_files_share_one_chunk_marked_to_run_without_lanes(tmp_path):
     assert land_browser.chunks(tmp_path, ["a_browser.py"], 4) == [[land_browser.BROWSER_ENV, "a_browser.py"]]
 
 
+def test_alone_chunk_is_dispatched_first_whatever_its_size(tmp_path):
+    from work_queue import queue_order
+    (tmp_path / "big.py").write_text("x" * 1000)
+    (tmp_path / "small.py").write_text("x")
+    invs = [["big.py"], [land_browser.BROWSER_ENV, land_browser.ALONE_ENV, "small.py"], ["small.py"]]
+    assert queue_order(tmp_path, invs) == [1, 0, 2]
+
+
 def test_files_split_into_size_balanced_chunks(tmp_path):
     sizes = {"a_browser.py": 900, "b_browser.py": 500, "c_browser.py": 400, "d_browser.py": 300,
              "e_browser.py": 200, "f_browser.py": 100}
