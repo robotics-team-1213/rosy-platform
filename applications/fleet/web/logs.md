@@ -1290,7 +1290,7 @@
 
 ## 2026-11-18 · uncommitted · ui(fleet): 알림 한 곳 — 벨은 열린 개입 수, '알림' 탭·팝오버·읽음 삭제, 인라인 결과는 토스트 없음
 - 변경: `inbox.js` 읽음 장치(inboxAttention·markAllRead·data-unread) 삭제, 벨 숫자 = `#critical-list`·`#warning-list`의 열린 행 수. '알림' 탭 삭제, 판단 전달 기록(`#inbox-messages`)과 `#log`를 '기록·근거' 탭으로(`index.html`, `?inbox=1`은 기록·근거로 읽음). 벨은 화면에 큐가 있으면 `.queues-panel` 포커스, 다른 Fleet 문서에서는 `/console?queue=1`(첫 상태가 그려진 뒤 포커스, `fleet-header.js`). 죽은 `#inbox-popover`와 CSS 삭제. `alert-popup.js`에서 호출·로그 정책을 `alert-policy.js`로 분리(syncCritRows·카드 그리기는 제자리). 화면 런타임 오류는 토스트가 아니라 기록 줄. `call({inline})`·`log(..., {inline})`: line-stuck·person-request·station-recovery·trip-replan의 명령 실패는 행 안 글자 + 기록 1줄 + 한 번 낭독, 토스트 없음. line-stuck 소리·OS 알림은 `document.hidden`일 때만. polite live 영역에서 map-hover-card·map-selection-bar·#hint·site-path-summary·dispatch-control을 빼고 발행 상태 변화만 announcer로.
-- 증거: 노드 `operations/fleet/test/web`+`shared/web/test` 649 passed, 0 failed(새 `fleet-alert-surface.test.mjs` 정적 게이트, 런타임 오류·숨김 탭 알림 시험 포함). 실측(D:/DevTemp/ui-refine-1118/shots/S1-*.png, 1366×768·390×844): rosy_01 '대기' 409(claim·decision 둘 다) → 행 안 1·기록 1·토스트 0·벨 3 그대로(이전 4곳·카드 2장). `rosy_harness.py lint` 0 errors.
+- 증거: 노드 `operations/fleet/test/web`+`shared/web/test` 649 passed, 0 failed(새 `fleet-alert-surface.test.mjs` 정적 게이트, 런타임 오류·숨김 탭 알림 시험 포함). 실측(D:/DevTemp/ui-refine-1118/shots/S1-*.png, 1366×768·390×844): rosy_01 '대기' 409(claim·decision 둘 다) → 행 안 1·기록 1·토스트 0·벨 3 그대로(이전 4곳·카드 2장). `rosy_harness.py lint` 0 errors. 원격(96d7e1dd66, run-1) 249 passed·19 failed — 18개는 부모 564b5dc870에서도 같은 18개가 실패(remote-base/run-1.txt, 기존 실패), 남은 1개(다른 문서의 벨 이름)는 머리말 정적 aria-label을 6개 문서·fleet-header.html.inc에서 맞춰 고침.
 - gate 변화: 없음. patterns.yaml C25 adopters에 Fleet(createAlertStore)·Learning 추가 필요(S3 담당).
 - 교훈: 없음
 
