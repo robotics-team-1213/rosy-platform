@@ -46,14 +46,19 @@ from omx_two_arm_policy_helpers import (  # noqa: E402, F401
     Driver,
     Recorder,
     collect,
+    command_history,
+    delta_mask,
+    feature_names,
     goal_block,
     goal_of,
     goal_vector,
     observe,
     plan_tasks,
+    policy_state,
     resolved_choices,
     sheet,
 )
+import omx_two_arm_mix as mixing  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 import omx_two_arm_skill as skills  # noqa: E402
 import omx_two_arm_tasks as tasks  # noqa: E402, F401
@@ -220,7 +225,8 @@ def run_round(args):
                   cam_jitter=bool(getattr(args, "cam_jitter", False)), compensate_zero=bool(getattr(args, "compensate_zero", False)),
                   no_goal=bool(getattr(args, "no_goal", False)), goal=getattr(args, "goal", "joints"),
                   dagger_model=getattr(args, "dagger_model", None), dagger_only=bool(getattr(args, "dagger_only", False)),
-                  extra_datasets=list(getattr(args, "extra_dataset", None) or []))
+                  extra_datasets=list(getattr(args, "extra_dataset", None) or []),
+                  extra_dataset_weights=list(getattr(args, "extra_dataset_weight", None) or []))
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
                   tasks=names, seeds=args.seeds, recipe=recipe, choices=parsed_choices, claim="기하: 도달·순서·충돌(D-947). 실물 근거가 아닙니다.")
     write_record(run, record)
@@ -256,7 +262,7 @@ def run_round(args):
         for part, _ in parts:
             found = json.loads((run / f"{part.name}.steps.json").read_text(encoding="utf-8"))
             spoiled += found["spoiled"]
-            goal_meta.update({k: found[k] for k in ("goal_mode", "goal_sites") if k in found})
+            goal_meta.update({k: found[k] for k in ("goal_mode", "goal_sites", "state_names", "action_names") if k in found})
             for k, v in (found.get("dagger") or {}).items():
                 dagger_totals[k] = dagger_totals.get(k, 0) + v
             if found.get("episodes", 1) != 0:
@@ -264,7 +270,7 @@ def run_round(args):
             for key, value in found["longest"].items():
                 longest[key] = {k: max(v, longest.get(key, {}).get(k, 0)) for k, v in value.items()} if isinstance(value, dict) else max(longest.get(key, 0), value)
         (run / "steps.json").write_text(json.dumps(dict(longest=longest, spoiled=spoiled, **goal_meta, **({"dagger": dagger_totals} if dagger_totals else {}))), encoding="utf-8")
-        roots = part_roots + [Path(p) for p in (getattr(args, "extra_dataset", None) or [])]
+        roots, mix = mixing.weighted_roots(part_roots, getattr(args, "extra_dataset", None), getattr(args, "extra_dataset_weight", None))
         if getattr(args, "early_stop", True) and getattr(args, "dagger_only", False) and getattr(args, "dagger_model", None) and not roots and dagger_totals.get("recovered", 0) == 0 and dagger_totals.get("recovery_failed", 0) == 0 and dagger_totals.get("passed_skip", 0) > 0:
             for part, _ in parts:
                 shutil.rmtree(part, ignore_errors=True)
@@ -284,7 +290,7 @@ def run_round(args):
             for part, _ in parts:
                 shutil.rmtree(part, ignore_errors=True)
             gpu_yield.yield_turn(say=functools.partial(print, file=log))
-            record.update(stage="train", data=dict(episodes=info["total_episodes"], frames=info["total_frames"], spoiled_runs=spoiled, **({"dagger": dagger_totals} if dagger_totals else {})))
+            record.update(stage="train", data=dict(episodes=info["total_episodes"], frames=info["total_frames"], spoiled_runs=spoiled, mix=mix, **({"dagger": dagger_totals} if dagger_totals else {})))
             write_record(run, record)
             common = [f"--batch_size={recipe['batch_size']}", f"--steps={recipe['steps']}", f"--save_freq={max(500, recipe['steps'] // 20)}", "--log_freq=500",
                       f"--num_workers={args.train_workers}", "--wandb.enable=false", f"--output_dir={run / 'train'}",
@@ -416,7 +422,9 @@ def main(argv=None):
             one.add_argument("--no-goal", action="store_true")
             one.add_argument("--goal", default="joints", choices=GOAL_MODES,
                              help="site: one-hot source and target site (what an admitted job names), not the IK joints")
-            one.add_argument("--extra-dataset", action="append")
+            one.add_argument("--extra-dataset", action="append", help="another two-arm dataset of the same features (a real recording, an older sim set) trained on with the sim parts")
+            one.add_argument("--extra-dataset-weight", action="append", type=int,
+                             help="whole number of copies of an extra dataset in the mix: once for all, or once per --extra-dataset (default 1)")
             one.add_argument("--early-stop", action=argparse.BooleanOptionalAction, default=True)
             one.add_argument("--early-stop-min-steps", type=int, default=0)
             one.add_argument("--early-stop-seeds", type=int, default=1)
@@ -437,7 +445,8 @@ def main(argv=None):
                        compensate_zero=args.compensate_zero, no_goal=args.no_goal, goal_mode=args.goal,
                        dagger_model=args.dagger_model, steps_file=args.steps_file, dagger_prefix_frames=args.dagger_prefix_frames,
                        dagger_only=args.dagger_only, dagger_device=args.dagger_device, dagger_steps=args.dagger_steps,
-                       dagger_eval_file=args.dagger_eval_file,
+                       dagger_eval_file=args.dagger_eval_file, state_history=getattr(args, "state_history", False),
+                       track_history=getattr(args, "track_history", 0), delta_action=getattr(args, "delta_action", False),
                        n_action_steps=args.n_action_steps, flow_steps=args.flow_steps, use_amp=True if args.amp else None)
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 
