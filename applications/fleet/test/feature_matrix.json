@@ -301,7 +301,8 @@
         "applications/fleet/web/index.html"
       ],
       "consumers": [
-        "applications/fleet/web/work/arm-transfer-view.js"
+        "applications/fleet/web/work/arm-transfer-view.js",
+        "applications/fleet/web/robot/robot-panel-adapters.js"
       ],
       "availability": "Installed simulation ARM transfer API; known mission ID; independent named Fleet operator. No physical deployment or application completion evidence.",
       "calls": [
@@ -359,6 +360,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/robot-panel-adapters.js",
+          "expression": "/api/fleet/arm-transfers/jobs",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/arm-transfers/jobs"
           ]
         }
       ],
@@ -452,6 +461,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve"
+        },
+        {
+          "id": "POST:/api/fleet/arm-transfers/jobs",
+          "method": "POST",
+          "path": "/api/fleet/arm-transfers/jobs",
+          "implementation": "operations/fleet/fleet/server/work/arm_transfer_job_routes.py",
+          "handler": "create",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_arm_transfer_job_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/arm-transfers/jobs"
         }
       ],
       "flows": [
@@ -2087,7 +2113,10 @@
         "applications/fleet/web/shared/site-map-model.js",
         "applications/fleet/web/shared/stuck-evidence.js",
         "applications/fleet/web/sitemap/site-map.js",
-        "applications/fleet/web/work/work-view.js"
+        "applications/fleet/web/work/work-view.js",
+        "applications/fleet/web/alert-popup.js",
+        "applications/fleet/web/robot/localization-view.js",
+        "applications/fleet/web/robot/step-nudge.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -2384,6 +2413,86 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/robots/{robot_id}/road-nav2/plan"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/alert-popup.js",
+          "expression": "/api/fleet/state",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/state"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/localization-view.js",
+          "expression": "/api/fleet/auto-locate",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/auto-locate"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/localization-view.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/localization",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/robots/{robot_id}/localization"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/localization-view.js",
+          "expression": "/api/fleet/auto-locate/${encodeURIComponent(id)}/lift-block",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/auto-locate/{robot_id}/lift-block"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/localization-view.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/relocalize",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/relocalize"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/localization-view.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/localization/confirm",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/localization/confirm"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/roster.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/cancel",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/roster.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/line-follow",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/line-follow"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/step-nudge.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/localization",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/robots/{robot_id}/localization"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/step-nudge.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/step",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/step"
           ]
         }
       ],
@@ -2902,6 +3011,125 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/road-nav2/plan"
+        },
+        {
+          "id": "GET:/api/fleet/auto-locate",
+          "method": "GET",
+          "path": "/api/fleet/auto-locate",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "auto_locate_readback",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/auto-locate"
+        },
+        {
+          "id": "POST:/api/fleet/auto-locate",
+          "method": "POST",
+          "path": "/api/fleet/auto-locate",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "auto_locate_start",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auto-locate"
+        },
+        {
+          "id": "POST:/api/fleet/auto-locate/{robot_id}/lift-block",
+          "method": "POST",
+          "path": "/api/fleet/auto-locate/{robot_id}/lift-block",
+          "implementation": "operations/fleet/fleet/server/tracking/tracking_routes.py",
+          "handler": "auto_locate_lift_block",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_overhead_tracking_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auto-locate/{robot_id}/lift-block"
+        },
+        {
+          "id": "GET:/api/fleet/robots/{robot_id}/localization",
+          "method": "GET",
+          "path": "/api/fleet/robots/{robot_id}/localization",
+          "implementation": "operations/fleet/fleet/server/pose/relocalize_routes.py",
+          "handler": "robot_localization",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_relocalize_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/localization"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/relocalize",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/relocalize",
+          "implementation": "operations/fleet/fleet/server/pose/relocalize_routes.py",
+          "handler": "robot_relocalize",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_relocalize_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/relocalize"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/localization/confirm",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/localization/confirm",
+          "implementation": "operations/fleet/fleet/server/pose/relocalize_routes.py",
+          "handler": "robot_localization_confirm",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_relocalize_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/localization/confirm"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/step",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/step",
+          "implementation": "operations/fleet/fleet/server/pose/nudge_routes.py",
+          "handler": "robot_step",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_nudge_step.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/step"
         }
       ],
       "flows": [
@@ -4116,7 +4344,10 @@
       ],
       "consumers": [
         "applications/fleet/web/cell/cell.js",
-        "applications/fleet/web/cell/cell-real2sim-specs.js"
+        "applications/fleet/web/cell/cell-real2sim-specs.js",
+        "applications/fleet/web/robot/robot-panel-adapters.js",
+        "applications/fleet/web/sitemap/site-map-sources.js",
+        "applications/fleet/web/work/cell-resume-view.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -4250,6 +4481,54 @@
           "request_ids": [
             "GET:/api/fleet/pipeline/station-zones",
             "PUT:/api/fleet/pipeline/station-zones"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/robot-panel-adapters.js",
+          "expression": "/api/fleet/cell-jobs/${encodeURIComponent(missionId)}/cancel",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/cell-jobs/{mission_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-sources.js",
+          "expression": "/api/fleet/pipeline/station-zones",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/station-zones"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/cell-resume-view.js",
+          "expression": "/api/fleet/pipeline/human-safety-gate/clear",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/human-safety-gate/clear"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/cell-resume-view.js",
+          "expression": "/api/fleet/pipeline/cell-tasks/${encodeURIComponent(task.task_id)}/resume",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-tasks/{task_id}/resume"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/cell-resume-view.js",
+          "expression": "/api/fleet/pipeline/decision-gate/execute",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/decision-gate/execute"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/cell-resume-view.js",
+          "expression": "/api/fleet/pipeline/cell-tasks",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-tasks"
           ]
         }
       ],
@@ -4748,7 +5027,8 @@
         "applications/fleet/web/sitemap/site-map-sources.js",
         "applications/fleet/web/sitemap/drawing-import.js",
         "applications/fleet/web/sitemap/extraction-review.js",
-        "applications/fleet/web/sitemap/map-authoring.js"
+        "applications/fleet/web/sitemap/map-authoring.js",
+        "applications/fleet/web/map/cad-twin-layer.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -5115,6 +5395,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/site-map"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/cad-twin-layer.js",
+          "expression": "/api/fleet/site-lanes",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-lanes"
           ]
         }
       ],
@@ -7436,7 +7724,9 @@
         "applications/fleet/web/sitemap/site-map-sources.js",
         "applications/fleet/web/cell/cell-observation.js",
         "applications/fleet/web/shared/cell-frames.js",
-        "applications/fleet/web/robot/roster-cards.js"
+        "applications/fleet/web/robot/roster-cards.js",
+        "applications/fleet/web/alert-popup.js",
+        "applications/fleet/web/robot/robot-camera-tile.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -7556,6 +7846,38 @@
         },
         {
           "consumer": "applications/fleet/web/calibration/map-fit-view.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/alert-popup.js",
+          "expression": "/api/fleet/vision/sources",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/vision/sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/alert-popup.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/robot-camera-tile.js",
+          "expression": "/api/fleet/vision/sources",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/vision/sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/robot/robot-camera-tile.js",
           "expression": "/api/fleet/vision/lease",
           "resolution": "literal-or-template",
           "request_ids": [
