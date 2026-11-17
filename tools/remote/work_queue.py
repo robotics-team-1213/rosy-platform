@@ -347,6 +347,36 @@ def history(repo: Path) -> dict[tuple, float]:
     return _history(str(events), events.stat().st_mtime)
 
 
+@functools.lru_cache(maxsize=4)
+def _fail_rates(events: str, mtime: float) -> dict[tuple, float]:
+    """Share of an argv's finished runs (not cancelled) that ended new or flaky, from the landing events log."""
+    seen = collections.defaultdict(lambda: [0, 0])
+    with open(events, encoding="utf-8") as f:
+        for line in f:
+            if '"tests"' not in line:
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if row.get("event") == "tests" and row.get("verdict") in ("pass", "new", "flaky"):
+                seen[tuple(row.get("argv") or ())][0] += row["verdict"] != "pass"
+                seen[tuple(row.get("argv") or ())][1] += 1
+    return {argv: bad / total for argv, (bad, total) in seen.items()}
+
+
+def order(repo: Path, inv: list[str], seen: dict) -> tuple:
+    """Fail-fast start order: short invocations first, likeliest to fail per second first; long ones by cost after."""
+    run_s = cost(repo, inv, seen)
+    if run_s > SPLIT_S:
+        return (1, -run_s)
+    common = subprocess.run(["git", "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            capture_output=True, text=True).stdout.strip()
+    events = Path(common) / "rosy-land-events.jsonl" if common else None
+    rates = _fail_rates(str(events), events.stat().st_mtime) if events and events.is_file() else {}
+    return (0, -(rates.get(tuple(inv), 0.0) + 0.01) / max(run_s, 5.0))
+
+
 def cost(repo: Path, inv: list[str], seen: dict | None = None) -> float:
     """Expected run seconds: the measured median when this argv ran before, else test-file bytes / BYTES_PER_S."""
     seen = history(repo) if seen is None else seen
@@ -365,9 +395,9 @@ def cost(repo: Path, inv: list[str], seen: dict | None = None) -> float:
 
 def queue_order(repo: Path, invocations: list[list[str]]) -> list[int]:
     """Indices in dispatch order: the ROSY_BROWSER_ALONE chunk first (it waits for idle lanes, so queued late it held
-    the FULL tail), then largest expected seconds first."""
+    the FULL tail), then the fail-fast ``order``."""
     seen = history(repo)
-    return sorted(range(len(invocations)), key=lambda i: (ALONE_ENV not in invocations[i], -cost(repo, invocations[i], seen)))
+    return sorted(range(len(invocations)), key=lambda i: (ALONE_ENV not in invocations[i], order(repo, invocations[i], seen)))
 
 
 def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) -> list[list[str]]:

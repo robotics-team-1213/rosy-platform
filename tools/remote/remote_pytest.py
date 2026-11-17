@@ -58,8 +58,8 @@ import remote_test_tools  # noqa: E402
 import host_caps, host_probe  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, current_profile, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
-from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, history,  # noqa: E402,F401
-                        queue_order, small_first, small_only, stranded, upgrade_watch, wanted, workers)
+from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, order, history, queue_order,  # noqa: E402,F401
+                        small_first, small_only, stranded, upgrade_watch, wanted, workers)
 
 CANCELLED = remote_job.CANCELLED
 
@@ -355,17 +355,17 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
     work = Work(queue_order(repo, invocations), on_done, stop=stop)
     reruns = {}  # Work index -> original failure and the remaining quarantine rerun; never a completed code
-    hosts = placed_hosts("pytest", cores=cores)
+    host_probe.FULL = False; hosts = placed_hosts("pytest", cores=cores)  # FULL: only a real placement may say "full"
     wants = host_caps.needs(repo, sha, invocations)  # HOST_CAPABILITIES a test module declares
     while work.todo and not work.stop.is_set():
-        deadline = clock() + wait  # per placement attempt: productive host time must not eat the D-584 budget
+        deadline, hard = clock() + wait, clock() + host_probe.FULL_WAIT_S  # per placement attempt: productive host time must not eat the D-584 budget
         while not hosts or not host_caps.served(wants, [host_caps.room(h, HEADROOM) for h in hosts]):
             if work.stop.is_set():
                 return cancelled(invocations, [work.codes.get(i) for i in range(len(invocations))])
-            if clock() + poll > deadline:
+            if clock() + poll > deadline and not (host_probe.FULL and clock() < hard):  # reachable but full keeps waiting
                 raise SystemExit(f"[remote-pytest] no test host reachable (D-584) after {wait:.0f} s;"
                                  " the tests did not run. Report them as not run; do not land or push.")
-            print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
+            print(f"[remote-pytest] {'hosts full' if host_probe.FULL else 'no test host reachable'}; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
             sleep(poll)
             hosts = placed_hosts("pytest", cores=cores)
         plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split(), BLOCKED)
