@@ -212,7 +212,7 @@ def metrics(rows, extra, arms):
 CELL_STACK_START = {
     "bar-1": "tmp-a-2-l1", "bar-2": "tmp-a-1-l1", "bar-3": "tmp-b-2-l1",
     "bar-4": "tmp-a-2", "bar-5": "tmp-a-1", "bar-6": "tmp-b-2",
-    "bar-7": "ship-stern-l0", "bar-8": "tmp-a-3", "bar-9": "tmp-b-3",
+    "bar-7": "tmp-b-1", "bar-8": "tmp-a-3", "bar-9": "tmp-b-3",
 }
 
 

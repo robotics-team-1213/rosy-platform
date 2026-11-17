@@ -222,10 +222,8 @@ def r08_sites(layout):
         for layer in range(R08_TIERS):
             out[f"ship-h{h}r{row}-l{layer}"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] * (layer + .5), yaw=0., row=row, layer=layer,
                                                     stack=f"h{h}r{row}", slots=list(layered_slot_ids[layer]))
-    # The stern bay, kept low (the low kit: no funnel tile, nothing standing in it), is one more ship place: one 1x3 across the beam that
-    # both arms reach. The outbound place is a lane of a temporary plate (set page 23233175, 2026-11-08), not this bay.
-    x, cy, z = ship_cell(layout, STERN_BAY["x"], 0, STERN_BAY["floor"])
-    out["ship-stern-l0"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] / 2, yaw=math.pi / 2, row=1, layer=0, stack="stern", slots=[])
+    # The stern bay is not a place (site map decision 2026-11-17); STERN_BAY stays as berth geometry. Outbound is the separate stand
+    # (r05 chute, arm_a only), which has no sim place until it is measured.
     return out
 
 
