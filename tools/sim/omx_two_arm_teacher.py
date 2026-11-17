@@ -67,6 +67,7 @@ class Teacher:
         self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), "", {}, 0., 0, 0.
         self.others = set()
         self.zero_error, self.privileged, self.compensate_zero, self.zero_est_noise_deg, self.estimated_prefix = {}, True, False, 0., False
+        self.last_cmd = {}  # each arm's last joint command in reported angles (--state-history)
         self.servo = {}
         self.servo_comp = r2s_comp.ServoCompensator(world, FPS) if hasattr(world, "q") else None
         if cam_jitter and hasattr(world, "model"):
@@ -88,6 +89,7 @@ class Teacher:
         """One video frame of physics. Sequential: the Teacher is the one context. Two arms at once: each context gets its own arm's
         link and pad contacts; arm-arm contacts go to both."""
         self.n += 1
+        self.last_cmd.update({arm: np.asarray(t, float) - (self.zero_error.get(arm, 0.) if self.privileged else 0.) for arm, t in targets.items()})
         if not self.privileged:
             targets = {arm: t + self.zero_error[arm] if arm in self.zero_error else t for arm, t in targets.items()}
         if self.servo_comp is not None:
