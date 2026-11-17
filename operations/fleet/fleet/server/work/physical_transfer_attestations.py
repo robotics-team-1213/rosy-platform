@@ -43,7 +43,8 @@ class PhysicalOperatorAttestations:
                 raise PermissionError("proposer and approver cannot attest")
             now = self.store._now_ns()
             try:
-                connection.execute("INSERT INTO fleet_physical_operator_attestations VALUES(?,?,?,?,?,?,?,?)",
+                connection.execute("INSERT INTO fleet_physical_operator_attestations(mission_id,kind,attested_by,request_digest,"
+                    "proposal_digest,job_status,attested_at_ns,expires_at_ns) VALUES(?,?,?,?,?,?,?,?)",
                     (mission_id, body.kind, who, job["request_digest"], job["proposal_digest"], job["status"],
                      now, now + OPERATOR_ATTESTATION_VALIDITY_NS))
             except sqlite3.IntegrityError:

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from fleet.server.mission_store import MissionConflict
-from fleet.server.work.physical_transfer_attestations import OPERATOR_ATTESTED_PRODUCER_ID, PhysicalOperatorAttestations
+from fleet.server.physical_transfer_attestations import OPERATOR_ATTESTED_PRODUCER_ID, PhysicalOperatorAttestations
 from test_arm_transfer_job_api import PATH
 from test_device_trial_arm_transfer import build
 from test_physical_transfer_store import installation  # noqa: F401
@@ -73,7 +73,7 @@ def test_simulation_without_attestations_is_unchanged(rig):
 
 
 def test_device_trial_observer_must_use_the_operator_attested_producer_id(tmp_path, installation, monkeypatch):
-    monkeypatch.setattr("fleet.server.work.physical_transfer_attestations.OPERATOR_ATTESTED_PRODUCER_ID", "other-producer")
+    monkeypatch.setattr("fleet.server.physical_transfer_attestations.OPERATOR_ATTESTED_PRODUCER_ID", "other-producer")
     with pytest.raises(ValueError, match="operator-attested producer id"):
         build(tmp_path, installation)
     assert OPERATOR_ATTESTED_PRODUCER_ID == "operator-attested-producer"
