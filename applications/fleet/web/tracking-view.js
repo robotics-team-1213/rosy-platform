@@ -25,8 +25,12 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
     cancelExpiry = () => {};
     const remaining = displayLeaseMs(body, elapsedMs);
     const next = classifyTracking(remaining > 0 ? body : null);
-    const changed = JSON.stringify(next) !== JSON.stringify(view.cameraTracking);
+    // Arm anchors (base + tracked head) ride on the same response; pinky anchors are not positions.
+    const anchors = body ? (body.anchors || []).filter(a => a?.kind === "omx_ai") : [];
+    const changed = JSON.stringify(next) !== JSON.stringify(view.cameraTracking)
+      || JSON.stringify(anchors) !== JSON.stringify(view.anchors || []);
     view.cameraTracking = next;
+    view.anchors = anchors;
     // 교정 낡음 표본은 실제 폴링 응답마다 한 번만 쌓는다. 수명 만료 show(null)은 연속을
     // 끊지 않는다 — 만료는 데이터 신선도이지 교정 상태가 아니기 때문이다. 최종 판정은
     // 로봇 표본 우선, 없으면 서버 자동 검사 판정(관측 0/0대 현장)으로 내린다.

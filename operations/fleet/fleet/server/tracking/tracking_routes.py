@@ -170,7 +170,8 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
 
     @app.get("/api/fleet/tracking", dependencies=read_guard, tags=["tracking"])
     async def tracking_readback() -> dict:
-        return tracking.snapshot()
+        anchors = getattr(tracking, "anchors_snapshot", None)
+        return {**tracking.snapshot(), "anchors": anchors()["targets"] if callable(anchors) else []}
 
     @app.post("/api/fleet/tracking/relearn", tags=["tracking"])
     async def tracking_relearn(body: RelearnRequest,

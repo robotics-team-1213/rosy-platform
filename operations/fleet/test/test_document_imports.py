@@ -69,6 +69,7 @@ OWN = {
         "roster-workspace.js",
         "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
+        "robot-video.js",  # D-801: the robot card's front camera reuses the console video tiles
         "motor-health-view.js",  # Fleet robot rows adapt shared read-only motor evidence.
         "roster-presentation.js",
         "device-discovery.js",

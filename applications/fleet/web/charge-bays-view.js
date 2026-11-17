@@ -5,6 +5,17 @@ import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 
 export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from "/console/assets/charge-bays-model.js";
 
+/** Choices that act on a robot need the server's occupant; the console never substitutes one. */
+// The human-safety gate is cell-wide and must never be disabled for want of a robot.
+export const needsRobot = (choice) => Boolean(choice.visionCheckCell || choice.cableGuardToggle
+  || choice.zoneId || choice.pinkyAction);
+
+function markNoRobot(button, choice, card) {
+  if (!needsRobot(choice) || card.robot_id) return;
+  button.setAttribute("disabled", "");
+  button.setAttribute("reason", "대상 로봇 없음");
+}
+
 export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null }) {
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
@@ -34,7 +45,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       const targetId = ev?.detail?.targetId;
       const camId = ev?.detail?.camId;
       if (!targetId) return;
-      activeInspectorId = targetId === "pinky" ? "rosy_46" : targetId;
+      activeInspectorId = targetId;
       framesOn = false;
       if (camId) selectedInspectorCam[activeInspectorId] = camId;
       if (lastRows) renderInspector(lastRows);
@@ -53,6 +64,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
 
   async function executeChoice(choice, card, button, confirmed = false) {
     if (auth.locked || button.hasAttribute("disabled")) return;
+    if (needsRobot(choice) && !card.robot_id) return;  // no occupant from the server: never guess one
     if (choice.cancelTaskId && !confirmed) {  // irreversible: the shared confirmation, or nothing (fail closed)
       if (!confirmedAction) return;
       return confirmedAction.run({message: `태스크(${choice.cancelTaskId})를 즉시 취소하고 셀 인터락을 해제할까요?`, opener: button,
@@ -70,12 +82,12 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       } else if (choice.visionCheckCell) {
         await call("/api/fleet/pipeline/vision-auto-check", {
           method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({cell_id: choice.visionCheckCell, robot_id: card.robot_id || "rosy_46"}),
+          body: JSON.stringify({cell_id: choice.visionCheckCell, robot_id: card.robot_id}),
         });
       } else if (choice.cableGuardToggle) {
         await call("/api/fleet/pipeline/cable-guard", {
           method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({toggle: true, robot_id: card.robot_id || "rosy_46"}),
+          body: JSON.stringify({toggle: true, robot_id: card.robot_id}),
         });
       } else if (choice.clearArmHold) {
         await call("/api/fleet/pipeline/arm-holds/clear", {
@@ -91,13 +103,13 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
           body: JSON.stringify({
             cell_id: choice.humanSafetyCell,
             human_detected: choice.humanDetected,
-            robot_id: card.robot_id || "rosy_46",
+            robot_id: card.robot_id || undefined,
           }),
         });
       } else if (choice.zoneId) {
         await call("/api/fleet/pipeline/station-zones/dispatch", {
           method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({zone_id: choice.zoneId, robot_id: card.robot_id || "rosy_46"}),
+          body: JSON.stringify({zone_id: choice.zoneId, robot_id: card.robot_id}),
         });
       } else if (choice.decisionSubject) {
         await call("/api/fleet/pipeline/decision-gate", {
@@ -108,7 +120,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         await call(choice.preset ? "/api/fleet/pipeline/cell-tasks" : "/api/fleet/pipeline/pinky-tasks", {
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify(choice.preset ? {preset: choice.preset} :
-            {robot_id: card.robot_id || "rosy_46", action: choice.pinkyAction}),
+            {robot_id: card.robot_id, action: choice.pinkyAction}),
         });
       }
       await refresh();
@@ -279,7 +291,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
             arm_id: targetArm,
             tier: Number(tierSel.value || 1),
             displaced_to: dispSel.value || null,
-            robot_id: active.robot_id || "rosy_46",
+            robot_id: active.robot_id || undefined,  // absent: the server picks, the console never guesses
           }),
         });
         await refresh();
@@ -302,6 +314,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       button.setAttribute("type", "button");
       button.setAttribute("data-work-read", "");
       button.textContent = choice.label;
+      markNoRobot(button, choice, active);
       button.addEventListener("click", () => executeChoice(choice, active, button));
       actions.append(button);
     }
@@ -427,6 +440,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         button.setAttribute("type", "button");
         button.setAttribute("data-work-read", "");
         button.textContent = choice.label;
+        markNoRobot(button, choice, card);
         button.addEventListener("click", () => executeChoice(choice, card, button));
         buttons.append(button);
       }

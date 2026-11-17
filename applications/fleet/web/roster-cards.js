@@ -1,3 +1,5 @@
+import { createRobotVideo, bindVisibility } from "/console/assets/robot-video.js";
+
 /** D-651: all four safety exceptions remain visible in the compact list, ahead of nominal robots. */
 export function mustExpand(robot) {
   const estop = robot.state?.safety?.estop;
@@ -43,14 +45,15 @@ export const OMX_CELL_DEFS = [
   { target_id: "arm_s", kind: "omx_ai", label: "OMX-AI #3 (동남 분류 · Arm S)", shortLabel: "ARM_S · 동남 분류", stationId: "S5", stationName: "분류 5 (동남)", stationX: 0.87, stationY: -0.38, base_x: 0.960, base_y: -0.035, head_x: 0.703, head_y: -0.035, head_yaw: 3.14, reach_m: 0.28, zoom: 4 },
 ];
 
+// Pinky stations name no robot: the occupant comes from the server (charge-bays), never from this table.
 export const STATION_INSPECT_LINKS = Object.freeze({
   S2: { targetId: "arm_a", camId: "arm_a_wrist", label: "S2 상차 · arm_a" },
   S3: { targetId: "arm_s", camId: "arm_s_wrist", label: "S3 하역 셔틀 · arm_s" },
   S5: { targetId: "arm_b", camId: "arm_b_wrist", label: "S5 적재·반출 · arm_b" },
-  S1: { targetId: "rosy_46", camId: "side", label: "S1 반출대 · Pinky" },
-  C1: { targetId: "rosy_46", camId: "pinky", label: "C1 충전소 · rosy_46" },
-  C2: { targetId: "rosy_45", camId: "pinky", label: "C2 임시칸 · rosy_45" },
-  C3: { targetId: "rosy_42", camId: "pinky", label: "C3 충전소 · rosy_42" },
+  S1: { targetId: null, camId: "side", label: "S1 반출대 · Pinky" },
+  C1: { targetId: null, camId: "pinky", label: "C1 충전칸" },
+  C2: { targetId: null, camId: "pinky", label: "C2 충전칸" },
+  C3: { targetId: null, camId: "pinky", label: "C3 충전칸" },
 });
 
 export function createSvgGauge(pct, tone = "good") {
@@ -92,10 +95,25 @@ export function createGaugeCard(nodeWithText, { key, title, value, subtext, pct,
   return box;
 }
 
+/** The ROI target is the focused arm or robot that has a map position; none means no polling. */
+export function roiTargetId(view) {
+  for (const id of [view.focusAnchorId, view.focusRobot]) {
+    if (!id) continue;
+    if ((view.anchors || []).some(a => a.target_id === id)) return id;
+    if ((view.guide?.robots || []).some(r => r.robot_id === id && r.pose)) return id;
+  }
+  return null;
+}
+
+const ROI_POLL_MS = 850, ROI_BACKOFF_MAX_MS = 5000;
+
 export function createRoiPoller({ scope, view, call, render = () => {} }) {
   const roiLease = { token: "", expiresAt: 0, pending: null };
   const roiObjectUrls = new Map();
   let roiPollInFlight = false;
+  // Failed reads back off (850 ms doubling to 5 s) so a missing ROI does not hammer Vision.
+  let failures = 0, retryAt = 0, lastTarget = null;
+  const failed = () => { failures += 1; retryAt = Date.now() + Math.min(ROI_BACKOFF_MAX_MS, ROI_POLL_MS * 2 ** failures); };
   scope.onDispose(() => {
     for (const url of roiObjectUrls.values()) URL.revokeObjectURL(url);
     roiObjectUrls.clear();
@@ -113,20 +131,23 @@ export function createRoiPoller({ scope, view, call, render = () => {} }) {
     return roiLease.pending;
   }
   async function refreshRoiPreview() {
-    if (document.hidden || roiPollInFlight || !view.anchors?.length) return;
+    if (document.hidden || roiPollInFlight) return;
     const img = document.getElementById("anchor-roi-img");
     const statusNode = document.getElementById("anchor-roi-status");
-    const targetId = view.focusAnchorId || view.focusRobot || "rosy_46";
+    const targetId = roiTargetId(view);
     if (!img || !targetId) return;
+    if (targetId !== lastTarget) { lastTarget = targetId; failures = 0; retryAt = 0; }
+    if (Date.now() < retryAt) return;
     roiPollInFlight = true;
     try {
       const token = await ensureRoiLease();
-      if (!token) return;
+      if (!token) { failed(); return; }
       const resp = await fetch(`/api/vision/sources/ceiling_north/roi/${encodeURIComponent(targetId)}`, {
         headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
       });
       if (resp.status === 401) { roiLease.token = ""; roiLease.expiresAt = 0; return; }
-      if (!resp.ok) return;
+      if (!resp.ok) { failed(); return; }
+      failures = 0; retryAt = 0;
       const blob = await resp.blob();
       if (!blob || !blob.size) return;
       const nextUrl = URL.createObjectURL(blob);
@@ -143,12 +164,12 @@ export function createRoiPoller({ scope, view, call, render = () => {} }) {
         }
       }
     } catch (_err) {
-      // Keep previous ROI image on transient error
+      failed(); // Keep previous ROI image on transient error
     } finally {
       roiPollInFlight = false;
     }
   }
-  scope.interval(refreshRoiPreview, 850);
+  scope.interval(refreshRoiPreview, ROI_POLL_MS);
   // A map anchor click focuses its card; an arm anchor also refreshes its ROI preview.
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     scope.listen(window, "rosy:focus-anchor", (ev) => {
@@ -167,6 +188,28 @@ export function createRoiPoller({ scope, view, call, render = () => {} }) {
   return { roiObjectUrls, refreshRoiPreview };
 }
 
+/** D-801: one robot's front camera in its card's ROI spot. Started by the person, closed on reselect or hide. */
+// Nothing is created until the person asks: no DOM, no grant, no WHEP session.
+export function createFrontCamera({ call, scope }) {
+  let stage = null, video = null, robotId = null, unbind = null;
+  const stop = () => { robotId = null; unbind?.(); unbind = null; video?.stop(); };
+  scope.onDispose(stop);
+  return {
+    stop,
+    stage: () => stage,
+    robotId: () => robotId,
+    toggle(id) {
+      if (robotId === id) { stop(); return; }
+      stop();
+      stage ??= Object.assign(document.createElement("div"), { className: "robot-video-stage" });
+      video ??= createRobotVideo({ call });
+      robotId = id;
+      unbind = bindVisibility({ target: stage, video });
+      void video.start(stage, [id]);
+    },
+  };
+}
+
 const DEFAULT_PLACES = [
   { id: "P1", name: "픽업 1", x: -0.415, y: 0.015 },
   { id: "P2", name: "픽업 2", x: -0.195, y: 0.015 },
@@ -182,7 +225,7 @@ const DEFAULT_PLACES = [
 
 export function buildQuickControlPanel({
   robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-  roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames = null,
+  roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames = null, frontCamera = null,
 }) {
   const quickPanel = document.createElement("section");
   quickPanel.className = "quick-control-panel";
@@ -261,10 +304,10 @@ export function buildQuickControlPanel({
       view.selected = robot.robot_id; view.focusRobot = robot.robot_id;
       const stationLink = STATION_INSPECT_LINKS[String(pl.id).toUpperCase()];
       if (stationLink) {
-        if (stationLink.targetId.startsWith("arm_")) view.focusAnchorId = stationLink.targetId;
+        if (stationLink.targetId?.startsWith("arm_")) view.focusAnchorId = stationLink.targetId;
         if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
           window.dispatchEvent(new CustomEvent("rosy:inspect-target", {
-            detail: { targetId: stationLink.targetId.startsWith("arm_") ? stationLink.targetId : robot.robot_id, camId: stationLink.camId },
+            detail: { targetId: stationLink.targetId?.startsWith("arm_") ? stationLink.targetId : robot.robot_id, camId: stationLink.camId },
           }));
         }
       }
@@ -275,10 +318,12 @@ export function buildQuickControlPanel({
   }
   quickPanel.appendChild(chipRow);
 
-  const defaultBay = robot.robot_id === "rosy_45" ? "C2" : robot.robot_id === "rosy_42" ? "C3" : "C1";
+  // The bay the robot stands in by its map pose; with no pose or no bay nearby there is no re-berth button.
+  const currentBay = gPose ? mapPlaces.find(p => /^C\d/.test(String(p.id))
+    && Math.hypot(p.x - gPose.x, p.y - gPose.y) <= 0.15)?.id ?? null : null;
   const berthRow = nodeWithText("div", "quick-chip-row berth-control-row");
   for (const [bId, bMode, bLabel, bTitle] of [
-    [defaultBay, "forward_and_berth_park", `⬆️→⚓ ${defaultBay} 출차 후 접안 파킹`, `${defaultBay}에서 +0.20m 전진 출차 후 레일 내부 무조향(ω=0) 직진 후진 접안 파킹`],
+    ...(currentBay ? [[currentBay, "forward_and_berth_park", `⬆️→⚓ ${currentBay} 출차 후 접안 파킹`, `${currentBay}에서 +0.20m 전진 출차 후 레일 내부 무조향(ω=0) 직진 후진 접안 파킹`]] : []),
     ["C1", "berth_park", "⚓ C1 접안", "충전 베이 C1 (bay_c1) 역방향 접안 모드 파킹"],
     ["C2", "berth_park", "⚓ C2 접안", "충전 베이 C2 (bay_c2) 역방향 접안 모드 파킹"],
     ["C3", "berth_park", "⚓ C3 접안", "충전 베이 C3 (bay_c3) 역방향 접안 모드 파킹"],
@@ -434,6 +479,8 @@ export function buildQuickControlPanel({
   const chosenCamId = view.trackerCamByTarget[activeAnchor.target_id] || camViewsForAnchor[0].id;
   const chosenCam = camViewsForAnchor.find((c) => c.id === chosenCamId) || camViewsForAnchor[0];
 
+  const frontOn = activeAnchor.kind === "pinky" && frontCamera?.robotId() === robot.robot_id;
+  if (!frontOn && frontCamera?.robotId() === robot.robot_id) frontCamera.stop();
   const roiRow = nodeWithText("div", "roi-row"), roiImg = document.createElement("img");
   roiImg.id = "anchor-roi-img"; roiImg.className = "anchor-roi-img"; roiImg.alt = `${activeAnchor.target_id} 확대 헤드 추적 영상`;
   const existingUrl = roiObjectUrls.get(activeAnchor.target_id);
@@ -469,6 +516,14 @@ export function buildQuickControlPanel({
     }));
     lensRow.appendChild(lBtn);
   }
+  if (frontCamera && activeAnchor.kind === "pinky") {
+    const frontBtn = nodeWithText("ui-button", "", "📷 전면 카메라");
+    frontBtn.setAttribute("kind", "toggle"); frontBtn.setAttribute("aria-pressed", frontOn ? "true" : "false");
+    frontBtn.setAttribute("data-work-read", ""); frontBtn.type = "button";
+    if (!robot.online && !frontOn) { frontBtn.disabled = true; frontBtn.setAttribute("reason", "연결 끊김"); }
+    frontBtn.addEventListener("click", scope.guard(() => { frontCamera.toggle(robot.robot_id); render(); }));
+    lensRow.appendChild(frontBtn);
+  }
   const openFullInspectorBtn = nodeWithText("ui-button", "", "🔍 우측 인스펙터 열기");
   openFullInspectorBtn.setAttribute("kind", "quiet");
   openFullInspectorBtn.setAttribute("data-work-read", "");
@@ -480,7 +535,7 @@ export function buildQuickControlPanel({
   }));
   lensRow.appendChild(openFullInspectorBtn);
   roiMeta.append(statusText, descText, lensRow);
-  roiRow.append(roiImg, liveCellImg, roiMeta);
+  roiRow.append(frontOn ? frontCamera.stage() : roiImg, liveCellImg, roiMeta);
   trackerBox.appendChild(roiRow);
   quickPanel.appendChild(trackerBox);
   return quickPanel;

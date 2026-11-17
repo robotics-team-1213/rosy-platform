@@ -30,3 +30,25 @@ test("expired or missing observations clear coordinates without hiding the coord
   tracking.reset();
   assert.equal(el("tracking-positions").hidden, true);
 });
+
+test("arm anchors come from the tracking response and leave with it", async () => {
+  const el = (id) => ({ id, hidden: true, dataset: {}, replaceChildren() {} });
+  globalThis.document = { createElement: () => ({ children: [], append(child) { this.children.push(child); } }) };
+  const arm = { target_id: "arm_a", kind: "omx_ai", base_x: 0.55, base_y: 0.36, live: true };
+  let body = { lease_s: 1, sources: [], robots: [], anchors: [arm, { target_id: "rosy_46", kind: "pinky", base_x: 0, base_y: 0 }] };
+  const view = {};
+  let redraws = 0;
+  const tracking = createTrackingView({ el, view, auth: { locked: false }, call: async () => body,
+    onChanged: () => { redraws += 1; },
+    scope: { capture: () => ({ check() {}, signal: new AbortController().signal }), timeout: () => () => {} } });
+  await tracking.refresh();
+  assert.deepEqual(view.anchors, [arm]);  // only OMX arms; a pinky anchor is not a position
+  const before = redraws;
+  body = { ...body, anchors: [{ ...arm, live: false }] };  // only the arm changed
+  await tracking.refresh();
+  assert.equal(redraws, before + 1);
+  assert.equal(view.anchors[0].live, false);
+  body = null;
+  await tracking.refresh();
+  assert.deepEqual(view.anchors, []);
+});

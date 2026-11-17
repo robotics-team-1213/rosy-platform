@@ -1,7 +1,7 @@
 // D-540 4: the site map and the 관제 map draw the same /guide marks; the view turn rotates them.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {guideMarks, poseLabel} from '../../../../applications/fleet/web/shared/guide-layer.js';
+import {guideMarks, poseLabel, drawGuide} from '../../../../applications/fleet/web/shared/guide-layer.js';
 import {fitView} from '../../../../applications/fleet/web/shared/site-map-model.js';
 
 const MAP = {places: [{id: 'A', x: 0, y: 0}, {id: 'B', x: 2, y: 1.2}], edges: []};
@@ -63,4 +63,29 @@ test('an offline robot says so in its label', () => {
   assert.match(poseLabel({robot_id: 'rosy_1', online: false, pose: {u_m: 0.02, state: 'LOCALIZED'}}), /연결 끊김/);
   assert.match(poseLabel({robot_id: 'rosy_1', online: false}), /위치 모름 · 연결 끊김/);
   assert.doesNotMatch(poseLabel({robot_id: 'rosy_1', online: true, pose: {u_m: 0.02, state: 'LOCALIZED'}}), /연결 끊김/);
+});
+
+function drawArm(anchor) {
+  const calls = [], chips = [];
+  const ctx = new Proxy({}, {
+    get: (t, k) => (k in t ? t[k] : (...args) => calls.push([k, ...args])),
+    set: (t, k, v) => { t[k] = v; return true; },
+  });
+  drawGuide(ctx, (x, y) => ({x: x * 100, y: y * 100}), {guide: {robots: []}, css: (name) => name,
+    colorOf: () => '#000', drawChip: (_c, _r, x, y, text) => chips.push({x, y, text}), on: false,
+    view: {anchors: [anchor], layers: {}}});
+  return {calls, chips, ctx};
+}
+
+test('an arm without a live head draws only its base, quietly, and says its position is unknown', () => {
+  const arm = {target_id: 'arm_a', kind: 'omx_ai', base_x: 0.5, base_y: 0.4, head_x: 0.5, head_y: 0.1, head_yaw: -1.57, reach_m: 0.28};
+  const stale = drawArm({...arm, live: false});
+  assert.equal(stale.calls.filter(([k]) => k === 'lineTo').length, 0);   // no base -> head link, no heading tip
+  assert.equal(stale.calls.filter(([k]) => k === 'arc').length, 1);      // reach circle only, no head dot
+  assert.equal(stale.ctx.strokeStyle, '--ink-quiet');
+  assert.deepEqual(stale.chips, [{x: 50, y: 40 - 12, text: 'arm_a · 위치 모름'}]);
+  const live = drawArm({...arm, live: true});
+  assert.ok(live.calls.filter(([k]) => k === 'lineTo').length >= 2);
+  assert.equal(live.calls.filter(([k]) => k === 'arc').length, 2);
+  assert.match(live.chips[0].text, /^ARM_A/);
 });
