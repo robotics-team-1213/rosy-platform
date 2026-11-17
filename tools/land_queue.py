@@ -228,7 +228,10 @@ def expired(qdir: Path, now: float | None = None) -> list[dict]:
         pid = int(row.get("pid") or 0)
         if pid in (0, os.getpid()):
             continue
-        limit = FULL_MAX_AGE_S if (row.get("tier") == "full" or row.get("full_wait")) else MAX_AGE_S
+        # D-889 35: a rollup holding a test record is mid-work like a FULL waiter (224327 was killed 4 h in, after its FULL)
+        rolled = (row.get("branch") or "").startswith("land/fix/land-rollup-") and (
+            row.get("tested") or row.get("tier") == "full_done")
+        limit = FULL_MAX_AGE_S if (row.get("tier") == "full" or row.get("full_wait") or rolled) else MAX_AGE_S
         if row["age"] > limit:
             out.append({**row, "path": qdir / row["ticket"]})
     return out
