@@ -437,7 +437,7 @@ def main(argv=None):
                        compensate_zero=args.compensate_zero, no_goal=args.no_goal, goal_mode=args.goal,
                        dagger_model=args.dagger_model, steps_file=args.steps_file, dagger_prefix_frames=args.dagger_prefix_frames,
                        dagger_only=args.dagger_only, dagger_device=args.dagger_device, dagger_steps=args.dagger_steps,
-                       dagger_eval_file=args.dagger_eval_file,
+                       dagger_eval_file=args.dagger_eval_file, state_history=getattr(args, "state_history", False),
                        n_action_steps=args.n_action_steps, flow_steps=args.flow_steps, use_amp=True if args.amp else None)
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 

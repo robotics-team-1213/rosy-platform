@@ -164,6 +164,8 @@ def step(driver, teacher, data, plan, here, skill):
             ze_obs, ze_bias = _policy_zero(teacher)
             for sub_t in range(driver.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
                 state, images = policy.observe(w, data, ze_obs)
+                if getattr(driver, "history", False):
+                    state = np.concatenate([state, policy.command_history(teacher, state)])
                 action = driver.act(state, images, goal, said)
                 k = sites.ARMS.index(arm)  # the other arm waits as the teacher had it wait: the model drives only the step's arm
                 last_cmd = action[k * 6:k * 6 + 6] + ze_bias.get(arm, 0.)
@@ -366,6 +368,8 @@ def options(parser):
     parser.add_argument("--compensate-zero", action="store_true", help="calibrate and compensate joint-zero error online (G-20)")
     parser.add_argument("--zero-est-noise-deg", type=noise_degrees, default=0.,
                         help="with --compensate-zero: per-seed Gaussian error (sigma, deg) of the zero estimate, one value or five (joints 1-5); 0 is the oracle")
+    parser.add_argument("--state-history", action="store_true",
+                        help="collect: the state also carries each arm's last joint command (the policy then sees its servo's lag)")
     parser.add_argument("--estimated-prefix", action="store_true",
                         help="judge: the IK before the sub-skill also runs on reported angles (+ the zero estimate with --compensate-zero), as on the real cell")
     parser.add_argument("--skill", choices=sorted(SKILLS), help="learn and judge only this part of each step; the teacher's IK does the rest")
@@ -381,7 +385,8 @@ def argv(args):
               *(["--cam-jitter"] if getattr(args, "cam_jitter", False) else []),
               *(["--compensate-zero"] if getattr(args, "compensate_zero", False) else []),
               *(["--zero-est-noise-deg", ",".join(map(str, np.atleast_1d(args.zero_est_noise_deg)))] if np.any(getattr(args, "zero_est_noise_deg", 0.)) else []),
-              *(["--estimated-prefix"] if getattr(args, "estimated_prefix", False) else [])]
+              *(["--estimated-prefix"] if getattr(args, "estimated_prefix", False) else []),
+              *(["--state-history"] if getattr(args, "state_history", False) else [])]
     flags = [*(["--servo-lag"] if args.servo_lag else []), *(["--physics-ranges"] if args.physics_ranges else [])]
     return [*(["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg), *flags] if args.skill else []), *vision]
 

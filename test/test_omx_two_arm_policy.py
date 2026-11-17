@@ -548,3 +548,20 @@ def test_an_isolated_collect_drops_only_the_failed_step_and_a_whole_run_drops_th
             rec.run_step(None, {"id": f"s{i}"}, {})
         assert len(saved) == saved_n and len(cleared) == 3 - saved_n
         assert (rec.failed, rec.spoiled) == ((["s1"], False) if isolated else ([], True))
+
+
+def test_state_history_appends_each_arms_last_command_or_repeats_its_state():
+    from types import SimpleNamespace
+    state = np.arange(12, dtype=np.float32)
+    teacher = SimpleNamespace(last_cmd={"arm_b": np.full(6, 9.)})
+    history = helpers.command_history(teacher, state)
+    assert history.dtype == np.float32 and history.shape == (12,)
+    assert history[:6].tolist() == state[:6].tolist() and history[6:].tolist() == [9.] * 6  # arm_a never commanded: its state
+
+
+def test_skill_argv_forwards_state_history():
+    import argparse
+    ap = argparse.ArgumentParser()
+    policy.skills.options(ap)
+    assert "--state-history" in policy.skills.argv(ap.parse_args(["--skill", "grasp", "--state-history"]))
+    assert "--state-history" not in policy.skills.argv(ap.parse_args(["--skill", "grasp"]))

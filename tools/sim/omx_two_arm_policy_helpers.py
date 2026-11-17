@@ -72,6 +72,13 @@ def observe(world, data, zero_error=None):
     return state, {view: world.render(data, view, SHAPE) for view in teaching.RECORDED}
 
 
+def command_history(teacher, state):
+    """--state-history: each arm's last joint command (reported angles) after its state, so the policy sees how far this seed's servo
+    trails what it was told; an arm not yet commanded repeats its state. 11-17: trained across random servo gains without it, the
+    policy averaged them and failed even at nominal gains (3/22), while one fixed-gain policy passed 57/57 in its own dynamics."""
+    return np.concatenate([np.asarray(teacher.last_cmd.get(arm, state[i * 6:i * 6 + 6]), np.float32) for i, arm in enumerate(sites.ARMS)])
+
+
 def sheet(images):
     return np.vstack([np.hstack([images[view] for view in row]) for row in (teaching.RECORDED[:2], teaching.RECORDED[2:])])
 
@@ -83,7 +90,7 @@ class Recorder(teaching.Teacher):
     def __init__(self, world, dataset, longest, concurrent=False, skill=None, no_goal=False, goal_mode="joints", **options):
         super().__init__(world, **options)
         self.dataset, self.longest, self.goal, self.spoiled, self.count = dataset, longest, None, False, 0
-        self.isolated, self.failed = False, []
+        self.isolated, self.failed, self.history = False, [], False
         self.concurrent, self.recording, self.blocks, self.skill, self.prompt, self.no_goal = concurrent, False, {}, skill, PROMPT, no_goal
         self.goal_mode = goal_mode
 
@@ -99,6 +106,8 @@ class Recorder(teaching.Teacher):
                 goal = goal_of({c.arm: self.blocks[c.step["id"]] for c in ctxs or []}, goal_size(self.layout, self.goal_mode))
         if goal is not None and (self.skill is None or self.phase in skills.SKILLS[self.skill]["phases"]):
             state, images = observe(self.world, data, self.zero_error)
+            if self.history:
+                state = np.concatenate([state, command_history(self, state)])
             action = np.concatenate([targets[arm] - self.zero_error.get(arm, 0.) for arm in sites.ARMS]).astype(np.float32)
             row = {"observation.state": state, "action": action,
                    **{f"observation.images.{view}": image for view, image in images.items()}, "task": self.prompt}
@@ -175,7 +184,7 @@ def _failed_steps_from_eval(dagger_model, eval_file):
 def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0., lag=False, physics=False, *,
             pick_vision=False, belt_skew=False, cam_jitter=False, compensate_zero=False, no_goal=False, goal_mode="joints",
             dagger_model=None, steps_file=None, dagger_prefix_frames="auto", dagger_only=False, dagger_device=None,
-            dagger_steps=None, dagger_eval_file=None, n_action_steps=None, flow_steps=None, use_amp=None):
+            dagger_steps=None, dagger_eval_file=None, n_action_steps=None, flow_steps=None, use_amp=None, state_history=False):
     if goal_mode not in GOAL_MODES or (no_goal and goal_mode != "joints"):
         raise ValueError("--goal is one of joints|site and cannot go with --no-goal")
     if skill and plan_dir:
@@ -186,7 +195,9 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     import omx_two_arm_world as world_mod
     joints = [f"{arm}.{joint}" for arm in sites.ARMS for joint in world_mod.JOINTS]
-    vector = dict(dtype="float32", shape=(12,), names=joints)
+    vector = dict(dtype="float32", shape=(len(joints),), names=joints)
+    seen = joints + [f"cmd.{j}" for j in joints] if state_history else joints
+    state_feature = dict(dtype="float32", shape=(len(seen),), names=seen)
     image = dict(dtype="video", shape=(*SHAPE, 3), names=["height", "width", "channels"])
     raw_choices = choices
     choices = resolved_choices(choices, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
@@ -205,7 +216,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
                                belt_skew=belt_skew, cam_jitter=cam_jitter, n_action_steps=n_action_steps,
                                flow_steps=flow_steps, use_amp=use_amp, device=dagger_device)
     world = dagger_driver.world if dagger_driver else world_mod.World(layout)
-    features = {"observation.state": vector, "action": vector, **{f"observation.images.{view}": image for view in teaching.RECORDED}}
+    features = {"observation.state": state_feature, "action": vector, **{f"observation.images.{view}": image for view in teaching.RECORDED}}
     if not no_goal:
         features[GOAL] = goal
     dataset = LeRobotDataset.create("rosy/omx-two-arm", world_mod.FPS, root=out, robot_type="omx_follower_pair", features=features)
@@ -217,7 +228,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
                 teacher = Recorder(world, dataset, longest, concurrent=planned is not None, skill=skill, no_goal=no_goal,
                                    goal_mode=goal_mode, seed=seed, pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
                 skills.disturb(teacher, seed, zero_error_deg, lag, physics)
-                teacher.compensate_zero = bool(compensate_zero)
+                teacher.compensate_zero, teacher.history = bool(compensate_zero), state_history
                 teacher.error_draw = (STEP_ERROR_SEED_BASE + 100 * seed + 50 * names.index(name), zero_error_deg, physics)
                 teacher.run_task(planned[name] if planned else tasks.get_task(layout, name), isolated=bool(skill) and planned is None)
                 if teacher.spoiled:
@@ -234,7 +245,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
                             rec = Recorder(world, dataset, longest, skill=skill, no_goal=no_goal, goal_mode=goal_mode, seed=seed + idx,
                                            pick_vision=pick_vision, belt_skew=belt_skew, cam_jitter=cam_jitter)
                             skills.disturb(rec, err_seed_base + idx, zero_error_deg, lag, physics)
-                            rec.compensate_zero = bool(compensate_zero)
+                            rec.compensate_zero, rec.history = bool(compensate_zero), state_history
                             row = skills.recover(dagger_driver, rec, plan, here, skill, prefix_frames=dagger_prefix_frames)
                             st = row.get("dagger_status", "unknown")
                             dagger_counts[st] = dagger_counts.get(st, 0) + 1
@@ -296,7 +307,9 @@ class Driver:
                                                            preprocessor_overrides={"device_processor": {"device": str(device)}},
                                                            postprocessor_overrides={"device_processor": {"device": "cpu"}})
             self.device = next(self.policy.parameters()).device
-            self.has_goal = GOAL in (getattr(self.policy.config, "input_features", None) or {})
+            features = getattr(self.policy.config, "input_features", None) or {}
+            self.has_goal = GOAL in features
+            self.history = getattr(features.get("observation.state"), "shape", (12,))[0] == 24  # trained with --state-history
             dev_type = getattr(self.device, "type", str(self.device))
             self.use_amp = (bool(getattr(self.policy.config, "use_amp", False)) if use_amp is None else bool(use_amp)) and dev_type == "cuda"
         else:
