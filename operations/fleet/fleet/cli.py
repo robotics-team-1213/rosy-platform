@@ -345,6 +345,9 @@ def run_console(args: argparse.Namespace) -> None:
     if observation_config is not None:
         from fleet.server.workcell_observation_config import load_workcell_observations
         workcell_observations = load_workcell_observations(observation_config)
+    from fleet import arm_transfer_config as arm_config
+    profile = arm_config.deployment_profile()
+    arm_installation = arm_config.load_installation(profile, "/run/rosy/omx")
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      control_unit_config=getattr(args, "control_unit_config", None),
                      workcell_observations=workcell_observations,
@@ -381,7 +384,10 @@ def run_console(args: argparse.Namespace) -> None:
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args), notification_config=notification_config,
                      channel_config=channel_config, channel_model_config=model_config,
-                     conversation_config=conversation_config, assistant_config=assistant_config, omx_instances=_omx_instances())
+                     conversation_config=conversation_config, assistant_config=assistant_config, omx_instances=_omx_instances(),
+                     deployment_profile=profile, arm_transfer_installation=arm_installation,
+                     arm_transfer_observer=arm_config.load_observer(arm_installation),
+                     omx_cell_grant_revisions=arm_config.grant_revisions())
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",
