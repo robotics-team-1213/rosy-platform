@@ -103,3 +103,20 @@ def test_observer_refuses_missing_or_naive_expiry(owner, until):
 def test_observer_token_without_installation_is_refused():
     with pytest.raises(SystemExit):
         cfg.load_observer(None, {cfg.OBSERVER_TOKEN_ENV: TOKEN})
+
+
+def test_owner_down_at_startup_installs_a_placeholder_that_fails_closed(tmp_path, owner, monkeypatch):
+    class Down(FakeTransport):
+        def transfer_capability(self, instance_id, *, workcell_id):
+            raise TimeoutError("owner socket is down")
+
+    monkeypatch.setattr("fleet.server.local_action_transport.UnixLocalActionTransport", Down)
+    installed = cfg.load_installation("device_trial", tmp_path, write(tmp_path, owner))
+    assert {c.journal_id for c in installed.capabilities} == {cfg.OWNER_DOWN}
+    assert installed.policy.digest == owner.policy.digest
+    # the live owner's capability never equals the placeholder, so the store refuses admit and prepare
+    assert tuple(installed.capabilities) != tuple(owner.capabilities)
+    from fleet.server.physical_transfer_store import PhysicalTransferStore
+    store = PhysicalTransferStore(tmp_path / "j.sqlite3", installation=installed, deployment_profile="device_trial")
+    with pytest.raises(Exception, match="capability or identity changed"):
+        store._check_capabilities(owner.capabilities, store._now_ns(), store._now_ns())

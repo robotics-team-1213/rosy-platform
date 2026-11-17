@@ -41,10 +41,15 @@ def grant_revisions(environ=os.environ):
     return value
 
 
-def fleet_installation(written, socket_root):
+OWNER_DOWN = "owner-unavailable"  # placeholder id; no live owner ever reports it, so every live-capability check fails closed
+
+
+def fleet_installation(written, socket_root, *, owner_may_be_down=False):
     """Fleet's TransferInstallation: the written policy plus each running owner's own capability.
 
     The owner's resource_policy_digest must equal the written policy digest (TransferInstallation refuses otherwise).
+    owner_may_be_down (cell Fleet startup): an unreachable owner gets a placeholder capability instead of aborting
+    Fleet; admit and prepare then refuse (capability changed) until Fleet restarts with the owner answering.
     """
     from fleet.server.local_action_transport import UnixLocalActionTransport
     from fleet.server.physical_transfer_evidence import PhysicalTransferPolicy
@@ -53,8 +58,19 @@ def fleet_installation(written, socket_root):
     if installed.digest != written["policy_digest"]:
         raise ValueError("policy digest does not match the written policy")
     transport = UnixLocalActionTransport(socket_root)
-    capabilities = tuple(transport.transfer_capability(p.instance_id, workcell_id=p.workcell_id)
-                         for p in installed.participants)
+    def capability(p):
+        try:
+            return transport.transfer_capability(p.instance_id, workcell_id=p.workcell_id)
+        except (OSError, TimeoutError):
+            if not owner_may_be_down:
+                raise
+            from core_common.protocol.arm_transfer import ArmTransferCapability
+            return ArmTransferCapability(action_kind="ARM_TRANSFER", control_mode="fleet_managed",
+                workcell_id=p.workcell_id, instance_id=p.instance_id, journal_id=OWNER_DOWN,
+                owner_session_id=OWNER_DOWN, catalog_digest=installed.catalog_digest,
+                bindings_digest=installed.bindings_digest, resource_policy_digest=installed.digest,
+                capability_revision=OWNER_DOWN, config_revision=OWNER_DOWN)
+    capabilities = tuple(capability(p) for p in installed.participants)
     return TransferInstallation(policy=installed, source="source", target="target", capabilities=capabilities)
 
 
@@ -69,7 +85,7 @@ def load_installation(profile, socket_root, environ=os.environ):
         written = json.loads(Path(path).read_text(encoding="utf-8"))
         if len(written["policy"]["participants"]) != 1:
             raise SystemExit("device_trial ARM transfer installs exactly one participant arm")
-        return fleet_installation(written, socket_root)
+        return fleet_installation(written, socket_root, owner_may_be_down=True)
     except SystemExit:
         raise
     except (OSError, ValueError, KeyError, TypeError, TimeoutError) as exc:
