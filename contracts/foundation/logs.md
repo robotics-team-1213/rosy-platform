@@ -1212,3 +1212,13 @@
 - 변경: `machine_clearable`이 표시 행 전부가 `PARK_STRAIN`(주차 중 관절 lag 정지, caught·pushing·session ended 없음)일 때만 그 행을 허용한다. 다른 조건은 그대로.
 - 증거: `omx_incident.facts()`→`report_for()`로 만든 2026-11-17 arm_s 모양 사실이 통과(셀은 보류), caught·pushing 행 추가·접히지 않음·토크 켜짐은 거부. `test/test_arm_incident_machine_clearable.py`; 원격 시험은 이 브랜치 검증에 기록한다.
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · 주차 중 부하 정지 전체 일치 (D-1039 재검토)
+- 변경: `PARK_STRAIN`을 실행기 문구(`chunk_runner_run.py`, `(lags: ...)` 포함) 전체에 `re.ASCII` fullmatch로 맞추고, 행의 `fault`가 비어 있어야 한다. `stops`·`fault_records`도 list로 있어야 한다.
+- 증거: `omx_incident.facts()`→`report_for()`로 만든 실행기 형식 행이 통과, 뒤에 붙은 글·`\nCAUGHT`·` Caught`·fault·목록 없음은 거부. 원격 시험은 이 브랜치 검증에 기록한다.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · 실물 사건 모양에 맞춘 주차 정지 행 (D-1039)
+- 변경: `_park_strain`이 `run park`·`state` 행만, 채워진 `error`·`fault`가 모두 같은 `PARK_STRAIN` 전체 일치 문구일 때만 허용한다(실물 `run park`는 둘 다, `state`는 `fault`만). `facts()`는 문구를 자르지 않아 잘린 꼬리는 허용하지 않는다.
+- 증거: 2026-11-17 셀 incident.json 두 개(arm_b 07:21, arm_s 12:29)를 `test/fixtures/arm_incidents/`에 두고 둘 다 통과, 변형은 거부. 원격 시험은 이 브랜치 검증에 기록한다.
+- gate 변화: 없음.

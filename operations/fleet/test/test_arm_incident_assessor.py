@@ -24,9 +24,12 @@ WHY = {"note": "folded home, torque off, frames clear", "cause": "blocked", "bas
 SAFE = {"safe_end": True, "latched": {}, "torque_after": {"11": 0, "12": 0, "13": 0}, "caps_restored": True,
         "folded": True, "windup_hits": [], "flagged": [], "stops": [], "fault_records": []}
 # 2026-11-17 night, arm_s: the runner's park strain stop, then folded home torque OFF (the cell holds; a machine clears)
-PARK = {"command": "park", "error": "contact in park: shoulder_lift lag rose to 2.2 units at PWM -321 of 600",
-        "fault": None, "caught": None, "t": 3.2}
-TONIGHT = {**SAFE, "flagged": [PARK]}
+# the real rows (contracts/foundation/test/fixtures/arm_incidents/20261117T122911-arm_s.json): the text in error and
+# fault of "run park", and in fault alone of the "state" row after it
+STRAIN = ("contact in park: shoulder_lift lag rose to 2.2 units at PWM -321 of 600 "
+          "(lags: shoulder_pan 0.1, elbow_flex 0.0, wrist_flex 0.2, wrist_roll 0.1)")
+PARK = {"command": "run park", "error": STRAIN, "fault": STRAIN, "caught": None, "t": 3.2}
+TONIGHT = {**SAFE, "flagged": [PARK, {"command": "state", "error": None, "fault": STRAIN, "caught": None, "t": 3.3}]}
 UNSAFE = {
     "latched": {**SAFE, "latched": {"13": {"hw_error": 32, "bits": ["overload"]}}},
     "unfolded": {**SAFE, "folded": False},
@@ -40,6 +43,10 @@ UNSAFE = {
     "park plus pushing": {**TONIGHT, "flagged": [PARK, {"command": "lift", "error": "pushing: elbow lag 3.0 units"}]},
     "park unfolded": {**TONIGHT, "folded": False},
     "park torque on": {**TONIGHT, "torque_after": {"11": 0, "12": 1}},
+    "park plus free text": {**TONIGHT, "flagged": [{**PARK, "error": STRAIN + "; a hand is in the jaws",
+                                                    "fault": STRAIN + "; a hand is in the jaws"}]},
+    "park with a fault": {**TONIGHT, "flagged": [{**PARK, "fault": "overload latched"}]},
+    "no stops list": {k: v for k, v in TONIGHT.items() if k != "stops"},
     "jaws short in park": {**SAFE, "flagged": [{**PARK, "error": "contact in park: the jaws stopped 5.0 units short "
                                                                  "at PWM -248 of 300: something is in them"}]},
     "contact stop": {**SAFE, "stops": [{"command": "place", "error": "contact in place: wrist lag", "t": 1.0}]},

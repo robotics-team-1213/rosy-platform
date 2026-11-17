@@ -18,12 +18,12 @@ D-1035로 팔 incident 해제를 AI 판정에 맡기기로 했지만, Fleet 해�
 1. **assessor 자격과 팔.** `site_users`의 `role: service` principal 가운데 `ROSY_FLEET_ARM_ASSESSORS`에 팔과 함께 적힌 것만 assessor다. 형식은 `id=source,source;id=source`(예: `cell-a-ai-assessor=omx_arm_a,omx_arm_b,omx_arm_s`)이고 기본값은 비어 있다(설정하지 않으면 기능이 꺼져 있다). 적히지 않은 팔의 사건은 403 `AI_CLEAR_ARM_NOT_ASSIGNED`다.
 2. **경로 한정.** assessor는 `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` 하나만 부른다. 다른 경로는 모두 403 `ARM_ASSESSOR_SCOPE_REQUIRED`다. 이 경로만 자기 guard(`require_incident_clearer`: 이름 있는 운영자 또는 설정된 assessor)를 쓰고 `require_operator`는 바꾸지 않는다.
 3. **근거 필수.** assessor 해제는 `note`·`cause`·`basis`가 모두 있어야 한다. 없으면 422 `AI_CLEAR_CAUSE_REQUIRED`다.
-4. **종류 게이트(기본 거부).** Fleet은 저장된 측정 사실에 `machine_clearable(facts)`(`core_common.protocol.arm_incidents`, `software_stop` 옆)를 적용한다. `torque_after`(dict)·`latched`(dict)·`windup_hits`(list)·`flagged`(list)가 그 형태로 있어야 한다. 잘린 보고는 목록이 없어 사람 몫이다. 아래 표의 기계 해제 조건을 하나라도 어기면 403 `AI_CLEAR_KIND_REFUSED`다.
+4. **종류 게이트(기본 거부).** Fleet은 저장된 측정 사실에 `machine_clearable(facts)`(`core_common.protocol.arm_incidents`, `software_stop` 옆)를 적용한다. `torque_after`(dict)·`latched`(dict)·`windup_hits`·`flagged`·`stops`·`fault_records`(list)가 그 형태로 있어야 한다. 잘린 보고는 목록이 없어 사람 몫이다. 아래 표의 기계 해제 조건을 하나라도 어기면 403 `AI_CLEAR_KIND_REFUSED`다.
 
    | 사건 종류 | 해제 |
    |---|---|
    | 실행기 표시 행 없음, 그 밖의 조건 모두 충족 | 기계 가능 |
-   | 표시 행이 모두 주차 중 부하 정지(`error`가 선택적 `runner: ` 뒤 `^contact in park: [a-z_]+ lag rose to [0-9.]+ units at PWM -?[0-9]+ of [0-9]+`, `caught`·`pushing`·`session ended`·`person_needed` 없음), 그 밖의 조건 모두 충족 (예: 2026-11-17 밤 arm_s `contact in park: shoulder_lift lag rose to 2.2 units at PWM -321 of 600`) | 기계 가능 |
+   | 표시 행이 모두 주차 중 부하 정지(`error` 전체가 실행기 문구 그대로: 선택적 `runner: ` 뒤 `contact in park: <관절> lag rose to <n.n> units at PWM <n> of <n> (lags: <관절> <n.n>, ...)`, `PARK_STRAIN`으로 ASCII 전체 일치, 앞뒤 다른 글 없음. 행은 `run park` 또는 그 뒤의 `state`이고, `error`·`fault` 가운데 채워진 것은 모두 같은 그 문구다(실물: `run park`는 둘 다, `state`는 `fault`만). `caught`·`person_needed` 없음), 그 밖의 조건 모두 충족 (예: 2026-11-17 밤 arm_s `contact in park: shoulder_lift lag rose to 2.2 units at PWM -321 of 600 (lags: ...)`) | 기계 가능 |
    | 그 밖의 표시 행(조 끼임, `pushing`, `session ended`, 주차 중 조가 덜 닫힘 등)이 하나라도 있음 | 사람 |
    | 래치(`latched`가 빈 dict 아님), 감김(`windup_hits`), 주차 행이 아닌 접촉 정지(`stops`), 모터 고장 기록(`fault_records`) | 사람 |
    | `safe_end`·`folded`가 참이 아님, 토크 미확인 또는 켜짐(`torque_after`가 비었거나 0이 아닌 값), `caps_restored`가 참이 아님 | 사람 |
