@@ -1231,6 +1231,9 @@ def test_key_released_while_an_input_has_focus_still_stops(tablet_page):
     log = f"{base_url}/__test__/teleop"
     _click_tool(page, "[data-drive-inputs]")
     page.wait_for_selector("[data-inputs-panel] input[type=range]")
+    # Opening the panel focuses its first control, and drive keys are ignored inside form controls (2026-11-14
+    # decision), so start the press from the page body.
+    page.evaluate("document.activeElement?.blur()")
     page.keyboard.down("KeyW")
     page.wait_for_timeout(400)
     page.focus("[data-inputs-panel] input[type=range]")
