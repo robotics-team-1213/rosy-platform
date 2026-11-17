@@ -1,0 +1,17 @@
+[Unit]
+Description=Check that this host's control units attach to their peers through mDNS (name, TLS, auth, revision, manifest)
+After=network-online.target avahi-daemon.service
+
+[Service]
+Type=oneshot
+# A failing peer link makes the unit fail: the journal has one JSON line per link and update_status
+# lists the failed unit as a FAIL finding (host-guard `drift` lines surface the same report); no new channel.
+# One JSON line per link goes to the journal (journalctl -u rosy-control-unit-check). Config files are
+# the private unit directories under /etc/rosy/control-unit; tokens are read but never printed.
+ExecStart=/usr/bin/python3 -I /usr/local/sbin/rosy-control-unit-check --json
+TimeoutStartSec=2min
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full

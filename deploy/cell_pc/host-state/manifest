@@ -14,3 +14,8 @@ approval=wifi wifi-allow
 safe file /etc/systemd/system/rosy-nightly-reboot.service.d/10-update-gate.conf common/10-update-gate.conf
 # D-991: owner of the cell camera user units a person may restart.
 approval=recovery file /etc/rosy/host-control/units-user common/host-control-units-user.in
+# 2026-11-17: both control-unit hosts (R and the cell PC) check their peer links through mDNS every 5 minutes.
+safe file /usr/local/sbin/rosy-control-unit-check deploy/site/control_unit_check.py 0755
+safe file /etc/systemd/system/rosy-control-unit-check.service deploy/site/rosy-control-unit-check.service
+safe file /etc/systemd/system/rosy-control-unit-check.timer deploy/site/rosy-control-unit-check.timer
+safe enabled rosy-control-unit-check.timer
