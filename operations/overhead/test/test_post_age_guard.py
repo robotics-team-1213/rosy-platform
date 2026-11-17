@@ -143,6 +143,9 @@ class _States:
     def marker_seen(self, target_id):
         return target_id == "rosy_46"
 
+    def update_from_config(self, config):
+        pass
+
 
 class _AnchorClient(_Client):
     def __init__(self, hang=False):
@@ -238,7 +241,7 @@ def _calibration():
 def test_a_pinky_without_its_own_marker_is_a_home_guess_never_a_sighting(marker_id, seen):
     tracker = AnchorHeadTracker()
     tracker.update_from_config({"robot_markers": {"rosy_46": 9}, "anchors": [
-        {"target_id": "rosy_46", "kind": "pinky", "base_x": 0.5, "base_y": 0.4, "updated_at": 1.0}]})
+        {"target_id": "rosy_46", "kind": "pinky", "base_x": 0.5, "base_y": 0.4, "updated_at": 1e12}]})
     result = DetectorResult((Detection(0.5, 0.4, 0.16, 0.9, marker_id),), "OK")
     image = np.full((360, 640, 3), 120, np.uint8)
     _, sightings, _ = tracker.step(image, 100.0, _calibration(), result, source_id="ceiling_north",
