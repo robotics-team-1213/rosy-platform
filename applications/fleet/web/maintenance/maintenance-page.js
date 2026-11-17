@@ -1,6 +1,7 @@
 // D-991 /console/maintenance: PC 상태·조치·이력. 해도 되는지는 그 PC의 도우미가 판단한다.
 import {createFleetClient} from '/common/fleet-client.js';
 import {createPollGate} from '/console/assets/poll-gate.js';
+import {readToken, storeToken} from '/console/assets/console-token.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
@@ -8,7 +9,7 @@ import {createHostServices} from '/console/assets/host-services.js';
 import {createDbMaintenance} from '/console/assets/db-maintenance.js';
 
 // A development or token session lives in this tab's storage, not a cookie (same as the other work pages).
-let token = sessionStorage.getItem('rosy-console-token') || '';
+let token = readToken();
 const tokenInput = document.getElementById('console-token');
 if (tokenInput) tokenInput.value = token;
 const request = createFleetClient({credential: () => token, origin: location.origin});
@@ -69,8 +70,7 @@ async function connect(credentialChange = false) {
 
 function saveToken() {
   token = tokenInput?.value.trim() || '';
-  if (token) sessionStorage.setItem('rosy-console-token', token);
-  else sessionStorage.removeItem('rosy-console-token');
+  storeToken(token);
   void connect(true).catch(() => {});
 }
 
@@ -82,7 +82,7 @@ const loginForm = createPasswordLogin(document.getElementById('password-login'),
   onChange: () => {
     token = '';
     if (tokenInput) tokenInput.value = '';
-    sessionStorage.removeItem('rosy-console-token');
+    storeToken('');
     void connect(true).catch(() => {});
   },
 });

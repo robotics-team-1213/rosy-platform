@@ -24,6 +24,7 @@ SHARED = {
     "address-drift.js",
     "authorization.js",
     "poll-gate.js",
+    "console-token.js",  # sessionStorage token read/store and the signed-out error test shared by Cell, Installation and Maintenance.
     "uuid.js",  # DOM-free CSPRNG identifiers shared by Console, Cell and site-map documents.
     "development-auth.js",
     "password-login.js",

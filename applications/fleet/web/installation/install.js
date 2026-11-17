@@ -3,6 +3,7 @@
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
 
 import { applyRoleToControls } from "/console/assets/authorization.js";
+import { isSignedOut, readToken, storeToken } from "/console/assets/console-token.js";
 import { developmentToken } from "/console/assets/development-auth.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
@@ -47,7 +48,7 @@ let measuredCalibration = null;
 let deviceProfiles = null;
 
 const auth = {
-  token: sessionStorage.getItem("rosy-console-token") || "",
+  token: readToken(),
   role: null,
   principal: null,
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다.
@@ -115,7 +116,7 @@ async function call(path, options = {}) {
     return body;
   } catch (error) {
     task.check();
-    if ((error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') && !cameraPreview) markLocked();
+    if (isSignedOut(error) && !cameraPreview) markLocked();
     throw error;
   }
 }
@@ -238,11 +239,7 @@ function saveToken() {
   auth.token = el("console-token").value.trim();
   auth.role = null;
   applyRole();
-  if (auth.token) {
-    sessionStorage.setItem("rosy-console-token", auth.token);
-  } else {
-    sessionStorage.removeItem("rosy-console-token");
-  }
+  storeToken(auth.token);
   visionView.reset();
   mapFit.reset();
   startPoints.reset();
@@ -398,7 +395,7 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
         }
       } catch (_issueError) { /* Paired and unavailable consoles keep the token prompt. */ }
     }
-    if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
+    if (!auth.locked) markLocked(isSignedOut(_err) ? "auth" : "connection");
   }
 }
 

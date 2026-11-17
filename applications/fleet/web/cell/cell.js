@@ -1,5 +1,6 @@
 import {randomUUID} from "/console/assets/uuid.js";
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
+import {isSignedOut, readToken} from '/console/assets/console-token.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
@@ -43,7 +44,7 @@ function jobReasonLabel(reason) {
   return !reason ? '' : JOB_REASON_LABEL[reason] || '사유 확인 필요 · 진행 원장 상세를 확인하세요';
 }
 // Read once: a token typed while the page starts is the person's own 접속, not a stored session.
-const stored = sessionStorage.getItem('rosy-console-token') || '';
+const stored = readToken();
 $('console-token').value = stored;
 const revisions = new Map();
 let previewRefs = null, role = null, busy = false, lastBusy = null, lastRole = undefined, cellServiceUnavailable = false, job = null, jobGeneration = null, layoutData = null;
@@ -137,7 +138,7 @@ async function action(fn) {
     if (error.code === 'CELL_APP_UNCONFIGURED') cellServiceUnavailable = true;
     if (error.status === 401 || error.status === 403) clearSession();
     if (error.status === 403 && error.code !== 'PASSWORD_CHANGE_REQUIRED') showSignedOut({refused: false});
-    if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') { showSignedOut(); loginForm.refresh(true); }
+    if (isSignedOut(error)) { showSignedOut(); loginForm.refresh(true); }
     else if (error.status === 409) clearJobSnapshot();
     const failure = error.code === 'PASSWORD_CHANGE_REQUIRED' ? '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요.'
       : error.status === 403 ? '이 계정에는 팔레트 적재 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'

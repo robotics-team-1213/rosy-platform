@@ -414,6 +414,10 @@
       "path": "map/map-datum.js",
       "media_type": "application/javascript"
     },
+    "console-token.js": {
+      "path": "shared/console-token.js",
+      "media_type": "application/javascript"
+    },
     "poll-gate.js": {
       "path": "shared/poll-gate.js",
       "media_type": "application/javascript"
