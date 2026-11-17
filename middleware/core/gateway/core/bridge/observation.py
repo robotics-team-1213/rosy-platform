@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 from typing import Callable, Optional
 
 from core.bridge import battery_policy, translate
@@ -31,7 +32,7 @@ from core_features.vision import accept_preview
 from core_features.docking.lidar_v import DockVSpec, detect_dock_v, lidar_v_payload
 from core_features.docking.model import DockPhase
 from core_common.protocol.lane_containment import LaneContainmentEvidence
-from core_common.robot_body import inside_body
+from core_common.robot_body import RobotBody, inside_body
 
 Warn = Callable[[str], None]
 
@@ -193,6 +194,35 @@ def rear_dock_scan(services, sample, *, received_at: float) -> None:
         return
 
 
+def bay_body_scan(services, sample, *, received_at: float) -> None:
+    """D-1013 칸 접근 중: 짐칸 포함 몸으로 제자리 회전 판정(D-424 rotation_check)과 앞뒤 곧은 여유를
+    도킹에 넣는다 — 칸 회전·칸 줄 전진은 이것이 비어 있다고 할 때만 움직인다(2026-11-18 옆 칸 접촉).
+    판정을 못 하면 넣지 않는다: 도킹은 낡은 판정을 '없음'으로 읽어 멈춘다."""
+    try:
+        docking = services.docking
+        overhang = docking.body_scan_rear_overhang()
+        if overhang is None:
+            return
+        config = services.line_follow.config
+        body = RobotBody(front_x_m=config.body_front_x_m, rear_x_m=config.body_rear_x_m,
+                         half_width_m=config.body_half_width_m,
+                         rotation_radius_m=config.body_rotation_radius_m,
+                         lidar_x_m=config.body_lidar_x_m, lidar_forward_deg=config.lidar_forward_deg,
+                         margin_m=config.obstacle_body_margin_m)
+        rear = min(body.rear_x_m, -overhang)
+        body = replace(body, rear_x_m=rear, rotation_radius_m=max(
+            body.rotation_radius_m, math.hypot(rear, body.half_width_m), body.front_x_m))
+        view = body.scan_view(sample, forward_deg=config.lidar_forward_deg,
+                              self_mask=config.lidar_self_mask)
+        kind, _ = body.rotation_check(view)
+        # No return at all is not a clear way: report zero gaps so a straight drive stops too.
+        front = body.translation_gap(view.points) if view.points else 0.0
+        rear = body.translation_gap(view.points, reverse=True) if view.points else 0.0
+        docking.note_body_scan(kind, front, rear, received_at - _scan_lag_s(sample))
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return
+
+
 def _scan_lag_s(sample) -> float:
     """Seconds the scan waited between its stamp and this callback (queue + transport); 0 if unprovable.
 
@@ -209,6 +239,7 @@ def front_clearance(services, sample, *, received_at: float) -> None:
     D-395 P2-7 미션도 같은 표본을 받는다(정면 여유는 미션이 필요할 때만 잰다). 후진 충전소의
     V 표지도 같은 표본에서 찾는다(D-972, 도킹이 찾는 동안만)."""
     rear_dock_scan(services, sample, received_at=received_at)
+    bay_body_scan(services, sample, received_at=received_at)
     mission = services.loc_mission
     if mission is not None:
         mission.observe_scan(sample)

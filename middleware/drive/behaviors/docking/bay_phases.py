@@ -24,6 +24,7 @@ import math
 from typing import Any, Optional
 
 from core_common.protocol.schemas import NavigationState
+from core_features.docking.bay_zone import NO_LINE, classify as classify_zone
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.model import DockPhase
 from core_features.docking.parking import ParkingGains, turn_twist
@@ -56,6 +57,12 @@ class BayPhases:
         self._last_tick: Optional[float] = None
         self._baseline_v: Optional[float] = None
         self._fleet_cue: Optional[tuple[float, dict]] = None
+        # 칸 줄 안 시작(bay_zone.py): None | "check"(선 관측 기다려 판정) | "exit"(곧은 전진)
+        self._zone: Optional[str] = None
+        self._zone_checked = False      # "out" 판정 직후 한 번은 Nav2 스테이징으로 보낸다
+        self._exit_m = 0.0
+        # 몸 스캔(짐칸 포함 회전 판정, 앞 여유): (rotation_block, front_gap, rear_gap, at)
+        self._body: Optional[tuple] = None
 
     # --- 매니저가 부르는 자리 ---------------------------------------------------
 
@@ -80,6 +87,49 @@ class BayPhases:
             return self._charging.update(None, voltage, now=now), self._charging
         return self._h._rear_phases.docked_confirm(status, voltage, now)
 
+    def note_body_scan(self, rotation_block: Optional[str], front_gap_m: Optional[float],
+                       rear_gap_m: Optional[float], at: float) -> None:
+        """CORE 가 LiDAR 한 장마다 넣는다: 짐칸 포함 제자리 회전 판정(None = 비어 있음)과 앞뒤 여유."""
+        self._body = (rotation_block, front_gap_m, rear_gap_m, float(at))
+
+    def _body_fresh(self, now: float) -> Optional[tuple]:
+        if self._body is None or now - self._body[3] > self._h._cfg.bay_scan_fresh_s:
+            return None
+        return self._body
+
+    def _forward_block(self, now: float, since: float) -> Optional[str]:
+        """곧은 전진(칸 줄 나가기·재시도 후퇴·정착 크립) 전 앞 확인: None = 가도 된다, "wait" = 아직
+        판정 없음(멈춰 기다림), 그 밖 = 실패 사유. 점이 없거나 앞 빔이 무응답이면 비어 있는 것이 아니다."""
+        body = self._body_fresh(now)
+        if body is not None and body[3] < since:
+            body = None
+        if body is None:
+            return "wait" if now - since <= self._h._cfg.bay_scan_wait_s else "no fresh body scan"
+        if body[0] in ("empty", "unknown"):
+            return "LiDAR cannot vouch for the way ahead (%s)" % body[0]
+        if body[1] is not None and body[1] < self._h._cfg.bay_exit_front_gap_m:
+            return "something ahead within %.2f m" % self._h._cfg.bay_exit_front_gap_m
+        return None
+
+    def zone_entry(self) -> bool:
+        """스테이징 전에 칸 줄 안인지 본다(시작·재시도 모두). 판정을 맡으면 True."""
+        if not self.active():
+            return False
+        if self._zone_checked:
+            self._zone_checked = False
+            return False
+        h = self._h
+        self._reset_line_state()
+        if h._detector is None and h._detector_factory is not None and h._dock is not None:
+            h._detector = h._detector_factory(h._dock, h._type())
+        if h._detector is not None:
+            h._detector.start(h._dock)        # a retry's backoff stopped it
+        if h.executor is not None:
+            h.executor.stop()
+        self._zone = "check"
+        h._enter(DockPhase.BACKOFF)
+        return True
+
     def leave_sign(self) -> float:
         """칸 언도킹은 전진(도크가 뒤에 있다). 나머지는 후진형 규칙에 위임."""
         return 1.0 if self.active() else self._h._rear_phases.leave_sign()
@@ -88,7 +138,9 @@ class BayPhases:
         """칸형이면 이 단계를 맡고 True."""
         if not self.active():
             return False
-        if phase is DockPhase.STAGING:
+        if phase is DockPhase.BACKOFF and self._zone is not None:
+            self._tick_zone(now)
+        elif phase is DockPhase.STAGING:
             self._tick_staging(now)
         elif phase is DockPhase.TURNING:
             self._tick_turning(now)
@@ -136,6 +188,15 @@ class BayPhases:
         pose = self._odometry()
         if pose is None:
             h._fail("bay odometry unavailable")
+            return
+        body = self._body_fresh(now)
+        if body is not None and body[3] < h._phase_since:
+            body = None          # a scan from before the stop at staging says nothing about here
+        if body is None or body[0] is not None:
+            # 짐칸 포함 회전 판정이 비어 있다고 할 때만 돈다 — 매 틱(2026-11-18 옆 칸 접촉).
+            self._stop()
+            if body is not None or now - h._phase_since > h._cfg.bay_scan_wait_s:
+                h._fail("bay turn not clear: %s" % (body[0] if body else "no fresh body scan"))
             return
         error = _wrap(self._turn_target - pose[2])
         angular, done = turn_twist(error, _TURN_GAINS)
@@ -188,6 +249,12 @@ class BayPhases:
             h.executor.reset_odometry_mark()
             self._creep_from = 0.0
         if abs(h.executor.travelled_m()) < cfg.bay_settle_creep_m:
+            block = self._forward_block(now, h._phase_since)
+            if block is not None:
+                self._stop()
+                if block != "wait":
+                    h._fail("bay settle creep: " + block)
+                return
             self._drive(h._cfg.undock_speed, 0.0)
             return
         self._stop()
@@ -317,6 +384,70 @@ class BayPhases:
         if now - h._phase_since > cfg.settle_timeout_s + cfg.bay_charge_confirm_s:
             h._retry("no charge after bay contact")
 
+    def _tick_zone(self, now: float) -> None:
+        """칸 줄 안: 판정 → 곧은 전진(Nav2·제자리 회전 없음) → 뒤가 칸을 보므로 선 포획부터."""
+        h, cfg = self._h, self._h._cfg
+        if self._zone == "check":
+            verdict = classify_zone(h._pose_provider(), h._dock, h._type().staging_offset_m,
+                                    self._observation(), cfg)
+            if verdict.reason == NO_LINE and now - h._phase_since < cfg.bay_zone_look_s:
+                return                       # a frame may still be on its way (5 Hz)
+            body = self._body_fresh(now)
+            if verdict.kind == "out" and (body is None or body[3] < h._phase_since):
+                if now - h._phase_since <= cfg.bay_scan_wait_s:
+                    return                   # Nav2 may turn at its start: look first
+                verdict = verdict.__class__("manual", "no fresh body scan before Nav2")
+            elif verdict.kind == "out" and body[0] == "near":
+                verdict = verdict.__class__("manual", "something within the tray sweep before Nav2")
+            h._emit("docking.bay_zone", "info", {"kind": verdict.kind, "reason": verdict.reason})
+            if verdict.kind == "out":
+                self._zone, self._zone_checked = None, True
+                h._begin_staging()
+            elif verdict.kind == "manual":
+                self._stop()
+                h._fail("bay zone: " + verdict.reason)
+            elif h.executor is None:
+                h._fail("bay executor unavailable")
+            else:
+                h.executor.reset_odometry_mark()
+                self._zone, self._exit_m = "exit", verdict.exit_m
+                self._est, h._last_seen_at = None, now
+                h._enter(DockPhase.BACKOFF)
+            return
+        if abs(h.executor.travelled_m()) >= self._exit_m:
+            self._stop()
+            self._reset_line_state()
+            h._begin_acquiring()
+            return
+        if now - h._phase_since > self._exit_m / cfg.bay_exit_speed + cfg.backoff_timeout_s:
+            self._stop()
+            h._fail("bay lane exit timed out")
+            return
+        block = self._forward_block(now, h._phase_since)
+        if block is not None:
+            self._stop()
+            if block != "wait":
+                h._fail("bay lane exit: " + block)
+            return
+        observation = self._observation()
+        errors = rear_errors(observation) if observation is not None else None
+        if errors is not None and self._est is not None and abs(errors[1] - self._est[0]) > cfg.bay_gate_jump_m:
+            errors = None                    # a jump is a neighbour's line or noise, not evidence
+        if errors is None:
+            # Never steer or drive blind out of the row: stop, and call a person if it stays lost.
+            self._stop()
+            if h._last_seen_at is None or now - h._last_seen_at > cfg.detector_lost_grace_s:
+                h._fail("bay lane exit lost the guide line")
+            return
+        _, lateral, heading = errors
+        self._est, h._last_seen_at = (lateral, heading), now
+        angular = 0.0
+        if cfg.bay_exit_steer_head > 0.0:
+            # Forward along the line: hold a heading that walks the lateral back (sign checked in sim).
+            target = max(-0.15, min(0.15, cfg.bay_exit_steer_lat * lateral))
+            angular = max(-0.3, min(0.3, -cfg.bay_exit_steer_head * (heading - target)))
+        self._drive(cfg.bay_exit_speed, angular)
+
     def _tick_backoff(self, now: float) -> None:
         """재시도: 교차점 쪽으로 전진한 뒤 스테이징부터."""
         h, cfg = self._h, self._h._cfg
@@ -330,6 +461,12 @@ class BayPhases:
             if now - h._phase_since > cfg.backoff_timeout_s:
                 self._stop()
                 h._fail("bay backoff blocked")
+                return
+            block = self._forward_block(now, h._phase_since)
+            if block is not None:
+                self._stop()
+                if block != "wait":
+                    h._fail("bay backoff: " + block)
                 return
             self._drive(cfg.undock_speed, 0.0)
             return
@@ -389,6 +526,8 @@ class BayPhases:
         self._backoff = False
         self._turn_target = None
         self._fleet_cue = None
+        self._zone = None
+        self._exit_m = 0.0
 
     def _odometry(self):
         pose = getattr(self._h.executor, "odometry_pose", None) if self._h.executor else None

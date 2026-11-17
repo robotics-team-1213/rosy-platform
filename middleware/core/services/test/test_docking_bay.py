@@ -175,7 +175,7 @@ def a_bay(*, charges=True, **type_kwargs):
     manager = DockingManager(
         database=db, safety=safety, config=DockingConfig(), clock=clock,
         detector_factory=lambda dock, dock_type: detector,
-        capability_provider=lambda: True, battery=battery,
+        capability_provider=lambda: True, battery=battery, pose_provider=lambda: world.pose,
         events=SimpleNamespace(publish=lambda t, **kw: events.append((t, kw.get("data")))))
     manager.executor = world
     world.manager = manager
@@ -188,6 +188,7 @@ def run(p, until, max_s=240.0):
     while p.clock.now - t0 < max_s:
         if k % 4 == 0:
             p.detector.capture()
+            p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)   # open floor: clear
         p.manager.tick()
         phase = p.manager.phase.value if p.manager.phase else None
         if not phases or phases[-1] != (p.manager.state.value, phase):
@@ -303,6 +304,7 @@ def test_fleet_centerline_evaluation_guides_reverse_and_triggers_contact_when_ca
     while p.clock.now - t0 < 120.0:
         if k % 4 == 0:
             p.detector.capture()
+            p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)   # open floor: clear
         if p.manager.phase is DockPhase.ALIGNING:
             x, y, yaw = p.world.pose
             to_end_m = max(0.0, -DOCKED_ALONG - x)
@@ -336,6 +338,7 @@ def test_fleet_retry_verdict_triggers_immediate_backoff_and_realign():
     while p.clock.now - t0 < 160.0:
         if k % 4 == 0:
             p.detector.capture()
+            p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)   # open floor: clear
         if p.manager.phase is DockPhase.ALIGNING and not injected:
             injected = True
             p.manager._bay_phases.observe_fleet_docking({

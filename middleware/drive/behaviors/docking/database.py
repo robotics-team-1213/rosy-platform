@@ -66,6 +66,12 @@ class DockType(BaseModel):
     rail_entry_m: float = 0.45          # 여기까지 오기 전에 정렬을 끝낸다(바퀴가 레일 입구에 닿기 전)
     rear_align_tolerance_m: float = 0.010
     rear_align_tolerance_rad: float = 0.035
+    # 저배터리 자동 복귀(manager.on_battery_level). None: 칸 접근(line)은 끔, 나머지는 켬.
+    auto_return: Optional[bool] = None
+
+    @property
+    def battery_return(self) -> bool:
+        return self.auto_return if self.auto_return is not None else self.approach != "line"
 
     @field_validator("staging_offset_m")
     @classmethod
@@ -121,6 +127,10 @@ class DockType(BaseModel):
             raise ValueError("a line approach needs the camera_line detector")
         if not self.staging or self.settle != "agent":
             raise ValueError("a line approach stages by Nav2 and settles by charge")
+        # 스테이징에서 제자리 180° 회전한다: 칸 입구에서 0.30 m 안쪽이면 옆 칸 로봇에 닿는다
+        # (짐칸 돌출 126 mm 가정: 0.20 m 33 mm·0.30 m 171 mm, 2026-11-18 패널).
+        if self.staging_offset_m < 0.30:
+            raise ValueError("a line approach turns at staging: staging_offset_m must be >= 0.30")
         return self
 
 
