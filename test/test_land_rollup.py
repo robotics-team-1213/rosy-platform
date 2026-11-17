@@ -195,7 +195,7 @@ def test_a_failed_rollup_splits_in_halves_or_sends_members_back_alone(tmp_path, 
     (holder / "land-r.log").write_text(log)
     monkeypatch.setattr(land_rollup.land_async, "holder", lambda repo: holder)
     seen = land_rollup.split(tmp_path, "land-r", NOW, builder=lambda repo, half, now: [m["branch"] for m in half],
-                             resumer=lambda m: [m["branch"]])
+                             resumer=lambda m: [m["branch"]], bisect=True)
     assert seen == groups
 
 
@@ -273,6 +273,36 @@ def test_a_rollup_whose_full_has_not_started_rerolls_with_new_waiters(repo, monk
     assert stopped == [8] and not marker.exists(), "the old rollup keeps landing b"
 
 
+def test_a_stop_without_a_new_failure_requeues_members_instead_of_halves(tmp_path, monkeypatch):
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    (holder / "land-r.members").write_text(json.dumps([{"branch": n, "worktree": n} for n in "abc"]))
+    (holder / "land-r.log").write_text("[remote-pytest] serial: browser job")  # killed: no verdict
+    monkeypatch.setattr(land_rollup.land_async, "holder", lambda repo: holder)
+    kw = dict(builder=lambda repo, half, now: pytest.fail("no halves"), resumer=lambda m: m["branch"])
+    assert land_rollup.split(tmp_path, "land-r", NOW, **kw) == ["a", "b", "c"]
+
+
+def test_one_rollup_lane_blocks_a_new_build_until_it_is_stuck_or_not_yet_checking(repo, monkeypatch):
+    main, snapshot = repo
+    qdir = land_rollup.land_async.holder(main).parent / "q"
+    name = "land/fix/land-rollup-20261117000000-20261117000000"
+    plain = {**snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), "ticket": "t1"}
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    monkeypatch.setattr(land_rollup, "build", lambda *a, **k: pytest.fail("a rollup is in flight"))
+    monkeypatch.setattr(land_rollup, "plan", lambda r, rows, tier_of=None: rows)
+    for status, extra, age in (("turn", {}, 60), ("waiting", {}, 60), ("preparing", {}, 60)):
+        row = dict(branch=name, status=status, host="h", ticket="t0", age=age, **extra)
+        monkeypatch.setattr(land_rollup.land_queue, "ahead", lambda q, t, row=row: [row, plain])
+        assert land_rollup.roll(main, qdir, NOW, ["apply"]) == 0
+    live = [dict(branch=name, status="preparing", host="h", full_wait=True, age=60),
+            dict(branch=name, status="pending", host="h", age=60),
+            dict(branch=name, status="turn", host="other", age=60),
+            dict(branch=name, status="turn", host="h", age=land_rollup.ROLLUP_LANE_S + 1)]
+    assert land_rollup.in_flight(live, "h") == []
+    assert len(land_rollup.in_flight([{**live[3], "age": 60}], "h")) == 1
+
+
 def test_the_halves_of_a_split_get_distinct_build_stamps(tmp_path, monkeypatch):
     """11-14 04:50: both halves got the same stamp; the second build found its branch taken and five members waited."""
     holder = tmp_path / "rosy-land-wt"
@@ -281,7 +311,7 @@ def test_the_halves_of_a_split_get_distinct_build_stamps(tmp_path, monkeypatch):
     (holder / "land-r.log").write_text("[land] STOP: NEW failure in pkg/test")
     monkeypatch.setattr(land_rollup.land_async, "holder", lambda repo: holder)
     stamps = land_rollup.split(tmp_path, "land-r", NOW, builder=lambda repo, half, now: f"{now:%Y%m%d%H%M%S}",
-                               resumer=lambda m: None)
+                               resumer=lambda m: None, bisect=True)
     assert len(stamps) == 2 and stamps[0] != stamps[1]
 
 
