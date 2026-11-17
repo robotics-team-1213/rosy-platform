@@ -770,7 +770,7 @@ def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatc
     rollup = "land/fix/land-rollup-20261109000000-20261109000000"
     monkeypatch.setattr(tool, "git", lambda cwd, *a, **k: str(repo / ".git"))
     seen = []
-    launch = lambda argv, log, cwd=None: seen.append((argv[-2:], log.name, cwd))  # noqa: E731
+    launch = lambda argv, log, cwd=None: seen.append((argv[4:], log.name, cwd))  # noqa: E731
     tool.split_rollup(tree, rollup, launch)
     assert seen == [], "no .members record: not a rollup land_rollup built"
     (tree.parent / (tree.name + ".members")).write_text("[]", encoding="utf-8")
@@ -781,9 +781,15 @@ def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatc
     monkeypatch.delenv("ROSY_ROLLUP_MIXED")
     tool.split_rollup(tree, rollup, launch, reason="[land] STOP: landing queue full (12/12 tickets)")
     assert seen == [], "halves would stop on the same full queue"
-    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")
+    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure in a (log x); not landing")
     tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")  # a retried supervisor
+    assert seen == [(["split", tree.name, "bisect"], tree.name + ".split.log", repo)]
+    (tree.parent / (tree.name + ".split")).unlink()
+    seen.clear()
+    tool.split_rollup(tree, rollup, launch, reason="")  # killed or expired: no verdict, members go back alone
     assert seen == [(["split", tree.name], tree.name + ".split.log", repo)]
+    assert tool.verdict(["[land] STOP: x", "pytest a (log l)", "[remote-pytest] progress"]).startswith("[land] STOP: x")
+    assert tool.verdict(["[remote-pytest] serial: browser job"]) == ""
 
 
 def test_branch_option_queues_without_a_branch_worktree_and_checks_errors(repo, monkeypatch):

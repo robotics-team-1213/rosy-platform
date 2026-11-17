@@ -22,12 +22,29 @@ _HERE = str(Path(__file__).resolve().parent)
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
+import cell_arm_lease  # noqa: E402
 from joint_tune import SerialBus as _DefaultSerialBus, no_interrupts, protect_signals, session_lock  # noqa: E402
 from record_session_helpers import compose, interrupt_on_parent_death, load_task_card, static_episodes  # noqa: E402
 from session_caps import load_caps, model_tuning, robot_tuning  # noqa: E402
 
 
 _PARENT_GLOBALS_LIST: list[dict] = []
+
+
+def claim_arm_lease(arm):
+    """D-1035: claim the arm for this session; (record, created), created False when this owner already held it."""
+    owner = cell_arm_lease.default_owner()
+    before = cell_arm_lease.status(arm).get(arm)
+    revision = None
+    try:
+        revision = (Path(__file__).resolve().parents[3] / "REVISION").read_text().strip() or None
+    except OSError:
+        pass
+    try:
+        record = cell_arm_lease.claim(arm, owner, "record_session", pid=os.getpid(), revision=revision)
+    except cell_arm_lease.LeaseHeld as exc:
+        raise SystemExit(f"REFUSED: arm lease: {exc}")
+    return record, not (before and before["owner"] == owner and before["live"])
 
 
 def _REGISTER_GLOBALS(g: dict) -> None:
@@ -180,7 +197,10 @@ def main(argv=None, *, _globals: dict | None = None):
     )
     lock = attr("session_lock", session_lock)(args.arm)
     record = {}
+    lease_created = False
     try:
+        if args.arm:
+            lease_created = claim_arm_lease(args.arm)[1]
         omx_incident.refuse_if_held(args.arm)
         record = session.execute(
             args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card, body_only=args.body_only
@@ -215,6 +235,8 @@ def main(argv=None, *, _globals: dict | None = None):
                 except Exception as exc:
                     print(f"incident pipeline failed: {exc}")
         finally:
+            if lease_created:
+                cell_arm_lease.release(args.arm)
             lock.close()
     if not record.get("safe_end"):
         raise SystemExit("UNSAFE END: follower torque or caps not confirmed restored - see session.json")

@@ -306,11 +306,11 @@ def test_evaluate_forwards_flow_steps_and_amp(monkeypatch, tmp_path):
     out = tmp_path / "eval.json"
     rc = policy.main(["evaluate", "--model", "m", "--steps-file", "s", "--tasks", "stack", "--skill", "grasp",
                       "--isolated-seeds", "1", "--flow-steps", "5", "--amp", "--n-action-steps", "8",
-                      "--cam-jitter", "--compensate-zero",
+                      "--cam-jitter", "--compensate-zero", "--zero-est-noise-deg", "0.5",
                       "--out", str(out), "--artifacts", str(tmp_path / "art")])
     assert rc == 0 and json.loads(out.read_text(encoding="utf-8"))["policy"] == "smolvla"
     assert calls[0][2]["flow_steps"] == 5 and calls[0][2]["use_amp"] is True and calls[0][2]["n_action_steps"] == 8
-    assert calls[0][2]["cam_jitter"] is True and calls[1] == ("isolated", {"compensate_zero": True})
+    assert calls[0][2]["cam_jitter"] is True and calls[1] == ("isolated", {"compensate_zero": True, "zero_est_noise_deg": .5})
     assert helpers.resolved_choices({"arm_bases": "measured-194"}, cam_jitter=True)["arm_bases"] == "measured-194"
     assert "wrist_camera" in helpers.resolved_choices({}, cam_jitter=True)
 
@@ -534,3 +534,17 @@ def test_driver_moves_the_checkpoint_processor_to_its_own_device(monkeypatch, tm
     policy.Driver(model_dir, steps_file, device="cpu")
     assert seen_overrides[-1] == {"preprocessor_overrides": {"device_processor": {"device": "cpu"}},
                                   "postprocessor_overrides": {"device_processor": {"device": "cpu"}}}
+
+
+def test_an_isolated_collect_drops_only_the_failed_step_and_a_whole_run_drops_the_rest(monkeypatch):
+    from types import SimpleNamespace
+    for isolated, saved_n in ((True, 2), (False, 1)):
+        results, saved, cleared = iter(["pass", "fail", "pass"]), [], []
+        monkeypatch.setattr(helpers.teaching.Teacher, "run_step", lambda self, data, step, here: {"result": next(results)})
+        rec = helpers.Recorder.__new__(helpers.Recorder)
+        rec.dataset = SimpleNamespace(save_episode=lambda: saved.append(1), clear_episode_buffer=lambda: cleared.append(1))
+        rec.skill, rec.no_goal, rec.longest, rec.spoiled, rec.failed, rec.isolated, rec.count = None, True, {}, False, [], isolated, 0
+        for i in range(3):
+            rec.run_step(None, {"id": f"s{i}"}, {})
+        assert len(saved) == saved_n and len(cleared) == 3 - saved_n
+        assert (rec.failed, rec.spoiled) == ((["s1"], False) if isolated else ([], True))
