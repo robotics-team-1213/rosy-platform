@@ -107,7 +107,7 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     except ValueError as exc:
         out["bias_error"] = str(exc)
         out["missing_bias"].extend(f"{site}:{xy[0]},{xy[1]}" for site, xy in targets)
-    out["missing_map"] = [s for s in map_sites(config) if s not in calibration.get("sites", {})]
+    out["missing_map"] = rp.missing_maps(config, calibration, map_sites(config))
     for s in map_sites(config):
         rec = (calibration.get("sites") or {}).get(s) or {}
         if rec.get("loo_error_mm") and not map_agrees(rec, params) and len(rec.get("points") or []) >= 5:

@@ -266,6 +266,17 @@ def test_an_arm_with_no_map_for_its_sites_is_remapped():
     assert found["missing_map"] == ["pallet"] and cc.stale(found)[:2] == ["remap", "regions"]
 
 
+def test_a_one_jaw_map_is_remapped_when_the_config_asks_for_a_tcp_map():
+    """2026-11-17 arm_a: the 11-15 map followed one jaw; with calibrate.tcp_marks it must be measured again."""
+    one_jaw = {"sites": {"pallet": {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}}}
+    tcp_map = {"sites": {"pallet": {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]], "marks": "tcp"}}}
+    asks = {"calibrate": {"tcp_marks": True}}
+    assert cc.rp.missing_maps(asks, one_jaw, ["pallet"]) == ["pallet"]
+    assert cc.rp.missing_maps(asks, tcp_map, ["pallet"]) == []
+    assert cc.rp.missing_maps({}, one_jaw, ["pallet"]) == []  # without the key, as before
+    assert cc.rp.missing_maps({}, {"sites": {}}, ["pallet"]) == ["pallet"]
+
+
 def test_a_map_whose_marks_disagree_is_not_kept():
     assert cc.map_agrees({"loo_error_mm": {"max": 5.2, "mean": 3.1}})
     assert not cc.map_agrees({"loo_error_mm": {"max": 52.34, "mean": 26.81}})  # arm_a 2026-11-04 over the boxes

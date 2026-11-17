@@ -70,3 +70,11 @@ def planned_yaw(library: Path, config: dict) -> float | None:
         return float(cell_pivot.joints_tcp(frame, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))[3])
     except (OSError, KeyError, IndexError, TypeError, ValueError):
         return None
+
+
+def missing_maps(config: dict, calibration: dict, sites) -> list:
+    """Sites to remap: no map, or a one-jaw map while the config asks for a TCP map (calibrate.tcp_marks).
+    2026-11-17 arm_a: its 11-15 map followed one jaw, so every TCP pivot carried ~28 mm and failed max_bias_mm."""
+    tcp = bool((config.get("calibrate") or {}).get("tcp_marks"))
+    have = calibration.get("sites", {})
+    return [s for s in sites if s not in have or (tcp and have[s].get("marks") != "tcp")]
