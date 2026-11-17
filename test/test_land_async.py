@@ -209,7 +209,7 @@ def test_a_landing_recovers_after_a_resource_shortage(repo, monkeypatch):
 def test_expired_room_deadline_refuses_even_a_free_queue(repo, monkeypatch):
     _, dev = repo
     monkeypatch.setattr(tool.time, "monotonic", lambda: 11)
-    monkeypatch.setattr(tool._queue(), "full", lambda qdir: None)
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": None)
     assert not tool.wait_for_room(dev, 10)
 
 
@@ -321,7 +321,7 @@ def test_requeueing_a_head_the_live_snapshot_holds_reuses_it(repo, monkeypatch):
 def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room_after):
     _, dev = repo
     checks, clock = [], [0.0]
-    monkeypatch.setattr(tool._queue(), "full", lambda qdir: None if room_after and len(checks) >= room_after
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": None if room_after and len(checks) >= room_after
                         else checks.append(1) or "landing queue full (12/12 tickets)")
     monkeypatch.setattr(tool.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(tool.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
@@ -747,7 +747,7 @@ def test_a_waiter_never_replaces_a_landing_that_started_while_it_waited(repo, mo
     main, dev = repo
     state = {"full": True}
 
-    def full(qdir):
+    def full(qdir, lane=""):
         if state["full"]:
             state["full"] = False
             _ticket(main, "0001", branch="land/feat/x-20261028050000")  # queued meanwhile, from a newer HEAD
@@ -864,3 +864,22 @@ def test_supervise_prunes_clean_landed_worktrees_and_never_fails_on_prune_error(
     monkeypatch.setattr(worktrees, "prune", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("lock held")))
     assert tool.supervise(tree2, snap2, [], run=fake_land) == 0
     assert not tree2.exists() and "worktree prune skipped: lock held" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("verdict", [True, False])
+def test_a_rollup_killed_without_a_verdict_is_not_bisected(repo, monkeypatch, verdict):
+    """11-17: land_tick killed a running rollup's land.py (exit 1, last line mid pytest); the supervisor then split
+    it on that progress line. Only a land.py STOP is a verdict to bisect on."""
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    split = []
+    monkeypatch.setattr(tool, "split_rollup", lambda *a, **k: split.append(k))
+    monkeypatch.setattr(tool, "superseded", lambda *a: [])
+
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        stdout.write(("[land] STOP: NEW failure\n" if verdict else "") + "[remote-pytest] serial: browser job\n")
+        return 1
+    tool.supervise(tree, snap, [], run=fake_land)
+    assert bool(split) is verdict
+    assert (tree.parent / (tree.name + ".stopped")).exists()
