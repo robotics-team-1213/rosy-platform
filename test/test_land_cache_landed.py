@@ -59,7 +59,7 @@ def _prior_round(repo_pair, changed, sel_extra, monkeypatch, tests="auto"):
     monkeypatch.setattr(land.land_cache, "_selection", lambda *a: sel)
     monkeypatch.setattr(land.land_cache, "_guards_and_browsers", lambda *a: [])
     events = []
-    monkeypatch.setattr(land.land_events, "emit", lambda kind, **f: events.append((kind, f)))
+    monkeypatch.setattr(land.land_events, "emit", lambda kind, **f: kind == "reuse_miss" or events.append((kind, f)))
 
     def select(wt_, b, python, head=None, landed=False):
         return [["other/test"]], "FULL"  # the range and the branch's own commit are FULL: no _landed_full
@@ -147,7 +147,7 @@ def _sibling(repo_pair, changed, monkeypatch, select_result):
                         lambda *a: {"mode": "full", "escalations": [], "unmapped": [], "local_invocations": [["other/test"]]})
     monkeypatch.setattr(land.land_cache, "_guards_and_browsers", lambda *a: [])
     events = []
-    monkeypatch.setattr(land.land_events, "emit", lambda kind, **f: events.append((kind, f)))
+    monkeypatch.setattr(land.land_events, "emit", lambda kind, **f: kind == "reuse_miss" or events.append((kind, f)))
     asked = []
 
     def select(wt_, b, python, head=None, landed=False):
