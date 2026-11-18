@@ -413,6 +413,7 @@ def test_scoped_browser_proof_on_an_ancestor_counts_only_when_the_later_delta_mi
     local, _ = repo
     harness = local / "tools/harness/rosy_harness.py"
     full = harness.read_text(encoding="utf-8").split("print(", 1)[1].rsplit(")", 1)[0]
+    _commit(local, "tools/land_guards.py", "GUARDS = ()\n")  # land_cache.reach reads the tree's guards
     _commit(local, "tools/harness/rosy_harness.py", "import json, sys\nprint(" + full + " if '--full' in sys.argv"
             " else json.dumps({'mode': 'affected', 'escalations': [], 'invocations': [['learning/registry/policy/test']]}))\n")
     ancestor = _commit(local, "test/test_dashboard_browser.py", "def test_dashboard(): assert True\n")

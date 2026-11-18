@@ -94,8 +94,10 @@ def clean(row):
         return False
     new, _, _ = known_failures.compare(text, known)
     return not (set(new) - set(known_failures.flaky(text, quarantine)))
-reach = ({a: land_cache.reach(root, a, sha, sys.executable) for a in request.get("ancestors", [])}
-         if hasattr(land_cache, "reach") else {})  # a candidate older than D-970 3 reuses nothing across trees
+import contextlib
+with contextlib.redirect_stdout(sys.stderr):  # reach prints "[cache] no reuse ..."; stdout carries only the JSON
+    reach = ({a: land_cache.reach(root, a, sha, sys.executable) for a in request.get("ancestors", [])}
+             if hasattr(land_cache, "reach") else {})  # a candidate older than D-970 3 reuses nothing across trees
 print(json.dumps({"plan": full, "browsers": browsers, "scope": scope, "variants": variants, "env": land_cache.env_id(root, sha),
                   "clean": [clean(row) for row in request["rows"]], "reach": reach}))
 '''
