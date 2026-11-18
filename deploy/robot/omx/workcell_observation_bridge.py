@@ -268,6 +268,13 @@ def main(argv=None):
         default=os.environ.get("ROSY_OBSERVATION_ARM_HEALTH", "").split(),
         help="private trusted health file for a registered arm; owner derives from its arm_id",
     )
+    parser.add_argument(
+        "--mirror-vision",
+        action="append",
+        metavar="wss://URL,/absolute/ca.crt",
+        default=os.environ.get("ROSY_OBSERVATION_MIRROR_VISION", "").split(),
+        help="another site's Vision that also receives every camera (cameras only, own TLS trust)",
+    )
     args = parser.parse_args(argv)
     try:
         manifest = WorkcellObservationManifest.model_validate(
@@ -291,15 +298,21 @@ def main(argv=None):
         secure_url(args.fleet_url, "https")
         secure_url(args.vision_url, "wss")
         context = ssl.create_default_context(cafile=args.ca_file)
+        mirrors = []
+        for binding in args.mirror_vision:
+            url, separator, ca_file = binding.partition(",")
+            if not separator or not Path(ca_file).is_absolute():
+                raise ValueError("mirror Vision must be wss://URL,/absolute/ca.crt")
+            mirrors.append((secure_url(url, "wss"), ssl.create_default_context(cafile=ca_file)))
     except (OSError, ValueError, yaml.YAMLError) as error:
         parser.error(f"observation configuration invalid: {type(error).__name__}")
     stop, workers, senders = threading.Event(), [], []
     previous = signal.signal(signal.SIGTERM, interrupt_on_termination)
 
-    def deliver(source, buffer, sender, *, health_file=None):
+    def deliver(source, buffer, sender, *, health_file=None, name=None):
         delivery = ArmHealthSource(buffer, health_file, source.arm_id) if health_file is not None else buffer
         worker = threading.Thread(
-            target=SourceWorker(delivery, sender.send).run, args=(stop,), name=source.source_id, daemon=True
+            target=SourceWorker(delivery, sender.send).run, args=(stop,), name=name or source.source_id, daemon=True
         )
         worker.start()
         workers.append(worker)
@@ -319,6 +332,14 @@ def main(argv=None):
                 NativeSource(camera.image_topic),
                 CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context),
             )
+            # Own buffer and worker per mirror: a slow or absent site never delays the local Vision.
+            for index, (url, mirror_context) in enumerate(mirrors, 1):
+                deliver(
+                    camera,
+                    NativeSource(camera.image_topic),
+                    CameraSender(url, camera.source_id, tokens[camera.source_id], context=mirror_context),
+                    name=f"{camera.source_id}@mirror{index}",
+                )
         workers.append(
             threading.Thread(
                 target=run_usb_reports,

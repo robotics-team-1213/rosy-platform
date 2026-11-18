@@ -606,3 +606,9 @@
 - 변경: `rosy_vision/world_261026_auto.py` — 천장 형광등 반사로 분홍 충전칸 상단(`bay 3`)이 분리될 때 `pink_main`으로 병합하고, C1·C2 충전소 거치대 및 S1 대기 로봇 가림에도 흔들리지 않는 2D 랜드마크 시드와 외곽 분홍칸(`pts_pb1`·`pts_pb3`) 지지 게이트를 적용해 1칸 밀림(bay aliasing) 국소해를 차단했다.
 - 증거: `test/test_auto_track_calibration.py` 및 `ceiling_north` 실영상 검증(`rms_m = 0.00288`).
 - gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · feat(vision): R 핫패치 anchor 경로 코드화 및 Fleet POST 연령 재확인·통계·연결 위생
+
+- 변경: `track/anchor_feed.py`(헤드 트래커 1 Hz, 감지 POST 뒤 단일 비행 anchors POST)·`post_guard.py`(POST 직전 0.8 s 연령 재확인, 폐기·오류 계수)·`track/fleet_client.py`(`publish_anchors`, keepalive_expiry 30 s)·`cli.py`(`vision` 30 s 통계줄)·`anchor_head_tracker.py`(own marker 없는 Pinky는 sighting·anchors 제외). Fleet `POST /api/fleet/detections/anchors` 경로 추가. R `keep/r-live-20261117` 스냅샷에서 anchor 관련만 이식, 나머지는 폐기.
+- 증거: `test_post_age_guard.py`, `test_overhead_tracking_api.py` (원격 결과는 커밋 메시지 참조).
+- gate 변화: 없음.
