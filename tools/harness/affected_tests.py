@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath
 from affected_pack import IGNORED_BASENAMES, MAX_INVOCATION_CHARS, SelectionError, pack  # noqa: F401
 from affected_repo import HARNESS, IMPORT, TEST_FILE, Repo, _git, _match, _under  # noqa: F401  (re-exported)
 
+import affected_closure
 import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
 import affected_exclusive
 import safety_review  # D-430 5 judge, reused so the selector and the trailer rule agree
@@ -248,6 +249,15 @@ def _outside_ci_matrix(paths: list[str]) -> list[str]:
 
 
 
+def _narrowed_tests(repo: Repo, path: str, test: str, reverse: bool = False) -> list[str] | None:
+    """D-436 addendum: a registered test directory narrows to the files whose import closure reaches `path`."""
+    if test.endswith(".py") or not repo.exists(test) or TEST_FILE.search(path):
+        return None
+    if "_closure" not in vars(repo):
+        repo._closure = affected_closure.Closure(repo)
+    return affected_closure.narrow(repo, path, test, repo._closure, reverse)
+
+
 def select(repo: Repo, changed: list[str], moved: list[str] = (),
            harness_texts: tuple[str, str] | None = None, base_text=None) -> Selection:
     """`harness_texts`: ``harness.yaml`` at the merge base and at head; without it that file is FULL.
@@ -265,6 +275,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
         add(guard, "guard set (D-436 1)")
 
     touched_modules: dict[str, dict] = {}
+    touched_paths: dict[str, list[str]] = {}
     broad_fallback_modules: dict[str, dict] = {}
     for path in changed:
         tiered = False
@@ -316,6 +327,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             add(test, f"references {path}")
         if module:
             touched_modules[module["name"]] = module
+            touched_paths.setdefault(module["name"], []).append(path)
             tests = module.get("tests") or []
             if set(tests) & BROAD_TESTS:
                 if referencing:
@@ -328,10 +340,13 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                     broad_fallback_modules[module["name"]] = module
             else:
                 for test in tests:
-                    add(test, f"module {module['name']} ({path})")
+                    kept = None if safety_review.is_safety(path, repo.safety_roots, repo.safety_modules)                         else _narrowed_tests(repo, path, test)
+                    for one in kept or [test]:
+                        add(one, f"module {module['name']} ({path})" + (" [import closure]" if kept else ""))
             continue
         prefixes = repo.prefixes_under(path)
-        importing = [t for t in repo.test_files if prefixes and repo.imports_prefix(t, prefixes)]
+        names = _resolved(repo, [path])
+        importing = [t for t in repo.test_files if prefixes and _imports(repo, t, prefixes, names)]
         for test in importing:
             add(test, f"imports {'/'.join(prefixes)} ({path})")
         if referencing or importing or trigger or tiered:
@@ -357,17 +372,27 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
         prefixes = repo.prefixes_under(module["path"])
         if not prefixes:
             continue
+        names = _resolved(repo, touched_paths.get(module["name"], []))
         for other in repo.modules:
             if other["name"] == module["name"]:
                 continue
             sources = [t for t in repo.tracked if t.endswith(".py") and not TEST_FILE.search(t)
                        and _under(t, other["path"]) and repo.module_for(t) is other]
-            if any(repo.imports_prefix(s, prefixes) for s in sources):
+            if any(_imports(repo, s, prefixes, names) for s in sources):
                 for test in other.get("tests") or []:
                     if test not in BROAD_TESTS:
-                        add(test, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}")
+                        kept = None
+                        for changed_py in (p for p in changed if p.endswith(".py") and repo.module_for(p) is module):
+                            one = _narrowed_tests(repo, changed_py, test, reverse=True)
+                            if one is None:
+                                kept = None
+                                break
+                            kept = sorted({*(kept or []), *one})
+                        for one in kept or [test]:
+                            add(one, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}"
+                                + (" [import closure]" if kept else ""))
         for test in repo.test_files:
-            if not _under(test, module["path"]) and repo.imports_prefix(test, prefixes):
+            if not _under(test, module["path"]) and _imports(repo, test, prefixes, names):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
     # D-436 addendum 1 (panel 2026-11-09): a safety path stays FULL; static reach misses its config/IDL readers.
@@ -387,6 +412,18 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
         sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     sel.invocations = pack(repo, sorted(sel.reasons))
     return sel
+
+
+def _resolved(repo: Repo, paths: list[str]) -> list[str]:
+    """Changed files to match by dotted import name; [] keeps the coarse package-prefix rule
+    (nothing resolves, or a ``.py`` such as ``__init__.py`` has no name of its own)."""
+    if any(p.endswith(".py") and not repo.dotted(p) for p in paths):
+        return []
+    return [p for p in paths if repo.dotted(p)]
+
+
+def _imports(repo: Repo, path: str, prefixes: tuple[str, ...], names: list[str]) -> bool:
+    return repo.imports_changed(path, names) if names else repo.imports_prefix(path, prefixes)
 
 
 def pytest_command(paths: list[str], python: str = "python") -> list[str]:

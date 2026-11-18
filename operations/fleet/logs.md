@@ -5619,10 +5619,27 @@
 - 증거: 원격 `test_auto_track_calibration.py`·`test_overhead_tracking_api.py` 통과 및 `rosy-fleet-r` 실호스트 적용 확인.
 - gate 변화: 없음.
 
+## 2026-11-17 · uncommitted · feat(fleet): POST /api/fleet/detections/anchors 경로 추가
+
+- 변경: `fleet/server/tracking/tracking_routes.py` — Vision의 head tracker 상태를 source 토큰으로 받는 경로(`accept_anchors`, 표시 전용). 신선도·DETECTION_LEASE_S 규칙은 그대로.
+- 증거: `test/test_overhead_tracking_api.py` 경로 집합 고정 갱신 + 토큰·저장 시험.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · feat(fleet): AI assessor 서비스 자격의 안전한 팔 사건 해제 (D-1039)
+- 변경: `fleet/server/auth/site_auth.py` — `ROSY_FLEET_ARM_ASSESSORS`(기본 `cell-a-ai-assessor`)의 `role: service` principal을 팔 사건 해제 경로 하나로 한정(`ARM_ASSESSOR_SCOPE_REQUIRED`). `recognition/arm_incidents.py` — assessor 해제는 `cause`·`basis` 필수, 저장 사실이 `machine_clearable`을 통과하고 같은 팔·같은 원인 assessor 해제가 24시간 안에 없을 때만(`AI_CLEAR_KIND_REFUSED`·`AI_CLEAR_REPEAT_LIMIT`). 사람 해제는 그대로.
+- 증거: `test/test_arm_incident_assessor.py`; 원격 시험 결과는 이 브랜치 검증에 기록한다. 실물·배포 미실시.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(fleet): D-1039 독립 검토 반영
+- 변경: assessor 목록 기본 비움·팔 지정(`id=source,...;id=...`, `AI_CLEAR_ARM_NOT_ASSIGNED`), 해제 경로 전용 guard `require_incident_clearer`(`require_operator` 원복), 반복 상한을 원인과 상관없이 팔마다 하루 한 번·저장 표시 `cleared_kind='machine'`로 셈, 기계 해제 근거는 `unknown`으로 저장, `cleared.kind` 표시. `machine_clearable`은 기본 거부로 셀 `decide()`보다 느슨하지 않게.
+- 증거: `test/test_arm_incident_assessor.py`; 원격 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음.
+
 ## 2026-11-18 · uncommitted · test(fleet): 알림 한 곳에 맞춘 브라우저·노드 시험
 - 변경: `test_console_queue_inline_browser.py` 읽음 시험을 "벨 = 열린 큐 행 수, 기록·근거 탭의 전달 기록"으로 바꾸고, "인라인 결과 있는 409 → 행 1·기록 1·토스트 0"과 "인라인 결과 없는 전체 정지 503 → 토스트 정확히 1장"을 더했다. `test_fleet_header_browser.py`는 모든 Fleet 문서의 벨이 `.queues-panel` 포커스(다른 문서는 `/console?queue=1`)에 닿는지 본다. `#inbox-popover`·`#context-inbox`·`data-context-tab="inbox"`를 쓰던 시험(`test_robot_dock_panel_browser.py`, `test_fleet_role_consumers_browser.py`, 루트 `test/test_fleet_console_browser*.py`, `browser_harness.py`)은 없어진 요소 대신 '기록·근거' 탭과 `to_have_count(0)`으로 단언한다(동작이 바뀌어 단언을 고침, 강도 유지). 새 `web/fleet-alert-surface.test.mjs` 정적 게이트.
 - 증거: 노드 649 passed, 0 failed. 원격 브라우저 결과는 applications/fleet/web/logs.md 다음 항목·r-S1.md.
 - gate 변화: 없음.
+
 ## 2026-11-18 · uncommitted · refactor(fleet): 가려진 road-nav2 중복 라우트 삭제 — 응답 소유는 berth_parking 한 곳
 - 변경: GET "/api/fleet/robots/{id}/road-nav2/plan"과 POST ".../road-nav2"가 ledger/berth_parking_routes.py(app.py install_berth_parking_routes, 먼저 등록돼 실제로 응답)와 sitemap/lane_route_routes.py(role_builders install_trip_and_map_surfaces 뒤 등록, 가려짐)에 이중 등록돼 있었다. 가려진 lane_route 쪽 두 라우트와 전용 모델(RoadNav2Request)·포즈 도우미(_resolve_road_pose)·안 쓰는 import·read_guard 매개변수를 지우고 D-463 POST /route와 RouteRequest만 남겼다. 등록 순서가 바뀌면 다른 구현이 답하던 지뢰 제거.
 - 증거: 원격 pytest(ROSY_RUN_BROWSER_TESTS=1) test_berth_parking_routes·test_charge_bays·test_road_plan_frames·test_lane_route·test_robot_dock_panel_browser·test_console_queues_contract·test_task_contract_docs·test_document_imports·test_feature_matrix 결과는 r-S2.md에 적는다. 응답하는 쪽 파일(berth_parking_routes, safety_modules)은 한 줄도 고치지 않았다.

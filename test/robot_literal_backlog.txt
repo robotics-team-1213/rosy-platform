@@ -93,3 +93,4 @@ operations/fleet/fleet/server/tracking/tracking_anchors.py
 shared/web/patterns.yaml
 shared/web/shared-assets.json
 shared/web/meshes/pinky-pro.urdf
+operations/overhead/rosy_vision/track/anchor_feed.py

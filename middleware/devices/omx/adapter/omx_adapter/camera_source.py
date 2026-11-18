@@ -131,7 +131,7 @@ def main():
     import cv2
     import numpy as np
     from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
-    from camera_quality import frame_quality
+    from core_common.camera_quality import frame_quality
 
     # a depth role keeps its preview on the topic (viewer, bridge, Fleet unchanged) and the raw depth beside it
     channel, capture = SnapshotChannel(args.topic), None
