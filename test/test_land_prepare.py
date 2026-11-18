@@ -142,6 +142,12 @@ def test_a_lost_queue_ticket_leaves_a_stop_without_recreating_its_place(repos, m
     assert not list((main / ".git" / land.land_queue.QUEUE).glob("*.json"))
 
 
+@pytest.fixture(autouse=True)
+def _turn_time_delta(monkeypatch):
+    """These flows exercise the delta rerun at the turn; the pre-turn refresh (land_queue.REFRESH) has its own tests."""
+    monkeypatch.setattr(land.land_queue, "REFRESHES", 0)
+
+
 @pytest.fixture
 def full_anchor(repos, monkeypatch):
     main, wt = repos
