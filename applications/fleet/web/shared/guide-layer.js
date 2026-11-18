@@ -29,13 +29,19 @@ export function poseLabel(row) {
   return `${row.robot_id}${deg}${row.pose.state === "DEGRADED" ? " · 추정" : ""}${pin}${gone}`;
 }
 
-/** D-540 4: screen geometry of each placed robot at exact physical scale (~5.2 cm radius for Pinky Pro). */
-export function guideMarks(guide, toPoint) {
+/** Screen pixels for m metres east of (x, y), and the screen point m metres ahead along yaw. */
+function screenMeasure(toPoint) {
   const scaleAt = (x, y, m) => {
     const a = toPoint(x, y), b = toPoint(x + m, y);
     return Math.hypot(b.x - a.x, b.y - a.y);
   };
   const ahead = (x, y, yaw, m) => toPoint(x + Math.cos(yaw) * m, y + Math.sin(yaw) * m);
+  return { scaleAt, ahead };
+}
+
+/** D-540 4: screen geometry of each placed robot at exact physical scale (~5.2 cm radius for Pinky Pro). */
+export function guideMarks(guide, toPoint) {
+  const { scaleAt, ahead } = screenMeasure(toPoint);
   return (guide?.robots || []).flatMap((row, index) => {
     if (!row.pose) return [];
     const { x, y, yaw, u_m: u } = row.pose;
@@ -62,11 +68,7 @@ import { roadPolylineBetween, expandWaypointsOnRoad } from "./route-attention.js
 export { roadPolylineBetween, expandWaypointsOnRoad };
 
 export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, focusedRobotId = null, view = null }) {
-  const scaleAt = (x, y, m) => {
-    const a = toPoint(x, y), b = toPoint(x + m, y);
-    return Math.hypot(b.x - a.x, b.y - a.y);
-  };
-  const ahead = (x, y, yaw, m) => toPoint(x + Math.cos(yaw) * m, y + Math.sin(yaw) * m);
+  const { scaleAt, ahead } = screenMeasure(toPoint);
   const labelsOn = view?.layers?.labels !== false;
   const omxOn = view?.layers?.omx !== false;
   const hovered = view?.hoverEntity || null;

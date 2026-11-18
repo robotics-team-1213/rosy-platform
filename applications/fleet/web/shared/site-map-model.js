@@ -122,7 +122,7 @@ export function planPolylines(map, plan) {
   return plan.segments.filter(seg => edges.has(seg.edge_id)).map(seg => segmentPoints(edges.get(seg.edge_id), seg.forward, seg.s_from, seg.s_to));
 }
 
-function copy(map) { return JSON.parse(JSON.stringify(map)); }
+export function copy(map) { return JSON.parse(JSON.stringify(map)); }
 export const VIEW_TURNS = [0, 90, 180, 270];
 export function viewTurnOf(map) { return VIEW_TURNS.includes(map?.view_turn_deg) ? map.view_turn_deg : 0; }
 export function editViewTurn(map, turn) {

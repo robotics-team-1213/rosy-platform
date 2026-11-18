@@ -1347,3 +1347,9 @@
 - 변경: authorization.js 밖 `role ===/!== "operator"` 35줄(17파일)을 `isOperator(role)`/`!isOperator(role)`로 1:1 바꿨다. console.js 등 주입 람다의 namedReason·locked·busy·principal_id 조건은 그대로다(비교만 치환). fleet-header.js:139 표시 색은 권한 판정이 아니라 그대로 둔다. JS에 직접 쓴 "운영자 권한이 필요합니다"(정확한 문구, 마침표·꼬리 붙은 2곳은 템플릿)를 `OPERATOR_REASON` import로(13파일). `work/policy-model.js`의 같은 이름 다른 문구 `OPERATOR_REASON`(값=NAMED_OPERATOR_REASON)을 지우고 policy-page.js가 authorization.js `NAMED_OPERATOR_REASON`을 쓴다. 화면 문구는 같다.
 - 증거: 치환 뒤 `git grep -nE "role *[!=]==? *['\"]operator" -- applications/fleet/web` = authorization.js 정의 1 + fleet-header 표시 1. JS 권한 문구 직접 쓰기 0(다른 문구 "이름 있는 운영자 권한이…"·"기명 운영자 권한이…" 2곳은 별개). node fleet web·shared/web 통과. test_dispatch_control_ui.py 단언을 isOperator(auth.role)로.
 - gate 변화: 없음(재발 방지 래칫은 묶음 7).
+
+## 2026-11-18 · uncommitted · refactor(fleet-web): 본문 같은 사본 중 정본이 있는 것만 합침(copy, guide-layer 측정)
+- 변경: `shared/site-map-edit.js`의 copy 사본을 지우고 이미 import하던 `site-map-model.js`의 copy를 export해 쓴다. `shared/guide-layer.js`의 guideMarks·drawGuide가 각각 선언하던 같은 scaleAt·ahead를 파일 안 `screenMeasure(toPoint)` 하나로.
+- 건너뜀(정본 없음 — 이번엔 목록만): say(maintenance/db-maintenance·host-services 닫힘 안), node(maintenance 두 사본은 control-dom.js node와 인자 순서·text 조건이 다름), log(inbox.js 닫힘 안·installation/install.js), storageGet/Set(calibration/field-view·map-fit-view), tokenRgb(shared/web robot-3d·site-twin-3d — 본문 다름: 배열 검사), iconSvg/iconNode(shared/web robot-dock·robot-row, 둘 다 비공개).
+- 증거: 본문 글자 비교, node fleet web·shared/web 통과.
+- gate 변화: 없음(본문 해시 중복 래칫은 묶음 7).
