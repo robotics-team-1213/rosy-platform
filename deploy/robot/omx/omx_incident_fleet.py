@@ -231,9 +231,11 @@ def report_for(source_id: str, session_id: str, f: dict, d: dict, acted):
 
 
 def default_token_file() -> Path | None:
-    """Discover the single operator bearer token in ~/.config/rosy/*-operator-*.token when not passed explicitly."""
-    if os.environ.get("ROSY_OPERATOR_TOKEN_FILE"):
-        return Path(os.environ["ROSY_OPERATOR_TOKEN_FILE"]).expanduser()
+    """Discover the single operator bearer token in ~/.config/rosy/*-operator-*.token when not passed explicitly.
+    D-1039: an AI assessor's own token is named by ROSY_ARM_ASSESSOR_TOKEN_FILE, outside that glob."""
+    for name in ("ROSY_OPERATOR_TOKEN_FILE", "ROSY_ARM_ASSESSOR_TOKEN_FILE"):
+        if os.environ.get(name):
+            return Path(os.environ[name]).expanduser()
     cfg_dir = Path.home() / ".config/rosy"
     matches = sorted(cfg_dir.glob("*-operator-*.token")) if cfg_dir.is_dir() else []
     return matches[0] if len(matches) == 1 else None
