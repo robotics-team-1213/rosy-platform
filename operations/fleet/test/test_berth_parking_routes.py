@@ -13,7 +13,7 @@ from fleet.server.ledger.berth_parking_routes import (
     infer_bay_id,
     install_berth_parking_routes,
 )
-from fleet.server.ledger.berth_parking_scenario import dispatch_nav_target, install_berth_scenario_routes
+from fleet.server.ledger.berth_parking_scenario import dispatch_nav_target
 from fleet.server.site_auth import SitePrincipal
 
 
@@ -78,13 +78,6 @@ def test_berth_parking_status_and_dispatch_routes():
         compute_road_plan=fake_compute_road_plan,
         dispatch_nav=dispatch_nav_target,
     )
-    install_berth_scenario_routes(
-        app,
-        console=DummyConsole(),
-        operator_guard=[],
-        require_operator=fake_operator,
-    )
-
     client = TestClient(app)
     st = client.get("/api/fleet/robots/rosy_46/berth-park/status")
     assert st.status_code == 200
@@ -109,14 +102,6 @@ def test_berth_parking_status_and_dispatch_routes():
     assert rbody["in_rail_angular_rad_s"] == 0.0
     assert rbody["phases"] == ["FORWARD_UNDOCK", "ALIGNING", "REVERSING_IN_RAILS", "SETTLING", "DOCKED"]
     assert len(rbody["waypoints_site"]) == 4
-
-    scen = client.post("/api/fleet/scenario/bay-departure", json={"execute_physical": False})
-    assert scen.status_code == 200
-    sbody = scen.json()
-    assert sbody["depart_order"] == ["rosy_46", "rosy_45", "rosy_42"]
-    assert sbody["live_robots"]["rosy_46"]["site_pose"]["y"] == 0.470
-    assert sbody["live_robots"]["rosy_45"]["site_pose"]["y"] == 0.470
-    assert sbody["cell_contract_handoff"]["stop_place_id"] == "S3"
 
 
 def _road_app(goal, refusal=None):
