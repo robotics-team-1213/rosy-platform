@@ -798,9 +798,10 @@ def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
     expect(page.locator("#map-viewport")).to_be_visible()
     page.locator('#site-map-svg [data-place="NW"]').click()
     show_screen(page, "edit-heading")
-    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan", "#estop"):
+    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan"):
         expect(page.locator(selector)).to_be_disabled()
         expect(page.locator(selector)).to_have_attribute("reason", "운영자 권한이 필요합니다")
+    expect(page.locator("#estop")).to_be_enabled()  # D-1043 (11-18 user): a signed-in viewer may press the stop
     expect(page.locator("#place-form")).to_be_hidden()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth && document.querySelector('#estop').getBoundingClientRect().right <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):

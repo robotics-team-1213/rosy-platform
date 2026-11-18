@@ -95,6 +95,7 @@ def test_cell_hold_clear_keeps_task_paused_until_individual_resume(site, size):
             # Clear hold does NOT auto-resume the task.
             hold_btn = panel.locator(".cell-hold-row[data-cell-id='cell_s'] ui-button")
             hold_btn.click()
+            page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()  # clear asks first (note optional)
             expect(page.locator("#cell-resume-status")).to_contain_text("홀드 해제됨 · 작업은 각각 재개")
             expect(panel.locator("[data-paused-task='t-pause-1']")).to_be_visible()
             expect(task_btn).to_be_enabled()
@@ -107,7 +108,7 @@ def test_cell_hold_clear_keeps_task_paused_until_individual_resume(site, size):
                 "/api/fleet/pipeline/human-safety-gate/clear",
                 "/api/fleet/pipeline/cell-tasks/t-pause-1/resume",
             ]
-            assert posts[0][1] == {"cell_id": "cell_s"}
+            assert posts[0][1]["cell_id"] == "cell_s" and set(posts[0][1]) <= {"cell_id", "note"}  # clearBody
             assert errors == []
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         finally:

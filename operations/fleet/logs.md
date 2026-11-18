@@ -5637,3 +5637,8 @@
 - 변경: `unit_scope()`의 `arms`가 자기 자원뿐 아니라 바로 아래 하위 단위의 `workcell:` 자원도 센다. 현장 manifest(site-2026-11-17-r2)에서 R은 `robot:`만, ARM-CELL이 `workcell:arm_a/b/s`를 가지는데, 셀 작업자(`deploy/robot/omx/cell_task_worker.py`, rosy-arm-cell)는 R의 `/api/fleet/pipeline/cell-tasks`를 polling·claim·complete하고 R에 팔 토큰·workcell 관측 파일이 마운트돼 있다. 이전 규칙은 R에서 `/console/cell` 본문을 숨겨 실제 작업 장부가 있는 관제에서 셀 화면을 잃게 했다(feat/ui-refine, 아직 배포 전). 브라우저 시험의 root 경우·단위 시험 기대값을 고쳤다.
 - 증거: R의 `/etc/rosy/control-unit/control-unit.yaml`(읽기 전용 확인, unit_id R, 자원 robot 3·ARM-CELL workcell 3), 컨테이너 환경에 `ROSY_FLEET_OMX_INSTANCES` 없음. 원격 시험 결과는 D:/DevTemp/ui-refine-1118/remote-scope.
 - gate 변화: 없음. 서버 쪽 /pipeline 차단은 하지 않는다: 셀 작업 장부의 실제 주인이 R이라 "팔 없는 단위" 차단은 지금 막을 소비자가 없다.
+
+## 2026-11-18 · uncommitted · test(fleet): feat/ui-refine가 깬 브라우저 시험 4개 바로잡기
+- 변경: site-map 보기 전용 시험은 머리 비상 정지가 켜져 있음을 단언한다(D-1043). 셀 홀드 해제 시험은 해제 확인 창(사유 메모 선택)을 누르고 본문에 cell_id(+note)를 단언한다(clearBody 계약). 샘플 시험의 관제 작업 요청 요약은 이름으로 고른다(취소 안내 summary가 같은 패널에 생김). 개발 샘플 제어 막대가 고정된 AI 채팅 창 아래에 깔려 누를 수 없던 것을 z-index로 올렸다(dev 전용 CSS).
+- 증거: 기준 c6c6d932e1 원격 D:/DevTemp/ui-panel-1118/remote-base/run-1.txt(10 실패), main ea80549559 원격 D:/DevTemp/ui-panel-1118/remote-main/run-1.txt(part3 3개만 실패 = main 기존 실패, 이번 범위 밖).
+- gate 변화: 없음.
