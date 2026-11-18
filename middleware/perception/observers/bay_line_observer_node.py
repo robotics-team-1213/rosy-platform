@@ -7,8 +7,8 @@ sole final ``cmd_vel`` publisher (D-2, D-143 pattern). Camera geometry is
 declared, not calibrated: the Gazebo camera (``camera_geometry_source``
 GAZEBO under ``use_sim_time``) may project. On a robot, NOMINAL with
 ``allow_nominal_ground`` projects through camera_nominal.yaml and labels each
-payload ``ground: NOMINAL``, which CORE's feed watches but never drives on
-(2026-11-18 panel). Anything else fails closed like the dock tag observer —
+payload ``ground: NOMINAL``; CORE docks on it from one button press (user decision
+2026-11-18, D-1042 6). Anything else fails closed like the dock tag observer —
 every frame publishes not visible, never a guess.
 """
 

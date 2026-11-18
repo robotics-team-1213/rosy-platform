@@ -55,9 +55,9 @@ class DockObservationFeed:
             if not payload["visible"]:
                 self._latest.pop(source, None)
                 return False
-            if payload.get("ground") not in (None, "GAZEBO"):
-                # A NOMINAL (URDF/record) camera ground may be watched, never driven on: lateral
-                # error ~2 cm at 0.2 m = the whole bay margin (2026-11-18 panel; D-344, 2026-10-06).
+            if payload.get("ground") not in (None, "GAZEBO", "NOMINAL"):
+                # NOMINAL (the robot's URDF/record camera) drives docking from one button press
+                # (user decision 2026-11-18, D-1042 6); an unknown ground is not evidence.
                 self._latest.pop(source, None)
                 return False
             tag_id = payload.get("tag_id")

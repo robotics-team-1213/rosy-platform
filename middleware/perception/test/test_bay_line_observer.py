@@ -127,7 +127,7 @@ def test_the_node_is_an_installed_entry_point_and_publishes_only_evidence():
     assert "cmd_vel" not in source.replace("``cmd_vel``", "")
     assert "Twist" not in source
     assert "source != 'GAZEBO' or not use_sim_time" in source
-    assert "payload['ground'] = self._ground" in source   # CORE's feed never drives on NOMINAL
+    assert "payload['ground'] = self._ground" in source   # labelled, so CORE knows the ground
 
 
 def test_the_robot_s_nominal_camera_profile_gives_a_projecting_observer():
