@@ -123,7 +123,7 @@ def train(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     seen: list[str | None] = [None]
 
     def on_ahead(leader: dict) -> None:
-        if getattr(args, "tests", None) != "auto" or os.environ.get(SPECULATE_ENV) == "0":
+        if getattr(args, "tests", None) != "auto" or os.environ.get(SPECULATE_ENV) != "1":
             return
         if not land.land_full.restore(wt, branch):
             return
@@ -192,6 +192,10 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     A NEW failure stops here, before the turn; the ticket is released by ``land.main``. One exception (D-889 14):
     a failure main already had at the merged base, when main has moved since, prepares once more on the new main.
     11-01: two landings stopped on a MAIN-RED test that main had fixed during their 66 min pretest."""
+    # A head tested over an older main refreshes through here before its turn (land_queue.wait), not inside the lock.
+    land_queue.REFRESH = ((lambda: (prepare(land, wt, branch, args, python, qdir, ticket),
+                                    land.land_full.restore(wt, branch))[1])
+                          if ticket is not None and getattr(args, "tests", None) == "auto" else None)
     try:
         _prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
     except land.Stop as stop:

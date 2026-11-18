@@ -289,6 +289,7 @@ def test_merge_train_predicts_once_for_position_one_turn_holder(queued, monkeypa
     peer_ticket = sorted(qdir.glob("*.json"))[0]
     land.land_queue.set_status(peer_ticket, "waiting")
     args = land.argparse.Namespace(tests="auto")
+    monkeypatch.setenv(land.land_prepare.SPECULATE_ENV, "1")
     hook = land.land_prepare.train(land, wt, "feat/x", args, sys.executable, qdir, ticket)
     calls = []
     monkeypatch.setattr(spec, "prepare", lambda *a, **k: calls.append(a[6]) or True)
