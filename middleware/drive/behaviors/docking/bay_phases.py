@@ -20,6 +20,7 @@ base_link 상대 위치, yaw = 칸 안쪽 축. `rear_errors` 와 같은 분해(a
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any, Optional
 
@@ -31,6 +32,7 @@ from core_features.docking.parking import ParkingGains, turn_twist
 from core_features.docking.rear_phases import rear_errors
 
 _TURN_GAINS = ParkingGains()
+_LOG = logging.getLogger(__name__)
 
 
 class BayPhases:
@@ -399,7 +401,8 @@ class BayPhases:
                 verdict = verdict.__class__("manual", "no fresh body scan before Nav2")
             elif verdict.kind == "out" and body[0] == "near":
                 verdict = verdict.__class__("manual", "something within the tray sweep before Nav2")
-            h._emit("docking.bay_zone", "info", {"kind": verdict.kind, "reason": verdict.reason})
+            # a log, not an event: a manual verdict already reaches Fleet as docking.failed "bay zone: ..."
+            _LOG.info("bay zone verdict %s: %s", verdict.kind, verdict.reason)
             if verdict.kind == "out":
                 self._zone, self._zone_checked = None, True
                 h._begin_staging()
