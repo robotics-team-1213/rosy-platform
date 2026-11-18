@@ -69,9 +69,8 @@ def locked(path: Path, wait: bool = False):
             stream.flush()
         stream.seek(0)
         try:
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK if wait else msvcrt.LK_NBLCK, 1)
+            if os.name == "nt":  # msvcrt LK_LOCK gave up after ~10 s (EDEADLK) behind a minutes-long precheck (11-18)
+                _queue().nt_lock(stream.fileno(), wait)
             else:
                 import fcntl
                 fcntl.flock(stream.fileno(), fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))

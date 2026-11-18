@@ -55,6 +55,21 @@ class QueueError(Exception):
     """Waiting for the queue failed; the message says why. land.py exits 1."""
 
 
+def nt_lock(fd: int, wait: bool) -> None:
+    """Lock byte 0 of fd on Windows. LK_LOCK retries only ~10 s and then raises EDEADLK, while a queued landing
+    holds the launch lock through its minutes-long precheck: 11-18 several land_async starts died with "Resource
+    deadlock avoided" instead of waiting. A waiter polls the non-blocking lock until it is free."""
+    import errno
+    import msvcrt
+    while True:
+        try:
+            return msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError as exc:
+            if not wait or exc.errno not in (errno.EACCES, errno.EDEADLK):
+                raise
+        time.sleep(1)
+
+
 def pid_alive(pid: int) -> bool:
     """Whether a process with this id exists. Never signals it (os.kill on Windows would end it).
 
