@@ -2,7 +2,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON } from "../../../../applications/fleet/web/shared/authorization.js";
 // Header unit tests isolate authorization; shared icon rendering has real-browser coverage.
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
@@ -84,7 +83,7 @@ test("Escape leaves a dialog-owned event and outside focus alone", () => {
 test("the E-stop locks only on a press the server would refuse", () => {
   assert.equal(estopReason(undefined), "");            // unknown: loading or Fleet unreachable
   assert.equal(estopReason(null), SESSION_REASON);     // 401
-  assert.equal(estopReason({role: "viewer"}), OPERATOR_REASON);
+  assert.equal(estopReason({role: "viewer"}), "");     // 11-18: viewers may stop too
   assert.equal(estopReason({role: "operator"}), "");
 });
 
@@ -146,8 +145,8 @@ test("a session shows its Korean role and title identity; a development session 
   assert.equal(nodes["user-role"].textContent, "보기 전용");
   assert.equal(nodes["user-role"].title, "vic · viewer");
   assert.equal(nodes["user-role"].getAttribute("status"), "neutral");
-  assert.equal(nodes.estop.disabled, true);
-  assert.equal(nodes.estop.getAttribute("reason"), OPERATOR_REASON);
+  assert.equal(nodes.estop.disabled, false);
+  assert.equal(nodes.estop.getAttribute("reason"), null);
 });
 
 test("a refused session locks the E-stop but leaves the account row closed; a lost Fleet does not lock it", () => {

@@ -28,7 +28,7 @@ def test_account_bundle_has_only_account_pages_assets_and_common_dependencies(tm
     assert result.returncode == 0, result.stderr
     registry = json.loads((output / 'console/assets.json').read_text())
     assert set(registry['pages']) == {'/console/login', '/console/profile', '/console/accounts'}
-    assert len(registry['assets']) == 8
+    assert len(registry['assets']) == 9  # 11-18: password-login.js imports console-token.js
     assert not {'fleet-header.js', 'authorization.js'} & registry['assets'].keys()
     common = json.loads((output / 'common/shared-assets.json').read_text())['shared_assets']
     assert set(common) == COMMON

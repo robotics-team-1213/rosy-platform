@@ -82,6 +82,8 @@ def test_each_unit_screen_shows_only_its_own_jobs(unit_fleet):
             expect(page.locator("#estop")).to_be_visible()  # every unit keeps its E-stop
             for block in ("#charge-bays-fold", ".formation"):  # Pinky jobs belong to R (D-960 §2)
                 (expect(page.locator(block)).to_be_hidden if cell else expect(page.locator(block)).to_be_attached)()
+            site_map = page.locator('.ui-rail-nav a[href="/console/site-map"]')  # the drive map is R's
+            (expect(site_map).to_be_hidden if cell else expect(site_map).to_be_visible)()
 
             page.goto(origin + "/console/cell")
             expect(page.locator("#estop")).to_be_visible()

@@ -1322,3 +1322,8 @@
 - 변경: 지도가 없을 때(`data-map-state=unavailable`) `map-tool-lock.js`가 표시 방식 칩마다 긴 잠금 사유(`.choice-reason`)를 보이게 해 `.map-head`가 48→220px로 늘고, `#map-stage`가 321px·y 247에서 바닥 200px·y 419로 밀렸다(좌표 표는 원인 아님 — `.map-readouts-content`는 이미 16rem 고정). `shared/styles.css`에서 `.map-display .choice-reason`은 박스 없이 두고(display:none, aria-describedby 그대로) 칩에 포인터를 올리면 칩 아래 툴팁 토큰 쪽지로 띄운다(끝 쪽 정렬, 흐린 칩은 hover 때 불투명). 첫 판(visibility:hidden)은 390px에서 가로 넘침을 만들어 display:none으로 고쳤다.
 - 증거: 진단 커밋(3be32a8998, 착지 안 함)으로 `map_box` 측정 직후 머리 220·표시 방식 fieldset 148 확인. 수정 커밋 원격 pytest(ROSY_RUN_BROWSER_TESTS=1, fleet_console 3부·console_roles·queue_inline·fleet_header·robot_dock_panel) 236 passed·2 failed — 실패는 part3 기존 2건(offline_robots…·viewer_sees_reasons…, 부모 bf7c00e32f에서도 같은 실패). D:/DevTemp/remote-pytest/e448b7429217/run-1.txt, 기준선 D:/DevTemp/remote-pytest/bf7c00e32f9f/run-1.txt. harness lint 오류 0.
 - gate 변화: 없음 — 표시만. console.js·alert-*·잠금 판정(map-tool-lock.js)은 그대로.
+
+## 2026-11-18 · uncommitted · feat(fleet-web): 머리 비상 정지는 로그인만 있으면 눌린다, 셀은 지도 레일을 숨긴다
+- 변경: `fleet-header.js` `estopReason`은 세션이 없을 때(401)만 잠근다(보기 전용 잠금 제거, DESIGN C9 예외 문구 삭제). 레일의 '지도'(`/console/site-map`, 주행 지도)에 `data-unit-scope="drive"`를 붙여 주행 로봇이 없는 셀 관제에서 숨긴다(7개 문서와 `fleet-nav.html.inc` 같은 줄). 정비·시스템 상태·설치는 호스트마다 있는 일이라 셀에도 남긴다.
+- 증거: node fleet-header·unit-scope 16/16. 원격 브라우저(test_unit_scope_browser 셀·R, fleet_console part2, console_session, fleet_header_browser, console_roles) D:/DevTemp/ui-refine-1118/remote-r3b/run-1.txt 에서 통과.
+- gate 변화: 없음.

@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 PAGES = frozenset(('/console/login', '/console/profile', '/console/accounts'))
-ASSETS = frozenset(('fleet-document.css', 'password-login.css', 'password-login.js', 'login-page.js',
+ASSETS = frozenset(('fleet-document.css', 'password-login.css', 'password-login.js', 'console-token.js', 'login-page.js',
                     'login-return.js', 'profile-page.js', 'account-page.js', 'account-permissions.js'))
 CSP = "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'"
 

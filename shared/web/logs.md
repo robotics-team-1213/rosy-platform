@@ -1400,3 +1400,8 @@
 - gate 변화: C12·C15·C22 planned -> built; 새 정적 게이트 2개
 - 결정: 비상 정지 권한(운영자만)은 바꾸지 않음(11-18)
 - 교훈: 없음
+
+## 2026-11-18 · uncommitted · test(shared-web): 조합 어휘가 토큰 이름도 확인, C10 채택 화면 갱신
+- 변경: `test_content_vocabulary.py` `declared()`가 `--토큰` 이름을 `var(--토큰)` 사용으로 확인한다(S3에서 표의 `.ui-sidebar`를 `--sidebar-track`으로 바꾼 뒤 탐지기가 토큰을 몰라 실패). `patterns.yaml` C10 채택 화면을 연결 배너를 실제로 쓰는 `fleet-header.js`로 바꿨다(S7에서 connection-view의 두 번째 알림을 지움).
+- 증거: 착지 land-feat-ui-refine-20261117215146 단독 실행 실패 2건, 수정 뒤 원격 D:/DevTemp/ui-refine-1118/remote-r3b/run-1.txt 통과.
+- gate 변화: 없음.

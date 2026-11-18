@@ -127,3 +127,8 @@
 - 증거: 원격 remote_pytest(ROSY_RUN_BROWSER_TESTS=1) games 브라우저·표면, Fleet 계정 브라우저 5종, 절차·작업 페이지 구성, Account 이미지 묶음, shared/web 게이트(patterns·no_element_style·shared_controls·token·layout_canon·surface_titles·icon·design_scope) 322 passed 0 failed(HEAD 직전 코드 커밋 기준). 같은 묶음을 기준(968ceb3472)에서 돌리면 1 failed 2 errors(Account 묶음 누락 건).
 - gate 변화: 없음
 - 교훈: 없음
+
+## 2026-11-18 · uncommitted · fix(account): 로그인 묶음에 console-token.js
+- 변경: `password-login.js`가 공용 `console-token.js`를 읽게 되어(S7) Account 고정 묶음 ASSETS에 더했다. 묶음 자산 수 단언 8→9.
+- 증거: 착지 단독 실행 `test_site_account_image.py` 실패("outside its fixed bundle") 재현 후 수정, 원격 재실행 결과는 D:/DevTemp/ui-refine-1118/remote-r3c.
+- gate 변화: 없음.

@@ -660,7 +660,9 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
             page.locator('[data-context-tab="tools"]').click()
             assert page.locator("#formation-role-lock").is_visible()
             assert page.locator(".formation ui-button[reason]").count() == 0
-            assert page.locator("#estop").get_attribute("reason") == "운영자 권한이 필요합니다"
+            # 11-18: a viewer may stop; the E-stop never carries a role lock.
+            assert page.locator("#estop").get_attribute("reason") is None
+            assert page.locator("#estop").is_enabled()
         assert not errors
         save_temp_screenshot(page, f"fleet_desktop_{scenario}.png")
         browser.close()

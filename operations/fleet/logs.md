@@ -5627,3 +5627,8 @@
 - 변경: GET "/api/fleet/robots/{id}/road-nav2/plan"과 POST ".../road-nav2"가 ledger/berth_parking_routes.py(app.py install_berth_parking_routes, 먼저 등록돼 실제로 응답)와 sitemap/lane_route_routes.py(role_builders install_trip_and_map_surfaces 뒤 등록, 가려짐)에 이중 등록돼 있었다. 가려진 lane_route 쪽 두 라우트와 전용 모델(RoadNav2Request)·포즈 도우미(_resolve_road_pose)·안 쓰는 import·read_guard 매개변수를 지우고 D-463 POST /route와 RouteRequest만 남겼다. 등록 순서가 바뀌면 다른 구현이 답하던 지뢰 제거.
 - 증거: 원격 pytest(ROSY_RUN_BROWSER_TESTS=1) test_berth_parking_routes·test_charge_bays·test_road_plan_frames·test_lane_route·test_robot_dock_panel_browser·test_console_queues_contract·test_task_contract_docs·test_document_imports·test_feature_matrix 결과는 r-S2.md에 적는다. 응답하는 쪽 파일(berth_parking_routes, safety_modules)은 한 줄도 고치지 않았다.
 - gate 변화: 없음 — 삭제된 두 라우트는 FastAPI 등록 순서상 지금까지 한 번도 응답한 적 없고(앱 구성 순서로 확인) 웹·시험 소비 0건, 기능표·수신 기록의 road-nav2 항목은 남은 berth 라우트를 가리킨다.
+
+## 2026-11-18 · uncommitted · docs(fleet): 보기 전용 비상 정지의 서버 쪽은 별도 착지
+- 변경: 화면(`fleet-header.js`)은 보기 전용에게도 머리 비상 정지를 연다(사용자 11-18). 서버 `/api/fleet/estop`의 가드 변경은 안전 경로라 착지 규칙(D-889 추가 32)대로 따로 착지한다(브랜치 fix/viewer-estop). 그 사이 보기 전용이 누르면 서버 403이 정지 단추 아래 글로 보인다(C9).
+- 증거: land.py STOP "changes ... safety paths (task_dispatch_routes.py) together with product paths". 서버 변경과 시험은 D:/DevTemp/ui-refine-1118/viewer-estop-server.patch.
+- gate 변화: 없음(이 브랜치).

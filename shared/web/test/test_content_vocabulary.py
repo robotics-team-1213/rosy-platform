@@ -80,6 +80,8 @@ def declared(name: str) -> bool:
         return f'"{name.strip("<>")}"' in UI.read_text(encoding="utf-8")
     if name.endswith("()"):
         return any(f"function {name[:-2]}" in path.read_text(encoding="utf-8") for path in (WORKSPACE, STATUS_TAG, WEB / "choice-group.js", WEB / "choice-list.js", WEB / "selection.js"))
+    if name.startswith("--"):
+        return f"var({name})" in styles
     if name.startswith("."):
         class_name, _, rest = name.partition("[")
         attribute = rest.strip("[]")

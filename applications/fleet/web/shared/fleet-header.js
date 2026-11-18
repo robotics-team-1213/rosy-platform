@@ -3,7 +3,6 @@
 // count, role words on the account button, development badge, the account fold and the one E-stop rule.
 import "/common/ui.js";  // wires the `[data-theme-cycle]` button
 import {createConnectionNotice} from "/common/connection-notice.js";
-import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {renderAccountApps, roleLabel} from "/common/account-profile.js";
 import {applyUnitScope, scopeSummary} from "/console/assets/unit-scope.js";
 export {roleLabel};
@@ -59,12 +58,10 @@ export function showInboxCount(count) {
 }
 
 // The one E-stop rule. `session` is undefined while unknown (loading, Fleet unreachable), null after a 401,
-// else the /api/fleet/session body. Only a press the server would surely refuse is locked: no session (401)
-// or a role without stop rights (403). Unknown stays live — never harder to reach than a refused press.
+// else the /api/fleet/session body. Only a press the server would surely refuse is locked: no session (401).
+// Every signed-in role may stop, viewers included (11-18); unknown stays live.
 export function estopReason(session) {
-  if (session === null) return SESSION_REASON;
-  if (session && session.role !== "operator") return OPERATOR_REASON;
-  return "";
+  return session === null ? SESSION_REASON : "";
 }
 
 function gateEstop(session) {
