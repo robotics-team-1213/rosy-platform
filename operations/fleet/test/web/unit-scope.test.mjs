@@ -12,7 +12,7 @@ test("a cell hides drive and the children list, keeps arms (D-960 §4)", () => {
   assert.equal(scopeSummary(unitScope()), "셀 관제 · 맡은 일: 팔 셀");
 });
 
-test("통합관제 R drives its own Pinky and sees its children but not the arms", () => {
+test("a root with no arm cell below it drives its Pinky and sees its children but not the arms", () => {
   const root = flags();
   applyUnitScope({role: "root", drive: true, arms: false, children: true, enrollment: false}, root);
   assert.deepEqual([...root.set].sort(), ["data-unit-children", "data-unit-drive", "data-unit-root", "data-unit-scope-ready"]);

@@ -5632,3 +5632,8 @@
 - 변경: 화면(`fleet-header.js`)은 보기 전용에게도 머리 비상 정지를 연다(사용자 11-18). 서버 `/api/fleet/estop`의 가드 변경은 안전 경로라 착지 규칙(D-889 추가 32)대로 따로 착지한다(브랜치 fix/viewer-estop). 그 사이 보기 전용이 누르면 서버 403이 정지 단추 아래 글로 보인다(C9).
 - 증거: land.py STOP "changes ... safety paths (task_dispatch_routes.py) together with product paths". 서버 변경과 시험은 D:/DevTemp/ui-refine-1118/viewer-estop-server.patch.
 - gate 변화: 없음(이 브랜치).
+
+## 2026-11-18 · uncommitted · fix(fleet): 통합관제 R도 팔 셀 작업 화면을 맡는다 — 하위 셀의 workcell을 unit_scope에 셈
+- 변경: `unit_scope()`의 `arms`가 자기 자원뿐 아니라 바로 아래 하위 단위의 `workcell:` 자원도 센다. 현장 manifest(site-2026-11-17-r2)에서 R은 `robot:`만, ARM-CELL이 `workcell:arm_a/b/s`를 가지는데, 셀 작업자(`deploy/robot/omx/cell_task_worker.py`, rosy-arm-cell)는 R의 `/api/fleet/pipeline/cell-tasks`를 polling·claim·complete하고 R에 팔 토큰·workcell 관측 파일이 마운트돼 있다. 이전 규칙은 R에서 `/console/cell` 본문을 숨겨 실제 작업 장부가 있는 관제에서 셀 화면을 잃게 했다(feat/ui-refine, 아직 배포 전). 브라우저 시험의 root 경우·단위 시험 기대값을 고쳤다.
+- 증거: R의 `/etc/rosy/control-unit/control-unit.yaml`(읽기 전용 확인, unit_id R, 자원 robot 3·ARM-CELL workcell 3), 컨테이너 환경에 `ROSY_FLEET_OMX_INSTANCES` 없음. 원격 시험 결과는 D:/DevTemp/ui-refine-1118/remote-scope.
+- gate 변화: 없음. 서버 쪽 /pipeline 차단은 하지 않는다: 셀 작업 장부의 실제 주인이 R이라 "팔 없는 단위" 차단은 지금 막을 소비자가 없다.

@@ -95,7 +95,8 @@ def test_unit_scope_reads_the_manifest_and_standalone_keeps_everything():
 
     topology = ControlUnitTopology.from_mapping({"revision": "v1", "units": [
         *MANIFEST["units"], {"id": "ARM-CELL", "parent": "R", "resources": ["workcell:arm_a"]}]})
-    assert unit_scope(topology, "R") == {"role": "root", "drive": False, "arms": False, "children": True,
+    # R keeps the cell work screen: ARM-CELL's worker claims from R's ledger (cell_task_worker → Fleet-R)
+    assert unit_scope(topology, "R") == {"role": "root", "drive": False, "arms": True, "children": True,
                                          "enrollment": False}
     assert unit_scope(topology, "ARM-CELL")["arms"] is True
     assert unit_scope(topology, "B", has_arms=True)["arms"] is True  # an OMX wired to this instance
