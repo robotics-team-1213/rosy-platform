@@ -301,7 +301,7 @@ def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypat
         "cur_map": {"map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
     })
     outcomes = [
-        {"cal_updated": False, "map_updated": False, "map_activate_status": 409, "deferred": True},
+        {"cal_updated": False, "map_updated": False, "map_sync": "deferred", "map_sync_status": 409},
         {"cal_updated": True, "calibration_revision": 2, "map_updated": True, "map_version": 2},
     ]
     monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: outcomes.pop(0))
@@ -311,7 +311,7 @@ def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypat
         capsys.readouterr()
     assert mod.main([]) == 0
     deferred = json.loads(capsys.readouterr().out.strip())
-    assert deferred["status"] == "deferred" and deferred["map_activate_status"] == 409
+    assert deferred["status"] == "deferred" and deferred["map_sync_status"] == 409
     saved = json.loads(state_file.read_text(encoding="utf-8"))
     assert len(saved["history"]) == 5 and saved["last_approved_at"] is None
 
@@ -362,3 +362,36 @@ def test_spread_is_read_on_traced_places_not_off_screen_corners():
     assert held["decision"] == "hold" and held["reason"] == "unstable_series"
     approved = mod.decide(swinging, now=100_000.0, spread_m=mod.places_spread_m(tight))
     assert approved["decision"] == "approve" and approved["reason"] == "drift_exceeded"
+
+
+def test_forbidden_map_sync_still_applies_calibration_and_records_it(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    token_file = tmp_path / "auto-calibration.token"
+    token_file.write_text("secret-bearer-token\n", encoding="utf-8")
+    state_file = tmp_path / "state.json"
+    monkeypatch.setenv("ROSY_AUTO_CALIBRATION_TOKEN_FILE", str(token_file))
+    monkeypatch.setattr(mod, "STATE_FILE", state_file)
+    ident = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    monkeypatch.setattr(mod, "run_vision_solve", lambda: {
+        "ok": True, "width": 1280, "height": 720, "frame_seq": 10, "rms_m": 0.002,
+        "map_to_image": [1.0, 0.0, -0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "image_to_map": [1.0, 0.0, 0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "places": [{"id": "p1", "x": 0.13, "y": 0.2}], "edges": [],
+    })
+    monkeypatch.setattr(mod, "fetch_fleet_current", lambda _t: {
+        "cur_cal": {"calibration_revision": 1, "map_to_image": ident},
+        "cur_map": {"map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
+    })
+    monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: {
+        "cal_updated": True, "calibration_revision": 2, "map_updated": False,
+        "map_sync": "forbidden", "map_sync_status": 403})
+    for _ in range(4):
+        assert mod.main([]) == 0
+        capsys.readouterr()
+    assert mod.main([]) == 0
+    cap = capsys.readouterr()
+    out = json.loads(cap.out.strip())
+    assert out["status"] == "updated" and out["map_sync"] == "forbidden" and out["map_sync_status"] == 403
+    assert "map sync forbidden (HTTP 403)" in cap.err
+    saved = json.loads(state_file.read_text(encoding="utf-8"))
+    assert saved["map_sync"] == "forbidden" and saved["cal_revision"] == 2 and saved["history"] == []
