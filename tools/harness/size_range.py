@@ -27,6 +27,7 @@ from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import PurePosixPath
 
+import crlf_rule
 import land_metrics_rule
 import size_limits
 from colcon_roots import colcon_roots
@@ -191,7 +192,7 @@ def metrics_problems(commit: str) -> list[str]:
     if dt.datetime.fromisoformat(_git("log", "-1", "--format=%cI", commit).strip()) < land_metrics_rule.RULE_SINCE:
         return []
     files = _git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", commit).split("\0")
-    diff = _git("diff", "--unified=0", commit + "~1", commit, "--", "tools")
+    diff = _git("diff", "--unified=0", commit + "~1", commit, "--", "tools/*.py")  # code only: a doc line naming land_rollup.py is no trigger
     return land_metrics_rule.violations(_git("log", "-1", "--format=%B", commit), files, diff)
 
 
@@ -229,6 +230,10 @@ def main(argv: list[str]) -> int:
             red.append(_git("log", "-1", "--format=%h %s", commit).strip() + "\n    " + "\n    ".join(bad))
     print(f"[size-range] {len(commits)} commit(s) checked")
     for commit in commits:
+        if bad := crlf_rule.problems(commit, _git) if len(_git("rev-list", "--parents", "-n", "1", commit).split()) == 2 else []:
+            print(f"[size-range] {_git('log', '-1', '--format=%h %s', commit).strip()} (CRLF): " + "; ".join(bad),
+                  file=sys.stderr)
+            return 1
         if bad := metrics_problems(commit):
             print(f"[size-range] {_git('log', '-1', '--format=%h %s', commit).strip()} (D-889 36): "
                   + "; ".join(bad) + " (see docs/adr/D-889, addendum 36)", file=sys.stderr)

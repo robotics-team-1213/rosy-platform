@@ -280,3 +280,46 @@ def test_tries_that_agree_in_place_but_switch_jaw_give_no_mark(monkeypatch):
     report = {}
     assert cell_pivot.mark_jaws(None, {"plan": {}}, lambda s: None, jaws=jaws(), report=report) == pytest.approx(
         (REF[0] + 2, REF[1]), abs=1) and report["side"] == "ref"
+
+
+def test_one_jaw_seen_at_every_yaw_is_relabelled_together_and_fits(tmp_path, monkeypatch):
+    """2026-11-17 arm_a pallet: the one visible jaw sat in the reference disc at three yaws and in the other's at two;
+    moved for two only, the marks split. Chosen over all yaws together, every mark is that one jaw."""
+    yaws, seen = [-75.0, -45.0, -15.0, 15.0, 45.0, 75.0], {}
+    disc = ["ref", "ref", "ref", "other", "other", "other"]
+    order = iter(range(6))
+    d_m, d_deg = 0.054, 79.0  # the shipped jaw_side.other_mm / other_deg
+
+    def mark(cell, config, sleep, report=None, jaws=None, **kw):
+        k = next(order)
+        b = math.radians(yaws[k] + d_deg)  # the jaws 54 mm apart, either side of the centre (0.11, 0.16); the other one shows
+        jaw = (0.11 + d_m / 2 * math.cos(b), 0.16 + d_m / 2 * math.sin(b))
+        moved = 1.0 if disc[k] == "other" else 0.0  # what the disc label did to it
+        seen["arm"] = (jaw[0] - moved * d_m * math.cos(b), jaw[1] - moved * d_m * math.sin(b))
+        report.update(reason=None, side=disc[k])
+        return (100.0, 150.0)
+
+    monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda *a, **k: seen["arm"])
+    res = pivot_rig(monkeypatch, tmp_path, mark)
+    assert res["result"] == "calibrated" and len(set(res["bias"]["jaw_sides"])) == 1  # one jaw: either name, one centre
+    assert res["bias"]["bias_mm"] == pytest.approx([10.0, 10.0], abs=0.5) and res["bias"]["radius_mm"] == pytest.approx(27.0, abs=0.5)
+    labels = json.loads(next(tmp_path.glob("pivot-frames/floor-*/labels.json")).read_text())
+    assert labels["disc_sides"] == disc and labels["rms_mm"][0] < 0.1 and labels["rms_mm"][2] > 10  # as labelled: split
+
+
+def test_relabel_leaves_the_old_path_and_refuses_mixed_paths():
+    marks = [(0.1, 0.1), (0.11, 0.1), (0.1, 0.11)]
+    tcps = [(0.1, 0.1, 0.1, y) for y in (-60.0, 0.0, 60.0)]
+    old = [{"side": None, "path": "old"}] * 3
+    assert js.relabel(marks, tcps, old, {}) is None and marks == [(0.1, 0.1), (0.11, 0.1), (0.1, 0.11)]
+    mixed = [{"side": "ref", "path": "discs"}, {"side": None, "path": "old"}, {"side": "ref", "path": "discs"}]
+    assert js.relabel(marks, tcps, mixed, {}).startswith("jaw paths mixed")
+
+
+def test_labellings_that_fit_alike_but_move_the_centre_are_refused():
+    yaws, geo = [-1.0, 1.0], {"radius_mm": 20.0, "phase_deg": 0.0}  # two yaws 2 deg apart: either jaw fits both
+    tcps = [(0.1, 0.1, 0.1, y) for y in yaws]
+    marks = [(0.12 + 0.02 * math.cos(math.radians(y)) - 0.02, 0.1 + 0.02 * math.sin(math.radians(y))) for y in yaws]
+    hows = [{"side": "ref", "path": "discs"} for _ in yaws]
+    why = js.relabel(marks, tcps, hows, {"pivot": {"geometry": geo}})
+    assert why.startswith("jaw sides ambiguous") and hows[0]["side"] == "ref"  # refused, nothing rewritten

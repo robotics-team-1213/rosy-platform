@@ -507,8 +507,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
         if len(codes) != len(todo):
             raise land.Stop("incomplete remote results; not landing")
         print(f"[pytest] {(secs := round(land.time.monotonic() - began))}s", flush=True)
-        # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
-        # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
+        # Each invocation is judged and each clean pass kept before a stop: a retry reruns only the rest (10-25).
         stops, cancelled = [], []
         for (n, _), inv, log, code in zip(part, todo, logs, codes):
             if land.out(wt, "rev-parse", "HEAD") != head:
@@ -520,8 +519,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
             why = (affected_exclusive.evidence(log, code) if affected_exclusive.dedicated(inv)
                    else land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log))
             if why == land.land_cache.NO_EVIDENCE:
-                # 2026-10-28: exit 1 with every test passed and no FAILED/ERROR line stopped 8 landings in a day;
-                # one rerun of the same invocation decides, and a second exit without evidence still stops.
+                # 10-28: exit 1, all passed, no FAILED line stopped 8 landings: one rerun decides, a second stops.
                 again = logdir / f"rerun-{round_no}-{n}.txt"
                 try:
                     rerun = (diagnostic_run if stop is not None else land.remote_pytest.run)(
@@ -539,7 +537,10 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs, **timing(log, began_at))
                 continue
-            failed, flaky, why = seen.get(str(log)) or judge(inv, log, f"{round_no}-{n}")
+            try:
+                failed, flaky, why = seen.get(str(log)) or judge(inv, log, f"{round_no}-{n}")
+            except CancelledError:  # no verdict at the deadline: not kept, the passes after it still are
+                cancelled.append(inv); continue
             if land.out(wt, "rev-parse", "HEAD") != head:
                 raise land.Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
             if failed and not flaky:

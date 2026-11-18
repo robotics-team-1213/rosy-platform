@@ -12,6 +12,7 @@ import omx_two_arm_sites as sites  # noqa: E402
 import omx_two_arm_skill as skills  # noqa: E402
 import omx_two_arm_tasks as tasks  # noqa: E402
 import omx_two_arm_teacher as teaching  # noqa: E402
+from omx_two_arm_policy_files import _failed_steps_from_eval, _resolve_steps_file, plan_tasks  # noqa: E402,F401  (re-exported)
 
 SHAPE = (240, 320)
 TASKS = ("stack", "outbound")  # the conveyor stack and Harbor's outbound plan in two-arm mode (omx_two_arm_plan.py)
@@ -193,30 +194,9 @@ class Recorder(teaching.Teacher):
         return row
 
 
-def plan_tasks(plan_dir, names):
-    """The two-arm plans of omx_two_arm_plan.py (compare --replay-dir) by task name, for concurrent collection and evaluation."""
-    return {name: dict(json.loads((Path(plan_dir) / f"{name}-two-arm.json").read_text(encoding="utf-8")), name=name) for name in names}
-
-
 def resolved_choices(choices=None, *, pick_vision=False, belt_skew=False, cam_jitter=False):
     """Merge layout overrides, adding `VISION_SKEW_CHOICES` when vision/skew perturbation is enabled."""
     return dict(teaching.VISION_SKEW_CHOICES if (pick_vision or belt_skew or cam_jitter) else {}, **(choices or {}))
-
-
-def _resolve_steps_file(dagger_model, steps_file, name="steps.json"):
-    if steps_file and str(steps_file).strip().lower() != "auto":
-        return Path(steps_file)
-    for parent in Path(dagger_model).resolve().parents:
-        candidate = parent / name
-        if candidate.is_file():
-            return candidate
-    raise ValueError(f"--dagger-model requires --steps-file (or an ancestor {name})")
-
-
-def _failed_steps_from_eval(dagger_model, eval_file):
-    path = _resolve_steps_file(dagger_model, eval_file, name="eval.json")
-    rows = json.loads(path.read_text(encoding="utf-8")).get("rows", [])
-    return {f"{r['task']}/{r['step']}" if "task" in r else r["step"] for r in rows if r.get("result") != "pass"}
 
 
 def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0., lag=False, physics=False, *,

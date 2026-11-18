@@ -351,7 +351,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
             hows.append(how)
     finally:
         fold(cell, sleep)
-    if why := cell_jaw_side.path_check(hows):  # 2026-11-17 review: a yaw the discs could not place is not mixed in
+    if why := cell_jaw_side.relabel(marks, tcps, hows, config, frames):  # mixed paths refused; jaw sides from all yaws
         return {"result": why}
     geometry = config.get("pivot", {}).get("geometry")
     if geometry is not None:
