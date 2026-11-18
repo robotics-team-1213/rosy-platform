@@ -206,6 +206,24 @@ def test_a_landing_recovers_after_a_resource_shortage(repo, monkeypatch):
     assert not (tree.parent / (tree.name + ".stopped")).exists()
 
 
+def test_one_freed_slot_wakes_only_the_oldest_waiting_supervisor(tmp_path, monkeypatch):
+    """11-18: every queue-full supervisor polled and re-ran land.py at once; now the oldest alone does."""
+    import threading
+    q, slots, real_sleep, got = tool._queue(), [1], time.sleep, {}
+    monkeypatch.setattr(q, "full", lambda qdir, lane="": None if slots and slots.pop() else "landing queue full")
+    monkeypatch.setattr(q, "queue_dir", lambda tree: tree)
+    monkeypatch.setattr(q, "lane_of", lambda tree, ref="HEAD": "")
+    monkeypatch.setattr(time, "sleep", lambda s: real_sleep(0.01))
+    threads = [threading.Thread(target=lambda n=n: got.update({n: tool.wait_for_room(tmp_path / n, time.monotonic() + 1)}))
+               for n in "abc"]
+    for t in threads:  # a starts waiting first
+        t.start()
+        real_sleep(0.1)
+    for t in threads:
+        t.join()
+    assert got == {"a": True, "b": False, "c": False}
+
+
 def test_expired_room_deadline_refuses_even_a_free_queue(repo, monkeypatch):
     _, dev = repo
     monkeypatch.setattr(tool.time, "monotonic", lambda: 11)
