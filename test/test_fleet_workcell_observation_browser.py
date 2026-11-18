@@ -124,7 +124,7 @@ def test_cell_displays_two_arms_three_cameras_and_expires_each_disconnected_sour
     with sync_playwright() as playwright:
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
         state, _ = observation_feed(page)
-        page.goto(cell_url)
+        page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
         assert not state.failed_assets, state.failed_assets
         assert not errors, errors
         root = page.locator("#workcell-observations")
@@ -158,7 +158,7 @@ def test_rate_limited_frame_keeps_the_fresh_image_until_it_expires(cell_url):
     with sync_playwright() as playwright:
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
         state, _ = observation_feed(page)
-        page.goto(cell_url)
+        page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
         card = page.locator('#workcell-observations [data-camera-source="wrist_a"]')
         expect(card.locator("img")).to_be_visible()
         state.limited.add("wrist_a")
@@ -182,7 +182,7 @@ def test_hidden_cell_tab_stops_pulling_and_resumes_when_shown(cell_url):
     with sync_playwright() as playwright:
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
         state, _ = observation_feed(page)
-        page.goto(cell_url)
+        page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
         arm = page.locator('#workcell-observations [data-arm-source="feedback_a"] pre')
         expect(arm).to_contain_text("0.25")
         page.evaluate(visibility, True)
@@ -203,7 +203,7 @@ def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
     with sync_playwright() as playwright:
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
         state, snapshot = observation_feed(page)
-        page.goto(cell_url)
+        page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
         assert not state.failed_assets, state.failed_assets
         assert not errors, errors
         root = page.locator("#workcell-observations")
@@ -248,7 +248,7 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
                             "model": "qwen3-vl:8b", "explained_at": 1.0, "note": "explanation only"}, "cleared": None})
         if unfamiliar_facts:
             state.incidents[0]["facts"] = {"flagged": {}, "latched": {"13": None}, "detail": "<b>measurement</b>"}
-        page.goto(cell_url)
+        page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
         assert not state.failed_assets, state.failed_assets
         card = page.locator('[data-arm-source="feedback_b"]')
         expect(card.locator("summary").filter(has_text="보류 중 1건")).to_be_visible()
@@ -325,7 +325,7 @@ def test_incident_lines_accept_bounded_json_without_assuming_measurement_shapes(
     with sync_playwright() as playwright:
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
         observation_feed(page)
-        page.goto(cell_url)
+        page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
         lines = page.evaluate("""async facts => {
             const {incidentLines} = await import('/console/assets/cell-observation.js');
             return facts.map(facts => incidentLines({facts, decision: {reason: 'held'}}));
@@ -350,7 +350,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
         try:
             state, _ = observation_feed(page)
             page.route("**/api/fleet/cell-app/object-catalog", lambda route: route.fulfill(json=body))
-            page.goto(cell_url)
+            page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
             page.evaluate("theme => window.RosyTheme.set(theme)", theme)
             table = page.locator("#catalog-table")
             expect(table).to_be_visible()
@@ -406,7 +406,7 @@ def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pend
                     route.fulfill(json=body)
             page.route("**/api/fleet/cell-app/object-catalog", catalog)
             with page.expect_request("**/api/fleet/cell-app/object-catalog"):
-                page.goto(cell_url)
+                page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
             if not pending:
                 expect(page.locator("#catalog-table")).to_contain_text("previous-account-object")
             page.locator("#topbar-more").click()
