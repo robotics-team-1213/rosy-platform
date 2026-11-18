@@ -15,6 +15,15 @@ from affected_repo import _under
 
 DYNAMIC = re.compile(r"importlib|subprocess|spec_from_file_location|runpy|__import__|exec_module|os\.system")
 WHOLE_DIR_NAMES = ("conftest.py", "__init__.py")
+#: Composition roots: files that wire every domain of an app together. The closure does not walk through them, so
+#: a test that reaches a domain only by building the whole app is not picked for that domain's change; the
+#: publish-time FULL run still covers it.
+COMPOSITION_ROOTS = ("operations/fleet/fleet/server/app.py", "operations/fleet/fleet/server/bootstrap/",
+                     "operations/fleet/fleet/cli.py")
+
+
+def is_composition(path: str) -> bool:
+    return any(path == root or (root.endswith("/") and path.startswith(root)) for root in COMPOSITION_ROOTS)
 
 
 def _dotted(path: str) -> list[str]:
@@ -38,10 +47,23 @@ class Closure:
                 if path.endswith(".py"):
                     for name in _dotted(path):
                         self._index.setdefault(name, set()).add(path)
+            # A folder without __init__.py inside a package is installed flat into that package (fleet/server/ledger ->
+            # fleet.server, fleet._source_layout.SERVER_HOLDERS): index its modules under the parent's names too, or
+            # nothing resolves "fleet.server.<module>". Extra names only add matches.
+            tracked = set(self.repo.tracked)
+            for path in self.repo.tracked:
+                p = PurePosixPath(path)
+                if path.endswith(".py") and p.stem != "__init__" and f"{p.parent}/__init__.py" not in tracked \
+                        and f"{p.parent.parent}/__init__.py" in tracked:
+                    for name in _dotted(f"{p.parent.parent}/{p.name}"):
+                        self._index.setdefault(name, set()).add(path)
         return self._index
 
     def deps(self, path: str) -> set[str]:
         if path in self._deps:
+            return self._deps[path]
+        if is_composition(path):
+            self._deps[path] = set()
             return self._deps[path]
         found: set[str] = set()
         try:
@@ -80,7 +102,7 @@ class Closure:
         return seen
 
 
-def narrow(repo, changed_py: str, test_dir: str, closure: Closure) -> list[str] | None:
+def narrow(repo, changed_py: str, test_dir: str, closure: Closure, reverse: bool = False) -> list[str] | None:
     """Test files under ``test_dir`` reaching ``changed_py``; None = keep the whole directory."""
     if not changed_py.endswith(".py") or PurePosixPath(changed_py).name in WHOLE_DIR_NAMES:
         return None
@@ -97,4 +119,6 @@ def narrow(repo, changed_py: str, test_dir: str, closure: Closure) -> list[str] 
         elif "?" in reached or any(DYNAMIC.search(repo.text(p)) for p in reached
                                    if p == test or p in repo.test_files or "/test" in p):
             dynamic.append(test)  # dynamic loads can reach anything: keep this file too
+    if reverse:  # a reverse dependent's suite: only what reaches the change, plus dynamic loaders
+        return [*reaching, *dynamic]
     return [*reaching, *dynamic] if reaching else None  # nobody imports it: the whole directory
