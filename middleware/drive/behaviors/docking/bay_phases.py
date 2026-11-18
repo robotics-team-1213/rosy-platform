@@ -49,6 +49,7 @@ class BayPhases:
         self._scan_s: Optional[float] = None
         self._resync = False
         self._turn_target: Optional[float] = None
+        self._stage_bad: Optional[float] = None           # first tick the arrival heading looked wrong
         self._turn_dir = -1.0                             # fixed turn sense: tray swings downstream
         self._creep_from: Optional[float] = None          # 정착 크립 시작 travelled
         self._crept = False
@@ -199,11 +200,16 @@ class BayPhases:
         # The staging goal faces the bay: a nose far off that axis is a wrong-way arrival, and the
         # line observer would read it as normal (it forces the axis to -x), so refuse before turning.
         if mp is None or abs(_wrap(mp[2] - h._dock.yaw)) > h._cfg.bay_stage_heading_max_rad:
-            h._fail("bay staging arrival heading off the bay axis")
+            # One noisy or missing pose must not end a first try: stand still and look again for a while.
+            self._stage_bad = now if self._stage_bad is None else self._stage_bad
+            if now - self._stage_bad >= h._cfg.bay_stage_recheck_s:
+                self._stage_bad = None
+                h._fail("bay staging arrival heading off the bay axis")
             return
+        self._stage_bad = None
         self._reset_line_state()
-        self._turn_dir = -1.0 if h._cfg.bay_downstream_sign >= 0.0 else 1.0
-        self._turn_target = pose[2] + self._turn_dir * math.pi
+        self._turn_dir = -math.copysign(1.0, h._cfg.bay_downstream_sign) if h._cfg.bay_downstream_sign else 0.0
+        self._turn_target = pose[2] + (self._turn_dir or 1.0) * math.pi
         h._enter(DockPhase.TURNING)
 
     def _tick_turning(self, now: float) -> None:
@@ -222,8 +228,13 @@ class BayPhases:
                 h._fail("bay turn not clear: %s" % (body[0] if body else "no fresh body scan"))
             return
         error = _wrap(self._turn_target - pose[2])
-        if error * self._turn_dir < 0.0 and abs(error) > math.pi / 2:
-            error += self._turn_dir * 2.0 * math.pi     # near ±pi the wrap flips on noise: keep the sense
+        if error * self._turn_dir < 0.0:
+            if abs(error) > math.pi - 0.2:
+                error += self._turn_dir * 2.0 * math.pi  # start: near ±pi the wrap flips on noise, keep the sense
+            elif abs(error) > h._cfg.bay_turn_overshoot_rad:
+                self._stop()                             # a long way back would swing the tray upstream
+                h._fail("bay turn overshot the target")
+                return
         angular, done = turn_twist(error, _TURN_GAINS)
         if done:
             self._stop()

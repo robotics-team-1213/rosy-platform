@@ -8,6 +8,7 @@ bay faces; CORE's dock for the same bay is the stop face at y 0.47 with yaw +pi/
 
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import pytest
@@ -45,28 +46,80 @@ def test_site_frame_signs_outside_is_positive_and_the_bay_row_is_exit():
 
 
 @pytest.mark.parametrize("pose,kind", [
-    ((-0.49, 0.02, math.pi), "manual"),                # west = downstream of C2 (C3 -> C1)
+    ((-0.49, 0.02, math.pi), "manual"),                 # west = downstream of C2 (C3 -> C1)
     ((-0.49, 0.10, math.pi), "manual"),
-    ((0.11, 0.02, math.pi), "out"),                    # east = upstream: Nav2 drives with the flow
-    ((-0.19, 0.02, math.pi), "out"),                   # in front of the mouth
+    ((0.11, 0.02, math.pi), "out"),                     # east = upstream: Nav2 drives with the flow
+    ((-0.19, 0.02, math.pi), "out"),                    # in front of the mouth
+    ((-0.19 - 0.14, 0.02, math.pi), "out"),             # inside lane half + map error (0.11 + 0.04)
+    ((-0.19 - 0.16, 0.02, math.pi), "manual"),
     ((-0.49, -0.25, math.pi), "out"),                   # upper lane, far from the corridor line
 ])
 def test_bay_zone_downstream_side_is_manual(pose, kind):
     assert verdict(pose).kind == kind
 
 
-def test_downstream_check_can_be_switched_off():
-    assert verdict((-0.49, 0.02, math.pi), DockingConfig(bay_downstream_sign=0.0)).kind == "out"
+@pytest.mark.parametrize("bay_x", [-0.414, -0.19, 0.032])      # C1, C2, C3
+def test_downstream_is_west_of_every_bay(bay_x):
+    dock = DockInstance(id="c", type="bay-line", x=bay_x, y=0.47, yaw=math.pi / 2)
+    assert verdict((bay_x - 0.30, 0.02, math.pi), dock=dock).kind == "manual"
+    assert verdict((bay_x + 0.30, 0.02, math.pi), dock=dock).kind == "out"
 
 
-def test_staging_arrival_wrong_heading_fails():
-    for dyaw in (math.pi, math.radians(75.0)):
-        p = a_bay()
-        p.world.arrival_error = (0.0, dyaw)
-        p.manager.dock()
+def test_downstream_sign_minus_one_mirrors_and_zero_checks_nothing():
+    west, east = (-0.49, 0.02, math.pi), (0.11, 0.02, math.pi)
+    flipped = DockingConfig(bay_downstream_sign=-1.0)
+    assert (verdict(west, flipped).kind, verdict(east, flipped).kind) == ("out", "manual")
+    off = DockingConfig(bay_downstream_sign=0.0)
+    assert (verdict(west, off).kind, verdict(east, off).kind) == ("out", "out")
+
+
+def settle(p, seconds):
+    for _ in range(int(seconds / 0.05)):
+        p.detector.capture()
+        p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)
         p.manager.tick()
-        assert p.manager.state is DockState.DOCK_FAILED and "heading" in p.manager._error
-        assert not [c for _, c in p.world.commands if c != (0.0, 0.0)]
+        p.clock.now += 0.05
+
+
+@pytest.mark.parametrize("deg", [180.0, 61.0, -75.0])
+def test_staging_arrival_wrong_heading_fails(deg):
+    p = a_bay()
+    p.world.arrival_error = (0.0, math.radians(deg))
+    p.manager.dock()
+    settle(p, 0.5)
+    assert p.manager.state is not DockState.DOCK_FAILED       # looks again before it gives up
+    settle(p, 1.0)
+    assert p.manager.state is DockState.DOCK_FAILED and "heading" in p.manager._error
+    assert not [c for _, c in p.world.commands if c != (0.0, 0.0)]
+
+
+def test_staging_arrival_59_deg_is_accepted():
+    p = a_bay()
+    p.world.arrival_error = (0.0, math.radians(59.0))
+    p.manager.dock()
+    settle(p, 0.3)
+    assert p.manager.phase is DockPhase.TURNING
+
+
+def test_staging_arrival_missing_pose_fails_only_after_the_recheck():
+    p = a_bay()
+    p.manager.dock()
+    p.manager._pose_provider = lambda: None
+    settle(p, 0.5)
+    assert p.manager.state is not DockState.DOCK_FAILED
+    settle(p, 1.0)
+    assert p.manager.state is DockState.DOCK_FAILED
+
+
+def test_a_one_tick_bad_pose_does_not_end_the_try():
+    p = a_bay()
+    p.manager.dock()
+    good = p.manager._pose_provider
+    p.manager._pose_provider = lambda: None
+    settle(p, 0.2)
+    p.manager._pose_provider = good
+    settle(p, 0.3)
+    assert p.manager.phase is DockPhase.TURNING
 
 
 def turning_commands(noise):
@@ -163,3 +216,48 @@ def test_a_car_0_15_m_behind_at_the_junction_blocks_the_turn_without_contact():
     assert p.manager.state is DockState.DOCK_FAILED and "turn not clear" in p.manager._error
     assert contacts == 0
     assert not [c for ph, c in p.world.commands if ph is not DockPhase.STAGING and c != (0.0, 0.0)]
+
+
+def to_turning(sign=None):
+    p = a_bay()
+    if sign is not None:
+        p.manager._cfg = dataclasses.replace(p.manager._cfg, bay_downstream_sign=sign)
+    p.manager.dock()
+    settle(p, 0.1)
+    assert p.manager.phase is DockPhase.TURNING
+    return p
+
+
+@pytest.mark.parametrize("sign,expect", [(1.0, -1.0), (-1.0, 1.0)])
+def test_turn_sense_follows_the_downstream_sign(sign, expect):
+    p = to_turning(sign)
+    settle(p, 0.2)
+    assert p.world.command[1] * expect > 0.0
+
+
+def test_turn_without_a_downstream_sign_takes_the_short_way():
+    for noise in (1e-9, -1e-9):
+        p = a_bay()
+        p.world.arrival_error = (0.0, noise)
+        p.manager._cfg = dataclasses.replace(p.manager._cfg, bay_downstream_sign=0.0)
+        p.manager.dock()
+        settle(p, 0.3)
+        assert p.manager.phase is DockPhase.TURNING and p.world.command[1] != 0.0
+        assert p.manager._bay_phases._turn_target == pytest.approx(p.world.pose[2] + math.pi, abs=0.1)
+
+
+def test_a_small_overshoot_is_corrected_the_short_way():
+    p = to_turning()
+    x, y, _ = p.world.pose
+    p.world.pose = (x, y, -math.pi - 0.2)             # 0.2 rad past the clockwise target
+    settle(p, 0.2)
+    assert p.manager.phase is not DockPhase.TURNING or p.world.command[1] > 0.0
+    assert p.manager.state is not DockState.DOCK_FAILED
+
+
+def test_a_large_overshoot_stops_instead_of_swinging_the_tray_back():
+    p = to_turning()
+    x, y, _ = p.world.pose
+    p.world.pose = (x, y, -math.pi - 1.0)
+    settle(p, 0.2)
+    assert p.manager.state is DockState.DOCK_FAILED and "overshot" in p.manager._error

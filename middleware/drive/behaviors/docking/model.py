@@ -125,8 +125,13 @@ class DockingConfig:
     bay_exit_front_gap_m: float = 0.08  # 앞 여유가 이보다 작으면 멈춘다
     bay_exit_steer_lat: float = 6.0     # rad/m, 횡 오차 → 목표 방위(선 보며 전진; 시뮬로 부호·크기 확인)
     bay_exit_steer_head: float = 2.0    # 1/s, 목표 방위로 맞추는 이득(0 이면 곧게 나간다)
-    # 일방통행(C3→C1, 사이트 v258): 칸 축 기준 하류가 +횡(서쪽). 이 사이트 값이 기본이고 0 이면 검사·고정 방향 없음.
+    # 일방통행(C3→C1, 사이트 v258): 칸 축 기준 하류가 +횡(서쪽). 이 사이트 값이 기본이고 0 이면 검사 없음·회전은 최단 방향.
     bay_downstream_sign: float = 1.0
+    # 하류 거절 경계 = 칸 반폭 + 맵 등록 오차(수 cm). 동(상류)쪽은 거절하지 않으므로 경계 오차는 서쪽 입구 앞에서만
+    # 보이고, 여유를 더해 입구 바로 앞 로봇이 오차로 거절되는 쪽을 막는다(놓치면 Nav2 가 흐름을 거슬러 간다).
+    bay_downstream_map_error_m: float = 0.04
+    bay_stage_recheck_s: float = 1.0    # 스테이징 도착 방향 불일치를 이만큼 이어서 봐야 실패(포즈 잡음·일시 None)
+    bay_turn_overshoot_rad: float = 0.35  # 회전 지나침 보정 허용(20 deg, 짐칸이 상류로 휘는 양); 넘으면 정지
     bay_corridor_band_m: float = 0.15   # 스테이징 거리 ± 이만큼이 통로선 위(하류 쪽 시작 거절 범위)
     bay_stage_heading_max_rad: float = 1.0472  # 60 deg: 스테이징 도착 코가 칸 축에서 이보다 틀면 실패
     bay_scan_fresh_s: float = 0.5       # 몸 스캔 판정이 이보다 오래되면 없는 것
