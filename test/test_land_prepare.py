@@ -652,6 +652,52 @@ def test_delta_prepare_skips_full_slot_and_isolation_gate(full_anchor, monkeypat
     assert json.loads(ticket.read_text(encoding="utf-8")).get("tier") == ""
 
 
+def _full_prepare(wt, qdir, ticket):
+    return land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=False),
+                                     sys.executable, qdir, ticket, [["pkg/test"]], "FULL tier (test)")
+
+
+def test_full_guards_run_during_the_slot_wait_and_tests_wait_for_both(full_anchor, monkeypatch):
+    """The 150-870 s guard round hides under the FULL slot wait; the FULL tier needs the slot and green guards."""
+    _, wt, *_ = full_anchor
+    qdir = land.land_queue.queue_dir(wt)
+    ticket = land.land_queue.take(qdir, "feat/x", status="preparing")
+    events, started = [], threading.Event()
+
+    def guards(*a, **k):
+        started.set()
+        events.append("guards")
+        return []
+
+    def slot(*a, **k):
+        assert started.wait(10), "the slot wait began before the guards"
+        events.append("slot")
+
+    monkeypatch.setattr(land.land_guards, "first", guards)
+    monkeypatch.setattr(land.land_prepare, "full_slot", slot)
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: events.append("tests") or [])
+    _full_prepare(wt, qdir, ticket)
+    assert sorted(events[:2]) == ["guards", "slot"] and events[2] == "tests"
+
+
+def test_full_guard_stop_ends_the_slot_wait_and_runs_no_fulltest(full_anchor, monkeypatch):
+    _, wt, *_ = full_anchor
+    qdir = land.land_queue.queue_dir(wt)
+    for n in range(land.land_prepare.MAX_FULL):
+        older = land.land_queue.take(qdir, f"feat/old-{n}", status="preparing")
+        land.land_queue.set_status(older, "preparing", tier="full")
+    ticket = land.land_queue.take(qdir, "feat/x", status="preparing")
+
+    def guards(*a, **k):
+        raise land.Stop("NEW failure in test/architecture")
+
+    monkeypatch.setattr(land.land_guards, "first", guards)
+    monkeypatch.setattr(land.land_prepare, "POLL", 0.01)
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: pytest.fail("a FULL test ran after a guard Stop"))
+    with pytest.raises(land.Stop, match="test/architecture"):
+        _full_prepare(wt, qdir, ticket)  # the older FULLs never finish: only the Stop can end the wait
+
+
 def test_guard_and_body_rounds_share_one_lint_run_per_tree(repos, monkeypatch, tmp_path):
     """gpre/pre and g1/1 run on the exact same tree and must not spawn two lint processes each."""
     _, wt = repos

@@ -220,6 +220,15 @@ def test_a_prepared_waiting_ticket_is_not_rolled_up(repo):
     assert land_rollup.candidates([plain, tested, done], main, host="h") == [plain]
 
 
+def test_a_pending_ticket_tested_on_the_current_main_is_not_rolled_up(repo):
+    """11-18: pending + tested == main kept its pass; tested on an older main may still re-roll."""
+    main, snapshot = repo
+    head = land_rollup.git(main, "rev-parse", "main").stdout.strip()
+    fresh = {**snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), "status": "pending", "tested": head}
+    stale = {**snapshot("fix/b", {"pkg/b.py": "y = 2\n"}), "status": "pending", "tested": "0" * 40}
+    assert land_rollup.candidates([fresh, stale], main, host="h") == [stale]
+
+
 def test_the_rollup_takes_its_first_members_place_and_the_member_leaves_it(repo, monkeypatch, tmp_path):
     main, snapshot = repo
     qdir = land_rollup.land_queue.queue_dir(main)

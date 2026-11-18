@@ -247,32 +247,35 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     began = time.monotonic()
     guard_args = land.argparse.Namespace(**{**vars(args), "no_cache": True}) if explicit else args
     guarded: list[str] = []
+    # The guard round (with land_isolation's alone runs) runs beside the selection (affected tier) or beside the
+    # FULL slot wait (FULL tier): on 2026-10-27 it took 150-870 s and every pretest waited for it.
+    # Each is its own remote_pytest.run (own queue, threads, run dir); a Stop from either stops the landing.
+    raised: list[BaseException] = []
+
+    def guards() -> None:
+        nonlocal guarded
+        try:
+            guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
+                                             isolated=not delta)
+        except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
+            raised.append(error)
+    side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
+    side.start()
     if full and ticket is not None:
-        # Fail fast on guards (architecture, contracts, ownership, isolation) before waiting behind MAX_FULL.
-        guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
-                                         isolated=not delta)
+        def waiting() -> int | None:
+            if raised:
+                raise raised[0]  # a guard Stop ends the slot wait; no FULL test has started
+            return relaunch(land, qdir, ticket)
+        full_slot(qdir, ticket, changed=waiting)
+        side.join()  # the FULL tier starts only with the slot and green guards
+        if raised:
+            raise raised[0]
         if land.out(wt, "rev-parse", "HEAD") != candidate:
             raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
         land.land_selection.require_eligible(land, args, land.land_selection.eligible(land, guarded, args), guarded)
-        guard_s = time.monotonic() - began
-        full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket))
-        began = time.monotonic() - guard_s
+        began = time.monotonic()  # the slot wait is not preparation time
         tested = land.run_tests(wt, args, invocations, logdir, "pre")
     else:
-        # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on
-        # 2026-10-27 it took 150-870 s and every pretest waited for it while holding one of MAX_PREPARING slots.
-        # Each is its own remote_pytest.run (own queue, threads, run dir); a Stop from either stops the landing.
-        raised: list[BaseException] = []
-
-        def guards() -> None:
-            nonlocal guarded
-            try:
-                guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
-                                                 isolated=not delta)
-            except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
-                raised.append(error)
-        side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
-        side.start()
         tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
         side.join()
         if raised:
