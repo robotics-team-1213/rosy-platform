@@ -469,9 +469,10 @@ def _repack(repo: Path, inv: list[str], env: list[str], paths: list[str], ignore
     groups: list[list[str]] = [[] for _ in range(n)]
     names_of, weights, chars = [{} for _ in range(n)], [0.0] * n, [0] * n
     cache: dict[str, dict[str, str]] = {}
-    for item in items:  # heaviest first into the lightest group that can hold it
+    for item in items:  # heaviest first into the lightest group that can hold it (fewest files on a tie: free
+        # files, e.g. paths missing from this tree, spread instead of piling into the first group)
         names = _import_names(repo, item, cache)
-        choice = next((i for i in sorted(range(len(groups)), key=lambda i: (weights[i], i))
+        choice = next((i for i in sorted(range(len(groups)), key=lambda i: (weights[i], len(groups[i]), i))
                        if all(names_of[i].get(name, source) == source for name, source in names.items())
                        and EXCLUSIVE_FILE not in groups[i] and item != EXCLUSIVE_FILE
                        and chars[i] + len(item) + 1 <= MAX_INVOCATION_CHARS), None)
