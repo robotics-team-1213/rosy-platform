@@ -143,8 +143,13 @@ def _segment_masks(img: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     return white_mask, green_mask, pink_mask, yellow_mask
 
 
-def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | None = None) -> dict | None:
-    """100% automatic OpenCV 12-DOF calibration + sub-pixel map tracer for ``world_261026``."""
+def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | None = None,
+                                          seed_map_to_image: np.ndarray | None = None) -> dict | None:
+    """100% automatic OpenCV 12-DOF calibration + sub-pixel map tracer for ``world_261026``.
+
+    ``seed_map_to_image`` replaces the first guess (step 1), which assumes the usual camera view;
+    a re-aimed camera or a robot over an outer bay defeats it, while the refinement still converges.
+    """
     if img is None or img.ndim != 3 or img.shape[2] != 3:
         return None
     t0 = time.perf_counter()
@@ -253,6 +258,9 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
     if map_to_image is None or not np.all(np.isfinite(map_to_image)):
         return None
     map_to_image /= map_to_image[2, 2]
+    if seed_map_to_image is not None:
+        map_to_image = np.asarray(seed_map_to_image, np.float64) / seed_map_to_image[2, 2]
+        divider_comp = None  # its fixed end points (+-0.926) come from the default-view guess
     try:
         image_to_map = np.linalg.inv(map_to_image)
         image_to_map /= image_to_map[2, 2]

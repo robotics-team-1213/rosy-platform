@@ -244,8 +244,21 @@ if jpeg is None:
 else:
     img = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
     fit = auto_calibrate_and_trace_world_261026(img)
+    seed = None
     if fit is None:
-        print(json.dumps({"ok": False, "reason": "fit_rejected"}))
+        # A re-aimed camera or a robot over an outer bay defeats the tracer's own first guess.
+        # Vision's paint registrar (D-375) still finds the track: refine from its accepted fit.
+        lease = signer.issue(principal_id='auto-calib-seed', source_id='ceiling_north', ttl_s=60)
+        with httpx.Client(verify='/run/secrets/site_ca', timeout=20.0) as client:
+            r = client.get('https://vision:8095/api/vision/sources/ceiling_north/map-proposal',
+                           headers={'Authorization': f'Bearer {lease}', 'Host': 'vision'})
+        body = r.json() if r.status_code == 200 else {}
+        if body.get("accepted") and body.get("proposal"):
+            seed = "map-proposal"
+            fit = auto_calibrate_and_trace_world_261026(
+                img, seed_map_to_image=np.array(body["proposal"]["map_to_image"], np.float64))
+    if fit is None:
+        print(json.dumps({"ok": False, "reason": "fit_rejected", "seed": seed}))
     else:
         h, w = img.shape[:2]
         print(json.dumps({
@@ -253,6 +266,7 @@ else:
             "width": w,
             "height": h,
             "frame_seq": frame_seq,
+            "seed": seed,
             "rms_m": round(float(fit["rms_m"]), 5),
             "map_to_image": [round(float(v), 8) for v in fit["map_to_image"].ravel()],
             "image_to_map": [round(float(v), 8) for v in fit["image_to_map"].ravel()],
