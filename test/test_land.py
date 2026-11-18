@@ -1273,7 +1273,7 @@ def test_a_landing_leaves_its_queue_turn_round_tests_and_landed_events(repos, mo
     assert land.main(["--tests", "pkg/test"]) == 0
     rows = land.land_events.read(main / ".git" / land.land_events.EVENTS)
     assert [r["event"] for r in rows] == ["queue", "turn", "round", "round_start", "tests", "round_end", "landed"]
-    assert rows[3]["verdict"] == "pass" and rows[-1]["sha"] == git(main, "rev-parse", "HEAD")
+    assert rows[4]["verdict"] == "pass" and rows[-1]["sha"] == git(main, "rev-parse", "HEAD")
     assert {r["branch"] for r in rows} == {"feat/x"}
 
 
