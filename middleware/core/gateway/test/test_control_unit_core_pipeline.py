@@ -72,6 +72,9 @@ def test_delegated_task_dispatches_through_core_and_projects_exact_terminal_resu
                 except Exception as exc:
                     dispatch_errors.append((type(exc).__name__, str(exc)))
                     raise
+            # Fresh synthetic odometry: setup alone outlasted HARDWARE_LIVENESS_S on a loaded host and goal
+            # navigation was withheld as silent hardware (2026-11-18, 74 s run).
+            services.state.set_velocity(0.0, 0.0)
             task = await leaf.tasks.dispatch_next({"a1"}, dispatch=dispatch)
             assert task["status"] == "ACCEPTED", (task["reason"], task["receipt"], dispatch_errors)
             assert len(executor.goals) == 1
