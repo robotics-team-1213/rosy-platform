@@ -159,7 +159,8 @@ def test_another_clean_execution_on_the_same_candidate_preserves_the_recorded_lo
     assert tool.green_full(local, sha)
 
 
-@pytest.mark.parametrize("damage", ["opt-in", "alone", "missing", "duplicate", "ordinary-invocation"])
+# D-1036 addendum: a record may omit browser chunks (test_scoped_*); a renamed or unproven one still fails.
+@pytest.mark.parametrize("damage", ["opt-in", "alone", "ordinary-invocation"])
 def test_canonical_full_and_browser_chunks_cannot_be_replaced_by_partial_or_duplicate_coverage(
         repo, monkeypatch, damage):
     local, sha, _ = _proof(repo)
@@ -169,12 +170,8 @@ def test_canonical_full_and_browser_chunks_cannot_be_replaced_by_partial_or_dupl
         invs[-1].remove("ROSY_RUN_BROWSER_TESTS=1")
     elif damage == "alone":
         invs[-2].remove("ROSY_BROWSER_ALONE=1")
-    elif damage == "duplicate":
-        invs[-1] = invs[-2][:]
-    elif damage == "ordinary-invocation":
-        invs.pop(0)
     else:
-        invs.pop()
+        invs.pop(0)
     (tool.land_record.folder(local) / f"{sha}.json").write_text(json.dumps(record), encoding="utf-8")
     _deny_selection_and_merge(local, sha, monkeypatch)
 
@@ -375,3 +372,72 @@ def test_the_newest_green_nightly_stays_a_candidate_ancestor_beyond_the_recent_w
     common = Path(_git(local, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     (common / "rosy-nightly-green").write_text(nightly + "\n", encoding="utf-8")
     assert nightly in kept() and len(kept()) <= land_cache.NARROW_COMMITS
+
+
+# D-1036 addendum (2026-11-18): browser chunks are those the delta origin/main...sha maps to (land.py's mapping).
+CANONICAL = FULL[:3]
+DASHBOARD = ["ROSY_RUN_BROWSER_TESTS=1", "test/test_dashboard_browser.py"]
+
+
+def test_scoped_delta_without_browser_paths_needs_no_browser_rows(repo, capsys):
+    local, _ = repo
+    sha = _commit(local, "app.py", "no UI")
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"), CANONICAL)
+    assert tool.green_full(local, sha) and tool.publish_sha(local) == sha
+    assert "browser chunks 0/0 evidenced (delta scope)" in capsys.readouterr().err
+
+
+def test_scoped_browser_chunk_without_proof_is_named_and_filled(repo, monkeypatch, tmp_path):
+    local, _ = repo
+    sha = _commit(local, "test/test_dashboard_browser.py", "def test_dashboard(): assert True\n")
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"), CANONICAL)
+    why = tool.publish_evidence.reason(tool, local, sha, tool.land_record.read(local, sha))
+    assert why.startswith("browser chunks 0/1 evidenced (delta scope); missing") and "test_dashboard_browser" in why
+    assert not tool.green_full(local, sha)
+    calls = []
+
+    def run(invocations, logs, commit, repo=None, label=None):
+        calls.append((invocations, commit))
+        for log in logs:
+            log.write_text("1 passed in 0.01s\n", encoding="utf-8")
+        return [0] * len(invocations)
+    monkeypatch.setattr(land_cache.remote_pytest, "run", run)
+    monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path))
+    assert "would run 1 chunk(s)" in tool.publish_evidence.fill(tool, local, False) and not calls
+    assert "1/1 missing browser chunk(s) passed" in tool.publish_evidence.fill(tool, local, True)
+    assert calls == [([DASHBOARD], sha)] and tool.green_full(local, sha)
+
+
+@pytest.mark.parametrize("later", ["app.py", "test/test_dashboard_browser.py"])
+def test_scoped_browser_proof_on_an_ancestor_counts_only_when_the_later_delta_misses_it(repo, later):
+    local, _ = repo
+    harness = local / "tools/harness/rosy_harness.py"
+    full = harness.read_text(encoding="utf-8").split("print(", 1)[1].rsplit(")", 1)[0]
+    _commit(local, "tools/harness/rosy_harness.py", "import json, sys\nprint(" + full + " if '--full' in sys.argv"
+            " else json.dumps({'mode': 'affected', 'escalations': [], 'invocations': [['learning/registry/policy/test']]}))\n")
+    ancestor = _commit(local, "test/test_dashboard_browser.py", "def test_dashboard(): assert True\n")
+    qualified_record(tool, local, ancestor, _git(local, "rev-parse", f"{ancestor}^"))
+    sha = _commit(local, later, "def test_dashboard(): assert 1\n")
+    qualified_record(tool, local, sha, ancestor, CANONICAL)
+    assert tool.green_full(local, sha) is (later == "app.py")
+
+
+def test_scoped_mapping_failure_requires_every_registered_browser_chunk(repo):
+    local, _ = repo
+    scope = local / "test/browser_scope.py"
+    text = scope.read_text(encoding="utf-8") + "\n\ndef targets(paths):\n    raise RuntimeError('mapping broken')\n"
+    sha = _commit(local, "test/browser_scope.py", text)
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"), CANONICAL)
+    why = tool.publish_evidence.reason(tool, local, sha, tool.land_record.read(local, sha))
+    assert why.startswith("browser chunks 0/2 evidenced (all scope)")
+    sha = _commit(local, "app.py", "after broken mapping")
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
+    assert tool.green_full(local, sha)
+
+
+def test_scoped_browsers_never_excuse_a_missing_canonical_full_invocation(repo):
+    local, _ = repo
+    sha = _commit(local, "app.py", "no UI")
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"), CANONICAL[1:])
+    assert tool.publish_evidence.reason(tool, local, sha, tool.land_record.read(local, sha)) == (
+        "record omits a canonical FULL invocation")
