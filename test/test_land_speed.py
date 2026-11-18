@@ -158,3 +158,8 @@ def test_quick_contract_stops_only_on_a_confirmed_new_failure(tmp_path, codes, v
             land_quick.run(fake, tmp_path, "python", ("t.py",))
     else:
         land_quick.run(fake, tmp_path, "python", ("t.py",))
+
+
+def test_every_quick_contract_file_exists():
+    # run() skips a missing file silently, so a rename would quietly drop the check
+    assert [p for p in land_quick.QUICK if not (ROOT / p).is_file()] == []
