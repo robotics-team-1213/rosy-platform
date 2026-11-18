@@ -20,6 +20,7 @@ D-395 Fleet localization arbiter. Scores each robot's pose candidates with bound
 | `arbiter.py` | `Weights`, `Context`, `score()`, `Arbiter.observe()` → `LocalizationDecision` |
 | (not in this folder) | MapPose lives in `rosy.world.state.projections.map_pose`. Import it directly (D-752). This folder does not re-export it. Fleet service, transaction, and admission stay in `server/` |
 | `lane_compliance.py` | D-511 2: signed lateral offset (left +), body margin `width_m/2 − (|d| + half width)` from `core_common.robot_body`, `LaneComplianceTracker` (OK/WARN/ACT/UNKNOWN, `persist_n`), `LaneComplianceConfig` (`fleet.lane_compliance`, provisional defaults). Observe only |
+| `wall_grid.py` | SLAM fallback: active site map walls -> Nav2 trinary map in the site frame (0.025 m, walls >= 1 cell, pure stdlib, deterministic sha256), served by `GET /api/fleet/site-map/wall-grid` |
 
 ## For AI Agents
 
