@@ -264,6 +264,23 @@ def test_world_261026_auto_refines_from_a_seed_after_the_camera_moved():
         assert abs(places[bay] - x) < 0.015, (bay, places[bay])
 
 
+def test_world_261026_auto_fits_real_frames_well_inside_the_rms_cut():
+    """The divider end points are not a residual: on real night and noon frames they doubled RMS to ~12 mm,
+    next to the 15 mm cut, so a little glare tipped good frames into fit_rejected."""
+    import sys
+    import cv2
+
+    vision_dir = str(ROOT / "operations/overhead")
+    if vision_dir not in sys.path:
+        sys.path.insert(0, vision_dir)
+    from rosy_vision.world_261026_auto import auto_calibrate_and_trace_world_261026
+
+    for name in ("f0.jpg", "f3.jpg", "f6.jpg", "day0.jpg"):
+        fit = auto_calibrate_and_trace_world_261026(
+            cv2.imread(str(ROOT / "operations/overhead/test/data/ceiling_pinky" / name)))
+        assert fit is not None and fit["rms_m"] < 0.006, (name, fit and fit["rms_m"])
+
+
 def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypatch, capsys):
     mod = _load_module()
     token_file = tmp_path / "auto-calibration.token"
