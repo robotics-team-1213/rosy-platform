@@ -391,3 +391,13 @@ def test_the_choice_set_shares_one_scene_and_differs_only_in_the_container_taken
         assert len(mine) == 3 and len({s["from"] for s in mine}) == 3 and len({s["to"] for s in mine}) == 1
     for name in choose:
         tasks.validate(layout, tasks.get_task(layout, name))
+
+
+def test_carry_height_clears_containers_standing_on_temp_plates():
+    """choose-bar-9 carries past a second-layer temp container: the carry must clear its top, not only the ship's."""
+    lay = sites.Layout(preset="v24-20261114")
+    task = tasks.get_task(lay, "choose-bar-9")
+    step = task["steps"][0]
+    here = {c: s for c, s in task["start"].items() if c != step["container"]}
+    top = max(lay.sites[s]["z"] for s in here.values() if lay.sites[s]["kind"] == "temp")
+    assert tasks.carry_z(lay, here, step["from"], step["to"]) >= top + lay.box[2] + tasks.CARRY_CLEAR + lay.hold_below
