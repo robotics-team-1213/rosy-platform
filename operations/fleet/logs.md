@@ -5637,3 +5637,8 @@
 - 변경: `unit_scope()`의 `arms`가 자기 자원뿐 아니라 바로 아래 하위 단위의 `workcell:` 자원도 센다. 현장 manifest(site-2026-11-17-r2)에서 R은 `robot:`만, ARM-CELL이 `workcell:arm_a/b/s`를 가지는데, 셀 작업자(`deploy/robot/omx/cell_task_worker.py`, rosy-arm-cell)는 R의 `/api/fleet/pipeline/cell-tasks`를 polling·claim·complete하고 R에 팔 토큰·workcell 관측 파일이 마운트돼 있다. 이전 규칙은 R에서 `/console/cell` 본문을 숨겨 실제 작업 장부가 있는 관제에서 셀 화면을 잃게 했다(feat/ui-refine, 아직 배포 전). 브라우저 시험의 root 경우·단위 시험 기대값을 고쳤다.
 - 증거: R의 `/etc/rosy/control-unit/control-unit.yaml`(읽기 전용 확인, unit_id R, 자원 robot 3·ARM-CELL workcell 3), 컨테이너 환경에 `ROSY_FLEET_OMX_INSTANCES` 없음. 원격 시험 결과는 D:/DevTemp/ui-refine-1118/remote-scope.
 - gate 변화: 없음. 서버 쪽 /pipeline 차단은 하지 않는다: 셀 작업 장부의 실제 주인이 R이라 "팔 없는 단위" 차단은 지금 막을 소비자가 없다.
+
+## 2026-11-18 · uncommitted · test(fleet): 정리 브랜치의 원격 실패 고침 — 노드 import 훅, camera-peer 자산 경로, 한 걸음 거절은 행 안 글자
+- 변경: 측정 보정·장치 프로필 노드 시험이 다른 웹 시험처럼 `register-console-assets.mjs` 훅을 쓴다(authorization.js가 이제 `/common/cause-line.js`를, device-profiles.js가 `/console/assets/authorization.js`를 가져온다). camera-peer 브라우저 시험 고정 서버가 `/console/assets/*`를 모두 shared에서 낸다. 로봇 도크 시험의 한 걸음 409는 이제 inline 호출이라 토스트가 아니라 `.step-nudge-status` 글자로 단언한다(토스트 0장도 단언, 알림 한 곳 규칙).
+- 증거: D:/DevTemp/ui-panel-1118/remote-1/run-1.txt(21 실패 중 이 브랜치가 만든 것: 노드 2·camera-peer 6·robot-dock 1·roster.css 중괄호 1(앞 커밋에서 고침)), 기준 c6c6d932e1 비교 D:/DevTemp/ui-panel-1118/remote-base/run-1.txt.
+- gate 변화: 없음(단언 강도 유지: 토스트 0장 추가).
