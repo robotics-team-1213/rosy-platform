@@ -146,6 +146,7 @@ export function createRoiPoller({ scope, view, call, render = () => {} }) {
         headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
       });
       if (resp.status === 401) { roiLease.token = ""; roiLease.expiresAt = 0; return; }
+      if (resp.status === 404) { retryAt = Infinity; return; } // no ROI for this target: stop until it changes
       if (!resp.ok) { failed(); return; }
       failures = 0; retryAt = 0;
       const blob = await resp.blob();
