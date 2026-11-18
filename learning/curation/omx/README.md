@@ -183,11 +183,11 @@ W&B, Hub 업로드를 끈다. 학습 뒤 model/config/preprocessor/postprocessor
 
 수집·검토 모듈은 업로드하지 않는다. 별도 [artifact 동기화 도구](../../registry/policy/hub_sync.py)를 사용한다.
 실제 HF org가 정해지면 대상 dataset/model 저장소를 private로 준비한다.
-인증은 공식 HF login cache 또는 서버의 `HF_TOKEN`을 사용하며 인자로 토큰을 전달하지 않는다.
+인증은 팀 전용 HF 계정 토큰을 담은 파일(`--token-file`)만 쓴다. 호스트의 HF login cache나 `HF_TOKEN`은 쓰지 않는다.
 
 ```text
 python learning/registry/policy/hub_sync.py prepare <artifact-root> --out <new-bundle> --repo-id <org>/<name> --repo-type dataset --file README.md --file meta/info.json --file <each-reviewed-relative-file>
-python learning/registry/policy/hub_sync.py upload <new-bundle>
+python learning/registry/policy/hub_sync.py upload <new-bundle> --token-file <team-hf-token-file>
 ```
 
 `prepare`는 선택 파일만 snapshot하고 manifest를 출력한다. 목록·대상·내용을 검토한 후에만
