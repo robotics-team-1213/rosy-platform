@@ -15,12 +15,14 @@ from fleet.server.trip_geometry import site_goal_in_robot_frame
 LOCALIZED = {"localization": {"state": "LOCALIZED", "pose_frame": "map"}}
 
 
-def _convert(state, site_pose, active_map="site", goal=(0.0, 0.0, 0.0)):
+def _convert(state, site_pose, active_map="site", goal=(0.0, 0.0, 0.0), driving=None):
     async def gather(robot_id):
         return state, "ok"
     active = None if active_map is None else (3, SimpleNamespace(map_id=active_map))
-    app = SimpleNamespace(state=SimpleNamespace(site_maps=SimpleNamespace(active=lambda: active),
-                                                map_pose=SimpleNamespace(arbitrated_pose=lambda rid: site_pose)))
+    poses = SimpleNamespace(arbitrated_pose=lambda rid: site_pose)
+    if driving is not None:   # D-989: the service also offers the trusted pose of an auto-locate robot
+        poses.driving_pose = lambda rid: driving
+    app = SimpleNamespace(state=SimpleNamespace(site_maps=SimpleNamespace(active=lambda: active), map_pose=poses))
     return asyncio.run(site_goal_in_robot_frame(app, SimpleNamespace(_gather_state=gather), "rosy_46", goal))
 
 
@@ -52,3 +54,24 @@ def test_the_frame_field_takes_only_site():
     assert ConsoleGoalRequest(x=0, y=0, frame="site").frame == "site"
     with pytest.raises(ValueError):
         ConsoleGoalRequest(x=0, y=0, frame="robot")
+
+
+_ROBOT = {**LOCALIZED, "map_id": "slam", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}}
+
+
+def test_site_goal_uses_aligned_auto_locate_anchor():
+    unknown = MapPose(None, None, None, "UNKNOWN", None, 0.0, None)      # arbitrated_pose hides the D-989 anchor
+    aligned = MapPose(-0.42, 0.38, -math.pi / 2, "LOCALIZED", "auto_locate", 0.0, 0.1, 0.1, "site",
+                      anchor_source="auto_locate")
+    x, y, yaw = _convert(_ROBOT, unknown, driving=aligned)
+    assert (x, y) == pytest.approx((0.38, 0.42), abs=1e-6)
+
+
+@pytest.mark.parametrize("driving", [
+    MapPose(None, None, None, "UNKNOWN", None, 0.0, None),
+    MapPose(-0.42, 0.38, 0.0, "DEGRADED", "auto_locate", 0.0, 0.1, 20.0, "site", anchor_source="auto_locate"),
+])
+def test_site_goal_refuses_unknown_pose(driving):
+    with pytest.raises(HTTPException) as err:
+        _convert(_ROBOT, None, driving=driving)
+    assert err.value.status_code == 409 and err.value.detail["code"] == "SITE_POSE_UNKNOWN"

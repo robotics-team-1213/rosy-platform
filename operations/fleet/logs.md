@@ -5562,3 +5562,13 @@
 - 변경: `fleet/server/auth/site_auth.py` — `role: service`, `principal_id: auto-track-calibration` 기계 자격을 `/api/fleet/calibrations` 및 `/api/fleet/site-map/*` 경로로 한정 허용해 Account receiver 모드에서도 호스트 자동 보정 타이머가 인간 세션 위조 없이 동작하도록 연결했다.
 - 증거: 원격 `test_auto_track_calibration.py`·`test_overhead_tracking_api.py` 통과 및 `rosy-fleet-r` 실호스트 적용 확인.
 - gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · fix(map-pose): D-989 허용 목록에 콘솔 site goal 추가
+- 변경: `trip_geometry.site_goal_in_robot_frame`이 `driving_pose`(LOCALIZED·map_id 일치만, 아니면 409)를 쓴다. D-989 `driving_pose` 호출자 목록이 trip runner·readback·auto start·guide에서 `trips/trip_geometry.py`까지 늘었다(`test_the_allowlist_is_exactly_...` 갱신). 다른 소비자는 그대로 `arbitrated_pose`.
+- 증거: 원격 `operations/world/test`·`operations/fleet/test` 통과(최종 SHA는 보고에).
+- gate 변화: SOURCE. 실물 미실시.
+
+## 2026-11-18 · uncommitted · fix(map-pose): 늦은 odom·오래된 앵커·3 fps 짝짓기
+- 변경: 3 s 안에 뒤처진 그럴듯한 odom은 `stale_source`(survey 안 끊음), 그 밖은 `out_of_order`; `max_stale_draw_s`(120, 상한 600) 넘은 pin·sighting·peer 앵커는 UNKNOWN; auto-locate 짝 신선도는 `max(0.5, 2/fps)`, 상한 1.0 s; `stale_source`를 trip 진단에 노출.
+- 증거: 원격 `operations/world/test`·`operations/fleet/test` 통과(최종 SHA는 보고에).
+- gate 변화: SOURCE. 현장 y8xs 재확인 미실시.
