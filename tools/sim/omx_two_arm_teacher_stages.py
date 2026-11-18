@@ -164,7 +164,7 @@ def run_concurrent_steps(teacher, data, task, here, max_s=900, faults=None):
             # every blocked head waiting on the belt ledger (a delivery in flight, or readings to retry) is waiting, not deadlock
             belt_waiting = all(s["from"] == "belt" and all(status.get(d) == "done" for d in s.get("after", [])) for s in heads)
             if halt or (not heads and belt.state != "picked") or (heads and not belt_waiting):
-                return result(halt or f"deadlock: {[s['id'] for s in heads]} cannot start")
+                return result(halt or (f"deadlock: {[s['id'] for s in heads]} cannot start" if heads else None))
         targets = {}
         parking = [a for a, r in running.items() if r[2].phase == "park"]
         for arm, (s, gen, ctx, pick_only) in list(running.items()):
@@ -182,7 +182,18 @@ def run_concurrent_steps(teacher, data, task, here, max_s=900, faults=None):
                 status[s["id"]] = "done"
                 timing[s["id"]]["end_s"] = round(frames / FPS, 2)
                 held = {z: i for z, i in held.items() if i != s["id"]}
-                here[s["container"]] = s["to"]
+                if s["from"] == "belt" and stop.value["result"] in ("blocked", "unreachable"):
+                    # as run_task does for a belt box it could not take: the box leaves and the ledger moves on, so the run can go on judging rows
+                    teacher.world.put(data, s["container"], None, [c for c, _ in L.containers()].index(s["container"]))
+                    here.pop(s["container"], None)
+                    if belt.state == "at_end" and s["id"] in belt_gen:
+                        belt.grasped(belt_gen[s["id"]], s["container"])
+                        try:
+                            belt.cleared(belt.generation, reading())
+                        except Hold:
+                            pass
+                else:
+                    here[s["container"]] = s["to"]
                 teacher.off_stand(data, s, here)
                 del running[arm]
                 continue
