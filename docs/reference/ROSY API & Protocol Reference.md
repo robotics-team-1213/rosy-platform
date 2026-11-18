@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.404
+**Version:** v1.408
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -4070,7 +4070,8 @@ the stop response. These software latch receipts are not physical E-stop or
 driver standstill proof. The existing CORE/mobile stop fanout remains
 independent, and physical E-stop/readback remain separate.
 
-The dedicated `POST /api/fleet/estop` requires an authenticated operator but
+The dedicated `POST /api/fleet/estop` requires any authenticated `fleet.read`
+person (viewer, policy-admin, operator; not `service`, 403; D-1043, v1.408) but
 still sends the stop fanout if the audit store, dispatch-latch write, or queued
 task cleanup fails. Fleet logs each failed durable step; the response reports
 CORE request outcomes only and is not physical stop proof. Other mutations,
@@ -4823,6 +4824,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.408 | 2026-11-18 | 권한 변경 (D-1043, fix/viewer-estop, Safety-Review 대상): `POST /api/fleet/estop`을 operator 전용에서 사람 계정의 `fleet.read`(보기 전용·정책 관리자·운영자)로 넓힌다. `service` 역할은 그대로 403 `FORBIDDEN`. CORE `POST /api/v1/safety/stop`(Viewer↑)과 같다. 자격 없음 401, 이웃 관제 전용 자격·AI 관찰자 POST 제한은 그대로 403. 해제·`/dispatch/rearm`·재가동·승인 권한은 그대로. 본문·응답·감사 예외 불변. 스키마·envelope 변경 없음 |
 | v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |
 | v1.402 | 2026-11-14 | Additive: Fleet 앞으로/뒤로 한 걸음(`POST /api/fleet/robots/{robot_id}/step`, CORE nudge 미션 재사용) |
 | v1.400 | 2026-11-14 | Additive: Fleet `POST /api/fleet/robots/{robot_id}/goal` `frame: "site"` — 콘솔 현장 지도 클릭을 기체 지도 프레임으로 바꿔 보낸다(D-1003), 증명 없으면 409 |
