@@ -131,6 +131,8 @@ def install_berth_scenario_routes(app, *, console, operator_guard, require_named
                 live_robots[rid] = {"bay_id": bid, "physical": None, "site_pose": None, "pin_skipped": "PLAN_ONLY"}
                 continue
             rid_mode = str((body.get("robot_modes") or {}).get(rid) or body.get("mode") or "berth_park")
+            if busy := console.trip_refusal([rid]):  # a trip may claim it during the previous robot's run
+                raise busy
             phys = await _execute_physical_berth_park(
                 request,
                 console,

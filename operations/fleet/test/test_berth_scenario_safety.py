@@ -6,6 +6,7 @@ import inspect
 from types import SimpleNamespace
 
 from fastapi import FastAPI, HTTPException
+from fleet.hub.hub import HubError
 from fastapi.testclient import TestClient
 
 from fleet.server.ledger import berth_parking_scenario as scenario
@@ -30,9 +31,10 @@ def _client(monkeypatch, *, refusal=None, named=True, results=None):
     monkeypatch.setattr(scenario, "_execute_physical_berth_park", fake_physical)
     app = FastAPI()
     app.state.tracking = SimpleNamespace(set_anchor=lambda *a, **k: anchors.append(a))
-    scenario.install_berth_scenario_routes(app, console=SimpleNamespace(trip_refusal=lambda ids: refusal),
+    trip = refusal if callable(refusal) else (lambda ids: refusal)
+    scenario.install_berth_scenario_routes(app, console=SimpleNamespace(trip_refusal=trip),
                                            operator_guard=[], require_named_operator=operator)
-    return TestClient(app), moved, anchors
+    return TestClient(app, raise_server_exceptions=False), moved, anchors
 
 
 def test_empty_body_moves_nothing(monkeypatch):
@@ -68,9 +70,18 @@ def test_physical_run_needs_a_named_operator(monkeypatch):
 
 
 def test_trip_latch_refuses_before_any_motion(monkeypatch):
-    client, moved, _ = _client(monkeypatch, refusal=HTTPException(409, {"code": "TRIP_RUNNING"}))
+    # console.trip_refusal returns a HubError; the fleet server has no handler for it, so it is a 500.
+    client, moved, _ = _client(monkeypatch, refusal=HubError("TRIP_ROBOT_BUSY", "rosy_46 is on a running trip"))
     res = client.post(URL, json={"execute_physical": True}, headers={"Idempotency-Key": "k1"})
-    assert res.status_code == 409 and not moved
+    assert res.status_code == 500 and not moved
+
+
+def test_trip_claiming_the_next_robot_mid_sequence_stops_it(monkeypatch):
+    def refusal(ids):  # rosy_45 joins a trip while rosy_46 is parking
+        return HubError("TRIP_ROBOT_BUSY", "rosy_45 is on a running trip") if ids == ["rosy_45"] else None
+    client, moved, _ = _client(monkeypatch, refusal=refusal)
+    res = client.post(URL, json={"execute_physical": True}, headers={"Idempotency-Key": "k1"})
+    assert res.status_code == 500 and moved == ["rosy_46"]
 
 
 def test_failed_park_stops_the_sequence_and_pins_nothing(monkeypatch):
