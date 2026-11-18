@@ -766,3 +766,19 @@ def test_complete_1to3_tier_stack_standby_return_recovery_and_pinky_teardown(tmp
     import judge_seat
     assert judge_seat.from_config("codex:gpt-5-codex").__name__ == "codex:gpt-5-codex"
     assert judge_seat.from_config("opencode:zai-coding-plan/glm-5.3-flash").__name__ == "opencode:zai-coding-plan/glm-5.3-flash"
+
+
+def test_verify_all_in_simulation_does_not_false_pass_when_sim_fails(tmp_path: Path, monkeypatch):
+    class _Boom:
+        @staticmethod
+        def replay_and_verify_ledger_cases(_cfg):
+            raise RuntimeError("sim exploded")
+
+    monkeypatch.setitem(sys.modules, "omx_tier_stack_recovery_sim", _Boom)
+    res = cpp.verify_all_in_simulation(tmp_path)
+    assert res["all_verified"] is False and res["verified_cases"] == 0
+    assert res["total_cases"] > 0 and res["error"] == "RuntimeError: sim exploded"
+
+    monkeypatch.setitem(sys.modules, "omx_tier_stack_recovery_sim", None)  # import raises ImportError
+    res = cpp.verify_all_in_simulation(tmp_path)
+    assert res["all_verified"] is False and res["error"].startswith("ModuleNotFoundError")
