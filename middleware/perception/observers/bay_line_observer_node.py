@@ -14,8 +14,6 @@ every frame publishes not visible, never a guess.
 
 import json
 
-import yaml
-
 import numpy as np
 import rclpy
 from rclpy.node import Node
@@ -24,6 +22,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
 from . import executor_choice
+from .calibrated_values import nominal_camera_profile
 from .sensing.bay_line_observer import BayLineObserver, nominal_geometry
 from .sensing.dock_tag import CameraMount
 
@@ -78,15 +77,17 @@ class BayLineObserverNode(Node):
             return None
 
     def _build_nominal(self):
-        path = str(self.get_parameter('nominal_camera_profile_path').value)
+        # URDF nominal < the robot's accepted camera_profile record (D-397), as the lane observer:
+        # a wrong pitch scales the line's lateral/heading (sim: k 1.4 docks ~70 %, k <= 1.2 ~97 %).
+        profile, source = nominal_camera_profile(str(self.get_parameter('nominal_camera_profile_path').value))
+        self.get_logger().info(f'bay line camera profile from {source}')
         try:
-            with open(path, encoding='utf-8') as handle:
-                mount, hfov, width, height = nominal_geometry(yaml.safe_load(handle) or {})
+            mount, hfov, width, height = nominal_geometry(profile)
             observer = BayLineObserver(
                 mount=CameraMount(**mount), hfov_rad=hfov, width=width, height=height,
                 line_total_m=float(self.get_parameter('line_total_m').value),
                 far_field_m=float(self.get_parameter('far_field_m').value))
-        except (OSError, yaml.YAMLError, KeyError, TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             self.get_logger().warning(
                 f'nominal bay line geometry unusable ({exc}); dock/observation stays not visible')
             return None
