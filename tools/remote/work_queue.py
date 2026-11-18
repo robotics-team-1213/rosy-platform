@@ -22,7 +22,7 @@ import subprocess
 import sys
 import threading
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from remote_job import CANCELLED, LOST_EXIT
 from xdist_plan import HOST_ALONE, SERIAL_FILE, load_serial, serial_reason
@@ -304,6 +304,14 @@ SPLIT_S = 90  # an invocation whose median run exceeds this is split (Wave-3A: t
 MAX_SPLIT = 12
 BYTES_PER_S = 2000  # shortcut: rough test-code bytes per run second for invocations with no history; replace if it misorders
 FLEET_SECONDS = "tools/harness/fleet_test_seconds.json"
+# affected_pack's group rules, read from the tree so the same tree groups the same way every round (argv must
+# stay stable for land_cache's exact-tree reuse): the command's path budget, basenames never in pytest's module
+# cache, the G1 timing file that only runs as a whole-file job, and the import scan for module-name collisions.
+MAX_INVOCATION_CHARS = 3000
+IGNORED_BASENAMES = frozenset({"__init__.py", "conftest.py"})
+EXCLUSIVE_FILE = "test/test_platform_g1_timing.py"
+IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import|import\s+([A-Za-z_][\w.]*(?:\s*,\s*[A-Za-z_][\w.]*)*))",
+                    re.MULTILINE)
 
 
 def _fleet_weights(repo: Path) -> dict[str, float]:
@@ -400,12 +408,90 @@ def queue_order(repo: Path, invocations: list[list[str]]) -> list[int]:
     return sorted(range(len(invocations)), key=lambda i: (ALONE_ENV not in invocations[i], order(repo, invocations[i], seen)))
 
 
+def _import_names(repo: Path, path: str, cache: dict) -> dict[str, str]:
+    """The module names this file loads into pytest's cache: its basename plus every sibling test module it
+    imports, transitively (affected_repo.test_import_names' rule, read from the tree so grouping is stable)."""
+    if path in cache:
+        return cache[path]
+    pending, visited, names = [path], set(), {}
+    while pending:
+        current = pending.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        if current.endswith(".py"):
+            names[PurePosixPath(current).name] = current
+        try:
+            text = (repo / current).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for frm, plain in IMPORT.findall(text):
+            for word in [frm] if frm else plain.split(","):
+                sibling = str(PurePosixPath(current).parent / (word.strip().split(" ")[0].split(".")[0] + ".py"))
+                name = PurePosixPath(sibling).name
+                if (sibling not in visited and (name.startswith("test_") or name.endswith("_test.py"))
+                        and (repo / sibling).is_file()):
+                    pending.append(sibling)
+    cache[path] = {name: source for name, source in names.items() if name not in IGNORED_BASENAMES}
+    return cache[path]
+
+
+def _repack(repo: Path, inv: list[str], env: list[str], paths: list[str], ignores: list[str],
+            seconds: float, fleet: dict[str, float]) -> list[list[str]]:
+    """One multi-path invocation as ceil(seconds / SPLIT_S) balanced file groups instead of a job per file.
+
+    The 2026-11-01 per-file unpack removed the 30-min tails but made 8,111 single-file jobs a day (p50 run
+    11 s, 39 % of all run time) while a packed invocation costs ~2.6 s/file: every job pays the ~9-11 s
+    collection/venv/ssh fixed cost again. Groups balance by the cold per-file estimate only (bytes, fleet
+    weights), so the same tree yields the same argv between rounds and land_cache's exact-tree reuse fires;
+    the split decision itself still reads measured history first (``whole``). A group honours affected_pack's
+    rules: one source per module name (basename clash included), the command budget, the G1 timing file alone.
+    Serial, node-id and option-carrying invocations never reach here (``whole``); when no group can take a
+    file, one more group beats a broken constraint (the count bound yields, never a constraint)."""
+    ignored = [w.split("=", 1)[1].rstrip("/") for w in ignores]
+    items: list[str] = []
+    for p in paths:
+        folder = repo / p
+        items += ([f.relative_to(repo).as_posix() for f in folder.rglob("*.py")
+                   if (f.name.startswith("test_") or f.name.endswith("_test.py"))
+                   and not any(f.relative_to(repo).as_posix() == i
+                               or f.relative_to(repo).as_posix().startswith(i + "/") for i in ignored)]
+                  if folder.is_dir() else [p])
+    items = list(dict.fromkeys(items))
+    n = min(MAX_SPLIT, max(1, math.ceil(seconds / SPLIT_S)), len(items))
+    if n <= 1:
+        return [inv]  # one group is the invocation itself: the cheapest argv, the single-directory precedent
+
+    def cold(p: str) -> float:
+        return _file_weight(repo, repo / p, fleet) if (repo / p).is_file() else 0.0
+
+    items.sort(key=lambda p: (-cold(p), p))
+    groups: list[list[str]] = [[] for _ in range(n)]
+    names_of, weights, chars = [{} for _ in range(n)], [0.0] * n, [0] * n
+    cache: dict[str, dict[str, str]] = {}
+    for item in items:  # heaviest first into the lightest group that can hold it
+        names = _import_names(repo, item, cache)
+        choice = next((i for i in sorted(range(len(groups)), key=lambda i: (weights[i], i))
+                       if all(names_of[i].get(name, source) == source for name, source in names.items())
+                       and EXCLUSIVE_FILE not in groups[i] and item != EXCLUSIVE_FILE
+                       and chars[i] + len(item) + 1 <= MAX_INVOCATION_CHARS), None)
+        if choice is None:
+            groups.append([]), names_of.append({}), weights.append(0.0), chars.append(0)
+            choice = len(groups) - 1
+        groups[choice].append(item)
+        names_of[choice].update(names)
+        weights[choice] += cold(item)
+        chars[choice] += len(item) + 1
+    return [[*env, *sorted(g), *ignores] for g in groups if g]
+
+
 def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) -> list[list[str]]:
     """Long invocations as smaller ones the hosts can run side by side; every test still runs exactly once.
 
-    One estimated at least SPLIT_S unpacks multi-path invocations first, then splits large single directories into up
-    to MAX_SPLIT balanced file groups. Browser chunks (land_browser chunks them), alone/isolation runs, node ids, own
-    -n and serial_suites.txt paths stay whole."""
+    One estimated at least SPLIT_S repacks a multi-path invocation into ceil(estimated / SPLIT_S) balanced
+    file groups (_repack), then splits a large single directory into up to MAX_SPLIT balanced file groups.
+    Browser chunks (land_browser chunks them), alone/isolation runs, node ids, own -n and serial_suites.txt
+    paths stay whole."""
     seen = history(repo) if seen is None else seen
     serial = load_serial(SERIAL_FILE.read_text(encoding="utf-8")) if SERIAL_FILE.is_file() else []
     fleet = _fleet_weights(repo)
@@ -425,7 +511,7 @@ def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) ->
         paths = [w for w in rest if not w.startswith("-")]
         ignores = [w for w in rest if w.startswith("--ignore=")]
         if len(paths) > 1 and not whole(inv, env, rest, paths, ignores):
-            expanded += [[*env, p, *ignores] for p in paths]
+            expanded += _repack(repo, inv, env, paths, ignores, cost(repo, inv, seen), fleet)
         else:
             expanded.append(inv)
     out = []
