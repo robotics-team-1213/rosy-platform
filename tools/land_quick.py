@@ -20,6 +20,10 @@ QUICK = (
     "test/test_native_systemd_contract.py",
     "middleware/core/gateway/test/test_protocol_version_alignment.py",
     "middleware/core/gateway/test/test_event_catalogue.py",
+    # 11-18 panel (72 h): these failed on 33 branches only after the queue ticket; together about 2 s
+    "test/test_robot_literals.py",
+    "test/test_omx_control_modularization.py",
+    "test/test_behavior_test_ownership.py",
 )
 
 
