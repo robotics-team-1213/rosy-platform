@@ -1931,3 +1931,8 @@
 - 변경: 앞 항목의 시험 두 개(래치 시험·포기 틱 시험)가 리더 표본을 끊어 `stream_lost` 가 먼저 서던 것을 고쳤다. 시험 루프가 리더 표본을 계속 보낸다.
 - 증거: e91adeefcd 원격 시험 exit 0 — test_swarm_trail·test_swarm_trail_anchor·test_swarm_trail_obstacle·test_swarm·gateway test_swarm_stream·test_swarm_integration·test_swarm_api·operations/fleet test_trail_anchor_e2e 165 passed, `known_failures` 0 new·0 known·0 flaky. AI PC(`ai@100.108.76.123`), env 157a16177778fcdd. 첫 원격 시도는 `test_swarm_api.py` 경로를 services 로 잘못 적어 0 수집(exit 5)이었다.
 - gate 변화: 없음. 호스트 시험은 실물 편대 주행·DEVICE/FIELD 수용을 입증하지 않는다.
+
+## 2026-11-14 · uncommitted · nudge_backward 미션 (Fleet 앞/뒤 한 걸음)
+- 변경: `localization/mission.py`에 `nudge_backward` 종류 — `nudge_forward`의 정확한 거울(같은 `nudge_max_m`·`nudge_min_m`·짧아지기·정지 갭, 속도는 -`nudge_linear`). D-424 몸통 판정은 후방 섹터(`translation_gap(reverse)`·`unknown_blocks(reverse)`, 후방 초음파 없음), 몸통 없을 때는 후방 부채꼴(빔 측정 불가·`min_front_clearance_m`)로 같은 규칙을 적용한다. `LOCALIZED` 아닐 때만 게이트는 검색 의미론이라 nudge 두 종류만 완화했다: LOCALIZED 로봇에서도 nudge 시작이 가능하고 그런 실행(`search=false`)은 `localized` 끝을 무시한다. rotate·lane·square와 `nudge_forward`의 기존 동작은 그대로.
+- 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고. 실물 후방 주행은 미실시.
+- gate 변화: 없음. 안전 경로 검토 요청은 결과 파일에 별도로 남긴다(운동 코드 변경).

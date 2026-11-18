@@ -45,6 +45,8 @@ def test_map_callback_preserves_saved_id_and_refreshes_unsaved_id(core_client):
             data=list(GRID['data']))
         assert receive_map(NS(_svc=svc, _map_pose_lease=None), msg, warn=lambda _: None)
         assert svc.state.map_id == ('saved-map' if initial == 'saved-map' else occupancy_map_id(GRID))
+        # The content id of the loaded grid is reported even when map_id is a configured name.
+        assert svc.state.snapshot().map_grid_id == occupancy_map_id(GRID)
 
 
 def test_ros_map_and_lifecycle_callbacks_delegate_to_the_observed_source_adapter():

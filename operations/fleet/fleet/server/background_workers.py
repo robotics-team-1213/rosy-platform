@@ -79,6 +79,16 @@ async def charge_bays_loop(tick, logger, period_s: float = 1.0) -> None:
         await asyncio.sleep(period_s)
 
 
+async def auto_locate_loop(service, logger, period_s: float = 30.0) -> None:
+    """D-989 follow-up: open a locate session for listed robots Fleet cannot yet place."""
+    while True:
+        try:
+            service.auto_start()
+        except Exception:       # one bad pass must not end the watch
+            logger.exception("auto locate pass failed")
+        await asyncio.sleep(period_s)
+
+
 async def goal_lease_renew_loop(console, logger) -> None:
     """D-550 10: every ttl/3 renew the console's leased goals whose source still holds (named
     operator present, attempt open, still yielding: ``goal_lease.GoalLeases``). Trip goals are

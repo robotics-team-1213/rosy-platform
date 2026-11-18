@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 SCHEMA = "rosy.calibration.record/1"
-KINDS = ("camera_profile", "wheel_odometry", "lidar_mount")
+KINDS = ("camera_profile", "wheel_odometry", "lidar_mount", "floor_paint")
 STATUSES = ("candidate", "accepted", "rejected")
 DEFAULT_ROOT = "/var/lib/rosy/calibration"
 _LOG = logging.getLogger(__name__)
@@ -55,6 +55,14 @@ FILE_MODE = 0o664
 PROFILE_POSITIVE_KEYS = ("width", "height", "fx", "cx", "cy", "max_range_m")
 # Lateral lane-edge detector error a camera_profile may state (D-468 projection uncertainty).
 DETECTOR_LATERAL_PX_MAX = 5.0
+FLOOR_PINK_H_MIN = 120
+#: Shared D-1013 magenta bay-tape HSV defaults (camera calibration refines via ``floor_paint``).
+FLOOR_PINK_DEFAULTS = {
+    "pink_h_low": 145,
+    "pink_h_high": 179,
+    "pink_min_saturation": 35,
+    "pink_min_value": 60,
+}
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 
@@ -342,7 +350,8 @@ def check_values(kind, values, *, nominal=None):
     nominal["lidar_forward_deg"] (the hand value). wheel_odometry: radius and
     separation finite reals within WHEEL_TOLERANCE of nominal (default the
     URDF nominal). camera_profile: pitch_rad and height_m finite reals in a
-    physical range; detector_lateral_px, when present, in (0, DETECTOR_LATERAL_PX_MAX]."""
+    physical range; detector_lateral_px, when present, in (0, DETECTOR_LATERAL_PX_MAX].
+    floor_paint: the robot's own camera's gate for the pink bay tape (integer HSV bounds)."""
     if not isinstance(values, dict):
         return "values are not a mapping"
     nominal = nominal or {}
@@ -378,6 +387,15 @@ def check_values(kind, values, *, nominal=None):
             px = values["detector_lateral_px"]
             if not (_real(px) and 0 < px <= DETECTOR_LATERAL_PX_MAX):
                 return f"detector_lateral_px must be in (0, {DETECTOR_LATERAL_PX_MAX}] px"
+        return None
+    if kind == "floor_paint":
+        keys = ("pink_h_low", "pink_h_high", "pink_min_saturation", "pink_min_value")
+        if not all(isinstance(values.get(k), int) and not isinstance(values.get(k), bool) for k in keys):
+            return "pink_h_low/pink_h_high/pink_min_saturation/pink_min_value must be integers"
+        low, high, sat, val = (values[k] for k in keys)
+        # below H 120 the band reaches orange containers and yellow (H 5-35); S under 20 is grey carpet
+        if not (FLOOR_PINK_H_MIN <= low < high <= 179 and 20 <= sat <= 255 and 0 <= val <= 255):
+            return f"pink gate H {low}-{high}, S >= {sat}, V >= {val} outside H {FLOOR_PINK_H_MIN}-179, S >= 20"
         return None
     return f"unknown kind {kind!r}"
 
@@ -426,3 +444,12 @@ def _resolve_record(kind, fallback, *, fallback_source, robot, root, store, nomi
     values = {**fallback, **rec["values"]}
     return values, (f"calibration record {rec['id']} sha256 {rec['sha256'][:12]}"
                     f"{' (pinned)' if rec.get('pinned') else ''}"), rec.get("intervals") or {}
+
+
+def read_floor_paint_gate() -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    """Resolved (low, high) HSV bounds for pink floor tape from the accepted ``floor_paint`` record."""
+    values, _ = resolve("floor_paint", FLOOR_PINK_DEFAULTS, fallback_source="floor_paint defaults")
+    return (
+        (values["pink_h_low"], values["pink_min_saturation"], values["pink_min_value"]),
+        (values["pink_h_high"], 255, 255),
+    )

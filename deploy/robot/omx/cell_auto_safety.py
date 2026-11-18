@@ -175,7 +175,9 @@ def after_failure(config: dict, site: str, target: dict, moved: dict, wrist_on: 
     contact_z = None
     if contact is not None:
         from cell_surface import fk_z
-        contact_z = round(fk_z(contact["state"], config.get("tcp_x_m")), 4)
+        import omx_tcp
+
+        contact_z = round(fk_z(contact["state"], omx_tcp.config_tcp(config)), 4)
     surface = surface_z(config, site)
     diag = cell_diagnose.diagnose(
         moved["result"],
@@ -217,6 +219,9 @@ def episode_binding() -> dict:
 
 def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
     """A raw training episode around one carry (episode_recorder.py), when config['episodes'] names a root."""
+    import cell_attempts
+
+    cell_attempts.RUN["episode"] = None
     spec = config.get("episodes")
     if not spec:
         return None
@@ -237,6 +242,9 @@ def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
     )
     if not cell.act(f"episode start {folder}").get("ok"):
         return None
+    binding = episode_binding()
+    if binding:  # the attempt row written for this carry names the folder back
+        cell_attempts.RUN["episode"] = {"attempt_id": binding["attempt_id"], "folder": str(folder)}
     import episode_recorder
     return episode_recorder.CameraSession(folder, spec["cameras"])
 

@@ -56,6 +56,10 @@ python learning/curation/perception/review_app.py --state "<absolute-review-stat
 
 카메라 descriptor에는 `shape=[3,height,width]`, `timestamp_semantics="host_receive"`도 둔다. event schema는 `rosy.passive-camera-sample/1`이며 `source_identity`, `session_epoch`, `clock_domain`, `shape`, `timestamp_semantics`, `sequence`, `timestamp`, `jpeg_sha256`를 포함한다. hash는 같은 번호 JPEG의 SHA256이다. 노출 시각을 측정한 동기화라고 표시하지 않는다. JSON은 파일당 64KiB, JPEG·미리보기는 16MiB 이하이며 링크를 거절한다.
 
+## OMX 두 팔 생산자
+
+OMX 셀의 `deploy/robot/omx/cell_record_producer.py`가 두 팔(`arm_a`, `arm_b`)과 카메라 4대(top, side, 각 팔 wrist)를 이 파일 계약으로 등록한다. 읽기 전용이다: 러너가 남긴 `chunk-io/live.json`(측정 상태와 이미 전송된 관절 목표)과 읽기 전용 카메라 뷰어 HTTP만 읽고 명령 FIFO는 열지 않는다(AST 시험으로 고정). 주기는 1/15 s, 시뮬 학습 데이터의 FPS와 같다(런너의 live 파일은 약 10 Hz라 일부 이벤트는 같은 행을 반복하며, 새 번호는 새 관측이다). 상태·명령은 follower 원래 단위(몸 -100..100, 집게 0..100)로 남기고 팔별 집게 규칙(`grip_rule`)이 descriptor에 고정된다. radian·시뮬 변환은 내보내기가 한다. 참조는 러너 live 파일의 target이므로 위의 legacy live 파일 주의가 그대로 적용된다. 실행 단위(systemd 템플릿)와 등록 디렉터리 예시는 그 모듈 docstring이 정본이고, 작업대와 같은 셀 PC(같은 clock domain)에서 돌린다.
+
 ## 구성 저장부터 학습까지
 
 1. `/learning/record`에서 한 작업 팔 또는 두 작업 팔의 초안을 연다. 두 팔은 leader/follower 한 쌍을 뜻하지 않는다. 실제 관절·단위·장치 식별·카메라 크기를 입력하고 저장한다. 초안의 수용 상태는 미검증이다.

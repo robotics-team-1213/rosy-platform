@@ -10,6 +10,10 @@ subset) and the parking area is pink planes plus collision bay guides from v7.
 
 Usage: python build_world.py [--out BUNDLE_DIR]
 Output is byte-deterministic; re-run and diff before committing.
+
+Also writes maps/map_world_261026.{pgm,yaml}, the Nav2 occupancy grid of this world:
+the mat interior is free, the wall ring and EVERYTHING outside it is occupied, so a
+planner or a SLAM seed can never treat the space beyond the walls as open.
 """
 
 import argparse
@@ -243,7 +247,41 @@ def world_xml(loop_count: int) -> str:
 """
 
 
-def build(out: Path) -> None:
+#: Nav2 grid: 2 cm cells and 0.20 m of occupied margin outside the wall ring. Integer mm keeps the
+#: free/occupied split exact: a cell is free only when its centre is strictly inside the mat.
+GRID_RES_MM = 20
+GRID_MARGIN_MM = 200
+
+
+def map_grid():
+    """(width, height, rows, origin_x_m, origin_y_m); rows start at max y; 254 free, 0 occupied."""
+    half_x_mm, half_y_mm = round(MAT_X * 500), round(MAT_Y * 500)
+    ring_mm = round(WALL_T * 1000)
+    ext_x, ext_y = half_x_mm + ring_mm + GRID_MARGIN_MM, half_y_mm + ring_mm + GRID_MARGIN_MM
+    width, height = -(-2 * ext_x // GRID_RES_MM), -(-2 * ext_y // GRID_RES_MM)
+    ox_mm, oy_mm = -width * GRID_RES_MM // 2, -height * GRID_RES_MM // 2
+    rows = []
+    for j in range(height - 1, -1, -1):
+        cy = oy_mm + GRID_RES_MM // 2 + GRID_RES_MM * j
+        rows.append(bytes(
+            254 if abs(ox_mm + GRID_RES_MM // 2 + GRID_RES_MM * i) < half_x_mm and abs(cy) < half_y_mm else 0
+            for i in range(width)))
+    return width, height, rows, ox_mm / 1000.0, oy_mm / 1000.0
+
+
+def write_map(out: Path) -> None:
+    width, height, rows, ox, oy = map_grid()
+    maps = out / "maps"
+    maps.mkdir(parents=True, exist_ok=True)
+    header = f"P5\n# rosy map_world_261026 (scripts/build_world.py)\n{width} {height}\n255\n"
+    (maps / "map_world_261026.pgm").write_bytes(header.encode() + b"".join(rows))
+    (maps / "map_world_261026.yaml").write_text(
+        "image: map_world_261026.pgm\nmode: trinary\n"
+        f"resolution: {GRID_RES_MM / 1000.0}\norigin: [{ox}, {oy}, 0]\n"
+        "negate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n", encoding="utf-8", newline="\n")
+
+
+def build(out: Path, seed_map: bool = False) -> None:
     tris = read_triangles(SOURCE_STL)
     loop = loop_triangles(tris)
     if not loop or len(loop) == len(tris):
@@ -252,13 +290,18 @@ def build(out: Path) -> None:
     world = out / "worlds" / "map_world_261026.world"
     world.parent.mkdir(parents=True, exist_ok=True)
     world.write_text(world_xml(len(loop)), encoding="utf-8", newline="\n")
+    # The map files are data, not generator output: a saved map dropped in via map_bundle.py is never overwritten.
+    if seed_map or not (out / "maps" / "map_world_261026.yaml").exists():
+        write_map(out)
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=Path, default=BUNDLE)
+    p.add_argument("--seed-map", action="store_true",
+                   help="rewrite maps/ from the design values (default: only when no map is there yet)")
     args = p.parse_args(argv)
-    build(args.out)
+    build(args.out, seed_map=args.seed_map)
     return 0
 
 

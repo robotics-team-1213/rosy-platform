@@ -19,8 +19,10 @@ Markers out of view fall back to the setup pose and to the existing maps; the ca
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,9 +31,52 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
 import cell_marks  # noqa: E402
-from cell_checkerboard import compose, pixel_to_plane  # noqa: E402
+from cell_checkerboard import PRINTED, compose, live_camera_binding, pixel_to_plane  # noqa: E402
 
 MIN_SURFACE_MARKERS = 2  # one marker's four corners leave the tilt loose and can flip the plane (D-933 4)
+
+
+def validated_intrinsics(intr: dict, *, camera: str = "top", viewer_label: str | None = None) -> tuple:
+    """Accept only a measured ROSY board model; a fitted lens is not an arm pose."""
+    board = intr.get("board") if isinstance(intr, dict) else None
+    if (not isinstance(intr, dict) or intr.get("accepted") is not True
+            or camera not in ("top", "side", "wrist") or intr.get("camera") != camera or not isinstance(board, dict)
+            or (camera == "wrist" and not viewer_label)):
+        raise ValueError("CALIBRATION_REQUIRED: accepted ChArUco intrinsics missing")
+    cols, rows, square_m, marker_m = PRINTED
+    expected = {"cols": cols, "rows": rows, "square_m": square_m,
+                "marker_m": marker_m, "dictionary": "DICT_4X4_50"}
+    if any(board.get(key) != value for key, value in expected.items()):
+        raise ValueError("CALIBRATION_REQUIRED: ChArUco board differs from ROSY print sheet")
+    try:
+        bar = float(board["scale_bar_mm"])
+        size = intr["size"]
+        K = np.asarray(intr["K"], dtype=float)
+        dist = np.asarray(intr["dist"], dtype=float).reshape(-1)
+        rms = float(intr["rms_px"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("CALIBRATION_REQUIRED: incomplete ChArUco result") from exc
+    if not (49.5 <= bar <= 50.5) or not isinstance(size, list) or len(size) != 2 or any(
+            isinstance(v, bool) or not isinstance(v, int) or v <= 0 for v in size):
+        raise ValueError("CALIBRATION_REQUIRED: board scale or image size invalid")
+    if (K.shape != (3, 3) or dist.shape != (5,) or not np.isfinite(K).all()
+            or not np.isfinite(dist).all() or not np.isfinite(rms) or rms > 0.5
+            or K[0, 0] <= 0 or K[1, 1] <= 0 or not np.allclose(K[2], [0, 0, 1])
+            or not np.isclose(dist[4], 0.0)):
+        raise ValueError("CALIBRATION_REQUIRED: ChArUco fit outside D-933 limits")
+    if not isinstance(intr.get("source_frames"), list) or len(intr["source_frames"]) < 25:
+        raise ValueError("CALIBRATION_REQUIRED: ChArUco source frames missing")
+    try:
+        if (not isinstance(intr.get("device_binding"), dict)
+                or intr["device_binding"].get("unique_hardware_identity") is not True
+                or not intr["device_binding"].get("viewer_invocation_id")
+                or not intr["device_binding"].get("producer_invocation_id")
+                or intr["device_binding"].get("viewer_label") != (viewer_label or camera)
+                or intr["device_binding"] != live_camera_binding(camera, viewer_label=viewer_label)):
+            raise ValueError("camera identity or focus differs from lens calibration")
+    except (OSError, RuntimeError, SystemExit, KeyError, ValueError, subprocess.SubprocessError) as exc:
+        raise ValueError("CALIBRATION_REQUIRED: camera identity or focus unverified") from exc
+    return K, dist, size
 
 
 def slot_ids(slot: int) -> dict:
@@ -132,6 +177,9 @@ def seed(views, K, dist, offset_m) -> tuple:
     return inverse(pose), rms
 
 
+from cell_intrinsics_frames import plane_pose_map  # noqa: E402,F401  (re-exported)
+
+
 def learn(seen: dict, K, dist, camera_in_base: tuple, slot: int, z_m: dict, surfaces: list) -> dict:
     """The camera record: every base and surface marker of `slot` in view, lifted onto its plane's touched height
     (z_m["base"], z_m[<site>]). `surfaces` names the slot's surfaces 1-3 in order (None for an unused one)."""
@@ -193,6 +241,8 @@ def surface_motion(record: dict, seen: dict, site: str, camera_in_base: tuple):
 
 def refresh(record: dict, img) -> dict:
     """This frame's camera pose and every surface's motion, kept in record["now"] for to_arm/to_pixel."""
+    if img is None or record.get("size") != [img.shape[1], img.shape[0]]:
+        raise ValueError("CALIBRATION_REQUIRED: camera frame size differs from accepted intrinsics")
     return update(record, corners(img))
 
 
@@ -280,18 +330,26 @@ def main(argv=None):
     c.add_argument("frame", type=Path)
     args = ap.parse_args(argv)
     config = json.loads(args.config.read_text())
-    spec = config["markers"]  # {"slot", "gripper_offset_m", "z_m": {"base", <site>...}, "surfaces": [site|null x 3]}
     path = Path(config["calibration_path"]).expanduser()
     if args.verb == "check":
         record = cal.load(path)["cameras"]["top"]
-        refresh(record, cv2.imread(str(args.frame)))
+        frame = cv2.imread(str(args.frame))
+        if frame is None or [frame.shape[1], frame.shape[0]] != record.get("size"):
+            raise SystemExit("CALIBRATION_REQUIRED: top frame size differs from camera model")
+        refresh(record, frame)
         print(json.dumps({"base_seen": record["now"]["base_seen"], "rms_px": record["now"]["rms_px"], "drift": drift(record)}))
         return 0
-    intr = json.loads(args.intrinsics.read_text())
-    K, dist = np.array(intr["K"]), np.array(intr["dist"])
+    spec = config.get("markers")  # {"slot", "gripper_offset_m", "z_m": {"base", <site>...}, "surfaces": [site|null x 3]}
+    if not isinstance(spec, dict):
+        raise SystemExit("CALIBRATION_REQUIRED: arm marker survey missing")
+    intr_bytes = args.intrinsics.read_bytes()
+    intr = json.loads(intr_bytes)
+    K, dist, size = validated_intrinsics(intr)
     gripper, views, last = slot_ids(spec["slot"])["gripper"], [], None
     for meta in sorted(args.views.glob("view-*.json")):
         img = cv2.imread(str(meta.with_suffix(".png")))
+        if img is None or [img.shape[1], img.shape[0]] != size:
+            raise SystemExit("CALIBRATION_REQUIRED: gripper view size differs from intrinsics")
         seen = corners(img)
         if gripper in seen:
             m = json.loads(meta.read_text())
@@ -299,7 +357,9 @@ def main(argv=None):
             last = seen
     camera, rms = seed(views, K, dist, spec["gripper_offset_m"])
     record = learn(last, K, dist, camera, spec["slot"], spec["z_m"], spec["surfaces"])
-    record.update(size=intr.get("size"), rms_px=round(rms, 2), views=len(views))
+    record.update(size=size, rms_px=round(rms, 2), views=len(views),
+                  intrinsics_rms_px=intr["rms_px"], intrinsics_board=intr["board"],
+                  intrinsics_sha256=hashlib.sha256(intr_bytes).hexdigest())
     save(path, "top", record)
     print(json.dumps({"views": len(views), "rms_px": record["rms_px"], "markers": sorted(record["markers"], key=int)}))
     return 0

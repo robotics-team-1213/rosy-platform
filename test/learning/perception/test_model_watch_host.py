@@ -166,7 +166,7 @@ def test_a_network_failure_exits_with_its_code_and_is_recorded(tmp_path, capsys)
     cfg = ti._config(tmp_path)
     ti._drop(tmp_path, "m1")
     fakes = Net(down={"pinky-a": "dns"})
-    assert ti._run(cfg, fakes) == 77
+    assert ti._run(cfg, fakes) == 0                              # a name that does not resolve is skipped
     err = capsys.readouterr().err
     assert err.count("pinky-a: dns failure (exit 77, 1 in a row)") == 1
     state = ti._state(tmp_path)
@@ -195,7 +195,8 @@ def test_a_reachable_robot_clears_its_failure(tmp_path):
     cfg = ti._config(tmp_path)
     ti._drop(tmp_path, "m1")
     fakes = Net(down={"pinky-a": "dns"})
-    assert ti._run(cfg, fakes) == 77
+    assert ti._run(cfg, fakes) == 0
+    assert ti._state(tmp_path)["robot_failures"]["pinky-a"]["kind"] == "dns"
     fakes.down.clear()
     assert ti._run(cfg, fakes) == 0
     assert ti._state(tmp_path)["robot_failures"] == {}
@@ -207,14 +208,17 @@ def test_an_up_to_date_robot_that_cannot_be_read_is_no_longer_silent(tmp_path):
     fakes = Net()
     assert ti._run(cfg, fakes) == 0                                 # delivered, entry ok
     fakes.down["pinky-a"] = "dns"
-    assert ti._run(cfg, fakes) == 77
+    assert ti._run(cfg, fakes) == 0                                 # skipped, still recorded
+    assert ti._state(tmp_path)["robot_failures"]["pinky-a"]["kind"] == "dns"
+    fakes.down["pinky-a"] = "unreachable"                           # resolved but not reachable stays a failure
+    assert ti._run(cfg, fakes) == 78
 
 
 @pytest.mark.parametrize("code, kind", [(77, "dns"), (78, "unreachable"), (79, "hostkey")])
 def test_a_push_that_fails_with_a_network_code(tmp_path, code, kind):
     cfg = ti._config(tmp_path)
     ti._drop(tmp_path, "m1")
-    assert ti._run(cfg, Net(push_code=code)) == code
+    assert ti._run(cfg, Net(push_code=code)) == (0 if code == 77 else code)  # 77 = skipped robot
     state = ti._state(tmp_path)
     assert state["robot_failures"]["pinky-a"]["kind"] == kind
     assert state["commits"]["m1"]["robots"]["pinky-a"]["attempts"] == 0

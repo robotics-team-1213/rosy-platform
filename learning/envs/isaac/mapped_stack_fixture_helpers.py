@@ -93,9 +93,9 @@ def container_fixture(*, layers, case):
         if case.startswith('release-episodes'):
             value['release_episodes'] = 40  # short single-placement episodes for RL; see release_episodes.py
         return value
-    if (type(layers) is not int or layers not in (1, 3) or case not in ('nominal', 'offset', 'reverse','column')
+    if (type(layers) is not int or layers not in (1, 2, 3) or case not in ('nominal', 'offset', 'reverse','column')
             or case=='column' and layers!=3):
-        raise ValueError('container settings require layers1/3 and nominal/offset/reverse, or layers3/column')
+        raise ValueError('container settings require layers1/2/3 and nominal/offset/reverse, or layers3/column')
     value = dict(CUBE_FIXTURE, revision='final-map-cad-container-stack-v11', target_stage='CONTAINER_STACK',
         layers=layers, case=case, target_cells=[3, 3, layers], bin_size_m=[.09, .09, .03*layers],
         row_order=[1, 2, 0] if case == 'reverse' else [1, 0, 2], carry_height_m=.17,

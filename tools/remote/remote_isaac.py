@@ -435,7 +435,7 @@ def main():
     parser.add_argument('--role', choices=('model', 'ai'), default='model', help='declared sim_hosts role to run on')
     commands = parser.add_subparsers(dest='action', required=True)
     check = commands.add_parser('check')
-    check.add_argument('--scenario', required=True, choices=['omx-f-import', 'omx-stacking-rl', 'omx-map-long-stack', 'omx-map-stacking-rl', 'omx-map-cube-stack', 'omx-map-container-stack', 'pinky-conveyor-roundtrip',
+    check.add_argument('--scenario', required=True, choices=['omx-f-import', 'omx-stacking-rl', 'omx-map-long-stack', 'omx-map-stacking-rl', 'omx-map-cube-stack', 'omx-map-container-stack', 'omx-map-container-stacking-rl', 'pinky-conveyor-roundtrip',
                        'arm-s-cell-nominal', 'arm-s-cell-overhang', 'arm-s-cell-wrong-yaw', 'arm-s-cell-case'])
     check.add_argument('--config', required=True, type=Path)
     check.add_argument('--sha', required=True)

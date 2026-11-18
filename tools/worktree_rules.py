@@ -1,7 +1,8 @@
 """Rules ``tools/worktrees.py`` and ``tools/land.py`` share (D-790, amends D-761).
 
 - A landed worktree (merged into main, a commit of its own in its branch reflog) that is clean
-  waits ``LANDED_IDLE_HOURS`` (1 h), not 72 h, before anyone's lossless prune takes it.
+  has no wait (``wait_h = 0.0``) in ``tools/worktrees.py``, whoever made it; ``LANDED_IDLE_HOURS``
+  (1 h) still applies to orphan directories and unused merged branches (``sweep_branches``).
 - ``stale_history``: a branch on the pre-rewrite line (more than ``STALE_COMMITS`` commits not in
   main, or forked from main at or before ``REWRITE_BASE``) would re-import the old history; ``new``
   does not base on it and ``land.py`` does not land it.
@@ -72,7 +73,10 @@ def stale_history(cwd: Path, tip: str, base: str = "main") -> str | None:
 
 def unlanded(cwd: Path, tip: str, base: str = "main") -> str | None:
     """Why a new branch must not start at ``tip``, or None: work stacked on an unlanded branch grows with it
-    (11-14: v2/v3 chains held 178-189 commits not in main). Land that branch first."""
+    (11-14: v2/v3 chains held 178-189 commits not in main). Land that branch first. ``origin/main`` is published,
+    never unlanded work: the D-1038 urgent lane starts there."""
+    if tip == "origin/main":
+        return None
     if _git(cwd, "merge-base", "--is-ancestor", tip, base).returncode == 1:
         return f"not in {base} yet (land it first; a branch stacked on unlanded work grows with it)"
     return None

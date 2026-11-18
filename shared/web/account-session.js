@@ -11,8 +11,16 @@ function publish(value) {
   globalThis.dispatchEvent?.(new CustomEvent('rosy:account-profile', {detail: value}));
 }
 
-function announce(key) {
+export function announceIdentity(key, KEY = 'rosy.account.identity') {
   try { localStorage.setItem(KEY, key); } catch { /* storage may be unavailable; the poll still fences */ }
+}
+
+export function watchIdentity({key = KEY, matches, changed, onPoll, poll = 10000, target = typeof window !== 'undefined' ? window : null}) {
+  if (!target) return;
+  target.addEventListener?.('storage', event => {
+    if (event.key === key && matches(event.newValue)) changed();
+  });
+  if (poll && onPoll) target.setInterval?.(onPoll, poll);
 }
 
 // current(): the app's account value. apply(value): store a fresh read and drop app-local
@@ -30,7 +38,7 @@ export function createAccountSession({current, apply, changed, failed = () => {}
       apply(value);
       publish(value);
       const key = accountKey(value);
-      if (key || previous) announce(key);  // an ended session also tells the other tabs at once
+      if (key || previous) announceIdentity(key);  // an ended session also tells the other tabs at once
       if (previous && previous !== key) changed();
     } catch {
       // A failed probe never opens a fallback login path.
@@ -43,14 +51,14 @@ export function createAccountSession({current, apply, changed, failed = () => {}
   async function logout(reset, options = {}) {
     const response = await fetch(`${base}/logout`, {method: 'POST', ...options});
     reset();
-    announce('');
+    announceIdentity('');
     if (!response.ok) throw new Error(UNREVOKED);
   }
-  if (typeof window !== 'undefined') {
-    window.addEventListener('storage', event => {
-      if (event.key === KEY && current()?.authenticated && event.newValue !== accountKey(current())) changed();
-    });
-    if (poll) window.setInterval(() => { if (current()?.enabled) restore(); }, poll);
-  }
+  watchIdentity({
+    matches: value => current()?.authenticated && value !== accountKey(current()),
+    changed,
+    onPoll: () => { if (current()?.enabled) restore(); },
+    poll,
+  });
   return {restore, invalidate, logout};
 }

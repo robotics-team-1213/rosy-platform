@@ -116,6 +116,8 @@ peers:
     token_file: secrets/r-to-cell-a.token
 ```
 
+2026-11-17부터 이웃 URL은 `https://<host>.local:<port>` mDNS 이름이어야 하며(인증서 SAN에 `<host>.local`, 컨테이너에 avahi 소켓 bind, 두 관제의 manifest 동일·변경마다 새 revision), 호스트가 5분마다 `rosy-control-unit-check`로 확인한다. 규칙·명령은 [deploy/site/README.md](../../deploy/site/README.md)의 「Control-unit peer links through mDNS」를 따른다.
+
 CLI는 `--control-unit-config` 또는 환경 기본값 `ROSY_CONTROL_UNIT_CONFIG`를 받으며 명시 옵션이 우선한다. 기본 site Compose는 관제를 자동 활성화하지 않는다. 현장 배포는 서명 candidate의 [`compose.control-unit.yaml`](../../deploy/site/compose.control-unit.yaml)을 `ROSY_SITE_PAIRING_COMPOSE`에 덧붙여 켠다(D-960). `ROSY_CONTROL_UNIT_DIR`(승인 private 디렉터리: `control-unit.yaml`·`certs/`·`secrets/`·`peer.Caddyfile`·`peer-secrets/`)와 `ROSY_CONTROL_UNIT_PEER_ALIAS`(예: `peer-r`)를 `site.env`에 두며, 서명 overlay이므로 자동 갱신이 계속 검증·설치한다. 사이트별 미서명 overlay 파일은 쓰지 않는다. [별도 overlay](../../deploy/site/compose.control-unit.yaml.example)를 함께 사용하면 `ROSY_CONTROL_UNIT_DIR`의 승인 private 디렉터리를 Fleet에만 읽기 전용으로 mount하고 그 안의 `control-unit.yaml`을 선택한다. 상대 token/CA 경로도 그 디렉터리 안에 둔다. 기존 site 설정의 수신 users·직접 roster·독립 DB를 함께 대조한다. 여러 인스턴스를 한 PC에 배치하면 Compose project/포트/볼륨도 분리한다.
 
 관제 peer는 명시 `tls_ca_file`로 만든 SSLContext 또는 기본 인증서 검증을 사용하며 hostname 검증을 유지한다. `trust_env=False`이므로 site의 SSL_CERT_FILE·환경 proxy가 자동 적용된다고 가정하지 않는다. 사설 CA는 승인한 파일을 명시 mount하고, 내부 loopback proxy와 외부 TLS origin을 구분한다. 잘못된 CA·hostname과 압축 응답 거절은 실제 loopback TCP/TLS 회귀로 확인하며 실제 관제 PC 링크 수용은 별도로 남긴다.
@@ -139,6 +141,7 @@ CLI는 `--control-unit-config` 또는 환경 기본값 `ROSY_CONTROL_UNIT_CONFIG
 2. ARM은 위 주행용 `/approve`로 승인하지 않는다(`CONTROL_UNIT_ARM_ADMIT_AT_CELL`). 해당 셀의 `POST /api/fleet/arm-transfers/jobs/{mission_id}/admit`이 현재 부모 증명·기명 운영자·제안자 자기 승인 거절과 기존 물리/admission 검사를 적용한다. simulation 정책 admission을 실물 자동 승인으로 확대하지 않는다.
 3. R은 셀 결과를 읽어 투영한다. job 투영·receipt와 별도의 physical-evidence·recheck 중계는 현재 직계 자식만 지원한다. 더 깊은 셀에서는 `ARM_TRANSFER_RELAY_DEPTH`로 거절하므로 일반 3수준 topology를 모든 ARM 경로의 지원 완료로 해석하지 않는다.
 4. 실제 R↔셀 TLS·기명 승인·장치 동작·정지·복구와 N100 배치는 별도 수용 대상이다. 호스트 HTTP 시험은 실제 팔이 움직였다는 증거가 아니다.
+5. 셀 Fleet이 `device_trial` 프로필로 이 API를 내려면 `deploy/site/compose.omx-device-trial.yaml`을 `compose.omx.yaml` 뒤에 더한다. 환경은 `ROSY_DEPLOYMENT_PROFILE=device_trial`(허용값 `device_trial`·`production`, 미설정은 기존 `production`), `ROSY_ARM_TRANSFER_INSTALLATION`(owner도 읽는 같은 작성 파일, 팔 1개만, owner가 보고하는 policy digest와 다르면 기동 거절), `ROSY_FLEET_OMX_GRANT_REVISIONS`(JSON, 팔별 `commissioning_revision` 포함), 선택으로 관측자 토큰 secret 파일(`/etc/rosy/fleet-arm-transfer/observer_token`)과 `ROSY_ARM_TRANSFER_OBSERVER_VALID_UNTIL`이다. 토큰이 없으면 관측자가 없어 하달이 불가능하다. owner는 D-977 결정 4 전까지 목표를 거절하므로 이 설정만으로 팔은 움직이지 않는다.
 
 ## 통합 정보와 하위 정지 요청
 

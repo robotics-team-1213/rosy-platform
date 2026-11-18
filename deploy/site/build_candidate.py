@@ -24,7 +24,7 @@ DEPLOY_FILES = (
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
-    "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+    "compose.pairing.yaml", "compose.omx.yaml", "compose.omx-device-trial.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
     "compose.control-unit-remote.yaml",
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",

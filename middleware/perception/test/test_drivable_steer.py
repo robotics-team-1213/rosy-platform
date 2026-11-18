@@ -518,3 +518,25 @@ def test_an_arc_toward_the_routes_bend_waits_while_the_ways_centre_lies_the_othe
     monkeypatch.setattr(steer_module, "way_target", lambda *a, **k: dict(spoke))
     debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=25.0)[2]
     assert debug["strategy"] == "drivable_centre" and debug.get("recentre_first"), debug
+
+
+def test_straight_route_guide_blocks_stale_exit_memory_and_target_pivot(monkeypatch):
+    import control.sensing.perception.drivable.drivable_steer as steer_module
+    steer = DrivableSteer()
+    pose = (0.0, 0.0, 0.0)
+    corner = dict(target_m=(0.20, -0.10), ahead_m=0.2, exit="right", seen_exit="right", straddle=None,
+                  both=False, exit_point_m={"right": (0.20, -0.10)}, exit_reach_m={"right": 0.25},
+                  exit_near={"right": True}, near_centre_m=(0.14, 0.0), centre_path_m=[], edges_m=[],
+                  near_edges_m={})
+    monkeypatch.setattr(steer_module, "way_target", lambda *a, **k: dict(corner))
+    assert steer.update(_lane(HALF, -HALF), 1, G, XO, HALF, pose, pose, guide_deg=-50.0)[2]["exit"] == "right"
+    assert steer._memory is not None
+
+    # Straight / gentle left curve (|guide_deg| < EXIT_BEND_DEG=15): neither memory nor target may invent a right exit.
+    straight = dict(target_m=(0.11, -0.18), ahead_m=0.0, exit=None, seen_exit=None, straddle=None, both=False,
+                    exit_point_m={}, exit_reach_m={}, near_centre_m=(0.14, 0.0), centre_path_m=[],
+                    edges_m=[], near_edges_m={})
+    monkeypatch.setattr(steer_module, "way_target", lambda *a, **k: dict(straight))
+    debug = steer.update(_lane(HALF, -HALF), 2, G, XO, HALF, pose, pose, guide_deg=13.5)[2]
+    assert debug["exit"] is None and not debug.get("exit_from_memory") and not debug.get("exit_from_target"), debug
+    assert not debug["strategy"].startswith("drivable_pivot") and steer._memory is None, debug

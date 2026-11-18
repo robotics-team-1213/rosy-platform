@@ -321,8 +321,12 @@ def verify_stack_outcome_z_mm(
     slot_obs = perceive_slot_z_mm(
         after_side, after_top, after_depth, col=place_col, row=place_row, tier=place_tier, z_profile=z_profile, spec_id=resolved_spec,
     )
-    meas_top_mm = float(slot_obs.get("measured_top_z_mm") or base_out.get("place_slot", {}).get("measured_top_z_mm") or TIER_TOP_Z_MM.get(place_tier, 30.0))
-    z_gate = slot_obs.get("spec_gate") or evaluate_signed_tier_residual_mm(meas_top_mm, expected_tier=place_tier, spec_id=resolved_spec)
+    if slot_obs.get("found"):
+        z_gate = slot_obs.get("spec_gate") or evaluate_signed_tier_residual_mm(
+            float(slot_obs["measured_top_z_mm"]), expected_tier=place_tier, spec_id=resolved_spec,
+        )
+    else:
+        z_gate = {"verdict": "UNKNOWN", "failure_code": "S5_VIEW_OR_GATE_MISMATCH", "reason": "no measured post-release stack height"}
     if after_side is not None or after_top is not None or after_depth is not None:
         from cell_subzone_3d import evaluate_multiview_subzones
         base_out["subzone_3d"] = evaluate_multiview_subzones(
@@ -336,9 +340,10 @@ def verify_stack_outcome_z_mm(
     if isinstance(base_out.get("place_slot"), dict):
         base_out["place_slot"]["r_k_mm"] = z_gate.get("r_k_mm")
         base_out["place_slot"]["spec_id"] = z_gate.get("spec_id", resolved_spec)
-    if not post_gate["ok"]:
+    if not post_gate["ok"] or base_out.get("basis") == "telemetry_only":
         base_out["verified"] = False
         base_out["recovery_mode"] = rec_skill["skill"] if rec_skill else "seat_nudge"
+        base_out["reason"] = str(post_gate.get("reason") or "post-release stack height unverified")
     return base_out
 
 

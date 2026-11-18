@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rosy Calibration — 실측 요청</title>
+  <title>Rosy Calibration — 모눈종이 · 실측 요청</title>
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
@@ -14,36 +14,201 @@
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <ui-shell grammar="procedure" class="ui-app-shell">
-    <a class="skip-link" href="#request-main">요청 내용으로 건너뛰기</a>
+  <ui-shell grammar="procedure" class="ui-app-shell" data-hangul>
+    <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
     <noscript><ui-status state="error">이 화면은 브라우저 스크립트를 사용합니다. 스크립트를 허용한 뒤 다시 여세요.</ui-status></noscript>
     <ui-topbar role="banner">
       <ui-brand href="/" aria-label="Rosy Calibration 홈">
         <b>Calibration</b>
-        <small>셀 실측 요청 · 사람이 확인하는 값</small>
+        <small>모눈종이 · 프로파일 · 실측 요청</small>
       </ui-brand>
+      <nav class="cal-tabs" role="tablist" aria-label="화면 전환">
+        <ui-button id="tabGrid" kind="segment" type="button" role="tab" aria-selected="true" class="active">모눈종이 · 프로파일</ui-button>
+        <ui-button id="tabRequests" kind="segment" type="button" role="tab" aria-selected="false">실측 요청</ui-button>
+      </nav>
       <span data-spacer></span>
+      <ui-button id="btnTheme" kind="quiet" type="button">테마 전환</ui-button>
       <ui-tag id="mode-tag">확인 중</ui-tag>
       <a id="account-login" href="/api/account/login" hidden>Rosy Account 로그인</a>
       <a data-account-profile hidden></a>
       <ui-button id="account-logout" kind="quiet" type="button" hidden>로그아웃</ui-button>
     </ui-topbar>
-    <div class="ui-app-body" data-seats="none">
-      <main class="ui-app-main" id="request-main" tabindex="-1">
-        <div class="ui-pathbar"><h1 class="ui-page-heading">실측 요청</h1></div>
-        <div class="ui-stage-grid" data-layout="watch">
-          <section class="ui-pane" data-pane="stage" aria-labelledby="detail-heading">
-            <h2 id="detail-heading" class="sr-only">요청 내용</h2>
-            <ui-status id="status" role="status" aria-live="polite">요청을 불러오는 중입니다.</ui-status>
-            <div id="detail" hidden></div>
-          </section>
-          <aside class="ui-pane" data-pane="now" aria-labelledby="list-heading">
-            <h2 id="list-heading">요청 목록</h2>
-            <ul id="list" class="request-list"></ul>
-            <ui-empty id="empty" hidden>열린 요청이 없습니다.</ui-empty>
-          </aside>
+
+    <div id="main-content" class="cal-main" tabindex="-1">
+      <section id="panelGrid" class="cal-page" aria-labelledby="tabGrid">
+        <header class="cal-profile-header">
+          <div id="profileBar" class="cal-profile-bar" role="group" aria-label="프로파일 선택"></div>
+          <div class="cal-meta-badges">
+            <ui-tag id="profileSourceTag" status="neutral">-</ui-tag>
+            <ui-tag id="holdBadge" status="neutral">HOLD</ui-tag>
+            <ui-button id="btnReloadSnapshot" kind="quiet" type="button">상태 다시 읽기</ui-button>
+          </div>
+        </header>
+
+        <section id="hygienePanel" class="cal-hygiene" aria-label="프로파일 점검">
+          <ui-status id="hygieneSummary" state="pending">프로파일 불러오는 중…</ui-status>
+          <details id="hygieneDetails">
+            <summary id="hygieneToggleLabel">점검 세부 항목</summary>
+            <ul id="hygieneList" class="cal-hygiene-list"></ul>
+          </details>
+        </section>
+
+        <section class="cal-controls" aria-label="모눈종이 보기 설정">
+          <label class="ui-field-label">
+            <span>Site</span>
+            <select id="siteSelect" class="ui-field"></select>
+          </label>
+
+          <div class="cal-control-group">
+            <span class="cal-control-label">투영 Z 평면</span>
+            <div class="cal-seg-group" role="group" aria-label="투영 Z 평면">
+              <ui-button id="zPlaneView" kind="segment" type="button" aria-pressed="true" class="active">z_view</ui-button>
+              <ui-button id="zPlaneSurface" kind="segment" type="button" aria-pressed="false">surface_z</ui-button>
+            </div>
+          </div>
+
+          <div class="cal-control-group">
+            <span class="cal-control-label">카메라 프레임</span>
+            <div class="cal-seg-group" role="group" aria-label="카메라 프레임">
+              <ui-button id="frameRef" kind="segment" type="button" aria-pressed="false">Reference</ui-button>
+              <ui-button id="frameLive" kind="segment" type="button" aria-pressed="true" class="active">Live</ui-button>
+            </div>
+          </div>
+
+          <div class="cal-control-group">
+            <span class="cal-control-label">오차 배율</span>
+            <div class="cal-seg-group" role="group" aria-label="오차 벡터 배율">
+              <ui-button id="scale1" kind="segment" type="button" data-scale="1" aria-pressed="false">1x</ui-button>
+              <ui-button id="scale5" kind="segment" type="button" data-scale="5" aria-pressed="true" class="active">5x</ui-button>
+              <ui-button id="scale10" kind="segment" type="button" data-scale="10" aria-pressed="false">10x</ui-button>
+            </div>
+          </div>
+
+          <div class="cal-control-group">
+            <span class="cal-control-label">패널 배치</span>
+            <div class="cal-seg-group" role="group" aria-label="패널 배치">
+              <ui-button id="layoutBoth" kind="segment" type="button" data-layout="both" aria-pressed="true" class="active">둘 다</ui-button>
+              <ui-button id="layoutTop" kind="segment" type="button" data-layout="top" aria-pressed="false">카메라</ui-button>
+              <ui-button id="layoutArm" kind="segment" type="button" data-layout="arm" aria-pressed="false">베이스 XY</ui-button>
+            </div>
+          </div>
+
+          <div class="cal-layer-toggles" role="group" aria-label="레이어 표시">
+            <label class="ui-check"><input id="layerPxGrid" class="ui-field" type="checkbox" checked><span>px 격자</span></label>
+            <label class="ui-check"><input id="layerMetricGrid" class="ui-field" type="checkbox" checked><span>mm 모눈</span></label>
+            <label class="ui-check"><input id="layerSites" class="ui-field" type="checkbox" checked><span>Sites/ROI</span></label>
+            <label class="ui-check"><input id="layerPoints" class="ui-field" type="checkbox" checked><span>표적/LOO</span></label>
+            <label class="ui-check"><input id="layerBias" class="ui-field" type="checkbox" checked><span>Bias</span></label>
+            <label class="ui-check"><input id="layerTcp" class="ui-field" type="checkbox" checked><span>중심/TCP</span></label>
+          </div>
+        </section>
+
+        <section id="gridStage" class="cal-stage" data-layout="both">
+          <article id="topCanvasCard" class="cal-card">
+            <header class="cal-card-head">
+              <div>
+                <h2 class="ui-section-heading">Top Camera 모눈종이 (Pixel + Metric Homography)</h2>
+                <p id="topCardSub" class="cal-card-sub">-</p>
+              </div>
+              <div class="cal-card-actions">
+                <ui-tag id="frameBindTag" status="neutral">-</ui-tag>
+                <ui-button id="btnRefreshFrame" kind="quiet" type="button">프레임 갱신</ui-button>
+              </div>
+            </header>
+            <div class="cal-canvas-wrap">
+              <canvas id="topCanvas" width="640" height="480" aria-label="탑 카메라 모눈종이"></canvas>
+            </div>
+            <footer class="cal-legend">
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-grid"></i>mm 모눈(20/50mm)</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-inlier"></i>Inlier · LOO(map−arm, z_view 기준)</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-drop"></i>Dropped/외삽</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-miss"></i>표적 미검출</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-bias"></i>Bias = map−FK (적용 시 −bias)</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-site"></i>Start/Place (Z 시차 반영)</span>
+            </footer>
+          </article>
+
+          <article id="armCanvasCard" class="cal-card">
+            <header class="cal-card-head">
+              <div>
+                <h2 class="ui-section-heading">Arm-Base XY 모눈종이 (우손 좌표 mm, +X 우 · +Y 상)</h2>
+                <p id="armCardSub" class="cal-card-sub">-</p>
+              </div>
+              <ui-tag id="armBoundsTag" status="neutral">20 mm / 100 mm</ui-tag>
+            </header>
+            <div class="cal-canvas-wrap">
+              <canvas id="armCanvas" width="640" height="560" aria-label="로봇 베이스 XY 모눈종이"></canvas>
+            </div>
+            <footer class="cal-legend">
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-reach"></i>Max/Park Reach · 특이점 반경</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-roi"></i>Workspace 경계 / Low Zone</span>
+              <span class="cal-leg-item"><i class="cal-sw cal-sw-tcp"></i>실시간 TCP + Yaw</span>
+            </footer>
+          </article>
+        </section>
+
+        <section class="cal-lower">
+          <article class="cal-card" aria-label="선택 항목 검사기">
+            <header class="cal-card-head">
+              <h2 class="ui-section-heading">선택 항목 상세</h2>
+              <ui-button id="btnClearSelect" kind="quiet" type="button">선택 해제</ui-button>
+            </header>
+            <p id="inspectorEmpty" class="cal-muted">모눈종이 위 점, Start/Place, Bias 벡터, TCP를 클릭하면 상세 수치와 시차를 확인합니다.</p>
+            <dl id="inspectorDl" class="ui-readout" hidden></dl>
+          </article>
+
+          <article class="cal-card" aria-label="로봇 상태 및 Bias">
+            <header class="cal-card-head">
+              <h2 class="ui-section-heading">로봇 · 프로필 · Bias 상태</h2>
+              <ui-tag id="envTag" status="neutral">-</ui-tag>
+            </header>
+            <div class="cal-cv-strip" aria-label="교차 검증 상태">
+              <span class="cal-control-label">교차 검증 (Eval · Depth · Touch · Map · XY · FK · Drift)</span>
+              <div class="cal-cv-badges">
+                <ui-tag id="cvEvalTag" status="neutral">Eval -</ui-tag>
+                <ui-tag id="cvDepthTag" status="neutral">Depth -</ui-tag>
+                <ui-tag id="cvTouchTag" status="neutral">Touch -</ui-tag>
+                <ui-tag id="cvMapTag" status="neutral">Map -</ui-tag>
+                <ui-tag id="cvXyTag" status="neutral">XY -</ui-tag>
+                <ui-tag id="cvFkTag" status="neutral">FK -</ui-tag>
+                <ui-tag id="cvDriftTag" status="neutral">Drift -</ui-tag>
+              </div>
+              <p id="crossVerifyMeta" class="cal-card-sub">-</p>
+            </div>
+            <dl id="robotStatusDl" class="ui-readout"></dl>
+            <h3 class="cal-subhead">Pivot-Near Bias 영역</h3>
+            <div id="biasTableWrap" class="cal-table-wrap"></div>
+          </article>
+
+          <article class="cal-card" aria-label="Site 및 Homography 계보">
+            <header class="cal-card-head">
+              <h2 class="ui-section-heading">Sites &amp; Map 계보</h2>
+              <span id="siteCountNote" class="cal-muted">-</span>
+            </header>
+            <div id="sitesTableWrap" class="cal-table-wrap"></div>
+          </article>
+        </section>
+      </section>
+
+      <section id="panelRequests" aria-labelledby="tabRequests" hidden>
+        <div class="ui-app-body" data-seats="none">
+          <main class="ui-app-main" id="request-main" tabindex="-1">
+            <div class="ui-pathbar"><h1 class="ui-page-heading">실측 요청</h1></div>
+            <div class="ui-stage-grid" data-layout="watch">
+              <section class="ui-pane" data-pane="stage" aria-labelledby="detail-heading">
+                <h2 id="detail-heading" class="sr-only">요청 내용</h2>
+                <ui-status id="status" state="pending" role="status" aria-live="polite">요청을 불러오는 중입니다.</ui-status>
+                <div id="detail" hidden></div>
+              </section>
+              <aside class="ui-pane" data-pane="now" aria-labelledby="list-heading">
+                <h2 id="list-heading">요청 목록</h2>
+                <ul id="list" class="request-list"></ul>
+                <ui-empty id="empty" hidden>열린 요청이 없습니다.</ui-empty>
+              </aside>
+            </div>
+          </main>
         </div>
-      </main>
+      </section>
     </div>
   </ui-shell>
 </body>

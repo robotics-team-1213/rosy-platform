@@ -2,8 +2,10 @@
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/sim"))
 import omx_twin  # noqa: E402
@@ -68,3 +70,27 @@ def test_the_sim_is_posed_with_the_physics_candidates_zero():
     cell = lambda name: SimpleNamespace(physics=omx_physics.Physics(name))  # noqa: E731
     assert omx_twin.physics_zero(cell("design")) == [0.] * 5
     assert omx_twin.physics_zero(cell("twin-zero-20261109")) == [4.0, 1.0, 3.2, 2.8, 2.4]
+
+
+def test_fit_camera_refuses_coupled_both_unless_explicitly_allowed(monkeypatch, tmp_path):
+    argv = ["fit-camera", "--cell", "c", "--out", str(tmp_path), "--site", "s", "--root", "r", "--params", "both"]
+    with pytest.raises(SystemExit, match="allow-coupled-fit"):
+        omx_twin.main(argv)
+
+    real_fit = omx_twin.fit_camera
+    called = {}
+
+    def fake_fit(args):
+        called["params"] = args.params
+        called["allow"] = args.allow_coupled_fit
+        return 0
+
+    monkeypatch.setattr(omx_twin, "fit_camera", fake_fit)
+    assert omx_twin.main([*argv, "--allow-coupled-fit"]) == 0
+    assert called == {"params": "both", "allow": True}
+
+    monkeypatch.setitem(sys.modules, "mujoco", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "omx_cell_sim", SimpleNamespace())
+    monkeypatch.setattr(omx_twin, "closed_episodes", lambda *a: (_ for _ in ()).throw(RuntimeError("past_guard")))
+    with pytest.raises(RuntimeError, match="past_guard"):
+        real_fit(SimpleNamespace(params="both", allow_coupled_fit=True, real_camera="top", camera="top", out=str(tmp_path), site="s", root="r", since="20261101"))

@@ -8,6 +8,7 @@
 # 재생성: python test/architecture/test_duplicate_definitions.py
 middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/fleet/fleet/server/peer/camera_peer_crypto.py|PeerIdentity  ③ D-841 Dec.8 의도 복제, test_peer_proof_ownership.py가 고정
 contracts/foundation/core_common/protocol/account_client.py deploy/robot/omx/load_report_bridge.py integrations/robots/omx/src/rosy/integrations/robots/omx/core_arm_client.py middleware/media/src/rosy_media_edge/whip.py operations/site_ui/media/src/rosy_media/backend.py tools/release/download_artifact.py|_NoRedirect  ③ 독립 실행 HTTP 클라이언트들, contracts 사본이 정본, test_site_preflight.py가 리다이렉트 차단 동치 고정
+integrations/robots/omx/src/rosy/integrations/robots/omx/site_shadow.py learning/curation/perception/owner_robots.py operations/fleet/fleet/server/auth/policy_delivery.py|_NoRedirect  ③ 독립 배포 HTTP 클라이언트(omx 통합 패키지·학습 큐레이션·Fleet 서버), 토큰이 리다이렉트를 따라가지 않음, test_omx_site_shadow.py가 세 사본의 리다이렉트 차단 동치 고정
 middleware/drive/behaviors/line_follow/recovery/lane_return.py tools/sim/native_gazebo_map_pose.py|_angle  ④ 각도 wrap 관습, test_angle_wrap_conventions.py가 경계 거동 고정
 contracts/foundation/core_common/protocol/site_link.py deploy/site/site_preflight.py|_children  ③ deploy/site 미러, site_link가 정본, test_site_preflight.py가 DER 파서 동치 고정
 contracts/motion/src/rosy/contracts/motion/characteristics.py middleware/devices/omx/adapter/omx_adapter/contracts/hardware_profile.py|_fields  ③ 로봇 payload 독립 배포 경계(test_structure_installed_packages), test_motion_characteristics.py가 헬퍼 동치 고정

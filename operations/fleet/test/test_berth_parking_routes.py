@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -11,6 +13,7 @@ from fleet.server.ledger.berth_parking_routes import (
     infer_bay_id,
     install_berth_parking_routes,
 )
+from fleet.server.ledger.berth_parking_scenario import dispatch_nav_target, install_berth_scenario_routes
 from fleet.server.site_auth import SitePrincipal
 
 
@@ -42,7 +45,10 @@ def test_berth_parking_status_and_dispatch_routes():
 
     class DummyConsole:
         async def goal(self, robot_id: str, x: float, y: float, yaw: float) -> dict:
-            return {"robot_id": robot_id, "x": x, "y": y, "yaw": yaw, "queued": False}
+            return {"robot_id": robot_id, "x": x, "y": y, "yaw": yaw, "queued": False, "accepted": True}
+
+        def trip_refusal(self, robot_ids):
+            return None
 
     async def fake_compute_road_plan(request, robot_id, x, y, yaw, place_id, label):
         return {
@@ -68,7 +74,15 @@ def test_berth_parking_status_and_dispatch_routes():
         read_guard=[],
         operator_guard=[],
         require_operator=fake_operator,
+        require_named_operator=fake_operator,
         compute_road_plan=fake_compute_road_plan,
+        dispatch_nav=dispatch_nav_target,
+    )
+    install_berth_scenario_routes(
+        app,
+        console=DummyConsole(),
+        operator_guard=[],
+        require_operator=fake_operator,
     )
 
     client = TestClient(app)
@@ -102,6 +116,88 @@ def test_berth_parking_status_and_dispatch_routes():
     assert sbody["cell_contract_handoff"]["stop_place_id"] == "S3"
 
 
+def _road_app(goal, refusal=None):
+    from fastapi import HTTPException
+    from fleet.hub.hub import HubError
+
+    app = FastAPI()
+    console = SimpleNamespace(goal=goal, trip_refusal=lambda ids: refusal)
+
+    async def plan(request, robot_id, x, y, yaw, place_id, label):
+        return {"target_nav2": {"x": 0.1, "y": 0.0, "yaw": 0.0}, "waypoints_site": []}
+
+    def named() -> SitePrincipal:
+        return SitePrincipal(principal_id="op-named", role="operator")
+
+    install_berth_parking_routes(app, console=console, task_service=None, read_guard=[], operator_guard=[],
+                                 require_operator=named, require_named_operator=named, compute_road_plan=plan,
+                                 dispatch_nav=dispatch_nav_target)
+    return TestClient(app, raise_server_exceptions=False), HTTPException, HubError
+
+
+def test_road_nav2_failure_is_an_error_never_a_simulated_dispatch():
+    async def goal(*args):
+        raise HubError("robot unreachable")
+    client, _, _ = _road_app(goal)
+    res = client.post("/api/fleet/robots/rosy_46/road-nav2", json={"x": 0.0, "y": 0.0})
+    assert res.status_code >= 400 and "simulated_dispatch" not in res.text
+
+
+def test_road_nav2_refuses_a_robot_on_a_running_trip():
+    sent = []
+
+    async def goal(*args):
+        sent.append(args)
+        return {"accepted": True}
+    from fastapi import HTTPException
+    client, _, _ = _road_app(goal, refusal=HTTPException(409, {"code": "TRIP_RUNNING"}))
+    res = client.post("/api/fleet/robots/rosy_46/road-nav2", json={"x": 0.0, "y": 0.0})
+    assert res.status_code == 409 and not sent
+
+
+def test_road_nav2_route_needs_a_named_operator():
+    import inspect
+    from fleet.server.ledger import berth_parking_routes
+    assert "Depends(require_named_operator)" in inspect.getsource(berth_parking_routes.install_berth_parking_routes)
+
+
+def test_berth_park_failure_is_an_error_never_a_reported_dispatch():
+    from fleet.hub.hub import HubError
+
+    async def goal(*args):
+        raise HubError("robot unreachable")
+    client, _, _ = _road_app(goal)
+    res = client.post("/api/fleet/robots/rosy_46/berth-park", json={"bay_id": "C1", "execute_physical": False})
+    assert res.status_code >= 400 and '"dispatched":true' not in res.text.replace(" ", "")
+
+
+def test_queued_road_nav2_is_reported_queued_not_dispatched():
+    from fleet.server.ledger import berth_parking_routes as routes
+    app = FastAPI()
+
+    class Tasks:
+        async def submit_navigation(self, **kwargs):
+            return {"status": "QUEUED", "task_id": "t1"}
+
+    async def plan(*args):
+        return {"target_nav2": {"x": 0.1, "y": 0.0, "yaw": 0.0}, "waypoints_site": []}
+
+    named = lambda: SitePrincipal(principal_id="op-named", role="operator")  # noqa: E731
+    routes.install_berth_parking_routes(app, console=SimpleNamespace(trip_refusal=lambda ids: None), task_service=Tasks(),
+                                        read_guard=[], operator_guard=[], require_operator=named,
+                                        require_named_operator=named, compute_road_plan=plan,
+                                        dispatch_nav=dispatch_nav_target)
+    res = TestClient(app).post("/api/fleet/robots/rosy_46/road-nav2", json={"x": 0.0, "y": 0.0},
+                               headers={"Idempotency-Key": "k1"})
+    body = res.json()
+    assert res.status_code == 200 and body["queued"] is True and body["dispatched"] is False
+
+
+def test_only_a_measured_stop_face_counts_as_a_berth_park():
+    from fleet.server.ledger.berth_parking_helpers import BERTH_SUCCESS_REASONS
+    assert "dock_stop_face_reached" in BERTH_SUCCESS_REASONS
+    assert not {"completed", "reverse_timeout", "emergency_latched", "emergency_during_forward"} & BERTH_SUCCESS_REASONS
+
 def test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_query():
     app = FastAPI()
     seen = {}
@@ -113,6 +209,7 @@ def test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_quer
     install_berth_parking_routes(
         app, console=None, task_service=None, read_guard=[], operator_guard=[],
         require_operator=lambda: SitePrincipal(principal_id="op-test", role="operator"),
+        require_named_operator=lambda: SitePrincipal(principal_id="op-test", role="operator"),
         compute_road_plan=fake_compute_road_plan,
     )
     client = TestClient(app)

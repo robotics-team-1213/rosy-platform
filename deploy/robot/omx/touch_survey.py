@@ -6,7 +6,10 @@ the same path and clears the hold, so the next point needs no park. The touched 
 cell_calibration surface. Points the planner cannot reach are reported, never guessed.
 
   python touch_survey.py --config cell-pipeline.json --plan plan.json --name right_side --kind object \\
-      --x=0.0,0.025 --y=-0.075,-0.1 [--top 0.10] [--bottom 0.02] [--plan-only]
+      --x=0.0,0.025 --y=-0.075,-0.1 [--top 0.10] [--bottom 0.02] [--plan-only | --commissioning --person-at-switch]
+
+Moving the arm needs --commissioning --person-at-switch (D-911); the envelope check and the safety monitor
+(cell_envelope.assess, cell_auto_safety.Guarded) run as for cell_auto_pick. --plan-only never opens the port.
 
 (--y=... with "=": argparse reads a bare "-0.075,..." as an option.)
 """
@@ -22,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import cell_calibration as cal  # noqa: E402
 from grasp_planner import Planner, norm_to_rad  # noqa: E402
+from joint_jitter import settled_state  # noqa: E402
 
 SPEED_M_S = 0.003  # the contact hold stops a 3 mm/s descent within about 2 mm of the first touch (2026-10-27)
 
@@ -44,7 +48,7 @@ def library(planner: Planner, points, top: float, bottom: float) -> tuple[dict, 
     return dict(base, chunks=chunks), kept, skipped
 
 
-def survey(cell, planner: Planner, points, log=print) -> list:
+def survey(cell, planner: Planner, points, log=print, params=None) -> list:
     """Touch each point of the loaded survey library in turn; the touched [x, y, z] list. Parks at the end."""
     touched = []
     for k, (x, y) in enumerate(points):
@@ -59,7 +63,7 @@ def survey(cell, planner: Planner, points, log=print) -> list:
                 log({"k": k, "stop": "rise failed"})
                 break
             continue
-        pose = planner.kin.fk([norm_to_rad(v) for v in cell.act("state")["state"][:5]])
+        pose = planner.kin.fk([norm_to_rad(v) for v in settled_state(cell, params)["state"][:5]])
         touched.append([pose.x, pose.y, pose.z])
         log({"k": k, "xy": [x, y], "contact": True, "tcp_m": [round(v, 4) for v in touched[-1]]})
         if not cell.act("retreat").get("ok"):
@@ -80,7 +84,13 @@ def main(argv=None) -> int:
     parser.add_argument("--top", type=float, default=0.10)
     parser.add_argument("--bottom", type=float, default=0.02)
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--commissioning", action="store_true", help="a supervised survey (D-911)")
+    parser.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = parser.parse_args(argv)
+    moves = not args.plan_only
+    if moves and not (args.commissioning and args.person_at_switch):  # before any file or port is opened
+        print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch, D-911)"}))
+        return 2
     config = json.loads(args.config.read_text())
     planner = Planner(json.loads(args.plan.read_text()))
     points = [(float(x), float(y)) for x in args.x.split(",") for y in args.y.split(",")]
@@ -92,14 +102,27 @@ def main(argv=None) -> int:
     print(json.dumps({"library": str(path), "points": len(kept)}))
     if args.plan_only or not kept:
         return 0
+    from cell_auto_safety import Aborted, Guarded
+    from cell_auto_setup import load_config
+    from cell_envelope import assess
     from cell_pipeline import FifoCell
 
-    cell = FifoCell(args.config.parent / config["io"], config.get("cameras", {}))
+    config = {**load_config(args.config), "_commissioning": {"person_at_switch": True}}
+    raw = FifoCell(args.config.parent / config["io"], config.get("cameras", {}))
+    allowed = assess(config, cal.load(Path(config["calibration_path"]).expanduser()), lib, raw.act("state"))
+    if not allowed["allowed"]:
+        print(json.dumps({"stop": "envelope", "reason": allowed["reason"]}))
+        return 1
+    cell = Guarded(raw, config)
     loaded = cell.act(f"load {path}")
     if not loaded.get("ok"):  # e.g. no runner: the session ended on its motor-health log budget (2026-10-27)
         print(json.dumps({"stop": "load failed", "error": loaded.get("error")}))
         return 1
-    touched = survey(cell, planner, kept, log=lambda row: print(json.dumps(row), flush=True))
+    try:
+        touched = survey(cell, planner, kept, log=lambda row: print(json.dumps(row), flush=True), params=config.get("params"))
+    except Aborted as exc:  # Guarded already parked
+        print(json.dumps({"stop": "safety", "reason": str(exc)}))
+        return 1
     if touched:
         when = time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime())
         cal.save_surface(Path(config["calibration_path"]).expanduser(), args.name,

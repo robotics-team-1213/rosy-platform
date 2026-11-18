@@ -117,6 +117,8 @@ class LocalizationService:
         self._traffic_hold = traffic_hold
         self._monitor = Monitor()
         self._ladder = Ladder()
+        #: Panel decision 2026-11-14: the ladder's motion rungs need a named operator's request.
+        self._motion_gate = service_logic.MotionGate()
         self._last_good: dict[str, cues.Pose] = {}
         self._last_decision: dict[str, dict] = {}
         self._last_mission: dict[str, dict] = {}
@@ -164,6 +166,28 @@ class LocalizationService:
             view["needs_human"] = True
         return {**view, "last_decision": self._last_decision.get(robot_id),
                 "last_mission": self._last_mission.get(robot_id), "pose_request": asked}
+
+    # --- operator relocalize (panel decision 2026-11-14) ----------------------------
+
+    def allow_motion(self, robot_id: str, by: str) -> dict:
+        """Record a named operator's request: the ladder's motion rungs may run MOTION_ALLOW_S."""
+        self._motion_gate.allow(robot_id, by, self._clock(), self._wall())
+        return self.motion_view(robot_id)
+
+    def motion_view(self, robot_id: str) -> dict:
+        now = self._clock()
+        return {"motion_allowed": self._motion_gate.allowed(robot_id, now),
+                "motion_allow_s": service_logic.MOTION_ALLOW_S,
+                "last_operator_request": self._motion_gate.view(robot_id, now)}
+
+    async def start_relocalize(self, robot_id: str, status) -> Optional[dict]:
+        """The operator's press starts the ladder's rotate rung now, through the same mission
+        path the ladder uses. Legacy (null) status sends nothing, like every ladder rung."""
+        client = self._clients().get(robot_id)
+        if client is None:
+            return None
+        await self._climb(robot_id, client, "rotate", status, self._clock())
+        return self._last_mission.get(robot_id)
 
     # --- loop -----------------------------------------------------------------------
 
@@ -381,6 +405,12 @@ class LocalizationService:
             return
         if status is None or status.state is LocState.LOCALIZED:
             return          # legacy (null) or LOCALIZED robots never get a mission
+        if rung in service_logic.MOTION_RUNGS and not self._motion_gate.allowed(rid, now):
+            logger.info("localization: %s ladder %s held: wheel motion needs an operator relocalize "
+                        "request (robots can sit on chargers or cables)", rid, rung)
+            self._last_mission[rid] = {"kind": None, "rung": rung, "held": [],
+                                       "result": "operator_required"}
+            return
         target = service_logic.square_target(self._last_report.get(rid), self._squares)
         refused = self._unsupported.setdefault(rid, set())
         kinds = [k for k in service_logic.RUNG_MISSIONS[rung]

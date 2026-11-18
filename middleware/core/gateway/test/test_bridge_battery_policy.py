@@ -17,8 +17,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.bridge import battery_policy
 from core.bridge.battery_policy import apply_voltage
 from core_common.protocol.schemas import BatteryStatus
+from core_common.protocol.wire_status import NavigationState
 from core_features.command.arbitration import Mode, ModeMachine
 from core_features.power.battery import BatteryLevel
 from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimits
@@ -37,7 +39,7 @@ class Recorder:
 
 def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
           home_raises=False, status="DISCHARGING", dock_state=None,
-          docking_active=False):
+          docking_active=False, charge_return=None):
     log = recorder.calls
 
     battery = SimpleNamespace(
@@ -54,7 +56,7 @@ def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
     safety = SimpleNamespace(
         trigger_estop=lambda reason: log.append(("safety.trigger_estop", reason)),
         on_battery_percent=lambda p: (log.append(("safety.on_battery_percent", p)) or action),
-        battery_policy=SimpleNamespace(warning_percent=20.0), battery_return_suppressed=False,
+        battery_policy=SimpleNamespace(warning_percent=20.0, critical_percent=10.0), battery_return_suppressed=False,
         release_recovered_battery_stop=lambda: False, estop=False, estop_source="",
     )
     docking = SimpleNamespace(
@@ -67,11 +69,25 @@ def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
             raise RuntimeError("no home waypoint")
 
     # `localization=None`: a robot without D-395 (the policy reads the field directly).
+    # `charge_return`: a mutable [lease_live, navigating] pair, or None (no D-1029 lease).
+    cr = charge_return or [False, False]
     return SimpleNamespace(battery=battery, state=state, power=power,
                            safety=safety, docking=docking, localization=None,
-                           nav=SimpleNamespace(
-                               home=home,
-                               docking_active_provider=lambda: docking_active))
+                           trip_lease=SimpleNamespace(charge_return_active=lambda: cr[0], critical_deferred=False, critical_inactive_since=None),
+                           events=SimpleNamespace(publish=lambda t, **kw: log.append(("events." + t, kw["data"]["percent"]))),
+                           nav=_Nav(home, cr, docking_active))
+
+
+class _Nav:
+    """``nav_state`` follows ``cr[1]`` live, as the manager's property does."""
+
+    def __init__(self, home, cr, docking_active):
+        self.home, self._cr = home, cr
+        self.docking_active_provider = lambda: docking_active
+
+    @property
+    def nav_state(self):
+        return NavigationState.NAVIGATING if self._cr[1] else NavigationState.ARRIVED
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
@@ -287,6 +303,7 @@ def _real_services(percent=30.0, level=BatteryLevel.OK):
         battery=battery, safety=safety, modes=modes, state=state, localization=None,
         power=SimpleNamespace(on_battery_alert=lambda lv: None),
         docking=SimpleNamespace(on_battery_level=lambda lv: None, state=None),
+        trip_lease=SimpleNamespace(charge_return_active=lambda: False, critical_deferred=False, critical_inactive_since=None),
         nav=SimpleNamespace(home=lambda source: None, docking_active_provider=lambda: False))
 
 
@@ -376,3 +393,118 @@ def test_a_sensor_stuck_high_does_not_end_a_battery_stop():
 
     assert services.safety.estop is True
     assert services.modes.mode is Mode.EMERGENCY
+
+
+# --- D-1029: a Fleet charge return defers the 10% action, never the 5% DEEP stop ---
+
+@pytest.mark.parametrize("action", ["RETURN_HOME", "STOP"])
+def test_critical_action_is_deferred_during_a_charge_return(action):
+    rec = Recorder()
+    svc = build(rec, level=BatteryLevel.CRITICAL, percent=9.0, action=action, charge_return=[True, True])
+
+    apply_voltage(svc, 7.3)
+
+    assert ("events.battery.critical_deferred", 9.0) in rec.calls
+    assert "safety.trigger_estop" not in rec.names() and "nav.home" not in rec.names()
+    assert svc.trip_lease.critical_deferred
+
+
+def test_no_charge_return_lease_keeps_today_s_action():
+    rec = Recorder()
+    apply_voltage(build(rec, percent=9.0, action="STOP"), 7.3)
+    assert ("safety.trigger_estop", "battery_policy") in rec.calls
+    rec = Recorder()
+    apply_voltage(build(rec, percent=9.0, action="RETURN_HOME"), 7.3)
+    assert ("nav.home", "battery_policy") in rec.calls
+
+
+def test_a_lease_without_a_navigation_goal_does_not_defer():
+    rec = Recorder()
+    apply_voltage(build(rec, percent=9.0, action="STOP", charge_return=[True, False]), 7.3)
+    assert ("safety.trigger_estop", "battery_policy") in rec.calls
+
+
+def _deferred(rec, cr):
+    svc = build(rec, level=BatteryLevel.CRITICAL, percent=9.0, action="STOP", charge_return=cr)
+    apply_voltage(svc, 7.3)
+    rec.calls.clear()
+    svc.safety.on_battery_percent = lambda p: None   # the crossing was reported once
+    return svc
+
+
+@pytest.mark.parametrize("ended", [[False, True], [True, False]], ids=["lease_ended", "goal_ended"])
+def test_the_deferred_action_latches_when_the_return_ends_while_still_critical(ended, monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(battery_policy.time, "monotonic", lambda: clock[0])
+    rec = Recorder()
+    cr = [True, True]
+    svc = _deferred(rec, cr)
+
+    apply_voltage(svc, 7.3)
+    assert "safety.trigger_estop" not in rec.names() and svc.trip_lease.critical_deferred
+
+    cr[:] = ended
+    apply_voltage(svc, 7.3)                      # the first reading after the end only starts the clock
+    assert "safety.trigger_estop" not in rec.names()
+    clock[0] += battery_policy.INACTIVE_LATCH_S
+    apply_voltage(svc, 7.3)
+    assert ("safety.trigger_estop", "battery_policy") in rec.calls
+    assert not svc.trip_lease.critical_deferred
+
+
+def test_a_reading_between_two_legs_does_not_end_the_return(monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(battery_policy.time, "monotonic", lambda: clock[0])
+    rec = Recorder()
+    cr = [True, True]
+    svc = _deferred(rec, cr)
+
+    cr[1] = False
+    apply_voltage(svc, 7.3)
+    clock[0] += 1.0
+    cr[1] = True                                  # the next leg started
+    apply_voltage(svc, 7.3)
+    clock[0] += battery_policy.INACTIVE_LATCH_S
+    apply_voltage(svc, 7.3)
+
+    assert "safety.trigger_estop" not in rec.names() and svc.trip_lease.critical_deferred
+
+
+def test_a_person_stop_during_the_return_keeps_the_deferral_until_it_is_released(monkeypatch):
+    # Review 2026-11-14: a person's e-stop must not swallow the deferral, or the release leaves 10..5 % unlatched.
+    clock = [100.0]
+    monkeypatch.setattr(battery_policy.time, "monotonic", lambda: clock[0])
+    rec = Recorder()
+    cr = [True, True]
+    svc = _deferred(rec, cr)
+    svc.safety.estop = True                       # a person's stop; nav goes idle under it
+    cr[1] = False
+
+    apply_voltage(svc, 7.3)
+    clock[0] += battery_policy.INACTIVE_LATCH_S
+    apply_voltage(svc, 7.3)
+    assert "safety.trigger_estop" not in rec.names() and svc.trip_lease.critical_deferred
+
+    svc.safety.estop = False                      # released while still critical
+    apply_voltage(svc, 7.3)
+    assert ("safety.trigger_estop", "battery_policy") in rec.calls
+
+
+def test_recovery_above_critical_clears_the_deferral():
+    rec = Recorder()
+    cr = [True, True]
+    svc = _deferred(rec, cr)
+    svc.battery.percent = 15.0
+
+    apply_voltage(svc, 7.4)
+    cr[:] = [False, False]
+    apply_voltage(svc, 7.4)
+
+    assert not svc.trip_lease.critical_deferred
+    assert "safety.trigger_estop" not in rec.names()
+
+
+def test_deep_still_stops_immediately_during_a_charge_return():
+    rec = Recorder()
+    apply_voltage(build(rec, level=BatteryLevel.DEEP, percent=4.0, action="STOP", charge_return=[True, True]), 7.0)
+    assert ("safety.trigger_estop", "battery_deep") in rec.calls

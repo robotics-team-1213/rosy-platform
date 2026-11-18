@@ -270,3 +270,68 @@ def test_attempts_and_incidents_endpoints_serve_tier_history_and_clear_hold(path
         running.shutdown()
         running.server_close()
 
+
+def test_account_protected_params_web_forwards_core_bearer_to_clear_and_enforces_origin(path, monkeypatch):
+    from types import SimpleNamespace
+    import omx_incident
+
+    class FakeClaims:
+        def permits(self, resource, cap):
+            return resource == "site:rosy-site" and cap == "fleet.operate"
+
+    class FakeAccount:
+        resource = "site:rosy-site"
+        callback = "https://cell.example:9449/api/account/callback"
+        profile_url = "https://core.example/profile"
+
+        def resolve(self, cookie):
+            return FakeClaims() if cookie == "good-cookie" else None
+
+        def access_token_for(self, cookie):
+            return (FakeClaims(), "hdr.payload.sig") if cookie == "good-cookie" else (None, None)
+
+        def profile(self, cookie):
+            return None
+
+        def apps(self, cookie):
+            return []
+
+    cleared = []
+    monkeypatch.setattr(omx_incident, "status", lambda arm: {"arm": arm, "local_held": False, "fleet_held": False, "incident_ids": []})
+    monkeypatch.setattr(omx_incident, "clear", lambda arm, note, cause=None, basis=None, token=None: cleared.append((arm, note, token)))
+
+    running = web.make_server(files(path), 0, incident_arms=["arm_b"], account=FakeAccount())
+    threading.Thread(target=running.serve_forever, daemon=True).start()
+    try:
+        port = running.server_port
+        host_hdr = {"Host": f"127.0.0.1:{port}"}
+        assert call(running, "GET", "/params.json", headers=host_hdr)[0] == 401
+        assert call(running, "GET", "/params.json", headers={**host_hdr, "Cookie": f"{web.ACCOUNT_COOKIE}=good-cookie"})[0] == 200
+        body = json.dumps({"arm": "arm_b", "note": "checked home"})
+        assert call(running, "POST", "/incidents/clear", body, {**host_hdr, "X-Cell-Params": "1", "Cookie": f"{web.ACCOUNT_COOKIE}=good-cookie"})[0] == 403
+        st, _, _ = call(running, "POST", "/incidents/clear", body, {
+            **host_hdr, "X-Cell-Params": "1", "Origin": "https://cell.example:9449",
+            "Cookie": f"{web.ACCOUNT_COOKIE}=good-cookie",
+        })
+        assert st == 200 and cleared == [("arm_b", "checked home", "hdr.payload.sig")]
+    finally:
+        running.shutdown()
+        running.server_close()
+
+
+def test_params_subpath_serves_ui_and_json_under_shared_origin(path, monkeypatch):
+    import omx_incident
+
+    monkeypatch.setattr(omx_incident, "status", lambda arm: {"arm": arm, "local_held": False, "fleet_held": False, "incident_ids": []})
+    running = web.make_server(files(path), 0, incident_arms=["arm_a"])
+    threading.Thread(target=running.serve_forever, daemon=True).start()
+    try:
+        assert call(running, "GET", "/params")[0] == 200
+        st, page, _ = call(running, "GET", "/params/")
+        assert st == 200 and b"location.pathname.startsWith('/params')" in page
+        assert call(running, "GET", "/params/params.json")[0] == 200
+        assert call(running, "GET", "/params/incidents.json")[0] == 200
+    finally:
+        running.shutdown()
+        running.server_close()
+

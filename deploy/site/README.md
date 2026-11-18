@@ -714,6 +714,34 @@ Check from any LAN PC:
 `curl -sk https://<site-host>.local:$ROSY_SITE_HTTPS_PORT/api/fleet/auth/connection`
 prints `{"mode":"development"}`.
 
+## Control-unit peer links through mDNS (2026-11-17)
+
+Every ROSY host always advertises its `<name>.local`, and control units attach to each other by those names.
+R and CELL-A stopped talking for 8 days after they moved to separate PCs because `control-unit.yaml` kept
+same-host URLs and nothing alarmed; this section is the enforced configuration.
+
+- A peer `url` is `https://<host>.local:<port>` (R's peer port 8544, the cell's 8543). Loopback literals,
+  `0.0.0.0` and bare service names are rejected by Fleet at load time; an `address` entry is not needed.
+- The peer certificate's SAN must include `<host>.local` (`tls_ca_file` signs it); hostname verification stays on.
+- Containers resolve `.local` only with the host's `/run/avahi-daemon` bound in (the signed `compose.yaml` does it
+  for R's containers; add the same bind for any other container that dials a peer).
+- Both units carry the byte-identical `manifest` and a new `revision` on every change. Fleet compares the manifest
+  digest, so an equal revision with a different manifest is reported as a mismatch, not accepted.
+- A unit on another PC than its peer: R publishes the peer port on its LAN address through
+  `compose.control-unit-remote.yaml`; the cell PC publishes 8543 the same way.
+- `avahi-daemon` is a required (enabled, active) unit on every lab PC (`deploy/hosts/common/host-state/manifest`).
+
+Check (installed on R and the cell PC by the host-state manifest, run by `rosy-control-unit-check.timer` every 5
+minutes; a failing link fails the unit, which `update_status.py` reports as `control-unit-link`):
+
+```sh
+sudo /usr/local/sbin/rosy-control-unit-check            # every /etc/rosy/control-unit/**/control-unit.yaml
+sudo /usr/local/sbin/rosy-control-unit-check --config /etc/rosy/control-unit/<unit>/control-unit.yaml --json
+```
+
+Each peer line names the step that failed: `mdns-name`, `resolve`, `tls`, `connect`, `healthz`, `auth`,
+`revision`, `manifest`. The tool needs `python3-yaml` and never prints tokens.
+
 ## Contract path
 
 ```text

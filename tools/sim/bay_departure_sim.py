@@ -170,6 +170,8 @@ def run_s3_cell_contract_handoff(
     fleet_r_token: str = "",
     request_fn: Any = None,
 ) -> dict[str, Any]:
+    if fleet_r_url or request_fn is not None:
+        raise ValueError("synthetic bay departure cannot claim or release a live Fleet handoff")
     from types import SimpleNamespace
 
     from fleet.pipeline.orchestrator import evaluate_fleet_pipeline
@@ -200,8 +202,11 @@ def run_s3_cell_contract_handoff(
     sys.path.insert(0, str(omx_path)) if str(omx_path) not in sys.path else None
     from cell_fleet_pipeline import FleetModelPipeline
 
+    # Simulator fixture explicitly supplies readiness; production has no such sensor evidence.
+    sim_handoff = {**held["contract_layer"]["active_handoffs"][0],
+                   "wheel_brake_locked": True, "bed_ready": True}
     omx_result = FleetModelPipeline(Path(work_dir)).run_contract_handoff_stage(
-        held["contract_layer"]["active_handoffs"][0], stage_id="sim-s3-pinky-to-belt"
+        sim_handoff, stage_id="sim-s3-pinky-to-belt"
     )
     receipt = omx_result["receipt"]
     assert receipt["phase"] == "RELEASED", receipt
@@ -252,11 +257,6 @@ def run_s3_cell_contract_handoff(
             },
         },
     }
-    if fleet_r_url or request_fn is not None:
-        result["remote_fleet_r_handoff"] = FleetModelPipeline(Path(work_dir)).execute_remote_fleet_r_handoff(
-            fleet_r_url=fleet_r_url or "https://rosy-fleet-r:8443",
-            token=fleet_r_token, robot_id=robot_id, request_fn=request_fn,
-        )
     return result
 
 

@@ -146,7 +146,8 @@ def finger_pads(img, dark: int = 60, color: str | int = "auto"):
     return d_pads if d_pads is not None else w_pads
 
 
-def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | None = None) -> dict:
+def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | None = None,
+                     parallax_px: float | None = None) -> dict:
     """The container's offset from the pads' midpoint in mm: along (the closing axis, left->right) and across."""
     mode = resolve_finger_color(params=params, color=color)
     pads = finger_pads(img, color=mode)
@@ -159,8 +160,8 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
         if face is not None:
             cx, y_front, w_px = face
             s_face = 30.0 / max(w_px, 1.0)
-            parallax_px = float(params.get("wrist.parallax_px", 0.0)) if isinstance(params, dict) else 0.0
-            ref_x = 0.5 * (a[0] + b[0]) - parallax_px
+            p_px = (params.get("wrist.parallax_px", 0.0) if isinstance(params, dict) else 0.0) if parallax_px is None else parallax_px
+            ref_x = 0.5 * (a[0] + b[0]) - float(p_px)
             along_mm = round(float(cx - ref_x) * s_face, 1)
             across_mm = round(float(y_front - 0.76 * img.shape[0]) * s_face, 1)
             return {"found": True, "along_mm": along_mm, "across_mm": across_mm,
@@ -270,7 +271,7 @@ def resolve_wrist_servo_offset(
 
 
 def finger_servo(cell, camera: str, hsv, closing_deg: float, gap_mm: float, replan, params=None, sign=None,
-                 color: str | int | None = None) -> dict:
+                 color: str | int | None = None, parallax_px: float | None = None) -> dict:
     """Up to wrist.max_iter corrections from the finger-referenced offset; the across sign is learned."""
     import math
 
@@ -279,8 +280,18 @@ def finger_servo(cell, camera: str, hsv, closing_deg: float, gap_mm: float, repl
     total, dx, dy, rows, last = 0.0, 0.0, 0.0, [], None
     c = math.radians(closing_deg)
     along_arm, across_arm = np.array([math.cos(c), math.sin(c)]), np.array([-math.sin(c), math.cos(c)])
+    f_mode = resolve_finger_color(params=params, color=color)
     for i in range(int(prm.get(params, "wrist.servo_iter")) + 1):
-        seen = finger_offset_mm(cell.frame(camera), hsv, gap_mm, params, color=color)
+        img = cell.frame(camera)
+        seen = finger_offset_mm(img, hsv, gap_mm, params, color=color, parallax_px=parallax_px)
+        if not seen.get("found"):
+            seen = resolve_wrist_servo_offset(
+                img,
+                cal={"finger_color": f_mode, "parallax_px": 0.0 if parallax_px is None else float(parallax_px)},
+                structural_fallback=True,
+                camera_invariant_obb=True,
+                hsv=hsv,
+            )
         rows.append({"iteration": i, **seen})
         if not seen["found"]:
             return {"verdict": "refuse", "why": seen["why"], "dx_mm": dx, "dy_mm": dy, "total_mm": total, "iterations": rows}
@@ -338,7 +349,8 @@ def finger_hook(config: dict, cell, target: dict, write_library, gap_mm: float):
         default_signs = dict({"along": 1.0, "across": 1.0}, **(spec.get("finger_sign") or {}))
         signs = json.loads(signs_path.read_text()) if signs_path.exists() else default_signs
         hsv_pair = (spec["hsv_min"], spec["hsv_max"]) if spec.get("hsv_min") and not spec.get("shape_mode") else None
-        out = finger_servo(cell, camera, hsv_pair, closing, gap_mm, replan_from_base, params, signs, color=finger_color)
+        out = finger_servo(cell, camera, hsv_pair, closing, gap_mm, replan_from_base, params, signs,
+                           color=finger_color, parallax_px=spec.get("parallax_px"))
         if out["verdict"] == "pass":  # only a sign that led to a pass is kept for the next run
             signs_path.write_text(json.dumps(signs))
         elif out.get("iterations") and out["iterations"][-1].get("found"):

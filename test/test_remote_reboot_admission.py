@@ -166,3 +166,44 @@ mkdir -p "$HOME/rosy-jobs"
     assert not list((home / "rosy-jobs").glob("*.alone-wait"))
     result = _sh(prefix + rj.JOB, env, "r", "d", "", "0", "60", "x.py")
     assert result.returncode == 0, result.stderr  # an ordinary job still fits beside the hold
+
+
+@pytest.mark.skipif(os.name != "posix" or not shutil.which("flock"), reason="actual admission shell needs Linux")
+def test_cpu_alone_job_runs_beside_gpu_when_room_fits_and_defers_on_sim_or_full_host(tmp_path):
+    """Dedicated CPU/fsync timing alone job runs beside gpu training when sim is absent and cpu/mem fit."""
+    home, env = _job_env(tmp_path, 'touch "$HOME/pytest-started"\n')
+    env = {**env, "ROSY_HOST_CORES": "24", "ROSY_HOST_GB": "32"}
+    (home / "rosy-test/runs/r.jobs").mkdir()
+    base = '''clock=10000
+date() { if [ "$1" = +%s ]; then echo "$clock"; else /usr/bin/date "$@"; fi; }
+systemctl() { case "$1" in show) echo;; is-active) echo inactive; return 3;; esac; }
+sleep() { clock=$((clock + 100)); }
+mkdir -p "$HOME/rosy-jobs"
+'''
+    # 1) gpu lock with ample headroom: CPU_ALONE runs (non_gpu == 0)
+    p1 = base + 'echo "$$ gpu 8 16" > "$HOME/rosy-jobs/train-1.lock"\n'
+    res = _sh(p1 + rj.JOB, env, "r", "d", "", "0", "60", "ROSY_JOB_ALONE=1", "ROSY_JOB_CPU_ALONE=1", "x.py")
+    assert res.returncode == 0 and (home / "pytest-started").exists(), res.stderr
+    (home / "pytest-started").unlink()
+    # 2) gpu lock leaves too few cores: CPU_ALONE defers cleanly
+    p2 = base + 'echo "$$ gpu 24 16" > "$HOME/rosy-jobs/train-1.lock"\n'
+    res = _sh(p2 + rj.JOB, env, "r", "d", "", "1", "60", "ROSY_JOB_ALONE=1", "ROSY_JOB_CPU_ALONE=1", "x.py")
+    assert res.returncode == 253 and rj.HOLD_DEFERRED + b"\n" in res.stdout
+    # 3) sim lock (Gazebo): CPU_ALONE still defers
+    p3 = base + 'echo "$$ sim 6 8" > "$HOME/rosy-jobs/gz-1.lock"\n'
+    res = _sh(p3 + rj.JOB, env, "r", "d", "", "2", "60", "ROSY_JOB_ALONE=1", "ROSY_JOB_CPU_ALONE=1", "x.py")
+    assert res.returncode == 253 and rj.HOLD_DEFERRED + b"\n" in res.stdout
+
+    # 4) dedicated test/test_platform_g1_timing.py auto-enables CPU_ALONE in JOB without changing invocation words
+    (home / "pytest-started").unlink(missing_ok=True)
+    res = _sh(p1 + rj.JOB, env, "r", "d", "", "3", "60", "ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py", "-pno:xdist")
+    assert res.returncode == 0 and (home / "pytest-started").exists(), res.stderr
+    # 5) dedicated ROSY_BROWSER_ALONE=1 + ROSY_RUN_BROWSER_TESTS=1 auto-enables CPU_ALONE beside gpu
+    (home / "pytest-started").unlink(missing_ok=True)
+    res = _sh(p1 + rj.JOB, env, "r", "d", "", "4", "60", "ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1",
+              "ROSY_JOB_ALONE=1", "a/test/test_b_browser.py")
+    assert res.returncode == 0 and (home / "pytest-started").exists(), res.stderr
+    # 6) generic ROSY_JOB_ALONE=1 without dedicated CPU-only marker still defers beside gpu training
+    (home / "pytest-started").unlink(missing_ok=True)
+    res = _sh(p1 + rj.JOB, env, "r", "d", "", "5", "60", "ROSY_JOB_ALONE=1", "a/test/test_b_browser.py")
+    assert res.returncode == 253 and rj.HOLD_DEFERRED + b"\n" in res.stdout

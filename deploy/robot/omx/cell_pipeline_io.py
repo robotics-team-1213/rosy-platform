@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import http.client
+import hashlib
 import json
+import math
 import os
+import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -23,17 +27,41 @@ def case(work: Path, row: dict) -> None:
         f.write(json.dumps({"t": round(time.time(), 3), **row}, default=str) + "\n")
 
 
-def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
-    from grasp_planner import Planner
-
-    library = Planner(dict(config["plan"], pick=pick, place=place, keep_out=config.get("keep_out"),
-                           **({"tcp_x_m": config["tcp_x_m"]} if "tcp_x_m" in config else {}))).library()
+def limit_error(config: dict, library: dict) -> str | None:
+    """The first way a planned library leaves this arm's joint window, else None. ``joint_min`` looks at every chunk;
+    ``joint_max`` only at ``played_chunks`` when the caller lists them (the remap plays above_pick and the fold home)."""
+    names, chunks = library["names"], library["chunks"]
     # arm_b's wrist roll holds at 9.89 in free air (2026-11-06): refuse the plan here, so every caller tries its next yaw
     for name, low in (config.get("joint_min") or {}).items():
-        column = library["names"].index(name)
-        lowest = min(row[column] for chunk in library["chunks"].values() for row in chunk)
+        lowest = min(row[names.index(name)] for chunk in chunks.values() for row in chunk)
         if lowest < low:
-            raise SystemExit(f"{name} target {lowest:.1f} is under this arm's joint_min {low}")
+            return f"{name} target {lowest:.1f} is under this arm's joint_min {low}"
+    # 2026-11-14: arm_b's printed wrist holder touched link3/4 at wrist_flex 59.3, so its profile caps the wrist lower
+    played = config.get("played_chunks")
+    for name, high in (config.get("joint_max") or {}).items():
+        highest = max(row[names.index(name)] for key, chunk in chunks.items() if played is None or key in played
+                      for row in chunk)
+        if highest > high:
+            return f"{name} target {highest:.1f} is over this arm's joint_max {high}"
+    return None
+
+
+def plan_library(config: dict, pick: dict, place: dict, *, check: bool = True) -> dict:
+    """The chunk library for a pick and place; refused (SystemExit) when it leaves the arm's joint window."""
+    from grasp_planner import Planner
+    import omx_tcp
+
+    tcp_x_m = omx_tcp.config_tcp(config)
+    library = Planner(dict(config["plan"], pick=pick, place=place, keep_out=config.get("keep_out"),
+                           **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))).library()
+    error = limit_error(config, library) if check else None
+    if error:
+        raise SystemExit(error)
+    return library
+
+
+def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
+    library = plan_library(config, pick, place)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({k: v for k, v in library.items() if v is not None}))
     return path
@@ -46,6 +74,9 @@ def fold(cell, sleep=time.sleep, wait_s: float = 2.0) -> dict:
         return status
     sleep(wait_s)
     return cell.act("park")
+
+
+FIFO_WRITE_LOCK = threading.Lock()
 
 
 class FifoCell:
@@ -113,12 +144,13 @@ class FifoCell:
         expected = command.split(" ", 3)[-1] if command.startswith("checked ") else command
         status_path = self.io / "chunk-status.jsonl"
         start = status_path.stat().st_size if status_path.exists() else 0
-        try:  # non-blocking: never hand a command to a later runner
-            fd = os.open(self.io / "chunk-cmd", os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
-        except OSError:
-            return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
-        os.write(fd, (command + "\n").encode())
-        os.close(fd)
+        with FIFO_WRITE_LOCK:  # the hardware owner's cancel fold writes `park` from another thread (D-977 4)
+            try:  # non-blocking: never hand a command to a later runner
+                fd = os.open(self.io / "chunk-cmd", os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
+            except OSError:
+                return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
+            os.write(fd, (command + "\n").encode())
+            os.close(fd)
         deadline = time.monotonic() + (self.timeout_s if timeout is None else timeout)
         while time.monotonic() < deadline:
             if status_path.exists():
@@ -171,7 +203,7 @@ class FifoCell:
                             self._frame_cache[camera] = (etag, decoded)
                         return decoded.copy() if decoded is not None else decoded
                     break
-                except (OSError, http.client.HTTPException):
+                except (OSError, http.client.HTTPException, AttributeError):  # 3.12 http.client: a closed keep-alive read
                     try:
                         if conn is not None:
                             conn.close()
@@ -182,6 +214,56 @@ class FifoCell:
                         break
         with urllib.request.urlopen(url, timeout=10) as reply:
             return cv2.imdecode(np.frombuffer(reply.read(), np.uint8), cv2.IMREAD_COLOR)
+
+    def frame_receipt(self, camera: str, *, previous: dict | None = None,
+                      max_age_s: float = 2.0) -> dict:
+        """Read one source frame; reject stale or non-advancing evidence rather than reusing a cached image."""
+        import cv2
+
+        if max_age_s <= 0:
+            raise ValueError("max_age_s must be positive")
+        if previous is not None and previous.get("camera") != camera:
+            raise ValueError("previous frame belongs to another camera")
+        spec = self.cameras[camera]
+        url = spec["url"] if isinstance(spec, dict) else spec
+        headers = {"Cache-Control": "no-cache"}
+        if previous is not None and previous.get("etag"):
+            headers["If-None-Match"] = previous["etag"]
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=10) as reply:
+                if reply.status != 200:
+                    raise ValueError(f"camera frame HTTP {reply.status}; no fresh JPEG")
+                sequence_text = reply.headers.get("X-Frame-Seq")
+                stamp_text = reply.headers.get("X-Source-Stamp")
+                etag = reply.headers.get("ETag")
+                raw = reply.read()
+        except urllib.error.HTTPError as exc:
+            raise ValueError(f"camera frame HTTP {exc.code}; no fresh JPEG") from exc
+        captured_at = time.time()
+        try:
+            sequence = int(sequence_text)
+            source_stamp = float(stamp_text)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("camera frame lacks source sequence or stamp") from exc
+        if (sequence < 0 or not math.isfinite(source_stamp) or source_stamp <= 0
+                or source_stamp > captured_at + 0.5 or captured_at - source_stamp > max_age_s):
+            raise ValueError("camera frame source metadata is stale or invalid")
+        if previous is not None:
+            try:
+                advanced = sequence > int(previous["source_seq"]) and source_stamp > float(previous["source_stamp"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("previous frame lacks source metadata") from exc
+            if not advanced:
+                raise ValueError("camera frame source has not advanced")
+        if not raw.startswith(b"\xff\xd8"):
+            raise ValueError("camera frame is not a JPEG")
+        image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        if image is None:
+            raise ValueError("camera frame is not a decodable JPEG")
+        return {"image": image, "jpeg_bytes": raw, "jpeg_sha256": hashlib.sha256(raw).hexdigest(),
+                "source_seq": sequence, "source_stamp": source_stamp,
+                "camera": camera, "captured_at": captured_at, "etag": etag}
 
 
 def write_receipt(directory: Path, stage: str, payload: dict) -> Path:

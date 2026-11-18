@@ -85,6 +85,10 @@ def test_the_pan_limit_names_a_box_out_of_reach():
     config = {"plan": {"limits": {"joints_rad": {"joint1": [-2.6, 2.6]}}}}  # +-149 deg
     assert plan.past_pan_limit(config, (-0.187, -0.065)) == -160.8
     assert plan.past_pan_limit(config, (-0.15, -0.12)) is None and plan.past_pan_limit({"plan": {}}, (-0.187, -0.065)) is None
+    reach = {"plan": {"limits": {"park_reach_m": 0.18}}}  # 2026-11-14 arm_s: the park failed from 192 mm, folded from 186
+    assert plan.past_park_reach(reach, (0.054, 0.184)) == 192 and plan.past_park_reach(reach, (0.05, 0.17)) is None
+    assert plan.past_park_reach({"plan": {}}, (0.054, 0.184)) is None
+    assert dg.obstacle_type([{"why": "out of reach: 192 mm, past the park reach 180 mm"}]) == "out of reach"
 
 
 def test_the_stall_hook_keeps_the_session_and_only_with_a_person_at_the_switch(monkeypatch):
@@ -216,3 +220,78 @@ def test_a_site_camera_frame_is_kept_on_each_failure_row_and_never_chooses_the_a
     assert out["result"] == "placed" and len(seen) == 1
     assert out["rounds"][0]["evidence"] == {"frame": None, "why": "unreachable"} and "evidence" not in out["rounds"][1]
     assert [r["action"] for r in out["rounds"]] == [r["action"] for r in run(["stopped: misaligned", "placed"])[0]["rounds"]]
+
+
+def test_the_running_belt_is_not_a_moved_scene():
+    """2026-11-14 arm_s: the conveyor's 11364 px change read as a moved pile, and the carry asked a person for nothing."""
+    after = CLEAN.copy()
+    after[13:173, 511:640] = 200
+    assert rc.scene_moved(CLEAN, after) and rc.scene_moved(CLEAN, after, [[511, 13, 640, 173]]) == []
+    belt = {"sites": {"belt": {"auto_roi": [312, 105, 639, 172], "surface_px": [[300, 20], [639, 40], [639, 180], [290, 170]]}}}
+    assert rc.moving_rects(belt) == [[312, 105, 639, 172], [290, 20, 639, 180]] and rc.moving_rects({"sites": {}}) == []
+    belt["sites"]["belt"]["moving_px"] = [292, 28, 640, 210]
+    assert rc.moving_rects(belt) == [[292, 28, 640, 210]]
+
+
+def test_a_moved_camera_stops_the_carry_before_any_pick():
+    picked = []
+    out = rc.carry(lambda: CLEAN, lambda: picked.append(1), lambda c, a: True, expected_px=lambda a: [], emit=lambda *a: None,
+                   camera=lambda frame: {"max_px": 109.0})
+    assert not picked and out["result"] == "ask a person: camera_moved" and out["ask"] == dg.ASK["camera_moved"]
+
+
+def test_no_session_and_a_park_overload_are_named_and_never_retried():
+    assert dg.attempt_cause("refused") == "no_session" and dg.attempt_cause("refused: source 'x' has no site") == "other"
+    assert dg.attempt_cause("stopped: contact at park: contact in park: lag", pile_moved=True) == "park_contact"
+    assert dg.RECOVERY["no_session"] == dg.RECOVERY["park_contact"] == ["ask_person"]
+
+
+def test_a_tier_destination_resolves_before_the_carry(monkeypatch):
+    """2026-11-17: `--dest pallet-l1` crashed in parse_dest (ValueError) because main skipped the tier expansion."""
+    import cell_auto_setup
+
+    config = {"sites": {"temp_plate_b": {"surface_z": 0.005, "place": [0.02, -0.16], "yaw_deg": 0.0},
+                        "pallet": {"surface_z": 0.005, "place": [0.14, 0.03], "yaw_deg": 0.0}}}
+    monkeypatch.setattr(cell_auto_setup, "open_cell", lambda args, commissioning: (config, None, Path("cal.json"), Path(".")))
+    monkeypatch.setattr(rc.cell_objects, "load_catalog", lambda path: [])
+    monkeypatch.setattr(rc, "load_calibration", lambda path: {"sites": {}})
+    monkeypatch.setattr(rc.cell_pivot, "with_site_maps", lambda config, calibration: calibration)
+    seen = []
+
+    def parse_dest(config, source, dest):
+        seen.append(dest in config["sites"])
+        raise SystemExit("stop before the carry")
+
+    monkeypatch.setattr(rc.auto, "parse_dest", parse_dest)
+    with pytest.raises(SystemExit):
+        rc.main(["--config", "c.json", "--catalog", "k.json", "--roi", "0", "0", "1", "1", "--from", "temp_plate_b",
+                 "--dest", "pallet-l1", "--commissioning", "--person-at-switch"])
+    assert seen == [True]
+
+
+def test_the_camera_gate_and_the_carry_get_the_untiered_calibration(monkeypatch):
+    """2026-11-17: a tiered calibration (4 -> 16 sites) changed the map digest, so the binding check read
+    "top camera calibration changed" and every live carry stopped as camera_moved before it began."""
+    import cell_auto_setup
+    import cell_calibrate
+
+    config = {"sites": {"temp_plate_b": {"surface_z": 0.005, "place": [0.02, -0.16], "yaw_deg": 0.0},
+                        "pallet": {"surface_z": 0.005, "place": [0.14, 0.03], "yaw_deg": 0.0}},
+              "preflight": {"reference_top": "ref.jpg"}, "plan": {"home": [0] * 5}}
+    calibration = {"sites": {"pallet": {"homography": []}, "temp_plate_b": {"homography": []}}}
+    monkeypatch.setattr(cell_auto_setup, "open_cell", lambda args, commissioning: (config, None, Path("cal.json"), Path(".")))
+    monkeypatch.setattr(rc.cell_objects, "load_catalog", lambda path: [])
+    monkeypatch.setattr(rc, "load_calibration", lambda path: calibration)
+    monkeypatch.setattr(rc.cell_pivot, "with_site_maps", lambda config, cal: cal)
+    seen = {}
+
+    def check(cfg, cal, targets, frame, params):
+        seen["sites"] = sorted(cal["sites"])
+        raise SystemExit("stop at the camera gate")
+
+    monkeypatch.setattr(cell_calibrate, "check", check)
+    monkeypatch.setattr(rc, "carry", lambda frame, pick, push, camera=None, **kw: camera(None))
+    with pytest.raises(SystemExit):
+        rc.main(["--config", "c.json", "--catalog", "k.json", "--roi", "0", "0", "1", "1", "--from", "temp_plate_b",
+                 "--dest", "pallet-l1", "--commissioning", "--person-at-switch"])
+    assert seen["sites"] == ["pallet", "temp_plate_b"]

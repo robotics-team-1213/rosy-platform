@@ -31,7 +31,7 @@ REQUIRED_DEPLOYMENT_FILES = (
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
-    "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+    "compose.pairing.yaml", "compose.omx.yaml", "compose.omx-device-trial.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
     "compose.control-unit-remote.yaml",
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
@@ -160,6 +160,8 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         required.difference_update(PG_BACKUP_FILES)
     if "compose.omx.yaml" not in hashes:
         required.discard("compose.omx.yaml")
+    if "compose.omx-device-trial.yaml" not in hashes:
+        required.discard("compose.omx-device-trial.yaml")
     if "compose.workcell.yaml" not in hashes:
         required.discard("compose.workcell.yaml")
     if "compose.control-unit.yaml" not in hashes:

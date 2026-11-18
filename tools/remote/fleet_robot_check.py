@@ -1,6 +1,6 @@
 """Read-only Fleet R / robot release and enrollment check.
 
-    python tools/remote/fleet_robot_check.py [robot-id ...] --json-out C:/DevTemp/e2e-check/result.json
+    python tools/remote/fleet_robot_check.py [robot-id ...] --json-out $ROSY_SCRATCH/e2e-check/result.json
 
 Robot names and SSH targets come from private/lab-hosts.json. No credential or digest
 is returned from either remote probe. --active only requests the existing identify blink.

@@ -412,3 +412,40 @@ def test_after_the_merge_a_direct_code_push_to_origin_stops_the_sync_back(repo, 
     monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls))
     assert _run(local, "--merge-when-green", "7", "--apply") == 3
     assert "sync needs 동기화·게시 담당:" in capsys.readouterr().err
+
+
+def _auto_gh(local, sha, calls, prs):
+    inner = _merge_gh(local, sha, calls)
+
+    def gh(repo_path, *args):
+        if args[:2] == ("pr", "list"):
+            calls.append(args)
+            return json.dumps(prs)
+        return inner(repo_path, *args)
+    return gh
+
+
+def test_merge_when_green_auto_merges_the_single_open_publish_pr_with_the_same_checks(repo, monkeypatch):
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
+    calls = []
+    prs = [{"number": 7, "headRefName": "publish/main-20261026-12"}, {"number": 9, "headRefName": "feat/x"}]
+    monkeypatch.setattr(tool, "run_gh", _auto_gh(local, sha, calls, prs))
+    assert _run(local, "--merge-when-green", "auto", "--apply") == 0
+    assert [c for c in calls if c[:2] == ("pr", "merge")] == [("pr", "merge", "7", "--merge", "--match-head-commit", sha)]
+
+
+def test_merge_when_green_auto_refuses_without_the_green_full_record_and_with_several_prs(repo, monkeypatch):
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")  # no land record
+    calls = []
+    one = [{"number": 7, "headRefName": "publish/main-20261026-12"}]
+    monkeypatch.setattr(tool, "run_gh", _auto_gh(local, sha, calls, one))
+    assert _run(local, "--merge-when-green", "auto", "--apply") == 1
+    two = one + [{"number": 8, "headRefName": "publish/main-20261027-12"}]
+    monkeypatch.setattr(tool, "run_gh", _auto_gh(local, sha, calls, two))
+    assert _run(local, "--merge-when-green", "auto", "--apply") == 7
+    monkeypatch.setattr(tool, "run_gh", _auto_gh(local, sha, calls, []))
+    assert _run(local, "--merge-when-green", "auto", "--apply") == 0
+    assert not [c for c in calls if c[:2] == ("pr", "merge")]

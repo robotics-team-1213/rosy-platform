@@ -8,6 +8,7 @@ from fleet.pipeline import resolve_omx_cells
 from fleet.pipeline.station_zones import load_station_zones, save_station_zones_yaml
 
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health, _storage_dir
+from fleet.server.sitemap.pipeline_task_input import checked_finite_float
 
 
 def install_gates_routes(app, ctx) -> None:
@@ -18,6 +19,9 @@ def install_gates_routes(app, ctx) -> None:
     _is_human_detected = ctx._is_human_detected
     _evaluate_decision = ctx._evaluate_decision
     active_map = ctx.active_map
+    def _aborted(cell_id: str) -> bool:
+        state = app.state.omx_cell_states.get(cell_id) or {}
+        return state.get("phase") == "ABORTED" or state.get("prev_phase") == "ABORTED"
     CELL_TASK_PRESETS = ctx.CELL_TASK_PRESETS
     _enqueue_one_task = ctx._enqueue_one_task
     @app.get("/api/fleet/pipeline/human-safety-gate", dependencies=read_guard)
@@ -41,6 +45,8 @@ def install_gates_routes(app, ctx) -> None:
             detected = not _is_human_detected(None if target_cell == "all" else target_cell)
         else:
             detected = bool(body.get("human_detected", True))
+        if not detected:
+            raise HTTPException(409, detail={"code": "HUMAN_CLEAR_EVIDENCE_UNAVAILABLE"})
         affected_cells = ["cell_s", "cell_ab"] if target_cell == "all" else [target_cell]
         if target_cell == "all":
             app.state.human_detected = {"cell_s": detected, "cell_ab": detected, "all": detected}
@@ -57,13 +63,11 @@ def install_gates_routes(app, ctx) -> None:
             for cid in affected_cells:
                 st = stations[cid]
                 prev = dict(app.state.omx_cell_states.get(cid) or {})
-                prev_phase = prev.get("phase") if prev.get("phase") != "HUMAN_HOLD" else (prev.get("prev_phase") or "CLAIMED")
+                prev_phase = prev.get("phase") if prev.get("phase") != "HUMAN_HOLD" else (prev.get("prev_phase") or "IDLE")
                 docked = prev.get("docked_robot") or {
                     "robot_id": prev.get("robot_id") or "rosy_46",
                     "robot_kind": "pinky",
                     "pose": {"x": st.station_xy[0], "y": st.station_xy[1], "yaw": 0.0},
-                    "wheel_brake_locked": True,
-                    "bed_ready": True,
                     "v_cmd_mps": 0.0,
                 }
                 app.state.omx_cell_states[cid] = {
@@ -92,24 +96,25 @@ def install_gates_routes(app, ctx) -> None:
                 "duration_s": 0.0,
                 "decision": _evaluate_decision(target_cell if target_cell != "all" else "cell_s", "arm_target", {"human_detected": True}),
                 "spawned_cell_task_id": None,
-                "status": "COMPLETED",
+                "status": "QUEUED",
                 "created_at": round(time.time(), 3),
             }
             app.state.pinky_tasks[pid] = pinky_estop
         else:
             for t in app.state.omx_cell_tasks.values():
                 if t["cell_id"] in affected_cells and t["status"] == "PAUSED_HUMAN":
-                    t["status"] = "QUEUED"
+                    t["status"] = "ABORTED" if t.get("paused_from_status") == "RUNNING" else "QUEUED"
                     _enrich_task_health(t)
-                    resumed_tasks.append(t["task_id"])
+                    if t["status"] == "QUEUED":
+                        resumed_tasks.append(t["task_id"])
             for cid in affected_cells:
                 prev = dict(app.state.omx_cell_states.get(cid) or {})
-                has_queued = any(t["cell_id"] == cid and t["status"] == "QUEUED" for t in app.state.omx_cell_tasks.values())
-                restored_phase = "CLAIMED" if has_queued else (prev.get("prev_phase") if prev.get("prev_phase") in ("CLAIMED", "RELEASED") else "RELEASED")
+                held = prev.get("prev_phase") in ("ARM_IN_BED_ZONE", "ABORTED")
+                restored_phase = "ABORTED" if held else (prev.get("prev_phase") if prev.get("prev_phase") in ("CLAIMED", "RELEASED") else "IDLE")
                 app.state.omx_cell_states[cid] = {
                     **prev,
                     "phase": restored_phase,
-                    "amr_motion_inhibited": restored_phase in ("CLAIMED", "ARM_IN_BED_ZONE"),
+                    "amr_motion_inhibited": restored_phase in ("CLAIMED", "ARM_IN_BED_ZONE", "ABORTED"),
                     "reason": "HUMAN_CLEARED_AUTO_RESUME",
                 }
             _evaluate_decision(target_cell if target_cell != "all" else "cell_s", "arm_target", {"human_detected": False})
@@ -151,11 +156,12 @@ def install_gates_routes(app, ctx) -> None:
         zone = zones_info["zones_by_id"].get(zone_id)
         if zone is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_STATION_ZONE", "zone_id": zone_id})
-        if _is_human_detected(zone.get("cell_id")):
+        if _is_human_detected() or any(state.get("phase") == "HUMAN_HOLD"
+                                       for state in app.state.omx_cell_states.values()):
             raise HTTPException(409, detail={"code": "HUMAN_ESTOP_ACTIVE", "message": "사람 감지 비상정지 중에는 구역 배차를 실행할 수 없습니다"})
         cable_guard = bool(app.state.cable_tangled)
-        max_step_m = min(0.015 if cable_guard else 0.10, float(zone.get("max_step_m", 0.015)))
-        v_cmd = min(0.02 if cable_guard else 0.08, float(zone.get("speed_cap_mps", 0.02)))
+        max_step_m = min(0.015 if cable_guard else 0.10, checked_finite_float(zone.get("max_step_m", 0.015)))
+        v_cmd = min(0.02 if cable_guard else 0.08, checked_finite_float(zone.get("speed_cap_mps", 0.02)))
         spawned_cell_task = None
         if zone.get("kind") == "export" and zone.get("cell_id"):
             spawned_cell_task = _enqueue_one_task(
@@ -184,7 +190,7 @@ def install_gates_routes(app, ctx) -> None:
             "duration_s": 0.35,
             "decision": _evaluate_decision(robot_id, "line_follow", {"tangled": cable_guard}),
             "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
-            "status": "COMPLETED",
+            "status": "QUEUED",
             "created_at": round(time.time(), 3),
         }
         app.state.pinky_tasks[pid] = ptask
@@ -217,6 +223,8 @@ def install_gates_routes(app, ctx) -> None:
                 break
         intrusion_score = float(body.get("intrusion_score", 0.05))
         human_detected = bool(body["human_detected"]) if "human_detected" in body else (intrusion_score >= 0.35)
+        if not human_detected:
+            raise HTTPException(409, detail={"code": "VISION_CLEAR_EVIDENCE_UNAVAILABLE"})
         displaced_to = body.get("displaced_to")
         if displaced_to in ("belt_far", "floor_front", None, ""):
             if "displaced_to" in body:
@@ -233,13 +241,11 @@ def install_gates_routes(app, ctx) -> None:
                 app.state.human_detected[cid] = True
                 st = stations[cid]
                 prev = dict(app.state.omx_cell_states.get(cid) or {})
-                prev_phase = prev.get("phase") if prev.get("phase") != "HUMAN_HOLD" else (prev.get("prev_phase") or "CLAIMED")
+                prev_phase = prev.get("phase") if prev.get("phase") != "HUMAN_HOLD" else (prev.get("prev_phase") or "IDLE")
                 docked = prev.get("docked_robot") or {
                     "robot_id": prev.get("robot_id") or "rosy_46",
                     "robot_kind": "pinky",
                     "pose": {"x": st.station_xy[0], "y": st.station_xy[1], "yaw": 0.0},
-                    "wheel_brake_locked": True,
-                    "bed_ready": True,
                     "v_cmd_mps": 0.0,
                 }
                 app.state.omx_cell_states[cid] = {
@@ -263,17 +269,17 @@ def install_gates_routes(app, ctx) -> None:
             app.state.human_detected["all"] = False
             for t in app.state.omx_cell_tasks.values():
                 if t["cell_id"] in affected_cells and t["status"] == "PAUSED_HUMAN":
-                    t["status"] = "QUEUED"
+                    t["status"] = "ABORTED" if t.get("paused_from_status") == "RUNNING" else "QUEUED"
                     _enrich_task_health(t)
-                    resumed_tasks.append(t["task_id"])
+                    if t["status"] == "QUEUED":
+                        resumed_tasks.append(t["task_id"])
             for cid in affected_cells:
                 prev = dict(app.state.omx_cell_states.get(cid) or {})
-                has_queued = any(t["cell_id"] == cid and t["status"] == "QUEUED" for t in app.state.omx_cell_tasks.values())
-                restored_phase = "CLAIMED" if has_queued else "RELEASED"
+                restored_phase = "ABORTED" if prev.get("prev_phase") in ("ARM_IN_BED_ZONE", "ABORTED") else (prev.get("prev_phase") if prev.get("prev_phase") in ("CLAIMED", "RELEASED") else "IDLE")
                 app.state.omx_cell_states[cid] = {
                     **prev,
                     "phase": restored_phase,
-                    "amr_motion_inhibited": restored_phase in ("CLAIMED", "ARM_IN_BED_ZONE"),
+                    "amr_motion_inhibited": restored_phase in ("CLAIMED", "ARM_IN_BED_ZONE", "ABORTED"),
                     "reason": "VISION_HUMAN_CLEARED_AUTO_RESUME",
                 }
 
@@ -329,6 +335,10 @@ def install_gates_routes(app, ctx) -> None:
         dec = _evaluate_decision(subject_id, domain, body.get("facts") or body)
         spawned_cell_task = None
         pinky_task = None
+        held = _is_human_detected() or any(state.get("phase") == "HUMAN_HOLD"
+                                            for state in app.state.omx_cell_states.values())
+        if auto_execute and held and (dec.get("auto_preset") or dec.get("auto_pinky_action") not in (None, "stop_now")):
+            raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE"})
         if auto_execute:
             if dec["domain"] == "arm_target" and dec.get("auto_preset"):
                 preset_spec = CELL_TASK_PRESETS[dec["auto_preset"]]
@@ -346,10 +356,8 @@ def install_gates_routes(app, ctx) -> None:
                 elif act == "micro_reverse_2cm":
                     target_place, v_cmd, dur = "MICRO_REV_1.5CM", -max_speed_mps, 0.35
                 else:
-                    st = resolve_omx_cells(active[1], active[2])["cell_s"]
-                    docked = {"robot_id": rid, "robot_kind": "pinky", "pose": {"x": st.station_xy[0], "y": st.station_xy[1], "yaw": 0.0},
-                              "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
-                    app.state.omx_cell_states["cell_s"] = {"phase": "CLAIMED", "tier": 1, "robot_id": rid, "docked_robot": docked}
+                    if _aborted("cell_s"):
+                        raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
                     target_place, v_cmd, dur = "S3", max_speed_mps, round(max_step_m / max_speed_mps, 2)
                     spawned_cell_task = _enqueue_one_task(active, {**CELL_TASK_PRESETS["s3_shuttle"], "robot_id": rid})
                 pid = f"pinky-dec-{uuid.uuid4().hex[:6]}"
@@ -364,7 +372,7 @@ def install_gates_routes(app, ctx) -> None:
                     "duration_s": dur,
                     "decision": dec,
                     "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
-                    "status": "COMPLETED",
+                    "status": "QUEUED",
                     "created_at": round(time.time(), 3),
                 }
                 app.state.pinky_tasks[pid] = pinky_task

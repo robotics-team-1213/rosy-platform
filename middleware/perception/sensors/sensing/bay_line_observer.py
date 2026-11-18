@@ -23,10 +23,8 @@ import math
 
 import cv2
 import numpy as np
+from core_common.calibration_store import read_floor_paint_gate
 
-#: HSV bounds for magenta guide tape (OpenCV H 140-170, S >= 80, V >= 60).
-PINK_HSV_LOW = (140, 80, 60)
-PINK_HSV_HIGH = (170, 255, 255)
 HORIZON_MARGIN_PX = 3
 MIN_COMPONENT_AREA_PX = 40
 #: The mask must paint at least this many pixels before the line exists.
@@ -90,6 +88,7 @@ class BayLineObserver:
         self._w, self._h = int(width), int(height)
         self._line_total_m = float(line_total_m)
         self._far_field_m = float(far_field_m)
+        self._pink_gate = read_floor_paint_gate()
 
     def _payload(self, stamp: float, visible: bool, **fields) -> dict:
         body = {"source": "CAMERA_LINE", "visible": visible, "stamp": float(stamp),
@@ -101,7 +100,7 @@ class BayLineObserver:
         hrow = horizon_row(self._w, self._h, self._hfov, self._mount.pitch_rad,
                            self._mount.height_m)
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        raw = cv2.inRange(hsv, PINK_HSV_LOW, PINK_HSV_HIGH)
+        raw = cv2.inRange(hsv, *self._pink_gate)
         raw[:max(0, min(raw.shape[0], int(math.ceil(hrow)) + HORIZON_MARGIN_PX))] = 0
         count, labels, stats, _ = cv2.connectedComponentsWithStats(raw, connectivity=8)
         keep = np.zeros(count, bool)

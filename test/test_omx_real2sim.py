@@ -18,7 +18,7 @@ POSES = dict(a=(-.0378, -.1672, math.radians(1.)), b=(-.0334, .1474, math.radian
 COVERED = dict(a=2, b=1)  # a container sits in this lane, the others show their dark pad
 
 
-def frame(layout, hide=()):
+def frame(layout, hide=(), skew=None):
     img = np.full((480, 640, 3), (60, 200, 200), np.uint8)  # the yellow table (hue 30, clear of the orange mask's < 22)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
@@ -28,6 +28,7 @@ def frame(layout, hide=()):
                 continue
             (x, y), yaw = r2s.place(local, pose)
             on_top = k == COVERED[tag]
+            yaw += math.radians((skew or {}).get((tag, k), 0.))
             z = layout.deck_z + (box_h if on_top else 0.)
             corners = [cam.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
                                     y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), z))
@@ -55,6 +56,16 @@ def test_plates_are_found_with_their_covered_lane():
             assert abs(lane["yaw_deg"] - math.degrees(yaw)) < 1.5, (tag, k)
         assert lanes[COVERED[tag]]["source"] == "container"
     assert max(got["camera_check"]["worst_mm"]) < 3
+
+
+def test_a_container_turned_in_its_lane_is_unseated_and_a_straight_one_is_not():
+    layout = sites.Layout()
+    plates = r2s.measure_temp_plates(frame(layout), layout)
+    assert r2s.unseated_containers(frame(layout), layout, plates) == []
+    img = frame(layout, skew={("a", COVERED["a"]): 14.})  # 2026-11-14: arm_a's temp container sat about 14 deg across its lane
+    prev = dict(plates={t: p["lanes"] for t, p in plates["plates"].items()}, shape=plates["shape"])
+    got = r2s.unseated_containers(img, layout, r2s.measure_temp_plates(img, layout, prev))
+    assert [(u["plate"], u["lane"]) for u in got] == [("a", COVERED["a"])] and 12 < got[0]["turn_deg"] < 16
 
 
 def test_a_plate_seen_by_one_lane_comes_from_the_previous_shape():
@@ -211,7 +222,7 @@ def test_layout_takes_the_ship_from_a_snapshot(tmp_path):
     path = tmp_path / "snap.json"
     path.write_text(json.dumps(s), encoding="utf-8")
     base, moved = sites.Layout(), sites.Layout(cell_snapshot=str(path), ship_pose="snapshot")
-    a, b = base.sites["ship-stern-l0"]["xy"], moved.sites["ship-stern-l0"]["xy"]
+    a, b = base.sites["ship-h1r1-l0"]["xy"], moved.sites["ship-h1r1-l0"]["xy"]
     assert b[0] - a[0] == pytest.approx(.1705 - base.choices["ship_stern_x_m"], abs=1e-6)
     assert b[1] - a[1] == pytest.approx(-.011 - base.choices["ship_centre_y_m"], abs=1e-6)
     with pytest.raises(ValueError, match="no measured ship"):
@@ -235,6 +246,13 @@ def test_the_belt_end_and_centreline_come_from_its_strip():
     assert got["end_x_m"] == pytest.approx(end, abs=.003)
     assert got["centre_y_m"] == pytest.approx(y, abs=.003)
     assert got["width_m"] == pytest.approx(2 * half, abs=.006)
+    assert "end_occluded" not in got
+    # a container waiting at the stop hides the strip's end (2026-11-14 real frame: the end read 60 mm past the stop)
+    top = layout.belt_top + sites.CONTAINER[layout.choices["ship_source"]][2]
+    box = [cam.project((x, yy, top)) for x, yy in ((end, y - .045), (end + .03, y - .045), (end + .03, y + .045), (end, y + .045))]
+    cv2.fillPoly(img, [np.round(box).astype(np.int32)], (20, 110, 240))
+    hidden = r2s.measure_belt(img, layout)
+    assert hidden["end_occluded"] and hidden["end_x_m"] > end + .015 and hidden["end_at_most_x_m"] == pytest.approx(end, abs=.006)
 
 
 def test_layout_takes_the_belt_from_a_snapshot(tmp_path):
@@ -298,7 +316,11 @@ def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():
     for k in ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3", "ship-h1r1-l0", "belt"):
         assert math.dist(from_snap.sites[k]["xy"], from_named.sites[k]["xy"]) < 1e-6, k
     assert tuple(from_named.arms["arm_b"].base[:2]) == pytest.approx((.107, .164))
-    assert tuple(sites.Layout().arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
+    default = sites.Layout()
+    assert tuple(default.arms["arm_a"].base[:2]) == pytest.approx((.091, -.16825))
+    assert tuple(default.arms["arm_b"].base[:2]) == pytest.approx((.091, .16825))
+    assert default.arms["arm_b"].base[1] - default.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)
+    assert tuple(sites.Layout(arm_bases="surveyed").arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
     assert not any(s.get("blocked") for s in from_named.sites.values())  # tmp-b-1 clears the measured ship by 15.9 mm
     assert sites.WRIST_PHOTO_A["lens_m"][0] > sites.WRIST_PHOTO["lens_m"][0] and sites.WRIST_PHOTO_A["axis_hit_x_m"] > sites.WRIST_PHOTO["axis_hit_x_m"]
     img = np.full((200, 320, 3), (200, 175, 130), np.uint8)  # sky-blue v11 plate background
@@ -316,15 +338,15 @@ def test_online_camera_anchor_calibration_and_servo_compensator_correct_drift():
     moved_dict = r2s_comp.perturbed_camera_dict(base_cam, **r2s_comp.DEFAULT_CAM_JITTER)
     cam_moved = r2s.Camera(moved_dict, (480, 640))
 
-    # Render synthetic top frame from the perturbed camera with 6 dark lane pads, belt strip, and a skewed belt container
+    # Render synthetic top frame (pads 90 mm long as printed, the anchor length) from the perturbed camera with 6 dark lane pads, belt strip, and a skewed belt container
     img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
     pad_z = layout.deck_z + .0006
     for tag in ("a", "b"):
         for k in (1, 2, 3):
             s = layout.sites[f"tmp-{tag}-{k}"]
             x, y, yaw = s["xy"][0], s["xy"][1], s["yaw"]
-            corners = [cam_moved.project((x + a * .048 * math.cos(yaw) - b * .015 * math.sin(yaw),
-                                          y + a * .048 * math.sin(yaw) + b * .015 * math.cos(yaw), pad_z))
+            corners = [cam_moved.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                          y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), pad_z))
                        for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
             cv2.fillPoly(img, [np.round(corners).astype(np.int32)], (25, 25, 25))
     bx, by = layout.belt_stop_x + .005, layout.belt_y
@@ -478,11 +500,16 @@ def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
         "berth_v16_cradle",
         "berth_v16_bridges",
         "berth_v16_stopper",
+        "berth_v24_cradle",
+        "berth_v24_docks",
+        "berth_v24_stopper",
         "omx_base_plate_a",
         "omx_base_plate_b",
         "temp_slot_bridge_a",
         "temp_slot_bridge_b",
         "temp_slot_plate_v11",
+        "temp_slot_plate_v12_navy",
+        "temp_slot_plate_v12_sky",
         "container_1x3_v3",
     ):
         assert name in source["meshes"] and (sites.SHIP_ASSETS / f"{name}.stl").is_file()
@@ -514,8 +541,98 @@ def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
     assert bundle["stages"][1]["isaac_handoff"]["schema"] == "rosy.omx-isaac-handoff.v1"
 
 
+def test_temp_plate_renders_two_color_v12_cad_oriented_into_bridge():
+    try:
+        import mujoco
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    w = tw.World()
+    m = w.model
+    assert w.layout.choices["temp_lanes"] == "fan" and w.layout.choices["temp_radius_m"] == pytest.approx(0.200)
+    world_q = np.zeros(4)
+    for tag in ("a", "b"):
+        navy_id = m.geom(f"plate_v12_navy_{tag}").id
+        sky_id = m.geom(f"plate_v12_sky_{tag}").id
+        deck_id = m.geom(f"deck_{tag}").id
+        wall_id = m.geom(f"w{tag}1s0").id
+        for gid in (navy_id, sky_id):
+            mq = m.mesh_quat[m.geom_dataid[gid]]
+            mujoco.mju_mulQuat(world_q, m.geom_quat[gid], np.array([mq[0], -mq[1], -mq[2], -mq[3]]))
+            assert np.allclose(world_q, [1.0, 0.0, 0.0, 0.0], atol=1e-4)
+        assert m.geom_rgba[navy_id, 3] == pytest.approx(1.0) and m.geom_rgba[sky_id, 3] == pytest.approx(1.0)
+        assert not np.allclose(m.geom_rgba[navy_id, :3], m.geom_rgba[sky_id, :3])
+        assert m.geom_rgba[deck_id, 3] == pytest.approx(0.0) and m.geom_rgba[wall_id, 3] == pytest.approx(0.0)
 
 
+def test_v24_berth_docks_and_symmetric_194mm_layout_render_without_quay():
+    lay = sites.Layout()
+    assert lay.choices["ship_centre_y_m"] == pytest.approx(0.0)
+    assert lay.choices["berth_kit"] == "v24-docks"
+    fix = lay.ship_fixation()
+    assert fix["arm_a_gap_dy_mm"] == pytest.approx(32.0) and fix["arm_b_gap_dy_mm"] == pytest.approx(32.0)
+    try:
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    m_v24 = tw.World(lay).model
+    names_v24 = {m_v24.geom(i).name for i in range(m_v24.ngeom)}
+    assert {"ship_berth_v24_cradle", "ship_berth_v24_docks", "ship_berth_v24_stopper"} <= names_v24
+    assert "ship_quay" not in names_v24
+    m_v18 = tw.World(sites.Layout(berth_kit="v18-modular-adjustable")).model
+    names_v18 = {m_v18.geom(i).name for i in range(m_v18.ngeom)}
+    assert {"ship_berth_v16_cradle", "ship_berth_v16_bridges", "ship_berth_v16_stopper"} <= names_v18
+    assert "ship_quay" not in names_v18
 
 
+def test_temp_plate_v12_lanes_seat_containers_without_interlane_wall_overlap():
+    try:
+        import mujoco
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
 
+    w = tw.World()
+    data = w.reset()
+    lanes = ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3")
+    cids = [cid for cid, _ in w.layout.containers()[:len(lanes)]]
+    for cid, site in zip(cids, lanes):
+        w.put(data, cid, site)
+    for _ in range(int(0.5 / w.model.opt.timestep)):
+        mujoco.mj_step(w.model, data)
+    for cid, site in zip(cids, lanes):
+        pos, _, tilt = w.pose(data, cid)
+        s = w.layout.sites[site]
+        assert np.linalg.norm(pos[:2] - s["xy"]) * 1000 < 0.5, site
+        assert abs(pos[2] - s["z"]) * 1000 < 0.3, site
+        assert tilt < 0.5, site
+
+
+def test_pace_seconds_track_budget_slows_low_kp_joints():
+    """A contact descent is paced by the servo's ramp lag: half the kp needs about twice the time; without a budget nothing changes."""
+    import omx_real2sim_comp as r2s_comp
+
+    def world(kp):
+        class M:
+            actuator_forcerange = np.tile([[0.0, 3.0]], (5, 1))
+            dof_damping = np.full(5, 0.25)
+            dof_frictionloss = np.full(5, 0.03)
+            actuator_gainprm = np.tile([[kp, 0.0, 0.0]], (5, 1))
+            actuator_biasprm = np.tile([[0.0, -kp, -6.3]], (5, 1))
+
+        class W:
+            model = M()
+            q = {"arm_b": np.arange(0, 6)}
+            arm_dof = act = {"arm_b": np.arange(0, 5)}
+
+        return W()
+
+    q0, q1 = np.zeros(5), np.array([0.0, 0.05, 0.08, -0.10, 0.0])
+    fast, slow = (r2s_comp.ServoCompensator(world(kp)) for kp in (40.0, 20.0))
+    assert fast.pace_seconds("arm_b", q0, q1, 1.5) == slow.pace_seconds("arm_b", q0, q1, 1.5) == 1.5
+    budget = math.radians(1.5)
+    t40, t20 = (c.pace_seconds("arm_b", q0, q1, 1.5, track_rad=budget) for c in (fast, slow))
+    assert t20 == pytest.approx(1.5 * 0.10 * (6.3 + 0.25) / 20.0 / budget)
+    assert t20 > t40 >= 1.5

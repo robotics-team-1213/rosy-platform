@@ -2,6 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
+const COMMON_SESSION_URL = new URL('../../../../shared/web/account-session.js', import.meta.url).href;
+
+async function loadLearningSession(tag) {
+  const raw = await readFile(new URL('../../../../learning/curation/perception/review_app_web/account-session.js', import.meta.url), 'utf8');
+  const source = raw
+    .replace(
+      "import {renderAccountApps, renderAccountProfile} from '/common/account-profile.js';",
+      'const renderAccountApps = () => {}; const renderAccountProfile = session => globalThis.renderedProfile = session;'
+    )
+    .replace(
+      "import {announceIdentity, watchIdentity} from '/common/account-session.js';",
+      `import {announceIdentity, watchIdentity} from '${COMMON_SESSION_URL}';`
+    );
+  return import('data:text/javascript;base64,' + Buffer.from(`${source}\n// ${tag}`).toString('base64'));
+}
+
 test('learning session rejects delayed old-account data and hides old drafts', async () => {
   let account = 'account-a', release, reloaded = false;
   const listeners = {};
@@ -17,8 +33,7 @@ test('learning session rejects delayed old-account data and hides old drafts', a
     return new Promise(resolve=>{release=()=>resolve(Response.json({private:'old-account'}));});
   };
   try {
-    const source = (await readFile(new URL('../../../../learning/curation/perception/review_app_web/account-session.js',import.meta.url),'utf8')).replace("import {renderAccountProfile} from '/common/account-profile.js';", 'const renderAccountProfile = session => globalThis.renderedProfile = session;');
-    const {accountFetch} = await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+    const {accountFetch} = await loadLearningSession('delay');
     const pending = accountFetch('/api/workspace');
     await new Promise(resolve=>setImmediate(resolve));
     account = 'account-b'; release();
@@ -42,8 +57,7 @@ test('initial authority outage can retry without discarding drafts', async () =>
     return Response.json({ok:true});
   };
   try {
-    const source = (await readFile(new URL('../../../../learning/curation/perception/review_app_web/account-session.js',import.meta.url),'utf8')).replace("import {renderAccountProfile} from '/common/account-profile.js';", 'const renderAccountProfile = session => globalThis.renderedProfile = session;');
-    const {accountFetch} = await import('data:text/javascript;base64,'+Buffer.from(source+'\n// retry scenario').toString('base64'));
+    const {accountFetch} = await loadLearningSession('retry');
     await assert.rejects(accountFetch('/api/workspace'),/계정 연결/);
     offline = false;
     assert.deepEqual(await (await accountFetch('/api/workspace')).json(), {ok:true});
@@ -68,8 +82,7 @@ test('profile follows the existing session poll and clears on outage and logout'
     return Response.json({ok:true});
   };
   try {
-    const source = (await readFile(new URL('../../../../learning/curation/perception/review_app_web/account-session.js',import.meta.url),'utf8')).replace("import {renderAccountProfile} from '/common/account-profile.js';", 'const renderAccountProfile = session => globalThis.renderedProfile = session;');
-    const {accountFetch} = await import('data:text/javascript;base64,'+Buffer.from(source+'\n// profile scenario').toString('base64'));
+    const {accountFetch} = await loadLearningSession('profile');
     await accountFetch('/api/workspace');
     assert.equal(renderedProfile.authenticated,true);
     assert.equal(renderedProfile.profile.display_name,'First');

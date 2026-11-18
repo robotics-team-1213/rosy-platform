@@ -31,8 +31,6 @@ POLL = 15.0
 # 2026-11-04 05:42: five FULL pretests shared the two lab PCs at once, so none finished for 45 min and main stood
 # still with nothing ready. FULL pretests beyond this many wait (oldest first), so one finishes and takes the turn.
 MAX_FULL = 2
-GATHER_S = 90.0  # gather(): a new ticket waits this long as pending for a rollup to take it
-ROLL_POLLS = 40  # D-889 34: a FULL waiter starts a rollup again every 40 polls (10 min) while it waits
 # D-889 28: speculation (addendum 3) ran 9.8 h of test-PC time in 6 h on 11-03 and its tree was held at 3 of 34
 # turns, while the ticket stayed "preparing" behind it. It runs only when this is "1".
 SPECULATE_ENV = "ROSY_LAND_SPECULATE"
@@ -73,7 +71,7 @@ def relaunch(land, qdir: Path, ticket: Path, run=None) -> int | None:
     return run(argv, env)
 
 
-def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None, roll=None) -> None:
+def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) -> None:
     """Wait for a preparation slot, reserving capacity for older pending tickets, and while ``held()`` (a batch
     carries this branch, ``land_batch.carried``: its pretest covers this one). A carried pending ticket reserves
     no capacity: it never prepares on its own. An urgent ticket (D-889 addendum 5) reserves nothing for older
@@ -93,71 +91,53 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None, ro
         if changed and (code := changed()) is not None:
             raise SystemExit(code)  # main's land.py ran this landing to its end on this ticket
         sleep(POLL)
-    gather(ticket, sleep, roll)
     land_queue.set_status(ticket, "preparing")
 
 
-def gather(ticket: Path, sleep=time.sleep, roll=None, clock=time.monotonic) -> None:
-    """Stay ``pending`` for GATHER_S, then start a rollup: landings queued close together (20 MAIN-RED stops resumed
-    at once) go as one candidate with one pretest. 11-10..11-14 the rollup found "fewer than two pending" 243 times
-    in a row: with 6 slots a ticket was pending for one poll, and only the turn holder rolled, every 10 min, while
-    each landing ran its own ~46 min pretest. A rollup that takes this ticket stops this lander (``land_rollup``)."""
-    try:
-        row = json.loads(ticket.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return
-    # only land_async snapshots (land_rollup.candidates' rule): a land.py run from a worktree is never rolled
-    if (roll is None or row.get("urgent") or row.get("alone") or land_async_rollup(row.get("branch") or "")
-            or "rosy-land-wt" not in Path(row.get("worktree") or "").parts):
-        return
-    end = clock() + GATHER_S
-    while clock() < end:
-        land_queue.touch(ticket)
-        sleep(min(POLL, max(end - clock(), 0)))
-    try:
-        roll()
-    except Exception:  # noqa: BLE001  a rollup that cannot start never costs the landing
-        pass
-
-
-def land_async_rollup(branch: str) -> bool:
-    return branch.startswith("land/fix/land-rollup-")  # a rollup itself never waits to be rolled again
-
-
-def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None, roll=None) -> None:
+def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None) -> None:
     """Mark this preparing ticket FULL and wait while MAX_FULL older FULL pretests run; an urgent one never waits.
     A waiter runs no test, so ``full_wait`` frees its preparation slot (2026-11-07: two waiters held 2 of 6 slots
     while a one-file landing stood pending); MAX_FULL and each host's admission still hold the load.
-    On starting to wait it calls ``roll`` (D-889 addendum 34): the rollup takes this waiter with every other waiter
-    and any rollup whose FULL has not started, so one combined FULL candidate waits (11-09 22:40: five did, with no
-    turn holder to run the scheduled rollup)."""
+    It starts no rollup: ``land_tick`` is the only trigger (D-889 addendum 36)."""
     land_queue.set_status(ticket, "preparing", tier="full")
     if json.loads(ticket.read_text(encoding="utf-8")).get("urgent"):
         return
     said = False
     def older() -> int:
         return sum(r.get("status") == "preparing" and r.get("tier") == "full" for r in land_queue.ahead(qdir, ticket))
-    polls = 0
     while older() >= MAX_FULL:
-        if roll and said and (polls := polls + 1) % ROLL_POLLS == 0:
-            try:  # a waiter that came while another apply held its lock was left out of that one
-                roll()
-            except Exception:  # noqa: BLE001
-                pass
         if not said:
             print(f"[land] FULL pretest waits for {MAX_FULL} older FULL pretest(s) to finish", flush=True)
             said = True
             land_queue.set_status(ticket, "preparing", full_wait=True)
-            try:
-                roll and roll()
-            except Exception:  # noqa: BLE001  a rollup that cannot start never costs the landing
-                pass
         land_queue.touch(ticket)
         if changed and (code := changed()) is not None:
             raise SystemExit(code)
         sleep(POLL)
     if said:
         land_queue.set_status(ticket, "preparing", full_wait=False)
+
+
+def train(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path):
+    """1-step Merge-Train: speculate once for position-1's turn holder right before our turn."""
+    seen: list[str | None] = [None]
+
+    def on_ahead(leader: dict) -> None:
+        if getattr(args, "tests", None) != "auto" or os.environ.get(SPECULATE_ENV) == "0":
+            return
+        if not land.land_full.restore(wt, branch):
+            return
+        tip = land.git(wt, "rev-parse", "-q", "--verify", f"refs/heads/{leader.get('branch') or ''}",
+                       check=False).stdout.strip()
+        key = f"{leader.get('branch') or ''}:{tip or leader.get('tested', '')}"
+        if not key or seen[0] == key:
+            return
+        seen[0] = key
+        try:
+            land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)
+        except Exception as exc:  # noqa: BLE001 - merge-train is advisory; the real turn still decides
+            print(f"[train] 1-step speculation skipped ({exc})", flush=True)
+    return on_ahead
 
 
 def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, invocations, note) -> str | None:
@@ -167,7 +147,8 @@ def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     land_queue.release(ticket, note)
     prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
     land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=watch(land, wt),
-                    tested=land.land_full.restore(wt, branch), changed=lambda: relaunch(land, qdir, ticket))
+                    tested=land.land_full.restore(wt, branch), changed=lambda: relaunch(land, qdir, ticket),
+                    on_ahead=train(land, wt, branch, args, python, qdir, ticket))
     return land.land_full.restore(wt, branch)
 
 
@@ -220,6 +201,17 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
         args._main_red_retry = True
         print(f"[land] {stop}\n[land] main moved since that base: preparing once more on the new main", flush=True)
         _prepare(land, wt, branch, args, python, qdir, None, None, None)
+    if ticket is not None and ticket.is_file() and not land.land_batch.in_main(land, wt, branch):
+        main_now = land.out(wt, "rev-parse", "main")
+        if land.git(wt, "merge-base", "--is-ancestor", main_now, "HEAD", check=False).returncode != 0:
+            if why := watch(land, wt)():
+                raise land.Stop(why)
+        try:
+            me = json.loads(ticket.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            me = {}
+        if int(me.get("pid") or 0) == os.getpid() and (code := relaunch(land, qdir, ticket)) is not None:
+            raise SystemExit(code)
 
 
 def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None,
@@ -227,7 +219,7 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     if ticket is not None:
         landed = lambda: land.land_batch.in_main(land, wt, branch)  # noqa: E731
         slot(qdir, ticket, held=lambda: not landed() and land.land_batch.carried(qdir, branch),
-             changed=lambda: relaunch(land, qdir, ticket), roll=lambda: land.land_watchdog.rollup(qdir.parent))
+             changed=lambda: relaunch(land, qdir, ticket))
         if landed():
             return  # a batch landed this branch while it waited for a slot: the turn's wait ends it as landed
     main_sha = land.out(wt, "rev-parse", "main")
@@ -249,20 +241,16 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     print(f"[land] {'FULL' if full else 'delta' if delta else 'affected'} tier before the turn, ticket preparing"
           f" (main {main_sha[:10]})", flush=True)
     if ticket is not None:
-        if full:
-            full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket),
-                      roll=lambda: land.land_watchdog.rollup(qdir.parent))
-        else:
-            land_queue.set_status(ticket, "preparing", tier="")
+        land_queue.set_status(ticket, "preparing", tier="")
     # Cache log hashes outlive this preparation; later preparations must keep its raw bytes intact.
     logdir = Path(tempfile.mkdtemp(prefix=f"prepare-{candidate[:10]}-", dir=land.tmp_dir(branch)))
     began = time.monotonic()
     guard_args = land.argparse.Namespace(**{**vars(args), "no_cache": True}) if explicit else args
-    # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on
-    # 2026-10-27 it took 150-870 s and every pretest waited for it while holding one of MAX_PREPARING slots.
+    guarded: list[str] = []
+    # The guard round (with land_isolation's alone runs) runs beside the selection (affected tier) or beside the
+    # FULL slot wait (FULL tier): on 2026-10-27 it took 150-870 s and every pretest waited for it.
     # Each is its own remote_pytest.run (own queue, threads, run dir); a Stop from either stops the landing.
     raised: list[BaseException] = []
-    guarded: list[str] = []
 
     def guards() -> None:
         nonlocal guarded
@@ -273,10 +261,25 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
             raised.append(error)
     side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
     side.start()
-    tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
-    side.join()
-    if raised:
-        raise raised[0]
+    if full and ticket is not None:
+        def waiting() -> int | None:
+            if raised:
+                raise raised[0]  # a guard Stop ends the slot wait; no FULL test has started
+            return relaunch(land, qdir, ticket)
+        full_slot(qdir, ticket, changed=waiting)
+        side.join()  # the FULL tier starts only with the slot and green guards
+        if raised:
+            raise raised[0]
+        if land.out(wt, "rev-parse", "HEAD") != candidate:
+            raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
+        land.land_selection.require_eligible(land, args, land.land_selection.eligible(land, guarded, args), guarded)
+        began = time.monotonic()  # the slot wait is not preparation time
+        tested = land.run_tests(wt, args, invocations, logdir, "pre")
+    else:
+        tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+        side.join()
+        if raised:
+            raise raised[0]
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     clean = land.land_selection.eligible(land, guarded + tested, args)
@@ -319,16 +322,30 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
                  and all(isinstance(inv, list) and inv
                          and all(isinstance(word, str) and word for word in inv)
                          for inv in anchor["invocations"]))
+    overtime_delta = (not delta and not full and getattr(args, "_overtime", 0)
+                      and anchor and anchor["tier"] in ("affected", "delta") and anchor.get("invocations"))
     if keep_full:
         # A delta cannot replace a FULL origin; retain its exact base and invocations.
         print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
+    elif overtime_delta:
+        try:
+            combined = land.land_record.plan(invocations, anchor,
+                                              available=(wt / land.land_record.TARGET).is_file())
+        except ValueError as exc:
+            raise land.Stop(f"invalid delta preparation plan: {exc}") from exc
+        land.land_full.save(wt, branch, candidate, main_sha, "delta", combined,
+                            base_tier=anchor["tier"],
+                            flaky=land.land_full.flaky(wt, branch) + (flaky or []),
+                            yields=int(anchor.get("yields") or 0) + 1,
+                            reused=reused or bool(anchor.get("reused")))
     elif not delta:
         land.land_full.save(wt, branch, candidate, main_sha, tier, invocations, flaky=flaky, reused=reused,
                             env=env if explicit else None)
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
     if ticket is not None:
-        land_queue.set_status(ticket, "preparing", tested=land.land_full.restore(wt, branch) or "")
+        land_queue.set_status(ticket, "preparing", tested=land.land_full.restore(wt, branch) or "",
+                              **({"tier": "full_done"} if full else {}))
     land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
     if os.environ.get(SPECULATE_ENV) == "1":
         land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)

@@ -388,7 +388,7 @@ class DrivableSteer:
                 if remembered is not None and side_clear_m.get(remembered) is not None and side_clear_m[remembered] < SIDE_WALL_M:
                     self._memory = self._side = self._pivot = self._pivot_yaw = self._route_exit = None
         ahead, side, near = info["ahead_m"], info["exit"], info.get("exit_near", {info["exit"]: info["exit"] is not None})
-        bridge, want = False, None
+        bridge, want, straight_route = False, None, False
         if guide_deg is not None:
             # Route prior (Fleet guidance, D-511 rev 2: the lane direction ahead minus the heading):
             # the map knows which way the road goes where the camera sees two openings or none.
@@ -413,11 +413,14 @@ class DrivableSteer:
                 return error, self._pivot_confidence, dict(info, strategy="drivable_reorient_" + ("left" if here > 0 else "right"))
             want = None if abs(guide_deg) < EXIT_BEND_DEG or info.get("reorient_deferred") else (
                 "left" if guide_deg > 0 else "right")
+            straight_route = want is None and not info.get("reorient_deferred")
             if want is None:
                 # the map lane goes on: no exit turn or pivot; a way cut short (blue tape, cable)
                 # is bridged along the lane below (user 2026-10-10: the map is the route reference)
                 side = info["exit"] = None
                 self._pivot = self._side = None
+                if straight_route:
+                    self._memory = None
             elif want in info["exit_reach_m"] and near.get(want) and (not side_clear_m or want in open_sides):
                 side = info["exit"] = want
             elif side is not None and side != want:
@@ -450,7 +453,7 @@ class DrivableSteer:
                        and (wall_ahead_m is None or wall_ahead_m > target[0]))   # a LiDAR wall short of it closes
         info["straight_on"] = straight_on
         if (side is None and ahead < PIVOT_AHEAD_M and self._memory is not None and not straight_on
-                and (want is None or want == self._memory[0])):
+                and not straight_route and (want is None or want == self._memory[0])):
             side = info["exit"] = self._memory[0]
             info["exit_from_memory"] = True
         if side is None and ahead < PIVOT_AHEAD_M and info["target_m"] is not None:
@@ -462,7 +465,7 @@ class DrivableSteer:
             beyond = info.get("exit_behind_line") or current_pose is not None and _crosses(
                 seen, *_to_current(info["target_m"], source_pose, current_pose)) is not None
             if (abs(bearing) >= TARGET_SIDE_DEG and (not beyond or ahead < PIVOT_AT_BODY_M)
-                    and (want is None or want == target_side)):
+                    and not straight_route and (want is None or want == target_side)):
                 side = info["exit"] = target_side
                 info["exit_point_m"] = dict(info["exit_point_m"], **{side: tuple(info["target_m"])})
                 info["exit_from_target"] = True

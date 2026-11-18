@@ -150,6 +150,7 @@ class TrackWorker:
         self._sighting_log = _FailureLog("marker sighting not accepted", camera.source_id, clock)
         #: D-587: the approved record's Calibration when the last _detect used it (single flight).
         self._approved: Calibration | None = None
+        self._latest_calibration: Calibration | None = None
         # D-472: LED samples of the last RING_S for every identify colour, kept before any
         # challenge arrives. Fleet's challenge reaches this worker on the CONFIG_REFRESH_S
         # config read, up to 2 s after the window opened; sampling only from then left the
@@ -253,6 +254,8 @@ class TrackWorker:
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
                 lens, relearn, event, suspend, hold))
+        if step is not None and step[0] is not None:
+            self._latest_calibration = step[0]
         # D-589 x D-596: no tune step or retune is judged while an LED identify window is open
         # (an exposure change would hide the blink); the request is still kept fresh.
         self._identifying = hold is not None and frame.captured_at <= hold
@@ -358,7 +361,7 @@ class TrackWorker:
                                       not_after=challenge["not_after"], now=now, config=self.led_config)
         body = {"source_id": self.camera.source_id, "map_id": self.camera.map_id,
                 "request_id": request_id, "processor_revision": led_identity.PROCESSOR_REVISION,
-                **verdict}
+                **verdict, "yaw": _map_yaw(verdict, self._latest_calibration)}
         try:
             await self.client.publish_identity(body)
         except TrackPublishError as exc:
@@ -475,6 +478,29 @@ class TrackWorker:
             anonymous = list(result.detections) if result.status == "OK" else []
             result = DetectorResult(tuple((measured + anonymous)[:MAX_DETECTIONS]), "OK")
         return calibration, result
+
+
+def _map_yaw(verdict: Mapping, calibration: Calibration | None) -> float | None:
+    """Transform pixel-frame yaw_px at the matched blob into map-frame yaw (radians)."""
+    if verdict.get("state") != "matched" or calibration is None:
+        return None
+    yaw_px = (verdict.get("evidence") or {}).get("yaw_px")
+    x, y = verdict.get("x"), verdict.get("y")
+    if yaw_px is None or x is None or y is None:
+        return None
+    try:
+        matrix = geometry.as_matrix(calibration.image_to_map)
+        px, py = geometry.apply(np.linalg.inv(matrix), [(x, y)])[0]
+        if not (math.isfinite(px) and math.isfinite(py)):
+            return None
+        (mx0, my0), (mx1, my1) = geometry.apply(
+            matrix, [(px, py), (px + math.cos(yaw_px), py + math.sin(yaw_px))])
+    except (ValueError, np.linalg.LinAlgError):
+        return None
+    dx, dy = mx1 - mx0, my1 - my0
+    if not (math.isfinite(dx) and math.isfinite(dy)) or (dx == 0.0 and dy == 0.0):
+        return None
+    return float(math.atan2(dy, dx))
 
 
 def _challenges(config: Mapping, led: led_identity.LedConfig) -> list[dict]:

@@ -149,7 +149,7 @@ flowchart TD
    뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는
    장치, ARM64 이미지, 현장 수용을 대신하지 않는다. 시험 티어와 CI는 [개발자 가이드](developer-guide.md)의 「테스트와 CI」다.
 6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 기본 방법은 워크트리에서
-   `python tools/land_async.py --tests auto`다(2026-10-28부터, D-889 추가 5). 커밋된 HEAD를
+   `python tools/land_async.py --tests auto`다(2026-10-28부터, D-889 추가 5; 워크트리 슬롯이 없는 브랜치는 `main` 등에서 `python tools/land_async.py --branch <브랜치> --tests auto`로 숨은 검사와 대기열 등록을 바로 실행한다). 커밋된 HEAD를
    `land/<브랜치>-<UTC 시각>` 브랜치로 떼어 `<git-common-dir>/rosy-land-wt/`의 숨은 워크트리(슬롯이 아니다)에서
    `land.py`를 돌린다. 명령은 바로 돌아오고 워크트리는 그때부터 비어 있다. 이어 쓰면 그 뒤 커밋은 다음 착지에
    들어가고, 미커밋 변경이 있으면 거절한다. 기록은 `<git-common-dir>/rosy-land-wt/<이름>.log`이다. 착지하면

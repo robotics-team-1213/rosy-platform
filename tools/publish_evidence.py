@@ -171,16 +171,32 @@ def reason(publish, repo, sha, record):
     return None
 
 
+def nightly_sha(publish, repo):
+    """The newest main sha whose nightly FULL was green (tools/land_nightly.py keeps it in the shared git dir)."""
+    holder = Path(publish.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
+    try:
+        sha = (holder / "rosy-nightly-green").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return sha if land_cache.OID.fullmatch(sha) else None
+
+
 def ancestor_rows(publish, repo, commit, entries, recent=20):
     """Exact rows (their own tree) of the land_cache.NARROW_COMMITS strict ancestors of commit, among the ``recent``
-    newest commits with rows, that hold the most rows: an earlier FULL candidate of the same branch."""
+    newest commits with rows, that hold the most rows: an earlier FULL candidate of the same branch. The newest green
+    nightly sha always competes, so a night older than ``recent`` later rows still vouches for its unchanged suites."""
+    nightly = nightly_sha(publish, repo)
     seen = list(dict.fromkeys(row["commit"] for row in reversed(entries) if row["commit"] != commit))[:recent]
+    if nightly and nightly != commit and nightly not in seen and any(row["commit"] == nightly for row in entries):
+        seen.append(nightly)
     kept = {}
     for a in seen:
         if publish.ancestor(repo, a, commit):
             tree = publish.git(repo, "rev-parse", f"{a}^{{tree}}").stdout.strip()
             kept[a] = [row for row in entries if row["commit"] == a and row["tree"] == tree]
     best = sorted(kept, key=lambda a: -len(kept[a]))[:land_cache.NARROW_COMMITS]
+    if nightly in kept and nightly not in best:
+        best = best[:-1] + [nightly]
     return [row for a in best for row in kept[a]]
 
 

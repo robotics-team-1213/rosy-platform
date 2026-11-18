@@ -84,11 +84,10 @@ root, model, size = Path(sys.argv[1]), Path(sys.argv[2]), int(sys.argv[3])
 splits, policy_type = Path(sys.argv[4]), sys.argv[5]
 sys.path[:0] = [str(root/'integrations/robots/omx/src'), str(root/'contracts/learning/src'), str(root/'test')]
 from omx_policy_statistics import assert_train_statistics
-from rosy.integrations.robots.omx.policy_runner import LeRobotAdapter, BENCH_POLICY_TYPES, ALLOWED_POLICY_TYPES
-assert 'smolvla' not in ALLOWED_POLICY_TYPES
+from rosy.integrations.robots.omx.policy_runner import LeRobotAdapter, ALLOWED_POLICY_TYPES
+assert 'smolvla' in ALLOWED_POLICY_TYPES
 adapter = LeRobotAdapter(str(model), 'cpu', joint_names=[str(i) for i in range(size)],
-    cameras=['front'], unit='lerobot_norm_v1',
-    allowed_types=BENCH_POLICY_TYPES if policy_type == 'smolvla' else ALLOWED_POLICY_TYPES)
+    cameras=['front'], unit='lerobot_norm_v1', allowed_types=ALLOWED_POLICY_TYPES)
 normalizer = next(step for step in adapter.pre.steps if type(step).__name__ == 'NormalizerProcessorStep')
 unnormalizer = next(step for step in adapter.post.steps if type(step).__name__ == 'UnnormalizerProcessorStep')
 stats = {split:json.loads((splits/split/'meta/stats.json').read_text()) for split in ('train','eval','test')}

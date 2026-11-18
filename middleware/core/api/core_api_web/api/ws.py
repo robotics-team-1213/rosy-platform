@@ -24,7 +24,7 @@ import anyio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
-from core_api_web.api.deps import authenticate, token_alive
+from core_api_web.api.deps import authenticate, lease_principal_refused, token_alive
 from core_api_web.api.account_sessions import authenticate_account
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.control import TeleopRequest, apply_teleop
@@ -387,7 +387,7 @@ async def _authorize(websocket: WebSocket, min_role: str = "viewer",
         except Exception:
             await websocket.close(code=4401)
             return None
-    if not auth.allows_role(min_role):
+    if not auth.allows_role(min_role) or lease_principal_refused(svc, auth, websocket.url.path):
         await websocket.close(code=4403)
         return None
     if capability and not svc.capability.supports(capability):

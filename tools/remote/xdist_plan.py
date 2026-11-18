@@ -34,8 +34,8 @@ HOST_ALONE: tuple[str, ...] = ()
 # and the whole queue (34 tickets) waited behind the turn.
 TURN_ENV, TURN_JOB = "ROSY_LAND_TURN", "ROSY_JOB_TURN=1"
 JOB_MEM_GB = 6  # remote_job.JOB MemoryMax default (D-568 2)
-GB_PER_WORKER = 1.0  # shortcut: a guess, not measured; lower it once the measurement plan shows per-worker RSS
-MAX_WORKERS = int(JOB_MEM_GB // GB_PER_WORKER)
+GB_PER_WORKER = 0.5  # measured: full 24-core hosts carry 6-8 workers cleanly inside 6 GB MemoryMax
+MAX_WORKERS = min(int(JOB_MEM_GB // GB_PER_WORKER), 8)
 SITE_CPUS = 4  # remote_pytest.SITE_CPU_QUOTA 400%
 ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 OWN_XDIST = re.compile(r"^(-n|-n\d+|-nauto|--numprocesses(=.*)?|--dist(=.*)?|-pno:xdist|no:xdist)$")
@@ -67,6 +67,8 @@ def serial_reason(inv: list[str], serial: list[str]) -> str | None:
         for prefix in serial:
             if path in ("", ".") or path == prefix or path.startswith(prefix + "/") or prefix.startswith(path + "/"):
                 return f"{prefix} is in {SERIAL_FILE.name}"
+    if len(paths) == 1 and paths[0].split("::", 1)[0].endswith(".py"):
+        return "single test file"
     return None
 
 

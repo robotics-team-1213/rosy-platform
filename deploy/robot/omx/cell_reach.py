@@ -72,7 +72,9 @@ def hook(config: dict, cell, target: dict, write_library):
     from pathlib import Path
 
     work = Path(config["work_dir"]).expanduser()
-    tcp_x_m = config.get("tcp_x_m")
+    import omx_tcp
+
+    tcp_x_m = omx_tcp.config_tcp(config)
     fk_fn = fk_xy if tcp_x_m is None else (lambda s: fk_xy(s, tcp_x_m))
 
     def run():

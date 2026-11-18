@@ -202,11 +202,11 @@ def register_map(image: np.ndarray, paint: MapPaint) -> RegistrationResult:
     height, width = image.shape[:2]
     if width < 64 or height < 64 or width > 8192 or height > 8192:
         raise ValueError("image dimensions are outside the supported range")
-    registration, accepted, reason = _register(image, paint)
-    if not accepted:
-        fallback = _register_world_261026(image, paint)
-        if fallback is not None:
-            registration, accepted, reason = fallback
+    fallback = _register_world_261026(image, paint)
+    if fallback is not None:
+        registration, accepted, reason = fallback
+    else:
+        registration, accepted, reason = _register(image, paint)
     elapsed = (time.perf_counter() - started) * 1000.0
     return RegistrationResult(registration, accepted, reason, elapsed, (width, height))
 
@@ -323,7 +323,9 @@ def _line_mask(image: np.ndarray) -> np.ndarray:
     tophat = cv2.morphologyEx(val, cv2.MORPH_TOPHAT,
                               cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (side, side)))
     otsu, _ = cv2.threshold(tophat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    mask = ((tophat >= max(40.0, float(otsu))) & (hsv[:, :, 1] <= 70)).astype(np.uint8) * 255
+    # The pink bay tape reads S 40-74 from the ceiling, inside the white bound: not lane paint.
+    pink = (hsv[:, :, 0] >= 145) & (hsv[:, :, 1] >= 35)
+    mask = ((tophat >= max(40.0, float(otsu))) & (hsv[:, :, 1] <= 70) & ~pink).astype(np.uint8) * 255
     return cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
 
 

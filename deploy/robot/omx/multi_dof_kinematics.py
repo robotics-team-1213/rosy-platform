@@ -16,6 +16,8 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from omx_tcp import V21_JAW_TCP_M, resolve_tcp
+
 JOINT_NAMES_BY_DOF: dict[int, tuple[str, ...]] = {
     5: ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"),
     6: ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_yaw", "wrist_roll"),
@@ -111,7 +113,7 @@ def matrix_to_rpy(r: np.ndarray) -> tuple[float, float, float]:
     return roll, pitch, yaw
 
 
-def fk_se3(q: Sequence[float], *, dof: int = 6, tcp_x_m: float = 0.0885) -> dict[str, Any]:
+def fk_se3(q: Sequence[float], *, dof: int = 6, tcp_x_m: float | None = None) -> dict[str, Any]:
     """Forward kinematics for 5-DOF, 6-DOF, or 7-DOF serial arm chain.
     Returns TCP `xyz_m`, `rpy_rad`, `rotation` (3x3), and `elbow_xyz_m` (for 7-DOF swivel clearance)."""
     if dof not in (5, 6, 7):
@@ -120,7 +122,7 @@ def fk_se3(q: Sequence[float], *, dof: int = 6, tcp_x_m: float = 0.0885) -> dict
     if len(qv) != dof:
         raise ValueError(f"expected {dof} joint angles, got {len(qv)}")
 
-    p_tcp, r_tcp, p_elbow, p_wrist = _fk_raw(qv, dof, tcp_x_m)
+    p_tcp, r_tcp, p_elbow, p_wrist = _fk_raw(qv, dof, resolve_tcp(tcp_x_m, default=V21_JAW_TCP_M)[0])
     rpy = matrix_to_rpy(r_tcp)
     return {
         "dof": dof,
@@ -171,12 +173,13 @@ def numerical_jacobian(
     q: Sequence[float],
     *,
     dof: int = 6,
-    tcp_x_m: float = 0.0885,
+    tcp_x_m: float | None = None,
     eps: float = 1e-5,
     base_fk: dict[str, Any] | None = None,
 ) -> np.ndarray:
     """Compute the 6xN geometric Jacobian `J(q)` via forward finite differences in SE(3)."""
     qv = [float(v) for v in q[:dof]]
+    tcp_x_m = resolve_tcp(tcp_x_m, default=V21_JAW_TCP_M)[0]
     j_mat = np.zeros((6, dof), dtype=float)
     if base_fk is not None:
         b_xyz, b_rot = base_fk["xyz_m"], base_fk["rotation"]
@@ -218,6 +221,7 @@ def nullspace_velocity(
     center_weight: float = 0.35,
     swivel_weight: float = 0.85,
     damping: float = 0.04,
+    tcp_x_m: float | None = None,
 ) -> dict[str, Any]:
     """Compute the 7-DOF null-space projector `(I - J^+ J)` and secondary joint velocity `qdot_null`
     that centers joints within limits and drives the redundant elbow swivel (`q[2]`) toward `psi_target_rad`
@@ -239,7 +243,7 @@ def nullspace_velocity(
             z0[2] += swivel_weight * (float(psi_target_rad) - qv[2])
         elif obstacle_xy_m is not None:
             if elbow_xyz_m is None:
-                _, _, elbow_xyz_m, _ = _fk_raw(qv, 7, 0.0885)
+                _, _, elbow_xyz_m, _ = _fk_raw(qv, 7, resolve_tcp(tcp_x_m, default=V21_JAW_TCP_M)[0])
             obs_dy = float(elbow_xyz_m[1]) - float(obstacle_xy_m[1])
             swivel_dir = 0.45 if obs_dy >= 0.0 else -0.45
             z0[2] += swivel_weight * (swivel_dir - qv[2])
@@ -260,7 +264,7 @@ def solve_se3_ik(
     q0: Sequence[float] | None = None,
     psi_target_rad: float | None = None,
     obstacle_xy_m: tuple[float, float] | None = None,
-    tcp_x_m: float = 0.0885,
+    tcp_x_m: float | None = None,
     damping: float = 0.04,
     max_steps: int = 90,
     pos_tol_m: float = 1.2e-3,

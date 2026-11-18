@@ -144,7 +144,25 @@ def test_pad_swept_bound_covers_all_finger_angles_with_contact_skin():
                 assert bottom >= lower-1e-12
 
 
-@pytest.mark.parametrize('layers,case', [(0, 'nominal'), (2, 'nominal'), (3, 'unknown'), (True, 'offset')])
+@pytest.mark.parametrize('case', ['nominal', 'offset', 'reverse'])
+def test_two_layers_have_six_distinct_cells_and_measured_second_tier_support(case):
+    fixture = f.container_fixture(layers=2, case=case)
+    items = f.plan(True, fixture=fixture)
+    assert fixture['target_cells'] == [3, 3, 2]
+    assert fixture['bin_size_m'] == [.09, .097, .06]
+    assert len(items) == len({tuple(item['cell']) for item in items}) == 6
+    assert {item['cell'][2] for item in items} == {0, 1}
+    boxes = bodies(fixture)
+    assert all(f.stable_box(box, i, True, fixture=fixture) for i, box in enumerate(boxes))
+    names = f.contact_names(3, True, fixture=fixture)
+    boxes[3]['forces'][names.index('bar-1')][2] = 0.
+    boxes[3]['forces'][names.index('bin')][2] = .6
+    assert not f.stable_box(boxes[3], 3, True, fixture=fixture)
+    assert normalize('omx-map-container-stack', dict(seed=42, layers=2, case=case))['layers'] == 2
+    assert f.judge(dict(layers=[]), True, fixture=fixture)['failures'] == ['two_layers_not_completed']
+
+
+@pytest.mark.parametrize('layers,case', [(0, 'nominal'), (4, 'nominal'), (3, 'unknown'), (True, 'offset'), (2, 'column')])
 def test_invalid_container_profiles_are_not_admitted(layers, case):
     with pytest.raises(ValueError):
         f.container_fixture(layers=layers, case=case)
@@ -226,6 +244,17 @@ def judged_trial(fixture):
     return dict(layers=layers)
 
 
+def test_two_layer_contact_judgement_requires_all_six_supported_boxes(monkeypatch):
+    fixture = f.container_fixture(layers=2, case='nominal')
+    monkeypatch.setattr(f, 'leveling_sequence_observed', lambda *a: True)
+    monkeypatch.setattr(f, 'free_lift', lambda *a: True)
+    trial = judged_trial(fixture)
+    assert f.judge(trial, True, fixture=fixture) == dict(task_success=True, failures=[])
+    trial['layers'].pop()
+    assert f.judge(trial, True, fixture=fixture) == dict(
+        task_success=False, failures=['two_layers_not_completed'])
+
+
 @pytest.mark.parametrize('mutation', [None, 'narrow', 'wide', 'no_window', 'late_window'])
 def test_nine_container_judge_requires_gap_band_and_prior_stack_windows(monkeypatch, mutation):
     fixture = f.container_fixture(layers=3, case='nominal')
@@ -260,8 +289,8 @@ def test_nine_container_budget_covers_the_measured_run_and_the_mp4_cap():
     assert entry['timeout_seconds'] == 4200
     # 2026-11-03: the surveyed bases (waypoint, higher leveling carry) placed 8/9 and met the 2,310 s limit (run 5d3a), and the
     # D-969 demo recording renders two more cameras per frame: 65 min task inside a 70 min unit, under the 90 min reboot guard.
-    assert "timeout = 4200 if scenario == 'omx-map-container-stack'" in inspect.getsource(run_system)
-    assert "'timeout': 3900 if container_task" in inspect.getsource(run_worker)
+    assert "timeout = 4200 if scenario in ('omx-map-container-stack', 'omx-map-container-stacking-rl')" in inspect.getsource(run_system)
+    assert "'timeout': 3900 if container_task or container_rl" in inspect.getsource(run_worker)
 
 
 def test_ship_offset_cases_move_only_the_release_target():

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import json
 import yaml
 
 DEFAULT_YAML_PATH = Path(__file__).with_name("station_zones.yaml")
@@ -31,6 +32,22 @@ def load_station_zones(override_path: Path | None = None) -> dict[str, Any]:
     }
 
 
+# Legacy warehouse station ids -> cell site map ids (shared/web/cell-site-map.json).
+# None = no cell place; "not_places:*" = a non-place entry of the map (belt feed).
+_SITE_ALIASES: dict[str, str | None] = {
+    "EXP_S1": "stand:r1-s1",
+    "EXP_S5_PALLET": "stand:r1-s1",
+    "EXP_S3_BELT": "not_places:belt",
+    "STG_C2": None,
+    "STG_S3_WAIT": None,
+}
+
+
+def resolve_site_alias(old_id: str) -> str | None:
+    """Read-only lookup of a legacy station zone id; unknown ids also give None."""
+    return _SITE_ALIASES.get(old_id)
+
+
 def save_station_zones_yaml(yaml_text: str, target_path: Path) -> dict[str, Any]:
     """Validate and persist updated YAML text for staging bays and export stations."""
     parsed = yaml.safe_load(yaml_text)
@@ -38,6 +55,10 @@ def save_station_zones_yaml(yaml_text: str, target_path: Path) -> dict[str, Any]
         raise ValueError("YAML root must be a mapping")
     if "staging_bays" not in parsed and "export_stations" not in parsed:
         raise ValueError("YAML must define staging_bays or export_stations")
+    try:
+        json.dumps(parsed, allow_nan=False)
+    except (TypeError, ValueError):
+        raise ValueError("station zones must contain finite JSON values") from None
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(yaml_text, encoding="utf-8")
     return load_station_zones(target_path)

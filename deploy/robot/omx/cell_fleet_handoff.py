@@ -194,6 +194,8 @@ def run_contract_handoff_stage(
     return {
         "contract_version": "rosy.fleet-r-cell-contract.v1",
         "receipt": {
+            "simulated_success": converged,
+            "physical_completion": False,
             "handoff_lease_id": lease_id,
             "cell_id": cell_id,
             "station_place": station_place,
@@ -222,46 +224,8 @@ def execute_remote_fleet_r_handoff(
     tier: int = 1,
     request_fn: Callable[[str, str, dict[str, Any] | None], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Hold the Fleet-R bed-zone gate while the local OMX stage runs."""
-    if request_fn is None:
-        import ssl
-        from urllib.request import Request, urlopen
-
-        def request_fn(method: str, path: str, body: dict[str, Any] | None) -> dict[str, Any]:
-            data = json.dumps(body).encode("utf-8") if body is not None else None
-            request = Request(
-                f"{fleet_r_url.rstrip('/')}{path}", data=data, method=method,
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            )
-            with urlopen(request, context=ssl._create_unverified_context(), timeout=15) as response:
-                return json.load(response)
-
-    body = {
-        "cell_id": cell_id, "robot_id": robot_id, "robot_kind": "pinky",
-        "x": float(pose_xy_yaw[0]), "y": float(pose_xy_yaw[1]), "yaw": float(pose_xy_yaw[2]),
-        "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0,
-        "phase": "ARM_IN_BED_ZONE", "tier": int(tier),
-    }
-    claim_resp = request_fn("POST", "/api/fleet/pipeline/cell-handoff", body)
-    assert claim_resp["gate"]["amr_motion_inhibited"] is True
-    cb_locked = request_fn("GET", "/api/fleet/charge-bays", None)
-    status_locked = request_fn("GET", "/api/fleet/pipeline/status", None)
-    assert cb_locked["omx_cells"][cell_id]["gate"]["amr_motion_inhibited"] is True
-    assert status_locked["omx_cell_layer"]["cells"][cell_id]["gate"]["amr_motion_inhibited"] is True
-
-    omx_res = pipeline.run_contract_handoff_stage(claim_resp["handoff"], stage_id=stage_id, tier=tier)
-    receipt = omx_res["receipt"]
-    release_resp = request_fn("POST", "/api/fleet/pipeline/cell-handoff", {
-        **body, "phase": receipt["phase"], "stage_id": stage_id,
-        "goal_evidence_digest": receipt["goal_evidence_digest"], "reason": receipt["reason"],
-    })
-    assert release_resp["gate"]["amr_motion_inhibited"] is False
-    assert release_resp["gate"]["amr_can_depart"] is True
-    return {
-        "fleet_r_url": fleet_r_url, "claim_gate": claim_resp["gate"],
-        "charge_bays_locked": cb_locked.get("omx_cells", {}).get(cell_id, {}).get("gate"),
-        "omx_receipt": receipt, "release_gate": release_resp["gate"],
-    }
+    """Synthetic stages cannot claim or release a live Fleet handoff."""
+    raise RuntimeError("SIMULATED_STAGE_CANNOT_COMPLETE_FLEET_HANDOFF")
 
 
 def dispatch_and_execute_fleet_r_cell_task(
@@ -272,35 +236,8 @@ def dispatch_and_execute_fleet_r_cell_task(
     live_act_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     request_fn: Callable[[str, str, dict[str, Any] | None], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Assign a task on Fleet-R (`/api/fleet/pipeline/cell-tasks`), claim it on the OMX cell, execute the stage, and complete it."""
-    if request_fn is None:
-        import ssl
-        from urllib.request import Request, urlopen
-
-        def request_fn(method: str, path: str, body: dict[str, Any] | None) -> dict[str, Any]:
-            data = json.dumps(body).encode("utf-8") if body is not None else None
-            req = Request(f"{fleet_r_url.rstrip('/')}{path}", data=data, method=method,
-                          headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
-            with urlopen(req, context=ssl._create_unverified_context(), timeout=20) as resp:
-                return json.load(resp)
-
-    created = request_fn("POST", "/api/fleet/pipeline/cell-tasks", {
-        "task_id": task_id, "cell_id": cell_id, "arm_id": arm_id, "robot_id": robot_id,
-        "src_site": src_site, "dst_site": dst_site, "tier": int(tier), "displaced_to": displaced_to,
-        "x": float(pose_xy_yaw[0]), "y": float(pose_xy_yaw[1]), "yaw": float(pose_xy_yaw[2]),
-    })["task"]
-    claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": created["task_id"]})
-    assert claimed["claimed"] is True and claimed["gate"]["amr_motion_inhibited"] is True
-    omx_res = pipeline.run_contract_handoff_stage(claimed["handoff"], stage_id=created["task_id"], tier=tier)
-    released = omx_res["receipt"]["phase"] == "RELEASED"  # never move on a refused or unconverged stage
-    hw_tel = live_act_fn(claimed["handoff"]) if callable(live_act_fn) and released else None
-    done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{created['task_id']}/complete", {
-        "phase": omx_res["receipt"]["phase"], "goal_evidence_digest": omx_res["receipt"]["goal_evidence_digest"],
-        "reason": omx_res["receipt"]["reason"], "receipt": omx_res["receipt"],
-        "stage_result": omx_res["stage_result"], "hardware_telemetry": hw_tel,
-    })
-    assert done["gate"]["amr_motion_inhibited"] is False and done["task"]["status"] == "COMPLETED"
-    return {"task": done["task"], "claim_gate": claimed["gate"], "release_gate": done["gate"], "omx_result": omx_res}
+    """Synthetic stages cannot create or complete a live Fleet cell task."""
+    raise RuntimeError("SIMULATED_STAGE_CANNOT_COMPLETE_FLEET_TASK")
 
 
 
@@ -378,19 +315,24 @@ def execute_task_plan(
                 if ledger_fut is not None:
                     res["parallel_sim_ledger"] = ledger_fut.result()
                 stage_out = res
-                if res.get("task_verified") or res.get("result") == "placed":
+                if res.get("task_verified") is True:
                     used_candidates.add(cand_id)
+                    break
+                if res.get("result") in ("placed", "unverified_place"):
                     break
             if stage_out is not None:
                 stage_results.append({"stage_id": stage_name, **stage_out})
+                if stage_out.get("task_verified") is not True:
+                    break
     finally:
         if executor is not None:
             executor.shutdown(wait=False)
 
-    all_verified = bool(stage_results) and all(bool(s.get("task_verified")) for s in stage_results)
+    all_verified = bool(stages) and len(stage_results) == len(stages) and all(s.get("task_verified") is True for s in stage_results)
     return {
         "schema": "rosy.omx-area-xyz-task-plan-result.v1",
-        "stages_completed": len(stage_results),
+        "stages_attempted": len(stage_results),
+        "stages_completed": sum(s.get("task_verified") is True for s in stage_results),
         "task_verified": all_verified,
         "used_candidates": sorted(used_candidates),
         "sim_precheck": sim_reports,

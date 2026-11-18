@@ -103,3 +103,17 @@ def test_no_new_job_lands_on_a_host_whose_nightly_reboot_is_near(tmp_path, fires
     probe, _ = measured(tmp_path, systemctl=stub)
     assert probe['busy'] is held and probe['reboot_soon'] is held
     assert runner.place('pytest', ['fixture'], [probe])[0] == ([] if held else ['fixture'])
+
+
+def test_probe_reports_busy_cores_over_a_second_not_the_lagging_load_average(tmp_path):
+    """2026-11-17: load1 kept the model PC at 37 while it was 72 % idle, so placement saw negative free cores."""
+    stat = tmp_path / 'stat'
+    stat.write_text('cpu  100 0 100 800 0 0 0 0 0 0\n')
+    later = 'cpu  400 0 100 1500 0 0 0 0 0 0'  # 1000 ticks, 700 idle: 30 % busy
+    script = 'nproc() { echo 24; }\n' + host_probe.PROBE.replace('/proc/stat', shlex.quote(str(stat)))
+    script = script.replace('J=~/rosy-jobs', f'J={shlex.quote(str(tmp_path / "jobs"))}')
+    script = script.replace('sleep 1', f'echo {shlex.quote(later)} > {shlex.quote(str(stat))}', 1)
+    out = subprocess.run(['bash', '-c', script], capture_output=True, text=True, check=True,
+                         env={**os.environ, 'HOME': str(tmp_path)}).stdout
+    probe = host_probe.parse_probe(out)
+    assert probe['nproc'] == 24 and probe['load1'] == 7.2

@@ -25,7 +25,13 @@ FILES = {**base.FILES, "tools/harness/platform_parts.yaml": PARTS,
          "tools/land_prepare.py": "MAX_PREPARING = 6\n",
          "test/test_land_sample.py": "def test_land():\n    pass\n",
          "test/test_remote_pytest.py": "def test_remote():\n    pass\n",
-         "deploy/requirements.txt": "pyyaml==6.0\n"}
+         "deploy/requirements.txt": "pyyaml==6.0\n",
+         "tools/publish_main.py": "TASK = 'register_publish_merge_task.ps1'\n",
+         "tools/register_publish_merge_task.ps1": "Write-Host hi\n",
+         "test/test_publish_main_sample.py": "import publish_main\n\n\ndef test_p():\n    pass\n",
+         "operations/world/test/test_w.py": "def test_w():\n    pass\n",
+         "middleware/media/test/test_m.py": "def test_m():\n    pass\n",
+         "contracts/foundation/test/test_f.py": "def test_f():\n    pass\n"}
 
 
 @pytest.fixture(scope="module")
@@ -60,14 +66,34 @@ def test_a_safety_path_stays_full(sample, path):
 
 
 @pytest.mark.parametrize("path", ["tools/harness/affected_tests.py", "tools/harness/affected_narrow.py",
-                                  "tools/land_selection.py", "tools/land_browser.py", "tools/remote/remote_pytest.py",
-                                  "tools/remote/remote_job.py", "tools/remote/work_queue.py", "test/known_failures.py",
-                                  "tools/remote/remote_test_tools.py", "tools/remote/xdist_plan.py",
-                                  "test/browser_scope.py"])
-def test_the_code_that_selects_or_runs_tests_stays_full(sample, path):
+                                  "tools/land_selection.py", "test/known_failures.py", "test/browser_scope.py"])
+def test_the_code_that_selects_or_judges_tests_stays_full(sample, path):
     """Design 0.7 rule 8: a gate never tests itself with a selection it made."""
     sel = _select(sample, path)
     assert sel.mode == "full" and not sel.narrowed, sel.escalations
+
+
+@pytest.mark.parametrize("path", ["tools/land_browser.py", "tools/remote/remote_pytest.py", "tools/remote/remote_job.py",
+                                  "tools/remote/work_queue.py", "tools/remote/remote_test_tools.py",
+                                  "tools/remote/xdist_plan.py"])
+def test_a_runner_tool_runs_the_self_test_tier_plus_the_canary(sample, path):
+    """2026-11-17 panel: 34 of 55 FULL landings only touched a tool that runs tests."""
+    sel = _select(sample, path)
+    assert sel.mode == "affected" and not sel.escalations, sel.escalations
+    assert {"test/test_land_sample.py", "test/architecture", *affected.affected_narrow.CANARY} <= set(sel.reasons)
+    assert "test" not in sel.reasons
+
+
+def test_a_runner_tool_keeps_the_legacy_escape(sample, monkeypatch):
+    monkeypatch.setenv("ROSY_FULL_LEGACY", "1")
+    assert _select(sample, "tools/remote/work_queue.py").mode == "full"
+
+
+def test_a_script_no_test_names_selects_the_tests_of_the_source_naming_it(sample):
+    sel = _select(sample, "tools/register_publish_merge_task.ps1")
+    assert sel.mode == "affected" and not sel.unmapped, sel.escalations
+    assert "test/test_publish_main_sample.py" in sel.reasons
+    assert "register_publish_merge_task.ps1" in " ".join(sel.reasons["test/test_publish_main_sample.py"])
 
 
 def test_a_gate_tool_runs_the_selector_self_test_tier(sample):

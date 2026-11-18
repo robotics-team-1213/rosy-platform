@@ -27,13 +27,21 @@ from pathlib import Path
 
 QUEUE = "rosy-land-queue"
 STALE_AFTER = 3 * 3600  # seconds without a refresh; one FULL round takes 30-90 min, the holder refreshes per round
-POLL = 10.0
+MAX_AGE_S = int(os.environ.get("ROSY_LAND_MAX_AGE_S", str(4 * 3600)))
+FULL_MAX_AGE_S = int(os.environ.get("ROSY_LAND_FULL_MAX_AGE_S", str(6 * 3600)))
+POLL = 2.0
 TICKET_ENV = "ROSY_LAND_TICKET"  # land_prepare.relaunch hands its ticket to main's land.py in a child process
 REPORT_EVERY = 300.0  # seconds between unchanged position lines
 # A waiting ticket tested over the current main passes an earlier waiting one tested over an older main (that one
 # re-runs its tier anyway; turning it first made the fresh one re-run too: ~984 min/day of FULL re-runs before the
 # turn, 2026-10-30..31). Only while the passed one has waited less than this; then order holds again.
 PASS_CAP_S = 3600
+# Path lane (2026-11-17, user: "경로별 착지를 먼저 두면서"): a landing whose every changed path is under LANE_PREFIXES
+# has its own cap and may pass ordinary *waiting* tickets; turns still run one at a time, so main is merged as before.
+# shortcut: one lane (learning); add a table of lanes if a second path family needs one.
+LANE = "learning"
+LANE_PREFIXES = ("learning/", "test/learning/")
+LANE_CAP = int(os.environ.get("ROSY_LAND_LANE_CAP", "4"))
 _held: list[Path] = []
 _status_lock = threading.RLock()  # timer release and the main thread share the ticket's read/replace operation
 
@@ -75,8 +83,16 @@ def queue_dir(wt: Path) -> Path:
     return Path(common.stdout.strip()) / QUEUE
 
 
+def lane_of(wt: Path, ref: str = "HEAD") -> str:
+    """LANE when every path the ref changes since its merge base with main is under LANE_PREFIXES, else ''."""
+    done = subprocess.run(["git", "-C", str(wt), "diff", "--name-only", f"main...{ref}"],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    paths = done.stdout.split() if done.returncode == 0 else []
+    return LANE if paths and all(p.startswith(LANE_PREFIXES) for p in paths) else ""
+
+
 def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting", urgent: str = "", *,
-         batch_auto: bool = False, alone: bool = False) -> Path:
+         batch_auto: bool = False, alone: bool = False, lane: str = "") -> Path:
     """Write this process's ticket at the end of the queue and return its path.
 
     ``status``: ``pending`` (waiting for a preparation slot) or ``preparing`` (tests outside the lock: keeps its
@@ -90,7 +106,8 @@ def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting", u
         stamp += 1
     name = f"{stamp:020d}-{os.getpid()}.json"
     info = {"pid": os.getpid(), "host": socket.gethostname(), "start": time.time(), "branch": branch,
-            "worktree": worktree, "status": status, "batch_auto": batch_auto, **({"urgent": urgent} if urgent else {}), **({"alone": True} if alone else {})}
+            "worktree": worktree, "status": status, "batch_auto": batch_auto, **({"urgent": urgent} if urgent else {}), **({"alone": True} if alone else {}),
+            **({"lane": lane} if lane else {})}
     tmp = qdir / f".{name}.tmp"
     tmp.write_text(json.dumps(info), encoding="utf-8")
     os.replace(tmp, qdir / name)
@@ -168,6 +185,8 @@ def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
     now = time.time() if now is None else now
 
     def passed(r: dict) -> bool:  # stale and young enough to pass; never a turn or an urgent ticket
+        if me.get("lane") and not r.get("lane") and r.get("status") == "waiting" and not r.get("urgent"):
+            return True  # path lane: at most LANE_CAP lane tickets live, so an ordinary one waits a bounded while
         return (bool(main) and me.get("tested") == main and r.get("status") == "waiting" and not r.get("urgent")
                 and r.get("tested") != main and now - r.get("waiting_since", 0) < PASS_CAP_S)  # 0: an older land.py
     # D-889 addendum 5: an urgent ticket (one at a time, the user's words as its reason) passes ordinary waiting
@@ -218,6 +237,23 @@ def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
     return found
 
 
+def expired(qdir: Path, now: float | None = None) -> list[dict]:
+    """Live tickets whose immutable ``start`` timestamp exceeded MAX_AGE_S (FULL/full_wait: FULL_MAX_AGE_S)."""
+    now = time.time() if now is None else now
+    out = []
+    for row in ahead(qdir, Path("~"), now):
+        pid = int(row.get("pid") or 0)
+        if pid in (0, os.getpid()):
+            continue
+        # D-889 35: a rollup holding a test record is mid-work like a FULL waiter (224327 was killed 4 h in, after its FULL)
+        rolled = (row.get("branch") or "").startswith("land/fix/land-rollup-") and (
+            row.get("tested") or row.get("tier") == "full_done")
+        limit = FULL_MAX_AGE_S if (row.get("tier") == "full" or row.get("full_wait") or rolled) else MAX_AGE_S
+        if row["age"] > limit:
+            out.append({**row, "path": qdir / row["ticket"]})
+    return out
+
+
 def describe(rows: list[dict]) -> str:
     return ", ".join(f"{r.get('branch', '?')} ({r.get('status', 'waiting')}, pid {r.get('pid', '?')} on "
                      f"{r.get('host', '?')}, {r['age'] / 60:.0f} min)" for r in rows)
@@ -256,7 +292,7 @@ def touch(ticket: Path | None = None) -> None:
 
 
 def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None,
-         done=None, form=None, tested: str | None = None, changed=None) -> str | None:
+         done=None, form=None, tested: str | None = None, changed=None, on_ahead=None) -> str | None:
     """Mark ``ticket`` waiting; return None once nothing blocks it (``blockers``), marked as in its turn;
     QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop.
     ``"landed"`` as soon as ``done()`` is true (a batch landed this branch), ``"batch"`` when ``form(rows)``
@@ -279,6 +315,8 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
             return None
         if form and form(rows):
             return "batch"
+        if on_ahead and len(rows) == 1 and rows[0].get("status") == "turn":
+            on_ahead(rows[0])
         if len(rows) != said or clock() - last >= REPORT_EVERY:
             print(f"[queue] position {len(rows) + 1}; ahead: {describe(rows)}", flush=True)
             said, last = len(rows), clock()
@@ -297,13 +335,32 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
 CAP = int(os.environ.get("ROSY_LAND_QUEUE_CAP", "12"))
 
 
-def full(qdir: Path) -> str | None:
-    """Why a new ordinary ticket is refused, or None while the queue has room."""
-    rows = ahead(qdir, Path("~"))
-    if len(rows) < CAP:
+def signature(wt: Path) -> tuple[str, ...]:
+    """Ticket names: they change whenever a ticket lands or is released."""
+    return tuple(sorted(p.name for p in queue_dir(wt).glob("[0-9]*.json")))
+
+
+def wait_drain(wt: Path, room, deadline: float, window: float) -> float:
+    """The deadline (moved out by ``window`` while tickets keep leaving) once ``room`` opens, else 0.0."""
+    sig = signature(wt)
+    while time.monotonic() < deadline:
+        if room(wt, deadline) and time.monotonic() < deadline:
+            return deadline
+        if signature(wt) == sig:
+            return 0.0  # nothing landed or was released for a whole wait window
+        sig, deadline = signature(wt), time.monotonic() + window
+    return 0.0
+
+
+def full(qdir: Path, lane: str = "") -> str | None:
+    """Why a new ordinary ticket (of the given lane) is refused, or None while its part of the queue has room."""
+    rows = [r for r in ahead(qdir, Path("~")) if (r.get("lane") or "") == lane]
+    cap = LANE_CAP if lane else CAP
+    if len(rows) < cap:
         return None
-    return (f"landing queue full ({len(rows)}/{CAP} tickets): combine related branches into one landing or retry"
-            " later; --urgent with the user's words still passes (ROSY_LAND_QUEUE_CAP sets the cap)")
+    name = f"{lane} lane" if lane else "landing queue"
+    return (f"{name} full ({len(rows)}/{cap} tickets): combine related branches into one landing or retry later;"
+            " --urgent with the user's words still passes (ROSY_LAND_QUEUE_CAP / ROSY_LAND_LANE_CAP set the caps)")
 
 
 def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
@@ -321,10 +378,11 @@ def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
             set_status(ticket, status, urgent=urgent)
     elif urgent and (holder := urgent_holder(qdir)):
         raise QueueError(f"--urgent refused: {describe([holder])} is already urgent ({holder['urgent']}); one at a time")
-    elif not urgent and (why := full(qdir)):
+    elif not urgent and (why := full(qdir, lane := lane_of(wt))):
         raise QueueError(why)
     else:
-        ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto, alone=alone)
+        ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto, alone=alone,
+                      lane="" if urgent else lane)
     if urgent:
         land_events.emit("urgent", ticket=ticket.name, reason=urgent)
     _held.append(ticket)

@@ -226,6 +226,25 @@ def measure_temp_plates(frame, layout, prev=None):
     return dict(plates=plates, shape=shape, camera_check=scale)
 
 
+def unseated_containers(frame, layout, plates, yaw_tol_deg=4., off_tol_m=.008, near_m=.06):
+    """Containers on a temp plate that do not sit in a lane: turned or shifted past the plate fit's own tolerance (fit_plate
+    leaves such a container out, so its lane comes from the pads). Returns dict(plate, lane, off_mm, turn_deg) per container."""
+    lanes = [(t, l) for t, p in plates["plates"].items() for l in p.get("lanes", [])]
+    cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
+    out = []
+    for b in lane_blobs(frame, cam, layout.deck_z, sites.CONTAINER[layout.choices["ship_source"]][2]):
+        if b["kind"] != "container" or not lanes:
+            continue
+        t, lane = min(lanes, key=lambda tl: math.dist(tl[1]["xy"], b["xy"]))
+        v = (math.cos(math.radians(lane["yaw_deg"])), math.sin(math.radians(lane["yaw_deg"])))
+        d = np.subtract(b["xy"], lane["xy"])
+        off = abs(d[1] * v[0] - d[0] * v[1]) if b["partial"] else float(np.hypot(*d))  # a partial blob's along-lane centre is unknown
+        turn_deg = abs((math.degrees(fold(b["yaw"])) - lane["yaw_deg"] + 90) % 180 - 90)
+        if np.hypot(*d) < near_m and (turn_deg > yaw_tol_deg or off > off_tol_m):
+            out.append(dict(plate=t, lane=lane["lane"], off_mm=round(off * 1000, 1), turn_deg=round(turn_deg, 1)))
+    return out
+
+
 @functools.lru_cache(maxsize=1)
 def hull_outline():
     """Plan-view outline (ship mm, x stern to bow, y to port) and deck height (mm) of the r08 hull mesh."""
@@ -335,7 +354,16 @@ def measure_belt(frame, layout):
     end = float(np.percentile(best[:, 0], 1))
     far = best[best[:, 0] > end + .02]
     width = float(np.percentile(far[:, 1], 98) - np.percentile(far[:, 1], 2))
-    return dict(end_x_m=round(end, 4), centre_y_m=round(float(np.median(far[:, 1])), 4), width_m=round(width, 4))
+    out = dict(end_x_m=round(end, 4), centre_y_m=round(float(np.median(far[:, 1])), 4), width_m=round(width, 4))
+    # a container waiting at the stop hides the strip's end: the "end" is then the container's far edge (2026-11-14: .2195 read for a stop near .158)
+    box = (((hsv[..., 0] < 29) & (hsv[..., 1] > 140) & (hsv[..., 2] > 140)).astype(np.uint8))
+    ys, xs = np.nonzero(box)
+    if len(xs):
+        pts = cam.to_plane(np.stack([xs, ys], 1), layout.belt_top + sites.CONTAINER[layout.choices["ship_source"]][2])
+        near = pts[(np.abs(pts[:, 1] - out["centre_y_m"]) < width / 2) & (pts[:, 0] > end - .06) & (pts[:, 0] < end + .005)]
+        if len(near) >= BELT_MIN_PX / 4:
+            out.update(end_occluded=True, end_at_most_x_m=round(float(np.percentile(near[:, 0], 1)), 4))
+    return out
 
 
 def measure_ship_fixation(ship, belt, layout):
@@ -384,7 +412,12 @@ def overlay(frame, layout, plates, ship=None, belt=None):
             cv2.polylines(img, [np.array(pts, np.int32)], True, colour, 1)
             cv2.putText(img, f"{tag}-{lane['lane']}", tuple(int(v) for v in cam.project((x, y, layout.deck_z))),
                         cv2.FONT_HERSHEY_SIMPLEX, .4, colour, 1)
-    for arm in layout.arms.values():
+    inner, half = sites.BERTH_V16_SPEC["base_inner_from_axis_mm"] / 1000, sites.BERTH_V16_SPEC["base_front_from_axis_mm"] / 1000
+    for name, arm in layout.arms.items():  # the PR33_C02_BASE plate (150 x 120 mm) under each arm: the overlay must show where the map puts the arms
+        x, y, _ = arm.base
+        toward = 1. if name == "arm_a" else -1.
+        plate = [(x - half, y - toward * (.120 - inner)), (x + half, y - toward * (.120 - inner)), (x + half, y + toward * inner), (x - half, y + toward * inner)]
+        cv2.polylines(img, [np.array([cam.project((*p, layout.table_z + .013)) for p in plate], np.int32)], True, (0, 255, 255), 1)
         cv2.circle(img, tuple(int(v) for v in cam.project(arm.base)), 4, (0, 0, 255), -1)
     if belt and "error" not in belt:
         ends = [cam.project((belt["end_x_m"], belt["centre_y_m"] + s * belt["width_m"] / 2, layout.belt_top)) for s in (-1, 1)]

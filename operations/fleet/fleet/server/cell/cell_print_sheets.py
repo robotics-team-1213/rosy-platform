@@ -125,15 +125,23 @@ def arm_pdf(slot: int) -> bytes:
 FACES = ("roof", "side")
 
 
-def container_tags_pdf(ids, size_mm: float = 12.0) -> bytes:
+def container_tags_pdf(ids, size_mm: float = 12.0, names=None, copies: int = 2) -> bytes:
     """D-996 6: each container tag twice, one for the roof and one for the side, at one size (12 mm fits a 1-cell
-    container, 20 mm the larger ones). The tag-to-object_ref table is the site's marker profile, never the sheet."""
+    container, 20 mm the larger ones). The tag-to-object_ref table is the site's marker profile, never the sheet;
+    `names` ({id: object_ref}, from that table) only prints each tag's container under it, so the right two squares
+    go on the right container."""
     ids, size = [int(i) for i in ids], float(size_mm)
     if not ids or any(not FIRST_TAG <= i < len(DICT_4X4_250_PRINTABLE) for i in ids) or len(set(ids)) != len(ids):
         raise ValueError(f"container tags are distinct ids {FIRST_TAG}-{len(DICT_4X4_250_PRINTABLE) - 1}")
+    names = {int(k): str(v) for k, v in (names or {}).items()}
+    if set(names) - set(ids):
+        raise ValueError("container names given for ids not on the sheet")
+    if not 2 <= int(copies) <= 4:
+        raise ValueError("2-4 copies of each tag: roof, side and up to two spares")
+    faces = FACES + ("spare",) * (int(copies) - 2)  # spares for a torn or misplaced square
     words = ("ROSY container tags - ArUco DICT_4X4_250 (D-996)",
              "Each tag twice: one flat on the roof, one flat on the side of the same container. Matte paper.")
-    return _markers_page([([i for i in ids for _ in FACES], size, {}, FACES * len(ids))], words)
+    return _markers_page([([i for i in ids for _ in faces], size, names, faces * len(ids))], words)
 
 
 def _markers_page(groups, words) -> bytes:
@@ -162,9 +170,10 @@ def _markers_page(groups, words) -> bytes:
             for r, c in marker_cells(marker_id):
                 page.box(x + quiet + c * cell, y + quiet + r * cell, cell, cell)
             page.box(x, y, size + 2 * quiet, size + 2 * quiet, fill=False)
-            label = f"id {marker_id}  {size:g} mm" + (f"  {names[marker_id]}" if marker_id in names else "") + \
-                (f"  {faces[0][k]}" if faces else "")
+            label = f"id {marker_id}  {size:g} mm" + (f"  {faces[0][k]}" if faces else "")
             page.text(x, y + size + 2 * quiet + 5, 9, label)
+            if marker_id in names:  # its own line: appended, it ran into the next marker's label
+                page.text(x, y + size + 2 * quiet + 9, 9, names[marker_id])
             x += size + 2 * quiet + GAP_MM
         y += size + 2 * quiet + GAP_MM
     return page.pdf(words[0].split(" - ")[0])

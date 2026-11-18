@@ -241,7 +241,8 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
             raise ValueError("trials must retain their attempt schema and scope")
         if any(not isinstance(r.get("verify", {}), dict) or not isinstance(r.get("transfer", {}), dict) for r in trials):
             raise ValueError("invalid trial observations")
-        successes = sum(r.get("outcome") == "placed" and (r.get("verify") or {}).get("inside") is True
+        successes = sum(r.get("outcome") == "placed" and (r.get("verify") or {}).get("verified") is True
+                        and (r.get("verify") or {}).get("inside") is True
                         and (r.get("transfer") or {}).get("result") == "placed" for r in trials)
         out.update(attempts=len(trials), successes=successes, evidence_ref=review["evidence_ref"],
                    reviewed_by=review["reviewed_by"])
@@ -284,7 +285,8 @@ def review_candidates(rows: list[dict]) -> dict:
             candidate["automatic_failures"] += 1
     for candidate in tasks.values():
         trials = candidate.pop("trials")
-        count = sum(r.get("outcome") == "placed" for r in trials)
+        count = sum(r.get("outcome") == "placed" and (r.get("verify") or {}).get("verified") is True
+                    and (r.get("verify") or {}).get("inside") is True for r in trials)
         candidate.update(attempts=len(trials), successes=count, attempts_sha256=digest(trials),
                          observed_success_fraction=count / len(trials) if trials else None)
     return tasks

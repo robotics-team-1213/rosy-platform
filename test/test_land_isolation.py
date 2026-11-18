@@ -359,6 +359,23 @@ def test_guard_round_wiring(monkeypatch, mode):
     assert seen[0][2] == [list(land_guards.GUARDS)]
 
 
+def test_guards_cover_every_existing_root_guard_set_file():
+    import affected_tests
+    from pathlib import PurePosixPath
+
+    assert land_guards.GUARDS[:3] == (
+        "test/architecture",
+        "test/test_harness_contracts.py",
+        "test/test_behavior_test_ownership.py",
+    )
+    expected_root = {
+        path for path in affected_tests.GUARD_SET
+        if len(PurePosixPath(path).parts) == 2 and PurePosixPath(path).parts[0] == "test" and (ROOT / path).is_file()
+    }
+    assert expected_root <= set(land_guards.GUARDS)
+    assert all((ROOT / path).exists() for path in land_guards.GUARDS)
+
+
 def test_selector_edge_on_this_repo_selects_the_incident_test():
     """The 2026-10-26 change to native_cycle.py: its test is on the references edge and loads it by path."""
     repo, _, refs, _ = land_isolation._selector(ROOT)
@@ -425,3 +442,31 @@ def test_a_quarantined_timing_flake_is_not_an_isolation_failure():
     other = "test/test_other.py::test_new"
     report = f"FAILED {quarantined} - AssertionError\nFAILED {other} - AssertionError\n2 failed in 1.00s\n"
     assert land_isolation.new_failures(report) == [other]
+
+
+def test_gate_shards_large_selection_and_runs_alone_jobs_first(pair, monkeypatch, tmp_path):
+    ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    for i in range(9):
+        p = pair / f"p{i}" / "test_x.py"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("def test_ok(): pass\n", encoding="utf-8")
+    git(pair, "add", ".")
+    git(pair, *ident, "commit", "-q", "-m", "pkgs")
+    (pair / "tools").mkdir(exist_ok=True)
+    (pair / land_isolation.GATE).write_text("", encoding="utf-8")
+    sel = [[f"p{i}" for i in range(9)]]
+    sharded = land_isolation.gate(pair, sel)
+    assert len(sharded) == land_isolation.GATE_SHARDS
+    seen_paths = [p for inv in sharded for p in inv[1].removeprefix("ROSY_COLLECT_PATHS=").split(",")]
+    assert sorted(seen_paths) == [f"p{i}" for i in range(9)]
+    monkeypatch.setattr(land_isolation, "alone_files", lambda wt, s: (["p0/test_x.py"], set()))
+    calls = []
+    logdir = tmp_path / "logs"
+    logdir.mkdir()
+    args = argparse.Namespace(tests="auto", node=False, no_cache=False, no_queue=False)
+    land_isolation.run(pair, "fix/s", sel, args, logdir, "pre",
+                       fake_round({"gpre": {"run-gpre-1.txt": "[isolation] complete: 1\n"}}, calls),
+                       [["guard"]], prepare=True)
+    batch = calls[0][1]
+    assert batch[0] == ["guard"] and batch[1] == land_isolation.job(["p0/test_x.py"])[0]
+    assert len(batch) == 2 + land_isolation.GATE_SHARDS

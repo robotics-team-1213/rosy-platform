@@ -25,6 +25,16 @@ def test_canonical_exclusive_full_with_hash_bound_strict_receipt_qualifies(repo)
     assert tool.green_full(local, sha)
 
 
+def test_publication_refuses_cache_rows_marked_reused(repo):
+    """D-889 37: a row carrying reused_from is a reuse, not an execution; land_cache.entries drops it."""
+    local, sha, _ = _timing_proof(repo)
+    assert tool.green_full(local, sha)
+    target = land_cache.path(local)
+    rows = [json.loads(line) for line in target.read_text(encoding="utf-8").splitlines() if line]
+    target.write_text("".join(json.dumps({**row, "reused_from": "0" * 40}) + "\n" for row in rows), encoding="utf-8")
+    assert land_cache.entries(local) == [] and not tool.green_full(local, sha)
+
+
 @pytest.mark.parametrize('damage', ['missing', 'skip', 'partial', 'quarantine', 'hash', 'ignore-only'])
 def test_publication_requires_complete_strict_dedicated_evidence(repo, damage):
     local, sha, log = _timing_proof(repo)
@@ -349,3 +359,19 @@ def test_normal_ros_only_skip_and_approved_quarantine_rerun_keep_existing_verdic
                             encoding="utf-8")
     _record_updated_log(local, Path(logs[0]))
     assert tool.green_full(local, sha)
+
+
+def test_the_newest_green_nightly_stays_a_candidate_ancestor_beyond_the_recent_window(repo):
+    local, _ = repo
+    nightly = _commit(local, "app.py", "nightly")
+    rows = [{"commit": nightly, "tree": _git(local, "rev-parse", f"{nightly}^{{tree}}"), "argv": ["test"]}]
+    for i in range(land_cache.NARROW_COMMITS + 2):
+        sha = _commit(local, "app.py", f"later {i}")
+        tree = _git(local, "rev-parse", f"{sha}^{{tree}}")
+        rows += [{"commit": sha, "tree": tree, "argv": [f"a{i}"]}, {"commit": sha, "tree": tree, "argv": [f"b{i}"]}]
+    head = _commit(local, "app.py", "head")
+    kept = lambda: {row["commit"] for row in tool.publish_evidence.ancestor_rows(tool, local, head, rows, recent=3)}
+    assert nightly not in kept()
+    common = Path(_git(local, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    (common / "rosy-nightly-green").write_text(nightly + "\n", encoding="utf-8")
+    assert nightly in kept() and len(kept()) <= land_cache.NARROW_COMMITS

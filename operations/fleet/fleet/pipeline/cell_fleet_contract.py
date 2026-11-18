@@ -31,8 +31,8 @@ class FleetRToCellHandoff:
     robot_id: str
     robot_kind: str
     station_pose_xy_yaw: tuple[float, float, float]
-    wheel_brake_locked: bool = True
-    bed_ready: bool = True
+    wheel_brake_locked: bool = False
+    bed_ready: bool = False
     v_cmd_mps: float = 0.0
     cargo_manifest: tuple[str, ...] = ()
 

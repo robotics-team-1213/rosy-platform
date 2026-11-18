@@ -110,12 +110,16 @@ MONITORING = ["test/test_monitoring_browser.py"]
 RECOVERY = ["test/test_network_recovery_browser.py"]
 EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY
 
+SERVER = "operations/fleet/fleet/server/"
 SCOPE: dict[str, list[str]] = {
     "applications/monitoring/": MONITORING,
     "operations/monitoring/": MONITORING,
     "applications/fleet/dev/": FLEET_SAMPLE + ["operations/fleet/test/test_app_connected_browser.py"],
     "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
+    # Only the cell page and the work page fetch these routes (grep of applications/fleet/web, shared/web).
+    "operations/fleet/fleet/server/cell/": ["operations/fleet/test/test_cell_app_browser.py",
+                                           "operations/fleet/test/test_work_overview_browser.py"],
     "applications/fleet/web/": FLEET,
     "middleware/robot_ui/robot/": ROBOT + ["middleware/core/api/test/test_d283_console_browser.py"],
     "middleware/core/api/": API_WEB,
@@ -195,6 +199,9 @@ def targets(paths: list[str]) -> list[str]:
             continue
         for prefix, patterns in SCOPE.items():
             if path.startswith(prefix):
+                # A registered sub-prefix narrows the generic server entry (not applied to other prefixes).
+                if prefix == SERVER and any(q != SERVER and q.startswith(SERVER) and path.startswith(q) for q in SCOPE):
+                    continue
                 for pattern in patterns:
                     selected.update(_expand(pattern))
         # test_ prefix: tools/land_browser.py is a module, not a test (2026-10-26 landings stopped on it)

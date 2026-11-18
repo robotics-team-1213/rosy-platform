@@ -1,0 +1,11 @@
+[Unit]
+Description=Run automatic OpenCV track calibration and sub-pixel map sync every 2 min (10 min stability window)
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+AccuracySec=10s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -165,6 +165,9 @@ def test_a_landing_refused_only_by_a_full_queue_waits_for_room(repo, room):
     ("OSError: [WinError 1450] Insufficient system resources", 4, True),
     ("fatal: Out of memory, malloc failed (tried to allocate 1884142 bytes)", 4, True),
     ("[land] STOP: 1 new failure(s): test_x", 1, True),
+    ("[land] STOP: pytest a exited 255 (log a.txt); not landing\npytest b exited 255 (log b.txt); not landing", 4, True),
+    ("[land] STOP: pytest a 1 new failure(s) (log a.txt); not landing\npytest b exited 255 (log b.txt); not landing",
+     1, True),  # a real failure beside a lost host: the owner's stop, no rerun
 ])
 def test_only_a_laptop_resource_shortage_reruns_land_and_only_a_few_times(repo, monkeypatch, last_line, attempts, stopped):
     _, dev = repo
@@ -206,7 +209,7 @@ def test_a_landing_recovers_after_a_resource_shortage(repo, monkeypatch):
 def test_expired_room_deadline_refuses_even_a_free_queue(repo, monkeypatch):
     _, dev = repo
     monkeypatch.setattr(tool.time, "monotonic", lambda: 11)
-    monkeypatch.setattr(tool._queue(), "full", lambda qdir: None)
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": None)
     assert not tool.wait_for_room(dev, 10)
 
 
@@ -264,6 +267,21 @@ def test_the_supervisor_never_holds_the_callers_worktree(tmp_path, monkeypatch):
     assert Path(log.read_text(encoding="utf-8").strip()) == log.parent
 
 
+def test_detach_falls_back_when_the_job_object_forbids_breakaway(monkeypatch, tmp_path):
+    seen = []
+
+    def popen(*args, **kwargs):
+        seen.append(flags := kwargs.get("creationflags", 0))
+        if flags & 0x01000000:  # CREATE_BREAKAWAY_FROM_JOB: the parent job object refuses it
+            raise PermissionError(5, "Access is denied.")
+        return object()
+
+    monkeypatch.setattr(tool.subprocess, "Popen", popen)
+    assert tool.detach([sys.executable, "-c", "pass"], tmp_path / "d.log") is not None
+    assert seen == ([0x00000008 | 0x00000200 | 0x01000000, 0x00000008 | 0x00000200]
+                    if os.name == "nt" else [0])
+
+
 def _ticket(main: Path, name: str, **row) -> Path:
     qdir = main / ".git" / "rosy-land-queue"
     qdir.mkdir(exist_ok=True)
@@ -300,10 +318,10 @@ def test_requeueing_a_head_the_live_snapshot_holds_reuses_it(repo, monkeypatch):
 
 
 @pytest.mark.parametrize("room_after", [2, None])
-def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room_after):
+def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, capsys, room_after):
     _, dev = repo
     checks, clock = [], [0.0]
-    monkeypatch.setattr(tool._queue(), "full", lambda qdir: None if room_after and len(checks) >= room_after
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": None if room_after and len(checks) >= room_after
                         else checks.append(1) or "landing queue full (12/12 tickets)")
     monkeypatch.setattr(tool.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(tool.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
@@ -311,8 +329,11 @@ def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room
         assert tool.start(dev, [], NOW, lambda *a: None)[0] == "land/feat/x-20261028044000"
         assert clock[0] == 2 * tool.FULL_POLL_S
     else:
-        with pytest.raises(SystemExit, match="queue full .*waited 30 min"):
+        with pytest.raises(SystemExit) as stop:
             tool.start(dev, [], NOW, lambda *a: None)
+        assert stop.value.code == 3  # not 0: a caller's background command must not read it as queued
+        err = capsys.readouterr().err
+        assert "[land-async] NOT QUEUED: feat/x: landing queue full" in err and "after 30 min" in err
         assert clock[0] >= tool.FULL_WAIT_S and not _git(dev, "branch", "--list", "land/*")
 
 
@@ -729,7 +750,7 @@ def test_a_waiter_never_replaces_a_landing_that_started_while_it_waited(repo, mo
     main, dev = repo
     state = {"full": True}
 
-    def full(qdir):
+    def full(qdir, lane=""):
         if state["full"]:
             state["full"] = False
             _ticket(main, "0001", branch="land/feat/x-20261028050000")  # queued meanwhile, from a newer HEAD
@@ -752,7 +773,7 @@ def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatc
     rollup = "land/fix/land-rollup-20261109000000-20261109000000"
     monkeypatch.setattr(tool, "git", lambda cwd, *a, **k: str(repo / ".git"))
     seen = []
-    launch = lambda argv, log, cwd=None: seen.append((argv[-2:], log.name, cwd))  # noqa: E731
+    launch = lambda argv, log, cwd=None: seen.append((argv[4:], log.name, cwd))  # noqa: E731
     tool.split_rollup(tree, rollup, launch)
     assert seen == [], "no .members record: not a rollup land_rollup built"
     (tree.parent / (tree.name + ".members")).write_text("[]", encoding="utf-8")
@@ -763,6 +784,105 @@ def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatc
     monkeypatch.delenv("ROSY_ROLLUP_MIXED")
     tool.split_rollup(tree, rollup, launch, reason="[land] STOP: landing queue full (12/12 tickets)")
     assert seen == [], "halves would stop on the same full queue"
-    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")
+    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure in a (log x); not landing")
     tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")  # a retried supervisor
+    assert seen == [(["split", tree.name, "bisect"], tree.name + ".split.log", repo)]
+    (tree.parent / (tree.name + ".split")).unlink()
+    seen.clear()
+    tool.split_rollup(tree, rollup, launch, reason="")  # killed or expired: no verdict, members go back alone
     assert seen == [(["split", tree.name], tree.name + ".split.log", repo)]
+    assert tool.verdict(["[land] STOP: x", "pytest a (log l)", "[remote-pytest] progress"]).startswith("[land] STOP: x")
+    assert tool.verdict(["[remote-pytest] serial: browser job"]) == ""
+
+
+def test_branch_option_queues_without_a_branch_worktree_and_checks_errors(repo, monkeypatch):
+    main, dev = repo
+    _git(main, "branch", "feat/plumbing", _git(dev, "rev-parse", "HEAD"))
+    launched = []
+    snap, log = tool.start(main, ["--tests", "auto"], NOW, lambda argv, log: launched.append(argv),
+                           branch="feat/plumbing")
+    assert snap == "land/feat/plumbing-20261028044000"
+    tree = log.parent / log.name.removesuffix(".log")
+    assert _git(tree, "rev-parse", "HEAD") == _git(main, "rev-parse", "refs/heads/feat/plumbing")
+    assert _git(main, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+    assert launched[0][-4:] == [str(tree), snap, "--tests", "auto"]
+    for bad in ("main", "HEAD", "land/feat/x-1", "feat/missing"):
+        with pytest.raises(SystemExit):
+            tool._precheck_mod().resolve_branch(main, bad)
+    (dev / "a.txt").write_text("dirty\n")
+    with pytest.raises(SystemExit, match="uncommitted changes"):
+        tool._precheck_mod().resolve_branch(main, "feat/x")
+
+
+def test_main_branch_option_parses_and_checks_too_big(repo, monkeypatch):
+    main, dev = repo
+    _git(main, "branch", "feat/plumbing", _git(dev, "rev-parse", "HEAD"))
+    monkeypatch.chdir(main)
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 0)
+    with pytest.raises(SystemExit, match="refused: 1 own commits"):
+        tool.main(["--branch", "feat/plumbing", "--tests", "auto"])
+    with pytest.raises(SystemExit, match="--branch needs"):
+        tool.main(["--branch"])
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 40)
+    calls = []
+    monkeypatch.setattr(tool, "precheck_branch", lambda cwd, b, words: calls.append((b, words)) or 0)
+    monkeypatch.setattr(tool, "start", lambda cwd, args, now, launch, branch=None: (
+        calls.append((branch, args)) or ("land/feat/plumbing-1", Path("log"))))
+    assert tool.main(["--branch=feat/plumbing", "--tests", "auto", "--mixed", "ok"]) == 0
+    assert calls == [("feat/plumbing", ["--mixed", "ok"]), ("feat/plumbing", ["--tests", "auto", "--mixed", "ok"])]
+
+
+def test_supervise_prunes_clean_landed_worktrees_and_never_fails_on_prune_error(repo, monkeypatch, capsys):
+    main, dev = repo
+    done = main / ".worktrees" / "done"
+    dirty = main / ".worktrees" / "dirty"
+    _git(main, "worktree", "add", "-q", "-b", "feat/done", str(done), "main")
+    _git(main, "config", "branch.feat/done.description", "owner: t <t@example.invalid>")
+    (done / "done.txt").write_text("done\n", encoding="utf-8")
+    _git(done, "add", "done.txt")
+    _git(done, "commit", "-q", "-m", "done")
+    _git(main, "merge", "-q", "--ff-only", "feat/done")
+    _git(main, "worktree", "add", "-q", "-b", "feat/dirty", str(dirty), "main")
+    (dirty / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+    _git(dirty, "add", "dirty.txt")
+    _git(dirty, "commit", "-q", "-m", "dirty")
+    _git(main, "merge", "-q", "--ff-only", "feat/dirty")
+    (dirty / "wip.txt").write_text("wip\n", encoding="utf-8")
+
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        _git(main, "merge", "-q", "--no-edit", _git(Path(cwd), "rev-parse", "--abbrev-ref", "HEAD"))
+        return 0
+
+    assert tool.supervise(tree, snap, [], run=fake_land) == 0
+    assert not done.exists() and dirty.is_dir()
+
+    (dev / "a.txt").write_text("3\n", encoding="utf-8")
+    _git(dev, "commit", "-qam", "change 2")
+    snap2, log2 = tool.start(dev, [], NOW.replace(second=1), lambda *a: None)
+    tree2 = log2.parent / log2.name.removesuffix(".log")
+    import worktrees
+    monkeypatch.setattr(worktrees, "prune", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("lock held")))
+    assert tool.supervise(tree2, snap2, [], run=fake_land) == 0
+    assert not tree2.exists() and "worktree prune skipped: lock held" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("verdict", [True, False])
+def test_a_rollup_killed_without_a_verdict_is_not_bisected(repo, monkeypatch, verdict):
+    """11-17: land_tick killed a running rollup's land.py (exit 1, last line mid pytest); the supervisor then split
+    it on that progress line. Only a land.py STOP is a verdict to bisect on."""
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    split = []
+    monkeypatch.setattr(tool, "split_rollup", lambda *a, **k: split.append(k))
+    monkeypatch.setattr(tool, "superseded", lambda *a: [])
+
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        stdout.write(("[land] STOP: NEW failure\n" if verdict else "") + "[remote-pytest] serial: browser job\n")
+        return 1
+    tool.supervise(tree, snap, [], run=fake_land)
+    assert bool(split) is verdict
+    assert (tree.parent / (tree.name + ".stopped")).exists()

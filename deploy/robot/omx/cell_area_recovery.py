@@ -14,6 +14,42 @@ import numpy as np
 from cell_control_core import apply_wrist_xy_step
 
 
+def recover_hover(run_cmd, grip_open_val: float, steps_log: list[dict], *, park_after: bool = False) -> bool:
+    """Stop recovery on the first refused command; leave torque control with the runner."""
+    if not run_cmd("retreat").get("ok"):
+        return False
+    if not run_cmd(f"grip {min(57.85, float(grip_open_val)):.2f}").get("ok"):
+        return False
+    if steps_log and steps_log[-1].get("t") is not None:
+        import time
+        time.sleep(0.20)
+    if not run_cmd("goto above_pick").get("ok"):
+        return False
+    if park_after:
+        if steps_log and steps_log[-1].get("t") is not None:
+            if not run_cmd("grip 55.80").get("ok"):
+                return False
+            import time
+            time.sleep(0.20)
+        if not run_cmd("park").get("ok"):
+            return False
+    return True
+
+
+def release_early_touchdown(run_cmd, grip_release: float, *, frame_fn=None, stay_hover: bool = False) -> str | None:
+    """Return the first refused release/retreat/fold command; a failed release cannot count as placement."""
+    if not run_cmd(f"grip {grip_release:.2f}").get("ok"):
+        return "grip"
+    if frame_fn is not None and not stay_hover:
+        import time
+        time.sleep(0.20)
+    if not run_cmd("retreat").get("ok"):
+        return "retreat"
+    if not stay_hover and not run_cmd("park").get("ok"):
+        return "park"
+    return None
+
+
 def diagnose_and_recover_pick(
     *,
     attempt: int,

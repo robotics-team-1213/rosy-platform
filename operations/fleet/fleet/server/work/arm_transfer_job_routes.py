@@ -114,13 +114,19 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
     from .physical_transfer_execution import PhysicalTransferExecution
     from .physical_transfer_dispatcher import PhysicalTransferDispatcher
     dispatcher = service = None
+    attestations = (PhysicalOperatorAttestations(store)
+                    if store is not None and deployment_profile == "device_trial" else None)
     if observer is not None:
+        if attestations is not None:
+            from .physical_transfer_attestations import OPERATOR_ATTESTED_PRODUCER_ID
+            if observer.producer_id != OPERATOR_ATTESTED_PRODUCER_ID:
+                raise ValueError("device_trial observer must use the operator-attested producer id")
         validate_observer(observer, None if store is None else store.installation, console=console,
             principals=principals, other_tokens=other_tokens, other_services=other_services, registries=registries)
         dispatcher = PhysicalTransferDispatcher(PhysicalTransferExecution(store), reader, task_store,
                                                deployment_profile=deployment_profile,
                                                commissioning_revisions=commissioning)
-        service = PhysicalObservationService(dispatcher, observer)
+        service = PhysicalObservationService(dispatcher, observer, attestations)
     app.state.arm_transfer_dispatcher = dispatcher
     app.state.arm_transfer_delegate = None if store is None else DelegatedArmJobs(store, service)
     if intake is not None:  # D-996 5: an arrived trip's object_ref becomes the supply arm's proposal
@@ -211,9 +217,9 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
         job_view=_view, require_viewer=require_viewer, require_proposer=require_proposer,
         require_named_operator=require_named_operator, write_origin=write_origin)
 
-    if store is not None and deployment_profile == "device_trial":
+    if attestations is not None:
         from .physical_transfer_attestation_routes import install_operator_attestation_routes
-        install_operator_attestation_routes(app, attestations=PhysicalOperatorAttestations(store),
+        install_operator_attestation_routes(app, attestations=attestations,
             require_viewer=require_viewer, require_named_operator=require_named_operator, write_origin=write_origin,
             store=store)
 

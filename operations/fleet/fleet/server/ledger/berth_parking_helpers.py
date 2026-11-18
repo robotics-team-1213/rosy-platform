@@ -115,12 +115,7 @@ async def _pin_robot_on_fleet(
         try:
             tracker = pose_service._tracker(robot_id)
             now_wall = pose_service._wall()
-            if tracker is not None and (
-                tracker.latest_odom_stamp is None
-                or now_wall - tracker.latest_odom_stamp > pose_service.config.max_odom_age_s * 0.8
-            ):
-                from rosy.world.state.projections.map_pose import OdomSample
-                tracker.add_odom(OdomSample(0.0, 0.0, 0.0, now_wall), now_wall)
+            # No synthesized odometry: a pin needs the robot's own fresh odom, else it is refused (D-430 panel).
             _refused, mp = await pose_service.pin(robot_id, (float(x), float(y), float(yaw)))
             if mp is not None:
                 pinned_pose = {"x": round(mp.x, 4), "y": round(mp.y, 4), "yaw": round(mp.yaw, 4), "state": mp.state}
@@ -135,7 +130,11 @@ async def _pin_robot_on_fleet(
             )
         except Exception:
             pass
-    return pinned_pose or {"x": round(float(x), 4), "y": round(float(y), 4), "yaw": round(float(yaw), 4), "state": "LOCALIZED"}
+    return pinned_pose or {"x": round(float(x), 4), "y": round(float(y), 4), "yaw": round(float(yaw), 4), "state": "UNKNOWN"}
+
+
+#: Measured endings of the reverse phase; anything else (emergency, timeout) is not a berth park.
+BERTH_SUCCESS_REASONS = frozenset({"already_at_dock_stop_face", "dock_stop_face_reached", "contact_stall_at_stop_face"})
 
 
 async def _execute_physical_berth_park(
@@ -227,11 +226,14 @@ async def _execute_physical_berth_park(
         last_rem_m = target_back_m
         last_progress_at = time.monotonic()
 
-        if target_back_m <= 0.008:
+        if stop_reason.startswith("emergency"):
+            pass  # never reverse after an emergency; the run is reported as not succeeded
+        elif target_back_m <= 0.008:
             stop_reason = "already_at_dock_stop_face"
             if "REVERSING_IN_RAILS" not in phases_executed:
                 phases_executed.append("REVERSING_IN_RAILS")
         else:
+            stop_reason = "reverse_timeout"  # replaced only by a measured stop-face reason below
             while time.monotonic() - t_rev < 10.0:
                 p_cur, fg_cur, rg_cur, st_cur = await _read_pose_and_gaps()
                 if st_cur.get("mode") == "EMERGENCY":
@@ -315,6 +317,7 @@ async def _execute_physical_berth_park(
 
     return {
         "executed": True,
+        "succeeded": stop_reason in BERTH_SUCCESS_REASONS,
         "stop_reason": stop_reason,
         "phases_executed": phases_executed,
         "before": {"pose": p0, "fg_center_m": fg0, "rg_center_m": rg0},

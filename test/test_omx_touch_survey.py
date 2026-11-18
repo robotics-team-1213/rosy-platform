@@ -57,3 +57,27 @@ def test_the_held_pose_is_the_height_and_a_free_descent_needs_no_retreat():
     assert touched == [[held.x, held.y, held.z]]
     assert cell.sent == ["goto above_0", "run descend_touch_0", "state", "retreat",
                          "goto above_1", "run descend_touch_1", "goto above_1", "park"]
+
+
+def test_motion_without_the_d911_flags_is_refused_before_any_port_is_opened(tmp_path, monkeypatch, capsys):
+    import types
+
+    opened = []
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(FifoCell=lambda *a, **k: opened.append(a)))
+    cfg = tmp_path / "cfg.json"
+    cfg.write_text("{}")  # never read: the flags are checked first
+    base = ["--config", str(cfg), "--plan", str(cfg), "--name", "n", "--kind", "object", "--x=0.05", "--y=-0.1"]
+    for flags in ([], ["--commissioning"], ["--person-at-switch"]):
+        assert m.main(base + flags) == 2
+    assert "held" in capsys.readouterr().out and opened == []
+
+
+def test_plan_only_never_touches_the_port(tmp_path, monkeypatch):
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(FifoCell=lambda *a, **k: pytest.fail("port opened")))
+    (tmp_path / "plan.json").write_text(json.dumps(PLAN))
+    (tmp_path / "cfg.json").write_text("{}")
+    assert m.main(["--config", str(tmp_path / "cfg.json"), "--plan", str(tmp_path / "plan.json"), "--name", "n",
+                   "--kind", "object", "--x=0.05", "--y=-0.1", "--plan-only"]) == 0
+    assert (tmp_path / "touch-survey-n.json").exists()

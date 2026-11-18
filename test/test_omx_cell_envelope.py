@@ -51,7 +51,8 @@ def approve(tmp_path, envelope, task, outcomes=("placed", "placed"), *, sequence
     rows = [{"schema": "rosy.omx-cell-attempt.v1", "attempt_id": f"trial-{i}",
              "envelope": {**result, "mode": "commissioning", "status": "commissioning", "allowed": True},
              "outcome": outcome,
-             "verify": {"inside": outcome == "placed"}, "transfer": {"result": outcome}}
+             "verify": {"inside": outcome == "placed", "verified": outcome == "placed"},
+             "transfer": {"result": outcome}}
             for i, outcome in enumerate(outcomes)]
     attempts = tmp_path / "attempts.jsonl"
     attempts.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
@@ -124,7 +125,11 @@ def test_reviewed_gate_load_keeps_its_own_durable_intent(tmp_path, task, envelop
     assert gate.open(path, lambda a: cell_attempts.begin(config, a)) is None
     pending = attempts.with_suffix(".pending.json")
     original = pending.read_bytes()
-    assert gate.act(f"load {path}")["ok"]
+    state["t"] = 100.01
+    state["trace_receipt"] = {"status": "ok", "source": "owner-trace.jsonl"}
+    loaded = gate.act(f"load {path}")
+    assert loaded["ok"] and loaded["pre_state_trace"] == {
+        "t": 100.01, "trace_receipt": state["trace_receipt"]}
     state["operating_context"]["session_id"] = "other-session"
     assert not gate.act(f"load {path}")["ok"]
     state["operating_context"]["session_id"] = "fixture-session"
@@ -217,6 +222,20 @@ def test_failures_stay_in_the_denominator_and_new_failures_revoke(tmp_path, task
     with attempts.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps(row) + "\n")
     assert envelope.assess(*task, now=100.01)["reason"] == "runtime_failure"
+
+
+def test_unverified_commissioning_placement_cannot_approve_automatic_task(tmp_path, task, envelope):
+    attempts, document = approve(tmp_path, envelope, task)
+    rows = [json.loads(line) for line in attempts.read_text().splitlines()]
+    rows[0]["verify"]["verified"] = False
+    attempts.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    document["reviews"][0]["attempts_sha256"] = envelope.digest(rows)
+    Path(task[0]["operating_envelope_path"]).write_text(json.dumps(document))
+
+    result = envelope.assess(*task, now=100.01)
+    assert result["status"] == "failed"
+    assert result["successes"] == 1
+    assert envelope.review_candidates(rows)[result["task_sha256"]]["successes"] == 1
 
 
 def test_commissioning_is_explicit_and_never_a_verified_result(task, envelope):

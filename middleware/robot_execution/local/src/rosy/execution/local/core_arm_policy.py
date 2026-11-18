@@ -23,11 +23,17 @@ def _single(cameras):
 
 
 class CoreArmPolicyPort:
-    def __init__(self, session, *, capture, principal):
+    def __init__(self, session, *, capture, principal, lease_receiver=None, lease_principal=None):
         if (not isinstance(session, OwnerPolicySession) or session._runtime_binding is None
                 or not callable(capture) or not isinstance(principal, str) or not principal.strip()):
             raise ValueError('watchdog-bound owner session, trusted capture and principal required')
+        # D-1024 3: a separate Fleet principal delivers leases; the runner's principal never can, and Fleet's never acts.
+        if lease_receiver is not None and (
+                not isinstance(lease_principal, str) or not lease_principal.strip() or lease_principal == principal
+                or getattr(lease_receiver, '_session', None) is not session):
+            raise ValueError('a pushed-lease receiver bound to this session and a distinct Fleet principal required')
         self.session, self.capture, self.principal = session, capture, principal
+        self.lease_receiver, self.lease_principal = lease_receiver, lease_principal
         self._pending = None
         self._lock = threading.RLock()
 
@@ -85,6 +91,20 @@ class CoreArmPolicyPort:
                 tuple(positions[name] for name in source.joint_names),
                 tuple(s.frame_sha256 for s in sources), tuple(s.camera_received_at_ns for s in sources))
             return asdict(self.session.submit(candidate))
+
+    def deliver_lease(self, principal, grant):
+        if self.lease_receiver is None or principal != self.lease_principal:
+            raise PermissionError('lease delivery belongs to the Fleet principal')
+        if not self.lease_receiver.deliver(grant):  # The receiver has already latched HOLD.
+            raise ValueError('lease refused; the session is on HOLD')
+        return dict(accepted=True, lease_expires_at_ns=self.session.lease.expires_at_ns)
+
+    def hold(self, principal, reason):
+        # HOLD only removes authority, so the runner's principal may request it as well as Fleet.
+        if self.lease_receiver is None or principal not in (self.lease_principal, self.principal):
+            raise PermissionError('hold belongs to a configured principal')
+        self.lease_receiver.hold(reason)
+        return dict(hold_reason=self.session.hold_reason)
 
     def stop(self):
         # A stalled RGB provider holds the I/O lock; stop must reach the fence without it.

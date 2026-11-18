@@ -144,6 +144,11 @@ def apply_delta(cell, camera, base, delta):
 def fit_camera(args):
     """Fit the camera pose and/or the joints' zero offsets (--params) to the real frames of most episodes; judge on the
     held-out ones (every third by crc)."""
+    if args.params == "both" and not getattr(args, "allow_coupled_fit", False):
+        raise SystemExit(
+            "fit-camera --params both couples camera pose and joint zero offsets (2026-11-09: worsened fit 4.5 -> 6.3 px); "
+            "fix camera height/tilt with cell_depth_pose first then run --params joints, or pass --allow-coupled-fit (D-1033)"
+        )
     import mujoco
     import omx_cell_sim as cs
     cams = {args.real_camera: args.camera}
@@ -346,6 +351,11 @@ def main(argv=None):
     f.add_argument("--every", type=float, default=2.0)
     f.add_argument("--per-episode", type=int, default=6)
     f.add_argument("--params", choices=("camera", "joints", "both"), default="camera")
+    f.add_argument(
+        "--allow-coupled-fit",
+        action="store_true",
+        help="allow --params both despite camera-vs-joint cancellation (D-1033)",
+    )
     a = p.parse_args(argv)
     if a.command == "fit-camera":
         return fit_camera(a)

@@ -113,3 +113,16 @@ def test_cover_adds_the_capable_host_that_the_worker_cut_dropped():
     rooms = {"a@1": {"caps": frozenset()}, "b@2": {"caps": NEED}}
     assert host_caps.cover([("a@1", "any")], ["a@1", "b@2"], [NEED], rooms) == [("a@1", "any"), ("b@2", "any")]
     assert host_caps.cover([("a@1", "any")], ["a@1", "b@2"], [frozenset()], rooms) == [("a@1", "any")]
+
+
+def test_a_fallback_host_below_the_floor_keeps_its_probed_capabilities(monkeypatch, repo, tmp_path):
+    path, _ = repo
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    rp.HEADROOM.pop("low@1", None)  # below the floor: place() recorded no headroom for it
+    monkeypatch.setitem(host_caps.KNOWN, "low@1", NEED)
+    monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None, cores=0: ["low@1"])
+    monkeypatch.setattr(rp, "run_on", lambda host, inv, *a, **k: [0] * len(inv))
+    now = [0.0]
+    assert rp.run([["suite/test_needs.py"]], [tmp_path / "1.txt"], repo=path, wait=60, poll=30,
+                  sleep=lambda s: now.__setitem__(0, now[0] + s), clock=lambda: now[0]) == [0]
+    assert host_caps.room("other@1", {}) == {"caps": ()}, "a host never probed has no capability"

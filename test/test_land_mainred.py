@@ -218,3 +218,21 @@ def test_recheck_runs_a_legacy_browser_red_with_the_opt_in(repo):
     seen = []
     mr.recheck(wt, git(wt, "rev-parse", "HEAD"), lambda invocations, logs: seen.extend(invocations), wt)
     assert ["ROSY_RUN_BROWSER_TESTS=1", "-rA", browser] in seen, "without the opt-in the run skips and never closes"
+
+
+def test_state_asks_git_about_one_pair_of_commits_once(repo, monkeypatch):
+    wt, main, head = repo
+    for _ in range(3):  # three closes of the same red main by the same tree: one question
+        mr.write(wt, "close", id=ID, sha=head, landed=head, covers=[])
+        mr.red(wt, main, [ID], LOG, [], "fix/elsewhere")
+    asked = []
+    real = mr._git
+
+    def counted(wt_, *args):
+        asked.extend([args] * (args[0] == "merge-base"))
+        return real(wt_, *args)
+
+    monkeypatch.setattr(mr, "_git", counted)
+    first = mr.state(wt)
+    assert len(asked) == 1 and ID in first
+    assert mr.state(wt) == first and len(asked) == 1, "a second read costs no git call"

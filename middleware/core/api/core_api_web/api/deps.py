@@ -452,8 +452,18 @@ def authenticate(config: dict, bearer: Optional[str], query_token: Optional[str]
 
 #: D-548: on a device the shared dev tokens drive the robot but never hand out a shell, a
 #: credential that outlives the marker, or a new network, release or boot.
+ARM_LEASE_PATHS = ("/api/v1/arm/lease", "/api/v1/arm/hold", "/api/v1/arm/stop")
 SHARED_DEV_REFUSED_PREFIXES = ("/api/v1/host/ssh", "/api/v1/auth/enrollment-codes")
 SHARED_DEV_REFUSED_WRITES = ("/api/v1/host/", "/api/v1/system/tokens", "/api/v1/system/dds")
+
+
+def lease_principal_refused(svc, auth, path) -> bool:
+    """D-807: the Fleet lease credential reaches only the arm lease/hold/stop routes; no websocket path at all.
+
+    Shared by the HTTP dependency and the websocket authorizer so neither can be a way around the other.
+    """
+    lease_principal = getattr(getattr(svc, 'arm_policy', None), 'lease_principal', None)
+    return bool(lease_principal) and auth.token_id == lease_principal and path not in ARM_LEASE_PATHS
 
 
 def auth_dependency(request: Request,
@@ -468,6 +478,9 @@ def auth_dependency(request: Request,
         if (path.startswith(SHARED_DEV_REFUSED_PREFIXES)
                 or (request.method not in ("GET", "HEAD") and path.startswith(SHARED_DEV_REFUSED_WRITES))):
             raise ApiError("FORBIDDEN", 403, "공용 개발 토큰으로는 이 작업을 할 수 없습니다 (D-548)")
+    # D-807: the Fleet lease principal is a machine credential for the arm lease/hold/stop routes only.
+    if lease_principal_refused(request.app.state.core, auth, request.url.path):
+        raise ApiError("FORBIDDEN", 403, "this credential may only deliver arm leases and holds")
     return auth
 
 

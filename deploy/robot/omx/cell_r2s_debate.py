@@ -142,7 +142,7 @@ def run_complete_stack_return_and_recovery_scenario(
             env_obs=env_t, systematic_bias_m=pipeline.systematic_bias_m,
         )
         rl_sel = parallel_speculative_r2s_rl_select(
-            proj, work_dir=pipeline.work_dir, clf=pipeline.clf,
+            proj, work_dir=pipeline.fleet_pipe.policy_dir, clf=pipeline.clf,
             iwr=pipeline.iwr, r2s_gap_state=pipeline.r2s_gap_state,
         )
         debate = deliberate_real_sim_r2s_step(

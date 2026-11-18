@@ -118,3 +118,9 @@ CORE → OwnerPolicySession → owner (유일한 joint writer, 승인·한계·s
 4. 정책 실행기 뼈대 + LeRobot 공통 adapter(ACT부터). 기존 `lerobot_robot_rosy_omx` 시험이 그대로 통과하는지 확인.
 5. AI PC 지연 측정: ACT, 그다음 SmolVLA. 측정 결과로 정책별 `max_chunk`·horizon을 정한다.
 6. SmolVLA를 허용 목록에 넣고, Gazebo `policy_chain_gazebo.py`로 chunk 실행부터 stop까지 확인. 과제 성공 증거가 아니다.
+
+### 개정 (2026-11-16) — SmolVLA 실행기 편입 및 추론 가속 옵션
+
+- **실측:** 미세조정 체크포인트(`20261116T032207-caf27aaa`, `001500`, 301M bf16 + 148.8M fp32 파라미터, 4카메라 `240x320`)에 대해 AI PC RTX 5080에서 `LeRobotAdapter` 추론 지연을 측정했다([검증 기록](../validation/policy-latency-smolvla-2026-11-16/result.md)). 미세조정 모델에는 fp32 가중치가 남아 있어 CUDA autocast(`use_amp=True`)가 중앙값 `535.5 ms → 359.1 ms`로 지연을 줄였고, `flow_steps=5` + `n_action_steps=8` 조합은 평균 `37.5 ms`(중앙값 `11.5 ms`)를 기록했다.
+- **변경:** `ALLOWED_POLICY_TYPES`에 `'smolvla'`를 넣고, `LeRobotAdapter`에 `use_amp`·`flow_steps`·`n_action_steps` 선택자와 `observation.environment_state` 전달을 더했다.
+- **유지되는 관문:** `ActionSpace`의 `lerobot_norm_v1 → ros_joint_rad` 거절, CORE의 `policy_revision`·SIM 전용 검사, `cell_executor.APPROVED_REAL_EXECUTORS = frozenset({'ik_chunk'})`, 실물 owner의 `allowed_owners=('rule_based',)`(D-911·D-1024)은 그대로 닫혀 있다.

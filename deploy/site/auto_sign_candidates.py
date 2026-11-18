@@ -290,6 +290,8 @@ class AutoSigner:
             latest = max(runs, key=lambda row: row["id"])
             conclusion = latest.get("conclusion")
             if latest.get("status") == "completed" and conclusion in {"failure", "cancelled"}:
+                if conclusion == "failure":
+                    self._rerun_failed(latest["id"])
                 raise CiRed(str(conclusion))
             if latest.get("status") != "completed" or conclusion != "success":
                 raise RuntimeError("CI is not successful yet")
@@ -300,6 +302,22 @@ class AutoSigner:
                 raise RuntimeError("ci-result is not successful yet")
         except (ValueError, KeyError, TypeError, AttributeError):
             raise RuntimeError("exact-main CI proof is missing or malformed; retry later") from None
+
+    def _rerun_failed(self, run_id: int) -> None:
+        """Ask GitHub once per run id to rerun its failed jobs; the newest-run rule itself is unchanged."""
+        state = getattr(self, "_state", None)
+        if state is None:
+            return
+        done = state.setdefault("rerun", [])
+        if run_id in done:
+            return
+        done.append(run_id)
+        del done[:-_REFUSED_LIMIT]
+        try:
+            self._gh("run", "rerun", str(run_id), "--failed", "--repo", self.repo)
+            self._audit({"decision": "ci-rerun-requested", "run_id": run_id})
+        except RuntimeError as error:  # a token without actions:write keeps today's behaviour
+            self._audit({"decision": "ci-rerun-refused", "run_id": run_id, "reason": str(error)})
 
     # -- state ------------------------------------------------------------
     def _state_path(self) -> Path:
@@ -460,6 +478,7 @@ class AutoSigner:
         self.state_dir.mkdir(parents=True, exist_ok=True)
         with _run_lock(self.state_dir):
             state = self._load_state()
+            self._state = state
             try:
                 releases = self.list_releases()
             except (RuntimeError, json.JSONDecodeError) as error:

@@ -4,7 +4,8 @@
 Each scenario is data: what each attempt ends in, what the top camera shows, whether a push moves anything, and what the cell
 must then do. `teach` runs rounds first on the same ledger, and the action that failed must lose its place.
 --decisions turns the real failures of a cell's decisions.jsonl into scenarios too: each must get the table's answer today, and
-one that only a person can answer goes on the `unsolved` list, the list of rules still to write. A scenario that passes here
+one that only a person can answer goes on the `unsolved` list, the list of rules still to write. `changed` lists the real
+failures the table now answers otherwise than the cell did then (the expectation itself comes from today's table). A scenario that passes here
 proves the decision, not the motion: motion is proven only on the arm.
 
   cell_failure_scenarios.py [--workers 8] [--decisions work/decisions.jsonl]
@@ -26,6 +27,7 @@ import cell_recovery
 
 STALL, ROOM = "stopped: released after a stop at run lift_pick", "stopped: no usable object"
 PILE = "stopped: no usable object (tangled pile)"  # 2026-11-13 arm_s: one box's end on another, the pile against the plate
+PARK = "stopped: contact at park: contact in park: shoulder_lift lag rose to 2.3 units at PWM -538 of 600"
 PICK_PX = (100, 100)  # a change within NEAR_PX of it is the box itself; `pile` paints one far from it
 
 # rounds: (run_auto's result, the pile moved away from the box in that attempt, the push moved something[, cell_why's reading])
@@ -89,22 +91,45 @@ SCENARIOS = [
      "result": "ask a person: out_of_reach", "actions": ["ask_person"]},
     {"name": "pile moved while picking: look before pushing", "rounds": [(PILE, True, True), ("placed", False, True)], "result": "placed",
      "actions": ["observe_again", "done"]},
+    # 2026-11-14 arm_s, on the real arm: a USB replug moved the top camera 109 px and six grasps closed on air; the running
+    # belt read as a moved pile; a run without a chunk session said only "refused"; a park from a far pick overloaded the lift
+    {"name": "camera moved: no grasp on a stale map", "camera": [True], "rounds": [], "result": "ask a person: camera_moved",
+     "actions": ["ask_person"]},
+    {"name": "camera bumped mid-carry: stop before the next pick", "camera": [False, True], "rounds": [(STALL, False, True)],
+     "result": "ask a person: camera_moved", "actions": ["slow_down", "ask_person"]},
+    {"name": "the belt runs all through the carry: not a moved pile", "belt": True,
+     "rounds": [(STALL, False, True), ("placed", False, True)], "result": "placed", "actions": ["slow_down", "done"]},
+    {"name": "the belt cannot fake a push's effect", "belt": True, "rounds": [(ROOM, False, False)],
+     "result": "ask a person: no_room", "actions": ["ask_person"]},
+    {"name": "no chunk session: the ask names the fix", "rounds": [("refused", False, True)], "result": "ask a person: no_session",
+     "actions": ["ask_person"]},
+    {"name": "park overloaded at a far pick: a person, even when the pile moved", "rounds": [(PARK, True, True)],
+     "result": "ask a person: park_contact", "actions": ["ask_person"]},
 ]
+BELT = [500, 0, 640, 200]  # the belt's rect, far from PICK_PX
 
 
 class World:
-    """A top view that changes only where a scenario says."""
+    """A top view that changes only where a scenario says; with `belt` a strip changes in every frame, and `camera` says per
+    round whether the top camera moved."""
 
-    def __init__(self, rounds):
-        self.rounds, self.painted, self.now = iter(rounds), 0, None
+    def __init__(self, rounds, camera=(), belt=False):
+        self.rounds, self.painted, self.now, self.camera_at, self.belt, self.frames, self.picks = iter(rounds), 0, None, list(camera), belt, 0, 0
 
     def frame(self):
         img = np.full((480, 640, 3), 90, np.uint8)
         for i in range(self.painted):
             img[300:340, 300 + 50 * i:340 + 50 * i] = 240
+        self.frames += 1
+        if self.belt:
+            img[13:173, 511:640] = 90 + 120 * (self.frames % 2)
         return img
 
+    def camera(self, frame):
+        return {"max_px": 109.0} if self.picks < len(self.camera_at) and self.camera_at[self.picks] else None
+
     def pick(self):
+        self.picks += 1
         self.now = next(self.rounds)
         self.painted += bool(self.now[1])
         return {"result": self.now[0], "attempts": [{}]}
@@ -122,10 +147,10 @@ class World:
         return {"hypothesis": reading, "by": "measurement"} if reading else {"hypothesis": "unknown", "by": "nobody"}
 
 
-def replay(rounds, choices, floor=False):
-    world = World(rounds)
+def replay(rounds, choices, floor=False, camera=(), belt=False):
+    world = World(rounds, camera, belt)
     return cell_recovery.carry(world.frame, world.pick, world.push, expected_px=lambda attempt: [PICK_PX], emit=lambda *a: None, choices=choices,
-                               explain=world.explain, slow=lambda: not floor)
+                               explain=world.explain, slow=lambda: not floor, camera=world.camera, ignore=[BELT] if belt else ())
 
 
 def run_one(scenario: dict) -> dict:
@@ -135,7 +160,7 @@ def run_one(scenario: dict) -> dict:
         try:
             if "teach" in scenario:
                 replay(scenario["teach"], choices)
-            out = replay(scenario["rounds"], choices, scenario.get("floor", False))
+            out = replay(scenario["rounds"], choices, scenario.get("floor", False), scenario.get("camera", ()), scenario.get("belt", False))
         except StopIteration:  # asked for an attempt the scenario does not have: it went on where it should have stopped
             return {"name": scenario["name"], "ok": False, "result": "tried again past the scenario's end", "actions": [], "unsolved": {}}
     actions =[r["action"] for r in out["rounds"]]
@@ -157,8 +182,14 @@ def from_decisions(path: Path) -> list:
         first = cell_recovery.options(cause, {"observe_again", "push_clear", "slow_down"})[0]
         out.append({"name": f"real: {facts['result'][:70]}", "rounds": [(facts["result"], pile, True), ("placed", False, True)],
                     "result": "placed" if first != "ask_person" else f"ask a person: {cause}",
-                    "actions": [first, "done"] if first != "ask_person" else ["ask_person"]})
+                    "actions": [first, "done"] if first != "ask_person" else ["ask_person"], "logged": facts.get("action")})
     return out
+
+
+def changed(scenarios: list) -> list:
+    """Real failures where today's table answers otherwise than the cell did then: rules that changed since, to look at."""
+    return [{"name": s["name"], "then": s["logged"], "now": s["actions"][0]} for s in scenarios
+            if s.get("logged") and s["logged"] != s["actions"][0]]
 
 
 def run_all(scenarios: list, workers: int = 8) -> dict:
@@ -176,8 +207,9 @@ def main(argv=None) -> int:
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--decisions", type=Path, help="a cell's decisions.jsonl: its real failures become scenarios")
     args = ap.parse_args(argv)
-    out = run_all(SCENARIOS + (from_decisions(args.decisions) if args.decisions else []), args.workers)
-    print(json.dumps(out, indent=1, ensure_ascii=False))
+    real = from_decisions(args.decisions) if args.decisions else []
+    out = run_all(SCENARIOS + real, args.workers)
+    print(json.dumps({**out, "changed": changed(real)}, indent=1, ensure_ascii=False))
     return 0 if not out["failed"] else 1
 
 

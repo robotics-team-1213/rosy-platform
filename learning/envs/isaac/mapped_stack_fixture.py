@@ -314,7 +314,9 @@ def judge(trial, cube=False, *, fixture=None):
     failures = []
     layers = trial.get('layers', [])
     if len(layers) != len(plan(cube, fixture=fixture)):
-        return dict(task_success=False, failures=['first_layer_not_completed' if cube else 'three_layers_not_completed'])
+        incomplete = ('two_layers_not_completed' if cube and fixture and fixture.get('layers') == 2
+                      else 'first_layer_not_completed' if cube else 'three_layers_not_completed')
+        return dict(task_success=False, failures=[incomplete])
     for i, layer in enumerate(layers):
         if 'policy' in layer:  # D-969: a learned policy is judged on the outcome only (where the boxes settled)
             if layer.get('item') != i or layer.get('arm') != plan(cube, fixture=fixture)[i]['arm']:

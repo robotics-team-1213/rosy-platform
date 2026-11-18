@@ -29,6 +29,7 @@ from omx_two_arm_teacher_stages import (  # noqa: E402, F401
     SERVO_GAIN,
     VISION_SKEW_CHOICES,
     Ctx,
+    Faults,
     isaac_handoff,
     judge_pose,
     open_video_writer,
@@ -37,6 +38,18 @@ from omx_two_arm_teacher_stages import (  # noqa: E402, F401
     servo_values,
 )
 import palletizing_gripper as jaw  # noqa: E402
+
+TRACK_RAD = math.radians(1.5)  # grasp/lower ramp lag budget: arm_b at twin kp 20 lagged j4 3 deg on a 1.5 s descent and its finger sat on the box (design kp 40 lagged 1.7 deg and passed)
+
+
+def zero_est_residual(seed, arm, deg):
+    """A seed's per-joint error of the joint-zero estimate: Gaussian, sigma `deg` (one value or one per joint 1-5), fixed per seed
+    and arm; zeros at 0. Per joint because the marker estimator sees j4 worst (about 1.5-2 deg, the rest about 1)."""
+    sigma = np.broadcast_to(np.asarray(deg, float), 5)
+    if not sigma.any():
+        return np.zeros(6)
+    rng = np.random.default_rng([seed, sites.ARMS.index(arm), 7919])
+    return np.append(np.radians(rng.normal(0., 1., 5) * sigma), 0.)
 
 
 class Teacher:
@@ -55,7 +68,8 @@ class Teacher:
         self.hook = frame_hook or (lambda data, label: None)
         self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), "", {}, 0., 0, 0.
         self.others = set()
-        self.zero_error, self.privileged, self.compensate_zero = {}, True, False
+        self.zero_error, self.privileged, self.compensate_zero, self.zero_est_noise_deg, self.estimated_prefix = {}, True, False, 0., False
+        self.last_cmd = {}  # each arm's last joint command in reported angles (--state-history)
         self.servo = {}
         self.servo_comp = r2s_comp.ServoCompensator(world, FPS) if hasattr(world, "q") else None
         if cam_jitter and hasattr(world, "model"):
@@ -77,10 +91,11 @@ class Teacher:
         """One video frame of physics. Sequential: the Teacher is the one context. Two arms at once: each context gets its own arm's
         link and pad contacts; arm-arm contacts go to both."""
         self.n += 1
+        self.last_cmd.update({arm: np.asarray(t, float) - (self.zero_error.get(arm, 0.) if self.privileged else 0.) for arm, t in targets.items()})
         if not self.privileged:
             targets = {arm: t + self.zero_error[arm] if arm in self.zero_error else t for arm, t in targets.items()}
         if self.servo_comp is not None:
-            targets = self.servo_comp.apply(data, targets)
+            targets = self.servo_comp.apply(data, targets, privileged=self.privileged)
         self.world.advance(data, targets)
         both = ctxs is not None
         ctxs = ctxs if both else [self]
@@ -129,7 +144,8 @@ class Teacher:
         """TCP straight line with IK warm start, one target per frame. Returns the final q and the worst IK error (m) met on the way."""
         if self.servo_comp is not None:
             q_end = ik_arm.ik(q, p_to + shift(p_to, yaw_to, q) if shift is not None else p_to, yaw_to, 20)[0]
-            seconds = self.servo_comp.pace_seconds(ik_arm.name, q, q_end, seconds)
+            track = TRACK_RAD if ctx.phase in ("grasp", "lower") else None  # the two moves that end in contact with a container
+            seconds = self.servo_comp.pace_seconds(ik_arm.name, q, q_end, seconds, track_rad=track)
         n, worst = max(1, round(seconds * FPS)), 0.
         dp = p_to - p_from
         dyaw = yaw_to - yaw_from
@@ -230,21 +246,25 @@ class Teacher:
                      max_jitter_std_deg=round(math.degrees(self.servo_comp.max_jitter_std_rad[arm]), 3) if self.servo_comp else 0.0)
         return dict(self.verdict(data, step, row, before, ctx), held=held, servo_comp=scomp, worst_ik_error_mm=round(worst * 1000, 2))
 
+    def skew_for(self, step=None):
+        """Next deterministic belt arrival jitter dict `{'jitter': (dx, dy, yaw_rad)}` from `SKEW_CASES`."""
+        dx, dy, y_deg = self.SKEW_CASES[self.skew_i % len(self.SKEW_CASES)]
+        self.skew_i += 1
+        return dict(jitter=(dx, dy, math.radians(y_deg)))
+
     def belt_in_g(self, data, step):
         """The next container arrives; the belt pick pose varies inside the fixture's infeed tolerance, seed 0 is the nominal pose."""
         f, arm = self.layout.fixture, step["arm"]
         if self.belt_skew:
-            dx, dy, y_deg = self.SKEW_CASES[self.skew_i % len(self.SKEW_CASES)]
-            self.skew_i += 1
-            j = (dx, dy, math.radians(y_deg))
+            j = self.skew_for(step)["jitter"]
         else:
             j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
         self.world.put(data, step["container"], "belt", jitter=j)
         for _ in range(8):
             yield self.q_now(data, arm)
 
-    def run_concurrent(self, data, task, here, max_s=900):
-        return run_concurrent_steps(self, data, task, here, max_s=max_s)
+    def run_concurrent(self, data, task, here, max_s=900, faults=None):
+        return run_concurrent_steps(self, data, task, here, max_s=max_s, faults=faults)
 
     def belt_in(self, data, step, idle):
         """belt_in_g for a caller that drives frames itself with the other arm holding `idle` (the policy evaluation)."""
@@ -301,7 +321,8 @@ class Teacher:
                 for a in L.arms:
                     q_true = self.q_now(data, a)
                     q_rep = q_true - self.zero_error.get(a, np.zeros(6))
-                    self.servo_comp.calibrate_zero_offset(a, q_true, q_rep)
+                    # an estimator, not the truth: zero_est = zero_error + the estimate's residual (0 deg = oracle)
+                    self.servo_comp.calibrate_zero_offset(a, q_true + zero_est_residual(self.seed, a, self.zero_est_noise_deg), q_rep)
         for cid, site in here.items():
             j = (0., 0., 0.) if self.seed == 0 or site == "belt" else (*self.rng.uniform(-1, 1, 2) * .0003, float(self.rng.uniform(-1, 1)) * math.radians(.5))
             w.put(data, cid, site, jitter=j)
@@ -321,15 +342,15 @@ class Teacher:
         self.contacts, self.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
         return self.run_step(self.fresh(here), step, {k: v for k, v in here.items() if k != step["container"]})
 
-    def run_task(self, task, isolated=False, concurrent=False):
+    def run_task(self, task, isolated=False, concurrent=False, faults=None):
         w, L = self.world, self.layout
         here = dict(task.get("start", {}))
         self.contacts, self.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
         data = self.fresh(here)
-        rows, timing, stopped = [], None, None
+        rows, timing, stopped, extra = [], None, None, {}
         start = self.n
         if concurrent:
-            rows, timing, stopped = self.run_concurrent(data, task, here)
+            rows, timing, stopped, extra = self.run_concurrent(data, task, here, faults=faults)
         for step in [] if concurrent else task["steps"]:
             if isolated and rows:
                 data = self.fresh(here)
@@ -352,7 +373,7 @@ class Teacher:
         if concurrent:
             spans = {a: [(t["start_s"], t["end_s"]) for t in timing.values() if t["arm"] == a and "end_s" in t] for a in L.arms}
             a, b = spans.values()
-            out.update(concurrent=True, stopped=stopped, timing=timing,
+            out.update(concurrent=True, stopped=stopped, timing=timing, **extra,
                        overlap_s=round(sum(max(0., min(e1, e2) - max(s1, s2)) for s1, e1 in a for s2, e2 in b), 1))
         return out
 
@@ -372,7 +393,11 @@ def main(argv=None):
     p.add_argument("--cone", default="elliptic", choices=["elliptic", "pyramidal"], help="MuJoCo friction cone")
     p.add_argument("--drop-upper", type=float, default=tasks.RELEASE_DROP_UPPER, help="release height over a lower container, m")
     p.add_argument("--isolated", action="store_true", help="reset to the nominal plan state before every step")
-    p.add_argument("--concurrent", action="store_true", help="both arms at once by the steps' after/after_pick/zones")
+    p.add_argument("--concurrent", action="store_true", help="both arms at once by the steps' after/zones; a belt pick waits on the handover ledger")
+    p.add_argument("--belt-unknown", type=float, default=0., metavar="P", help="concurrent only: a belt reading returns unknown with probability P (seeded); the gate holds and retries next tick")
+    p.add_argument("--belt-miss", default="", metavar="STEP_ID", help="concurrent only: that step's belt delivery never arrives (container removed): the ledger goes missing and the run stops")
+    p.add_argument("--fail-at", default="", metavar="STEP_ID", help="concurrent only: that step fails right after its pick; the peer finishes its current step and starts none")
+    p.add_argument("--slow", action="append", default=[], metavar="ARM:FACTOR", help="concurrent only: stretch that arm's segment times (stall frames, FACTOR >= 1); gating stays on measured progress")
     p.add_argument("--pick-vision", action="store_true", help="perceive each pick container's (xy, yaw) from the rendered top camera")
     p.add_argument("--belt-skew", action="store_true", help="arrive belt containers with +-8..12 mm xy offset and +-15..22 deg yaw skew")
     p.add_argument("--cam-jitter", action="store_true", help="perturb physical top camera pose to verify online 6-DoF anchor self-calibration")
@@ -407,7 +432,11 @@ def main(argv=None):
         import omx_two_arm_skill as skill_mod
         teacher.zero_error = skill_mod.draw_zero_error(a.seed or 1003, a.zero_error_deg)
         teacher.privileged, teacher.compensate_zero = False, True
-    result = teacher.run_task(task, a.isolated, a.concurrent)
+    slow = {arm: float(factor) for arm, factor in (spec.split(":") for spec in a.slow)}
+    if not 0 <= a.belt_unknown <= 1 or any(arm not in PREFIX or f < 1 for arm, f in slow.items()):
+        p.error("--belt-unknown takes 0..1 and --slow ARM:FACTOR an arm_a/arm_b with FACTOR >= 1")  # a typo must not run a fault-free test
+    faults = Faults(unknown_p=a.belt_unknown, miss=a.belt_miss, fail_at=a.fail_at, seed=a.seed, slow=slow)
+    result = teacher.run_task(task, a.isolated, a.concurrent, faults=faults)
     if a.frames:
         from PIL import Image
         Path(a.frames).mkdir(parents=True, exist_ok=True)

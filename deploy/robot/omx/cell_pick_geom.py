@@ -70,3 +70,13 @@ def reachable_ends(o: dict, entry: dict, params=None) -> list:
     ends = [dict(o, raw_m=[o["raw_m"][0] + k * reach * math.cos(u), o["raw_m"][1] + k * reach * math.sin(u)],
                  grasp_shift_mm=round(1000 * k * reach, 1)) for k in (1, -1)]
     return sorted(ends, key=lambda e: math.hypot(*e["raw_m"]))
+
+
+def box_centre(o: dict) -> list:
+    """The box's own centre for a target that may be a reachable_ends grasp point (shifted along the long axis).
+    Scene checks compare it with a fresh observation of the box (2026-11-17: a 20 mm end shift read as 'source moved')."""
+    shift = o.get("grasp_shift_mm")
+    if not shift:
+        return list(o["raw_m"])
+    u = math.radians(o["long_axis_deg"])
+    return [o["raw_m"][0] - shift / 1000 * math.cos(u), o["raw_m"][1] - shift / 1000 * math.sin(u)]

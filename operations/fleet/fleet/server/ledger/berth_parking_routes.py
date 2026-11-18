@@ -9,13 +9,11 @@
 from __future__ import annotations
 
 import math
-import uuid
 from functools import partial
 from typing import Any, Callable, Optional
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Header, HTTPException, Request
 
-from fleet.server.site_auth import SitePrincipal
 from .berth_parking_helpers import (
     BAY_DOCK_SPECS,
     DEFAULT_ROBOT_BAY,
@@ -47,7 +45,9 @@ def install_berth_parking_routes(
     read_guard,
     operator_guard,
     require_operator,
+    require_named_operator,
     compute_road_plan: Callable | None = None,
+    dispatch_nav: Callable | None = None,
 ) -> None:
     if compute_road_plan is None:
         compute_road_plan = partial(_compute_road_plan, console)
@@ -64,8 +64,13 @@ def install_berth_parking_routes(
     async def fleet_road_nav2(
         robot_id: str, request: Request,
         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-        principal: SitePrincipal = Depends(require_operator),
+        principal=Depends(require_named_operator),  # D-540 9: a goal moves the robot
     ) -> dict:
+        if busy := console.trip_refusal([robot_id]):  # D-494 5: refused before a task is queued for it
+            raise busy
+        if task_service is not None and not idempotency_key:
+            raise HTTPException(status_code=400, detail={
+                "code": "IDEMPOTENCY_KEY_REQUIRED", "message": "Idempotency-Key is required for navigation requests"})
         body = await request.json()
         target_x = float(body.get("x", 0.0))
         target_y = float(body.get("y", 0.0))
@@ -75,26 +80,13 @@ def install_berth_parking_routes(
 
         plan = await compute_road_plan(request, robot_id, target_x, target_y, target_yaw, place_id, label)
         final_nav2 = plan["target_nav2"]
-        dispatch_res = {}
-        req_key = idempotency_key or uuid.uuid4().hex
-        try:
-            if task_service is not None:
-                task = await task_service.submit_navigation(
-                    robot_id=robot_id, x=final_nav2["x"], y=final_nav2["y"], yaw=final_nav2["yaw"],
-                    source="operator", actor_id=principal.principal_id, request_key=req_key,
-                )
-                dispatch_res = {"accepted": task["status"] in ("ACCEPTED", "QUEUED"), "task": task}
-            else:
-                res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
-                dispatch_res = {"accepted": True, "receipt": res}
-        except Exception as exc:
-            try:
-                res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
-                dispatch_res = {"accepted": True, "receipt": res}
-            except Exception:
-                dispatch_res = {"accepted": True, "simulated_dispatch": True, "note": str(exc)}
-
-        return {"dispatched": True, **plan, **dispatch_res}
+        if dispatch_nav is None:
+            raise HTTPException(status_code=503, detail={"code": "DISPATCH_UNAVAILABLE"})
+        dispatch_res = await dispatch_nav(
+            task_service=task_service, console=console, robot_id=robot_id,
+            target=final_nav2, actor_id=principal.principal_id, idempotency_key=idempotency_key,
+        )
+        return {**plan, **dispatch_res, "dispatched": bool(dispatch_res.get("accepted"))}  # QUEUED is not sent
 
     @app.get("/api/fleet/robots/{robot_id}/berth-park/status", dependencies=read_guard, tags=["fleet"])
     async def fleet_berth_park_status(robot_id: str) -> dict:
@@ -118,8 +110,13 @@ def install_berth_parking_routes(
         robot_id: str,
         request: Request,
         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-        principal: SitePrincipal = Depends(require_operator),
+        principal=Depends(require_named_operator),  # D-540 9: a berth park moves the robot
     ) -> dict:
+        if busy := console.trip_refusal([robot_id]):  # D-494 5
+            raise busy
+        if task_service is not None and not idempotency_key:
+            raise HTTPException(status_code=400, detail={
+                "code": "IDEMPOTENCY_KEY_REQUIRED", "message": "Idempotency-Key is required for navigation requests"})
         body = await request.json() if await request.body() else {}
         mode = str(body.get("mode") or "berth_park")
         bay_id = str(body.get("bay_id") or infer_bay_id(robot_id)).upper()
@@ -174,34 +171,22 @@ def install_berth_parking_routes(
                 actor_id=principal.principal_id,
             )
 
-        final_nav2 = plan.get("target_nav2") or {"x": 0.0, "y": 0.0, "yaw": 0.0}
-        req_key = idempotency_key or uuid.uuid4().hex
+        final_nav2 = plan["target_nav2"]  # compute_road_plan refuses instead of inventing one
         dispatch_res: dict[str, Any] = {}
         if physical_execution and physical_execution.get("executed"):
-            dispatch_res = {"accepted": True, "physical_execution": physical_execution}
+            dispatch_res = {"accepted": bool(physical_execution.get("succeeded")), "physical_execution": physical_execution}
         else:
-            try:
-                if task_service is not None:
-                    task = await task_service.submit_navigation(
-                        robot_id=robot_id,
-                        x=final_nav2["x"],
-                        y=final_nav2["y"],
-                        yaw=final_nav2["yaw"],
-                        source="operator",
-                        actor_id=principal.principal_id,
-                        request_key=req_key,
-                    )
-                    dispatch_res = {"accepted": task["status"] in ("ACCEPTED", "QUEUED"), "task": task}
-                else:
-                    res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
-                    dispatch_res = {"accepted": True, "receipt": res}
-            except Exception as exc:
-                dispatch_res = {"accepted": True, "simulated_dispatch": True, "note": str(exc)}
+            if dispatch_nav is None:
+                raise HTTPException(status_code=503, detail={"code": "DISPATCH_UNAVAILABLE"})
+            dispatch_res = await dispatch_nav(
+                task_service=task_service, console=console, robot_id=robot_id,
+                target=final_nav2, actor_id=principal.principal_id, idempotency_key=idempotency_key,
+            )
             if physical_execution is not None:
                 dispatch_res["physical_execution"] = physical_execution
 
         return {
-            "dispatched": True,
+            "dispatched": bool(dispatch_res.get("accepted")),  # QUEUED is reported as queued, not sent
             "berth_mode": mode,
             "bay_id": bay_id,
             "dock_id": spec["dock_id"],
@@ -217,117 +202,4 @@ def install_berth_parking_routes(
             "length_m": length_m,
             "eta_s": eta_s,
             **dispatch_res,
-        }
-
-    @app.post("/api/fleet/scenario/bay-departure", dependencies=operator_guard, tags=["fleet"])
-    async def fleet_scenario_bay_departure(
-        request: Request,
-        principal: SitePrincipal = Depends(require_operator),
-    ) -> dict:
-        """시뮬레이션(`bay_departure_sim.py`)과 동일한 `world_261026` 시나리오(C1->C2->C3 순차 출차 중재,
-        실물 기체 전진 출차 후 접안 파킹, S3 하역 셀 계약 핸드오프)를 Fleet R에서 실행·검증한다.
-        """
-        body = await request.json() if await request.body() else {}
-        execute_physical = bool(body.get("execute_physical", True))
-        forward_m = max(0.12, min(0.25, float(body.get("forward_m") or 0.18)))
-
-        from fleet.charge_bays import ChargeBays, RobotView, bays_from_map
-        from fleet.routing.graph import build_graph
-        from fleet.routing.road_path import plan_road_path
-        from fleet.site_rules import SiteRules
-
-        site_maps = getattr(request.app.state, "site_maps", None)
-        active = site_maps.active() if site_maps is not None else None
-        arbitration_steps: list[dict[str, Any]] = []
-        if active is not None:
-            smap = active[2]
-            graph = build_graph(smap)
-            bays = bays_from_map(smap)
-            rules = SiteRules.model_validate({"departure": {"order": "exit_nearest"}, "return": {"exit_place": "S1"}})
-            cb = ChargeBays(rate_pct_per_min=15.0)
-            sim_spawns = [
-                ("rosy_46", "C1", BAY_DOCK_SPECS["C1"]["bay_pose"], "S3"),
-                ("rosy_45", "C2", BAY_DOCK_SPECS["C2"]["bay_pose"], "S5"),
-                ("rosy_42", "C3", BAY_DOCK_SPECS["C3"]["bay_pose"], "S4"),
-            ]
-            base_views = [
-                RobotView(rid, True, 85.0, 7.60, (bp["x"], bp["y"]), False, bp["yaw"])
-                for rid, _bid, bp, _goal in sim_spawns
-            ]
-            cb.observe(0.0, base_views, bays)
-            cb.observe(300.0, base_views, bays)
-            plan_cb = cb.plan(base_views, bays, graph=graph, site_rules=rules)
-            for rid, bid, bp, goal_place in sim_spawns:
-                rplan = plan_road_path(graph, (bp["x"], bp["y"], bp["yaw"]), goal_place, step_m=0.08)
-                act = next((a for a in plan_cb.get("actions", []) if a.get("robot_id") == rid), {})
-                arbitration_steps.append({
-                    "robot_id": rid,
-                    "bay_id": bid,
-                    "exit_rank": act.get("exit_rank"),
-                    "exit_distance_m": act.get("exit_distance_m"),
-                    "initial_action": act.get("action"),
-                    "initial_reason": act.get("reason"),
-                    "post_exit_goal": goal_place,
-                    "places": list(rplan.places),
-                    "edges": list(rplan.edges),
-                    "length_m": round(float(rplan.length_m), 3),
-                })
-
-        live_robots: dict[str, Any] = {}
-        for rid, bid in (("rosy_46", "C1"), ("rosy_45", "C2")):
-            spec = BAY_DOCK_SPECS[bid]
-            rid_mode = str((body.get("robot_modes") or {}).get(rid) or body.get("mode") or "berth_park")
-            if execute_physical:
-                phys = await _execute_physical_berth_park(
-                    request,
-                    console,
-                    rid,
-                    spec,
-                    mode=rid_mode,
-                    forward_m=forward_m,
-                    actor_id=principal.principal_id,
-                )
-            else:
-                phys = None
-            if not phys or not phys.get("executed"):
-                pinned = await _pin_robot_on_fleet(
-                    request,
-                    rid,
-                    spec["bay_pose"]["x"],
-                    spec["bay_pose"]["y"],
-                    spec["bay_pose"]["yaw"],
-                    actor_id=principal.principal_id,
-                )
-                live_robots[rid] = {"bay_id": bid, "physical": phys, "site_pose": pinned}
-            else:
-                live_robots[rid] = {"bay_id": bid, "physical": phys, "site_pose": phys["after"]["site_pose"]}
-
-        r42_place = str(body.get("rosy_42_place") or "S3").upper()
-        if r42_place == "C3":
-            r42_pose = BAY_DOCK_SPECS["C3"]["bay_pose"]
-        else:
-            r42_pose = {"x": 0.6987, "y": -0.2512, "yaw": 3.1416}
-        r42_pinned = await _pin_robot_on_fleet(
-            request,
-            "rosy_42",
-            r42_pose["x"],
-            r42_pose["y"],
-            r42_pose["yaw"],
-            actor_id=principal.principal_id,
-        )
-        live_robots["rosy_42"] = {"place_id": r42_place, "site_pose": r42_pinned}
-
-        return {
-            "scenario": "world_261026_sequential_bay_departure_and_berth_parking",
-            "depart_order": ["rosy_46", "rosy_45", "rosy_42"],
-            "arbitration": arbitration_steps,
-            "live_robots": live_robots,
-            "cell_contract_handoff": {
-                "stop_place_id": "S3",
-                "stop_pose": {"x": 0.6987, "y": -0.2512, "yaw": 3.1416},
-                "unload_arm_id": "arm_s",
-                "sort_cells": ["cell_a", "cell_b"],
-                "return_bay_id": "C1",
-                "return_places": ["S3", "J_in", "S2", "P3", "P2", "P1", "C1"],
-            },
         }

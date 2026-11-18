@@ -308,3 +308,81 @@ def test_a_held_ticket_stays_fresh_while_its_process_lives(tmp_path, monkeypatch
     queue._keepalive()
     _t.sleep(0.3)
     assert _t.time() - ticket.stat().st_mtime < 60
+
+
+def test_expired_flags_tickets_past_age_limits_and_skips_self(tmp_path, monkeypatch):
+    monkeypatch.setattr(queue, "pid_alive", lambda pid: True)
+    now = 100_000.0
+    other = queue.take(tmp_path, "feat/old")
+    info = json.loads(other.read_text())
+    info["pid"] = 424242
+    info["start"] = now - (queue.MAX_AGE_S + 10)
+    other.write_text(json.dumps(info))
+    full_wait = queue.take(tmp_path, "feat/full")
+    finfo = json.loads(full_wait.read_text())
+    finfo.update(pid=424243, tier="full", start=now - (queue.MAX_AGE_S + 10))
+    full_wait.write_text(json.dumps(finfo))
+    mine = queue.take(tmp_path, "feat/self")
+    minfo = json.loads(mine.read_text())
+    minfo["start"] = now - (queue.FULL_MAX_AGE_S + 10)
+    mine.write_text(json.dumps(minfo))
+    assert [r["branch"] for r in queue.expired(tmp_path, now)] == ["feat/old"]
+    finfo["start"] = now - (queue.FULL_MAX_AGE_S + 10)
+    full_wait.write_text(json.dumps(finfo))
+    assert [r["branch"] for r in queue.expired(tmp_path, now)] == ["feat/old", "feat/full"]
+
+
+def test_a_rollup_with_a_test_record_gets_the_six_hour_window(tmp_path, monkeypatch):
+    """D-889 35: 224327 was killed 4 h in, after its FULL passed."""
+    monkeypatch.setattr(queue, "pid_alive", lambda pid: True)
+    now = 100_000.0
+    rollup = "land/fix/land-rollup-20261117000000-20261117000000"
+    for n, extra in enumerate(({}, {"tested": "abc"}, {"tier": "full_done"})):
+        ticket = queue.take(tmp_path, f"{rollup}-{n}")
+        info = json.loads(ticket.read_text())
+        info.update(pid=424250 + n, start=now - (queue.MAX_AGE_S + 10), **extra)
+        ticket.write_text(json.dumps(info))
+    assert [r.get("tested") or r.get("tier") for r in queue.expired(tmp_path, now)] == [None]
+
+
+def test_lane_has_its_own_cap(tmp_path, monkeypatch):
+    monkeypatch.setattr(queue, "CAP", 2)
+    monkeypatch.setattr(queue, "LANE_CAP", 1)
+    queue.take(tmp_path, "feat/a"), queue.take(tmp_path, "feat/b")
+    assert "landing queue full (2/2" in queue.full(tmp_path)
+    assert queue.full(tmp_path, queue.LANE) is None  # ordinary tickets do not fill the lane
+    queue.take(tmp_path, "feat/learn", lane=queue.LANE)
+    assert "learning lane full (1/1" in queue.full(tmp_path, queue.LANE)
+
+
+def test_lane_ticket_passes_waiting_tickets_but_never_a_turn_or_urgent(tmp_path):
+    turn = queue.take(tmp_path, "feat/turn", status="turn")
+    waiting = queue.take(tmp_path, "feat/wait", status="waiting")
+    urgent = queue.take(tmp_path, "feat/urgent", status="waiting", urgent="user: now")
+    lane = queue.take(tmp_path, "feat/learn", status="waiting", lane=queue.LANE)
+    assert [r["branch"] for r in queue.blockers(tmp_path, lane)] == ["feat/turn", "feat/urgent"]
+    urgent.unlink(), turn.unlink()
+    assert queue.blockers(tmp_path, lane) == []
+    assert queue.blockers(tmp_path, waiting) == []  # a later lane ticket never holds an earlier ordinary one
+    plain = queue.take(tmp_path, "feat/plain", status="waiting")
+    assert [r["branch"] for r in queue.blockers(tmp_path, plain)] == ["feat/wait", "feat/learn"]
+
+
+def test_lane_of_reads_the_changed_paths(tmp_path):
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+                       check=True, capture_output=True)
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    git("switch", "-q", "-c", "feat/x")
+    (tmp_path / "learning").mkdir()
+    (tmp_path / "learning" / "a.py").write_text("x = 1\n")
+    git("add", "learning/a.py")
+    git("commit", "-q", "-m", "learning only")
+    assert queue.lane_of(tmp_path) == queue.LANE
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "b.py").write_text("y = 2\n")
+    git("add", "tools/b.py")
+    git("commit", "-q", "-m", "mixed")
+    assert queue.lane_of(tmp_path) == ""
+    assert queue.lane_of(tmp_path, "main") == ""  # nothing changed: not a lane landing

@@ -389,3 +389,13 @@ def test_old_whole_frames_go_on_a_report_too_not_only_on_a_clear():
     clock[0] += 15 * 86400
     store.report(ArmIncidentReport.model_validate(report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")))
     assert store.labelled()[0]["evidence"] == []
+
+
+def test_verified_baseline_caps_on_folded_torque_off_arm_does_not_hold_on_fleet(client):
+    facts = {"safe_end": False, "folded": True, "latched": {}, "windup_hits": [], "flagged": [],
+             "torque_after": {"11": 0, "12": 0}, "caps_verified_restored": True}
+    res = post(client, report(facts=facts, decision={"hold": False, "reason": "verified baseline caps"})).json()
+    assert res["hold"]["held"] is False
+    bad = post(client, report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b",
+                              facts={**facts, "torque_after": {"11": 0, "12": 1}})).json()
+    assert bad["hold"]["held"] is True

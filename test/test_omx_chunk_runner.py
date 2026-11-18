@@ -65,6 +65,90 @@ def by_command(status, command):
     return [s for s in status if s["command"] == command]
 
 
+def test_human_hold_latches_present_pose_and_rejects_motion_without_idle_torque_off():
+    robot, status, clock = Robot(), [], [0.0]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 params={"runner.idle_park_s": 0.1, "runner.idle_stop_s": 0.2})
+    r.target = list(HOME)
+    r.last_input = 0.0
+    r.command("run approach_pinky")
+    r.tick()
+    assert r.queue
+    present = r.present()
+    r.pending = ["stop", "park"]
+    r._stop_after_park = "stop"
+    r.grip_from = 57.0  # a pending gripper reopen must not fire after the human hold
+    r.command("human-hold")
+    assert not by_command(status, "human-hold")  # ACK follows the first held target, not FIFO parsing
+    r.tick()
+    ack = by_command(status, "human-hold")[-1]
+    assert ack["ok"] and ack["human_hold_latched"] and ack["torque_hold_commanded"]
+    assert r.target[:5] == pytest.approx(present[:5]) and not r.queue and not r.pending
+    assert r._stop_after_park is None
+    assert r.grip_from is None
+    for command in ("stop", "park", "run grasp_pinky", "grip 50", "checked current x run approach_pinky"):
+        r.command(command)
+        assert status[-1]["ok"] is False and "human hold latched" in status[-1]["error"]
+    clock[0] = 100.0
+    assert r.idle() is False
+    assert not by_command(status, "run park")
+    r.tick()
+    assert [robot.sent[-1][name] for name in m.NAMES[:5]] == pytest.approx(present[:5])
+    r.command("state")
+    assert status[-1]["human_hold_latched"] and status[-1]["torque_hold_commanded"]
+
+
+def test_human_hold_preempts_pending_stop_and_motion_while_chunk_runs():
+    class EndLoop(Exception):
+        pass
+
+    robot, status, clock = Robot(), [], [0.0]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0])
+    delivered = [False]
+
+    def lines():
+        if r.ticks == 0 and not delivered[0]:
+            delivered[0] = True
+            return ["run approach_pinky"]
+        if r.ticks == 2:
+            return ["park", "stop", "human-hold", "run grasp_pinky"]
+        return []
+
+    def sleep(seconds):
+        clock[0] += 1 / 30
+        if r.ticks >= 5:
+            raise EndLoop
+
+    r.sleep = sleep
+    with pytest.raises(EndLoop):
+        r.run(lines)
+    assert by_command(status, "human-hold")[-1]["ok"] is True
+    assert not by_command(status, "park") and not by_command(status, "stop")
+    assert not r.queue and not r.pending and r.human_hold_latched
+    held = [robot.sent[-1][name] for name in m.NAMES[:5]]
+    assert all([row[name] for name in m.NAMES[:5]] == held for row in robot.sent[-3:])
+
+
+def test_human_hold_reports_failed_ack_and_allows_guard_overload_relief(monkeypatch):
+    from types import SimpleNamespace
+
+    robot, status = Robot(), []
+    robot.motion = SimpleNamespace(held={"shoulder_lift": "overload"})
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    r = m.Runner(robot, lib, fps=30, status=status.append)
+    r.target = list(HOME)
+    relief = []
+    monkeypatch.setattr(m.runner_strain, "shed", lambda *args: relief.append(True) or list(HOME))
+    monkeypatch.setattr(m.runner_strain, "release_when_clear", lambda *args: None)
+    r.command("human-hold")
+    r.tick()
+    assert relief and r.human_hold_latched
+    assert by_command(status, "human-hold")[-1]["ok"] is False
+    assert not any(row["ok"] for row in by_command(status, "human-hold"))
+    assert "overload" in status[-1]["error"] and status[-1]["person_needed"]
+
+
 def test_checked_commands_bind_the_session_and_library_at_the_motion_boundary():
     robot, status = Robot(), []
     r = m.Runner(robot, library(), fps=30, status=status.append,
@@ -353,7 +437,8 @@ def test_the_live_state_is_published_about_twice_a_second():
     r = m.Runner(Robot(), library(), fps=10, status=lambda row: None, clock=lambda: clock[0],
                  sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 10), live=rows.append)
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
-    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health", "lag"}
+    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health", "lag",
+                                     "human_hold_latched", "torque_hold_commanded"}
     assert rows[-1]["state"][0] == 18.0  # held at the end of the approach chunk
 
 
@@ -373,6 +458,22 @@ def test_an_empty_grasp_is_judged_after_the_slow_jaws_stop():
     status = runner(SlowJaws(), ["run approach_pinky", "run grasp_pinky", "stop"])
     done = by_command(status, "run grasp_pinky")[0]
     assert done["holding"] is False and done["state"][5] == pytest.approx(46.6)
+
+
+def test_release_waits_for_slow_jaws_to_open_before_settling():
+    class SlowJaws(Robot):  # release must not declare settled while jaws are still pinched on the box
+        def send_action(self, action):
+            target = action["gripper.pos"]
+            super().send_action({**action, "gripper.pos": self.pos[5]})
+            self.pos[5] += max(-0.5, min(0.5, target - self.pos[5]))
+
+    lib = library()
+    lib["chunks"]["release_place"] = [[0.0, -60.0, 50.0, 45.0, 10.0, 60.5]]
+    robot = SlowJaws(object_at=54.5)
+    robot.pos[5] = 54.5
+    status = run_with(robot, lib, ["run release_place", "stop"])
+    done = by_command(status, "run release_place")[0]
+    assert done["ok"] is True and done["settled"] is True and done["state"][5] == pytest.approx(60.5)
 
 
 def test_a_burst_of_jogs_against_a_joint_that_does_not_follow_is_refused():
@@ -650,6 +751,19 @@ def test_a_soft_contact_holds_with_torque_on_then_retreats_along_its_path_and_pa
 
 
 
+def test_a_contact_drops_the_pitch_hold_nudge_so_the_wrist_stops_where_it_is():
+    robot = Pressing(after=8)  # lift stops following: the jaw pitch falls short and the nudge engages
+    status, clock, queue = [], [0.0], ["run descend_pick", "stop"]
+    r = m.Runner(robot, descend_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30),
+                 params={"runner.pitch_hold_gain": 0.5, "runner.pitch_hold_max": 0.5})
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert by_command(status, "run descend_pick")[0]["contact"] is True
+    wrist = [a["wrist_flex.pos"] for a in robot.sent]
+    assert any(abs(w - 45.0) > 0.01 for w in wrist)  # nudged while descending
+    assert r.pitch_hold == 0.0 and wrist[-1] == r.target[3]  # held exactly at the present pose
+
+
 def test_a_settled_retreat_clears_the_contact_so_the_next_point_needs_no_park():
     robot = Pressing(after=8)
     status, clock, queue = [], [0.0], ["run descend_pick", "retreat", "run descend_pick", "stop"]
@@ -904,6 +1018,17 @@ def test_the_trace_gets_one_row_per_tick():
     assert len(rows) == r.ticks
     assert rows[1]["chunk"] == "approach_pinky" and len(rows[1]["sent"]) == 6 and len(rows[1]["present"]) == 6
     assert rows[1]["pwm"] == {}  # a robot with no guard sample
+
+
+def test_each_owner_tick_binds_its_session_and_library():
+    rows, status, clock, queue = [], [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(Pressing(after=10**9), library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30),
+                 operating_context={"session_id": "owner-session"})
+    r.trace = rows.append
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert rows and all(row["owner_session_id"] == r.operating_context["session_id"] for row in rows)
+    assert all(row["library_sha256"] == r._library_digest() for row in rows)
 
 
 def test_the_trace_keeps_each_health_reading_once():
@@ -1230,6 +1355,18 @@ def test_long_chunk_retreat_trims_unreached_lead_frames_and_retimes_smoothly():
     assert ret["state"][1] == pytest.approx(-60.0, abs=0.5)
 
 
+def test_adaptive_contact_guard_caps_loaded_threshold_below_five_deg_stop():
+    import chunk_runner_guards as crg
+
+    _, ticks, tripped, _ = crg.evaluate_adaptive_contact_guard(
+        [0.0, 0.0, 0.0, 2.40, 0.0],
+        contact_start=[1.5, 1.5, 1.5, 2.2, 1.5],
+        contact_ticks=1,
+        step_delta_units=5.0,
+    )
+    assert ticks == 2 and tripped is True
+
+
 def test_hardware_stop_while_extended_folds_home_before_turning_torque_off():
     lib = library()
     lib["chunks"]["home"] = [HOME]
@@ -1250,5 +1387,111 @@ def test_hardware_stop_while_extended_folds_home_before_turning_torque_off():
     assert end["command"] == "stop" and end["ok"] is True and end["folded"] is True
     assert end["state"][:5] == pytest.approx(HOME[:5])
 
+
+def test_runner_waits_for_guard_alignment_before_reporting_start_or_starting_chunks():
+    class AligningRobot(Robot):
+        def __init__(self):
+            super().__init__()
+            self.motion = type("Motion", (), {"tracking": False})()
+            self.align_ticks = 0
+
+        def send_action(self, action):
+            if not self.motion.tracking:
+                if abs(action["shoulder_pan.pos"] - HOME[0]) > 0.5:
+                    raise ValueError("follower: alignment deadline exceeded")
+                self.align_ticks += 1
+                if self.align_ticks >= 16:
+                    self.motion.tracking = True
+            return super().send_action(action)
+
+    robot, status, clock = AligningRobot(), [], [0.0]
+    queue, seen_start = ["run approach_pinky", "stop"], []
+
+    def lines():
+        if by_command(status, "start") and not seen_start:
+            seen_start.append(robot.motion.tracking)
+        if queue and by_command(status, "start") and not r.chunk:
+            return [queue.pop(0)]
+        if not seen_start and clock[0] == 0.0:
+            # Even a command arriving before `start` must not preempt alignment
+            return ["state"]
+        return []
+
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lines)
+    assert seen_start == [True] and robot.align_ticks == 16
+    assert by_command(status, "start")[0]["ok"] is True
+    assert by_command(status, "run approach_pinky")[0]["ok"] is True
+
+    # A stop arriving while still aligning exits immediately without waiting for alignment
+    stopped = []
+    r_stop = m.Runner(AligningRobot(), library(), fps=30, status=stopped.append, clock=lambda: clock[0],
+                      sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r_stop.run(lambda: ["stop now"])
+    assert stopped[-1]["command"] == "stop now" and stopped[-1]["ok"] is True
+    assert not by_command(stopped, "start")
+
+
+@pytest.mark.parametrize("wait_pan", [-49.212, 50.812])
+def test_park_from_folded_side_wait_pose_stays_folded_without_rising_to_transit(wait_pan):
+    home = [0.8, -62.2, 53.1, 51.6, 45.2, 49.0]
+    wait_side = [wait_pan, -62.2, 53.1, 51.6, 45.2, 49.0]
+    path = m.park_path(wait_side, home, 49.0, fps=30)
+    assert all(f[1] <= -50.0 for f in path)
+    assert not m.too_fast([wait_side] + path, 30)
+    assert path[-1] == pytest.approx(home)
+    # Open jaws close before turning while remaining folded; large wrist_roll deltas still use transit
+    open_path = m.park_path([wait_pan, -62.2, 53.1, 51.6, 45.2, 60.0], home, 49.0, fps=30)
+    closed_idx = next(i for i, f in enumerate(open_path) if abs(f[5] - 49.0) <= 0.1)
+    assert abs(open_path[closed_idx][0] - wait_pan) <= 1e-3 and all(f[1] <= -50.0 for f in open_path)
+    flipped_roll = m.park_path([wait_pan, -62.2, 53.1, 51.6, -54.8, 49.0], home, 49.0, fps=30)
+    assert any(f[1] > -30.0 for f in flipped_roll)
+
+
+def test_load_holding_library_skips_empty_jaw_pinch_on_recovery_park(tmp_path):
+    class HeldRobot(Robot):
+        def __init__(self):
+            super().__init__(object_at=53.0)
+            self.pos[5] = 55.0
+
+            class _Motion:
+                pwm_limits = {"gripper": 300}
+                effort_pwm = {**dict.fromkeys(m.NAMES[:5], 0), "gripper": -260}
+                held = ()
+
+            self.motion = _Motion()
+
+    lib = {
+        "schema": m.SCHEMA,
+        "names": m.NAMES,
+        "fps": 30,
+        "gripper_closed": 46.6,
+        "holding": True,
+        "chunks": {
+            "home": [list(HOME)],
+            "release_place": [[*HOME[:5], round(46.6 + 0.1 * k, 2)] for k in range(11)],
+        },
+    }
+    lib_path = tmp_path / "return-held-beltend.json"
+    lib_path.write_text(json.dumps(lib))
+    robot, status, clock = HeldRobot(), [], [0.0]
+    queue = [f"load {lib_path}", "park", "stop now"]
+
+    def lines():
+        return [queue.pop(0)] if queue and not r.chunk else []
+
+    r = m.Runner(robot, {**library(), "chunks": {**library()["chunks"], "home": [list(HOME)]}}, fps=30,
+                 status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lines)
+    load_res = by_command(status, f"load {lib_path}")
+    assert load_res and load_res[0]["ok"] is True
+    park_res = by_command(status, "run park")
+    assert park_res and park_res[0]["ok"] is True
+    assert r.holding is True
+    r.target = list(lib["chunks"]["release_place"][0])
+    r.command("run release_place")
+    assert r.holding is False
 
 

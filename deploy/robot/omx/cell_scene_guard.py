@@ -45,11 +45,14 @@ def moved_blobs(before, after, roi, base_px, target_px, params=None, _pre=None) 
     return sorted(blobs, key=lambda b: -b["area"])
 
 
-def scene_moved(before, after) -> list:
+def scene_moved(before, after, ignore=()) -> list:
     """Regions that differ between two whole top views taken with the arms folded: [area, x0, y0, x1, y1]. Folded, the arm is in
-    both views, so unlike moved_blobs the whole frame can be compared."""
+    both views, so unlike moved_blobs the whole frame can be compared. `ignore` rects ([x0, y0, x1, y1]) always change, like
+    the running belt (2026-11-14 arm_s: its 11364 px blob read as a moved pile)."""
     diff = cv2.GaussianBlur(cv2.absdiff(before, after), (5, 5), 0).max(2)
     mask = cv2.morphologyEx((diff > 45).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    for x0, y0, x1, y1 in ignore:
+        mask[max(int(y0), 0):int(y1), max(int(x0), 0):int(x1)] = 0
     n, _, stats, _ = cv2.connectedComponentsWithStats(mask)
     return [[int(stats[i, 4]), int(stats[i, 0]), int(stats[i, 1]), int(stats[i, 0] + stats[i, 2]), int(stats[i, 1] + stats[i, 3])]
             for i in range(1, n) if stats[i, 4] > 150]

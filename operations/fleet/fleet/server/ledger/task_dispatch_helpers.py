@@ -5,7 +5,20 @@ from __future__ import annotations
 import importlib as _il
 import math as _math
 
-from fastapi import Request
+from fastapi import HTTPException, Request
+
+
+def _auto_locate_reason(request: Request, robot_id: str) -> str | None:
+    """Why D-989 has no fit for this robot, with the robot's own lamp refusal (e.g. CAUTION_ACTIVE on low battery)."""
+    service = getattr(request.app.state, "auto_locate", None)
+    try:
+        row = next((r for r in service.snapshot()["robots"] if r["robot_id"] == robot_id), None)
+        if row is None or not row.get("reason"):
+            return None
+        lamp = row.get("lamp_reason")
+        return f"{row['reason']} ({lamp})" if lamp else str(row["reason"])
+    except Exception:  # the reason is a hint; a missing service must not change the refusal
+        return None
 
 
 async def compute_road_plan(console, request: Request, robot_id: str, target_x: float, target_y: float,
@@ -19,23 +32,24 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
     runner = getattr(request.app.state, "trip_runner", None)
     active = site_maps.active() if site_maps is not None else None
 
+    # The site pose is Fleet's own measured estimate (sighting, pin, or D-989 fit) and never the robot's
+    # SLAM pose or a constant: either of those made the site->Nav2 delta an identity, so a site goal was sent
+    # into a SLAM frame whose origin is wherever the robot booted (2026-11-13, rosy_46 drove elsewhere).
     site_pose = None
     if runner is not None:
         try:
             mp = await runner.map_pose(robot_id)
-            if mp is not None and mp.x is not None and mp.y is not None:
-                site_pose = (float(mp.x), float(mp.y), float(mp.yaw if mp.yaw is not None else 0.0))
+            if (mp is not None and getattr(mp, "state", None) == "LOCALIZED"
+                    and mp.x is not None and mp.y is not None and mp.yaw is not None):
+                site_pose = (float(mp.x), float(mp.y), float(mp.yaw))
         except Exception:
             pass
     if site_pose is None:
-        try:
-            tp = await console.trusted_map_pose(robot_id)
-            if tp is not None:
-                site_pose = (float(tp[0]), float(tp[1]), float(tp[2] if tp[2] is not None else 0.0))
-        except Exception:
-            pass
-    if site_pose is None:
-        site_pose = (-0.411, 0.350, -1.5708)
+        why = _auto_locate_reason(request, robot_id)
+        raise HTTPException(status_code=409, detail={
+            "code": "SITE_POSE_UNKNOWN", "auto_locate": why,
+            "message": f"{robot_id}: Fleet has no measured site pose (camera sighting, pin or auto-locate fit)"
+                       + (f"; auto-locate: {why}" if why else "")})
 
     explicit_yaw = target_yaw
     if target_yaw is None:
@@ -46,14 +60,17 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
         snap = await console.snapshot()
         for r in (snap.get("robots") or []):
             if r.get("robot_id") == robot_id and isinstance(r.get("state"), dict):
-                p = r["state"].get("pose")
-                if isinstance(p, dict) and isinstance(p.get("x"), (int, float)) and isinstance(p.get("y"), (int, float)):
-                    local_pose = (float(p["x"]), float(p["y"]), float(p.get("yaw") or 0.0))
+                p, loc = r["state"].get("pose"), r["state"].get("localization") or {}
+                if (isinstance(p, dict) and loc.get("state") == "LOCALIZED" and loc.get("pose_frame") == "map"
+                        and all(isinstance(p.get(k), (int, float)) for k in ("x", "y", "yaw"))):
+                    local_pose = (float(p["x"]), float(p["y"]), float(p["yaw"]))
                     break
     except Exception:
         pass
     if local_pose is None:
-        local_pose = site_pose
+        raise HTTPException(status_code=409, detail={
+            "code": "ROBOT_POSE_UNTRUSTED",
+            "message": f"{robot_id}: the robot's own map pose is not LOCALIZED in its map frame"})
 
     d_yaw = _math.atan2(_math.sin(local_pose[2] - site_pose[2]), _math.cos(local_pose[2] - site_pose[2]))
     cos_d, sin_d = _math.cos(d_yaw), _math.sin(d_yaw)

@@ -27,6 +27,8 @@ def card_renderer(info_screen) -> Callable[[dict], object]:
         elif screen.get("row") == "network_recovery":
             page = screen["recovery_page"]
             image = info_screen.render_notice(page["title"], page["lines"])
+        elif kind == "face" and screen.get("identify_color") in ("blue", "amber"):
+            image = info_screen.render_identify_card(screen["identify_color"], str(card.get("device_name") or ""))
         elif kind == "face" and screen.get("overlay"):  # a card takes the expression area, under the bar
             image = info_screen.render_overlay(screen["overlay"]["payload"])
         elif screen.get("row") == "peer_request":

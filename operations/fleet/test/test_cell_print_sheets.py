@@ -140,6 +140,20 @@ def test_container_tags_read_back_from_dict_4x4_250_twice_each_at_true_size(size
     assert all(np.linalg.norm(c[0][1] - c[0][0]) / (300 / 25.4) == pytest.approx(size, abs=0.2) for c in corners)
 
 
+def test_container_tags_print_each_tags_container_on_its_own_line():
+    from fleet.server.cell.cell_print_sheets import container_tags_pdf
+
+    pdf = container_tags_pdf([100, 101], 20.0, {100: "CNTR-0001", "101": "CNTR-0002"})
+    assert pdf.count(b"CNTR-0001") == pdf.count(b"CNTR-0002") == 2  # under the roof and the side copy
+    assert pdf.count(b"mm  roof") == 2  # the name is not run into the id line
+    with pytest.raises(ValueError, match="not on the sheet"):
+        container_tags_pdf([100], 20.0, {101: "CNTR-0002"})
+    spares = container_tags_pdf([100, 101, 102, 103, 104], 20.0, copies=4)  # five containers fill a page
+    assert spares.count(b"mm  spare") == 10 and spares.count(b"mm  roof") == 5
+    with pytest.raises(ValueError, match="copies"):
+        container_tags_pdf([100], 20.0, copies=5)
+
+
 def test_container_tags_refuse_ids_outside_their_block():
     for ids, sizes in (([99], [12]), ([200], [12]), ([100, 100], [12]), ([100], [12, 20])):
         with pytest.raises(ValueError):

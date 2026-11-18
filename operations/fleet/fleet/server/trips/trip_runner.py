@@ -112,7 +112,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
     # ---- operator actions -------------------------------------------------------------
 
     async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None, start_token=None,
-                    start_guard=None) -> dict:
+                    start_guard=None, purpose: Optional[str] = None) -> dict:
         row = self._store.plan(plan_id)
         plan = (row or {}).get("result", {}).get("plan")
         if plan is None:
@@ -134,7 +134,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             if self.lease.job_of(robot_id) not in (None, job_id):  # D-763 6: a job holds it; before any turn
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             self._check_engaged(robot_id)
-            await self._check_battery(robot_id)
+            if purpose != "charge_return":  # D-1029: the way to a charger, like a charge_session job; CORE keeps 10 %/5 %
+                await self._check_battery(robot_id)
             await self._guard_start(robot_id, start_token, start_guard)
             start_at = (row.get("request") or {}).get("start_at")
             pose, enable, turns = await self._start_pose(
@@ -142,7 +143,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 start_token=start_token, start_guard=start_guard)
             await self._guard_start(robot_id, start_token, start_guard)
             pose_observed_at = self._clock()
-            lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id, "job_id": job_id}, caps)
+            lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id, "job_id": job_id,
+                                                  "purpose": purpose}, caps)
             try:
                 self._check_start_token(robot_id, start_token)
                 self._check_engaged(robot_id)
@@ -164,6 +166,8 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 pose_observed_at=pose_observed_at, repeat=repeat, caps_view=caps_view,
                 traffic_authority=self.authority.mode(caps), leader=leader,
                 lease=lease, moved=moved, enable=enable, turns=turns)
+            if purpose is not None:  # D-1029: renews carry it too (CORE refuses a changed purpose)
+                view["purpose"] = purpose
             live = LiveTrip(view, graph, request)
             live.inherited = self.held_stops.pop(robot_id, None) if plan["segments"] else None  # D-763 7
             live.lap_route, live.lap_arcs = lap_route, arcs

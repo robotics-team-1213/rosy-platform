@@ -189,8 +189,9 @@ def test_drivable_model_without_wall_loads_but_cannot_use_ungated_lane_fallback(
         assert kind == "drivable" and info["reason"] == "ok"
         assert mask[100:, 90:230].all() and not mask[:100].any()
     else:
-        with pytest.raises(NoWallClass):
-            model.infer_drivable(frame)
+        mask, kind, info, _ = model.infer_drivable(frame)
+        assert kind == "drivable" and not mask.any() and info["reason"] == "low_coverage"
+        assert "lane_marking" not in kind
     with pytest.raises(NoWallClass):
         model.infer_mask(frame)
     with pytest.raises(NoWallClass):

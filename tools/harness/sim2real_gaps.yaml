@@ -311,7 +311,7 @@ gaps:
   - id: G-26
     gap: OMX outbound planner and two-arm policy built their layout without choices, so they used the design plates, not the measured snapshot
     evidence:
-      - tools/sim/omx_two_arm_plan.py:323
+      - tools/sim/omx_two_arm_plan.py:279
       - tools/sim/omx_two_arm_policy.py:141,174
       - tools/sim/omx_real2sim.py
     tier: [M]

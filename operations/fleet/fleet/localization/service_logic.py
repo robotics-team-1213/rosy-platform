@@ -69,6 +69,12 @@ RUNG_MISSIONS = {"rotate": ("rotate_in_place",), "homing": ("to_square", "lane_t
 #: (max_distance_m, max_time_s) per mission; within CORE's caps (1.0 m, 120 s, nudge 0.10 m).
 MISSION_LIMITS = {"rotate_in_place": (0.0, 30.0), "lane_to_stopline": (0.6, 40.0),
                   "to_square": (1.0, 60.0)}
+#: 3-model panel decision 2026-11-14: a rung that moves wheels runs only while a named
+#: operator asked for it this recently for that robot. A robot can sit on a charger or
+#: cables the platform cannot see, so unattended wheel motion is out; `needs_human` and
+#: every other ladder behaviour stay automatic.
+MOTION_ALLOW_S = 120.0
+MOTION_RUNGS = ("rotate", "homing")
 
 Observation = tuple[float, float, Optional[float]]     # x, y, yaw (None: position only)
 
@@ -158,6 +164,31 @@ def peer_observations(objects: Sequence, observer: cues.Pose,
         if len(at_mirror) == 1:
             out[robot_id] = (at_mirror[0][0], at_mirror[0][1], None)
     return out
+
+
+@dataclass
+class MotionGate:
+    """Wheel-moving rungs (`MOTION_RUNGS`) run only within `allow_s` of a named operator's
+    request for that robot (panel decision 2026-11-14). Pure: both clocks are passed in —
+    `now` is the service clock the ladder uses, `at_wall` the human-readable time views show."""
+
+    allow_s: float = MOTION_ALLOW_S
+    _granted: dict = field(default_factory=dict)      # robot -> (by, now, at_wall)
+
+    def allow(self, robot_id: str, by: str, now: float, at_wall: float) -> None:
+        self._granted[robot_id] = (by, now, at_wall)
+
+    def allowed(self, robot_id: str, now: float) -> bool:
+        grant = self._granted.get(robot_id)
+        return grant is not None and now - grant[1] <= self.allow_s
+
+    def view(self, robot_id: str, now: float) -> Optional[dict]:
+        """The last operator request as the console shows it; None when there was none."""
+        grant = self._granted.get(robot_id)
+        if grant is None:
+            return None
+        return {"by": grant[0], "at": grant[2],
+                "expires_in_s": max(round(grant[1] + self.allow_s - now, 1), 0.0)}
 
 
 @dataclass

@@ -61,7 +61,7 @@ def pretrain_task_with_r2s_sim_rl(self, task_name: str = "pinky_to_3tier_stack",
             src_coord = self.fleet_pipe.SITE_COORDS["pinky" if src_area == "pinky" else "belt"]
             dst_coord = self.fleet_pipe.SITE_COORDS["belt" if dst_area == "belt" else f"pallet-l{t_val - 1}"]
             cpp.update_il_rl_from_run(
-                self.work_dir,
+                self.fleet_pipe.policy_dir,
                 {
                     "pick": {"area": src_area, "x": src_coord["x"], "y": src_coord["y"], "z": src_coord["z"], "yaw_deg": -85.0},
                     "place": {"area": dst_area, "tier": t_val, "x": dst_coord["x"], "y": dst_coord["y"], "z": dst_coord["z"], "yaw_deg": -90.0},
@@ -114,7 +114,7 @@ def sim_rl_fallback_on_real_failure(self, failed_obs: dict[str, Any], *, tier: i
     src_coord = self.fleet_pipe.SITE_COORDS["belt"]
     for _ in range(max(2, int(episodes))):
         cpp.update_il_rl_from_run(
-            self.work_dir,
+            self.fleet_pipe.policy_dir,
             {
                 "pick": {"area": "belt", "x": src_coord["x"], "y": src_coord["y"], "z": src_coord["z"], "yaw_deg": -90.0},
                 "place": {"area": "pallet", "tier": tier_idx, "x": dst_coord["x"], "y": dst_coord["y"], "z": dst_coord["z"], "yaw_deg": -90.0},
@@ -171,7 +171,7 @@ def fuse_r2s_sim_and_real_models(self, *, tau_sim_confidence: float = 6.0) -> di
         "alpha_real": alpha_real, "beta_sim": beta_sim,
         "fused_bias_m": [fused_dx_m, fused_dy_m], "real_updates": n_real,
     })
-    rl_path = self.work_dir / "rl-policy.json"
+    rl_path = self.fleet_pipe.policy_dir / "rl-policy.json"
     if rl_path.is_file():
         try:
             rl_state = json.loads(rl_path.read_text(encoding="utf-8"))

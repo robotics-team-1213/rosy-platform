@@ -2,7 +2,7 @@
 
 Read-only plus one record. Fleet approves an actionable request by itself (``fleet:auto``, user decision
 2026-11-08: a low robot must not wait for a person); a named operator may still approve by hand. Approval
-commands no robot: motion is S2, so the response says ``started: false``. The list and the approval both
+commands no robot (``started: false``) unless D-1029 dispatch is on, which starts a charge return trip. The list and the approval both
 answer from the same ``decide`` call at the time, so an approval never outlives the answer that justified it.
 """
 
@@ -17,6 +17,7 @@ from fastapi import Depends, HTTPException
 
 from fleet.server.person_request_routes import install_person_request_routes
 from fleet.server.person_request_store import PersonRequestStore
+from fleet.server.station_recovery_dispatch import ChargeReturns
 from fleet.station_recovery import decide
 
 logger = logging.getLogger(__name__)
@@ -69,10 +70,12 @@ def _by_battery(row: dict) -> tuple:
             row["robot_id"])
 
 
-def install_station_recovery_routes(app, enabled: bool, guards: tuple,
+def install_station_recovery_routes(app, enabled, guards: tuple,
                                     gathered: Callable[[], Awaitable[dict]],
                                     bay_inputs: Callable[[], Awaitable[tuple]], monotonic=time.monotonic) -> None:
-    """``enabled`` is ``fleet.station_recovery.enabled`` (default false); off, nothing is asked or approved.
+    """``enabled`` is ``fleet.station_recovery.enabled`` (default false); off, nothing is asked or approved. It may
+    be the config dict ``{"enabled", "dispatch"}``: D-1029 ``dispatch`` (default false) starts the charge return after
+    an approval (``station_recovery_dispatch``); without it an approval still sends nothing.
 
     ``guards`` is ``(read_guard, require_named_operator, require_proposer)``. The person request routes
     (always on, they only note what a person is asked to do) are installed here too.
@@ -82,9 +85,13 @@ def install_station_recovery_routes(app, enabled: bool, guards: tuple,
     Fleet's charge-bay tick.
     """
     read_guard, require_named_operator, require_proposer = guards
+    config = enabled if isinstance(enabled, dict) else {"enabled": bool(enabled), "dispatch": False}
+    enabled, dispatch = config["enabled"], config["enabled"] and config["dispatch"]
     install_person_requests(app, gathered, read_guard, require_named_operator, require_proposer)
     map_pose = getattr(app.state, "map_pose", None)
-    another_returning = lambda: False   # S1 starts no return; S2 reads the open recovery trips here
+    console = getattr(app.state, "console", None)
+    returns = ChargeReturns(app, RobotRequests(console.clients)) if dispatch and console is not None else None
+    another_returning = returns.returning if returns is not None else (lambda: False)
     approved: dict = {}   # robot_id -> who approved while its request stays actionable; S2 starts from it
     last = {"at": None}
 
@@ -104,23 +111,27 @@ def install_station_recovery_routes(app, enabled: bool, guards: tuple,
                 for b in plan["bays"]:
                     if b["bay"] == answer["bay"]:
                         b["state"], b["robot_id"] = "planned", row["robot_id"]
-            out.append({**answer, "approved_by": approved.get(row["robot_id"])})
+            out.append({**answer, "approved_by": approved.get(row["robot_id"]),
+                        **({"return": returns.view(row["robot_id"])} if returns is not None else {})})
         return (active[0] if active is not None else None), sorted(out, key=lambda a: a["robot_id"])
 
-    def record_approval(answer: dict, by: str, map_version) -> None:
+    async def record_approval(answer: dict, by: str, map_version) -> Optional[dict]:
+        """Records the approval; with dispatch on also starts the return and answers its state, else None."""
         approved[answer["robot_id"]] = by
         maps = getattr(app.state, "site_maps", None)
         if maps is not None:
             maps.record_event("station_recovery_approved", by,
                               {"robot_id": answer["robot_id"], "bay": answer["bay"], "level": answer["level"],
                                "percent": answer["percent"], "map_version": map_version, "started": False})
-        logger.info("station recovery: %s approved by %s for bay %s (S1 records only, nothing was sent)",
-                    answer["robot_id"], by, answer["bay"])
+        logger.info("station recovery: %s approved by %s for bay %s", answer["robot_id"], by, answer["bay"])
+        return await returns.start(answer, by) if returns is not None else None
 
     async def auto_approve() -> None:
         """Approve each actionable request once; a robot that stops being actionable is asked afresh next time."""
         if not enabled:
             return
+        if returns is not None:
+            await returns.poll()
         now = monotonic()
         if last["at"] is not None and now - last["at"] < AUTO_EVERY_S:
             return
@@ -131,7 +142,7 @@ def install_station_recovery_routes(app, enabled: bool, guards: tuple,
             del approved[robot_id]
         for robot_id, answer in sorted(ready.items()):
             if robot_id not in approved:
-                record_approval(answer, AUTO_APPROVER, map_version)
+                await record_approval(answer, AUTO_APPROVER, map_version)
     app.state.station_recovery_auto = auto_approve
     tick = getattr(app.state, "charge_bays_tick", None)   # Fleet's existing one-second loop carries it
     if tick is not None and enabled:
@@ -146,7 +157,7 @@ def install_station_recovery_routes(app, enabled: bool, guards: tuple,
             return {"enabled": False, "reason": "disabled", "map_version": None, "requests": [], "dispatch": False}
         map_version, requests = await answers()
         return {"enabled": True, "reason": None, "map_version": map_version, "requests": requests,
-                "dispatch": False}
+                "dispatch": dispatch}
 
     @app.post("/api/fleet/station-recovery/{robot_id}/approve", tags=["fleet"])
     async def station_recovery_approve(robot_id: str, principal=Depends(require_named_operator)) -> dict:
@@ -158,7 +169,10 @@ def install_station_recovery_routes(app, enabled: bool, guards: tuple,
             raise _conflict("STATION_RECOVERY_NOT_ACTIONABLE", reason=(answer or {}).get("reason") or "no_request")
         if answer["reason"] is not None:
             raise _conflict("STATION_RECOVERY_NOT_ACTIONABLE", reason=answer["reason"])
-        record_approval(answer, principal.principal_id, map_version)
+        started = await record_approval(answer, principal.principal_id, map_version)
+        if started is not None:
+            return {"robot_id": robot_id, "approved": True, "bay": answer["bay"], "return": started,
+                    "started": started["state"] == "returning", "reason": started["reason"]}
         return {"robot_id": robot_id, "approved": True, "bay": answer["bay"], "started": False,
                 "reason": "not_implemented",
                 "message": "Approval recorded. Motion is not built yet, so no robot was commanded."}

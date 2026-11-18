@@ -13,6 +13,12 @@ which every worktree of the clone shares. A later run skips an invocation when
   main's delta inside one run) selects none of its paths, is not FULL, deletes or renames
   nothing, and leaves the known-failure lists alone (a shorter list can turn an old pass NEW).
 
+* prior round (D-889 37, ``--tests auto``): the same, also when that range is FULL, but only while no safety path,
+  STAY_FULL trigger, selector or runner tool, registry, root conftest/pyproject/pytest.ini, known-failure list or
+  unmapped path is in it (``_refusal``); the reach is then the selector's own, and nothing is written to the cache.
+  The row's commit need not be an ancestor: the delta is then the exact tree diff from its tree to the candidate's
+  (``_probe``), so a sibling merge of the same branch reuses what main's newer commits did not touch.
+
 Lint, safety-review, size-range and node never come from here. Bad lines are ignored; the file
 is trimmed to its last ``KEEP`` lines past ``MAX_LINES``. ``--no-cache`` disables reuse;
 fresh clean executions still leave evidence for publication.
@@ -21,12 +27,14 @@ Standard library only.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -38,7 +46,8 @@ from harness import affected_exclusive
 CACHE = "rosy-land-cache.jsonl"
 FAILED = "rosy-land-failed.json"  # argv of invocations whose last run had a NEW failure
 MAX_LINES, KEEP = 20000, 15000
-NARROW_COMMITS = 3  # ancestor commits tried for narrow reuse: one selector call each
+NARROW_COMMITS = 12  # ancestor commits tried for narrow reuse: one selector call each
+REUSED_FROM = "reused_from"  # a row carrying it is never a fresh execution: entries() drops it, publication never sees it
 NARROW = "reused across trees"  # land.py: a narrow reuse is not this candidate's own run (land record)
 LISTS = ("test/known_failures.py", "test/known_failures.txt", "test/flaky_quarantine.txt")
 OID = re.compile(r"[0-9a-f]{40,64}")
@@ -82,9 +91,36 @@ def entries(wt: Path) -> list[dict]:
             entry = json.loads(line)
         except ValueError:
             continue
-        if _valid(entry):
+        if _valid(entry) and REUSED_FROM not in entry:
             found.append(entry)
     return found
+
+
+@contextlib.contextmanager
+def _locked(target: Path, timeout: float = 15.0):
+    """Cross-process exclusive lock for shared cache and failed-list rewrites (D-889)."""
+    lock = target.with_suffix(target.suffix + ".lock")
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, f"{os.getpid()}\n".encode())
+            os.close(fd)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > 60:
+                    lock.unlink(missing_ok=True)
+                    continue
+            except OSError:
+                pass
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"timed out waiting for {lock}")
+            time.sleep(0.05)
+    try:
+        yield
+    finally:
+        lock.unlink(missing_ok=True)
 
 
 def record(wt: Path, commit: str, tree: str, env: str, inv: list[str], log: Path, digest: str | None = "") -> None:
@@ -94,29 +130,34 @@ def record(wt: Path, commit: str, tree: str, env: str, inv: list[str], log: Path
             digest = hashlib.sha256(log.read_bytes()).hexdigest()
         except OSError:
             digest = None  # Missing historical logs can support cache reuse, never publication.
-    line = json.dumps({"tree": tree, "commit": commit, "env": env, "argv": inv, "log": str(log),
-                       "log_sha256": digest, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
-    with open(target, "a", encoding="utf-8") as out:
-        out.write(line + "\n")
-    if len(target.read_text(encoding="utf-8", errors="replace").splitlines()) > MAX_LINES:
-        # shortcut: a peer's append racing this rewrite can be dropped; it only costs that peer a rerun.
-        temporary = target.with_suffix(".new")
-        temporary.write_text("".join(json.dumps(e) + "\n" for e in entries(wt)[-KEEP:]), encoding="utf-8")
-        temporary.replace(target)
+    line = (json.dumps({"tree": tree, "commit": commit, "env": env, "argv": inv, "log": str(log),
+                        "log_sha256": digest, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}) + "\n").encode("utf-8")
+    with _locked(target):
+        fd = os.open(str(target), os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o666)
+        try:
+            os.write(fd, line)
+        finally:
+            os.close(fd)
+        if len(target.read_text(encoding="utf-8", errors="replace").splitlines()) > MAX_LINES:
+            temporary = target.with_suffix(".new")
+            temporary.write_text("".join(json.dumps(e) + "\n" for e in entries(wt)[-KEEP:]), encoding="utf-8")
+            temporary.replace(target)
 
 
 def failed(wt: Path, inv: list[str], now: bool) -> None:
     """Mark an invocation that had a NEW failure (now=True), or clear it once it passes."""
     target = path(wt).with_name(FAILED)
-    try:
-        marked = set(json.loads(target.read_text(encoding="utf-8")))
-    except (OSError, ValueError, TypeError):
-        marked = set()
     key = json.dumps(inv)
-    if (key in marked) != now:
-        (marked.add if now else marked.discard)(key)
-        # shortcut: a peer's write racing this one can drop a mark; that costs only the failed-first order once
-        target.write_text(json.dumps(sorted(marked)), encoding="utf-8")
+    with _locked(target):
+        try:
+            marked = set(json.loads(target.read_text(encoding="utf-8")))
+        except (OSError, ValueError, TypeError):
+            marked = set()
+        if (key in marked) != now:
+            (marked.add if now else marked.discard)(key)
+            tmp = target.with_suffix(".new")
+            tmp.write_text(json.dumps(sorted(marked)), encoding="utf-8")
+            tmp.replace(target)
 
 
 def failed_first(wt: Path, invocations: list[list[str]]) -> list[list[str]]:
@@ -149,9 +190,25 @@ NO_EVIDENCE = "exited 1 without usable failure evidence"
 
 
 def _paths(inv: list[str]) -> list[str] | None:
-    """The test paths of inv; None when it carries pytest options (no path mapping then)."""
-    paths = [a.split("::")[0].rstrip("/") for a in inv if not ENV_TOKEN.match(a)]
-    return None if any(p.startswith("-") for p in paths) else paths
+    """The test paths of inv (including isolation path env tokens); None when unsupported pytest options appear."""
+    paths: list[str] = []
+    for a in inv:
+        if a.startswith(("ROSY_COLLECT_PATHS=", "ROSY_ALONE_FILES=")):
+            raw = a.split("=", 1)[1]
+            for p in (x.strip().replace("\\", "/").rstrip("/") for x in raw.split(",")):
+                if not p:
+                    continue
+                if p == ".":
+                    return None
+                paths.append(p)
+            continue
+        if ENV_TOKEN.match(a) or a.startswith("--ignore="):
+            continue
+        p = a.split("::")[0].rstrip("/")
+        if p.startswith("-"):
+            return None
+        paths.append(p)
+    return list(dict.fromkeys(paths))
 
 
 def _overlap(a: str, b: str) -> bool:
@@ -160,6 +217,46 @@ def _overlap(a: str, b: str) -> bool:
 
 _delta_lock = threading.RLock()
 _delta_memo: dict[tuple, list[str] | None] = {}
+_via_full: set[tuple[str, str]] = set()  # ranges whose reach came from _full_delta (the log line says so)
+_anc_lock = threading.RLock()
+_anc_cache: dict[tuple[str, str], set[str]] = {}
+_anc_neg: dict[tuple[str, str, str], bool] = {}
+
+
+def is_ancestor(repo: Path, base: str, head: str, *, git_dir: bool = False) -> bool:
+    """Check ``base`` <= ``head`` using a batched ``rev-list -n 2000`` window per immutable head OID."""
+    if not (OID.fullmatch(base) and OID.fullmatch(head)):
+        res = (subprocess.run(["git", "--git-dir", str(repo), "merge-base", "--is-ancestor", base, head],
+                              capture_output=True) if git_dir else _git(repo, "merge-base", "--is-ancestor", base, head))
+        return res.returncode == 0
+    key = (str(repo.resolve()), head)
+    with _anc_lock:
+        ancestors = _anc_cache.get(key)
+    if ancestors is None:
+        cmd = (["git", "--git-dir", str(repo), "rev-list", "-n", "2000", head] if git_dir
+               else None)
+        res = (subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace") if cmd
+               else _git(repo, "rev-list", "-n", "2000", head))
+        if res.returncode == 0:
+            ancestors = set(res.stdout.splitlines())
+            with _anc_lock:
+                if len(_anc_cache) > 512:
+                    _anc_cache.clear()
+                _anc_cache[key] = ancestors
+    if ancestors is not None and base in ancestors:
+        return True
+    neg_key = (key[0], base, head)
+    with _anc_lock:
+        if neg_key in _anc_neg:
+            return _anc_neg[neg_key]
+    res = (subprocess.run(["git", "--git-dir", str(repo), "merge-base", "--is-ancestor", base, head],
+                          capture_output=True) if git_dir else _git(repo, "merge-base", "--is-ancestor", base, head))
+    ok = res.returncode == 0
+    with _anc_lock:
+        if len(_anc_neg) > 4096:
+            _anc_neg.clear()
+        _anc_neg[neg_key] = ok
+    return ok
 
 
 def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[str] | None:
@@ -168,8 +265,11 @@ def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[st
     with _delta_lock:
         if key in _delta_memo:
             return _delta_memo[key]
-        if _git(wt, "merge-base", "--is-ancestor", base, head).returncode != 0:
-            return None
+        orig, sibling = head, not is_ancestor(wt, base, head)
+        if sibling:  # D-889 37: no ancestry, so the exact tree-to-tree diff stands in for it
+            head = _probe(wt, base, head)
+            if head is None:
+                return None
         status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
         rows = [row.split("\t") for row in status.stdout.splitlines() if row]
         if status.returncode or any(r[0] not in ("M", "A") or r[-1] in LISTS for r in rows):
@@ -180,14 +280,31 @@ def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[st
         except Exception as exc:  # a selector failure only means no narrow reuse
             print(f"[cache] selector failed ({exc}); no narrow reuse from {base[:10]}")
             return None
-        if full:
-            invocations = _landed_full(wt, base, head, python, select)
-            if invocations is None:
-                _delta_memo[key] = None
-                return None
+        if full:  # _landed_full reasons over main's landed commits: it needs the ancestry a sibling lacks
+            invocations = None if sibling else _landed_full(wt, base, head, python, select)
+            if invocations is None:  # D-889 37: a FULL range with none of the refused triggers
+                found = _full_delta(wt, base, head, python, [r[-1] for r in rows])
+                if found is not None:
+                    _via_full.add((base, orig))
+                _delta_memo[key] = found
+                return found
         picked = [_paths(inv) for inv in invocations]
         _delta_memo[key] = None if None in picked else [p for paths in picked for p in paths]
+        if sibling and _delta_memo[key] is not None:
+            _via_full.add((base, orig))
         return _delta_memo[key]
+
+
+def _probe(wt: Path, base: str, head: str) -> str | None:
+    """A throwaway commit holding head's tree on top of base: base...probe is then exactly the tree diff
+    base's tree -> head's tree (D-889 37), whatever the two commits' ancestry. Fixed identity and dates, so the
+    same pair always gives the same unreferenced object."""
+    env = {**os.environ, "GIT_AUTHOR_NAME": "probe", "GIT_AUTHOR_EMAIL": "probe@invalid", "GIT_AUTHOR_DATE": "@1 +0000",
+           "GIT_COMMITTER_NAME": "probe", "GIT_COMMITTER_EMAIL": "probe@invalid", "GIT_COMMITTER_DATE": "@1 +0000"}
+    res = subprocess.run(["git", "-C", str(wt), "commit-tree", f"{head}^{{tree}}", "-p", base, "-m", "reuse probe"],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+    out = res.stdout.strip()
+    return out if res.returncode == 0 and OID.fullmatch(out) else None
 
 
 def reach(wt: Path, base: str, head: str, python: str = sys.executable) -> list[str] | None:
@@ -195,29 +312,75 @@ def reach(wt: Path, base: str, head: str, python: str = sys.executable) -> list[
     None when reuse across that range is unsound (not an ancestor, a delete or rename, a known-failure list changed,
     a FULL selection, anything unreadable). The explicit FULL witness and publish_evidence use only this strict rule,
     publish recomputing it in its fresh checkout of the candidate."""
-    if _git(wt, "merge-base", "--is-ancestor", base, head).returncode != 0:
+    if not is_ancestor(wt, base, head):
         return None
     status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
     rows = [row.split("\t") for row in status.stdout.splitlines() if row]
     if status.returncode or any(r[0] not in ("M", "A") or r[-1] in LISTS for r in rows):
         return None
-    run = subprocess.run([python, "tools/harness/rosy_harness.py", "affected", "--base", base, "--head", head, "--json"],
-                         cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                         env={**os.environ, "PYTHONUTF8": "1"})
+    sel = _selection(wt, base, head, python)
     try:
-        sel = json.loads(run.stdout) if run.returncode == 0 else None
         if not sel or sel["mode"] == "full":
             return None
         picked = [_paths(inv) for inv in sel["invocations"]]
-        if str(wt / "test") not in sys.path:
-            sys.path.insert(0, str(wt / "test"))
-        import browser_scope  # noqa: PLC0415 - the tree's own registry
-        import land_guards  # noqa: PLC0415 - the guards read the whole tree: never reused across trees
-        browsers = list(browser_scope.targets([r[-1] for r in rows])) + list(land_guards.GUARDS)
+        browsers = _guards_and_browsers(wt, [r[-1] for r in rows])
     except (ValueError, KeyError, TypeError, ImportError) as exc:
         print(f"[cache] no reuse across {base[:10]}..{head[:10]}: {exc!r}")
         return None
     return None if None in picked else [p for paths in picked for p in paths] + browsers
+
+
+def _selection(wt: Path, base: str, head: str, python: str) -> dict | None:
+    """The D-436 selector's JSON for base..head; None when it fails."""
+    run = subprocess.run([python, "tools/harness/rosy_harness.py", "affected", "--base", base, "--head", head, "--json"],
+                         cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                         env={**os.environ, "PYTHONUTF8": "1"})
+    try:
+        return json.loads(run.stdout) if run.returncode == 0 else None
+    except ValueError:
+        return None
+
+
+def _guards_and_browsers(wt: Path, changed: list[str]) -> list[str]:
+    if str(wt / "test") not in sys.path:
+        sys.path.insert(0, str(wt / "test"))
+    import browser_scope  # noqa: PLC0415 - the tree's own registry
+    import land_guards  # noqa: PLC0415 - the guards read the whole tree: never reused across trees
+    return list(browser_scope.targets(changed)) + list(land_guards.GUARDS)
+
+
+def _refusal(changed: list[str], sel: dict) -> str | None:
+    """D-889 37: why a FULL range may not vouch for an earlier pass (its reach is unknown); None when none applies."""
+    harness = str(Path(__file__).resolve().parent / "harness")
+    if harness not in sys.path:
+        sys.path.insert(0, harness)
+    import affected_tests as at  # noqa: PLC0415
+    import affected_narrow as an  # noqa: PLC0415 - the selector's own lists, not copies
+    for p in changed:
+        if (p in an.REGISTRY_FILES or p in ("conftest.py", "pyproject.toml", "pytest.ini")
+                or any(at._match(p, g) for g in (*an.SELECT_CORE, *an.RUNNER_TOOLS))):
+            return p
+    for e in sel["escalations"]:
+        if e.endswith(at.SAFETY_TRIGGER) or any(e.endswith(t) for t in an.STAY_FULL):
+            return e
+    return f"unmapped {sel['unmapped'][0]}" if sel["unmapped"] else None
+
+
+def _full_delta(wt: Path, base: str, head: str, python: str, changed: list[str]) -> list[str] | None:
+    """D-889 37 (user 2026-11-17: reuse earlier rounds' results): the test paths a FULL base..head reaches as the
+    selector's own guards and directly affected suites, plus browser targets; None on a refusal (``_refusal``)."""
+    try:
+        sel = _selection(wt, base, head, python)
+        why = None if sel is None else _refusal(changed, sel)
+        if sel is None or why:
+            print(f"[cache] no prior-round reuse across {base[:10]}..{head[:10]}: {why or 'selector failed'}")
+            return None
+        picked = [_paths(inv) for inv in sel["local_invocations"]]
+        extra = _guards_and_browsers(wt, changed)
+    except (ValueError, KeyError, TypeError, ImportError) as exc:
+        print(f"[cache] no prior-round reuse across {base[:10]}..{head[:10]}: {exc!r}")
+        return None
+    return None if None in picked else [p for paths in picked for p in paths] + extra
 
 
 def _landed_full(wt: Path, base: str, head: str, python: str, select) -> list[list[str]] | None:
@@ -262,7 +425,7 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     # Dedicated timing rows prove publication, but must never replace a fresh execution.
     known = [e for e in entries(wt) if e["env"] == env and not affected_exclusive.dedicated(e["argv"])]
     exact = {tuple(e["argv"]): e for e in known if e["tree"] == tree}
-    reused, todo = [], []
+    reused, todo, prior = [], [], 0
     for inv in invocations:
         if not affected_exclusive.dedicated(inv) and tuple(inv) in exact:
             reused.append(f"pytest {' '.join(inv)} reused: passed on this tree {tree[:10]} (env {env})")
@@ -274,8 +437,14 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     if todo and args.tests in ("auto", "full") and (wt / "tools/harness/affected_tests.py").is_file():
         wanted = {tuple(inv) for inv in todo if not affected_exclusive.dedicated(inv)}
         ancestors = set(_git(wt, "rev-list", head).stdout.split()) - {head}
-        commits = [c for c in dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted)
-                   if c in ancestors]
+        rowed = list(dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted))
+        commits = [c for c in rowed if c in ancestors]
+        if args.tests == "auto":  # D-889 37: siblings (another merge of the same branch) by exact tree diff, newest first
+            for c in rowed:
+                if len(commits) >= NARROW_COMMITS:
+                    break
+                if c not in ancestors and c != head and _git(wt, "cat-file", "-e", f"{c}^{{commit}}").returncode == 0:
+                    commits.append(c)
         for commit in commits[:NARROW_COMMITS]:
             # explicit FULL: only the strict rule publish_evidence recomputes, never the landed-FULL extension
             delta = (reach(wt, commit, head, python) if args.tests == "full"
@@ -287,9 +456,86 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
                 paths = _paths(inv)
                 if paths and not any(_overlap(p, d) for p in paths for d in delta):
                     todo.remove(inv)
-                    reused.append(f"pytest {' '.join(inv)} {NARROW}: passed on {commit[:10]}; the selector for"
-                                  f" {commit[:10]}..{head[:10]} picks none of its paths (env {env})")
+                    if (commit, head) in _via_full:
+                        prior += 1
+                        reused.append(f"reused {' '.join(inv)} from {commit[:10]} (delta selects none of its paths)")
+                    else:
+                        reused.append(f"pytest {' '.join(inv)} {NARROW}: passed on {commit[:10]}; the selector for"
+                                      f" {commit[:10]}..{head[:10]} picks none of its paths (env {env})")
     for line in reused:
         print(f"[cache] {line}")
+    if reused:
+        import land_events  # noqa: PLC0415 - publish_evidence loads this module in trees that lack it
+        land_events.emit("reuse", reused=len(reused), prior=prior, total=len(invocations))  # the daily [metrics]
 
     return reused, todo, keep
+
+
+def warm_main(wt: Path, limit: int = 16, main_ref: str = "main", skip_lab: bool = False) -> tuple[int, int]:
+    """Warm shared cache rows for ``main_ref`` so branches inherit exact/narrow hits immediately."""
+    sha = _git(wt, "rev-parse", main_ref).stdout.strip()
+    tree = _git(wt, "rev-parse", f"{sha}^{{tree}}").stdout.strip() if sha else ""
+    env = env_id(wt, sha) if sha else None
+    if not sha or not tree or not env:
+        return 0, 0
+    tools_dir = Path(__file__).resolve().parent
+    test_dir = wt / "test"
+    for extra in (str(tools_dir), str(tools_dir / "remote"), str(test_dir)):
+        if extra not in sys.path:
+            sys.path.insert(0, extra)
+    import known_failures  # noqa: E402
+    import land_browser  # noqa: E402
+    import land_guards  # noqa: E402
+    import work_queue  # noqa: E402
+
+    candidates = [[g] for g in land_guards.GUARDS if (wt / g).exists()]
+    if (wt / "tools/harness/rosy_harness.py").is_file():
+        res = subprocess.run([sys.executable, "tools/harness/rosy_harness.py", "affected", "--base", sha,
+                              "--json", "--full"], cwd=wt, capture_output=True, text=True, encoding="utf-8")
+        if res.returncode == 0:
+            candidates += json.loads(res.stdout).get("full_invocations", [])
+    exact = {tuple(e["argv"]) for e in entries(wt) if e["env"] == env and e["tree"] == tree}
+    seen: set[tuple[str, ...]] = set()
+    missing = []
+    for inv in candidates:
+        k = tuple(inv)
+        if k in seen or k in exact or affected_exclusive.dedicated(inv):
+            continue
+        if skip_lab and (work_queue.lab_only(inv) or work_queue.host_alone(inv)):
+            continue
+        seen.add(k)
+        missing.append(inv)
+    todo = missing[:limit] if limit > 0 else missing
+    if not todo:
+        return 0, 0
+    scratch = Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-land-warm" / sha[:10]
+    scratch.mkdir(parents=True, exist_ok=True)
+    stamp = int(time.time())
+    logs = [scratch / f"warm-{stamp}-{i}.txt" for i in range(len(todo))]
+    codes = remote_pytest.run(todo, logs, sha, repo=wt, label="warm")
+    known = {name: why for p in ("test/known_failures.txt", "test/flaky_quarantine.txt") if (wt / p).is_file()
+             for name, why in known_failures.load_known((wt / p).read_text(encoding="utf-8")).items()}
+    warmed = 0
+    for inv, log, code in zip(todo, logs, codes or []):
+        if unusable(code, log) is not None or land_browser.vacuous(inv, log):
+            continue
+        text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
+        if known_failures.compare(text, known)[0]:
+            continue
+        record(wt, sha, tree, env, inv, log)
+        warmed += 1
+    return warmed, len(todo)
+
+
+if __name__ == "__main__":
+    import argparse
+    p = argparse.ArgumentParser(description="Warm landing cache on main")
+    p.add_argument("--warm", action="store_true", help="run missing non-dedicated suites on main and record passes")
+    p.add_argument("--limit", type=int, default=16)
+    p.add_argument("--main", default="main")
+    p.add_argument("--skip-lab", action="store_true")
+    ns = p.parse_args()
+    if ns.warm:
+        root = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").stdout.strip())
+        done, ran = warm_main(root, limit=ns.limit, main_ref=ns.main, skip_lab=ns.skip_lab)
+        print(f"[cache] warmed {done} of {ran} missing invocation(s) on {ns.main}")

@@ -27,3 +27,14 @@ def test_docked_pinky_cell_phase_controls_stage_and_motion_interlock():
     assert in_zone["receipt"]["amr_motion_inhibited"] is True
     assert released["receipt"]["amr_motion_inhibited"] is False
     assert released["stage_directive"] is None
+
+
+def test_missing_brake_or_bed_evidence_does_not_claim_cell():
+    station = resolve_omx_cells()["cell_s"]
+    robot = {"robot_id": "rosy_01", "pose": {"x": 0.68, "y": -0.25, "yaw": 0.0}}
+    result = evaluate_omx_cell_station(station, docked_robot=robot,
+                                       cell_state={"phase": "ARRIVED"})
+    assert result["gate"]["cell_can_claim"] is False
+    assert result["stage_directive"] is None
+    assert result["handoff"]["wheel_brake_locked"] is False
+    assert result["handoff"]["bed_ready"] is False

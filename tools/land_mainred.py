@@ -29,6 +29,7 @@ pretest. A NEW failure now does not stop a landing when every condition holds; a
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -144,6 +145,10 @@ def known(wt: Path, main: str, ids: list[str]) -> bool:
     return bool(ids) and set(ids) <= have
 
 
+# 11-14: close() reads state() after every passing invocation, and state() asked git once per close record: 372
+# calls a pass, 68 passes a FULL, about 0.2 s a call on a busy laptop. A landing sat silent for over 30 min after its
+# tests. Ancestry between two commits never changes.
+@functools.lru_cache(maxsize=None)
 def _ancestor(wt: Path, a: str, b: str) -> bool:
     return _git(wt, "merge-base", "--is-ancestor", a, b).returncode == 0
 

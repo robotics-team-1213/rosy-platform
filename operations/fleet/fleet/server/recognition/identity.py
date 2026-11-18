@@ -95,6 +95,13 @@ class _Pending:
     lamp: Optional[str] = None  # D-596 rev 2026-10-10: CORE's answer once final (shown, expired, unsupported)
 
 
+def _finite_float(value) -> Optional[float]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    val = float(value)
+    return val if math.isfinite(val) else None
+
+
 @dataclass
 class _Binding:
     robot_id: str
@@ -106,6 +113,7 @@ class _Binding:
     seen_at: float        # capture time of the last continuing detection
     confirmed_at: float
     evidence: dict = field(default_factory=dict)
+    yaw: Optional[float] = None
 
 
 class IdentityService:
@@ -309,9 +317,12 @@ class IdentityService:
             if other.robot_id != robot_id and other.source_id == source.source_id and math.hypot(
                     other.x - found[0], other.y - found[1]) <= self.config.overlap_m:
                 return self._unknown(robot_id, "overlap", source.source_id)
+        yaw = _finite_float(body.get("yaw"))
+        if yaw is None:
+            yaw = found[2]
         self._bindings[robot_id] = _Binding(robot_id, source.source_id, source.map_id, revision,
                                             found[0], found[1], latest.captured_at, now,
-                                            dict(body.get("evidence") or {}))
+                                            dict(body.get("evidence") or {}), yaw=yaw)
         self._last[robot_id] = {"state": "CONFIRMED", "reason": None, "at": now, "source_id": source.source_id}
         self._pending.pop(robot_id, None)  # done: this colour is free again
         return {"robot_id": robot_id, "state": "CONFIRMED", "source_id": source.source_id}
@@ -340,6 +351,7 @@ class IdentityService:
                 self._drop(robot_id, "overlap")
             elif isinstance(found, tuple):
                 binding.x, binding.y, binding.seen_at = found[0], found[1], payload.captured_at
+                binding.yaw = found[2]
         # Review 2026-10-08: A's blob hidden, B's within track_step_m of A's last position -> A
         # would follow B. Two bindings within overlap_m can no longer tell who is who: drop both.
         followed = [b for b in self._bindings.values() if b.source_id == source_id]
@@ -352,17 +364,18 @@ class IdentityService:
             self._drop(robot_id, "overlap")
 
     def _continue(self, payload, x: float, y: float):
-        """(x, y) of the one anonymous detection continuing (x, y), or a reason string."""
+        """(x, y, yaw) of the one anonymous detection continuing (x, y), or a reason string."""
         if payload.status != "OK":
             return "track_lost"
-        seen = [(d.x, d.y) for d in payload.detections if d.marker_id is None]
-        near = sorted((math.hypot(dx - x, dy - y), dx, dy) for dx, dy in seen)
+        seen = [(d.x, d.y, _finite_float(getattr(d, "yaw", None)))
+                for d in payload.detections if d.marker_id is None]
+        near = sorted((math.hypot(dx - x, dy - y), dx, dy, dyaw) for dx, dy, dyaw in seen)
         if not near or near[0][0] > self.config.track_step_m:
             return "track_lost"
-        _, cx, cy = near[0]
-        if any(math.hypot(dx - cx, dy - cy) <= self.config.overlap_m for _, dx, dy in near[1:]):
+        _, cx, cy, cyaw = near[0]
+        if any(math.hypot(dx - cx, dy - cy) <= self.config.overlap_m for _, dx, dy, _ in near[1:]):
             return "overlap"
-        return cx, cy
+        return cx, cy, cyaw
 
     def _unknown(self, robot_id: str, reason: str, source_id: str) -> dict:
         self._last[robot_id] = {"state": "UNKNOWN", "reason": reason, "at": self._clock(), "source_id": source_id}
@@ -399,7 +412,7 @@ class IdentityService:
                     "map_id": None, "calibration_revision": None, "confirmed_at": None,
                     "use": "observation-only"}
         return {"robot_id": robot_id, "state": "CONFIRMED", "reason": None,
-                "x": binding.x, "y": binding.y, "yaw": None, "age_s": round(now - binding.seen_at, 3),
+                "x": binding.x, "y": binding.y, "yaw": binding.yaw, "age_s": round(now - binding.seen_at, 3),
                 "source_id": binding.source_id, "map_id": binding.map_id,
                 "calibration_revision": binding.calibration_revision,
                 "confirmed_at": binding.confirmed_at, "use": "observation-only"}

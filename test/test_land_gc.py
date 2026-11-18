@@ -339,3 +339,34 @@ def test_an_archived_source_branch_still_covers_its_snapshot(tmp_path):
     git(repo, "update-ref", f"refs/archive/feat/arch@{head[:10]}", head)
     verdict = {t.name: (action, reason) for action, reason, t, _ in land_gc.plan(repo, time.time(), 7) if t}
     assert verdict[tree.name] == ("remove", "landed or nothing unique")
+
+
+def test_active_rollup_build_is_kept_under_lock_and_removed_when_stale_or_unlocked(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "t@t")
+    git(repo, "config", "user.name", "t")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "base")
+    common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    holder = common / land_gc.HOLDER
+    holder.mkdir()
+    tree = hidden(repo, holder, "rollup-build-20261116000000")
+    lock = common / "rosy-land-rollup.lock"
+    lock.write_text("busy")
+    now = time.time()
+    os.utime(tree, (now, now))
+    assert {t.name: a for a, _, t, _ in land_gc.plan(repo, now, 7) if t}[tree.name] == "keep"
+    assert {t.name: a for a, _, t, _ in land_gc.plan(repo, now + 1000, 7) if t}[tree.name] == "remove"
+    lock.unlink()
+    assert {t.name: a for a, _, t, _ in land_gc.plan(repo, now, 7) if t}[tree.name] == "remove"
+
+
+
+def test_member_of_a_recent_rollup_keeps_its_tree_for_the_split_resume(landing):
+    repo, common, tree, _ = landing  # 2026-11-17: a split rollup's member tree was gone at resume (WinError 267)
+    members = common / land_gc.HOLDER / "land-fix-land-rollup-20261102000002-20261102000002.members"
+    members.write_text(json.dumps([{"branch": "land/feat/protected-20261102000001", "worktree": str(tree)}]))
+    assert [r[:2] for r in land_gc.plan(repo, time.time(), 7)][0] == ("keep", "member of a recent rollup")
+    os.utime(members, (OLD, OLD))
+    assert [r[0] for r in land_gc.plan(repo, time.time(), 7)][0] == "remove"

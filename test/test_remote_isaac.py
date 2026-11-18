@@ -30,6 +30,13 @@ def request():
             'source_sha': SHA, 'expected_input_sha256': 'b' * 64}
 
 
+def test_current_cad_ppo_is_allowed_by_remote_cli():
+    for action in ('check', 'run'):
+        result = subprocess.run([sys.executable, str(ROOT / 'tools/remote/remote_isaac.py'),
+                                 action, '--help'], capture_output=True, text=True, check=True)
+        assert 'omx-map-container-stacking-rl' in result.stdout
+
+
 def test_explicit_model_target_is_selected_without_test_host_fallback():
     lab = {'sim_hosts': ['fake@ai=ai', 'fake@model=model'], 'site_host': 'fake@site',
            'test_hosts': ['fake@test']}

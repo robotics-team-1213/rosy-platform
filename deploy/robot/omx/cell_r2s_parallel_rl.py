@@ -247,7 +247,7 @@ def run_pipelined_parallel_unit_transfer(
             env_obs=env, systematic_bias_m=pipeline.systematic_bias_m,
         )
         rl_sel = parallel_speculative_r2s_rl_select(
-            proj, work_dir=pipeline.work_dir, clf=pipeline.clf,
+            proj, work_dir=pipeline.fleet_pipe.policy_dir, clf=pipeline.clf,
             iwr=pipeline.iwr, r2s_gap_state=pipeline.r2s_gap_state,
         )
         debate = (

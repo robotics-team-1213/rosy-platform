@@ -207,6 +207,57 @@ def test_each_rung_starts_after_the_previous_mission_can_have_ended():
     assert service_logic.LADDER_HOMING_S + lane_t < service_logic.LADDER_HUMAN_S
 
 
+# --- the operator motion gate (panel decision 2026-11-14) -------------------------------------
+
+
+def test_the_gate_expires_after_120_s_and_shows_the_last_request():
+    gate = service_logic.MotionGate()
+    assert gate.allowed("r1", 0.0) is False
+    gate.allow("r1", "kim", 10.0, 1_800_000_010.0)
+    assert gate.allowed("r1", 129.5) is True
+    assert gate.allowed("r1", 130.5) is False            # MOTION_ALLOW_S after the press
+    assert gate.view("r1", 130.5) == {"by": "kim", "at": 1_800_000_010.0, "expires_in_s": 0.0}
+    assert gate.view("r2", 0.0) is None
+
+
+def test_the_ladder_sends_no_mission_without_an_operator_request():
+    """Panel 2026-11-14: no unattended wheel motion — a robot can sit on a charger or cables."""
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 60.0)                              # past rotate (10 s) and homing (45 s)
+    assert r1.missions == []
+    assert svc.view("r1")["last_mission"]["result"] == "operator_required"
+    assert svc.motion_view("r1") == {"motion_allowed": False,
+                                     "motion_allow_s": service_logic.MOTION_ALLOW_S,
+                                     "last_operator_request": None}
+
+
+def test_a_fresh_operator_request_lets_the_motion_rungs_run():
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 9.0)
+    view = svc.allow_motion("r1", "kim")
+    assert view["motion_allowed"] is True and view["last_operator_request"]["by"] == "kim"
+    ticks(svc, clock, 2.0)
+    assert r1.missions == [("rotate_in_place", 0.0, 30.0, None)]   # the press starts rotate now
+    ticks(svc, clock, 40.0)
+    assert [m[0] for m in r1.missions] == ["rotate_in_place", "lane_to_stopline"]
+
+
+def test_the_service_motion_allowance_expires_after_120_s():
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    svc = service(r1, clock=clock)
+    svc.allow_motion("r1", "kim")
+    ticks(svc, clock, 60.0)
+    assert svc.motion_view("r1")["motion_allowed"] is True
+    ticks(svc, clock, 70.5)                              # 130.5 s after the press
+    assert svc.motion_view("r1")["motion_allowed"] is False
+    assert svc.motion_view("r1")["last_operator_request"]["by"] == "kim"
+
+
 # --- the service ------------------------------------------------------------------------
 
 
@@ -769,6 +820,7 @@ def test_the_ladder_sends_missions_then_raises_needs_human(caplog):
     clock = FakeClock()
     r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))   # no report: never decided
     svc = service(r1, clock=clock)
+    svc.allow_motion("r1", "operator")          # panel 2026-11-14: motion rungs need a press
     with caplog.at_level(logging.INFO, logger="fleet.localization"):
         ticks(svc, clock, 10.0)
         assert svc.view("r1")["rung"] is None and r1.missions == []
@@ -828,6 +880,7 @@ def test_homing_tries_to_square_first_and_falls_back_when_core_refuses_it():
 
     r1.localization_mission = mission
     svc = service(r1, clock=clock)
+    svc.allow_motion("r1", "operator")
     ticks(svc, clock, 46.0)
     assert calls == ["rotate_in_place", "to_square", "lane_to_stopline"]
     [lane] = [m for m in r1.missions if m[0] == "lane_to_stopline"]
@@ -856,6 +909,7 @@ def test_an_unsupported_kind_is_not_asked_again_in_the_same_ladder_episode():
 
     r1.localization_mission = mission
     svc = service(r1, clock=clock)
+    svc.allow_motion("r1", "operator")
     ticks(svc, clock, 46.0)
     assert calls == ["rotate_in_place", "to_square", "lane_to_stopline"]
     ticks(svc, clock, 6.0)                                   # busy retries: the lane mission only
@@ -868,6 +922,7 @@ def test_an_unsupported_kind_is_not_asked_again_in_the_same_ladder_episode():
     ticks(svc, clock, 0.5)
     r1._state = state("r1", "CANDIDATES", "odom")            # a new one tries to_square again
     calls.clear()
+    svc.allow_motion("r1", "operator")
     ticks(svc, clock, 46.5)
     assert "to_square" in calls
 
@@ -885,6 +940,7 @@ def test_a_refused_mission_is_recorded_not_retried(code):
     r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
     r1.mission_error = RobotApiError("r1", 409, code, "refused")
     svc = service(r1, clock=clock)
+    svc.allow_motion("r1", "operator")
     ticks(svc, clock, 12.0)
     assert [m[0] for m in r1.missions] == ["rotate_in_place"]
     assert svc.view("r1")["last_mission"]["result"] == code
@@ -916,6 +972,7 @@ def test_traffic_is_held_before_every_mission():
 
     r1.localization_mission = mission
     svc = service(r1, clock=clock, traffic_hold=hold)
+    svc.allow_motion("r1", "operator")
     ticks(svc, clock, 46.0)
     assert order == [("hold", "r1"), ("mission", "rotate_in_place"),
                      ("hold", "r1"), ("mission", "lane_to_stopline")]
@@ -930,6 +987,7 @@ def test_a_failed_traffic_hold_sends_no_mission():
         raise RuntimeError("navigation goal cancellation was not confirmed")
 
     svc = service(r1, clock=clock, traffic_hold=hold)
+    svc.allow_motion("r1", "operator")
     ticks(svc, clock, 12.0)
     assert r1.missions == []
     assert svc.view("r1")["last_mission"]["result"] == "traffic_hold_failed"
@@ -1051,6 +1109,7 @@ def test_a_busy_refusal_is_retried_on_later_polls():
     r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
     r1.mission_error = RobotApiError("r1", 409, "busy", "mission rotate_in_place is running")
     svc = service(r1, clock=clock)
+    svc.allow_motion("r1", "operator")
     ticks(svc, clock, 11.0)
     assert [m[0] for m in r1.missions] == ["rotate_in_place"]
     ticks(svc, clock, 1.0)                                    # within the retry interval
@@ -1106,6 +1165,7 @@ def test_no_ladder_mission_while_the_robot_runs_its_check():
     clock = FakeClock()
     r1 = FakeRobot("r1", state=candidates_state("r1", "r1-1"))
     svc = service(r1, clock=clock)
+    svc.allow_motion("r1", "operator")
     ticks(svc, clock, 9.0)
     r1._state = candidates_state("r1", "r1-1", reason="checking")
     ticks(svc, clock, 5.0)
@@ -1122,6 +1182,7 @@ def test_a_busy_rung_is_not_retried_while_the_robot_checks():
     r1 = FakeRobot("r1", state=candidates_state("r1", "r1-1"))
     r1.mission_error = RobotApiError("r1", 409, "busy", "mission rotate_in_place is running")
     svc = service(r1, clock=clock)
+    svc.allow_motion("r1", "operator")
     ticks(svc, clock, 11.0)
     assert len(r1.missions) == 1
     r1._state = candidates_state("r1", "r1-1", reason="checking")
