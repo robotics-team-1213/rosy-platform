@@ -494,3 +494,28 @@ def leave() -> None:
         except (OSError, ValueError):
             pass
         ticket.unlink(missing_ok=True)
+
+
+# A NOT QUEUED request land_async keeps for land_tick's requeue pass; named so no [0-9]* ticket reader sees it.
+PENDING = "pending"
+
+
+def _git(cwd: Path, *args: str) -> str:
+    done = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, encoding="utf-8")
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def keep_pending(cwd: Path, args: list[str]) -> str:
+    """Keep a NOT QUEUED landing request beside the queue, so it is not simply gone: one file per branch (branch,
+    ref sha at request time, land args, cwd; a later request supersedes an earlier one) which land_tick's existing
+    requeue pass relaunches via land_async once the queue has room (D-889 addendum 36: no new trigger). The caller
+    prints where it was kept instead of asking for a manual re-run."""
+    branch = _git(cwd, "branch", "--show-current")
+    qdir = queue_dir(cwd)
+    qdir.mkdir(parents=True, exist_ok=True)
+    path = qdir / f"{PENDING}-{branch.replace('/', '-')}.json"
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(json.dumps({"branch": branch, "ref": _git(cwd, "rev-parse", branch or "HEAD"),
+                               "args": args, "cwd": str(cwd), "start": time.time()}), encoding="utf-8")
+    os.replace(tmp, path)
+    return f"kept as {path}; land_tick's requeue pass relaunches it when the queue has room"

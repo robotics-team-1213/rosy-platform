@@ -218,7 +218,7 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | 
         except Full as exc:  # polled outside the lock: resumes and rollups go on meanwhile
             if time.monotonic() >= deadline:
                 print(f"[land-async] NOT QUEUED: {branch or git(cwd, 'branch', '--show-current')}: {exc} after "
-                      f"{FULL_WAIT_S // 60} min; run land_async.py again when tickets free up", file=sys.stderr)
+                      f"{FULL_WAIT_S // 60} min; {_queue().keep_pending(cwd, land_args)}", file=sys.stderr)
                 raise SystemExit(3) from exc
             print(f"[land-async] {exc}; checking again every {FULL_POLL_S} s for up to {FULL_WAIT_S // 60} min", flush=True)
             time.sleep(FULL_POLL_S)
