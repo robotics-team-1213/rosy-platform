@@ -16,7 +16,7 @@ export function personHeadline(request) {
   return `: 사람 부탁(${kind}) — ${request.text}${request.why ? ` · 이유: ${request.why}` : ""}`;
 }
 
-export const SHOWN_FRESH_S = 30;
+const SHOWN_FRESH_S = 30;
 
 /** Pure: whether the robot's own screen shows it. "Shown" means Fleet read it back from the robot lately. */
 export function deliveryText(request) {

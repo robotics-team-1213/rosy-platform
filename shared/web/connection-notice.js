@@ -10,7 +10,7 @@
 import {EVIDENCE_LABEL} from "./core_ui_logic.js";
 import {statusTag} from "./status-tag.js";
 
-export const CONNECTION_TEXT = Object.freeze({...EVIDENCE_LABEL, "auth-wait": "인증 대기"});
+const CONNECTION_TEXT = Object.freeze({...EVIDENCE_LABEL, "auth-wait": "인증 대기"});
 
 export function createConnectionNotice(element) {
   if (!element.hasAttribute("role") && !element.hasAttribute("aria-live")) {

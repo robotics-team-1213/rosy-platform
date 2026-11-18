@@ -1410,3 +1410,8 @@
 - 변경: `cause-line.js`에 `setOffBy(control, reason)`을 더했다 — Fleet의 같은 본문 변종 9개(gate·guard·setReason·blockWith)의 정본. `test_shared_controls.py` scan_disabled가 setOffBy도 읽어 사유 인자(2번째)가 없으면 실패한다.
 - 증거: python으로 scan_disabled(disabled_scripts()) 직접 호출, 누락 0·폭 변화 없음.
 - gate 변화: scan_disabled REASON_HELPER에 setOffBy 추가(강화).
+
+## 2026-11-18 · uncommitted · refactor(web): 어디서도 import하지 않는 export 58개의 export 키워드 제거
+- 변경: shared/web export 10개(account-gate RELOAD_NOTE·LOGOUT_DELAYED, connection-notice CONNECTION_TEXT, localization-state REVOKE_TEXT, robot-3d-assets MODELS, stop-control stopFailureText, webrtc STALE_WARN_MS·STALE_HIDE_MS·RENEW_MS·WATERMARK_WIDTH)의 export 키워드 제거 — 저장소 어디서도 import하지 않음(middleware 포함).
+- 증거: 위 집계, node shared/web 시험 147 통과.
+- gate 변화: 없음.

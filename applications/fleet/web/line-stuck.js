@@ -15,7 +15,7 @@ export const CAUSE_LABEL = Object.freeze({ obstacle_ahead: "앞 물체로 멈춤
 export const PHASE_LABEL = Object.freeze({
   ASKING: "관제 답 기다림 · 시간이 지나면 로컬 복구", WAITING_CONSOLE: "관제 답만 기다림", BACKING: "로컬 복구 · 후진 중", SETTLING: "로컬 복구 · 다시 보는 중",
 });
-export const REFUSAL_REASON = Object.freeze({
+const REFUSAL_REASON = Object.freeze({
   no_scan: "LiDAR 스캔이 없습니다", scan_stale: "LiDAR 스캔이 오래되었습니다",
   object_within_stop_distance: "정지 거리 안에 아직 물체가 있습니다", local_recovery_disabled: "이 로봇은 로컬 복구가 꺼져 있습니다",
   attempts_exhausted: "후진 시도를 모두 썼습니다", calibration_active: "보정 세션 중입니다",
@@ -46,7 +46,7 @@ const AI_HELD_REASON = Object.freeze({
   attempts: "후진 시도 소진", rule_budget: "자동 판단 횟수 소진", refused: "후진 거절됨",
 });
 const AI_CLASS_TEXT = Object.freeze({ accepted: "CORE 수락", refused: "CORE 거절", pending: "CORE 답 기다림", held: "Fleet 보류" });
-export function aiHeldText(verdict) {
+function aiHeldText(verdict) {
   if (typeof verdict === "string" && verdict.startsWith("ai:")) return `AI 사실 ${verdict.slice(3)}`;
   if (typeof verdict === "string" && verdict.startsWith("ai_fact:")) return `AI 사실 ${verdict.slice(8)}`;
   return AI_HELD_REASON[verdict] || verdict;

@@ -23,7 +23,7 @@ const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
 // console_view._error_of 는 닿지 못한 예외를 클래스 이름(code)으로 싣는다. 운영자 말은
 // 한국어 평문이다 — 아는 코드만 옮기고 모르는 값은 받은 그대로 보인다(2026-10-02 회차).
-export const REACH_LABEL = Object.freeze({
+const REACH_LABEL = Object.freeze({
   ConnectError: "접속 실패",
   ConnectTimeout: "접속 시간 초과",
   TimeoutException: "응답 시간 초과",

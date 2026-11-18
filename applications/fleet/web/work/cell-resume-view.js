@@ -21,8 +21,8 @@ export const RESUME_REFUSALS = Object.freeze({
 });
 
 export const NOTE_MAX = 200;
-export const NOTE_INPUT = Object.freeze({label: "사유 메모", max: NOTE_MAX});
-export const RESTART_MESSAGE = "실행 중에 멈춘 작업입니다. 처음부터 다시 시작합니다";
+const NOTE_INPUT = Object.freeze({label: "사유 메모", max: NOTE_MAX});
+const RESTART_MESSAGE = "실행 중에 멈춘 작업입니다. 처음부터 다시 시작합니다";
 
 // Server contract: clear and resume both carry `note`; resume adds restart_from_start only after the 409 confirm.
 export const clearBody = (cellId, note) => ({cell_id: cellId, note});

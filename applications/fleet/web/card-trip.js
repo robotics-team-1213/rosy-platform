@@ -44,7 +44,7 @@ export function cancelScope(trip, lineFollowMode) {
 }
 
 // Options change only when the list does, so a poll keeps the operator's choice.
-export function placeOptions(select, places, chosen, label = (place) => `${place.name} (${place.id})`) {
+function placeOptions(select, places, chosen, label = (place) => `${place.name} (${place.id})`) {
   const ids = places.map((place) => place.id).join(",");
   if (select.dataset.ids !== ids) {
     select.dataset.ids = ids;

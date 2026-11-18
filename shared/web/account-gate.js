@@ -8,8 +8,8 @@
 //   Returns {restore, dispose(), logout(), get state(), get account(), canOperate}. logout() resolves to an error text or "".
 import {createAccountSession} from "./account-session.js";
 
-export const RELOAD_NOTE = "계정이 바뀌어 다시 불러오는 중 · 정지는 계속 누를 수 있습니다";
-export const LOGOUT_DELAYED = "중앙 로그아웃 처리가 지연 중입니다.";
+const RELOAD_NOTE = "계정이 바뀌어 다시 불러오는 중 · 정지는 계속 누를 수 있습니다";
+const LOGOUT_DELAYED = "중앙 로그아웃 처리가 지연 중입니다.";
 
 /** Pure: the gate state of one /session body. */
 export function gateState(account) {

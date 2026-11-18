@@ -4,7 +4,7 @@
 // LOCALIZED 실선, DEGRADED 파선, CAMERA_ONLY(천장 카메라 추적만) 점선. 현재 지도와 map_id가 일치하는 구간만 그린다. 위치 미보고(모터 모드)·odom pose 는
 // Fleet 이 기록하지 않으므로 지도에 그려지지 않는다. 테더 밖 판정도 LOCALIZED·map 보고만 쓴다(D-526 감시와 같다).
 // map-view 가 자기 toPx(격자 칸 또는 D-513 7 로 돌린 미터 뷰)를 넘기므로 지도와 같이 돈다.
-export const PATH_POLL_MS = 2000, TRIPS_POLL_MS = 10000, TETHER_POLL_MS = 5000, WATCH_STALE_S = 2, MAX_POINTS = 20000;
+const PATH_POLL_MS = 2000, TRIPS_POLL_MS = 10000, TETHER_POLL_MS = 5000, WATCH_STALE_S = 2, MAX_POINTS = 20000;
 
 const watching = (view) => view.watchAge != null && view.watchAge <= WATCH_STALE_S; // null: no tick yet
 

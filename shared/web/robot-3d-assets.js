@@ -4,7 +4,7 @@
  */
 import { parseUrdf, parseStl } from "./robot-3d-model.js";
 
-export const MODELS = Object.freeze({ arm: "omx-f.urdf", mobile: "pinky-pro.urdf" });
+const MODELS = Object.freeze({ arm: "omx-f.urdf", mobile: "pinky-pro.urdf" });
 
 const THREE_URL = new URL("./vendor/three.module.min.js", import.meta.url).href;
 let threeLoad = null;

@@ -17,8 +17,8 @@ export const ARM_HOLDS_CLEAR_PATH = '/api/fleet/pipeline/arm-holds/clear';
 
 // 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
 // Pinky 도킹은 천장 Cam(ceiling_north) ROI 확대로 위에서 본다.
-export const DOCK_VIEW_LABEL = '도킹 확대 (천장 Cam)';
-export const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, roiTarget: robotId || 'rosy_46'});
+const DOCK_VIEW_LABEL = '도킹 확대 (천장 Cam)';
+const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, roiTarget: robotId || 'rosy_46'});
 export const S3_VIEWS = [
   {id: 'arm_s_top', label: 'S3 상단(arm_s_top)', source: 'arm_s_top'},
   {id: 'arm_s_wrist', label: 'arm_s 손목', source: 'arm_s_wrist'},

@@ -38,7 +38,7 @@ export function rotationZ(rad = 0) {
   return new Float64Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 }
 
-export function rotationAxisAngle(axis, rad = 0) {
+function rotationAxisAngle(axis, rad = 0) {
   const [ax = 0, ay = 0, az = 1] = axis || [];
   const len = Math.hypot(ax, ay, az);
   if (!len || !rad) return translation(0, 0, 0);

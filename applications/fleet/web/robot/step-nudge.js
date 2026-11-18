@@ -3,7 +3,7 @@
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import { createCauseLine } from "/common/cause-line.js";
 
-export const STEP_DISTANCE_M = 0.10;
+const STEP_DISTANCE_M = 0.10;
 const NUDGE_KINDS = new Set(["nudge_forward", "nudge_backward"]);
 
 export function reportingOff(robot) {
@@ -13,7 +13,7 @@ export function reportingOff(robot) {
   return false;
 }
 
-export function isNudgeMissionRunning(mission) {
+function isNudgeMissionRunning(mission) {
   return Boolean(mission && NUDGE_KINDS.has(mission.kind) && mission.state === "running");
 }
 

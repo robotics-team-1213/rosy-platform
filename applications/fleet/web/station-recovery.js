@@ -34,7 +34,7 @@ export function recoveryHeadline(request) {
 }
 
 /** Pure: who approved, in words. */
-export function approvedText(by) {
+function approvedText(by) {
   return !by ? "승인 대기" : by === "fleet:auto" ? "자동 승인됨" : `${by} 승인`;
 }
 

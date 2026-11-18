@@ -59,7 +59,7 @@ export const REASON_TEXT = Object.freeze({
 const reasonText = code => REASON_TEXT[code] ?? REASON_TEXT[String(code).toLowerCase()] ?? `알 수 없는 사유 (${code})`;
 
 // last_operator_request.revoked.reason: "estop" or "mission_<CORE reason>". One press gives one motion; a new press is the only way back.
-export const REVOKE_TEXT = Object.freeze({
+const REVOKE_TEXT = Object.freeze({
   estop: "비상정지로 회전 권한이 닫혔습니다",
   mission: "한 번 회전이 끝났습니다 · 다시 누르면 다시 찾습니다",
   other: "회전 권한이 닫혔습니다 · 다시 누르면 다시 찾습니다",

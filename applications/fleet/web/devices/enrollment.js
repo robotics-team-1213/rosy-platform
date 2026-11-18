@@ -89,7 +89,7 @@ export function moveDoneLines(row) {
 export const MOVE_CHECK = "코드를 넣기 전에 이 주소가 로봇 화면에 보이는 IP와 같은지 확인하세요"
   + "(LCD 정보 화면의 이름 아래 주소 줄). 다르면 옮기지 마세요 — 같은 이름을 다른 기기가 광고하고 있을 수 있습니다.";
 
-export const CONSUMED_REASONS = {
+const CONSUMED_REASONS = {
   role_too_low: "원인: 코드 역할이 operator보다 낮습니다.",
   admin_code_refused: "원인: 관리자 역할 코드는 사이트 등록에 쓰지 않습니다.",
   wrong_robot: "원인: 선택한 행과 다른 로봇이 답했습니다.",
