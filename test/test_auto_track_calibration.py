@@ -312,3 +312,13 @@ def test_auto_track_calibration_service_principal_is_scoped_to_calibration_and_s
     assert exc.value.status_code == 403
 
 
+def test_spread_is_read_on_traced_places_not_off_screen_corners():
+    mod = _load_module()
+    swinging = [_shifted_corners(mod, 0.30 + (0.05 if i % 2 else 0.0)) for i in range(5)]  # off-screen extrapolation
+    tight = [[{"id": "S1", "x": -0.675 + i * 0.001, "y": -0.136}] for i in range(5)]
+    loose = [[{"id": "S1", "x": -0.675 + (0.04 if i % 2 else 0.0), "y": -0.136}] for i in range(5)]
+    assert mod.places_spread_m(tight) < mod.STABLE_SPREAD_M < mod.places_spread_m(loose)
+    held = mod.decide(swinging, now=100_000.0, spread_m=mod.places_spread_m(loose))
+    assert held["decision"] == "hold" and held["reason"] == "unstable_series"
+    approved = mod.decide(swinging, now=100_000.0, spread_m=mod.places_spread_m(tight))
+    assert approved["decision"] == "approve" and approved["reason"] == "drift_exceeded"

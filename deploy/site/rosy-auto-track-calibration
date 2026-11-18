@@ -76,6 +76,18 @@ def series_spread_m(series_corners: list[list[list[float]] | list[tuple[float, f
     return worst
 
 
+def places_spread_m(series_places: list[list[dict]]) -> float:
+    """Max pairwise spread (m) of each traced place across the series. Places are seen in the frame;
+    the track corners are partly off screen, where a homography's extrapolation swings (11-18: 4-6 cm
+    corner spread held a 0.35 m stale calibration for 34 h while the places agreed within 5 mm)."""
+    coords: dict[str, list[tuple[float, float]]] = {}
+    for places in series_places:
+        for p in places:
+            coords.setdefault(p["id"], []).append((float(p["x"]), float(p["y"])))
+    return max((math.hypot(a[0] - b[0], a[1] - b[1]) for pts in coords.values()
+                for i, a in enumerate(pts) for b in pts[i + 1:]), default=0.0)
+
+
 def mean_homography(matrices: list[list[float]]) -> list[float]:
     """Element-wise mean of normalized 3x3 homography matrices."""
     n = len(matrices)
@@ -122,10 +134,11 @@ def decide(
     drift_threshold_m: float = DRIFT_THRESHOLD_M,
     place_threshold_m: float = MAP_PLACE_THRESHOLD_M,
     min_interval_s: float = MIN_APPROVAL_INTERVAL_S,
+    spread_m: float | None = None,
 ) -> dict:
     """Return approve/hold decision with reason, drift (m), and spread (m)."""
     recent = list(series_corners[-window_size:])
-    spread = series_spread_m(recent)
+    spread = series_spread_m(recent) if spread_m is None else spread_m
     if has_current_cal and recent:
         drift = corner_drift_m(mean_corners(recent))
     elif not has_current_cal:
@@ -409,6 +422,7 @@ def main(argv: list[str] | None = None) -> int:
         now=now,
         last_approved_at=last_approved_at,
         force=force,
+        spread_m=places_spread_m([h["places"] for h in history]) if all(h.get("places") for h in history) else None,
     )
 
     if dry_run:
