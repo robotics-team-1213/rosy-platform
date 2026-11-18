@@ -115,7 +115,9 @@ def test_a_docs_only_change_selects_nothing_heavy(sample):
 def test_a_foundation_runtime_change_runs_its_import_graph_dependents(sample):
     sel = _select(sample, "contracts/foundation/core_common/power.py")
     assert sel.mode == "affected", sel.escalations
-    assert {"contracts/foundation/test", "middleware/perception/test"} <= set(sel.reasons)
+    assert "contracts/foundation/test" in sel.reasons
+    # D-1037 addendum 1: the reverse dependent's suite narrows to the files whose closure reaches the change
+    assert "middleware/perception/test/test_battery.py" in sel.reasons, sel.reasons
 
 
 @pytest.mark.parametrize("path,scope", [("middleware/core/gateway/test/conftest.py", "middleware/core/gateway/test"),
