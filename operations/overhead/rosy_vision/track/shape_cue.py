@@ -36,8 +36,9 @@ WHEEL_TRACK_M = 0.0811
 TEAL_HUE = (92, 107)
 TEAL_MIN_S = 70
 TEAL_V_RATIO = 0.45
-#: Wheel blob area window in work pixels (a wheel seen from above is about 16 x 5 at 640 wide).
-WHEEL_AREA_PX = (3, 160)
+#: Wheel blob area window in work pixels (a wheel seen from above is about 16 x 5 at 640 wide; a
+#: wheel mostly hidden under the body shows 2 to 4, 1 is sensor noise).
+WHEEL_AREA_PX = (2, 160)
 #: A wheel blob this elongated (long/short axis) shows its rolling direction, which must be
 #: across the axle: |cos(rolling axis, axle)| at most ROLL_ALONG_AXLE_MAX (63 degrees off).
 WHEEL_ELONGATION = 1.4
@@ -88,6 +89,8 @@ def find_robots(work_bgr: np.ndarray, track_mask: np.ndarray) -> list[ShapeDetec
               and track[int(round(centroids[i][1])), int(round(centroids[i][0]))]]
     dark = (bright < DARK_RATIO * floor).astype(np.uint8)
     dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+    # fill labels, screws and board specks on the dark deck so its core is measured whole
+    dark = cv2.morphologyEx(dark, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
     depth = cv2.distanceTransform(dark, cv2.DIST_L2, 3)
     pairs = []
     for i, j in itertools.combinations(range(len(wheels)), 2):

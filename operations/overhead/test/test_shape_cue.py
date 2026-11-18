@@ -1,6 +1,7 @@
 """Panel 2026-11-18: ceiling-camera Pinky shape cue on real frames (shape_cue.py, background_blob.py).
 
-data/ceiling_pinky: three ceiling_north frames (1280 x 720, 2026-11-18, static scene). Truth is the
+data/ceiling_pinky: four ceiling_north frames (1280 x 720, 2026-11-18, static scene; f* at night,
+day0 at noon, where the first cut missed R1 and R2 at its thresholds' edge). Truth is the
 body centre in frame pixels: R1 and R2 touch in the charging bays (R2 has its cable in), R3 carries
 an orange box at S5 (centre from wheels, LiDAR and deck screws, cargo left out). The track mask is
 a plain image rectangle around the mat, as a simple calibration's track_bounds_m gives.
@@ -18,7 +19,7 @@ from rosy_vision.track.background_blob_helpers import _work_image
 from rosy_vision.track.model import Calibration, Frame
 
 DATA = Path(__file__).resolve().parent / "data" / "ceiling_pinky"
-FRAMES = ("f0.jpg", "f3.jpg", "f6.jpg")
+FRAMES = ("f0.jpg", "f3.jpg", "f6.jpg", "day0.jpg")
 TRUTH = np.array([(603.0, 201.0), (644.0, 259.0), (1027.0, 441.0)])  # R1, R2 (touching), R3
 TOLERANCE_PX = 12.0
 TRACK_PX = (330, 130, 1280, 680)  # x0, y0, x1, y1 in frame pixels
