@@ -205,6 +205,7 @@ def report_for(source_id: str, session_id: str, f: dict, d: dict, acted):
     shown = {k: v for k, v in f.items() if k not in ("frames", "fault_records")}
     shown["windup_hits"] = shown["windup_hits"][:5]
     shown["fault_records"] = [Path(p).name for p in f["fault_records"]][-3:]
+    shown["fault_record_kinds"] = list(f.get("fault_record_kinds") or [])[-3:]  # D-1047: paired with the names above
     frames = []
     for path in f["frames"]:
         data = Path(path).read_bytes() if Path(path).is_file() else b""

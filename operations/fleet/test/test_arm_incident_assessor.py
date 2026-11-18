@@ -1,4 +1,4 @@
-"""D-1039: a configured AI assessor service clears only safe incidents of its own arms, one per arm a day, marked as a
+"""D-1039/D-1047: a configured AI assessor service clears only safe incidents of its own arms, three per arm a day, marked as a
 machine clear whose cause is never scored as truth; people clear every kind as before."""
 from hashlib import sha256
 
@@ -9,7 +9,7 @@ from core_common.protocol.arm_incidents import ArmIncidentReport
 from core_common.protocol.workcell_observations import WorkcellObservationManifest
 from fakes import FakeRobot
 from fleet.server.app import create_app
-from fleet.server.arm_incidents import REPEAT_WINDOW_S, ArmIncidentStore, MachineClearRefused
+from fleet.server.arm_incidents import MACHINE_CLEARS_PER_WINDOW, REPEAT_WINDOW_S, ArmIncidentStore, MachineClearRefused
 from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
@@ -139,15 +139,15 @@ def test_assessor_must_name_a_cause_and_its_basis(client):
     assert row(client, incident_id)["state"] == "open"
 
 
-def test_one_machine_clear_per_arm_a_day_whatever_the_cause_and_human_clears_do_not_count(client, monkeypatch):
-    first, second, third = (report(client, n) for n in (20, 21, 22))
+def test_three_machine_clears_per_arm_a_day_whatever_the_cause_and_human_clears_do_not_count(client, monkeypatch):
+    first, *machine, fifth = (report(client, n) for n in (20, 21, 22, 23, 24))
     assert clear(client, first, headers=OPERATOR).status_code == 200  # a person's clear is not counted
-    assert clear(client, second).status_code == 200
-    assert code(clear(client, third, cause="other")) == (403, "AI_CLEAR_REPEAT_LIMIT")
-    assert row(client, third)["state"] == "open"
-    assert clear(client, third, headers=OPERATOR).status_code == 200  # the repeat goes to a person
+    assert all(clear(client, m).status_code == 200 for m in machine)  # D-1047: three a day (was one)
+    assert code(clear(client, fifth, cause="other")) == (403, "AI_CLEAR_REPEAT_LIMIT")
+    assert row(client, fifth)["state"] == "open"
+    assert clear(client, fifth, headers=OPERATOR).status_code == 200  # the repeat goes to a person
     monkeypatch.setenv("ROSY_FLEET_ARM_ASSESSORS", "cell-a-ai-assessor=arm_b,arm_a")
-    assert clear(client, report(client, 23, source="arm_a"), source="arm_a").status_code == 200  # another arm
+    assert clear(client, report(client, 25, source="arm_a"), source="arm_a").status_code == 200  # another arm
 
 
 def test_assessor_clears_only_its_own_arms(client):
@@ -159,16 +159,17 @@ def test_assessor_clears_only_its_own_arms(client):
 def test_the_repeat_window_is_a_day_on_the_store_clock_and_counts_the_marker_not_the_name():
     clock = [1000.0]
     store = ArmIncidentStore(wall=lambda: clock[0])
-    ids = [store.report(ArmIncidentReport.model_validate(body(n, SAFE))) for n in (30, 31, 32, 33)]
-    store.clear("arm_b", ids[0], "ok", "cell-a-ai-assessor", "blocked", "measured", True)
+    ids = [store.report(ArmIncidentReport.model_validate(body(n, SAFE))) for n in range(30, 37)]
+    for n in range(MACHINE_CLEARS_PER_WINDOW):
+        store.clear("arm_b", ids[n], "ok", "cell-a-ai-assessor", "blocked", "measured", True)
     clock[0] += REPEAT_WINDOW_S - 1
     with pytest.raises(MachineClearRefused):  # another assessor id on the same arm is still the same limit
-        store.clear("arm_b", ids[1], "ok", "cell-a-renamed-assessor", "other", "seen", True)
-    store.clear("arm_b", ids[1], "ok", "cell-a-ai-assessor", "blocked", "measured")  # a person-kind clear: no limit
-    clock[0] += 2
-    store.clear("arm_b", ids[2], "ok", "cell-a-ai-assessor", "blocked", "measured", True)
+        store.clear("arm_b", ids[3], "ok", "cell-a-renamed-assessor", "other", "seen", True)
+    store.clear("arm_b", ids[3], "ok", "cell-a-ai-assessor", "blocked", "measured")  # a person-kind clear: no limit
+    clock[0] += 2  # the first machine clears left the window
+    store.clear("arm_b", ids[4], "ok", "cell-a-ai-assessor", "blocked", "measured", True)
     basis = {r["incident_id"]: r["cleared"] and r["cleared"]["basis"] for r in store.snapshot("arm_b")}
-    assert [basis[i] for i in ids] == ["unknown", "measured", "unknown", None]
+    assert [basis[i] for i in ids[:6]] == ["unknown", "unknown", "unknown", "measured", "unknown", None]
 
 
 def test_assessor_reaches_no_other_route(client):

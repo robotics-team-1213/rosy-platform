@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.406
+**Version:** v1.412
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.412 통신 끊김 사건의 기계 해제와 하루 세 번 (D-1047)
+
+`POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear`의 assessor 해제 조건이 넓어진다(경로·본문 그대로). 표시 행이 모두 러너의 통신 끊김 문구(`LINK_END` 전체 일치)이고 잘리지 않았으며(`flagged_total`·`fault_records_total`), 고장 기록이 모두 `(5, 'Input/output error')`(정지 사유 없음, `fault_record_kinds`)인 사건은, 보고된 `last_state`·`last_target`·`last_command`·`home`과 `torque_after`로 다시 계산한 쉬는 팔(토크 0, 이동 명령 아님, 목표와 3단위 안, home과 8단위 안)이면 `folded` 없이도 기계 해제할 수 있다. `AI_CLEAR_REPEAT_LIMIT`는 같은 팔의 기계 해제가 24시간 안에 세 번 있었을 때다(이전 한 번).
 
 ### v1.406 AI assessor의 팔 사건 해제 (D-1039)
 
@@ -687,7 +691,7 @@ It does not enable a physical owner, command, calibration or motion admission.
 | `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents` | D-971. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentReport` `{source_id,session_id,facts,decision,recovery?,frames<=2 [{role top\|side,sha256,jpeg_b64}]}`, `facts`/`decision`/`recovery` each a finite JSON object of at most 12,288 bytes and depth 6, each frame a JPEG of at most 200,000 bytes whose sha256 Fleet recomputes; body limit 700,000 bytes (413); `source_id` must equal the path (422) | 200 `{incident_id,hold:{held,incident_ids<=64,reason}}`; no-store. The same `(source_id, session_id)` returns the same incident |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/hold` | D-971. Source-bound `X-Workcell-Observation-Token` | 200 `{held,incident_ids,reason}`; held while an incident of that arm is not cleared; no-store |
-| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator, or (v1.406, D-1039) an AI assessor service principal configured with its arms in `ROSY_FLEET_ARM_ASSESSORS` that may call only this route (guard `require_incident_clearer`); body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists; an assessor must send both) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared; assessor only: 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 422 `AI_CLEAR_CAUSE_REQUIRED`, 403 `AI_CLEAR_KIND_REFUSED` (stored facts fail `machine_clearable`), 403 `AI_CLEAR_REPEAT_LIMIT` (a machine clear of this arm within 24 h, any cause). Records who, when, the note, the cause with its basis (`unknown` for a machine clear) and `cleared.kind` (`machine`/`person`); nothing is deleted |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator, or (v1.406, D-1039) an AI assessor service principal configured with its arms in `ROSY_FLEET_ARM_ASSESSORS` that may call only this route (guard `require_incident_clearer`); body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists; an assessor must send both) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared; assessor only: 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 422 `AI_CLEAR_CAUSE_REQUIRED`, 403 `AI_CLEAR_KIND_REFUSED` (stored facts fail `machine_clearable`), 403 `AI_CLEAR_REPEAT_LIMIT` (v1.412, D-1047: three machine clears of this arm within 24 h, any cause; before, one). Records who, when, the note, the cause with its basis (`unknown` for a machine clear) and `cleared.kind` (`machine`/`person`); nothing is deleted |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence` | v1.375. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentEvidenceFrame {camera, t_rel_s, kind full\|tip, sha256, jpeg_b64}`, one JPEG of at most 200,000 bytes whose sha256 Fleet recomputes | 200 `{incident_id, seq}`; the same sha256 is the same frame; 404 unknown incident of that arm; 409 24 frames already; 413 body; no-store |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence/{seq}` | v1.375. Existing Fleet viewer authentication | `image/jpeg`; no-store; 404 unknown or expired (whole frames 14 days after clearing) |
 | `GET /api/fleet/workcell-observations/arm-incidents/labelled` | v1.375. `ai_observer` only | `{incidents:[...]}` cleared incidents with a recorded cause, newest first (at most 200), frame lists without bytes; no-store |
@@ -4827,6 +4831,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.412 | 2026-11-19 | Additive (D-1047): 통신 끊김뿐인 사건(러너 문구 전체 일치, 잘리지 않은 목록, EIO 고장 기록)은 다시 계산한 쉬는 팔이면 assessor가 해제한다. `AI_CLEAR_REPEAT_LIMIT`는 팔마다 24시간에 세 번 뒤. |
 | v1.406 | 2026-11-17 | Additive (D-1039): 설정된 AI assessor 서비스 자격이 지정된 팔의 사건 해제 경로만 부른다. `cause`·`basis` 필수(422 `AI_CLEAR_CAUSE_REQUIRED`), `machine_clearable` 기본 거부(403 `AI_CLEAR_KIND_REFUSED`), 팔마다 하루 한 번(403 `AI_CLEAR_REPEAT_LIMIT`), 다른 팔 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 다른 경로 403 `ARM_ASSESSOR_SCOPE_REQUIRED`. 사건 행 `cleared.kind`(`machine`·`person`), 기계 해제 근거는 `unknown`. 사람 해제는 그대로. |
 | v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |
 | v1.402 | 2026-11-14 | Additive: Fleet 앞으로/뒤로 한 걸음(`POST /api/fleet/robots/{robot_id}/step`, CORE nudge 미션 재사용) |

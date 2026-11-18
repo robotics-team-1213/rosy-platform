@@ -31,7 +31,8 @@ CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 ROLES = ("top", "side")
 EVIDENCE_KEEP_S = 14 * 86400  # whole frames of a cleared incident; tip crops, labels and facts stay
 EVIDENCE_BODY_BYTES = ARM_INCIDENT_FRAME_BYTES * 4 // 3 + 4096
-REPEAT_WINDOW_S = 86400  # D-1039: one machine clear per arm a day, whatever the cause; the next goes to a person
+REPEAT_WINDOW_S = 86400  # D-1039 window
+MACHINE_CLEARS_PER_WINDOW = 3  # D-1047 (was 1): a fourth machine clear of one arm in 24 h goes to a person
 
 
 class MachineClearRefused(PermissionError):
@@ -138,9 +139,11 @@ class ArmIncidentStore:
                 ok, why = machine_clearable(_facts(row[1]))
                 if not ok:
                     raise MachineClearRefused("AI_CLEAR_KIND_REFUSED", why)
-                if self._db.execute("SELECT 1 FROM arm_incidents WHERE source_id=? AND cleared_kind='machine' "
-                                    "AND cleared_at>=?", (source_id, self._wall() - REPEAT_WINDOW_S)).fetchone():
-                    raise MachineClearRefused("AI_CLEAR_REPEAT_LIMIT", "a machine clear of this arm in the last 24 h")
+                done = self._db.execute("SELECT count(*) FROM arm_incidents WHERE source_id=? AND cleared_kind='machine' "
+                                        "AND cleared_at>=?", (source_id, self._wall() - REPEAT_WINDOW_S)).fetchone()[0]
+                if done >= MACHINE_CLEARS_PER_WINDOW:
+                    raise MachineClearRefused("AI_CLEAR_REPEAT_LIMIT",
+                                              f"{done} machine clears of this arm in the last 24 h")
                 basis = "unknown"
             self._db.execute("UPDATE arm_incidents SET cleared_by=?, cleared_at=?, clear_note=?, true_cause=?, label_basis=?, "
                              "cleared_kind=? WHERE incident_id=?",
