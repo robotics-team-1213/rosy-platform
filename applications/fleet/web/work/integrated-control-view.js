@@ -263,7 +263,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   async function write(path, body) {
     const life = scope.capture(), version = epoch, expected = pending; busy = true; controls();
     try {
-      const value = await call(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+      const value = await call(path, {inline: true, method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
       life.check(); if (!valid(life, version) || pending !== expected) return;
       paintSnapshot(value); notice.textContent = "요청 결과를 기록했습니다. 관제별 응답과 미확인 결과를 확인하세요.";
     } catch {

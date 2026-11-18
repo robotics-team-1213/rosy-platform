@@ -29,3 +29,23 @@ test("modules that show a command result in their row never raise a toast for it
     assert.doesNotMatch(text, /\/\/[^\n]*\b(headers|body):/, name);  // 11-18: a trailing comment swallowed the claim body (422)
   }
 });
+
+// 11-18 패널: 실패를 자기 행·구획 글자로 쓰는 모듈은 변경 호출마다 inline을 명시한다(토스트와 이중 알림 금지).
+test("modules that write a failed change into their own section mark every change call inline", () => {
+  for (const name of ["site-rules-judge.js", "robot/step-nudge.js", "work/control-unit-view.js", "work/work-view.js",
+    "work/channel-request-view.js", "work/arm-transfer-view.js", "work/cell-resume-view.js",
+    "work/integrated-control-view.js", "work/trip-proposal-view.js", "robot/robot-panel-adapters.js"]) {
+    const lines = read(name).split("\n");
+    lines.forEach((line, i) => {
+      if (!/\bcall\(/.test(line)) return;
+      const head = lines.slice(i, i + 4).join(" ");
+      if (/method: "(POST|PUT|PATCH|DELETE)"/.test(head)) assert.match(head, /inline: true/, `${name}:${i + 1}`);
+    });
+  }
+});
+
+test("site rules judge shows '판정 중' only while it is judging", () => {
+  const text = read("site-rules-judge.js");
+  assert.match(text, /setOff\(ask, rule\.busy, "판정 중"\)/);
+  assert.doesNotMatch(text, /setAttribute\("reason", "판정 중"\)/);
+});

@@ -1,6 +1,7 @@
 // D-982: the trip form's `현장 규칙 판정` — ask the site rules "go / wait / refuse" for a what-if state with
 // the same pure functions Fleet uses live (`POST /api/fleet/site-rules/judge`). Advice only: nothing is sent
 // to a robot and nothing changes. Picks are selects, so a poll keeps the card while one has focus.
+import { setOff } from "/common/cause-line.js";
 import { quietButton } from "./queues.js";
 
 const SECONDS = [0, 5, 10, 20, 30, 60];
@@ -133,7 +134,7 @@ export function ruleJudgeSection({ mine, robot, call, scope, render }) {
     try {
       const body = { state: ruleJudgeState(rule.kind, robot.robot_id, values), source: rule.draft ? "draft" : "active" };
       const answer = await call("/api/fleet/site-rules/judge",
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        { inline: true, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       life.check();
       rule.answer = answer;
     } catch (err) {
@@ -145,8 +146,7 @@ export function ruleJudgeSection({ mine, robot, call, scope, render }) {
       if (life.current()) render();
     }
   }));
-  ask.disabled = rule.busy;
-  ask.setAttribute("reason", "판정 중");
+  setOff(ask, rule.busy, "판정 중");
   box.append(draft, ask, out);
   return box;
 }

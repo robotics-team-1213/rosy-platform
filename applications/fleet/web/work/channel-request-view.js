@@ -102,7 +102,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
       request: async owner => {
         busy = true; paint();
         try {
-          const result = await call(base + "/incident", {method: "POST", headers: {"Content-Type": "application/json"},
+          const result = await call(base + "/incident", {inline: true, method: "POST", headers: {"Content-Type": "application/json"},
             body: JSON.stringify({expected_hash: snapshot.content_hash, expected_revision: snapshot.revision,
               robot_id: incident.robot_ids[0], stuck_id: incident.stuck_id,
               judgment_revision: incident.judgment_revision, reason}), signals: [owner.signal]});
@@ -122,7 +122,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
       const source = await call(`/api/fleet/proposals/${encodeURIComponent(sourceId)}`); life.check();
       if (current !== version) return;
       if (!source.mission) throw new Error("Mission candidate unavailable");
-      const result = await call(base + "/prepare", {method: "POST", headers: {"Content-Type": "application/json"},
+      const result = await call(base + "/prepare", {inline: true, method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({kind: "mission", source_proposal_id: sourceId,
           workcell_id: source.mission.workcell_id, instance_id: source.mission.instance_id, reason,
           expected_hash: snapshot.content_hash, expected_revision: snapshot.revision})});
@@ -148,7 +148,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
         request: async owner => {
           busy = true; paint();
           try {
-            const result = await call(base + "/admit", {method: "POST", headers: {"Content-Type": "application/json"},
+            const result = await call(base + "/admit", {inline: true, method: "POST", headers: {"Content-Type": "application/json"},
               body: JSON.stringify({expected_hash: snapshot.content_hash, expected_revision: snapshot.revision,
                 expected_generation: control.generation}), signals: [owner.signal]});
             owner.check(); if (current === version) review = result;
@@ -175,7 +175,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     }
     const current = version, life = scope.capture(); let failure = ""; busy = true; paint();
     try {
-      const result = await call(path() + "/review", {method: "PUT", headers: {"Content-Type": "application/json"},
+      const result = await call(path() + "/review", {inline: true, method: "PUT", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({expected_hash: review.content_hash, expected_revision: review.revision, state: next, candidate, reason})});
       life.check(); if (current === version) review = result;
     } catch (error) {
@@ -197,7 +197,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
       request: async owner => {
         busy = true; paint();
         try {
-          const linked = await call(base + "/submit", {method: "POST", headers: {"Content-Type": "application/json"},
+          const linked = await call(base + "/submit", {inline: true, method: "POST", headers: {"Content-Type": "application/json"},
             body: JSON.stringify({expected_hash: snapshot.content_hash,
               expected_revision: snapshot.revision}), signals: [owner.signal]});
           owner.check(); if (current === version) review = linked;

@@ -332,7 +332,7 @@ export function buildArmSections({ call, view, isOperator, namedReason, refresh,
             }
           : { arm_id: profile.id, cell_id: detail.def.cellId };
         await call("/api/fleet/arm-transfers/jobs", {
-          method: "POST",
+          inline: true, method: "POST",
           headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
           body: JSON.stringify(body),
           ...(sig ? { signals: [sig] } : {}),
@@ -377,7 +377,7 @@ export function buildArmSections({ call, view, isOperator, namedReason, refresh,
       cancelBtn.setAttribute("reason", "작업 취소 요청 중");
       try {
         await call(`/api/fleet/cell-jobs/${encodeURIComponent(missionId)}/cancel`, {
-          method: "POST",
+          inline: true, method: "POST",
           headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
           body: JSON.stringify({}),
           ...(sig ? { signals: [sig] } : {}),

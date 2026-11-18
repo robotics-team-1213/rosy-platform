@@ -1332,3 +1332,8 @@
 - 변경: `line-stuck.js` choose()의 claim 호출에서 줄 끝 주석이 `headers`·`body`를 삼켜 본문 없이 나가던 것(서버 LineStuckClaimRequest가 stuck_id 필수라 늘 422, `.catch`가 삼킴)을 고쳤다. 오늘 inline 정리(652499f1c3, 아직 main 밖)에서 생겼다. `fleet-alert-surface.test.mjs`가 모양만 보던 것에 "주석 뒤 headers/body 금지" 단언을 더했다.
 - 증거: UI 패널 2라운드 좌석 A(D:/DevTemp/ui-panel-1118/r2-A.md), 노드 fleet-alert-surface 3/3. 웹 전체에서 같은 모양 0건(git grep).
 - gate 변화: fleet-alert-surface 정적 시험 1단언 추가.
+
+## 2026-11-18 · uncommitted · fix(fleet-web): 인라인 결과 모듈의 변경 호출은 inline, 판정 중 사유는 판정할 때만
+- 변경: `site-rules-judge.js`가 켜진 "규칙으로 판정" 단추에도 `reason="판정 중"`을 늘 붙여 사유 줄이 상시 보이던 버그를 `setOff(ask, rule.busy, "판정 중")`로 고쳤다. 실패를 자기 행·구획 글자로 쓰는 모듈의 변경 호출(POST·PUT)에 `inline: true`를 붙여 토스트 이중 알림을 없앴다: site-rules-judge, robot/step-nudge, robot/robot-panel-adapters, work/control-unit-view·work-view·channel-request-view·arm-transfer-view·cell-resume-view·integrated-control-view·trip-proposal-view(모두 console.js 주입 call, catch·onError가 notice/state/refusals/reason에 씀).
+- 증거: UI 패널 2라운드(D:/DevTemp/ui-panel-1118/r2-A.md·r2-B.md), node --import register-console-assets 전체 fleet web 시험·shared/web 시험 통과.
+- gate 변화: fleet-alert-surface.test.mjs에 10파일 변경 호출 inline 단언과 판정 중 사유 단언 추가.

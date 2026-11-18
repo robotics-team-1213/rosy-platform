@@ -155,7 +155,7 @@ export function createStepNudge({ scope, call, isOperator = () => true, namedRea
       sync();
       try {
         await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/step`, {
-          method: "POST",
+          inline: true, method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ direction, distance_m: STEP_DISTANCE_M }),
           ...(sig ? { signals: [sig] } : {}),

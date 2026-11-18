@@ -92,7 +92,7 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
     const life = scope.capture(), version = revision; busy = true; controls();
     notice.textContent = "요청 결과를 확인하고 있습니다.";
     try {
-      await call(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+      await call(path, {inline: true, method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
       life.check();
       if (version === revision) {
         if (path === "/api/fleet/control-unit/delegations" && draft) { draft.confirmed = true; saveDraft(); }
