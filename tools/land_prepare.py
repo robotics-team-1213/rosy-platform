@@ -262,6 +262,8 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
             guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
                                              isolated=not delta)
         except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
+            if not full:  # the pre run beside it is moot; cancel before raised is set (see the finally below)
+                land.remote_pytest.remote_job.cancel_all()
             raised.append(error)
     side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
     side.start()
@@ -280,7 +282,16 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         began = time.monotonic()  # the slot wait is not preparation time
         tested = land.run_tests(wt, args, invocations, logdir, "pre")
     else:
-        tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+        try:
+            tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+        except land.Overtime:
+            side.join()  # a guard failure cancelled the pre run: the guard's Stop is the verdict, not this Overtime
+            if raised:
+                raise raised[0] from None
+            raise
+        finally:
+            if raised:
+                land.remote_pytest.remote_job.cancel_all(False)
         side.join()
         if raised:
             raise raised[0]
