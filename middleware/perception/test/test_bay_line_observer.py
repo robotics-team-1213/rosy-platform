@@ -59,6 +59,12 @@ def render(offset_m, heading_rad, south_of_camera_m, *, carpet=105, tape_dim=1.0
     return frame
 
 
+def errors(payload):
+    """CORE's rear_errors: (along to the stop face, lateral of the robot from the axis, heading)."""
+    ax, ay = math.cos(payload["yaw"]), math.sin(payload["yaw"])
+    return payload["x"] * ax + payload["y"] * ay, ay * payload["x"] - ax * payload["y"]
+
+
 def heading_error(yaw, want):
     """|yaw - want| wrapped to (-pi, pi]: -pi and +pi are the same heading."""
     return abs(math.atan2(math.sin(yaw - want), math.cos(yaw - want)))
@@ -69,10 +75,11 @@ def test_a_centred_visible_line_reads_the_virtual_dock():
     assert payload["visible"] is True
     assert payload["source"] == "CAMERA_LINE" and payload["tag_id"] is None
     assert heading_error(payload["yaw"], math.pi) <= math.radians(1.5)
-    assert payload["y"] == pytest.approx(0.0, abs=0.005)
-    # x = line_total - camera->south end - camera offset ahead of base_link.
-    assert payload["x"] == pytest.approx(LINE_TOTAL_M - 0.30 - MOUNT.x_offset_m,
-                                         abs=0.015)
+    along, lateral = errors(payload)
+    assert lateral == pytest.approx(0.0, abs=0.005)
+    # the stop face is behind: line_total minus the corridor end's distance ahead of base_link
+    assert along == pytest.approx(LINE_TOTAL_M - 0.30 - MOUNT.x_offset_m, abs=0.015)
+    assert payload["x"] < 0.0
     assert payload["along_measured"] is True
 
 
@@ -80,7 +87,7 @@ def test_a_lateral_offset_and_heading_read_through():
     payload = observer().observe(render(0.03, math.pi + math.radians(5.0), 0.28),
                                  stamp=10.0)
     assert payload["visible"] is True
-    assert payload["y"] == pytest.approx(0.03, abs=0.008)
+    assert errors(payload)[1] == pytest.approx(0.03, abs=0.008)
     assert heading_error(payload["yaw"], math.pi + math.radians(5.0)) <= math.radians(1.5)
 
 
@@ -89,7 +96,7 @@ def test_beyond_the_far_field_the_along_degrades_but_steering_stays(south_m):
     payload = observer().observe(render(0.0, math.pi, south_m), stamp=10.0)
     assert payload["visible"] is True
     assert payload["along_measured"] is False
-    assert payload["y"] == pytest.approx(0.0, abs=0.008)
+    assert errors(payload)[1] == pytest.approx(0.0, abs=0.008)
     assert heading_error(payload["yaw"], math.pi) <= math.radians(1.5)
 
 
@@ -159,7 +166,7 @@ def test_an_l_shaped_bay_mouth_is_read_from_the_bay_line_alone():
     payload = observer().observe(frame, stamp=10.0)
     assert payload["visible"] is True
     assert heading_error(payload["yaw"], math.pi) <= math.radians(3.0)
-    assert abs(payload["y"] - 0.02) <= 0.01
+    assert abs(errors(payload)[1] - 0.02) <= 0.01
 
 
 def test_the_corridor_line_alone_gives_the_bay_axis_and_distance_not_the_lateral():
@@ -175,4 +182,4 @@ def test_the_corridor_line_alone_gives_the_bay_axis_and_distance_not_the_lateral
     payload = observer().observe(frame, stamp=10.0)
     assert payload["visible"] is True and payload["lateral_measured"] is False
     assert heading_error(payload["yaw"], math.pi) <= math.radians(3.0)
-    assert abs(payload["x"] - (LINE_TOTAL_M - (0.25 + MOUNT.x_offset_m))) <= 0.02
+    assert abs(errors(payload)[0] - (LINE_TOTAL_M - (0.25 + MOUNT.x_offset_m))) <= 0.02

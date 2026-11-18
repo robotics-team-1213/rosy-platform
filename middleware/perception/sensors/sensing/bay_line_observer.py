@@ -2,8 +2,8 @@
 
 ROS-free. Given one camera frame this turns the magenta guide tape into the
 ``dock/observation`` payload the docking manager's ``approach="line"`` phases
-consume: the line is the dock — ``x`` is the along distance to the stop face,
-``y`` the line's lateral offset in base_link, ``yaw`` the bay inward axis.
+consume: the line is the dock — ``(x, y)`` is the stop-face centre in base_link (behind the
+robot, so x < 0; CORE's rear_errors reads along/lateral from it), ``yaw`` the bay inward axis.
 
 Ground geometry is declared, not calibrated: only the Gazebo camera
 (``camera_geometry_source`` GAZEBO under ``use_sim_time``) may project; the
@@ -162,7 +162,8 @@ class BayLineObserver:
         mouth = float(np.dot(normal, centre) / normal[0])   # where base_link x meets the corridor line
         if mouth - self._mount.x_offset_m > self._far_field_m - 0.02:
             return self._payload(stamp, False)
-        return self._payload(stamp, True, x=float(self._line_total_m - mouth), y=0.0,
+        stop = np.array([mouth, 0.0]) + normal * self._line_total_m   # lateral is a placeholder here
+        return self._payload(stamp, True, x=float(stop[0]), y=float(stop[1]),
                              yaw=float(math.atan2(normal[1], normal[0])),
                              confidence=min(1.0, pixels / CONFIDENCE_PIXELS),
                              along_measured=True, lateral_measured=False)
@@ -206,17 +207,16 @@ class BayLineObserver:
         # The far (corridor-side) end: the visible extent along -direction.
         along = (pts - centre) @ direction
         south = centre + direction * float(along.min())
-        # Points are base_link; the camera sits x_offset ahead, so the
-        # camera->end distance is the point's x minus that offset.
-        south_base = float(south[0])
-        d_south = south_base - self._mount.x_offset_m
-        measured = d_south <= self._far_field_m - 0.02
+        measured = float(south[0]) - self._mount.x_offset_m <= self._far_field_m - 0.02
         if not measured:
-            # The end has left the view: the longitudinal signal is gone; the
-            # saturated value stays finite for rear_errors, flagged not measured.
-            south_base = self._far_field_m + self._mount.x_offset_m
-        x = self._line_total_m - south_base
+            # The end has left the view: the longitudinal signal is gone; place it at the far field
+            # on the line so the value stays finite, flagged not measured.
+            reach = self._far_field_m + self._mount.x_offset_m
+            south = foot + direction * ((reach - float(foot[0])) / float(direction[0]))
+        # DockObservation is the stop-face centre in base_link (CORE's rear_errors reads it so): from the
+        # corridor end, line_total along the line into the bay (2026-11-18: this was the bare distance).
+        stop = south + direction * self._line_total_m
         return self._payload(
-            stamp, True, x=float(x), y=float(foot[1]), yaw=float(yaw),
+            stamp, True, x=float(stop[0]), y=float(stop[1]), yaw=float(yaw),
             confidence=min(1.0, len(xs) / CONFIDENCE_PIXELS),
             along_measured=bool(measured))
