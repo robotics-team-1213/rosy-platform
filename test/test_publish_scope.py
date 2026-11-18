@@ -27,7 +27,7 @@ def scoped(repo, monkeypatch):
     _git(local, "fetch", "-q", "origin")
     calls = []
 
-    def describe(publish, repo_, sha, base, invocations, rows, ancestors=(), scoped=False):
+    def describe(publish, repo_, sha, base, invocations, rows, ancestors=(), scope_base="", extra=(), scoped=False):
         calls.append(scoped)
         return {"plan": PLAN, "env": "e", "clean": [True] * len(rows), "reach": {},
                 "variants": {json.dumps(inv): [[inv]] for inv in PLAN}}
