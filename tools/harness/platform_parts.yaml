@@ -64,6 +64,24 @@ capabilities:
   vision_ai: {epic: KAN-22, owners: [now2466]}
   platform: {epic: null, owners: []}
 
+# App view (2026-11-18 release split, step 1): every root also carries one
+# `app:`, the product app that owns it and whose publish evidence it belongs to.
+# Values are from `apps`; `core` is shared code and tooling (sep-r2 A/B). Like
+# `capability`, it changes no part, concern or import rule. `app_subtrees` carve
+# a folder inside one root out to another app (deploy holds every channel).
+# Each tracked file takes the app of its deepest root or subtree; files that no
+# root covers (repository root files, folder notes) are `core`.
+# tools/harness/affected_repo.py app_of() reads both; checked by
+# test/architecture/test_capability_owners.py.
+apps: [site-fleet, omx-cell, pinky, account, vision, learning, core]
+app_subtrees:
+  deploy/site: site-fleet
+  deploy/robot/omx: omx-cell
+  deploy/cell_pc: omx-cell
+  deploy/robot/pinky_pro: pinky
+  deploy/model_pc: learning
+  deploy/ai_pc: learning
+
 roots:
   - path: learning/training/pinky
     part: learning
@@ -72,6 +90,7 @@ roots:
     import_prefix: []
     concern: learning
     capability: pinky
+    app: learning
     note: D-449 offline recorded velocity comparison; no runtime authority.
   - path: learning/curation/pinky
     part: learning
@@ -80,6 +99,7 @@ roots:
     import_prefix: []
     concern: learning
     capability: pinky
+    app: learning
     note: D-449 recorded Pinky source snapshots and Episode conversion; no control authority.
   - path: learning/registry/policy
     part: learning
@@ -88,6 +108,7 @@ roots:
     import_prefix: []
     concern: learning
     capability: vision_ai
+    app: learning
     note: D-449 policy artifact snapshots and transactional metadata ledger; no runtime authority.
   - path: learning/training/omx
     part: learning
@@ -96,6 +117,7 @@ roots:
     import_prefix: []
     concern: learning
     capability: omx
+    app: learning
     note: D-449 offline ACT study; no deployment or execution authority.
   - path: learning/training/world_model
     part: learning
@@ -104,6 +126,7 @@ roots:
     import_prefix: []
     concern: learning
     capability: vision_ai
+    app: learning
     note: D-782 M1 world-model training; no promotion, deployment or execution authority.
   - path: learning/evaluation/world_model
     part: learning
@@ -112,6 +135,7 @@ roots:
     import_prefix: []
     concern: learning
     capability: vision_ai
+    app: learning
     note: D-782 offline acceptance against hold and reach baselines; no promotion or admission.
   - path: contracts/learning
     part: contracts
@@ -120,6 +144,7 @@ roots:
     import_prefix: [rosy.contracts.learning]
     concern: contracts
     capability: platform
+    app: learning
     note: D-449 draft artifact schemas; stdlib only, no runtime authority.
   # --- contracts -----------------------------------------------------------
   - path: contracts/foundation
@@ -130,6 +155,7 @@ roots:
     import_prefix: [core_common]
     concern: contracts
     capability: platform
+    app: core
   - path: contracts/ros_idl
     part: contracts
     d427_target: contracts/ros_idl
@@ -138,6 +164,7 @@ roots:
     import_prefix: [interfaces]
     concern: contracts
     capability: platform
+    app: core
   - path: contracts/skill
     part: contracts
     d427_target: contracts/skill
@@ -150,6 +177,7 @@ roots:
       (D-429 §4 rule 1 needs an .api prefix); contracts are importable by every part.
     concern: contracts
     capability: platform
+    app: core
     reviewers: [sajy0804, ddaokki]
 
   - path: contracts/motion
@@ -159,6 +187,7 @@ roots:
     import_prefix: [rosy.contracts.motion]
     concern: contracts
     capability: platform
+    app: core
     reviewers: [PURPLE-SY]
     note: >-
       D-442(a) ROS-free Motion Intent and DeviceControlPort shapes. The Pinky B
@@ -174,6 +203,7 @@ roots:
     import_prefix: [core]
     concern: control
     capability: platform
+    app: core
   - path: middleware/drive/behaviors
     layout_target: middleware/drive/behaviors
     part: middleware
@@ -181,6 +211,7 @@ roots:
     wave: none
     concern: control
     capability: platform
+    app: pinky
     reviewers: [PURPLE-SY]
     import_prefix: [core_features.line_follow, core_features.docking, core_features.navigation, core_features.localization, core_features.swarm, core_features.road_behaviour, core_features.traffic_policy]
     source_packages:
@@ -199,6 +230,7 @@ roots:
     wave: none
     concern: control
     capability: platform
+    app: pinky
     reviewers: [PURPLE-SY]
     import_prefix: [control.control_node, control.goal_node, control.wander_node, control.safety_node]
     source_packages: {"": control}
@@ -216,6 +248,7 @@ roots:
       core_features/preview: core_features.vision
     concern: control
     capability: platform
+    app: core
   - path: middleware/core/services/core_features/safety_gate
     layout_target: middleware/core/services/core_features/safety_gate
     part: middleware
@@ -226,6 +259,7 @@ roots:
     note: D-430 §1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
     concern: safety
     capability: platform
+    app: core
   - path: middleware/core/services/core_features/action_rules
     layout_target: middleware/core/services/core_features/action_rules
     part: middleware
@@ -238,6 +272,7 @@ roots:
       Tagged so D-430 invariant 2 has a robot-side importer to check.
     concern: decision
     capability: platform
+    app: core
   - path: middleware/core/events
     part: middleware
     d427_target: middleware/core/events
@@ -246,6 +281,7 @@ roots:
     import_prefix: [core_events]
     concern: control
     capability: platform
+    app: core
   - path: middleware/core/api
     layout_target: middleware/core/api  # D-626 current layout; d427_target is the ownership ID
     part: middleware
@@ -256,6 +292,7 @@ roots:
     note: Pinky Device API web layer and host-agent client.
     concern: control
     capability: platform
+    app: core
   - path: middleware/drive/planning/nav2
     layout_target: middleware/drive/planning/nav2
     part: middleware
@@ -265,6 +302,7 @@ roots:
     import_prefix: [navigation]
     concern: control
     capability: platform
+    app: pinky
     reviewers: [PURPLE-SY]
   - path: middleware/drive/planning/nav2/native_map
     layout_target: middleware/drive/planning/nav2/native_map
@@ -273,6 +311,7 @@ roots:
     wave: "4c"
     concern: safety
     capability: platform
+    app: pinky
     reviewers: [PURPLE-SY]
     note: D-783 guarded native map producers, canonical identity, SDK/build and plugin boundary.
   - path: middleware/perception
@@ -289,6 +328,7 @@ roots:
       Node composition, recorder compatibility and map assets stay in this package.
     concern: control
     capability: vision_ai
+    app: vision
   - path: middleware/drive
     part: middleware
     d427_target: middleware/control/drive
@@ -305,6 +345,7 @@ roots:
       tracking/wander: control.wander
     concern: control
     capability: platform
+    app: pinky
     reviewers: [PURPLE-SY]
     note: D-630 Drive algorithms; installed by the existing control distribution.
   - path: middleware/drive/motion_limits
@@ -318,6 +359,7 @@ roots:
       adapter: control.safety
     concern: safety
     capability: platform
+    app: pinky
     reviewers: [PURPLE-SY]
     note: D-630 policy/clearance and existing sensor-only adapter; no new final writer.
   - path: middleware/drivers/imu_bno055
@@ -327,6 +369,7 @@ roots:
     wave: "4c"
     concern: control
     capability: pinky
+    app: pinky
   - path: middleware/drivers/pinky_adc
     part: middleware
     d427_target: middleware/drivers/pinky_adc
@@ -334,6 +377,7 @@ roots:
     wave: "4c"
     concern: control
     capability: pinky
+    app: pinky
   - path: middleware/drivers/pinky_lamp
     part: middleware
     d427_target: middleware/drivers/pinky_lamp
@@ -341,6 +385,7 @@ roots:
     wave: "4c"
     concern: control
     capability: pinky
+    app: pinky
   - path: middleware/drivers/pinky_led
     part: middleware
     d427_target: middleware/drivers/pinky_led
@@ -349,6 +394,7 @@ roots:
     import_prefix: [led]
     concern: control
     capability: pinky
+    app: pinky
   - path: middleware/devices/pinky/bringup
     layout_target: middleware/devices/pinky/bringup
     part: middleware
@@ -358,6 +404,7 @@ roots:
     import_prefix: [bringup, rosylib]
     concern: control
     capability: pinky
+    app: pinky
   - path: middleware/devices/pinky/profile
     layout_target: middleware/devices/pinky/profile
     part: middleware
@@ -366,6 +413,7 @@ roots:
     wave: "4c"
     concern: control
     capability: pinky
+    app: pinky
   - path: middleware/devices/rasptank/profile
     layout_target: middleware/devices/rasptank/profile
     part: middleware
@@ -373,6 +421,7 @@ roots:
     wave: "none"
     concern: control
     capability: platform
+    app: core
   - path: middleware/devices/omx/adapter
     layout_target: middleware/devices/omx/adapter
     part: middleware
@@ -385,6 +434,7 @@ roots:
       lives in learning/curation/omx and consumes contracts/learning validation.
     concern: control
     capability: omx
+    app: omx-cell
   - path: middleware/devices/omx/profile
     layout_target: middleware/devices/omx/profile
     part: middleware
@@ -394,6 +444,7 @@ roots:
     note: OMX composition config the adapter validates, not an installation pin (profiles/).
     concern: control
     capability: omx
+    app: omx-cell
   - path: middleware/devices/pinky/description
     layout_target: middleware/devices/pinky/description
     part: middleware
@@ -403,6 +454,7 @@ roots:
     note: Pinky URDF used by both the real robot and Gazebo; could also be integrations/robots/pinky.
     concern: control
     capability: pinky
+    app: pinky
   - path: middleware/devices/omx/agent
     layout_target: middleware/devices/omx/agent
     part: middleware
@@ -413,6 +465,7 @@ roots:
     note: OMX cell local Action owner composition (device side of the D-401 cell).
     concern: control
     capability: omx
+    app: omx-cell
   - path: middleware/skills/api
     part: middleware
     d427_target: middleware/skills/api
@@ -421,6 +474,7 @@ roots:
     import_prefix: [rosy.skills.api]
     concern: control
     capability: platform
+    app: core
     reviewers: [sajy0804, ddaokki]
     api: true
   - path: middleware/skills/manipulation
@@ -431,6 +485,7 @@ roots:
     import_prefix: [rosy.skills.manipulation]
     concern: control
     capability: omx
+    app: omx-cell
   - path: operations/site_execution
     layout_target: operations/site_execution
     part: operations
@@ -442,6 +497,7 @@ roots:
       their own. Goes with api/site (3a); local became rosy-execution-local in 2c.
     concern: other
     capability: fleet
+    app: site-fleet
   - path: middleware/robot_execution/local
     layout_target: middleware/robot_execution/local
     part: middleware
@@ -454,6 +510,7 @@ roots:
       unchanged. rosy-execution no longer packages it.
     concern: control
     capability: platform
+    app: core
     reviewers: [sajy0804, ddaokki]
   - path: operations/site_execution/src/rosy/execution/api
     layout_target: operations/site_execution/src/rosy/execution/api
@@ -467,6 +524,7 @@ roots:
       placed with its site producer. Re-decide when execution splits in step B.
     concern: contracts
     capability: fleet
+    app: site-fleet
   - path: operations/site_execution/src/rosy/execution/site
     layout_target: operations/site_execution/src/rosy/execution/site
     part: operations
@@ -477,6 +535,7 @@ roots:
     note: D-657 pure goal verification and full progress projection; helpers import independently, wire schemas load on projection calls; Fleet retains ledgers, producer authentication, claim/fence and device transport.
     concern: other
     capability: fleet
+    app: site-fleet
   - path: middleware/robot_ui/robot
     layout_target: middleware/robot_ui/robot
     part: middleware
@@ -486,6 +545,7 @@ roots:
     note: Robot dashboard screens served by core_api_web on the device.
     concern: other
     capability: pinky
+    app: pinky
   - path: middleware/robot_ui/pilot
     layout_target: middleware/robot_ui/pilot
     part: middleware
@@ -494,6 +554,7 @@ roots:
     wave: "4b"
     concern: other
     capability: pinky
+    app: pinky
   - path: middleware/robot_ui/pilot/android
     layout_target: middleware/robot_ui/pilot/android
     part: middleware
@@ -503,6 +564,7 @@ roots:
     note: D-432 native discovery shell reuses the CORE-served Pilot UI; no command authority.
     concern: other
     capability: pinky
+    app: pinky
   - path: middleware/robot_ui/face
     layout_target: middleware/robot_ui/face
     part: middleware
@@ -512,6 +574,7 @@ roots:
     import_prefix: [emotion]
     concern: other
     capability: pinky
+    app: pinky
   # D-429 §2: site devices (signal, dock) are operations-owned, listed here so the
   # firmware entries stay together.
   - path: operations/site_devices/dock
@@ -524,6 +587,7 @@ roots:
       polling the dock /status directly (core_features/docking stays middleware).
     concern: control
     capability: fleet
+    app: site-fleet
   - path: operations/site_devices/dock/firmware
     part: operations
     d427_target: operations/site_devices/dock/firmware
@@ -532,6 +596,7 @@ roots:
     note: D-430 §1 dock firmware owns the limit-switch interlock and 0 V boot (layer 2).
     concern: safety
     capability: fleet
+    app: site-fleet
   - path: operations/site_devices/signal
     part: operations
     d427_target: operations/site_devices/signal
@@ -542,6 +607,7 @@ roots:
       imports. Fleet stays the only command path and the signal sequence owner (D-337 §2).
     concern: control
     capability: fleet
+    app: site-fleet
   - path: operations/site_devices/signal/firmware
     part: operations
     d427_target: operations/site_devices/signal/firmware
@@ -550,6 +616,7 @@ roots:
     note: D-430 §1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
     concern: safety
     capability: fleet
+    app: site-fleet
   - path: operations/signal_observation
     layout_target: operations/signal_observation
     part: operations
@@ -561,6 +628,7 @@ roots:
       Target is D-429's example; the run host stays undecided (D-163).
     concern: other
     capability: vision_ai
+    app: vision
 
   # --- operations: Fleet, world, processes, vision, Console/Cam -------------
   - path: operations/fleet
@@ -588,12 +656,14 @@ roots:
       fleet/server/rightofway: fleet.server
     concern: decision
     capability: fleet
+    app: site-fleet
   - path: operations/fleet/fleet/swarm/api
     part: operations
     d427_target: operations/fleet/fleet/swarm/api
     wave: none
     concern: contracts
     capability: fleet
+    app: site-fleet
     api: true
     import_prefix: [fleet.swarm.api]
     source_packages: {"": fleet.swarm.api}
@@ -607,6 +677,7 @@ roots:
     source_packages: {"": fleet.observe}
     concern: other
     capability: fleet
+    app: site-fleet
     note: D-699 credential-free CORE event/observation journals in the same Fleet distribution; server aliases and SQLite policy stay compatible.
   - path: operations/decision
     part: operations
@@ -618,6 +689,7 @@ roots:
     note: D-637 canonical Decision source; installed by Fleet. D-657 ledger-bound tool dispatch is fleet.server.model_feedback_dispatch, not Decision.
     concern: decision
     capability: fleet
+    app: site-fleet
   - path: applications/fleet/web
     layout_target: applications/fleet/web
     part: operations
@@ -629,6 +701,7 @@ roots:
     note: D-637 Console source; Fleet installs the existing fleet/server/web resources.
     concern: other
     capability: fleet
+    app: site-fleet
   - path: applications/fleet/gateway
     layout_target: applications/fleet/gateway
     part: operations
@@ -638,6 +711,7 @@ roots:
     import_prefix: [rosy_gateway]
     concern: other
     capability: fleet
+    app: site-fleet
   - path: applications/fleet/dev
     layout_target: applications/fleet/dev
     part: tools
@@ -645,6 +719,7 @@ roots:
     wave: none
     concern: other
     capability: fleet
+    app: site-fleet
     note: D-830 loopback frontend development host; never installed in Fleet or device payloads.
   - path: applications/fleet/test
     layout_target: applications/fleet/test
@@ -653,6 +728,7 @@ roots:
     wave: none
     concern: other
     capability: fleet
+    app: site-fleet
   - path: operations/site_ui/media
     layout_target: operations/site_ui/media
     part: operations
@@ -663,6 +739,7 @@ roots:
     note: D-789 standalone media authorization and supervision; never Fleet video relay or robot command authority.
     concern: other
     capability: platform
+    app: site-fleet
   - path: middleware/media
     layout_target: middleware/media
     part: middleware
@@ -673,6 +750,7 @@ roots:
     note: D-791 optional native media process, no camera ownership or robot command authority.
     concern: other
     capability: platform
+    app: core
   - path: operations/world
     part: operations
     d427_target: operations/world
@@ -681,6 +759,7 @@ roots:
     import_prefix: [rosy.world]
     concern: other
     capability: fleet
+    app: site-fleet
   - path: operations/account
     layout_target: operations/account
     part: operations
@@ -691,6 +770,7 @@ roots:
     note: D-962 independent Account identity, session, grant and revocation authority. No Fleet ledger or device command authority.
     concern: other
     capability: platform
+    app: account
   - path: operations/notifications
     layout_target: operations/notifications
     part: operations
@@ -700,6 +780,7 @@ roots:
     note: D-998 pre-cutover delivery journal and fixed-channel transport; producers retain business outboxes and last-moment validity. No deployed service or device authority.
     concern: other
     capability: platform
+    app: site-fleet
   - path: operations/monitoring
     layout_target: operations/monitoring
     part: operations
@@ -709,6 +790,7 @@ roots:
     note: D-876 independent read-only collector, scoped API and POSIX launcher; UI source belongs to applications/monitoring. No Fleet/CORE command or host repair authority.
     concern: other
     capability: fleet
+    app: site-fleet
   - path: applications/monitoring
     layout_target: applications/monitoring
     part: operations
@@ -718,6 +800,7 @@ roots:
     note: D-876 independent Monitoring application boundary and backend browser contracts; visual UI acceptance follows separately. Static artifacts consume canonical shared web assets.
     concern: other
     capability: fleet
+    app: site-fleet
   - path: applications/calibration
     layout_target: applications/calibration
     part: operations
@@ -727,6 +810,7 @@ roots:
     note: D-951 ROSY Calibration application boundary; the calibration engine stays in deploy/robot/omx cell tools and arm motion stays under D-911.
     concern: other
     capability: omx
+    app: omx-cell
   - path: operations/processes/palletizing
     part: operations
     d427_target: operations/processes/palletizing
@@ -735,6 +819,7 @@ roots:
     import_prefix: [rosy.processes.palletizing]
     concern: other
     capability: omx
+    app: omx-cell
   - path: operations/processes/cell
     part: operations
     d427_target: operations/processes/cell
@@ -743,6 +828,7 @@ roots:
     import_prefix: [rosy_cell]
     concern: other
     capability: omx
+    app: omx-cell
   - path: operations/prediction
     part: operations
     d427_target: operations/prediction
@@ -750,6 +836,7 @@ roots:
     import_prefix: []
     concern: other
     capability: fleet
+    app: site-fleet
     note: D-782 pre-execution checker and shadow recorder; predictions support REJECT/HOLD only and are not wired to admission or an owner.
   - path: operations/situation
     part: operations
@@ -758,6 +845,7 @@ roots:
     import_prefix: [rosy_situation]
     concern: other
     capability: fleet
+    app: site-fleet
     note: >-
       D-577 AI PC situation service; reads Fleet, posts facts and existing advisory proposals.
       D-652 pure necessity assessment is shared with Fleet through three static holder files;
@@ -771,6 +859,7 @@ roots:
     import_prefix: [rosy_vision]
     concern: other
     capability: vision_ai
+    app: vision
   - path: operations/site_ui/cam
     layout_target: operations/site_ui/cam
     part: operations
@@ -779,6 +868,7 @@ roots:
     wave: "3b"
     concern: other
     capability: vision_ai
+    app: vision
   - path: operations/apps/games
     part: operations
     d427_target: operations/apps/games
@@ -788,6 +878,7 @@ roots:
     note: Laptop game host (D-90) with an overhead camera; a site app, not a process.
     concern: other
     capability: pinky
+    app: pinky
 
   # --- learning -------------------------------------------------------------
   - path: learning/training/perception
@@ -798,6 +889,7 @@ roots:
     note: D-637 trainer source only; data, registry, replay and CLI have explicit owners below.
     concern: learning
     capability: vision_ai
+    app: learning
   - path: learning/curation/perception
     part: learning
     d427_target: learning/curation/perception
@@ -805,6 +897,7 @@ roots:
     wave: "1"
     concern: learning
     capability: vision_ai
+    app: learning
   - path: learning/registry/perception
     part: learning
     d427_target: learning/registry/perception
@@ -812,6 +905,7 @@ roots:
     wave: "1"
     concern: learning
     capability: vision_ai
+    app: learning
   - path: learning/evaluation/perception
     part: learning
     d427_target: learning/evaluation/perception
@@ -819,12 +913,14 @@ roots:
     wave: "1"
     concern: learning
     capability: vision_ai
+    app: learning
   - path: learning/evaluation/decision
     part: learning
     d427_target: learning/evaluation/decision
     wave: none
     concern: learning
     capability: vision_ai
+    app: learning
     note: D-697 host-only independent operational evidence comparison; no runtime imports or admission.
   - path: tools/perception
     part: tools
@@ -832,6 +928,7 @@ roots:
     wave: none
     concern: other
     capability: vision_ai
+    app: vision
     note: D-637 CLI orchestration of curation, training, evaluation and registry.
   - path: tools/perception_prototype
     part: tools
@@ -841,6 +938,7 @@ roots:
     note: Camera-calibration and real-run prototypes, not part of the learning loop.
     concern: other
     capability: vision_ai
+    app: vision
   - path: learning/envs/isaac
     part: learning
     d427_target: learning/envs/isaac
@@ -850,6 +948,7 @@ roots:
     note: Isaac assets and scripts (D-322 holds Isaac Lab training); could also be integrations/simulation/isaac.
     concern: learning
     capability: omx
+    app: learning
   - path: learning/curation/omx
     part: learning
     d427_target: learning/curation/omx
@@ -860,6 +959,7 @@ roots:
       OMX body validation belongs to contracts/learning; no middleware import.
     concern: learning
     capability: omx
+    app: learning
   - path: data
     part: learning
     d427_target: data
@@ -867,6 +967,7 @@ roots:
     note: Teleop recordings and the drive data drop folder; stays in place (D-427 plan Q3).
     concern: learning
     capability: platform
+    app: learning
 
   # --- integrations ---------------------------------------------------------
   - path: integrations/messaging/discord
@@ -879,6 +980,7 @@ roots:
     note: D-671 pure mention envelope and signature transport, installed by Fleet; no runtime service or device authority.
     concern: other
     capability: fleet
+    app: site-fleet
   - path: integrations/perception
     part: integrations
     integration: perception
@@ -891,6 +993,7 @@ roots:
       tools replay the robot's exact perception without importing middleware; colcon-installed beside control.
     concern: control
     capability: vision_ai
+    app: vision
   - path: integrations/robots/omx
     part: integrations
     integration: robots
@@ -899,6 +1002,7 @@ roots:
     import_prefix: [rosy.integrations.robots.omx, lerobot_robot_rosy_omx]
     concern: control
     capability: omx
+    app: omx-cell
   - path: integrations/simulation/gazebo
     part: integrations
     integration: simulation
@@ -908,6 +1012,7 @@ roots:
     note: Worlds, models, plugins and Gazebo params; launch/ and scripts/ are mapped on their own.
     concern: other
     capability: platform
+    app: learning
   - path: integrations/simulation/gazebo/launch
     part: middleware
     d427_target: middleware/apps/device/sim
@@ -917,6 +1022,7 @@ roots:
     note: Launch files start the sim device owner on the same middleware pipeline (D-427 §5).
     concern: control
     capability: platform
+    app: learning
   # Same target as the tools/sim root below: when the gz_sim split lands, the
   # scripts move into tools/sim and this root is removed (not given a path).
   - path: integrations/simulation/gazebo/scripts
@@ -928,6 +1034,7 @@ roots:
     note: Sim benches, acceptance harnesses and world/map converters (swarm_bench drives Fleet).
     concern: other
     capability: platform
+    app: learning
 
   # --- shared web -----------------------------------------------------------
   - path: shared/web
@@ -937,6 +1044,7 @@ roots:
     wave: "4b"
     concern: other
     capability: platform
+    app: core
 
   # --- shared android (D-939) -----------------------------------------------
   - path: shared/android
@@ -945,6 +1053,7 @@ roots:
     wave: none
     concern: other
     capability: platform
+    app: core
     reviewers: [PURPLE-SY]
 
   # --- top-level non-part roots ----------------------------------------------
@@ -954,12 +1063,14 @@ roots:
     wave: none
     concern: other
     capability: platform
+    app: core
   - path: deploy
     part: deploy
     d427_target: deploy
     wave: none
     concern: other
     capability: platform
+    app: core
   - path: tools
     part: tools
     d427_target: tools
@@ -967,12 +1078,14 @@ roots:
     note: Loose scripts directly in tools/ only; every tools/<subfolder> needs its own root.
     concern: other
     capability: platform
+    app: core
   - path: tools/packaging
     part: tools
     d427_target: tools/packaging
     wave: none
     concern: other
     capability: platform
+    app: core
     note: D-652 build-time Fleet source composition and self-contained sdist support; excluded from runtime wheels and images.
   - path: tools/validation
     part: tools
@@ -981,6 +1094,7 @@ roots:
     note: D-426 Fleet-Gazebo conformance runner (preflight, run planning); host-side only, never installed on a robot.
     concern: other
     capability: platform
+    app: core
   - path: tools/calibration
     part: tools
     d427_target: tools/calibration
@@ -988,6 +1102,7 @@ roots:
     note: Offline per-robot calibration fit and store CLI (never run on a robot).
     concern: other
     capability: platform
+    app: core
     reviewers: [sajy0804, ddaokki]
   - path: tools/capture
     part: tools
@@ -996,6 +1111,7 @@ roots:
     note: Supervised edge-capture drives over the CORE API (D-379 recording, advisory D-424 body check); operator PC only.
     concern: other
     capability: platform
+    app: core
   - path: tools/device_test
     part: tools
     d427_target: tools/device_test
@@ -1003,6 +1119,7 @@ roots:
     note: D-512 agent-run device test (camera preflight, temporary CORE overlay with readback and restore, recording, status/events JSONL); operator PC only.
     concern: other
     capability: platform
+    app: core
   - path: tools/device_twin
     part: tools
     d427_target: tools/device_twin
@@ -1010,24 +1127,28 @@ roots:
     note: D-412 device twin test tool; not shipped.
     concern: other
     capability: platform
+    app: core
   - path: tools/harness
     part: tools
     d427_target: tools/harness
     wave: none
     concern: other
     capability: platform
+    app: core
   - path: tools/hooks
     part: tools
     d427_target: tools/hooks
     wave: none
     concern: other
     capability: platform
+    app: core
   - path: tools/icons
     part: tools
     d427_target: tools/icons
     wave: none
     concern: other
     capability: platform
+    app: core
   - path: tools/ops
     part: tools
     d427_target: tools/ops
@@ -1035,6 +1156,7 @@ roots:
     note: Host-maintenance stage scripts run by people on the lab PCs (D-1011 arm-cell rename, dry-run first); never shipped.
     concern: other
     capability: platform
+    app: core
   - path: tools/remote
     part: tools
     d427_target: tools/remote
@@ -1042,12 +1164,14 @@ roots:
     note: remote_pytest.py runs pytest on the model/AI/site PC by headroom (D-568); not shipped.
     concern: other
     capability: platform
+    app: core
   - path: tools/release
     part: tools
     d427_target: tools/release
     wave: none
     concern: other
     capability: platform
+    app: core
   - path: tools/sim
     part: tools
     d427_target: tools/sim
@@ -1055,6 +1179,7 @@ roots:
     note: Sim benches and scenario scripts.
     concern: other
     capability: platform
+    app: core
   - path: tools/ssh
     part: tools
     d427_target: tools/ssh
@@ -1062,6 +1187,7 @@ roots:
     note: D-418 operator SSH enrollment and team-key share CLIs (run on the operator PC); not shipped.
     concern: other
     capability: platform
+    app: core
   - path: .github
     part: tools
     d427_target: .github
@@ -1069,6 +1195,7 @@ roots:
     note: CI workflows.
     concern: other
     capability: platform
+    app: core
   - path: .claude
     part: tools
     d427_target: .claude
@@ -1076,18 +1203,21 @@ roots:
     note: Project agent skills and settings.
     concern: other
     capability: platform
+    app: core
   - path: test
     part: test
     d427_target: test
     wave: none
     concern: other
     capability: platform
+    app: core
   - path: test/flaky_quarantine.txt
     part: test
     d427_target: test/flaky_quarantine.txt
     wave: none
     concern: safety
     capability: platform
+    app: core
     note: D-762 stage 1. A listed failure passes after one rerun, so adding an id needs a Safety-Review trailer.
   - path: docs
     part: docs
@@ -1095,6 +1225,7 @@ roots:
     wave: none
     concern: other
     capability: platform
+    app: core
 
 # D-430 §1: safety files inside mixed folders, tagged per file so no folder is
 # split. A mixed file is safety as a whole (§5 change control); `concern: safety`
