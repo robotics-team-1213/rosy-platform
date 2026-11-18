@@ -674,9 +674,9 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
 
         page.route("**/api/fleet/enrollment/robots/*/move-address", move)
         page.goto(console_url, wait_until="networkidle")
-        banner = page.locator("#address-banner")
-        banner.wait_for()
-        assert banner.inner_text().startswith("사이트 망 주소가 바뀌었을 수 있습니다")
+        banner = page.locator("#address-drift [data-address-note]")  # D-1117: the note is the drift box's first line
+        banner.wait_for(state="attached")
+        assert banner.text_content().startswith("사이트 망 주소가 바뀌었을 수 있습니다")
         page.get_by_role("link", name="작업", exact=True).click()
         page.wait_for_function(
             "() => document.querySelectorAll('#roster [data-address-reason]').length === 3")
@@ -816,7 +816,7 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#address-banner").wait_for()
+        page.locator("#address-drift [data-address-note]").wait_for(state="attached")  # D-1117
         page.wait_for_function(
             "() => document.querySelectorAll('#roster [data-address-reason]').length === 3")
         assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
