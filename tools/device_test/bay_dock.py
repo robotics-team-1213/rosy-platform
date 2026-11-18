@@ -36,6 +36,7 @@ sys.path.insert(0, str(HERE))
 from live_transport import Live  # noqa: E402
 from plan_rules import OVERLAY_PATH, sanitize  # noqa: E402
 from run_helpers import Abort, _sigterm, log  # noqa: E402
+from tether import wrap  # noqa: E402
 
 
 def _load_run():
@@ -64,10 +65,6 @@ OBS_CMD = (". /opt/ros/*/setup.bash 2>/dev/null; t=$(ros2 topic list 2>/dev/null
 
 
 # --- pure helpers ---------------------------------------------------------------------------
-
-def wrap(a):
-    return math.atan2(math.sin(a), math.cos(a))
-
 
 def obs_errors(o):
     """(along to the stop face, lateral, heading) of one observation: same split as rear_phases.rear_errors."""
