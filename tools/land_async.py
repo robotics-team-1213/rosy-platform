@@ -217,9 +217,10 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | 
                 return _start(cwd, land_args, now, launch, replace=not waited, branch=branch)
         except Full as exc:  # polled outside the lock: resumes and rollups go on meanwhile
             if time.monotonic() >= deadline:
-                raise SystemExit(f"[land-async] {exc} (waited {FULL_WAIT_S // 60} min)") from exc
-            print(f"[land-async] {exc}; checking again every {FULL_POLL_S} s for up to {FULL_WAIT_S // 60} min",
-                  flush=True)
+                print(f"[land-async] NOT QUEUED: {branch or git(cwd, 'branch', '--show-current')}: {exc} after "
+                      f"{FULL_WAIT_S // 60} min; run land_async.py again when tickets free up", file=sys.stderr)
+                raise SystemExit(3) from exc
+            print(f"[land-async] {exc}; checking again every {FULL_POLL_S} s for up to {FULL_WAIT_S // 60} min", flush=True)
             time.sleep(FULL_POLL_S)
             waited = True
 
@@ -549,8 +550,7 @@ def precheck_branch(cwd: Path, branch: str, words: list[str]) -> int:
 
 def main(argv: list[str]) -> int:
     if any(arg in ("-h", "--help") for arg in argv):
-        print(__doc__)
-        return 0
+        return print(__doc__) or 0
     if argv[:1] == ["orphans"]:
         names = orphans(Path.cwd())
         print("\n".join(f"[land-async] orphan {n}" for n in names) or "[land-async] no orphaned landings")
