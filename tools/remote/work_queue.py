@@ -449,20 +449,23 @@ def _repack(repo: Path, inv: list[str], env: list[str], paths: list[str], ignore
     Serial, node-id and option-carrying invocations never reach here (``whole``); when no group can take a
     file, one more group beats a broken constraint (the count bound yields, never a constraint)."""
     ignored = [w.split("=", 1)[1].rstrip("/") for w in ignores]
-    items: list[str] = []
-    for p in paths:
-        folder = repo / p
-        items += ([f.relative_to(repo).as_posix() for f in folder.rglob("*.py")
-                   if (f.name.startswith("test_") or f.name.endswith("_test.py"))
-                   and not any(f.relative_to(repo).as_posix() == i
-                               or f.relative_to(repo).as_posix().startswith(i + "/") for i in ignored)]
-                  if folder.is_dir() else [p])
-    items = list(dict.fromkeys(items))
+    def under(p: str) -> list[str]:  # test files a directory item holds (cost and module names only; argv keeps it whole)
+        return [f.relative_to(repo).as_posix() for f in (repo / p).rglob("*.py")
+                if (f.name.startswith("test_") or f.name.endswith("_test.py"))
+                and not any(f.relative_to(repo).as_posix() == i
+                            or f.relative_to(repo).as_posix().startswith(i + "/") for i in ignored)]
+
+    # A directory stays one item: pytest's own collection (norecursedirs, conftest, python_files) decides its files.
+    items = [p for p in dict.fromkeys(paths) if not any(o != p and p.startswith(o.rstrip("/") + "/") for o in paths)]
+    if any(EXCLUSIVE_FILE in under(p) for p in items if (repo / p).is_dir()):
+        return [[*env, p, *ignores] for p in paths]  # the G1 file inside a directory cannot be kept alone
     n = min(MAX_SPLIT, max(1, math.ceil(seconds / SPLIT_S)), len(items))
     if n <= 1:
         return [inv]  # one group is the invocation itself: the cheapest argv, the single-directory precedent
 
     def cold(p: str) -> float:
+        if (repo / p).is_dir():
+            return sum(_file_weight(repo, repo / t, fleet) for t in under(p))
         return _file_weight(repo, repo / p, fleet) if (repo / p).is_file() else 0.0
 
     items.sort(key=lambda p: (-cold(p), p))
@@ -471,7 +474,9 @@ def _repack(repo: Path, inv: list[str], env: list[str], paths: list[str], ignore
     cache: dict[str, dict[str, str]] = {}
     for item in items:  # heaviest first into the lightest group that can hold it (fewest files on a tie: free
         # files, e.g. paths missing from this tree, spread instead of piling into the first group)
-        names = _import_names(repo, item, cache)
+        names = {}
+        for t in under(item) if (repo / item).is_dir() else [item]:
+            names.update(_import_names(repo, t, cache))
         choice = next((i for i in sorted(range(len(groups)), key=lambda i: (weights[i], len(groups[i]), i))
                        if all(names_of[i].get(name, source) == source for name, source in names.items())
                        and EXCLUSIVE_FILE not in groups[i] and item != EXCLUSIVE_FILE
