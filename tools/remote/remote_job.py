@@ -123,7 +123,9 @@ LEASE = r""": > "$D/$K.seen"
 lease_check() {
   [ -e "$D/$K.rc" ] && return 1
   s=$(stat -c %Y "$D/$K.seen" 2>/dev/null) || return 0
-  [ $(( ${NOW:-$(date +%s)} - s )) -gt "$1" ] && { kill -TERM -- "-$2" 2>/dev/null; return 1; }
+  # a group kill only when $2 leads its own group (setsid): over Tailscale SSH a pgid can be tailscaled's (11-07)
+  [ $(( ${NOW:-$(date +%s)} - s )) -gt "$1" ] && { if [ "$(ps -o pgid= -p "$2" | tr -d ' ')" = "$2" ]; then
+    kill -TERM -- "-$2"; else kill -TERM "$2"; fi 2>/dev/null; return 1; }
   return 0
 }
 """
