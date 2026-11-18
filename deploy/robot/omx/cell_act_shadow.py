@@ -44,7 +44,13 @@ def load(config: dict, work: Path):
             import cell_lerobot_shadow
 
             binding = cell_lerobot_shadow.LeRobotShadow(spec["policy_root"], spec["policy_revision"])
-            return Shadow(binding, work, None, lerobot=True)
+            offset = None
+            if spec.get("model_calibration") and spec.get("cell_calibration"):
+                import cell_policy_drive
+
+                offset = cell_policy_drive.calibration_offset(
+                    *(json.loads(Path(spec[k]).expanduser().read_text()) for k in ("model_calibration", "cell_calibration")))
+            return Shadow(binding, work, None, lerobot=True, offset=offset)
         if spec.get("kind") == "two_arm":
             import act_two_arm_shadow
 
@@ -74,10 +80,10 @@ class Shadow:
     """Asks the pinned policy on the carry's observation; the proposal is logged, never executed."""
 
     def __init__(self, binding, work: Path, observation, *, error=None, policy_id=None, spec=None, peer=None,
-                 lerobot=False):
+                 lerobot=False, offset=None):
         self._binding, self._path, self._observation = binding, Path(work) / "act-shadow.jsonl", observation
         self._error, self._policy_id, self._spec, self._peer = error, policy_id, spec, peer
-        self._lerobot = lerobot
+        self._lerobot, self._offset = lerobot, offset  # model units minus cell units per joint (calibration homing)
 
     def _peer_cell(self):
         """The other arm's cell for its wrist frame and state: opened once, read only (frame and state), None without config."""
@@ -104,9 +110,10 @@ class Shadow:
         row["observation"].pop("camera_identity", None)
         frames = {view: obs_img if view == "top" else cell.frame(view) for view in self._binding.image_views}
         state = cell.act("state")["state"]
-        taken, meta = self._binding.inputs(state, frames)
-        row["observation"].update(meta, positions=list(state), unit="lerobot_norm")
-        row["proposed"] = [list(q) for q in self._binding.infer(taken).chunk]
+        off = self._offset or [0.0] * len(state)
+        taken, meta = self._binding.inputs([s + o for s, o in zip(state, off)], frames)
+        row["observation"].update(meta, positions=list(state), unit="lerobot_norm", calibration_offset=self._offset)
+        row["proposed"] = [[q - o for q, o in zip(frame, off)] for frame in self._binding.infer(taken).chunk]  # cell units
         return row
 
     def capture(self, cell, config: dict, attempt: int, obs_img, source=None, dest=None) -> dict | None:

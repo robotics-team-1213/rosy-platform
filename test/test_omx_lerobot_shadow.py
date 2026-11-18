@@ -187,3 +187,13 @@ def test_cell_quality_has_no_model_without_act_shadow(tmp_path):
 
     (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({"work_dir": str(tmp_path)}))
     assert sync._collect_arm_models(tmp_path) == {"arm_s": {}, "arm_a": {}, "arm_b": {}}
+
+
+def test_shadow_offset_maps_cell_state_to_model_units_and_back(tmp_path):
+    root, sha = checkpoint(tmp_path)
+    rec = Recorder()
+    shadow = cell_act_shadow.Shadow(lrs.LeRobotShadow(root, sha, loader=rec), tmp_path, None, lerobot=True,
+                                    offset=[0, 0, 0, 0, 46.7, 0])
+    row = shadow.capture(Cell(), {"cameras": {}}, 0, bgr())
+    assert rec.seen[0]["observation.state"][4] == pytest.approx(68.0 + 46.7)
+    assert row["proposed"][0][4] == pytest.approx(68.0)  # back in cell units
