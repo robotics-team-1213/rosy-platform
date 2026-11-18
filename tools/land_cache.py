@@ -217,6 +217,7 @@ def _overlap(a: str, b: str) -> bool:
 
 _delta_lock = threading.RLock()
 _delta_memo: dict[tuple, list[str] | None] = {}
+_refused: dict[tuple[str, str], str | None] = {}  # (base, head) -> why _full_delta refused (reuse_miss reason)
 _via_full: set[tuple[str, str]] = set()  # ranges whose reach came from _full_delta (the log line says so)
 _anc_lock = threading.RLock()
 _anc_cache: dict[tuple[str, str], set[str]] = {}
@@ -374,6 +375,7 @@ def _full_delta(wt: Path, base: str, head: str, python: str, changed: list[str])
         why = None if sel is None else _refusal(changed, sel)
         if sel is None or why:
             print(f"[cache] no prior-round reuse across {base[:10]}..{head[:10]}: {why or 'selector failed'}")
+            _refused[(base, head)] = why
             return None
         picked = [_paths(inv) for inv in sel["local_invocations"]]
         extra = _guards_and_browsers(wt, changed)
@@ -425,7 +427,7 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     # Dedicated timing rows prove publication, but must never replace a fresh execution.
     known = [e for e in entries(wt) if e["env"] == env and not affected_exclusive.dedicated(e["argv"])]
     exact = {tuple(e["argv"]): e for e in known if e["tree"] == tree}
-    reused, todo, prior = [], [], 0
+    reused, todo, prior, miss = [], [], 0, {}  # miss: why an earlier same-argv row did not carry over (events only)
     for inv in invocations:
         if not affected_exclusive.dedicated(inv) and tuple(inv) in exact:
             reused.append(f"pytest {' '.join(inv)} reused: passed on this tree {tree[:10]} (env {env})")
@@ -434,6 +436,7 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
                 record(wt, head, tree, env, inv, Path(source["log"]), digest=source.get("log_sha256"))
         else:
             todo.append(inv)
+    commits: list[str] = []
     if todo and args.tests in ("auto", "full") and (wt / "tools/harness/affected_tests.py").is_file():
         wanted = {tuple(inv) for inv in todo if not affected_exclusive.dedicated(inv)}
         ancestors = set(_git(wt, "rev-list", head).stdout.split()) - {head}
@@ -449,12 +452,16 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
             # explicit FULL: only the strict rule publish_evidence recomputes, never the landed-FULL extension
             delta = (reach(wt, commit, head, python) if args.tests == "full"
                      else _delta_paths(wt, commit, head, python, select))
-            if delta is None:
-                continue
             passed = {tuple(e["argv"]) for e in known if e["commit"] == commit}
+            if delta is None:
+                miss.update({k: f"refusal:{_refused.get((commit, head), '')}" for k in passed})
+                continue
             for inv in [i for i in todo if not affected_exclusive.dedicated(i) and tuple(i) in passed]:
                 paths = _paths(inv)
-                if paths and not any(_overlap(p, d) for p in paths for d in delta):
+                hit = next((p for p in paths or [] for d in delta if _overlap(p, d)), None)
+                if hit:
+                    miss[tuple(inv)] = f"selected:{hit}"
+                if paths and hit is None:
                     todo.remove(inv)
                     if (commit, head) in _via_full:
                         prior += 1
@@ -464,9 +471,17 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
                                       f" {commit[:10]}..{head[:10]} picks none of its paths (env {env})")
     for line in reused:
         print(f"[cache] {line}")
+    import land_events  # noqa: PLC0415 - publish_evidence loads this module in trees that lack it
     if reused:
-        import land_events  # noqa: PLC0415 - publish_evidence loads this module in trees that lack it
         land_events.emit("reuse", reused=len(reused), prior=prior, total=len(invocations))  # the daily [metrics]
+    earlier = {tuple(e["argv"]): e for e in entries(wt)}
+    for inv in todo:  # an earlier row of this argv exists but did not carry over: say why (one event each)
+        if tuple(inv) in earlier:
+            why = ("dedicated" if affected_exclusive.dedicated(inv)
+                   else "env" if not any(tuple(e["argv"]) == tuple(inv) for e in known)
+                   else miss.get(tuple(inv)) or ("not_auto" if args.tests not in ("auto", "full")
+                                                else "sibling_limit" if len(commits) >= NARROW_COMMITS else "not_ancestor"))
+            land_events.emit("reuse_miss", argv=inv, reason=why)
 
     return reused, todo, keep
 
