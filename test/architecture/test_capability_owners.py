@@ -15,6 +15,7 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 
+import pytest
 import yaml
 
 from affected_repo import app_of
@@ -140,7 +141,7 @@ def test_signing_paths_stay_lead_only():
 
 def test_every_root_and_subtree_names_a_known_app():
     apps = MANIFEST["apps"]
-    assert len(apps) == len(set(apps)) and "core" in apps, apps
+    assert len(apps) == len(set(apps)) and {"core", "repo"} <= set(apps), apps
     subtrees = MANIFEST["app_subtrees"]
     bad = [f"{r['path']}: {r.get('app')!r}" for r in MANIFEST["roots"] if r.get("app") not in apps]
     bad += [f"{path}: {app!r}" for path, app in subtrees.items() if app not in apps or not (ROOT / path).is_dir()]
@@ -164,3 +165,16 @@ def test_app_of_takes_the_deepest_entry_and_defaults_to_core():
     assert app_of("deploy/robot/omxy/x.py", parts) == "core"
     assert app_of("ops/fleet/a/b.py", parts) == "site-fleet"
     assert app_of("README.md", parts) == "core"
+
+
+@pytest.mark.parametrize(("path", "app"), [
+    # D-1036 addendum 2: gate code and shipped shared code stay core; never-deployed paths are repo.
+    ("tools/land.py", "core"), ("tools/publish_main.py", "core"), ("tools/urgent_lane.py", "core"),
+    ("tools/harness/platform_parts.yaml", "core"), ("tools/hooks/land_record.py", "core"),
+    (".github/workflows/ci.yml", "core"), ("tools/release/x.py", "core"), ("deploy/hosts/services.yaml", "core"),
+    ("tools/sim/omx_two_arm_world.py", "core"), ("test/flaky_quarantine.txt", "core"),
+    ("docs/adr/D-1036-publish-evidence-from-nightly-full.md", "repo"), ("test/conftest.py", "repo"),
+    ("test/architecture/test_capability_owners.py", "repo"), ("tools/remote/remote_pytest.py", "repo"),
+    ("test/learning/test_x.py", "learning")])
+def test_never_deployed_paths_are_repo_and_gates_stay_core(path, app):
+    assert app_of(path, MANIFEST) == app

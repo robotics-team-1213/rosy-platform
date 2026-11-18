@@ -37,3 +37,7 @@
 **전역으로 남는 것.** D-430 `Safety-Review` 범위 검사, D-868 merge commit(squash·rebase 금지), 비밀값 검사, 서명기와 `ci-result`·`review-gate`. 앱 모드도 이 단계를 모두 지난다. 안전 경로 변경은 위 1항으로 FULL이다.
 
 **검증.** `test/test_publish_scope.py`: 앱 델타가 자기 선택으로 증명됨, core·안전 경로·선택기 FULL은 FULL 유지, 다른 앱의 적색은 막지 않음, 건드린 앱의 적색은 막음. 아직 시험 PC와 실제 야간에서 관측하지 않았다.
+
+### 부록 2 (2026-11-19): 배포되지 않는 경로는 앱 `repo`
+
+사용자 승인 2026-11-19(앱 분리, 패널 int-r1 A·B 합의). 부록 1의 `core` 6,761개 파일 중 대부분이 문서·시험·도구여서 거의 모든 델타가 FULL로 갔다. 그래서 배포되지 않고 게시 관문도 아닌 경로에 앱 값 `repo`를 준다: `docs/`, 루트 `test/`(인프라·`test/architecture`·한 앱으로 확정할 수 없는 루트 시험; `test/learning`은 `learning`), `.claude/`, 운영자 PC에서만 쓰는 도구(`tools/validation`·`calibration`·`capture`·`device_test`·`device_twin`·`icons`·`ops`·`remote`·`ssh`). `repo`는 배포하지 않으므로 델타에 있어도 FULL을 부르지 않고 앱 집합에도 들어가지 않는다. 문서만 바뀐 델타는 앱 모드로 자기 선택(`affected`)의 깨끗한 증거만 요구한다. `core`에는 공유 실행 코드(middleware/core·contracts·shared·gateway·deploy 루트), 배포물을 만드는 도구(`tools/release`·`packaging`, OMX 셀이 실행 경로에 넣는 `tools/sim`), 관문 코드(`tools/harness`·`hooks`, `tools/` 바로 아래의 `land*`·`publish*`·`urgent_lane.py`, `.github`), `test/flaky_quarantine.txt`가 남는다. 선택기의 FULL 승격(`conftest.py`·`test/architecture/**`·`tools/remote/remote_pytest.py` 등 `FULL_TRIGGERS`)과 `safety_review.is_safety`는 바꾸지 않으므로, `repo` 안의 관문 파일을 바꾸면 여전히 FULL이다. `repo` 시험 파일의 MAIN-RED는 어느 앱 델타도 막지 않는다(부록 1에서 `core` 소유 적색이 앱 델타를 막지 않던 것과 같다). 검증: `test/test_publish_scope.py`(문서만 → 앱 모드, 문서 + `tools/land.py` → FULL), `test/architecture/test_capability_owners.py`(관문은 `core`, 배포 안 되는 경로는 `repo`).

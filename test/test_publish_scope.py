@@ -10,8 +10,10 @@ import land_cache
 import land_mainred
 import publish_evidence
 
-PARTS = {"apps": ["site-fleet", "account", "pinky", "core"], "safety_modules": [], "roots": [
+PARTS = {"apps": ["site-fleet", "account", "pinky", "core", "repo"], "safety_modules": [], "roots": [
     {"path": "operations/fleet", "app": "site-fleet"},
+    {"path": "docs", "app": "repo"},
+    {"path": "tools", "app": "core"},
     {"path": "operations/account", "app": "account"},
     {"path": "middleware/drive", "app": "pinky", "concern": "safety"}]}
 PLAN = [["operations/fleet/test"]]
@@ -102,3 +104,28 @@ def test_a_red_nightly_in_a_touched_app_blocks(scoped, nodeid):
     _red(local, nodeid)
     ok, line = tool.publish_scope.check(tool, local, sha)
     assert not ok and "blocked by red nightly/main-red in a touched app (site-fleet:" in line and calls == []
+
+
+def test_a_docs_only_delta_is_published_in_app_mode_with_no_app(scoped):
+    local, calls = scoped
+    sha = _commit(local, "docs/note.md", "1")
+    _evidence(local, sha)
+    ok, line = tool.publish_scope.check(tool, local, sha)
+    assert ok and calls == [True]
+    assert line == f"{sha[:10]} apps=- mode=app required=1 evidenced=1"
+
+
+def test_repo_paths_do_not_hide_a_gate_path(scoped):
+    local, calls = scoped
+    sha = _commit(local, "docs/note.md", "1")
+    sha = _commit(local, "tools/land.py", "gate")
+    ok, line = tool.publish_scope.check(tool, local, sha)
+    assert not ok and line == f"{sha[:10]} apps=core mode=full (touches core)" and calls == []
+
+
+def test_a_red_repo_test_blocks_no_app_delta(scoped):
+    local, _ = scoped
+    sha = _commit(local, "operations/fleet/fleet/a.py", "1")
+    _evidence(local, sha)
+    _red(local, "docs/test_x.py::test_y")
+    assert tool.publish_scope.check(tool, local, sha)[0]
