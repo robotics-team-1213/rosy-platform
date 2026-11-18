@@ -50,6 +50,7 @@ def observation_feed(page):
     encoded = BytesIO()
     Image.new("RGB", (4, 4), color="green").save(encoded, format="JPEG")
     jpeg = encoded.getvalue()
+    state.jpeg = jpeg
 
     def snapshot():
         now = time.time()
@@ -85,6 +86,11 @@ def observation_feed(page):
             state.incidents[0].update(state="cleared", cleared={"by": "op-7", "at": time.time(), "note": body["note"],
                                                                 "cause": body.get("cause"), "basis": body.get("basis")})
             return route.fulfill(json={"held": False, "incident_ids": [], "reason": None})
+        if path == "/api/fleet/vision/sources":  # cell mode shows cameras only in the inspector (shared/cell-frames.js)
+            return route.fulfill(json={"sources": ["omx_overhead", "omx_wrist_a", "omx_wrist_b"]})
+        if path == "/api/fleet/pipeline/cell-tasks":
+            return route.fulfill(json={"tasks": [], "cells": {"cell_s": {"gate": {}}, "cell_ab": {"gate": {}}},
+                                       "summary": {"total": 0, "queued": 0, "running": 0, "completed": 0}})
         if path == "/api/fleet/vision/lease":
             source = route.request.post_data_json["source_id"]
             assert route.request.headers.get("authorization") == "Bearer viewer-token"
@@ -107,7 +113,7 @@ def observation_feed(page):
             return
         if any(f"/{source}/" in route.request.url for source in state.limited):
             return route.fulfill(status=429, body="rate limited", headers={"Retry-After": "1"})
-        if "/wrist_b/" in route.request.url and state.freeze_b:
+        if "wrist_b/" in route.request.url and state.freeze_b:
             return route.fulfill(status=503, body="unavailable")
         state.sequence += 1
         route.fulfill(content_type="image/jpeg", body=jpeg,
@@ -128,22 +134,30 @@ def test_cell_displays_two_arms_three_cameras_and_expires_each_disconnected_sour
         assert not state.failed_assets, state.failed_assets
         assert not errors, errors
         root = page.locator("#workcell-observations")
+        # In a cell workspace the camera frames live in the right inspector (shared/cell-frames.js), not in the tiles.
+        inspector = page.locator("#omx-right-inspector")
+        pip = lambda cam: inspector.locator(f'.omx-inspector-pip[data-cam-id="{cam}"] img')
+        main = inspector.locator(".omx-inspector-main-cam")
         expect(root.locator("[data-arm-source]")).to_have_count(2)
         expect(root.locator('[data-arm-source="feedback_a"] pre')).to_contain_text("0.25")
         expect(root.locator('[data-arm-source="feedback_b"] pre')).to_contain_text("0.75")
-        expect(root.locator("[data-camera-source] img")).to_have_count(3)
-        for source in ("top", "wrist_a", "wrist_b"):
-            expect(root.locator(f'[data-camera-source="{source}"] img')).to_be_visible()
+        expect(inspector.locator(".omx-inspector-pip img")).to_have_count(4)
+        expect(main).to_be_visible()
+        for cam in ("top", "arm_a_wrist", "arm_b_wrist"):
+            expect(pip(cam)).to_be_visible()
+        expect(pip("side")).to_be_hidden()  # a source Vision does not list is never shown as live
         state.freeze_b = time.time()
         expect(root.locator('[data-arm-source="feedback_b"] pre')).not_to_contain_text("0.75", timeout=4000)
-        expect(root.locator('[data-camera-source="wrist_b"] img')).to_be_hidden(timeout=4000)
+        expect(pip("arm_b_wrist")).to_be_hidden(timeout=4000)
         expect(root.locator('[data-arm-source="feedback_a"] pre')).to_contain_text("0.25")
-        expect(root.locator('[data-camera-source="wrist_a"] img')).to_be_visible()
-        expect(root.locator('[data-camera-source="top"] img')).to_be_visible()
+        expect(pip("arm_a_wrist")).to_be_visible()
+        expect(pip("top")).to_be_visible()
+        expect(main).to_be_visible()
         state.stall = True
         expect(root.locator('[data-arm-source="feedback_a"] pre')).not_to_contain_text("0.25", timeout=3000)
-        for source in ("top", "wrist_a"):
-            expect(root.locator(f'[data-camera-source="{source}"] img')).to_be_hidden(timeout=3000)
+        for cam in ("top", "arm_a_wrist"):  # FRAME_LATE_MS (3 s) after the last frame, polled every 2 s
+            expect(pip(cam)).to_be_hidden(timeout=4000)
+        expect(main).to_be_hidden()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert page.locator("iframe").count() == 0
         assert urlsplit(page.url).path == "/console/cell"
@@ -159,16 +173,18 @@ def test_rate_limited_frame_keeps_the_fresh_image_until_it_expires(cell_url):
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
         state, _ = observation_feed(page)
         page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
-        card = page.locator('#workcell-observations [data-camera-source="wrist_a"]')
-        expect(card.locator("img")).to_be_visible()
-        state.limited.add("wrist_a")
-        page.wait_for_timeout(1000)  # two polls get 429 while the last frame is under 2 s old
-        expect(card.locator("img")).to_be_visible()
-        expect(card.locator("ui-status")).not_to_contain_text("최신 영상 없음")
-        expect(card.locator("img")).to_be_hidden(timeout=4000)  # expired is still stale
-        expect(card.locator("ui-status")).to_contain_text("최신 영상 없음")
+        main = page.locator("#omx-right-inspector .omx-inspector-main-cam")  # arm_a_wrist in the A/B inspector
+        status = page.locator("#omx-right-inspector .omx-inspector-main-cam + .cell-visual-badge")
+        expect(main).to_be_visible()
+        state.limited.add("omx_wrist_a")
+        with page.expect_response(lambda r: "/omx_wrist_a/frame" in r.url and r.status == 429, timeout=4000):
+            pass  # one poll gets 429 while the last frame is under FRAME_LATE_MS old
+        expect(main).to_be_visible()
+        expect(status).not_to_contain_text("최신 영상 없음")
+        expect(main).to_be_hidden(timeout=4000)  # expired is still stale
+        expect(status).to_contain_text("최신 영상 없음")
         state.limited.clear()
-        expect(card.locator("img")).to_be_visible(timeout=4000)
+        expect(main).to_be_visible(timeout=4000)
         page.unroute_all(behavior="ignoreErrors")
         browser.close()
 
@@ -207,22 +223,33 @@ def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
         assert not state.failed_assets, state.failed_assets
         assert not errors, errors
         root = page.locator("#workcell-observations")
+        inspector = page.locator("#omx-right-inspector")
+        frames_left = "() => [...document.querySelectorAll('#omx-right-inspector img')].filter(i => i.getAttribute('src')).length"
         expect(root.locator('[data-arm-source="feedback_a"] pre')).to_contain_text("0.25")
-        expect(root.locator('[data-camera-source="top"] img')).to_be_visible()
+        expect(inspector.locator(".omx-inspector-main-cam")).to_be_visible()
         state.stall = True
         with page.expect_request("**/api/fleet/workcell-observations"):
             page.locator("#topbar-more").click()
         page.locator('[data-login="logout"]').click()
         expect(root.locator("[data-arm-source]")).to_have_count(0)
         expect(root.locator("img")).to_have_count(0)
+        expect(inspector.locator("img:visible")).to_have_count(0)
+        assert page.evaluate(frames_left) == 0  # the previous session's frames are wiped, not just paused
         for route in state.held:
-            if urlsplit(route.request.url).path.endswith("/workcell-observations"):
-                route.fulfill(content_type="application/json", body=json.dumps(snapshot()))
-            else:
-                route.fulfill(status=503, body="late frame")
+            try:
+                if urlsplit(route.request.url).path.endswith("/workcell-observations"):
+                    route.fulfill(content_type="application/json", body=json.dumps(snapshot()))
+                else:  # a late good frame, so a missed generation check would paint it
+                    route.fulfill(content_type="image/jpeg", body=state.jpeg,
+                                  headers={"X-Frame-Age-Ms": "0", "X-Frame-Seq": "999999", "Cache-Control": "no-store"})
+            except Exception:  # the logout aborted this request in the browser already
+                pass
         page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+        page.wait_for_timeout(300)  # a late answer would need its blob read and paint
         expect(root.locator("[data-arm-source]")).to_have_count(0)
         expect(root.locator("img")).to_have_count(0)
+        expect(inspector.locator("img:visible")).to_have_count(0)
+        assert page.evaluate(frames_left) == 0
         assert not errors
         page.unroute_all(behavior="ignoreErrors")
         browser.close()

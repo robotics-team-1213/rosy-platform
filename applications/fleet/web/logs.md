@@ -1373,3 +1373,8 @@
 - 변경: roster.css에서 선택자만 지워지고 남은 outline 본문 줄을 지워 다음 규칙(.quick-control-panel)이 다시 적용되게 했다. channel-request-view.js의 inline 변경 호출 5곳에서 401·403이 패널만 닫고 아무 글도 없던 것을 denied()가 상태 줄에 쓰게 했다. fleet-alert-surface의 주석 검사가 `http://`를 주석으로 보지 않게, test_shared_dedupe의 파일 집합이 시험 PC의 venv·build 같은 추적 밖 폴더를 빼게 했다.
 - 증거: D:/DevTemp/ui-panel-1118/review-1.md, 노드 fleet-alert-surface 7/7, CSS 중괄호 균형 검사(바뀐 css 전부) 이상 0.
 - gate 변화: 없음(오탐 2건 제거).
+
+## 2026-11-19 · uncommitted · fix(fleet-web): 셀 인스펙터 카메라가 만료 영상을 숨기고 로그아웃 때 지운다
+- 변경: shared/cell-frames.js가 cell-observation.js 관측 타일과 같은 규칙을 따른다. 영상은 촬영 뒤 FRAME_LATE_MS(vision-view.js 공용 값) 안에서만 보이고, 넘으면 타이머가 이미지를 숨기고 '최신 영상 없음'을 쓴다. 비정상 응답·오류·미등록 소스도 이미지를 숨긴다(전에는 배지 글만 바뀌고 마지막 영상이 남았다). 429는 영상을 유지하고 만료 타이머가 그대로 늙힌다. 붙이기 전에 bind한 img도 바로 칠해, 다시 그린 인스펙터의 빈 img가 429 동안 '보이는' 상태로 남지 않는다. 피드 일시정지는 img 자신의 hidden(피드가 건 것)이 아니라 숨은 컨테이너만 본다(아니면 배지 없는 pip이 영영 영상을 받지 않는다). 새 clear()는 세대를 올려 진행 중 요청을 끊고 늦은 응답을 버리며 blob URL·img src를 지운다. cell-real2sim.js clear()가 setRunning(false) 대신 clear()를 부른다(로그아웃·인증 거부).
+- 증거: node cell-camera-views 7/7(만료 숨김·clear 뒤 늦은 응답 무시 시험 2개 추가), charge-bays-view 통과. 카메라 브라우저 시험 3개를 #omx-right-inspector 위치로 옮겼다(가짜 Vision 소스 목록·작업 원장 추가).
+- gate 변화: 없음.

@@ -137,7 +137,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, ce
     connected = false;
     lastCellTasksBody = null;
     lastCellTasksAt = 0;
-    cellFrames?.setRunning(false);
+    cellFrames?.clear();  // logout wipes the previous session's inspector frames, not just pauses them
     if ($('real2sim-figures')) {
       $('real2sim-figures').hidden = true;
       $('real2sim-figures').replaceChildren();

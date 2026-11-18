@@ -106,3 +106,56 @@ test("scoped cell workspaces strictly isolate cell_s (arm_s) from cell_ab (arm_a
   assert.deepEqual(cellBInspectors.map(s => s.id), ["arm_b"]);
 });
 
+
+// Same honesty as the cell observation tile: an expired frame is hidden, logout wipes it and a late answer is ignored.
+async function liveFeed(ageMs) {
+  const {createCellFrameFeed} = await import("../../../../applications/fleet/web/shared/cell-frames.js");
+  const {FRAME_LATE_MS} = await import("../../../../applications/fleet/web/shared/vision-view.js");
+  globalThis.location ??= {origin: "http://cell.test"};
+  let release = null;
+  const answer = () => new Response(new Blob([new Uint8Array([1, 2, 3])]),
+    {headers: {"X-Frame-Age-Ms": String(FRAME_LATE_MS - ageMs), "X-Frame-Seq": "7"}});
+  globalThis.fetch = async () => (release ? new Promise(resolve => release.push(() => resolve(answer()))) : answer());
+  const call = async path => path === "/api/fleet/vision/sources" ? {sources: ["omx_overhead"]}
+    : {lease: "l", frame_path: "/api/vision/sources/omx_overhead/frame", expires_in_s: 60};
+  const feed = createCellFrameFeed({call});
+  // DOM-like: closest() matches the img itself while the feed keeps it hidden, its container is shown.
+  const img = {isConnected: true, hidden: true, src: "", parentElement: {closest: () => null},
+    closest() { return this.hidden ? this : null; }, removeAttribute(name) { this[name] = ""; }};
+  feed.bind(img, {source: "top"});  // no badge: a still-hidden img alone must not pause its own feed
+  await until(() => !img.hidden);
+  const badge = {isConnected: true, textContent: ""};
+  feed.bind(null, {source: "top"}, badge, "top");
+  return {feed, img, badge, hold: () => { release = []; return release; }};
+}
+
+async function until(check, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    assert.ok(Date.now() < deadline, "condition not reached in time");
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+}
+
+test("an inspector frame is hidden as 최신 영상 없음 once it is older than FRAME_LATE_MS", async () => {
+  const {feed, img, badge} = await liveFeed(400);
+  assert.match(img.src, /^blob:/);
+  await until(() => img.hidden);
+  assert.match(badge.textContent, /최신 영상 없음/);
+  feed.dispose();
+});
+
+test("clear wipes the previous session's frame and ignores a late answer", async () => {
+  const {feed, img, hold} = await liveFeed(2500);
+  const held = hold();
+  feed.setRunning(true);
+  await until(() => held.length > 0);  // a frame request is in flight when the session ends
+  feed.clear();
+  assert.equal(img.hidden, true);
+  assert.equal(img.src, "");
+  for (const late of held) late();
+  await new Promise(resolve => setTimeout(resolve, 15));
+  assert.equal(img.hidden, true);
+  assert.equal(img.src, "");
+  feed.dispose();
+});
