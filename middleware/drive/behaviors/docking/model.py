@@ -127,5 +127,6 @@ class DockingConfig:
     bay_exit_steer_head: float = 2.0    # 1/s, 목표 방위로 맞추는 이득(0 이면 곧게 나간다)
     bay_scan_fresh_s: float = 0.5       # 몸 스캔 판정이 이보다 오래되면 없는 것
     bay_scan_wait_s: float = 2.0        # 몸 스캔 없이 이만큼 지나면 실패
-    # shortcut: 짐칸 뒤 돌출 0.126 m 는 D-1013/D-397 추정(미실측) — 실측(D-397 후속) 뒤 바꾼다.
-    bay_turn_rear_overhang_m: float = 0.126
+    # 짐칸 J-v3 뒤끝은 바퀴축 뒤 0.134–0.135 m(정격 CAD, 뒷면 y_d −14.45 · 축 y_d 120.5; 몸 74.5·42.1·r 82.6 이
+    # base_link 치수와 일치, 2026-11-18 tray_overhang_cad.py). 모따기 덕에 쓸리는 반경은 0.137 m.
+    bay_turn_rear_overhang_m: float = 0.135
