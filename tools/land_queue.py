@@ -477,6 +477,9 @@ def join(wt: Path, branch: str, timeout: float) -> Path:
 def leave() -> None:
     """Remove every ticket this process holds. Safe to call twice. A ticket another process adopted (its pid
     changed: a rollup took its place, D-889 23) stays."""
+    global REFRESH
+    if _held:
+        REFRESH = None  # its closure belongs to the ending landing
     while _held:
         ticket = _held.pop()
         try:
