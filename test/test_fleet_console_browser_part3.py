@@ -817,6 +817,7 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
         page.locator("#address-drift [data-address-note]").wait_for(state="attached")  # D-1117
+        page.get_by_role("link", name="작업", exact=True).click()  # the roster lives on the work view
         page.wait_for_function(
             "() => document.querySelectorAll('#roster [data-address-reason]').length === 3")
         assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
