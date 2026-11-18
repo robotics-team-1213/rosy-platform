@@ -757,3 +757,5 @@
 **검증.** `test/test_land_rollup.py`(준비 기록 있는 waiting 두 종류가 후보가 아님), `test/test_land_queue.py`, `test/test_land.py`를 원격 시험 PC에서 돌린다.
 
 **되돌림.** 이 조건 한 줄(`prepared`)을 지우면 추가 23 동작으로 돌아간다. 24시간 안에 단독 착지 대기가 길어지면 되돌리고 숫자를 다시 잰다.
+
+**보충 (2026-11-18, R3 패널).** 9개 대기 착지가 각자 차례를 도는 것(건당 약 46분, 하루 약 31건)이 남은 직렬 한계다. 추가 38의 이유는 증거를 버리는 것이므로, `tested`가 현재 main과 같은 waiting 착지(urgent·alone 아님, 같은 호스트)는 후보로 되돌린다. 이전 main에서 시험한 waiting, `tier: full_done`, 살아 있는 롤업에 타고 있는 행은 계속 뺀다. 되돌림: `prepared`의 `main` 비교를 지우면 추가 38 그대로다.
