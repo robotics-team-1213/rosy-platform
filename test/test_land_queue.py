@@ -389,6 +389,32 @@ def test_lane_of_reads_the_changed_paths(tmp_path):
     assert queue.lane_of(tmp_path, "main") == ""  # nothing changed: not a lane landing
 
 
+def test_tooling_lane_covers_only_land_tool_paths_and_has_its_own_cap(tmp_path, monkeypatch):
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+                       check=True, capture_output=True)
+
+    def add(*rels):
+        for rel in rels:
+            (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / rel).write_text("x = 1\n")
+        git("add", *rels)
+        git("commit", "-q", "-m", "c")
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    git("switch", "-q", "-c", "feat/x")
+    add("tools/land_queue.py", "test/test_land_queue.py")
+    assert queue.lane_of(tmp_path) == "tooling"
+    add("tools/remote/x.py")
+    assert queue.lane_of(tmp_path) == ""
+    monkeypatch.setattr(queue, "TOOLING_CAP", 2)
+    queue.take(tmp_path / "q", "feat/a", lane="tooling")
+    assert queue.full(tmp_path / "q", "tooling") is None
+    queue.take(tmp_path / "q", "feat/b", lane="tooling")
+    assert "tooling lane full (2/2" in queue.full(tmp_path / "q", "tooling")
+    assert queue.full(tmp_path / "q", queue.LANE) is None  # lanes count apart
+
+
 def _reserver(qdir: Path, cap: int = 12) -> subprocess.Popen:
     """A live process that reserves once, prints ok/full and then stays alive (its marker only counts while it lives)."""
     code = ("import sys\nsys.path.insert(0, sys.argv[2])\nimport land_queue as q\nfrom pathlib import Path\n"

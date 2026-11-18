@@ -21,6 +21,7 @@ import socket
 import subprocess
 import threading
 import time
+from fnmatch import fnmatchcase
 
 import land_events  # rosy-land-events.jsonl (queue and turn lines)
 from pathlib import Path
@@ -38,10 +39,11 @@ REPORT_EVERY = 300.0  # seconds between unchanged position lines
 PASS_CAP_S = 3600
 # Path lane (2026-11-17, user: "경로별 착지를 먼저 두면서"): a landing whose every changed path is under LANE_PREFIXES
 # has its own cap and may pass ordinary *waiting* tickets; turns still run one at a time, so main is merged as before.
-# shortcut: one lane (learning); add a table of lanes if a second path family needs one.
+# Second lane (2026-11-18): land code is re-read from main by every landing, so a pipeline fix waited ~10 h in the FIFO.
 LANE = "learning"
-LANE_PREFIXES = ("learning/", "test/learning/")
 LANE_CAP = int(os.environ.get("ROSY_LAND_LANE_CAP", "4"))
+TOOLING_CAP = int(os.environ.get("ROSY_LAND_TOOLING_CAP", "2"))
+LANES = {LANE: ("learning/*", "test/learning/*"), "tooling": ("tools/land*.py", "test/test_land*.py")}  # fnmatch; tooling is flat
 _held: list[Path] = []
 REFRESH = None  # land_prepare.prepare sets it: () -> new tested main; re-runs main's delta outside the lock
 REFRESHES = 2  # per wait; then the ticket takes its turn on whatever it has
@@ -86,12 +88,16 @@ def queue_dir(wt: Path) -> Path:
     return Path(common.stdout.strip()) / QUEUE
 
 
+def _in_lane(lane: str, path: str) -> bool:
+    return any(fnmatchcase(path, g) and (lane == LANE or path.count("/") == 1) for g in LANES[lane])
+
+
 def lane_of(wt: Path, ref: str = "HEAD") -> str:
-    """LANE when every path the ref changes since its merge base with main is under LANE_PREFIXES, else ''."""
+    """The lane whose paths cover every path the ref changes since its merge base with main, else ''."""
     done = subprocess.run(["git", "-C", str(wt), "diff", "--name-only", f"main...{ref}"],
                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     paths = done.stdout.split() if done.returncode == 0 else []
-    return LANE if paths and all(p.startswith(LANE_PREFIXES) for p in paths) else ""
+    return next((n for n in LANES if paths and all(_in_lane(n, q) for q in paths)), "")
 
 
 def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting", urgent: str = "", *,
@@ -429,7 +435,7 @@ def full(qdir: Path, lane: str = "") -> str | None:
     """Why a new ordinary ticket (of the given lane) is refused, or None while its part of the queue has room."""
     rows = [r for r in ahead(qdir, Path("~")) if (r.get("lane") or "") == lane]
     rows += [m for m in _markers(qdir) if (m.get("lane") or "") == lane and m.get("pid") != os.getpid()]
-    cap = LANE_CAP if lane else CAP
+    cap = (TOOLING_CAP if lane == "tooling" else LANE_CAP) if lane else CAP
     if len(rows) < cap:
         return None
     name = f"{lane} lane" if lane else "landing queue"
