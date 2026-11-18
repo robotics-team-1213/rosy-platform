@@ -1,4 +1,5 @@
-import { primaryButton, quietButton, setReason, stuckOverdue } from "./queues.js";
+import { setOffBy } from "/common/cause-line.js";
+import { primaryButton, quietButton, stuckOverdue } from "./queues.js";
 import { loadEvidence, PreviewMap } from "/console/assets/stuck-evidence.js";
 
 export const DECISIONS = Object.freeze(["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]);
@@ -374,7 +375,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     for (const spec of specs) {
       const node = quietButton(spec.confirm ? `${spec.label}…` : spec.label);
       node.dataset.decision = spec.decision; node.dataset.focusKey = `decision-${spec.decision}`;
-      node.setAttribute("aria-label", `${robotId} ${spec.label} (${spec.decision})`); setReason(node, spec.reason);
+      node.setAttribute("aria-label", `${robotId} ${spec.label} (${spec.decision})`); setOffBy(node, spec.reason);
       if (spec.confirm) node.setAttribute("aria-expanded", String(pending?.decision === spec.decision));
       node.addEventListener("click", scope.guard(() => choose(robotId, stuck.stuck_id, spec.decision)));
       actions.append(node);
@@ -415,7 +416,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       text.id = `stuck-confirm-${robotId}`; text.textContent = confirmText(robotId, pending.decision); box.setAttribute("aria-labelledby", text.id);
       const yes = primaryButton(`${DECISION_LABEL[pending.decision]} 보내기`), no = quietButton("취소");
       yes.dataset.focusKey = "confirm-yes"; no.dataset.focusKey = "confirm-no";
-      setReason(yes, specs.find((spec) => spec.decision === pending.decision)?.reason || "");
+      setOffBy(yes, specs.find((spec) => spec.decision === pending.decision)?.reason || "");
       yes.addEventListener("click", scope.guard(() => send(robotId, stuck.stuck_id, pending.decision)));
       no.addEventListener("click", scope.guard(() => cancelConfirm(robotId, pending.decision)));
       box.addEventListener("keydown", scope.guard((event) => {

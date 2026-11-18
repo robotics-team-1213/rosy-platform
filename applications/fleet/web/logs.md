@@ -1337,3 +1337,8 @@
 - 변경: `site-rules-judge.js`가 켜진 "규칙으로 판정" 단추에도 `reason="판정 중"`을 늘 붙여 사유 줄이 상시 보이던 버그를 `setOff(ask, rule.busy, "판정 중")`로 고쳤다. 실패를 자기 행·구획 글자로 쓰는 모듈의 변경 호출(POST·PUT)에 `inline: true`를 붙여 토스트 이중 알림을 없앴다: site-rules-judge, robot/step-nudge, robot/robot-panel-adapters, work/control-unit-view·work-view·channel-request-view·arm-transfer-view·cell-resume-view·integrated-control-view·trip-proposal-view(모두 console.js 주입 call, catch·onError가 notice/state/refusals/reason에 씀).
 - 증거: UI 패널 2라운드(D:/DevTemp/ui-panel-1118/r2-A.md·r2-B.md), node --import register-console-assets 전체 fleet web 시험·shared/web 시험 통과.
 - gate 변화: fleet-alert-surface.test.mjs에 10파일 변경 호출 inline 단언과 판정 중 사유 단언 추가.
+
+## 2026-11-18 · uncommitted · refactor(fleet-web): setOff 변종 9개를 공용 cause-line으로
+- 변경: 본문이 같은 사유 끄기 변종 gate×4(sitemap/site-map·camera·survey·teach), guard×2(work/control-unit-view·integrated-control-view), setReason(queues.js, 호출 card-trip·line-stuck·trip-replan), blockWith(robot/roster-presentation.js, 호출 roster.js·power-action.js 주입)을 지우고 `/common/cause-line.js`의 `setOffBy(control, reason)`(= `setOff(control, reason, reason)`, 사유가 곧 스위치)로 바꿨다. gate의 id 조회 차이는 호출에서 `$(id)`로 둔다(site-map 호스트 객체로 넘기던 gate 주입도 제거). `shared/authorization.js`의 describe 사본은 cause-line `describeBy` import로.
+- 증거: 본문 비교(disabled=Boolean(reason) + reason 속성 쓰기/지우기, describe는 describeBy와 글자 단위 동일), node fleet web·shared/web 시험 통과, 바뀐 JS node --check 통과, scan_disabled 누락 0.
+- gate 변화: 없음(이 모듈).

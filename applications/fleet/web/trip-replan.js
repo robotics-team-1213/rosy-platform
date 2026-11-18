@@ -3,7 +3,8 @@
 // D-577 (d): the wait-cycle row opens on Fleet's resolver decision, the AI facts (shadow) and the same two
 // trip routes plus the robot card. No new motion route.
 import {AI_FACT_LABEL, RESOLVER_DECISION_LABEL, tripErrorText} from "/console/assets/trip-display.js";
-import { primaryButton, quietButton, setReason } from "./queues.js";
+import { setOffBy } from "/common/cause-line.js";
+import { primaryButton, quietButton } from "./queues.js";
 
 /** What the slot shows for one held trip: the changed route, or why there is none. */
 export function replanView(trip, { operator, named = "", busy = false }) {
@@ -82,7 +83,7 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
     actions.setAttribute("aria-label", `${robotId} ${label}`);
     for (const [node, key, reason, click] of buttons) {
       node.dataset.replan = key;
-      setReason(node, reason);
+      setOffBy(node, reason);
       node.addEventListener("click", scope.guard(click));
       actions.append(node);
     }

@@ -1405,3 +1405,8 @@
 - 변경: `test_content_vocabulary.py` `declared()`가 `--토큰` 이름을 `var(--토큰)` 사용으로 확인한다(S3에서 표의 `.ui-sidebar`를 `--sidebar-track`으로 바꾼 뒤 탐지기가 토큰을 몰라 실패). `patterns.yaml` C10 채택 화면을 연결 배너를 실제로 쓰는 `fleet-header.js`로 바꿨다(S7에서 connection-view의 두 번째 알림을 지움).
 - 증거: 착지 land-feat-ui-refine-20261117215146 단독 실행 실패 2건, 수정 뒤 원격 D:/DevTemp/ui-refine-1118/remote-r3b/run-1.txt 통과.
 - gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · refactor(fleet-web): setOff 변종 9개를 공용 cause-line으로
+- 변경: `cause-line.js`에 `setOffBy(control, reason)`을 더했다 — Fleet의 같은 본문 변종 9개(gate·guard·setReason·blockWith)의 정본. `test_shared_controls.py` scan_disabled가 setOffBy도 읽어 사유 인자(2번째)가 없으면 실패한다.
+- 증거: python으로 scan_disabled(disabled_scripts()) 직접 호출, 누락 0·폭 변화 없음.
+- gate 변화: scan_disabled REASON_HELPER에 setOffBy 추가(강화).

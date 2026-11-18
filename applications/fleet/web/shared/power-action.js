@@ -1,7 +1,8 @@
 // D-440 6: the robot card's sleep / wake button. CORE owns the power API and keeps a robot that is not IDLE awake.
+import { setOffBy } from "/common/cause-line.js";
 import { POWER_MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 
-export function createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason, blockWith }) {
+export function createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason }) {
   const asleep = ["STANDBY", "IDLE"].includes(state.power?.mode);
   const powerName = asleep ? "깨우기" : "절전";
   const power = document.createElement("ui-button");
@@ -9,7 +10,7 @@ export function createPowerButton({ robot, state, view, scope, call, log, isOper
   power.type = "button";
   power.dataset.powerAction = asleep ? "wake" : "sleep";
   power.textContent = powerName;
-  blockWith(power, !isOperator() ? "운영자 권한이 필요합니다"
+  setOffBy(power, !isOperator() ? "운영자 권한이 필요합니다"
     : namedReason() ? namedReason()
     : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
       : !asleep && state.mode !== "IDLE" ? "일하는 로봇은 절전할 수 없습니다" : "");

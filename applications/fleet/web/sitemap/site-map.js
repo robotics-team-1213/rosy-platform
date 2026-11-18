@@ -1,3 +1,4 @@
+import {setOffBy} from '/common/cause-line.js';
 import {createMapSourcesPanel} from '/console/assets/site-map-sources.js';
 import {isSignedOut, readToken, storeToken} from '/console/assets/console-token.js';
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
@@ -40,20 +41,19 @@ const survey = createSurveyPanel({map: () => shown(), source: () => $('map-sourc
 const cameraMap = createCameraMapPanel({request, guarded, reason: () => operatorReason(), context: () => [state.working, state.sessionEpoch],
   draft: () => state.draft, dirty: () => state.dirty, notice, reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
 const reality = createRealityPanel({request, guarded, reason: () => operatorReason(), draft: () => state.draft, dirty: () => state.dirty, robots: () => state.robots,
-  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }, notice, gate, status});
+  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }, notice, status});
 const cameraDraft = createCameraDraftPanel({request, guarded, reason: () => operatorReason(), draft: () => state.draft, dirty: () => state.dirty,
-  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }, notice, gate, status, sync: syncButtons});
+  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }, notice, status, sync: syncButtons});
 const authoring = createMapAuthoring({request, svg: $('site-map-svg'), map: shown, draft: () => state.working,
   source: () => $('map-source').value, view: () => state.view, reason: operatorReason, dirty: () => state.dirty,
   begin: () => { survey.cancel(); if ($('map-source').value !== 'draft') $('map-source').value = 'draft'; clearPlane(); $('trip-pick').checked = false; state.band = null; updatePlaneSources(); },
   changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft'; state.selected = null; state.band = null; updatePlaneSources(); clearPlan(); },
   render, notice, epoch: () => state.sessionEpoch});
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
-function gate(id, reason) { $(id).disabled = Boolean(reason); if (reason) $(id).setAttribute('reason', reason); else $(id).removeAttribute('reason'); }
 function notice(text) { $('notice').textContent = text; $('notice').hidden = !text; }
 function status(id, text, kind) { $(id).textContent = text; $(id).setAttribute('state', kind); }
 const sourcePanel = createMapSourcesPanel({request, state, shown, calibrations: () => calibrations,
-  operatorReason, render, syncButtons, gate, guarded, select, clearPlan, status, W, H});
+  operatorReason, render, syncButtons, guarded, select, clearPlan, status, W, H});
 const {selectedProfile, loadProfiles, clearPlane, updatePlaneSources} = sourcePanel;
 function shown() { return $('map-source').value === 'profile' ? selectedProfile()?.map : ($('map-source').value === 'draft' ? state.working : state.active?.map); }
 function operatorReason() { return state.role === 'operator' ? '' : state.role ? OPERATOR_REASON : '관제 접속이 필요합니다'; }
@@ -197,7 +197,7 @@ function select(selection) {
   $('edge-form').hidden = !edge || Boolean(reason);
   $('crosswalk-form').hidden = !crosswalk || Boolean(reason);
   if (!crosswalk) state.band = null;
-  gate('apply-edit', reason || (place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요'));
+  setOffBy($('apply-edit'), reason || (place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요'));
   if (place) {
     $('selection').textContent = `장소 ${place.id}`;
     $('place-name').value = place.name;
@@ -222,16 +222,16 @@ function syncButtons() {
   authoring.sync(); cameraMap.sync(); cameraDraft.sync(); reality.sync(); survey.sync();
   const reason = operatorReason();
   sourcePanel.sync();
-  gate('map-view-turn', reason || ($('map-source').value === 'profile' ? '지도 설정을 초안으로 불러오세요' : '') || (!state.working ? '고칠 지도가 없습니다' : ''));
-  gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
+  setOffBy($('map-view-turn'), reason || ($('map-source').value === 'profile' ? '지도 설정을 초안으로 불러오세요' : '') || (!state.working ? '고칠 지도가 없습니다' : ''));
+  setOffBy($('save-draft'), reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
   const crosswalk = state.selected?.crosswalk;
   const bands = (state.working?.crosswalks || []).find(item => item.id === crosswalk)?.approach || [];
   $('site-map-svg').classList.toggle('drawing', state.band !== null);
-  gate('band-draw', reason || (!crosswalk ? '횡단보도를 고르세요' : state.band !== null ? '띠를 그리는 중입니다' : bands.length >= 4 ? '대기 띠는 4개까지입니다' : ''));
-  gate('band-finish', reason || (state.band === null ? '대기 띠 그리기를 먼저 누르세요' : state.band.length < 3 ? '지도에서 점을 세 개 이상 찍으세요' : ''));
-  gate('band-delete', reason || (!bands.length ? '지울 대기 띠가 없습니다' : ''));
-  gate('import-crosswalks', reason || (!state.working ? '고칠 지도가 없습니다' : ''));
-  gate('activate', reason || (!state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : '')));
+  setOffBy($('band-draw'), reason || (!crosswalk ? '횡단보도를 고르세요' : state.band !== null ? '띠를 그리는 중입니다' : bands.length >= 4 ? '대기 띠는 4개까지입니다' : ''));
+  setOffBy($('band-finish'), reason || (state.band === null ? '대기 띠 그리기를 먼저 누르세요' : state.band.length < 3 ? '지도에서 점을 세 개 이상 찍으세요' : ''));
+  setOffBy($('band-delete'), reason || (!bands.length ? '지울 대기 띠가 없습니다' : ''));
+  setOffBy($('import-crosswalks'), reason || (!state.working ? '고칠 지도가 없습니다' : ''));
+  setOffBy($('activate'), reason || (!state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : '')));
   status('draft-status', state.loadState === 'pending' ? '초안 조회 중'
     : state.loadState === 'error' ? '초안 확인 불가 · 다시 접속하세요'
     : state.loadState === 'idle' ? '관제 접속 필요'
@@ -249,8 +249,8 @@ function syncButtons() {
   const inspecting = $('plane-pick').checked ? '평면 지도 좌표 확인을 먼저 마치세요' : '';
   const poseReason = state.guideUnavailable ? '현장 지도 위치 확인 불가' : tripPoseReason(state.guide, tripRobot.value,
     state.active, robotMapPose(state.robots.find(robot => robot.robot_id === tripRobot.value)));
-  gate('trip-plan', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || poseReason || (target ? '' : '목적지를 고르세요')));
-  gate('trip-pick', reason); gate('station-zones-save', operatorReason()); teach.sync();
+  setOffBy($('trip-plan'), inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || poseReason || (target ? '' : '목적지를 고르세요')));
+  setOffBy($('trip-pick'), reason); setOffBy($('station-zones-save'), operatorReason()); teach.sync();
 }
 
 let lastPollSig = null;
@@ -342,7 +342,7 @@ async function connect(credentialChange = false) {
   state.sessionEpoch = (state.sessionEpoch || 0) + 1;
   lastPollSig = null;
   sourcePanel.reset(); calibrations = [];
-  gate('token-save', '접속 중');
+  setOffBy($('token-save'), '접속 중');
   const started = Date.now();
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
   state.role = null;
@@ -391,7 +391,7 @@ async function connect(credentialChange = false) {
   } finally {
     for (const {field, value, checked} of editFields) { field.value = value; field.checked = checked; }
     clearInterval(ticker);
-    gate('token-save', '');
+    setOffBy($('token-save'), '');
   }
 }
 $('token-save').addEventListener('click', () => connect(true));

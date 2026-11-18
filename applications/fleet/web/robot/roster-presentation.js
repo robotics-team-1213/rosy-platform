@@ -99,12 +99,6 @@ export function tag(text, cls) {
   return node;
 }
 
-export function blockWith(button, reason) {
-  button.disabled = Boolean(reason);
-  if (reason) button.setAttribute("reason", reason);
-  else button.removeAttribute("reason");
-}
-
 const planningSince = new Map();
 
 export function navTag(state, robotId = null, nowMs = Date.now()) {

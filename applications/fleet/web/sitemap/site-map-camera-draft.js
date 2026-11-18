@@ -1,6 +1,7 @@
 // 카메라로 초안 만들기 — Vision의 draft-map 제안을 Fleet이 검증한 초안 본문으로 (v1.385).
 // 브라우저가 Fleet 발급 lease로 Vision에서 파생 JSON을 직접 가져오는 D-375 패턴을 따른다.
 // 저장은 기존 PUT 초안 경로: 이 패널은 후보를 만들 뿐 쓰지 않는다.
+import {setOffBy} from '/common/cause-line.js';
 import {confirmIrreversible} from '/common/ui.js';
 
 const VERDICT = {  // POST reality-check의 camera 판정 (site-map-reality 패널과 같은 어휘)
@@ -117,7 +118,7 @@ export function createCameraDraftPanel(host) {
             }
           });
       }
-      host.gate('camera-draft-run', busy ? '작업 중입니다'
+      setOffBy($('camera-draft-run'), busy ? '작업 중입니다'
         : unavailable ? '카메라 미리보기가 꺼져 있습니다'
         : $('camera-draft-source').value ? '' : '카메라를 고르세요');
     },

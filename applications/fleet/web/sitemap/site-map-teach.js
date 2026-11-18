@@ -2,6 +2,7 @@
 // then confirm the simplified line as a draft lane, or add an address at the robot or at a
 // fresh floor place marker the ceiling camera sees (D-564).
 // Nothing here moves a robot. The draft changes only through the Fleet teach API.
+import {setOffBy} from '/common/cause-line.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, newestPending, siteMapErrorText, teachConfirmBody, teachStatusText,
 } from '/console/assets/site-map-model.js';
@@ -21,10 +22,6 @@ export function createTeachPanel(host) {
   let roster = [];
   for (const kind of PLACE_KINDS) $('teach-place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
-  function gate(id, reason) {
-    $(id).disabled = Boolean(reason);
-    if (reason) $(id).setAttribute('reason', reason); else $(id).removeAttribute('reason');
-  }
   function status(text, kind) { $('teach-status').textContent = text; $('teach-status').setAttribute('state', kind); }
 
   function sync() {
@@ -41,8 +38,8 @@ export function createTeachPanel(host) {
     const key = `${$('teach-robot').value}:${$('teach-frame').value}:${draft?.revision}`;
     if (key !== basisKey) { basisKey = key; $('teach-origin-confirm').checked = false; }
     $('teach-origin-check').hidden = !survey;
-    gate('teach-frame', recording ? '기록 중 · 중단 뒤 좌표 기준을 바꾸세요' : '');
-    gate('teach-robot', recording ? '기록 중 · 중단 뒤 대상을 바꾸세요' : '');
+    setOffBy($('teach-frame'), recording ? '기록 중 · 중단 뒤 좌표 기준을 바꾸세요' : '');
+    setOffBy($('teach-robot'), recording ? '기록 중 · 중단 뒤 대상을 바꾸세요' : '');
     $('teach-target').textContent = recording ? `기록 중인 로봇 ${recording.robot_id} · 중단 뒤 대상과 좌표 기준을 바꿀 수 있습니다`
       : target ? `기록 대상 ${target.robot_id} · ${target.online === false ? '연결 끊김 · ' : ''}시작 전 실제 로봇을 확인하세요`
         : requestedRobot && !roster.some(row => row.robot_id === requestedRobot) ? `요청한 로봇 ${requestedRobot}이 등록 목록에 없습니다 · 기록할 로봇을 직접 선택하세요`
@@ -52,13 +49,13 @@ export function createTeachPanel(host) {
       : '조사 기준 없음 · 지도 만들기에서 기준을 정해 저장하세요';
     const surveyReason = survey ? draftReason || (!reference || !draft?.revision ? '조사 기준이 있는 초안을 먼저 저장하세요' : '')
       || ($('teach-origin-confirm').checked ? '' : '로봇이 조사 시작점과 방향에 놓였는지 확인하세요') : '';
-    gate('teach-start', robot || (recording ? '기록 중입니다' : '') || surveyReason);
-    gate('teach-stop', base || (recording ? '' : '기록 중이 아닙니다'));
+    setOffBy($('teach-start'), robot || (recording ? '기록 중입니다' : '') || surveyReason);
+    setOffBy($('teach-stop'), base || (recording ? '' : '기록 중이 아닙니다'));
     const named = $('teach-place-name').value.trim() ? '' : '새 주소 이름을 적으세요';
-    gate('teach-place', robot || draftReason || named);
-    gate('teach-marker-place', base || draftReason || ($('teach-marker').value ? '' : '보이는 장소 마커가 없습니다') || named);
+    setOffBy($('teach-place'), robot || draftReason || named);
+    setOffBy($('teach-marker-place'), base || draftReason || ($('teach-marker').value ? '' : '보이는 장소 마커가 없습니다') || named);
     $('teach-form').hidden = !pending || Boolean(base);
-    gate('teach-confirm', base || draftReason || (pending?.mode === 'survey' && !surveyTeachMatches(pending, draft?.map)
+    setOffBy($('teach-confirm'), base || draftReason || (pending?.mode === 'survey' && !surveyTeachMatches(pending, draft?.map)
       ? '기록의 조사 기준과 현재 초안이 다릅니다 · 기존 기준을 확인하세요' : ''));
   }
 

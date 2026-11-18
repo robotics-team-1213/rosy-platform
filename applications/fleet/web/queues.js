@@ -82,12 +82,6 @@ export function primaryButton(text) {
   return node;
 }
 
-export function setReason(node, reason) {
-  node.disabled = Boolean(reason);
-  if (reason) node.setAttribute("reason", reason);
-  else node.removeAttribute("reason");
-}
-
 /** The robot's open trip as the console last read it, or null. */
 export function openTrip(view, robotId) {
   return (view.trafficTrips || []).find((trip) => trip.robot_id === robotId) || null;
