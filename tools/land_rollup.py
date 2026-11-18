@@ -85,7 +85,8 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: boo
         # D-889 38, 2026-11-17: a waiting ticket with a prepare record already passed its tests; re-rolling it threw that
         # away (7 prepared tickets re-rolled at 21:3x, one 138 min ready at queue position 2; rollup lead p50 200 min vs 32 min)
         # 11-18 panel: a 'pending' ticket (or rollup) whose prepare already passed on today's main was re-rolled too
-        prepared = (r.get("status") == "waiting" and (r.get("tested") or r.get("tier") == "full_done")
+        # D-889 38 addendum (11-18 R3): a waiting ticket tested on today's main loses nothing by riding, so it may roll up
+        prepared = (r.get("status") == "waiting" and (r.get("tier") == "full_done" or r.get("tested") not in (None, "", main))
                     or r.get("status") == "pending" and bool(main) and r.get("tested") == main)
         idle = (r.get("status") in ("pending", "waiting") and not prepared
                 or (mixed and r.get("status") == "preparing" and r.get("full_wait")))  # a FULL waiter runs no test

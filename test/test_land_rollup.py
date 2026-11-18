@@ -220,6 +220,20 @@ def test_a_prepared_waiting_ticket_is_not_rolled_up(repo):
     assert land_rollup.candidates([plain, tested, done], main, host="h") == [plain]
 
 
+def test_waiting_tickets_tested_on_the_current_main_roll_up_into_one_plan(repo):
+    """D-889 38 addendum, 11-18: evidence made on today's main is not thrown away; an old main's is."""
+    main, snapshot = repo
+    head = land_rollup.git(main, "rev-parse", "main").stdout.strip()
+    rows = [{**snapshot(f"fix/{n}", {f"pkg/{n}.py": "x = 2\n"}), "status": "waiting", "tested": head} for n in "abc"]
+    old = {**snapshot("fix/d", {"pkg/d.py": "x = 2\n"}), "status": "waiting", "tested": "0" * 40}
+    urgent = {**snapshot("fix/e", {"pkg/e.py": "x = 2\n"}), "status": "waiting", "tested": head, "urgent": "now"}
+    alone = {**snapshot("fix/f", {"pkg/f.py": "x = 2\n"}), "status": "waiting", "tested": head, "alone": True}
+    assert land_rollup.candidates(rows + [old, urgent, alone], main, host="h") == rows
+    reach = {r["branch"]: [[f"{r['branch'][-1]}/test"]] for r in rows}
+    plan = land_rollup.plan(main, rows, lambda r, b: "affected", lambda r, b: reach[b], mixed=True)
+    assert [r["branch"] for r in plan] == [r["branch"] for r in rows]
+
+
 def test_a_pending_ticket_tested_on_the_current_main_is_not_rolled_up(repo):
     """11-18: pending + tested == main kept its pass; tested on an older main may still re-roll."""
     main, snapshot = repo
