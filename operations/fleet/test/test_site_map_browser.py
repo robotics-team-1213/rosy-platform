@@ -1252,9 +1252,14 @@ def test_camera_observation_accumulates_without_replacing_operator_features(page
     assert saved['map']['facilities'] == draft['map']['facilities']
     assert saved['map']['edges'][0]['evidence']['source'] == 'camera'
     assert saved['map']['survey']['reviewed'] is False
-    expect(page.locator('#merge-camera-map')).to_be_enabled()
+    before = store.draft_view()['revision']
     page.locator('#merge-camera-map').click()
+    for _ in range(200):  # the repeat merge saves and reloads; its notice must not land after the next click's error
+        if store.draft_view()['revision'] != before:
+            break
+        page.wait_for_timeout(50)
     expect(page.locator('#notice')).to_contain_text('관측')
+    expect(page.locator('#map-source')).to_have_value('draft')
     assert len(store.draft_view()['map']['edges']) == 1
     other = {**observation, 'map_id': 'wrong-frame'}
     page.locator('#camera-map-file').set_input_files({'name': 'wrong.json',
