@@ -149,6 +149,7 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     import subprocess
 
     import omx_incident
+    import omx_incident_auto
 
     conf = json.loads(Path(conf_file).read_text(encoding="utf-8"))[arm]
     link = link or omx_incident.link_for(arm)
@@ -196,7 +197,7 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     proof = evidence(result, result["home"], torque, incident, now())
     note = f"automatic fold (D-1048): {result.get('candidate')}, home within {SETTLE_TOL} units, torque OFF"
     try:
-        (clear or omx_incident.clear)(arm, note, omx_incident.assessor_token_file(), link, cause="unknown",
+        (clear or omx_incident.clear)(arm, note, omx_incident_auto.assessor_token_file(), link, cause="unknown",
                                       basis="measured", recovery=proof, only=incident)
         return {"result": "cleared", "incident_id": incident, "evidence": proof}
     except (SystemExit, Exception) as exc:  # Fleet refused or unreachable: the hold stays

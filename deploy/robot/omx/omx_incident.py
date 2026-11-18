@@ -56,6 +56,9 @@ from omx_incident_fleet import (  # noqa: E402
     upload_evidence,
 )
 
+from omx_incident_reading import rows, stop_reading  # noqa: E402  (split for size; names kept here)
+from omx_incident_auto import _fault_kind, auto_clear, launch_auto_fold  # noqa: E402
+
 HW_BITS = {1: "input voltage", 4: "overheating", 8: "motor encoder", 16: "electrical shock", 32: "overload"}
 REBOOTABLE = 1 | 32       # a latch the cause of which is load or supply, not heat or damage
 HOME_TOL = 3.0            # units: the runner's SETTLE_TOL
@@ -123,38 +126,6 @@ def after_session(arm: str | None, device: str | None, session=Path("session.jso
                   verify_caps=verify)
 
 
-def rows(path, since=0.0):
-    out = []
-    if path and Path(path).is_file():
-        for line in Path(path).read_text(errors="replace").splitlines():
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            if row.get("t", since) >= since:
-                out.append(row)
-    return out
-
-
-def stop_reading(status: list) -> dict | None:
-    """What the 30 Hz trace says of the session's last contact stop: too fast or blocked (cell_why). 2026-11-07: an hour of guessing
-    with the answer on disk, and the explanation had no frames and no such fact."""
-    import os
-    import re
-
-    import cell_why
-
-    stops = [re.match(r"contact in (.+?):", str(r.get("error") or "")) for r in status]
-    stops = [m.group(1) for m in stops if m and m.group(1) != "park"]  # a fold refused on what it holds follows the real stop
-    path = os.environ.get("ROSY_CHUNK_TRACE")
-    if not stops or not path or not Path(path).is_file():
-        return None
-    try:
-        return {"chunk": stops[-1], **cell_why.read_motion(cell_why.last_run(cell_why.read_trace(path), stops[-1]))}
-    except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:  # a damaged trace must not lose the report
-        return {"chunk": stops[-1], "verdict": "undetermined", "why": f"trace unreadable: {type(exc).__name__}"}
-
-
 def stills_of(arm: str | None, since: float) -> list:
     """This session's stop frames, those the explanation's prompt names first (the report carries two)."""
     if not arm or not STILLS.is_dir():
@@ -197,15 +168,6 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
             "fault_record_kinds": [_fault_kind(p) for p in kept],
             "frames": ([str(p.with_name(f"{p.stem}-{v}.jpg")) for p in kept[-1:] for v in ("top", "side")]
                        or stills_of(arm, session.get("started", 0)))}
-
-
-def _fault_kind(path) -> dict:
-    """What a person would read first in a motor-health fault record: its fault and stop reasons (D-1047)."""
-    try:
-        record = json.loads(Path(path).read_text())
-        return {"fault": str(record.get("fault"))[:200], "stop_reasons": list(record.get("stop_reasons") or [])}
-    except (OSError, ValueError, AttributeError, TypeError):
-        return {"fault": None, "stop_reasons": None}
 
 
 def software_stop(f: dict) -> str | None:
@@ -314,55 +276,6 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             incident["auto_fold"] = launch_auto_fold(arm)
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
     return {"incident": True, "folder": str(folder), **incident}
-
-
-def launch_auto_fold(arm: str, popen=None) -> dict:
-    """D-1048: start cell_auto_fold for this arm in its own process once this session has let go of the arm. Off unless
-    ~/.config/rosy/auto-fold.json names the arm (its wrapper, config, library, site and roi)."""
-    import os
-    import subprocess
-
-    conf = Path(os.environ.get("ROSY_AUTO_FOLD_CONFIG", str(Path.home() / ".config" / "rosy" / "auto-fold.json")))
-    try:
-        if arm not in json.loads(conf.read_text(encoding="utf-8")):
-            return {"started": False, "why": f"{arm} not in {conf.name}"}
-    except (OSError, ValueError):
-        return {"started": False, "why": f"no {conf.name}"}
-    command = [sys.executable, str(Path(__file__).resolve().parent / "cell_auto_fold.py"), "launch", "--arm", arm,
-               "--config-file", str(conf)]
-    try:
-        (popen or subprocess.Popen)(command, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"started": True}
-    except OSError as exc:
-        return {"started": False, "why": f"{type(exc).__name__}: {exc}"[:160]}
-
-
-def assessor_token_file() -> Path | None:
-    import os
-
-    named = os.environ.get("ROSY_ARM_ASSESSOR_TOKEN_FILE")
-    found = [Path(named)] if named else sorted((Path.home() / ".config" / "rosy").glob("*-ai-assessor.token"))
-    return next((p for p in found if p.is_file()), None)
-
-
-def auto_clear(arm: str, f: dict, link, clear_fn=None) -> dict:
-    """D-1047 (user 2026-11-19, "보류 해제를 완전히 자동화"): the same rule Fleet applies (machine_clearable) is checked here
-    first; when it allows, the cell's AI assessor clears at once, so a link failure on a rested, torque-OFF arm no longer
-    waits for a person. Fleet still re-judges the stored facts and its repeat limit; any refusal leaves the hold."""
-    try:
-        from core_common.protocol.arm_incidents import machine_clearable
-
-        ok, why = machine_clearable(f)
-    except Exception as exc:  # the rule cannot judge: the hold stays
-        return {"cleared": False, "why": f"rule unavailable: {type(exc).__name__}"}
-    token = assessor_token_file()
-    if not ok or token is None or link is None:
-        return {"cleared": False, "why": why if not ok else "no assessor token or Fleet link"}
-    try:
-        (clear_fn or clear)(arm, f"automatic (D-1047): {why}", token, link, cause="software_or_config", basis="measured")
-        return {"cleared": True, "why": why}
-    except (SystemExit, Exception) as exc:  # Fleet refused (kind or repeat limit) or unreachable: the hold stays
-        return {"cleared": False, "why": f"{type(exc).__name__}: {str(exc)[:160]}"}
 
 
 def reboot_latched(device: str):
