@@ -22,7 +22,8 @@ from pathlib import Path
 root = Path.cwd()
 sys.path[:0] = [str(root / p) for p in ("tools", "tools/remote", "test")]
 import land_cache, land_browser, work_queue, known_failures
-from land_selection import valid_plan
+import browser_scope
+from land_selection import valid_plan, pack
 exclusive = None
 if (root / "tools/harness/affected_exclusive.py").is_file():
     from harness import affected_exclusive as exclusive
@@ -32,16 +33,29 @@ def command(args):
     run = subprocess.run([sys.executable, *args], capture_output=True, text=True,
                          encoding="utf-8", check=True)
     return json.loads(run.stdout)
-selection = command(["tools/harness/rosy_harness.py", "affected", "--base", base,
-                     "--head", sha, "--json", "--full"])
-full = selection["full_invocations"]
-browsers = command(["tools/land_selection.py", "--all-browsers"])
-assert selection["mode"] == "full" and valid_plan(full)
-assert exclusive.canonical_full(full) if exclusive is not None else ["test"] in full
-if exclusive is not None:
-    exclusive.validate(request["invocations"], True)
-assert valid_plan(browsers) and all("ROSY_RUN_BROWSER_TESTS=1" in inv for inv in browsers)
-plan = full + browsers
+if request.get("scoped"):  # D-1036 addendum: the delta's own affected selection + the browser chunks it maps to
+    selection = command(["tools/harness/rosy_harness.py", "affected", "--base", base, "--head", sha, "--json"])
+    if selection["mode"] == "full":
+        print(json.dumps({"escalated": selection["escalations"]}))
+        sys.exit(0)
+    changed = subprocess.run(["git", "diff", "--name-only", f"{base}...{sha}"], capture_output=True, text=True,
+                             encoding="utf-8", check=True).stdout.split("\n")
+    browsers = [inv for group in pack(root, browser_scope.targets([c for c in changed if c]))
+                for inv in land_browser.chunks(root, group)]
+    plan = selection["invocations"] + browsers
+    assert not plan or valid_plan(plan)
+    request["invocations"] = plan
+else:
+    selection = command(["tools/harness/rosy_harness.py", "affected", "--base", base,
+                         "--head", sha, "--json", "--full"])
+    full = selection["full_invocations"]
+    browsers = command(["tools/land_selection.py", "--all-browsers"])
+    assert selection["mode"] == "full" and valid_plan(full)
+    assert exclusive.canonical_full(full) if exclusive is not None else ["test"] in full
+    if exclusive is not None:
+        exclusive.validate(request["invocations"], True)
+    assert valid_plan(browsers) and all("ROSY_RUN_BROWSER_TESTS=1" in inv for inv in browsers)
+    plan = full + browsers
 variants = {}
 for inv in request["invocations"]:
     choices = []
@@ -90,14 +104,15 @@ print(json.dumps({"plan": plan, "variants": variants, "env": land_cache.env_id(r
 '''
 
 
-def describe(publish, repo, sha, base, invocations, rows, ancestors=()):
+def describe(publish, repo, sha, base, invocations, rows, ancestors=(), scoped=False):
     """Use the existing publication checkout location and cleanup policy for immutable selection."""
     holder = Path(publish.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
     temp = holder / "rosy-publish" / f"proof-{sha[:10]}-{uuid.uuid4().hex[:8]}"
     publish.git(repo, "worktree", "add", "--detach", str(temp), sha)
     try:
         result = subprocess.run([sys.executable, "-c", DESCRIBE, sha, base], cwd=temp,
-                                input=json.dumps({"invocations": invocations, "rows": rows, "ancestors": list(ancestors)}),
+                                input=json.dumps({"invocations": invocations, "rows": rows, "ancestors": list(ancestors),
+                                                          "scoped": scoped}),
                                 capture_output=True, text=True, encoding="utf-8",
                                 env={**os.environ, "PYTHONUTF8": "1"})
         if result.returncode:
@@ -109,14 +124,21 @@ def describe(publish, repo, sha, base, invocations, rows, ancestors=()):
             publish.worktree_rules.leave_tombstone(temp)
 
 
-def reason(publish, repo, sha, record):
-    """None for qualified proof; a fail-closed reason otherwise. Legacy tier guesses never qualify."""
-    if record.get("tier") != "full" or not valid_plan(record.get("invocations")):
+def reason(publish, repo, sha, record, scoped=False, stats=None):
+    """None for qualified proof; a fail-closed reason otherwise. Legacy tier guesses never qualify.
+
+    ``scoped`` (D-1036 addendum): the plan is the delta's own app selection, computed in the candidate's checkout
+    (``record`` then only carries ``base``); ``stats`` receives ``required``/``evidenced``/``escalated``."""
+    stats = {} if stats is None else stats
+    if scoped:
+        invocations = []
+    elif record.get("tier") != "full" or not valid_plan(record.get("invocations")):
         return "no explicit FULL execution plan"
-    invocations = record["invocations"]
-    if not any("ROSY_RUN_BROWSER_TESTS=1" in inv for inv in invocations):
+    elif not any("ROSY_RUN_BROWSER_TESTS=1" in inv for inv in record["invocations"]):
         return "no opted-in canonical browser chunks"
-    prepared = record.get("prepared_candidate")
+    else:
+        invocations = record["invocations"]
+    prepared = None if scoped else record.get("prepared_candidate")
     sources = [(sha, record["base"])]
     if prepared:
         on = record.get("prepared_on")
@@ -136,8 +158,12 @@ def reason(publish, repo, sha, record):
             return f"missing exact execution mappings for {commit[:10]} (possibly pruned)"
         older = ancestor_rows(publish, repo, commit, entries)
         ancestors = list(dict.fromkeys(row["commit"] for row in older))
-        description = describe(publish, repo, commit, base, invocations, rows + older, ancestors)
-        if not description or not description.get("env") or not valid_plan(description.get("plan")):
+        description = describe(publish, repo, commit, base, invocations, rows + older, ancestors, scoped)
+        if description and description.get("escalated") is not None:
+            stats["escalated"] = True
+            return f"delta escalates to FULL ({'; '.join(description['escalated'][:2])})"
+        if (not description or not description.get("env")
+                or not (valid_plan(description.get("plan")) or (scoped and description.get("plan") == []))):
             return f"canonical candidate plan/environment unavailable for {commit[:10]}"
         usable = [row for row, clean in zip(rows, description["clean"])
                   if clean and row["env"] == description["env"]]
@@ -157,13 +183,19 @@ def reason(publish, repo, sha, record):
     current = descriptions[0]
     if any(d["plan"] != current["plan"] or d["env"] != current["env"] for d in descriptions[1:]):
         return "prepared and final candidate FULL plans or environments differ"
-    if not all(inv in invocations for inv in current["plan"]):
+    if scoped:
+        invocations = current["plan"]
+    elif not all(inv in invocations for inv in current["plan"]):
         return "record omits a canonical FULL invocation or exact browser chunk"
-    for inv in invocations:
-        if not any(all(tuple(part) in mapped for part in variant)
-                   for description, mapped in zip(descriptions, evidence)
-                   for variant in description["variants"][json.dumps(inv)]):
-            return f"missing clean exact execution/log proof for {' '.join(inv)}"
+    missing = [inv for inv in invocations
+               if not any(all(tuple(part) in mapped for part in variant)
+                          for description, mapped in zip(descriptions, evidence)
+                          for variant in description["variants"][json.dumps(inv)])]
+    stats.update(required=len(invocations), evidenced=len(invocations) - len(missing))
+    if missing:
+        return f"missing clean exact execution/log proof for {' '.join(missing[0])}"
+    if scoped:
+        return None
     logs = record.get("logs")
     if (not isinstance(logs, list) or not all(isinstance(log, str) for log in logs)
             or not set(logs) <= final_logs):
@@ -200,11 +232,11 @@ def ancestor_rows(publish, repo, commit, entries, recent=20):
     return [row for a in best for row in kept[a]]
 
 
-def qualified(publish, repo, sha, record):
+def qualified(publish, repo, sha, record, scoped=False, stats=None):
     try:
-        why = reason(publish, repo, sha, record)
+        why = reason(publish, repo, sha, record, scoped, stats)
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
         why = "execution proof could not be read or validated"
     if why:
-        print(f"[publish] FULL {sha[:10]} not qualified: {why}", file=sys.stderr)
+        print(f"[publish] {'app-scoped' if scoped else 'FULL'} {sha[:10]} not qualified: {why}", file=sys.stderr)
     return why is None

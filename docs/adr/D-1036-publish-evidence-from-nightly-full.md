@@ -21,3 +21,19 @@
 ### 검증
 
 `test/test_land_nightly.py`(녹색 밤의 기록이 `green_full`을 통과, NEW 밤은 기록 없음), `test/test_publish_evidence.py`(야간 조상 유지), `test/test_site_auto_sign.py`(재실행 한 번, 권한 없음, 빨강 유지)를 시험 PC에서 돌렸다. 실제 야간·GitHub 권한 아래의 동작은 아직 관측하지 않았다.
+
+### 부록 1 (2026-11-18): 게시 증거를 앱 범위로 나눈다
+
+사용자 승인 2026-11-18 ("끝까지 나눠라", 릴리스 분리 패널 sep-r2 A·B의 합의안, 앱 필드는 `platform_parts.yaml`의 `app:`·`affected_repo.app_of`).
+
+**규칙.** 게시 후보 sha의 델타 `origin/main...sha`에 닿는 앱 집합을 `app_of`로 구한다(`tools/publish_scope.py`).
+
+1. 델타가 `core`, 안전 태그 경로(`safety_review.is_safety`), 또는 선택기가 FULL로 올리는 경로(후보 체크아웃에서 `affected`가 `mode: full`)에 닿으면 위의 결정을 그대로 쓴다: 정본 FULL 기록과 브라우저 청크 전부.
+2. 그 밖의 앱 델타는 후보 체크아웃에서 `rosy_harness.py affected --base origin/main --head <sha> --json`(FULL 아님)의 선택과 그 델타가 매핑되는 브라우저 청크를 필요 계획으로 삼는다. 각 호출은 sha 또는 선택기가 닿지 않는 조상에서 깨끗한 정확한 증거가 있어야 한다. 증거 판정은 `publish_evidence`의 변형·clean·reach 검사 그대로이고 두 번째 판정기는 없다. FULL 기록은 요구하지 않는다.
+3. 열린 MAIN-RED(야간 FULL 또는 착지가 남긴 `land_mainred` 기록)는 그 실패 시험 파일을 소유한 앱(`app_of`)을 델타가 건드릴 때만 게시를 막는다. 다른 앱의 적색은 막지 않는다.
+4. 게시 출력(stderr `[publish] scope …`, 드라이런 문구, PR 본문)에 후보마다 `apps=`, `mode=app|full`, `required=`/`evidenced=` 개수와 막힘 이유를 남긴다.
+5. 앱 모드는 최신 후보 20개까지만 시도한다(후보마다 체크아웃 비용). 그 뒤는 기존 FULL 기록 규칙뿐이다.
+
+**전역으로 남는 것.** D-430 `Safety-Review` 범위 검사, D-868 merge commit(squash·rebase 금지), 비밀값 검사, 서명기와 `ci-result`·`review-gate`. 앱 모드도 이 단계를 모두 지난다. 안전 경로 변경은 위 1항으로 FULL이다.
+
+**검증.** `test/test_publish_scope.py`: 앱 델타가 자기 선택으로 증명됨, core·안전 경로·선택기 FULL은 FULL 유지, 다른 앱의 적색은 막지 않음, 건드린 앱의 적색은 막음. 아직 시험 PC와 실제 야간에서 관측하지 않았다.
