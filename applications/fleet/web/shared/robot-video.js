@@ -9,7 +9,7 @@ import {createFleetClient} from "/common/fleet-client.js";
 import {openRobotCamera} from "/console/assets/app-runtime.js";
 import {mountRobotCameraTile} from "/console/assets/robot-camera-tile.js";
 
-export const MAX_TILES = 6;
+const MAX_TILES = 6;
 
 const LABEL = {
   live: (robot, s) => `${robot} · ${s.fps}fps · ${Math.round(s.ageMs)}ms`,
@@ -28,7 +28,7 @@ function el(doc, tag, text, attrs = {}) {
   return node;
 }
 
-export function createRobotVideo({doc = document, call, open = openRobotCamera, fetchImpl}) {
+function createRobotVideo({doc = document, call, open = openRobotCamera, fetchImpl}) {
   let sessions = [], cameraTiles = [], running = null;
   const grantPath = (robot, suffix = "") => `/api/fleet/robots/${encodeURIComponent(robot)}/media-grant${suffix}`;
 
@@ -86,7 +86,7 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
 }
 
 // 화면이 숨거나 패널이 보이지 않으면 세션을 닫고, 다시 보이면 같은 선택으로 연다.
-export function bindVisibility({doc = document, target, video, Observer = globalThis.IntersectionObserver}) {
+function bindVisibility({doc = document, target, video, Observer = globalThis.IntersectionObserver}) {
   let wanted = null, onScreen = true;
   const pause = () => { const now = video.current(); if (now) { wanted = now; video.stop(); } };
   const resume = () => {
@@ -103,7 +103,7 @@ export function bindVisibility({doc = document, target, video, Observer = global
 }
 
 // 콘솔 패널: 사이트 카메라 패널 다음에 붙는다. index.html은 이 모듈을 불러오기만 한다.
-export function mountRobotVideoPanel({doc = document} = {}) {
+function mountRobotVideoPanel({doc = document} = {}) {
   const anchor = doc.querySelector(".vision-preview");
   if (!anchor || doc.getElementById("robot-video")) return null;
   const link = el(doc, "link", null, {rel: "stylesheet", href: "/console/assets/robot-video.css"});

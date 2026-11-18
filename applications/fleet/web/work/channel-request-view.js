@@ -12,6 +12,8 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     version++; receipt = review = null; modelState = ""; panel.hidden = true;
     el("channel-review-reason").value = "";
   }
+  // inline 호출이라 토스트가 없다: 권한 거절도 이 화면의 상태 줄이 말한다(11-18 검토 F2)
+  function denied() { reset(); el("channel-requests-state").textContent = "요청 검토 권한 없음 · 이름 있는 운영자로 다시 접속하세요."; }
   function paint() {
     const reason = busy ? "요청 처리 중입니다" : review.state === "LINKED" ? "이미 작업과 연결된 요청입니다" : !canManage() ? "이름 있는 운영자 로그인이 필요합니다" : "로봇 연결과 안전 상태를 확인하세요";
     setOff(el("channel-review-incident"), busy || review.state === "LINKED" || !canManage(), reason);
@@ -102,14 +104,14 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
       request: async owner => {
         busy = true; paint();
         try {
-          const result = await call(base + "/incident", {method: "POST", headers: {"Content-Type": "application/json"},
+          const result = await call(base + "/incident", {inline: true, method: "POST", headers: {"Content-Type": "application/json"},
             body: JSON.stringify({expected_hash: snapshot.content_hash, expected_revision: snapshot.revision,
               robot_id: incident.robot_ids[0], stuck_id: incident.stuck_id,
               judgment_revision: incident.judgment_revision, reason}), signals: [owner.signal]});
           owner.check(); if (current === version) review = result;
         } finally { busy = false; if (current === version && review) paint(); }
       }, onError: error => {
-        if ([401, 403].includes(error.status)) reset();
+        if ([401, 403].includes(error.status)) denied();
         else state.textContent = "인수 결과 미확인 · 자동 재전송하지 않습니다. 현재 사건 기록을 확인하세요.";
       }});
   }
@@ -122,14 +124,14 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
       const source = await call(`/api/fleet/proposals/${encodeURIComponent(sourceId)}`); life.check();
       if (current !== version) return;
       if (!source.mission) throw new Error("Mission candidate unavailable");
-      const result = await call(base + "/prepare", {method: "POST", headers: {"Content-Type": "application/json"},
+      const result = await call(base + "/prepare", {inline: true, method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({kind: "mission", source_proposal_id: sourceId,
           workcell_id: source.mission.workcell_id, instance_id: source.mission.instance_id, reason,
           expected_hash: snapshot.content_hash, expected_revision: snapshot.revision})});
       life.check(); if (current === version) review = result;
     } catch (error) {
       if (life.current() && current === version) {
-        if ([401, 403].includes(error.status)) reset();
+        if ([401, 403].includes(error.status)) denied();
         else failure = "후보 준비 결과 미확인 · 요청을 다시 선택해 원장을 확인하세요.";
       }
     } finally { busy = false; if (current === version && review) { paint(); if (failure) state.textContent = failure; } }
@@ -148,13 +150,13 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
         request: async owner => {
           busy = true; paint();
           try {
-            const result = await call(base + "/admit", {method: "POST", headers: {"Content-Type": "application/json"},
+            const result = await call(base + "/admit", {inline: true, method: "POST", headers: {"Content-Type": "application/json"},
               body: JSON.stringify({expected_hash: snapshot.content_hash, expected_revision: snapshot.revision,
                 expected_generation: control.generation}), signals: [owner.signal]});
             owner.check(); if (current === version) review = result;
           } finally { busy = false; if (current === version && review) paint(); }
         }, onError: error => {
-          if ([401, 403].includes(error.status)) reset();
+          if ([401, 403].includes(error.status)) denied();
           else state.textContent = "승인 결과 미확인 · 자동 재전송하지 않습니다. 원장을 확인하세요.";
         }});
     } catch (error) { if (life.current() && current === version) reset(); }
@@ -175,12 +177,12 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     }
     const current = version, life = scope.capture(); let failure = ""; busy = true; paint();
     try {
-      const result = await call(path() + "/review", {method: "PUT", headers: {"Content-Type": "application/json"},
+      const result = await call(path() + "/review", {inline: true, method: "PUT", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({expected_hash: review.content_hash, expected_revision: review.revision, state: next, candidate, reason})});
       life.check(); if (current === version) review = result;
     } catch (error) {
       if (life.current() && current === version) {
-        if ([401, 403].includes(error.status)) reset();
+        if ([401, 403].includes(error.status)) denied();
         else failure = "검토 저장 실패 · 요청을 다시 선택해 최신 상태를 확인하세요.";
       }
     } finally {
@@ -197,13 +199,13 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
       request: async owner => {
         busy = true; paint();
         try {
-          const linked = await call(base + "/submit", {method: "POST", headers: {"Content-Type": "application/json"},
+          const linked = await call(base + "/submit", {inline: true, method: "POST", headers: {"Content-Type": "application/json"},
             body: JSON.stringify({expected_hash: snapshot.content_hash,
               expected_revision: snapshot.revision}), signals: [owner.signal]});
           owner.check(); if (current === version) review = linked;
         } finally { busy = false; if (current === version && review) paint(); }
       }, onError: error => {
-        if ([401, 403].includes(error.status)) reset();
+        if ([401, 403].includes(error.status)) denied();
         else state.textContent = "요청 결과 미확인 · 자동 재전송하지 않습니다. Fleet 작업 원장을 확인하세요.";
       }});
   }

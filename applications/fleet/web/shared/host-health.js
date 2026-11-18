@@ -91,11 +91,11 @@ const UPDATE_STALE_S = 6 * 3600;
 const CHANNEL_LABEL = {ok: "정상", off: "꺼짐", stuck: "멈춤", unknown: "미확인"};
 const GATE_LABEL = {open: "업데이트 허용", frozen: "업데이트 동결", missing: "동결 관문 없음"};
 
-export function unitName(unit) {
+function unitName(unit) {
   return String(unit || "").replace(/^rosy-/, "").replace(/(-autoupdate|-update)?\.service$/, "");
 }
 
-export function channelState(item, now = Date.now() / 1000) {
+function channelState(item, now = Date.now() / 1000) {
   if (item?.state) return item.state;  // /api/fleet/updates already classified it
   if (item?.timer !== "enabled") return "off";
   return Number.isFinite(item?.healthy_at) && now - item.healthy_at <= UPDATE_STALE_S ? "ok" : "stuck";

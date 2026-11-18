@@ -1,8 +1,9 @@
 // D-395 / fix/fleet-relative-step-nudge — 0.10 m forward/backward step buttons in robot detail.
 // One POST per click (no hold auto-repeat, no chaining while running); stop control stays separate.
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import { createCauseLine } from "/common/cause-line.js";
 
-export const STEP_DISTANCE_M = 0.10;
+const STEP_DISTANCE_M = 0.10;
 const NUDGE_KINDS = new Set(["nudge_forward", "nudge_backward"]);
 
 export function reportingOff(robot) {
@@ -12,7 +13,7 @@ export function reportingOff(robot) {
   return false;
 }
 
-export function isNudgeMissionRunning(mission) {
+function isNudgeMissionRunning(mission) {
   return Boolean(mission && NUDGE_KINDS.has(mission.kind) && mission.state === "running");
 }
 
@@ -126,7 +127,7 @@ export function createStepNudge({ scope, call, isOperator = () => true, namedRea
       const running = Boolean(runningByRobot.get(robotId))
         || isNudgeMissionRunning(robot?.localization?.mission || robot?.localization?.last_mission);
       const disabledReason = running ? "한 걸음 이동 진행 중입니다"
-        : !isOperator() ? "운영자 권한이 필요합니다"
+        : !isOperator() ? OPERATOR_REASON
         : namedReason() ? namedReason()
         : !robot?.online ? "로봇이 오프라인입니다"
         : reportingOff(robot) ? "위치 보고가 꺼져 있음"
@@ -155,7 +156,7 @@ export function createStepNudge({ scope, call, isOperator = () => true, namedRea
       sync();
       try {
         await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/step`, {
-          method: "POST",
+          inline: true, method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ direction, distance_m: STEP_DISTANCE_M }),
           ...(sig ? { signals: [sig] } : {}),

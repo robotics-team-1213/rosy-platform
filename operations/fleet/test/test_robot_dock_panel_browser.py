@@ -279,22 +279,17 @@ def test_map_click_bell_focuses_queues_and_error_popup_flow(site):
             expect(panel).to_have_attribute("data-robot-id", "arm_s")
             expect(panel).to_contain_text("arm_s")
 
-            # Click back to rosy_45 via dock and trigger HTTP 409 on step nudge -> floating error popup appears.
+            # Click back to rosy_45 via dock and trigger HTTP 409 on step nudge: the refusal is said once, in the
+            # nudge row (inline call, 11-18 single alert surface), never as a second copy in a toast.
             dock.locator('.robot-dock-btn[data-robot-id="rosy_45"]').click()
             expect(panel).to_have_attribute("data-robot-id", "rosy_45")
             panel.locator('[data-step-nudge="forward"]').click()
-            popup = page.locator("#alert-popup-region .alert-popup-card").first
-            expect(popup).to_be_visible()
-            expect(popup).to_contain_text("HTTP 409")
-            expect(popup).to_contain_text("ROBOT_STEP_BLOCKED")
-            expect(popup).to_contain_text("차단됨: 테스트 정지")
-            expect(popup).to_contain_text("/api/fleet/robots/rosy_45/step")
+            expect(panel.locator(".step-nudge-status")).to_contain_text("차단됨: 테스트 정지")
+            expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(0)
             _assert_layout_geometry_desktop_and_390(page)
             assert page.locator("#estop").is_enabled()
 
             # Bell keeps the count badge but opens no list; it moves focus to the queues panel.
-            popup.get_by_role("button", name="닫기").click()
-            expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(0)
 
             page.locator("#fleet-inbox").click()
             expect(page.locator("#inbox-popover")).to_have_count(0)  # 11-18: the popover is gone

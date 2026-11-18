@@ -15,7 +15,7 @@ const STEP = {linear: 0.01, angular: 0.05};
 const MIN_SET = {linear: 0.01, angular: 0.05};
 const num = value => Number(Number(value).toFixed(3));
 
-export function manualSpeeds(state) {
+function manualSpeeds(state) {
   const limits = state?.speed_limits, usable = value => Number.isFinite(value) && value >= 0;
   const known = usable(limits?.manual_linear) && usable(limits?.manual_angular);
   const linear = known ? limits.manual_linear : FALLBACK.manual_linear;
@@ -28,7 +28,7 @@ export function manualSpeeds(state) {
   return {linear, angular, set, max, sealed};
 }
 
-export function speedText({linear, angular, set, sealed}) {
+function speedText({linear, angular, set, sealed}) {
   const bound = set && sealed && (linear < set.linear || angular < set.angular)
     ? ` (설정 ${num(set.linear)}·${num(set.angular)}, 측정 봉인 ${num(sealed.linear)}·${num(sealed.angular)}로 제한)` : "";
   return `전후진 ${num(linear)}m/s · 회전 ${num(angular)}rad/s${bound}`;

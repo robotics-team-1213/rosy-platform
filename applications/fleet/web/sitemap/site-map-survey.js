@@ -1,3 +1,4 @@
+import {setOffBy} from '/common/cause-line.js';
 import {randomUUID} from "/console/assets/uuid.js";
 // D-655 survey drafting UI; it changes the local draft and never commands a robot.
 import {confirmIrreversible} from '/common/ui.js';
@@ -21,10 +22,6 @@ export function createSurveyPanel(host) {
     if (host.reason()) return;
     try { action(); sync(); } catch (error) { message(error.message); }
   }
-  function gate(id, reason) {
-    $(id).disabled = Boolean(reason);
-    if (reason) $(id).setAttribute('reason', reason); else $(id).removeAttribute('reason');
-  }
   function options(id, values) {
     const field = $(id), selected = new Set([...field.selectedOptions].map(o => o.value));
     const key = JSON.stringify(values);
@@ -40,7 +37,7 @@ export function createSurveyPanel(host) {
   function clear() {
     points = []; picking = false; editing = false;
     loadedApproaches = []; approachEdited = false;
-    gate('element-id', '');
+    setOffBy($('element-id'), '');
     $('element-id').value = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
     geometry();
   }
@@ -55,21 +52,21 @@ export function createSurveyPanel(host) {
     if ((map?.map_id || null) !== lastMapId) {
       lastMapId = map?.map_id || null;
       points = []; picking = false; editing = false; loadedApproaches = []; approachEdited = false;
-      gate('element-id', ''); $('element-id').value = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
+      setOffBy($('element-id'), ''); $('element-id').value = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
       $('element-points').textContent = '찍은 좌표 없음'; $('element-pick').setAttribute('aria-pressed', 'false');
     }
     const draftReason = reason || (!map ? '조사 기준이 있는 초안을 만드세요' : '');
     if (picking && (draftReason || mapId !== map?.map_id)) { picking = false; $('element-pick').setAttribute('aria-pressed', 'false'); }
-    gate('survey-new', reason);
-    for (const id of ['element-pick', 'element-point', 'element-clear', 'element-save']) gate(id, draftReason);
-    gate('survey-review', reason || (!map ? '검토할 조사 또는 관측 도로가 없습니다' : ''));
+    setOffBy($('survey-new'), reason);
+    for (const id of ['element-pick', 'element-point', 'element-clear', 'element-save']) setOffBy($(id), draftReason);
+    setOffBy($('survey-review'), reason || (!map ? '검토할 조사 또는 관측 도로가 없습니다' : ''));
     options('element-from', [['', '시작 장소 선택'], ...(map?.places || []).map(p => [p.id, p.name])]);
     options('element-to', [['', '끝 장소 선택'], ...(map?.places || []).map(p => [p.id, p.name])]);
     options('element-lanes', (map?.edges || []).map(e => [e.id, `${e.id} · ${e.from} → ${e.to}`]));
     options('element-existing', [['', '기존 요소 선택'], ...rows().map((row, i) => [`${row.category}:${row.id}`, `${i + 1} · ${row.name} · ${KINDS[row.kind] || row.kind}`])]);
     const selected = $('element-existing').value;
-    for (const id of ['element-load', 'element-delete']) gate(id, draftReason || (!selected ? '기존 요소를 고르세요' : ''));
-    gate('element-endpoints', draftReason || (!$('element-from').value || !$('element-to').value ? '시작·끝 장소를 고르세요' : ''));
+    for (const id of ['element-load', 'element-delete']) setOffBy($(id), draftReason || (!selected ? '기존 요소를 고르세요' : ''));
+    setOffBy($('element-endpoints'), draftReason || (!$('element-from').value || !$('element-to').value ? '시작·끝 장소를 고르세요' : ''));
     const kind = $('element-kind').value;
     $('element-road').hidden = kind !== 'road';
     $('element-signal').hidden = kind !== 'traffic_signal';
@@ -79,7 +76,7 @@ export function createSurveyPanel(host) {
     const reference = map?.survey;
     $('survey-reference').textContent = reference ? `${reference.reviewed ? '검토됨' : '검토 전'} · 원점 ${reference.origin.join(', ')} m · 방향 ${Math.round(reference.heading_rad * 180 / Math.PI)}° · ${reference.scale_source === 'measured' ? `실측 ${reference.measured_distance_m} m` : '장치 odom 축척'} · ${reference.description}` : '조사 기준 없음';
     $('survey-odometry-note').hidden = $('survey-scale').value !== 'odometry';
-    gate('survey-distance', $('survey-scale').value !== 'measured' ? '실측 축척에서 입력합니다' : reason);
+    setOffBy($('survey-distance'), $('survey-scale').value !== 'measured' ? '실측 축척에서 입력합니다' : reason);
     const list = $('survey-elements');
     list.replaceChildren(...rows().map((row, i) => {
       const li = document.createElement('li');
@@ -120,7 +117,7 @@ export function createSurveyPanel(host) {
     const row = rows().find(r => `${r.category}:${r.id}` === $('element-existing').value);
     if (!row) return;
     editing = true; editingKind = row.kind; picking = false; points = row.geometry.map(p => [...p]);
-    $('element-id').value = row.id; gate('element-id', '불러온 요소의 ID는 유지됩니다');
+    $('element-id').value = row.id; setOffBy($('element-id'), '불러온 요소의 ID는 유지됩니다');
     $('element-name').value = row.name; $('element-kind').value = row.kind;
     $('element-from').value = row.from || ''; $('element-to').value = row.to || '';
     $('element-width').value = row.width_m || .2; $('element-direction').value = row.direction || 'one_way';

@@ -736,7 +736,7 @@ def test_every_button_kind_has_shared_interaction_states():
 DISABLE_SITE = re.compile(
     r"""\.disabled\s*=(?!=)|setAttribute\(\s*["']disabled["']|toggleAttribute\(\s*["']disabled["']""")
 REASON_WRITE = re.compile(r"""(?:set|remove)Attribute\(\s*["']reason["']""")
-REASON_HELPER = re.compile(r"\b(setOff|setEnabled)\(")
+REASON_HELPER = re.compile(r"\b(setOff|setOffBy|setEnabled)\(")  # setOffBy(control, reason): the reason is the switch
 DISABLE_ROOTS = (
     ROOT / 'middleware' / 'robot_ui' / "robot",
     ROOT / 'applications' / 'fleet' / 'web',
@@ -847,7 +847,7 @@ def scan_disabled(scripts):
             args = _call_args(text, match.end())
             enabled = len(args) > 1 and ((match.group(1) == "setOff" and args[1].strip() == "false")
                                          or (match.group(1) == "setEnabled" and args[1].strip() == "true"))
-            if len(args) < 3 and not enabled:
+            if len(args) < (2 if match.group(1) == "setOffBy" else 3) and not enabled:
                 number = text.count("\n", 0, match.start()) + 1
                 snippet = lines[number - 1].strip()
                 key = next((k for k in DISABLED_WITHOUT_REASON

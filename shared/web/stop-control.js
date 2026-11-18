@@ -22,7 +22,7 @@ export const STOP_TEXT = Object.freeze({
   failed: "정지 요청 실패 · 다시 눌러 재시도하세요",
 });
 
-export function stopFailureText(error) {
+function stopFailureText(error) {
   if (error?.name === "AbortError") return STOP_TEXT.timeout;
   if (error?.status === 403) return STOP_TEXT.forbidden;
   if (error?.status === 503) return STOP_TEXT.unverified;

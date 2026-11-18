@@ -4,11 +4,11 @@
 // "영상 원본 미등록" state instead of a placeholder stream.
 import {frameBadge} from './vision-view.js';
 
-export const CEILING_SOURCE = 'ceiling_north';
-export const UNREGISTERED_TEXT = '영상 원본 미등록';
+const CEILING_SOURCE = 'ceiling_north';
+const UNREGISTERED_TEXT = '영상 원본 미등록';
 // Cell camera name -> its Vision source id in the workcell observation manifest (the cell PC
 // observation bridge publishes these). side and arm_s_* are listed once the manifest carries them.
-export const VISION_SOURCE = {top: 'omx_overhead', arm_a_wrist: 'omx_wrist_a', arm_b_wrist: 'omx_wrist_b',
+const VISION_SOURCE = {top: 'omx_overhead', arm_a_wrist: 'omx_wrist_a', arm_b_wrist: 'omx_wrist_b',
   side: 'omx_side', arm_s_top: 'omx_arm_s_top', arm_s_wrist: 'omx_arm_s_wrist'};
 const LIST_REFRESH_MS = 30000;
 const LEASE_MARGIN_MS = 8000;

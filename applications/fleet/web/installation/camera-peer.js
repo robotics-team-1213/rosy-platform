@@ -1,10 +1,11 @@
 // D456 receiver-screen approval. A remembered camera is not a running stream or lease.
+import {isOperator} from '/console/assets/authorization.js';
 import {createRequest} from '/common/request.js';
 const BASE = '/api/fleet/pairing/v2';
 
 export function approvalBody(row, source, remember, who) {
   if (row?.state !== 'pending' || !Number.isInteger(row.revision) || row.revision < 0
-      || who?.role !== 'operator' || !who.principal_id
+      || !isOperator(who?.role) || !who.principal_id
       || !/^[A-Za-z0-9_-]{1,32}$/.test(source) || typeof remember !== 'boolean') return null;
   return {action:'approve',revision:row.revision,source_id:source,persist_requested:remember};
 }
@@ -111,7 +112,7 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
     for (const id of ['camera-peer-requests','camera-peer-relationships']) el(id)?.replaceChildren();
   }
   async function refresh() {
-    if (locked() || identity()?.role!=='operator') {clear(); return;}
+    if (locked() || !isOperator(identity()?.role)) {clear(); return;}
     if (!/^Bearer\s+\S+$/.test(headers().Authorization || headers().authorization || '')) {
       clear(); el('camera-peer-panel').hidden=false;
       notice('카메라 연결 승인은 기명 운영자의 고급 접속 토큰으로 연결한 뒤 사용할 수 있습니다. 현재 로그인은 유지됩니다.');
@@ -119,7 +120,7 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
     }
     if (deniedOwner && deniedOwner===ownerKey()) return;
     if (inFlight || !inView || document.visibilityState==='hidden' || locked()
-        || identity()?.role!=='operator' || !el('camera-peer-panel')) return;
+        || !isOperator(identity()?.role) || !el('camera-peer-panel')) return;
     inFlight=true; const life=scope.capture(), owner=ownerKey();
     try {
       const [requests,relationships,anchor]=await Promise.all([

@@ -1332,3 +1332,44 @@
 - 변경: `line-stuck.js` choose()의 claim 호출에서 줄 끝 주석이 `headers`·`body`를 삼켜 본문 없이 나가던 것(서버 LineStuckClaimRequest가 stuck_id 필수라 늘 422, `.catch`가 삼킴)을 고쳤다. 오늘 inline 정리(652499f1c3, 아직 main 밖)에서 생겼다. `fleet-alert-surface.test.mjs`가 모양만 보던 것에 "주석 뒤 headers/body 금지" 단언을 더했다.
 - 증거: UI 패널 2라운드 좌석 A(D:/DevTemp/ui-panel-1118/r2-A.md), 노드 fleet-alert-surface 3/3. 웹 전체에서 같은 모양 0건(git grep).
 - gate 변화: fleet-alert-surface 정적 시험 1단언 추가.
+
+## 2026-11-18 · uncommitted · fix(fleet-web): 인라인 결과 모듈의 변경 호출은 inline, 판정 중 사유는 판정할 때만
+- 변경: `site-rules-judge.js`가 켜진 "규칙으로 판정" 단추에도 `reason="판정 중"`을 늘 붙여 사유 줄이 상시 보이던 버그를 `setOff(ask, rule.busy, "판정 중")`로 고쳤다. 실패를 자기 행·구획 글자로 쓰는 모듈의 변경 호출(POST·PUT)에 `inline: true`를 붙여 토스트 이중 알림을 없앴다: site-rules-judge, robot/step-nudge, robot/robot-panel-adapters, work/control-unit-view·work-view·channel-request-view·arm-transfer-view·cell-resume-view·integrated-control-view·trip-proposal-view(모두 console.js 주입 call, catch·onError가 notice/state/refusals/reason에 씀).
+- 증거: UI 패널 2라운드(D:/DevTemp/ui-panel-1118/r2-A.md·r2-B.md), node --import register-console-assets 전체 fleet web 시험·shared/web 시험 통과.
+- gate 변화: fleet-alert-surface.test.mjs에 10파일 변경 호출 inline 단언과 판정 중 사유 단언 추가.
+
+## 2026-11-18 · uncommitted · refactor(fleet-web): setOff 변종 9개를 공용 cause-line으로
+- 변경: 본문이 같은 사유 끄기 변종 gate×4(sitemap/site-map·camera·survey·teach), guard×2(work/control-unit-view·integrated-control-view), setReason(queues.js, 호출 card-trip·line-stuck·trip-replan), blockWith(robot/roster-presentation.js, 호출 roster.js·power-action.js 주입)을 지우고 `/common/cause-line.js`의 `setOffBy(control, reason)`(= `setOff(control, reason, reason)`, 사유가 곧 스위치)로 바꿨다. gate의 id 조회 차이는 호출에서 `$(id)`로 둔다(site-map 호스트 객체로 넘기던 gate 주입도 제거). `shared/authorization.js`의 describe 사본은 cause-line `describeBy` import로.
+- 증거: 본문 비교(disabled=Boolean(reason) + reason 속성 쓰기/지우기, describe는 describeBy와 글자 단위 동일), node fleet web·shared/web 시험 통과, 바뀐 JS node --check 통과, scan_disabled 누락 0.
+- gate 변화: 없음(이 모듈).
+
+## 2026-11-18 · uncommitted · refactor(fleet-web): 운영자 판정·권한 문구를 authorization.js 하나로
+- 변경: authorization.js 밖 `role ===/!== "operator"` 35줄(17파일)을 `isOperator(role)`/`!isOperator(role)`로 1:1 바꿨다. console.js 등 주입 람다의 namedReason·locked·busy·principal_id 조건은 그대로다(비교만 치환). fleet-header.js:139 표시 색은 권한 판정이 아니라 그대로 둔다. JS에 직접 쓴 "운영자 권한이 필요합니다"(정확한 문구, 마침표·꼬리 붙은 2곳은 템플릿)를 `OPERATOR_REASON` import로(13파일). `work/policy-model.js`의 같은 이름 다른 문구 `OPERATOR_REASON`(값=NAMED_OPERATOR_REASON)을 지우고 policy-page.js가 authorization.js `NAMED_OPERATOR_REASON`을 쓴다. 화면 문구는 같다.
+- 증거: 치환 뒤 `git grep -nE "role *[!=]==? *['\"]operator" -- applications/fleet/web` = authorization.js 정의 1 + fleet-header 표시 1. JS 권한 문구 직접 쓰기 0(다른 문구 "이름 있는 운영자 권한이…"·"기명 운영자 권한이…" 2곳은 별개). node fleet web·shared/web 통과. test_dispatch_control_ui.py 단언을 isOperator(auth.role)로.
+- gate 변화: 없음(재발 방지 래칫은 묶음 7).
+
+## 2026-11-18 · uncommitted · refactor(fleet-web): 본문 같은 사본 중 정본이 있는 것만 합침(copy, guide-layer 측정)
+- 변경: `shared/site-map-edit.js`의 copy 사본을 지우고 이미 import하던 `site-map-model.js`의 copy를 export해 쓴다. `shared/guide-layer.js`의 guideMarks·drawGuide가 각각 선언하던 같은 scaleAt·ahead를 파일 안 `screenMeasure(toPoint)` 하나로.
+- 건너뜀(정본 없음 — 이번엔 목록만): say(maintenance/db-maintenance·host-services 닫힘 안), node(maintenance 두 사본은 control-dom.js node와 인자 순서·text 조건이 다름), log(inbox.js 닫힘 안·installation/install.js), storageGet/Set(calibration/field-view·map-fit-view), tokenRgb(shared/web robot-3d·site-twin-3d — 본문 다름: 배열 검사), iconSvg/iconNode(shared/web robot-dock·robot-row, 둘 다 비공개).
+- 증거: 본문 글자 비교, node fleet web·shared/web 통과.
+- gate 변화: 없음(본문 해시 중복 래칫은 묶음 7).
+
+## 2026-11-18 · uncommitted · refactor(fleet-web): 소비자 0 CSS·죽은 대체 경로·옛 충전 칸 카드·시험 전용 export 정리
+- 변경: 제품 소비자 0 CSS 클래스 24개 삭제 — robot/roster.css 11(omx-dense-card, cell-cam-thumb, omx-card-actions, omx-inspector-single-wrap, omx-inspector-cam-badge, omx-inspector-meta, robot-app-actions, robot-line, robot-fold, omx-summary-btns, robot-main), learning.css 9(learning-host·hosts·host-head·host-hint·host-readout·steps·steps-list·prep·prep-note), shared/styles.css .brand 묶음·.topbar .spacer(Fleet 문서에 class="brand"·"topbar" 없음). omx-cell-card·omx-inspector-cam·.discovery-state.verified_online은 동적 조립·상태 클래스라 남김. inbox.js 탭 content의 죽은 `|| el("context-*")` 대체 3개 제거(그 id는 createTabs가 붙인 뒤에야 생긴다). charge-bays-model.js에서 뷰가 읽지 않는 cards·armLiveStates·stationCameraLinks·stationZones 조립과 inspectorTargetsFromRows·formatArmLiveJointText·CELL_BUTTONS·PINKY_BUTTONS 삭제(297→74줄), charge-bays-view.js 재수출 정리. 시험만 쓰던 export 5개 삭제: field-layers applyHomography, camera-pairing CONFIRM_PROMPT·freeSources, site-layer cameraScreenToMap, vision-view mapToPlane(applyHomography·mapToPlane은 시험 안 오라클로 옮김).
+- 증거: 이름마다 저장소 전체 git grep(md·css 제외) — 제품 소비자 0, 남은 것은 음성 단언(test_console_queue_inline_browser.py robot-fold count==0)뿐. node fleet web 559/559(삭제한 시험 2개: 옛 카드 단언, freeSources), shared 147/147. test_learning_entry.py의 learning-hosts·--surface-raised 단언 삭제(지운 CSS를 지키던 단언).
+- gate 변화: 없음(래칫은 묶음 7). clearRobotModelCache·ICON_CATALOG은 시험 이음매라 남김.
+
+## 2026-11-18 · uncommitted · refactor(web): 어디서도 import하지 않는 export 58개의 export 키워드 제거
+- 변경: 정의 파일 밖(시험·middleware 포함 저장소 전체, md 제외)에서 이름이 한 번도 안 나오는 Fleet export 48개의 `export` 키워드만 지웠다(코드는 파일 안에서 쓰이므로 유지). robot-video.js 4개 포함(문서가 script 태그로 싣고 아무도 import하지 않음).
+- 증거: 집계 스크립트(D:/DevTemp/ui-panel-1118 보고 참고)로 0참조 재계산, 남은 소비자 0 export 0(시험 이음매 clearRobotModelCache·ICON_CATALOG만 시험 소비). 바뀐 JS node --check, node fleet web 559·shared 147 통과. 파이썬 시험이 `export ...` 글자를 단언하는 곳 0.
+- gate 변화: 없음(래칫은 묶음 7).
+
+## 2026-11-18 · uncommitted · test(web): 재발 방지 래칫 3개 — inline 명시, 소비자 0 이름, 정본 밖 재정의·복제·직접 쓰기
+- 변경: operations/fleet/test/web/fleet-alert-surface.test.mjs — console.js import 닫힘(assets.json으로 평평한 /console/assets 해석) 모듈의 console call() 변경 호출 중 `inline:` 미명시 수 래칫(UNMARKED_CHANGE_CALLS 30, 자체 call 정의 파일 제외), Fleet web 전체 JS에서 주석 뒤 headers/body 0.
+- 증거: node fleet web 561/561(새 시험 2개 포함).
+- gate 변화: fleet-alert-surface 정적 래칫 2개 추가.
+
+## 2026-11-18 · uncommitted · fix(fleet-web): 독립 검토 F1~F4 — 고아 CSS 줄, 채널 요청 403 표시, 게이트 오탐 2건
+- 변경: roster.css에서 선택자만 지워지고 남은 outline 본문 줄을 지워 다음 규칙(.quick-control-panel)이 다시 적용되게 했다. channel-request-view.js의 inline 변경 호출 5곳에서 401·403이 패널만 닫고 아무 글도 없던 것을 denied()가 상태 줄에 쓰게 했다. fleet-alert-surface의 주석 검사가 `http://`를 주석으로 보지 않게, test_shared_dedupe의 파일 집합이 시험 PC의 venv·build 같은 추적 밖 폴더를 빼게 했다.
+- 증거: D:/DevTemp/ui-panel-1118/review-1.md, 노드 fleet-alert-surface 7/7, CSS 중괄호 균형 검사(바뀐 css 전부) 이상 0.
+- gate 변화: 없음(오탐 2건 제거).

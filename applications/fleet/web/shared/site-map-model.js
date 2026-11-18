@@ -1,10 +1,11 @@
+import {isOperator, OPERATOR_REASON} from '/console/assets/authorization.js';
 import {DRAWING_ERROR_LABEL} from './drawing-errors.js';
 import {ACTION_LABEL, RESOLVER_DECISION_LABEL, TRIP_ERROR_LABEL, startCheckText, tripErrorText} from './trip-display.js';
 export {routeAttention} from './route-attention.js';
 
 export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'slow', 'turnaround', 'start'];
 export const PLACE_KIND_LABEL = { junction: '교차', park: '주차', charge: '충전', stop: '정차', slow: '감속', turnaround: '회차', start: '출발' };
-export const SITE_MAP_ERROR_LABEL = {
+const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다', SITE_MAP_NO_DRAFT: '저장된 초안이 없습니다',
   SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 현재 변경 내용을 별도로 기록한 뒤 화면을 새로고침해 최신 초안을 확인하세요. 저장하지 않은 편집은 사라집니다.',
   SITE_MAP_PROFILE_CHANGED: '다른 운영자가 프로필을 바꿨습니다. 수정한 규칙을 복사해 둔 뒤 다시 접속하세요.',
@@ -31,7 +32,7 @@ export const SITE_MAP_ERROR_LABEL = {
 export function siteMapErrorText(error) {
   if (error.code === 'PASSWORD_CHANGE_REQUIRED') return '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요';
   if (error.status === 401) return '관제 토큰을 확인하고 다시 접속하세요';
-  if (error.status === 403) return '운영자 권한이 필요합니다 · 계정을 확인하세요';
+  if (error.status === 403) return `${OPERATOR_REASON} · 계정을 확인하세요`;
   if (error.status >= 500) return '관제 서버 응답을 확인할 수 없습니다 · 잠시 뒤 다시 접속하세요';
   if (!error.status && /Failed to fetch|NetworkError|ERR_/.test(error.message || '')) return '관제 연결이 끊겼습니다 · 네트워크를 확인하고 다시 접속하세요';
   const base = DRAWING_ERROR_LABEL[error.code] || SITE_MAP_ERROR_LABEL[error.code] || error.message || String(error);
@@ -90,7 +91,7 @@ export function lengths(points) {
   return knots;
 }
 
-export function pointAt(points, knots, s) {
+function pointAt(points, knots, s) {
   for (let i = 1; i < points.length; i += 1) {
     if (s <= knots[i] || i === points.length - 1) {
       const span = knots[i] - knots[i - 1], t = span > 0 ? Math.min(Math.max((s - knots[i - 1]) / span, 0), 1) : 0;
@@ -121,8 +122,8 @@ export function planPolylines(map, plan) {
   return plan.segments.filter(seg => edges.has(seg.edge_id)).map(seg => segmentPoints(edges.get(seg.edge_id), seg.forward, seg.s_from, seg.s_to));
 }
 
-function copy(map) { return JSON.parse(JSON.stringify(map)); }
-export const VIEW_TURNS = [0, 90, 180, 270];
+export function copy(map) { return JSON.parse(JSON.stringify(map)); }
+const VIEW_TURNS = [0, 90, 180, 270];
 export function viewTurnOf(map) { return VIEW_TURNS.includes(map?.view_turn_deg) ? map.view_turn_deg : 0; }
 export function editViewTurn(map, turn) {
   const value = Number(turn);
@@ -185,7 +186,7 @@ export function repeatTripReason({active, running, start}) {
 export function convoyLeaders(open, robotId) { return (open || []).filter(trip => trip.repeat && !trip.convoy && trip.robot_id !== robotId).map(trip => trip.robot_id); }
 
 export function tripStartReason({role, plan, active, running, now = Date.now() / 1000}) {
-  if (role !== 'operator') return role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
+  if (!isOperator(role)) return role ? OPERATOR_REASON : '관제 접속이 필요합니다';
   if (running) return '이 로봇은 이미 운행 중입니다';
   if (!plan) return '먼저 경로를 계산하세요';
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
@@ -218,7 +219,7 @@ export function teachConfirmBody({teachId, from, fromName, to, toName, direction
 
 export function newestPending(view) { return (view?.pending || []).reduce((best, item) => (!best || item.expires_at > best.expires_at ? item : best), null); }
 
-export const MERGE_MAX_WAIT_MS = 20000;
+const MERGE_MAX_WAIT_MS = 20000;
 const BLOCK_GAP_M = 0.03;
 const isZone = (unit) => unit.zone === true;
 const twoWay = (unit) => unit.id.startsWith("lane:");
@@ -303,7 +304,7 @@ export function trafficDrawing(traffic, active, trips = []) {
 }
 
 const LAMP_TEXT = { green: "녹", yellow: "황", red: "적" };
-export const signalLampText = (lamp) => LAMP_TEXT[lamp] || "적";
+const signalLampText = (lamp) => LAMP_TEXT[lamp] || "적";
 
 function occupancyStateText(occupancy) {
   const who = occupancy?.holder ? ` · ${occupancy.holder}` : "";
@@ -318,7 +319,7 @@ export function occupancyLampText(signal, row) {
   return `적 · ${occupancyStateText(occupancy)}`;
 }
 
-export function countdownText(row) {
+function countdownText(row) {
   const s = row?.lamp === "red" ? row?.green_in_s ?? row?.left_s : row?.left_s;
   return typeof s === "number" ? `${row.exact ? "" : "≥"}${Math.ceil(s)}` : "";
 }
@@ -331,7 +332,7 @@ export function signalAheadText(ahead) {
   return `가상 신호 ${ahead.signal_id} ${lamp}${wait}${where}${ahead.may_enter ? " · 진입 허가" : ""}`;
 }
 
-export function signalWait(traffic, robotId) {
+function signalWait(traffic, robotId) {
   const robot = (traffic?.robots || []).find((row) => row.robot_id === robotId);
   const node = (robot?.waiting_for || []).find((id) => id.startsWith("signal:"));
   if (!node) return null;

@@ -16,7 +16,7 @@ def test_device_profile_web_behavior():
     if node is None:
         pytest.skip('node is not installed')
     script = Path(__file__).parent / 'web/device-profiles.test.mjs'
-    result = subprocess.run([node, '--test', str(script)], capture_output=True, text=True,
+    result = subprocess.run([node, '--import', (script.parent / 'register-console-assets.mjs').as_uri(), '--test', str(script)], capture_output=True, text=True,
                             encoding='utf-8', errors='replace', timeout=30, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
 

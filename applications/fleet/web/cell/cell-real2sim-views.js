@@ -1,4 +1,5 @@
 // Right inspector, visual cards and camera matrix renderers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
+import {OPERATOR_REASON} from '/console/assets/authorization.js';
 import {CELL_TASKS_PATH, CAMERA_WALL_VIEWS, S3_VIEWS, CELL_A_VIEWS, CELL_B_VIEWS, S5_VIEWS, inspectorSpecs, visualCardSpecs} from './cell-real2sim-specs.js';
 
 export function createCellViews(ctx) {
@@ -28,7 +29,7 @@ export function createCellViews(ctx) {
     }
     btn.disabled = !allowed;
     if (allowed) btn.removeAttribute('reason');
-    else btn.setAttribute('reason', '운영자 권한이 필요합니다');
+    else btn.setAttribute('reason', OPERATOR_REASON);
   }
 
   function makeActionButton(b, fallbackRobotId) {

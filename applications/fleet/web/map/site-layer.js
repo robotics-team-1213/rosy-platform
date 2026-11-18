@@ -1,5 +1,5 @@
 // 천장 카메라 사이트 층 (D-257). DOM 없는 순수 계산만 둔다 — map-view.js 가 그린다.
-import { invert3, project as projectHomography } from "/console/assets/map-fit.js";
+import { project as projectHomography } from "/console/assets/map-fit.js";
 
 // 대형 릴레이 증거(streamEvidence)도 같은 순수 계산이라 여기 있다(D-359 US-009).
 // 관측(sighting)은 표시·대조용이다. CORE TF pose 와 합치지 않고, 목표 좌표로 쓰지 않는다.
@@ -128,19 +128,6 @@ export function quarterTurn(rot, w, h) {
       return { x: (m[3] * dx - m[2] * dy) / det, y: (-m[1] * dx + m[0] * dy) / det };
     },
   };
-}
-
-// 돌린 카메라 화면의 점 → 지도 m. map_to_image 를 뒤집어 쓴다. 지평선 뒤면 null.
-// 역행렬의 부호는 지도 위 기준점 ``ref``(트랙 중심)가 앞쪽(w > 0)이 되게 한 번 맞춘다 —
-// 부호를 점마다 바꾸면 지평선 뒤 픽셀이 거울 위치의 바닥 점으로 돌아온다.
-export function cameraScreenToMap(mapToImage, turn, x, y, ref) {
-  let inverse = Array.isArray(mapToImage) && mapToImage.length === 9 ? invert3(mapToImage) : null;
-  const seen = inverse && ref ? projectHomography(mapToImage, ref.x, ref.y) : null;
-  if (!seen) return null;
-  if (inverse[6] * seen[0] + inverse[7] * seen[1] + inverse[8] < 0) inverse = inverse.map((v) => -v);
-  const raw = turn.unpoint(x, y);
-  const p = projectHomography(inverse, raw.x, raw.y);
-  return p ? { x: p[0], y: p[1] } : null;
 }
 
 // D-513 7: 현장 지도(D-488 활성 지도)의 화면 방향 — 기본(+y 위) 화면을 시계 방향으로 돌릴 각.

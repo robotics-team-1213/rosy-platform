@@ -21,8 +21,8 @@ export const RESUME_REFUSALS = Object.freeze({
 });
 
 export const NOTE_MAX = 200;
-export const NOTE_INPUT = Object.freeze({label: "사유 메모", max: NOTE_MAX});
-export const RESTART_MESSAGE = "실행 중에 멈춘 작업입니다. 처음부터 다시 시작합니다";
+const NOTE_INPUT = Object.freeze({label: "사유 메모", max: NOTE_MAX});
+const RESTART_MESSAGE = "실행 중에 멈춘 작업입니다. 처음부터 다시 시작합니다";
 
 // Server contract: clear and resume both carry `note`; resume adds restart_from_start only after the 409 confirm.
 export const clearBody = (cellId, note) => ({cell_id: cellId, note});
@@ -212,7 +212,7 @@ export function createCellResumeView({scope, call, anchor, active, approveReason
         busyKey = key; refusals.delete(key); paint();
         try {
           await call("/api/fleet/pipeline/human-safety-gate/clear", {
-            method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
+            inline: true, method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
             body: JSON.stringify(clearBody(cellId, note)),
           });
           owner.check();
@@ -232,7 +232,7 @@ export function createCellResumeView({scope, call, anchor, active, approveReason
     const send = (owner, note, restart) => async () => {
       busyKey = key; refusals.delete(key); paint();
       try {
-        await call(url, {method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
+        await call(url, {inline: true, method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
           body: JSON.stringify(resumeBody(note, restart))});
         owner.check();
         statusNotice = `${task.task_id} 작업 재개됨`;
@@ -271,7 +271,7 @@ export function createCellResumeView({scope, call, anchor, active, approveReason
         busyKey = key; refusals.delete(key); paint();
         try {
           await call("/api/fleet/pipeline/decision-gate/execute", {
-            method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
+            inline: true, method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
             body: JSON.stringify({decision_id: prop.decision_id}),
           });
           owner.check();

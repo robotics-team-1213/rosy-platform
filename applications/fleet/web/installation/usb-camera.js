@@ -1,4 +1,5 @@
 // D-963: approve the role of a USB camera plugged into a control PC. Fleet stores the decision; the PC applies it.
+import {isOperator} from '/console/assets/authorization.js';
 import {createRequest} from '/common/request.js';
 const BASE = '/api/fleet/workcell-observations';
 const ROLE = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
@@ -21,7 +22,7 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
   const bearer = () => headers().Authorization || headers().authorization || '';
   const canDecide = () => {
     const principal = identity();
-    return !locked() && principal?.role === 'operator'
+    return !locked() && isOperator(principal?.role)
       && typeof principal.principal_id === 'string' && Boolean(principal.principal_id.trim());
   };
   async function call(path, {method = 'GET', body} = {}) {

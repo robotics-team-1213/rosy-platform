@@ -1,3 +1,4 @@
+import {isOperator} from '/console/assets/authorization.js';
 import {createPollGate} from '/console/assets/poll-gate.js';
 
 const FIELDS = ['device_id', 'display_name', 'manufacturer', 'model', 'device_kind', 'arm_count', 'hardware_ids'];
@@ -18,7 +19,7 @@ export function createDeviceProfiles({root, scope, call, identity, care = null})
   const gate = createPollGate();
   let selected = '', dirty = false, busy = false, loading = false;
   let initial = new URLSearchParams(root.ownerDocument.defaultView?.location?.search || '').get('profile');
-  const canEdit = () => identity()?.role === 'operator' && Boolean(identity()?.principal_id)
+  const canEdit = () => isOperator(identity()?.role) && Boolean(identity()?.principal_id)
     && identity().principal_id !== 'site-console';
   function updateAuthorization() {
     care?.authorization();

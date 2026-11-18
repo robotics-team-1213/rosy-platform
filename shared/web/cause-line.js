@@ -39,6 +39,11 @@ export function setOff(control, off, reason = "", describedBy = "") {
   if (describedBy) control.setAttribute("aria-describedby", describedBy);
 }
 
+/** setOff whose reason is also the switch: "" enables and forgets the reason, any text disables and shows it. */
+export function setOffBy(control, reason) {
+  setOff(control, reason, reason);
+}
+
 export function createCauseLine(group, {line} = {}) {
   const owned = !line;
   if (!line) {

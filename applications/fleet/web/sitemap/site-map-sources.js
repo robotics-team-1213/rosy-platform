@@ -1,3 +1,4 @@
+import {setOffBy} from '/common/cause-line.js';
 import {svgElement as el} from '/console/assets/map-editor.js';
 import {randomUUID} from '/console/assets/uuid.js';
 import {soccerProfileMap, rectangularView, viewTurnOf, planeView, siteMapErrorText} from '/console/assets/site-map-model.js';
@@ -10,7 +11,7 @@ const $ = id => document.getElementById(id);
 
 // Map sources are read-only until the existing profile-to-draft CAS action is confirmed.
 export function createMapSourcesPanel({request, state, shown, calibrations, operatorReason,
-  render, syncButtons, gate, guarded, select, clearPlan, status, W, H}) {
+  render, syncButtons, guarded, select, clearPlan, status, W, H}) {
   let profiles = [], plane = null, planeEpoch = 0;
   const selectedProfile = () => profiles.find(row => row.profile_id === $('map-profile').value);
   function clearPlane() {
@@ -95,7 +96,7 @@ export function createMapSourcesPanel({request, state, shown, calibrations, oper
     render();
     syncButtons();
     $('plane-status').textContent = '평면 영상 불러오는 중';
-    gate('plane-load', '불러오는 중');
+    setOffBy($('plane-load'), '불러오는 중');
     let url;
     try {
       const turn = viewTurnOf(shown());
@@ -211,14 +212,14 @@ export function createMapSourcesPanel({request, state, shown, calibrations, oper
 
   function sync() {
     const reason = operatorReason();
-    gate('profile-new', reason);
-    gate('profile-copy', reason || (!shown() ? '복사할 지도가 없습니다' : ''));
-    gate('profile-save', reason || (!$('profile-id').value || !$('profile-name').value.trim() || !$('profile-rules').value ? 'ID·이름·지도 규칙을 입력하세요' : ''));
-    gate('profile-draft', reason || (!selectedProfile() ? '저장된 지도 설정을 고르세요' : ''));
-    if (selectedProfile()?.kind === 'soccer') gate('profile-draft', '축구장 기본 정보는 Games 설정용입니다. 차로 초안으로 불러오지 않습니다.');
-    gate('plane-load', !state.role ? '관제 접속이 필요합니다' : !$('plane-source').value ? '이 지도에 맞는 카메라 보정이 없습니다' : '');
-    gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
-    gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
+    setOffBy($('profile-new'), reason);
+    setOffBy($('profile-copy'), reason || (!shown() ? '복사할 지도가 없습니다' : ''));
+    setOffBy($('profile-save'), reason || (!$('profile-id').value || !$('profile-name').value.trim() || !$('profile-rules').value ? 'ID·이름·지도 규칙을 입력하세요' : ''));
+    setOffBy($('profile-draft'), reason || (!selectedProfile() ? '저장된 지도 설정을 고르세요' : ''));
+    if (selectedProfile()?.kind === 'soccer') setOffBy($('profile-draft'), '축구장 기본 정보는 Games 설정용입니다. 차로 초안으로 불러오지 않습니다.');
+    setOffBy($('plane-load'), !state.role ? '관제 접속이 필요합니다' : !$('plane-source').value ? '이 지도에 맞는 카메라 보정이 없습니다' : '');
+    setOffBy($('plane-clear'), plane ? '' : '불러온 영상이 없습니다');
+    setOffBy($('plane-pick'), plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
   }
 
   function reset() {

@@ -89,7 +89,7 @@ export function createTripProposalView({scope, call, anchor, active, approveReas
         busy = true; attempted = true; paint();
         try {
           const result = await call(`/api/fleet/trip-proposals/${encodeURIComponent(snapshot.proposal_id)}/admit`,
-            {method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
+            {inline: true, method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
               body: JSON.stringify({expected_proposal_digest: snapshot.proposal_digest, expected_generation: generation})});
           owner.check();
           if (current === version) {

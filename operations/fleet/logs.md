@@ -5647,3 +5647,8 @@
 - 변경: 홀드 해제 확인 창은 사유 메모가 필수다(단추 사유 "사유 메모을(를) 적어야 합니다") — 시험이 메모를 적고 본문 {cell_id, note}를 단언한다. 개발 샘플 제어 막대의 z-index 올림을 되돌리고(전송 단추를 덮었다) 오른쪽에 AI 창 폭만큼 안쪽 여백을 둬 단추가 창 아래로 가지 않게 했다(dev 전용 CSS).
 - 증거: D:/DevTemp/ui-panel-1118/remote-ui/run-1.txt. site-map 무지도 기록 시험 [False-1440]은 같은 코드에서 통과·실패가 갈려(remote-1 통과, remote-ui·remote-base 실패, main 통과) 간헐 실패로 보고 따로 다룬다.
 - gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · test(fleet): 정리 브랜치의 원격 실패 고침 — 노드 import 훅, camera-peer 자산 경로, 한 걸음 거절은 행 안 글자
+- 변경: 측정 보정·장치 프로필 노드 시험이 다른 웹 시험처럼 `register-console-assets.mjs` 훅을 쓴다(authorization.js가 이제 `/common/cause-line.js`를, device-profiles.js가 `/console/assets/authorization.js`를 가져온다). camera-peer 브라우저 시험 고정 서버가 `/console/assets/*`를 모두 shared에서 낸다. 로봇 도크 시험의 한 걸음 409는 이제 inline 호출이라 토스트가 아니라 `.step-nudge-status` 글자로 단언한다(토스트 0장도 단언, 알림 한 곳 규칙).
+- 증거: D:/DevTemp/ui-panel-1118/remote-1/run-1.txt(21 실패 중 이 브랜치가 만든 것: 노드 2·camera-peer 6·robot-dock 1·roster.css 중괄호 1(앞 커밋에서 고침)), 기준 c6c6d932e1 비교 D:/DevTemp/ui-panel-1118/remote-base/run-1.txt.
+- gate 변화: 없음(단언 강도 유지: 토스트 0장 추가).

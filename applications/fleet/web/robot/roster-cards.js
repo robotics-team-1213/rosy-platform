@@ -68,13 +68,13 @@ export function placeRosterCards(box, cards) {
   nodes.forEach((node, i) => { if (box.children[i] !== node) box.insertBefore(node, box.children[i] || null); });
 }
 
-export const OMX_CELL_DEFS = [
+const OMX_CELL_DEFS = [
   { target_id: "arm_a", kind: "omx_ai", label: "OMX-AI #1 (Cell A · S5 1·3단 적재)", shortLabel: "Cell A · arm_a (S5 1·3단)", stationId: "S2", stationName: "정지선 2 (상차)", stationX: 0.34, stationY: 0.015, base_x: 0.551, base_y: 0.365, head_x: 0.550, head_y: 0.109, head_yaw: -1.57, reach_m: 0.28, zoom: 4 },
   { target_id: "arm_b", kind: "omx_ai", label: "OMX-AI #2 (Cell B · S5 2단 적재·반출)", shortLabel: "Cell B · arm_b (S5 2단)", stationId: "S5", stationName: "분류 5 (동남)", stationX: 0.87, stationY: -0.38, base_x: 0.956, base_y: 0.370, head_x: 0.956, head_y: 0.113, head_yaw: -1.57, reach_m: 0.28, zoom: 4 },
   { target_id: "arm_s", kind: "omx_ai", label: "OMX-AI #3 (Cell S · S3 공급 셔틀)", shortLabel: "Cell S · arm_s (S3 공급)", stationId: "S3", stationName: "하차 3 (동북)", stationX: 0.67, stationY: -0.06, base_x: 0.960, base_y: -0.035, head_x: 0.703, head_y: -0.035, head_yaw: 3.14, reach_m: 0.28, zoom: 4 },
 ];
 
-export const STATION_INSPECT_LINKS = Object.freeze({
+const STATION_INSPECT_LINKS = Object.freeze({
   S2: { targetId: "arm_a", camId: "arm_a_wrist", label: "S2 상차 · arm_a" },
   S3: { targetId: "arm_s", camId: "arm_s_wrist", label: "S3 하역 셔틀 · arm_s" },
   S5: { targetId: "arm_b", camId: "arm_b_wrist", label: "S5 적재·반출 · arm_b" },

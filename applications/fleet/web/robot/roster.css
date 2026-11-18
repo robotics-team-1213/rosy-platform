@@ -7,27 +7,17 @@
 #discovery-pending { margin: 0; }
 
 .roster { display: flex; flex-direction: column; gap: var(--space-3); }
-.omx-dense-card { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-2); min-width: 0; padding-block: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
-.omx-dense-card > div { min-width: 0; }
-.omx-dense-card strong { font-size: var(--text-label); overflow-wrap: anywhere; }
-.omx-dense-card p { margin: var(--space-1) 0; font-size: var(--text-micro); overflow-wrap: anywhere; }
-.cell-cam-thumb { width: 6rem; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); cursor: zoom-in; }
-.cell-cam-thumb.focused { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; cursor: zoom-out; }
-.omx-card-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.omx-card-actions ui-button { min-width: 0; }
 .omx-right-inspector:not(:empty) { display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; box-sizing: border-box; margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--series-primary); border-radius: var(--radius-panel); background: var(--surface-raised); overflow: hidden; }
 .omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding-bottom: var(--space-1); border-bottom: 1px solid var(--border-subtle); }
 .omx-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .omx-inspector-head strong { font-family: var(--mono); font-size: var(--text-label); color: var(--series-primary); overflow-wrap: anywhere; }
 .omx-inspector-main-cam { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--series-primary); background: var(--surface-flat); cursor: zoom-in; }
 .omx-inspector-main-cam.focused { aspect-ratio: auto; max-height: 60vh; object-fit: contain; cursor: zoom-out; }
-.omx-inspector-single-wrap { display: grid; gap: var(--space-1); min-width: 0; }
 .omx-inspector-dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); min-width: 0; }
 @media (width < 30rem) {
   .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
 }
 .omx-inspector-dual-pane { display: grid; gap: var(--space-1); min-width: 0; }
-.omx-inspector-cam-badge { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: center; min-width: 0; }
 @media (width < 30rem) {
   .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); }
@@ -38,7 +28,6 @@
 .omx-inspector-pip.active { border-color: var(--series-primary); background: var(--surface-raised); }
 .omx-inspector-pip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); }
 .omx-inspector-pip small { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.omx-inspector-meta { margin: 0; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow-wrap: anywhere; }
 /* 카드는 내용 높이를 지킨다 — 스크롤 칸 안에서 줄어들면 까닭 줄과 버튼이 잘린다. */
 .roster > * { flex-shrink: 0; }
 
@@ -52,7 +41,7 @@
 .detail-refusal:empty, .detail-now:empty, #detail-localization:empty, #detail-skill:empty { min-width: 0; }
 /* The primary action group follows the facts; the profile, destinations and cell links are the second group. */
 .robot-detail-main > .robot-actions, .robot-detail-main > .card-trip { order: 1; }
-.robot-detail-main > :is(.quick-control-panel, [data-robot-profile], .robot-app-actions, section:not(.detail-now), details) { order: 2; }
+.robot-detail-main > :is(.quick-control-panel, [data-robot-profile], section:not(.detail-now), details) { order: 2; }
 .robot-evidence { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin: 0; color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); }
 .robot-evidence > * + *::before { content: "·"; margin-inline-end: var(--space-2); }
 
@@ -66,9 +55,6 @@
 .robot .trip-line { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-label); color: var(--text-primary); overflow-wrap: anywhere; }
 /* D-540 3 — 정상 로봇은 한 줄: 이름 · 운행 한 줄 · 배터리. 줄 전체가 펼침 단추다. */
 .robot[data-collapsed] { padding: 0; }
-.robot-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); width: 100%; }
-.robot-line b { font-family: var(--mono); letter-spacing: var(--track-wide); }
-.robot-line .trip-line { flex: 1 1 8rem; margin: 0; min-width: 0; color: var(--text-secondary); }
 
 .facts { margin: 0; }
 .facts dt { display: flex; align-items: center; gap: var(--space-1); }
@@ -102,7 +88,6 @@
 .robot-arm-readiness { margin: 0; font-size: var(--text-label); }
 .robot-summary { padding: var(--space-1) var(--space-3); }
 .robot-row-extra { grid-column: 1 / -1; display: grid; gap: var(--space-1); min-width: 0; }
-.robot-summary .robot-line { width: 100%; }
 .robot-summary-evidence { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-secondary); font-size: var(--text-label); overflow-wrap: anywhere; }
 .manual-control { margin-top: var(--space-3); }
 .robot-panel-manual { margin-top: var(--space-2); }
@@ -122,13 +107,9 @@
 
 .robot-summary { border-bottom: 1px solid var(--border-subtle); }
 .robot-summary.selected { background: var(--surface-raised); }
-.robot-summary .robot-line { align-items: center; justify-content: space-between; }
 .robot-summary .trip-line { margin: var(--space-1) 0; font-size: var(--text-label); overflow-wrap: anywhere; }
 .robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-1); }
 .robot-list-details { margin-top: var(--space-3); }
-
-.robot-line:focus-visible, .robot-fold:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
 /* Quick destinations: a flat group inside the robot panel (no box inside the box). */
 .quick-control-panel { display: grid; gap: var(--space-2); min-width: 0; padding-top: var(--space-2); border-top: 1px solid var(--border-subtle); }
@@ -180,13 +161,6 @@
   gap: var(--space-2);
   margin-top: var(--space-1);
 }
-.omx-summary-btns {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex-shrink: 0;
-}
-
 .tracker-box {
   border-top: 1px solid var(--border-subtle);
   padding-top: var(--space-2);
@@ -509,7 +483,6 @@
   box-shadow: none;
 }
 #fleet-robot-stage .robot-panel-wrap .robot-body,
-#fleet-robot-stage .robot-panel-wrap .robot-main,
 #fleet-robot-stage .robot-panel-wrap .robot-detail-main {
   display: grid;
   gap: var(--space-1);

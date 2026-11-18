@@ -1,7 +1,6 @@
 // D-655 draft edits and survey teach context; no DOM, robot command or activation.
-import {PLACE_KINDS} from './site-map-model.js';
+import {PLACE_KINDS, copy} from './site-map-model.js';
 
-function copy(map) { return JSON.parse(JSON.stringify(map)); }
 function category(kind) { return PLACE_KINDS.includes(kind) ? 'places' : kind === 'road' ? 'edges' : 'facilities'; }
 
 export function createSurveyDraft(mapId, reference) {

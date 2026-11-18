@@ -1,6 +1,6 @@
 // 관제 접속: 잠금·해제, 세션 확인, 토큰 입력과 비밀번호 로그인, 개발 접속 모드(D-248·D-473·D-519).
 // 토큰은 셸(console.js)의 auth 에 살고, 이 팩토리는 그 상태를 바꾸는 길을 가진다(D-798 3.2).
-import { applyRoleToControls, OPERATOR_REASON } from "/console/assets/authorization.js";
+import { applyRoleToControls, OPERATOR_REASON, isOperator } from "/console/assets/authorization.js";
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { createPasswordLogin } from "./password-login.js";
 import { isSignedOut, storeToken } from "/console/assets/console-token.js";
@@ -131,7 +131,7 @@ export function createMapSelectionBar({
     const openBtn = el("map-sel-open-panel"), sendBtn = el("map-sel-send");
     const armBtn = el("map-sel-arm-inspect");
     const stopBtn = el("map-sel-stop"), reasonEl = el("map-sel-reason");
-    const operatorAllowed = !auth.locked && auth.role === "operator" && !namedReason();
+    const operatorAllowed = !auth.locked && isOperator(auth.role) && !namedReason();
     const mobileSendReason = (mobileId) => {
       if (!mobileId) return "이동할 모바일 로봇을 먼저 선택하세요";
       if (!operatorAllowed) return auth.locked ? "관제 접속 필요" : OPERATOR_REASON;

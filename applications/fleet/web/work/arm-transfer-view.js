@@ -197,7 +197,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
         busy = true; attempted = true; paint();
         try {
           const result = await call(`/api/fleet/arm-transfers/jobs/${encodeURIComponent(snapshot.mission_id)}/admit`,
-            {method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
+            {inline: true, method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal],
               body: JSON.stringify({expected_proposal_digest: snapshot.proposal_digest, expected_generation: generation})});
           owner.check();
           if (current === version) {
@@ -217,7 +217,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
     busy = true; recoveryAttempted = true; recoveryError = ""; paint();
     try {
       const result = await call(`/api/fleet/arm-transfers/jobs/${encodeURIComponent(parent.mission_id)}/recovery`,
-        {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({request_key: randomUUID(), expected_context_digest: snapshot.context_digest})});
+        {inline: true, method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({request_key: randomUUID(), expected_context_digest: snapshot.context_digest})});
       life.check();
       if (current !== version) return;
       if (result.request?.context_digest !== snapshot.context_digest) throw new Error("invalid recovery request response");
@@ -240,7 +240,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
         busy = true; recoveryAttempted = true; recoveryError = ""; paint();
         try {
           const result = await call(`/api/fleet/arm-transfers/jobs/${encodeURIComponent(parent.mission_id)}/recovery/${encodeURIComponent(snapshot.request_id)}/approve`,
-            {method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal], body: JSON.stringify({
+            {inline: true, method: "POST", headers: {"Content-Type": "application/json"}, signals: [owner.signal], body: JSON.stringify({
               expected_proposal_digest: snapshot.proposal_digest, expected_evidence_digest: snapshot.evidence_digest, expected_generation: snapshot.expected_generation})});
           owner.check();
           if (current !== version) return;

@@ -8,7 +8,7 @@ import { fleetRobotProfile } from "./roster-presentation.js";
 import { CELL_PHASE } from "/console/assets/charge-bays-model.js";
 
 export const ARM_STOP_NOTE = "팔 단독 정지 없음 · 위 머리의 전체 비상 정지를 쓴다";
-export const ARM_DEFS = Object.freeze({
+const ARM_DEFS = Object.freeze({
   arm_s: { id: "arm_s", cellId: "cell_s", label: "arm_s (S3)", title: "OMX-AI #3 · arm_s (Cell S · S3 공급 셔틀)" },
   arm_a: { id: "arm_a", cellId: "cell_ab", label: "arm_a (S5)", title: "OMX-AI #1 · arm_a (Cell A · S5 1·3단 적재)" },
   arm_b: { id: "arm_b", cellId: "cell_ab", label: "arm_b (S5)", title: "OMX-AI #2 · arm_b (Cell B · S5 2단 적재·반출)" },
@@ -103,7 +103,7 @@ export function armRobotProfile(armId, plan, view, staleAfterS = 5) {
   };
 }
 
-export function mobileRobotProfile(robot, view, staleAfterS = 5) {
+function mobileRobotProfile(robot, view, staleAfterS = 5) {
   const base = fleetRobotProfile(robot, view, staleAfterS);
   const online = view?.stateUnavailable ? false : Boolean(robot?.online);
   const ageS = base.link?.ageS;
@@ -332,7 +332,7 @@ export function buildArmSections({ call, view, isOperator, namedReason, refresh,
             }
           : { arm_id: profile.id, cell_id: detail.def.cellId };
         await call("/api/fleet/arm-transfers/jobs", {
-          method: "POST",
+          inline: true, method: "POST",
           headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
           body: JSON.stringify(body),
           ...(sig ? { signals: [sig] } : {}),
@@ -377,7 +377,7 @@ export function buildArmSections({ call, view, isOperator, namedReason, refresh,
       cancelBtn.setAttribute("reason", "작업 취소 요청 중");
       try {
         await call(`/api/fleet/cell-jobs/${encodeURIComponent(missionId)}/cancel`, {
-          method: "POST",
+          inline: true, method: "POST",
           headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
           body: JSON.stringify({}),
           ...(sig ? { signals: [sig] } : {}),

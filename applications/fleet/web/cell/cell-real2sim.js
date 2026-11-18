@@ -1,4 +1,5 @@
 // Real-to-Sim <-> Sim-to-Real closed-loop pipeline view for the Cell workspace (D-947, D-1012).
+import {OPERATOR_REASON} from '/console/assets/authorization.js';
 import {
   CELL_TASKS_PATH,
   cellTaskSummaryPairs,
@@ -111,7 +112,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, ce
 
   function syncOperatorButtons() {
     const allowed = Boolean(isOperator());
-    const reason = allowed ? '' : '운영자 권한이 필요합니다';
+    const reason = allowed ? '' : OPERATOR_REASON;
     const staticIds = [
       'real2sim-evaluate', 'real2sim-run', 'real2sim-promote',
       'cell-task-preset-run', 'cell-task-create', 'cell-vision-auto-check',

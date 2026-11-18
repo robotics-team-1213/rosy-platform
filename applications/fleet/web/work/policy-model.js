@@ -15,7 +15,6 @@ export const REASON_LABELS = {
 export const RESOLUTION_LABELS = {resume: '재개', abort: '중단', send_to_learning: '학습으로 되돌림'};
 export const TWO_PERSON_REASON = '제안한 사람과 다른 관리자가 승인해야 합니다';
 export const ADMIN_REASON = '정책 관리자 권한이 필요합니다';
-export const OPERATOR_REASON = '이름 있는 운영자 로그인이 필요합니다';
 
 function permits(session, capability, legacyRoles) {
   if (!session) return false;

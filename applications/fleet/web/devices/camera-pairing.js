@@ -2,6 +2,7 @@
 // 콘솔은 6자리 코드를 모른다 — 운영자가 폰 화면의 코드를 입력해 Fleet으로만 보낸다.
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createCameraPairingPanel 이 화면 배선이다.
 
+import {isOperator} from "/console/assets/authorization.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createRequest } from "/common/request.js";
 import { canManage } from "./enrollment.js";
@@ -13,7 +14,6 @@ export const PENDING_POLL_MS = 2500;
 const CREDENTIAL_EVERY = 3;
 
 export const UNAVAILABLE = "이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다.";
-export const CONFIRM_PROMPT = "폰 화면과 이 지문·자격 ID가 같은지 확인하세요";
 
 export function normalizePairingCode(text) {
   return String(text ?? "").replace(/[\s-]/g, "");
@@ -65,10 +65,6 @@ export function queueHealthText(listing) {
 
 export function canApprove(identity) {
   return canManage(identity);
-}
-
-export function freeSources(listing) {
-  return (listing?.paired_sources || []).filter((s) => !s.has_credential).map((s) => s.source_id);
 }
 
 // 승인 대상: 빈 자리를 먼저, 그 뒤에 교체할 수 있는 자리(기기 이름·자격 ID를 보여 준다).
@@ -335,7 +331,7 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
 
   function renderIdentity() {
     const who = identity();
-    el("camera-identity-note").hidden = !(who?.role === "operator" && !canApprove(who));
+    el("camera-identity-note").hidden = !(isOperator(who?.role) && !canApprove(who));
   }
 
   function openApprove(row) {

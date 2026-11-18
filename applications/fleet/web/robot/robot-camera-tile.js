@@ -13,7 +13,7 @@ export function robotCameraSourceId(robotId) {
 }
 
 /** Resolve first registered front camera source id among `pinky_<N>_front`, `pinky_<N>`, `${robotId}_front`, `${robotId}`. */
-export function resolveRobotCameraSourceId(robotId, sources) {
+function resolveRobotCameraSourceId(robotId, sources) {
   const id = String(robotId ?? "");
   if (!id || !sources?.size) return null;
   const match = id.match(/(\d+)$/);

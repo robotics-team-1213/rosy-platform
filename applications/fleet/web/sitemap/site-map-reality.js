@@ -1,4 +1,5 @@
 // Map vs where robots actually drove (D-594 path history): report only, and one draft correction.
+import {setOffBy} from '/common/cause-line.js';
 import {CAMERA_VERDICT_TEXT} from '/console/assets/site-map-camera-draft.js';
 import {confirmIrreversible} from '/common/ui.js';
 
@@ -52,9 +53,9 @@ export function createRealityPanel(host) {
   function sync() {
     fillRobots();
     const reason = host.reason();
-    host.gate('reality-check', reason);
-    host.gate('reality-camera', reason);
-    host.gate('reality-apply', reason || (host.dirty() ? '수정한 초안을 먼저 저장하세요' : '')
+    setOffBy($('reality-check'), reason);
+    setOffBy($('reality-camera'), reason);
+    setOffBy($('reality-apply'), reason || (host.dirty() ? '수정한 초안을 먼저 저장하세요' : '')
       || (!host.draft()?.revision ? '초안을 먼저 저장하세요' : '')
       || (!report ? '먼저 대조하세요' : !report.fit?.accepted ? '적용할 보정이 없습니다' : ''));
     host.status('reality-verdict', describe() + (cameraVerdict ? ` · 카메라: ${CAMERA_VERDICT_TEXT(cameraVerdict)}` : ''),

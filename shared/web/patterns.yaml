@@ -40,3 +40,20 @@ patterns:
 #   - `.region-head`(감지·관측·조작 레일)는 구획 제목이 아니다.
 # 학습 검수 판정 줄 하단 고정(명세 9): 보류. sticky는 부모 상자 안에서만 걸리고 ui-shell·검수 칸이 container-type을 가져 fixed도 쓸 수 없다. DOM 이동이 필요해 별도 화면 PR.
 
+# 11-18 UI 패널 게이트 ③(test_patterns_registry.py test_helpers_are_defined_once_and_direct_writes_only_go_down).
+# helpers: 정본 하나를 둔 작은 도우미. module 밖에서 name·aliases를 function·const·let으로 다시 정의한 곳의 수 상한.
+# direct: 정본(owners) 밖 Fleet·shared/web 제품 JS가 직접 쓴 줄 수 상한(주석 제외, 문자열 포함).
+# duplicate_bodies: 본문(문자열 비움·공백 제거) 35자 이상이 두 파일 이상에 같은 함수 묶음 수 상한.
+# 모든 ceiling은 수가 늘면 실패, 줄면 같은 변경에서 내린다.
+helpers:
+  - {name: setOff, module: shared/web/cause-line.js, aliases: [setOffBy, setReason, blockWith], ceiling: 2}  # gate·guard는 다른 뜻으로도 쓰는 이름이라 본문 복제(duplicate_bodies)가 잡는다
+  - {name: describeBy, module: shared/web/cause-line.js, aliases: [], ceiling: 0}
+  - {name: node, module: shared/web/control-dom.js, aliases: [nodeWithText], ceiling: 13}
+  - {name: isOperator, module: applications/fleet/web/shared/authorization.js, aliases: [], ceiling: 0}
+direct:
+  - {what: reason 속성 직접 쓰기, pattern: '(?:set|remove)Attribute\(\s*["'']reason["'']', owners: [shared/web/ui.js, shared/web/cause-line.js, shared/web/choice-group.js], ceiling: 109}
+  - {what: 운영자 역할 직접 비교, pattern: 'role\s*[!=]==?\s*["'']operator["'']', owners: [applications/fleet/web/shared/authorization.js], ceiling: 1}  # fleet-header.js 표시 색(권한 판정 아님)
+  - {what: 권한 문구 직접 쓰기, pattern: '운영자 권한이 필요합니다', owners: [applications/fleet/web/shared/authorization.js], ceiling: 2}  # "이름 있는·기명 운영자 권한이…" 다른 문구 2
+  - {what: 콘솔 토큰 저장 키, pattern: 'rosy-console-token', owners: [applications/fleet/web/shared/console-token.js], ceiling: 2}
+  - {what: "'초 전' 손 포맷", pattern: '초 전', owners: [shared/web/core_ui_logic.js, shared/web/evidence-line.js, shared/web/value-text.js, shared/web/component-gallery.js], ceiling: 42}
+duplicate_bodies: {ceiling: 10}

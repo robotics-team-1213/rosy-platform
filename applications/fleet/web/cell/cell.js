@@ -1,5 +1,5 @@
 import {randomUUID} from "/console/assets/uuid.js";
-import {OPERATOR_REASON} from "/console/assets/authorization.js";
+import {OPERATOR_REASON, isOperator} from "/console/assets/authorization.js";
 import {isSignedOut, readToken} from '/console/assets/console-token.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
@@ -51,7 +51,7 @@ let previewRefs = null, role = null, busy = false, lastBusy = null, lastRole = u
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 const catalog = createObjectCatalog({request, $});
-const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy,
+const real2sim = createReal2SimPipeline({request, $, isOperator: () => isOperator(role) && !busy,
   cellFrames: createCellFrameFeed({call: request}), confirm: confirmIrreversible});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
@@ -117,14 +117,14 @@ function refreshControls(syncFields = false) {
     const needsJob = id in jobActionLabels;
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
-    const allowed = role === 'operator' && !busy && jobAllowed && !sheetBlocked &&
+    const allowed = isOperator(role) && !busy && jobAllowed && !sheetBlocked &&
       (id !== 'propose' || (scopeFilled() && previewRefs !== null && (!channelRequested || (channelReceipt && channelReview?.state !== 'LINKED'))));
     let reason = '';
     if (!allowed) {
       reason = id === 'propose' && !scopeFilled() ? '작업 셀 ID와 실행 인스턴스 ID를 입력하세요' : '저장 후 미리보기 필요';
       if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
       if (sheetBlocked) reason = '작업자 간지 삽입 확인 대기';
-      if (role !== 'operator') reason = OPERATOR_REASON;
+      if (!isOperator(role)) reason = OPERATOR_REASON;
       if (busy) reason = '요청 처리 중';
     }
     $(id).disabled = !allowed; $(id).setAttribute('reason', reason);
@@ -477,14 +477,14 @@ $('new-proposal').addEventListener('click', () => {
 for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
   $(command).addEventListener('click', async () => {
     if (command === 'cancel' || (command === 'admit' && channelRequested)) {
-      if (busy || role !== 'operator' || !job || job.mission_id !== $('mission-id').value) return;
+      if (busy || !isOperator(role) || !job || job.mission_id !== $('mission-id').value) return;
       const id = job.mission_id, epoch = editEpoch;
       const allowed = await confirmIrreversible({
         message: command === 'admit' ? `대화 요청에 연결된 팔레트 적재 작업 "${id}"의 실행을 승인할까요?` :
           `작업 "${id}"을 취소할까요? 작업 취소는 실행 중인 장치를 정지하지 않습니다. 실제 장치 상태를 확인하세요.`,
         action: command === 'admit' ? '실행 승인' : '작업 취소', opener: $(command),
       });
-      if (!allowed || busy || epoch !== editEpoch || role !== 'operator' || job?.mission_id !== id) return;
+      if (!allowed || busy || epoch !== editEpoch || !isOperator(role) || job?.mission_id !== id) return;
     }
     await action(async () => {
       if (!job || job.mission_id !== $('mission-id').value) throw new Error('작업 상태를 먼저 확인하세요.');

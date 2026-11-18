@@ -23,7 +23,7 @@ import { createChargeBaysView } from "./charge-bays-view.js";
 import { createPlatoonView } from "./platoon-view.js";
 import { createTrackingView } from "./tracking-view.js";
 import { createVisionView } from "/console/assets/vision-view.js";
-import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON } from "/console/assets/authorization.js";
+import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON, isOperator } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { createDeviceDiscovery } from "/console/assets/device-discovery.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
@@ -61,15 +61,15 @@ const layoutPanels = [document.querySelector('.queues-panel'), document.querySel
 const MAP_PANEL = 1;
 const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
   robots: () => view.robots,
-  canManage: () => !auth.locked && auth.role === "operator" && !namedReason(),
-  canSubmit: robotId => !auth.locked && auth.role === "operator" && !namedReason() && !view.stateUnavailable
+  canManage: () => !auth.locked && isOperator(auth.role) && !namedReason(),
+  canSubmit: robotId => !auth.locked && isOperator(auth.role) && !namedReason() && !view.stateUnavailable
     && !motionCommandReason(view, robotId, "goal")
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
 const workView = createWorkView({scope: pageScope, call, el, channelRequestView,
   confirm: options => confirmedAction.run(options),
   principal: () => auth.principal,
-  approveReason: () => auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
+  approveReason: () => !isOperator(auth.role) ? OPERATOR_REASON : namedReason()});
 // D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
 const requestedView = area.get("view");
 const workArea = requestedView === "work";
@@ -144,7 +144,7 @@ const view = {
   stateLoaded: false,
   receivedAtMs: null,  // D-493: 마지막 state 응답을 받은 브라우저 시각
   addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
-  isOperator: () => auth.role === "operator" && !namedReason(),
+  isOperator: () => isOperator(auth.role) && !namedReason(),
 };
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
 const alertPopup = createAlertPopup({ mount: el("alert-popup-region"), onNavigate: navigateFromAlert,
@@ -380,7 +380,7 @@ function render() {
     view.robotSelection?.get?.() || "", view.mapSelection?.kind || "", view.selected || "",
   ].join("|");
   // A non-operator re-applies every paint: formation/convoy renders put their own reasons back on locked buttons.
-  if (roleApplyKey !== lastRoleApplyKey || auth.role !== "operator") {
+  if (roleApplyKey !== lastRoleApplyKey || !isOperator(auth.role)) {
     lastRoleApplyKey = roleApplyKey;
     applyRoleToControls(auth.role, operatorControls());
   }
@@ -454,12 +454,12 @@ const mapView = createMapView({ scope: pageScope,
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 roster = createRoster({ scope: pageScope, el, view, log, call, render,
-  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction,
+  streamEvidence: mapView.streamEvidence, isOperator: () => isOperator(auth.role), namedReason, confirmedAction,
   onSelectionChanged: () => { clearPinStart(); } });
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   onStatusChange: () => { if (!el("map-selection-bar")?.hidden) renderMapSelectionBar(); },
-  namedReason: () => auth.locked ? "관제에 다시 접속하세요." : auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
+  namedReason: () => auth.locked ? "관제에 다시 접속하세요." : !isOperator(auth.role) ? OPERATOR_REASON : namedReason()});
 robotDock = createRobotDockBinding({
   scope: pageScope,
   el,
@@ -469,7 +469,7 @@ robotDock = createRobotDockBinding({
   manualControl,
   assistant,
   onOpen: closeTransientPopovers,
-  isOperator: () => auth.role === "operator",
+  isOperator: () => isOperator(auth.role),
   namedReason,
   refresh: () => chargeBays?.refresh(),
   render,
@@ -511,7 +511,7 @@ view.openFormationWorkspace = () => {
 view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openTrip(robotId); render(); };
 paintMove = createMovePanel({ scope: pageScope, el, view, getRoster: () => roster, render });
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
-const operatorDeps = { scope: pageScope, view, call, log, isOperator: () => auth.role === "operator", namedReason };
+const operatorDeps = { scope: pageScope, view, call, log, isOperator: () => isOperator(auth.role), namedReason };
 const lineStuck = createLineStuckPanel(operatorDeps);
 const deviceWatch = createDeviceWatch({ scope: pageScope, el, view });
 const stationRecovery = createStationRecovery(operatorDeps);
@@ -520,7 +520,7 @@ const tripReplan = createTripReplan({ ...operatorDeps, openCard: (robotId) => { 
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
-  isOperator: () => auth.role === "operator" && !auth.locked, namedReason });
+  isOperator: () => isOperator(auth.role) && !auth.locked, namedReason });
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
 const visionView = createVisionView({
   scope: pageScope, el, call, rawOnly: true,

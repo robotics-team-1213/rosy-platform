@@ -176,7 +176,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     if (policyBusy || approveReason()) return;
     const life = scope.capture(); policyBusy = true; policyNotice = ""; paintPolicy();
     try {
-      const result = await call("/api/fleet/policy-admission", {method: "POST",
+      const result = await call("/api/fleet/policy-admission", {inline: true, method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({enabled: !policy?.scope?.enabled})});
       life.check(); policy = result.status ?? policy; policyNotice = "";
@@ -337,7 +337,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     busy = true; refusal = ""; showDetail(row);
     try {
       const control = await call("/api/fleet/dispatch-control"); life.check();
-      await call(`/api/fleet/missions/${encodeURIComponent(row.source_id)}/admit`, {method: "POST",
+      await call(`/api/fleet/missions/${encodeURIComponent(row.source_id)}/admit`, {inline: true, method: "POST",
         headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_generation: control.generation})});
     } catch (error) {
       // a late answer belongs to its own row; a newer selection keeps its own (clear) refusal

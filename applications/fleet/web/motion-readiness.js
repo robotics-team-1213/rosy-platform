@@ -65,7 +65,7 @@ export function noRobotServesGrid(robots) {
 }
 
 // The trailing number is the order: rosy_2 leads rosy_10. No number sorts after every number.
-export function robotOrderNumber(robotId) {
+function robotOrderNumber(robotId) {
   const parts = String(robotId ?? "").match(/\d+/g);
   if (!parts) return null;
   const value = Number(parts[parts.length - 1]);

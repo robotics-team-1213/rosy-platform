@@ -1,8 +1,8 @@
 // D-941 5/7: the charge-bay plan remains display-only; robot/arm inspection and actions live in C23/C24 (robot-dock-binding.js).
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
-import { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from "/console/assets/charge-bays-model.js";
+import { chargeBayRows } from "/console/assets/charge-bays-model.js";
 
-export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText };
+export { chargeBayRows };
 
 export function createChargeBaysView({ scope, el, call, auth, onPlan = null }) {
   const state = el("charge-bays-state");

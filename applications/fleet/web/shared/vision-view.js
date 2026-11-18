@@ -9,7 +9,6 @@ export function parsePlaneHeader(value) {
   return [min_x, min_y, max_x, max_y, ppm].every(Number.isFinite) && min_x < max_x && min_y < max_y && ppm > 0 ? { min_x, min_y, max_x, max_y, ppm } : null;
 }
 export const planeToMap = (plane, u, v) => ({ x: plane.min_x + u / plane.ppm, y: plane.max_y - v / plane.ppm });
-export const mapToPlane = (plane, x, y) => ({ u: (x - plane.min_x) * plane.ppm, v: (plane.max_y - y) * plane.ppm });
 export const planeFitsImage = (plane, width, height) =>
   Math.abs((plane.max_x - plane.min_x) * plane.ppm - width) <= 1 && Math.abs((plane.max_y - plane.min_y) * plane.ppm - height) <= 1;
 export const planeCalibrationsFor = (calibrations, siteMap, source) => (calibrations || []).filter((row) =>

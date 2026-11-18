@@ -1,11 +1,12 @@
 // D-982: the trip form's `현장 규칙 판정` — ask the site rules "go / wait / refuse" for a what-if state with
 // the same pure functions Fleet uses live (`POST /api/fleet/site-rules/judge`). Advice only: nothing is sent
 // to a robot and nothing changes. Picks are selects, so a poll keeps the card while one has focus.
+import { setOff } from "/common/cause-line.js";
 import { quietButton } from "./queues.js";
 
 const SECONDS = [0, 5, 10, 20, 30, 60];
 /** kind -> label and the picks: [key, label, choices, default]; `null` means "use the rule's default". */
-export const RULE_KINDS = Object.freeze({
+const RULE_KINDS = Object.freeze({
   return: { label: "충전 복귀", picks: [
     ["percent", "배터리 %", [5, 10, 15, 20, 30, 50, 80, 100], 50],
     ["bays", "충전 칸 수", [0, 1, 2, 3, 4], 2],
@@ -28,7 +29,7 @@ const REASON = Object.freeze({
 });
 
 /** Pure: the `state` of a judge request for this robot from the picked values. */
-export function ruleJudgeState(kind, robotId, v) {
+function ruleJudgeState(kind, robotId, v) {
   if (kind === "return") {
     const bays = Array.from({ length: v.bays }, (_, i) => `칸${i + 1}`);
     const taken = Math.min(v.taken, bays.length);
@@ -47,7 +48,7 @@ export function ruleJudgeState(kind, robotId, v) {
 }
 
 /** Pure: "감 · 내 차례" style text for an answer. */
-export function ruleAnswerText(answer) {
+function ruleAnswerText(answer) {
   const [text] = VERDICT[answer.verdict] || [answer.verdict];
   return `${text} · ${REASON[answer.reason] || answer.reason}`;
 }
@@ -133,7 +134,7 @@ export function ruleJudgeSection({ mine, robot, call, scope, render }) {
     try {
       const body = { state: ruleJudgeState(rule.kind, robot.robot_id, values), source: rule.draft ? "draft" : "active" };
       const answer = await call("/api/fleet/site-rules/judge",
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        { inline: true, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       life.check();
       rule.answer = answer;
     } catch (err) {
@@ -145,8 +146,7 @@ export function ruleJudgeSection({ mine, robot, call, scope, render }) {
       if (life.current()) render();
     }
   }));
-  ask.disabled = rule.busy;
-  ask.setAttribute("reason", "판정 중");
+  setOff(ask, rule.busy, "판정 중");
   box.append(draft, ask, out);
   return box;
 }

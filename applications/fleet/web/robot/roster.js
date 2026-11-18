@@ -1,3 +1,4 @@
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import { DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_LABEL, LINE_STATE_LABEL,
   enumLabel, operatorModeLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
@@ -14,6 +15,7 @@ import { createFleetMotorHealth } from "./motor-health-view.js";
 import { placeRosterCards as place, mustExpand, selectRobot, createRoiPoller,
   buildQuickControlPanel, appendDetailSlots, appendDetailCamera, createDetail3dController,
   leaveTwinOrCameraView, leaveCameraView } from "./roster-cards.js";
+import { setOffBy } from "/common/cause-line.js";
 import { createStepNudge } from "/console/assets/step-nudge.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
@@ -21,7 +23,7 @@ import {createCellFrameFeed} from "/console/assets/cell-frames.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
 import { stepQueuedStarts } from "./localization-view.js";
 import { valueText } from "/common/value-text.js";
-import { createRosterSummary, fleetRobotProfile, nodeWithText, tag, blockWith, navTag, queuedReason, offlineWhy,
+import { createRosterSummary, fleetRobotProfile, nodeWithText, tag, navTag, queuedReason, offlineWhy,
   IDENTIFY_REASON, LAMP_REASON } from "./roster-presentation.js";
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction, onSelectionChanged = () => {} }) {
@@ -325,7 +327,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     aim.setAttribute("aria-pressed", view.selected === robot.robot_id ? "true" : "false");
     const currentLineFollow = state.line_follow || {};
     const lineFollowActive = currentLineFollow.mode === "CAMERA_LINE" || currentLineFollow.mode === "IR_LINE";
-    blockWith(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
+    setOffBy(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
         : capabilityReason(robot.capabilities, 'navigation.goal_navigation') || motionCommandReason(view, robot.robot_id, 'goal')
           || ((!view.map && !view.siteMap) ? "지도 없음" : estop === true ? "비상정지 중" : estop !== false ? "안전 상태 확인 불가" : lineFollowActive ? "차선 추종 중" : "")));
@@ -346,7 +348,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const pin = uiBtn(view.pinning === robot.robot_id ? "위치를 찍고 방향으로 끄세요" : "위치 찍기", "toggle");
     pin.dataset.pinRobotId = robot.robot_id;
     pin.setAttribute("aria-pressed", view.pinning === robot.robot_id ? "true" : "false");
-    blockWith(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
+    setOffBy(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
         : !view.map && !view.siteMap ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
     pin.addEventListener("click", scope.guard(() => {
@@ -363,7 +365,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const cancel = uiBtn("운행 취소");
     cancel.title = shown.text;
     cancel.dataset.cancelScope = shown.trip ? "trip" : shown.lane ? "goal-lane" : "goal";
-    blockWith(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
+    setOffBy(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online && !shown.trip ? (offlineWhyId ? "위 사유" : "로봇 오프라인") : "");
     if (offlineWhyId) cancel.setAttribute("aria-describedby", offlineWhyId);
     cancel.addEventListener("click", scope.guard(() => stopRobot(robot.robot_id)));
@@ -373,9 +375,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       && lineFollow.reason === "camera_reselection_required";
     if (cameraFaultLatched || lineFollow.mode === "IR_LINE") {
       const fallback = uiBtn(lineFollow.mode === "IR_LINE" ? "IR 차선 추종 끄기" : "IR 차선 추종으로 전환…");
-      blockWith(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
+      setOffBy(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
-          : !isOperator() ? "운영자 권한이 필요합니다"
+          : !isOperator() ? OPERATOR_REASON
             // D-540 9: IR 추적 선택은 움직임, 중지(OFF)는 멈춤이다.
             : lineFollow.mode !== "IR_LINE" ? namedReason() : "");
       fallback.addEventListener("click", scope.guard(async () => {
@@ -406,7 +408,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       actions.append(fallback);
     }
     const identify = uiBtn("LED로 찾기");
-    blockWith(identify, !isOperator() ? "운영자 권한이 필요합니다"
+    setOffBy(identify, !isOperator() ? OPERATOR_REASON
       : namedReason() ? namedReason()
       : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
         : estop !== false ? "안전 상태 확인이 필요합니다" : "");
@@ -434,13 +436,13 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         if (error.name !== "AbortError") log(`${robot.robot_id} LED 확인 거부 · ${error.message}`, "bad");
       }
     }));
-    const powerButton = createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason, blockWith });
+    const powerButton = createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason });
     actions.append(aim, pin, trip.toggle(robot), cancel, identify, powerButton);
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
       const move = uiBtn("새 주소로 옮기기…");
       move.dataset.moveRobotId = robot.robot_id;
-      blockWith(move, moveAddressBlocked());
+      setOffBy(move, moveAddressBlocked());
       move.addEventListener("click", scope.guard(() => moveAddress(robot.robot_id)));
       actions.append(move);
     }

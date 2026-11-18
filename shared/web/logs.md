@@ -1405,3 +1405,18 @@
 - 변경: `test_content_vocabulary.py` `declared()`가 `--토큰` 이름을 `var(--토큰)` 사용으로 확인한다(S3에서 표의 `.ui-sidebar`를 `--sidebar-track`으로 바꾼 뒤 탐지기가 토큰을 몰라 실패). `patterns.yaml` C10 채택 화면을 연결 배너를 실제로 쓰는 `fleet-header.js`로 바꿨다(S7에서 connection-view의 두 번째 알림을 지움).
 - 증거: 착지 land-feat-ui-refine-20261117215146 단독 실행 실패 2건, 수정 뒤 원격 D:/DevTemp/ui-refine-1118/remote-r3b/run-1.txt 통과.
 - gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · refactor(fleet-web): setOff 변종 9개를 공용 cause-line으로
+- 변경: `cause-line.js`에 `setOffBy(control, reason)`을 더했다 — Fleet의 같은 본문 변종 9개(gate·guard·setReason·blockWith)의 정본. `test_shared_controls.py` scan_disabled가 setOffBy도 읽어 사유 인자(2번째)가 없으면 실패한다.
+- 증거: python으로 scan_disabled(disabled_scripts()) 직접 호출, 누락 0·폭 변화 없음.
+- gate 변화: scan_disabled REASON_HELPER에 setOffBy 추가(강화).
+
+## 2026-11-18 · uncommitted · refactor(web): 어디서도 import하지 않는 export 58개의 export 키워드 제거
+- 변경: shared/web export 10개(account-gate RELOAD_NOTE·LOGOUT_DELAYED, connection-notice CONNECTION_TEXT, localization-state REVOKE_TEXT, robot-3d-assets MODELS, stop-control stopFailureText, webrtc STALE_WARN_MS·STALE_HIDE_MS·RENEW_MS·WATERMARK_WIDTH)의 export 키워드 제거 — 저장소 어디서도 import하지 않음(middleware 포함).
+- 증거: 위 집계, node shared/web 시험 147 통과.
+- gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · test(web): 재발 방지 래칫 3개 — inline 명시, 소비자 0 이름, 정본 밖 재정의·복제·직접 쓰기
+- 변경: test_shared_dedupe.py `unused_names()`/`test_names_nobody_uses_only_go_down` — 정의 파일 밖(저장소 전체, md 제외)에 이름이 안 나오는 export·시험만 쓰는 export(이음매 2개 TEST_SEAMS 이유 포함)·제품 CSS 클래스(템플릿 `접두-${` 처리)·HTML id를 세어 상한(UNUSED_CEILING)과 같아야 한다. patterns.yaml에 `helpers`(setOff·describeBy·node·isOperator 정본 밖 재정의), `direct`(reason 직접 쓰기·운영자 역할 비교·권한 문구·콘솔 토큰 키·"초 전" 손 포맷 줄 수), `duplicate_bodies`(본문 35자 이상 두 파일 이상 같은 함수 묶음) 상한을 두고 test_patterns_registry.py `test_helpers_are_defined_once_and_direct_writes_only_go_down`이 읽는다. 늘면 실패, 줄면 상한을 같이 내리라는 메시지로 실패. 게이트 자체 견본 시험 `test_the_helper_gate_sees_copies_and_ignores_comments`.
+- 증거: 노트북 python으로 집계 함수와 두 시험 함수를 직접 호출해 통과(pytest는 원격). 기준선: export 0·시험 전용 0·CSS 0·HTML id 20; helpers setOff 2(formation·channel-request 얇은 어댑터)·describeBy 0·node 13·isOperator 0; direct reason 109·role 1(fleet-header 표시 색)·권한 문구 2(다른 문구 2)·토큰 키 2·초 전 42; 본문 복제 10묶음.
+- gate 변화: 새 정적 래칫 2개(test_shared_dedupe·test_patterns_registry) + patterns.yaml helpers·direct·duplicate_bodies 절.
