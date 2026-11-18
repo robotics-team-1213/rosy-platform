@@ -222,7 +222,7 @@ def test_layout_takes_the_ship_from_a_snapshot(tmp_path):
     path = tmp_path / "snap.json"
     path.write_text(json.dumps(s), encoding="utf-8")
     base, moved = sites.Layout(), sites.Layout(cell_snapshot=str(path), ship_pose="snapshot")
-    a, b = base.sites["ship-stern-l0"]["xy"], moved.sites["ship-stern-l0"]["xy"]
+    a, b = base.sites["ship-h1r1-l0"]["xy"], moved.sites["ship-h1r1-l0"]["xy"]
     assert b[0] - a[0] == pytest.approx(.1705 - base.choices["ship_stern_x_m"], abs=1e-6)
     assert b[1] - a[1] == pytest.approx(-.011 - base.choices["ship_centre_y_m"], abs=1e-6)
     with pytest.raises(ValueError, match="no measured ship"):
@@ -610,10 +610,29 @@ def test_temp_plate_v12_lanes_seat_containers_without_interlane_wall_overlap():
         assert tilt < 0.5, site
 
 
+def test_pace_seconds_track_budget_slows_low_kp_joints():
+    """A contact descent is paced by the servo's ramp lag: half the kp needs about twice the time; without a budget nothing changes."""
+    import omx_real2sim_comp as r2s_comp
 
+    def world(kp):
+        class M:
+            actuator_forcerange = np.tile([[0.0, 3.0]], (5, 1))
+            dof_damping = np.full(5, 0.25)
+            dof_frictionloss = np.full(5, 0.03)
+            actuator_gainprm = np.tile([[kp, 0.0, 0.0]], (5, 1))
+            actuator_biasprm = np.tile([[0.0, -kp, -6.3]], (5, 1))
 
+        class W:
+            model = M()
+            q = {"arm_b": np.arange(0, 6)}
+            arm_dof = act = {"arm_b": np.arange(0, 5)}
 
+        return W()
 
-
-
-
+    q0, q1 = np.zeros(5), np.array([0.0, 0.05, 0.08, -0.10, 0.0])
+    fast, slow = (r2s_comp.ServoCompensator(world(kp)) for kp in (40.0, 20.0))
+    assert fast.pace_seconds("arm_b", q0, q1, 1.5) == slow.pace_seconds("arm_b", q0, q1, 1.5) == 1.5
+    budget = math.radians(1.5)
+    t40, t20 = (c.pace_seconds("arm_b", q0, q1, 1.5, track_rad=budget) for c in (fast, slow))
+    assert t20 == pytest.approx(1.5 * 0.10 * (6.3 + 0.25) / 20.0 / budget)
+    assert t20 > t40 >= 1.5

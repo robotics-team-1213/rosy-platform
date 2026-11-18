@@ -58,7 +58,7 @@ import remote_test_tools  # noqa: E402
 import host_caps, host_probe  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, current_profile, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
-from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, order, history,  # noqa: E402,F401
+from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, order, history, queue_order,  # noqa: E402,F401
                         small_first, small_only, stranded, upgrade_watch, wanted, workers)
 
 CANCELLED = remote_job.CANCELLED
@@ -353,7 +353,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     cores = max((int(w[15:]) for inv in invocations for w in itertools.takewhile(ENV_ARG.match, inv)
                  if w.startswith("ROSY_JOB_CORES=") and w[15:].isdigit()), default=0)
     # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
-    work = Work(sorted(range(len(invocations)), key=lambda i, s=history(repo): order(repo, invocations[i], s)), on_done, stop=stop)
+    work = Work(queue_order(repo, invocations), on_done, stop=stop)
     reruns = {}  # Work index -> original failure and the remaining quarantine rerun; never a completed code
     host_probe.FULL = False; hosts = placed_hosts("pytest", cores=cores)  # FULL: only a real placement may say "full"
     wants = host_caps.needs(repo, sha, invocations)  # HOST_CAPABILITIES a test module declares
