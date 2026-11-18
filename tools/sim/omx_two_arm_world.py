@@ -207,10 +207,8 @@ class World:
             base.update(sites.WRIST_PHOTO)
         elif self.wrist == "photo-20261110":
             base.update(sites.WRIST_PHOTO_A if p == "a_" else sites.WRIST_PHOTO)
-        elif self.wrist == "shared-20261118":  # one mount for both arms: no measured arm difference yet
-            base.update(sites.WRIST_SHARED)
         link5 = spec.body(p + "link5")
-        if self.wrist in ("v21-b", "photo-20261108", "photo-20261110", "shared-20261118"):  # the printed D holder: link5 is the team's parts, not the stock mesh with ROBOTIS frame F9 (both see and collide)
+        if self.wrist in ("v21-b", "photo-20261108", "photo-20261110"):  # the printed D holder: link5 is the team's parts, not the stock mesh with ROBOTIS frame F9 (both see and collide)
             for part in link5.geoms:
                 part.contype = part.conaffinity = 0
                 part.rgba = [0, 0, 0, 0]

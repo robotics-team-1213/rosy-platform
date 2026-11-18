@@ -232,18 +232,21 @@ def test_strict_pose_judge_names_each_limit(layout, data):
 
 def test_a_run_records_the_cell_s_four_cameras():
     assert teacher.RECORDED == ("top", "side", "a_wrist", "b_wrist")  # D-960; the overview is not a camera the cell has
-    assert sites.CHOICES["wrist_camera"] == "photo-20261108", "the wrist camera where arm_b's real frame puts it (the D r06 CAD is 'v21-b')"
-    assert sites.WRIST_PHOTO["lens_m"][2] > .0511 + .01  # higher than the D r06 CAD lens
+    assert sites.CHOICES["wrist_camera"] == "v21-b", "the D r06 CAD is the wrist camera for both arms; the photo fits are reproduction only"
 
 
-def test_the_cell_teacher_mounts_both_wrist_cameras_alike():
-    """Same board in the same D r06 holder and no measured arm difference: one mount (11-18). The per-arm fits stay only as named choices."""
-    assert teacher.VISION_SKEW_CHOICES["wrist_camera"] == "shared-20261118" and sites.WRIST_SHARED["lens_m"][2] > .0511 + .01
+def test_the_cell_teacher_mounts_both_wrist_cameras_at_the_cad_value():
+    """User 11-18: the wrist camera is already in CAD and both arms are alike; the photo fits are single-frame and stay only as named choices."""
+    assert teacher.VISION_SKEW_CHOICES["wrist_camera"] == "v21-b"
     pytest.importorskip("mujoco")
+    import numpy as np
     import omx_two_arm_world as tw
-    cams = tw.World(wrist="shared-20261118").model
+    import palletizing_gripper as jaw
+    cams = tw.World(wrist="v21-b").model
     a, b = cams.camera("a_wrist"), cams.camera("b_wrist")
     assert list(a.pos) == list(b.pos) and list(a.quat) == list(b.quat) and a.fovy == b.fovy
+    lens, (w, x, y, z) = jaw.wrist_camera_pose(jaw.WRIST_CAMERA_B)
+    assert np.allclose(a.pos, lens, atol=1e-6) and np.allclose(a.quat, [-z, y, -x, w], atol=1e-6) and a.fovy == jaw.WRIST_CAMERA_B["vfov_deg"]
     split = tw.World(wrist="photo-20261110").model
     assert list(split.camera("a_wrist").pos) != list(split.camera("b_wrist").pos)  # reproduction keeps the old per-arm split
 
