@@ -23,6 +23,7 @@ from .berth_parking_helpers import (
     centerline_axial_gaps,
     infer_bay_id,
 )
+from .berth_core_dock import execute_core_line_dock
 from .task_dispatch_helpers import compute_road_plan as _compute_road_plan
 
 __all__ = [
@@ -160,6 +161,24 @@ def install_berth_parking_routes(
             phases = ["ALIGNING", "REVERSING_IN_RAILS", "SETTLING", "DOCKED"]
 
         physical_execution = None
+        if mode == "core_line":
+            # D-1042: CORE docks on the pink line and decides DOCKED; Fleet only asks and reads.
+            # Never fall back to a plain Nav2 goal at the bay: that skips CORE's bay guards.
+            if not execute_physical:
+                raise HTTPException(status_code=400, detail={
+                    "code": "CORE_LINE_NEEDS_EXECUTION", "message": "core_line has no plan-only form"})
+            physical_execution = await execute_core_line_dock(console, robot_id, spec)
+            if physical_execution is None or not physical_execution.get("executed"):
+                raise HTTPException(status_code=502, detail={
+                    "code": "CORE_DOCK_NOT_STARTED", "berth": physical_execution})
+            if physical_execution.get("succeeded"):
+                await _pin_robot_on_fleet(request, robot_id, bay_pose["x"], bay_pose["y"], bay_pose["yaw"],
+                                          actor_id=principal.principal_id)
+            return {"dispatched": True, "berth_mode": mode, "bay_id": bay_id, "dock_id": spec["dock_id"],
+                    "dock_type": "line", "phases": ["STAGING", "TURNING", "ACQUIRING", "ALIGNING",
+                                                    "SETTLING", "DOCKED"],
+                    "accepted": bool(physical_execution.get("succeeded")),
+                    "physical_execution": physical_execution}
         if execute_physical:
             physical_execution = await _execute_physical_berth_park(
                 request,
