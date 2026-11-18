@@ -31,7 +31,8 @@ CHOICES = dict(
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=0.0,     # r08: hull centreline y centred symmetrically between the 194 mm base plates (modular berth locks port/starboard)   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
                              # edges). Its x reading (holds 25 mm toward the belt) would put the stern over the belt end: x stays
-    wrist_camera="photo-20261108",  # "photo-20261108": WRIST_PHOTO (fitted to arm_b); "photo-20261110": WRIST_PHOTO_A on arm_a, WRIST_PHOTO on arm_b (G-24);
+    wrist_camera="photo-20261108",  # "shared-20261118": WRIST_SHARED on both arms (the cell-teacher default); "photo-20261108": WRIST_PHOTO (fitted to arm_b) on both;
+                             # "photo-20261110": WRIST_PHOTO_A on arm_a, WRIST_PHOTO on arm_b (G-24, kept for reproduction);
                              # "v21-b": the team's printed D holder r06 (palletizing_gripper.WRIST_CAMERA_B); "stock" or "none"
     tcp_x_arm_b=.0740,       # URDF/STL v2.1 jaw (tip 74.1 mm from the pivot); a touch gave .0885 but that rests on an unchecked table height (OPEN, 14.5 mm FK offset)
     tcp_x_arm_a=.0740,       # same jaw, not confirmed on arm_a separately
@@ -150,6 +151,11 @@ STERN = dict(boxes=((0., 50., -65., 65., 6.), (0., 6.5, -65., 65., 11.), (43.5, 
 # out, about the same 34 deg down. One frame at one pose: lens height and aim trade off; refit on frames at other poses.
 WRIST_PHOTO = dict(lens_m=[.0338, .008, .0671], axis_hit_x_m=.1328)
 WRIST_PHOTO_A = dict(lens_m=[.0528, .005, .0641], axis_hit_x_m=.145)  # arm_a 2026-11-10 wrist frame jaw silhouette fit (IoU 0.18 -> 0.39, G-24)
+# One mount for both arms (11-18): same Innomaker board in the same D r06 holder, and the two single-frame fits above disagree only along the depth the
+# jaw silhouette cannot fix (arm_a shows 2.2k jaw pixels, arm_b 18.8k). One grid fit of both arms' home-pose jaw masks (9 + 7 frames, 11-10 to 11-16;
+# gripper free per arm): IoU arm_b 0.61, arm_a 0.12 (own best 0.33, CAD 0.52 / 0.16). Lens y 8 mm and about 19 mm above the CAD lens recur in every fit.
+# Per-arm values stay only for reproduction (photo-20261108 / photo-20261110); use a per-arm mount only after a measurement shows the arms differ.
+WRIST_SHARED = dict(lens_m=[.025, .008, .070], axis_hit_x_m=.17)
 TEMP_TIERS = 3  # plate v11: 3 lanes x 3 tiers (Confluence 15368863); tier 0 keeps the lane's name, tier k is "<lane>-l<k>"
 R08_TIERS = 3 # the cell stacks three high (user, 11-08); the slot map lists tiers 82 and 84, the third sits one container (32.4 mm) higher
 R08_TIER_STEP = 32.4

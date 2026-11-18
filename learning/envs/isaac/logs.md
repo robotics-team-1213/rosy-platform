@@ -637,3 +637,10 @@
 - 증거: design 모델 해시가 main과 같음(AI PC). 원격 시험 119개 통과(MuJoCo 시험은 AI PC 16/16). 첫 서보 맞춤은 보류 0.455→0.393°였지만 kp가 범위 끝에 붙어 올리지 않음 — `docs/validation/omx-sysid-2026-11-09/result.md`.
 - gate 변화: 없음. 시뮬 근거이며 실물 실험(마찰·램프)은 감독 시험(D-911)으로 남음.
 - CE: 해당 없음 — 범위 끝 값 거절은 `verdict` 코드·회귀 시험·result.md에 남겼다.
+
+## 2026-11-18 · uncommitted · fix(sim): one wrist camera mount and one servo kp for both arms (G-24)
+
+- 변경: `wrist_camera=shared-20261118`(`WRIST_SHARED`, 양팔 같은 렌즈 자리·시선)과 `physics=twin-kp-shared-20261118`(kp 20을 joint1·4·5에 양팔 공통)을 추가하고 교사 기본(`VISION_SKEW_CHOICES`)을 그 값으로 바꿨다. 팔별 값(photo-20261108·photo-20261110, twin-kp-20261109)은 재현용으로 남는다.
+- 증거: 같은 홀더·같은 보드인데 11-08 arm_b 한 장 맞춤과 11-10 arm_a 한 장 맞춤이 깊이 방향으로 어긋났다. 홈 자세 조 마스크(arm_a 9장, arm_b 7장)를 한꺼번에 맞춘 공통 값의 조 IoU는 arm_b 0.61·arm_a 0.12다(팔별 최고 0.61 / 0.33). 인식 IK 3시드 93행은 75/93 그대로(뒤집힌 행 0), 닫는 순간 arm_a 상자 윗면이 화면에 보이는 비율 중앙값 0.18→0.68, arm_b 0.85→0.69. 시뮬 근거이며 실물 근거가 아니다(D-947). 기록 `D:/DevTemp/vla-act-roles-1117/plateau-1118/wrist-unify.md`.
+- gate 변화: 없음. 열린 결정: 실제 팔 사이 손목 카메라 차이는 팔별 다자세 hand-eye로만 가려진다(G-24).
+- CE: 해당 없음 — 원인과 근거는 wrist-unify.md와 코드 주석에 있다.

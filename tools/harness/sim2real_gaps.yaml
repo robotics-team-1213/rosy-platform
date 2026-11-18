@@ -281,7 +281,7 @@ gaps:
     next: servo-friction-20261109 lowers held-out replay RMS from 0.452 deg (design) to 0.416 deg (-10.3 %), and omx_real2sim_comp.ServoCompensator + closed-loop waypoint settle (settle_g, terminal-speed pacing, gravity feedforward and Coulomb-friction integral trim) resolves the ~15 mm open-loop belt grasp lag so stack passes 9/9 (xy 0.2-0.5 mm) under both servo-friction-20261109 and registers-20261109
 
   - id: G-24
-    gap: OMX wrist cameras have no measured intrinsics or multi-pose hand-eye; the real arm_a and arm_b wrist frames differ from each other (jaw tips small at the bottom on arm_a, about a quarter up on arm_b), though per-arm jaw-silhouette mounts (WRIST_PHOTO_A, WRIST_PHOTO) now match each arm's rest view
+    gap: OMX wrist cameras have no measured intrinsics or multi-pose hand-eye; the real arm_a and arm_b wrist frames differ from each other (jaw tips small at the bottom on arm_a, about a quarter up on arm_b), the cell teacher mounts one shared holder pose on both arms (WRIST_SHARED, 11-18) because the two single-frame per-arm fits (WRIST_PHOTO_A, WRIST_PHOTO) differ along the depth a jaw silhouette cannot fix; whether the arms really differ (mount, jaw or gripper offset) is not measured
     evidence:
       - docs/validation/omx-real-sim-loop-2026-11-10/result.md
       - tools/sim/omx_two_arm_sites.py:35
@@ -290,7 +290,7 @@ gaps:
     tier: [M, R]
     owner: robot-43 (tools/sim two-arm) / omx_twin
     status: IN-PROGRESS
-    next: wrist_camera=photo-20261110 applies WRIST_PHOTO_A on arm_a (jaw IoU 0.183 -> 0.385, outline offset 26.0 -> 12.8 px) and WRIST_PHOTO on arm_b (jaw IoU 0.652, score 0.95); follow with a ~12-pose supervised hand-eye per arm over the v11 plate pads to reach D-947 5 px
+    next: wrist_camera=shared-20261118 (teacher default) puts WRIST_SHARED on both arms; photo-20261110 keeps the per-arm split (WRIST_PHOTO_A jaw IoU 0.183 -> 0.385, WRIST_PHOTO 0.652) for reproduction; a ~12-pose supervised hand-eye per arm over the v11 plate pads decides whether a per-arm mount is real and reaches D-947 5 px
 
   - id: G-25
     gap: OMX contact physics are hand-set (container mass, one friction); MuJoCo contacts are not results and Isaac had one case against the real outcome before the D-1012 Stage-1 MuJoCo -> Stage-2 Isaac handoff suite

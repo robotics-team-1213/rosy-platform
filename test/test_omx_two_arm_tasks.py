@@ -236,6 +236,18 @@ def test_a_run_records_the_cell_s_four_cameras():
     assert sites.WRIST_PHOTO["lens_m"][2] > .0511 + .01  # higher than the D r06 CAD lens
 
 
+def test_the_cell_teacher_mounts_both_wrist_cameras_alike():
+    """Same board in the same D r06 holder and no measured arm difference: one mount (11-18). The per-arm fits stay only as named choices."""
+    assert teacher.VISION_SKEW_CHOICES["wrist_camera"] == "shared-20261118" and sites.WRIST_SHARED["lens_m"][2] > .0511 + .01
+    pytest.importorskip("mujoco")
+    import omx_two_arm_world as tw
+    cams = tw.World(wrist="shared-20261118").model
+    a, b = cams.camera("a_wrist"), cams.camera("b_wrist")
+    assert list(a.pos) == list(b.pos) and list(a.quat) == list(b.quat) and a.fovy == b.fovy
+    split = tw.World(wrist="photo-20261110").model
+    assert list(split.camera("a_wrist").pos) != list(split.camera("b_wrist").pos)  # reproduction keeps the old per-arm split
+
+
 def test_the_r08_ship_sites_come_from_its_berth_slot_map(layout):
     """Rated ship v15 on the berth kit: 1x3 sites are the mean of three 1x1 cells, rows 38 mm apart, three tiers 32.4 mm apart from 6 mm over the table."""
     ship = {n: s for n, s in layout.sites.items() if s["kind"] == "ship" and s["stack"] != "stern"}  # the stern bay: test_omx_two_arm_plan
