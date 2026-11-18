@@ -193,11 +193,16 @@ class BayLineObserver:
             return self._payload(stamp, False)
         cloud = np.asarray(points, dtype=np.float64)
         pts = axial_line(cloud)
-        if pts is None:
+        direction = None
+        if pts is not None:
+            centre = pts.mean(axis=0)
+            _, _, vt = np.linalg.svd(pts - centre, full_matrices=False)
+            direction = vt[0]
+            # the pair test bounds the sample, not the fit: a 53 deg diagonal passed it on y8xs (2026-11-18)
+            if math.atan2(abs(direction[1]), abs(direction[0])) > AXIAL_MAX_RAD:
+                direction = None
+        if direction is None:
             return self._crossbar(cloud, stamp, len(xs))
-        centre = pts.mean(axis=0)
-        _, _, vt = np.linalg.svd(pts - centre, full_matrices=False)
-        direction = vt[0]
         # The bay is behind the robot (the camera looks at the corridor side).
         if direction[0] > 0.0:
             direction = -direction

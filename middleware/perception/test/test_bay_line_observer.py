@@ -183,3 +183,18 @@ def test_the_corridor_line_alone_gives_the_bay_axis_and_distance_not_the_lateral
     assert payload["visible"] is True and payload["lateral_measured"] is False
     assert heading_error(payload["yaw"], math.pi) <= math.radians(3.0)
     assert abs(errors(payload)[0] - (LINE_TOTAL_M - (0.25 + MOUNT.x_offset_m))) <= 0.02
+
+
+def test_a_diagonal_pink_line_is_not_the_bay_line():
+    """2026-11-18 y8xs: a 53 deg entry diagonal was read as the bay line beside the corridor line."""
+    frame = render(0.0, math.pi, 0.30, tape_dim=0.0)          # no bay line
+    for t in np.arange(0.0, 0.30, 0.004):                     # a diagonal at 53 deg off the axis
+        for w in (-0.006, 0.0, 0.006):
+            gx, gy = 0.20 + t * math.cos(math.radians(53)), -0.10 + t * math.sin(math.radians(53)) + w
+            px = ground_to_pixel(gx, gy, width=W, height=H, hfov_rad=HFOV,
+                                 pitch_rad=MOUNT.pitch_rad, height_m=MOUNT.height_m)
+            if px is not None:
+                u, v = int(round(px[0])), int(round(px[1]))
+                frame[max(0, v - 2):v + 3, max(0, u - 2):u + 3] = PINK
+    payload = observer().observe(frame, stamp=10.0)
+    assert payload["visible"] is False or payload.get("lateral_measured") is False
