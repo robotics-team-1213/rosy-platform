@@ -99,7 +99,7 @@ def _collect_arm_models(prep_dir: Path) -> dict[str, Any]:
                         "rows": len(rows), "errors": len(errors),
                         "last_at": round(log.stat().st_mtime, 3) if rows else None,
                         "last_ik_outcome": (last.get("ik") or {}).get("outcome"),
-                        "last_error": str(errors[-1]["error"])[:200] if errors else None,
+                        "last_error": str(errors[-1]["error"])[:120] if errors else None,  # Fleet drops longer than 120
                     }
                 models[arm_id] = entry
                 break

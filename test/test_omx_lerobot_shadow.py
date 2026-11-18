@@ -158,6 +158,7 @@ def test_cell_quality_reports_the_pinned_shadow_model_and_never_grants_execution
     assert model["warp_sha256"] == hashlib.sha256((root / "cam_warp.json").read_bytes()).hexdigest()
     assert model["shadow"]["rows"] == 2 and model["shadow"]["errors"] == 1
     assert model["shadow"]["last_ik_outcome"] == "empty" and "wrist" in model["shadow"]["last_error"]
+    assert len(model["block_reason"]) <= 200 and len(model["name"]) <= 128  # Fleet nulls longer strings
 
     sent = []
 
