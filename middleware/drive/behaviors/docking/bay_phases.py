@@ -25,7 +25,7 @@ import math
 from typing import Any, Optional
 
 from core_common.protocol.schemas import NavigationState
-from core_features.docking.bay_zone import NO_LINE, classify as classify_zone
+from core_features.docking.bay_zone import NO_LINE, classify as classify_zone, map_offsets
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.model import DockPhase
 from core_features.docking.parking import ParkingGains, turn_twist
@@ -168,7 +168,20 @@ class BayPhases:
             self._h.executor.stop()
 
     def _observation(self):
-        return self._h._detector.relative_pose() if self._h._detector is not None else None
+        obs = self._h._detector.relative_pose() if self._h._detector is not None else None
+        if obs is None or obs.lateral_measured:
+            return obs
+        # Only the corridor line was seen: heading and along are measured, the lateral is not. Fill it from
+        # the running estimate, else from the map pose; never from the payload's placeholder (2026-11-18).
+        lateral = self._est[0] if self._est is not None else None
+        if lateral is None:
+            pose = self._h._pose_provider()
+            if pose is None or self._h._dock is None:
+                return None
+            lateral = map_offsets(pose, self._h._dock)[1]
+        along, _, _ = rear_errors(obs)
+        ax, ay = math.cos(obs.yaw), math.sin(obs.yaw)
+        return obs.model_copy(update={"x": along * ax + lateral * ay, "y": along * ay - lateral * ax})
 
     def _tick_staging(self, now: float) -> None:
         """스테이징(교차점) 도착 → 선반 180° 회전부터. Nav2 실패는 후진형과 같은 재시도."""

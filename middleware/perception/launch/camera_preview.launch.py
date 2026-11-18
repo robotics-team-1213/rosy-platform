@@ -141,8 +141,11 @@ def generate_launch_description():
             package='control', executable='bay_line_observer_node', namespace=namespace,
             output='screen', respawn=True, respawn_delay=2.0,
             condition=IfCondition(LaunchConfiguration('bay_line')),
+            # line_total_m: stop face to the corridor line's centre on the site bays (site map: C y 0.47,
+            # P y 0.027); no painted extension past the corridor line, so the bay line ends there.
             parameters=[{'camera_geometry_source': 'NOMINAL', 'allow_nominal_ground': True,
-                         'nominal_camera_profile_path': '/etc/rosy/camera_nominal.yaml'}],
+                         'nominal_camera_profile_path': '/etc/rosy/camera_nominal.yaml',
+                         'line_total_m': 0.443, 'far_field_m': 0.40}],
         ),
         Node(
             package='control', executable='object_detector_node', namespace=namespace,

@@ -79,12 +79,9 @@ AXIAL_MAX_RAD = math.radians(35.0)
 INLIER_M = 0.015
 
 
-def axial_line(pts: np.ndarray):
-    """The points of the one straight line nearest the robot's axis, or None.
-
-    Fitting every pink pixel to one line averages the bay line with the corridor line (2026-11-18,
-    y8xs: a steady but wrong 16 deg). Deterministic sample consensus over point pairs whose direction
-    is within AXIAL_MAX_RAD of base_link x; the most inliers wins."""
+def _consensus(pts: np.ndarray, *, axial: bool):
+    """Inliers of the straight line with the most support whose direction is near base_link x (axial) or
+    near y (the corridor line across the bay), or None."""
     n = len(pts)
     rng = np.random.default_rng(7)
     best = None
@@ -92,7 +89,10 @@ def axial_line(pts: np.ndarray):
         i, j = rng.integers(0, n, 2)
         d = pts[j] - pts[i]
         length = float(np.hypot(*d))
-        if length < 0.04 or abs(math.atan2(abs(d[1]), abs(d[0]))) > AXIAL_MAX_RAD:
+        if length < 0.04:
+            continue
+        off_x = math.atan2(abs(d[1]), abs(d[0]))
+        if (off_x if axial else math.pi / 2 - off_x) > AXIAL_MAX_RAD:
             continue
         normal = np.array([-d[1], d[0]]) / length
         inliers = np.abs((pts - pts[i]) @ normal) <= INLIER_M
@@ -101,6 +101,14 @@ def axial_line(pts: np.ndarray):
     if best is None or best.sum() < MIN_MASK_PIXELS:
         return None
     return pts[best]
+
+
+def axial_line(pts: np.ndarray):
+    """The points of the one straight line nearest the robot's axis, or None.
+
+    Fitting every pink pixel to one line averages the bay line with the corridor line (2026-11-18,
+    y8xs: a steady but wrong 16 deg). Deterministic sample consensus; the most inliers wins."""
+    return _consensus(pts, axial=True)
 
 
 def nominal_geometry(profile: dict) -> tuple[dict, float, int, int]:
@@ -139,6 +147,26 @@ class BayLineObserver:
         body.update(fields)
         return body
 
+    def _crossbar(self, cloud: np.ndarray, stamp: float, pixels: int) -> dict:
+        """Only the corridor line across the bay mouth is in view (the robot's nose at or past the bay line's
+        corridor end, 2026-11-18 y8xs). It gives the bay axis (its normal) and the distance to the bay mouth,
+        not the lateral: the payload says so and CORE fills that from its estimate or the map."""
+        bar = _consensus(cloud, axial=False)
+        if bar is None:
+            return self._payload(stamp, False)
+        centre = bar.mean(axis=0)
+        _, _, vt = np.linalg.svd(bar - centre, full_matrices=False)
+        normal = np.array([-vt[0][1], vt[0][0]])
+        if normal[0] > 0.0:
+            normal = -normal                     # the bay inward axis points behind the robot
+        mouth = float(np.dot(normal, centre) / normal[0])   # where base_link x meets the corridor line
+        if mouth - self._mount.x_offset_m > self._far_field_m - 0.02:
+            return self._payload(stamp, False)
+        return self._payload(stamp, True, x=float(self._line_total_m - mouth), y=0.0,
+                             yaw=float(math.atan2(normal[1], normal[0])),
+                             confidence=min(1.0, pixels / CONFIDENCE_PIXELS),
+                             along_measured=True, lateral_measured=False)
+
     def observe(self, frame: np.ndarray, stamp: float) -> dict:
         hrow = horizon_row(self._w, self._h, self._hfov, self._mount.pitch_rad,
                            self._mount.height_m)
@@ -162,9 +190,10 @@ class BayLineObserver:
                 points.append((g[0] + self._mount.x_offset_m, g[1]))
         if len(points) < MIN_MASK_PIXELS:
             return self._payload(stamp, False)
-        pts = axial_line(np.asarray(points, dtype=np.float64))
+        cloud = np.asarray(points, dtype=np.float64)
+        pts = axial_line(cloud)
         if pts is None:
-            return self._payload(stamp, False)
+            return self._crossbar(cloud, stamp, len(xs))
         centre = pts.mean(axis=0)
         _, _, vt = np.linalg.svd(pts - centre, full_matrices=False)
         direction = vt[0]

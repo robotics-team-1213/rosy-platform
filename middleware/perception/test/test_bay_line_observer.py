@@ -162,7 +162,8 @@ def test_an_l_shaped_bay_mouth_is_read_from_the_bay_line_alone():
     assert abs(payload["y"] - 0.02) <= 0.01
 
 
-def test_a_corridor_line_alone_is_not_a_bay_line():
+def test_the_corridor_line_alone_gives_the_bay_axis_and_distance_not_the_lateral():
+    """Nose at the bay mouth: only the corridor line is in view (2026-11-18 y8xs, no painted extension)."""
     frame = render(0.0, math.pi, 0.30, tape_dim=0.0)          # no bay line drawn (black tape is not pink)
     for t in np.arange(-0.20, 0.20, 0.004):
         for w in (-0.006, 0.0, 0.006):
@@ -171,4 +172,7 @@ def test_a_corridor_line_alone_is_not_a_bay_line():
             if px is not None:
                 u, v = int(round(px[0])), int(round(px[1]))
                 frame[max(0, v - 2):v + 3, max(0, u - 2):u + 3] = PINK
-    assert observer().observe(frame, stamp=10.0)["visible"] is False
+    payload = observer().observe(frame, stamp=10.0)
+    assert payload["visible"] is True and payload["lateral_measured"] is False
+    assert heading_error(payload["yaw"], math.pi) <= math.radians(3.0)
+    assert abs(payload["x"] - (LINE_TOTAL_M - (0.25 + MOUNT.x_offset_m))) <= 0.02
