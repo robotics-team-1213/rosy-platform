@@ -399,6 +399,10 @@ class BayPhases:
         if now - h._phase_since > cfg.settle_timeout_s + cfg.bay_charge_confirm_s:
             h._retry("no charge after bay contact")
 
+    def _corridor_view(self) -> bool:
+        raw = self._h._detector.relative_pose() if self._h._detector is not None else None
+        return raw is not None and not raw.lateral_measured
+
     def _tick_zone(self, now: float) -> None:
         """칸 줄 안: 판정 → 곧은 전진(Nav2·제자리 회전 없음) → 뒤가 칸을 보므로 선 포획부터."""
         h, cfg = self._h, self._h._cfg
@@ -424,6 +428,13 @@ class BayPhases:
                 h._fail("bay zone: " + verdict.reason)
             elif h.executor is None:
                 h._fail("bay executor unavailable")
+            elif self._corridor_view():
+                # Only the corridor line is in view: the nose is at the bay mouth, and driving out to the
+                # staging distance loses that line under the nose (y8xs 2026-11-18). The rear already faces
+                # the bay and the verdict said straight: acquire here.
+                self._stop()
+                self._reset_line_state()
+                h._begin_acquiring()
             else:
                 h.executor.reset_odometry_mark()
                 self._zone, self._exit_m = "exit", verdict.exit_m

@@ -311,6 +311,24 @@ def test_a_corridor_only_view_takes_the_lateral_from_the_map_never_from_the_payl
     assert p.manager.state is DockState.DOCKED, p.manager._error
 
 
+def test_inside_the_bay_row_with_only_the_corridor_line_in_view_it_reverses_without_driving_out():
+    """y8xs 2026-11-18: driving out to the staging distance lost the corridor line under the nose."""
+    p = a_bay()
+    p.world.pose = (-0.30, 0.0, math.pi)          # in the row, nose out, rear to the bay
+    capture = p.detector.capture
+
+    def corridor_only():
+        capture()
+        if p.detector.latest is not None:
+            p.detector.latest = p.detector.latest.model_copy(update={"lateral_measured": False})
+    p.detector.capture = corridor_only
+    p.manager.dock()
+    run(p, done)
+    assert p.manager.state is DockState.DOCKED, p.manager._error
+    forward_out = [cmd for phase, cmd in p.world.commands if phase is DockPhase.BACKOFF and cmd[0] > 0.0]
+    assert forward_out == [] and p.world.goals == []
+
+
 def test_rear_and_line_docks_never_return_on_low_battery_unless_told_to():
     """2026-11-18 map panel: Fleet-taught rear bays sit in the robot's own frame with no map id."""
     rear = DockType(name="charge_bay_rear", detector="lidar_v", approach="rear", staging_offset_m=0.55)
