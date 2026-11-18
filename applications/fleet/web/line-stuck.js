@@ -309,7 +309,8 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
 
   function choose(robotId, stuckId, decision) {
     call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/claim`, {
-      inline: true, method: "POST",  // 맡음 표시 실패는 이어지는 판단 결과 글자가 말한다 headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stuck_id: stuckId }),
+      // 맡음 표시 실패는 이어지는 판단 결과 글자가 말한다
+      inline: true, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stuck_id: stuckId }),
     }).catch(() => {});
     if (needsConfirm(decision)) { confirming.set(robotId, { stuck_id: stuckId, decision }); render("confirm-yes", robotId); return; }
     send(robotId, stuckId, decision);

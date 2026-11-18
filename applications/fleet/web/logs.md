@@ -1327,3 +1327,8 @@
 - 변경: `fleet-header.js` `estopReason`은 세션이 없을 때(401)만 잠근다(보기 전용 잠금 제거, DESIGN C9 예외 문구 삭제). 레일의 '지도'(`/console/site-map`, 주행 지도)에 `data-unit-scope="drive"`를 붙여 주행 로봇이 없는 셀 관제에서 숨긴다(7개 문서와 `fleet-nav.html.inc` 같은 줄). 정비·시스템 상태·설치는 호스트마다 있는 일이라 셀에도 남긴다.
 - 증거: node fleet-header·unit-scope 16/16. 원격 브라우저(test_unit_scope_browser 셀·R, fleet_console part2, console_session, fleet_header_browser, console_roles) D:/DevTemp/ui-refine-1118/remote-r3b/run-1.txt 에서 통과.
 - gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · fix(fleet-web): line-stuck 맡음 요청 본문 복구
+- 변경: `line-stuck.js` choose()의 claim 호출에서 줄 끝 주석이 `headers`·`body`를 삼켜 본문 없이 나가던 것(서버 LineStuckClaimRequest가 stuck_id 필수라 늘 422, `.catch`가 삼킴)을 고쳤다. 오늘 inline 정리(652499f1c3, 아직 main 밖)에서 생겼다. `fleet-alert-surface.test.mjs`가 모양만 보던 것에 "주석 뒤 headers/body 금지" 단언을 더했다.
+- 증거: UI 패널 2라운드 좌석 A(D:/DevTemp/ui-panel-1118/r2-A.md), 노드 fleet-alert-surface 3/3. 웹 전체에서 같은 모양 0건(git grep).
+- gate 변화: fleet-alert-surface 정적 시험 1단언 추가.

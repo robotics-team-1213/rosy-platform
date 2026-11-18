@@ -26,5 +26,6 @@ test("modules that show a command result in their row never raise a toast for it
     const text = read(name);
     assert.match(text, /inline: true, method: "POST"/, name);
     assert.match(text, /\{ inline: true \}\);/, name);
+    assert.doesNotMatch(text, /\/\/[^\n]*\b(headers|body):/, name);  // 11-18: a trailing comment swallowed the claim body (422)
   }
 });
