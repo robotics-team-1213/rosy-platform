@@ -87,12 +87,12 @@ def test_atexit_kills_the_jobs_still_live_and_none_finished(tmp_path):
     assert ("h", "q", 0) not in rj._LIVE
 
 
-def _lease(tmp_path, seen_age, rc=False, now=10_000):
+def _lease(tmp_path, seen_age, rc=False, now=10_000, pgid="4242"):
     """Run the host's lease_check with kill stubbed; returns (exit code, kill words)."""
     (tmp_path / "0.seen").touch()
     if rc:
         (tmp_path / "0.rc").write_text("0")
-    script = (f'D={tmp_path}; K=0; {rj.LEASE}\nkill() {{ echo kill "$@"; }}\n'
+    script = (f'D={tmp_path}; K=0; {rj.LEASE}\nkill() {{ echo kill "$@"; }}\nps() {{ echo " {pgid}"; }}\n'
               f'touch -d @{now - seen_age} "$D/0.seen"; NOW={now}; lease_check 1200 4242; echo "rc=$?"')
     out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
     return out.split("rc=")[1].strip(), out.split("rc=")[0].strip()
@@ -101,6 +101,7 @@ def _lease(tmp_path, seen_age, rc=False, now=10_000):
 def test_lease_fresh_job_lives_stale_job_gets_term_finished_job_is_skipped(tmp_path):
     assert _lease(tmp_path, 100) == ("0", "")
     assert _lease(tmp_path, 1201) == ("1", "kill -TERM -- -4242")
+    assert _lease(tmp_path, 1201, pgid="3496") == ("1", "kill -TERM 4242"), "a group it does not lead (tailscaled's)"
     assert _lease(tmp_path, 5000, rc=True) == ("1", ""), "a finished job (.rc) is never signalled"
 
 
