@@ -160,6 +160,8 @@ def step(driver, teacher, data, plan, here, skill):
                 target = next(gen)
         else:
             goal = policy.goal_vector(L, plan, others, getattr(driver, "goal_mode", "joints")) if getattr(driver, "has_goal", True) else None
+            if plan["id"] not in driver.longest:  # collection never finished this step: no time budget and nothing learned for it
+                return dict(row, result="fail", untaught=True)
             said = prompt(plan, skill)
             driver.policy.reset()
             first_bad, last_cmd = None, None
