@@ -284,6 +284,10 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     async def localization_decision(self, decision: LocalizationDecision) -> dict:
         return await self._post("/api/v1/localization/decision", decision.model_dump(mode="json"))
 
+    async def slam_fallback_wall_map(self, payload: dict) -> dict:
+        """SLAM fallback: the active site map's wall grid, for CORE to spool and the host to stage (2026-11-18)."""
+        return await self._post("/api/v1/navigation/slam-fallback/wall-map", payload)
+
     async def localization_suspect(self, reason: str) -> dict:
         if not reason or len(reason) > 64:
             raise ValueError("suspect reason must be 1-64 characters")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import time
 from functools import partial
 from types import SimpleNamespace
 
@@ -28,6 +29,7 @@ from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_
 from fleet.server.lane_route_routes import install_lane_route_routes
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.map_pose_service import MapPoseService, install_map_pin_route, install_map_pose_routes
+from fleet.server.wall_map_sync import WallMapSync  # SLAM fallback (2026-11-18)
 from fleet.server.nudge_routes import install_nudge_step_route
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
@@ -163,6 +165,7 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
     if localization_service is not None:
         localization_service.set_overhead_pose(map_pose.arbitrated_pose)
+        localization_service.set_wall_sync(WallMapSync(site_maps, console.clients, time.monotonic))
     app.state.map_pose = map_pose
     if tracking is not None:
         tracking.map_pose = map_pose.arbitrated_pose

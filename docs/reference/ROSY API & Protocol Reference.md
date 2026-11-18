@@ -1,11 +1,11 @@
-﻿# ROSY API & Protocol Reference
+# ROSY API & Protocol Reference
 
 D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md). 사람 신원·앱 세션 교환·자원별 접근 자격·계정 관리의 구현 대상이며 운영 활성화 증거는 별도다.
 
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.409
+**Version:** v1.411
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2202,6 +2202,10 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/localization/decision` | `LOCALIZE_ASSIST` (+`NAVIGATE` for `source: human`) | D-395 P2-4 — 본문 `LocalizationDecision`(§7.9). 로봇에 보냈으면 202 `{request_id}`. 열린 요청이 아니면 409 `STALE_REQUEST`, 보정 lease 중 비소유자는 423 `CALIBRATION_ACTIVE`, 스키마 위반 400, D-395 이전 로봇은 501. `source: human` 이면 `localization.initialpose` 를 낸다 (v1.72) |
 | POST | `/api/v1/localization/suspect` | `LOCALIZE_ASSIST` | D-395 P2-4 — `{reason}`(1–64자, 예: `fleet_monitor`)를 로봇 `localization/suspect` 로. 202 `{accepted: true}`, lease 중 423, D-395 이전 로봇 501 (v1.72) |
 | POST | `/api/v1/localization/mission` | `LOCALIZE_ASSIST` | D-395 P2-7 — `{kind, max_distance_m, max_time_s, target}`. CORE 가 스스로 아주 느리게 움직인다(Fleet 은 바퀴를 몰지 않는다, D-2·D-369). 로봇이 `LOCALIZED` 가 아닐 때만 — 단 v1.402 부터 `nudge_forward`·`nudge_backward` 는 로봇 자기 프레임의 상대 한 걸음(운영자 확인 단계)이라 `LOCALIZED` 로봇에서도 시작할 수 있고, 그렇게 시작한 실행은 `localized` 로 끝나지 않는다(그 밖의 끝은 그대로). `kind`: `rotate_in_place`(오도메트리로 최대 한 바퀴, 0.3 rad/s, `max_distance_m` 무시, 전체 스캔에 0.20 m 안 반사가 있으면 `path_not_clear`), `nudge_forward`(오도메트리로 0 < `max_distance_m` ≤ 0.10 m, 0.03 m/s, 정면 0.25 m 안에 물체가 들어오거나 정면 ±20° 를 잴 수 없으면 — 유효 빔 5 개 미만, 또는 inf·NaN·`range_min` 미만 빔이 30 % 초과, self-mask 반사는 빼고 — 거부·끝), `nudge_backward`(v1.402, `nudge_forward` 의 정확한 거울: 같은 한도와 규칙이 후방 섹터에 적용되고 속도는 −0.03 m/s; 후방에는 초음파가 없어 몸통 뒤로 나가는 unknown 빔은 무조건 거부), `lane_to_stopline`(카메라 line-follow 를 이 미션에 한해 `LOCALIZED` 관문 없이 켜고 0.04 m/s 로 제한, 정지선 0.12 m 안·거리·시간에서 끝, 0 < `max_distance_m` ≤ 1.0), `to_square`(409 `unsupported`: map 프레임 없이 사각형까지 가는 차선 경로가 아직 없다, 후속). `0 < max_time_s ≤ 120`. 움직임은 NAVIGATION 모드의 nav 슬롯으로 들어가 50 Hz 최종 중재(`select_output`: e-stop·readiness·속도 제한·제어 정책)를 그대로 거친다. 202 는 `GET` 과 같은 본문(`state: running`). 끝: `done`·`stop_line`·`localized`(→ `state: done`), `timeout`·`obstacle`·`obstacle_sensor_stale`(모든 종류, LiDAR 0.5 s 끊김)·`odometry_stale`·`lane_lost`·`estop`·`cancelled`(모드가 NAVIGATION 을 떠남: MANUAL·IDLE·line-follow OFF)·`error`(→ `aborted`). 끝나면 바퀴 명령을 지우고 IDLE 로 돌아가며, ROS `localization/mission` `{kind, state, reason}` 으로 로봇 sensing 노드가 바로 다시 탐색한다. 거부 409 코드는 §ERR-102, 범위 위반 400, D-395 이전 로봇 501, 구동 능력 없음 501, readiness HOLD 503 (v1.73) |
+| GET | `/api/v1/navigation/slam-fallback` | 읽기 | v1.411 (D-1046): SLAM 폴백 감독기 상태 `{phase, health, reason, since, staged_wall_map, attempted_this_boot}`. 백엔드가 `slam`이 아니면 비활성으로 답한다. |
+| POST | `/api/v1/navigation/slam-fallback/wall-map` | `LOCALIZE_ASSIST` | v1.411: Fleet가 미리 보내는 벽 지도 `{map_id, version, sha256, yaml, pgm_base64}`; sha256이 PGM과 다르면 400, `resolution`은 0.01~0.1, `origin`은 유한한 ±1000 m 안, 전환(정지·재시작)이 도는 동안은 409 `SWITCH_RUNNING`. 스풀에 두고 Host Agent `navigation_fallback.stage`가 설치한다(`site.yaml`은 건드리지 않고, 실행 중인 `ROSY_MAP`이 가리키는 지도는 지우지 않는다). |
+| POST | `/api/v1/navigation/slam-fallback/evidence` | `LOCALIZE_ASSIST` | v1.411: Fleet 근거 `{slam_camera_gap_m?, scan_agreement?, map_verdict?}`(10 s 유효). 감독기 표본에만 쓰이고 움직임을 명령하지 않는다. |
+| POST | `/api/v1/navigation/slam-fallback/reset?confirm=true` | operator | v1.411: 실패(FAILED) 뒤 감시를 다시 켠다. 전환된 뒤에는 되돌리지 않는다(SLAM 복귀 없음). |
 | GET | `/api/v1/localization/mission` | Viewer | D-395 P2-7 — `{kind, state, reason}`; `state`: `idle`(아직 없음, `kind`·`reason` 은 `null`) \| `running`(+ `elapsed_s`, `travelled_m`, `turned_rad`) \| `done` \| `aborted` (v1.73) |
 | POST | `/api/v1/motion/rotate_to` | Operator: trip lease 주인(D-541), lease가 없으면 `operator_name`을 적은 운영자 | D-603 (v1.194) — `{delta_deg? (|·| ≤ 180), yaw_odom? (rad, odom), tol_deg = 5 (1–20), max_rate_dps = 20 (≤ 30), timeout_s = 10 (≤ 15), operator_name}`, `delta_deg`·`yaw_odom` 중 하나만. CORE가 제자리에서 자기 odom yaw로 닫힌 고리 회전을 한다(비례 감속, 최저 `localization_mission.rotate_to_min_angular` 0.15 rad/s, 최고 `max_rate_dps`). NAVIGATION 모드의 nav 슬롯으로 들어가 `select_output`(E-Stop·readiness·Safety clip·D-400 정책)을 거친다. `LOCALIZED`와 상관없이 받고, `LOCALIZED`가 되어도 끝나지 않는다. 거부: lease 주인 아님 409 `TRIP_LEASED`, 보정 lease 409 `CALIBRATION_ACTIVE`, 이름 없음 403 `OPERATOR_NAME_REQUIRED`, 매핑 409 `MAPPING_ACTIVE`, E-Stop 409 `EMERGENCY_ACTIVE`, 409 `MOTION_BUSY`·`ODOMETRY_STALE`·`ROTATE_CLEARANCE`, 범위 400, readiness HOLD 503, 구동 능력 없음 501. 202 본문은 `GET`과 같다. 끝: `done`(오차 ≤ `tol_deg`) 또는 `timeout`·`overturn`(odom 회전 합이 요청 + `rotate_to_overturn_deg` 30° 초과)·`obstacle`(회전 중 `rotate_in_place`와 같은 몸체 검사)·`obstacle_sensor_stale`·`odometry_stale`·`estop`·`cancelled`(NAVIGATION을 떠남, `DELETE`)·`error` → `aborted`. 끝나면 바퀴 명령을 지우고 IDLE. 사건 `motion.rotate_to`(요청), `localization.mission`(`kind: rotate_to` 시작·끝) |
 | GET | `/api/v1/motion/rotate_to` | Viewer | D-603 (v1.194) — `{kind: rotate_to, state: running\|done\|aborted\|idle, reason, err_deg (running), final_err_deg (끝), elapsed_s, turned_rad}`; 마지막 미션이 회전이 아니면 `state: idle` |
@@ -3021,6 +3025,14 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `docking.reseat` | warning | 로봇 | `{reason, attempt}` — 접점 재착좌 |
 | `docking.failed` | error | 로봇 | `{reason, dock_id}` — 종착이며 스스로 재시도하지 않는다. native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason` (D-28/D-732) |
 | `docking.return_started` | warning | 로봇 | `{dock_id, reason}` — SAF-005 저배터리 복귀 |
+| `slam_fallback.health` | info/warning | 로봇 | `{state, reasons}` — D-1046: SLAM 판정이 바뀔 때. ok로 돌아오면 info, degraded·lost이면 warning |
+| `slam_fallback.wall_map` | info/warning | 로봇 | `{staged, code, detail}` — 벽 지도 설치 결과. 성공이면 info, 호스트가 거절하면 warning |
+| `slam_fallback.stopping` | critical | 로봇 | `{reason}` — SLAM lost: 자율 정지, 속도 0이 2 s 이어지고 목표가 없을 때까지 기다린다 |
+| `slam_fallback.switching` | critical | 로봇 | `{reason}` — Host Agent가 전환을 받았다(정지 증거는 호스트가 답할 때까지 계속 갱신) |
+| `slam_fallback.switched` | critical | 로봇 | `{reason}` — 벽 지도 localization으로 전환되고 rosy-navigation이 다시 떴다. 재시작 뒤 받은 LOCALIZED(map) 전에는 목표를 거절한다 |
+| `slam_fallback.active` | info | 로봇 | `{reason}` — 재시작 뒤 받은 LOCALIZED(map)로 목표 거절이 풀렸다 |
+| `slam_fallback.alert` | critical | 로봇 | `{alert, phase}` — 사람이 봐야 한다(정지 못 함, 호스트 거절·무응답, 자세 결정 없음) |
+| `slam_fallback.reset` | warning | 로봇 | `{}` — 운영자가 FAILED 뒤 감시를 다시 켰다 |
 | `mission.assigned` | info | Fleet | `{mission_id, robot_id}` |
 | `mission.started` | info | Fleet | `{mission_id}` |
 | `mission.step_completed` | info | Fleet | `{mission_id, step_index}` |
@@ -4824,6 +4836,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.411 | 2026-11-18 | Additive (D-1046): `StateSnapshot.slam_fallback`(선택 블록 `SlamFallbackStatus`), CORE `/api/v1/navigation/slam-fallback` 읽기·`wall-map`·`evidence`·`reset`, Host Agent 등급 `machine`과 `navigation_fallback.status/stage/switch` — SLAM이 lost면 정지 확인 뒤 사이트 벽 지도 localization으로 자동 전환(부팅당 한 번, 복귀 없음) |
 | v1.409 | 2026-11-18 | Additive (D-1046): Fleet `GET /api/fleet/site-map/wall-grid` — 활성 현장 지도 벽의 현장 좌표계 Nav2 점유 지도(SLAM 폴백용) |
 | v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |
 | v1.402 | 2026-11-14 | Additive: Fleet 앞으로/뒤로 한 걸음(`POST /api/fleet/robots/{robot_id}/step`, CORE nudge 미션 재사용) |
