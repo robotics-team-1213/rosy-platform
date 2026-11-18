@@ -72,6 +72,18 @@ def ground_to_pixel(x_ahead: float, y_left: float, *, width: int, height: int,
     return u, v
 
 
+def nominal_geometry(profile: dict) -> tuple[dict, float, int, int]:
+    """(mount fields, hfov_rad, width, height) from camera_nominal.yaml (D-364/D-397).
+
+    The observer's pinhole assumes a centred principal point; a profile that says otherwise
+    is refused rather than projected wrong."""
+    width, height, fx = int(profile["width"]), int(profile["height"]), float(profile["fx"])
+    if abs(float(profile["cx"]) - width / 2.0) > 1.0 or abs(float(profile["cy"]) - height / 2.0) > 1.0:
+        raise ValueError("principal point is not centred")
+    mount = {k: float(profile[k]) for k in ("height_m", "pitch_rad", "x_offset_m")}
+    return mount, 2.0 * math.atan(width / 2.0 / fx), width, height
+
+
 class BayLineObserver:
     """``observe(frame, stamp) -> dock/observation payload`` (CAMERA_LINE)."""
 

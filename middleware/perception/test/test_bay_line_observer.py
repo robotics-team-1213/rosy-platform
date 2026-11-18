@@ -12,7 +12,7 @@ import math
 import numpy as np
 import pytest
 
-from control.sensing.bay_line_observer import BayLineObserver, ground_to_pixel
+from control.sensing.bay_line_observer import BayLineObserver, ground_to_pixel, nominal_geometry
 from control.sensing.dock_tag import CameraMount
 
 W, H = 320, 180
@@ -127,3 +127,19 @@ def test_the_node_is_an_installed_entry_point_and_publishes_only_evidence():
     assert "cmd_vel" not in source.replace("``cmd_vel``", "")
     assert "Twist" not in source
     assert "source != 'GAZEBO' or not use_sim_time" in source
+    assert "payload['ground'] = self._ground" in source   # CORE's feed never drives on NOMINAL
+
+
+def test_the_robot_s_nominal_camera_profile_gives_a_projecting_observer():
+    """A real Pinky watches the line through camera_nominal.yaml (labelled NOMINAL by the node)."""
+    import yaml
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[3]
+    profile = yaml.safe_load((root / "middleware/devices/pinky/profile/config/camera_nominal.yaml")
+                             .read_text(encoding="utf-8"))
+    mount, hfov, width, height = nominal_geometry(profile)
+    assert (width, height) == (320, 240) and abs(math.degrees(hfov) - 59.2) < 0.2
+    assert BayLineObserver(mount=CameraMount(**mount), hfov_rad=hfov, width=width, height=height,
+                           line_total_m=LINE_TOTAL_M)
+    with pytest.raises(ValueError):
+        nominal_geometry(dict(profile, cx=150.0))      # off-centre: refused, not projected wrong

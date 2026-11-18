@@ -55,6 +55,11 @@ class DockObservationFeed:
             if not payload["visible"]:
                 self._latest.pop(source, None)
                 return False
+            if payload.get("ground") not in (None, "GAZEBO"):
+                # A NOMINAL (URDF/record) camera ground may be watched, never driven on: lateral
+                # error ~2 cm at 0.2 m = the whole bay margin (2026-11-18 panel; D-344, 2026-10-06).
+                self._latest.pop(source, None)
+                return False
             tag_id = payload.get("tag_id")
             # The V marker has no identity; a tag without an integer id is malformed.
             if (type(tag_id) is not int) if source == SOURCE else tag_id is not None:

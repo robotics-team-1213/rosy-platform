@@ -292,6 +292,17 @@ def test_feed_and_detector_selection_carry_the_camera_line_source():
     assert detector.relative_pose() is not None
 
 
+def test_a_nominal_ground_line_is_watched_but_never_driven_on():
+    """A robot's URDF-nominal camera ground errs ~2 cm sideways at 0.2 m: the whole bay margin."""
+    feed = DockObservationFeed()
+    seen = {"source": CAMERA_LINE, "visible": True, "stamp": 10.0, "tag_id": None,
+            "x": 0.2, "y": 0.01, "yaw": math.pi, "confidence": 0.8}
+    assert feed.ingest(seen, received_at=10.2, source_now=10.3)
+    assert not feed.ingest(dict(seen, ground="NOMINAL"), received_at=10.3, source_now=10.4)
+    assert feed.latest(source=CAMERA_LINE) is None          # the earlier sighting is gone too
+    assert feed.ingest(dict(seen, ground="GAZEBO"), received_at=10.4, source_now=10.5)
+
+
 def test_fleet_centerline_evaluation_guides_reverse_and_triggers_contact_when_camera_drops():
     """When Pinky's onboard camera loses the pink line mid-bay, Fleet's real-time centerline
     evaluation (BACKING_ALIGNED / BACKING_DRIFT -> CONTACT_STOP) guides it to DOCKED."""
