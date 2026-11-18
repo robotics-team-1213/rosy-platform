@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
 import host_probe  # noqa: E402
 import remote_pytest as rp  # noqa: E402
-from test_land import cached, commit, git, land, repos  # noqa: E402,F401
+from test_land import RED, _runner, cached, commit, git, land, repos  # noqa: E402,F401
 from test_land_async import NOW, _git, repo, tool  # noqa: E402,F401
 import land_quick  # noqa: E402
 import work_queue  # noqa: E402
@@ -141,6 +141,17 @@ class _Land:
     def verdict(self, *a):
         return self._verdict
 
+
+
+def test_a_stop_line_keeps_the_failed_id_in_view_after_a_long_argv(cached, monkeypatch):
+    """11-18 panel: a 30-file argv pushed the failed id off the STOP line; readers blamed the first file instead."""
+    wt, run, calls = cached
+    commit(wt, {"other/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red")
+    many = ["other/test", *(f"pkg/test/t{i}.py" for i in range(6))]
+    monkeypatch.setattr(land.remote_pytest, "run", _runner({"other/test": RED, "other/test/test_bad.py::test_bad": RED}))
+    with pytest.raises(land.Stop) as stop:
+        run([many])
+    assert "pkg/test/t5.py" not in str(stop.value) and "test_bad.py::test_bad" in str(stop.value)
 
 @pytest.mark.parametrize("codes, verdict, stops", [
     ([0], (0, [], ""), False),
