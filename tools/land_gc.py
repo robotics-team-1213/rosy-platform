@@ -234,8 +234,11 @@ def apply(repo: Path, rows) -> list[str]:
             if action == "lock":  # kept while any process holds it; closed again before the unlink (Windows)
                 path = Path(items[0])
                 if not (holder / path.name.removesuffix(".supervisor.lock")).exists():
-                    with land_async.locked(path):
-                        pass
+                    try:
+                        with land_async.locked(path):
+                            pass
+                    except land_async.Busy:
+                        continue  # held: not a problem, just not stale
                     path.unlink(missing_ok=True)
                 continue
             name = tree.name if tree else Path(items[0]).name.removesuffix(".resume.log").removesuffix(".log")
