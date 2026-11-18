@@ -56,12 +56,12 @@ def repos(tmp_path, monkeypatch, request):
     monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
 
     def fake_run(invocations, logs, sha="HEAD", repo=None, label=None, **kw):
-        # Fixture repos are throwaway and cannot be shipped to a test host; this test itself
-        # already runs on one (D-584), so the inner pytest runs in the fixture worktree.
+        # Fixture repos cannot be shipped to a test host (this test already runs on one, D-584): pytest runs in place.
         return [land.remote_pytest.capture([sys.executable, "-m", "pytest", *inv, *land.remote_pytest.PYTEST_TAIL],
                                            log, cwd=repo) for inv, log in zip(invocations, logs)]
 
     monkeypatch.setattr(land.remote_pytest, "run", fake_run)
+    monkeypatch.setattr(land.land_queue, "REFRESHES", 0)  # these flows rerun main's delta at the turn; the pre-turn refresh has own tests
     return main, wt
 
 
