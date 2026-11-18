@@ -521,7 +521,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
             if land.out(wt, "rev-parse", "HEAD") != head:
                 raise land.Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
             if failed and not flaky:
-                stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
+                stops.append(f"NEW failure in {' '.join(inv[:4])}{' ...' * (len(inv) > 4)} (log {log}); {why}; not landing")
                 land.land_cache.failed(wt, inv, True)
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="new", seconds=secs, **timing(log, began_at))
                 continue
