@@ -5652,3 +5652,8 @@
 - 변경: 측정 보정·장치 프로필 노드 시험이 다른 웹 시험처럼 `register-console-assets.mjs` 훅을 쓴다(authorization.js가 이제 `/common/cause-line.js`를, device-profiles.js가 `/console/assets/authorization.js`를 가져온다). camera-peer 브라우저 시험 고정 서버가 `/console/assets/*`를 모두 shared에서 낸다. 로봇 도크 시험의 한 걸음 409는 이제 inline 호출이라 토스트가 아니라 `.step-nudge-status` 글자로 단언한다(토스트 0장도 단언, 알림 한 곳 규칙).
 - 증거: D:/DevTemp/ui-panel-1118/remote-1/run-1.txt(21 실패 중 이 브랜치가 만든 것: 노드 2·camera-peer 6·robot-dock 1·roster.css 중괄호 1(앞 커밋에서 고침)), 기준 c6c6d932e1 비교 D:/DevTemp/ui-panel-1118/remote-base/run-1.txt.
 - gate 변화: 없음(단언 강도 유지: 토스트 0장 추가).
+
+## 2026-11-18 · uncommitted · test(fleet): 카메라 관측 누적 시험의 경합 제거
+- 변경: 같은 관측을 두 번째로 누적하는 클릭의 저장·다시 읽기·알림이 다음 클릭(다른 지도 ID 거절)의 오류 알림 뒤에 도착해 덮어쓰던 경합을, 알림을 비운 뒤 그 클릭 자신의 알림을 기다리게 해 없앴다. 제품 코드 변경 없음.
+- 증거: 합친 HEAD에서 [1440]·[390]이 번갈아 실패, 각 부모(feat/ui-dedupe·feat/ui-refine)·합친 커밋 단독은 통과. 고친 뒤 4회 연속 8/8 통과(D:/DevTemp/ui-panel-1118/sm4a~d).
+- gate 변화: 없음.
