@@ -25,3 +25,18 @@ def test_a_full_queue_is_refused_before_any_gate_and_the_place_is_released(repos
     monkeypatch.setattr(land, "safety_review", lambda *a, **k: (_ for _ in ()).throw(land.Stop("stop here")))
     assert land.main(["--tests", "auto"]) == 1
     assert marks == ["marker"], "a reserved place is released when the landing ends"
+
+
+def test_the_room_is_released_once_the_ticket_exists(repos, monkeypatch):
+    """The ticket holds the room; a marker kept past enter() would count the cap twice for every other landing."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    monkeypatch.setattr(land.land_queue, "reserve", lambda qdir, branch, lane=None: "marker", raising=False)
+    monkeypatch.setattr(land.land_queue, "unreserve", lambda marker: land._reserved.remove(marker), raising=False)
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        assert land._reserved == [], "the marker must be released at the ticket, not at process exit"
+        return []
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "none"]) == 0
