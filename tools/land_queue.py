@@ -505,12 +505,12 @@ def _git(cwd: Path, *args: str) -> str:
     return done.stdout.strip() if done.returncode == 0 else ""
 
 
-def keep_pending(cwd: Path, args: list[str]) -> str:
+def keep_pending(cwd: Path, args: list[str], branch: str | None = None) -> str:
     """Keep a NOT QUEUED landing request beside the queue, so it is not simply gone: one file per branch (branch,
     ref sha at request time, land args, cwd; a later request supersedes an earlier one) which land_tick's existing
     requeue pass relaunches via land_async once the queue has room (D-889 addendum 36: no new trigger). The caller
     prints where it was kept instead of asking for a manual re-run."""
-    branch = _git(cwd, "branch", "--show-current")
+    branch = branch or _git(cwd, "branch", "--show-current")  # --branch from main names the branch, not main
     qdir = queue_dir(cwd)
     qdir.mkdir(parents=True, exist_ok=True)
     path = qdir / f"{PENDING}-{branch.replace('/', '-')}.json"

@@ -370,6 +370,26 @@ def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, caps
         assert clock[0] >= tool.FULL_WAIT_S and not _git(dev, "branch", "--list", "land/*")
 
 
+def test_not_queued_keeps_one_pending_request_for_the_named_branch(repo, monkeypatch, capsys):
+    """NOT QUEUED keeps the request for land_tick's requeue pass, for --branch from main too (not main itself)."""
+    main, dev = repo
+    clock = [0.0]
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": "landing queue full (12/12 tickets)")
+    monkeypatch.setattr(tool.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(tool.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    for cwd, branch in ((dev, None), (main, "feat/x")):
+        with pytest.raises(SystemExit) as stop:
+            tool.start(cwd, ["--tests", "auto"], NOW, lambda *a: None, branch=branch)
+        assert stop.value.code == 3
+        err = capsys.readouterr().err
+        assert "kept as" in err and "run land_async.py again" not in err
+        (path,) = tool._queue().queue_dir(dev).glob("pending-*.json")
+        row = json.loads(path.read_text(encoding="utf-8"))
+        assert row["branch"] == "feat/x" and row["ref"] == _git(dev, "rev-parse", "feat/x")
+        assert row["args"] == ["--tests", "auto"]
+        clock[0] = 0.0
+
+
 def test_a_finished_landing_removes_the_older_snapshots_it_covers(repo, monkeypatch, tmp_path):
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "rosy-land"))
     main, dev = repo
