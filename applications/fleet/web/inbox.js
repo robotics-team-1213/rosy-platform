@@ -60,9 +60,9 @@ export function createInboxPanel({scope, el, readView}) {
     label: "관제 상세 보기",
     activation: "automatic",
     tabs: [
-      { id: "status", panelId: "context-status", label: "로봇·작업", icon: "robot", content: el("context-status-body") || el("context-status") },
-      { id: "evidence", panelId: "context-evidence", label: "기록·근거", icon: "list", content: el("context-evidence-body") || el("context-evidence") },
-      { id: "tools", panelId: "context-tools", label: "운영 도구", icon: "tools", content: el("context-tools-body") || el("context-tools") },
+      { id: "status", panelId: "context-status", label: "로봇·작업", icon: "robot", content: el("context-status-body") },
+      { id: "evidence", panelId: "context-evidence", label: "기록·근거", icon: "list", content: el("context-evidence-body") },
+      { id: "tools", panelId: "context-tools", label: "운영 도구", icon: "tools", content: el("context-tools-body") },
     ],
     onChange: (key) => {
       contextChoice = key;

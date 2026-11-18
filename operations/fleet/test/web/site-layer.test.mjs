@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   classifySightings, siteBounds, siteStageHeight, fitTransform, project, gridLines,
-  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, quarterTurn, cameraScreenToMap, mapUpTurn, siteViewTurn,
+  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, quarterTurn, mapUpTurn, siteViewTurn,
 } from "../../../../applications/fleet/web/map/site-layer.js";
 
 const row = (changes) => ({
@@ -88,22 +88,12 @@ test("D-513 7: a 90° turn puts the picture's right edge at the bottom", () => {
   assert.deepEqual(quarterTurn(0, 10, 4).point(3, 2), { x: 3, y: 2 });
 });
 
-test("D-513 7: a click on the turned picture maps back through the turn and calibration", () => {
-  const h = [100, 0, 200, 0, -100, 100, 0, 0, 1]; // map (x, y) -> image (100x+200, -100y+100)
+test("D-513 7: a click on the turned picture maps back through the turn", () => {
   for (const rot of [0, 90, 180, 270]) {
     const turn = quarterTurn(rot, 400, 200);
     const back = turn.unpoint(...Object.values(turn.point(30, 40)));
     assert.deepEqual(back, { x: 30, y: 40 });
-    const shown = turn.point(100 * 0.5 + 200, -100 * -0.25 + 100);
-    const map = cameraScreenToMap(h, turn, shown.x, shown.y, { x: 0, y: 0 });
-    assert.ok(Math.abs(map.x - 0.5) < 1e-9 && Math.abs(map.y + 0.25) < 1e-9, `rot ${rot}`);
   }
-  assert.equal(cameraScreenToMap([0, 0, 0, 0, 0, 0, 0, 0, 0], quarterTurn(0, 1, 1), 0, 0, { x: 0, y: 0 }), null);
-  // A tilted camera: image rows above the horizon have no floor point.
-  const tilted = [100, 0, 0, 0, 100, 0, 0, 1, 1]; // w = y + 1: the floor is y > -1
-  const flat = quarterTurn(0, 400, 400);
-  assert.ok(cameraScreenToMap(tilted, flat, 0, 50, { x: 0, y: 0 }));
-  assert.equal(cameraScreenToMap(tilted, flat, 0, 150, { x: 0, y: 0 }), null); // beyond the horizon row 100
 });
 
 test("D-513 7: the picture turns so map +y points up — no installation key", () => {

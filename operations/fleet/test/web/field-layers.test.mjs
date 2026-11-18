@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   LAYER_DEFAULTS, parseLayers, normalizeProposal, quadAspect, configuredSize, aspectMismatch,
-  parseFieldSize, homography, applyHomography, rectifiedLayout,
+  parseFieldSize, homography, rectifiedLayout,
 } from "../../../../applications/fleet/web/calibration/field-layers.js";
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} vs ${b}`);
@@ -66,6 +66,12 @@ test("operator W×H accepts only a bounded positive size", () => {
   assert.equal(parseFieldSize("abc", "1"), null);
   assert.equal(parseFieldSize("1", "1000"), null);
 });
+
+// Test oracle: apply a 3×3 homography to one point (the product draws through the canvas transform instead).
+const applyHomography = (h, x, y) => {
+  const w = h[6] * x + h[7] * y + h[8];
+  return [(h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w];
+};
 
 test("homography maps the four corners exactly and rejects a degenerate quad", () => {
   const src = [[0, 0], [1, 0], [1, 1], [0, 1]];

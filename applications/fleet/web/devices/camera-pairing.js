@@ -14,7 +14,6 @@ export const PENDING_POLL_MS = 2500;
 const CREDENTIAL_EVERY = 3;
 
 export const UNAVAILABLE = "이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다.";
-export const CONFIRM_PROMPT = "폰 화면과 이 지문·자격 ID가 같은지 확인하세요";
 
 export function normalizePairingCode(text) {
   return String(text ?? "").replace(/[\s-]/g, "");
@@ -66,10 +65,6 @@ export function queueHealthText(listing) {
 
 export function canApprove(identity) {
   return canManage(identity);
-}
-
-export function freeSources(listing) {
-  return (listing?.paired_sources || []).filter((s) => !s.has_credential).map((s) => s.source_id);
 }
 
 // 승인 대상: 빈 자리를 먼저, 그 뒤에 교체할 수 있는 자리(기기 이름·자격 ID를 보여 준다).

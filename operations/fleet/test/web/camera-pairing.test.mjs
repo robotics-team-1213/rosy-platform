@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  CONFIRM_PROMPT, MESSAGES, PENDING_POLL_MS, UNAVAILABLE, canApprove, credentialActions, credentialText,
-  approveTargets, targetValue, formatClock, formatWhen, freeSources, messageFor, queueHealthText, normalizePairingCode, pairingCodeError, remainingSeconds,
+  MESSAGES, PENDING_POLL_MS, UNAVAILABLE, canApprove, credentialActions, credentialText,
+  approveTargets, targetValue, formatClock, formatWhen, messageFor, queueHealthText, normalizePairingCode, pairingCodeError, remainingSeconds,
   requestActions, requestText,
 } from "../../../../applications/fleet/web/devices/camera-pairing.js";
 
@@ -19,15 +19,6 @@ test("the code is the phone's six digits; the console never formats or shows one
   for (const bad of ["", "12345", "1234567", "12a456", "ABCDEF"]) {
     assert.equal(pairingCodeError(bad), MESSAGES.bad_code, bad);
   }
-});
-
-test("only paired sources without a credential can be chosen", () => {
-  const listing = { paired_sources: [
-    { source_id: "ceiling-north", has_credential: true },
-    { source_id: "ceiling-south", has_credential: false },
-  ] };
-  assert.deepEqual(freeSources(listing), ["ceiling-south"]);
-  assert.deepEqual(freeSources({}), []);
 });
 
 test("approve targets list free sources first, then replace options with label and credential id", () => {
@@ -115,9 +106,8 @@ test("each refusal maps to its operator sentence; a wrong code says the tries le
   assert.match(messageFor({ code: "PAIRING_RATE_LIMITED" })[0], /잠시 뒤/);
 });
 
-test("fixed copy: absent routes are calm, confirm prompt matches the phone check, polling is 2-3 s", () => {
+test("fixed copy: absent routes are calm, polling is 2-3 s", () => {
   assert.equal(UNAVAILABLE, "이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다.");
-  assert.equal(CONFIRM_PROMPT, "폰 화면과 이 지문·자격 ID가 같은지 확인하세요");
   assert.ok(PENDING_POLL_MS >= 2000 && PENDING_POLL_MS <= 3000, PENDING_POLL_MS);
 });
 

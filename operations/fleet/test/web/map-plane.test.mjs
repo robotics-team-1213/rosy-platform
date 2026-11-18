@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createPlaneFeed, mapToPlane, parsePlaneHeader, parseObservedFraction, planeCalibration, planeFitsImage, planeToMap,
+  createPlaneFeed, parsePlaneHeader, parseObservedFraction, planeCalibration, planeFitsImage, planeToMap,
 } from "../../../../applications/fleet/web/shared/vision-view.js";
 import { planeAffine } from "../../../../applications/fleet/web/map/camera-backdrop.js";
 import { fitTransform, project, quarterTurn } from "../../../../applications/fleet/web/map/site-layer.js";
@@ -27,6 +27,9 @@ test("X-Frame-Plane parses five finite numbers with min < max and px_per_m > 0, 
     assert.equal(parsePlaneHeader(bad), null, String(bad));
   }
 });
+
+// Test oracle: the inverse of planeToMap (the product only reads plane pixels back to the map).
+const mapToPlane = (plane, x, y) => ({ u: (x - plane.min_x) * plane.ppm, v: (plane.max_y - y) * plane.ppm });
 
 test("plane pixel ↔ map follows x = min_x + u/ppm, y = max_y − v/ppm both ways", () => {
   assert.deepEqual(planeToMap(PLANE, 0, 0), { x: -0.15, y: 3.75 });

@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-18 · uncommitted · refactor(fleet-web): 소비자 0 CSS·죽은 대체 경로·옛 충전 칸 카드·시험 전용 export 정리
 - 2026-11-18 · uncommitted · refactor(fleet-web): 본문 같은 사본 중 정본이 있는 것만 합침(copy, guide-layer 측정)
 - 2026-11-18 · uncommitted · refactor(fleet-web): 운영자 판정·권한 문구를 authorization.js 하나로
 - 2026-11-18 · uncommitted · refactor(fleet-web): setOff 변종 9개를 공용 cause-line으로
 - 2026-11-18 · uncommitted · fix(fleet-web): 인라인 결과 모듈의 변경 호출은 inline, 판정 중 사유는 판정할 때만
-- 2026-11-18 · uncommitted · fix(fleet-web): line-stuck 맡음 요청 본문 복구

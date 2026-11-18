@@ -130,9 +130,7 @@ def test_launch_uses_house_components_without_inline_code_and_work_navigation():
     assert 'learning-host' not in html and 'learning-steps' not in html   # 안내 문서 한 장뿐이다
     assert '/console/assets/learning.css' in html
     learning_css = (WEB_ROOT / 'learning.css').read_text(encoding='utf-8')
-    assert 'learning-hosts' in learning_css and '@media (width < 30rem)' in learning_css
     assert '[data-host-focus="model"]' in learning_css          # 초점 문서 전환이 시트에 있다
-    assert '--surface-raised' in learning_css                   # 카드 면은 역할 토큰만 쓴다
     assert '#' not in learning_css.replace('\\#', '')           # 원시 색 금지
     index = (WEB_ROOT / 'index.html').read_text(encoding='utf-8')
     work = index.split('data-area="work"', 1)[1].split('</nav>', 1)[0]
