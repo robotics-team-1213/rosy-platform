@@ -11,6 +11,7 @@ from fleet.pipeline.station_zones import load_station_zones
 
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
+from fleet.server.sitemap.pipeline_unload_release import container_count, install_unload_release_routes, unload_release
 
 
 def install_cell_tasks_routes(app, ctx) -> None:
@@ -166,6 +167,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cable_guard_micro": bool(spec.get("cable_guard_micro", dec_row["cable_guard_micro"])),
             "decision": dec_row,
             "preset": spec.get("preset"),
+            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index") if k in spec},
             "pose": pose,
             "status": "QUEUED",
             "created_at": round(time.time(), 3),
@@ -319,7 +321,29 @@ def install_cell_tasks_routes(app, ctx) -> None:
             v_cmd = max_speed_mps
             duration_s = round(checked_finite_float(max_step_m / max(0.005, max_speed_mps)), 2)
             if action == "dock_and_unload_s3":
-                spawned_cell_task = _enqueue_one_task(active, {**CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id})
+                count = container_count(body)
+                batch_id = f"unload-{uuid.uuid4().hex[:8]}"
+                batch = []
+                for index in range(count):  # one s3_shuttle per container, each after the previous one is verified
+                    batch.append(_enqueue_one_task(active, {
+                        **CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id,
+                        "task_id": f"{batch_id}-{index + 1}",
+                        "depends_on": batch[-1]["task_id"] if batch else None,
+                        "unload_batch_id": batch_id, "unload_expected": count, "unload_index": index,
+                    }))
+                spawned_cell_task = batch[0]
+        elif action == "depart_s3":
+            release = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(_is_human_detected()))
+            if not release["ready"]:
+                raise HTTPException(409, detail={"code": "DEPART_NOT_PERMITTED", "reasons": release["reasons"]})
+            principal = getattr(request.state, "site_principal", None)
+            # shortcut: in memory, so a Fleet restart forgets used releases; persist with the ledger if restarts happen mid-shift
+            app.state.unload_releases[release["batch_id"]] = {
+                "robot_id": robot_id, "task_id": task_id, "at": round(time.time(), 3),
+                "operator": getattr(principal, "principal_id", None), "release": release}
+            target_place = "S3_DEPART"
+            v_cmd = max_speed_mps
+            duration_s = 0.35
         elif action == "dock_s5":
             if _aborted("cell_ab"):
                 raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
@@ -385,5 +409,6 @@ def install_cell_tasks_routes(app, ctx) -> None:
         app.state.pinky_tasks[task_id] = ptask
         _save_ledger()
         return {"ok": True, "pinky_task": ptask, "decision": dec_row, "spawned_cell_task": spawned_cell_task}
+    install_unload_release_routes(app, ctx)
     ctx.CELL_TASK_PRESETS = CELL_TASK_PRESETS
     ctx._enqueue_one_task = _enqueue_one_task
