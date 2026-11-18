@@ -1,3 +1,4 @@
+import {isOperator} from "/console/assets/authorization.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // 지도 위 목표 지정과 운영자 핀(D-201·D-224·D-593). 셸(console.js)이 그리기(render)와 지도 뷰를 건넨다(D-798 3.2).
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
@@ -85,7 +86,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     const viaTrip = !view.map && selectedRobot?.state?.map_id !== siteMapId;   // site view, robot not on this map
     const onFrame = () => !view.map && (view.robots.find(robot => robot.robot_id === robotId)?.state?.map_id !== siteMapId) === viaTrip
       && view.activeSiteMap?.map?.map_id === siteMapId;
-    const canDispatch = !view.stateUnavailable && auth.role === "operator" && !namedReason()
+    const canDispatch = !view.stateUnavailable && isOperator(auth.role) && !namedReason()
       && (viaTrip || !capabilityReason(selectedRobot?.capabilities, 'navigation.goal_navigation'))
       && !motionCommandReason(view, robotId, viaTrip ? "trip" : "goal") && selectedRobot?.online && selectedRobot.state?.safety?.estop === false;
     if (!canDispatch) {
@@ -101,7 +102,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
             ...view.selectedGoal, points: planRes.waypoints_site.map((w) => [w.x, w.y]),
             places: planRes.places || view.selectedGoal.places, length_m: planRes.length_m ?? view.selectedGoal.length_m,
             eta_s: planRes.eta_s ?? view.selectedGoal.eta_s, status: "PREVIEW",
-            statusText: auth.role !== "operator" ? "목표 핀 고정 (운영자 로그인 시 출발)" : "목표 핀 고정 (안전 확인 대기)", at: Date.now(),
+            statusText: !isOperator(auth.role) ? "목표 핀 고정 (운영자 로그인 시 출발)" : "목표 핀 고정 (안전 확인 대기)", at: Date.now(),
           };
           view.activeRoadPlan = { robotId, ...planRes, at: Date.now() };
           drawMap(); render();
@@ -198,7 +199,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     const eligible = () => {
       const robot = view.robots.find(row => row.robot_id === robotId);
       const currentRobot = view.robotSelection ? view.robotSelection.get() : null;
-      return !view.stateUnavailable && auth.role === "operator" && !namedReason()
+      return !view.stateUnavailable && isOperator(auth.role) && !namedReason()
         && view.selected === robotId && currentRobot === robotId && robot?.online
         && robot.state?.safety?.estop === false
         && !capabilityReason(robot.capabilities, "navigation.goal_navigation")

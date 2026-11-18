@@ -2,6 +2,7 @@
 // then confirm the simplified line as a draft lane, or add an address at the robot or at a
 // fresh floor place marker the ceiling camera sees (D-564).
 // Nothing here moves a robot. The draft changes only through the Fleet teach API.
+import {isOperator, OPERATOR_REASON} from '/console/assets/authorization.js';
 import {setOffBy} from '/common/cause-line.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, newestPending, siteMapErrorText, teachConfirmBody, teachStatusText,
@@ -26,7 +27,7 @@ export function createTeachPanel(host) {
 
   function sync() {
     const role = host.role();
-    const base = role === 'operator' ? '' : role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
+    const base = isOperator(role) ? '' : role ? OPERATOR_REASON : '관제 접속이 필요합니다';
     const robot = base || ($('teach-robot').value ? '' : '로봇을 고르세요');
     const recording = view?.recording;
     if (recording) $('teach-robot').value = roster.some(row => row.robot_id === recording.robot_id) ? recording.robot_id : '';

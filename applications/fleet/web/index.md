@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-18 · uncommitted · refactor(fleet-web): 운영자 판정·권한 문구를 authorization.js 하나로
 - 2026-11-18 · uncommitted · refactor(fleet-web): setOff 변종 9개를 공용 cause-line으로
 - 2026-11-18 · uncommitted · fix(fleet-web): 인라인 결과 모듈의 변경 호출은 inline, 판정 중 사유는 판정할 때만
 - 2026-11-18 · uncommitted · fix(fleet-web): line-stuck 맡음 요청 본문 복구
 - 2026-11-18 · uncommitted · feat(fleet-web): 머리 비상 정지는 로그인만 있으면 눌린다, 셀은 지도 레일을 숨긴다
-- 2026-11-18 · e448b74292 · fix(fleet): 지도 잠금 사유가 지도 머리를 늘려 지도를 밀지 않는다 (S8)

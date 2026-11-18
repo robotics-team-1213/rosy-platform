@@ -4,6 +4,7 @@
 // behind a leader's open repeat trip. Every request goes through the site map's own trip path
 // (shared/site-map-model.js) to the unchanged D-494 routes. Moving controls need a named operator (D-540 9).
 // `운행 취소` stays on roster.js: it is a stop, open to every operator.
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason} from "/console/assets/site-map-model.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
 import { POSE_REFUSALS, enqueuePoseStart } from "/console/assets/localization-view.js";
@@ -25,7 +26,7 @@ export function cardTripLine(view, robotId) {
 export function tripReason(robot, { view, operator, named }) {
   const estop = robot?.state?.safety?.estop;
   return view.stateUnavailable ? "Fleet 상태 확인 불가"
-    : !operator ? "운영자 권한이 필요합니다"
+    : !operator ? OPERATOR_REASON
       : named || (!robot ? "로봇을 고르세요"
         : !robot.online ? "로봇 오프라인"
           : estop === true ? estopText(robot.state)

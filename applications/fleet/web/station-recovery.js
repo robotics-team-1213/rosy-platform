@@ -2,6 +2,7 @@
 // Fleet approves an actionable request by itself (approved_by "fleet:auto"); an operator may approve first.
 // Approval is only recorded. S1 sends no motion, and this file says so on the row.
 // No import from queues.js: queues.js imports the text helper below.
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
 const REASON = Object.freeze({
@@ -40,7 +41,7 @@ export function approvedText(by) {
 /** Pure: what the opened row shows. The approve button exists only when the answer allows it. */
 export function recoveryView(request, { operator, named = "", busy = false }) {
   const allowed = request.request === true && !request.reason && Boolean(request.bay) && !request.approved_by;
-  const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : named;
+  const lock = !operator ? OPERATOR_REASON : busy ? "답을 보내는 중" : named;
   return { lines: [recoveryHeadline(request).replace(/^:\s*/, ""), NO_MOTION], approve: allowed, approveReason: lock };
 }
 

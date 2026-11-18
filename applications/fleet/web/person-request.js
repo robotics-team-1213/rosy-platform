@@ -1,6 +1,7 @@
 // D-721 Amendment: 사람 부탁. The system asks a person to do something physical; the person answers here.
 // An answer is a statement only: it starts no motion, releases no stop and passes no check. The row says so.
 // No import from queues.js: queues.js imports the text helpers below.
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
 export const KIND_LABEL = Object.freeze({
@@ -35,7 +36,7 @@ export function deliveryText(request) {
 
 /** Pure: what the opened row shows and why its buttons are locked, if they are. */
 export function personView(request, { operator, named = "", busy = false }) {
-  const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : named;
+  const lock = !operator ? OPERATOR_REASON : busy ? "답을 보내는 중" : named;
   return { lines: [personHeadline(request).replace(/^:\s*/, ""), deliveryText(request), NO_MOTION_LINE], lock };
 }
 

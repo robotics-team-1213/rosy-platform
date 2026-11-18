@@ -1,3 +1,4 @@
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import { DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_LABEL, LINE_STATE_LABEL,
   enumLabel, operatorModeLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
@@ -376,7 +377,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       const fallback = uiBtn(lineFollow.mode === "IR_LINE" ? "IR 차선 추종 끄기" : "IR 차선 추종으로 전환…");
       setOffBy(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
-          : !isOperator() ? "운영자 권한이 필요합니다"
+          : !isOperator() ? OPERATOR_REASON
             // D-540 9: IR 추적 선택은 움직임, 중지(OFF)는 멈춤이다.
             : lineFollow.mode !== "IR_LINE" ? namedReason() : "");
       fallback.addEventListener("click", scope.guard(async () => {
@@ -407,7 +408,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       actions.append(fallback);
     }
     const identify = uiBtn("LED로 찾기");
-    setOffBy(identify, !isOperator() ? "운영자 권한이 필요합니다"
+    setOffBy(identify, !isOperator() ? OPERATOR_REASON
       : namedReason() ? namedReason()
       : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
         : estop !== false ? "안전 상태 확인이 필요합니다" : "");

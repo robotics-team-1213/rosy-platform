@@ -1,3 +1,4 @@
+import {isOperator} from "/console/assets/authorization.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // Console owns draft/display only; Fleet owns durable requests and all facts.
 import { createVoice } from './assistant-voice.js';
@@ -257,7 +258,7 @@ export function createAssistantPanel({scope, call, el, readSelection, onOpen = n
   return {
     close: (opts = {}) => close({ restoreFocus: false, ...opts }),
     setIdentity(auth) {
-      const next = !auth.locked && auth.role === 'operator' && auth.principal !== 'site-console' &&
+      const next = !auth.locked && isOperator(auth.role) && auth.principal !== 'site-console' &&
         !auth.principal?.startsWith('development-') ? auth.principal || null : null;
       const changed = dialogue.setIdentity(next);
       if (!changed && identity === next) return;

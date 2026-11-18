@@ -1,3 +1,4 @@
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import { setOffBy } from "/common/cause-line.js";
 import { primaryButton, quietButton, stuckOverdue } from "./queues.js";
 import { loadEvidence, PreviewMap } from "/console/assets/stuck-evidence.js";
@@ -160,7 +161,7 @@ export function stuckFacts(stuck) {
 export function decisionButtons(stuck, { operator, namedReason = "", busy = false }) {
   return DECISIONS.map((decision) => {
     let reason = "";
-    if (!operator) reason = "운영자 권한이 필요합니다";
+    if (!operator) reason = OPERATOR_REASON;
     else if (namedReason && decision !== "WAIT" && decision !== "ABORT") reason = namedReason;
     else if (stuck.robot_online === false) reason = "로봇 연결이 끊겼습니다";
     else if (busy) reason = "답을 보내는 중";
@@ -198,7 +199,7 @@ export function stuckSummary(stuck) {
     const source = {ai: "AI 분석 제안", human: "운영자 판단", rule: "관제 규칙"}[answer.tier] || "판단 주체 미확인";
     const reason = typeof answer.message === "string" ? answer.message.slice(answer.message.lastIndexOf(": ") + 2) : "";
     const refusal = {EMERGENCY_ACTIVE: "비상정지 중입니다.", CALIBRATION_ACTIVE: "보정 세션이 로봇을 제어하고 있습니다.",
-      OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 로그인이 필요합니다.", FORBIDDEN: "운영자 권한이 필요합니다.",
+      OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 로그인이 필요합니다.", FORBIDDEN: `${OPERATOR_REASON}.`,
       STUCK_ID_MISMATCH: "판단 요청이 바뀌었습니다. 새 요청을 확인하세요."}[answer.code] || REFUSAL_REASON[reason] || "거절 이유 미확인입니다.";
     const receipt = answer.code === "ROBOT_UNREACHABLE" ? "로봇에 연결되지 않아 전달하지 못했습니다. 연결과 현재 요청을 확인하세요."
       : answer.accepted === true ? "관제가 전달했고 로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다."
@@ -272,7 +273,7 @@ export function refusalText(robotId, decision, err) {
   } else if (code === "EMERGENCY_ACTIVE") why = "비상정지 중입니다";
   else if (code === "CALIBRATION_ACTIVE") why = "보정 세션이 로봇을 쥐고 있습니다";
   else if (code === "OPERATOR_IDENTITY_REQUIRED") why = "이름 있는 운영자 로그인이 필요합니다";
-  else if (err && err.status === 403) why = "운영자 권한이 필요합니다";
+  else if (err && err.status === 403) why = OPERATOR_REASON;
   else if (code === "ROBOT_UNREACHABLE") why = "로봇에 닿지 않아 답이 전해지지 않았습니다";
   else if (code === "STUCK_DECISION_OUTCOME_UNKNOWN") why = "로봇이 응답하지 않았습니다. CORE가 이미 적용했을 수 있으니 막힘 상태를 다시 확인한 뒤 답하세요";
   else why = "답을 전하지 못했습니다";

@@ -1,13 +1,14 @@
 // D-793 /console/policy: 학습 정책 단계·승인 창·확인 요청·사고 잠금. 규칙은 서버가 판단한다.
 import {createFleetClient} from '/common/fleet-client.js';
 import {createPollGate} from '/console/assets/poll-gate.js';
+import {NAMED_OPERATOR_REASON} from '/console/assets/authorization.js';
 import {isSignedOut, readToken} from '/console/assets/console-token.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {loginHref} from '/console/assets/login-return.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
-  ADMIN_REASON, OPERATOR_REASON, REASON_LABELS, RESOLUTION_LABELS, STAGE_LABELS, WINDOW_LABELS,
+  ADMIN_REASON, REASON_LABELS, RESOLUTION_LABELS, STAGE_LABELS, WINDOW_LABELS,
   errorText, executionVerdict, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
 } from '/console/assets/policy-model.js';
 
@@ -109,7 +110,7 @@ function renderWindow(item) {
       '승인 창 열기', `/windows/${item.window_id}/approve`, {operator_confirmed: true}, '승인 창을 열었습니다.')));
   }
   if (item.active || (!item.approved_by && !item.closed_ns)) {
-    row.append(button('닫기', who.operator ? '' : OPERATOR_REASON, () => post(`/windows/${item.window_id}/close`,
+    row.append(button('닫기', who.operator ? '' : NAMED_OPERATOR_REASON, () => post(`/windows/${item.window_id}/close`,
       {operator_confirmed: true, reason: '콘솔에서 닫음'}, '승인 창을 닫았습니다.')));
   }
   return row;
@@ -174,7 +175,7 @@ function render() {
     $(id).disabled = !who.admin; who.admin ? $(id).removeAttribute('reason') : $(id).setAttribute('reason', ADMIN_REASON);
   }
   for (const id of ['policy-incident-report', 'policy-sync-owner']) {
-    $(id).disabled = !who.operator; who.operator ? $(id).removeAttribute('reason') : $(id).setAttribute('reason', OPERATOR_REASON);
+    $(id).disabled = !who.operator; who.operator ? $(id).removeAttribute('reason') : $(id).setAttribute('reason', NAMED_OPERATOR_REASON);
   }
 }
 

@@ -1,4 +1,5 @@
 // Fleet shell owns credentials and page lifetime; this owner also spans roster commands.
+import {isOperator} from "/console/assets/authorization.js";
 export function createConfirmedAction({scope, identity, confirm}) {
   let held = null;
   function cancel(kind) {
@@ -9,7 +10,7 @@ export function createConfirmedAction({scope, identity, confirm}) {
   // With `note`, the confirmation also asks for it and request(owner, text) receives the trimmed text.
   async function run({message, opener, eligible, request, onError, kind = "", note = null, action = "요청 전송"}) {
     const caller = identity();
-    if (held || caller.locked || caller.role !== "operator" || !eligible()) return;
+    if (held || caller.locked || !isOperator(caller.role) || !eligible()) return;
     const life = scope.capture(), controller = new AbortController();
     const owner = {controller, kind, signal: AbortSignal.any([life.signal, controller.signal])};
     owner.current = () => held === owner && !owner.signal.aborted && life.current()

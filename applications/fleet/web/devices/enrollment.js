@@ -2,6 +2,7 @@
 // 브라우저는 로봇에 닿지 않고 토큰을 보지 않는다. 코드는 Fleet 서버로만 간다.
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createEnrollmentPanel 이 화면 배선이다.
 
+import {isOperator, OPERATOR_REASON} from "/console/assets/authorization.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createRequest } from "/common/request.js";
 import {getAnnouncer} from "/common/announcer.js";
@@ -168,7 +169,7 @@ const ACTION_LABELS = {
 };
 
 export function canManage(identity) {
-  return identity?.role === "operator" && Boolean(identity.principal_id)
+  return isOperator(identity?.role) && Boolean(identity.principal_id)
     && identity.principal_id !== "site-console";
 }
 
@@ -483,7 +484,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     }
     const addBlocked = !manage || Date.now() < state.blockedUntil;
     el("enroll-address-add").disabled = addBlocked;
-    if (addBlocked) el("enroll-address-add").setAttribute("reason", !manage ? "운영자 권한이 필요합니다" : "잠시 뒤 다시 시도");
+    if (addBlocked) el("enroll-address-add").setAttribute("reason", !manage ? OPERATOR_REASON : "잠시 뒤 다시 시도");
     else el("enroll-address-add").removeAttribute("reason");
   }
 

@@ -1,3 +1,4 @@
+import {isOperator, OPERATOR_REASON} from '/console/assets/authorization.js';
 import {DRAWING_ERROR_LABEL} from './drawing-errors.js';
 import {ACTION_LABEL, RESOLVER_DECISION_LABEL, TRIP_ERROR_LABEL, startCheckText, tripErrorText} from './trip-display.js';
 export {routeAttention} from './route-attention.js';
@@ -31,7 +32,7 @@ export const SITE_MAP_ERROR_LABEL = {
 export function siteMapErrorText(error) {
   if (error.code === 'PASSWORD_CHANGE_REQUIRED') return '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요';
   if (error.status === 401) return '관제 토큰을 확인하고 다시 접속하세요';
-  if (error.status === 403) return '운영자 권한이 필요합니다 · 계정을 확인하세요';
+  if (error.status === 403) return `${OPERATOR_REASON} · 계정을 확인하세요`;
   if (error.status >= 500) return '관제 서버 응답을 확인할 수 없습니다 · 잠시 뒤 다시 접속하세요';
   if (!error.status && /Failed to fetch|NetworkError|ERR_/.test(error.message || '')) return '관제 연결이 끊겼습니다 · 네트워크를 확인하고 다시 접속하세요';
   const base = DRAWING_ERROR_LABEL[error.code] || SITE_MAP_ERROR_LABEL[error.code] || error.message || String(error);
@@ -185,7 +186,7 @@ export function repeatTripReason({active, running, start}) {
 export function convoyLeaders(open, robotId) { return (open || []).filter(trip => trip.repeat && !trip.convoy && trip.robot_id !== robotId).map(trip => trip.robot_id); }
 
 export function tripStartReason({role, plan, active, running, now = Date.now() / 1000}) {
-  if (role !== 'operator') return role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
+  if (!isOperator(role)) return role ? OPERATOR_REASON : '관제 접속이 필요합니다';
   if (running) return '이 로봇은 이미 운행 중입니다';
   if (!plan) return '먼저 경로를 계산하세요';
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';

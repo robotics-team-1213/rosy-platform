@@ -1342,3 +1342,8 @@
 - 변경: 본문이 같은 사유 끄기 변종 gate×4(sitemap/site-map·camera·survey·teach), guard×2(work/control-unit-view·integrated-control-view), setReason(queues.js, 호출 card-trip·line-stuck·trip-replan), blockWith(robot/roster-presentation.js, 호출 roster.js·power-action.js 주입)을 지우고 `/common/cause-line.js`의 `setOffBy(control, reason)`(= `setOff(control, reason, reason)`, 사유가 곧 스위치)로 바꿨다. gate의 id 조회 차이는 호출에서 `$(id)`로 둔다(site-map 호스트 객체로 넘기던 gate 주입도 제거). `shared/authorization.js`의 describe 사본은 cause-line `describeBy` import로.
 - 증거: 본문 비교(disabled=Boolean(reason) + reason 속성 쓰기/지우기, describe는 describeBy와 글자 단위 동일), node fleet web·shared/web 시험 통과, 바뀐 JS node --check 통과, scan_disabled 누락 0.
 - gate 변화: 없음(이 모듈).
+
+## 2026-11-18 · uncommitted · refactor(fleet-web): 운영자 판정·권한 문구를 authorization.js 하나로
+- 변경: authorization.js 밖 `role ===/!== "operator"` 35줄(17파일)을 `isOperator(role)`/`!isOperator(role)`로 1:1 바꿨다. console.js 등 주입 람다의 namedReason·locked·busy·principal_id 조건은 그대로다(비교만 치환). fleet-header.js:139 표시 색은 권한 판정이 아니라 그대로 둔다. JS에 직접 쓴 "운영자 권한이 필요합니다"(정확한 문구, 마침표·꼬리 붙은 2곳은 템플릿)를 `OPERATOR_REASON` import로(13파일). `work/policy-model.js`의 같은 이름 다른 문구 `OPERATOR_REASON`(값=NAMED_OPERATOR_REASON)을 지우고 policy-page.js가 authorization.js `NAMED_OPERATOR_REASON`을 쓴다. 화면 문구는 같다.
+- 증거: 치환 뒤 `git grep -nE "role *[!=]==? *['\"]operator" -- applications/fleet/web` = authorization.js 정의 1 + fleet-header 표시 1. JS 권한 문구 직접 쓰기 0(다른 문구 "이름 있는 운영자 권한이…"·"기명 운영자 권한이…" 2곳은 별개). node fleet web·shared/web 통과. test_dispatch_control_ui.py 단언을 isOperator(auth.role)로.
+- gate 변화: 없음(재발 방지 래칫은 묶음 7).

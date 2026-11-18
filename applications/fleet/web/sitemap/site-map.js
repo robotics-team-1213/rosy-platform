@@ -1,7 +1,7 @@
 import {setOffBy} from '/common/cause-line.js';
 import {createMapSourcesPanel} from '/console/assets/site-map-sources.js';
 import {isSignedOut, readToken, storeToken} from '/console/assets/console-token.js';
-import {OPERATOR_REASON} from "/console/assets/authorization.js";
+import {OPERATOR_REASON, isOperator} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
 // and preview a D-490 trip plan. D-540 4: robots are drawn read-only; trips start and stop on the 관제 robot card.
 import {createFleetClient} from '/common/fleet-client.js';
@@ -56,7 +56,7 @@ const sourcePanel = createMapSourcesPanel({request, state, shown, calibrations: 
   operatorReason, render, syncButtons, guarded, select, clearPlan, status, W, H});
 const {selectedProfile, loadProfiles, clearPlane, updatePlaneSources} = sourcePanel;
 function shown() { return $('map-source').value === 'profile' ? selectedProfile()?.map : ($('map-source').value === 'draft' ? state.working : state.active?.map); }
-function operatorReason() { return state.role === 'operator' ? '' : state.role ? OPERATOR_REASON : '관제 접속이 필요합니다'; }
+function operatorReason() { return isOperator(state.role) ? '' : state.role ? OPERATOR_REASON : '관제 접속이 필요합니다'; }
 
 function render() {
   authoring.sync();

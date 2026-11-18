@@ -1,6 +1,6 @@
 // 관제 화면의 읽기 갱신: 발행 제어 띠와 재허가, 현장 경로, Fleet 상태 폴링, 전체 주행 취소.
 // 폴링 주기는 셸(console.js)이 쥐고 이 팩토리의 함수를 부른다(D-798 3.2).
-import { namedOperatorReason } from "/console/assets/authorization.js";
+import { namedOperatorReason, isOperator } from "/console/assets/authorization.js";
 import { statusTag } from "/common/status-tag.js";
 import { getAnnouncer } from "/common/announcer.js";
 import { noteLink, showFleet } from "/console/assets/fleet-header.js";
@@ -58,7 +58,7 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       }
       // 띠는 live가 아니다(11-18) — 발행 허용·차단이 실제로 바뀔 때만 한 번 낭독한다.
       if (["enabled", "restarted", "latched"].includes(was) && was !== band.dataset.state) getAnnouncer()?.announce(title.textContent);
-      rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
+      rearm.hidden = !(isOperator(auth.role) && !state.dispatch_enabled);
       // D-540 9: 재허가는 대기 작업을 다시 움직이므로 이름 있는 운영자만.
       const rearmNamed = namedOperatorReason(auth.role, auth.principal);
       rearm.disabled = auth.locked || !state.rearm_available || Boolean(rearmNamed);
