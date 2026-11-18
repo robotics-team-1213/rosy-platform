@@ -94,9 +94,12 @@ def test_berth_parking_status_and_dispatch_routes():
     assert set(BAY_DOCK_SPECS.keys()) == {"C1", "C2", "C3"}
     assert infer_bay_id("rosy_45") == "C2"
 
+    # 2868c99d7b review: the teleop reverse has no rear proximity stop, so it is never implicit.
+    asked = client.post("/api/fleet/robots/rosy_46/berth-park", json={"bay_id": "C1"})
+    assert asked.status_code == 400 and asked.json()["detail"]["code"] == "EXECUTE_PHYSICAL_REQUIRED"
     res = client.post(
         "/api/fleet/robots/rosy_46/berth-park",
-        json={"bay_id": "C1", "mode": "forward_and_berth_park", "forward_m": 0.20},
+        json={"bay_id": "C1", "mode": "forward_and_berth_park", "forward_m": 0.20, "execute_physical": True},
     )
     assert res.status_code == 200
     rbody = res.json()
@@ -220,3 +223,4 @@ def test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_quer
                           "places": ["P1", "C1"], "edges": ["bay_1"], "length_m": 0.2}
     assert seen == {"robot_id": "rosy_46", "x": 0.1, "y": 0.2, "yaw": 1.5, "place_id": "C1", "label": "charge 1"}
     assert client.get("/api/fleet/robots/rosy_46/road-nav2/plan", params={"x": "not-a-number"}).status_code == 422
+
