@@ -822,6 +822,7 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
             "() => document.querySelectorAll('#roster [data-address-reason]').length === 3")
         assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="로봇 등록", exact=True).click()  # the enrolled list loads with its task tab
         page.wait_for_function("() => document.querySelectorAll('#enrolled-list li[data-robot-id]').length > 0")
         assert page.locator('#enrolled-list ui-button[data-action="move"]').count() == 0
         button = page.locator('#enroll-address-add')
