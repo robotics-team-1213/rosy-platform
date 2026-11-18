@@ -49,6 +49,7 @@ class BayPhases:
         self._scan_s: Optional[float] = None
         self._resync = False
         self._turn_target: Optional[float] = None
+        self._turn_dir = -1.0                             # fixed turn sense: tray swings downstream
         self._creep_from: Optional[float] = None          # 정착 크립 시작 travelled
         self._crept = False
         self._match: Optional[tuple[float, float]] = None  # 크립 전 관측(두 번 일치용)
@@ -194,8 +195,15 @@ class BayPhases:
             h._fail("bay odometry unavailable")
             return
         self._stop()
+        mp = h._pose_provider()
+        # The staging goal faces the bay: a nose far off that axis is a wrong-way arrival, and the
+        # line observer would read it as normal (it forces the axis to -x), so refuse before turning.
+        if mp is None or abs(_wrap(mp[2] - h._dock.yaw)) > h._cfg.bay_stage_heading_max_rad:
+            h._fail("bay staging arrival heading off the bay axis")
+            return
         self._reset_line_state()
-        self._turn_target = pose[2] + math.pi
+        self._turn_dir = -1.0 if h._cfg.bay_downstream_sign >= 0.0 else 1.0
+        self._turn_target = pose[2] + self._turn_dir * math.pi
         h._enter(DockPhase.TURNING)
 
     def _tick_turning(self, now: float) -> None:
@@ -214,6 +222,8 @@ class BayPhases:
                 h._fail("bay turn not clear: %s" % (body[0] if body else "no fresh body scan"))
             return
         error = _wrap(self._turn_target - pose[2])
+        if error * self._turn_dir < 0.0 and abs(error) > math.pi / 2:
+            error += self._turn_dir * 2.0 * math.pi     # near ±pi the wrap flips on noise: keep the sense
         angular, done = turn_twist(error, _TURN_GAINS)
         if done:
             self._stop()

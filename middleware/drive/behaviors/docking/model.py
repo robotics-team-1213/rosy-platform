@@ -125,6 +125,10 @@ class DockingConfig:
     bay_exit_front_gap_m: float = 0.08  # 앞 여유가 이보다 작으면 멈춘다
     bay_exit_steer_lat: float = 6.0     # rad/m, 횡 오차 → 목표 방위(선 보며 전진; 시뮬로 부호·크기 확인)
     bay_exit_steer_head: float = 2.0    # 1/s, 목표 방위로 맞추는 이득(0 이면 곧게 나간다)
+    # 일방통행(C3→C1, 사이트 v258): 칸 축 기준 하류가 +횡(서쪽). 이 사이트 값이 기본이고 0 이면 검사·고정 방향 없음.
+    bay_downstream_sign: float = 1.0
+    bay_corridor_band_m: float = 0.15   # 스테이징 거리 ± 이만큼이 통로선 위(하류 쪽 시작 거절 범위)
+    bay_stage_heading_max_rad: float = 1.0472  # 60 deg: 스테이징 도착 코가 칸 축에서 이보다 틀면 실패
     bay_scan_fresh_s: float = 0.5       # 몸 스캔 판정이 이보다 오래되면 없는 것
     bay_scan_wait_s: float = 2.0        # 몸 스캔 없이 이만큼 지나면 실패
     # 짐칸 J-v3 뒤끝은 바퀴축 뒤 0.134–0.135 m(정격 CAD, 뒷면 y_d −14.45 · 축 y_d 120.5; 몸 74.5·42.1·r 82.6 이
