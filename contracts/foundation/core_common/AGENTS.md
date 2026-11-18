@@ -25,6 +25,7 @@ The importable Python package of the `core_common` module: config loading, ident
 | `robot_state.py` | One five-state robot state for buzzer, lamp, LCD, dashboard (D-260); stdlib only, also loaded by the boot display |
 | `device_poll.py` | Shared HTTP polling with a unified failure vocabulary (D-352/353); stdlib only |
 | `discover.py` | mDNS/DNS-SD discovery with zeroconf, avahi, dns-sd fallbacks (D-354); optional, never required |
+| `camera_quality.py` | Photometric screening of original frames and the two-camera `Readiness` gate (policy omx-photometric-v3); numpy only inside `frame_quality`. `deploy/robot/omx/camera_quality.py` is a shim |
 | `intent.py` | Translates operator intent into robot tasks or site commands; never takes ROS topic names |
 | `succession.py` | Deterministic leader choice from roster plus dead set, so two robots cannot appoint two leaders |
 

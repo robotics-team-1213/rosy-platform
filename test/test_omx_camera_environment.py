@@ -8,7 +8,7 @@ import pytest
 
 REPO = Path(__file__).parents[1]
 FILES = {
-    'camera_quality': REPO / 'deploy/robot/omx/camera_quality.py',
+    'camera_quality': REPO / 'contracts/foundation/core_common/camera_quality.py',
     'camera_environment': REPO / 'deploy/robot/omx/camera_environment.py',
     'camera_readiness': REPO / 'deploy/robot/omx/camera_readiness.py',
 }
