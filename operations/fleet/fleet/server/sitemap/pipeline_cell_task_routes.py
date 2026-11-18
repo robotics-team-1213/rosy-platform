@@ -11,7 +11,7 @@ from fleet.pipeline.station_zones import load_station_zones
 
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
-from fleet.server.sitemap.pipeline_unload_release import container_count, install_unload_release_routes, unload_release
+from fleet.server.sitemap.pipeline_unload_release import install_unload_release_routes, manifest_count, unload_release
 
 
 def install_cell_tasks_routes(app, ctx) -> None:
@@ -321,25 +321,18 @@ def install_cell_tasks_routes(app, ctx) -> None:
             v_cmd = max_speed_mps
             duration_s = round(checked_finite_float(max_step_m / max(0.005, max_speed_mps)), 2)
             if action == "dock_and_unload_s3":
-                count = container_count(body)
-                batch_id = f"unload-{uuid.uuid4().hex[:8]}"
-                batch = []
-                for index in range(count):  # one s3_shuttle per container, each after the previous one is verified
-                    batch.append(_enqueue_one_task(active, {
-                        **CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id,
-                        "task_id": f"{batch_id}-{index + 1}",
-                        "depends_on": batch[-1]["task_id"] if batch else None,
-                        "unload_batch_id": batch_id, "unload_expected": count, "unload_index": index,
-                    }))
-                spawned_cell_task = batch[0]
+                batch_id = f"unload-{uuid.uuid4().hex[:8]}"  # the camera adds the next carry (continue_unload)
+                spawned_cell_task = _enqueue_one_task(active, {
+                    **CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id, "task_id": f"{batch_id}-1",
+                    "unload_batch_id": batch_id, "unload_expected": manifest_count(body), "unload_index": 0,
+                })
         elif action == "depart_s3":
             release = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(_is_human_detected()))
             if not release["ready"]:
                 raise HTTPException(409, detail={"code": "DEPART_NOT_PERMITTED", "reasons": release["reasons"]})
             principal = getattr(request.state, "site_principal", None)
-            # shortcut: in memory, so a Fleet restart forgets used releases; persist with the ledger if restarts happen mid-shift
             app.state.unload_releases[release["batch_id"]] = {
-                "robot_id": robot_id, "task_id": task_id, "at": round(time.time(), 3),
+                "robot_id": robot_id, "task_id": task_id, "at": round(time.time(), 3), "state": "OPERATOR",
                 "operator": getattr(principal, "principal_id", None), "release": release}
             target_place = "S3_DEPART"
             v_cmd = max_speed_mps
