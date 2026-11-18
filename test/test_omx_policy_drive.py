@@ -138,3 +138,13 @@ def test_moving_needs_person_at_switch():
     with pytest.raises(SystemExit):
         drive.main(["--config", "c", "--library", "l", "--policy-root", "p", "--policy-revision", "r",
                     "--model-calibration", "m", "--cell-calibration", "c", "--operator", "x"])
+
+
+def test_demonstrated_range_widens_only_where_a_person_went(tmp_path):
+    low, high, _ = drive.envelope(LIB)
+    wl, wh = drive.widen(low, high, [0, -58, 30, 40, -2, 46], [20, -20, 51, 50, 48, 60])
+    assert wl[4] == -5 and wh[4] == 48 and wl[5] == 46 and wh[:4] == high[:4]
+    rows = []
+    result = drive.run_episode(Cell(), Policy([[[0, -58, 51, 50, 40, 49]]]), write_lib(tmp_path), tmp_path, offset=[0] * 6,
+                               max_chunks=1, dry_run=True, log=rows.append, demonstrated=([0] * 4 + [-5, 46], [0] * 4 + [48, 60]))
+    assert result["result"] == "dry_run" and "refused" not in rows[0]

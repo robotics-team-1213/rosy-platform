@@ -4,7 +4,9 @@
 The policy's proposed chunk becomes a chunk named `policy` in a copy of the arm's reviewed library, so the runner applies
 the same `load` plan_check, start-gap check, speed/strain/jitter guards and holds as for an IK chunk; the IK chunks
 (`home`, transfer chunks) stay in the same library, which is how a policy segment and IK segments mix. On top:
-- every policy frame must lie inside the per-joint range the reviewed library's chunks already cover (+ margin);
+- every policy frame must lie inside the per-joint range the reviewed library's chunks cover, widened to the q01..q99
+  range a person demonstrated on this arm in the training actions (+ margin): 11-18 the IK library never rolls the
+  wrist (-17..-2) while the demonstrations roll it to align with the box;
 - no step may be faster than the library's fastest step: a faster chunk is stretched in time, never sent as is;
 - the model's LeRobot calibration and the cell's may differ by a homing offset (11-18: wrist_roll 957 ticks = 46.7
   units); `calibration_offset` maps cell state into model units and the action back.
@@ -54,6 +56,23 @@ def envelope(library: dict) -> tuple[list[float], list[float], float]:
     return arr.min(axis=0).tolist(), arr.max(axis=0).tolist(), float(max(steps))
 
 
+def demonstrated_range(policy_root: Path, offset) -> tuple[list[float], list[float]]:
+    """Per-joint q01..q99 of the actions the model was trained on (recorded by a person on this arm), in cell units."""
+    from safetensors.numpy import load_file
+
+    files = sorted(Path(policy_root).glob("policy_preprocessor_step_*_normalizer_processor.safetensors"))
+    if not files:
+        raise ValueError("checkpoint has no normalizer statistics")
+    stats = load_file(str(files[0]))
+    off = np.asarray(offset, dtype=float)
+    return (np.asarray(stats["action.q01"], dtype=float) - off).tolist(), (np.asarray(stats["action.q99"], dtype=float) - off).tolist()
+
+
+def widen(low, high, demo_low, demo_high) -> tuple[list[float], list[float]]:
+    """Union of the reviewed IK range and the range a person demonstrated on this arm, per joint."""
+    return np.minimum(low, demo_low).tolist(), np.maximum(high, demo_high).tolist()
+
+
 def shape_chunk(chunk, start, low, high, fastest: float) -> list[list[float]]:
     """Cell-unit frames the runner may get: refused outside the envelope, stretched so no body step beats `fastest`."""
     arr = np.asarray(chunk, dtype=float)
@@ -72,9 +91,12 @@ def shape_chunk(chunk, start, low, high, fastest: float) -> list[list[float]]:
     return out
 
 
-def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chunks: int, dry_run: bool, log) -> dict:
+def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chunks: int, dry_run: bool, log,
+                demonstrated=None) -> dict:
     library = json.loads(library_path.read_text(encoding="utf-8"))
     low, high, fastest = envelope(library)
+    if demonstrated is not None:
+        low, high = widen(low, high, *demonstrated)
     closed = float(library.get("jaw_empty_stop", library["gripper_closed"]))
     off = np.asarray(offset, dtype=float)
     held, released = False, False
@@ -167,7 +189,7 @@ def main(argv=None) -> int:
 
     log({"start": True, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch, "max_chunks": args.max_chunks})
     result = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks,
-                         dry_run=args.dry_run, log=log)
+                         dry_run=args.dry_run, log=log, demonstrated=demonstrated_range(args.policy_root, offset))
     log({"end": True, **result})
     print(json.dumps(result))
     return 0 if result["result"] in ("released", "chunks_done", "dry_run") else 1
