@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-18 · uncommitted · test(fleet): 셀 홀드 해제 시험에 사유 메모, 샘플 제어 막대는 AI 창 옆으로
 - 2026-11-18 · uncommitted · test(fleet): feat/ui-refine가 깬 브라우저 시험 4개 바로잡기
 - 2026-11-18 · uncommitted · fix(fleet): 통합관제 R도 팔 셀 작업 화면을 맡는다 — 하위 셀의 workcell을 unit_scope에 셈
 - 2026-11-18 · uncommitted · docs(fleet): 보기 전용 비상 정지의 서버 쪽은 별도 착지
 - 2026-11-18 · uncommitted · refactor(fleet): 가려진 road-nav2 중복 라우트 삭제 — 응답 소유는 berth_parking 한 곳
-- 2026-11-18 · uncommitted · test(fleet): 알림 한 곳에 맞춘 브라우저·노드 시험

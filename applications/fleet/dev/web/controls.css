@@ -1,4 +1,5 @@
-#rosy-sample-controls {position:relative; z-index:20; display:flex; flex-wrap:wrap; gap:.5rem; padding:.75rem; border:2px dashed #876300; background:#fff5ce; color:#292400; font:14px system-ui;}
+/* the fixed AI chat panel (assistant/panel.css, ≤27rem + rail) sits bottom-right: keep sample buttons out from under it */
+#rosy-sample-controls {display:flex; flex-wrap:wrap; gap:.5rem; padding:.75rem; padding-inline-end:max(.75rem, min(32rem, 100vw - 20rem)); border:2px dashed #876300; background:#fff5ce; color:#292400; font:14px system-ui;}
 #rosy-sample-controls strong, #rosy-sample-controls span {flex-basis:100%;}
 #rosy-sample-controls button {font:inherit; min-height:2rem; padding:.3rem .6rem;}
 #rosy-sample-controls output {flex-basis:100%;}

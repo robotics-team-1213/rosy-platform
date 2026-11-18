@@ -5642,3 +5642,8 @@
 - 변경: site-map 보기 전용 시험은 머리 비상 정지가 켜져 있음을 단언한다(D-1043). 셀 홀드 해제 시험은 해제 확인 창(사유 메모 선택)을 누르고 본문에 cell_id(+note)를 단언한다(clearBody 계약). 샘플 시험의 관제 작업 요청 요약은 이름으로 고른다(취소 안내 summary가 같은 패널에 생김). 개발 샘플 제어 막대가 고정된 AI 채팅 창 아래에 깔려 누를 수 없던 것을 z-index로 올렸다(dev 전용 CSS).
 - 증거: 기준 c6c6d932e1 원격 D:/DevTemp/ui-panel-1118/remote-base/run-1.txt(10 실패), main ea80549559 원격 D:/DevTemp/ui-panel-1118/remote-main/run-1.txt(part3 3개만 실패 = main 기존 실패, 이번 범위 밖).
 - gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · test(fleet): 셀 홀드 해제 시험에 사유 메모, 샘플 제어 막대는 AI 창 옆으로
+- 변경: 홀드 해제 확인 창은 사유 메모가 필수다(단추 사유 "사유 메모을(를) 적어야 합니다") — 시험이 메모를 적고 본문 {cell_id, note}를 단언한다. 개발 샘플 제어 막대의 z-index 올림을 되돌리고(전송 단추를 덮었다) 오른쪽에 AI 창 폭만큼 안쪽 여백을 둬 단추가 창 아래로 가지 않게 했다(dev 전용 CSS).
+- 증거: D:/DevTemp/ui-panel-1118/remote-ui/run-1.txt. site-map 무지도 기록 시험 [False-1440]은 같은 코드에서 통과·실패가 갈려(remote-1 통과, remote-ui·remote-base 실패, main 통과) 간헐 실패로 보고 따로 다룬다.
+- gate 변화: 없음.
