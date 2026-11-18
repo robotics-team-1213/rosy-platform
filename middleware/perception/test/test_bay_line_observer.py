@@ -143,3 +143,32 @@ def test_the_robot_s_nominal_camera_profile_gives_a_projecting_observer():
                            line_total_m=LINE_TOTAL_M)
     with pytest.raises(ValueError):
         nominal_geometry(dict(profile, cx=150.0))      # off-centre: refused, not projected wrong
+
+
+def test_an_l_shaped_bay_mouth_is_read_from_the_bay_line_alone():
+    """2026-11-18 y8xs: the corridor line across the bay line pulled a one-line fit 16 deg off."""
+    frame = render(0.02, math.pi, 0.30)
+    # the corridor line: across the robot's axis, 0.25 m ahead of the camera, 0.4 m long
+    for t in np.arange(-0.20, 0.20, 0.004):
+        for w in (-0.006, 0.0, 0.006):
+            px = ground_to_pixel(0.25 + w, t, width=W, height=H, hfov_rad=HFOV,
+                                 pitch_rad=MOUNT.pitch_rad, height_m=MOUNT.height_m)
+            if px is not None:
+                u, v = int(round(px[0])), int(round(px[1]))
+                frame[max(0, v - 2):v + 3, max(0, u - 2):u + 3] = PINK
+    payload = observer().observe(frame, stamp=10.0)
+    assert payload["visible"] is True
+    assert heading_error(payload["yaw"], math.pi) <= math.radians(3.0)
+    assert abs(payload["y"] - 0.02) <= 0.01
+
+
+def test_a_corridor_line_alone_is_not_a_bay_line():
+    frame = render(0.0, math.pi, 0.30, tape_dim=0.0)          # no bay line drawn (black tape is not pink)
+    for t in np.arange(-0.20, 0.20, 0.004):
+        for w in (-0.006, 0.0, 0.006):
+            px = ground_to_pixel(0.25 + w, t, width=W, height=H, hfov_rad=HFOV,
+                                 pitch_rad=MOUNT.pitch_rad, height_m=MOUNT.height_m)
+            if px is not None:
+                u, v = int(round(px[0])), int(round(px[1]))
+                frame[max(0, v - 2):v + 3, max(0, u - 2):u + 3] = PINK
+    assert observer().observe(frame, stamp=10.0)["visible"] is False

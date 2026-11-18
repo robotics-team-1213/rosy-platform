@@ -72,6 +72,37 @@ def ground_to_pixel(x_ahead: float, y_left: float, *, width: int, height: int,
     return u, v
 
 
+#: Ahead of a bay the camera sees the bay's own line and the corridor line across it (an L or a T).
+#: Only a line within this angle of the robot's axis can be the bay line being reversed along.
+AXIAL_MAX_RAD = math.radians(35.0)
+#: A ground point within this distance of the candidate line belongs to it (tape ~2 cm wide).
+INLIER_M = 0.015
+
+
+def axial_line(pts: np.ndarray):
+    """The points of the one straight line nearest the robot's axis, or None.
+
+    Fitting every pink pixel to one line averages the bay line with the corridor line (2026-11-18,
+    y8xs: a steady but wrong 16 deg). Deterministic sample consensus over point pairs whose direction
+    is within AXIAL_MAX_RAD of base_link x; the most inliers wins."""
+    n = len(pts)
+    rng = np.random.default_rng(7)
+    best = None
+    for _ in range(300):
+        i, j = rng.integers(0, n, 2)
+        d = pts[j] - pts[i]
+        length = float(np.hypot(*d))
+        if length < 0.04 or abs(math.atan2(abs(d[1]), abs(d[0]))) > AXIAL_MAX_RAD:
+            continue
+        normal = np.array([-d[1], d[0]]) / length
+        inliers = np.abs((pts - pts[i]) @ normal) <= INLIER_M
+        if best is None or inliers.sum() > best.sum():
+            best = inliers
+    if best is None or best.sum() < MIN_MASK_PIXELS:
+        return None
+    return pts[best]
+
+
 def nominal_geometry(profile: dict) -> tuple[dict, float, int, int]:
     """(mount fields, hfov_rad, width, height) from camera_nominal.yaml (D-364/D-397).
 
@@ -131,7 +162,9 @@ class BayLineObserver:
                 points.append((g[0] + self._mount.x_offset_m, g[1]))
         if len(points) < MIN_MASK_PIXELS:
             return self._payload(stamp, False)
-        pts = np.asarray(points, dtype=np.float64)
+        pts = axial_line(np.asarray(points, dtype=np.float64))
+        if pts is None:
+            return self._payload(stamp, False)
         centre = pts.mean(axis=0)
         _, _, vt = np.linalg.svd(pts - centre, full_matrices=False)
         direction = vt[0]

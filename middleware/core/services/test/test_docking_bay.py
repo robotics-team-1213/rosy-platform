@@ -292,6 +292,14 @@ def test_feed_and_detector_selection_carry_the_camera_line_source():
     assert detector.relative_pose() is not None
 
 
+def test_rear_and_line_docks_never_return_on_low_battery_unless_told_to():
+    """2026-11-18 map panel: Fleet-taught rear bays sit in the robot's own frame with no map id."""
+    rear = DockType(name="charge_bay_rear", detector="lidar_v", approach="rear", staging_offset_m=0.55)
+    assert rear.battery_return is False and DockType(**BAY).battery_return is False
+    assert rear.model_copy(update={"auto_return": True}).battery_return is True
+    assert DockType(name="tag", detector="simulated").battery_return is True     # sim docks unchanged
+
+
 def test_a_robot_s_nominal_camera_line_docks_and_an_unknown_ground_does_not():
     """One button press docks on the real camera (NOMINAL, user decision 2026-11-18, D-1042 6)."""
     feed = DockObservationFeed()
