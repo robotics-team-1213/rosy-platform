@@ -1252,12 +1252,14 @@ def test_camera_observation_accumulates_without_replacing_operator_features(page
     assert saved['map']['facilities'] == draft['map']['facilities']
     assert saved['map']['edges'][0]['evidence']['source'] == 'camera'
     assert saved['map']['survey']['reviewed'] is False
+    expect(page.locator('#merge-camera-map')).to_be_enabled()
     page.locator('#merge-camera-map').click()
     expect(page.locator('#notice')).to_contain_text('관측')
     assert len(store.draft_view()['map']['edges']) == 1
     other = {**observation, 'map_id': 'wrong-frame'}
     page.locator('#camera-map-file').set_input_files({'name': 'wrong.json',
         'mimeType': 'application/json', 'buffer': json.dumps(other).encode()})
+    expect(page.locator('#merge-camera-map')).to_be_enabled()  # the previous merge's guarded reload has finished
     page.locator('#merge-camera-map').click()
     expect(page.locator('#notice')).to_contain_text('지도 ID')
     assert store.draft_view()['map'] == saved['map']
