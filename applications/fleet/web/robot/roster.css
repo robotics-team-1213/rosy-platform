@@ -111,8 +111,6 @@
 .robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-1); }
 .robot-list-details { margin-top: var(--space-3); }
 
-  outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-
 /* Quick destinations: a flat group inside the robot panel (no box inside the box). */
 .quick-control-panel { display: grid; gap: var(--space-2); min-width: 0; padding-top: var(--space-2); border-top: 1px solid var(--border-subtle); }
 .robot-head b {

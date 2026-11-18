@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-18 · uncommitted · fix(fleet-web): 독립 검토 F1~F4 — 고아 CSS 줄, 채널 요청 403 표시, 게이트 오탐 2건
 - 2026-11-18 · uncommitted · test(web): 재발 방지 래칫 3개 — inline 명시, 소비자 0 이름, 정본 밖 재정의·복제·직접 쓰기
 - 2026-11-18 · uncommitted · refactor(web): 어디서도 import하지 않는 export 58개의 export 키워드 제거
 - 2026-11-18 · uncommitted · refactor(fleet-web): 소비자 0 CSS·죽은 대체 경로·옛 충전 칸 카드·시험 전용 export 정리
 - 2026-11-18 · uncommitted · refactor(fleet-web): 본문 같은 사본 중 정본이 있는 것만 합침(copy, guide-layer 측정)
-- 2026-11-18 · uncommitted · refactor(fleet-web): 운영자 판정·권한 문구를 authorization.js 하나로

@@ -93,6 +93,6 @@ test("console change calls say whether their result is inline; the unmarked coun
 
 test("no request object hides headers or body behind a comment anywhere in the Fleet web", () => {
   const files = readdirSync(web, { recursive: true }).filter((f) => String(f).endsWith(".js")).map((f) => String(f).replaceAll("\\", "/"));
-  const hits = files.flatMap((name) => read(name).split("\n").flatMap((line, i) => /\/\/[^\n]*\b(headers|body):/.test(line) ? [`${name}:${i + 1}`] : []));
+  const hits = files.flatMap((name) => read(name).split("\n").flatMap((line, i) => /(^|[^:])\/\/[^\n]*\b(headers|body):/.test(line) ? [`${name}:${i + 1}`] : []));
   assert.deepEqual(hits, []);
 });

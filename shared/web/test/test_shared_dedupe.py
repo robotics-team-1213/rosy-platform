@@ -5,7 +5,9 @@ import re
 
 WEB = Path(__file__).resolve().parents[1]
 REPO = WEB.parents[1]
-SKIP = {".git", "node_modules", ".worktrees", "vendor", "docs", "__pycache__"}
+# untracked trees a test PC may hold (11-18 review F4: the ratchets below need the same file set everywhere)
+SKIP = {".git", "node_modules", ".worktrees", "vendor", "docs", "__pycache__", ".venv", "venv", ".pytest_cache", ".mypy_cache",
+        ".tox", "site-packages", "build", "dist"}
 
 
 def _sources(suffixes):

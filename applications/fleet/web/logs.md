@@ -1368,3 +1368,8 @@
 - 변경: operations/fleet/test/web/fleet-alert-surface.test.mjs — console.js import 닫힘(assets.json으로 평평한 /console/assets 해석) 모듈의 console call() 변경 호출 중 `inline:` 미명시 수 래칫(UNMARKED_CHANGE_CALLS 30, 자체 call 정의 파일 제외), Fleet web 전체 JS에서 주석 뒤 headers/body 0.
 - 증거: node fleet web 561/561(새 시험 2개 포함).
 - gate 변화: fleet-alert-surface 정적 래칫 2개 추가.
+
+## 2026-11-18 · uncommitted · fix(fleet-web): 독립 검토 F1~F4 — 고아 CSS 줄, 채널 요청 403 표시, 게이트 오탐 2건
+- 변경: roster.css에서 선택자만 지워지고 남은 outline 본문 줄을 지워 다음 규칙(.quick-control-panel)이 다시 적용되게 했다. channel-request-view.js의 inline 변경 호출 5곳에서 401·403이 패널만 닫고 아무 글도 없던 것을 denied()가 상태 줄에 쓰게 했다. fleet-alert-surface의 주석 검사가 `http://`를 주석으로 보지 않게, test_shared_dedupe의 파일 집합이 시험 PC의 venv·build 같은 추적 밖 폴더를 빼게 했다.
+- 증거: D:/DevTemp/ui-panel-1118/review-1.md, 노드 fleet-alert-surface 7/7, CSS 중괄호 균형 검사(바뀐 css 전부) 이상 0.
+- gate 변화: 없음(오탐 2건 제거).
