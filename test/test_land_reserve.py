@@ -31,8 +31,9 @@ def test_the_room_is_released_once_the_ticket_exists(repos, monkeypatch):
     """The ticket holds the room; a marker kept past enter() would count the cap twice for every other landing."""
     main, wt = repos
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    marks = []
     monkeypatch.setattr(land.land_queue, "reserve", lambda qdir, branch, lane=None: "marker", raising=False)
-    monkeypatch.setattr(land.land_queue, "unreserve", lambda marker: land._reserved.remove(marker), raising=False)
+    monkeypatch.setattr(land.land_queue, "unreserve", marks.append, raising=False)
 
     def run_tests(wt_, args, invocations, logdir, round_no):
         assert land._reserved == [], "the marker must be released at the ticket, not at process exit"
@@ -40,3 +41,4 @@ def test_the_room_is_released_once_the_ticket_exists(repos, monkeypatch):
 
     monkeypatch.setattr(land, "run_tests", run_tests)
     assert land.main(["--tests", "none"]) == 0
+    assert marks == ["marker"]
