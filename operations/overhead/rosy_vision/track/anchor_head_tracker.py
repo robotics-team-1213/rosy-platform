@@ -61,6 +61,8 @@ class AnchorHeadTracker:
         self._enrolled_robots: set[str] = {"rosy_45", "rosy_46"}
         self._states: dict[str, TrackedHeadState] = {}
         self._last_sighting_at: dict[str, float] = {}
+        # R hotpatch 2026-11-13: only a frame that saw the robot's own marker is a measured pose.
+        self._marker_seen: dict[str, bool] = {}
 
     def update_from_config(self, config: Mapping | None) -> None:
         if not isinstance(config, Mapping):
@@ -173,7 +175,7 @@ class AnchorHeadTracker:
                     self._anchors[anchor.target_id].base_x = st.base_x
                     self._anchors[anchor.target_id].base_y = st.base_y
                     self._anchors[anchor.target_id].base_yaw = st.head_yaw
-                if matched_det is not None:
+                if matched_det is not None and self.marker_seen(anchor.target_id):
                     filtered_detections = [
                         d for d in filtered_detections
                         if d.marker_id is not None or math.hypot(d.x - st.base_x, d.y - st.base_y) > 0.14
@@ -181,7 +183,8 @@ class AnchorHeadTracker:
                     matched_dets.append(matched_det)
                 last_sent = self._last_sighting_at.get(anchor.target_id, 0.0)
                 if (anchor.target_id in enrolled_robots and anchor.target_id not in already_sighted
-                        and st.confidence >= 0.45 and captured_at - last_sent >= SIGHTING_MIN_INTERVAL_S):
+                        and st.confidence >= 0.45 and self.marker_seen(anchor.target_id)
+                        and captured_at - last_sent >= SIGHTING_MIN_INTERVAL_S):
                     self._last_sighting_at[anchor.target_id] = captured_at
                     new_sightings.append(SiteSightingPayload(
                         robot_id=anchor.target_id, x=round(st.base_x, 4), y=round(st.base_y, 4), yaw=round(st.head_yaw, 4),
@@ -404,6 +407,7 @@ class AnchorHeadTracker:
                     measured_yaw = _blend_angle(ref_yaw, cand_yaw, 0.15)
 
         has_marker = best_blob is not None and best_blob.marker_id is not None
+        self._marker_seen[anchor.target_id] = has_marker
         if not has_marker:
             measured_x = 0.85 * home.base_x + 0.15 * measured_x
             measured_y = 0.85 * home.base_y + 0.15 * measured_y
@@ -468,6 +472,10 @@ class AnchorHeadTracker:
             marker_id=anchor.marker_id,
         )
         return state, det
+
+    def marker_seen(self, target_id: str) -> bool:
+        """True when the last step matched this robot's own marker (else its pose is a home guess)."""
+        return self._marker_seen.get(target_id, False)
 
     def snapshot_list(self) -> list[dict]:
         with self._lock:
