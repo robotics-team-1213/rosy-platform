@@ -31,6 +31,30 @@ def test_preview_uses_selected_outgoing_lane_and_source_relative_angles():
     assert result["s_m"] == pytest.approx(.9)
 
 
+@pytest.mark.parametrize("station,turn,expected", [(.8, 90., 0.), (.86, 90., 90.), (.8, 30., 30.)])
+def test_preview_crosses_a_corner_node_only_near_it(station, turn, expected):
+    # ring_entry sim 2026-11-18: the NE corner previewed 0.23 m early turned the robot off the road
+    end = (1. + math.cos(math.radians(turn)), math.sin(math.radians(turn)))
+    arcs = [_arc("in", "a", "b", [(0., 0.), (1., 0.)]), _arc("out", "b", "c", [(1., 0.), end])]
+    graph = SimpleNamespace(arcs={a.id: a for a in arcs})
+    result = route_direction(graph, [_segment("in"), _segment("out")], 0, station, 0.)
+    assert result["heading_ahead_deg"] == pytest.approx(expected)
+    assert result["ahead_m"] == pytest.approx(.25)
+
+
+def test_near_a_corner_the_preview_ends_on_the_heading_leaving_it():
+    # a lane curving back after the corner (a ring) must not hide the corner's turn
+    arcs = [_arc("in", "a", "b", [(0., 0.), (1., 0.)]), _arc("out", "b", "c", [(1., 0.), (1., .05), (1.3, .1)])]
+    graph = SimpleNamespace(arcs={a.id: a for a in arcs})
+    result = route_direction(graph, [_segment("in"), _segment("out", end=arcs[1].length_m)], 0, .9, 0.)
+    assert result["heading_ahead_deg"] == pytest.approx(90., abs=1.)
+    assert result["heading_here_deg"] == pytest.approx(0.)
+    assert result["ahead_m"] == pytest.approx(.25)
+    # at the node the robot pivots: the lane here is the corner's mid direction
+    assert route_direction(graph, [_segment("in"), _segment("out", end=arcs[1].length_m)],
+                           0, .97, 0.)["heading_here_deg"] == pytest.approx(45., abs=1.)
+
+
 @pytest.mark.parametrize("next_mode", ["free", "lane"])
 def test_preview_stops_at_partial_destination_or_free_segment(next_mode):
     first = _arc("in", "a", "b", [(0., 0.), (1., 0.)])
