@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.412
+**Version:** v1.413
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.413 접기 증거를 실은 assessor 해제 (D-1048)
+
+`POST .../incidents/{incident_id}/clear` 본문에 선택 필드 `recovery`(assessor만 의미 있음)가 생긴다. `{kind: "auto_fold", folded_state, home, torque_after, corridor_clear, candidate}`이다. `machine_clearable`이 거부한 사건은 `clearable_after_fold`로 다시 판정한다. 사실 목록이 완전하고 래치·감김이 없으며, 접힘이 home 3단위 안이고 사건이 보고한 home과 같고, 토크가 모두 0이며 길이 비었을 때만 해제된다. 증거는 사건 행의 `recovery`에 남는다. 이름 있는 운영자 해제는 그대로다.
 
 ### v1.412 통신 끊김 사건의 기계 해제와 하루 세 번 (D-1047)
 
@@ -4831,6 +4835,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.413 | 2026-11-19 | Additive (D-1048): assessor 해제 본문 선택 `recovery`(자동 접기 증거) → `clearable_after_fold`, 증거는 사건 행 `recovery`에 저장. |
 | v1.412 | 2026-11-19 | Additive (D-1047): 통신 끊김뿐인 사건(러너 문구 전체 일치, 잘리지 않은 목록, EIO 고장 기록)은 다시 계산한 쉬는 팔이면 assessor가 해제한다. `AI_CLEAR_REPEAT_LIMIT`는 팔마다 24시간에 세 번 뒤. |
 | v1.406 | 2026-11-17 | Additive (D-1039): 설정된 AI assessor 서비스 자격이 지정된 팔의 사건 해제 경로만 부른다. `cause`·`basis` 필수(422 `AI_CLEAR_CAUSE_REQUIRED`), `machine_clearable` 기본 거부(403 `AI_CLEAR_KIND_REFUSED`), 팔마다 하루 한 번(403 `AI_CLEAR_REPEAT_LIMIT`), 다른 팔 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 다른 경로 403 `ARM_ASSESSOR_SCOPE_REQUIRED`. 사건 행 `cleared.kind`(`machine`·`person`), 기계 해제 근거는 `unknown`. 사람 해제는 그대로. |
 | v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |

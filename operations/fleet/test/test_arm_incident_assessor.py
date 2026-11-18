@@ -186,3 +186,27 @@ def test_no_assessor_unless_configured(client, monkeypatch):
     monkeypatch.delenv("ROSY_FLEET_ARM_ASSESSORS")
     assert code(clear(client, incident_id)) == (403, "FORBIDDEN")
     assert row(client, incident_id)["state"] == "open"
+
+
+
+HOME6 = [0.0, -58.0, 50.0, 50.0, -5.0, 48.8]
+
+
+def fold(incident_id, **over):
+    return {"kind": "auto_fold", "incident_id": incident_id, "taken_at": 1.0e12, "folded_state": [0.0, -58.0, 50.5, 50.0, -5.0, 48.8],
+            "home": HOME6, "torque_after": {str(i): 0 for i in range(11, 17)}, "corridor_clear": True,
+            "candidate": "park", **over}
+
+
+def test_an_extended_contact_stop_clears_only_with_measured_auto_fold_evidence_for_it(client):
+    stopped = {**SAFE, "folded": False, "home": HOME6,
+               "stops": [{"command": "place", "error": "contact in place: wrist lag", "t": 1.0}]}
+    incident_id = report(client, 40, stopped)
+    assert code(clear(client, incident_id)) == (403, "AI_CLEAR_KIND_REFUSED")  # no fold: still a person
+    out_on_reach = fold(incident_id, folded_state=[20.0, -20.0, 20.0, 45.0, -5.0, 48.8])
+    assert code(clear(client, incident_id, recovery=out_on_reach)) == (403, "AI_CLEAR_KIND_REFUSED")
+    assert code(clear(client, incident_id, recovery=fold("another"))) == (403, "AI_CLEAR_KIND_REFUSED")
+    assert clear(client, incident_id, recovery=fold(incident_id)).status_code == 200
+    assert row(client, incident_id)["recovery"]["auto_fold"]["kind"] == "auto_fold"
+    latched = report(client, 41, {**stopped, "latched": {"13": {"hw_error": 32, "bits": ["overload"]}}})
+    assert code(clear(client, latched, recovery=fold(latched))) == (403, "AI_CLEAR_KIND_REFUSED")

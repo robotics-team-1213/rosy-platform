@@ -96,9 +96,18 @@ def sync_hold_from_fleet(arm: str | None, link=None) -> bool:
     return not _probe_hold(arm, link)[0]
 
 
-def refuse_if_held(arm: str | None, link=None) -> None:
-    """Before a session: resend unsent reports, ask Fleet for the hold. Fleet unreachable: refuse only on a local hold."""
+def refuse_if_held(arm: str | None, link=None, allow_incident: str | None = None) -> None:
+    """Before a session: resend unsent reports, ask Fleet for the hold. Fleet unreachable: refuse only on a local hold.
+    allow_incident (D-1048, cell_auto_fold's recovery session): opens only when Fleet answers that this one incident is
+    the whole hold; anything else, or Fleet out of reach, refuses as before."""
     is_held, detail = _probe_hold(arm, link)
+    if is_held and allow_incident:
+        try:
+            answer = (link or link_for(arm)).hold()
+            if list(answer.incident_ids) == [allow_incident]:
+                return
+        except Exception as exc:  # no answer: the recovery session does not open
+            detail = f"{detail}; recovery refused: {type(exc).__name__}"
     if is_held:
         raise SystemExit(f"{arm} held for a person: {detail}")
 
@@ -301,8 +310,31 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             incident["reported"] = bool(link) and send(arm, link, None if d["hold"] else label_box(arm))
     if d["hold"] and incident["reported"]:
         incident["auto_clear"] = auto_clear(arm, f, link)
+        if not incident["auto_clear"].get("cleared"):
+            incident["auto_fold"] = launch_auto_fold(arm)
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
     return {"incident": True, "folder": str(folder), **incident}
+
+
+def launch_auto_fold(arm: str, popen=None) -> dict:
+    """D-1048: start cell_auto_fold for this arm in its own process once this session has let go of the arm. Off unless
+    ~/.config/rosy/auto-fold.json names the arm (its wrapper, config, library, site and roi)."""
+    import os
+    import subprocess
+
+    conf = Path(os.environ.get("ROSY_AUTO_FOLD_CONFIG", str(Path.home() / ".config" / "rosy" / "auto-fold.json")))
+    try:
+        if arm not in json.loads(conf.read_text(encoding="utf-8")):
+            return {"started": False, "why": f"{arm} not in {conf.name}"}
+    except (OSError, ValueError):
+        return {"started": False, "why": f"no {conf.name}"}
+    command = [sys.executable, str(Path(__file__).resolve().parent / "cell_auto_fold.py"), "launch", "--arm", arm,
+               "--config-file", str(conf)]
+    try:
+        (popen or subprocess.Popen)(command, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"started": True}
+    except OSError as exc:
+        return {"started": False, "why": f"{type(exc).__name__}: {exc}"[:160]}
 
 
 def assessor_token_file() -> Path | None:
@@ -395,12 +427,14 @@ def status(arm: str, link=None) -> dict:
             "incident_ids": fleet_ids, "fleet_reason": fleet_reason}
 
 
-def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None) -> int:
-    """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold."""
+def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None, recovery=None, only=None) -> int:
+    """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold.
+    recovery/only (D-1048): an assessor's auto-fold evidence for that one incident."""
     from omx_incident_fleet import clear_incidents
 
     return clear_incidents(
-        arm, note, token_file, link or link_for(arm), cause=cause, basis=basis, token=token, refuse_fn=refuse_if_held
+        arm, note, token_file, link or link_for(arm), cause=cause, basis=basis, token=token, refuse_fn=refuse_if_held,
+        recovery=recovery, only=only,
     )
 
 

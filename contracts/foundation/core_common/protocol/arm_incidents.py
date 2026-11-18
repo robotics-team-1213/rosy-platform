@@ -114,6 +114,7 @@ class ArmIncidentClear(_Strict):
     note: Text
     cause: Literal[CAUSES] | None = None
     basis: Literal[BASES] | None = None
+    recovery: BoundedJson | None = None  # D-1048: an assessor's measured auto-fold evidence (clearable_after_fold)
 
 
 class ArmIncidentEvidenceFrame(_Strict):
@@ -285,3 +286,48 @@ def machine_clearable(facts) -> tuple[bool, str]:
     kind = "bus link failure, then " if link else "park strain stop, then " if flagged else ""
     return True, (kind + ("folded" if facts.get("folded") is True else "rested near home")
                   + " safe end, torque OFF, caps restored, nothing latched, wound up or stopped")
+
+
+#: D-1048: kinds an automatic fold may close. A latch (hardware error) or a wind-up/snag (a cable or a hose) is never
+#: folded by a machine; contact, strain, caught jaws and link failures are what the fold is for.
+FOLD_HOME_TOL = 3.0  # units: omx_incident.HOME_TOL / chunk_runner.SETTLE_TOL
+
+
+def clearable_after_fold(facts, recovery, incident_id=None, reported_at=None) -> tuple[bool, str]:
+    """D-1048 (user 2026-11-19): may an assessor clear an incident whose arm the cell folded home by itself? Default
+    deny. The incident's facts must be complete and free of a latch and a wind-up; the recovery must be cell_auto_fold's
+    measured result: folded_state within FOLD_HOME_TOL of home on every body joint, the same home the incident reported
+    (when it did), torque confirmed 0 on every motor after the recovery session, and a clear corridor (or no motion)."""
+    if not isinstance(facts, dict):
+        return False, "facts unreadable"
+    torque, latched, windup, flagged, stops, faults = (facts.get(k) for k in (
+        "torque_after", "latched", "windup_hits", "flagged", "stops", "fault_records"))
+    if not (isinstance(torque, dict) and isinstance(latched, dict)
+            and all(isinstance(v, list) for v in (windup, flagged, stops, faults))):
+        return False, "facts incomplete (torque_after, latched, windup_hits, flagged, stops, fault_records)"
+    if latched:
+        return False, "latched hardware error"
+    if windup:
+        return False, "wind-up or snag hit"
+    if faults and not _link_faults_only(faults, facts.get("fault_record_kinds")):
+        return False, "motor fault record"
+    if not isinstance(recovery, dict) or recovery.get("kind") != "auto_fold":
+        return False, "no auto-fold evidence"
+    if incident_id is not None and recovery.get("incident_id") != incident_id:
+        return False, "auto-fold evidence is for another incident"
+    taken = recovery.get("taken_at")
+    if reported_at is not None and (type(taken) not in (int, float) or taken < reported_at - 120.0):  # cell/Fleet clocks
+        return False, "auto-fold evidence older than the incident"
+    state, home, after = (recovery.get(k) for k in ("folded_state", "home", "torque_after"))
+    if not all(isinstance(r, list) and len(r) >= 6 and all(type(v) in (int, float) for v in r[:6]) for r in (state, home)):
+        return False, "auto-fold evidence incomplete"
+    reported = facts.get("home")
+    if not isinstance(reported, list) or reported[:5] != home[:5]:
+        return False, "auto-fold home is not the incident's reported home"
+    if not all(abs(a - b) <= FOLD_HOME_TOL for a, b in zip(state[:5], home[:5])):
+        return False, "auto-fold did not reach home"
+    if not (isinstance(after, dict) and len(after) >= 6 and all(type(v) is int and v == 0 for v in after.values())):
+        return False, "torque not confirmed OFF on every motor after the fold"
+    if recovery.get("corridor_clear") is not True:
+        return False, "auto-fold corridor not confirmed clear"
+    return True, f"folded home by the cell ({recovery.get('candidate')}), torque OFF; nothing latched or wound up"
