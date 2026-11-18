@@ -2,7 +2,7 @@
 
 2026-11-18 a robot turned in place in front of its bay and pushed the charging neighbour. This
 kinematic row keeps the robot of test_docking_bay and adds two docked neighbours at the site pitch,
-a body with the tray (rear 0.126 m, assumed until D-397 measures it) and the body-scan verdicts CORE
+a body with the tray (rear 0.135 m, rated J-v3 CAD) and the body-scan verdicts CORE
 feeds (rotation check with the tray, straight gaps). It covers the start from the corridor, a turn
 the scan refuses, and docking switched on while the robot is already inside the bay row
 (bay_zone.py): leave straight and skip the turn, or stay still and call a person.
@@ -20,7 +20,7 @@ from core_features.docking.manager import DockPhase
 from test_docking_bay import BAY, a_bay, done
 
 PITCH = 0.221                       # C2-C3 bay pitch (BAY_DOCK_SPECS), the tighter one
-FRONT, REAR, HALF = 0.042, 0.126, 0.0566
+FRONT, REAR, HALF = 0.042, 0.135, 0.0566
 SWEEP = math.hypot(REAR, HALF) + 0.010
 DOCKED = (-0.05, 0.0, math.pi)      # base_link on the stop face, rear in
 
