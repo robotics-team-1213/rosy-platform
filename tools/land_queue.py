@@ -21,6 +21,7 @@ import socket
 import subprocess
 import threading
 import time
+from fnmatch import fnmatchcase
 
 import land_events  # rosy-land-events.jsonl (queue and turn lines)
 from pathlib import Path
@@ -38,11 +39,15 @@ REPORT_EVERY = 300.0  # seconds between unchanged position lines
 PASS_CAP_S = 3600
 # Path lane (2026-11-17, user: "경로별 착지를 먼저 두면서"): a landing whose every changed path is under LANE_PREFIXES
 # has its own cap and may pass ordinary *waiting* tickets; turns still run one at a time, so main is merged as before.
-# shortcut: one lane (learning); add a table of lanes if a second path family needs one.
+# Second lane (2026-11-18): land code is re-read from main by every landing, so a pipeline fix waited ~10 h in the FIFO.
 LANE = "learning"
-LANE_PREFIXES = ("learning/", "test/learning/")
 LANE_CAP = int(os.environ.get("ROSY_LAND_LANE_CAP", "4"))
+TOOLING_CAP = int(os.environ.get("ROSY_LAND_TOOLING_CAP", "2"))
+LANES = {LANE: ("learning/*", "test/learning/*"), "tooling": ("tools/land*.py", "test/test_land*.py")}  # fnmatch; tooling is flat
 _held: list[Path] = []
+REFRESH = None  # land_prepare.prepare sets it: () -> new tested main; re-runs main's delta outside the lock
+REFRESHES = 2  # per wait; then the ticket takes its turn on whatever it has
+RESERVE_TTL = 20 * 60  # a reservation (a supervisor between its cap check and enter) lives at most this long
 _status_lock = threading.RLock()  # timer release and the main thread share the ticket's read/replace operation
 
 
@@ -83,12 +88,16 @@ def queue_dir(wt: Path) -> Path:
     return Path(common.stdout.strip()) / QUEUE
 
 
+def _in_lane(lane: str, path: str) -> bool:
+    return any(fnmatchcase(path, g) and (lane == LANE or path.count("/") == 1) for g in LANES[lane])
+
+
 def lane_of(wt: Path, ref: str = "HEAD") -> str:
-    """LANE when every path the ref changes since its merge base with main is under LANE_PREFIXES, else ''."""
+    """The lane whose paths cover every path the ref changes since its merge base with main, else ''."""
     done = subprocess.run(["git", "-C", str(wt), "diff", "--name-only", f"main...{ref}"],
                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     paths = done.stdout.split() if done.returncode == 0 else []
-    return LANE if paths and all(p.startswith(LANE_PREFIXES) for p in paths) else ""
+    return next((n for n in LANES if paths and all(_in_lane(n, q) for q in paths)), "")
 
 
 def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting", urgent: str = "", *,
@@ -291,6 +300,14 @@ def touch(ticket: Path | None = None) -> None:
             pass
 
 
+def _stale_head(qdir: Path, ticket: Path) -> bool:
+    try:
+        tested = json.loads(ticket.read_text(encoding="utf-8")).get("tested")
+    except (OSError, ValueError):
+        return False
+    return bool(tested) and (main := current_main(qdir)) is not None and tested != main
+
+
 def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None,
          done=None, form=None, tested: str | None = None, changed=None, on_ahead=None) -> str | None:
     """Mark ``ticket`` waiting; return None once nothing blocks it (``blockers``), marked as in its turn;
@@ -300,13 +317,20 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
     ticket's green tier passed over (``land_full.restore``), for ``blockers``' fresh-first order.
     ``changed()`` may run current main's lander on this ticket; its exit code ends this process before a turn."""
     set_status(ticket, "waiting", tested=tested or "", waiting_since=clock())
-    began, said, last = clock(), None, 0.0
+    began, said, last, refreshed = clock(), None, 0.0, 0
     while True:
         if done and done():
             return "landed"
         if changed and (code := changed()) is not None:
             raise SystemExit(code)
         rows = blockers(qdir, ticket, clock())
+        if not rows and REFRESH and refreshed < REFRESHES and _stale_head(qdir, ticket):
+            refreshed += 1  # tested over an older main: refresh outside the lock (blocks nobody), then ask again
+            print(f"[queue] first in line, but tested over an older main: refreshing ({refreshed}/{REFRESHES})", flush=True)
+            set_status(ticket, "preparing")
+            new = REFRESH()
+            set_status(ticket, "waiting", **({"tested": new} if new else {}))
+            continue
         if not rows:
             if said is not None:
                 print(f"[queue] first in line after {(clock() - began) / 60:.0f} min", flush=True)
@@ -352,10 +376,66 @@ def wait_drain(wt: Path, room, deadline: float, window: float) -> float:
     return 0.0
 
 
+def _markers(qdir: Path) -> list[dict]:
+    """Live reservation markers; dead (pid gone on this host) or older than RESERVE_TTL ones are deleted."""
+    live = []
+    for path in qdir.glob("[0-9]*.reserve"):
+        try:
+            info = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError):
+            info = {}
+        if (time.time() - info.get("start", 0) > RESERVE_TTL
+                or (info.get("host") == socket.gethostname() and not pid_alive(int(info.get("pid") or 0)))):
+            path.unlink(missing_ok=True)
+            continue
+        live.append(info)
+    return live
+
+
+def reserve(qdir: Path, branch: str, lane: str | None = None) -> Path:
+    """Claim one place in the cap before the long admit work, so N supervisors cannot all pass full() and then
+    over-fill the queue one by one (13/12 in 37 stop events, 11-17/18). Atomic under an O_EXCL lock file; QueueError
+    with full()'s text when no room. enter() ignores the calling pid's own marker; unreserve() drops it."""
+    qdir.mkdir(parents=True, exist_ok=True)
+    lock, deadline = qdir / ".reserve.lock", time.time() + 30
+    while True:
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > 30:  # a crashed holder
+                    lock.unlink(missing_ok=True)
+            except OSError:
+                pass
+            if time.time() > deadline:
+                raise QueueError(f"landing queue reservation lock busy ({lock})")
+            time.sleep(0.02)
+    try:
+        if why := full(qdir, lane or ""):
+            raise QueueError(why)
+        marker = qdir / f"{time.time_ns():020d}-{os.getpid()}.reserve"
+        tmp = qdir / f".{marker.name}.tmp"
+        tmp.write_text(json.dumps({"branch": branch, "lane": lane or "", "pid": os.getpid(),
+                                   "host": socket.gethostname(), "start": time.time()}), encoding="utf-8")
+        os.replace(tmp, marker)
+        return marker
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def unreserve(marker: Path | None) -> None:
+    if marker is not None:
+        marker.unlink(missing_ok=True)
+
+
 def full(qdir: Path, lane: str = "") -> str | None:
     """Why a new ordinary ticket (of the given lane) is refused, or None while its part of the queue has room."""
     rows = [r for r in ahead(qdir, Path("~")) if (r.get("lane") or "") == lane]
-    cap = LANE_CAP if lane else CAP
+    rows += [m for m in _markers(qdir) if (m.get("lane") or "") == lane and m.get("pid") != os.getpid()]
+    cap = (TOOLING_CAP if lane == "tooling" else LANE_CAP) if lane else CAP
     if len(rows) < cap:
         return None
     name = f"{lane} lane" if lane else "landing queue"
@@ -403,6 +483,9 @@ def join(wt: Path, branch: str, timeout: float) -> Path:
 def leave() -> None:
     """Remove every ticket this process holds. Safe to call twice. A ticket another process adopted (its pid
     changed: a rollup took its place, D-889 23) stays."""
+    global REFRESH
+    if _held:
+        REFRESH = None  # its closure belongs to the ending landing
     while _held:
         ticket = _held.pop()
         try:
