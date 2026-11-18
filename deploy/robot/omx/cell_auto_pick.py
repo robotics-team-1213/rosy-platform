@@ -13,6 +13,7 @@ import cell_auto_record  # noqa: E402
 import cell_auto_evidence  # noqa: E402
 from cell_auto_pick_plan import CLOSING, choose, observe, plan_pick, save_frame_receipt, verify_placed  # noqa: E402,F401  (re-exported)
 import cell_executor  # noqa: E402
+import cell_release_evidence  # noqa: E402
 from cell_auto_safety import (  # noqa: E402, F401
     PWM_FRACTION, TEMP_STOP_C, Aborted, Guarded, Monitor, after_failure, close_episode,
     finger_room, object_sized, open_episode, score_pick_candidate, session_caps, square_entry,
@@ -297,6 +298,7 @@ def run_auto(
                 cell_executor.outcome(choices, tried["execution"], choice,
                                       tried["verify"].get("verified") is True and tried["verify"].get("inside") is True,
                                       "placement verification")
+                tried["verify"]["release"] = cell_release_evidence.from_steps(moved["steps"], config.get("io"))  # observation only
                 pending = cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(
                     ".pending.json"
                 )

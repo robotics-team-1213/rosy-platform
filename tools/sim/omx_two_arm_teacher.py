@@ -39,6 +39,8 @@ from omx_two_arm_teacher_stages import (  # noqa: E402, F401
 )
 import palletizing_gripper as jaw  # noqa: E402
 
+TRACK_RAD = math.radians(1.5)  # grasp/lower ramp lag budget: arm_b at twin kp 20 lagged j4 3 deg on a 1.5 s descent and its finger sat on the box (design kp 40 lagged 1.7 deg and passed)
+
 
 def zero_est_residual(seed, arm, deg):
     """A seed's per-joint error of the joint-zero estimate: Gaussian, sigma `deg` (one value or one per joint 1-5), fixed per seed
@@ -142,7 +144,8 @@ class Teacher:
         """TCP straight line with IK warm start, one target per frame. Returns the final q and the worst IK error (m) met on the way."""
         if self.servo_comp is not None:
             q_end = ik_arm.ik(q, p_to + shift(p_to, yaw_to, q) if shift is not None else p_to, yaw_to, 20)[0]
-            seconds = self.servo_comp.pace_seconds(ik_arm.name, q, q_end, seconds)
+            track = TRACK_RAD if ctx.phase in ("grasp", "lower") else None  # the two moves that end in contact with a container
+            seconds = self.servo_comp.pace_seconds(ik_arm.name, q, q_end, seconds, track_rad=track)
         n, worst = max(1, round(seconds * FPS)), 0.
         dp = p_to - p_from
         dyaw = yaw_to - yaw_from

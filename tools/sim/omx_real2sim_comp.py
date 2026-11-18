@@ -237,13 +237,19 @@ class ServoCompensator:
             p[2] += self.z_sag_m[arm]
         return p
 
-    def pace_seconds(self, arm: str, q_from: np.ndarray, q_to: np.ndarray, base_seconds: float) -> float:
-        """Scale spline duration so no joint demands more than 72% of its torque-limited passive damping speed."""
+    def pace_seconds(self, arm: str, q_from: np.ndarray, q_to: np.ndarray, base_seconds: float, track_rad: float | None = None) -> float:
+        """Scale spline duration so no joint demands more than 72% of its torque-limited passive damping speed. With `track_rad`,
+        also slow enough that each joint's ramp lag (peak speed x (kv + damping) / kp of its servo) stays within it: a low-kp
+        joint lags a fixed-time descent and lands a finger on the container it reaches for (twin-kp arm_b, 11-18)."""
         m = self.world.model
         dofs, acts = self.world.arm_dof[arm][:5], self.world.act[arm][:5]
         v_terminal = np.maximum(0.05, (m.actuator_forcerange[acts, 1] - m.dof_frictionloss[dofs]) / np.maximum(m.dof_damping[dofs], 0.05))
         dq = np.abs(np.asarray(q_to[:5], float) - np.asarray(q_from[:5], float))
-        return max(float(base_seconds), min(float(np.max((1.5 / 0.72) * dq / v_terminal)), 16.0))
+        need = (1.5 / 0.72) * dq / v_terminal
+        if track_rad:
+            tau = (-m.actuator_biasprm[acts, 2] + m.dof_damping[dofs]) / np.maximum(m.actuator_gainprm[acts, 0], 1.0)
+            need = np.maximum(need, 1.5 * dq * tau / track_rad)  # smoothstep peak speed is 1.5 dq / T
+        return max(float(base_seconds), min(float(np.max(need)), 16.0))
 
     def apply(self, data: Any, targets: dict[str, np.ndarray], *, privileged: bool = False) -> dict[str, np.ndarray]:
         """Return compensated joint targets `{arm: q_cmd_6}` for one physics frame with gravity FF, friction trim, and active jitter damping."""
