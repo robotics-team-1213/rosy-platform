@@ -1,13 +1,13 @@
 """Publish a built dataset folder into the store (D-373 decision 8); HF is optional.
 
-publish.py <dataset_dir> [--store <path>] [--name <name>] [--hf <org/name> [--tag ds-...]]
+publish.py <dataset_dir> [--store <path>] [--name <name>] [--hf <org/name> --hf-token-file <path> [--tag ds-...]]
 
 Frames listed in manifest.json are sharded into images|masks/shard_0000/, ... of <= 1000
 frames each, and manifest.json paths are rewritten to match. The sharded copy goes to
 <store>/datasets/<name>/<content_sha>/ (never overwritten) and the line
 `dataset: store:<name>@<content_sha>` is printed: that ref is what the trainer enters.
 --store defaults to `store` in the rosy_ml config. --hf also (or only) uploads to a private
-HF dataset repo; its token comes from HF_TOKEN or the huggingface-cli login cache."""
+HF dataset repo with the team token read from --hf-token-file (never HF_TOKEN or the login cache)."""
 
 import argparse
 import json
@@ -67,10 +67,10 @@ def _configured_store():
     return doc.get("store") if isinstance(doc, dict) else None
 
 
-def _hf_publish(staging: Path, repo: str, tag) -> str:
+def _hf_publish(staging: Path, repo: str, tag, token: str) -> str:
     from huggingface_hub import HfApi  # lazy: optional backend
 
-    api = HfApi()
+    api = HfApi(token=token)
     api.create_repo(repo, repo_type="dataset", private=True, exist_ok=True)
     info = api.upload_folder(folder_path=str(staging), repo_id=repo,
                              repo_type="dataset", commit_message="dataset publish")
@@ -85,6 +85,7 @@ def main(argv=None) -> int:
     ap.add_argument("--store", help="store folder (default: `store` in the rosy_ml config)")
     ap.add_argument("--name", help="dataset name in the store (default: the folder name)")
     ap.add_argument("--hf", metavar="ORG/NAME", help="optional: also upload to this HF repo")
+    ap.add_argument("--hf-token-file", type=Path, help="team HF token file (required with --hf)")
     ap.add_argument("--tag", help="HF tag (with --hf)")
     ap.add_argument("--shard-size", type=int, default=1000)
     args = ap.parse_args(argv)
@@ -94,6 +95,11 @@ def main(argv=None) -> int:
     name = args.name or Path(args.dataset_dir).resolve().name
     if not store_mod.safe_name(name):
         ap.error(f"--name {name!r}: expected [A-Za-z0-9][A-Za-z0-9._-]*")
+    token = None
+    if args.hf:
+        token = args.hf_token_file.read_text(encoding="utf-8").strip() if args.hf_token_file else ""
+        if not token:
+            ap.error("--hf needs --hf-token-file with the team HF token")
     root = args.store or _configured_store()
     if not root and not args.hf:
         print("refused: no store: pass --store <path> or set `store` with rosy_ml init "
@@ -108,7 +114,7 @@ def main(argv=None) -> int:
             print(f"stored: {path}")
             print(f"dataset: store:{name}@{sha}")
         if args.hf:
-            print(f"hf: {args.hf}@{_hf_publish(staging, args.hf, args.tag)}")
+            print(f"hf: {args.hf}@{_hf_publish(staging, args.hf, args.tag, token)}")
     return 0
 
 
