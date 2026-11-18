@@ -4,7 +4,28 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
+
+
+def note_event(row: dict) -> None:
+    """One line of what the cell did by itself (kind, arm, incident_id, result, why, candidate), kept in
+    incidents/auto-events.jsonl; cell_camera_telemetry_sync sends the tail to Fleet. Never raises."""
+    try:
+        import omx_incident_fleet
+
+        path = Path(omx_incident_fleet.INCIDENTS) / "auto-events.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({**row, "t": time.time()}, default=str) + "\n")
+    except Exception:  # a lost note must never change what the arm does
+        pass
+
+
+def note_auto_clear(arm: str, verdict: dict) -> None:
+    """The auto_clear verdict (auto_clear's return) as an event; the incident id is Fleet's, not known here."""
+    note_event({"kind": "auto_clear", "arm": arm, "incident_id": None, "result": bool(verdict.get("cleared")),
+                "why": verdict.get("why")})
 
 
 def _fault_kind(path) -> dict:

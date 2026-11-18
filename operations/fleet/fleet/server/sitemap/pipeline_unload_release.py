@@ -1,12 +1,12 @@
-"""When a Pinky docked at S3 may leave (2026-11-19 panel: Claude, opencode, agy partial; user: "다 가져가고 나면 판정해서
-전달하고, 정지해 있던 Pinky가 출발해야 해").
+"""When an AMR docked at S3 may leave (2026-11-19 panel: Claude, opencode, agy partial; user: "다 가져가고 나면 판정해서
+전달하고, 정지해 있던 AMR가 출발해야 해").
 
 A dock_and_unload_s3 starts one unload batch with one s3_shuttle; after each verified carry the cell looks at the bed
 (source_clearance) and, while it still sees objects, the next s3_shuttle joins the batch (continue_unload). Nobody types
 a count (user 2026-11-19): a cargo_manifest from Harbor, when given, is the expected count. The vehicle is ready only
 when every check holds at once:
 - COUNT: no task aborted or cancelled, none open, and the manifest count (if any) completed;
-- BED: the last completion's source_clearance saw 0 objects on the Pinky site (the cell's camera); missing = not seen;
+- BED: the last completion's source_clearance saw 0 objects on the AMR site (the cell's camera); missing = not seen;
 - ARM: arm_s folded by measurement and fresh; the cell RELEASED and not inhibited;
 - HOLD: no arm hold, no person detected or HUMAN_HOLD.
 Either source alone fails one way: the camera alone leaves with a box it missed, the ledger alone leaves after a box
@@ -112,6 +112,13 @@ def continue_unload(state, enqueue) -> list[str]:
     return made
 
 
+def _event(state, robot_id, batch, result, why, now) -> None:
+    from fleet.server.sitemap import pipeline_auto_events
+
+    pipeline_auto_events.add(state, [{"kind": "auto_depart", "robot_id": robot_id, "batch_id": batch, "result": result,
+                                      "why": why, "t": now}], "fleet")
+
+
 def exit_target(rules, site) -> tuple[str, float, float, float] | None:
     """(place_id, x, y, yaw) of the site rules' return.exit_place on the active map, else None (never a guess)."""
     place_id = getattr(getattr(rules, "return_", None), "exit_place", None) if rules is not None else None
@@ -121,7 +128,7 @@ def exit_target(rules, site) -> tuple[str, float, float, float] | None:
     return place_id, float(place.x), float(place.y), float(getattr(place, "yaw", 0.0) or 0.0)
 
 
-async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float) -> list[dict]:
+async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float, task_log=None) -> list[dict]:
     """One pass: continue camera-driven unloads, then send each vehicle whose check held on two ticks to the exit."""
     continue_unload(state, enqueue)
     sent = []
@@ -148,6 +155,7 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
                                                      "at": round(now, 3), "operator": None, "release": release}
             if target is None:
                 record.update(state="HELD", reason="NO_EXIT_PLACE")
+                _event(state, robot_id, batch, "HELD", "NO_EXIT_PLACE", now)
             save()  # the claim is on disk before anything moves
         if target is None:
             continue
@@ -160,12 +168,13 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
             accepted, result = False, {"error": f"{type(exc).__name__}: {exc}"[:200]}
         if accepted:
             record.update(state="SENT", sent_at=round(now, 3), receipt={k: result.get(k) for k in ("accepted", "queued")})
-            state.pinky_tasks[f"depart-{batch}"] = {
-                "task_id": f"depart-{batch}", "robot_id": robot_id, "action": "depart_s3", "target_place": target[0],
-                "status": "SENT", "auto": True, "created_at": round(now, 3)}
+            _event(state, robot_id, batch, "SENT", target[0], now)
+            if task_log is not None:  # the robot task ledger is the caller's (pipeline_cell_task_routes)
+                task_log(robot_id, batch, target[0], now)
             sent.append(record)
         elif record["attempts"] >= MAX_SEND_ATTEMPTS:
             record.update(state="HELD", reason="DEPART_SEND_FAILED", last_error=result.get("error"))
+            _event(state, robot_id, batch, "HELD", "DEPART_SEND_FAILED", now)
         save()
     return sent
 
@@ -187,7 +196,8 @@ def install_unload_release_routes(app, ctx) -> None:
         active = ctx.active_map()
         return dict(console=ctx.console, rules=ctx.rules(), site=active[1],
                     enqueue=lambda spec: ctx._enqueue_one_task(active, {**ctx.CELL_TASK_PRESETS["s3_shuttle"], **spec}),
-                    human_detected=bool(ctx._is_human_detected()), save=ctx._save_ledger, now=time.time())
+                    human_detected=bool(ctx._is_human_detected()), save=ctx._save_ledger, now=time.time(),
+                    task_log=getattr(ctx, "record_depart_task", None))
 
     app.state.depart_tick = lambda: depart_tick(app.state, **tick_args())
     if getattr(ctx, "console", None) is None:

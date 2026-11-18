@@ -84,7 +84,9 @@ def tick(state, console, rules=RULES, human=False):
     saves = []
     sent = asyncio.run(ur.depart_tick(state, console=console, rules=rules, site=SITE,
                                       enqueue=lambda spec: {"task_id": spec["task_id"]}, human_detected=human,
-                                      save=lambda: saves.append(1), now=time.time()))
+                                      save=lambda: saves.append(1), now=time.time(),
+                                      task_log=lambda robot, batch, place, now: state.pinky_tasks.__setitem__(
+                                          f"depart-{batch}", {"place": place, "auto": True})))
     return sent, saves
 
 

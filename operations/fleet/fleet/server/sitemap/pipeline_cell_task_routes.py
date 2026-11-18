@@ -249,6 +249,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "station_camera_links": STATION_CAMERA_LINKS,
             "decisions": list(app.state.pipeline_decisions[-20:]),
             "pinky_tasks": list(app.state.pinky_tasks.values()),
+            "auto_events": list(getattr(app.state, "cell_auto_events", None) or [])[-30:],
         }
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/cancel", dependencies=operator_guard)
@@ -402,6 +403,12 @@ def install_cell_tasks_routes(app, ctx) -> None:
         app.state.pinky_tasks[task_id] = ptask
         _save_ledger()
         return {"ok": True, "pinky_task": ptask, "decision": dec_row, "spawned_cell_task": spawned_cell_task}
+    def record_depart_task(robot_id, batch, place, now):
+        app.state.pinky_tasks[f"depart-{batch}"] = {
+            "task_id": f"depart-{batch}", "robot_id": robot_id, "action": "depart_s3", "target_place": place,
+            "status": "SENT", "auto": True, "created_at": round(now, 3)}
+
+    ctx.record_depart_task = record_depart_task
     install_unload_release_routes(app, ctx)
     ctx.CELL_TASK_PRESETS = CELL_TASK_PRESETS
     ctx._enqueue_one_task = _enqueue_one_task

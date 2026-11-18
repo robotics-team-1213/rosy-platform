@@ -9,6 +9,7 @@ from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_
 from fleet.site_rules import SiteRules
 
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
+from fleet.server.sitemap import pipeline_auto_events as auto_events
 
 
 def _clear_label(body, key):
@@ -114,6 +115,8 @@ def install_cameras_routes(app, ctx) -> None:
                     prev["updated_at"] = float(s.get("updated_at") or now_ts)
                     prev["source"] = str(s.get("source") or "live_stream")
                     app.state.arm_live_states[arm_id] = prev
+        if auto_events.add(app.state, body.get("auto_events"), "cell") and not app.state._pipeline_ledger_fault:
+            _save_ledger()  # what the cell did by itself, kept with the ledger (pipeline_auto_events)
         for ack_arm in body.get("clear_ack_arms") or ():
             app.state.pending_clear_arms.pop(str(ack_arm), None)
         pending = dict(app.state.pending_clear_arms)

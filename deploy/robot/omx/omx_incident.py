@@ -57,7 +57,7 @@ from omx_incident_fleet import (  # noqa: E402
 )
 
 from omx_incident_reading import rows, stop_reading  # noqa: E402  (split for size; names kept here)
-from omx_incident_auto import _fault_kind, auto_clear, launch_auto_fold  # noqa: E402
+from omx_incident_auto import _fault_kind, auto_clear, launch_auto_fold, note_auto_clear  # noqa: E402
 
 HW_BITS = {1: "input voltage", 4: "overheating", 8: "motor encoder", 16: "electrical shock", 32: "overload"}
 REBOOTABLE = 1 | 32       # a latch the cause of which is load or supply, not heat or damage
@@ -272,6 +272,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             incident["reported"] = bool(link) and send(arm, link, None if d["hold"] else label_box(arm))
     if d["hold"] and incident["reported"]:
         incident["auto_clear"] = auto_clear(arm, f, link)
+        note_auto_clear(arm, incident["auto_clear"])
         if not incident["auto_clear"].get("cleared"):
             incident["auto_fold"] = launch_auto_fold(arm)
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))

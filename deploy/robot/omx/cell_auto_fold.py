@@ -33,6 +33,8 @@ SCHEMA = "rosy.omx-auto-fold.v1"
 PAN_DETOURS = (5.0, -5.0, 10.0, -10.0)
 SETTLE_TOL = 3.0  # chunk_runner.SETTLE_TOL (kept here so the plan is testable without the runner)
 HOLDING_MARGIN = 4.0  # jaws stopped this far above their closing command are on something (cell_transfer.STILL_HOLDING_UNITS)
+REST_TOL = 8.0  # a hold this near home (all five body joints) ends the session instead of holding torque
+CHOICE = "auto_fold.candidate"  # cell_choices name the candidates compete under
 RISE_UNITS = 12.0  # cell_unwedge.CLEAR: release_and_rise lifts shoulder_lift this far
 
 
@@ -53,6 +55,14 @@ def folded(state, home) -> bool:
     return all(abs(a - b) <= SETTLE_TOL for a, b in zip(state[:5], home[:5]))
 
 
+def candidate_names():
+    return ["park", *(f"pan{d:+g}" for d in PAN_DETOURS)]
+
+
+def at_rest(state, home) -> bool:
+    return state is not None and all(abs(a - b) <= REST_TOL for a, b in zip(state[:5], home[:5]))
+
+
 def candidates(state, plan):
     """(name, commands before the park, frames the arm would sweep) in the order they are tried."""
     yield "park", [], plan(state)
@@ -61,21 +71,30 @@ def candidates(state, plan):
         yield f"pan{d:+g}", [f"jog shoulder_pan.pos {d}"], [state, moved, *plan(moved)]
 
 
-def recover(cell, home, closed, *, plan, look, reserve, release, release_and_rise, low, log=lambda row: None) -> dict:
-    """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor."""
-    steps = []
+def recover(cell, home, closed, *, plan, look, reserve, release, release_and_rise, low, log=lambda row: None, order=None) -> dict:
+    """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
+    gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
+    steps, known = [], {"state": None}  # known: the last state seen, None once the arm may have moved unseen
 
     def note(row):
         steps.append(row)
         log(row)
 
     def hold(reason, **extra):
+        # resting at home: end the session in place (torque OFF), nothing hangs out. The pose is read again right before
+        # the stop (review N1: seconds of corridor checks may pass after the last read)
+        if at_rest(known["state"], home) and at_rest(_ok_state(cell.act("state")), home):
+            stopped = cell.act("stop now")
+            if stopped.get("ok") is True:
+                return {"schema": SCHEMA, "result": "held", "reason": reason, "steps": steps, "hold_ok": None,
+                        "ended": "stop_now", **extra}
         held = cell.act("human-hold")
         return {"schema": SCHEMA, "result": "held", "reason": reason, "steps": steps, "hold_ok": held.get("ok"), **extra}
 
     status = cell.act("state")
     state = _ok_state(status)
     target = status.get("target") if isinstance(status.get("target"), list) and len(status["target"]) >= 6 else state
+    known["state"] = state
     if state is None:
         return hold("STATE_UNREADABLE")
     if folded(state, home):
@@ -89,6 +108,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         if not look(rise_lane).get("clear") or not reserve(rise_lane).get("ok"):
             release()
             return hold("RISE_BLOCKED")
+        known["state"] = None
         try:
             freed = release_and_rise(cell)
         finally:
@@ -97,11 +117,15 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         if freed.get("result") != "risen":
             return hold("RELEASE_STUCK")
         status = cell.act("state")
-        state = _ok_state(status)
+        state = known["state"] = _ok_state(status)
         if state is None:
             return hold("STATE_UNREADABLE")
         target = status.get("target") if isinstance(status.get("target"), list) and len(status["target"]) >= 6 else state
-    for name, before, frames in candidates(list(target[:6]), plan):  # the runner parks from its held target
+    tries = list(candidates(list(target[:6]), plan))  # the runner parks from its held target
+    if order is not None:
+        rank = {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
+        tries.sort(key=lambda c: rank.get(c[0], len(rank)))
+    for name, before, frames in tries:
         verdict = look(frames)
         note({"step": "check", "candidate": name, "clear": verdict.get("clear"),
               "low": len(verdict.get("low") or []), "high": len(verdict.get("high") or []),
@@ -112,6 +136,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         if not booked.get("ok"):
             note({"step": "reserve", "candidate": name, "refused": booked.get("reason")})
             continue
+        known["state"] = None  # from the first command the arm is no longer where it was read
         try:
             for command in before:
                 moved = cell.act(command)
@@ -120,7 +145,7 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             parked = cell.act("park")
         finally:
             release()
-        at = _ok_state(parked)
+        at = known["state"] = _ok_state(parked)
         note({"step": "park", "candidate": name, "ok": parked.get("ok"), "settled": parked.get("settled"),
               "error": parked.get("error"), "contact": parked.get("contact")})
         if parked.get("ok") is True and parked.get("settled") is True and at is not None and folded(at, home):
@@ -139,6 +164,21 @@ def evidence(result: dict, home, torque_after: dict, incident_id: str, taken_at:
             "torque_after": torque_after,
             "corridor_clear": corridor.get("clear") if corridor else result.get("candidate") == "already_home",
             "steps": len(result.get("steps") or [])}
+
+
+def _learn(result: dict, ok: bool) -> None:
+    """Record how the tried candidate did in the arm's cell_choices file (main named it); nothing moved: nothing recorded."""
+    path, name = result.get("choices_path"), result.get("candidate")
+    if not path or name in (None, "already_home"):
+        return
+    try:
+        from cell_choices import Choices
+
+        choices = Choices(Path(path))
+        choices.outcome(CHOICE, name, ok, note=str(result.get("reason") or result.get("result")))
+        choices.save()
+    except (SystemExit, Exception):  # a lost learning row never changes the outcome
+        pass
 
 
 def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=time.time, clear=None) -> dict:
@@ -172,6 +212,12 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
                "--library", conf["library"], "--site", conf["site"], "--roi", *map(str, conf["roi"]), "--out", str(out)]
     env = {**os.environ, "ROSY_RECOVERY_INCIDENT": incident}
     started = now()
+
+    def done(out: dict, candidate=None) -> dict:
+        omx_incident_auto.note_event({"kind": "auto_fold", "arm": arm, "incident_id": incident, "result": out["result"],
+                                      "why": out.get("why"), "candidate": candidate})
+        return out
+
     for _ in range(12):  # the session that held the arm may still be ending: its lock frees within a minute
         # no short timeout: killing the wrapper mid-fold would leave the arm out on its reach
         proc = (run or subprocess.run)(command, cwd=cwd, env=env, timeout=3600, capture_output=True, text=True)
@@ -179,29 +225,31 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
             break
         sleep(5)
     if not out.is_file():
-        return {"result": "failed", "why": ((proc.stdout or "") + (proc.stderr or ""))[-300:]}
+        return done({"result": "failed", "why": ((proc.stdout or "") + (proc.stderr or ""))[-300:]})
     result = json.loads(out.read_text())
+    cand = result.get("candidate")
+    _learn(result, result.get("result") == "folded")
     if result.get("result") != "folded":
-        return {"result": "held", "why": result.get("reason")}
+        return done({"result": "held", "why": result.get("reason")}, cand)
     session = cwd / "session.json"
     for _ in range(36):  # the stop ends the recovery session; record_session writes torque_after when it has
-        if session.is_file() and session.stat().st_mtime >= started:
+        if session.is_file() and session.stat().st_mtime >= started - 2.0:  # file-time granularity; old sessions are minutes old
             break
         sleep(5)
     else:
-        return {"result": "not_cleared", "why": "the recovery session did not report its end (no fresh session.json)"}
+        return done({"result": "not_cleared", "why": "the recovery session did not report its end (no fresh session.json)"}, cand)
     try:
         torque = json.loads(session.read_text()).get("torque_after") or {}
     except (OSError, ValueError):
-        return {"result": "not_cleared", "why": "session.json unreadable"}
+        return done({"result": "not_cleared", "why": "session.json unreadable"}, cand)
     proof = evidence(result, result["home"], torque, incident, now())
     note = f"automatic fold (D-1048): {result.get('candidate')}, home within {SETTLE_TOL} units, torque OFF"
     try:
         (clear or omx_incident.clear)(arm, note, omx_incident_auto.assessor_token_file(), link, cause="unknown",
                                       basis="measured", recovery=proof, only=incident)
-        return {"result": "cleared", "incident_id": incident, "evidence": proof}
+        return done({"result": "cleared", "incident_id": incident, "evidence": proof}, cand)
     except (SystemExit, Exception) as exc:  # Fleet refused or unreachable: the hold stays
-        return {"result": "not_cleared", "why": f"{type(exc).__name__}: {str(exc)[:200]}", "evidence": proof}
+        return done({"result": "not_cleared", "why": f"{type(exc).__name__}: {str(exc)[:200]}", "evidence": proof}, cand)
 
 
 def main(argv=None) -> int:
@@ -219,6 +267,7 @@ def main(argv=None) -> int:
         print(json.dumps(launch(opts.arm, opts.config_file), default=str))
         return 0
 
+    import cell_choices
     import cell_corridor
     import cell_objects
     import cell_params as prm
@@ -252,6 +301,11 @@ def main(argv=None) -> int:
     arm = args.arm
     to_px = lambda p: predicted_pixel(config, calibration, args.site, p)  # noqa: E731
     booked = {}
+    choices_path = Path(config.get("work_dir") or ".") / f"auto-fold-choices-{arm}.json"
+    choices = cell_choices.Choices(choices_path)
+    for name in candidate_names():
+        choices.offer(CHOICE, name, "D-1048")
+    choices.save()  # launch records the outcome into this file
 
     def plan(state):  # the runner's park: park_path(target, home[-1], gripper_closed, fps, transit, transit_speed)
         return park_path(list(state), home, closed, library["fps"], transit, library.get("transit_speed", 0.85))
@@ -276,13 +330,15 @@ def main(argv=None) -> int:
 
     try:
         result = recover(cell, home, closed, plan=plan, look=look, reserve=reserve, release=lambda: space.release(arm),
-                         release_and_rise=cell_unwedge.release_and_rise, low=low)
+                         release_and_rise=cell_unwedge.release_and_rise, low=low,
+                         order=lambda names: choices.ranked(CHOICE, names))
     except Exception as exc:  # whatever broke, the arm stays where it is with torque ON
         held = cell.act("human-hold")
         space.release(arm)
         result = {"schema": SCHEMA, "result": "held", "reason": f"ERROR: {type(exc).__name__}: {str(exc)[:160]}",
                   "hold_ok": held.get("ok"), "steps": []}
     result["incident_id"], result["home"] = os.environ["ROSY_RECOVERY_INCIDENT"], list(home)
+    result["choices_path"] = str(choices_path)
     if result["result"] == "folded":
         result["stop"] = cell.act("stop")  # at home: the runner's stop folds nothing more and turns torque OFF
     args.out.write_text(json.dumps(result, default=str, indent=1))

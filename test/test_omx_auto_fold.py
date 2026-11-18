@@ -10,6 +10,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contracts" / "foun
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx"))
 import cell_auto_fold as af  # noqa: E402
 
+@pytest.fixture(autouse=True)
+def _own_incidents(tmp_path, monkeypatch):  # launch writes auto-events.jsonl beside the markers: never the real ones
+    import omx_incident
+    import omx_incident_fleet
+
+    monkeypatch.setattr(omx_incident_fleet, "INCIDENTS", tmp_path / "incidents")
+    monkeypatch.setattr(omx_incident, "INCIDENTS", tmp_path / "incidents")
+
+
 HOME = [0.0, -58.0, 50.0, 50.0, -5.0, 46.6]
 REACH = [20.0, -20.0, 20.0, 45.0, -5.0, 46.6]
 CLOSED = 46.6
@@ -37,7 +46,7 @@ class Cell:
         return {"ok": True, "state": self.state, "target": self.target}
 
 
-def run(cell, blocked=(), reserve_ok=True, rise="risen", low=True):
+def run(cell, blocked=(), reserve_ok=True, rise="risen", low=True, order=None):
     seen, booked, released = [], [], []
 
     def look(frames):
@@ -50,7 +59,7 @@ def run(cell, blocked=(), reserve_ok=True, rise="risen", low=True):
 
     result = af.recover(cell, HOME, CLOSED, plan=lambda s: [s, HOME], look=look, reserve=reserve,
                         release=lambda: released.append(1), release_and_rise=lambda c: {"result": rise},
-                        low=lambda s: low)
+                        low=lambda s: low, order=order)
     return result, seen, booked, released
 
 
@@ -74,6 +83,63 @@ def test_everything_blocked_holds_with_torque_on_and_never_moves():
     result, *_ = run(cell, blocked=(0, 1, 2, 3, 4))
     assert result["result"] == "held" and result["reason"] == "ALL_PATHS_BLOCKED"
     assert cell.commands == ["state", "human-hold"]  # no motion, no stop (torque stays ON out on the reach)
+
+
+def test_hold_at_rest_near_home_ends_the_session_but_an_extended_arm_keeps_torque():
+    rest = Cell([5.0, *HOME[1:]])  # 5 units off home: past the fold tolerance, inside the rest tolerance
+    result, *_ = run(rest, blocked=(0, 1, 2, 3, 4))
+    assert result["result"] == "held" and result["reason"] == "ALL_PATHS_BLOCKED" and result["ended"] == "stop_now"
+    assert rest.commands == ["state", "state", "stop now"]  # the pose is read again right before the stop
+    far = Cell([af.REST_TOL + 5.0, *HOME[1:]])
+    result, *_ = run(far, blocked=(0, 1, 2, 3, 4))
+    assert far.commands == ["state", "human-hold"] and "ended" not in result
+    unreadable = Cell(REACH, refuse=("state",))
+    result, *_ = run(unreadable)
+    assert result["reason"] == "STATE_UNREADABLE" and unreadable.commands == ["state", "human-hold"]
+
+
+def test_a_failed_stop_now_falls_back_to_the_human_hold():
+    rest = Cell([5.0, *HOME[1:]], refuse=("stop",))
+    result, *_ = run(rest, blocked=(0, 1, 2, 3, 4))
+    assert rest.commands == ["state", "state", "stop now", "human-hold"] and "ended" not in result
+
+
+def test_a_stalled_park_gives_no_state_to_trust_so_it_holds_with_torque():
+    near = Cell([5.0, *HOME[1:]], park_ok=False)
+    result, *_ = run(near)
+    assert result["reason"] == "PARK_NOT_HOME" and near.commands[-1] == "human-hold"  # park gave no state to trust
+
+
+def test_order_changes_only_the_order_of_the_same_candidates():
+    names = []
+
+    def order(offered):
+        names.append(list(offered))
+        return ["pan-5", *[n for n in offered if n != "pan-5"]]
+
+    cell = Cell(REACH)
+    result, *_ = run(cell, order=order)
+    assert names == [af.candidate_names()] and result["candidate"] == "pan-5"
+    assert cell.commands.index("jog shoulder_pan.pos -5.0") < cell.commands.index("park")
+    plain = Cell(REACH)
+    assert run(plain)[0]["candidate"] == "park"
+
+
+def test_learned_outcome_is_written_to_the_choices_file_named_in_the_result(tmp_path):
+    from cell_choices import Choices
+
+    path = tmp_path / "choices.json"
+    seed = Choices(path)
+    for name in af.candidate_names():
+        seed.offer(af.CHOICE, name, "D-1048")
+    seed.save()
+    af._learn({"choices_path": str(path), "candidate": "park", "result": "held", "reason": "PARK_NOT_HOME"}, False)
+    af._learn({"choices_path": str(path), "candidate": None}, False)  # nothing moved: nothing recorded
+    af._learn({"choices_path": str(path), "candidate": "already_home"}, True)
+    af._learn({"candidate": "park"}, True)
+    data = Choices(path).data["values"][af.CHOICE]
+    assert [(c["value"], c["tries"], c["ok"]) for c in data if c["tries"]] == [("park", 1, 0)]
+    assert Choices(path).ranked(af.CHOICE, af.candidate_names())[-1] == "park"  # a failed one drops behind untried ones
 
 
 def test_jaws_on_a_box_low_let_go_after_the_rise_is_checked():
