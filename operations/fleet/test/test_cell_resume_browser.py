@@ -103,6 +103,7 @@ def test_cell_hold_clear_keeps_task_paused_until_individual_resume(site, size):
 
             # Resuming requires explicit confirmation and resumes only that task.
             task_btn.click()
+            page.locator("dialog.ui-confirm textarea, dialog.ui-confirm input").first.fill("재개 확인")  # resume needs a note too
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             expect(panel.locator("[data-paused-task='t-pause-1']")).to_have_count(0)
             assert [p[0] for p in posts] == [
