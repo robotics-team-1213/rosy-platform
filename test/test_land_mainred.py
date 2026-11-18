@@ -192,6 +192,21 @@ def test_recheck_closes_what_passes_or_is_gone_and_keeps_what_still_fails(repo):
     assert not any(gone in inv for inv in seen), "a deleted test file is not run"
 
 
+def test_recheck_closes_an_id_pytest_no_longer_finds_in_its_file(repo):
+    """11-18: a renamed test stayed an open main-red id for 3 days; its file was still on main."""
+    wt, main, _ = repo
+    renamed = "pkg/test/test_a.py::test_renamed"
+    mr.red(wt, main, [renamed], LOG, [], "fix/elsewhere")
+
+    def run(invocations, logs):
+        for inv, log in zip(invocations, logs):
+            log.write_text(f"ERROR: not found: /runs/x/{renamed}\n(no match in any of [<Module test_a.py>])\n"
+                           if inv[-1] == renamed else f"FAILED {inv[-1]}\n")
+
+    assert mr.recheck(wt, main, run, wt) == [renamed]
+    assert renamed not in mr.state(wt) and ID in mr.state(wt), "only the missing id closes"
+
+
 def test_recheck_keeps_an_id_whose_run_left_no_log(repo):
     wt, main, _ = repo
     assert mr.recheck(wt, main, lambda invocations, logs: None, wt) == []

@@ -211,6 +211,21 @@ def test_apply_history_revalidation_is_linear(landing, monkeypatch):
     assert len(calls) == 4, "each candidate's history is rechecked once"
 
 
+def test_supervisor_locks_of_gone_trees_go_unless_held_or_young(landing):
+    repo, common, _, _ = landing
+    holder = common / land_gc.HOLDER
+    gone, held, young = (holder / f"land-feat-{n}-20261102000009.supervisor.lock" for n in ("gone", "held", "young"))
+    for lock in (gone, held, young):
+        lock.write_text("x")
+    os.utime(gone, (OLD, OLD))
+    os.utime(held, (OLD, OLD))
+    with supervisor_lease(holder / held.name.removesuffix(".supervisor.lock")):
+        rows = land_gc.plan(repo, time.time(), 7)
+        assert {Path(r[3][0]).name for r in rows if r[0] == "lock"} == {gone.name, held.name}
+        assert land_gc.apply(repo, rows) == []
+    assert not gone.exists() and held.exists() and young.exists()  # a held lock is kept, a young one is not planned
+
+
 def test_sidecars_without_tree_or_branch_are_removed(landing):
     repo, common, _, _ = landing
     marker = common / land_gc.HOLDER / "land-feat-gone-20261102000009.stopped"

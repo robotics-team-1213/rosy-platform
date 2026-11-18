@@ -4,6 +4,8 @@ import importlib
 import importlib.util
 from pathlib import Path
 
+import yaml
+
 from fleet._source_layout import SERVER_HOLDERS, SOURCE_ROOTS
 
 FLEET_ROOT = Path(__file__).resolve().parents[1] / "fleet"
@@ -98,3 +100,12 @@ def test_fleet_assessment_modules_cover_internal_and_fleet_imports():
 
     assert not missing, f"rosy_situation imports outside ASSESSMENT_MODULES: {missing}"
 
+
+
+def test_every_server_holder_is_a_selector_source_package():
+    """The affected selector names a holder file fleet.server.<stem> only through platform_parts source_packages;
+    a holder missing there drops its importers' tests silently (2026-11-18: tracking was missing)."""
+    parts = yaml.safe_load((SERVER.parents[3] / "tools" / "harness" / "platform_parts.yaml").read_text(encoding="utf-8"))
+    fleet = next(root for root in parts["roots"] if root["path"] == "operations/fleet")
+    listed = {key for key, package in fleet["source_packages"].items() if package == "fleet.server"}
+    assert listed == {f"fleet/server/{holder}" for holder in SERVER_HOLDERS}
