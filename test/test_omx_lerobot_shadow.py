@@ -185,4 +185,4 @@ def test_cell_quality_has_no_model_without_act_shadow(tmp_path):
     import cell_camera_telemetry_sync as sync
 
     (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({"work_dir": str(tmp_path)}))
-    assert sync._collect_arm_models(tmp_path) == {}
+    assert sync._collect_arm_models(tmp_path) == {"arm_s": {}, "arm_a": {}, "arm_b": {}}

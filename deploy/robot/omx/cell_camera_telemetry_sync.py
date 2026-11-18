@@ -70,8 +70,8 @@ BLOCK_REASON = "학습 정책 실물 실행은 사용자 승인 전(D-1024 L3 ar
 
 
 def _collect_arm_models(prep_dir: Path) -> dict[str, Any]:
-    """Per arm: the pinned shadow model and a summary of its proposals. Never an execution grant (execution_allowed False)."""
-    models: dict[str, Any] = {}
+    """Per arm: the pinned shadow model and a summary of its proposals, {} without one. Never an execution grant."""
+    models: dict[str, Any] = {arm_id: {} for arm_id in ARM_SUFFIXES}  # {} tells Fleet to drop that arm's entry
     for arm_id, suffix in ARM_SUFFIXES.items():
         for path in sorted(prep_dir.glob(f"cell-auto-arm-{suffix}-*.json")):
             try:
