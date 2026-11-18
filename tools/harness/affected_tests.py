@@ -249,13 +249,13 @@ def _outside_ci_matrix(paths: list[str]) -> list[str]:
 
 
 
-def _narrowed_tests(repo: Repo, path: str, test: str) -> list[str] | None:
+def _narrowed_tests(repo: Repo, path: str, test: str, reverse: bool = False) -> list[str] | None:
     """D-436 addendum: a registered test directory narrows to the files whose import closure reaches `path`."""
     if test.endswith(".py") or not repo.exists(test) or TEST_FILE.search(path):
         return None
     if "_closure" not in vars(repo):
         repo._closure = affected_closure.Closure(repo)
-    return affected_closure.narrow(repo, path, test, repo._closure)
+    return affected_closure.narrow(repo, path, test, repo._closure, reverse)
 
 
 def select(repo: Repo, changed: list[str], moved: list[str] = (),
@@ -381,7 +381,16 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             if any(_imports(repo, s, prefixes, names) for s in sources):
                 for test in other.get("tests") or []:
                     if test not in BROAD_TESTS:
-                        add(test, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}")
+                        kept = None
+                        for changed_py in (p for p in changed if p.endswith(".py") and repo.module_for(p) is module):
+                            one = _narrowed_tests(repo, changed_py, test, reverse=True)
+                            if one is None:
+                                kept = None
+                                break
+                            kept = sorted({*(kept or []), *one})
+                        for one in kept or [test]:
+                            add(one, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}"
+                                + (" [import closure]" if kept else ""))
         for test in repo.test_files:
             if not _under(test, module["path"]) and _imports(repo, test, prefixes, names):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
