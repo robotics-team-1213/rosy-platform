@@ -31,8 +31,8 @@ CHOICES = dict(
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=0.0,     # r08: hull centreline y centred symmetrically between the 194 mm base plates (modular berth locks port/starboard)   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
                              # edges). Its x reading (holds 25 mm toward the belt) would put the stern over the belt end: x stays
-    wrist_camera="photo-20261108",  # "photo-20261108": WRIST_PHOTO (fitted to arm_b); "photo-20261110": WRIST_PHOTO_A on arm_a, WRIST_PHOTO on arm_b (G-24);
-                             # "v21-b": the team's printed D holder r06 (palletizing_gripper.WRIST_CAMERA_B); "stock" or "none"
+    wrist_camera="v21-b",    # CAD, canonical for both arms (user 11-18): the printed D holder r06 (palletizing_gripper.WRIST_CAMERA_B). "photo-20261108": WRIST_PHOTO on both;
+                             # "photo-20261110": WRIST_PHOTO_A on arm_a, WRIST_PHOTO on arm_b (single-photo fits, reproduction only); "stock" or "none"
     tcp_x_arm_b=.0740,       # URDF/STL v2.1 jaw (tip 74.1 mm from the pivot); a touch gave .0885 but that rests on an unchecked table height (OPEN, 14.5 mm FK offset)
     tcp_x_arm_a=.0740,       # same jaw, not confirmed on arm_a separately
     sim_tcp_x_m=.0740,       # the MuJoCo pads are the repo's v2.1 STL, whose TCP is .0740: the teacher grasps with this one (STL may not match the installed jaws)
@@ -145,11 +145,11 @@ STERN = dict(boxes=((0., 50., -65., 65., 6.), (0., 6.5, -65., 65., 11.), (43.5, 
 
 # Only hold 1 (next to the stern) is in reach with the stern at the table edge: hold 2 lies behind both arms, where no tool-down pose holds a
 # container along x (validator, stern x .155 to .215). So the stack is hold 1, 3 rows x 3 tiers, middle row first, in the stud plan's arm order.
-# arm_b's wrist camera as the real frame shows it (2026-11-08 22:30, arm at rest, the jaw silhouette traced and matched in MuJoCo with the
+# REPRODUCTION ONLY (single-photo fit, the CAD "v21-b" is the rated mount for both arms, user 11-18): arm_b's wrist camera as the real frame shows it (2026-11-08 22:30, arm at rest, the jaw silhouette traced and matched in MuJoCo with the
 # jaw opening fitted too, IoU 0.15 -> 0.68): 16 mm higher and 8 mm to the side of the D r06 CAD, the axis meeting the jaw axis 25 mm further
 # out, about the same 34 deg down. One frame at one pose: lens height and aim trade off; refit on frames at other poses.
 WRIST_PHOTO = dict(lens_m=[.0338, .008, .0671], axis_hit_x_m=.1328)
-WRIST_PHOTO_A = dict(lens_m=[.0528, .005, .0641], axis_hit_x_m=.145)  # arm_a 2026-11-10 wrist frame jaw silhouette fit (IoU 0.18 -> 0.39, G-24)
+WRIST_PHOTO_A = dict(lens_m=[.0528, .005, .0641], axis_hit_x_m=.145)  # reproduction only: arm_a 2026-11-10 single-photo jaw silhouette fit (IoU 0.18 -> 0.39); CAD is canonical, the arm difference is read as pose (zero) error
 TEMP_TIERS = 3  # plate v11: 3 lanes x 3 tiers (Confluence 15368863); tier 0 keeps the lane's name, tier k is "<lane>-l<k>"
 R08_TIERS = 3 # the cell stacks three high (user, 11-08); the slot map lists tiers 82 and 84, the third sits one container (32.4 mm) higher
 R08_TIER_STEP = 32.4
@@ -244,8 +244,9 @@ def under_hull(layout, site):
 
 
 def lane_geometry(radius):
-    """SCAD v11 fan: (pocket width, pocket length, flare, fan angle rad, lane angles). Lane i is rotated by -angle about the arm centre.
-    The pocket is three 1x1 cells at pitch 32 (pk_l 96, v9 on), so the fan is 17.3 deg at arm_r 200."""
+    """SCAD v12 fan: (pocket width, pocket length, flare, fan angle rad, lane angles). Lane i is rotated by -angle about the arm centre.
+    The pocket is three 1x1 cells at pitch 32 (pk_l 96, v9 on); gap_min 0.6 (v12) gives 13.8 deg at arm_r 200, the printed r05 fan.
+    v9-v11's 10 mm double-counted the flare (17.3 deg) and overlapped the hull: do not restore it."""
     s = SCAD
     width, length = s["cont_w"] + 2 * s["clr"], s["pk_l"]
     flare = length / 2 * math.tan(math.radians(s["yaw_tol_deg"]))
