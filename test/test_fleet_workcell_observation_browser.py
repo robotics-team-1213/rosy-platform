@@ -350,7 +350,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
         try:
             state, _ = observation_feed(page)
             page.route("**/api/fleet/cell-app/object-catalog", lambda route: route.fulfill(json=body))
-            page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
+            page.goto(cell_url)  # the catalog belongs to the prep screen's saved documents
             page.evaluate("theme => window.RosyTheme.set(theme)", theme)
             table = page.locator("#catalog-table")
             expect(table).to_be_visible()
