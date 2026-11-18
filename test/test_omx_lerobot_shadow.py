@@ -137,3 +137,52 @@ def test_load_routes_lerobot_kind_and_keeps_failures_in_the_row(tmp_path):
                                                   "policy_revision": "rev"}}, tmp_path)
     row = shadow.capture(Cell(), {"cameras": {}}, 0, bgr())
     assert row["policy_id"] == "rev" and "FileNotFoundError" in row["error"]
+
+
+def test_cell_quality_reports_the_pinned_shadow_model_and_never_grants_execution(tmp_path):
+    import cell_camera_telemetry_sync as sync
+
+    root, sha = checkpoint(tmp_path, warp={"camera": "top", "matrix": [[1, 0, 0], [0, 1, 0]], "size": [12, 8]})
+    work = tmp_path / "work"
+    work.mkdir()
+    (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps(
+        {"work_dir": str(work), "act_shadow": {"kind": "lerobot", "policy_root": str(root), "policy_revision": sha}}))
+    (tmp_path / "cell-auto-arm-s-live.json.bak-1").write_text("{}")  # backups are not configs
+    rows = [{"policy_id": "older", "ik": {"outcome": "placed"}},
+            {"policy_id": sha, "proposed": [[0] * 6], "ik": {"outcome": "placed"}},
+            {"policy_id": sha, "error": "ValueError: camera 'wrist' unavailable", "ik": {"outcome": "empty"}}]
+    (work / "act-shadow.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    model = sync._collect_arm_models(tmp_path)["arm_s"]
+    assert model["name"] == "ckpt" and model["policy_revision"] == sha and model["binding"] == "lerobot"
+    assert model["execution_allowed"] is False and model["block_reason"]
+    assert model["warp_sha256"] == hashlib.sha256((root / "cam_warp.json").read_bytes()).hexdigest()
+    assert model["shadow"]["rows"] == 2 and model["shadow"]["errors"] == 1
+    assert model["shadow"]["last_ik_outcome"] == "empty" and "wrist" in model["shadow"]["last_error"]
+
+    sent = []
+
+    class Reply:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b"{}"
+
+    def fake_urlopen(request, **kwargs):
+        if request.full_url.endswith("/cell-quality"):
+            sent.append(json.loads(request.data))
+            return Reply()
+        raise OSError("no local viewer")
+
+    sync.sync_cell_telemetry("https://fleet.test", "token", prep_dir=tmp_path, urlopen_fn=fake_urlopen)
+    assert sent and sent[0]["arm_models"]["arm_s"]["policy_revision"] == sha
+
+
+def test_cell_quality_has_no_model_without_act_shadow(tmp_path):
+    import cell_camera_telemetry_sync as sync
+
+    (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({"work_dir": str(tmp_path)}))
+    assert sync._collect_arm_models(tmp_path) == {}
