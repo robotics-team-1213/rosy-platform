@@ -219,3 +219,77 @@ def test_a_planned_row_is_not_already_used_by_a_product_file():
         users = [p for p in REPO.rglob("*.js") if p.name != module and not {"node_modules", "vendor", "test", ".worktrees"} & set(p.relative_to(REPO).parts) and "gallery" not in p.name
                  and re.search(rf"import[^;]*{re.escape(row['export'])}[^;]*{re.escape(module)}", p.read_text(encoding="utf-8", errors="ignore"))]
         assert not users, f"{row['id']} is planned but {[u.relative_to(REPO).as_posix() for u in users]} import it"
+
+
+# 11-18 UI 패널 게이트 ③: 정본 밖 재정의·본문 복제·직접 쓰기 래칫. patterns.yaml helpers·direct·duplicate_bodies가
+# 상한이다. 수가 늘면 실패하고, 줄면 같은 변경에서 상한을 내린다(줄어든 개선이 다시 새지 않게).
+REGISTRY = yaml.safe_load((WEB / "patterns.yaml").read_text(encoding="utf-8"))
+SCAN_ROOTS = (REPO / "applications" / "fleet" / "web", WEB)
+
+
+def product_scripts():
+    for root in SCAN_ROOTS:
+        for path in sorted(root.rglob("*.js")):
+            if not ({"test", "vendor", "node_modules"} & set(path.relative_to(REPO).parts)):
+                yield path.relative_to(REPO).as_posix(), path.read_text(encoding="utf-8", errors="ignore")
+
+
+def helper_redefinitions(scripts, row):
+    """Places outside the helper's own module that define its name or an alias with function/const/let."""
+    names = "|".join(re.escape(n) for n in [row["name"], *row.get("aliases", [])])
+    pattern = re.compile(rf"(?:\bfunction\s+(?:{names})\s*\(|\b(?:const|let|var)\s+(?:{names})\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|[\w$]+\s*=>))")
+    return [f"{rel}:{js_code(text)[:m.start()].count(chr(10)) + 1}" for rel, text in scripts if rel != row["module"]
+            for m in pattern.finditer(js_code(text))]
+
+
+def direct_uses(scripts, row):
+    """Lines outside the owners that write the pattern directly (comments ignored, strings kept)."""
+    pattern = re.compile(row["pattern"])
+    return [f"{rel}:{n}" for rel, text in scripts if rel not in row["owners"]
+            for n, line in enumerate(js_without_comments(text).splitlines(), 1) if pattern.search(line)]
+
+
+_FUNCTION_HEAD = re.compile(r"\bfunction\s+[\w$]+\s*\([^)]*\)\s*\{|\b(?:const|let)\s+[\w$]+\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{")
+
+
+def duplicate_bodies(scripts, minimum=35):
+    """Groups of function bodies (strings emptied, whitespace dropped) that appear in two or more files."""
+    seen = {}
+    for rel, text in scripts:
+        code = js_code(text)
+        for head in _FUNCTION_HEAD.finditer(code):
+            depth, start = 0, head.end() - 1
+            for end in range(start, len(code)):
+                depth += {"{": 1, "}": -1}.get(code[end], 0)
+                if depth == 0:
+                    break
+            body = re.sub(r"\s+", "", code[start:end + 1])
+            if len(body) >= minimum:
+                seen.setdefault(body, set()).add(rel)
+    return sorted(sorted(files) for files in seen.values() if len(files) > 1)
+
+
+def _ratchet(label, found, ceiling):
+    assert len(found) <= ceiling, f"{label}: {len(found)} > ceiling {ceiling}; use the shared one instead: {found[:15]}"
+    assert len(found) == ceiling, f"{label} fell to {len(found)}; lower its ceiling in patterns.yaml to {len(found)}"
+
+
+def test_helpers_are_defined_once_and_direct_writes_only_go_down():
+    scripts = list(product_scripts())
+    for row in REGISTRY["helpers"]:
+        assert (REPO / row["module"]).is_file() and re.search(rf"\b{re.escape(row['name'])}\b", (REPO / row["module"]).read_text(encoding="utf-8")), row
+        _ratchet(f"redefined {row['name']}", helper_redefinitions(scripts, row), row["ceiling"])
+    for row in REGISTRY["direct"]:
+        assert row["owners"] and all((REPO / owner).is_file() for owner in row["owners"]), row
+        _ratchet(f"direct {row['what']}", direct_uses(scripts, row), row["ceiling"])
+    _ratchet("duplicate function bodies", duplicate_bodies(scripts), REGISTRY["duplicate_bodies"]["ceiling"])
+
+
+def test_the_helper_gate_sees_copies_and_ignores_comments():
+    row = {"name": "setOff", "module": "shared/web/cause-line.js", "aliases": ["guard"]}
+    copy = ("a.js", "// function guard(x) {}\nfunction guard(control, reason) { control.disabled = Boolean(reason); }\nconst guard = 1;\nconst guard = (c) => c;")
+    assert helper_redefinitions([copy], row) == ["a.js:2", "a.js:4"]
+    direct = {"pattern": r"role\s*[!=]==?\s*[\"']operator", "owners": ["auth.js"]}
+    assert direct_uses([("b.js", 'if (role === "operator") go();\n// role === "operator"'), ("auth.js", 'role === "operator"')], direct) == ["b.js:1"]
+    body = "function a(n) { const el = document.createElement(n); el.hidden = true; return el; }"
+    assert duplicate_bodies([("x.js", body), ("y.js", body.replace("a(", "b("))]) == [["x.js", "y.js"]]

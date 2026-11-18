@@ -50,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-11-18 · uncommitted · test(web): 재발 방지 래칫 3개 — inline 명시, 소비자 0 이름, 정본 밖 재정의·복제·직접 쓰기
 - 2026-11-18 · uncommitted · refactor(web): 어디서도 import하지 않는 export 58개의 export 키워드 제거
 - 2026-11-18 · uncommitted · refactor(fleet-web): setOff 변종 9개를 공용 cause-line으로
 - 2026-11-18 · uncommitted · test(shared-web): 조합 어휘가 토큰 이름도 확인, C10 채택 화면 갱신
 - 2026-11-18 · uncommitted · refactor(ui): shared parts, registry and tokens match what the code does (S3)
-- 2026-11-15 · uncommitted · patterns.yaml C23/C24 built 전환 (Fleet Stage 2)

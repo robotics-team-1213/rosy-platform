@@ -1363,3 +1363,8 @@
 - 변경: 정의 파일 밖(시험·middleware 포함 저장소 전체, md 제외)에서 이름이 한 번도 안 나오는 Fleet export 48개의 `export` 키워드만 지웠다(코드는 파일 안에서 쓰이므로 유지). robot-video.js 4개 포함(문서가 script 태그로 싣고 아무도 import하지 않음).
 - 증거: 집계 스크립트(D:/DevTemp/ui-panel-1118 보고 참고)로 0참조 재계산, 남은 소비자 0 export 0(시험 이음매 clearRobotModelCache·ICON_CATALOG만 시험 소비). 바뀐 JS node --check, node fleet web 559·shared 147 통과. 파이썬 시험이 `export ...` 글자를 단언하는 곳 0.
 - gate 변화: 없음(래칫은 묶음 7).
+
+## 2026-11-18 · uncommitted · test(web): 재발 방지 래칫 3개 — inline 명시, 소비자 0 이름, 정본 밖 재정의·복제·직접 쓰기
+- 변경: operations/fleet/test/web/fleet-alert-surface.test.mjs — console.js import 닫힘(assets.json으로 평평한 /console/assets 해석) 모듈의 console call() 변경 호출 중 `inline:` 미명시 수 래칫(UNMARKED_CHANGE_CALLS 30, 자체 call 정의 파일 제외), Fleet web 전체 JS에서 주석 뒤 headers/body 0.
+- 증거: node fleet web 561/561(새 시험 2개 포함).
+- gate 변화: fleet-alert-surface 정적 래칫 2개 추가.
