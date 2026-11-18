@@ -60,7 +60,7 @@ D-600: every learn leaves out the regions Fleet says robots stand on (``set_occu
 union over the learn's frames) and fills unknown floor later (robot_mask.py). The kept frames
 carry their unknown-floor mask, so a restart keeps filling; ``unknown_floor`` reports it.
 
-Panel 2026-11-18 (shape cue, stage 1): every frame is also searched for the Pinky shape (teal wheel
+Panel 2026-11-18 (shape cue, stage 1): every frame is also searched for the robot base shape (teal wheel
 pair, dark body, shape_cue.py), which needs no background. A robot found that way is reported even
 while learning or after MOG2 absorbed it, merged with a background blob within SHAPE_MERGE_M (the
 higher score is kept; footprint the nominal 2 x rotation radius), and its region is left out of

@@ -1,4 +1,4 @@
-"""Pinky shape cue for the ceiling camera (panel 2026-11-18, stage 1).
+"""Wheeled-base shape cue for the ceiling camera (panel 2026-11-18, stage 1).
 
 The background model forgets a robot that stands still long enough (or never sees it when it was
 parked while learning). The robot itself is easy to see: two teal wheels with a dark body between
@@ -30,7 +30,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-#: Pinky wheel centre distance (URDF wheel joints at +-0.04055 m).
+#: Wheel centre distance of the current base (URDF wheel joints at +-0.04055 m).
 WHEEL_TRACK_M = 0.0811
 #: Teal wheel colour: OpenCV hue band, minimum saturation, minimum brightness over the floor.
 TEAL_HUE = (92, 107)
