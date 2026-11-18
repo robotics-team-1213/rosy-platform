@@ -49,3 +49,8 @@
 - 변경: profile/capability 값은 유지하고 package model ID와 normalized JSON SHA256을 담은 `deployment-binding.yaml`을 추가했다. 기존 config 디렉터리 설치에 포함된다.
 - 증거: 다른 기종 전체/부분 파일 복사·잘못된 binding RED 후 관련153 PASS/NEW0. 현재 Pinky package를 product 설정으로 읽는 positive control 포함. 독립 source 검토 승인. 전체 착지 회귀는 별도다.
 - gate 변화: 소스 계약 근거 추가. 기존 장치 보정·이미지·실물 수용 상태를 승격하지 않는다.
+
+## 2026-11-18 · uncommitted · Pinky Pro docking.supported true (D-1042 6)
+- 변경: `capabilities.yaml` `docking.supported: true`, `deployment-binding.yaml` 디지스트 갱신. 사용자 결정 2026-11-18 "도킹은 버튼 한 번으로 진행"(칸 분홍선, 실물 NOMINAL 카메라).
+- 증거: 원격 `test_robot_package.py`·`test_core_node_robot_paths.py`.
+- gate 변화: SOURCE. 실물 접안은 서명 릴리스 뒤.
