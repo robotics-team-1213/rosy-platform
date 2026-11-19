@@ -14892,3 +14892,8 @@ osy-d395-s1d\`.
 - 변경: `publish_evidence`가 origin/main...SHA가 닿는 브라우저 묶음만 요구(착지 대응 재사용, 실패 시 전부), 기록 나열 불요·조상 reach 규칙 동일, `publish_main.py --fill-browsers [--apply]`, 후보별 브라우저 증거 수 출력. ADR D-1036 부록(사용자 결정).
 - 증거: 원격 `test_publish_evidence`·`test_publish_main` 외 관련 시험.
 - gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · D-1055 PR + Merge Queue 유일 병합 경로
+- 변경: ADR D-1055(Proposed), ADR Log 행. land.py 착지 은퇴 기준, 두 레인 전환, D-868 개정, 실험실 증거 규칙. 문서만.
+- 증거: 원격 `test_harness_contracts` 결과는 커밋 뒤 기록.
+- gate 변화: 없음.
