@@ -1,6 +1,6 @@
 """The FIFO place a land_async supervisor holds before land.py starts (11-19: 792 of 958 STOPs were "queue full").
 
-Only the oldest live waiter (<tree>.roomwait, its first request time kept in <tree>.requested) may reserve, under
+Only the oldest live waiter in each queue lane (<tree>.roomwait, first request time in <tree>.requested) may reserve, under
 land_queue.reserve()'s lock; the marker is kept in ``taken`` until land_async hands it to land.py.
 Lives beside land_async (its copy runs beside the log) and is imported from main's tools/ after land_async._queue().
 """
@@ -14,16 +14,22 @@ taken: dict[str, Path] = {}  # tree -> the reservation reserve_now took for it
 
 
 def reserve_now(tree: Path, land_queue, mine: Path, start: str) -> bool:
-    """One FIFO poll: the oldest live waiter reserves under reserve()'s lock (kept in taken)."""
+    """One FIFO poll for this lane, with reserve() enforcing its capacity under lock."""
     mine.write_text(start, "utf-8")  # rewritten each poll: a waiter silent for 5 min is not in line
+    lane = land_queue.lane_of(tree)
+    now = time.time()
     try:
-        line = [(q.read_text("utf-8"), q.name) for q in mine.parent.glob("*.roomwait") if time.time() - q.stat().st_mtime < 300]
+        for waiter in mine.parent.glob("*.roomwait"):
+            if waiter == mine or now - waiter.stat().st_mtime >= 300:
+                continue
+            if (waiter.read_text("utf-8"), waiter.name) < (start, mine.name):
+                waiting_tree = waiter.with_name(waiter.name.removesuffix(".roomwait"))
+                if land_queue.lane_of(waiting_tree) == lane:
+                    return False
     except OSError:
-        line = []
-    if not (line and min(line)[1] == mine.name):
         return False
     try:
-        taken[str(tree)] = land_queue.reserve(land_queue.queue_dir(tree), tree.name, land_queue.lane_of(tree))
+        taken[str(tree)] = land_queue.reserve(land_queue.queue_dir(tree), tree.name, lane)
     except land_queue.QueueError:
         return False  # still full: stay first in line
     mine.unlink(missing_ok=True)  # no longer waiting: it must not block the next in line
