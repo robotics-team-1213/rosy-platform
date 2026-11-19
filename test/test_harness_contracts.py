@@ -1052,3 +1052,18 @@ def test_generated_targets_scans_plan_and_solution_frontmatter_once_across_modul
     assert sum("7 commits touched" in n for n in notes) == 2
 
 
+def test_every_ratchet_runs_in_the_guard_set():
+    """bn H-1 (2026-11-20): a ratchet (a ratchet_lists user or an *only_shrink test) outside affected_tests.GUARD_SET
+    let main grow its list unseen (11-19 omx_cell_boundary 148 -> 153). Add it to GUARD_SET in the same commit."""
+    import re
+    import subprocess
+
+    import affected_tests
+
+    marker = re.compile(r"^\s*(import ratchet_lists|from ratchet_lists import)|^def test_\w*only_shrink", re.MULTILINE)
+    tracked = subprocess.run(["git", "ls-files", "-z", "*test_*.py"], cwd=ROOT, capture_output=True,
+                             check=True).stdout.decode("utf-8").split("\0")
+    ratchets = {name for name in tracked if name and (ROOT / name).is_file()
+                and marker.search((ROOT / name).read_text(encoding="utf-8", errors="ignore"))}
+    assert {"test/test_robot_literals.py", "test/architecture/test_platform_parts.py"} <= ratchets
+    assert sorted(ratchets - set(affected_tests.GUARD_SET)) == []
