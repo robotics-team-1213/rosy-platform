@@ -6,7 +6,9 @@ turns back. The turn sweeps near the arm reach, so it only starts while the unlo
 A verdict only ever raises the layer count (task["tier_hint"]); an abstain, a missing mapping, no vehicle, an arm
 that is not folded, a failed turn, a timeout or a person skips the look and the unload goes on with the other signals.
 The mapping {unload_place: wait_place} comes from the site rules (observe_from) or app.state.observe_from.
-step() is one tick; capture and judge are injected (the real ones are below)."""
+step() is one tick; capture and judge are injected. Fleet decodes no image (D-136 3): the tier judge belongs to Vision
+(rosy_vision.stack_tiers), and until one is installed as app.state.observer_judge every look is SKIPPED NO_JUDGE
+before any turn."""
 from __future__ import annotations
 
 import inspect
@@ -25,7 +27,6 @@ ROTATE_POLL_S = 0.4
 ARM_FRESH_S = 60.0
 OPERATOR = "fleet-observer"
 DEFAULT_UNLOAD_PLACE = "S3"
-DEFAULT_HFOV_RAD = 1.1519
 TERMINAL = ("VERDICT", "SKIPPED")
 MAX_REQUESTS = 50
 
@@ -166,6 +167,8 @@ def _unload_pose(rows, robot_id):
 
 
 async def _look(state, request, console, capture, judge, now, site, rows, human=False) -> None:
+    if judge is None:
+        return _skip(state, request, "NO_JUDGE", now)
     wait_place = request.get("wait_place")
     if not wait_place:
         return _skip(state, request, "NO_OBSERVE_PLACE", now)
@@ -250,23 +253,6 @@ def make_capture(console):
     return capture
 
 
-def make_judge(app):
-    """Real judge: decode the jpeg and read the tier count; abstain when it cannot be decoded."""
-    def judge(frame, dist_m) -> dict:
-        import cv2
-        import numpy as np
-
-        from fleet.server.sitemap import observer_vision
-
-        img = cv2.imdecode(np.frombuffer(frame, np.uint8), cv2.IMREAD_COLOR) if frame else None
-        if img is None:
-            return {"tiers": None, "confidence": None}
-        hfov = getattr(app.state, "observer_hfov_rad", None) or DEFAULT_HFOV_RAD
-        out = observer_vision.classify_tiers(img, {"hfov_rad": hfov, "width": img.shape[1], "height": img.shape[0]}, dist_m)
-        return {"tiers": out["tiers"], "confidence": out["confidence"]}
-    return judge
-
-
 def install_observer_routes(app, ctx) -> None:
     import asyncio
     import logging
@@ -313,7 +299,7 @@ def install_observer_routes(app, ctx) -> None:
 
     async def tick() -> None:
         capture = getattr(app.state, "observer_capture", None) or make_capture(ctx.console)
-        judge = getattr(app.state, "observer_judge", None) or make_judge(app)
+        judge = getattr(app.state, "observer_judge", None)
         site = ctx.active_map()[1]
         for request in list(app.state.observer_requests.values()):
             if request["state"] in TERMINAL:

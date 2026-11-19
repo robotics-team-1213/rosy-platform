@@ -11,7 +11,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ### v1.419 대기 기체가 돌아서 짐칸 단수를 본다 (사용자 2026-11-19)
 
-하역 자리 뒤 대기 자리(`observe_from` 사이트 규칙, 예: S3←S5)에 선 기체가 관측한다. `POST /api/fleet/pipeline/observer-requests` `{cell_task_id, unload_place?}`(operator, 사람 감지 409), `GET .../{request_id}`, `POST .../{request_id}/cancel`(닫힌 요청 409). Fleet가 하역 셀의 팔이 접혀 있을 때만 대기 기체를 CORE `/api/v1/motion/rotate_to`로 짐칸 쪽으로 돌려(±25° 안이면 안 돎) 앞 카메라 한 장을 판정하고 되돌린다. 판정(1단·2단, 확신 낮으면 기권)은 셀 작업 `tier_hint` `{layers_below, source, confidence, t}`로 남고 셀은 `--layers-below`로 받는다(올리기만). 결과는 `auto_events` kind `auto_observe`. 기권·기체 없음·팔 미접힘·시간 초과는 SKIPPED로 하역을 막지 않는다.
+하역 자리 뒤 대기 자리(`observe_from` 사이트 규칙, 예: S3←S5)에 선 기체가 관측한다. `POST /api/fleet/pipeline/observer-requests` `{cell_task_id, unload_place?}`(operator, 사람 감지 409), `GET .../{request_id}`, `POST .../{request_id}/cancel`(닫힌 요청 409). Fleet가 하역 셀의 팔이 접혀 있을 때만 대기 기체를 CORE `/api/v1/motion/rotate_to`로 짐칸 쪽으로 돌려(±25° 안이면 안 돎) 앞 카메라 한 장을 판정하고 되돌린다. 판정(1단·2단, 확신 낮으면 기권)은 셀 작업 `tier_hint` `{layers_below, source, confidence, t}`로 남고 셀은 `--layers-below`로 받는다(올리기만). 결과는 `auto_events` kind `auto_observe`. 기권·기체 없음·팔 미접힘·시간 초과는 SKIPPED로 하역을 막지 않는다. Fleet는 영상을 해석하지 않는다(D-136 3). 판정기는 Vision 소유(`rosy_vision.stack_tiers`)이고 Fleet에 판정기가 없으면 돌기 전에 SKIPPED `NO_JUDGE`다.
 
 ### v1.416 팔이 못 닿을 때 운반체 재정차 요청 (사용자 2026-11-19)
 

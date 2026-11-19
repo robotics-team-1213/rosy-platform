@@ -1,9 +1,9 @@
-"""Tier vision (observer_vision): synthetic orange blobs against the expected heights at a known distance."""
+"""Stack tier vision (rosy_vision.stack_tiers): synthetic orange blobs against the expected heights at a known distance."""
 import pytest
 
 cv2 = pytest.importorskip("cv2")
 np = pytest.importorskip("numpy")
-from fleet.server.sitemap import observer_vision as tv
+from rosy_vision import stack_tiers as tv
 
 CAM = {"hfov_rad": 1.1519, "width": 320, "height": 240}
 ORANGE = (0, 128, 255)  # BGR, H about 15

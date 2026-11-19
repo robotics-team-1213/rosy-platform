@@ -612,3 +612,8 @@
 - 변경: `track/anchor_feed.py`(헤드 트래커 1 Hz, 감지 POST 뒤 단일 비행 anchors POST)·`post_guard.py`(POST 직전 0.8 s 연령 재확인, 폐기·오류 계수)·`track/fleet_client.py`(`publish_anchors`, keepalive_expiry 30 s)·`cli.py`(`vision` 30 s 통계줄)·`anchor_head_tracker.py`(own marker 없는 Pinky는 sighting·anchors 제외). Fleet `POST /api/fleet/detections/anchors` 경로 추가. R `keep/r-live-20261117` 스냅샷에서 anchor 관련만 이식, 나머지는 폐기.
 - 증거: `test_post_age_guard.py`, `test_overhead_tracking_api.py` (원격 결과는 커밋 메시지 참조).
 - gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · refactor(vision): 적재 단수 판정을 Fleet에서 Vision으로
+- 변경: Fleet `fleet/server/sitemap/observer_vision.py`(cv2로 JPEG 해석)를 `rosy_vision/stack_tiers.py`로 옮김(D-136 3, Fleet는 영상을 해석하지 않음). Fleet `pipeline_observer`의 기본 판정기 삭제: 판정기가 없으면 돌기 전에 SKIPPED `NO_JUDGE`. Vision 엔드포인트 연결은 아직 없음.
+- 증거: 원격 `test_no_video_relay.py`·`test_observer.py`·`test_stack_tiers.py` (결과는 커밋 보고에).
+- gate 변화: 없음.

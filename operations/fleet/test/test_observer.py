@@ -99,12 +99,16 @@ def test_timeout_and_human_hold_skip():
     assert held["why"] == "HUMAN_HOLD"
 
 
-def test_default_judge_decodes_and_abstains_on_garbage():
-    cv2, np = pytest.importorskip("cv2"), pytest.importorskip("numpy")
-    judge = ob.make_judge(SimpleNamespace(state=SimpleNamespace()))
-    assert judge(b"not a jpeg", 0.3) == {"tiers": None, "confidence": None}
-    ok, jpg = cv2.imencode(".jpg", np.full((240, 320, 3), 90, np.uint8))
-    assert judge(jpg.tobytes(), 0.3)["tiers"] is None  # a plain grey frame has no blob
+def test_without_a_vision_judge_nothing_turns_or_captures():
+    state = _state()
+    request = _req(state)
+
+    async def capture(_rid):
+        raise AssertionError("no judge: no frame enters Fleet")
+
+    asyncio.run(ob.step(state, request, console=Console([_row("docked", 1.0, 1.5), _row("obs", 1.0, 2.0)]),
+                        capture=capture, judge=None, now=1.0, site=SITE))
+    assert (request["state"], request["why"], request["turn"]) == ("SKIPPED", "NO_JUDGE", None)
 
 
 def _client(tasks=True, human=False, rules=None):

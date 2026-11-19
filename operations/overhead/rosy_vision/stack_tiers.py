@@ -1,5 +1,7 @@
 """Container tier count (1 or 2) from the front camera: height of the orange blob against the height each
-tier count would have at the measured distance. Rule based; abstains whenever the picture is not clear."""
+tier count would have at the measured distance. Rule based; abstains whenever the picture is not clear.
+Vision owns it (D-136 3: Fleet decodes no image); Fleet's pipeline_observer takes only its JSON verdict through
+app.state.observer_judge. Not wired to a Vision endpoint yet, so the Fleet look skips NO_JUDGE."""
 import math
 
 import cv2
