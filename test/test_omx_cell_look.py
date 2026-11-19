@@ -117,6 +117,24 @@ class Mute:
         raise AssertionError(f"the arm was commanded: {command}")
 
 
+def test_measured_neighbour_clearance_refuses_a_pick_that_only_barely_fits():
+    import cell_finger_room as fr
+    import cell_params as prm
+
+    mask, px, box, default_room = dense_row()
+    roi = (0, 0, 300, 200)
+    params = prm.validate({
+        "schema": prm.SCHEMA,
+        "params": {
+            "auto.neighbour_clear_mm": {"value": 14.0, "unit": "mm", "source": "measured", "evidence": "field clearance"},
+            "auto.finger_mm": {"value": 2.0, "unit": "mm", "source": "measured", "evidence": "finger width"},
+        },
+    })
+    assert default_room["margin_mm"] is not None
+    assert fr.jaw_margin(fr.own_removed(mask, roi, px, box), roi, px, box, params=params)["margin_mm"] is None
+    assert fr.jaw_margin(np.zeros_like(mask), roi, px, box, params=params)["margin_mm"] is not None
+
+
 def test_jaws_never_open_for_the_mark_among_neighbours_within_the_opened_width(tmp_path, monkeypatch):
     import cell_finger_room as fr
 
