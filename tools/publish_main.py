@@ -78,6 +78,7 @@ sys.path.insert(0, str(TOOLS))
 import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a handle still holds)
 import urgent_lane  # noqa: E402  (D-1038: evidence for urgent/ PRs)
 import publish_evidence  # noqa: E402  (canonical plan and exact executed proof)
+import pr_land  # noqa: E402  (lab-only evidence check for the exact candidate)
 import publish_scope  # noqa: E402  (D-1036 addendum: app-only deltas need only their app's evidence)
 SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(SCANNER))
@@ -312,6 +313,15 @@ def pr_body(repo: Path, sha: str, why: str, safety: str) -> str:
         GENERATED_BY])
 
 
+def lab_evidence_ok(worktree: Path, sha: str) -> bool:
+    """True when pr_land's lab evidence check passes for exactly sha; any failure means "not proven"."""
+    try:
+        pr_land.verify_lab_evidence(worktree, sha, pr_land.required_lab_invocations(worktree, "origin/main", sha))
+    except (SystemExit, Exception):
+        return False
+    return True
+
+
 def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     git(repo, "fetch", "origin")
     if not ancestor(repo, "origin/main", "main"):
@@ -356,8 +366,11 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
         (hooks / "pre-push").write_bytes(git(repo, "show", f"{sha}:{HOOK}").stdout.replace("\r", "").encode())
         (hooks / "pre-push").chmod(0o755)
         # The hook skips the secret scan and Safety-Review this run just passed for exactly this SHA (D-889).
+        push_env = {**os.environ, "ROSY_PUBLISH_CHECKED": sha}
+        if getattr(args, "via_ci", False) and lab_evidence_ok(temp, sha):
+            push_env["ROSY_STATIC_PRE_PUSH"] = "1"  # lab evidence is proven for this sha; ci-result is the pytest gate
         push = git(temp, "-c", f"core.hooksPath={hooks.as_posix()}", "push", "origin", f"{sha}:refs/heads/{branch}",
-                   check=False, env={**os.environ, "ROSY_PUBLISH_CHECKED": sha})
+                   check=False, env=push_env)
         if push.returncode != 0:
             raise Stop(1, f"push refused (pre-push or remote):\n{push.stdout}{push.stderr}".rstrip())
     finally:

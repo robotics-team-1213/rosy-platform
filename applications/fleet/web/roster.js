@@ -12,7 +12,7 @@ import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
 import { placeRosterCards as place, mustExpand, selectRobot, createRoiPoller,
-  buildQuickControlPanel } from "./roster-cards.js";
+  buildQuickControlPanel, createFrontCamera } from "./roster-cards.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
 import {createCellFrameFeed} from "/console/assets/cell-frames.js";
@@ -29,6 +29,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call, render });
   // 셀 카메라 뷰도 천장 ROI와 같은 Vision 임대로 본다(D-136). Fleet은 바이트를 중계하지 않는다.
   const cellFrames = createCellFrameFeed({ call, scope });
+  const frontCamera = createFrontCamera({ call, scope });
   function openCard(robotId) {
     if (typeof window !== "undefined" && robotId && typeof window.dispatchEvent === "function") {
       window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: robotId } }));
@@ -46,9 +47,10 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (selectRobot(view, robotId)) {
       confirmedAction?.cancel();
       trip.close();
+      frontCamera.stop();
       onSelectionChanged();
       // D-651: 로봇을 고르는 것은 읽기다. 목표 받기는 '목표 지정' 단추로만 켜진다.
-      view.focusAnchorId = view.focusRobot || "rosy_46";
+      view.focusAnchorId = view.focusRobot || null;
       const stage = el("map-stage");
       const birdseyeToggle = el("birdseye-toggle");
       if (stage && stage.dataset.view === "camera") {
@@ -243,7 +245,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable) {
       node.appendChild(buildQuickControlPanel({
         robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-        roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames,
+        roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames, frontCamera,
       }));
     }
 

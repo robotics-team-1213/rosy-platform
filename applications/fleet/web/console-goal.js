@@ -190,8 +190,8 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   view.dispatchBerthPark = async (targetRobotId, bayId = "", mode = "berth_park") => {
     const robotId = targetRobotId;
     if (!robotId || view.selected !== robotId || view.focusRobot !== robotId) return;
-    const defaultBay = robotId === "rosy_45" ? "C2" : robotId === "rosy_42" ? "C3" : "C1";
-    const chosenBay = (bayId || defaultBay).toUpperCase();
+    // The person names the bay; there is no per-robot default bay.
+    const chosenBay = String(bayId || "").toUpperCase();
     const bayCoords = { C1: { x: -0.418, y: 0.380 }, C2: { x: -0.190, y: 0.380 }, C3: { x: 0.038, y: 0.380 } };
     const pt = bayCoords[chosenBay];
     if (!pt || !["berth_park", "forward_and_berth_park"].includes(mode)) return;
@@ -326,12 +326,12 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       bars.push(["📐 팔 뻗음", `${extM.toFixed(2)}/${reachM.toFixed(2)}m (${reachPct}%)`, reachPct, "info"]);
       bars.push(["⚙️ 서보 버스", anc.motor_summary || "12.0V · 31°C (100%)", 100, "good"]);
       bars.push(["🔍 4x 추적", `신뢰도 ${confPct}%`, confPct, "good"]);
-      footer = `클릭 시 우측 셀 상세 카드 열기 · ${view.selected || view.focusRobot || "rosy_46"} 연계 정류장 즉시 호출 가능`;
+      footer = `클릭 시 우측 셀 상세 카드 열기 · ${view.selected || view.focusRobot || "선택한 로봇"} 연계 정류장 즉시 호출 가능`;
     } else if (entity.kind === "place") {
       const pl = entity.place, siteMapObj = view.activeSiteMap?.map;
       const edges = (siteMapObj?.edges || []).filter((e) => e.from === pl.id || e.to === pl.id);
       const edgeDesc = edges.map((e) => `${e.id}(${e.direction === "two_way" ? "양방향" : "일방향"})`).join(", ") || "연결 차로";
-      const activeId = view.selected || view.focusRobot || "rosy_46";
+      const activeId = view.selected || view.focusRobot || null;
       const guideRow = (view.guide?.robots || []).find((r) => r.robot_id === activeId);
       const road = guideRow?.pose ? roadPolylineBetween(siteMapObj, guideRow.pose, pl) : null;
       const isCharger = String(pl.id).startsWith("C");
@@ -344,7 +344,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         const distPct = Math.max(15, Math.min(100, Math.round((1 - Math.min(1, road.length_m / 4.5)) * 100)));
         bars.push(["🛣️ 접근성", `${road.length_m.toFixed(2)}m · 약 ${Math.ceil(road.length_m / 0.15)}초`, distPct, "info"]);
       }
-      footer = `클릭 시 🎯 ${pl.id} 핀 고정 및 ${activeId} 도로(lane_graph) 즉시 주행`;
+      footer = `클릭 시 🎯 ${pl.id} 핀 고정 및 ${activeId || "선택한 로봇"} 도로(lane_graph) 즉시 주행`;
     }
 
     const headRow = document.createElement("div");
