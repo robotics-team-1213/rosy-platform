@@ -486,3 +486,8 @@ def test_via_ci_push_uses_the_static_hook_only_with_lab_evidence_for_the_sha(rep
     monkeypatch.setattr(tool, "git", spy)
     assert _run(local, "--via-ci", "--apply") == 0
     assert pushes == [expected] and checked == [sha]
+
+
+def test_the_scheduled_merge_task_passes_via_ci_like_the_manual_path():
+    text = (Path(__file__).resolve().parents[1] / "tools" / "register_publish_merge_task.ps1").read_text(encoding="utf-8")
+    assert "--merge-when-green auto --via-ci --apply" in text
