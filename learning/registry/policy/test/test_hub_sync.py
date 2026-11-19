@@ -149,11 +149,17 @@ def test_interrupted_readback_retries_same_commit_and_rejects_corruption(module,
     assert receipt['bytes_verified'] and hub.uploads == 1
 
 
-def test_upload_without_explicit_token_never_uses_host_login(module, bundle, monkeypatch):
-    monkeypatch.setitem(sys.modules, 'huggingface_hub', None)  # would fail differently if reached
-    with pytest.raises(ValueError, match='explicit team HF token'):
+def test_upload_uses_only_the_team_account_login(module, bundle, monkeypatch):
+    team = module.TEAM_HF_ACCOUNT
+    assert module.team_token(get_token=lambda: 'login', whoami=lambda token: {'name': team}) == 'login'
+    assert module.team_token('file', get_token=lambda: None, whoami=lambda token: {'name': team}) == 'file'
+    with pytest.raises(ValueError, match='no HF login'):
+        module.team_token(get_token=lambda: None, whoami=lambda token: {'name': team})
+    personal = SimpleNamespace(get_token=lambda: 'login', whoami=lambda token: {'name': 'someone'})
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', personal)
+    with pytest.raises(ValueError, match='not the team account'):
         module.upload_bundle(bundle)
     monkeypatch.setattr(sys, 'argv', ['hub_sync.py', 'upload', str(bundle)])
-    with pytest.raises(SystemExit):  # --token-file is required
+    with pytest.raises(SystemExit):  # same refusal through the CLI, no --token-file needed to reach it
         module.main()
     assert not (bundle / 'upload.json').exists()

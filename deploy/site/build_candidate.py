@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import tarfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -156,7 +157,8 @@ def _sbom_command(tool: str, reference: str, sbom_path: Path) -> list[str]:
 def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess.run,
                     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
                     sbom_tool: str = "scout", base_candidate: Path | None = None,
-                    trusted_key_id: str | None = None, trusted_public_key: Path | None = None) -> dict:
+                    trusted_key_id: str | None = None, trusted_public_key: Path | None = None,
+                    jobs: int | None = None) -> dict:
     if sbom_tool not in SBOM_TOOLS:
         raise ValueError(f"unsupported SBOM tool: {sbom_tool}")
     root = root.resolve()
@@ -242,66 +244,84 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
         "vision": (site / "Dockerfile.vision", root),
         "proxy": (site / "Dockerfile.proxy", site),
     }
-    for service, (dockerfile, context) in services.items():
-        if reuse(service, _build_inputs(site, service)):
-            continue
+    def _inspect_amd64(service: str, reference: str) -> str:
+        inspect = runner(["docker", "image", "inspect", "--format",
+                          "{{.Id}}|{{.Os}}|{{.Architecture}}", reference],
+                         cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+        parts = inspect.split("|")
+        if len(parts) != 3 or not parts[0].startswith("sha256:"):
+            raise RuntimeError(f"Docker returned invalid image identity for {service}")
+        image_id, image_os, architecture = parts
+        if (image_os, architecture) != ("linux", "amd64"):
+            raise RuntimeError(f"{service} image is {image_os}/{architecture}, expected linux/amd64")
+        return image_id
+
+    def _scan_sbom(service: str, reference: str) -> tuple[str, str]:
+        sbom_path = sbom_dir / f"{service}.spdx"
+        runner(_sbom_command(sbom_tool, reference, sbom_path), cwd=root, check=True)
+        if not sbom_path.is_file() or sbom_path.stat().st_size == 0:
+            raise RuntimeError(f"{sbom_tool} did not produce the {service} SBOM")
+        return str(sbom_path.relative_to(output)).replace("\\", "/"), _sha256(sbom_path)
+
+    def _build_service(service: str, dockerfile: Path, context: Path) -> tuple[str, dict[str, str]]:
         reference = f"rosy-site-{service}:{tag}"
         runner(["docker", "build", "--pull", "--platform", "linux/amd64",
                 "--tag", reference, "--file", str(dockerfile), str(context)],
                cwd=root, check=True)
-        inspect = runner(["docker", "image", "inspect", "--format",
-                          "{{.Id}}|{{.Os}}|{{.Architecture}}", reference],
-                         cwd=root, check=True, capture_output=True, text=True).stdout.strip()
-        parts = inspect.split("|")
-        if len(parts) != 3 or not parts[0].startswith("sha256:"):
-            raise RuntimeError(f"Docker returned invalid image identity for {service}")
-        image_id, image_os, architecture = parts
-        if (image_os, architecture) != ("linux", "amd64"):
-            raise RuntimeError(f"{service} image is {image_os}/{architecture}, expected linux/amd64")
-
-        sbom_path = sbom_dir / f"{service}.spdx"
-        runner(_sbom_command(sbom_tool, reference, sbom_path), cwd=root, check=True)
-        if not sbom_path.is_file() or sbom_path.stat().st_size == 0:
-            raise RuntimeError(f"{sbom_tool} did not produce the {service} SBOM")
-        images[service] = {
+        image_id = _inspect_amd64(service, reference)
+        sbom_rel, sbom_sha = _scan_sbom(service, reference)
+        return service, {
             "reference": reference,
             "image_id": image_id,
             "platform": "linux/amd64",
-            "sbom": str(sbom_path.relative_to(output)).replace("\\", "/"),
-            "sbom_sha256": _sha256(sbom_path),
+            "sbom": sbom_rel,
+            "sbom_sha256": sbom_sha,
         }
-        references.append(reference)
 
-    for service, upstream in MIRRORED_IMAGES.items():
-        if reuse(service, {"deploy/site/build_candidate.py", ".github/workflows/build-site-candidate.yml"}):
-            continue
+    def _mirror_image(service: str, upstream: str) -> tuple[str, dict[str, str]]:
         reference = f"rosy-site-{service}:{tag}"
         runner(["docker", "pull", "--platform", "linux/amd64", upstream], cwd=root, check=True)
         runner(["docker", "tag", upstream, reference], cwd=root, check=True)
-        inspect = runner(["docker", "image", "inspect", "--format",
-                          "{{.Id}}|{{.Os}}|{{.Architecture}}", reference],
-                         cwd=root, check=True, capture_output=True, text=True).stdout.strip()
-        parts = inspect.split("|")
-        if len(parts) != 3 or not parts[0].startswith("sha256:"):
-            raise RuntimeError(f"Docker returned invalid image identity for {service}")
-        image_id, image_os, architecture = parts
-        if (image_os, architecture) != ("linux", "amd64"):
-            raise RuntimeError(f"{service} image is {image_os}/{architecture}, expected linux/amd64")
-
-        sbom_path = sbom_dir / f"{service}.spdx"
-        runner(_sbom_command(sbom_tool, reference, sbom_path), cwd=root, check=True)
-        if not sbom_path.is_file() or sbom_path.stat().st_size == 0:
-            raise RuntimeError(f"{sbom_tool} did not produce the {service} SBOM")
-        images[service] = {
+        image_id = _inspect_amd64(service, reference)
+        sbom_rel, sbom_sha = _scan_sbom(service, reference)
+        return service, {
             "reference": reference,
             "image_id": image_id,
             "platform": "linux/amd64",
             "source": "mirror",
             "upstream": upstream,
-            "sbom": str(sbom_path.relative_to(output)).replace("\\", "/"),
-            "sbom_sha256": _sha256(sbom_path),
+            "sbom": sbom_rel,
+            "sbom_sha256": sbom_sha,
         }
-        references.append(reference)
+
+    build_tasks = [
+        (service, dockerfile, context) for service, (dockerfile, context) in services.items()
+        if not reuse(service, _build_inputs(site, service))
+    ]
+    mirror_tasks = [
+        (service, upstream) for service, upstream in MIRRORED_IMAGES.items()
+        if not reuse(service, {"deploy/site/build_candidate.py", ".github/workflows/build-site-candidate.yml"})
+    ]
+    workers = max(1, jobs if jobs is not None else (4 if runner is subprocess.run else 1))
+    built: dict[str, dict[str, str]] = {}
+    if workers == 1 or len(build_tasks) + len(mirror_tasks) <= 1:
+        for task in build_tasks:
+            svc, row = _build_service(*task)
+            built[svc] = row
+        for task in mirror_tasks:
+            svc, row = _mirror_image(*task)
+            built[svc] = row
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(_build_service, *task) for task in build_tasks]
+            futures += [pool.submit(_mirror_image, *task) for task in mirror_tasks]
+            for fut in futures:
+                svc, row = fut.result()
+                built[svc] = row
+    for service in (*services, *MIRRORED_IMAGES):
+        if service in built:
+            images[service] = built[service]
+            references.append(built[service]["reference"])
 
     archive = output / "images.tar"
     if references:
@@ -368,11 +388,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base-candidate", type=Path, help="signed candidate whose unchanged images are reused")
     parser.add_argument("--trusted-key-id", help="independently enrolled base signing key ID")
     parser.add_argument("--trusted-public-key", type=Path, help="independently enrolled base public key")
+    parser.add_argument("--jobs", type=int, default=4, help="parallel Docker/SBOM build workers (default: 4)")
     args = parser.parse_args(argv)
     try:
         manifest = build_candidate(ROOT, args.output_dir, sbom_tool=args.sbom_tool,
                                    base_candidate=args.base_candidate, trusted_key_id=args.trusted_key_id,
-                                   trusted_public_key=args.trusted_public_key)
+                                   trusted_public_key=args.trusted_public_key, jobs=args.jobs)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
         parser.error(str(exc))
     print(f"site candidate: {manifest['source_commit']} -> {args.output_dir.resolve()}")
