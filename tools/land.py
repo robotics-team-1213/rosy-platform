@@ -369,8 +369,7 @@ def land(args) -> int:
         _unreserve()
         if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # it led a batch at once: one shared pretest instead of one each
-        if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
-            land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
+        land_prepare.pretest(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
         if (code := land_batch.queue(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # a batch landed this branch
     return rounds(args, wt, branch, main_co, python, qdir, ticket)

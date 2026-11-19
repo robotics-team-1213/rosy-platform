@@ -295,12 +295,14 @@ def test_map_pose_is_stdlib_only_and_never_reads_tracking():
     path = Path(map_pose.__file__)
     assert path == Path(__file__).resolve().parents[3] / "operations/world/src/rosy/world/state/projections/map_pose.py"
     names = set()
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.Import):
-            names.update(a.name for a in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            names.add(node.module or "")
-    assert names <= {"__future__", "math", "collections", "dataclasses", "datetime", "typing"}
+    for source in (path, path.with_name("map_pose_samples.py")):  # the split-out helpers are part of it
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                names.update(a.name for a in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                names.add(node.module or "")
+    assert names <= {"__future__", "math", "collections", "dataclasses", "datetime", "typing",
+                     "rosy.world.state.projections.map_pose_samples"}
     assert not any("tracking" in name for name in names)
 
 
@@ -364,7 +366,7 @@ def test_pending_sighting_is_dropped_when_it_goes_stale():
 
 def test_odom_refusals_are_counted_with_the_last_reason():
     tr = localized()
-    assert not tr.add_odom(odom(0.1, x=0.1), T0 + 0.3)
+    assert not tr.add_odom(odom(0.2, x=0.1), T0 + 0.3)          # same stamp, another pose: a clock fault
     assert not tr.add_odom(odom(0.2), T0 + 0.3)                 # the same sample twice: not counted
     pose = tr.pose(T0 + 0.3)
     assert (pose.odom_refused, pose.odom_refused_reason) == (1, "out_of_order")
@@ -597,3 +599,32 @@ def test_a_camera_sighting_holds_the_peer_anchor_back_for_exactly_ten_seconds():
     tr.add_odom(odom(10), T0 + 10.0)
     assert tr.add_peer((0.0, 0.0, 0.0), T0 + 10.0, T0 + 10.0, 'a', 'a') is None
 
+
+def test_hub_after_rest_snapshot_is_not_counted_out_of_order():
+    tr = localized()
+    assert tr.add_odom(odom(1.0, x=0.2), T0 + 1.0)         # REST read
+    assert not tr.add_odom(odom(0.6, x=0.1), T0 + 1.05)    # hub snapshot of an earlier moment arrives late
+    pose = tr.pose(T0 + 1.05)
+    assert (pose.stale_source, pose.odom_refused, pose.odom_refused_reason) == (1, 0, None)
+    assert tr.survey_odom(T0 + 1.05)[2] == 0               # a skipped late copy leaves the recorded odom order intact
+
+
+def test_true_clock_rewind_still_refused():
+    tr = localized()
+    assert tr.add_odom(odom(10.0), T0 + 10.0)
+    assert not tr.add_odom(odom(2.0), T0 + 10.1)            # 8 s back: more than the 3 s hub reuse
+    assert not tr.add_odom(odom(-10.0), T0 + 10.1)          # 20 s back (chrony step): still a refusal
+    assert not tr.add_odom(odom(10.0, x=0.3), T0 + 10.1)    # same stamp, another pose
+    pose = tr.pose(T0 + 10.1)
+    assert (pose.odom_refused, pose.odom_refused_reason, pose.stale_source) == (3, "out_of_order", 0)
+
+
+def test_implausible_late_sample_is_refused_and_breaks_survey_but_a_plausible_one_does_not():
+    tr = localized()
+    tr.add_odom(odom(1.0, x=0.2), T0 + 1.0)
+    epoch = tr.survey_odom(T0 + 1.0)[2]
+    assert not tr.add_odom(odom(0.9, x=0.19), T0 + 1.0)    # 0.1 s behind, 1 cm away: a late copy
+    assert tr.survey_odom(T0 + 1.0)[2] == epoch and tr.pose(T0 + 1.0).stale_source == 1
+    assert not tr.add_odom(odom(0.9, x=9.0), T0 + 1.0)     # 0.1 s behind but 9 m away: not the same robot path
+    assert tr.survey_odom(T0 + 1.0)[2] == epoch + 1
+    assert tr.pose(T0 + 1.0).odom_refused_reason == "out_of_order"
