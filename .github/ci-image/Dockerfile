@@ -1,6 +1,6 @@
 # Prebuilt CI image (user 11-20, GitHub landing migration): everything ci.yml used to install per job.
 # Built by .github/workflows/build-ci-image.yml with the repository root as the build context.
-FROM ros:jazzy-ros-base
+FROM ros:jazzy-ros-base@sha256:00b8d47a6e6384a2834e3d01fa87ae767876543baa574f2d64a75c04ea33c698
 
 ENV DEBIAN_FRONTEND=noninteractive PIP_NO_CACHE_DIR=1 PIP_BREAK_SYSTEM_PACKAGES=1 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
