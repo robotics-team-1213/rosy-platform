@@ -175,6 +175,8 @@ def test_every_root_test_of_a_gate_tool_is_in_the_self_test_tier():
 
 def test_pack_splits_large_non_serial_capsules_for_parallel_runners(tmp_path):
     """Capsules above MAX_GROUP_PATHS shard across lab PCs and CI runners instead of one serial queue."""
+    import affected_pack
+
     class FakeRepo:
         root = tmp_path
 
@@ -182,7 +184,7 @@ def test_pack_splits_large_non_serial_capsules_for_parallel_runners(tmp_path):
         def test_import_names(path):
             return {path: path}
 
-    cap = affected.affected_pack.MAX_GROUP_PATHS
+    cap = affected_pack.MAX_GROUP_PATHS
     groups = affected.pack(FakeRepo(), [f"test/test_cap_{i}.py" for i in range(cap + 5)])
     assert len(groups) == 2
     assert all(len(group) <= cap for group in groups)
