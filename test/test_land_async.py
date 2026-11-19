@@ -917,5 +917,6 @@ def test_a_rollup_killed_without_a_verdict_is_not_bisected(repo, monkeypatch, ve
         stdout.write(("[land] STOP: NEW failure\n" if verdict else "") + "[remote-pytest] serial: browser job\n")
         return 1
     tool.supervise(tree, snap, [], run=fake_land)
-    assert bool(split) is verdict
+    # 11-19: without a verdict the members still go back alone (empty reason), never bisected on a progress line
+    assert len(split) == 1 and ("NEW failure" in split[0]["reason"]) is verdict
     assert (tree.parent / (tree.name + ".stopped")).exists()
