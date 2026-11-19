@@ -579,6 +579,27 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     assert affected.ci_matrix(repo, selection)["include"] == matrix
 
 
+def _invocation_test_files(repo, invocation):
+    ignored = [p.removeprefix("--ignore=") for p in invocation if p.startswith("--ignore=")]
+    return {t for p in invocation if not p.startswith("-") for t in repo.test_files_under(p)
+            if not any(affected._under(t, path) for path in ignored)}
+
+
+def test_full_ci_runs_station_scheduling_on_its_own_required_runner():
+    repo = affected.Repo.load(ROOT)
+    suite = "middleware/core/gateway/test"
+    target = f"{suite}/test_station_camera_scheduling.py"
+    ignore = f"--ignore={target}"
+    matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    station = next(entry for entry in matrix if entry["name"] == "core-station-simulation")
+    assert station["invocations"] == [[target]]
+    assert station["gating"] and station["ros"] == "none"
+    for invocations in ([inv for entry in matrix for inv in entry["invocations"]],
+                        affected.lab_full_invocations(repo)):
+        assert any(suite in inv and ignore in inv for inv in invocations)
+        assert sum(target in _invocation_test_files(repo, inv) for inv in invocations) == 1
+
+
 def test_account_native_tests_are_required_in_full_and_source_affected_ci():
     repo = affected.Repo.load(ROOT)
     suite = 'operations/account/test'
@@ -597,13 +618,15 @@ def test_ci_full_matrix_reaches_every_registered_module_suite():
     """D-762 stage 1: CI's full tier runs every registered test file, bar the reasoned exclusions."""
     repo = affected.Repo.load(ROOT)
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
-    args = [p for e in matrix for inv in e["invocations"] for p in inv]
-    ignored = {p.removeprefix("--ignore=") for p in args if p.startswith("--ignore=")}
-    assert ignored == set(affected.CI_FULL_EXCLUDED), "every --ignore needs a CI_FULL_EXCLUDED reason"
+    invocations = [inv for e in matrix for inv in e["invocations"]]
+    ran = set().union(*(_invocation_test_files(repo, inv) for inv in invocations))
+    ignores = {p.removeprefix("--ignore=") for inv in invocations for p in inv if p.startswith("--ignore=")}
+    ignored = {t for p in ignores for t in (repo.test_files_under(p) or [p])}
+    excluded = set(affected.CI_FULL_EXCLUDED)
+    assert ignored - ran == excluded, "every ignored test without another invocation needs a CI_FULL_EXCLUDED reason"
     assert all(affected.CI_FULL_EXCLUDED.values())
-    ran = {t for p in args if not p.startswith("-") for t in repo.test_files_under(p)} - ignored
     registered = {t for p in affected._full_paths(repo) for t in repo.test_files_under(p)}
-    missing = sorted(registered - ran - set(affected.CI_FULL_EXCLUDED))
+    missing = sorted(registered - ran - excluded)
     assert not missing, f"registered suites CI's full tier never runs: {missing}"
     for suite in ("middleware/core/api/test", "middleware/robot_ui/pilot/test", "operations/apps/games/test"):
         assert any(affected._under(t, suite) for t in ran), suite
