@@ -135,8 +135,7 @@ def run_auto(
             row = {"observed": len(objects), "refused": refused}
             out["attempts"].append(row)
             if error or not usable:
-                kind = cell_diagnose.obstacle_type(refused)
-                row["error"] = error or ("no usable object" + (f" ({kind})" if kind else ""))
+                row["error"] = error or cell_diagnose.no_usable_object(refused)
                 tried["fail"] = {"stage": "choose", "class": row["error"]}
                 if not dry_run:
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
@@ -176,9 +175,7 @@ def run_auto(
                     bias_data, choices, work, failed_yaws, dest_view,
                 )
                 if not usable:
-                    row["refused"] = refused
-                    kind = cell_diagnose.obstacle_type(refused)
-                    row["error"] = f"no usable object ({kind})" if kind == "neighbour clearance" else "no usable object after the pivot"
+                    row.update(refused=refused, error=cell_diagnose.no_usable_object(refused, after_pivot=True))
                     return {**out, "result": "stopped: " + row["error"]}
                 target = usable[0]
                 cd.target(objects, usable, refused)

@@ -141,8 +141,9 @@ def test_measured_neighbour_clearance_refuses_a_pick_that_only_barely_fits(monke
     params["auto.min_jaw_margin_mm"] = 5.0
     assert fr.jaw_margin(mask, roi, px, narrower, params=params)["margin_mm"] is not None
     assert fr.jaw_margin(mask, roi, px, narrower, params=params, opening_width_mm=30)["margin_mm"] is None
-    obstacle = cell_diagnose.obstacle_type([{"why": "tangled blob"}, {"why": "neighbour clearance: 8 mm free"}])
-    cause = cell_diagnose.attempt_cause(f"stopped: no usable object ({obstacle})", pile_moved=True)
+    refused = [{"why": "tangled blob"}, {"why": "neighbour clearance: 8 mm free"}]
+    error = cell_diagnose.no_usable_object(refused, after_pivot=True)
+    cause = cell_diagnose.attempt_cause(f"stopped: {error}", pile_moved=True)
     assert cell_diagnose.RECOVERY[cause] == ["ask_person"]
 
 

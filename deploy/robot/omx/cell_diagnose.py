@@ -105,6 +105,13 @@ def obstacle_type(refused: list) -> str | None:
     return next((t for key, t in OBSTACLE_TYPES.items() if any(w.startswith(key) for w in whys)), None)
 
 
+def no_usable_object(refused: list, *, after_pivot: bool = False) -> str:
+    kind = obstacle_type(refused)
+    if after_pivot and kind != "neighbour clearance":
+        return "no usable object after the pivot"
+    return f"no usable object ({kind})" if kind else "no usable object"
+
+
 def diagnose(result: str, contact_z: float | None, surface_z: float | None, top_z: float | None,
              grasp_z: float | None, params=None) -> dict:
     """{cause, facts}: from the transfer result and the contact pose's FK height against the planned heights."""
