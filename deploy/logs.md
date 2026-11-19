@@ -4938,11 +4938,6 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 실물 프레임 재생에서 원 적합 n 7, rms 3.0 mm, 반경 28.1 mm, 버린 표시 0. 이어서 기존 bias 가드가 거절했다(-16.2, 25.1 mm = 29.9 mm > 25). 원격 pytest는 아직 돌리지 않았다.
 - gate 변화: 없음.
 
-## 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
-- 변경: `rosy_site_autoupdate.py`에 `hold --until-contains <sha> [<sha>...]` 추가. 매 실행마다 다음 설치 대상 signed 후보가 대기 sha 전부를 조상으로 두는지 이미 읽는 GitHub compare 증명(`is_newer`와 같은 판정)으로 확인하고, 증명되면 `hold-cleared` 로그와 함께 홀드가 저절로 풀리고 정상 설치 경로로 진행한다. 증명 못 함·후보 없음·네트워크 오류는 홀드 유지(fail closed). `site_update_io.py`의 `set_hold`·`load_update_state`에 `until_contains` 필드(1..8개 40-hex sha) 검증 추가, 옛 홀드 파일은 그대로 파싱. dry run은 홀드를 소비하지 않는다. README 자동 갱신 절에 사용법 문서화.
-- 증거: 새 단위 시험 `test/test_site_autoupdate_until_contains.py` 5건(전부 포함 시 설치·하나 빠지면 유지·증명 불가 시 유지·평범한 홀드 불변·CLI 저장/상태 표시/거부). 원격 pytest는 ralph 확인이 돌린다.
-- gate 변화: 없음.
-
 ## 2026-11-17 · uncommitted · fix(omx-post-eval): 마주 보는 yaw가 실제로 마주 볼 때만 짝으로 쓰고, 두 표시의 집게 쪽을 함께 정한다
 - 원인: arm_a post-eval 두 번(01:46 (0.115, 0.034), 17:15 (0.14, 0.039))이 모두 `yaw_pair_gap`으로 거절됐다. 두 visit 라이브러리의 above_pick 관절이 같았다(wrist_roll 8.775 둘 다). top-down IK가 yaw와 yaw+180을 같은 쌍둥이로 풀어 홈에 가까운 wrist_roll을 고르므로 요청 yaw 0/180은 같은 자세다. arm_a wrist_roll 범위(-31~62 단위, 약 167도)로는 180도 차이 자체가 닿지 않는다. raw (-8.8, 51.8) mm는 17:00 pivot yaw 5.6의 같은 집게 blob(-10.2, 52.1)과 1.5 mm 안에서 같다(같은 자세, 같은 집게). 쪽이 바뀐 짝이 아니었다.
 - 변경: `select_visit_yaws`가 각 yaw의 계획 라이브러리 above_pick 프레임 FK yaw를 읽어, 두 계획 yaw가 180 ± `post.yaw_pair_tol_deg` 안일 때만 짝으로 쓴다. 아니면 기존 1-yaw advisory 경로(또는 기하 없으면 skipped)로 간다. 진짜 마주 보는 짝은 `cell_jaw_side.label`(pivot `relabel`의 공동 판정을 떼어 낸 함수)로 두 표시의 집게 쪽을 함께 정한다. 같은 집게면 가운데가 중심이고, 쪽이 바뀌면 두 조합의 중심이 other_mm만큼 갈려 `jaw_sides_ambiguous`로 거절한다. `yaw_pair_gap`·`finger_identity`·rms·bias 가드는 그대로다. 모니터 행·결과에 `jaw_sides`를 남긴다.
@@ -4959,4 +4954,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 원인: 실물 arm_a TCP remap(17:47)이 14점을 모두 표시했지만 "jaw sides unlabelled: 14 remap marks, at most 12"로 거절됐다(2**n 전수 탐색의 상한). 두 blob이 보인 3점은 모두 y 0.08 한 줄이었다.
 - 변경: 판정을 `cell_remap_jaws.py`로 옮기고(`cell_jaw_side`가 다시 내보냄) 세 단계로 한다. (1) 두 blob만 본 점이 한 줄이 아닌 3개 이상이면 그 가운데로 지도를 맞추고 각 표시를 지도가 더 가깝게 놓는 집게로 정한다(두 집게까지 거리 차가 pivot.side_agree_mm 이하면 거절). (2) 아니면 12개 이하는 기존 전수 탐색. (3) 12개 초과면 짝 점과 가장 퍼진 점으로 12개 기준을 골라 전수 탐색으로 지도를 얻고 (1)의 가까운 집게 규칙으로 전체를 정한다. 그 뒤 전체로 다시 맞춘다. 거절 조건과 consensus·LOO는 그대로다.
 - 증거: 17:47 실물 14점 재생은 anchored 경로, 14점 모두 other, 짝 3, rms 1.95 mm(다음 조합 12.77), consensus 14/14, LOO max 8.3 / mean 3.99 mm. 이 지도로 17:00 pallet pivot을 재생하면 bias (-0.9, -4.1) = 4.2 mm(자유 g, rms 3.3) / 5.1 mm(tcp 기하). 11-15 22:25 8점은 pairs 경로로 전과 같은 판정(rms 3.06, LOO 9.6 / 4.37). 옛 한 집게 지도는 29.8 mm.
+- gate 변화: 없음.
+
+## 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
+- 변경: `rosy_site_autoupdate.py`에 `hold --until-contains <sha> [<sha>...]` 추가. 매 실행마다 다음 설치 대상 signed 후보가 대기 sha 전부를 조상으로 두는지 이미 읽는 GitHub compare 증명(`is_newer`와 같은 판정)으로 확인하고, 증명되면 `hold-cleared` 로그와 함께 홀드가 저절로 풀리고 정상 설치 경로로 진행한다. 증명 못 함·후보 없음·네트워크 오류는 홀드 유지(fail closed). `site_update_io.py`의 `set_hold`·`load_update_state`에 `until_contains` 필드(1..8개 40-hex sha) 검증 추가, 옛 홀드 파일은 그대로 파싱. dry run은 홀드를 소비하지 않는다. README 자동 갱신 절에 사용법 문서화.
+- 증거: 새 단위 시험 `test/test_site_autoupdate_until_contains.py` 5건(전부 포함 시 설치·하나 빠지면 유지·증명 불가 시 유지·평범한 홀드 불변·CLI 저장/상태 표시/거부). 원격 pytest는 ralph 확인이 돌린다.
 - gate 변화: 없음.
