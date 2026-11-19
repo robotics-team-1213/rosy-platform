@@ -224,3 +224,6 @@ def install_unload_release_routes(app, ctx) -> None:
                 task.cancel()
 
     app.router.lifespan_context = lifespan
+    from fleet.server.sitemap.pipeline_repark import install_repark_routes
+
+    install_repark_routes(app, ctx)  # a vehicle re-park closes here; DONE re-queues the cell task

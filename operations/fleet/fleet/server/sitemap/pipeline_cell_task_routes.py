@@ -167,7 +167,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cable_guard_micro": bool(spec.get("cable_guard_micro", dec_row["cable_guard_micro"])),
             "decision": dec_row,
             "preset": spec.get("preset"),
-            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index") if k in spec},
+            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root") if k in spec},
             "pose": pose,
             "status": "QUEUED",
             "created_at": round(time.time(), 3),
@@ -234,10 +234,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "presets": list(CELL_TASK_PRESETS.values()),
             "detected_displaced_site": app.state.detected_displaced_site,
             "cable_tangled": app.state.cable_tangled,
-            "human_safety": {
-                "human_detected": dict(app.state.human_detected),
-                "active_estop": _is_human_detected(),
-            },
+            "human_safety": {"human_detected": dict(app.state.human_detected), "active_estop": _is_human_detected()},
             "station_zones": {
                 "schema": zones_data["schema"],
                 "site_id": zones_data["site_id"],
@@ -250,6 +247,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "decisions": list(app.state.pipeline_decisions[-20:]),
             "pinky_tasks": list(app.state.pinky_tasks.values()),
             "auto_events": list(getattr(app.state, "cell_auto_events", None) or [])[-30:],
+            "repark_requests": dict(getattr(app.state, "repark_requests", None) or {}),
         }
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/cancel", dependencies=operator_guard)

@@ -167,6 +167,7 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
             "z_gate": {"verdict": "PASS" if placed else "FAIL"},
         },
         "raw": parsed,
+        **({"reach_fix": parsed["reach_fix"]} if parsed.get("reach_fix") else {}),
         **({"source_clearance": clearance} if clearance is not None else {}),
     }
     return {

@@ -227,6 +227,11 @@ def main(argv=None) -> int:
             except Exception as exc:
                 return {"objects": None, "error": str(exc)[:120]}
     before = look() if look else None
+    if before is not None and before.get("objects") == 0 and not args.dry_run:
+        result = {"result": "nothing_to_pick", "source": {"before": 0}}  # the camera sees no object: no motion
+        log({"end": True, **result})
+        print(json.dumps(result))
+        return 1
     result = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks,
                          dry_run=args.dry_run, log=log, demonstrated=demonstrated_range(args.policy_root, offset))
     if look:

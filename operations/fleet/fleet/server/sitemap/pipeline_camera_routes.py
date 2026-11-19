@@ -10,6 +10,7 @@ from fleet.site_rules import SiteRules
 
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap import pipeline_auto_events as auto_events
+from fleet.server.sitemap import pipeline_repark
 
 
 def _clear_label(body, key):
@@ -325,6 +326,8 @@ def install_cameras_routes(app, ctx) -> None:
             prev["last_task_id"] = task_id
             app.state.arm_live_states[arm_id] = prev
         _enrich_task_health(task)
+        if phase == "ABORTED":
+            pipeline_repark.on_abort(app.state, task, body.get("stage_result") or {}, time.time(), rules=rules())
         _save_ledger()
         return {"ok": True, "task": task, "gate": res["gate"]}
 

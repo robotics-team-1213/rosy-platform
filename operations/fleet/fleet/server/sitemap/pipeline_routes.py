@@ -149,6 +149,8 @@ def install_pipeline_routes(
             app.state.pinky_tasks.update(saved.get("pinky_tasks") or {})
             app.state.unload_releases = dict(saved.get("unload_releases") or {})
             app.state.cell_auto_events = list(saved.get("cell_auto_events") or [])[-100:]
+            app.state.repark_requests = dict(saved.get("repark_requests") or {})
+            app.state.repark_done = list(saved.get("repark_done") or [])
             app.state.pipeline_decisions = list(saved.get("pipeline_decisions") or [])[-100:]
             app.state.detected_displaced_site = saved.get("detected_displaced_site")
             if "cable_tangled" in saved:
@@ -170,6 +172,8 @@ def install_pipeline_routes(
                 "pinky_tasks": app.state.pinky_tasks,
                 "unload_releases": getattr(app.state, "unload_releases", {}),
                 "cell_auto_events": getattr(app.state, "cell_auto_events", None) or [],
+                "repark_requests": getattr(app.state, "repark_requests", {}),
+                "repark_done": getattr(app.state, "repark_done", []),
                 "pipeline_decisions": app.state.pipeline_decisions[-100:],
                 "detected_displaced_site": app.state.detected_displaced_site,
                 "cable_tangled": app.state.cable_tangled,
