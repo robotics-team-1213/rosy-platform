@@ -96,5 +96,6 @@ def test_route_404_409_and_done_through_the_ledger(tmp_path, monkeypatch):
     assert client.get("/api/fleet/pipeline/cell-tasks").json()["repark_requests"]["rosy_46"]["request_id"] == req["request_id"]
     path = f"/api/fleet/pipeline/repark/{req['request_id']}"
     ok = client.post(path, json={"state": "DONE"})
-    assert ok.status_code == 200 and "c-1-rp1" in app.state.omx_cell_tasks
+    assert ok.status_code == 200, ok.text
+    assert "c-1-rp1" in app.state.omx_cell_tasks
     assert client.post(path, json={"state": "DONE"}).status_code == 409
