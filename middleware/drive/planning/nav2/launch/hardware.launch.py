@@ -70,14 +70,18 @@ def _include_nav2(context, *args, **kwargs):
                 max_linear_mps=limits.max_linear_mps,
                 max_angular_rps=min(limits.max_angular_rps, selected_footprint.max_angular_rps),
             )
+    requested_linear = LaunchConfiguration("max_linear_mps").perform(context)
+    requested_angular = LaunchConfiguration("max_angular_rps").perform(context)
     validate_requested_limits(
-        limits,
-        max_linear_mps=LaunchConfiguration("max_linear_mps").perform(context),
-        max_angular_rps=LaunchConfiguration("max_angular_rps").perform(context),
+        limits, max_linear_mps=requested_linear, max_angular_rps=requested_angular
     )
     validate_nav2_parameters(source, limits)
+    # ROSY_MAX_LINEAR_MPS/ROSY_MAX_ANGULAR_RPS carry the approved speed; Nav2 plans inside it instead of CORE clipping afterwards.
     rewritten_nav = write_prefixed_nav2_params(
-        source, namespace, footprint_points=footprint_points
+        source,
+        namespace,
+        footprint_points=footprint_points,
+        speed=(float(requested_linear), float(requested_angular)),
     )
     if backend == "localization":
         fallback_map = os.path.join(nav_share, "map", "my_map.yaml")

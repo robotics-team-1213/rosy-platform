@@ -31,7 +31,7 @@ class Vision:
 
     def handle(self, method, path, body):
         if (method, path) == ('GET', '/vision/sources'):
-            return reply(['sample-camera'])
+            return reply({'sources': ['sample-camera']})   # same shape as Fleet /api/fleet/vision/sources
         if (method, path) == ('POST', '/vision/lease'):
             if body.get('source_id') != 'sample-camera':
                 return error(404, 'UNKNOWN_SOURCE')
