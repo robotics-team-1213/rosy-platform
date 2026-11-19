@@ -84,19 +84,29 @@ def install_pipeline_routes(
     }
     app.state.pending_clear_arms = getattr(app.state, "pending_clear_arms", None) or {}
     app.state.arm_live_states = getattr(app.state, "arm_live_states", None) or {
-        "arm_s": {"arm": "arm_s", "cell_id": "cell_s", "station_id": "S3", "joints_deg": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1], "folded": True, "temp_c": 31.0, "current_ma": 42.0, "voltage_v": 12.0, "updated_at": round(time.time(), 3), "source": "boot_default"},
-        "arm_a": {"arm": "arm_a", "cell_id": "cell_ab", "station_id": "S2", "joints_deg": [0.8, -62.5, 53.3, 51.7, 45.0, 50.0], "folded": True, "temp_c": 31.0, "current_ma": 38.0, "voltage_v": 12.0, "updated_at": round(time.time(), 3), "source": "boot_default"},
-        "arm_b": {"arm": "arm_b", "cell_id": "cell_ab", "station_id": "S5", "joints_deg": [-1.2, -61.0, 52.0, 51.0, -45.0, 50.0], "folded": True, "temp_c": 31.5, "current_ma": 40.0, "voltage_v": 12.0, "updated_at": round(time.time(), 3), "source": "boot_default"},
+        "arm_s": {"arm": "arm_s", "cell_id": "cell_s", "station_id": "S3", "joints_deg": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1], "folded": True, "temp_c": 31.0, "current_ma": 42.0, "voltage_v": 12.0, "updated_at": None, "source": "boot_default"},
+        "arm_a": {"arm": "arm_a", "cell_id": "cell_ab", "station_id": "S2", "joints_deg": [0.8, -62.5, 53.3, 51.7, 45.0, 50.0], "folded": True, "temp_c": 31.0, "current_ma": 38.0, "voltage_v": 12.0, "updated_at": None, "source": "boot_default"},
+        "arm_b": {"arm": "arm_b", "cell_id": "cell_ab", "station_id": "S5", "joints_deg": [-1.2, -61.0, 52.0, 51.0, -45.0, 50.0], "folded": True, "temp_c": 31.5, "current_ma": 40.0, "voltage_v": 12.0, "updated_at": None, "source": "boot_default"},
     }
     STATION_CAMERA_LINKS: dict[str, dict] = {
         "S2": {"place_id": "S2", "target_id": "arm_a", "cell_id": "cell_ab", "primary_cam": "arm_a_wrist", "secondary_cam": "top", "label": "S2 상차 · arm_a"},
         "S3": {"place_id": "S3", "target_id": "arm_s", "cell_id": "cell_s", "primary_cam": "arm_s_wrist", "secondary_cam": "arm_s_top", "label": "S3 하역 셔틀 · arm_s"},
         "S5": {"place_id": "S5", "target_id": "arm_b", "cell_id": "cell_ab", "primary_cam": "arm_b_wrist", "secondary_cam": "top", "label": "S5 적재·반출 · arm_b"},
-        "S1": {"place_id": "S1", "target_id": "rosy_46", "cell_id": "pinky", "primary_cam": "side", "secondary_cam": "top", "label": "S1 출구·반출대 · Pinky"},
-        "C1": {"place_id": "C1", "target_id": "rosy_46", "cell_id": "pinky", "primary_cam": "pinky", "secondary_cam": "side", "label": "C1 충전 스테이션 · rosy_46"},
-        "C2": {"place_id": "C2", "target_id": "rosy_45", "cell_id": "pinky", "primary_cam": "pinky", "secondary_cam": "side", "label": "C2 충전·임시칸 · rosy_45"},
-        "C3": {"place_id": "C3", "target_id": "rosy_42", "cell_id": "pinky", "primary_cam": "pinky", "secondary_cam": "side", "label": "C3 충전 스테이션 · rosy_42"},
+        "S1": {"place_id": "S1", "target_id": None, "cell_id": "pinky", "primary_cam": "side", "secondary_cam": "top", "label": "S1 출구·반출대 · Pinky"},
+        # Bay links name no robot here; station_camera_links_for fills the robot actually in the bay.
+        "C1": {"place_id": "C1", "target_id": None, "cell_id": "pinky", "primary_cam": "pinky", "secondary_cam": "side", "label": "C1 충전칸"},
+        "C2": {"place_id": "C2", "target_id": None, "cell_id": "pinky", "primary_cam": "pinky", "secondary_cam": "side", "label": "C2 충전칸"},
+        "C3": {"place_id": "C3", "target_id": None, "cell_id": "pinky", "primary_cam": "pinky", "secondary_cam": "side", "label": "C3 충전칸"},
     }
+
+    def station_camera_links_for(bays=None) -> dict[str, dict]:
+        """Station links with each charge bay pointed at the robot the bay plan sees in it."""
+        links = {pid: dict(link) for pid, link in STATION_CAMERA_LINKS.items()}
+        for row in bays or ():
+            link = links.get(row.get("bay"))
+            if link is not None and row.get("robot_id") and row.get("state") in ("arrived", "charging"):
+                link.update(target_id=row["robot_id"], label=f"{link['label']} · {row['robot_id']}")
+        return links
 
     def _arm_live_catalog() -> dict[str, dict]:
         now = time.time()
@@ -122,20 +132,23 @@ def install_pipeline_routes(
                     base["updated_at"] = round(t_stamp, 3)
                     base["source"] = "task_telemetry"
                     base["last_task_id"] = last_t.get("task_id")
-            upd = float(base.get("updated_at") or now)
-            age_s = max(0.0, round(now - upd, 1))
+            # The boot default is a placeholder pose, never an observation of the arm.
+            observed = base.get("source") != "boot_default" and base.get("updated_at") is not None
+            age_s = max(0.0, round(now - float(base["updated_at"]), 1)) if observed else None
             running_t = next((t for t in arm_tasks if t.get("status") == "RUNNING"), None)
             out[arm_id] = {
                 **base,
                 "arm": arm_id,
+                "observed": observed,
                 "age_s": age_s,
-                "fresh": bool(age_s <= 15.0 or running_t is not None),
+                "fresh": bool(observed and age_s <= 15.0),
                 "active_task_id": running_t["task_id"] if running_t else None,
                 "substage": (running_t.get("health_summary") or {}).get("substage") if running_t else ("Fold Home 대기" if base.get("folded", True) else "Place 완료"),
             }
         return out
     app.state.get_arm_live_catalog = _arm_live_catalog
     app.state.station_camera_links = STATION_CAMERA_LINKS
+    app.state.station_camera_links_for = station_camera_links_for
 
     storage_dir = _storage_dir()
     ledger_path = storage_dir / "rosy-pipeline-ledger.json"
