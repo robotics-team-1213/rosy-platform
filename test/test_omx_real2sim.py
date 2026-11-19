@@ -19,7 +19,7 @@ COVERED = dict(a=2, b=1)  # a container sits in this lane, the others show their
 
 
 def frame(layout, hide=(), skew=None):
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)  # the yellow table (hue 30, clear of the orange mask's < 22)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)  # the sim table (hue 21, BG_HUES)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
     for tag, pose in POSES.items():
@@ -180,7 +180,7 @@ def test_yellow_containers_and_bottom_clipped_v11_plates_are_measured():
     prev = dict(plates={t: p["lanes"] for t, p in first["plates"].items()}, shape=first["shape"])
     v11 = dict(step_deg=17.0, radius_m=.203)
     poses = dict(a=(-.0933, -.1676, 0.), b=(-.0906, .1668, 0.))
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
     for tag, pose in poses.items():
@@ -205,7 +205,7 @@ def test_yellow_containers_and_bottom_clipped_v11_plates_are_measured():
 
 def test_the_ship_is_found_where_its_hull_lies():
     layout = sites.Layout()
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     pose = (.1705, -.011, math.radians(.5))
     cv2.fillPoly(img, [np.round(r2s.ship_polygon(cam, layout, pose)).astype(np.int32)], (250, 215, 150))  # light blue hull
@@ -213,7 +213,7 @@ def test_the_ship_is_found_where_its_hull_lies():
     assert got["stern_x_m"] == pytest.approx(pose[0], abs=.002)
     assert got["centre_y_m"] == pytest.approx(pose[1], abs=.002)
     assert got["iou"] > .95
-    assert "error" in r2s.measure_ship(np.full((480, 640, 3), (60, 200, 200), np.uint8), layout)
+    assert "error" in r2s.measure_ship(np.full((480, 640, 3), (27, 132, 180), np.uint8), layout)
 
 
 def test_layout_takes_the_ship_from_a_snapshot(tmp_path):
@@ -277,7 +277,7 @@ def test_a_stage_takes_extra_choices_after_the_snapshots_so_they_win():
 
 def test_the_belt_request_asks_for_one_tape_reading_that_tells_the_two_belts_apart(tmp_path):
     (tmp_path / "frames").mkdir()
-    cv2.imwrite(str(tmp_path / "frames" / "top.jpg"), np.full((480, 640, 3), (60, 200, 200), np.uint8))
+    cv2.imwrite(str(tmp_path / "frames" / "top.jpg"), np.full((480, 640, 3), (27, 132, 180), np.uint8))
     s = snap()
     s["items"]["belt"] = dict(end_x_m=.205, centre_y_m=-.037, width_m=.085)
     s["taken_at"] = "2026-11-09T04:28:23+00:00"
@@ -339,7 +339,7 @@ def test_online_camera_anchor_calibration_and_servo_compensator_correct_drift():
     cam_moved = r2s.Camera(moved_dict, (480, 640))
 
     # Render synthetic top frame (pads 90 mm long as printed, the anchor length) from the perturbed camera with 6 dark lane pads, belt strip, and a skewed belt container
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
     pad_z = layout.deck_z + .0006
     for tag in ("a", "b"):
         for k in (1, 2, 3):
@@ -380,7 +380,7 @@ def test_tilted_bottom_clipped_temp_lane_and_servo_zero_offset_compensation():
     moved_dict = r2s_comp.perturbed_camera_dict(base_cam, **r2s_comp.DEFAULT_CAM_JITTER)
     cam_moved = r2s.Camera(moved_dict, (480, 640))
 
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
     bx, by = layout.belt_stop_x + .005, layout.belt_y
     belt_poly = [cam_moved.project((x, yy, layout.belt_top))
                  for x, yy in ((bx, by - .0425), (bx + .295, by - .0425), (bx + .295, by + .0425), (bx, by + .0425))]
@@ -680,10 +680,28 @@ def test_far_clip_drops_top_tier_far_edge_creep_past_the_seat_draw():
     assert math.dist(clipped, sa["xy"]) < .002 < math.dist(plain, sa["xy"])
 
 
-def test_container_blobs_keeps_a_joined_container_group_below_the_background_area_cut():
-    """A joined orange group (~9.6k px) must not count as background (11-18): only regions over 12000 px do."""
+def test_container_blobs_background_is_table_or_hull_colour_not_size():
+    """A joined orange group stays foreground at any size (11-18/19: 7-8 boxes beat the old 12000 px cut); table and hull stay background."""
     import omx_real2sim_comp_helpers as helpers
 
-    bgr = np.full((480, 640, 3), (200, 120, 40), np.uint8)  # saturated blue table, far over the cut
-    bgr[140:240, 290:386] = (0, 110, 255)  # orange group, 9600 px
-    assert any(col == "orange" for col, _ in helpers.container_blobs(bgr))
+    table, hull, orange = (27, 132, 180), (222, 200, 151), (53, 112, 219)  # BGR of the 11-18 render dump: table, hull, container
+    for w in (96, 200, 380):  # 9.6k, 20k and 38k px groups
+        bgr = np.full((480, 640, 3), table, np.uint8)
+        bgr[:, :120] = hull
+        bgr[140:240, 290:290 + w] = orange
+        assert any(col == "orange" and cv2.contourArea(c.astype(np.int32)) > .8 * 100 * w for col, c in helpers.container_blobs(bgr)), w
+    assert not helpers.container_blobs(np.full((480, 640, 3), table, np.uint8))  # a bare table gives no candidate
+    assert not helpers.container_blobs(np.full((480, 640, 3), hull, np.uint8))
+
+
+def test_bg_hues_match_the_sim_albedos():
+    import colorsys
+    import omx_real2sim_comp_helpers as helpers
+    try:
+        import omx_two_arm_world as world
+    except (ImportError, OSError):
+        pytest.skip("mujoco not usable here")
+
+    hue = lambda k: colorsys.rgb_to_hsv(*world.COLOURS[k][:3])[0] * 180
+    for k, (centre, half) in zip(("table", "ship"), helpers.BG_HUES):
+        assert abs(hue(k) - centre) <= 1 and abs(hue("container") - centre) > half
