@@ -529,3 +529,13 @@ def test_ci_exempts_known_failures_from_required_node_check(monkeypatch, tmp_pat
     with pytest.raises(SystemExit) as ended:
         exec(compile(python, str(WORKFLOW), "exec"), {})
     assert ended.value.code == 0
+
+
+def test_test_scope_step_selects_once_per_branch_and_takes_both_outputs_from_that_call():
+    import yaml
+
+    doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    run = {s["name"]: s for s in doc["jobs"]["scope"]["steps"]}["Test scope (D-436)"]["run"]
+    assert run.count("rosy_harness.py affected") == run.count("--ci-matrix") == 4  # pr/merge_group, push x2, other events
+    assert "--print" not in run, "the selection text comes from the --ci-matrix call's stderr, not a second selection"
+    assert 'echo "mode=' in run and 'echo "matrix=' in run

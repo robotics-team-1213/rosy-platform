@@ -390,6 +390,28 @@ def test_not_queued_keeps_one_pending_request_for_the_named_branch(repo, monkeyp
         clock[0] = 0.0
 
 
+def test_not_queued_preserves_allow_big_for_land_tick_relaunch(repo, monkeypatch):
+    """NOT QUEUED keeps --allow-big in pending-*.json without leaking it into land.py's argv."""
+    main, _ = repo
+    clock, state, launched = [0.0], {"full": "landing queue full (12/12 tickets)"}, []
+    monkeypatch.chdir(main)
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 0)
+    monkeypatch.setattr(tool, "precheck_branch", lambda *a: 0)
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": state["full"])
+    monkeypatch.setattr(tool.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(tool.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    monkeypatch.setattr(tool, "detach", lambda argv, log: launched.append(argv))
+    with pytest.raises(SystemExit) as stop:
+        tool.main(["--branch", "feat/x", "--allow-big", "cannot split UI bundle", "--tests", "auto"])
+    assert stop.value.code == 3
+    (path,) = tool._queue().queue_dir(main).glob("pending-*.json")
+    row = json.loads(path.read_text(encoding="utf-8"))
+    assert row["args"] == ["--tests", "auto", "--allow-big", "cannot split UI bundle"]
+    state["full"] = None
+    assert tool.main(["--branch", row["branch"], *row["args"]]) == 0
+    assert launched and launched[0][launched[0].index("--supervise") + 3:] == ["--tests", "auto"]
+
+
 def test_a_finished_landing_removes_the_older_snapshots_it_covers(repo, monkeypatch, tmp_path):
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "rosy-land"))
     main, dev = repo
