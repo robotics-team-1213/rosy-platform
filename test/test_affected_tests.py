@@ -1037,3 +1037,11 @@ def test_full_json_forces_the_actual_lab_plan_on_an_affected_only_change(sample,
     assert result["mode"] == "full"
     assert result["full_invocations"] == affected.lab_full_invocations(affected.Repo.load(sample), result["local_invocations"])
     assert ["test"] in result["full_invocations"]
+
+
+def test_ci_matrix_cli_also_prints_the_human_selection_to_stderr_without_changing_stdout(sample, capsys):
+    argv = ["affected", "--repo", str(sample), "--base", "HEAD", "--full", "--ci-matrix"]
+    assert harness.main(argv) == 0
+    captured = capsys.readouterr()
+    assert captured.out.count("\n") == 1 and json.loads(captured.out)["mode"] == "full"
+    assert "affected tier (D-436): mode=full" in captured.err
