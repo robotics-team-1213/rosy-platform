@@ -6,6 +6,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -235,7 +236,7 @@ def test_journal_restart_after_dispatch_never_replays(tmp_path):
     asyncio.run(scenario())
 
 
-def test_readable_case_adapter_can_use_cooperation_without_new_execution_path(tmp_path):
+def test_readable_case_adapter_can_use_cooperation_without_new_execution_path(tmp_path, monkeypatch):
     from fleet.server.deliberation_journal import DeliberationJournal
     from fleet.server.incident_deliberation import run_line_judgment, FleetBaseline
     from test_incident_deliberation import judgment
@@ -254,10 +255,14 @@ def test_readable_case_adapter_can_use_cooperation_without_new_execution_path(tm
                 response['opinion']['evidence_ids'] = list(request.evidence_ids)
                 return response
         port.exchange = BoundExchange()
-    result = asyncio.run(run_line_judgment(assessment, DeliberationJournal(tmp_path / 'fleet.db'),
-        supervisor(ports, primary={**reply(request), 'evidence_ids': list(request.evidence_ids)}), ports,
-        current=lambda: assessment, baseline=baseline, current_baseline=lambda: baseline))
-    assert result['state'] == 'CANDIDATE' and result['action_admissible'] is False
+    # The 1 s review budget runs on the event-loop clock; a loaded test host spent 8 s here (11-18) and got HOLD.
+    # This test is about the adapter path, not the budget, so the loop clock stands still while it runs.
+    with monkeypatch.context() as frozen:
+        frozen.setattr(time, 'monotonic', lambda: 1000.0)
+        result = asyncio.run(run_line_judgment(assessment, DeliberationJournal(tmp_path / 'fleet.db'),
+            supervisor(ports, primary={**reply(request), 'evidence_ids': list(request.evidence_ids)}), ports,
+            current=lambda: assessment, baseline=baseline, current_baseline=lambda: baseline))
+    assert result['state'] == 'CANDIDATE' and result['action_admissible'] is False, result
 
 
 def test_reuse_calls_only_missing_role_with_its_own_budget():
