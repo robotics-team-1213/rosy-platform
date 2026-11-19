@@ -48,6 +48,7 @@ import land_async  # noqa: E402
 import land_batch  # noqa: E402
 import land_merge  # noqa: E402
 import land_queue  # noqa: E402
+import land_rollup_failed  # noqa: E402
 import land_selection  # noqa: E402
 
 ROLLUP_MAX = int(os.environ.get("ROSY_ROLLUP_MAX", "12"))
@@ -417,6 +418,7 @@ def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume,
         halves = [[m] for m in members]
     else:
         halves = [members[: len(members) // 2], members[len(members) // 2:]]
+        land_rollup_failed.record(holder.parent, rollup, members, now)  # bn-L-2: auto rollups leave them out
     done = []
     # 11-14 04:50: both halves got now's stamp, so the second build found fix/land-rollup-<stamp> taken and crashed,
     # stranding its five members: each half is built one second after the one before
@@ -453,6 +455,8 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
         print(f"[rollup] a rollup is in flight: {busy[0]['branch']}", flush=True)
         return 0
     rows = candidates(live, repo)
+    if auto or argv[:1] != ["apply"]:  # bn-L-2: a candidate that failed a rollup lands alone
+        rows = land_rollup_failed.drop(repo, qdir.parent, rows, now)
     # Bundle fast affected landings on their own lane before falling back to mixed FULL rollups.
     members = whole(plan(repo, rows, tier_of=affected))
     if len(sources(members)) < 2 and not (auto and not MIXED):
