@@ -14,7 +14,7 @@ for _p in (Path(__file__).resolve().parents[3] / 'learning/registry/perception',
         sys.path.insert(0, str(_p))
 
 import convert  # noqa: E402
-from perception_runtime.perception.learned.manifest import OBJECT_CLASSES, load_manifest  # noqa: E402
+from core_common.perception_model import OBJECT_CLASSES, load_manifest  # noqa: E402
 
 
 def test_module_imports_without_torch_onnx_or_ultralytics():

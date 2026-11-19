@@ -44,7 +44,7 @@ from dataclasses import dataclass, replace
 import cv2
 import numpy as np
 
-from .manifest import ClassSpec, InputSpec
+from core_common.perception_model import ClassSpec, InputSpec
 
 NEAR_FIELD_FRACTION = 0.40
 DRIVABLE_MIN_FRACTION = 0.02
