@@ -636,3 +636,54 @@ def test_pace_seconds_track_budget_slows_low_kp_joints():
     t40, t20 = (c.pace_seconds("arm_b", q0, q1, 1.5, track_rad=budget) for c in (fast, slow))
     assert t20 == pytest.approx(1.5 * 0.10 * (6.3 + 0.25) / 20.0 / budget)
     assert t20 > t40 >= 1.5
+
+
+def test_far_clip_ignores_colour_past_the_far_edge_of_a_slot_box():
+    """A gold dock part joined to a ship-h1r0 box on the side away from the camera dragged the overhang correction 15 mm (11-18)."""
+    import omx_real2sim_comp_helpers as helpers
+
+    layout = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                          arm_bases="plate-centre", top_camera="2026-11-10")
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], (480, 640))
+    sa = layout.sites["ship-h1r0-l1"]
+    box_l, box_w, box_h = layout.box
+    top_z = sa["z"] + box_h / 2
+    yaw = sa["yaw"]
+    along, across = np.array([math.cos(yaw), math.sin(yaw)]), np.array([-math.sin(yaw), math.cos(yaw)])
+    far = -1.0 if (np.asarray(cam.eye[:2]) - sa["xy"]) @ across >= 0 else 1.0
+    face = [np.asarray(sa["xy"]) + s * along + t * across for s in np.linspace(-box_l / 2, box_l / 2, 19) for t in np.linspace(-box_w / 2, box_w / 2, 7)]
+    stuck = [np.asarray(sa["xy"]) + s * along + far * t * across for s in np.linspace(-.02, .02, 5) for t in np.linspace(box_w / 2, box_w / 2 + .016, 5)]
+    px = np.array([cam.project([*p, top_z]) for p in face + stuck], float)
+    plain = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"])[0]
+    clipped = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"], far_clip=True)[0]
+    assert math.dist(clipped, sa["xy"]) < .002 < .005 < math.dist(plain, sa["xy"])
+
+
+def test_far_clip_drops_top_tier_far_edge_creep_past_the_seat_draw():
+    """The top tier's far edge reads 6-7 mm past the slot (calibration scale at box height), more than the seat draw: it is clipped, not trusted (11-18)."""
+    import omx_real2sim_comp_helpers as helpers
+
+    layout = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                          arm_bases="plate-centre", top_camera="2026-11-10")
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], (480, 640))
+    sa = layout.sites["ship-h1r0-l2"]
+    box_l, box_w, box_h = layout.box
+    top_z = sa["z"] + box_h / 2
+    yaw = sa["yaw"]
+    along, across = np.array([math.cos(yaw), math.sin(yaw)]), np.array([-math.sin(yaw), math.cos(yaw)])
+    far = -1.0 if (np.asarray(cam.eye[:2]) - sa["xy"]) @ across >= 0 else 1.0
+    face = [np.asarray(sa["xy"]) + s * along + t * across for s in np.linspace(-box_l / 2, box_l / 2, 19) for t in np.linspace(-box_w / 2, box_w / 2, 7)]
+    creep = [np.asarray(sa["xy"]) + s * along + far * t * across for s in np.linspace(-.04, .04, 9) for t in np.linspace(box_w / 2 + .005, box_w / 2 + .007, 3)]
+    px = np.array([cam.project([*p, top_z]) for p in face + creep], float)
+    plain = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"])[0]
+    clipped = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"], far_clip=True)[0]
+    assert math.dist(clipped, sa["xy"]) < .002 < math.dist(plain, sa["xy"])
+
+
+def test_container_blobs_keeps_a_joined_container_group_below_the_background_area_cut():
+    """A joined orange group (~9.6k px) must not count as background (11-18): only regions over 12000 px do."""
+    import omx_real2sim_comp_helpers as helpers
+
+    bgr = np.full((480, 640, 3), (200, 120, 40), np.uint8)  # saturated blue table, far over the cut
+    bgr[140:240, 290:386] = (0, 110, 255)  # orange group, 9600 px
+    assert any(col == "orange" for col, _ in helpers.container_blobs(bgr))

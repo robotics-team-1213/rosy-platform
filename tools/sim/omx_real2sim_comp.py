@@ -144,7 +144,7 @@ def perceive_container(bgr: np.ndarray, sa: dict[str, Any], true_xy: Any, true_y
     exp_xy = sa["xy"] if sa["kind"] != "belt" else None
     cands = []
     for col, px in container_blobs(bgr):
-        xy, yaw, sz = _box_on_plane(cam, px, top_z, box_l, box_w, img_h, exp_yaw, exp_xy)
+        xy, yaw, sz = _box_on_plane(cam, px, top_z, box_l, box_w, img_h, exp_yaw, exp_xy, far_clip=True)
         if cam_comp.get("moved"):
             if sa["kind"] == "belt":
                 xy = (xy[0] - bres["dx"], xy[1] - bres["dy"])
@@ -159,7 +159,7 @@ def perceive_container(bgr: np.ndarray, sa: dict[str, Any], true_xy: Any, true_y
         return None
     _, xy, yaw, sz, col, best_px = min(cands, key=lambda x: x[0])
     if cam_comp.get("moved"):
-        raw_xy, raw_yaw, _ = _box_on_plane(cam_nom, best_px, top_z, box_l, box_w, img_h, exp_yaw, exp_xy)
+        raw_xy, raw_yaw, _ = _box_on_plane(cam_nom, best_px, top_z, box_l, box_w, img_h, exp_yaw, exp_xy, far_clip=True)
         cam_comp = dict(cam_comp, raw_xy_err_mm=round(math.dist(raw_xy, true_xy) * 1000.0, 2),
                         raw_yaw_err_deg=round(abs(math.degrees(r2s.fold(raw_yaw - true_yaw))), 2),
                         correction_mm=round(math.dist(xy, raw_xy) * 1000.0, 2))
