@@ -55,6 +55,12 @@ def test_refuses_publish_only_clone_per_d868(monkeypatch, tmp_path):
         pr_land.check_coexistence(tmp_path, "a" * 40)
 
 
+def test_refuses_missing_base_instead_of_head_caret(monkeypatch, tmp_path):
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, env=None, check=True: "")
+    with pytest.raises(SystemExit, match="neither origin/main nor main"):
+        pr_land.check_coexistence(tmp_path, "a" * 40)
+
+
 def test_ci_runnable_excludes_lab_only_omx_browser_alone_and_sim():
     assert pr_land.ci_runnable(["operations/world/test"])
     assert not pr_land.ci_runnable(["middleware/devices/omx/adapter/test"])

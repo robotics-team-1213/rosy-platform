@@ -487,6 +487,8 @@ def test_merge_group_and_push_run_scoped_affected_against_their_base():
 @pytest.mark.parametrize("paths,output,expected", [
     (["test/test_req.py::test_must_run"], "test/test_req.py::test_must_run SKIPPED\n1 skipped in 0.12s\n", 1),
     (["test/test_req.py::test_must_run"], "test/test_req.py::test_must_run PASSED\n1 passed in 0.12s\n", 0),
+    (["test/test_req.py::test_p"], "test/test_req.py::test_p[a] PASSED\n1 passed in 0.10s\n", 0),
+    (["test/test_req.py::TestC"], "test/test_req.py::TestC::test_m PASSED\n1 passed in 0.10s\n", 0),
     (["operations/fleet/test"], "5 skipped in 0.20s\n", 1),
 ])
 def test_ci_fails_when_required_node_or_suite_passes_zero_items(monkeypatch, paths, output, expected):
@@ -503,3 +505,27 @@ def test_ci_fails_when_required_node_or_suite_passes_zero_items(monkeypatch, pat
     with pytest.raises(SystemExit) as ended:
         exec(compile(python, str(WORKFLOW), "exec"), {})
     assert ended.value.code == expected
+
+
+def test_ci_exempts_known_failures_from_required_node_check(monkeypatch, tmp_path):
+    import json
+    import sys
+    import yaml
+    from types import SimpleNamespace
+
+    monkeypatch.syspath_prepend(str(ROOT / "test"))
+    import known_failures
+
+    kf = tmp_path / "known_failures.txt"
+    kf.write_text("test/test_req.py::test_known_bug  # expected pre-existing\n", encoding="utf-8")
+    monkeypatch.setattr(known_failures, "LIST", kf)
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    script = next(step["run"] for step in steps if step["name"] == "Test (matrix suite, D-436)")
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    monkeypatch.setenv("ROSY_INVOCATIONS", json.dumps([["test/test_req.py::test_known_bug"]]))
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs:
+                        SimpleNamespace(stdout=iter(["FAILED test/test_req.py::test_known_bug - bug\n1 failed in 0.10s\n"]),
+                                        wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), "exec"), {})
+    assert ended.value.code == 0

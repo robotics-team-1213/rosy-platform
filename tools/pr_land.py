@@ -95,7 +95,9 @@ def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> s
         )
     origin_main = _run(["git", "rev-parse", "--verify", "-q", "origin/main"], cwd, check=False)
     local_main = _run(["git", "rev-parse", "--verify", "-q", "main"], cwd, check=False)
-    base = origin_main or local_main or "HEAD^"
+    base = origin_main or local_main
+    if not base:
+        raise SystemExit("[pr-land] neither origin/main nor main exists; fetch origin/main first (refusing HEAD^ fallback)")
     if not allow_backlog and origin_main and local_main and origin_main != local_main:
         anc = subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", local_main, head], capture_output=True)
         if anc.returncode == 0:
