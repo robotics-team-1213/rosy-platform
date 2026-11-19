@@ -154,6 +154,9 @@ def set_status(ticket: Path, status: str, **fields) -> None:
             info = json.loads(ticket.read_text(encoding="utf-8"))
         except FileNotFoundError as error:
             raise QueueError(f"landing ticket disappeared: {ticket.name}; run land.py again to rejoin the queue") from error
+        if status == "preparing" and not info.get("admitted"):  # the first time this ticket leaves the line
+            fields["admitted"] = True
+            land_events.emit("admitted", ticket=ticket.name)
         tmp = ticket.with_name(f".{ticket.name}.tmp")
         tmp.write_text(json.dumps({**info, **fields, "status": status}), encoding="utf-8")
         os.replace(tmp, ticket)

@@ -271,7 +271,8 @@ def test_account_changes_control_login_and_sample_authority():
     assert call(engine, 'PATCH', target, {'revision': 1, 'role': 'viewer',
                 'grants': [{'resource':'site:sample', 'capabilities':['fleet.read']}]})[0] == 200
     assert call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample-reviewer', 'password': 'CHANGE_ME'})[0] == 204
-    assert call(engine, 'POST', '/api/fleet/estop', {})[0] == 403
+    assert call(engine, 'POST', '/api/fleet/cancel-all', {})[0] == 403
+    assert call(engine, 'POST', '/api/fleet/estop', {})[0] == 200  # D-1043: a viewer may stop
     call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     assert call(engine, 'PATCH', target, {'revision': 2, 'enabled': False})[0] == 200
     assert call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample-reviewer', 'password': 'CHANGE_ME'})[0] == 401
