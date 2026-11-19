@@ -202,13 +202,13 @@ def choose(
         elif not square_entry(entries, o):
             entry = entries[o["object"]]
             ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
-            room = finger_room(mask, roi, pixel_fn, o, ends, p)
+            room = finger_room(mask, roi, pixel_fn, o, ends, p, opening_width_mm=across(entry))
             if room["margin_mm"] is None:
                 o, room = next(
                     (
                         (e, r)
                         for e in reachable_ends(o, entries[o["object"]], p)
-                        if (r := finger_room(mask, roi, pixel_fn, e, None, p))["margin_mm"] is not None
+                        if (r := finger_room(mask, roi, pixel_fn, e, None, p, opening_width_mm=across(entry)))["margin_mm"] is not None
                     ),
                     (o, room),
                 )
@@ -241,7 +241,7 @@ def choose(
             fresh = [
                 y for y in (base_yaw, base_yaw + 90.0) if all(abs(wrap90(y - f)) > 5.0 for f in failed_yaws)
             ] or [base_yaw, base_yaw + 90.0]
-            rooms = [(y, finger_room(mask, roi, pixel_fn, o, y + closing, p)) for y in fresh]
+            rooms = [(y, finger_room(mask, roi, pixel_fn, o, y + closing, p, opening_width_mm=across(entry))) for y in fresh]
             yaw, room = next(((y, r) for y, r in rooms if r["margin_mm"] is not None), (None, rooms[0][1]))
             if yaw is None:
                 reason = "neighbour clearance" if require_clearance else "no finger gap"
