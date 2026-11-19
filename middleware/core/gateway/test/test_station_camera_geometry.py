@@ -55,7 +55,7 @@ def test_rendered_marker_observes_station_relative_to_robot(pipeline_sources, po
     assert seen.pose.yaw == pytest.approx(-yaw, abs=0.02)
 
 
-def test_marker_outside_view_or_blank_frame_is_lost_not_guessed(pipeline_sources):  # noqa: F811
+def test_blank_frame_is_lost_not_guessed(pipeline_sources):  # noqa: F811
     from rosy_vision.station_observation import observe_jpeg
     import cv2
     import numpy as np
