@@ -182,7 +182,7 @@ def make_worker():
 
     def make(*, configs=(), lens=None, detector=None, error=None, clock=None):
         client = _Client(configs, error)
-        extra = {} if clock is None else {"clock": clock}
+        extra = {"clock": clock or (lambda: 100.0)}  # frames are captured at ~100 s: never stale
         worker = TrackWorker(camera=CAMERA, ingest=_Ingest(lens), client=client,
                              detector=detector or _Detector(), **extra)
         workers.append(worker)

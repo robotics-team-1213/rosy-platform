@@ -20,7 +20,8 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 | `project.py` | Marker observations to site map (uses the `games` homography) |
 | `publish.py` | Source-token-only Fleet sighting client |
 | `worker.py` | Latest-frame camera-to-Fleet pipeline, no queues |
-| `track/` | D-457 markerless blob tracking (`background_blob.py`, `worker.py`, `fleet_client.py`), D-587 `marker_sightings.py` (identified robot markers through the approved record become sightings) and D-472 `led_identity.py` (pure on/off/on LED blink detector; the worker sends Fleet a numbers-only verdict per identity challenge) |
+| `post_guard.py` | Age re-check (0.8 s) before every Fleet POST plus posted/dropped_stale/post_errors counters; the `vision` stats line prints them every 30 s |
+| `track/` | D-457 markerless blob tracking (`background_blob.py`, `worker.py`, `fleet_client.py`), display-only head tracker (`anchor_head_tracker.py`; `anchor_feed.py` runs it at most 1 Hz and POSTs its states to Fleet from a single-flight task after the detections), D-587 `marker_sightings.py` (identified robot markers through the approved record become sightings) and D-472 `led_identity.py` (pure on/off/on LED blink detector; the worker sends Fleet a numbers-only verdict per identity challenge) |
 | `vision_config.py` | Validated camera/map config; secrets resolved by env name |
 | `pairing_sync.py` | Paired camera credentials synced from Fleet (token hashes only, D-341) |
 | `rectify.py` | Display-only lens/plane rectification for preview (D-318) |
@@ -37,6 +38,7 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 - Keep OpenCV out of `protocol.py`, `ingest.py`, `publish.py`; it belongs in `detect.py` and the proposal modules.
 - Latest-only everywhere: do not add frame queues. Never trust the phone clock; use the receiver's own time minus `age_ms`.
 - Proposals (field, map fit) and rectification are display-only; they never alter the raw frame used for sightings or become policy evidence.
+- Every Fleet POST goes through `PostGuard.post` (stale payloads are dropped and counted, never queued); the httpx clients keep `keepalive_expiry` at 30 s, below Fleet's 75 s and Caddy's idle pool. A Pinky pose without its own marker in the frame is a home guess: never a sighting, never in the anchors POST.
 - Never log or forward tokens; the worker publishes with a source token only.
 
 ### Testing Requirements

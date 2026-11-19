@@ -2,7 +2,7 @@
 symptom: "test_omx_cell_field.py가 전체(FULL) 부하 실행에서만 intermittently 실패하고 단독(alone)에서는 통과한다 — state[\"t\"] stale 거부"
 discovered: 2026-11-15
 category: test-failures
-tags: [omx, cell_field, max-gap-s, fixture, flaky-test, landing-gate]
+tags: [omx, cell_field, max-gap-s, fixture, flaky-test, landing-gate, liveness, deadline, gateway]
 ---
 
 # `marking_cell` 픽스처의 고정 `time.time()` 스탬프가 부하 시 `MAX_GAP_S` (0.5s)를 넘어 stale 실패로 위장한다
@@ -48,3 +48,13 @@ tags: [omx, cell_field, max-gap-s, fixture, flaky-test, landing-gate]
   setup 시점에 `time.time()`을 고정하지 말고 응답 시점에 오프셋(`time.time() + (t - created)`)으로 계산한다.
 - 정상 실행을 살리기 위해 `MAX_GAP_S`를 키우거나 stale 거부 테스트를 완화하지 않고,
   명시적 시간 오프셋 검증을 그대로 둔 채 픽스처 시계만 일관되게 맞춘다.
+## 같은 계열 사례 (2026-11-18)
+
+두 시험이 착지 사전 시험에서 NEW 로 멈췄고, 같은 후보 sha 의 단독 원격 재실행은 통과했다. 둘 다 운영 코드의 시간 창은 그대로 두고 시험 쪽 시계만 고쳤다(커밋 `f22cfd55aa`, main 에는 병합 `9b988da637` 로 들어감).
+
+- `middleware/core/gateway/test/test_control_unit_core_pipeline.py`: 부하 호스트에서 준비 단계만 74 s 걸려 합성 odometry 가 `HARDWARE_LIVENESS_S`(15 s, `contracts/foundation/core_common/domain/capabilities.py`)를 넘겼다. `_hardware_presence` 가 "silent" 를 돌려 `navigation.goal_navigation is not advertised` 로 실패했다. 해결: dispatch 직전에 `services.state.set_velocity(0.0, 0.0)` 로 odometry 를 새로 넣는다.
+- `test/test_omx_arm_session_carry.py::test_the_deadline_never_interrupts_a_fold_in_progress`: 0.05 s 데드라인이 느린 호스트에서 carry 가 명령에 들어가기 전에 지나 `entered.wait(5)` 가 시간 초과했다. 해결: `ArmGoals.timing` 으로 `clock` 을 주입하고(`arm_session_carry.py` 가 kwargs 로 넘김), carry 가 명령 안에 들어간 뒤에야 시계를 60 s 앞당긴다.
+
+검증: 같은 커밋으로 두 파일을 포함한 7파일 원격 실행 exit 0, 묶음 착지 사전 시험에서 재발 없음.
+
+일반 규칙: 시험이 짧은 실시간 창(신선도, 생존, 데드라인)을 넘기는 순간을 표현하려면 sleep 이나 작은 실제 시간 값에 기대지 말고, 주입한 시계를 시험이 원하는 시점에 앞당긴다. 부하 호스트에서는 준비 단계만으로 수십 초가 걸릴 수 있다.
