@@ -37,24 +37,45 @@ def expired_pem(certificate, key) -> bytes:
 
 
 def download_package(pin):
+    #: 2026-11-11: archive.ubuntu.com was unreachable from the lab network for hours (curl 000 on
+    #: both test PCs while github.com answered 200) and every test using this fixture failed a FULL
+    #: tier. kernel.org's Ubuntu mirror serves the same pool path, so an /ubuntu/ pin falls back to
+    #: it after its three attempts; the size/sha256 pin keeps whichever source answers honest. The
+    #: URL itself never enters the diagnostics (the pin query may carry a secret).
+    candidates = [pin["url"]]
+    if "/ubuntu/" in pin["url"]:
+        candidates.append("https://mirrors.edge.kernel.org/ubuntu/" + pin["url"].split("/ubuntu/", 1)[1])
     failures = []
-    for attempt in range(1, 4):
-        try:
-            with urlopen(pin["url"], timeout=30) as response:
-                package = response.read(pin["size_bytes"] + 1)
-                digest = hashlib.sha256(package).hexdigest()
-                observed = (f"length={len(package)} sha256={digest} status={response.status} "
-                            f"content-length={response.headers.get('Content-Length')} "
-                            f"content-type={response.headers.get('Content-Type')}")
-            if len(package) == pin["size_bytes"] and digest == pin["sha256"]:
-                if failures:
-                    warnings.warn("Pinned RAUC package recovered after " + "; ".join(failures), RuntimeWarning)
-                return package
-        except (OSError, IncompleteRead) as error:
-            observed = type(error).__name__
-        failures.append(f"attempt {attempt}: {observed}")
+    for url in candidates:
+        for attempt in range(1, 4):
+            try:
+                with urlopen(url, timeout=30) as response:
+                    package = response.read(pin["size_bytes"] + 1)
+                    digest = hashlib.sha256(package).hexdigest()
+                    observed = (f"length={len(package)} sha256={digest} status={response.status} "
+                                f"content-length={response.headers.get('Content-Length')} "
+                                f"content-type={response.headers.get('Content-Type')}")
+                if len(package) == pin["size_bytes"] and digest == pin["sha256"]:
+                    if failures:
+                        warnings.warn("Pinned RAUC package recovered after " + "; ".join(failures), RuntimeWarning)
+                    return package
+            except (OSError, IncompleteRead) as error:
+                observed = type(error).__name__
+            failures.append(f"attempt {attempt}: {observed}")
     raise AssertionError(f"Pinned RAUC package unavailable: expected length={pin['size_bytes']} "
                          f"sha256={pin['sha256']}; " + "; ".join(failures))
+
+
+def pinned_package(pin):
+    staged = os.environ.get("ROSY_TEST_RAUC_DEB")
+    if not staged:
+        return download_package(pin)
+    with Path(staged).open("rb") as stream:
+        package = stream.read(pin["size_bytes"] + 1)
+    assert len(package) == pin["size_bytes"] and hashlib.sha256(package).hexdigest() == pin["sha256"], (
+        "staged RAUC package does not match pinned size and SHA-256"
+    )
+    return package
 
 
 @pytest.fixture(scope="session")
@@ -64,7 +85,7 @@ def rauc_tool(tmp_path_factory):
     assert platform.machine() in PACKAGES, "no verified native RAUC test package for this architecture"
     assert shutil.which("dpkg-deb") and shutil.which("mksquashfs") and shutil.which("openssl")
     pin = PACKAGES[platform.machine()]
-    package = download_package(pin)
+    package = pinned_package(pin)
     directory = tmp_path_factory.mktemp("isolated-rauc")
     archive = directory / "rauc.deb"
     archive.write_bytes(package)

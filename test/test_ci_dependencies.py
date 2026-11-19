@@ -14,12 +14,13 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
+@pytest.mark.parametrize('rest', [[], ['middleware/core/gateway/test']])
 @pytest.mark.parametrize('target', [
     'applications/fleet/test',
     'applications/fleet/test/test_sample_browser.py',
     'applications/fleet/test/test_sample_browser.py::test_sample_login',
 ])
-def test_ci_activates_standalone_app_browsers(monkeypatch, target):
+def test_ci_activates_standalone_app_browsers(monkeypatch, target, rest):
     import json
     import yaml
     from types import SimpleNamespace
@@ -33,7 +34,8 @@ def test_ci_activates_standalone_app_browsers(monkeypatch, target):
     script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
     python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
     calls = []
-    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([['middleware/core/gateway/test', target]]))
+    exclude = '--ignore=test/test_platform_g1_timing.py'
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([[*rest, target, exclude]]))
     monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
     monkeypatch.delenv('ROSY_BROWSER_TESTS', raising=False)
     monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
@@ -41,10 +43,12 @@ def test_ci_activates_standalone_app_browsers(monkeypatch, target):
     with pytest.raises(SystemExit) as ended:
         exec(compile(python, str(WORKFLOW), 'exec'), {})
     assert ended.value.code == 0
-    assert len(calls) == 2
-    assert 'ROSY_RUN_BROWSER_TESTS' not in calls[0][1]
-    assert target in calls[1][0]
-    assert calls[1][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
+    assert len(calls) == 1 + len(rest)
+    if rest:
+        assert calls[0][0][3:5] == [*rest, exclude]
+        assert 'ROSY_RUN_BROWSER_TESTS' not in calls[0][1]
+    assert calls[-1][0][3:5] == [target, exclude]
+    assert calls[-1][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
 
 
 @pytest.mark.parametrize("selection", [
@@ -479,3 +483,25 @@ def test_merge_group_runs_the_full_tier_against_the_group_base():
     test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
     assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
     assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
+
+
+def test_every_ci_apt_update_uses_the_runner_mirror_with_retries():
+    lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    updates = [i for i, line in enumerate(lines) if line.strip().startswith("apt-get update")]
+    assert updates
+    for i in updates:
+        prep = lines[i - 1]
+        assert "azure.archive.ubuntu.com" in prep and "Acquire::Retries" in prep, lines[i]
+
+
+def test_omx_cell_tests_run_on_the_cells_opencv_not_the_containers():
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
+    step = next(s for s in steps if s["name"] == "Install OMX cell vision runtime")
+    assert "test/test_omx_cell" in step["if"]
+    assert "deploy/robot/omx/requirements-cell.lock" in step["run"]
+    assert "opencv-python-headless" in step["run"]
+    lock = (ROOT / "deploy/robot/omx/requirements-cell.lock").read_text(encoding="utf-8").splitlines()
+    assert any(line.startswith("opencv-python-headless==") for line in lock)
+    assert any(line.startswith("numpy==") for line in lock)
