@@ -26,6 +26,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_lerobot_shadow as lrs  # noqa: E402
+from omx_adapter.chunk_library import GUARD_UNITS_PER_S  # noqa: E402
 
 MARGIN = 3.0  # units outside the reviewed per-joint range still allowed (sensor and settle noise)
 JOINTS = len(lrs.JOINT_NAMES)
@@ -86,7 +87,7 @@ def shape_chunk(chunk, start, low, high, fastest: float) -> list[list[float]]:
     path = np.vstack([np.asarray(start, dtype=float)[None, :], arr])
     out = []
     for a, b in zip(path[:-1], path[1:]):
-        n = max(1, math.ceil(float(np.abs(b[:5] - a[:5]).max()) / fastest - 1e-9))
+        n = max(1, math.ceil(float(np.abs(b - a).max()) / fastest - 1e-9))  # all six joints, as the runner checks
         out.extend((a + (b - a) * k / n).tolist() for k in range(1, n + 1))
     return out
 
@@ -95,6 +96,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                 demonstrated=None) -> dict:
     library = json.loads(library_path.read_text(encoding="utf-8"))
     low, high, fastest = envelope(library)
+    fastest = min(fastest, GUARD_UNITS_PER_S / float(library.get("fps", 30)))  # the runner refuses any frame step past this
     if demonstrated is not None:
         low, high = widen(low, high, *demonstrated)
     closed = float(library.get("jaw_empty_stop", library["gripper_closed"]))
@@ -128,7 +130,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
             log({"command": "park", **_status(cell.act("park"))})
             return {"result": "refused", "at": n, "reason": loaded.get("error")}
         ran = cell.act("run policy")
-        log({"command": "run policy", **_status(ran)})
+        log({"command": "run policy", **_status(ran), **_moved(state, ran, frames.get("top"), cell, work, n)})
         if ran.get("contact"):
             if "overload-hold" not in (ran.get("error") or ""):
                 log({"command": "retreat", **_status(cell.act("retreat"))})
@@ -139,8 +141,9 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                 log({"command": "park", **_status(cell.act("park"))})
             return {"result": "fault" if ran.get("fault") else "refused", "at": n, "error": ran.get("error")}
         jaws = [f[5] for f in frames_cell]
-        held = held or min(jaws) <= closed + 2.0
-        released = held and jaws[-1] > closed + 10.0  # closed on something, then opened: the place (OMX_RUN_STOP_ON_PLACE)
+        # held only on the runner's measured hold: empty jaws parked at closed read as closed (11-19 false release)
+        held = held or bool(ran.get("holding"))
+        released = held and jaws[-1] > closed + 10.0  # held something, then opened: the place (OMX_RUN_STOP_ON_PLACE)
         if released:
             break
     if dry_run:
@@ -148,6 +151,23 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
     parked = cell.act("park")
     log({"command": "park", **_status(parked)})
     return {"result": "released" if released else "chunks_done", "held": held, "parked": bool(parked.get("ok"))}
+
+
+def _moved(state, ran: dict, top_before, cell, work: Path, n: int) -> dict:
+    """Did the arm move: joint travel the encoders measured and how much the top view changed (mean |diff|, 0-255)."""
+    out = {"joint_travel": float(np.abs(np.asarray(ran.get("state") or state, dtype=float) - state).max())}
+    try:
+        import cv2
+
+        top_after = cell.frame("top")
+        out["top_change"] = round(float(np.abs(top_before.astype(np.int16) - top_after.astype(np.int16)).mean()), 2)
+        shots = work / "policy-frames"
+        shots.mkdir(exist_ok=True)
+        cv2.imwrite(str(shots / f"{int(time.time())}-{n}-before.jpg"), top_before)
+        cv2.imwrite(str(shots / f"{int(time.time())}-{n}-after.jpg"), top_after)
+    except Exception as exc:  # camera evidence never stops the episode
+        out["top_change_error"] = str(exc)[:120]
+    return out
 
 
 def _status(status: dict) -> dict:
@@ -166,6 +186,9 @@ def main(argv=None) -> int:
     parser.add_argument("--operator", required=True, help="named person who approved this run")
     parser.add_argument("--person-at-switch", action="store_true", help="D-911: a person stands at the power switch")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--catalog", type=Path, help="with --roi and --site: count the source's objects before and after")
+    parser.add_argument("--roi", type=int, nargs=4)
+    parser.add_argument("--site")
     args = parser.parse_args(argv)
     if not args.dry_run and not args.person_at_switch:
         parser.error("moving the arm needs --person-at-switch (D-911)")
@@ -188,8 +211,29 @@ def main(argv=None) -> int:
                                      "policy_revision": args.policy_revision, "offset": offset, **row}, default=str) + "\n")
 
     log({"start": True, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch, "max_chunks": args.max_chunks})
+    look = None
+    if args.catalog and args.roi and args.site:
+        import cell_auto_pick_plan
+
+        calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text(encoding="utf-8"))
+        catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
+        catalog = catalog.get("objects", catalog) if isinstance(catalog, dict) else catalog
+
+        def look():  # camera only, as cell_task_exec.source_clearance; a failure reads as unknown
+            try:
+                _img, _mask, objects, error = cell_auto_pick_plan.observe(cell, config, calibration, args.site,
+                                                                          tuple(args.roi), catalog)
+                return {"objects": None if error else len(objects), "error": error}
+            except Exception as exc:
+                return {"objects": None, "error": str(exc)[:120]}
+    before = look() if look else None
     result = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks,
                          dry_run=args.dry_run, log=log, demonstrated=demonstrated_range(args.policy_root, offset))
+    if look:
+        after = look()
+        result["source"] = {"before": before.get("objects"), "after": after.get("objects")}
+        if None not in result["source"].values():
+            result["took_one"] = result["source"]["after"] < result["source"]["before"]
     log({"end": True, **result})
     print(json.dumps(result))
     return 0 if result["result"] in ("released", "chunks_done", "dry_run") else 1

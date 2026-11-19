@@ -90,13 +90,20 @@ GRASP_THEN_RELEASE = [[[5, -50, 45, 48, -5 + 46.7, 46.0]], [[5, -50, 45, 48, -5 
 
 
 def test_episode_runs_policy_chunks_then_parks_after_release(tmp_path):
-    cell, rows = Cell(), []
+    cell, rows = Cell({"run policy": {"ok": True, "holding": True}}), []
     off = [0, 0, 0, 0, 46.7, 0]
     result = drive.run_episode(cell, Policy(GRASP_THEN_RELEASE), write_lib(tmp_path), tmp_path, offset=off,
                                max_chunks=3, dry_run=False, log=rows.append)
     assert result["result"] == "released" and result["parked"]
     assert [c.split()[0] for c in cell.commands] == ["state", "load", "run", "state", "load", "run", "park"]
     assert cell.commands[2] == "run policy"
+
+
+def test_closed_empty_jaws_are_not_a_release(tmp_path):
+    """11-19 real arm: jaws parked at closed then opened read as 'released' with nothing held; only the runner's hold counts."""
+    result = drive.run_episode(Cell(), Policy(GRASP_THEN_RELEASE), write_lib(tmp_path), tmp_path,
+                               offset=[0, 0, 0, 0, 46.7, 0], max_chunks=2, dry_run=False, log=lambda row: None)
+    assert result["result"] == "chunks_done" and not result["held"]
 
 
 def test_policy_sees_model_units(tmp_path):
