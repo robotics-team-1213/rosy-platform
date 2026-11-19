@@ -124,6 +124,11 @@ def install_berth_parking_routes(
             bay_id = infer_bay_id(robot_id)
         spec = BAY_DOCK_SPECS[bay_id]
         forward_m = max(0.10, min(0.35, float(body.get("forward_m") or spec["undock_distance_m"])))
+        if mode != "core_line" and not isinstance(body.get("execute_physical"), bool):
+            # The teleop berth park drives the robot backwards with no rear proximity stop: an
+            # operator must ask for it (or for plan-only) in words (2868c99d7b review).
+            raise HTTPException(status_code=400, detail={
+                "code": "EXECUTE_PHYSICAL_REQUIRED", "message": "say execute_physical true or false"})
         execute_physical = bool(body.get("execute_physical", True))
 
         bay_pose = spec["bay_pose"]

@@ -35,13 +35,17 @@ class FakeWorld:
 class FakeTeacher:
     """Phases and container moves only: one target per phase, so the scheduler's measured-progress gates see progress happen."""
 
-    def __init__(self, layout, long=None, stray_after=None):
-        self.layout, self.world, self.long, self.stray_after = layout, FakeWorld(layout), long or {}, stray_after
+    def __init__(self, layout, long=None, stray_after=None, block=()):
+        self.layout, self.world, self.long, self.stray_after, self.block = layout, FakeWorld(layout), long or {}, stray_after, set(block)
 
     def step_gen(self, data, step, here, ctx):
         for _ in range(self.long.get(step["id"], 0)):  # steps the test wants to outlive a peer's pick
             ctx.phase = "approach"
             yield np.zeros(6)
+        if step["id"] in self.block:  # the pick refused before the jaws closed (the real one: top camera saw nothing, or unreachable)
+            ctx.phase = "approach"
+            yield np.zeros(6)
+            return dict(step=step["id"], container=step["container"], arm=step["arm"], result="blocked")
         for phase in PHASES:
             ctx.phase = phase
             if phase == "carry" and step["from"] == "belt":  # lifted: over the belt end, but far above it
@@ -75,8 +79,8 @@ def miss_task():
         dict(id="m1", container="bar-1", **{"from": "belt"}, to="ship-h1r1-l0", arm="arm_a", zones=[["mid"], ["a"]])])
 
 
-def run(task, faults=None, long=None, stray_after=None):
-    teacher = FakeTeacher(LAYOUT, long=long, stray_after=stray_after)
+def run(task, faults=None, long=None, stray_after=None, block=()):
+    teacher = FakeTeacher(LAYOUT, long=long, stray_after=stray_after, block=block)
     for cid, site in task.get("start", {}).items():
         teacher.world.put(None, cid, site)
     return run_concurrent_steps(teacher, None, task, dict(task.get("start", {})), faults=faults)
@@ -143,3 +147,12 @@ def test_a_non_belt_step_still_waits_for_its_after_pick():
     task["steps"][3]["after_pick"] = ["p1"]  # r1 (arm_a) may start only once arm_b has lifted bar-1 off the belt
     _, timing, stopped, _ = run(task)
     assert stopped is None and timing["r1"]["start_s"] >= timing["p1"]["picked_s"]
+
+
+def test_a_belt_pick_the_arm_could_not_take_clears_the_ledger_and_the_run_goes_on():
+    rows, _, stopped, extra = run(make_task(), block={"p2"})
+    assert stopped is None and {r["step"]: r["result"] for r in rows} == dict(p2="blocked", q1="pass", p1="pass", r1="pass", q2="pass")
+    assert [e["event"] for e in extra["belt_events"]] == ["reserve", "placed", "arrived", "grasped", "cleared"] * 2
+    assert extra["invariants"] == PASSING
+    rows, _, stopped, extra = run(miss_task(), block={"m1"})  # the last delivery refused: the run ends done, not "deadlock: []"
+    assert stopped is None and [r["result"] for r in rows] == ["blocked"] and extra["belt_events"][-1]["event"] == "cleared"

@@ -570,5 +570,10 @@
   {
     "commit": "27d01cb24f5d4588d528c1b15805f86eae59669d",
     "reason": "Independent D-430 review 2026-11-13 (Codex round 2 APPROVE after round-1 REJECT fixed in 27d01cb24f; GLM 5.3 APPROVE; author robot-ec not a reviewer): no preset pins/synthesized odom, queued not reported as sent, no raw /goal fallback, berth success only on measured stop face, helpers tagged. No device acceptance. Record: docs/validation/fleet-real-site-pose-safety-review-2026-11-13/result.md"
+  },
+  {
+    "commit": "2868c99d7b21b7290b265d3b46c8bc739c998ef3",
+    "original_commit": "2868c99d7b21b7290b265d3b46c8bc739c998ef3",
+    "reason": "Independent reviewer agent safety review, 2026-11-18 (D:/DevTemp/pitin-panel/review-2868c99d7b.md CHANGES -> fix 729d35ee57 -> review-2868c99d7b-2.md PASS conditional): Fleet teleop berth park; execute_physical now required in words (400 EXECUTE_PHYSICAL_REQUIRED), failed runs never teach or pin the dock; no rear proximity stop on the short in-bay reverse (0.04 m/s, 10 s cap, EMERGENCY exit, teleop 0 on exit) - run only with an operator at the robot's e-stop; drop this exemption when a rear proximity stop lands; no device acceptance."
   }
 ]

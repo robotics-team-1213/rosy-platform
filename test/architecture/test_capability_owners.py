@@ -11,9 +11,14 @@ against GitHub here.
 
 from __future__ import annotations
 
+import subprocess
+from collections import Counter
 from pathlib import Path
 
+import pytest
 import yaml
+
+from affected_repo import app_of, landing_apps
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = yaml.safe_load((ROOT / "tools" / "harness" / "platform_parts.yaml").read_text(encoding="utf-8"))
@@ -133,3 +138,61 @@ def test_signing_paths_stay_lead_only():
                     " (deploy/robot image lanes keep their §5.1 joint review)"
                 )
     assert bad == [], bad
+
+def test_every_root_and_subtree_names_a_known_app():
+    apps = MANIFEST["apps"]
+    assert len(apps) == len(set(apps)) and {"core", "repo"} <= set(apps), apps
+    subtrees = MANIFEST["app_subtrees"]
+    bad = [f"{r['path']}: {r.get('app')!r}" for r in MANIFEST["roots"] if r.get("app") not in apps]
+    bad += [f"{path}: {app!r}" for path, app in subtrees.items() if app not in apps or not any(ROOT.glob(path))]
+    assert bad == [], bad
+    entries = [r["path"] for r in MANIFEST["roots"]] + list(subtrees)
+    # Unique entry paths make the deepest match unique, so every path has exactly one app.
+    assert len(entries) == len(set(entries)), "a path is either a root or an app subtree, once"
+
+
+def test_every_tracked_path_maps_to_exactly_one_app():
+    tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True,
+                             encoding="utf-8", check=True).stdout.splitlines()
+    counts = Counter(app_of(path, MANIFEST) for path in tracked)
+    assert set(counts) == set(MANIFEST["apps"]), f"apps without a tracked file or unknown apps: {counts}"
+
+
+def test_app_of_takes_the_deepest_entry_and_defaults_to_core():
+    parts = {"roots": [{"path": "deploy", "app": "core"}, {"path": "ops/fleet", "app": "site-fleet"}],
+             "app_subtrees": {"deploy/robot/omx": "omx-cell"}}
+    assert app_of("deploy/robot/omx/x.py", parts) == "omx-cell"
+    assert app_of("deploy/robot/omxy/x.py", parts) == "core"
+    assert app_of("ops/fleet/a/b.py", parts) == "site-fleet"
+    assert app_of("README.md", parts) == "core"
+
+
+def test_app_of_reads_glob_subtrees_and_neutral_first():
+    parts = {"roots": [{"path": "tools", "app": "core"}, {"path": "tools/sim", "app": "core"},
+                       {"path": "ops/fleet", "app": "site-fleet"}],
+             "app_subtrees": {"tools/sim/omx_*": "omx-cell", "tools/land*.py": "tooling"},
+             "app_neutral": ["**/logs.md", "docs/adr/*"]}
+    assert app_of("tools/sim/omx_world.py", parts) == "omx-cell"
+    assert app_of("tools/sim/export_site_map.py", parts) == "core"
+    assert app_of("tools/land_queue.py", parts) == "tooling"
+    assert app_of("ops/fleet/logs.md", parts) == "neutral"  # neutral beats the deeper root
+    assert landing_apps(["ops/fleet/logs.md", "docs/adr/D-1.md", "ops/fleet/a.py", "tools/sim/omx_w.py"],
+                        parts) == ["omx-cell", "site-fleet"]
+    assert landing_apps(["docs/adr/D-1.md"], parts) == []
+
+
+@pytest.mark.parametrize(("path", "app"), [
+    # D-1036 addendum 2: gate code and shipped shared code stay core; never-deployed paths are repo.
+    # 2026-11-19 (release-split-1118): the landing/publish gate is tooling, omx sim tools and root omx tests are
+    # omx-cell, folder notes and ADRs are neutral (the panel's 48 h sample of misattributed landing paths).
+    ("tools/land.py", "tooling"), ("tools/publish_main.py", "tooling"), ("tools/urgent_lane.py", "tooling"),
+    ("tools/harness/platform_parts.yaml", "tooling"), ("tools/hooks/land_record.py", "tooling"),
+    ("test/test_land_events.py", "tooling"), ("tools/sim/omx_two_arm_world.py", "omx-cell"),
+    ("test/test_omx_two_arm_world.py", "omx-cell"), ("tools/sim/export_site_map.py", "core"),
+    (".github/workflows/ci.yml", "core"), ("tools/release/x.py", "core"), ("deploy/hosts/services.yaml", "core"),
+    ("test/flaky_quarantine.txt", "core"), ("operations/fleet/logs.md", "neutral"), ("tools/index.md", "neutral"),
+    ("docs/adr/D-1036-publish-evidence-from-nightly-full.md", "neutral"), ("test/conftest.py", "repo"),
+    ("test/architecture/test_capability_owners.py", "repo"), ("tools/remote/remote_pytest.py", "repo"),
+    ("test/learning/test_x.py", "learning")])
+def test_never_deployed_paths_are_repo_and_gates_stay_core(path, app):
+    assert app_of(path, MANIFEST) == app

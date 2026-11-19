@@ -4,7 +4,7 @@ name: review-gate
 # merge_group reports success without counting: approval is a PR-stage rule and the queue needs the check.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   pull_request_review:
     types: [submitted, dismissed]
   merge_group:

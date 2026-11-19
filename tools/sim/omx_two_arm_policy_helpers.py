@@ -337,8 +337,10 @@ class Driver:
         start_z, peak = world.pose(data, c)[0][2], 0.
         goal = goal_vector(self.layout, plan, {k: v for k, v in here.items() if k != c}, self.goal_mode) if self.has_goal else None
         self.policy.reset()
+        track = deque(maxlen=getattr(self, "track", 0))  # --track-history: per step, padded with its first frame (as the skill eval does)
         for _ in range(self.longest[plan["id"]] + 15):
             state, images = observe(world, data)
+            state = policy_state(self, teacher, state, track)
             if sink:
                 sink(sheet(images))
             action = self.act(state, images, goal)
@@ -348,16 +350,21 @@ class Driver:
         row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], lifted=bool(peak > .015))
         return teacher.verdict(data, plan, row, before)
 
-    def concurrent(self, task, seed, sink=None):
-        """A whole two-arm task with the model driving both arms."""
+    def concurrent(self, task, seed, sink=None, disturb=None, stop_on_fail=True):
+        """A whole two-arm task with the model driving both arms. `disturb` = (zero_error_deg, servo_lag[, physics]) gives the seed the errors of
+        a sub-skill evaluation (the model then commands in reported angles); `stop_on_fail=False` keeps judging the rows after a failed step."""
         import omx_two_arm_plan as plan_mod
         L, w = self.layout, self.world
         teacher = teaching.Teacher(w, seed=seed, pick_vision=self.pick_vision, belt_skew=self.belt_skew, cam_jitter=self.cam_jitter)
+        if disturb:
+            skills.disturb(teacher, seed, *disturb)
+            teacher.privileged = False
         here = dict(task.get("start", {}))
         data = teacher.fresh(here)
         queue = {a: [s for s in task["steps"] if s["arm"] == a] for a in L.arms}
         status, held, running, rows, prev_active = {}, {}, {}, [], ()
         self.policy.reset()
+        track = deque(maxlen=getattr(self, "track", 0))  # one 12-wide error history for both arms, restarted wherever the policy is reset
         with self.torch.inference_mode():
             for _ in range(sum(self.longest[f"{task['name']}/{s['id']}"]["frames"] + 15 for s in task["steps"])):
                 for arm in L.arms:
@@ -392,8 +399,10 @@ class Driver:
                 active = tuple((a, running[a]["step"]["id"]) for a in sorted(running))
                 if active != prev_active:
                     self.policy.reset()
+                    track.clear()
                     prev_active = active
-                state, images = observe(w, data)
+                state, images = observe(w, data, teacher.zero_error if disturb else None)
+                state = policy_state(self, teacher, state, track)
                 if sink:
                     sink(sheet(images))
                 goal = goal_of({arm: r["block"] for arm, r in running.items()}, goal_size(L, self.goal_mode)) if self.has_goal else None
@@ -419,7 +428,7 @@ class Driver:
                     held = {z: i for z, i in held.items() if i != s["id"]}
                     teacher.off_stand(data, s, here)
                     del running[arm]
-                if rows and rows[-1]["result"] != "pass":
+                if stop_on_fail and rows and rows[-1]["result"] != "pass":
                     break
         passed = sum(row["result"] == "pass" for row in rows)
         return rows, dict(task=task["name"], seed=seed, total=len(task["steps"]), passed=passed, completed=passed == len(task["steps"]), last=rows[-1] if rows else {})
