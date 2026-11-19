@@ -3,6 +3,7 @@ import affected_exclusive
 
 # Leave room for the remote runner's SSH command and options.
 MAX_INVOCATION_CHARS = 3000
+MAX_GROUP_PATHS = 28
 IGNORED_BASENAMES = frozenset({'__init__.py', 'conftest.py'})
 SERIAL_FILE = 'tools/remote/serial_suites.txt'
 
@@ -42,7 +43,9 @@ def pack(repo, paths: list[str]) -> list[list[str]]:
         alone = is_serial(path, serial)
         for members, seen, kind in groups:
             conflict = any(name in seen and seen[name] != source for name, source in names.items())
-            if kind == alone and not conflict and sum(len(p) + 1 for p in members) + len(path) + 1 <= MAX_INVOCATION_CHARS:
+            if (kind == alone and not conflict
+                    and (alone or len(members) < MAX_GROUP_PATHS)
+                    and sum(len(p) + 1 for p in members) + len(path) + 1 <= MAX_INVOCATION_CHARS):
                 members.append(path)
                 seen.update(names)
                 break

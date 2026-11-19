@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1052 | 셀프 리뷰 1급 지원, 블로킹 FULL 폐지(Zero-FULL), Merge Queue 직행. [전문](../adr/D-1052-self-review-and-zero-full-ci.md) | Accepted (2026-11-19, 사용자 결정) |
 | D-1035 | 셀 팔 리스, Calibration 보정 작업 API, AI 판정 기록으로 팔 incident 해제(D-971 해제 주체 변경). [전문](../adr/D-1035-calibration-arm-lease-jobs-and-ai-incident-assessment.md) | Accepted (2026-11-17, 사용자 결정; 배포·실물 수용 별도) |
 | D-1024 | OMX 학습 정책의 실물 입회 시험을 하루 안에 연다 — D-793 단계를 줄이되 장치 한계·정지·두 사람 확인은 그대로 둔다. [전문](../adr/D-1024-omx-learned-policy-supervised-real-trial-fast-track.md) | Accepted (2026-11-14, 사용자 지시; 구현·원격 시험, 실물 수용 없음) |
 | D-1034 | 원격·분리 제어 유닛의 중앙 Rosy Account 연동, 터널 브리지, 기계 토큰 분리 및 공용 브라우저 세션. [전문](../adr/D-1034-paired-control-unit-central-account-wiring.md) | Accepted (2026-11-15, 사용자 결정; `cell-a`↔`rosy-fleet-r` 실물 연동 검증·`shared/web` 통합 반영, 서명 compose 템플릿·R 이미지 갱신 별도) |
