@@ -200,7 +200,7 @@ camera before starting the unit, and verify advancing fresh frames and measured
 format after start. Arm drivers and their admission profiles remain separate.
 
 The camera needs OpenCV's `cv2` (`python3-opencv`), NumPy, `core_common` and
-the deployed `camera_quality` helper. Native units set their source import paths;
+the deployed `core_common.camera_quality` helper (`deploy/robot/omx/camera_quality.py` is a shim). Native units set their source import paths;
 they do not require `rclpy`, `sensor_msgs` or `cv_bridge`. The optional standalone
 preview is not provisioned by the disabled adapter profile or workstation image.
 For boot activation, enable the user units and verify `loginctl show-user
@@ -880,7 +880,7 @@ gripper camera in the `front` slot: `"unit": "arm_a_wrist"`); the tuner then che
 for the measured cameras, not universal camera defaults. The tuner checks the
 actual control ranges. Put `ROSY_CAMERA_PIPELINE_ROOT=<absolute-source-directory>`
 in `~/.config/rosy/omx-camera-readiness.env`; that directory must contain
-`commissioning_view.py`, `camera_quality.py`, `camera_environment.py`, `camera_readiness.py` and
+`commissioning_view.py`, `camera_quality.py` (shim; needs `contracts/foundation` of the same revision), `camera_environment.py`, `camera_readiness.py` and
 `camera-view-receive.xml` from the same revision. Use a release directory such as
 `~/.local/share/rosy/omx-camera-pipeline/releases/<full sha>/`, not a `~/rosy-test` copy:
 `tools/remote/update_status.py` reports a `~/rosy-test` source as `ADHOC`. The viewer loads
