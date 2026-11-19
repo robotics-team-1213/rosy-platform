@@ -241,6 +241,46 @@ def test_world_261026_auto_handles_glare_split_and_charger_occlusion():
     assert get_latest_lens_model(1280, 720, "paint-r2") is None
 
 
+
+def test_world_261026_auto_refines_from_a_seed_after_the_camera_moved():
+    """2026-11-18 20:06 frame: camera re-aimed ~4 deg and a robot over bay 3. The tracer's own first guess fails;
+    seeded with Vision's paint-registrar proposal (D-375) it fits and the bays land on the map."""
+    import sys
+    import cv2
+    import numpy as np
+
+    vision_dir = str(ROOT / "operations/overhead")
+    if vision_dir not in sys.path:
+        sys.path.insert(0, vision_dir)
+    from rosy_vision.world_261026_auto import auto_calibrate_and_trace_world_261026
+
+    img = cv2.imread(str(ROOT / "operations/overhead/test/data/ceiling_pinky/moved0.jpg"))
+    assert auto_calibrate_and_trace_world_261026(img) is None
+    proposal = np.array([259.69124,42.66428,493.75608,-143.109,-351.92314,398.48827,-0.19053,0.13838,1]).reshape(3, 3)
+    fit = auto_calibrate_and_trace_world_261026(img, seed_map_to_image=proposal)
+    assert fit is not None and fit["rms_m"] < 0.005
+    places = {p["id"]: p["x"] for p in fit["places"]}
+    for bay, x in (("C1", -0.429), ("C2", -0.1915), ("C3", 0.0377)):
+        assert abs(places[bay] - x) < 0.015, (bay, places[bay])
+
+
+def test_world_261026_auto_fits_real_frames_well_inside_the_rms_cut():
+    """The divider end points are not a residual: on real night and noon frames they doubled RMS to ~12 mm,
+    next to the 15 mm cut, so a little glare tipped good frames into fit_rejected."""
+    import sys
+    import cv2
+
+    vision_dir = str(ROOT / "operations/overhead")
+    if vision_dir not in sys.path:
+        sys.path.insert(0, vision_dir)
+    from rosy_vision.world_261026_auto import auto_calibrate_and_trace_world_261026
+
+    for name in ("f0.jpg", "f3.jpg", "f6.jpg", "day0.jpg"):
+        fit = auto_calibrate_and_trace_world_261026(
+            cv2.imread(str(ROOT / "operations/overhead/test/data/ceiling_pinky" / name)))
+        assert fit is not None and fit["rms_m"] < 0.006, (name, fit and fit["rms_m"])
+
+
 def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypatch, capsys):
     mod = _load_module()
     token_file = tmp_path / "auto-calibration.token"
@@ -261,7 +301,7 @@ def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypat
         "cur_map": {"map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
     })
     outcomes = [
-        {"cal_updated": False, "map_updated": False, "map_activate_status": 409, "deferred": True},
+        {"cal_updated": False, "map_updated": False, "map_sync": "deferred", "map_sync_status": 409},
         {"cal_updated": True, "calibration_revision": 2, "map_updated": True, "map_version": 2},
     ]
     monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: outcomes.pop(0))
@@ -271,7 +311,7 @@ def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypat
         capsys.readouterr()
     assert mod.main([]) == 0
     deferred = json.loads(capsys.readouterr().out.strip())
-    assert deferred["status"] == "deferred" and deferred["map_activate_status"] == 409
+    assert deferred["status"] == "deferred" and deferred["map_sync_status"] == 409
     saved = json.loads(state_file.read_text(encoding="utf-8"))
     assert len(saved["history"]) == 5 and saved["last_approved_at"] is None
 
@@ -322,3 +362,63 @@ def test_spread_is_read_on_traced_places_not_off_screen_corners():
     assert held["decision"] == "hold" and held["reason"] == "unstable_series"
     approved = mod.decide(swinging, now=100_000.0, spread_m=mod.places_spread_m(tight))
     assert approved["decision"] == "approve" and approved["reason"] == "drift_exceeded"
+
+
+def test_forbidden_map_sync_still_applies_calibration_and_records_it(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    token_file = tmp_path / "auto-calibration.token"
+    token_file.write_text("secret-bearer-token\n", encoding="utf-8")
+    state_file = tmp_path / "state.json"
+    monkeypatch.setenv("ROSY_AUTO_CALIBRATION_TOKEN_FILE", str(token_file))
+    monkeypatch.setattr(mod, "STATE_FILE", state_file)
+    ident = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    monkeypatch.setattr(mod, "run_vision_solve", lambda: {
+        "ok": True, "width": 1280, "height": 720, "frame_seq": 10, "rms_m": 0.002,
+        "map_to_image": [1.0, 0.0, -0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "image_to_map": [1.0, 0.0, 0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "places": [{"id": "p1", "x": 0.13, "y": 0.2}], "edges": [],
+    })
+    monkeypatch.setattr(mod, "fetch_fleet_current", lambda _t: {
+        "cur_cal": {"calibration_revision": 1, "map_to_image": ident},
+        "cur_map": {"map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
+    })
+    monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: {
+        "cal_updated": True, "calibration_revision": 2, "map_updated": False,
+        "map_sync": "forbidden", "map_sync_status": 403})
+    for _ in range(4):
+        assert mod.main([]) == 0
+        capsys.readouterr()
+    assert mod.main([]) == 0
+    cap = capsys.readouterr()
+    out = json.loads(cap.out.strip())
+    assert out["status"] == "updated" and out["map_sync"] == "forbidden" and out["map_sync_status"] == 403
+    assert "map sync forbidden (HTTP 403)" in cap.err
+    saved = json.loads(state_file.read_text(encoding="utf-8"))
+    assert saved["map_sync"] == "forbidden" and saved["cal_revision"] == 2 and saved["history"] == []
+    assert saved["map_sync_refused_runs"] == 1
+
+
+def test_a_map_sync_refused_three_times_in_a_row_fails_the_run(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    state_file = tmp_path / "state.json"
+    token_file = tmp_path / "auto-calibration.token"
+    token_file.write_text("secret-bearer-token\n", encoding="utf-8")
+    monkeypatch.setenv("ROSY_AUTO_CALIBRATION_TOKEN_FILE", str(token_file))
+    monkeypatch.setattr(mod, "STATE_FILE", state_file)
+    ident = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    monkeypatch.setattr(mod, "run_vision_solve", lambda: {
+        "ok": True, "width": 1280, "height": 720, "frame_seq": 10, "rms_m": 0.002,
+        "map_to_image": [1.0, 0.0, -0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "image_to_map": [1.0, 0.0, 0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "places": [{"id": "p1", "x": 0.13, "y": 0.2}], "edges": [],
+    })
+    monkeypatch.setattr(mod, "fetch_fleet_current", lambda _t: {
+        "cur_cal": {"calibration_revision": 1, "map_to_image": ident},
+        "cur_map": {"map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
+    })
+    monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: {
+        "cal_updated": False, "map_updated": False, "map_sync": "forbidden", "map_sync_status": 403})
+    codes = [mod.main([]) for _ in range(7)]
+    capsys.readouterr()
+    assert codes == [0, 0, 0, 0, 0, 0, 1]  # 4 holds fill the series, then refusals 1, 2, 3
+    assert json.loads(state_file.read_text(encoding="utf-8"))["map_sync_refused_runs"] == 3

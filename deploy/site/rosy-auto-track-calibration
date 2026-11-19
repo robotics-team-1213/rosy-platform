@@ -17,6 +17,7 @@ TOKEN_FILE_ENV = "ROSY_AUTO_CALIBRATION_TOKEN_FILE"
 CORNERS_M = ((-1.22, -0.61), (1.22, -0.61), (1.22, 0.61), (-1.22, 0.61))
 DRIFT_THRESHOLD_M = 0.015
 MAP_PLACE_THRESHOLD_M = 0.012
+MAP_SYNC_REFUSED_FAIL_AFTER = 3  # consecutive refused map syncs before the run exits non-zero (visible in systemd)
 STABILITY_WINDOW = 5
 STABLE_SPREAD_M = 0.025
 MIN_APPROVAL_INTERVAL_S = 10 * 60
@@ -244,8 +245,21 @@ if jpeg is None:
 else:
     img = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
     fit = auto_calibrate_and_trace_world_261026(img)
+    seed = None
     if fit is None:
-        print(json.dumps({"ok": False, "reason": "fit_rejected"}))
+        # A re-aimed camera or a robot over an outer bay defeats the tracer's own first guess.
+        # Vision's paint registrar (D-375) still finds the track: refine from its accepted fit.
+        lease = signer.issue(principal_id='auto-calib-seed', source_id='ceiling_north', ttl_s=60)
+        with httpx.Client(verify='/run/secrets/site_ca', timeout=20.0) as client:
+            r = client.get('https://vision:8095/api/vision/sources/ceiling_north/map-proposal',
+                           headers={'Authorization': f'Bearer {lease}', 'Host': 'vision'})
+        body = r.json() if r.status_code == 200 else {}
+        if body.get("accepted") and body.get("proposal"):
+            seed = "map-proposal"
+            fit = auto_calibrate_and_trace_world_261026(
+                img, seed_map_to_image=np.array(body["proposal"]["map_to_image"], np.float64))
+    if fit is None:
+        print(json.dumps({"ok": False, "reason": "fit_rejected", "seed": seed}))
     else:
         h, w = img.shape[:2]
         print(json.dumps({
@@ -253,6 +267,7 @@ else:
             "width": w,
             "height": h,
             "frame_seq": frame_seq,
+            "seed": seed,
             "rms_m": round(float(fit["rms_m"]), 5),
             "map_to_image": [round(float(v), 8) for v in fit["map_to_image"].ravel()],
             "image_to_map": [round(float(v), 8) for v in fit["image_to_map"].ravel()],
@@ -309,18 +324,23 @@ with httpx.Client(verify='/run/secrets/site_ca', timeout=15.0) as client:
             if exp_rev:
                 put_body["expected_revision"] = exp_rev
             put_r = client.put('https://fleet:8090/api/fleet/site-map/draft', headers=headers, json=put_body)
-            put_r.raise_for_status()
-            new_rev = put_r.json()["revision"]
-            act_post = client.post('https://fleet:8090/api/fleet/site-map/activate',
-                                   headers=headers, json={{"expected_revision": new_rev}})
-            if act_post.status_code == 200:
+            act_post = None
+            if put_r.status_code not in (403, 409):
+                put_r.raise_for_status()
+                act_post = client.post('https://fleet:8090/api/fleet/site-map/activate',
+                                       headers=headers, json={{"expected_revision": put_r.json()["revision"]}})
+            refused = put_r if act_post is None else act_post
+            if refused.status_code == 200:
                 out["map_updated"] = True
-                out["map_version"] = act_post.json().get("version")
+                out["map_version"] = refused.json().get("version")
+            elif refused.status_code in (403, 409):
+                # A map-permission or revision problem must not block the calibration below.
+                out["map_sync"] = "forbidden" if refused.status_code == 403 else "deferred"
+                out["map_sync_status"] = refused.status_code
             else:
-                out["map_activate_status"] = act_post.status_code
-                out["deferred"] = True
+                refused.raise_for_status()
 
-    if needs_cal and not out.get("deferred"):
+    if needs_cal:
         score = max(0.95, min(0.995, round(1.0 - solved['rms_m'] * 8.0, 3)))
         body = {{
             "source_id": "ceiling_north",
@@ -436,6 +456,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if outcome["decision"] != "approve":
         _save_state(STATE_FILE, {
+            "map_sync_refused_runs": int(state.get("map_sync_refused_runs", 0)),  # holds between tries keep the count
             "checked_at": now,
             "cal_revision": cal_rev,
             "last_approved_at": last_approved_at,
@@ -465,7 +486,14 @@ def main(argv: list[str] | None = None) -> int:
     needs_cal = force or (old_m2i is None) or (outcome["drift"] > DRIFT_THRESHOLD_M)
     needs_map = force or needs_cal or (place_diff_m > MAP_PLACE_THRESHOLD_M)
     res = apply_fleet_update(token, approved_solve, needs_cal=needs_cal, needs_map=needs_map)
-    if res.get("deferred"):
+    map_sync = {k: res[k] for k in ("map_sync", "map_sync_status") if k in res}
+    if map_sync:
+        map_sync["map_sync_refused_runs"] = int(state.get("map_sync_refused_runs", 0)) + 1
+    refused_too_long = map_sync.get("map_sync_refused_runs", 0) >= MAP_SYNC_REFUSED_FAIL_AFTER
+    if map_sync:
+        print(f"map sync {map_sync['map_sync']} (HTTP {map_sync['map_sync_status']}); calibration "
+              f"{'applied anyway' if res.get('cal_updated') else 'not due'}", file=sys.stderr)
+    if map_sync and not res.get("cal_updated"):
         _save_state(STATE_FILE, {
             "checked_at": now,
             "cal_revision": cal_rev,
@@ -474,6 +502,7 @@ def main(argv: list[str] | None = None) -> int:
             "place_diff_m": round(place_diff_m, 4),
             **outcome,
             "history": history,
+            **map_sync,
             "last_update": res,
         })
         print(json.dumps({
@@ -483,7 +512,7 @@ def main(argv: list[str] | None = None) -> int:
             **outcome,
             **res,
         }))
-        return 0
+        return 1 if refused_too_long else 0
 
     _save_state(STATE_FILE, {
         "checked_at": now,
@@ -493,6 +522,7 @@ def main(argv: list[str] | None = None) -> int:
         "place_diff_m": round(place_diff_m, 4),
         **outcome,
         "history": [],
+        **map_sync,
         "last_update": res,
     })
     print(json.dumps({
@@ -502,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
         **outcome,
         **res,
     }))
-    return 0
+    return 1 if refused_too_long else 0
 
 
 if __name__ == "__main__":

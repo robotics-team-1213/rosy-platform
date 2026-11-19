@@ -143,8 +143,13 @@ def _segment_masks(img: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     return white_mask, green_mask, pink_mask, yellow_mask
 
 
-def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | None = None) -> dict | None:
-    """100% automatic OpenCV 12-DOF calibration + sub-pixel map tracer for ``world_261026``."""
+def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | None = None,
+                                          seed_map_to_image: np.ndarray | None = None) -> dict | None:
+    """100% automatic OpenCV 12-DOF calibration + sub-pixel map tracer for ``world_261026``.
+
+    ``seed_map_to_image`` replaces the first guess (step 1), which assumes the usual camera view;
+    a re-aimed camera or a robot over an outer bay defeats it, while the refinement still converges.
+    """
     if img is None or img.ndim != 3 or img.shape[2] != 3:
         return None
     t0 = time.perf_counter()
@@ -253,6 +258,8 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
     if map_to_image is None or not np.all(np.isfinite(map_to_image)):
         return None
     map_to_image /= map_to_image[2, 2]
+    if seed_map_to_image is not None:
+        map_to_image = np.asarray(seed_map_to_image, np.float64) / seed_map_to_image[2, 2]
     try:
         image_to_map = np.linalg.inv(map_to_image)
         image_to_map /= image_to_map[2, 2]
@@ -264,6 +271,8 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
         return np.vstack(nonempty) if nonempty else np.zeros((0, 2), np.float64)
 
     # 2. Coarse-to-fine Huber-IRLS Gauss-Newton refinement across 10 track lines
+    #    The divider end points only seed step 1: the painted divider is shorter than +-0.926 (traced
+    #    about -0.90..0.78 on 2026-11-18), and as a residual it doubled the RMS to ~12 mm near the 15 mm cut.
     #    Final stage jointly optimizes 12-DOF: 8-DOF homography + 4-DOF lens distortion (k1, k2, p1, p2)
     K = default_camera_matrix(w, h)
     D = np.zeros(4, dtype=np.float64)
@@ -315,9 +324,6 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
                                   (pts_pb1, -0.4140), (pts_pb2, -0.1900), (pts_pb3, +0.0320)]:
                 if len(pts):
                     res.append(_uproj(H, d_vec, pts)[:, 0] - x_target)
-            if divider_comp is not None:
-                xy_pts = _uproj(H, d_vec, np.array([[u_dl, v_dl], [u_dr, v_dr]]))
-                res.append(xy_pts[:, 0] - np.array([-0.9260, +0.9260]))
             if len(vec) == 9 and include_reg:
                 res.append(np.array([vec[8] * 0.020]))
             return np.concatenate(res) if res else np.zeros(0, np.float64)
