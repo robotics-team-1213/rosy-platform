@@ -22,7 +22,7 @@ CONFIG_DIR = (Path(__file__).resolve().parents[4] / "contracts") / "foundation" 
 HARDWARE = {"runtime": {"mode": "hardware", "navigation_backend": "localization"}}
 MOTION_IDS = {
     "mobility.move", "mobility.navigate", "mobility.follow", "mobility.lead",
-    "perception.localize",
+    "perception.localize", "mobility.dock",
 }
 
 
