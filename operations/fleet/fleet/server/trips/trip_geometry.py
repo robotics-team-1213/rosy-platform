@@ -349,7 +349,9 @@ async def site_goal_in_robot_frame(app, console, robot_id: str, goal: tuple) -> 
     if active is None:
         raise HTTPException(409, detail={"code": "SITE_MAP_NOT_ACTIVE", "message": "no active site map"})
     service = getattr(app.state, "map_pose", None)
-    site_pose = service.arbitrated_pose(robot_id) if service is not None else None
+    # D-989: the trusted pose a trip would drive on, which includes an ALIGNED auto-locate anchor
+    pose_of = getattr(service, "driving_pose", None) or getattr(service, "arbitrated_pose", None)
+    site_pose = pose_of(robot_id) if pose_of is not None else None
     try:
         state, _ = await console._gather_state(robot_id)
         converted = robot_frame_goal(goal, site_pose, state, active[1].map_id)

@@ -185,6 +185,22 @@ def watch(land, wt: Path):
     return check
 
 
+def pretest(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None) -> None:
+    """Before the wait: prepare, unless an earlier run's tier restores; either way the pre-turn refresh is armed."""
+    if args.tests == "full" or (args.tests == "auto" and land.land_full.restore(wt, branch) is None):
+        prepare(land, wt, branch, args, python, qdir, ticket)
+    else:
+        arm_refresh(land, wt, branch, args, python, qdir, ticket)
+
+
+def arm_refresh(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None) -> None:
+    """A head tested over an older main refreshes through here before its turn (land_queue.wait), not inside the lock.
+    11-18: nine relaunched tickets restored their record, skipped prepare, waited unarmed and released on main's delta."""
+    land_queue.REFRESH = ((lambda: (prepare(land, wt, branch, args, python, qdir, ticket),
+                                    land.land_full.restore(wt, branch))[1])
+                          if ticket is not None and getattr(args, "tests", None) == "auto" else None)
+
+
 def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None,
             invocations: list[list[str]] | None = None, note: str | None = None) -> None:
     """Merge main, run this branch's selection (or the given FULL ``invocations`` of main's delta), record it.
@@ -192,10 +208,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     A NEW failure stops here, before the turn; the ticket is released by ``land.main``. One exception (D-889 14):
     a failure main already had at the merged base, when main has moved since, prepares once more on the new main.
     11-01: two landings stopped on a MAIN-RED test that main had fixed during their 66 min pretest."""
-    # A head tested over an older main refreshes through here before its turn (land_queue.wait), not inside the lock.
-    land_queue.REFRESH = ((lambda: (prepare(land, wt, branch, args, python, qdir, ticket),
-                                    land.land_full.restore(wt, branch))[1])
-                          if ticket is not None and getattr(args, "tests", None) == "auto" else None)
+    arm_refresh(land, wt, branch, args, python, qdir, ticket)
     try:
         _prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
     except land.Stop as stop:
@@ -262,6 +275,8 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
             guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
                                              isolated=not delta)
         except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
+            if not full:  # the pre run beside it is moot; cancel before raised is set (see the finally below)
+                land.remote_pytest.remote_job.cancel_all()
             raised.append(error)
     side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
     side.start()
@@ -280,7 +295,16 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         began = time.monotonic()  # the slot wait is not preparation time
         tested = land.run_tests(wt, args, invocations, logdir, "pre")
     else:
-        tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+        try:
+            tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+        except land.Overtime:
+            side.join()  # a guard failure cancelled the pre run: the guard's Stop is the verdict, not this Overtime
+            if raised:
+                raise raised[0] from None
+            raise
+        finally:
+            if raised:
+                land.remote_pytest.remote_job.cancel_all(False)
         side.join()
         if raised:
             raise raised[0]

@@ -39,6 +39,17 @@ MIN_STEP_M = 0.05
 MAX_PAIRS = 32
 #: Camera track older than this is not paired with the robot's current pose.
 PAIR_FRESH_S = 0.5
+#: A slower camera (3 fps: frame age 0.29-0.56 s on site 2026-11-18) is paired within two frame intervals, never beyond this.
+PAIR_FRESH_FRAMES = 2.0
+#: Cap 1.0 s: the pair has no motion correction, so a robot at 0.3 m/s is biased 0.3 m along its heading at the cap.
+PAIR_FRESH_MAX_S = 1.0
+
+
+def pair_fresh_s(source_fps) -> float:
+    """Newest allowed camera frame age; PAIR_FRESH_S when the source rate is unknown."""
+    if not isinstance(source_fps, (int, float)) or isinstance(source_fps, bool) or not source_fps > 0.0:
+        return PAIR_FRESH_S
+    return min(PAIR_FRESH_MAX_S, max(PAIR_FRESH_S, PAIR_FRESH_FRAMES / source_fps))
 #: After the last camera sample the transform is no longer reported. Provisional until measured.
 VALID_S = 90.0
 #: Driving use (D-989 7). Worst heading error of a rigid fit is about 2 * residual / baseline:
@@ -208,7 +219,7 @@ class AlignmentTracker:
             self._reason = track.get("reason") or "NO_CAMERA_TRACK"
             return
         age = track.get("age_s")
-        if not isinstance(age, (int, float)) or not 0.0 <= age <= PAIR_FRESH_S:
+        if not isinstance(age, (int, float)) or not 0.0 <= age <= pair_fresh_s(track.get("source_fps")):
             self._reason = "STALE_CAMERA_TRACK"
             return
         status, pose = trust.status_of(state), _robot_pose(state)
