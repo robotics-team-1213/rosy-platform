@@ -4895,6 +4895,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: native systemd·rosy-face 원격 계약 시험 결과는 이 브랜치 검증에 기록한다.
 - gate 변화: 없음. ARM64·장치 LED 수용은 별도다.
 
+## 2026-11-14 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 스위치
+- 변경: `rosy-navigation.service`가 `enable_loc_assist:=${ROSY_ENABLE_LOC_ASSIST}`를 넘긴다(유닛 기본 false, `runtime.env`가 이긴다). 템플릿 `rosy-runtime.env`에 `ROSY_ENABLE_LOC_ASSIST=false`. 실물 Pinky는 `loc_assist_node`를 한 번도 띄우지 않아 `localization/state` 발행자가 없었고, 그래서 CORE `state.localization`이 늘 null이었다(rosy_45, 178).
+- 증거: 원격 `test/test_pinky_loc_assist_switch.py`·`test_image_customization_contract.py`·`test_device_surface_contract.py`·`test_bringup_motor_contracts.py` 140 통과.
+- gate 변화: SOURCE. 기본은 꺼짐. 켠 기체의 LOCALIZED는 D-395 결정 흐름이 필요하다(실물 미실시).
+
+
 ## 2026-11-16 · uncommitted · fix(deploy): 천장 카메라 자동 트랙 보정 10분 주기 안정화 파이프라인 연결
 - 변경: `deploy/site/rosy-auto-track-calibration`의 승인 쿨다운(`MIN_APPROVAL_INTERVAL_S`)을 6시간에서 10분(`600s`)으로 조정하고, `deploy/site/host-state/rosy-auto-track-calibration.timer` 주기를 2분(`OnUnitActiveSec=2min`, 5회 일관성 창 = 10분)으로 맞춰 트랙·카메라 변동 시 10분 주기로 자동 조정되도록 연결했다.
 - 증거: `test/test_auto_track_calibration.py` 원격 pytest 및 `rosy-fleet-r` 실호스트 적용 확인.
@@ -4938,8 +4944,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 실물 프레임 재생에서 원 적합 n 7, rms 3.0 mm, 반경 28.1 mm, 버린 표시 0. 이어서 기존 bias 가드가 거절했다(-16.2, 25.1 mm = 29.9 mm > 25). 원격 pytest는 아직 돌리지 않았다.
 - gate 변화: 없음.
 
+## 2026-11-18 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 기본 켬
+- 변경: `rosy-navigation.service`와 템플릿 `rosy-runtime.env`의 `ROSY_ENABLE_LOC_ASSIST` 기본값을 true로(사용자 결정 2026-11-18 "위치 보조도 켜"). 기체의 runtime.env가 false면 그 값이 이긴다.
+- 증거: 원격 `test/test_pinky_loc_assist_switch.py`.
+- gate 변화: SOURCE. 실물 LOCALIZED는 서명 릴리스 뒤 D-395 결정 흐름으로 확인한다.
+
 ## 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
 - 변경: `rosy_site_autoupdate.py`에 `hold --until-contains <sha> [<sha>...]` 추가. 매 실행마다 다음 설치 대상 signed 후보가 대기 sha 전부를 조상으로 두는지 이미 읽는 GitHub compare 증명(`is_newer`와 같은 판정)으로 확인하고, 증명되면 `hold-cleared` 로그와 함께 홀드가 저절로 풀리고 정상 설치 경로로 진행한다. 증명 못 함·후보 없음·네트워크 오류는 홀드 유지(fail closed). `site_update_io.py`의 `set_hold`·`load_update_state`에 `until_contains` 필드(1..8개 40-hex sha) 검증 추가, 옛 홀드 파일은 그대로 파싱. dry run은 홀드를 소비하지 않는다. README 자동 갱신 절에 사용법 문서화.
 - 증거: 새 단위 시험 `test/test_site_autoupdate_until_contains.py` 5건(전부 포함 시 설치·하나 빠지면 유지·증명 불가 시 유지·평범한 홀드 불변·CLI 저장/상태 표시/거부). 원격 pytest는 ralph 확인이 돌린다.
 - gate 변화: 없음.
-
