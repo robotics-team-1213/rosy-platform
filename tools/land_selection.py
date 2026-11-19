@@ -10,12 +10,33 @@ import ast
 import json
 from harness import affected_exclusive
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 SAFETY_TRIGGER = ": safety path (platform_parts concern: safety)"  # affected_tests.SAFETY_TRIGGER
 # D-889 addendum 12: simulation suites in an automatic FULL tier only when the change touches simulation.
 SIM_SUITES = ("integrations/simulation/gazebo/test", "learning/envs/isaac/test")
 SIM_PATHS = ("integrations/simulation/", "learning/envs/isaac/")
+
+
+def _test_dir(path: str) -> str | None:
+    parts = PurePosixPath(path).parts
+    return "/".join(parts[: parts.index("test") + 1]) if "test" in parts else None
+
+
+def fallback_targets(wt: Path, changed: list[str]) -> list[str]:
+    """Nearest ancestor ``test/`` dir per changed file; test files map to themselves."""
+    targets: list[str] = []
+    for path in changed:
+        name = PurePosixPath(path).name
+        own = _test_dir(path)
+        if own:
+            target = path if name.startswith("test_") and name.endswith(".py") else own
+        else:
+            target = next((f"{p}/test".lstrip("./") for p in map(str, PurePosixPath(path).parents)
+                           if (wt / p / "test").is_dir()), None)
+        if target and (wt / target).exists() and target not in targets:
+            targets.append(target)
+    return targets
 
 
 def without_sim(invocations: list[list[str]], changed: list[str]) -> list[list[str]]:

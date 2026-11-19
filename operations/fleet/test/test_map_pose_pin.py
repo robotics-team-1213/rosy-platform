@@ -195,3 +195,41 @@ def test_a_pin_is_never_sent_to_a_robot_as_an_overhead_decision():
     pose = pinned().pose(T0 + 0.1, "m")
     request = {"request_id": "q1", "reason": "stale_pose"}
     assert pose.state == LOCALIZED and overhead_decision(request, pose) is None
+
+
+def _stand(tr, until, start=1):
+    for k in range(start, until + 1):
+        tr.add_odom(odom(k), T0 + k)
+
+
+def test_stale_pin_returns_unknown_after_limit():
+    tr = pinned()
+    _stand(tr, 125)
+    assert tr.pose(T0 + 115.0, "m").state == DEGRADED       # past 10 s, still inside the 120 s limit
+    assert tr.pose(T0 + 125.0, "m").state == UNKNOWN
+
+
+def test_pin_within_limit_is_degraded_not_unknown():
+    tr = pinned()
+    _stand(tr, 100)
+    pose = tr.pose(T0 + 100.0, "m")
+    assert (pose.state, pose.anchor_source) == (DEGRADED, OPERATOR_PIN)
+
+
+def test_camera_sighting_after_stale_unknown_recovers():
+    tr = pinned()
+    _stand(tr, 125)
+    assert tr.pose(T0 + 125.0, "m").state == UNKNOWN
+    for k in (126, 127, 128):
+        tr.add_odom(odom(k), T0 + k)
+        assert tr.add_sighting(Sighting("r1", 3.0, 4.0, 0.0, T0 + k, map_id="m"), T0 + k, "m")
+    pose = tr.pose(T0 + 128.0, "m")
+    assert (pose.state, pose.anchor_source, pose.x) == (LOCALIZED, SIGHTING, pytest.approx(3.0))
+
+
+def test_stale_draw_limit_is_validated():
+    assert MapPoseConfig().max_stale_draw_s == 120.0
+    with pytest.raises(ValueError):
+        MapPoseConfig(max_stale_draw_s=601.0)
+    with pytest.raises(ValueError):
+        MapPoseConfig(max_anchor_age_s=30.0, max_stale_draw_s=20.0)

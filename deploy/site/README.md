@@ -1792,6 +1792,16 @@ A legacy hold without `until` counts as expired 24 h after it was set. The
 2026-11-09 R migration hold sat unnoticed for four days; renew with a new
 `hold` or `resume` it.
 
+A hold can also resume itself (2026-11-19): `hold '<reason>' --until-contains
+<sha> [<sha> ...]` records the waiting shas in the state file (`status` shows
+them as `until_contains`) and every run checks the next installable signed
+candidate through the same GitHub compare API the selection already uses. When
+every sha is provably an ancestor of that candidate, the run logs `hold-cleared`
+with the hold reason and continues straight into the normal install path. A sha
+the candidate does not contain, or any comparison that cannot be proven, keeps
+the hold (fail closed); `resume` still clears it by hand, and a dry run never
+consumes it.
+
 `last_run.result=refused` with a `reason` (also in `update_status.py`) means the
 updater stopped on purpose and will not retry that candidate by itself. A reason
 `running candidate verification failed: fleet loaded image ID mismatch` means

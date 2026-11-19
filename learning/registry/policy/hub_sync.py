@@ -101,7 +101,24 @@ def prepare_bundle(source, output, repo_id, repo_type, files):
     return output
 
 
-def upload_bundle(bundle, *, api=None, operation=None, downloader=None):
+TEAM_HF_ACCOUNT = 'robotteam'  # the team's own HF account; a personal login is refused, whoever is logged in
+
+
+def team_token(token=None, *, get_token=None, whoami=None):
+    """The --token-file token, else the host's `hf auth login` token, only when HF says it is the team account."""
+    if get_token is None or whoami is None:
+        import huggingface_hub
+        get_token, whoami = get_token or huggingface_hub.get_token, whoami or huggingface_hub.whoami
+    token = token or get_token()
+    if not token:
+        raise ValueError('no HF login: run `hf auth login` as the team account, or pass --token-file')
+    name = whoami(token=token).get('name')
+    if name != TEAM_HF_ACCOUNT:
+        raise ValueError(f'HF account {name!r} is not the team account {TEAM_HF_ACCOUNT!r}; log in as the team account')
+    return token
+
+
+def upload_bundle(bundle, *, api=None, operation=None, downloader=None, token=None):
     bundle = Path(bundle).resolve()
     if in_source_checkout(bundle):
         raise ValueError('upload receipt and download belong outside the source checkout')
@@ -119,8 +136,10 @@ def upload_bundle(bundle, *, api=None, operation=None, downloader=None):
         raise ValueError('bundle already has a success receipt')
     _verify_omx(bundle/'payload', selected, repo_id, repo_type)
     if api is None:
+        token = team_token(token)
+        from functools import partial
         from huggingface_hub import HfApi, CommitOperationAdd, snapshot_download
-        api, operation, downloader = HfApi(), CommitOperationAdd, snapshot_download
+        api, operation, downloader = HfApi(token=token), CommitOperationAdd, partial(snapshot_download, token=token)
     info = api.repo_info(repo_id=repo_id, repo_type=repo_type)
     if info.private is not True:
         raise ValueError('destination must already be private; no visibility changes are performed')
@@ -173,6 +192,7 @@ def main():
     selection.add_argument('--file-list', type=Path, help='JSON array of explicitly reviewed relative files')
     upload = commands.add_parser('upload')
     upload.add_argument('bundle', type=Path)
+    upload.add_argument('--token-file', type=Path, help='file holding the team HF token (default: the host HF login)')
     args = parser.parse_args()
     try:
         if args.command == 'prepare':
@@ -182,7 +202,8 @@ def main():
             output = prepare_bundle(args.source, args.out, args.repo_id, args.repo_type, files)
             print((output / 'manifest.json').read_text(encoding='utf-8'))
         else:
-            print(json.dumps(upload_bundle(args.bundle), indent=2))
+            token = args.token_file.read_text(encoding='utf-8').strip() if args.token_file else None
+            print(json.dumps(upload_bundle(args.bundle, token=token), indent=2))
     except Exception as exc:
         # SDK exception bodies can contain request details; do not print credentials or URLs.
         message = str(exc) if isinstance(exc, ValueError) else type(exc).__name__

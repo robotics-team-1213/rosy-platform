@@ -8,6 +8,7 @@ import socket
 import subprocess
 import sys
 import time
+import types
 from pathlib import Path
 
 import pytest
@@ -386,3 +387,133 @@ def test_lane_of_reads_the_changed_paths(tmp_path):
     git("commit", "-q", "-m", "mixed")
     assert queue.lane_of(tmp_path) == ""
     assert queue.lane_of(tmp_path, "main") == ""  # nothing changed: not a lane landing
+
+
+def test_tooling_lane_covers_only_land_tool_paths_and_has_its_own_cap(tmp_path, monkeypatch):
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+                       check=True, capture_output=True)
+
+    def add(*rels):
+        for rel in rels:
+            (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / rel).write_text("x = 1\n")
+        git("add", *rels)
+        git("commit", "-q", "-m", "c")
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    git("switch", "-q", "-c", "feat/x")
+    add("tools/land_queue.py", "test/test_land_queue.py")
+    assert queue.lane_of(tmp_path) == "tooling"
+    add("tools/remote/x.py")
+    assert queue.lane_of(tmp_path) == ""
+    monkeypatch.setattr(queue, "TOOLING_CAP", 2)
+    queue.take(tmp_path / "q", "feat/a", lane="tooling")
+    assert queue.full(tmp_path / "q", "tooling") is None
+    queue.take(tmp_path / "q", "feat/b", lane="tooling")
+    assert "tooling lane full (2/2" in queue.full(tmp_path / "q", "tooling")
+    assert queue.full(tmp_path / "q", queue.LANE) is None  # lanes count apart
+
+
+def _reserver(qdir: Path, cap: int = 12) -> subprocess.Popen:
+    """A live process that reserves once, prints ok/full and then stays alive (its marker only counts while it lives)."""
+    code = ("import sys\nsys.path.insert(0, sys.argv[2])\nimport land_queue as q\nfrom pathlib import Path\n"
+            "try:\n    q.reserve(Path(sys.argv[1]), 'feat/x')\n    print('ok', flush=True)\n"
+            "except q.QueueError:\n    print('full', flush=True)\nsys.stdin.read()\n")
+    return subprocess.Popen([sys.executable, "-c", code, str(qdir), str(ROOT / "tools")], stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, text=True, env={**os.environ, "ROSY_LAND_QUEUE_CAP": str(cap)})
+
+
+def test_twenty_processes_reserving_at_cap_twelve_get_exactly_twelve_markers(tmp_path):
+    """11-17/18: 13/12 in 37 stop events: every supervisor passed full(), then each entered."""
+    procs = [_reserver(tmp_path) for _ in range(20)]
+    try:
+        answers = [p.stdout.readline().strip() for p in procs]
+    finally:
+        for p in procs:
+            p.stdin.close()
+            p.wait(timeout=30)
+    assert answers.count("ok") == 12 and answers.count("full") == 8
+    assert len(list(tmp_path.glob("*.reserve"))) == 12
+
+
+def test_a_dead_reservation_is_reclaimed_and_the_own_one_never_blocks_enter(tmp_path, monkeypatch):
+    monkeypatch.setattr(queue, "CAP", 1)
+    monkeypatch.setattr(queue, "queue_dir", lambda wt: tmp_path)
+    monkeypatch.setattr(queue, "_held", [])
+    dead = tmp_path / "00000000000000000001-1.reserve"
+    dead.write_text(json.dumps({"pid": gone_pid(), "host": socket.gethostname(), "start": time.time(), "branch": "x"}))
+    old = tmp_path / "00000000000000000002-1.reserve"
+    old.write_text(json.dumps({"pid": os.getpid(), "host": "elsewhere", "start": time.time() - queue.RESERVE_TTL - 1}))
+    marker = queue.reserve(tmp_path, "feat/a")
+    assert not dead.exists() and not old.exists() and marker.exists()
+    other = tmp_path / f"{time.time_ns():020d}-{os.getpid()}.reserve"
+    marker.rename(other)  # keep it as another process's marker: same pid is excluded, so fake a foreign pid
+    other.write_text(json.dumps({"pid": os.getppid(), "host": socket.gethostname(), "start": time.time(), "branch": "x"}))
+    with pytest.raises(queue.QueueError, match="landing queue full"):
+        queue.reserve(tmp_path, "feat/b")
+    other.write_text(json.dumps({"pid": os.getpid(), "host": socket.gethostname(), "start": time.time(), "branch": "x"}))
+    _, mine = queue.enter(tmp_path, "feat/a")  # its own marker never blocks its enter
+    assert mine.exists()
+    queue.unreserve(other)
+    queue.unreserve(None)
+
+
+def test_a_head_tested_over_an_older_main_is_refreshed_outside_the_turn(tmp_path, monkeypatch):
+    monkeypatch.setattr(queue, "current_main", lambda qdir: "m2")
+    mine = queue.take(tmp_path, "feat/mine")
+    nxt = queue.take(tmp_path, "feat/next")
+    queue.set_status(nxt, "waiting", tested="m2", waiting_since=time.time())
+    seen = []
+
+    def refresh(tested_after):
+        def run():
+            seen.append((json.loads(mine.read_text())["status"], queue.blockers(tmp_path, nxt)))
+            return tested_after
+        return run
+
+    monkeypatch.setattr(queue, "REFRESH", refresh("m2"))
+    assert queue.wait(tmp_path, mine, 0, tested="m1", sleep=lambda s: None) is None
+    assert seen == [("preparing", [])], "preparing while it refreshes: it holds no one, and the next fresh ticket may pass"
+    assert json.loads(mine.read_text())["status"] == "turn" and json.loads(mine.read_text())["tested"] == "m2"
+    seen.clear()
+    queue.set_status(mine, "waiting", tested="m2")
+    assert queue.wait(tmp_path, mine, 0, tested="m2", sleep=lambda s: None) is None and seen == [], "fresh: turn at once"
+    monkeypatch.setattr(queue, "REFRESH", refresh(None))  # a refresh that cannot catch up: two tries, then the turn
+    assert queue.wait(tmp_path, mine, 0, tested="m1", sleep=lambda s: None) is None and len(seen) == queue.REFRESHES == 2
+
+
+def test_speculation_runs_only_when_asked(monkeypatch):
+    import land_prepare
+    hook = land_prepare.train(types.SimpleNamespace(), Path("."), "feat/x", types.SimpleNamespace(tests="auto"), "py", Path("."), Path("."))
+    monkeypatch.delenv(land_prepare.SPECULATE_ENV, raising=False)
+    hook({"branch": "feat/peer"})  # returns before touching land: nothing starts
+    monkeypatch.setenv(land_prepare.SPECULATE_ENV, "1")
+    with pytest.raises(AttributeError):
+        hook({"branch": "feat/peer"})  # asked: it goes on to land.land_full
+
+
+def test_nt_lock_waits_past_the_msvcrt_ten_second_give_up(monkeypatch):
+    import errno
+    calls = []
+
+    def locking(fd, mode, n):
+        calls.append(mode)
+        if len(calls) < 3:
+            raise OSError(errno.EDEADLK, "Resource deadlock avoided")
+
+    monkeypatch.setitem(sys.modules, "msvcrt", types.SimpleNamespace(LK_NBLCK=2, locking=locking))
+    monkeypatch.setattr(queue.time, "sleep", lambda s: None)
+    queue.nt_lock(5, True)
+    assert calls == [2, 2, 2]
+
+
+def test_nt_lock_without_wait_fails_at_once(monkeypatch):
+    import errno
+
+    def locking(fd, mode, n):
+        raise OSError(errno.EACCES, "locked")
+
+    monkeypatch.setitem(sys.modules, "msvcrt", types.SimpleNamespace(LK_NBLCK=2, locking=locking))
+    with pytest.raises(OSError):
+        queue.nt_lock(5, False)

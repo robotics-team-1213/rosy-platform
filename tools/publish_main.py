@@ -2,6 +2,7 @@
 
     python tools/publish_main.py [--min-hours 6] [--force-blocked "<reason>"] [--apply]
     python tools/publish_main.py --merge-when-green <PR> [--apply]
+    python tools/publish_main.py --fill-browsers [--apply]
 
 Publish mode:
 1. ``git fetch origin``. If origin/main is not an ancestor of local main, ``git merge-tree`` (no checkout
@@ -12,8 +13,9 @@ Publish mode:
    origin/main, is in local main) with a green FULL land record. Not ``--first-parent``: a land.py landing
    is a merge with the topic branch as first parent, so the main tips that hold records sit on second
    parents. **Green FULL** = an exact-SHA land record whose base is an ancestor and explicit tier is
-   ``full``, containing that immutable candidate's canonical FULL and every opted-in browser chunk,
-   including ALONE. ``publish_evidence`` requires exact commit/tree/environment/argv/log cache mappings
+   ``full``, containing that immutable candidate's canonical FULL, plus clean exact proof (listed in the record or
+   not) of every browser chunk, including ALONE, that the delta origin/main...SHA maps to by land.py's landing
+   mapping (D-1036 addendum; a mapping failure requires every chunk). ``publish_evidence`` requires exact commit/tree/environment/argv/log cache mappings
    and content-hashed clean logs for every invocation (including the existing sharder outputs). Prepared
    FULL evidence requires the existing main-merge bridge plus matching final plan and environment.
    Missing/pruned mappings, missing logs and vacuous browsers fail closed. Legacy tier/root-test
@@ -39,6 +41,9 @@ fast-forward is impossible; ``git merge origin/main`` in a fresh worktree and ``
 when merge-tree finds code conflicts). PRs are never closed, reopened or force-pushed.
 ``--merge-when-green auto`` (D-1038, the scheduled task ``tools/register_publish_merge_task.ps1``)
 picks the single open ``publish/main-`` PR itself (none: exit 0; several: exit 7); every check above is unchanged.
+
+Fill mode (``--fill-browsers``, D-1036 addendum): on the newest candidate whose only failure is missing
+browser proof, runs those chunks on a test host and records the clean passes (``publish_evidence.fill``).
 
 Exit codes: 0 done, planned (dry run), nothing to publish or not due | 1 git/gh failure, Safety-Review
 range red, ci-result failed or a refusal (branch exists, PR not a publish PR) | 2 usage | 3 sync needs
@@ -73,6 +78,7 @@ sys.path.insert(0, str(TOOLS))
 import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a handle still holds)
 import urgent_lane  # noqa: E402  (D-1038: evidence for urgent/ PRs)
 import publish_evidence  # noqa: E402  (canonical plan and exact executed proof)
+import publish_scope  # noqa: E402  (D-1036 addendum: app-only deltas need only their app's evidence)
 SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(SCANNER))
 import secret_scan  # noqa: E402  (the one repository secret scanner: tokens, keys, PSKs, SHA-256 rows)
@@ -151,16 +157,30 @@ def green_full(repo: Path, sha: str) -> bool:
             and publish_evidence.qualified(sys.modules[__name__], repo, sha, record))
 
 
+def green(repo: Path, sha: str) -> bool:
+    """A green FULL record, or (D-1036 addendum) clean evidence for an app-only delta."""
+    return green_full(repo, sha) or publish_scope.check(sys.modules[__name__], repo, sha)[0]
+
+
+SCOPE: dict[str, str] = {}  # sha -> its "apps= mode= required= evidenced=" line, for the publish output
+
+
 def publish_sha(repo: Path) -> str | None:
     seen = known = 0
-    for sha in git(repo, "rev-list", "--topo-order", "--ancestry-path", "origin/main..main").stdout.split():
+    for n, sha in enumerate(git(repo, "rev-list", "--topo-order", "--ancestry-path", "origin/main..main").stdout.split()):
         record = land_record.read(repo, sha)
-        if record is None:
-            continue
-        seen += 1
-        known += tier(record) is not None
-        if green_full(repo, sha):  # pushed through its own hook copy, so a hook edit on main never blocks it
-            return sha
+        if record is not None:
+            seen += 1
+            known += tier(record) is not None
+            if green_full(repo, sha):  # pushed through its own hook copy, so a hook edit on main never blocks it
+                return sha
+        if n < publish_scope.SCOPED_TRIES:
+            ok, line = publish_scope.check(sys.modules[__name__], repo, sha)
+            if line:
+                print(f"[publish] scope {line}", file=sys.stderr)
+            if ok:
+                SCOPE[sha] = line
+                return sha
     if seen and not known:
         raise Stop(8, f"{seen} land record(s) past origin/main, none with a known format (tier field or"
                       " invocations): fix publish_main.tier before publishing")
@@ -309,6 +329,7 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     scanned = secret_gate(repo, sha)
     branch = PREFIX + now.strftime("%Y%m%d-%H")
     why = f"forced: {args.force_blocked}" if args.force_blocked else f"last publish {when}"
+    why += f"; scope {SCOPE[sha]}" if sha in SCOPE else ""
     if not args.apply:
         return f"dry run: would push {sha} to {branch} and open a PR ({why}; {scanned}); rerun with --apply"
     if json.loads(run_gh(repo, "pr", "list", "--state", "open", "--search", f"head:{PREFIX}",
@@ -352,7 +373,7 @@ def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime) -> str:
     if view["state"] != "OPEN" or not (view["headRefName"].startswith(PREFIX) or urgent):
         raise Stop(1, f"PR {pr} is not an open {PREFIX} or {urgent_lane.PREFIX} PR ({view['state']} {view['headRefName']})")
     # D-1038: an urgent PR's FULL land record is replaced by its remote affected + mapped-browser evidence file.
-    if not (urgent_lane.verified(repo, head) if urgent else green_full(repo, head)):
+    if not (urgent_lane.verified(repo, head) if urgent else green(repo, head)):
         raise Stop(1, f"PR {pr} head {head[:10]} has no green {'urgent evidence' if urgent else 'FULL land record'}"
                       " here; not merging")
     if view["mergeable"] == "CONFLICTING" or view["mergeStateStatus"] in ("DIRTY", "BEHIND"):
@@ -407,6 +428,7 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     parser.add_argument("--min-hours", type=float, default=6.0)
     parser.add_argument("--force-blocked", metavar="REASON", help="publish now: a teammate PR waits on it")
     parser.add_argument("--merge-when-green", metavar="PR", help="PR number, or 'auto' for the single open publish PR")
+    parser.add_argument("--fill-browsers", action="store_true", help="run the browser chunks the newest candidate lacks")
     parser.add_argument("--secret-scan", metavar="SHA", help="only the per-commit secret scan of origin/main..SHA")
     parser.add_argument("--repo", type=Path, default=Path.cwd(), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -414,6 +436,9 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     try:
         if args.secret_scan:
             message = secret_gate(args.repo, git(args.repo, "rev-parse", f"{args.secret_scan}^{{commit}}").stdout.strip())
+        elif args.fill_browsers:
+            git(args.repo, "fetch", "origin")
+            message = publish_evidence.fill(sys.modules[__name__], args.repo, args.apply)
         elif args.merge_when_green:
             number = open_publish_pr(args.repo) if args.merge_when_green == "auto" else args.merge_when_green
             message = (merge_when_green(args.repo, number, args.apply, now) if number

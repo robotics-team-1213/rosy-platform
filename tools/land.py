@@ -57,6 +57,7 @@ import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
 import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did)
 import land_browser  # noqa: E402  (the browser tier in file-level chunks)
 import land_selection  # noqa: E402  (selection with this caller's Stop and helper seams)
+from land_selection import _test_dir, fallback_targets  # noqa: E402,F401  (moved there; callers and tests use land.*)
 import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
 import land_precheck  # noqa: E402  (the cheap gates alone, before land_async makes a ticket)
 import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
@@ -176,27 +177,6 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, sour
 
 
 # --- test selection -------------------------------------------------------------
-
-def _test_dir(path: str) -> str | None:
-    parts = PurePosixPath(path).parts
-    return "/".join(parts[: parts.index("test") + 1]) if "test" in parts else None
-
-
-def fallback_targets(wt: Path, changed: list[str]) -> list[str]:
-    """Nearest ancestor ``test/`` dir per changed file; test files map to themselves."""
-    targets: list[str] = []
-    for path in changed:
-        name = PurePosixPath(path).name
-        own = _test_dir(path)
-        if own:
-            target = path if name.startswith("test_") and name.endswith(".py") else own
-        else:
-            target = next((f"{p}/test".lstrip("./") for p in map(str, PurePosixPath(path).parents)
-                           if (wt / p / "test").is_dir()), None)
-        if target and (wt / target).exists() and target not in targets:
-            targets.append(target)
-    return targets
-
 
 def pack(wt: Path, paths: list[str]) -> list[list[str]]:
     return land_selection.pack(wt, paths)
@@ -336,6 +316,14 @@ def on_main(main_co: Path) -> None:
         raise Stop(f"{main_co} has {head or 'a detached HEAD'} checked out, not refs/heads/main")
 
 
+_reserved: list[Path] = []
+
+
+def _unreserve() -> None:
+    while _reserved:
+        getattr(land_queue, "unreserve", lambda marker: None)(_reserved.pop())
+
+
 def land(args) -> int:
     wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
     branch = out(wt, "rev-parse", "--abbrev-ref", "HEAD")
@@ -362,6 +350,9 @@ def land(args) -> int:
     python = sys.executable
     land_selection.begin(sys.modules[__name__], args)
     qdir = ticket = None
+    reserve = getattr(land_queue, "reserve", None)  # A: a place in the cap before the long gates; a full queue ends here
+    if reserve and not (args.no_queue or args.dry_run or args.urgent or os.environ.get(land_queue.TICKET_ENV)):
+        _reserved.append(reserve(land_queue.queue_dir(wt), branch, land_queue.lane_of(wt)))
     if args.no_queue and not args.dry_run:
         holders = land_queue.ahead(land_queue.queue_dir(wt), Path("~"))  # every live ticket: the first holds its turn
         if holders:  # a landing outside the queue mid-turn gave that turn another round (2026-10-25, 22:52)
@@ -375,10 +366,10 @@ def land(args) -> int:
         qdir, ticket = land_queue.enter(wt, branch, "preparing", args.urgent,
                                         batch_auto=land_batch.plain_auto(args, EXTRA),
                                         alone=land_batch.explicit(args, EXTRA))
+        _unreserve()
         if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # it led a batch at once: one shared pretest instead of one each
-        if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
-            land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
+        land_prepare.pretest(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
         if (code := land_batch.queue(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # a batch landed this branch
     return rounds(args, wt, branch, main_co, python, qdir, ticket)
@@ -593,6 +584,7 @@ def main(argv: list[str] | None = None) -> int:
             land_events.emit("stop", reason=exc.code.splitlines()[0][:300])
         raise
     finally:
+        _unreserve()
         land_queue.leave()  # also on Ctrl-C; a killed process's ticket is reclaimed by PID
 
 
