@@ -29,7 +29,15 @@ def _event(state, request, result, why, now) -> None:
 
 
 def to_site(need, rules, cell_id):
-    """Rotate an arm-frame move into the site frame by the rules' ARM_TO_SITE[cell].yaw_deg; None when not configured."""
+    """Arm-frame move -> site frame: the cell geometry owner (fleet.pipeline.zone_geometry, feat/zone-geometry) when it
+    is installed, else the rules' arm_to_site[cell].yaw_deg; None when neither knows the cell (never a guess)."""
+    try:
+        from fleet.pipeline.zone_geometry import arm_to_site
+    except ImportError:
+        arm_to_site = None
+    if arm_to_site is not None:
+        moved = arm_to_site(cell_id, float(need[0]), float(need[1]))
+        return None if moved is None else [round(float(moved[0]), 4), round(float(moved[1]), 4)]
     arm_to_site = getattr(rules, "arm_to_site", None) if rules is not None else None
     yaw = arm_to_site.get(cell_id, {}).get("yaw_deg") if isinstance(arm_to_site, dict) else None
     if not isinstance(yaw, (int, float)) or isinstance(yaw, bool):
