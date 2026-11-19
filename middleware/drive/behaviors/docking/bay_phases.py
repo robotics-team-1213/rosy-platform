@@ -25,7 +25,7 @@ import math
 from typing import Any, Optional
 
 from core_common.protocol.schemas import NavigationState
-from core_features.docking.bay_zone import NO_LINE, classify as classify_zone
+from core_features.docking.bay_zone import NO_LINE, classify as classify_zone, map_offsets
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.model import DockPhase
 from core_features.docking.parking import ParkingGains, turn_twist
@@ -49,6 +49,8 @@ class BayPhases:
         self._scan_s: Optional[float] = None
         self._resync = False
         self._turn_target: Optional[float] = None
+        self._stage_bad: Optional[float] = None           # first tick the arrival heading looked wrong
+        self._turn_dir = -1.0                             # fixed turn sense: tray swings downstream
         self._creep_from: Optional[float] = None          # 정착 크립 시작 travelled
         self._crept = False
         self._match: Optional[tuple[float, float]] = None  # 크립 전 관측(두 번 일치용)
@@ -168,7 +170,20 @@ class BayPhases:
             self._h.executor.stop()
 
     def _observation(self):
-        return self._h._detector.relative_pose() if self._h._detector is not None else None
+        obs = self._h._detector.relative_pose() if self._h._detector is not None else None
+        if obs is None or obs.lateral_measured:
+            return obs
+        # Only the corridor line was seen: heading and along are measured, the lateral is not. Fill it from
+        # the running estimate, else from the map pose; never from the payload's placeholder (2026-11-18).
+        lateral = self._est[0] if self._est is not None else None
+        if lateral is None:
+            pose = self._h._pose_provider()
+            if pose is None or self._h._dock is None:
+                return None
+            lateral = map_offsets(pose, self._h._dock)[1]
+        along, _, _ = rear_errors(obs)
+        ax, ay = math.cos(obs.yaw), math.sin(obs.yaw)
+        return obs.model_copy(update={"x": along * ax + lateral * ay, "y": along * ay - lateral * ax})
 
     def _tick_staging(self, now: float) -> None:
         """스테이징(교차점) 도착 → 선반 180° 회전부터. Nav2 실패는 후진형과 같은 재시도."""
@@ -181,8 +196,20 @@ class BayPhases:
             h._fail("bay odometry unavailable")
             return
         self._stop()
+        mp = h._pose_provider()
+        # The staging goal faces the bay: a nose far off that axis is a wrong-way arrival, and the
+        # line observer would read it as normal (it forces the axis to -x), so refuse before turning.
+        if mp is None or abs(_wrap(mp[2] - h._dock.yaw)) > h._cfg.bay_stage_heading_max_rad:
+            # One noisy or missing pose must not end a first try: stand still and look again for a while.
+            self._stage_bad = now if self._stage_bad is None else self._stage_bad
+            if now - self._stage_bad >= h._cfg.bay_stage_recheck_s:
+                self._stage_bad = None
+                h._fail("bay staging arrival heading off the bay axis")
+            return
+        self._stage_bad = None
         self._reset_line_state()
-        self._turn_target = pose[2] + math.pi
+        self._turn_dir = -math.copysign(1.0, h._cfg.bay_downstream_sign) if h._cfg.bay_downstream_sign else 0.0
+        self._turn_target = pose[2] + (self._turn_dir or 1.0) * math.pi
         h._enter(DockPhase.TURNING)
 
     def _tick_turning(self, now: float) -> None:
@@ -201,6 +228,13 @@ class BayPhases:
                 h._fail("bay turn not clear: %s" % (body[0] if body else "no fresh body scan"))
             return
         error = _wrap(self._turn_target - pose[2])
+        if error * self._turn_dir < 0.0:
+            if abs(error) > math.pi - 0.2:
+                error += self._turn_dir * 2.0 * math.pi  # start: near ±pi the wrap flips on noise, keep the sense
+            elif abs(error) > h._cfg.bay_turn_overshoot_rad:
+                self._stop()                             # a long way back would swing the tray upstream
+                h._fail("bay turn overshot the target")
+                return
         angular, done = turn_twist(error, _TURN_GAINS)
         if done:
             self._stop()
@@ -386,6 +420,10 @@ class BayPhases:
         if now - h._phase_since > cfg.settle_timeout_s + cfg.bay_charge_confirm_s:
             h._retry("no charge after bay contact")
 
+    def _corridor_view(self) -> bool:
+        raw = self._h._detector.relative_pose() if self._h._detector is not None else None
+        return raw is not None and not raw.lateral_measured
+
     def _tick_zone(self, now: float) -> None:
         """칸 줄 안: 판정 → 곧은 전진(Nav2·제자리 회전 없음) → 뒤가 칸을 보므로 선 포획부터."""
         h, cfg = self._h, self._h._cfg
@@ -411,6 +449,13 @@ class BayPhases:
                 h._fail("bay zone: " + verdict.reason)
             elif h.executor is None:
                 h._fail("bay executor unavailable")
+            elif self._corridor_view():
+                # Only the corridor line is in view: the nose is at the bay mouth, and driving out to the
+                # staging distance loses that line under the nose (y8xs 2026-11-18). The rear already faces
+                # the bay and the verdict said straight: acquire here.
+                self._stop()
+                self._reset_line_state()
+                h._begin_acquiring()
             else:
                 h.executor.reset_odometry_mark()
                 self._zone, self._exit_m = "exit", verdict.exit_m

@@ -4,9 +4,12 @@
 This node owns no motion output. It reports the guide line as the virtual
 dock in base_link; CORE's docking manager decides the motion and remains the
 sole final ``cmd_vel`` publisher (D-2, D-143 pattern). Camera geometry is
-declared, not calibrated: only the Gazebo camera (``camera_geometry_source``
-GAZEBO under ``use_sim_time``) may project; anything else fails closed like
-the dock tag observer — every frame publishes not visible, never a guess.
+declared, not calibrated: the Gazebo camera (``camera_geometry_source``
+GAZEBO under ``use_sim_time``) may project. On a robot, NOMINAL with
+``allow_nominal_ground`` projects through camera_nominal.yaml and labels each
+payload ``ground: NOMINAL``; CORE docks on it from one button press (user decision
+2026-11-18, D-1042 6). Anything else fails closed like the dock tag observer —
+every frame publishes not visible, never a guess.
 """
 
 import json
@@ -19,7 +22,8 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
 from . import executor_choice
-from .sensing.bay_line_observer import BayLineObserver
+from .calibrated_values import nominal_camera_profile
+from .sensing.bay_line_observer import BayLineObserver, nominal_geometry
 from .sensing.dock_tag import CameraMount
 
 
@@ -31,12 +35,15 @@ class BayLineObserverNode(Node):
         self.declare_parameter('camera_pitch_rad', 0.0)
         self.declare_parameter('camera_hfov_rad', 0.0)
         self.declare_parameter('camera_x_offset_m', 0.0)
+        self.declare_parameter('allow_nominal_ground', False)
+        self.declare_parameter('nominal_camera_profile_path', '')
         # Stop face -> line's corridor-side end (site constant, unmeasured).
         self.declare_parameter('line_total_m', 0.65)
         self.declare_parameter('far_field_m', 0.45)
         self.declare_parameter('frame_width', 320)
         self.declare_parameter('frame_height', 180)
 
+        self._ground = None
         self._observer = self._build_observer()
         self.observation_pub = self.create_publisher(String, 'dock/observation', 10)
         self.create_subscription(Image, 'camera/front', self._on_camera,
@@ -45,6 +52,8 @@ class BayLineObserverNode(Node):
     def _build_observer(self):
         source = str(self.get_parameter('camera_geometry_source').value).strip().upper()
         use_sim_time = bool(self.get_parameter('use_sim_time').value)
+        if source == 'NOMINAL' and bool(self.get_parameter('allow_nominal_ground').value):
+            return self._build_nominal()
         if source != 'GAZEBO' or not use_sim_time:
             self.get_logger().warning(
                 'bay line needs declared GAZEBO camera geometry under use_sim_time; '
@@ -67,6 +76,24 @@ class BayLineObserverNode(Node):
                 'dock/observation stays not visible')
             return None
 
+    def _build_nominal(self):
+        # URDF nominal < the robot's accepted camera_profile record (D-397), as the lane observer:
+        # a wrong pitch scales the line's lateral/heading (sim: k 1.4 docks ~70 %, k <= 1.2 ~97 %).
+        profile, source = nominal_camera_profile(str(self.get_parameter('nominal_camera_profile_path').value))
+        self.get_logger().info(f'bay line camera profile from {source}')
+        try:
+            mount, hfov, width, height = nominal_geometry(profile)
+            observer = BayLineObserver(
+                mount=CameraMount(**mount), hfov_rad=hfov, width=width, height=height,
+                line_total_m=float(self.get_parameter('line_total_m').value),
+                far_field_m=float(self.get_parameter('far_field_m').value))
+        except (KeyError, TypeError, ValueError) as exc:
+            self.get_logger().warning(
+                f'nominal bay line geometry unusable ({exc}); dock/observation stays not visible')
+            return None
+        self._ground = 'NOMINAL'
+        return observer
+
     def _on_camera(self, msg: Image) -> None:
         stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
         payload = {"source": "CAMERA_LINE", "visible": False, "stamp": stamp,
@@ -83,6 +110,8 @@ class BayLineObserverNode(Node):
                 frame = np.ascontiguousarray(frame[:, :, 0] if channels == 1 else (
                     frame[:, :, ::-1] if msg.encoding == 'rgb8' else frame))
                 payload = self._observer.observe(frame, stamp)
+                if self._ground:
+                    payload['ground'] = self._ground
             except ValueError as exc:
                 self.get_logger().warning(f'invalid camera frame for bay line: {exc}',
                                           throttle_duration_sec=5.0)
