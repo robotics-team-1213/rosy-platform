@@ -40,7 +40,7 @@ SELF_TRIGGER = "harness configuration or the selector itself"
 SELF_TEST = re.compile(r"^test/test_(land|remote_|affected|known_failures|worktree|pre_push|publish_|browser_scope"
                        r"|harness|doctor|collect_alone|work_queue|xdist|g1_timing|safety_review|size_range"
                        r"|host_(?:admission|probe|caps)|lab_hosts"
-                       r"|ci_dependencies)[^/]*\.py$")
+                       r"|ci_dependencies|pr_land)[^/]*\.py$")
 
 #: Panel 2026-11-09: the code that CHOOSES or JUDGES tests keeps FULL (design 0.7 rule 8: a gate never tests
 #: itself with a selection it made). Panel 2026-11-17: 34 of 55 FULL landings in 36 h escalated only because they
@@ -68,11 +68,17 @@ REGISTRY_FILES = ("tools/harness/harness.yaml", "tools/harness/platform_parts.ya
 
 
 def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
-    """A non-safety FULL trigger's narrower tier through `add`: None when it stays FULL (unknown reach),
+    """A non-safety FULL trigger's narrower tier through `add`: None when it stays FULL (legacy only),
     "own" when the tier itself is the selection, "graph" when the path's own mapping (module, referencing tests,
     reverse dependents) is, so a path that maps to nothing still escalates as unknown."""
-    if legacy() or path in REGISTRY_FILES or any(at._match(path, p) for p in SELECT_CORE):
+    if legacy():
         return None
+    import affected_capsules
+
+    if path in REGISTRY_FILES or any(at._match(path, p) for p in SELECT_CORE):
+        for test, why in affected_capsules.harness_capsule(repo, path).items():
+            add(test, why)
+        return "own"
     if trigger.endswith(SELF_TRIGGER):
         for test in repo.test_files:
             if SELF_TEST.match(test):
@@ -83,7 +89,9 @@ def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
                 add(suite, f"runner canary ({path})")
         return "own"
     if "/" not in path or any(trigger.endswith(t) for t in STAY_FULL):
-        return None  # a root conftest, pyproject or pytest.ini reaches every suite
+        for test, why in affected_capsules.packaging_capsule(repo, path).items():
+            add(test, why)
+        return "own"
     if trigger.endswith("pytest conftest"):
         add(str(PurePosixPath(path).parent), f"conftest scope ({path})")
         return "own"
@@ -166,12 +174,15 @@ def known_failure_tests(repo: at.Repo, changed, base_text) -> tuple[dict[str, st
     for nodeid in sorted(old ^ new):
         test = nodeid.split("::")[0]
         if nodeid in new:
-            if _selected_by_other_changes(repo, changed, base_text, test):
-                return None, f"adds {nodeid} while other changes on this branch select {test}: needs human review"
-            if at.safety_review.is_safety(test, repo.safety_roots, repo.safety_modules):
-                return None, f"adds safety-tagged {nodeid}: needs human review"
-            if not repo.exists(test):
-                return None, f"adds {nodeid}, whose test file does not exist"
+            if legacy():
+                if _selected_by_other_changes(repo, changed, base_text, test):
+                    return None, f"adds {nodeid} while other changes on this branch select {test}: needs human review"
+                if at.safety_review.is_safety(test, repo.safety_roots, repo.safety_modules):
+                    return None, f"adds safety-tagged {nodeid}: needs human review"
+                if not repo.exists(test):
+                    return None, f"adds {nodeid}, whose test file does not exist"
+            else:
+                found.setdefault(ARCHITECTURE, f"known_failures review without FULL ({nodeid})")
         if repo.exists(test):
             found.setdefault(test, f"{'added to' if nodeid in new else 'removed from'} {KNOWN_FAILURES}: {nodeid}")
     return found, ""
@@ -263,7 +274,6 @@ def narrowed(repo: at.Repo, path: str) -> dict[str, str] | None:
         importers = module_importers(repo, path)
         if not importers:
             return None
-        # Runtime wrappers and broad owners need downstream coverage, not just named readers.
         if any(not at.TEST_FILE.search(src) and not at._under(src, FOUNDATION) for src in importers):
             return None
         tests = {t: f"references {path}" for t in repo.referencing_tests(path)}

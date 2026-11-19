@@ -75,25 +75,42 @@ jobs:
         env:
           SIZE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
         run: |
-          if [ -z "$SIZE_BASE" ] || ! git cat-file -e "$SIZE_BASE^{commit}" 2>/dev/null; then SIZE_BASE=HEAD^; fi
+          if [ -z "$SIZE_BASE" ] || [ "$SIZE_BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$SIZE_BASE^{commit}" 2>/dev/null; then
+            echo "::error::missing or unreachable SIZE_BASE ($SIZE_BASE); refusing silent HEAD^ narrowing"
+            exit 1
+          fi
           python3 tools/harness/size_range.py "$SIZE_BASE" HEAD
 
       - name: Test scope (D-436)
         id: scope
         shell: bash
         env:
-          SCOPE_BASE: ${{ github.event.pull_request.base.sha }}
-          # D-436 2026-11-09 narrows landing tiers only; GitHub PRs keep the FULL triggers as the publish net.
-          ROSY_FULL_LEGACY: "1"
+          SCOPE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event_name == 'push' && github.event.before || '' }}
         run: |
           set -eo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "$SCOPE_BASE" ]; then
-            python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --print
-            out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
-          else
-            echo "full tier: event ${{ github.event_name }} (D-436 4)"
-            out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
-          fi
+          case "${{ github.event_name }}" in
+            pull_request|merge_group)
+              if [ -z "$SCOPE_BASE" ] || [ "$SCOPE_BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$SCOPE_BASE^{commit}" 2>/dev/null; then
+                echo "::error::missing or unreachable SCOPE_BASE ($SCOPE_BASE) for ${{ github.event_name }}; refusing silent narrowing"
+                exit 1
+              fi
+              python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --print
+              out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
+              ;;
+            push)
+              if [ -z "$SCOPE_BASE" ] || [ "$SCOPE_BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$SCOPE_BASE^{commit}" 2>/dev/null; then
+                echo "::warning::missing or unreachable push base ($SCOPE_BASE); escalating to --full"
+                out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
+              else
+                python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --print
+                out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
+              fi
+              ;;
+            *)
+              echo "full tier: event ${{ github.event_name }} (scheduled/manual health sweep)"
+              out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
+              ;;
+          esac
           echo "mode=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["mode"])' "$out")" >> "$GITHUB_OUTPUT"
           echo "matrix=$(python3 -c 'import json, sys; print(json.dumps(json.loads(sys.argv[1])["matrix"]))' "$out")" >> "$GITHUB_OUTPUT"
 
@@ -344,6 +361,8 @@ jobs:
           sys.path.append("test")
           import known_failures
           quarantine = known_failures.load_known(known_failures.QUARANTINE.read_text(encoding="utf-8"))
+          known_list = (known_failures.load_known(known_failures.LIST.read_text(encoding="utf-8"))
+                        if getattr(known_failures, "LIST", None) is not None and known_failures.LIST.is_file() else {})
           act_cpu_required = os.environ.get("ROSY_ACT_CPU_REQUIRED") == "1"
           status = 0
           for paths, extra in runs:
@@ -380,12 +399,38 @@ jobs:
                       print(f"::warning::FLAKY (passed on rerun, D-762): {' '.join(ids)}", flush=True)
                       code = 0
               print("::endgroup::", flush=True)
-              if (native_required or act_cpu_required) and (code == 5 or re.search(r"\b\d+ skipped\b", "".join(out))):
+              full_out = "".join(out)
+              first_out = full_out.split(known_failures.RERUN_MARKER, 1)[0]
+              target_paths = [p for p in paths if not p.startswith("-")]
+              req_ids = [p for p in target_paths if "::" in p]
+              known_id = lambda nid: any(
+                  k == nid or k.startswith((nid + "[", nid + "::")) or known_failures._matches(nid, k)
+                  for k in known_list
+              )
+              checked_req = [nid for nid in req_ids if not known_id(nid)]
+              has_summary = bool(re.search(r"\bin [0-9.]+s\b", first_out) or "no tests ran" in first_out)
+              if first_out.strip() and checked_req:
+                  missing_req = [
+                      nid for nid in checked_req
+                      if not re.search(rf"(?m)^{re.escape(nid)}(?:\[[^\r\n]*\]|::\S+)?\s+PASSED\b", first_out)
+                      and not re.search(rf"(?m)^PASSED\s+{re.escape(nid)}(?:\[[^\r\n]*\]|::\S+)?\b", full_out)
+                  ]
+                  if missing_req:
+                      print(f"::error::required node id(s) did not pass (skipped/missing): {' '.join(missing_req)}", flush=True)
+                      status = 1
+              _, seen_known, _ = known_failures.compare(first_out, known_list)
+              all_req_known = bool(req_ids) and not checked_req and bool(seen_known)
+              if has_summary and not all_req_known and (len(target_paths) > 1 or bool(req_ids)
+                                  or any(not p.endswith(".py") for p in target_paths)):
+                  if not re.search(r"\b[1-9]\d* passed\b", full_out):
+                      print(f"::error::pytest {' '.join(paths)} passed 0 items (all skipped or empty)", flush=True)
+                      status = 1
+              if (native_required or act_cpu_required) and (code == 5 or re.search(r"\b\d+ skipped\b", full_out)):
                   kind = "ACT CPU" if act_cpu_required else "ROS"
                   print(f"::error::native {kind} fixture must execute without skips: {' '.join(paths)}", flush=True)
                   status = 1
               # 경로가 여럿인데 0건 수집이면 세션 전체가 건너뛰어진 것이다(10-11부터 루트 test/ 가 그랬다).
-              if known_failures.collected_nothing("".join(out), paths):
+              if known_failures.collected_nothing(full_out, paths):
                   print(f"::error::pytest {' '.join(paths)} collected 0 items", flush=True)
                   status = 1
               elif code not in (0, 5):

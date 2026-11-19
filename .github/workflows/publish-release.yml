@@ -38,8 +38,10 @@ jobs:
           assert re.fullmatch(r'[a-z0-9][a-z0-9-]{2,63}', os.environ['KEY_ID'])
           PY
           test -f "deploy/robot/pinky_pro/release/public-keys/$KEY_ID.pem"
-          sudo apt-get update -qq
-          sudo apt-get install -y openssl zstd
+          if ! command -v openssl >/dev/null || ! command -v zstd >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y openssl zstd
+          fi
       - name: Download externally signed draft asset
         env:
           GH_TOKEN: ${{ github.token }}
