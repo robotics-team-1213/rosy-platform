@@ -4944,12 +4944,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 실물 프레임 재생에서 원 적합 n 7, rms 3.0 mm, 반경 28.1 mm, 버린 표시 0. 이어서 기존 bias 가드가 거절했다(-16.2, 25.1 mm = 29.9 mm > 25). 원격 pytest는 아직 돌리지 않았다.
 - gate 변화: 없음.
 
-## 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
-- 변경: `rosy_site_autoupdate.py`에 `hold --until-contains <sha> [<sha>...]` 추가. 매 실행마다 다음 설치 대상 signed 후보가 대기 sha 전부를 조상으로 두는지 이미 읽는 GitHub compare 증명(`is_newer`와 같은 판정)으로 확인하고, 증명되면 `hold-cleared` 로그와 함께 홀드가 저절로 풀리고 정상 설치 경로로 진행한다. 증명 못 함·후보 없음·네트워크 오류는 홀드 유지(fail closed). `site_update_io.py`의 `set_hold`·`load_update_state`에 `until_contains` 필드(1..8개 40-hex sha) 검증 추가, 옛 홀드 파일은 그대로 파싱. dry run은 홀드를 소비하지 않는다. README 자동 갱신 절에 사용법 문서화.
-- 증거: 새 단위 시험 `test/test_site_autoupdate_until_contains.py` 5건(전부 포함 시 설치·하나 빠지면 유지·증명 불가 시 유지·평범한 홀드 불변·CLI 저장/상태 표시/거부). 원격 pytest는 ralph 확인이 돌린다.
-- gate 변화: 없음.
-
 ## 2026-11-18 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 기본 켬
 - 변경: `rosy-navigation.service`와 템플릿 `rosy-runtime.env`의 `ROSY_ENABLE_LOC_ASSIST` 기본값을 true로(사용자 결정 2026-11-18 "위치 보조도 켜"). 기체의 runtime.env가 false면 그 값이 이긴다.
 - 증거: 원격 `test/test_pinky_loc_assist_switch.py`.
 - gate 변화: SOURCE. 실물 LOCALIZED는 서명 릴리스 뒤 D-395 결정 흐름으로 확인한다.
+
+## 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
+- 변경: `rosy_site_autoupdate.py`에 `hold --until-contains <sha> [<sha>...]` 추가. 매 실행마다 다음 설치 대상 signed 후보가 대기 sha 전부를 조상으로 두는지 이미 읽는 GitHub compare 증명(`is_newer`와 같은 판정)으로 확인하고, 증명되면 `hold-cleared` 로그와 함께 홀드가 저절로 풀리고 정상 설치 경로로 진행한다. 증명 못 함·후보 없음·네트워크 오류는 홀드 유지(fail closed). `site_update_io.py`의 `set_hold`·`load_update_state`에 `until_contains` 필드(1..8개 40-hex sha) 검증 추가, 옛 홀드 파일은 그대로 파싱. dry run은 홀드를 소비하지 않는다. README 자동 갱신 절에 사용법 문서화.
+- 증거: 새 단위 시험 `test/test_site_autoupdate_until_contains.py` 5건(전부 포함 시 설치·하나 빠지면 유지·증명 불가 시 유지·평범한 홀드 불변·CLI 저장/상태 표시/거부). 원격 pytest는 ralph 확인이 돌린다.
+- gate 변화: 없음.
