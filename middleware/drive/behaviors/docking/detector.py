@@ -92,6 +92,7 @@ class DockObservation(BaseModel):
     yaw: float
     confidence: float = Field(ge=0.0, le=1.0)
     at: float                       # 관측 시각 (주입 시계 기준)
+    lateral_measured: bool = True   # False: 통로선만 보여 횡은 모른다 — 방위·거리만 실측(2026-11-18 y8xs)
 
     @property
     def range_m(self) -> float:

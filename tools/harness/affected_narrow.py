@@ -73,6 +73,11 @@ def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
     reverse dependents) is, so a path that maps to nothing still escalates as unknown."""
     if legacy():
         return None
+    if path == "tools/harness/fleet_test_seconds.json" and repo.exists(path):
+        reader = "test/test_affected_tests.py"
+        if repo.exists(reader):
+            add(reader, f"checks Fleet shard weights ({path})")
+            return "own"
     import affected_capsules
 
     if path in REGISTRY_FILES or any(at._match(path, p) for p in SELECT_CORE):
