@@ -39,6 +39,7 @@ FROZEN_ROS_PACKAGES = frozenset({
 CONSUMERS = {
     ".github/workflows/ci.yml": r"--base-paths \$COLCON_ROOTS\b",
     ".github/workflows/arm64-rehearsal.yml": r"--base-paths \$COLCON_ROOTS\b",
+    ".github/workflows/rolling-sweep.yml": r"--base-paths \$COLCON_ROOTS\b",
     "tools/build_wsl.sh": r"--base-paths \$COLCON_ROOTS\b",
     # D-571 headless Gazebo bench: the runner builds gz_sim over the roots.
     "tools/remote/remote_sim.py": r"--base-paths \$COLCON_ROOTS\b",

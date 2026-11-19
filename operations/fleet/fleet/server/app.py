@@ -390,7 +390,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         operator_guard=operator_guard, require_operator=require_operator,
         require_named_operator=require_named_operator, dispatch_nav=dispatch_nav_target)
     install_berth_scenario_routes(
-        app, console=console, operator_guard=operator_guard, require_operator=require_operator)
+        app, console=console, operator_guard=operator_guard, require_named_operator=require_named_operator)
 
     trip_runner = install_trip_and_map_surfaces(
         app, console=console, console_token=console_token, task_service=task_service,
