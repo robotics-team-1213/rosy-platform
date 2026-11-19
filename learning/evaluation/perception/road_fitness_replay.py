@@ -23,7 +23,7 @@ from intake_eval_gate import evaluation_semantics
 import review_evidence as review
 import review_masks
 import store
-from perception_runtime.perception.learned.manifest import verify_files
+from core_common.perception_model import verify_files
 from perception_runtime.perception.learned.runner import LaneSegModel
 from core_common.observation import ObservationSnapshot, SnapshotValidity
 from road_fitness import evaluate_model_frame, summarize_frames

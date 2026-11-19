@@ -106,7 +106,7 @@ from deliver_helpers import (  # noqa: E402, F401
     remote_script,
 )
 from intake_eval_gate import road_delivery_error, v13_lineage_error  # noqa: E402
-from perception_runtime.perception.learned.manifest import (  # noqa: E402
+from core_common.perception_model import (  # noqa: E402
     MANIFEST_NAME, TASKS, ManifestError, check_revision, load_manifest, verify_files)
 from perception_runtime.perception.learned.signature import (  # noqa: E402
     SIGNATURE_NAME, SignatureError, verify_manifest_signature)

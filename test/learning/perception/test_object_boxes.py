@@ -14,7 +14,7 @@ for _p in (Path(__file__).resolve().parents[3] / 'learning/curation/perception',
 
 import object_boxes as OB  # noqa: E402
 from geometry import Camera, Lidar  # noqa: E402
-from perception_runtime.perception.learned.manifest import OBJECT_CLASSES  # noqa: E402
+from core_common.perception_model import OBJECT_CLASSES  # noqa: E402
 
 CAM = Camera.from_profile(width=320, height=240)
 

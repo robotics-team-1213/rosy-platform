@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from perception_runtime.perception.learned.manifest import ManifestError, load_manifest, verify_files
+from core_common.perception_model import ManifestError, load_manifest, verify_files
 from test_learned_manifest_object_det import object_manifest
 
 

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from core_common.observation import ObservationSnapshot, SnapshotValidity
-from perception_runtime.perception.learned.manifest import ManifestError
+from core_common.perception_model import ManifestError
 from perception_runtime.perception.learned.runner import LaneSegModel
 from test_learned_runner import FakeSession, _model_dir
 

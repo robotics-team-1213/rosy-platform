@@ -107,7 +107,7 @@ def main(argv=None) -> int:
     doc["metrics"]["export_parity_max_abs_diff"] = diff
     (out / "model_manifest.json").write_text(
         json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    from perception_runtime.perception.learned.manifest import load_manifest, verify_files
+    from core_common.perception_model import load_manifest, verify_files
     verify_files(load_manifest(out))
     print(f"OK {doc['model_revision']} -> {out}")
     return 0
