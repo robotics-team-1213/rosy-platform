@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.413
+**Version:** v1.416
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.416 팔이 못 닿을 때 운반체 재정차 요청 (사용자 2026-11-19)
+
+셀 작업이 도달 거리 때문에 중단되면(완료 본문 `phase: "ABORTED"`, `stage_result.reach_fix` = `{object_arm_xy_m, reach_mm, limit_mm, need_arm_dxdy_m}`) Fleet가 그 운반체에 재정차 요청 하나를 연다. `GET /api/fleet/pipeline/cell-tasks`에 `repark_requests`(키 robot_id → `{request_id, task_id, cell_id, arm_id, robot_id, need_arm_dxdy_m, need_site_dxdy_m, attempt, state, t}`)가 더해진다. `need_site_dxdy_m`는 사이트 규칙 `arm_to_site[cell_id].yaw_deg`가 있을 때만 값이고 없으면 null이다. 운반체 쪽은 `POST /api/fleet/pipeline/repark/{request_id}` `{state: "DONE"|"FAILED", moved_robot_dxdy_m?, reason?}`로 닫는다(operator, 404 `UNKNOWN_REPARK_REQUEST`, 409 `REPARK_NOT_OPEN`). DONE이면 같은 운반을 `<task_id>-rp<attempt>`로 다시 큐에 넣고, FAILED나 세 번째 시도는 사람 알림(`auto_events` kind `auto_repark`).
 
 ### v1.413 접기 증거를 실은 assessor 해제 (D-1048)
 
@@ -4836,6 +4840,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.416 | 2026-11-19 | Additive: 셀 작업 중단의 `stage_result.reach_fix` → `repark_requests`(GET cell-tasks), `POST /api/fleet/pipeline/repark/{request_id}` 닫기, DONE이면 같은 운반 재시도(최대 2회). |
 | v1.413 | 2026-11-19 | Additive (D-1048): assessor 해제 본문 선택 `recovery`(자동 접기 증거) → `clearable_after_fold`, 증거는 사건 행 `recovery`에 저장. |
 | v1.412 | 2026-11-19 | Additive (D-1047): 통신 끊김뿐인 사건(러너 문구 전체 일치, 잘리지 않은 목록, EIO 고장 기록)은 다시 계산한 쉬는 팔이면 assessor가 해제한다. `AI_CLEAR_REPEAT_LIMIT`는 팔마다 24시간에 세 번 뒤. |
 | v1.408 | 2026-11-18 | 권한 변경 (D-1043, fix/viewer-estop, Safety-Review 대상): `POST /api/fleet/estop`을 operator 전용에서 사람 계정의 `fleet.read`(보기 전용·정책 관리자·운영자)로 넓힌다. `service` 역할은 그대로 403 `FORBIDDEN`. CORE `POST /api/v1/safety/stop`(Viewer↑)과 같다. 자격 없음 401, 이웃 관제 전용 자격·AI 관찰자 POST 제한은 그대로 403. 해제·`/dispatch/rearm`·재가동·승인 권한은 그대로. 본문·응답·감사 예외 불변. 스키마·envelope 변경 없음 |

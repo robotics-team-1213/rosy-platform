@@ -79,7 +79,7 @@ def close(state, request_id: str, body: dict, enqueue, now: float) -> dict:
         raise ValueError("state must be DONE or FAILED")
     request.update(state=new, closed_at=now, moved_robot_dxdy_m=body.get("moved_robot_dxdy_m"))
     if new == "FAILED":
-        _event(state, request, "failed", str(body.get("why") or "REPARK_FAILED"), now)
+        _event(state, request, "failed", str(body.get("reason") or body.get("why") or "REPARK_FAILED"), now)
         return request
     state.repark_done.append({"root": request["root"], "request_id": request_id})
     old = state.omx_cell_tasks[request["task_id"]]
