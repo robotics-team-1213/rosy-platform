@@ -418,3 +418,28 @@ def test_auto_start_backs_off_per_robot_and_starts_again_after_300_s():
     assert locate.auto_start() == []
     now[0] = 300.0
     assert locate.auto_start() == ["a"]
+
+
+def test_three_fps_source_pairs_within_two_frames():
+    tracker = AlignmentTracker("r1")
+    slow = track(0, 0, age=0.56) | {"source_fps": 3.0}   # field 2026-11-18: frame age 0.29-0.56 s
+    tracker.observe(0.0, slow, robot(0, 0), {})
+    assert tracker.view(0.0)["pairs"] == 1
+    tracker = AlignmentTracker("r1")
+    tracker.observe(0.0, track(0, 0, age=0.56), robot(0, 0), {})      # rate unknown: the old 0.5 s
+    assert tracker.view(0.0)["reason"] == "STALE_CAMERA_TRACK"
+
+
+def test_stale_frame_beyond_cap_refused():
+    tracker = AlignmentTracker("r1")
+    tracker.observe(0.0, track(0, 0, age=1.1) | {"source_fps": 0.5}, robot(0, 0), {})   # 2 frames = 4 s, cap 1.0 s
+    assert tracker.view(0.0)["reason"] == "STALE_CAMERA_TRACK" and tracker.view(0.0)["pairs"] == 0
+    tracker.observe(1.0, track(0, 0, age=0.9) | {"source_fps": 0.5}, robot(0, 0), {})
+    assert tracker.view(1.0)["pairs"] == 1
+
+
+@pytest.mark.parametrize("fps,limit", [(None, 0.5), (0, 0.5), (-3.0, 0.5), (float("nan"), 0.5), (float("inf"), 0.5),
+                                       (True, 0.5), ("3", 0.5), (1e9, 0.5), (3.0, 2 / 3), (10.0, 0.5), (0.1, 1.0)])
+def test_odd_source_rates_never_widen_the_pair_limit_past_the_cap(fps, limit):
+    from fleet.localization.auto_locate import pair_fresh_s
+    assert pair_fresh_s(fps) == pytest.approx(limit)

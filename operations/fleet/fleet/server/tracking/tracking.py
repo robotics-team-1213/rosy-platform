@@ -383,6 +383,14 @@ class TrackingService:
             return None
         return Pose(x, y, verified)
 
+    def source_fps(self, source_id) -> Optional[float]:
+        """Frames per second one source delivered over the last FPS_WINDOW_S; None for an unknown or silent one."""
+        state = self._sources.get(source_id)
+        if state is None:
+            return None
+        self._trim(state, self._clock())
+        return len(state.arrivals) / FPS_WINDOW_S or None
+
     @staticmethod
     def _trim(state: _SourceState, now: float) -> None:
         while state.arrivals and now - state.arrivals[0] > FPS_WINDOW_S:

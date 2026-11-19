@@ -93,11 +93,11 @@ class Teacher:
         """One video frame of physics. Sequential: the Teacher is the one context. Two arms at once: each context gets its own arm's
         link and pad contacts; arm-arm contacts go to both."""
         self.n += 1
-        self.last_cmd.update({arm: np.asarray(t, float) - (self.zero_error.get(arm, 0.) if self.privileged else 0.) for arm, t in targets.items()})
-        if not self.privileged:
-            targets = {arm: t + self.zero_error[arm] if arm in self.zero_error else t for arm, t in targets.items()}
+        self.last_cmd.update({arm: np.asarray(t, float) - (self.zero_error.get(arm, 0.) if self.priv(arm) else 0.) for arm, t in targets.items()})
+        targets = {arm: t if self.priv(arm) or arm not in self.zero_error else t + self.zero_error[arm] for arm, t in targets.items()}
         if self.servo_comp is not None:
-            targets = self.servo_comp.apply(data, targets, privileged=self.privileged)
+            targets = {k: v for flag in (True, False) for k, v in self.servo_comp.apply(
+                data, {a: t for a, t in targets.items() if self.priv(a) == flag}, privileged=flag).items()}
         self.world.advance(data, targets)
         both = ctxs is not None
         ctxs = ctxs if both else [self]
@@ -114,6 +114,10 @@ class Teacher:
                 c.held_tilt = max(c.held_tilt, self.world.pose(data, c.carried)[2])
         self.hook(data, label)
 
+    def priv(self, arm):
+        """Whether this arm's commands are in true joint angles (no zero error injected). One flag for both arms here; a subclass may say per arm and phase."""
+        return self.privileged
+
     def q_now(self, data, arm):
         return data.qpos[self.world.q[arm]].copy()
 
@@ -128,8 +132,8 @@ class Teacher:
     def settle_g(self, data, arm, q_target, grip, pos_target=None, max_s=6.0):
         """Closed-loop settle at a waypoint until joint error, velocity, TCP position, and jitter gate converge."""
         cmd = np.append(q_target[:5], grip)
-        z_off = (self.zero_error[arm][:5] - (self.servo_comp.zero_est[arm] if self.servo_comp is not None else 0.)) if (not self.privileged and arm in self.zero_error) else 0.
-        check_tcp = self.privileged or self.compensate_zero
+        z_off = (self.zero_error[arm][:5] - (self.servo_comp.zero_est[arm] if self.servo_comp is not None else 0.)) if (not self.priv(arm) and arm in self.zero_error) else 0.
+        check_tcp = self.priv(arm) or self.compensate_zero
         arm_q_idx = self.world.q[arm][:5]
         arm_dof_idx = self.world.arm_dof[arm][:5]
         target5 = q_target[:5] + z_off
