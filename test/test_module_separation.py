@@ -266,8 +266,9 @@ def test_control_imports_no_core_code():
     Runtime packages stay banned outright.
     """
     runtime_tops = {"core", "core_features", "core_api_web", "core_events"}
+    # core_common.perception_model: the stateless learned-model manifest contract (9e22eb73be moved it here).
     allowed_contracts = ("core_common.protocol", "core_common.calibration_store",
-                         "core_common.robot_body")
+                         "core_common.robot_body", "core_common.perception_model")
     violations = []
     for path in (file for tree in CONTROL_TREES for file in _prod_py_files(tree)):
         try:
