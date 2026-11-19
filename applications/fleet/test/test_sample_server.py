@@ -182,3 +182,14 @@ def test_local_vision_frame_needs_its_lease_and_preserves_binary_headers():
     assert response.status == 200 and response.body.startswith(b'\x89PNG\r\n\x1a\n')
     assert dict(response.headers)['Content-Type'] == 'image/png'
 
+
+def test_measured_calibration_preview_listing_is_the_empty_no_approval_state():
+    engine = load_engine()
+    assert engine.handle('GET', '/api/fleet/calibrations?purpose=preview', {}, b'').status == 401
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
+    headers = {'Cookie': 'rosy_sample_session=sample-1'}
+    response = engine.handle('GET', '/api/fleet/calibrations?purpose=preview', headers, b'')
+    assert response.status == 200
+    assert json.loads(response.body) == {'calibrations': [], 'use': 'preview-only', 'persistent': False}
+    assert json.loads(engine.handle('GET', '/api/fleet/calibrations', headers, b'').body)['use'] == 'display-only'
+
