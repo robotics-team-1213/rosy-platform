@@ -4082,7 +4082,8 @@ the stop response. These software latch receipts are not physical E-stop or
 driver standstill proof. The existing CORE/mobile stop fanout remains
 independent, and physical E-stop/readback remain separate.
 
-The dedicated `POST /api/fleet/estop` requires an authenticated operator but
+The dedicated `POST /api/fleet/estop` requires any authenticated `fleet.read`
+person (viewer, policy-admin, operator; not `service`, 403; D-1043, v1.408) but
 still sends the stop fanout if the audit store, dispatch-latch write, or queued
 task cleanup fails. Fleet logs each failed durable step; the response reports
 CORE request outcomes only and is not physical stop proof. Other mutations,
@@ -4837,6 +4838,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 |---|---|---|
 | v1.413 | 2026-11-19 | Additive (D-1048): assessor 해제 본문 선택 `recovery`(자동 접기 증거) → `clearable_after_fold`, 증거는 사건 행 `recovery`에 저장. |
 | v1.412 | 2026-11-19 | Additive (D-1047): 통신 끊김뿐인 사건(러너 문구 전체 일치, 잘리지 않은 목록, EIO 고장 기록)은 다시 계산한 쉬는 팔이면 assessor가 해제한다. `AI_CLEAR_REPEAT_LIMIT`는 팔마다 24시간에 세 번 뒤. |
+| v1.408 | 2026-11-18 | 권한 변경 (D-1043, fix/viewer-estop, Safety-Review 대상): `POST /api/fleet/estop`을 operator 전용에서 사람 계정의 `fleet.read`(보기 전용·정책 관리자·운영자)로 넓힌다. `service` 역할은 그대로 403 `FORBIDDEN`. CORE `POST /api/v1/safety/stop`(Viewer↑)과 같다. 자격 없음 401, 이웃 관제 전용 자격·AI 관찰자 POST 제한은 그대로 403. 해제·`/dispatch/rearm`·재가동·승인 권한은 그대로. 본문·응답·감사 예외 불변. 스키마·envelope 변경 없음 |
 | v1.406 | 2026-11-17 | Additive (D-1039): 설정된 AI assessor 서비스 자격이 지정된 팔의 사건 해제 경로만 부른다. `cause`·`basis` 필수(422 `AI_CLEAR_CAUSE_REQUIRED`), `machine_clearable` 기본 거부(403 `AI_CLEAR_KIND_REFUSED`), 팔마다 하루 한 번(403 `AI_CLEAR_REPEAT_LIMIT`), 다른 팔 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 다른 경로 403 `ARM_ASSESSOR_SCOPE_REQUIRED`. 사건 행 `cleared.kind`(`machine`·`person`), 기계 해제 근거는 `unknown`. 사람 해제는 그대로. |
 | v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |
 | v1.402 | 2026-11-14 | Additive: Fleet 앞으로/뒤로 한 걸음(`POST /api/fleet/robots/{robot_id}/step`, CORE nudge 미션 재사용) |

@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-18 · uncommitted · D-1036 부록: 게시 브라우저 증거는 바뀐 범위만
 - 2026-11-14 · uncommitted · D-1029 저전력 충전 복귀
 - 2026-11-14 · uncommitted · fleet: D-1022 기체 SLAM 지도–현장 지도 결속
 - 2026-11-14 · uncommitted · API 참조 v1.401 재위치화 경로
 - 2026-11-14 · uncommitted · fix(tools): 임시 ref 삭제 실패가 원격 시험 실행을 죽이지 않음
-- 2026-11-14 · uncommitted · fix(tools): main_red가 alone 계열 NEW id를 파일 단위로 main에서 다시 돌림
