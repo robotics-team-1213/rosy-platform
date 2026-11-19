@@ -230,7 +230,7 @@ class TripError(Exception):
 
 def pose_diagnostics(pose) -> dict:
     # the provider's types are its own; the trip row stores JSON (a dataclass becomes its str)
-    keys = ("sightings_filtered_map_id", "odom_refused", "odom_refused_reason")
+    keys = ("sightings_filtered_map_id", "odom_refused", "odom_refused_reason", "stale_source")
     return json.loads(json.dumps({key: getattr(pose, key, None) for key in keys}, default=str))
 
 
