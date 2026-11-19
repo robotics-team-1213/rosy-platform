@@ -38,6 +38,9 @@ class Closure:
         self.repo = repo
         self._index: dict[str, set[str]] | None = None
         self._deps: dict[str, set[str]] = {}
+        self._reachable: dict[str, set[str]] = {}
+        self._dynamic: dict[str, bool] = {}
+        self._tests = set(repo.test_files)
 
     @property
     def index(self) -> dict[str, set[str]]:
@@ -93,13 +96,23 @@ class Closure:
         return found
 
     def reach(self, start: str) -> set[str]:
+        if start in self._reachable:
+            return self._reachable[start]
         seen, todo = {start}, [start]
         while todo:
             for dep in self.deps(todo.pop()):
                 if dep not in seen:
                     seen.add(dep)
                     todo.append(dep)
+        self._reachable[start] = seen
         return seen
+
+    def has_dynamic_loads(self, test: str) -> bool:
+        if test not in self._dynamic:
+            reached = self.reach(test)
+            self._dynamic[test] = "?" in reached or any(DYNAMIC.search(self.repo.text(path)) for path in reached
+                                                       if path == test or path in self._tests or "/test" in path)
+        return self._dynamic[test]
 
 
 def narrow(repo, changed_py: str, test_dir: str, closure: Closure, reverse: bool = False) -> list[str] | None:
@@ -116,8 +129,7 @@ def narrow(repo, changed_py: str, test_dir: str, closure: Closure, reverse: bool
         reached = closure.reach(test)
         if changed_py in reached:
             reaching.append(test)
-        elif "?" in reached or any(DYNAMIC.search(repo.text(p)) for p in reached
-                                   if p == test or p in repo.test_files or "/test" in p):
+        elif closure.has_dynamic_loads(test):
             dynamic.append(test)  # dynamic loads can reach anything: keep this file too
     if reverse:  # a reverse dependent's suite: only what reaches the change, plus dynamic loaders
         return [*reaching, *dynamic]
