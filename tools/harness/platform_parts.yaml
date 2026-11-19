@@ -74,12 +74,25 @@ capabilities:
 # `repo` (2026-11-19, D-1036 addendum 2) is what never ships and is no gate:
 # docs, root test/ infrastructure and app-ambiguous root tests, and operator-only
 # tools. It is never deployed and adds no app to a publish delta; shared runtime,
-# deploy, tools/release·packaging·sim (sim ships with the OMX cell) and gate code
-# (tools/harness·hooks, loose tools/ such as land*·publish*, .github) stay `core`.
-# tools/harness/affected_repo.py app_of() reads both; checked by
+# deploy, tools/release·packaging·sim and .github stay `core`.
+# 2026-11-19 (release-split-1118 panel): `tooling` is the landing and publish gate
+# (tools/harness·hooks, tools/land*·publish*·urgent_lane, test/test_land_*); like
+# `core` it keeps the whole-repo rule. `neutral` paths (`app_neutral`: folder
+# notes and ADRs) belong to no app and add none to a delta. An `app_subtrees` key
+# with `*` is an fnmatch pattern (longest key still wins): tools/sim/omx_* and
+# root test/test_omx_* are omx-cell work. Landing events record the apps
+# (tools/land_events.py) so a week of data can decide per-app parallel turns.
+# tools/harness/affected_repo.py app_of() reads all three; checked by
 # test/architecture/test_capability_owners.py.
-apps: [site-fleet, omx-cell, pinky, account, vision, learning, core, repo]
+apps: [site-fleet, omx-cell, pinky, account, vision, learning, core, tooling, repo, neutral]
+app_neutral: ["**/logs.md", "**/index.md", "docs/adr/*"]
 app_subtrees:
+  tools/sim/omx_*: omx-cell
+  test/test_omx_*: omx-cell
+  tools/land*.py: tooling
+  tools/publish*.py: tooling
+  tools/urgent_lane.py: tooling
+  test/test_land_*: tooling
   deploy/site: site-fleet
   deploy/robot/omx: omx-cell
   deploy/cell_pc: omx-cell
@@ -1140,14 +1153,14 @@ roots:
     wave: none
     concern: other
     capability: platform
-    app: core
+    app: tooling
   - path: tools/hooks
     part: tools
     d427_target: tools/hooks
     wave: none
     concern: other
     capability: platform
-    app: core
+    app: tooling
   - path: tools/icons
     part: tools
     d427_target: tools/icons
