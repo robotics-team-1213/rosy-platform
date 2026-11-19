@@ -14,6 +14,8 @@
 /contracts/skill/ @sajy0804 @ddaokki @livsbittt
 /middleware/skills/api/ @sajy0804 @ddaokki @livsbittt
 /middleware/robot_execution/local/ @sajy0804 @ddaokki @livsbittt
+# CORE runs only in the Pinky image (2026-11-19 user decision: app pinky).
+/middleware/core/ @sajy0804 @livsbittt
 /tools/calibration/ @sajy0804 @ddaokki @livsbittt
 
 # KAN-19 fleet: 관제·충전·물류

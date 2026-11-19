@@ -98,7 +98,7 @@ app_subtrees:
   deploy/cell_pc: omx-cell
   deploy/robot/pinky_pro: pinky
   deploy/model_pc: learning
-  deploy/ai_pc: learning
+  deploy/ai_pc: site-fleet  # deliberation, situation, operator broker: Fleet judgment
   test/learning: learning
 
 roots:
@@ -163,7 +163,7 @@ roots:
     import_prefix: [rosy.contracts.learning]
     concern: contracts
     capability: platform
-    app: learning
+    app: core
     note: D-449 draft artifact schemas; stdlib only, no runtime authority.
   # --- contracts -----------------------------------------------------------
   - path: contracts/foundation
@@ -222,7 +222,8 @@ roots:
     import_prefix: [core]
     concern: control
     capability: platform
-    app: core
+    app: pinky
+    reviewers: [sajy0804]
   - path: middleware/drive/behaviors
     layout_target: middleware/drive/behaviors
     part: middleware
@@ -267,7 +268,8 @@ roots:
       core_features/preview: core_features.vision
     concern: control
     capability: platform
-    app: core
+    app: pinky
+    reviewers: [sajy0804]
   - path: middleware/core/services/core_features/safety_gate
     layout_target: middleware/core/services/core_features/safety_gate
     part: middleware
@@ -278,7 +280,8 @@ roots:
     note: D-430 §1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
     concern: safety
     capability: platform
-    app: core
+    app: pinky
+    reviewers: [sajy0804]
   - path: middleware/core/services/core_features/action_rules
     layout_target: middleware/core/services/core_features/action_rules
     part: middleware
@@ -291,7 +294,8 @@ roots:
       Tagged so D-430 invariant 2 has a robot-side importer to check.
     concern: decision
     capability: platform
-    app: core
+    app: pinky
+    reviewers: [sajy0804]
   - path: middleware/core/events
     part: middleware
     d427_target: middleware/core/events
@@ -300,7 +304,8 @@ roots:
     import_prefix: [core_events]
     concern: control
     capability: platform
-    app: core
+    app: pinky
+    reviewers: [sajy0804]
   - path: middleware/core/api
     layout_target: middleware/core/api  # D-626 current layout; d427_target is the ownership ID
     part: middleware
@@ -311,7 +316,8 @@ roots:
     note: Pinky Device API web layer and host-agent client.
     concern: control
     capability: platform
-    app: core
+    app: pinky
+    reviewers: [sajy0804]
   - path: middleware/drive/planning/nav2
     layout_target: middleware/drive/planning/nav2
     part: middleware
@@ -529,7 +535,7 @@ roots:
       unchanged. rosy-execution no longer packages it.
     concern: control
     capability: platform
-    app: core
+    app: omx-cell
     reviewers: [sajy0804, ddaokki]
   - path: operations/site_execution/src/rosy/execution/api
     layout_target: operations/site_execution/src/rosy/execution/api
