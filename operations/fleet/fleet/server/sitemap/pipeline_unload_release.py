@@ -203,6 +203,9 @@ def install_unload_release_routes(app, ctx) -> None:
     from fleet.server.sitemap.pipeline_repark import install_repark_routes
 
     install_repark_routes(app, ctx)  # a vehicle re-park closes here; DONE re-queues the cell task
+    from fleet.server.sitemap.pipeline_observer import install_observer_routes
+
+    install_observer_routes(app, ctx)  # a second idle vehicle looks at the docked one's stack (tier_hint)
     if getattr(ctx, "console", None) is None:
         return  # no robots to send (bare test apps): the read route and depart_s3 still work
     inner = app.router.lifespan_context

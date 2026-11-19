@@ -166,6 +166,9 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         "--task-id", str(handoff.get("task_id") or ""),
         "--handoff-lease-id", str(handoff.get("handoff_lease_id") or ""),
     ]
+    hint = (handoff.get("tier_hint") or {}).get("layers_below")
+    if isinstance(hint, int) and not isinstance(hint, bool) and hint > 0:
+        cmd += ["--layers-below", str(hint)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     parsed: dict[str, Any] = {}
     for line in reversed(proc.stdout.splitlines()):

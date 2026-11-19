@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.416
+**Version:** v1.419
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.419 대기 기체가 돌아서 짐칸 단수를 본다 (사용자 2026-11-19)
+
+하역 자리 뒤 대기 자리(`observe_from` 사이트 규칙, 예: S3←S5)에 선 기체가 관측한다. `POST /api/fleet/pipeline/observer-requests` `{cell_task_id, unload_place?}`(operator, 사람 감지 409), `GET .../{request_id}`, `POST .../{request_id}/cancel`(닫힌 요청 409). Fleet가 하역 셀의 팔이 접혀 있을 때만 대기 기체를 CORE `/api/v1/motion/rotate_to`로 짐칸 쪽으로 돌려(±25° 안이면 안 돎) 앞 카메라 한 장을 판정하고 되돌린다. 판정(1단·2단, 확신 낮으면 기권)은 셀 작업 `tier_hint` `{layers_below, source, confidence, t}`로 남고 셀은 `--layers-below`로 받는다(올리기만). 결과는 `auto_events` kind `auto_observe`. 기권·기체 없음·팔 미접힘·시간 초과는 SKIPPED로 하역을 막지 않는다.
 
 ### v1.416 팔이 못 닿을 때 운반체 재정차 요청 (사용자 2026-11-19)
 
@@ -4840,6 +4844,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.419 | 2026-11-19 | Additive: 관측 요청(`/api/fleet/pipeline/observer-requests`), 대기 기체 제자리 회전→앞 카메라 단수 판정→셀 작업 `tier_hint`, `auto_observe`. |
 | v1.416 | 2026-11-19 | Additive: 셀 작업 중단의 `stage_result.reach_fix` → `repark_requests`(GET cell-tasks), `POST /api/fleet/pipeline/repark/{request_id}` 닫기, DONE이면 같은 운반 재시도(최대 2회). |
 | v1.413 | 2026-11-19 | Additive (D-1048): assessor 해제 본문 선택 `recovery`(자동 접기 증거) → `clearable_after_fold`, 증거는 사건 행 `recovery`에 저장. |
 | v1.412 | 2026-11-19 | Additive (D-1047): 통신 끊김뿐인 사건(러너 문구 전체 일치, 잘리지 않은 목록, EIO 고장 기록)은 다시 계산한 쉬는 팔이면 assessor가 해제한다. `AI_CLEAR_REPEAT_LIMIT`는 팔마다 24시간에 세 번 뒤. |
