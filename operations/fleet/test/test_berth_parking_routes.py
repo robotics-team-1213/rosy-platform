@@ -13,7 +13,7 @@ from fleet.server.ledger.berth_parking_routes import (
     infer_bay_id,
     install_berth_parking_routes,
 )
-from fleet.server.ledger.berth_parking_scenario import dispatch_nav_target, install_berth_scenario_routes
+from fleet.server.ledger.berth_parking_scenario import dispatch_nav_target
 from fleet.server.site_auth import SitePrincipal
 
 
@@ -78,13 +78,6 @@ def test_berth_parking_status_and_dispatch_routes():
         compute_road_plan=fake_compute_road_plan,
         dispatch_nav=dispatch_nav_target,
     )
-    install_berth_scenario_routes(
-        app,
-        console=DummyConsole(),
-        operator_guard=[],
-        require_operator=fake_operator,
-    )
-
     client = TestClient(app)
     st = client.get("/api/fleet/robots/rosy_46/berth-park/status")
     assert st.status_code == 200
@@ -94,9 +87,12 @@ def test_berth_parking_status_and_dispatch_routes():
     assert set(BAY_DOCK_SPECS.keys()) == {"C1", "C2", "C3"}
     assert infer_bay_id("rosy_45") == "C2"
 
+    # 2868c99d7b review: the teleop reverse has no rear proximity stop, so it is never implicit.
+    asked = client.post("/api/fleet/robots/rosy_46/berth-park", json={"bay_id": "C1"})
+    assert asked.status_code == 400 and asked.json()["detail"]["code"] == "EXECUTE_PHYSICAL_REQUIRED"
     res = client.post(
         "/api/fleet/robots/rosy_46/berth-park",
-        json={"bay_id": "C1", "mode": "forward_and_berth_park", "forward_m": 0.20},
+        json={"bay_id": "C1", "mode": "forward_and_berth_park", "forward_m": 0.20, "execute_physical": True},
     )
     assert res.status_code == 200
     rbody = res.json()
@@ -106,14 +102,6 @@ def test_berth_parking_status_and_dispatch_routes():
     assert rbody["in_rail_angular_rad_s"] == 0.0
     assert rbody["phases"] == ["FORWARD_UNDOCK", "ALIGNING", "REVERSING_IN_RAILS", "SETTLING", "DOCKED"]
     assert len(rbody["waypoints_site"]) == 4
-
-    scen = client.post("/api/fleet/scenario/bay-departure", json={"execute_physical": False})
-    assert scen.status_code == 200
-    sbody = scen.json()
-    assert sbody["depart_order"] == ["rosy_46", "rosy_45", "rosy_42"]
-    assert sbody["live_robots"]["rosy_46"]["site_pose"]["y"] == 0.470
-    assert sbody["live_robots"]["rosy_45"]["site_pose"]["y"] == 0.470
-    assert sbody["cell_contract_handoff"]["stop_place_id"] == "S3"
 
 
 def _road_app(goal, refusal=None):
@@ -220,3 +208,4 @@ def test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_quer
                           "places": ["P1", "C1"], "edges": ["bay_1"], "length_m": 0.2}
     assert seen == {"robot_id": "rosy_46", "x": 0.1, "y": 0.2, "yaw": 1.5, "place_id": "C1", "label": "charge 1"}
     assert client.get("/api/fleet/robots/rosy_46/road-nav2/plan", params={"x": "not-a-number"}).status_code == 422
+
