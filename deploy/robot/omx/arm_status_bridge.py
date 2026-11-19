@@ -128,10 +128,11 @@ def main(argv=None):
     if not token:
         raise SystemExit(f"{args.token_env} is not set")
     calibration = json.loads(args.calibration.read_text()) if args.calibration else None
-    from workcell_observation_bridge import ArmSender, SourceWorker, secure_url
+    from workcell_observation_bridge import ArmSender
 
     stop, mirrors = threading.Event(), []
     for binding in args.mirror_fleet:
+        from workcell_observation_bridge import SourceWorker, secure_url  # only a mirror needs these
         url, separator, ca_file = binding.partition(",")
         if not separator or not Path(ca_file).is_absolute():
             parser.error("mirror Fleet must be https://URL,/absolute/ca.pem")
