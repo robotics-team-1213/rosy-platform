@@ -1,0 +1,205 @@
+name: Rolling Regression Sweep
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Maximum GHA shards to run in this sweep"
+        required: false
+        default: "4"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: rosy-rolling-sweep
+  cancel-in-progress: false
+
+jobs:
+  plan-sweep:
+    name: Plan Rolling Sweep
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_work: ${{ steps.plan.outputs.has_work }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
+        with:
+          fetch-depth: 50
+
+      - name: Fetch prior sweep state artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/prior-dir
+          art_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=rolling-sweep-state&per_page=1" --jq '.artifacts[0].id // empty' || true)"
+          if [ -n "$art_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${art_id}/zip" > /tmp/prior.zip && unzip -oq /tmp/prior.zip -d /tmp/prior-dir && cp /tmp/prior-dir/*.json /tmp/prior-state.json || true
+          fi
+          [ -s /tmp/prior-state.json ] || echo '{"shards":{},"open_culprits":{}}' > /tmp/prior-state.json
+
+      - name: Select rolling sweep batch
+        id: plan
+        env:
+          SWEEP_LIMIT: ${{ inputs.limit || '4' }}
+        run: |
+          python3 -c "import yaml" 2>/dev/null || pip3 install --break-system-packages --quiet pyyaml
+          sha="$(git rev-parse HEAD)"
+          matrix_json="$(python3 tools/rolling_regression.py gha-plan --sha "$sha" --state /tmp/prior-state.json --limit "$SWEEP_LIMIT" --json-out /tmp/sweep-plan.json)"
+          has_work="$(python3 -c 'import json, sys; print("true" if json.loads(sys.argv[1]).get("include") else "false")' "$matrix_json")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "has_work=$has_work" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix_json" >> "$GITHUB_OUTPUT"
+
+      - name: Upload prior state
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
+        with:
+          name: rolling-prior-state
+          path: /tmp/prior-state.json
+          retention-days: 1
+
+  run-shard:
+    name: sweep (${{ matrix.name }})
+    needs: plan-sweep
+    if: needs.plan-sweep.outputs.has_work == 'true'
+    runs-on: ubuntu-26.04
+    container: ros:jazzy-ros-base
+    timeout-minutes: 25
+    continue-on-error: ${{ !matrix.gating }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan-sweep.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
+        with:
+          ref: ${{ needs.plan-sweep.outputs.sha }}
+          fetch-depth: 50
+
+      - name: Fix git safe directory (container)
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Install runtime and test dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl openssh-client zstd python3-opencv python3-pil rauc=1.11.3-2 squashfs-tools ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs ros-jazzy-control-msgs ros-jazzy-controller-manager-msgs
+          pip3 install --no-cache-dir --break-system-packages --ignore-installed --require-hashes --no-deps --only-binary=:all: -r deploy/robot/pinky_pro/image/device-python-requirements.txt
+          grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
+          pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt flake8 httpx==0.28.1 pyyaml jsonschema ext4 playwright==1.64.1
+          pip3 install --no-cache-dir --break-system-packages --no-deps oauthlib==4.0.0 joserfc==1.7.5
+          pip3 install --no-cache-dir --break-system-packages --require-hashes --no-deps --only-binary=:all: --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 --target /tmp/rosy-receiver-crypto -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
+          pip3 install --no-cache-dir --break-system-packages --no-deps --target /tmp/rosy-receiver-crypto joserfc==1.7.5
+          echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+
+      - name: Install optional suite tools
+        env:
+          INVS_JSON: ${{ toJSON(matrix.invocations) }}
+          SHARD_NAME: ${{ matrix.name }}
+        run: |
+          if echo "$INVS_JSON" | grep -q 'operations/overhead/test'; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-site-vision-tools -r deploy/site/requirements-vision.txt
+            echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          fi
+          if echo "$INVS_JSON" | grep -Eq 'operations/fleet/test|applications/fleet/test|test_account_pipeline.py|test_monitoring_browser.py'; then
+            apt-get update -qq && apt-get install -y -qq fonts-noto-cjk
+            python3 -m playwright install --with-deps chromium
+          fi
+          if echo "$INVS_JSON" | grep -Eq 'learning/curation/pinky|learning/training/pinky'; then
+            pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt --target /tmp/rosy-pinky-raw-tools -r learning/curation/pinky/requirements-raw.txt
+            echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          fi
+          if echo "$INVS_JSON" | grep -q 'learning/training/pinky'; then
+            pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          fi
+          if [ "$SHARD_NAME" = "omx-act-cpu" ]; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu --extra-index-url https://download.pytorch.org/whl/cpu -r deploy/robot/omx/requirements-lerobot-export.txt
+            echo "PYTHONPATH=/tmp/rosy-omx-act-cpu${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+            echo "ROSY_ACT_CPU_REQUIRED=1" >> "$GITHUB_ENV"
+            echo "HF_HUB_OFFLINE=1" >> "$GITHUB_ENV"
+            echo "TRANSFORMERS_OFFLINE=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build platform wheels and overlay
+        run: |
+          wheelhouse=/tmp/rosy-platform-wheelhouse
+          mkdir -p "$wheelhouse"
+          pip3 wheel --no-deps --no-build-isolation --wheel-dir "$wheelhouse" contracts/foundation contracts/skill contracts/motion contracts/learning operations/account operations/world operations/monitoring operations/notifications middleware/skills/api middleware/skills/manipulation operations/site_execution middleware/robot_execution/local operations/processes/palletizing integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway
+          pip3 install --break-system-packages --no-cache-dir --no-index --find-links "$wheelhouse" core_common==0.0.3 rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.16 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
+          if [ "${{ matrix.ros }}" = "overlay" ]; then
+            . /opt/ros/jazzy/setup.sh
+            GZ_IGNORE=integrations/simulation/gazebo/COLCON_IGNORE
+            if [ ! -e "$GZ_IGNORE" ]; then
+              trap 'rm -f "$GZ_IGNORE"' EXIT
+              touch "$GZ_IGNORE"
+            fi
+            COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
+            colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install --event-handlers console_direct+
+          fi
+
+      - name: Run shard with single-nodeid retry
+        shell: bash
+        env:
+          ROSY_ROS: ${{ matrix.ros }}
+          ROSY_ENTRY_JSON: ${{ toJSON(matrix) }}
+        run: |
+          set -eo pipefail
+          case "$ROSY_ROS" in
+            overlay) . /opt/ros/jazzy/setup.sh; . install/setup.sh ;;
+            base) . /opt/ros/jazzy/setup.sh ;;
+          esac
+          python3 tools/rolling_regression.py gha-run-entry --entry-json "$ROSY_ENTRY_JSON" --out-dir /tmp/rolling-out
+
+      - name: Upload shard result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
+        with:
+          name: rolling-result-${{ matrix.name }}
+          path: /tmp/rolling-out
+          retention-days: 1
+
+  rolling-watermark:
+    name: Update Rolling Watermark
+    needs: [plan-sweep, run-shard]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
+        with:
+          ref: ${{ needs.plan-sweep.outputs.sha }}
+          fetch-depth: 50
+
+      - name: Download prior state
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0 (pinned commit)
+        with:
+          name: rolling-prior-state
+          path: /tmp/prior-dir
+
+      - name: Download shard results
+        if: needs.plan-sweep.outputs.has_work == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0 (pinned commit)
+        with:
+          pattern: rolling-result-*
+          path: /tmp/rolling-results
+          merge-multiple: true
+
+      - name: Merge rolling watermark state
+        run: |
+          mkdir -p /tmp/rolling-results
+          python3 -c "import yaml" 2>/dev/null || pip3 install --break-system-packages --quiet pyyaml
+          python3 tools/rolling_regression.py gha-record --sha "${{ needs.plan-sweep.outputs.sha }}" --state /tmp/prior-dir/prior-state.json --results-dir /tmp/rolling-results --out-state /tmp/next-state.json --summary-out "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload updated rolling sweep state
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
+        with:
+          name: rolling-sweep-state
+          path: /tmp/next-state.json
+          retention-days: 14

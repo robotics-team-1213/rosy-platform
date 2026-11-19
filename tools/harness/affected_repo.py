@@ -36,7 +36,7 @@ def _under(path: str, prefix: str) -> bool:
 def app_of(path: str, parts: dict) -> str:
     """The app that owns `path` (2026-11-18 release split): its deepest ``platform_parts.yaml``
     root or ``app_subtrees`` entry, else ``core`` (repository root files, uncovered folder notes)."""
-    entries = [(root["path"], root["app"]) for root in parts.get("roots") or []]
+    entries = [(root["path"], root.get("app", "core")) for root in parts.get("roots") or [] if "path" in root]
     entries += list((parts.get("app_subtrees") or {}).items())
     hits = [entry for entry in entries if _under(path, entry[0])]
     return max(hits, key=lambda entry: len(entry[0]))[1] if hits else "core"
@@ -61,6 +61,7 @@ class Repo:
     test_files: list[str]
     safety_roots: list[dict] = field(default_factory=list)
     safety_modules: set[str] = field(default_factory=set)
+    parts: dict = field(default_factory=dict)
     #: Read files at this revision instead of the working tree (``--head``: the pushed or landed commit).
     rev: str | None = None
     _texts: dict[str, str] = field(default_factory=dict)
@@ -79,6 +80,7 @@ class Repo:
         bare.modules = list(harness.get("modules") or [])
         bare.owners = [(r["path"], tuple(r.get("import_prefix") or ())) for r in parts.get("roots") or []]
         bare.safety_roots, bare.safety_modules = list(parts.get("roots") or []), set(parts.get("safety_modules") or ())
+        bare.parts = dict(parts or {})
         return bare
 
     def text(self, path: str) -> str:
