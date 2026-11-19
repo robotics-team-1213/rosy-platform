@@ -138,10 +138,7 @@ def add_readers(repo: at.Repo, path: str, trigger: str, add, changed=(), base_te
     else:
         found, why = narrowed(repo, path), ""
     if found is None:
-        if legacy():
-            return why
-        import affected_capsules
-        found = affected_capsules.packaging_capsule(repo, path)
+        return why
     # D-762 stage 0: the readers found, not the whole tree; foundation keeps its own suite.
     if at._under(path, FOUNDATION) and not at.TEST_FILE.search(path):
         found.setdefault(f"{FOUNDATION}/test", f"module core_common ({path})")
@@ -277,8 +274,7 @@ def narrowed(repo: at.Repo, path: str) -> dict[str, str] | None:
         importers = module_importers(repo, path)
         if not importers:
             return None
-        # Runtime wrappers and broad owners need downstream coverage, not just named readers (legacy FULL only).
-        if legacy() and any(not at.TEST_FILE.search(src) and not at._under(src, FOUNDATION) for src in importers):
+        if any(not at.TEST_FILE.search(src) and not at._under(src, FOUNDATION) for src in importers):
             return None
         tests = {t: f"references {path}" for t in repo.referencing_tests(path)}
         for src in importers:

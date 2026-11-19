@@ -171,3 +171,18 @@ def test_every_root_test_of_a_gate_tool_is_in_the_self_test_tier():
               if GATE_IMPORT.search(t.read_text(encoding="utf-8", errors="replace"))
               and not affected.affected_narrow.SELF_TEST.match(t.relative_to(base.ROOT).as_posix())]
     assert not missed, missed
+
+
+def test_pack_splits_large_non_serial_capsules_for_parallel_runners(tmp_path):
+    """Capsules above MAX_GROUP_PATHS shard across lab PCs and CI runners instead of one serial queue."""
+    class FakeRepo:
+        root = tmp_path
+
+        @staticmethod
+        def test_import_names(path):
+            return {path: path}
+
+    cap = affected.affected_pack.MAX_GROUP_PATHS
+    groups = affected.pack(FakeRepo(), [f"test/test_cap_{i}.py" for i in range(cap + 5)])
+    assert len(groups) == 2
+    assert all(len(group) <= cap for group in groups)

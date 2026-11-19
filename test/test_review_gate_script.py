@@ -45,7 +45,7 @@ sys.exit(0)
 def _gate(tmp_path, monkeypatch, deletions, **extra_env):
     """Bob changed docs/logs.md on main; alice's PR touches it with `deletions` deleted lines."""
     work = tmp_path / "work"
-    work.mkdir()
+    work.mkdir(parents=True, exist_ok=True)
 
     def git(*a):
         return subprocess.run(["git", "-C", str(work), *a], check=True, capture_output=True, text=True).stdout.strip()
@@ -59,7 +59,7 @@ def _gate(tmp_path, monkeypatch, deletions, **extra_env):
     git("update-ref", "refs/remotes/origin/main", "HEAD")
     sha = git("rev-parse", "HEAD")
     bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
+    bin_dir.mkdir(parents=True, exist_ok=True)
     (bin_dir / "gh").write_text(FAKE_GH, encoding="utf-8")
     (bin_dir / "gh").chmod(0o755)
     env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "GH_TOKEN": "x", "REPO": "o/r", "PR": "1",
