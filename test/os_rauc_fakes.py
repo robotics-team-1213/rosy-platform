@@ -66,6 +66,18 @@ def download_package(pin):
                          f"sha256={pin['sha256']}; " + "; ".join(failures))
 
 
+def pinned_package(pin):
+    staged = os.environ.get("ROSY_TEST_RAUC_DEB")
+    if not staged:
+        return download_package(pin)
+    with Path(staged).open("rb") as stream:
+        package = stream.read(pin["size_bytes"] + 1)
+    assert len(package) == pin["size_bytes"] and hashlib.sha256(package).hexdigest() == pin["sha256"], (
+        "staged RAUC package does not match pinned size and SHA-256"
+    )
+    return package
+
+
 @pytest.fixture(scope="session")
 def rauc_tool(tmp_path_factory):
     if platform.system() != "Linux":
@@ -73,7 +85,7 @@ def rauc_tool(tmp_path_factory):
     assert platform.machine() in PACKAGES, "no verified native RAUC test package for this architecture"
     assert shutil.which("dpkg-deb") and shutil.which("mksquashfs") and shutil.which("openssl")
     pin = PACKAGES[platform.machine()]
-    package = download_package(pin)
+    package = pinned_package(pin)
     directory = tmp_path_factory.mktemp("isolated-rauc")
     archive = directory / "rauc.deb"
     archive.write_bytes(package)
