@@ -10,6 +10,7 @@ from typing import Sequence
 import yaml
 
 from navigation.frame_prefix import apply_nav2_frame_prefix
+from navigation.profile_limits import derive_slow_speed_params
 
 
 def write_prefixed_nav2_params(
@@ -18,8 +19,11 @@ def write_prefixed_nav2_params(
     *,
     directory: str | Path = "/tmp",
     footprint_points: Sequence[Sequence[float]] | None = None,
+    speed: tuple[float, float] | None = None,
 ) -> str:
     params = yaml.safe_load(Path(source).read_text(encoding="utf-8"))
+    if speed is not None:
+        derive_slow_speed_params(params, *speed)
     prefix = f"{namespace}/" if namespace else ""
     # D-1009: our behavior trees ship beside params/ (share/navigation/behavior_trees); a source without them keeps Nav2's stock trees.
     trees = Path(source).resolve().parent.parent / "behavior_trees"

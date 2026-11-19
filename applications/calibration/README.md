@@ -61,6 +61,8 @@ python3 deploy/robot/omx/cell_checkerboard.py intrinsics \
 
 사람만 확인할 수 있는 것(줄자 거리, 감독 시험으로 보는 자세)은 엔진 `deploy/robot/omx/cell_requests.py`가 요청으로 연다([D-951 덧붙임 2026-11-09](../../docs/adr/D-951-rosy-calibration-application.md)). 요청은 후보마다 예측값을 적고, 사람의 답은 어느 후보를 지지하는지만 정한다. 값을 직접 바꾸지 않는다.
 
+답의 판정은 화면과 `cell_requests.py list --all`에 보인다. 엔진은 재실행 때 답을 자동으로 읽지 않는다. 판정을 반영하는 길은 그 판정을 근거로 기본값을 고친 커밋 하나다(`cell_requests.py` 머리말). 그래서 반영 기록은 요청 id를 커밋 메시지나 작업 기록에 적어 남긴다.
+
 ```
 python tools/sim/omx_real2sim.py request belt RUN       # 벨트 요청 (실물↔시뮬 루프의 RUN 폴더)
 python3 deploy/robot/omx/cell_requests.py list
