@@ -185,8 +185,38 @@ def watch(land, wt: Path):
     return check
 
 
+def full_in_turn(land, wt: Path, branch: str, args) -> bool:
+    """D-889 addendum 39 (user 2026-11-19): an urgent landing whose FULL is certain (a safety path, or --tests full)
+    runs it inside its turn, so main cannot move under it. 11-19 the urgent berth-unblock landing reran its pretest
+    FULL twice outside the lock after main moved (10:52, 13:32): a safety path reuses no prior round."""
+    if not isinstance(getattr(args, "_full_in_turn", None), bool):
+        args._full_in_turn = bool(getattr(args, "urgent", "")) and (
+            args.tests == "full" or (args.tests == "auto" and land.land_batch.safety(land, wt, branch)))
+    return args._full_in_turn
+
+
+def in_turn(args) -> bool:
+    """For land.rounds: this landing's FULL runs in the turn instead of land_prepare.again (full_in_turn)."""
+    return getattr(args, "_full_in_turn", False) is True
+
+
+def saved(land, wt: Path, branch: str, args, candidate: str, main: str, tier, invocations, prepared):
+    """Save the turn's FULL tier; a FULL run in the turn (in_turn) is then the prepared record pre-push reuses."""
+    if not in_turn(args):
+        land.land_full.save(wt, branch, candidate, main, tier, invocations)
+        return prepared
+    env = land.land_cache.env_id(wt, candidate) if args.tests == "full" else None  # current_main's witness
+    land.land_full.save(wt, branch, candidate, main, tier, invocations, env=env)
+    return land.land_full.prepared(wt, branch, main)
+
+
 def pretest(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None) -> None:
-    """Before the wait: prepare, unless an earlier run's tier restores; either way the pre-turn refresh is armed."""
+    """Before the wait: prepare, unless an earlier run's tier restores; either way the pre-turn refresh is armed.
+    An urgent FULL in the turn (full_in_turn) prepares nothing: it waits for the turn and runs there."""
+    if ticket is not None and full_in_turn(land, wt, branch, args):
+        land_queue.REFRESH = None
+        print("[land] urgent FULL (safety path or --tests full): no pretest, it runs inside the turn", flush=True)
+        return
     if args.tests == "full" or (args.tests == "auto" and land.land_full.restore(wt, branch) is None):
         prepare(land, wt, branch, args, python, qdir, ticket)
     else:

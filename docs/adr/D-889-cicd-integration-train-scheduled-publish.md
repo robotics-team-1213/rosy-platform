@@ -759,3 +759,13 @@
 **되돌림.** 이 조건 한 줄(`prepared`)을 지우면 추가 23 동작으로 돌아간다. 24시간 안에 단독 착지 대기가 길어지면 되돌리고 숫자를 다시 잰다.
 
 **보충 (2026-11-18, R3 패널).** 9개 대기 착지가 각자 차례를 도는 것(건당 약 46분, 하루 약 31건)이 남은 직렬 한계다. 추가 38의 이유는 증거를 버리는 것이므로, `tested`가 현재 main과 같은 waiting 착지(urgent·alone 아님, 같은 호스트)는 후보로 되돌린다. 이전 main에서 시험한 waiting, `tier: full_done`, 살아 있는 롤업에 타고 있는 행은 계속 뺀다. 되돌림: `prepared`의 `main` 비교를 지우면 추가 38 그대로다.
+
+### 추가 39 (2026-11-19): 급한 안전 경로 착지는 차례를 먼저 잡고 그 안에서 FULL을 돈다 (사용자 결정 2026-11-19 "그렇게 해")
+
+**왜.** 안전 경로를 건드린 착지는 FULL을 돌아야 하고 이전 라운드 통과를 재사용하지 못한다(추가 37의 거부 목록). 2026-11-19 급한 착지 `fix/berth-safety-publish-unblock`은 차례 밖에서 FULL을 준비하는 동안 main이 움직일 때마다(10:52, 13:32) FULL을 처음부터 다시 돌았다(`no prior-round reuse ... safety path`). 기록: `docs/workspace-records/2026-11-18/release-split-panel.md`(작업 공간).
+
+**결정.** `--urgent` 착지가 안전 경로를 건드려 FULL이 확실하거나(`--tests auto`), `--tests full`을 명시했으면 차례 밖 사전 시험을 하지 않는다. 먼저 차례를 잡고, 차례를 쥔 채로 FULL을 돈다. 그동안 main은 움직이지 않으므로 FULL을 다시 시작하지 않는다. 다른 착지는 그 FULL 동안(약 85분) 기다린다. 사용자가 받아들였다. 이 경우에만 차례 상한(`TURN_CAP_S`·30분 `TURN_MAX_S`)을 `land_turn.URGENT_FULL_TURN_S`(3시간)로 바꾼다. 3시간이 지나면 지금처럼 반납하고 밖에서 준비한다. 급하지 않은 착지와 안전 경로가 없는 급한 착지는 그대로다. 차례 안에서 통과한 FULL은 준비 기록으로 저장되어 pre-push가 재사용하는 착지 기록이 된다. 판정은 `land_prepare.full_in_turn`(안전 경로는 `land_batch.safety`)이다.
+
+**검증.** `test/test_land_prepare.py`(급한 안전·명시 FULL은 사전 시험 없이 차례 안에서 FULL 한 번, 반납 없음, 3시간 상한; 급하지 않은 것·안전 경로 없는 급한 것은 그대로), `test/test_land.py`, `test/test_land_queue.py`, `test/test_land_turn_deadline.py`를 원격 시험 PC에서 돌린다. 24시간 동안 급한 안전 착지의 FULL 재시작 횟수(`prepared` 이벤트 수)를 본다.
+
+**되돌림.** `land_prepare.pretest`의 `full_in_turn` 분기를 지우면 이전 동작이다(`in_turn`이 거짓이 되어 차례 상한과 `again`도 돌아온다).
