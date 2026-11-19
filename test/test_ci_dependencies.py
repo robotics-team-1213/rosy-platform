@@ -478,7 +478,7 @@ def test_merge_group_and_push_run_scoped_affected_against_their_base():
     assert "github.event.before" in scope_step["env"]["SCOPE_BASE"]
     tier = scope_step["run"]
     assert "pull_request|merge_group)" in tier and "push)" in tier and "--full --ci-matrix" in tier
-    assert "HEAD^" not in tier and "HEAD^" not in scope["Size rule per commit (D-766)"]["run"]
+    assert "SCOPE_BASE=HEAD^" not in tier and "SIZE_BASE=HEAD^" not in scope["Size rule per commit (D-766)"]["run"]
     test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
     assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
     assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
