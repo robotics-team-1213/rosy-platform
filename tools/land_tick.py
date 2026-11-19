@@ -8,8 +8,8 @@ the next), never deleting work:
 1. main-red recheck: when main moved since the last tick and ids are open, run them on main (``land_mainred
    recheck``); ids that pass close, which is what lets the landings stopped on them go again.
 2. resume: orphaned landings and MAIN-RED stops main has cleared (``land_async.orphans``); then one landing whose
-   last STOP was a full queue, once the queue has room (``requeue``), and a NOT QUEUED request land_async kept
-   there (``land_queue.keep_pending``).
+   last STOP gave no verdict on its change (a full queue, the watchdog, a refused --urgent: ``no_verdict``), once
+   the queue has room (``requeue``), and a NOT QUEUED request land_async kept there (``land_queue.keep_pending``).
 3. rollup: ``land_rollup apply --auto`` for pending landings that fit together. The only rollup trigger (D-889 36).
 4. cleanup: ``land_gc`` (lossless), worktrees (landed and orphan ones at once, any idle WORKTREE_IDLE_H with its
    branch kept and dirty work under refs/wip/) and the branch sweep (merged go, idle unlanded to refs/archive/).
@@ -49,6 +49,8 @@ WARM_BATCH = 8  # missing main invocations warmed during an idle tick
 WORKTREE_IDLE_H = 12  # a worktree nobody touched this long is removed (branch kept, dirty work to refs/wip/)
 METRICS_EVERY_S = 24 * 3600  # D-889 36: the pipeline's numbers, once per day
 METRICS_LOG = "rosy-land-metrics.jsonl"
+WATCHDOG, URGENT_REFUSED = "watchdog: no progress", "--urgent refused"  # land_watchdog's stop, land_queue.enter's
+AUTO = ("queue full", "watchdog", "urgent")  # no_verdict's reasons, as the .auto-resume mark and the report name them
 RECHECK_STAMP, LOG, REPORT, LOCK = ("rosy-land-tick.recheck", "rosy-land-tick.log", "rosy-land-backlog.txt",
                                      "rosy-land-tick.lock")
 
@@ -81,35 +83,71 @@ def resume(repo: Path) -> str:
     return f"resumed {len(done)} of {len(names)}: {', '.join(done)}" if names else "nothing to resume"
 
 
+def no_verdict(stop: str, qdir: Path) -> str | None:
+    """Why a landing's last STOP says nothing about its change (one of AUTO), so the tick relaunches it; None: a
+    verdict for its owner. 11-20: of 12 h of landings, 9.5 h sat stopped on the watchdog and 9.7 h on a refused
+    --urgent. A refused --urgent goes once no urgent ticket is live, its args.json (the user's urgency) untouched."""
+    if land_async.QUEUE_FULL in stop:
+        return "queue full"
+    if stop.startswith(WATCHDOG):
+        return "watchdog"
+    if stop.startswith(URGENT_REFUSED) and land_queue.urgent_holder(qdir) is None:
+        return "urgent"
+    return None
+
+
+def stop_events(common: Path) -> dict[str, str]:
+    """The last watchdog stop's reason by hidden worktree name: its os._exit(3) prints no [land] STOP to the log."""
+    found: dict[str, str] = {}
+    try:
+        with (common / land_events.EVENTS).open(encoding="utf-8", errors="replace") as rows:
+            for line in rows:
+                if '"event": "stop"' in line and '"watchdog' in line:  # 137 MB on 11-20: parse only these
+                    try:
+                        row = json.loads(line)
+                        found[str(row["branch"]).replace("/", "-")] = str(row["reason"])
+                    except (ValueError, KeyError):
+                        continue
+    except OSError:
+        pass
+    return found
+
+
 def requeue(repo: Path, days: float = 7, now: float | None = None) -> str:
-    """One landing whose last STOP was a full queue, relaunched once the queue has room. land_async gives up after its
-    drain wait and nobody queued it again (11-18: orphan-relands-3, safety-review-clean sat stopped 3-4 days). Only the
-    newest snapshot of a branch, once per stop (the .auto-resume mark), never a .stopped carrying an owner's own note.
+    """One landing whose last STOP gave no verdict (``no_verdict``), relaunched once the queue has room. land_async
+    gives up after its drain wait and nobody queued it again (11-18: orphan-relands-3, safety-review-clean sat stopped
+    3-4 days). Only the newest snapshot of a branch, once per stop (the .auto-resume mark, "<main> <reason>"), a
+    watchdog stop right after a watchdog relaunch left to its owner, never a .stopped carrying an owner's own note.
     A NOT QUEUED request land_async kept (land_queue.keep_pending) goes first; at most one launch per tick in all."""
     if land_queue.full(land_queue.queue_dir(repo)):
         return "queue full"
     if (said := pending(repo)) is not None:
         return said
-    place, now = land_async.holder(repo), now or time.time()
-    newest: dict[str, str] = {}
+    place, now, events = land_async.holder(repo), now or time.time(), None
+    qdir, newest = land_queue.queue_dir(repo), {}
     for tree in place.iterdir() if place.is_dir() else ():
         if tree.is_dir() and (key := tree.name.rsplit("-", 1)[0]) and tree.name > newest.get(key, ""):
             newest[key] = tree.name
     for name in sorted(newest.values()):
         stop, mark = place / (name + ".stopped"), place / (name + ".auto-resume")
         if (not stop.is_file() or now - stop.stat().st_mtime > days * 86400
-                or not stop.read_text(encoding="utf-8").startswith("land.py exit")
+                or not (note := stop.read_text(encoding="utf-8")).startswith("land.py exit")
                 or mark.is_file() and mark.stat().st_mtime >= stop.stat().st_mtime):
             continue
         logs = [p for p in (place / (name + ".log"), place / (name + ".resume.log")) if p.is_file()]
         text = max(logs, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8", errors="replace") if logs else ""
-        stops = re.findall(r"^\[land\] STOP: .*$", text, re.M)
-        if not stops or land_async.QUEUE_FULL not in stops[-1]:
+        stops = re.findall(r"^\[land\] STOP: (.*)$", text, re.M)
+        last = stops[-1] if stops else ""
+        if note.startswith("land.py exit 3"):  # land_watchdog's exit code: its reason is only in the events
+            last = (events := stop_events(place.parent) if events is None else events).get(name, last)
+        why = no_verdict(last, qdir)
+        if why is None or (why == "watchdog" and mark.is_file()
+                           and mark.read_text(encoding="utf-8").endswith(" watchdog")):  # hangs again: its owner's
             continue
-        mark.write_text(land_async.git(repo, "rev-parse", "main"), encoding="utf-8")
+        mark.write_text(f"{land_async.git(repo, 'rev-parse', 'main')} {why}", encoding="utf-8")
         try:
             land_async.resume(repo, name, [], land_async.detach, wait=0)
-            return f"requeued {name}"
+            return f"requeued {name} ({why})"
         except SystemExit as exc:  # e.g. held by a live ticket
             print(f"[tick] requeue {name}: {exc}", flush=True)
     return "nothing to requeue"
@@ -210,10 +248,12 @@ def report(repo: Path, common: Path, now: float | None = None) -> list[str]:
     place = land_async.holder(repo)
     stops = sorted(place.glob("*.stopped")) if place.is_dir() else []
     red = [s for s in stops if land_async.main_red_stop(place, s.name[:-len(".stopped")])]
+    auto = resumed(place, now)
     lines = [f"[backlog] {time.strftime('%m-%d %H:%M', time.localtime(now))} main {land_async.git(repo, 'rev-parse', '--short=10', 'main')}",
              "[backlog] queue: " + (", ".join(f"{s} {sum(r.get('status') == s for r in rows)}"
                                               for s in ("pending", "preparing", "waiting", "turn")) if rows else "empty"),
-             f"[backlog] stopped: {len(stops)} ({len(red)} on MAIN-RED, wait for main; {len(stops) - len(red)} for owners)"]
+             f"[backlog] stopped: {len(stops)} ({len(red)} on MAIN-RED, wait for main; {len(stops) - len(red)} for owners);"
+             " auto-resumed 24h: " + ", ".join(f"{why} {auto.count(why)}" for why in AUTO)]
     opened = sorted(land_mainred.state(repo).items(), key=lambda kv: kv[1]["since"] or now)
     alerts = [nodeid for nodeid, s in opened if now - (s["since"] or now) > ALERT_S and not s["owner"]]
     lines.append(f"[backlog] main-red open: {len(opened)}, {len(alerts)} unowned over {ALERT_S // 60} min"
@@ -224,6 +264,18 @@ def report(repo: Path, common: Path, now: float | None = None) -> list[str]:
         lines.append(line)
     (common / REPORT).write_text("\n".join(lines) + "\n", encoding="utf-8")
     return lines
+
+
+def resumed(place: Path, now: float) -> list[str]:
+    """The reasons of the .auto-resume marks requeue wrote within 24 h (a landed one's mark goes with land_gc)."""
+    found = []
+    for mark in place.glob("*.auto-resume") if place.is_dir() else ():
+        try:
+            if now - mark.stat().st_mtime < 86400:
+                found.append(mark.read_text(encoding="utf-8").partition(" ")[2].strip())
+        except OSError:
+            continue
+    return found
 
 
 def main(argv: list[str] | None = None) -> int:
