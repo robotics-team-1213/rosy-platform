@@ -38,14 +38,17 @@ STRATEGY = {
 # with what to change (ASK).
 # shortcut: a box leaning on a fixture (2026-11-13 arm_b, beside the ship) is not seen from the top camera; it needs the
 # side camera or depth before it can be a type here.
-OBSTACLE_TYPES = {"tangled blob": "tangled pile", "no finger room": "packed", "edge of view": "edge of view",
+OBSTACLE_TYPES = {"neighbour clearance": "neighbour clearance", "tangled blob": "tangled pile", "no finger room": "packed", "edge of view": "edge of view",
                   "not inside the camera view": "edge of view", "out of reach": "out of reach"}
 ASK = {"edge_of_view": "move the box, or aim the top camera, so the box and the room beside it are in view",
+       "neighbour_clearance": "separate the object from its neighbours to leave the measured finger clearance",
        "out_of_reach": "move the box inside the arm's reach",
        "camera_moved": "the top camera moved since the map's reference: remap (cell_calibrate auto, a person at the switch), then rerun",
        "no_session": "start record_session.py --chunks for this arm, then rerun"}
 # 2026-11-14 arm_s: run_auto's bare "refused" is its one no-session answer; its other refusals are prefixed and stay `other`
-ATTEMPT_CAUSES = (("stopped: contact at park", "park_contact"),("stopped: no usable object (tangled pile)", "pile"), ("stopped: no usable object (edge of view)", "edge_of_view"),
+ATTEMPT_CAUSES = (("stopped: contact at park", "park_contact"),
+                  ("stopped: no usable object (neighbour clearance)", "neighbour_clearance"),
+                  ("stopped: no usable object (tangled pile)", "pile"), ("stopped: no usable object (edge of view)", "edge_of_view"),
                   ("stopped: no usable object (out of reach)", "out_of_reach"),
                   ("stopped: released", "lift_stall"), ("stopped: holding", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
                   ("stopped: misaligned", "misaligned"), ("stopped: reinserted", "unstable_grasp"), ("stopped: placed", "not_seen_placed"), ("stopped: no usable", "no_room"),
@@ -60,6 +63,7 @@ RECOVERY = {
     "no_room": ["push_clear", "observe_again", "ask_person"],
     "pile": ["push_clear", "observe_again", "ask_person"],  # one piece per push; the next look re-plans from what is left
     "edge_of_view": ["ask_person"],
+    "neighbour_clearance": ["ask_person"],
     "out_of_reach": ["ask_person"],
     "no_progress": ["push_clear", "observe_again", "ask_person"],
     "misaligned": ["observe_again", "push_clear", "ask_person"],

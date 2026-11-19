@@ -212,8 +212,12 @@ def choose(
                     (o, room),
                 )
             if room["margin_mm"] is None:
-                why = (("edge of view: a side is past the camera's view, " if room.get("unseen") else "no finger room: ")
-                       + f"{room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it")
+                prefix = "no finger room: "
+                if room.get("unseen"):
+                    prefix = "edge of view: a side is past the camera's view, "
+                elif prm.get(p, "auto.neighbour_clear_mm") > 0:
+                    prefix = "neighbour clearance: "
+                why = f"{prefix}{room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it"
         if why:
             refused.append(
                 {"centre_mm": o["centre_mm"], "object": o.get("object"), "colour": o.get("colour"), "why": why}
@@ -239,8 +243,9 @@ def choose(
             rooms = [(y, finger_room(mask, roi, pixel_fn, o, y + closing, p)) for y in fresh]
             yaw, room = next(((y, r) for y, r in rooms if r["margin_mm"] is not None), (None, rooms[0][1]))
             if yaw is None:
+                reason = "neighbour clearance" if prm.get(p, "auto.neighbour_clear_mm") > 0 else "no finger gap"
                 refused.append(
-                    {"centre_mm": o["centre_mm"], "object": o["object"], "why": "no finger gap on either closing axis"}
+                    {"centre_mm": o["centre_mm"], "object": o["object"], "why": f"{reason} on either closing axis"}
                 )
                 continue
         use_blend = bool((config.get("calibrate") or {}).get("blend_bias"))

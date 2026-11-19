@@ -157,6 +157,12 @@
    "source": "measured",
    "evidence": "2026-10-28 facts 19: 30 mm container, jaws 15 mm below the top"
   },
+  "auto.neighbour_clear_mm": {
+   "value": 0.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "The measured clearance is configured per cell."
+  },
   "auto.clear_mm": {
    "value": 55.0,
    "unit": "mm",

@@ -118,6 +118,7 @@ class Mute:
 
 
 def test_measured_neighbour_clearance_refuses_a_pick_that_only_barely_fits():
+    import cell_diagnose
     import cell_finger_room as fr
     import cell_params as prm
 
@@ -133,6 +134,9 @@ def test_measured_neighbour_clearance_refuses_a_pick_that_only_barely_fits():
     assert default_room["margin_mm"] is not None
     assert fr.jaw_margin(fr.own_removed(mask, roi, px, box), roi, px, box, params=params)["margin_mm"] is None
     assert fr.jaw_margin(np.zeros_like(mask), roi, px, box, params=params)["margin_mm"] is not None
+    obstacle = cell_diagnose.obstacle_type([{"why": "tangled blob"}, {"why": "neighbour clearance: 8 mm free"}])
+    cause = cell_diagnose.attempt_cause(f"stopped: no usable object ({obstacle})", pile_moved=True)
+    assert cell_diagnose.RECOVERY[cause] == ["ask_person"]
 
 
 def test_jaws_never_open_for_the_mark_among_neighbours_within_the_opened_width(tmp_path, monkeypatch):

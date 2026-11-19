@@ -105,14 +105,16 @@ def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, p
         params, "gripper.gap_mm_per_unit")  # the opening at open_max, from the 30 mm hold and the gap per unit
     most = min(prm.get(params, "auto.jaw_margin_max_mm"), (widest - 2 * half) / 2)
     centre = np.asarray(o["raw_m"], float)
+    clear = prm.get(params, "auto.neighbour_clear_mm")
+    scan_mm = most + finger + clear + 2.0
     free = [free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across, (-pad / 2, 0.0, pad / 2),
-                    most + finger + 2.0, own_mm=own, outside_blocks=True) for side in (-1, 1)]  # unseen is not free: a roi cut to one box passed a neighbour 7 times (2026-11-06)
-    margin = min(most, min(free) - finger)
+                    scan_mm, own_mm=own, outside_blocks=True) for side in (-1, 1)]  # unseen is not free: a roi cut to one box passed a neighbour 7 times (2026-11-06)
+    margin = min(most, min(free) - finger - clear)
     # no room only because a side is past the view: the object is at the frame's edge, not packed (2026-11-13 arm_s, a box on
     # Pinky at the top edge after the camera moved), so no push is planned for it
     unseen = margin < least and min(most, min(free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across,
-                                                      (-pad / 2, 0.0, pad / 2), most + finger + 2.0, own_mm=own)
-                                              for side in (-1, 1)) - finger) >= least
+                                                      (-pad / 2, 0.0, pad / 2), scan_mm, own_mm=own)
+                                              for side in (-1, 1)) - finger - clear) >= least
     # the jaw mark opens wider than any pick (62 against open_max 56): its own room, from the box's centre, kept with it
     return {"margin_mm": round(margin, 1) if margin >= least else None, "free_mm": [round(f, 1) for f in free], "unseen": unseen,
             "mark_half_mm": mark_room(mask, roi, pixel_fn, centre, across, half, params, own_mm=own)}
