@@ -260,16 +260,24 @@ def _narrowed_tests(repo: Repo, path: str, test: str, reverse: bool = False) -> 
 
 def select(repo: Repo, changed: list[str], moved: list[str] = (),
            harness_texts: tuple[str, str] | None = None, base_text=None) -> Selection:
-    """`harness_texts`: ``harness.yaml`` at the merge base and at head; without it that file is FULL.
+    """`harness_texts`: ``harness.yaml`` at the merge base and at head; without it that file is FULL in legacy mode.
     `base_text(path)`: a file at the merge base (None: absent there); without it the rules that compare
-    with the base (known_failures) stay FULL."""
-    sel = Selection(mode="affected", changed=changed, escalations=list(moved))
+    with the base (known_failures) stay FULL in legacy mode."""
+    import affected_capsules
+
+    legacy = affected_narrow.legacy()
+    sel = Selection(mode="affected", changed=changed, escalations=list(moved) if legacy else [])
 
     def add(path: str, why: str) -> None:
         if repo.exists(path):
             sel.reasons.setdefault(path, [])
             if why not in sel.reasons[path]:
                 sel.reasons[path].append(why)
+
+    if moved and not legacy:
+        sel.narrowed += [f"{m} [dual-endpoint capsule]" for m in moved]
+        for test, why in affected_capsules.moved_capsule(repo, list(moved)).items():
+            add(test, why)
 
     for guard in GUARD_SET:
         add(guard, "guard set (D-436 1)")
@@ -297,6 +305,11 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             if narrow:
                 sel.narrowed.append(f"{path}: {trigger}")
                 trigger, tiered = None, narrow == "own"
+        elif trigger == SAFETY_TRIGGER and not legacy:
+            for test, why in affected_capsules.safety_capsule(repo, path).items():
+                add(test, why)
+            sel.narrowed.append(f"{path}: {SAFETY_TRIGGER}")
+            trigger = None
         if path == affected_narrow.HARNESS_YAML:  # reads harness.yaml; not in GUARD_SET
             add("test/architecture/test_folder_layout.py", f"reads {path}")
         if path == affected_narrow.HARNESS_YAML and trigger:
@@ -307,6 +320,11 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                 for test in [p for m in added for p in (*m["tests"], *(m.get("functional") or []))] + [
                         "test/test_harness_contracts.py", "test/test_affected_tests.py"]:
                     add(test, reason)
+            elif not legacy:
+                for test, capsule_why in affected_capsules.harness_capsule(repo, path).items():
+                    add(test, capsule_why)
+                sel.narrowed.append(f"{path}: ({why}): {trigger}")
+                trigger, tiered = None, True
             else:  # land.py HARNESS_TRIGGER matches the suffix, so the reason goes before it
                 trigger = f"({why}): {trigger}"
         if trigger:
@@ -361,7 +379,14 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             for test, why in folder.items():
                 add(test, why)
             continue
-        sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
+        if legacy:
+            sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
+        else:
+            for test, why in affected_capsules.packaging_capsule(repo, path).items():
+                add(test, why)
+            for test, why in affected_capsules.harness_capsule(repo, path).items():
+                add(test, why)
+            sel.narrowed.append(f"{path}: maps to no module, import root or test (scoped capsule)")
         sel.unmapped.append(path)
 
     # Direct reverse dependents (D-436 1): modules whose shipped (non-test) code
@@ -382,12 +407,17 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                 for test in other.get("tests") or []:
                     if test not in BROAD_TESTS:
                         kept = None
-                        for changed_py in (p for p in changed if p.endswith(".py") and repo.module_for(p) is module):
-                            one = _narrowed_tests(repo, changed_py, test, reverse=True)
-                            if one is None:
-                                kept = None
-                                break
-                            kept = sorted({*(kept or []), *one})
+                        mod_has_safety = any(
+                            safety_review.is_safety(p, repo.safety_roots, repo.safety_modules)
+                            for p in touched_paths.get(module["name"], ())
+                        )
+                        if not mod_has_safety:
+                            for changed_py in (p for p in changed if p.endswith(".py") and repo.module_for(p) is module):
+                                one = _narrowed_tests(repo, changed_py, test, reverse=True)
+                                if one is None:
+                                    kept = None
+                                    break
+                                kept = sorted({*(kept or []), *one})
                         for one in kept or [test]:
                             add(one, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}"
                                 + (" [import closure]" if kept else ""))
