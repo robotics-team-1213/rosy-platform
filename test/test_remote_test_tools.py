@@ -27,6 +27,31 @@ RAW = "learning/curation/pinky/requirements-raw.txt"
 PROFILE = "pinky-raw"
 
 
+def test_ci_scope_change_does_not_rebuild_the_remote_environment(monkeypatch):
+    original = rp.git
+    before, dirs = rp.deps(ROOT, "HEAD")
+    ci_ref = f"HEAD:{rp.CI}"
+
+    def git(repo, *args):
+        if args == ("show", ci_ref):
+            return original(repo, *args).replace("--ci-matrix", "--full --ci-matrix")
+        if args == ("rev-parse", ci_ref):
+            return "f" * 40
+        return original(repo, *args)
+
+    monkeypatch.setattr(rp, "git", git)
+    assert rp.deps(ROOT, "HEAD") == (before, dirs)
+
+    def new_wheel(repo, *args):
+        if args == ("rev-parse", f"HEAD:{dirs[0]}"):
+            return "f" * 40
+        return git(repo, *args)
+
+    monkeypatch.setattr(rp, "git", new_wheel)
+    after, after_dirs = rp.deps(ROOT, "HEAD")
+    assert after != before and after_dirs == dirs
+
+
 def tools():
     return importlib.import_module("remote_test_tools")
 
