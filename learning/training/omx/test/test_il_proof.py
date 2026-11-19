@@ -15,7 +15,7 @@ EXPECTED = ['env', 'synthetic_sessions', 'prepare', 'synthetic_decisions', 'trai
 def test_il_proof_cpu_act_chain_writes_a_passing_synthetic_receipt(tmp_path):
     for name in ('lerobot', 'torch'):
         if importlib.util.find_spec(name) is None:
-            pytest.skip(f'{name} is not installed in this python; run in the learning env (learning/training/env)')
+            pytest.skip(f'{name} is not installed in this python; run in the learning env (learning/training/omx/env)')
     out = tmp_path / 'proof'
     result = subprocess.run([sys.executable, str(SCRIPT), '--out', str(out), '--device', 'cpu',
                              '--steps', '2', '--timeout', '600'],

@@ -7,7 +7,7 @@ native_cycle verify -> optional SmolVLA train (--smolvla) -> register_policy --d
 hub_sync prepare (never uploads). Writes <out>/proof-receipt.json; exits 1 if a requested stage fails.
 
     python il_proof.py --out <new dir> --device cuda [--smolvla] [--steps 20]
-Run it with the python of the learning env (learning/training/env/provision_policy_gpu.sh).
+Run it with the python of the learning env (learning/training/omx/env/provision_policy_gpu.sh).
 """
 import argparse
 import hashlib

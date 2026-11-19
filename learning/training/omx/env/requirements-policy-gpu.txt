@@ -1,6 +1,6 @@
 # SmolVLA + ACT capable GPU training env (LeRobot 0.4.4, Python 3.12, CUDA 12.8 wheels).
 # Exact copy of `uv pip freeze` from the model PC's working ~/rosy-test/venvs/policy-gpu (2026-11-19).
-# Install ONLY through learning/training/env/provision_policy_gpu.sh (it passes the right uv flags).
+# Install ONLY through learning/training/omx/env/provision_policy_gpu.sh (it passes the right uv flags).
 # torch/torchvision/triton/nvidia-* come from the cu128 index below; everything else from PyPI.
 # Never install this into a robot/ROS runtime (learning/AGENTS.md).
 --extra-index-url https://download.pytorch.org/whl/cu128

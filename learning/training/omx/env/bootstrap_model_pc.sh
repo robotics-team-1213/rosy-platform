@@ -47,8 +47,8 @@ cat <<'TXT'
 == person-only steps (not done by this script) ==
  1. Model code: run deploy/site/install-model-code.sh with the release signing PUBLIC key
     (needs the signer; see deploy/model_pc/README.md).
- 2. Team HF token: put the team account token in ~/.config/rosy/hf-team-token, then chmod 600.
-    Uploads always pass it explicitly with --token-file; the host HF login cache is never used.
+ 2. Team HF login: `hf auth login` as the team account. hub_sync upload checks HF whoami and
+    refuses any other account (or pass --token-file with a team token file, chmod 600).
  3. Real demonstrations (leader-arm recording) for any model quality beyond the synthetic proof.
 Then prove the env with the VENV python (not the system python):
    <venv>/bin/python learning/training/omx/il_proof.py --out <new dir> --device cuda [--smolvla]
