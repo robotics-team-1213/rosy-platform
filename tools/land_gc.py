@@ -265,6 +265,23 @@ def apply(repo: Path, rows) -> list[str]:
     return problems
 
 
+def superseded(repo: Path, snap: str) -> list[str]:
+    """Remove the older snapshots of ``snap``'s branch that nothing unique holds (this one covers them); the names
+    removed. 2026-11-08: 149 superseded snapshots (22 GB) waited for a person."""
+    src = source(snap)
+    older = {ref.split("-batch")[0].replace("/", "-") for ref in git(
+        repo, "for-each-ref", "--format=%(refname:short)", f"refs/heads/{land_async.PREFIX}{src}-*").splitlines()
+        if SNAPSHOT.search(ref) and source(ref) == src and ref < snap}
+    gone = []
+    for name in sorted(older):
+        rows = plan(repo, time.time(), 7, only=name)
+        if any(row[0] == "remove" for row in rows) and not apply(repo, rows):
+            gone.append(name)
+    if gone:
+        print(f"[land-async] removed superseded snapshots of {src}: {gone}", flush=True)
+    return gone
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="remove; without it only print the plan")
