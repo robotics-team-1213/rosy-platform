@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.408
+**Version:** v1.417
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.417 로봇 미세 재정차 `/api/v1/motion/repark` (D-1051)
+
+로봇 `POST`/`GET`/`DELETE /api/v1/motion/repark`를 더한다(additive, Safety-Review 대상). 셀 팔 도달 보정용으로 정차한 로봇을 로봇 몸체 기준 옆 ≤ 0.06 m·앞뒤 ≤ 0.10 m 옮긴다. 능력 플래그는 따로 없다(`motion.rotate_to`와 같은 `loc_mission`).
 
 ### v1.406 AI assessor의 팔 사건 해제 (D-1039)
 
@@ -2209,6 +2213,9 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/localization/mission` | Viewer | D-395 P2-7 — `{kind, state, reason}`; `state`: `idle`(아직 없음, `kind`·`reason` 은 `null`) \| `running`(+ `elapsed_s`, `travelled_m`, `turned_rad`) \| `done` \| `aborted` (v1.73) |
 | POST | `/api/v1/motion/rotate_to` | Operator: trip lease 주인(D-541), lease가 없으면 `operator_name`을 적은 운영자 | D-603 (v1.194) — `{delta_deg? (|·| ≤ 180), yaw_odom? (rad, odom), tol_deg = 5 (1–20), max_rate_dps = 20 (≤ 30), timeout_s = 10 (≤ 15), operator_name}`, `delta_deg`·`yaw_odom` 중 하나만. CORE가 제자리에서 자기 odom yaw로 닫힌 고리 회전을 한다(비례 감속, 최저 `localization_mission.rotate_to_min_angular` 0.15 rad/s, 최고 `max_rate_dps`). NAVIGATION 모드의 nav 슬롯으로 들어가 `select_output`(E-Stop·readiness·Safety clip·D-400 정책)을 거친다. `LOCALIZED`와 상관없이 받고, `LOCALIZED`가 되어도 끝나지 않는다. 거부: lease 주인 아님 409 `TRIP_LEASED`, 보정 lease 409 `CALIBRATION_ACTIVE`, 이름 없음 403 `OPERATOR_NAME_REQUIRED`, 매핑 409 `MAPPING_ACTIVE`, E-Stop 409 `EMERGENCY_ACTIVE`, 409 `MOTION_BUSY`·`ODOMETRY_STALE`·`ROTATE_CLEARANCE`, 범위 400, readiness HOLD 503, 구동 능력 없음 501. 202 본문은 `GET`과 같다. 끝: `done`(오차 ≤ `tol_deg`) 또는 `timeout`·`overturn`(odom 회전 합이 요청 + `rotate_to_overturn_deg` 30° 초과)·`obstacle`(회전 중 `rotate_in_place`와 같은 몸체 검사)·`obstacle_sensor_stale`·`odometry_stale`·`estop`·`cancelled`(NAVIGATION을 떠남, `DELETE`)·`error` → `aborted`. 끝나면 바퀴 명령을 지우고 IDLE. 사건 `motion.rotate_to`(요청), `localization.mission`(`kind: rotate_to` 시작·끝) |
 | GET | `/api/v1/motion/rotate_to` | Viewer | D-603 (v1.194) — `{kind: rotate_to, state: running\|done\|aborted\|idle, reason, err_deg (running), final_err_deg (끝), elapsed_s, turned_rad}`; 마지막 미션이 회전이 아니면 `state: idle` |
+| POST | `/api/v1/motion/repark` | Operator: `rotate_to`와 같은 admission(trip lease 주인 또는 `operator_name`) | D-1051 (v1.417) — `{forward_m = 0 (앞 +, |·| ≤ 0.10), left_m = 0 (왼 +, |·| ≤ 0.06), operator_name}`. CORE가 `rotate_to` 회전 θ(≥ 30°) → `nudge` d → odom yaw로 되돌림 → 남은 앞뒤 nudge 순서로 이어 간다(`core_features.localization.repark`). 속도 ≤ 0.023 m/s·≤ 0.09 rad/s, 각 단계는 odom 폐루프이고 `rotate_to`·`nudge`의 몸체 여유·센서 신선도·E-Stop·모드 취소 검사를 그대로 받는다. 거부는 `rotate_to`와 같은 코드 + 범위 400 `VALIDATION_ERROR`. 202 본문은 `GET`과 같다 |
+| GET | `/api/v1/motion/repark` | Viewer | D-1051 (v1.417) — `{state: idle\|running\|done\|aborted, reason, segment (running, "i/n"), moved_robot_dxdy_m {forward_m, left_m} (끝, odom 측정)}`. `aborted`이면 로봇은 선 자리에서 멈췄고 방향이 θ만큼 어긋나 있을 수 있다 |
+| DELETE | `/api/v1/motion/repark` | Operator | D-1051 (v1.417) — 멈춘다(`aborted` `cancelled`). 멈춤이라 lease와 상관없이 받는다 |
 | DELETE | `/api/v1/motion/rotate_to` | Operator | D-603 (v1.194) — 도는 회전을 멈춘다(`cancelled`). 멈춤이므로 lease와 상관없이 받는다. 다른 미션은 건드리지 않는다. 본문은 `GET`과 같다 |
 | POST | `/api/v1/slam/start` | Operator | NAV-005 — 추종 세션이 주행을 쥐고 있으면 409 `NAVIGATION_ACTIVE` |
 | POST | `/api/v1/slam/stop` | Operator | NAV-005 |
@@ -3014,6 +3021,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `localization.request_cleared` | info | 로봇 | `{request_id, why}` — 요청이 닫혔다(v1.163). `why`: `answered`(수락된 결정), `lane_return_resumed`, `line_follow_reset`. `ttl_s` 만료는 이벤트 없이 사라진다 |
 | `localization.mission` | info | 로봇 | `{phase, kind, reason, elapsed_s, travelled_m, turned_rad}` — D-395 P2-7 미션이 시작했거나(`phase: started`, `reason: null`) 끝났다(`phase: done`\|`aborted`, `reason` 은 `POST /localization/mission` 의 끝 사유). 같은 내용이 ROS `localization/mission` 으로 로봇 sensing 노드에 가서 다시 탐색하게 한다 (v1.73) |
 | `motion.rotate_to` | info | 로봇 | `{delta_deg, yaw_odom, tol_deg, max_rate_dps, timeout_s, lease_owner, operator_name, by}` — D-603 회전 요청을 받았다 (v1.194) |
+| `motion.repark` | info | 로봇 | `{forward_m, left_m, lease_owner, operator_name, by}` — D-1051 미세 재정차 요청을 받았다 (v1.417) |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
 | `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id, source}` — 확인된 충전 상태. `source: instrumented`(2소스, D-28) 또는 `voltage_only`(후진 도크 D-350 Phase 1 — 배터리 인터록에는 반영되지 않는다) |
