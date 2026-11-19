@@ -235,6 +235,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
   const inkCol = css("--ink");
   const recessedCol = css("--surface-recessed");
   const scrimCol = css("--scrim-solid");
+  const quietCol = css("--ink-quiet");
 
   // 1. Draw anchored OMX-AI arms (base anchor + 4x zoomed tracked head/gripper vector)
   const anchors = omxOn && Array.isArray(view?.anchors) ? view.anchors : [];
@@ -245,7 +246,9 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     const reachPx = Math.max(14, scaleAt(anc.base_x, anc.base_y, anc.reach_m || 0.28));
     const isHoveredOmx = hovered?.kind === "omx_ai" && hovered.id === anc.target_id;
     const isSelectedOmx = isHoveredOmx || view?.focusAnchorId === anc.target_id || view?.anchorPinTarget === anc.target_id;
-    const armColor = isSelectedOmx ? primaryCol : warnCol;
+    // Without a live head the base is all we know: no link, no head, a quiet colour.
+    const live = anc.live === true;
+    const armColor = !live ? quietCol : isSelectedOmx ? primaryCol : warnCol;
     ctx.save();
     // Workspace reach circle (subtle unless hovered/selected)
     ctx.beginPath();
@@ -266,32 +269,36 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     ctx.rect(baseP.x - bs, baseP.y - bs, bs * 2, bs * 2);
     ctx.fill();
     ctx.stroke();
-    // Base -> Head link vector
-    ctx.beginPath();
-    ctx.moveTo(baseP.x, baseP.y);
-    ctx.lineTo(headP.x, headP.y);
-    ctx.lineWidth = isSelectedOmx ? 3.2 : 2.2;
-    ctx.strokeStyle = armColor;
-    ctx.stroke();
-    // Distal Head / Gripper marker + orientation tip
-    ctx.beginPath();
-    ctx.arc(headP.x, headP.y, isSelectedOmx ? 5.5 : 4, 0, Math.PI * 2);
-    ctx.fillStyle = primaryCol;
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = inkCol;
-    ctx.stroke();
-    if (typeof anc.head_yaw === "number") {
-      const hTip = ahead(anc.head_x ?? anc.base_x, anc.head_y ?? anc.base_y, anc.head_yaw, 0.055);
+    if (live) {
+      // Base -> Head link vector
       ctx.beginPath();
-      ctx.moveTo(headP.x, headP.y);
-      ctx.lineTo(hTip.x, hTip.y);
-      ctx.lineWidth = 1.8;
-      ctx.strokeStyle = primaryCol;
+      ctx.moveTo(baseP.x, baseP.y);
+      ctx.lineTo(headP.x, headP.y);
+      ctx.lineWidth = isSelectedOmx ? 3.2 : 2.2;
+      ctx.strokeStyle = armColor;
       ctx.stroke();
+      // Distal Head / Gripper marker + orientation tip
+      ctx.beginPath();
+      ctx.arc(headP.x, headP.y, isSelectedOmx ? 5.5 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = primaryCol;
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = inkCol;
+      ctx.stroke();
+      if (typeof anc.head_yaw === "number") {
+        const hTip = ahead(anc.head_x ?? anc.base_x, anc.head_y ?? anc.base_y, anc.head_yaw, 0.055);
+        ctx.beginPath();
+        ctx.moveTo(headP.x, headP.y);
+        ctx.lineTo(hTip.x, hTip.y);
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = primaryCol;
+        ctx.stroke();
+      }
     }
     ctx.restore();
-    if (labelsOn || isHoveredOmx) {
+    if (!live) {
+      drawChip(ctx, null, baseP.x, baseP.y - 12, `${anc.target_id} · 위치 모름`, "");
+    } else if (labelsOn || isHoveredOmx) {
       const deg = typeof anc.head_yaw === "number" ? ` ${Math.round((anc.head_yaw * 180) / Math.PI)}°` : "";
       const shortText = isHoveredOmx
         ? `${anc.target_id.toUpperCase()} · (${(anc.head_x ?? anc.base_x).toFixed(2)}, ${(anc.head_y ?? anc.base_y).toFixed(2)}m)${deg}`
