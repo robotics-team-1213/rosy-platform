@@ -121,6 +121,13 @@ def test_next_puts_assumed_constants_first_with_an_experiment():
     assert json.dumps([list(r) for r in rows])  # the --json form serialises
 
 
+def test_the_shared_kp_candidate_gives_both_arms_the_same_servo_gains():
+    p = physics.Physics("twin-kp-shared-20261118")
+    for j in ("joint1", "joint2", "joint3", "joint4", "joint5"):
+        assert p.joint("arm_a", j) == p.joint("arm_b", j), j
+    assert p.joint("arm_a", "joint1")["kp"] == 20.0 and p.joint("arm_a", "joint2")["kp"] == 40.0  # the fitted joints only
+
+
 def test_the_two_arm_world_builds_from_the_chosen_candidate():
     pytest.importorskip("mujoco")
     import omx_two_arm_world as tw

@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.404
+**Version:** v1.408
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.406 AI assessor의 팔 사건 해제 (D-1039)
+
+`POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear`를 이름 있는 운영자 외에 설정된 AI assessor 서비스 자격도 부를 수 있다(additive). assessor는 `site_users` `role: service`이고 `ROSY_FLEET_ARM_ASSESSORS`(`id=source,source;id=source`, 기본 비어 있음 = 꺼짐)에 팔과 함께 적힌 principal이다. assessor는 이 경로 외 모든 경로에서 403 `ARM_ASSESSOR_SCOPE_REQUIRED`, 지정되지 않은 팔에서 403 `AI_CLEAR_ARM_NOT_ASSIGNED`다. `note`·`cause`·`basis`가 모두 필요하고(없으면 422 `AI_CLEAR_CAUSE_REQUIRED`), 저장된 사실이 `core_common.protocol.arm_incidents.machine_clearable`(기본 거부: 형태가 맞는 사실, 접힌 안전 종료, 모든 모터 토크 0, `caps_restored` 참, 래치·감김·접촉 정지·모터 고장 기록 없음, 실행기 표시 행은 모두 `run park`·`state` 행이고 채워진 `error`·`fault`가 같은 문구로 전체가 `contact in park: <joint> lag rose to <n.n> units at PWM <n> of <n> (lags: <joint> <n.n>, ...)`인 주차 중 부하 정지일 때만)을 통과하지 않으면 403 `AI_CLEAR_KIND_REFUSED`, 그 팔에 24시간 안의 기계 해제가 이미 있으면 원인과 상관없이 403 `AI_CLEAR_REPEAT_LIMIT`다(사람 해제는 세지 않음). 사건 행의 `cleared`에 `kind`(`machine`·`person`)가 붙는다(additive). 기계 해제는 `cleared.by`가 assessor id이고 `basis`가 늘 `unknown`이라 학습 정답으로 채점되지 않는다. 사람 해제는 바뀌지 않는다.
 
 ### v1.402 Fleet 앞으로/뒤로 한 걸음 (CORE nudge 미션 재사용)
 
@@ -683,7 +687,7 @@ It does not enable a physical owner, command, calibration or motion admission.
 | `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents` | D-971. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentReport` `{source_id,session_id,facts,decision,recovery?,frames<=2 [{role top\|side,sha256,jpeg_b64}]}`, `facts`/`decision`/`recovery` each a finite JSON object of at most 12,288 bytes and depth 6, each frame a JPEG of at most 200,000 bytes whose sha256 Fleet recomputes; body limit 700,000 bytes (413); `source_id` must equal the path (422) | 200 `{incident_id,hold:{held,incident_ids<=64,reason}}`; no-store. The same `(source_id, session_id)` returns the same incident |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/hold` | D-971. Source-bound `X-Workcell-Observation-Token` | 200 `{held,incident_ids,reason}`; held while an incident of that arm is not cleared; no-store |
-| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator (`require_named_operator`); body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared. Records who, when, the note and the person's cause with its basis; nothing is deleted |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator, or (v1.406, D-1039) an AI assessor service principal configured with its arms in `ROSY_FLEET_ARM_ASSESSORS` that may call only this route (guard `require_incident_clearer`); body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists; an assessor must send both) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared; assessor only: 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 422 `AI_CLEAR_CAUSE_REQUIRED`, 403 `AI_CLEAR_KIND_REFUSED` (stored facts fail `machine_clearable`), 403 `AI_CLEAR_REPEAT_LIMIT` (a machine clear of this arm within 24 h, any cause). Records who, when, the note, the cause with its basis (`unknown` for a machine clear) and `cleared.kind` (`machine`/`person`); nothing is deleted |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence` | v1.375. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentEvidenceFrame {camera, t_rel_s, kind full\|tip, sha256, jpeg_b64}`, one JPEG of at most 200,000 bytes whose sha256 Fleet recomputes | 200 `{incident_id, seq}`; the same sha256 is the same frame; 404 unknown incident of that arm; 409 24 frames already; 413 body; no-store |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence/{seq}` | v1.375. Existing Fleet viewer authentication | `image/jpeg`; no-store; 404 unknown or expired (whole frames 14 days after clearing) |
 | `GET /api/fleet/workcell-observations/arm-incidents/labelled` | v1.375. `ai_observer` only | `{incidents:[...]}` cleared incidents with a recorded cause, newest first (at most 200), frame lists without bytes; no-store |
@@ -2930,7 +2934,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 |---|---|---|---|
 | `system.boot` | info | 로봇 | `{version}` |
 | `system.shutdown` | warning | 로봇 | `{}` |
-| `config.changed` | warning | 로봇 | `{key, id, role, deleted, by, changes}` — `key`: `robot.identity` \| `auth.tokens` \| `safety.limits` \| `safety.speed_limits` \| `safety.approved_speed` \| `dds.rmw`. `safety.speed_limits`·`safety.approved_speed` 는 `{key, changes}` 를 싣고(`changes`: 필드 → [이전, 새 값]) 앞의 것은 `by`(설정한 사람의 principal_ref)도 싣는다. `id`·`role` 은 토큰 추가, `id`·`deleted` 는 토큰 삭제·로그아웃, `id` 만은 이름표 변경일 때 실린다. 토큰 원문도, 원문에서 유도된 값도 싣지 않는다 |
+| `config.changed` | warning | 로봇 | `{key, id, role, deleted, by, operator_name, changes}` — `key`: `robot.identity` \| `auth.tokens` \| `safety.limits` \| `safety.speed_limits` \| `safety.approved_speed` \| `dds.rmw`. `safety.speed_limits`·`safety.approved_speed` 는 `{key, changes}` 를 싣고(`changes`: 필드 → [이전, 새 값]) 앞의 것은 `by`(설정한 사람의 principal_ref)와 `operator_name`(콘솔이 보낸 표시용 이름, 감사 주체 아님)도 싣는다. `id`·`role` 은 토큰 추가, `id`·`deleted` 는 토큰 삭제·로그아웃, `id` 만은 이름표 변경일 때 실린다. 토큰 원문도, 원문에서 유도된 값도 싣지 않는다 |
 | `auth.paired` | warning | 로봇 | `{id, role, source, expires_at}` — 로그인 코드로 토큰이 발급됐다(D-193). 코드도 토큰도 싣지 않는다 |
 | `auth.code_burned` | warning | 로봇 | `{code_id, attempts}` — 틀린 시도가 쌓여 로그인 코드를 폐기했다 |
 | `auth.enrollment_code_issued` | warning | 로봇 | `{code_id, role, by}` — 관리자(`by` = 토큰 id)가 등록 코드를 받았다. 코드는 싣지 않는다 |
@@ -4070,7 +4074,8 @@ the stop response. These software latch receipts are not physical E-stop or
 driver standstill proof. The existing CORE/mobile stop fanout remains
 independent, and physical E-stop/readback remain separate.
 
-The dedicated `POST /api/fleet/estop` requires an authenticated operator but
+The dedicated `POST /api/fleet/estop` requires any authenticated `fleet.read`
+person (viewer, policy-admin, operator; not `service`, 403; D-1043, v1.408) but
 still sends the stop fanout if the audit store, dispatch-latch write, or queued
 task cleanup fails. Fleet logs each failed durable step; the response reports
 CORE request outcomes only and is not physical stop proof. Other mutations,
@@ -4823,6 +4828,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.408 | 2026-11-18 | 권한 변경 (D-1043, fix/viewer-estop, Safety-Review 대상): `POST /api/fleet/estop`을 operator 전용에서 사람 계정의 `fleet.read`(보기 전용·정책 관리자·운영자)로 넓힌다. `service` 역할은 그대로 403 `FORBIDDEN`. CORE `POST /api/v1/safety/stop`(Viewer↑)과 같다. 자격 없음 401, 이웃 관제 전용 자격·AI 관찰자 POST 제한은 그대로 403. 해제·`/dispatch/rearm`·재가동·승인 권한은 그대로. 본문·응답·감사 예외 불변. 스키마·envelope 변경 없음 |
+| v1.406 | 2026-11-17 | Additive (D-1039): 설정된 AI assessor 서비스 자격이 지정된 팔의 사건 해제 경로만 부른다. `cause`·`basis` 필수(422 `AI_CLEAR_CAUSE_REQUIRED`), `machine_clearable` 기본 거부(403 `AI_CLEAR_KIND_REFUSED`), 팔마다 하루 한 번(403 `AI_CLEAR_REPEAT_LIMIT`), 다른 팔 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 다른 경로 403 `ARM_ASSESSOR_SCOPE_REQUIRED`. 사건 행 `cleared.kind`(`machine`·`person`), 기계 해제 근거는 `unknown`. 사람 해제는 그대로. |
 | v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |
 | v1.402 | 2026-11-14 | Additive: Fleet 앞으로/뒤로 한 걸음(`POST /api/fleet/robots/{robot_id}/step`, CORE nudge 미션 재사용) |
 | v1.400 | 2026-11-14 | Additive: Fleet `POST /api/fleet/robots/{robot_id}/goal` `frame: "site"` — 콘솔 현장 지도 클릭을 기체 지도 프레임으로 바꿔 보낸다(D-1003), 증명 없으면 409 |

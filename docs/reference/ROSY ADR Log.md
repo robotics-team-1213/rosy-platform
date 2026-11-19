@@ -13,6 +13,7 @@
 | D-1035 | 셀 팔 리스, Calibration 보정 작업 API, AI 판정 기록으로 팔 incident 해제(D-971 해제 주체 변경). [전문](../adr/D-1035-calibration-arm-lease-jobs-and-ai-incident-assessment.md) | Accepted (2026-11-17, 사용자 결정; 배포·실물 수용 별도) |
 | D-1024 | OMX 학습 정책의 실물 입회 시험을 하루 안에 연다 — D-793 단계를 줄이되 장치 한계·정지·두 사람 확인은 그대로 둔다. [전문](../adr/D-1024-omx-learned-policy-supervised-real-trial-fast-track.md) | Accepted (2026-11-14, 사용자 지시; 구현·원격 시험, 실물 수용 없음) |
 | D-1034 | 원격·분리 제어 유닛의 중앙 Rosy Account 연동, 터널 브리지, 기계 토큰 분리 및 공용 브라우저 세션. [전문](../adr/D-1034-paired-control-unit-central-account-wiring.md) | Accepted (2026-11-15, 사용자 결정; `cell-a`↔`rosy-fleet-r` 실물 연동 검증·`shared/web` 통합 반영, 서명 compose 템플릿·R 이미지 갱신 별도) |
+| D-1037 | 착지 시험 선택: 모듈 시험 디렉터리는 import 폐포로 좁히고, 꽉 찬 시험 PC·줄어드는 대기열은 기다린다. [전문](../adr/D-1037-land-speed-import-closure-and-pool-waits.md) | Proposed (2026-11-17, 사용자 지시; 원격 시험·선택 크기 실측만, 실제 착지 시간 단축은 며칠 측정 뒤) |
 | D-1033 | OMX 1팔·2팔 공통 프로필 정본, 양팔 실행·Fine 탑재 경계 및 카메라 투영 디지털 트윈 운영 규격. [전문](../adr/D-1033-omx-per-arm-profile-bimanual-and-twin-plan.md) | Proposed (2026-11-15, 사용자 지시 + Gemini 4 Hydrogen · GLM-5.3 2라운드 패널 합의; 실물 측정·카메라 복구 및 증분 B·Fine 구현 별도) |
 | D-990 | Monitoring 화면의 Rosy Account 로그인. [전문](../adr/D-990-monitoring-account-receiver.md) | Accepted (2026-11-07, 사용자 지시; Account client 등록·배포·현장 수용 별도) |
 | D-992 | 장비 등록과 Rosy Account 연동. [전문](../adr/D-992-device-enrollment-account-link.md) | Accepted (2026-11-07, 사용자 지시; 현장 활성화·실물 수용 별도) |
@@ -24,6 +25,8 @@
 | D-1032 | OMX 두 팔 집기 정책(`omx_two_arm_policy`) CORE 계약 정렬 — `--no-goal` 기본 경로 및 평가 시 `temporal_ensemble_coeff` 강제 덮어쓰기 제거. [전문](../adr/D-1032-omx-two-arm-grasp-policy-no-goal-no-eval-ensemble.md) | Proposed (2026-11-15, Phase A 시뮬 진단 패치·평가 대기; Phase B 재학습·실물 승격 별도) |
 | D-1036 | 게시 증거를 야간 FULL에서 얻는다 — 야간 착지 기록·최근 야간 조상 유지·빨간 CI 재실행 한 번. [전문](../adr/D-1036-publish-evidence-from-nightly-full.md) | Proposed (2026-11-17) |
 | D-1038 | 게시 PR 예약 병합·review-gate 추가 전용 면제·긴급 차선 (2026-11-17 사용자 승인). [전문](../adr/D-1038-scheduled-publish-merge-review-gate-append-only-and-urgent-lane.md) | Proposed (2026-11-17) |
+| D-1043 | 보기 전용도 Fleet 전체 비상 정지(`/api/fleet/estop`)를 누른다 — 해제·재가동은 그대로 운영자. [전문](../adr/D-1043-viewer-may-press-the-fleet-site-estop.md) | Accepted (2026-11-18, 사용자 결정) |
+| D-1039 | 설정된 AI assessor 서비스 자격은 지정된 팔의 안전한 incident(접혀 토크 OFF로 끝나고 신호가 없거나 주차 중 부하 정지뿐인 것)만, 팔마다 하루 한 번 기계 해제로 표시해 해제한다. 사람 해제는 그대로. [전문](../adr/D-1039-ai-assessor-kind-limited-incident-clear.md) | Accepted (2026-11-17, D-1035 사용자 결정; 구현·원격 시험, 배포·토큰 발급·실물 수용 별도) |
 | D-1021 | ROSY 공통: 값마다 소유자 하나, 신원은 Account, 배치는 비공개 현장 배치 지도 — 다섯 층·정본 표·변경 절차·완료 네 상태. [전문](../adr/D-1021-one-owner-per-value-identity-in-account-placement-in-site-map.md) | Accepted (2026-11-13, 사용자 승인; 일부 구현·운영 수용 별도) |
 | D-1017 | peer 위치 공유로 지도 자세 앵커 보강 — 카메라·운영자 핀 뒤에서만, 첫 앵커는 DEGRADED. [전문](../adr/D-1017-peer-sighting-map-pose-anchor.md) | Proposed (2026-11-11, 사용자 지시; 구현·원격 시험, 현장 수용 없음) |
 | D-1022 | 기체 SLAM 지도와 현장 지도의 결속 — 실제로 읽은 격자(`map_grid_id`)·현장 지도 버전에 묶인 승인 변환, 벽에서 마커 없이 제안, 켜진 현장의 free 목표는 결속으로만. [전문](../adr/D-1022-robot-map-binding.md) | Proposed (2026-11-14, 사용자 지시; 호스트 시험까지, 실물 미수행) |

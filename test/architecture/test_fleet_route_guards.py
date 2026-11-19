@@ -19,10 +19,11 @@ from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 
 # Site role guards from auth/site_auth.build_role_guards, plus the guards other installers own:
-# require_ai_observer (AI PC facts), parent_only (control-unit parent), require_camera_viewer (vision lease).
+# require_ai_observer (AI PC facts), parent_only (control-unit parent), require_camera_viewer (vision lease),
+# require_incident_clearer (D-1039: arm incident clear, named operator or configured AI assessor).
 ROLE_GUARDS = frozenset({
     "require_viewer", "require_operator", "require_named_operator", "require_proposer",
-    "require_ai_observer", "parent_only", "require_camera_viewer",
+    "require_ai_observer", "parent_only", "require_camera_viewer", "require_incident_clearer",
 })
 # Machine ingress: the arm-transfer observer token dependency (work/physical_transfer_observer_routes.py).
 INGRESS_GUARDS = frozenset({"authenticate"})
