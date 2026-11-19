@@ -119,6 +119,10 @@ class AutoLocateService:
             return
         open_ids = [rid for rid, until in self._until.items() if now < until]
         tracks = {rid: self._track(identity, rid) for rid in self._watched() | set(open_ids)}
+        for track in tracks.values():   # the pair freshness limit follows the camera's frame interval
+            if track.get("state") == "CONFIRMED":
+                fps_of = getattr(self.tracking, "source_fps", None)
+                track["source_fps"] = fps_of(track.get("source_id")) if fps_of is not None else None
         for robot_id in open_ids:
             track = tracks[robot_id]
             if (track["state"] != "CONFIRMED" and now - self._asked_at.get(robot_id, -RETRY_S) >= RETRY_S
