@@ -15,6 +15,10 @@ BELT_STOP_EDGE_OFFSET_M = 0.0080  # 2 mm belt_stop half-width + 3 mm perspective
 FAR_CUT_MIN_PX = 10  # contour points past the far edge before the edge counts as foreign
 FAR_EDGE_TOL_M = 0.0045  # seat pose draw (dy +-4 mm) + a little jitter: a true box edge stays inside this past nominal; 0.008 kept the top-tier far edge 6-7 mm out (calibration scale at box height) and sent ship-h1r0-l2 picks 6.6 mm across (11-18, 6 seeds IK 142 -> 152 of 186)
 DEFAULT_CAM_JITTER = dict(eye_shift_m=(0.012, -0.010, 0.008), focus_shift_m=(0.015, -0.012, 0.0), roll_deg=1.2)
+# Background = table or hull colour, not size. OpenCV hue (0-179) of the sim albedos in omx_two_arm_world.COLOURS (table .59/.43/.08 -> 21, ship .45/.60/.67 -> 99); container .62/.31/.14 -> 11
+# sits 10 away, so a joined 7-8 container group stays foreground. Hue survives the renderer's light gain (11-18 dump: table 21, hull 100, container 11, all lighting).
+BG_HUES = ((21, 4), (99, 12))  # (centre, half-width)
+BG_MIN_AREA_PX = 3000  # speckle guard only; no upper area bound
 _EYE3 = np.eye(3)
 _KERNEL_3X3 = np.ones((3, 3), np.uint8)
 _KERNEL_5X5 = np.ones((5, 5), np.uint8)
@@ -82,8 +86,10 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     cut_u8 = (chromatic & (~edge_cut)).astype(np.uint8)
     n_cc, lab_cc, stats_cc, _ = cv2.connectedComponentsWithStats(cut_u8)
     keep_bg = np.zeros(n_cc, dtype=bool)
-    if n_cc > 1:
-        keep_bg[1:] = stats_cc[1:, cv2.CC_STAT_AREA] > 12000  # shortcut: area cut between a joined orange container group (~9.6k px) and the sky-blue hull (~15k); a 7-8 box group would be bg again, upgrade to a table/hull colour test (11-18 measure C)
+    for i in range(1, n_cc):
+        if stats_cc[i, cv2.CC_STAT_AREA] >= BG_MIN_AREA_PX:
+            hue = float(np.median(h[lab_cc == i]))
+            keep_bg[i] = any(abs(hue - c) <= w for c, w in BG_HUES)
     if np.any(keep_bg):
         bg_mask = keep_bg[lab_cc]
         bg_ab = np.median(ab_smooth[bg_mask], axis=0)
