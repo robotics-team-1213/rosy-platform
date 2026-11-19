@@ -89,6 +89,18 @@ def test_package_acquisition_falls_back_to_the_kernel_mirror_when_the_archive_is
     assert seen == [pin["url"]] * 3 + [mirror]
 
 
+def test_ci_staged_package_must_match_the_pin(monkeypatch, tmp_path):
+    trusted, pin = package_pin()
+    package = tmp_path / "rauc.deb"
+    package.write_bytes(trusted)
+    monkeypatch.setenv("ROSY_TEST_RAUC_DEB", str(package))
+    assert fixtures.pinned_package(pin) == trusted
+
+    package.write_bytes(bytes([trusted[0] ^ 1]) + trusted[1:])
+    with pytest.raises(AssertionError, match="staged RAUC package"):
+        fixtures.pinned_package(pin)
+
+
 def test_isolated_rauc_accepts_codesigning_self_signed_leaf_and_exposes_full_manifest(tmp_path, rauc_tool):
     key, certificate = signer(tmp_path / "authority")
     bundle, config = make_bundle(tmp_path / "bundle", rauc_tool, key, certificate)
