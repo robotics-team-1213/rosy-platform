@@ -59,8 +59,8 @@ concerns: [learning, decision, control, safety, contracts, other]
 # Checked against .github/CODEOWNERS by test/architecture/test_capability_owners.py.
 capabilities:
   fleet: {epic: KAN-19, owners: [livsbittt]}
-  pinky: {epic: KAN-20, owners: [PURPLE-SY]}
-  omx: {epic: KAN-21, owners: [sajy0804, ddaokki]}
+  pinky: {epic: KAN-20, owners: [sajy0804]}
+  omx: {epic: KAN-21, owners: [ddaokki, livsbittt]}
   vision_ai: {epic: KAN-22, owners: [now2466]}
   platform: {epic: null, owners: []}
 
@@ -197,7 +197,7 @@ roots:
     concern: contracts
     capability: platform
     app: core
-    reviewers: [sajy0804, ddaokki]
+    reviewers: [ddaokki, livsbittt]
 
   - path: contracts/motion
     part: contracts
@@ -207,7 +207,7 @@ roots:
     concern: contracts
     capability: platform
     app: core
-    reviewers: [PURPLE-SY]
+    reviewers: [sajy0804]
     note: >-
       D-442(a) ROS-free Motion Intent and DeviceControlPort shapes. The Pinky B
       writer binding consumes GuardedMotion carrying BaseTwist; full producer admission and the
@@ -232,7 +232,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [PURPLE-SY]
+    reviewers: [sajy0804]
     import_prefix: [core_features.line_follow, core_features.docking, core_features.navigation, core_features.localization, core_features.swarm, core_features.road_behaviour, core_features.traffic_policy]
     source_packages:
       line_follow: core_features.line_follow
@@ -251,7 +251,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [PURPLE-SY]
+    reviewers: [sajy0804]
     import_prefix: [control.control_node, control.goal_node, control.wander_node, control.safety_node]
     source_packages: {"": control}
     note: D-649 legacy ROS adapters installed by control; final legacy writer stays excluded.
@@ -328,7 +328,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [PURPLE-SY]
+    reviewers: [sajy0804]
   - path: middleware/drive/planning/nav2/native_map
     layout_target: middleware/drive/planning/nav2/native_map
     part: middleware
@@ -337,7 +337,7 @@ roots:
     concern: safety
     capability: platform
     app: pinky
-    reviewers: [PURPLE-SY]
+    reviewers: [sajy0804]
     note: D-783 guarded native map producers, canonical identity, SDK/build and plugin boundary.
   - path: middleware/perception
     part: middleware
@@ -371,7 +371,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [PURPLE-SY]
+    reviewers: [sajy0804]
     note: D-630 Drive algorithms; installed by the existing control distribution.
   - path: middleware/drive/motion_limits
     layout_target: middleware/drive/motion_limits
@@ -385,7 +385,7 @@ roots:
     concern: safety
     capability: platform
     app: pinky
-    reviewers: [PURPLE-SY]
+    reviewers: [sajy0804]
     note: D-630 policy/clearance and existing sensor-only adapter; no new final writer.
   - path: middleware/drivers/imu_bno055
     part: middleware
@@ -500,7 +500,7 @@ roots:
     concern: control
     capability: platform
     app: core
-    reviewers: [sajy0804, ddaokki]
+    reviewers: [ddaokki, livsbittt]
     api: true
   - path: middleware/skills/manipulation
     part: middleware
@@ -536,7 +536,7 @@ roots:
     concern: control
     capability: platform
     app: omx-cell
-    reviewers: [sajy0804, ddaokki]
+    reviewers: [ddaokki, livsbittt]
   - path: operations/site_execution/src/rosy/execution/api
     layout_target: operations/site_execution/src/rosy/execution/api
     part: operations
@@ -1079,7 +1079,7 @@ roots:
     concern: other
     capability: platform
     app: core
-    reviewers: [PURPLE-SY]
+    reviewers: [sajy0804]
 
   # --- top-level non-part roots ----------------------------------------------
   - path: profiles
@@ -1128,7 +1128,7 @@ roots:
     concern: other
     capability: platform
     app: repo
-    reviewers: [sajy0804, ddaokki]
+    reviewers: [ddaokki, livsbittt]
   - path: tools/capture
     part: tools
     d427_target: tools/capture
