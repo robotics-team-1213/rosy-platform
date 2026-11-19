@@ -71,7 +71,8 @@ class DockType(BaseModel):
 
     @property
     def battery_return(self) -> bool:
-        return self.auto_return if self.auto_return is not None else self.approach != "line"
+        # rear (Fleet-taught bays, robot-frame pose) and line docks start alone only when told to (2026-11-18 map panel)
+        return self.auto_return if self.auto_return is not None else self.approach not in ("line", "rear")
 
     @field_validator("staging_offset_m")
     @classmethod
