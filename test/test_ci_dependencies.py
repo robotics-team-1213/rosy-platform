@@ -15,6 +15,30 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 DOCKERFILE = ROOT / ".github" / "ci-image" / "Dockerfile"  # the baked installs (apt, pins, receiver crypto)
 
 
+@pytest.mark.parametrize(("invocations", "needs_rauc"), [
+    ([["test"]], True),
+    ([["test/test_external_os_signing.py::test_example"]], True),
+    ([["middleware/core/gateway/test", "test/test_prepare_os_release.py"]], True),
+    ([["operations/fleet/test/test_routes.py"], ["deploy/robot/pinky_pro/image/test"]], False),
+    ([], False),
+])
+def test_ci_stages_rauc_for_root_targets(invocations, needs_rauc):
+    import json
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    setup = next(step for step in steps if step["name"] == "Install colcon & tools")
+    stage = next(step for step in steps if step["name"] == "Stage pinned package for root RAUC fixtures")
+    condition = stage["if"].replace("toJSON(matrix.invocations)", "payload").replace("||", "or")
+    assert eval(condition, {
+        "__builtins__": {}, "contains": lambda value, part: part in value, "payload": json.dumps(invocations),
+    }) is needs_rauc
+    assert steps.index(setup) < steps.index(stage)
+    assert "rauc=1.11.3-2" not in setup["run"]
+    assert "rauc=1.11.3-2 squashfs-tools" in stage["run"]
+    assert "apt-get download -qq rauc=1.11.3-2" in stage["run"]
+
+
 @pytest.mark.parametrize('rest', [[], ['middleware/core/gateway/test']])
 @pytest.mark.parametrize('target', [
     'applications/fleet/test',

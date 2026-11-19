@@ -29,7 +29,13 @@ def source(tmp_path, monkeypatch):
 
 
 def test_source_snapshot_to_authenticated_route_and_lifecycle(core_client, tmp_path, monkeypatch):
+    from core_api_web.api.v1 import motors
+
     monitor, motion, path, session = source(tmp_path, monkeypatch)
+    now = json.loads(path.read_text(encoding='utf-8'))['observed_at']
+    read = motors.read_motor_health
+    # Control the read clock independently of app setup and runner load.
+    monkeypatch.setattr(motors, 'read_motor_health', lambda: read(now=now))
     client, _ = core_client()
     assert client.get('/api/v1/motors/health').status_code == 401
     headers = {'Authorization': 'Bearer rosy-dev-viewer'}
@@ -42,6 +48,7 @@ def test_source_snapshot_to_authenticated_route_and_lifecycle(core_client, tmp_p
     assert '/dev/' not in response.text and 'usb_port' not in response.text
     monitor.fault(motion, OSError('/dev/serial/by-id/private-device failed'))
     monitor.end()
+    now = monitor.terminal_at
     row = client.get('/api/v1/motors/health', headers=headers).json()
     assert row['status'] == 'fault' and row['evidence'] != 'fresh'
     assert '/dev/' not in json.dumps(row) and row['stop_reasons']
