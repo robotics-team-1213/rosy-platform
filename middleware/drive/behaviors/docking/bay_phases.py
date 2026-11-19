@@ -25,6 +25,7 @@ import math
 from typing import Any, Optional
 
 from core_common.protocol.schemas import NavigationState
+from core_features.docking.bay_align import BayAlignMixin
 from core_features.docking.bay_guards import BayGuardsMixin, entry_ok, heading_gate, rear_blocked, reverse_twist
 from core_features.docking.bay_zone import map_offsets
 from core_features.docking.bay_zone_phases import BayZoneMixin
@@ -37,7 +38,7 @@ _TURN_GAINS = ParkingGains()
 _LOG = logging.getLogger(__name__)
 
 
-class BayPhases(BayZoneMixin, BayGuardsMixin):
+class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
     """The pink guide-line charge bay, under the manager's lock (D-1013)."""
 
     def __init__(self, host: Any) -> None:
@@ -70,6 +71,7 @@ class BayPhases(BayZoneMixin, BayGuardsMixin):
         # 몸 스캔(짐칸 포함 회전 판정, 앞 여유): (rotation_block, front_gap, rear_gap, at)
         self._body: Optional[tuple] = None
         self._init_guards()
+        self._init_align()
 
     # --- 매니저가 부르는 자리 ---------------------------------------------------
 
@@ -215,6 +217,7 @@ class BayPhases(BayZoneMixin, BayGuardsMixin):
         self._reset_line_state()
         if h._retries == 0 and h._reseats == 0:
             self._seen.clear()           # a fresh dock; a guard failure always counts a retry or reseat
+            self._align_n = 0
         self._turn_dir = -math.copysign(1.0, h._cfg.bay_downstream_sign) if h._cfg.bay_downstream_sign else 0.0
         self._turn_target = pose[2] + (self._turn_dir or 1.0) * math.pi
         h._enter(DockPhase.TURNING)
@@ -256,7 +259,13 @@ class BayPhases(BayZoneMixin, BayGuardsMixin):
     def _tick_acquiring(self, now: float) -> None:
         """선 포획 + 캐스터 정착 크립 + 두 번 일치. 크립 없이는 후진 첫 cm 에 킥이 온다."""
         h, cfg = self._h, self._h._cfg
+        if self._align is not None:
+            self._tick_heading_align(now)
+            return
         along, lateral, heading = self._line_errors()
+        seen = (along, lateral, heading) != (None, None, None)
+        if not self._crept and self._find_step(now, seen):
+            return
         if self._crept:
             if (along, lateral, heading) == (None, None, None):
                 if h._last_seen_at is None or now - h._last_seen_at > cfg.detector_lost_grace_s:
@@ -270,6 +279,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin):
                 h._retry("bay line observation jumped after the creep")
                 return
             if not entry_ok(cfg, lateral, heading):
+                if self._try_heading_align(now, lateral, heading):
+                    return
                 # Too far off to converge: never reverse into it. A straight back-off keeps the bearing, so start over.
                 self._guard_fail("entry", "entry error outside the window (lat %.0f mm, head %.0f deg)"
                                  % (lateral * 1000.0, math.degrees(heading)), h._retry)
@@ -528,6 +539,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin):
         self._slip = None
         self._backoff = False
         self._turn_target = None
+        self._align = None
+        self._find_on, self._find_seen_m = False, None
         self._fleet_cue = None
         self._zone = None
         self._exit_m = 0.0

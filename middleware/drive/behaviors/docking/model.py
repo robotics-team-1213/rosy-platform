@@ -152,3 +152,13 @@ class DockingConfig:
     # 짐칸 J-v3 뒤끝은 바퀴축 뒤 0.134–0.135 m(정격 CAD, 뒷면 y_d −14.45 · 축 y_d 120.5; 몸 74.5·42.1·r 82.6 이
     # base_link 치수와 일치, 2026-11-18 tray_overhang_cad.py). 모따기 덕에 쓸리는 반경은 0.137 m.
     bay_turn_rear_overhang_m: float = 0.135
+    # 카메라 기준 방향 맞춤·선 찾기(bay_align.py, 실물 y8xs 2026-11-19: 지도-카메라 방향 17~30° 어긋남, 스테이징에서 선 안 보임)
+    bay_heading_align_max_rad: float = 0.7854   # 45°: 이 안의 방위 위반만 제자리 회전으로 맞춘다(넘으면 재시도)
+    bay_heading_align_tol_rad: float = 0.05     # ~3°: 이 안이면 끝(관측 지연 0.3 s × 0.1 rad/s 1.7° 여유)
+    bay_heading_align_tries: int = 2            # 한 도킹당 회전 맞춤 횟수
+    bay_heading_align_timeout_s: float = 8.0
+    bay_find_wait_s: float = 1.0                # 선이 안 보이면 이만큼 정지해 보고(5 Hz) 나서 후진 크립
+    bay_find_speed: float = 0.03
+    bay_find_creep_max_m: float = 0.12          # 선이 안 보이는 후진 상한 = 선 시야 여유(Nav2 오차 ~0.10 m, 실측)
+    bay_find_extra_m: float = 0.06              # 처음 보인 뒤 더 가는 양 = 정착 크립 0.04 + 여유 0.02
+    bay_find_rear_gap_m: float = 0.06           # 뒤 띠 여유가 이보다 작으면 멈춘다(멈춤면 도착 전 0.17 m 이상 남음)
