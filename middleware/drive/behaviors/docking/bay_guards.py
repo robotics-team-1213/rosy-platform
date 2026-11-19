@@ -18,20 +18,23 @@ def reverse_twist(cfg: Any, lateral: float, heading: float) -> float:
     return max(-cfg.max_angular, min(cfg.max_angular, -cfg.bay_gain_heading * (heading - target)))
 
 
-def entry_ok(cfg: Any, along: float, lateral: float, heading: float) -> bool:
-    """ALIGNING 에 들어가도 되는 오차인가. 허용 횡은 남은 거리가 길수록 넓다: 이 법칙이 그 거리 안에 0.10 m
-    지점(가이드 목, ±6 mm)까지 수렴하는 한계(sim: 방위 10°에서 along 0.305→15 mm, 0.41→45 mm, 0.6→90 mm)를
-    0.25*(along-0.25) 로 아래에서 근사했다. 앞으로 빠지면 along 이 늘어 같은 오차가 허용창에 들어올 수 있다."""
-    lat_max = min(cfg.bay_entry_lat_max_m,
-                  max(cfg.bay_entry_lat_base_m, cfg.bay_entry_lat_slope * (along - cfg.bay_entry_lat_from_m)))
-    return abs(lateral) <= lat_max and abs(heading) <= cfg.bay_entry_heading_max_rad
+def entry_ok(cfg: Any, lateral: float, heading: float) -> bool:
+    """ALIGNING 에 들어가도 되는 오차인가(평평한 창). 횡 7 cm·방위 15° 안은 시뮬에서 접촉 0, 밖은 후진하지 않고
+    스테이징부터 다시 한다. 맵 횡(통로선만 보일 때)은 수 cm 오차라 창을 4 cm 로 좁히면 맵 오차에 좌우된다."""
+    return abs(lateral) <= cfg.bay_entry_lat_m and abs(heading) <= cfg.bay_entry_heading_max_rad
+
+
+def rear_band_gap(points, rear_x: float, half_m: float = 0.03) -> Optional[float]:
+    """뒤 정면 좁은 띠(|y| ≤ half_m)에서 짐칸 끝(rear_x, 음수)부터 가장 가까운 점까지. 띠 안 점이 없으면 None(막지
+    않음). 옆 칸 몸통은 띠 밖이라 0.0 으로 오지 않는다(몸통 폭 띠의 translation_gap 은 이웃이 0.0 을 만든다)."""
+    gaps = [rear_x - x for x, y in points if abs(y) <= half_m and rear_x - x > 0.0]
+    return min(gaps) if gaps else None
 
 
 def rear_blocked(cfg: Any, rear_gap: Optional[float], along: Optional[float]) -> bool:
     """LiDAR 뒤 여유(짐칸 끝~첫 점)가 카메라로 잰 멈춤면까지 남은 거리(along - 짐칸 돌출)보다 확실히 작으면 칸
     안에 뭔가 있다. 멈춤면 자체가 보여도 gap≈남은 거리라 막지 않는다. 여유 = 몸 스캔 지연 0.5 s×0.05 m/s 2.5 cm +
-    LiDAR·카메라 오차 각 1~2 cm. 값이 없으면 판단하지 않는다(기존 동작). gap 0.0 은 '점 없음'과 '접촉'이 같이
-    0 으로 오므로 정지 쪽으로 읽는다(정지 우선)."""
+    LiDAR·카메라 오차 각 1~2 cm. 값이 없으면(띠 안 점 없음 포함) 판단하지 않는다(기존 동작)."""
     if rear_gap is None or along is None:
         return False
     return rear_gap < max(0.0, along - cfg.bay_turn_rear_overhang_m) - cfg.bay_rear_gap_margin_m
@@ -39,7 +42,7 @@ def rear_blocked(cfg: Any, rear_gap: Optional[float], along: Optional[float]) ->
 
 def heading_gate(cfg: Any, omega: float, age_s: float) -> float:
     """프레임당 방위 점프 게이트 + 관측 나이 동안 돈 양. 나이 든 정상 프레임이 회전 중 게이트에 걸리지 않게."""
-    return cfg.bay_gate_jump_rad + abs(omega) * max(0.0, age_s)
+    return cfg.bay_gate_jump_rad + abs(omega) * min(max(0.0, age_s), cfg.bay_obs_max_age_s)
 
 
 class BayGuardsMixin:
@@ -48,14 +51,15 @@ class BayGuardsMixin:
     def _init_guards(self) -> None:
         self._blind_s = 0.0           # 횡을 못 잰 채(통로선만) 후진한 시간
         self._blind_m = 0.0           # 그 거리 — 추정값(맵·명령 적분)으로 리셋하지 않는다
+        self._blind_budget_m = 0.0    # 이번 진입의 예산(진입 along 에서 정해진다)
         self._along_m: Optional[float] = None   # 이번 관측의 along(실측일 때만)
         self._obs_age = 0.0
         self._omega = 0.0             # 마지막 명령 각속도
         self._seen: dict[str, int] = {}         # 사유별 가드 실패 횟수(첫 시도에서만 비운다)
 
     def _blind_lateral(self, dt: float, speed: float) -> bool:
-        """횡 맹목 예산: 실측 횡이 없는 프레임으로만 후진한 거리·시간(0.10 m / 2 s — 통로선→칸 선이 들어오는
-        데 필요한 길이의 두 배쯤)을 넘으면 정지하고 재진입. 실측 횡 프레임이 오면 비운다. 프레임이 없을 땐 세지
+        """횡 맹목 예산: 실측 횡이 없는 프레임으로만 후진한 거리·시간. 예산 = (진입 along - 칸 선이 보이는 거리) + 여유로,
+        정상 진입(along 0.41)의 맹목 0.105 m 는 통과하고 그보다 길면 정지하고 재진입(시간은 같은 비율). 실측 횡 프레임이 오면 비운다. 프레임이 없을 땐 세지
         않는다(코스트·스캔 사다리가 맡는다)."""
         h, cfg = self._h, self._h._cfg
         raw = h._detector.relative_pose() if h._detector is not None else None
@@ -66,7 +70,7 @@ class BayGuardsMixin:
             return False
         self._blind_s += dt
         self._blind_m += speed * dt
-        if self._blind_m <= cfg.bay_blind_lat_m and self._blind_s <= cfg.bay_blind_lat_s:
+        if self._blind_m <= self._blind_budget_m and self._blind_s <= self._blind_budget_m / cfg.bay_reverse_speed:
             return False
         self._guard_fail("blind", "lateral unmeasured over the blind budget", h._retry)
         return True

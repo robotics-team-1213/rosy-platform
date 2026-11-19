@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 import pytest
 
-from core_features.docking.bay_guards import entry_ok, heading_gate, rear_blocked
+from core_features.docking.bay_guards import entry_ok, heading_gate, rear_band_gap, rear_blocked
 from core_features.docking.feed import CAMERA_LINE, DockObservationFeed
 from core_features.docking.manager import DockingConfig, DockPhase, DockState
 from test_docking_bay import DOCKED_ALONG, DT, NECK, a_bay, done
@@ -78,8 +78,28 @@ def test_lateral_blind_budget_stops():
     p.manager.dock()
     drive(p, lambda m: m.phase is DockPhase.BACKOFF, hook=hook)
     assert p.manager.phase is DockPhase.BACKOFF
-    assert abs(p.world.pose[0] - start["x"]) <= CFG.bay_blind_lat_m + 0.03
+    # budget = (entry along - 0.305) + 0.05; the stop adds a frame of delay
+    budget = max(0.0, -start["x"] - CFG.bay_line_view_m) + CFG.bay_blind_margin_m
+    assert abs(p.world.pose[0] - start["x"]) <= budget + 0.03
     assert any("blind budget" in r for r in reasons(p, "docking.retry"))
+
+
+def test_normal_entry_not_stopped_by_blind_budget():
+    """Corridor line only until the bay line comes into view at 0.305 m (the observer's range): the normal blind
+    stretch of the entry run must not trip the budget."""
+    p = a_bay()
+    capture = p.detector.capture
+
+    def corridor_until_view():
+        capture()
+        if (p.detector.latest is not None and p.manager.phase is DockPhase.ALIGNING
+                and p.world.pose[0] < -CFG.bay_line_view_m):
+            p.detector.latest = p.detector.latest.model_copy(update={"lateral_measured": False})
+    p.detector.capture = corridor_until_view
+    p.manager.dock()
+    drive(p, done)
+    assert p.manager.state is DockState.DOCKED
+    assert not reasons(p, "docking.retry")
 
 
 def test_unmeasured_along_does_not_shorten_travel_cap():
@@ -116,17 +136,24 @@ def test_feed_carries_along_measured():
 
 
 def test_bay_wide_entry_error_backs_off_not_reverses():
-    """7.5 cm off at the first sight is outside the window for that room: go forward (reseat), look again with more
-    run, and only then reverse. No reverse command is sent before the back-off."""
+    """8 cm off at the first sight is outside the entry window: no reverse command is ever sent; it backs out and
+    starts over from staging (a straight back-off would keep the error), and the same reason twice is a person's call."""
     p = a_bay()
-    p.world.arrival_error = (0.075, 0.0)
+    p.world.arrival_error = (0.08, 0.0)
     p.manager.dock()
     order = drive(p, done)
-    assert order.index("backoff") < order.index("aligning"), order
-    first_back = next(i for i, (ph, c) in enumerate(p.world.commands) if ph is DockPhase.BACKOFF)
-    assert all(c[0] >= 0.0 for ph, c in p.world.commands[:first_back])
-    assert len(reasons(p, "docking.reseat")) == 1
-    assert p.manager.state is DockState.DOCKED
+    assert "backoff" in order and "aligning" not in order, order
+    assert not [c for ph, c in p.world.commands if ph is DockPhase.ALIGNING]
+    assert any("entry error" in r for r in reasons(p, "docking.retry"))
+    assert p.manager.state is DockState.DOCK_FAILED
+
+
+def test_entry_inside_the_flat_window_aligns():
+    p = a_bay()
+    p.world.arrival_error = (0.065, math.radians(-8.0))
+    p.manager.dock()
+    drive(p, lambda m: m.phase is DockPhase.ALIGNING)
+    assert p.manager.phase is DockPhase.ALIGNING and not reasons(p, "docking.retry")
 
 
 def _pinned_off_axis(p):
@@ -197,13 +224,37 @@ def test_normal_approach_not_stopped_by_rear_gap():
 
 
 def test_stale_frame_gate_widens_with_turn_rate():
-    assert heading_gate(CFG, 0.0, 0.5) == pytest.approx(CFG.bay_gate_jump_rad)
-    assert heading_gate(CFG, 0.3, 0.5) == pytest.approx(CFG.bay_gate_jump_rad + 0.15)
+    assert heading_gate(CFG, 0.0, 0.2) == pytest.approx(CFG.bay_gate_jump_rad)
+    assert heading_gate(CFG, 0.3, 0.2) == pytest.approx(CFG.bay_gate_jump_rad + 0.06)
+    assert heading_gate(CFG, 0.3, 0.5) == pytest.approx(CFG.bay_gate_jump_rad + 0.3 * CFG.bay_obs_max_age_s)   # age capped
     assert heading_gate(CFG, -0.3, -1.0) == pytest.approx(CFG.bay_gate_jump_rad)      # a future stamp adds nothing
 
 
-def test_entry_window_grows_with_the_room_left_and_rear_gap_needs_both_values():
-    assert not entry_ok(CFG, 0.30, 0.03, 0.0) and entry_ok(CFG, 0.60, 0.03, 0.0)
-    assert not entry_ok(CFG, 0.60, 0.0, math.radians(12))
+def test_a_frame_older_than_the_age_cap_is_discarded_not_followed():
+    """0.4 s old frames (the detector would still pass them at 0.6 s): no evidence, so the coast and scan ladder runs."""
+    p = a_bay(max_retries=1)
+    capture = p.detector.capture
+
+    def old():
+        capture()
+        if p.detector.latest is not None and p.manager.phase is DockPhase.ALIGNING:
+            p.detector.latest = p.detector.latest.model_copy(update={"at": p.clock() - 0.4})
+    p.detector.capture = old
+    p.manager.dock()
+    drive(p, lambda m: m.phase is DockPhase.BACKOFF)
+    assert any("line lost" in r for r in reasons(p, "docking.retry"))
+
+
+def test_entry_window_is_flat_and_rear_gap_needs_both_values():
+    assert entry_ok(CFG, 0.07, math.radians(15)) and not entry_ok(CFG, 0.08, 0.0)
+    assert not entry_ok(CFG, 0.0, math.radians(16))
     assert not rear_blocked(CFG, None, 0.4) and not rear_blocked(CFG, 0.1, None)
     assert rear_blocked(CFG, 0.10, 0.40) and not rear_blocked(CFG, 0.10, 0.15)
+
+
+def test_rear_band_gap_ignores_the_neighbour_beside_the_strip_and_sees_the_obstacle_in_it():
+    rear_x = -0.135
+    neighbour = [(x / 100.0, 0.031) for x in range(-30, 5)]       # a body just outside the 3 cm strip
+    assert rear_band_gap(neighbour, rear_x) is None
+    assert rear_band_gap(neighbour + [(-0.30, 0.02)], rear_x) == pytest.approx(0.165)
+    assert rear_band_gap([], rear_x) is None

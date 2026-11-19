@@ -109,18 +109,17 @@ class DockingConfig:
     bay_settle_creep_m: float = 0.04    # 회전 뒤 캐스터 정착 크립(전진)
     bay_travel_margin_m: float = 0.02   # 접촉 거리 상한 = 진입 잔여거리 + 이 값
     bay_backoff_m: float = 0.15         # 재시도 전진(교차점 쪽)
-    # 진입 허용창(ALIGNING 시작 때): 횡 허용 = clip(slope*(along-from), base, max), 방위 상한. 넘으면 후진 대신 앞으로 빠졌다 재진입.
-    bay_entry_lat_base_m: float = 0.015
-    bay_entry_lat_slope: float = 0.25
-    bay_entry_lat_from_m: float = 0.25
-    bay_entry_lat_max_m: float = 0.09
-    bay_entry_heading_max_rad: float = 0.1745   # 10°
+    # 진입 허용창(ALIGNING 시작 때): 평평한 횡·방위 한계(시뮬: 횡 ≤7 cm 는 방위 ±15°에서도 접촉 0, 밖은 거부 — sim-before-after.txt).
+    # 밖이면 후진하지 않고 스테이징부터 다시(직진 후퇴로는 방위가 안 고쳐진다). Nav2 도착 허용 yaw 14° 보다 넓게 둔다.
+    bay_entry_lat_m: float = 0.07
+    bay_entry_heading_max_rad: float = 0.2618   # 15°
     # 접촉 때 허용창: 가이드 목 ±6 mm·방위 2°(충전 판정)의 두세 배. 넘으면 전압 20 s 를 기다리지 않고 재진입.
     bay_contact_lat_m: float = 0.015
     bay_contact_heading_rad: float = 0.0873     # 5°
-    # 횡 맹목 후진(통로선만 보여 횡 실측 없음) 예산: 0.10 m 또는 2 s(0.05 m/s) 넘으면 정지·재진입.
-    bay_blind_lat_m: float = 0.10
-    bay_blind_lat_s: float = 2.0
+    # 횡 맹목 후진(통로선만 보여 횡 실측 없음) 예산 = (진입 along - 칸 선이 보이는 거리) + 여유. 시간은 같은 비율(0.05 m/s).
+    bay_line_view_m: float = 0.305              # 멈춤면 이 안에서만 칸 선이 보인다(관측기)
+    bay_blind_margin_m: float = 0.05            # 관측 지연 2.5 cm + 슬립 여유
+    bay_obs_max_age_s: float = 0.3              # 이보다 오래된 프레임은 게이트를 넓히지 않고 버린다(지연 0.3 s 넘으면 15° 상한이 안 지켜짐)
     bay_rear_gap_margin_m: float = 0.06         # LiDAR 뒤 여유가 남은 거리보다 이만큼 넘게 작으면 칸 안 장애
     bay_settle_baseline_s: float = 2.0  # 멈춘 뒤 기준 전압을 잡기 전 대기
     bay_charge_rise_v: float = 0.05     # D-941: 20 s 안 +0.05 V(도크 계측 없음)

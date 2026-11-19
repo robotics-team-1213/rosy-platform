@@ -269,14 +269,15 @@ class BayPhases(BayZoneMixin, BayGuardsMixin):
                 self._stop()
                 h._retry("bay line observation jumped after the creep")
                 return
-            if not entry_ok(cfg, along, lateral, heading):
-                # Too far off to converge in the room left: back out and come in again, never reverse into it.
+            if not entry_ok(cfg, lateral, heading):
+                # Too far off to converge: never reverse into it. A straight back-off keeps the bearing, so start over.
                 self._guard_fail("entry", "entry error outside the window (lat %.0f mm, head %.0f deg)"
-                                 % (lateral * 1000.0, math.degrees(heading)), h._reseat)
+                                 % (lateral * 1000.0, math.degrees(heading)), h._retry)
                 return
             self._est = (lateral, heading)
             self._no_obs_s = 0.0
             self._blind_s = self._blind_m = 0.0
+            self._blind_budget_m = max(0.0, along - cfg.bay_line_view_m) + cfg.bay_blind_margin_m
             if h.executor is not None:
                 h.executor.reset_odometry_mark()
                 h.executor.set_collision_exemption(True)
@@ -369,6 +370,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin):
         """게이트가 증거를 판다: 점프는 이웃 칸 선이나 잡음, 통과만 관측이다."""
         h, cfg = self._h, self._h._cfg
         along, lateral, heading = self._line_errors()
+        if self._obs_age > cfg.bay_obs_max_age_s:
+            along = lateral = heading = None       # too old to steer by, and not worth widening the gate for
         if (along, lateral, heading) != (None, None, None):
             if (not self._resync and self._est is not None and (
                     abs(lateral - self._est[0]) > cfg.bay_gate_jump_m
