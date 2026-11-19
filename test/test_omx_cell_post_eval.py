@@ -91,7 +91,8 @@ def _make_setup(tmp_path, *, true_bias_mm=(8.0, -5.0), saved_bias_mm=(0.0, 0.0),
 
 
 def _patch_cell(monkeypatch, *, yaws=(0.0, 180.0), true_bias_mm=(8.0, -5.0), droop_mm=(0.0, 0.0),
-                flip_second_finger=False, scene_moved=False, cam_moved=False, allow_yaws=None):
+                flip_second_finger=False, scene_moved=False, cam_moved=False, allow_yaws=None, twin=False,
+                jaw_at=None):
     import cell_calibrate
     import cell_scene_guard
     import joint_jitter
@@ -104,7 +105,11 @@ def _patch_cell(monkeypatch, *, yaws=(0.0, 180.0), true_bias_mm=(8.0, -5.0), dro
     def fake_write(cfg, pose, _place, path):
         if allow_yaws is not None and round(pose["yaw_deg"], 1) not in allow_yaws:
             raise SystemExit("joint_min refused")
-        state["pending_yaw"] = float(pose["yaw_deg"])
+        # the planner's 180-deg twin: with `twin` every yaw plans the joints of yaw mod 180 (real arm_a 2026-11-17)
+        planned = float(pose["yaw_deg"]) % 180.0 if twin else float(pose["yaw_deg"])
+        state["pending_yaw"] = planned
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"chunks": {"above_pick": [[pose["x"], pose["y"], pose["z"], planned, 0.0, 62.0]]}}))
         return path
 
     monkeypatch.setattr(cell_pivot, "joints_tcp", lambda s, **k: (s[0], s[1], s[2], s[3]))
@@ -120,8 +125,11 @@ def _patch_cell(monkeypatch, *, yaws=(0.0, 180.0), true_bias_mm=(8.0, -5.0), dro
         r_m = 0.0344 if (flip_second_finger and state["idx"] == 1) else 0.022
         ph = 53.0 + (229.5 if (flip_second_finger and state["idx"] == 1) else 0.0)
         a = math.radians(state["yaw"] + ph)
-        return (fk_x + true_bias_mm[0] / 1000.0 + r_m * math.cos(a),
-                fk_y + true_bias_mm[1] / 1000.0 + r_m * math.sin(a))
+        x, y = fk_x + true_bias_mm[0] / 1000.0 + r_m * math.cos(a), fk_y + true_bias_mm[1] / 1000.0 + r_m * math.sin(a)
+        if jaw_at and jaw_at[state["idx"]] == "other":  # the other jaw: jaw_side.other_mm at FK yaw + other_deg
+            b = math.radians(state["yaw"] + 79.0)
+            x, y = x + 0.054 * math.cos(b), y + 0.054 * math.sin(b)
+        return x, y
 
     monkeypatch.setattr(cell_pivot, "mark_to_arm", fake_mark_to_arm)
 
@@ -217,6 +225,33 @@ def test_post_eval_1yaw_fallback_is_advisory_and_never_applies(tmp_path, monkeyp
     assert state["moved"] == [0.0]
     assert res["results"][0]["geometry_dependent"] is True and res["results"][0]["status"] == "advisory"
     assert res["applied"] == [] and res["lateral_xy"]["verdict"] == "advisory" and res["lateral_xy"]["lateral_xy_verified"] is False
+
+
+def test_post_eval_twin_yaw_plan_is_no_opposing_pair(tmp_path, monkeypatch):
+    # arm_a 2026-11-17: yaw 0 and 180 planned the same joints (IK twin), the pair moved twice to one pose and was
+    # refused yaw_pair_gap. Now no pair is chosen whose planned FK yaws are not opposite: one visit, advisory only.
+    cfg, _, cal_data, _, _, _ = _make_setup(tmp_path, saved_bias_mm=(0.0, 0.0))
+    cell, writer, state = _patch_cell(monkeypatch, true_bias_mm=(9.0, -4.0), twin=True)
+    res = cell_post_eval.run_post_eval(cell, cfg, cal_data, apply=True, commissioning=True, person_at_switch=True, write_library_fn=writer)
+    assert state["moved"] == [0.0]
+    row = res["results"][0]
+    assert row["geometry_dependent"] is True and row["status"] == "advisory" and row["reason"] != "yaw_pair_gap"
+    assert res["applied"] == [] and res["lateral_xy"]["lateral_xy_verified"] is False
+
+
+def test_post_eval_labels_the_visible_jaw_over_the_opposing_pair(tmp_path, monkeypatch):
+    # the other jaw at both yaws: labelled together, its midpoint is the centre (unlabelled: half 74 mm, finger_identity)
+    cfg, _, cal_data, _, _, _ = _make_setup(tmp_path, true_bias_mm=(9.0, -4.0), saved_bias_mm=(0.0, 0.0))
+    cell, writer, _ = _patch_cell(monkeypatch, true_bias_mm=(9.0, -4.0), jaw_at=("other", "other"))
+    row = cell_post_eval.run_post_eval(cell, cfg, cal_data, commissioning=True, person_at_switch=True, write_library_fn=writer)["results"][0]
+    assert row["accepted"] is True and row["jaw_sides"] == ["other", "other"]
+    assert row["raw_bias_mm"] == pytest.approx([9.0, -4.0], abs=0.1) and row["half_radius_mm"] == pytest.approx(22.0, abs=0.1)
+
+    # the visible jaw switched between the yaws: both labellings fit, their centres are other_mm apart: refused
+    cell_sw, writer_sw, _ = _patch_cell(monkeypatch, true_bias_mm=(9.0, -4.0), jaw_at=("ref", "other"))
+    res_sw = cell_post_eval.run_post_eval(cell_sw, cfg, cal_data, apply=True, commissioning=True, person_at_switch=True, write_library_fn=writer_sw)
+    assert res_sw["results"][0]["reason"] == "jaw_sides_ambiguous" and res_sw["results"][0]["accepted"] is False
+    assert res_sw["applied"] == [] and res_sw["lateral_xy"]["verdict"] == "fail"
 
 
 def test_blend_bias_at_regularized_kernel_and_sequential_save_fusion(tmp_path):
