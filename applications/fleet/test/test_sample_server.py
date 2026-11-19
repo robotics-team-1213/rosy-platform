@@ -160,6 +160,15 @@ def test_sample_usb_listing_is_empty_over_http_without_relaxing_auth_or_origin(h
         worker.join(5)
 
 
+def test_sample_vision_sources_have_the_fleet_route_shape():
+    # vision-view.js reads result.sources; a bare list left the camera screen on "영상 연결 불가" (2026-11-19)
+    engine = load_engine()
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
+    response = engine.handle('GET', '/api/fleet/vision/sources', {'Cookie': 'rosy_sample_session=sample-1'}, b'')
+    assert response.status == 200
+    assert json.loads(response.body) == {'sources': ['sample-camera']}
+
+
 def test_local_vision_frame_needs_its_lease_and_preserves_binary_headers():
     engine = load_engine()
     engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
