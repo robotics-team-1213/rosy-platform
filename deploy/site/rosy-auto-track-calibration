@@ -17,6 +17,7 @@ TOKEN_FILE_ENV = "ROSY_AUTO_CALIBRATION_TOKEN_FILE"
 CORNERS_M = ((-1.22, -0.61), (1.22, -0.61), (1.22, 0.61), (-1.22, 0.61))
 DRIFT_THRESHOLD_M = 0.015
 MAP_PLACE_THRESHOLD_M = 0.012
+MAP_SYNC_REFUSED_FAIL_AFTER = 3  # consecutive refused map syncs before the run exits non-zero (visible in systemd)
 STABILITY_WINDOW = 5
 STABLE_SPREAD_M = 0.025
 MIN_APPROVAL_INTERVAL_S = 10 * 60
@@ -455,6 +456,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if outcome["decision"] != "approve":
         _save_state(STATE_FILE, {
+            "map_sync_refused_runs": int(state.get("map_sync_refused_runs", 0)),  # holds between tries keep the count
             "checked_at": now,
             "cal_revision": cal_rev,
             "last_approved_at": last_approved_at,
@@ -486,6 +488,9 @@ def main(argv: list[str] | None = None) -> int:
     res = apply_fleet_update(token, approved_solve, needs_cal=needs_cal, needs_map=needs_map)
     map_sync = {k: res[k] for k in ("map_sync", "map_sync_status") if k in res}
     if map_sync:
+        map_sync["map_sync_refused_runs"] = int(state.get("map_sync_refused_runs", 0)) + 1
+    refused_too_long = map_sync.get("map_sync_refused_runs", 0) >= MAP_SYNC_REFUSED_FAIL_AFTER
+    if map_sync:
         print(f"map sync {map_sync['map_sync']} (HTTP {map_sync['map_sync_status']}); calibration "
               f"{'applied anyway' if res.get('cal_updated') else 'not due'}", file=sys.stderr)
     if map_sync and not res.get("cal_updated"):
@@ -507,7 +512,7 @@ def main(argv: list[str] | None = None) -> int:
             **outcome,
             **res,
         }))
-        return 0
+        return 1 if refused_too_long else 0
 
     _save_state(STATE_FILE, {
         "checked_at": now,
@@ -527,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
         **outcome,
         **res,
     }))
-    return 0
+    return 1 if refused_too_long else 0
 
 
 if __name__ == "__main__":
