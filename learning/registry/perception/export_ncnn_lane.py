@@ -9,7 +9,7 @@ from pathlib import Path
 
 from compare_backends import compare_lane_frames
 from export_ncnn import bundle, publish
-from perception_runtime.perception.learned.manifest import load_manifest
+from core_common.perception_model import load_manifest
 from perception_runtime.perception.learned.ncnn_session import NcnnSession
 
 

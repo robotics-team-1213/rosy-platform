@@ -7,7 +7,7 @@ import pytest
 
 from perception_runtime.perception.learned.detector import (
     MAX_DETECTIONS, ObjectDetModel, decode, detection_packet, letterbox)
-from perception_runtime.perception.learned.manifest import OBJECT_CLASSES, ManifestError
+from core_common.perception_model import OBJECT_CLASSES, ManifestError
 
 H, W = 256, 320          # model input (stride 32)
 C = len(OBJECT_CLASSES)

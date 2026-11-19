@@ -390,6 +390,28 @@ def test_not_queued_keeps_one_pending_request_for_the_named_branch(repo, monkeyp
         clock[0] = 0.0
 
 
+def test_not_queued_preserves_allow_big_for_land_tick_relaunch(repo, monkeypatch):
+    """NOT QUEUED keeps --allow-big in pending-*.json without leaking it into land.py's argv."""
+    main, _ = repo
+    clock, state, launched = [0.0], {"full": "landing queue full (12/12 tickets)"}, []
+    monkeypatch.chdir(main)
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 0)
+    monkeypatch.setattr(tool, "precheck_branch", lambda *a: 0)
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": state["full"])
+    monkeypatch.setattr(tool.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(tool.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    monkeypatch.setattr(tool, "detach", lambda argv, log: launched.append(argv))
+    with pytest.raises(SystemExit) as stop:
+        tool.main(["--branch", "feat/x", "--allow-big", "cannot split UI bundle", "--tests", "auto"])
+    assert stop.value.code == 3
+    (path,) = tool._queue().queue_dir(main).glob("pending-*.json")
+    row = json.loads(path.read_text(encoding="utf-8"))
+    assert row["args"] == ["--tests", "auto", "--allow-big", "cannot split UI bundle"]
+    state["full"] = None
+    assert tool.main(["--branch", row["branch"], *row["args"]]) == 0
+    assert launched and launched[0][launched[0].index("--supervise") + 3:] == ["--tests", "auto"]
+
+
 def test_a_finished_landing_removes_the_older_snapshots_it_covers(repo, monkeypatch, tmp_path):
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "rosy-land"))
     main, dev = repo
@@ -974,6 +996,25 @@ def test_the_freed_slot_is_reserved_for_the_oldest_waiter_not_a_newcomer(tmp_pat
     assert (tmp_path / "old.requested").read_text() == "1000"  # the original request time is never reset
     assert list((tmp_path / "q").glob("*.reserve")) and str(tmp_path / "old") in tool._room().taken
     assert str(tmp_path / "mid") not in tool._room().taken and str(tmp_path / "new") not in tool._room().taken
+
+
+def test_a_full_ordinary_lane_does_not_hold_the_open_tooling_lane(tmp_path, monkeypatch):
+    queue = _fifo_queue(monkeypatch, tmp_path, [])
+    room = tool._room()
+    monkeypatch.setattr(queue, "lane_of", lambda tree: "" if tree.name == "ordinary" else "tooling")
+    monkeypatch.setattr(queue, "full", lambda qdir, lane="": "landing queue full" if not lane else None)
+    ordinary = tmp_path / "ordinary"
+    tooling = tmp_path / "tooling"
+    later = tmp_path / "tooling-later"
+    old_wait = ordinary.with_suffix(".roomwait")
+    old_tool_wait = tooling.with_suffix(".roomwait")
+    old_wait.write_text("1000", encoding="utf-8")
+    old_tool_wait.write_text("2000", encoding="utf-8")
+
+    assert not room.reserve_now(later, queue, later.with_suffix(".roomwait"), "3000")
+    assert room.reserve_now(tooling, queue, old_tool_wait, "2000")
+    assert old_wait.exists()
+    assert not old_tool_wait.exists()
 
 
 def test_land_py_starts_only_with_a_reservation_and_a_full_queue_never_launches_it(repo, monkeypatch):

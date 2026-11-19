@@ -35,7 +35,7 @@ ROS-free lane perception and learned-model runtime shared by the robot and the l
 - Import only `contracts` (`core_common`) and third-party libraries here. Never import `control`, `rclpy` or other middleware: the layer rule allows `middleware` and `learning` to import this part, not the reverse.
 - Keep the module tree. Robot nodes in `control` and the learning tools import `perception_runtime.perception.*` by these names.
 - A source checkout finds this package through `control/__init__.py` (it appends this folder to `sys.path` when `control` runs from source) or through the explicit `integrations/perception` path entries in learning/tools scripts. Installed robots get it from colcon.
-- The manifest is the contract between training and the robot (`perception/learned/manifest.py`); change both sides together.
+- The manifest is the contract between training and the robot. It lives in `core_common.perception_model` (contracts/foundation) so learning does not import this package for it; `perception/learned/manifest.py` is only a re-export for older callers. Import the core_common name in new code.
 
 ### Testing Requirements
 
