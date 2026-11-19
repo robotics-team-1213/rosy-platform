@@ -19,6 +19,7 @@ KEY_ID = "rosy-site-test-1"
 COMMIT = "ab" * 20
 TAG = f"site-{COMMIT[:12]}"
 WORKFLOW = f"{REPO}/.github/workflows/build-site-candidate.yml"
+TRIAGE_FX = json.loads((Path(__file__).parent / "fixtures" / "ci_triage" / "pr247_run44516702259.json").read_text(encoding="utf-8"))
 
 
 def test_gh_utf8_output_survives_windows_legacy_locale(tmp_path, monkeypatch):
@@ -83,6 +84,17 @@ class FakeGh:
         self.ci_runs = [{"id": 101, "head_sha": COMMIT, "head_branch": "main",
                          "event": "push", "status": "completed", "conclusion": "success"}]
         self.ci_jobs = [{"name": "ci-result", "status": "completed", "conclusion": "success"}]
+        self.red = "apt_install"  # which PR #247 failure a red run 101 replays (test/fixtures/ci_triage)
+
+    def _triage(self, path: str) -> str | None:
+        """ci_triage's reads of the red run: run row, failed jobs of the attempt, the job's log."""
+        if path.endswith("/actions/runs/101"):
+            return json.dumps({**self.ci_runs[0], "run_attempt": 1, "repository": {"full_name": REPO}})
+        if path.endswith("/actions/runs/101/attempts/1/jobs?per_page=100"):
+            return json.dumps({"jobs": [TRIAGE_FX[self.red]["job"], TRIAGE_FX["ci_result"]]})
+        if path.endswith(f"/actions/jobs/{TRIAGE_FX[self.red]['job']['id']}/logs"):
+            return TRIAGE_FX[self.red]["log"]
+        return None
 
     def _ok(self, stdout: str = "") -> SimpleNamespace:
         return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
@@ -90,6 +102,8 @@ class FakeGh:
     def __call__(self, argv, **kwargs):
         args = list(argv[1:])
         self.calls.append(args)
+        if args[0] == "api" and (body := self._triage(args[-1])) is not None:
+            return self._ok(body)
         if args[0] == "api" and "/actions/workflows/ci.yml/runs?" in args[1]:
             return self._ok(json.dumps({"workflow_runs": self.ci_runs}))
         if args[0] == "api" and "/actions/runs/101/jobs?" in args[1]:
@@ -211,6 +225,20 @@ def test_red_exact_main_run_gets_one_rerun_request_and_still_refuses(tmp_path, k
     assert len(reruns) == 1 and reruns[0][2:4] == ["101", "--failed"]
     assert gh.uploads == [] and _audit(tmp_path)[-1]["decision"] == "ci-red"
     assert 101 in json.loads((tmp_path / "state/auto-sign-state.json").read_text())["rerun"]
+
+
+def test_red_exact_main_run_with_a_test_failure_is_not_rerun(tmp_path, keys):
+    gh = FakeGh()
+    gh.red = "assertion_test"
+    gh.ci_runs[0]["conclusion"] = "failure"
+    signer = auto.AutoSigner(_config(tmp_path, keys), runner=gh)
+    assert signer.run() == auto.EXIT_IDLE
+    assert [call for call in gh.calls if call[:2] == ["run", "rerun"]] == []
+    decisions = {record["decision"]: record for record in _audit(tmp_path)}
+    assert decisions["ci-rerun-skipped"]["category"] == "real_failure" and decisions["ci-red"]
+    assert 101 in json.loads((tmp_path / "state/auto-sign-state.json").read_text())["rerun"]  # still once per run
+    ledger = (tmp_path / "state" / "rosy-ci-triage.jsonl").read_text(encoding="utf-8")
+    assert "real_failure" in ledger and "test_omx_cell_frame" in ledger
 
 
 def test_rerun_without_permission_is_logged_and_the_red_stays_red(tmp_path, keys):

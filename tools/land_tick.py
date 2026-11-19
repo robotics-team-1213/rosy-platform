@@ -32,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "harness"))
 import land_async  # noqa: E402
 import land_cache  # noqa: E402
 import land_gc  # noqa: E402
@@ -39,6 +40,7 @@ import land_mainred  # noqa: E402
 import land_events  # noqa: E402
 import land_queue  # noqa: E402
 import land_stats  # noqa: E402
+import ci_triage  # noqa: E402  (red CI runs a person must look at, same operator surface as main-red)
 import memory_history  # noqa: E402
 import worktrees  # noqa: E402
 
@@ -220,6 +222,7 @@ def report(repo: Path, common: Path, now: float | None = None) -> list[str]:
                  + (" (ALERT)" if alerts else ""))
     for nodeid, s in opened[:SHOWN]:  # 11-14: 160 open ids, most never rechecked after main healed them
         lines.append(f"[backlog]   {nodeid} open {(now - (s['since'] or now)) / 60:.0f} min, owner {s['owner'] or 'none'}")
+    lines += ci_triage.backlog_lines(common / ci_triage.LEDGER, now)
     if line := metrics(common, now):
         lines.append(line)
     (common / REPORT).write_text("\n".join(lines) + "\n", encoding="utf-8")
