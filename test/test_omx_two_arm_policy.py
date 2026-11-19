@@ -663,5 +663,5 @@ def test_driver_step_feeds_track_history_state_width(monkeypatch, tmp_path):
     monkeypatch.setattr(helpers, "observe", lambda world, data: (np.zeros(12, np.float32), {}))
     monkeypatch.setattr(helpers, "sheet", lambda images: None)
     teacher = types.SimpleNamespace(last_cmd={}, frame=lambda *a, **k: None, verdict=lambda *a, **k: {}, contacts=None)
-    d.step(teacher, None, {"id": "s1", "container": "c", "arm": "arm_a", "from": "stand"}, {})
+    d.step(teacher, None, {"id": "s1", "container": "c", "arm": "arm_a", "from": "stand", "to": "stand"}, {})
     assert widths == [36] * 17
