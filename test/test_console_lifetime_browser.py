@@ -87,7 +87,9 @@ def test_hidden_document_cancels_reads_and_commands_and_restores_only_reads(cons
             else:
                 _serve_api(route)
         page.route("**/api/**", serve)
-        page.goto(f"{base}/{document}", wait_until="domcontentloaded")
+        # Discovery polls only while the robot-enrollment task is open (feat/ui-refine), so open that task.
+        task = "#robots" if held == "/api/fleet/discovery" else ""
+        page.goto(f"{base}/{document}{task}", wait_until="domcontentloaded")
         asset = "console.js" if document == "index.html" else "install.js"
         assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / CONSOLE_ASSETS[asset][0]).read_bytes()
         if held.startswith("/api/vision/"):
