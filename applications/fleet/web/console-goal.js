@@ -219,7 +219,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     try {
       const res = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/berth-park`, {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
-        body: JSON.stringify({ bay_id: chosenBay, mode, forward_m: 0.20 }), signals: [owner.signal],
+        body: JSON.stringify({ bay_id: chosenBay, mode, forward_m: 0.20, execute_physical: true }), signals: [owner.signal],
       });
       owner.check();
       if (res?.accepted !== true || res?.simulated_dispatch === true) {
