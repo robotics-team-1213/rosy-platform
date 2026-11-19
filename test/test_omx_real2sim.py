@@ -678,3 +678,12 @@ def test_far_clip_drops_top_tier_far_edge_creep_past_the_seat_draw():
     plain = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"])[0]
     clipped = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"], far_clip=True)[0]
     assert math.dist(clipped, sa["xy"]) < .002 < math.dist(plain, sa["xy"])
+
+
+def test_container_blobs_keeps_a_joined_container_group_below_the_background_area_cut():
+    """A joined orange group (~9.6k px) must not count as background (11-18): only regions over 12000 px do."""
+    import omx_real2sim_comp_helpers as helpers
+
+    bgr = np.full((480, 640, 3), (200, 120, 40), np.uint8)  # saturated blue table, far over the cut
+    bgr[140:240, 290:386] = (0, 110, 255)  # orange group, 9600 px
+    assert any(col == "orange" for col, _ in helpers.container_blobs(bgr))

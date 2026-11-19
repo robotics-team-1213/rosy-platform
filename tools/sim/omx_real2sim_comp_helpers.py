@@ -83,7 +83,7 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     n_cc, lab_cc, stats_cc, _ = cv2.connectedComponentsWithStats(cut_u8)
     keep_bg = np.zeros(n_cc, dtype=bool)
     if n_cc > 1:
-        keep_bg[1:] = stats_cc[1:, cv2.CC_STAT_AREA] > 6000
+        keep_bg[1:] = stats_cc[1:, cv2.CC_STAT_AREA] > 12000  # shortcut: area cut between a joined orange container group (~9.6k px) and the sky-blue hull (~15k); a 7-8 box group would be bg again, upgrade to a table/hull colour test (11-18 measure C)
     if np.any(keep_bg):
         bg_mask = keep_bg[lab_cc]
         bg_ab = np.median(ab_smooth[bg_mask], axis=0)
