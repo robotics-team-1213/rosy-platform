@@ -62,7 +62,7 @@ _FOUNDATION = str(Path(__file__).resolve().parents[3] / 'contracts/foundation') 
 for _p in (_SENSING, str(Path(_SENSING).parents[1] / 'integrations/perception'), _FOUNDATION):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from perception_runtime.perception.learned.manifest import ROLES, validate_label_semantic  # noqa: E402
+from core_common.perception_model import ROLES, validate_label_semantic  # noqa: E402
 # Mask value for unlabelled pixels (manifest "ignore_index"): excluded from the
 # loss, never a class. D-379 addendum 2026-10-01.
 IGNORE_INDEX = 255

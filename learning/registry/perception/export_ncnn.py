@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 from compare_backends import compare_frames
-from perception_runtime.perception.learned.manifest import (
+from core_common.perception_model import (
     LAYOUTS, NCNN_FAMILIES, NCNN_SCHEMA, OBJECT_CLASSES, load_manifest, verify_files)
 from perception_runtime.perception.learned.ncnn_session import NcnnSession
 
