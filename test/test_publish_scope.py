@@ -129,3 +129,13 @@ def test_a_red_repo_test_blocks_no_app_delta(scoped):
     _evidence(local, sha)
     _red(local, "docs/test_x.py::test_y")
     assert tool.publish_scope.check(tool, local, sha)[0]
+
+
+def test_parts_from_before_the_app_split_have_no_scope(scoped):
+    """11-19: a candidate whose platform_parts.yaml predates the app split (roots without "app") crashed publish_sha
+    with KeyError: it is simply not an app-scoped candidate."""
+    local, _ = scoped
+    old = {"roots": [{"path": "operations/fleet"}]}
+    sha = _commit(local, tool.publish_scope.PARTS, yaml.safe_dump(old))
+    assert tool.publish_scope.parts_at(tool, local, sha) is None
+    assert tool.publish_scope.check(tool, local, sha) == (False, None)
