@@ -55,8 +55,8 @@ class LaneJunctionPort(Protocol):
     async def front_camera(self, robot_id: str) -> dict:
         """D-601 B: ``GET /api/v1/vision/front/status``."""
 
-    async def rotate_to(self, robot_id: str, delta_deg: float, operator_name: str) -> dict:
-        """D-603: ``POST /api/v1/motion/rotate_to`` (the trip start's alignment turn)."""
+    async def rotate_to(self, robot_id: str, delta_deg: float, operator_name: str, tol_deg: Optional[float] = None) -> dict:
+        """D-603: ``POST /api/v1/motion/rotate_to`` (the trip start's alignment turn; the arrival alignment sets ``tol_deg``)."""
 
     async def rotate_status(self, robot_id: str) -> dict:
         """D-603: ``GET /api/v1/motion/rotate_to``."""
@@ -125,8 +125,8 @@ class HttpLaneJunction:
     async def front_camera(self, robot_id: str) -> dict:
         return await self._client(robot_id).front_status()
 
-    async def rotate_to(self, robot_id: str, delta_deg: float, operator_name: str) -> dict:
-        return await self._client(robot_id).rotate_to(delta_deg, operator_name)
+    async def rotate_to(self, robot_id: str, delta_deg: float, operator_name: str, tol_deg: Optional[float] = None) -> dict:
+        return await self._client(robot_id).rotate_to(delta_deg, operator_name, tol_deg)
 
     async def rotate_status(self, robot_id: str) -> dict:
         return await self._client(robot_id).rotate_to_status()
