@@ -34,7 +34,7 @@ modules:
   - name: control
     path: middleware/perception
     source_paths: [middleware/drive]
-    tests: [middleware/perception/test, test/test_control_absorption_package.py]
+    tests: [middleware/perception/test, middleware/drive/test, test/test_control_absorption_package.py]
     functional_kind: pytest
     functional: [middleware/perception/test]
   - name: fleet

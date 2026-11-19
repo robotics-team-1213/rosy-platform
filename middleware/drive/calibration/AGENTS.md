@@ -44,7 +44,7 @@ None.
 
 ### Testing Requirements
 
-Matching tests live in `middleware/perception/test/test_calibration*.py`, `test_modes.py`, `test_round_trip.py`, `test_commissioning_certificate.py`, `test_sensing_only.py`, `test_sensor_tiers.py`, `test_startup_diagnostics.py`, and `test_startup_profile.py`. Run committed HEAD through `tools/remote/remote_pytest.py`, then `test/known_failures.py`.
+Matching tests live in `middleware/drive/test/test_calibration*.py`, `test_modes.py`, `test_round_trip.py`, `test_commissioning_certificate.py`, `test_sensing_only.py`, `test_sensor_tiers.py`, `test_startup_diagnostics.py`, and `test_startup_profile.py`. Run committed HEAD through `tools/remote/remote_pytest.py`, then `test/known_failures.py`.
 
 ### Common Patterns
 
