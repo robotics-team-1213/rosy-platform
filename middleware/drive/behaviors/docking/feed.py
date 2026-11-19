@@ -55,6 +55,11 @@ class DockObservationFeed:
             if not payload["visible"]:
                 self._latest.pop(source, None)
                 return False
+            if payload.get("ground") not in (None, "GAZEBO", "NOMINAL"):
+                # NOMINAL (the robot's URDF/record camera) drives docking from one button press
+                # (user decision 2026-11-18, D-1042 6); an unknown ground is not evidence.
+                self._latest.pop(source, None)
+                return False
             tag_id = payload.get("tag_id")
             # The V marker has no identity; a tag without an integer id is malformed.
             if (type(tag_id) is not int) if source == SOURCE else tag_id is not None:
@@ -64,7 +69,8 @@ class DockObservationFeed:
                 x=_finite(payload.get("x")), y=_finite(payload.get("y")),
                 yaw=_finite(payload.get("yaw")),
                 confidence=min(1.0, max(0.0, _finite(payload.get("confidence")))),
-                at=_finite(received_at) - age)
+                at=_finite(received_at) - age,
+                lateral_measured=payload.get("lateral_measured", True) is not False)
         except (ValueError, TypeError):
             # Garbage of unknown origin clears every source: lost, not guessed.
             if source in SOURCES:
