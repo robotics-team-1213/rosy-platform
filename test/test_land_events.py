@@ -27,6 +27,31 @@ def test_events_append_one_line_each_and_a_torn_line_is_skipped(tmp_path, monkey
     assert rows[0]["position"] == 3 and rows[1]["waited_s"] == 120
 
 
+def test_queue_and_landed_carry_the_branch_apps(tmp_path, monkeypatch):
+    """2026-11-19: a week of ``apps`` on queue/landed lines decides per-app parallel turns."""
+    import subprocess
+    git = lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True)  # noqa: E731
+    git("init", "-q", "-b", "main")
+    parts = tmp_path / "tools/harness/platform_parts.yaml"
+    parts.parent.mkdir(parents=True)
+    parts.write_text("app_neutral: ['**/logs.md']\nroots: [{path: ops/fleet, app: site-fleet}]\n", encoding="utf-8")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+    git("checkout", "-qb", "feat/x")
+    for name in ("ops/fleet/a.py", "ops/fleet/logs.md", "README.md"):
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("1", encoding="utf-8")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x")
+    monkeypatch.setattr(land_events, "_where", {})
+    land_events.bind(tmp_path, "feat/x")
+    land_events.emit("queue", ticket="x")
+    land_events.emit("turn", waited_s=1)
+    land_events.landed("abc")
+    rows = land_events.read(tmp_path / ".git" / land_events.EVENTS)
+    assert [r.get("apps") for r in rows] == [["core", "site-fleet"], None, ["core", "site-fleet"]]
+
+
 def test_daily_numbers_from_waits_turns_and_verdicts():
     t = 1_792_900_000.0
     rows = [{"t": t, "event": "turn", "pid": 1, "waited_s": 600},
