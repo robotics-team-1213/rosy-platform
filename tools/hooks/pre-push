@@ -181,6 +181,11 @@ FAST_SUITES=(
   middleware/core/gateway/test/test_triage_contract.py
   middleware/core/gateway/test/test_host_status_summary.py
 )
+# D-1052: personal partial clones delegate pytest to GitHub PR CI + local dev runs (`rosy.staticPrePush=true`).
+if [ "$(git config --bool rosy.staticPrePush 2>/dev/null || true)" = "true" ] || [ "${ROSY_STATIC_PRE_PUSH:-}" = "1" ]; then
+  echo "[pre-push] static gate green (pytest delegated to CI)"
+  exit 0
+fi
 # D-436: affected tier on top of the fast suites (whose contents stay as they
 # are). Tests of the modules this branch touches, their direct reverse
 # dependents, the tests naming the changed paths and the guard set. When the
