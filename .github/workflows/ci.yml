@@ -213,7 +213,12 @@ jobs:
           # assertions (fleet header link tag) see overflow that real browsers do not.
           # The common setup has already configured apt mirrors and refreshed the index.
           apt-get install -y -qq fonts-noto-cjk
-          python3 -m playwright install --with-deps chromium
+          if [ -n "${ROSY_BROWSER_CHANNEL:-}" ] || [ "${ROSY_VISIBLE_BROWSER:-}" = 1 ]; then
+            python3 -m playwright install --with-deps chromium
+          else
+            # The default test browser is the headless shell.
+            python3 -m playwright install --with-deps --only-shell chromium
+          fi
 
       - name: Install Pinky raw verification tools
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
