@@ -449,6 +449,8 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
                 if c not in ancestors and c != head and _git(wt, "cat-file", "-e", f"{c}^{{commit}}").returncode == 0:
                     commits.append(c)
         for commit in commits[:NARROW_COMMITS]:
+            if "land_events" in sys.modules:  # each selector pass is progress; 11-18 the watchdog stopped a rollup here
+                sys.modules["land_events"].beat()
             # explicit FULL: only the strict rule publish_evidence recomputes, never the landed-FULL extension
             delta = (reach(wt, commit, head, python) if args.tests == "full"
                      else _delta_paths(wt, commit, head, python, select))
