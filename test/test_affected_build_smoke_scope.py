@@ -23,14 +23,17 @@ def _buildable(changed: list[str], mode: str = "affected") -> bool:
 def test_trees_outside_every_colcon_root_build_nothing():
     assert not _buildable(["tools/land_cache.py"])
     assert not _buildable(["test/test_land_cache.py", "docs/reference/developer-guide.md"])
-    assert not _buildable([".github/workflows/ci.yml"])
-    assert not _buildable(["deploy/robot/omx/arm_status_bridge.py"])
+
+
+def test_workflow_deploy_and_build_data_conservatively_keep_the_smoke_job():
+    assert _buildable([".github/workflows/ci.yml"])
+    assert _buildable(["deploy/robot/omx/arm_status_bridge.py"])
+    assert _buildable(["tools/harness/platform_parts.yaml"])
 
 
 def test_colcon_root_files_and_build_data_keep_the_smoke_job():
     assert _buildable(["middleware/core/gateway/core/node.py"])
     assert _buildable(["operations/fleet/test/test_model_cooperation.py"])
-    assert _buildable(["tools/harness/platform_parts.yaml"])
 
 
 def test_the_full_tier_always_builds():
