@@ -300,7 +300,8 @@ def test_a_corridor_only_view_takes_the_lateral_from_the_map_never_from_the_payl
 
     def corridor_only():
         capture()
-        if p.detector.latest is not None:
+        if p.detector.latest is not None and p.world.pose[0] < -0.42:
+            # corridor line only at the bay mouth; the lateral blind budget (0.10 m) ends it before the stop face
             p.detector.latest = p.detector.latest.model_copy(update={"lateral_measured": False})
             if p.manager.phase is not None and p.manager.phase.value in ("acquiring", "turning", "backoff"):
                 o = p.detector.latest            # a lying y must not steer: shift it 7 cm sideways

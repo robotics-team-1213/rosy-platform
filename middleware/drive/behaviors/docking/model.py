@@ -98,7 +98,8 @@ class DockingConfig:
     # (Rosy/docs/research/charge-bay-pink-line-2026-11-10/, 명목 36/36·시나리오 13/13).
     bay_reverse_speed: float = 0.05     # m/s, 선 가운데·평행 유지하며 후진
     bay_gain_lateral: float = 8.0       # rad/(s·m), ω = -(a·횡 + b·방위)
-    bay_gain_heading: float = 0.6
+    bay_gain_heading: float = 1.2       # 0.6→1.2: 감쇠 ζ≈0.47→0.95, 5 cm 시작 방위 피크 20.5°→13.2°(운동학 sim, 2026-11-19)
+    bay_target_heading_max_rad: float = 0.26  # 옆 오차가 요구하는 목표 방위 상한(15°; 짐칸 끝 0.135·칸 폭 0.18)
     bay_gate_jump_m: float = 0.02       # 프레임당 횡 점프 게이트(물리 가능 범위 밖 = 이웃선)
     bay_gate_jump_rad: float = 0.0873   # 5 deg/프레임
     bay_coast_slow_s: float = 0.5       # 관측 무효: 이 안은 제어량 유지(코스트)
@@ -108,6 +109,19 @@ class DockingConfig:
     bay_settle_creep_m: float = 0.04    # 회전 뒤 캐스터 정착 크립(전진)
     bay_travel_margin_m: float = 0.02   # 접촉 거리 상한 = 진입 잔여거리 + 이 값
     bay_backoff_m: float = 0.15         # 재시도 전진(교차점 쪽)
+    # 진입 허용창(ALIGNING 시작 때): 횡 허용 = clip(slope*(along-from), base, max), 방위 상한. 넘으면 후진 대신 앞으로 빠졌다 재진입.
+    bay_entry_lat_base_m: float = 0.015
+    bay_entry_lat_slope: float = 0.25
+    bay_entry_lat_from_m: float = 0.25
+    bay_entry_lat_max_m: float = 0.09
+    bay_entry_heading_max_rad: float = 0.1745   # 10°
+    # 접촉 때 허용창: 가이드 목 ±6 mm·방위 2°(충전 판정)의 두세 배. 넘으면 전압 20 s 를 기다리지 않고 재진입.
+    bay_contact_lat_m: float = 0.015
+    bay_contact_heading_rad: float = 0.0873     # 5°
+    # 횡 맹목 후진(통로선만 보여 횡 실측 없음) 예산: 0.10 m 또는 2 s(0.05 m/s) 넘으면 정지·재진입.
+    bay_blind_lat_m: float = 0.10
+    bay_blind_lat_s: float = 2.0
+    bay_rear_gap_margin_m: float = 0.06         # LiDAR 뒤 여유가 남은 거리보다 이만큼 넘게 작으면 칸 안 장애
     bay_settle_baseline_s: float = 2.0  # 멈춘 뒤 기준 전압을 잡기 전 대기
     bay_charge_rise_v: float = 0.05     # D-941: 20 s 안 +0.05 V(도크 계측 없음)
     bay_charge_confirm_s: float = 20.0
