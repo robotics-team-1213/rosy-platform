@@ -143,7 +143,7 @@ def test_ci_extracts_exclusive_environment_before_passing_pytest_arguments():
     assert environment == {'ROSY_JOB_ALONE': '1'} and args[0] == exclusive.TARGET
     workflow = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
     assert 'paths, job_environment = split_environment(paths)' in workflow
-    assert '(rest, job_environment)' in workflow
+    assert 'runs.append(([*rest, *flags], job_environment))' in workflow
     assert 'ids = [] if dedicated(paths)' in workflow
 
 
