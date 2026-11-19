@@ -559,6 +559,22 @@ def test_standalone_app_tests_are_required_in_full_and_affected_ci():
             assert owners[0]['invocations'] == [[path]]
 
 
+def test_fleet_timing_data_selects_only_its_reader_and_guards(monkeypatch):
+    repo = affected.Repo.load(ROOT)
+    timing = "tools/harness/fleet_test_seconds.json"
+    reader = "test/test_affected_tests.py"
+    assert affected.select(repo, [timing]).mode == "full"  # legacy switch
+
+    monkeypatch.delenv("ROSY_FULL_LEGACY")
+    selected = affected.select(repo, [timing])
+    assert selected.mode == "affected"
+    assert set(selected.reasons) == GUARDS | {reader}
+
+    selector = "tools/harness/affected_ci.py"
+    with_selector = affected.select(repo, [timing, selector])
+    assert set(affected.select(repo, [selector]).reasons) <= set(with_selector.reasons)
+
+
 def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     # Main CI 38807338775 (2026-10-15) took 224/528/168/275 s with the 2026-10-10 weights;
     # the measured table must keep the slowest shard near a quarter of the suite.

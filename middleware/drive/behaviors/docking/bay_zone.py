@@ -49,6 +49,10 @@ def classify(pose, dock, staging_offset_m: float, observation, cfg) -> ZoneVerdi
         return ZoneVerdict("manual", "map pose unavailable")
     along, lateral, heading = map_offsets(pose, dock)
     if along >= staging_offset_m - cfg.bay_zone_margin_m:
+        # One-way corridor: Nav2 would drive against the flow into a robot leaving the bay row.
+        if (cfg.bay_downstream_sign and abs(along - staging_offset_m) <= cfg.bay_corridor_band_m
+                and lateral * cfg.bay_downstream_sign > cfg.bay_lane_half_m + cfg.bay_downstream_map_error_m):
+            return ZoneVerdict("manual", "downstream of this bay on the one-way corridor: re-enter from the upstream side")
         return ZoneVerdict("out", "at or beyond the staging distance")
     if abs(lateral) > cfg.bay_lane_half_m:
         return ZoneVerdict("manual", "inside the bay row but not in this bay's lane")
