@@ -649,6 +649,24 @@ def test_skill_argv_forwards_track_history_and_delta_action():
     with pytest.raises(ValueError, match="--track-history"):
         helpers.collect([1], ["stack"], "unused", state_history=True, track_history=2)
 
+def test_driver_step_feeds_track_history_state_width(monkeypatch, tmp_path):
+    """A --track-history checkpoint sees state + K x 12 tracking errors in every Driver.step frame (the skill eval already did)."""
+    model_dir, steps_file, _ = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": {}})
+    steps_file.write_text(json.dumps({"longest": {"s1": 2}, "state_names": [f"j{i}" for i in range(12)] + [f"err{k}.j{i}" for k in range(2) for i in range(12)]}), encoding="utf-8")
+    d = policy.Driver(model_dir, steps_file)
+    assert d.track == 2
+    widths = []
+    d.act = lambda state, images, goal=None, prompt=None: widths.append(len(state)) or np.zeros(12, dtype=np.float32)
+    d.policy.reset = lambda: None
+    d.has_goal = False
+    d.world = types.SimpleNamespace(pose=lambda data, c: ((0., 0., 0.), None))
+    monkeypatch.setattr(helpers, "observe", lambda world, data: (np.zeros(12, np.float32), {}))
+    monkeypatch.setattr(helpers, "sheet", lambda images: None)
+    teacher = types.SimpleNamespace(last_cmd={}, frame=lambda *a, **k: None, verdict=lambda *a, **k: {}, contacts=None)
+    d.step(teacher, None, {"id": "s1", "container": "c", "arm": "arm_a", "from": "stand", "to": "stand"}, {})
+    assert widths == [36] * 17
+
+
 def test_driver_concurrent_can_disturb_and_keep_judging_after_a_failed_step(monkeypatch):
     """The sub-skill evaluation's errors reach the whole-task run (reported angles, zero error read back out), and a failed step no longer ends it."""
     from contextlib import nullcontext
