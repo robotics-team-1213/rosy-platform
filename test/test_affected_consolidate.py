@@ -28,3 +28,16 @@ def test_heavy_jobs_are_not_merged_past_the_weight_cap():
     out = affected_ros.consolidate([_e("affected-1", "overlay", ["a/test_big.py"]),
                                     _e("affected-2", "overlay", ["b/test_y.py"])], heavy)
     assert len(out) == 2
+
+
+def test_build_smoke_skips_only_outside_colcon_roots_workflows_and_deploy():
+    import affected_ci
+    from types import SimpleNamespace
+    repo = SimpleNamespace(parts={"colcon_roots": ["middleware/core"]})
+    sel = lambda *paths: SimpleNamespace(mode="affected", escalations=[], changed=list(paths))  # noqa: E731
+    assert not affected_ci.buildable(repo, sel("tools/land_room.py", "test/test_x.py"))
+    assert affected_ci.buildable(repo, sel("middleware/core/x.py"))
+    assert affected_ci.buildable(repo, sel(".github/workflows/ci.yml"))
+    assert affected_ci.buildable(repo, sel("deploy/site/x.yaml"))
+    assert affected_ci.buildable(repo, sel("tools/harness/platform_parts.yaml"))
+    assert affected_ci.buildable(SimpleNamespace(parts={}), sel("tools/land_room.py"))  # unknown roots keep the job
