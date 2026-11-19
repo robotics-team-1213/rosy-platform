@@ -66,12 +66,18 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     """Serve one authorized latest-frame read directly from Vision, never from Fleet."""
     prefix = "/api/vision/sources/"
     source, _, view = path[len(prefix):].partition("/") if path.startswith(prefix) else ("", "", "")
-    if source and view.startswith("roi/"):
+    if source and view.startswith("roi/") and self.preview_signer is not None:
+        lease = _verified_lease(self, source, authorization)
+        if isinstance(lease, Response):
+            return lease
         target_id = view[len("roi/"):].strip("/").split("?")[0]
         tracker = getattr(self, "anchor_tracker", None)
         if not target_id or tracker is None:
             return _http_response(404, b"roi tracker unavailable\n")
         self.hold_stream(source)
+        limited = self._rate_limited((str(lease["sub"]), source, "roi"), _FRAME_INTERVAL_S)
+        if limited is not None:
+            return limited
         roi_jpeg, roi_at = tracker.roi_jpeg(target_id)
         if not roi_jpeg:
             return _http_response(404, b"roi unavailable\n")
@@ -84,11 +90,9 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     if (not source or view not in ("frame", "field-proposal", "map-proposal")
             or self.preview_signer is None):
         return _http_response(404, b"not found\n")
-    bearer = authorization[len("Bearer "):] if authorization and authorization.startswith("Bearer ") else ""
-    try:
-        lease = self.preview_signer.verify(bearer, source_id=source)
-    except VisionLeaseError:
-        return _http_response(401, b"unauthorized\n")
+    lease = _verified_lease(self, source, authorization)
+    if isinstance(lease, Response):
+        return lease
     # A missing, stale, or rate-limited frame is still a request (D-691).
     self.hold_stream(source)
 
@@ -159,6 +163,15 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
         **extra_state,
         **_lens_header(self.source_lens(source)),
     })
+
+
+def _verified_lease(self, source: str, authorization: str | None) -> Mapping | Response:
+    """The signed preview lease scoped to ``source``, or a 401 response."""
+    bearer = authorization[len("Bearer "):] if authorization and authorization.startswith("Bearer ") else ""
+    try:
+        return self.preview_signer.verify(bearer, source_id=source)
+    except VisionLeaseError:
+        return _http_response(401, b"unauthorized\n")
 
 
 async def _map_plane_response(self, source: str, frame: LatestFrame, age: float,
