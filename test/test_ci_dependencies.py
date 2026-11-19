@@ -27,7 +27,7 @@ def test_ci_activates_standalone_app_browsers(monkeypatch, target, rest):
     from types import SimpleNamespace
 
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
-    install = next(step for step in steps if step['name'] == 'Install Fleet browser verification tools')
+    install = next(step for step in steps if step['name'] == 'Fleet browser readiness (Chromium and CJK fonts from the image)')
     # Evaluate the condition with the same serialized invocation payload used by Actions.
     condition = install['if'].replace('toJSON(matrix.invocations)', 'payload').replace('||', 'or')
     assert eval(condition, {'__builtins__': {}, 'contains': lambda value, part: part in value,
@@ -238,7 +238,7 @@ def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkey
     core = next(entry for entry in CI_FULL_MATRIX if entry['name'] == 'core-domain')
     assert [browser_node] in core['invocations'], 'SSO browser journey must not remain opt-in-only'
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
-    install = next(step for step in steps if step['name'] == 'Install Fleet browser verification tools')
+    install = next(step for step in steps if step['name'] == 'Fleet browser readiness (Chromium and CJK fonts from the image)')
     assert 'test_account_pipeline.py' in install['if']
     script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
     python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
