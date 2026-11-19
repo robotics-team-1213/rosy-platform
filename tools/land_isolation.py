@@ -67,8 +67,11 @@ def tracked_tests(root: Path, paths: list[str]) -> list[str]:
     """Tracked test files under ``paths`` (a test file names itself), as the selector counts them."""
     if not paths:
         return []  # ls-files with no pathspec lists the whole tree
-    listed = subprocess.run(["git", "ls-files", "-z", "--", *paths], cwd=root, capture_output=True, check=True,
-                            text=True, encoding="utf-8").stdout
+    # Batches: hundreds of paths overflow the Windows command line (WinError 206); ls-files has no
+    # --pathspec-from-file.
+    listed = "\0".join(subprocess.run(["git", "ls-files", "-z", "--", *paths[i:i + 100]], cwd=root,
+                                      capture_output=True, check=True, text=True, encoding="utf-8").stdout
+                       for i in range(0, len(paths), 100))
     return sorted({p for p in listed.split("\0") if TEST_FILE.search(p)})
 
 
