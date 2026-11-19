@@ -33,7 +33,9 @@ ALONE = re.compile(r"^tools/collect_alone\.py::test_(?:runs|collects)_alone\[(.+
 
 def parts_at(publish, repo: Path, sha: str) -> dict | None:
     shown = publish.git(repo, "show", f"{sha}:{PARTS}", check=False)
-    return (yaml.safe_load(shown.stdout) or None) if shown.returncode == 0 else None
+    parts = (yaml.safe_load(shown.stdout) or None) if shown.returncode == 0 else None
+    # 11-19: a candidate from before the app split (no root "app") crashed publish_sha with KeyError; it has no app scope
+    return parts if parts and all("app" in root for root in parts.get("roots") or []) else None
 
 
 def full_reason(paths: list[str], parts: dict) -> str | None:

@@ -95,3 +95,41 @@ def test_panel_sends_only_changed_rectangle_and_redraws_after_sleep(monkeypatch)
     lcd.show_panel(changed)
     assert windows[-1] == (0, 0, 4, 3)
     assert sent[-1] == changed.tobytes()
+
+
+def _load_lcd(monkeypatch, outputs):
+    spi = ModuleType("spidev")
+    spi.SpiDev = type("SpiDev", (), {"open": lambda *_: None})
+    rpi = ModuleType("RPi")
+    gpio = ModuleType("RPi.GPIO")
+    gpio.BCM, gpio.OUT, gpio.HIGH, gpio.LOW = "BCM", "OUT", 1, 0
+    gpio.setmode = gpio.setwarnings = gpio.setup = lambda *_: None
+    gpio.output = lambda pin, value: outputs.append((pin, value))
+    gpio.cleanup = lambda *_: None
+
+    def no_pwm(*_):
+        raise AssertionError("software PWM: its lgpio thread spun a whole core on the field robots")
+
+    gpio.PWM = no_pwm
+    rpi.GPIO = gpio
+    for module in (spi, rpi, gpio):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+    path = Path(__file__).resolve().parents[1] / "emotion" / "rosy_lcd.py"
+    spec = importlib.util.spec_from_file_location("emotion._lcd_backlight_under_test", path)
+    lcd_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lcd_module)
+    monkeypatch.setattr(lcd_module.LCD, "lcd_init", lambda self: None)
+    return lcd_module
+
+
+def test_backlight_is_a_plain_gpio_line_without_a_pwm_thread(monkeypatch):
+    outputs = []
+    lcd_module = _load_lcd(monkeypatch, outputs)
+    lcd = lcd_module.LCD()
+    bl = lcd_module.BL_PIN
+    assert outputs == [(bl, 1)]
+    for value in (100, 30, 0, -5):
+        lcd.set_backlight(value)
+    assert outputs[1:] == [(bl, 1), (bl, 1), (bl, 0), (bl, 0)]
+    lcd.spi = type("SPI", (), {"close": lambda _self: None})()
+    lcd.close()
