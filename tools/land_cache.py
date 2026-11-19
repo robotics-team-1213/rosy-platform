@@ -505,6 +505,13 @@ def warm_main(wt: Path, limit: int = 16, main_ref: str = "main", skip_lab: bool 
     import land_guards  # noqa: E402
     import work_queue  # noqa: E402
 
+    rolling = None
+    if (wt / "tools/harness/harness.yaml").is_file() and (tools_dir / "rolling_regression.py").is_file():
+        import rolling_regression  # noqa: E402
+        if rolling_regression.queue_busy(wt):
+            return 0, 0
+        rolling = (rolling_regression, rolling_regression.load_state(wt))
+
     candidates = [[g] for g in land_guards.GUARDS if (wt / g).exists()]
     if (wt / "tools/harness/rosy_harness.py").is_file():
         res = subprocess.run([sys.executable, "tools/harness/rosy_harness.py", "affected", "--base", sha,
@@ -520,8 +527,15 @@ def warm_main(wt: Path, limit: int = 16, main_ref: str = "main", skip_lab: bool 
             continue
         if skip_lab and (work_queue.lab_only(inv) or work_queue.host_alone(inv)):
             continue
+        if rolling and rolling[0].is_closure_warm(wt, sha, inv, rolling[1]):
+            continue
         seen.add(k)
         missing.append(inv)
+    if rolling and missing:
+        rr, _ = rolling
+        lab_invs = [i for i in missing if not rr.ci_runnable(i)]
+        gha_invs = [i for i in missing if rr.ci_runnable(i)]
+        missing = (lab_invs[:rr.WARM_BATCH] if not skip_lab else []) + gha_invs
     todo = missing[:limit] if limit > 0 else missing
     if not todo:
         return 0, 0
@@ -540,7 +554,11 @@ def warm_main(wt: Path, limit: int = 16, main_ref: str = "main", skip_lab: bool 
         if known_failures.compare(text, known)[0]:
             continue
         record(wt, sha, tree, env, inv, log)
+        if rolling:
+            rolling[0].note_warm_pass(wt, sha, inv, rolling[1])
         warmed += 1
+    if rolling and warmed:
+        rolling[0].save_state(wt, rolling[1])
     return warmed, len(todo)
 
 
