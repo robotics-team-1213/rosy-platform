@@ -87,11 +87,22 @@ def covers_lab_baseline(cwd: Path, head: str, argv: list[str], candidate_text: s
     return True
 
 
+def activated(cwd: Path) -> bool:
+    """Activation marker for the shared publishOnly clone: git config rosy.prLandActivated=true or D-1055 Accepted."""
+    if _run(["git", "config", "--bool", "rosy.prLandActivated"], cwd, check=False).lower() == "true":
+        return True
+    for adr in (cwd / "docs/adr").glob("D-1055-*.md"):
+        if re.search(r"(?m)^\*\*Status:\*\*\s*Accepted\b", adr.read_text(encoding="utf-8", errors="replace")):
+            return True
+    return False
+
+
 def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> str:
     """Enforce D-868 publishOnly separation and return base ref for PR diff checks."""
-    if _run(["git", "config", "--bool", "rosy.publishOnly"], cwd, check=False).lower() == "true":
+    if _run(["git", "config", "--bool", "rosy.publishOnly"], cwd, check=False).lower() == "true" and not activated(cwd):
         raise SystemExit(
-            "[pr-land] rosy.publishOnly=true clone follows D-868: use land_async.py -> publish_main.py --via-ci"
+            "[pr-land] rosy.publishOnly=true clone follows D-868: use land_async.py -> publish_main.py --via-ci "
+            "(D-1055 not Accepted and rosy.prLandActivated unset; activation needs human approval)"
         )
     origin_main = _run(["git", "rev-parse", "--verify", "-q", "origin/main"], cwd, check=False)
     local_main = _run(["git", "rev-parse", "--verify", "-q", "main"], cwd, check=False)
@@ -204,6 +215,8 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     body = build_body(args.body, args.self_review)
     if args.dry_run:
         print(f"[pr-land] dry-run branch={branch} lab_required={len(lab_needed)} title={title!r}")
+        print(f"[pr-land] plan: git push -u origin {branch}; gh pr create|edit (base main, head {branch}); "
+              f"gh pr merge --auto --merge --match-head-commit {head}; then exit (no waiting)")
         return 0
 
     env = dict(os.environ)
