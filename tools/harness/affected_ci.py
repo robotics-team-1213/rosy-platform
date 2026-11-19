@@ -48,6 +48,7 @@ SUITE_SHARDS = {"fleet": 5, "sensing": 2}  # Station suites (D-772) retain the f
 # every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
+_STATION_SCHEDULING = "middleware/core/gateway/test/test_station_camera_scheduling.py"
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
     {"name": "omx-act-cpu", "invocations": [[
@@ -61,9 +62,11 @@ CI_FULL_MATRIX = (
         ["operations/prediction/world_model/test"]], "ros": "none"},
     # 2026-11-18: core-domain was CI's longest runner (pytest step 16.5 and 22.4 min of a 25 min budget, runs
     # 43769060136 and 42596065578); the gateway suite and the rest now run on two runners, same tests.
-    {"name": "core-domain", "invocations": [["middleware/core/gateway/test"], [
+    {"name": "core-domain", "invocations": [["middleware/core/gateway/test", f"--ignore={_STATION_SCHEDULING}"], [
         "middleware/core/gateway/test/test_account_pipeline.py"
     ]], "ros": "none"},
+    # Runs the known load-sensitive simulation in a fresh runner (PRs #249 and #250).
+    {"name": "core-station-simulation", "invocations": [[_STATION_SCHEDULING]], "ros": "none"},
     {"name": "core-services", "invocations": [[
         "middleware/core/events/test", "middleware/core/services/test",
         "shared/web/test", "contracts/foundation/test",
