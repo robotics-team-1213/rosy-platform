@@ -15,7 +15,7 @@ swarm:                      # D-20 (SWM-005)
   follow: true
   lead: true
 docking:
-  supported: false               # DNC-001 — Pinky Pro 미지원
+  supported: true                # D-1042 6 (2026-11-18 사용자 결정): 칸 분홍선 도킹을 버튼 한 번으로
 sensors: [lidar, imu, battery, encoder]
 events: ["nav.*", "safety.*", "battery.*", "mode.*", "waypoint.*", "map.*", "system.*", "command.*"]
 api_versions: [v1]
