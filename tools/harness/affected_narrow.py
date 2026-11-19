@@ -107,8 +107,9 @@ def tool_readers(repo: at.Repo, path: str) -> dict[str, str]:
     """Panel 2026-11-20 (aff-narrow): a landing or runner TOOL (not the selector, its registries or the
     harness) selects the tests that import or name it and its own `test/test_<stem>*.py`, not the whole
     self-test tier. {} (the whole tier) when no test reads it: an unread gate tool is unknown reach."""
-    if legacy() or not path.startswith("tools/") or at._under(path, "tools/harness"):
-        return {}
+    if (legacy() or not path.startswith("tools/") or at._under(path, "tools/harness")
+            or any(at._match(path, p) for p in RUNNER_TOOLS)):
+        return {}  # runner tools keep the whole tier plus canary (panel 2026-11-17)
     stem = PurePosixPath(path).stem
     found = {t: f"reads {path}" for t in repo.referencing_tests(path)}
     for test in repo.test_files:
