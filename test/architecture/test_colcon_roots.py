@@ -73,6 +73,7 @@ EXEMPT = {
     "operations/fleet/package.xml": "XML comment",
     # Tests pin consumer text; none runs colcon or rosdep.
     "test/architecture/test_colcon_roots.py": "this test",
+    "test/test_affected_build_smoke_scope.py": "docstring naming the smoke job's steps; runs nothing",
     "test/test_ci_dependencies.py": "asserts on ci.yml",
     "test/test_image_customization_contract.py": "asserts on image scripts",
     "test/test_native_ros_payload.py": "asserts on the payload script",

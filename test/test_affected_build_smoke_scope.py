@@ -2,7 +2,7 @@
 
 ci.yml's smoke job is colcon build + flake8 + core boot + SaveMap, and every step reads only files
 inside a ``platform_parts.yaml`` colcon root. A change confined to documents or to trees outside
-every root (tools, root ``test/``, deploy, .github) skips the job; product files and
+every root (tools, root ``test/``) skips the job; product files, .github/, deploy/ and
 platform_parts.yaml (colcon_roots.py's input) keep it, and the full tier always builds.
 """
 
