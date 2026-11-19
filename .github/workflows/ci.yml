@@ -33,7 +33,7 @@ jobs:
     # 전환이다. 되돌림은 이 기본값을 24.04 로 바꾸면 된다.
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container:
-      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:0000000000000000000000000000000000000000000000000000000000000000  # build-ci-image.yml prints the real digest; replace before merge
+      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:59245c63b56db2a87722baf0b6696853f55d3f9c85dfc4688a53a946032a0685
       credentials:
         username: ${{ github.actor }}
         password: ${{ github.token }}
@@ -124,7 +124,7 @@ jobs:
     name: test (${{ matrix.name }})
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container:
-      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:0000000000000000000000000000000000000000000000000000000000000000  # build-ci-image.yml prints the real digest; replace before merge
+      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:59245c63b56db2a87722baf0b6696853f55d3f9c85dfc4688a53a946032a0685
       credentials:
         username: ${{ github.actor }}
         password: ${{ github.token }}
