@@ -41,7 +41,9 @@ def test_dry_run_skips_push_and_gh(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(pr_land, "_run", fake_run)
     monkeypatch.setattr(pr_land, "required_lab_invocations", lambda cwd, base, head: [])
     assert pr_land.main(["--dry-run", "--self-review", "solo"], repo=tmp_path) == 0
-    assert "dry-run branch=feat/topic" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "dry-run branch=feat/topic" in out
+    assert "gh pr merge --auto --merge --match-head-commit " + "a" * 40 in out
     assert not any(c[0] == "gh" or (c[0] == "git" and c[1] == "push") for c in calls)
 
 
@@ -77,6 +79,26 @@ def test_refuses_publish_only_clone_per_d868(monkeypatch, tmp_path):
     )
     with pytest.raises(SystemExit, match="rosy.publishOnly=true"):
         pr_land.check_coexistence(tmp_path, "a" * 40)
+
+
+def test_publish_only_clone_allowed_once_activated(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        pr_land,
+        "_run",
+        lambda cmd, cwd, env=None, check=True: "true" if cmd[:3] == ["git", "config", "--bool"] else "origin-main-sha",
+    )
+    assert pr_land.activated(tmp_path)
+    assert pr_land.check_coexistence(tmp_path, "a" * 40) == "origin-main-sha"
+
+
+def test_activated_by_accepted_adr_only(monkeypatch, tmp_path):
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, env=None, check=True: "")
+    adr = tmp_path / "docs/adr"
+    adr.mkdir(parents=True)
+    (adr / "D-1055-x.md").write_text("**Status:** Proposed (x)\n", encoding="utf-8")
+    assert not pr_land.activated(tmp_path)
+    (adr / "D-1055-x.md").write_text("**Status:** Accepted (x)\n", encoding="utf-8")
+    assert pr_land.activated(tmp_path)
 
 
 def test_refuses_missing_base_instead_of_head_caret(monkeypatch, tmp_path):
