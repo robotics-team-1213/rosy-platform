@@ -77,7 +77,10 @@ def test_in_simulation_the_overlay_enables_and_seeds_docking(core_client):
 def test_outside_simulation_the_same_block_changes_nothing(core_client):
     overrides = sim_overrides(mode="hardware")
     _, services = core_client(config_overrides=overrides)
-    assert not services.capability.supports("docking.supported")
+    # The profile may declare docking itself (Pinky, D-1042 6); the block adds nothing to that.
+    _, bare = core_client(config_overrides={"runtime": overrides["runtime"]})
+    assert services.capability.supports("docking.supported") == \
+        bare.capability.supports("docking.supported")
     assert services.docking.database.list() == []
 
 
