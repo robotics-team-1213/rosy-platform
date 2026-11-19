@@ -45,7 +45,7 @@ def check_coverage(classes, train_counts, val_counts):
 
 def validate_drivable_parent(folder, torchscript, dataset_classes):
     """Bind real parent bytes and output order before a drivable candidate can train."""
-    from perception_runtime.perception.learned.manifest import ManifestError, load_manifest
+    from core_common.perception_model import ManifestError, load_manifest
     from review_provenance import _stable_bytes
 
     folder, torchscript = Path(folder).absolute(), Path(torchscript).absolute()
@@ -98,7 +98,7 @@ def publish_ready(folder, store_root, job_name, *, before_ready=None):
     import handover
     from store import (Store, content_sha, safe_name, publication_group,
                        publication_directory, shared_publication_permissions, refuse_publication_links)
-    from perception_runtime.perception.learned.manifest import load_manifest, verify_files
+    from core_common.perception_model import load_manifest, verify_files
     folder = Path(folder)
     manifest = load_manifest(folder)
     verify_files(manifest)

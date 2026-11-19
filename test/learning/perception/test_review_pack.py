@@ -89,5 +89,5 @@ def test_preview_classes_match_export_contract():
     sys.path.insert(0, str(root / 'middleware' / 'perception'))
     sys.path.insert(0, str(root / 'integrations' / 'perception'))
     sys.path.insert(0, str(root / 'contracts' / 'foundation'))
-    from perception_runtime.perception.learned.manifest import OBJECT_CLASSES
+    from core_common.perception_model import OBJECT_CLASSES
     assert review_pack.CLASSES == OBJECT_CLASSES

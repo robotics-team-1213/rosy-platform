@@ -27,6 +27,7 @@ The importable Python package of the `core_common` module: config loading, ident
 | `discover.py` | mDNS/DNS-SD discovery with zeroconf, avahi, dns-sd fallbacks (D-354); optional, never required |
 | `camera_quality.py` | Photometric screening of original frames and the two-camera `Readiness` gate (policy omx-photometric-v3); numpy only inside `frame_quality`. `deploy/robot/omx/camera_quality.py` is a shim |
 | `intent.py` | Translates operator intent into robot tasks or site commands; never takes ROS topic names |
+| `perception_model.py` | `rosy.perception.model/1·2` learned-model manifest (D-356/D-423): schema, roles, classes, input spec, file hashes; stdlib only. Shared by learning tools and the robot runtime; `perception_runtime.perception.learned.manifest` re-exports it |
 | `succession.py` | Deterministic leader choice from roster plus dead set, so two robots cannot appoint two leaders |
 
 ## Subdirectories

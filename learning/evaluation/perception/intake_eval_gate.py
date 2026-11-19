@@ -11,7 +11,7 @@ for holder in ('middleware/perception', 'integrations/perception', 'contracts/fo
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from perception_runtime.perception.learned.manifest import road_delivery_error
+from core_common.perception_model import road_delivery_error
 
 # D-554 lane-derived labels, or D-563 map-projected labels (same lineage and quality gates).
 V13_ANNOTATIONS = ({"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
