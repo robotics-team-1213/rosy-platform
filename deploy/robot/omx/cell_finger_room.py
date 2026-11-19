@@ -106,6 +106,11 @@ def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, p
     most = min(prm.get(params, "auto.jaw_margin_max_mm"), (widest - 2 * half) / 2)
     centre = np.asarray(o["raw_m"], float)
     clear = prm.get(params, "auto.neighbour_clear_mm")
+    if clear:
+        gap_per_unit = prm.get(params, "gripper.gap_mm_per_unit")
+        # jaw_open_for has a half-unit floor and rounds the two-decimal command; margin_mm is rounded to 0.1 mm.
+        least = max(least, (30.0 + 0.5 * gap_per_unit) / 2 - half)
+        clear += 0.05 + 0.005 * gap_per_unit / 2
     scan_mm = most + finger + clear + 2.0
     free = [free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across, (-pad / 2, 0.0, pad / 2),
                     scan_mm, own_mm=own, outside_blocks=True) for side in (-1, 1)]  # unseen is not free: a roi cut to one box passed a neighbour 7 times (2026-11-06)

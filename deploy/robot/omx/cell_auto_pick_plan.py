@@ -182,6 +182,7 @@ def choose(
     entries, usable, refused = {e["id"]: e for e in catalog}, [], []
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
     p = config.get("params")
+    require_clearance = prm.get(p, "auto.neighbour_clear_mm") > 0
     plan_fn = _parent_attr("plan_pick", plan_pick)
     for o in sorted(objects, key=lambda o: ("split_from" in o, math.dist(o["raw_m"], config["sites"][site]["start"]))):
         why = None
@@ -215,7 +216,7 @@ def choose(
                 prefix = "no finger room: "
                 if room.get("unseen"):
                     prefix = "edge of view: a side is past the camera's view, "
-                elif prm.get(p, "auto.neighbour_clear_mm") > 0:
+                elif require_clearance:
                     prefix = "neighbour clearance: "
                 why = f"{prefix}{room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it"
         if why:
@@ -243,7 +244,7 @@ def choose(
             rooms = [(y, finger_room(mask, roi, pixel_fn, o, y + closing, p)) for y in fresh]
             yaw, room = next(((y, r) for y, r in rooms if r["margin_mm"] is not None), (None, rooms[0][1]))
             if yaw is None:
-                reason = "neighbour clearance" if prm.get(p, "auto.neighbour_clear_mm") > 0 else "no finger gap"
+                reason = "neighbour clearance" if require_clearance else "no finger gap"
                 refused.append(
                     {"centre_mm": o["centre_mm"], "object": o["object"], "why": f"{reason} on either closing axis"}
                 )
@@ -274,7 +275,8 @@ def choose(
         )
         for xy, place_yaw in places:
             planned = plan_fn(config, site, dest_site, xy, o, entry, offset, bias, work, yaw, place_yaw)
-            for end in (reachable_ends(o, entry, p) if isinstance(planned, str) and "UNREACHABLE" in planned else []):
+            # The IK retry inherits room and bias measured at the original point.
+            for end in (reachable_ends(o, entry, p) if not require_clearance and isinstance(planned, str) and "UNREACHABLE" in planned else []):
                 planned = plan_fn(config, site, dest_site, xy, end, entry, offset, bias, work, yaw, place_yaw)
                 if not isinstance(planned, str):
                     o = end
