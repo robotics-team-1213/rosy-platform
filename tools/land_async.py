@@ -69,9 +69,8 @@ def locked(path: Path, wait: bool = False):
             stream.flush()
         stream.seek(0)
         try:
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK if wait else msvcrt.LK_NBLCK, 1)
+            if os.name == "nt":  # msvcrt LK_LOCK gave up after ~10 s (EDEADLK) behind a minutes-long precheck (11-18)
+                _queue().nt_lock(stream.fileno(), wait)
             else:
                 import fcntl
                 fcntl.flock(stream.fileno(), fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
@@ -347,8 +346,8 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
     else:
         (tree.parent / f"{tree.name}.stopped").write_text(f"land.py exit {code}; read {tree.name}.log\n", "utf-8")
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
-        if reason := verdict(output):  # no STOP block: land.py was killed, there is no verdict to split on
-            split_rollup(tree, snap, reason=reason)
+        # no STOP block (watchdog, kill): members go back alone, never bisected (D-889 35; 11-19 three were stranded)
+        split_rollup(tree, snap, reason=verdict(output))
     superseded(tree, snap)
     return code
 

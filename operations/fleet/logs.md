@@ -5674,3 +5674,12 @@
 - 변경: 같은 관측을 두 번째로 누적하는 클릭의 저장·다시 읽기·알림이 다음 클릭(다른 지도 ID 거절)의 오류 알림 뒤에 도착해 덮어쓰던 경합을, 알림을 비운 뒤 그 클릭 자신의 알림을 기다리게 해 없앴다. 제품 코드 변경 없음.
 - 증거: 합친 HEAD에서 [1440]·[390]이 번갈아 실패, 각 부모(feat/ui-dedupe·feat/ui-refine)·합친 커밋 단독은 통과. 고친 뒤 4회 연속 8/8 통과(D:/DevTemp/ui-panel-1118/sm4a~d).
 - gate 변화: 없음.
+## 2026-11-18 · uncommitted · fix(map-pose): D-989 허용 목록에 콘솔 site goal 추가
+- 변경: `trip_geometry.site_goal_in_robot_frame`이 `driving_pose`(LOCALIZED·map_id 일치만, 아니면 409)를 쓴다. D-989 `driving_pose` 호출자 목록이 trip runner·readback·auto start·guide에서 `trips/trip_geometry.py`까지 늘었다(`test_the_allowlist_is_exactly_...` 갱신). 다른 소비자는 그대로 `arbitrated_pose`.
+- 증거: 원격 `operations/world/test`·`operations/fleet/test` 통과(최종 SHA는 보고에).
+- gate 변화: SOURCE. 실물 미실시.
+
+## 2026-11-18 · uncommitted · fix(map-pose): 늦은 odom·오래된 앵커·3 fps 짝짓기
+- 변경: 3 s 안에 뒤처진 그럴듯한 odom은 `stale_source`(survey 안 끊음), 그 밖은 `out_of_order`; `max_stale_draw_s`(120, 상한 600) 넘은 pin·sighting·peer 앵커는 UNKNOWN; auto-locate 짝 신선도는 `max(0.5, 2/fps)`, 상한 1.0 s; `stale_source`를 trip 진단에 노출.
+- 증거: 원격 `operations/world/test`·`operations/fleet/test` 통과(최종 SHA는 보고에).
+- gate 변화: SOURCE. 현장 y8xs 재확인 미실시.
