@@ -75,7 +75,7 @@ def test_refuses_publish_only_clone_per_d868(monkeypatch, tmp_path):
     monkeypatch.setattr(
         pr_land,
         "_run",
-        lambda cmd, cwd, env=None, check=True: "true" if cmd[:3] == ["git", "config", "--bool"] else "",
+        lambda cmd, cwd, env=None, check=True: "true" if cmd[:4] == ["git", "config", "--bool", "rosy.publishOnly"] else "",
     )
     with pytest.raises(SystemExit, match="rosy.publishOnly=true"):
         pr_land.check_coexistence(tmp_path, "a" * 40)
