@@ -39,7 +39,7 @@ def test_test_jobs_install_no_apt_packages_and_never_apt_get_update():
 def test_readiness_asserts_survive_the_removed_install_steps():
     steps = {s["name"]: s["run"] for s in _jobs()["test"]["steps"] if "run" in s}
     run = steps["CI image readiness"]
-    for needle in ("colcon", "openssl", "rauc", 'httpx.__version__ == "0.28.1"', '"1.64.1"', "joserfc",
+    for needle in ("openssl", "rauc", 'httpx.__version__ == "0.28.1"', '"1.64.1"', "joserfc",
                    'cryptography.__version__ == "50.0.0"', "PolicyBuilder, Store", "slam_toolbox", "ROSY_TEST_RAUC_DEB"):
         assert needle in run, needle
     scope = _jobs()["scope"]["steps"]

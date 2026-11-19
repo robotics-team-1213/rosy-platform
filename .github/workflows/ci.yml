@@ -187,9 +187,7 @@ jobs:
           # The console is Korean: without fonts-noto-cjk, headless Chromium renders Hangul through
           # Playwright's wide Unifont fallback and 320px layout-fit assertions see overflow.
           fc-list | grep -qi 'noto.*cjk'
-          python3 -c 'from playwright.sync_api import sync_playwright as p
-with p() as pw:
-    b = pw.chromium.launch(); b.close()'
+          python3 -c 'from playwright.sync_api import sync_playwright as p; pw = p().start(); pw.chromium.launch().close(); pw.stop()'
 
       - name: Install Pinky raw verification tools
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
