@@ -33,13 +33,24 @@ def _under(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix.rstrip("/") + "/")
 
 
+NEUTRAL = "neutral"  # folder notes and ADRs: no app's work
+
+
 def app_of(path: str, parts: dict) -> str:
-    """The app that owns `path` (2026-11-18 release split): its deepest ``platform_parts.yaml``
-    root or ``app_subtrees`` entry, else ``core`` (repository root files, uncovered folder notes)."""
+    """The app that owns `path` (2026-11-18 release split): ``neutral`` for an ``app_neutral`` glob, else
+    its deepest ``platform_parts.yaml`` root or ``app_subtrees`` entry (a key with ``*`` is an fnmatch
+    pattern), else ``core`` (repository root files, uncovered folder notes)."""
+    if any(_match(path, pattern) for pattern in parts.get("app_neutral") or ()):
+        return NEUTRAL
     entries = [(root["path"], root["app"]) for root in parts.get("roots") or []]
     entries += list((parts.get("app_subtrees") or {}).items())
-    hits = [entry for entry in entries if _under(path, entry[0])]
+    hits = [(key, app) for key, app in entries if (_match(path, key) if "*" in key else _under(path, key))]
     return max(hits, key=lambda entry: len(entry[0]))[1] if hits else "core"
+
+
+def landing_apps(paths: list[str], parts: dict) -> list[str]:
+    """The apps a landing's delta touches, sorted, neutral paths left out (land_events records them)."""
+    return sorted({app_of(path, parts) for path in paths} - {NEUTRAL})
 
 
 def _git(repo: Path, *args: str) -> str:
