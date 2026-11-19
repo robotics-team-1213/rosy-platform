@@ -27,6 +27,31 @@ RAW = "learning/curation/pinky/requirements-raw.txt"
 PROFILE = "pinky-raw"
 
 
+def test_ci_scope_change_does_not_rebuild_the_remote_environment(monkeypatch):
+    original = rp.git
+    before, dirs = rp.deps(ROOT, "HEAD")
+    ci_ref = f"HEAD:{rp.CI}"
+
+    def git(repo, *args):
+        if args == ("show", ci_ref):
+            return original(repo, *args).replace("--ci-matrix", "--full --ci-matrix")
+        if args == ("rev-parse", ci_ref):
+            return "f" * 40
+        return original(repo, *args)
+
+    monkeypatch.setattr(rp, "git", git)
+    assert rp.deps(ROOT, "HEAD") == (before, dirs)
+
+    def new_wheel(repo, *args):
+        if args == ("rev-parse", f"HEAD:{dirs[0]}"):
+            return "f" * 40
+        return git(repo, *args)
+
+    monkeypatch.setattr(rp, "git", new_wheel)
+    after, after_dirs = rp.deps(ROOT, "HEAD")
+    assert after != before and after_dirs == dirs
+
+
 def tools():
     return importlib.import_module("remote_test_tools")
 
@@ -63,10 +88,10 @@ def test_default_recipe_changes_only_pytest_pin_and_rekeys_the_environment(monke
     before = rp.deps(ROOT, BASE)
     ci = rp.git(ROOT, "show", f"{BASE}:.github/workflows/ci.yml")
     dirs = re.search(r'--wheel-dir "\$wheelhouse" \\\n\s*(.+)', ci).group(1).split()
-    paths = (rp.CI, rp.DEVICE_REQ, rp.CRYPTO_REQ, rp.FLEET_REQ, rp.VISION_REQ, *dirs)
+    paths = (rp.DEVICE_REQ, rp.CRYPTO_REQ, rp.FLEET_REQ, rp.VISION_REQ, *dirs)
     ids = [rp.git(ROOT, "rev-parse", f"{BASE}:{p}") for p in paths]
     install = pinned.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
-    expected = hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16]
+    expected = hashlib.sha256("\n".join([install, *dirs, *ids]).encode()).hexdigest()[:16]
     assert before == (expected, dirs)
     monkeypatch.setattr(rp, "VENV", old)
     legacy = rp.deps(ROOT, BASE, test_tools=None)
