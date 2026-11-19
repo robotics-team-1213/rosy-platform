@@ -9,6 +9,9 @@ inference error, and the same carry's real IK outcome. Shadow output has no exec
 (this module only reads `cell.frame` and `cell.act("state")`; a test pins that), and an inference error is a field
 in the row, never a change to the IK path.
 
+`kind: "lerobot"` binds a LeRobot checkpoint trained on one real arm as it was recorded (`cell_lerobot_shadow`: top/wrist by trained
+camera name, the runner's LeRobot-normalized state, the folder's cam_warp.json), pinned by the sha256 of model.safetensors.
+
 `kind: "two_arm"` in the config binds the sim-trained two-arm policy instead: four cameras, both arms' twelve joints and the goal
 vector, assembled by `cell_act_inputs` in the trained order. An input the cell cannot read (a camera, the peer arm in
 `act_shadow.peer` = {"io", "cameras"}, a goal) is a row `error` naming it, never a blank or copied substitute."""
@@ -37,6 +40,17 @@ def load(config: dict, work: Path):
         learning = Path(__file__).resolve().parents[3] / "learning" / "training" / "omx"
         if str(learning) not in sys.path:
             sys.path.insert(0, str(learning))
+        if spec.get("kind") == "lerobot":
+            import cell_lerobot_shadow
+
+            binding = cell_lerobot_shadow.LeRobotShadow(spec["policy_root"], spec["policy_revision"])
+            offset = None
+            if spec.get("model_calibration") and spec.get("cell_calibration"):
+                import cell_policy_drive
+
+                offset = cell_policy_drive.calibration_offset(
+                    *(json.loads(Path(spec[k]).expanduser().read_text()) for k in ("model_calibration", "cell_calibration")))
+            return Shadow(binding, work, None, lerobot=True, offset=offset)
         if spec.get("kind") == "two_arm":
             import act_two_arm_shadow
 
@@ -65,9 +79,11 @@ def record(shadow, row, attempt_id, outcome, at) -> None:
 class Shadow:
     """Asks the pinned policy on the carry's observation; the proposal is logged, never executed."""
 
-    def __init__(self, binding, work: Path, observation, *, error=None, policy_id=None, spec=None, peer=None):
+    def __init__(self, binding, work: Path, observation, *, error=None, policy_id=None, spec=None, peer=None,
+                 lerobot=False, offset=None):
         self._binding, self._path, self._observation = binding, Path(work) / "act-shadow.jsonl", observation
         self._error, self._policy_id, self._spec, self._peer = error, policy_id, spec, peer
+        self._lerobot, self._offset = lerobot, offset  # model units minus cell units per joint (calibration homing)
 
     def _peer_cell(self):
         """The other arm's cell for its wrist frame and state: opened once, read only (frame and state), None without config."""
@@ -89,6 +105,17 @@ class Shadow:
         row["proposed"] = [list(map(float, q)) for q in self._binding.infer(taken).chunk]
         return row
 
+    def _lerobot_row(self, row, cell, obs_img):
+        """The trained cameras by name: `top` is the frame the IK plan came from, any other is read once from the cell."""
+        row["observation"].pop("camera_identity", None)
+        frames = {view: obs_img if view == "top" else cell.frame(view) for view in self._binding.image_views}
+        state = cell.act("state")["state"]
+        off = self._offset or [0.0] * len(state)
+        taken, meta = self._binding.inputs([s + o for s, o in zip(state, off)], frames)
+        row["observation"].update(meta, positions=list(state), unit="lerobot_norm", calibration_offset=self._offset)
+        row["proposed"] = [[q - o for q, o in zip(frame, off)] for frame in self._binding.infer(taken).chunk]  # cell units
+        return row
+
     def capture(self, cell, config: dict, attempt: int, obs_img, source=None, dest=None) -> dict | None:
         """One inference on the observation the IK plan came from; never raises, never moves the arm."""
         row = {"schema": SCHEMA, "policy_id": self._binding.policy_revision if self._binding else self._policy_id,
@@ -101,6 +128,8 @@ class Shadow:
             row["observation"]["id"] = f"{row['observation']['t_ns']}-{row['observation']['top_frame_sha256'][:12]}"
             if self._error:
                 raise ValueError(self._error)
+            if self._lerobot:
+                return self._lerobot_row(row, cell, obs_img)
             if self._spec is not None:
                 return self._two_arm(row, cell, config, source, dest)
             state = cell.act("state")["state"]

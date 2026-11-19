@@ -148,7 +148,7 @@ class MapPoseService:
 
     def driving_pose(self, robot_id: str) -> Optional[MapPose]:
         """D-989 allowlist: `arbitrated_pose` plus an auto-locate anchor. Only the trip runner and the
-        readback route call this; every other consumer sees such a robot as UNKNOWN."""
+        readback route and the console's site-goal conversion call this; every other consumer sees such a robot as UNKNOWN."""
         tracker = self._tracker(robot_id)
         return tracker.pose(self._wall(), self.active_map_id(), auto_locate=True) if tracker is not None else None
 
