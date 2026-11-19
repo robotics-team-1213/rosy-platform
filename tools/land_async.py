@@ -217,7 +217,7 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | 
         except Full as exc:  # polled outside the lock: resumes and rollups go on meanwhile
             if time.monotonic() >= deadline:
                 print(f"[land-async] NOT QUEUED: {branch or git(cwd, 'branch', '--show-current')}: {exc} after "
-                      f"{FULL_WAIT_S // 60} min; run land_async.py again when tickets free up", file=sys.stderr)
+                      f"{FULL_WAIT_S // 60} min; {_queue().keep_pending(cwd, land_args, branch)}", file=sys.stderr)
                 raise SystemExit(3) from exc
             print(f"[land-async] {exc}; checking again every {FULL_POLL_S} s for up to {FULL_WAIT_S // 60} min", flush=True)
             time.sleep(FULL_POLL_S)
@@ -273,21 +273,15 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool
     return snap, log
 
 
+def _room():
+    _queue()  # main's tools/ (and this copy's folder) on sys.path
+    import land_room
+    return land_room
+
+
 def wait_for_room(tree: Path, deadline: float) -> bool:
-    """FIFO: only the oldest waiting supervisor (.roomwait start) polls, so one freed slot starts one land.py."""
-    sys.path.insert(0, str(tree / "tools"))  # the snapshot's land_queue: this copy runs beside the log
-    import land_queue
-    mine, start = tree.parent / (tree.name + ".roomwait"), str(time.time_ns())
-    while time.monotonic() < deadline:
-        mine.write_text(start, "utf-8")  # rewritten each poll: a waiter silent for 5 min is not in line
-        try:
-            line = [(q.read_text("utf-8"), q.name) for q in mine.parent.glob("*.roomwait") if time.time() - q.stat().st_mtime < 300]
-        except OSError:
-            line = []
-        if line and min(line)[1] == mine.name and not land_queue.full(land_queue.queue_dir(tree), land_queue.lane_of(tree)):
-            return True
-        time.sleep(60)
-    return False
+    """FIFO: only the oldest waiting supervisor polls, and it reserves the freed slot before land.py starts."""
+    return _room().wait_for_room(tree, deadline, _queue())
 
 
 def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call, room=wait_for_room) -> int:
@@ -300,14 +294,31 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
     path = tree.parent / (tree.name + ".log")
     deadline = time.monotonic() + ROOM_WAIT_S
     shortages = 0
+    try:
+        land_queue = _queue()
+    except ImportError:  # no main tools beside this copy: nothing to reserve in, launch as before
+        land_queue = None
+    own = land_queue is not None and not (
+        {"--urgent", "--no-queue", "--dry-run"} & set(land_args) or os.environ.get(land_queue.TICKET_ENV))
     while True:
         seen = path.stat().st_size if path.exists() else 0
+        marker = None
+        if own:  # land.py starts only with a reserved place (FIFO head), never to find the queue full
+            deadline, marker = _room().gate(tree, land_queue, room, deadline, ROOM_WAIT_S)
+            if not deadline:
+                code, output = 1, [f"[land-async] STOP: no place in the landing queue for {ROOM_WAIT_S // 60} min; "
+                                   "land.py was not started"]
+                with open(path, "a", encoding="utf-8") as log:
+                    log.write(output[0] + "\n")
+                break
         # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
         with open(path, "a", encoding="utf-8") as log:
             # CREATE_NO_WINDOW: under the detached supervisor land.py got a new console, a tab of the default
             # terminal; closing that window killed every lander at once (exit 0xC000013A: 8 on 10-28, 12 on 10-30).
             code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
                        stderr=subprocess.STDOUT, **({"creationflags": NO_WINDOW} if os.name == "nt" else {}))
+        if marker is not None:
+            _room().release(land_queue, marker)  # land.py consumed it at enter(); this drops an unused one
         output = path.read_bytes()[seen:].decode("utf-8", "replace").rstrip().splitlines()
         reason = output[-1] if output else ""
         if code != 0 and shortages < RESOURCE_RETRIES and (any(mark in reason for mark in RESOURCE_SHORTAGE)
@@ -327,6 +338,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         main = git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")
         git(Path(main).parent, "worktree", "remove", "--force", str(tree), check=False)
         git(Path(main).parent, "branch", "-D", snap, check=False)
+        (tree.parent / (tree.name + ".requested")).unlink(missing_ok=True)
         print(f"[land-async] {snap} landed; hidden worktree and snapshot branch removed", flush=True)
         for p in (str(Path(__file__).resolve().parent), str(Path(main).parent / "tools")):
             if p not in sys.path:
@@ -353,24 +365,12 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
 
 
 def superseded(tree: Path, snap: str) -> list[str]:
-    """Remove the older snapshots of ``snap``'s branch that land_gc finds nothing unique in (this one covers them);
-    the names removed. 2026-11-08: 149 superseded snapshots (22 GB) waited for a person."""
+    """Older snapshots of snap's branch that this one covers, removed by main's land_gc (this file is a copy)."""
     repo = tree.parent.parent.parent  # <main checkout>/.git/rosy-land-wt/<tree>; the tree itself may be gone
-    sys.path[:0] = [str(repo / "tools"), str(Path(__file__).resolve().parent)]  # main's land_gc (this is a copy)
+    sys.path[:0] = [str(repo / "tools"), str(Path(__file__).resolve().parent)]
     try:
         import land_gc
-        src = land_gc.source(snap)
-        older = {ref.split("-batch")[0].replace("/", "-") for ref in git(
-            repo, "for-each-ref", "--format=%(refname:short)", f"refs/heads/{PREFIX}{src}-*").splitlines()
-            if land_gc.SNAPSHOT.search(ref) and land_gc.source(ref) == src and ref < snap}
-        gone = []
-        for name in sorted(older):
-            rows = land_gc.plan(repo, time.time(), 7, only=name)
-            if any(row[0] == "remove" for row in rows) and not land_gc.apply(repo, rows):
-                gone.append(name)
-        if gone:
-            print(f"[land-async] removed superseded snapshots of {src}: {gone}", flush=True)
-        return gone
+        return land_gc.superseded(repo, snap)
     except Exception as exc:  # cleanup must never change the landing's own outcome
         print(f"[land-async] superseded snapshot cleanup skipped: {exc}", flush=True)
         return []
