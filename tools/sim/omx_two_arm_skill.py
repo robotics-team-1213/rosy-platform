@@ -151,7 +151,7 @@ def step(driver, teacher, data, plan, here, skill):
             teacher.frame(data, {arm: target, **idle}, plan["id"])
             target = next(gen)
         teacher.privileged = False  # from here on commands are in reported angles
-        n_g0 = teacher.n
+        n_g0 = getattr(teacher, "n", None)
         idle = {o: t - teacher.zero_error.get(o, 0.) for o, t in idle.items()}  # the waiting arm too: it stays at its true wait pose, its command as recorded
         start_z = w.pose(data, c)[0][2]
         if driver.kind == "ik":
