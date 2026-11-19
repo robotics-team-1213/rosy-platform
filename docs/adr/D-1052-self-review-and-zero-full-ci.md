@@ -27,8 +27,9 @@
    - `.github/workflows/ci.yml`은 `pull_request`·`merge_group`·`push: [main]` 모두 각 이벤트 base(`base.sha` / `merge_group.base_sha` / `before`) 기준 `--ci-matrix` 영향 선택만 실행하며, `schedule`·`workflow_dispatch`만 `--full`을 유지한다(D-441 `push:main` `ci-result` 서명 검증 및 `concurrency` 미설정 불변 유지).
    - `tools/harness/affected_capsules.py`가 `concern: safety`, `contracts/foundation` 런타임 소비자, 패키징/`ros_idl`/`compose`, 폴더 이동/삭제, `SELECT_CORE`/매니페스트, `unmapped`를 각 정밀 캡슐(`Safety`/`Importer-Closure`/`Packaging`/`Harness`/`Moved` + `test/architecture`)로 실행한다(`ROSY_FULL_LEGACY=1` 복구 스위치는 보존).
    - `tools/publish_main.py --via-ci`는 로컬 `FULL` 기록 대기 없이 `secret_gate`·`safety_review`와 GitHub `ci-result`로 적체 게시를 허용한다.
-3. **고속 PR 착지 & ADR 연속성 완화:**
-   - `tools/hooks/pre-push`는 `rosy.staticPrePush=true`(또는 `ROSY_STATIC_PRE_PUSH=1`)일 때 정적 게이트(lint·secret·Safety-Review·size) 후 pytest를 CI/Merge Queue에 위임하고, `tools/pr_land.py`로 PR 생성·자동 병합을 일원화한다.
+3. **고속 PR 착지 & ADR 연속성 완화 & `D-868` 공존:**
+   - **2-레인 공존 규칙 (`D-868` × `pr_land.py`):** 공용 에이전트 클론(`rosy.publishOnly=true`)은 기존 `D-868`(`land_async.py` → 로컬 `main` → `publish_main.py --via-ci`)을 따르며 `pr_land.py` 실행을 거부한다. 개인 부분 클론(`rosy.publishOnly` 미설정)은 반드시 `origin/main` 기준 토픽 브랜치에서만 `tools/pr_land.py`를 사용한다(미게시 로컬 `main` 커밋이 섞이면 거부).
+   - `tools/hooks/pre-push`는 `rosy.staticPrePush=true`(또는 `ROSY_STATIC_PRE_PUSH=1`)일 때 정적 게이트(lint·secret·Safety-Review·size) 후 pytest를 CI/Merge Queue에 위임하고, `tools/pr_land.py`는 변경이 실험실 전용 표면(OMX adapter·browser·`host_alone`·`LAB_ONLY`·simulation)을 건드리면 해당 `tree/env`의 실험실 `land_cache` 통과 기록과 `CI 통과 ID ⊇ 실험실 통과 ID` 커버리지 가드를 통과한 경우에만 자동 병합을 허용한다.
    - `tools/harness/adr_gaps.py`는 연속 번호(gap) 검사를 `D-1043`까지로 한정하고 `D-1044+`부터는 유일성만 검사한다.
    - `tools/harness/affected_pack.py`는 비직렬 캡슐을 `MAX_GROUP_PATHS = 28` 단위로 분할해 랩 PC와 GitHub Actions 러너에 병렬 분산한다.
    - `.github/workflows/build-site-candidate.yml`은 `push: [main]` 시 최신 서명된 `site-*` 후보를 `base_commit`으로 자동 탐색·재사용하고, `deploy/site/build_candidate.py`(`--jobs 4`)·`Dockerfile.{fleet,vision}` 계층 캐시 순서 및 `publish-release.yml` 사전 설치 도구 분기로 CD·릴리즈 빌드를 단축한다.

@@ -477,7 +477,29 @@ def test_merge_group_and_push_run_scoped_affected_against_their_base():
     assert "github.event.merge_group.base_sha" in scope_step["env"]["SCOPE_BASE"]
     assert "github.event.before" in scope_step["env"]["SCOPE_BASE"]
     tier = scope_step["run"]
-    assert "pull_request|merge_group|push" in tier and "--full --ci-matrix" in tier
+    assert "pull_request|merge_group)" in tier and "push)" in tier and "--full --ci-matrix" in tier
+    assert "HEAD^" not in tier and "HEAD^" not in scope["Size rule per commit (D-766)"]["run"]
     test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
     assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
     assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
+
+
+@pytest.mark.parametrize("paths,output,expected", [
+    (["test/test_req.py::test_must_run"], "test/test_req.py::test_must_run SKIPPED\n1 skipped in 0.12s\n", 1),
+    (["test/test_req.py::test_must_run"], "test/test_req.py::test_must_run PASSED\n1 passed in 0.12s\n", 0),
+    (["operations/fleet/test"], "5 skipped in 0.20s\n", 1),
+])
+def test_ci_fails_when_required_node_or_suite_passes_zero_items(monkeypatch, paths, output, expected):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    script = next(step["run"] for step in steps if step["name"] == "Test (matrix suite, D-436)")
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    monkeypatch.setenv("ROSY_INVOCATIONS", json.dumps([paths]))
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs:
+                        SimpleNamespace(stdout=iter([output]), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), "exec"), {})
+    assert ended.value.code == expected
