@@ -153,6 +153,7 @@ class DockingConfig:
     # base_link 치수와 일치, 2026-11-18 tray_overhang_cad.py). 모따기 덕에 쓸리는 반경은 0.137 m.
     bay_turn_rear_overhang_m: float = 0.135
     # 카메라 기준 방향 맞춤·선 찾기(bay_align.py, 실물 y8xs 2026-11-19: 지도-카메라 방향 17~30° 어긋남, 스테이징에서 선 안 보임)
+    bay_stage_map_wrong_way_rad: float = 2.0    # 115°: with the camera on the line only a map yaw this far off is a wrong-way arrival
     bay_heading_align_max_rad: float = 0.7854   # 45°: 이 안의 방위 위반만 제자리 회전으로 맞춘다(넘으면 재시도)
     bay_heading_align_tol_rad: float = 0.05     # ~3°: 이 안이면 끝(관측 지연 0.3 s × 0.1 rad/s 1.7° 여유)
     bay_heading_align_tries: int = 2            # 한 도킹당 회전 맞춤 횟수

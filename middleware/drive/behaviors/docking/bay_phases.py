@@ -206,7 +206,7 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         mp = h._pose_provider()
         # The staging goal faces the bay: a nose far off that axis is a wrong-way arrival, and the
         # line observer would read it as normal (it forces the axis to -x), so refuse before turning.
-        if mp is None or abs(_wrap(mp[2] - h._dock.yaw)) > h._cfg.bay_stage_heading_max_rad:
+        if mp is None or self._stage_heading_bad(mp):
             # One noisy or missing pose must not end a first try: stand still and look again for a while.
             self._stage_bad = now if self._stage_bad is None else self._stage_bad
             if now - self._stage_bad >= h._cfg.bay_stage_recheck_s:

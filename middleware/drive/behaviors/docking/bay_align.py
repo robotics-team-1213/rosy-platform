@@ -11,6 +11,7 @@ import math
 from typing import Any, Optional
 
 from core_features.docking.parking import ParkingGains, turn_twist
+from core_features.docking.rear_phases import rear_errors
 
 # 관측 지연(<=0.3 s)×각속도가 허용 오차(~3°)를 넘지 않게 느리게 돈다: 0.1 rad/s×0.3 s = 1.7°.
 _ALIGN_GAINS = ParkingGains(max_angular=0.25, turn_gain=1.5, turn_min_angular=0.1)
@@ -125,6 +126,22 @@ class BayAlignMixin:
         h.executor.set_collision_exemption(True)
         self._drive(-cfg.bay_find_speed, 0.0)
         return True
+
+    def _stage_heading_bad(self, mp) -> bool:
+        """Staging arrival heading check. With the camera on the bay line its (undirected) bearing decides; the SLAM yaw
+        can be 17-30 deg off the line and only has to rule out a wrong-way arrival. No line in view: the map yaw as before."""
+        h = self._h
+        cfg = h._cfg
+        map_err = abs(math.remainder(mp[2] - h._dock.yaw, math.tau))
+        if h._detector is None and h._detector_factory is not None:
+            h._detector = h._detector_factory(h._dock, h._type())
+        if h._detector is not None:
+            h._detector.start(h._dock)        # the retry back-off stopped it; the line is looked at from the staging point
+        raw = h._detector.relative_pose() if h._detector is not None else None
+        if raw is None:
+            return map_err > cfg.bay_stage_heading_max_rad
+        off = math.remainder(rear_errors(raw)[2], math.pi)     # a line has no direction: fold into +-90 deg
+        return abs(off) > cfg.bay_stage_heading_max_rad or map_err > cfg.bay_stage_map_wrong_way_rad
 
     def _find_end(self) -> None:
         self._find_on, self._find_seen_m = False, None

@@ -30,6 +30,30 @@ def test_camera_heading_align_after_turn():
     assert _spins(p) and not reasons(p, "docking.retry")
 
 
+def test_staging_heading_uses_camera_line_not_map_yaw():
+    """The map yaw is 70 deg off at staging (past the 60 deg map limit) while the camera sees the line square: it goes on and
+    docks. With no line in view the map yaw still decides and refuses."""
+    p = a_bay()
+    p.manager._pose_provider = lambda: (p.world.pose[0], p.world.pose[1], p.world.pose[2] + math.radians(70.0))
+    p.manager.dock()
+    drive(p, done)
+    assert p.manager.state is DockState.DOCKED
+    q = a_bay()
+    q.manager._pose_provider = lambda: (q.world.pose[0], q.world.pose[1], q.world.pose[2] + math.radians(70.0))
+    q.detector.capture = lambda: setattr(q.detector, "latest", None)
+    q.manager.dock()
+    drive(q, done)
+    assert any("arrival heading" in str((data or {}).get("reason", "")) for _, data in q.events)
+
+
+def test_staging_arrival_with_the_map_25_deg_off_passes():
+    p = a_bay()
+    p.manager._pose_provider = lambda: (p.world.pose[0], p.world.pose[1], p.world.pose[2] + math.radians(25.0))
+    p.manager.dock()
+    drive(p, done)
+    assert p.manager.state is DockState.DOCKED
+
+
 def test_heading_align_refused_when_turn_blocked():
     """A blocked sweep (LiDAR rotation_block) stops the align: no spin command and a person is called."""
     p = a_bay()
