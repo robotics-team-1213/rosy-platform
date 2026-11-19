@@ -82,18 +82,20 @@ jobs:
         id: scope
         shell: bash
         env:
-          SCOPE_BASE: ${{ github.event.pull_request.base.sha }}
-          # D-436 2026-11-09 narrows landing tiers only; GitHub PRs keep the FULL triggers as the publish net.
-          ROSY_FULL_LEGACY: "1"
+          SCOPE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event_name == 'push' && github.event.before || '' }}
         run: |
           set -eo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "$SCOPE_BASE" ]; then
-            python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --print
-            out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
-          else
-            echo "full tier: event ${{ github.event_name }} (D-436 4)"
-            out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
-          fi
+          case "${{ github.event_name }}" in
+            pull_request|merge_group|push)
+              if [ -z "$SCOPE_BASE" ] || ! git cat-file -e "$SCOPE_BASE^{commit}" 2>/dev/null; then SCOPE_BASE=HEAD^; fi
+              python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --print
+              out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
+              ;;
+            *)
+              echo "full tier: event ${{ github.event_name }} (scheduled/manual health sweep)"
+              out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
+              ;;
+          esac
           echo "mode=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["mode"])' "$out")" >> "$GITHUB_OUTPUT"
           echo "matrix=$(python3 -c 'import json, sys; print(json.dumps(json.loads(sys.argv[1])["matrix"]))' "$out")" >> "$GITHUB_OUTPUT"
 

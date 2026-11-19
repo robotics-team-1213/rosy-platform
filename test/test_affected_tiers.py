@@ -58,19 +58,26 @@ def _select(sample, *changed):
 
 
 @pytest.mark.parametrize("path", ["middleware/core/gateway/core/node.py", "middleware/drive/motion_limits/limits.py"])
-def test_a_safety_path_stays_full(sample, path):
-    """D-889 6 holds: static import reach misses a safety value's config, YAML, web or IDL readers."""
+def test_a_safety_path_runs_its_safety_capsule_and_keeps_legacy_escape(sample, monkeypatch, path):
+    """D-1052 Zero-FULL: safety paths run full owning+reverse+app capsule by default; ROSY_FULL_LEGACY=1 restores FULL."""
     sel = _select(sample, path)
-    assert sel.mode == "full" and not sel.narrowed, sel.escalations
-    assert any(e.endswith(affected.SAFETY_TRIGGER) for e in sel.escalations)
+    assert sel.mode == "affected" and not sel.escalations, sel.escalations
+    assert any(e.endswith(affected.SAFETY_TRIGGER) for e in sel.narrowed)
+    assert "test/architecture" in sel.reasons
+    monkeypatch.setenv("ROSY_FULL_LEGACY", "1")
+    legacy = _select(sample, path)
+    assert legacy.mode == "full" and any(e.endswith(affected.SAFETY_TRIGGER) for e in legacy.escalations)
 
 
 @pytest.mark.parametrize("path", ["tools/harness/affected_tests.py", "tools/harness/affected_narrow.py",
                                   "tools/land_selection.py", "test/known_failures.py", "test/browser_scope.py"])
-def test_the_code_that_selects_or_judges_tests_stays_full(sample, path):
-    """Design 0.7 rule 8: a gate never tests itself with a selection it made."""
+def test_the_code_that_selects_or_judges_tests_runs_harness_capsule(sample, monkeypatch, path):
+    """D-1052 Zero-FULL: selector/judge changes run SELF_TEST + test/architecture + CANARY without FULL."""
     sel = _select(sample, path)
-    assert sel.mode == "full" and not sel.narrowed, sel.escalations
+    assert sel.mode == "affected" and not sel.escalations, sel.escalations
+    assert {"test/test_land_sample.py", "test/architecture", *affected.affected_narrow.CANARY} <= set(sel.reasons)
+    monkeypatch.setenv("ROSY_FULL_LEGACY", "1")
+    assert _select(sample, path).mode == "full"
 
 
 @pytest.mark.parametrize("path", ["tools/land_browser.py", "tools/remote/remote_pytest.py", "tools/remote/remote_job.py",
@@ -131,7 +138,12 @@ def test_a_nested_conftest_or_workflow_is_narrowed(sample, path, scope):
 @pytest.mark.parametrize("path", ["conftest.py", "deploy/requirements.txt", "tools/mystery/run.sh",
                                   "deploy/site/compose.yaml", "tools/harness/harness.yaml",
                                   "tools/harness/platform_parts.yaml", "tools/mystery/pyproject.toml"])
-def test_unknown_reach_still_escalates_to_full(sample, path):
+def test_formerly_full_triggers_run_scoped_capsules_and_keep_legacy_escape(sample, monkeypatch, path):
+    sel = _select(sample, path)
+    assert sel.mode == "affected" and not sel.escalations, sel.escalations
+    assert sel.narrowed
+    assert "test/architecture" in sel.reasons and set(affected.affected_narrow.CANARY) <= set(sel.reasons)
+    monkeypatch.setenv("ROSY_FULL_LEGACY", "1")
     assert _select(sample, path).mode == "full"
 
 
@@ -150,7 +162,7 @@ def test_the_lab_full_plan_runs_every_path_once():
 
 GATE_IMPORT = re.compile(r"^\s*(?:import|from)\s+(land\w*|remote_pytest|remote_job|remote_test_tools|work_queue"
                          r"|xdist_plan|host_probe|host_caps|lab_hosts|memory_history|affected_\w+|known_failures"
-                         r"|browser_scope|publish_main|publish_evidence)\b", re.M)
+                         r"|browser_scope|publish_main|publish_evidence|pr_land)\b", re.M)
 
 
 def test_every_root_test_of_a_gate_tool_is_in_the_self_test_tier():

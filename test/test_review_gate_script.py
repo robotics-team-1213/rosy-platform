@@ -27,14 +27,22 @@ import os, sys
 args = sys.argv[1:]
 url = next((a for a in args if a.startswith("repos/")), "")
 if "/pulls/1/files" in url:
-    sys.stdout.write(os.environ["FAKE_PR_ROWS"])
+    sys.stdout.write(os.environ.get("FAKE_PR_ROWS", ""))
+elif "/pulls/1/reviews" in url:
+    sys.stdout.write(os.environ.get("FAKE_REVIEW_BODIES", ""))
+elif url.endswith("/pulls/1"):
+    sys.stdout.write(os.environ.get("FAKE_PR_BODY", ""))
+elif "/pulls?state=open" in url:
+    sys.stdout.write(os.environ.get("FAKE_OPEN_PRS", ""))
+elif "/pulls/2/files" in url:
+    sys.stdout.write(os.environ.get("FAKE_OPEN_FILES", ""))
 elif "/commits?" in url:
-    sys.stdout.write(os.environ["FAKE_COMMIT_ROWS"])
+    sys.stdout.write(os.environ.get("FAKE_COMMIT_ROWS", ""))
 sys.exit(0)
 """
 
 
-def _gate(tmp_path, monkeypatch, deletions):
+def _gate(tmp_path, monkeypatch, deletions, **extra_env):
     """Bob changed docs/logs.md on main; alice's PR touches it with `deletions` deleted lines."""
     work = tmp_path / "work"
     work.mkdir()
@@ -54,10 +62,12 @@ def _gate(tmp_path, monkeypatch, deletions):
     bin_dir.mkdir()
     (bin_dir / "gh").write_text(FAKE_GH, encoding="utf-8")
     (bin_dir / "gh").chmod(0o755)
-    for key, value in {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "GH_TOKEN": "x", "REPO": "o/r", "PR": "1",
-                       "AUTHOR": "alice", "WINDOW_DAYS": "3650",
-                       "FAKE_PR_ROWS": f"docs/logs.md\t{deletions}\n",
-                       "FAKE_COMMIT_ROWS": f"{sha}\tbob\n"}.items():
+    env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "GH_TOKEN": "x", "REPO": "o/r", "PR": "1",
+           "AUTHOR": "alice", "WINDOW_DAYS": "3650",
+           "FAKE_PR_ROWS": f"docs/logs.md\t{deletions}\n",
+           "FAKE_COMMIT_ROWS": f"{sha}\tbob\n"}
+    env.update(extra_env)
+    for key, value in env.items():
         monkeypatch.setenv(key, value)
     return subprocess.run(["bash", str(SCRIPT)], cwd=work, capture_output=True, text=True)
 
@@ -68,3 +78,17 @@ def test_append_only_journal_changes_do_not_meet_others_but_an_edited_line_does(
     result = _gate(tmp_path, monkeypatch, deletions)
     assert result.returncode == code, result.stdout + result.stderr
     assert ("no overlap" in result.stdout) == (code == 0)
+
+
+@pytest.mark.skipif(shutil.which("bash") is None or sys.platform == "win32", reason="needs bash and a posix gh stub")
+def test_open_pr_only_default_and_self_review_unblock(tmp_path, monkeypatch):
+    # Default WINDOW_DAYS=0 ignores merged main commits and blocks only on another active open PR unless acked.
+    r1 = _gate(tmp_path / "a", monkeypatch, 1, WINDOW_DAYS="0")
+    assert r1.returncode == 0, r1.stdout + r1.stderr
+    r2 = _gate(tmp_path / "b", monkeypatch, 1, WINDOW_DAYS="0",
+               FAKE_OPEN_PRS="bob 2\n", FAKE_OPEN_FILES="bob\tdocs/logs.md\n", FAKE_PR_BODY="plain body")
+    assert r2.returncode == 1
+    r3 = _gate(tmp_path / "c", monkeypatch, 1, WINDOW_DAYS="0",
+               FAKE_OPEN_PRS="bob 2\n", FAKE_OPEN_FILES="bob\tdocs/logs.md\n",
+               FAKE_PR_BODY="Overlap-Review: self (coordinated solo)")
+    assert r3.returncode == 0, r3.stdout + r3.stderr

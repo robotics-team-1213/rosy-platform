@@ -460,8 +460,8 @@ def test_every_ci_job_has_a_timeout_below_the_six_hour_default():
         assert 0 < int(job.get("timeout-minutes", 0)) <= (60 if name == "scope" else 30), name
 
 
-def test_merge_group_runs_the_full_tier_against_the_group_base():
-    """D-762 stage 1: a merge queue group is a full-tier event and checks its own base..head."""
+def test_merge_group_and_push_run_scoped_affected_against_their_base():
+    """D-1052: pull_request, merge_group and push:main run scoped affected CI; schedule keeps weekly --full."""
     import yaml
 
     doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
@@ -472,10 +472,12 @@ def test_merge_group_runs_the_full_tier_against_the_group_base():
     safety = scope["Safety-Review trailer (D-430)"]
     assert "github.event_name == 'merge_group'" in safety["if"]
     assert "github.event_name == 'merge_group' && github.event.merge_group.base_sha" in safety["env"]["SAFETY_BASE"]
-    tier = scope["Test scope (D-436)"]["run"]
-    # Only pull_request takes the affected tier; every other event (merge_group included) is full.
-    assert '"${{ github.event_name }}" = "pull_request"' in tier and "--full --ci-matrix" in tier
-    assert "merge_group" not in tier
+    scope_step = scope["Test scope (D-436)"]
+    assert "ROSY_FULL_LEGACY" not in scope_step.get("env", {})
+    assert "github.event.merge_group.base_sha" in scope_step["env"]["SCOPE_BASE"]
+    assert "github.event.before" in scope_step["env"]["SCOPE_BASE"]
+    tier = scope_step["run"]
+    assert "pull_request|merge_group|push" in tier and "--full --ci-matrix" in tier
     test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
     assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
     assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
