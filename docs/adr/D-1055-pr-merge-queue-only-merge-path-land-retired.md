@@ -1,6 +1,6 @@
 ## D-1055 PR + Merge Queue를 유일한 병합 경로로 하고 land.py 착지를 은퇴한다
 
-**Status:** Proposed (2026-11-20, 사용자 결정 "지금 바로": 착지 GitHub 이관·경량화. 은퇴는 아래 기준 충족 뒤 Accepted로 바꾼다)
+**Status:** Accepted (2026-11-20, 사용자 11-20 05:4x: "지금 바로 해 시간이 없어, 병목이 너무 심해서 더 지체할 수 없어". 채택 승인이며 land.py 은퇴·D-868 Superseded 전환은 아래 은퇴 기준을 채운 날 한다)
 
 잇는 결정: [D-868](D-868-local-main-first-merge-commit-publish.md)(로컬 main 우선, 이 ADR이 개정한다) · [D-762](D-762-main-gateway-pull-request-merge-queue.md)(Merge Queue) · [D-1052](D-1052-self-review-and-zero-full-ci.md)(Zero-FULL, 2-레인 공존) · [D-803](D-803-landing-queue-before-delta-rerun.md)(착지 대기열) · [D-441](D-441-site-stack-automatic-update.md)(정확 SHA `ci-result` 서명).
 

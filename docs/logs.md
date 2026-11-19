@@ -14894,6 +14894,6 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 
 ## 2026-11-20 · uncommitted · D-1055 PR + Merge Queue 유일 병합 경로
-- 변경: ADR D-1055(Proposed), ADR Log 행. land.py 착지 은퇴 기준, 두 레인 전환, D-868 개정, 실험실 증거 규칙. 문서만.
+- 변경: ADR D-1055(Accepted, 2026-11-20 사용자 승인), ADR Log 행. land.py 착지 은퇴 기준, 두 레인 전환, D-868 개정, 실험실 증거 규칙. 문서만.
 - 증거: 원격 `test_harness_contracts` 결과는 커밋 뒤 기록.
 - gate 변화: 없음.
