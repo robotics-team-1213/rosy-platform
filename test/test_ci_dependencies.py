@@ -483,3 +483,25 @@ def test_merge_group_runs_the_full_tier_against_the_group_base():
     test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
     assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
     assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
+
+
+def test_every_ci_apt_update_uses_the_runner_mirror_with_retries():
+    lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    updates = [i for i, line in enumerate(lines) if line.strip().startswith("apt-get update")]
+    assert updates
+    for i in updates:
+        prep = lines[i - 1]
+        assert "azure.archive.ubuntu.com" in prep and "Acquire::Retries" in prep, lines[i]
+
+
+def test_omx_cell_tests_run_on_the_cells_opencv_not_the_containers():
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
+    step = next(s for s in steps if s["name"] == "Install OMX cell vision runtime")
+    assert "test/test_omx_cell" in step["if"]
+    assert "deploy/robot/omx/requirements-cell.lock" in step["run"]
+    assert "opencv-python-headless" in step["run"]
+    lock = (ROOT / "deploy/robot/omx/requirements-cell.lock").read_text(encoding="utf-8").splitlines()
+    assert any(line.startswith("opencv-python-headless==") for line in lock)
+    assert any(line.startswith("numpy==") for line in lock)

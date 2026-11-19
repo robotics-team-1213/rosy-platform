@@ -53,6 +53,8 @@ jobs:
 
       - name: Install selector tools
         run: |
+          # 11-19: archive/security.ubuntu.com refused GitHub runners for an hour (PR #247, 25 of 26 shards exit 100)
+          sed -i 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci-retries
           apt-get update -qq
           apt-get install -y -qq python3-yaml
 
@@ -126,6 +128,8 @@ jobs:
 
       - name: Install colcon & tools
         run: |
+          # 11-19: archive/security.ubuntu.com refused GitHub runners for an hour (PR #247, 25 of 26 shards exit 100)
+          sed -i 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci-retries
           apt-get update -qq
           # openssl: the release signing contract requires OpenSSL 3 raw Ed25519.
           # Installed explicitly so a slimmer base image cannot silently remove it.
@@ -174,6 +178,16 @@ jobs:
           PYTHONPATH=/tmp/rosy-receiver-crypto python3 -c 'import cryptography; from cryptography.x509.verification import PolicyBuilder, Store; assert cryptography.__version__ == "50.0.0"'
           echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
+      - name: Install OMX cell vision runtime
+        if: contains(toJSON(matrix.invocations), 'test/test_omx_cell')
+        run: |
+          # The cell runs deploy/robot/omx/requirements-cell.lock (OpenCV 4.12, NumPy 2.2); the container's apt
+          # python3-opencv is 4.6, where cell geometry tests failed on PR #247 (11-19) on a version the cell never runs.
+          grep -E '^(numpy|opencv-python-headless)==' deploy/robot/omx/requirements-cell.lock > /tmp/rosy-omx-cell-vision.txt
+          pip3 install --no-cache-dir --break-system-packages \
+            --target /tmp/rosy-omx-cell-vision -r /tmp/rosy-omx-cell-vision.txt
+          echo "PYTHONPATH=/tmp/rosy-omx-cell-vision${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+
       - name: Install site Vision verification runtime
         if: contains(toJSON(matrix.invocations), 'operations/overhead/test')
         run: |
@@ -188,6 +202,8 @@ jobs:
           # The console is Korean: without fonts-noto-cjk, headless Chromium renders
           # Hangul through Playwright's wide Unifont fallback and 320px layout-fit
           # assertions (fleet header link tag) see overflow that real browsers do not.
+          # 11-19: archive/security.ubuntu.com refused GitHub runners for an hour (PR #247, 25 of 26 shards exit 100)
+          sed -i 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci-retries
           apt-get update -qq && apt-get install -y -qq fonts-noto-cjk
           python3 -m playwright install --with-deps chromium
 
@@ -441,6 +457,8 @@ jobs:
           set -eo pipefail
           . /opt/ros/jazzy/setup.sh
           cd /tmp
+          # 11-19: archive/security.ubuntu.com refused GitHub runners for an hour (PR #247, 25 of 26 shards exit 100)
+          sed -i 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci-retries
           apt-get update -qq
           apt-get download ros-jazzy-slam-toolbox
           dpkg -x ros-jazzy-slam-toolbox_*.deb /
