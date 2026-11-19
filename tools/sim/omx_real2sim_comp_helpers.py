@@ -123,6 +123,7 @@ def _raw_plus_end_and_width(
     expected_yaw: float | None = None,
     expected_xy: Any = None,
     far_clip: bool = False,
+    box_l: float | None = None,
 ) -> tuple[tuple[float, float], float, tuple[float, float], tuple[float, float], np.ndarray]:
     """Return `(xy_w_corrected, yaw, sz_raw, plus_end_xy, px_used)` on plane `z` before bottom-clipping extension.
     `far_clip` (picking a container on a known slot only, not the calibration anchors) drops colour past the far edge."""
@@ -150,6 +151,14 @@ def _raw_plus_end_and_width(
                 keep = np.abs(rel_t) <= 0.034
                 if int(np.count_nonzero(keep)) >= 25:
                     pts, px = pts[keep], px[keep]
+        if far_clip and box_l is not None and expected_xy is not None:
+            s_all, s_exp = pts @ u_along, float(np.asarray(expected_xy, float) @ u_along)
+            if float(np.ptp(s_all)) > box_l + FAR_EDGE_TOL_M:
+                # a neighbour joined the blob along its length (rehandle b3, ship-h1r0-l0: 134 mm long): the front end the width is read from sat on the
+                # neighbour, 8-9 mm off across. Keep what lies within a box length of the slot.
+                near = np.abs(s_all - s_exp) <= 0.5 * box_l + FAR_EDGE_TOL_M
+                if int(np.count_nonzero(near)) >= 25:
+                    pts, px = pts[near], px[near]
         s = pts @ u_along
         t = pts @ u_across
         s_span = float(np.percentile(s, 99) - np.percentile(s, 1))
@@ -193,7 +202,7 @@ def _box_on_plane(cam: r2s.Camera, px: np.ndarray, top_z: float, box_l: float, b
                   img_h: int = 480, expected_yaw: float | None = None, expected_xy: Any = None,
                   far_clip: bool = False) -> tuple[tuple[float, float], float, tuple[float, float]]:
     """Back-project contour pixels `px` onto `top_z`, correcting side-wall overhang and bottom-clipped (`row 479`) length."""
-    xy, yaw, sz_raw, plus_xy, px_used = _raw_plus_end_and_width(cam, px, top_z, box_w, expected_yaw, expected_xy, far_clip)
+    xy, yaw, sz_raw, plus_xy, px_used = _raw_plus_end_and_width(cam, px, top_z, box_w, expected_yaw, expected_xy, far_clip, box_l)
     if sz_raw[1] < 0.021:
         return xy, yaw, (0.0, sz_raw[1])
     sz = (sz_raw[0], min(sz_raw[1], box_w))
