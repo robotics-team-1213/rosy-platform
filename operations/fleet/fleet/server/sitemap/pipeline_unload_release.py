@@ -200,6 +200,9 @@ def install_unload_release_routes(app, ctx) -> None:
                     task_log=getattr(ctx, "record_depart_task", None))
 
     app.state.depart_tick = lambda: depart_tick(app.state, **tick_args())
+    from fleet.server.sitemap.pipeline_repark import install_repark_routes
+
+    install_repark_routes(app, ctx)  # a vehicle re-park closes here; DONE re-queues the cell task
     if getattr(ctx, "console", None) is None:
         return  # no robots to send (bare test apps): the read route and depart_s3 still work
     inner = app.router.lifespan_context
@@ -224,6 +227,3 @@ def install_unload_release_routes(app, ctx) -> None:
                 task.cancel()
 
     app.router.lifespan_context = lifespan
-    from fleet.server.sitemap.pipeline_repark import install_repark_routes
-
-    install_repark_routes(app, ctx)  # a vehicle re-park closes here; DONE re-queues the cell task
