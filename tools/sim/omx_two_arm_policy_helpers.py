@@ -100,7 +100,7 @@ class Recorder(teaching.Teacher):
         if goal is not None and (self.skill is None or self.phase in skills.SKILLS[self.skill]["phases"]):
             state, images = observe(self.world, data, self.zero_error)
             if self.count == 0:  # a new episode: its tracking errors start padded with its first frame's
-                self.track_buf = deque(maxlen=getattr(self, "track", 0))
+                self.track_buf = deque(maxlen=self.track)
             state = policy_state(self, self, state, self.track_buf)
             action = np.concatenate([targets[arm] - self.zero_error.get(arm, 0.) for arm in sites.ARMS]).astype(np.float32)
             if self.delta is not None:  # (target - z) - (qpos - z): the zero error cancels
