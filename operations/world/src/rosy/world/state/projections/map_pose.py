@@ -47,11 +47,14 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass, fields
-from datetime import datetime
 from typing import Mapping, Optional
 
+from rosy.world.state.projections.map_pose_samples import (  # noqa: F401
+    SIGHTING, Pose, OdomSample, Sighting, _finite, _wrap, wrap_angle, relative, compose, parse_utc,
+    odom_from_snapshot, sighting_from_row)
+
 LOCALIZED, DEGRADED, UNKNOWN = "LOCALIZED", "DEGRADED", "UNKNOWN"
-SIGHTING, BRIDGED = "sighting", "bridged"
+BRIDGED = "bridged"
 #: D-593: an anchor set by a named operator on the console map.
 OPERATOR_PIN = "operator_pin"
 #: D-989: the robot's map pose through the transform fitted to the camera's LED-confirmed track.
@@ -69,23 +72,14 @@ RECOVER_AFTER = 2
 ODOM_BUFFER = 256
 #: Allowance on top of `max_speed_mps * dt` for odom noise before a step counts as an odom reset.
 ODOM_STEP_MARGIN_M = 0.05
+#: The hub snapshot is reused for up to 3 s, so a late hub sample can be that far behind a REST one.
+STALE_SOURCE_S = 3.0
 ODOM_TURN_MARGIN_RAD = 0.1
 #: Odom path / turn since the anchor at or below which the robot stood still (odom jitter).
 STILL_PATH_M = 0.02
 STILL_TURN_RAD = math.radians(2.0)
 #: Sightings waiting for odom per robot (3.2 s at 10 Hz); the oldest goes first when full.
 PENDING_SIGHTINGS = 32
-
-Pose = tuple[float, float, float]
-
-
-def _finite(*values) -> bool:
-    try:
-        return all(not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v)
-                   for v in values)
-    except (OverflowError, ValueError, TypeError):
-        return False
-
 
 @dataclass(frozen=True)
 class MapPoseConfig:
@@ -111,6 +105,8 @@ class MapPoseConfig:
     #: One planned U-turn (180 deg) plus margin bridges without a sighting.
     max_bridge_turn_deg: float = 270.0
     max_anchor_age_s: float = 10.0
+    #: A non-auto-locate anchor (pin, sighting, peer) older than this is no pose at all (UNKNOWN), not a drawn one.
+    max_stale_draw_s: float = 120.0
     #: D-989: robots whose ALIGNED auto-locate transform may anchor; none by default.
     auto_locate_robots: tuple = ()
     #: D-1017: a peer claim older than this at ingest is refused (1 Hz beacon, 5 s table, relay).
@@ -122,7 +118,7 @@ class MapPoseConfig:
         upper = {"max_dead_reckon_m": 20.0, "max_jump_m": 2.0, "max_jump_deg": 180.0,
                  "max_odom_age_s": 30.0, "max_pair_s": 1.0, "max_interp_gap_s": 5.0,
                  "sighting_lease_s": 5.0, "max_odom_future_s": 5.0, "max_speed_mps": 10.0,
-                 "max_bridge_turn_deg": 3600.0, "max_turn_rate_dps": 3600.0, "max_anchor_age_s": 600.0,
+                 "max_bridge_turn_deg": 3600.0, "max_turn_rate_dps": 3600.0, "max_anchor_age_s": 600.0, "max_stale_draw_s": 600.0,
                  "peer_lease_s": 30.0, "peer_after_camera_s": 600.0}
         if (not isinstance(self.auto_locate_robots, tuple)
                 or not all(isinstance(r, str) and r for r in self.auto_locate_robots)):
@@ -139,6 +135,8 @@ class MapPoseConfig:
             raise ValueError("fleet.map_pose.min_quality must be within [0, 1]")
         if self.max_interp_gap_s < self.max_pair_s:
             raise ValueError("fleet.map_pose.max_interp_gap_s must be >= max_pair_s")
+        if self.max_stale_draw_s < self.max_anchor_age_s:
+            raise ValueError("fleet.map_pose.max_stale_draw_s must be >= max_anchor_age_s")
 
     @classmethod
     def from_mapping(cls, raw: Mapping | None) -> "MapPoseConfig":
@@ -149,28 +147,6 @@ class MapPoseConfig:
         if isinstance(raw.get("auto_locate_robots"), list):
             raw["auto_locate_robots"] = tuple(raw["auto_locate_robots"])
         return cls(**raw)
-
-
-@dataclass(frozen=True)
-class OdomSample:
-    x: float
-    y: float
-    yaw: float
-    stamp: float
-    #: D-758 0: CORE's odom epoch (snapshot `odom_pose.epoch`); None from a CORE before v1.234.
-    epoch: Optional[int] = None
-
-
-@dataclass(frozen=True)
-class Sighting:
-    robot_id: str
-    x: float
-    y: float
-    yaw: float
-    captured_at: float
-    quality: Optional[float] = None
-    map_id: Optional[str] = None
-    kind: str = SIGHTING
 
 
 @dataclass(frozen=True)
@@ -187,6 +163,8 @@ class MapPose:
     #: Odom samples refused so far and why the last one was (future, out_of_order, malformed).
     odom_refused: int = 0
     odom_refused_reason: Optional[str] = None
+    #: Odom samples that arrived late from a second source (hub snapshot vs REST) and were skipped, not refused.
+    stale_source: int = 0
     #: Sightings ignored because their map_id is not the active site map frame.
     sightings_filtered_map_id: int = 0
     #: D-517 4: CORE's stamp of the newest odom sample in this pose (the authority's ``pose_stamp``).
@@ -197,66 +175,6 @@ class MapPose:
     bridge_turn_deg: float = 0.0
     #: D-1017: age of the newest camera sighting (None: none ever), shown on the operator card.
     last_sighting_age_s: Optional[float] = None
-
-
-def wrap_angle(angle: float) -> float:
-    return (angle + math.pi) % (2.0 * math.pi) - math.pi
-
-
-_wrap = wrap_angle
-
-
-def relative(a: Pose, b: Pose) -> Pose:
-    """`b` in the frame of `a` (a^-1 * b)."""
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    c, s = math.cos(a[2]), math.sin(a[2])
-    return c * dx + s * dy, -s * dx + c * dy, _wrap(b[2] - a[2])
-
-
-def compose(a: Pose, d: Pose) -> Pose:
-    c, s = math.cos(a[2]), math.sin(a[2])
-    return a[0] + c * d[0] - s * d[1], a[1] + s * d[0] + c * d[1], _wrap(a[2] + d[2])
-
-
-def parse_utc(text) -> Optional[float]:
-    """Epoch seconds of a UTC ISO stamp (`captured_at` format); None when not one."""
-    if not isinstance(text, str):
-        return None
-    try:
-        stamp = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        return stamp.timestamp() if stamp.tzinfo is not None else None
-    except (ValueError, OverflowError, OSError):
-        return None
-
-
-def odom_from_snapshot(state: Optional[Mapping]) -> Optional[OdomSample]:
-    """The snapshot's D-494 2 `odom_pose {x, y, yaw, stamp}`; None when absent or malformed.
-
-    `stamp` is UTC epoch seconds (float, same as sighting `captured_at`); a UTC ISO string is
-    accepted for robustness."""
-    raw = state.get("odom_pose") if isinstance(state, Mapping) else None
-    if not isinstance(raw, Mapping):
-        return None
-    x, y, yaw, stamp = raw.get("x"), raw.get("y"), raw.get("yaw"), raw.get("stamp")
-    stamp = float(stamp) if _finite(stamp) else parse_utc(stamp)
-    if stamp is None or not _finite(x, y, yaw):
-        return None
-    epoch = raw.get("epoch")  # D-758 0: anything but a count is no epoch (today's rule)
-    return OdomSample(float(x), float(y), float(yaw), stamp,
-                      epoch if type(epoch) is int and epoch >= 0 else None)
-
-
-def sighting_from_row(row: Optional[Mapping]) -> Optional[Sighting]:
-    """An accepted sighting row (`SightingService.accept`); None when malformed."""
-    if not isinstance(row, Mapping):
-        return None
-    robot_id, quality, map_id = row.get("robot_id"), row.get("quality"), row.get("map_id")
-    values = (row.get("x"), row.get("y"), row.get("yaw"), row.get("captured_at"))
-    if (not isinstance(robot_id, str) or not _finite(*values)
-            or not (quality is None or _finite(quality)) or not (map_id is None or isinstance(map_id, str))):
-        return None
-    return Sighting(robot_id, *(float(v) for v in values),
-                    quality=None if quality is None else float(quality), map_id=map_id)
 
 
 @dataclass(frozen=True)
@@ -295,6 +213,7 @@ class MapPoseTracker:
         self._degraded = False
         self._consistent = 0
         self._refused = 0
+        self._stale_source = 0
         self._refused_reason: Optional[str] = None
         self._epoch = 0   # D-581: odom resets so far (odom_to_map)
         self._core_epoch: Optional[int] = None  # D-758 0: the robot's odom epoch last sent
@@ -350,7 +269,15 @@ class MapPoseTracker:
             return False
         last = self._odom[-1] if self._odom else None
         if last is not None and sample.stamp <= last.stamp:
-            if sample.stamp < last.stamp or (sample.x, sample.y, sample.yaw) != last.pose:
+            # The hub snapshot is reused for at most STALE_SOURCE_S, so a hub sample behind a newer REST one lags
+            # that much. A late copy within it, on a path the robot could have driven, is skipped (no survey
+            # break: the order of recorded odom did not change). A larger step back, an implausible pose, or
+            # the same stamp with another pose means the robot clock or odom itself went wrong.
+            lag = last.stamp - sample.stamp
+            if (0.0 < lag <= STALE_SOURCE_S
+                    and math.dist(last.pose[:2], (sample.x, sample.y)) <= cfg.max_speed_mps * lag + ODOM_STEP_MARGIN_M):
+                self._stale_source += 1
+            elif sample.stamp < last.stamp or (sample.x, sample.y, sample.yaw) != last.pose:
                 self.refuse_odom("out_of_order")
             return False           # the same sample read twice is not a refusal
         pose = (sample.x, sample.y, sample.yaw)
@@ -487,7 +414,7 @@ class MapPoseTracker:
     def pose(self, now: float, active_map_id: Optional[str] = None, auto_locate: bool = False) -> MapPose:
         cfg = self.config
         self._resolve(now)
-        diag = {"odom_refused": self._refused, "odom_refused_reason": self._refused_reason,
+        diag = {"stale_source": self._stale_source, "odom_refused": self._refused, "odom_refused_reason": self._refused_reason,
                 "sightings_filtered_map_id": self._filtered_map_id,
                 "last_sighting_age_s": (None if self._newest_sighting is None
                                         else max(0.0, now - self._newest_sighting))}
@@ -497,6 +424,8 @@ class MapPoseTracker:
         if hidden or anchor is None or latest is None or now - latest.stamp > cfg.max_odom_age_s:
             return MapPose(None, None, None, UNKNOWN, None, 0.0, None, **diag)
         anchor_age = max(0.0, now - anchor.captured_at)
+        if anchor.kind != AUTO_LOCATE and anchor_age > cfg.max_stale_draw_s:
+            return MapPose(None, None, None, UNKNOWN, None, 0.0, None, **diag)
         if latest.stamp <= anchor.odom.stamp:
             (x, y, yaw), source, bridged, turned = anchor.map_pose, anchor.kind, 0.0, 0.0
             age = anchor_age
@@ -555,6 +484,8 @@ class MapPoseTracker:
         anchor = self._anchor
         if anchor is not None and anchor.kind != AUTO_LOCATE and sighting.captured_at < anchor.captured_at:
             return                            # D-593: seen before the operator pin it would undo
+        if anchor is not None and anchor.kind != AUTO_LOCATE and sighting.captured_at - anchor.captured_at > cfg.max_stale_draw_s:
+            anchor = None                     # expired anchor reads UNKNOWN; a new sighting starts over
         if anchor is not None and anchor.map_id != sighting.map_id:
             anchor = None                     # another map frame: start over from this sighting
         if anchor is None:
