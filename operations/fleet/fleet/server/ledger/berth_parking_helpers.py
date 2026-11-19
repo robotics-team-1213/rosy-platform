@@ -303,21 +303,24 @@ async def _execute_physical_berth_park(
 
     await asyncio.sleep(0.25)
     p_end, fg_end, rg_end, st_end = await _read_pose_and_gaps()
+    succeeded = stop_reason in BERTH_SUCCESS_REASONS
     taught_dock = None
-    try:
-        taught_dock = await _req("POST", f"/api/v1/docking/docks/{spec['dock_id']}/teach", {})
-    except Exception:
-        pass
+    if succeeded:   # a timed-out or E-stopped run must not become the dock pose (2868c99d7b review)
+        try:
+            taught_dock = await _req("POST", f"/api/v1/docking/docks/{spec['dock_id']}/teach", {})
+        except Exception:
+            pass
 
     backed_total_m = math.hypot(p_end["x"] - p_stage["x"], p_end["y"] - p_stage["y"])
     rg_err_m = abs(rg_end - stop_face_rg_m)
     yaw_err_deg = math.degrees(_wrap(p_end["yaw"] - p_stage["yaw"]))
     final_y = bay_pose["y"] if rg_err_m <= 0.025 else round(bay_pose["y"] - max(0.0, rg_end - stop_face_rg_m), 4)
-    pinned = await _pin_robot_on_fleet(request, robot_id, bay_pose["x"], final_y, bay_pose["yaw"], actor_id=actor_id)
+    pinned = (await _pin_robot_on_fleet(request, robot_id, bay_pose["x"], final_y, bay_pose["yaw"], actor_id=actor_id)
+              if succeeded else None)
 
     return {
         "executed": True,
-        "succeeded": stop_reason in BERTH_SUCCESS_REASONS,
+        "succeeded": succeeded,
         "stop_reason": stop_reason,
         "phases_executed": phases_executed,
         "before": {"pose": p0, "fg_center_m": fg0, "rg_center_m": rg0},

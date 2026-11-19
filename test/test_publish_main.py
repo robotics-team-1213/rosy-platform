@@ -449,3 +449,14 @@ def test_merge_when_green_auto_refuses_without_the_green_full_record_and_with_se
     monkeypatch.setattr(tool, "run_gh", _auto_gh(local, sha, calls, []))
     assert _run(local, "--merge-when-green", "auto", "--apply") == 0
     assert not [c for c in calls if c[:2] == ("pr", "merge")]
+
+
+def test_via_ci_plans_main_tip_without_lab_full_record_and_merges_when_ci_green(repo, monkeypatch, capsys):
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")
+    assert _run(local, "--via-ci") == 0
+    assert f"would push {sha}" in capsys.readouterr().out
+    calls = []
+    monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls))
+    assert _run(local, "--merge-when-green", "7", "--via-ci", "--apply") == 0
+    assert ("pr", "merge", "7", "--merge", "--match-head-commit", sha) in calls
