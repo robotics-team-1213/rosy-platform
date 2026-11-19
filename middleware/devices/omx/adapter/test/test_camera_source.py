@@ -157,7 +157,7 @@ def test_native_camera_encodes_once_without_ros_and_releases_device(monkeypatch,
     monkeypatch.setattr(source.time, 'sleep', stop)
     monkeypatch.setitem(sys.modules, 'cv2', SimpleNamespace(
         imencode=encode, IMWRITE_JPEG_QUALITY=1, error=RuntimeError))
-    monkeypatch.setitem(sys.modules, 'camera_quality', SimpleNamespace(frame_quality=quality))
+    monkeypatch.setitem(sys.modules, 'core_common.camera_quality', SimpleNamespace(frame_quality=quality))
     for name in ('rclpy', 'sensor_msgs', 'cv_bridge'):
         monkeypatch.setitem(sys.modules, name, None)
     source.main()
