@@ -77,13 +77,13 @@ def widen(low, high, demo_low, demo_high) -> tuple[list[float], list[float]]:
 def open_before_close(chunk, open_g: float, closed: float):
     """IK help for the jaws (11-19: in a new scene the model opened only to 52 = a 30 mm gap, then closed on nothing):
     before the model's close (jaws back at closed after having been open) the jaws are at least the reviewed library's
-    widest opening, then the model closes as it chose. A chunk that never closes is opened throughout."""
+    widest opening, then the model closes as it chose. A chunk without such a close is left as the model gave it."""
     arr = np.array(chunk, dtype=float)
     g = arr[:, 5]
     was_open = np.maximum.accumulate(g) > closed + 2.0
     closing = np.flatnonzero((g <= closed + 1.0) & was_open)
-    end = int(closing[0]) if len(closing) else len(arr)
-    arr[:end, 5] = np.maximum(g[:end], open_g)
+    if len(closing):
+        arr[:closing[0], 5] = np.maximum(g[:closing[0]], open_g)
     return arr
 
 
