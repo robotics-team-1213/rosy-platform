@@ -460,3 +460,26 @@ def test_via_ci_plans_main_tip_without_lab_full_record_and_merges_when_ci_green(
     monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls))
     assert _run(local, "--merge-when-green", "7", "--via-ci", "--apply") == 0
     assert ("pr", "merge", "7", "--merge", "--match-head-commit", sha) in calls
+
+
+def test_via_ci_keeps_the_reviewed_candidate_when_local_main_advances(repo, capsys):
+    local, _ = repo
+    candidate = _commit(local, "app.py", "reviewed")
+    newer = _commit(local, "app.py", "new work")
+
+    assert _run(local, "--via-ci", "--candidate", candidate) == 0
+    out = capsys.readouterr().out
+    assert f"would push {candidate}" in out
+    assert newer not in out
+
+
+def test_via_ci_refuses_a_candidate_that_never_landed(repo, capsys):
+    local, _ = repo
+    _git(local, "switch", "-c", "topic")
+    candidate = _commit(local, "app.py", "unlanded")
+    _git(local, "switch", "main")
+    _commit(local, "app.py", "landed")
+
+    assert _run(local, "--via-ci", "--candidate", candidate, "--apply") == 1
+    assert "not in local main" in capsys.readouterr().err
+    assert _git(local, "ls-remote", "--heads", "origin", "publish/main-*") == ""
