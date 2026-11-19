@@ -100,7 +100,7 @@ class Recorder(teaching.Teacher):
         if goal is not None and (self.skill is None or self.phase in skills.SKILLS[self.skill]["phases"]):
             state, images = observe(self.world, data, self.zero_error)
             if self.count == 0:  # a new episode: its tracking errors start padded with its first frame's
-                self.track_buf = deque(maxlen=self.track)
+                self.track_buf = deque(maxlen=getattr(self, "track", 0))
             state = policy_state(self, self, state, self.track_buf)
             action = np.concatenate([targets[arm] - self.zero_error.get(arm, 0.) for arm in sites.ARMS]).astype(np.float32)
             if self.delta is not None:  # (target - z) - (qpos - z): the zero error cancels
@@ -337,8 +337,10 @@ class Driver:
         start_z, peak = world.pose(data, c)[0][2], 0.
         goal = goal_vector(self.layout, plan, {k: v for k, v in here.items() if k != c}, self.goal_mode) if self.has_goal else None
         self.policy.reset()
+        track = deque(maxlen=getattr(self, "track", 0))  # --track-history: per step, padded with its first frame (as the skill eval does)
         for _ in range(self.longest[plan["id"]] + 15):
             state, images = observe(world, data)
+            state = policy_state(self, teacher, state, track)
             if sink:
                 sink(sheet(images))
             action = self.act(state, images, goal)
@@ -358,6 +360,7 @@ class Driver:
         queue = {a: [s for s in task["steps"] if s["arm"] == a] for a in L.arms}
         status, held, running, rows, prev_active = {}, {}, {}, [], ()
         self.policy.reset()
+        track = deque(maxlen=getattr(self, "track", 0))  # one 12-wide error history for both arms, restarted wherever the policy is reset
         with self.torch.inference_mode():
             for _ in range(sum(self.longest[f"{task['name']}/{s['id']}"]["frames"] + 15 for s in task["steps"])):
                 for arm in L.arms:
@@ -392,8 +395,10 @@ class Driver:
                 active = tuple((a, running[a]["step"]["id"]) for a in sorted(running))
                 if active != prev_active:
                     self.policy.reset()
+                    track.clear()
                     prev_active = active
                 state, images = observe(w, data)
+                state = policy_state(self, teacher, state, track)
                 if sink:
                     sink(sheet(images))
                 goal = goal_of({arm: r["block"] for arm, r in running.items()}, goal_size(L, self.goal_mode)) if self.has_goal else None
