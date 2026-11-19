@@ -54,3 +54,17 @@
 ### 부록 2 (2026-11-19): 배포되지 않는 경로는 앱 `repo`
 
 사용자 승인 2026-11-19(앱 분리, 패널 int-r1 A·B 합의). 부록 1의 `core` 6,761개 파일 중 대부분이 문서·시험·도구여서 거의 모든 델타가 FULL로 갔다. 그래서 배포되지 않고 게시 관문도 아닌 경로에 앱 값 `repo`를 준다: `docs/`, 루트 `test/`(인프라·`test/architecture`·한 앱으로 확정할 수 없는 루트 시험; `test/learning`은 `learning`), `.claude/`, 운영자 PC에서만 쓰는 도구(`tools/validation`·`calibration`·`capture`·`device_test`·`device_twin`·`icons`·`ops`·`remote`·`ssh`). `repo`는 배포하지 않으므로 델타에 있어도 FULL을 부르지 않고 앱 집합에도 들어가지 않는다. 문서만 바뀐 델타는 앱 모드로 자기 선택(`affected`)의 깨끗한 증거만 요구한다. `core`에는 공유 실행 코드(middleware/core·contracts·shared·gateway·deploy 루트), 배포물을 만드는 도구(`tools/release`·`packaging`, OMX 셀이 실행 경로에 넣는 `tools/sim`), 관문 코드(`tools/harness`·`hooks`, `tools/` 바로 아래의 `land*`·`publish*`·`urgent_lane.py`, `.github`), `test/flaky_quarantine.txt`가 남는다. 선택기의 FULL 승격(`conftest.py`·`test/architecture/**`·`tools/remote/remote_pytest.py` 등 `FULL_TRIGGERS`)과 `safety_review.is_safety`는 바꾸지 않으므로, `repo` 안의 관문 파일을 바꾸면 여전히 FULL이다. `repo` 시험 파일의 MAIN-RED는 어느 앱 델타도 막지 않는다(부록 1에서 `core` 소유 적색이 앱 델타를 막지 않던 것과 같다). 검증: `test/test_publish_scope.py`(문서만 → 앱 모드, 문서 + `tools/land.py` → FULL), `test/architecture/test_capability_owners.py`(관문은 `core`, 배포 안 되는 경로는 `repo`).
+
+### 부록 3 (2026-11-19): 같은 SHA 재실행 통과는 녹색으로 친다
+
+**사용자 결정 (2026-11-19).** 야간 FULL은 6밤 중 5밤 빨갰다. 11-18 밤의 NEW 11개는 다음 main에서 모두 통과했고(120 passed), 8번 호출은 실행마다 다른 부하 flaky 시험(station camera, config_transaction)으로 떨어졌다가 같은 SHA의 세 번째 실행에서 통과했다. 녹색 밤만 게시용 FULL 기록을 쓰므로 부하 flaky 하나가 하루 게시를 막았다.
+
+1. **재실행 한 번.** 계층이 끝난 뒤 NEW가 있는 호출은 같은 SHA·같은 argv로 한 번 다시 돈다(로그 `nightly-<n>-rerun.txt`). 재실행이 깨끗하면(exit 0, 요약 있음, `land_cache.unusable` 통과, 전용 증거·비어 있지 않은 브라우저 실행) 그 행을 `land_cache.record`로 남기고 그 ids를 NEW에서 뺀다. 재실행도 실패하면 지금처럼 MAIN-RED다.
+2. **flaky 후보.** 실패 뒤 통과한 id는 착지의 LOAD-FLAKY와 같은 후보 파일(`<git-common-dir>/rosy-flaky-candidates.txt`)에 적어 담당자가 `test/flaky_quarantine.txt` 검토를 하게 한다(이 도구는 격리 목록에 넣지 않는다).
+3. **격리만 실패한 호출.** NEW 없이 격리(quarantine) 시험만 실패해 exit 1인 호출도 한 번 다시 돌려 깨끗한 행을 남긴다(11-18에는 이런 호출에 행이 없어 게시 증거가 빠졌다).
+4. **기록 로그.** 게시용 `land_record.write`는 행을 만든 로그(재실행으로 기록됐으면 재실행 로그)를 적는다.
+5. **상한.** 한 밤에 다시 도는 호출은 최대 `MAX_RERUNS`(8)개다. 안전 루트 아래 id가 있는 호출은 다시 돌지 않는다(D-762). `[nightly] rerun:` 요약 줄을 출력한다.
+
+**그대로 엄격한 것.** 게시 검사(`publish_evidence`)는 바뀌지 않는다. 재실행 행도 같은 정확한 commit·tree·env·argv·log 검사를 받는다.
+
+**검증.** `test/test_land_nightly.py`(재실행 통과 → 녹색·기록·후보, 두 번 실패 → 빨강, 격리만 실패한 호출의 재실행 기록, 상한)를 시험 PC에서 돌린다. 실제 야간 관측은 아직 없다.

@@ -137,7 +137,7 @@ def test_robot_loader_reads_six_class_d554_shadow_output(tmp_path):
     import numpy as np
     from export_cell import write_manifest
     from perception_runtime.perception.learned.lane_mask import lane_evidence
-    from perception_runtime.perception.learned.manifest import load_manifest
+    from core_common.perception_model import load_manifest
     raw = tmp_path / "m.onnx"
     raw.write_bytes(b"candidate")
     write_manifest(tmp_path / "v13", onnx_path=raw, classes=[(c["name"], c["role"]) for c in ldd.CLASSES],

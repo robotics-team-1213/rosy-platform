@@ -7,6 +7,7 @@ import { isSample, sampleTag } from "/common/sample-data.js";
 import { renderRefusalSlot, renderLocalizationSlot } from "/console/assets/localization-view.js";
 import { armCameraSpecs } from "./robot-panel-adapters.js";
 export { createDetail3dController, appendDetailCamera } from "./roster-presentation.js";
+import { createRobotVideo, bindVisibility } from "/console/assets/robot-video.js";
 
 /** D-651: all four safety exceptions remain visible in the compact list, ahead of nominal robots. */
 export function mustExpand(robot) {
@@ -74,14 +75,15 @@ const OMX_CELL_DEFS = [
   { target_id: "arm_s", kind: "omx_ai", label: "OMX-AI #3 (Cell S · S3 공급 셔틀)", shortLabel: "Cell S · arm_s (S3 공급)", stationId: "S3", stationName: "하차 3 (동북)", stationX: 0.67, stationY: -0.06, base_x: 0.960, base_y: -0.035, head_x: 0.703, head_y: -0.035, head_yaw: 3.14, reach_m: 0.28, zoom: 4 },
 ];
 
-const STATION_INSPECT_LINKS = Object.freeze({
+// Pinky stations name no robot: the occupant comes from the server (charge-bays), never from this table.
+export const STATION_INSPECT_LINKS = Object.freeze({
   S2: { targetId: "arm_a", camId: "arm_a_wrist", label: "S2 상차 · arm_a" },
   S3: { targetId: "arm_s", camId: "arm_s_wrist", label: "S3 하역 셔틀 · arm_s" },
   S5: { targetId: "arm_b", camId: "arm_b_wrist", label: "S5 적재·반출 · arm_b" },
-  S1: { targetId: "rosy_46", camId: "side", label: "S1 반출대 · Pinky" },
-  C1: { targetId: "rosy_46", camId: "pinky", label: "C1 충전소 · rosy_46" },
-  C2: { targetId: "rosy_45", camId: "pinky", label: "C2 임시칸 · rosy_45" },
-  C3: { targetId: "rosy_42", camId: "pinky", label: "C3 충전소 · rosy_42" },
+  S1: { targetId: null, camId: "side", label: "S1 반출대 · Pinky" },
+  C1: { targetId: null, camId: "pinky", label: "C1 충전칸" },
+  C2: { targetId: null, camId: "pinky", label: "C2 충전칸" },
+  C3: { targetId: null, camId: "pinky", label: "C3 충전칸" },
 });
 
 function formatRoiStatus(anc) {
@@ -89,10 +91,25 @@ function formatRoiStatus(anc) {
   return `${anc.target_id} · ${anc.zoom || 4}x 실시간 추적 · 기준 (${Number(anc.base_x).toFixed(2)}, ${Number(anc.base_y).toFixed(2)}) → 방향 (${Number(anc.head_x ?? anc.base_x).toFixed(2)}, ${Number(anc.head_y ?? anc.base_y).toFixed(2)}) ${deg}`;
 }
 
+/** The ROI target is the focused arm or robot that has a map position; none means no polling. */
+export function roiTargetId(view) {
+  for (const id of [view.focusAnchorId, view.robotSelection?.get() ?? null]) {
+    if (!id) continue;
+    if ((view.anchors || []).some(a => a.target_id === id)) return id;
+    if ((view.guide?.robots || []).some(r => r.robot_id === id && r.pose)) return id;
+  }
+  return null;
+}
+
+const ROI_POLL_MS = 850, ROI_BACKOFF_MAX_MS = 5000;
+
 export function createRoiPoller({ scope, view, call, render = () => {} }) {
   const roiLease = { token: "", expiresAt: 0, pending: null };
   const roiObjectUrls = new Map();
   let roiPollInFlight = false;
+  // Failed reads back off (850 ms doubling to 5 s) so a missing ROI does not hammer Vision.
+  let failures = 0, retryAt = 0, lastTarget = null;
+  const failed = () => { failures += 1; retryAt = Date.now() + Math.min(ROI_BACKOFF_MAX_MS, ROI_POLL_MS * 2 ** failures); };
   scope.onDispose(() => {
     roiPollInFlight = false;
     roiLease.token = "";
@@ -118,21 +135,26 @@ export function createRoiPoller({ scope, view, call, render = () => {} }) {
   }
   async function refreshRoiPreview() {
     const life = scope.capture();
-    if (!life.current() || document.hidden || roiPollInFlight || !view.anchors?.length) return;
+    if (!life.current() || document.hidden || roiPollInFlight) return;
     const img = document.getElementById("anchor-roi-img");
     const statusNode = document.getElementById("anchor-roi-status");
-    const targetId = view.focusAnchorId || view.robotSelection?.get() || null;
+    const targetId = roiTargetId(view);
     if (!img || !targetId || (typeof img.closest === "function" && !img.closest(".quick-cell-link")?.open)) return;
+    if (targetId !== lastTarget) { lastTarget = targetId; failures = 0; retryAt = 0; }
+    if (Date.now() < retryAt) return;
     roiPollInFlight = true;
     try {
       const token = await ensureRoiLease(life.signal);
-      if (!life.current() || !token) return;
+      if (!life.current()) return;
+      if (!token) { failed(); return; }
       const resp = await fetch(`/api/vision/sources/ceiling_north/roi/${encodeURIComponent(targetId)}`, {
         headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: life.signal,
       });
       if (!life.current()) return;
       if (resp.status === 401) { roiLease.token = ""; roiLease.expiresAt = 0; return; }
-      if (!resp.ok) return;
+      if (resp.status === 404) { retryAt = Infinity; return; } // no ROI for this target: stop until it changes
+      if (!resp.ok) { failed(); return; }
+      failures = 0; retryAt = 0;
       const blob = await resp.blob();
       if (!life.current() || !blob || !blob.size) return;
       const nextUrl = URL.createObjectURL(blob);
@@ -147,14 +169,14 @@ export function createRoiPoller({ scope, view, call, render = () => {} }) {
       }
     } catch (err) {
       if (err?.name === "AbortError") return;
-      // Keep previous ROI image on transient error
+      failed(); // Keep previous ROI image on transient error
     } finally {
       if (life.current()) roiPollInFlight = false;
     }
   }
   scope.interval(() => {
     if (typeof document !== "undefined" && document.querySelector?.(".quick-cell-link")?.open) void refreshRoiPreview();
-  }, 850);
+  }, ROI_POLL_MS);
   // A map anchor click focuses its card; an arm anchor also refreshes its ROI preview.
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     scope.listen(window, "rosy:focus-anchor", (ev) => {
@@ -173,6 +195,28 @@ export function createRoiPoller({ scope, view, call, render = () => {} }) {
   return { roiObjectUrls, refreshRoiPreview };
 }
 
+/** D-801: one robot's front camera in its card's ROI spot. Started by the person, closed on reselect or hide. */
+// Nothing is created until the person asks: no DOM, no grant, no WHEP session.
+export function createFrontCamera({ call, scope }) {
+  let stage = null, video = null, robotId = null, unbind = null;
+  const stop = () => { robotId = null; unbind?.(); unbind = null; video?.stop(); };
+  scope.onDispose(stop);
+  return {
+    stop,
+    stage: () => stage,
+    robotId: () => robotId,
+    toggle(id) {
+      if (robotId === id) { stop(); return; }
+      stop();
+      stage ??= Object.assign(document.createElement("div"), { className: "robot-video-stage" });
+      video ??= createRobotVideo({ call });
+      robotId = id;
+      unbind = bindVisibility({ target: stage, video });
+      void video.start(stage, [id]);
+    },
+  };
+}
+
 const DEFAULT_PLACES = [
   { id: "P1", name: "픽업 1", x: -0.415, y: 0.015 },
   { id: "P2", name: "픽업 2", x: -0.195, y: 0.015 },
@@ -188,7 +232,7 @@ const DEFAULT_PLACES = [
 
 export function buildQuickControlPanel({
   robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-  roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames = null,
+  roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames = null, frontCamera = null,
 }) {
   const quickPanel = document.createElement("section");
   quickPanel.className = "quick-control-panel";
@@ -241,10 +285,10 @@ export function buildQuickControlPanel({
         view.selected = robot.robot_id;
         const stationLink = STATION_INSPECT_LINKS[pid.toUpperCase()];
         if (stationLink) {
-          if (stationLink.targetId.startsWith("arm_")) view.focusAnchorId = stationLink.targetId;
+          if (stationLink.targetId?.startsWith("arm_")) view.focusAnchorId = stationLink.targetId;
           if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
             window.dispatchEvent(new CustomEvent("rosy:inspect-target", {
-              detail: { targetId: stationLink.targetId.startsWith("arm_") ? stationLink.targetId : robot.robot_id, camId: stationLink.camId },
+              detail: { targetId: stationLink.targetId?.startsWith("arm_") ? stationLink.targetId : robot.robot_id, camId: stationLink.camId },
             }));
           }
         }
@@ -405,6 +449,8 @@ export function buildQuickControlPanel({
   const chosenCamId = view.trackerCamByTarget[activeAnchor.target_id] || camViewsForAnchor[0].id;
   const chosenCam = camViewsForAnchor.find((c) => c.id === chosenCamId) || camViewsForAnchor[0];
 
+  const frontOn = activeAnchor.kind === "pinky" && frontCamera?.robotId() === robot.robot_id;
+  if (!frontOn && frontCamera?.robotId() === robot.robot_id) frontCamera.stop();
   const roiRow = nodeWithText("div", "roi-row"), roiImg = document.createElement("img");
   roiImg.id = "anchor-roi-img"; roiImg.className = "anchor-roi-img"; roiImg.alt = `${activeAnchor.target_id} 확대 헤드 추적 영상`;
   const existingUrl = roiObjectUrls.get(activeAnchor.target_id);
@@ -446,6 +492,15 @@ export function buildQuickControlPanel({
   }
   const openFullInspectorBtn = nodeWithText("ui-button", "", "우측 인스펙터 열기");
   actionIcon(openFullInspectorBtn, "search");
+  if (frontCamera && activeAnchor.kind === "pinky") {
+    const frontBtn = nodeWithText("ui-button", "", "전면 카메라");
+    actionIcon(frontBtn, "camera");
+    frontBtn.setAttribute("kind", "toggle"); frontBtn.setAttribute("aria-pressed", frontOn ? "true" : "false");
+    frontBtn.setAttribute("data-work-read", ""); frontBtn.type = "button";
+    if (!robot.online && !frontOn) { frontBtn.disabled = true; frontBtn.setAttribute("reason", "연결 끊김"); }
+    frontBtn.addEventListener("click", scope.guard(() => { frontCamera.toggle(robot.robot_id); render(); }));
+    lensRow.appendChild(frontBtn);
+  }
   openFullInspectorBtn.setAttribute("kind", "quiet");
   openFullInspectorBtn.setAttribute("data-work-read", "");
   openFullInspectorBtn.type = "button";
@@ -456,7 +511,7 @@ export function buildQuickControlPanel({
   }));
   lensRow.appendChild(openFullInspectorBtn);
   roiMeta.append(statusText, descText, lensRow);
-  roiRow.append(roiImg, liveCellImg, roiMeta);
+  roiRow.append(frontOn ? frontCamera.stage() : roiImg, liveCellImg, roiMeta);
   trackerBox.appendChild(roiRow);
   cells.appendChild(trackerBox);
   quickPanel.appendChild(cells);

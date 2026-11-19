@@ -186,6 +186,14 @@ def test_tracking_pairs_the_console_state_with_detections(tmp_path):
     assert [(row["x"], row["y"]) for row in snap["unknown"]] == [(2.5, 1.0)]
 
 
+def test_tracking_readback_carries_the_anchor_targets(tmp_path):
+    with _client(tmp_path) as client:
+        snap = client.get("/api/fleet/tracking", headers=_auth(VIEWER_TOKEN)).json()
+    targets = {row["target_id"]: row for row in snap["anchors"]}
+    assert {"arm_s", "arm_a", "arm_b"} <= set(targets)
+    assert targets["arm_a"]["live"] is False   # no anchor report yet: defaults, never shown as live
+
+
 def test_state_uses_its_own_read_time_after_a_slow_gather(tmp_path):
     clock = _Clock()
     with _client(tmp_path, clock=clock, delay_s=2.5) as client:

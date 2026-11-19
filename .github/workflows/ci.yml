@@ -94,7 +94,6 @@ jobs:
                 echo "::error::missing or unreachable SCOPE_BASE ($SCOPE_BASE) for ${{ github.event_name }}; refusing silent narrowing"
                 exit 1
               fi
-              python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --print
               out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
               ;;
             push)
@@ -102,7 +101,6 @@ jobs:
                 echo "::warning::missing or unreachable push base ($SCOPE_BASE); escalating to --full"
                 out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
               else
-                python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --print
                 out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
               fi
               ;;

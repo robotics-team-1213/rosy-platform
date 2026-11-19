@@ -89,7 +89,7 @@ def check_ncnn_evidence(manifest):
     """Validate the hashed export proof before an NCNN model enters intake."""
     import json
     import re
-    from perception_runtime.perception.learned.manifest import ManifestError
+    from core_common.perception_model import ManifestError
     if "export_parity.json" not in {f.name for f in manifest.files}:
         raise ManifestError("ncnn parity: missing hashed export_parity.json")
     try:

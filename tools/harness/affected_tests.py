@@ -547,6 +547,7 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
         sel.escalations.append("forced (--full)")
         sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     if matrix:
+        print(render(sel), end="", file=sys.stderr)  # the human selection (was a second --print call in ci.yml)
         print(json.dumps({"mode": sel.mode, "matrix": ci_matrix(repo, sel)}, separators=(",", ":")))
         return 0
     if as_json:

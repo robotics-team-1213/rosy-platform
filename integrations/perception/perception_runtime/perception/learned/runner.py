@@ -22,7 +22,7 @@ import numpy as np
 from .drivable_paint import drivable_target
 from .lane_mask import (LaneMaskEvidence, floor_gate_role_error, lane_evidence, lane_marking_mask, preprocess,
                         uncrop_logits)
-from .manifest import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, road_delivery_error, verify_files
+from core_common.perception_model import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, road_delivery_error, verify_files
 
 
 # learned-perception-requirements.txt is installed with pip --target here by the

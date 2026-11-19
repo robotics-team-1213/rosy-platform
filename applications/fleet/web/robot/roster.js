@@ -14,7 +14,7 @@ import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
 import { placeRosterCards as place, mustExpand, selectRobot, createRoiPoller,
   buildQuickControlPanel, appendDetailSlots, appendDetailCamera, createDetail3dController,
-  leaveTwinOrCameraView, leaveCameraView } from "./roster-cards.js";
+  leaveTwinOrCameraView, leaveCameraView, createFrontCamera } from "./roster-cards.js";
 import { setOffBy } from "/common/cause-line.js";
 import { createStepNudge } from "/console/assets/step-nudge.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
@@ -37,6 +37,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   // 셀 카메라 뷰도 천장 ROI와 같은 Vision 임대로 본다(D-136). Fleet은 바이트를 중계하지 않는다.
   const cellFrames = createCellFrameFeed({ call, scope });
   const detail3d = createDetail3dController(scope);
+  const frontCamera = createFrontCamera({ call, scope });
   const stepNudge = createStepNudge({ scope, call, isOperator, namedReason });
   const uiBtn = (text, kind = "quiet") => { const b = nodeWithText("ui-button", "", text); b.setAttribute("kind", kind); b.type = "button"; return b; };
   const syncMapPicking = () => {
@@ -54,7 +55,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       return;
     }
     if (selectRobot(view, robotId)) {
-      confirmedAction?.cancel(); trip.close(); onSelectionChanged(); syncMapPicking();
+      confirmedAction?.cancel(); trip.close(); frontCamera.stop(); onSelectionChanged(); syncMapPicking();
       view.focusAnchorId = view.robotSelection?.get() ?? null;
       leaveCameraView(view, el);  // 선택은 카메라 보기만 닫는다 — 트윈 3D는 유지한다
       const canvas = el("map-canvas");
@@ -243,7 +244,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable) {
       quickControlEl = buildQuickControlPanel({
         robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-        roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames,
+        roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames, frontCamera,
       });
       if (!opts?.split) mainCol.appendChild(quickControlEl);
       stepNudgeEl = stepNudge.renderPanel({ robot, onUpdate: render }).element;

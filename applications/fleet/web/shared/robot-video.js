@@ -28,7 +28,7 @@ function el(doc, tag, text, attrs = {}) {
   return node;
 }
 
-function createRobotVideo({doc = document, call, open = openRobotCamera, fetchImpl}) {
+export function createRobotVideo({doc = document, call, open = openRobotCamera, fetchImpl}) {
   let sessions = [], cameraTiles = [], running = null;
   const grantPath = (robot, suffix = "") => `/api/fleet/robots/${encodeURIComponent(robot)}/media-grant${suffix}`;
 
@@ -86,7 +86,7 @@ function createRobotVideo({doc = document, call, open = openRobotCamera, fetchIm
 }
 
 // 화면이 숨거나 패널이 보이지 않으면 세션을 닫고, 다시 보이면 같은 선택으로 연다.
-function bindVisibility({doc = document, target, video, Observer = globalThis.IntersectionObserver}) {
+export function bindVisibility({doc = document, target, video, Observer = globalThis.IntersectionObserver}) {
   let wanted = null, onScreen = true;
   const pause = () => { const now = video.current(); if (now) { wanted = now; video.stop(); } };
   const resume = () => {

@@ -11,7 +11,7 @@ import store
 import cv2
 import numpy as np
 from perception_runtime.perception.learned.detector import ObjectDetModel
-from perception_runtime.perception.learned.manifest import OBJECT_CLASSES, load_manifest, verify_files
+from core_common.perception_model import OBJECT_CLASSES, load_manifest, verify_files
 from object_fitness import _fraction, evaluate_detections, evaluate_model_frame, summarize_frames
 
 

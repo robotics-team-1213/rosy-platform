@@ -191,8 +191,8 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     const robotId = targetRobotId;
     const activeRobot = view.robotSelection ? view.robotSelection.get() : null;
     if (!robotId || view.selected !== robotId || activeRobot !== robotId) return;
-    const defaultBay = robotId === "rosy_45" ? "C2" : robotId === "rosy_42" ? "C3" : "C1";
-    const chosenBay = (bayId || defaultBay).toUpperCase();
+    // The person names the bay; there is no per-robot default bay.
+    const chosenBay = String(bayId || "").toUpperCase();
     const bayCoords = { C1: { x: -0.418, y: 0.380 }, C2: { x: -0.190, y: 0.380 }, C3: { x: 0.038, y: 0.380 } };
     const pt = bayCoords[chosenBay];
     if (!pt || !["berth_park", "forward_and_berth_park"].includes(mode)) return;

@@ -3,7 +3,7 @@ import json
 import re
 from pathlib import Path
 from threading import RLock
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from response import DevResponse, error, reply
 from sample.sessions import Sessions
@@ -109,6 +109,9 @@ class SampleEngine:
             # The sample site has no cell camera; Fleet answers with a placeholder picture too.
             return DevResponse(200, [('Content-Type', 'image/svg+xml'), ('Cache-Control', 'no-store')],
                                b'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"/>')
+        if (method, path) == ('GET', '/calibrations') and parse_qs(urlsplit(target).query).get('purpose') == ['preview']:
+            # Display-only sample: Fleet's measured-preview listing shape, always the no-approval empty state.
+            return reply({'calibrations': [], 'use': 'preview-only', 'persistent': False})
         if method != 'GET' and role == 'viewer' and path != '/estop':  # D-1043
             return error(403, 'FORBIDDEN')
         if (method, path) == ('POST', '/dispatch/rearm') and self.control_units.local_stop_pending():

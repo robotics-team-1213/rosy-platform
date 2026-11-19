@@ -670,7 +670,9 @@ def _open(playwright, origin, api, posts, answers=None, size=(1440, 900)):
     def serve(route):
         request = route.request
         path = urlparse(request.url).path
-        if request.method != "GET":
+        if request.method != "GET" and path == "/api/fleet/vision/lease":
+            route.fulfill(status=404, json={"detail": "no such api"})  # a camera-frame read lease, not an action
+        elif request.method != "GET":
             posts.append((path, request.post_data))
             status, body = (answers or {}).get(path, (404, {"detail": "no such api"}))
             route.fulfill(status=status, json=body)

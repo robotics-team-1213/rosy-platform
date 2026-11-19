@@ -159,3 +159,28 @@ test('drawGuide draws outer selection rings for selected Pinky and OMX-AI using 
   });
   assert.ok(fallbackRec.strokes.some((s) => s.strokeStyle === 'token-pri' && s.lineWidth === 2.4));
 });
+
+function drawArm(anchor) {
+  const calls = [], chips = [];
+  const ctx = new Proxy({}, {
+    get: (t, k) => (k in t ? t[k] : (...args) => calls.push([k, ...args])),
+    set: (t, k, v) => { t[k] = v; return true; },
+  });
+  drawGuide(ctx, (x, y) => ({x: x * 100, y: y * 100}), {guide: {robots: []}, css: (name) => name,
+    colorOf: () => '#000', drawChip: (_c, _r, x, y, text) => chips.push({x, y, text}), on: false,
+    view: {anchors: [anchor], layers: {}}});
+  return {calls, chips, ctx};
+}
+
+test('an arm without a live head draws only its base, quietly, and says its position is unknown', () => {
+  const arm = {target_id: 'arm_a', kind: 'omx_ai', base_x: 0.5, base_y: 0.4, head_x: 0.5, head_y: 0.1, head_yaw: -1.57, reach_m: 0.28};
+  const stale = drawArm({...arm, live: false});
+  assert.equal(stale.calls.filter(([k]) => k === 'lineTo').length, 0);   // no base -> head link, no heading tip
+  assert.equal(stale.calls.filter(([k]) => k === 'arc').length, 1);      // reach circle only, no head dot
+  assert.equal(stale.ctx.strokeStyle, '--ink-quiet');
+  assert.deepEqual(stale.chips, [{x: 50, y: 40 - 12, text: 'arm_a · 위치 모름'}]);
+  const live = drawArm({...arm, live: true});
+  assert.ok(live.calls.filter(([k]) => k === 'lineTo').length >= 2);
+  assert.equal(live.calls.filter(([k]) => k === 'arc').length, 2);
+  assert.match(live.chips[0].text, /^ARM_A/);
+});
