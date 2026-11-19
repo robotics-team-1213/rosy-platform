@@ -491,3 +491,29 @@ def test_speculation_runs_only_when_asked(monkeypatch):
     monkeypatch.setenv(land_prepare.SPECULATE_ENV, "1")
     with pytest.raises(AttributeError):
         hook({"branch": "feat/peer"})  # asked: it goes on to land.land_full
+
+
+def test_nt_lock_waits_past_the_msvcrt_ten_second_give_up(monkeypatch):
+    import errno
+    calls = []
+
+    def locking(fd, mode, n):
+        calls.append(mode)
+        if len(calls) < 3:
+            raise OSError(errno.EDEADLK, "Resource deadlock avoided")
+
+    monkeypatch.setitem(sys.modules, "msvcrt", types.SimpleNamespace(LK_NBLCK=2, locking=locking))
+    monkeypatch.setattr(queue.time, "sleep", lambda s: None)
+    queue.nt_lock(5, True)
+    assert calls == [2, 2, 2]
+
+
+def test_nt_lock_without_wait_fails_at_once(monkeypatch):
+    import errno
+
+    def locking(fd, mode, n):
+        raise OSError(errno.EACCES, "locked")
+
+    monkeypatch.setitem(sys.modules, "msvcrt", types.SimpleNamespace(LK_NBLCK=2, locking=locking))
+    with pytest.raises(OSError):
+        queue.nt_lock(5, False)

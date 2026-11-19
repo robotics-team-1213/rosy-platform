@@ -78,6 +78,7 @@ sys.path.insert(0, str(TOOLS))
 import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a handle still holds)
 import urgent_lane  # noqa: E402  (D-1038: evidence for urgent/ PRs)
 import publish_evidence  # noqa: E402  (canonical plan and exact executed proof)
+import publish_scope  # noqa: E402  (D-1036 addendum: app-only deltas need only their app's evidence)
 SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(SCANNER))
 import secret_scan  # noqa: E402  (the one repository secret scanner: tokens, keys, PSKs, SHA-256 rows)
@@ -156,16 +157,30 @@ def green_full(repo: Path, sha: str) -> bool:
             and publish_evidence.qualified(sys.modules[__name__], repo, sha, record))
 
 
+def green(repo: Path, sha: str) -> bool:
+    """A green FULL record, or (D-1036 addendum) clean evidence for an app-only delta."""
+    return green_full(repo, sha) or publish_scope.check(sys.modules[__name__], repo, sha)[0]
+
+
+SCOPE: dict[str, str] = {}  # sha -> its "apps= mode= required= evidenced=" line, for the publish output
+
+
 def publish_sha(repo: Path) -> str | None:
     seen = known = 0
-    for sha in git(repo, "rev-list", "--topo-order", "--ancestry-path", "origin/main..main").stdout.split():
+    for n, sha in enumerate(git(repo, "rev-list", "--topo-order", "--ancestry-path", "origin/main..main").stdout.split()):
         record = land_record.read(repo, sha)
-        if record is None:
-            continue
-        seen += 1
-        known += tier(record) is not None
-        if green_full(repo, sha):  # pushed through its own hook copy, so a hook edit on main never blocks it
-            return sha
+        if record is not None:
+            seen += 1
+            known += tier(record) is not None
+            if green_full(repo, sha):  # pushed through its own hook copy, so a hook edit on main never blocks it
+                return sha
+        if n < publish_scope.SCOPED_TRIES:
+            ok, line = publish_scope.check(sys.modules[__name__], repo, sha)
+            if line:
+                print(f"[publish] scope {line}", file=sys.stderr)
+            if ok:
+                SCOPE[sha] = line
+                return sha
     if seen and not known:
         raise Stop(8, f"{seen} land record(s) past origin/main, none with a known format (tier field or"
                       " invocations): fix publish_main.tier before publishing")
@@ -314,6 +329,7 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     scanned = secret_gate(repo, sha)
     branch = PREFIX + now.strftime("%Y%m%d-%H")
     why = f"forced: {args.force_blocked}" if args.force_blocked else f"last publish {when}"
+    why += f"; scope {SCOPE[sha]}" if sha in SCOPE else ""
     if not args.apply:
         return f"dry run: would push {sha} to {branch} and open a PR ({why}; {scanned}); rerun with --apply"
     if json.loads(run_gh(repo, "pr", "list", "--state", "open", "--search", f"head:{PREFIX}",
@@ -357,7 +373,7 @@ def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime) -> str:
     if view["state"] != "OPEN" or not (view["headRefName"].startswith(PREFIX) or urgent):
         raise Stop(1, f"PR {pr} is not an open {PREFIX} or {urgent_lane.PREFIX} PR ({view['state']} {view['headRefName']})")
     # D-1038: an urgent PR's FULL land record is replaced by its remote affected + mapped-browser evidence file.
-    if not (urgent_lane.verified(repo, head) if urgent else green_full(repo, head)):
+    if not (urgent_lane.verified(repo, head) if urgent else green(repo, head)):
         raise Stop(1, f"PR {pr} head {head[:10]} has no green {'urgent evidence' if urgent else 'FULL land record'}"
                       " here; not merging")
     if view["mergeable"] == "CONFLICTING" or view["mergeStateStatus"] in ("DIRTY", "BEHIND"):
