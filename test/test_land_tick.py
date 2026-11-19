@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -11,6 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
+import pytest  # noqa: E402
+
+import land_queue  # noqa: E402
 import land_tick  # noqa: E402
 import memory_history  # noqa: E402
 
@@ -199,3 +204,94 @@ def test_metrics_line_is_written_once_per_day(tmp_path):
     assert land_tick.metrics(tmp_path, now + 3600) is None  # already written today
     assert json.loads((tmp_path / land_tick.METRICS_LOG).read_text().splitlines()[-1])["deadline_releases"] == 1
     assert land_tick.metrics(tmp_path, now + 25 * 3600)
+
+
+def _git(cwd: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, check=True).stdout.strip()
+
+
+@pytest.fixture
+def pending_repo(tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    _git(work, "init", "-q", "-b", "main")
+    _git(work, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
+    _git(work, "checkout", "-q", "-b", "feat/x")
+    return work
+
+
+def _tick(monkeypatch, launched, full=None, holders=()):
+    monkeypatch.setattr(land_tick.land_queue, "full", lambda qdir, lane="": full)
+    monkeypatch.setattr(land_tick.land_async, "holders", lambda pending_repo, branch: list(holders))
+    monkeypatch.setattr(land_tick.land_async, "detach", lambda argv, log, cwd=None: launched.append(argv))
+
+
+def _kept(pending_repo):
+    return sorted(land_queue.queue_dir(pending_repo).glob("pending-*.json"))
+
+
+def test_not_queued_request_leaves_one_pending_request(pending_repo):
+    said = land_queue.keep_pending(pending_repo, ["--tests", "auto"])
+    land_queue.keep_pending(pending_repo, ["--tests", "auto"])  # the same branch again supersedes, not duplicates
+    (path,) = _kept(pending_repo)
+    row = json.loads(path.read_text(encoding="utf-8"))
+    assert str(path) in said
+    assert (row["branch"], row["args"], row["cwd"]) == ("feat/x", ["--tests", "auto"], str(pending_repo))
+    assert row["ref"] == _git(pending_repo, "rev-parse", "feat/x")
+
+
+def test_pending_request_is_launched_once_when_the_queue_has_room(pending_repo, monkeypatch):
+    land_queue.keep_pending(pending_repo, ["--tests", "auto"])
+    launched = []
+    _tick(monkeypatch, launched)
+    assert land_tick.requeue(pending_repo) == "relaunched pending feat/x"
+    assert len(launched) == 1 and launched[0][-4:] == ["--branch", "feat/x", "--tests", "auto"][-4:]
+    assert not _kept(pending_repo)
+
+
+def test_pending_request_is_kept_while_the_queue_is_full(pending_repo, monkeypatch):
+    land_queue.keep_pending(pending_repo, [])
+    launched = []
+    _tick(monkeypatch, launched, full="landing queue full (12/12 tickets)")
+    assert land_tick.requeue(pending_repo) == "queue full"
+    assert not launched and len(_kept(pending_repo)) == 1
+
+
+def test_pending_request_is_dropped_when_the_branch_already_lands(pending_repo, monkeypatch):
+    land_queue.keep_pending(pending_repo, [])
+    launched = []
+    _tick(monkeypatch, launched, holders=[{"ticket": "0001"}])
+    land_tick.requeue(pending_repo)
+    assert not launched and not _kept(pending_repo)
+
+
+def test_pending_request_is_dropped_when_the_branch_moved_past_it(pending_repo, monkeypatch):
+    land_queue.keep_pending(pending_repo, [])
+    _git(pending_repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "newer")
+    launched = []
+    _tick(monkeypatch, launched)
+    land_tick.requeue(pending_repo)
+    assert not launched and not _kept(pending_repo)
+
+
+def test_pending_requests_are_requeued_oldest_first_one_per_tick(pending_repo, monkeypatch):
+    _git(pending_repo, "checkout", "-q", "-b", "feat/y")
+    land_queue.keep_pending(pending_repo, [])
+    time.sleep(0.01)  # Windows time.time() resolution: keep the start stamps apart (else names order feat/x first)
+    _git(pending_repo, "checkout", "-q", "feat/x")
+    land_queue.keep_pending(pending_repo, [])
+    launched = []
+    _tick(monkeypatch, launched)
+    assert land_tick.requeue(pending_repo) == "relaunched pending feat/y"  # kept earlier, though y sorts after x
+    assert len(launched) == 1 and launched[0][-2:] == ["--branch", "feat/y"]
+    assert land_tick.requeue(pending_repo) == "relaunched pending feat/x"  # at most one launch per tick
+    assert not _kept(pending_repo)
+
+
+def test_pending_request_file_that_is_unreadable_is_cleaned(pending_repo, monkeypatch):
+    land_queue.keep_pending(pending_repo, [])
+    path = _kept(pending_repo)[0]
+    path.write_text("{oops", encoding="utf-8")
+    launched = []
+    _tick(monkeypatch, launched)
+    assert land_tick.requeue(pending_repo) == "nothing to requeue" and not path.exists() and not launched
