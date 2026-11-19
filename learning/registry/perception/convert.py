@@ -50,7 +50,7 @@ for _p in (Path(__file__).resolve().parents[3] / 'learning/training/perception',
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from perception_runtime.perception.learned.manifest import (  # noqa: E402
+from core_common.perception_model import (  # noqa: E402
     LAYOUTS, OBJECT_CLASSES, OBJECT_ROLE, SCHEMA, TASKS, load_manifest, verify_files)
 
 PARITY_TOLERANCE = 1e-3

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from perception_runtime.perception.learned.manifest import (
+from core_common.perception_model import (
     ManifestError,
     ROLES,
     load_manifest,
@@ -163,7 +163,7 @@ def test_model_revision_must_be_path_safe(tmp_path, rev):
 
 
 def test_check_revision_is_the_shared_rule():
-    from perception_runtime.perception.learned.manifest import check_revision
+    from core_common.perception_model import check_revision
     assert check_revision("lane-seg-20260930-abcdef12") == "lane-seg-20260930-abcdef12"
     with pytest.raises(ManifestError):
         check_revision("a b")
@@ -176,3 +176,11 @@ def test_model_version_is_optional_and_parsed(tmp_path):
     for bad in ("v13.1.0", "13.1.00", 13, "v13.1.00; x"):
         with pytest.raises(ManifestError, match="model_version"):
             load_manifest(_write(tmp_path, _manifest(model_version=bad)))
+
+
+def test_legacy_manifest_module_reexports_core_common():
+    """Robot nodes and older tools still import perception_runtime...learned.manifest."""
+    from core_common import perception_model
+    from perception_runtime.perception.learned import manifest as legacy
+    for name in ("ManifestError", "ClassSpec", "InputSpec", "TASKS", "OBJECT_CLASSES", "load_manifest", "verify_files"):
+        assert getattr(legacy, name) is getattr(perception_model, name)

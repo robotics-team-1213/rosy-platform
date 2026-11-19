@@ -11,7 +11,7 @@ from perception_runtime.perception.learned.lane_mask import (
     lane_evidence,
     preprocess,
 )
-from perception_runtime.perception.learned.manifest import ClassSpec, InputSpec
+from core_common.perception_model import ClassSpec, InputSpec
 
 CLASSES = (ClassSpec(0, "floor", "background"), ClassSpec(1, "line", "lane_marking"))
 SPEC = InputSpec((1, 3, 240, 320), "rgb", 1 / 255, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
