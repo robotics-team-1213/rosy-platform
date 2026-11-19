@@ -998,6 +998,25 @@ def test_the_freed_slot_is_reserved_for_the_oldest_waiter_not_a_newcomer(tmp_pat
     assert str(tmp_path / "mid") not in tool._room().taken and str(tmp_path / "new") not in tool._room().taken
 
 
+def test_a_full_ordinary_lane_does_not_hold_the_open_tooling_lane(tmp_path, monkeypatch):
+    queue = _fifo_queue(monkeypatch, tmp_path, [])
+    room = tool._room()
+    monkeypatch.setattr(queue, "lane_of", lambda tree: "" if tree.name == "ordinary" else "tooling")
+    monkeypatch.setattr(queue, "full", lambda qdir, lane="": "landing queue full" if not lane else None)
+    ordinary = tmp_path / "ordinary"
+    tooling = tmp_path / "tooling"
+    later = tmp_path / "tooling-later"
+    old_wait = ordinary.with_suffix(".roomwait")
+    old_tool_wait = tooling.with_suffix(".roomwait")
+    old_wait.write_text("1000", encoding="utf-8")
+    old_tool_wait.write_text("2000", encoding="utf-8")
+
+    assert not room.reserve_now(later, queue, later.with_suffix(".roomwait"), "3000")
+    assert room.reserve_now(tooling, queue, old_tool_wait, "2000")
+    assert old_wait.exists()
+    assert not old_tool_wait.exists()
+
+
 def test_land_py_starts_only_with_a_reservation_and_a_full_queue_never_launches_it(repo, monkeypatch):
     main, dev = repo
     q = tool._queue()
