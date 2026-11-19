@@ -4895,6 +4895,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: native systemd·rosy-face 원격 계약 시험 결과는 이 브랜치 검증에 기록한다.
 - gate 변화: 없음. ARM64·장치 LED 수용은 별도다.
 
+## 2026-11-14 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 스위치
+- 변경: `rosy-navigation.service`가 `enable_loc_assist:=${ROSY_ENABLE_LOC_ASSIST}`를 넘긴다(유닛 기본 false, `runtime.env`가 이긴다). 템플릿 `rosy-runtime.env`에 `ROSY_ENABLE_LOC_ASSIST=false`. 실물 Pinky는 `loc_assist_node`를 한 번도 띄우지 않아 `localization/state` 발행자가 없었고, 그래서 CORE `state.localization`이 늘 null이었다(rosy_45, 178).
+- 증거: 원격 `test/test_pinky_loc_assist_switch.py`·`test_image_customization_contract.py`·`test_device_surface_contract.py`·`test_bringup_motor_contracts.py` 140 통과.
+- gate 변화: SOURCE. 기본은 꺼짐. 켠 기체의 LOCALIZED는 D-395 결정 흐름이 필요하다(실물 미실시).
+
+
 ## 2026-11-16 · uncommitted · fix(deploy): 천장 카메라 자동 트랙 보정 10분 주기 안정화 파이프라인 연결
 - 변경: `deploy/site/rosy-auto-track-calibration`의 승인 쿨다운(`MIN_APPROVAL_INTERVAL_S`)을 6시간에서 10분(`600s`)으로 조정하고, `deploy/site/host-state/rosy-auto-track-calibration.timer` 주기를 2분(`OnUnitActiveSec=2min`, 5회 일관성 창 = 10분)으로 맞춰 트랙·카메라 변동 시 10분 주기로 자동 조정되도록 연결했다.
 - 증거: `test/test_auto_track_calibration.py` 원격 pytest 및 `rosy-fleet-r` 실호스트 적용 확인.
@@ -4955,6 +4961,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 판정을 `cell_remap_jaws.py`로 옮기고(`cell_jaw_side`가 다시 내보냄) 세 단계로 한다. (1) 두 blob만 본 점이 한 줄이 아닌 3개 이상이면 그 가운데로 지도를 맞추고 각 표시를 지도가 더 가깝게 놓는 집게로 정한다(두 집게까지 거리 차가 pivot.side_agree_mm 이하면 거절). (2) 아니면 12개 이하는 기존 전수 탐색. (3) 12개 초과면 짝 점과 가장 퍼진 점으로 12개 기준을 골라 전수 탐색으로 지도를 얻고 (1)의 가까운 집게 규칙으로 전체를 정한다. 그 뒤 전체로 다시 맞춘다. 거절 조건과 consensus·LOO는 그대로다.
 - 증거: 17:47 실물 14점 재생은 anchored 경로, 14점 모두 other, 짝 3, rms 1.95 mm(다음 조합 12.77), consensus 14/14, LOO max 8.3 / mean 3.99 mm. 이 지도로 17:00 pallet pivot을 재생하면 bias (-0.9, -4.1) = 4.2 mm(자유 g, rms 3.3) / 5.1 mm(tcp 기하). 11-15 22:25 8점은 pairs 경로로 전과 같은 판정(rms 3.06, LOO 9.6 / 4.37). 옛 한 집게 지도는 29.8 mm.
 - gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 기본 켬
+- 변경: `rosy-navigation.service`와 템플릿 `rosy-runtime.env`의 `ROSY_ENABLE_LOC_ASSIST` 기본값을 true로(사용자 결정 2026-11-18 "위치 보조도 켜"). 기체의 runtime.env가 false면 그 값이 이긴다.
+- 증거: 원격 `test/test_pinky_loc_assist_switch.py`.
+- gate 변화: SOURCE. 실물 LOCALIZED는 서명 릴리스 뒤 D-395 결정 흐름으로 확인한다.
 
 ## 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
 - 변경: `rosy_site_autoupdate.py`에 `hold --until-contains <sha> [<sha>...]` 추가. 매 실행마다 다음 설치 대상 signed 후보가 대기 sha 전부를 조상으로 두는지 이미 읽는 GitHub compare 증명(`is_newer`와 같은 판정)으로 확인하고, 증명되면 `hold-cleared` 로그와 함께 홀드가 저절로 풀리고 정상 설치 경로로 진행한다. 증명 못 함·후보 없음·네트워크 오류는 홀드 유지(fail closed). `site_update_io.py`의 `set_hold`·`load_update_state`에 `until_contains` 필드(1..8개 40-hex sha) 검증 추가, 옛 홀드 파일은 그대로 파싱. dry run은 홀드를 소비하지 않는다. README 자동 갱신 절에 사용법 문서화.

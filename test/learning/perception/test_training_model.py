@@ -225,7 +225,7 @@ def _frame_folder(root, image, mask, classes=CLASSES):
 ])
 def test_dataset_matches_robot_preprocess_exactly(tmp_path, pre):
     from perception_runtime.perception.learned.lane_mask import preprocess
-    from perception_runtime.perception.learned.manifest import InputSpec
+    from core_common.perception_model import InputSpec
 
     image = np.random.default_rng(3).integers(0, 256, (480, 640, 3), dtype=np.uint8)
     root = _frame_folder(tmp_path / "ds", image, np.zeros((480, 640), np.uint8))

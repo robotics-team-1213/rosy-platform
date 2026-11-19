@@ -13,7 +13,7 @@ for holder in ('learning/registry/perception', 'middleware/perception', 'integra
         sys.path.insert(0, path)
 
 from perception_runtime.perception.learned.lane_mask import preprocess
-from perception_runtime.perception.learned.manifest import ManifestError, validate_label_semantic
+from core_common.perception_model import ManifestError, validate_label_semantic
 from intake_dataset import EvalSetError, _verified_manifest, _sessions
 from intake_eval_gate import evaluation_semantics
 

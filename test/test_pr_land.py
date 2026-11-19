@@ -45,6 +45,30 @@ def test_dry_run_skips_push_and_gh(monkeypatch, tmp_path, capsys):
     assert not any(c[0] == "gh" or (c[0] == "git" and c[1] == "push") for c in calls)
 
 
+def test_enqueues_only_the_verified_head(monkeypatch, tmp_path):
+    head = "a" * 40
+    calls = []
+
+    def fake_run(cmd, cwd, env=None, check=True):
+        calls.append(cmd)
+        if cmd[:2] == ["git", "rev-parse"]:
+            return "fix/topic" if "--abbrev-ref" in cmd else head
+        if cmd[:2] in (["git", "status"], ["git", "push"]):
+            return ""
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return '[{"number": 42}]'
+        if cmd[:4] == ["gh", "pr", "merge", "42"]:
+            return ""
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(pr_land, "_run", fake_run)
+    monkeypatch.setattr(pr_land, "check_coexistence", lambda *a, **kw: "origin/main")
+    monkeypatch.setattr(pr_land, "required_lab_invocations", lambda *a: [])
+
+    assert pr_land.main(["--title", "Test"], repo=tmp_path) == 0
+    assert ["gh", "pr", "merge", "42", "--auto", "--merge", "--match-head-commit", head] in calls
+
+
 def test_refuses_publish_only_clone_per_d868(monkeypatch, tmp_path):
     monkeypatch.setattr(
         pr_land,

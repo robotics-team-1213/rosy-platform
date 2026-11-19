@@ -4,12 +4,16 @@
                 --site-url URL (--site-ca-file CA | --site-insecure) --peer-check-ok "EVIDENCE"
                 --bay-verdict VERDICT.json --dock-id bay_c2 [--remove-dock]
 
-Steps: preflight (identity, battery unplugged, update hold, a bay verdict that names the bay and says
+Steps: preflight (identity, battery unplugged, NO update hold yet, a bay verdict that names the bay and says
 the robot stands inside the bay line, rear toward the bay, no cable) -> approval_refresh (only when the
-navigation approval is not valid for the current release, D-985) -> navigation_start (LOCALIZED) ->
-line_view (dock/observation over SSH; the bay line, not only the aisle line) -> dock_register (SLAM
-origin moves with every navigation restart, so every run registers) -> dock (watch, cancel at 180 s).
-Every abort names its step; cleanup cancels the dock/approval, zeroes teleop, IDLE, releases the hold.
+navigation approval is not valid for the current release, D-985; the approval refuses to measure under an
+update hold) -> hold -> os_update_guard (an old image's rosy-os-update.timer stops navigation every minute and
+the update hold does not stop it: stop the timer for the run, restore it in cleanup) -> navigation_start
+(LOCALIZED) -> line_view (dock/observation over SSH; the bay line, not only the aisle line) -> dock_register
+(SLAM origin moves with every navigation restart, so every run registers) -> leave_bay (a start at the stop
+face first drives straight out, then back in) -> dock (watch, cancel at 180 s); --cycles N repeats leave_bay +
+dock. Every abort names its step; cleanup cancels the dock/approval, zeroes teleop, restores the timer, IDLE,
+releases the hold.
 Raw evidence stays in the evidence dir (default $ROSY_SCRATCH/device-test/); no robot or Fleet is
 touched by importing this module.
 """
@@ -60,8 +64,14 @@ DOCK_END = ("DOCKED", "DOCK_FAILED", "UNDOCKED")
 SECTORS = ("front", "front-left", "left", "rear-left", "rear", "rear-right", "right", "front-right")
 BAY_TYPE = {"name": "bay_line_c", "detector": "camera_line", "approach": "line", "staging_offset_m": 0.32,
             "max_retries": 1}
-OBS_CMD = (". /opt/ros/*/setup.bash 2>/dev/null; t=$(ros2 topic list 2>/dev/null | grep -m1 /dock/observation); "
-           "[ -n \"$t\" ] && timeout 20 ros2 topic echo --field data \"$t\" 2>/dev/null")
+# rosy runs as a plain user: the topics need the robot's ROS_DOMAIN_ID etc. from runtime.env (sudo -n, as the updater does)
+OBS_CMD = ("sudo -n bash -c 'set -a; . /etc/rosy/runtime.env; set +a; . /opt/ros/jazzy/setup.bash 2>/dev/null; "
+           "t=$(ros2 topic list 2>/dev/null | grep -m1 /dock/observation); "
+           "[ -n \"$t\" ] && timeout 20 ros2 topic echo --field data \"$t\" 2>/dev/null'")
+TIMER = "rosy-os-update.timer"
+DOCKED_ALONG_M = 0.05                   # stop face -> base_link when seated (bay_phases DOCKED_ALONG)
+EXIT_ALONG_M = 0.12                     # a bay line this close behind: the robot sits at the stop face
+EXIT_SPEED, EXIT_FRONT_GAP_M = 0.05, 0.15
 
 
 # --- pure helpers ---------------------------------------------------------------------------
@@ -82,8 +92,9 @@ def summarize_observations(obs, min_n=MIN_OBS, max_diff_deg=MAX_LINE_DIFF_DEG):
     """Medians of the bay line (lateral_measured true, A) and the aisle line (false, X). ok False + reason
     when the robot cannot register a dock from what it sees."""
     vis = [o for o in obs if o.get("visible") and all(isinstance(o.get(k), (int, float)) for k in ("x", "y", "yaw"))]
-    a = [o for o in vis if o.get("lateral_measured") is True]
-    x = [o for o in vis if o.get("lateral_measured") is False]
+    # A missing key reads as measured, like feed.py (the observer only adds the key for the aisle-only view).
+    a = [o for o in vis if o.get("lateral_measured", True) is not False]
+    x = [o for o in vis if o.get("lateral_measured", True) is False]
     s = {"frames": len(obs), "visible": len(vis), "bay_line": len(a), "aisle_line": len(x), "ok": False,
          "reason": None, "median": None, "errors": None, "aisle_median": None, "line_diff_deg": None}
     if len(vis) < min_n:
@@ -158,8 +169,8 @@ class BayDock(_load_run()):
     def __init__(self, robot, args, evidence):
         super().__init__(robot, {"topic": "bay-dock", "overlay_path": OVERLAY_PATH, "overlay": {}}, args, evidence)
         self.step = "start"
-        self.measuring = self.dock_active = False
-        self.summary.update(bay_dock={"dock_id": args.dock_id}, trials=[])
+        self.measuring = self.dock_active = self.timer_stopped = self.timer_was_active = False
+        self.summary.update(bay_dock={"dock_id": args.dock_id}, trials=[], cycles=[])
 
     def post(self, path, body=None, timeout=3.0):
         return self.r.core.call("POST", path, {} if body is None else body, timeout=timeout)
@@ -201,9 +212,11 @@ class BayDock(_load_run()):
         except (OSError, ValueError) as exc:
             raise Abort(f"bay verdict: {exc}") from exc
         self.summary["bay_dock"]["bay_id"] = verdict["bay_id"]
+        # The approval refuses to measure under an update hold, so the hold comes after it (step "hold").
+        if self.hold_state() != "none":
+            raise Abort("preflight: an update hold is already on the robot (an earlier run? use run.py --restore)")
         self.phase("preflight", battery_percent=pct, pose=st.get("pose"), bay_id=verdict["bay_id"],
                    judged_by=verdict["judged_by"])
-        self.hold()
 
     # 2
     def refresh_approval(self):
@@ -283,6 +296,22 @@ class BayDock(_load_run()):
         if cause == "button_release":
             self.post("/navigation/approval/trial/stop")
 
+    # 2c
+    def os_update_guard(self):
+        """The update hold is the D-412 updater's; rosy-os-update.timer is another unit. An image that still has the
+        poll unit wanting rosy-io has navigation stopped every minute, so the timer is stopped for the run."""
+        if not self.get("/navigation/approval").get("os_update_stops_navigation"):
+            self.phase("os_update_guard", needed=False)
+            return
+        rc, out = self.sh(f"systemctl is-active {TIMER}")
+        self.timer_was_active = out.strip() == "active"
+        if self.timer_was_active:
+            self.timer_stopped = True        # before the stop: a half-done stop is still restored
+            rc, out = self.sh(f"sudo -n systemctl stop {TIMER}")
+            if rc != 0:
+                raise Abort(f"stopping {TIMER} -> rc {rc}: {out.strip()[:200]}")
+        self.phase("os_update_guard", needed=True, timer_was_active=self.timer_was_active)
+
     # 3
     def navigation_start(self):
         s, b = self.post("/navigation/approval/navigation-start", timeout=10.0)
@@ -336,8 +365,46 @@ class BayDock(_load_run()):
         self.summary["bay_dock"]["registered"] = pose
         self.phase("dock_register", dock=self.args.dock_id, **{k: round(v, 4) for k, v in pose.items()})
 
+    # 5b
+    def leave_bay(self, along=None):
+        """Seated at the stop face (the bay line is within EXIT_ALONG_M behind): drive straight out to the staging
+        distance (teleop MANUAL, 0.05 m/s, LiDAR front gap checked every step), then dock comes back in."""
+        if along is None:
+            along = ((self.summary.get("observation") or {}).get("errors") or {}).get("along")
+        if along is None or not 0.0 <= along < EXIT_ALONG_M:
+            self.phase("leave_bay", skipped=True, along=along)
+            return
+        need = BAY_TYPE["staging_offset_m"] - along + 0.02
+        start = self.get("/robot/state").get("pose")
+        if not isinstance(start, dict):
+            raise Abort("leave_bay: pose unknown")
+        s, b = self.post("/mode", {"mode": "MANUAL"})
+        if s != 200:
+            raise Abort(f"leave_bay: MANUAL -> {s} {json.dumps(b)[:200]}")
+        t0, moved = self.r.now(), 0.0
+        while moved < need:
+            if self.r.now() - t0 > 2.0 * need / EXIT_SPEED + 3.0:
+                raise Abort(f"leave_bay: moved {moved:.2f} of {need:.2f} m in time")
+            s, scan = self.r.core.call("GET", "/sensors/lidar")
+            near = sectors(scan) if s == 200 and isinstance(scan, dict) else {}
+            if not near:
+                raise Abort("leave_bay: no LiDAR returns (blind): not driving")
+            if near.get("front", 9.0) < EXIT_FRONT_GAP_M:
+                raise Abort(f"leave_bay: something {near['front']} m in front")
+            s, b = self.post("/teleop", {"linear": EXIT_SPEED, "angular": 0.0})
+            if s != 200:
+                raise Abort(f"leave_bay: teleop -> {s}")
+            self.r.sleep(0.2)
+            pose = self.get("/robot/state").get("pose")
+            if not isinstance(pose, dict):
+                raise Abort("leave_bay: pose lost")
+            moved = math.hypot(pose["x"] - start["x"], pose["y"] - start["y"])
+        self.post("/teleop", {"linear": 0.0, "angular": 0.0})
+        self.post("/mode", {"mode": "IDLE"})
+        self.phase("leave_bay", moved=round(moved, 3), along=round(along, 3))
+
     # 6
-    def dock(self):
+    def dock(self, cycle=1):
         s, b = self.post("/docking/dock", {"dock": self.args.dock_id,
                                            "correlation_id": f"bay-dock-{int(self.r.now())}"})
         if s != 200:
@@ -356,12 +423,22 @@ class BayDock(_load_run()):
                 break
             self.r.sleep(0.5)
         self.summary["bay_dock"].update(transitions=seen, final=final)
-        self.phase("dock", final=final, transitions=len(seen))
+        self.summary["cycles"].append({"cycle": cycle, "final": final, "seconds": round(self.r.now() - t0, 1),
+                                       "transitions": seen})
+        self.phase("dock", cycle=cycle, final=final, transitions=len(seen))
         if final is None:
             raise Abort(f"dock still running after {DOCK_TIMEOUT_S:.0f} s: cancelled")
         if final == "DOCKED":
             self.dock_active = False
         return final
+
+    def restore_timer(self):
+        rc, out = self.sh(f"sudo -n systemctl start {TIMER}")
+        _, now = self.sh(f"systemctl is-active {TIMER}")
+        if rc != 0 or now.strip() != "active":
+            raise Abort(f"{TIMER} not active after start (rc {rc}, {now.strip()!r}): start it by hand")
+        self.timer_stopped = False
+        return (200, None)
 
     def undo_motion(self):
         """Before the base cleanup: every step runs; the base cleanup then does IDLE and the hold."""
@@ -370,7 +447,10 @@ class BayDock(_load_run()):
             steps.append(("dock cancel", lambda: self.post("/docking/cancel")))
         if self.measuring:
             steps.append(("approval cancel", lambda: self.post("/navigation/approval/cancel")))
+            steps.append(("IDLE", lambda: self.post("/mode", {"mode": "IDLE"})))      # before the hold the base cleanup does not
         steps.append(("teleop 0", lambda: self.post("/teleop", {"linear": 0.0, "angular": 0.0})))
+        if self.timer_stopped:
+            steps.append((f"{TIMER} restore", self.restore_timer))
         for name, fn in steps:
             try:
                 status = fn()[0]
@@ -385,9 +465,17 @@ class BayDock(_load_run()):
         previous = signal.signal(signal.SIGTERM, _sigterm)
         code, final = 2, None
         try:
-            for name in ("preflight", "refresh_approval", "navigation_start", "line_view", "dock_register", "dock"):
+            for name in ("preflight", "refresh_approval", "hold", "os_update_guard", "navigation_start", "line_view",
+                         "dock_register", "leave_bay", "dock"):
                 self.step = name
                 final = getattr(self, name)()
+            for cycle in range(2, self.args.cycles + 1):
+                if final != "DOCKED":
+                    break
+                self.step = f"leave_bay#{cycle}"
+                self.leave_bay(DOCKED_ALONG_M)
+                self.step = f"dock#{cycle}"
+                final = self.dock(cycle)
             self.summary["outcome"] = f"completed ({final})"
             code = 0 if final == "DOCKED" else 1
         except BaseException as exc:   # noqa: B036 - Ctrl-C/SIGTERM end in cleanup too
@@ -395,8 +483,9 @@ class BayDock(_load_run()):
             log("ABORT", self.summary["outcome"])
         finally:
             signal.signal(signal.SIGTERM, previous)
+            if self.held or self.measuring or self.dock_active or self.timer_stopped:
+                self.undo_motion()           # the approval and the dock are ours before the hold too
             if self.held:
-                self.undo_motion()
                 self.cleanup()
             if self.summary["errors"]:
                 self.summary["outcome"] = f"CLEANUP FAILED ({self.summary['outcome']})"
@@ -425,10 +514,16 @@ def main(argv=None, robot=None):
     ap.add_argument("--bay-verdict", required=True, help="JSON: bay_id, judged_by, in_bay_line, rear_toward_bay, cable_absent")
     ap.add_argument("--dock-id", required=True)
     ap.add_argument("--remove-dock", action="store_true", help="delete the dock record when the run ends")
+    ap.add_argument("--cycles", type=int, default=1, help="dock this many times (leave the bay, dock again)")
+    ap.add_argument("--tls-host", help="certificate name for --host (an address); default <robot>.local")
     ap.add_argument("--evidence-dir")
     ap.add_argument("--summary-dir")
     args = ap.parse_args(argv)
     args.host = args.host or f"{args.robot}.local"
+    if args.cycles < 1:
+        ap.error("--cycles must be at least 1")
+    # .local does not resolve on every laptop: --host may be an address; the TLS name stays the robot's.
+    args.tls_host = args.tls_host or (f"{args.robot}.local" if args.host != f"{args.robot}.local" else None)
     if robot is None and (not args.token_file or not (args.ca_file or args.insecure)):
         ap.error("pass --token-file (or ROSY_CORE_OPERATOR_TOKEN_FILE) and --ca-file or --insecure")
     stamp = dt.datetime.now().strftime("%Y-%m-%d")

@@ -14,7 +14,7 @@ if str(TRAINING) not in sys.path:
 
 import export_cell  # noqa: E402
 import publish  # noqa: E402
-from perception_runtime.perception.learned.manifest import (  # noqa: E402
+from core_common.perception_model import (  # noqa: E402
     ManifestError, load_manifest, verify_files)
 
 CLASSES = [("background", "background"), ("lane", "lane_marking"),
@@ -298,7 +298,7 @@ def test_stage_keeps_session_prefixed_names_without_double_prefix(tmp_path):
 
 
 def test_export_roles_match_the_robot_contract_including_wall(tmp_path):
-    from perception_runtime.perception.learned.manifest import ROLES
+    from core_common.perception_model import ROLES
     assert export_cell.ROLES == ROLES and "wall" in ROLES
     _, doc = _write(tmp_path, classes=CLASSES + [("wall", "wall")])
     assert doc["output"]["classes"][-1] == {"index": 4, "name": "wall", "role": "wall"}

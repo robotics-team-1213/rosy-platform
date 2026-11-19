@@ -43,10 +43,10 @@ for _p in (_SENSING, ROOT / 'integrations/perception', _FOUNDATION, ROOT / 'lear
 
 from perception_runtime.perception.lane import detect_lane_error  # noqa: E402
 from perception_runtime.perception.learned.lane_mask import NonFiniteLogits, preprocess  # noqa: E402
-from perception_runtime.perception.learned.manifest import (  # noqa: E402
+from core_common.perception_model import (  # noqa: E402
     ManifestError, load_manifest, verify_files, validate_label_semantic)
 from perception_runtime.perception.learned.detector import ObjectDetModel  # noqa: E402
-from perception_runtime.perception.learned.manifest import TASKS  # noqa: E402
+from core_common.perception_model import TASKS  # noqa: E402
 from perception_runtime.perception.learned.runner import LaneSegModel  # noqa: E402
 
 from intake_eval_gate import (_number, compare_to_champion, judge_eval, _eval_gate_error,  # noqa: E402
