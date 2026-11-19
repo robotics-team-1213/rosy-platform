@@ -11,9 +11,14 @@ against GitHub here.
 
 from __future__ import annotations
 
+import subprocess
+from collections import Counter
 from pathlib import Path
 
+import pytest
 import yaml
+
+from affected_repo import app_of
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = yaml.safe_load((ROOT / "tools" / "harness" / "platform_parts.yaml").read_text(encoding="utf-8"))
@@ -133,3 +138,43 @@ def test_signing_paths_stay_lead_only():
                     " (deploy/robot image lanes keep their §5.1 joint review)"
                 )
     assert bad == [], bad
+
+def test_every_root_and_subtree_names_a_known_app():
+    apps = MANIFEST["apps"]
+    assert len(apps) == len(set(apps)) and {"core", "repo"} <= set(apps), apps
+    subtrees = MANIFEST["app_subtrees"]
+    bad = [f"{r['path']}: {r.get('app')!r}" for r in MANIFEST["roots"] if r.get("app") not in apps]
+    bad += [f"{path}: {app!r}" for path, app in subtrees.items() if app not in apps or not (ROOT / path).is_dir()]
+    assert bad == [], bad
+    entries = [r["path"] for r in MANIFEST["roots"]] + list(subtrees)
+    # Unique entry paths make the deepest match unique, so every path has exactly one app.
+    assert len(entries) == len(set(entries)), "a path is either a root or an app subtree, once"
+
+
+def test_every_tracked_path_maps_to_exactly_one_app():
+    tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True,
+                             encoding="utf-8", check=True).stdout.splitlines()
+    counts = Counter(app_of(path, MANIFEST) for path in tracked)
+    assert set(counts) == set(MANIFEST["apps"]), f"apps without a tracked file or unknown apps: {counts}"
+
+
+def test_app_of_takes_the_deepest_entry_and_defaults_to_core():
+    parts = {"roots": [{"path": "deploy", "app": "core"}, {"path": "ops/fleet", "app": "site-fleet"}],
+             "app_subtrees": {"deploy/robot/omx": "omx-cell"}}
+    assert app_of("deploy/robot/omx/x.py", parts) == "omx-cell"
+    assert app_of("deploy/robot/omxy/x.py", parts) == "core"
+    assert app_of("ops/fleet/a/b.py", parts) == "site-fleet"
+    assert app_of("README.md", parts) == "core"
+
+
+@pytest.mark.parametrize(("path", "app"), [
+    # D-1036 addendum 2: gate code and shipped shared code stay core; never-deployed paths are repo.
+    ("tools/land.py", "core"), ("tools/publish_main.py", "core"), ("tools/urgent_lane.py", "core"),
+    ("tools/harness/platform_parts.yaml", "core"), ("tools/hooks/land_record.py", "core"),
+    (".github/workflows/ci.yml", "core"), ("tools/release/x.py", "core"), ("deploy/hosts/services.yaml", "core"),
+    ("tools/sim/omx_two_arm_world.py", "core"), ("test/flaky_quarantine.txt", "core"),
+    ("docs/adr/D-1036-publish-evidence-from-nightly-full.md", "repo"), ("test/conftest.py", "repo"),
+    ("test/architecture/test_capability_owners.py", "repo"), ("tools/remote/remote_pytest.py", "repo"),
+    ("test/learning/test_x.py", "learning")])
+def test_never_deployed_paths_are_repo_and_gates_stay_core(path, app):
+    assert app_of(path, MANIFEST) == app

@@ -33,6 +33,15 @@ def _under(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix.rstrip("/") + "/")
 
 
+def app_of(path: str, parts: dict) -> str:
+    """The app that owns `path` (2026-11-18 release split): its deepest ``platform_parts.yaml``
+    root or ``app_subtrees`` entry, else ``core`` (repository root files, uncovered folder notes)."""
+    entries = [(root["path"], root["app"]) for root in parts.get("roots") or []]
+    entries += list((parts.get("app_subtrees") or {}).items())
+    hits = [entry for entry in entries if _under(path, entry[0])]
+    return max(hits, key=lambda entry: len(entry[0]))[1] if hits else "core"
+
+
 def _git(repo: Path, *args: str) -> str:
     result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
                             encoding="utf-8", errors="replace")
