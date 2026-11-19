@@ -32,7 +32,11 @@ jobs:
     # 26.04 로 올렸다 — ubuntu-latest 의 강제 이동(10-19~11-19)보다 먼저 검증된
     # 전환이다. 되돌림은 이 기본값을 24.04 로 바꾸면 된다.
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
-    container: ros:jazzy-ros-base
+    container:
+      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:0000000000000000000000000000000000000000000000000000000000000000  # build-ci-image.yml prints the real digest; replace before merge
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
     # A lost runner otherwise holds the run for the 6 h default (run 38588670328 sat 45 min in an
     # install step). Measured scope: ~35 s. A publish PR's per-commit size rule walks its whole range
     # (#210: 3,145 commits, cancelled at 10 min on 2026-10-26), so the cap leaves room for that.
@@ -51,12 +55,8 @@ jobs:
       - name: Fix git safe directory (container)
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
-      - name: Install selector tools
-        run: |
-          # 11-19: archive/security.ubuntu.com refused GitHub runners for an hour (PR #247, 25 of 26 shards exit 100)
-          sed -i 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci-retries
-          apt-get update -qq
-          apt-get install -y -qq python3-yaml
+      - name: CI image readiness (selector tools)
+        run: python3 -c 'import yaml' && git --version
 
       # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
       # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
@@ -123,7 +123,11 @@ jobs:
     needs: scope
     name: test (${{ matrix.name }})
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
-    container: ros:jazzy-ros-base
+    container:
+      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:0000000000000000000000000000000000000000000000000000000000000000  # build-ci-image.yml prints the real digest; replace before merge
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
     # Longest entry on 2026-10-16: fleet-2of4, 751 s. A timeout is a failure, so ci-result fails.
     timeout-minutes: 25
     continue-on-error: ${{ !matrix.gating }}
@@ -141,70 +145,33 @@ jobs:
       - name: Fix git safe directory (container)
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
-      - name: Install colcon & tools
+      # The image (.github/ci-image/Dockerfile, build-ci-image.yml) carries the apt packages, the hash-locked
+      # device runtime, test tools, account OAuth, receiver crypto and Chromium. These asserts keep the old
+      # install steps' readiness checks, so a stale or wrong image fails here instead of deep in a suite.
+      - name: CI image readiness
+        shell: bash
         run: |
-          # 11-19: archive/security.ubuntu.com refused GitHub runners for an hour (PR #247, 25 of 26 shards exit 100)
-          sed -i 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci-retries
-          apt-get update -qq
-          # openssl: the release signing contract requires OpenSSL 3 raw Ed25519.
-          # Installed explicitly so a slimmer base image cannot silently remove it.
-          # python3-opencv: the lane live viewer (integrations/simulation/gazebo/scripts/lane_live_view.py)
-          # imports cv2 at module top; without the package the gz_sim step dies at
-          # collection and masks every later gate (main red since 650fad89, 2026-09-24).
-          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl openssh-client zstd python3-opencv python3-pil rauc=1.11.3-2 squashfs-tools ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs ros-jazzy-control-msgs ros-jazzy-controller-manager-msgs
-          # The isolated RAUC fixtures verify the exact package bytes. Use the same apt mirror as installation.
-          (cd /tmp && apt-get download -qq rauc=1.11.3-2)
-          echo "ROSY_TEST_RAUC_DEB=/tmp/rauc_1.11.3-2_$(dpkg --print-architecture).deb" >> "$GITHUB_ENV"
-          # --break-system-packages: ros:jazzy-ros-base 는 Ubuntu 24.04 / Python 3.12 라
-          # 시스템 환경이 PEP 668 로 표시되어 있다. 이 플래그가 없어 run 34474895940 이
-          # externally-managed-environment 로 40 초만에 죽었고, 그 아래 colcon build 부터
-          # 부팅 스모크까지 모든 ROS 검증이 한 번도 실행되지 않았다. venv 는 답이 아니다 —
-          # --system-site-packages 없이는 rclpy 를 잃고, 그러면 이 워크플로가 검증하려는
-          # 대상 자체가 사라진다. 컨테이너는 job 마다 버려지므로 시스템에 직접 깐다.
-          # D-189: CORE 런타임(pydantic 2·fastapi·starlette·uvicorn·websockets 와 그 폐포)은
-          # 이미지가 싣는 해시 고정 집합 그대로 깐다. 최신을 깔면 호스트 시험은 장치가 돌리지
-          # 않는 버전을 검증한다 — 2026.09.23-005 가 CI 녹색인 채 pydantic 1.10 으로 죽었다.
-          pip3 install --no-cache-dir --break-system-packages --ignore-installed \
-            --require-hashes --no-deps --only-binary=:all: -r deploy/robot/pinky_pro/image/device-python-requirements.txt
-          # 시험 도구는 그 뒤에, 고정 집합을 제약으로 깐다 — anyio·h11·idna·typing-extensions 가
-          # 두 벌 깔리지 않는다. 해시가 있는 파일을 제약으로 주면 pip 이 해시 모드로 바뀌므로
-          # name==version 줄만 뽑는다.
-          grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
-          pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
-            flake8 httpx==0.28.1 pyyaml jsonschema ext4 playwright==1.64.1
-          # playwright is pinned: 1.65.0 (released 2026-11-09) makes select_option and friends
-          # enforce the inert attribute, which turned the ui-confirm live-dialog browser contract
-          # tests red overnight with no commit involved. Upgrade deliberately, with those tests.
-          # Account authority imports oauthlib and joserfc at module top; installed-package and boundary
-          # tests start their own python3 (-I or a replaced PYTHONPATH), so it must be system-wide.
-          pip3 install --no-cache-dir --break-system-packages --no-deps oauthlib==4.0.0 joserfc==1.7.5
-          # Browser modules import the SDK during collection, even with browser tests disabled.
-          # Chromium stays scoped to the browser verification step below.
-
-      - name: Install receiver TLS verification runtime
-        run: |
-          # D-456: load the same hashlocked receiver crypto as the signed ARM payload.
-          # Explicit compatible platforms select the existing reviewed AMD64 wheel hashes.
-          pip3 install --no-cache-dir --break-system-packages \
-            --require-hashes --no-deps --only-binary=:all: \
-            --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
-            --target /tmp/rosy-receiver-crypto \
-            -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
-          # Offline core wheels need this site-pinned provider.
-          pip3 install --no-cache-dir --break-system-packages --no-deps \
-            --target /tmp/rosy-receiver-crypto joserfc==1.7.5
-          PYTHONPATH=/tmp/rosy-receiver-crypto python3 -c 'import cryptography; from cryptography.x509.verification import PolicyBuilder, Store; assert cryptography.__version__ == "50.0.0"'
-          echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          set -eo pipefail
+          command -v colcon openssl rauc zstd >/dev/null
+          test "$(dpkg-query -W -f='${Version}' rauc)" = 1.11.3-2
+          test -f "$ROSY_TEST_RAUC_DEB"
+          dpkg -s nodejs python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-nav2-msgs >/dev/null
+          python3 -c 'import flake8, httpx, yaml, jsonschema, ext4, playwright, oauthlib, joserfc; assert httpx.__version__ == "0.28.1"'
+          python3 -c 'from importlib.metadata import version as v; assert v("playwright") == "1.64.1", v("playwright"); assert v("oauthlib") == "4.0.0" and v("joserfc") == "1.7.5"'
+          python3 -c 'import pydantic; assert pydantic.VERSION.startswith("2."), pydantic.VERSION'
+          python3 -c 'import cryptography; from cryptography.x509.verification import PolicyBuilder, Store; assert cryptography.__version__ == "50.0.0"'
+          ! test -e /opt/ros/jazzy/share/slam_toolbox  # the boot smoke needs slam_toolbox absent
+          test -f /opt/rosy-ci/runtime-constraints.txt
 
       - name: Install OMX cell vision runtime
         if: contains(toJSON(matrix.invocations), 'test/test_omx_cell')
         run: |
           # The cell runs deploy/robot/omx/requirements-cell.lock (OpenCV 4.12, NumPy 2.2); the container's apt
           # python3-opencv is 4.6, where cell geometry tests failed on PR #247 (11-19) on a version the cell never runs.
+          # The image holds the lock's numpy and opencv-python-headless pins; assert they match the lock in this checkout.
           grep -E '^(numpy|opencv-python-headless)==' deploy/robot/omx/requirements-cell.lock > /tmp/rosy-omx-cell-vision.txt
-          pip3 install --no-cache-dir --break-system-packages \
-            --target /tmp/rosy-omx-cell-vision -r /tmp/rosy-omx-cell-vision.txt
-          echo "PYTHONPATH=/tmp/rosy-omx-cell-vision${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          PYTHONPATH=/opt/rosy-ci/omx-cell-vision python3 -c 'from importlib.metadata import version as v; [v(n) == ver or (_ for _ in ()).throw(AssertionError((n, v(n), ver))) for n, ver in (l.split()[0].split("==") for l in open("/tmp/rosy-omx-cell-vision.txt"))]'
+          echo "PYTHONPATH=/opt/rosy-ci/omx-cell-vision${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Install site Vision verification runtime
         if: contains(toJSON(matrix.invocations), 'operations/overhead/test')
@@ -214,16 +181,15 @@ jobs:
             --target /tmp/rosy-site-vision-tools -r deploy/site/requirements-vision.txt
           echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
-      - name: Install Fleet browser verification tools
+      - name: Fleet browser readiness (Chromium and CJK fonts from the image)
         if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py')
         run: |
-          # The console is Korean: without fonts-noto-cjk, headless Chromium renders
-          # Hangul through Playwright's wide Unifont fallback and 320px layout-fit
-          # assertions (fleet header link tag) see overflow that real browsers do not.
-          # 11-19: archive/security.ubuntu.com refused GitHub runners for an hour (PR #247, 25 of 26 shards exit 100)
-          sed -i 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci-retries
-          apt-get update -qq && apt-get install -y -qq fonts-noto-cjk
-          python3 -m playwright install --with-deps chromium
+          # The console is Korean: without fonts-noto-cjk, headless Chromium renders Hangul through
+          # Playwright's wide Unifont fallback and 320px layout-fit assertions see overflow.
+          fc-list | grep -qi 'noto.*cjk'
+          python3 -c 'from playwright.sync_api import sync_playwright as p
+with p() as pw:
+    b = pw.chromium.launch(); b.close()'
 
       - name: Install Pinky raw verification tools
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
@@ -231,7 +197,7 @@ jobs:
           # Real CDR/MCAP and video tests must run, not skip behind missing host tools.
           # Keep NumPy 2/OpenCV in this job's tool directory; Debian's NumPy has
           # no pip RECORD and must remain available to the ROS base image.
-          pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
+          pip3 install --no-cache-dir --break-system-packages -c /opt/rosy-ci/runtime-constraints.txt \
             --target /tmp/rosy-pinky-raw-tools -r learning/curation/pinky/requirements-raw.txt
           echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
@@ -502,12 +468,8 @@ jobs:
         run: |
           set -eo pipefail
           . /opt/ros/jazzy/setup.sh
-          cd /tmp
-          # 11-19: archive/security.ubuntu.com refused GitHub runners for an hour (PR #247, 25 of 26 shards exit 100)
-          sed -i 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci-retries
-          apt-get update -qq
-          apt-get download ros-jazzy-slam-toolbox
-          dpkg -x ros-jazzy-slam-toolbox_*.deb /
+          # The image carries the slam_toolbox deb (not installed: the boot smoke needs it absent).
+          dpkg -x /opt/rosy-ci/debs/ros-jazzy-slam-toolbox_*.deb /
           python3 - <<'PY'
           from slam_toolbox.srv import SaveMap
           from std_msgs.msg import String

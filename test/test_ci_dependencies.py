@@ -12,6 +12,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+DOCKERFILE = ROOT / ".github" / "ci-image" / "Dockerfile"  # the baked installs (apt, pins, receiver crypto)
 
 
 @pytest.mark.parametrize('rest', [[], ['middleware/core/gateway/test']])
@@ -177,7 +178,8 @@ def test_core_wheel_dependencies_are_available_before_offline_install():
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
     wheel_index = next(i for i, step in enumerate(steps)
                        if step['name'] == 'Build and install ROS-free platform API wheels')
-    commands = '\n'.join(step.get('run', '') for step in steps[:wheel_index] if not step.get('if'))
+    commands = DOCKERFILE.read_text(encoding='utf8') + '\n' + '\n'.join(
+        step.get('run', '') for step in steps[:wheel_index] if not step.get('if'))
     tokens = shlex.split(commands.replace('\\\n', ' '), comments=True)
     providers = dict(re.findall(r'^([A-Za-z0-9._-]+)==([^\s\\]+)',
                                (ROOT / 'deploy/robot/pinky_pro/image/device-python-requirements.txt')
@@ -201,17 +203,15 @@ def test_ci_provides_the_site_account_oauth_runtime():
     jose_pin = re.search(r'^joserfc==[^\s]+', site_requirements, re.MULTILINE).group()
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
     test_index = next(i for i, step in enumerate(steps) if step['name'] == 'Test (matrix suite, D-436)')
-    tokens = shlex.split('\n'.join(step.get('run', '') for step in steps[:test_index]
-                                  if not step.get('if')).replace('\\\n', ' '), comments=True)
+    baked = DOCKERFILE.read_text(encoding='utf8').replace('\\\n', ' ')
+    tokens = shlex.split(baked, comments=True)
     assert oauth_pin in tokens, f'CI account authority lacks site runtime {oauth_pin}'
     assert jose_pin in tokens, f'CI account authority lacks site runtime {jose_pin}'
     # Installed-package tests run python3 -I, which ignores a --target dir on PYTHONPATH.
-    lines = [line for step in steps[:test_index] if not step.get('if')
-             for line in step.get('run', '').replace('\\\n', ' ').splitlines() if oauth_pin in line]
+    lines = [line for line in baked.splitlines() if oauth_pin in line]
     assert lines and not any('--target' in line for line in lines), f'{oauth_pin} must be system-wide'
     # The receiver --target copy is not enough: boundary tests replace PYTHONPATH.
-    jose_lines = [line for step in steps[:test_index] if not step.get('if')
-                  for line in step.get('run', '').replace('\\\n', ' ').splitlines() if jose_pin in line]
+    jose_lines = [line for line in baked.splitlines() if jose_pin in line]
     assert any('--target' not in line for line in jose_lines), f'{jose_pin} must be system-wide'
 
 
@@ -353,8 +353,7 @@ def test_colcon_ignore_is_scoped_to_the_build(tmp_path, build_exit, preexisting)
 
 
 def test_ci_installs_root_contract_python_dependencies():
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert "jsonschema" in workflow
+    assert "jsonschema" in DOCKERFILE.read_text(encoding="utf-8")
 
 
 def test_root_contract_step_sources_the_colcon_install():
@@ -381,8 +380,7 @@ def test_ci_colcon_build_runs_from_the_repo_root_over_the_manifest_roots():
 
 def test_ci_installs_the_ext4_reader_for_the_card_diagnostics_test():
     # Without it test_card_diagnostics.py skips its real-ext4 case (D-174 F8).
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert "jsonschema ext4" in workflow
+    assert "jsonschema ext4" in DOCKERFILE.read_text(encoding="utf-8")
 
 
 def test_ci_result_aggregates_the_matrix_for_branch_protection():
@@ -440,15 +438,16 @@ def test_raw_numpy_tools_are_isolated_from_debian_and_keep_runtime_constraints()
 def test_ci_loads_hashlocked_receiver_crypto_before_tls_contracts():
     import yaml
 
+    image = DOCKERFILE.read_text(encoding="utf-8")
+    assert "receiver-crypto-requirements.txt" in image
+    assert "--require-hashes --no-deps --only-binary=:all:" in image
+    assert "--platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64" in image
+    assert "--target /opt/rosy-ci/receiver-crypto" in image
+    assert "PYTHONPATH=/opt/rosy-ci/receiver-crypto" in image
     steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
-    step = next((s for s in steps if s["name"] == "Install receiver TLS verification runtime"), None)
+    step = next((s for s in steps if s["name"] == "CI image readiness"), None)
     assert step is not None, "TLS contracts cannot use the older container cryptography"
     script = step["run"]
-    assert "receiver-crypto-requirements.txt" in script
-    assert "--require-hashes --no-deps --only-binary=:all:" in script
-    assert "--platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64" in script
-    assert "--target /tmp/rosy-receiver-crypto" in script
-    assert 'echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}"' in script
     assert "from cryptography.x509.verification import PolicyBuilder, Store" in script
     assert 'cryptography.__version__ == "50.0.0"' in script
     assert steps.index(step) < next(i for i, s in enumerate(steps) if s["name"] == "Test (matrix suite, D-436)")
@@ -546,7 +545,7 @@ def test_test_scope_step_selects_once_per_branch_and_takes_both_outputs_from_tha
 
 
 def test_every_ci_apt_update_uses_the_runner_mirror_with_retries():
-    lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    lines = DOCKERFILE.read_text(encoding="utf-8").splitlines()
     updates = [i for i, line in enumerate(lines) if line.strip().startswith("apt-get update")]
     assert updates
     for i in updates:
