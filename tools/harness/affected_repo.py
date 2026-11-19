@@ -9,7 +9,9 @@ from __future__ import annotations
 import fnmatch
 import re
 import subprocess
+from collections import Counter
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path, PurePosixPath
 
 import yaml
@@ -79,6 +81,7 @@ class Repo:
     _imports: dict[str, set[str]] = field(default_factory=dict)
     _tokens: dict[str, set[str]] = field(default_factory=dict)
     _importers: dict[str, list[str]] = field(default_factory=dict)
+    _dotted_names: dict[str, str | None] = field(default_factory=dict)
     _cat: list = field(default_factory=list)  # one `git cat-file --batch` process for `rev`
 
     @classmethod
@@ -213,6 +216,11 @@ class Repo:
 
     def dotted(self, path: str) -> str | None:
         """Runtime import name of a changed ``.py`` below its owning root (``fleet.pipeline.x``); None if unresolved."""
+        if path not in self._dotted_names:
+            self._dotted_names[path] = self._resolve_dotted(path)
+        return self._dotted_names[path]
+
+    def _resolve_dotted(self, path: str) -> str | None:
         if not path.endswith(".py") or PurePosixPath(path).name == "__init__.py":
             return None
         roots = [r for r in self.safety_roots if r.get("import_prefix") and path.startswith(r["path"].rstrip("/") + "/")]
@@ -264,9 +272,12 @@ class Repo:
                                              and (self._reaches(t, name) or self._relative(t, changed_path))]
         return self._importers[changed_path]
 
+    @cached_property
+    def _basename_counts(self) -> Counter[str]:
+        return Counter(PurePosixPath(path).name for path in self.tracked)
+
     def basename_unique(self, path: str) -> bool:
-        name = PurePosixPath(path).name
-        return sum(1 for t in self.tracked if PurePosixPath(t).name == name) == 1
+        return self._basename_counts[PurePosixPath(path).name] == 1
 
     def referencing_tests(self, path: str, closure: bool = False) -> list[str]:
         """Test files that name `path`.
