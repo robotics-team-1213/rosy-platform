@@ -185,8 +185,9 @@ def test_the_allowlist_is_exactly_the_trip_runner_the_readback_and_auto_start():
     callers = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.py")
                      if "driving_pose" in p.read_text(encoding="utf-8"))
     # The guide shows it read-only (user, 2026-11-13); lane compliance and the rest keep arbitrated_pose.
+    # 2026-11-18: the console's site-goal conversion joins, so an ALIGNED robot's goal is not refused.
     assert callers == ["server/guide_service.py", "server/pose/auto_locate_service.py",
-                       "server/pose/map_pose_service.py", "server/trips/trip_runner.py"]
+                       "server/pose/map_pose_service.py", "server/trips/trip_geometry.py", "server/trips/trip_runner.py"]
 
 
 def test_anchor_age_counts_from_the_camera_not_the_sample():
@@ -540,3 +541,35 @@ def test_the_guide_shows_the_auto_located_pose():
     guide._poses = rig.map_pose
     assert guide._display_pose("r1").anchor_source == AUTO_LOCATE
     assert rig.map_pose.arbitrated_pose("r1").state == UNKNOWN  # other consumers still do not see it
+
+
+def test_auto_locate_anchor_not_expired_by_limit():
+    tracker = localized()
+    for t in range(4, 126):                                  # camera quiet for two minutes; odom keeps coming
+        tracker.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + t), T0 + t)
+    assert tracker.pose(T0 + 125, "m", auto_locate=True).state == DEGRADED   # the old rule, not UNKNOWN
+
+
+def test_the_service_hands_the_source_rate_to_the_pairing_limit():
+    rig, _ = localized_rig()
+    rig.track = {**rig.camera(1.0, 0.3), "age_s": 0.56}       # 3 fps frame age on site 2026-11-18
+    before = rig.fit._seen_at
+    rig.tracking.source_fps = lambda source_id: 3.0 if source_id == "north" else None
+    rig.tick()
+    assert rig.fit._seen_at > before                          # paired
+    del rig.tracking.source_fps
+    rig.tick()
+    seen = rig.fit._seen_at
+    rig.tick()
+    assert rig.fit._seen_at == seen                           # rate unknown: the old 0.5 s refuses the frame
+
+
+def test_tracking_source_fps_counts_the_last_window():
+    from collections import deque
+    from fleet.server.tracking import FPS_WINDOW_S, TrackingService, _SourceState
+    now = 100.0
+    fake = SimpleNamespace(_sources={"a": _SourceState(), "b": _SourceState()}, _clock=lambda: now,
+                           _trim=TrackingService._trim)
+    fake._sources["a"].arrivals = deque([90.0, now - 2.5, now - 1.5, now - 0.5])   # one is outside the window
+    assert TrackingService.source_fps(fake, "a") == pytest.approx(3 / FPS_WINDOW_S)
+    assert TrackingService.source_fps(fake, "b") is None and TrackingService.source_fps(fake, "zz") is None
