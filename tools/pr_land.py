@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     else:
         url = _run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body], cwd)
         pr = url.rstrip("/").rsplit("/", 1)[-1]
-    _run(["gh", "pr", "merge", pr, "--auto", "--merge"], cwd)
+    _run(["gh", "pr", "merge", pr, "--auto", "--merge", "--match-head-commit", head], cwd)
     print(f"[pr-land] queued PR #{pr} ({branch}) in Merge Queue")
     return 0
 

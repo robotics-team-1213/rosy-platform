@@ -30,7 +30,7 @@ import land_events  # noqa: E402
 WINDOW = 6 * 3600  # seconds within which one id failing for two branches counts as shared
 REPEAT_ROWS = 10
 TIMING_KEYS = ("queued_s", "wait_s", "run_s")
-STAGES = ("pretest", "full", "merge", "behind")  # minutes, minutes, minutes, commits
+STAGES = ("prep_wait", "pretest", "full", "merge", "behind")  # minutes except behind, which counts commits
 
 
 def percentile(values: list[float], q: float) -> float | None:
@@ -95,6 +95,8 @@ def daily(rows: list[dict]) -> dict[str, dict]:
             day["landed" if event == "landed" else "stopped"] += 1
             if pid in turn_at:
                 day["turns"].append((row["t"] - turn_at.pop(pid)) / 60)
+        elif event == "prep_wait":
+            day["stages"]["prep_wait"].append(row["seconds"] / 60)
         elif event == "prepared":
             day["prepares"].append(row.get("seconds", 0) / 60)
             day["stages"]["full" if row.get("tier") == "full" else "pretest"].append(row.get("seconds", 0) / 60)
@@ -216,7 +218,7 @@ def main(argv=None) -> int:
             print(f"{name}  " + "  ".join(f"{fmt(d[k + '_p50']):>6}/{fmt(d[k + '_p90']):<6}" for k in TIMING_KEYS))
     staged = {name: d for name, d in stats.items() if any(d[k + "_p50"] is not None for k in STAGES)}
     if staged:
-        print("\nstage p50/p90   pretest min  FULL min  merge min  behind main (commits, at queue time)")
+        print("\nstage p50/p90   prep wait min  pretest min  FULL min  merge min  behind main (commits, at queue time)")
         for name, d in staged.items():
             print(f"{name}  " + "  ".join(f"{fmt(d[k + '_p50']):>6}/{fmt(d[k + '_p90']):<6}" for k in STAGES))
     read = lambda path: path.read_text(encoding="utf-8") if path.is_file() else ""  # noqa: E731

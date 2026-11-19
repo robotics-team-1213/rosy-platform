@@ -2,4 +2,4 @@ schema_version: 1
 model: pinky_pro
 files:
   profile.yaml: 609f7f8d8218664ffba6791da42bbcd5f518ff960b9074537997c5bffca14816
-  capabilities.yaml: 6a56c0dad8fab17c923a6d11abb1efd5609c3549ebc3ab3ce4e7a41e009fc891
+  capabilities.yaml: 1ea9a76f47b9e08932eae18200dae2a9dec6d7432b666ae7f4e0a8529f7f3fa3
