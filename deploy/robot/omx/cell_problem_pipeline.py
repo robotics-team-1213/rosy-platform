@@ -366,8 +366,9 @@ def verify_all_in_simulation(config_or_work: dict | Path, **kwargs: Any) -> dict
     try:
         import omx_tier_stack_recovery_sim as sim
         return sim.replay_and_verify_ledger_cases(config_or_work)
-    except Exception:
-        return {"total_cases": len(cases), "verified_cases": len(cases), "all_verified": True}
+    except Exception as exc:  # incl. ImportError: a sim that cannot run must never read as verified
+        return {"total_cases": len(cases), "verified_cases": 0, "all_verified": False,
+                "error": f"{type(exc).__name__}: {exc}"}
 
 
 from cell_rl_policy import (  # noqa: E402,F401  (re-exported: existing importers are unchanged)

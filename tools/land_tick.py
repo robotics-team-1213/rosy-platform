@@ -7,7 +7,8 @@ the next), never deleting work:
 
 1. main-red recheck: when main moved since the last tick and ids are open, run them on main (``land_mainred
    recheck``); ids that pass close, which is what lets the landings stopped on them go again.
-2. resume: orphaned landings and MAIN-RED stops main has cleared (``land_async.orphans``).
+2. resume: orphaned landings and MAIN-RED stops main has cleared (``land_async.orphans``); then one landing whose
+   last STOP was a full queue, once the queue has room (``requeue``).
 3. rollup: ``land_rollup apply --auto`` for pending landings that fit together. The only rollup trigger (D-889 36).
 4. cleanup: ``land_gc`` (lossless), worktrees (landed and orphan ones at once, any idle WORKTREE_IDLE_H with its
    branch kept and dirty work under refs/wip/) and the branch sweep (merged go, idle unlanded to refs/archive/).
@@ -22,6 +23,7 @@ the next), never deleting work:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import time
@@ -76,6 +78,37 @@ def resume(repo: Path) -> str:
         except SystemExit as exc:  # e.g. still held by a live ticket: not resumed, so not counted
             print(f"[tick] resume {name}: {exc}", flush=True)
     return f"resumed {len(done)} of {len(names)}: {', '.join(done)}" if names else "nothing to resume"
+
+
+def requeue(repo: Path, days: float = 7, now: float | None = None) -> str:
+    """One landing whose last STOP was a full queue, relaunched once the queue has room. land_async gives up after its
+    drain wait and nobody queued it again (11-18: orphan-relands-3, safety-review-clean sat stopped 3-4 days). Only the
+    newest snapshot of a branch, once per stop (the .auto-resume mark), never a .stopped carrying an owner's own note."""
+    if land_queue.full(land_queue.queue_dir(repo)):
+        return "queue full"
+    place, now = land_async.holder(repo), now or time.time()
+    newest: dict[str, str] = {}
+    for tree in place.iterdir() if place.is_dir() else ():
+        if tree.is_dir() and (key := tree.name.rsplit("-", 1)[0]) and tree.name > newest.get(key, ""):
+            newest[key] = tree.name
+    for name in sorted(newest.values()):
+        stop, mark = place / (name + ".stopped"), place / (name + ".auto-resume")
+        if (not stop.is_file() or now - stop.stat().st_mtime > days * 86400
+                or not stop.read_text(encoding="utf-8").startswith("land.py exit")
+                or mark.is_file() and mark.stat().st_mtime >= stop.stat().st_mtime):
+            continue
+        logs = [p for p in (place / (name + ".log"), place / (name + ".resume.log")) if p.is_file()]
+        text = max(logs, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8", errors="replace") if logs else ""
+        stops = re.findall(r"^\[land\] STOP: .*$", text, re.M)
+        if not stops or land_async.QUEUE_FULL not in stops[-1]:
+            continue
+        mark.write_text(land_async.git(repo, "rev-parse", "main"), encoding="utf-8")
+        try:
+            land_async.resume(repo, name, [], land_async.detach, wait=0)
+            return f"requeued {name}"
+        except SystemExit as exc:  # e.g. held by a live ticket
+            print(f"[tick] requeue {name}: {exc}", flush=True)
+    return "nothing to requeue"
 
 
 def active(holder: Path, name: str) -> bool:
@@ -170,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
     repo = Path(land_async.git(Path.cwd(), "rev-parse", "--show-toplevel"))
     common = Path(land_async.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     steps = [] if "--report" in argv else [("recheck", lambda: recheck(repo, common)), ("resume", lambda: resume(repo)),
+                                           ("requeue", lambda: requeue(repo)),
                                            ("rollup", lambda: _run(repo, "tools/land_rollup.py", "apply", "--auto",
                                                                    timeout=20 * 60)),
                                            ("cleanup", lambda: cleanup(repo)),

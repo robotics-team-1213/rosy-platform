@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request
 
 from fleet.charge_bays import ChargeBays, RobotView, bays_from_map
 from fleet.hub.hub import HubError
@@ -16,7 +16,7 @@ from fleet.server.task_store import IdempotencyConflict
 from fleet.site_rules import SiteRules
 from fleet.swarm.transport import RobotApiError
 
-from .berth_parking_helpers import BAY_DOCK_SPECS, _execute_physical_berth_park, _pin_robot_on_fleet
+from .berth_parking_helpers import BAY_DOCK_SPECS, _execute_physical_berth_park
 
 
 async def dispatch_nav_target(
@@ -56,19 +56,33 @@ async def dispatch_nav_target(
         raise http_error(exc) from exc
 
 
-def install_berth_scenario_routes(app, *, console, operator_guard, require_operator) -> None:
+SCENARIO_ROBOTS = ("rosy_46", "rosy_45", "rosy_42")
+
+
+def install_berth_scenario_routes(app, *, console, operator_guard, require_named_operator) -> None:
     """Install the world_261026 sequential bay-departure scenario route."""
 
     @app.post("/api/fleet/scenario/bay-departure", dependencies=operator_guard, tags=["fleet"])
     async def fleet_scenario_bay_departure(
         request: Request,
-        principal: SitePrincipal = Depends(require_operator),
+        idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+        principal: SitePrincipal = Depends(require_named_operator),  # D-540 9: it drives two robots
     ) -> dict:
         """시뮬레이션(`bay_departure_sim.py`)과 동일한 `world_261026` 시나리오(C1->C2->C3 순차 출차 중재,
         실물 기체 전진 출차 후 접안 파킹, S3 하역 셀 계약 핸드오프)를 Fleet R에서 실행·검증한다.
         """
+        # Same gates as berth-park (2868c99d7b review R1/R2): trip latch, an explicit ask, a key.
+        if busy := console.trip_refusal(list(SCENARIO_ROBOTS)):  # D-494 5
+            raise busy
         body = await request.json() if await request.body() else {}
-        execute_physical = bool(body.get("execute_physical", True))
+        if not isinstance(body.get("execute_physical"), bool):
+            # The teleop reverse has no rear proximity stop: an operator asks for it, or for plan-only, in words.
+            raise HTTPException(status_code=400, detail={
+                "code": "EXECUTE_PHYSICAL_REQUIRED", "message": "say execute_physical true or false"})
+        execute_physical = body["execute_physical"]
+        if execute_physical and not idempotency_key:
+            raise HTTPException(status_code=400, detail={
+                "code": "IDEMPOTENCY_KEY_REQUIRED", "message": "Idempotency-Key is required for physical runs"})
         forward_m = max(0.12, min(0.25, float(body.get("forward_m") or 0.18)))
 
         site_maps = getattr(request.app.state, "site_maps", None)
@@ -108,49 +122,34 @@ def install_berth_scenario_routes(app, *, console, operator_guard, require_opera
                     "length_m": round(float(rplan.length_m), 3),
                 })
 
+        # No preset pose is pinned or anchored here (R3): only a measured stop face pins, inside the
+        # physical run itself; a plan-only run or a failed run leaves Fleet's pose untouched.
         live_robots: dict[str, Any] = {}
         for rid, bid in (("rosy_46", "C1"), ("rosy_45", "C2")):
             spec = BAY_DOCK_SPECS[bid]
+            if not execute_physical:
+                live_robots[rid] = {"bay_id": bid, "physical": None, "site_pose": None, "pin_skipped": "PLAN_ONLY"}
+                continue
             rid_mode = str((body.get("robot_modes") or {}).get(rid) or body.get("mode") or "berth_park")
-            if execute_physical:
-                phys = await _execute_physical_berth_park(
-                    request,
-                    console,
-                    rid,
-                    spec,
-                    mode=rid_mode,
-                    forward_m=forward_m,
-                    actor_id=principal.principal_id,
-                )
-            else:
-                phys = None
-            if not phys or not phys.get("executed"):
-                pinned = await _pin_robot_on_fleet(
-                    request,
-                    rid,
-                    spec["bay_pose"]["x"],
-                    spec["bay_pose"]["y"],
-                    spec["bay_pose"]["yaw"],
-                    actor_id=principal.principal_id,
-                )
-                live_robots[rid] = {"bay_id": bid, "physical": phys, "site_pose": pinned}
-            else:
-                live_robots[rid] = {"bay_id": bid, "physical": phys, "site_pose": phys["after"]["site_pose"]}
+            if busy := console.trip_refusal([rid]):  # a trip may claim it during the previous robot's run
+                raise busy
+            phys = await _execute_physical_berth_park(
+                request,
+                console,
+                rid,
+                spec,
+                mode=rid_mode,
+                forward_m=forward_m,
+                actor_id=principal.principal_id,
+            )
+            if not (phys or {}).get("succeeded"):
+                live_robots[rid] = {"bay_id": bid, "physical": phys, "site_pose": None, "pin_skipped": "NOT_MEASURED"}
+                break  # fail closed: the next robot does not leave its bay after a failed park
+            live_robots[rid] = {"bay_id": bid, "physical": phys, "site_pose": phys["after"]["site_pose"]}
 
-        r42_place = str(body.get("rosy_42_place") or "S3").upper()
-        if r42_place == "C3":
-            r42_pose = BAY_DOCK_SPECS["C3"]["bay_pose"]
-        else:
-            r42_pose = {"x": 0.6987, "y": -0.2512, "yaw": 3.1416}
-        r42_pinned = await _pin_robot_on_fleet(
-            request,
-            "rosy_42",
-            r42_pose["x"],
-            r42_pose["y"],
-            r42_pose["yaw"],
-            actor_id=principal.principal_id,
-        )
-        live_robots["rosy_42"] = {"place_id": r42_place, "site_pose": r42_pinned}
+        # rosy_42 is not measured by this route, so it is not pinned to a preset S3/C3 pose.
+        live_robots["rosy_42"] = {"place_id": str(body.get("rosy_42_place") or "S3").upper(),
+                                  "site_pose": None, "pin_skipped": "NOT_MEASURED"}
 
         return {
             "scenario": "world_261026_sequential_bay_departure_and_berth_parking",

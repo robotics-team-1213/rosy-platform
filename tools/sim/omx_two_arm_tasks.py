@@ -17,7 +17,7 @@ import omx_two_arm_sites as sites_mod
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK_FILE = ROOT / "deploy/robot/omx/sim/two_arm_tasks.json"
-CARRY_CLEAR = .005       # container bottom clears the highest seated container by this much (plus one container height)
+CARRY_CLEAR = .020       # container bottom clears the highest seated container by this much (plus one container height); .005 let carry sag touch neighbours on tier 2 (11-19: stack 10 seeds seq 6 -> 9 complete, 0 regressions)
 ARM_RADIUS, ARM_MARGIN = .03, .005  # capsule stand-in for a link; MuJoCo contacts are the real check
 RELEASE_DROP = .005     # fixture stack_release_clearance_m; layer 0 rests on studs (floor enforced) and the temp lanes have a funnel
 RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only needed while single-contact deck meshes made boxes creep; see omx_two_arm_world)
@@ -52,7 +52,8 @@ def wrap_pi(angle):
 
 def carry_z(layout, here, a, b):
     """TCP height for moving between sites a and b: above every seated container and both ends."""
-    tops = [layout.sites[s]["z"] for s in here.values() if layout.sites[s]["kind"] == "ship"]
+    # temp stacks count too: an upper temp layer left the choose-bar-9 carry 32 mm under its neighbour's top (11-18)
+    tops = [layout.sites[s]["z"] for s in here.values() if layout.sites[s]["kind"] != "belt"]
     return max([layout.sites[a]["z"], layout.sites[b]["z"], *tops]) + layout.box[2] + CARRY_CLEAR + layout.hold_below
 
 

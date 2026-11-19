@@ -232,7 +232,7 @@ class SpeedLimitsRequest(BaseModel):
     trial_linear: float | None = None
     trial_angular: float | None = None
     trial_travel_m: float | None = None
-    operator_name: str | None = Field(default=None, max_length=80)  # a console names who asked (recorded only)
+    operator_name: str | None = Field(default=None, max_length=80)  # display only; the audit `by` is the authenticated principal
 
 
 @safety_router.put("/speed-limits")
@@ -253,7 +253,8 @@ def safety_speed_limits(body: SpeedLimitsRequest, auth: AuthContext = Depends(op
     changes = apply(svc.safety.limits, values)
     svc.config.setdefault("safety", {}).update(values)
     svc.events.publish("config.changed", severity="warning", source="api",
-                       data={"key": "safety.speed_limits", "by": body.operator_name or auth.principal_ref, "changes": changes})
+                       data={"key": "safety.speed_limits", "by": auth.principal_ref,
+                             "operator_name": body.operator_name, "changes": changes})
     return _safety_payload(svc)
 
 

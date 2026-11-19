@@ -144,12 +144,14 @@ def step(driver, teacher, data, plan, here, skill):
     row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], skill=skill, lifted=False)
     phases, gen = SKILLS[skill]["phases"], teacher.step_gen(data, plan, others, teacher)
     teacher.privileged = not getattr(teacher, "estimated_prefix", False)  # the real cell reaches the sub-skill on its zero estimate too
+    n_g0 = None
     try:
         target = next(gen)
         while teacher.phase not in phases:
             teacher.frame(data, {arm: target, **idle}, plan["id"])
             target = next(gen)
         teacher.privileged = False  # from here on commands are in reported angles
+        n_g0 = getattr(teacher, "n", None)
         idle = {o: t - teacher.zero_error.get(o, 0.) for o, t in idle.items()}  # the waiting arm too: it stays at its true wait pose, its command as recorded
         start_z = w.pose(data, c)[0][2]
         if driver.kind == "ik":
@@ -160,6 +162,8 @@ def step(driver, teacher, data, plan, here, skill):
                 target = next(gen)
         else:
             goal = policy.goal_vector(L, plan, others, getattr(driver, "goal_mode", "joints")) if getattr(driver, "has_goal", True) else None
+            if plan["id"] not in driver.longest:  # collection never finished this step: no time budget and nothing learned for it
+                return dict(row, result="fail", untaught=True)
             said = prompt(plan, skill)
             driver.policy.reset()
             first_bad, last_cmd = None, None
@@ -181,7 +185,12 @@ def step(driver, teacher, data, plan, here, skill):
                 teacher.frame(data, {arm: last_cmd, **idle}, plan["id"])
     except StopIteration as stop:  # blocked or unreachable before the sub-skill began
         return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""))
-    return _judge_step(teacher, data, plan, row, before, start_z, skill)
+    out = _judge_step(teacher, data, plan, row, before, start_z, skill)
+    if n_g0 is not None:
+        out["grasp_s"] = round((teacher.n - n_g0) / teaching.FPS, 2)  # sim seconds of the grasp half: what the closed loop costs
+    if getattr(teacher, "cl", None):
+        out["cl"] = teacher.cl
+    return out
 
 
 def _tcp_yaw(R, ref_yaw):
@@ -340,7 +349,7 @@ def recover(driver, recorder, plan, here, skill, prefix_frames="auto"):
     return dict(verdict, dagger_status="recovery_failed")
 
 
-def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, compensate_zero=False, zero_est_noise_deg=0., estimated_prefix=False):
+def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, compensate_zero=False, zero_est_noise_deg=0., estimated_prefix=False, closed_loop=()):
     """Each step of a task from the plan's nominal state with its own errors, the sub-skill judged alone."""
     task = tasks.get_task(driver.layout, name)
     here, rows = dict(task.get("start", {})), []
@@ -350,6 +359,7 @@ def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, c
                                        belt_skew=getattr(driver, "belt_skew", False), cam_jitter=getattr(driver, "cam_jitter", False))
             disturb(teacher, seed + len(rows), zero_error_deg, lag, physics)
             teacher.compensate_zero, teacher.zero_est_noise_deg, teacher.estimated_prefix = bool(compensate_zero), zero_est_noise_deg, bool(estimated_prefix)
+            teacher.closed_loop = tuple(closed_loop)
             data = teacher.fresh(here)  # step_gen brings a belt container in itself
             rows.append(dict(step(driver, teacher, data, plan, here, skill), task=name, seed=seed))
             print(json.dumps(rows[-1], default=str), flush=True)
@@ -366,11 +376,23 @@ def noise_degrees(text):
     return values[0] if len(values) == 1 else values
 
 
+def closed_loop_parts(text):
+    """--closed-loop: comma-separated parts of omx_wrist_closed_loop (wrist, contact)."""
+    import omx_wrist_closed_loop as cloop
+    parts = tuple(p for p in text.replace("+", ",").split(",") if p)
+    if not parts or any(p not in cloop.PARTS for p in parts):
+        raise ValueError(f"--closed-loop takes {'/'.join(cloop.PARTS)}, got {text!r}")
+    return parts
+
+
 def options(parser):
     parser.add_argument("--pick-vision", action="store_true", help="infer belt pick pose from top camera")
     parser.add_argument("--belt-skew", action="store_true", help="spawn skewed/offset containers on belt")
     parser.add_argument("--cam-jitter", action="store_true", help="perturb physical top camera pose and self-calibrate online")
     parser.add_argument("--compensate-zero", action="store_true", help="calibrate and compensate joint-zero error online (G-20)")
+    parser.add_argument("--closed-loop", type=closed_loop_parts, default=(), metavar="PARTS",
+                        help="judge, IK driver: close the loop of the grasp half in the sim, off by default. wrist = re-aim the close pose from where the wrist camera sees the container's top face (at most 2 corrections of 15 mm); "
+                             "contact = slow last descent that stops when a pad stands on the deck or the container's top, feels sideways, and retries an empty jaw once; wrist,contact = both")
     parser.add_argument("--zero-est-noise-deg", type=noise_degrees, default=0.,
                         help="with --compensate-zero: per-seed Gaussian error (sigma, deg) of the zero estimate, one value or five (joints 1-5); 0 is the oracle")
     parser.add_argument("--state-history", action="store_true",
@@ -393,6 +415,7 @@ def argv(args):
               *(["--belt-skew"] if getattr(args, "belt_skew", False) else []),
               *(["--cam-jitter"] if getattr(args, "cam_jitter", False) else []),
               *(["--compensate-zero"] if getattr(args, "compensate_zero", False) else []),
+              *(["--closed-loop", ",".join(args.closed_loop)] if getattr(args, "closed_loop", ()) else []),
               *(["--zero-est-noise-deg", ",".join(map(str, np.atleast_1d(args.zero_est_noise_deg)))] if np.any(getattr(args, "zero_est_noise_deg", 0.)) else []),
               *(["--estimated-prefix"] if getattr(args, "estimated_prefix", False) else []),
               *(["--state-history"] if getattr(args, "state_history", False) else []),
