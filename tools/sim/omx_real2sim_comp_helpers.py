@@ -13,7 +13,7 @@ import omx_real2sim as r2s  # noqa: E402
 
 BELT_STOP_EDGE_OFFSET_M = 0.0080  # 2 mm belt_stop half-width + 3 mm perspective occlusion of 8 mm stop + 3 mm 1st-percentile offset
 FAR_CUT_MIN_PX = 10  # contour points past the far edge before the edge counts as foreign
-FAR_EDGE_TOL_M = 0.008  # seat pose draw (dy +-4 mm) + jitter + calibration residual: a true box edge stays inside this past nominal
+FAR_EDGE_TOL_M = 0.0045  # seat pose draw (dy +-4 mm) + a little jitter: a true box edge stays inside this past nominal; 0.008 kept the top-tier far edge 6-7 mm out (calibration scale at box height) and sent ship-h1r0-l2 picks 6.6 mm across (11-18, 6 seeds IK 142 -> 152 of 186)
 DEFAULT_CAM_JITTER = dict(eye_shift_m=(0.012, -0.010, 0.008), focus_shift_m=(0.015, -0.012, 0.0), roll_deg=1.2)
 _EYE3 = np.eye(3)
 _KERNEL_3X3 = np.ones((3, 3), np.uint8)
