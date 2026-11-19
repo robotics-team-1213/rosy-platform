@@ -29,7 +29,13 @@ def source(tmp_path, monkeypatch):
 
 
 def test_source_snapshot_to_authenticated_route_and_lifecycle(core_client, tmp_path, monkeypatch):
+    from core_api_web.api.v1 import motors
+
     monitor, motion, path, session = source(tmp_path, monkeypatch)
+    observed_at = json.loads(path.read_text(encoding='utf-8'))['observed_at']
+    read = motors.read_motor_health
+    # Read at the captured sample time, regardless of app setup or runner load.
+    monkeypatch.setattr(motors, 'read_motor_health', lambda: read(now=observed_at))
     client, _ = core_client()
     assert client.get('/api/v1/motors/health').status_code == 401
     headers = {'Authorization': 'Bearer rosy-dev-viewer'}
