@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "middleware" / "drive" / "planning" / "nav2"))
 
 from navigation.profile_limits import (
     MotionLimits,
+    derive_slow_speed_params,
     load_motion_limits,
     validate_nav2_parameters,
     validate_requested_limits,
@@ -141,3 +142,35 @@ def test_profile_with_missing_or_invalid_limits_fails_closed(tmp_path):
 
     with pytest.raises(ValueError, match="max_angular_velocity"):
         load_motion_limits(path)
+
+
+def _nav2():
+    return yaml.safe_load(NAV2.read_text(encoding="utf-8"))
+
+
+def test_slow_speed_derivation_at_the_approved_speed():
+    p = derive_slow_speed_params(_nav2(), 0.023, 0.093)
+    c = p["controller_server"]["ros__parameters"]
+    assert c["FollowPath"]["desired_linear_vel"] == 0.023
+    assert c["FollowPath"]["rotate_to_heading_angular_vel"] == 0.093
+    assert c["FollowPath"]["min_approach_linear_velocity"] == pytest.approx(0.0115)
+    assert c["FollowPath"]["regulated_linear_scaling_min_speed"] == pytest.approx(0.0115)
+    checker = c["progress_checker"]
+    assert checker["movement_time_allowance"] == pytest.approx(1.25 * 3.141592653589793 / 0.093)
+    assert checker["required_movement_radius"] == pytest.approx(0.25 * 0.023 * checker["movement_time_allowance"])
+    assert p["velocity_smoother"]["ros__parameters"]["max_velocity"] == [0.023, 0.0, 0.093]
+    assert p["behavior_server"]["ros__parameters"]["max_rotational_vel"] == 0.093
+    # the derived file still passes the Device ceiling check
+    limits = load_motion_limits(PROFILE)
+    from navigation.params_rewrite import write_prefixed_nav2_params
+    out = write_prefixed_nav2_params(NAV2, "", directory=Path(__import__("tempfile").mkdtemp()), speed=(0.023, 0.093))
+    validate_nav2_parameters(out, limits)
+
+
+def test_slow_speed_derivation_leaves_stock_speed_unchanged():
+    assert derive_slow_speed_params(_nav2(), 0.20, 0.80) == _nav2()
+
+
+def test_bt_server_timeout_survives_a_slow_controller_loop():
+    bt = _nav2()["bt_navigator"]["ros__parameters"]
+    assert bt["default_server_timeout"] == 500

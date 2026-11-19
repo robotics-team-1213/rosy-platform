@@ -207,7 +207,8 @@ def _premerge(wt: Path) -> None:
         print("[land-async] main did not merge cleanly here; queued as-is", flush=True)
 
 
-def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | None = None) -> tuple[str, Path]:
+def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | None = None,
+          allow_big: str | None = None) -> tuple[str, Path]:
     """Create the snapshot branch and hidden worktree, hand them to ``launch``; (snapshot, log path)."""
     deadline, waited = time.monotonic() + FULL_WAIT_S, False
     while True:
@@ -216,8 +217,9 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | 
                 return _start(cwd, land_args, now, launch, replace=not waited, branch=branch)
         except Full as exc:  # polled outside the lock: resumes and rollups go on meanwhile
             if time.monotonic() >= deadline:
+                kept = [*land_args, *(("--allow-big", allow_big) if allow_big else ())]
                 print(f"[land-async] NOT QUEUED: {branch or git(cwd, 'branch', '--show-current')}: {exc} after "
-                      f"{FULL_WAIT_S // 60} min; {_queue().keep_pending(cwd, land_args, branch)}", file=sys.stderr)
+                      f"{FULL_WAIT_S // 60} min; {_queue().keep_pending(cwd, kept, branch)}", file=sys.stderr)
                 raise SystemExit(3) from exc
             print(f"[land-async] {exc}; checking again every {FULL_POLL_S} s for up to {FULL_WAIT_S // 60} min", flush=True)
             time.sleep(FULL_POLL_S)
@@ -569,9 +571,7 @@ def main(argv: list[str]) -> int:
     pre = _precheck_mod()
     branch, argv = pre.pop_opt(argv, "--branch", "a branch name: --branch <type/topic>")
     big, argv = pre.pop_opt(argv, "--allow-big", 'a reason: --allow-big "<why this cannot be split>"')
-    ref = "HEAD"
-    if branch is not None:
-        branch, ref = pre.resolve_branch(Path.cwd(), branch, PREFIX)
+    branch, ref = pre.resolve_branch(Path.cwd(), branch, PREFIX) if branch is not None else (None, "HEAD")
     why = too_big(Path.cwd()) if branch is None else too_big(Path.cwd(), ref=ref)
     if big is None and why:
         raise SystemExit(f"[land-async] refused: {why}. Land the oldest finished part from a new branch off main"
@@ -580,16 +580,17 @@ def main(argv: list[str]) -> int:
         print(f"[land-async] --allow-big: {big}", flush=True)
     words = next((argv[i:i + 2] if a == "--mixed" else [a] for i, a in enumerate(argv)
                   if a == "--mixed" or a.startswith("--mixed=")), [])
+    extra = {"allow_big": big} if big else {}
     if branch is None:
         if subprocess.call(  # cheap gates fail here, before a snapshot or ticket exists
                 [sys.executable, str(Path(__file__).with_name("land.py")), "--precheck", *words], cwd=Path.cwd()):
             return 1
-        snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach)
+        snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach, **extra)
         print(f"[land-async] queued {snap}; this worktree is free now. Log: {log}")
     else:
         if precheck_branch(Path.cwd(), branch, words):
             return 1
-        snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach, branch=branch)
+        snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach, branch=branch, **extra)
         print(f"[land-async] queued {snap} from branch {branch}. Log: {log}")
     return 0
 
