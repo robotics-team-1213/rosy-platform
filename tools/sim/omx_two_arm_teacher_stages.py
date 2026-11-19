@@ -26,7 +26,7 @@ RECORDED = ("top", "side", "a_wrist", "b_wrist")  # the cell's four cameras (D-9
 PREFIX = {"arm_a": "a_", "arm_b": "b_"}
 parse_choices = sites.parse_choices
 VISION_SKEW_CHOICES = dict(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
-                           arm_bases="plate-centre", wrist_camera="photo-20261110", physics="twin-kp-20261109")
+                           arm_bases="plate-centre", wrist_camera="v21-b", physics="twin-kp-shared-20261118")
 
 
 class Faults:
