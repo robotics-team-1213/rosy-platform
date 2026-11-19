@@ -99,6 +99,13 @@ def test_episode_runs_policy_chunks_then_parks_after_release(tmp_path):
     assert cell.commands[2] == "run policy"
 
 
+def test_jaws_open_to_the_library_width_before_the_model_closes():
+    chunk = [[0, 0, 0, 0, 0, g] for g in (49.0, 51.0, 52.0, 50.0, 46.6, 46.6)]
+    out = drive.open_before_close(chunk, 70.0, 48.8)
+    assert [f[5] for f in out] == [70.0, 70.0, 70.0, 70.0, 46.6, 46.6]
+    assert [f[5] for f in drive.open_before_close([[0] * 5 + [49.0]] * 3, 70.0, 48.8)] == [70.0] * 3  # never closes
+
+
 def test_closed_empty_jaws_are_not_a_release(tmp_path):
     """11-19 real arm: jaws parked at closed then opened read as 'released' with nothing held; only the runner's hold counts."""
     result = drive.run_episode(Cell(), Policy(GRASP_THEN_RELEASE), write_lib(tmp_path), tmp_path,

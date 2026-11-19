@@ -74,6 +74,19 @@ def widen(low, high, demo_low, demo_high) -> tuple[list[float], list[float]]:
     return np.minimum(low, demo_low).tolist(), np.maximum(high, demo_high).tolist()
 
 
+def open_before_close(chunk, open_g: float, closed: float):
+    """IK help for the jaws (11-19: in a new scene the model opened only to 52 = a 30 mm gap, then closed on nothing):
+    before the model's close (jaws back at closed after having been open) the jaws are at least the reviewed library's
+    widest opening, then the model closes as it chose. A chunk that never closes is opened throughout."""
+    arr = np.array(chunk, dtype=float)
+    g = arr[:, 5]
+    was_open = np.maximum.accumulate(g) > closed + 2.0
+    closing = np.flatnonzero((g <= closed + 1.0) & was_open)
+    end = int(closing[0]) if len(closing) else len(arr)
+    arr[:end, 5] = np.maximum(g[:end], open_g)
+    return arr
+
+
 def shape_chunk(chunk, start, low, high, fastest: float) -> list[list[float]]:
     """Cell-unit frames the runner may get: refused outside the envelope, stretched so no body step beats `fastest`."""
     arr = np.asarray(chunk, dtype=float)
@@ -100,6 +113,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
     if demonstrated is not None:
         low, high = widen(low, high, *demonstrated)
     closed = float(library.get("jaw_empty_stop", library["gripper_closed"]))
+    open_g = max(f[5] for chunk in library["chunks"].values() for f in chunk if len(f) == JOINTS)
     off = np.asarray(offset, dtype=float)
     held, released = False, False
     for n in range(max_chunks):
@@ -108,6 +122,8 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
         frames = {view: cell.frame(view) for view in shadow.image_views}
         obs, meta = shadow.inputs((state + off).tolist(), frames)
         proposed = np.asarray(shadow.infer(obs).chunk, dtype=float) - off
+        if not held:
+            proposed = open_before_close(proposed, open_g, closed)
         row = {"chunk": n, "state": state.tolist(), "meta": meta, "proposed_first": proposed[0].tolist(),
                "proposed_last": proposed[-1].tolist()}
         try:
