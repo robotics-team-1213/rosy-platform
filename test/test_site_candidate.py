@@ -373,3 +373,21 @@ def test_site_candidate_refuses_copy_forms_the_guard_cannot_parse(tmp_path, copy
                         sbom_tool="syft")
     assert not any(call[:2] == ["git", "ls-files"] for call in calls)
     assert not any(call[:2] == ["docker", "build"] for call in calls)
+
+
+def test_site_candidate_parallel_jobs_preserves_image_inventory_and_order(tmp_path):
+    import threading
+
+    root = tmp_path / "repo"
+    _fixture_repo(root)
+    calls: list = []
+    lock = threading.Lock()
+    inner = _recording_runner(calls)
+
+    def locked_runner(args, **kwargs):
+        with lock:
+            return inner(args, **kwargs)
+
+    manifest = build_candidate(root, tmp_path / "release", runner=locked_runner, sbom_tool="syft", jobs=4)
+    assert list(manifest["images"]) == ["fleet", "account", "monitoring", "vision", "proxy", "postgres"]
+    assert all(row["sbom_sha256"] for row in manifest["images"].values())
