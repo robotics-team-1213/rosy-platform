@@ -637,3 +637,10 @@
 - 증거: design 모델 해시가 main과 같음(AI PC). 원격 시험 119개 통과(MuJoCo 시험은 AI PC 16/16). 첫 서보 맞춤은 보류 0.455→0.393°였지만 kp가 범위 끝에 붙어 올리지 않음 — `docs/validation/omx-sysid-2026-11-09/result.md`.
 - gate 변화: 없음. 시뮬 근거이며 실물 실험(마찰·램프)은 감독 시험(D-911)으로 남음.
 - CE: 해당 없음 — 범위 끝 값 거절은 `verdict` 코드·회귀 시험·result.md에 남겼다.
+
+## 2026-11-18 · uncommitted · fix(sim): wrist camera is the CAD value on both arms; one servo kp (G-24)
+
+- 변경: 교사·평가 기본 손목 카메라를 CAD `wrist_camera=v21-b`(`palletizing_gripper.WRIST_CAMERA_B`)로 바꿨다. `physics=twin-kp-shared-20261118`(kp 20을 joint1·4·5에 양팔 공통)은 유지. 사진 한 장 맞춤(photo-20261108·photo-20261110, twin-kp-20261109)은 재현용이다. 같은 날 먼저 넣었던 `WRIST_SHARED`·`shared-20261118`은 근거 없는 맞춤값이라 지웠다.
+- 근거: 사용자 11-18 — 손목 카메라 위치는 이미 CAD로 구현했고 두 팔이 같다. 실물 홈 프레임에서 arm_a 집게가 작고 낮게 보인 것은 장착 차이가 아니라 자세(영점) 차이로 읽는다(미측정). 수치는 `D:/DevTemp/vla-act-roles-1117/plateau-1118/wrist-unify.md` 정정 절. 시뮬 근거이며 실물 근거가 아니다(D-947).
+- gate 변화: 없음. 열린 결정: 홈 프레임 차이가 영점으로 설명되는지(G-24).
+- CE: 해당 없음 — 근거는 wrist-unify.md와 코드 주석에 있다.

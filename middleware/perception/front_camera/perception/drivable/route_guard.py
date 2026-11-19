@@ -216,8 +216,11 @@ class RouteBridge:
 
     def _align(self, error, confidence, info, pose, owner, source_pose, stamp, observed):
         from .drivable_steer import (BEND_ON_X_M, LOOKAHEAD_M, PIVOT_AHEAD_M, PIVOT_ERROR,
-                                     PIVOT_MAX_RAD, REALIGN_DEG, RECENTRE_M)
+                                     PIVOT_MAX_RAD, REALIGN_DEG, RECENTRE_M, at_corner)
 
+        if at_corner(owner._ctx, info.get('ahead_m')):   # at a route corner node the pivot follows the route
+            self._alignment = None
+            return None
         timing, poses = self._track_alignment(pose, owner, source_pose, stamp, observed)
         state = self._alignment
         if state is not None and timing and poses:

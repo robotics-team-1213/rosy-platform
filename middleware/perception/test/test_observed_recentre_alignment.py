@@ -48,6 +48,19 @@ def test_recorded_closed_recentre_aligns_to_observed_left_floor_with_zero_linear
     assert info.get('reason') is None
 
 
+@pytest.mark.parametrize('corner', [False, True])
+def test_a_route_corner_node_drops_an_earlier_recentre_and_lets_the_route_pivot(corner):
+    # lap sim 2026-11-18 at NW: one recentre frame 4 cm short of the node, then Fleet's lane here turned with
+    # the route; the leftover episode held every right pivot (recentre_alignment_unobserved) to the stall stop
+    owner, guard = guarded()
+    assert step(owner, guard)[2]['strategy'] == 'drivable_recentre_pivot_left'
+    owner._ctx = dict(owner._ctx, here=-84.0, ahead=-82.9, route_here=-84.0 if corner else 20.0)
+    pivot = dict(STALLED, strategy='drivable_pivot_right', reason=None, recentre_first=False, exit='right')
+    error, _, info = step(owner, guard, info=pivot, error=PIVOT_ERROR, confidence=owner._pivot_confidence)
+    assert (error, info['strategy']) == ((PIVOT_ERROR, 'drivable_pivot_right') if corner else (None, 'none')), info
+    assert (guard._alignment is None) == corner
+
+
 def test_the_full_steer_does_not_let_the_future_right_exit_cancel_observed_left_alignment(monkeypatch):
     import control.sensing.perception.drivable.drivable_steer as steer_module
     from test_drivable_steer import G, HALF, XO, _lane

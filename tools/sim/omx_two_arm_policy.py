@@ -97,6 +97,8 @@ def evaluate(args):
         comp_kw = dict(compensate_zero=True, zero_est_noise_deg=getattr(args, "zero_est_noise_deg", 0.)) if getattr(args, "compensate_zero", False) else {}
         if getattr(args, "estimated_prefix", False):
             comp_kw["estimated_prefix"] = True
+        if getattr(args, "closed_loop", ()):
+            comp_kw["closed_loop"] = args.closed_loop
         for name in args.tasks.split(","):
             for k in range(args.isolated_seeds):
                 rows += skills.isolated(driver, name, EVAL_SEED_BASE + 1000 * k, args.skill, args.zero_error_deg, args.servo_lag,

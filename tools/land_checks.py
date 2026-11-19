@@ -30,6 +30,7 @@ from pathlib import Path
 
 import land_events
 import land_mainred
+from land_turn import overtimes, turn_budget, turn_deadline, turn_wanted  # noqa: F401  (tests patch turn_wanted here)
 
 MAX_RERUN = 5  # more NEW ids than this is a real break, not load
 MAX_MAIN_CHECK = 30  # NEW ids rerun on main in one invocation (bounds the command line)
@@ -374,42 +375,6 @@ def next_overtime(land, args) -> int:
     return nxt
 
 
-def turn_wanted(land, wt: Path) -> bool:
-    """Whether another landing is ready ('waiting') for the turn. The turn cap only applies then: on 2026-10-31 an
-    urgent landing's turn hit the 10 min cap at 584 s with no one waiting and redid its pretest outside for an hour."""
-    try:
-        mine = {t.name for t in land.land_queue._held}
-        rows = land.land_queue.ahead(land.land_queue.queue_dir(wt), Path("~"))
-        return any(r.get("status") == "waiting" and r["ticket"] not in mine for r in rows)
-    except Exception:  # noqa: BLE001 - an unreadable queue keeps the cap
-        return True
-
-
-def overtimes(land, args) -> int:
-    """How often the turn cap sent this landing back: in this process, or before a relaunch on main's new landing
-    code (the ticket keeps it; 11-01 13:26 the rest bundle relaunched and went back once more). True counts as 1."""
-    counts = [int(getattr(args, "_overtime", 0) or 0)]
-    for ticket in land.land_queue._held:
-        try:
-            counts.append(int(json.loads(ticket.read_text(encoding="utf-8")).get("overtime") or 0))
-        except (OSError, ValueError, TypeError):
-            pass
-    return max(counts)
-
-
-def turn_budget(land, args) -> float:
-    sent_back = overtimes(land, args)
-    return land.TURN_MAX_S if sent_back >= 2 else min(land.TURN_MAX_S, land.TURN_CAP_S * (3 if sent_back else 1))
-
-
-def turn_deadline(land, args, round_no, *, maximum: bool = False) -> float | None:
-    budget = land.TURN_MAX_S if maximum else turn_budget(land, args)
-    if not (isinstance(round_no, int) or re.fullmatch(r"g\d+r?", str(round_no))):
-        return None
-    started = land.land_queue.turn_started()
-    return (land.time.monotonic() if started is None else started) + budget
-
-
 def check_turn(land, wt: Path, args, round_no) -> None:
     """Yield at a safe phase boundary; Git mutations are never interrupted by the turn clock."""
     deadline = turn_deadline(land, args, round_no)
@@ -449,9 +414,13 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
         done.append("lint ok")
     check_turn(land, wt, args, round_no)
     # Long invocations split by measured run time so hosts run them side by side (2026-11-01: 30 min tails).
-    invocations = sys.modules["work_queue"].split(wt, invocations)
+    # seen={}: groups follow the tree alone (history only orders dispatch), so a retry's argv matches its earlier rows
+    invocations = sys.modules["work_queue"].split(wt, invocations, seen={})
     reused, todo, keep = land.land_cache.split(wt, args, invocations, head, python, land.select)
     done += reused
+    land_events.emit("round_start", round=round_no, head=head, tree=land.out(wt, "rev-parse", "HEAD^{tree}"),
+                     reused=len(reused), todo=len(todo))
+    kept = set()  # logs already kept when judged (early); the post-loop skips them
 
     def batch(part: list[tuple[int, list[str]]]) -> list[str]:
         todo = [inv for _, inv in part]
@@ -466,14 +435,23 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 raise CancelledError("turn deadline expired during diagnostic checks")
             return codes
 
+        def settle(inv, log, code):  # why an exit is no verdict (None: clean); one rule for on_done and the post-loop
+            return (affected_exclusive.evidence(log, code) if affected_exclusive.dedicated(inv)
+                    else land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log))
+
         def judge(inv, log, tag):  # a NEW that main-red carry-over takes (land_mainred) neither stops nor is kept
             run = diagnostic_run if stop is not None else land.remote_pytest.run
             v = land.land_checks.verdict(wt, inv, land.Path(log), logdir, tag, python, run, head)
             taken = land.land_checks.carry(wt, land.Path(log), head, python, inv) if v[0] and not v[1] else ([], "")
             return (v[0], taken[0], f"main-red carried: {taken[1]}") if taken[0] else v
 
-        def on_done(inv, log):  # D-889: a confirmed NEW failure, or the turn's time cap, cancels the rest
+        def on_done(inv, log, code=None):  # D-889: a confirmed NEW failure, or the turn's time cap, cancels the rest
             seen[str(log)] = v = judge(inv, log, f"{round_no}-{land.Path(log).stem[4:]}")
+            # An earned pass survives a kill. Only with the exit code (Work.done passing it is the pending part 3):
+            # a log alone cannot tell exit 0 from the exit-1-all-passed case that the post-loop reruns.
+            if code is not None and not v[0] and not settle(inv, log, code):
+                keep(inv, log)
+                kept.add(str(log))
             return bool(v[0] and not v[1]) or (stop is not None and stop.is_set())
         stop = threading.Event() if deadline is not None else None
         timers = []
@@ -507,8 +485,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
         if len(codes) != len(todo):
             raise land.Stop("incomplete remote results; not landing")
         print(f"[pytest] {(secs := round(land.time.monotonic() - began))}s", flush=True)
-        # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
-        # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
+        # Each invocation is judged and each clean pass kept before a stop: a retry reruns only the rest (10-25).
         stops, cancelled = [], []
         for (n, _), inv, log, code in zip(part, todo, logs, codes):
             if land.out(wt, "rev-parse", "HEAD") != head:
@@ -517,11 +494,9 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 cancelled.append(inv)
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="cancelled", seconds=secs, **timing(log, began_at))
                 continue
-            why = (affected_exclusive.evidence(log, code) if affected_exclusive.dedicated(inv)
-                   else land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log))
+            why = settle(inv, log, code)
             if why == land.land_cache.NO_EVIDENCE:
-                # 2026-10-28: exit 1 with every test passed and no FAILED/ERROR line stopped 8 landings in a day;
-                # one rerun of the same invocation decides, and a second exit without evidence still stops.
+                # 10-28: exit 1, all passed, no FAILED line stopped 8 landings: one rerun decides, a second stops.
                 again = logdir / f"rerun-{round_no}-{n}.txt"
                 try:
                     rerun = (diagnostic_run if stop is not None else land.remote_pytest.run)(
@@ -539,11 +514,14 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs, **timing(log, began_at))
                 continue
-            failed, flaky, why = seen.get(str(log)) or judge(inv, log, f"{round_no}-{n}")
+            try:
+                failed, flaky, why = seen.get(str(log)) or judge(inv, log, f"{round_no}-{n}")
+            except CancelledError:  # no verdict at the deadline: not kept, the passes after it still are
+                cancelled.append(inv); continue
             if land.out(wt, "rev-parse", "HEAD") != head:
                 raise land.Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
             if failed and not flaky:
-                stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
+                stops.append(f"NEW failure in {' '.join(inv[:4])}{' ...' * (len(inv) > 4)} (log {log}); {why}; not landing")
                 land.land_cache.failed(wt, inv, True)
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="new", seconds=secs, **timing(log, began_at))
                 continue
@@ -552,7 +530,8 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
             land.land_events.emit("tests", round=round_no, argv=inv, seconds=secs, **timing(log, began_at),
                                   verdict="carried" if carried else "flaky" if flaky else "pass")
             if not failed:
-                keep(inv, log)  # Timing mappings are publication evidence; split never reuses them.
+                if str(log) not in kept:
+                    keep(inv, log)  # Timing mappings are publication evidence; split never reuses them.
                 land.land_mainred.passed(inv)  # this round passed it: an earlier round's carry of it is void
                 land.land_mainred.close(wt, log.read_text(encoding="utf-8", errors="replace"), head)
             done.append(f"pytest {' '.join(inv)} ok ({log.name})"
@@ -596,4 +575,5 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
             done.append("node skipped: no web/*.mjs under the selected test dirs")
     if land.out(wt, "rev-parse", "HEAD") != head:
         raise land.Stop(f"HEAD changed during checks; {head[:10]} was tested; retry the landing")
+    land_events.emit("round_end", round=round_no, head=head, verdict="pass")
     return done

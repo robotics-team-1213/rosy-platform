@@ -213,9 +213,12 @@ def test_the_deadline_never_interrupts_a_fold_in_progress(tmp_path, kin, profile
     session = FakeSession()
     session.fold_gate = threading.Event()
     entered, release = session.block("run descend_pick")
-    owner, installation, fence = build(tmp_path, kin, profile, session, timing={"deadline_s": 0.05})
+    skew = [0.0]  # the deadline passes only once the carry is inside a command: 0.05 s raced a slow host to it
+    owner, installation, fence = build(tmp_path, kin, profile, session,
+                                       timing={"deadline_s": 30, "clock": lambda: time.monotonic() + skew[0]})
     submit(owner, grant(owner, installation))
     assert entered.wait(5)
+    skew[0] = 60.0
     assert wait_for(lambda: session.folds == 1)  # the deadline began the fold
     fence["ok"] = False
     time.sleep(0.4)  # many deadlines and a lost fence later: still the one fold, still running

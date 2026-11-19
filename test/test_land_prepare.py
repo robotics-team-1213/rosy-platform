@@ -142,6 +142,12 @@ def test_a_lost_queue_ticket_leaves_a_stop_without_recreating_its_place(repos, m
     assert not list((main / ".git" / land.land_queue.QUEUE).glob("*.json"))
 
 
+@pytest.fixture(autouse=True)
+def _turn_time_delta(monkeypatch):
+    """These flows exercise the delta rerun at the turn; the pre-turn refresh (land_queue.REFRESH) has its own tests."""
+    monkeypatch.setattr(land.land_queue, "REFRESHES", 0)
+
+
 @pytest.fixture
 def full_anchor(repos, monkeypatch):
     main, wt = repos
@@ -652,6 +658,52 @@ def test_delta_prepare_skips_full_slot_and_isolation_gate(full_anchor, monkeypat
     assert json.loads(ticket.read_text(encoding="utf-8")).get("tier") == ""
 
 
+def _full_prepare(wt, qdir, ticket):
+    return land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=False),
+                                     sys.executable, qdir, ticket, [["pkg/test"]], "FULL tier (test)")
+
+
+def test_full_guards_run_during_the_slot_wait_and_tests_wait_for_both(full_anchor, monkeypatch):
+    """The 150-870 s guard round hides under the FULL slot wait; the FULL tier needs the slot and green guards."""
+    _, wt, *_ = full_anchor
+    qdir = land.land_queue.queue_dir(wt)
+    ticket = land.land_queue.take(qdir, "feat/x", status="preparing")
+    events, started = [], threading.Event()
+
+    def guards(*a, **k):
+        started.set()
+        events.append("guards")
+        return []
+
+    def slot(*a, **k):
+        assert started.wait(10), "the slot wait began before the guards"
+        events.append("slot")
+
+    monkeypatch.setattr(land.land_guards, "first", guards)
+    monkeypatch.setattr(land.land_prepare, "full_slot", slot)
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: events.append("tests") or [])
+    _full_prepare(wt, qdir, ticket)
+    assert sorted(events[:2]) == ["guards", "slot"] and events[2] == "tests"
+
+
+def test_full_guard_stop_ends_the_slot_wait_and_runs_no_fulltest(full_anchor, monkeypatch):
+    _, wt, *_ = full_anchor
+    qdir = land.land_queue.queue_dir(wt)
+    for n in range(land.land_prepare.MAX_FULL):
+        older = land.land_queue.take(qdir, f"feat/old-{n}", status="preparing")
+        land.land_queue.set_status(older, "preparing", tier="full")
+    ticket = land.land_queue.take(qdir, "feat/x", status="preparing")
+
+    def guards(*a, **k):
+        raise land.Stop("NEW failure in test/architecture")
+
+    monkeypatch.setattr(land.land_guards, "first", guards)
+    monkeypatch.setattr(land.land_prepare, "POLL", 0.01)
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: pytest.fail("a FULL test ran after a guard Stop"))
+    with pytest.raises(land.Stop, match="test/architecture"):
+        _full_prepare(wt, qdir, ticket)  # the older FULLs never finish: only the Stop can end the wait
+
+
 def test_guard_and_body_rounds_share_one_lint_run_per_tree(repos, monkeypatch, tmp_path):
     """gpre/pre and g1/1 run on the exact same tree and must not spawn two lint processes each."""
     _, wt = repos
@@ -747,3 +799,23 @@ def test_full_prepare_sets_full_done_after_tests_before_speculate(repos, monkeyp
     assert seen_tiers == ["full_done"]
 
 
+
+
+@pytest.mark.parametrize("tests, restored, prepares, armed", [
+    ("auto", "m1", False, True),   # a relaunched or resumed ticket: its record restores, prepare is skipped
+    ("auto", None, True, True),
+    ("full", "m1", True, False),
+])
+def test_pretest_arms_the_pre_turn_refresh_also_on_a_restored_record(monkeypatch, tmp_path, tests, restored, prepares,
+                                                                     armed):
+    """11-18: nine relaunched tickets restored their record, waited with REFRESH unset and released on main's delta."""
+    prep, ran = land.land_prepare, []
+    monkeypatch.setattr(land.land_queue, "REFRESH", None)
+    monkeypatch.setattr(land.land_full, "restore", lambda wt, branch: restored)
+    monkeypatch.setattr(prep, "_prepare", lambda land_, wt, branch, *a: ran.append(branch))
+    ticket = tmp_path / "ticket.json"  # absent: prepare ends before its relaunch check
+    prep.pretest(land, tmp_path, "feat/x", land.argparse.Namespace(tests=tests), sys.executable, tmp_path, ticket)
+    assert ran == (["feat/x"] if prepares else [])
+    assert (land.land_queue.REFRESH is not None) is armed
+    if armed:  # the refresh re-prepares this landing's own branch and reports its new tested main
+        assert land.land_queue.REFRESH() == restored and ran[-1] == "feat/x"

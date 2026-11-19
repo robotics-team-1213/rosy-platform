@@ -4,6 +4,7 @@
 Single Responsibility:
   - Gathers camera quality facts from local `commissioning_view` (`:8767`) `state.json`,
   - Gathers `omx_incident` hold status and `chunk-status.jsonl` live arm states (`arm_s`, `arm_a`, `arm_b`),
+  - Gathers each arm's pinned shadow model (`act_shadow` in its cell-auto config) and its act-shadow.jsonl summary,
   - Posts the facts to `/api/fleet/pipeline/cell-quality`.
 
 D-136: camera JPEG bytes are never uploaded. Fleet relays no video; the console reads
@@ -11,6 +12,7 @@ frames through Vision preview leases only.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import ssl
@@ -63,6 +65,49 @@ def _collect_live_arm_states(prep_dir: Path) -> dict[str, Any]:
     return arm_states
 
 
+SHADOW_TAIL = 200  # rows summarised per arm; the file stays on the cell PC
+BLOCK_REASON = "학습 정책 실물 실행은 사용자 승인 전(D-1024 L3 arm_b 한정, cell_executor 승인 목록 ik_chunk)"
+
+
+def _collect_arm_models(prep_dir: Path) -> dict[str, Any]:
+    """Per arm: the pinned shadow model and a summary of its proposals, {} without one. Never an execution grant."""
+    models: dict[str, Any] = {arm_id: {} for arm_id in ARM_SUFFIXES}  # {} tells Fleet to drop that arm's entry
+    for arm_id, suffix in ARM_SUFFIXES.items():
+        for path in sorted(prep_dir.glob(f"cell-auto-arm-{suffix}-*.json")):
+            try:
+                config = json.loads(path.read_text(encoding="utf-8"))
+                spec = config.get("act_shadow")
+                if not isinstance(spec, dict) or not spec.get("policy_root"):
+                    continue
+                root = Path(str(spec["policy_root"])).expanduser()
+                warp = root / "cam_warp.json"
+                entry: dict[str, Any] = {
+                    "name": root.name, "policy_revision": spec.get("policy_revision"), "kind": "shadow",
+                    "binding": spec.get("kind") or "act_inference", "config": path.name,
+                    "warp_sha256": hashlib.sha256(warp.read_bytes()).hexdigest() if warp.is_file() else None,
+                    "execution_allowed": False, "block_reason": BLOCK_REASON,
+                    "shadow": {"rows": 0, "errors": 0, "last_at": None, "last_ik_outcome": None, "last_error": None},
+                }
+                log = Path(str(config.get("work_dir") or path.parent)).expanduser() / "act-shadow.jsonl"
+                if log.is_file():
+                    rows = [json.loads(line) for line in log.read_text(errors="replace").splitlines()[-SHADOW_TAIL:]
+                            if line.strip().startswith("{")]
+                    rows = [r for r in rows if r.get("policy_id") == spec.get("policy_revision")]
+                    errors = [r for r in rows if r.get("error")]
+                    last = rows[-1] if rows else {}
+                    entry["shadow"] = {
+                        "rows": len(rows), "errors": len(errors),
+                        "last_at": round(log.stat().st_mtime, 3) if rows else None,
+                        "last_ik_outcome": (last.get("ik") or {}).get("outcome"),
+                        "last_error": str(errors[-1]["error"])[:120] if errors else None,  # Fleet drops longer than 120
+                    }
+                models[arm_id] = entry
+                break
+            except Exception:
+                continue
+    return models
+
+
 def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR, urlopen_fn: Any = urlopen) -> dict[str, Any]:
     """Post camera-quality facts, arm holds and live arm states to Fleet. No image bytes leave the cell PC."""
     ctx = ssl._create_unverified_context()
@@ -87,9 +132,10 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
         except Exception:
             pass
         arm_states = _collect_live_arm_states(prep_dir)
+        arm_models = _collect_arm_models(prep_dir)
         qreq = Request(
             f"{base}/api/fleet/pipeline/cell-quality",
-            data=json.dumps({"schema": "rosy.pipeline.cell-quality.v1", "cameras": cams_quality, "arm_holds": arm_holds, "arm_states": arm_states}).encode("utf-8"),
+            data=json.dumps({"schema": "rosy.pipeline.cell-quality.v1", "cameras": cams_quality, "arm_holds": arm_holds, "arm_states": arm_states, "arm_models": arm_models}).encode("utf-8"),
             method="POST",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         )

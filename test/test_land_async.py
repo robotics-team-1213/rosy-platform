@@ -132,6 +132,21 @@ def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     assert (tree.parent / (tree.name + ".stopped")).exists() is not lands
 
 
+def test_a_supervisor_copy_beside_its_log_finds_mains_land_queue(tmp_path, monkeypatch):
+    """11-18: the copy in <git-common-dir>/rosy-land-wt crashed with "No module named 'land_queue'" on a full queue."""
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "land_queue.py").write_text("WHERE = 'main tools'\n")
+    copy = tmp_path / ".git" / "rosy-land-wt" / "land-fix-x-20261118000000.land_async.py"
+    copy.parent.mkdir(parents=True)
+    copy.write_bytes((ROOT / "tools" / "land_async.py").read_bytes())
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.delitem(sys.modules, "land_queue", raising=False)
+    spec = importlib.util.spec_from_file_location("land_async_copy", copy)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module._queue().WHERE == "main tools"
+
+
 @pytest.mark.parametrize("room", [True, False])
 def test_a_landing_refused_only_by_a_full_queue_waits_for_room(repo, room):
     """start() saw room, another session took the last slot first: wait and run land.py again, not stop."""
@@ -204,6 +219,24 @@ def test_a_landing_recovers_after_a_resource_shortage(repo, monkeypatch):
     assert tool.supervise(tree, snap, [], run=fake_land) == 0
     assert len(runs) == 2
     assert not (tree.parent / (tree.name + ".stopped")).exists()
+
+
+def test_one_freed_slot_wakes_only_the_oldest_waiting_supervisor(tmp_path, monkeypatch):
+    """11-18: every queue-full supervisor polled and re-ran land.py at once; now the oldest alone does."""
+    import threading
+    q, slots, real_sleep, got = tool._queue(), [1], time.sleep, {}
+    monkeypatch.setattr(q, "full", lambda qdir, lane="": None if slots and slots.pop() else "landing queue full")
+    monkeypatch.setattr(q, "queue_dir", lambda tree: tree)
+    monkeypatch.setattr(q, "lane_of", lambda tree, ref="HEAD": "")
+    monkeypatch.setattr(time, "sleep", lambda s: real_sleep(0.01))
+    threads = [threading.Thread(target=lambda n=n: got.update({n: tool.wait_for_room(tmp_path / n, time.monotonic() + 1)}))
+               for n in "abc"]
+    for t in threads:  # a starts waiting first
+        t.start()
+        real_sleep(0.1)
+    for t in threads:
+        t.join()
+    assert got == {"a": True, "b": False, "c": False}
 
 
 def test_expired_room_deadline_refuses_even_a_free_queue(repo, monkeypatch):
@@ -318,7 +351,7 @@ def test_requeueing_a_head_the_live_snapshot_holds_reuses_it(repo, monkeypatch):
 
 
 @pytest.mark.parametrize("room_after", [2, None])
-def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room_after):
+def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, capsys, room_after):
     _, dev = repo
     checks, clock = [], [0.0]
     monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": None if room_after and len(checks) >= room_after
@@ -329,8 +362,11 @@ def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room
         assert tool.start(dev, [], NOW, lambda *a: None)[0] == "land/feat/x-20261028044000"
         assert clock[0] == 2 * tool.FULL_POLL_S
     else:
-        with pytest.raises(SystemExit, match="queue full .*waited 30 min"):
+        with pytest.raises(SystemExit) as stop:
             tool.start(dev, [], NOW, lambda *a: None)
+        assert stop.value.code == 3  # not 0: a caller's background command must not read it as queued
+        err = capsys.readouterr().err
+        assert "[land-async] NOT QUEUED: feat/x: landing queue full" in err and "after 30 min" in err
         assert clock[0] >= tool.FULL_WAIT_S and not _git(dev, "branch", "--list", "land/*")
 
 
@@ -881,5 +917,6 @@ def test_a_rollup_killed_without_a_verdict_is_not_bisected(repo, monkeypatch, ve
         stdout.write(("[land] STOP: NEW failure\n" if verdict else "") + "[remote-pytest] serial: browser job\n")
         return 1
     tool.supervise(tree, snap, [], run=fake_land)
-    assert bool(split) is verdict
+    # 11-19: without a verdict the members still go back alone (empty reason), never bisected on a progress line
+    assert len(split) == 1 and ("NEW failure" in split[0]["reason"]) is verdict
     assert (tree.parent / (tree.name + ".stopped")).exists()

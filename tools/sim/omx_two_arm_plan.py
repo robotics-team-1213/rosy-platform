@@ -131,6 +131,14 @@ def duration(layout, a, b):
     return TIMING["pick"], math.hypot(ax - bx, ay - by) / TIMING["speed"], TIMING["place"]
 
 
+def holds(layout, arm, a, b):
+    """The zones `arm` holds moving a container from `a` to `b`: (through the pick and carry, through the place)."""
+    za, zb = zone(layout, a), zone(layout, b)
+    cross = za in ("a", "b") and zb in ("a", "b") and za != zb  # side to side passes over the middle
+    return ({za} | ({"mid"} if za not in ("mid", SIDE[arm]) else set()),
+            {zb} | ({"mid"} if zb not in ("mid", SIDE[arm]) or cross else set()))
+
+
 def schedule(layout, moves, arms, belt_arrivals=None, start=None):
     """List-schedule `moves` (Harbor order) on `arms`. Returns rows (move, arm, start, pick_end, end, zones) and the extra transports."""
     free = {a: 0. for a in arms}
@@ -154,10 +162,7 @@ def schedule(layout, moves, arms, belt_arrivals=None, start=None):
         here_step = {c: s for c, s in here.items() if c != m["cargo_id"]}
         best = None
         for arm in able:
-            za, zb = zone(layout, a), zone(layout, b)
-            hold_a = {za} | ({"mid"} if za not in ("mid", SIDE[arm]) else set())
-            cross = za in ("a", "b") and zb in ("a", "b") and za != zb  # side to side passes over the middle
-            hold_b = {zb} | ({"mid"} if zb not in ("mid", SIDE[arm]) or cross else set())
+            hold_a, hold_b = holds(layout, arm, a, b)
             poses = step_swept_poses(layout, arm, a, b, here_step) if len(arms) > 1 else None
             t = max(ready, free[arm])
             while True:
@@ -212,7 +217,7 @@ def metrics(rows, extra, arms):
 CELL_STACK_START = {
     "bar-1": "tmp-a-2-l1", "bar-2": "tmp-a-1-l1", "bar-3": "tmp-b-2-l1",
     "bar-4": "tmp-a-2", "bar-5": "tmp-a-1", "bar-6": "tmp-b-2",
-    "bar-7": "ship-stern-l0", "bar-8": "tmp-a-3", "bar-9": "tmp-b-3",
+    "bar-7": "tmp-b-1", "bar-8": "tmp-a-3", "bar-9": "tmp-b-3",
 }
 
 

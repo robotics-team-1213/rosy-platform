@@ -19,7 +19,7 @@ COVERED = dict(a=2, b=1)  # a container sits in this lane, the others show their
 
 
 def frame(layout, hide=(), skew=None):
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)  # the yellow table (hue 30, clear of the orange mask's < 22)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)  # the sim table (hue 21, BG_HUES)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
     for tag, pose in POSES.items():
@@ -180,7 +180,7 @@ def test_yellow_containers_and_bottom_clipped_v11_plates_are_measured():
     prev = dict(plates={t: p["lanes"] for t, p in first["plates"].items()}, shape=first["shape"])
     v11 = dict(step_deg=17.0, radius_m=.203)
     poses = dict(a=(-.0933, -.1676, 0.), b=(-.0906, .1668, 0.))
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
     for tag, pose in poses.items():
@@ -205,7 +205,7 @@ def test_yellow_containers_and_bottom_clipped_v11_plates_are_measured():
 
 def test_the_ship_is_found_where_its_hull_lies():
     layout = sites.Layout()
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     pose = (.1705, -.011, math.radians(.5))
     cv2.fillPoly(img, [np.round(r2s.ship_polygon(cam, layout, pose)).astype(np.int32)], (250, 215, 150))  # light blue hull
@@ -213,7 +213,7 @@ def test_the_ship_is_found_where_its_hull_lies():
     assert got["stern_x_m"] == pytest.approx(pose[0], abs=.002)
     assert got["centre_y_m"] == pytest.approx(pose[1], abs=.002)
     assert got["iou"] > .95
-    assert "error" in r2s.measure_ship(np.full((480, 640, 3), (60, 200, 200), np.uint8), layout)
+    assert "error" in r2s.measure_ship(np.full((480, 640, 3), (27, 132, 180), np.uint8), layout)
 
 
 def test_layout_takes_the_ship_from_a_snapshot(tmp_path):
@@ -222,7 +222,7 @@ def test_layout_takes_the_ship_from_a_snapshot(tmp_path):
     path = tmp_path / "snap.json"
     path.write_text(json.dumps(s), encoding="utf-8")
     base, moved = sites.Layout(), sites.Layout(cell_snapshot=str(path), ship_pose="snapshot")
-    a, b = base.sites["ship-stern-l0"]["xy"], moved.sites["ship-stern-l0"]["xy"]
+    a, b = base.sites["ship-h1r1-l0"]["xy"], moved.sites["ship-h1r1-l0"]["xy"]
     assert b[0] - a[0] == pytest.approx(.1705 - base.choices["ship_stern_x_m"], abs=1e-6)
     assert b[1] - a[1] == pytest.approx(-.011 - base.choices["ship_centre_y_m"], abs=1e-6)
     with pytest.raises(ValueError, match="no measured ship"):
@@ -277,7 +277,7 @@ def test_a_stage_takes_extra_choices_after_the_snapshots_so_they_win():
 
 def test_the_belt_request_asks_for_one_tape_reading_that_tells_the_two_belts_apart(tmp_path):
     (tmp_path / "frames").mkdir()
-    cv2.imwrite(str(tmp_path / "frames" / "top.jpg"), np.full((480, 640, 3), (60, 200, 200), np.uint8))
+    cv2.imwrite(str(tmp_path / "frames" / "top.jpg"), np.full((480, 640, 3), (27, 132, 180), np.uint8))
     s = snap()
     s["items"]["belt"] = dict(end_x_m=.205, centre_y_m=-.037, width_m=.085)
     s["taken_at"] = "2026-11-09T04:28:23+00:00"
@@ -339,7 +339,7 @@ def test_online_camera_anchor_calibration_and_servo_compensator_correct_drift():
     cam_moved = r2s.Camera(moved_dict, (480, 640))
 
     # Render synthetic top frame (pads 90 mm long as printed, the anchor length) from the perturbed camera with 6 dark lane pads, belt strip, and a skewed belt container
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
     pad_z = layout.deck_z + .0006
     for tag in ("a", "b"):
         for k in (1, 2, 3):
@@ -380,7 +380,7 @@ def test_tilted_bottom_clipped_temp_lane_and_servo_zero_offset_compensation():
     moved_dict = r2s_comp.perturbed_camera_dict(base_cam, **r2s_comp.DEFAULT_CAM_JITTER)
     cam_moved = r2s.Camera(moved_dict, (480, 640))
 
-    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
     bx, by = layout.belt_stop_x + .005, layout.belt_y
     belt_poly = [cam_moved.project((x, yy, layout.belt_top))
                  for x, yy in ((bx, by - .0425), (bx + .295, by - .0425), (bx + .295, by + .0425), (bx, by + .0425))]
@@ -610,10 +610,98 @@ def test_temp_plate_v12_lanes_seat_containers_without_interlane_wall_overlap():
         assert tilt < 0.5, site
 
 
+def test_pace_seconds_track_budget_slows_low_kp_joints():
+    """A contact descent is paced by the servo's ramp lag: half the kp needs about twice the time; without a budget nothing changes."""
+    import omx_real2sim_comp as r2s_comp
+
+    def world(kp):
+        class M:
+            actuator_forcerange = np.tile([[0.0, 3.0]], (5, 1))
+            dof_damping = np.full(5, 0.25)
+            dof_frictionloss = np.full(5, 0.03)
+            actuator_gainprm = np.tile([[kp, 0.0, 0.0]], (5, 1))
+            actuator_biasprm = np.tile([[0.0, -kp, -6.3]], (5, 1))
+
+        class W:
+            model = M()
+            q = {"arm_b": np.arange(0, 6)}
+            arm_dof = act = {"arm_b": np.arange(0, 5)}
+
+        return W()
+
+    q0, q1 = np.zeros(5), np.array([0.0, 0.05, 0.08, -0.10, 0.0])
+    fast, slow = (r2s_comp.ServoCompensator(world(kp)) for kp in (40.0, 20.0))
+    assert fast.pace_seconds("arm_b", q0, q1, 1.5) == slow.pace_seconds("arm_b", q0, q1, 1.5) == 1.5
+    budget = math.radians(1.5)
+    t40, t20 = (c.pace_seconds("arm_b", q0, q1, 1.5, track_rad=budget) for c in (fast, slow))
+    assert t20 == pytest.approx(1.5 * 0.10 * (6.3 + 0.25) / 20.0 / budget)
+    assert t20 > t40 >= 1.5
 
 
+def test_far_clip_ignores_colour_past_the_far_edge_of_a_slot_box():
+    """A gold dock part joined to a ship-h1r0 box on the side away from the camera dragged the overhang correction 15 mm (11-18)."""
+    import omx_real2sim_comp_helpers as helpers
+
+    layout = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                          arm_bases="plate-centre", top_camera="2026-11-10")
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], (480, 640))
+    sa = layout.sites["ship-h1r0-l1"]
+    box_l, box_w, box_h = layout.box
+    top_z = sa["z"] + box_h / 2
+    yaw = sa["yaw"]
+    along, across = np.array([math.cos(yaw), math.sin(yaw)]), np.array([-math.sin(yaw), math.cos(yaw)])
+    far = -1.0 if (np.asarray(cam.eye[:2]) - sa["xy"]) @ across >= 0 else 1.0
+    face = [np.asarray(sa["xy"]) + s * along + t * across for s in np.linspace(-box_l / 2, box_l / 2, 19) for t in np.linspace(-box_w / 2, box_w / 2, 7)]
+    stuck = [np.asarray(sa["xy"]) + s * along + far * t * across for s in np.linspace(-.02, .02, 5) for t in np.linspace(box_w / 2, box_w / 2 + .016, 5)]
+    px = np.array([cam.project([*p, top_z]) for p in face + stuck], float)
+    plain = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"])[0]
+    clipped = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"], far_clip=True)[0]
+    assert math.dist(clipped, sa["xy"]) < .002 < .005 < math.dist(plain, sa["xy"])
 
 
+def test_far_clip_drops_top_tier_far_edge_creep_past_the_seat_draw():
+    """The top tier's far edge reads 6-7 mm past the slot (calibration scale at box height), more than the seat draw: it is clipped, not trusted (11-18)."""
+    import omx_real2sim_comp_helpers as helpers
+
+    layout = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                          arm_bases="plate-centre", top_camera="2026-11-10")
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], (480, 640))
+    sa = layout.sites["ship-h1r0-l2"]
+    box_l, box_w, box_h = layout.box
+    top_z = sa["z"] + box_h / 2
+    yaw = sa["yaw"]
+    along, across = np.array([math.cos(yaw), math.sin(yaw)]), np.array([-math.sin(yaw), math.cos(yaw)])
+    far = -1.0 if (np.asarray(cam.eye[:2]) - sa["xy"]) @ across >= 0 else 1.0
+    face = [np.asarray(sa["xy"]) + s * along + t * across for s in np.linspace(-box_l / 2, box_l / 2, 19) for t in np.linspace(-box_w / 2, box_w / 2, 7)]
+    creep = [np.asarray(sa["xy"]) + s * along + far * t * across for s in np.linspace(-.04, .04, 9) for t in np.linspace(box_w / 2 + .005, box_w / 2 + .007, 3)]
+    px = np.array([cam.project([*p, top_z]) for p in face + creep], float)
+    plain = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"])[0]
+    clipped = helpers._box_on_plane(cam, px, top_z, box_l, box_w, 480, yaw, sa["xy"], far_clip=True)[0]
+    assert math.dist(clipped, sa["xy"]) < .002 < math.dist(plain, sa["xy"])
 
 
+def test_container_blobs_background_is_table_or_hull_colour_not_size():
+    """A joined orange group stays foreground at any size (11-18/19: 7-8 boxes beat the old 12000 px cut); table and hull stay background."""
+    import omx_real2sim_comp_helpers as helpers
 
+    table, hull, orange = (27, 132, 180), (222, 200, 151), (53, 112, 219)  # BGR of the 11-18 render dump: table, hull, container
+    for w in (96, 200, 380):  # 9.6k, 20k and 38k px groups
+        bgr = np.full((480, 640, 3), table, np.uint8)
+        bgr[:, :120] = hull
+        bgr[140:240, 290:290 + w] = orange
+        assert any(col == "orange" and cv2.contourArea(c.astype(np.int32)) > .8 * 100 * w for col, c in helpers.container_blobs(bgr)), w
+    assert not helpers.container_blobs(np.full((480, 640, 3), table, np.uint8))  # a bare table gives no candidate
+    assert not helpers.container_blobs(np.full((480, 640, 3), hull, np.uint8))
+
+
+def test_bg_hues_match_the_sim_albedos():
+    import colorsys
+    import omx_real2sim_comp_helpers as helpers
+    try:
+        import omx_two_arm_world as world
+    except (ImportError, OSError):
+        pytest.skip("mujoco not usable here")
+
+    hue = lambda k: colorsys.rgb_to_hsv(*world.COLOURS[k][:3])[0] * 180
+    for k, (centre, half) in zip(("table", "ship"), helpers.BG_HUES):
+        assert abs(hue(k) - centre) <= 1 and abs(hue("container") - centre) > half

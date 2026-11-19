@@ -112,3 +112,20 @@ class DockingConfig:
     bay_charge_rise_v: float = 0.05     # D-941: 20 s 안 +0.05 V(도크 계측 없음)
     bay_charge_confirm_s: float = 20.0
     bay_fleet_eval_weight: float = 0.35  # 관제(Fleet) 서브픽셀 중심선 평가 보정 가중치
+    # 칸 줄 안 시작·회전 안전(2026-11-18 옆 칸 접촉, bay_zone.py). 몸 스캔 = 짐칸 포함 회전 판정.
+    bay_zone_margin_m: float = 0.0      # 스테이징 거리보다 안쪽이면 칸 줄 안(Nav2 를 부르지 않는다)
+    bay_lane_half_m: float = 0.11       # 칸 간격(약 0.22 m)의 반 — 넘으면 다른 칸 줄
+    bay_zone_agree_m: float = 0.05      # 맵 횡과 선 횡이 이만큼 넘게 다르면 모호
+    bay_zone_agree_rad: float = 0.1745  # 10 deg
+    bay_zone_look_s: float = 1.0        # 칸 줄 안 판정 전에 선 관측을 기다리는 시간
+    bay_exit_lateral_m: float = 0.05    # 칸 줄에서 나가기 시작할 수 있는 횡 오차(선 관측)
+    bay_exit_heading_max_rad: float = 0.2618  # 15 deg (조향 없이 나가면 atan(횡/거리)로 더 좁힌다)
+    bay_exit_extra_m: float = 0.02      # 스테이징 거리보다 이만큼 더 나간다
+    bay_exit_speed: float = 0.05        # m/s, 칸 줄 곧은 전진
+    bay_exit_front_gap_m: float = 0.08  # 앞 여유가 이보다 작으면 멈춘다
+    bay_exit_steer_lat: float = 6.0     # rad/m, 횡 오차 → 목표 방위(선 보며 전진; 시뮬로 부호·크기 확인)
+    bay_exit_steer_head: float = 2.0    # 1/s, 목표 방위로 맞추는 이득(0 이면 곧게 나간다)
+    bay_scan_fresh_s: float = 0.5       # 몸 스캔 판정이 이보다 오래되면 없는 것
+    bay_scan_wait_s: float = 2.0        # 몸 스캔 없이 이만큼 지나면 실패
+    # shortcut: 짐칸 뒤 돌출 0.126 m 는 D-1013/D-397 추정(미실측) — 실측(D-397 후속) 뒤 바꾼다.
+    bay_turn_rear_overhang_m: float = 0.126
