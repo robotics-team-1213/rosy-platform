@@ -10,6 +10,8 @@
       Refuses unless that log came from `test` for this sha and its last pytest summary passed
       without failures or errors. Unpacks `git archive` of deploy/robot, the OMX adapter, contracts/foundation and the Calibration app plus
       REVISION into ~/rosy-test/omx-tools-<sha10>/ (skipped when its REVISION already matches),
+      records `git merge-base <sha> main` as floor_sha in the cell's omx_autoupdate state (other keys kept,
+      under the updater's lock, atomic rename) so the timer never goes back below the hotfix,
       then switches ~/rosy-test/omx-tools-current to it atomically. Prints folder and old target.
   status [--host user@host]
       Prints the current link target and the five newest omx-tools-* folders.
@@ -22,11 +24,14 @@ import argparse
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "deploy" / "robot" / "omx"))
+from omx_autoupdate import DEFAULT_CONFIG, DEFAULT_ROOT, STATE_FILE, UPDATE_LOCK  # noqa: E402
 HOST_ENV = "OMX_HOTFIX_HOST"
 # contracts/foundation: the cell scripts import core_common (D-966 control parameters), and the site env puts
 # <tree>/contracts/foundation on PYTHONPATH like the omx_autoupdate tree
@@ -130,11 +135,43 @@ def unpack_script(name: str) -> str:
             f" tar -xzf - -C {part}; rm -rf {name}; mv {part}/{name} {name}; rmdir {part}")
 
 
+# Runs on the cell (python3 - <floor> <config> <root> <state> <lock>): the updater's root from its config, then
+# floor_sha merged into its state under its update.lock, other keys untouched, replaced by rename.
+FLOOR_SCRIPT = """\
+import fcntl, json, os, sys
+from pathlib import Path
+floor, config, root, name, lock_name = sys.argv[1:6]
+config = Path(os.path.expanduser(config))
+if config.is_file():
+    root = json.loads(config.read_text(encoding="utf-8")).get("root", root)
+root = Path(os.path.expanduser(root))
+root.mkdir(parents=True, exist_ok=True)
+with (root / lock_name).open("a") as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    path = root / name
+    try:
+        state = json.loads(path.read_text())
+    except FileNotFoundError:
+        state = {"current": None, "previous": None, "history": []}
+    state["floor_sha"] = floor
+    tmp = path.with_name(name + ".floor.tmp")
+    tmp.write_text(json.dumps(state, indent=2))
+    os.replace(tmp, path)
+print(path)
+"""
+
+
+def floor_command(floor: str) -> str:
+    return "python3 - " + " ".join(shlex.quote(a) for a in (floor, DEFAULT_CONFIG, DEFAULT_ROOT, STATE_FILE,
+                                                             UPDATE_LOCK))
+
+
 def deploy(sha: str, host: str, tested_log: Path) -> tuple[str, str]:
     full = _sha(sha)
     problem = log_problem(tested_log, full)
     if problem:
         raise SystemExit(f"[omx-hotfix] refusing to deploy {full[:10]}: {problem}")
+    floor = _git("merge-base", full, "main")  # before any copy: no common base, no deploy
     short = full[:10]
     name = f"omx-tools-{short}"
     if _ssh(host, f"cat rosy-test/{name}/REVISION 2>/dev/null || true") == short:
@@ -147,6 +184,9 @@ def deploy(sha: str, host: str, tested_log: Path) -> tuple[str, str]:
         if archive.returncode:
             raise SystemExit(f"[omx-hotfix] git archive failed: {archive.stderr.decode(errors='replace')}")
         _ssh(host, unpack_script(name), data=archive.stdout)  # stdin, so no scp or local C: paths
+    # floor first: if the switch then fails, a raised floor only holds the timer back
+    state = _ssh(host, floor_command(floor), data=FLOOR_SCRIPT.encode())
+    print(f"[omx-hotfix] autoupdate floor {floor[:10]} recorded in {state}", flush=True)
     previous = _ssh(host, switch_script(name))
     return f"~/rosy-test/{name}", previous
 
