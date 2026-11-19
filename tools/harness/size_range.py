@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime as dt
 import functools
+import json
 import os
 import re
 import subprocess
@@ -25,13 +26,14 @@ import types
 import xml.etree.ElementTree as ET
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import crlf_rule
 import land_metrics_rule
 import size_limits
 from colcon_roots import colcon_roots
 
+EXEMPT_FILE = Path(__file__).with_name("size_range_exempt.json")  # exact shas, reviewed in their commit message
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
 
 
@@ -225,8 +227,10 @@ def main(argv: list[str]) -> int:
     if verdicts is None:
         verdicts = [check(commit) for commit in commits]
     red = []
+    # 11-19: historical commits already in local main whose files a later commit split; listed by exact sha
+    exempt = {row["commit"] for row in json.loads(EXEMPT_FILE.read_text(encoding="utf-8"))} if EXEMPT_FILE.is_file() else set()
     for commit, bad in zip(commits, verdicts):
-        if bad:
+        if bad and commit not in exempt:
             red.append(_git("log", "-1", "--format=%h %s", commit).strip() + "\n    " + "\n    ".join(bad))
     print(f"[size-range] {len(commits)} commit(s) checked")
     for commit in commits:
