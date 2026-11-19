@@ -176,7 +176,9 @@ def run_auto(
                     bias_data, choices, work, failed_yaws, dest_view,
                 )
                 if not usable:
-                    row["error"] = "no usable object after the pivot"
+                    row["refused"] = refused
+                    kind = cell_diagnose.obstacle_type(refused)
+                    row["error"] = f"no usable object ({kind})" if kind == "neighbour clearance" else "no usable object after the pivot"
                     return {**out, "result": "stopped: " + row["error"]}
                 target = usable[0]
                 cd.target(objects, usable, refused)
