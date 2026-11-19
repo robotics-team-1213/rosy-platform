@@ -90,7 +90,7 @@ def bundle(tmp_path, monkeypatch):
     raw = json.loads((model_dir / "model_manifest.json").read_text())
     raw["dataset"] = {"repo": "store:train", "revision": train.name}
     (model_dir / "model_manifest.json").write_text(json.dumps(raw))
-    from perception_runtime.perception.learned.manifest import load_manifest
+    from core_common.perception_model import load_manifest
     model.manifest = load_manifest(model_dir)
     monkeypatch.setattr(replay.LaneSegModel, "open", lambda folder: model)
     image, anchor = _snapshots()

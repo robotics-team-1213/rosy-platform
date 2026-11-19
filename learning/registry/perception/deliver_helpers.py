@@ -17,7 +17,7 @@ for _p in (_HERE, ROOT / "middleware" / "perception", ROOT / "integrations" / "p
         sys.path.insert(0, str(_p))
 
 import operator_ssh  # noqa: E402
-from perception_runtime.perception.learned.manifest import MANIFEST_NAME  # noqa: E402
+from core_common.perception_model import MANIFEST_NAME  # noqa: E402
 
 REMOTE_ROOT = "/var/lib/rosy/models"
 REPORT_NAME = "intake_report.json"

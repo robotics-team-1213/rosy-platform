@@ -22,7 +22,7 @@ import store
 from test_object_eval_publication import fixture
 from test_learned_detector import model_dir, FakeSession
 from perception_runtime.perception.learned.detector import ObjectDetModel
-from perception_runtime.perception.learned.manifest import load_manifest
+from core_common.perception_model import load_manifest
 from core_common.observation import ObservationSnapshot, SnapshotValidity
 
 
