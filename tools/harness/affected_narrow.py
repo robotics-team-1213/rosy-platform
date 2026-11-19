@@ -85,9 +85,9 @@ def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
             add(test, why)
         return "own"
     if trigger.endswith(SELF_TRIGGER):
-        for test in repo.test_files:
-            if SELF_TEST.match(test):
-                add(test, f"selector self-test tier ({path})")
+        readers = tool_readers(repo, path)
+        for test in readers or [t for t in repo.test_files if SELF_TEST.match(t)]:
+            add(test, readers.get(test) or f"selector self-test tier ({path})")
         add(ARCHITECTURE, f"selector self-test tier ({path})")
         if any(at._match(path, p) for p in RUNNER_TOOLS):
             for suite in CANARY:
@@ -101,6 +101,20 @@ def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
         add(str(PurePosixPath(path).parent), f"conftest scope ({path})")
         return "own"
     return "own" if trigger.endswith("CI workflow") else "graph"  # lab runs execute no workflow
+
+
+def tool_readers(repo: at.Repo, path: str) -> dict[str, str]:
+    """Panel 2026-11-20 (aff-narrow): a landing or runner TOOL (not the selector, its registries or the
+    harness) selects the tests that import or name it and its own `test/test_<stem>*.py`, not the whole
+    self-test tier. {} (the whole tier) when no test reads it: an unread gate tool is unknown reach."""
+    if legacy() or not path.startswith("tools/") or at._under(path, "tools/harness"):
+        return {}
+    stem = PurePosixPath(path).stem
+    found = {t: f"reads {path}" for t in repo.referencing_tests(path)}
+    for test in repo.test_files:
+        if PurePosixPath(test).name.startswith(f"test_{stem}") and at._under(test, "test"):
+            found.setdefault(test, f"named for {path}")
+    return found
 
 
 def folder_tests(repo: at.Repo, path: str) -> dict[str, str]:
