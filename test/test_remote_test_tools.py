@@ -88,10 +88,10 @@ def test_default_recipe_changes_only_pytest_pin_and_rekeys_the_environment(monke
     before = rp.deps(ROOT, BASE)
     ci = rp.git(ROOT, "show", f"{BASE}:.github/workflows/ci.yml")
     dirs = re.search(r'--wheel-dir "\$wheelhouse" \\\n\s*(.+)', ci).group(1).split()
-    paths = (rp.CI, rp.DEVICE_REQ, rp.CRYPTO_REQ, rp.FLEET_REQ, rp.VISION_REQ, *dirs)
+    paths = (rp.DEVICE_REQ, rp.CRYPTO_REQ, rp.FLEET_REQ, rp.VISION_REQ, *dirs)
     ids = [rp.git(ROOT, "rev-parse", f"{BASE}:{p}") for p in paths]
     install = pinned.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
-    expected = hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16]
+    expected = hashlib.sha256("\n".join([install, *dirs, *ids]).encode()).hexdigest()[:16]
     assert before == (expected, dirs)
     monkeypatch.setattr(rp, "VENV", old)
     legacy = rp.deps(ROOT, BASE, test_tools=None)
