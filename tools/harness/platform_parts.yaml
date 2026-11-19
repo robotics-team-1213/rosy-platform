@@ -85,8 +85,16 @@ capabilities:
 # tools/harness/affected_repo.py app_of() reads all three; checked by
 # test/architecture/test_capability_owners.py.
 apps: [site-fleet, omx-cell, pinky, account, vision, learning, core, tooling, repo, neutral]
-app_neutral: ["**/logs.md", "**/index.md", "docs/adr/*"]
+# 2026-11-20 (bn-C rank 1): folder guides (AGENTS.md, README.md) and the API contract
+# version (only the OpenAPI description reads it; api_reserve bumps it from any app) are no app's work.
+# shortcut: contract_version.py is neutral while one API version covers every surface; drop it when versions split per surface (bn-C rank 3).
+app_neutral: ["**/logs.md", "**/index.md", "docs/adr/*", "**/AGENTS.md", "**/README.md",
+              "middleware/core/api/core_api_web/api/contract_version.py"]
 app_subtrees:
+  learning/envs/isaac/assets: omx-cell  # cell twin assets, co-edited with omx-cell (9 of 12 isaac commits in 7 days)
+  learning/envs/isaac/cell_model_inventory.yaml: omx-cell
+  learning/envs/isaac/cell_physics.yaml: omx-cell
+  tools/incident_*: site-fleet  # import rosy.decision (Fleet judgment)
   tools/sim/omx_*: omx-cell
   test/test_omx_*: omx-cell
   tools/land*.py: tooling
