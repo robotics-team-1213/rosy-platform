@@ -136,10 +136,7 @@ jobs:
           # python3-opencv: the lane live viewer (integrations/simulation/gazebo/scripts/lane_live_view.py)
           # imports cv2 at module top; without the package the gz_sim step dies at
           # collection and masks every later gate (main red since 650fad89, 2026-09-24).
-          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl openssh-client zstd python3-opencv python3-pil rauc=1.11.3-2 squashfs-tools ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs ros-jazzy-control-msgs ros-jazzy-controller-manager-msgs
-          # The isolated RAUC fixtures verify the exact package bytes. Use the same apt mirror as installation.
-          (cd /tmp && apt-get download -qq rauc=1.11.3-2)
-          echo "ROSY_TEST_RAUC_DEB=/tmp/rauc_1.11.3-2_$(dpkg --print-architecture).deb" >> "$GITHUB_ENV"
+          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl openssh-client zstd python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs ros-jazzy-control-msgs ros-jazzy-controller-manager-msgs
           # --break-system-packages: ros:jazzy-ros-base 는 Ubuntu 24.04 / Python 3.12 라
           # 시스템 환경이 PEP 668 로 표시되어 있다. 이 플래그가 없어 run 34474895940 이
           # externally-managed-environment 로 40 초만에 죽었고, 그 아래 colcon build 부터
@@ -165,6 +162,15 @@ jobs:
           pip3 install --no-cache-dir --break-system-packages --no-deps oauthlib==4.0.0 joserfc==1.7.5
           # Browser modules import the SDK during collection, even with browser tests disabled.
           # Chromium stays scoped to the browser verification step below.
+
+      - name: Stage pinned package for root RAUC fixtures
+        if: contains(toJSON(matrix.invocations), '"test/') || contains(toJSON(matrix.invocations), '"test"')
+        run: |
+          # Root fixtures verify the package bytes before extracting the pinned executable.
+          # The common setup already loaded the apt index for this job.
+          apt-get install -y -qq rauc=1.11.3-2 squashfs-tools
+          (cd /tmp && apt-get download -qq rauc=1.11.3-2)
+          echo "ROSY_TEST_RAUC_DEB=/tmp/rauc_1.11.3-2_$(dpkg --print-architecture).deb" >> "$GITHUB_ENV"
 
       - name: Install receiver TLS verification runtime
         run: |
@@ -205,9 +211,8 @@ jobs:
           # The console is Korean: without fonts-noto-cjk, headless Chromium renders
           # Hangul through Playwright's wide Unifont fallback and 320px layout-fit
           # assertions (fleet header link tag) see overflow that real browsers do not.
-          # 11-19: archive/security.ubuntu.com refused GitHub runners for an hour (PR #247, 25 of 26 shards exit 100)
-          sed -i 's|http://archive.ubuntu.com|http://azure.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://azure.archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci-retries
-          apt-get update -qq && apt-get install -y -qq fonts-noto-cjk
+          # The common setup has already configured apt mirrors and refreshed the index.
+          apt-get install -y -qq fonts-noto-cjk
           python3 -m playwright install --with-deps chromium
 
       - name: Install Pinky raw verification tools
