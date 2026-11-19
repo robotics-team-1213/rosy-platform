@@ -54,6 +54,9 @@ rosy-monitoring --config /etc/rosy-monitoring/monitoring.yaml --state-dir /var/l
 원천 URL의 자격·query·fragment를 거부하며 HTTPS 또는 리터럴 loopback HTTP만 허용한다.
 `load_credentials`는 환경 변수 참조에서 읽기 principal과 상위 원천의 자격을 따로 읽는다.
 읽기 principal마다 사이트 범위를 제한하고 reader/upstream 간 토큰 재사용을 거부한다.
+`account_config`는 Rosy Account 수신 설정 JSON의 절대 경로다. 있으면 사람은 Account로 로그인해 자기 사이트의 `monitoring.read`로 읽고, 조회 키는 수집기 사이 조회와 비상 조회에 남는다([D-990](../../docs/adr/D-990-monitoring-account-receiver.md)). 현장 이미지에서만 켤 수 있다.
+
+현장에서 켤 때는 수신 설정 JSON과 공개 키, 암호화 키를 `ROSY_SITE_MONITORING_SECRETS_DIR`에 두고 `account_config: /run/rosy-monitoring-secrets/account.json`을 적는다. 비밀 폴더가 읽기 전용이므로 `session_db`는 `/var/lib/rosy-monitoring/account.sqlite3` 같은 절대 경로로 둔다. 암호화 키는 서비스 사용자(10001) 소유 0600이어야 하고, 그렇지 않으면 `MONITORING_STARTUP_FAILED`로 끝난다. Account에는 `https://<site>/api/monitoring/v1/account/callback`과 `site:<site_id>` 자원으로 client를 등록한다.
 
 `ObservationCache.update_local`은 검증된 로컬 관측을 게시한다.
 `receive_peer`는 등록된 peer의 신원·사이트 집합·generation/sequence·시계를 확인한다.

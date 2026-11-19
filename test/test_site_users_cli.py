@@ -10,8 +10,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deploy.site import site_users
-from deploy.site.site_users import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "operations" / "account"))
+
+from deploy.site import site_users  # noqa: E402
+from deploy.site.site_users import (  # noqa: E402
     SiteUsersError,
     add_user,
     list_users,
@@ -45,7 +47,10 @@ def _no_temp_files_left(tmp_path: Path) -> None:
 
 
 def test_unrelated_registry_edits_preserve_explicit_machine_viewer(tmp_path):
-    from fleet.server.site_users import load_site_users
+    import fleet.server.site_users as fleet_site_users
+    import rosy_account.site_users as account_site_users
+    from rosy_account.site_users import load_site_users
+    assert fleet_site_users is account_site_users
     path = tmp_path / "site-users.yaml"
     machine = {**_entry("health-check", "viewer", "health-check-key"), "machine": True}
     _seed(path, _entry(), machine)
@@ -68,7 +73,7 @@ def test_registry_writer_rejects_invalid_machine_entries(changes):
 
 
 def test_machine_marker_cannot_accompany_valid_human_login_credentials(tmp_path):
-    from fleet.server.site_users import hash_password, load_site_users
+    from rosy_account.site_users import hash_password, load_site_users
     path = tmp_path / "site-users.yaml"
     machine = {**_entry("health-check", "viewer"), "machine": True,
                "login": "health", "password_scrypt": hash_password("test-only-human-password")}
@@ -81,7 +86,7 @@ def test_machine_marker_cannot_accompany_valid_human_login_credentials(tmp_path)
 
 def test_add_list_remove_roundtrip_loads_in_the_real_fleet_loader(
         tmp_path, monkeypatch, capsys):
-    from fleet.server.site_users import load_site_users
+    from rosy_account.site_users import load_site_users
 
     path = tmp_path / "site-users.yaml"
     _seed(path, _entry())
@@ -304,7 +309,7 @@ def test_validate_users_document_accepts_service_rows_and_normalizes_spaces():
 
 
 def test_add_login_preserves_machine_users_and_real_fleet_auth(tmp_path, monkeypatch, capsys):
-    from fleet.server.site_users import hash_password, load_site_accounts, verify_password
+    from rosy_account.site_users import hash_password, load_site_accounts, verify_password
 
     path = tmp_path / "site-users.yaml"
     machine = _entry("situation", "ai_observer", "situation-token")
@@ -338,7 +343,7 @@ def test_add_login_preserves_machine_users_and_real_fleet_auth(tmp_path, monkeyp
 
 
 def test_login_invalid_or_duplicate_credentials_leave_registry_unchanged(tmp_path, monkeypatch):
-    from fleet.server.site_users import hash_password
+    from rosy_account.site_users import hash_password
 
     encoded = hash_password("test-only-password")
     path = tmp_path / "site-users.yaml"
@@ -401,7 +406,7 @@ def test_ownership_failure_preserves_original_registry(tmp_path, monkeypatch):
 def test_set_policy_admin_keeps_the_operator_role_and_loads_in_fleet(tmp_path):
     """D-793: an operator gains fleet.policy without losing operate; --off removes it."""
     from fleet.server.site_auth import parse_site_principals
-    from fleet.server.site_users import load_site_users
+    from rosy_account.site_users import load_site_users
 
     class Console:
         def user_credential_overlaps_robot_secret(self, digests):
@@ -447,7 +452,7 @@ def test_set_policy_admin_writes_several_people_once(tmp_path, monkeypatch):
 
 
 def test_add_service_registers_a_machine_without_console_credentials(tmp_path, monkeypatch, capsys):
-    from fleet.server.site_users import hash_password, load_site_accounts
+    from rosy_account.site_users import hash_password, load_site_accounts
 
     path = tmp_path / "site-users.yaml"
     human = {"principal_id": "person-1", "role": "operator", "login": "person",
@@ -537,3 +542,66 @@ def test_add_service_ownership_failure_preserves_original_registry(tmp_path, mon
     assert "ownership refused" in capsys.readouterr().err
     assert path.read_bytes() == original
     _no_temp_files_left(tmp_path)
+
+
+def test_deploy_site_users_and_rosy_account_site_users_schema_parity(tmp_path):
+    from rosy_account.site_users import hash_password, load_site_accounts, verify_password
+
+    encoded = hash_password("correct-horse-battery")
+    valid_doc = {
+        "users": [
+            {
+                "principal_id": "op-1",
+                "role": "operator",
+                "login": "op1",
+                "password_scrypt": encoded,
+                "policy_admin": True,
+            },
+            _entry("viewer-1", "viewer", "tok-1"),
+        ]
+    }
+    path = tmp_path / "users.yaml"
+    path.write_text(yaml.safe_dump(valid_doc, sort_keys=False), encoding="utf-8")
+
+    normalized = validate_users_document(valid_doc)
+    tokens, logins = load_site_accounts(path)
+    assert len(normalized) == 2
+    assert len(tokens) == 1 and len(logins) == 1
+    assert logins["op1"]["principal_id"] == "op-1"
+    assert logins["op1"]["policy_admin"] is True
+    assert verify_password("correct-horse-battery", logins["op1"]["password_scrypt"])
+
+    for bad_entry in (
+        {"principal_id": "op-1", "role": "superadmin", "login": "op1", "password_scrypt": encoded},
+        {"principal_id": "svc-1", "role": "service", "login": "svc1", "password_scrypt": encoded},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": encoded.replace("scrypt$32768$", "scrypt$8192$", 1)},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": encoded.replace("scrypt$32768$", "scrypt$32769$", 1)},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": encoded.replace("scrypt$32768$8$1$", "scrypt$32768$17$1$", 1)},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": encoded.replace("scrypt$32768$8$1$", "scrypt$32768$8$5$", 1)},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": "scrypt$16$8$1$aaaa$bbbb"},
+    ):
+        bad_doc = {"users": [bad_entry]}
+        bad_path = tmp_path / "bad.yaml"
+        bad_path.write_text(yaml.safe_dump(bad_doc, sort_keys=False), encoding="utf-8")
+        with pytest.raises(SiteUsersError):
+            validate_users_document(bad_doc)
+        with pytest.raises(ValueError):
+            load_site_accounts(bad_path)
+
+    dup_login_doc = {
+        "users": [
+            {"principal_id": "op-1", "role": "operator", "login": "dup", "password_scrypt": encoded},
+            {"principal_id": "op-2", "role": "viewer", "login": "dup", "password_scrypt": encoded},
+        ]
+    }
+    dup_path = tmp_path / "dup.yaml"
+    dup_path.write_text(yaml.safe_dump(dup_login_doc, sort_keys=False), encoding="utf-8")
+    with pytest.raises(SiteUsersError):
+        validate_users_document(dup_login_doc)
+    with pytest.raises(ValueError):
+        load_site_accounts(dup_path)

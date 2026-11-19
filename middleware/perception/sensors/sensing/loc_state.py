@@ -18,9 +18,10 @@ Pure logic: the node feeds time, fits and events and executes `Step.actions`.
 """
 from __future__ import annotations
 
-import enum
 import math
 from dataclasses import dataclass
+
+from core_common.protocol.localization import LocState
 
 from .loc_verify import FAILED, PASSED, InjectionCheck
 
@@ -28,13 +29,6 @@ from .loc_verify import FAILED, PASSED, InjectionCheck
 #: `overhead` are not here: they may support a decision but never carry it.
 ASYMMETRIC_CUES = frozenset({'square', 'paint', 'peers', 'slot'})
 DECISION_TTL_S = 5.
-
-
-class LocState(str, enum.Enum):
-    UNKNOWN = 'UNKNOWN'
-    CANDIDATES = 'CANDIDATES'
-    LOCALIZED = 'LOCALIZED'
-    SUSPECT = 'SUSPECT'
 
 
 @dataclass(frozen=True)

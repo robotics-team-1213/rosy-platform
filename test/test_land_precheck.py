@@ -65,6 +65,7 @@ def test_land_async_stops_before_any_snapshot_when_the_precheck_fails(monkeypatc
     tool = load("land_async")
     seen = []
     monkeypatch.setattr(tool.subprocess, "call", lambda argv, **k: seen.append(argv) or 1)
+    monkeypatch.setattr(tool, "too_big", lambda cwd: None)  # the size gate has its own test
     monkeypatch.setattr(tool, "start", lambda *a, **k: pytest.fail("a snapshot was made after a failed precheck"))
     assert tool.main(["--tests", "auto"]) == 1
     assert seen[0][-1] == "--precheck" and seen[0][1].endswith("land.py")
@@ -73,6 +74,7 @@ def test_land_async_stops_before_any_snapshot_when_the_precheck_fails(monkeypatc
 def test_land_async_queues_after_a_passing_precheck(monkeypatch, tmp_path):
     tool = load("land_async")
     monkeypatch.setattr(tool.subprocess, "call", lambda argv, **k: 0)
+    monkeypatch.setattr(tool, "too_big", lambda cwd: None)  # the size gate has its own test
     monkeypatch.setattr(tool, "start", lambda *a, **k: ("land/x", tmp_path / "x.log"))
     assert tool.main(["--tests", "auto"]) == 0
 
@@ -139,3 +141,69 @@ def test_landing_merge_ignores_a_line_ending_only_difference(eol_repo):
     assert subprocess.run(["git", "-C", str(eol_repo), *plain], capture_output=True).returncode == 1
     tree = _git(eol_repo, "merge-tree", "--write-tree", "--no-messages", *real_land().RENORMALIZE, "HEAD", "main")
     assert _git(eol_repo, "cat-file", "-p", f"{tree}:a.py") == "a\nB\nc\nd\nE"
+
+
+def test_land_async_branch_option_runs_precheck_in_hidden_checkout_and_cleans_up(eol_repo, monkeypatch):
+    commit(eol_repo, {"a.py": b"a\r\nb\r\n"})
+    _git(eol_repo, "branch", "feat/plumbing", "HEAD")
+    _git(eol_repo, "switch", "-q", "main")
+    monkeypatch.chdir(eol_repo)
+    tool = load("land_async")
+    monkeypatch.setattr(tool, "start", lambda *a, **k: pytest.fail("a snapshot was made after a failed precheck"))
+    assert tool.main(["--branch", "feat/plumbing", "--tests", "auto"]) == 1
+    assert not _git(eol_repo, "branch", "--list", "land/*")
+    holder = eol_repo / ".git" / tool.HOLDER
+    assert not holder.exists() or list(holder.iterdir()) == []
+    assert len(_git(eol_repo, "worktree", "list", "--porcelain").split("\n\n")) == 1
+
+
+@pytest.mark.parametrize("explicit_branch", [False, True])
+def test_resolve_branch_rejects_untracked_files_but_allows_gitignored(tmp_path, explicit_branch):
+    main = tmp_path / "main"
+    main.mkdir()
+    _git(main, "init", "-q", "-b", "main")
+    for key, value in (("user.email", "t@example.invalid"), ("user.name", "t")):
+        _git(main, "config", key, value)
+    (main / ".gitignore").write_text("*.ignored\n", encoding="utf-8")
+    _git(main, "add", ".gitignore")
+    _git(main, "commit", "-qm", "base")
+    dev = tmp_path / "dev"
+    _git(main, "worktree", "add", "-q", "-b", "feat/untracked", str(dev))
+
+    precheck = load("land_precheck")
+    cwd, arg, expected = (main, "feat/untracked", "refs/heads/feat/untracked") if explicit_branch else (dev, None, "HEAD")
+
+    (dev / "scratch.ignored").write_text("ok\n", encoding="utf-8")
+    assert precheck.resolve_branch(cwd, arg) == ("feat/untracked", expected)
+
+    (dev / "forgotten.py").write_text("x = 1\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="uncommitted changes"):
+        precheck.resolve_branch(cwd, arg)
+
+
+def test_precheck_stops_on_manual_merge_conflict_and_allows_auto_resolvable(eol_repo, monkeypatch):
+    _git(eol_repo, "switch", "-q", "main")
+    (eol_repo / "docs").mkdir()
+    commit(eol_repo, {"docs/logs.md": b"## 2026-11-01\n- base\n", "c.py": b"1\n2\n3\n"})
+    _git(eol_repo, "switch", "-q", "feat/x")
+    _git(eol_repo, "merge", "-q", "--ff-only", "main")
+    commit(eol_repo, {"docs/logs.md": b"## 2026-11-01\n- base\n\n## 2026-11-02\n- feat\n"})
+    _git(eol_repo, "switch", "-q", "main")
+    commit(eol_repo, {"docs/logs.md": b"## 2026-11-01\n- base\n\n## 2026-11-03\n- main\n"})
+    _git(eol_repo, "switch", "-q", "feat/x")
+    land = real_land()
+    load("land_precheck").precheck(land, eol_repo, sys.executable)
+
+    _git(eol_repo, "switch", "-q", "main")
+    commit(eol_repo, {"c.py": b"main\n2\n3\n"})
+    _git(eol_repo, "switch", "-q", "feat/x")
+    commit(eol_repo, {"c.py": b"feat\n2\n3\n"})
+    with pytest.raises(land.Stop, match="conflicts with this branch"):
+        load("land_precheck").precheck(land, eol_repo, sys.executable)
+
+    monkeypatch.chdir(eol_repo)
+    tool = load("land_async")
+    monkeypatch.setattr(tool, "start", lambda *a, **k: pytest.fail("conflicting branch must not queue"))
+    assert tool.main(["--tests", "auto"]) == 1
+    assert not _git(eol_repo, "branch", "--list", "land/*")
+    assert not (eol_repo / ".git" / "rosy-land-queue").exists()

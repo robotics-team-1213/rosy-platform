@@ -115,6 +115,7 @@ class TransferPreflight:
         if not callable(execution_state) or not callable(monotonic):
             raise ValueError("owner-admitted state and its monotonic clock are required")
         self.catalog, self.profile, self.kinematics = catalog, profile, kinematics
+        self._joint_name_set = frozenset(profile.joint_names)
         self.execution_state, self.monotonic = execution_state, monotonic
         self.planner = AnalyticTransferPlanner(kinematics, monotonic=self._clock)
 
@@ -131,7 +132,7 @@ class TransferPreflight:
         if (state.observed_at_monotonic_s > now
                 or now - state.observed_at_monotonic_s > self.profile.max_joint_state_age_s):
             raise TransferPlanRejected(STATE_INVALID, "measured state is stale or from the future")
-        if (set(state.joint_positions) != set(self.profile.joint_names)
+        if (set(state.joint_positions) != self._joint_name_set
                 or state.calibration_revision != catalog.calibration_revision
                 or state.transform_revision != catalog.transform_revision
                 or state.planning_scene_revision != catalog.planning_scene_revision):

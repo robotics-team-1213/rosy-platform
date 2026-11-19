@@ -27,6 +27,8 @@
 
    **순서 (사용자 결정 2026-11-01 「MuJoCo로 먼저 하고 그다음 Isaac」):** 새 시험 조건(어긋난 놓기, 흔들기 범위, 임시 칸 배분)은 먼저 MuJoCo 적층 장면에서 넓게 훑어 실패 경계 후보를 찾고, 그 경계 주변만 Isaac에서 확인한다. MuJoCo 접촉 결과는 후보를 고르는 데만 쓰고, 보고하는 접촉 수치·성공률은 Isaac 확인값이다. 두 결과가 갈리면 갈린 사실과 조건을 기록한다.
 
+   **파이프라인·트랙 명문화 (2026-11-10, [D-1012](D-1012-omx-sim-pipeline-mujoco-to-isaac-and-gazebo-ros-contract.md)):** 물리·학습 파이프라인의 직렬 순서는 **`Stage 1 (MuJoCo: 기하·다색/비정렬 비전·ACT 학습)` → `Stage 2 (Isaac Sim: PhysX 그리퍼 패드 슬립·3단 안착 심화 확증)`** 2단계다(`isaac-handoff.json`으로 직결). `Gazebo`는 MuJoCo와 Isaac 사이의 학습·물리 단계가 아니라, ROS 2 제어·토픽 실행 계약(`omx_backend_conformance.py`, D-866 §2)을 독립 검증하는 별도 트랙(`track: "ros2_execution_contract"`)으로 분리한다.
+
 2. **셀 모델은 원본 하나에서 만든다.** 팔은 `omx_f_palletizing.urdf`(조 v2.1), 작업대·벨트·팔 베이스는 `261026_World.STL`, 배 판은 잰 값(피치·지름·높이·5×5)에서 생성, 컨테이너는 치수와 사용자 무게, 카메라는 아래 3의 표. 이 값들을 저장소 대장 하나(제안 `learning/envs/isaac/cell_model_inventory.yaml`)에 출처와 함께 두고 Isaac·MuJoCo가 같은 대장을 읽는다. 시뮬레이터마다 숫자를 따로 적지 않는다.
 
    **보강 (2026-11-03, 사용자 요청 「가제보와 무조코 그리고 아이삭까지 다 함께」):** Gazebo도 OMX 셀을 만들 때 같은 대장을 읽는다. 대장의 값마다 출처(`cad`, `surveyed`(날짜·방법·잔차), `assumed`)를 붙이고, CAD 값과 실측값은 후보로 함께 둔다. 어느 쪽을 fixture에 쓸지는 실행 결과로 고른다. 첫 실측은 [셀 실측 기록](../validation/omx-cell-survey-2026-11-03/result.md)이다. 실물 팔 받침이 CAD보다 선미 쪽으로 24~36 mm 가 있고, 실물 side 카메라는 `mapped-side`의 반대편(뱃머리 쪽)에 있다.

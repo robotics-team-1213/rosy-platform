@@ -1,7 +1,7 @@
 ---
 title: Upgrading the model-PC Learning Center in place needs the new commit's exact unit written first
 date: 2026-10-23
-last_updated: 2026-11-06
+last_updated: 2026-11-13
 category: deployment
 module: deploy/model_pc/install_learning_center.py (rosy-learning-center.service), deploy/model_pc/install_review_release.py
 problem_type: deployment_error
@@ -16,7 +16,7 @@ root_cause: undocumented_upgrade_procedure
 resolution_type: procedure
 severity: medium
 tags: [learning-center, model-pc, systemd, installer, upgrade, state-roots, rollback, review-release, d-446, tls]
-applies_when: "moving the running rosy-learning-center.service to a new commit while keeping its existing review state and OMX center root, or installing an accepted D-446 model-code release on the protected Learning center with install_review_release.py"
+applies_when: "history only — the rosy-learning-center.service candidate was retired on 2026-10-31, so the in-place upgrade procedure is kept as history; the install_review_release.py sections still apply to the live protected center (rosy-edge-review, 8768)"
 ---
 
 # Upgrading the Learning Center in place needs the new commit's exact unit written first

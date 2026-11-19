@@ -29,6 +29,18 @@ candidates:
         joint1: {kp: 20.0}
         joint4: {kp: 20.0}
         joint5: {kp: 20.0}
+  twin-kp-shared-20261118:
+    base: design
+    source: fitted
+    date: '2026-11-18'
+    method: the twin-kp-20261109 fit (arm_b's real episodes), applied to both arms
+    evidence: Rosy/docs/workspace-records/2026-11-09/omx-twin-night/findings.md (feat/omx-sim-twin)
+    note: both arms carry the same servos and register caps (registers-20261109) and the kp grid never ran on arm_a, so arm_a at 40 against
+      arm_b at 20 was fit scope, not a measured difference; a measured arm_a difference gets its own arms entry. The older candidate stays for reproduction
+    joints:
+      joint1: {kp: 20.0}
+      joint4: {kp: 20.0}
+      joint5: {kp: 20.0}
   twin-zero-20261109:
     base: design
     source: fitted
@@ -150,3 +162,15 @@ candidates:
     gravity_hold:
     - joint3
     - joint4
+  servo-antijitter-20261112:
+    base: servo-friction-20261109
+    source: registers
+    date: '2026-11-12'
+    method: Position_P_Gain from deploy/robot/omx/omx-ai-follower-tuning.json (joint2
+      P=1000 anti-jitter boom damping per D-951 6, joint1/3/4/5 P=1200/1200/1000/800)
+      combined with fitted servo-friction-20261109 frictionloss and damping
+    evidence: deploy/robot/omx/omx-ai-follower-tuning.json
+    joints:
+      joint2:
+        kp: 8.416
+

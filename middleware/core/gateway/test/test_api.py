@@ -247,7 +247,7 @@ def test_robot_state_carries_server_judged_evidence(client):
     assert fresh["battery"]["evidence"] == "unavailable"
 
 
-def test_inventory_is_a_mobile_base_without_pick_or_rfid(client):
+def test_inventory_is_a_mobile_base_that_docks_without_pick_or_rfid(client):
     tc, _svc = client
     response = tc.get("/api/v1/system/inventory", headers=VIEWER)
     assert response.status_code == 200, response.text
@@ -259,7 +259,7 @@ def test_inventory_is_a_mobile_base_without_pick_or_rfid(client):
     assert "mobility.follow" in ids
     assert "mobility.lead" in ids
     assert "perception.localize" in ids
-    assert "mobility.dock" not in ids
+    assert "mobility.dock" in ids        # D-1042 6: Pinky Pro docks at the pink-line bay (2026-11-18)
     assert "manipulate.pick" not in ids
     assert "scan_rfid" not in ids
     assert "infer" not in ids
@@ -461,12 +461,19 @@ def test_admin_can_update_manual_speed_limits(client):
     assert svc.safety.limits.manual_linear == pytest.approx(0.10)
     assert "config.changed" in [event.type for event in svc.events.history()]
 
-    denied = tc.put("/api/v1/safety/limits", json={"manual_linear": 0.05}, headers=OPERATOR)
-    assert denied.status_code == 403
+    # D-1005: an operator sets the manual speeds; the battery and Fleet-loss policy stay the administrator's.
+    assert tc.put("/api/v1/safety/limits", json={"manual_linear": 0.05}, headers=OPERATOR).status_code == 200
+    assert svc.safety.limits.manual_linear == pytest.approx(0.05)
+    assert tc.put("/api/v1/safety/limits", json={"manual_linear": 0.06, "fleet_loss_policy": "HOLD"},
+                  headers=OPERATOR).status_code == 403
+    assert tc.put("/api/v1/safety/limits", json={"battery_warning_percent": 30}, headers=OPERATOR).status_code == 403
+    assert tc.put("/api/v1/safety/limits", json={"manual_linear": 0.05}, headers=VIEWER).status_code == 403
+    assert tc.put("/api/v1/safety/limits", json={"manual_linear": 0.10}, headers=ADMIN).status_code == 200
 
-    clipped = tc.put("/api/v1/safety/limits", json={"manual_linear": ceiling + 1.0}, headers=ADMIN)
-    assert clipped.status_code == 200
-    assert clipped.json()["limits"]["manual_linear"] == pytest.approx(ceiling)
+    # D-1005: above the signed ceiling is refused, not clipped, and nothing changes.
+    refused = tc.put("/api/v1/safety/limits", json={"manual_linear": ceiling + 1.0}, headers=ADMIN)
+    assert refused.status_code == 400
+    assert svc.safety.limits.manual_linear == pytest.approx(0.10)
 
 
 def test_safety_state_includes_battery_policy(client):
@@ -743,7 +750,13 @@ def _register_dock(services, dock_id="dock_1", map_id=None):
 
 class TestDockingStubContract:
     """DNC-003 — 이 계약이 회귀하면 안 된다. 기능을 넣으면서 스텁을 깨는 것이
-    가장 흔한 사고다."""
+    가장 흔한 사고다. Pinky Pro 는 2026-11-18 부터 도킹을 지원하므로(D-1042 6) 여기서는
+    능력을 끈 로봇으로 본다."""
+
+    @pytest.fixture
+    def client(self, client):
+        client[1].capability._data["docking"]["supported"] = False
+        return client
 
     def test_dock_returns_501_when_unsupported(self, client):
         tc, _ = client

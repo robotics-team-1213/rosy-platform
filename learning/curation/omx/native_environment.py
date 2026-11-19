@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
 from rosy.contracts.learning.omx import WRIST, camera_role, camera_roles  # noqa: E402  D-794 B
+from rosy.contracts.learning.pinky import _number  # noqa: E402
 
 
 SCHEMA = 'rosy.omx-native-environment.v1'
@@ -51,10 +52,6 @@ def _float(value):
     result = float(value)
     _require(math.isfinite(result), 'nonfinite JSON number')
     return result
-
-
-def _number(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def _image_condition(item, stamp_ns, previous):

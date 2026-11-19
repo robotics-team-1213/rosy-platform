@@ -157,3 +157,41 @@ def test_later_load_uses_the_same_current_cap_check_and_keeps_the_previous_plan(
     assert runner.library is safe and not robot.sent
     row = json.loads(capsys.readouterr().out.splitlines()[-1])
     assert row["chunks"]["hold"]["worst"]["shoulder_lift"]["share"] == 0.667
+
+
+def test_gravity_pwm_and_runner_strain_distinguish_static_gravity_from_external_push(model, tmp_path):
+    import test_omx_chunk_runner as cr
+
+    fitted, poses = model
+    arm = fitted["arms"]["FF061D2D"]
+    pose = hot(poses, 1)
+    grav = lp.gravity_pwm(arm, pose)
+    assert "shoulder_lift" in grav and lp.gravity_pwm(arm, [0, -90, 90, 90, 0, 50]) == {}
+
+    # Scale shoulder_lift gravity to 330 (55% of 600 cap, above STRAIN_PWM=0.5)
+    scale = 330.0 / abs(grav["shoulder_lift"])
+    arm["joints"]["shoulder_lift"]["coef"] = [c * scale for c in arm["joints"]["shoulder_lift"]["coef"]]
+    grav_lift = lp.gravity_pwm(arm, pose)["shoulder_lift"]
+    assert abs(abs(grav_lift) - 330.0) < 1.0
+
+    # Runner with attached arm model: PWM matching static gravity (330) is NOT external strain,
+    # whereas PWM 480 (150 above gravity, >= 20% of 600 cap) triggers strain
+    check = lambda lib: None  # noqa: E731
+    check.arm = arm
+    robot = cr.Straining(lambda n: 0.0, pwm=round(abs(grav_lift)), joint=1)
+    runner = cr.m.Runner(robot, cr.library(), fps=30, status=lambda r: None, plan_check=check)
+    sent = dict(zip(cr.m.NAMES, pose))
+    for k in range(10):
+        present = list(pose)
+        present[1] = pose[1] - (1.8 + 0.1 * k)  # rising lag past STRAIN_LAG=2.2, staying in same 5-unit cell
+        res_gravity_only = cr.m.runner_strain.strained(runner, sent, present)
+    assert res_gravity_only is None
+
+    robot.motion.effort_pwm["shoulder_lift"] = -480
+    runner.trend.clear()
+    for k in range(10):
+        present = list(pose)
+        present[1] = pose[1] - (1.8 + 0.1 * k)
+        res_external = cr.m.runner_strain.strained(runner, sent, present)
+    assert res_external is not None and res_external[0] == "shoulder_lift"
+

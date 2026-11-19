@@ -192,6 +192,21 @@ def test_recheck_closes_what_passes_or_is_gone_and_keeps_what_still_fails(repo):
     assert not any(gone in inv for inv in seen), "a deleted test file is not run"
 
 
+def test_recheck_closes_an_id_pytest_no_longer_finds_in_its_file(repo):
+    """11-18: a renamed test stayed an open main-red id for 3 days; its file was still on main."""
+    wt, main, _ = repo
+    renamed = "pkg/test/test_a.py::test_renamed"
+    mr.red(wt, main, [renamed], LOG, [], "fix/elsewhere")
+
+    def run(invocations, logs):
+        for inv, log in zip(invocations, logs):
+            log.write_text(f"ERROR: not found: /runs/x/{renamed}\n(no match in any of [<Module test_a.py>])\n"
+                           if inv[-1] == renamed else f"FAILED {inv[-1]}\n")
+
+    assert mr.recheck(wt, main, run, wt) == [renamed]
+    assert renamed not in mr.state(wt) and ID in mr.state(wt), "only the missing id closes"
+
+
 def test_recheck_keeps_an_id_whose_run_left_no_log(repo):
     wt, main, _ = repo
     assert mr.recheck(wt, main, lambda invocations, logs: None, wt) == []
@@ -218,3 +233,21 @@ def test_recheck_runs_a_legacy_browser_red_with_the_opt_in(repo):
     seen = []
     mr.recheck(wt, git(wt, "rev-parse", "HEAD"), lambda invocations, logs: seen.extend(invocations), wt)
     assert ["ROSY_RUN_BROWSER_TESTS=1", "-rA", browser] in seen, "without the opt-in the run skips and never closes"
+
+
+def test_state_asks_git_about_one_pair_of_commits_once(repo, monkeypatch):
+    wt, main, head = repo
+    for _ in range(3):  # three closes of the same red main by the same tree: one question
+        mr.write(wt, "close", id=ID, sha=head, landed=head, covers=[])
+        mr.red(wt, main, [ID], LOG, [], "fix/elsewhere")
+    asked = []
+    real = mr._git
+
+    def counted(wt_, *args):
+        asked.extend([args] * (args[0] == "merge-base"))
+        return real(wt_, *args)
+
+    monkeypatch.setattr(mr, "_git", counted)
+    first = mr.state(wt)
+    assert len(asked) == 1 and ID in first
+    assert mr.state(wt) == first and len(asked) == 1, "a second read costs no git call"

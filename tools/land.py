@@ -20,7 +20,7 @@ measured headroom, D-568; an unavailable host stops landing); an auto selection 
 real-Chromium tests ``test/browser_scope.py`` maps the changed paths to. Lint, node and the
 known_failures comparison stay here. A branch on the pre-rewrite history is refused, and NEW failures
 that each pass when rerun alone land as LOAD-FLAKY (D-790, ``land_checks.py``). Never pushes,
-stashes, resets or cleans. A pytest invocation that passed on the same tree (or, when the selector
+resets or cleans; the main checkout's dirty files the landing changes are auto-stashed first. A pytest invocation that passed on the same tree (or, when the selector
 vouches for the delta, an ancestor) is reused from ``land_cache.py`` unless --no-cache. Standard library only.
 """
 
@@ -46,7 +46,7 @@ import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these resul
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees)
 from land_logs import append_blocks  # noqa: E402,F401  (logs.md: whole entries, date order; tests call it here)
-import land_guards  # noqa: E402  (structural guards before the long round)
+import land_guards, land_quick  # noqa: E402  (structural guards; quick contract run before the ticket)
 import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
 import land_watchdog  # noqa: E402  (a landing with no progress for 30 min stops itself, stacks on file)
 import land_full  # noqa: E402  (a green tier outlives the run that passed it)
@@ -57,6 +57,7 @@ import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
 import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did)
 import land_browser  # noqa: E402  (the browser tier in file-level chunks)
 import land_selection  # noqa: E402  (selection with this caller's Stop and helper seams)
+from land_selection import _test_dir, fallback_targets  # noqa: E402,F401  (moved there; callers and tests use land.*)
 import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
 import land_precheck  # noqa: E402  (the cheap gates alone, before land_async makes a ticket)
 import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
@@ -72,6 +73,7 @@ SCANNER_DIR = "deploy/robot/pinky_pro/release"  # its scanner; admission runs it
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
+MAIN_WRITER_ENV = {**ENV, "ROSY_MAIN_WRITER": "land"}  # tools/hooks/reference-transaction lets only this move main
 RENORMALIZE = ("-X", "renormalize")  # merges clean CRLF->LF per side first: line endings alone never conflict (11-09)
 
 TURN_CAP_S = 1200  # D-889 26 (20 min): the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
@@ -89,9 +91,9 @@ class Stop(Exception):
 class Overtime(Stop): """The turn exhausted its budget; remaining checks prepare outside the lock."""
 
 
-def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+def git(cwd: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     result = subprocess.run(["git", "-c", "core.quotepath=off", "-C", str(cwd), *args],
-                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env or ENV)
     if check and result.returncode != 0:
         raise Stop(f"git {' '.join(args)} failed:\n{result.stdout}{result.stderr}".rstrip())
     return result
@@ -176,27 +178,6 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, sour
 
 # --- test selection -------------------------------------------------------------
 
-def _test_dir(path: str) -> str | None:
-    parts = PurePosixPath(path).parts
-    return "/".join(parts[: parts.index("test") + 1]) if "test" in parts else None
-
-
-def fallback_targets(wt: Path, changed: list[str]) -> list[str]:
-    """Nearest ancestor ``test/`` dir per changed file; test files map to themselves."""
-    targets: list[str] = []
-    for path in changed:
-        name = PurePosixPath(path).name
-        own = _test_dir(path)
-        if own:
-            target = path if name.startswith("test_") and name.endswith(".py") else own
-        else:
-            target = next((f"{p}/test".lstrip("./") for p in map(str, PurePosixPath(path).parents)
-                           if (wt / p / "test").is_dir()), None)
-        if target and (wt / target).exists() and target not in targets:
-            targets.append(target)
-    return targets
-
-
 def pack(wt: Path, paths: list[str]) -> list[list[str]]:
     return land_selection.pack(wt, paths)
 
@@ -241,14 +222,14 @@ def size_check(wt: Path, base: str, head: str, python: str) -> None:
 
 
 def admit(wt: Path, branch: str, main_sha: str, python: str) -> None:
-    """D-889 S0: merge main and lint before taking a ticket. On 10-26..30 lint errors in a branch's own records
-    stopped 10 landings 12-152 min in, after the prepare slot wait. Only here: once a ticket exists a batch may carry
-    the branch, and moving its tip then would hide that it landed."""
+    """D-889 S0: merge main and lint before taking a ticket (10-26..30: lint stopped 10 landings 12-152 min in). Only
+    here: once a ticket exists a batch may carry the branch, and moving its tip then would hide that it landed."""
     if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
         merge(wt, main_sha, branch, python, False)
     if (wt / HARNESS).is_file():
         step(wt, [python, HARNESS, "lint"], None, "lint")
     secret_scan(wt, main_sha)
+    land_quick.run(sys.modules[__name__], wt, sys.executable)
 
 
 def secret_scan(wt: Path, main_sha: str) -> None:
@@ -335,6 +316,14 @@ def on_main(main_co: Path) -> None:
         raise Stop(f"{main_co} has {head or 'a detached HEAD'} checked out, not refs/heads/main")
 
 
+_reserved: list[Path] = []
+
+
+def _unreserve() -> None:
+    while _reserved:
+        getattr(land_queue, "unreserve", lambda marker: None)(_reserved.pop())
+
+
 def land(args) -> int:
     wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
     branch = out(wt, "rev-parse", "--abbrev-ref", "HEAD")
@@ -361,6 +350,11 @@ def land(args) -> int:
     python = sys.executable
     land_selection.begin(sys.modules[__name__], args)
     qdir = ticket = None
+    reserve = getattr(land_queue, "reserve", None)  # A: a place in the cap before the long gates; a full queue ends here
+    if reserve and not (args.no_queue or args.dry_run or args.urgent or os.environ.get(land_queue.TICKET_ENV)):
+        adopt = getattr(land_queue, "adopt_reserved", lambda name: None)  # land_async reserved this place for us
+        _reserved.append(adopt(os.environ.pop(getattr(land_queue, "RESERVED_ENV", "_"), "")) or
+                         reserve(land_queue.queue_dir(wt), branch, land_queue.lane_of(wt)))
     if args.no_queue and not args.dry_run:
         holders = land_queue.ahead(land_queue.queue_dir(wt), Path("~"))  # every live ticket: the first holds its turn
         if holders:  # a landing outside the queue mid-turn gave that turn another round (2026-10-25, 22:52)
@@ -374,10 +368,10 @@ def land(args) -> int:
         qdir, ticket = land_queue.enter(wt, branch, "preparing", args.urgent,
                                         batch_auto=land_batch.plain_auto(args, EXTRA),
                                         alone=land_batch.explicit(args, EXTRA))
+        _unreserve()
         if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # it led a batch at once: one shared pretest instead of one each
-        if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
-            land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
+        land_prepare.pretest(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
         if (code := land_batch.queue(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # a batch landed this branch
     return rounds(args, wt, branch, main_co, python, qdir, ticket)
@@ -444,7 +438,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     note = None
                 if note and note not in summary:
                     summary.append(note)
-                if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
+                if note and ticket is not None and not land_prepare.in_turn(args):  # FULL prepares outside (D-889 39 aside)
                     full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
                     continue
                 # D-970 4: the pretest's LOAD-FLAKY ids run again here, each in its own invocation, and must pass
@@ -457,8 +451,9 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 print(f"[plan] then git -C {main_co} merge --ff-only {candidate}  ({branch})")
                 return 0
 
-            delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
-            if tested_main and all(map(record_only, delta)):
+            base_main = tested_main or (full_main if args.tests == "auto" else None)
+            delta = lines(wt, "diff", "--name-only", base_main, main_sha) if base_main else []
+            if base_main and delta and all(map(record_only, delta)):
                 # Only module-scoped suites may skip; root test/ guards read the records themselves.
                 invocations = land_speculate.root_part(invocations)
                 reusable = False  # module suites ran on an earlier candidate, not this one
@@ -484,7 +479,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             if note:
                 full_main = main_sha
                 tier = land_selection.tier(sys.modules[__name__], guarded + tested, True, args)
-                land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+                prepared = land_prepare.saved(sys.modules[__name__], wt, branch, args, candidate, main_sha, tier, invocations, prepared)
                 summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
             if invocations or tested_main is None:
                 tested_main = main_sha
@@ -504,8 +499,8 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     land_record.plan(invocations, prepared, available=(wt / land_record.TARGET).is_file())
                 except (ValueError, TypeError, KeyError) as exc:
                     raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
-            on_main(main_co)
-            ff = git(main_co, "merge", "--ff-only", candidate, check=False)
+            on_main(main_co); land_checks.stash_main_collisions(main_co, main_sha, candidate)
+            ff = git(main_co, "merge", "--ff-only", candidate, check=False, env=MAIN_WRITER_ENV)
             if ff.returncode == 0:
                 land_full.forget(wt, branch)
                 landed = out(main_co, "rev-parse", "HEAD")
@@ -531,7 +526,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             if turn_epoch is None or land_queue.turn_started() != turn_epoch:
                 raise Stop("landing turn ownership changed before overtime handoff; ticket left as is")
             land_queue.release(ticket, "turn deadline", started=land_queue.turn_started())
-            args._overtime = land_checks.overtimes(sys.modules[__name__], args) + 1
+            args._overtime = land_checks.next_overtime(sys.modules[__name__], args)
             land_queue.set_status(ticket, "preparing", overtime=args._overtime)
             full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, "")
             continue
@@ -591,6 +586,7 @@ def main(argv: list[str] | None = None) -> int:
             land_events.emit("stop", reason=exc.code.splitlines()[0][:300])
         raise
     finally:
+        _unreserve()
         land_queue.leave()  # also on Ctrl-C; a killed process's ticket is reclaimed by PID
 
 

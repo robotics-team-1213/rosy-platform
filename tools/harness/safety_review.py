@@ -154,6 +154,80 @@ def _with_parents(base: str, head: str) -> dict[str, list[str]]:
     return {row.split()[0]: row.split()[1:] for row in rows if row and row.split()[0] not in EXEMPT}
 
 
+def _batch_untrailered(base: str, head: str, checked: dict[str, list[str]],
+                       range_manifests: tuple[dict, ...]) -> list[str]:
+    """Check large ranges with batched git plumbing while matching ``needs_review`` exactly."""
+    raw_meta = _git("-c", "core.quotePath=false", "log", "--format=%x00%H%x1f%h %s (author %an)%x1f%B",
+                    head, "^" + base, "^" + BASELINE)
+    subjects: dict[str, str] = {}
+    has_trailer: set[str] = set()
+    for rec in raw_meta.split("\0"):
+        if not rec.strip():
+            continue
+        sha, _, rest = rec.partition("\x1f")
+        subj, _, body = rest.partition("\x1f")
+        sha = sha.strip()
+        subjects[sha] = subj.strip()
+        if TRAILER.search(body):
+            has_trailer.add(sha)
+
+    untrailered = {c: parents for c, parents in checked.items() if c not in has_trailer}
+    if not untrailered:
+        return []
+
+    nm_raw = _git("-c", "core.quotePath=false", "log", "--no-merges", "--no-renames", "--name-only",
+                  "--format=%x00%H", head, "^" + base, "^" + BASELINE)
+    changed_map: dict[str, list[str]] = {}
+    for rec in nm_raw.split("\0"):
+        lines = [ln.strip() for ln in rec.splitlines() if ln.strip()]
+        if lines and re.fullmatch(r"[0-9a-f]{40}", lines[0]):
+            changed_map[lines[0]] = lines[1:]
+
+    revs = sorted({c for c, ps in untrailered.items() for rev in (c, *ps)})
+    oids_proc = subprocess.run(
+        ["git", "cat-file", "--batch-check=%(objectname) %(objecttype)"],
+        input="".join(f"{r}:{MANIFEST}\n" for r in revs).encode("utf-8"),
+        capture_output=True, check=True,
+    )
+    manifests: dict[str, dict] = {}
+    for rev, line in zip(revs, oids_proc.stdout.decode("utf-8", errors="replace").splitlines()):
+        words = line.split()
+        manifests[rev] = _parse(words[0]) if len(words) == 2 and words[1] == "blob" else {}
+
+    merge_commits = [c for c, ps in untrailered.items() if len(ps) > 1]
+    merge_map: dict[str, list[str]] = {}
+    if merge_commits:
+        dt_proc = subprocess.run(
+            ["git", "-c", "core.quotePath=false", "diff-tree", "--stdin", "--cc", "--name-only", "--format=%x00%H"],
+            input="".join(f"{c}\n" for c in merge_commits).encode("utf-8"),
+            capture_output=True, check=True,
+        )
+        for rec in dt_proc.stdout.decode("utf-8", errors="replace").split("\0"):
+            lines = [ln.strip() for ln in rec.splitlines() if ln.strip()]
+            if lines and re.fullmatch(r"[0-9a-f]{40}", lines[0]):
+                merge_map[lines[0]] = lines[1:]
+
+    missing = []
+    for commit, parents in untrailered.items():
+        if len(parents) > 1:
+            changed = merge_map.get(commit)
+            if changed is None:
+                changed = _git("diff-tree", "--cc", "--no-commit-id", "--name-only", commit).split()
+        else:
+            changed = changed_map.get(commit)
+            if changed is None:
+                changed = _git("diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "--root", commit).split()
+        own = manifests.get(commit, {})
+        parent_manifests = [manifests.get(p, {}) for p in parents]
+        combined = (*range_manifests, own, *parent_manifests[:1])
+        reasons = [f"touches {path}" for path in changed if any(_is_safety_in(path, m) for m in combined)]
+        kept = set.intersection(*(tagged(m) for m in parent_manifests)) if parent_manifests else set()
+        reasons += [f"untags {entry}" for entry in sorted(kept - tagged(own))]
+        if reasons:
+            missing.append(f"{subjects.get(commit, commit[:10])}\n    " + "\n    ".join(reasons))
+    return missing
+
+
 def main(argv: list[str]) -> int:
     warn_only = "--warn-only" in argv
     args = [arg for arg in argv if arg != "--warn-only"]
@@ -169,11 +243,14 @@ def main(argv: list[str]) -> int:
     range_manifests = (_manifest(head), _manifest(base))
     missing = []
     checked = _with_parents(base, head)
-    for commit, parents in checked.items():
-        reasons = needs_review(commit, range_manifests, parents)
-        if reasons and not TRAILER.search(_git("log", "-1", "--format=%B", commit)):
-            subject = _git("log", "-1", "--format=%h %s (author %an)", commit).strip()
-            missing.append(f"{subject}\n    " + "\n    ".join(reasons))
+    if len(checked) > 8:
+        missing = _batch_untrailered(base, head, checked, range_manifests)
+    else:
+        for commit, parents in checked.items():
+            reasons = needs_review(commit, range_manifests, parents)
+            if reasons and not TRAILER.search(_git("log", "-1", "--format=%B", commit)):
+                subject = _git("log", "-1", "--format=%h %s (author %an)", commit).strip()
+                missing.append(f"{subject}\n    " + "\n    ".join(reasons))
     print(f"[safety-review] {len(checked)} commit(s) checked after baseline {BASELINE[:9]}")
     if not missing:
         return 0

@@ -12,6 +12,8 @@ from pathlib import Path
 
 ADR_GAPS = Path("tools") / "harness" / "adr_gaps.txt"  # D-510, merge=union
 ADR_ID = re.compile(r"^D-(\d+)$")
+# Historical gap tracking stops at D-1043 (D-1052): D-1044+ checks uniqueness only so multi-clone work never collides.
+LEGACY_CONTIGUOUS_MAX = 1043
 
 
 def _number(adr_id: str) -> int:
@@ -64,7 +66,7 @@ def reservation_warnings(adr, gaps: dict[str, str], reserved: set[str]) -> list[
     Only a number below the branch's highest ADR would fail CI as a missing gap.
     """
     present = set(adr.index) | set(adr.bodies)
-    highest = max((_number(i) for i in present), default=0)
+    highest = min(max((_number(i) for i in present), default=0), LEGACY_CONTIGUOUS_MAX)
     return [f"{adr_id} reserved locally (refs/adr) but not on this branch"
             " — land its ADR or add a gap line to tools/harness/adr_gaps.txt before push"
             for adr_id in sorted(reserved - present - set(gaps), key=_number)
@@ -80,7 +82,7 @@ def validate_adr_log(adr, gaps: dict[str, str]) -> list[str]:
         errors.append(f"{adr_id}: index row has no body section")
 
     present = set(adr.index) | set(adr.bodies)
-    highest = max((_number(i) for i in present), default=0)
+    highest = min(max((_number(i) for i in present), default=0), LEGACY_CONTIGUOUS_MAX)
     for number in range(1, highest + 1):
         adr_id = f"D-{number}"
         if adr_id not in present and adr_id not in gaps:

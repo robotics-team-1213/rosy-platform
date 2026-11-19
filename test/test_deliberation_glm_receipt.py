@@ -35,6 +35,14 @@ def test_verified_plan_basis_is_distinct_from_observed_charge_and_sdk_cost():
     assert receipt['cost_status'] == 'UNKNOWN'
 
 
+def test_deliberation_glm_receipt_digest_matches_billing_contract_digest():
+    from deploy.ai_pc import deliberation_glm_receipt as bridge
+    from rosy.decision.deliberation.contracts import billing
+
+    for sample in ("sample", {"b": 1, "a": [True, "text"]}, ["x", {"k": 0}]):
+        assert bridge.digest(sample) == billing.digest(sample)
+
+
 @pytest.mark.parametrize('change', ['none', 'expired', 'profile', 'job', 'judgment',
                                   'request_id', 'tokens', 'sdk_scope', 'tool', 'limit', 'credential'])
 def test_unknown_or_mismatched_billing_binding_refuses(change):

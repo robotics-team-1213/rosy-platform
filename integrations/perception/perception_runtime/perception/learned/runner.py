@@ -22,7 +22,7 @@ import numpy as np
 from .drivable_paint import drivable_target
 from .lane_mask import (LaneMaskEvidence, floor_gate_role_error, lane_evidence, lane_marking_mask, preprocess,
                         uncrop_logits)
-from .manifest import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, road_delivery_error, verify_files
+from core_common.perception_model import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, road_delivery_error, verify_files
 
 
 # learned-perception-requirements.txt is installed with pip --target here by the
@@ -181,8 +181,13 @@ class LaneSegModel:
         way, info = drivable_target(logits, self.manifest.classes,
                                     ignore_top=spec.crop[2] if spec.crop is not None else 0, prefer=prefer)
         if way is None:
-            mask, kind = lane_marking_mask(logits, self.manifest.classes, size=size,
-                                          floor_gate=self.floor_gate), "lane_marking"
+            if self.floor_gate and floor_gate_role_error(self.manifest.classes) is not None:
+                # Wall-less drivable models (GAZEBO_ROLES) cannot run the wall-based lane floor gate;
+                # return an empty drivable mask so callers retain revision, crosswalk and speed_bump masks.
+                mask, kind = np.zeros((size[1], size[0]), dtype=np.uint8), "drivable"
+            else:
+                mask, kind = lane_marking_mask(logits, self.manifest.classes, size=size,
+                                              floor_gate=self.floor_gate), "lane_marking"
         else:
             mask, kind = cv2.resize(way.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST), "drivable"
         labels = logits[0].argmax(axis=0)

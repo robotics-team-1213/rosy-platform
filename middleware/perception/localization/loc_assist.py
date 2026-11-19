@@ -30,6 +30,7 @@ from __future__ import annotations
 import math
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 from core_common.protocol.localization import (CHECKING, CandidateReport, LocalizationDecision,
@@ -42,7 +43,8 @@ from .sensing.loc_state import LocalizationStateMachine, LocState
 
 #: Injection standard deviations per decision source, (metres, radians).
 COVARIANCE = {'candidate': (.05, .1), 'human': (.15, .3),
-              'overhead': (.10, .2), 'homing_ref': (.05, .1)}
+              'overhead': (.10, .2), 'homing_ref': (.05, .1),
+              'auto_recovery': (.08, .15)}
 #: CandidateReport limits (core_common.protocol.localization).
 MAX_CANDIDATES, MAX_OBJECTS, MAX_SIGHTINGS = 8, 16, 4
 #: A robot that moved more than this during a search did not stand still.
@@ -76,6 +78,31 @@ class Injection:
 def _moved(a, b, metres, radians):
     turn = math.atan2(math.sin(a[2] - b[2]), math.cos(a[2] - b[2]))
     return math.dist(a[:2], b[:2]) > metres or abs(turn) > radians
+
+
+def verify_recovery_pose(
+    candidate_pose,
+    *,
+    fit,
+    camera_xy,
+    camera_yaw=None,
+    min_fit=0.85,
+    max_xy_m=0.15,
+    max_yaw_rad=math.radians(20.0),
+) -> tuple[bool, Optional[str]]:
+    """Gate Path B auto-recovery on LiDAR MapAgreement and camera/peer agreement."""
+    if fit is None or not math.isfinite(fit) or fit < min_fit:
+        return False, 'fit_low'
+    if candidate_pose is None or camera_xy is None:
+        return False, 'missing_pose'
+    if not (math.dist(candidate_pose[:2], camera_xy) <= max_xy_m):
+        return False, 'xy_mismatch'
+    if camera_yaw is not None:
+        dyaw = math.atan2(math.sin(candidate_pose[2] - camera_yaw),
+                          math.cos(candidate_pose[2] - camera_yaw))
+        if not (abs(dyaw) <= max_yaw_rad):
+            return False, 'yaw_mismatch'
+    return True, None
 
 
 class LocAssist:
@@ -199,6 +226,40 @@ class LocAssist:
                                     decision.request_id))]
         return out + self._state_if_changed(now_s)
 
+    def try_auto_recovery(
+        self,
+        now_s,
+        candidate_pose,
+        *,
+        fit,
+        camera_xy,
+        camera_yaw=None,
+        request_id: Optional[str] = None,
+        min_fit=0.85,
+        max_xy_m=0.15,
+        max_yaw_rad=math.radians(20.0),
+    ) -> tuple[list, Optional[str]]:
+        """Path B bounded-window auto-recovery: inject only when stationary and verified."""
+        if self.held:
+            return [], 'held'
+        if not self._is_settled(now_s):
+            return [], 'not_settled'
+        ok, reason = verify_recovery_pose(
+            candidate_pose,
+            fit=fit,
+            camera_xy=camera_xy,
+            camera_yaw=camera_yaw,
+            min_fit=min_fit,
+            max_xy_m=max_xy_m,
+            max_yaw_rad=max_yaw_rad,
+        )
+        if not ok:
+            return [], reason
+        xy_std, yaw_std = COVARIANCE['auto_recovery']
+        pose = tuple(float(v) for v in candidate_pose)
+        rid = request_id or self.machine.request_id or 'auto_recovery'
+        return [('inject', Injection(pose, xy_std, yaw_std, 'auto_recovery', rid))], None
+
     def tick(self, now_s):
         """Timer: scan-gap check, candidate re-report, state cadence."""
         out = []
@@ -211,6 +272,10 @@ class LocAssist:
                 now_s - self._state_s >= self.state_period_s or self._key() != self._state_key):
             out.append(self._state(now_s))
         return out
+
+    def _is_settled(self, now_s):
+        fresh = self._twist_at is not None and now_s - self._twist_at <= SETTLE_S
+        return fresh and self._still_since is not None and now_s - self._still_since >= SETTLE_S
 
     # --- search -------------------------------------------------------------
     def search_due(self, now_s, odom):
@@ -225,7 +290,7 @@ class LocAssist:
         if self._due_since is None:
             self._due_since = float(now_s)
         fresh = self._twist_at is not None and now_s - self._twist_at <= SETTLE_S
-        settled = fresh and self._still_since is not None and now_s - self._still_since >= SETTLE_S
+        settled = self._is_settled(now_s)
         self.settle_timed_out = None
         if not settled and now_s - self._due_since >= SETTLE_CAP_S:
             self.settle_timed_out = 'never_settled' if fresh else 'no_fresh_odom'

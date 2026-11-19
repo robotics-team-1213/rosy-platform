@@ -26,6 +26,7 @@ import time
 import cell_finger_room as fr
 import cell_params as prm
 import cell_pivot
+import joint_jitter
 
 
 def tcp_from_mark(mark_raw, yaw_deg: float, region: dict):
@@ -60,11 +61,15 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         why = f"no room to open the jaws for the mark: {room} mm free each side, {need:.0f} needed"
         return out("skipped" if fallback else "refuse", why=why)
     for i in range(int(prm.get(params, "look.max_iter")) + 1):
-        status = cell.act("state")
+        status = joint_jitter.settled_state(cell, params)
         state, commanded = status.get("state"), status.get("target")
         if state is None or commanded is None:
             return out("refuse", why="no arm state")
-        x, y, z, yaw = cell_pivot.joints_tcp(state)
+        import omx_tcp
+
+        tcp_x_m = omx_tcp.config_tcp(config)
+        tcp_kw = {"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}
+        x, y, z, yaw = cell_pivot.joints_tcp(state, **tcp_kw)
         bias = region.get("bias_mm", [0.0, 0.0])
         expected = []
         for f in fingers:
@@ -78,16 +83,28 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
             return out("refuse", why="jaw mark not seen near where the jaws should be")
         k = min(range(len(fingers)), key=lambda j: math.dist(pixel, expected[j]))
         tcp = tcp_from_mark(cell_pivot.mark_to_arm(record, config, site, pixel, z), yaw, fingers[k])
+        import cell_attempts
+        import cell_cal_monitor
+
+        raw_bias = [1000.0 * (tcp[0] - x), 1000.0 * (tcp[1] - y)]
+        resid_bias = [raw_bias[0] - bias[0], raw_bias[1] - bias[1]]
+        cell_cal_monitor.record_observation(
+            config, site=site, map_sha=cell_attempts.digest(record), source="look",
+            raw_mm=raw_bias, residual_mm=resid_bias, sigma_mm=float(prm.get(params, "verify.mark_sigma_mm")),
+        )
         d = (box[0] - tcp[0], box[1] - tcp[1])
         off = 1000 * math.hypot(*d)
-        rows.append({"look": i, "mark_px": [round(v, 1) for v in pixel], "finger": k, "fk_m": [round(x, 4), round(y, 4)],
-                     "box_minus_tcp_mm": [round(1000 * d[0], 1), round(1000 * d[1], 1)]})
+        row = {"look": i, "mark_px": [round(v, 1) for v in pixel], "finger": k, "fk_m": [round(x, 4), round(y, 4)],
+               "box_minus_tcp_mm": [round(1000 * d[0], 1), round(1000 * d[1], 1)]}
+        if status.get("samples", 1) > 1:
+            row["samples"] = status["samples"]
+        rows.append(row)
         if off <= (prm.get(params, "look.tol_mm") if tol_mm is None else tol_mm):
             return out("pass")
         if i == int(prm.get(params, "look.max_iter")) or total + off > prm.get(params, "look.max_total_mm"):
             return out("refuse", why=f"box still {off:.0f} mm from the jaws")
         total += off
-        cx, cy, _, _ = cell_pivot.joints_tcp(commanded)  # what the runner was told; the arm stands short of it
+        cx, cy, _, _ = cell_pivot.joints_tcp(commanded, **tcp_kw)  # what the runner was told; the arm stands short of it
         target["pick"] = dict(target["pick"], x=round(cx + d[0], 4), y=round(cy + d[1], 4))
         library = write_library(config, target["pick"], target["place"], work / name)
         if not all(cell.act(c).get("ok") for c in (f"load {library}", goto)):

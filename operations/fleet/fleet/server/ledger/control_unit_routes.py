@@ -10,6 +10,7 @@ from core_common.protocol.arm_transfer_recheck import ArmTransferRecheckCreate
 from core_common.protocol.control_units import (
     ControlApproveRequest, ControlArmIngressRequest, ControlCancelRequest, ControlIngressRequest, ControlWorkRequest,
 )
+from fleet.server.control_unit_config import canonical_unit_id
 from fleet.swarm.transport import RobotApiError
 
 
@@ -24,7 +25,7 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
     def peer_id(principal):
         if principal.role != "service" or not principal.principal_id.startswith("control-unit:"):
             raise HTTPException(403, detail={"code": "CONTROL_UNIT_PEER_REQUIRED"})
-        return principal.principal_id[len("control-unit:"):]
+        return canonical_unit_id(principal.principal_id[len("control-unit:"):])  # D-1011 alias
 
     def parent_scope(principal, origin):
         peer = peer_id(principal)

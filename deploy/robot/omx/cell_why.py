@@ -82,7 +82,8 @@ def _lag(r, j):
 
 def _peak(rows, j) -> float:
     """The command's fastest 5-tick stretch on joint j: the speed a baseline is kept at."""
-    return max((abs(b["sent"][j] - a["sent"][j]) / (b["t"] - a["t"]) for a, b in zip(rows, rows[5:]) if b["t"] > a["t"]), default=0.0)
+    return max((abs(rows[k + 5]["sent"][j] - rows[k]["sent"][j]) / (rows[k + 5]["t"] - rows[k]["t"])
+                for k in range(len(rows) - 5) if rows[k + 5]["t"] > rows[k]["t"]), default=0.0)
 
 
 def _load(rows, j) -> dict:
@@ -118,7 +119,8 @@ def learn(rows: list, path: Path) -> dict:
     for chunk, joints in free_runs(rows).items():
         for joint, runs in joints.items():
             have = kept.setdefault(chunk, {}).setdefault(joint, [])
-            have += [r for r in runs if r[2] not in {h[2] for h in have}]
+            seen_t = {h[2] for h in have}
+            have += [r for r in runs if r[2] not in seen_t]
             # shortcut: the newest KEEP_RUNS per chunk and joint (2 days gave 170 transit runs); keep the fastest instead
             # if old fast runs start to matter
             del have[:-KEEP_RUNS]
@@ -202,6 +204,9 @@ def explain(kind: str, result: str, trace: list, images: list, backend, path: Pa
     past = past_rows(path, kind)
     motion = read_repeat(motion, [r for r in past if r.get("chunk") == chunk and r["t"] >= since])
     row = {"t": time.time(), "kind": kind, "result": result, "chunk": chunk, "motion": motion, "model": None, "missing": []}
+    if backend is not None and not callable(backend):
+        import judge_seat
+        backend = judge_seat.from_config(backend)
     if backend is not None:
         prompt = (f"A robot arm's attempt failed: {result!r} (kind {kind}). Measured from its 30 Hz trace: {json.dumps(motion)}. Past results "
                   f"of this kind: {json.dumps([{k: r.get(k) for k in ('hypothesis', 'missing')} for r in past[-5:]])}. Images, if any, are "
@@ -213,6 +218,9 @@ def explain(kind: str, result: str, trace: list, images: list, backend, path: Pa
             if answer.get("hypothesis") not in HYPOTHESES:
                 raise ValueError(f"answered {answer.get('hypothesis')!r}")
             row["model"] = {"hypothesis": answer["hypothesis"], "reason": str(answer.get("reason", ""))[:400], "seen": str(answer.get("seen", ""))[:400]}
+            for k in ("deliberation", "consensus"):
+                if k in answer:
+                    row["model"][k] = answer[k]
             row["missing"] = [str(m)[:160] for m in answer.get("missing", [])][:6]
         except Exception as exc:  # the model is advice: without it the measurement stands
             row["model"] = {"hypothesis": None, "reason": f"model unavailable: {str(exc)[:120]}"}
@@ -259,6 +267,8 @@ def flushing_trace(file):
         if row["chunk"] != last[0]:
             file.flush()
         last[0] = row["chunk"]
+
+    write.flush = file.flush
     return write
 
 

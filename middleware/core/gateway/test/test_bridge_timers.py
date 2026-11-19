@@ -175,9 +175,10 @@ def registered(tmp_path, monkeypatch):
     # for a key that does not exist yet at setup time. Left in place, the
     # stub-bound module outlives the fixture and the next test to import it gets
     # a result that depends on file ordering.
-    key = "core.bridge.ros_bridge"
-    sys.modules.pop(key, None)
-    sys.modules.pop("core.bridge.pilot_recorder_client", None)
+    for sub in ("ros_bridge", "pilot_recorder_client", "nav_goal"):
+        sys.modules.pop(f"core.bridge.{sub}", None)
+        if hasattr(bridge_pkg, sub):
+            delattr(bridge_pkg, sub)
 
     def read(name):
         return yaml.safe_load((CONFIG_DIR / name).read_text(encoding="utf-8"))
@@ -195,10 +196,10 @@ def registered(tmp_path, monkeypatch):
     bridge = RosBridge(node, services)
     yield types.SimpleNamespace(node=node, bridge=bridge, services=services)
 
-    sys.modules.pop(key, None)
-    sys.modules.pop("core.bridge.pilot_recorder_client", None)
-    if getattr(bridge_pkg, "ros_bridge", None) is not None:
-        delattr(bridge_pkg, "ros_bridge")
+    for sub in ("ros_bridge", "pilot_recorder_client", "nav_goal"):
+        sys.modules.pop(f"core.bridge.{sub}", None)
+        if hasattr(bridge_pkg, sub):
+            delattr(bridge_pkg, sub)
 
 
 #: Period in seconds, in registration order. `1/50` is D-2's sole `cmd_vel`

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from test_land import cached, land, repos  # noqa: F401
+from test_land import cached, commit, git, land, repos  # noqa: F401
 from test_remote_pytest import _fake_hosts
 
 
@@ -294,3 +294,25 @@ def test_expired_turn_yields_even_when_every_check_passed_and_peer_already_owns_
         land.run_tests(wt, args, invocations, wt.parent / "logs", 1)
     assert [entry["argv"] for entry in land.land_cache.entries(wt)] == invocations, "all completed passes remain reusable"
     assert json.loads(peer.read_text())["status"] == "turn"
+
+
+def test_round_one_record_only_delta_since_full_main_skips_module_suites(repos, monkeypatch):
+    main, wt = repos
+    full_main = git(main, "rev-parse", "HEAD")
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    candidate = git(wt, "rev-parse", "HEAD")
+    land.land_full.save(wt, "feat/x", candidate, full_main, "full", [["pkg/test"]])
+    commit(main, {"docs/adr/D-9.md": "# adr\n"}, "record only")
+    calls = []
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test", "test/test_guard.py"]], None))
+    monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, rnd: calls.append((rnd, inv)) or [])
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [(1, [["test/test_guard.py"]])]
+
+
+def test_overtime_cap_stops_runaway_tickets(monkeypatch):
+    args = land.argparse.Namespace(_overtime=land.land_checks.MAX_OVERTIMES - 1)
+    assert land.land_checks.next_overtime(land, args) == land.land_checks.MAX_OVERTIMES
+    args._overtime = land.land_checks.MAX_OVERTIMES
+    with pytest.raises(land.Stop, match="overtime"):
+        land.land_checks.next_overtime(land, args)

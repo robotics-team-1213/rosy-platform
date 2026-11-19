@@ -70,6 +70,15 @@ test("the card names the robot pose frame and shows Fleet's site map pose apart"
   assert.equal(sitePoseText({ pose: { ...bridged, anchor_age_s: 3 } }), "지도 1.00, 2.00 · 확정·odom 이음");
   assert.equal(sitePoseText({ pose: { ...bridged, anchor_age_s: 0.2, anchor_source: "operator_pin" } }),
     "지도 1.00, 2.00 · 확정·운영자 핀");
+  // D-1017: a peer anchor is named, and a long-dead camera stays visible on the card.
+  assert.equal(sitePoseText({ pose: { ...bridged, anchor_age_s: 0.2, anchor_source: "peer" } }),
+    "지도 1.00, 2.00 · 확정·로봇 보고");
+  assert.equal(sitePoseText({ pose: { x: 1, y: 2, state: "LOCALIZED", source: "sighting",
+    last_sighting_age_s: 2_592_000 } }),
+    "지도 1.00, 2.00 · 확정·카메라 · 카메라 43200분 침묵");
+  assert.equal(sitePoseText({ pose: { x: 1, y: 2, state: "LOCALIZED", source: "sighting",
+    last_sighting_age_s: 30 } }),
+    "지도 1.00, 2.00 · 확정·카메라");
 });
 
 test("the map draws the robot's own pose only when it is a LOCALIZED map pose, never odom", () => {

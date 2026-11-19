@@ -21,7 +21,8 @@ from core_features.docking.detector import DockObservation
 
 SOURCE = "CAMERA_TAG"
 LIDAR_V = "LIDAR_V"   # rear dock V marker (D-950 follow-up), from dock_lidar_observer_node
-SOURCES = (SOURCE, LIDAR_V)
+CAMERA_LINE = "CAMERA_LINE"  # charge-bay pink guide line (D-1013), from bay_line_observer_node
+SOURCES = (SOURCE, LIDAR_V, CAMERA_LINE)
 
 
 def _finite(value) -> float:
@@ -47,11 +48,16 @@ class DockObservationFeed:
         source = payload.get("source") if isinstance(payload, dict) else None
         try:
             if source not in SOURCES:
-                raise ValueError("not a CAMERA_TAG or LIDAR_V dock observation")
+                raise ValueError("not a CAMERA_TAG, LIDAR_V or CAMERA_LINE dock observation")
             if type(payload.get("visible")) is not bool:
                 raise ValueError("visible must be a boolean")
             stamp = _finite(payload.get("stamp"))
             if not payload["visible"]:
+                self._latest.pop(source, None)
+                return False
+            if payload.get("ground") not in (None, "GAZEBO", "NOMINAL"):
+                # NOMINAL (the robot's URDF/record camera) drives docking from one button press
+                # (user decision 2026-11-18, D-1042 6); an unknown ground is not evidence.
                 self._latest.pop(source, None)
                 return False
             tag_id = payload.get("tag_id")
@@ -63,7 +69,8 @@ class DockObservationFeed:
                 x=_finite(payload.get("x")), y=_finite(payload.get("y")),
                 yaw=_finite(payload.get("yaw")),
                 confidence=min(1.0, max(0.0, _finite(payload.get("confidence")))),
-                at=_finite(received_at) - age)
+                at=_finite(received_at) - age,
+                lateral_measured=payload.get("lateral_measured", True) is not False)
         except (ValueError, TypeError):
             # Garbage of unknown origin clears every source: lost, not guessed.
             if source in SOURCES:

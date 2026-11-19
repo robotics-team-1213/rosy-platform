@@ -27,9 +27,22 @@ import time
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_params as prm  # noqa: E402
+from cell_params_account import (  # noqa: E402,F401
+    ACCOUNT_COOKIE,
+    authorize_request,
+    handle_account_route,
+    load_account_client,
+)
+from cell_params_tables import (  # noqa: E402,F401
+    ATTEMPTS_SHOWN,
+    attempts_table,
+    incidents_table,
+    servo_table,
+)
 
 PAGE = Path(__file__).with_name("cell_params_web.html")
 # Fail closed: a group or unit not named here stays locked, so a new guard cannot become editable by accident.
@@ -196,24 +209,48 @@ class ParamFiles:
             raise
 
 
-def servo_table(name: str, caps: Path, profile: Path | None = None) -> dict:
-    """One arm's servo values for the page; a file a session would refuse shows its reason instead."""
+def clear_arm_hold(files: ParamFiles, arms: list[str], body: dict, token: str | None = None) -> dict:
+    """Clear an arm's open hold via omx_incident.clear when no session is busy."""
+    import omx_incident
+
+    arm = body.get("arm")
+    note = body.get("note")
+    cause = body.get("cause") or None
+    basis = body.get("basis") or None
+    if arm not in arms:
+        raise ValueError("등록되지 않은 팔입니다.")
+    if not isinstance(note, str) or not note.strip() or len(note) > NOTE_MAX or not note.isprintable():
+        raise ValueError(f"확인한 내용을 한 줄로 적어 주세요({NOTE_MAX}자 이내).")
+    if files.busy():
+        raise Conflict("세션이 실행 중이라 홀드를 해제할 수 없습니다.")
     try:
-        import guarded_native
-        import session_caps
-
-        layers = session_caps.servo_layers(caps, model=session_caps.model_tuning(),
-                                           robot=session_caps.robot_tuning(profile))
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, SystemExit) as exc:
-        return {"name": name, "error": f"{caps.name}: {exc}"}
-    return {"name": name, "path": str(caps), "profile": str(profile) if profile else None,
-            "motors": [{"id": motor, "joint": joint, "values": layers[motor]}
-                       for motor, joint in zip(layers, guarded_native.NAMES)]}
+        kw = {"token": token} if token else {}
+        omx_incident.clear(arm, note.strip(), cause=cause, basis=basis, **kw)
+    except SystemExit as exc:
+        raise ValueError(str(exc)) from None
+    return omx_incident.status(arm)
 
 
-def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: dict | None = None):
+def _cookie(handler, name: str) -> str:
+    jar = SimpleCookie()
+    try:
+        jar.load(handler.headers.get("Cookie", ""))
+        return jar[name].value if name in jar else ""
+    except CookieError:
+        return ""
+
+
+def _set_cookie(name: str, value: str, age: int) -> tuple[str, str]:
+    return ("Set-Cookie", f"{name}={value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={age}")
+
+
+def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: dict | None = None,
+                attempts: dict | None = None, incident_arms: list[str] | None = None, account=None):
+    if account and not account.resource.startswith("site:"):
+        raise ValueError("Cell Params Account requires a site resource")
+
     class Handler(BaseHTTPRequestHandler):
-        def reply(self, code, value, kind="application/json"):
+        def reply(self, code, value, kind="application/json", headers=()):
             body = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header("Content-Type", kind)
@@ -222,30 +259,59 @@ def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: di
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; "
                                                         "script-src 'unsafe-inline'; frame-ancestors 'none'")
+            for k, v in headers:
+                self.send_header(k, v)
             self.end_headers()
             self.wfile.write(body)
 
         def local(self):
-            return self.headers.get("Host") in (f"127.0.0.1:{self.server.server_port}",
-                                                f"localhost:{self.server.server_port}")
+            allowed = {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
+            if account:
+                allowed.add(urlsplit(account.callback).netloc)
+            return self.headers.get("Host") in allowed
+
+        def _norm_path(self):
+            path = urlsplit(self.path).path
+            if path == "/params":
+                return "/"
+            if path.startswith("/params/"):
+                return path[len("/params"):]
+            return path
 
         def do_GET(self):
             if not self.local():
                 return self.reply(403, {"error": "local cell only"})
-            if self.path == "/":
+            path = self._norm_path()
+            if path.startswith("/api/account/"):
+                return handle_account_route(self, account, "GET", path, self.path)
+            if path == "/":
                 return self.reply(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-            if self.path == "/params.json":
+            err, _ = authorize_request(self, account)
+            if err:
+                return self.reply(*err)
+            if path == "/params.json":
                 return self.reply(200, files.snapshot())
-            if self.path == "/servo.json":
+            if path == "/servo.json":
                 return self.reply(200, [servo_table(name, *paths) for name, paths in (servo or {}).items()])
+            if path == "/attempts.json":
+                return self.reply(200, [attempts_table(name, path) for name, path in (attempts or {}).items()])
+            if path == "/incidents.json":
+                return self.reply(200, incidents_table(list(incident_arms or ())))
             self.reply(404, {"error": "not found"})
 
         def do_POST(self):
+            path = self._norm_path()
+            if path.startswith("/api/account/") and self.local():
+                return handle_account_route(self, account, "POST", path, self.path)
             # The custom header forces a CORS preflight, so another origin cannot change a value.
             if not self.local() or self.headers.get("X-Cell-Params") != "1":
                 return self.reply(403, {"error": "local cell only"})
-            if self.path != "/save":
+            if path not in ("/save", "/incidents/clear"):
                 return self.reply(404, {"error": "not found"})
+            needed = ("fleet.operate",) if path == "/incidents/clear" else ("calibration.operate", "fleet.operate")
+            err, token = authorize_request(self, account, needed)
+            if err:
+                return self.reply(*err)
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 if not 0 < length <= 65536:
@@ -253,7 +319,10 @@ def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: di
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError("JSON object required")
-                self.reply(200, files.save(body))
+                if path == "/incidents/clear":
+                    self.reply(200, clear_arm_hold(files, list(incident_arms or ()), body, token=token))
+                else:
+                    self.reply(200, files.save(body))
             except Conflict as exc:
                 self.reply(409, {"error": str(exc)})
             except (ValueError, OSError, KeyError, TypeError, RecursionError) as exc:
@@ -277,11 +346,15 @@ def main(argv=None):
     parser.add_argument("--file", type=parse_file, action="append", required=True, metavar="NAME=PATH")
     parser.add_argument("--caps", type=parse_file, action="append", default=[], metavar="NAME=PATH")
     parser.add_argument("--profile", type=parse_file, action="append", default=[], metavar="NAME=PATH")
+    parser.add_argument("--attempts", type=parse_file, action="append", default=[], metavar="NAME=PATH")
+    parser.add_argument("--incident-arm", action="append", default=[], metavar="ARM_ID")
+    parser.add_argument("--account-config", type=Path, help="Rosy Account receiver json (optional)")
     parser.add_argument("--port", type=int, default=8772)
     args = parser.parse_args(argv)
-    files, caps, profiles = dict(args.file), dict(args.caps), dict(args.profile)
-    if len(files) != len(args.file) or len(caps) != len(args.caps) or len(profiles) != len(args.profile):
-        parser.error("--file, --caps and --profile names must differ")
+    files, caps, profiles, attempts = dict(args.file), dict(args.caps), dict(args.profile), dict(args.attempts)
+    if (len(files) != len(args.file) or len(caps) != len(args.caps)
+            or len(profiles) != len(args.profile) or len(attempts) != len(args.attempts)):
+        parser.error("--file, --caps, --profile and --attempts names must differ")
     if not set(profiles) <= set(caps):
         parser.error("--profile needs a --caps of the same name")
     for path in files.values():
@@ -289,8 +362,12 @@ def main(argv=None):
             prm.load(path)
         except (OSError, ValueError) as exc:
             parser.error(f"{path}: {exc}")
+    if args.account_config and load_account_client is None:
+        parser.error("cryptography/core_common required for --account-config")
+    account = load_account_client(args.account_config, destinations=("/",)) if args.account_config else None
     server = make_server(ParamFiles(files), args.port,
-                         servo={name: (path, profiles.get(name)) for name, path in caps.items()})
+                         servo={name: (path, profiles.get(name)) for name, path in caps.items()},
+                         attempts=attempts, incident_arms=args.incident_arm, account=account)
     from joint_tune import lock_root
 
     # A page with another HOME or ROSY_OMX_HOME would watch a different lock and save during a session.

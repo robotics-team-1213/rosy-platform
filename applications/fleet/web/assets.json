@@ -82,6 +82,26 @@
       "path": "cell/cell-object-catalog.js",
       "media_type": "application/javascript"
     },
+    "cell-real2sim.js": {
+      "path": "cell/cell-real2sim.js",
+      "media_type": "application/javascript"
+    },
+    "cell-real2sim-specs.js": {
+      "path": "cell/cell-real2sim-specs.js",
+      "media_type": "application/javascript"
+    },
+    "cell-real2sim-actions.js": {
+      "path": "cell/cell-real2sim-actions.js",
+      "media_type": "application/javascript"
+    },
+    "cell-real2sim-views.js": {
+      "path": "cell/cell-real2sim-views.js",
+      "media_type": "application/javascript"
+    },
+    "cell-frames.js": {
+      "path": "shared/cell-frames.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"
@@ -196,6 +216,10 @@
     },
     "host-services.js": {
       "path": "maintenance/host-services.js",
+      "media_type": "application/javascript"
+    },
+    "db-maintenance.js": {
+      "path": "maintenance/db-maintenance.js",
       "media_type": "application/javascript"
     },
     "host-health.js": {
@@ -406,6 +430,10 @@
       "path": "charge-bays-view.js",
       "media_type": "application/javascript"
     },
+    "charge-bays-model.js": {
+      "path": "charge-bays-model.js",
+      "media_type": "application/javascript"
+    },
     "platoon-view.js": {
       "path": "platoon-view.js",
       "media_type": "application/javascript"
@@ -460,6 +488,18 @@
     },
     "site-map-camera.js": {
       "path": "sitemap/site-map-camera.js",
+      "media_type": "application/javascript"
+    },
+    "site-map-reality.js": {
+      "path": "sitemap/site-map-reality.js",
+      "media_type": "application/javascript"
+    },
+    "site-map-camera-draft.js": {
+      "path": "sitemap/site-map-camera-draft.js",
+      "media_type": "application/javascript"
+    },
+    "site-map-bands.js": {
+      "path": "sitemap/site-map-bands.js",
       "media_type": "application/javascript"
     },
     "edit-history.js": {

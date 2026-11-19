@@ -126,7 +126,7 @@ def test_job_prints_the_scope_memory_peak_and_keeps_the_exit_code(tmp_path, peak
 @pytest.mark.parametrize("words, lock, mem", [(["ROSY_JOB_RESERVE_GB=3"], "2 3", "6G"),
                                               (["ROSY_JOB_MEM_GB=4"], "2 4", "4G"),
                                               (["ROSY_JOB_CORES=6", "ROSY_JOB_RESERVE_GB=3"], "6 3", "6G"),
-                                              (["ROSY_JOB_CORES=6", "ROSY_JOB_RESERVE_CORES=2"], "2 6", "6G")])
+                                              (["ROSY_JOB_CORES=6", "ROSY_JOB_RESERVE_CORES=2"], "2 2", "6G")])
 def test_job_lock_takes_the_reservation_and_memory_max_the_cap(tmp_path, words, lock, mem):
     home, env = _job_env(tmp_path, 'cat "$HOME/rosy-jobs/r.0.lock"\n')
     (tmp_path / "bin" / "systemd-run").write_text(
@@ -162,14 +162,48 @@ def test_missing_history_has_no_rows(tmp_path):
 
 def test_a_run_reserves_its_largest_measured_need_and_full_while_any_is_unmeasured(tmp_path):
     history, small, heavy = tmp_path / mh.FILE, ["test/a.py"], ["test/b.py"]
-    assert mh.reserve_gb_all(history, [small]) == 6 and mh.reserve_gb_all(None, [small]) == 6
+    assert mh.reserve_gb_all(history, [small]) == 2 and mh.reserve_gb_all(None, [small]) == 2
     mh.record(history, small, "omen", 300, "ab" * 20)
     assert mh.reserve_gb_all(history, [small]) == 1
-    assert mh.reserve_gb_all(history, [small, heavy]) == 6  # heavy was never measured
+    assert mh.reserve_gb_all(history, [small, heavy]) == 2  # heavy was never measured
     mh.record(history, heavy, "omen", 2000, "ab" * 20)
     assert mh.reserve_gb_all(history, [small, heavy]) == 3  # 1.25 x 2000 MiB, rounded up
-    assert mh.reserve_gb_all(history, []) == 6
+    assert mh.reserve_gb_all(history, []) == 2
     assert 'pytest 2 ${5:-6}' in rp.SHIP  # the run's measured GB, 6 from an older caller
     with history.open("ab") as out:
         out.write(b'\xff\xfe{"key": "torn\n')  # a torn multibyte write must not crash a run
     assert mh.reserve_gb_all(history, [small, heavy]) == 3 and mh.reserve_gb(history, small) == 1
+
+
+def test_reserve_reads_history_once_and_lane_ship_skips_non_browser_invocations(tmp_path, monkeypatch):
+    history, browser, plain = tmp_path / mh.FILE, ["ROSY_RUN_BROWSER_TESTS=1", "test/a_browser.py"], ["test/b.py"]
+    mh.record(history, browser, "h", 300, "ab" * 20, 1.5)
+    reads = []
+    real_rows = mh._rows
+    monkeypatch.setattr(mh, "_rows", lambda h, inv: reads.append(inv) or real_rows(h, inv))
+    words, _ = mh.reserve(history, browser, ["ROSY_JOB_CORES=6"], "xdist")
+    assert len(reads) == 1 and "ROSY_JOB_RESERVE_GB=1" in words and "ROSY_JOB_RESERVE_CORES=2" in words
+
+    shipped = []
+    monkeypatch.setattr(rp, "HEADROOM", {"h": {"cores": 4.0, "mem": 10.0, "site": False, "light": False}})
+    monkeypatch.setattr(rp, "ship", lambda _r, _h, _s, _n, gb=6: shipped.append(gb))
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
+    monkeypatch.setattr(mh, "path", lambda repo: history)
+    monkeypatch.setattr(rp.remote_job, "run", lambda h, name, k, log, job, inv, *a: log.write_bytes(b"1 passed\n") and 0)
+    assert rp.run_on("h", [browser, plain], [tmp_path / "1.txt", tmp_path / "2.txt"], "ab" * 20, tmp_path, None, kind="lane") == [0, None]
+    assert shipped == [1]  # plain has no history, but a lane never runs it
+
+
+def test_rows_caches_by_file_stat_and_invalidates_on_append(tmp_path):
+    mh._cached_rows.cache_clear()
+    history = tmp_path / mh.FILE
+    a, b = ["test/a.py"], ["test/b.py"]
+    mh.record(history, a, "h", 512, "ab" * 20, 1.0)
+    assert len(mh._rows(history, a)) == 1
+    assert mh._cached_rows.cache_info().misses == 1
+    assert len(mh._rows(history, a)) == 1
+    assert mh._cached_rows.cache_info().hits == 1
+    assert mh._rows(history, b) == []
+    mh.record(history, b, "h", 1024, "ab" * 20, 2.0)
+    assert len(mh._rows(history, b)) == 1

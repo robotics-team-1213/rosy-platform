@@ -729,3 +729,17 @@ def test_a_camera_change_does_not_fill_robot_regions_from_the_old_exposure():
     assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
     detector.camera_changed(OTHER)
     assert detector._previous is None
+
+
+def test_calibration_change_refreshes_baked_suspects_for_the_new_homography():
+    detector = _learned(floor=_parked_robot_floor)
+    assert len(detector._suspects) == 1
+    shifted = _calibration((0.01, 0.0, 1.0, 0.0, -0.01, 4.1, 0.0, 0.0, 1.0), bounds=(0.0, 0.0, 7.4, 4.1))
+    assert detector.detect(Frame(_parked_robot_floor(), 11.0), shifted).status == "OK"
+    assert len(detector._suspects) == 1
+    detector.hold(20.0)
+    (guess,) = detector.detect(Frame(_lamp_on(_parked_robot_floor()), 11.4), shifted).detections
+    assert guess.score <= BAKED_SCORE_MAX and guess.x == pytest.approx(3.995, abs=0.006)
+    clipped = _calibration(CAL.image_to_map, bounds=(0.0, 0.0, 2.0, 3.6))
+    assert detector.detect(Frame(_floor(), 11.8), clipped).status == "OK"
+    assert detector._suspects == []

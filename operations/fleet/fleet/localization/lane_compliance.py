@@ -30,9 +30,30 @@ from typing import Mapping, Optional
 from rosy.world.state.projections.map_pose import wrap_angle as _wrap
 
 from core_common.robot_body import NOMINAL_BODY
+from fleet.localization.lane_compliance_helpers import (
+    BAY_ALIGNED_OFFSET_M,
+    BAY_ALIGNED_YAW_DEG,
+    BAY_CONTACT_MAX_OFFSET_M,
+    BAY_CONTACT_MAX_YAW_DEG,
+    BAY_CONTACT_STOP_M,
+    BAY_DRIFT_MAX_OFFSET_M,
+    BAY_DRIFT_MAX_YAW_DEG,
+    BAY_GAIN_HEADING,
+    BAY_GAIN_LATERAL,
+    BAY_MAX_STEER_RAD_S,
+    BAY_REAR_CONTACT_M,
+    BAY_TURN_ENTRY_S_M,
+    BAY_TURN_ENTRY_YAW_DEG,
+    XW_STEP_M,
+    ReturnSample,
+    _bay_inward_arcs,
+    crosswalk_ahead,
+    evaluate_bay_dock,
+    map_bounds,
+)
 
 OK, WARN, ACT, UNKNOWN = "OK", "WARN", "ACT", "UNKNOWN"
-#: D-424 URDF nominal. ponytail: one body for every robot; per-kind bodies when a second kind drives.
+#: D-424 URDF nominal (Pinky): one body for every robot; per-kind bodies when a second kind drives.
 BODY_HALF_WIDTH_M = NOMINAL_BODY.half_width_m
 #: D-424 URDF nominal: base_footprint to the body front (m), for the crosswalk hint distance.
 BODY_FRONT_M = NOMINAL_BODY.front_x_m
@@ -245,41 +266,6 @@ ON_LANE, ON_LINE, OFF_LANE, OFF_MAP, WRONG_WAY, UNSEEN = (
     "ON_LANE", "ON_LINE", "OFF_LANE", "OFF_MAP", "WRONG_WAY", "UNSEEN")
 
 
-@dataclass(frozen=True)
-class ReturnSample:
-    """One raw (undebounced) classification. Angles in degrees. ``side`` is where the lane centre
-    is, seen from the robot (``left``/``right``); None when on the lane."""
-
-    state: str
-    edge_id: Optional[str] = None
-    offset_m: Optional[float] = None
-    side: Optional[str] = None
-    bearing_deg: Optional[float] = None       # to the re-entry point, robot frame (left +)
-    lane_heading_deg: Optional[float] = None  # allowed direction of the nearest lane, map frame
-    turn_deg: Optional[float] = None          # lane direction minus robot heading (left +)
-    entry: Optional[tuple] = None             # re-entry point (x, y), map frame
-    crosswalk: Optional[str] = None
-    #: D-491/D-573 zone ``{id, near_m, far_m, uncertainty_m, source}`` of the crosswalk ahead (or under
-    #: the body) along the lane from base_footprint; None when none is near.
-    crosswalk_ahead: Optional[dict] = None
-    #: D-511 rev 2: ``{ahead_m, heading_ahead_deg, curvature_1pm, to_end_m, next_place_id, ring}``.
-    guide: Optional[dict] = None
-    #: D-511 rev 4: the body is on a configured turn spot (a WRONG_WAY may turn here).
-    turn_spot: bool = False
-    #: rev 6: the nearest arc and the distance along it (for the lap context).
-    arc_id: Optional[str] = None
-    s_m: Optional[float] = None
-
-
-def map_bounds(graph, pad_m: float) -> Optional[tuple]:
-    """The lanes' bounding box grown by ``pad_m``: (x0, y0, x1, y1), or None without lanes."""
-    points = [p for arc in graph.arcs.values() for p in arc.polyline] if graph is not None else []
-    if not points:
-        return None
-    xs, ys = [p[0] for p in points], [p[1] for p in points]
-    return min(xs) - pad_m, min(ys) - pad_m, max(xs) + pad_m, max(ys) + pad_m
-
-
 def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], graph, crosswalks=(),
              config: LaneComplianceConfig = LaneComplianceConfig(),
              body_half_width_m: float = BODY_HALF_WIDTH_M, bounds=None,
@@ -295,8 +281,12 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
         bounds = map_bounds(graph, config.off_map_pad_m)
     if not arcs or bounds is None or not (bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3]):
         return ReturnSample(OFF_MAP)
+    facing = yaw if yaw is not None else travel   # D-587 marker yaw first (±5 deg), else motion
     projected = [(arc, *arc.project(x, y)) for arc in arcs]
-    arc, dist, s, tangent = min(projected, key=lambda item: item[1])
+    arc, dist, s, tangent = min(
+        projected,
+        key=lambda item: (round(item[1], 6), 0.0 if facing is None else abs(_wrap(item[3] - facing))),
+    )
     px, py, _ = arc.point_at(s)
     left = math.cos(tangent) * (y - py) - math.sin(tangent) * (x - px)
     offset = math.copysign(dist, left)
@@ -308,7 +298,6 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
         state = ON_LINE
     else:
         state = OFF_LANE
-    facing = yaw if yaw is not None else travel   # D-587 marker yaw first (±5 deg), else motion
     if config.wrong_way and facing is not None and state != OFF_LANE:
         # Every lane under the body runs against the robot: wrong way. At a junction a lane
         # within 90 deg is always under the body, so turning there is not.
@@ -336,40 +325,14 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
              "curvature_1pm": round(_wrap(t_ahead - tangent) / config.guide_ahead_m, 3),
              "to_end_m": round(max(0.0, arc.length_m - s), 3), "next_place_id": arc.end_place,
              "ring": arc.edge_id.startswith("ring")}   # ponytail: ring edges are named ring*; a map flag if not
+    docking = evaluate_bay_dock(x, y, yaw, travel, graph) if arc.edge_id.startswith("bay_") or getattr(
+        (getattr(graph, "places", None) or {}).get(arc.end_place), "kind", None) == "charge" or getattr(
+        (getattr(graph, "places", None) or {}).get(arc.start_place), "kind", None) == "charge" else None
     return ReturnSample(state, arc.edge_id, round(offset, 4), side,
                         None if bearing is None else round(bearing, 1), round(math.degrees(tangent), 1),
                         None if turn is None else round(turn, 1), (round(ex, 4), round(ey, 4)), crossing, ahead,
                         guide, any(math.hypot(x - sx, y - sy) <= config.turn_spot_tolerance_m
-                                   for sx, sy in config.turn_spots), arc.id, round(s, 4))
-
-
-#: Walk step along the lane for the crosswalk zone (m); the zone is this coarse.
-XW_STEP_M = 0.01
-
-
-def crosswalk_ahead(arc, s: float, crosswalks, horizon_m: float, behind_m: float,
-                    uncertainty_m: float) -> Optional[dict]:
-    """D-491/D-573 zone from the map: the first crosswalk polygon the lane centreline is in between
-    ``behind_m`` behind and ``horizon_m`` ahead of base_footprint, as ``{id, near_m, far_m,
-    uncertainty_m, source}`` along the lane from base_footprint (near < 0 once inside).
-    ponytail: walks this arc only; a crosswalk past the arc's end shows once on the next arc."""
-    from fleet.site_map import _inside
-    for cid, polygon in crosswalks:
-        polygon = list(polygon)
-        hit = None
-        along = s - behind_m
-        while along <= min(s + horizon_m, arc.length_m) + 1e-9:
-            x, y, _ = arc.point_at(max(along, 0.0))
-            inside = _inside((x, y), polygon)
-            if inside and hit is None:
-                hit = along
-            elif not inside and hit is not None:
-                break
-            along += XW_STEP_M
-        if hit is not None and hit - s <= horizon_m and min(along, arc.length_m) - s > 0.0:  # base not past it
-            return {"id": cid, "near_m": round(hit - s, 3), "far_m": round(min(along, arc.length_m) - s, 3),
-                    "uncertainty_m": uncertainty_m, "source": "fleet_map"}
-    return None
+                                   for sx, sy in config.turn_spots), arc.id, round(s, 4), docking)
 
 
 class ReturnTracker:

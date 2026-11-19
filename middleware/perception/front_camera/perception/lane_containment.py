@@ -20,6 +20,7 @@ import math
 
 import numpy as np
 
+from core_common.calibration_store import _real
 from .camera_extrinsic import FINE_STEPS, PC_FINE_STEPS
 from perception_runtime.perception.lane_keep_lines import PAINT_HALF_WIDTH_M, paint_half_width  # noqa: F401 -- one value with the keeper
 
@@ -46,10 +47,6 @@ SAMPLING_MARGIN = 0.02
 #: A selected boundary without both (only truncated paint, or a keeper that does not state
 #: them) leaves uncertainty_m None.
 SLOPE_SIGMAS = 2.0*math.sqrt(2.0)
-
-
-def _real(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def geometry_error(profile, intervals, *, overridden=(), override_bounds=None):

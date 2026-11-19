@@ -40,7 +40,10 @@ class StorageSetup:
                  PRIMARY KEY(project,requester,target,proof))''')
 
     def connect(self):
-        return closing(sqlite3.connect(self.db, timeout=30))
+        conn = sqlite3.connect(self.db, timeout=30)
+        for p in ('journal_mode=WAL', 'synchronous=NORMAL', 'foreign_keys=ON', 'busy_timeout=5000'):
+            conn.execute(f'PRAGMA {p}')
+        return closing(conn)
 
     def _manager(self, actor):
         self.accounts.require(actor, 'publish')

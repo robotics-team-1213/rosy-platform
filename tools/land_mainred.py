@@ -29,6 +29,7 @@ pretest. A NEW failure now does not stop a landing when every condition holds; a
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -49,6 +50,15 @@ LOCATION = re.compile(r"^(\S+\.py):(\d+): (\w[\w.]*)$", re.M)
 CARRIED: list[tuple[str, str, str, tuple[str, ...]]] = []  # (id, main, why, invocation): no land record while set
 PASSES: list[tuple[str, str]] = []  # (id, tested head) PASSED in a -rA run: closed after the fast-forward
 ALONE = re.compile(r"^tools/collect_alone\.py::test_runs_alone\[(.+)\]$")  # names a test file, not a test
+# collect_alone.py's two id kinds name a file; which env var selects it (a bare node id gives no verdict on main)
+ALONE_ANY = re.compile(r"^tools/collect_alone\.py::test_(runs|collects)_alone\[(.+)\]$")
+ALONE_ENV = {"runs": "ROSY_ALONE_FILES", "collects": "ROSY_COLLECT_PATHS"}
+
+
+def alone_invocation(nodeid: str) -> list[str] | None:
+    """The pytest invocation that reruns an alone-class id for its file, or None for a plain node id."""
+    m = ALONE_ANY.match(nodeid)
+    return [f"{ALONE_ENV[m[1]]}={m[2]}", "tools/collect_alone.py", "-rA"] if m else None
 
 
 def _git(wt: Path, *args: str) -> subprocess.CompletedProcess:
@@ -135,6 +145,10 @@ def known(wt: Path, main: str, ids: list[str]) -> bool:
     return bool(ids) and set(ids) <= have
 
 
+# 11-14: close() reads state() after every passing invocation, and state() asked git once per close record: 372
+# calls a pass, 68 passes a FULL, about 0.2 s a call on a busy laptop. A landing sat silent for over 30 min after its
+# tests. Ancestry between two commits never changes.
+@functools.lru_cache(maxsize=None)
 def _ancestor(wt: Path, a: str, b: str) -> bool:
     return _git(wt, "merge-base", "--is-ancestor", a, b).returncode == 0
 
@@ -248,7 +262,8 @@ def landed(wt: Path, sha: str, branch: str) -> list[str]:
 
 def recheck(wt: Path, main_sha: str, run, logdir: Path) -> list[str]:
     """Run each open id on ``main_sha`` alone; close the ones that pass there or whose test file is gone, and return
-    them. Only a landing's own selection closed an id before, so ids nothing selected stayed red for days after the
+    them. An id pytest no longer finds in its file is gone too (11-18: a renamed test sat open 3 days unowned).
+    Only a landing's own selection closed an id before, so ids nothing selected stayed red for days after the
     fix (2026-11-07: 11 open, the oldest from 10-28, some of deleted files). A failing or unreachable id stays open."""
     # 2026-11-08 02:55: a recheck at sha 0000… read every file as gone and closed 7 ids whose files were on main.
     if _git(wt, "cat-file", "-e", f"{main_sha}^{{commit}}").returncode:
@@ -278,6 +293,9 @@ def recheck(wt: Path, main_sha: str, run, logdir: Path) -> list[str]:
             text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
             if re.search(rf"^PASSED {re.escape(nodeid)}\s*$", text, re.M):
                 settle(nodeid, "passed on main")
+                closed.append(nodeid)
+            elif re.search(rf"^ERROR: not found: \S*{re.escape(nodeid)}\s*$", text, re.M):
+                settle(nodeid, "test gone from its file")
                 closed.append(nodeid)
     return closed
 

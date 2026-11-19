@@ -114,7 +114,8 @@ def test_store_is_idempotent_per_session_and_keeps_the_open_explained_cleared_st
         store.clear("arm_b", first, "again", "op-8")
     states = {i["incident_id"]: i for i in store.snapshot("arm_b")}
     assert states[first]["state"] == "cleared" and states[first]["cleared"] == {"by": "op-7", "at": 20.0, "note": "box removed",
-                                                                                "cause": None, "basis": None}
+                                                                                "cause": None, "basis": None,
+                                                                                "kind": "person"}
     assert states[first]["explanation"]["seen"] == "A box in the jaws." and states[other]["state"] == "open"
     assert all("jpeg_b64" not in f for i in states.values() for f in i["frames"])  # no bytes in the console list
     assert store.hold("arm_b").incident_ids == [other]
@@ -389,3 +390,13 @@ def test_old_whole_frames_go_on_a_report_too_not_only_on_a_clear():
     clock[0] += 15 * 86400
     store.report(ArmIncidentReport.model_validate(report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")))
     assert store.labelled()[0]["evidence"] == []
+
+
+def test_verified_baseline_caps_on_folded_torque_off_arm_does_not_hold_on_fleet(client):
+    facts = {"safe_end": False, "folded": True, "latched": {}, "windup_hits": [], "flagged": [],
+             "torque_after": {"11": 0, "12": 0}, "caps_verified_restored": True}
+    res = post(client, report(facts=facts, decision={"hold": False, "reason": "verified baseline caps"})).json()
+    assert res["hold"]["held"] is False
+    bad = post(client, report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b",
+                              facts={**facts, "torque_after": {"11": 0, "12": 1}})).json()
+    assert bad["hold"]["held"] is True

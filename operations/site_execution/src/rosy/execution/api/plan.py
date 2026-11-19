@@ -7,6 +7,7 @@ import re
 from typing import Protocol
 
 from rosy.contracts.skill import AttemptIdentity, ReceiptBinding, SkillInvocation
+from rosy.contracts.skill.invocation import _identifier
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -30,11 +31,6 @@ class _GrantLike(Protocol):
 class _CompiledJobLike(Protocol):
     recipe_hash: str
     cell_hash: str
-
-
-def _identifier(value: str, field: str) -> None:
-    if not isinstance(value, str) or not value or value != value.strip():
-        raise ValueError(f"{field} must be a non-empty trimmed string")
 
 
 def _revision(value: str, field: str) -> None:

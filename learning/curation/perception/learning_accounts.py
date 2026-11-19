@@ -126,6 +126,8 @@ class Accounts:
     def _db(self):
         db = sqlite3.connect(self.db_path, timeout=15)
         db.row_factory = sqlite3.Row
+        for p in ('journal_mode=WAL', 'synchronous=NORMAL', 'foreign_keys=ON', 'busy_timeout=5000'):
+            db.execute(f'PRAGMA {p}')
         try:
             with db:
                 yield db

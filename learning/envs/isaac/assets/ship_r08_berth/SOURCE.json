@@ -1,6 +1,6 @@
 {
- "source": "Rosy/docs/research/ship-modular-2026-11-03: compact-ship-r08 (v15) + ship-berth, containers v3 body + real_door.py",
- "frame": "ship: x stern->bow, y port, z table, mm; container: body x 0..90 (doors +x), z 0..34.4",
+ "source": "Rosy/docs/research/ship-modular-2026-11-03: compact-ship-r08 (v15) + ship-berth (v15 quay & v16 berth-modular + belt-concave-stopper), berth-keyed v24 docking pieces, rosy-modeling/parts/omx-temp-slot (bridge v7 + plate v11) + PR33_C02_BASE, containers v3 body + real_door.py",
+ "frame": "ship: x stern->bow, y port, z table, mm; arm_base/bridge: fixture axes at joint1 on table, mm; plate_v11: fixture axes at lane-2 on table, mm; container: body x 0..90 (doors +x), z 0..34.4",
  "meshes": {
   "hull": {
    "faces": 25028,
@@ -47,6 +47,171 @@
     ]
    ]
   },
+  "berth_v16_cradle": {
+   "faces": 2630,
+   "bounds_mm": [
+    [
+     -4.0,
+     -83.5,
+     0.0
+    ],
+    [
+     203.0,
+     83.5,
+     14.0
+    ]
+   ]
+  },
+  "berth_v16_bridges": {
+   "faces": 1052,
+   "bounds_mm": [
+    [
+     -7.0,
+     -114.5,
+     2.6
+    ],
+    [
+     95.0,
+     114.5,
+     17.0
+    ]
+   ]
+  },
+  "berth_v16_stopper": {
+   "faces": 68,
+   "bounds_mm": [
+    [
+     -16.5,
+     -41.5,
+     -20.0
+    ],
+    [
+     -1.55,
+     41.5,
+     12.0
+    ]
+   ]
+  },
+  "berth_v24_cradle": {
+   "faces": 2630,
+   "bounds_mm": [
+    [
+     -4.0,
+     -83.5,
+     0.0
+    ],
+    [
+     203.0,
+     83.5,
+     14.0
+    ]
+   ]
+  },
+  "berth_v24_docks": {
+   "faces": 972,
+   "bounds_mm": [
+    [
+     -11.0,
+     -115.85,
+     0.0
+    ],
+    [
+     131.0,
+     115.85,
+     17.0
+    ]
+   ]
+  },
+  "berth_v24_stopper": {
+   "faces": 68,
+   "bounds_mm": [
+    [
+     -16.5,
+     -41.5,
+     -20.0
+    ],
+    [
+     -1.55,
+     41.5,
+     12.0
+    ]
+   ]
+  },
+  "omx_base_plate_a": {
+   "faces": 8850,
+   "bounds_mm": [
+    [
+     -75.0,
+     -48.75,
+     0.0
+    ],
+    [
+     75.0,
+     71.25,
+     32.0
+    ]
+   ]
+  },
+  "omx_base_plate_b": {
+   "faces": 8850,
+   "bounds_mm": [
+    [
+     -75.0,
+     -71.25,
+     0.0
+    ],
+    [
+     75.0,
+     48.75,
+     32.0
+    ]
+   ]
+  },
+  "temp_slot_bridge_a": {
+   "faces": 1676,
+   "bounds_mm": [
+    [
+     -127.73,
+     -50.0,
+     6.81
+    ],
+    [
+     -54.5,
+     69.25,
+     16.8
+    ]
+   ]
+  },
+  "temp_slot_bridge_b": {
+   "faces": 1676,
+   "bounds_mm": [
+    [
+     -127.73,
+     -69.25,
+     6.81
+    ],
+    [
+     -54.5,
+     50.0,
+     16.8
+    ]
+   ]
+  },
+  "temp_slot_plate_v11": {
+   "faces": 11516,
+   "bounds_mm": [
+    [
+     -56.0,
+     -84.83,
+     0.0
+    ],
+    [
+     81.27,
+     84.83,
+     14.6
+    ]
+   ]
+  },
   "container_1x3_v3": {
    "faces": 13748,
    "bounds_mm": [
@@ -89,6 +254,36 @@
      293.0,
      43.6,
      70.0
+    ]
+   ]
+  },
+  "temp_slot_plate_v12_navy": {
+   "faces": 10636,
+   "bounds_mm": [
+    [
+     -56.0,
+     -84.8256,
+     0.0
+    ],
+    [
+     81.2706,
+     84.8256,
+     14.6
+    ]
+   ]
+  },
+  "temp_slot_plate_v12_sky": {
+   "faces": 9784,
+   "bounds_mm": [
+    [
+     -56.0,
+     -84.8256,
+     7.4
+    ],
+    [
+     81.2706,
+     84.8256,
+     13.6
     ]
    ]
   }

@@ -207,8 +207,11 @@ def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
         value.update(scene=scene, scene_sha256=hashlib.sha256(_bytes(scene)).hexdigest(),
             scene_not_applicable_reason=None,
             verifier_sha256=hashlib.sha256(Path(__file__).with_name('mapped_stack_report.py').read_bytes()).hexdigest())
-    if scenario_id in ('omx-stacking-rl', 'omx-map-stacking-rl'):
-        if scenario_id == 'omx-map-stacking-rl':
+    if scenario_id in ('omx-stacking-rl', 'omx-map-stacking-rl', 'omx-map-container-stacking-rl'):
+        if scenario_id == 'omx-map-container-stacking-rl':
+            from container_rl_fixture import fixture as container_rl_fixture
+            STACKING = container_rl_fixture(layers=normalized['layers'], case=normalized['case'])
+        elif scenario_id == 'omx-map-stacking-rl':
             from mapped_stack_fixture import RL_FIXTURE as STACKING
         else:
             from stacking_fixture import FIXTURE as STACKING
@@ -428,7 +431,7 @@ class RunStore:
                             or result.get('coordinate_scope') != 'CONFLUENCE_CAD_WITH_NOMINAL_PHOTO_CELL'
                             or not required <= {item.get('id') for item in artifacts}):
                         raise ValueError('Measured three-trial stacking evidence is required')
-                elif row['input']['scenario_id'] in ('omx-stacking-rl', 'omx-map-stacking-rl'):
+                elif row['input']['scenario_id'] in ('omx-stacking-rl', 'omx-map-stacking-rl', 'omx-map-container-stacking-rl'):
                     required = {'stacking-report', 'stacking-policy', 'stacking-initial', 'stacking-evaluation'}
                     if (result.get('stage') != 'stacking_rl' or result.get('training_verified') is not True
                             or result.get('updates') != 32 or result.get('transitions') != 1024
@@ -437,8 +440,8 @@ class RunStore:
                             or result['evaluation_successes'] not in (0, 1)
                             or result.get('task_success') is not (result['evaluation_successes'] == 1)
                             or result.get('cleanup') != 'OWNED_PROCESSES_EXITED_GPU_RELEASED'
-                            or result.get('coordinate_scope') != ('CONFLUENCE_CAD_WITH_NOMINAL_PHOTO_CELL'
-                                if row['input']['scenario_id'] == 'omx-map-stacking-rl' else 'SYNTHETIC_NOT_CAMERA_REGISTERED')
+                            or result.get('coordinate_scope') != row['input']['scene'].get('coordinate_scope',
+                                'SYNTHETIC_NOT_CAMERA_REGISTERED')
                             or not required <= {item.get('id') for item in artifacts}):
                         raise ValueError('SDK exit alone is not verified stacking training')
                 elif row['input']['scenario_id'] == 'pinky-conveyor-roundtrip':

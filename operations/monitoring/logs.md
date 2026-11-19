@@ -106,7 +106,18 @@
 - 증거: 1366·390 폭에서 브랜드 클릭으로 입력한 조회 키와 세션이 사라지는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 운영 수용은 별도다.
 
+## 2026-11-08 · uncommitted · foundation 호환 의존 하한
+- 변경: core_common exact0.0.2를 호환 하한>=0.0.2로 바꿔0.0.3 wheel과 함께 설치 가능하게 했다. Monitoring 코드·관측 계약은 바꾸지 않았다.
+- 증거: CI 입력의 wheel 설치와 Monitoring 원격 회귀를 변경 커밋에서 확인한다.
+- gate 변화: 없음. 관측·배포 수용은 별도다.
+
 ## 2026-11-09 · uncommitted · deploy(monitoring): 전용 서명 이미지 rosy-site-monitoring (D-1001 이행 2)
 - 변경: `deploy/site/Dockerfile.monitoring`(fleet 패키지 없음)을 후보 빌드·서명 목록에 넣고 compose를 그 이미지로 바꿨다. Fleet 이미지에서 Monitoring 소스·화면을 뺐다. 업데이트기·검증기는 이미지 목록의 선택 항목 `monitoring`을 받고, 이전 후보(Fleet 이미지 동반)는 그대로 검증·되돌린다.
 - 증거: 원격 pytest(후보 빌더·검증기·업데이트기·배치 시험, 구조 시험에서 Fleet 이미지 예외 제거). 실제 이미지 빌드·R 배포는 하지 않았다.
 - gate 변화: SOURCE 회귀. 운영 수용은 별도다.
+
+## 2026-11-11 · uncommitted · feat(monitoring): 사람 조회를 Rosy Account로 (D-990)
+
+- 변경: `account_config`가 있으면 로그인·세션·로그아웃 경로와 `monitoring.read` 판정을 제공한다. 화면은 Account 로그인을 먼저 보이고 조회 키를 비상용으로 접는다. 키 판정과 수집기 사이 조회는 그대로다.
+- 증거: 원격 시험 결과는 착지 기록을 따른다. 실제 Account·site proxy 경유 로그인은 확인하지 못했다.
+- Gate: 없음. 운영 활성화와 DEVICE/FIELD를 주장하지 않는다. CE: 해당 없음 — 새 기능 구현이다.

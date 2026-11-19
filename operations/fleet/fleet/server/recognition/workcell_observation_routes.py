@@ -18,6 +18,9 @@ def assert_workcell_observation_credentials_isolated(service, *, console, princi
 
 def install_workcell_observation_routes(app, service, require_viewer, require_named_operator=None, task_service=None,
                                        authorize=None):
+    if authorize is not None:  # D-996 2/7: port events ride the same workcell machine tokens
+        from fleet.server.port_event_routes import install_port_event_routes
+        install_port_event_routes(app, service, task_service, authorize=authorize, require_viewer=require_viewer)
     incidents = None
     if service is not None and require_named_operator is not None:  # D-963
         from fleet.server.usb_camera_decisions import UsbCameraStore, install_usb_camera_routes
@@ -28,6 +31,10 @@ def install_workcell_observation_routes(app, service, require_viewer, require_na
         incidents = ArmIncidentStore(task_service and task_service.store.path)
         install_arm_incident_routes(app, service=service, store=incidents, require_viewer=require_viewer,
                                     require_named_operator=require_named_operator, authorize=authorize)
+    if incidents is not None and hasattr(app, "state"):
+        # D-971: the operator's pipeline arm-hold clear reuses this store; source lookup reuses the service.
+        app.state.arm_incidents = incidents
+        app.state.workcell_observations_service = service
 
     def available():
         if service is None:

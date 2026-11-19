@@ -57,6 +57,12 @@ def select_detector(dock: DockInstance, dock_type, *,
         from core_features.docking.feed import LIDAR_V, FeedDetector
 
         return FeedDetector(feed, tag_id=None, clock=clock, source=LIDAR_V)
+    if dock_type.detector == "camera_line" and feed is not None:
+        # Charge bay (D-1013): control's bay_line_observer_node turns the pink
+        # guide line into the virtual dock observation (CAMERA_LINE source).
+        from core_features.docking.feed import CAMERA_LINE, FeedDetector
+
+        return FeedDetector(feed, tag_id=None, clock=clock, source=CAMERA_LINE)
     if (dock_type.detector == "aruco"
             and getattr(dock_type, "tag_id", None) is not None
             and getattr(dock_type, "tag_size_m", None) is not None
@@ -86,6 +92,7 @@ class DockObservation(BaseModel):
     yaw: float
     confidence: float = Field(ge=0.0, le=1.0)
     at: float                       # 관측 시각 (주입 시계 기준)
+    lateral_measured: bool = True   # False: 통로선만 보여 횡은 모른다 — 방위·거리만 실측(2026-11-18 y8xs)
 
     @property
     def range_m(self) -> float:

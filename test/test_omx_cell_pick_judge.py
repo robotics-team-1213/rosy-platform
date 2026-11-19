@@ -38,3 +38,58 @@ def test_a_veto_empties_the_list_and_a_failure_keeps_the_rule():
     out = pj.ask(down, IMG, USABLE)
     assert out["order"] == [0, 1] and out["by"] == "rule" and "unavailable" in out["reason"]
     assert pj.ask(None, IMG, USABLE)["order"] == [0, 1]
+
+
+def test_multi_model_deliberation_in_pick_judge_and_conservative_veto_tiebreak():
+    proposer = lambda p, i, s: {"choice": 1, "reason": "candidate 1 is isolated"}
+    critic_agree = lambda p, i, s: {"choice": 1, "reason": "confirmed candidate 1"}
+    out = pj.ask([proposer, critic_agree], IMG, USABLE)
+    assert out["order"] == [1, 0] and out["consensus"] is True and len(out["deliberation"]) == 2
+
+    # When one model vetoes (-1) and one picks 1, conservative tie-break chooses -1 (veto)
+    critic_veto = lambda p, i, s: {"choice": -1, "reason": "tilted"}
+    out_veto = pj.ask([proposer, critic_veto], IMG, USABLE)
+    assert out_veto["choice"] == -1 and out_veto["order"] == [] and out_veto["consensus"] is False
+
+
+def test_ask_goal_shadow_names_one_candidate_without_order_or_coordinates():
+    seen = {}
+
+    def backend(prompt, images, schema):
+        seen["prompt"], seen["images"] = prompt, images
+        return {"choice": 1, "reason": "the wide one"}
+
+    carry = [{**u, "pick": {"x": 0.1, "y": 0.0}, "place": {"x": 0.1, "y": 0.05}} for u in USABLE]
+    out = pj.ask_goal(backend, carry, "carry the wide container to the belt")
+    assert out["choice"] == 1 and out["by"] == "shadow" and "order" not in out
+    assert seen["images"] == []
+    assert "container-2" in seen["prompt"] and "carry the wide container" in seen["prompt"]
+    assert "'dist_to_place_mm': 50" in seen["prompt"]
+    assert "'x'" not in seen["prompt"] and "pick" not in seen["prompt"]
+
+
+def test_ask_goal_passes_a_veto_through_unchanged():
+    out = pj.ask_goal(lambda *a: {"choice": -1, "reason": "none fits the goal"}, USABLE, "move the top one")
+    assert out["choice"] == -1 and out["by"] == "shadow"
+
+
+def test_ask_goal_refuses_bad_answers_and_skips_the_model_without_a_goal():
+    calls = []
+
+    def counting(prompt, images, schema):
+        calls.append(prompt)
+        return {"choice": 7, "reason": "?"}
+
+    def down(*a):
+        raise OSError("connection refused")
+
+    assert pj.ask_goal(counting, USABLE, "any")["choice"] is None
+    assert pj.ask_goal(lambda *a: {"choice": "a", "reason": "?"}, USABLE, "any")["choice"] is None
+    out = pj.ask_goal(down, USABLE, "any")
+    assert out["choice"] is None and len(out["reason"]) <= 80
+    assert pj.ask_goal(counting, [], "any")["choice"] is None
+    before = len(calls)
+    assert pj.ask_goal(None, USABLE, "any")["choice"] is None
+    assert pj.ask_goal(counting, USABLE, "")["choice"] is None
+    assert pj.ask_goal(counting, USABLE, "   ")["choice"] is None
+    assert len(calls) == before  # no decision model or no goal sentence: the backend is never called

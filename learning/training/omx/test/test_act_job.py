@@ -9,6 +9,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from act_job import chunk_indices, offline_report, compatible_sources, run
 
 
+def test_reviewed_dataset_cli_uses_offline_act_training(monkeypatch, capsys, tmp_path):
+    from types import SimpleNamespace
+    import act_job
+    calls = []
+    monkeypatch.setitem(sys.modules, 'experiment_train', SimpleNamespace(
+        train=lambda *args, **kwargs: calls.append((args, kwargs)) or {'status': 'trained'}))
+    act_job.main(['--dataset', str(tmp_path / 'dataset'), '--out', str(tmp_path / 'run'), '--steps', '8'])
+    assert calls == [((tmp_path / 'dataset', tmp_path / 'run'),
+                      {'method': 'act', 'steps': 8, 'seed': 42750})]
+    assert 'trained' in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        act_job.main(['--dataset', str(tmp_path / 'dataset'), '--train-export', 'old',
+                      '--out', str(tmp_path / 'run')])
+
+
 def test_bounded_sampling_checks_the_whole_chunk_without_changing_labels():
     import copy
     import act_job

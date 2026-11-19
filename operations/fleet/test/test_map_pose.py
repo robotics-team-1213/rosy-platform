@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from rosy.world.state.projections.map_pose import (BRIDGED, DEGRADED, LOCALIZED, SIGHTING, UNKNOWN,
-                                         MapPoseConfig, MapPoseTracker, OdomSample, Sighting,
-                                         odom_from_snapshot, sighting_from_row)
+from rosy.world.state.projections.map_pose import (BRIDGED, DEGRADED, LOCALIZED, PEER, SIGHTING,
+                                         UNKNOWN, MapPoseConfig, MapPoseTracker, OdomSample,
+                                         Sighting, odom_from_snapshot, sighting_from_row)
 
 T0 = 1_800_000_000.0
 ANCHOR = (1.0, 2.0, math.pi / 2)     # map pose seen by Rosy Cam while odom reads (0, 0, 0)
@@ -295,12 +295,14 @@ def test_map_pose_is_stdlib_only_and_never_reads_tracking():
     path = Path(map_pose.__file__)
     assert path == Path(__file__).resolve().parents[3] / "operations/world/src/rosy/world/state/projections/map_pose.py"
     names = set()
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.Import):
-            names.update(a.name for a in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            names.add(node.module or "")
-    assert names <= {"__future__", "math", "collections", "dataclasses", "datetime", "typing"}
+    for source in (path, path.with_name("map_pose_samples.py")):  # the split-out helpers are part of it
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                names.update(a.name for a in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                names.add(node.module or "")
+    assert names <= {"__future__", "math", "collections", "dataclasses", "datetime", "typing",
+                     "rosy.world.state.projections.map_pose_samples"}
     assert not any("tracking" in name for name in names)
 
 
@@ -364,7 +366,7 @@ def test_pending_sighting_is_dropped_when_it_goes_stale():
 
 def test_odom_refusals_are_counted_with_the_last_reason():
     tr = localized()
-    assert not tr.add_odom(odom(0.1, x=0.1), T0 + 0.3)
+    assert not tr.add_odom(odom(0.2, x=0.1), T0 + 0.3)          # same stamp, another pose: a clock fault
     assert not tr.add_odom(odom(0.2), T0 + 0.3)                 # the same sample twice: not counted
     pose = tr.pose(T0 + 0.3)
     assert (pose.odom_refused, pose.odom_refused_reason) == (1, "out_of_order")
@@ -535,3 +537,94 @@ def test_an_odom_sample_without_epoch_keeps_todays_rule():
     assert tr.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 0.3, epoch=4), T0 + 0.3)
     assert tr.add_odom(odom(0.4), T0 + 0.4)            # an old robot's sample: no epoch to compare
     assert tr.pose(T0 + 0.4).state == LOCALIZED
+
+
+# --- D-1017 peer-relayed self pose ---------------------------------------------------------
+
+def test_peer_pose_anchors_only_while_the_camera_is_quiet():
+    """A robot's own relayed claim is the last anchor before UNKNOWN, never the first choice."""
+    tr = MapPoseTracker('r1')
+    tr.add_odom(odom(0), T0)
+    assert tr.add_peer(ANCHOR, T0, T0, 'a', 'a') is None
+    pose = tr.pose(T0, 'a')
+    assert (pose.source, pose.state) == (PEER, DEGRADED)     # a first anchor is not confirmed yet
+    assert (round(pose.x, 2), round(pose.y, 2)) == (1.0, 2.0)
+    tr.add_odom(odom(1, x=0.1), T0 + 1)
+    assert tr.add_peer((1.0, 2.1, math.pi / 2), T0 + 1, T0 + 1, 'a', 'a') is None
+    assert tr.pose(T0 + 1, 'a').state == DEGRADED            # a first anchor needs 2 agreeing
+    tr.add_odom(odom(2, x=0.2), T0 + 2)
+    assert tr.add_peer((1.0, 2.2, math.pi / 2), T0 + 2, T0 + 2, 'a', 'a') is None
+    assert tr.pose(T0 + 2, 'a').state == LOCALIZED
+
+
+def test_peer_pose_refusals_name_why_it_did_not_anchor():
+    tr = MapPoseTracker('r1')
+    tr.add_odom(odom(0), T0)
+    assert tr.add_peer((math.nan, 0.0, 0.0), T0, T0, 'a', 'a') == 'POSE_INVALID'
+    assert tr.add_peer((0.0, 0.0, 0.0), T0, T0, 'b', 'a') == 'MAP_NOT_ACTIVE'
+    assert tr.add_peer((0.0, 0.0, 0.0), T0 - 6.01, T0, 'a', 'a') == 'STALE_SAMPLE'
+    assert tr.add_peer((0.0, 0.0, 0.0), T0 + 1.0, T0, 'a', 'a') == 'STALE_SAMPLE'   # future
+    assert tr.add_peer((0.0, 0.0, 0.0), T0, T0, None, 'a') == 'MAP_NOT_ACTIVE'
+
+    tr.add_sighting(Sighting('r1', 0.0, 0.0, 0.0, T0, 0.9, 'a'), T0)
+    assert tr.add_peer((0.0, 0.0, 0.0), T0 + 1, T0 + 1, 'a', 'a') == 'CAMERA_RECENT'
+
+    pinned = MapPoseTracker('r1')
+    pinned.add_odom(odom(0), T0)
+    assert pinned.add_pin((0.5, 0.5, 0.0), T0, 'a') is None
+    assert pinned.add_peer((9.0, 9.0, 0.0), T0, T0, 'a', 'a') == 'PIN_FRESH'
+
+    newer = MapPoseTracker('r1')
+    newer.add_odom(odom(0), T0)
+    assert newer.add_peer((0.0, 0.0, 0.0), T0, T0, 'a', 'a') is None
+    assert newer.add_peer((0.0, 0.0, 0.0), T0, T0, 'a', 'a') == 'NOT_NEWER'
+
+
+def test_a_silent_camera_stays_visible_as_a_sighting_age():
+    """A dead camera must not read like a healthy one: the pose carries the age of its last sighting."""
+    tr = MapPoseTracker('r1')
+    assert tr.pose(T0).last_sighting_age_s is None
+    tr.add_odom(odom(0), T0)
+    tr.add_sighting(Sighting('r1', 0.0, 0.0, 0.0, T0, 0.9, 'a'), T0)
+    assert tr.pose(T0 + 30, 'a').last_sighting_age_s == pytest.approx(30.0)
+
+
+def test_a_camera_sighting_holds_the_peer_anchor_back_for_exactly_ten_seconds():
+    """The CAMERA_RECENT gate is pinned on both sides: 9.99 s still refuses, 10.0 s sharp accepts."""
+    tr = MapPoseTracker('r1')
+    tr.add_odom(odom(0), T0)
+    tr.add_sighting(Sighting('r1', 0.0, 0.0, 0.0, T0, 0.9, 'a'), T0)
+    tr.add_odom(odom(10), T0 + 9.99)
+    assert tr.add_peer((0.0, 0.0, 0.0), T0 + 9.99, T0 + 9.99, 'a', 'a') == 'CAMERA_RECENT'
+    tr.add_odom(odom(10), T0 + 10.0)
+    assert tr.add_peer((0.0, 0.0, 0.0), T0 + 10.0, T0 + 10.0, 'a', 'a') is None
+
+
+def test_hub_after_rest_snapshot_is_not_counted_out_of_order():
+    tr = localized()
+    assert tr.add_odom(odom(1.0, x=0.2), T0 + 1.0)         # REST read
+    assert not tr.add_odom(odom(0.6, x=0.1), T0 + 1.05)    # hub snapshot of an earlier moment arrives late
+    pose = tr.pose(T0 + 1.05)
+    assert (pose.stale_source, pose.odom_refused, pose.odom_refused_reason) == (1, 0, None)
+    assert tr.survey_odom(T0 + 1.05)[2] == 0               # a skipped late copy leaves the recorded odom order intact
+
+
+def test_true_clock_rewind_still_refused():
+    tr = localized()
+    assert tr.add_odom(odom(10.0), T0 + 10.0)
+    assert not tr.add_odom(odom(2.0), T0 + 10.1)            # 8 s back: more than the 3 s hub reuse
+    assert not tr.add_odom(odom(-10.0), T0 + 10.1)          # 20 s back (chrony step): still a refusal
+    assert not tr.add_odom(odom(10.0, x=0.3), T0 + 10.1)    # same stamp, another pose
+    pose = tr.pose(T0 + 10.1)
+    assert (pose.odom_refused, pose.odom_refused_reason, pose.stale_source) == (3, "out_of_order", 0)
+
+
+def test_implausible_late_sample_is_refused_and_breaks_survey_but_a_plausible_one_does_not():
+    tr = localized()
+    tr.add_odom(odom(1.0, x=0.2), T0 + 1.0)
+    epoch = tr.survey_odom(T0 + 1.0)[2]
+    assert not tr.add_odom(odom(0.9, x=0.19), T0 + 1.0)    # 0.1 s behind, 1 cm away: a late copy
+    assert tr.survey_odom(T0 + 1.0)[2] == epoch and tr.pose(T0 + 1.0).stale_source == 1
+    assert not tr.add_odom(odom(0.9, x=9.0), T0 + 1.0)     # 0.1 s behind but 9 m away: not the same robot path
+    assert tr.survey_odom(T0 + 1.0)[2] == epoch + 1
+    assert tr.pose(T0 + 1.0).odom_refused_reason == "out_of_order"

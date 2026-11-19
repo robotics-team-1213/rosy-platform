@@ -43,3 +43,14 @@ def test_probe_library_loads_in_the_runner_and_only_descends(tmp_path):
     down = loaded["chunks"]["descend_probe"]
     assert len(down) > 30 and all(f[5] == PLAN["grip_closed"] for f in down)  # jaws closed all the way
     assert cs.fk_z(down[-1]) < cs.fk_z(down[0]) - 0.08  # straight down by the full range
+
+
+def test_touch_and_probe_library_apply_configured_tcp_x_m():
+    lib_stock = cs.probe_library(PLAN, 0.15, 0.0, -14.4, 0.10, 0.01)
+    lib_v21 = cs.probe_library(PLAN, 0.15, 0.0, -14.4, 0.10, 0.01, tcp_x_m=0.074)
+    state = lib_v21["chunks"]["descend_probe"][-1]
+    assert lib_v21["chunks"]["descend_probe"][0] != lib_stock["chunks"]["descend_probe"][0]
+    cell = Scripted({"run descend_probe": {"ok": False, "contact": True, "state": state}})
+    z_stock = cs.touch(cell, Path("lib.json"))["surface_z"]
+    z_v21 = cs.touch(cell, Path("lib.json"), tcp_x_m=0.074)["surface_z"]
+    assert abs((z_v21 - z_stock) - 0.0179) < 0.002

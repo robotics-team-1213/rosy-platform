@@ -9,20 +9,26 @@ same argv, reserves ``MARGIN`` times its highest recorded peak in whole GB (at l
 MemoryMax stays 6 GB either way, so a wrong guess only lets one more job onto a host, it never kills one.
 Measured 2026-10-26 over 140 scopes: median 0.3 GB, p90 3.1 GB, max 5.7 GB. 2026-10-27 over 763 argvs (3,077
 runs) the highest peak per argv was median 292 MiB, p90 852 MiB, while 99% reserved 3 GB: the reservations, not
-the hosts' memory, filled the test PCs. Standard library only.
+the hosts' memory, filled the test PCs. Past MAX_ROWS rows the file is trimmed to its last KEEP_ROWS
+(land_tick). Standard library only.
 """
 
 from __future__ import annotations
 
+import functools
 import json
 import math
+import os
 import re
 import subprocess
 import time
 from pathlib import Path
 
 FILE = "rosy-pytest-memory.jsonl"
-FULL_GB, MARGIN = 6, 1.25
+# Seconds-to-GB: default cgroup MemoryMax (6 GB); unmeasured runs reserve UNKNOWN_GB until recorded.
+FULL_GB, UNKNOWN_GB, MARGIN = 6, 2, 1.25
+# Past MAX_ROWS rows the file is rewritten to its last KEEP_ROWS (trim, called by land_tick every 10 min).
+MAX_ROWS, KEEP_ROWS = 20_000, 15_000
 PEAK = re.compile(r"^\[remote-pytest\] memory peak (\d+) MiB\r?$", re.M)
 CPU = re.compile(r"^\[remote-pytest\] cpu (\d+) ms over (\d+) ms\r?$", re.M)
 
@@ -70,29 +76,63 @@ def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str,
         out.write(json.dumps(row) + "\n")
 
 
-def _rows(history: Path | None, inv: list[str]) -> list[dict]:
-    want, rows = key(inv), []
+def trim(history: Path | None, max_rows: int = MAX_ROWS, keep_rows: int = KEEP_ROWS) -> int:
+    """Rewrite history to its last keep_rows rows once past max_rows; the dropped count, else 0."""
     if history is None:
-        return rows
+        return 0
     try:
-        # Line by line: every invocation of a landing reads this at once, and the file only grows.
-        with history.open(encoding="utf-8", errors="replace") as lines:
-            for line in lines:
-                try:
-                    row = json.loads(line)
-                    if row["key"] == want:
-                        rows.append(row)
-                except (ValueError, KeyError, TypeError):
-                    continue  # a torn or foreign line
+        with history.open(encoding="utf-8", errors="replace") as src:
+            rows = src.readlines()
     except OSError:
-        pass
-    return rows
+        return 0
+    if len(rows) <= max_rows:
+        return 0
+    kept, tmp = rows[-keep_rows:], history.with_suffix(".jsonl.tmp")
+    tmp.write_text("".join(kept), encoding="utf-8")
+    os.replace(tmp, history)
+    _cached_rows.cache_clear()
+    return len(rows) - len(kept)
+
+
+@functools.lru_cache(maxsize=256)
+def _cached_rows(path_str: str, mtime_ns: int, size: int, want: str) -> tuple[dict, ...]:
+    rows, needle = [], json.dumps(want)
+    # Line by line: every invocation of a landing reads this at once, and the file only grows.
+    with open(path_str, encoding="utf-8", errors="replace") as lines:
+        for line in lines:
+            if needle not in line:
+                continue
+            try:
+                row = json.loads(line)
+                if row["key"] == want:
+                    rows.append(row)
+            except (ValueError, KeyError, TypeError):
+                continue  # a torn or foreign line
+    return tuple(rows)
+
+
+def _rows(history: Path | None, inv: list[str]) -> list[dict]:
+    if history is None:
+        return []
+    try:
+        st = history.stat()
+        return list(_cached_rows(str(history), st.st_mtime_ns, st.st_size, key(inv)))
+    except OSError:
+        return []
+
+
+def _gb_from_peaks(peaks) -> int:
+    return min(FULL_GB, max(1, math.ceil(max(peaks) * MARGIN / 1024))) if peaks else FULL_GB
+
+
+def _cores_from_rows(rows: list[dict], workers: int) -> int:
+    used = [r["cores"] for r in rows if isinstance(r.get("cores"), (int, float))]
+    return min(workers, max(1, math.ceil(max(used) * MARGIN))) if used else workers
 
 
 def reserve_gb(history: Path | None, inv: list[str]) -> int:
     """MARGIN x inv's highest recorded peak, rounded up to whole GB within 1..FULL_GB; FULL_GB with no record."""
-    peaks = [r["peak_mib"] for r in _rows(history, inv) if isinstance(r.get("peak_mib"), int)]
-    return min(FULL_GB, max(1, math.ceil(max(peaks) * MARGIN / 1024))) if peaks else FULL_GB
+    return _gb_from_peaks([r["peak_mib"] for r in _rows(history, inv) if isinstance(r.get("peak_mib"), int)])
 
 
 def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
@@ -100,9 +140,12 @@ def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
     (remote_pytest.SHIP). 2026-11-09: three runs waiting to start held 18 GB of a model PC at a fixed 6 GB each."""
     keys, peaks = {key(inv) for inv in invs}, {}
     if history is not None and invs:
+        pattern = re.compile("|".join(re.escape(json.dumps(k)) for k in keys))
         try:
             with history.open(encoding="utf-8", errors="replace") as lines:
                 for line in lines:
+                    if not pattern.search(line):
+                        continue
                     try:
                         row = json.loads(line)
                         if row["key"] in keys and isinstance(row.get("peak_mib"), int):
@@ -111,24 +154,25 @@ def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
                         continue
         except OSError:
             pass
-    if not invs or len(peaks) < len(keys):
-        return FULL_GB
-    return min(FULL_GB, max(1, math.ceil(max(peaks.values()) * MARGIN / 1024)))
+    if not invs:
+        return UNKNOWN_GB
+    measured = _gb_from_peaks(peaks.values()) if peaks else 0
+    return max(measured, UNKNOWN_GB) if len(peaks) < len(keys) else measured
 
 
 def reserve_cores(history: Path | None, inv: list[str], workers: int) -> int:
     """MARGIN x inv's highest recorded average cores, rounded up within 1..workers; workers with no record."""
-    used = [r["cores"] for r in _rows(history, inv) if isinstance(r.get("cores"), (int, float))]
-    return min(workers, max(1, math.ceil(max(used) * MARGIN))) if used else workers
+    return _cores_from_rows(_rows(history, inv), workers)
 
 
 def reserve(history: Path | None, inv: list[str], words: list[str], note: str) -> tuple[list[str], str]:
     """Job words and note with the lock budget inv's history earns (remote_pytest.one): GB, unless a light host
     already capped MemoryMax, and cores under the job's ``ROSY_JOB_CORES`` (JOB's default 2; ``-n`` keeps it)."""
-    gb = reserve_gb(history, inv)
+    rows = _rows(history, inv)
+    gb = _gb_from_peaks([r["peak_mib"] for r in rows if isinstance(r.get("peak_mib"), int)])
     if gb < FULL_GB and not any(w.startswith("ROSY_JOB_MEM_GB=") for w in words):
         words, note = [*words, f"ROSY_JOB_RESERVE_GB={gb}"], note + f", reserve {gb} GB (memory history)"
     workers = next((int(w[15:]) for w in words if w.startswith("ROSY_JOB_CORES=") and w[15:].isdigit()), 2)
-    if (cores := reserve_cores(history, inv, workers)) < workers:
+    if (cores := _cores_from_rows(rows, workers)) < workers:
         words, note = [*words, f"ROSY_JOB_RESERVE_CORES={cores}"], note + f", {cores} of {workers} cores (cpu history)"
     return words, note

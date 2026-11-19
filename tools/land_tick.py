@@ -1,0 +1,253 @@
+"""One unattended pass over the landing backlog, every 10 minutes from the main checkout (scheduled task RosyLandTick).
+
+Every step already existed, but each ran only when some session or a running landing happened to call it, so the
+backlog grew while nobody looked (11-13/14: ~20 landings stopped on one red main for hours, 270 unlanded branches,
+4.2 GB of leftovers, 243 rollup tries that found nothing). In order, each step on its own (one failing never skips
+the next), never deleting work:
+
+1. main-red recheck: when main moved since the last tick and ids are open, run them on main (``land_mainred
+   recheck``); ids that pass close, which is what lets the landings stopped on them go again.
+2. resume: orphaned landings and MAIN-RED stops main has cleared (``land_async.orphans``); then one landing whose
+   last STOP was a full queue, once the queue has room (``requeue``), and a NOT QUEUED request land_async kept
+   there (``land_queue.keep_pending``).
+3. rollup: ``land_rollup apply --auto`` for pending landings that fit together. The only rollup trigger (D-889 36).
+4. cleanup: ``land_gc`` (lossless), worktrees (landed and orphan ones at once, any idle WORKTREE_IDLE_H with its
+   branch kept and dirty work under refs/wip/) and the branch sweep (merged go, idle unlanded to refs/archive/).
+5. report: ``<git-common-dir>/rosy-land-backlog.txt``, the queue, stops by kind and open main-red ids with age and
+   owner. An unowned main-red id older than ALERT_S is the line a person or agent acts on. Once per 24 h it adds a
+   ``[metrics]`` line (arrivals, landed, lead p50/p90, turn-deadline releases, rollups) and a row in
+   ``rosy-land-metrics.jsonl``: the "before" and "after" numbers a land-tool commit cites (D-889 36).
+
+    python tools/land_tick.py [--report]        # --report: step 5 only
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
+import land_async  # noqa: E402
+import land_cache  # noqa: E402
+import land_gc  # noqa: E402
+import land_mainred  # noqa: E402
+import land_events  # noqa: E402
+import land_queue  # noqa: E402
+import land_stats  # noqa: E402
+import memory_history  # noqa: E402
+import worktrees  # noqa: E402
+
+ALERT_S = 30 * 60  # a main-red id open this long with no owner is called out
+SHOWN = 10  # the oldest open main-red ids the report names
+ACTIVE_LOG_S = 30 * 60  # an expired ticket whose landing logged this recently is working, not stuck
+WARM_BATCH = 8  # missing main invocations warmed during an idle tick
+WORKTREE_IDLE_H = 12  # a worktree nobody touched this long is removed (branch kept, dirty work to refs/wip/)
+METRICS_EVERY_S = 24 * 3600  # D-889 36: the pipeline's numbers, once per day
+METRICS_LOG = "rosy-land-metrics.jsonl"
+RECHECK_STAMP, LOG, REPORT, LOCK = ("rosy-land-tick.recheck", "rosy-land-tick.log", "rosy-land-backlog.txt",
+                                     "rosy-land-tick.lock")
+
+
+def _run(repo: Path, *argv: str, timeout: float) -> str:
+    done = subprocess.run([sys.executable, "-X", "utf8", *argv], cwd=repo, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", timeout=timeout)
+    lines = (done.stdout + done.stderr).strip().splitlines()
+    return lines[-1] if lines else f"exit {done.returncode}"
+
+
+def recheck(repo: Path, common: Path) -> str:
+    main = land_async.git(repo, "rev-parse", "main")
+    stamp = common / RECHECK_STAMP
+    if not land_mainred.state(repo) or (stamp.is_file() and stamp.read_text(encoding="utf-8").strip() == main):
+        return "nothing to recheck"
+    said = _run(repo, "tools/land_mainred.py", "recheck", timeout=45 * 60)
+    stamp.write_text(main, encoding="utf-8")
+    return said
+
+
+def resume(repo: Path) -> str:
+    names, done = land_async.orphans(repo), []
+    for name in names:
+        try:
+            land_async.resume(repo, name, [], land_async.detach, wait=0)
+            done.append(name)
+        except SystemExit as exc:  # e.g. still held by a live ticket: not resumed, so not counted
+            print(f"[tick] resume {name}: {exc}", flush=True)
+    return f"resumed {len(done)} of {len(names)}: {', '.join(done)}" if names else "nothing to resume"
+
+
+def requeue(repo: Path, days: float = 7, now: float | None = None) -> str:
+    """One landing whose last STOP was a full queue, relaunched once the queue has room. land_async gives up after its
+    drain wait and nobody queued it again (11-18: orphan-relands-3, safety-review-clean sat stopped 3-4 days). Only the
+    newest snapshot of a branch, once per stop (the .auto-resume mark), never a .stopped carrying an owner's own note.
+    A NOT QUEUED request land_async kept (land_queue.keep_pending) goes first; at most one launch per tick in all."""
+    if land_queue.full(land_queue.queue_dir(repo)):
+        return "queue full"
+    if (said := pending(repo)) is not None:
+        return said
+    place, now = land_async.holder(repo), now or time.time()
+    newest: dict[str, str] = {}
+    for tree in place.iterdir() if place.is_dir() else ():
+        if tree.is_dir() and (key := tree.name.rsplit("-", 1)[0]) and tree.name > newest.get(key, ""):
+            newest[key] = tree.name
+    for name in sorted(newest.values()):
+        stop, mark = place / (name + ".stopped"), place / (name + ".auto-resume")
+        if (not stop.is_file() or now - stop.stat().st_mtime > days * 86400
+                or not stop.read_text(encoding="utf-8").startswith("land.py exit")
+                or mark.is_file() and mark.stat().st_mtime >= stop.stat().st_mtime):
+            continue
+        logs = [p for p in (place / (name + ".log"), place / (name + ".resume.log")) if p.is_file()]
+        text = max(logs, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8", errors="replace") if logs else ""
+        stops = re.findall(r"^\[land\] STOP: .*$", text, re.M)
+        if not stops or land_async.QUEUE_FULL not in stops[-1]:
+            continue
+        mark.write_text(land_async.git(repo, "rev-parse", "main"), encoding="utf-8")
+        try:
+            land_async.resume(repo, name, [], land_async.detach, wait=0)
+            return f"requeued {name}"
+        except SystemExit as exc:  # e.g. held by a live ticket
+            print(f"[tick] requeue {name}: {exc}", flush=True)
+    return "nothing to requeue"
+
+
+def pending(repo: Path) -> str | None:
+    """Relaunch one NOT QUEUED request land_async kept (``land_queue.keep_pending``) now the queue has room:
+    oldest first, at most one per tick. One whose branch already lands goes, and one whose branch tip moved past
+    the recorded ref goes (a newer request supersedes it); the relaunched land_async keeps the request again when
+    the queue filled meanwhile, so a kept request is never simply gone."""
+    rows = []
+    for path in land_queue.queue_dir(repo).glob("pending-*.json"):
+        try:
+            rows.append({**json.loads(path.read_text(encoding="utf-8")), "path": path})
+        except (OSError, ValueError):
+            path.unlink(missing_ok=True)
+    for row in sorted(rows, key=lambda r: (r.get("start") or 0, r["path"].name)):
+        branch, ref = row.get("branch") or "", row.get("ref") or ""
+        if (not branch or not ref or land_async.holders(repo, branch)
+                or land_async.git(repo, "rev-parse", branch, check=False) != ref):
+            row["path"].unlink(missing_ok=True)  # already landing, or the branch moved past this request
+            continue
+        land_async.detach([sys.executable, "-X", "utf8", str(repo / "tools" / "land_async.py"), "--branch", branch,
+                           *map(str, row.get("args") or [])], row["path"].with_suffix(".log"), repo)
+        row["path"].unlink(missing_ok=True)
+        return f"relaunched pending {branch}"
+    return None
+
+
+def active(holder: Path, name: str) -> bool:
+    """The hidden landing's log grew within ACTIVE_LOG_S: it is running, whatever its ticket's age."""
+    try:
+        return time.time() - (holder / f"{name}.log").stat().st_mtime < ACTIVE_LOG_S
+    except OSError:
+        return False
+
+
+def cleanup(repo: Path) -> str:
+    import land_rollup  # noqa: E402
+    memory_history.trim(memory_history.path(repo))  # 2026-11-17: rosy-pytest-memory.jsonl only ever grew
+    qdir, holder, reaped = land_queue.queue_dir(repo), land_async.holder(repo), 0
+    for row in land_queue.expired(qdir):
+        name = Path(str(row.get("worktree") or "")).name or str(row.get("branch") or "").replace("/", "-")
+        if active(holder, name):
+            continue  # 11-17: age counts from queueing, so 4 h killed a rollup and a landing mid-test; no output = stuck
+        land_rollup.stop_remote(holder, [row])
+        if holder.is_dir() and (holder / name).is_dir():
+            (holder / f"{name}.stopped").write_text(f"STOP: EXPIRED (age {row['age']:.0f}s)\n", encoding="utf-8")
+        land_rollup.stop(int(row["pid"]))
+        try:
+            data = json.loads(row["path"].read_text(encoding="utf-8"))
+            if int(data.get("pid") or 0) == int(row["pid"]):
+                row["path"].unlink(missing_ok=True)
+        except (OSError, ValueError):
+            row["path"].unlink(missing_ok=True)
+        reaped += 1
+    rows = land_gc.plan(repo, time.time(), 7)
+    problems = land_gc.apply(repo, rows)
+    # 11-14: 41 worktrees against the 15 cap, 7 of them clean and idle 7-14 h. Lossless ones (landed, orphan) go at
+    # once; an idle one goes after WORKTREE_IDLE_H (4 h when over CAP) with dirty work saved under refs/wip/ first.
+    # prune also sweeps branches: merged ones go, idle unlanded ones move to refs/archive/.
+    wt_root = repo / ".worktrees"
+    over = wt_root.is_dir() and sum(1 for p in wt_root.iterdir() if p.is_dir()) > worktrees.CAP
+    idle_h = min(WORKTREE_IDLE_H, 4) if over else WORKTREE_IDLE_H
+    quiet = lambda line: None  # noqa: E731
+    gone = worktrees.prune(repo, apply=True, quiet=True, say=quiet)
+    gone += worktrees.prune(repo, apply=True, snapshot=True, everyone=True, idle_hours=idle_h, quiet=True, say=quiet)
+    return (f"reaped {reaped} expired; land_gc removed {sum(r[0] != 'keep' for r in rows) - len(problems)},"
+            f" kept {len(problems)} changed; worktrees removed {gone}")
+
+
+def warm(repo: Path) -> str:
+    """Warm main's cache when no landing is waiting in the queue."""
+    if land_queue.ahead(land_queue.queue_dir(repo), Path("~")):
+        return "queue active; skipped"
+    done, ran = land_cache.warm_main(repo, limit=WARM_BATCH)
+    return f"warmed {done} of {ran}" if ran else "already warm"
+
+
+def metrics(common: Path, now: float) -> str | None:
+    """The [metrics] line once per METRICS_EVERY_S, also appended as one json row to METRICS_LOG; None otherwise."""
+    log = common / METRICS_LOG
+    try:
+        last = json.loads(log.read_text(encoding="utf-8").splitlines()[-1])["t"]
+    except (OSError, IndexError, ValueError, KeyError):
+        last = 0
+    if now - last < METRICS_EVERY_S:
+        return None
+    found = land_stats.metrics(land_events.read(common / land_events.EVENTS), now - METRICS_EVERY_S, now)
+    with log.open("a", encoding="utf-8") as out:
+        out.write(json.dumps({"t": now, **found}) + "\n")
+    return land_stats.metrics_line(found)
+
+
+def report(repo: Path, common: Path, now: float | None = None) -> list[str]:
+    now = time.time() if now is None else now
+    rows = land_queue.ahead(land_queue.queue_dir(repo), Path("~"))
+    place = land_async.holder(repo)
+    stops = sorted(place.glob("*.stopped")) if place.is_dir() else []
+    red = [s for s in stops if land_async.main_red_stop(place, s.name[:-len(".stopped")])]
+    lines = [f"[backlog] {time.strftime('%m-%d %H:%M', time.localtime(now))} main {land_async.git(repo, 'rev-parse', '--short=10', 'main')}",
+             "[backlog] queue: " + (", ".join(f"{s} {sum(r.get('status') == s for r in rows)}"
+                                              for s in ("pending", "preparing", "waiting", "turn")) if rows else "empty"),
+             f"[backlog] stopped: {len(stops)} ({len(red)} on MAIN-RED, wait for main; {len(stops) - len(red)} for owners)"]
+    opened = sorted(land_mainred.state(repo).items(), key=lambda kv: kv[1]["since"] or now)
+    alerts = [nodeid for nodeid, s in opened if now - (s["since"] or now) > ALERT_S and not s["owner"]]
+    lines.append(f"[backlog] main-red open: {len(opened)}, {len(alerts)} unowned over {ALERT_S // 60} min"
+                 + (" (ALERT)" if alerts else ""))
+    for nodeid, s in opened[:SHOWN]:  # 11-14: 160 open ids, most never rechecked after main healed them
+        lines.append(f"[backlog]   {nodeid} open {(now - (s['since'] or now)) / 60:.0f} min, owner {s['owner'] or 'none'}")
+    if line := metrics(common, now):
+        lines.append(line)
+    (common / REPORT).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return lines
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    repo = Path(land_async.git(Path.cwd(), "rev-parse", "--show-toplevel"))
+    common = Path(land_async.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    steps = [] if "--report" in argv else [("recheck", lambda: recheck(repo, common)), ("resume", lambda: resume(repo)),
+                                           ("requeue", lambda: requeue(repo)),
+                                           ("rollup", lambda: _run(repo, "tools/land_rollup.py", "apply", "--auto",
+                                                                   timeout=20 * 60)),
+                                           ("cleanup", lambda: cleanup(repo)),
+                                           ("warm", lambda: warm(repo))]
+    try:
+        with land_async.locked(common / LOCK):  # one tick at a time; a long recheck makes the next ones skip
+            for name, step in steps:
+                try:
+                    print(f"[tick] {name}: {step()}", flush=True)
+                except Exception as exc:  # noqa: BLE001  each step on its own
+                    print(f"[tick] {name} failed: {exc}", flush=True)
+            print("\n".join(report(repo, common)), flush=True)
+    except land_async.Busy:
+        print("[tick] another tick is running; skipped", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

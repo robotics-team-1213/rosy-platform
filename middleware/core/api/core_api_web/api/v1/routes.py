@@ -15,6 +15,7 @@ from core_api_web.api.v1.common import admin, enter_navigation_mode, operator, v
 from core_api_web.api.v1.control import control_router
 from core_api_web.api.v1.docking import docking_router
 from core_api_web.api.v1.station_docking import station_docking_router
+from core_api_web.api.v1.account_receiver import account_receiver_router
 from core_api_web.api.v1.fleet_link import fleet_link_router
 from core_api_web.api.v1.host import host_router
 from core_api_web.api.v1.intent import intent_router
@@ -60,6 +61,7 @@ __all__ = [
     "station_docking_router",
     "enter_navigation_mode",
     "events_router",
+    "account_receiver_router",
     "fleet_link_router",
     "host_router",
     "intent_router",

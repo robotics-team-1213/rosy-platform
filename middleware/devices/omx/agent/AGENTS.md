@@ -16,6 +16,7 @@ Wheel `rosy-app-agent` 0.1.3. ROSY agent application compositions. It depends on
 | `src/rosy_agent/omx_cell_documents.py` | Wraps injected process rules into the acceptance store's validated types |
 | `src/rosy_agent/transfer_provider.py` | Binds the `pallet.transfer` Skill to the OMX analytic cell planner and the local `PickPlaceRunner`; `ActionRunner` validates grant, peer, revision, stop fence and journal first |
 | `src/rosy_agent/arm_transfer.py`, `cell_workflow.py` | Fleet-managed ARM_TRANSFER installation and the pick-place workflow execution |
+| `src/rosy_agent/arm_session_carry.py`, `presence_token.py` | D-977 4: the hardware owner runs ARM_TRANSFER as the field folded carry on the separate arm session (four journaled phases, fold on cancel/fence loss/deadline, never a signal); the single-use local presence token for `--commissioning` (safety-tagged) |
 | `src/rosy_agent/mixed_reach.py` | D-402 IK reach in the `mixed_cell.Reach` shape for the mixed planner (per arm base, profile limits, single poses only) |
 | `src/rosy_agent/omx_cell_owner.py` | OMX cell owner composition |
 | `src/rosy_agent/omx_sim.py` | Sim-side composition helper |

@@ -55,8 +55,9 @@ class LedConfig:
     min_value: int = 120
     ring_inner: float = 0.6       # x blob radius
     ring_outer: float = 2.6       # x blob radius
-    on_fraction: float = 0.02     # lit share of the ring at or above: on
-    off_fraction: float = 0.005   # at or below: off; between: unsure
+    # EV -0.3 site tuning (ceiling_north 2026-11-15, rosy_42 blue): ON measured 0.0055-0.0074 vs OFF 0.0001-0.0010.
+    on_fraction: float = 0.005    # lit share of the ring at or above: on
+    off_fraction: float = 0.003   # at or below: off; between: unsure
     min_off_s: float = 0.8
     max_off_s: float = 2.2
     max_on_s: float = 1.7
@@ -64,6 +65,8 @@ class LedConfig:
     steady_min_on: int = 2        # D-596 3: on frames in a row for a steady-colour match
     max_step_px: float = 60.0     # blob link distance between consecutive frames
     stale_s: float = 1.5          # newest frame older than this at decision time: stale
+    min_separation_px: float = 5.0
+    map_yaw_offset: float | None = None
 
 
 @dataclass(frozen=True)
@@ -81,6 +84,7 @@ class Sample:
     calibration_revision: str | None
     blobs: tuple[Blob, ...]
     lit: tuple[float, ...]  # ring share per blob, same order
+    lit_moments: tuple[tuple[int, float, float], ...] = ()  # (count, sum_dx, sum_dy) in disk per blob
 
 
 def sample_frame(image: np.ndarray, *, captured_at: float, calibration_revision: str | None,
@@ -92,12 +96,16 @@ def sample_frame(image: np.ndarray, *, captured_at: float, calibration_revision:
     height, width = lit_mask.shape
     rows, cols = np.ogrid[:height, :width]
     shares = []
+    moments = []
     for blob in blobs:
         distance = np.hypot(cols - blob.x_px, rows - blob.y_px)
         ring = (distance >= config.ring_inner * blob.radius_px) & (distance <= config.ring_outer * blob.radius_px)
         count = int(ring.sum())
         shares.append(0.0 if count == 0 else float(lit_mask[ring].sum()) / count)
-    return Sample(captured_at, calibration_revision, tuple(blobs), tuple(shares))
+        ys, xs = np.nonzero(lit_mask & (distance <= config.ring_outer * blob.radius_px))
+        n = int(xs.size)
+        moments.append((n, float((xs - blob.x_px).sum()), float((ys - blob.y_px).sum())) if n else (0, 0.0, 0.0))
+    return Sample(captured_at, calibration_revision, tuple(blobs), tuple(shares), tuple(moments))
 
 
 def decide(samples: Sequence[Sample], *, not_before: float, not_after: float, now: float,
@@ -136,21 +144,73 @@ def decide(samples: Sequence[Sample], *, not_before: float, not_after: float, no
     if len(matches) != 1:
         return _ambiguous("none" if not matches else "multiple", evidence)
     chain, found = matches[0]
-    t, blob, _share = chain[-1]
-    return {"state": "matched", "reason": None, "x": blob.map_x, "y": blob.map_y,
+    t, blob, _share, _moment = chain[-1]
+    yaw_info = _chain_yaw(chain, config)
+    evidence.update(yaw_info)
+    yaw = yaw_info["yaw_map"] if yaw_info["yaw_map"] is not None else yaw_info["yaw_px"]
+    return {"state": "matched", "reason": None, "x": blob.map_x, "y": blob.map_y, "yaw": yaw,
             "captured_at": t, "calibration_revision": window[0].calibration_revision,
             "evidence": evidence}
 
 
 def _ambiguous(reason: str, evidence: dict) -> dict:
-    return {"state": "ambiguous", "reason": reason, "x": None, "y": None, "captured_at": None,
+    return {"state": "ambiguous", "reason": reason, "x": None, "y": None, "yaw": None, "captured_at": None,
             "calibration_revision": None, "evidence": evidence}
 
 
-def _chains(window: Sequence[Sample], max_step_px: float) -> list[list[tuple[float, Blob, float]]]:
+def extract_asymmetric_yaw(
+    p_front: tuple[float, float] | None,
+    p_rear: tuple[float, float] | None,
+    *,
+    min_separation_px: float = 5.0,
+    map_yaw_offset: float | None = None,
+) -> dict:
+    """Compute yaw (rad) from steady front peak and blinking rear peak, or None if < min_separation_px."""
+    if p_front is None or p_rear is None:
+        return {"yaw_px": None, "yaw_map": None, "yaw_confidence": 0.0, "separation_px": 0.0}
+    dx, dy = p_front[0] - p_rear[0], p_front[1] - p_rear[1]
+    sep = math.hypot(dx, dy)
+    if sep < min_separation_px:
+        return {"yaw_px": None, "yaw_map": None, "yaw_confidence": 0.0, "separation_px": round(sep, 2)}
+    yaw_px = math.atan2(dy, dx)
+    yaw_map = (None if map_yaw_offset is None
+               else math.atan2(math.sin(yaw_px + map_yaw_offset), math.cos(yaw_px + map_yaw_offset)))
+    confidence = min(1.0, sep / (2.0 * min_separation_px))
+    return {"yaw_px": yaw_px, "yaw_map": yaw_map,
+            "yaw_confidence": round(confidence, 3), "separation_px": round(sep, 2)}
+
+
+def _chain_yaw(chain, config: LedConfig) -> dict:
+    off_m = [m for _t, _b, s, m in chain if s <= config.off_fraction and m[0] > 0]
+    on_m = [m for _t, _b, s, m in chain if s >= config.on_fraction and m[0] > 0]
+    if not off_m or not on_m:
+        return extract_asymmetric_yaw(None, None, min_separation_px=config.min_separation_px,
+                                      map_yaw_offset=config.map_yaw_offset)
+    n_off = sum(m[0] for m in off_m) / len(off_m)
+    sx_off = sum(m[1] for m in off_m) / len(off_m)
+    sy_off = sum(m[2] for m in off_m) / len(off_m)
+    p_front = (sx_off / n_off, sy_off / n_off)
+
+    n_on = sum(m[0] for m in on_m) / len(on_m)
+    sx_on = sum(m[1] for m in on_m) / len(on_m)
+    sy_on = sum(m[2] for m in on_m) / len(on_m)
+    n_rear = n_on - n_off
+    if n_rear < 1.0:
+        return extract_asymmetric_yaw(p_front, None, min_separation_px=config.min_separation_px,
+                                      map_yaw_offset=config.map_yaw_offset)
+    p_rear = ((sx_on - sx_off) / n_rear, (sy_on - sy_off) / n_rear)
+    return extract_asymmetric_yaw(p_front, p_rear, min_separation_px=config.min_separation_px,
+                                  map_yaw_offset=config.map_yaw_offset)
+
+
+def _chains(window: Sequence[Sample], max_step_px: float) -> list[list[tuple[float, Blob, float, tuple[int, float, float]]]]:
     """Greedy nearest links frame to frame; an unlinked blob starts a chain, an unlinked chain ends."""
+    def _moment(sample: Sample, idx: int) -> tuple[int, float, float]:
+        return sample.lit_moments[idx] if idx < len(sample.lit_moments) else (0, 0.0, 0.0)
+
     done: list[list] = []
-    open_: list[list] = [[(window[0].captured_at, b, s)] for b, s in zip(window[0].blobs, window[0].lit)]
+    open_: list[list] = [[(window[0].captured_at, b, s, _moment(window[0], bi))]
+                        for bi, (b, s) in enumerate(zip(window[0].blobs, window[0].lit))]
     for sample in window[1:]:
         pairs = sorted((math.hypot(b.x_px - c[-1][1].x_px, b.y_px - c[-1][1].y_px), ci, bi)
                        for ci, c in enumerate(open_) for bi, b in enumerate(sample.blobs))
@@ -164,11 +224,11 @@ def _chains(window: Sequence[Sample], max_step_px: float) -> list[list[tuple[flo
         for ci, chain in enumerate(open_):
             if ci in linked_c:
                 bi = linked_c[ci]
-                chain.append((sample.captured_at, sample.blobs[bi], sample.lit[bi]))
+                chain.append((sample.captured_at, sample.blobs[bi], sample.lit[bi], _moment(sample, bi)))
                 next_open.append(chain)
             else:
                 done.append(chain)  # lost: occluded, merged or left the view
-        next_open.extend([(sample.captured_at, b, s)] for bi, (b, s) in
+        next_open.extend([(sample.captured_at, b, s, _moment(sample, bi))] for bi, (b, s) in
                          enumerate(zip(sample.blobs, sample.lit)) if bi not in linked_b)
         open_ = next_open
     return done + open_
@@ -177,7 +237,7 @@ def _chains(window: Sequence[Sample], max_step_px: float) -> list[list[tuple[flo
 def _blink(chain, config: LedConfig) -> dict | None:
     """The on/off/on evidence of one chain, or None."""
     states = [(t, "on" if s >= config.on_fraction else "off" if s <= config.off_fraction else "?", s)
-              for t, _b, s in chain]
+              for t, _b, s, _m in chain]
     ons = [i for i, (_t, st, _s) in enumerate(states) if st == "on"]
     for a, b in zip(ons, ons[1:]):
         between = [st for _t, st, _s in states[a + 1:b]]
@@ -205,7 +265,7 @@ def _blink(chain, config: LedConfig) -> dict | None:
 def _steady(chain, config: LedConfig, *, require_off_after: bool = False) -> dict | None:
     """Off then consecutive on frames; timed proof also needs a second off and >= 1 s on."""
     run, seen_off, found, on_at = 0, False, None, None
-    for t, _b, share in chain:
+    for t, _b, share, _m in chain:
         if share <= config.off_fraction:
             if found is not None:
                 return found

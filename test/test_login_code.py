@@ -114,6 +114,31 @@ def test_issuer_and_core_share_the_scrypt_vector_and_the_alphabet(issuer_module)
         "dklen": core_auth.SCRYPT_DKLEN}
 
 
+def test_issuer_and_core_format_code_parity(issuer_module):
+    sys.path[:0] = [str(CORE_SRC[name]) for name in (
+        "core", "core_common", "core_events", "core_features", "core_api_web")]
+    from core_api_web.api.v1 import auth as core_auth
+
+    for sample in (
+        "",
+        "2",
+        "2345",
+        "23456",
+        VECTOR_CODE,
+        issuer_module.ALPHABET[:8],
+        issuer_module.ALPHABET[-8:],
+        "ABCD234567",
+    ):
+        assert issuer_module.format_code(sample) == core_auth.format_code(sample)
+
+    for invalid in (None, 12345678, object()):
+        with pytest.raises(TypeError) as issuer_err:
+            issuer_module.format_code(invalid)
+        with pytest.raises(TypeError) as core_err:
+            core_auth.format_code(invalid)
+        assert type(issuer_err.value) is type(core_err.value)
+
+
 def test_core_reads_what_the_issuer_writes_and_the_code_verifies(issuer_module, tmp_path):
     sys.path[:0] = [str(CORE_SRC[name]) for name in (
         "core", "core_common", "core_events", "core_features", "core_api_web")]

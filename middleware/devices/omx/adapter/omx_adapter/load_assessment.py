@@ -74,12 +74,12 @@ def _points(candidate):
     return result
 
 
-def _segments(request, candidate):
+def _segments(request, candidate, *, parsed_points=None):
     names = candidate['joint_names']
     q0 = tuple(request['start_positions_rad'][n] for n in names)
     v0 = a0 = (0.,) * len(names)
     t0 = 0.
-    for point in _points(candidate):
+    for point in _points(candidate) if parsed_points is None else parsed_points:
         duration = point.time_from_start_s - t0
         controls = []
         for q, v, a, q1, v1, a1 in zip(q0, v0, a0, point.positions, point.velocities, point.accelerations):
@@ -94,10 +94,14 @@ def _segments(request, candidate):
 
 
 def _curve(control, fraction):
-    values = list(control)
-    while len(values) > 1:
-        values = [(1 - fraction) * a + fraction * b for a, b in zip(values, values[1:])]
-    return values[0]
+    u = 1.0 - fraction
+    u2 = u * u
+    u3 = u2 * u
+    f2 = fraction * fraction
+    f3 = f2 * fraction
+    return (u2 * u3 * control[0] + 5.0 * u2 * u2 * fraction * control[1]
+            + 10.0 * u3 * f2 * control[2] + 10.0 * u2 * f3 * control[3]
+            + 5.0 * u * f2 * f2 * control[4] + f2 * f3 * control[5])
 
 
 def command_positions(request, candidate_id, elapsed_s):
@@ -141,10 +145,10 @@ def environment_reasons(envelope, request):
     return reasons
 
 
-def _trajectory_reasons(profile, request, candidate, envelope):
+def _trajectory_reasons(profile, request, candidate, envelope, *, parsed_points=None, segments=None):
     reasons = environment_reasons(envelope, request)
     names = candidate['joint_names']
-    last = _points(candidate)[-1]
+    last = (_points(candidate) if parsed_points is None else parsed_points)[-1]
     if last.time_from_start_s > envelope['max_motion_s']:
         reasons.append('motion_duration')
     if any(abs(last.positions[i] - request['goal_positions_rad'][name]) > request['goal_tolerance_rad']
@@ -153,7 +157,10 @@ def _trajectory_reasons(profile, request, candidate, envelope):
     if any(v != 0 for v in (*last.velocities, *last.accelerations)):
         reasons.append('final_state_not_at_rest')
     try:
-        for start, end, controls in _segments(request, candidate):
+        if isinstance(segments, Exception):
+            raise segments
+        for start, end, controls in (_segments(request, candidate, parsed_points=parsed_points)
+                                     if segments is None else segments):
             duration = end - start
             for name, control in zip(names, controls):
                 if any(not _within(v, envelope['position_rad'][name]) for v in control):
@@ -183,8 +190,14 @@ def assess_candidates(document, request, *, accepted_digest):
     results, ranked = [], []
     for candidate in r['candidates']:
         matches, failures = [], []
+        parsed_points = _points(candidate)
+        try:
+            segments = tuple(_segments(r, candidate, parsed_points=parsed_points))
+        except (ValueError, OverflowError, ZeroDivisionError) as error:
+            segments = error
         for envelope in profile['envelopes']:
-            reasons = _trajectory_reasons(profile, r, candidate, envelope)
+            reasons = _trajectory_reasons(profile, r, candidate, envelope,
+                                          parsed_points=parsed_points, segments=segments)
             if reasons:
                 failures.extend(f"{envelope['id']}:{reason}" for reason in reasons)
             else:

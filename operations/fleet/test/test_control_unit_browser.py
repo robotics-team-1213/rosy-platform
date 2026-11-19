@@ -14,16 +14,16 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real
 def test_arm_and_navigation_delegations_render_with_cell_owned_approval(site, local_task_id):
     from playwright.sync_api import expect, sync_playwright
     prefix = "/api/fleet/control-unit"
-    arm = {"unit_id": "CELL-A", "config_revision": "v1", "stale": False, "delegation": {
-        "origin_id": "R", "delegation_id": "arm-1", "owner_unit": "CELL-A", "status": "PENDING",
+    arm = {"unit_id": "ARM-CELL", "config_revision": "v1", "stale": False, "delegation": {
+        "origin_id": "R", "delegation_id": "arm-1", "owner_unit": "ARM-CELL", "status": "PENDING",
         "revision": 7, "local_actor": None, "local_task_id": local_task_id, "cancel_requested": False,
         "updated_at": "2026-11-03T00:00:00Z", "result": {}, "request": {
-            "target_unit": "CELL-A", "transfer": {"request_key": "app:move-1", "workcell_id": "arm_a",
+            "target_unit": "ARM-CELL", "transfer": {"request_key": "app:move-1", "workcell_id": "arm_a",
                 "instance_id": "arm_a", "object_ref": "box-1", "source": "slot-1", "target": "slot-2"}}}}
     navigation = {**arm, "delegation": {**arm["delegation"], "delegation_id": "nav-1",
-        "local_task_id": None, "request": {"target_unit": "CELL-A", "robot_id": "p1",
+        "local_task_id": None, "request": {"target_unit": "ARM-CELL", "robot_id": "p1",
             "goal": {"x": 1, "y": 2, "yaw": 0}}}}
-    api = {**API, prefix: {"unit_id": "CELL-A", "config_revision": "v1", "parent": "R",
+    api = {**API, prefix: {"unit_id": "ARM-CELL", "config_revision": "v1", "parent": "R",
         "children": [], "resources": ["workcell:arm_a", "robot:p1"]},
         prefix + "/delegations": {"delegations": [arm, navigation]},
         "/api/fleet/work": {"rows": [], "kinds": [], "observed_at": "2026-11-03T00:00:00Z",

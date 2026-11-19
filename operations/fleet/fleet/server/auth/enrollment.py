@@ -17,188 +17,69 @@ No request is ever retried automatically.
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import logging
-import re
 import time
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import httpx
 
-from fleet.server.discovery import is_rfc1918
 from fleet.server.enrollment_errors import EnrollmentError  # noqa: F401  (re-exported)
+from fleet.server.enrollment_helpers import (
+    LEGACY_WARN_S,
+    SITE_LIFETIME_S,
+    SITE_WARN_S,
+    STOP_PATHS,
+    EnrolledRobotClient,
+    EnrollmentAddressMixin,
+    EnrollmentCandidateMixin,
+    RobotGate,
+    _AVAHI_SUFFIX,
+    _PinnedTransport,
+    _seconds_between,
+)
 from fleet.server.enrollment_hub import HubLinkMixin
+from fleet.server.enrollment_idle import IDLE_REMOVAL_S, IdlePolicy
+from fleet.server.enrollment_inputs import normalize_code, parse_manual_address
 from fleet.server.enrollment_release import SafetyReleaseMixin
 from fleet.server.enrollment_store import EnrollmentStore, SealError, seal, unseal
 from fleet.swarm.robots import RobotEndpoint
-from fleet.swarm.transport import HttpRobotClient, RobotApiError
 
 _LOG = logging.getLogger(__name__)
 
-CODE_ALPHABET = frozenset("23456789ABCDEFGHJKMNPQRSTUVWXYZ")
-CODE_LENGTH = 8
-DEFAULT_PORT = 8080
-#: The only requests allowed to a pinned address whose identity is in doubt.
-STOP_PATHS = frozenset({"/api/v1/safety/stop", "/api/v1/navigation/cancel",
-                        "/api/v1/swarm/cancel"})
-SITE_WARN_S = 14 * 86400.0
-LEGACY_WARN_S = 48 * 3600.0
-SITE_LIFETIME_S = 90 * 86400.0
-_AVAHI_SUFFIX = re.compile(r"^(?P<base>.+)-\d+$")
-#: The console applies the same RFC 1918 rule before sending (web/enrollment.js).
-_RFC1918 = tuple(ipaddress.ip_network(net) for net in
-                 ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+__all__ = [
+    "EnrolledRobotClient",
+    "EnrollmentAddressMixin",
+    "EnrollmentCandidateMixin",
+    "EnrollmentError",
+    "EnrollmentService",
+    "LEGACY_WARN_S",
+    "RobotGate",
+    "SITE_LIFETIME_S",
+    "SITE_WARN_S",
+    "STOP_PATHS",
+    "_AVAHI_SUFFIX",
+    "_PinnedTransport",
+    "_seconds_between",
+    "normalize_code",
+    "parse_manual_address",
+]
 
 
-def normalize_code(text: object) -> str:
-    """Drop spaces and hyphens, uppercase, check the alphabet before any robot call."""
-    if not isinstance(text, str):
-        raise EnrollmentError("bad_format", 400, "a screen code is 8 characters like ABCD-EFGH")
-    code = "".join(ch for ch in text if ch not in " -\t").upper()
-    if len(code) != CODE_LENGTH or any(ch not in CODE_ALPHABET for ch in code):
-        raise EnrollmentError("bad_format", 400, "a screen code is 8 characters like ABCD-EFGH")
-    return code
-
-
-def parse_manual_address(text: object) -> str:
-    """Private LAN IPv4[:port] only; `.local`, hostnames and public addresses are refused."""
-    if not isinstance(text, str) or not text.strip():
-        raise EnrollmentError("bad_address", 400, "enter the robot's private LAN IPv4 address, optionally with :port")
-    host, _, port_text = text.strip().partition(":")
-    try:
-        ip = ipaddress.ip_address(host)
-        port = int(port_text) if port_text else DEFAULT_PORT
-    except ValueError:
-        raise EnrollmentError("bad_address", 400,
-                              "enter the robot's private LAN IPv4 address, optionally with :port") from None
-    if (ip.version != 4 or not any(ip in net for net in _RFC1918)
-            or not 1 <= port <= 65535):
-        raise EnrollmentError("bad_address", 400, "only private LAN IPv4 addresses are accepted")
-    return f"{ip}:{port}"
-
-
-def _seconds_between(start: object, end: object) -> float | None:
-    try:
-        return (datetime.fromisoformat(str(end)) - datetime.fromisoformat(str(start))).total_seconds()
-    except (TypeError, ValueError):
-        return None
-
-
-@dataclass
-class RobotGate:
-    """Held = the pinned address is unverified: stop requests only (D-361 3)."""
-
-    held: str | None = None
-    #: Fleet-clock expiry; past it the token is dead and only stop requests go out.
-    expires_at: float | None = None
-
-
-class _PinnedTransport(httpx.AsyncBaseTransport):
-    def __init__(self, inner: httpx.AsyncBaseTransport, robot_id: str, gate: RobotGate,
-                 on_unauthorized: Callable[[str], None],
-                 clock: Callable[[], float] = time.time) -> None:
-        self._inner = inner
-        self._robot_id = robot_id
-        self._gate = gate
-        self._on_unauthorized = on_unauthorized
-        self._clock = clock
-
-    def admit(self, request: httpx.Request) -> None:
-        if (self._gate.held is None and self._gate.expires_at is not None
-                and self._clock() >= self._gate.expires_at):
-            self._on_unauthorized(self._robot_id)  # expired: treated as a 401, nothing sent
-        if self._gate.held and request.url.path not in STOP_PATHS:
-            raise RobotApiError(self._robot_id, 409, "ADDRESS_UNVERIFIED",
-                                "pinned address is unverified; only stop requests are sent")
-
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        self.admit(request)
-        response = await self._inner.handle_async_request(request)
-        if response.status_code == 401:
-            self._on_unauthorized(self._robot_id)
-        return response
-
-    async def aclose(self) -> None:
-        await self._inner.aclose()
-
-
-class EnrolledRobotClient(HttpRobotClient):
-    """Operational client for an enrolled robot, bound to its pinned address."""
-
-    def __init__(self, endpoint: RobotEndpoint, gate: RobotGate, *,
-                 transport: httpx.AsyncBaseTransport | None = None,
-                 tls_bindings=None,
-                 on_unauthorized: Callable[[str], None] = lambda _robot_id: None,
-                 clock: Callable[[], float] = time.time) -> None:
-        self._tls_identity = None
-        if endpoint.discovery:
-            from fleet.server.enrollment_tls import EnrollmentIdentityTransport
-            from fleet.swarm.discovery_transport import DiscoveryTransport
-            self._tls_identity = EnrollmentIdentityTransport(endpoint, tls_bindings, inner=transport)
-            inner = DiscoveryTransport(endpoint, inner=self._tls_identity)
-        else:
-            inner = transport if transport is not None else httpx.AsyncHTTPTransport()
-        pinned = _PinnedTransport(inner, endpoint.robot_id, gate, on_unauthorized, clock)
-        if self._tls_identity is not None:
-            self._tls_identity.before_send = pinned.admit
-        http = httpx.AsyncClient(
-            base_url=endpoint.base_url, timeout=5.0, trust_env=False,
-            transport=pinned)
-        super().__init__(endpoint, http=http)
-        self._owns_http = True
-        self._gate = gate
-        self._clock = clock
-
-    def _refuse_socket(self) -> None:
-        if self._gate.expires_at is not None and self._clock() >= self._gate.expires_at:
-            self._gate.held = self._gate.held or "needs_new_code"
-        if self._gate.held:
-            raise RobotApiError(self.robot_id, 409, "ADDRESS_UNVERIFIED",
-                                "pinned address is unverified; sockets stay closed")
-
-    async def _socket_admission(self, address: str, port: int) -> None:
-        if self._tls_identity is not None:
-            from urllib.parse import urlsplit
-            host = urlsplit(self._ep.base_url).hostname
-            await self._tls_identity.identity(httpx.URL(f"https://{address}:{port}"),
-                                              {"sni_hostname": host, "timeout": {
-                                                  "connect": 3.0, "read": 5.0, "write": 5.0, "pool": 5.0}})
-        self._refuse_socket()
-
-    def _socket_auth_admission(self) -> None:
-        self._refuse_socket()
-
-    def _socket_context(self):
-        return self._tls_identity.context if self._tls_identity is not None else super()._socket_context()
-
-    async def pose_stream(self):
-        self._refuse_socket()
-        async for frame in super().pose_stream():
-            yield frame
-
-    async def open_reference_sink(self):
-        self._refuse_socket()
-        return await super().open_reference_sink()
-
-    async def events(self, types):
-        self._refuse_socket()
-        async for event in super().events(types):
-            yield event
-
-
-class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
+class EnrollmentService(EnrollmentCandidateMixin, EnrollmentAddressMixin, HubLinkMixin, SafetyReleaseMixin):
     #: D-960: robots this Fleet's control unit owns (manifest); None = no control unit, any id.
     owned_robot_ids: frozenset | None = None
+
     def __init__(self, store: EnrollmentStore, roster, *, key: bytes | None,
                  key_error: str | None = None, fleet_name: str = "rosy-site",
                  discovery=None, transport: httpx.AsyncBaseTransport | None = None,
-                 tls_bindings=None, hub_link: dict | None = None,
-                 clock: Callable[[], float] = time.time) -> None:
+                 tls_bindings=None, hub_link: dict | None = None, account_link=None,
+                 clock: Callable[[], float] = time.time, last_activity=None,
+                 idle_removal_s: float = IDLE_REMOVAL_S) -> None:
         self._store = store
+        self._idle = IdlePolicy(last_activity, idle_removal_s)  # D-1016 shown-only marking
         #: D-555: {expected_hostname, ca_pem} robots get with a hub credential; None = unavailable.
         self._hub_link = hub_link
+        self._account_link = account_link
         self._roster = roster
         self._key = key
         self.unavailable_reason = (key_error or "robot credential key is not configured") if key is None else None
@@ -297,7 +178,6 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
         try:
             opened = [(row, self._open(row)) for row in rows]
         except SealError:
-            # A runtime state only; nothing about it is written to the database.
             self.unavailable_reason = "robot credential key does not open the register"
             return
         if self._tls_bindings is not None:
@@ -327,8 +207,10 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
 
     def listing(self) -> dict:
         now = self._clock()
+        rows = self._store.rows()
+        idle = self._idle.facts(rows, now)
         robots = []
-        for row in self._store.rows():
+        for row in rows:
             if (row["state"] == "active" and row["fleet_expires_at"] is not None
                     and now >= row["fleet_expires_at"]):
                 row["state"] = "needs_new_code"  # shown only; the client records it on use
@@ -346,83 +228,14 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
                 "legacy_lifetime": row["source"] != "pair-site",
                 "lifetime_shortened": (row["source"] == "pair-site" and lifetime is not None
                                        and lifetime < SITE_LIFETIME_S - 86400.0),
-                # D-555: never the digest itself.
-                "hub_linked": bool(row.get("hub_digest")), "hub_host": row.get("hub_host"),
-                "hub_online": bool(row.get("hub_digest")) and self._hub_online(row["robot_id"]),
-                "hub_state": self._hub_state(row),
-                "hub_linkable": self._hub_link is not None and self._tls_client(row["robot_id"]) is not None,
+                **idle[row["robot_id"]],  # D-1016: shown only; unenroll stays a named operator's call (D-456)
+                **self._hub_fields(row),
             })
         return {"available": self.available, "unavailable_reason": self.unavailable_reason,
                 "static_robot_ids": sorted(self._roster.static_ids), "robots": robots,
                 "alarms": self._console().alarms()}
 
     # --- enroll ------------------------------------------------------------
-
-    def _pending_binding(self, hostnames: set[str], port: int):
-        """D-565: an HTTPS robot with no row enrolls only through an approved pending binding.
-
-        The scan only picks the binding; TLS (its CA and hostname), the identity probe and
-        the robot_id read after pairing must all match it before anything is stored.
-        """
-        binding = (self._tls_bindings.pending(self._store.rows(), next(iter(hostnames)), port)
-                   if self._tls_bindings is not None and len(hostnames) == 1 else None)
-        if binding is None:
-            raise EnrollmentError("tls_binding_required", 409, "HTTPS requires an approved TLS binding")
-        return binding
-
-    def _refuse_http_for_binding(self, hostnames: set[str], address: str) -> None:
-        """D-565: a name or address an approved binding owns never enrolls over plain HTTP."""
-        bound = {row["robot_id"] for row in self._store.rows() if row["address"] == address}
-        if self._tls_bindings is not None and self._tls_bindings.claims(hostnames, bound):
-            raise EnrollmentError("tls_binding_required", 409, "that robot has an approved TLS binding")
-
-    def _candidate(self, discovery_name: str | None, address: str | None) -> tuple[str, dict | None, Any]:
-        if (discovery_name is None) == (address is None):
-            raise EnrollmentError("bad_request", 400, "choose one discovered robot or one address")
-        if address is not None:
-            target = parse_manual_address(address)
-            secure = [row for row in (self._discovery.rows() if self._discovery else [])
-                      if f"{row['address']}:{row['port']}" == target and row.get("transport") == "https"]
-            enrolled = [row for row in self._store.rows() if row["address"] == target]
-            if secure and not enrolled:
-                return target, None, self._pending_binding({r["hostname"] for r in secure}, secure[0]["port"])
-            if secure and (len(enrolled) != 1 or self._tls_bindings is None
-                           or self._tls_bindings.binding(enrolled[0]["robot_id"]) is None):
-                raise EnrollmentError("tls_binding_required", 409, "HTTPS requires approved enrolled TLS binding")
-            if not secure:
-                self._refuse_http_for_binding(
-                    {row["hostname"] for row in (self._discovery.rows() if self._discovery else [])
-                     if f"{row['address']}:{row['port']}" == target}, target)
-            return target, None, None
-        if self._discovery is None:
-            raise EnrollmentError("not_discovered", 404, "that robot is not in the current scan")
-        if any((row.get("discovery_name") or row["hostname"]).lower() == discovery_name.lower()
-               for row in self._store.rows()):
-            raise EnrollmentError("already_enrolled", 409, "that robot is already enrolled")
-        console = self._console()
-        snapshot = self._discovery.snapshot(console.registered_endpoints,
-                                            console.hub.registry.identity_snapshot(),
-                                            self.enrolled_names())
-        rows = [row for row in snapshot["devices"] if row["name"] == discovery_name]
-        if not rows:
-            raise EnrollmentError("not_discovered", 404, "that robot is not in the current scan")
-        if len({(row["address"], row["port"]) for row in rows}) > 1 or any(
-                row["status"] == "conflict" for row in rows):
-            raise EnrollmentError("conflict", 409, "that name is seen at several addresses")
-        row = rows[0]
-        pending = None
-        if row.get("transport") == "https":
-            registered = [r for r in self._store.rows() if r["address"] == f"{row['address']}:{row['port']}"]
-            if not registered:
-                pending = self._pending_binding({row["hostname"]}, row["port"])
-            elif (len(registered) != 1 or self._tls_bindings is None
-                    or self._tls_bindings.binding(registered[0]["robot_id"]) is None):
-                raise EnrollmentError("tls_binding_required", 409, "HTTPS requires approved enrolled TLS binding")
-        else:
-            self._refuse_http_for_binding({row["hostname"]}, f"{row['address']}:{row['port']}")
-        if not row.get("enrollable"):
-            raise EnrollmentError("not_enrollable", 409, "that row is not waiting for registration")
-        return f"{row['address']}:{row['port']}", row, pending
 
     async def enroll(self, *, code: object, principal_id: str,
                      discovery_name: str | None = None, address: str | None = None) -> dict:
@@ -437,7 +250,6 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
             try:
                 paired = await self._exchange(http, normalized, principal_id, target)
             except ValueError as exc:
-                # TLS or the identity probe failed before the code left Fleet. Never retried over HTTP.
                 from fleet.server.enrollment_tls import EnrollmentTlsError
                 if pending is None:
                     raise
@@ -460,60 +272,6 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
                 self._store.audit(action="enroll", outcome="store_failed",
                                   principal_id=principal_id, target=target)
                 raise self._consumed("store_failed") from None
-
-    async def _exchange(self, http: httpx.AsyncClient, code: str, principal_id: str,
-                        target: str, action: str = "enroll") -> dict:
-        body = {"code": code, "label": f"site:{self._fleet_name}", "purpose": "site"}
-        try:
-            response = await http.post("/api/v1/auth/pair", json=body)
-        except httpx.HTTPError:
-            self._store.audit(action=action, outcome="unreachable", principal_id=principal_id,
-                              target=target)
-            raise EnrollmentError("unreachable", 502, "the robot is not reachable (address, port)") from None
-        status = response.status_code
-        if status == 201:
-            try:
-                paired = response.json()
-                if not isinstance(paired.get("token"), str) or not paired["token"]:
-                    raise ValueError
-                return paired
-            except (ValueError, AttributeError):
-                self._store.audit(action=action, outcome="robot_error",
-                                  principal_id=principal_id, target=target)
-                raise EnrollmentError("robot_error", 502, "the robot answered without a token") from None
-        outcome = {401: "code_rejected", 429: "rate_limited", 403: "lan_forbidden",
-                   400: "bad_format"}.get(status, "robot_error")
-        detail = {}
-        try:
-            detail = (response.json().get("error") or {}).get("detail") or {}
-        except (ValueError, AttributeError):
-            pass
-        if status == 401 and isinstance(detail, dict) and detail.get("burned"):
-            outcome = "code_burned"
-        self._store.audit(action=action, outcome=outcome, principal_id=principal_id, target=target)
-        if outcome == "rate_limited":
-            try:
-                retry_after = max(1, int(response.headers.get("Retry-After", "60")))
-            except ValueError:
-                retry_after = 60
-            raise EnrollmentError("rate_limited", 429, "too many attempts at this robot",
-                                  retry_after=retry_after)
-        messages = {
-            "code_rejected": "the code is wrong, used or expired",
-            "code_burned": "this robot's screen code was burned",
-            "lan_forbidden": "the robot sees this server as outside its LAN",
-            "bad_format": "the robot refused the code format",
-            "robot_error": f"the robot answered {status}",
-        }
-        http_status = {"code_rejected": 401, "code_burned": 401, "lan_forbidden": 403,
-                       "bad_format": 400}.get(outcome, 502)
-        raise EnrollmentError(outcome, http_status, messages[outcome])
-
-    @staticmethod
-    def _consumed(reason: str, **detail) -> EnrollmentError:
-        return EnrollmentError("code_consumed", 409,
-                               "the code was consumed; restart the robot or get an administrator code",
-                               reason=reason, detail=detail)
 
     async def _bind_and_store(self, http: httpx.AsyncClient, paired: dict, row: dict | None,
                               target: str, principal_id: str, pending=None, renumber: bool = False) -> dict:
@@ -572,7 +330,6 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
             if pending is not None and robot_id != pending.robot_id:
                 renamed = self._tls_bindings.renumber(pending, robot_id)
             if pending is not None:
-                # The downgrade fence a bound row gets at load: this id never goes back to HTTP.
                 self._store.remember_tls([dict(robot_id=robot_id, origin=f"https://{pending.hostname}:{pending.port}",
                                                ca_sha256=pending.tls_ca_sha256)])
             gate = self._gate_for(record)
@@ -580,7 +337,7 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
             self._roster.add(endpoint, self._client(endpoint, gate))
         except Exception:
             self._store.delete(robot_id)
-            if renamed is not None:  # back to the old id, so the token logout still proves TLS
+            if renamed is not None:
                 self._tls_bindings.renumber(renamed, pending.robot_id)
             raise
         if renamed is not None:
@@ -591,255 +348,3 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
         self._store.audit(action="enroll", outcome="enrolled", principal_id=principal_id,
                           target=robot_id)
         return next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
-
-    @staticmethod
-    async def _logout(http: httpx.AsyncClient, token: str) -> bool:
-        """One logout attempt. True when the robot no longer holds the token."""
-        from fleet.server.enrollment_tls import EnrollmentTlsError
-        try:
-            response = await http.post("/api/v1/auth/logout",
-                                       headers={"Authorization": f"Bearer {token}"})
-        except (httpx.HTTPError, EnrollmentTlsError):
-            return False
-        return response.status_code in (204, 401)
-
-    # --- pinned address ------------------------------------------------------
-
-    def _name_of(self, row: dict) -> str:
-        return (row.get("discovery_name") or row["hostname"]).lower()
-
-    async def on_discovery(self, rows: list[dict]) -> None:
-        seen: dict[str, set[str]] = {}
-        for item in rows:
-            seen.setdefault(item["name"].lower(), set()).add(f"{item['address']}:{item['port']}")
-        for row in self._store.rows():
-            if self._tls_bindings is not None and self._tls_bindings.binding(row["robot_id"]) is not None:
-                # TLS discovery authenticates locations during transport admission; scan hints
-                # never rewrite the encrypted record or release expiry/revocation holds.
-                if row["state"] == "pending_logout" and seen.get(self._name_of(row)):
-                    await self._retry_pending_logout(row)
-                continue
-            addresses = seen.get(self._name_of(row))
-            if not addresses:
-                continue
-            robot_id = row["robot_id"]
-            if row["state"] == "pending_logout":
-                if addresses == {row["address"]}:
-                    await self._retry_pending_logout(row)
-                continue
-            if len(addresses) > 1:
-                self._hold(robot_id, "conflict")
-            elif addresses == {row["address"]}:
-                if row["state"] == "address_changed":
-                    self._store.update(robot_id, state="active")
-                if row["state"] == "needs_new_code":
-                    self._hold(robot_id, "needs_new_code")  # the token stays dead
-                else:
-                    self._release(robot_id)
-            else:
-                if row["state"] == "active":
-                    self._store.update(robot_id, state="address_changed")
-                self._hold(robot_id, "address_changed")
-
-    def _hold(self, robot_id: str, reason: str) -> None:
-        gate = self._gates.get(robot_id)
-        if gate is None:
-            return
-        first = gate.held is None
-        gate.held = reason
-        self._console().hold_robot(robot_id, reason)
-        if first:
-            _LOG.warning("robot %s pinned address unverified (%s): stop requests only",
-                         robot_id, reason)
-
-    def _release(self, robot_id: str) -> None:
-        gate = self._gates.get(robot_id)
-        if gate is not None and gate.held is not None:
-            gate.held = None
-            self._console().release_robot(robot_id)
-
-    async def settle_holds(self) -> None:
-        """After a hold: stop formation members at the pinned address, then dissolve."""
-        await self._console().stop_held_formation()
-
-    async def _retry_pending_logout(self, row: dict) -> None:
-        if row.get("logout_attempted"):
-            return
-        self._store.update(row["robot_id"], logout_attempted=1)
-        try:
-            token = self._open(row)
-        except SealError:
-            return
-        async with self._http(row["address"]) as http:
-            done = await self._logout(http, token)
-        if done:
-            self._store.delete(row["robot_id"])
-        self._store.audit(action="logout_retry", outcome="removed" if done else "failed",
-                          principal_id=None, target=row["robot_id"])
-
-    def _current_other_address(self, row: dict) -> Optional[str]:
-        rows = self._discovery.rows() if self._discovery is not None else []
-        # discovery.py already keeps RFC 1918 rows only; checked again because this address
-        # is about to receive a screen code.
-        addresses = {f"{item['address']}:{item['port']}" for item in rows
-                     if item["name"].lower() == self._name_of(row) and is_rfc1918(item["address"])}
-        addresses.discard(row["address"])
-        return addresses.pop() if len(addresses) == 1 else None
-
-    async def move_address(self, robot_id: str, *, code: object, principal_id: str) -> dict:
-        """Re-pair at the new address with the robot's screen code (D-361 3, 2026-10-01).
-
-        1. Probe the pinned address (verified at enrollment; stop requests already go there
-           with this token). If the robot still answers there, refuse: a name seen elsewhere
-           is then not this robot moving — the usual shape of a relay.
-        2. Exchange the code at the new address with no existing credential.
-        3. Compare robot_id, hostname and serial_number read with the new token. This is a
-           consistency check, not authentication (any viewer can read them, and a relay can
-           pass them on); the operator's check of the code and IP on the robot's screen binds.
-        4. Rebind to the new token. The old token is never sent anywhere: a site token cannot
-           revoke itself, so the audit records `old_token_not_revoked` and the operator
-           revokes it on the robot dashboard or lets it expire.
-        """
-        self._require_available()
-        normalized = normalize_code(code)
-        row = self._store.get(robot_id)
-        if row is None:
-            raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
-        self._tls_fence(row)
-        if self._tls_bindings is not None and self._tls_bindings.binding(robot_id) is not None:
-            raise EnrollmentError("tls_bound", 409, "TLS-bound identity reconnects without address re-pairing")
-        if row["state"] != "address_changed":
-            raise EnrollmentError("address_unchanged", 409, "the robot is not at a new address")
-        gate = self._gates.get(robot_id)
-        if gate is not None and gate.held == "conflict":
-            raise EnrollmentError("conflict", 409, "that name is seen at several addresses")
-        new_address = self._current_other_address(row)
-        if new_address is None:
-            raise EnrollmentError("no_new_address", 409, "no single new address is in the scan")
-        if await self._still_at_pinned(row):
-            self._store.audit(action="move_address", outcome="still_at_pinned_address",
-                              principal_id=principal_id, target=robot_id)
-            raise EnrollmentError("still_at_pinned_address", 409,
-                                  "the robot still answers at its pinned address; nothing to move")
-        async with self._http(new_address) as http:
-            paired = await self._exchange(http, normalized, principal_id, new_address,
-                                          action="move_address")
-            token = paired["token"]
-            try:
-                record = await self._verify_moved(http, paired, row)
-            except EnrollmentError as exc:
-                await self._logout(http, token)
-                self._store.audit(action="move_address", outcome=exc.reason or exc.code,
-                                  principal_id=principal_id, target=robot_id)
-                raise
-            except Exception:
-                _LOG.exception("moving a robot failed after the code was consumed")
-                await self._logout(http, token)
-                self._store.audit(action="move_address", outcome="store_failed",
-                                  principal_id=principal_id, target=robot_id)
-                raise self._consumed("store_failed") from None
-            self._store.rebind(robot_id, seal(self._key, token, slot="rest", robot_id=robot_id,
-                                              token_id=record["token_id"]),
-                               address=new_address, state="active", **record)
-            endpoint = RobotEndpoint(robot_id, f"http://{new_address}", token)
-            gate = RobotGate(expires_at=record["fleet_expires_at"])
-            await self._roster.replace_endpoint(endpoint, self._client(endpoint, gate))
-            self._gates[robot_id] = gate
-            self._tokens[robot_id] = token
-            self._console().release_robot(robot_id)
-            self._store.audit(action="move_address", outcome="moved", principal_id=principal_id,
-                              target=robot_id)
-        # Never sent anywhere, so never revoked by Fleet (a relay could pass step 3).
-        self._store.audit(action="move_address", outcome="old_token_not_revoked",
-                          principal_id=principal_id, target=robot_id)
-        listed = next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
-        return {**listed, "old_token_revoked": False}
-
-    async def _still_at_pinned(self, row: dict) -> bool:
-        """True when the pinned address still answers `system/info` as this robot."""
-        token = self._tokens.get(row["robot_id"])
-        if token is None:
-            return False
-        async with self._http(row["address"]) as http:
-            try:
-                response = await http.get("/api/v1/system/info",
-                                          headers={"Authorization": f"Bearer {token}"})
-                info = response.json() if response.status_code == 200 else None
-            except (httpx.HTTPError, ValueError):
-                return False
-        return isinstance(info, dict) and info.get("robot_id") == row["robot_id"]
-
-    async def _verify_moved(self, http: httpx.AsyncClient, paired: dict, row: dict) -> dict:
-        """Consistency check with the NEW token against the register row; returns token fields.
-
-        device_uid is not compared: CORE's system/info does not return it, so the stored value
-        is always None and the comparison would be decoration.
-        """
-        received_at = self._clock()
-        role = paired.get("role")
-        if role != "operator":
-            raise self._consumed("admin_code_refused" if role == "administrator" else "role_too_low")
-        headers = {"Authorization": f"Bearer {paired['token']}"}
-        try:
-            me = (await http.get("/api/v1/auth/whoami", headers=headers)).raise_for_status().json()
-            info = (await http.get("/api/v1/system/info", headers=headers)).raise_for_status().json()
-        except (httpx.HTTPError, ValueError):
-            raise self._consumed("verify_failed") from None
-        same = (isinstance(info, dict) and info.get("robot_id") == row["robot_id"]
-                and str(info.get("hostname") or "").lower() == row["hostname"]
-                and info.get("serial_number") == row["serial_number"])
-        if not same:
-            raise EnrollmentError(
-                "identity_mismatch", 409,
-                "the device at the new address is not the enrolled robot; "
-                "no stored credential was sent to it", reason="identity_mismatch")
-        token_id = str(paired.get("id") or me.get("id") or "")
-        if not token_id:
-            raise self._consumed("verify_failed")
-        source = str(paired.get("source") or me.get("source") or "")
-        lifetime = _seconds_between(me.get("created_at"),
-                                    me.get("expires_at") or paired.get("expires_at"))
-        fleet_expires_at = received_at + lifetime if lifetime is not None else None
-        warn_before = SITE_WARN_S if source == "pair-site" else LEGACY_WARN_S
-        return {"token_id": token_id, "role": role, "source": source,
-                "expires_at": paired.get("expires_at") or me.get("expires_at"),
-                "fleet_expires_at": fleet_expires_at,
-                "warn_at": fleet_expires_at - warn_before if fleet_expires_at is not None else None}
-
-    # --- unenroll ------------------------------------------------------------
-
-    async def unenroll(self, robot_id: str, *, principal_id: str) -> dict:
-        self._require_available()
-        row = self._store.get(robot_id)
-        if row is None:
-            raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
-        self._endpoint(row, "anonymous-bootstrap")  # validate before changing the mounted roster
-        if self._tls_bindings is not None:
-            self._tls_bindings.remember(robot_id)  # D-580: this binding may come back renumbered
-        on_roster = robot_id in self._roster.robot_ids
-        if on_roster:
-            blocker = self._roster.removal_blockers(robot_id)
-            if blocker is not None:
-                raise blocker
-        if row.get("hub_digest") and on_roster:
-            await self._clear_robot_link(robot_id)  # D-555: the digest leaves with the row
-        # Popped before the first await so no concurrent path reuses them.
-        gate = self._gates.pop(robot_id, None)
-        token = self._tokens.pop(robot_id, None)
-        if on_roster:
-            await self._roster.remove(robot_id)
-        done = False
-        # An address in doubt gets no Bearer; a dead token may still log out at a sure one.
-        if token is not None and (gate is None or gate.held in (None, "needs_new_code")):
-            async with self._http(row["address"]) as http:
-                done = await self._logout(http, token)
-        if done:
-            self._store.delete(robot_id)
-            outcome = "removed"
-        else:
-            self._store.update(robot_id, state="pending_logout")
-            outcome = "pending_logout"
-        self._store.audit(action="unenroll", outcome=outcome, principal_id=principal_id,
-                          target=robot_id)
-        return {"robot_id": robot_id, "state": "removed" if done else "pending_logout",
-                "expires_at": row["expires_at"]}

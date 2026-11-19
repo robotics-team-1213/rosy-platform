@@ -10,7 +10,8 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from fakes import FakeClock, FakeRobot
-from fleet.server.app import _fan_out_events, create_app
+from fleet.hub.server import fan_out_events as _fan_out_events
+from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import SharedGather
 from fleet.stuck.board import LineStuckBoard

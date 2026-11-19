@@ -93,3 +93,24 @@ def test_stopped_collection_task_cannot_serve_fresh_ok(runtime, tmp_path, monkey
         assert client.get('/health').status_code == 503
         response = client.get('/api/monitoring/v1/snapshot', headers={'Authorization': f'Bearer {TOKEN}'})
         assert response.status_code == 503 and 'private collector failure' not in response.text
+
+
+def test_health_reports_the_last_successful_poll_and_keeps_status(runtime, tmp_path):
+    cache, clock = runtime
+    collector = Collector(cache.config, load_credentials(cache.config, {'READ': TOKEN}),
+                          MonitoringStore(tmp_path / 'monitoring.sqlite3', cache.config.collector_id))
+    fail = []
+
+    async def poll(source):
+        if fail:
+            raise ValueError('source down')
+    collector.reader.poll = poll
+    client = TestClient(create_app(collector))
+    assert client.get('/health').json() == {'status': 'ready', 'last_success': None}
+    asyncio.run(collector.poll_once())
+    stamp = collector.last_success
+    assert abs(stamp - collector.cache._wall().timestamp()) < 5 and client.get('/health').json()['last_success'] == stamp
+    fail.append(1)
+    clock.t += 60
+    asyncio.run(collector.poll_once())  # failing polls leave the last success alone
+    assert collector.last_success == stamp

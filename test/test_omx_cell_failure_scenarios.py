@@ -36,6 +36,7 @@ def test_recovery_refuses_a_dry_run_rather_than_moving_the_arm():
 
 def test_the_scenarios_cover_every_cause_in_the_table():
     causes = {dg.attempt_cause(r[0], r[1]) for s in fs.SCENARIOS for r in s["rounds"]}
+    causes |= {s["result"].removeprefix("ask a person: ") for s in fs.SCENARIOS}  # a camera check ends a carry before any attempt
     assert set(dg.RECOVERY) <= causes
 
 

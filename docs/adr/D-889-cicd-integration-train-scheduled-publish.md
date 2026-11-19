@@ -711,3 +711,61 @@
 **검증.** `test/test_land_rollup.py`(다시 묶기, `waiting` rollup 제외, 일부만 병합되면 옛 rollup 유지와 `.split` 표시), `test/test_land_prepare.py`(FULL 대기 시작 때 한 번 rollup)를 원격 시험 PC에서 돌린다.
 
 **되돌림.** `ROSY_ROLLUP_MIXED=0`이면 rollup을 다시 묶지 않는다(추가 33의 되돌림과 같다). 다시 묶인 rollup이 일주일에 두 번 넘게 FULL을 다시 시작해 착지가 늦어지면 3의 즉시 실행을 끄고 watchdog 주기만 쓴다.
+
+### 추가 35 (2026-11-17): 롤업은 한 번에 하나, 판정 있을 때만 나눈다 (2026-11-17 롤업 패널)
+
+**왜.** 36시간 동안 롤업 31개가 만들어져 4개만 착지했고 동시에 7개가 있었다. 판정 없이 만료된 롤업이 반으로 나뉘어 한 묶음이 FULL을 3번 돌렸다.
+
+**결정.** 롤업은 한 번에 하나만 돈다. 이 호스트에 검사 중·대기·턴 상태의 롤업이 있으면 새 롤업을 만들지 않고, 새로 온 착지는 pending으로 기다렸다가 다음 롤업에 들어간다(아직 FULL을 시작하지 않은 pending·FULL 대기 롤업에는 합칠 수 있고, 같은 롤업이 2시간을 넘기면 예외로 새 롤업을 허용한다). 롤업 만들기와 나누기는 같은 잠금(`rosy-land-rollup.lock`)을 잡는다. 롤업은 시험의 NEW failure로 멈췄을 때만 반으로 나누고, 병합 충돌과 판정 없는 정지(만료·호스트 유실·종료)는 구성원을 각자 다시 줄 세운다. 판정은 `land.py`의 마지막 `[land] STOP:` 블록으로 읽는다. 이미 시험 기록이 있는 롤업(`tested` 또는 `full_done`)은 6시간 만료 창을 쓴다. 근거: 2026-11-17 패널(36 h 롤업 31개 생성·4개 착지, 동시 7개, 판정 없는 분할로 한 묶음이 FULL 3번). 긴급·단독·안전 착지는 그대로다.
+
+**검증.** `test/test_land_rollup.py`, `test/test_land_async.py`, `test/test_land_queue.py`를 원격 시험 PC에서 돌린다.
+
+**되돌림.** `ROSY_ROLLUP_MIXED=0`은 추가 33의 되돌림 그대로다. 롤업 뒤에 기다리는 착지가 4시간 만료로 잇달아 죽으면 2시간 예외를 줄인다.
+
+### 추가 36 (2026-11-17): 착지 도구를 바꾸면 숫자를 먼저 적는다 (2026-11-17 롤업 패널)
+
+**왜.** 같은 계열 교훈이 11-01·11-14에 있었는데도 바꾼 뒤 숫자를 재지 않아 되풀이됐다. 롤업을 시작하는 곳이 4곳(land_tick, land_watchdog, `land_prepare.gather`, FULL 대기)까지 늘어 36시간 동안 31개가 만들어지고 4개만 착지했다.
+
+**결정.** 착지 파이프라인(tools/land*.py)을 바꾸는 커밋은 바꾸기 전 숫자(들어온 착지/h, 끝난 착지/h, 착지 p50·p90, 턴 시간 초과 반납/24h, 롤업 생성·착지)를 `Metrics: before=...` 줄에 적는다. land_tick이 24시간마다 같은 숫자를 남기고, 바꾼 뒤 24시간 안에 나빠졌으면 되돌린다. 새 타이머·트리거를 더하는 커밋은 같은 일을 하는 기존 것을 `Removes:` 줄에 적고 함께 지운다. 시간 상한은 실제 작업 시간 분포를 보고 정한다. 근거: 2026-11-17 패널(같은 계열 교훈 11-01·11-14가 있었는데도 착지 뒤 재지 않아 되풀이; 롤업 계기 4곳).
+
+이 커밋이 첫 적용이다. 롤업 트리거는 `land_tick` 한 곳만 남기고 `land_prepare.gather`·`GATHER_S`, FULL 대기의 `ROLL_POLLS` 재시도, `land_watchdog.rollup_due`·`ROLLUP_EVERY_S`를 지웠다. 추가 33·34의 "차례 쥔 watchdog 10분마다"·"FULL 대기 시작 때 한 번"은 이 추가로 대체된다. 새 입장 공식은 더하지 않았다(트리거가 하나일 때의 숫자를 24시간 본 뒤 정한다).
+
+**강제.** 규칙은 `tools/harness/size_range.py`가 `base..head`의 병합 아닌 커밋마다 검사한다(`land_metrics_rule.py`). `land.py`의 precheck와 턴에서 돌므로 로컬 main 기준이다. 커밋 시각이 `RULE_SINCE`(2026-11-17T18:00+09:00) 이후인 커밋만 검사해, 그 전에 시작된 다른 세션의 브랜치는 소급해서 막지 않는다.
+
+**검증.** `test/test_land_metrics_rule.py`(규칙 문장 시험과 임시 저장소의 size_range 시험), `test/test_land_prepare.py`, `test/test_land_queue_flow.py`, `test/test_land_tick.py`를 원격 시험 PC에서 돌린다. 규칙은 `[metrics]` 줄(`rosy-land-backlog.txt`)과 `<git-common-dir>/rosy-land-metrics.jsonl`로 24시간 뒤 확인한다.
+
+**되돌림.** 롤업이 24시간 안에 생성 없이 쌓이기만 하면 이 커밋을 되돌리고(트리거 3곳 복구) 숫자를 다시 잰다. 메시지 규칙 시험이 오탐이면 시험만 고치고 규칙 문장은 유지한다.
+
+### 추가 37 (2026-11-17): 이전 라운드의 통과를 FULL 범위에서도 재사용한다 (사용자 결정 2026-11-17)
+
+**왜.** 사용자: "이전 라운드 결과 재사용이 가장 빠르고 정확한 것 같다, 계획 세우고 바로 진행". 48시간에 FULL 크기 라운드 29개 중 12개가 main이 움직인 뒤 같은 스위트를 다시 돈 것이었고 `land_cache` 재사용은 0/1386이었다. `reach()`·`_delta_paths`는 범위가 FULL이면 재사용을 포기했다.
+
+**결정.** `--tests auto`에서 통과한 호출을 다시 돌리지 않는 조건은 (1) argv와 환경(deps 해시)이 같고 (2) 기록된 커밋의 트리부터 후보의 트리까지의 정확한 트리 차이에서(조상이면 기존 범위와 같다) (3) 그 차이에서 선택기가 그 호출의 경로를 하나도 고르지 않는 것이다. 범위가 FULL이어도 (3)은 선택기의 `local_invocations`(가드와 직접 영향 스위트)와 브라우저 대상으로 판단한다. 단, 범위에 다음이 하나라도 있으면 이 라운드의 새 재사용을 전부 거부하고 이전 동작으로 돌아간다. 안전 경로(SAFETY_TRIGGER, D-430), STAY_FULL 트리거(고정 의존성·compose·이미지/네이티브 매니페스트·소스 레이아웃), SELECT_CORE·RUNNER_TOOLS 파일, REGISTRY_FILES, 루트 conftest·pyproject·pytest.ini, `test/known_failures.*`·`flaky_quarantine.txt`, 삭제·이름 변경, 매핑 없는 경로(unmapped). 목록은 `affected_narrow`·`affected_tests`의 상수를 그대로 쓴다.
+
+**한계.** 안전한 FULL 범위는 위 목록에 걸리지 않는 FULL뿐이라 실제로는 드물다(main 최근 80커밋 중 FULL은 2개, 모두 안전 경로·선택기). 가장 큰 막힘은 후보에 조상 관계의 기록 행이 없는 것(최근 큰 커밋 25개 중 16개)이었고, 같은 날 후속으로 조상 요구를 버렸다. 기록 행의 커밋이 조상이 아니어도(같은 브랜치를 새 main에 다시 합친 형제 병합 커밋) 그 행의 트리와 후보의 트리 사이 `git diff`가 두 트리의 모든 차이이므로, 조상 관계가 주던 보증(차이 밖은 같은 내용)을 트리 비교가 그대로 준다. 선택기는 `-p 기록커밋`을 부모로 후보 트리를 얹은 버려지는 커밋(`_probe`)을 넣어 그 차이만 본다. 이 길은 `--tests auto`에서만 쓰며 거부 목록·deps 해시·argv 규칙은 같다. 조상이 아닌 행이 선택기 호출을 최대 `NARROW_COMMITS`개까지 쓴다. 폐쇄(import 그래프) 재사용은 조상 검사를 넓혀 이 브랜치가 만든 실패를 가릴 수 있어 쓰지 않는다. 명시적 `--tests full`(게시 증거)은 `reach()`의 엄격한 규칙 그대로이며, 재사용은 캐시 행을 쓰지 않고 `reused_from` 표시가 있는 행은 `entries()`가 버리므로 `publish_evidence`는 재사용을 증거로 받지 않는다.
+
+**관측.** 재사용마다 `[cache] reused <argv> from <sha10> (delta selects none of its paths)` 한 줄과 `land_events`의 `reuse` 이벤트(`reused`·`prior`·`total`)를 남긴다. 이 커밋의 Metrics 줄이 바꾸기 전 숫자다.
+
+**되돌림.** `_delta_paths`의 `_full_delta` 호출 한 곳을 지우면 추가 36 이전 동작이다. 재사용한 라운드가 NEW 실패를 놓쳤다면 즉시 되돌린다.
+
+### 추가 38 (2026-11-17): 시험을 마치고 기다리는 착지는 롤업에 다시 넣지 않는다 (2026-11-17 롤업 패널)
+
+**왜.** 추가 23(2026-11-02)은 "준비된(waiting) 착지도 서로 닿지 않으면 롤업에 묶는다"고 했다. 그러나 `tested`(준비 기록)나 `tier: full_done`을 가진 waiting 착지는 이미 시험을 통과했는데, 롤업에 넣으면 그 증거를 버리고 묶음 FULL을 다시 돈다. 2026-11-17 21시 30분대에 롤업이 준비된 waiting 7개를 다시 묶었고, 그중 하나는 대기열 2번 자리에서 138분째 준비 상태였다. 롤업 선두 p50은 200분, 영향받는 단일 착지 p50은 32분이다(36시간).
+
+**결정.** 추가 23의 "준비된 착지도 롤업에 묶는다"를 좁힌다. `land_rollup.candidates`는 `tested` 또는 `tier: full_done`이 있는 waiting 착지를 후보에서 뺀다. 그런 착지는 자기 증거로 단독 착지한다. pending, 준비 기록 없는 waiting, (섞기 켜짐일 때) FULL 대기 preparing은 그대로 후보이고, 롤업 행의 규칙(추가 33·34·35)도 그대로다. 이 추가는 `fix/land-g-bundle`의 추가 37 뒤에 이어진다. 새 상수·타이머는 없다.
+
+**검증.** `test/test_land_rollup.py`(준비 기록 있는 waiting 두 종류가 후보가 아님), `test/test_land_queue.py`, `test/test_land.py`를 원격 시험 PC에서 돌린다.
+
+**되돌림.** 이 조건 한 줄(`prepared`)을 지우면 추가 23 동작으로 돌아간다. 24시간 안에 단독 착지 대기가 길어지면 되돌리고 숫자를 다시 잰다.
+
+**보충 (2026-11-18, R3 패널).** 9개 대기 착지가 각자 차례를 도는 것(건당 약 46분, 하루 약 31건)이 남은 직렬 한계다. 추가 38의 이유는 증거를 버리는 것이므로, `tested`가 현재 main과 같은 waiting 착지(urgent·alone 아님, 같은 호스트)는 후보로 되돌린다. 이전 main에서 시험한 waiting, `tier: full_done`, 살아 있는 롤업에 타고 있는 행은 계속 뺀다. 되돌림: `prepared`의 `main` 비교를 지우면 추가 38 그대로다.
+
+### 추가 39 (2026-11-19): 급한 안전 경로 착지는 차례를 먼저 잡고 그 안에서 FULL을 돈다 (사용자 결정 2026-11-19 "그렇게 해")
+
+**왜.** 안전 경로를 건드린 착지는 FULL을 돌아야 하고 이전 라운드 통과를 재사용하지 못한다(추가 37의 거부 목록). 2026-11-19 급한 착지 `fix/berth-safety-publish-unblock`은 차례 밖에서 FULL을 준비하는 동안 main이 움직일 때마다(10:52, 13:32) FULL을 처음부터 다시 돌았다(`no prior-round reuse ... safety path`). 기록: `docs/workspace-records/2026-11-18/release-split-panel.md`(작업 공간).
+
+**결정.** `--urgent` 착지가 안전 경로를 건드려 FULL이 확실하거나(`--tests auto`), `--tests full`을 명시했으면 차례 밖 사전 시험을 하지 않는다. 먼저 차례를 잡고, 차례를 쥔 채로 FULL을 돈다. 그동안 main은 움직이지 않으므로 FULL을 다시 시작하지 않는다. 다른 착지는 그 FULL 동안(약 85분) 기다린다. 사용자가 받아들였다. 이 경우에만 차례 상한(`TURN_CAP_S`·30분 `TURN_MAX_S`)을 `land_turn.URGENT_FULL_TURN_S`(3시간)로 바꾼다. 3시간이 지나면 지금처럼 반납하고 밖에서 준비한다. 급하지 않은 착지와 안전 경로가 없는 급한 착지는 그대로다. 차례 안에서 통과한 FULL은 준비 기록으로 저장되어 pre-push가 재사용하는 착지 기록이 된다. 판정은 `land_prepare.full_in_turn`(안전 경로는 `land_batch.safety`)이다.
+
+**검증.** `test/test_land_prepare.py`(급한 안전·명시 FULL은 사전 시험 없이 차례 안에서 FULL 한 번, 반납 없음, 3시간 상한; 급하지 않은 것·안전 경로 없는 급한 것은 그대로), `test/test_land.py`, `test/test_land_queue.py`, `test/test_land_turn_deadline.py`를 원격 시험 PC에서 돌린다. 24시간 동안 급한 안전 착지의 FULL 재시작 횟수(`prepared` 이벤트 수)를 본다.
+
+**되돌림.** `land_prepare.pretest`의 `full_in_turn` 분기를 지우면 이전 동작이다(`in_turn`이 거짓이 되어 차례 상한과 `again`도 돌아온다).

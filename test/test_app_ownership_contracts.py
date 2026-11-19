@@ -14,11 +14,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("middleware/core/api", "middleware/core/services", "middleware/core/events"):
+for relative in ("middleware/core/api", "middleware/core/services", "middleware/core/events", "operations/fleet"):
     path = str(ROOT / relative)
     if path not in sys.path:
         sys.path.insert(0, path)
 
+from core_features.safety.limits import SpeedLimits  # noqa: E402
 from core_api_web.api.errors import register_exception_handlers  # noqa: E402
 from core_api_web.api.v1 import safety  # noqa: E402
 from core_api_web.api.v1.auth import auth_router  # noqa: E402
@@ -56,7 +57,7 @@ def core(monkeypatch):
          "sha256": sha256(f"core-{role}".encode()).hexdigest()}
         for role in ("viewer", "operator", "administrator")
     ]}}
-    limits = SimpleNamespace(max_linear=0.5, max_angular=2.0, manual_linear=0.3, manual_angular=1.0)
+    limits = SpeedLimits(max_linear=0.5, max_angular=2.0, manual_linear=0.3, manual_angular=1.0)
     safety_owner = SimpleNamespace(
         limits=limits, estop=False, estop_source=None, fleet_loss_policy="STOP", session_linear=0.5,
         battery_policy=SimpleNamespace(warning_percent=30, critical_percent=15, critical_action="STOP"),
@@ -89,11 +90,11 @@ def core(monkeypatch):
 ])
 def test_robot_persistent_settings_reject_before_touching_the_owner(core, token, status):
     client, services, writes = core
-    response = client.put("/api/v1/safety/limits", json={"manual_linear": 0.2}, headers=_headers(token))
+    response = client.put("/api/v1/safety/limits", json={"fleet_loss_policy": "HOLD"}, headers=_headers(token))
     assert response.status_code == status
     assert response.json()["error"]["code"] == ("UNAUTHORIZED" if status == 401 else "FORBIDDEN")
     assert writes == []
-    assert services.safety.limits.manual_linear == 0.3
+    assert services.safety.fleet_loss_policy == "STOP"
 
 
 def test_robot_administrator_persists_through_the_existing_owner(core):

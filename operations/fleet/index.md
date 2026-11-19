@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
-- 2026-11-10 · uncommitted · fix(fleet): D-1010 독립 검토 반영 — 증명 없는 free 목표 정지·모르는 프레임 교차 판정 배제·변조 DB 시동 생존 (D-1010)
-- 2026-11-10 · uncommitted · fix(fleet): 사이트 지도 프레임 결속 — 활성 본문 검증과 목표·자세·경로의 프레임 거절 (D-1010)
-- 2026-11-08 · uncommitted · fix: Account 가입·권한 요청 경로를 Fleet 기능표에 등록 (D-993)
-- 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
-- 2026-11-08 · uncommitted · feat(fleet): 스테이션 복구 자동 승인, 로봇 화면 답 기록
+- 2026-11-18 · uncommitted · fix(map-pose): 늦은 odom·오래된 앵커·3 fps 짝짓기
+- 2026-11-18 · uncommitted · fix(map-pose): D-989 허용 목록에 콘솔 site goal 추가
+- 2026-11-17 · uncommitted · fix(fleet): D-1039 독립 검토 반영
+- 2026-11-17 · uncommitted · feat(fleet): AI assessor 서비스 자격의 안전한 팔 사건 해제 (D-1039)
+- 2026-11-17 · uncommitted · feat(fleet): POST /api/fleet/detections/anchors 경로 추가

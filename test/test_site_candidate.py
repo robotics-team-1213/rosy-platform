@@ -30,13 +30,15 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "candidate_signing.py", "sign_candidate.py",
                  "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py", "site_users.py",
-                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+                 "compose.pairing.yaml", "compose.omx.yaml", "compose.omx-device-trial.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
                  "compose.control-unit-remote.yaml",
                  "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account", "compose.account-backup.yaml",
                  "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer"):
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer", "account_login_check.py", "rosy-site-account-login-check.service", "rosy-site-account-login-check.timer",
+                 "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
+                 "rosy-pg-backup-check.service", "rosy-pg-backup-check.timer"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text(
         "Requires=docker.service\n"
@@ -114,13 +116,15 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "verify_candidate.py",
         "candidate_signing.py", "sign_candidate.py",
         "discovery-token.template.txt", "site_db.py", "site_users.py",
-                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+                 "compose.pairing.yaml", "compose.omx.yaml", "compose.omx-device-trial.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
                  "compose.control-unit-remote.yaml",
                  "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account",
                  "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer", "account_login_check.py", "rosy-site-account-login-check.service", "rosy-site-account-login-check.timer",
+                  "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
+                  "rosy-pg-backup-check.service", "rosy-pg-backup-check.timer",
     }
     stack_unit = (output / "deploy" / "site" / "rosy-site-stack.service").read_text(
         encoding="utf-8")
@@ -171,7 +175,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
                  "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py", "site_users.py",
-                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+                 "compose.pairing.yaml", "compose.omx.yaml", "compose.omx-device-trial.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
                  "compose.control-unit-remote.yaml",
                  "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
@@ -179,7 +183,9 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring"):
         (site / name).write_text("fixture", encoding="utf-8")
     for name in ("compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer"):
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer", "account_login_check.py", "rosy-site-account-login-check.service", "rosy-site-account-login-check.timer",
+                 "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
+                 "rosy-pg-backup-check.service", "rosy-pg-backup-check.timer"):
         (site / name).write_text("fixture", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text("fixture", encoding="utf-8")
 
@@ -367,3 +373,21 @@ def test_site_candidate_refuses_copy_forms_the_guard_cannot_parse(tmp_path, copy
                         sbom_tool="syft")
     assert not any(call[:2] == ["git", "ls-files"] for call in calls)
     assert not any(call[:2] == ["docker", "build"] for call in calls)
+
+
+def test_site_candidate_parallel_jobs_preserves_image_inventory_and_order(tmp_path):
+    import threading
+
+    root = tmp_path / "repo"
+    _fixture_repo(root)
+    calls: list = []
+    lock = threading.Lock()
+    inner = _recording_runner(calls)
+
+    def locked_runner(args, **kwargs):
+        with lock:
+            return inner(args, **kwargs)
+
+    manifest = build_candidate(root, tmp_path / "release", runner=locked_runner, sbom_tool="syft", jobs=4)
+    assert list(manifest["images"]) == ["fleet", "account", "monitoring", "vision", "proxy", "postgres"]
+    assert all(row["sbom_sha256"] for row in manifest["images"].values())

@@ -6,10 +6,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import hashlib
 import json
-import math
 import re
 from typing import Protocol
 
+from rosy.contracts.skill.invocation import _finite
 from rosy.execution.api import PlanBundle
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -168,12 +168,6 @@ def _identifier(value: object, field: str, *, limit: int = 192) -> str:
             or len(value) > limit or any(ord(char) < 32 for char in value)):
         raise ValueError(f"{field} must be a non-empty trimmed identifier")
     return value
-
-
-def _finite(value: object, field: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-        raise ValueError(f"{field} must be a finite number")
-    return float(value)
 
 
 def _pose(value: object, field: str) -> Mapping:

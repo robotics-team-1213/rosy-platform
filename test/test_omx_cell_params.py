@@ -112,3 +112,20 @@ def test_a_site_given_only_its_surface_as_z_is_never_planned_at_the_surface(tmp_
     config["params"] = prm.load()["values"] | {"auto.grasp_depth_m": 0.02}
     with pytest.raises(SystemExit, match="below"):
         auto.surface_z(config, "floor")
+
+
+def test_wrist_finger_color_and_grasp_stability_params_validate():
+    data = {
+        "schema": prm.SCHEMA,
+        "params": {
+            "wrist.finger_color": {"value": 1, "unit": "mode", "source": "measured", "evidence": "2026-11-10 arm_s black pads"},
+            "grasp.stability_check": {"value": 1, "unit": "flag", "source": "tuned", "evidence": "2026-11-10 post-grasp debate"},
+            "grasp.shallow_tol_units": {"value": 1.2, "unit": "gripper", "source": "measured", "evidence": "2026-11-10 trials 4-5"},
+            "grasp.wedged_tol_units": {"value": 0.7, "unit": "gripper", "source": "measured", "evidence": "2026-11-10 diagonal wedge"},
+            "grasp.max_skew_mm": {"value": 4.0, "unit": "mm", "source": "tuned", "evidence": "2026-11-10 wrist center"},
+            "grasp.max_reinsert": {"value": 1, "unit": "count", "source": "tuned", "evidence": "2026-11-10 single retry"},
+            "grasp.min_stable_current_ma": {"value": 80.0, "unit": "mA", "source": "measured", "evidence": "2026-11-10 squeeze current"},
+        },
+    }
+    vals = prm.validate(data)
+    assert vals["wrist.finger_color"] == 1 and vals["grasp.min_stable_current_ma"] == 80.0

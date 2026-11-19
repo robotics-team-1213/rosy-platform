@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Supply arm S's role as code: look at every site, choose the next carry by the role's priorities, run it.
+"""Supply arm S's autonomous role as code: look at every site and rescue a fallen container.
 
 The role (user, 2026-10-29): the Pinky tray is where containers come and go.
   load      Pinky -> belt      what stands on the Pinky goes onto the conveyor
   retrieve  belt -> Pinky      a container on the belt comes back to the Pinky
   rescue    floor -> Pinky     a container that fell (or was left) on the floor is picked up and put back
-Rescue comes first (a fallen container is in the way and lost from the flow), then load, then retrieve. The
-priorities and the site of each step are data (ROLE below, or config["role"]); every choice is a "role" decision
-row, and N failed carries in a row stop the loop for a person.
+Rescue comes first (a fallen container is in the way and lost from the flow), then load, then retrieve.
+D-996 5 (D-858 1): load is a Fleet ARM_TRANSFER job (proposed when a trip arrives, admitted by a named operator)
+and retrieve is refused, so this loop runs rescue only. A config role naming load or retrieve is refused here,
+not skipped quietly. Every choice is a "role" decision row, and N failed carries in a row stop the loop for a person.
 
   cell_role.py --config cell-auto.json --catalog catalog.json [--rounds 6] [--dry-run]
 """
@@ -21,16 +22,24 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-ROLE = {"steps": [{"name": "rescue", "from": "floor", "to": "pinky"},
-                  {"name": "load", "from": "pinky", "to": "belt"},
-                  {"name": "retrieve", "from": "belt", "to": "pinky"}],
-        "max_failures_in_a_row": 2}
+ROLE = {"steps": [{"name": "rescue", "from": "floor", "to": "pinky"}], "max_failures_in_a_row": 2}
+#: The only steps this loop may run on its own (D-996 5); load/retrieve go through Fleet jobs or not at all.
+AUTONOMOUS = frozenset({"rescue"})
+
+
+def checked_role(role: dict) -> dict:
+    """The role, refused when it names a step outside AUTONOMOUS."""
+    names = [s.get("name") for s in role.get("steps") or []]
+    outside = sorted(set(names) - AUTONOMOUS)
+    if outside:
+        raise ValueError(f"cell_role runs {sorted(AUTONOMOUS)} only; {outside} must be a Fleet job (D-996 5)")
+    return role
 
 
 def next_step(counts: dict, role: dict, last: str | None = None) -> dict | None:
     """The first step (in priority order) whose source site holds a usable container; None when nothing to do.
     load and retrieve alternate: right after a retrieve, load comes before another retrieve and the other way."""
-    steps = [s for s in role["steps"] if counts.get(s["from"], 0) > 0]
+    steps = [s for s in checked_role(role)["steps"] if counts.get(s["from"], 0) > 0]
     if not steps:
         return None
     if last in ("load", "retrieve") and len(steps) > 1 and steps[0]["name"] == last and steps[0]["name"] != "rescue":
@@ -72,7 +81,7 @@ def main(argv=None):
 
     config = json.loads(args.config.read_text(encoding="utf-8"))
     config["params"] = prm.load(config.get("params_path"))["values"]
-    role = config.get("role") or ROLE
+    role = checked_role(config.get("role") or ROLE)
     calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text())
     catalog = cell_objects.load_catalog(args.catalog)
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])

@@ -20,5 +20,6 @@ def capsules(kin, joints, *, fingertip_m: float, item: tuple[float, float] | Non
     out = [(shoulder, elbow, LINK_RADIUS_M), (elbow, wrist, LINK_RADIUS_M), (wrist, tip, gripper_radius_m)]
     if item is not None:
         hang, radius = item
-        out.append((tcp, tuple(p + a * hang for p, a in zip(tcp, approach)), radius))
+        out.append((tcp, (tcp[0] + approach[0] * hang, tcp[1] + approach[1] * hang,
+                          tcp[2] + approach[2] * hang), radius))
     return out

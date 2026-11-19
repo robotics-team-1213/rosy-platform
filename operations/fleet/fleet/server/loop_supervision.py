@@ -16,7 +16,7 @@ from functools import partial
 from typing import Awaitable, Callable, Optional
 
 from fleet.server.background_workers import (
-    _mission_model_turn_worker_loop, _task_dispatch_loop, goal_evidence_expiry_loop,
+    _mission_model_turn_worker_loop, _task_dispatch_loop, auto_locate_loop, goal_evidence_expiry_loop,
     charge_bays_loop, event_loop_lag_loop, goal_lease_renew_loop, lane_compliance_loop, proposal_expiry_loop,
     start_notification_worker)
 from fleet.server.control_unit_observation_runtime import start_control_unit_tasks
@@ -136,7 +136,7 @@ FLEET_LOOP_NAMES = (
     "job-trips", "task-dispatch", "proposal-expiry", "mission-dispatch",
     "cell-job-dispatch", "goal-evidence-expiry", "mission-feedback-schedule",
     "mission-model-turn", "control-unit-journal", "control-unit-information", "charge-bays",
-    "event-loop-lag",
+    "event-loop-lag", "auto-locate",
 )
 
 
@@ -145,7 +145,8 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
                       cell_job_dispatcher=None, goal_evidence_service=None,
                       mission_model_turn_scheduler=None, mission_model_turn_worker=None,
                       localization_service=None, calibration_drift_watch=None,
-                      notification_config=None, identity=None, log, lane_compliance_period_s):
+                      notification_config=None, identity=None, auto_locate=None, log,
+                      lane_compliance_period_s):
     """Spawn every lifespan background loop under one liveness registry.
 
     app.py의 스폰 블록을 통째로 옮겼다(D-766 래칫: app.py는 파일 한도 초과라 늘지
@@ -189,6 +190,10 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
         app.state.lane_compliance, log, lane_compliance_period_s))
     bays_task = (supervisor.supervised("charge-bays", charge_bays_loop(app.state.charge_bays_tick, log))
                  if getattr(app.state, "charge_bays_tick", None) is not None else None)  # D-941 5
+    auto_pose = getattr(auto_locate, "map_pose", None) if auto_locate is not None else None
+    auto_locate_task = (supervisor.supervised(  # D-989 follow-up: unplaced listed robot → session
+                            "auto-locate", auto_locate_loop(auto_locate, log))
+                        if auto_pose is not None and auto_pose.config.auto_locate_robots else None)
     tether_task = supervisor.attach("tether-watch", app.state.tether_watch.start())  # D-526
     path_task = supervisor.supervised("paths", app.state.paths.run())  # D-594
     job_task = (supervisor.supervised("job-trips", app.state.job_trips.run())
@@ -224,6 +229,7 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
                                           trip_task, identity_task, lane_task, tether_task,
                                           lease_task, path_task, calibration_drift_task,
                                           notification_task, job_task, charge_task,
-                                          physical_worker, bays_task, lag_task, *control_tasks)
+                                          physical_worker, bays_task, lag_task, auto_locate_task,
+                                          *control_tasks)
                         if task is not None]
     return supervisor, notification_http, background_tasks

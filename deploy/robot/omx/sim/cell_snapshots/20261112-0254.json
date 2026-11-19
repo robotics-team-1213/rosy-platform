@@ -1,0 +1,172 @@
+{
+ "schema": "rosy.omx-cell-snapshot.v1",
+ "taken_at": "2026-11-11T17:54:00+00:00",
+ "frames": {
+  "top": "sha256:f010aab94657d71cb676e84c090a43beb56092e93c93b4c82cd63691bfbb085f",
+  "side": "sha256:99a1af56c68c065a04ab879e04ba2b9400465601b159dcbd8da6ae0c3ecf2577"
+ },
+ "camera": {
+  "top": {
+   "eye": [
+    -0.0334,
+    0.0493,
+    0.6613
+   ],
+   "focus": [
+    0.0804,
+    0.0086,
+    0.1762
+   ],
+   "up": [
+    0.9737,
+    0.0296,
+    0.226
+   ],
+   "f_px": 615.0,
+   "width": 640,
+   "height": 480
+  }
+ },
+ "camera_motion": {
+  "checked": true,
+  "moved": false,
+  "dx_px": 0.0,
+  "dy_px": 0.0,
+  "rotation_deg": 0.0,
+  "scale": 1.0,
+  "inliers": 24
+ },
+ "items": {
+  "temp_plates": {
+   "plates": {
+    "a": [
+     {
+      "lane": 1,
+      "xy": [
+       -0.0681,
+       -0.2328
+      ],
+      "yaw_deg": -3.1,
+      "source": "pad",
+      "residual_mm": 3.3
+     },
+     {
+      "lane": 2,
+      "xy": [
+       -0.0569,
+       -0.1749
+      ],
+      "yaw_deg": -18.7,
+      "source": "pad",
+      "residual_mm": 3.3
+     },
+     {
+      "lane": 3,
+      "xy": [
+       -0.0305,
+       -0.1221
+      ],
+      "yaw_deg": -34.4,
+      "source": "plate-fit",
+      "residual_mm": null
+     }
+    ],
+    "b": [
+     {
+      "lane": 1,
+      "xy": [
+       -0.0495,
+       0.0479
+      ],
+      "yaw_deg": 14.6,
+      "source": "pad",
+      "residual_mm": 0.7
+     },
+     {
+      "lane": 2,
+      "xy": [
+       -0.0566,
+       0.1065
+      ],
+      "yaw_deg": -1.0,
+      "source": "pad",
+      "residual_mm": 1.8
+     },
+     {
+      "lane": 3,
+      "xy": [
+       -0.0476,
+       0.1648
+      ],
+      "yaw_deg": -16.6,
+      "source": "pad",
+      "residual_mm": 1.1
+     }
+    ]
+   },
+   "seen": {
+    "a": 2,
+    "b": 3
+   },
+   "errors": {},
+   "shape": {
+    "step_deg": 15.61,
+    "radius_m": 0.2172,
+    "from": "plate b, two clean pads"
+   },
+   "camera_check": {
+    "pads": 5,
+    "worst_mm": [
+     7.6,
+     5.1
+    ]
+   }
+  },
+  "ship": {
+   "stern_x_m": 0.178,
+   "centre_y_m": -0.001,
+   "yaw_deg": 0.0,
+   "iou": 0.83,
+   "model": "r08"
+  },
+  "belt": {
+   "end_x_m": 0.2115,
+   "centre_y_m": -0.0226,
+   "width_m": 0.0818
+  },
+  "arm_bases": {
+   "fk": {
+    "arm_a": {
+     "xy": [
+      0.116,
+      -0.164
+     ],
+     "yaw_deg": 90.0
+    },
+    "arm_b": {
+     "xy": [
+      0.104,
+      0.153
+     ],
+     "yaw_deg": -94.3
+    }
+   },
+   "plate_centre": {
+    "arm_a": {
+     "xy": [
+      0.116,
+      -0.164
+     ],
+     "yaw_deg": 90.0
+    },
+    "arm_b": {
+     "xy": [
+      0.107,
+      0.164
+     ],
+     "yaw_deg": -90.0
+    }
+   }
+  }
+ }
+}

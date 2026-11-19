@@ -70,7 +70,11 @@
 
 - [컨테이너에서 `kill -0`은 좀비를 산 것으로 본다](../docs/solutions/deployment/container-zombie-kill0-blindness.md)
 - [실험실 PC에서 시뮬 셀 소유자는 장치 없는 namespace와 짧은 소켓 경로로 띄운다](../docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md)
+- [rosy-fleet-r 컨테이너 핫패치는 secret_bootstrap용 root 시작과 상태 유지형 셀 핸드오프를 지켜야 한다](../docs/solutions/deployment/site-stack-hotpatch-preserves-root-entrypoint-and-stateful-cell-handoff-2026-11-12.md)
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](../docs/solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
+- [OMX bias persistence preserves pivot circles, raw innovations survive window rejections, and NIS/CUSUM uses per-axis 1-sigma with min_n=15](../docs/solutions/logic-errors/omx-bias-persistence-drift-monitor-and-eval-invariants-2026-11-16.md)
+- [OMX Gate replan must refresh state after slow park and accept z_view destination maps with parallax geometry](../docs/solutions/logic-errors/omx-gate-replan-post-park-state-and-z-view-map-2026-11-16.md)
+- [OMX Chunk Runner waits for alignment before start, parks folded wait poses without unfolding, and tolerates legacy Fleet software-stop records](../docs/solutions/logic-errors/omx-start-tracking-folded-park-and-fleet-software-stop-2026-11-15.md)
 
 ## 시험
 
@@ -78,8 +82,8 @@
 
 ## 최근 기록
 
-- 2026-11-10 · uncommitted · fix(site): 원장 백업 정리 대상 확대, 백업본 압축, robots.yaml 소유 규칙 문서화
-- 2026-11-10 · uncommitted · fix(site): VACUUM temp를 대상 옆 디렉터리로 두어 fleet-backup 컨테이너에서 실물 크기에도 돌게 한다
-- 2026-11-09 · uncommitted · fix(site): 현장 PC 원하는 상태에 mDNS 검색 브리지 타이머를 넣는다
-- 2026-11-09 · uncommitted · fix(omx): 과부하에서 토크를 끄지 않고 버티기, 실물 계획 사전 검토 규칙
-- 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+- 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
+- 2026-11-18 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 기본 켬
+- 2026-11-17 · uncommitted · fix(omx-pivot): 집게 쪽을 yaw별 원이 아니라 pivot 전체로 정한다
+- 2026-11-17 · uncommitted · feat(fleet): 셀 Fleet device_trial 팔 이송 설정 주입 (D-977 2, 항목 1-5)
+- 2026-11-17 · uncommitted · fix(omx-pivot): 짝 표시를 기준 쪽으로 세고, 쪽이 바뀐 일치는 표시로 받지 않는다

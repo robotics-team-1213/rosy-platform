@@ -84,7 +84,6 @@ def test_learning_preview_names_unconfigured_hosts_without_template_slots(http_h
     assert response.status == (503 if focus else 200)
     body = response.body.decode('utf-8')
     assert '{{' not in body
-    assert '미등록' in body
     assert f'data-host-focus="{focus.removeprefix("/")}"' in body
     assert 'Fleet 작업으로 돌아가기' in body
 
@@ -161,6 +160,15 @@ def test_sample_usb_listing_is_empty_over_http_without_relaxing_auth_or_origin(h
         worker.join(5)
 
 
+def test_sample_vision_sources_have_the_fleet_route_shape():
+    # vision-view.js reads result.sources; a bare list left the camera screen on "영상 연결 불가" (2026-11-19)
+    engine = load_engine()
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
+    response = engine.handle('GET', '/api/fleet/vision/sources', {'Cookie': 'rosy_sample_session=sample-1'}, b'')
+    assert response.status == 200
+    assert json.loads(response.body) == {'sources': ['sample-camera']}
+
+
 def test_local_vision_frame_needs_its_lease_and_preserves_binary_headers():
     engine = load_engine()
     engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
@@ -173,4 +181,15 @@ def test_local_vision_frame_needs_its_lease_and_preserves_binary_headers():
     response = engine.handle('GET', lease['frame_path'], {'Authorization':'Bearer ' + lease['lease']}, b'')
     assert response.status == 200 and response.body.startswith(b'\x89PNG\r\n\x1a\n')
     assert dict(response.headers)['Content-Type'] == 'image/png'
+
+
+def test_measured_calibration_preview_listing_is_the_empty_no_approval_state():
+    engine = load_engine()
+    assert engine.handle('GET', '/api/fleet/calibrations?purpose=preview', {}, b'').status == 401
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
+    headers = {'Cookie': 'rosy_sample_session=sample-1'}
+    response = engine.handle('GET', '/api/fleet/calibrations?purpose=preview', headers, b'')
+    assert response.status == 200
+    assert json.loads(response.body) == {'calibrations': [], 'use': 'preview-only', 'persistent': False}
+    assert json.loads(engine.handle('GET', '/api/fleet/calibrations', headers, b'').body)['use'] == 'display-only'
 

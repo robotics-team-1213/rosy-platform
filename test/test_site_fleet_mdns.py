@@ -286,3 +286,59 @@ def test_site_locator_copy_agrees_with_core_common_outside_the_vectors_too(input
     real = classify("_rosy-fleet._tcp", host, address, port, txt)
     expected = getattr(real, "reason", None)
     assert _module().classify_fleet(host, address, port, txt) == expected
+
+
+def test_fleet_mdns_and_discovery_txt_lan_ipv4_and_parse_txt_pairs_parity():
+    from core_common.protocol import discovery_txt
+
+    module = _module()
+    ipv4_cases = [
+        # RFC1918 private LAN addresses
+        ("10.0.0.1", True),
+        ("172.16.0.1", True),
+        ("172.31.255.254", True),
+        ("192.168.1.20", True),
+        # Loopback
+        ("127.0.0.1", False),
+        ("127.255.255.254", False),
+        # CGNAT / Tailscale 100.64.0.0/10
+        ("100.64.0.1", False),
+        ("100.100.100.100", False),
+        ("100.127.255.254", False),
+        # Link-local
+        ("169.254.0.1", False),
+        ("169.254.254.254", False),
+        # Multicast and unspecified
+        ("224.0.0.1", False),
+        ("224.0.0.251", False),
+        ("239.255.255.250", False),
+        ("0.0.0.0", False),
+        # Public IPv4, IPv6, and malformed inputs
+        ("8.8.8.8", False),
+        ("1.1.1.1", False),
+        ("::1", False),
+        ("fe80::1", False),
+        ("fd00::1", False),
+        ("", False),
+        ("not-an-ip", False),
+        ("192.168.1.999", False),
+        (None, False),
+    ]
+    for address, expected in ipv4_cases:
+        assert module._lan_ipv4(address) is expected, address
+        assert discovery_txt._lan_ipv4(address) is expected, address
+
+    txt_cases = [
+        '"product=rosy" "role=fleet" "proto=site-v1" "tls=required"',
+        '"pair=rosy-pair/1=extra" "tls_host=fleet-a.local"',
+        '"product=rosy" "role=fleet" "role=robot" "proto=site-v1" "tls=required"',  # duplicate key
+        '"=empty_key" "empty_val=" "="',                                             # empty key / value
+        '"no_equals" "product=rosy" "bare_flag"',                                    # missing '='
+        '"unclosed=quote',                                                           # malformed shlex
+        "",
+    ]
+    for raw in txt_cases:
+        pairs_mdns = module.parse_txt_pairs(raw)
+        pairs_contract = discovery_txt.parse_txt_pairs(raw)
+        assert pairs_mdns == pairs_contract, raw
+        assert dict(pairs_mdns) == dict(pairs_contract), raw

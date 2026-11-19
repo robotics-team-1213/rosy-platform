@@ -1,6 +1,9 @@
 """Bounded observation aggregation across configured direct children only."""
 
 import asyncio
+import logging
+import socket
+import ssl
 import time
 
 import httpx
@@ -8,6 +11,34 @@ import httpx
 from core_common.protocol.integrated_control import (
     ControlMapSnapshot, ControlOverview, ControlUnitDetail, ControlUnitSummary,
 )
+from fleet.server.control_unit_config import canonical_unit_id
+
+log = logging.getLogger(__name__)
+MANIFEST_MISMATCH = "CONTROL_UNIT_MANIFEST_MISMATCH"
+
+
+def classify_peer_failure(exc):
+    """Short operator-facing reason for a failed peer refresh (walks the cause chain for dns/tls)."""
+    chain, seen = exc, set()
+    while chain is not None and id(chain) not in seen:
+        seen.add(id(chain))
+        if isinstance(chain, socket.gaierror):
+            return "dns"
+        if isinstance(chain, ssl.SSLError):
+            return "tls"
+        chain = chain.__cause__ or chain.__context__
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        return f"auth {code}" if code in (401, 403) else f"http {code}"
+    if isinstance(exc, (TimeoutError, httpx.TimeoutException)):
+        return "timeout"
+    if isinstance(exc, (httpx.TransportError, ConnectionError)):
+        return "connect"
+    if isinstance(exc, ValueError) and str(exc) == MANIFEST_MISMATCH:
+        return "manifest mismatch"
+    if isinstance(exc, ValueError):
+        return "scope mismatch" if str(exc).endswith("SCOPE_MISMATCH") else "invalid response"
+    return type(exc).__name__
 
 
 class ControlUnitCollection:
@@ -19,6 +50,7 @@ class ControlUnitCollection:
                                      if u.parent == config.unit_id))
         self.scope = self._subtree(config.unit_id)
         self.rows = {}
+        self.link_failure = {}  # child -> last logged failure reason; absent while the link is healthy
         self.lock = asyncio.Lock()
 
     def _subtree(self, root):
@@ -62,7 +94,8 @@ class ControlUnitCollection:
             rows.append(self._aged(*stored) if stored else
                         self._missing(unit_id, "CONTROL_UNIT_NOT_OBSERVED"))
         return ControlOverview(unit_id=self.unit.unit_id,
-                               config_revision=self.config.topology.revision, units=rows)
+                               config_revision=self.config.topology.revision,
+                               manifest_digest=self.config.topology.digest or None, units=rows)
 
     def _failed(self, scope, code):
         now = self.clock()
@@ -99,6 +132,11 @@ class ControlUnitCollection:
                            or r.robots_total != len(self._robots(r.unit_id))
                            for r in overview.units)):
                 raise ValueError("CONTROL_UNIT_INFORMATION_SCOPE_MISMATCH")
+            # Same revision string with a different manifest must not pass (an older peer sends no digest).
+            if overview.manifest_digest is not None and overview.manifest_digest != self.config.topology.digest:
+                raise ValueError(MANIFEST_MISMATCH)
+            if self.link_failure.pop(child, None) is not None:
+                log.info("control unit peer %s recovered", child)
             now = self.clock()
             for row in overview.units:
                 row = ControlUnitSummary(**(row.model_dump() | {
@@ -107,8 +145,13 @@ class ControlUnitCollection:
                 self.rows[row.unit_id] = row, now
         except asyncio.CancelledError:
             raise
-        except Exception:
-            self._failed(scope, "CONTROL_UNIT_PEER_INFORMATION_UNAVAILABLE")
+        except Exception as exc:
+            reason = classify_peer_failure(exc)
+            if self.link_failure.get(child) != reason:  # once per transition, not per poll
+                self.link_failure[child] = reason
+                log.warning("control unit peer %s unavailable: %s (%s)", child, reason, type(exc).__name__)
+            self._failed(scope, MANIFEST_MISMATCH if reason == "manifest mismatch"
+                         else "CONTROL_UNIT_PEER_INFORMATION_UNAVAILABLE")
 
     async def refresh(self):
         async with self.lock:
@@ -116,6 +159,7 @@ class ControlUnitCollection:
                                  *(self._refresh_child(child) for child in self.children))
 
     async def detail(self, unit_id):
+        unit_id = canonical_unit_id(unit_id)  # D-1011 alias
         if unit_id not in self.scope:
             raise ValueError("CONTROL_UNIT_OUTSIDE_SCOPE")
         if unit_id == self.unit.unit_id:
@@ -147,6 +191,7 @@ class ControlUnitCollection:
         return detail
 
     async def map(self, unit_id):
+        unit_id = canonical_unit_id(unit_id)  # D-1011 alias
         if unit_id not in self.scope:
             raise ValueError("CONTROL_UNIT_OUTSIDE_SCOPE")
         if unit_id == self.unit.unit_id:

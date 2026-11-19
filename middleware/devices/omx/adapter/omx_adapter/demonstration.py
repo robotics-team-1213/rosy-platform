@@ -23,6 +23,8 @@ ROBOT_TYPE = "omx_sim_ros"
 ACTION_SEMANTICS = "absolute_joint_position_target_rad"
 MAX_SKEW_NS = 50_000_000
 MAX_FRAMES = 3000
+_HEX40_RE = re.compile(r'[0-9a-f]{40}\Z')
+_HEX64_RE = re.compile(r'[0-9a-f]{64}\Z')
 #: Goal duration bounds: a jog is 0.1-1.0 s (OmxSimJog), a gripper goal up to 2.0 s (D-411 C).
 MIN_GOAL_DURATION_S = 0.1
 MAX_GOAL_DURATION_S = GRIPPER_GOAL_MAX_DURATION_S
@@ -40,9 +42,9 @@ def _provenance(source: dict) -> dict:
     value = json.loads(_json(source))
     if value.get("simulation") is not True or value.get("clock_domain") != "gazebo_sim":
         raise ValueError("explicit simulation and gazebo_sim clock provenance required")
-    for field, length in (("source_revision", 40), ("vendor_revision", 40),
-                          ("source_tree_sha256", 64), ("world_sha256", 64)):
-        if not re.fullmatch(rf"[0-9a-f]{{{length}}}", value.get(field, "")):
+    for field, pattern in (("source_revision", _HEX40_RE), ("vendor_revision", _HEX40_RE),
+                           ("source_tree_sha256", _HEX64_RE), ("world_sha256", _HEX64_RE)):
+        if not pattern.fullmatch(value.get(field, "")):
             raise ValueError(f"invalid {field}")
     for field in ("instance_id", "calibration_revision"):
         if not isinstance(value.get(field), str) or not value[field].strip():
@@ -62,7 +64,7 @@ def _provenance(source: dict) -> dict:
     camera = value.get("camera", {})
     if camera.get("name") != "front" or not camera.get("identity"):
         raise ValueError("explicit front camera identity required")
-    if not re.fullmatch(r"[0-9a-f]{64}", camera.get("camera_info_sha256", "")):
+    if not _HEX64_RE.fullmatch(camera.get("camera_info_sha256", "")):
         raise ValueError("camera calibration fingerprint required")
     if any(type(camera.get(k)) is not int or not 1 <= camera[k] <= 1920 for k in ("width", "height")):
         raise ValueError("invalid camera dimensions")
@@ -131,6 +133,8 @@ class DemonstrationRecorder:
         if any((p / '.git').exists() for p in (self.root, *self.root.parents)):
             raise ValueError("recording output belongs outside the source checkout")
         self.source = _provenance(provenance)
+        self._joint_names = tuple(self.source['joint_names'])
+        self._joint_name_set = frozenset(self._joint_names)
         self._lock = threading.RLock()
         self._manifest: dict | None = None
         self._path: Path | None = None
@@ -195,8 +199,8 @@ class DemonstrationRecorder:
             if self._frames >= MAX_FRAMES:
                 self.issue("frame_limit")
                 return
-            names = self.source["joint_names"]
-            if set(positions) != set(names) or set(target) != set(names):
+            names = self._joint_names
+            if set(positions) != self._joint_name_set or set(target) != self._joint_name_set:
                 self.issue("joint_map")
                 return
             row = {"capture_time_ns": capture_time_ns, "state_time_ns": state_time_ns,
@@ -273,11 +277,14 @@ def validate_episode(path: Path) -> dict:
     if manifest.get("task_outcome") not in {"success", "failure"} or not manifest.get("task", "").strip():
         raise ValueError("explicit task and operator outcome required")
     source = _provenance(manifest["provenance"])
+    samples_payload = None
     for file in ("samples", "events"):
         payload = (root / f"{file}.jsonl").read_bytes()
         if _sha(payload) != manifest.get(f"{file}_sha256"):
             raise ValueError(f"{file} hash mismatch")
-    samples = [json.loads(line) for line in (root / "samples.jsonl").read_text(encoding="utf-8").splitlines()]
+        if file == "samples":
+            samples_payload = payload
+    samples = [json.loads(line) for line in samples_payload.decode("utf-8").splitlines()]
     if not 2 <= len(samples) == manifest.get("frame_count") <= MAX_FRAMES:
         raise ValueError("sample count mismatch")
     previous = None

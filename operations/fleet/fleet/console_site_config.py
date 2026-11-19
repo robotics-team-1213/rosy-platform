@@ -23,6 +23,26 @@ def _account_login_config(args, site_logins, tasks_db):
     return account_config, account_client_config, human_login
 
 
+def _idle_days(args) -> float:
+    """D-1016: ``fleet.enrollment.idle_removal_days`` of ``--site-config`` (default 30 days).
+
+    The value is the idle threshold under which an enrolled robot is shown
+    ``removal_pending`` in the enrollment listing; it never unenrolls by itself."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        section = (site_config.get("fleet") or {}).get("enrollment")
+        days = 30 if not isinstance(section, dict) else section.get("idle_removal_days", 30)
+    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"enrollment config: {exc}")
+    if isinstance(days, bool) or not isinstance(days, (int, float)) or not 1 <= days <= 3650:
+        sys.exit("enrollment config: fleet.enrollment.idle_removal_days must be 1..3650")
+    return float(days) * 86400.0
+
+
 def _goal_lease_ttl_s(args) -> float:
     """D-550 10: ``fleet.goal_lease_ttl_s`` of ``--site-config``; 0 (default) = no goal lease.
     Otherwise floor..5 s: CORE takes at most 5 s; the floor is 2 x ``fleet.trip.port_timeout_s`` +

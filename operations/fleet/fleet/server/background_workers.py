@@ -22,8 +22,12 @@ def start_notification_worker(app, config):
     import httpx
     from fleet.incidents.notifications import NotificationWorker
     client = httpx.AsyncClient(trust_env=False)
-    task = asyncio.create_task(NotificationWorker(app.state.line_stuck._log.notifications, config, client,
-        board=app.state.line_stuck, snapshot=app.state.fleet_gather).run())
+    worker = NotificationWorker(
+        app.state.line_stuck._log.notifications, config, client,
+        board=app.state.line_stuck, snapshot=app.state.fleet_gather,
+        sink=getattr(config, "remote_sink", None))
+    app.state.notification_worker = worker
+    task = asyncio.create_task(worker.run())
     return client, task
 
 
@@ -72,6 +76,16 @@ async def charge_bays_loop(tick, logger, period_s: float = 1.0) -> None:
             await tick()
         except Exception:       # one bad tick must not end the watch
             logger.exception("charge bays tick failed")
+        await asyncio.sleep(period_s)
+
+
+async def auto_locate_loop(service, logger, period_s: float = 30.0) -> None:
+    """D-989 follow-up: open a locate session for listed robots Fleet cannot yet place."""
+    while True:
+        try:
+            service.auto_start()
+        except Exception:       # one bad pass must not end the watch
+            logger.exception("auto locate pass failed")
         await asyncio.sleep(period_s)
 
 
@@ -126,8 +140,10 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
             await asyncio.to_thread(task_service.scheduler.expire_queued)
             from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
             await reconcile_tasks(task_service, console)
-            snapshot = await console.snapshot()
-            console.prune_task_queue_entries(task_service.store.queued_task_ids())
+            queued_ids = await asyncio.to_thread(task_service.store.queued_task_ids)
+            console.prune_task_queue_entries(queued_ids)
+            # An empty queue skips the per-robot state read; dispatch_next still runs (drain gate).
+            snapshot = await console.snapshot() if queued_ids else {"robots": []}
             available = {
                 row["robot_id"] for row in snapshot["robots"]
                 if row["online"] and row["queued"] is None and row["goal"] is None

@@ -198,6 +198,13 @@ class OwnerPolicySession:
                 self.cancel_decision=self.owner.cancel(command_id=self._active_command,owner='learned_policy')
         raise PermissionError(self.hold_reason)
 
+    def hold(self,reason):
+        """Requested HOLD (Fleet window end, delivery loss): latches, cancels the active goal, never releases."""
+        text=reason if isinstance(reason,str) and reason.strip() else 'policy_hold_requested'
+        with self._lock:
+            try:self._fail('requested_hold:'+text.strip()[:96])
+            except PermissionError:pass
+
     def _now(self):
         value=self._clock()
         self._check_hold()

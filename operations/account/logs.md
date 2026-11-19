@@ -98,6 +98,23 @@
 - 증거: 문서 변경. 원격 결과는 착지 기록을 따른다.
 - Gate: 없음. CE: 해당 없음 — 문서 정정이다.
 
+## 2026-11-07 · uncommitted · feat(account): 연동 등록부 (D-955 2단계)
+
+- 변경: client 목록을 Account DB `account_clients`로 옮겼다. `accounts.manage`가 관리 화면과 API로 재시작 없이 등록·수정·정지한다. 보호 JSON은 빈 등록부에 한 번만 가져온다. 추출 이전은 등록부가 있으면 함께 옮긴다.
+- 증거: 원격 시험 결과는 착지 기록을 따른다. 실제 현장 Account의 등록부 전환은 확인하지 못했다.
+- Gate: 없음. CE: 해당 없음 — 결정된 단계의 구현이다.
+
+## 2026-11-07 · uncommitted · feat(account): 앱 목록 (D-955 4단계)
+
+- 변경: 등록부에서 그 사람이 권한을 가진 사용 중인 앱을 `/api/fleet/auth/apps`로 준다. 공용 세션 응답과 공용 계정 표시가 이를 앱 전환 메뉴로 보여 Robot·Pilot·Games·Monitoring·Learning·Fleet이 같은 목록을 읽는다.
+- 증거: 원격 시험 결과는 착지 기록을 따른다. 실제 현장 앱 사이 이동은 확인하지 못했다.
+- Gate: 없음. CE: 해당 없음 — 결정된 단계의 구현이다.
+
+## 2026-11-07 · uncommitted · feat(account): 장비 등록과 등록부 연결 (D-992)
+
+- 변경: Fleet 등록 키로 그 로봇 줄만 쓰는 `PUT /api/fleet/auth/device-clients/{robot_id}`를 더했다. 관리자의 정지는 재등록으로 풀리지 않는다.
+- 증거: 원격 시험 결과는 착지 기록을 따른다. 실물 로봇과 현장 Account의 전체 흐름은 확인하지 못했다.
+- Gate: 없음. CE: 해당 없음 — 결정된 단계의 구현이다.
 ## 2026-11-07 · uncommitted · 가입·권한 요청(D-993)
 
 - 변경: 권한 없는 사람이 청하는 요청 표 `rosy_access_requests`, 공개 입력 `POST /api/fleet/auth/access-requests`(same-origin·4 KiB·전체 200/주소 5건 대기 제한·존재 여부 비노출), 관리자 목록·승인·거절을 더했다. 승인은 `AccountLedger.create/mutate`에 `within`을 더해 계정 변경과 요청 마감·감사를 한 트랜잭션에 넣는다. 비밀번호는 요청 때 받지 않고 관리자가 임시 비밀번호를 정한다.

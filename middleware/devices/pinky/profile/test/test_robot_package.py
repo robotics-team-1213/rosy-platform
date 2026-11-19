@@ -21,4 +21,4 @@ def test_capabilities_match_the_profile_limits():
     assert caps["capability_version"] == 1
     assert caps["navigation"]["max_linear_velocity"] == profile["max_linear_velocity"]
     assert caps["navigation"]["max_angular_velocity"] == profile["max_angular_velocity"]
-    assert caps["docking"]["supported"] is False
+    assert caps["docking"]["supported"] is True    # D-1042 6: one-press bay docking (2026-11-18)

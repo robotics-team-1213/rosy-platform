@@ -125,3 +125,41 @@ def test_calibration_hovers_nine_offsets_fits_j_and_saves_a_band_per_arm(tmp_pat
     cal.save(path, "A", 20.0, 45, body, "arm_a_wrist")
     saved = __import__("json").loads(path.read_text())
     assert set(saved["arms"]) == {"S", "A"} and cw.band_for(saved, "S", -60) and cw.band_for(saved, "A", -60) is None
+
+
+def test_wrist_hook_and_ref_hook_update_target_pick_without_compounding(tmp_path):
+    import json
+    import cell_wrist_ref as cwr
+
+    cal_path = tmp_path / "cal.json"
+    cal_path.write_text(json.dumps({"schema": cw.SCHEMA, "arms": {"arm_b": {"bands": [BAND]}}}))
+    target = {
+        "pick": {"x": 0.100, "y": -0.050, "z": 0.010, "yaw_deg": -90.0},
+        "place": {"x": 0.150, "y": 0.0, "z": 0.020, "yaw_deg": -90.0},
+        "entry": {"length_mm": 60.0, "width_mm": 30.0},
+    }
+    cfg = {
+        "arm_id": "arm_b",
+        "params": {"wrist.enabled": 1, "wrist.ref_servo": 1, "reach.samples": 3},
+        "wrist": {"cal_path": str(cal_path), "hsv_min": HSV[0], "hsv_max": HSV[1], "camera": "wrist"},
+        "work_dir": str(tmp_path),
+    }
+    # 1. cell_wrist.hook updates target["pick"] relative to entry target["pick"]
+    cell = Cell([frame(340, 220)] * 3 + [frame()] * 3)
+    w_hook = cw.hook(cfg, cell, target, lambda _c, p, _pl, path: path)
+    target["pick"] = dict(target["pick"], x=0.110)  # upstream reach/look shift before wrist runs
+    out = w_hook()
+    assert out["verdict"] == "pass"
+    assert target["pick"]["x"] == pytest.approx(0.110 + out["dx_mm"] / 1000.0, abs=1e-4)
+    assert target["pick"]["y"] == pytest.approx(-0.050 + out["dy_mm"] / 1000.0, abs=1e-4)
+
+    # 2. cell_wrist_ref.ref_hook multi-samples _median_blob and updates target["pick"]
+    ref_file = cwr.ref_path(tmp_path, "arm_b")
+    ref_file.write_text(json.dumps({"u": 320.0, "v": 240.0, "area": 7200, "scale_mm": 120.0, "footprint_mm2": 1800.0, "J": [[2.0, 0.0], [0.0, -2.0]]}))
+    cell_ref = Cell([frame(310, 240)] * 3 + [frame(320, 240)] * 6)
+    r_hook = cwr.ref_hook(cfg, cell_ref, target, lambda _c, p, _pl, path: path, "pallet")
+    prev_x = target["pick"]["x"]
+    r_out = r_hook()
+    assert r_out["verdict"] == "pass"
+    assert target["pick"]["x"] == pytest.approx(prev_x + r_out["dx_mm"] / 1000.0, abs=1e-4)
+

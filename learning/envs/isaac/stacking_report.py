@@ -19,9 +19,12 @@ def read_regular(path, limit=1024*1024, *, allow_empty=False):
         return stream.read(limit+1)
 
 
-def verify_report(path, *, sdk_version, seed, mapped=False):
+def verify_report(path, *, sdk_version, seed, mapped=False, container=None):
     expected = FIXTURE
-    if mapped:
+    if container is not None:
+        from container_rl_fixture import fixture as container_rl_fixture
+        expected = container_rl_fixture(layers=container['layers'], case=container['case'])
+    elif mapped:
         from mapped_stack_fixture import RL_FIXTURE
         expected = RL_FIXTURE
     path = Path(path)
@@ -29,7 +32,7 @@ def verify_report(path, *, sdk_version, seed, mapped=False):
     displacement = value.get('belt_displacement_m', [])
     if (not isinstance(displacement, list) or len(displacement) != 3
             or not all(type(v) in (int, float) and math.isfinite(v) for v in displacement)
-            or not .005 < displacement[1] < .04 or abs(displacement[0]) > .01 or abs(displacement[2]) > .01):
+            or not _belt_observed(displacement, expected)):
         raise ValueError('Moving-belt contact transport was not observed')
     if (value.get('schema') != 'rosy.omx-stacking-rl/1' or value.get('fixture') != json.loads(json.dumps(expected))
             or value.get('sdk_version') != sdk_version or value.get('seed') != seed
@@ -55,3 +58,16 @@ def verify_report(path, *, sdk_version, seed, mapped=False):
     if checkpoint.get('bytes') != len(raw) or checkpoint.get('sha256') != hashlib.sha256(raw).hexdigest():
         raise ValueError('Stacking checkpoint fingerprint differs')
     return value
+
+
+def _belt_observed(displacement, fixture):
+    velocity = fixture.get('belt_velocity_m_s')
+    if velocity is None:
+        return .005 < displacement[1] < .04 and abs(displacement[0]) <= .01 and abs(displacement[2]) <= .01
+    magnitude = math.sqrt(sum(v*v for v in velocity))
+    if magnitude <= 0:
+        return False
+    direction = [v/magnitude for v in velocity]
+    travel = sum(a*b for a, b in zip(displacement, direction))
+    residual = math.sqrt(sum((a-travel*b)**2 for a, b in zip(displacement, direction)))
+    return .005 < travel < .04 and residual <= .005

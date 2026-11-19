@@ -279,3 +279,28 @@ def test_a_refused_blink_ends_the_window_with_the_robot_s_reason():
     assert identity.snapshot()["robots"][1]["last"]["lamp_reason"] == "CAUTION_ACTIVE"
     asyncio.run(identity.poll_lamps())                        # old CORE: asked once, window untouched
     assert identity._pending["rosy_26"].lamp == "unsupported"
+
+
+def test_matched_verdict_stores_finite_yaw_and_plain_continuation_clears_it():
+    clock, tracking, identity, _ = _setup()
+    _moving(tracking, clock, "rosy_60")
+    started = asyncio.run(identity.request("rosy_60"))
+    clock.now += 6.2
+    _detections(tracking, clock, (1.05, 1.0))
+    assert _verdict(identity, started["request_id"], yaw=0.45)["state"] == "CONFIRMED"
+    assert identity.confirmed_track_pose("rosy_60")["yaw"] == pytest.approx(0.45)
+
+    clock.now += 0.3
+    _detections(tracking, clock, (1.10, 1.0))
+    assert identity.confirmed_track_pose("rosy_60")["yaw"] is None
+
+
+@pytest.mark.parametrize("bad_yaw", [float("nan"), float("inf"), True])
+def test_matched_verdict_ignores_non_finite_or_bool_yaw(bad_yaw):
+    clock, tracking, identity, _ = _setup()
+    _moving(tracking, clock, "rosy_60")
+    started = asyncio.run(identity.request("rosy_60"))
+    clock.now += 6.2
+    _detections(tracking, clock, (1.05, 1.0))
+    assert _verdict(identity, started["request_id"], yaw=bad_yaw)["state"] == "CONFIRMED"
+    assert identity.confirmed_track_pose("rosy_60")["yaw"] is None

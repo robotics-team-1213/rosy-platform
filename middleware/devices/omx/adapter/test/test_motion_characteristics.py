@@ -99,3 +99,58 @@ def test_atomic_write_failure_preserves_previous_profile(tmp_path, monkeypatch):
         save_characteristics(path, changed)
     assert json.loads(path.read_text()) == p
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_characteristics_and_hardware_profile_helper_parity():
+    from omx_adapter import policy_parent
+    from omx_adapter.contracts import hardware_profile
+    from rosy.contracts.learning import fleet_export
+    from rosy.contracts.motion import characteristics as motion_characteristics
+
+    valid_map = {'a': 1, 'b': 2}
+    assert motion_characteristics._fields(valid_map, 'a b', 'lbl') == hardware_profile._fields(valid_map, 'a b', 'lbl')
+    for bad_map in ([1, 2], {'a': 1}, {'a': 1, 'b': 2, 'c': 3}):
+        with pytest.raises(ValueError) as exc_mc:
+            motion_characteristics._fields(bad_map, 'a b', 'lbl')
+        with pytest.raises(ValueError) as exc_hp:
+            hardware_profile._fields(bad_map, 'a b', 'lbl')
+        assert str(exc_mc.value) == str(exc_hp.value)
+
+    for num, pos in ((0, False), (-1.5, False), (2.5, True), (1, True)):
+        assert motion_characteristics._number(num, 'lbl', positive=pos) == hardware_profile._number(
+            num, 'lbl', positive=pos,
+        )
+    for bad_num, pos in (
+        (True, False), (False, False), ('1', False), (float('nan'), False),
+        (float('inf'), False), (10 ** 400, False), (0, True), (-0.1, True),
+    ):
+        with pytest.raises(ValueError) as exc_mc:
+            motion_characteristics._number(bad_num, 'lbl', positive=pos)
+        with pytest.raises(ValueError) as exc_hp:
+            hardware_profile._number(bad_num, 'lbl', positive=pos)
+        assert str(exc_mc.value) == str(exc_hp.value)
+
+    assert motion_characteristics._vector([1, 2.5, -3], 3, 'vec') == hardware_profile._vector([1, 2.5, -3], 3, 'vec')
+    for bad_vec in ((1, 2, 3), [1, 2], [1, 2, 3, 4], [1, True, 3], [1, float('nan'), 3]):
+        with pytest.raises(ValueError) as exc_mc:
+            motion_characteristics._vector(bad_vec, 3, 'vec')
+        with pytest.raises(ValueError) as exc_hp:
+            hardware_profile._vector(bad_vec, 3, 'vec')
+        assert str(exc_mc.value) == str(exc_hp.value)
+
+    assert motion_characteristics._range([-1.0, 2.0], 'rng') == hardware_profile._range([-1.0, 2.0], 'rng')
+    for bad_rng in ([1.0, 1.0], [2.0, -1.0], [1.0], [1.0, 2.0, 3.0]):
+        with pytest.raises(ValueError) as exc_mc:
+            motion_characteristics._range(bad_rng, 'rng')
+        with pytest.raises(ValueError) as exc_hp:
+            hardware_profile._range(bad_rng, 'rng')
+        assert str(exc_mc.value) == str(exc_hp.value)
+
+    sample = {'z': [1, 2, {'b': 'x', 'a': 'y'}], 'a': True}
+    assert fleet_export.encoded(sample) == policy_parent.encoded(sample) == b'{"a":true,"z":[1,2,{"a":"y","b":"x"}]}'
+    for non_finite in (float('nan'), float('inf'), float('-inf')):
+        with pytest.raises(ValueError):
+            fleet_export.encoded({'v': non_finite})
+        with pytest.raises(ValueError):
+            policy_parent.encoded({'v': non_finite})
+

@@ -69,7 +69,7 @@ def side_by_side(before, after, labels=("before", "after"), gain: float | None =
             g = min(3.0, max(1.0, 110.0 / max(mean, 1.0)))
         else:
             g = gain
-        shown = np.clip(img.astype(np.float32) * g, 0, 255).astype(np.uint8)
+        shown = img.copy() if g == 1.0 else cv2.convertScaleAbs(img, alpha=g, beta=0)
         cv2.putText(shown, text, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         frames.append(shown)
     return np.hstack(frames)

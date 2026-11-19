@@ -8,7 +8,7 @@ from test_learning_accounts import accounts, sign_in
 @pytest.mark.parametrize('failure, expected', [('denied', 'account_callback_failed'),
                                               ('offline', 'account_unavailable'),
                                               ('malformed', 'account_callback_failed')])
-def test_callback_failure_returns_to_account_recovery_without_credentials(failure, expected):
+def test_callback_failure_returns_to_account_recovery_without_credentials(failure, expected, caplog):
     from core_common.protocol.account_client import AccountDenied, AccountUnavailable
     from learning_collaboration import Collaboration
     def finish(*args):
@@ -29,6 +29,9 @@ def test_callback_failure_returns_to_account_recovery_without_credentials(failur
     assert any(name == 'Set-Cookie' and value.startswith('rosy_account_flow_fixture=')
                and 'Max-Age=0' in value for name, value in handler.extra_headers)
     assert 'credential' not in repr(sent) + repr(handler.extra_headers)
+    # The refusal reason is logged (11-13 clock skew was invisible); the code never is.
+    assert ('callback refused: AccountDenied' in caplog.text) == (failure == 'denied')
+    assert 'secret' not in caplog.text
 
 
 def test_central_subject_preserves_owner_and_rechecks_grants(accounts):
@@ -96,7 +99,8 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
         aud='project:one',permits=lambda *args:True) for name in ['alice','bob']}
     receiver = SimpleNamespace(resource='project:one',resolve_session_id=records.get,retry_revocations=lambda:None,
         profile_url='https://account.test/console/profile',
-        profile_session_id=lambda sid: {'account_id':records[sid].sub,'login':'member','display_name':'Member'})
+        profile_session_id=lambda sid: {'account_id':records[sid].sub,'login':'member','display_name':'Member'},
+        apps_session_id=lambda sid: [])
     managed = RosyAccounts(accounts.db_path,accounts.key_path,config,receiver=receiver)
     request = partial(legacy_request, cookie_name='rosy_learning_session_' + sha256(b'one\0').hexdigest()[:24])
     (tmp_path/'workspace').mkdir()
@@ -129,7 +133,8 @@ def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
     from review_app import make_server
     record = SimpleNamespace(sub='central-carol', aud='project:one', permits=lambda resource, cap: cap == 'learning.view')
     receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record, retry_revocations=lambda: None,
-        profile_url='https://account.test/console/profile', profile_session_id=lambda sid: None)
+        profile_url='https://account.test/console/profile', profile_session_id=lambda sid: None,
+        apps_session_id=lambda sid: [])
     config = accounts.config()
     config['users'] = []
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)

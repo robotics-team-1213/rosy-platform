@@ -30,7 +30,8 @@ import worktrees  # noqa: E402  (lossless status, including ignored user data)
 
 HOLDER, QUEUE, PREFIX = "rosy-land-wt", "rosy-land-queue", "land/"
 QUIET_S = 3600  # the 1 h wait worktree_rules gives landed worktrees
-FILES = (".stopped", ".land_async.py", ".resume.log", ".args.json")
+MAIN_RED_DAYS = 14  # a MAIN-RED stop's snapshot waits this long for main to clear (worktree_rules.ABANDON_DAYS)
+FILES = (".stopped", ".land_async.py", ".resume.log", ".args.json", ".auto-resume")
 SNAPSHOT = re.compile(r"-\d{14}(-batch\d+-k\d+)?$")  # land_async.snapshot_name, plus land_batch's batch branches
 
 
@@ -77,11 +78,25 @@ def live(common: Path) -> tuple[set[str], set[str]]:
     return branches - {""}, trees
 
 
+def rollup_members(holder: Path, now: float) -> set[str]:
+    """Hidden trees of members a recent rollup recorded: a split or re-rolled rollup resumes them from these trees."""
+    kept = set()
+    for path in holder.glob("*.members") if holder.is_dir() else ():
+        if now - path.stat().st_mtime > 86400:
+            continue
+        try:
+            kept |= {Path(m["worktree"]).name for m in json.loads(path.read_text(encoding="utf-8"))}
+        except (OSError, ValueError, KeyError, TypeError):
+            continue  # unreadable metadata names nothing; the commit checks below still protect unlanded work
+    return kept
+
+
 def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) -> Plan:
     """(action, reason, hidden tree or None, branches) per leftover; action is remove, keep or log."""
     common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     holder = common / HOLDER
     names, trees = live(common)
+    members = rollup_members(holder, now)
     listing = git(repo, "worktree", "list", "--porcelain")
     registered = {str(Path(line[9:]).resolve()) for line in listing.splitlines()
                   if line.startswith("worktree ")}
@@ -105,11 +120,28 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
         if any(b in names for b in branches) or str(tree.resolve()) in trees:
             out.append(("keep", "live ticket", tree if tree.is_dir() else None, branches))
             continue
+        if name in members:
+            out.append(("keep", "member of a recent rollup", tree if tree.is_dir() else None, branches))
+            continue
+        if name in members:
+            out.append(("keep", "member of a recent rollup", tree if tree.is_dir() else None, branches))
+            continue
         if land_async.running(tree):
             out.append(("keep", "live supervisor", tree if tree.is_dir() else None, branches))
             continue
-        if log.exists() and now - log.stat().st_mtime < QUIET_S:
+        # its branch may hold every commit, but the snapshot is what land_async.orphans resumes once main clears
+        if ((holder / f"{name}.stopped").exists() and log.exists() and now - log.stat().st_mtime < MAIN_RED_DAYS * 86400
+                and land_async.main_red_stop(holder, name)):
+            out.append(("keep", "stopped on MAIN-RED; resumes itself", tree if tree.is_dir() else None, branches))
+            continue
+        # .resume.log too: a resumed landing drops .stopped before its supervisor holds the lock
+        recent = [p.stat().st_mtime for p in (log, holder / f"{name}.resume.log") if p.exists()]
+        if recent and now - max(recent) < QUIET_S:
             out.append(("keep", "log written in the last hour", tree if tree.is_dir() else None, branches))
+            continue
+        if (name.startswith("rollup-build-") and tree.is_dir()
+                and ((holder.parent / "rosy-land-rollup.lock").exists() and now - tree.stat().st_mtime < 900)):
+            out.append(("keep", "rollup build active", tree, branches))
             continue
         if tree.is_dir() and (tree.is_symlink() or str(tree.resolve()) not in registered):
             out.append(("keep", "unregistered directory", tree, branches))
@@ -126,6 +158,8 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
             src = source(branches[0])
             if src in heads_all:
                 covers.append(f"^refs/heads/{src}")
+            # worktree_rules.archive_abandoned keeps an idle source branch here; it still covers its snapshot
+            covers += ["^" + r for r in git(repo, "for-each-ref", "--format=%(refname)", f"refs/archive/{src}@*").split()]
             for newer, more in by_name.items():
                 if newer > name and source(more[0]) == src:
                     covers += [f"^refs/heads/{b}" for b in more]
@@ -157,6 +191,14 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
                     and now - log.stat().st_mtime > log_days * 86400):
                 out.append(("log", f"older than {log_days:g} days", None, [str(log)]))
                 out.states[(None, (str(log),))] = log.stat()
+    if holder.is_dir():  # 2026-11-18: 2,187 locks of gone trees piled up; the lock is only a lease, a new run recreates it
+        for lock in holder.glob("*.supervisor.lock"):
+            stem = lock.name[:-len(".supervisor.lock")]
+            if (only is not None and stem != only) or (holder / stem).exists() or str((holder / stem).resolve()) in trees:
+                continue
+            if (not any(b.replace("/", "-").split("-batch")[0] == stem for b in names)
+                    and now - lock.stat().st_mtime > QUIET_S):
+                out.append(("lock", "supervisor lock of a gone tree", None, [str(lock)]))
     scratch = land_checks.tmp_root()  # a landing's local logs, kept like its .log, then removed
     # only the default root: a ROSY_LAND_TMP pointing at a shared folder is not ours to sweep
     owned = scratch.name == "rosy-land" and scratch.is_dir()
@@ -185,10 +227,20 @@ def apply(repo: Path, rows) -> list[str]:
         return ["removal requires an unchanged plan from this process"]
     for row in rows:
         action, _, tree, items = row
-        if action not in ("remove", "log", "tmp"):
+        if action not in ("remove", "log", "tmp", "lock"):
             continue
         key = (tree, tuple(items))
         try:
+            if action == "lock":  # kept while any process holds it; closed again before the unlink (Windows)
+                path = Path(items[0])
+                if not (holder / path.name.removesuffix(".supervisor.lock")).exists():
+                    try:
+                        with land_async.locked(path):
+                            pass
+                    except land_async.Busy:
+                        continue  # held: not a problem, just not stale
+                    path.unlink(missing_ok=True)
+                continue
             name = tree.name if tree else Path(items[0]).name.removesuffix(".resume.log").removesuffix(".log")
             fresh = plan(repo, time.time(), rows.log_days, only=name)
             if row not in fresh or rows.states[key] != fresh.states.get(key):
@@ -213,6 +265,23 @@ def apply(repo: Path, rows) -> list[str]:
     return problems
 
 
+def superseded(repo: Path, snap: str) -> list[str]:
+    """Remove the older snapshots of ``snap``'s branch that nothing unique holds (this one covers them); the names
+    removed. 2026-11-08: 149 superseded snapshots (22 GB) waited for a person."""
+    src = source(snap)
+    older = {ref.split("-batch")[0].replace("/", "-") for ref in git(
+        repo, "for-each-ref", "--format=%(refname:short)", f"refs/heads/{land_async.PREFIX}{src}-*").splitlines()
+        if SNAPSHOT.search(ref) and source(ref) == src and ref < snap}
+    gone = []
+    for name in sorted(older):
+        rows = plan(repo, time.time(), 7, only=name)
+        if any(row[0] == "remove" for row in rows) and not apply(repo, rows):
+            gone.append(name)
+    if gone:
+        print(f"[land-async] removed superseded snapshots of {src}: {gone}", flush=True)
+    return gone
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="remove; without it only print the plan")
@@ -232,7 +301,7 @@ def main(argv=None) -> int:
     for key, n in sorted(counts.items()):
         print(f"[land-gc] {n:4d} {key}")
     if not args.apply:
-        print("[land-gc] dry run; --apply removes the 'remove', 'log' and 'tmp' rows")
+        print("[land-gc] dry run; --apply removes the 'remove', 'log', 'lock' and 'tmp' rows")
         return 0
     problems = apply(repo, rows)
     for line in problems:

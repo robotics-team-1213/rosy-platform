@@ -45,7 +45,7 @@ def target(config: dict, site: str, xy, yaw_deg=None, place=False) -> dict:
 
 
 STEP_KEYS = ("ok", "error", "holding", "gripper_current_ma", "settled", "fault", "contact", "state", "target", "t",
-             "paced_ticks")
+             "paced_ticks", "sway", "speed_low")
 
 
 def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, before_motion=None) -> dict:
@@ -78,8 +78,8 @@ def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, 
         if command == f"load {library}" and status.get("library_sha256") != assessment["library_sha256"]:
             return {"result": "held", "at": command, "steps": steps,
                     "envelope": {**assessment, "allowed": False, "reason": "library_changed"}}
-        if status.get("contact"):  # the runner held with torque on: back up the same path, fold home
-            for after in ("retreat", "park"):
+        if status.get("contact"):  # the runner held with torque on: back up the same path (unless shedding), fold home
+            for after in (() if "overload-hold" in (status.get("error") or "") else ("retreat",)) + ("park",):
                 steps.append({"command": after, "ok": act(after).get("ok")})
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"),
                     "envelope": assessment}
@@ -94,7 +94,7 @@ def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, 
                 act("park")
                 return {"result": "misaligned", "at": command, "hover": seen, "steps": steps,
                         "envelope": assessment}
-        if command == "run grasp_pick" and not status.get("holding"):
+        if command == "run grasp_pick" and not (status.get("holding") or __import__("cell_arm_cal").infer_holding(status)):
             for after in ("run lift_pick", "park"):
                 steps.append({"command": after, "ok": act(after).get("ok")})
             return {"result": "empty", "at": command, "hover": seen, "steps": steps, "envelope": assessment}
@@ -103,8 +103,7 @@ def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, 
 
 def verify(cell, config: dict, site: str, calibration: dict | None = None, intended=None) -> dict:
     """Did the box land where it was put? With a fine map for `site`: the located box against the intended
-    arm point (verify_tol_mm). With only a coarse map or none, the arm's own placement is trusted once the
-    grasp held: a pixel zone drawn for another plan would refuse a correct placement (2026-10-25)."""
+    arm point (verify_tol_mm). Without that map, a visible box cannot establish its target position."""
     from cell_envelope import verification_tolerance
 
     tolerance = verification_tolerance(config)
@@ -113,264 +112,32 @@ def verify(cell, config: dict, site: str, calibration: dict | None = None, inten
         found = locate(cell, config, calibration, site)
         if not found["found"]:
             return {"found": False, "inside": False}
+        map_error = map_check(config, found, calibration)
+        if map_error:
+            return {"found": True, "inside": False, "verified": False,
+                    "basis": f"unverified: {map_error}"}
         off = 1000 * math.dist(found["arm_m"], intended)
         return {"found": True, "inside": off <= tolerance, "off_mm": round(off, 1),
-                "arm_m": found["arm_m"], "basis": "fine map"}
+                "arm_m": found["arm_m"], "basis": "fine map", "verified": True}
     box = see(cell.frame("top"), config["profiles"]["top"], site)
-    return {**{k: box.get(k) for k in ("found", "cx", "cy")}, "inside": bool(box.get("found")),
-            "basis": "arm placement"}
+    commissioning = bool(config.get("_commissioning"))
+    return {**{k: box.get(k) for k in ("found", "cx", "cy")},
+            "inside": bool(box.get("found")) and commissioning,
+            "verified": False,
+            "basis": "commissioning placement only" if commissioning else "unverified: fine map required"}
 
 
-def calibrate(cell, config: dict, site: str, work: Path, log=print, calibration: dict | None = None) -> dict:
-    """Carry the box from the start through grid points on `site`; return the fitted records. Points whose
-    box would not sit on the flat zone are skipped before the arm goes there."""
-    if config.get("_commissioning") != {"person_at_switch": True}:
-        return {"result": "held: supervised commissioning required"}
-    calibration = calibration or {"sites": {}}
-    import cell_perception as cp
-
-    s = config["sites"][site]
-    start = (s["start"][0], s["start"][1])
-    measured = {camera: [] for camera in fixed_cameras(config)}
-    hovers = []
-
-    def measure(point):
-        seen = {}
-        for camera in measured:
-            box = see(cell.frame(camera), config["profiles"][camera], site)
-            if box.get("found"):
-                measured[camera].append(((box["cx"], box["cy"]), point))
-            seen[camera] = {k: box.get(k) for k in ("found", "cx", "cy", "yaw")}
-        log({"measure": point, "seen": seen})
-        return any(v["found"] for v in seen.values())
-
-    def hover():  # above a box placed at a known point: what aligned looks like in the wrist view
-        box = cp.wrist_box(cell.frame("wrist"), config["profiles"]["top"])
-        if box.get("found"):
-            hovers.append((box["cx"], box["cy"], box["area"]))
-        return {"aligned": None}
-
-    if not measure(start):
-        return {"result": "box not seen at the start point"}
-    current, results = start, []
-    for i, point in enumerate(grid_points(config, calibration, site)):
-        if point == current:
-            continue
-        if on_flat(config, calibration, site, point) is False:
-            results.append({"point": point, "skipped": "the box would not sit on the flat zone"})
-            continue
-        try:
-            library = write_library(config, target(config, site, current), target(config, site, point, place=True),
-                                    work / f"calibrate-{site}-{i}.json")
-        except SystemExit as exc:  # IK refused this grid point: skip it, keep the box where it is
-            results.append({"point": point, "skipped": str(exc)[:160]})
-            continue
-        moved = transfer(cell, library, hover, config=config, calibration=calibration)
-        results.append({"point": point, "transfer": moved["result"], "at": moved.get("at")})
-        if moved["result"] != "placed":
-            return {"result": "stopped", "transfers": results}
-        current = point
-        measure(point)
-    when = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    records = {record_key(site, camera): cal.site_record(points, when)
-               for camera, points in measured.items() if len(points) >= cal.MIN_POINTS}
-    if not records:
-        return {"result": "too few measured points", "transfers": results}
-    top = records.get(record_key(site, "top"))
-    if hovers and top is not None:
-        xs, ys, areas = zip(*hovers)
-        spread = max(15.0, 3 * max(float(np.std(xs)), float(np.std(ys))))
-        top["wrist"] = {"cx": round(float(np.mean(xs)), 1), "cy": round(float(np.mean(ys)), 1),
-                        "area": int(np.mean(areas)), "spread_px": round(spread, 1), "samples": len(hovers)}
-    return {"result": "calibrated", "records": records, "transfers": results}
-
-
-def scene(config: dict, source: str, dest: str, tried: dict) -> dict | None:
-    """What a simulator needs to replay this attempt (cell_cases.from_row): box, jaw turn, place, outcome."""
-    found, transfer = tried["locate"], tried.get("transfer") or {}
-    if not found.get("found") or "grasp_yaw" not in tried or "transfer" not in tried:  # nothing moved: nothing to replay
-        return None
-    place = config["sites"][dest]["place"]
-    return {"box_m": found["arm_m"], "box_turn_deg": found.get("turn_deg", 0.0),
-            "grasp_turn_deg": round(tried["grasp_yaw"]["yaw_deg"] - config["sites"][source]["yaw_deg"], 1),
-            "place": "belt" if dest == "belt" else place, "outcome": transfer.get("result"), "at": transfer.get("at")}
-
-
-def grip_to(cell, value: float, timeout_s: float = 10.0, sleep=time.sleep, clock=time.monotonic) -> bool:
-    """`grip` only sets the target; the guard moves the jaws at 10 deg/s. Wait until they are there, or
-    until they stop short and stay (their mechanical end: on arm S the follower jaws stop at 48.5 while
-    the taught closed value is 46.6, 2026-10-25)."""
-    if not cell.act(f"grip {value}").get("ok"):
-        return False
-    deadline, last, still_since = clock() + timeout_s, None, None
-    while clock() < deadline:
-        state = cell.act("state").get("state")
-        if state:
-            now, jaw = clock(), state[5]
-            if abs(jaw - value) < 1.5:
-                return True
-            still_since = (still_since or now) if last is not None and abs(jaw - last) < 0.2 else None
-            if still_since is not None and now - still_since >= 1.0:
-                return True
-            last = jaw
-        sleep(0.3)
-    return False
-
-
-def coarse_map(cell, config: dict, site: str, work: Path, choices, log=print, around=None) -> dict:
-    """A first map before any box has been carried: the empty jaws visit known arm points high above the
-    surface; at each, the top camera sees only the fingers change when they open, which marks the jaws.
-    The fit is for the viewing height; locate() shifts a box pixel to that height by parallax."""
-    if config.get("_commissioning") != {"person_at_switch": True}:
-        return {"result": "held: supervised commissioning required"}
-    c, s = config["coarse"], config["sites"][site]  # the top camera marks the jaws
-    points = c["points"]
-    if around is not None:  # a re-map: the 8 points of a 3 x 3 grid around the box seen, never right above it
-        points = cal.grid(around, c.get("local_spacing_m", 0.03), 3)
-        points.pop(4)
-    closed_name = "gripper.closed@follower"
-    choices.offer(closed_name, float(config["plan"]["grip_closed"]), "taught: plan grip_closed (leader units)")
-    choices.offer(closed_name, float(c["grip_closed"]), "config: coarse grip_closed")
-    grip_closed = choices.best(closed_name)
-    marks = []
-    for i, (x, y) in enumerate(points):
-        view = {"x": x, "y": y, "z": round(c["z_view"] - config["plan"]["approach_m"], 4), "yaw_deg": s["yaw_deg"]}
-        try:
-            library = write_library(config, view, view, work / f"coarse-{site}-{i}.json")
-        except SystemExit as exc:
-            log({"coarse": [x, y], "skipped": str(exc)[:120]})
-            continue
-        for command in (f"load {library}", "goto above_pick"):
-            status = cell.act(command)
-            if not status.get("ok"):
-                return {"result": "stopped", "at": command, "error": status.get("error"), "fault": status.get("fault")}
-        if not grip_to(cell, grip_closed):
-            return {"result": "stopped", "at": "grip closed"}
-        jaw = (cell.act("state").get("state") or [None] * 6)[5]
-        if jaw is not None and abs(jaw - grip_closed) >= 1.0:  # the jaws end short of the asked value
-            choices.offer(closed_name, round(jaw, 1), "measured: where the follower jaws stopped")
-            choices.outcome(closed_name, grip_closed, False, f"asked {grip_closed}, jaws stopped at {jaw:.1f}")
-            choices.outcome(closed_name, round(jaw, 1), True, "the jaws' own end")
-            grip_closed = round(jaw, 1)
-        closed = cell.frame("top")
-        keep(f"coarse-{i}-closed", closed)
-        if not grip_to(cell, c["grip_open"]):
-            return {"result": "stopped", "at": "grip open"}
-        opened = cell.frame("top")
-        keep(f"coarse-{i}-open", opened)
-        jaws = cal.jaw_pixel(closed, opened)
-        log({"coarse": [x, y], "jaws": jaws})
-        if jaws is not None:
-            marks.append((jaws, (x, y)))
-    cell.act("park")
-    if len(marks) < 4:
-        return {"result": f"jaws seen at {len(marks)} points, need 4"}
-    return {"result": "mapped", "record": {"homography": cal.fit(marks).round(9).tolist(), "z_view": c["z_view"],
-            "coarse": True, "loo_error_mm": cal.loo_error_mm(marks) if len(marks) >= 5 else None,
-            "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks]}}
-
-
-def start_reference(config: dict, site: str, choices) -> list:
-    """Where the start looks in the top view for the top-down plan: the candidate with the best record.
-    The taught reference is one candidate (it belongs to the taught replay); a pixel measured right after
-    the arm itself put the box at the start is another."""
-    taught = config["profiles"]["top"]["reference"]["top"]
-    name = f"{site}.start_pixel@topdown"
-    choices.offer(name, [taught["cx"], taught["cy"]], "taught: profile reference.top")
-    return choices.best(name)
-
-
-def at_start(cell, config: dict, site: str, choices) -> dict:
-    box = see(cell.frame("top"), config["profiles"]["top"], site)
-    ref, tol = start_reference(config, site, choices), config["profiles"]["top"]["tolerance"]["box_px"]
-    ok = bool(box.get("found")) and math.dist((box["cx"], box["cy"]), ref) <= tol
-    return {"ok": ok, "box": {k: box.get(k) for k in ("found", "cx", "cy", "yaw")}, "reference": ref}
-
-
-def reset(cell, config: dict, calibration: dict, site: str, work: Path, choices, seat=None, log=print,
-          person_at_switch: bool = False) -> dict:
-    """Put the box back where calibration and cycle A start, wherever it is on `site`, without a person:
-    with a map, a normal move; without one, a coarse jaw map first. After the arm itself put the box at the
-    start, the pixel it shows is a measured start candidate, and every candidate gets that outcome."""
-    if at_start(cell, config, site, choices)["ok"]:
-        return {"result": "placed", "already": True}
-    made = {}
-    if not maps(calibration, site, "top"):
-        coarse = coarse_map(cell, config, site, work, choices, log)
-        if coarse["result"] != "mapped":
-            choices.save()
-            return {"result": "stopped", "coarse": coarse}
-        made = {f"{site}~coarse": coarse["record"]}
-        calibration = dict(calibration, sites=dict(calibration["sites"], **made))
-    moved = move(cell, config, calibration, site, site, work, seat, choices=choices, person_at_switch=person_at_switch)
-    if moved["result"] == "placed":
-        box = see(cell.frame("top"), config["profiles"]["top"], site)
-        if box.get("found"):
-            name, seen = f"{site}.start_pixel@topdown", [round(box["cx"], 1), round(box["cy"], 1)]
-            tol = config["profiles"]["top"]["tolerance"]["box_px"]
-            for candidate in choices.data["values"].get(name, []):
-                choices.outcome(name, candidate["value"], math.dist(candidate["value"], seen) <= tol,
-                                f"arm placed the box at the start; seen at {seen}")
-            choices.offer(name, seen, "measured: the arm placed the box at the start")
-            choices.outcome(name, seen, True, "measured right after the arm placed it")
-    choices.save()
-    check = at_start(cell, config, site, choices)
-    return {**moved, "result": "placed" if moved["result"] == "placed" and check["ok"] else
-            moved["result"] if moved["result"] != "placed" else "placed off the start", "start": check,
-            "remapped": {**made, **(moved.get("remapped") or {})}}
-
-
-def grasp_yaw(config: dict, calibration: dict, site: str, found: dict, choices):
-    """Which yaw the jaws take over the box: the site's own yaw, or that yaw turned by the top camera's
-    reading of the box edges. They compete on real grasps. Until the wrist view is learned the turn is
-    capped: a 30 px box gives a rough angle, and a box the arm placed is already square to the jaws
-    (2026-10-25: a 25 degree camera turn put the jaws on the box's corners and the guard stopped)."""
-    name, base = f"{site}.grasp_yaw@topdown", config["sites"][site]["yaw_deg"]
-    if choices is None:
-        return "site", base
-    choices.offer(name, "site", "taught: the site's yaw")
-    choices.offer(name, "camera", "measured: the top camera's box edges")
-    pick = choices.best(name)
-    if pick == "site":
-        return pick, base
-    learned = (calibration["sites"].get(record_key(site, "top")) or {}).get("wrist") is not None
-    cap = config.get("max_turn_deg", 45.0 if learned else 10.0)
-    return pick, round(base + max(-cap, min(cap, found.get("turn_deg", 0.0))), 1)
-
-
-def recover(cell, config: dict, site: str, work: Path, person_at_switch: bool) -> dict:
-    """After the guard turned torque off mid-task (2026-10-25: four times by hand), with a new session
-    already holding the present pose: lift clear the way the top-down descent came (jaws kept closed if a
-    box is held, opened if not), then put a held box at the start or fold home. Never without a person
-    at the power switch: a joint that faults again drops the arm."""
-    if not person_at_switch:
-        return {"result": "refused", "error": "recover moves an arm the guard stopped: confirm a person at the switch"}
-    state = cell.act("state")
-    if not state.get("ok"):
-        return {"result": "stopped", "error": state.get("error")}
-    current = abs(((state.get("health") or {}).get("current_ma") or [0] * 6)[5])
-    holding = current >= config["plan"].get("hold_current_ma", 140)
-    steps = [{"command": "state", "gripper_current_ma": current, "holding": holding}]
-    if not holding:  # 2026-11-03: the fixed lift below pressed a dropped arm further onto the stack; step out instead
-        import cell_unwedge
-        out = cell_unwedge.unwedge(cell, cell_unwedge.HOME, sleep=time.sleep if config.get("recover_settle_s", 3.0) else bool)
-        return {"result": out["result"], "holding": False, "steps": steps + out.get("rows", [])}
-    plan = [f"grip {config['plan']['grip_closed']}", config.get("recover_lift", "jog elbow_flex.pos -5 wrist_flex.pos 4")]
-    if holding:
-        here = state["state"]
-        library = write_library(config, target(config, site, config["sites"][site]["start"]),
-                                target(config, site, config["sites"][site]["start"], place=True),
-                                work / f"recover-{site}.json")
-        plan += [f"load {library}", "goto above_place", "run descend_place", "run release_place", "run lift_place"]
-        steps.append({"held_at": here})
-    for command in (*plan, "park"):
-        status = cell.act(command)
-        steps.append({"command": command, "ok": status.get("ok"), "error": status.get("error")})
-        if not status.get("ok"):
-            return {"result": "stopped", "at": command, "steps": steps}
-        if command.startswith(("grip", "jog")):
-            time.sleep(config.get("recover_settle_s", 3.0))  # these set targets; the guard moves at 10 deg/s
-    return {"result": "recovered", "holding": holding, "steps": steps}
+from cell_pipeline_stages import (  # noqa: E402, F401
+    at_start,
+    calibrate,
+    coarse_map,
+    grasp_yaw,
+    grip_to,
+    recover,
+    reset,
+    scene,
+    start_reference,
+)
 
 
 def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Path, seat=None,
@@ -420,9 +187,11 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
                 if tried["verify"].get("inside"):
                     attempt_id = cell_attempts.record(config, calibration, source, dest, attempt, tried, t_start, choices)
                     if out["decisions"]:  # the outcome of the last decision: this retry worked
-                        case(work, {"from": source, "to": dest, "attempt": attempt, "outcome": "placed",
+                        case(work, {"from": source, "to": dest, "attempt": attempt,
+                                    "outcome": "placed" if tried["verify"].get("verified") is True else "unverified",
                                     "attempt_id": attempt_id, "detection": detection(found)})
-                    return {**out, "result": "placed"}
+                    return {**out, "result": "placed",
+                            "position_verified": tried["verify"].get("verified") is True}
                 facts = {"box_found": tried["verify"].get("found", False), "next": "grasp", "aligned": False,
                          "check": "placed out of the next grasp's reach"}
             elif moved == "contact":
@@ -459,7 +228,7 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
                 return {**out, "result": f"stopped: remap {mapped['result']}"}
             calibration["sites"][key] = out.setdefault("remapped", {})[key] = mapped["record"]
             continue
-        if decision["decision"] != "retry" or (facts.get("fault")):
+        if decision["decision"] not in ("retry", "reinsert") or (facts.get("fault")):
             return {**out, "result": f"stopped: {decision['decision']} ({facts['check']})"}
     return {**out, "result": f"stopped: {attempts} attempts"}
 
@@ -514,6 +283,18 @@ def run(cell, config: dict, calibration_path: Path, work: Path, cycles: int, log
     return {"result": "done", "cycles": cycles, "steps": steps}
 
 
+def public_stage_result(stage: str, result: dict) -> dict:
+    """A supervised placement may advance calibration without becoming a verified receipt."""
+    if stage == "reset" and result.get("already") is True:
+        return {**result, "result": "unverified", "position_verified": False}
+    if stage in ("transfer", "reset") and result.get("position_verified") is False:
+        return {**result, "transfer_result": result.get("result"), "result": "unverified"}
+    if stage == "verify":
+        return {**result, "result": "verified" if result.get("verified") is True and result.get("inside") is True
+                else "unverified"}
+    return result
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", required=True, type=Path)
@@ -555,10 +336,10 @@ def main(argv=None):
     elif not cell.act("state").get("ok"):
         raise SystemExit("start record_session.py --chunks first: no chunk_runner answers")
     seat = None
-    if config.get("decision_model"):  # e.g. {"url": "http://127.0.0.1:11434", "model": "qwen3-vl:8b-instruct"}
+    if config.get("debate_models") or config.get("decision_model"):
         import judge_seat
 
-        seat = judge_seat.Seat(judge_seat.ollama(**config["decision_model"]), knowledge=config.get("knowledge"), params=config.get("params_path"), context=config.get("decision_context"))
+        seat = judge_seat.Seat(config.get("debate_models") or config["decision_model"], knowledge=config.get("knowledge"), params=config.get("params_path"), context=config.get("decision_context"))
     KEEP["dir"] = work / "frames"
     import cell_attempts
 
@@ -587,6 +368,7 @@ def main(argv=None):
         result = move(cell, config, calibration, args.source, args.to, work, seat, attempts=1, person_at_switch=gate)
     else:
         result = verify(cell, config, args.to)
+    result = public_stage_result(args.stage, result)
     save_maps(calibration_path, result)
     path = write_receipt(work / "receipts", args.stage, result)
     print(json.dumps({"receipt": str(path), "result": result.get("result") or result.get("transfer", {}).get("result")

@@ -6,6 +6,9 @@ from core_common.protocol.arm_transfer_attestation import (
     ArmTransferOperatorAttestation, OPERATOR_ATTESTATION_VALIDITY_NS)
 from .mission_store import MissionConflict
 
+#: D-977 5 (2026-11-17): the one producer id a device_trial observer may use; it shows in every evidence row.
+OPERATOR_ATTESTED_PRODUCER_ID = "operator-attested-producer"
+
 # kind -> the only job status in which that statement is meaningful
 _STATUS = {"SOURCE_CLEAR": "READY", "TARGET_PLACED": "ACTION_SUCCEEDED"}
 
@@ -20,6 +23,9 @@ class PhysicalOperatorAttestations:
                 attested_by TEXT NOT NULL, request_digest TEXT NOT NULL, proposal_digest TEXT NOT NULL,
                 job_status TEXT NOT NULL, attested_at_ns INTEGER NOT NULL, expires_at_ns INTEGER NOT NULL,
                 PRIMARY KEY(mission_id,kind))""")
+            if "consumed_at_ns" not in {r["name"] for r in connection.execute(
+                    "PRAGMA table_info(fleet_physical_operator_attestations)")}:
+                connection.execute("ALTER TABLE fleet_physical_operator_attestations ADD COLUMN consumed_at_ns INTEGER")
             connection.commit()
 
     def record(self, mission_id, principal, body):
@@ -37,13 +43,40 @@ class PhysicalOperatorAttestations:
                 raise PermissionError("proposer and approver cannot attest")
             now = self.store._now_ns()
             try:
-                connection.execute("INSERT INTO fleet_physical_operator_attestations VALUES(?,?,?,?,?,?,?,?)",
+                connection.execute("INSERT INTO fleet_physical_operator_attestations(mission_id,kind,attested_by,request_digest,"
+                    "proposal_digest,job_status,attested_at_ns,expires_at_ns) VALUES(?,?,?,?,?,?,?,?)",
                     (mission_id, body.kind, who, job["request_digest"], job["proposal_digest"], job["status"],
                      now, now + OPERATOR_ATTESTATION_VALIDITY_NS))
             except sqlite3.IntegrityError:
                 raise MissionConflict("this attestation is single-use and already recorded") from None
             connection.commit()
         return self._model(job, who, body.kind, now)
+
+    def source_clear_valid(self, mission_id):
+        """D-977 5 (2026-11-17): an unexpired, unconsumed SOURCE_CLEAR bound to the job's current request digest."""
+        with closing(self.store._journal._connect()) as connection:
+            job = self.store._read(connection, mission_id)
+            row = connection.execute("SELECT * FROM fleet_physical_operator_attestations WHERE mission_id=? "
+                                     "AND kind='SOURCE_CLEAR'", (mission_id,)).fetchone()
+        return (job is not None and row is not None and row["consumed_at_ns"] is None
+                and row["expires_at_ns"] > self.store._now_ns()
+                and (row["request_digest"], row["proposal_digest"]) == (job["request_digest"], job["proposal_digest"]))
+
+    def consume_source_clear(self, mission_id):
+        with closing(self.store._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            now = self.store._now_ns()
+            job = self.store._read(connection, mission_id)
+            row = connection.execute("SELECT request_digest, proposal_digest FROM fleet_physical_operator_attestations "
+                                     "WHERE mission_id=? AND kind='SOURCE_CLEAR'", (mission_id,)).fetchone()
+            matches = (job is not None and row is not None
+                       and (row["request_digest"], row["proposal_digest"]) == (job["request_digest"], job["proposal_digest"]))
+            if not matches or connection.execute(
+                    "UPDATE fleet_physical_operator_attestations SET consumed_at_ns=? WHERE mission_id=? "
+                    "AND kind='SOURCE_CLEAR' AND consumed_at_ns IS NULL AND expires_at_ns>?",
+                    (now, mission_id, now)).rowcount != 1:
+                raise MissionConflict("device_trial dispatch needs an unexpired, unconsumed operator SOURCE_CLEAR")
+            connection.commit()
 
     @staticmethod
     def _model(job, who, kind, at):

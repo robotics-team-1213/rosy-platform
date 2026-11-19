@@ -339,3 +339,30 @@ def test_loader_accepts_a_final_state_policy():
     _, config, _ = _load(_document(owner_config=owner_config))
     assert config.max_final_state_errors["joint1"] == 0.02
     assert config.max_final_state_errors["gripper_joint_1"] is None
+
+
+def test_check_imports_the_field_modules_when_goals_are_enabled(tmp_path, monkeypatch):
+    import hardware_owner_goals
+    monkeypatch.setenv("ROS_DOMAIN_ID", "41")
+    monkeypatch.setenv("ROS_AUTOMATIC_DISCOVERY_RANGE", "LOCALHOST")
+    monkeypatch.setenv("ROSY_OMX_ROS_NAMESPACE", "/omx_a")
+    goals = {"device_trial_arms": ["omx_cell_a_01"], "installation": "/i.json", "installation_spec": "/s.yaml",
+             "cell_config": "/c.json", "libraries": {"a>b": "/l.json"}, "presence_token": "/run/t"}
+    path = tmp_path / "cfg.json"
+    path.write_text(json.dumps(_document(commissioning_root="/var/lib/c", arm_goals=goals)), encoding="utf-8")
+    called = []
+
+    def missing():
+        called.append(1)
+        raise ModuleNotFoundError("numpy")
+    monkeypatch.setattr(hardware_owner_goals, "field_modules", missing)
+    with pytest.raises(ModuleNotFoundError):
+        run_hardware_owner.main(["--config", str(path), "--check"])
+    assert called == [1]
+    path.write_text(json.dumps(_document()), encoding="utf-8")  # no goals: nothing to import
+    assert run_hardware_owner.main(["--config", str(path), "--check"]) == 0 and called == [1]
+
+
+def test_arm_session_unit_can_only_be_started_by_a_person():
+    unit = (ROOT / "deploy/robot/omx/rosy-omx-arm-session@.service").read_text(encoding="utf-8")
+    assert "[Install]" not in unit and "WantedBy" not in unit and "Restart=no" in unit

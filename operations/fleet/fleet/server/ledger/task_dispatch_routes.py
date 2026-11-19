@@ -13,7 +13,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-from typing import Mapping, Optional
+import os
+from typing import Literal, Mapping, Optional
 
 from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -23,6 +24,8 @@ from fleet.server.cancel_all import DriveCancelFence, cancel_all_driving
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.owner_recovery_routes import install_owner_recovery_routes
+from fleet.server.policy_delivery import attach_ticker, build_policy_approvals
+from fleet.server.policy_approval_routes import install_policy_approval_routes
 from fleet.server.task_store import IdempotencyConflict, InvalidTaskTransition
 from fleet.swarm.transport import RobotApiError
 
@@ -42,6 +45,14 @@ class GoalRequest(BaseModel):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError("goal coordinates must be finite numbers")
         return value
+
+
+class ConsoleGoalRequest(GoalRequest):
+    """Console /goal request extending CORE mirror GoalRequest with optional site frame (D-1003)."""
+
+    #: "site": x, y, yaw are on the active site map (the console's site view) and Fleet converts them into the
+    #: robot's own Nav2 map frame (D-1003); absent: already in the robot's frame, sent as before.
+    frame: Optional[Literal["site"]] = None
 
 
 class DispatchRearmRequest(BaseModel):
@@ -106,17 +117,35 @@ def cancel_pending_task_queue(task_service, console, robot_id: Optional[str] = N
     console.discard_task_queue_entries(set(canceled))
 
 
+STOP_LEASE_HOLD_WAIT_S = 0.5
+STOP_LEASE_HOLDS = []  # D-1024 3: callables(reason) that hold every learned-policy window on a site E-Stop
+
+
+def _hold_learned_policy_leases(reason):
+    for hold in tuple(STOP_LEASE_HOLDS):
+        try:
+            hold(reason)
+        except Exception:
+            _LOG.exception("learned-policy lease hold failed during stop; device leases run out by themselves")
+
+
 async def execute_local_fleet_stop(*, console, task_service, configured_omx,
                                   stop_transport, stop_control, actor_id, stop_targets=None):
     local_stop_task = asyncio.to_thread(
         fanout_local_omx_stops, configured_omx, stop_transport, stop_control,
         reason="FLEET_ESTOP", targets=stop_targets,
     )
-    outcomes = await asyncio.gather(console.estop_all(), local_stop_task, return_exceptions=True)
-    for outcome in outcomes:
+    # The lease hold never delays or fails the stop: bounded wait, and a hold that is lost stays due and is retried by
+    # the next tick (the device lease also runs out by itself). The worker thread is abandoned past the bound.
+    lease_hold = asyncio.wait_for(asyncio.shield(asyncio.to_thread(_hold_learned_policy_leases, "fleet_estop")),
+                                  STOP_LEASE_HOLD_WAIT_S)
+    outcomes = await asyncio.gather(console.estop_all(), local_stop_task, lease_hold, return_exceptions=True)
+    for outcome in outcomes[:2]:
         if isinstance(outcome, BaseException):
             raise outcome
-    result, local_stop = outcomes
+    if isinstance(outcomes[2], BaseException):
+        _LOG.warning("learned-policy lease hold did not finish within the stop bound: %r", outcomes[2])
+    result, local_stop = outcomes[:2]
     try:
         cancel_pending_task_queue(task_service, console, actor_id=actor_id)
     except Exception:
@@ -132,6 +161,7 @@ def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
     read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None, require_named_operator, stop_targets=None,
+    convert_site_goal=None,
 ) -> None:
     drive_cancel = drive_cancel or DriveCancelFence()
     stop_targets = tuple(dict.fromkeys((*configured_omx.items(), *(stop_targets or ()))))
@@ -139,6 +169,14 @@ def install_task_dispatch_routes(
         install_owner_recovery_routes(app, configured_omx=configured_omx, stop_transport=stop_transport,
                                       task_service=task_service, require_viewer=require_viewer,
                                       require_named_operator=require_named_operator)
+        # D-1024 3: with ROSY_POLICY_LEASE_TARGETS a CORE delivery port and ticker exist; without it approvals are refused (409).
+        approvals, ticker = build_policy_approvals(os.environ)
+        if ticker is not None:
+            attach_ticker(app, ticker)
+        if approvals.hold_all not in STOP_LEASE_HOLDS:
+            STOP_LEASE_HOLDS.append(approvals.hold_all)
+        install_policy_approval_routes(app, approvals=approvals, configured_omx=configured_omx,
+                                       require_viewer=require_viewer, require_named_operator=require_named_operator)
 
     if task_service is not None:
         @app.get("/api/fleet/dispatch-control", dependencies=read_guard,
@@ -204,16 +242,22 @@ def install_task_dispatch_routes(
                 control["omx_local_rearm"] = local_rearm
             return control
 
-    # D-540 9: a goal moves the robot, so the operator must be named.
     @app.post("/api/fleet/robots/{robot_id}/goal", tags=["fleet"])
     async def fleet_goal(
-        robot_id: str, body: GoalRequest,
+        robot_id: str, body: ConsoleGoalRequest,
         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
         principal: SitePrincipal = Depends(require_named_operator),
     ) -> dict:
         try:
             if busy := console.trip_refusal([robot_id]):  # D-494 5: refused before a task is queued for it
                 raise busy
+            if body.frame == "site":
+                if convert_site_goal is None:
+                    raise HTTPException(409, detail={
+                        "code": "SITE_POSE_UNKNOWN",
+                        "message": f"{robot_id}: site-frame goal conversion is unavailable, so the goal was not sent"})
+                x, y, yaw = await convert_site_goal(app, console, robot_id, (body.x, body.y, body.yaw))
+                body = body.model_copy(update={"x": x, "y": y, "yaw": yaw, "frame": None})
             if task_service is not None:
                 if not idempotency_key:
                     raise HTTPException(status_code=400, detail={

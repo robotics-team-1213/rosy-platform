@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FLEET = ROOT / "operations/fleet/fleet"
+# D-996 port event and intake tables are not listed: each has one owner module that creates and writes it.
 LEDGER_TABLES = ("fleet_tasks", "fleet_task_history", "fleet_robot_reservations", "fleet_action_claims",
                  "fleet_control_stops", "fleet_control_stop_deliveries")
 _WRITE = re.compile(r"\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|DELETE\s+FROM)\s+("

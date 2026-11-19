@@ -15,6 +15,9 @@ from .motion_characteristics import _canonical, _text, document_digest, validate
 class LoadMonitor:
     def __init__(self, document, request, *, accepted_digest, candidate_id, command_id, started_at, session_id):
         self.profile = validate_characteristics(document)
+        self._joint_names = tuple(self.profile['joints'])
+        self._joint_name_set = frozenset(self._joint_names)
+        self._joint_index = {name: i for i, name in enumerate(self._joint_names)}
         self.request = json.loads(_canonical(request))
         self.assessment = assess_candidates(self.profile, self.request, accepted_digest=accepted_digest)
         match = next((c for c in self.assessment['candidates'] if c['id'] == candidate_id), None)
@@ -34,7 +37,7 @@ class LoadMonitor:
         self.last_joint_signature = {}
         self.latched = set()
         self.error_since = {}
-        self.history = {name: deque(maxlen=4096) for name in self.profile['joints']}
+        self.history = {name: deque(maxlen=4096) for name in self._joint_names}
 
     def unavailable(self, reason, *, now):
         """Record lost inputs without inventing a capture time or joint measurement."""
@@ -94,14 +97,15 @@ class LoadMonitor:
         if (health.sample_age_s is None or abs(health.sample_age_s - (now - captured)) > 1e-6
                 or now - captured > self.profile['monitor']['max_age_s']):
             reasons.add('stale_feedback')
-        names = list(self.profile['joints'])
+        names = self._joint_names
         motors = [m for m in health.motors if m.group == self.profile['binding']['motor_group']]
-        if len(motors) != len(names) or {m.joint for m in motors} != set(names):
+        if len(motors) != len(names) or {m.joint for m in motors} != self._joint_name_set:
             reasons.add('joint_coverage')
-            if any(m.joint in names and m.group != self.profile['binding']['motor_group'] for m in health.motors):
+            if any(m.joint in self._joint_name_set and m.group != self.profile['binding']['motor_group'] for m in health.motors):
                 reasons.add('motor_identity')
         if reasons:
             return self._report(reasons, errors, captured, now)
+        desired_by_stamp = {}
         for motor in motors:
             name = motor.joint
             joint = self.profile['joints'][name]
@@ -141,14 +145,22 @@ class LoadMonitor:
             self.last_joint_receipt[name] = now
             self.last_joint_signature[name] = signature
             try:
-                desired = command_positions(self.request, self.candidate_id, stamp - self.started_at)
+                if stamp not in desired_by_stamp:
+                    try:
+                        desired_by_stamp[stamp] = command_positions(self.request, self.candidate_id,
+                                                                    stamp - self.started_at)
+                    except (ValueError, OverflowError) as error:
+                        desired_by_stamp[stamp] = error
+                desired = desired_by_stamp[stamp]
+                if isinstance(desired, Exception):
+                    raise desired
                 actual = _number((motor.present_raw - joint['raw_zero']) * joint['rad_per_raw'], 'position_rad')
             except (ValueError, OverflowError):
                 reasons.add(f'command_reference_unavailable:{name}')
                 continue
             if not self.envelope['position_rad'][name][0] <= actual <= self.envelope['position_rad'][name][1]:
                 reasons.add(f'outside_measured_domain:{name}')
-            error = actual - desired[names.index(name)]
+            error = actual - desired[self._joint_index[name]]
             errors[name] = error
             self._tracking(name, stamp, error, reasons)
         return self._report(reasons, errors, captured, now)
@@ -167,8 +179,8 @@ class LoadMonitor:
         while history and history[0][0] < stamp - monitor['oscillation_window_s']:
             history.popleft()
         previous, reversals = 0, 0
+        amplitude = limits['oscillation_amplitude_rad']
         for _, value in history:
-            amplitude = limits['oscillation_amplitude_rad']
             sign = 1 if value >= amplitude else -1 if value <= -amplitude else 0
             if sign:
                 if previous and sign != previous:

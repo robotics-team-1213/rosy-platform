@@ -155,6 +155,23 @@ def test_departure_order_is_the_order_blocks_step_grants_in():
     assert judge(wide, state("b"))["detail"]["past_merge_bound"] is False
     assert blocks.grant_order_key("x", 0.0, 25.0, False) < blocks.grant_order_key("y", 20.0, 25.0, True)
 
+    # Regional exit_nearest departure rule ranks by shortest road distance to exit first
+    exit_rules = SiteRules.model_validate({"departure": {"order": "exit_nearest"}, "return": {"exit_place": "S1"}})
+    assert "S1" in exit_rules.place_ids()
+    exit_state = lambda me: Departure.model_validate({
+        "kind": "departure", "robot_id": me, "capacity": 1,
+        "robots": [
+            waiter("c3_bot", 40, exit_distance_m=1.229),
+            waiter("c2_bot", 20, exit_distance_m=1.007),
+            waiter("c1_bot", 5, exit_distance_m=0.783),
+        ],
+    })
+    assert judge(exit_rules, exit_state("c1_bot"))["verdict"] == "go"
+    c2_ans = judge(exit_rules, exit_state("c2_bot"))
+    assert (c2_ans["verdict"], c2_ans["detail"]["ahead"]) == ("wait", ["c1_bot"])
+    c3_ans = judge(exit_rules, exit_state("c3_bot"))
+    assert (c3_ans["verdict"], c3_ans["detail"]["ahead"]) == ("wait", ["c1_bot", "c2_bot"])
+
 
 def ask_return(rules, me, percent, bays=("C1",), occupied=None, **extra):
     robots = [{"robot_id": me, "percent": percent, **extra}]

@@ -6,14 +6,15 @@ from core_common.protocol.schemas import TripJobRequest
 from fleet.server.mission_store import MissionConflict, _json
 from fleet.server.trip_job_routes import create_trip_job
 from fleet.server.trip_ports import TripError
+from fleet.server.trip_proposals import request_body
 
 
 async def create_candidate_trip_job(jobs, candidates, steps, principal_id, request_key, *, validate=None,
                                     approved_by=None, proposal_id=None, expected_proposal_digest=None,
-                                    expected_generation=None):
+                                    expected_generation=None, object_ref=None):
     body = TripJobRequest(candidate_robot_ids=candidates, steps=steps, request_key=request_key)
     steps = [step.model_dump(mode="json") for step in body.steps]
-    digest = hashlib.sha256(_json({"candidates": body.candidate_robot_ids, "steps": steps}).encode()).hexdigest()
+    digest = hashlib.sha256(_json(request_body(body.candidate_robot_ids, steps, object_ref)).encode()).hexdigest()
     key = "trip-pool:" + body.request_key
     async with jobs.candidate_lock:
         old = await asyncio.to_thread(jobs.rows.find_request, principal_id, key, digest)

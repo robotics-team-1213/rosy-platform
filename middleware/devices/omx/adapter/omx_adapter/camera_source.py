@@ -107,7 +107,7 @@ def main():
     parser.add_argument('--topic', required=True)
     parser.add_argument('--frame-id', required=True)
     # The registered topic-shaped key addresses local IPC, never DDS.
-    parser.add_argument('--max-fps', type=float, default=10.0)
+    parser.add_argument('--max-fps', type=float, default=15.0)
     args = parser.parse_args()
     if not 0 < args.max_fps <= 30:
         parser.error('--max-fps must be in (0, 30]')
@@ -131,7 +131,7 @@ def main():
     import cv2
     import numpy as np
     from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
-    from camera_quality import frame_quality
+    from core_common.camera_quality import frame_quality
 
     # a depth role keeps its preview on the topic (viewer, bridge, Fleet unchanged) and the raw depth beside it
     channel, capture = SnapshotChannel(args.topic), None

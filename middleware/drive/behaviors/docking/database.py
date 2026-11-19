@@ -53,7 +53,8 @@ class DockType(BaseModel):
     staging: bool = True                # False: Nav2 스테이징 없이 진입 회전부터
     # pose: 도크 좌표계 정렬 접근. rear: 후진 충전소(D-950 후속) — LiDAR V 표지로 레일 입구
     # 밖에서 맞추고 레일 안은 각속도 0 으로 곧게 후진한다(`rear_phases.py`).
-    approach: Literal["bearing", "pose", "rear"] = "bearing"
+    # line: 충전 칸 분홍 유도선(D-1013) — 선을 가상 도크로 보고 후진 폐루프로 맞춘다(`bay_phases.py`).
+    approach: Literal["bearing", "pose", "rear", "line"] = "bearing"
     settle: Literal["agent", "pose"] = "agent"         # pose: 접점 없이 포즈로 정착
     tag_offset_m: Optional[float] = None  # 주차점 → 태그 중심, 도크 축 방향 (pose 접근)
     acquire_creep_m: float = 0.0        # 태그가 안 보일 때 주차점 쪽으로 기어갈 거리
@@ -65,6 +66,13 @@ class DockType(BaseModel):
     rail_entry_m: float = 0.45          # 여기까지 오기 전에 정렬을 끝낸다(바퀴가 레일 입구에 닿기 전)
     rear_align_tolerance_m: float = 0.010
     rear_align_tolerance_rad: float = 0.035
+    # 저배터리 자동 복귀(manager.on_battery_level). None: 칸 접근(line)은 끔, 나머지는 켬.
+    auto_return: Optional[bool] = None
+
+    @property
+    def battery_return(self) -> bool:
+        # rear (Fleet-taught bays, robot-frame pose) and line docks start alone only when told to (2026-11-18 map panel)
+        return self.auto_return if self.auto_return is not None else self.approach not in ("line", "rear")
 
     @field_validator("staging_offset_m")
     @classmethod
@@ -109,6 +117,21 @@ class DockType(BaseModel):
             raise ValueError("rail_entry_m must be positive and short of staging_offset_m")
         if self.rear_align_tolerance_m <= 0.0 or self.rear_align_tolerance_rad <= 0.0:
             raise ValueError("rear alignment tolerances must be positive")
+        return self
+
+    @model_validator(mode="after")
+    def _line_is_consistent(self) -> "DockType":
+        # 칸 유도선(D-1013): 선 관측은 CAMERA_LINE 소스의 dock/observation 으로 온다.
+        if self.approach != "line":
+            return self
+        if self.detector != "camera_line":
+            raise ValueError("a line approach needs the camera_line detector")
+        if not self.staging or self.settle != "agent":
+            raise ValueError("a line approach stages by Nav2 and settles by charge")
+        # 스테이징에서 제자리 180° 회전한다: 칸 입구에서 0.30 m 안쪽이면 옆 칸 로봇에 닿는다
+        # (짐칸 돌출 126 mm 가정: 0.20 m 33 mm·0.30 m 171 mm, 2026-11-18 패널).
+        if self.staging_offset_m < 0.30:
+            raise ValueError("a line approach turns at staging: staging_offset_m must be >= 0.30")
         return self
 
 

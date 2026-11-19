@@ -394,6 +394,86 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     onChanged();
   });
 
+  const autoExtractButton = el("camera-auto-extract");
+  if (autoExtractButton) {
+    scope.listen(autoExtractButton, "click", async () => {
+      const life = scope.capture();
+      life.check();
+      const source = visionView.currentSource() || "ceiling_north";
+      autoExtractButton.setAttribute("disabled", "");
+      autoExtractButton.setAttribute("reason", "추출 중");
+      showSummary({ tone: "neutral", guidance: null, headline: `카메라(${source})에서 맵 초안을 자동 추출하고 있습니다…` });
+      try {
+        const lease = await call("/api/fleet/vision/lease", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source_id: source }), signals: [life.signal],
+        });
+        life.check();
+        const draftPath = lease.frame_path.replace(/\/frame$/, "/draft-map");
+        const resp = await fetch(draftPath, {
+          credentials: "omit", redirect: "error",
+          headers: { Authorization: `Bearer ${lease.lease}` }, cache: "no-store", signal: life.signal,
+        });
+        if (!resp.ok) throw new Error(`Vision draft-map 응답 ${resp.status}`);
+        const proposal = await resp.json();
+        life.check();
+        const made = await call("/api/fleet/site-map/draft-from-camera", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source_id: proposal.source || source,
+            plane: {
+              bounds_m: proposal.plane.bounds_m,
+              px_per_m: proposal.plane.px_per_m,
+              calibration_revision: proposal.plane.calibration_revision,
+            },
+            detector: proposal.detector,
+            lanes: proposal.lanes,
+            zones: proposal.zones,
+            ...(proposal.places ? { places: proposal.places } : {}),
+            ...(proposal.edges ? { edges: proposal.edges } : {}),
+            ...(proposal.map_id ? { map_id: proposal.map_id } : {}),
+          }),
+          signals: [life.signal],
+        });
+        life.check();
+        const currentDraft = await call("/api/fleet/site-map/draft", { signals: [life.signal] });
+        life.check();
+        await call("/api/fleet/site-map/draft", {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ map: made.map, expected_revision: currentDraft?.revision || null }),
+          signals: [life.signal],
+        });
+        life.check();
+        await Promise.all([ensureLanes({ force: true }), ensureCalibrations({ force: true })]);
+        life.check();
+        const pCount = (made.map?.places || []).length;
+        const eCount = (made.map?.edges || []).length;
+        showSummary({
+          tone: "good",
+          guidance: "추출한 맵 초안을 직접 그리거나 수정하려면 [직접 맵 그리기·편집] 단추를 누르세요.",
+          headline: `카메라(${source})에서 맵 자동 추출·초안 저장 완료 (${made.map?.map_id || "world_261026"} · 장소 ${pCount}개 · 차로 ${eCount}개)`,
+        });
+        render();
+        onChanged();
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        showSummary({ tone: "warn", guidance: null, headline: `카메라 맵 자동 추출 실패: ${error.message || error}` });
+      } finally {
+        if (life.current()) {
+          autoExtractButton.removeAttribute("disabled");
+          autoExtractButton.removeAttribute("reason");
+        }
+      }
+    });
+  }
+
+  const manualDrawButton = el("camera-manual-draw");
+  if (manualDrawButton) {
+    scope.listen(manualDrawButton, "click", () => {
+      location.href = "/console/site-map#survey-heading";
+    });
+  }
+
   scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
     if (lastFrame?.source !== frame.source && pending && pending.source !== frame.source) pending = null;
     lastFrame = frame;

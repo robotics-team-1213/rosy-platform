@@ -3,10 +3,35 @@ import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { robotPoseText, sitePoseText } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 
+// Speeds are the robot's own live manual limit (CORE state.speed_limits, D-1005); these signs only pick the axis.
 const COMMANDS = [
-  ["forward", "전진", 0.03, 0], ["left", "좌회전", 0, 0.10],
-  ["backward", "후진", -0.03, 0], ["right", "우회전", 0, -0.10],
+  ["forward", "전진", 1, 0], ["left", "좌회전", 0, 1],
+  ["backward", "후진", -1, 0], ["right", "우회전", 0, -1],
 ];
+// A robot that does not report its limit (older CORE) drives no faster than this pad always did.
+const FALLBACK = {manual_linear: 0.03, manual_angular: 0.10};
+const STEP = {linear: 0.01, angular: 0.05};
+const MIN_SET = {linear: 0.01, angular: 0.05};
+const num = value => Number(Number(value).toFixed(3));
+
+export function manualSpeeds(state) {
+  const limits = state?.speed_limits, usable = value => Number.isFinite(value) && value >= 0;
+  const known = usable(limits?.manual_linear) && usable(limits?.manual_angular);
+  const linear = known ? limits.manual_linear : FALLBACK.manual_linear;
+  const angular = known ? limits.manual_angular : FALLBACK.manual_angular;
+  const set = known && usable(limits.set_linear) && usable(limits.set_angular)
+    ? {linear: limits.set_linear, angular: limits.set_angular} : null;
+  const max = known && limits.max_linear > 0 && limits.max_angular > 0
+    ? {linear: limits.max_linear, angular: limits.max_angular} : null;
+  const sealed = known && usable(limits.approved_linear) ? {linear: limits.approved_linear, angular: limits.approved_angular} : null;
+  return {linear, angular, set, max, sealed};
+}
+
+export function speedText({linear, angular, set, sealed}) {
+  const bound = set && sealed && (linear < set.linear || angular < set.angular)
+    ? ` (설정 ${num(set.linear)}·${num(set.angular)}, 측정 봉인 ${num(sealed.linear)}·${num(sealed.angular)}로 제한)` : "";
+  return `전후진 ${num(linear)}m/s · 회전 ${num(angular)}rad/s${bound}`;
+}
 
 const evidenceWord = (robot, key) => EVIDENCE_LABEL[robot.state?.evidence?.[key]?.evidence] || EVIDENCE_LABEL.unavailable;
 
@@ -34,6 +59,16 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
   mode.dataset.manualMode = "";
   mode.setAttribute("aria-describedby", reason.id);
   actions.append(mode);
+  const adjust = [["slower", "속도 −", -1], ["faster", "속도 +", 1]].map(([key, label, sign]) => {
+    const button = document.createElement("ui-button");
+    button.type = "button";
+    button.setAttribute("kind", "quiet");
+    button.textContent = label;
+    button.dataset.manualSpeed = key;
+    button.setAttribute("aria-describedby", reason.id);
+    actions.append(button);
+    return {button, sign};
+  });
   const buttons = COMMANDS.map(([direction, label, linear, angular]) => {
     const button = document.createElement("ui-button");
     button.type = "button";
@@ -48,7 +83,7 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
   });
   root.append(heading, pose, reason, actions);
   let active = null, pending = null, stopping = null, cancelTimeout = null;
-  let failure = "", notice = "", modePending = false;
+  let failure = "", notice = "", modePending = false, speedPending = false;
 
   function blocked(requireManual = true) {
     const robot = view.robots.find(row => row.robot_id === view.focusRobot);
@@ -76,7 +111,26 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     if (stopping) return "정지 명령을 전달하는 중입니다.";
     if (modePending) return "수동 모드 전환을 요청하는 중입니다.";
     if (requireManual && robot.state?.mode !== "MANUAL") return "수동 모드로 전환한 뒤 조종하세요.";
+    if (requireManual) { const s = manualSpeeds(robot.state); if (!(s.linear > 0 && s.angular > 0)) return "수동 속도 한도가 0입니다. 속도를 올리세요."; }
     return "";
+  }
+
+  // The operator raises or lowers the robot's manual speed here; CORE refuses anything above the signed ceiling.
+  for (const {button, sign} of adjust) {
+    scope.listen(button, "click", async () => {
+      const robotId = view.focusRobot, robot = view.robots.find(row => row.robot_id === robotId);
+      const s = manualSpeeds(robot?.state);
+      if (!s.set || !s.max || blocked(false)) return;
+      const next = (key) => num(Math.min(s.max[key], Math.max(MIN_SET[key], s.set[key] + sign * STEP[key])));
+      speedPending = true; failure = ""; update();
+      try {
+        await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/speed-limits`, {method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({manual_linear: next("linear"), manual_angular: next("angular")})});
+        await refreshState();
+      } catch (error) { failure = `속도 변경 실패: ${error.message}`; }
+      finally { speedPending = false; update(); }
+    });
   }
 
   scope.listen(mode, "click", async () => {
@@ -142,7 +196,9 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     event.preventDefault();
     if (active || blocked()) return;
     failure = ""; notice = "";
-    active = {...command, robotId: view.focusRobot, generation: view.dispatchControl.generation};
+    const speeds = manualSpeeds(view.robots.find(row => row.robot_id === view.focusRobot)?.state);
+    active = {...command, linear: command.linear * speeds.linear, angular: command.angular * speeds.angular,
+      robotId: view.focusRobot, generation: view.dispatchControl.generation};
     view.manualDriveRobot = active.robotId;  // motion-source.js: this console is the driver
     command.button.setAttribute("aria-pressed", "true");
     if (event.pointerId != null) {
@@ -176,6 +232,12 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     if (modeWhy) mode.setAttribute("reason", "위 사유");
     else mode.removeAttribute("reason");
     const why = blocked();
+    const focused = view.robots.find(row => row.robot_id === view.focusRobot);
+    const shown = manualSpeeds(focused?.state);
+    for (const {button} of adjust) {
+      button.disabled = Boolean(modeWhy) || speedPending || !shown.set || !shown.max;
+      if (button.disabled) button.setAttribute("reason", "위 사유"); else button.removeAttribute("reason");
+    }
     for (const {button} of buttons) {
       button.disabled = Boolean(why);
       if (why) button.setAttribute("reason", "위 사유");
@@ -186,7 +248,7 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     const age = robot && Number.isFinite(robot.state_age_s)
       ? `상태 ${Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000)}초 전` : "상태 시각 없음";
     pose.textContent = robot ? [sitePoseText(guideRow) || `위치 ${robotPoseText(robot.state, robot.localization)}`, `위치 관측 ${evidenceWord(robot, "pose")}`, age].join(" · ") : "";
-    if (!active && !stopping) reason.textContent = [failure, why].filter(Boolean).join(" · ") || notice || "누르는 동안만 이동 · 최대 2초 · 전후진 0.03m/s · 회전 0.10rad/s";
+    if (!active && !stopping) reason.textContent = [failure, why].filter(Boolean).join(" · ") || notice || `누르는 동안만 이동 · 최대 2초 · ${speedText(shown)}`;
   }
   scope.interval(update, 100);
   return {root, update, stop};

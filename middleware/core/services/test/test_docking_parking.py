@@ -183,7 +183,7 @@ def test_a_not_visible_payload_clears_the_last_sighting():
     assert feed.latest() is None
 
 
-@pytest.mark.parametrize("bad", [payload(source="CAMERA_LINE"), payload(visible="yes"),
+@pytest.mark.parametrize("bad", [payload(source="unknown-source"), payload(visible="yes"),
                                  payload(x=float("nan")), payload(tag_id=7.0),
                                  payload(stamp=None), "not a dict"])
 def test_a_malformed_payload_raises_and_clears(bad):

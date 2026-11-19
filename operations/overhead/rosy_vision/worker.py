@@ -12,6 +12,7 @@ from typing import Callable
 from rosy_vision.detect import detect_markers
 from rosy_vision.field_calib import FieldCalibrator
 from rosy_vision.field_detect import detect_field_jpeg
+from rosy_vision.post_guard import PostGuard
 from rosy_vision.project import CameraMap, project_frame, project_place_markers
 
 MAX_FUTURE_S = 0.05
@@ -51,6 +52,9 @@ class VisionWorker:
         self._last_frame_key: tuple[int, float, float] | None = None
         # D-457: optional markerless tracking step (rosy_vision.track.worker.TrackWorker).
         self.tracker = tracker
+        # One guard per source: the tracker's detections/anchors and our sightings share counters.
+        shared = getattr(tracker, "guard", None)
+        self.guard = shared if isinstance(shared, PostGuard) else PostGuard(source_id, clock)
         # D-484: optional field-boundary calibration source.
         self.calibrator = calibrator
         self.field_detector = field_detector
@@ -113,7 +117,7 @@ class VisionWorker:
         sent: list[str] = []
         try:
             for sighting in sightings:
-                await self.publisher.publish(sighting)
+                await self.guard.post(sighting.captured_at, lambda s=sighting: self.publisher.publish(s))
                 sent.append(sighting.robot_id)
         finally:
             # A rejected sighting must not cost the frame its tracking step, and a tracking
@@ -158,7 +162,7 @@ class VisionWorker:
     async def _send_place_markers(self, payload) -> None:
         """A rejection is logged by type, never raised."""
         try:
-            await self.publisher.publish_place_markers(payload)
+            await self.guard.post(payload.captured_at, lambda: self.publisher.publish_place_markers(payload))
         except Exception as exc:  # noqa: BLE001 - logged by type only, never the body
             logger.error("place marker publish failed source=%s error_type=%s",
                          self.source_id, type(exc).__name__)

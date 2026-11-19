@@ -7,7 +7,6 @@ paths; original video ordinals are derived only by unique exact timestamp joins.
 
 import argparse
 import copy
-import hashlib
 import json
 import math
 import os
@@ -20,6 +19,7 @@ import tempfile
 for holder in ('learning/registry/perception', 'learning/curation/perception'):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / holder))
 from build import read_eval_set
+from review_authority import _sha
 from review_eval_companion import capture_eval_companions
 from review_provenance import _stable_bytes
 from store import file_hashes, _sha256
@@ -28,10 +28,6 @@ from store import file_hashes, _sha256
 def _require(condition, message):
     if not condition:
         raise ValueError('eval package: ' + message)
-
-
-def _sha(raw):
-    return hashlib.sha256(raw).hexdigest()
 
 
 def _json(raw):

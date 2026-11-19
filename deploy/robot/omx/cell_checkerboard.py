@@ -19,8 +19,12 @@ Procedure (arm only, after a person lays a printed checkerboard flat on the floo
 from __future__ import annotations
 
 import json
+import math
+import subprocess
 
 import numpy as np
+from cell_board_capture import capture_intrinsics_frames
+from cell_camera_binding import live_camera_binding, runtime_viewer_state, viewer_label_from_url, viewer_session
 
 
 def board_points(cols: int, rows: int, square_m: float) -> np.ndarray:
@@ -40,11 +44,11 @@ def find_corners(img, cols: int, rows: int):
     return cv2.cornerSubPix(gray, corners, (5, 5), (-1, -1), (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-3))
 
 
-def calibrate_intrinsics(corner_sets: list, board: np.ndarray, size: tuple) -> dict:
+def calibrate_intrinsics(corner_sets: list, board: np.ndarray, size: tuple, extra_flags: int = 0) -> dict:
     import cv2
 
     objects = board if isinstance(board, list) else [board] * len(corner_sets)  # ChArUco: each view its own corners
-    rms, K, dist, _, _ = cv2.calibrateCamera(objects, corner_sets, size, None, None)
+    rms, K, dist, _, _ = cv2.calibrateCamera(objects, corner_sets, size, None, None, flags=cv2.CALIB_FIX_K3 | extra_flags)
     return {"K": K, "dist": dist, "rms_px": float(rms)}
 
 
@@ -79,20 +83,24 @@ def pixel_to_plane(pixel, K, dist, camera_in_base: tuple, plane_z: float):
     """The arm-frame point where the pixel's ray meets the plane z = plane_z (None if parallel or behind)."""
     import cv2
 
-    ray = cv2.undistortPoints(np.array([[pixel]], np.float64), K, dist).reshape(2)
-    d_cam = np.array([ray[0], ray[1], 1.0])
+    if not np.any(dist):
+        rx = (float(pixel[0]) - float(K[0][2])) / float(K[0][0])
+        ry = (float(pixel[1]) - float(K[1][2])) / float(K[1][1])
+    else:
+        ray = cv2.undistortPoints(np.array([[pixel]], np.float64), K, dist).reshape(2)
+        rx, ry = float(ray[0]), float(ray[1])
     R, t = camera_in_base
-    d = R @ d_cam
-    if abs(d[2]) < 1e-9:
+    dx = float(R[0][0]) * rx + float(R[0][1]) * ry + float(R[0][2])
+    dy = float(R[1][0]) * rx + float(R[1][1]) * ry + float(R[1][2])
+    dz = float(R[2][0]) * rx + float(R[2][1]) * ry + float(R[2][2])
+    if abs(dz) < 1e-9:
         return None
-    s = (plane_z - t[2]) / d[2]
-    return None if s <= 0 else t + s * d
+    s = (float(plane_z) - float(t[2])) / dz
+    return None if s <= 0 else np.array([float(t[0]) + s * dx, float(t[1]) + s * dy, float(t[2]) + s * dz])
 
 
 # --- ChArUco and printable pages (2026-10-29) ------------------------------------------------------------------------
-# A ChArUco board (ArUco markers in the white squares) names every corner, so a view that shows only part of the board
-# still gives a pose and the corners cannot be matched mirrored - the two plain-board failure modes. One 25 mm board
-# serves the wrist camera (partial views at 0.2 m) and the top camera (whole board at 0.65 m).
+# A ChArUco board names visible corners even in partial views.
 PX_PER_MM = 12  # 304.8 dpi; print the PDF at 100 % (no fit-to-page), then check the 50 mm bar with a ruler
 A4_MM = (210, 297)
 
@@ -100,7 +108,8 @@ A4_MM = (210, 297)
 PRINTED = (7, 10, 0.020, 0.015)  # the Fleet print sheet's board (cell_print_sheets.charuco_pdf, D-933 1)
 
 
-def charuco_board(cols: int = 7, rows: int = 5, square_m: float = 0.025, marker_m: float = 0.018):
+def charuco_board(cols: int = PRINTED[0], rows: int = PRINTED[1],
+                  square_m: float = PRINTED[2], marker_m: float = PRINTED[3]):
     import cv2
 
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
@@ -108,9 +117,9 @@ def charuco_board(cols: int = 7, rows: int = 5, square_m: float = 0.025, marker_
     return create(cols, rows, square_m, marker_m, dictionary) if create else cv2.aruco.CharucoBoard((cols, rows), square_m, marker_m, dictionary)
 
 
-def charuco_image(size: tuple) -> np.ndarray:
+def charuco_image(size: tuple, board=None) -> np.ndarray:
     """Render the calibration board with either OpenCV's 4.6 or 4.7+ API."""
-    board = charuco_board()
+    board = board or charuco_board()
     draw = getattr(board, "generateImage", None) or board.draw
     return draw(size, marginSize=0, borderBits=1)
 
@@ -148,9 +157,9 @@ def page(kind: str) -> np.ndarray:
         board = ((np.add.outer(np.arange(rows * q) // q, np.arange(cols * q) // q) % 2) * 255).astype(np.uint8)
         label = "checkerboard 7x5 inner corners, 15 mm squares"
     else:
-        cols, rows, sq = 7, 5, 25
+        cols, rows, sq = 7, 10, 20
         board = charuco_image((cols * sq * PX_PER_MM, rows * sq * PX_PER_MM))
-        label = "ChArUco 7x5 squares, 25 mm, markers 18 mm, DICT_4X4_50"
+        label = "ChArUco 7x10 squares, 20 mm, markers 15 mm, DICT_4X4_50"
     y, x = 30 * PX_PER_MM, (W - board.shape[1]) // 2
     img[y:y + board.shape[0], x:x + board.shape[1]] = board
     yb = y + board.shape[0] + 20 * PX_PER_MM
@@ -190,47 +199,20 @@ def hand_eye_top_down(gripper_in_base: list, board_in_camera: list, board_z: flo
 
 
 def capture(cell, config: dict, centre, z_list, yaw_list, step_m: float, out, camera: str = "wrist", log=print) -> int:
-    """Hover the gripper (down) over a grid around `centre` at each height and yaw, save the wrist frame and the
-    FK pose of the measured joints. Moves only through the planner's own libraries and the runner's goto."""
-    import cv2
-
-    import cell_pipeline as cp
-    import grasp_planner as gp
-
-    kin = gp.load_kinematics(None)[0]
-    out.mkdir(parents=True, exist_ok=True)
-    n = 0
-    try:
-        for yaw in yaw_list:
-            for z in z_list:
-                for dx, dy in ((0, 0), (step_m, 0), (0, step_m), (-step_m, 0), (0, -step_m)):
-                    view = {"x": centre[0] + dx, "y": centre[1] + dy, "z": z, "yaw_deg": yaw}
-                    try:
-                        library = cp.write_library(config, view, view, out / f"lib-{n}.json")
-                    except SystemExit as exc:  # out of reach here: the other hovers still count
-                        log({"hover": view, "skipped": str(exc)[:120]})
-                        continue
-                    if not all(cell.act(c).get("ok") for c in (f"load {library}", "goto above_pick")):
-                        log({"hover": view, "stopped": True})
-                        return n
-                    state = cell.act("state").get("state")
-                    fk = kin.fk([gp.norm_to_rad(q) for q in state[:5]])
-                    cv2.imwrite(str(out / f"view-{n}.png"), cell.frame(camera))
-                    (out / f"view-{n}.json").write_text(json.dumps({"state": state, "R": fk.rotation, "t": [fk.x, fk.y, fk.z], "hover": view}))
-                    n += 1
-    finally:
-        cell.act("park")
-    return n
+    from cell_board_capture import capture_hand_eye
+    return capture_hand_eye(cell, config, centre, z_list, yaw_list, step_m, out, camera, log)
 
 
-def solve(folder, K, dist, board_z: float, board=None) -> dict:
+def solve(folder, K, dist, board_z: float, board=None, *, binding=None) -> dict:
     """hand_eye_top_down over the captured views whose ChArUco corners give a pose."""
     import cv2
 
+    from cell_board_capture import verify_hand_eye_views
+    verify_hand_eye_views(folder, binding)
     board = board or charuco_board()
     G, B = [], []
     for meta in sorted(folder.glob("view-*.json")):
-        found = find_charuco(cv2.imread(str(meta.with_suffix(".png"))), board)
+        found = find_charuco(cv2.imread(str(meta.with_suffix(".jpg"))), board)
         pose = found and board_pose(found[1], found[0], K, dist)
         if pose:
             m = json.loads(meta.read_text())
@@ -273,7 +255,15 @@ def main(argv=None):
         s.add_argument("--config", required=True, type=Path)
         s.add_argument("--camera", default="wrist")
         s.add_argument("--out", required=True, type=Path)
-    sub.choices["intrinsics"].add_argument("--frames", type=int, default=25)
+    sub.choices["intrinsics"].add_argument("--frames", type=int, default=60,
+                                           help="most views to keep; capture stops at this count or timeout")
+    sub.choices["intrinsics"].add_argument("--scale-bar-mm", type=float, required=True)
+    sub.choices["intrinsics"].add_argument("--timeout-s", type=float, default=180)
+    offline = sub.add_parser("intrinsics-from-frames", help="fit saved RGB frames without moving an arm")
+    offline.add_argument("dir", type=Path)
+    offline.add_argument("--camera", required=True)
+    offline.add_argument("--scale-bar-mm", type=float, required=True, help="measured length of the printed 50 mm bar")
+    offline.add_argument("--out", required=True, type=Path)
     cap = sub.choices["capture"]
     cap.add_argument("--centre", nargs=2, type=float, required=True, help="TCP hover centre (m) with the board in the wrist view")
     cap.add_argument("--z", nargs="+", type=float, default=[0.20, 0.23])
@@ -283,26 +273,56 @@ def main(argv=None):
     sol.add_argument("dir", type=Path)
     sol.add_argument("--intrinsics", required=True, type=Path)
     sol.add_argument("--board-z", required=True, type=float, help="board surface height in the arm frame (m)")
+    sol.add_argument("--config", required=True, type=Path, help="cell config with the wrist viewer URL")
     args = ap.parse_args(argv)
+
+    def save_intrinsics(result):
+        try:
+            with args.out.open("x", encoding="utf-8") as output:
+                json.dump(result, output, indent=1, allow_nan=False)
+        except FileExistsError:
+            print(json.dumps({"accepted": False, "checks": {"reasons": ["result_file_exists"]}}))
+            return 1
+        print(json.dumps({"accepted": result["accepted"], "checks": result["checks"]}))
+        return 0 if result["accepted"] else 1
+
+    def fit_intrinsics(folder):
+        try:
+            return intrinsics_from_frames(folder, args.camera, args.scale_bar_mm)
+        except (ValueError, OSError) as exc:
+            return {"camera": args.camera, "accepted": False, "checks": {"reasons": [str(exc)]}}
+
     if args.verb == "pages":
         for kind in ("checker", "charuco"):
             cv2.imwrite(str(args.out / f"arm-s-{kind}-a4.png"), page(kind))
         return 0
     if args.verb == "solve":
-        intr = json.loads(args.intrinsics.read_text())
-        result = solve(args.dir, np.array(intr["K"]), np.array(intr["dist"]), args.board_z)
-        (args.dir / "hand-eye.json").write_text(json.dumps(result, indent=1))
-        print(json.dumps(result))
-        return 0
+        raise SystemExit("CALIBRATION_REQUIRED: checked hand-eye capture and FK authority unavailable")
+    if args.verb == "intrinsics-from-frames":
+        if args.out.exists():
+            return save_intrinsics({"accepted": False, "checks": {"reasons": ["result_file_exists"]}})
+        return save_intrinsics(fit_intrinsics(args.dir))
+    if args.verb == "intrinsics" and (not math.isfinite(args.scale_bar_mm) or not 49.5 <= args.scale_bar_mm <= 50.5):
+        return save_intrinsics({"camera": args.camera, "accepted": False,
+                                "checks": {"reasons": ["printed 50 mm scale bar must be measured within 0.5 mm"]}})
+    if args.verb == "intrinsics" and args.out.exists():
+        return save_intrinsics({"accepted": False, "checks": {"reasons": ["result_file_exists"]}})
+    if args.verb == "capture":
+        raise SystemExit("CALIBRATION_REQUIRED: supervised checked hand-eye capture unavailable")
     import cell_pipeline as cp
 
     config = json.loads(args.config.read_text())
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     if args.verb == "intrinsics":
-        result = grab_intrinsics(cell, args.camera, args.frames, board=charuco_board(*PRINTED))
-        args.out.write_text(json.dumps(result, indent=1))
-        print(json.dumps(result))
-        return 0
+        folder = args.out.parent / f"{args.out.stem}-frames"
+        try:
+            captured = capture_intrinsics_frames(cell, args.camera, folder, args.frames, args.timeout_s)
+        except (OSError, RuntimeError, SystemExit, ValueError, subprocess.SubprocessError):
+            return save_intrinsics({"camera": args.camera, "accepted": False,
+                                    "checks": {"reasons": ["camera_identity_or_capture_unavailable"]}})
+        result = fit_intrinsics(folder)
+        result["checks"]["captured_views"] = captured
+        return save_intrinsics(result)
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     if not cell.act("state").get("ok"):
         raise SystemExit("start the chunk session first: no chunk_runner answers")
@@ -312,3 +332,17 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+from cell_intrinsics_frames import (  # noqa: E402,F401  (re-exported; the module imports this one, so it comes last)
+    CELLS,
+    board_view,
+    board_scale,
+    view_coverage,
+    coverage_reasons,
+    board_spec,
+    intrinsics_from_frames,
+    board_observations,
+    _fit,
+    _same_look,
+)

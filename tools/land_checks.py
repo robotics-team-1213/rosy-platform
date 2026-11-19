@@ -30,6 +30,7 @@ from pathlib import Path
 
 import land_events
 import land_mainred
+from land_turn import overtimes, turn_budget, turn_deadline, turn_wanted  # noqa: F401  (tests patch turn_wanted here)
 
 MAX_RERUN = 5  # more NEW ids than this is a real break, not load
 MAX_MAIN_CHECK = 30  # NEW ids rerun on main in one invocation (bounds the command line)
@@ -197,6 +198,10 @@ def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, 
     ``verdict`` is test/known_failures.py's output for ``log``; ``run`` is ``remote_pytest.run``.
     A stop also says whether the ids fail on main too (``main_red``).
     """
+    # 11-13: ~20 landings on one red main each reran main's known reds alone first; those alone jobs held
+    # the test hosts ("no test host reachable") for everyone, then main_red said "already failed on main".
+    if land_mainred.known(wt, land_mainred.merged_main(wt), _ids(wt, verdict)):
+        return [], main_red(wt, inv, verdict, logdir, tag, python, run)
     ids, why = _rerun_alone(wt, inv, log, verdict, logdir, tag, python, run, tested_sha=tested_sha)
     if ids or why.startswith("HEAD changed"):
         return ids, why
@@ -213,24 +218,28 @@ def _only_skipped(log: Path) -> bool:
 def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
                  run, *, tested_sha: str) -> tuple[list[str], str]:
     ids = _ids(wt, verdict)
-    if not ids or len(ids) > MAX_RERUN:
-        return [], f"{len(ids)} NEW id(s); a rerun alone is tried only for 1 to {MAX_RERUN}"
+    files = sorted({i.split("::")[0] for i in ids})
+    if not ids or len(ids) > MAX_RERUN and len(files) > 2:
+        return [], (f"{len(ids)} NEW id(s); a rerun alone is tried only for 1 to {MAX_RERUN}" if not ids else
+                    f"{len(ids)} NEW id(s) across {len(files)} files; a rerun alone is tried only for 1 to"
+                    f" {MAX_RERUN} ids or 1 to 2 files")
+    targets = files if len(ids) > MAX_RERUN else ids  # 11-17: 22 parametrized ids of one file rerun as that file
     safety = _safety(wt, python, ids)
     if safety:
         return [], f"under a safety root, never retried (D-762): {', '.join(safety)}"
     env = [token for token in inv if ENV_TOKEN.match(token)]
-    logs = [logdir / f"alone-{tag}-{i}.txt" for i in range(1, len(ids) + 1)]
+    logs = [logdir / f"alone-{tag}-{i}.txt" for i in range(1, len(targets) + 1)]
     print(f"[land] {len(ids)} NEW failure(s) in {log.name}: rerunning each alone once (D-790)", flush=True)
-    codes = run([[*env, nodeid] for nodeid in ids], logs, tested_sha, repo=wt, label=f"land-alone-{tag}")
-    if len(codes) != len(ids):
+    codes = run([[*env, target] for target in targets], logs, tested_sha, repo=wt, label=f"land-alone-{tag}")
+    if len(codes) != len(targets):
         return [], "incomplete isolated rerun results"
     if _git(wt, "rev-parse", "HEAD").stdout.strip() != tested_sha:
         return [], "HEAD changed during isolated checks; retry the landing"
-    lost = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs)
+    lost = [f"{target} (exit {code}, {alone})" for target, code, alone in zip(targets, codes, logs)
             if code not in (0, 1) or code == 0 and _only_skipped(alone)]
     if lost:  # 4: no such file, 5: nothing collected, 255: host lost, exit 0 by skipping: no verdict, not a second failure
         return [], "the rerun alone gave no verdict: " + "; ".join(lost)
-    again = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code != 0]
+    again = [f"{target} (exit {code}, {alone})" for target, code, alone in zip(targets, codes, logs) if code != 0]
     if again:
         return [], "failed again when run alone: " + "; ".join(again)
     sha = tested_sha
@@ -240,8 +249,10 @@ def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path
     kept = log.with_name(f"{log.stem}-load-flaky-{sha[:10]}{log.suffix}")
     kept.write_bytes(log.read_bytes())
     log = kept
+    alone_for = dict(zip(targets, logs))  # grouped: every id's verdict came from its whole file's rerun
     with open(common / CANDIDATES, "a", encoding="utf-8") as out:
-        for nodeid, alone in zip(ids, logs):
+        for nodeid in ids:
+            alone = alone_for[nodeid if targets is ids else nodeid.partition("::")[0]]
             out.write(f"{nodeid}  # LOAD-FLAKY {day}: failed in {log} on {sha[:10]}, passed alone in {alone};"
                       " review for test/flaky_quarantine.txt (D-762 evidence rules)\n")
     for nodeid in ids:
@@ -260,26 +271,38 @@ def main_red(wt: Path, inv: list[str], verdict: str, logdir: Path, tag: str, pyt
         return ""
     main = land_mainred.merged_main(wt)  # the main this candidate merged, not main's tip (D-889 addendum 2, 1)
     env = [token for token in inv if ENV_TOKEN.match(token)]
-    log = logdir / f"main-{tag}.txt"
     if land_mainred.known(wt, main, ids):
         return f"MAIN-RED: every NEW id already failed on main {main[:10]} (rosy-main-red.jsonl); not rerun"
     print(f"[land] rerunning {min(len(ids), MAX_MAIN_CHECK)} NEW id(s) on main {main[:10]} (MAIN-RED check)",
           flush=True)
+    # an alone-class id names a file: run as a node id it gives no verdict on main (2026-11-13), so each reruns
+    # the way land_mainred.recheck does, in its own invocation
+    head = ids[:MAX_MAIN_CHECK]
+    alone = [land_mainred.alone_invocation(i) for i in head]
+    plain = [i for i, a in zip(head, alone) if not a]
+    jobs = ([[*env, *plain]] if plain else []) + [[*env, *a] for a in alone if a]
+    logs = [logdir / f"main-{tag}{'' if n == 0 else f'-{n}'}.txt" for n in range(len(jobs))]
+    log = logs[0]
     try:
-        code = run([[*env, *ids[:MAX_MAIN_CHECK]]], [log], main, repo=wt, label=f"land-main-{tag}")[0]
+        codes = run(jobs, logs, main, repo=wt, label=f"land-main-{tag}")
     except SystemExit as exc:  # no test host (D-584): unknown, not main's
         return f"main check not run ({exc})"
-    if code == 0:
+    if all(code == 0 for code in codes):
         return f"the NEW id(s) pass on main {main[:10]}: this branch caused them"
-    if code != 1 or not log.is_file():
-        return f"main check gave no verdict (exit {code}, log {log}); new tests may not exist on main"
-    again = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt, capture_output=True,
-                           text=True, encoding="utf-8", errors="replace")
-    red = [m.group(1).strip() for line in again.stdout.splitlines() if (m := NEW_LINE.match(line.strip()))]
+    if 1 not in codes or not all(lg.is_file() for lg, code in zip(logs, codes) if code == 1):
+        return f"main check gave no verdict (exit {codes}, log {log}); new tests may not exist on main"
+    red, text = [], ""
+    for lg, code in zip(logs, codes):
+        if code != 1:
+            continue
+        again = subprocess.run([python, "test/known_failures.py", str(lg)], cwd=wt, capture_output=True,
+                               text=True, encoding="utf-8", errors="replace")
+        red += [m.group(1).strip() for line in again.stdout.splitlines() if (m := NEW_LINE.match(line.strip()))]
+        text += lg.read_text(encoding="utf-8", errors="replace")
     for nodeid in red:
         print(f"MAIN-RED {nodeid}")
     branch = _git(wt, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-    land_mainred.red(wt, main, red, log.read_text(encoding="utf-8", errors="replace"), env, branch)
+    land_mainred.red(wt, main, red, text, env, branch)
     if not red:
         return f"the NEW id(s) pass on main {main[:10]}: this branch caused them"
     return (f"MAIN-RED: {len(red)} of {len(ids)} NEW id(s) also fail on main {main[:10]} (log {log}). Main is"
@@ -324,43 +347,32 @@ def landed_copy(main_co: Path, argv: list[str]) -> int | None:
     return subprocess.run([sys.executable, str(there / "land.py"), *argv], env={**os.environ, OWN_COPY: "1"}).returncode
 
 
+def stash_main_collisions(main_co: Path, main_sha: str, candidate: str) -> list[str]:
+    """Stash main_co's dirty/untracked files the landing also changes (disjoint dirty files stay), for --ff-only."""
+    status = _git(main_co, "-c", "core.quotepath=off", "status", "--porcelain")
+    if not status.stdout.strip():
+        return []
+    changed = set(_git(main_co, "-c", "core.quotepath=off", "diff", "--name-only",
+                       f"{main_sha}..{candidate}").stdout.splitlines())
+    colliding = sorted(p for p in (line[3:].split(" -> ")[-1] for line in status.stdout.splitlines())
+                       if p in changed or any(c.startswith(p.rstrip("/") + "/") for c in changed))
+    if colliding:
+        subprocess.run(["git", "-C", str(main_co), "stash", "push", "-u", "-m",
+                        f"land-auto-stash-{candidate[:10]}", "--", *colliding], check=False, capture_output=True)
+        print(f"[land] auto-stashed {len(colliding)} colliding file(s) in {main_co}: {', '.join(colliding[:5])}")
+    return colliding
+
+
 CAP_POLL_S = 15
+MAX_OVERTIMES = 2
 
 
-def turn_wanted(land, wt: Path) -> bool:
-    """Whether another landing is ready ('waiting') for the turn. The turn cap only applies then: on 2026-10-31 an
-    urgent landing's turn hit the 10 min cap at 584 s with no one waiting and redid its pretest outside for an hour."""
-    try:
-        mine = {t.name for t in land.land_queue._held}
-        rows = land.land_queue.ahead(land.land_queue.queue_dir(wt), Path("~"))
-        return any(r.get("status") == "waiting" and r["ticket"] not in mine for r in rows)
-    except Exception:  # noqa: BLE001 - an unreadable queue keeps the cap
-        return True
-
-
-def overtimes(land, args) -> int:
-    """How often the turn cap sent this landing back: in this process, or before a relaunch on main's new landing
-    code (the ticket keeps it; 11-01 13:26 the rest bundle relaunched and went back once more). True counts as 1."""
-    counts = [int(getattr(args, "_overtime", 0) or 0)]
-    for ticket in land.land_queue._held:
-        try:
-            counts.append(int(json.loads(ticket.read_text(encoding="utf-8")).get("overtime") or 0))
-        except (OSError, ValueError, TypeError):
-            pass
-    return max(counts)
-
-
-def turn_budget(land, args) -> float:
-    sent_back = overtimes(land, args)
-    return land.TURN_MAX_S if sent_back >= 2 else min(land.TURN_MAX_S, land.TURN_CAP_S * (3 if sent_back else 1))
-
-
-def turn_deadline(land, args, round_no, *, maximum: bool = False) -> float | None:
-    budget = land.TURN_MAX_S if maximum else turn_budget(land, args)
-    if not (isinstance(round_no, int) or re.fullmatch(r"g\d+r?", str(round_no))):
-        return None
-    started = land.land_queue.turn_started()
-    return (land.time.monotonic() if started is None else started) + budget
+def next_overtime(land, args) -> int:
+    """Increment overtime count and stop runaway zombies past MAX_OVERTIMES turns."""
+    nxt = overtimes(land, args) + 1
+    if nxt > MAX_OVERTIMES:
+        raise land.Stop(f"stopped after {MAX_OVERTIMES} overtime handoffs without finishing")
+    return nxt
 
 
 def check_turn(land, wt: Path, args, round_no) -> None:
@@ -392,8 +404,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     head = land.out(wt, "rev-parse", "HEAD")
     if (wt / land.HARNESS).is_file():
         lint_log = logdir / f"lint-{round_no}.txt"
-        key = (str(logdir.resolve()), str(round_no).removeprefix("g"), head, id(land.step),
-               (wt / land.HARNESS).stat().st_mtime_ns)
+        key = (str(wt.resolve()), head, id(land.step), (wt / land.HARNESS).stat().st_mtime_ns)
         with _lint_lock:
             if key in _lint_done:
                 lint_log.write_text(_lint_done[key], encoding="utf-8")
@@ -403,9 +414,13 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
         done.append("lint ok")
     check_turn(land, wt, args, round_no)
     # Long invocations split by measured run time so hosts run them side by side (2026-11-01: 30 min tails).
-    invocations = sys.modules["work_queue"].split(wt, invocations)
+    # seen={}: groups follow the tree alone (history only orders dispatch), so a retry's argv matches its earlier rows
+    invocations = sys.modules["work_queue"].split(wt, invocations, seen={})
     reused, todo, keep = land.land_cache.split(wt, args, invocations, head, python, land.select)
     done += reused
+    land_events.emit("round_start", round=round_no, head=head, tree=land.out(wt, "rev-parse", "HEAD^{tree}"),
+                     reused=len(reused), todo=len(todo))
+    kept = set()  # logs already kept when judged (early); the post-loop skips them
 
     def batch(part: list[tuple[int, list[str]]]) -> list[str]:
         todo = [inv for _, inv in part]
@@ -420,14 +435,23 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 raise CancelledError("turn deadline expired during diagnostic checks")
             return codes
 
+        def settle(inv, log, code):  # why an exit is no verdict (None: clean); one rule for on_done and the post-loop
+            return (affected_exclusive.evidence(log, code) if affected_exclusive.dedicated(inv)
+                    else land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log))
+
         def judge(inv, log, tag):  # a NEW that main-red carry-over takes (land_mainred) neither stops nor is kept
             run = diagnostic_run if stop is not None else land.remote_pytest.run
             v = land.land_checks.verdict(wt, inv, land.Path(log), logdir, tag, python, run, head)
             taken = land.land_checks.carry(wt, land.Path(log), head, python, inv) if v[0] and not v[1] else ([], "")
             return (v[0], taken[0], f"main-red carried: {taken[1]}") if taken[0] else v
 
-        def on_done(inv, log):  # D-889: a confirmed NEW failure, or the turn's time cap, cancels the rest
+        def on_done(inv, log, code=None):  # D-889: a confirmed NEW failure, or the turn's time cap, cancels the rest
             seen[str(log)] = v = judge(inv, log, f"{round_no}-{land.Path(log).stem[4:]}")
+            # An earned pass survives a kill. Only with the exit code (Work.done passing it is the pending part 3):
+            # a log alone cannot tell exit 0 from the exit-1-all-passed case that the post-loop reruns.
+            if code is not None and not v[0] and not settle(inv, log, code):
+                keep(inv, log)
+                kept.add(str(log))
             return bool(v[0] and not v[1]) or (stop is not None and stop.is_set())
         stop = threading.Event() if deadline is not None else None
         timers = []
@@ -461,8 +485,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
         if len(codes) != len(todo):
             raise land.Stop("incomplete remote results; not landing")
         print(f"[pytest] {(secs := round(land.time.monotonic() - began))}s", flush=True)
-        # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
-        # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
+        # Each invocation is judged and each clean pass kept before a stop: a retry reruns only the rest (10-25).
         stops, cancelled = [], []
         for (n, _), inv, log, code in zip(part, todo, logs, codes):
             if land.out(wt, "rev-parse", "HEAD") != head:
@@ -471,11 +494,9 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 cancelled.append(inv)
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="cancelled", seconds=secs, **timing(log, began_at))
                 continue
-            why = (affected_exclusive.evidence(log, code) if affected_exclusive.dedicated(inv)
-                   else land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log))
+            why = settle(inv, log, code)
             if why == land.land_cache.NO_EVIDENCE:
-                # 2026-10-28: exit 1 with every test passed and no FAILED/ERROR line stopped 8 landings in a day;
-                # one rerun of the same invocation decides, and a second exit without evidence still stops.
+                # 10-28: exit 1, all passed, no FAILED line stopped 8 landings: one rerun decides, a second stops.
                 again = logdir / f"rerun-{round_no}-{n}.txt"
                 try:
                     rerun = (diagnostic_run if stop is not None else land.remote_pytest.run)(
@@ -493,11 +514,14 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs, **timing(log, began_at))
                 continue
-            failed, flaky, why = seen.get(str(log)) or judge(inv, log, f"{round_no}-{n}")
+            try:
+                failed, flaky, why = seen.get(str(log)) or judge(inv, log, f"{round_no}-{n}")
+            except CancelledError:  # no verdict at the deadline: not kept, the passes after it still are
+                cancelled.append(inv); continue
             if land.out(wt, "rev-parse", "HEAD") != head:
                 raise land.Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
             if failed and not flaky:
-                stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
+                stops.append(f"NEW failure in {' '.join(inv[:4])}{' ...' * (len(inv) > 4)} (log {log}); {why}; not landing")
                 land.land_cache.failed(wt, inv, True)
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="new", seconds=secs, **timing(log, began_at))
                 continue
@@ -506,7 +530,8 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
             land.land_events.emit("tests", round=round_no, argv=inv, seconds=secs, **timing(log, began_at),
                                   verdict="carried" if carried else "flaky" if flaky else "pass")
             if not failed:
-                keep(inv, log)  # Timing mappings are publication evidence; split never reuses them.
+                if str(log) not in kept:
+                    keep(inv, log)  # Timing mappings are publication evidence; split never reuses them.
                 land.land_mainred.passed(inv)  # this round passed it: an earlier round's carry of it is void
                 land.land_mainred.close(wt, log.read_text(encoding="utf-8", errors="replace"), head)
             done.append(f"pytest {' '.join(inv)} ok ({log.name})"
@@ -550,4 +575,5 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
             done.append("node skipped: no web/*.mjs under the selected test dirs")
     if land.out(wt, "rev-parse", "HEAD") != head:
         raise land.Stop(f"HEAD changed during checks; {head[:10]} was tested; retry the landing")
+    land_events.emit("round_end", round=round_no, head=head, verdict="pass")
     return done

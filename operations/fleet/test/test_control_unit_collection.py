@@ -140,3 +140,75 @@ def test_detail_transit_ages_robot_observation_and_removes_stale_dispatch(transi
     assert detail.age_s == transit + 1.0 and detail.robots[0].state_age_s == transit + 2.0
     assert detail.availability == ("STALE" if transit == 6.0 else "AVAILABLE")
     assert (detail.dispatch is None) == (transit == 6.0)
+
+
+def _link_peer(behaviour, digest=None):
+    async def peer(unit, method, path):
+        if unit == "A" and behaviour:
+            raise behaviour[0]
+        rows = ([summary("A", "R"), summary("A1", "A")]
+                if unit == "A" else [summary("B", "R")])
+        return ControlOverview(unit_id=unit, config_revision="v1", manifest_digest=digest,
+                               units=rows).model_dump(mode="json")
+    return peer
+
+
+def test_peer_link_failure_logs_once_per_transition_with_reason_and_recovery(caplog):
+    import logging
+    import socket
+    import httpx
+    caplog.set_level(logging.INFO, logger="fleet.server.control_unit_collection")
+    failure = [httpx.ConnectError("x")]
+    failure[0].__cause__ = socket.gaierror("no such host")
+    collection = ControlUnitCollection(config(), Local(), _link_peer(failure))
+    for _ in range(3):
+        asyncio.run(collection.refresh())
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1 and "dns" in warnings[0].getMessage() and " A " in warnings[0].getMessage()
+    failure[0] = httpx.ReadTimeout("slow")  # a changed reason is a new transition worth one line
+    asyncio.run(collection.refresh())
+    assert "timeout" in [r for r in caplog.records if r.levelno == logging.WARNING][-1].getMessage()
+    failure.clear()
+    asyncio.run(collection.refresh())
+    asyncio.run(collection.refresh())
+    infos = [r for r in caplog.records if r.levelno == logging.INFO]
+    assert len(infos) == 1 and "recovered" in infos[0].getMessage()
+
+
+@pytest.mark.parametrize("exc,reason", [
+    (ConnectionRefusedError(), "connect"), (TimeoutError(), "timeout"),
+    (ValueError("CONTROL_UNIT_INFORMATION_SCOPE_MISMATCH"), "scope mismatch"),
+])
+def test_peer_failure_classification(exc, reason):
+    from fleet.server.control_unit_collection import classify_peer_failure
+    assert classify_peer_failure(exc) == reason
+
+
+def test_peer_http_status_and_tls_classification():
+    import ssl
+    import httpx
+    from fleet.server.control_unit_collection import classify_peer_failure
+    request = httpx.Request("GET", "https://peer.invalid")
+    for code, reason in [(401, "auth 401"), (403, "auth 403"), (500, "http 500")]:
+        exc = httpx.HTTPStatusError("x", request=request, response=httpx.Response(code, request=request))
+        assert classify_peer_failure(exc) == reason
+    exc = httpx.ConnectError("x")
+    exc.__cause__ = ssl.SSLCertVerificationError("bad cert")
+    assert classify_peer_failure(exc) == "tls"
+
+
+def test_overview_carries_manifest_digest_and_child_digest_mismatch_is_unavailable():
+    own = ControlUnitCollection(config(), Local(), None)
+    digest = config().topology.digest
+    assert len(digest) == 64 and own.overview().manifest_digest == digest
+    same = ControlUnitCollection(config(), Local(), _link_peer([], digest))
+    asyncio.run(same.refresh())
+    assert {r.unit_id: r.availability for r in same.overview().units}["A"] == "AVAILABLE"
+    legacy = ControlUnitCollection(config(), Local(), _link_peer([], None))  # peer predates the field
+    asyncio.run(legacy.refresh())
+    assert {r.unit_id: r.availability for r in legacy.overview().units}["A"] == "AVAILABLE"
+    other = ControlUnitCollection(config(), Local(), _link_peer([], "0" * 64))
+    asyncio.run(other.refresh())
+    rows = {r.unit_id: r for r in other.overview().units}
+    assert rows["A"].availability == "UNAVAILABLE" and rows["A"].error == "CONTROL_UNIT_MANIFEST_MISMATCH"
+    assert rows["B"].availability == "UNAVAILABLE"  # the whole mismatching peer stays out

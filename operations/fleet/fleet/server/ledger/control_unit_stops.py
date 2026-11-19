@@ -6,10 +6,20 @@ import logging
 from core_common.protocol.integrated_control import (
     ControlDispatchFence, ControlStopIngress, ControlStopUnitResult,
 )
+from fleet.server.control_unit_config import canonical_unit_id
 from fleet.server.control_stop_store import StopAssignment
 
 
 _LOG = logging.getLogger(__name__)
+
+
+def canonical_stop_ingress(body):
+    """D-1011: a stop may still address the pre-rename unit id or fence keys."""
+    return body.model_copy(update={
+        "target_unit": canonical_unit_id(body.target_unit),
+        "expected_controls": {canonical_unit_id(unit): fence
+                              for unit, fence in body.expected_controls.items()},
+    })
 
 
 class ControlUnitStops:
@@ -76,6 +86,7 @@ class ControlUnitStops:
         return await self.receive(ingress, actor_id=actor_id)
 
     async def receive(self, body, *, actor_id):
+        body = canonical_stop_ingress(body)  # D-1011 alias
         scope, assignments = self._assign(body)
         key = body.origin_id, body.stop_id
         async with self.live_work_gate:
@@ -164,7 +175,7 @@ class ControlUnitStops:
         return await asyncio.to_thread(self.store.snapshot, origin, identity)
 
     async def reconcile(self, origin, identity, body, *, actor_id):
-        if body.affected_units != [self.unit.unit_id]:
+        if [canonical_unit_id(unit) for unit in body.affected_units] != [self.unit.unit_id]:
             raise ValueError("CONTROL_UNIT_LOCAL_RECONCILIATION_ONLY")
         job = asyncio.create_task(self._reconcile(origin, identity, body, actor_id))
         self.reconciliations.add(job)

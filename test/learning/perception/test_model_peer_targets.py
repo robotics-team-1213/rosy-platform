@@ -121,7 +121,8 @@ def test_hint_lost_after_observation_spends_no_push_attempt(tmp_path, monkeypatc
         return {'shadow': None, 'hold': None}
     monkeypatch.setattr(deliver, 'observe', observe)
     monkeypatch.setattr(deliver, 'main', lambda _argv: pytest.fail('unapproved push attempted'))
-    assert watch.main(['--config', str(cfg_path)], intake_fn=fakes.intake) == (77 if fault == 'expired' else 79)
+    # expired: the name no longer resolves (robot off) -> skipped, exit 0 since 2026-11-17
+    assert watch.main(['--config', str(cfg_path)], intake_fn=fakes.intake) == (0 if fault == 'expired' else 79)
     state = ti._state(tmp_path)
     assert state['commits']['m1']['robots']['pinky']['attempts'] == 0
     assert state['commits']['m1']['robots']['pinky']['status'] == 'pending'

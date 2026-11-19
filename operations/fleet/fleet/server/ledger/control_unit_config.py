@@ -1,6 +1,8 @@
 """Validated, immutable direct ownership for independent and nested Fleet units."""
 
 from dataclasses import dataclass
+from hashlib import sha256
+import json
 import re
 from types import MappingProxyType
 from typing import Mapping
@@ -11,6 +13,14 @@ def _identifier(value, *, limit=64):
             or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]*", value)):
         raise ValueError("INVALID_CONTROL_UNIT_IDENTIFIER")
     return value
+
+
+# D-1011: the arm cell unit was CELL-A until 2026-11-10; inputs may still carry the old id.
+UNIT_IDENTIFIER_ALIASES = {"CELL-A": "ARM-CELL"}
+
+
+def canonical_unit_id(unit_id):
+    return UNIT_IDENTIFIER_ALIASES.get(unit_id, unit_id)
 
 
 @dataclass(frozen=True)
@@ -24,6 +34,8 @@ class ControlUnit:
 class ControlUnitTopology:
     revision: str
     units: Mapping[str, ControlUnit]
+    # sha256 of the canonical parsed manifest; equal revisions with different manifests differ here.
+    digest: str = ""
 
     @classmethod
     def from_mapping(cls, document):
@@ -62,11 +74,15 @@ class ControlUnitTopology:
                 if current.parent is not None and current.parent not in units:
                     raise ValueError("UNKNOWN_CONTROL_UNIT_PARENT")
                 current = units.get(current.parent)
-        return cls(revision, MappingProxyType(units))
+        canonical = {"revision": revision, "units": [
+            {"id": u.unit_id, "parent": u.parent, "resources": sorted(u.resources)}
+            for u in sorted(units.values(), key=lambda u: u.unit_id)]}
+        digest = sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return cls(revision, MappingProxyType(units), digest)
 
     def unit(self, unit_id):
         try:
-            return self.units[unit_id]
+            return self.units[canonical_unit_id(unit_id)]  # legacy alias accepted (D-1011)
         except (KeyError, TypeError):
             raise ValueError("UNKNOWN_CONTROL_UNIT") from None
 

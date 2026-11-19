@@ -26,6 +26,7 @@ from ..hardware_profile import _fields, _number, _range
 
 SCHEMA = "rosy.omx-commissioning-record.v1"
 ITEMS = ("joint_limits", "gripper", "workspace", "stop_test")
+_ITEMS_SET = frozenset(ITEMS)
 _STOP_FIELDS = ("joint measured_stop_ms joint1_deviation_rad joint1_velocity_rad_s "
                 "pre_stop_velocity_rad_s passed driver config_revision")
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
@@ -131,7 +132,7 @@ class CommissioningStore:
         revision. ``expected_revision`` is the revision the caller read (None before the first
         save); a record saved in between is refused rather than overwritten."""
         by = _text(by, "measured_by (who measured)")
-        if not changes or not set(changes) <= set(ITEMS):
+        if not changes or not set(changes) <= _ITEMS_SET:
             raise ValueError(f"changes: expected some of {ITEMS}")
         # shortcut: read-compare-write without a cross-process lock; one commissioning
         # operator per arm at a time. Add a lock file if two consoles ever save the same arm.
@@ -184,7 +185,7 @@ def _atomic_write(path: Path, text: str) -> None:
             os.close(dir_fd)
 
 
-def _evidence(record: dict | None, refusals: list[str]) -> MotionEvidence:
+def _evidence(record: dict | None, refusals: list[str], *, revision: str | None = None) -> MotionEvidence:
     if record is None:
         return MotionEvidence(refusals=tuple(refusals) or ("no commissioning record for this arm",))
     items = record["items"]
@@ -202,7 +203,8 @@ def _evidence(record: dict | None, refusals: list[str]) -> MotionEvidence:
         limits_measured="joint_limits" in items, gripper_open_rad=grip.get("open_rad"),
         gripper_close_rad=grip.get("close_rad"), stop_test=items.get("stop_test", {}).get("value"),
         workspace_m=tuple(tuple(pair) for pair in workspace) if workspace else None,
-        config_revision=revisions.pop() if len(revisions) == 1 else None, revision=revision_of(record),
+        config_revision=revisions.pop() if len(revisions) == 1 else None,
+        revision=revision if revision is not None else revision_of(record),
         refusals=tuple(refusals))
 
 
@@ -243,9 +245,10 @@ def gate_status(store: CommissioningStore) -> dict:
     except (OSError, ValueError, TypeError) as exc:
         return {"revision": None, "items": {}, "blockers": [f"commissioning record unreadable: {type(exc).__name__}"]}
     items = (record or {}).get("items", {})
-    return {"revision": revision_of(record),
+    rev = revision_of(record)
+    return {"revision": rev,
             "items": {name: ({key: items[name][key] for key in
                               ("measured_at", "measured_by", "config_revision")} if name in items else None)
                       for name in ITEMS},
             "stop_test": items.get("stop_test", {}).get("value"),
-            "blockers": _evidence(record, []).blockers()}
+            "blockers": _evidence(record, [], revision=rev).blockers()}

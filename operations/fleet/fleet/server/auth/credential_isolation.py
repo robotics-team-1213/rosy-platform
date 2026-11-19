@@ -13,6 +13,23 @@ from fleet.server.site_auth import (
 )
 
 
+def assert_lease_tokens_isolated(environ, other_tokens):
+    """D-807: the CORE lease credentials named by ROSY_POLICY_LEASE_TARGETS must differ from every other credential.
+
+    A garbled targets file yields no credentials here; policy_delivery then builds no delivery port at all.
+    """
+    import json
+    from pathlib import Path
+    path = environ.get('ROSY_POLICY_LEASE_TARGETS')
+    try:
+        rows = json.loads(Path(path).read_text(encoding='utf-8')).values() if path else ()
+        mine = {Path(row['token_file']).read_text(encoding='utf-8').strip() for row in rows}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return
+    if mine & {t for t in other_tokens if isinstance(t, str)}:
+        raise ValueError('policy lease credential must differ from every other site credential')
+
+
 def assert_credentials_isolated(
         *, console, principals, console_token, discovery_token, vision_lease_secret, robot_credential_key,
         pairing_sync_token, workcell_observations, goal_evidence_service, cell_goal_registry,

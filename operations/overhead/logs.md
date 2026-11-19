@@ -582,3 +582,40 @@
 - Change: Fleet config `stream_wanted: true` holds the D-691 stream like a preview read; tracking alone still never asks.
 - Evidence: worker test only. No field run.
 - Gate: SOURCE.
+
+
+## 2026-11-11 · uncommitted · feat(vision): draft-map 제안 - 정사 평면에서 차로·구역 후보
+- 변경: `draft-map` 보기 추가(`GET /api/vision/sources/{id}/draft-map`). 승인된 추적 보정 레코드만 있으면 D-375 지도 페인트 설정 없이, 프레임을 map 평면으로 정사(D-560)해 밝은 페인트 스트로크를 차로 중심선(minAreaRect 장축, 곧은 스트로크 가정), 채색 영역을 제외 구역 후보로 읽어 map 좌표로 돌려준다. 제안 전용 — 관측·CameraMap·지도 문서에 안 쓴다. 보는 사람마다 초당 1회.
+- 이유: 카메라→지도 초안 파이프라인(2026-11-11 사용자 요청, 설계 docs/plans/2026-11-11-camera-draft-map-design.md)의 계산 담당. 계산은 Vision, 판정·승인은 Fleet(안 1).
+- 시험: 원격 test_draft_map_route.py + 이웃(test_map_proposal_route·test_map_plane·test_ingest) exit 0.
+- 증거: 원격 실행 기록 run-1(68 passed [100%], 2026-11-11), py_compile·관측 검출 직접 실행 확인.
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · fix: Vision→Fleet 게시 재시도 — 끊긴 풀링 연결 1회 재송
+
+- 변경: `TrackClient`·`SightingPublisher`의 모든 Fleet 호출이 공유 `_request` 헬퍼를 거친다.
+  서버(코디/uvicorn)가 유휴 keep-alive 연결을 끊는 순간 겹친 요청이 `httpx.RemoteProtocolError`로
+  죽는 것을 새 연결로 1회 재시도한다(2026-11-11 R 실측 일 13회, `detections not accepted`).
+  본문은 상태 대치형이거나 Fleet 도착 2차가 stale로 거절되므로 재송이 안전하다. 스택 재시작 창의
+  `ConnectError`(pairing sync·tracking config)은 기존 주기 재시도로 자가 회복되는 그대로다.
+- 증거: 원격 시험으로 확인 뒤 갱신(시험 전 착지 없음).
+- gate 변화: 없음.
+
+## 2026-11-16 · uncommitted · fix(vision): world_261026 자동 보정 천장 조명 반사·충전소 가림 시드 보강 및 1칸 밀림 차단
+
+- 변경: `rosy_vision/world_261026_auto.py` — 천장 형광등 반사로 분홍 충전칸 상단(`bay 3`)이 분리될 때 `pink_main`으로 병합하고, C1·C2 충전소 거치대 및 S1 대기 로봇 가림에도 흔들리지 않는 2D 랜드마크 시드와 외곽 분홍칸(`pts_pb1`·`pts_pb3`) 지지 게이트를 적용해 1칸 밀림(bay aliasing) 국소해를 차단했다.
+- 증거: `test/test_auto_track_calibration.py` 및 `ceiling_north` 실영상 검증(`rms_m = 0.00288`).
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · feat(vision): R 핫패치 anchor 경로 코드화 및 Fleet POST 연령 재확인·통계·연결 위생
+
+- 변경: `track/anchor_feed.py`(헤드 트래커 1 Hz, 감지 POST 뒤 단일 비행 anchors POST)·`post_guard.py`(POST 직전 0.8 s 연령 재확인, 폐기·오류 계수)·`track/fleet_client.py`(`publish_anchors`, keepalive_expiry 30 s)·`cli.py`(`vision` 30 s 통계줄)·`anchor_head_tracker.py`(own marker 없는 Pinky는 sighting·anchors 제외). Fleet `POST /api/fleet/detections/anchors` 경로 추가. R `keep/r-live-20261117` 스냅샷에서 anchor 관련만 이식, 나머지는 폐기.
+- 증거: `test_post_age_guard.py`, `test_overhead_tracking_api.py` (원격 결과는 커밋 메시지 참조).
+- gate 변화: 없음.
+
+
+## 2026-11-20 · uncommitted · fix(vision): world_261026 왜곡·외삽 안정화 및 rectify 시드 폴백 보강
+
+- 변경: `rosy_vision/world_261026_auto.py` — `_sample_strip_centroids` 평균→중앙값 전환, 9-DOF(8+k1) 최적화기에 Levenberg-Marquardt 비용 감소 수락 검사 추가 및 `k1` 클램프 `[-0.25, 0.25]` 완화, `_fit_pink_leg` 샘플 구간 확장(`[-0.10, -0.002]`), `s5_x` 노란 정지선 마스크 우선, `C1` `x_nom` `-0.414` 통일. `rosy_vision/rectify.py` — `_LATEST_LENS_MODEL` 캐시 미스 시 승인 `calibration.image_to_map`의 역행렬을 `seed_map_to_image`로 전달해 재추정 실패(`warpPerspective` 폴백) 방지.
+- 증거: 원격 `remote_pytest.py` (`test/test_auto_track_calibration.py`, `operations/overhead/test/test_map_plane.py`, `operations/overhead/test/test_post_age_guard.py`) 53 passed in 5.04s + 라이브 `ceiling_north` 원영상(`live_raw.jpg`) 재투영 `rms_m = 0.00310 m` 확인.
+- gate 변화: 없음.

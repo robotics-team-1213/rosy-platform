@@ -22,6 +22,8 @@ from core_common.protocol.omx_sim import OmxSimRecordStart, OmxSimRecordStop, Om
 
 PREFIX = "/api/v1/sim/omx"
 SEAT_TTL_S = 10
+_REJECTED_OR_HOLD = frozenset({"REJECTED", "UNKNOWN_HOLD"})
+_HTTP_ERROR_CODES = {401: "UNAUTHORIZED", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "MODE_CONFLICT"}
 PILOT_ASSETS = {
     "layout.css": "text/css",
     "styles.css": "text/css", "app.js": "application/javascript",
@@ -131,6 +133,8 @@ class _Sessions:
 def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
                          pairing_code: str) -> FastAPI:
     """Construct a SIM-only HTTP surface; runtime is the sole action owner."""
+    target_joints = tuple(j for j in runtime.joint_names if j != runtime.gripper)
+    recording_field_keys = tuple(OmxSimRecording.model_fields)
     sessions = _Sessions(pairing_code, control_admission=getattr(runtime, "control_admission", None))
     def cancel_released_seat(seat_id):
         if getattr(runtime, "control_admission", None) is None:
@@ -163,8 +167,7 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
 
     @app.exception_handler(HTTPException)
     async def http_error(_request, exc: HTTPException) -> JSONResponse:
-        code = {401: "UNAUTHORIZED", 403: "FORBIDDEN", 404: "NOT_FOUND",
-                409: "MODE_CONFLICT"}.get(exc.status_code, "INTERNAL_ERROR")
+        code = _HTTP_ERROR_CODES.get(exc.status_code, "INTERNAL_ERROR")
         return JSONResponse(status_code=exc.status_code,
                             content={"error": {"code": code, "message": str(exc.detail), "detail": {}}})
 
@@ -209,7 +212,7 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
     @app.get(f"{PREFIX}/target")
     def target() -> OmxSimTarget:
         return OmxSimTarget(instance_id=runtime.instance_id,
-                            joints=tuple(j for j in runtime.joint_names if j != runtime.gripper),
+                            joints=target_joints,
                             gripper=runtime.gripper,
                             camera=bool(getattr(runtime, "camera_available", False)),
                             recording=getattr(runtime, "capture", None) is not None,
@@ -254,7 +257,7 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
         return selected
 
     def recording_response(value: dict) -> OmxSimRecording:
-        return OmxSimRecording.model_validate({key: value[key] for key in OmxSimRecording.model_fields
+        return OmxSimRecording.model_validate({key: value[key] for key in recording_field_keys
                                               if key in value})
 
     @app.get(f"{PREFIX}/camera")
@@ -319,7 +322,7 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
                 return previous[1]
             result = OmxSimGoal.model_validate(call(request)).model_dump()
             receipts[request.request_id] = (request, result)
-            if result["state"] in {"REJECTED", "UNKNOWN_HOLD"}:
+            if result["state"] in _REJECTED_OR_HOLD:
                 raise HTTPException(409, result["reason"])
             return result
 

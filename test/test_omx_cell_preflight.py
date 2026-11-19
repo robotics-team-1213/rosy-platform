@@ -1,4 +1,5 @@
 """cell_preflight: a moved top camera, a stale camera channel or another arm session fail the check before motion."""
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -11,6 +12,7 @@ cv2 = pytest.importorskip("cv2")
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "deploy/robot/omx"))
 import cell_preflight as pf  # noqa: E402
+import cell_attempts  # noqa: E402
 
 
 def scene():
@@ -46,6 +48,54 @@ def test_checks_fail_on_a_stale_camera_a_moved_view_and_another_session(tmp_path
                                                     run=lambda *a, **k: Ran())}
     assert rows == {"camera top": True, "camera front": False, "light top": True, "top camera pose": False,
                     "other arm session": False}
+
+
+def test_preflight_rejects_reference_bytes_that_differ_from_configured_hash(tmp_path):
+    ref = scene()
+    path = tmp_path / "ref.jpg"
+    assert cv2.imwrite(str(path), ref)
+    old_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    config = {"episodes": {"cameras": {"top": "u"}}, "sites": {},
+              "preflight": {"reference_top": str(path), "reference_sha256": old_hash}}
+    assert cv2.imwrite(str(path), np.roll(ref, 2, axis=0))
+    pages = {"/state.json": json.dumps({"top": {"fresh": True}}).encode(),
+             "/frame/top.jpg": path.read_bytes()}
+
+    class Ran:
+        stdout = "0\n"
+
+    rows = {name: (ok, reason) for name, ok, reason in pf.checks(
+        config, "http://v", 6, fetch=lambda url: pages[url[len("http://v"):]], run=lambda *a, **k: Ran())}
+    assert rows["top camera pose"][0] is False
+    assert "reference" in rows["top camera pose"][1]
+    bound_map = tmp_path / "map.json"
+    bound = {"sites": {}, "reference_top_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+             "reference_map_sha": cell_attempts.digest({}),
+             "reference_geometry_sha": cell_attempts.digest({})}
+    bound_map.write_text(json.dumps(bound))
+    config["calibration_path"] = str(bound_map)
+    rows = {name: (ok, reason) for name, ok, reason in pf.checks(
+        config, "http://v", 6, fetch=lambda url: pages[url[len("http://v"):]], run=lambda *a, **k: Ran())}
+    assert rows["top camera pose"][0] is True, rows
+    bound_map.write_text(json.dumps(dict(bound, sites={"floor": {}})))
+    rows = {name: ok for name, ok, _ in pf.checks(
+        config, "http://v", 6, fetch=lambda url: pages[url[len("http://v"):]], run=lambda *a, **k: Ran())}
+    assert rows["top camera pose"] is False
+    bound_map.write_text(json.dumps(bound))
+    config["sites"] = {"floor": {"auto_roi": [0, 0, 10, 10]}}
+    rows = {name: ok for name, ok, _ in pf.checks(
+        config, "http://v", 6, fetch=lambda url: pages[url[len("http://v"):]], run=lambda *a, **k: Ran())}
+    assert rows["top camera pose"] is False
+    config["sites"] = {}
+    config["preflight"]["reference_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    bound_map.write_text("{}")
+    rows = {name: ok for name, ok, _ in pf.checks(
+        config, "http://v", 6, fetch=lambda url: pages[url[len("http://v"):]], run=lambda *a, **k: Ran())}
+    assert rows["top camera pose"] is False
+    bound_map.unlink()
+    rows = {name: ok for name, ok, _ in pf.checks(
+        config, "http://v", 6, fetch=lambda url: pages[url[len("http://v"):]], run=lambda *a, **k: Ran())}
+    assert rows["top camera pose"] is False
 
 
 def test_a_dark_frame_says_the_lights_are_off_and_a_lit_one_passes():

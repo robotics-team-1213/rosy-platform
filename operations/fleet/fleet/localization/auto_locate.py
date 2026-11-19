@@ -39,6 +39,17 @@ MIN_STEP_M = 0.05
 MAX_PAIRS = 32
 #: Camera track older than this is not paired with the robot's current pose.
 PAIR_FRESH_S = 0.5
+#: A slower camera (3 fps: frame age 0.29-0.56 s on site 2026-11-18) is paired within two frame intervals, never beyond this.
+PAIR_FRESH_FRAMES = 2.0
+#: Cap 1.0 s: the pair has no motion correction, so a robot at 0.3 m/s is biased 0.3 m along its heading at the cap.
+PAIR_FRESH_MAX_S = 1.0
+
+
+def pair_fresh_s(source_fps) -> float:
+    """Newest allowed camera frame age; PAIR_FRESH_S when the source rate is unknown."""
+    if not isinstance(source_fps, (int, float)) or isinstance(source_fps, bool) or not source_fps > 0.0:
+        return PAIR_FRESH_S
+    return min(PAIR_FRESH_MAX_S, max(PAIR_FRESH_S, PAIR_FRESH_FRAMES / source_fps))
 #: After the last camera sample the transform is no longer reported. Provisional until measured.
 VALID_S = 90.0
 #: Driving use (D-989 7). Worst heading error of a rigid fit is about 2 * residual / baseline:
@@ -54,6 +65,49 @@ MAP_JUMP_DEG = MAX_DISAGREE_DEG
 PEER_RANGE_TOL_M = 0.12
 #: Closer than this, camera error alone swings the bearing past the disagreement limit.
 MIN_PEER_DIST_M = 0.3
+#: Path B SLAM re-localization recovery window defaults.
+RECOVERY_XY_RADIUS_M = 0.35
+RECOVERY_YAW_RADIUS_KNOWN_RAD = math.radians(25.0)
+RECOVERY_YAW_RADIUS_UNKNOWN_RAD = math.pi
+BAY_PRIOR_YAW_RAD = -math.pi / 2
+
+
+@dataclass(frozen=True)
+class RecoveryWindow:
+    x: float
+    y: float
+    yaw: Optional[float]
+    xy_radius_m: float = RECOVERY_XY_RADIUS_M
+    yaw_radius_rad: float = RECOVERY_YAW_RADIUS_UNKNOWN_RAD
+
+
+def _finite_float(value) -> Optional[float]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    val = float(value)
+    return val if math.isfinite(val) else None
+
+
+def recovery_window(
+    x: float,
+    y: float,
+    yaw_cam: Optional[float] = None,
+    *,
+    bay_bounds: Optional[tuple[float, float, float, float]] = None,
+    xy_radius_m: float = RECOVERY_XY_RADIUS_M,
+) -> RecoveryWindow:
+    """Bounded Path B SLAM recovery window from camera/peer position and optional yaw."""
+    fx, fy = float(x), float(y)
+    if not (math.isfinite(fx) and math.isfinite(fy)):
+        raise ValueError("recovery_window requires finite x, y")
+    cam_yaw = _finite_float(yaw_cam)
+    if cam_yaw is not None:
+        return RecoveryWindow(fx, fy, cues.wrap(cam_yaw), xy_radius_m, RECOVERY_YAW_RADIUS_KNOWN_RAD)
+    if bay_bounds is not None:
+        xmin, ymin, xmax, ymax = bay_bounds
+        if xmin <= fx <= xmax and ymin <= fy <= ymax:
+            return RecoveryWindow(fx, fy, BAY_PRIOR_YAW_RAD, xy_radius_m, RECOVERY_YAW_RADIUS_KNOWN_RAD)
+    return RecoveryWindow(fx, fy, None, xy_radius_m, RECOVERY_YAW_RADIUS_UNKNOWN_RAD)
 
 
 @dataclass(frozen=True)
@@ -89,6 +143,12 @@ def fit_rigid(pairs: Sequence[tuple[tuple[float, float], tuple[float, float]]]) 
     fit = Fit(yaw, bx - (c * ax - s * ay), by - (s * ax + c * ay), 0.0, _span([p[0] for p in pairs]), "span")
     residual = max(math.dist(fit.site_xy(*slam), site) for slam, site in pairs)
     return Fit(fit.yaw, fit.tx, fit.ty, residual, fit.span_m, "span")
+
+
+def _yaw_fit(yaw: float, slam: tuple[float, float], site: tuple[float, float], evidence: str) -> Fit:
+    c, s = math.cos(yaw), math.sin(yaw)
+    return Fit(yaw, site[0] - (c * slam[0] - s * slam[1]),
+               site[1] - (s * slam[0] + c * slam[1]), 0.0, 0.0, evidence)
 
 
 def _span(points: Sequence[tuple[float, float]]) -> float:
@@ -137,6 +197,7 @@ class AlignmentTracker:
         self._pairs: deque = deque(maxlen=MAX_PAIRS)
         self._fit: Optional[Fit] = None
         self._peer_yaw: Optional[float] = None
+        self._cam_yaw: Optional[float] = None
         self._degraded: Optional[str] = None
         self._reason = "NO_SAMPLE"
         self._seen_at: Optional[float] = None
@@ -158,7 +219,7 @@ class AlignmentTracker:
             self._reason = track.get("reason") or "NO_CAMERA_TRACK"
             return
         age = track.get("age_s")
-        if not isinstance(age, (int, float)) or not 0.0 <= age <= PAIR_FRESH_S:
+        if not isinstance(age, (int, float)) or not 0.0 <= age <= pair_fresh_s(track.get("source_fps")):
             self._reason = "STALE_CAMERA_TRACK"
             return
         status, pose = trust.status_of(state), _robot_pose(state)
@@ -180,6 +241,16 @@ class AlignmentTracker:
         if self._fit is not None and math.dist(self._fit.site_xy(*slam), site) > MAX_DISAGREE_M:
             self._degraded = "CAMERA_DISAGREES"
             return
+        raw_yaw = track.get("yaw_cam")
+        if raw_yaw is None:
+            raw_yaw = track.get("yaw")
+        yaw_cam = _finite_float(raw_yaw)
+        if yaw_cam is not None:
+            cam_yaw = cues.wrap(yaw_cam - pose[2])
+            if self._fit is not None and abs(math.degrees(cues.wrap(cam_yaw - self._fit.yaw))) > MAX_DISAGREE_DEG:
+                self._degraded = "CAMERA_DISAGREES"
+                return
+            self._cam_yaw = cam_yaw
         self._add_pair(slam, site)
         peer_yaw = self._peer_heading(now, status, site, peers)
         if peer_yaw is not None:
@@ -211,6 +282,10 @@ class AlignmentTracker:
     def _refit(self, slam: tuple[float, float], site: tuple[float, float]) -> None:
         if self._degraded is not None:
             return
+        if (self._peer_yaw is not None and self._cam_yaw is not None
+                and abs(math.degrees(cues.wrap(self._peer_yaw - self._cam_yaw))) > MAX_DISAGREE_DEG):
+            self._degraded = "CAM_HEADING_DISAGREES"
+            return
         rigid = fit_rigid(list(self._pairs))
         if rigid is not None and rigid.span_m >= MIN_SPAN_M:
             if rigid.residual_max_m > MAX_DISAGREE_M:
@@ -218,12 +293,15 @@ class AlignmentTracker:
             elif (self._peer_yaw is not None
                   and abs(math.degrees(cues.wrap(rigid.yaw - self._peer_yaw))) > MAX_DISAGREE_DEG):
                 self._degraded = "PEER_HEADING_DISAGREES"
+            elif (self._cam_yaw is not None
+                  and abs(math.degrees(cues.wrap(rigid.yaw - self._cam_yaw))) > MAX_DISAGREE_DEG):
+                self._degraded = "CAM_HEADING_DISAGREES"
             else:
                 self._fit = rigid
         elif self._peer_yaw is not None:
-            c, s = math.cos(self._peer_yaw), math.sin(self._peer_yaw)
-            self._fit = Fit(self._peer_yaw, site[0] - (c * slam[0] - s * slam[1]),
-                            site[1] - (s * slam[0] + c * slam[1]), 0.0, 0.0, "peer_heading")
+            self._fit = _yaw_fit(self._peer_yaw, slam, site, "peer_heading")
+        elif self._cam_yaw is not None:
+            self._fit = _yaw_fit(self._cam_yaw, slam, site, "cam_heading")
 
     def _check_peers(self, now: float, status, slam: tuple[float, float], yaw: float,
                      peers: Mapping[str, tuple[float, float]]) -> None:

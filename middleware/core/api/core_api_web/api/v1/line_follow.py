@@ -398,7 +398,15 @@ def set_lane_cue(body: LaneCueRequest, auth: AuthContext = Depends(lane_cue_seat
                  svc: CoreServicesLike = Depends(get_services)):
     """D-511 rev 1/2: Fleet's lane cue, from the Fleet site enrollment token only. It never lifts a
     stop; the CAMERA_LINE keep reads it while it drives (``fleet_lane_cue_enabled``, lane_cue.py)."""
-    accepted, reason = svc.line_follow.set_lane_cue(body.model_dump(), principal_ref=auth.principal_ref)
+    dumped = body.model_dump()
+    dock_accepted = False
+    if dumped.get("docking") is not None and getattr(svc, "docking", None) is not None:
+        bay_phases = getattr(svc.docking, "_bay_phases", None)
+        if bay_phases is not None and hasattr(bay_phases, "observe_fleet_docking"):
+            dock_accepted = bool(bay_phases.observe_fleet_docking(dumped["docking"]))
+    accepted, reason = svc.line_follow.set_lane_cue(dumped, principal_ref=auth.principal_ref)
+    if not accepted and dock_accepted:
+        return {"accepted": True, "reason": None}
     return {"accepted": accepted, "reason": reason}
 
 

@@ -13,7 +13,6 @@ from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from itertools import zip_longest
 from pathlib import Path
 
 DEFAULT_DATABASE = Path("/var/lib/rosy/fleet.sqlite3")
@@ -23,8 +22,7 @@ BACKUP_PREFIX = "fleet-backup-"
 
 def _prune_backups(directory: Path, keep: int) -> list[str]:
     """Keep the newest ``keep`` timestamped backups, return what was removed."""
-    backups = sorted(path for path in directory.glob(f"{BACKUP_PREFIX}*.sqlite3")
-                     if path.is_file())
+    backups = sorted(path for path in directory.glob(f"{BACKUP_PREFIX}*.sqlite3") if path.is_file())
     removed = [path.name for path in backups[:-keep]]
     for stale in backups[:-keep]:
         stale.unlink(missing_ok=True)
@@ -32,13 +30,8 @@ def _prune_backups(directory: Path, keep: int) -> list[str]:
 
 
 def check_backups(directory: Path, *, max_age_hours: int) -> dict:
-    """Newest backup must exist, be fresh, and pass integrity_check.
-
-    The daily timer writes fleet-backup-*.sqlite3; a failed, disabled, or
-    long-stalled timer surfaces here so the check unit fails visibly.
-    """
-    backups = sorted(path for path in directory.glob(f"{BACKUP_PREFIX}*.sqlite3")
-                     if path.is_file())
+    """Newest backup must exist, be fresh, and pass integrity_check."""
+    backups = sorted(path for path in directory.glob(f"{BACKUP_PREFIX}*.sqlite3") if path.is_file())
     if not backups:
         raise DatabaseError(f"no {BACKUP_PREFIX}*.sqlite3 backups in {directory}")
     if max_age_hours < 0:
@@ -46,94 +39,71 @@ def check_backups(directory: Path, *, max_age_hours: int) -> dict:
     newest = backups[-1]
     age_hours = (time.time() - newest.stat().st_mtime) / 3600.0
     if age_hours > max_age_hours:
-        raise DatabaseError(
-            f"newest backup {newest.name} is {age_hours:.1f} h old, over {max_age_hours} h")
-    return {"newest": str(newest), "age_hours": round(age_hours, 3),
-            "integrity": verify_database(newest)}
+        raise DatabaseError(f"newest backup {newest.name} is {age_hours:.1f} h old, over {max_age_hours} h")
+    return {"newest": str(newest), "age_hours": round(age_hours, 3), "integrity": verify_database(newest)}
 
 
-#: 2026-10-28 자원 경계: 무한히 쌓이던 원장 행의 보존 기간(일).
-DEFAULT_HISTORY_RETENTION_DAYS = 30   # 종료 작업의 fleet_task_history 행
-DEFAULT_AUDIT_RETENTION_DAYS = 90     # device_pairing_audit / core_event_audit
-#: 2026-11-10 자원 경계: 같은 이유로 무한히 쌓이던 사이트 감사표.
-DEFAULT_API_AUDIT_RETENTION_DAYS = 90   # fleet_api_audit (요청 감사, created_at ISO)
-DEFAULT_SIGHTING_RETENTION_DAYS = 90    # sighting_audit (수용 감사, received_at epoch)
+DEFAULT_HISTORY_RETENTION_DAYS = 30
+DEFAULT_AUDIT_RETENTION_DAYS = 90
+DEFAULT_API_AUDIT_RETENTION_DAYS = 90
+DEFAULT_SIGHTING_RETENTION_DAYS = 90
 
 
 def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETENTION_DAYS,
                  audit_days: int = DEFAULT_AUDIT_RETENTION_DAYS,
                  api_audit_days: int = DEFAULT_API_AUDIT_RETENTION_DAYS,
                  sighting_days: int = DEFAULT_SIGHTING_RETENTION_DAYS) -> dict[str, int]:
-    """Delete terminal-task history older than
-    ``history_days`` and pairing/CORE audit rows older than ``audit_days``. Runs on the live
-    volume after a fresh backup; tables missing from an older schema are skipped."""
+    """Delete terminal-task history and audit rows past their retention windows on the live volume."""
     path = Path(source)
     if history_days < 0 or audit_days < 0 or api_audit_days < 0 or sighting_days < 0:
         raise DatabaseError("retention days must not be negative")
     if not path.is_file():
         raise DatabaseError("source database is missing")
-    # fleet_tasks.updated_at / fleet_task_history.created_at are `_now()` ISO strings
-    # (task_store_types._now); core_event_audit.received_at uses the same shape. The
-    # same format keeps the string comparison exact. A retention of 0 days skips that
-    # group entirely (the CLI's "disable" value).
-    history_cutoff = (datetime.now(timezone.utc)
-                      - timedelta(days=history_days)).isoformat(timespec="milliseconds") \
-        if history_days > 0 else None
+    with closing(sqlite3.connect(path)) as settings_db:
+        if settings_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_db_settings'").fetchone():
+            settings = dict(settings_db.execute("SELECT key, value_int FROM fleet_db_settings"))
+            if history_days == DEFAULT_HISTORY_RETENTION_DAYS:
+                history_days = settings.get("history_retention_days", history_days)
+            if audit_days == DEFAULT_AUDIT_RETENTION_DAYS:
+                audit_days = settings.get("audit_retention_days", audit_days)
+            if api_audit_days == DEFAULT_API_AUDIT_RETENTION_DAYS:
+                api_audit_days = settings.get("api_audit_retention_days", api_audit_days)
+            if sighting_days == DEFAULT_SIGHTING_RETENTION_DAYS:
+                sighting_days = settings.get("sighting_retention_days", sighting_days)
+    iso_cutoff = lambda d: (datetime.now(timezone.utc) - timedelta(days=d)).isoformat(timespec="milliseconds") if d > 0 else None
+    history_cutoff = iso_cutoff(history_days)
     audit_cutoff = time.time() - audit_days * 86400.0 if audit_days > 0 else None
-    audit_cutoff_iso = (datetime.now(timezone.utc)
-                        - timedelta(days=audit_days)).isoformat(timespec="milliseconds") \
-        if audit_days > 0 else None
-    api_audit_cutoff_iso = (datetime.now(timezone.utc)
-                            - timedelta(days=api_audit_days)).isoformat(timespec="milliseconds") \
-        if api_audit_days > 0 else None
+    audit_cutoff_iso = iso_cutoff(audit_days)
+    api_audit_cutoff_iso = iso_cutoff(api_audit_days)
     sighting_cutoff = time.time() - sighting_days * 86400.0 if sighting_days > 0 else None
     removed = {"fleet_task_history": 0, "fleet_tasks": 0, "rosy_account_audit": 0,
-               "device_pairing_audit": 0, "core_event_audit": 0,
-               "fleet_api_audit": 0, "sighting_audit": 0}
-
+               "device_pairing_audit": 0, "core_event_audit": 0, "fleet_api_audit": 0, "sighting_audit": 0}
     try:
         with closing(sqlite3.connect(path, timeout=30.0)) as db:
-            tables = {row[0] for row in
-                      db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             db.execute("BEGIN IMMEDIATE")
             try:
                 if history_cutoff is not None and {"fleet_task_history", "fleet_tasks"} <= tables:
                     removed["fleet_task_history"] = db.execute(
-                        "DELETE FROM fleet_task_history WHERE task_id IN ("
-                        " SELECT task_id FROM fleet_tasks WHERE status IN"
-                        " ('COMPLETED','FAILED','CANCELED','EXPIRED')"
-                        " AND updated_at < ?)", (history_cutoff,)).rowcount
-                    # Task rows retain request-key identity and the original replay response.
-                # Account audit is part of the exact security-state restore guard.
+                        "DELETE FROM fleet_task_history WHERE task_id IN (SELECT task_id FROM fleet_tasks "
+                        "WHERE status IN ('COMPLETED','FAILED','CANCELED','EXPIRED') AND updated_at < ?)",
+                        (history_cutoff,)).rowcount
                 if audit_cutoff is not None and "device_pairing_audit" in tables:
                     removed["device_pairing_audit"] = db.execute(
-                        "DELETE FROM device_pairing_audit WHERE at < ?",
-                        (audit_cutoff,)).rowcount
-                # Durable CORE event audit (observe/events.py). Dedup survives restarts
-                # on the remaining window; a replay older than the retention re-inserts
-                # as new, which is far beyond any agent replay horizon.
+                        "DELETE FROM device_pairing_audit WHERE at < ?", (audit_cutoff,)).rowcount
                 if audit_cutoff_iso is not None and "core_event_audit" in tables:
                     removed["core_event_audit"] = db.execute(
-                        "DELETE FROM core_event_audit WHERE received_at < ?",
-                        (audit_cutoff_iso,)).rowcount
-                # Site API request audit (task_store.begin/finish_api_audit) shares the
-                # `_now()` ISO shape; the request_id link is per request, not a durable
-                # contract, so rows past the retention window have no reader.
+                        "DELETE FROM core_event_audit WHERE received_at < ?", (audit_cutoff_iso,)).rowcount
                 if api_audit_cutoff_iso is not None and "fleet_api_audit" in tables:
+                    watermark = db.execute("SELECT last_rowid FROM fleet_audit_flush WHERE kind='fleet_api_audit'").fetchone() \
+                        if "fleet_audit_flush" in tables else None
                     removed["fleet_api_audit"] = db.execute(
-                        "DELETE FROM fleet_api_audit WHERE created_at < ?",
-                        (api_audit_cutoff_iso,)).rowcount
-                # Accepted-sighting audit (recognition/sighting_store.py) keeps epoch
-                # seconds in received_at; latest_sightings (the live view) is untouched.
-                # Stuck incident reports (stuck/reports.py) enrich episodes from this
-                # table by captured_at — episodes older than the retention keep their
-                # report but lose the camera column (the join already tolerates absence).
+                        "DELETE FROM fleet_api_audit WHERE created_at < ?" + (" AND rowid <= ?" if watermark else ""),
+                        (api_audit_cutoff_iso, int(watermark[0])) if watermark else (api_audit_cutoff_iso,)).rowcount
                 if sighting_cutoff is not None and "sighting_audit" in tables:
                     removed["sighting_audit"] = db.execute(
-                        "DELETE FROM sighting_audit WHERE received_at < ?",
-                        (sighting_cutoff,)).rowcount
+                        "DELETE FROM sighting_audit WHERE received_at < ?", (sighting_cutoff,)).rowcount
                 db.commit()
-
             except sqlite3.Error:
                 db.rollback()
                 raise
@@ -143,9 +113,7 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
 
 
 def checkpoint_wal(source: Path | str) -> dict:
-    """Best-effort ``wal_checkpoint(TRUNCATE)`` so pages freed by the prune return to
-    the OS file. Never raises: a busy live writer leaves the WAL in place and the
-    result row reports it as (busy=1, log, checkpointed)."""
+    """Best-effort ``wal_checkpoint(TRUNCATE)`` so pages freed by the prune return to the OS file."""
     path = Path(source)
     if not path.is_file():
         raise DatabaseError("source database is missing")
@@ -158,16 +126,7 @@ def checkpoint_wal(source: Path | str) -> dict:
 
 
 def vacuum_database(path: Path | str) -> dict:
-    """Rewrite ``path`` in place with VACUUM so pages freed by the prune return to
-    the OS. The caller owns the stop decision: on the live volume this blocks writers
-    for the duration, so the CLI only reaches it with --assume-stopped or on a backup
-    copy.
-
-    VACUUM stages its temp copy in the SQLite temp dir. The fleet-backup container
-    has a read-only rootfs with a 32 MB tmpfs /tmp, so a real-size backup (hundreds
-    of MB) would fail with SQLITE_FULL there; keep the temp copy beside the target,
-    which is writable by construction in both CLI paths (the backup bind, the DB
-    volume) and is skipped when the caller already set a temp dir."""
+    """Rewrite ``path`` in place with VACUUM so pages freed by the prune return to the OS."""
     target = Path(path)
     if not target.is_file():
         raise DatabaseError("database is missing")
@@ -175,6 +134,7 @@ def vacuum_database(path: Path | str) -> dict:
     os.environ.setdefault("SQLITE_TMPDIR", str(target.parent))
     try:
         with closing(sqlite3.connect(target, timeout=30.0)) as db:
+            db.execute("PRAGMA auto_vacuum=INCREMENTAL")
             db.execute("VACUUM")
     except sqlite3.Error as exc:
         raise DatabaseError("vacuum failed") from exc
@@ -192,10 +152,8 @@ class DatabaseResult:
     sha256: str
     rollback_path: Path | None = None
 
-
 def _database_uri(path: Path) -> str:
     return path.resolve().as_uri() + "?mode=ro"
-
 
 def verify_database(path: Path | str) -> str:
     database = Path(path)
@@ -209,6 +167,42 @@ def verify_database(path: Path | str) -> str:
     if rows != [("ok",)]:
         raise DatabaseError("database integrity check failed")
     return "ok"
+
+
+def inspect_database(path: Path | str, *, quick_check: bool = True) -> dict:
+    database = Path(path)
+    if not database.is_file() or database.stat().st_size == 0:
+        raise DatabaseError("database is missing or empty")
+    try:
+        with closing(sqlite3.connect(_database_uri(database), uri=True, timeout=5.0)) as conn:
+            conn.execute("PRAGMA query_only=ON")
+            if quick_check and conn.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                raise DatabaseError("database quick check failed")
+            pragma = lambda name: conn.execute(f"PRAGMA {name}").fetchone()[0]
+            tables = {}
+            for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                                        "AND name NOT LIKE 'sqlite_%' ORDER BY name"):
+                table = '"' + name.replace('"', '""') + '"'
+                columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+                stamp = next((column for column in ("updated_at", "created_at", "received_at",
+                                                     "recorded_at", "at") if column in columns), None)
+                newest = 'MAX("' + stamp + '")' if stamp else "NULL"
+                count, latest = conn.execute(f"SELECT COUNT(*), {newest} FROM {table}").fetchone()
+                tables[name] = {"rows": int(count), "newest_at": latest}
+            wal = Path(f"{database}-wal")
+            return {"path": str(database), "size_bytes": database.stat().st_size,
+                    "wal_bytes": wal.stat().st_size if wal.is_file() else 0,
+                    "journal_mode": str(pragma("journal_mode")).lower(),
+                    "page_size": int(pragma("page_size")), "page_count": int(pragma("page_count")),
+                    "freelist_count": int(pragma("freelist_count")),
+                    "auto_vacuum": {0: "none", 1: "full", 2: "incremental"}.get(
+                        int(pragma("auto_vacuum")), "unknown"),
+                    "quick_check": "ok" if quick_check else None, "tables": tables,
+                    "component_migrations": {row[0]: int(row[1]) for row in conn.execute(
+                        "SELECT component, version FROM fleet_component_migrations ORDER BY component")}
+                    if "fleet_component_migrations" in tables else {}}
+    except sqlite3.Error as exc:
+        raise DatabaseError("database inspection failed") from exc
 
 
 def _copy_database(source: Path, destination: Path) -> None:
@@ -277,12 +271,12 @@ def _rollback_name(target: Path) -> Path:
     return target.with_name(f"{target.name}.pre-restore-{stamp}.sqlite3")
 
 
-def _guard_account_restore(source: Path, destination: Path) -> None:
+def _guard_account_restore(source: Path, destination: Path) -> tuple[dict, bool]:
     """A stale whole-DB restore must not undo credential changes or token consumption."""
     def schema(db):
         return [row for row in db.execute(
             "SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name"
-        ) if row[2].startswith(("rosy_account", "account_oauth_", "fleet_console_"))]
+        ) if row[2].startswith(("rosy_account", "account_oauth_", "account_client", "fleet_console_"))]
 
     try:
         with closing(sqlite3.connect(_database_uri(source), uri=True, timeout=5.0)) as saved:
@@ -291,11 +285,12 @@ def _guard_account_restore(source: Path, destination: Path) -> None:
             if not destination.exists():
                 if saved_schema:
                     raise DatabaseError("Account security state needs a readable current database")
-                return
+                return {}, False
             with closing(sqlite3.connect(_database_uri(destination), uri=True, timeout=5.0)) as current:
                 current.execute("BEGIN")
                 if saved_schema != schema(current):
                     raise DatabaseError("Account security state schema differs; restore refused")
+                audits, wipe_sessions = {}, False
                 for kind, name, _, _ in saved_schema:
                     if kind != "table":
                         continue
@@ -303,9 +298,26 @@ def _guard_account_restore(source: Path, destination: Path) -> None:
                     columns = len(saved.execute(f"SELECT * FROM {table} LIMIT 0").description)
                     query = f"SELECT * FROM {table} ORDER BY " + ",".join(
                         str(index) for index in range(1, columns + 1))
-                    if any(left != right for left, right in zip_longest(
-                            saved.execute(query), current.execute(query))):
+                    old, now = list(saved.execute(query)), list(current.execute(query))
+                    if name in ("rosy_account_sessions", "fleet_console_sessions"):
+                        if not {row[0] for row in old} <= {row[0] for row in now}:
+                            raise DatabaseError("Account security state differs; restore refused")
+                        wipe_sessions |= old != now
+                        continue
+                    if name in ("rosy_account_audit", "account_client_audit"):
+                        old = list(saved.execute(f"SELECT rowid,* FROM {table} ORDER BY rowid"))
+                        now = list(current.execute(f"SELECT rowid,* FROM {table} ORDER BY rowid"))
+                        if now[:len(old)] != old:
+                            raise DatabaseError("Account security state differs; restore refused")
+                        audits[name] = now[len(old):]
+                        continue
+                    if name.startswith("account_oauth_"):
+                        if not set(old) <= set(now):
+                            raise DatabaseError("Account security state differs; restore refused")
+                        continue
+                    if old != now:
                         raise DatabaseError("Account security state differs; restore refused")
+                return audits, wipe_sessions
     except sqlite3.Error as exc:
         raise DatabaseError("Account security state could not be verified") from exc
 
@@ -339,7 +351,21 @@ def restore_database(
         _copy_database(source_path, temporary)
         verify_database(temporary)
         _private_mode(temporary)
-        _guard_account_restore(temporary, destination_path)
+        audits, wipe_sessions = _guard_account_restore(temporary, destination_path)
+        if wipe_sessions or any(audits.values()):
+            with closing(sqlite3.connect(temporary)) as restored, restored:
+                if wipe_sessions:
+                    for table in ("rosy_account_sessions", "fleet_console_sessions"):
+                        if any(row[1] == table for row in restored.execute(
+                                "SELECT type,name FROM sqlite_master WHERE type='table'")):
+                            restored.execute(f"DELETE FROM {table}")
+                for name, rows in audits.items():
+                    if rows:
+                        restored.executemany(f"INSERT INTO {name} (rowid," +
+                                             ",".join('"' + column[1].replace('"', '""') + '"'
+                                                      for column in restored.execute(f"PRAGMA table_info({name})")) +
+                                             ") VALUES (" + ",".join("?" for _ in rows[0]) + ")", rows)
+            verify_database(temporary)
         if destination_path.exists():
             rollback = _rollback_name(destination_path)
             backup_database(destination_path, rollback)
@@ -377,7 +403,6 @@ def _rekey(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if not args.assume_stopped:
         parser.error("stop the Fleet service first, then pass --assume-stopped")
     from fleet.server.enrollment_store import CredentialKeyError, SealError, load_key_file, rekey
-
     if not Path(args.path).is_file():
         parser.error(f"database {args.path} does not exist")
     try:
@@ -396,41 +421,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     backup = commands.add_parser("backup", help="create a consistent SQLite online backup")
     backup.add_argument("--source", type=Path, default=DEFAULT_DATABASE)
-    backup.add_argument("--destination", type=Path,
-                        help="explicit backup file (one-shot use)")
-    backup.add_argument("--dest-dir", type=Path,
-                        help="timestamped backup directory (timer use); prunes old backups")
-    backup.add_argument("--prune", type=int, default=14,
-                        help="backups to keep when --dest-dir is used (default 14)")
-    backup.add_argument("--prune-history", type=int, default=DEFAULT_HISTORY_RETENTION_DAYS,
-                        metavar="DAYS",
-                        help="delete terminal-task history rows older than DAYS after the "
-                             "backup (default 30; 0 disables)")
-    backup.add_argument("--prune-audit", type=int, default=DEFAULT_AUDIT_RETENTION_DAYS,
-                        metavar="DAYS",
-                        help="delete pairing/CORE event audit rows older than DAYS after the "
-                             "backup (default 90; 0 disables)")
-    backup.add_argument("--prune-api-audit", type=int, default=DEFAULT_API_AUDIT_RETENTION_DAYS,
-                        metavar="DAYS",
-                        help="delete fleet_api_audit rows older than DAYS after the "
-                             "backup (default 90; 0 disables)")
-    backup.add_argument("--prune-sightings", type=int, default=DEFAULT_SIGHTING_RETENTION_DAYS,
-                        metavar="DAYS",
-                        help="delete sighting_audit rows older than DAYS after the "
-                             "backup (default 90; 0 disables)")
+    backup.add_argument("--destination", type=Path, help="explicit backup file (one-shot use)")
+    backup.add_argument("--dest-dir", type=Path, help="timestamped backup directory (timer use); prunes old backups")
+    backup.add_argument("--prune", type=int, default=14, help="backups to keep when --dest-dir is used (default 14)")
+    for flag, default in (("--prune-history", DEFAULT_HISTORY_RETENTION_DAYS), ("--prune-audit", DEFAULT_AUDIT_RETENTION_DAYS),
+                          ("--prune-api-audit", DEFAULT_API_AUDIT_RETENTION_DAYS), ("--prune-sightings", DEFAULT_SIGHTING_RETENTION_DAYS)):
+        backup.add_argument(flag, type=int, default=default, metavar="DAYS")
     verify = commands.add_parser("verify", help="run SQLite integrity_check")
     verify.add_argument("--path", type=Path, required=True)
-    compact = commands.add_parser(
-        "compact", help="VACUUM the database in place (quarterly, maintenance window)")
+    inspect = commands.add_parser("inspect", help="read live SQLite database statistics")
+    inspect.add_argument("--path", type=Path, default=DEFAULT_DATABASE)
+    inspect.add_argument("--no-quick-check", action="store_true")
+    inspect.add_argument("--json", action="store_true")
+    compact = commands.add_parser("compact", help="VACUUM the database in place (quarterly, maintenance window)")
     compact.add_argument("--path", type=Path, default=DEFAULT_DATABASE)
-    compact.add_argument("--assume-stopped", action="store_true",
-                         help="assert the site services are stopped (VACUUM blocks writers)")
-    check = commands.add_parser(
-        "check", help="verify the newest dest-dir backup is fresh and passes integrity_check")
-    check.add_argument("--dest-dir", type=Path, default=DEFAULT_BACKUP_DIR,
-                       help="backup directory the daily timer writes (default %(default)s)")
-    check.add_argument("--max-age-hours", type=int, default=48,
-                       help="fail when the newest backup is older (default 48; the timer is daily)")
+    compact.add_argument("--assume-stopped", action="store_true")
+    check = commands.add_parser("check", help="verify the newest dest-dir backup is fresh and passes integrity_check")
+    check.add_argument("--dest-dir", type=Path, default=DEFAULT_BACKUP_DIR)
+    check.add_argument("--max-age-hours", type=int, default=48)
     restore = commands.add_parser("restore", help="restore after stopping the site services")
     restore.add_argument("--source", type=Path, required=True)
     restore.add_argument("--destination", type=Path, default=DEFAULT_DATABASE)
@@ -445,10 +453,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "rekey":
         return _rekey(parser, args)
     try:
-        pruned = []
-        pruned_ledger = None
-        checkpointed = None
-        vacuumed = None
+        pruned, pruned_ledger, checkpointed, vacuumed = [], None, None, None
         if args.command == "backup":
             if bool(args.destination) == bool(args.dest_dir):
                 parser.error("pass exactly one of --destination or --dest-dir")
@@ -456,22 +461,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if args.prune < 1:
                     parser.error("--prune must keep at least one backup")
                 args.dest_dir.mkdir(parents=True, exist_ok=True)
-                timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-                args.destination = args.dest_dir / f"{BACKUP_PREFIX}{timestamp}.sqlite3"
+                args.destination = args.dest_dir / f"{BACKUP_PREFIX}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.sqlite3"
             result = backup_database(args.source, args.destination)
             if args.dest_dir is not None:
-                # The timer copy is off the live volume: compact it so 14 kept
-                # backups track the retained data, not the source's high-water mark.
-                vacuumed = vacuum_database(args.destination)
-                pruned = _prune_backups(args.dest_dir, args.prune)
-            # Retention runs only after the backup file exists (2026-10-28 resource bounds).
-            pruned_ledger = prune_ledger(args.source, history_days=args.prune_history,
-                                         audit_days=args.prune_audit,
-                                         api_audit_days=args.prune_api_audit,
-                                         sighting_days=args.prune_sightings)
+                vacuumed, pruned = vacuum_database(args.destination), _prune_backups(args.dest_dir, args.prune)
+            pruned_ledger = prune_ledger(args.source, history_days=args.prune_history, audit_days=args.prune_audit,
+                                         api_audit_days=args.prune_api_audit, sighting_days=args.prune_sightings)
             checkpointed = checkpoint_wal(args.source)
         elif args.command == "verify":
             print(json.dumps({"path": str(args.path), "integrity": verify_database(args.path)}))
+            return 0
+        elif args.command == "inspect":
+            print(json.dumps(inspect_database(args.path, quick_check=not args.no_quick_check)))
             return 0
         elif args.command == "compact":
             if not args.assume_stopped:
@@ -482,24 +483,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(report))
             return 0
         elif args.command == "check":
-            print(json.dumps(check_backups(args.dest_dir,
-                                           max_age_hours=args.max_age_hours)))
+            print(json.dumps(check_backups(args.dest_dir, max_age_hours=args.max_age_hours)))
             return 0
         else:
-            result = restore_database(args.source, args.destination,
-                                      replace=args.replace, assume_stopped=args.assume_stopped)
+            result = restore_database(args.source, args.destination, replace=args.replace, assume_stopped=args.assume_stopped)
     except (DatabaseError, OSError) as exc:
         parser.error(str(exc))
-    print(json.dumps({
-        "path": str(result.path),
-        "integrity": result.integrity,
-        "sha256": result.sha256,
-        "rollback_path": str(result.rollback_path) if result.rollback_path else None,
-        "pruned": pruned,
-        "pruned_ledger": pruned_ledger,
-        "checkpoint": checkpointed,
-        "vacuum": vacuumed,
-    }))
+    print(json.dumps({"path": str(result.path), "integrity": result.integrity, "sha256": result.sha256,
+                      "rollback_path": str(result.rollback_path) if result.rollback_path else None,
+                      "pruned": pruned, "pruned_ledger": pruned_ledger, "checkpoint": checkpointed, "vacuum": vacuumed}))
     return 0
 
 

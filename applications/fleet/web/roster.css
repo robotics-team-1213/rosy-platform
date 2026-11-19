@@ -10,10 +10,45 @@
 .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; }
 
 .roster { display: flex; flex-direction: column; gap: var(--space-3); }
+.omx-dense-card { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-2); min-width: 0; margin-top: var(--space-1); padding: var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.omx-dense-card > div { min-width: 0; }
+.omx-dense-card strong { font-size: var(--text-label); overflow-wrap: anywhere; }
+.omx-dense-card p { margin: var(--space-1) 0; font-size: var(--text-micro); overflow-wrap: anywhere; }
+.cell-cam-thumb { width: 6rem; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); cursor: zoom-in; }
+.cell-cam-thumb.focused { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; cursor: zoom-out; }
+.omx-card-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.omx-card-actions ui-button { min-width: 0; }
+.omx-right-inspector:not(:empty) { display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; box-sizing: border-box; margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--series-primary); border-radius: var(--radius-panel); background: var(--surface-raised); overflow: hidden; }
+.omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding-bottom: var(--space-1); border-bottom: 1px solid var(--border-subtle); }
+.omx-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.omx-inspector-head strong { font-family: var(--mono); font-size: var(--text-label); color: var(--series-primary); overflow-wrap: anywhere; }
+.omx-inspector-main-cam { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--series-primary); background: var(--surface-flat); cursor: zoom-in; }
+.omx-inspector-main-cam.focused { aspect-ratio: auto; max-height: 60vh; object-fit: contain; cursor: zoom-out; }
+.omx-inspector-single-wrap { display: grid; gap: var(--space-1); min-width: 0; }
+.omx-inspector-dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); min-width: 0; }
+@media (width < 30rem) {
+  .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.omx-inspector-dual-pane { display: grid; gap: var(--space-1); min-width: 0; }
+.omx-inspector-cam-badge { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: center; min-width: 0; }
+@media (width < 30rem) {
+  .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); }
+}
+.omx-inspector-quick-dispatch select { width: 100%; min-width: 0; font-size: var(--text-micro); }
+.omx-inspector-pip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.8rem, 1fr)); gap: var(--space-1); min-width: 0; }
+.omx-inspector-pip { display: grid; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); cursor: pointer; min-width: 0; }
+.omx-inspector-pip.active { border-color: var(--series-primary); background: var(--surface-raised); }
+.omx-inspector-pip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); }
+.omx-inspector-pip small { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omx-inspector-meta { margin: 0; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow-wrap: anywhere; }
 /* 카드는 내용 높이를 지킨다 — 스크롤 칸 안에서 줄어들면 까닭 줄과 버튼이 잘린다. */
 .roster > * { flex-shrink: 0; }
 
 .robot {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border-subtle);
   border-left: 3px solid var(--border-subtle);
   border-radius: var(--radius-panel);
@@ -83,6 +118,7 @@
   /* 전화에서는 선택한 로봇의 상태가 먼저다. 조종은 그 아래, 넓은 단에서만 카드 위다. */
   .manual-control { order: 3; }
   .panel:has(#robot-workspace > article) > .robot-list-details { order: 4; }
+  .charge-bays { order: 5; }  /* the OMX cell cards follow the selected robot's status */
   .roster-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roster-block > h2 { grid-column: 1 / -1; }
   .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 1; grid-row: 2; justify-content: flex-start; }
@@ -119,3 +155,319 @@
 
 .robot-line:focus-visible, .robot-fold:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+
+.quick-control-panel {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  contain: inline-size;
+  overflow: hidden;
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-button);
+  background: var(--surface-raised);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.robot-head b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.quick-header-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.quick-title {
+  font-size: var(--text-label);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-chip-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-1);
+  align-items: center;
+}
+@media (width < 30rem) {
+  .quick-chip-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Bounded 2x2 Telemetry & Sensor Bar-Graph Grid (CSP-Safe SVG Gauges) */
+.telemetry-gauge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+@media (width < 30rem) {
+  .telemetry-gauge-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.gauge-card {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-default);
+  background: var(--surface-flat);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.gauge-card-top, .gauge-meta-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.gauge-card-title, .gauge-meta-line span {
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.gauge-card-val, .gauge-meta-line strong {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.gauge-card-sub {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.gauge-svg {
+  width: 100%;
+  height: 7px;
+  display: block;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.gauge-bg { fill: var(--gauge-track); }
+.gauge-fill.good { fill: var(--series-goal); }
+.gauge-fill.info { fill: var(--series-primary); }
+.gauge-fill.warn { fill: var(--status-warn); }
+.gauge-fill.crit { fill: var(--status-crit); }
+
+.sensor-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+.sensor-pill {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-default);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.sensor-pill.warn {
+  border-color: var(--status-warn-a45);
+  background: var(--surface-raised);
+  color: var(--status-warn);
+}
+
+/* OMX-AI Workcell Units & Fleet Coordination Cards */
+.omx-fleet-section {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.omx-fleet-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  min-width: 0;
+}
+.omx-cell-card {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-default);
+  background: var(--surface-flat);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.omx-cell-card.selected {
+  border-color: var(--series-primary);
+  background: var(--surface-raised);
+}
+.omx-cell-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.omx-cell-title {
+  font-family: var(--mono);
+  font-size: var(--text-label);
+  color: var(--series-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.omx-bars-wrap, .hover-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.gauge-row-compact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.omx-cell-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+.omx-summary-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.tracker-box {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+.tracker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.tracker-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
+.roi-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; overflow: hidden; }
+.anchor-roi-img { width: 112px; height: 112px; flex-shrink: 0; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--series-primary); background: var(--surface-recessed); }
+.roi-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); overflow: hidden; }
+.roi-status-text, .roi-sub-text {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.omx-cell-summary { color: var(--series-primary); white-space: nowrap; }
+
+/* 지도 오버레이 표시 켜기·끄기 툴바 */
+.map-overlay-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) 0 var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-1);
+}
+.map-overlay-toggles [data-layer-toggle][aria-pressed="true"] {
+  border-color: var(--series-primary);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+}
+.map-overlay-toggles [data-layer-toggle][aria-pressed="false"] {
+  opacity: var(--disabled-opacity);
+}
+
+/* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
+.map-stage { position: relative; }
+.map-hover-card {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 12;
+  max-width: min(430px, calc(100% - 1.5rem));
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-button);
+  border: 1px solid var(--series-primary);
+  background: var(--scrim-solid);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-label);
+}
+.hover-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-1);
+}
+.hover-card-head strong {
+  font-family: var(--mono);
+  font-size: var(--text-body);
+  color: var(--series-primary);
+}
+.hover-card-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+}
+.hover-card-grid dt {
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  white-space: nowrap;
+}
+.hover-card-grid dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-primary);
+}
+.hover-card-foot {
+  margin: var(--space-1) 0 0;
+  padding-top: var(--space-1);
+  border-top: 1px dashed var(--border-subtle);
+  font-size: var(--text-micro);
+  color: var(--series-goal);
+}

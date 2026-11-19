@@ -29,14 +29,11 @@ def test_unconfigured_documents_explain_preparation(monkeypatch, tmp_path, confi
         response = http.get(path, follow_redirects=False)
         assert response.status_code == 503
         assert 'text/html' in response.headers['content-type']
-        assert 'Rosy Account' in response.text
+        assert '운영 연결이 아직 등록되지 않았습니다' in response.text
         assert '/console?view=work' in response.text
         assert 'Location' not in response.headers
         assert "script-src 'self'" in response.headers['content-security-policy']
         assert 'no-store' in response.headers['cache-control']
-        assert '운영 연결 준비 중' in response.text
-        assert response.text.count('status="neutral"') >= 1     # 보이는 호스트 카드는 준비 중
-        assert 'status="active"' not in response.text
         assert '{{' not in response.text                        # 모든 채움 토큰이 다 채워졌다
 
 
@@ -48,13 +45,16 @@ def test_entry_documents_focus_the_requested_host(monkeypatch, tmp_path, path, f
     assert f'data-host-focus="{focus}"' in response.text
     assert 'learning-focus-note' in response.text
     assert 'learning-hub-note' in response.text        # 허브 문장과 초점 문장이 함께 실려 CSS로 갈린다
-    other = 'ai' if focus == 'model' else 'model'
-    assert f'data-host="{other}"' in response.text     # 다른 카드는 CSS로 감춘다(문서에는 남는다)
 
 
 def test_constant_redirects_do_not_forward_credentials_or_queries(monkeypatch, tmp_path):
     http = client(monkeypatch, tmp_path, {'model': 'https://model.example', 'ai': 'https://ai.example:8443'})
-    assert http.get('/console/learning').status_code == 200
+    hub = http.get('/console/learning', follow_redirects=False,
+                   headers={'Authorization': 'Bearer fleet-secret', 'Cookie': 'session=fleet-cookie'})
+    assert hub.status_code == 303                        # 허브 진입은 설정된 model 원본으로 곧장 간다
+    assert hub.headers['location'] == 'https://model.example/learning'
+    assert 'set-cookie' not in hub.headers
+    assert 'fleet-secret' not in hub.text and 'fleet-cookie' not in hub.text
     for host, origin in [('model', 'https://model.example'), ('ai', 'https://ai.example:8443')]:
         response = http.get('/console/learning/' + host, follow_redirects=False,
                             headers={'Authorization': 'Bearer fleet-secret', 'Cookie': 'session=fleet-cookie'})
@@ -62,27 +62,22 @@ def test_constant_redirects_do_not_forward_credentials_or_queries(monkeypatch, t
         assert response.headers['location'] == origin + '/learning'
         assert 'set-cookie' not in response.headers
         assert 'fleet-secret' not in response.text and 'fleet-cookie' not in response.text
-    for query in ['url=https://evil.example', 'target=ai', 'token=fleet-secret', 'next=//evil.example']:
-        response = http.get('/console/learning/model?' + query, follow_redirects=False)
-        assert response.status_code == 400
-        assert 'location' not in response.headers
+    for path in ['/console/learning', '/console/learning/model']:
+        for query in ['url=https://evil.example', 'target=ai', 'token=fleet-secret', 'next=//evil.example']:
+            response = http.get(path + '?' + query, follow_redirects=False)
+            assert response.status_code == 400
+            assert 'location' not in response.headers
     assert http.get('/console/learning/other', follow_redirects=False).status_code == 404
 
 
 def test_partial_config_and_startup_snapshot(monkeypatch, tmp_path):
     http = client(monkeypatch, tmp_path, {'model': 'https://model.example'})
-    page = http.get('/console/learning')
-    assert page.status_code == 200
-    body = page.text
-    assert '운영 연결 등록됨' in body and '운영 연결 준비 중' in body
-    assert 'status="active"' in body and 'status="neutral"' in body   # 카드 상태가 호스트별로 갈린다
-    assert 'data-host-state="active"' in body and 'data-host-state="neutral"' in body
-    assert 'model.example' in body and body.count('미등록') == 1      # 등록된 원본은 카드에 실명으로 보인다
-    assert 'data-host-focus=""' in body                               # 허브 문서는 초점 없음
+    assert http.get('/console/learning', follow_redirects=False).headers['location'] == (
+        'https://model.example/learning')              # model만 등록되면 허브도 model 원본으로 간다
     assert http.get('/console/learning/ai').status_code == 503
     (tmp_path / 'learning.json').write_text('{"model":"https://changed.example"}')
     assert http.get('/console/learning/model', follow_redirects=False).headers['location'] == (
-        'https://model.example/learning')
+        'https://model.example/learning')              # 설정은 시작 때 한 번만 읽는다
 
 
 @pytest.mark.parametrize('config', [[], None, {'other': 'https://model.example'}, {'model': None},
@@ -129,12 +124,10 @@ def test_launch_uses_house_components_without_inline_code_and_work_navigation():
     assert '<ui-shell' in html and '<ui-section' in html
     assert 'style=' not in html and '<style' not in html
     assert '<script>' not in html
-    assert '/console/learning/model' in html and '/console/learning/ai' in html
-    assert '<ui-tag status="{{model_state}}">' in html and '<ui-tag status="{{ai_state}}">' in html
-    assert 'learning-hosts' in html and 'learning-host-head' in html
-    assert 'learning-host-readout' in html and '{{model_origin}}' in html and '{{ai_origin}}' in html
-    assert 'learning-steps-list' in html and 'learning-focus-note' in html and 'learning-hub-note' in html
+    assert 'learning-hub-note' in html and 'learning-focus-note' in html
     assert 'data-host-focus="{{focus}}"' in html
+    assert '/console?view=work' in html
+    assert 'learning-host' not in html and 'learning-steps' not in html   # 안내 문서 한 장뿐이다
     assert '/console/assets/learning.css' in html
     learning_css = (WEB_ROOT / 'learning.css').read_text(encoding='utf-8')
     assert 'learning-hosts' in learning_css and '@media (width < 30rem)' in learning_css

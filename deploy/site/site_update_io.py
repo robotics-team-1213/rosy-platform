@@ -370,7 +370,8 @@ def load_update_state(paths: Paths) -> dict:
     if 'hold' in state:
         hold = state['hold']
         if (not isinstance(hold, dict) or not isinstance(hold.get('reason'), str)
-                or not hold['reason'].strip() or len(hold['reason']) > 200):
+                or not hold['reason'].strip() or len(hold['reason']) > 200
+                or not hold_shas_valid(hold.get('until_contains'))):
             raise Refused('maintenance hold has an invalid schema')
     if 'switch' in state:
         journal = state['switch']
@@ -408,7 +409,39 @@ def forget_failed(updater, tag: str) -> int:
         return EXIT_FAILED
 
 
-def set_hold(updater, reason: str | None) -> int:
+HOLD_DEFAULT_HOURS, HOLD_MAX_HOURS = 24, 168
+HOLD_MAX_UNTIL_CONTAINS = 8
+
+
+def hold_shas_valid(shas: object) -> bool:
+    """``until_contains`` is absent (a plain or legacy hold) or 1..8 full 40-hex commit
+    shas; the CLI write and the state-file read share this one rule."""
+    return shas is None or (isinstance(shas, list) and 0 < len(shas) <= HOLD_MAX_UNTIL_CONTAINS
+                            and all(isinstance(sha, str) and _COMMIT.fullmatch(sha) for sha in shas))
+
+
+def hold_until(hold: dict) -> _dt.datetime:
+    """Expiry of a stored hold. A hold without an ``until`` key counts as set-time + 24 h; an ``until`` that is
+    present but unparsable, not a string or without a time zone is expired (a naive time cannot be compared).
+    update_status.py applies the same rule."""
+    expired = _dt.datetime.min.replace(tzinfo=_dt.timezone.utc)
+    try:
+        if 'until' in hold:
+            stamp = _dt.datetime.fromisoformat(hold['until'])
+        else:
+            stamp = _dt.datetime.fromisoformat(hold['time']) + _dt.timedelta(hours=HOLD_DEFAULT_HOURS)
+    except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
+        return expired
+    return stamp if stamp.tzinfo is not None else expired
+
+
+def hold_expired(hold: dict) -> bool:
+    """An expired hold still blocks updates (fail safe); it is only reported loudly."""
+    return hold_until(hold) <= _dt.datetime.now(_dt.timezone.utc)
+
+
+def set_hold(updater, reason: str | None, hours: float = HOLD_DEFAULT_HOURS,
+             until_contains: list[str] | None = None) -> int:
     """Operator control uses the same lock as switching and journal recovery."""
     try:
         with run_lock(updater.paths.lock):
@@ -418,7 +451,17 @@ def set_hold(updater, reason: str | None) -> int:
             else:
                 if not reason.strip() or len(reason) > 200:
                     raise Refused('hold reason must contain 1 to 200 characters')
-                state['hold'] = {'reason': reason.strip(), 'time': _now()}
+                if not 0 < hours <= HOLD_MAX_HOURS:
+                    raise Refused(f'hold hours must be above 0 and at most {HOLD_MAX_HOURS}')
+                if not hold_shas_valid(until_contains):
+                    raise Refused(f'hold --until-contains needs 1 to {HOLD_MAX_UNTIL_CONTAINS} '
+                                  'full 40-hex commit shas')
+                until = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(hours=hours)
+                hold = {'reason': reason.strip(), 'time': _now(),
+                        'until': until.replace(microsecond=0).isoformat()}
+                if until_contains:
+                    hold['until_contains'] = until_contains
+                state['hold'] = hold
             updater.save_state(state)
             log('hold-changed', held=reason is not None)
             return EXIT_OK

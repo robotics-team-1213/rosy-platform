@@ -388,8 +388,13 @@ def test_pc_maintenance_shows_host_headroom_and_has_no_process_kill():
     assert "pkill" not in script and "kill" not in script
     assert "10분 뒤 재부팅" in script and "operator_confirmed: true" in script
     assert '.includes("clean-storage")' in script  # only hosts whose catalogue offers it get the button
-    assert "createHostServices" in entry
+    assert "createHostServices" in entry and "createDbMaintenance" in entry
+    assert 'id="db-maintenance"' in page
     assert assets['host-services.js']['path'] == 'maintenance/host-services.js'
+    assert assets['db-maintenance.js']['path'] == 'maintenance/db-maintenance.js'
+    db_script = (web / "maintenance" / "db-maintenance.js").read_text(encoding="utf-8")
+    for route in ("/api/fleet/admin/db-status", "/api/fleet/admin/db-settings", "/api/fleet/admin/db-maintenance"):
+        assert route in db_script
 
 
 def test_app_without_named_principals_never_reaches_a_helper(monkeypatch):

@@ -4,7 +4,7 @@ import pytest
 
 import yaml
 
-from fleet.server.site_users import load_site_users
+from rosy_account.site_users import load_site_users
 
 
 def test_site_users_load_principal_roles_by_sha256_token_digest(tmp_path):

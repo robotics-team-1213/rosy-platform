@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -27,15 +28,25 @@ def _tree(tmp_path, monkeypatch, serial=""):
     monkeypatch.setattr(wq, "SERIAL_FILE", serial_file)
 
 
+def _tests(root, *dirs):
+    """Test files under the folders, as explicit paths (a directory in a repacked invocation stays whole)."""
+    return sorted(f.relative_to(root).as_posix() for d in dirs for f in (root / d).rglob("*.py")
+                  if f.name.startswith("test_") or f.name.endswith("_test.py"))
+
+
 def test_measured_long_invocations_split_and_every_test_file_runs_once(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
-    multi = ["ROSY_JOB_CORES=6", "pkg/test", "other/test"]
+    multi = ["ROSY_JOB_CORES=6", *_tests(tmp_path, "pkg/test")]
     seen = {tuple(multi): 600.0, ("pkg/test",): 600.0, ("short/test",): 30.0}
-    assert wq.split(tmp_path, [multi], seen) == [["ROSY_JOB_CORES=6", "pkg/test"], ["ROSY_JOB_CORES=6", "other/test"]]
+    unpacked = wq.split(tmp_path, [multi], seen)
+    # min(ceil(600 / 90), 5 files) = 5 groups; a small path count still ends one file per job.
+    assert len(unpacked) == 5 and all(g[0] == "ROSY_JOB_CORES=6" for g in unpacked)
+    assert sorted(w for g in unpacked for w in g if w != "ROSY_JOB_CORES=6") == [
+        f"pkg/test/test_{n}.py" for n in "abcde"]
     assert wq.split(tmp_path, [["short/test"]], seen) == [["short/test"]], "under SPLIT_S stays whole"
     assert wq.split(tmp_path, [["never/ran"]], seen) == [["never/ran"]], "a missing path has zero estimated cost"
     groups = wq.split(tmp_path, [["pkg/test"]], seen)
-    assert len(groups) == 3  # ceil(600 / 240)
+    assert len(groups) == 5  # min(ceil(600 / 90), 5 files)
     files = sorted(f for g in groups for f in g)
     assert files == [f"pkg/test/test_{n}.py" for n in "abcde"], "each test file exactly once, helpers not run"
 
@@ -48,21 +59,25 @@ def test_unknown_safe_packets_use_the_existing_byte_cost_at_the_same_threshold(t
     for i, path in enumerate(paths):
         (tmp_path / path).write_bytes(b"x" * (total // 2 + (total % 2 if i else 0)))
     packet = ["ROSY_JOB_CORES=6", "ROSY_CUSTOM=1", *paths]
-    expected = [[*packet[:2], path] for path in paths] if offset >= 0 else [packet]
+    # exactly SPLIT_S is one group of both files (the invocation unchanged); past it, two single-file groups,
+    # heaviest first
+    expected = [packet] if offset <= 0 else [[*packet[:2], "test_b.py"], [*packet[:2], "test_a.py"]]
     assert wq.split(tmp_path, [packet, packet], {}) == expected
     assert wq.split(tmp_path, [packet], {tuple(packet): 0}) == [packet], "measured history wins over byte cost"
 
 
 def test_unknown_large_directory_uses_existing_balancing_and_cap_and_preserves_measured_history(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
-    for n in "abcdefg":
+    extra = [f"{i:02d}" for i in range(14)]
+    for n in extra:
         (tmp_path / "pkg/test" / f"test_{n}.py").write_bytes(b"x" * (wq.SPLIT_S * wq.BYTES_PER_S))
     packet = ["ROSY_JOB_CORES=2", "pkg/test"]
     groups = wq.split(tmp_path, [packet], {})
     assert len(groups) == wq.MAX_SPLIT
     assert all(g[0] == packet[0] for g in groups)
-    assert sorted(p for g in groups for p in g[1:]) == [f"pkg/test/test_{n}.py" for n in "abcdefg"]
-    assert len(wq.split(tmp_path, [packet], {tuple(packet): 600})) == 3
+    expected = sorted(f"pkg/test/test_{n}.py" for n in [* "abcde", *extra])
+    assert sorted(p for g in groups for p in g[1:]) == expected
+    assert len(wq.split(tmp_path, [packet], {tuple(packet): 600})) == 7
     assert wq.split(tmp_path, [packet], {tuple(packet): 30}) == [packet]
 
 
@@ -127,9 +142,9 @@ def test_history_is_the_median_run_of_each_argv_from_the_events_log(tmp_path):
     assert wq.cost(tmp_path, ["pkg/test"], seen) == 200
 
 
-def test_a_run_may_ask_six_main_workers_of_a_full_host():
+def test_a_run_may_ask_three_main_workers_of_a_full_host():
     room = {"cores": 24.0, "mem": 30.0, "site": False, "light": False}
-    assert wq.MAX_MAIN == 6 and wq.main_workers(room, 20) == 6
+    assert wq.MAX_MAIN == 3 and wq.main_workers(room, 20) == 3
 
 
 def test_an_ignore_word_splits_too_and_the_ignored_file_never_runs(tmp_path, monkeypatch):
@@ -137,10 +152,111 @@ def test_an_ignore_word_splits_too_and_the_ignored_file_never_runs(tmp_path, mon
     _tree(tmp_path, monkeypatch)
     inv = ["pkg/test", "--ignore=pkg/test/test_a.py"]
     groups = wq.split(tmp_path, [inv], {tuple(inv): 600.0})
-    assert len(groups) == 3 and all(g[-1] == "--ignore=pkg/test/test_a.py" for g in groups)
+    assert len(groups) == 4 and all(g[-1] == "--ignore=pkg/test/test_a.py" for g in groups)
     files = sorted(w for g in groups for w in g if not w.startswith("-"))
     assert files == [f"pkg/test/test_{n}.py" for n in "bcde"], "every other test file exactly once"
     other = ["pkg/test", "-k", "x"]
     assert wq.split(tmp_path, [other], {tuple(other): 600.0}) == [other], "any other option keeps it whole"
     bare = ["--ignore=pkg/test/test_a.py"]
     assert wq.split(tmp_path, [bare], {tuple(bare): 600.0}) == [bare], "no path: nothing to split"
+
+
+def test_fleet_weights_and_unpacked_serial_paths_are_preserved(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch, serial="serial/test\n")
+    (tmp_path / "serial/test").mkdir(parents=True)
+    (tmp_path / "serial/test/test_s.py").write_text("x\n")
+    (tmp_path / "operations/fleet/test").mkdir(parents=True)
+    for n in "abc":
+        (tmp_path / "operations/fleet/test" / f"test_{n}.py").write_text("x\n")
+    (tmp_path / "tools/harness").mkdir(parents=True)
+    (tmp_path / wq.FLEET_SECONDS).write_text(json.dumps({"test_a.py": 180.0, "test_b.py": 20.0, "test_c.py": 20.0}))
+    assert wq._fleet_weights(tmp_path) == {"test_a.py": 180.0, "test_b.py": 20.0, "test_c.py": 20.0}
+    assert wq._file_weight(tmp_path, tmp_path / "operations/fleet/test/test_a.py", {"test_a.py": 180.0}) == 180.0
+    fleet_groups = wq.split(tmp_path, [["operations/fleet/test"]], {("operations/fleet/test",): 400.0})
+    assert ["operations/fleet/test/test_a.py"] in fleet_groups and len(fleet_groups) == 3
+    assert wq.split(tmp_path, [["pkg/test", "serial/test"]], {("pkg/test", "serial/test"): 600.0}) == [
+        ["pkg/test", "serial/test"]]
+
+
+def _deep_tree(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch)
+    (tmp_path / "pkg/a").mkdir(parents=True)
+    (tmp_path / "pkg/b").mkdir(parents=True)
+
+
+def test_multi_path_repack_balances_into_ceil_groups_and_keeps_every_file_once(tmp_path, monkeypatch):
+    """The 2026-11-18 fix: a >= SPLIT_S multi-path invocation becomes ceil(seconds/SPLIT_S) balanced groups,
+    not one job per file (8,111 single-file jobs a day, 39 % of run time, ~9-11 s fixed cost each)."""
+    _deep_tree(tmp_path, monkeypatch)
+    unit = wq.SPLIT_S * wq.BYTES_PER_S // 4  # 22.5 s a file: 20 of them plus the _tree files
+    for n in range(20):
+        (tmp_path / "pkg/test" / f"test_{n:02d}.py").write_bytes(b"x" * unit)
+    files = _tests(tmp_path, "pkg/test")
+    inv = ["ROSY_JOB_CORES=4", *files, "pkg/test/test_a.py"]  # test_a named twice: once deduped
+    seconds = sum((tmp_path / f).stat().st_size for f in files) / wq.BYTES_PER_S
+    seen = {tuple(inv): seconds}
+    groups = wq.split(tmp_path, [inv], seen)
+    assert len(groups) == math.ceil(seconds / wq.SPLIT_S) == 6, "the tail bound the 11-01 fix wanted"
+    assert sorted(p for g in groups for p in g[1:]) == files, "every test file exactly once, none duplicated"
+    assert all(g[0] == "ROSY_JOB_CORES=4" for g in groups)
+    for g in groups:  # balanced by the cold estimate: no group over SPLIT_S
+        assert sum((tmp_path / p).stat().st_size for p in g[1:]) / wq.BYTES_PER_S <= wq.SPLIT_S
+    again = wq.split(tmp_path, [inv], {tuple(inv): seconds, ("an/unrelated/argv",): 999.0})
+    assert again == groups == wq.split(tmp_path, [inv], seen), "same tree, same argv: land_cache reuse fires"
+
+
+def test_repack_separates_clashing_names_and_keeps_the_exclusive_file_alone(tmp_path, monkeypatch):
+    _deep_tree(tmp_path, monkeypatch)
+    (tmp_path / "pkg/a/test_twin.py").write_bytes(b"x" * 900)   # same basename as pkg/b's: pytest module clash
+    (tmp_path / "pkg/b/test_twin.py").write_bytes(b"x" * 900)
+    (tmp_path / "pkg/a/test_one.py").write_text("import shared_test\n")
+    (tmp_path / "pkg/a/shared_test.py").write_text("x = 1\n")   # a *_test.py sibling: same name, other source
+    (tmp_path / "pkg/b/test_two.py").write_text("import shared_test\n")
+    (tmp_path / "pkg/b/shared_test.py").write_text("x = 2\n")
+    (tmp_path / wq.EXCLUSIVE_FILE).parent.mkdir(parents=True)
+    (tmp_path / wq.EXCLUSIVE_FILE).write_text("def test_g1(): pass\n")
+    inv = [*_tests(tmp_path, "pkg/a", "pkg/b", "pkg/test"), wq.EXCLUSIVE_FILE]
+    groups = wq.split(tmp_path, [inv], {tuple(inv): 4 * wq.SPLIT_S})
+    expected = sorted(["pkg/a/test_twin.py", "pkg/b/test_twin.py", "pkg/a/test_one.py", "pkg/a/shared_test.py",
+                       "pkg/b/test_two.py", "pkg/b/shared_test.py", wq.EXCLUSIVE_FILE,
+                       *[f"pkg/test/test_{n}.py" for n in "abcde"]])
+    assert sorted(p for g in groups for p in g) == expected
+    joins = [set(g) for g in groups]
+    assert not any({"pkg/a/test_twin.py", "pkg/b/test_twin.py"} <= g for g in joins), "basename clash"
+    assert not any({"pkg/a/test_one.py", "pkg/b/test_two.py"} <= g for g in joins), "import-name clash"
+    assert not any({"pkg/a/shared_test.py", "pkg/b/shared_test.py"} <= g for g in joins), "clash via the siblings"
+    assert next(g for g in groups if wq.EXCLUSIVE_FILE in g) == [wq.EXCLUSIVE_FILE], "G1 timing runs whole-file"
+    assert all(sum(len(p) + 1 for p in g) <= wq.MAX_INVOCATION_CHARS for g in groups)
+
+
+def test_repack_yields_the_count_bound_to_the_command_budget(tmp_path, monkeypatch):
+    _deep_tree(tmp_path, monkeypatch)
+    for n in range(100):  # 64-char paths, 1.6 s each: 2 balanced groups would need 3250 chars apiece
+        (tmp_path / f"pkg/deep/{n:03d}/" / ("d" * 35)).mkdir(parents=True)
+        (tmp_path / f"pkg/deep/{n:03d}/" / ("d" * 35) / f"test_x_{n:03d}.py").write_bytes(b"x" * 3200)
+    inv = _tests(tmp_path, "pkg/deep")
+    seconds = 100 * 3200 / wq.BYTES_PER_S
+    groups = wq.split(tmp_path, [inv], {tuple(inv): seconds})
+    assert math.ceil(seconds / wq.SPLIT_S) == 2 < len(groups) == 3, "a broken constraint is worse than one more job"
+    assert all(sum(len(p) + 1 for p in g) <= wq.MAX_INVOCATION_CHARS for g in groups)
+    assert sorted(p for g in groups for p in g) == sorted(
+        f"pkg/deep/{n:03d}/" + "d" * 35 + f"/test_x_{n:03d}.py" for n in range(100))
+
+
+def test_a_group_may_exceed_split_s_only_when_one_file_does(tmp_path, monkeypatch):
+    _deep_tree(tmp_path, monkeypatch)
+    (tmp_path / "pkg/test/test_huge.py").write_bytes(b"x" * (2 * wq.SPLIT_S * wq.BYTES_PER_S))
+    inv = _tests(tmp_path, "pkg/test")
+    groups = wq.split(tmp_path, [inv], {tuple(inv): 185.0})
+    estimates = [sum((tmp_path / p).stat().st_size for p in g) / wq.BYTES_PER_S for g in groups]
+    assert [e > wq.SPLIT_S for e in estimates] == [True, False, False]
+    assert len(groups[0]) == 1 and groups[0] == ["pkg/test/test_huge.py"]
+
+
+def test_a_multi_path_directory_stays_whole_and_keeps_the_ignore_word(tmp_path, monkeypatch):
+    """Pytest's own collection decides a directory's files (norecursedirs, conftest), so argv never expands it."""
+    _deep_tree(tmp_path, monkeypatch)
+    inv = ["pkg/test", "other/test", "pkg/test/test_a.py", "--ignore=pkg/test/test_a.py"]
+    groups = wq.split(tmp_path, [inv], {tuple(inv): 600.0})
+    assert all(g[-1] == "--ignore=pkg/test/test_a.py" for g in groups)
+    assert sorted(p for g in groups for p in g[:-1]) == ["other/test", "pkg/test"], "dir kept, file under it deduped"

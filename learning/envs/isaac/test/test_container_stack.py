@@ -144,7 +144,25 @@ def test_pad_swept_bound_covers_all_finger_angles_with_contact_skin():
                 assert bottom >= lower-1e-12
 
 
-@pytest.mark.parametrize('layers,case', [(0, 'nominal'), (2, 'nominal'), (3, 'unknown'), (True, 'offset')])
+@pytest.mark.parametrize('case', ['nominal', 'offset', 'reverse'])
+def test_two_layers_have_six_distinct_cells_and_measured_second_tier_support(case):
+    fixture = f.container_fixture(layers=2, case=case)
+    items = f.plan(True, fixture=fixture)
+    assert fixture['target_cells'] == [3, 3, 2]
+    assert fixture['bin_size_m'] == [.09, .097, .06]
+    assert len(items) == len({tuple(item['cell']) for item in items}) == 6
+    assert {item['cell'][2] for item in items} == {0, 1}
+    boxes = bodies(fixture)
+    assert all(f.stable_box(box, i, True, fixture=fixture) for i, box in enumerate(boxes))
+    names = f.contact_names(3, True, fixture=fixture)
+    boxes[3]['forces'][names.index('bar-1')][2] = 0.
+    boxes[3]['forces'][names.index('bin')][2] = .6
+    assert not f.stable_box(boxes[3], 3, True, fixture=fixture)
+    assert normalize('omx-map-container-stack', dict(seed=42, layers=2, case=case))['layers'] == 2
+    assert f.judge(dict(layers=[]), True, fixture=fixture)['failures'] == ['two_layers_not_completed']
+
+
+@pytest.mark.parametrize('layers,case', [(0, 'nominal'), (4, 'nominal'), (3, 'unknown'), (True, 'offset'), (2, 'column')])
 def test_invalid_container_profiles_are_not_admitted(layers, case):
     with pytest.raises(ValueError):
         f.container_fixture(layers=layers, case=case)
@@ -226,6 +244,17 @@ def judged_trial(fixture):
     return dict(layers=layers)
 
 
+def test_two_layer_contact_judgement_requires_all_six_supported_boxes(monkeypatch):
+    fixture = f.container_fixture(layers=2, case='nominal')
+    monkeypatch.setattr(f, 'leveling_sequence_observed', lambda *a: True)
+    monkeypatch.setattr(f, 'free_lift', lambda *a: True)
+    trial = judged_trial(fixture)
+    assert f.judge(trial, True, fixture=fixture) == dict(task_success=True, failures=[])
+    trial['layers'].pop()
+    assert f.judge(trial, True, fixture=fixture) == dict(
+        task_success=False, failures=['two_layers_not_completed'])
+
+
 @pytest.mark.parametrize('mutation', [None, 'narrow', 'wide', 'no_window', 'late_window'])
 def test_nine_container_judge_requires_gap_band_and_prior_stack_windows(monkeypatch, mutation):
     fixture = f.container_fixture(layers=3, case='nominal')
@@ -260,8 +289,8 @@ def test_nine_container_budget_covers_the_measured_run_and_the_mp4_cap():
     assert entry['timeout_seconds'] == 4200
     # 2026-11-03: the surveyed bases (waypoint, higher leveling carry) placed 8/9 and met the 2,310 s limit (run 5d3a), and the
     # D-969 demo recording renders two more cameras per frame: 65 min task inside a 70 min unit, under the 90 min reboot guard.
-    assert "timeout = 4200 if scenario == 'omx-map-container-stack'" in inspect.getsource(run_system)
-    assert "'timeout': 3900 if container_task" in inspect.getsource(run_worker)
+    assert "timeout = 4200 if scenario in ('omx-map-container-stack', 'omx-map-container-stacking-rl')" in inspect.getsource(run_system)
+    assert "'timeout': 3900 if container_task or container_rl" in inspect.getsource(run_worker)
 
 
 def test_ship_offset_cases_move_only_the_release_target():
@@ -324,7 +353,11 @@ def test_every_ship_case_is_accepted_by_the_isaac_task_command_line():
             assert suffix in names or case in names, case
 
 
-@pytest.mark.parametrize('case', ['nominal-palletizing-v21-ship-surveyed-bases', 'nominal-palletizing-v21-ship-surveyed'])
+@pytest.mark.parametrize('case', [
+    'nominal-palletizing-v21-ship-surveyed-bases',
+    'nominal-palletizing-v21-ship-surveyed',
+    'nominal-palletizing-v21-ship-surveyed-skew-20261110',
+])
 def test_surveyed_bases_reach_belt_stack_and_their_own_leveling_spot(tmp_path, case):
     """Cell survey 2026-11-03: from the measured bases (24-36 mm toward the stern) arm_a no longer reaches the shared
     leveling spot past the bow (x -0.12, 0.287 m), so each arm levels on its own spot in front of it; both arms still
@@ -351,23 +384,33 @@ def test_surveyed_bases_reach_belt_stack_and_their_own_leveling_spot(tmp_path, c
 
 
 def test_lowered_belt_pick_descends_vertically_and_arm_a_levels_through_its_waypoint(tmp_path):
-    """Isaac 2026-11-03: the 28 mm lower belt was refused at z 0.07 on the vertical descent (the corridor's top dropped too)
-    and below -0.04 (the relaxed floor did not); arm_a's straight path to its own leveling spot is a wrist singularity."""
+    """Isaac 2026-11-03 / 2026-11-10: the 28 mm lower belt was refused at z 0.07 on the vertical descent (the corridor's top dropped too)
+    and below -0.04 (the relaxed floor did not); both surveyed arms' straight paths between home and their leveling spots hit a wrist singularity."""
     from mapped_stack_task import Planner
-    fixture = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed')
-    planner = Planner(tmp_path, scene=fixture['planning_scene'], tcp_x_m=fixture['tcp_offset_m'][0])
-    homes = planner.request('homes', bases=fixture['arm_bases_m'], base_yaws=fixture['arm_base_yaws_rad'],
-                            points=[f.home(0, True, fixture=fixture), f.home(1, True, fixture=fixture)])['homes']
+    for case, arms in (('nominal-palletizing-v21-ship-surveyed', (0,)),
+                       ('nominal-palletizing-v21-ship-surveyed-skew-20261110', (0, 1))):
+        fixture = f.container_fixture(layers=3, case=case)
+        planner = Planner(tmp_path, scene=fixture['planning_scene'], tcp_x_m=fixture['tcp_offset_m'][0])
+        homes = planner.request('homes', bases=fixture['arm_bases_m'], base_yaws=fixture['arm_base_yaws_rad'],
+                                points=[f.home(0, True, fixture=fixture), f.home(1, True, fixture=fixture)])['homes']
 
-    def path(arm, points):
-        q = homes[arm]
-        for point, yaw in points:
-            q = planner.request('move', base=fixture['arm_bases_m'][arm], base_yaw=fixture['arm_base_yaws_rad'][arm],
-                                start=q, target=[float(v) for v in point], yaw=float(yaw), dt=f.DT)['frames'][-1]
-    pick = fixture['pickup_center_m']
-    path(1, [([*pick[:2], fixture['carry_height_m']], 0.), (pick, 0.)])
-    spot, via, yaw = f.leveling_center(fixture, 0), f.leveling_via(fixture, 0), fixture['leveling_yaws_rad'][0]
-    path(0, [(via, yaw), ([*spot[:2], fixture['leveling_carry_height_m']], yaw), ([*spot[:2], spot[2]+.02], yaw)])
+        def path(arm, points):
+            q = homes[arm]
+            for point, yaw in points:
+                q = planner.request('move', base=fixture['arm_bases_m'][arm], base_yaw=fixture['arm_base_yaws_rad'][arm],
+                                    start=q, target=[float(v) for v in point], yaw=float(yaw), dt=f.DT)['frames'][-1]
+        pick = fixture['pickup_center_m']
+        path(1, [([*pick[:2], fixture['carry_height_m']], 0.), (pick, 0.)])
+        for arm in arms:
+            spot, via, yaw = f.leveling_center(fixture, arm), f.leveling_via(fixture, arm), fixture['leveling_yaws_rad'][arm]
+            path(arm, [
+                (via, yaw),
+                ([*spot[:2], fixture['leveling_carry_height_m']], yaw),
+                ([*spot[:2], spot[2]+.02], yaw),
+                ([*spot[:2], fixture['leveling_carry_height_m']], yaw),
+                (via, yaw),
+                (f.home(arm, True, fixture=fixture), 0.),
+            ])
 
 
 def test_stack_sites_map_back_onto_the_isaac_targets_for_the_arm_that_places_them():
@@ -385,6 +428,14 @@ def test_stack_sites_map_back_onto_the_isaac_targets_for_the_arm_that_places_the
         target = f.plan(True, fixture=fixture)[step['item']]['target']
         assert math.dist(back, target[:2]) < 1e-3
         assert found[step['site']]['surface_z'] == pytest.approx(-.01+.03*int(step['site'][-1]))
+        assert found[step['site']]['tier'] == int(step['site'][-1]) + 1
+    grouped = sites.by_tier(order)
+    assert [len(grouped[t]) for t in (1, 2, 3)] == [3, 3, 3]
+    assert [[s['site'] for s in grouped[t]] for t in (1, 2, 3)] == [
+        ['stack-r1-l0', 'stack-r0-l0', 'stack-r2-l0'],
+        ['stack-r1-l1', 'stack-r0-l1', 'stack-r2-l1'],
+        ['stack-r1-l2', 'stack-r0-l2', 'stack-r2-l2'],
+    ]
 
 
 def test_measured_layout_gives_the_arm_b_heights_the_sites_use():
@@ -405,7 +456,10 @@ def test_seat_check_flags_a_box_riding_on_a_stud_and_passes_a_seated_one():
 def test_every_ship_case_fixture_survives_the_json_round_trip_the_report_check_makes():
     # run a5e03df9 (2026-11-04): a tuple in the wrist camera spec made the stored fixture differ -> provenance refused
     import json
-    from release_cases import FIXTURE_OVERRIDES
+    from release_cases import FIXTURE_OVERRIDES, REAL_CAMERAS_20261110
     for case in (c for c in FIXTURE_OVERRIDES if c.startswith('nominal-palletizing-v21-ship')):
         fixture = f.container_fixture(layers=3, case=case)
         assert json.loads(json.dumps(fixture)) == fixture, case
+    skew_fx = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed-skew-20261110')
+    assert skew_fx['real_cameras']['top']['eye'] == REAL_CAMERAS_20261110['top']['eye']
+

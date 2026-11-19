@@ -54,8 +54,9 @@ def validate_observer(observer, installation, *, console, principals, other_toke
 
 
 class PhysicalObservationService:
-    def __init__(self, dispatcher, observer):
-        self.dispatcher, self.observer = dispatcher, observer
+    def __init__(self, dispatcher, observer, attestations=None):
+        # attestations (device_trial only): PRE_DISPATCH facts are accepted and shown only behind a named operator's SOURCE_CLEAR.
+        self.dispatcher, self.observer, self.attestations = dispatcher, observer, attestations
         self.execution, self.store = dispatcher.execution, dispatcher.execution.store
         from .physical_transfer_rechecks import PhysicalTransferRechecks
         self.rechecks = PhysicalTransferRechecks(self)
@@ -81,6 +82,9 @@ class PhysicalObservationService:
                 try:
                     self._job(connection, row["mission_id"])
                 except PermissionError:
+                    continue
+                if (self.attestations is not None and self.execution._state(connection, row["mission_id"])
+                        ["context"]["phase"] == "PRE_DISPATCH" and not self.attestations.source_clear_valid(row["mission_id"])):
                     continue
                 return self._context(connection, row["mission_id"])
             # D-930: a waiting recheck is observed only when no attempt needs facts.
@@ -167,6 +171,9 @@ class PhysicalObservationService:
                         raise MissionConflict("committed physical evidence cannot be replaced")
                     return
             if body.phase == "PRE_DISPATCH":
+                if self.attestations is not None:
+                    # Fail closed, single use: consumed before dispatch, so a failed dispatch needs a new attestation.
+                    self.attestations.consume_source_clear(mission_id)
                 self.dispatcher.submit(mission_id, observations=samples,
                     authenticated_producer_id=self.observer.producer_id)
             else:

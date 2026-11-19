@@ -12,10 +12,12 @@ is raised and the job is left running. Standard library only.
 
 from __future__ import annotations
 
+import atexit
 import os
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -27,6 +29,10 @@ LAST_POLL = 0.0  # monotonic time of the latest poll in this process (land_watch
 BACKOFF = (5, 10, 20, 30)
 RECONNECT_S = float(os.environ.get("ROSY_TEST_RECONNECT", "600"))
 CALL_TIMEOUT = 60
+# Host lease: POLL touches <k>.seen; a job whose .seen is older than this TERMs its own process group, so a laptop
+# killed without a chance to send KILL (taskkill /F) frees its ADMIT slot instead of holding it up to 5,400 s. Twice
+# RECONNECT_S: past one, poll() has already given up (Lost) and no verdict can be read anyway.
+LEASE_S = int(2 * RECONNECT_S)
 # ADMIT's line once a job that waited for host room starts: run() starts the job's deadline over. 2026-10-30 a
 # Gazebo suite waited 100 min behind 6 jobs and was killed at its 60-min deadline (exit 124) before running a test.
 ROOM = b"[remote-pytest] host room after waiting"
@@ -40,18 +46,26 @@ WAIT_CAP = 3  # timeout_s multiples a job may wait for room; new jobs stay out m
 # always starts, however large. One flock makes check and lock one step across runs. Waiting keeps the laptop
 # polling (its pid is up), so land_watchdog sees it as alive.
 HOLD_DEFERRED = b"[remote-pytest] admission deferred: gpu/sim hold"
-ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone; DEFER_HOLD='""" + HOLD_DEFERRED.decode() + r"""'
+ROOM_DEFERRED = b"[remote-pytest] admission deferred: host room"
+ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; CA=${ROSY_JOB_CPU_ALONE:-0}; [ "$AL" = 1 ] && X=alone; DEFER_HOLD='""" + HOLD_DEFERRED.decode() + r"""'; DEFER_ROOM='""" + ROOM_DEFERRED.decode() + r"""'
 CAPC=${ROSY_HOST_CORES:-$(nproc)}; CAPG=${ROSY_HOST_GB:-$(awk '/^MemTotal:/{print int($2 / 1048576)}' /proc/meminfo)}
+w_admit0=$(date +%s)
+_sl=0.5
 exec 9> ~/rosy-jobs/.admit
 while :; do
   now=$(date +%s)
   if reboot_soon "$now"; then echo '[remote-pytest] admission deferred: nightly reboot'; exit 253; fi
-  flock 9; uc=0; ug=0; others=0; held=0; pending=0; gh=0
+  flock 9; uc=0; ug=0; others=0; held=0; pending=0; gh=0; sh=0; non_gpu=0; gc=0; gg=0
   for f in ~/rosy-jobs/*.lock; do
     [ -e "$f" ] || continue; read -r p k fc fm < "$f" || true
     kill -0 "$p" 2>/dev/null || continue
-    others=$((others + 1)); [ "$k" = alone ] && held=1; case "$k" in sim|gpu) gh=1;; esac
-    [[ $fc$fm =~ ^[0-9]+$ ]] && { uc=$((uc + fc)); ug=$((ug + fm)); }
+    others=$((others + 1)); [ "$k" = alone ] && held=1
+    [ "$k" = gpu ] || non_gpu=$((non_gpu + 1))
+    case "$k" in sim) gh=1; sh=1;; gpu) gh=1;; esac
+    if [[ $fc$fm =~ ^[0-9]+$ ]]; then
+      uc=$((uc + fc)); ug=$((ug + fm))
+      [ "$k" = gpu ] && { gc=$((gc + fc)); gg=$((gg + fm)); }
+    fi
   done
   for f in ~/rosy-jobs/*.resv; do
     [ -e "$f" ] || continue; read -r t k fc fm < "$f" || true
@@ -61,23 +75,33 @@ while :; do
     [ -e "$f" ] || continue; read -r p < "$f" || true
     [ "$p" != $$ ] && kill -0 "$p" 2>/dev/null && pending=1
   done
-  if [ "$AL" = 1 ]; then ok=$((others == 0))
-  # ROSY_JOB_TURN=1 (xdist_plan.TURN_JOB): the landing holding the turn; never beside an alone job, else at once.
-  elif [ "${ROSY_JOB_TURN:-}" = 1 ]; then ok=$((held == 0))
+  hold=$gh
+  if [ "$AL" = 1 ] && [ "$CA" = 1 ]; then
+    ok=$((non_gpu == 0 && (others == 0 || (uc + RC <= CAPC && ug + G <= CAPG))))
+    # CPU/fsync timing alone job runs beside gpu training when sim is absent and cpu/mem fit.
+    [ "$sh" = 0 ] && [ "$((gc + RC <= CAPC && gg + G <= CAPG))" = 1 ] && hold=0
+  elif [ "$AL" = 1 ]; then ok=$((others == 0))
+  # ROSY_JOB_TURN=1 (xdist_plan.TURN_JOB): prioritized above CAPC/CAPG, capped against 2x overcommit.
+  elif [ "${ROSY_JOB_TURN:-}" = 1 ]; then ok=$((held == 0 && (others == 0 || (uc + RC <= CAPC + 4 && ug + G <= CAPG + 6))))
   else ok=$((held == 0 && pending == 0 && (others == 0 || (uc + RC <= CAPC && ug + G <= CAPG)))); fi
   if [ $ok = 1 ]; then echo "$$ $X $RC $G" > "$L"; rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; break; fi
   # 11-09: behind a training or Gazebo hold (hours) an alone waiter's marker kept every pytest off the host. It
   # waits without the marker, then gives its invocation back to be placed on another host (RebootSoon path).
-  [ "$gh" = 1 ] || unset w0  # the 180 s count is one continuous hold
-  if [ "$AL" = 1 ] && [ "$gh" = 1 ]; then
+  [ "$hold" = 1 ] || unset w0  # the 180 s count is one continuous hold
+  if [ "$AL" = 1 ] && [ "$hold" = 1 ]; then
     rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; : "${w0:=$now}"
     if [ $((now - w0)) -ge "${ROSY_ALONE_HOLD_WAIT_S:-180}" ]; then echo "$DEFER_HOLD"; exit 253; fi
-    sleep 5; continue
+    sleep "$_sl"; case "$_sl" in 0.5) _sl=1;; *) _sl=2;; esac; continue
+  fi
+  if [ "$AL" != 1 ] && [ $((now - w_admit0)) -ge "${ROSY_ADMIT_WAIT_S:-180}" ]; then
+    flock -u 9; echo "$DEFER_ROOM"; exit 253
   fi
   [ "$AL" = 1 ] && echo $$ > ~/rosy-jobs/$$.alone-wait
   flock -u 9
   [ -n "${said:-}" ] || { echo "[remote-pytest] waiting for host room ($others job(s), ${uc}c ${ug}GB in use)"; said=1; }
-  sleep 5
+  sleep "$_sl"
+  if [ "${ROSY_JOB_TURN:-}" = 1 ] || [ "$AL" = 1 ]; then case "$_sl" in 0.5) _sl=1;; *) _sl=2;; esac
+  else case "$_sl" in 0.5) _sl=1;; 1) _sl=2;; 2) _sl=4;; 4) _sl=8;; *) _sl=10;; esac; fi
 done
 [ -n "${said:-}" ] && echo "[remote-pytest] host room after waiting"
 exec 9>&-"""
@@ -93,6 +117,19 @@ ISAAC_GPU_GUARD = r"""for f in ~/rosy-jobs/isaac-*.resv; do
 done
 """
 
+# lease_check LEASE_S PGID: 1 once the job finished (.rc) or its lease ran out (TERM, so the EXIT trap frees the lock).
+# NOW is a test hook. Only this run's own group: .seen is per run and job.
+LEASE = r""": > "$D/$K.seen"
+lease_check() {
+  [ -e "$D/$K.rc" ] && return 1
+  s=$(stat -c %Y "$D/$K.seen" 2>/dev/null) || return 0
+  # a group kill only when $2 leads its own group (setsid): over Tailscale SSH a pgid can be tailscaled's (11-07)
+  [ $(( ${NOW:-$(date +%s)} - s )) -gt "$1" ] && { if [ "$(ps -o pgid= -p "$2" | tr -d ' ')" = "$2" ]; then
+    kill -TERM -- "-$2"; else kill -TERM "$2"; fi 2>/dev/null; return 1; }
+  return 0
+}
+"""
+
 # $1 run, $2 deps, $3 CPUQuota ('' = none), $4 job k, $5 timeout s, then [ROSY_*=value ...] pytest args.
 # The lock pid is this shell's: it lives until pytest ends (the trap keeps bash from exec'ing).
 JOB = r"""R=~/rosy-test; V=$R/venvs/$2; CPU=$3; D=$R/runs/$1.jobs; K=$4; T=$5; L=~/rosy-jobs/$1.$4.lock
@@ -102,6 +139,7 @@ trap 'c=$?; [ $c = 124 ] && echo "[remote-pytest] timed out after $T s"
 [ -z "${B:-}" ] || { chmod -R u+rwX -- "$B"; rm -rf -- "$B"; } 2>/dev/null  # tests leave read-only dirs
 echo $c > "$D/$K.rc.tmp"; rm -f "$L" ~/rosy-jobs/$$.alone-wait; mv -f "$D/$K.rc.tmp" "$D/$K.rc"' EXIT
 trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would still be 0
+""" + LEASE + r"""( while kill -0 $$ 2>/dev/null && sleep 60; do lease_check """ + str(LEASE_S) + r""" $$ || break; done ) </dev/null >/dev/null 2>&1 &
 """ + remote_test_tools.DEFAULT_CONTEXT + r"""shift 5
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 # Leading ROSY_*=value args are this job's environment (remote_pytest.ENV_ARG), not pytest args.
@@ -112,12 +150,15 @@ export PYTEST_TIMEOUT="${ROSY_PER_TEST_TIMEOUT:-900}"
 # xdist_plan job words: an xdist job's workers and a light host's memory cap, for the lock and MemoryMax.
 # ROSY_JOB_RESERVE_GB: the lock budget placement counts (laptop memory history), apart from the MemoryMax cap.
 # ROSY_JOB_RESERVE_CORES: the lock's cores from the laptop's cpu history; -n stays ROSY_JOB_CORES.
-C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-$M}; RC=${ROSY_JOB_RESERVE_CORES:-$C}
+C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-${ROSY_JOB_MEM_GB:-2}}; RC=${ROSY_JOB_RESERVE_CORES:-$C}
 [[ $C$M$G$RC =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/_MEM_GB/_RESERVE_* must be whole numbers"; exit 2; }
 X=pytest; [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && X=browser  # PROBE counts browser locks per host
+[ -z "${ROSY_JOB_CPU_ALONE:-}" ] && { { [ "${1:-}" = "test/test_platform_g1_timing.py" ] && [ "${ROSY_RUN_BROWSER_TESTS:-}" != 1 ]; } || { [ "${ROSY_BROWSER_ALONE:-}" = 1 ] && [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ]; }; } && ROSY_JOB_CPU_ALONE=1
 """ + ADMIT + "\n" + ISAAC_GPU_GUARD + r"""
 # Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
-[ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
+[ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { compgen -G ~/.cache/ms-playwright/chromium-*/chrome*/chrome >/dev/null 2>&1 \
+  || compgen -G ~/.cache/ms-playwright/chromium_headless_shell-*/chrome*/chrome* >/dev/null 2>&1 \
+  || timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
 umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
 # tmp_path root per job, removed by the EXIT trap: /tmp/pytest-of-<user> garbage filled a host disk (2026-10-26).
@@ -126,9 +167,14 @@ umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 fi
 B=$(mktemp -d /tmp/rosy-pytest-XXXXXX) || exit 1
 # TMPDIR beside the basetemp, not in it (pytest wipes --basetemp at start): TEMP-or-/tmp tests leak otherwise.
 mkdir -m 700 "$B/p" "$B/t"; export TMPDIR=$B/t TEMP=$B/t TMP=$B/t
-# The deps hash names the inputs, not what unpinned pip picked; installed dist-info names do (one per run).
-echo "[remote-pytest] env ${V##*/} freeze $(cd "$V" && ls -d lib/python3*/site-packages/*.dist-info \
-  receiver-crypto/*.dist-info 2>/dev/null | sha256sum | cut -c1-16)"
+# The deps hash names the inputs, not what unpinned pip picked; installed dist-info names do (cached per venv).
+SM=$(stat -c '%y' "$V"/lib/python*/site-packages 2>/dev/null | tr '\n' ';')
+PM=; F=
+[ -r "$V/.freeze-sha" ] && IFS='|' read -r PM F < "$V/.freeze-sha" || true
+[ -n "$F" ] && [ "$PM" = "$SM" ] || { F=$(cd "$V" && ls -d lib/python3*/site-packages/*.dist-info \
+  receiver-crypto/*.dist-info 2>/dev/null | sha256sum | cut -c1-16); \
+  printf '%s|%s\n' "$SM" "$F" > "$V/.freeze-sha.tmp.$$" 2>/dev/null && mv -f "$V/.freeze-sha.tmp.$$" "$V/.freeze-sha" 2>/dev/null || true; }
+echo "[remote-pytest] env ${V##*/} freeze $F"
 # Best-effort lowest, not idle (-c3): idle gets no disk time while any other process writes, so a timing
 # test's SQLite fsync stalled for seconds on a busy AI PC (g1 contact gap p99 4.7-5.7 s, 2026-10-26).
 # The scope's cgroup ends with pytest, so a watcher inside it reads memory.peak (kernel >= 5.19) after pytest is
@@ -168,7 +214,7 @@ setsid nohup bash -c "$J" job "$@" >> "$D/$4.log" 2>&1 < /dev/null &
 """
 
 # The exit code is read before the log, so a poll that sees it also gets the whole log.
-POLL = r"""D=~/rosy-test/runs/$1.jobs; K=$2; rc=; [ -f "$D/$2.rc" ] && rc=$(cat "$D/$2.rc")
+POLL = r"""D=~/rosy-test/runs/$1.jobs; K=$2; rc=; touch "$D/$2.seen" 2>/dev/null; [ -f "$D/$2.rc" ] && rc=$(cat "$D/$2.rc")
 """ + ALIVE + r"""
 echo "ROSYJOB ${rc:--} $alive"; tail -c +$(($3 + 1)) "$D/$2.log"
 """
@@ -200,6 +246,38 @@ LOST_EXIT = 255  # what land.py sees for an invocation whose host went silent
 VANISHED_EXIT = 254  # the job ended without an exit code (host reboot, SIGKILL, START cut off)
 CANCELLED = "cancelled"  # not an int: a cancelled invocation never reads as a pass or a cached result
 ARGV_MAX = 8000  # remote command bytes passed as an ssh argument; ssh.exe cut at ~8,190 (measured 2026-10-26)
+
+
+_LIVE: dict[tuple, tuple] = {}  # (host, name, k) -> (ssh, call) of every job this process follows
+_CANCEL = threading.Event()  # cancel_all(): every poll KILLs its job; runs not yet started return CANCELLED
+EXIT_KILL_S = 20  # atexit: all KILLs in parallel, then give up
+
+
+def cancel_all(on: bool = True) -> None:
+    """Cancel every job of this process (a guard failed, so the run beside it is moot); on=False re-arms."""
+    _CANCEL.set() if on else _CANCEL.clear()
+
+
+def _kill_live() -> None:
+    """atexit: a landing that stops without its run() unwinding (daemon threads, STOP) leaves no job on a host."""
+    jobs = [threading.Thread(target=call, args=(ssh, host, KILL, name, str(k)), daemon=True)
+            for (host, name, k), (ssh, call) in list(_LIVE.items())]
+    for t in jobs:
+        t.start()
+    end = time.monotonic() + EXIT_KILL_S
+    for t in jobs:
+        t.join(max(0.0, end - time.monotonic()))
+
+
+atexit.register(_kill_live)
+
+
+def _event(kind: str, **fields) -> None:
+    try:
+        import land_events
+        land_events.emit(kind, **fields)
+    except ImportError:  # run outside the landing tools
+        print(f"[remote-pytest] {kind} {fields}", file=sys.stderr, flush=True)
 
 
 class Lost(Exception):
@@ -315,6 +393,11 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
         return parse_poll(result.stdout) if result is not None and result.returncode == 0 else None
 
     offset, gone = 0, 0
+    if _CANCEL.is_set():
+        return CANCELLED
+    _LIVE[host, name, k] = (ssh, call)
+    t_start = clock()
+    _event("job_start", host=host, run=name, k=k)
     try:  # START too: Ctrl-C in its backoff must not leave a job running under the caller's cleanup
         started, lost = retrying(lambda: call(ssh, host, START, *args), "start", host, budget, sleep, clock)
         if started is None:
@@ -346,7 +429,9 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                     if rc == 253 and b"[remote-pytest] admission deferred: nightly reboot\n" in log.read_bytes():
                         raise RebootSoon(f"{host}: nightly reboot admission deferred")
                     if rc == 253 and HOLD_DEFERRED + b"\n" in log.read_bytes():
-                        raise RebootSoon(f"{host}: an alone job behind a gpu/sim hold; placed elsewhere")
+                        raise RebootSoon(f"{host}: an alone job deferred while other jobs ran; placed elsewhere")
+                    if rc == 253 and ROOM_DEFERRED + b"\n" in log.read_bytes():
+                        raise RebootSoon(f"{host}: admission deferred after room wait; placed elsewhere")
                     wait = max(0.0, admitted - wait_from) if waiting else 0.0  # user@address: only the user part
                     out.write(f"\n{TIMING} host={host.split('@')[0]} start={start_at:.0f} wait_s={wait:.0f}"
                               f" run_s={clock() - admitted:.0f}\n".encode())
@@ -359,7 +444,7 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                 if clock() > deadline:
                     call(ssh, host, KILL, name, str(k))
                     return 124
-                if stop is not None and stop.is_set():  # only a job this poll just saw; a lost one is left alone
+                if _CANCEL.is_set() or (stop is not None and stop.is_set()):  # only a job this poll just saw; a lost one is left alone
                     call(ssh, host, KILL, name, str(k))
                     out.write(f"\n[remote-pytest] cancelled after a failure elsewhere: {where}\n".encode())
                     return CANCELLED
@@ -367,3 +452,6 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
     except KeyboardInterrupt:
         call(ssh, host, KILL, name, str(k))  # as before: the caller's cleanup then removes the run
         raise
+    finally:
+        _LIVE.pop((host, name, k), None)
+        _event("job_end", host=host, run=name, k=k, seconds=round(clock() - t_start))

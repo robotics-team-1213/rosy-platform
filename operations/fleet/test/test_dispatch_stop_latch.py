@@ -54,15 +54,15 @@ def test_stop_clears_unsent_generic_claims_and_rejects_new_ones(tmp_path):
     rearmed = store.rearm_dispatch(expected_generation=0, actor_id="operator")
     assert store.reserve_resources(
         owner_kind="mission", owner_id="mission-ready", generation=rearmed["generation"],
-        resources=[("workcell", "cell-a")],
+        resources=[("workcell", "arm-cell")],
     ) is True
 
     stopped = store.trip_stop_latch(actor_id="operator", reason="SITE_STOP")
 
-    assert store.resource_claims(resource_kind="workcell", resource_id="cell-a") == []
+    assert store.resource_claims(resource_kind="workcell", resource_id="arm-cell") == []
     assert store.reserve_resources(
         owner_kind="mission", owner_id="mission-next", generation=stopped["generation"],
-        resources=[("workcell", "cell-a")],
+        resources=[("workcell", "arm-cell")],
     ) is False
 
 

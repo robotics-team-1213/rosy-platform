@@ -1,16 +1,59 @@
 """D-798: a file moved into a server holder still imports under its old ``fleet.server.<name>``."""
+import ast
 import importlib
 import importlib.util
 from pathlib import Path
 
-from fleet._source_layout import SERVER_HOLDERS
+import yaml
 
-SERVER = Path(__file__).resolve().parents[1] / "fleet" / "server"
+from fleet._source_layout import SERVER_HOLDERS, SOURCE_ROOTS
+
+FLEET_ROOT = Path(__file__).resolve().parents[1] / "fleet"
+SERVER = FLEET_ROOT / "server"
 ACCOUNT = SERVER.parents[2] / "account" / "rosy_account"
+SITUATION = SOURCE_ROOTS["assessment"] / "rosy_situation"
+FLEET_SOURCES = SERVER.parents[3] / "tools" / "packaging" / "fleet_sources.py"
 ACCOUNT_ALIASES = frozenset({
-    "account_authority", "account_authority_routes", "account_config", "account_ledger",
-    "account_routes", "password_routes", "password_session", "site_users",
+    "account_authority", "password_session", "site_users",
 })
+
+
+def _assessment_modules() -> tuple[str, ...]:
+    tree = ast.parse(FLEET_SOURCES.read_text(encoding="utf-8"), filename=str(FLEET_SOURCES))
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "ASSESSMENT_MODULES":
+                    return tuple(ast.literal_eval(node.value))
+    raise AssertionError("ASSESSMENT_MODULES not found in tools/packaging/fleet_sources.py")
+
+
+def _rosy_situation_imports(path: Path, *, inside_rosy_situation: bool) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                parts = alias.name.split(".")
+                if parts[0] == "rosy_situation":
+                    found.add(parts[1] if len(parts) > 1 else "__init__")
+        elif isinstance(node, ast.ImportFrom):
+            if node.level > 0 and inside_rosy_situation:
+                if node.module:
+                    found.add(node.module.split(".")[0])
+                else:
+                    for alias in node.names:
+                        if (SITUATION / f"{alias.name}.py").is_file():
+                            found.add(alias.name)
+            elif node.level == 0 and node.module:
+                parts = node.module.split(".")
+                if parts[0] == "rosy_situation":
+                    found.add(parts[1] if len(parts) > 1 else "__init__")
+                    if len(parts) == 1:
+                        for alias in node.names:
+                            if (SITUATION / f"{alias.name}.py").is_file():
+                                found.add(alias.name)
+    return found
 
 
 def test_every_holder_file_resolves_under_fleet_server():
@@ -33,3 +76,36 @@ def test_old_import_path_loads_the_moved_module():
     from fleet.server import map_pose_service, proposal_store
     assert Path(proposal_store.__file__).parent.name == "evidence"
     assert Path(map_pose_service.__file__).parent.name == "pose"
+
+
+def test_fleet_assessment_modules_cover_internal_and_fleet_imports():
+    assessment_modules = _assessment_modules()
+    allowed = set(assessment_modules)
+    assert "__init__" in allowed
+
+    missing: dict[str, list[str]] = {}
+    for module in assessment_modules:
+        path = SITUATION / f"{module}.py"
+        assert path.is_file(), f"Missing packaged rosy_situation module: {path}"
+        imported = _rosy_situation_imports(path, inside_rosy_situation=True)
+        outside = sorted(imported - allowed)
+        if outside:
+            missing[str(path.relative_to(SERVER.parents[3]))] = outside
+
+    for path in sorted(FLEET_ROOT.rglob("*.py")):
+        imported = _rosy_situation_imports(path, inside_rosy_situation=False)
+        outside = sorted(imported - allowed)
+        if outside:
+            missing[str(path.relative_to(SERVER.parents[3]))] = outside
+
+    assert not missing, f"rosy_situation imports outside ASSESSMENT_MODULES: {missing}"
+
+
+
+def test_every_server_holder_is_a_selector_source_package():
+    """The affected selector names a holder file fleet.server.<stem> only through platform_parts source_packages;
+    a holder missing there drops its importers' tests silently (2026-11-18: tracking was missing)."""
+    parts = yaml.safe_load((SERVER.parents[3] / "tools" / "harness" / "platform_parts.yaml").read_text(encoding="utf-8"))
+    fleet = next(root for root in parts["roots"] if root["path"] == "operations/fleet")
+    listed = {key for key, package in fleet["source_packages"].items() if package == "fleet.server"}
+    assert listed == {f"fleet/server/{holder}" for holder in SERVER_HOLDERS}

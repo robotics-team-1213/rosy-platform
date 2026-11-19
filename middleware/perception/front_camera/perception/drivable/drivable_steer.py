@@ -40,6 +40,7 @@ CORRIDOR_HALF_M = 0.03
 CORRIDOR_FILL = 0.8
 PIVOT_AHEAD_M = 0.14
 PIVOT_GUIDE_DEG = 45.0   # a milder map bend ahead is arced, not turned in place (v2 lap r28: 14 cm early)
+CORNER_MAX_DEG = 150.0   # map corners turn 103-115 deg, a robot arrives up to ~35 deg off; past this it faces back
 RECENTRE_M = 0.04   # way centre this far toward the other side: recentre, no pivot (v2 lap r45a)
 #: a way whose centre target lies at least this far ahead bends on past a short straight corridor (v2 lap 2026-10-18)
 BEND_ON_X_M = 0.18
@@ -241,6 +242,17 @@ def pursuit_error(tx, ty, confidence, **law):
     return error_for_k(2.0 * ty / d2, confidence, **law)
 
 
+def at_corner(ctx, way_ahead_m):
+    """At or just past a corner node (Fleet route_direction): Fleet's lane here and ahead turn the same way,
+    the larger by PIVOT_GUIDE_DEG up to CORNER_MAX_DEG, and the camera sees no way straight on. The lane in
+    view there is the arriving one, not one to recentre on (sim NW 2026-11-18). With the way open ahead the
+    same angles are a misaligned robot (realign), and past CORNER_MAX_DEG a reversed one (wrong_way_hold)."""
+    here, ahead = ctx.get("route_here"), ctx.get("ahead")
+    return (here is not None and ahead is not None and (here > 0) == (ahead > 0)
+            and PIVOT_GUIDE_DEG <= max(abs(here), abs(ahead)) <= CORNER_MAX_DEG
+            and way_ahead_m is not None and way_ahead_m < PIVOT_AHEAD_M)
+
+
 class DrivableSteer:
     """Keep-mode steering from the newest drivable way. Memory: the pivot and turn-side latches, the
     last opening seen, the smoothed commanded curvature, and the boundary memory (way edges seen, in
@@ -322,7 +334,8 @@ class DrivableSteer:
         consecutive frames (a HOLD applies at once), and the decision history."""
         here = kw.get("guide_here_deg", kw.get("guide_deg"))
         self._ctx = dict(s=guide_s, fresh=guide_fresh, here=here or 0.0, guide=kw.get("guide_deg") is not None,
-                         ahead=kw.get("guide_deg"), stamp=current_stamp)
+                         ahead=kw.get("guide_deg"), stamp=current_stamp,
+                         route_here=kw.get("guide_here_deg"))
         error, confidence, info = self._update(*args, **kw)
         error, confidence, info = observed_route_candidate(error, confidence, info, observed_only=observed_only, owner=self,
             pose=args[6] if len(args) > 6 else kw.get('current_pose'),
@@ -330,8 +343,8 @@ class DrivableSteer:
             observation_stamp=args[1] if len(args) > 1 else kw.get('way_key'))
         guide = kw.get("guide_deg")
         target = info.get("target_now_m")
-        if error is not None and guide is not None and guide_fresh and target:
-            bend = abs(guide - (guide if here is None else here))
+        if error is not None and guide is not None and guide_fresh and target and not at_corner(self._ctx, info.get("ahead_m")):
+            bend = abs(guide - (guide if here is None else here))   # (at a corner here is the leaving lane: no bend)
             off = abs(math.degrees(math.atan2(target[1], target[0])) - guide)
             if off <= bend + REALIGN_DEG:
                 self._misaligned_since = None
@@ -388,7 +401,7 @@ class DrivableSteer:
                 if remembered is not None and side_clear_m.get(remembered) is not None and side_clear_m[remembered] < SIDE_WALL_M:
                     self._memory = self._side = self._pivot = self._pivot_yaw = self._route_exit = None
         ahead, side, near = info["ahead_m"], info["exit"], info.get("exit_near", {info["exit"]: info["exit"] is not None})
-        bridge, want = False, None
+        bridge, want, straight_route = False, None, False
         if guide_deg is not None:
             # Route prior (Fleet guidance, D-511 rev 2: the lane direction ahead minus the heading):
             # the map knows which way the road goes where the camera sees two openings or none.
@@ -399,25 +412,32 @@ class DrivableSteer:
             # ... and agreed 0.25 m ahead: g7-9dfk held 344 frames on a polyline joint (here > 90, ahead 16)
             if abs(guide_deg) <= GUIDE_REVERSE_DEG:
                 here = guide_deg
-            if abs(here) > GUIDE_REVERSE_DEG and not guide_pivot_ok:
+            # at a corner node the lane here is the one leaving it: a turn past 90 deg there is the route's turn
+            reverse = abs(here) > GUIDE_REVERSE_DEG and not at_corner(self._ctx, ahead)
+            if reverse and not guide_pivot_ok:
                 # facing against the lane where the turn circle does not fit (a 0.16 m lane, not one of
                 # the ring-entry turn spots): no U-turn in the lane, HOLD for Fleet (architect 2026-10-10)
                 self._smoothed = self._pivot = self._side = self._route_exit = None
                 return None, None, dict(info, strategy="none", reason="wrong_way_hold", reorient_deferred=True)
-            elif abs(here) > GUIDE_REVERSE_DEG:
+            elif reverse:
                 # facing against the lane: turn in place toward its direction (user 2026-10-10: when
                 # the direction is wrong, set it right; 9dfk 20261010T042913Z_rosy_41 U-turned at the
                 # S-curve top and drove the loop backwards)
                 self._smoothed = self._pivot = self._side = self._route_exit = None
                 error = -PIVOT_ERROR if here > 0 else PIVOT_ERROR
                 return error, self._pivot_confidence, dict(info, strategy="drivable_reorient_" + ("left" if here > 0 else "right"))
-            want = None if abs(guide_deg) < EXIT_BEND_DEG or info.get("reorient_deferred") else (
-                "left" if guide_deg > 0 else "right")
+            # just past a corner node, part way round, the preview runs on along the new lane: turn by the lane here
+            turn = self._ctx["route_here"] if at_corner(self._ctx, ahead) and abs(guide_deg) < PIVOT_GUIDE_DEG else guide_deg
+            want = None if abs(turn) < EXIT_BEND_DEG or info.get("reorient_deferred") else (
+                "left" if turn > 0 else "right")
+            straight_route = want is None and not info.get("reorient_deferred")
             if want is None:
                 # the map lane goes on: no exit turn or pivot; a way cut short (blue tape, cable)
                 # is bridged along the lane below (user 2026-10-10: the map is the route reference)
                 side = info["exit"] = None
                 self._pivot = self._side = None
+                if straight_route:
+                    self._memory = None
             elif want in info["exit_reach_m"] and near.get(want) and (not side_clear_m or want in open_sides):
                 side = info["exit"] = want
             elif side is not None and side != want:
@@ -450,7 +470,7 @@ class DrivableSteer:
                        and (wall_ahead_m is None or wall_ahead_m > target[0]))   # a LiDAR wall short of it closes
         info["straight_on"] = straight_on
         if (side is None and ahead < PIVOT_AHEAD_M and self._memory is not None and not straight_on
-                and (want is None or want == self._memory[0])):
+                and not straight_route and (want is None or want == self._memory[0])):
             side = info["exit"] = self._memory[0]
             info["exit_from_memory"] = True
         if side is None and ahead < PIVOT_AHEAD_M and info["target_m"] is not None:
@@ -462,7 +482,7 @@ class DrivableSteer:
             beyond = info.get("exit_behind_line") or current_pose is not None and _crosses(
                 seen, *_to_current(info["target_m"], source_pose, current_pose)) is not None
             if (abs(bearing) >= TARGET_SIDE_DEG and (not beyond or ahead < PIVOT_AT_BODY_M)
-                    and (want is None or want == target_side)):
+                    and not straight_route and (want is None or want == target_side)):
                 side = info["exit"] = target_side
                 info["exit_point_m"] = dict(info["exit_point_m"], **{side: tuple(info["target_m"])})
                 info["exit_from_target"] = True
@@ -507,13 +527,13 @@ class DrivableSteer:
             if ahead < LOOKAHEAD_M:
                 self._smoothed = 0.0 if self._smoothed is None else self._smoothed
                 return 0.0, ONE_CONFIDENCE, dict(info, strategy="drivable_crosswalk_straight")
-        if self._pivot is None and not front_blocked and (side in info["exit_reach_m"] or info.get("exit_from_route_memory") and ahead
+        if self._pivot is None and not front_blocked and not at_corner(self._ctx, ahead) and (side in info["exit_reach_m"] or info.get("exit_from_route_memory") and ahead
                 < PIVOT_AHEAD_M) and (info.get("near_centre_m") or (0, 0))[1] * (1 if side == "left" else -1) <= -RECENTRE_M:
             side = info["exit"] = self._side = None   # arcs too: the south spoke cut its bend 0.2 m early (r50b)
             info["recentre_first"] = True
         turn_target = info['exit_point_m'].get(side, target)
         if self._pivot is None and side is not None and (front_blocked or ahead < PIVOT_AHEAD_M and (
-                guide_deg is None or abs(guide_deg) >= PIVOT_GUIDE_DEG
+                guide_deg is None or abs(guide_deg) >= PIVOT_GUIDE_DEG or at_corner(self._ctx, ahead)
                 or any(info.get(f'exit_from_{origin}') for origin in ('guide', 'target', 'memory')) and target is not None
                 and _to_current(turn_target, source_pose, current_pose)[1] * (1 if side == 'left' else -1) < 0.0)):
             self._pivot = side

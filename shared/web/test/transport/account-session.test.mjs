@@ -75,3 +75,29 @@ test('a first sign-in is not reported as a change', async () => {
   await kit.restore();
   assert.equal(state.changed, 0);
 });
+
+test('watchIdentity fires changed on mismatched storage event and poll', async () => {
+  const {watchIdentity} = await import('../../account-session.js');
+  const listeners = {};
+  let changed = 0, polled = 0, timerFn = null;
+  const target = {
+    addEventListener: (name, fn) => { listeners[name] = fn; },
+    setInterval: fn => { timerFn = fn; },
+  };
+  watchIdentity({
+    key: 'k',
+    matches: value => value !== 'alice',
+    changed: () => { changed++; },
+    onPoll: () => { polled++; },
+    poll: 1000,
+    target,
+  });
+  listeners.storage({key: 'other', newValue: 'bob'});
+  assert.equal(changed, 0);
+  listeners.storage({key: 'k', newValue: 'alice'});
+  assert.equal(changed, 0);
+  listeners.storage({key: 'k', newValue: 'bob'});
+  assert.equal(changed, 1);
+  timerFn();
+  assert.equal(polled, 1);
+});

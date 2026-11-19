@@ -120,6 +120,11 @@ def angle_for_gap(width_m):
     return (lo+hi)/2
 
 
+def angle_for_gap_clipped(width_m):
+    """`angle_for_gap` with a real reading past the modelled stroke posed at the stroke's end (a wide-open real jaw)."""
+    return angle_for_gap(min(max(width_m, gap_m(-.2)), gap_m(1.2)))
+
+
 def finger_angles(release_gap_m=None):
     """Pre-open, squeezing close and release angles for the 30 mm container, from the pad geometry."""
     return dict(preopen=angle_for_gap(PREOPEN_GAP_M), close=angle_for_gap(GRASP_WIDTH_M-SQUEEZE_M),

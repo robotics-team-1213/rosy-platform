@@ -5,11 +5,18 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import closing
-from typing import Any, Mapping
+from typing import AbstractSet, Any, Mapping
 
 from .action_store_readback import _nonempty
 from .action_store_phases import InvalidActionTransition, _json, _utc_now
 from .workflow_states import _PICK_PLACE_PHASES, _WORKFLOW_STATES, _WORKFLOW_EVIDENCE_KEYS, _COMPLETION_BY_KIND
+
+_ORDINAL_4 = (0, 1, 2, 3)
+_WORKFLOW_ALLOW_STATES = frozenset({"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"})
+_UNRESOLVED_WORKFLOW_STATES = frozenset({"UNKNOWN", "HOLD", "CANCEL_REQUESTED"})
+_RUNNING_STATES = frozenset({"ACCEPTED", "RUNNING"})
+_PHASE_TRANSITION_STATES = frozenset({"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"})
+_RELEASE_EVIDENCE_KEYS = frozenset({"gripper_hold_sequence", "gripper_release_sequence"})
 
 
 class _ActionWorkflowOps:
@@ -35,9 +42,7 @@ class _ActionWorkflowOps:
                 _nonempty(name, value, maximum=192)
         _json(refs)
         if workflow_state == "ACTION_SUCCEEDED":
-            if object_may_be_held or not {
-                "gripper_hold_sequence", "gripper_release_sequence",
-            } <= set(refs):
+            if object_may_be_held or not _RELEASE_EVIDENCE_KEYS <= refs.keys():
                 raise InvalidActionTransition(
                     "Action success requires released-object readback evidence",
                 )
@@ -48,15 +53,15 @@ class _ActionWorkflowOps:
             connection.execute("BEGIN IMMEDIATE")
             action = self._require_attempt(
                 connection, action_id, attempt_id,
-                {"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"},
+                _WORKFLOW_ALLOW_STATES,
             )
-            if action["state"] in {"UNKNOWN", "HOLD", "CANCEL_REQUESTED"} \
+            if action["state"] in _UNRESOLVED_WORKFLOW_STATES \
                     and workflow_state != "HOLD":
                 raise InvalidActionTransition(
                     "unresolved or canceling Action can record HOLD only",
                 )
             if workflow_state == "ACTION_SUCCEEDED":
-                if action["state"] not in {"ACCEPTED", "RUNNING"}:
+                if action["state"] not in _RUNNING_STATES:
                     raise InvalidActionTransition("held or unresolved Action cannot complete")
                 phases = connection.execute(
                     "SELECT phase_id, ordinal, state FROM omx_action_phases "
@@ -64,7 +69,7 @@ class _ActionWorkflowOps:
                     (action_id, attempt_id),
                 ).fetchall()
                 if (tuple(row["phase_id"] for row in phases) != _PICK_PLACE_PHASES
-                        or tuple(row["ordinal"] for row in phases) != tuple(range(4))
+                        or tuple(row["ordinal"] for row in phases) != _ORDINAL_4
                         or any(row["state"] != "SUCCEEDED" for row in phases)):
                     raise InvalidActionTransition(
                         "completed workflow requires four successful ROS motion phases",
@@ -85,7 +90,8 @@ class _ActionWorkflowOps:
             ).fetchone()
             connection.commit()
         result = dict(event)
-        result["detail"] = json.loads(result.pop("detail_json"))
+        result.pop("detail_json")
+        result["detail"] = detail
         return result
 
     def complete_pick_place(self, action_id: str, attempt_id: str, *,
@@ -100,7 +106,7 @@ class _ActionWorkflowOps:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             action = self._require_attempt(
-                connection, action_id, attempt_id, {"ACCEPTED", "RUNNING"},
+                connection, action_id, attempt_id, _RUNNING_STATES,
             )
             phases = connection.execute(
                 "SELECT phase_id, ordinal, state FROM omx_action_phases "
@@ -113,7 +119,7 @@ class _ActionWorkflowOps:
                 (action_id, attempt_id),
             ).fetchone()
             if (tuple(row["phase_id"] for row in phases) != _PICK_PLACE_PHASES
-                    or tuple(row["ordinal"] for row in phases) != tuple(range(4))
+                    or tuple(row["ordinal"] for row in phases) != _ORDINAL_4
                     or any(row["state"] != "SUCCEEDED" for row in phases)):
                 raise InvalidActionTransition("Action completion requires four successful ROS phases")
             if latest_workflow is None:
@@ -123,7 +129,7 @@ class _ActionWorkflowOps:
                     or workflow.get("object_may_be_held") is not False):
                 raise InvalidActionTransition("Action completion requires verified gripper release")
             refs = workflow.get("evidence_refs", {})
-            if not {"gripper_hold_sequence", "gripper_release_sequence"} <= set(refs):
+            if not _RELEASE_EVIDENCE_KEYS <= set(refs):
                 raise InvalidActionTransition("Action completion evidence refs are incomplete")
             if refs["gripper_release_sequence"] <= refs["gripper_hold_sequence"]:
                 raise InvalidActionTransition("release readback must follow the hold readback")
@@ -146,7 +152,7 @@ class _ActionWorkflowOps:
         return self._dict(updated)
 
     def _transition_phase(self, action_id: str, attempt_id: str, *, phase_id: str,
-                          allowed: set[str], target: str, event_type: str,
+                          allowed: AbstractSet[str], target: str, event_type: str,
                           driver_goal_id: str | None = None) -> dict[str, Any]:
         phase_id = _nonempty("phase_id", phase_id, maximum=96)
         if driver_goal_id is not None:
@@ -156,7 +162,7 @@ class _ActionWorkflowOps:
             connection.execute("BEGIN IMMEDIATE")
             action = self._require_attempt(
                 connection, action_id, attempt_id,
-                {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"},
+                _PHASE_TRANSITION_STATES,
             )
             phase = self._require_phase(connection, action_id, attempt_id, phase_id, allowed)
             if driver_goal_id is not None and phase["driver_goal_id"] != driver_goal_id:
@@ -181,7 +187,7 @@ class _ActionWorkflowOps:
 
     @staticmethod
     def _require_phase(connection: sqlite3.Connection, action_id: str, attempt_id: str,
-                       phase_id: str, allowed: set[str]) -> sqlite3.Row:
+                       phase_id: str, allowed: AbstractSet[str]) -> sqlite3.Row:
         row = connection.execute(
             "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
             (action_id, attempt_id, phase_id),
@@ -224,20 +230,21 @@ class _ActionWorkflowOps:
         phases = [self._phase_dict(row) for row in phase_rows]
         if len(phases) > 4:
             raise InvalidActionTransition("pick-place phase journal exceeds its fixed bound")
-        history = [dict(row) for row in event_rows]
-        for event in history:
-            event["detail"] = json.loads(event.pop("detail_json"))
+        latest_by_phase = {}
+        phase_ids = {phase["phase_id"] for phase in phases}
+        for event in reversed(event_rows):
+            phase_id = json.loads(event["detail_json"]).get("phase_id")
+            if isinstance(phase_id, str) and phase_id in phase_ids and phase_id not in latest_by_phase:
+                latest_by_phase[phase_id] = event["event_id"]
+                if len(latest_by_phase) == len(phase_ids):
+                    break
         result = []
         for phase in phases:
-            matching = [event for event in history
-                        if event["attempt_id"] == attempt_id
-                        and event["detail"].get("phase_id") == phase["phase_id"]
-                        and event["event_type"].startswith("ACTION_PHASE_")]
-            if not matching:
+            if phase["phase_id"] not in latest_by_phase:
                 raise InvalidActionTransition("phase journal has no durable event")
             result.append({
                 "phase_id": phase["phase_id"], "ordinal": phase["ordinal"],
-                "state": phase["state"], "journal_event_id": matching[-1]["event_id"],
+                "state": phase["state"], "journal_event_id": latest_by_phase[phase["phase_id"]],
                 "observed_at": phase["updated_at"],
             })
         return result

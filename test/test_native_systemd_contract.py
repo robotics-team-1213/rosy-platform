@@ -411,6 +411,7 @@ DECLARED_WRITES = {
         # D-483: the pending peer request's approval code for rosy-face
         # (receiver_initializer.py PEER_DISPLAY_DIR, receiver_service.py DISPLAY_FILE).
         "/run/rosy-peer-display/approval.json",
+        "/var/lib/rosy/lamp-control/status-patterns.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-camera-healthy.service": {"/var/lib/rosy/camera"},
@@ -569,14 +570,15 @@ DECLARED_READS = {
     # D-373: root:rosy-camera 0750 models, written only by the operator's sudo install.
     # D-344 §12 addendum 2026-10-03: the operator's camera lane overrides, root 0644,
     # written only by line_observer_overrides under sudo.
-    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml", "/var/lib/rosy/models",
+    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml", "/etc/rosy/camera_nominal.yaml", "/var/lib/rosy/models",
                             "/etc/rosy/line_observer_overrides.yaml"},
     # boot-status.json, network.json and ap-display.txt (root-written; D-190).
     "rosy-boot-display.service": {"/run/rosy-boot"},
     # D-433: also CORE's face hand-over in rosy-core's /run/rosy (0755, file 0644)
     # and the release's emotion GIFs.
     # D-483: CORE's approval-code hand-over, rosy-core:rosy-display 2750 (file 0640).
-    "rosy-face.service": {"/run/rosy-boot", "/run/rosy", "/opt/rosy/current", "/run/rosy-peer-display"},
+    "rosy-face.service": {"/run/rosy-boot", "/run/rosy", "/opt/rosy/current", "/run/rosy-peer-display",
+                          "/var/lib/rosy/lamp-control/status-patterns.json"},
     # D-193: boot-status.json; CORE's used/burned signal (read strictly, never
     # followed); the image defaults and the applied rosy-config policy.
     "rosy-login-code.service": {
@@ -1032,8 +1034,9 @@ def test_state_rules_keep_the_parent_and_root_only_state_with_root():
     # Same mode/owner/group as the tmpfiles rule, read from it so the two cannot drift.
     _d, path, mode, owner, group, _age = next(
         line.split() for line in rules.splitlines() if line.startswith("d /run/rosy-peer-display "))
-    assert _directives("rosy-core.service")["ExecStartPre"] == [
-        f"-+/usr/bin/install -d -m {mode} -o {owner} -g {group} {path}"]
+    starts = _directives("rosy-core.service")["ExecStartPre"]
+    assert f"-+/usr/bin/install -d -m {mode} -o {owner} -g {group} {path}" in starts
+    assert "-+/usr/bin/install -d -m 2750 -o rosy-core -g rosy-display /var/lib/rosy/lamp-control" in starts
 
 
 def test_contract_parser_sees_the_2026_09_23_005_defects():

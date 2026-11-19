@@ -10,200 +10,46 @@ import hashlib
 import json
 import sqlite3
 from contextlib import closing, nullcontext
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from core_common.protocol.schemas import (
-    DeviceActionPhaseReceipt, MISSION_EVENT_DETAIL_MAX_BYTES,
+from core_common.protocol.schemas import MISSION_EVENT_DETAIL_MAX_BYTES
+from fleet.server.mission_store_queries import (
+    MissionConflict,
+    _json,
+    _json_utf8_size,
+    _nonempty,
+    _now,
+    _phase_event_key,
 )
-
-from .dispatch_admission import release as release_dispatch_claims
-from .dispatch_admission import reserve as reserve_dispatch_claims
 from rosy.execution.site.goal_evidence import GoalEvidence, GoalPredicate
+
+from .dispatch_admission import release as release_dispatch_claims, reserve as reserve_dispatch_claims
+from .mission_store_helpers import (
+    MissionStoreHelpersMixin, _check_action_result, _check_step_start_claims,
+    _confirm_phase_transition, _ensure_mission_schema, _load_phase_attempt, _prepare_phase_entry,
+)
 from .sqlite_policy import configure_connection, enable_wal
 
-
-class MissionConflict(ValueError):
-    """Mission request, admission, or event conflicts with durable state."""
-
-
-def _phase_event_key(mission_id: str, action_id: str, attempt_id: str,
-                     ordinal: int, local_event_id: int) -> str:
-    identity = f"{mission_id}:{action_id}:{attempt_id}:{ordinal}:{local_event_id}"
-    return "phase:" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+__all__ = [
+    "MISSION_EVENT_DETAIL_MAX_BYTES", "MissionConflict", "MissionStore",
+    "_json", "_json_utf8_size", "_nonempty", "_now", "_phase_event_key",
+]
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
-
-
-def _nonempty(name: str, value: object, *, limit: int = 192) -> str:
-    if (not isinstance(value, str) or not value.strip() or value != value.strip()
-            or len(value) > limit or any(ord(char) < 32 for char in value)):
-        raise ValueError(f"{name} must be a non-empty trimmed string of at most {limit} characters")
-    return value
-
-
-def _json(value: object) -> str:
-    try:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Mission data must be finite JSON") from exc
-
-
-def _json_utf8_size(value: object) -> int:
-    encoded = json.dumps(
-        value, sort_keys=True, separators=(",", ":"),
-        ensure_ascii=False, allow_nan=False,
-    ).encode("utf-8")
-    return len(encoded)
-
-
-class MissionStore:
+class MissionStore(MissionStoreHelpersMixin):
     """Atomic Mission proposals/admission/results on the Fleet task database."""
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         with closing(self._connect()) as connection:
             enable_wal(connection)
-            connection.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS fleet_missions (
-                    mission_id TEXT PRIMARY KEY,
-                    step_id TEXT NOT NULL UNIQUE,
-                    principal_id TEXT NOT NULL,
-                    request_key TEXT NOT NULL,
-                    request_digest TEXT NOT NULL,
-                    action_kind TEXT NOT NULL CHECK(action_kind='PICK_PLACE'),
-                    workcell_id TEXT NOT NULL,
-                    instance_id TEXT NOT NULL,
-                    plan_json TEXT NOT NULL,
-                    goal_predicate_json TEXT NOT NULL,
-                    resources_json TEXT,
-                    action_grant_json TEXT,
-                    reconciliation_pending INTEGER NOT NULL DEFAULT 0,
-                    status TEXT NOT NULL CHECK(status IN (
-                        'PROPOSED', 'READY', 'RUNNING', 'ACTION_SUCCEEDED',
-                        'GOAL_CONFIRMED', 'HOLD', 'CANCELED'
-                    )),
-                    dispatch_generation INTEGER,
-                    authority_epoch INTEGER,
-                    action_id TEXT,
-                    attempt_id TEXT,
-                    supersedes_mission_id TEXT,
-                    reason TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(principal_id, request_key)
-                );
-                CREATE INDEX IF NOT EXISTS fleet_missions_status
-                    ON fleet_missions(status, updated_at);
-                CREATE TABLE IF NOT EXISTS fleet_mission_events (
-                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_source TEXT NOT NULL,
-                    source_event_id TEXT NOT NULL,
-                    mission_id TEXT NOT NULL REFERENCES fleet_missions(mission_id),
-                    step_id TEXT NOT NULL,
-                    action_id TEXT,
-                    attempt_id TEXT,
-                    state TEXT NOT NULL,
-                    event_type TEXT NOT NULL,
-                    actor_id TEXT NOT NULL,
-                    detail_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    UNIQUE(event_source, source_event_id)
-                );
-                CREATE INDEX IF NOT EXISTS fleet_mission_events_mission
-                    ON fleet_mission_events(mission_id, event_id);
-                CREATE INDEX IF NOT EXISTS fleet_mission_events_attempt
-                    ON fleet_mission_events(
-                        mission_id, action_id, attempt_id, event_id
-                    );
-                CREATE TABLE IF NOT EXISTS fleet_mission_event_retention (
-                    mission_id TEXT PRIMARY KEY REFERENCES fleet_missions(mission_id),
-                    cursor_floor INTEGER NOT NULL DEFAULT 0 CHECK(cursor_floor >= 0)
-                );
-                """
-            )
-            columns = {row[1] for row in connection.execute(
-                "PRAGMA table_info(fleet_missions)").fetchall()}
-            if "authority_epoch" not in columns:
-                connection.execute(
-                    "ALTER TABLE fleet_missions ADD COLUMN authority_epoch INTEGER"
-                )
-            if "action_grant_json" not in columns:
-                connection.execute(
-                    "ALTER TABLE fleet_missions ADD COLUMN action_grant_json TEXT"
-                )
-            if "reconciliation_pending" not in columns:
-                connection.execute(
-                    "ALTER TABLE fleet_missions ADD COLUMN reconciliation_pending "
-                    "INTEGER NOT NULL DEFAULT 0"
-                )
-            if "supersedes_mission_id" not in columns:
-                connection.execute(
-                    "ALTER TABLE fleet_missions ADD COLUMN supersedes_mission_id TEXT"
-                )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS fleet_missions_ready_queue "
-                "ON fleet_missions(status, created_at, mission_id)"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS fleet_missions_reconcile_queue "
-                "ON fleet_missions(reconciliation_pending, updated_at, mission_id)"
-            )
+            _ensure_mission_schema(connection)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
         connection.row_factory = sqlite3.Row
         return configure_connection(connection)
-
-    @staticmethod
-    def _row(row: sqlite3.Row | None) -> dict[str, Any] | None:
-        if row is None:
-            return None
-        result = dict(row)
-        for field in ("plan_json", "goal_predicate_json", "resources_json",
-                      "action_grant_json"):
-            if result[field] is not None:
-                result[field.removesuffix("_json")] = json.loads(result[field])
-                del result[field]
-        return result
-
-    def _event(self, connection: sqlite3.Connection, *, event_source: str,
-               source_event_id: str, mission: sqlite3.Row, event_type: str,
-               state: str, actor_id: str, detail: object,
-               action_id: str | None = None, attempt_id: str | None = None) -> bool:
-        source_event_id = _nonempty("source_event_id", source_event_id)
-        event_source = _nonempty("event_source", event_source, limit=48)
-        detail_json = _json(detail)
-        if _json_utf8_size(detail) > MISSION_EVENT_DETAIL_MAX_BYTES:
-            raise ValueError("Mission event detail exceeds the 16 KiB limit")
-        prior = connection.execute(
-            "SELECT * FROM fleet_mission_events WHERE event_source=? AND source_event_id=?",
-            (event_source, source_event_id),
-        ).fetchone()
-        if prior is not None:
-            if (prior["mission_id"] != mission["mission_id"]
-                    or prior["step_id"] != mission["step_id"]
-                    or prior["action_id"] != action_id
-                    or prior["attempt_id"] != attempt_id
-                    or prior["state"] != state
-                    or prior["event_type"] != event_type
-                    or prior["actor_id"] != actor_id
-                    or prior["detail_json"] != detail_json):
-                raise MissionConflict("event identity was reused with different Mission evidence")
-            return False
-        connection.execute(
-            """INSERT INTO fleet_mission_events
-               (event_source, source_event_id, mission_id, step_id, action_id, attempt_id,
-                state, event_type, actor_id, detail_json, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (event_source, source_event_id, mission["mission_id"], mission["step_id"],
-             action_id, attempt_id, state, event_type, actor_id, detail_json, _now()),
-        )
-        return True
 
     def create_proposal(self, *, mission_id: str, principal_id: str, request_key: str,
                         action_kind: str, workcell_id: str, instance_id: str,
@@ -216,9 +62,7 @@ class MissionStore:
         workcell_id = _nonempty("workcell_id", workcell_id, limit=96)
         instance_id = _nonempty("instance_id", instance_id, limit=96)
         if supersedes_mission_id is not None:
-            supersedes_mission_id = _nonempty(
-                "supersedes_mission_id", supersedes_mission_id,
-            )
+            supersedes_mission_id = _nonempty("supersedes_mission_id", supersedes_mission_id)
             if supersedes_mission_id == mission_id:
                 raise ValueError("a Mission cannot supersede itself")
         if action_kind != "PICK_PLACE":
@@ -263,15 +107,13 @@ class MissionStore:
                  workcell_id, instance_id, plan_json, predicate_json,
                  supersedes_mission_id, now, now),
             )
-            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                             (mission_id,)).fetchone()
+            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,)).fetchone()
             self._event(
                 db, event_source="fleet_mission", source_event_id=f"proposal:{mission_id}",
                 mission=row, event_type="MISSION_PROPOSED", state="PROPOSED",
                 actor_id=principal_id, detail={"request_digest": digest},
             )
-            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                             (mission_id,)).fetchone()
+            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,)).fetchone()
             if owns_transaction:
                 db.commit()
         return {"mission": self._row(row), "created": True}
@@ -328,6 +170,7 @@ class MissionStore:
         if (type(expected_authority_epoch) is not int or expected_authority_epoch < 0
                 or type(expected_generation) is not int or expected_generation < 0):
             raise ValueError("authority epoch and generation must be non-negative integers")
+        grant = None
         action_grant_json = None
         if action_grant is not None:
             if not isinstance(action_grant, Mapping):
@@ -341,39 +184,12 @@ class MissionStore:
                 raise ValueError("Action grant identity or fence does not match Mission start")
             action_grant_json = _json(grant)
         now = _now()
-        rejected_reason = None
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            control = connection.execute(
-                "SELECT authority_epoch, generation, dispatch_enabled "
-                "FROM fleet_dispatch_control WHERE control_id=1"
-            ).fetchone()
-            if row["status"] != "READY":
-                raise MissionConflict("only a READY Mission step may start")
-            if (not control["dispatch_enabled"]
-                    or control["authority_epoch"] != expected_authority_epoch
-                    or control["generation"] != expected_generation
-                    or row["authority_epoch"] != expected_authority_epoch
-                    or row["dispatch_generation"] != expected_generation):
-                rejected_reason = "Fleet authority or stop generation changed before Mission step submission"
-            else:
-                resources = json.loads(row["resources_json"] or "[]")
-                expected_keys = {f"{kind}:{resource}" for kind, resource in resources}
-                claims = connection.execute(
-                    """SELECT resource_key FROM fleet_action_claims WHERE owner_kind='mission'
-                       AND owner_id=? AND generation=? AND phase='CLAIMED'""",
-                    (mission_id, expected_generation),
-                ).fetchall()
-                if {claim["resource_key"] for claim in claims} != expected_keys:
-                    rejected_reason = "Mission resource claim is no longer complete"
+            row, control, rejected_reason, reason_code = _check_step_start_claims(
+                connection, mission_id, expected_authority_epoch, expected_generation,
+            )
             if rejected_reason:
-                reason_code = ("FLEET_FENCE_CHANGED_BEFORE_SUBMISSION"
-                               if "generation" in rejected_reason
-                               else "MISSION_RESOURCE_CLAIM_LOST")
                 connection.execute(
                     "UPDATE fleet_missions SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
                     (reason_code, now, mission_id),
@@ -411,8 +227,7 @@ class MissionStore:
                     action_id=action_id, attempt_id=attempt_id,
                     detail={"authority_epoch": expected_authority_epoch,
                             "dispatch_generation": expected_generation,
-                            "request_digest": (grant.get("request_digest")
-                                               if action_grant is not None else None)},
+                            "request_digest": grant.get("request_digest") if grant is not None else None},
                 )
             updated = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
                                          (mission_id,)).fetchone()
@@ -424,50 +239,23 @@ class MissionStore:
     def record_action_result(self, mission_id: str, *, event_id: str, action_id: str,
                              attempt_id: str, outcome: str,
                              result: Mapping[str, Any]) -> dict[str, Any]:
-        if outcome not in {"SUCCEEDED", "FAILED", "UNKNOWN", "HOLD"}:
-            raise ValueError("unsupported terminal Action outcome")
-        if not isinstance(result, Mapping):
-            raise ValueError("Action result must be a JSON object")
-        detail = {"outcome": outcome, "result": dict(result)}
-        detail_json = _json(detail)
         now = _now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            duplicate = connection.execute(
-                "SELECT * FROM fleet_mission_events WHERE event_source='device_action' AND source_event_id=?",
-                (event_id,),
-            ).fetchone()
-            if duplicate is not None:
-                if (duplicate["mission_id"] != mission_id or duplicate["action_id"] != action_id
-                        or duplicate["attempt_id"] != attempt_id
-                        or duplicate["event_type"] != "ACTION_TERMINAL_RESULT"
-                        or duplicate["detail_json"] != detail_json):
-                    raise MissionConflict("device Action event ID was reused with different evidence")
+            row, is_duplicate, detail, target_state, reason, reconcile = _check_action_result(
+                connection, mission_id, event_id=event_id, action_id=action_id,
+                attempt_id=attempt_id, outcome=outcome, result=result,
+            )
+            if is_duplicate:
                 connection.commit()
                 return self._row(row)
-            reconciling_hold = (row["status"] == "HOLD" and row["reconciliation_pending"])
-            if ((row["status"] != "RUNNING" and not reconciling_hold)
-                    or row["action_id"] != action_id or row["attempt_id"] != attempt_id):
-                raise MissionConflict("Action result does not match the active Mission attempt")
-            late_success_requires_goal = reconciling_hold and outcome == "SUCCEEDED"
-            target_state = ("HOLD" if late_success_requires_goal else
-                            "ACTION_SUCCEEDED" if outcome == "SUCCEEDED" else "HOLD")
-            reason = ("LATE_SUCCESS_REQUIRES_INDEPENDENT_GOAL_EVIDENCE"
-                      if late_success_requires_goal else
-                      None if outcome == "SUCCEEDED" else f"ACTION_{outcome}")
             connection.execute(
                 "UPDATE fleet_missions SET status=?, reason=?, updated_at=? WHERE mission_id=?",
                 (target_state, reason, now, mission_id),
             )
             connection.execute(
                 "UPDATE fleet_missions SET reconciliation_pending=? WHERE mission_id=?",
-                (1 if outcome == "UNKNOWN" and result.get("reason") in {
-                    "LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN", "LOCAL_ACTION_READBACK_UNKNOWN"
-                } else 0, mission_id),
+                (reconcile, mission_id),
             )
             self._event(
                 connection, event_source="device_action", source_event_id=event_id,
@@ -485,55 +273,16 @@ class MissionStore:
                                       dispatch_generation: int,
                                       phases: list[Mapping[str, Any]]) -> dict[str, Any]:
         """Atomically append idempotent, attempt-fenced local phase snapshots."""
-        if type(authority_epoch) is not int or type(dispatch_generation) is not int:
-            raise ValueError("phase receipt fence must be integer-valued")
-        if not isinstance(phases, list) or len(phases) > 4:
-            raise ValueError("phase summaries must be a bounded list")
-        phases = [DeviceActionPhaseReceipt.model_validate(phase).model_dump(mode="json")
-                  for phase in phases]
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            if (row["action_id"] != action_id or row["attempt_id"] != attempt_id
-                    or row["authority_epoch"] != authority_epoch
-                    or row["dispatch_generation"] != dispatch_generation
-                    or row["status"] not in {
-                        "RUNNING", "ACTION_SUCCEEDED", "HOLD", "GOAL_CONFIRMED",
-                    }):
-                raise MissionConflict("phase receipt does not match the active Mission attempt")
-
-            prior_rows = connection.execute(
-                "SELECT * FROM fleet_mission_events WHERE mission_id=? AND action_id=? "
-                "AND attempt_id=? AND event_source='device_action_phase' ORDER BY event_id",
-                (mission_id, action_id, attempt_id),
-            ).fetchall()
-            latest: dict[int, dict[str, Any]] = {}
-            for prior in prior_rows:
-                detail = json.loads(prior["detail_json"])
-                ordinal = detail["ordinal"]
-                if (ordinal not in latest or detail["source_journal_event_id"]
-                        > latest[ordinal]["detail"]["source_journal_event_id"]):
-                    latest[ordinal] = {"detail": detail}
-
-            for phase in phases:
-                if not isinstance(phase, Mapping):
-                    raise ValueError("phase snapshot must be an object")
-                ordinal = phase.get("ordinal")
-                source_event_id = phase.get("journal_event_id")
-                if (type(ordinal) is not int or not 0 <= ordinal < 4
-                        or type(source_event_id) is not int or source_event_id < 1):
-                    raise ValueError("phase snapshot identity is invalid")
-                detail = {
-                    "phase_id": phase["phase_id"], "ordinal": ordinal,
-                    "state": phase["state"], "observed_at": phase["observed_at"],
-                    "source_journal_event_id": source_event_id,
-                }
-                event_key = _phase_event_key(
-                    mission_id, action_id, attempt_id, ordinal, source_event_id,
+            row, latest, validated_phases = _load_phase_attempt(
+                connection, mission_id, action_id=action_id, attempt_id=attempt_id,
+                authority_epoch=authority_epoch, dispatch_generation=dispatch_generation,
+                phases=phases,
+            )
+            for phase in validated_phases:
+                ordinal, source_event_id, event_key, detail = _prepare_phase_entry(
+                    mission_id, action_id, attempt_id, phase,
                 )
                 self._event(
                     connection, event_source="device_action_phase",
@@ -542,32 +291,9 @@ class MissionStore:
                     actor_id="device-action", action_id=action_id,
                     attempt_id=attempt_id, detail=detail,
                 )
-                previous = latest.get(ordinal)
-                if previous is not None:
-                    previous_id = previous["detail"]["source_journal_event_id"]
-                    if source_event_id < previous_id:
-                        continue
-                    if source_event_id == previous_id:
-                        continue
-                    allowed_next = {
-                        "SUBMITTING": {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED",
-                                       "UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED"},
-                        "ACCEPTED": {"RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
-                                     "SUCCEEDED", "FAILED", "CANCELED"},
-                        "RUNNING": {"CANCEL_REQUESTED", "UNKNOWN", "SUCCEEDED",
-                                    "FAILED", "CANCELED"},
-                        "CANCEL_REQUESTED": {"UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED"},
-                    }
-                    prior_state = previous["detail"]["state"]
-                    if (prior_state not in allowed_next
-                            or phase["state"] not in allowed_next[prior_state]
-                            and phase["state"] != prior_state):
-                        raise MissionConflict("phase receipt regresses or changes a terminal phase")
-                if ordinal > 0:
-                    previous_phase = latest.get(ordinal - 1)
-                    if previous_phase is None or previous_phase["detail"]["state"] != "SUCCEEDED":
-                        raise MissionConflict("phase receipt skips an unconfirmed prior phase")
-                latest[ordinal] = {"detail": detail}
+                _confirm_phase_transition(
+                    latest, ordinal, source_event_id, phase["state"], detail,
+                )
             updated = connection.execute(
                 "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
             ).fetchone()
@@ -596,87 +322,6 @@ class MissionStore:
                                          (mission_id,)).fetchone()
             connection.commit()
         return self._row(updated)
-
-    def hold_ready(self, mission_id: str, *, actor_id: str, reason: str) -> dict[str, Any]:
-        actor_id = _nonempty("actor_id", actor_id, limit=96)
-        reason = _nonempty("reason", reason, limit=96)
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            if row["status"] != "READY":
-                raise MissionConflict("only a READY Mission may be held before dispatch")
-            connection.execute(
-                "UPDATE fleet_missions SET status='HOLD', reason=?, updated_at=? "
-                "WHERE mission_id=?",
-                (reason, _now(), mission_id),
-            )
-            self._event(
-                connection, event_source="fleet_mission",
-                source_event_id=f"pre-dispatch-hold:{mission_id}:{reason}",
-                mission=row, event_type="MISSION_HELD_BEFORE_DISPATCH", state="HOLD",
-                actor_id=actor_id, detail={"reason": reason},
-            )
-            release_dispatch_claims(
-                connection, owner_kind="mission", owner_id=mission_id,
-                generation=row["dispatch_generation"],
-            )
-            updated = connection.execute(
-                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            connection.commit()
-        return self._row(updated)
-
-    def hold_mission(self, mission_id: str, *, actor_id: str, event_id: str,
-                     reason: str, evidence: Mapping[str, Any],
-                     event_type: str = "GOAL_EVIDENCE_REJECTED") -> dict[str, Any]:
-        reason = _nonempty("reason", reason, limit=96)
-        if event_type not in {"GOAL_EVIDENCE_REJECTED", "GOAL_PREDICATE_UNSATISFIED"}:
-            raise ValueError("invalid goal evidence hold event type")
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            if row["status"] not in {"ACTION_SUCCEEDED", "HOLD"}:
-                raise MissionConflict("only an Action result or held Mission can be reconciled")
-            connection.execute(
-                "UPDATE fleet_missions SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
-                (reason, now, mission_id),
-            )
-            self._event(
-                connection, event_source="goal_evidence", source_event_id=event_id,
-                mission=row, event_type=event_type, state="HOLD",
-                actor_id=actor_id, action_id=row["action_id"], attempt_id=row["attempt_id"],
-                detail={"reason": reason, "evidence": dict(evidence)},
-            )
-            updated = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                         (mission_id,)).fetchone()
-            connection.commit()
-        return self._row(updated)
-
-    @staticmethod
-    def _terminal_action_succeeded(connection, mission_id: str, action_id: str,
-                                   attempt_id: str) -> bool:
-        terminal = connection.execute(
-            """SELECT detail_json FROM fleet_mission_events
-               WHERE mission_id=? AND action_id=? AND attempt_id=?
-                 AND event_source='device_action' AND event_type='ACTION_TERMINAL_RESULT'
-               ORDER BY event_id DESC LIMIT 1""",
-            (mission_id, action_id, attempt_id),
-        ).fetchone()
-        return terminal is not None and json.loads(terminal["detail_json"]).get("outcome") == "SUCCEEDED"
-
-    def terminal_action_succeeded(self, mission_id: str, *, action_id: str,
-                                  attempt_id: str) -> bool:
-        """Read durable terminal proof for exactly one Action attempt."""
-        with closing(self._connect()) as connection:
-            return self._terminal_action_succeeded(connection, mission_id, action_id, attempt_id)
 
     def confirm_goal(self, mission_id: str, *, actor_id: str, event_id: str,
                      evidence: GoalEvidence) -> dict[str, Any]:
@@ -714,223 +359,3 @@ class MissionStore:
                                          (mission_id,)).fetchone()
             connection.commit()
         return self._row(updated)
-
-    def get_mission(self, mission_id: str) -> dict[str, Any] | None:
-        with closing(self._connect()) as connection:
-            row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
-        return self._row(row)
-
-    def next_ready_mission(self) -> dict[str, Any] | None:
-        with closing(self._connect()) as connection:
-            row = connection.execute(
-                "SELECT * FROM fleet_missions WHERE status='READY' "
-                "ORDER BY created_at, mission_id LIMIT 1",
-            ).fetchone()
-        return self._row(row)
-
-    def next_dispatch_mission(self, instances: Mapping[str, str], *, after_id: str) -> dict[str, Any] | None:
-        """One bounded round-robin choice; unresolved attempts remain readable without configuration."""
-        clauses = ["status='RUNNING'", "reconciliation_pending=1"]
-        values = []
-        for workcell_id, instance_id in instances.items():
-            clauses.append("(status='READY' AND workcell_id=? AND instance_id=?)")
-            values.extend((workcell_id, instance_id))
-        with closing(self._connect()) as connection:
-            row = connection.execute(
-                "SELECT * FROM fleet_missions WHERE (" + " OR ".join(clauses) + ") "
-                "ORDER BY CASE WHEN mission_id>? THEN 0 ELSE 1 END, mission_id LIMIT 1",
-                [*values, after_id],
-            ).fetchone()
-        return self._row(row)
-
-    def missions_awaiting_goal_evidence(self) -> list[dict[str, Any]]:
-        """Return successful terminal Actions that have not confirmed their goal."""
-        with closing(self._connect()) as connection:
-            rows = connection.execute(
-                """SELECT m.*, e.created_at AS action_terminal_at
-                   FROM fleet_missions AS m
-                   JOIN fleet_mission_events AS e
-                     ON e.mission_id=m.mission_id
-                    AND e.action_id=m.action_id AND e.attempt_id=m.attempt_id
-                    AND e.event_type='ACTION_TERMINAL_RESULT' AND e.state='ACTION_SUCCEEDED'
-                   WHERE m.status='ACTION_SUCCEEDED'
-                   ORDER BY e.event_id""",
-            ).fetchall()
-        return [self._row(row) | {"action_terminal_at": row["action_terminal_at"]}
-                for row in rows]
-
-    def finish_reconciliation(self, mission_id: str, *, action_id: str,
-                              attempt_id: str) -> dict[str, Any]:
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            if (row["action_id"] != action_id or row["attempt_id"] != attempt_id
-                    or not row["reconciliation_pending"]):
-                raise MissionConflict("reconciliation does not match a pending Action attempt")
-            connection.execute(
-                "UPDATE fleet_missions SET reconciliation_pending=0, updated_at=? "
-                "WHERE mission_id=?", (_now(), mission_id),
-            )
-            updated = connection.execute(
-                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            connection.commit()
-        return self._row(updated)
-
-    def history(self, mission_id: str) -> list[dict[str, Any]]:
-        with closing(self._connect()) as connection:
-            rows = connection.execute(
-                "SELECT * FROM fleet_mission_events WHERE mission_id=? ORDER BY event_id",
-                (mission_id,),
-            ).fetchall()
-        result = [dict(row) for row in rows]
-        for event in result:
-            event["detail"] = json.loads(event.pop("detail_json"))
-        return result
-
-    def progress_snapshot_data(self, mission_id: str) -> dict[str, Any] | None:
-        """Read Mission, history watermark, and Fleet stop fence in one SQLite snapshot."""
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN")
-            row = connection.execute(
-                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            if row is None:
-                connection.rollback()
-                return None
-            recent_events = connection.execute(
-                "SELECT * FROM fleet_mission_events WHERE mission_id=? "
-                "ORDER BY event_id DESC LIMIT 51",
-                (mission_id,),
-            ).fetchall()
-            events = list(reversed(recent_events[:50]))
-            active_action_events = []
-            active_goal_events = []
-            active_phase_events = []
-            if row["action_id"] and row["attempt_id"]:
-                active_action_events = connection.execute(
-                    "SELECT * FROM fleet_mission_events WHERE mission_id=? "
-                    "AND action_id=? AND attempt_id=? AND event_type IN "
-                    "('STEP_SUBMITTED', 'ACTION_TERMINAL_RESULT') "
-                    "ORDER BY event_id DESC LIMIT 1",
-                    (mission_id, row["action_id"], row["attempt_id"]),
-                ).fetchall()
-                active_goal_events = connection.execute(
-                    "SELECT * FROM fleet_mission_events WHERE mission_id=? "
-                    "AND action_id=? AND attempt_id=? AND event_type IN "
-                    "('GOAL_PREDICATE_CONFIRMED', 'GOAL_EVIDENCE_REJECTED', "
-                    "'GOAL_PREDICATE_UNSATISFIED') "
-                    "ORDER BY event_id DESC LIMIT 1",
-                    (mission_id, row["action_id"], row["attempt_id"]),
-                ).fetchall()
-                active_phase_events = connection.execute(
-                    "SELECT * FROM fleet_mission_events WHERE mission_id=? AND action_id=? "
-                    "AND attempt_id=? AND event_source='device_action_phase' "
-                    "ORDER BY event_id",
-                    (mission_id, row["action_id"], row["attempt_id"]),
-                ).fetchall()
-            control = connection.execute(
-                "SELECT authority_epoch, generation, dispatch_enabled, reason, updated_at "
-                "FROM fleet_dispatch_control WHERE control_id=1"
-            ).fetchone()
-            retention = connection.execute(
-                "SELECT cursor_floor FROM fleet_mission_event_retention WHERE mission_id=?",
-                (mission_id,),
-            ).fetchone()
-            connection.commit()
-        history = [dict(event) for event in events]
-        progress_events = [dict(event) for event in (
-            *active_action_events, *active_goal_events, *active_phase_events,
-        )]
-        for event in [*history, *progress_events]:
-            event["detail"] = json.loads(event.pop("detail_json"))
-        return {
-            "mission": self._row(row),
-            "history": history,
-            "history_truncated": len(recent_events) > 50 or bool(
-                retention and int(retention["cursor_floor"]) > 0
-            ),
-            "progress_events": progress_events,
-            "snapshot_event_id": max(
-                int(recent_events[0]["event_id"]) if recent_events else 0,
-                int(retention["cursor_floor"]) if retention else 0,
-            ),
-            "cursor_floor": int(retention["cursor_floor"]) if retention else 0,
-            "stop_control": dict(control) if control else None,
-        }
-
-    def mission_events_after(self, mission_id: str, *, after_event_id: int,
-                             limit: int) -> dict[str, Any] | None:
-        """Read one bounded journal page and its cursor bounds atomically."""
-        if (isinstance(after_event_id, bool) or not isinstance(after_event_id, int)
-                or after_event_id < 0):
-            raise ValueError("after_event_id must be a non-negative integer")
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 200:
-            raise ValueError("limit must be between 1 and 200")
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN")
-            mission = connection.execute(
-                "SELECT 1 FROM fleet_missions WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            if mission is None:
-                connection.rollback()
-                return None
-            watermark = connection.execute(
-                "SELECT COALESCE(MAX(event_id), 0) FROM fleet_mission_events "
-                "WHERE mission_id=?", (mission_id,),
-            ).fetchone()[0]
-            retention = connection.execute(
-                "SELECT cursor_floor FROM fleet_mission_event_retention WHERE mission_id=?",
-                (mission_id,),
-            ).fetchone()
-            floor = int(retention["cursor_floor"]) if retention else 0
-            watermark = max(int(watermark), floor)
-            if after_event_id < floor or after_event_id > watermark:
-                connection.commit()
-                return {
-                    "snapshot_event_id": int(watermark),
-                    "cursor_floor": floor,
-                    "cursor_state": "EXPIRED" if after_event_id < floor else "AHEAD",
-                    "events": [],
-                    "next_after_event_id": after_event_id,
-                    "has_more": False,
-                }
-            rows = connection.execute(
-                "SELECT * FROM fleet_mission_events WHERE mission_id=? AND event_id>? "
-                "ORDER BY event_id LIMIT ?",
-                (mission_id, after_event_id, limit + 1),
-            ).fetchall()
-            connection.commit()
-        has_more = len(rows) > limit
-        events = [dict(row) for row in rows[:limit]]
-        for event in events:
-            event["detail"] = json.loads(event.pop("detail_json"))
-        next_cursor = events[-1]["event_id"] if events else after_event_id
-        return {
-            "snapshot_event_id": int(watermark),
-            "cursor_floor": floor,
-            "cursor_state": "OK",
-            "events": events,
-            "next_after_event_id": int(next_cursor),
-            "has_more": has_more,
-        }
-
-    def feedback_events_after(self, *, after_event_id: int,
-                              limit: int = 100) -> list[dict[str, Any]]:
-        """Read a bounded global journal page for the feedback outbox scanner."""
-        if type(after_event_id) is not int or after_event_id < 0:
-            raise ValueError("after_event_id must be a non-negative integer")
-        if type(limit) is not int or not 1 <= limit <= 500:
-            raise ValueError("feedback event page limit must be from 1 to 500")
-        with closing(self._connect()) as connection:
-            rows = connection.execute(
-                """SELECT event_id, mission_id, action_id, attempt_id, event_type
-                   FROM fleet_mission_events WHERE event_id>? ORDER BY event_id LIMIT ?""",
-                (after_event_id, limit),
-            ).fetchall()
-        return [dict(row) for row in rows]

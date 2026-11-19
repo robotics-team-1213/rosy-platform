@@ -28,6 +28,17 @@ from .journal_identity import existing_journal_identity
 # A phase-runner-only kind is never journaled from a v1 frame, whose reply drops the
 # ordered phase summaries Fleet needs to reconcile it (D-403 §2).
 MIN_SUBMIT_VERSION_BY_KIND = {"CELL_TRANSFER": 2, "ARM_TRANSFER": 2}
+_GET_CAPABILITY_KEYS = frozenset({"version", "operation"})
+_SUBMIT_ACTION_KEYS = frozenset({"version", "operation", "grant"})
+_GET_ACTION_KEYS = frozenset({"version", "operation", "action_id"})
+_CANCEL_ACTION_KEYS = frozenset({"version", "operation", "action_id", "attempt_id", "reason", "requested_at"})
+_CANCEL_MODEL_KEYS = _CANCEL_ACTION_KEYS - {"version", "operation"}
+_STOP_LOCAL_KEYS = frozenset({"version", "operation", "workcell_id", "instance_id", "authority_epoch", "dispatch_generation", "requested_at", "reason"})
+_STOP_MODEL_KEYS = _STOP_LOCAL_KEYS - {"version", "operation"}
+_REARM_LOCAL_KEYS = frozenset({"version", "operation", "workcell_id", "instance_id", "authority_epoch", "dispatch_generation"})
+_REARM_MODEL_KEYS = _REARM_LOCAL_KEYS - {"version", "operation"}
+_GET_STOP_STATE_KEYS = frozenset({"version", "operation", "workcell_id", "instance_id"})
+_COORDINATOR_STOP_REASON_VALUES = frozenset(item.value for item in CoordinatorStopReason)
 
 
 class ActionApi:
@@ -98,7 +109,7 @@ class ActionApi:
                 if version != 2:
                     return self._error("UNSUPPORTED_VERSION", "transfer capability requires v2",
                                        status=400, version=version)
-                if set(request) != {"version", "operation"}:
+                if set(request) != _GET_CAPABILITY_KEYS:
                     raise ValueError("GetTransferCapability contains unsupported fields")
                 try:
                     factory = self.runner.phase_runner_factories.get("ARM_TRANSFER")
@@ -112,7 +123,7 @@ class ActionApi:
             if operation == "CheckTransfer" and self.transfer_preflight_api is not None:
                 return self.transfer_preflight_api.dispatch(request, peer_uid=peer_uid)
             if operation == "SubmitAction":
-                if set(request) != {"version", "operation", "grant"}:
+                if set(request) != _SUBMIT_ACTION_KEYS:
                     raise ValueError("SubmitAction contains unsupported fields")
                 grant = parse_action_grant(request["grant"])
                 if self.coordinator_api is None and (
@@ -128,7 +139,7 @@ class ActionApi:
                 receipt = self.runner.submit(grant, peer_uid=peer_uid)
                 return self._success(version, receipt)
             if operation == "GetAction":
-                if set(request) != {"version", "operation", "action_id"}:
+                if set(request) != _GET_ACTION_KEYS:
                     raise ValueError("GetAction contains unsupported fields")
                 receipt = self.runner.get(request["action_id"], peer_uid=peer_uid)
                 if receipt is None:
@@ -143,12 +154,10 @@ class ActionApi:
                     return missing
                 return self._success(version, receipt)
             if operation == "CancelAction":
-                expected = {"version", "operation", "action_id", "attempt_id",
-                            "reason", "requested_at"}
-                if set(request) != expected:
+                if set(request) != _CANCEL_ACTION_KEYS:
                     raise ValueError("CancelAction contains unsupported fields")
                 cancel = DeviceActionCancelRequest.model_validate({
-                    key: request[key] for key in expected - {"version", "operation"}
+                    key: request[key] for key in _CANCEL_MODEL_KEYS
                 })
                 receipt = self.runner.cancel(
                     cancel.action_id, cancel.attempt_id, peer_uid=peer_uid,
@@ -256,15 +265,13 @@ class LocalStopApi:
         try:
             operation = request.get("operation")
             if operation == "StopLocal":
-                expected = {"version", "operation", "workcell_id", "instance_id",
-                            "authority_epoch", "dispatch_generation", "requested_at", "reason"}
-                if set(request) != expected:
+                if set(request) != _STOP_LOCAL_KEYS:
                     raise ValueError("StopLocal contains unsupported fields")
                 stop_request = LocalStopRequest.model_validate({
-                    key: request[key] for key in expected - {"version", "operation"}
+                    key: request[key] for key in _STOP_MODEL_KEYS
                 })
                 if (source is StopRequestSource.COORDINATOR
-                        and stop_request.reason not in {item.value for item in CoordinatorStopReason}):
+                        and stop_request.reason not in _COORDINATOR_STOP_REASON_VALUES):
                     raise ValueError("coordinator stop reason must be a CoordinatorStopReason code")
                 cancellations = []
                 callback = None
@@ -286,12 +293,10 @@ class LocalStopApi:
                         "code": "FLEET_PEER_REQUIRED",
                         "message": "only the authenticated Fleet peer can rearm",
                     })
-                expected = {"version", "operation", "workcell_id", "instance_id",
-                            "authority_epoch", "dispatch_generation"}
-                if set(request) != expected:
+                if set(request) != _REARM_LOCAL_KEYS:
                     raise ValueError("RearmLocal contains unsupported fields")
                 rearm = LocalStopRearmRequest.model_validate({
-                    key: request[key] for key in expected - {"version", "operation"}
+                    key: request[key] for key in _REARM_MODEL_KEYS
                 })
                 if (rearm.workcell_id, rearm.instance_id) != (
                         self.controller.workcell_id, self.controller.instance_id):
@@ -304,7 +309,7 @@ class LocalStopApi:
                 )
                 return self._response(200, snapshot=snapshot.model_dump(mode="json"))
             if operation == "GetStopState":
-                if set(request) != {"version", "operation", "workcell_id", "instance_id"}:
+                if set(request) != _GET_STOP_STATE_KEYS:
                     raise ValueError("GetStopState contains unsupported fields")
                 query = LocalStopQuery.model_validate({
                     "workcell_id": request["workcell_id"],

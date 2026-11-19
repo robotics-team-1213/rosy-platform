@@ -93,10 +93,11 @@ def _http(exc: TrackingError | IdentityError) -> HTTPException:
 
 
 def install_tracking_routes(app, *, tracking, require_operator, read_guard, operator_guard,
-                            require_named_operator=None, map_revision=None, map_pose=None) -> None:
+                            require_named_operator=None, map_revision=None, map_pose=None,
+                            console=None) -> None:
     measured = MeasuredCalibrationService(tracking, map_revision=map_revision)
     from fleet.server.auto_locate_service import AutoLocateService
-    tracking.auto_locate = AutoLocateService(tracking, map_pose=map_pose)
+    tracking.auto_locate = app.state.auto_locate = AutoLocateService(tracking, map_pose=map_pose, console=console)
     app.state.measured_calibration = measured
 
     def named(principal):
@@ -108,6 +109,14 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
                                 authorization: Optional[str] = Header(default=None)) -> dict:
         try:
             return tracking.accept(authorization, body)
+        except TrackingError as exc:
+            raise _http(exc) from exc
+
+    @app.post("/api/fleet/detections/anchors", tags=["tracking"])
+    async def submit_anchor_states(body: dict, authorization: Optional[str] = Header(default=None)) -> dict:
+        """Vision's display-only head-tracker states; the source token is checked in accept_anchors."""
+        try:
+            return tracking.accept_anchors(authorization, body)
         except TrackingError as exc:
             raise _http(exc) from exc
 
@@ -169,7 +178,8 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
 
     @app.get("/api/fleet/tracking", dependencies=read_guard, tags=["tracking"])
     async def tracking_readback() -> dict:
-        return tracking.snapshot()
+        anchors = getattr(tracking, "anchors_snapshot", None)
+        return {**tracking.snapshot(), "anchors": anchors()["targets"] if callable(anchors) else []}
 
     @app.post("/api/fleet/tracking/relearn", tags=["tracking"])
     async def tracking_relearn(body: RelearnRequest,

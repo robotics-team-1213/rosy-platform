@@ -173,7 +173,7 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                         {'status': 'RUNNING', 'phase': 'SDK_IMPORT', 'runtime': dict(owner, gpu=admitted_gpu)})
                     config = row['input']['config']
                     jaw = None  # opt-in jaw of a container case (palletizing v2.1); the stock jaw otherwise
-                    if row['input']['scenario_id'] == 'omx-map-container-stack':
+                    if row['input']['scenario_id'] in ('omx-map-container-stack', 'omx-map-container-stacking-rl'):
                         from mapped_stack_fixture import container_fixture
                         jaw = container_fixture(layers=config['layers'], case=config['case']).get('gripper')
                     urdf = prepare('omx_f', directory / 'prepared.urdf', jaw)
@@ -189,10 +189,11 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                     contact_task = row['input']['scenario_id'] == 'pinky-conveyor-roundtrip'
                     arm_task = row['input']['scenario_id'].startswith('arm-s-cell-')
                     container_task = row['input']['scenario_id'] == 'omx-map-container-stack'
+                    container_rl = row['input']['scenario_id'] == 'omx-map-container-stacking-rl'
                     mapped_cube = row['input']['scenario_id'] in ('omx-map-cube-stack', 'omx-map-container-stack')
                     mapped_task = row['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack', 'omx-map-container-stack')
                     mapped_rl = row['input']['scenario_id'] == 'omx-map-stacking-rl'
-                    stacking_task = row['input']['scenario_id'] == 'omx-stacking-rl' or mapped_task or mapped_rl
+                    stacking_task = row['input']['scenario_id'] == 'omx-stacking-rl' or mapped_task or mapped_rl or container_rl
                     report_path = directory / ('contact-report.json' if contact_task else
                                                'arm-s-cell-report.json' if arm_task else 'import-report.json')
                     if stacking_task:
@@ -212,6 +213,9 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                                 argv.append('--mapped-cube-stack' if mapped_cube else '--mapped-long-stack')
                         elif mapped_rl:
                             argv.append('--mapped-rl')
+                        elif container_rl:
+                            argv.extend(['--mapped-container-rl', '--layers', str(config['layers']),
+                                         '--container-case', config['case']])
                     if arm_task:  # the real cell's chunk frames for this scenario (system python: the planner)
                         frames = directory / 'frames.json'
                         repo = Path(__file__).resolve().parents[3]
@@ -232,7 +236,7 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                                 '--report', str(report_path)]
                     outcome = supervise(argv, cwd=directory, env=env, descriptors=descriptors,
                                         output=directory, stop_requested=stopped,
-                                        **({'timeout': 3900 if container_task else 870} if stacking_task else {}))
+                                        **({'timeout': 3900 if container_task or container_rl else 870} if stacking_task else {}))
                     if outcome['exit_code'] == 0 and outcome['reason'] == 'process_exited':
                         if mapped_task:
                             from mapped_stack_report import verify_report as verify_mapped
@@ -242,7 +246,9 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                         elif stacking_task:
                             from stacking_report import verify_report as verify_stacking
                             report = verify_stacking(report_path, sdk_version=binding['sdk_version'],
-                                                     seed=row['input']['config']['seed'], **({'mapped': True} if mapped_rl else {}))
+                                                     seed=row['input']['config']['seed'],
+                                                     **({'mapped': True} if mapped_rl else
+                                                        {'container': config} if container_rl else {}))
                         elif contact_task:
                             from conveyor_report import verify_report as verify_contact_report
                             report = verify_contact_report(report_path, sdk_version=binding['sdk_version'])
@@ -282,7 +288,7 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                 raw = report_path.read_bytes()
                 artifacts = [{'id': report_path.stem, 'name': report_path.name, 'bytes': len(raw),
                               'sha256': hashlib.sha256(raw).hexdigest(), 'media_type': 'application/json'}]
-                if row['input']['scenario_id'] in ('omx-stacking-rl', 'omx-map-stacking-rl'):
+                if row['input']['scenario_id'] in ('omx-stacking-rl', 'omx-map-stacking-rl', 'omx-map-container-stacking-rl'):
                     checkpoint = report['checkpoint']
                     artifacts.append(dict(id='stacking-policy', name=checkpoint['name'],
                         bytes=checkpoint['bytes'], sha256=checkpoint['sha256'], media_type='application/octet-stream'))
@@ -344,12 +350,11 @@ def _finish(store, run_id, outcome, report, artifacts, stopped, *, gpu=None,
             evidence_class='ARM_S_CELL_' + str(judgement.get('result')).upper(), judgement=judgement,
             coordinate_scope='ARM_FK_FROM_REAL_GRASPS_NOT_CAMERA_REGISTERED',
             controller='ARM_S_CHUNK_FRAMES_NOT_LEARNED_POLICY', video_unavailable_reason='phase_pngs_only_no_video')
-    if current['input']['scenario_id'] in ('omx-stacking-rl', 'omx-map-stacking-rl'):
+    if current['input']['scenario_id'] in ('omx-stacking-rl', 'omx-map-stacking-rl', 'omx-map-container-stacking-rl'):
         result.update(stage='stacking_rl', import_verified=report is not None,
             training_verified=bool(report and report['training_verified']),
             task_success=bool(report and report['task_success']), controller='RSL_RL_PPO',
-            coordinate_scope=('CONFLUENCE_CAD_WITH_NOMINAL_PHOTO_CELL'
-                if current['input']['scenario_id'] == 'omx-map-stacking-rl' else 'SYNTHETIC_NOT_CAMERA_REGISTERED'),
+            coordinate_scope=current['input'].get('scene', {}).get('coordinate_scope', 'SYNTHETIC_NOT_CAMERA_REGISTERED'),
             updates=report['updates'] if report else 0,
             transitions=report['transitions'] if report else 0,
             evaluation_successes=report['evaluation_successes'] if report else 0,

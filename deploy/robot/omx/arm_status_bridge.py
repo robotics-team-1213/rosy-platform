@@ -15,7 +15,11 @@ Fleet's Cell page shows it in the arm's motor health panel.
 
   arm_status_bridge.py --live chunk-io/live.json --fleet-url https://<fleet> --source-id omx_arm_s \\
       --token-env ROSY_ARM_S_TOKEN [--ca-file ca.pem] [--calibration omx_follower_arm.json] \\
-      [--arm-id omx_s --health-file /abs/motor-health-current.json]
+      [--arm-id omx_s --health-file /abs/motor-health-current.json] [--mirror-fleet https://<R>,/abs/ca.pem]
+
+This is the ONLY sender for omx_arm_s: arm S has no ROS snapshot, so workcell_observation_bridge never
+carries it (two senders for one source would rotate epochs and 409 each other). --mirror-fleet (also
+ROSY_ARM_STATUS_MIRROR_FLEET, space separated) sends the same samples to R's Fleet from its own worker.
 """
 from __future__ import annotations
 
@@ -24,6 +28,7 @@ import json
 import math
 import os
 import ssl
+import threading
 import time
 from pathlib import Path
 
@@ -91,6 +96,17 @@ def next_sample(row, health, last_t, now, calibration=None):
     return sample
 
 
+class Latest:  # newest sample for one mirror worker; SourceWorker reads .latest() and .sequence
+    def __init__(self):
+        self.sample = None
+
+    def put(self, sample):
+        self.sample, sample.sequence = sample, getattr(self.sample, "sequence", 0) + 1
+
+    def latest(self):
+        return self.sample
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--live", type=Path, required=True)
@@ -99,9 +115,12 @@ def main(argv=None):
     parser.add_argument("--token-env", required=True)
     parser.add_argument("--ca-file", type=Path)
     parser.add_argument("--calibration", type=Path)
-    parser.add_argument("--period", type=float, default=0.5)
+    parser.add_argument("--period", type=float, default=0.1)
     parser.add_argument("--arm-id", help="registered arm_id: the motor-health owner and group Fleet expects")
     parser.add_argument("--health-file", type=Path, help="absolute motor-health snapshot of the runner's guard")
+    parser.add_argument("--mirror-fleet", action="append", metavar="https://URL,/abs/ca.pem",
+                        default=os.environ.get("ROSY_ARM_STATUS_MIRROR_FLEET", "").split(),
+                        help="another Fleet (R) that also receives these observations")
     args = parser.parse_args(argv)
     if bool(args.arm_id) != bool(args.health_file):
         parser.error("--arm-id and --health-file go together")
@@ -111,6 +130,18 @@ def main(argv=None):
     calibration = json.loads(args.calibration.read_text()) if args.calibration else None
     from workcell_observation_bridge import ArmSender
 
+    stop, mirrors = threading.Event(), []
+    for binding in args.mirror_fleet:
+        from workcell_observation_bridge import SourceWorker, secure_url  # only a mirror needs these
+        url, separator, ca_file = binding.partition(",")
+        if not separator or not Path(ca_file).is_absolute():
+            parser.error("mirror Fleet must be https://URL,/absolute/ca.pem")
+        buffer = Latest()
+        mirror = ArmSender(secure_url(url, "https"), args.source_id, token,
+                           context=ssl.create_default_context(cafile=ca_file))
+        threading.Thread(target=SourceWorker(buffer, mirror.send).run, args=(stop,), daemon=True,
+                         name=f"{args.source_id}@fleet").start()
+        mirrors.append(buffer)
     sender = ArmSender(args.fleet_url, args.source_id, token, context=ssl.create_default_context(cafile=args.ca_file))
     last_t = None
     while True:
@@ -123,6 +154,8 @@ def main(argv=None):
                 row = {}  # the runner exited; its terminal health can still go
             sample = next_sample(row, health, last_t, now, calibration)
             if sample is not None:
+                for buffer in mirrors:
+                    buffer.put(Sample(sample.captured_at, sample.value, sample.motor_health))
                 sender.send(sample)
                 last_t = sample.captured_at
         except (OSError, ValueError) as error:  # a refused post never stops the bridge

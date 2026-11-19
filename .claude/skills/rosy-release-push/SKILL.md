@@ -5,6 +5,8 @@ description: Use when current main (CORE, dashboard, ROS nodes) must run on an e
 
 # Shipping main to a robot as a payload release (D-225)
 
+After each update, run `python tools/remote/fleet_robot_check.py --json-out C:/DevTemp/e2e-check/result.json` from the operator PC. Inspect every `FAIL` and `SKIP`; the check reads signed checksums, services, TLS and Fleet enrollment without driving. See `docs/deployment/deployment-tools.md` for its limits.
+
 ## Overview
 
 A payload release replaces everything under `/opt/rosy/releases/<id>` (`install/`, the

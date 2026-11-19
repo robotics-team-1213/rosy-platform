@@ -186,6 +186,14 @@ def test_tracking_pairs_the_console_state_with_detections(tmp_path):
     assert [(row["x"], row["y"]) for row in snap["unknown"]] == [(2.5, 1.0)]
 
 
+def test_tracking_readback_carries_the_anchor_targets(tmp_path):
+    with _client(tmp_path) as client:
+        snap = client.get("/api/fleet/tracking", headers=_auth(VIEWER_TOKEN)).json()
+    targets = {row["target_id"]: row for row in snap["anchors"]}
+    assert {"arm_s", "arm_a", "arm_b"} <= set(targets)
+    assert targets["arm_a"]["live"] is False   # no anchor report yet: defaults, never shown as live
+
+
 def test_state_uses_its_own_read_time_after_a_slow_gather(tmp_path):
     clock = _Clock()
     with _client(tmp_path, clock=clock, delay_s=2.5) as client:
@@ -231,6 +239,40 @@ def test_auto_locate_is_an_operator_session_that_wakes_the_camera(tmp_path):
         assert config["stream_wanted"] is True
 
 
+@pytest.mark.parametrize("token", [None, "wrong-token", OPERATOR_TOKEN])
+def test_anchors_post_needs_the_source_token(tmp_path, token):
+    body = {"source_id": "ceiling_north", "targets": [{"target_id": "arm_a", "head_x": 0.5, "head_y": 0.4}]}
+    with _client(tmp_path) as client:
+        response = client.post("/api/fleet/detections/anchors", json=body,
+                               headers={} if token is None else _auth(token))
+    assert response.status_code == 401
+
+
+def test_anchors_post_is_stored_for_the_source_and_shown_live(tmp_path):
+    body = {"source_id": "ceiling_north", "captured_at": NOW,
+            "targets": [{"target_id": "arm_a", "head_x": 0.5, "head_y": 0.4, "head_yaw": 0.1, "confidence": 0.8,
+                         "captured_at": NOW}, "junk", {"head_x": 1.0}]}
+    with _client(tmp_path) as client:
+        response = client.post("/api/fleet/detections/anchors", json=body, headers=_auth(SOURCE_TOKEN))
+        assert response.status_code == 200, response.text
+        assert response.json() == {"accepted": True, "source_id": "ceiling_north", "count": 1}
+        assert client.post("/api/fleet/detections/anchors", json={"targets": 5},
+                           headers=_auth(SOURCE_TOKEN)).json() == {"accepted": False, "count": 0}
+
+
+def test_accepted_anchor_state_shows_live_in_the_snapshot_then_ages_out():
+    clock = _Clock()
+    tracking = TrackingService([_source()], calibrations=TrackingCalibrationStore(), clock=clock)
+    row = {"target_id": "arm_a", "head_x": 0.5, "head_y": 0.4, "head_yaw": 0.1, "confidence": 0.8, "captured_at": NOW}
+    assert tracking.accept_anchors(f"Bearer {SOURCE_TOKEN}", {"targets": [row]})["count"] == 1
+
+    def arm_a():
+        return next(t for t in tracking.anchors_snapshot(clock.now)["targets"] if t["target_id"] == "arm_a")
+    assert (arm_a()["live"], arm_a()["head_x"], arm_a()["source_id"]) == (True, 0.5, "ceiling_north")
+    clock.now += tracking.lease_s * 2.0 + 1.0
+    assert arm_a()["live"] is False
+
+
 def test_tracking_routes_are_exactly_these_and_name_no_media(tmp_path):
     with _client(tmp_path) as client:
         paths = {route.path for route in client.app.routes if hasattr(route, "path")}
@@ -240,7 +282,8 @@ def test_tracking_routes_are_exactly_these_and_name_no_media(tmp_path):
                     "/api/fleet/tracking/relearn", "/api/fleet/calibrations",
                     "/api/fleet/calibrations/{source_id}",
                     "/api/fleet/detections/identity", "/api/fleet/tracking/identity",
-                    "/api/fleet/detections/preview-status"}  # D-472, D-775 numeric readback
+                    "/api/fleet/detections/preview-status",  # D-472, D-775 numeric readback
+                    "/api/fleet/detections/anchors"}  # display-only head-tracker states (source token)
 
 
 def test_tracking_needs_the_sighting_sources():

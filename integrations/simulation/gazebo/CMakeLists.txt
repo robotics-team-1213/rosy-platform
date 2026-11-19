@@ -49,6 +49,7 @@ install(
     scripts/coverage_harness.py
     scripts/mission_harness.py
     scripts/lane_live_view.py
+    scripts/lane_live_view_helpers.py
     scripts/live_view_model.py
     scripts/live_view_demo.py
     scripts/sim_ir_floor.py

@@ -19,10 +19,10 @@ from fleet.server.task_store import FleetTaskStore
 
 MANIFEST = {"revision": "v1", "units": [
     {"id": "R", "resources": ["robot:p1"]},
-    {"id": "CELL-A", "parent": "R", "resources": ["workcell:arm_a"]}]}
+    {"id": "ARM-CELL", "parent": "R", "resources": ["workcell:arm_a"]}]}
 TRANSFER = {"request_key": "harbor:move-1", "workcell_id": "arm_a", "instance_id": "arm_a",
             "object_ref": "box-1", "source": "slot-1", "target": "slot-2"}
-WORK = {"delegation_id": "arm-1", "target_unit": "CELL-A", "transfer": TRANSFER}
+WORK = {"delegation_id": "arm-1", "target_unit": "ARM-CELL", "transfer": TRANSFER}
 PARENT = SimpleNamespace(principal_id="control-unit:R", role="service")
 HARBOR = SimpleNamespace(principal_id="harbor", role="service")
 OTHER = SimpleNamespace(principal_id="other-app", role="service")
@@ -92,7 +92,7 @@ def cluster(tmp_path, arm_jobs):
             await node.cancel(origin, identity, reason=(body or {}).get("reason"))
         return await node.read(origin, identity, for_child="R" if method == "GET" else None)
 
-    for unit_id, jobs in [("R", None), ("CELL-A", arm_jobs)]:
+    for unit_id, jobs in [("R", None), ("ARM-CELL", arm_jobs)]:
         path = tmp_path / (unit_id + ".db")
         if jobs is not None:
             jobs.path = path
@@ -104,7 +104,7 @@ def cluster(tmp_path, arm_jobs):
 
 
 def refresh(nodes):
-    asyncio.run(nodes["CELL-A"].refresh())
+    asyncio.run(nodes["ARM-CELL"].refresh())
     asyncio.run(nodes["R"].refresh())
 
 
@@ -114,7 +114,7 @@ def test_cell_proposes_once_under_the_parent_service_and_r_sees_the_projection(t
     request = ControlArmWorkRequest.model_validate(WORK)
     asyncio.run(nodes["R"].submit(request))
     asyncio.run(nodes["R"].submit(request))
-    cell = nodes["CELL-A"].store.get("R", "arm-1")
+    cell = nodes["ARM-CELL"].store.get("R", "arm-1")
     assert cell["local_task_id"] == "physical-1" and cell["status"] == "QUEUED"
     assert {call[0] for call in jobs.calls} == {"control-unit:R"}
     assert len({call[1] for call in jobs.calls}) == 1
@@ -122,7 +122,7 @@ def test_cell_proposes_once_under_the_parent_service_and_r_sees_the_projection(t
     assert jobs.calls[0][1] != TRANSFER["request_key"]
     assert "request_key" not in jobs.calls[0][2]
     root = nodes["R"].store.get("R", "arm-1")
-    assert root["owner_unit"] == "CELL-A" and root["local_task_id"] is None
+    assert root["owner_unit"] == "ARM-CELL" and root["local_task_id"] is None
     assert root["status"] == "QUEUED" and root["result"]["job"]["mission_id"] == "physical-1"
     assert root["result"]["job"]["request_key"] == "harbor:move-1"
 
@@ -136,9 +136,9 @@ def test_cell_proposes_once_under_the_parent_service_and_r_sees_the_projection(t
 def test_delegation_approve_is_refused_for_arm_work(tmp_path):
     nodes = cluster(tmp_path, ArmJobs())
     asyncio.run(nodes["R"].submit(ControlArmWorkRequest.model_validate(WORK)))
-    revision = nodes["CELL-A"].store.get("R", "arm-1")["revision"]
+    revision = nodes["ARM-CELL"].store.get("R", "arm-1")["revision"]
     with pytest.raises(ValueError, match="CONTROL_UNIT_ARM_ADMIT_AT_CELL"):
-        asyncio.run(nodes["CELL-A"].approve("R", "arm-1", actor_id="operator-a", expected_revision=revision))
+        asyncio.run(nodes["ARM-CELL"].approve("R", "arm-1", actor_id="operator-a", expected_revision=revision))
 
 
 def test_cancel_before_admit_ends_canceled_and_after_admit_reaches_the_arm_once(tmp_path):
@@ -146,7 +146,7 @@ def test_cancel_before_admit_ends_canceled_and_after_admit_reaches_the_arm_once(
     nodes = cluster(tmp_path, jobs)
     asyncio.run(nodes["R"].submit(ControlArmWorkRequest.model_validate(WORK)))
     asyncio.run(nodes["R"].cancel("R", "arm-1"))
-    assert nodes["CELL-A"].store.get("R", "arm-1")["status"] == "CANCELED"
+    assert nodes["ARM-CELL"].store.get("R", "arm-1")["status"] == "CANCELED"
     root = nodes["R"].store.get("R", "arm-1")
     assert root["status"] == "CANCELED" and root["result"]["job"]["status"] == "HOLD"
     assert root["result"]["job"]["reason"] == "control-unit-cancel"
@@ -174,12 +174,12 @@ def test_missing_arm_jobs_or_principal_creates_no_binding(tmp_path):
     nodes = cluster(tmp_path, None)
     incoming = ControlArmIngressRequest.model_validate(dict(WORK, origin_id="R", config_revision="v1"))
     with pytest.raises(ValueError, match="CONTROL_UNIT_ARM_JOBS_UNAVAILABLE"):
-        asyncio.run(nodes["CELL-A"].receive(incoming, parent_id="R", principal=PARENT))
-    assert nodes["CELL-A"].store.get("R", "arm-1")["local_task_id"] is None
+        asyncio.run(nodes["ARM-CELL"].receive(incoming, parent_id="R", principal=PARENT))
+    assert nodes["ARM-CELL"].store.get("R", "arm-1")["local_task_id"] is None
     (tmp_path / "second").mkdir()
     nodes = cluster(tmp_path / "second", ArmJobs())
     with pytest.raises(ValueError, match="CONTROL_UNIT_ARM_PROPOSAL_FORBIDDEN"):
-        asyncio.run(nodes["CELL-A"].receive(incoming, parent_id="R", principal=None))
+        asyncio.run(nodes["ARM-CELL"].receive(incoming, parent_id="R", principal=None))
 
 
 def relay(tmp_path, jobs):
@@ -227,19 +227,19 @@ def test_r_relays_create_read_receipt_and_cancel_for_the_proposing_app_only(tmp_
     assert client.post("/api/fleet/arm-transfers/jobs/physical-1/rechecks", json={"recheck_key": "r-1"}).status_code == 403
 
     who["principal"] = HARBOR
-    assert nodes["CELL-A"].store.list()[0]["request"]["requested_by"] == "harbor"
+    assert nodes["ARM-CELL"].store.list()[0]["request"]["requested_by"] == "harbor"
     evidence = client.get("/api/fleet/arm-transfers/jobs/physical-1/physical-evidence")
     assert evidence.status_code == 404 and evidence.json()["detail"]["code"] == "ARM_TRANSFER_JOB_NOT_FOUND"
     assert client.post("/api/fleet/arm-transfers/jobs/physical-1/rechecks", json={"recheck_key": "r-1"}).status_code == 404
     assert client.get("/api/fleet/arm-transfers/jobs/physical-1/rechecks/r-1").status_code == 404
     identity = delegation_id("harbor", "harbor:move-1")
-    assert who["forwarded"] == [("CELL-A", "GET", "R", identity, "physical-evidence", None),
-                                ("CELL-A", "POST", "R", identity, "rechecks", {"recheck_key": "r-1"}),
-                                ("CELL-A", "GET", "R", identity, "rechecks/r-1", None)]
+    assert who["forwarded"] == [("ARM-CELL", "GET", "R", identity, "physical-evidence", None),
+                                ("ARM-CELL", "POST", "R", identity, "rechecks", {"recheck_key": "r-1"}),
+                                ("ARM-CELL", "GET", "R", identity, "rechecks/r-1", None)]
     canceled = client.post("/api/fleet/arm-transfers/jobs/physical-1/cancel", json={"reason": "operator changed plan"})
     assert canceled.status_code == 200 and canceled.json()["job"]["status"] == "HOLD"
     assert nodes["R"].store.list()[0]["status"] == "CANCELED"
-    assert nodes["CELL-A"].store.list()[0]["cancel_reason"] == "operator changed plan"
+    assert nodes["ARM-CELL"].store.list()[0]["cancel_reason"] == "operator changed plan"
     assert jobs.cancels == [("physical-1", "operator changed plan")]
 
 
@@ -300,7 +300,7 @@ def test_cell_serves_evidence_and_rechecks_only_for_a_bound_arm_delegation(tmp_p
     jobs = ArmJobs()
     nodes = cluster(tmp_path, jobs)
     asyncio.run(nodes["R"].submit(ControlArmWorkRequest.model_validate(WORK)))
-    cell = nodes["CELL-A"]
+    cell = nodes["ARM-CELL"]
     assert asyncio.run(cell.arm_detail("R", "arm-1", "evidence")) == {"evidence": {"mission_id": "physical-1"}}
     asyncio.run(cell.arm_detail("R", "arm-1", "request_recheck", key="r-1", principal_id="control-unit:R"))
     assert jobs.rechecks == [("physical-1", "r-1", "control-unit:R")]

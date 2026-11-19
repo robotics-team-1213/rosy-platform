@@ -169,6 +169,7 @@ class LaneComplianceMonitor:
                 "context": (lap_context(self._lap[1], raw.arc_id, raw.s_m, raw.offset_m,
                                         getattr(pose, "age_s", None), getattr(pose, "anchor_age_s", None))
                             if current and self.config.guide_context else None),
+                "docking": raw.docking if current else None,
                 **{k: getattr(raw, k) if current else None for k in detail},
                 "entry": list(raw.entry) if current and raw.entry else None,
                 "crosswalk": raw.crosswalk,
@@ -189,7 +190,7 @@ class LaneComplianceMonitor:
             return                     # not judged now: CORE's cue expires, the robot drives as today
         if back["pose_stamp"] is None and state != OFF_MAP:
             return                     # D-430 review 7: CORE measures a turn from the odom at pose_stamp
-        if (state == ON_LANE and not back["moving"]
+        if (state == ON_LANE and not back["moving"] and back.get("docking") is None
                 and self._cue_sent.get(robot_id, ON_LANE) == ON_LANE):
             return                     # still on the lane: nothing to guide, nothing to clear
         if self._cue_mute.get(robot_id, 0.0) > now:
@@ -209,7 +210,8 @@ class LaneComplianceMonitor:
                 # rev 4: only when true, so a CORE without the field (strict schema) never sees it.
                 **({"turn_spot": True} if back["turn_spot"] else {}),
                 # rev 6: only with guide_context on, so a CORE without the field never sees it.
-                **({"context": back["context"]} if back["context"] is not None else {})}
+                **({"context": back["context"]} if back["context"] is not None else {}),
+                **({"docking": back["docking"]} if back.get("docking") is not None else {})}
         # Crosswalk zones never go from Fleet: CORE's own camera finds them (D-491/D-573, no crosswalks[]).
         try:
             reply = await asyncio.wait_for(send(body), PERIOD_S)

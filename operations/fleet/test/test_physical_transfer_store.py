@@ -343,8 +343,8 @@ def test_admit_refuses_a_delegated_proposal_its_origin_canceled(rig):
     path, _, control, store = rig
     proposed = create(store)
     assert store.peek(proposed["mission_id"]) == proposed
-    delegations = ControlUnitStore(path, unit_id="CELL-A")
-    delegations.create("R", "arm-1", {"target_unit": "CELL-A"}, owner_unit="CELL-A", config_revision="v1")
+    delegations = ControlUnitStore(path, unit_id="ARM-CELL")
+    delegations.create("R", "arm-1", {"target_unit": "ARM-CELL"}, owner_unit="ARM-CELL", config_revision="v1")
     delegations.bind_local("R", "arm-1", proposed["mission_id"])
     assert store.peek(proposed["mission_id"])["delegated_by"] == {"origin_unit": "R", "requested_by": None}
     delegations.request_cancel("R", "arm-1")

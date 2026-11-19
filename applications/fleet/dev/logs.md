@@ -93,3 +93,15 @@
 - 변경: 계정 관리 화면이 새로 읽는 `GET /api/fleet/auth/access-requests`(D-993)를 샘플 provider가 운영자에게 빈 목록으로, 다른 역할에는 403으로 응답한다.
 - 증거: 착지 시험에서 `test_sample_browser.py`의 `/console/accounts`가 미처리 요청으로 혼자서도 실패했다. 고친 뒤 같은 시험을 원격으로 다시 돌린다.
 - gate 변화: 미처리 요청 검사는 그대로다. 실제 승인·거절 흐름은 Account 시험이 맡는다. CE: 해당 없음 — 기존 USB 목록 사례와 같은 누락 경로.
+
+## 2026-11-13 · uncommitted · fix: 기능표에 pipeline·real2sim·road-nav2 호출 등록
+
+- 변경: `feature_matrix.json`에 8b65ceaa0f 이후 늘어난 프런트 호출을 등록했다. pipeline 셀 작업·게이트 14개, real2sim 4개, road-nav2 POST·berth-park POST 요청과 `backend_http_evidence.json` 수신 기록 18개, 그리고 map-fit-view·install.js의 기존 요청 연결이다.
+- 증거: 원격에서 `ROSY_CAPTURE_FLEET_APP_CONTRACTS=1`로 `test_pipeline_orchestrator`·`test_cell_real2sim_pipeline`·`test_charge_bays`·`test_berth_parking_routes`를 실행(exit 0)해 실제 HTTP 응답과 통과 시험 이름·소스 SHA를 수신 기록에 옮겼다. 시험이 호출하지 않는 `PUT /pipeline/station-zones`와 `GET .../road-nav2/plan`은 등록하지 않았다.
+- gate 변화: 미등록 호출 34건 중 31건 해소. 남은 3건은 `station-zones`(PUT 시험 없음), `road-nav2/plan`(HTTP 시험 없음), `/api/fleet/anchors`(서버 경로 없음, 호출 제거 대상). 기능표 시험은 이 셋이 해결될 때까지 적색이다. CE: 해당 없음 — 등록 누락.
+
+## 2026-11-13 · uncommitted · test: station-zones PUT·road-nav2 plan 시험과 마지막 호출 등록
+
+- 변경: `PUT /api/fleet/pipeline/station-zones`(저장소를 tmp로 돌려 쓴 뒤 GET이 반영, 빈·잘못된 YAML은 422)와 `GET .../road-nav2/plan`(실제 응답 모양, 잘못된 쿼리 422) HTTP 시험을 기존 시험 옆에 더하고 두 요청과 호출을 기능표에 등록했다.
+- 증거: 원격 `ROSY_CAPTURE_FLEET_APP_CONTRACTS=1`로 `test_pipeline_orchestrator`·`test_berth_parking_routes` 10 passed(exit 0), 수신 기록 두 건. 첫 시험은 `fleet.server.sitemap` 모듈을 패치해 시험 호스트 `/tmp/station_zones.yaml`을 오염시켰고(기본 구역 시험이 실패), 시험이 import하는 `fleet.server.pipeline_routes`를 패치하도록 고친 뒤 그 파일을 지웠다.
+- gate 변화: PUT은 `read_guard`(viewer)만 요구해 viewer도 구역 YAML을 덮어쓸 수 있다. 시험은 viewer 403을 주장하지 않으며 권한 상향은 별도 결정이다. CE: 해당 없음 — 시험 누락 보강.

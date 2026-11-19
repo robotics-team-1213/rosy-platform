@@ -51,6 +51,7 @@ from core_api_web.api.v1.routes import (
     system_router,
     traffic_router,
     trip_lease_router,
+    account_receiver_router,
     person_request_router,
     fleet_link_router,
     vision_router,
@@ -135,7 +136,10 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     from .account_sessions import install_account_sessions
     from core_common.protocol.account_client import load_account_client
     account_file = config.get('auth', {}).get('account_client_file')
-    app.state.account_client = load_account_client(account_file) if account_file else None
+    from .v1.account_receiver import load_provisioned
+    identity = getattr(services, 'identity', None)  # partial services (tests, tools) have no robot to link
+    app.state.account_client = (load_account_client(account_file) if account_file
+                                else load_provisioned(identity.robot_id) if identity else None)
     if app.state.account_client and app.state.account_client.resource != 'robot:' + services.identity.robot_id:
         raise ValueError('Account resource does not match robot identity')
     install_account_sessions(app)
@@ -229,6 +233,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(trip_lease_router)
     app.include_router(person_request_router)
     app.include_router(fleet_link_router)
+    app.include_router(account_receiver_router)
     app.include_router(line_follow_router)
     app.include_router(navigation_approval_router)
     app.include_router(traffic_router)

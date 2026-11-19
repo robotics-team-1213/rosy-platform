@@ -42,6 +42,7 @@ def test_setup_page_is_read_only_and_operational_api_stays_unavailable(tmp_path)
             assert response.status == 200
             assert "rosy-pinky-k7m4" in body
             assert "새 로봇 등록" in body
+            assert r".\deploy\robot\pinky_pro\sd\setup-moved-device.ps1" in body
             assert response.headers["Cache-Control"] == "no-store"
             assert "192.0.2.10" not in body
         for path in ("/api/v1", "/api/v1/robot/state"):

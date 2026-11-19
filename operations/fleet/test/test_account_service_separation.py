@@ -10,15 +10,17 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_migration_preserves_rows_and_refuses_overwrite(standalone, tmp_path):
-    from rosy_account.migration import AUTHORITY_TABLES, migrate_authority
+    from rosy_account.migration import AUTHORITY_TABLES, OPTIONAL_TABLES, migrate_authority
+    tables = AUTHORITY_TABLES + OPTIONAL_TABLES
     app = standalone[0]
     source, target = app.state.password_sessions.path, tmp_path / 'second-copy.db'
     with sqlite3.connect(source) as db:
-        before = {table: db.execute(f'SELECT * FROM {table}').fetchall() for table in AUTHORITY_TABLES}
+        before = {table: db.execute(f'SELECT * FROM {table}').fetchall() for table in tables}
+    assert before['account_clients'], 'a registry row must survive extraction'
     counts = migrate_authority(source, target)
     assert counts == {table: len(rows) for table, rows in before.items()}
     with sqlite3.connect(target) as db:
-        assert {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} == set(AUTHORITY_TABLES)
+        assert {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} == set(tables)
         for table, rows in before.items():
             assert db.execute(f'SELECT * FROM {table}').fetchall() == rows
     with pytest.raises(FileExistsError):

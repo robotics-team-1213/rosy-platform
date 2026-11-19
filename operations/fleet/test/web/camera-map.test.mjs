@@ -48,7 +48,7 @@ test("camera map accepts only a fresh raw frame with matching source, map, lens 
     [calibration], siteMap), calibration);
 });
 
-test("corrected comparison clears when a frame expires or calibration changes", (t) => {
+test("corrected comparison keeps the last good frame when input goes bad; calibration change clears it", (t) => {
   const previous = globalThis.document;
   const ctx = new Proxy({}, {get: () => () => {}});
   globalThis.document = {createElement: () => ({getContext: () => ctx})};
@@ -65,9 +65,11 @@ test("corrected comparison clears when a frame expires or calibration changes", 
   backdrop.setCameraFrame(frame);
   assert.equal(canvas.hidden, false);
   assert.match(status.textContent, /map_v2_fleet/);
+  // 2026-11-14: 끊긴(안 신선한·null) 입력은 그림을 지우지 않고 마지막 좋은 프레임을 유지한다
   backdrop.setCameraFrame({...frame, ageMs: 3001});
-  assert.equal(canvas.hidden, true);
-  backdrop.setCameraFrame(frame);
+  assert.equal(canvas.hidden, false);
+  backdrop.setCameraFrame(null);
+  assert.equal(canvas.hidden, false);
   backdrop.setCalibrations([{...calibration, map_id: 'other'}]);
   assert.equal(canvas.hidden, true);
 });

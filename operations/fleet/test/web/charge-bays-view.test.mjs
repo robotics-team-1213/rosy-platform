@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chargeBayRows } from '../../../../applications/fleet/web/charge-bays-view.js';
+import { readFile } from 'node:fs/promises';
+
+const source = new URL('../../../../applications/fleet/web/charge-bays-view.js', import.meta.url);
+const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
+const model = new URL('../../../../applications/fleet/web/charge-bays-model.js', import.meta.url);
+const frames = new URL('../../../../applications/fleet/web/shared/cell-frames.js', import.meta.url);
+const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href)
+  .replaceAll('/console/assets/charge-bays-model.js', model.href)
+  .replaceAll('/console/assets/cell-frames.js', frames.href);
+const { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
 
 const plan = {
   thresholds: { go_percent: 15, leave_percent: 80, rate_pct_per_min: null },
@@ -46,4 +55,103 @@ test('an empty bay that cannot be called free says so', () => {
     actions: [{ robot_id: 'low', action: 'wait', reason: 'bay_unknown' }] });
   assert.equal(rows.bays[0].text, '확인 불가 · 비어 있다고 볼 수 없음');
   assert.match(rows.actions[0].text, /칸이 비었는지 확인 불가/);
+});
+
+test('centerline docking evaluation and misaligned reseat render in Korean', () => {
+  const rows = chargeBayRows({
+    bays: [{ bay: 'C1', state: 'arrived', robot_id: 'rosy_60' }],
+    actions: [{
+      robot_id: 'rosy_60', action: 'reseat', bay: 'C1', arrived_percent: 14,
+      reason: 'misaligned_on_bay',
+      docking: { verdict: 'RETRY_FROM_P', offset_m: 0.034, yaw_err_deg: 11.2 },
+    }],
+  });
+  assert.match(rows.actions[0].text, /중심선 정렬 불량 · 전진 후 재접안 필요/);
+  assert.match(rows.actions[0].text, /이탈 · 재정렬 필요 34mm 11\.2°/);
+});
+
+test('OMX cell gates and cell-blocked actions render in Korean', () => {
+  const rows = chargeBayRows({
+    actions: [{ robot_id: 'rosy_60', action: 'wait', reason: 'locked_by_cell',
+      blocked_by_cell: true, cell_id: 'cell_s' }],
+    omx_cells: {
+      cell_s: { station: { station_place: 'S3' }, gate: {
+        phase: 'ARM_IN_BED_ZONE', robot_id: 'rosy_60', amr_motion_inhibited: true,
+      } },
+      cell_ab: { station: { station_place: 'S5' }, gate: { phase: 'IDLE' } },
+    },
+  });
+  assert.deepEqual(rows.cells, [
+    { id: 'cell_s', text: 'OMX 작업 중 · AMR 잠금 · S3 · rosy_60', status: 'active' },
+    { id: 'cell_ab', text: '대기 중 · S5', status: 'neutral' },
+  ]);
+  assert.match(rows.actions[0].text, /OMX 셀 작업 중 구동 잠금/);
+  assert.match(rows.actions[0].text, /OMX 셀\(cell_s\) 잠금/);
+});
+
+test('pipeline cards carry cell telemetry and one-click robot actions without changing legacy rows', () => {
+  const rows = chargeBayRows({
+    ...plan,
+    omx_cells: {
+      cell_s: {gate: {phase: 'ARM_IN_BED_ZONE'}},
+      cell_ab: {gate: {phase: 'IDLE'}},
+    },
+    omx_cell_tasks: [
+      {task_id: 'old', cell_id: 'cell_s', status: 'COMPLETED', created_at: 1},
+      {task_id: 'new', cell_id: 'cell_s', status: 'RUNNING', created_at: 2, arm_id: 'arm_s'},
+    ],
+  });
+  assert.equal(rows.bays.length, 3);
+  assert.equal(rows.actions.length, 2);
+  assert.equal(rows.cells.length, 2);
+  assert.match(rows.summary, /15%/);
+  assert.deepEqual(rows.cards[0].cameraViews.map(v => v.id), ['arm_s_top', 'arm_s_wrist']);
+  assert.deepEqual(rows.cards[1].cameraViews.map(v => v.id), ['top', 'side', 'arm_a_wrist', 'arm_b_wrist']);
+  assert.deepEqual(rows.cards[2].cameraViews.map(v => v.id), ['pinky_dock', 'arm_s_top']);
+  assert.equal(rows.cards[2].cameraViews[0].roiTarget, 'rosy_60');  // 도킹은 천장 Cam 확대로 위에서 본다
+  assert.ok(rows.cards.every(c => !c.cameraUrl), '카드는 Fleet 중계 URL을 들지 않는다(D-136)');
+  assert.equal(rows.cards[0].title, 'cell_s · S3 하역 셔틀 (arm_s)');
+  assert.equal(rows.cards[0].phase, 'ARM_IN_BED_ZONE');
+  assert.equal(rows.cards[0].task.task_id, 'new');
+  assert.deepEqual(rows.cards[0].buttons.map(b => b.preset),
+    ['s3_shuttle', 's3_recover_belt_far', 's3_recover_floor_front']);
+  assert.equal(rows.cards[1].title, 'cell_ab · S5 팔레트 적재 (arm_a·arm_b)');
+  assert.deepEqual(rows.cards[1].buttons.map(b => b.preset),
+    ['s5_tier1_arm_a', 's5_tier2_arm_b', 's5_tier3_arm_a', 'full_s3_to_s5_pipeline']);
+  assert.equal(rows.cards[2].robot_id, 'rosy_60');
+  assert.deepEqual(rows.cards[2].buttons.map(b => b.pinkyAction),
+    ['dock_and_unload_s3', 'dock_s3', 'charge_c1', 'depart_s1']);
+  assert.equal(rows.cards[0].quickControls[0].decisionSubject, 'cell_s');
+  assert.equal(rows.cards[0].quickControls[1].humanSafetyCell, 'cell_s');
+  assert.equal(rows.cards[0].quickControls[2].zoneId, 'EXP_S3_BELT');
+  assert.equal(rows.cards[0].quickControls[3].visionCheckCell, 'cell_s');
+  assert.equal(rows.cards[0].quickControls[4].clearArmHold, 'cell_s');
+  assert.equal(rows.cards[0].cameraViews.length, 2);
+  assert.equal(rows.cards[1].cameraViews.length, 4);
+  assert.equal(rows.cards[2].cameraViews.length, 2);
+  assert.equal(rows.cards[2].quickControls[0].decisionSubject, 'rosy_60');
+  assert.equal(rows.cards[2].quickControls[1].zoneId, 'STG_C2');
+  assert.ok(rows.cards[2].quickControls.some(c => c.cableGuardToggle === true));
+  assert.deepEqual(chargeBayRows({}).cards.filter(c => c.robot_id).map(c => c.robot_id),
+    ['rosy_42', 'rosy_45', 'rosy_46']);
+
+  const targets = inspectorTargetsFromRows({
+    ...rows,
+    armLiveStates: {
+      arm_s: { joints_deg: [0.0, -58.0, 50.0, 50.0, -5.0, 58.1], folded: true, temp_c: 31.2, current_ma: 44.0, age_s: 2.0, fresh: true, substage: 'Fold Home 대기' },
+    },
+  });
+  assert.deepEqual(targets.map(t => t.id), ['arm_s', 'arm_a', 'arm_b', 'cell_s', 'cell_ab', 'rosy_60', 'rosy_40']);
+  assert.equal(targets[0].cameraViews[0].id, 'arm_s_wrist');
+  assert.equal(targets[1].cameraViews[0].id, 'arm_a_wrist');
+  assert.equal(targets[2].cameraViews[0].id, 'arm_b_wrist');
+  assert.deepEqual(targets[0].dualPair, ['arm_s_top', 'arm_s_wrist']);
+  assert.deepEqual(targets[1].dualPair, ['top', 'arm_a_wrist']);
+  assert.deepEqual(targets[2].dualPair, ['top', 'arm_b_wrist']);
+  assert.match(targets[0].jointLiveText, /\[LIVE · 2초 전\]/);
+  assert.match(targets[0].jointLiveText, /J1:0\.0°/);
+  assert.match(formatArmLiveJointText('arm_s', { arm_s: { joints_deg: [1, 2, 3, 4, 5, 6], folded: false, fresh: false, age_s: 25 } }), /\[스냅샷 · 25초 전\]/);
+  assert.ok(targets[0].quickControls.some(c => c.clearArmHold === 'arm_s'));
+  assert.ok(targets[1].quickControls.some(c => c.clearArmHold === 'arm_a'));
+  assert.ok(targets[2].quickControls.some(c => c.clearArmHold === 'arm_b'));
 });

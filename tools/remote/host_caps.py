@@ -40,6 +40,17 @@ def needs(repo: Path, sha: str, invocations: list[list[str]]) -> list[frozenset[
     return result
 
 
+KNOWN: dict[str, frozenset[str]] = {}  # host -> the capabilities of its last reachable probe (host_probe.placed_hosts)
+
+
+def room(host: str, headroom: dict) -> dict:
+    """The host's placed headroom, or only its probed capabilities when it is a below-the-floor fallback host.
+
+    2026-11-14: place() records capabilities with the headroom, and a fallback host has none. A FULL ran 100 min on
+    two fallback hosts that both had the learner venv, then stopped: "no working host has it: not run"."""
+    return headroom.get(host) or {"caps": KNOWN.get(host, ())}
+
+
 def has(room: dict | None, need: frozenset[str]) -> bool:
     return need <= frozenset((room or {}).get("caps", ()))
 

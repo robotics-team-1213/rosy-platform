@@ -9,8 +9,18 @@ ai pc <user>@<ai-pc-address> 05:48-06:18
 robot-a robot <robot-a-address>:8080
 robot-b robot <robot-b-address>:8080
 site updates <site-user>@127.0.0.1
+# <name> monitoring <https-url> [<ca-file>]   alert through the webhook when R Monitoring's /monitoring-health fails or its last_success is older than GUARD_MONITORING_STALE_MIN (15)
+#   ALERT_AFTER checks in a row (it carries no last-success time, so only the status code is checked), e.g.:
+# r-monitoring monitoring https://<site>.local/monitoring-health /etc/rosy/host-guard/site-ca.crt
 # One more pc line per OMX cell control PC, e.g.: cell-b pc <user>@<cell-b-address> 05:40-06:10
 # rosy-arm-cell (role cell) is guarded from R, never by itself: its own host-guard stays off. Add its line only after
 # its rosy-host-control helper matches D-991 (reboot refused during an arm session); the guard ladder reboots otherwise.
 # On the model PC (reverse guard of the site PC), the file holds one line:
 # site pc <user>@<site-pc-address> 05:58-06:28
+# D-1021 drift lines (needs the current rosy-host-guard-remote on the target): <time_source> is the site map's, "-" skips the
+# name compare; after it, the retired host names (full names, from the site map) to look for in chrony and /etc/hosts.
+# One line per PC that runs a guard; a missing status.json, a malformed line or a stopped guard alerts (guard-age):
+# model drift <user>@<model-pc-address> <ntp-name> <retired-name>
+# site drift <user>@<site-pc-address> <upstream-a>,<upstream-b>,<upstream-c> <retired-name>
+# On the site PC, the Account login probe's report (rosy-site-account-login-check writes it; alerts on a failure streak and recovery):
+# account-login logincheck /var/lib/rosy-account-login-check/status.json

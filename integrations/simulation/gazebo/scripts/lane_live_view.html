@@ -9,62 +9,24 @@
 <link rel="stylesheet" href="/common/components.css">
 <script type="module" src="/common/ui.js"></script>
 <style>
-/* 이 페이지의 역할 이름 → 공용 토큰(shared/web/tokens.css). 원시 색은 두지 않는다 —
- * 색·테마는 tokens.css 한 곳에서 바뀐다. status는 임계(정지·끊김·판정)에만, series는
- * 경로·궤적 같은 데이터 계열에만 쓴다(D-624). 브랜드 색은 ROSY 글자에만 쓴다. */
-:root {
-  --bg: var(--surface-recessed);
-  --panel: var(--surface-canvas);
-  --panel-2: var(--ground-raise);
-  --line: var(--border-default);
-  --line-2: var(--border-strong);
-  --text: var(--text-primary);
-  --dim: var(--text-secondary);
-  /* 선택·현재 위치 — 상호작용 강조는 계열 색이다(브랜드가 아니다). */
-  --accent: var(--series-primary);
-  --accent-soft: color-mix(in oklab, var(--series-primary) 14%, transparent);
-  --ok: var(--status-good); --warn: var(--status-warn); --bad: var(--status-crit);
-  --both: var(--status-good); --one: var(--series-primary);
-  --memory: var(--status-warn); --stop: var(--status-crit);
-  /* 지도 — 남은 길은 바탕, 지나온 길은 같은 계열의 짙은 쪽, 주차 칸·마커는 목표 계열. */
-  --road: var(--ground-card-2);
-  --done: var(--series-secondary);
-  --partial: color-mix(in oklab, var(--series-secondary) 50%, var(--ground-card-2));
-  --spur: color-mix(in oklab, var(--series-goal) 35%, var(--ground-card-2));
-  --spot: var(--series-goal);
-  --radius: var(--radius-panel); --font-ui: var(--body); --font-num: var(--mono);
-}
+:root { --bg: var(--surface-recessed); --panel: var(--surface-canvas); --panel-2: var(--ground-raise); --line: var(--border-default); --line-2: var(--border-strong); --text: var(--text-primary); --dim: var(--text-secondary); --accent: var(--series-primary); --accent-soft: color-mix(in oklab, var(--series-primary) 14%, transparent); --ok: var(--status-good); --warn: var(--status-warn); --bad: var(--status-crit); --both: var(--status-good); --one: var(--series-primary); --memory: var(--status-warn); --stop: var(--status-crit); --road: var(--ground-card-2); --done: var(--series-secondary); --partial: color-mix(in oklab, var(--series-secondary) 50%, var(--ground-card-2)); --spur: color-mix(in oklab, var(--series-goal) 35%, var(--ground-card-2)); --spot: var(--series-goal); --radius: var(--radius-panel); --font-ui: var(--body); --font-num: var(--mono); }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
 body { font: var(--text-label)/var(--leading-body) var(--font-ui); -webkit-font-smoothing: antialiased; }
 .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .muted { color: var(--ink-quiet); }
-
-/* ---------- header ---------- */
-.top {
-  position: sticky; top: 0; z-index: 10;
-  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
-  padding: var(--space-2) var(--space-5); background: var(--scrim-solid);
-  border-bottom: 1px solid var(--line);
-}
+.top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-2) var(--space-5); background: var(--scrim-solid); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: baseline; gap: var(--gap-brand); }
-.brand b { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--font-num);
-           letter-spacing: var(--track-label); color: var(--brand-rose); }
+.brand b { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--font-num); letter-spacing: var(--track-label); color: var(--brand-rose); }
 .brand span { font-weight: var(--weight-label); font-size: var(--text-label); }
-.tabs { display: flex; gap: var(--space-1); background: var(--panel); border: 1px solid var(--line);
-        border-radius: var(--radius-button); padding: var(--space-1); }
+.tabs { display: flex; gap: var(--space-1); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-button); padding: var(--space-1); }
 .clock { margin-left: auto; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
-.kv { display: inline-flex; gap: var(--gap-readback); align-items: baseline; padding: var(--inset-chip);
-      border: 1px solid var(--line); border-radius: var(--radius-flag); background: var(--panel); }
-.kv small { color: var(--ink-quiet); font-size: var(--text-micro); font-weight: var(--weight-label);
-            letter-spacing: var(--track-wide); }
+.kv { display: inline-flex; gap: var(--gap-readback); align-items: baseline; padding: var(--inset-chip); border: 1px solid var(--line); border-radius: var(--radius-flag); background: var(--panel); }
+.kv small { color: var(--ink-quiet); font-size: var(--text-micro); font-weight: var(--weight-label); letter-spacing: var(--track-wide); }
 .kv.warn { border-color: var(--status-warn-a45); color: var(--warn); }
 .kv.bad { border-color: var(--bad); background: var(--bad); color: var(--text-on-danger); }
 .kv.bad small { color: inherit; }
-
-/* ---------- health strip ---------- */
-.health { display: flex; flex-wrap: wrap; gap: var(--gap-readout); padding: var(--space-2) var(--space-5);
-          border-bottom: 1px solid var(--line); background: var(--panel); font-size: var(--text-micro); }
+.health { display: flex; flex-wrap: wrap; gap: var(--gap-readout); padding: var(--space-2) var(--space-5); border-bottom: 1px solid var(--line); background: var(--panel); font-size: var(--text-micro); }
 .hp { display: inline-flex; align-items: center; gap: var(--gap-readback); color: var(--ink-quiet); }
 .hp i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: none; }
 .hp.ok i { background: var(--ok); }
@@ -72,85 +34,50 @@ body { font: var(--text-label)/var(--leading-body) var(--font-ui); -webkit-font-
 .hp.warn i { background: var(--warn); }
 .hp b { color: var(--text); font-weight: var(--weight-label); }
 .hp .num { color: var(--text); }
-
 main { padding: var(--space-4) var(--space-5) var(--space-6); max-width: 1600px; margin: 0 auto; }
-
-/* ---------- offline banner ---------- */
-.banner { display: none; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4);
-          padding: var(--space-4) var(--space-5); border-radius: var(--radius);
-          border: 1px solid var(--status-crit-a45); background: var(--status-crit-a07); }
+.banner { display: none; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4); padding: var(--space-4) var(--space-5); border-radius: var(--radius); border: 1px solid var(--status-crit-a45); background: var(--status-crit-a07); }
 .banner.show { display: flex; }
 .banner strong { font-size: var(--text-body); }
 .banner p { margin: var(--space-1) 0 0; color: var(--ink-quiet); font-size: var(--text-label); }
 .banner .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--bad); flex: none; }
 body.offline .live-panel { opacity: 0.45; filter: saturate(0.4); }
-
-/* ---------- phase rail ---------- */
-.rail { display: flex; align-items: stretch; gap: 0; margin-bottom: var(--space-4);
-        background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-        padding: var(--space-3); overflow-x: auto; }
-.phase { flex: 1 1 0; min-width: 92px; position: relative; padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
-         border-radius: var(--radius-button); color: var(--dim); }
-.phase + .phase::before { content: ""; position: absolute; left: -6px; top: 50%;
-         width: 12px; height: 2px; background: var(--line-2); }
-.phase .name { font-weight: var(--weight-strong); font-size: var(--text-label); display: flex;
-               align-items: center; gap: var(--space-2); }
+.rail { display: flex; align-items: stretch; gap: 0; margin-bottom: var(--space-4); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); overflow-x: auto; }
+.phase { flex: 1 1 0; min-width: 92px; position: relative; padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4); border-radius: var(--radius-button); color: var(--dim); }
+.phase + .phase::before { content: ""; position: absolute; left: -6px; top: 50%; width: 12px; height: 2px; background: var(--line-2); }
+.phase .name { font-weight: var(--weight-strong); font-size: var(--text-label); display: flex; align-items: center; gap: var(--space-2); }
 .phase .name i { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; }
 .phase .when { font-size: var(--text-micro); margin-top: var(--space-1); min-height: 16px; }
 .phase.done { color: var(--ink-quiet); }
 .phase.done .name i { background: var(--done); border-color: var(--done); }
-.phase.current { background: var(--accent-soft); color: var(--text);
-                 outline: 1px solid color-mix(in oklab, var(--accent) 55%, transparent); outline-offset: -1px; }
+.phase.current { background: var(--accent-soft); color: var(--text); outline: 1px solid color-mix(in oklab, var(--accent) 55%, transparent); outline-offset: -1px; }
 .phase.current .name i { border-color: var(--accent); background: var(--accent); }
-.rail-meta { display: flex; flex-direction: column; justify-content: center; gap: var(--space-1);
-             padding: 0 var(--space-2) 0 var(--space-4); margin-left: var(--space-2);
-             border-left: 1px solid var(--line); min-width: 150px; }
-.rail-meta .big { font: var(--weight-strong) var(--text-title)/var(--leading-flat) var(--font-num); } .micro { font-size: var(--text-micro); } figure.cam { margin: 0; } .dist-head { margin: 0 0 var(--space-2); } .track u.mid { left: 50%; }
-.alert { display: none; margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius);
-         background: var(--bad); color: var(--text-on-danger); font-weight: var(--weight-strong); }
+.rail-meta { display: flex; flex-direction: column; justify-content: center; gap: var(--space-1); padding: 0 var(--space-2) 0 var(--space-4); margin-left: var(--space-2); border-left: 1px solid var(--line); min-width: 150px; }
+.rail-meta .big { font: var(--weight-strong) var(--text-title)/var(--leading-flat) var(--font-num); }.micro { font-size: var(--text-micro); }figure.cam { margin: 0; }.dist-head { margin: 0 0 var(--space-2); }.track u.mid { left: 50%; }
+.alert { display: none; margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius); background: var(--bad); color: var(--text-on-danger); font-weight: var(--weight-strong); }
 .alert.show { display: block; }
-
-/* ---------- grid + cards ---------- */
 .grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--space-4); }
 .col { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-        padding: var(--space-4); min-width: 0; }
-.card h2 { margin: 0 0 var(--space-3); font-size: var(--text-micro); font-weight: var(--weight-strong);
-           letter-spacing: var(--track-state); color: var(--ink-quiet); display: flex;
-           align-items: center; gap: var(--space-2); }
-.card h2 .src { margin-left: auto; font: var(--weight-medium) var(--text-micro) var(--font-num); color: var(--dim);
-                letter-spacing: 0; text-align: right; overflow-wrap: anywhere; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-4); min-width: 0; }
+.card h2 { margin: 0 0 var(--space-3); font-size: var(--text-micro); font-weight: var(--weight-strong); letter-spacing: var(--track-state); color: var(--ink-quiet); display: flex; align-items: center; gap: var(--space-2); }
+.card h2 .src { margin-left: auto; font: var(--weight-medium) var(--text-micro) var(--font-num); color: var(--dim); letter-spacing: 0; text-align: right; overflow-wrap: anywhere; }
 .card h2 > :first-child, .card h2 { white-space: nowrap; }
 .card h2 .src { white-space: normal; }
-
-/* ---------- cameras ---------- */
 .cams { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
-.cam figcaption { font-size: var(--text-micro); color: var(--ink-quiet); margin-bottom: var(--space-1);
-                  display: flex; justify-content: space-between; gap: var(--space-2); }
-.frame { position: relative; aspect-ratio: 4 / 3; background: var(--surface-recessed);
-         border-radius: var(--radius-control); overflow: hidden; border: 1px solid var(--line); }
-.frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
-             display: block; }
-.frame .nodata { position: absolute; inset: 0; display: none; place-items: center;
-                 text-align: center; color: var(--ink-quiet); font-size: var(--text-label);
-                 background: repeating-linear-gradient(135deg, var(--ground-deep) 0 12px, var(--ground) 12px 24px); }
+.cam figcaption { font-size: var(--text-micro); color: var(--ink-quiet); margin-bottom: var(--space-1); display: flex; justify-content: space-between; gap: var(--space-2); }
+.frame { position: relative; aspect-ratio: 4 / 3; background: var(--surface-recessed); border-radius: var(--radius-control); overflow: hidden; border: 1px solid var(--line); }
+.frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+.frame .nodata { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--ink-quiet); font-size: var(--text-label); background: repeating-linear-gradient(135deg, var(--ground-deep) 0 12px, var(--ground) 12px 24px); }
 .frame.stale .nodata { display: grid; }
-.frame .nodata b { display: block; font: var(--weight-strong) var(--text-label) var(--font-num);
-                   color: var(--text); letter-spacing: var(--track-label); }
-.legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin-top: var(--space-3);
-          font-size: var(--text-micro); color: var(--ink-quiet); }
+.frame .nodata b { display: block; font: var(--weight-strong) var(--text-label) var(--font-num); color: var(--text); letter-spacing: var(--track-label); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin-top: var(--space-3); font-size: var(--text-micro); color: var(--ink-quiet); }
 .legend span { display: inline-flex; align-items: center; gap: var(--space-2); }
 .legend b { color: var(--text); font-weight: var(--weight-label); }
 .sw { width: 18px; height: 4px; border-radius: 2px; display: inline-block; }
-.sw.box { width: 14px; height: 10px; border-radius: 2px; } .sw-done { background: var(--done); } .sw-now { background: var(--accent); } .sw-road { background: var(--road); } .sw-spur { background: var(--spur); } .sw-spot { background: var(--spot); }
+.sw.box { width: 14px; height: 10px; border-radius: 2px; }.sw-done { background: var(--done); }.sw-now { background: var(--accent); }.sw-road { background: var(--road); }.sw-spur { background: var(--spur); }.sw-spot { background: var(--spot); }
 .legend .note { display: block; flex-basis: 100%; color: var(--dim); }
-
-/* ---------- map ---------- */
 .mapwrap { position: relative; }
-#map { width: 100%; height: auto; display: block; background: var(--surface-recessed);
-       border-radius: var(--radius-button); border: 1px solid var(--line); }
-#map .seg { fill: none; stroke: var(--road); stroke-width: 7; stroke-linecap: round;
-            stroke-linejoin: round; }
+#map { width: 100%; height: auto; display: block; background: var(--surface-recessed); border-radius: var(--radius-button); border: 1px solid var(--line); }
+#map .seg { fill: none; stroke: var(--road); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
 #map .seg.done { stroke: var(--done); }
 #map .seg.partial { stroke: var(--partial); }
 #map .seg.current { stroke: var(--accent); }
@@ -165,124 +92,97 @@ body.offline .live-panel { opacity: 0.45; filter: saturate(0.4); }
 #map .halo { fill: var(--accent-soft); }
 #map .arrow { fill: var(--ink); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
 .progress { margin-top: var(--space-3); }
-.progress .row { display: flex; justify-content: space-between; align-items: baseline;
-                 gap: var(--space-3); flex-wrap: wrap; }
+.progress .row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
 .progress .row b { font-size: var(--text-body); }
-.bar { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2);
-       border: 1px solid var(--line); overflow: hidden; margin-top: var(--space-2); }
+.bar { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; margin-top: var(--space-2); }
 .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--done); width: 0; }
 .keys { display: flex; gap: 3px; margin-top: var(--space-2); }
 .keys i { flex: 1; height: 6px; border-radius: 2px; background: var(--road); }
 .keys i.done { background: var(--done); }
 .keys i.current { background: var(--accent); }
-.maplegend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin-top: var(--space-2);
-             font-size: var(--text-micro); color: var(--ink-quiet); }
+.maplegend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin-top: var(--space-2); font-size: var(--text-micro); color: var(--ink-quiet); }
 .maplegend span { display: inline-flex; align-items: center; gap: var(--space-2); }
-
-/* ---------- perception ---------- */
 .tier { display: flex; align-items: center; gap: var(--space-4); }
-/* 채움 위 글자는 가장 깊은 바탕 — 두 테마에서 채움과 반대 밝기다. */
-.chip-tier { padding: var(--space-3) var(--space-5); border-radius: var(--radius-panel); font-weight: var(--weight-strong);
-             font-size: var(--text-display); line-height: var(--leading-flat); min-width: 150px;
-             text-align: center; color: var(--ground-deep); background: var(--dim); }
-.chip-tier small { display: block; font: var(--weight-strong) var(--text-micro) var(--font-num);
-                   letter-spacing: var(--track-label); margin-top: var(--space-2); opacity: 0.7; }
-.t-BOTH { background: var(--both); } .t-ONE { background: var(--one); }
-.t-MEMORY { background: var(--memory); } .t-STOP { background: var(--stop); color: var(--text-on-danger); }
+.chip-tier { padding: var(--space-3) var(--space-5); border-radius: var(--radius-panel); font-weight: var(--weight-strong); font-size: var(--text-display); line-height: var(--leading-flat); min-width: 150px; text-align: center; color: var(--ground-deep); background: var(--dim); }
+.chip-tier small { display: block; font: var(--weight-strong) var(--text-micro) var(--font-num); letter-spacing: var(--track-label); margin-top: var(--space-2); opacity: 0.7; }
+.t-BOTH { background: var(--both); }.t-ONE { background: var(--one); }
+.t-MEMORY { background: var(--memory); }.t-STOP { background: var(--stop); color: var(--text-on-danger); }
 .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); flex: 1; }
 .stat small { display: block; font-size: var(--text-micro); color: var(--ink-quiet); }
 .stat .num { font-size: var(--text-value); font-weight: var(--weight-label); }
-#spark { width: 100%; height: 78px; display: block; margin-top: var(--space-3); background: var(--panel-2);
-         border-radius: var(--radius-control); border: 1px solid var(--line); }
+#spark { width: 100%; height: 78px; display: block; margin-top: var(--space-3); background: var(--panel-2); border-radius: var(--radius-control); border: 1px solid var(--line); }
 #spark .mid { stroke: var(--line-2); }
 #spark .err { fill: none; stroke: var(--text); }
 #spark .cap { fill: var(--dim); }
-.spark-cap { display: flex; justify-content: space-between; font-size: var(--text-micro); color: var(--dim);
-             margin-top: var(--space-1); }
+.spark-cap { display: flex; justify-content: space-between; font-size: var(--text-micro); color: var(--dim); margin-top: var(--space-1); }
 .dist { margin-top: var(--space-3); }
-.dist .stack { display: flex; height: 14px; border-radius: 4px; overflow: hidden;
-               background: var(--panel-2); border: 1px solid var(--line); }
+.dist .stack { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--panel-2); border: 1px solid var(--line); }
 .dist .stack i { display: block; height: 100%; }
-.dist .rows { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2);
-              margin-top: var(--space-2); }
+.dist .rows { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); margin-top: var(--space-2); }
 .dist .rows div { font-size: var(--text-micro); color: var(--ink-quiet); }
 .dist .rows b { display: block; font: var(--weight-label) var(--text-body) var(--font-num); color: var(--text); }
 .hint { font-size: var(--text-micro); color: var(--dim); margin-top: var(--space-2); }
-
-/* ---------- core + parking ---------- */
 .pairs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-4); }
 .pair small { display: block; font-size: var(--text-micro); color: var(--ink-quiet); margin-bottom: var(--space-1); }
-.pill { display: inline-block; padding: var(--inset-tag); border-radius: var(--radius-flag); font-weight: var(--weight-strong);
-        font-size: var(--text-label); background: var(--panel-2); border: 1px solid var(--line-2); }
+.pill { display: inline-block; padding: var(--inset-tag); border-radius: var(--radius-flag); font-weight: var(--weight-strong); font-size: var(--text-label); background: var(--panel-2); border: 1px solid var(--line-2); }
 .pill.ok { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 45%, transparent); }
 .pill.warn { color: var(--warn); border-color: var(--status-warn-a45); }
 .pill.bad { color: var(--text-on-danger); background: var(--bad); border-color: var(--bad); }
 .pill.accent { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 50%, transparent); }
-.reason { font-size: var(--text-micro); color: var(--ink-quiet); margin-top: var(--space-1); font-family: var(--font-num);
-          word-break: break-word; }
+.reason { font-size: var(--text-micro); color: var(--ink-quiet); margin-top: var(--space-1); font-family: var(--font-num); word-break: break-word; }
 .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-4); }
 .gauge small { display: flex; justify-content: space-between; font-size: var(--text-micro); color: var(--ink-quiet); }
-.gauge .track { position: relative; height: 8px; border-radius: 4px; background: var(--panel-2);
-                border: 1px solid var(--line); margin-top: var(--space-1); overflow: hidden; }
+.gauge .track { position: relative; height: 8px; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--line); margin-top: var(--space-1); overflow: hidden; }
 .gauge .track i { position: absolute; top: 0; bottom: 0; background: var(--accent); }
-.gauge .track.centered::after { content: ""; position: absolute; left: 50%; top: -2px;
-                                bottom: -2px; width: 1px; background: var(--line-2); }
+.gauge .track.centered::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-2); }
 .park-idle { color: var(--dim); font-size: var(--text-label); }
 .meter { margin-top: var(--space-3); }
 .meter small { display: flex; justify-content: space-between; font-size: var(--text-micro); color: var(--ink-quiet); }
-.meter .track { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2);
-                border: 1px solid var(--line); margin-top: var(--space-1); overflow: hidden; }
+.meter .track { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2); border: 1px solid var(--line); margin-top: var(--space-1); overflow: hidden; }
 .meter .track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bad); }
 .meter .track i.in { background: var(--ok); }
 .meter .track u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: 0.8; }
-
-/* ---------- results ---------- */
 #results { display: none; }
 body.tab-results #results { display: block; }
 body.tab-results #live { display: none; }
 .runs-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--space-4); }
 table { width: 100%; border-collapse: collapse; font-size: var(--text-label); }
-th { text-align: left; font-size: var(--text-micro); color: var(--ink-quiet); font-weight: var(--weight-strong);
-     letter-spacing: var(--track-state); padding: var(--space-2); border-bottom: 1px solid var(--line); }
+th { text-align: left; font-size: var(--text-micro); color: var(--ink-quiet); font-weight: var(--weight-strong); letter-spacing: var(--track-state); padding: var(--space-2); border-bottom: 1px solid var(--line); }
 td { padding: var(--space-2); border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--panel-2); }
 tbody tr.sel { background: var(--accent-soft); }
 tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-ring-offset-outer)); }
-.kind { font-size: var(--text-micro); font-weight: var(--weight-strong); padding: var(--inset-tag); border-radius: var(--radius-control);
-        background: var(--panel-2); border: 1px solid var(--line-2); white-space: nowrap; }
+.kind { font-size: var(--text-micro); font-weight: var(--weight-strong); padding: var(--inset-tag); border-radius: var(--radius-control); background: var(--panel-2); border: 1px solid var(--line-2); white-space: nowrap; }
 .verdict { font: var(--weight-strong) var(--text-micro) var(--font-num); letter-spacing: var(--track-state); }
 .verdict.pass { color: var(--ok); }
 .verdict.fail { color: var(--text-on-danger); background: var(--bad); padding: var(--inset-tag); border-radius: var(--radius-control); }
 .verdict.none { color: var(--dim); }
 .metrics { font-family: var(--font-num); font-size: var(--text-micro); color: var(--ink-quiet); }
 .metrics b { color: var(--text); font-weight: var(--weight-label); }
-#runplot { width: 100%; height: auto; display: block; background: var(--surface-recessed);
-           border-radius: var(--radius-button); border: 1px solid var(--line); }
+#runplot { width: 100%; height: auto; display: block; background: var(--surface-recessed); border-radius: var(--radius-button); border: 1px solid var(--line); }
 #runplot .seg { fill: none; stroke: var(--ground-card); stroke-width: 6; stroke-linecap: round; }
 #runplot .tr { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
-.rundetail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-4);
-                margin: var(--space-3) 0 0; font-size: var(--text-label); }
+.rundetail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-4); margin: var(--space-3) 0 0; font-size: var(--text-label); }
 .rundetail dt { color: var(--ink-quiet); }
 .rundetail dd { margin: 0; font-family: var(--font-num); overflow-wrap: anywhere; }
 .empty { color: var(--dim); padding: var(--space-5) var(--space-1); }
-
 @media (width <= 1000px) {
-  .grid, .runs-grid { grid-template-columns: minmax(0, 1fr); }
+.grid, .runs-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (width <= 640px) {
-  .top { padding: var(--space-2) var(--space-3); gap: var(--gap-topbar); }
-  .clock { margin-left: 0; width: 100%; }
-  .health { padding: var(--space-2) var(--space-3); }
-  main { padding: var(--space-3) var(--space-3) var(--space-6); }
-  .cams { grid-template-columns: 1fr; }
-  .rail { flex-wrap: wrap; gap: var(--space-1); }
-  .phase { min-width: 30%; flex: 1 1 30%; }
-  .phase + .phase::before { display: none; }
-  .rail-meta { border-left: 0; margin-left: 0; padding: var(--space-2) var(--space-3); width: 100%; }
-  .chip-tier { min-width: 120px; font-size: var(--text-title); }
-  .tier { flex-wrap: wrap; }
-  .metrics-col { display: none; }
+.top { padding: var(--space-2) var(--space-3); gap: var(--gap-topbar); }
+.clock { margin-left: 0; width: 100%; }
+.health { padding: var(--space-2) var(--space-3); }
+main { padding: var(--space-3) var(--space-3) var(--space-6); }
+.cams { grid-template-columns: 1fr; }
+.rail { flex-wrap: wrap; gap: var(--space-1); }
+.phase { min-width: 30%; flex: 1 1 30%; }
+.phase + .phase::before { display: none; }
+.rail-meta { border-left: 0; margin-left: 0; padding: var(--space-2) var(--space-3); width: 100%; }
+.chip-tier { min-width: 120px; font-size: var(--text-title); }
+.tier { flex-wrap: wrap; }
+.metrics-col { display: none; }
 }
 </style>
 </head>
@@ -299,7 +199,6 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
     <span class="kv" id="stepBox"><small>시계 점프</small><span class="num" id="step">--</span></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
   </div>
 </header>
-
 <div class="health" id="health" aria-live="polite">
   <span class="hp" id="h-camera"><i></i><b>카메라</b><span class="num">NO DATA</span></span>
   <span class="hp" id="h-overlay"><i></i><b>오버레이</b><span class="num">NO DATA</span></span>
@@ -309,7 +208,6 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
   <span class="hp" id="h-src"><i></i><b>단계 출처</b><span class="num">--</span></span>
   <span class="hp"><b>마지막 갱신</b><span class="num" id="h-updated">--</span></span>
 </div>
-
 <main>
 <section id="live" role="tabpanel" aria-labelledby="tab-live" tabindex="0">
   <div class="banner" id="offline" role="status">
@@ -317,10 +215,8 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
     <div><strong id="offlineTitle">주행 중이 아님 — Gazebo가 꺼져 있습니다</strong>
       <p id="offlineHint">시뮬레이션을 시작하면 자동으로 연결됩니다. 이전 실행은 ‘지난 결과’ 탭에서 볼 수 있습니다.</p></div>
   </div>
-
   <div class="rail live-panel" id="rail" aria-label="미션 단계"></div>
   <div class="alert" id="alert" role="alert"></div>
-
   <div class="grid">
     <div class="col">
       <div class="card live-panel">
@@ -341,7 +237,6 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
             </div>
           </figure>
         </div>
-        <!-- 오버레이 색은 서버가 영상에 그려 넣은 고정 값이라 테마를 따르지 않는다 — 견본 대신 색 이름으로 적는다. -->
         <div class="legend" aria-label="오버레이 범례">
           <span><b>초록 선</b>왼쪽 차선</span>
           <span><b>파랑 선</b>오른쪽 차선</span>
@@ -350,7 +245,6 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
           <span class="note">그려진 선은 이번 프레임에서 본 것만이 아니라 <b>기억</b>(최근에 본 차선)도 포함합니다. 선이 보이는데 인식 등급이 ‘기억’이면 지금은 페인트를 보지 못하고 있다는 뜻입니다.</span>
         </div>
       </div>
-
       <div class="card live-panel">
         <h2>실시간 지도 <span class="src" id="routeKeys"></span></h2>
         <div class="mapwrap">
@@ -376,7 +270,6 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
         </div>
       </div>
     </div>
-
     <div class="col">
       <div class="card live-panel">
         <h2>인식 상태 <span class="src">line/observation</span></h2>
@@ -398,7 +291,6 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
         </div>
         <div class="hint">등급은 신뢰도로 추정합니다: 양쪽 ≥ 0.85 · 한쪽 ≈ 0.8 · 기억 ≈ 0.6 · 그 아래는 정지.</div>
       </div>
-
       <div class="card live-panel">
         <h2>CORE <span class="src" id="coreSrc">/api/v1</span></h2>
         <div class="pairs">
@@ -416,7 +308,6 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
             <div class="track centered"><i id="gAng"></i></div></div>
         </div>
       </div>
-
       <div class="card live-panel" id="parkCard">
         <h2>주차 <span class="src">dock/observation · odom</span></h2>
         <div id="parkIdle" class="park-idle">주차·칸 확인 중이 아닙니다. 도킹이 시작되거나 마커가 보이면 여기에 표시됩니다.</div>
@@ -434,7 +325,6 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
     </div>
   </div>
 </section>
-
 <section id="results" role="tabpanel" aria-labelledby="tab-results" aria-hidden="true" tabindex="0">
   <div class="runs-grid">
     <div class="card">
@@ -453,36 +343,23 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
   </div>
 </section>
 </main>
-
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
 const SVGNS = "http://www.w3.org/2000/svg";
-/* 그림 색은 모두 CSS 변수다 — SVG style·인라인 style로 넣어 테마가 바뀌면 다시 그리지 않아도 따라간다. */
 const TIER_COLOR = { BOTH: "var(--both)", ONE: "var(--one)", MEMORY: "var(--memory)", STOP: "var(--stop)" };
 const TIER_LABEL = { BOTH: "양쪽", ONE: "한쪽", MEMORY: "기억", STOP: "정지" };
 const PHASE_ORDER = ["boot", "confirm", "undock", "tour", "park", "done"];
 const PHASE_KO = { boot: "부팅", confirm: "칸 확인", undock: "출차", tour: "순회", park: "주차", done: "완료" };
 const LIN_MAX = 0.12, ANG_MAX = 1.0;
 let graph = null, view = null, lastOk = 0;
-
-function fmt(v, d, unit) {
-  if (v === null || v === undefined || Number.isNaN(Number(v))) return "NO DATA";
-  return Number(v).toFixed(d === undefined ? 2 : d) + (unit || "");
-}
-function el(tag, attrs, parent) {
-  const n = document.createElementNS(SVGNS, tag);
-  for (const k in attrs) n.setAttribute(k, attrs[k]);
-  if (parent) parent.appendChild(n);
-  return n;
-}
+function fmt(v, d, unit) { if (v === null || v === undefined || Number.isNaN(Number(v))) return "NO DATA"; return Number(v).toFixed(d === undefined ? 2 : d) + (unit || ""); }
+function el(tag, attrs, parent) { const n = document.createElementNS(SVGNS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; }
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 function setPill(node, text, cls) { node.textContent = text; node.className = "pill" + (cls ? " " + cls : ""); }
 function setHp(id, cls, text) { const n = $(id); n.className = "hp " + cls; n.querySelector(".num").textContent = text; }
-
-/* ---------- tabs ---------- */
 const TAB_SELECTOR = ".tabs [role=tab]";
 function showTab(tab) {
   if (tab !== "live" && tab !== "results") tab = "live";
@@ -495,7 +372,7 @@ function showTab(tab) {
   $("live").setAttribute("aria-hidden", String(tab !== "live"));
   $("results").setAttribute("aria-hidden", String(tab !== "results"));
   if (tab === "results") loadRuns();
-  try { localStorage.setItem("rosyTab", tab); } catch (e) { /* storage unavailable */ }
+  try { localStorage.setItem("rosyTab", tab); } catch (e) {  }
 }
 for (const b of document.querySelectorAll(TAB_SELECTOR)) {
   b.addEventListener("click", () => showTab(b.dataset.tab));
@@ -513,8 +390,6 @@ for (const b of document.querySelectorAll(TAB_SELECTOR)) {
     target.focus();
   });
 }
-
-/* ---------- map geometry ---------- */
 function bounds(g) {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   const eat = (p) => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); };
@@ -531,7 +406,6 @@ function makeView(svg, b) {
   return { scale, P: (x, y) => [((x - b.x0) * scale).toFixed(1), ((b.y1 - y) * scale).toFixed(1)] };
 }
 function pathD(v, pts) { return pts.map((p, i) => (i ? "L" : "M") + v.P(p[0], p[1]).join(",")).join(""); }
-
 function drawBase(svg, g, v, into, opts) {
   into.innerHTML = "";
   if (g.parking) el("path", { d: pathD(v, g.parking.points), class: "spur" }, into);
@@ -556,7 +430,6 @@ function drawBase(svg, g, v, into, opts) {
     const t = el("text", { x: +mx + 8, y: +my + 4, class: "lbl" }, into); t.textContent = "마커";
   }
 }
-
 async function loadGraph() {
   try {
     graph = await (await fetch("/graph.json", { cache: "no-store" })).json();
@@ -568,13 +441,11 @@ async function loadGraph() {
   $("routeKeys").textContent = keys.length ? `경로 ${keys.length}개 구간 · 방향 ${new Set(keys).size}개` : "";
   $("keyStrip").innerHTML = keys.map((k) => `<i title="${esc(k)}"></i>`).join("");
 }
-
 function keyPoints(key) {
   const [name, way] = key.split(":");
   const pts = (graph.segments[name] || []).slice();
   return way === "r" ? pts.reverse() : pts;
 }
-
 function drawRoute(route) {
   const g = $("m-route"); g.innerHTML = "";
   if (!graph || !view || !route) return;
@@ -590,7 +461,6 @@ function drawRoute(route) {
   }
   if (!route.finished) el("path", { d: pathD(view, keyPoints(route.current_key)), class: "cur" }, g);
 }
-
 function drawRobot(odom, trail) {
   const tg = $("m-trail"), rg = $("m-robot");
   tg.innerHTML = ""; rg.innerHTML = "";
@@ -604,8 +474,6 @@ function drawRobot(odom, trail) {
     el("path", { d: `M${s},0 L${-s * 0.7},${s * 0.65} L${-s * 0.35},0 L${-s * 0.7},${-s * 0.65} Z`, class: "arrow" }, grp);
   }
 }
-
-/* ---------- panels ---------- */
 function renderRail(m, clock) {
   const rail = $("rail");
   if (!rail.children.length) {
@@ -625,7 +493,6 @@ function renderRail(m, clock) {
   const a = $("alert");
   a.textContent = m.alert || ""; a.classList.toggle("show", !!m.alert);
 }
-
 function renderClock(c) {
   $("simTime").textContent = c.sim_s === null ? "--" : fmt(c.sim_s, 1, " s");
   $("rtf").textContent = c.rtf === null ? "--" : "×" + fmt(c.rtf, 2);
@@ -634,12 +501,10 @@ function renderClock(c) {
   $("stepBox").className = "kv" + (c.step_warn ? " bad" : "");
   $("stepBox").title = c.step_warn ? "벽시계가 1초 넘게 점프했습니다. 이번 실행의 시간 측정은 믿을 수 없습니다 (재실행 권장)." : "벽시계 점프 없음";
 }
-
 function streamHp(id, h) {
   if (!h || !h.ok) setHp(id, "bad", h && h.age_s != null ? `끊김 ${fmt(h.age_s, 1)} s` : "NO DATA");
   else setHp(id, h.fps < 1 ? "warn" : "ok", `${fmt(h.fps, 1)} fps · ${fmt(h.age_s, 1)} s`);
 }
-
 function renderHealth(s) {
   streamHp("h-camera", s.streams.camera);
   streamHp("h-overlay", s.streams.overlay);
@@ -658,7 +523,6 @@ function renderHealth(s) {
     if (img.naturalWidth) $(id).style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
   }
 }
-
 function renderProgress(r) {
   if (!r) { $("keysDone").textContent = "경로 정보 없음"; $("meters").textContent = "— / — m"; $("progressBar").style.width = "0%"; $("curKey").textContent = ""; [...$("keyStrip").children].forEach(key => key.className = ""); return; }
   $("keysDone").textContent = `${r.total_unique}개 방향 구간 중 ${r.done_unique}개 완료`;
@@ -669,7 +533,6 @@ function renderProgress(r) {
   $("curKey").textContent = r.finished ? "경로 끝까지 주행 완료"
     : `지금 ${r.segment_index + 1}/${r.keys.length}번째 구간 · ${r.current_key}`;
 }
-
 function renderSpark(history) {
   const svg = $("spark"); svg.innerHTML = "";
   const W = 600, H = 78, band = 10, mid = (H - band) / 2, amp = 0.05;
@@ -686,7 +549,6 @@ function renderSpark(history) {
   if (pts.length > 1) el("polyline", { points: pts.join(" "), class: "err", "stroke-width": 1.6, "vector-effect": "non-scaling-stroke" }, svg);
   const lab = el("text", { x: 4, y: 12, class: "cap", "font-size": 10 }, svg); lab.textContent = "±50 mm";
 }
-
 function renderPerception(p) {
   const chip = $("tierChip"), tier = p.tier;
   chip.className = "chip-tier" + (tier ? " t-" + tier : "");
@@ -702,7 +564,6 @@ function renderPerception(p) {
   $("distStack").innerHTML = ["BOTH", "ONE", "MEMORY", "STOP"].map((t) => `<i style="width:${d.pct[t]}%;background:${TIER_COLOR[t]}" title="${TIER_LABEL[t]} ${d.pct[t]}%"></i>`).join("");
   $("distRows").innerHTML = ["BOTH", "ONE", "MEMORY", "STOP"].map((t) => `<div><i class="sw" style="background:${TIER_COLOR[t]}"></i> ${TIER_LABEL[t]}<b>${d.samples ? d.pct[t].toFixed(1) + "%" : "--"}</b></div>`).join("");
 }
-
 function renderCore(api) {
   const lf = api.line_follow || {}, dk = api.docking || {};
   setPill($("cMode"), api.mode || "NO DATA", api.mode === "EMERGENCY" ? "bad" : api.mode ? "accent" : "");
@@ -720,7 +581,6 @@ function renderCore(api) {
   ga.style.left = (f >= 0 ? 50 : 50 + f) + "%"; ga.style.width = Math.abs(f) + "%";
   $("coreSrc").textContent = api.reachable ? `/api/v1 · ${fmt(api.age_s, 1)} s 전` : "/api/v1 · 응답 없음";
 }
-
 function renderParking(k) {
   $("parkIdle").style.display = k.active ? "none" : "block";
   $("parkBody").style.display = k.active ? "block" : "none";
@@ -735,7 +595,6 @@ function renderParking(k) {
   db.style.width = Math.min(100, (e.dist_m / (2 * e.target_m)) * 100) + "%"; db.className = e.ok_position ? "in" : "";
   hb.style.width = Math.min(100, (Math.abs(e.heading_err_deg) / (2 * e.target_deg)) * 100) + "%"; hb.className = e.ok_heading ? "in" : "";
 }
-
 function render(s) {
   document.body.classList.toggle("offline", !s.live);
   $("offline").classList.toggle("show", !s.live);
@@ -753,7 +612,6 @@ function render(s) {
   renderCore(s.core_api);
   renderParking(s.parking);
 }
-
 async function poll() {
   try {
     const r = await fetch("/status.json", { cache: "no-store" });
@@ -769,26 +627,14 @@ async function poll() {
   }
   setTimeout(poll, 330);
 }
-
-/* MJPEG reconnect: a relaunched server closes the stream; retry quietly. */
 for (const id of ["camera", "overlay"]) {
   const img = $(id);
   img.addEventListener("error", () => setTimeout(() => { img.src = `/${id}.mjpg?r=${Date.now()}`; }, 2000));
 }
-
-/* ---------- results ---------- */
 let runsLoaded = false, selected = null;
-function when(ts) {
-  const d = new Date(ts * 1000);
-  return d.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }) + " " + d.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" });
-}
+function when(ts) { const d = new Date(ts * 1000); return d.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }) + " " + d.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" }); }
 function mm(v) { return v == null ? "--" : (v * 1000).toFixed(1) + " mm"; }
-function metricsHtml(r) {
-  const m = r.metrics || {};
-  if (r.kind === "junctions") return `<b>${m.passed ?? "-"}/${m.scenarios ?? "-"}</b> 통과 · 최대 이탈 <b>${mm(m.max_dev_m)}</b> · sim <b>${fmt(m.sim_s, 0, " s")}</b>`;
-  if (r.kind === "mission") return `최대 이탈 <b>${mm(m.max_dev_m)}</b> · 주차 오차 <b>${mm(m.park_error_m)}</b> / <b>${fmt(m.park_dyaw_deg, 1, "°")}</b> · sim <b>${fmt(m.sim_s, 0, " s")}</b>`;
-  return `최대 이탈 <b>${mm(m.max_dev_m)}</b> · 끝 오차 <b>${mm(m.end_error_m)}</b> · sim <b>${fmt(m.sim_s, 0, " s")}</b>`;
-}
+function metricsHtml(r) { const m = r.metrics || {}; if (r.kind === "junctions") return `<b>${m.passed ?? "-"}/${m.scenarios ?? "-"}</b> 통과 · 최대 이탈 <b>${mm(m.max_dev_m)}</b> · sim <b>${fmt(m.sim_s, 0, " s")}</b>`; if (r.kind === "mission") return `최대 이탈 <b>${mm(m.max_dev_m)}</b> · 주차 오차 <b>${mm(m.park_error_m)}</b> / <b>${fmt(m.park_dyaw_deg, 1, "°")}</b> · sim <b>${fmt(m.sim_s, 0, " s")}</b>`; return `최대 이탈 <b>${mm(m.max_dev_m)}</b> · 끝 오차 <b>${mm(m.end_error_m)}</b> · sim <b>${fmt(m.sim_s, 0, " s")}</b>`; }
 function verdict(r) {
   if (r.pass === true) return `<span class="verdict pass">PASS</span>`;
   if (r.pass === false) return `<span class="verdict fail">FAIL</span>${r.reason && r.reason !== "reached" ? `<div class="reason">${esc(r.reason)}</div>` : ""}`;
@@ -812,7 +658,6 @@ async function loadRuns() {
     $("runRows").innerHTML = `<tr><td colspan="5" class="empty">실행 목록을 불러올 수 없습니다.</td></tr>`;
   }
 }
-/* 궤적은 데이터 계열이다 — series 토큰만 쓴다. 정체성은 범례의 단계 이름이 나르고 색은 순환한다(D-82). */
 const TRACK_COLORS = { confirm: "var(--ink-quiet)", undock: "var(--series-secondary)", tour: "var(--series-primary)", park: "var(--series-goal)" };
 const PALETTE = ["var(--series-primary)", "var(--series-secondary)", "var(--series-goal)", "var(--ink-quiet)"];
 async function openRun(id) {
@@ -844,12 +689,10 @@ async function openRun(id) {
   for (const [k, [label, f]] of Object.entries(names)) if (m[k] != null) facts.push([label, f(m[k])]);
   $("runFacts").innerHTML = facts.map(([a, b]) => `<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join("");
 }
-
 loadGraph().then(poll);
 let initialTab = "live";
-try { initialTab = localStorage.getItem("rosyTab") || "live"; } catch (e) { /* storage unavailable */ }
+try { initialTab = localStorage.getItem("rosyTab") || "live"; } catch (e) {  }
 showTab(initialTab);
-/* ui-button이 정의되며 tabIndex를 0으로 되돌린다 — 탭의 로빙 tabindex를 다시 맞춘다. */
 customElements.whenDefined("ui-button").then(() => showTab(document.body.classList.contains("tab-results") ? "results" : "live"));
 </script>
 </body>

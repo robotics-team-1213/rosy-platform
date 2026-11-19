@@ -27,9 +27,13 @@ export function untrustedQueuedReason(who) {
 // Field check 2026-10-10: the card's "위치 0.90, 0.05" was odom and read as a map coordinate.
 // The robot pose names its frame; Fleet's site map pose (D-536 guide row) is a separate line.
 const SITE_POSE_STATE = { LOCALIZED: "확정", DEGRADED: "추정" };
-const SITE_POSE_SOURCE = { sighting: "카메라", operator_pin: "운영자 핀", auto_locate: "자동 위치", bridged: "odom 이음" };
+const SITE_POSE_SOURCE = { sighting: "카메라", operator_pin: "운영자 핀", auto_locate: "자동 위치",
+  peer: "로봇 보고", bridged: "odom 이음" };
 // D-494 3 sighting lease: odom samples newer than an anchor this fresh are the anchor, not a bridge.
 const FRESH_ANCHOR_S = 1.0;
+// D-1017: a camera quiet longer than this stays named on the card — the sighting chip hides
+// after 30 s, so without this a dead camera is invisible (measured 2026-11-11: 30 days).
+const CAMERA_QUIET_S = 300;
 
 function poseFrame(state, localization) {
   return localization?.pose_frame || state.localization?.pose_frame || (state.map_id ? "map" : "odom");
@@ -61,7 +65,9 @@ export function sitePoseText(guideRow) {
     ? pose.anchor_source : pose.source;
   const words = [SITE_POSE_STATE[pose.state] || pose.state, SITE_POSE_SOURCE[source] || source]
     .filter(Boolean).join("·");
-  return `지도 ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}${words ? ` · ${words}` : ""}`;
+  const quiet = Number.isFinite(pose.last_sighting_age_s) && pose.last_sighting_age_s > CAMERA_QUIET_S
+    ? ` · 카메라 ${Math.max(1, Math.round(pose.last_sighting_age_s / 60))}분 침묵` : "";
+  return `지도 ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}${words ? ` · ${words}` : ""}${quiet}`;
 }
 
 /** Fleet's site map pose first, then CORE's explicit state; UNKNOWN warns and needs_human is critical. */

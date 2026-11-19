@@ -14,6 +14,7 @@ from face_frames import FaceFrames  # noqa: F401  (re-exported for rosy-face.py)
 from rosy_face_parts import Log
 
 CORE_USER = "rosy-core"
+LAMP_STATUS_FILE = "var/lib/rosy/lamp-control/status-patterns.json"
 FACE_LOAD_SKIP = 1  # 320x240 authored frames match the 10 fps panel tick
 FACE_SIZE = (320, 240)
 #: D-433 row 3: the updater (root) writes two lines, step and release id, while it applies.
@@ -107,6 +108,26 @@ def lamp_enabled(environ: dict[str, str], log: Log) -> bool:
         log.once("lamp-config", "ROSY_LAMP_ENABLED must be true or false, got "
                                 f"{environ.get('ROSY_LAMP_ENABLED')!r}; lamp off")
     return enabled
+
+
+def status_patterns_enabled(root: Path) -> bool:
+    """A missing or invalid persistent setting leaves the normal status display on."""
+    path = root / LAMP_STATUS_FILE
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return True
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 128:
+            return True
+        data = json.loads(os.read(descriptor, 129).decode("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return True
+    finally:
+        os.close(descriptor)
+    return not (isinstance(data, dict) and data.get("status_patterns") == "off")
 
 
 def read_update(root: Path, wall: float) -> dict | None:

@@ -56,12 +56,12 @@ def repos(tmp_path, monkeypatch, request):
     monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
 
     def fake_run(invocations, logs, sha="HEAD", repo=None, label=None, **kw):
-        # Fixture repos are throwaway and cannot be shipped to a test host; this test itself
-        # already runs on one (D-584), so the inner pytest runs in the fixture worktree.
+        # Fixture repos cannot be shipped to a test host (this test already runs on one, D-584): pytest runs in place.
         return [land.remote_pytest.capture([sys.executable, "-m", "pytest", *inv, *land.remote_pytest.PYTEST_TAIL],
                                            log, cwd=repo) for inv, log in zip(invocations, logs)]
 
     monkeypatch.setattr(land.remote_pytest, "run", fake_run)
+    monkeypatch.setattr(land.land_queue, "REFRESHES", 0)  # these flows rerun main's delta at the turn; the pre-turn refresh has own tests
     return main, wt
 
 
@@ -354,15 +354,15 @@ def test_main_checkout_must_have_main(repos, tmp_path):
     assert git(other, "rev-parse", "HEAD") == git(main, "rev-parse", "HEAD")
 
 
-def test_ff_refused_by_peer_dirty_file_leaves_it(repos, capsys):
+def test_ff_auto_stashes_peer_dirty_colliding_file_and_keeps_it(repos, capsys):
+    """2026-11-17: the colliding dirty file no longer refuses the ff; it goes to a named stash, never lost."""
     main, wt = repos
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
     (main / "pkg/a.py").write_bytes(b"peer's uncommitted edit\n")
-    before = git(main, "rev-parse", "HEAD")
-    assert land.main(["--tests", "none"]) == 1
-    assert "would be overwritten" in capsys.readouterr().err
-    assert (main / "pkg/a.py").read_bytes() == b"peer's uncommitted edit\n"
-    assert git(main, "rev-parse", "HEAD") == before
+    assert land.main(["--tests", "none"]) == 0 and "auto-stashed 1 colliding file(s)" in capsys.readouterr().out
+    assert (main / "pkg/a.py").read_bytes() == b"x = 2\n" and git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+    stashed = subprocess.run(["git", "-C", str(main), "stash", "show", "-p", "stash@{0}"], capture_output=True).stdout
+    assert b"peer's uncommitted edit" in stashed
 
 
 FULL = ('{"mode": "full", "escalations": ["a -> b/a: folder move"], "invocations": [],'
@@ -871,7 +871,7 @@ def test_head_move_during_isolated_check_cannot_publish_verdict_or_cache(repos, 
 
 @pytest.mark.parametrize("alone_codes, ids, why", [
     ([1], ("pkg/test/test_a.py::test_a",), "failed again when run alone"),
-    ([0] * 6, tuple(f"pkg/test/test_a.py::test_{n}" for n in range(6)), "a rerun alone is tried only for 1 to 5"),
+    ([0] * 6, tuple(f"pkg/test/test_{n}.py::test_a" for n in range(6)), "a rerun alone is tried only for 1 to 5"),
 ])
 def test_new_failure_that_fails_again_or_too_many_still_stops(repos, monkeypatch, capsys, alone_codes, ids, why):
     main, wt = repos
@@ -1196,8 +1196,8 @@ def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeyp
     monkeypatch.setattr(land, "run_tests", run_tests)
     monkeypatch.setattr(land.land_full, "save", lambda *a: saved.append(a))
     assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1
-    # the selection ran beside the guards (2026-10-27); a failed guard still records nothing and lands nothing
-    assert sorted(phases) == ["gpre", "pre"] and saved == []
+    # Fail fast on guards before full_slot/pre; a failed guard or HEAD move stops before long tests or FULL record
+    assert phases == ["gpre"] and saved == []
     assert git(main, "rev-parse", "HEAD") == before
     assert sorted(qdir.glob("*.json")) == [peer]
     expected = "structural guard failed" if guard_outcome == "failure" else "HEAD changed"
@@ -1272,8 +1272,8 @@ def test_a_landing_leaves_its_queue_turn_round_tests_and_landed_events(repos, mo
     monkeypatch.setattr(land.land_cache, "env_id", lambda wt_, sha: None)
     assert land.main(["--tests", "pkg/test"]) == 0
     rows = land.land_events.read(main / ".git" / land.land_events.EVENTS)
-    assert [r["event"] for r in rows] == ["queue", "turn", "round", "tests", "landed"]
-    assert rows[3]["verdict"] == "pass" and rows[-1]["sha"] == git(main, "rev-parse", "HEAD")
+    assert [r["event"] for r in rows] == ["queue", "turn", "round", "round_start", "tests", "round_end", "landed"]
+    assert rows[4]["verdict"] == "pass" and rows[-1]["sha"] == git(main, "rev-parse", "HEAD")
     assert {r["branch"] for r in rows} == {"feat/x"}
 
 

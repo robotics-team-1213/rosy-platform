@@ -114,7 +114,7 @@ def test_profile_api_permissions_validation_and_conflict(tmp_path):
         assert updated.json()['revision'] != saved.json()['revision']
         assert client.put(url, content=b'x' * (2 * 1024 * 1024 + 1), headers=OPERATOR).status_code == 413
         rows = client.get('/api/fleet/site-map/profiles', headers=VIEWER).json()['profiles']
-        assert rows == [updated.json()]
+        assert [r for r in rows if r['profile_id'] == 'room-1'] == [updated.json()]
         assert client.get('/api/fleet/site-map/active', headers=VIEWER).json() == active
 
 

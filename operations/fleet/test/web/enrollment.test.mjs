@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
+const { register } = await import("node:module");
+register("./common-loader.mjs", import.meta.url);
+register("./resolve-console-assets.mjs", import.meta.url);
+const {
   AVAHI_HINT, DISCOVERY_LABELS, MESSAGES, canManage, codeError, discoveryActions, formatCode,
   messageFor, normalizeCode, parseAddress, retryUntil, rowActions, rowText,
-} from "../../../../applications/fleet/web/devices/enrollment.js";
+} = await import("../../../../applications/fleet/web/devices/enrollment.js");
 
 const CODE = "7KXM" + "P3QA";
 
@@ -72,6 +75,8 @@ test("row text follows the register state", () => {
   assert.match(rowText({ state: "pending_logout", expires_at: "2026-10-06" })[1],
     /로봇에 토큰이 남아 있음\(만료 2026-10-06\) — 로봇 대시보드에서 회수 가능/);
   assert.ok(rowText({ state: "active", legacy_lifetime: true }).some((l) => /7일 뒤 새 코드/.test(l)));
+  assert.ok(rowText({ state: "needs_new_code", removal_pending: true, days_idle: 31 })
+    .some((l) => /삭제 예정\(31일 비활동\)/.test(l)));
   assert.ok(rowText({ state: "active", lifetime_shortened: true }).some((l) => /관리자 세션의 만료/.test(l)));
   assert.ok(rowText({ state: "active", hold: "conflict" }).some((l) => /신원 충돌/.test(l)));
   assert.ok(rowText({ state: "active" }).includes("수집: REST"));

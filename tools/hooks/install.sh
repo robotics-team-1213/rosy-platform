@@ -15,3 +15,6 @@ fi
 sed 's/\r$//' "$root/tools/hooks/pre-push" > "$hooks/pre-push"
 chmod +x "$hooks/pre-push"
 echo "installed $hooks/pre-push (fast gate, D-346)"
+sed 's/\r$//' "$root/tools/hooks/reference-transaction" > "$hooks/reference-transaction"
+chmod +x "$hooks/reference-transaction"
+echo "installed $hooks/reference-transaction (main moves only through land.py)"

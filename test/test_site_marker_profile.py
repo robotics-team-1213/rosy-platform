@@ -87,3 +87,34 @@ def test_arm_ids_are_three_bits_from_every_ceiling_id_in_any_turn():
     nearest = min(sum(a != b for ra, rb in zip(t, c) for a, b in zip(ra, rb))
                   for i in arms for t in turns(grid(sheets.DICT_4X4_100[i])) for c in ceiling)
     assert nearest >= 3
+
+
+def test_container_tags_map_to_object_refs_only_inside_their_block():
+    assert mp.object_ref_of(EXAMPLE, 100) == "EXAMPLE-CONTAINER-0001"
+    assert mp.object_ref_of(EXAMPLE, 150) is None
+    bad = {**EXAMPLE, "container_tags": {"99": "a", "100": "b", "101": "b", "102": " c", "x": "d"}}
+    assert mp.check(bad)[0] == ["container tag '99' is not a container_tags id",
+                                "container tags 100 and 101 name the same object_ref",
+                                "container tag 102: object_ref must be 1-128 characters without edge spaces",
+                                "container tag 'x' is not a container_tags id"]
+    rows = [r for r in EXAMPLE["allocations"] if r["owner"] != "container_tags"]
+    assert mp.check({**EXAMPLE, "allocations": rows})[0] == [
+        "container_tags names tags but there is no container_tags allocation"]
+
+
+def test_container_tags_are_three_bits_from_every_ceiling_and_arm_id_in_any_turn():
+    # D-996 6: a roof tag rides under the ceiling camera (DICT_4X4_50, no bit corrected) and beside the arm markers
+    np = pytest.importorskip("numpy")
+    cv2 = pytest.importorskip("cv2")
+    if not hasattr(cv2, "aruco"):
+        pytest.skip("OpenCV without aruco")
+    d = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+
+    def grid(i):
+        return cv2.aruco.Dictionary.getBitsFromByteList(d.bytesList[i:i + 1], 4).reshape(4, 4)
+
+    table = mp.owned(EXAMPLE)
+    others = list(range(50)) + [i for o, ids in table.items() if o.startswith("arm_slot_") for i in ids]
+    nearest = min(int((np.rot90(grid(t), k) != grid(o)).sum())
+                  for t in table["container_tags"] for k in range(4) for o in others)
+    assert nearest >= 3

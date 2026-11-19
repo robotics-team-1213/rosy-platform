@@ -74,7 +74,7 @@ def test_owner_snapshot_is_bounded_and_explicit():
 
 
 def arm_work():
-    return {"delegation_id": "arm-1", "target_unit": "CELL-A", "transfer": {
+    return {"delegation_id": "arm-1", "target_unit": "ARM-CELL", "transfer": {
         "request_key": "harbor:move-1", "workcell_id": "arm_a", "instance_id": "arm_a",
         "object_ref": "box-1", "source": "slot-1", "target": "slot-2"}}
 
@@ -97,7 +97,7 @@ def test_arm_candidate_is_a_separate_kind_from_navigation():
 def test_snapshot_keeps_the_candidate_kind():
     _, _, _, Reply, _ = classes()
     request = {key: value for key, value in arm_work().items() if key != "delegation_id"}
-    snapshot = {"origin_id": "R", "delegation_id": "arm-1", "request": request, "owner_unit": "CELL-A",
+    snapshot = {"origin_id": "R", "delegation_id": "arm-1", "request": request, "owner_unit": "ARM-CELL",
                 "config_revision": "lab-1", "status": "PENDING", "revision": 1, "owner_revision": 0,
                 "local_actor": None, "local_task_id": None, "cancel_requested": False, "result": {},
                 "updated_at": "2026-11-03T12:00:00+00:00"}

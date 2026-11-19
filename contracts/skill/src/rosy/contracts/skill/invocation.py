@@ -14,6 +14,13 @@ def _identifier(value: str, field: str) -> None:
         raise ValueError(f"{field} must be a non-empty trimmed string")
 
 
+def _finite(value: object, field: str) -> float:
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value)):
+        raise ValueError(f"{field} must be a finite number")
+    return float(value)
+
+
 def _freeze_json(value: Any, field: str) -> Any:
     if value is None or isinstance(value, (bool, int, str)):
         return value

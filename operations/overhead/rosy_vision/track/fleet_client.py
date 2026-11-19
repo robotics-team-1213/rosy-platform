@@ -17,6 +17,12 @@ from core_common.protocol.overhead_detections import OverheadDetectionsPayload
 DETECTIONS_PATH = "/api/fleet/detections"
 CONFIG_PATH = "/api/fleet/detections/config"
 IDENTITY_PATH = "/api/fleet/detections/identity"  # D-472: verdict numbers only, no image
+ANCHORS_PATH = "/api/fleet/detections/anchors"  # display-only head-tracker states
+#: A pooled connection idle longer than this is closed here, before the peer can: Fleet's uvicorn
+#: keep-alive is 75 s and Caddy's idle pool about 90 s, and a request sent onto a connection the
+#: server just closed aborts (RemoteProtocolError, measured every ~5 min on R, 2026-11-17).
+KEEPALIVE_EXPIRY_S = 30.0
+HTTP_LIMITS = httpx.Limits(keepalive_expiry=KEEPALIVE_EXPIRY_S)
 
 
 class TrackPublishError(RuntimeError):
@@ -37,7 +43,8 @@ class TrackClient:
             raise ValueError("detection source token is required")
         self._authorization = f"Bearer {source_token}"
         self._client = httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout_s,
-                                         transport=transport, follow_redirects=False)
+                                         transport=transport, follow_redirects=False,
+                                         limits=HTTP_LIMITS)
 
     async def __aenter__(self) -> "TrackClient":
         return self
@@ -49,18 +56,25 @@ class TrackClient:
         await self._client.aclose()
 
     async def publish(self, payload: OverheadDetectionsPayload) -> dict[str, Any]:
-        response = await self._client.post(DETECTIONS_PATH, json=payload.model_dump(mode="json"),
-                                           headers={"Authorization": self._authorization})
+        response = await _request(self._client, "POST", DETECTIONS_PATH,
+                                  json=payload.model_dump(mode="json"),
+                                  headers={"Authorization": self._authorization})
         return _body(response, "DETECTION_HTTP_ERROR", "BAD_RESPONSE")
 
+    async def publish_anchors(self, body: dict[str, Any]) -> dict[str, Any]:
+        response = await _request(self._client, "POST", ANCHORS_PATH, json=body,
+                                  headers={"Authorization": self._authorization})
+        return _body(response, "ANCHORS_HTTP_ERROR", "BAD_RESPONSE")
+
     async def publish_identity(self, body: dict[str, Any]) -> dict[str, Any]:
-        response = await self._client.post(IDENTITY_PATH, json=body,
-                                           headers={"Authorization": self._authorization})
+        response = await _request(self._client, "POST", IDENTITY_PATH, json=body,
+                                  headers={"Authorization": self._authorization})
         return _body(response, "IDENTITY_HTTP_ERROR", "BAD_RESPONSE")
 
     async def fetch_config(self) -> dict[str, Any]:
-        response = await self._client.get(CONFIG_PATH, params={'include_preview': 'true'},
-                                          headers={"Authorization": self._authorization})
+        response = await _request(self._client, "GET", CONFIG_PATH,
+                                  params={'include_preview': 'true'},
+                                  headers={"Authorization": self._authorization})
         body = _body(response, "CONFIG_HTTP_ERROR", "CONFIG_BAD_RESPONSE")
         calibration = body.get("calibration")
         if (not isinstance(body.get("source_id"), str) or not isinstance(body.get("map_id"), str)
@@ -71,9 +85,24 @@ class TrackClient:
         return body
 
     async def publish_preview_status(self, body):
-        response = await self._client.post('/api/fleet/detections/preview-status', json=body,
-                                           headers={'Authorization': self._authorization})
+        response = await _request(self._client, "POST", '/api/fleet/detections/preview-status',
+                                  json=body, headers={'Authorization': self._authorization})
         return _body(response, 'PREVIEW_STATUS_HTTP_ERROR', 'BAD_RESPONSE')
+
+
+async def _request(client: httpx.AsyncClient, method: str, path: str, **kwargs) -> httpx.Response:
+    """One retry on a dropped pooled keep-alive connection.
+
+    The server closes idle connections on its own schedule, so a request sent onto a
+    just-closed pooled connection dies with RemoteProtocolError (measured ~daily on
+    the vision worker, 2026-11-11). Every body sent through here is state-replacing
+    or refused by Fleet as stale on the second arrival, so one fresh retry is safe."""
+    for attempt in (0, 1):
+        try:
+            return await client.request(method, path, **kwargs)
+        except httpx.RemoteProtocolError:
+            if attempt:
+                raise
 
 
 def _body(response: httpx.Response, error_code: str, bad_code: str, *,

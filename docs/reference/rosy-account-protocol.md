@@ -52,6 +52,8 @@ UI 표시 조건은 동일 site의 `accounts.manage`이며 서버가 매 요청 
 ### 공통 프로필 표시 (2026-10-14 보완)
 
 프로필 편집 정본은 Fleet의 `/console/profile` 하나다. 앱별 프로필 저장소를 만들지 않는다.
+`POST /api/fleet/auth/apps`는 같은 form 경계로 `token` 하나를 받아, 그 사람이 권한을 가진 사용 중인 앱 가운데 시작 주소가 있는 앱의 `client_id`, `label`, `home_url`을 `apps`로 돌려준다(D-955 4단계). 수신 앱은 이 목록을 세션 응답의 `apps`로 전달하며, 목록은 화면 이동에만 쓰고 권한 판단에 쓰지 않는다. 읽기에 실패하면 빈 목록이다.
+
 `POST /api/fleet/auth/userinfo`는 기존 form 경계로 `token` 하나를 받고, 현재 유효한
 access token의 계정만 조회한다. 성공 응답은 `account_id`, `login`, `display_name`이며
 정지·회수·만료·revision 불일치는 401, 원장 장애는 503이다. grant와 다른 계정 정보는
@@ -74,7 +76,7 @@ Account identity는 불변 opaque `account_id`다. login/email은 identity가 �
 
 | 자원 | 허용 capability |
 |---|---|
-| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, vault.read, vault.operate, vault.manage |
+| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, calibration.operate, monitoring.read, vault.read, vault.operate, vault.manage, harbor.view, harbor.operate, harbor.field, harbor.admin |
 | robot | robot.read, robot.operate, robot.admin |
 | project | learning.view, learning.edit, learning.approve, learning.manage, learning.import, learning.publish |
 
@@ -95,18 +97,26 @@ Vault는 2026-10-24 은퇴했다. 저장된 grant의 처리와 이 권한의 제
 `GET /api/fleet/auth/setup`은 same-origin 사람 쿠키만 허용한다. 활성 계정은 현재
 site의 `accounts.manage`, 전환 전 계정은 `policy-admin` 역할을 요구한다. 첫 비밀번호
 변경이 필요한 세션은 거절한다. 응답은 no-store이며 `configured`, `issuer`, `clients`
-(`client_id`, `redirect_uris`, `resources`)만 제공한다. 키와 서버 파일 경로는 반환하지 않는다.
+(`client_id`, `redirect_uris`, `resources`, `label`, `home_url`, `enabled`, `revision`)만 제공한다. 키와 서버 파일 경로는 반환하지 않는다.
 `configured`는 현재 프로세스의 Authority 설정 적용 여부이고 HTTPS·앱 로그인 수용 증거가 아니다.
 
 Fleet `/console/accounts`에 설정 상태·앱 등록·최초 설치 안내를 함께 둔다. 계정·권한 변경은
-아래 기존 API를 유지한다. HTTPS, 보호 키 설치, 앱 등록 변경은 기존 관리자 배포 경로가
-수행하며 Fleet에 호스트 root 권한이나 비밀 업로드 API를 추가하지 않는다.
+아래 기존 API를 유지한다. HTTPS와 보호 키 설치는 기존 관리자 배포 경로가 수행하며 Fleet에
+호스트 root 권한이나 비밀 업로드 API를 추가하지 않는다.
+
+앱 등록은 Account DB의 등록부가 정본이다(D-955 2단계, D-962). 보호 JSON의 `clients`는 등록부가
+비어 있을 때 한 번만 가져오고, 그 뒤 JSON을 고쳐도 반영되지 않는다. 등록부 변경은 재시작 없이 다음
+요청부터 적용된다. 앱을 정지하면 그 앱의 새 로그인, 토큰 갱신, 세션 확인이 실패하고 같은 사람의 다른 앱
+세션은 유지된다. 변경 기록은 `account_client_audit`에 남는다.
 
 모든 경로는 유효한 변경 완료 사람 쿠키와 해당 site의 `accounts.manage`를 요구한다.
 unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail `{code,message}`를 쓴다.
 
 | 경로 | 동작 |
 |---|---|
+| PUT /api/fleet/auth/device-clients/{robot_id} | 사람 쿠키가 아니라 Fleet 등록 키. callback, home_url, label로 그 로봇 줄만 만들거나 주소를 고침. `enabled`는 바꾸지 않음(D-992) |
+| POST /api/fleet/auth/clients | client_id, redirect_uris, resources와 선택 label, home_url로 앱 등록 |
+| PATCH /api/fleet/auth/clients/{client_id} | revision과 enabled/redirect_uris/resources/label/home_url 중 변경값 |
 | GET /api/fleet/auth/accounts | 비밀 없는 계정 목록 |
 | POST /api/fleet/auth/accounts | login, principal_id, role, password, grants로 계정 발급 |
 | PATCH /api/fleet/auth/accounts/{account_id} | revision과 enabled/role/grants 중 변경값; 미지 필드 거부 |
@@ -200,7 +210,7 @@ unsafe REST와 쿠키 WebSocket handshake는 정확한 same-origin을 요구한�
 CORE의 중앙 계정은 `robot.read`/`robot.operate`/`robot.admin`을 각각 검사한다.
 중앙 계정으로 회수와 무관하게 남는 legacy token·enrollment를 발급하지 않는다.
 
-수신 설정은 `auth.account_client_file`이 가리키는 보호된 JSON 파일이다.
+수신 설정은 `auth.account_client_file`이 가리키는 보호된 JSON 파일이거나, Fleet이 허브 연결 뒤 TLS로 보내 `PUT /api/v1/account/receiver`로 받은 파일이다(D-992). 운영자 파일이 있으면 받기를 거절한다.
 필드는 issuer, client_id, resource, callback, public_key_files(kid→PEM 경로),
 encryption_key_file(Fernet key 경로), session_db이며 운영 비밀을 기본 설정에 넣지 않는다.
 resource는 해당 호스트의 실제 robot identity와 일치해야 한다. 설정이 없으면 기존
@@ -265,6 +275,10 @@ HTTPS reverse proxy 뒤의 loopback 서버로 연다. 등록한 HTTPS origin만 
 요청을 허용한다. `/stop`은 `games.operate`를 검사한다. 설정이 없으면 보드는
 공개 읽기 전용이며 CLI의 기존 물리 현장 정지·Ctrl+C는 그대로 유지한다.
 
+Calibration 화면(D-1004)도 같은 receiver를 쓴다. 목록·상세·그림은 그 site의 유효한 세션이면 보고,
+실측 요청의 답은 `calibration.operate`를 정확히 요구한다. 답의 `by`는 세션의 표시 이름과 account_id다.
+설정이 없으면 읽기 전용이다. 모르는 capability를 옛 receiver가 거절하므로 receiver를 먼저 배포하고 그 뒤 부여한다.
+
 학습 연결의 소유자는 기존 user_id로 보존한다. 중앙 모드의 개인 연결 사용은
 현재 소유자의 `learning.import` 권한을 확인한다. 프로젝트 공유 연결은 해당
 generation을 승인한 중앙 subject와 session에 결속하며 매 사용/worker 단계에서
@@ -277,6 +291,18 @@ generation을 승인한 중앙 subject와 session에 결속하며 매 사용/wor
 HF 연결은 한 번에 `read-repos gated-repos write-repos manage-repos`를 요청한다.
 읽기 연결 뒤 관리 연결을 따로 요구하지 않는다. 읽기·쓰기·저장소 관리가 승인된 연결을
 보관하며 기존 읽기 전용 연결은 다시 연결해 공급자의 승인을 받는다.
+
+### 바깥 앱 수신 계약 (D-955 7, 2026-11-07)
+
+ROSY 코드를 import하지 않는 앱(예: Harbor)은 HTTP로만 붙는다.
+
+- 등록: 관리자가 연동 등록부에 client를 만든다. 정확한 HTTPS callback, resource `site:<id>`, 앱 목록에 보일 `home_url`을 넣는다. 앱은 `{issuer, client_id, resource, callback}` 파일 하나를 읽는다.
+- 로그인: 위 「앱 연결」의 code + S256 PKCE. `scope`는 resource 하나다. state와 verifier는 앱 서버 세션에 둔다.
+- 권한: 앱은 접근 토큰의 `aud`가 자기 resource인지, `iss`가 설정한 issuer인지 확인하고, 그 resource의 grant에서 앱 이름 capability만 읽는다. Harbor는 `harbor.view`·`harbor.operate`·`harbor.field`·`harbor.admin`이다. 앱 이름 capability가 없으면 로그인시키지 않고 refresh family를 회수한다.
+- 재확인: 최대 10초마다 `POST /api/fleet/auth/introspect`. `active`가 아니면 refresh로 회전을 시도하고, 실패하면 앱 세션을 끝낸다. 중앙에 닿지 않으면 마지막으로 확인한 토큰의 `exp`까지만 유지한다.
+- 로그아웃: 앱 로그아웃은 `POST /api/fleet/auth/revoke`로 family를 회수한다. 중앙 로그아웃·정지·권한 회수는 다음 재확인에서 앱 세션을 끝낸다.
+- 표시: `POST /api/fleet/auth/userinfo`의 `display_name`은 표시용이다. 권한 판단에 쓰지 않는다.
+- 앱 자체 로컬 로그인은 복구용으로 남길 수 있다. 서버 간 호출은 사람 세션이 아니라 named service 신원을 쓴다(D-807).
 
 ## 명시적인 초기 비밀번호 규칙 (2026-10-19)
 

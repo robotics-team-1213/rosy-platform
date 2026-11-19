@@ -93,3 +93,49 @@ class DockingConfig:
     contact_progress_m: float = 0.002   # 이보다 덜 가면 진행이 없다
     rear_backoff_m: float = 0.55        # 재시도 전진 거리(레일 밖으로)
     rear_charge_rise_v: float = 0.02    # 멈춘 뒤 기준보다 이만큼 올라야 충전으로 본다(팩 실측 후 조정)
+
+    # 칸 유도선 접근 (approach="line", D-1013). 이득·게이트·예산은 bay_pit_sim 게이트 값
+    # (Rosy/docs/research/charge-bay-pink-line-2026-11-10/, 명목 36/36·시나리오 13/13).
+    bay_reverse_speed: float = 0.05     # m/s, 선 가운데·평행 유지하며 후진
+    bay_gain_lateral: float = 8.0       # rad/(s·m), ω = -(a·횡 + b·방위)
+    bay_gain_heading: float = 0.6
+    bay_gate_jump_m: float = 0.02       # 프레임당 횡 점프 게이트(물리 가능 범위 밖 = 이웃선)
+    bay_gate_jump_rad: float = 0.0873   # 5 deg/프레임
+    bay_coast_slow_s: float = 0.5       # 관측 무효: 이 안은 제어량 유지(코스트)
+    bay_coast_stop_s: float = 1.0       # 이 넘으면 감속 끝 정지 → 스캔
+    bay_scan_rad: float = 0.0873        # 스캔 회전 폭 ±5 deg(정지 상태)
+    bay_scan_s: float = 6.0
+    bay_settle_creep_m: float = 0.04    # 회전 뒤 캐스터 정착 크립(전진)
+    bay_travel_margin_m: float = 0.02   # 접촉 거리 상한 = 진입 잔여거리 + 이 값
+    bay_backoff_m: float = 0.15         # 재시도 전진(교차점 쪽)
+    bay_settle_baseline_s: float = 2.0  # 멈춘 뒤 기준 전압을 잡기 전 대기
+    bay_charge_rise_v: float = 0.05     # D-941: 20 s 안 +0.05 V(도크 계측 없음)
+    bay_charge_confirm_s: float = 20.0
+    bay_fleet_eval_weight: float = 0.35  # 관제(Fleet) 서브픽셀 중심선 평가 보정 가중치
+    # 칸 줄 안 시작·회전 안전(2026-11-18 옆 칸 접촉, bay_zone.py). 몸 스캔 = 짐칸 포함 회전 판정.
+    bay_zone_margin_m: float = 0.0      # 스테이징 거리보다 안쪽이면 칸 줄 안(Nav2 를 부르지 않는다)
+    bay_lane_half_m: float = 0.11       # 칸 간격(약 0.22 m)의 반 — 넘으면 다른 칸 줄
+    bay_zone_agree_m: float = 0.05      # 맵 횡과 선 횡이 이만큼 넘게 다르면 모호
+    bay_zone_agree_rad: float = 0.1745  # 10 deg
+    bay_zone_look_s: float = 1.0        # 칸 줄 안 판정 전에 선 관측을 기다리는 시간
+    bay_exit_lateral_m: float = 0.05    # 칸 줄에서 나가기 시작할 수 있는 횡 오차(선 관측)
+    bay_exit_heading_max_rad: float = 0.2618  # 15 deg (조향 없이 나가면 atan(횡/거리)로 더 좁힌다)
+    bay_exit_extra_m: float = 0.02      # 스테이징 거리보다 이만큼 더 나간다
+    bay_exit_speed: float = 0.05        # m/s, 칸 줄 곧은 전진
+    bay_exit_front_gap_m: float = 0.08  # 앞 여유가 이보다 작으면 멈춘다
+    bay_exit_steer_lat: float = 6.0     # rad/m, 횡 오차 → 목표 방위(선 보며 전진; 시뮬로 부호·크기 확인)
+    bay_exit_steer_head: float = 2.0    # 1/s, 목표 방위로 맞추는 이득(0 이면 곧게 나간다)
+    # 일방통행(C3→C1, 사이트 v258): 칸 축 기준 하류가 +횡(서쪽). 이 사이트 값이 기본이고 0 이면 검사 없음·회전은 최단 방향.
+    bay_downstream_sign: float = 1.0
+    # 하류 거절 경계 = 칸 반폭 + 맵 등록 오차(수 cm). 동(상류)쪽은 거절하지 않으므로 경계 오차는 서쪽 입구 앞에서만
+    # 보이고, 여유를 더해 입구 바로 앞 로봇이 오차로 거절되는 쪽을 막는다(놓치면 Nav2 가 흐름을 거슬러 간다).
+    bay_downstream_map_error_m: float = 0.04
+    bay_stage_recheck_s: float = 1.0    # 스테이징 도착 방향 불일치를 이만큼 이어서 봐야 실패(포즈 잡음·일시 None)
+    bay_turn_overshoot_rad: float = 0.35  # 회전 지나침 보정 허용(20 deg, 짐칸이 상류로 휘는 양); 넘으면 정지
+    bay_corridor_band_m: float = 0.15   # 스테이징 거리 ± 이만큼이 통로선 위(하류 쪽 시작 거절 범위)
+    bay_stage_heading_max_rad: float = 1.0472  # 60 deg: 스테이징 도착 코가 칸 축에서 이보다 틀면 실패
+    bay_scan_fresh_s: float = 0.5       # 몸 스캔 판정이 이보다 오래되면 없는 것
+    bay_scan_wait_s: float = 2.0        # 몸 스캔 없이 이만큼 지나면 실패
+    # 짐칸 J-v3 뒤끝은 바퀴축 뒤 0.134–0.135 m(정격 CAD, 뒷면 y_d −14.45 · 축 y_d 120.5; 몸 74.5·42.1·r 82.6 이
+    # base_link 치수와 일치, 2026-11-18 tray_overhang_cad.py). 모따기 덕에 쓸리는 반경은 0.137 m.
+    bay_turn_rear_overhang_m: float = 0.135

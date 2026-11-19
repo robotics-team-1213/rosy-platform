@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the control-unit peer links every 5 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=5min
+Persistent=true
+Unit=rosy-control-unit-check.service
+
+[Install]
+WantedBy=timers.target

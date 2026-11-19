@@ -56,6 +56,7 @@ import httpx
 import numpy as np
 
 from core_common.protocol.overhead_detections import OverheadDetection, OverheadDetectionsPayload, UnknownFloor
+from rosy_vision.post_guard import PostGuard
 from rosy_vision.project import CameraMap, Point
 from rosy_vision.track.background_blob import BackgroundBlobDetector
 from rosy_vision.track.calibration import from_markers, from_record
@@ -63,6 +64,7 @@ from rosy_vision.publish import SightingPublishError
 from rosy_vision.track.fleet_client import TrackPublishError
 from rosy_vision.track.marker_sightings import robot_sightings
 from rosy_vision.track import led_identity
+from rosy_vision.track.anchor_feed import AnchorFeed
 from rosy_vision.track import tuning
 from rosy_vision.track.model import (
     Calibration, Detection, DetectorResult, Frame, RobotDetector, ROBOT_TOP_HEIGHT_M,
@@ -131,9 +133,12 @@ class _FailureLog:
 class TrackWorker:
     def __init__(self, *, camera: CameraMap, ingest, client, detector: RobotDetector | None = None,
                  decode: Callable[[bytes], np.ndarray | None] = decode_jpeg,
-                 clock: Callable[[], float] = time.monotonic, sightings=None,
-                 auto_tune: bool = True, tuner: tuning.Tuner | None = None) -> None:
+                 clock: Callable[[], float] = time.time, sightings=None,
+                 auto_tune: bool = True, tuner: tuning.Tuner | None = None,
+                 guard: PostGuard | None = None) -> None:
         self.camera = camera
+        #: Age re-check + counters for every Fleet POST (``captured_at`` is wall-clock time).
+        self.guard = guard if guard is not None else PostGuard(camera.source_id, clock)
         #: D-587: SightingPublisher for identified robot markers, or None (display only).
         self.sightings = sightings
         self.ingest = ingest
@@ -150,6 +155,7 @@ class TrackWorker:
         self._sighting_log = _FailureLog("marker sighting not accepted", camera.source_id, clock)
         #: D-587: the approved record's Calibration when the last _detect used it (single flight).
         self._approved: Calibration | None = None
+        self._latest_calibration: Calibration | None = None
         # D-472: LED samples of the last RING_S for every identify colour, kept before any
         # challenge arrives. Fleet's challenge reaches this worker on the CONFIG_REFRESH_S
         # config read, up to 2 s after the window opened; sampling only from then left the
@@ -170,6 +176,11 @@ class TrackWorker:
         self._send_tuning = True
         self._sends: set[asyncio.Future] = set()
         self._clock = clock
+        self.anchors = AnchorFeed(camera.source_id, camera.map_id, client, self.guard, clock)
+        try:  # the preview route serves the tracker's ROI crops
+            ingest.anchor_tracker = self.anchors.tracker
+        except AttributeError:
+            pass
 
     @property
     def config(self) -> dict | None:
@@ -238,6 +249,7 @@ class TrackWorker:
         hold = max((c["not_after"] for c in challenges), default=None)
         if hasattr(self.detector, "set_occupied"):  # D-600: before the step, never during it
             self.detector.set_occupied(config.get("occupied"))
+        self.anchors.tracker.update_from_config(config)
         link_of = getattr(self.ingest, "camera_link", None)
         link, camera_state = (None, None) if link_of is None else link_of(self.camera.source_id)
         # D-589: decided from the last tuner step (one frame earlier); the phone applies a new
@@ -253,6 +265,8 @@ class TrackWorker:
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
                 lens, relearn, event, suspend, hold))
+        if step is not None and step[0] is not None:
+            self._latest_calibration = step[0]
         # D-589 x D-596: no tune step or retune is judged while an LED identify window is open
         # (an exposure change would hide the blink); the request is still kept fresh.
         self._identifying = hold is not None and frame.captured_at <= hold
@@ -273,7 +287,7 @@ class TrackWorker:
         self._seq = (self._seq + 1) % _SEQ_MODULUS
         try:
             try:
-                await self.client.publish(payload)
+                await self.guard.post(payload.captured_at, lambda: self.client.publish(payload))
             except TrackPublishError as exc:
                 if exc.status_code != 422 or payload.tuning is None:
                     raise
@@ -282,13 +296,14 @@ class TrackWorker:
                                self.camera.source_id)
                 self._send_tuning = False
                 payload = payload.model_copy(update={"tuning": None})
-                await self.client.publish(payload)
+                await self.guard.post(payload.captured_at, lambda: self.client.publish(payload))
         except TrackPublishError as exc:
             self._publish_log.failed((("status", exc.status_code), ("code", exc.code)))
         except httpx.HTTPError as exc:
             self._publish_log.failed((("error_type", type(exc).__name__),))
         else:
             self._publish_log.ok()
+        self.anchors.send()  # after the detections, in its own task: never delays them
         return payload
 
     def _tune(self, link, camera_state, measurement) -> dict | None:
@@ -336,9 +351,12 @@ class TrackWorker:
         except (TypeError, ValueError, ArithmeticError, np.linalg.LinAlgError) as exc:
             self._sighting_log.failed((("error_type", type(exc).__name__),))
             return
+        sightings = list(sightings)
+        seen = {s.robot_id for s in sightings} | set(sighted)
+        sightings += [s for s in self.anchors.sightings if s.robot_id not in seen]
         for sighting in sightings:
             try:
-                await self.sightings.publish(sighting)
+                await self.guard.post(sighting.captured_at, lambda s=sighting: self.sightings.publish(s))
             except SightingPublishError as exc:
                 self._sighting_log.failed((("status", exc.status_code), ("code", exc.code)))
             except (httpx.HTTPError, ValueError) as exc:  # ValueError: a non-JSON error body
@@ -358,7 +376,7 @@ class TrackWorker:
                                       not_after=challenge["not_after"], now=now, config=self.led_config)
         body = {"source_id": self.camera.source_id, "map_id": self.camera.map_id,
                 "request_id": request_id, "processor_revision": led_identity.PROCESSOR_REVISION,
-                **verdict}
+                **verdict, "yaw": _map_yaw(verdict, self._latest_calibration)}
         try:
             await self.client.publish_identity(body)
         except TrackPublishError as exc:
@@ -474,7 +492,32 @@ class TrackWorker:
             # would erase a second, adjacent robot when Fleet processes the frame.
             anonymous = list(result.detections) if result.status == "OK" else []
             result = DetectorResult(tuple((measured + anonymous)[:MAX_DETECTIONS]), "OK")
+        result = self.anchors.step(image, captured_at, calibration, result,
+                                   processor_revision=self.camera.processor_revision, seq=self._seq)
         return calibration, result
+
+
+def _map_yaw(verdict: Mapping, calibration: Calibration | None) -> float | None:
+    """Transform pixel-frame yaw_px at the matched blob into map-frame yaw (radians)."""
+    if verdict.get("state") != "matched" or calibration is None:
+        return None
+    yaw_px = (verdict.get("evidence") or {}).get("yaw_px")
+    x, y = verdict.get("x"), verdict.get("y")
+    if yaw_px is None or x is None or y is None:
+        return None
+    try:
+        matrix = geometry.as_matrix(calibration.image_to_map)
+        px, py = geometry.apply(np.linalg.inv(matrix), [(x, y)])[0]
+        if not (math.isfinite(px) and math.isfinite(py)):
+            return None
+        (mx0, my0), (mx1, my1) = geometry.apply(
+            matrix, [(px, py), (px + math.cos(yaw_px), py + math.sin(yaw_px))])
+    except (ValueError, np.linalg.LinAlgError):
+        return None
+    dx, dy = mx1 - mx0, my1 - my0
+    if not (math.isfinite(dx) and math.isfinite(dy)) or (dx == 0.0 and dy == 0.0):
+        return None
+    return float(math.atan2(dy, dx))
 
 
 def _challenges(config: Mapping, led: led_identity.LedConfig) -> list[dict]:

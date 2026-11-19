@@ -14,8 +14,8 @@ import math
 import os
 import time
 import traceback
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime, timezone  # noqa: F401 — re-exported
+from typing import Optional  # noqa: F401 — re-exported
 
 import rclpy
 from rclpy.action import ActionClient
@@ -32,7 +32,7 @@ from sensor_msgs.msg import BatteryState, CompressedImage, Imu, LaserScan, Range
 from std_msgs.msg import Bool, Float32, String
 from std_srvs.srv import Empty, SetBool
 
-from core.bridge import (
+from core.bridge import (  # noqa: F401 — re-exported
     device_power,
     display,
     expression,
@@ -51,15 +51,21 @@ from core.bridge import (
 )
 from core.bridge.cmd_vel import CycleGapWatch, cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
+from core.bridge.expression_policy import Expression, ExpressionPolicy  # noqa: F401 — re-exported
 from core.bridge.goal_tracker import GoalTracker
-from core.bridge.route_context import RouteContextPublication
 from core.bridge.lane_route import RouteGuidePublication
-from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
-from core_features.navigation.initial_pose import amcl_pose_covariance
-from interfaces.srv import Emotion, SetLed, PilotRecordingStart
-from tf2_ros import Buffer, TransformListener
-
-from core.bridge.expression_policy import Expression, ExpressionPolicy
+from core.bridge.ros_bridge_helpers import RosBridgeHelpersMixin
+from core.bridge.route_context import RouteContextPublication
+from core_common.protocol.recording import (
+    FETCHED_TOPIC,
+    RAW_PREVIEW_TOPIC,
+    SET_ACTIVE_SERVICE,
+    START_SERVICE,
+    STATUS_TOPIC,
+    TELEOP_INTENT_TOPIC,
+    teleop_intent,
+)
+from core_common.protocol.schemas import HealthState
 from core_features.command.manager import Twist as CoreTwist
 from core_features.diagnostics.collector import (
     CpuLoadProvider,
@@ -68,18 +74,18 @@ from core_features.diagnostics.collector import (
     disk_provider,
     topic_freshness_provider,
 )
+from core_features.navigation.initial_pose import amcl_pose_covariance
 from core_features.navigation.manager import NavGoalSpec, NavigationError
-from core_common.protocol.schemas import HealthState
-from core_common.protocol.recording import (
-    START_SERVICE, RAW_PREVIEW_TOPIC,
-    FETCHED_TOPIC, SET_ACTIVE_SERVICE, STATUS_TOPIC, TELEOP_INTENT_TOPIC, teleop_intent)
+from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
+from interfaces.srv import Emotion, PilotRecordingStart, SetLed
+from tf2_ros import Buffer, TransformListener
 
 # 늦게 뜬 노드도 현재 모드를 즉시 받도록 latch 한다 (PWR-003).
 _LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                       durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 
-class RosBridge:
+class RosBridge(RosBridgeHelpersMixin):
     def __init__(self, node: Node, services) -> None:
         self._node = node
         self._svc = services
@@ -95,8 +101,8 @@ class RosBridge:
         self.initialpose_pub = node.create_publisher(PoseWithCovarianceStamped, "initialpose", 10)
 
         self.nav_client = ActionClient(node, NavigateToPose, "navigate_to_pose")
-        self.route_client = ActionClient(node, NavigateThroughPoses, "navigate_through_poses")  # D-1009
-        self.tf_buffer = Buffer(cache_time=Duration(seconds=10.0))  # 자원 경계: tf2 Jazzy 기본값=10s 명시
+        self.route_client = ActionClient(node, NavigateThroughPoses, "navigate_through_poses")
+        self.tf_buffer = Buffer(cache_time=Duration(seconds=10.0))
         self.tf_listener = TransformListener(self.tf_buffer, node)
 
         node.create_subscription(Odometry, "odom", self._on_odom, 10)
@@ -104,30 +110,19 @@ class RosBridge:
         node.create_subscription(Twist, "nav_cmd_vel", self._on_nav_cmd_vel, 10)
         node.create_subscription(String, "line/observation", self._on_line_observation, 10)
         node.create_subscription(String, "line/keep_debug", self._on_lane_perception, 1)
-        # D-137 T4: 검출 증거는 boxes 토픽과 분리된 evidence 채널로 들어온다
-        # (D-136 §2). 판정은 ROS-free 피드가 하고, 이 파일은 적응만 한다.
         node.create_subscription(String, "detection_evidence", self._on_detection_evidence, 10)
         node.create_subscription(String, "road/observation", self._on_road_observation, 10)
-        # 주차형 도크: control 의 dock_observer_node 가 태그를 base_link 로 풀어 낸 증거.
         node.create_subscription(String, "dock/observation", self._on_dock_observation, 10)
         preview_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         node.create_subscription(CompressedImage, PREVIEW_TOPIC, self._on_camera_preview, preview_qos)
         node.create_subscription(CompressedImage, RAW_PREVIEW_TOPIC, self._on_camera_raw_preview, preview_qos)
-        # D-423 §3.6: learned-model status per task (latched by the model nodes); display only.
         lane_topic, object_topic = MODEL_STATUS_TOPICS
         node.create_subscription(String, lane_topic, self._on_lane_model_status, _LATCHED)
         node.create_subscription(String, object_topic, self._on_object_det_model_status, _LATCHED)
-        # Nav2 lifecycle nodes announce their authoritative goal state on
-        # transition_event.  CORE never infers readiness from node discovery;
-        # it requires these active transitions plus the motor adapter lease.
-        node.create_subscription(TransitionEvent, "amcl/transition_event",
-                                 self._on_amcl_transition, 10)
-        node.create_subscription(TransitionEvent, "map_server/transition_event",
-                                 self._on_map_server_transition, 10)
-        node.create_subscription(TransitionEvent, "slam_toolbox/transition_event",
-                                 self._on_slam_transition, 10)
-        node.create_subscription(TransitionEvent, "controller_server/transition_event",
-                                 self._on_controller_transition, 10)
+        node.create_subscription(TransitionEvent, "amcl/transition_event", self._on_amcl_transition, 10)
+        node.create_subscription(TransitionEvent, "map_server/transition_event", self._on_map_server_transition, 10)
+        node.create_subscription(TransitionEvent, "slam_toolbox/transition_event", self._on_slam_transition, 10)
+        node.create_subscription(TransitionEvent, "controller_server/transition_event", self._on_controller_transition, 10)
         node.create_subscription(TransitionEvent, "local_costmap/local_costmap/transition_event",
                                  self._on_local_costmap_transition, 10)
         node.create_subscription(TransitionEvent, "global_costmap/global_costmap/transition_event",
@@ -142,146 +137,78 @@ class RosBridge:
         node.create_subscription(BatteryState, "batt_state", self._on_batt_state, 10)
         node.create_subscription(OccupancyGrid, "map", self._on_map, _LATCHED)
         node.create_subscription(Path, "plan", self._on_plan, 10)
-        # `_raw` 만 구독한다 — `costmap`(OccupancyGrid) 쪽은 타입이 안 맞아 영원히 무음이다. 근거는 bridge/AGENTS.md.
         node.create_subscription(Costmap, "local_costmap/costmap_raw", self._on_local_costmap, 10)
         node.create_subscription(Costmap, "global_costmap/costmap_raw", self._on_global_costmap, 10)
-        # D-395 P2-1: sensing loc_assist_node JSON (contract docs/plans/2026-10-01-d395-phase2-interfaces.md §1).
         node.create_subscription(String, "localization/state", self._on_loc_state, _LATCHED)
         node.create_subscription(String, "localization/candidates", self._on_loc_candidates, _LATCHED)
         node.create_subscription(String, "localization/result", self._on_loc_result, 10)
-        # D-411 A: the camera unit's recorder status (1 Hz, latched); the guard judges on it.
         node.create_subscription(String, STATUS_TOPIC, self._on_pilot_recorder_status, _LATCHED)
-        # Per-device power policy: device nodes report readiness after a wake.
         node.create_subscription(String, device_power.DEVICE_READY_TOPIC, self._on_device_ready, 10)
 
         self.power_mode_pub = node.create_publisher(String, "power/mode", _LATCHED)
         self.display_info_pub = node.create_publisher(String, "display/info", 10)
-        self.dock_exemption_pub = node.create_publisher(
-            Bool, "docking/collision_exemption", _LATCHED)
+        self.dock_exemption_pub = node.create_publisher(Bool, "docking/collision_exemption", _LATCHED)
         self.loc_decision_pub = node.create_publisher(String, "localization/decision", 5)
         self.loc_suspect_pub = node.create_publisher(String, "localization/suspect", 5)
-        # D-395 P2-7: mission start/end; the sensing node searches again after an end.
         self.loc_mission_pub = node.create_publisher(String, "localization/mission", 5)
-        # D-411 A: teleop decisions as evidence for the Pilot recorder (never read by control).
         self.intent_pub = node.create_publisher(String, TELEOP_INTENT_TOPIC, 10)
         self.pilot_fetched_pub = node.create_publisher(String, FETCHED_TOPIC, 5)
         self.route_context_pub = None
         if services.line_follow.config.route_context_enabled:
             route_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                                    durability=DurabilityPolicy.VOLATILE)
-            self.route_context_pub = node.create_publisher(
-                String, "line/route_context", route_qos)
+            self.route_context_pub = node.create_publisher(String, "line/route_context", route_qos)
         self._route_context_output = RouteContextPublication()
-        self._lane_guide_pub, self._lane_guide_output = node.create_publisher(String, "line/lane_guide", 10), RouteGuidePublication()
-        # Per-device power policy: latched level board for topic-driven devices (camera, perception).
+        self._lane_guide_pub = node.create_publisher(String, "line/lane_guide", 10)
+        self._lane_guide_output = RouteGuidePublication()
         self.devices_pub = node.create_publisher(String, device_power.DEVICES_TOPIC, _LATCHED)
         self._led_client = node.create_client(SetLed, "set_led")
-        # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
-        # sllidar_ros2가 제공하는 모터 제어 서비스 (PWR-005).
         self._lidar_start_client = node.create_client(Empty, "start_motor")
         self._lidar_stop_client = node.create_client(Empty, "stop_motor")
-        self._pilot_recorder_client = node.create_client(SetBool, SET_ACTIVE_SERVICE)  # D-411 A
+        self._pilot_recorder_client = node.create_client(SetBool, SET_ACTIVE_SERVICE)
         self._pilot_recording_start_client = node.create_client(PilotRecordingStart, START_SERVICE)
-        # One DevicePowerPort per declared device. Undeclared devices are never touched.
         board = device_power.DeviceBoard(lambda data: self.devices_pub.publish(String(data=data)))
         self._device_ports = {
             name: (device_power.ServiceDevicePort(name, self._send_lidar)
                    if name == device_power.LIDAR
                    else device_power.TopicDevicePort(name, board))
             for name in services.power.devices}
-        # A managed device may be off if CORE restarted during STANDBY: unknown, so send once.
         self._device_applied: dict = dict.fromkeys(services.power.managed_devices())
 
         self._cmd_timer = node.create_timer(1.0 / 50.0, cmd_gap := CycleGapWatch(self._publish_cmd_vel))
         self._state_timer = node.create_timer(1.0 / self._state_hz, self._tick_state)
         self._diag_timer = node.create_timer(1.0, cmd_gap.reporting(self._tick_diagnostics, node.get_logger().warning))
         self._power_timer = node.create_timer(1.0 / 5.0, self._tick_power)
-        # 20 Hz while a parking run moves (DockingManager.fast_tick), 5 Hz
-        # otherwise: docking_mode.due() skips 3 in 4 calls.
         self._dock_timer = node.create_timer(1.0 / 20.0, self._tick_docking)
         self._dock_ticks = 0
         self._swarm_timer = node.create_timer(1.0 / 5.0, self._tick_swarm)
         self._line_follow_timer = node.create_timer(1.0 / 20.0, self._tick_line_follow)
         self._goals = GoalTracker()
 
-        self._last_odom_ts = 0.0
-        self._last_odom_pose = None
-        self._wheels_warned_at = -1e9   # D-422 wheels_sent warning throttle (monotonic)
-        # 최상단 임포트는 노드 기동 전체를 실패시킨다(core 에 없고 slam: false).
-        # 여기서 시도하고, 클라이언트는 생성자에서 만들어야 DDS 엔드포인트 매칭에
-        # 노드 수명만큼의 시간이 주어진다.
-        self._slam_client = None
-        try:
-            from slam_toolbox.srv import SaveMap
-        except ImportError as exc:
-            node.get_logger().warning(
-                f"slam_toolbox unavailable; map saving disabled ({exc})")
-        else:
-            self._slam_client = node.create_client(SaveMap, "slam_toolbox/save_map")
-
-        self._published_power_mode: Optional[str] = None
-        self._info_was_visible = False
-        self._expression = ExpressionPolicy()
-        self._expression_intent = Expression(None)
-        self._face_output = expression.ServiceOutput(accept=expression.emotion_accepted)
-        self._led_output = expression.ServiceOutput()
-        #: D-385 확장: CORE 기동 직후 10초간 인사한다. 첫 인상은 hello 다.
-        self._hello_until: Optional[float] = None
-        self._drive_last_pub: Optional[float] = None
-        #: D-433: the face rosy-face draws (whatever the set_emotion service did) and
-        #: the last face-inputs.json written, for change-or-1 s writes.
-        self._face_desired: Optional[str] = None
-        self._face_inputs_last: Optional[dict] = None
-        self._face_inputs_at: Optional[float] = None
-        self._face_inputs_failed = False
-        self._info_last_pub = 0.0
-        self._voltage_topic_seen = False
-        self._api_address: Optional[str] = None
-        #: map→base TF 를 마지막으로 읽은 시각. 이것이 신선하면 odom 은 pose 를 건드리지
-        #: 않는다. 지역화가 없는 구성(맵도 SLAM 도 없는 teleop)에서는 만료되고, 그때만
-        #: odom 이 화면에 무엇이라도 띄우는 폴백이 된다.
-        #: On the line clock (D-395 S1 finding 6): sim time starts near 0, so "never" is -inf.
+        self._init_bridge_state(node, services)
         self._map_pose_ts: float = float('-inf')
         self._map_pose_lease = map_pose.MapPoseLease()
 
         self._setup_diagnostics()
-        # D-137 T4: 자문 피드의 시계를 노드 시계로 맞춘다. 패킷의 observed_at은
-        # ROS epoch 기준이라, monotonic 기본값과 섞이면 모든 패킷이 영원히
-        # stale이 되어 자문이 한 번도 살지 못한다.
         self._svc.advisory_feed.bind_clock(
             lambda: self._node.get_clock().now().nanoseconds / 1e9)
         self._svc.nav.executor = self
-        # NAV-006 무진척 시계를 ROS 시계로 바꾼다. `use_sim_time` 이 켜진 시뮬에서는 이것이
-        # sim clock 이라, 느리게 도는 기계에서도 "30 초"가 시뮬 30 초를 뜻한다. 실기에서는
-        # 시스템 시계와 같아 동작이 달라지지 않는다.
         self._svc.nav.clock = lambda: self._node.get_clock().now().nanoseconds / 1e9
-        # Line/road evidence staleness (0.3 s) and loss (3 s) run on one clock:
-        # sim seconds under `use_sim_time` (a Gazebo at RTF 0.25 otherwise ages a
-        # 5 Hz frame 0.8 s of wall time and HOLDs), `time.monotonic` on Device.
         self._line_clock = traffic_gate.line_clock(
             bool(node.get_parameter("use_sim_time").value),
             lambda: self._node.get_clock().now().nanoseconds / 1e9)
         self._svc.line_follow.bind_clock(self._line_clock)
         self._svc.loc_mission.bind_clock(self._line_clock)
-        # The dock observation feed is stamped on the same clock, so the
-        # docking manager judges tag freshness and phase timeouts on it too.
         self._svc.docking.bind_clock(self._line_clock)
-        # DockingExecutor: ROS-free in docking_executor.py; only the ROS actions come from here.
         self.docking_executor = BridgeDockingExecutor(
             self._svc, send_goal=self.send_goal, cancel_goal=self.cancel_goal,
             publish_exemption=lambda on: self.dock_exemption_pub.publish(Bool(data=on)),
             odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info,
             transport_snapshot=self._goals.transport_snapshot)
         self._svc.docking.executor = self.docking_executor
-        # D-395 P2-4: `received_s` on the ROS clock; decisions and suspects go out as JSON.
-        # It must be the robot node's clock (its ttl counts from it): both nodes share
-        # use_sim_time, so this is sim time in sim and epoch time on the device, where
-        # the line clock (monotonic) would read as long expired.
         loc = self._svc.localization
         loc.clock = lambda: self._node.get_clock().now().nanoseconds / 1e9
-        # D-395 S1 finding 6: the state_stale window runs on the line clock, so a
-        # Gazebo below RTF ~0.17 no longer flaps the robot's 0.5 s state stale.
         loc.bind_clock(self._line_clock)
         loc.publish_decision = lambda body: self.loc_decision_pub.publish(String(data=json.dumps(body)))
         loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
@@ -289,83 +216,32 @@ class RosBridge:
             lambda body: self.loc_mission_pub.publish(String(data=json.dumps(body))))
         self._svc.command.intent_sink = lambda **fields: self.intent_pub.publish(
             String(data=json.dumps(teleop_intent(**fields))))
-        guard = self._svc.pilot_recording
-        warn = self._node.get_logger().warn
-        guard.request_active = lambda on, wait: pilot_recorder_client.request_active(
-            self._pilot_recorder_client, on, wait, warn)
-        guard.request_start = lambda mode, wait: pilot_recorder_client.request_start(
-            self._pilot_recording_start_client, mode, wait, warn)
-        guard.start_available = self._pilot_recording_start_client.service_is_ready
-        guard.publish_fetched = lambda rid: self.pilot_fetched_pub.publish(
-            String(data=json.dumps({"id": rid})))
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
-
-    def _on_pilot_recorder_status(self, msg: String) -> None:
-        try:
-            self._svc.pilot_recording.on_status(json.loads(msg.data))
-        except (ValueError, TypeError) as exc:
-            self._node.get_logger().warn(f"pilot recorder status ignored: {exc}",
-                                         throttle_duration_sec=10.0)
 
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()
         sample = odometry.receive_odom(self, msg, station=self._svc.station_docking)
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
-            # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"], frame="odom")
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
         self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])
 
-    def _on_battery(self, msg: Float32) -> None:
-        self._voltage_topic_seen = True
-        observation.battery_voltage(self._svc, float(msg.data), received_at=time.time())
-
     def _on_lane_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
-
-    def _on_lane_perception(self, msg: String) -> None:
-        source_now = self._node.get_clock().now().nanoseconds / 1e9
-        self._svc.vision.lane_perception.accept(
-            msg.data, now=time.monotonic(),
-            source_now=source_now)
-        observation.keep_junction(  # D-494/D-495: junction sighting (holds; starts a turn)
-            self._svc, msg.data, source_now=source_now,
-            received_at=self._line_clock(),
-            expected_context_seq=self._current_route_context_seq(source_now))
 
     def _on_object_det_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,
                                        now=time.monotonic())
 
-    def _on_detection_evidence(self, msg: String) -> None:
-        observation.detection_evidence(self._svc, msg.data)
-        expression.observe(self._expression, msg.data, models=self._svc.vision.models,
-                           source_now=self._node.get_clock().now().nanoseconds / 1e9,
-                           now=time.monotonic())
-
-    def _on_nav_cmd_vel(self, msg: Twist) -> None:
-        # Docking owns the nav slot rules (NAVIGATION, or DOCKING+STAGING);
-        # line-follow still blocks Nav2 output there.
-        docking_mode.route_nav_cmd_vel(
-            self._svc, CoreTwist(linear=msg.linear.x, angular=msg.angular.z))
-
     def _on_line_observation(self, msg: String) -> None:
         """Accept normalized evidence only; malformed or wrong-source data cannot drive."""
         source_now = self._node.get_clock().now().nanoseconds * 1e-9
-        # received_at runs on the line clock (sim seconds under use_sim_time).
         observation.line_observation(
             self._svc, msg.data,
             source_now=source_now, received_at=self._line_clock(),
             expected_context_seq=self._current_route_context_seq(source_now))
-
-    def _current_route_context_seq(self, ros_now: float):
-        if self.route_context_pub is None or self._svc.safety.estop:
-            return None
-        context = self._svc.line_follow.route_context(
-            ros_now=ros_now, now=self._line_clock())
-        return None if context is None else context.seq
 
     def _on_road_observation(self, msg: String) -> None:
         """Decode road evidence; invalid data invalidates an enforced lease."""
@@ -374,41 +250,14 @@ class RosBridge:
             self._svc, msg.data,
             source_now=source_now, received_at=self._line_clock())
 
-    def _on_dock_observation(self, msg: String) -> None:
-        """Tag evidence only; a malformed payload clears the feed (lost, not guessed)."""
-        try:
-            self._svc.dock_feed.ingest(
-                json.loads(msg.data), received_at=self._line_clock(),
-                source_now=self._node.get_clock().now().nanoseconds * 1e-9)
-        except (TypeError, ValueError, json.JSONDecodeError) as exc:
-            self._node.get_logger().warning(
-                f"ignored dock observation: {exc}", throttle_duration_sec=5.0)
-
-    def _on_loc_state(self, msg: String) -> None:
-        self._svc.localization.on_state(msg.data)
-
-    def _on_loc_candidates(self, msg: String) -> None:
-        self._svc.localization.on_candidates(msg.data)
-
-    def _on_loc_result(self, msg: String) -> None:
-        self._svc.localization.on_result(msg.data)
-
-    def _on_camera_preview(self, msg: CompressedImage) -> None:
-        observation.camera_preview(
-            self._svc, msg, warn=self._node.get_logger().warning,
-            source_now=self._node.get_clock().now().nanoseconds * 1e-9)
-
-    def _on_camera_raw_preview(self, msg: CompressedImage) -> None:
-        observation.camera_preview(
-            self._svc, msg, warn=self._node.get_logger().warning, raw=True,
-            source_now=self._node.get_clock().now().nanoseconds * 1e-9)
-
     def _tick_line_follow(self) -> None:
-        for message in self._lane_guide_output.messages(self._svc.line_follow.route_guide() if self._svc.line_follow.active and self._svc.line_follow.config.route_guide_enabled and not self._svc.safety.estop else None, self._node.get_clock().now().nanoseconds / 1e9):
+        guide = (self._svc.line_follow.route_guide()
+                 if self._svc.line_follow.active and self._svc.line_follow.config.route_guide_enabled
+                 and not self._svc.safety.estop else None)
+        for message in self._lane_guide_output.messages(guide, self._node.get_clock().now().nanoseconds / 1e9):
             self._lane_guide_pub.publish(String(data=json.dumps(message)))
-        # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
         self._svc.loc_mission.tick()
-        self._tick_trail()  # D-559 swarm trail follow rides this 20 Hz timer too
+        self._tick_trail()
         if not self._svc.line_follow.active or self._svc.safety.estop:
             self._publish_route_context(None)
             return
@@ -419,7 +268,6 @@ class RosBridge:
             self._publish_route_context(
                 self._svc.line_follow.route_context(ros_now=ros_now, now=now),
                 ros_now=ros_now)
-        # CommandManager.select_output() ages the nav twist on time.monotonic.
         command_now = None if self._line_clock is time.monotonic else time.monotonic()
         traffic_gate.apply_line_candidate(
             self._svc.line_follow,
@@ -434,19 +282,7 @@ class RosBridge:
         self._svc.state.set_sensor("line_follow", status.model_dump())
         traffic_status = self._svc.traffic_policy.status()
         self._svc.state.set_traffic_policy(traffic_status)
-        self._svc.state.set_sensor(
-            "traffic_policy", traffic_status.model_dump())
-
-    def _publish_route_context(self, context, *, ros_now=None) -> None:
-        if self.route_context_pub is None:
-            return
-        if ros_now is None:
-            ros_now = self._node.get_clock().now().nanoseconds / 1e9
-        message = self._route_context_output.message(context, ros_now)
-        if message is not None:
-            self.route_context_pub.publish(String(data=json.dumps(message)))
-            self._svc.line_follow.set_route_context_publication(
-                context if self._route_context_output.previous is not None else None, self._route_context_output.at)
+        self._svc.state.set_sensor("traffic_policy", traffic_status.model_dump())
 
     @staticmethod
     def _lifecycle_active(msg: TransitionEvent) -> bool:
@@ -459,10 +295,6 @@ class RosBridge:
                 pass
         return str(getattr(goal, "label", "")).strip().lower() == "active"
 
-    def _on_amcl_transition(self, msg: TransitionEvent) -> None:
-        if self._readiness is not None:
-            self._readiness.observe("amcl", self._lifecycle_active(msg))
-
     def _on_map_server_transition(self, msg: TransitionEvent) -> None:
         map_observation.lifecycle(self, self._lifecycle_active(msg))
         if self._readiness is not None:
@@ -473,24 +305,7 @@ class RosBridge:
         if self._readiness is not None:
             self._readiness.observe("slam_toolbox", self._lifecycle_active(msg))
 
-    def _on_controller_transition(self, msg: TransitionEvent) -> None:
-        if self._readiness is not None:
-            self._readiness.observe("controller_server", self._lifecycle_active(msg))
-
-    def _on_local_costmap_transition(self, msg: TransitionEvent) -> None:
-        if self._readiness is not None:
-            self._readiness.observe("local_costmap", self._lifecycle_active(msg))
-
-    def _on_global_costmap_transition(self, msg: TransitionEvent) -> None:
-        if self._readiness is not None:
-            self._readiness.observe("global_costmap", self._lifecycle_active(msg))
-
-    def _on_motor_ready(self, msg: Bool) -> None:
-        if self._readiness is not None:
-            self._readiness.observe("motor_adapter", bool(msg.data), lease=True)
-
     def _publish_cmd_vel(self) -> None:
-        # ROS-free cycle owns write-before-observation ordering.
         cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
                       self._readiness, warn=self._node.get_logger().error,
                       trial_guard=self._bounded_trial_guard,
@@ -503,237 +318,33 @@ class RosBridge:
         msg.angular.z = out.angular
         self.cmd_vel_pub.publish(msg)
 
-    def _note_wheels(self, out: CoreTwist) -> None:
-        # D-422: update near-point memory after host publish, outside submission locks.
-        problem = observation.wheels_sent(self._svc, out)
-        if problem is not None:
-            now = time.monotonic()
-            if now - self._wheels_warned_at >= 5.0:
-                self._wheels_warned_at = now
-                self._node.get_logger().warning(problem)
-
     def _tick_state(self) -> None:
         map_pose.receive_map_pose(self, lambda: self.tf_buffer.lookup_transform(
             self._map_frame, self._base_frame, rclpy.time.Time()))
-        # D-395 P2-1: the frame flag follows the same freshness rule as `_on_odom`.
         self._svc.localization.tick(odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()))
         snapshot = self._svc.state.snapshot()
-        # 로봇 모드가 IDLE이 아니면 절전 진입을 막는다 (PWR-001 안전 인터록).
         self._svc.power.on_robot_mode(snapshot.mode)
 
     def _on_map(self, msg: OccupancyGrid) -> None:
         map_observation.receive_map(self, msg, warn=self._node.get_logger().warning)
 
-    def _on_plan(self, msg: Path) -> None:
-        observation.nav_path(self._svc, msg,
-                             warn=self._node.get_logger().warning)
-
-    def _on_local_costmap(self, msg: Costmap) -> None:
-        observation.nav_costmap(self._svc, "local", msg,
-                                warn=self._node.get_logger().warning)
-
-    def _on_global_costmap(self, msg: Costmap) -> None:
-        observation.nav_costmap(self._svc, "global", msg,
-                                warn=self._node.get_logger().warning)
-
-    def _on_scan(self, msg: LaserScan) -> None:
-        sample = translate.lidar_sample(msg, time.time())
-        sample["source_now_ns"] = self._node.get_clock().now().nanoseconds
-        self._svc.state.set_sensor("lidar", sample)
-        # A scan that arrives is the LiDAR's own ready report after a power-policy wake.
-        self._svc.power.report_device_ready(device_power.LIDAR, True)
-        observation.front_clearance(self._svc, sample, received_at=self._line_clock())
-
-    def _on_imu(self, msg: Imu) -> None:
-        self._svc.state.set_sensor("imu", translate.imu_sample(msg, time.time()))
-
-    # --- PWR-002~004 근접 웨이크 --------------------------------------------
-
-    def _on_us_range(self, msg: Range) -> None:
-        observation.us_range(self._svc, msg, received_at=time.time())
-
-    def _on_batt_state(self, msg: BatteryState) -> None:
-        observation.batt_state(
-            self._svc, msg, received_at=time.time(),
-            voltage_topic_seen=self._voltage_topic_seen)
-
     def _tick_power(self) -> None:
-        # D-550 10 Safety-Review: the SAF-003 and goal-lease stops run first, each guarded, so a
-        # fault in the power/calibration/trip-lease calls below cannot starve them.
-        if self._svc.fleet_loss is not None:  # SAF-003 (D-419): 5 Hz, off the 50 Hz cmd path
+        if self._svc.fleet_loss is not None:
             try:
                 self._svc.fleet_loss.tick()
-            except Exception:  # a monitor fault must not stop the power timer
+            except Exception:
                 self._node.get_logger().error(f"fleet_loss tick failed:\n{traceback.format_exc()}")
-        try:  # D-550 10: a leased Fleet goal whose lease ran out is cancelled (SAF-003 cancel path)
+        try:
             self._svc.nav.expire_goal_lease()
-        except Exception:  # a lease fault must not stop the power timer
+        except Exception:
             self._node.get_logger().error(f"goal lease tick failed:\n{traceback.format_exc()}")
         power = self._svc.power
         power.tick()
-        # D-321 addendum: a lapsed calibration lease emits its expiry even when
-        # no screen is reading /robot/state. Rides this timer; commands nothing.
         self._svc.calibration.expire_due()
-        # D-541 6: a trip lease not renewed within ttl_s ends and halts the robot to IDLE.
         self._svc.trip_lease.expire_due()
         status = power.status()
         self._svc.state.set_power(status)
-
-        if status.mode.value != self._published_power_mode:
-            self._published_power_mode = status.mode.value
-            self.power_mode_pub.publish(String(data=status.mode.value.lower()))
-
-        # Devices are already on when CORE starts: nothing is sent until a level changes.
-        device_power.reconcile_devices(self._svc.power.device_levels(), self._device_applied,
-                                       self._device_ports, log=self._node.get_logger().info,
-                                       restarted=self._svc.power.device_restarted)
-
-        now = time.monotonic()
-        if display.republish_due(status.info_visible, self._info_was_visible,
-                                 now, self._info_last_pub):
-            self._publish_display_info(status)
-            self._info_last_pub = now
-        self._info_was_visible = status.info_visible
-
-        self._reconcile_emotion(now)
-        self._reconcile_led(status.info_visible, now)
-        self._maybe_publish_drive(now)
-        self._maybe_write_face_inputs(status, now)
-
-    def _maybe_write_face_inputs(self, status, now: float) -> None:
-        """D-433: hand rosy-face the face, the drive/wake cards and the power mode.
-
-        File-only and best effort: a failed write is logged once and the screen
-        falls back to the status card when the file goes stale (3 s).
-        """
-        from core_common.face_screen import FACE_INPUTS_PERIOD_S
-
-        snapshot = self._svc.state.snapshot()
-        wake = None
-        if status.info_visible:
-            wake = display.info_payload(
-                snapshot, status, health=self.diagnostics.summary_health().value,
-                address=self._api_endpoint(), hold_s=self._svc.power.info_hold_s)
-        content = display.face_inputs_payload(
-            snapshot, face=self._face_desired, power_mode=status.mode.value, wake=wake,
-            expression=self._expression_intent.handover(),
-            written_at=datetime.now(timezone.utc).isoformat(timespec="milliseconds"))
-        preview = self._svc.vision.status(now=time.monotonic())
-        content.update(display.face_camera_quality(preview), **display.face_person_request(self._svc.person_request.view()))
-        expressive = self._expression_intent.handover() is not None
-        period = min(FACE_INPUTS_PERIOD_S, .15) if expressive else FACE_INPUTS_PERIOD_S
-        if not display.face_inputs_due(content, self._face_inputs_last, now,
-                                       self._face_inputs_at, period):
-            return
-        try:
-            self._svc.host_files.write_face_inputs(self._svc, content)
-        except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
-            if not self._face_inputs_failed:
-                self._node.get_logger().warning(f"face inputs not written: {type(exc).__name__}: {exc}")
-            self._face_inputs_failed = True
-            return
-        self._face_inputs_failed = False
-        self._face_inputs_last, self._face_inputs_at = content, now
-
-    def _publish_display_info(self, status) -> None:
-        payload = display.info_payload(
-            self._svc.state.snapshot(), status,
-            health=self.diagnostics.summary_health().value,
-            address=self._api_endpoint(),
-            hold_s=self._svc.power.info_hold_s,
-        )
-        self.display_info_pub.publish(String(data=json.dumps(payload)))
-
-    def _api_endpoint(self) -> str:
-        """정보 화면에 띄울 접속 주소. 한 번 풀고 캐시한다."""
-        if self._api_address is None:
-            port = self._svc.config.get("network", {}).get("api_port", 8080)
-            self._api_address = display.resolve_api_address(port)
-        return self._api_address
-
-    def _reconcile_led(self, info_visible: bool, now: float) -> None:
-        """중재 결과에 LED 를 맞춘다 (SAF-005 경보 > 정보창 게이지)."""
-        command = expression.led_command(
-            self._expression_intent, alert=self._svc.battery.led_alert,
-            info_visible=info_visible,
-            gauge_percent=self._svc.state.snapshot().battery.percent,
-            now=now)
-        self._led_output.apply(command, now=now, ready=self._led_client.service_is_ready(),
-                               send=lambda value: self._call_led(value.command, value.r, value.g, value.b))
-
-    def _maybe_publish_drive(self, now: float) -> None:
-        """D-394: 운용 중에는 20 s 마다 주행 카드가 얼굴 위로 잠깐 지나간다."""
-        snapshot = self._svc.state.snapshot()
-        mode = snapshot.mode.value
-        if not display.drive_due(mode, now, self._drive_last_pub):
-            return
-        # C6 — 목표 좌표는 NavigationManager 가 current_goal 을 선언하기 전까지는
-        # 없다(2026-10-01 판정). 죽은 reach 를 두지 않는다.
-        goal_x = goal_y = None
-        self.display_info_pub.publish(String(data=json.dumps(
-            display.drive_payload(snapshot, goal_x=goal_x, goal_y=goal_y))))
-        self._drive_last_pub = now
-
-    def _reconcile_emotion(self, now: Optional[float] = None) -> None:
-        """D-922: one display intent feeds the face service, native hand-over and LED."""
-        current = time.monotonic() if now is None else now
-        if self._hello_until is None:
-            self._hello_until = current + 10.0
-        snapshot = self._svc.state.snapshot()
-        mode = snapshot.mode.value
-        status = self._svc.power.status()
-        suspended = (snapshot.safety.estop or status.info_visible or status.mode.value == "STANDBY"
-                     or self.diagnostics.summary_health() != HealthState.OK or bool(display.face_cautions(snapshot)))
-        velocity = snapshot.velocity
-        moving = (bool(velocity.linear or velocity.angular)
-                  if 0 <= current - self._last_odom_ts <= .5 and self._last_odom_ts > 0 else None)
-        self._expression_intent = self._expression.update(
-            mode, snapshot.navigation.value, current, suspended=suspended, moving=moving)
-        desired = self._expression_intent.face
-        if (current < self._hello_until and not suspended and mode == "IDLE"
-                and self._expression_intent.face == "basic"):
-            desired = "hello"
-        self._face_desired = desired or self._face_desired
-        self._face_output.apply(self._face_desired, now=current,
-                                ready=self._emotion_client.service_is_ready(), send=self._call_emotion)
-
-    def _call_emotion(self, face: str):
-        """표정은 부가 표시다 — 서비스가 없으면 조용히 건너뛰고 다음 틱에 다시 한다."""
-        if not self._emotion_client.service_is_ready():
-            return None
-        request = Emotion.Request()
-        request.emotion = face
-        return self._emotion_client.call_async(request)
-
-    def _send_lidar(self, spinning: bool) -> bool:
-        """LiDAR 는 내비게이션 입력 — 서비스가 늦게 뜨면 False, 다음 틱에 재시도한다."""
-        client = self._lidar_start_client if spinning else self._lidar_stop_client
-        if not client.service_is_ready():
-            return False
-        client.call_async(Empty.Request())
-        return True
-
-    def _on_device_ready(self, msg: String) -> None:
-        report = device_power.parse_ready_report(msg.data)
-        if report is not None:
-            self._svc.power.report_device_ready(*report)
-
-    def _call_led(self, command: str, r: int, g: int, b: int):
-        """LED는 부가 표시다 — 서비스가 없으면 조용히 건너뛴다."""
-        if not self._led_client.service_is_ready():
-            return None
-        request = SetLed.Request()
-        request.command = command
-        request.pixels = []
-        request.r, request.g, request.b = r, g, b
-        return self._led_client.call_async(request)
-
-    def _on_hitl_request(self, msg: String) -> None:
-        observation.hitl_request(self._svc, msg.data,
-                                 logger=self._node.get_logger())
-
-    def _on_degraded_modules(self, msg: String) -> None:
-        observation.degraded_modules(self._svc, msg.data)
+        self._reconcile_power_outputs(status)
 
     def _setup_diagnostics(self) -> None:
         self.diagnostics = DiagnosticsCollector()
@@ -743,41 +354,6 @@ class RosBridge:
         self.diagnostics.register("disk", disk_provider("/"))
         self.diagnostics.register("odom_topic", topic_freshness_provider(
             lambda: self._last_odom_ts, stale_s=2.0))
-
-    def _on_motor_health(self, msg: String) -> None:
-        thermal_policy.on_motor_health(self._svc, msg.data, time.monotonic())
-
-    def _tick_diagnostics(self) -> None:
-        results = self.diagnostics.collect()
-        for component, health in results.items():
-            self._svc.state.set_diagnostic(component, health)
-        if self._readiness is not None:
-            self._svc.state.set_diagnostic(
-                "navigation_readiness",
-                HealthState.OK if self._readiness.snapshot().ready else HealthState.ERROR,
-            )
-        thermal_policy.tick(self._svc, time.monotonic())  # last: diagnostics never wait on heat
-
-    def _tick_swarm(self) -> None:
-        """SWM-004 는 마감시각으로 판정한다 — 스트림이 끊기면 아무 프레임도
-        오지 않으므로 소켓 쪽에서는 알아챌 수 없다."""
-        try:
-            self._svc.swarm.tick()
-        except Exception as exc:  # 추종 실패가 브리지 루프를 멈추면 안 된다
-            self._node.get_logger().warning(f"swarm tick failed: {exc}")
-
-    def _tick_trail(self) -> None:
-        try:
-            self._svc.swarm.trail_tick(self._line_clock())
-        except Exception as exc:  # a failed tick holds (the nav twist ages out in 0.5 s)
-            self._node.get_logger().warning(f"trail tick failed: {exc}")
-
-    def _tick_docking(self) -> None:
-        docking = self._svc.docking
-        self._dock_ticks += 1
-        if not docking_mode.due(self._dock_ticks, docking.fast_tick):
-            return
-        docking_mode.tick(self._svc, self._node.get_logger().warning, station=self._svc.station_docking)
 
     # --- NavExecutor 구현 (navigation.manager와 계약) -------------------------
 
@@ -795,24 +371,12 @@ class RosBridge:
         future.add_done_callback(lambda done, gen=generation: self._goal_response_cb(done, gen))
         goal_tracker.watch_response(self._goals, self._svc.nav, future, generation)
 
-    def _goal_response_cb(self, future, generation: int) -> None:
-        goal_tracker.on_response(self._goals, self._svc.nav, future, generation,
-                                 attach_result=self._attach_result)
-
-    def _attach_result(self, result_future, generation: int) -> None:
-        result_future.add_done_callback(
-            lambda done, gen=generation: self._result_cb(done, gen))
-
-    def _result_cb(self, future, generation: int) -> None:
-        goal_tracker.on_result(self._goals, self._svc.nav, future, generation)
-
     def cancel_goal(self) -> None:
         handles = self._goals.cancel_all()
         for handle in handles:
             handle.cancel_goal_async()
         if handles:
-            self._node.get_logger().info(
-                f"navigation cancel requested ({len(handles)} goal(s))")
+            self._node.get_logger().info(f"navigation cancel requested ({len(handles)} goal(s))")
 
     def native_transport_snapshot(self):
         return self._goals.transport_snapshot()
@@ -829,10 +393,7 @@ class RosBridge:
         self.initialpose_pub.publish(msg)
 
     def save_map(self, name: str) -> str:
-        """NAV-005: slam_toolbox SaveMap 호출 → map_id 발급 (D-13).
-
-        파일을 찾으면 내용 체크섬, 못 찾으면 name+시각 해시로 대체 map_id.
-        """
+        """NAV-005: slam_toolbox SaveMap 호출 → map_id 발급 (D-13)."""
         if self._slam_client is None:
             raise RuntimeError(
                 "slam_toolbox is not installed in this runtime; map saving is unavailable")
@@ -842,23 +403,14 @@ class RosBridge:
             name, os.environ.get("ROSY_MAP_OUTPUT_DIR", "/var/lib/rosy/maps")
         )
         request = self._slam_client.srv_type.Request()
-        # SaveMap.srv 의 name 은 string 이 아니라 std_msgs/String 이다.
         request.name = String(data=output_stem)
         response = save_map.await_call(
             self._slam_client.call_async(request), timeout=15.0)
         save_map.check_result(response.result)
-
-        return save_map.map_id(
-            name, save_map.saved_bytes(output_stem), time.time()
-        )
+        return save_map.map_id(name, save_map.saved_bytes(output_stem), time.time())
 
     def reset_mapping(self) -> None:
-        """NAV-005 세션 초기화 — 아직 실기가 없다.
-
-        `hasattr` 뒤에 숨어 있던 자리다. 조용히 건너뛰면 reset 이 200 을 돌려준다 —
-        선언해 두고 `CAPABILITY_NOT_SUPPORTED` 로 실패하는 편이 CAP-003 요구다.
-        실물은 slam_toolbox `Reset` (구 Flask `nav2_web_server.py`, D-3 이후 삭제).
-        """
+        """NAV-005 세션 초기화 — CAPABILITY_NOT_SUPPORTED 로 실패 (CAP-003)."""
         raise NavigationError(
             "CAPABILITY_NOT_SUPPORTED",
             "slam_toolbox reset is not implemented in this runtime")

@@ -444,3 +444,17 @@
 - 변경: 일반 간격·tag corner·행 focus를 기존 공용 토큰으로 정리하고 긴 결과의 표/상세 wrapping을 보완했다. 실제 handler와 공용 자산을 사용하는 합성 브라우저 fixture로 바꿨다. script/body·SVG style22개·데이터 기하는 유지한다.
 - 증거: 긴 결과8 RED 후 전체26 browser pass/0 skip, 카드 경계8 pass. 공식 affected833 pass/28 skip·NEW0, 최종32장 독립 검토 범위 P1/P2없음. 정본: `docs/validation/sim-viewer-spacing-2026-10-29/result.md`. 실제 Gazebo 미션 실행과 구분한다.
 - gate 변화: 없음. ROS·CORE·장치·FIELD·설치/배포 수용은 아니다. CE: 해당 없음 — 기존 clipping 교훈을 적용했으며 원인과 해결이 코드·회귀·검증 기록에 드러난다.
+
+## 2026-11-11 · 1e35310e23 · feat(gz_sim): map_261026_bay_lane launch and core overlay (D-1013 gate b)
+- 변경: `launch/map_261026_bay_lane.launch.py`(keep 모드·paint_source pink·S2 스폰 0.309/-0.13/yaw 1.5708, dock_observer·lane_graph 없음), `config/map_261026_core.yaml`(도크 시드 없음 — approach "line"은 다음 브랜치), 시험 `test/test_map_261026_bay_launch.py`, `operations/fleet/test/test_fleet_sim_site_d601.py` CAMERA_LAUNCHES 등록
+- 증거: 원격 pytest(ai PC) 4파일 14 passed, exit 0 (run 1e35310e23-a2f4a9, 첫 실행 1e35310e23 2실패는 시험 코드 경계 오차·pose 요소 읽기 오류로 1e35310e23에서 수정)
+- gate 변화: 없음
+- 결정: D-1013 9항 (b). 원격 Gazebo 실구동(전 흐름·S1 예정 종료 분류)은 시뮬 호스트에서 별도 기록
+- 교훈: 없음
+
+## 2026-11-11 · 76b74fd91b · feat(gz_sim): bay observer on the 261026 launch (D-1013)
+- 변경: `launch/map_261026_bay_lane.launch.py`에 `bay_observer`(기본 켬) — bay_line_observer_node를 같은 선언 Gazebo 기하(25°·320x180)로 부착, line_total_m 0.65(미실측 site 값). 핀 시험 갱신
+- 증거: 원격 pytest(ai PC) test_bay_line_observer·test_robot_literals·test_map_261026_bay_launch·test_dock_observer 21 passed 1 skip exit 0 (76b74fd91b; 오프셋 부호·테이프 두께 렌더·±π 비교는 로컬 순수 모듈 왕복으로 잡아 수정)
+- gate 변화: 없음
+- 결정: D-1013. 칸 흐름의 관측 경로가 런치에서 닫힘 — 원격 Gazebo 실구동은 다음 기록
+- 교훈: 없음

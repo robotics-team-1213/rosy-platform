@@ -102,6 +102,59 @@ def test_any_timing_the_gates_allow_keeps_the_margin_even_when_an_arm_stalls(see
         assert clearance([where["a"]], [where["b"]]) >= margin - 1e-9
 
 
+@pytest.mark.parametrize("seed", range(30))
+def test_replanning_from_completion_events_swaps_generations_only_at_boundaries(seed):
+    """cell_two_arm.execute's replan rule against the coordination math: every completion re-plans from the done state
+    (a refused plan holds both arms), the new generation lands only when both arms rest at a boundary (started == done,
+    admission blocked while a replan is pending), and any timing the gates then allow keeps the margin, stalls included."""
+    rng = random.Random(seed)
+    point = lambda: (rng.uniform(0, 1), rng.uniform(0, 1))  # noqa: E731
+    walk = lambda name: [move(f"{name}{k}", p, q) for k, (p, q) in  # noqa: E731
+                         enumerate(itertools.pairwise([point() for _ in range(6)]))]
+    a, b, margin = walk("a"), walk("b"), 0.03
+    schedule = plan(a, b, margin)
+    if schedule is None:
+        return
+    segments = {"a": a, "b": b}
+    steps, pending = schedule["steps"], None
+    done, started, moving, inside = {"a": 0, "b": 0}, {"a": 0, "b": 0}, {"a": False, "b": False}, {"a": 0.0, "b": 0.0}
+    stalled, stall_at = rng.choice(["a", "b", None]), rng.randrange(1, 60)
+    for tick in range(8000):
+        order = list("ab")
+        rng.shuffle(order)
+        for arm in order:
+            if moving[arm] and not (arm == stalled and tick > stall_at):
+                inside[arm] += rng.uniform(0.0, 0.15)
+        held = False
+        for arm in "ab":  # each completion fires the replan from the state it left the arms in
+            if moving[arm] and inside[arm] >= 1.0:
+                moving[arm], done[arm] = False, done[arm] + 1
+                fresh = plan(a, b, margin, start=(done["a"], done["b"]))
+                if fresh is None:
+                    held = True  # plan refused: execute stops both arms; nothing was violated up to here
+                    break
+                pending = fresh["steps"]
+        if held:
+            break
+        if pending is not None and started == done:  # activation only at a joint boundary
+            steps, pending = pending, None
+        for arm in "ab":
+            if (not moving[arm] and done[arm] < len(segments[arm]) and pending is None
+                    and ready(steps, arm, done[arm], done["a"], done["b"])):
+                assert any(s[arm] == done[arm] for s in steps)  # a segment admission needs is in the active generation
+                moving[arm], inside[arm], started[arm] = True, 0.0, started[arm] + 1
+        where = {}
+        for arm in "ab":
+            path = segments[arm]
+            if moving[arm]:
+                where[arm] = _position(path[done[arm]], inside[arm])
+            else:
+                where[arm] = path[done[arm]].poses[0] if done[arm] < len(path) else path[-1].poses[-1]
+        assert clearance([where["a"]], [where["b"]]) >= margin - 1e-9
+        if done["a"] == len(a) and done["b"] == len(b):
+            break
+
+
 def test_rigid_between_recovers_a_known_transform_and_moves_capsules():
     yaw, tx, ty = 0.4, 0.3, -0.2
     source = [(0.0, 0.0), (0.1, 0.0), (0.0, 0.2), (0.3, 0.1)]

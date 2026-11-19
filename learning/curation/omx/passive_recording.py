@@ -13,231 +13,31 @@ import sys
 import threading
 import uuid
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'training/omx'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'training/omx'))
 from experiment_profile import validate_profile, profile_revision
 from passive_recording_io import frames, verify, check_draft
-
-MAX_BYTES = 2*1024**3
-MAX_METADATA = 64*1024**2
-MAX_BUFFER = 64*1024**2
-MAX_FRAMES = 200000
-DISK_RESERVE = 1024**3
-
-
-def require_space(root,needed=0):
-    probe=Path(root)
-    while not probe.exists():
-        probe=probe.parent
-    try:
-        if shutil.disk_usage(probe).free<DISK_RESERVE+needed:
-            raise ValueError('insufficient recording disk space: 1 GiB reserve required')
-    except OSError as exc:
-        raise ValueError('recording disk reserve could not be checked') from exc
-
-
-def canonical(value):
-    return json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False).encode()
-
-
-def digest(value):
-    return hashlib.sha256(canonical(value)).hexdigest()
-
-
-def write_json(path,value):
-    temporary=path.with_suffix('.tmp')
-    temporary.write_bytes(canonical(value))
-    temporary.replace(path)
-
-
-def read_json(path):
-    if path.is_symlink() or not path.is_file() or path.stat().st_size>MAX_METADATA:
-        raise ValueError('bounded regular passive recording JSON required')
-    return json.loads(path.read_bytes())
-
-
-def number(value):
-    if type(value) not in (int,float) or value<0 or value>1e12 or not math.isfinite(value):
-        raise ValueError('finite nonnegative recording timestamp/limit required')
-    return float(value)
-
-
-def text(value):
-    if not isinstance(value,str) or not 1<=len(value)<=2048 or any(ord(c)<32 for c in value):
-        raise ValueError('explicit bounded producer identity required')
-    return value
-
-
-def retained(profile):
-    return [c for c in profile['cameras'] if set(c['purposes'])-{'monitor'}]
-
-
-def preflight(profile,producers,timing,*,now,clock_domain):
-    profile=validate_profile(profile)
-    text(clock_domain)
-    number(now)
-    fields={'fps','max_camera_age_s','max_arm_age_s','max_camera_skew_s','max_arm_skew_s','max_gap_s'}
-    if not isinstance(timing,dict) or set(timing)!=fields or type(timing['fps']) is not int or not 1<=timing['fps']<=240:
-        raise ValueError('explicit bounded recording grid recipe required')
-    for key in fields-{'fps'}:
-        if not 0<number(timing[key])<=5:
-            raise ValueError('timing bounds must be positive and at most five seconds')
-    if not isinstance(producers,dict) or set(producers)!={'arms','cameras'}:
-        raise ValueError('explicit arm and camera producer descriptors required')
-    if set(producers['arms'])!={a['id'] for a in profile['arms']}:
-        raise ValueError('every selected working arm requires a producer')
-    cameras=retained(profile)
-    if set(producers['cameras'])!={c['id'] for c in cameras}:
-        raise ValueError('every retained camera requires a producer; monitor is preview only')
-    policy=[c for c in cameras if 'policy' in c['purposes']]
-    if len(policy)>8 or sum(len(a['joint_names']) for a in profile['arms'])>64:
-        raise ValueError('ACT supports at most eight policy views and 64 action dimensions')
-    if sum(c['shape'][1]*c['shape'][2] for c in cameras)>16000000:
-        raise ValueError('raw recording resource budget exceeds 16M pixels per grid')
-    for arm in profile['arms']:
-        descriptor=producers['arms'][arm['id']]
-        for key in ('owner_id','source_identity','session_epoch','calibration_revision','profile_revision',
-                    'state_producer','reference_producer'):
-            text(descriptor.get(key))
-        if (descriptor.get('kind')!='arm' or descriptor.get('reference_stage')!='post_guard_accepted'
-                or descriptor.get('joint_names')!=arm['joint_names']
-                or descriptor.get('state_units')!=arm['units'] or descriptor.get('action_units')!=arm['units']):
-            raise ValueError('measured prestate and complete post-guard accepted reference required')
-    identities=[descriptor['source_identity'] for descriptor in producers['arms'].values()]
-    if len(set(identities))!=len(identities):
-        raise ValueError('working arms must have distinct physical producer identities')
-    for camera in cameras:
-        descriptor=producers['cameras'][camera['id']]
-        text(descriptor.get('session_epoch'))
-        if (descriptor.get('kind')!='camera' or descriptor.get('source_identity')!=camera['source_identity']
-                or descriptor.get('shape')!=camera['shape'] or descriptor.get('timestamp_semantics')!='host_receive'):
-            raise ValueError('exact physical camera identity and host-receive shape required')
-    for descriptor in [*producers['arms'].values(),*producers['cameras'].values()]:
-        if descriptor.get('clock_domain')!=clock_domain or number(descriptor.get('rate_hz'))<timing['fps']:
-            raise ValueError('common clock and sufficient measured/declared producer rate required')
-    config=dict(profile=profile,profile_revision=profile_revision(profile),producers=copy.deepcopy(producers),
-                timing=copy.deepcopy(timing),clock_domain=clock_domain,preflight_at=now)
-    config['revision']=digest(config)
-    return config
-
-
-def check_config(config):
-    expected=preflight(config['profile'],config['producers'],config['timing'],
-        now=config['preflight_at'],clock_domain=config['clock_domain'])
-    if expected!=config:
-        raise ValueError('frozen recording profile/configuration revision changed')
-
-
-def validate_event(config,kind,event,received_at):
-    if not isinstance(event,dict):
-        raise ValueError('explicit passive producer envelope required')
-    identity='arm_id' if kind=='arms' else 'camera_id'
-    source_id=event.get(identity)
-    descriptor=config['producers'][kind].get(source_id)
-    if descriptor is None:
-        raise ValueError('unselected recording source')
-    expected_schema='rosy.passive-owner-sample/1' if kind=='arms' else 'rosy.passive-camera-sample/1'
-    if (event.get('schema')!=expected_schema or type(event.get('sequence')) is not int
-            or not 0<=event['sequence']<2**63):
-        raise ValueError('producer schema and monotonic integer sequence required')
-    frozen=('owner_id','source_identity','session_epoch','clock_domain','joint_names','state_units',
-        'action_units','calibration_revision','profile_revision','reference_stage') if kind=='arms' else (
-        'source_identity','session_epoch','clock_domain','shape','timestamp_semantics')
-    fields={'schema',identity,'sequence',*frozen}
-    fields|={'state_timestamp','reference_timestamp','state','accepted_reference','reference_id'} if kind=='arms' else {'timestamp'}
-    if set(event)-fields-{'received_at','path','sha256'}:
-        raise ValueError('passive sample envelope fields differ')
-    for key in frozen:
-        if event.get(key)!=descriptor[key]:
-            raise ValueError('recording producer identity/layout changed: '+key)
-    if kind=='arms':
-        state=number(event.get('state_timestamp'))
-        reference=number(event.get('reference_timestamp'))
-        if not state<=reference<=number(received_at):
-            raise ValueError('prestate <= accepted reference <= receipt required')
-        text(event.get('reference_id'))
-        for key in ('state','accepted_reference'):
-            value=event.get(key)
-            if (not isinstance(value,list) or len(value)!=len(descriptor['joint_names'])
-                    or any(type(v) not in (int,float) or abs(v)>3.4e38 or not math.isfinite(v) for v in value)):
-                raise ValueError('complete finite ordered measured state and accepted reference required')
-        import struct
-        for key in ('state','accepted_reference'):
-            if any(not math.isfinite(struct.unpack('f',struct.pack('f',v))[0]) for v in event[key]):
-                raise ValueError('recorded vectors must have finite float32 encoding')
-        stamp=reference
-    else:
-        stamp=number(event.get('timestamp'))
-        if stamp>number(received_at):
-            raise ValueError('camera timestamp cannot follow receipt')
-    return source_id,stamp
-
-
-def check_grid(config,row,previous=None):
-    timing=config['timing']
-    tick=number(row['grid_time'])
-    if tick>number(row['processed_at']):
-        raise ValueError('grid cannot precede processing availability')
-    expected_ids={'arms':{a['id'] for a in config['profile']['arms']},
-                  'cameras':{c['id'] for c in retained(config['profile'])}}
-    for kind in ('arms','cameras'):
-        if set(row[kind])!=expected_ids[kind]:
-            raise ValueError('complete selected arm/camera inputs required at every grid')
-        stamps=[]
-        state_stamps=[]
-        for source_id,event in row[kind].items():
-            _,stamp=validate_event(config,kind,event,event['received_at'])
-            if event['received_at']>row['processed_at']:
-                raise ValueError('source receipt follows grid processing')
-            oldest=event['state_timestamp'] if kind=='arms' else stamp
-            maximum=timing['max_arm_age_s' if kind=='arms' else 'max_camera_age_s']
-            if stamp>tick+1e-9 or tick-oldest>maximum+1e-9:
-                raise ValueError('missing causal/fresh source at recording grid')
-            stamps.append(stamp)
-            if kind=='arms':
-                state_stamps.append(event['state_timestamp'])
-            if previous is not None:
-                prior=previous[kind][source_id]
-                delta=event['sequence']-prior['sequence']
-                descriptor=config['producers'][kind][source_id]
-                if (delta<=0 or stamp<(prior['reference_timestamp'] if kind=='arms' else prior['timestamp'])
-                        or (kind=='arms' and event['state_timestamp']<prior['state_timestamp'])
-                        or delta/descriptor['rate_hz']>timing['max_gap_s']+1e-9
-                        or stamp-(prior['reference_timestamp'] if kind=='arms' else prior['timestamp'])>timing['max_gap_s']+1e-9):
-                    raise ValueError('reused/regressed frame or producer gap exceeds recording budget')
-        if max(stamps)-min(stamps)>timing['max_arm_skew_s' if kind=='arms' else 'max_camera_skew_s']+1e-9:
-            raise ValueError('cross-source skew exceeds frozen recording limits')
-        if state_stamps and max(state_stamps)-min(state_stamps)>timing['max_arm_skew_s']+1e-9:
-            raise ValueError('inter-arm measured state skew exceeds frozen limits')
-    state=[v for a in config['profile']['arms'] for v in row['arms'][a['id']]['state']]
-    action=[v for a in config['profile']['arms'] for v in row['arms'][a['id']]['accepted_reference']]
-    if row['state']!=state or row['action']!=action:
-        raise ValueError('ordered recording vectors differ from measured/accepted envelopes')
-
-
-def hashes(root,*,cancelled=lambda:False):
-    result={}
-    for path in sorted(root.rglob('*')):
-        if cancelled():
-            raise ValueError('passive evidence verification cancelled')
-        if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
-            raise ValueError('passive recording links are forbidden')
-        if path.is_file() and path.relative_to(root).as_posix() not in ('episode.json','seal.json'):
-            with path.open('rb') as stream:
-                result[path.relative_to(root).as_posix()]=hashlib.file_digest(stream,'sha256').hexdigest()
-        elif not path.is_file() and not path.is_dir():
-            raise ValueError('regular passive recording files required')
-    return result
-
-
-def image_valid(raw,shape):
-    from PIL import Image
-    try:
-        with Image.open(io.BytesIO(raw)) as image:
-            if image.format!='JPEG' or image.mode!='RGB' or image.size!=(shape[2],shape[1]):
-                raise ValueError('raw RGB JPEG dimensions differ from frozen camera profile')
-            image.load()
-    except (OSError,Image.DecompressionBombError) as exc:
-        raise ValueError('invalid bounded raw JPEG evidence') from exc
+from passive_recording_helpers import (  # noqa: F401
+    DISK_RESERVE,
+    MAX_BUFFER,
+    MAX_BYTES,
+    MAX_FRAMES,
+    MAX_METADATA,
+    canonical,
+    check_config,
+    check_grid,
+    digest,
+    hashes,
+    image_valid,
+    number,
+    preflight,
+    read_json,
+    require_space,
+    retained,
+    text,
+    validate_event,
+    write_json,
+)
 
 
 class Recorder:

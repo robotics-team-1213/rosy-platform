@@ -177,21 +177,24 @@ class EnrolledTlsBindings:
         self._file = {b.hostname: b for b in bindings.values()}
         if self._store is None:
             return bindings
+        renumbers = self._store.tls_renumbers()
         renamed = {}
         for binding in bindings.values():
-            learned = self._learned(binding)
+            learned = self._learned(binding, renumbers)
             if learned is not None and learned not in bindings:  # the file wins a collision
                 binding = replace(binding, robot_id=learned)
             renamed[binding.robot_id] = binding
         return renamed
 
-    def _learned(self, row: EnrolledTlsBinding) -> str | None:
+    def _learned(self, row: EnrolledTlsBinding, renumbers: dict | None = None) -> str | None:
         """D-580: the id this file row's robot last enrolled with here, if the row is unchanged.
 
         Only when hostname, CA and the file's robot_id are all as they were when the robot proved
         them, and no other file row shares the CA or hostname (one CA per robot, D-565).
         """
-        learned = self._store.tls_renumbers().get(row.hostname) if self._store is not None else None
+        if renumbers is None and self._store is not None:
+            renumbers = self._store.tls_renumbers()
+        learned = renumbers.get(row.hostname) if renumbers is not None else None
         if (learned is None or learned['ca_sha256'] != row.tls_ca_sha256
                 or learned['file_robot_id'] != row.robot_id
                 or sum(b.tls_ca_sha256 == row.tls_ca_sha256 or b.hostname == row.hostname

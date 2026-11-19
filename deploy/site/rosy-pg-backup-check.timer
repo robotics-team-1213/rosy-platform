@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically check site PostgreSQL backup freshness
+
+[Timer]
+OnBootSec=30min
+OnUnitInactiveSec=6h
+Unit=rosy-pg-backup-check.service
+
+[Install]
+WantedBy=timers.target

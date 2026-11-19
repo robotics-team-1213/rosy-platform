@@ -29,7 +29,7 @@ if __package__:
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
-        run_lock, safe_extract, set_hold, swap_link, write_env_tag,
+        hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
     from .site_update_runtime import SiteRuntimeIO, containers_reason, runtime_reason
 else:  # pragma: no cover - installed host CLI
@@ -41,7 +41,7 @@ else:  # pragma: no cover - installed host CLI
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
-        run_lock, safe_extract, set_hold, swap_link, write_env_tag,
+        hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
     from site_update_runtime import SiteRuntimeIO, containers_reason, runtime_reason
 
@@ -137,12 +137,12 @@ class SiteUpdater(SiteRuntimeIO):
             return row
         return None
 
-    def is_newer(self, current: str, candidate: str) -> bool:
+    def is_newer(self, current: str, candidate: str, or_same: bool = False) -> bool:
         # Later pages omit changed files but retain ancestry metadata.
         url = f"https://api.github.com/repos/{self.config['repo']}/compare/{current}...{candidate}?per_page=1&page=2"
         try:
             comparison = json.loads(self.http.get(url, _LIST_LIMIT))
-            return (comparison['status'] == 'ahead'
+            return (comparison['status'] in (('ahead', 'identical') if or_same else ('ahead',))
                     and comparison['merge_base_commit']['sha'] == current)
         except (json.JSONDecodeError, KeyError, TypeError):
             raise Transient('commit comparison is malformed') from None
@@ -376,6 +376,21 @@ class SiteUpdater(SiteRuntimeIO):
                 log("pruned-image", image=reference)
 
     # main flow
+    def _until_contains_ready(self, state: dict) -> bool:
+        """True only when the next installable signed candidate provably contains every
+        waiting sha (``compare <sha>...<tag>`` ahead or identical, with that sha as the merge base —
+        the same evidence ``is_newer`` already reads). Anything unreadable or unprovable
+        keeps the hold: fail closed."""
+        try:
+            current = read_env(self.paths.site_env).get("ROSY_SITE_IMAGE_TAG", "")
+            if not _COMMIT.fullmatch(current):
+                return False
+            release = self.select(self.list_releases(), current, state)
+            return release is not None and all(self.is_newer(sha, release["tag_name"], or_same=True)
+                                               for sha in state["hold"]["until_contains"])
+        except Exception:
+            return False
+
     def run(self) -> int:
         try:
             with run_lock(self.paths.lock):
@@ -405,9 +420,21 @@ class SiteUpdater(SiteRuntimeIO):
                 state['last_run']['result'] = 'recovered'
                 return EXIT_FAILED
             if state.get('hold'):
-                log('held')
-                state['last_run']['result'] = 'held'
-                return EXIT_OK
+                hold = state['hold']
+                # The one hold that lifts itself: --until-contains clears only on proven
+                # ancestry of the next candidate; a dry run must not consume it.
+                if (not self.dry_run and hold.get('until_contains')
+                        and self._until_contains_ready(state)):
+                    log('hold-cleared', reason=hold['reason'],
+                        until_contains=hold['until_contains'])
+                    state.pop('hold', None)
+                else:
+                    fields = {'reason': hold['reason'], 'until': hold.get('until')}
+                    if hold.get('until_contains'):
+                        fields['until_contains'] = hold['until_contains']
+                    log('held-expired' if hold_expired(hold) else 'held', **fields)
+                    state['last_run']['result'] = 'held'
+                    return EXIT_OK
             return self._update(state)
         finally:
             self.save_state(state)
@@ -442,11 +469,11 @@ class SiteUpdater(SiteRuntimeIO):
             release = self.select(self.list_releases(), current, state)
         except Refused as error:
             log('refused', reason=str(error))
-            state['last_run']['result'] = 'refused'
+            state['last_run'].update(result='refused', reason=str(error)[:200])
             return EXIT_FAILED
         except Rejected as error:
             log('refused', reason=f'running candidate verification failed: {error}')
-            state['last_run']['result'] = 'refused'
+            state['last_run'].update(result='refused', reason=f'running candidate verification failed: {error}'[:200])
             return EXIT_FAILED
         except Transient as error:
             log("error", reason=str(error))
@@ -486,7 +513,7 @@ class SiteUpdater(SiteRuntimeIO):
             ok, reason = self.switch(env, previous, target, commit, current)
         except Refused as error:
             log("refused", tag=tag, reason=str(error))
-            state["last_run"]["result"] = "refused"
+            state["last_run"].update(result="refused", reason=str(error)[:200])
             return EXIT_FAILED
         except Transient as error:
             log("error", tag=tag, reason=str(error))
@@ -531,11 +558,23 @@ def main(argv: list[str] | None = None) -> int:
     forget.add_argument("tag")
     hold = commands.add_parser('hold', help='pause new updates during local maintenance')
     hold.add_argument('reason')
+    hold.add_argument('--hours', type=float, default=24, help='hold length, 24 by default, at most 168')
+    hold.add_argument('--until-contains', nargs='+', metavar='SHA',
+                      help='also resume automatically once the newest signed candidate '
+                           'contains every listed commit')
     commands.add_parser('resume', help='allow updates after local maintenance')
     args = parser.parse_args(argv)
     paths = Paths()
     if args.command == "status":
-        print(paths.state.read_text(encoding="utf-8") if paths.state.exists() else "{}")
+        text = paths.state.read_text(encoding="utf-8") if paths.state.exists() else "{}"
+        try:  # annotate for update_status.py; an unparsable file is printed as it is
+            doc = json.loads(text)
+            if isinstance(doc.get('hold'), dict):
+                doc['hold'].update(expired=hold_expired(doc['hold']), until=hold_until(doc['hold']).isoformat())
+                text = json.dumps(doc, indent=2, sort_keys=True)
+        except (ValueError, AttributeError, TypeError):
+            pass
+        print(text)
         return EXIT_OK
     try:
         config = load_config(paths.config)
@@ -546,7 +585,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "forget-failed":
         return forget_failed(updater, args.tag)
     if args.command in {'hold', 'resume'}:
-        return set_hold(updater, args.reason if args.command == 'hold' else None)
+        if args.command == 'resume':
+            return set_hold(updater, None)
+        return set_hold(updater, args.reason, args.hours, args.until_contains)
     return updater.run()
 
 

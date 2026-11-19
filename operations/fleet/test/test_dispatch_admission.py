@@ -60,12 +60,12 @@ def test_conflicting_multi_resource_claim_is_atomic(tmp_path):
     store.rearm_dispatch(expected_generation=control["generation"], actor_id="test-operator")
     assert store.reserve_resources(
         owner_kind="mission", owner_id="mission-1", generation=control["generation"] + 1,
-        resources=[("workcell", "cell-a")],
+        resources=[("workcell", "arm-cell")],
     ) is True
 
     assert store.reserve_resources(
         owner_kind="mission", owner_id="mission-2", generation=control["generation"] + 1,
-        resources=[("robot", "rosy_01"), ("workcell", "cell-a")],
+        resources=[("robot", "rosy_01"), ("workcell", "arm-cell")],
     ) is False
     assert store.reserve_resources(
         owner_kind="task", owner_id="task-1", generation=control["generation"] + 1,

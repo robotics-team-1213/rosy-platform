@@ -142,6 +142,12 @@ def test_a_lost_queue_ticket_leaves_a_stop_without_recreating_its_place(repos, m
     assert not list((main / ".git" / land.land_queue.QUEUE).glob("*.json"))
 
 
+@pytest.fixture(autouse=True)
+def _turn_time_delta(monkeypatch):
+    """These flows exercise the delta rerun at the turn; the pre-turn refresh (land_queue.REFRESH) has its own tests."""
+    monkeypatch.setattr(land.land_queue, "REFRESHES", 0)
+
+
 @pytest.fixture
 def full_anchor(repos, monkeypatch):
     main, wt = repos
@@ -366,6 +372,54 @@ def test_batch_leader_preserves_other_preparing_and_older_pending_claims(tmp_pat
     assert len(naps) == 1
     assert json.loads(leader.read_text())["status"] == "preparing"
     assert json.loads(later.read_text())["status"] == "pending"
+
+
+def test_ordinary_pending_reserves_the_last_preparation_slot_for_newer_urgent(tmp_path):
+    prep, queue = land.land_prepare, land.land_queue
+    for n in range(prep.MAX_PREPARING - 1):
+        queue.take(tmp_path, f"feat/busy-{n}", status="preparing")
+    ordinary = queue.take(tmp_path, "feat/ordinary", status="pending")
+    urgent = queue.take(tmp_path, "fix/urgent", status="pending", urgent="posting CI is blocked")
+    admissions = []
+
+    def let_urgent_prepare(_seconds):
+        assert not admissions, "ordinary should start when urgent releases its preparation slot"
+        prep.slot(tmp_path, urgent, sleep=lambda _: pytest.fail("ordinary pending blocked urgent"))
+        assert json.loads(urgent.read_text())["status"] == "preparing"
+        assert json.loads(ordinary.read_text())["status"] == "pending"
+        admissions.append("urgent")
+        queue.set_status(urgent, "waiting")
+
+    prep.slot(tmp_path, ordinary, sleep=let_urgent_prepare)
+
+    assert admissions == ["urgent"]
+    assert json.loads(ordinary.read_text())["status"] == "preparing"
+
+
+def test_records_each_preparation_slot_wait_on_the_same_ticket(tmp_path, monkeypatch):
+    prep, queue = land.land_prepare, land.land_queue
+    ticket = queue.take(tmp_path, "fix/example", status="pending")
+    now = [0.0]
+    events = []
+    monkeypatch.setattr(prep.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(land.land_events, "emit", lambda kind, **fields: events.append((kind, fields)))
+    prep.slot(tmp_path, ticket, sleep=lambda _: pytest.fail("a free slot never waits"))
+
+    for seconds in (21.0, 34.0):
+        busy = [queue.take(tmp_path, f"feat/busy-{n}", status="preparing") for n in range(prep.MAX_PREPARING)]
+
+        def release_one(_):
+            busy.pop().unlink()
+            now[0] += seconds
+
+        prep.slot(tmp_path, ticket, sleep=release_one)
+        for other in busy:
+            other.unlink()
+
+    assert [fields for kind, fields in events if kind == "prep_wait"] == [
+        {"ticket": ticket.name, "seconds": 21},
+        {"ticket": ticket.name, "seconds": 34},
+    ]
 
 
 def test_a_pending_landing_continues_on_mains_new_landing_code_with_its_own_ticket(tmp_path, monkeypatch):
@@ -627,10 +681,8 @@ def test_full_pretests_beyond_max_full_wait_for_older_ones_and_affected_ones_do_
         naps.append(1)
         queue.set_status(older[0], "waiting")  # its pretest ended: the turn's wait, no longer preparing
 
-    rolls = []
-    prep.full_slot(tmp_path, mine, sleep=finish_one, roll=lambda: rolls.append(1))
+    prep.full_slot(tmp_path, mine, sleep=finish_one)
     assert naps == [1] and json.loads(mine.read_text())["tier"] == "full"
-    assert rolls == [1], "D-889 34: a new FULL waiter starts one rollup of every waiter, once"
     later = queue.take(tmp_path, "feat/later", status="preparing")
     queue.set_status(later, "preparing", tier="")  # an affected pretest never counts against FULL ones
     urgent = queue.take(tmp_path, "feat/urgent", status="preparing", urgent="hotfix")
@@ -654,6 +706,52 @@ def test_delta_prepare_skips_full_slot_and_isolation_gate(full_anchor, monkeypat
     assert json.loads(ticket.read_text(encoding="utf-8")).get("tier") == ""
 
 
+def _full_prepare(wt, qdir, ticket):
+    return land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=False),
+                                     sys.executable, qdir, ticket, [["pkg/test"]], "FULL tier (test)")
+
+
+def test_full_guards_run_during_the_slot_wait_and_tests_wait_for_both(full_anchor, monkeypatch):
+    """The 150-870 s guard round hides under the FULL slot wait; the FULL tier needs the slot and green guards."""
+    _, wt, *_ = full_anchor
+    qdir = land.land_queue.queue_dir(wt)
+    ticket = land.land_queue.take(qdir, "feat/x", status="preparing")
+    events, started = [], threading.Event()
+
+    def guards(*a, **k):
+        started.set()
+        events.append("guards")
+        return []
+
+    def slot(*a, **k):
+        assert started.wait(10), "the slot wait began before the guards"
+        events.append("slot")
+
+    monkeypatch.setattr(land.land_guards, "first", guards)
+    monkeypatch.setattr(land.land_prepare, "full_slot", slot)
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: events.append("tests") or [])
+    _full_prepare(wt, qdir, ticket)
+    assert sorted(events[:2]) == ["guards", "slot"] and events[2] == "tests"
+
+
+def test_full_guard_stop_ends_the_slot_wait_and_runs_no_fulltest(full_anchor, monkeypatch):
+    _, wt, *_ = full_anchor
+    qdir = land.land_queue.queue_dir(wt)
+    for n in range(land.land_prepare.MAX_FULL):
+        older = land.land_queue.take(qdir, f"feat/old-{n}", status="preparing")
+        land.land_queue.set_status(older, "preparing", tier="full")
+    ticket = land.land_queue.take(qdir, "feat/x", status="preparing")
+
+    def guards(*a, **k):
+        raise land.Stop("NEW failure in test/architecture")
+
+    monkeypatch.setattr(land.land_guards, "first", guards)
+    monkeypatch.setattr(land.land_prepare, "POLL", 0.01)
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: pytest.fail("a FULL test ran after a guard Stop"))
+    with pytest.raises(land.Stop, match="test/architecture"):
+        _full_prepare(wt, qdir, ticket)  # the older FULLs never finish: only the Stop can end the wait
+
+
 def test_guard_and_body_rounds_share_one_lint_run_per_tree(repos, monkeypatch, tmp_path):
     """gpre/pre and g1/1 run on the exact same tree and must not spawn two lint processes each."""
     _, wt = repos
@@ -673,3 +771,148 @@ def test_guard_and_body_rounds_share_one_lint_run_per_tree(repos, monkeypatch, t
     assert len(lint_calls) == 1
     assert (tmp_path / "lint-gpre.txt").read_text(encoding="utf-8") == "lint pass\n"
     assert (tmp_path / "lint-pre.txt").read_text(encoding="utf-8") == "lint pass\n"
+    other = tmp_path / "turn-logs"
+    other.mkdir()
+    land.run_tests(wt, args, [], other, 1)
+    assert len(lint_calls) == 1
+    assert (other / "lint-1.txt").read_text(encoding="utf-8") == "lint pass\n"
+
+
+def test_overtime_merges_affected_anchor_instead_of_dropping_own_invocations(repos, monkeypatch):
+    main, wt = repos
+    base = git(main, "rev-parse", "HEAD")
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch work")
+    candidate = git(wt, "rev-parse", "HEAD")
+    land.land_full.save(wt, "feat/x", candidate, base, "affected", [["own/test"]])
+    commit(main, {"lib/peer.py": "peer = 1\n"}, "peer moves main")
+    git(wt, "merge", "--no-edit", "main")
+    monkeypatch.setattr(land.land_mainred, "CARRIED", [])
+    monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [])
+    args = land.argparse.Namespace(tests="auto", no_cache=False, _overtime=1)
+    land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["delta/test"]], "")
+    saved = json.loads((main / ".git" / land.land_full.RECORDS / "feat-x.json").read_text(encoding="utf-8"))
+    assert saved["tier"] == "delta" and saved["base_tier"] == "affected"
+    assert ["own/test"] in saved["invocations"] and ["delta/test"] in saved["invocations"]
+
+
+def test_waiting_starts_no_rollup_land_tick_is_the_only_trigger():
+    """D-889 36: 11-10..11-17 had four rollup triggers; a waiting or pending landing starts none."""
+    import inspect
+    prep = land.land_prepare
+    assert not hasattr(prep, "gather") and not hasattr(prep, "GATHER_S") and not hasattr(prep, "ROLL_POLLS")
+    for fn in (prep.slot, prep.full_slot):
+        assert "roll" not in inspect.signature(fn).parameters
+    assert not hasattr(land.land_watchdog, "rollup_due") and not hasattr(land.land_watchdog, "ROLLUP_EVERY_S")
+
+
+def test_prepare_checks_conflicts_after_pretest_and_guards_relaunch(tmp_path, monkeypatch):
+    import types
+    prep = land.land_prepare
+    ticket = tmp_path / "01-1.json"
+    ticket.write_text(json.dumps({"pid": os.getpid()}))
+    monkeypatch.setattr(prep, "_prepare", lambda *a: None)
+    monkeypatch.setattr(land.land_batch, "in_main", lambda *a: False)
+    monkeypatch.setattr(land, "out", lambda *a: "newmain")
+    monkeypatch.setattr(land, "git", lambda *a, **kw: types.SimpleNamespace(returncode=1))
+    monkeypatch.setattr(prep, "watch", lambda *a: (lambda: "merge conflict on main"))
+    args = land.argparse.Namespace()
+    with pytest.raises(land.Stop, match="merge conflict on main"):
+        prep.prepare(land, tmp_path, "feat/x", args, sys.executable, tmp_path, ticket)
+    monkeypatch.setattr(prep, "watch", lambda *a: (lambda: None))
+    ticket.write_text(json.dumps({"pid": os.getpid() + 1}))  # adopted by a rollup: must not relaunch
+    monkeypatch.setattr(prep, "relaunch", lambda *a: 77)
+    prep.prepare(land, tmp_path, "feat/x", args, sys.executable, tmp_path, ticket)
+    ticket.write_text(json.dumps({"pid": os.getpid()}))
+    with pytest.raises(SystemExit) as exc:
+        prep.prepare(land, tmp_path, "feat/x", args, sys.executable, tmp_path, ticket)
+    assert exc.value.code == 77
+
+
+def test_full_prepare_sets_full_done_after_tests_before_speculate(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch change")
+    qdir = land.land_queue.queue_dir(wt)
+    land.land_events.bind(wt, "feat/x")
+    ticket = land.land_queue.take(qdir, "feat/x", status="preparing")
+    seen_tiers = []
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL"))
+    monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: ["pytest pkg/test ok (run-pre-1.txt)"])
+    monkeypatch.setattr(land.land_speculate, "prepare",
+                        lambda *a, **k: seen_tiers.append(json.loads(ticket.read_text())["tier"]))
+    monkeypatch.setenv(land.land_prepare.SPECULATE_ENV, "1")
+    land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=True),
+                              sys.executable, qdir, ticket)
+    assert seen_tiers == ["full_done"]
+
+
+
+
+@pytest.mark.parametrize("tests, restored, prepares, armed", [
+    ("auto", "m1", False, True),   # a relaunched or resumed ticket: its record restores, prepare is skipped
+    ("auto", None, True, True),
+    ("full", "m1", True, False),
+])
+def test_pretest_arms_the_pre_turn_refresh_also_on_a_restored_record(monkeypatch, tmp_path, tests, restored, prepares,
+                                                                     armed):
+    """11-18: nine relaunched tickets restored their record, waited with REFRESH unset and released on main's delta."""
+    prep, ran = land.land_prepare, []
+    monkeypatch.setattr(land.land_queue, "REFRESH", None)
+    monkeypatch.setattr(land.land_full, "restore", lambda wt, branch: restored)
+    monkeypatch.setattr(prep, "_prepare", lambda land_, wt, branch, *a: ran.append(branch))
+    ticket = tmp_path / "ticket.json"  # absent: prepare ends before its relaunch check
+    prep.pretest(land, tmp_path, "feat/x", land.argparse.Namespace(tests=tests), sys.executable, tmp_path, ticket)
+    assert ran == (["feat/x"] if prepares else [])
+    assert (land.land_queue.REFRESH is not None) is armed
+    if armed:  # the refresh re-prepares this landing's own branch and reports its new tested main
+        assert land.land_queue.REFRESH() == restored and ran[-1] == "feat/x"
+
+
+@pytest.mark.parametrize("urgent, safety, tests, in_turn", [
+    ("user words", True, "auto", True),    # D-889 39: the urgent safety FULL runs in the turn
+    ("user words", False, "full", True),   # an explicit --tests full is a certain FULL as well
+    ("", True, "auto", False),             # not urgent: unchanged, it prepares before the turn
+    ("user words", False, "auto", False),  # urgent but no safety path: unchanged
+])
+def test_an_urgent_certain_full_skips_the_pretest_and_runs_in_the_turn(monkeypatch, tmp_path, urgent, safety, tests,
+                                                                       in_turn):
+    prep, ran = land.land_prepare, []
+    monkeypatch.setattr(land.land_queue, "REFRESH", None)
+    monkeypatch.setattr(land.land_full, "restore", lambda wt, branch: None)
+    monkeypatch.setattr(land.land_batch, "safety", lambda land_, wt, branch: safety)
+    monkeypatch.setattr(prep, "_prepare", lambda land_, wt, branch, *a: ran.append(branch))
+    args = land.argparse.Namespace(tests=tests, urgent=urgent)
+    prep.pretest(land, tmp_path, "feat/x", args, sys.executable, tmp_path, tmp_path / "ticket.json")
+    assert ran == ([] if in_turn else ["feat/x"])
+    assert prep.in_turn(args) is in_turn
+    budget = land.land_checks.turn_budget(land, args)
+    assert budget == (3 * 3600 if in_turn else land.TURN_CAP_S)
+    monkeypatch.setattr(land.land_queue, "turn_started", lambda: 0.0)
+    maximum = land.land_checks.turn_deadline(land, args, 1, maximum=True)
+    assert maximum == (3 * 3600 if in_turn else land.TURN_MAX_S), "only the urgent FULL outlives the 30 min ceiling"
+
+
+def test_an_urgent_safety_landing_runs_its_full_in_the_turn_without_preparing_outside(repos, monkeypatch):
+    """11-19: berth-unblock (urgent, safety paths) restarted its FULL outside the lock each time main moved."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "a safety change")
+    statuses, outside = [], []
+    monkeypatch.setattr(land.land_mainred, "CARRIED", [])
+    monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
+    monkeypatch.setattr(land.land_batch, "safety", lambda *a: True)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL: safety path"))
+    monkeypatch.setattr(land.land_prepare, "_prepare", lambda *a: outside.append(a))
+    monkeypatch.setattr(land.land_prepare, "again", lambda *a: outside.append(a))
+    real_release = land.land_queue.release
+    monkeypatch.setattr(land.land_queue, "release", lambda *a, **k: outside.append(a) or real_release(*a, **k))
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        statuses.append((round_no, json.loads(land.land_queue._held[0].read_text())["status"]))
+        return []
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto", "--urgent", "user 11-19"]) == 0
+    assert statuses == [(1, "turn")] and not outside, "the FULL ran once, in the turn, never released to prepare"
+    record = land.land_record.read(main, git(main, "rev-parse", "HEAD"))
+    assert record["tier"] == "full"

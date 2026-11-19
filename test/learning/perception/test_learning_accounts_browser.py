@@ -88,6 +88,8 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
         if endpoint == 'revoke':
             state['active'] = False
             return {}
+        if endpoint == 'apps':
+            return {'apps': []}
         if endpoint == 'userinfo':
             if state['offline']:
                 raise AccountUnavailable()

@@ -1,4 +1,5 @@
-import {renderAccountProfile} from '/common/account-profile.js';
+import {renderAccountApps, renderAccountProfile} from '/common/account-profile.js';
+import {announceIdentity, watchIdentity} from '/common/account-session.js';
 // Fence responses and drafts when another tab replaces the browser identity.
 let managed = false, owner = '', invalidated = false, ready, initialized = false, loggingOut = false;
 const key = 'rosy.learning.identity';
@@ -15,10 +16,18 @@ async function identity() {
     if (response.status >= 500) throw new Error('계정 연결을 확인하세요.');
     const session = response.ok ? await response.json() : null;
     const current = session?.account_session || '';
-    renderAccountProfile(current && !invalidated && !loggingOut && (!initialized || current === owner)
-      ? {...session, authenticated:true} : null);
+    const shown = current && !invalidated && !loggingOut && (!initialized || current === owner)
+      ? {...session, authenticated:true} : null;
+    renderAccountProfile(shown);
+    // Most Learning pages have no profile link; the topbar still offers the other apps.
+    const spacer = document.querySelector?.('ui-topbar [data-spacer]');
+    if (!document.querySelector?.('[data-account-profile]')) renderAccountApps(shown, spacer);
     return current;
-  } catch (error) { renderAccountProfile(null); throw error; }
+  } catch (error) {
+    renderAccountProfile(null);
+    renderAccountApps(null, document.querySelector?.('ui-topbar [data-spacer]'));
+    throw error;
+  }
 }
 function initialize() {
   return ready ??= (async () => {
@@ -27,18 +36,21 @@ function initialize() {
   managed = (await response.json()).rosy_account === true;
   if (managed) {
     owner = await identity();
-    localStorage.setItem(key, owner);
+    announceIdentity(owner, key);
   }
   initialized = true;
   })().catch(error => { ready = undefined; managed = false; throw error; });
 }
-addEventListener('storage', event => {
-  if (initialized && managed && event.key === key && event.newValue !== owner) invalidate();
+watchIdentity({
+  key,
+  target: globalThis,
+  matches: value => initialized && managed && value !== owner,
+  changed: invalidate,
+  onPoll: async () => {
+    if (!initialized || !managed || invalidated) return;
+    try { if (await identity() !== owner) invalidate(); } catch (_) { /* Keep drafts during outages. */ }
+  },
 });
-setInterval(async () => {
-  if (!initialized || !managed || invalidated) return;
-  try { if (await identity() !== owner) invalidate(); } catch (_) { /* Keep drafts during outages. */ }
-}, 10000);
 // A failed save or action says what happened, that the screen was kept, and what to do next, never a raw fetch or HTML error.
 const NO_SERVER = '서버에 연결하지 못했습니다. 방금 요청은 처리되지 않았고 화면의 내용은 그대로입니다. 네트워크를 확인한 뒤 다시 시도하세요.';
 const SLOW_SERVER = '서버 응답이 너무 늦어 기다리지 못했습니다. 반영됐는지 확실하지 않고 화면의 내용은 그대로입니다. 다시 불러와 확인한 뒤 다시 시도하세요.';
@@ -64,7 +76,7 @@ export async function accountFetch(path, options) {
   if (!managed) return response.status >= 500 ? plainFailure(response, await response.text()) : response;
   const body = await response.text();
   if (path === '/api/accounts/logout') {
-    localStorage.setItem(key, ''); owner = '';
+    announceIdentity('', key); owner = '';
   } else if (await identity() !== owner || invalidated) {
     invalidate();
   }

@@ -101,6 +101,24 @@ def test_home_return_from_other_learning_areas(browser_workspace,route):
     expect(page.locator('#learning-start')).to_be_focused()
 
 
+def test_home_status_strip_reads_one_learning_response(browser_workspace):
+    # 5b: 홈 상태줄은 실행기·두 검수 대기 수를 /api/learning 한 번으로 보여준다(GPU 항목·새 API 없음).
+    page,_,expect=browser_workspace
+    base=page.url.split('?')[0].rstrip('/')
+    page.goto(base+'/learning',wait_until='networkidle')
+    page.get_by_role('navigation',name='학습센터 작업 이동',exact=True).get_by_role('link',name='인식 자료·학습',exact=True).click()
+    expect(page.locator('#pipeline')).to_be_visible()
+    payload=page.request.get(base+'/api/learning').json()
+    strip=page.locator('#home-status-strip')
+    expect(strip).to_be_visible()
+    expect(strip).to_contain_text('실행기 ')
+    expect(strip).to_contain_text(f"객체 검수 대기 {payload['counts']['pending']}장")
+    expect(strip).to_contain_text(f"픽셀 검수 대기 {payload['pixel_counts']['pending']}장")
+    control=payload.get('control')
+    if not control or not control.get('available'):
+        expect(strip).to_contain_text('실행기 연결 필요')
+
+
 @pytest.mark.parametrize('width', [1440, 390, 320])
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, width, theme):

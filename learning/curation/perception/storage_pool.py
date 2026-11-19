@@ -58,6 +58,8 @@ class StoragePool:
     @contextmanager
     def connect(self):
         with closing(sqlite3.connect(self.db, timeout=30)) as conn, conn:
+            for p in ('journal_mode=WAL', 'synchronous=NORMAL', 'foreign_keys=ON', 'busy_timeout=5000'):
+                conn.execute(f'PRAGMA {p}')
             conn.row_factory = sqlite3.Row
             yield conn
 

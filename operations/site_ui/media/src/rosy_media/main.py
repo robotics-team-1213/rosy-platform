@@ -11,15 +11,10 @@ import ssl
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
+from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
 from .authority import MediaAuthority
-from .backend import MediaMTXClient
-
-
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+from .backend import MediaMTXClient, _NoRedirect
 
 
 def _read(path, limit=16384):

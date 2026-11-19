@@ -3,6 +3,7 @@ labelled held/empty from the recorded jaws, and the reset checked with the top c
 import importlib.util
 import json
 import math
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
 import sys
@@ -67,7 +68,7 @@ class Cell:
         return img
 
 
-def test_one_cycle_is_planned_from_the_located_box_recorded_labelled_and_checked_for_its_reset(tmp_path):
+def test_one_cycle_is_planned_from_the_located_box_recorded_labelled_and_checked_for_its_reset(tmp_path, monkeypatch):
     config = json.loads((OMX / "cell-pipeline.example.json").read_text())
     config["profiles"] = {name: PROFILE for name in config["cameras"]}
     config["plan"] = json.loads((OMX / "grasp-plan.example.json").read_text())
@@ -98,12 +99,54 @@ def test_one_cycle_is_planned_from_the_located_box_recorded_labelled_and_checked
 
     result = m.record_cycle(Cell(box), config, calibration, tmp_path / "work", run=run)
     assert result["result"] == "recorded", result
+    assert result["reset_check"]["passed"] is True and result["reset_check"]["tolerance_mm"] == 10.0
     assert [o["outcome"] for o in result["outcomes"]] == ["held", "held"]
     assert result["dataset"] != str(tmp_path / "ds") and result["reset_mm"] < 3  # a new root; the box came back
     session = json.loads((Path(result["folder"]) / "session.json").read_text())
     assert [o["segment"] for o in session["episode_outcomes"]] == ["A", "B"] and "cell_record" in session["outcome_source"]
+    assert session["reset_check"]["passed"] is True
     assert seen["segments"]["A"][1] - seen["segments"]["A"][0] == seen["segments"]["B"][1] - seen["segments"]["B"][0]
     assert seen["command"][seen["command"].index("--operating-profile") + 1] == str(profile)
+    observations = iter([{"found": True, "arm_m": box,
+                          "estimates": [{"camera": "top", "map": "pinky", "outside_mm": 0, "residual_mm": 1}]},
+                         {"found": False}])
+    timestamps = iter([datetime.now(timezone.utc) + timedelta(seconds=2),
+                       datetime.now(timezone.utc) + timedelta(seconds=4)])
+
+    class Clock:
+        @staticmethod
+        def now(tz=None):
+            return next(timestamps)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(m, "datetime", Clock)
+        scoped.setattr(m, "locate", lambda *args: next(observations))
+        missing_reset = m.record_cycle(Cell(box), config, calibration, tmp_path / "missing-reset", run=run)
+    assert missing_reset["result"] == "recorded with issues"
+    assert missing_reset["reset_check"]["passed"] is False and missing_reset["reset_mm"] is None
+    assert missing_reset["reset_check"]["error"] == "box not seen after recording"
+    assert json.loads((Path(missing_reset["folder"]) / "session.json").read_text())["reset_check"]["passed"] is False
+    locations = iter([{"found": True, "arm_m": box,
+                       "estimates": [{"camera": "top", "map": "pinky", "outside_mm": 0, "residual_mm": 1}]},
+                      {"found": True, "arm_m": box,
+                       "estimates": [{"camera": "side", "map": "pinky@side", "outside_mm": 30, "residual_mm": 1}]}])
+    checks = iter([None, "side: box outside fitted points"])
+    with monkeypatch.context() as scoped:
+        scoped.setattr(m, "datetime", Clock)
+        scoped.setattr(m, "locate", lambda *args: next(locations))
+        scoped.setattr(m, "map_check", lambda *args: next(checks))
+        invalid_reset_map = m.record_cycle(Cell(box), config, calibration, tmp_path / "invalid-reset-map", run=run)
+    assert invalid_reset_map["result"] == "recorded with issues"
+    assert invalid_reset_map["reset_check"]["passed"] is False and invalid_reset_map["reset_mm"] is None
+    assert invalid_reset_map["reset_check"]["error"] == "side: box outside fitted points"
+    calls = []
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(m, "locate", lambda *args: {"found": True, "arm_m": box})
+        monkeypatch.setattr(m, "map_check", lambda *args: "side: box outside fitted points")
+        blocked = m.record_cycle(Cell(box), config, calibration, tmp_path / "untrusted",
+                                 run=lambda *a, **kw: calls.append(a))
+    assert blocked["result"] == "held: side: box outside fitted points" and calls == []
+    assert not (tmp_path / "untrusted").exists()
     profile_data = json.loads(profile.read_text())
     profile.write_text(json.dumps({**profile_data, "instance_id": "other-arm"}))
     calls = []

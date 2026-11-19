@@ -6,6 +6,8 @@ Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.
 
 from __future__ import annotations
 
+from .notification_delivery import DeliveryRequest, DeliveryReceipt, DeliveryOwnerReply  # noqa: F401
+
 from .device_actions import (  # noqa: F401
     DeviceActionState, DeviceActionPhaseReceipt, MissionPhaseProgress, LocalStopState,
     StopRequestSource, ResolvedTargetEvidence, FleetActionGrant, DeviceActionReceipt,
@@ -61,7 +63,7 @@ from .integrated_control import (  # noqa: F401
     ControlStopReconcile, ControlStopReference, ControlStopHistory,
 )
 from .navigation_cancel import NAVIGATION_ADMISSION_FENCE_VERSION, ScopedNavigationCancelRequest  # noqa: F401
-from .lamp import LampIdentifyRequest  # noqa: F401
+from .lamp import LampIdentifyRequest, LampStatusPatternsRequest  # noqa: F401
 from .media_grants import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest  # noqa: F401
 from .channel_requests import (  # noqa: F401
     DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
@@ -481,6 +483,9 @@ class StateSnapshot(TripLeaseFields):
     mode: RobotMode = RobotMode.IDLE
     navigation: NavigationState = NavigationState.IDLE
     map_id: Optional[str] = None
+    #: Content id (`occupancy:<sha12>`) of the occupancy grid this robot actually loaded, even when
+    #: `map_id` is a configured name; Fleet binds a robot map to the site frame by it (map binding).
+    map_grid_id: Optional[str] = None
     pose: Pose = Field(default_factory=Pose)
     velocity: Velocity = Field(default_factory=Velocity)
     battery: Battery = Field(default_factory=Battery)

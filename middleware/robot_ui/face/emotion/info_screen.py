@@ -481,6 +481,24 @@ def render_notice(title: str, lines: list[str], size: tuple[int, int] = DEFAULT_
     return image
 
 
+_IDENTIFY_STYLES = {
+    "blue": ((0, 110, 255), _FG),
+    "amber": ((255, 165, 0), _BG),
+}
+
+
+def render_identify_card(color: str, device_name: str = "",
+                         size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
+    """High-contrast solid patch for overhead-camera robot identification."""
+    fill, ink = _IDENTIFY_STYLES.get(color, (_BG, _FG))
+    image = Image.new("RGB", size, fill)
+    if device_name:
+        draw = ImageDraw.Draw(image)
+        font, text = _fit(draw, device_name, 28, size[0] - 32)
+        draw.text((size[0] // 2, size[1] // 2), text, font=font, fill=ink, anchor="mm")
+    return image
+
+
 #: The panes of a face screen (the D-433 amendment of 2026-10-09): a status bar on top,
 #: the expression below it. The GIFs are authored 320x240 with the face inside rows
 #: 41..217, so the expression area is the GIF cut to rows FACE_CROP_TOP..+208, unscaled.

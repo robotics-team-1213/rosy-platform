@@ -40,14 +40,21 @@ SELF_TRIGGER = "harness configuration or the selector itself"
 SELF_TEST = re.compile(r"^test/test_(land|remote_|affected|known_failures|worktree|pre_push|publish_|browser_scope"
                        r"|harness|doctor|collect_alone|work_queue|xdist|g1_timing|safety_review|size_range"
                        r"|host_(?:admission|probe|caps)|lab_hosts"
-                       r"|ci_dependencies)[^/]*\.py$")
+                       r"|ci_dependencies|pr_land)[^/]*\.py$")
 
-#: Panel 2026-11-09: the code that picks or runs every other landing's tests keeps FULL (design 0.7 rule 8: a
-#: gate never tests itself with a selection it made). The rest of the gate tools take the self-test tier.
-SELECT_CORE = ("tools/harness/affected_*.py", "tools/land_selection.py", "tools/land_browser.py",
-               "test/known_failures.py", "test/browser_scope.py",
-               *(f"tools/remote/{name}.py" for name in ("remote_pytest", "remote_job", "remote_test_tools",
-                                                       "work_queue", "xdist_plan")))
+#: Panel 2026-11-09: the code that CHOOSES or JUDGES tests keeps FULL (design 0.7 rule 8: a gate never tests
+#: itself with a selection it made). Panel 2026-11-17: 34 of 55 FULL landings in 36 h escalated only because they
+#: touched a tool that merely RUNS tests (RUNNER_TOOLS); those take the self-test tier plus CANARY. The nightly
+#: complete FULL and the pre-publish green FULL (D-868) are the net.
+SELECT_CORE = ("tools/harness/affected_*.py", "tools/land_selection.py", "test/known_failures.py",
+               "test/browser_scope.py")
+RUNNER_TOOLS = ("tools/land_browser.py",
+                *(f"tools/remote/{name}.py" for name in ("remote_pytest", "remote_job", "remote_test_tools",
+                                                        "work_queue", "xdist_plan")))
+#: Real product suites from different areas a runner change must still drive through the changed runner. No
+#: browser canary: browser tests are chosen by land.py (test/browser_scope.py + ROSY_RUN_BROWSER_TESTS=1), not by
+#: this selection, so one cannot be named here; the nightly run covers the browsers.
+CANARY = ("contracts/foundation/test", "operations/world/test", "middleware/media/test")
 
 
 def legacy() -> bool:
@@ -61,23 +68,66 @@ REGISTRY_FILES = ("tools/harness/harness.yaml", "tools/harness/platform_parts.ya
 
 
 def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
-    """A non-safety FULL trigger's narrower tier through `add`: None when it stays FULL (unknown reach),
+    """A non-safety FULL trigger's narrower tier through `add`: None when it stays FULL (legacy only),
     "own" when the tier itself is the selection, "graph" when the path's own mapping (module, referencing tests,
     reverse dependents) is, so a path that maps to nothing still escalates as unknown."""
-    if legacy() or path in REGISTRY_FILES or any(at._match(path, p) for p in SELECT_CORE):
+    if legacy():
         return None
+    if path == "tools/harness/fleet_test_seconds.json" and repo.exists(path):
+        reader = "test/test_affected_tests.py"
+        if repo.exists(reader):
+            add(reader, f"checks Fleet shard weights ({path})")
+            return "own"
+    import affected_capsules
+
+    if path in REGISTRY_FILES or any(at._match(path, p) for p in SELECT_CORE):
+        for test, why in affected_capsules.harness_capsule(repo, path).items():
+            add(test, why)
+        return "own"
     if trigger.endswith(SELF_TRIGGER):
         for test in repo.test_files:
             if SELF_TEST.match(test):
                 add(test, f"selector self-test tier ({path})")
         add(ARCHITECTURE, f"selector self-test tier ({path})")
+        if any(at._match(path, p) for p in RUNNER_TOOLS):
+            for suite in CANARY:
+                add(suite, f"runner canary ({path})")
         return "own"
     if "/" not in path or any(trigger.endswith(t) for t in STAY_FULL):
-        return None  # a root conftest, pyproject or pytest.ini reaches every suite
+        for test, why in affected_capsules.packaging_capsule(repo, path).items():
+            add(test, why)
+        return "own"
     if trigger.endswith("pytest conftest"):
         add(str(PurePosixPath(path).parent), f"conftest scope ({path})")
         return "own"
     return "own" if trigger.endswith("CI workflow") else "graph"  # lab runs execute no workflow
+
+
+def folder_tests(repo: at.Repo, path: str) -> dict[str, str]:
+    """Tests for a path no module, import root or test names, from its owning folder; {} keeps it FULL.
+
+    The longest platform_parts root holding the path contributes its tests; so do the tests beside the path
+    (its folder or its `test/`) and the tests of a sibling source that names the file (a script its launcher
+    mentions, 2026-11-17: `tools/register_publish_merge_task.ps1` is named only by `tools/publish_main.py`)."""
+    parent = str(PurePosixPath(path).parent)
+    if parent == ".":
+        return {}  # a repo-root file has no owning folder
+    found: dict[str, str] = {}
+    roots = [r for r, _ in repo.owners if at._under(path, r)]
+    if roots:
+        root = max(roots, key=len)
+        for test in repo.test_files_under(root):
+            found[test] = f"owning folder {root} ({path})"
+    for test in repo.test_files:
+        if str(PurePosixPath(test).parent) in (parent, f"{parent}/test"):
+            found.setdefault(test, f"beside {path}")
+    name = PurePosixPath(path).name
+    for sibling in repo.tracked:
+        if (sibling != path and sibling.endswith(".py") and str(PurePosixPath(sibling).parent) == parent
+                and not at.TEST_FILE.search(sibling) and name in repo.text(sibling)):
+            for test in repo.referencing_tests(sibling):
+                found.setdefault(test, f"references {sibling}, which names {path}")
+    return found
 
 
 def add_readers(repo: at.Repo, path: str, trigger: str, add, changed=(), base_text=None) -> str | None:
@@ -129,12 +179,15 @@ def known_failure_tests(repo: at.Repo, changed, base_text) -> tuple[dict[str, st
     for nodeid in sorted(old ^ new):
         test = nodeid.split("::")[0]
         if nodeid in new:
-            if _selected_by_other_changes(repo, changed, base_text, test):
-                return None, f"adds {nodeid} while other changes on this branch select {test}: needs human review"
-            if at.safety_review.is_safety(test, repo.safety_roots, repo.safety_modules):
-                return None, f"adds safety-tagged {nodeid}: needs human review"
-            if not repo.exists(test):
-                return None, f"adds {nodeid}, whose test file does not exist"
+            if legacy():
+                if _selected_by_other_changes(repo, changed, base_text, test):
+                    return None, f"adds {nodeid} while other changes on this branch select {test}: needs human review"
+                if at.safety_review.is_safety(test, repo.safety_roots, repo.safety_modules):
+                    return None, f"adds safety-tagged {nodeid}: needs human review"
+                if not repo.exists(test):
+                    return None, f"adds {nodeid}, whose test file does not exist"
+            else:
+                found.setdefault(ARCHITECTURE, f"known_failures review without FULL ({nodeid})")
         if repo.exists(test):
             found.setdefault(test, f"{'added to' if nodeid in new else 'removed from'} {KNOWN_FAILURES}: {nodeid}")
     return found, ""
@@ -226,7 +279,6 @@ def narrowed(repo: at.Repo, path: str) -> dict[str, str] | None:
         importers = module_importers(repo, path)
         if not importers:
             return None
-        # Runtime wrappers and broad owners need downstream coverage, not just named readers.
         if any(not at.TEST_FILE.search(src) and not at._under(src, FOUNDATION) for src in importers):
             return None
         tests = {t: f"references {path}" for t in repo.referencing_tests(path)}

@@ -99,7 +99,7 @@ class StateManager:
         self._power = PowerStatus()
         self._line_follow = LineFollowStatus()
         self._traffic_policy = TrafficPolicyStatus()
-        self._map_id: Optional[str] = None
+        self._map_id = self._map_grid_id = None  # Optional[str]; grid: content id of the grid /map delivered
         self._diagnostics: dict[str, HealthState] = {}
         self._errors: list[str] = []
         self._sensors: dict[str, dict] = {}
@@ -298,12 +298,12 @@ class StateManager:
         with self._lock:
             self._swarm = status
 
-    def set_map_id(self, map_id) -> None:
+    def set_map_id(self, map_id, grid_id: Optional[str] = None) -> None:
         with self._lock:
             normalised = _as_map_id(map_id)
             if normalised != self._map_id:
                 self._odom_write_token = object()
-            self._map_id = normalised
+            self._map_id, self._map_grid_id = normalised, grid_id or self._map_grid_id  # save_map: same grid
 
     @property
     def map_id(self) -> Optional[str]:
@@ -422,7 +422,7 @@ class StateManager:
                 online=True,
                 mode=self._mode,
                 navigation=self._navigation,
-                map_id=self._map_id,
+                map_id=self._map_id, map_grid_id=self._map_grid_id,
                 peers=peers,
                 pose=self._pose.model_copy(),
                 velocity=self._velocity.model_copy(),

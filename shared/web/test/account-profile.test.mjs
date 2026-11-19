@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {profileView, renderAccountProfile} from '../account-profile.js';
+import {appLinks, profileView, renderAccountProfile} from '../account-profile.js';
 
 const session = {authenticated:true, account_id:'alice', profile_url:'https://account.example/console/profile',
   profile:{account_id:'alice', login:'alice', display_name:'작업자 🤖'}};
@@ -20,6 +20,20 @@ test('only fixed HTTPS profile URLs are shown', () => {
     assert.equal(profileView({...session, profile_url}), null);
   }
 });
+test('the app list shows only safe https addresses and not the app already open', () => {
+  const app = (label, home_url) => ({client_id:'x', label, home_url});
+  const apps = [app('Fleet', 'https://site.example/console'), app('Here', 'https://site.example/monitoring/'),
+    app('Bad', 'javascript:alert(1)'), app('Plain', 'http://site.example/'), app('Creds', 'https://u:p@site.example/'),
+    app('line\nbreak', 'https://site.example/a'), app('', 'https://site.example/b'), app('None', ''), null];
+  assert.deepEqual(appLinks({authenticated:true, apps}, 'https://site.example/monitoring/?view=1'),
+    [{href:'https://site.example/console', label:'Fleet'}]);
+  assert.deepEqual(appLinks({authenticated:true, apps:[app('Root', 'https://site.example/')]}, 'https://site.example/monitoring/'),
+    [{href:'https://site.example/', label:'Root'}]);
+  assert.deepEqual(appLinks({authenticated:false, apps}, ''), []);
+  assert.deepEqual(appLinks({authenticated:true}, ''), []);
+  assert.deepEqual(appLinks(null, ''), []);
+});
+
 test('renderer uses literal text and removes stale navigation on logout/native shell', () => {
   const link = {removeAttribute(key) { delete this[key]; }};
   const root = {documentElement:{dataset:{}}, querySelectorAll:() => [link]};

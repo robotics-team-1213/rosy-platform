@@ -11,10 +11,10 @@ Usage (from the main checkout or any worktree of the repository)::
 what is lossless: a worktree that is clean (nothing modified, staged or
 untracked), whose HEAD is an ancestor of ``main``, that is not locked, has no
 rebase/merge/bisect/cherry-pick in progress, holds no ignored file outside the
-cache directories, and has been idle long enough. Long enough is 1 h when its branch landed (a
-commit of its own in the branch reflog, D-790), whoever made it; no wait at all for the caller's
-own landed worktree (owner note equal to the caller's identity, session included); ``--idle-hours``
-(default 72) for the rest, a just-created empty worktree included. Its branch is
+cache directories, and has been idle long enough. No wait at all when its branch landed (a
+commit of its own in the branch reflog, D-790) and the worktree is clean, whoever made it;
+``--idle-hours`` (default 72) for the rest, a just-created empty worktree or a dirty landed one
+included. Its branch is
 deleted by exact sha (``git update-ref -d <ref> <sha>``) once that sha is an
 ancestor of main, as are landed branches no worktree uses (D-886). ``--snapshot``, for a person or dispatcher,
 also takes idle worktrees that are dirty or unmerged: the working files (modified,
@@ -240,8 +240,8 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
 
     ``lossless`` stops at an unmerged branch (the lossless prune keeps it anyway);
     ``full`` always reads the status, for the uncommitted count in ``status``. A merged branch
-    with a commit of its own (``_landed``) waits ``rules.LANDED_IDLE_HOURS`` while the worktree is
-    clean, none at all when ``me`` (the caller's identity) owns it (``row["fast"]``). An orphan
+    with a commit of its own (``_landed``) has no wait while the worktree is clean (``row["fast"]``,
+    whoever made it), and waits ``idle_hours`` when dirty (``landed-dirty``). An orphan
     gets its content summary in ``note`` and its kept files in ``keep``.
     """
     if row["orphan"]:
@@ -253,8 +253,8 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
         row["verdict"] = "orphan"
         return
     landed = bool(row["branch"] and row["merged"] and row["branch"] != "main" and _landed(row))
-    row["fast"] = landed and bool(me) and row["owner"] == me
-    row["wait_h"] = 0.0 if row["fast"] else min(idle_hours, rules.LANDED_IDLE_HOURS) if landed else idle_hours
+    row["fast"] = landed
+    row["wait_h"] = 0.0 if landed else idle_hours
     stale = None if row["merged"] or not row["sha"] else rules.stale_history(row["path"], row["sha"])
     if stale:
         row["note"] = stale
@@ -490,7 +490,7 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
         else f"--from {base}: not a commit" if not known
         else '--owner needs a name: --owner "<who>"' if owner is not None and not owner.strip()
         else None)
-    stale = None if problem or base == "main" else rules.stale_history(root, base)
+    stale = None if problem or base == "main" else rules.stale_history(root, base) or rules.unlanded(root, base)
     if stale:  # D-790: a worktree on the pre-rewrite line would carry it into main
         problem = f"refused: --from {base} is {stale}; rebuild on a new branch from main (D-172)"
     if problem:

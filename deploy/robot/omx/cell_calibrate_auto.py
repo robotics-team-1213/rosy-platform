@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+"""Online Self-Calibration & Place-and-Look Bias Learning (`cell_calibrate_auto.py`).
+
+Single Responsibility:
+  - Select clear pivot points on the live top view (`clear_point`, `auto_pivot_point`, `over_target`, `pivot_near_yaws`).
+  - Run online self-calibration before an auto-pick (`self_calibrate`, `carried`).
+  - Learn map bias from top-camera place verification (`learn_bias`).
+"""
+from __future__ import annotations
+
+import math
+from pathlib import Path
+import sys
+import time
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cell_params as prm  # noqa: E402
+import cell_pivot  # noqa: E402
+
+
+def _parent_attr(name: str, default):
+    mod = sys.modules.get("cell_calibrate")
+    if mod is not None and hasattr(mod, name):
+        return getattr(mod, name)
+    return default
+
+
+_CLEAR_GRID_CACHE: dict[float, list[tuple[float, float, float]]] = {}
+
+
+def _clear_offsets(max_mm: float) -> list[tuple[float, float, float]]:
+    cached = _CLEAR_GRID_CACHE.get(max_mm)
+    if cached is not None:
+        return cached
+    out = sorted(
+        (math.hypot(float(dx), float(dy)), float(dx), float(dy))
+        for dx in np.arange(-max_mm, max_mm + 1, 5.0)
+        for dy in np.arange(-max_mm, max_mm + 1, 5.0)
+        if math.hypot(float(dx), float(dy)) <= max_mm
+    )
+    _CLEAR_GRID_CACHE[max_mm] = out
+    return out
+
+
+def clear_point(
+    near_xy, mask, roi, inside, to_px, radius_px: int = 36, max_mm: float = 72.0, reach_m: float = 0.23
+):
+    """The nearest arm point to near_xy whose pivot circle (radius_px around its pixel) is empty in the mask and fully
+    on the surface (inside: full-image 0/1 array), within max_mm and reach. None when there is none."""
+    nx, ny = float(near_xy[0]), float(near_xy[1])
+    rx0, ry0, rx1, ry1 = roi[0], roi[1], roi[2], roi[3]
+    r = radius_px
+    r1 = r - 1
+    reach_sq = reach_m * reach_m
+    for _, dx, dy in _clear_offsets(float(max_mm)):
+        px_m, py_m = nx + dx * 0.001, ny + dy * 0.001
+        if px_m * px_m + py_m * py_m > reach_sq:
+            continue
+        px = to_px((px_m, py_m))
+        if px is None:
+            continue
+        x, y = int(round(px[0])), int(round(px[1]))
+        if x - r < rx0 or y - r < ry0 or x + r >= rx1 or y + r >= ry1:
+            continue
+        if not (inside[y - r, x - r] and inside[y - r, x + r1] and inside[y + r1, x - r] and inside[y + r1, x + r1]):
+            continue
+        my, mx = y - ry0, x - rx0
+        if (
+            mask[my, mx]
+            or mask[my - r, mx - r]
+            or mask[my - r, mx + r1]
+            or mask[my + r1, mx - r]
+            or mask[my + r1, mx + r1]
+            or mask[my - r, mx]
+            or mask[my + r1, mx]
+            or mask[my, mx - r]
+            or mask[my, mx + r1]
+        ):
+            continue
+        if not mask[my - r : my + r, mx - r : mx + r].any() and inside[y - r : y + r, x - r : x + r].min() == 1:
+            return [round(px_m, 4), round(py_m, 4)]
+    return None
+
+
+def map_agrees(record: dict, params=None) -> bool:
+    """Marks that disagree fit a map that misses by centimetres: such a map is never saved."""
+    return record["loo_error_mm"]["max"] <= prm.get(params, "calibrate.max_loo_mm")
+
+
+def auto_pivot_point(cell, config, calibration, site, target_xy):
+    """clear_point on the live top view: empty of objects, on the site's surface, near the target."""
+    import cv2
+    import cell_objects
+    from cell_observe import predicted_pixel
+
+    img = cell.frame("top")
+    roi = tuple(config["sites"][site].get("auto_roi") or (0, 0, img.shape[1], img.shape[0]))
+    big = (max(0, roi[0] - 60), max(0, roi[1] - 60), min(img.shape[1], roi[2] + 60), min(img.shape[0], roi[3] + 60))
+    site_cfg = config["sites"][site]
+    mask = cell_objects.foreground(
+        img, big, params=config.get("params"), surface_px=site_cfg.get("surface_px"), surface_lab=site_cfg.get("surface_lab")
+    )
+    inside = np.zeros(img.shape[:2], np.uint8)
+    poly = config["sites"][site].get("surface_px") or [
+        [0, 0],
+        [img.shape[1] - 1, 0],
+        [img.shape[1] - 1, img.shape[0] - 1],
+        [0, img.shape[0] - 1],
+    ]
+    cv2.fillPoly(inside, [np.asarray(poly, np.int32)], 1)
+    cp_fn = _parent_attr("clear_point", clear_point)
+    return cp_fn(target_xy, mask, big, inside, lambda q: predicted_pixel(config, calibration, site, q))
+
+
+def over_target(config, site) -> bool:
+    """The jaws may be marked right over the target when the pivot height clears the tallest top there."""
+    p, s_z = config.get("params"), config["sites"][site].get("surface_z")
+    return (
+        bool(prm.get(p, "pivot.over_target"))
+        and s_z is not None
+        and (
+            1000 * (cell_pivot.pivot_z_view(config, site) - s_z) - prm.get(p, "pivot.over_top_mm")
+            >= prm.get(p, "pivot.over_clear_mm")
+        )
+    )
+
+
+def pivot_near_yaws(config, site, over: bool | None = None) -> list:
+    """Yaws for a pivot near (`over` False) or over (`over` True) a target; None: as `over_target` allows."""
+    site_cfg = config["sites"][site]
+    if over is None:
+        over = _parent_attr("over_target", over_target)(config, site)
+    if over and site_cfg.get("pivot_yaws"):
+        return list(site_cfg["pivot_yaws"])
+    base = site_cfg["yaw_deg"]
+    offsets = range(-60, 61, 20) if over else (-80, -40, 0, 40, 80, 120)
+    return [base + d for d in offsets]
+
+
+def pivot_point(cell, config, calibration, site, target_xy) -> tuple[list | None, bool]:
+    """(point, over) for a pivot that can serve `target_xy`: a configured `pivot.points` entry the live view finds
+    clear, else the nearest clear surface point, else the target itself when `pivot.over_target` allows.
+    2026-11-17 panel: with over_target set, every site went straight to the over-target set (±60 deg, exactly the
+    120 deg MIN_YAW_ARC_DEG, so FK 116 deg failed) and `pivot.points` was never tried. With `pivot.clear_first` a
+    clear point's full circle comes first and the over-target pivot only when no clear point is within reach; without
+    it an over-target site keeps the reviewed over-target set."""
+    over_ok = _parent_attr("over_target", over_target)(config, site)
+    if over_ok and not clear_first(config):
+        return list(target_xy), True  # the reviewed over-target set until this arm's clear-point circles are checked
+    reach_mm = 0.9 * prm.get(config.get("params"), "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
+    ap_fn = _parent_attr("auto_pivot_point", auto_pivot_point)
+    configured = sorted((tuple(q) for q in (config.get("pivot") or {}).get("points", [])), key=lambda q: math.dist(q, target_xy))
+    for start in [q for q in configured if 1000 * math.dist(q, target_xy) <= reach_mm] + [tuple(target_xy)]:
+        found = ap_fn(cell, config, calibration, site, start)
+        if found is not None and 1000 * math.dist(found, target_xy) <= reach_mm:
+            return list(found), False
+    if over_ok:
+        return list(target_xy), True
+    return None, False
+
+
+def pivot_near(cell, config, calibration, cal_path, step: str, work) -> dict:
+    """One `pivot-near <site>:<x>,<y>` step. 2026-11-17 panel r6: every failure that night (marks off the frame top,
+    a short FK arc, a geometry from another height) was found only by the guards after the arm moved, so
+    `cell_pivot_precheck` judges the plan first and a problem sends no arm command at all."""
+    import cell_pivot_precheck
+
+    site, xy = step.split()[1].split(":")
+    near = tuple(float(v) for v in xy.split(","))
+    point, over = _parent_attr("pivot_point", pivot_point)(cell, config, calibration, site, near)
+    if point is None:
+        return {step: "no clear point near the target"}
+    yaws = _parent_attr("pivot_near_yaws", pivot_near_yaws)(config, site, over)
+    frame_wh = None if ((config.get("cameras") or {}).get("top") or {}).get("frame_wh") else cell.frame("top").shape[1::-1]
+    problems = cell_pivot_precheck.pivot_precheck(config, calibration, site, point, yaws, frame_wh)
+    if problems:
+        return {step: "precheck refused: " + "; ".join(problems), "at": point}
+    result = cell_pivot.pivot_calibrate(cell, config, point, yaws, calibration, site, work, time.sleep, lambda row: None)
+    if result["result"] == "calibrated":
+        cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"], config.get("params"))
+    return {step: result["result"], "at": point, "bias": result.get("bias", {}).get("bias_mm")}
+
+
+def clear_first(config) -> bool:
+    """Config `pivot.clear_first`: try a clear point's full circle before the over-target set. Off by default: at a
+    packed over-target site that circle is a new real-arm pose set (review 2026-11-17), so an arm turns it on only
+    after the AGENTS four checks for its configured points."""
+    return bool((config.get("pivot") or {}).get("clear_first"))
+
+
+def carried(region: dict) -> bool:
+    """A region copied from another site or point, never measured where it stands."""
+    return bool(region.get("carried_from")) or str(region.get("source", "")).startswith("carried")
+
+
+def self_calibrate(
+    cell, config, calibration, calibration_path, site, target_xy, objects, work, bias_data, sleep, log
+):
+    """The bias region near `target_xy`: saved, or a pivot circle at a clear configured point (not in dry runs)."""
+    p = config.get("params")
+    bias_data = {**bias_data, "regions": [r for r in bias_data["regions"] if not carried(r)]}
+    if cell_pivot.bias_at(bias_data, site, target_xy, reach_mm=prm.get(p, "calibrate.bias_near_mm"), params=p):
+        return bias_data, None
+    pivot = config.get("pivot", {})
+    clear_mm, base = pivot.get("clear_mm", prm.get(p, "auto.clear_mm")), config["sites"][site]["yaw_deg"]
+    points = [
+        q
+        for q in pivot.get("points", [])
+        if 1000 * math.dist(q, target_xy) <= 0.9 * prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
+        and all(1000 * math.dist(q, o["raw_m"]) >= clear_mm for o in objects)
+    ]
+    if cell is not None and not clear_first(config) and _parent_attr("over_target", over_target)(config, site):
+        points = [tuple(target_xy)]  # the reviewed order until pivot.clear_first is turned on (see pivot_point)
+    if not points and cell is not None:
+        ap_fn = _parent_attr("auto_pivot_point", auto_pivot_point)
+        found = ap_fn(cell, config, calibration, site, target_xy)
+        have = cell_pivot.bias_at(bias_data, site, target_xy, params=p)
+        if found and have and math.dist(have["point_m"], target_xy) <= math.dist(found, target_xy) + 0.005:
+            return bias_data, None
+        points = [found] if found else []
+    if not points and cell is not None and _parent_attr("over_target", over_target)(config, site):
+        points = [tuple(target_xy)]  # 2026-11-17: over the box only when no clear point serves it (see pivot_point)
+    if not points:
+        if cell_pivot.bias_at(bias_data, site, target_xy, params=p):
+            return bias_data, None
+        return bias_data, "no clear pivot point within reach of the object"
+    chosen = min(points, key=lambda q: math.dist(q, target_xy))
+    if any(r["site"] == site and math.dist(r["point_m"], chosen) <= 0.010 for r in bias_data["regions"]):
+        return bias_data, None
+    if cell is None:
+        return bias_data, f"needs a pivot at {chosen}"
+    yaws = pivot.get("yaws", [base + d for d in (-80, -40, 0, 40, 80, 120)])
+    result = cell_pivot.pivot_calibrate(cell, config, chosen, yaws, calibration, site, work, sleep, log)
+    if result["result"] != "calibrated":
+        return bias_data, f"pivot: {result['result']}"
+    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), result["bias"], p)
+    return cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), p), None
+
+
+def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict, calibration: dict | None = None) -> dict | None:
+    """Learn map bias from top-camera place verification (records raw innovation even when rejected)."""
+    import cell_attempts
+    import cell_cal_monitor
+
+    p = config.get("params")
+    if not prm.get(p, "auto.bias_from_place") or not verify.get("found") or "seen_bias_mm" not in verify:
+        return None
+    seen, used = verify["seen_bias_mm"], verify["used_bias_mm"]
+    cal_data = calibration
+    if cal_data is None and calibration_path:
+        try:
+            cal_data = __import__("json").loads(Path(calibration_path).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            cal_data = None
+    record = cell_pivot.map_record(cal_data, site) if isinstance(cal_data, dict) else None
+    map_sha = cell_attempts.digest(record) if record is not None else None
+    sigma_mm = math.hypot(
+        float(prm.get(p, "verify.mark_sigma_mm")),
+        float(prm.get(p, "verify.place_sigma_mm")),
+    )
+    valid = True
+    try:
+        for value in (seen, used):
+            cell_pivot.validate_bias({"point_m": place_xy, "bias_mm": value}, p)
+    except ValueError:
+        valid = False
+    resid = ([float(seen[0]) - float(used[0]), float(seen[1]) - float(used[1])]
+             if isinstance(seen, (list, tuple)) and isinstance(used, (list, tuple)) and len(seen) >= 2 and len(used) >= 2 else None)
+    within = valid and math.dist(seen, used) <= prm.get(p, "auto.bias_learn_max_mm")
+    need_sha = record is not None
+    ok = valid and within and (not need_sha or map_sha is not None)
+    cell_cal_monitor.record_observation(
+        config, site=site, map_sha=map_sha, source="place_look", raw_mm=seen, residual_mm=resid,
+        sigma_mm=sigma_mm, accepted=ok,
+        reason=None if ok else ("exceeds_max_bias" if not valid else ("missing_map_sha" if (need_sha and map_sha is None) else "exceeds_bias_learn_max_mm")),
+    )
+    if not ok:
+        return None
+    region = {
+        "site": site,
+        "kind": "place_look",
+        "point_m": list(place_xy),
+        "bias_mm": seen,
+        "centre_sigma_mm": round(sigma_mm, 2),
+        "n": 1,
+        **({"map_sha": map_sha} if map_sha is not None else {}),
+        "measured": time.strftime("%Y-%m-%d"),
+        "source": "place-and-look: the arm set the box here and the top camera saw it",
+    }
+    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), region, p)
+    return region

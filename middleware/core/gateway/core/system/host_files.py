@@ -36,6 +36,8 @@ _test_lock = threading.Lock()
 _confirm_lock = threading.Lock()
 STATUS_INPUTS_FILE = "/run/rosy/status-inputs.json"
 STATUS_INPUTS_PERIOD_S = 1.0
+LAMP_STATUS_FILE = "/var/lib/rosy/lamp-control/status-patterns.json"
+_lamp_lock = threading.Lock()
 _UNSET = object()
 
 
@@ -107,6 +109,27 @@ class HostFileError(Exception):
 
 class HostFileExchange:
     Error = HostFileError
+
+    def lamp_status_patterns(self) -> dict[str, Any]:
+        path = Path(LAMP_STATUS_FILE)
+        if not path.parent.is_dir():
+            return {"status_patterns": "on", "available": False}
+        if not path.exists():
+            return {"status_patterns": "on", "available": True}
+        value = _read_small_json(str(path))
+        if not isinstance(value, dict) or value.get("status_patterns") not in ("on", "off"):
+            return {"status_patterns": "on", "available": False}
+        return {"status_patterns": value["status_patterns"], "available": True}
+
+    def set_lamp_status_patterns(self, status_patterns: str) -> dict[str, Any]:
+        path = Path(LAMP_STATUS_FILE)
+        with _lamp_lock:
+            try:
+                _write_private(str(path), json.dumps({"status_patterns": status_patterns}) + "\n",
+                               0o640, "status-patterns")
+            except OSError as exc:
+                raise HostFileError("LAMP_UNAVAILABLE", "상태 표시등 설정을 저장하지 못했습니다") from exc
+        return {"status_patterns": status_patterns, "available": True}
 
     def hardware(self, svc: Any) -> Optional[dict[str, Any]]:
         """Validated readback with overlays and age; absent files still raise FileNotFoundError."""

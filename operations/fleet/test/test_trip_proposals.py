@@ -19,7 +19,7 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 from test_job_trip_steps import Rig, R, TWO
 from fleet.server.trip_candidates import create_candidate_trip_job
-from fleet.server.trip_proposals import TripProposalStore
+from fleet.server.trip_proposals import TripProposalStore, request_body
 
 ROBOT = "rosy_01"
 PATH = "/api/fleet/trip-proposals"
@@ -49,7 +49,7 @@ def rig(tmp_path, monkeypatch):
 
     async def fake_create(jobs, candidates, steps, principal_id, request_key, **kwargs):
         made.append((candidates, steps, principal_id, request_key, kwargs))
-        digest = sha256(_json({"candidates": candidates, "steps": steps}).encode()).hexdigest()
+        digest = sha256(_json(request_body(candidates, steps, kwargs.get("object_ref"))).encode()).hexdigest()
         return await asyncio.to_thread(
             jobs.rows.create, "mission-1", candidates[0], principal_id, steps,
             request_key="trip-pool:" + request_key, request_digest=digest, approved_by=kwargs["approved_by"],
@@ -185,3 +185,28 @@ def test_admission_makes_the_same_trip_ledger_job_as_the_operator_path(tmp_path)
                                    "event_type='CELL_JOB_ADMITTED'", (job["mission_id"],)).fetchone()[0]
     assert actor == "operator-2"
     assert rig.jobs.rows.read("harbor", request_key="k")["mission_id"] == job["mission_id"]
+
+
+def test_object_ref_is_carried_opaquely_bound_by_the_digest_and_survives_admission(rig):
+    # D-996 5: the app's cargo code rides on the proposal unread; omitting it keeps the old response bytes
+    client, _, made = rig
+    plain = propose(rig, request_key="harbor/plain").json()["proposal"]
+    assert "object_ref" not in plain
+    first = propose(rig, request_key="harbor/cargo", object_ref="CNTR-0001")
+    assert first.status_code == 200
+    proposal = first.json()["proposal"]
+    assert proposal["object_ref"] == "CNTR-0001"
+    assert propose(rig, request_key="harbor/cargo", object_ref="CNTR-0001").json() == first.json()
+    assert propose(rig, request_key="harbor/cargo", object_ref="CNTR-0002").status_code == 409
+    assert propose(rig, request_key="harbor/cargo").status_code == 409
+    for bad in (" CNTR", "x" * 129, "a\u0001b", ""):
+        assert propose(rig, request_key="harbor/bad", object_ref=bad).status_code == 422
+    # request_digest: sha256 of compact sorted-key JSON; object_ref joins it only when set (Harbor recomputes this)
+    canonical = '{"candidates":["rosy_01"],"object_ref":"CNTR-0001","steps":[{"to":"B","via":[]}]}'
+    assert proposal["request_digest"] == sha256(canonical.encode()).hexdigest()
+    assert plain["request_digest"] == sha256(b'{"candidates":["rosy_01"],"steps":[{"to":"B","via":[]}]}').hexdigest()
+    admitted = client.post(PATH + "/" + proposal["proposal_id"] + "/admit", headers=headers("op1"),
+                           json=args(rig, proposal))
+    assert admitted.status_code == 200
+    assert admitted.json()["proposal"]["object_ref"] == "CNTR-0001"
+    assert admitted.json()["proposal"]["status"] == "ADMITTED"

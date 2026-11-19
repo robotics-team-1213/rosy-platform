@@ -16,6 +16,12 @@ def show_screen(page, heading):
     page.evaluate("heading => { location.hash = heading }", "#" + heading)
 
 
+def open_tools(page, tool_id):
+    tools = page.locator(f'#{tool_id}')
+    if not tools.evaluate('(element) => element.open'):
+        tools.locator('summary').click()
+
+
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in real Chromium')
 
 
@@ -72,7 +78,7 @@ def test_raster_register_draw_and_reopen_with_token(editor_site):
     image = page.locator('#site-map-svg image[data-drawing]')
     expect(image).to_have_count(1)
     expect(image).to_have_attribute('href', re.compile('^blob:'))
-    page.locator('#editor-tools > summary').click()
+    open_tools(page, 'editor-tools')
     page.locator('#editor-enabled').check()
     page.locator('#editor-kind').select_option('park')
     point(page, 300, 200)
@@ -90,7 +96,7 @@ def test_explicit_split_join_are_single_undoable_draft_changes(editor_site):
     page, store, robot = editor_site
     register(page)
     show_screen(page, "survey-heading")
-    page.locator('#editor-tools > summary').click()
+    open_tools(page, 'editor-tools')
     page.locator('#editor-enabled').check()
     page.locator('#editor-kind').select_option('park')
     point(page, 300, 200)
@@ -130,7 +136,7 @@ def test_extract_edit_select_accept_undo_save_and_reopen(editor_site):
     page.locator('#drawing-description').fill('실측 1 m 평면 기준선')
     page.locator('#drawing-register').click()
     expect(page.locator('#site-map-svg image[data-drawing]')).to_have_count(1)
-    page.locator('#extraction-tools > summary').click()
+    open_tools(page, 'extraction-tools')
     page.locator('#extract-run').click()
     expect(page.locator('#extract-status')).to_contain_text('개 후보')
     page.locator('#extract-candidate').select_option(index=1)
@@ -142,7 +148,7 @@ def test_extract_edit_select_accept_undo_save_and_reopen(editor_site):
     page.locator('#extract-accept').click()
     expect(page.locator('#extract-status')).to_contain_text('초안에 반영')
     expect(page.locator('#site-map-svg [data-facility]')).to_have_count(1)
-    page.locator('#editor-tools > summary').click()
+    open_tools(page, 'editor-tools')
     page.locator('#editor-undo').click()
     expect(page.locator('#site-map-svg [data-facility]')).to_have_count(0)
     page.locator('#editor-redo').click()
@@ -165,7 +171,7 @@ def test_import_register_edit_save_reopen(editor_site, width, tmp_path):
     page.set_viewport_size({'width': width, 'height': 1000})
     register(page)
     show_screen(page, "survey-heading")
-    page.locator('#editor-tools > summary').click()
+    open_tools(page, 'editor-tools')
     page.locator('#editor-enabled').check()
     page.locator('#editor-kind').select_option('park')
     page.locator('#editor-name').fill('입구')
@@ -222,7 +228,7 @@ def test_zoom_rotation_and_drag_never_dispatch(editor_site):
             and re.search(r'/(trip|formation|navigation)(/|$)', req.url) else None)
     register(page)
     show_screen(page, "survey-heading")
-    page.locator('#editor-tools > summary').click()
+    open_tools(page, 'editor-tools')
     page.locator('#editor-enabled').check()
     page.locator('#editor-kind').select_option('park')
     point(page, 400, 240)
@@ -280,7 +286,7 @@ def test_import_failure_and_unsaved_navigation_preserve_draft(editor_site):
     page.locator('#drawing-register').click()
     expect(page.locator('#drawing-status')).to_contain_text('양수')
     assert store.draft_view() == before
-    page.locator('#editor-tools > summary').click()
+    open_tools(page, 'editor-tools')
     page.locator('#editor-enabled').check()
     page.locator('#editor-kind').select_option('park')
     point(page, 400, 240)
@@ -344,7 +350,7 @@ def test_drawing_replacement_uses_working_draft_while_viewing_active(editor_site
     active = store.active_view()
     register(page)
     show_screen(page, "survey-heading")
-    page.locator('#editor-tools > summary').click()
+    open_tools(page, 'editor-tools')
     page.locator('#editor-enabled').check()
     page.locator('#editor-kind').select_option('park')
     page.locator('#editor-name').fill('unsaved destination')
@@ -352,7 +358,7 @@ def test_drawing_replacement_uses_working_draft_while_viewing_active(editor_site
     page.locator('#map-source').select_option('active')
     page.locator('#drawing-rotation').fill('30')
     page.locator('#drawing-register').click()
-    page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+    expect(page.locator('#drawing-status')).to_contain_text('맞춤 완료')
     expect(page.locator('#map-source')).to_have_value('draft')
     show_screen(page, "edit-heading")
     page.locator('#save-draft').click()
@@ -370,7 +376,7 @@ def test_draft_click_never_plans_or_starts_trip(editor_site):
     register(page)
     page.locator('#site-map-svg [data-place]').first.dispatch_event('click')
     show_screen(page, "survey-heading")
-    page.locator('#editor-tools > summary').click()
+    open_tools(page, 'editor-tools')
     page.locator('#editor-enabled').check()
     page.locator('#editor-kind').select_option('road')
     point(page, 300, 200)

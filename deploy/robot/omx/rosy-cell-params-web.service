@@ -1,0 +1,19 @@
+# Rosy OMX cell params, servo caps, attempt history, and incident clear UI on the control PC.
+# Loopback 8772, exposed under :9449/params alongside rosy-calibration-web via:
+# `tailscale serve --bg --https=9449 --set-path=/params http://127.0.0.1:8772`
+# Install as the cell user: copy into ~/.config/systemd/user/, then:
+# systemctl --user daemon-reload && systemctl --user enable --now rosy-cell-params-web
+[Unit]
+Description=Rosy OMX Cell Params and Incident Web Console (ROSY Core protected)
+After=network-online.target rosy-calibration-web.service
+Wants=rosy-calibration-web.service
+
+[Service]
+EnvironmentFile=-%h/.config/rosy/omx-observation-bridge.env
+Environment=PYTHONPATH=%h/rosy-test/omx-tools-current:%h/rosy-test/omx-tools-current/deploy/robot/omx:%h/rosy-test/omx-tools-current/middleware/devices/omx/adapter:%h/rosy-test/omx-tools-current/contracts/foundation
+ExecStart=%h/.local/share/rosy/calibration/venv/bin/python %h/rosy-test/omx-tools-current/deploy/robot/omx/cell_params_web.py --port 8772 --account-config %h/.config/rosy/calibration/receiver.json --file stack=%h/rosy-test/omx-record-prep-20261019/cell-params-stack.json --caps arm_a=%h/rosy-test/omx-record-prep-20261019/caps-arm-a-wrist400-20261109.json --profile arm_a=%h/rosy-test/omx-record-prep-20261019/arm-a-robot-profile.json --caps arm_b=%h/rosy-test/omx-record-prep-20261019/caps-arm-b-wrist400-20261103.json --profile arm_b=%h/rosy-test/omx-record-prep-20261019/arm-b-robot-profile.json --incident-arm arm_a --incident-arm arm_b --incident-arm arm_s
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

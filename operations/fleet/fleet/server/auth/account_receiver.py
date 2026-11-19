@@ -3,6 +3,7 @@ import asyncio
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
 import json
+import logging
 import re
 from urllib.parse import parse_qsl, urlsplit
 
@@ -11,6 +12,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
+from core_common.protocol.account_access import refusal_reason
 from core_common.protocol.account_client import AccountUnavailable, load_account_client
 from fleet.server.site_auth import SitePrincipal
 
@@ -143,7 +145,8 @@ def install_account_receiver(app, *, config):
             return await run_in_threadpool(fn, *args, **kwargs)
         except AccountUnavailable:
             raise HTTPException(503, detail={'code': 'ACCOUNT_UNAVAILABLE'}, headers=NO_STORE) from None
-        except ValueError:
+        except ValueError as exc:
+            logging.getLogger(__name__).warning('account %s refused: %s', fn.__name__, refusal_reason(exc))
             raise HTTPException(401, detail={'code': 'ACCOUNT_SESSION_REFUSED'}, headers=NO_STORE) from None
 
     @app.get('/api/fleet/auth/login')
@@ -187,11 +190,12 @@ def install_account_receiver(app, *, config):
             return JSONResponse({**common, 'authenticated': False}, status_code=401, headers=NO_STORE)
         principal = principal_from_claims(claims)
         profile = await invoke(client.profile, cookie) if not authorization else None
+        apps = await invoke(client.apps, cookie) if not authorization else []
         return JSONResponse({**common, 'authenticated': True, 'principal_id': principal.principal_id,
             'role': principal.role, 'account_id': claims.sub, 'site_resource': claims.aud,
             'session_family': claims.sid, 'revision': claims.rev, 'password_change_required': False,
             'expires_at': datetime.fromtimestamp(claims.exp, timezone.utc).isoformat(), 'profile': profile,
-            'grants': [g.model_dump() for g in claims.grants]}, headers=NO_STORE)
+            'apps': apps, 'grants': [g.model_dump() for g in claims.grants]}, headers=NO_STORE)
 
     @app.post('/api/fleet/auth/login')
     def password_login():

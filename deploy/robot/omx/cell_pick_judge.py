@@ -12,6 +12,8 @@ The backend is judge_seat.ollama(**config["decision_model"]) or any callable(pro
 from __future__ import annotations
 
 import base64
+import json
+import math
 
 SCHEMA = {"type": "object", "properties": {"choice": {"type": "integer"}, "reason": {"type": "string"}},
           "required": ["choice", "reason"]}
@@ -38,19 +40,67 @@ def ask(backend, img, usable: list) -> dict:
     rule = {"order": list(range(len(usable))), "choice": 0 if usable else None, "by": "rule"}
     if backend is None or len(usable) < 1:
         return {**rule, "reason": "no decision model"}
+    if not callable(backend):
+        import judge_seat
+        backend = judge_seat.from_config(backend)
     facts = [{"n": i, "object": u["object"].get("object"), "size_mm": [round(u["object"]["length_mm"]), round(u["object"]["width_mm"])],
               "split_from": u["object"].get("split_from")} for i, u in enumerate(usable)]
     prompt = ("Top view of a robot cell. The numbered red outlines are candidates the measurements accepted for a "
               f"top-down grasp: {facts}. Which number is one single green shipping container lying flat, not "
               "touching or leaning on another object? Answer its number, or -1 if none of them is.")
+    schema = {
+        "type": "object",
+        "properties": {"choice": {"type": "integer", "enum": [-1, *range(len(usable))]}, "reason": {"type": "string"}},
+        "required": ["choice", "reason"],
+    }
     try:
-        answer = backend(prompt, [picture(img, usable)], SCHEMA)
+        answer = backend(prompt, [picture(img, usable)], schema)
         choice = int(answer["choice"])
     except Exception as exc:  # the model is advice: when it cannot answer, the rule stands
         return {**rule, "reason": f"model unavailable: {str(exc)[:80]}"}
+    extra = {k: answer[k] for k in ("deliberation", "consensus") if isinstance(answer, dict) and k in answer}
     if choice == -1:
-        return {"order": [], "choice": -1, "reason": str(answer.get("reason", ""))[:200], "by": "model"}
+        return {"order": [], "choice": -1, "reason": str(answer.get("reason", ""))[:200], "by": "model", **extra}
     if not 0 <= choice < len(usable):
-        return {**rule, "reason": f"model answered {choice}, out of range"}
+        return {**rule, "reason": f"model answered {choice}, out of range", **extra}
     return {"order": [choice] + [i for i in range(len(usable)) if i != choice], "choice": choice,
-            "reason": str(answer.get("reason", ""))[:200], "by": "model"}
+            "reason": str(answer.get("reason", ""))[:200], "by": "model", **extra}
+
+
+def ask_goal(backend, usable: list, goal: str) -> dict:
+    """Shadow only: which measured candidate the operator's goal sentence means. Never reorders; the caller logs it."""
+    out = {"choice": None, "reason": "", "by": "shadow"}
+    if backend is None or not usable or not str(goal or "").strip():
+        return {**out, "reason": "no decision model, no candidate or no goal sentence"}
+    if not callable(backend):
+        import judge_seat
+        backend = judge_seat.from_config(backend)
+    facts = []
+    for i, u in enumerate(usable):
+        pick, place = u.get("pick"), u.get("place")
+        fact = {"n": i, "object": u["object"].get("object"),
+                "size_mm": [round(u["object"]["length_mm"]), round(u["object"]["width_mm"])],
+                "split_from": u["object"].get("split_from")}
+        if (isinstance(pick, dict) and isinstance(place, dict)
+                and "x" in pick and "y" in pick and "x" in place and "y" in place):
+            fact["dist_to_place_mm"] = round(1000 * math.hypot(pick["x"] - place["x"], pick["y"] - place["y"]))
+        facts.append(fact)
+    prompt = ("A robot cell has these candidates, each already accepted by measurement as safe to grasp: "
+              f"{facts}. The operator's goal for this carry, as a JSON string, is: {json.dumps(str(goal)[:300])}. "
+              "Which candidate number best serves "
+              "that goal? Answer -1 if none of them does.")
+    schema = {
+        "type": "object",
+        "properties": {"choice": {"type": "integer", "enum": [-1, *range(len(usable))]}, "reason": {"type": "string"}},
+        "required": ["choice", "reason"],
+    }
+    try:
+        answer = backend(prompt, [], schema)
+        choice = int(answer["choice"])
+    except Exception as exc:  # shadow advice: an unanswered reading is logged as None and the carry goes on
+        return {**out, "reason": f"model unavailable: {str(exc)[:80]}"[:80]}
+    if choice == -1:
+        return {**out, "choice": -1, "reason": str(answer.get("reason", ""))[:200]}
+    if not 0 <= choice < len(usable):
+        return {**out, "reason": f"model answered {choice}, out of range"}
+    return {**out, "choice": choice, "reason": str(answer.get("reason", ""))[:200]}

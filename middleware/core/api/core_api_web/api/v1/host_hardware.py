@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, StrictBool
 
 from core_api_web.api.errors import ApiError
-from core_api_web.api.v1.common import admin, operator, viewer
-from core_common.protocol.schemas import LampIdentifyRequest
+from core_api_web.api.v1.common import admin, operator, robot_still, viewer
+from core_common.protocol.schemas import LampIdentifyRequest, LampStatusPatternsRequest
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 
 
@@ -62,6 +62,34 @@ class HardwareTestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     device: Literal["buzzer", "lamp"]
+
+
+@hardware_router.get("/lamp/status-patterns")
+def host_lamp_status_patterns(
+    _auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services),
+):
+    return svc.host_files.lamp_status_patterns()
+
+
+@hardware_router.put("/lamp/status-patterns")
+def host_set_lamp_status_patterns(
+    body: LampStatusPatternsRequest,
+    auth: AuthContext = Depends(operator),
+    svc: CoreServicesLike = Depends(get_services),
+):
+    if body.status_patterns == "off" and (
+        svc.modes.mode.value == "MANUAL" or svc.command.manual_active
+        or svc.modes.motion_reserved or not robot_still(svc)
+        or (svc.trip_lease is not None and svc.trip_lease.current() is not None)
+    ):
+        raise ApiError("LAMP_BUSY", 409, "주행 또는 수동 조종 중에는 상태 표시등을 끌 수 없습니다")
+    try:
+        result = svc.host_files.set_lamp_status_patterns(body.status_patterns)
+    except svc.host_files.Error as exc:
+        raise ApiError(exc.code, 503, str(exc)) from exc
+    svc.events.publish("lamp.status_patterns_changed", source="api",
+                       data={"status_patterns": body.status_patterns, "by": auth.token_id})
+    return result
 
 
 @hardware_router.post("/lamp/identify")

@@ -41,7 +41,7 @@ from core_features.swarm.reference_stream import (
     SwarmReferenceStream,
 )
 from core_features.swarm.poses import ReferencePose, follow_goal
-from core_features.swarm.trail import Trail, trail_twist
+from core_features.swarm.trail import LOST_HOLD_S, Trail, trail_twist
 
 #: D-559: own map pose older than this holds the trail (state tick 10 Hz; TF stalls otherwise
 #: leave a frozen pose labelled "map" for MAP_POSE_TTL_S = 2 s).
@@ -128,6 +128,10 @@ class SwarmManager(SwarmStatusView, SwarmReferenceStream):
         self._trail_resume: Optional[float] = None
         self._trail_sample_at: Optional[float] = None
         self._trail_broken: Optional[str] = None  # latched: trail_lost, reference_frame_changed
+        #: Since when the follower has been off its own trail (s, None = on it).
+        self._trail_off_at: Optional[float] = None
+        #: Since when leader samples have been rejected by the jump bound (s, None = accepted).
+        self._trail_jump_at: Optional[float] = None
         #: D-581 kind of the last leader sample ("map" | "fleet") and why it was unusable.
         self._ref_kind: Optional[str] = None
         self._ref_bad: Optional[str] = None
@@ -399,12 +403,24 @@ class SwarmManager(SwarmStatusView, SwarmReferenceStream):
             elif self._trail is None:
                 reason = "waiting_for_leader"
             else:
-                linear, angular, reason = trail_twist(
+                linear, angular, reason, off = trail_twist(
                     self._trail, *own[:3], gap=params.distance, max_speed=params.max_speed,
                     max_angular=self._safety.limits.max_angular,
                     prev_linear=self._trail_linear, dt=dt)
                 if reason is None:
+                    self._trail_off_at = None
                     twist = (linear, angular)
+                elif reason == "trail_rejoin":
+                    # Off our own path: creep back while the geometry can still bridge it.
+                    # Give up only after LOST_HOLD_S, so one bad sample cannot end the convoy.
+                    if self._trail_off_at is None:
+                        self._trail_off_at = now
+                    if now - self._trail_off_at > LOST_HOLD_S:
+                        # Latch and announce on this tick; the twist stays None, so it stops now.
+                        self._trail_broken = reason = "trail_lost"
+                    else:
+                        twist = (linear, angular)
+                        reason = None     # creeping back is motion, not a hold
                 else:
                     self._trail_broken = reason
             latched = self._trail_resume

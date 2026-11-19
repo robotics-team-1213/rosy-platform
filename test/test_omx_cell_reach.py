@@ -36,6 +36,23 @@ def test_an_arm_that_does_not_follow_the_correction_is_refused():
     assert out["verdict"] == "refuse" and len(out["iterations"]) == 3
 
 
+def test_timestamped_hover_samples_pause_between_polls():
+    class TimedArm:
+        def __init__(self):
+            self.polls = 0
+
+        def act(self, command):
+            self.polls += 1
+            return {"state": [0.0, 0.0], "t": 1.0, "jitter": {"shaking": True}}
+
+    pauses = []
+    arm = TimedArm()
+    out = cr.correct(arm, (0.0, 0.0), lambda dx, dy: None,
+                     fk=lambda s: (s[0], s[1]), sleep=pauses.append)
+    assert out["verdict"] == "pass" and arm.polls == 3
+    assert pauses == [0.015, 0.015]
+
+
 def test_a_lower_gain_settles_an_arm_that_moves_more_than_told():
     """2026-11-03 arm_b: each re-plan moved the arm about twice the correction; the full error swung round the aim."""
     class Over:

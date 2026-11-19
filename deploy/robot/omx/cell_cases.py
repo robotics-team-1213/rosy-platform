@@ -82,6 +82,12 @@ def suite(rows=()) -> list[dict]:
 
 
 AIM_MM = (5, 10, 15)
+SKEW_VISION_SPECS = (
+    ("skew-aligned-pos18", [0.006, 0.006, 18.0], 18.0, [0.0005, -0.0003]),
+    ("skew-aligned-neg16", [0.005, -0.006, -16.0], -16.0, [-0.0004, 0.0005]),
+    ("skew-aligned-neg12", [0.004, 0.005, -12.0], -12.0, [0.0004, 0.0004]),
+    ("skew-aligned-pos25-offset", [-0.012, 0.010, 25.0], 25.0, [0.0008, -0.0006]),
+)
 
 
 def aim_sweep() -> list[dict]:
@@ -101,14 +107,40 @@ def aim_sweep() -> list[dict]:
     return cases
 
 
+def skew_vision_cases() -> list[dict]:
+    """Stage-2 Isaac contact/slip candidates for skewed and offset boxes where vision aligns grasp_turn to box turn."""
+    f = fixture()
+    return [{"id": cid, "source": "mujoco->isaac skew-vision",
+             "sim": f.check_case({"box": box, "place": "belt", "grasp_turn": turn, "expect": None, "aim": aim})}
+            for cid, box, turn, aim in SKEW_VISION_SPECS]
+
+
+def from_mujoco_handoff(handoff: dict) -> list[dict]:
+    """Convert a Stage-1 MuJoCo handoff (rosy.omx-mujoco-isaac-handoff.v1) into checked Stage-2 Isaac arm-s-cell cases."""
+    f = fixture()
+    out = []
+    for item in (handoff.get("stage_2_isaac") or {}).get("single_arm_cases", []):
+        out.append({"id": item["id"], "source": item.get("source", "mujoco-handoff"), "sim": f.check_case(item["sim"])})
+    return out
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--cases", type=Path, action="append", default=[], help="a pipeline cases.jsonl")
     parser.add_argument("--aim-sweep", action="store_true", help="only the aim tolerance candidates (aim_sweep)")
+    parser.add_argument("--skew-vision", action="store_true", help="skewed/offset vision-aligned grasp candidates for Isaac")
+    parser.add_argument("--mujoco-handoff", type=Path, help="Stage-1 MuJoCo handoff JSON to promote into Isaac cases")
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv)
     rows = [json.loads(line) for path in args.cases for line in path.read_text().splitlines() if line.strip()]
-    cases = aim_sweep() if args.aim_sweep else suite(rows)
+    if args.mujoco_handoff:
+        cases = from_mujoco_handoff(json.loads(args.mujoco_handoff.read_text(encoding="utf-8")))
+    elif args.skew_vision:
+        cases = skew_vision_cases()
+    elif args.aim_sweep:
+        cases = aim_sweep()
+    else:
+        cases = suite(rows)
     args.out.write_text(json.dumps({"schema": SCHEMA, "cases": cases}, indent=1))
     print(json.dumps({"out": str(args.out), "cases": len(cases), "sim": sum("sim" in c for c in cases)}))
 

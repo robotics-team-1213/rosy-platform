@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily site PostgreSQL context backup timer
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=15m
+Unit=rosy-pg-backup.service
+
+[Install]
+WantedBy=timers.target

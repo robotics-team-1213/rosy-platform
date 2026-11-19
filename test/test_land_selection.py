@@ -434,6 +434,24 @@ def test_explicit_full_affected_change_executes_canonical_plan_and_real_receipt(
     assert all(no_cache for _, no_cache, invs in case.splits if any("tools/collect_alone.py" in inv for inv in invs))
 
 
+def test_explicit_full_keeps_evidence_after_turn_expires_without_main_change(full_case, monkeypatch):
+    case = full_case
+    candidate = git(case.wt, "rev-parse", "HEAD")
+    checked = []
+
+    def expire_once(*args):
+        if isinstance(args[-1], int):
+            checked.append(args[-1])
+            if len(checked) == 1:
+                raise land.Overtime("turn budget expired")
+
+    monkeypatch.setattr(land.land_checks, "check_turn", expire_once)
+    assert land.main(["--tests", "full"]) == 0
+    assert checked[0] == 1 and 2 in checked
+    assert git(case.main, "rev-parse", "HEAD") == candidate
+    assert land.land_record.read(case.main, candidate)["tier"] == "full"
+
+
 def test_explicit_full_ignores_stale_spec_and_executes_the_actual_main_delta(full_case, monkeypatch):
     case = full_case
     delta_source = CANONICAL.replace("invocations=[] if '--head' in sys.argv",

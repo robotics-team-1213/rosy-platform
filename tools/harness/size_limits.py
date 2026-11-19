@@ -64,7 +64,9 @@ STANDALONE = {
     "rosy-palletizing": "operations/processes/palletizing",
     "rosy-world": "operations/world",
     "rosy-monitoring": "operations/monitoring",
+    "rosy-notifications": "operations/notifications",
     "rosy-monitoring-web": "applications/monitoring",
+    "rosy-calibration": "applications/calibration",  # D-1004 screen server and page
     "rosy-cam": "operations/site_ui/cam",
     "rosy-media": "operations/site_ui/media",
     "rosy-media-edge": "middleware/media",
@@ -143,35 +145,85 @@ def measure(files: dict[str, int], packages: dict[str, str], colcon_roots, units
     roots = tuple(colcon_roots)
     counts = dict.fromkeys(units, 0)
     over, owner, package_of = {}, {}, {}
+    dir_pkgs: dict[str, list[str]] = {}
     for name, directory in packages.items():
         counts[name] = 0
-        dirs = (directory, *PACKAGE_HOLDERS.get(name, ()))
-        for path, count in files.items():
-            if PurePosixPath(path).suffix not in CODE_SUFFIXES | WEB_SUFFIXES or not any(_under(path, d) for d in dirs):
-                continue
-            root = next((r for r in roots if _under(path, r)), None)
-            rel = path[len(root) + 1:] if root else path
-            if not is_prod(PurePosixPath(rel).parts):
-                continue
-            unit = max((u for u in units if _under(rel, u)), key=len, default=None)  # innermost
-            key = unit or name
-            counts[key] += count
-            owner[path] = key
-            if unit:
-                package_of[unit] = name
-            if _over_limit(path, count, scripts):
-                over[rel] = count
+        for d in (directory, *PACKAGE_HOLDERS.get(name, ())):
+            dir_pkgs.setdefault(d.rstrip("/"), []).append(name)
+    root_map: dict[str, tuple[int, str]] = {}
+    for idx, r in enumerate(roots):
+        root_map.setdefault(r.rstrip("/"), (idx, r))
+    ops_map: dict[str, tuple[int, str]] = {}
+    for idx, r in enumerate(OPS_ROOTS):
+        ops_map.setdefault(r.rstrip("/"), (idx, r))
+    unit_map = {u.rstrip("/"): u for u in units}
+    all_suffixes = CODE_SUFFIXES | WEB_SUFFIXES
     for path, count in files.items():
-        root = next((root for root in OPS_ROOTS if _under(path, root)), None)
-        if root and PurePosixPath(path).suffix in OPS_SUFFIXES and is_prod(PurePosixPath(path).parts):
-            owner.setdefault(path, root)
+        slash = path.rfind("/")
+        base = path[slash + 1:] if slash != -1 else path
+        dot = base.rfind(".")
+        if dot <= 0 or base[dot:] not in all_suffixes:
+            continue
+        matched_pkgs: list[str] | None = None
+        root_hit: tuple[int, str] | None = None
+        ops_hit: tuple[int, str] | None = None
+        pos = path.find("/")
+        while pos != -1:
+            prefix = path[:pos]
+            if prefix in dir_pkgs:
+                if matched_pkgs is None:
+                    matched_pkgs = list(dir_pkgs[prefix])
+                else:
+                    for p in dir_pkgs[prefix]:
+                        if p not in matched_pkgs:
+                            matched_pkgs.append(p)
+            if prefix in root_map:
+                hit = root_map[prefix]
+                if root_hit is None or hit[0] < root_hit[0]:
+                    root_hit = hit
+            if prefix in ops_map:
+                hit = ops_map[prefix]
+                if ops_hit is None or hit[0] < ops_hit[0]:
+                    ops_hit = hit
+            pos = path.find("/", pos + 1)
+        if matched_pkgs:
+            root = root_hit[1] if root_hit else None
+            rel = path[len(root) + 1:] if root else path
+            if is_prod(PurePosixPath(rel).parts):
+                unit = None
+                upos = rel.rfind("/")
+                while upos != -1:
+                    u = unit_map.get(rel[:upos])
+                    if u is not None:
+                        unit = u
+                        break
+                    upos = rel.rfind("/", 0, upos)
+                over_path = _over_limit(path, count, scripts)
+                for name in matched_pkgs:
+                    key = unit or name
+                    counts[key] += count
+                    owner[path] = key
+                    if unit:
+                        package_of[unit] = name
+                    if over_path:
+                        over[rel] = count
+        ops_root = ops_hit[1] if ops_hit else None
+        if ops_root and is_prod(PurePosixPath(path).parts):
+            owner.setdefault(path, ops_root)
             if _over_limit(path, count, scripts):
                 over[path] = count
         elif is_test(path) and count > TEST_LIMIT:
             over[path] = count
     for unit in units:
-        owner[unit] = max((u for u in units if u != unit and _under(unit, u)), key=len,
-                          default=package_of.get(unit))
+        parent = None
+        upos = unit.rfind("/")
+        while upos != -1:
+            u = unit_map.get(unit[:upos])
+            if u is not None and u != unit:
+                parent = u
+                break
+            upos = unit.rfind("/", 0, upos)
+        owner[unit] = parent if parent is not None else package_of.get(unit)
     over.update((key, count) for key, count in counts.items() if count > UNIT_LIMIT)
     return counts, over, owner
 

@@ -17,14 +17,14 @@ if __package__:
     from .site_update_io import (
         ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
         Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
-        read_env,
+        log, read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
         ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
         Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
-        read_env,
+        log, read_env,
     )
     from verify_candidate import CandidateVerificationError, verified_services
 
@@ -164,8 +164,10 @@ class SiteRuntimeIO:
                 self._accepted_images[commit] = accepted
                 self._runtime_proofs[commit] = services
             return manifest
-        except (CandidateVerificationError, OSError) as error:
+        except CandidateVerificationError as error:  # fixed strings of our verifier
             raise Rejected(f"verification failed: {error}") from None
+        except OSError as error:  # its text names host paths
+            raise Rejected(f"verification failed: {type(error).__name__}") from None
 
     def healthy(self, env: dict[str, str], commit: str) -> tuple[bool, str]:
         deadline = self.clock() + self.config["health_timeout_s"]
@@ -201,7 +203,8 @@ class SiteRuntimeIO:
         try:
             out = self._compose(env, "ps", "--all", "--format", "json").stdout.strip()
         except Transient as error:
-            return str(error)
+            log('compose-ps-failed', detail=str(error))  # last_run.reason is only ever our own fixed text
+            return 'docker compose ps failed (see the journal)'
         try:
             rows = json.loads(out) if out.startswith("[") else [
                 json.loads(line) for line in out.splitlines() if line.strip()]
@@ -211,7 +214,8 @@ class SiteRuntimeIO:
             output = self._compose(env, 'config', '--hash', '*', tag=commit).stdout
             hashes = dict(line.split() for line in output.splitlines() if line.strip())
         except Transient as error:
-            return str(error)
+            log('compose-config-failed', detail=str(error))
+            return 'docker compose config failed (see the journal)'
         except ValueError:
             return 'Compose configuration hashes cannot be verified'
         companions = companion_services(overlays, inventory, hashes)

@@ -58,6 +58,21 @@ class LaneContext(BaseModel):
     anchor_age_s: Optional[float] = Field(None, ge=0, le=600, allow_inf_nan=False)
 
 
+class BayDockCue(BaseModel):
+    """D-1013 / D-941: Fleet's charging-bay centerline evaluation during reverse-in docking."""
+    model_config = ConfigDict(extra="forbid")
+
+    bay_id: str = Field(min_length=1, max_length=64)
+    edge_id: str = Field(min_length=1, max_length=128)
+    verdict: Literal["TURN_AT_ENTRY", "BACKING_ALIGNED", "BACKING_DRIFT", "CONTACT_STOP", "RETRY_FROM_P"]
+    s_m: float = Field(ge=0, le=10, allow_inf_nan=False)
+    to_end_m: float = Field(ge=0, le=10, allow_inf_nan=False)
+    offset_m: float = Field(ge=-1, le=1, allow_inf_nan=False)
+    rear_offset_m: float = Field(ge=-1, le=1, allow_inf_nan=False)
+    yaw_err_deg: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    steer_cmd_rad_s: float = Field(ge=-2, le=2, allow_inf_nan=False)
+
+
 class LaneCueRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -84,3 +99,5 @@ class LaneCueRequest(BaseModel):
     turn_spot: bool = False
     #: D-511 rev 6: driving context on the lap (Fleet sends it only with ``guide_context`` on).
     context: Optional[LaneContext] = None
+    #: D-1013 / D-941: Fleet's charging-bay centerline evaluation while on or entering a bay edge.
+    docking: Optional[BayDockCue] = None

@@ -12,7 +12,33 @@ STATIC = Path(__file__).with_name('review_app_web')
 PAGES = {'/learning/record': ('record.html', 'text/html'),
          '/record.js': ('record.js', 'text/javascript'),
          '/record-review.js': ('record-review.js', 'text/javascript'),
-         '/record.css': ('record.css', 'text/css')}
+         '/record.css': ('record.css', 'text/css'),
+         '/incidents': ('incidents.html', 'text/html'),
+         '/incidents.js': ('incidents.js', 'text/javascript')}
+INCIDENT_LIMIT = 256 * 1024
+
+
+def incident_feedback_binding(body):
+    """Bind an operator's Fleet incidents export to harvested stuck markers.
+
+    Validation only mirrors the CLI tool: malformed input must surface as
+    ValueError (HTTP 400), never an AttributeError or TypeError from bind().
+    Nothing is stored and no label is created.
+    """
+    import incident_feedback
+    if set(body) != {'incidents', 'markers'}:
+        raise ValueError('incident feedback requires incidents and markers objects')
+    pair = []
+    for key in ('incidents', 'markers'):
+        value = body[key]
+        if not isinstance(value, dict) or len(json.dumps(
+                value, ensure_ascii=False).encode('utf-8')) > INCIDENT_LIMIT:
+            raise ValueError(f'{key} must be a JSON object of at most 256 KiB')
+        pair.append(value)
+    try:
+        return incident_feedback.bind(*pair)
+    except (TypeError, AttributeError) as exc:
+        raise ValueError(f'invalid {exc}') from None
 
 
 def create(store, center, config):
@@ -108,6 +134,9 @@ def get(handler, path, recordings):
 
 def post(handler, path, body, recordings):
     actor = getattr(handler, 'learning_principal', None)
+    if path == PREFIX+'/incident-feedback':
+        handler.send(incident_feedback_binding(body))
+        return True
     if path == PREFIX+'/profile':
         handler.send(recordings.profiles.save(body, actor))
         return True

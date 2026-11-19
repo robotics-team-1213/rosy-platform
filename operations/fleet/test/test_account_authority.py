@@ -9,7 +9,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 
-from fleet.server.account_authority import AccountAuthority
+from rosy_account.account_authority import AccountAuthority
 
 ISSUER = 'https://account.example.test'
 CALLBACK = 'https://robot.example.test/account/callback'
@@ -31,6 +31,12 @@ def authority(tmp_path):
         resolve_family=lambda db, family: deepcopy(families.get(family)),
         revoke_family=lambda db, family: families.pop(family, None), clock=lambda: 1000)
     return instance, context, families
+
+
+def set_resources(instance, resources):
+    # Direct row edit: an empty list is what a removed resource leaves, and the registry API refuses it.
+    with instance.transaction() as db:
+        db.execute("UPDATE account_clients SET resources=? WHERE client_id='robot-app'", (json.dumps(resources),))
 
 
 def authorize(instance, context, **changes):
@@ -131,7 +137,7 @@ def test_revision_change_and_family_logout_invalidate_access(authority):
 def test_vault_site_grant_survives_exchange_and_revocation(authority, capability):
     from core_common.protocol.account_access import verify_access
     instance, context, families = authority
-    instance.clients['robot-app']['resources'] = ['site:test']
+    set_resources(instance, ['site:test'])
     context['grants'] = [{'resource': 'site:test', 'capabilities': [capability]}]
     families['family-1'] = deepcopy(context)
     location = authorize(instance, context, scope='site:test')[0]['Location']
@@ -150,7 +156,7 @@ def test_removed_client_resource_stops_pending_exchange_and_refresh(authority):
     instance, context, _ = authority
     tokens = json.loads(exchange(instance, get_code(instance, context))[1])
     code = get_code(instance, context)
-    instance.clients['robot-app']['resources'] = []
+    set_resources(instance, [])
     assert exchange(instance, code)[2] == 400
     assert instance.token(urlencode({'grant_type': 'refresh_token', 'client_id': 'robot-app',
                                     'refresh_token': tokens['refresh_token']}))[2] == 400

@@ -176,6 +176,11 @@ class LeaderActuator:
             goals[name] = goal
         self.bus.sync_write("Goal_Position", goals, normalize=False)
 
+    def _read_body_pwm(self) -> dict[str, int]:
+        if "read" not in vars(self.bus) and hasattr(self.bus, "model_ctrl_table"):
+            return self.bus.sync_read("Present_PWM", list(BODY), normalize=False, num_retry=2)
+        return {name: self.bus.read("Present_PWM", name) for name in BODY}
+
     def check_effort(self, current: dict[str, int]) -> None:
         """Stop the run when a joint holds its load at the cap.
 
@@ -183,8 +188,9 @@ class LeaderActuator:
         persists at most of the PWM cap means the arm is blocked, not that it is slow.
         """
         now = self.clock()
+        pwms = self._read_body_pwm()
         for name in BODY:
-            pwm = self.bus.read("Present_PWM", name)
+            pwm = pwms[name]
             if not isinstance(pwm, (int, float)) or not math.isfinite(pwm):
                 raise ValueError(f"{self.label} {name}: PWM read is not a number")
             error = abs(current[name] - int(self.command[name])) / TICKS_PER_DEGREE

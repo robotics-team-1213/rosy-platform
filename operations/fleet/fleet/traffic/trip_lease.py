@@ -71,7 +71,8 @@ class TripLease:
     def _body(self, lease_id: str, view: dict) -> dict:
         return {"lease_id": lease_id, "trip_id": view["trip_id"][:128], "holder": self.holder[:64],
                 "operator_name": (view["started_by"] or "operator")[:64], "ttl_s": self.ttl_s,
-                **({"job_id": view["job_id"][:128]} if view.get("job_id") else {})}
+                **({"job_id": view["job_id"][:128]} if view.get("job_id") else {}),
+                **({"purpose": view["purpose"]} if view.get("purpose") else {})}
 
     async def _put(self, robot_id: str, body: dict) -> dict:
         return await asyncio.wait_for(self._port.trip_lease(robot_id, body), self._timeout_s) or {}
@@ -93,13 +94,17 @@ class TripLease:
             await asyncio.wait([pending], timeout=self._timeout_s)
         lease = {"lease_id": lease_id or uuid.uuid4().hex, "state": HELD, "renewed_at": self._clock()}
         try:
-            await self._put(robot_id, self._body(lease["lease_id"], view))
+            answer = await self._put(robot_id, self._body(lease["lease_id"], view))
         except RobotApiError as exc:
             raise TripError(409, START_CODES.get(exc.code, "TRIP_LEASE_REFUSED"),
                             {"code": exc.code, **({"lease": exc.detail} if exc.detail else {})}) from exc
         except Exception as exc:  # it may have opened: release it, CORE's expiry otherwise
             self._release_later(robot_id, lease["lease_id"])
             raise TripError(422, "TRIP_ROBOT_UNREACHABLE", {"error": type(exc).__name__}) from exc
+        if view.get("purpose") and (answer.get("trip_lease") or {}).get("purpose") != view["purpose"]:
+            # D-1029: an older CORE ignores the field, so the return would run without its cap and deferral.
+            self._release_later(robot_id, lease["lease_id"])
+            raise TripError(422, "TRIP_LEASE_PURPOSE_UNSUPPORTED", {"purpose": view["purpose"]})
         return lease
 
     def period(self, lives) -> None:

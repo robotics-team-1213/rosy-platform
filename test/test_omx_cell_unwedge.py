@@ -12,11 +12,13 @@ HOME = [0.8, -62.2, 53.1, 51.6, 45.2]
 
 
 class Cell:
-    """Joints follow a jog at once, except `stuck` joints, which lag `stuck_lag` behind their target."""
+    """Joints follow a jog at once, except `stuck` joints, which lag `stuck_lag` behind their target; `droop` is the
+    shoulder_lift's lag just holding the pose (a far reach), which it keeps while it moves."""
 
-    def __init__(self, state, stuck=(), stuck_lag=2.0, park_settled=True, park_offset=0.0):
+    def __init__(self, state, stuck=(), stuck_lag=2.0, park_settled=True, park_offset=0.0, droop=0.0):
         self.state, self.target, self.stuck, self.stuck_lag, self.sent = list(state), list(state), stuck, stuck_lag, []
-        self.park_settled, self.park_offset = park_settled, park_offset
+        self.park_settled, self.park_offset, self.droop = park_settled, park_offset, droop
+        self.target[1] -= droop
 
     def act(self, command):
         self.sent.append(command)
@@ -25,6 +27,8 @@ class Cell:
             i = u.BODY.index(words[1].removesuffix(".pos"))
             self.target[i] += float(words[2])
             self.state[i] = self.target[i] - (self.stuck_lag if words[1].startswith(self.stuck) else 0.0)
+            if i == 1 and not words[1].startswith(self.stuck):
+                self.state[i] += self.droop
         if words[0] == "park":
             self.target[:5], self.state[:5] = HOME, HOME
             self.state[0] += self.park_offset
@@ -50,6 +54,22 @@ def test_a_strained_action_backs_off_and_both_strained_stops_for_a_person():
     assert out["result"] == "stuck" and [r["action"] for r in out["rows"]] == ["lift", "pull"]
     assert "jog shoulder_lift.pos 0.5" in cell.sent and "jog elbow_flex.pos -0.5" in cell.sent  # half a step back
     assert "park" not in cell.sent
+
+
+def test_a_lift_that_droops_holding_its_pose_is_not_read_as_blocked():
+    """2026-11-14 arm_s: the lift lagged 1.3-1.6 just holding a far reach; every 1.0 step read blocked and unwedge stopped."""
+    cell = Cell([-5.4, 1.9, -1.0, 48.4, -11.5, 53.2], droop=1.5)
+    out = u.unwedge(cell, HOME, sleep=lambda s: None)
+    assert out["result"] == "recovered" and all(r["outcome"] == "moved" for r in out["rows"])
+    assert {c for c in cell.sent if c.startswith("jog")} <= {"jog shoulder_lift.pos -0.3", "jog elbow_flex.pos 0.3"}
+
+
+def test_a_drooping_lift_that_stalls_still_stops_below_the_guard():
+    """The room over the droop ends at LAG_CEIL: a lift stalled at 2.04 (the guard trips near 2.2) is blocked, not pushed."""
+    cell = Cell([-5.4, 1.9, -1.0, 48.4, -11.5, 53.2], stuck=("shoulder_lift", "elbow_flex"), stuck_lag=2.04, droop=1.9)
+    out = u.unwedge(cell, HOME, sleep=lambda s: None)
+    assert out["result"] == "stuck" and "park" not in cell.sent
+    assert all(max(r["lags"]) <= u.LAG_CEIL or r["outcome"] == "blocked" for r in out["rows"])
 
 
 class Holding:

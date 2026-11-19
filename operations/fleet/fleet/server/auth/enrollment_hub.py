@@ -24,6 +24,16 @@ class HubLinkMixin:
     def _tls_bound(self, robot_id: str) -> bool:
         return self._tls_bindings is not None and self._tls_bindings.binding(robot_id) is not None
 
+    def _hub_fields(self, row: dict) -> dict:
+        """D-555: never the digest itself. D-992: `account_link` is in memory only, so a restart reads
+        `unknown`; the registry and the robot are the record."""
+        return {"hub_linked": bool(row.get("hub_digest")), "hub_host": row.get("hub_host"),
+                "hub_online": bool(row.get("hub_digest")) and self._hub_online(row["robot_id"]),
+                "hub_state": self._hub_state(row),
+                "hub_linkable": self._hub_link is not None and self._tls_client(row["robot_id"]) is not None,
+                "account_link": (self._account_link.states.get(row["robot_id"], "unknown")
+                                 if self._account_link else None)}
+
     def _hub_state(self, row: dict) -> str | None:
         """`online`, `checking` (inside CORE's arm grace) or `failed` (CORE's SAF-003 counts the
         link as lost), mirroring FLEET_LINK_ARM_GRACE_S without asking the robot."""
@@ -85,6 +95,19 @@ class HubLinkMixin:
             raise refused
 
     async def link_hub(self, robot_id: str, *, principal_id: str) -> dict:
+        row = await self._link_hub(robot_id, principal_id=principal_id)
+        if self._account_link is None:
+            return row
+        # D-992: after the hub lock, so a hung Account can never delay an unlink. Never undoes the link above.
+        client = self._tls_client(robot_id)  # re-checked: the robot may have been unlinked since the lock
+        if client is None:
+            self._account_link.states[robot_id] = state = "robot_unreachable"
+        else:
+            state = await self._account_link.provision(robot_id, client)
+        self._store.audit(action="account_link", outcome=state[:64], principal_id=principal_id, target=robot_id)
+        return next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
+
+    async def _link_hub(self, robot_id: str, *, principal_id: str) -> dict:
         """Issue (or rotate) the robot's hub credential and deliver it once over TLS.
 
         Only the SHA-256 digest is stored. It is stored and applied before delivery so the

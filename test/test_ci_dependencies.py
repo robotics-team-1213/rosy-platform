@@ -488,8 +488,8 @@ def test_every_ci_job_has_a_timeout_below_the_six_hour_default():
         assert 0 < int(job.get("timeout-minutes", 0)) <= (60 if name == "scope" else 30), name
 
 
-def test_merge_group_runs_the_full_tier_against_the_group_base():
-    """D-762 stage 1: a merge queue group is a full-tier event and checks its own base..head."""
+def test_merge_group_and_push_run_scoped_affected_against_their_base():
+    """D-1052: pull_request, merge_group and push:main run scoped affected CI; schedule keeps weekly --full."""
     import yaml
 
     doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
@@ -500,13 +500,73 @@ def test_merge_group_runs_the_full_tier_against_the_group_base():
     safety = scope["Safety-Review trailer (D-430)"]
     assert "github.event_name == 'merge_group'" in safety["if"]
     assert "github.event_name == 'merge_group' && github.event.merge_group.base_sha" in safety["env"]["SAFETY_BASE"]
-    tier = scope["Test scope (D-436)"]["run"]
-    # Only pull_request takes the affected tier; every other event (merge_group included) is full.
-    assert '"${{ github.event_name }}" = "pull_request"' in tier and "--full --ci-matrix" in tier
-    assert "merge_group" not in tier
+    scope_step = scope["Test scope (D-436)"]
+    assert "ROSY_FULL_LEGACY" not in scope_step.get("env", {})
+    assert "github.event.merge_group.base_sha" in scope_step["env"]["SCOPE_BASE"]
+    assert "github.event.before" in scope_step["env"]["SCOPE_BASE"]
+    tier = scope_step["run"]
+    assert "pull_request|merge_group)" in tier and "push)" in tier and "--full --ci-matrix" in tier
+    assert "SCOPE_BASE=HEAD^" not in tier and "SIZE_BASE=HEAD^" not in scope["Size rule per commit (D-766)"]["run"]
     test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
     assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
     assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
+
+
+@pytest.mark.parametrize("paths,output,expected", [
+    (["test/test_req.py::test_must_run"], "test/test_req.py::test_must_run SKIPPED\n1 skipped in 0.12s\n", 1),
+    (["test/test_req.py::test_must_run"], "test/test_req.py::test_must_run PASSED\n1 passed in 0.12s\n", 0),
+    (["test/test_req.py::test_p"], "test/test_req.py::test_p[a] PASSED\n1 passed in 0.10s\n", 0),
+    (["test/test_req.py::TestC"], "test/test_req.py::TestC::test_m PASSED\n1 passed in 0.10s\n", 0),
+    (["operations/fleet/test"], "5 skipped in 0.20s\n", 1),
+])
+def test_ci_fails_when_required_node_or_suite_passes_zero_items(monkeypatch, paths, output, expected):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    script = next(step["run"] for step in steps if step["name"] == "Test (matrix suite, D-436)")
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    monkeypatch.setenv("ROSY_INVOCATIONS", json.dumps([paths]))
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs:
+                        SimpleNamespace(stdout=iter([output]), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), "exec"), {})
+    assert ended.value.code == expected
+
+
+def test_ci_exempts_known_failures_from_required_node_check(monkeypatch, tmp_path):
+    import json
+    import sys
+    import yaml
+    from types import SimpleNamespace
+
+    monkeypatch.syspath_prepend(str(ROOT / "test"))
+    import known_failures
+
+    kf = tmp_path / "known_failures.txt"
+    kf.write_text("test/test_req.py::test_known_bug  # expected pre-existing\n", encoding="utf-8")
+    monkeypatch.setattr(known_failures, "LIST", kf)
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    script = next(step["run"] for step in steps if step["name"] == "Test (matrix suite, D-436)")
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    monkeypatch.setenv("ROSY_INVOCATIONS", json.dumps([["test/test_req.py::test_known_bug"]]))
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs:
+                        SimpleNamespace(stdout=iter(["FAILED test/test_req.py::test_known_bug - bug\n1 failed in 0.10s\n"]),
+                                        wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), "exec"), {})
+    assert ended.value.code == 0
+
+
+def test_test_scope_step_selects_once_per_branch_and_takes_both_outputs_from_that_call():
+    import yaml
+
+    doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    run = {s["name"]: s for s in doc["jobs"]["scope"]["steps"]}["Test scope (D-436)"]["run"]
+    assert run.count("rosy_harness.py affected") == run.count("--ci-matrix") == 4  # pr/merge_group, push x2, other events
+    assert "--print" not in run, "the selection text comes from the --ci-matrix call's stderr, not a second selection"
+    assert 'echo "mode=' in run and 'echo "matrix=' in run
 
 
 def test_every_ci_apt_update_uses_the_runner_mirror_with_retries():

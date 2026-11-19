@@ -1,7 +1,6 @@
 """Model-PC-only Qwen vision proposals for a verified review catalog; never approvals."""
 import argparse
 import base64
-import hashlib
 import json
 import shutil
 import urllib.error
@@ -9,6 +8,7 @@ import urllib.request
 from pathlib import Path
 
 from class_sets import from_data_yaml
+from review_authority import _sha as sha
 
 MODEL = 'qwen3-vl:8b-instruct'
 CLASSES = ('robot', 'obstacle_box', 'cone', 'traffic_light', 'sign', 'person', 'obstacle')
@@ -34,10 +34,6 @@ SCHEMA = {'type': 'object', 'properties': {'boxes': {'type': 'array', 'maxItems'
         'reason': {'type': 'string', 'maxLength': 160}},
         'required': ['label', 'bbox_xyxy', 'reason'], 'additionalProperties': False}}},
     'required': ['boxes'], 'additionalProperties': False}
-
-
-def sha(raw):
-    return hashlib.sha256(raw).hexdigest()
 
 
 def scaled_boxes(doc, width, height):

@@ -240,7 +240,7 @@ CASES = [
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
-     {"middleware/perception/test", "middleware/core/gateway/test"}),
+     {"middleware/perception/test/test_battery.py", "middleware/core/gateway/test"}),  # import closure narrows it
     ("ADR only -> the ADR Log readers (guards cover the ADR index)",
      ["docs/adr/D-1-sample.md"], "affected", {"test/test_network_topology_contracts.py"}),
     ("doc read by a contract test -> that test too",
@@ -338,7 +338,7 @@ def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
 def test_duplicate_basenames_run_in_separate_invocations(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
-    assert owners["middleware/perception/test"] != owners["middleware/core/gateway/test"]
+    assert owners["middleware/perception/test/test_battery.py"] != owners["middleware/core/gateway/test"]
     repo = affected.Repo.load(sample)
     for inv in sel.invocations:
         names = [PurePosixPath(t).name for p in inv for t in repo.test_files_under(p)]
@@ -559,6 +559,22 @@ def test_standalone_app_tests_are_required_in_full_and_affected_ci():
             assert owners[0]['invocations'] == [[path]]
 
 
+def test_fleet_timing_data_selects_only_its_reader_and_guards(monkeypatch):
+    repo = affected.Repo.load(ROOT)
+    timing = "tools/harness/fleet_test_seconds.json"
+    reader = "test/test_affected_tests.py"
+    assert affected.select(repo, [timing]).mode == "full"  # legacy switch
+
+    monkeypatch.delenv("ROSY_FULL_LEGACY")
+    selected = affected.select(repo, [timing])
+    assert selected.mode == "affected"
+    assert set(selected.reasons) == GUARDS | {reader}
+
+    selector = "tools/harness/affected_ci.py"
+    with_selector = affected.select(repo, [timing, selector])
+    assert set(affected.select(repo, [selector]).reasons) <= set(with_selector.reasons)
+
+
 def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     # Main CI 38807338775 (2026-10-15) took 224/528/168/275 s with the 2026-10-10 weights;
     # the measured table must keep the slowest shard near a quarter of the suite.
@@ -707,10 +723,9 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
     monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd, **kwargs: ran.append(cmd) or Done())
     assert affected.run(sample, sel) == 0
     local = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
-    # core_common's own suite and its direct reverse dependent (sensing imports core_common)
-    # run locally; the rest of the full tier stays on GitHub.
-    assert local == GUARDS | {"test/test_rosy_ssh_enroll.py", "contracts/foundation/test",
-                              "middleware/perception/test"}, "FULL stays on GitHub by default"
+    # core_common's own suite runs locally; orphan.py is imported by nobody (dotted-name match, 2026-11-17),
+    # so no reverse dependent joins; the rest of the full tier stays on GitHub.
+    assert local == GUARDS | {"test/test_rosy_ssh_enroll.py", "contracts/foundation/test"}, "FULL stays on GitHub by default"
     assert "test" not in local and "middleware/core/gateway/test" not in local
     ran.clear()
     affected.run(sample, sel, allow_full=True)
@@ -1061,3 +1076,11 @@ def test_full_json_forces_the_actual_lab_plan_on_an_affected_only_change(sample,
     assert result["mode"] == "full"
     assert result["full_invocations"] == affected.lab_full_invocations(affected.Repo.load(sample), result["local_invocations"])
     assert ["test"] in result["full_invocations"]
+
+
+def test_ci_matrix_cli_also_prints_the_human_selection_to_stderr_without_changing_stdout(sample, capsys):
+    argv = ["affected", "--repo", str(sample), "--base", "HEAD", "--full", "--ci-matrix"]
+    assert harness.main(argv) == 0
+    captured = capsys.readouterr()
+    assert captured.out.count("\n") == 1 and json.loads(captured.out)["mode"] == "full"
+    assert "affected tier (D-436): mode=full" in captured.err
