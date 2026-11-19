@@ -2,8 +2,8 @@
 
 ROS-free. Given one camera frame this turns the magenta guide tape into the
 ``dock/observation`` payload the docking manager's ``approach="line"`` phases
-consume: the line is the dock — ``x`` is the along distance to the stop face,
-``y`` the line's lateral offset in base_link, ``yaw`` the bay inward axis.
+consume: the line is the dock — ``(x, y)`` is the stop-face centre in base_link (behind the
+robot, so x < 0; CORE's rear_errors reads along/lateral from it), ``yaw`` the bay inward axis.
 
 Ground geometry is declared, not calibrated: only the Gazebo camera
 (``camera_geometry_source`` GAZEBO under ``use_sim_time``) may project; the
@@ -72,6 +72,57 @@ def ground_to_pixel(x_ahead: float, y_left: float, *, width: int, height: int,
     return u, v
 
 
+#: Ahead of a bay the camera sees the bay's own line and the corridor line across it (an L or a T).
+#: Only a line within this angle of the robot's axis can be the bay line being reversed along.
+AXIAL_MAX_RAD = math.radians(35.0)
+#: A ground point within this distance of the candidate line belongs to it (tape ~2 cm wide).
+INLIER_M = 0.015
+
+
+def _consensus(pts: np.ndarray, *, axial: bool):
+    """Inliers of the straight line with the most support whose direction is near base_link x (axial) or
+    near y (the corridor line across the bay), or None."""
+    n = len(pts)
+    rng = np.random.default_rng(7)
+    best = None
+    for _ in range(300):
+        i, j = rng.integers(0, n, 2)
+        d = pts[j] - pts[i]
+        length = float(np.hypot(*d))
+        if length < 0.04:
+            continue
+        off_x = math.atan2(abs(d[1]), abs(d[0]))
+        if (off_x if axial else math.pi / 2 - off_x) > AXIAL_MAX_RAD:
+            continue
+        normal = np.array([-d[1], d[0]]) / length
+        inliers = np.abs((pts - pts[i]) @ normal) <= INLIER_M
+        if best is None or inliers.sum() > best.sum():
+            best = inliers
+    if best is None or best.sum() < MIN_MASK_PIXELS:
+        return None
+    return pts[best]
+
+
+def axial_line(pts: np.ndarray):
+    """The points of the one straight line nearest the robot's axis, or None.
+
+    Fitting every pink pixel to one line averages the bay line with the corridor line (2026-11-18,
+    y8xs: a steady but wrong 16 deg). Deterministic sample consensus; the most inliers wins."""
+    return _consensus(pts, axial=True)
+
+
+def nominal_geometry(profile: dict) -> tuple[dict, float, int, int]:
+    """(mount fields, hfov_rad, width, height) from camera_nominal.yaml (D-364/D-397).
+
+    The observer's pinhole assumes a centred principal point; a profile that says otherwise
+    is refused rather than projected wrong."""
+    width, height, fx = int(profile["width"]), int(profile["height"]), float(profile["fx"])
+    if abs(float(profile["cx"]) - width / 2.0) > 1.0 or abs(float(profile["cy"]) - height / 2.0) > 1.0:
+        raise ValueError("principal point is not centred")
+    mount = {k: float(profile[k]) for k in ("height_m", "pitch_rad", "x_offset_m")}
+    return mount, 2.0 * math.atan(width / 2.0 / fx), width, height
+
+
 class BayLineObserver:
     """``observe(frame, stamp) -> dock/observation payload`` (CAMERA_LINE)."""
 
@@ -96,6 +147,27 @@ class BayLineObserver:
         body.update(fields)
         return body
 
+    def _crossbar(self, cloud: np.ndarray, stamp: float, pixels: int) -> dict:
+        """Only the corridor line across the bay mouth is in view (the robot's nose at or past the bay line's
+        corridor end, 2026-11-18 y8xs). It gives the bay axis (its normal) and the distance to the bay mouth,
+        not the lateral: the payload says so and CORE fills that from its estimate or the map."""
+        bar = _consensus(cloud, axial=False)
+        if bar is None:
+            return self._payload(stamp, False)
+        centre = bar.mean(axis=0)
+        _, _, vt = np.linalg.svd(bar - centre, full_matrices=False)
+        normal = np.array([-vt[0][1], vt[0][0]])
+        if normal[0] > 0.0:
+            normal = -normal                     # the bay inward axis points behind the robot
+        mouth = float(np.dot(normal, centre) / normal[0])   # where base_link x meets the corridor line
+        if mouth - self._mount.x_offset_m > self._far_field_m - 0.02:
+            return self._payload(stamp, False)
+        stop = np.array([mouth, 0.0]) + normal * self._line_total_m   # lateral is a placeholder here
+        return self._payload(stamp, True, x=float(stop[0]), y=float(stop[1]),
+                             yaw=float(math.atan2(normal[1], normal[0])),
+                             confidence=min(1.0, pixels / CONFIDENCE_PIXELS),
+                             along_measured=True, lateral_measured=False)
+
     def observe(self, frame: np.ndarray, stamp: float) -> dict:
         hrow = horizon_row(self._w, self._h, self._hfov, self._mount.pitch_rad,
                            self._mount.height_m)
@@ -119,10 +191,18 @@ class BayLineObserver:
                 points.append((g[0] + self._mount.x_offset_m, g[1]))
         if len(points) < MIN_MASK_PIXELS:
             return self._payload(stamp, False)
-        pts = np.asarray(points, dtype=np.float64)
-        centre = pts.mean(axis=0)
-        _, _, vt = np.linalg.svd(pts - centre, full_matrices=False)
-        direction = vt[0]
+        cloud = np.asarray(points, dtype=np.float64)
+        pts = axial_line(cloud)
+        direction = None
+        if pts is not None:
+            centre = pts.mean(axis=0)
+            _, _, vt = np.linalg.svd(pts - centre, full_matrices=False)
+            direction = vt[0]
+            # the pair test bounds the sample, not the fit: a 53 deg diagonal passed it on y8xs (2026-11-18)
+            if math.atan2(abs(direction[1]), abs(direction[0])) > AXIAL_MAX_RAD:
+                direction = None
+        if direction is None:
+            return self._crossbar(cloud, stamp, len(xs))
         # The bay is behind the robot (the camera looks at the corridor side).
         if direction[0] > 0.0:
             direction = -direction
@@ -132,17 +212,16 @@ class BayLineObserver:
         # The far (corridor-side) end: the visible extent along -direction.
         along = (pts - centre) @ direction
         south = centre + direction * float(along.min())
-        # Points are base_link; the camera sits x_offset ahead, so the
-        # camera->end distance is the point's x minus that offset.
-        south_base = float(south[0])
-        d_south = south_base - self._mount.x_offset_m
-        measured = d_south <= self._far_field_m - 0.02
+        measured = float(south[0]) - self._mount.x_offset_m <= self._far_field_m - 0.02
         if not measured:
-            # The end has left the view: the longitudinal signal is gone; the
-            # saturated value stays finite for rear_errors, flagged not measured.
-            south_base = self._far_field_m + self._mount.x_offset_m
-        x = self._line_total_m - south_base
+            # The end has left the view: the longitudinal signal is gone; place it at the far field
+            # on the line so the value stays finite, flagged not measured.
+            reach = self._far_field_m + self._mount.x_offset_m
+            south = foot + direction * ((reach - float(foot[0])) / float(direction[0]))
+        # DockObservation is the stop-face centre in base_link (CORE's rear_errors reads it so): from the
+        # corridor end, line_total along the line into the bay (2026-11-18: this was the bare distance).
+        stop = south + direction * self._line_total_m
         return self._payload(
-            stamp, True, x=float(x), y=float(foot[1]), yaw=float(yaw),
+            stamp, True, x=float(stop[0]), y=float(stop[1]), yaw=float(yaw),
             confidence=min(1.0, len(xs) / CONFIDENCE_PIXELS),
             along_measured=bool(measured))

@@ -24,6 +24,7 @@ import threading
 import time
 from pathlib import Path
 
+import land_events
 import land_queue
 
 MAX_PREPARING = 6
@@ -86,12 +87,17 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) ->
                    or (not urgent and r.get("status") == "pending" and r.get("branch") not in carried
                        and (r["ticket"] < ticket.name or bool(r.get("urgent"))))
                    for r in rows if r["ticket"] != ticket.name)
+    waiting_since = None
     while (held and held()) or busy() >= MAX_PREPARING:
+        if waiting_since is None:
+            waiting_since = time.monotonic()
         land_queue.touch(ticket)
         if changed and (code := changed()) is not None:
             raise SystemExit(code)  # main's land.py ran this landing to its end on this ticket
         sleep(POLL)
     land_queue.set_status(ticket, "preparing")
+    if waiting_since is not None:
+        land_events.emit("prep_wait", ticket=ticket.name, seconds=round(time.monotonic() - waiting_since))
 
 
 def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None) -> None:
