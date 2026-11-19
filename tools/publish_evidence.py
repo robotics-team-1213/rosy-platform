@@ -22,7 +22,7 @@ from pathlib import Path
 root = Path.cwd()
 sys.path[:0] = [str(root / p) for p in ("tools", "tools/remote", "test")]
 import land_cache, land_browser, work_queue, known_failures
-from land_selection import valid_plan
+from land_selection import valid_plan, pack
 exclusive = None
 if (root / "tools/harness/affected_exclusive.py").is_file():
     from harness import affected_exclusive as exclusive
@@ -32,27 +32,40 @@ def command(args):
     run = subprocess.run([sys.executable, *args], capture_output=True, text=True,
                          encoding="utf-8", check=True)
     return json.loads(run.stdout)
-selection = command(["tools/harness/rosy_harness.py", "affected", "--base", base,
-                     "--head", sha, "--json", "--full"])
-full = selection["full_invocations"]
-# D-1036 addendum: the browser chunks the publish delta (origin/main...sha) maps to, by land.py's own landing
-# mapping (land_selection.browser_tier); any failure falls back to every registered chunk (fail closed).
-try:
-    import types, browser_scope, land_selection
-    def lines(wt, *args):
-        return [line for line in subprocess.run(["git", "-C", str(wt), *args], capture_output=True, text=True,
-                encoding="utf-8", check=True).stdout.splitlines() if line]
-    tier = types.SimpleNamespace(lines=lines, pack=land_selection.pack, browser_scope=browser_scope,
-                                 land_browser=land_browser)
-    browsers, scope = land_selection.browser_tier(tier, root, scope_base, sha), "delta"
-except Exception:
-    browsers, scope = command(["tools/land_selection.py", "--all-browsers"]), "all"
-    assert valid_plan(browsers)
-assert selection["mode"] == "full" and valid_plan(full)
-assert exclusive.canonical_full(full) if exclusive is not None else ["test"] in full
-if exclusive is not None:
-    exclusive.validate(request["invocations"], True)
-assert all("ROSY_RUN_BROWSER_TESTS=1" in inv for inv in browsers)
+if request.get("scoped"):  # D-1036 addendum 1: the app delta's own affected selection + the browser chunks it maps to
+    import browser_scope
+    selection = command(["tools/harness/rosy_harness.py", "affected", "--base", base, "--head", sha, "--json"])
+    if selection["mode"] == "full":
+        print(json.dumps({"escalated": selection["escalations"]}))
+        sys.exit(0)
+    changed = subprocess.run(["git", "diff", "--name-only", f"{base}...{sha}"], capture_output=True, text=True,
+                             encoding="utf-8", check=True).stdout.split("\n")
+    full = selection["invocations"] + [inv for group in pack(root, browser_scope.targets([c for c in changed if c]))
+                                       for inv in land_browser.chunks(root, group)]
+    assert not full or valid_plan(full)
+    request["invocations"], browsers, scope = full, [], "app"
+else:
+    selection = command(["tools/harness/rosy_harness.py", "affected", "--base", base,
+                         "--head", sha, "--json", "--full"])
+    full = selection["full_invocations"]
+    # D-1036 addendum: the browser chunks the publish delta (origin/main...sha) maps to, by land.py's own landing
+    # mapping (land_selection.browser_tier); any failure falls back to every registered chunk (fail closed).
+    try:
+        import types, browser_scope, land_selection
+        def lines(wt, *args):
+            return [line for line in subprocess.run(["git", "-C", str(wt), *args], capture_output=True, text=True,
+                    encoding="utf-8", check=True).stdout.splitlines() if line]
+        tier = types.SimpleNamespace(lines=lines, pack=land_selection.pack, browser_scope=browser_scope,
+                                     land_browser=land_browser)
+        browsers, scope = land_selection.browser_tier(tier, root, scope_base, sha), "delta"
+    except Exception:
+        browsers, scope = command(["tools/land_selection.py", "--all-browsers"]), "all"
+        assert valid_plan(browsers)
+    assert selection["mode"] == "full" and valid_plan(full)
+    assert exclusive.canonical_full(full) if exclusive is not None else ["test"] in full
+    if exclusive is not None:
+        exclusive.validate(request["invocations"], True)
+    assert all("ROSY_RUN_BROWSER_TESTS=1" in inv for inv in browsers)
 variants = {}
 for inv in request["invocations"] + browsers + request.get("extra", []):
     choices = []
@@ -103,7 +116,7 @@ print(json.dumps({"plan": full, "browsers": browsers, "scope": scope, "variants"
 '''
 
 
-def describe(publish, repo, sha, base, invocations, rows, ancestors=(), scope_base="", extra=()):
+def describe(publish, repo, sha, base, invocations, rows, ancestors=(), scope_base="", extra=(), scoped=False):
     """Use the existing publication checkout location and cleanup policy for immutable selection."""
     holder = Path(publish.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
     temp = holder / "rosy-publish" / f"proof-{sha[:10]}-{uuid.uuid4().hex[:8]}"
@@ -111,7 +124,8 @@ def describe(publish, repo, sha, base, invocations, rows, ancestors=(), scope_ba
     try:
         result = subprocess.run([sys.executable, "-c", DESCRIBE, sha, base, scope_base], cwd=temp,
                                 input=json.dumps({"invocations": invocations, "rows": rows,
-                                                  "ancestors": list(ancestors), "extra": list(extra)}),
+                                                  "ancestors": list(ancestors), "extra": list(extra),
+                                                  "scoped": scoped}),
                                 capture_output=True, text=True, encoding="utf-8",
                                 env={**os.environ, "PYTHONUTF8": "1"})
         if result.returncode:
@@ -123,20 +137,27 @@ def describe(publish, repo, sha, base, invocations, rows, ancestors=(), scope_ba
             publish.worktree_rules.leave_tombstone(temp)
 
 
-def reason(publish, repo, sha, record):
+def reason(publish, repo, sha, record, scoped=False, stats=None):
     """None for qualified proof; a fail-closed reason otherwise. Legacy tier guesses never qualify."""
-    return check(publish, repo, sha, record)[0]
+    return check(publish, repo, sha, record, scoped, stats)[0]
 
 
-def check(publish, repo, sha, record):
+def check(publish, repo, sha, record, scoped=False, stats=None):
     """(reason or None, browser chunks lacking proof, browser count note). The chunks are listed only when they are
-    the sole failure: every other check runs first (D-1036 addendum, publish_main --fill-browsers)."""
-    if record.get("tier") != "full" or not valid_plan(record.get("invocations")):
+    the sole failure: every other check runs first (D-1036 addendum, publish_main --fill-browsers).
+
+    ``scoped`` (D-1036 addendum 1): the plan is the delta's own app selection, computed in the candidate's checkout
+    (``record`` then only carries ``base``); ``stats`` receives ``required``/``evidenced``/``escalated``."""
+    stats = {} if stats is None else stats
+    if scoped:
+        invocations = []
+    elif record.get("tier") != "full" or not valid_plan(record.get("invocations")):
         return "no explicit FULL execution plan", [], ""
-    invocations = record["invocations"]
+    else:
+        invocations = record["invocations"]
     # D-1036 addendum (2026-11-18): browser chunks are those the publish delta maps to, not every registered one.
     scope_base = publish.git(repo, "rev-parse", "--verify", "-q", "origin/main^{commit}", check=False).stdout.strip()
-    prepared = record.get("prepared_candidate")
+    prepared = None if scoped else record.get("prepared_candidate")
     sources = [(sha, record["base"])]
     if prepared:
         on = record.get("prepared_on")
@@ -157,8 +178,13 @@ def check(publish, repo, sha, record):
         older = ancestor_rows(publish, repo, commit, entries)
         ancestors = list(dict.fromkeys(row["commit"] for row in older))
         extra = descriptions[0]["browsers"] if descriptions else ()  # the final candidate's chunks, proven anywhere
-        description = describe(publish, repo, commit, base, invocations, rows + older, ancestors, scope_base, extra)
-        if not description or not description.get("env") or not valid_plan(description.get("plan")):
+        description = describe(publish, repo, commit, base, invocations, rows + older, ancestors, scope_base, extra,
+                               scoped=scoped)
+        if description and description.get("escalated") is not None:
+            stats["escalated"] = True
+            return f"delta escalates to FULL ({'; '.join(description['escalated'][:2])})", [], ""
+        if (not description or not description.get("env")
+                or not (valid_plan(description.get("plan")) or (scoped and description.get("plan") == []))):
             return f"canonical candidate plan/environment unavailable for {commit[:10]}", [], ""
         usable = [row for row, clean in zip(rows, description["clean"])
                   if clean and row["env"] == description["env"]]
@@ -178,16 +204,21 @@ def check(publish, repo, sha, record):
     current = descriptions[0]
     if any(d["plan"] != current["plan"] or d["env"] != current["env"] for d in descriptions[1:]):
         return "prepared and final candidate FULL plans or environments differ", [], ""
-    if not all(inv in invocations for inv in current["plan"]):
+    if scoped:
+        invocations = current["plan"]
+    elif not all(inv in invocations for inv in current["plan"]):
         return "record omits a canonical FULL invocation", [], ""
 
     def proven(inv):
         return any(all(tuple(part) in mapped for part in variant)
                    for description, mapped in zip(descriptions, evidence)
                    for variant in description["variants"].get(json.dumps(inv), []))
-    for inv in invocations:
-        if not proven(inv):
-            return f"missing clean exact execution/log proof for {' '.join(inv)}", [], ""
+    unproven = [inv for inv in invocations if not proven(inv)]
+    stats.update(required=len(invocations), evidenced=len(invocations) - len(unproven))
+    if unproven:
+        return f"missing clean exact execution/log proof for {' '.join(unproven[0])}", [], ""
+    if scoped:
+        return None, [], ""
     logs = record.get("logs")
     if (not isinstance(logs, list) or not all(isinstance(log, str) for log in logs)
             or not set(logs) <= final_logs):
@@ -233,15 +264,16 @@ def ancestor_rows(publish, repo, commit, entries, recent=20):
 ERRORS = (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError)
 
 
-def qualified(publish, repo, sha, record):
+def qualified(publish, repo, sha, record, scoped=False, stats=None):
+    label = "app-scoped" if scoped else "FULL"
     try:
-        why, _, note = check(publish, repo, sha, record)
+        why, _, note = check(publish, repo, sha, record, scoped, stats)
     except ERRORS:
         why, note = "execution proof could not be read or validated", ""
     if why:
-        print(f"[publish] FULL {sha[:10]} not qualified: {why}", file=sys.stderr)
+        print(f"[publish] {label} {sha[:10]} not qualified: {why}", file=sys.stderr)
     elif note:
-        print(f"[publish] FULL {sha[:10]} qualified: {note}", file=sys.stderr)
+        print(f"[publish] {label} {sha[:10]} qualified: {note}", file=sys.stderr)
     return why is None
 
 

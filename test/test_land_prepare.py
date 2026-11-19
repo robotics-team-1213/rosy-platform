@@ -799,3 +799,23 @@ def test_full_prepare_sets_full_done_after_tests_before_speculate(repos, monkeyp
     assert seen_tiers == ["full_done"]
 
 
+
+
+@pytest.mark.parametrize("tests, restored, prepares, armed", [
+    ("auto", "m1", False, True),   # a relaunched or resumed ticket: its record restores, prepare is skipped
+    ("auto", None, True, True),
+    ("full", "m1", True, False),
+])
+def test_pretest_arms_the_pre_turn_refresh_also_on_a_restored_record(monkeypatch, tmp_path, tests, restored, prepares,
+                                                                     armed):
+    """11-18: nine relaunched tickets restored their record, waited with REFRESH unset and released on main's delta."""
+    prep, ran = land.land_prepare, []
+    monkeypatch.setattr(land.land_queue, "REFRESH", None)
+    monkeypatch.setattr(land.land_full, "restore", lambda wt, branch: restored)
+    monkeypatch.setattr(prep, "_prepare", lambda land_, wt, branch, *a: ran.append(branch))
+    ticket = tmp_path / "ticket.json"  # absent: prepare ends before its relaunch check
+    prep.pretest(land, tmp_path, "feat/x", land.argparse.Namespace(tests=tests), sys.executable, tmp_path, ticket)
+    assert ran == (["feat/x"] if prepares else [])
+    assert (land.land_queue.REFRESH is not None) is armed
+    if armed:  # the refresh re-prepares this landing's own branch and reports its new tested main
+        assert land.land_queue.REFRESH() == restored and ran[-1] == "feat/x"
