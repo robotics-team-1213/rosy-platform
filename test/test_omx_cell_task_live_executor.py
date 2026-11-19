@@ -108,6 +108,12 @@ def _fixture(tmp_path, monkeypatch, *, fail_command=None, unsettled_command=None
         {"chunks": {"home": [[0] * 6]}}, {}, {}))
     monkeypatch.setattr(live, "capture_top_depth_z16_receipt", lambda *args, **kwargs: None)
     monkeypatch.setattr(attempts, "RUN", dict(attempts.RUN))
+    # finish_area_xyz rechecks the park step's owner state against wall time (0.5 s); the fsyncs between park and
+    # the journal took longer than that on a loaded test host (11-18). Judge the session at the step's own time.
+    import cell_envelope
+    same_session = cell_envelope.same_session
+    monkeypatch.setattr(cell_envelope, "same_session", lambda state, assessment, **kw: same_session(
+        state, assessment, **{"now": (state or {}).get("t"), **kw}))
     return handoff, config, calibration_path, Cell(), commands
 
 
