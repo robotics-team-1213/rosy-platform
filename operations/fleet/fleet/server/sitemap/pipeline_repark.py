@@ -48,7 +48,7 @@ def to_site(need, rules, cell_id):
 
 def on_abort(state, task: dict, stage_result: dict, now: float, rules=None) -> dict | None:
     """Open a repark request for an aborted carry that carries a reach_fix; None when it has none or the limit is spent."""
-    fix = stage_result.get("reach_fix") if isinstance(stage_result, dict) else None
+    fix = (stage_result.get("reach_fix") or stage_result.get("zone_fix")) if isinstance(stage_result, dict) else None
     need = fix.get("need_arm_dxdy_m") if isinstance(fix, dict) else None
     if not (isinstance(need, (list, tuple)) and len(need) == 2
             and all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in need)):
