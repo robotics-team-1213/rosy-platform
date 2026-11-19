@@ -1,5 +1,6 @@
 """LOCAL simulated telemetry: real shared view, Fleet roster and robot panel. No device traffic."""
 from pathlib import Path
+import re
 
 import pytest
 from browser_harness import browser_tests_enabled, save_temp_screenshot
@@ -167,7 +168,7 @@ def test_cell_arm_health_uses_shared_view_without_double_aging_and_retains_fault
                     arm['motor_health']=motor
             route.fulfill(json=data)
         page.route('**/api/fleet/workcell-observations',observations)
-        page.goto(cell_url)
+        page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
         card=page.locator('[data-arm-source="feedback_a"]')
         expect(card.locator('.motor-health-summary')).to_contain_text('주의 모터 1개')
         assert card.locator('.motor-health-summary').get_attribute('data-evidence')=='fresh'
@@ -353,10 +354,12 @@ def test_cell_keeps_a_guard_stop_with_the_lagging_joints_and_the_frames_on_scree
                 arm['faults'] = list(faults) if arm['arm_id'] == 'arm_a' else []
             route.fulfill(json=data)
         page.route('**/api/fleet/workcell-observations', observations)
-        page.goto(cell_url)
+        page.goto(cell_url + "?cell=cell_ab")  # live observation runs in a cell workspace, not the prep screen
         card = page.locator('[data-arm-source="feedback_a"]')
         expect(card).to_contain_text('고장 이력 없음')
-        expect(page.locator('[data-camera-source="top"] img')).to_be_visible()
+        # in a cell workspace the live frames are in the right inspector (shared/cell-frames.js), not the tiles
+        live_top = page.locator('#omx-right-inspector .omx-inspector-pip[data-cam-id="top"] img')
+        expect(live_top).to_be_visible()
         faults.append(stop)  # arrives while the page is open: held with the frames on screen
         expect(card.locator('details:has(.cell-fault-history)')).to_have_attribute('open', '')
         history = card.locator('.cell-fault-history')
@@ -364,10 +367,16 @@ def test_cell_keeps_a_guard_stop_with_the_lagging_joints_and_the_frames_on_scree
         expect(history).to_contain_text('함께 뒤처진 관절: 어깨 회전 2.2°')
         expect(history.locator('.cell-fault-frames img')).to_have_count(3)
         expect(card).to_contain_text('고장 이력 1건')
-        tile = page.locator('[data-camera-source="top"]')
+        expect(live_top).to_be_visible()  # the held fault does not take the live frame off screen
+        # the cell workspace enlarges a camera in the inspector: pick the top view, then press it
+        top_pip = page.locator('#omx-right-inspector .omx-inspector-pip[data-cam-id="top"]')
+        top_pip.focus()
+        page.keyboard.press('Enter')
+        expect(top_pip).to_have_class(re.compile(r'\bactive\b'))
+        tile = page.locator('#omx-right-inspector .omx-inspector-main-cam')
         tile.focus()
         page.keyboard.press('Enter')
-        expect(tile).to_have_class('cell-observation-card focused')
+        expect(tile).to_have_class(re.compile(r'\bfocused\b'))
         expect(tile).to_have_attribute('aria-pressed', 'true')
         page.keyboard.press('Escape')
         expect(tile).to_have_attribute('aria-pressed', 'false')

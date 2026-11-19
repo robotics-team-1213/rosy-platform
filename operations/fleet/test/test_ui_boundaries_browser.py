@@ -26,26 +26,37 @@ def test_roster_layout_keeps_safety_and_trip_controls(site, width, height, theme
         expect(form).to_be_visible()
         expect(page.locator("#estop")).to_be_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-        assert page.locator("#roster .robot-summary").count() == 4
-        snapshot = page.evaluate("""() => {
+        rules = """selectors => {
           const rules = {};
-          for (const selector of ['.roster-block', '.robot-summary', '.robot-summary.selected',
-            '#robot-panel-mount .robot', '#robot-panel-mount .facts', '#robot-panel-mount .card-trip']) {
+          for (const selector of selectors) {
             const node = document.querySelector(selector), style = getComputedStyle(node);
             rules[selector] = Object.fromEntries(['display', 'grid-template-columns', 'gap', 'padding',
               'border-left-width', 'border-left-style', 'background-color', 'color', 'font-family', 'font-size']
               .map(key => [key, style.getPropertyValue(key)]));
           }
           return rules;
-        }""")
+        }"""
+        snapshot = page.evaluate(rules, ['#robot-panel-mount .robot', '#robot-panel-mount .facts',
+                                         '#robot-panel-mount .card-trip'])
         assert snapshot['#robot-panel-mount .robot']['display'] == 'grid'  # the robot card is one ui-panel (grid)
         assert snapshot['#robot-panel-mount .card-trip']['display'] == 'grid'
+        if output := os.environ.get("ROSY_SHOT_DIR"):
+            page.evaluate("document.fonts.ready")
+            page.locator("#robot-panel-mount").screenshot(
+                path=str(Path(output) / f"roster-{theme}-{width}x{height}.png"))
+        if page.viewport_size["width"] < 1024:  # the panel sheet covers the document rail on narrow screens
+            page.locator("#robot-panel-mount .robot-panel-close").click()
+        page.locator('.doc-tabs').get_by_role("link", name="작업", exact=True).click()  # the roster lives on the work view
+        expect(page.locator("#roster .robot-summary")).to_have_count(4)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        # a view change clears the selection; selecting on the roster marks that row
+        page.locator('#roster ui-button[data-select-robot-id="rosy_02"]').click()
+        expect(page.locator("#roster .robot-summary.selected")).to_have_count(1)
+        snapshot |= page.evaluate(rules, ['.roster-block', '.robot-summary', '.robot-summary.selected'])
         if output := os.environ.get("ROSY_SHOT_DIR"):
             folder = Path(output)
             folder.mkdir(parents=True, exist_ok=True)
             stem = f"roster-{theme}-{width}x{height}"
             (folder / (stem + ".json")).write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf8")
-            page.evaluate("document.fonts.ready")
-            page.locator("#robot-panel-mount").screenshot(path=str(folder / (stem + ".png")))
         assert not posts and not errors
         browser.close()

@@ -110,11 +110,12 @@ def test_persisted_analysis_origin_and_diagnosis_order_in_cell(persisted_cell, w
             page.on('request', lambda request: writes.append(request.url) if request.method in ('POST', 'PUT', 'DELETE')
                     and ('/api/fleet/robots/' in request.url or '/api/fleet/device-profiles/' in request.url) else None)
             page.add_init_script(f"sessionStorage.setItem('rosy-console-token', '{VIEWER}')")
-            page.goto(origin + '/console/cell')
+            page.goto(origin + '/console/cell?cell=cell_ab')  # live observation runs in a cell workspace
             camera = page.locator('.cell-camera-wall [data-camera-source="fixture-top"]')  # cameras on their own wall
             expect(camera).to_have_count(1)
-            camera.click(); expect(camera).to_have_class(re.compile('focused'))
-            camera.click(); expect(camera).not_to_have_class(re.compile('focused'))
+            # a cell workspace shows live frames in the inspector; the tile wall stays hidden and no camera joins an arm card
+            expect(camera).to_be_hidden()
+            expect(page.locator('[data-arm-source="source-one"] [data-camera-source]')).to_have_count(0)
             info = page.locator('[data-arm-source="source-one"] [data-robot-profile]')
             expect(info).to_contain_text('2·3번 관절 하중 주의')
             expect(info).to_contain_text('feedback_gap')
@@ -150,7 +151,7 @@ def test_restarted_cell_does_not_attach_old_owner_profile_or_accept_old_report(p
         try:
             page = browser.new_page(viewport={'width': 390, 'height': 1000})
             page.add_init_script(f"sessionStorage.setItem('rosy-console-token', '{VIEWER}')")
-            page.goto(origin + '/console/cell')
+            page.goto(origin + '/console/cell?cell=cell_ab')  # live observation runs in a cell workspace
             info = page.locator('[data-arm-source="source-one"] [data-robot-profile]')
             expect(info).to_contain_text('프로필 연결을 다시 확인하세요')
             expect(info).not_to_contain_text('2·3번 관절 하중 주의')

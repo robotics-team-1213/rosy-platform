@@ -1378,3 +1378,8 @@
 - 변경: shared/cell-frames.js가 cell-observation.js 관측 타일과 같은 규칙을 따른다. 영상은 촬영 뒤 FRAME_LATE_MS(vision-view.js 공용 값) 안에서만 보이고, 넘으면 타이머가 이미지를 숨기고 '최신 영상 없음'을 쓴다. 비정상 응답·오류·미등록 소스도 이미지를 숨긴다(전에는 배지 글만 바뀌고 마지막 영상이 남았다). 429는 영상을 유지하고 만료 타이머가 그대로 늙힌다. 붙이기 전에 bind한 img도 바로 칠해, 다시 그린 인스펙터의 빈 img가 429 동안 '보이는' 상태로 남지 않는다. 피드 일시정지는 img 자신의 hidden(피드가 건 것)이 아니라 숨은 컨테이너만 본다(아니면 배지 없는 pip이 영영 영상을 받지 않는다). 새 clear()는 세대를 올려 진행 중 요청을 끊고 늦은 응답을 버리며 blob URL·img src를 지운다. cell-real2sim.js clear()가 setRunning(false) 대신 clear()를 부른다(로그아웃·인증 거부).
 - 증거: node cell-camera-views 7/7(만료 숨김·clear 뒤 늦은 응답 무시 시험 2개 추가), charge-bays-view 통과. 카메라 브라우저 시험 3개를 #omx-right-inspector 위치로 옮겼다(가짜 Vision 소스 목록·작업 원장 추가).
 - gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · fix(fleet-web): 로스터 서명에 상태 늙음·열·배터리를 넣고, 셀 작업 공간 고장 이력이 인스펙터 영상을 잡는다
+- 변경: 제품(퇴행) — (1) console-auth.js buildRosterSig에 상태 stale 여부(staleAgeS)·safety.thermal·powerHealthView 배터리 글을 넣었다. 빠져 있어 상태가 늙어도 로스터 행을 다시 그리지 않아 '열: 감속' 칩이 '안전 확인 불가' 대신 남았다. (2) 셀 작업 공간(?cell=…)은 관측 타일 벽을 숨기고 타일 영상을 받지 않아 고장 순간 영상(holdFrames)이 늘 비었다. cell-frames.js가 마지막 blob을 들고 snapshot()을 내고, cell-observation.js는 보이는 타일 영상이 없으면 liveFrames()(cell.js가 인스펙터 피드를 넘김)를 잡는다. (3) 인스펙터 메인 카메라가 타일처럼 role=button·aria-pressed로 확대 상태를 말한다. 시험(구조 변경) — 로스터는 작업 보기에 있음(D-1117 이후), 보기 전용도 비상 정지 가능(11-18, a2543e9dcc)이므로 역할 강등은 운영자 전용 단추(#cancel-all)의 잠금으로 확인, 셀 관측 시험은 ?cell=cell_ab 작업 공간에서, 카메라 확대는 인스펙터에서.
+- 증거: 로컬 node 569/569, 로컬 브라우저 4파일(ui_boundaries 8·fleet_account focus 2·device_care 3·motor_health 16) 통과.
+- gate 변화: 없음.

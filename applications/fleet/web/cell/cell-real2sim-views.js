@@ -88,10 +88,14 @@ export function createCellViews(ctx) {
     mainCam.className = 'omx-inspector-main-cam omx-inspector-cam';
     mainCam.alt = `${activeSpec.title} 메인 카메라`;
     mainCam.tabIndex = 0;
-    mainCam.addEventListener('click', () => mainCam.classList.toggle('focused'));
+    // a press enlarges it like the cell camera tile, and says so (role button + aria-pressed)
+    mainCam.setAttribute('role', 'button'); mainCam.setAttribute('aria-label', `${mainCam.alt} 크게 보기`);
+    mainCam.setAttribute('aria-pressed', 'false');
+    const zoom = on => { mainCam.classList.toggle('focused', on); mainCam.setAttribute('aria-pressed', String(on)); };
+    mainCam.addEventListener('click', () => zoom(!mainCam.classList.contains('focused')));
     mainCam.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); mainCam.classList.toggle('focused'); }
-      else if (ev.key === 'Escape') mainCam.classList.remove('focused');
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); zoom(!mainCam.classList.contains('focused')); }
+      else if (ev.key === 'Escape') zoom(false);
     });
     const qualLine = document.createElement('span');
     qualLine.className = 'cell-visual-badge';

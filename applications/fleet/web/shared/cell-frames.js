@@ -159,7 +159,7 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
   function forget(watcher) {
     cancelExpiry(watcher);
     if (watcher.url) URL.revokeObjectURL(watcher.url);
-    Object.assign(watcher, {url: null, lastSeq: null, lease: null, fresh: false,
+    Object.assign(watcher, {url: null, blob: null, lastSeq: null, lease: null, fresh: false,
       capturedAtMs: null, captured_epoch_s: null, ageMs: null});
   }
 
@@ -237,6 +237,7 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
         const next = URL.createObjectURL(blob);
         if (watcher.url) URL.revokeObjectURL(watcher.url);
         watcher.url = next;
+        watcher.blob = blob;  // kept for snapshot(): the page CSP refuses fetch() of a blob: URL
         watcher.lastSeq = seq || null;
       }
       updateTimingFromHeaders(watcher, response.headers);
@@ -341,6 +342,12 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     watchers.clear();
   }
 
+  // The live camera frames on screen now ({label, blob}), for a fault that must keep what the operator saw.
+  function snapshot() {
+    return [...watchers.values()].filter(watcher => watcher.fresh && watcher.blob && !watcher.view.roiTarget
+      && !isWatcherHidden(watcher)).map(watcher => ({label: watcher.badgeLabel || watcher.view.source, blob: watcher.blob}));
+  }
+
   scope?.onDispose?.(dispose);
-  return {bind, setRunning, clear, dispose};
+  return {bind, setRunning, clear, dispose, snapshot};
 }

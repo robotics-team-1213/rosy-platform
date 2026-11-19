@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · fix(fleet-web): 로스터 서명에 상태 늙음·열·배터리를 넣고, 셀 작업 공간 고장 이력이 인스펙터 영상을 잡는다
 - 2026-11-19 · uncommitted · fix(fleet-web): 셀 인스펙터 카메라가 만료 영상을 숨기고 로그아웃 때 지운다
 - 2026-11-18 · uncommitted · fix(fleet-web): 독립 검토 F1~F4 — 고아 CSS 줄, 채널 요청 403 표시, 게이트 오탐 2건
 - 2026-11-18 · uncommitted · test(web): 재발 방지 래칫 3개 — inline 명시, 소비자 0 이름, 정본 밖 재정의·복제·직접 쓰기
 - 2026-11-18 · uncommitted · refactor(web): 어디서도 import하지 않는 export 58개의 export 키워드 제거
-- 2026-11-18 · uncommitted · refactor(fleet-web): 소비자 0 CSS·죽은 대체 경로·옛 충전 칸 카드·시험 전용 export 정리

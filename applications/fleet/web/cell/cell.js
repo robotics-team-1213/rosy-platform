@@ -49,10 +49,12 @@ $('console-token').value = stored;
 const revisions = new Map();
 let previewRefs = null, role = null, busy = false, lastBusy = null, lastRole = undefined, cellServiceUnavailable = false, job = null, jobGeneration = null, layoutData = null;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
+const cellFrames = createCellFrameFeed({call: request});
+const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value,
+  liveFrames: () => cellFrames.snapshot()});
 const catalog = createObjectCatalog({request, $});
 const real2sim = createReal2SimPipeline({request, $, isOperator: () => isOperator(role) && !busy,
-  cellFrames: createCellFrameFeed({call: request}), confirm: confirmIrreversible});
+  cellFrames, confirm: confirmIrreversible});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
 bindPrintSheets({request, $});

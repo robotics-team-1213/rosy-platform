@@ -64,7 +64,7 @@ export const incidentLines = incident => {
   ].filter(Boolean);
 };
 
-export function createCellObservation({request, root, credential = () => ''}) {
+export function createCellObservation({request, root, credential = () => '', liveFrames = () => []}) {
   const empty = element('ui-empty', '접속하면 작업 셀의 실제 관측을 확인할 수 있습니다.');
   let life = null, pending = false, layout = '', disposed = false;
   const gate = createPollGate(); // 관측 라우트가 없는 Fleet 은 로그인 전까지 두드리지 않는다
@@ -252,9 +252,11 @@ export function createCellObservation({request, root, credential = () => ''}) {
   }
 
   function holdFrames(session) {
-    // the tile's own JPEG: the page CSP (connect-src 'self') refuses fetch() of a blob: URL
-    faultFrames.set(session, [...cameras.values()].filter(camera => !camera.image.hidden && camera.blob)
-      .map(camera => ({label: camera.label, url: URL.createObjectURL(camera.blob)})));
+    // the tile's own JPEG: the page CSP (connect-src 'self') refuses fetch() of a blob: URL.
+    // A cell workspace hides the tiles and shows its frames in the inspector (liveFrames), so take those.
+    const tiles = [...cameras.values()].filter(camera => !camera.image.hidden && camera.blob);
+    const shown = tiles.length ? tiles : liveFrames();
+    faultFrames.set(session, shown.map(camera => ({label: camera.label, url: URL.createObjectURL(camera.blob)})));
   }
 
   function paintFaults(entry, faults) {

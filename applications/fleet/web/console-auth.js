@@ -3,6 +3,8 @@
 import { applyRoleToControls, OPERATOR_REASON, isOperator } from "/console/assets/authorization.js";
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { createPasswordLogin } from "./password-login.js";
+import { powerHealthView } from "./power-health-view.js";
+import { staleAgeS } from "./state-age.js";
 import { isSignedOut, storeToken } from "/console/assets/console-token.js";
 import { showConnection, showSession, showSignedOut, stopNotice } from "/console/assets/fleet-header.js";
 
@@ -69,6 +71,7 @@ export function navigateConsoleAlert(target, { el, getInbox, getRoster, render }
 }
 
 export function buildRosterSig(view, auth, activeRobotId) {
+  const now = Date.now();
   return JSON.stringify([
     view.stateLoaded, view.stateUnavailable, view.selected, view.pinning,
     auth.locked, auth.role, auth.principal, activeRobotId || "",
@@ -76,7 +79,9 @@ export function buildRosterSig(view, auth, activeRobotId) {
     view.robots.map((r) => [
       r.robot_id, r.online, r.link, r.link_reason?.message, r.calibration?.label, r.held,
       r.error?.code, r.goal?.x, r.goal?.y, r.queued?.x, r.queued?.y,
-      r.state?.mode, r.state?.safety?.estop, r.state?.safety?.source,
+      r.state?.mode, r.state?.safety?.estop, r.state?.safety?.source, r.state?.safety?.thermal,
+      // a row whose state or battery evidence ages out must redraw: stale facts read as unknown, not current
+      staleAgeS(r, view.receivedAtMs, now) !== null, powerHealthView(r, view.receivedAtMs, now).battery,
       r.state?.battery?.percent, r.state?.battery?.percentage,
       r.state?.battery_status?.shown_percent, r.power_health?.battery?.percent,
       r.state?.localization?.state, r.state?.localization?.pose_frame,
