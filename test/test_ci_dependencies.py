@@ -15,28 +15,17 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 DOCKERFILE = ROOT / ".github" / "ci-image" / "Dockerfile"  # the baked installs (apt, pins, receiver crypto)
 
 
-@pytest.mark.parametrize(("invocations", "needs_rauc"), [
-    ([["test"]], True),
-    ([["test/test_external_os_signing.py::test_example"]], True),
-    ([["middleware/core/gateway/test", "test/test_prepare_os_release.py"]], True),
-    ([["operations/fleet/test/test_routes.py"], ["deploy/robot/pinky_pro/image/test"]], False),
-    ([], False),
-])
-def test_ci_stages_rauc_for_root_targets(invocations, needs_rauc):
-    import json
+def test_ci_image_carries_the_pinned_rauc_for_root_fixtures():
     import yaml
 
+    # Root RAUC fixtures verify the package bytes: the image bakes the pinned deb and ci.yml asserts it.
+    dockerfile = DOCKERFILE.read_text(encoding="utf8")
+    assert "rauc=1.11.3-2 squashfs-tools" in dockerfile
+    assert "apt-get download -qq rauc=1.11.3-2" in dockerfile
+    assert "ROSY_TEST_RAUC_DEB=/opt/rosy-ci/debs/rauc_1.11.3-2_amd64.deb" in dockerfile
     steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
-    setup = next(step for step in steps if step["name"] == "Install colcon & tools")
-    stage = next(step for step in steps if step["name"] == "Stage pinned package for root RAUC fixtures")
-    condition = stage["if"].replace("toJSON(matrix.invocations)", "payload").replace("||", "or")
-    assert eval(condition, {
-        "__builtins__": {}, "contains": lambda value, part: part in value, "payload": json.dumps(invocations),
-    }) is needs_rauc
-    assert steps.index(setup) < steps.index(stage)
-    assert "rauc=1.11.3-2" not in setup["run"]
-    assert "rauc=1.11.3-2 squashfs-tools" in stage["run"]
-    assert "apt-get download -qq rauc=1.11.3-2" in stage["run"]
+    ready = next(step for step in steps if step["name"] == "CI image readiness")
+    assert "= 1.11.3-2" in ready["run"] and 'test -f "$ROSY_TEST_RAUC_DEB"' in ready["run"]
 
 
 @pytest.mark.parametrize('rest', [[], ['middleware/core/gateway/test']])
