@@ -323,7 +323,12 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     if getattr(args, "via_ci", False):
         main_sha = git(repo, "rev-parse", "main").stdout.strip()
         origin_sha = git(repo, "rev-parse", "origin/main").stdout.strip()
-        sha = None if main_sha == origin_sha else main_sha
+        candidate = getattr(args, "candidate", None) or main_sha
+        if not ancestor(repo, candidate, main_sha):
+            raise Stop(1, f"candidate {candidate[:10]} is not in local main")
+        if not ancestor(repo, origin_sha, candidate):
+            raise Stop(1, f"candidate {candidate[:10]} is missing the current origin/main; review a newer candidate")
+        sha = None if candidate == origin_sha else candidate
     else:
         sha = publish_sha(repo)
     if sha is None:
@@ -437,10 +442,16 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     parser.add_argument("--merge-when-green", metavar="PR", help="PR number, or 'auto' for the single open publish PR")
     parser.add_argument("--via-ci", action="store_true",
                         help="publish/merge using GitHub ci-result without requiring a local lab FULL record (D-1052)")
+    parser.add_argument("--candidate", metavar="SHA", help="publish this reviewed local main commit with --via-ci")
     parser.add_argument("--fill-browsers", action="store_true", help="run the browser chunks the newest candidate lacks")
     parser.add_argument("--secret-scan", metavar="SHA", help="only the per-commit secret scan of origin/main..SHA")
     parser.add_argument("--repo", type=Path, default=Path.cwd(), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.candidate and (
+        not re.fullmatch(r"[0-9a-f]{40}", args.candidate) or not args.via_ci
+        or args.secret_scan or args.fill_browsers or args.merge_when_green
+    ):
+        parser.error("--candidate requires a full commit SHA and --via-ci in publish mode")
     now = now or datetime.now(timezone.utc)
     try:
         if args.secret_scan:
