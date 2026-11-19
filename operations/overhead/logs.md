@@ -612,3 +612,10 @@
 - 변경: `track/anchor_feed.py`(헤드 트래커 1 Hz, 감지 POST 뒤 단일 비행 anchors POST)·`post_guard.py`(POST 직전 0.8 s 연령 재확인, 폐기·오류 계수)·`track/fleet_client.py`(`publish_anchors`, keepalive_expiry 30 s)·`cli.py`(`vision` 30 s 통계줄)·`anchor_head_tracker.py`(own marker 없는 Pinky는 sighting·anchors 제외). Fleet `POST /api/fleet/detections/anchors` 경로 추가. R `keep/r-live-20261117` 스냅샷에서 anchor 관련만 이식, 나머지는 폐기.
 - 증거: `test_post_age_guard.py`, `test_overhead_tracking_api.py` (원격 결과는 커밋 메시지 참조).
 - gate 변화: 없음.
+
+
+## 2026-11-20 · uncommitted · fix(vision): world_261026 왜곡·외삽 안정화 및 rectify 시드 폴백 보강
+
+- 변경: `rosy_vision/world_261026_auto.py` — `_sample_strip_centroids` 평균→중앙값 전환, 9-DOF(8+k1) 최적화기에 Levenberg-Marquardt 비용 감소 수락 검사 추가 및 `k1` 클램프 `[-0.25, 0.25]` 완화, `_fit_pink_leg` 샘플 구간 확장(`[-0.10, -0.002]`), `s5_x` 노란 정지선 마스크 우선, `C1` `x_nom` `-0.414` 통일. `rosy_vision/rectify.py` — `_LATEST_LENS_MODEL` 캐시 미스 시 승인 `calibration.image_to_map`의 역행렬을 `seed_map_to_image`로 전달해 재추정 실패(`warpPerspective` 폴백) 방지.
+- 증거: 원격 `remote_pytest.py` (`test/test_auto_track_calibration.py`, `operations/overhead/test/test_map_plane.py`, `operations/overhead/test/test_post_age_guard.py`) 53 passed in 5.04s + 라이브 `ceiling_north` 원영상(`live_raw.jpg`) 재투영 `rms_m = 0.00310 m` 확인.
+- gate 변화: 없음.
