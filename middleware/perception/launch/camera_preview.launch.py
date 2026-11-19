@@ -16,7 +16,11 @@ how often learned_lane_node infers: a Pi 5 at the full 8 fps was ~175 % CPU.
 
 D-423: object_det:=true (ROSY_OBJECT_DET, default off) starts object_detector_node,
 advisory detections (the D-137 detections topic) from object_det_pointer, at most
-object_det_max_rate_hz (ROSY_OBJECT_DET_MAX_HZ, default 2.0). CORE never reads it."""
+object_det_max_rate_hz (ROSY_OBJECT_DET_MAX_HZ, default 2.0). CORE never reads it.
+
+D-1042 6 (2026-11-18): bay_line:=true (ROSY_BAY_LINE, default on) starts
+bay_line_observer_node on the robot's nominal camera (/etc/rosy/camera_nominal.yaml):
+the charge-bay pink line as dock/observation for one-press docking. Evidence only."""
 
 import os
 
@@ -33,8 +37,8 @@ from launch_ros.substitutions import FindPackagePrefix
 from control.ir_overlay import usable_operator_overlay, usable_overlay
 
 
-def _env_switch(name):
-    value = os.environ.get(name, 'false')
+def _env_switch(name, default='false'):
+    value = os.environ.get(name, default)
     if value in ('true', 'false'):
         return value
     get_logger('camera_preview.launch').warning(
@@ -92,6 +96,7 @@ def generate_launch_description():
                               default_value=_env_rate('ROSY_LEARNED_MAX_HZ', '3.0')),
         DeclareLaunchArgument('capture', default_value=_env_switch('ROSY_CAPTURE')),
         DeclareLaunchArgument('object_det', default_value=_env_switch('ROSY_OBJECT_DET')),
+        DeclareLaunchArgument('bay_line', default_value=_env_switch('ROSY_BAY_LINE', 'true')),
         DeclareLaunchArgument('object_det_pointer',
                               default_value='/var/lib/rosy/models/object_det/active'),
         DeclareLaunchArgument('object_det_max_rate_hz',
@@ -131,6 +136,16 @@ def generate_launch_description():
             parameters=[{'pointer': LaunchConfiguration('shadow_pointer'),
                          'max_rate_hz': ParameterValue(LaunchConfiguration('learned_max_rate_hz'),
                                                        value_type=float)}],
+        ),
+        Node(
+            package='control', executable='bay_line_observer_node', namespace=namespace,
+            output='screen', respawn=True, respawn_delay=2.0,
+            condition=IfCondition(LaunchConfiguration('bay_line')),
+            # line_total_m: stop face to the corridor line's centre on the site bays (site map: C y 0.47,
+            # P y 0.027); no painted extension past the corridor line, so the bay line ends there.
+            parameters=[{'camera_geometry_source': 'NOMINAL', 'allow_nominal_ground': True,
+                         'nominal_camera_profile_path': '/etc/rosy/camera_nominal.yaml',
+                         'line_total_m': 0.443, 'far_field_m': 0.40}],
         ),
         Node(
             package='control', executable='object_detector_node', namespace=namespace,
