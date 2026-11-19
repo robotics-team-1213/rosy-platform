@@ -71,6 +71,24 @@ def test_package_acquisition_fails_closed_with_attempt_diagnostics(monkeypatch, 
         assert "status=200" in message and "content-length=" in message and "content-type=" in message
 
 
+def test_package_acquisition_falls_back_to_the_kernel_mirror_when_the_archive_is_down(monkeypatch):
+    trusted, pin = package_pin()
+    pin["url"] = "https://archive.ubuntu.com/ubuntu/pool/universe/r/rauc/rauc_1.11.3-2_amd64.deb"
+    mirror = "https://mirrors.edge.kernel.org/ubuntu/pool/universe/r/rauc/rauc_1.11.3-2_amd64.deb"
+    seen = []
+
+    def open_response(url, timeout):
+        seen.append(url)
+        if url == pin["url"]:
+            raise URLError("archive down")
+        return package_response(trusted)
+
+    monkeypatch.setattr(fixtures, "urlopen", open_response)
+    with pytest.warns(RuntimeWarning, match="attempt 3: URLError"):
+        assert fixtures.download_package(pin) == trusted
+    assert seen == [pin["url"]] * 3 + [mirror]
+
+
 def test_isolated_rauc_accepts_codesigning_self_signed_leaf_and_exposes_full_manifest(tmp_path, rauc_tool):
     key, certificate = signer(tmp_path / "authority")
     bundle, config = make_bundle(tmp_path / "bundle", rauc_tool, key, certificate)
