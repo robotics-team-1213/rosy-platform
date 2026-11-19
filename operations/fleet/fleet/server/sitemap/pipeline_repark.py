@@ -10,6 +10,11 @@ import uuid
 from fastapi import HTTPException
 
 MAX_REPARK = 2
+
+
+class UnknownRequest(KeyError):
+    """No repark request with that id (only this maps to 404; a failing retry enqueue must not)."""
+
 ROOT_KEY = "repark_root"
 CARRY_FIELDS = ("preset", "cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site", "tier",
                 "unload_batch_id", "unload_expected", "unload_index")
@@ -66,7 +71,7 @@ def close(state, request_id: str, body: dict, enqueue, now: float) -> dict:
     request = next((r for r in (getattr(state, "repark_requests", None) or {}).values()
                     if r.get("request_id") == request_id), None)
     if request is None:
-        raise KeyError(request_id)
+        raise UnknownRequest(request_id)
     if request["state"] != "REQUESTED":
         raise ValueError(request["state"])
     new = body.get("state")
@@ -96,7 +101,7 @@ def install_repark_routes(app, ctx) -> None:
         enqueue = lambda spec: ctx._enqueue_one_task(ctx.active_map(), spec)  # noqa: E731
         try:
             request = close(app.state, request_id, body, enqueue, time.time())
-        except KeyError:
+        except UnknownRequest:
             raise HTTPException(404, detail={"code": "UNKNOWN_REPARK_REQUEST"}) from None
         except ValueError as exc:
             raise HTTPException(409, detail={"code": "REPARK_NOT_OPEN", "why": str(exc)}) from None
