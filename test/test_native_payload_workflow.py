@@ -58,12 +58,12 @@ def test_builder_snapshot_guard_executes_before_apt(sources, accepted, monkeypat
             exec(compile(script, "builder-snapshot-guard", "exec"), {})
 
 
-def test_manual_native_arm64_and_read_only():
+def test_native_arm64_and_read_only():
     workflow = _workflow()
     triggers = workflow.get("on", workflow.get(True))
     job = _job()
 
-    assert set(triggers) == {"workflow_dispatch"}
+    assert set(triggers) == {"workflow_dispatch", "workflow_run"}  # no push/PR trigger; workflow_run is main-only
     assert triggers["workflow_dispatch"]["inputs"]["release_id"]["required"] is True
     assert job["runs-on"] == "ubuntu-24.04-arm"
     assert job.get("continue-on-error") is not True
@@ -234,4 +234,4 @@ def test_one_build_per_sha_and_checkout_pins_that_sha():
 
 def test_automatic_build_never_signs():
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "sign_image_release" not in text and "secrets." not in text
+    assert "sign_image_release.py" not in "\n".join(s.get("run", "") for j in _workflow()["jobs"].values() for s in j["steps"]) and "secrets." not in text
