@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+import ratchet_lists
+
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "tools" / "harness" / "platform_parts.yaml"
 READER = ROOT / "tools" / "harness" / "colcon_roots.py"
@@ -146,7 +148,7 @@ def test_every_colcon_invocation_is_a_consumer_or_exempt():
         assert name in hits, f"{name} no longer invokes colcon/rosdep; drop it from CONSUMERS"
         bare = [(number, line) for number, line in hits[name] if not re.search(pattern, line)]
         assert bare == [], (name, bare)
-    assert sorted(set(EXEMPT) - set(hits)) == [], "stale EXEMPT entries"
+    ratchet_lists.check(set(hits) - set(CONSUMERS), EXEMPT, "colcon invocations outside CONSUMERS (EXEMPT)")
 
 
 def test_every_colcon_consumer_reads_the_one_root_list():
