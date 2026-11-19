@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from perception_runtime.perception.learned.manifest import ManifestError, load_manifest
+from core_common.perception_model import ManifestError, load_manifest
 from test_learned_manifest_ncnn import ncnn_doc, write_doc
 
 

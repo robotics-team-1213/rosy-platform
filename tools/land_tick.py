@@ -8,7 +8,8 @@ the next), never deleting work:
 1. main-red recheck: when main moved since the last tick and ids are open, run them on main (``land_mainred
    recheck``); ids that pass close, which is what lets the landings stopped on them go again.
 2. resume: orphaned landings and MAIN-RED stops main has cleared (``land_async.orphans``); then one landing whose
-   last STOP was a full queue, once the queue has room (``requeue``).
+   last STOP was a full queue, once the queue has room (``requeue``), and a NOT QUEUED request land_async kept
+   there (``land_queue.keep_pending``).
 3. rollup: ``land_rollup apply --auto`` for pending landings that fit together. The only rollup trigger (D-889 36).
 4. cleanup: ``land_gc`` (lossless), worktrees (landed and orphan ones at once, any idle WORKTREE_IDLE_H with its
    branch kept and dirty work under refs/wip/) and the branch sweep (merged go, idle unlanded to refs/archive/).
@@ -83,9 +84,12 @@ def resume(repo: Path) -> str:
 def requeue(repo: Path, days: float = 7, now: float | None = None) -> str:
     """One landing whose last STOP was a full queue, relaunched once the queue has room. land_async gives up after its
     drain wait and nobody queued it again (11-18: orphan-relands-3, safety-review-clean sat stopped 3-4 days). Only the
-    newest snapshot of a branch, once per stop (the .auto-resume mark), never a .stopped carrying an owner's own note."""
+    newest snapshot of a branch, once per stop (the .auto-resume mark), never a .stopped carrying an owner's own note.
+    A NOT QUEUED request land_async kept (land_queue.keep_pending) goes first; at most one launch per tick in all."""
     if land_queue.full(land_queue.queue_dir(repo)):
         return "queue full"
+    if (said := pending(repo)) is not None:
+        return said
     place, now = land_async.holder(repo), now or time.time()
     newest: dict[str, str] = {}
     for tree in place.iterdir() if place.is_dir() else ():
@@ -109,6 +113,30 @@ def requeue(repo: Path, days: float = 7, now: float | None = None) -> str:
         except SystemExit as exc:  # e.g. held by a live ticket
             print(f"[tick] requeue {name}: {exc}", flush=True)
     return "nothing to requeue"
+
+
+def pending(repo: Path) -> str | None:
+    """Relaunch one NOT QUEUED request land_async kept (``land_queue.keep_pending``) now the queue has room:
+    oldest first, at most one per tick. One whose branch already lands goes, and one whose branch tip moved past
+    the recorded ref goes (a newer request supersedes it); the relaunched land_async keeps the request again when
+    the queue filled meanwhile, so a kept request is never simply gone."""
+    rows = []
+    for path in land_queue.queue_dir(repo).glob("pending-*.json"):
+        try:
+            rows.append({**json.loads(path.read_text(encoding="utf-8")), "path": path})
+        except (OSError, ValueError):
+            path.unlink(missing_ok=True)
+    for row in sorted(rows, key=lambda r: (r.get("start") or 0, r["path"].name)):
+        branch, ref = row.get("branch") or "", row.get("ref") or ""
+        if (not branch or not ref or land_async.holders(repo, branch)
+                or land_async.git(repo, "rev-parse", branch, check=False) != ref):
+            row["path"].unlink(missing_ok=True)  # already landing, or the branch moved past this request
+            continue
+        land_async.detach([sys.executable, "-X", "utf8", str(repo / "tools" / "land_async.py"), "--branch", branch,
+                           *map(str, row.get("args") or [])], row["path"].with_suffix(".log"), repo)
+        row["path"].unlink(missing_ok=True)
+        return f"relaunched pending {branch}"
+    return None
 
 
 def active(holder: Path, name: str) -> bool:

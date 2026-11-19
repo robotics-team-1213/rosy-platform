@@ -32,7 +32,7 @@ def benchmark(folder, frames, *, iterations=100, warmup=5, max_p95_ms, duration_
     import cv2
     from perception_runtime.perception.learned.detector import ObjectDetModel
     from perception_runtime.perception.learned.runner import LaneSegModel
-    from perception_runtime.perception.learned.manifest import load_manifest
+    from core_common.perception_model import load_manifest
     if iterations < 1 or warmup < 0 or not np.isfinite(duration_s) or duration_s < 0:
         raise ValueError("invalid benchmark iteration/warm-up/duration")
     paths = [Path(p) for p in frames]

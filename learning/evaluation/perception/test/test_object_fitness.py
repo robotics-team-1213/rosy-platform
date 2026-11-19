@@ -110,7 +110,7 @@ def model_frame(snapshot_validity=None, **kwargs):
     from types import SimpleNamespace
     import numpy as np
     from core_common.observation import ObservationSnapshot, SnapshotValidity
-    from perception_runtime.perception.learned.manifest import OBJECT_CLASSES
+    from core_common.perception_model import OBJECT_CLASSES
     image = ObservationSnapshot('image', 'camera', 1000, datetime.now(timezone.utc),
                                 'front', 'cal-1', ('capture',),
                                 snapshot_validity or SnapshotValidity.VALID)

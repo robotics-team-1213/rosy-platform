@@ -460,3 +460,34 @@ def test_via_ci_plans_main_tip_without_lab_full_record_and_merges_when_ci_green(
     monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls))
     assert _run(local, "--merge-when-green", "7", "--via-ci", "--apply") == 0
     assert ("pr", "merge", "7", "--merge", "--match-head-commit", sha) in calls
+
+
+@pytest.mark.parametrize("evidence,expected", [(True, "1"), (False, None)])
+def test_via_ci_push_uses_the_static_hook_only_with_lab_evidence_for_the_sha(repo, monkeypatch, evidence, expected):
+    local, _ = repo
+    _commit(local, "tools/hooks/pre-push", "#!/bin/sh\nexit 0\n")
+    sha = _commit(local, "app.py", "1")
+    monkeypatch.delenv("ROSY_STATIC_PRE_PUSH", raising=False)
+    monkeypatch.setattr(tool, "run_gh", lambda repo_path, *a: "[]" if a[:2] == ("pr", "list") else "https://example.invalid/pull/1")
+    monkeypatch.setattr(tool, "safety_range", lambda wt, s: "1 commits checked, 0 missing")
+    checked = []
+    monkeypatch.setattr(tool.pr_land, "required_lab_invocations", lambda cwd, base, head: checked.append(head) or [["lab"]])
+
+    def verify(cwd, head, required):
+        if not evidence:
+            raise SystemExit("[pr-land] lab-only change requires remote_pytest lab evidence")
+    monkeypatch.setattr(tool.pr_land, "verify_lab_evidence", verify)
+    pushes, real = [], tool.git
+
+    def spy(repo_path, *args, **kw):
+        if "push" in args:
+            pushes.append((kw.get("env") or {}).get("ROSY_STATIC_PRE_PUSH"))
+        return real(repo_path, *args, **kw)
+    monkeypatch.setattr(tool, "git", spy)
+    assert _run(local, "--via-ci", "--apply") == 0
+    assert pushes == [expected] and checked == [sha]
+
+
+def test_the_scheduled_merge_task_passes_via_ci_like_the_manual_path():
+    text = (Path(__file__).resolve().parents[1] / "tools" / "register_publish_merge_task.ps1").read_text(encoding="utf-8")
+    assert "--merge-when-green auto --via-ci --apply" in text

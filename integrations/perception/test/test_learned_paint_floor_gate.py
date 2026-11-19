@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from perception_runtime.perception.learned.lane_mask import FOOT_GAP_PX, NoWallClass, lane_marking_mask
-from perception_runtime.perception.learned.manifest import ClassSpec, ManifestError
+from core_common.perception_model import ClassSpec, ManifestError
 from perception_runtime.perception.learned.runner import LaneSegModel
 
 FLOOR, LANE, WALL, DRIVABLE = 0, 1, 2, 3

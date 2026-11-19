@@ -352,7 +352,9 @@ def land(args) -> int:
     qdir = ticket = None
     reserve = getattr(land_queue, "reserve", None)  # A: a place in the cap before the long gates; a full queue ends here
     if reserve and not (args.no_queue or args.dry_run or args.urgent or os.environ.get(land_queue.TICKET_ENV)):
-        _reserved.append(reserve(land_queue.queue_dir(wt), branch, land_queue.lane_of(wt)))
+        adopt = getattr(land_queue, "adopt_reserved", lambda name: None)  # land_async reserved this place for us
+        _reserved.append(adopt(os.environ.pop(getattr(land_queue, "RESERVED_ENV", "_"), "")) or
+                         reserve(land_queue.queue_dir(wt), branch, land_queue.lane_of(wt)))
     if args.no_queue and not args.dry_run:
         holders = land_queue.ahead(land_queue.queue_dir(wt), Path("~"))  # every live ticket: the first holds its turn
         if holders:  # a landing outside the queue mid-turn gave that turn another round (2026-10-25, 22:52)
@@ -436,7 +438,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     note = None
                 if note and note not in summary:
                     summary.append(note)
-                if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
+                if note and ticket is not None and not land_prepare.in_turn(args):  # FULL prepares outside (D-889 39 aside)
                     full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
                     continue
                 # D-970 4: the pretest's LOAD-FLAKY ids run again here, each in its own invocation, and must pass
@@ -477,7 +479,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             if note:
                 full_main = main_sha
                 tier = land_selection.tier(sys.modules[__name__], guarded + tested, True, args)
-                land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+                prepared = land_prepare.saved(sys.modules[__name__], wt, branch, args, candidate, main_sha, tier, invocations, prepared)
                 summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
             if invocations or tested_main is None:
                 tested_main = main_sha

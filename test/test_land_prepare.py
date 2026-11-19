@@ -374,6 +374,28 @@ def test_batch_leader_preserves_other_preparing_and_older_pending_claims(tmp_pat
     assert json.loads(later.read_text())["status"] == "pending"
 
 
+def test_ordinary_pending_reserves_the_last_preparation_slot_for_newer_urgent(tmp_path):
+    prep, queue = land.land_prepare, land.land_queue
+    for n in range(prep.MAX_PREPARING - 1):
+        queue.take(tmp_path, f"feat/busy-{n}", status="preparing")
+    ordinary = queue.take(tmp_path, "feat/ordinary", status="pending")
+    urgent = queue.take(tmp_path, "fix/urgent", status="pending", urgent="posting CI is blocked")
+    admissions = []
+
+    def let_urgent_prepare(_seconds):
+        assert not admissions, "ordinary should start when urgent releases its preparation slot"
+        prep.slot(tmp_path, urgent, sleep=lambda _: pytest.fail("ordinary pending blocked urgent"))
+        assert json.loads(urgent.read_text())["status"] == "preparing"
+        assert json.loads(ordinary.read_text())["status"] == "pending"
+        admissions.append("urgent")
+        queue.set_status(urgent, "waiting")
+
+    prep.slot(tmp_path, ordinary, sleep=let_urgent_prepare)
+
+    assert admissions == ["urgent"]
+    assert json.loads(ordinary.read_text())["status"] == "preparing"
+
+
 def test_a_pending_landing_continues_on_mains_new_landing_code_with_its_own_ticket(tmp_path, monkeypatch):
     """2026-10-31: queue fixes never reached landers already waiting; they deadlocked until restarted by hand."""
     prep, queue, q = land.land_prepare, land.land_queue, tmp_path / ".git" / "rosy-land-queue"
@@ -819,3 +841,52 @@ def test_pretest_arms_the_pre_turn_refresh_also_on_a_restored_record(monkeypatch
     assert (land.land_queue.REFRESH is not None) is armed
     if armed:  # the refresh re-prepares this landing's own branch and reports its new tested main
         assert land.land_queue.REFRESH() == restored and ran[-1] == "feat/x"
+
+
+@pytest.mark.parametrize("urgent, safety, tests, in_turn", [
+    ("user words", True, "auto", True),    # D-889 39: the urgent safety FULL runs in the turn
+    ("user words", False, "full", True),   # an explicit --tests full is a certain FULL as well
+    ("", True, "auto", False),             # not urgent: unchanged, it prepares before the turn
+    ("user words", False, "auto", False),  # urgent but no safety path: unchanged
+])
+def test_an_urgent_certain_full_skips_the_pretest_and_runs_in_the_turn(monkeypatch, tmp_path, urgent, safety, tests,
+                                                                       in_turn):
+    prep, ran = land.land_prepare, []
+    monkeypatch.setattr(land.land_queue, "REFRESH", None)
+    monkeypatch.setattr(land.land_full, "restore", lambda wt, branch: None)
+    monkeypatch.setattr(land.land_batch, "safety", lambda land_, wt, branch: safety)
+    monkeypatch.setattr(prep, "_prepare", lambda land_, wt, branch, *a: ran.append(branch))
+    args = land.argparse.Namespace(tests=tests, urgent=urgent)
+    prep.pretest(land, tmp_path, "feat/x", args, sys.executable, tmp_path, tmp_path / "ticket.json")
+    assert ran == ([] if in_turn else ["feat/x"])
+    assert prep.in_turn(args) is in_turn
+    budget = land.land_checks.turn_budget(land, args)
+    assert budget == (3 * 3600 if in_turn else land.TURN_CAP_S)
+    monkeypatch.setattr(land.land_queue, "turn_started", lambda: 0.0)
+    maximum = land.land_checks.turn_deadline(land, args, 1, maximum=True)
+    assert maximum == (3 * 3600 if in_turn else land.TURN_MAX_S), "only the urgent FULL outlives the 30 min ceiling"
+
+
+def test_an_urgent_safety_landing_runs_its_full_in_the_turn_without_preparing_outside(repos, monkeypatch):
+    """11-19: berth-unblock (urgent, safety paths) restarted its FULL outside the lock each time main moved."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "a safety change")
+    statuses, outside = [], []
+    monkeypatch.setattr(land.land_mainred, "CARRIED", [])
+    monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
+    monkeypatch.setattr(land.land_batch, "safety", lambda *a: True)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL: safety path"))
+    monkeypatch.setattr(land.land_prepare, "_prepare", lambda *a: outside.append(a))
+    monkeypatch.setattr(land.land_prepare, "again", lambda *a: outside.append(a))
+    real_release = land.land_queue.release
+    monkeypatch.setattr(land.land_queue, "release", lambda *a, **k: outside.append(a) or real_release(*a, **k))
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        statuses.append((round_no, json.loads(land.land_queue._held[0].read_text())["status"]))
+        return []
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto", "--urgent", "user 11-19"]) == 0
+    assert statuses == [(1, "turn")] and not outside, "the FULL ran once, in the turn, never released to prepare"
+    record = land.land_record.read(main, git(main, "rev-parse", "HEAD"))
+    assert record["tier"] == "full"
