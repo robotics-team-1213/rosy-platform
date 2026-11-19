@@ -40,16 +40,18 @@ from affected_ci import (CI_FULL_EXCLUDED, CI_FULL_MATRIX, FLEET_TEST_SECONDS, F
                          ROOT_SHARDS, SUITE_SHARDS, ci_matrix)  # the CI full-run matrix, re-exported
 
 # D-436 §1: always on. The 2026-10-03 D-418 merge failures all sat here.
+# Ratchets (known lists that only shrink) run on every selection: 11-19 main grew omx_cell_boundary 148 -> 153
+# outside the guard set while a branch held 148, and list ratchets were half of the 48 h NEW stops (bn H-1).
+_ARCHITECTURE = Path(__file__).resolve().parents[2] / "test" / "architecture"
 GUARD_SET = (
     "test/test_release_boundary_guards.py",
-    "test/architecture/test_module_structure.py",
+    *sorted(f"test/architecture/{p.name}" for p in _ARCHITECTURE.glob("test_*.py")),
+    "test/test_module_functional_surface.py",
+    "test/test_behavior_test_ownership.py",
     "test/test_harness_contracts.py",
     "test/test_secret_public_provenance.py",
     "middleware/core/gateway/test/test_protocol_version_alignment.py",
     "test/test_robot_literals.py",
-    "test/architecture/test_platform_parts.py",
-    # D-762 stage 0: Markdown under a FULL trigger is not FULL; placement still runs.
-    "test/architecture/test_document_placement.py",
     # D-795: walks every deploy/runtime file, so no path mapping selects it (b101f57783 turned main red).
     "test/test_no_cross_host_dds.py",
 )
