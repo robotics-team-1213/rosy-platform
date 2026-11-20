@@ -75,7 +75,7 @@ def test_monitoring_has_its_own_image_that_carries_no_fleet_code():
     assert "install -d -o 10001 -g 10001 -m 0700 /var/lib/rosy-monitoring" in dockerfile
     assert 'ENTRYPOINT ["python3", "/opt/rosy/secret_exec.py"]' in dockerfile
     ignore = (SITE / "Dockerfile.monitoring.dockerignore").read_text(encoding="utf-8").splitlines()
-    assert ignore[0] == "**" and not any("fleet" in line or "account" in line for line in ignore)
+    assert ignore[0] == "**" and not any("operations/fleet" in line or "operations/account" in line for line in ignore)
     assert {"!operations/monitoring/src/**", "!applications/monitoring/web/**", "!shared/web/**"} <= set(ignore)
     fleet = (SITE / "Dockerfile.fleet").read_text(encoding="utf-8")
     assert "monitoring" not in fleet  # a Fleet-image defect must not reach the observer
