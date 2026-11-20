@@ -97,6 +97,15 @@ def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: 
             connection.commit()
             return store._task_dict(task)
 
+        canceled_result = event_type == "nav.failed" and error_code == "CANCELED"
+        if canceled_result and connection.execute(
+                """SELECT 1 FROM fleet_task_core_events WHERE robot_id=? AND attempt_id=?
+                   AND event_type='nav.canceled'""", (robot_id, correlation_id)).fetchone():
+            # D-421 keeps dispatched tasks FAILED. nav.failed carries no data.source, so a
+            # safety cancel cannot be told apart; only a seen nav.canceled earns the distinct reason.
+            # shortcut: any CORE cancel (operator or safety) gets this reason; store the nav.canceled
+            # source in fleet_task_core_events if the two must differ.
+            reason = "CORE_CANCEL_CONFIRMED"
         connection.execute(
             """INSERT INTO fleet_task_core_events
                (robot_id, event_id, task_id, attempt_id, seq, event_type)
@@ -117,7 +126,7 @@ def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: 
             # D-421: settled by a cancel-all; a later correlated event is recorded, not applied.
             _LOG.warning("CORE %s for task %s after HOLD(FLEET_CANCEL_ALL) recorded, not applied",
                          event_type, task["task_id"])
-        if event_type == "nav.canceled" and cancel_all_tag_matches(
+        if (event_type == "nav.canceled" or canceled_result) and cancel_all_tag_matches(
                 connection, task_id=task["task_id"], robot_id=robot_id,
                 attempt_id=correlation_id, source=source, now=now):
             # D-421: CORE confirmed the cancel a cancel-all window asked for. HOLD is terminal,
