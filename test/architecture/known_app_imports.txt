@@ -51,15 +51,10 @@ operations/fleet/test/test_trail_anchor_e2e.py -> pinky
 operations/fleet/test/test_transfer_installation.py -> omx-cell
 operations/fleet/test/test_transfer_observer_client.py -> omx-cell
 operations/fleet/test/test_trip_runner.py -> pinky
-operations/overhead/rosy_vision/field_calib.py -> pinky
-operations/overhead/rosy_vision/project.py -> pinky
-operations/overhead/test/test_field_calib.py -> pinky
 operations/overhead/test/test_lane_map.py -> site-fleet
 operations/overhead/test/test_pairing_e2e.py -> site-fleet
 operations/overhead/test/test_site_cameras_example.py -> site-fleet
 operations/overhead/test/test_vision_fleet_integration.py -> site-fleet
-operations/overhead/test/test_vision_project.py -> pinky
-operations/overhead/test/test_vision_worker.py -> pinky
 shared/web/test/test_shared_controls_browser.py -> site-fleet
 shared/web/test/test_theme_browser.py -> site-fleet
 shared/web/test/test_ui_token_contracts.py -> pinky

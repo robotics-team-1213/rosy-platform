@@ -7,7 +7,7 @@
 
 Laptop game host (D-90). CORE does not import this package. Final `cmd_vel` stays in CORE.
 
-`field` / `game` / `policy` must not import `cv2`, `httpx`, `rclpy`, `core`, or `fleet`. OpenCV belongs only in `host/overhead.py`. Homography math lives in `field/homography.py` (no cv2). `host/loop.py` and `host/transport.py` must not import `cv2`. Do not add `isaac/`.
+`field` / `game` / `policy` must not import `cv2`, `httpx`, `rclpy`, `core`, or `fleet`. OpenCV belongs only in `host/overhead.py`. Homography math lives in `core_common/homography.py` (no cv2); `field/homography.py` keeps only `field_corners` and re-exports it. `host/loop.py` and `host/transport.py` must not import `cv2`. Do not add `isaac/`.
 
 ## Key Files
 
