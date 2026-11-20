@@ -38,7 +38,7 @@ None.
 
 ### Common Patterns
 
-PNG only. Referenced from README and governance docs.
+PNG·JPG images. `video-records/` holds GIF previews (3 MB or less each). Referenced from README and governance docs.
 
 ## Dependencies
 
