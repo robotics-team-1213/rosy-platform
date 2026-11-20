@@ -161,13 +161,16 @@ _HEAVY_ROOT_TESTS = (
 
 
 def _shard_py_invocation(inv: list[str], n: int = ROOT_SHARDS) -> list[list[str]]:
-    """Split large non-directory .py invocations across runners, balancing heavy root tests."""
+    """Split an invocation with 12 or more .py targets across runners, slowest measured files first.
+
+    Directories in it go round the shards like files (#343: 28 files beside two directories ran 9 min on one runner)."""
     flags = [p for p in inv if p.startswith("-")]
     targets = [p for p in inv if not p.startswith("-")]
-    if n <= 1 or len(targets) < 12 or not all(p.endswith(".py") for p in targets):
+    if n <= 1 or sum(p.endswith(".py") for p in targets) < 12:
         return [inv]
     rank = {p: i for i, p in enumerate(_HEAVY_ROOT_TESTS)}
-    ordered = sorted(targets, key=lambda p: (rank.get(p, len(rank)), p))
+    ordered = sorted(targets, key=lambda p: (not p.endswith(".py"), -CI_TEST_SECONDS.get(PurePosixPath(p).name, 0),
+                                             rank.get(p, len(rank)), p))
     return [[*ordered[i::n], *flags] for i in range(n) if ordered[i::n]]
 
 
