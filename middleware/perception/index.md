@@ -68,6 +68,8 @@
 ## 시험
 
 - `middleware/perception/test`
+- `middleware/drive/test`
+- `test/integration/vision_pinky`
 - `test/test_control_absorption_package.py`
 
 ## 최근 기록
