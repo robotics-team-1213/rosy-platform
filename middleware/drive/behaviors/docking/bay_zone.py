@@ -164,6 +164,11 @@ def classify(pose, dock, staging_offset_m: float, observation, cfg, scan=None) -
         # The numbers tell a stale map (odom slip near the bay) from a wrong bay at a glance; the verdict itself is unchanged.
         return ZoneVerdict("manual", DISAGREE + " (lateral %s %.3f line %.3f m, heading %s %.1f line %.1f deg)"
                            % (src, lateral, o_lat, src, math.degrees(heading), math.degrees(o_head)))
+    if scan is not None:
+        # The LiDAR pose is authoritative for lateral and heading (the camera line heading is 6-25 deg off at this site and passes the agreement gate
+        # above): the camera only had to agree. b8xy C2 x 0.214: LiDAR straight (y -1 mm, 0.1 deg, extent 0.057), camera -9 deg / -15 mm -> the
+        # camera-driven footprint check refused a robot that was inside its lane. The disagreement gates above are unchanged.
+        o_lat, o_head = lateral, heading
     # Straight enough that the reverse run (along) cannot leave the lane: the rear already faces the bay, so there is
     # no turn and no runway to find, only the line to hold.
     if abs(o_lat) <= cfg.bay_exit_lateral_m and lane_extent(cfg, o_lat, o_head) <= lane_edge(cfg, dock) and abs(o_head) <= min(
