@@ -395,6 +395,8 @@ def _dispatched(service, robot_id="rosy_01", key="k1"):
 def _nav_canceled(service, task, event_id="ev-1", seq=1, source="api:operator",
                   event_type="nav.canceled"):
     data = {"correlation_id": task["attempt_id"]}
+    if event_type == "nav.failed":
+        data["error_code"] = "CANCELED"
     if source is not None:
         data["source"] = source
     return service.project_core_event({
@@ -435,6 +437,18 @@ def test_without_core_evidence_the_task_stays_and_the_robot_stays_claimed(tmp_pa
     assert run(service.dispatch_next({"rosy_01"}, dispatch=_accept_new)) is None
     assert service.store.get_task(first["task_id"])["status"] == "ACCEPTED"
     assert service.store.get_task(second["task_id"])["status"] == "QUEUED"
+
+
+def test_nav_failed_canceled_under_cancel_all_holds_and_a_later_nav_canceled_changes_nothing(tmp_path):
+    robot = FakeRobot("rosy_01")
+    service = _service(tmp_path, "rosy_01")
+    first = _dispatched(service)
+    run(cancel_all_driving(_console(robot), service, DriveCancelFence(), actor_id="op-7"))
+
+    held = _nav_canceled(service, first, source=None, event_type="nav.failed")  # no nav.canceled yet
+    assert held["status"] == "HOLD" and held["reason"] == CANCEL_ALL_REASON
+    later = _nav_canceled(service, first, event_id="ev-2", seq=2)
+    assert later["status"] == "HOLD" and later["reason"] == CANCEL_ALL_REASON
 
 
 def test_a_cancel_outside_any_cancel_all_window_stays_unknown(tmp_path):
