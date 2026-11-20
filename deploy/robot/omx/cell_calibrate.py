@@ -153,11 +153,14 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     and nothing but the runner's one line said what it met."""
     import cv2
     import cell_pipeline as cp
+    import cell_recovery
     import cell_scene_guard
 
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
     frames = work / "remap-frames" / time.strftime("%Y%m%d-%H%M%S")
     frames.mkdir(parents=True, exist_ok=True)
+    if not fold(cell).get("ok"):
+        raise SystemExit("remap: initial park failed")
     before = cell.frame("top")
     cv2.imwrite(str(frames / "before.jpg"), before)
     for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
@@ -206,7 +209,8 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     cell.act("park")
     after = cell.frame("top")
     cv2.imwrite(str(frames / "after.jpg"), after)
-    moved = cell_scene_guard.scene_moved(before, after)
+    ignore = [*cell_recovery.moving_rects(config), *(config.get("scene_ignore_px") or ())]
+    moved = cell_scene_guard.scene_moved(before, after, ignore=ignore)
     if moved:
         raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
     seen, marks = marks, consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))

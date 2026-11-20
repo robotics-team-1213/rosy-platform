@@ -413,7 +413,7 @@ def test_a_scene_that_changed_during_the_remap_saves_no_map(tmp_path, monkeypatc
 
         def frame(self, camera):
             view = np.zeros((480, 640, 3), np.uint8)
-            if self.parked:  # a box pushed while the arm was out
+            if self.i >= 0:  # a box pushed while the arm was out
                 view[100:200, 100:160] = (20, 90, 220)
             return view
 
@@ -429,6 +429,41 @@ def test_a_scene_that_changed_during_the_remap_saves_no_map(tmp_path, monkeypatc
         cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
     kept = sorted(p.name for p in next((tmp_path / "remap-frames").iterdir()).iterdir())
     assert "before.jpg" in kept and "after.jpg" in kept and "07.jpg" in kept
+
+
+def test_remap_parks_before_reference_and_ignores_moving_belt(tmp_path, monkeypatch):
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+
+    class Cell:
+        def __init__(self):
+            self.i, self.parked = -1, False
+
+        def frame(self, camera):
+            view = np.zeros((480, 640, 3), np.uint8)
+            if not self.parked:  # unparked entry arm pose must not pollute `before`
+                view[20:120, 300:400] = (200, 200, 200)
+            if self.i >= 0:  # running belt + configured ignore rect
+                view[90:200, 320:500] = (180, 180, 180)
+                view[10:80, 10:60] = (180, 180, 180)
+            return view
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            self.parked = command == "park"
+            return {"ok": True}
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None, **kw: to_px(points[cell.i]))
+    config = {
+        "coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04},
+        "sites": {"pallet": {"yaw_deg": 0.0}, "belt": {"moving_px": [291, 83, 638, 265]}},
+        "scene_ignore_px": [[0, 0, 75, 300]],
+        "calibrate": {"map_sites": ["pallet"]},
+    }
+    record = cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
+    assert len(record["points"]) == len(points)
 
 
 def test_a_map_only_a_minority_of_the_marks_agree_on_is_refused():
