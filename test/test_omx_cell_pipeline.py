@@ -29,6 +29,57 @@ finally:
 
 PROFILE = cell_perception.load_profile(OMX / "cell-profile.example.json")
 CONFIG = json.loads((OMX / "cell-pipeline.example.json").read_text())
+
+
+def test_home_stage_requires_person_and_writes_receipt(tmp_path, monkeypatch, capsys):
+    import cell_robot_profile
+    import cell_unwedge
+    from chunk_runner import NAMES
+
+    config = tmp_path / "cell.json"
+    config.write_text(json.dumps({"io": str(tmp_path), "operating_profile_path": "profile.json",
+                                  "joint_min": {"wrist_roll.pos": -31}}))
+    library = tmp_path / "library.json"
+    measured = [0.8, -62.2, 53.1, 51.6, 45.2, 50.0]
+    library.write_text(json.dumps({"names": NAMES, "chunks": {"home": [measured]}}))
+    profile = {"device_id": "arm_a"}
+    monkeypatch.setattr(cell_robot_profile, "bind_pipeline", lambda cfg, _: {
+        **cfg, "work_dir": str(tmp_path), "_operating_profile_binding": profile,
+    })
+
+    def fake_act(self, command):
+        assert self.operating_profile == profile
+        assert command in ("state", "grip 50.0")
+        return {"ok": True, "state": measured, "target": measured,
+                "operating_context": {"operating_profile": profile}}
+
+    monkeypatch.setattr(m.FifoCell, "act", fake_act)
+    return_home = cell_unwedge.return_home
+    monkeypatch.setattr(cell_unwedge, "return_home",
+                        lambda *args, **kwargs: return_home(*args, **kwargs, sleep=lambda _: None))
+    args = ["--config", str(config), "--stage", "home", "--library", str(library)]
+    with pytest.raises(SystemExit, match="2"):
+        m.main(args)
+    assert not (tmp_path / "receipts").exists()
+    assert m.main([*args, "--person-at-switch"]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    receipt = json.loads(Path(summary["receipt"]).read_text())
+    assert receipt["result"] == "home" and receipt["jogs"] == []
+    assert receipt["start"]["state"] == receipt["end"]["state"] == measured
+
+    def check_lift(*args, lift, **kwargs):
+        assert lift == expected
+        return {"result": "home"}
+
+    monkeypatch.setattr(cell_unwedge, "return_home", check_lift)
+    for flags, expected in [(["--lift", "shoulder_lift:-6"], ("shoulder_lift", -6.0)), (["--no-lift"], False)]:
+        assert m.main([*args, "--person-at-switch", *flags]) == 0
+
+
+def test_profile_bound_fifo_can_send_runner_human_hold(tmp_path, monkeypatch):
+    cell = m.FifoCell(tmp_path, {}, operating_profile={"device_id": "arm_a"})
+    monkeypatch.setattr(cell, "_send", lambda command, _: command)
+    assert cell.act("human-hold") == "human-hold"
 CONFIG["profiles"] = {name: PROFILE for name in CONFIG["cameras"]}
 CONFIG["plan"] = json.loads((OMX / "grasp-plan.example.json").read_text())
 CONFIG["_commissioning"] = {"person_at_switch": True}  # simulated calibration/transfer trials, not field acceptance

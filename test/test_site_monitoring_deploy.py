@@ -75,12 +75,36 @@ def test_monitoring_has_its_own_image_that_carries_no_fleet_code():
     assert "install -d -o 10001 -g 10001 -m 0700 /var/lib/rosy-monitoring" in dockerfile
     assert 'ENTRYPOINT ["python3", "/opt/rosy/secret_exec.py"]' in dockerfile
     ignore = (SITE / "Dockerfile.monitoring.dockerignore").read_text(encoding="utf-8").splitlines()
-    assert ignore[0] == "**" and not any("fleet" in line or "account" in line for line in ignore)
+    # No Fleet or Account service code; the shared core_common protocol modules are allowed.
+    assert ignore[0] == "**" and not any("fleet" in line or "operations/account" in line for line in ignore)
     assert {"!operations/monitoring/src/**", "!applications/monitoring/web/**", "!shared/web/**"} <= set(ignore)
     fleet = (SITE / "Dockerfile.fleet").read_text(encoding="utf-8")
     assert "monitoring" not in fleet  # a Fleet-image defect must not reach the observer
     assert "monitoring" not in (SITE / "Dockerfile.fleet.dockerignore").read_text(encoding="utf-8")
     assert "operations/monitoring/src" in (ROOT / ".github/workflows/build-site-candidate.yml").read_text(encoding="utf-8")
+
+
+def test_monitoring_image_copies_every_core_common_module_it_imports():
+    # 11-20 R: account_routes imported core_common.protocol.account_client, which the image never copied,
+    # so monitoring died with MONITORING_STARTUP_FAILED whenever account_config was set.
+    dockerfile = (SITE / "Dockerfile.monitoring").read_text(encoding="utf-8")
+    ignore = set((SITE / "Dockerfile.monitoring.dockerignore").read_text(encoding="utf-8").splitlines())
+    foundation = ROOT / "contracts/foundation"
+    pending = list((ROOT / "operations/monitoring/src").rglob("*.py"))
+    seen = set()
+    while pending:
+        text = pending.pop().read_text(encoding="utf-8")
+        for module in re.findall(r"^\s*(?:from|import) (core_common(?:\.\w+)+)", text, re.M):
+            path = "contracts/foundation/" + module.replace(".", "/") + ".py"
+            if path not in seen and (ROOT / path).is_file():
+                seen.add(path)
+                pending.append(ROOT / path)
+    assert "contracts/foundation/core_common/protocol/account_client.py" in seen
+    for path in seen:
+        assert path in dockerfile and "!" + path in ignore, path
+    assert "rosy.monitoring.account_routes" in dockerfile  # the build-time import check covers the lazy module
+    requirements = (SITE / "requirements-monitoring.txt").read_text(encoding="utf-8")
+    assert "cryptography==" in requirements and "joserfc==" in requirements
 
 
 def test_compose_renders_monitoring_only_with_its_overlay(tmp_path):
