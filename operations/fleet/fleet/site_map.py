@@ -102,6 +102,8 @@ class SitePlace(BaseModel):
     kind: PlaceKind = "junction"
     exit_yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
     radius_m: Optional[float] = Field(default=None, gt=0.0, le=0.5, allow_inf_nan=False)
+    #: A person placed it on purpose; automatic calibration must not move it.
+    pinned: bool = False
 
     @model_validator(mode="after")
     def _start_heading(self) -> "SitePlace":
@@ -131,6 +133,8 @@ class SiteEdge(BaseModel):
     width_m: float = Field(gt=0.0, le=10.0, allow_inf_nan=False)
     speed_cap_mps: float = Field(gt=0.0, le=5.0, allow_inf_nan=False)
     drive_mode: Literal["lane", "free"] = "lane"
+    #: A person drew it on purpose; automatic calibration must not redraw it.
+    pinned: bool = False
     robot_kinds: Optional[list[Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")]]] = Field(
         default=None, max_length=16)
     evidence: Optional[RoadEvidence] = None
@@ -347,6 +351,8 @@ class SiteMap(BaseModel):
             for key in ("exit_yaw", "radius_m"):
                 if place[key] is None:
                     del place[key]
+            if not place["pinned"]:  # unpinned places stay byte-equal in stored maps
+                del place["pinned"]
         if body["view_turn_deg"] == 0:  # keep stored maps readable by a Fleet without the field
             del body["view_turn_deg"]
         if not body["crosswalks"]:  # D-573: a map without crosswalks stays byte-equal
@@ -360,6 +366,8 @@ class SiteMap(BaseModel):
         if not body["facilities"]:
             del body["facilities"]
         for edge in body["edges"]:
+            if not edge["pinned"]:  # unpinned edges stay byte-equal in stored maps
+                del edge["pinned"]
             if edge["name"] is None:
                 del edge["name"]
             if edge["evidence"] is None:
