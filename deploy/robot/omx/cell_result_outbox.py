@@ -16,7 +16,9 @@ from urllib.error import HTTPError
 DROP_CODES = (409, 422)  # Fleet refused this exact body on its merits (another record, stale or invalid): not retried
 STALE_S = 65  # Fleet takes owner evidence for 60 s after measured_at; measured again only once that has surely passed
 WAITING_FOR_PERSON = "BED_CONFIRMATION_INVALID"  # 422 on /complete: the bed confirmation lapsed; a named operator confirms again
-RETRY_LATER = ("OMX_OWNER_EVIDENCE_UNAVAILABLE",)  # 422 on /complete: the evidence expired in between; measured again on a later poll
+# 422 codes of Fleet's 60 s evidence limit: the result is kept and measured again (no arm motion) once STALE_S has passed
+RETRY_LATER = ("OMX_OWNER_EVIDENCE_UNAVAILABLE", "OWNER_EVIDENCE_MEASURED_AT_INVALID")
+EVIDENCE_MAX_AGE_S = 60  # Fleet's limit on owner evidence
 
 
 def refusal_code(exc: HTTPError) -> str:
@@ -127,6 +129,9 @@ def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any
                 outbox.put(task_id, entry)
                 done.append({"task_id": task_id, "action": "kept", "reason": "re-measurement failed"})
                 continue
+        if isinstance(measured, (int, float)) and EVIDENCE_MAX_AGE_S <= now - measured < STALE_S:
+            done.append({"task_id": task_id, "action": "kept", "reason": "evidence expired, measured again at STALE_S"})
+            continue  # Fleet would refuse it now and nothing is lost by waiting
         try:
             if entry.get("owner_evidence") is not None:
                 try:
@@ -142,6 +147,8 @@ def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any
                 outbox.put(task_id, entry)
                 done.append({"task_id": task_id, "action": "kept", "reason": "waiting for a named operator to confirm the bed"})
             elif code in RETRY_LATER:
+                entry["last_refusal"] = {"reason": code, "at": now}
+                outbox.put(task_id, entry)
                 done.append({"task_id": task_id, "action": "kept", "reason": code})
             elif exc.code in DROP_CODES:
                 outbox.drop(task_id)

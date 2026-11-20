@@ -211,15 +211,18 @@ def install_cameras_routes(app, ctx) -> None:
                                         map_version=getattr(active[2], "version", None))
         if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
             return {"claimed": False, "task": task, "gate": res["gate"]}
-        app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
         from fleet.server.sitemap.pipeline_evidence import bind_bed, take_presence
+
+        # D-1057: binding the bed confirmation to the lease and going RUNNING are one step; if it lapsed meanwhile, nothing changes
+        if not bind_bed(app, task, res["handoff"].get("handoff_lease_id")):
+            return {"claimed": False, "task": task, "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
+        app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
 
         task["presence"] = take_presence(app, task)  # D-1057/D-911: set only for a task a named operator confirmed in time
         task["status"] = "RUNNING"
         task["amr_claim_evidence"] = dict(amr)
         task["handoff_lease_id"] = res["handoff"].get("handoff_lease_id")
         task["claimed_at"] = round(time.time(), 3)
-        bind_bed(app, task)  # D-1057: the bed confirmation is used up here and belongs to this lease from now on
         _enrich_task_health(task)
         _save_ledger()
         handoff = {

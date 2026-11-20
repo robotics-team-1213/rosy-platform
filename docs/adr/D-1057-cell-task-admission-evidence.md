@@ -104,6 +104,11 @@ worker가 보관한 결과(2-4절)의 `owner-evidence`가 `measured_at` 기준 6
 3. **재전송은 원래 증거부터.** Fleet이 원래 owner 증거를 60 s 들고 있는 동안은 같은 본문으로 `/complete`만 다시 보낸다. `owner-evidence`의 409 `OWNER_EVIDENCE_ALREADY_RECORDED`는 이미 기록됨으로 보고 항목을 지우지 않고 `/complete`를 이어 보낸다(다른 409는 그대로 버린다). 팔 없는 재측정은 원래 증거가 만료된 뒤(`STALE_S` = 65 s)에만 한다. 그 사이 `/complete`가 422 `OMX_OWNER_EVIDENCE_UNAVAILABLE`이면 항목을 두고 다음 폴링에 다시 한다.
 4. **적재함 확인은 claim에서 소비해 lease에 묶는다.** `claim`이 유효한 적재함 확인을 쓰고 확인자·`confirmed_at`·그때의 자세·지도 ID·버전을 작업 행 `bed_confirmation`과 lease에 묶는다. 묶인 뒤 `RELEASED`는 120 s 만료를 다시 보지 않는다(120 s는 claim까지의 대기만 잰다). 다시 확인하는 것은 "확인 뒤 2 cm 넘는 이동 없음·지도 변경 없음"(기존 영구 무효 규칙, 상태 갱신마다)과 정지·정지 위치 증거(`amr_evidence`, 변경 없음)다. 확인이 무효가 됐으면 `/complete`는 422 `BED_CONFIRMATION_INVALID`(속도·정지 미측정은 기존 `AMR_BRAKE_BED_VELOCITY_UNMEASURED`)를 돌려준다. 이때 이름 있는 운영자가 RUNNING 작업에 `bed-confirm`을 다시 보낼 수 있다(같은 lease, 로봇이 지금 정지·정지 구역이어야 하며 아니면 409 `BED_CONFIRM_ROBOT_NOT_STOPPED`; 유효한 확인이 있으면 여전히 409 `CELL_TASK_NOT_QUEUED`). worker는 이 422에서 보관 결과를 두고 `last_refusal`에 사유를 남긴 채 사람을 기다리고, 다른 422(불일치 등)는 이전처럼 버린다.
 
+#### 2-8. 검토 8차: 60초 경계의 응답은 보관·재측정, claim은 결속과 한 단계
+
+- 재전송 응답 정리(보관 결과는 `pending-results.json`): 증거 나이가 60 s 이상 65 s 미만이면 아무것도 보내지 않고 보관(Fleet이 거부할 것이므로), 65 s 이상이면 팔 없는 재측정 뒤 전송. 422 `OWNER_EVIDENCE_MEASURED_AT_INVALID`·`OMX_OWNER_EVIDENCE_UNAVAILABLE`(만료 계열)은 삭제하지 않고 `last_refusal`과 함께 보관해 다음 재측정 시점에 다시 한다. 422 `BED_CONFIRMATION_INVALID`는 사람 대기(보관). 연결 끊김·403·5xx·원래 증거 409 `OWNER_EVIDENCE_ALREADY_RECORDED`는 보관·계속. 그 밖의 409·422(본문 불일치, 작업이 RUNNING 아님 등)와 lease가 바뀐 작업만 삭제한다.
+- `claim`은 적재함 확인의 lease 결속(`bind_bed`, 한 번 잡은 `now`로 120 s 판정)을 원장 변경(셀 상태·`RUNNING`·lease) 앞에서 하고, 확인이 그사이 만료되었으면 `claimed:false`, `AMR_BRAKE_BED_VELOCITY_UNMEASURED`로 거부한다(작업은 QUEUED). 119.9 s는 통과, 120.1 s는 거부.
+
 #### 3. 신뢰 경계
 
 owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경(ID 또는 활성 버전)이 한 번이라도 있으면 영구 무효이고, 확인은 조회 때만이 아니라 콘솔이 받는 상태 갱신마다 검사한다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.

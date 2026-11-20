@@ -653,3 +653,42 @@ def test_a_map_change_after_the_claim_still_voids_the_bound_confirmation(env):
     ev.check_beds(env.app)
     refused = _complete(env, parts, digest)
     assert refused.status_code == 422 and refused.json()["detail"]["code"] == "BED_CONFIRMATION_INVALID"
+
+
+# --- D-1057 round 8: binding the confirmation and going RUNNING are one step, judged at one time -----------------------------
+def _claim(env):
+    return env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_s"}).json()
+
+
+@pytest.mark.parametrize("age, claimed", [(119.9, True), (120.1, False)])
+def test_the_claim_boundary_of_the_bed_confirmation_is_120_s(env, age, claimed):
+    env.confirm_bed()
+    env.app.state.cell_bed_confirmations[TASK]["confirmed_at"] = time.time() - age
+    res = _claim(env)
+    task = env.app.state.omx_cell_tasks[TASK]
+    assert res["claimed"] is claimed
+    if claimed:
+        assert task["status"] == "RUNNING" and task["bed_confirmation"]["confirmed_at"] < time.time()
+    else:
+        assert res["reason"] == "AMR_BRAKE_BED_VELOCITY_UNMEASURED" and task["status"] == "QUEUED"
+
+
+def test_bind_bed_judges_at_the_one_time_it_is_given(env):
+    env.confirm_bed()
+    task = env.app.state.omx_cell_tasks[TASK]
+    at = env.app.state.cell_bed_confirmations[TASK]["confirmed_at"]
+    assert ev.bind_bed(env.app, task, "lease-x", now=at + 120.1) is False and "bed_confirmation" not in task
+    assert "lease" not in env.app.state.cell_bed_confirmations[TASK]  # nothing was bound
+    assert ev.bind_bed(env.app, task, "lease-x", now=at + 119.9) is True
+    assert env.app.state.cell_bed_confirmations[TASK]["lease"] == "lease-x" and task["bed_confirmation"]["operator"] == "operator"
+
+
+def test_a_confirmation_that_lapses_between_the_check_and_the_bind_refuses_the_claim_before_the_ledger_changes(env, monkeypatch):
+    env.confirm_bed()
+    monkeypatch.setattr(ev, "bind_bed", lambda *a, **k: False)  # it expired after _ready_amr looked
+    cells_before = dict(env.app.state.omx_cell_states)
+    res = _claim(env)
+    task = env.app.state.omx_cell_tasks[TASK]
+    assert res["claimed"] is False and res["reason"] == "AMR_BRAKE_BED_VELOCITY_UNMEASURED"
+    assert task["status"] == "QUEUED" and not task.get("handoff_lease_id") and not task.get("claimed_at")
+    assert env.app.state.omx_cell_states == cells_before

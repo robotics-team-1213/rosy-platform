@@ -472,3 +472,29 @@ def test_other_422_refusals_are_dropped_as_before_except_evidence_that_expired_i
         fail = lambda part, code=code: _refused(code) if part == "complete" else None  # noqa: E731
         assert resend_pending(outbox, _posting(_running(), [], fail), _Remeasure())[0]["action"] == action
         assert len(outbox.items()) == left
+
+
+# --- D-1057 round 8: every answer past Fleet's 60 s evidence limit keeps the result ------------------------------------------
+def test_between_60_s_and_the_re_measure_time_nothing_is_sent_or_dropped_then_it_is_measured_again(tmp_path):
+    from cell_result_outbox import STALE_S, Outbox, resend_pending
+
+    outbox, sent, fresh = Outbox(tmp_path / "o.json"), [], _Remeasure()
+    outbox.put("t-1", _stale_entry(62))
+    done = resend_pending(outbox, _posting(_running(), sent), fresh)
+    assert sent == [] and fresh.calls == [] and done[0]["action"] == "kept" and "t-1" in outbox.items()
+    outbox.put("t-1", _stale_entry(STALE_S + 1))  # the same entry, later
+    assert resend_pending(outbox, _posting(_running(), sent), fresh)[0]["action"] == "resent" and fresh.calls == ["t-1"]
+
+
+def test_a_measured_at_expiry_answer_keeps_the_result_and_the_next_stale_poll_measures_again(tmp_path):
+    from cell_result_outbox import STALE_S, Outbox, resend_pending
+
+    outbox, sent, fresh = Outbox(tmp_path / "o.json"), [], _Remeasure()
+    outbox.put("t-1", _stale_entry(20))  # Fleet's clock disagrees: it answers 422 OWNER_EVIDENCE_MEASURED_AT_INVALID
+    fail = lambda part: _refused("OWNER_EVIDENCE_MEASURED_AT_INVALID") if part == "owner-evidence" else None  # noqa: E731
+    done = resend_pending(outbox, _posting(_running(), sent, fail), fresh)
+    kept = outbox.items()["t-1"]
+    assert done[0]["action"] == "kept" and kept["last_refusal"]["reason"] == "OWNER_EVIDENCE_MEASURED_AT_INVALID" and sent == ["owner-evidence"]
+    kept["owner_evidence"]["measured_at"] -= STALE_S  # time passes
+    outbox.put("t-1", kept)
+    assert resend_pending(outbox, _posting(_running(), sent), fresh)[0]["action"] == "resent" and fresh.calls == ["t-1"]

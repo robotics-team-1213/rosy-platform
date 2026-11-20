@@ -167,18 +167,25 @@ def zone_pose(app, task: dict):
     return {"x": float(pose.x), "y": float(pose.y), "yaw": float(pose.yaw)}, time.time() - pose.age_s
 
 
-def _bed_valid(rec: dict) -> bool:
+def _bed_valid(rec: dict, now: float | None = None) -> bool:
     """Not voided, and either bound to a claimed task's lease (the 120 s only bounds the wait for the claim) or inside the TTL."""
-    return not rec.get("invalid") and (bool(rec.get("lease")) or 0 <= time.time() - rec["confirmed_at"] <= BED_CONFIRM_TTL_S)
+    now = time.time() if now is None else now
+    return not rec.get("invalid") and (bool(rec.get("lease")) or 0 <= now - rec["confirmed_at"] <= BED_CONFIRM_TTL_S)
 
 
-def bind_bed(app, task: dict) -> None:
-    """At the claim: consume the task's bed confirmation into its lease (who, when, pose and map version at that moment)."""
+def bind_bed(app, task: dict, lease_id, now: float | None = None) -> bool:
+    """At the claim, BEFORE the ledger changes: consume the task's bed confirmation into the lease (who, when, pose and map
+    version at that moment). One `now` decides validity. False when a confirmation exists but is no longer valid at `now`
+    (nothing is changed then and the claim is refused); no confirmation at all is nothing to bind."""
     rec = (getattr(app.state, "cell_bed_confirmations", None) or {}).get(task["task_id"])
-    if rec is not None and _bed_valid(rec):
-        rec["lease"] = task.get("handoff_lease_id")
-        task["bed_confirmation"] = {"operator": rec["principal_id"], "confirmed_at": rec["confirmed_at"], "pose": dict(rec["pose"]),
-                                    "map_id": rec["map_id"], "map_version": rec["map_version"]}
+    if rec is None:
+        return True
+    if not _bed_valid(rec, time.time() if now is None else now):
+        return False
+    rec["lease"] = lease_id
+    task["bed_confirmation"] = {"operator": rec["principal_id"], "confirmed_at": rec["confirmed_at"], "pose": dict(rec["pose"]),
+                                "map_id": rec["map_id"], "map_version": rec["map_version"]}
+    return True
 
 
 def bed_confirmation_lost(app, task: dict) -> bool:

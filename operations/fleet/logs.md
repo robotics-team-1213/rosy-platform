@@ -5603,3 +5603,8 @@
 - 변경: 설정 파일의 `_commissioning` 무시(이번 실행 인자만), 검토된 작업은 입회 표시가 와도 검토 경로, 재전송은 원래 증거가 유효한 동안 `/complete`만(409 이미 기록됨은 이어서 전송, 재측정은 65 s 뒤), 적재함 확인은 claim에서 lease에 묶고 무효 때 422 `BED_CONFIRMATION_INVALID`·RUNNING 작업 재확인 허용. ADR D-1057 2-7절과 API v1.428 절을 맞춤.
 - 증거: 로컬 `test_pipeline_evidence.py`·`test_omx_cell_task_worker_refusal.py`·`test_omx_cell_envelope.py`·`test_omx_cell_task_exec_measured.py`와 `rosy_harness.py lint`. 원격 시험은 조정 세션.
 - gate 변화: 없음. 가드 한계는 그대로이고 실물 인터록은 만들지 않았다.
+
+## 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 8차
+- 변경: worker 재전송은 60 s 이상 65 s 미만엔 보내지 않고 보관, 만료 계열 422(`OWNER_EVIDENCE_MEASURED_AT_INVALID`)는 보관 후 재측정; claim은 적재함 확인 결속을 원장 변경 앞에서 한 `now`로 판정해 실패면 거부. ADR D-1057 2-8절.
+- 증거: 로컬 `test_pipeline_evidence.py`·`test_omx_cell_task_worker_refusal.py`와 lint. 원격 시험은 조정 세션.
+- gate 변화: 없음.
