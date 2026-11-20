@@ -200,6 +200,7 @@ def verify_stack_outcome(
     place: dict[str, Any],
     strict_target: bool = False,
     zone_rois: dict[str, Any] | None = None,
+    after_depth: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Deterministic zone-based task outcome verification (Isaac-Sim style) using pre-defined `side` and `top` target zones.
 
@@ -294,10 +295,19 @@ def verify_stack_outcome(
         if strict_target:  # nothing measured on top is not "fine by default"
             top_orientation_ok = bool(top_zone_info.get("within_zone") and top_zone_info.get("orientation_ok") is True)
 
+    depth_ref = None
+    if strict_target and (zone_rois or {}).get("floor"):
+        # D-1057: with floor ROIs configured the slot's occupancy and tier come from the depth map (black containers included);
+        # the colour and side findings above stay in the record as auxiliary. No usable depth then means not verified.
+        import cell_depth_slots
+        slot_roi = named("top", f"c{place_col}r{place_row}") or TOP_ROI_BY_COL_ROW.get((place_col, place_row))
+        depth_ref = cell_depth_slots.depth_reference(after_depth, after_top, slot_roi, zone_rois["floor"], place_tier)
+        target_present, top_orientation_ok = bool(depth_ref["ok"] and depth_ref["tier_ok"]), True
     verified = bool(target_present and source_vacated and top_orientation_ok)
     recovery_mode = None if verified else ("re_pick_and_re_place" if not source_vacated else ("re_orient_and_re_place" if not top_orientation_ok else "re_align_place_zone"))
     return {
         "verified": verified, "recovery_mode": recovery_mode, "basis": "predefined_side_and_top_target_zones",
+        "depth_reference": depth_ref,
         "pick_slot": {"col": pick_col, "tier": pick_tier, "zone": after_pick_zone, "before_fill": before_pick_fill, "after_fill": after_pick_fill, "vacated": source_vacated},
         "place_slot": {
             "col": place_col, "tier": place_tier, "zone": after_place_zone, "top_zone": top_zone_info,
@@ -331,7 +341,7 @@ def verify_stack_outcome_z_mm(
     """`ContainerSpec`-aware Z-mm stack outcome verification with signed residual `r_k` and `post_release` interlock gate."""
     base_out = verify_stack_outcome(
         before_side=before_side, after_side=after_side, before_top=before_top, after_top=after_top, pick=pick, place=place,
-        strict_target=strict_target, zone_rois=zone_rois,
+        strict_target=strict_target, zone_rois=zone_rois, after_depth=after_depth,
     )
     place_col = int(place.get("col") or 2)
     place_row = int(place.get("row") or 1)
@@ -339,6 +349,8 @@ def verify_stack_outcome_z_mm(
     resolved_spec = str(spec_id or place.get("spec_id") or pick.get("spec_id") or place.get("object_id") or "C3")
     slot_obs = perceive_slot_z_mm(
         after_side, after_top, after_depth, col=place_col, row=place_row, tier=place_tier, z_profile=z_profile, spec_id=resolved_spec,
+        slot_roi=((zone_rois or {}).get("top") or {}).get(f"c{place_col}r{place_row}") or TOP_ROI_BY_COL_ROW.get((place_col, place_row)),
+        floor_rois=(zone_rois or {}).get("floor"),
     )
     if slot_obs.get("found"):
         z_gate = slot_obs.get("spec_gate") or evaluate_signed_tier_residual_mm(

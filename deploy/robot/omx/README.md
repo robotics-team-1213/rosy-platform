@@ -1470,3 +1470,6 @@ place 점은 셀 보정(`cell_observe.predicted_pixel`)이 있어야 그려진�
 
 `cell_zone_propose.py`는 상단·측면 프레임에서 트레이 칸 경계를 찾아 `zone_rois` 형식의 제안 JSON과 겹침 PNG(공용 표는 빨강,
 제안은 초록)를 만든다. 경계가 뚜렷하지 않은 칸은 `null`과 이유다. 이 도구는 셀 설정을 읽지도 쓰지도 않는다.
+
+`zone_rois`에는 `"floor": [[x1, y1, x2, y2], ...]`(색 영상 좌표의 팔레트 바닥 ROI, 비어 있는 머리 띠나 빈 칸)를 더할 수 있다. `floor`가 있으면 목표
+칸의 점유와 층을 깊이 상대 높이(`cell_depth_slots`, ADR D-1057 2-2절)로 판정하고 색·측면은 보조다. `floor`가 없으면 기존 판정이다.

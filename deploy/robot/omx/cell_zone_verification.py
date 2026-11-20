@@ -118,9 +118,19 @@ def _zone_rois(config: dict):
     if raw is None:
         return None, None
     shapes = {"top": re.compile(r"c[1-3]r[1-2]\Z"), "side": re.compile(r"c[1-3]t[1-3]\Z")}
-    if not isinstance(raw, dict) or set(raw) - set(shapes):
-        return None, "zone_rois must be an object with top and side tables"
+    if not isinstance(raw, dict) or set(raw) - set(shapes) - {"floor"}:
+        return None, "zone_rois must be an object with top, side and floor tables"
+
+    def valid(roi) -> bool:
+        return (isinstance(roi, list) and len(roi) == 4 and all(type(v) is int for v in roi)
+                and 0 <= roi[0] < roi[2] <= 640 and 0 <= roi[1] < roi[3] <= 480)
+
+    floor = raw.get("floor")
+    if floor is not None and (not isinstance(floor, list) or not floor or not all(valid(r) for r in floor)):
+        return None, "zone_rois.floor must be a list of [x1,y1,x2,y2] pallet floor ROIs"
     for kind, table in raw.items():
+        if kind == "floor":
+            continue
         if not isinstance(table, dict):
             return None, f"zone_rois.{kind} must be an object"
         for key, roi in table.items():
@@ -208,5 +218,7 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     top_zone = (stack.get("place_slot") or {}).get("top_zone")
     # verify_stack_outcome leaves top_orientation_ok True when it measured nothing on top: an unmeasured top zone is not verified.
     top_ok = bool(isinstance(top_zone, dict) and top_zone.get("within_zone") and top_zone.get("orientation_ok") is True)
+    if stack.get("depth_reference") is not None:  # D-1057: with floor ROIs the depth map decides; colour/side are auxiliary
+        top_ok = True
     return _plain({**out, **stack, "verified": bool(stack.get("verified")) and top_ok,
                    "top": {**out["top"], "zone": top_zone}})
