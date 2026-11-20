@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import time
 from types import SimpleNamespace
 
 SECTION_KEYS = {"device_trial_arms", "installation", "installation_spec", "cell_config", "libraries", "presence_token"}
@@ -105,10 +106,18 @@ def open_carry_for(section, *, field=None, presence=None):
         args = SimpleNamespace(config=Path(section["cell_config"]), dry_run=False, task_id=None, handoff_lease_id=None,
                                want_object=None, want_colour=None)
         config, fifo, calibration_path, _work = f.open_cell(args, person_present)
-        gate = f.Gate(f.Guarded(fifo, config), config, f.pivot.with_site_maps(config, f.calibration.load(calibration_path)),
-                      sequence=f.FOLDED)
+        calibration = f.pivot.with_site_maps(config, f.calibration.load(calibration_path))
+        t0 = time.time()
+        gate = f.Gate(f.Guarded(fifo, config), config, calibration, sequence=f.FOLDED)
         held = gate.open(library, lambda assessment: f.attempts.begin(config, assessment))
         if held is not None:
+            if f.attempts.RUN["path"] is not None:
+                tried = {"locate": {"found": True}, "library": str(library)}
+                ledger = f.attempts.ReplanLedger(config, calibration, body.source, body.target, 1, tried, t0, None)
+                try:
+                    ledger.record_open_hold(gate, held)
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    raise CarryRefused("held: audit_unavailable") from exc
             raise CarryRefused(f"held: {held.get('reason')}")
         return Carry(cell=gate, run=lambda cell: f.transfer_folded(cell, library, sequence=f.FOLDED),
                      fold=lambda: f.fold(fifo), sequence=tuple(f.FOLDED))
