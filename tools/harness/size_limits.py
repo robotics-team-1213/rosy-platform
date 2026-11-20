@@ -45,7 +45,7 @@ OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception toolin
 #: fleet: the SOURCE_ROOTS of operations/fleet/fleet/_source_layout.py (a test keeps them equal).
 PACKAGE_HOLDERS = {
     "control": tuple(f"middleware/drive/{holder}" for holder in
-                     ("calibration", "recovery", "motion_limits", "tracking", "planning/grid", "runtime")),
+                     ("calibration", "recovery", "motion_limits", "tracking", "planning/grid", "runtime", "tools")),
     "core_features": ("middleware/drive/behaviors",),
     "fleet": ("operations/decision", "applications/fleet/web", "operations/situation",
               "operations/site_execution", "integrations/messaging/discord", "operations/account"),
