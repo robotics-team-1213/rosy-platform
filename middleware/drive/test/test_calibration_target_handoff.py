@@ -3,7 +3,7 @@ import math
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from mixin_method import mixin_method
+from test.mixin_method import mixin_method
 from control.control.calibration_clearance import motion_clearance, preflight_clearance_wait
 
 

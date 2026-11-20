@@ -5,7 +5,7 @@ from control.control.calibration_profile import ProfileLease, make_profile
 
 class ProfileLeaseTest(unittest.TestCase):
     def test_refined_rotation_sequence_binds_new_envelope_and_complete_response(self):
-        from test.test_calibration_certificate import RotationCertificateTest
+        from test_calibration_certificate import RotationCertificateTest
         from control.control.rotation_envelope import RotationEnvelope, CROSS_ENDPOINT_MODEL
         import copy
         estimator = RotationEnvelope(.083, uncertainty_model=CROSS_ENDPOINT_MODEL)
@@ -27,7 +27,7 @@ class ProfileLeaseTest(unittest.TestCase):
             self.assertFalse(ProfileLease().accept(make_profile('bad', 1, 100., True, (1., 1.), 'g', invalid), 100., 10., 'g'))
 
     def test_translation_trial_retains_constraint_without_gains_and_expires(self):
-        from test.test_calibration_certificate import RotationCertificateTest
+        from test_calibration_certificate import RotationCertificateTest
         from control.control.rotation_envelope import RotationEnvelope
         estimator=RotationEnvelope(.08)
         for yaw in (.2,.2,-.2,-.2):estimator.add((0,0,yaw),(0,0,yaw),yaw,.0001)
@@ -49,7 +49,7 @@ class ProfileLeaseTest(unittest.TestCase):
             self.assertIsNone(lease.rotation_envelope(10.2,.08,[]))
 
     def test_explicit_recalibration_lease_retains_only_geometry_constraint(self):
-        from test.test_calibration_certificate import RotationCertificateTest
+        from test_calibration_certificate import RotationCertificateTest
         from control.control.rotation_envelope import RotationEnvelope
         estimator=RotationEnvelope(.08)
         for yaw in (.2,.2,-.2,-.2):
@@ -78,7 +78,7 @@ class ProfileLeaseTest(unittest.TestCase):
             self.assertFalse(lease.accept(bad,100.5,10.5,'g'))
 
     def test_rotation_estimate_binds_exact_configured_geometry(self):
-        from test.test_calibration_certificate import RotationCertificateTest
+        from test_calibration_certificate import RotationCertificateTest
         from control.control.rotation_envelope import RotationEnvelope
         footprint=[[-.04,-.05],[-.04,.05],[.08,.05],[.08,-.05]]
         radius=math.hypot(.08,.05)
@@ -111,7 +111,7 @@ class ProfileLeaseTest(unittest.TestCase):
     def test_an_expired_envelope_falls_back_to_rho_without_a_latch(self):
         """D-424 (G): after expiry the gate judges the URDF rotation radius, not 'no rotation
         until recalibrated'."""
-        from test.test_calibration_certificate import RotationCertificateTest
+        from test_calibration_certificate import RotationCertificateTest
         from control.control.rotation_envelope import RotationEnvelope
         from control.control.lidar_guard import lidar_can_rotate
         estimator=RotationEnvelope(.08)
@@ -126,7 +126,7 @@ class ProfileLeaseTest(unittest.TestCase):
         self.assertTrue(lidar_can_rotate([.3]*6,.076,True,.10))     # rho 0.0826 + 0.010 < 0.10
 
     def test_untrusted_rotation_envelope_cannot_be_applied(self):
-        from test.test_calibration_certificate import RotationCertificateTest
+        from test_calibration_certificate import RotationCertificateTest
         rotation = RotationCertificateTest.rotation()
         rotation['envelope'] = {'valid': False}
         packet = make_profile('trial-a', 1, 100., True, (1., 1.), 'geometry-a', rotation)
@@ -172,7 +172,7 @@ class LegacyEnvelopeTest(unittest.TestCase):
     """D-424 review M7/M8."""
 
     def _lease(self, body):
-        from test.test_calibration_certificate import RotationCertificateTest
+        from test_calibration_certificate import RotationCertificateTest
         from control.control.rotation_envelope import RotationEnvelope
         estimator=RotationEnvelope(body)
         for yaw in (.2,.2,-.2,-.2):estimator.add((0,0,yaw),(0,0,yaw),yaw,.0001)
