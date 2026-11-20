@@ -19,6 +19,7 @@ import ssl
 import threading
 import time
 from typing import Any, Callable
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
@@ -30,7 +31,7 @@ from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
 from cell_task_exec import (
-    check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen, resolve_task_arm,
+    check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen, query_safety_listing, resolve_task_arm,
 )
 
 ensure_omx_paths()
@@ -129,30 +130,30 @@ def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, dict[str
 
 
 _LAST_SAFETY_ERROR: list[Exception | None] = [None]
+_SAFETY_LISTING_TIMEOUT_S = 0.5
+_SAFETY_LISTING_RETRY_S = 1.5
+_BACKGROUND_SAFETY_MISSES = 3
 
 
 def _bounded_safety_listing(request_fn, *, cell_id: str | None = None, task_id: str | None = None) -> dict | None:
     """Only an explicit fresh Fleet `active_estop=False` can allow an arm task to continue."""
-    answer: dict[str, Any] = {}
-    finished = threading.Event()
-
-    def query() -> None:
-        try:
-            answer["value"] = request_fn("GET", "/api/fleet/pipeline/cell-tasks?status=QUEUED", None)
-        except Exception as exc:
-            answer["error"] = exc
-        finally:
-            finished.set()
-
-    threading.Thread(target=query, daemon=True).start()
-    if not finished.wait(0.5):
-        return None  # shortcut: one timed-out daemon query may finish later; no further poll after this failure
-    _LAST_SAFETY_ERROR[0] = answer.get("error")
-    listing = answer.get("value")
+    attempts = _BACKGROUND_SAFETY_MISSES if cell_id is None else 1
+    # Background feed loss can delay a Fleet stop by ~4.5 s over three deadlines; a received stop and leased tasks still hold on the first failed check.
+    for attempt in range(attempts):
+        listing, error = query_safety_listing(request_fn, _SAFETY_LISTING_TIMEOUT_S)
+        _LAST_SAFETY_ERROR[0] = error
+        no_response = (error is None or isinstance(error, (TimeoutError, ConnectionError))
+                       or (isinstance(error, URLError) and not isinstance(error, HTTPError)
+                           and isinstance(error.reason, OSError) and not isinstance(error.reason, ssl.SSLError)))
+        if listing is not None or not no_response or attempt == attempts - 1:
+            break
+        time.sleep(_SAFETY_LISTING_RETRY_S)
     if not isinstance(listing, dict) or not isinstance(listing.get("human_safety"), dict):
         return None
     safety = listing["human_safety"]
     if safety.get("active_estop") is not False or not isinstance(safety.get("human_detected"), dict):
+        return None
+    if cell_id is None and any(safety["human_detected"].values()):
         return None
     if cell_id is not None:
         cells = listing.get("cells")
