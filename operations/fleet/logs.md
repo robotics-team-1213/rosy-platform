@@ -5600,3 +5600,8 @@
 - 변경: `task_results.py`는 `nav.failed` `error_code=CANCELED`를 같은 시도의 `nav.canceled`를 이미 본 경우에만 `FAILED`/`CORE_CANCEL_CONFIRMED`로 투영하고(없으면 `CORE_NAV_FAILED` 유지) cancel-all 표시가 맞으면 `nav.canceled`처럼 `HOLD`/`FLEET_CANCEL_ALL`로 만든다. D-421대로 발행된 작업은 `CANCELED`가 되지 않는다. `evidence.py` native 결과는 FAILED, 사유 `CANCELED`. CORE의 `nav.failed`에는 `data.source`가 없어 안전 취소를 구분하지 못한다. CORE는 바꾸지 않았다.
 - 증거: `test_task_service.py`·`test_cancel_all.py` 사례 추가(nav.failed 먼저, nav.canceled 먼저 둘 다). 원격 affected 8774 passed. 실패 1건 `test_host_control.py::test_no_reboot_path_cuts_an_arm_session`은 origin/main 단독 실행에서 통과해 무관함을 확인 중. 독립 검토 2회.
 - gate 변화: SOURCE. 실물 미실시.
+
+## 2026-11-21 · uncommitted · feat(site-map): 정지 장소 stop_zone·approach_m
+- 변경: 에  전용 선택 필드 (횡단보도 다각형 검사  공용, 장소 점 포함,  필수)과 (0.05–0.6 m,  필수), 순수 함수 . 없으면 저장 본문에서 빠짐. 지도 편집 장소 검사 칸에 접근 거리와 정지 구역 그리기·지우기(대기 띠 그리기와 같은 점 목록, 그리면 고정), 지도에 구역 표시. API v1.434.
+- 증거: ··의 고정 정지 장소 병합 시험, site-map·map-editor node 시험 37개 로컬 통과. 원격·실물 미실시.
+- gate 변화: 없음.
