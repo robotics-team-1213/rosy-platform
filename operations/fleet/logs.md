@@ -5600,3 +5600,8 @@
 - 변경: `task_results.py`는 `nav.failed` `error_code=CANCELED`를 같은 시도의 `nav.canceled`를 이미 본 경우에만 `FAILED`/`CORE_CANCEL_CONFIRMED`로 투영하고(없으면 `CORE_NAV_FAILED` 유지) cancel-all 표시가 맞으면 `nav.canceled`처럼 `HOLD`/`FLEET_CANCEL_ALL`로 만든다. D-421대로 발행된 작업은 `CANCELED`가 되지 않는다. `evidence.py` native 결과는 FAILED, 사유 `CANCELED`. CORE의 `nav.failed`에는 `data.source`가 없어 안전 취소를 구분하지 못한다. CORE는 바꾸지 않았다.
 - 증거: `test_task_service.py`·`test_cancel_all.py` 사례 추가(nav.failed 먼저, nav.canceled 먼저 둘 다). 원격 affected 8774 passed. 실패 1건 `test_host_control.py::test_no_reboot_path_cuts_an_arm_session`은 origin/main 단독 실행에서 통과해 무관함을 확인 중. 독립 검토 2회.
 - gate 변화: SOURCE. 실물 미실시.
+
+## 2026-11-21 · uncommitted · feat(fleet): Pinky 작업을 Fleet trip으로 한 번 배차 (D-1059, 패널 5 조각 3)
+- 변경: `sitemap/pipeline_pinky_dispatch.py` 새 소비자. 파이프라인 1초 루프에서 QUEUED pinky 작업을 `trip_plan` → `TripRunner.start`로 한 번 보낸다(SENDING·plan_id를 먼저 장부에 씀, 재기동 때 다시 보내지 않음). 거절은 REFUSED와 사유(지도 버전, 오프라인·E-stop, dispatch 래치, cancel-all, 사람·셀 보류, 셀 사용 중, 기체 주행 중, 120 s 경과). ARRIVED·FAILED·CANCELLED는 trip 상태에서만. `POST .../pinky-tasks/{id}/cancel`은 trip 취소. 등록 행에 `place_id`·`map_version`·`requested_by`. `ROSY_FLEET_PINKY_TASK_DISPATCH=1`일 때만(기본 꺼짐). API v1.435.
+- 증거: `test_pinky_task_dispatch.py` 32개(플래그 꺼짐, 한 번만·두 번 tick, 재기동 2종, 거절 18종, cancel-all, 취소 3종, 경로 행)와 `test_unload_release`·`test_auto_events`·`test_pipeline_orchestrator` 로컬 통과. 실물 미실시.
+- gate 변화: SOURCE. 안전 경로, Safety-Review 대기(robot-08 조정자).

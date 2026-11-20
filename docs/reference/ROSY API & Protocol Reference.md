@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.433
+**Version:** v1.435
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.435 Pinky 작업 배차 필드와 취소 (additive, D-1059)
+
+`POST /api/fleet/pipeline/pinky-tasks`·`station-zones/dispatch`·`decision-gate`가 만드는 `pinky_tasks` 행에 `place_id`(장소 목표, 없으면 `null`), `map_version`(등록 때 활성 지도), `requested_by`(요청 운영자)를 더한다. `ROSY_FLEET_PINKY_TASK_DISPATCH=1`(기본 꺼짐)이면 Fleet이 QUEUED 행을 Fleet trip으로 한 번 보낸다. 상태는 `QUEUED → SENDING → SENT → ARRIVED|FAILED|CANCELLED` 또는 `QUEUED → REFUSED`이고 `reason`, `plan_id`·`trip_id`(`GET /api/fleet/trips/{trip_id}`), `receipt`(`trip_state`, `lease`)를 싣는다. ARRIVED는 trip 상태에서만 온다. 거절 사유는 D-1059 가드 목록이다. `POST /api/fleet/pipeline/pinky-tasks/{task_id}/cancel`(operator): QUEUED는 끝내고 진행 중이면 trip을 취소한다. 응답 `{ok, pinky_task}`, 404 `UNKNOWN_TASK`, 끝난 작업은 409 `PINKY_TASK_ENDED`.
 
 ### v1.433 도킹 상태 진단 필드와 도크 metadata (additive)
 
@@ -4867,6 +4871,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.435 | 2026-11-21 | Additive: `pinky_tasks` 행의 `place_id`·`map_version`·`requested_by`, 배차 상태(SENDING·SENT·ARRIVED·FAILED·CANCELLED·REFUSED)와 `reason`·`trip_id`·`receipt`, `POST /api/fleet/pipeline/pinky-tasks/{task_id}/cancel`. 배차는 `ROSY_FLEET_PINKY_TASK_DISPATCH=1`일 때만 (D-1059, 본문 v1.435) |
 | v1.433 | 2026-11-21 | Additive: `GET /docking/status` 의 `last_event`·`charge_unconfirmed`, `POST /docking/docks` 의 선택 `metadata`(`reference_scan`), 이벤트 `docking.person_call`·`docking.uncharged_voltage_drop` (본문 v1.433) |
 | v1.432 | 2026-11-20 | Additive: `GET /api/v1/sensors/{type}` 에 `odometry`·`wheels`·`dock_observation` 을 더하고 `imu`·`motor` 필드를 넓힌다. 이 다섯 type 은 표본이 없으면 404 대신 200 `evidence: missing`. ROS 콜백은 원본만 보관하고 변환은 GET 때 한다 (본문 v1.429) |
 | v1.431 | 2026-11-20 | Additive: site map place·edge 선택 필드 `pinned`(bool, 기본 false, false면 저장 본문에서 빠짐). 사람이 일부러 둔 장소·차로이며, 현장 자동 트랙 보정(`deploy/site/rosy-auto-track-calibration`)은 고정된 장소·차로를 옮기지 않고 그 장소에 닿는 차로 끝만 그 장소에 맞춘다. 관제 지도 편집의 장소·차로 검사 칸에 「고정」 확인란. |

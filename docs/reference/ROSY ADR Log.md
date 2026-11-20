@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1059 | Pinky 작업은 Fleet trip으로 한 번만 배차한다. 기본 꺼짐(`ROSY_FLEET_PINKY_TASK_DISPATCH=1`), 거절 사유 기록, 취소는 trip 취소. [전문](../adr/D-1059-pinky-task-dispatch.md) | Proposed (2026-11-21, 패널 5 조각 3; Safety-Review 대기) |
 | D-1058 | CORE 실행기 기본값을 events로 바꾼다(D-953 후속 3 개정). 되돌리기는 `ROSY_CORE_EXECUTOR=threaded` drop-in. [전문](../adr/D-1058-core-events-executor-default.md) | Accepted (2026-11-20, 사용자 결정; 정지 상태 실측·Gazebo 확인, 주행 확인 남음) |
 | D-1055 | PR + Merge Queue를 유일한 병합 경로로 하고 land.py 착지를 은퇴한다(D-868 개정). [전문](../adr/D-1055-pr-merge-queue-only-merge-path-land-retired.md) | Accepted (2026-11-20, 사용자 결정) |
 | D-1052 | 셀프 리뷰 1급 지원, 블로킹 FULL 폐지(Zero-FULL), Merge Queue 직행. [전문](../adr/D-1052-self-review-and-zero-full-ci.md) | Accepted (2026-11-19, 사용자 결정) |

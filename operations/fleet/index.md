@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-21 · uncommitted · feat(fleet): Pinky 작업을 Fleet trip으로 한 번 배차 (D-1059, 패널 5 조각 3)
 - 2026-11-20 · uncommitted · fix(fleet): CORE cancel result nav.failed CANCELED gets its own FAILED reason
 - 2026-11-20 · uncommitted · fix(site-map): 자동 트랙 보정이 고정 장소·차로를 지킴
 - 2026-11-18 · uncommitted · fix(map-pose): 늦은 odom·오래된 앵커·3 fps 짝짓기
 - 2026-11-18 · uncommitted · fix(map-pose): D-989 허용 목록에 콘솔 site goal 추가
-- 2026-11-17 · uncommitted · fix(fleet): D-1039 독립 검토 반영
