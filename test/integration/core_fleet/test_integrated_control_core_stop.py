@@ -8,7 +8,7 @@ import pytest
 
 @pytest.mark.parametrize("lose_reply", [False, True])
 def test_typed_stop_reaches_core_without_claiming_physical_stop(core_client, monkeypatch, tmp_path, lose_reply):
-    repo = Path(__file__).resolve().parents[4]
+    repo = Path(__file__).resolve().parents[3]
     for path in ["operations/fleet", "operations/fleet/test", "operations/decision/src", "operations/world/src",
                  "operations/site_execution/src", "operations/processes/palletizing/src"]:
         monkeypatch.syspath_prepend(str(repo / path))

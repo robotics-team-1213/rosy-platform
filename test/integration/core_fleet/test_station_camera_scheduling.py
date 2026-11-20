@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from test_station_camera_pipeline import (
+from test_station_camera_http_pipeline import (
     test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_stop as _camera_pipeline,
 )
 from test_station_camera_pipeline import pipeline_sources, station_api  # noqa: F401
