@@ -95,6 +95,7 @@ def test_landed_tree_after_branch_deleted_not_outside(repo):
 def test_head_lookup_error_is_unknown(repo):
     cfg(repo, allow=[])
     holder = Path(g(repo, "rev-parse", "--absolute-git-dir")) / "rosy-land-wt"
-    (holder / "broken").mkdir(parents=True)  # not a git tree: rev-parse fails
+    (holder / "broken").mkdir(parents=True)
+    (holder / "broken" / ".git").write_text("gitdir: /nonexistent")  # rev-parse fails
     s = cw.collect(repo)
     assert s["unknown"] == ["broken"] and s["outside_allow"] == []
