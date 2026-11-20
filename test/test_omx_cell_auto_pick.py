@@ -1490,3 +1490,5 @@ def test_a_shifted_end_grasp_still_names_the_box_centre_for_scene_checks():
     for end in ends:
         assert geom.box_centre(end) == pytest.approx(o["raw_m"], abs=1e-9)
     assert geom.box_centre(o) == o["raw_m"]
+
+# CI-environment probe 2026-11-20 (do not merge): does this test pass on main inside the CI image?
