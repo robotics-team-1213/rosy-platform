@@ -60,6 +60,7 @@ def test_odometry_that_reports_arrival_while_the_camera_shows_it_short_reads_the
     pose = tr.pose(T0 + 1.25)
     assert pose.anchor_source == "sighting"                 # a fresh marker stays the anchor; the track only measures
     assert pose.camera_residual_m == pytest.approx(0.16) and pose.camera_residual_deg is None   # no camera heading
+    assert (pose.camera_x, pose.camera_y, pose.camera_yaw) == (pytest.approx(0.84), 0.0, None)  # what the map draws
 
 
 def test_a_track_takes_over_once_the_marker_anchor_is_old():
@@ -82,7 +83,9 @@ def test_a_heading_far_off_after_contact_with_odometry_yaw_still_reads_the_gap()
     pose = tr.pose(T0 + 0.25)
     assert 50 <= abs(pose.camera_residual_deg) <= 90 and pose.bridge_turn_deg < 5
     assert math.degrees(pose.yaw) == pytest.approx(3.0)      # the travel heading is measured, it never turns the pose
-    assert tr.pose(T0 + 0.25 + 3.5).camera_residual_deg is None   # no fresh fix, no residual
+    assert math.degrees(pose.camera_yaw) == pytest.approx(69.4, abs=0.5)
+    late = tr.pose(T0 + 0.25 + 3.5)
+    assert late.camera_residual_deg is None and late.camera_x is None   # no fresh fix, nothing to show
 
 
 def test_a_turn_in_place_follows_odometry_not_the_last_travel_heading():

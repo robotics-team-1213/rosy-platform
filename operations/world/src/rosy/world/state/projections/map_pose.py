@@ -56,7 +56,7 @@ from dataclasses import dataclass, fields
 from typing import Mapping, Optional
 
 from rosy.world.state.projections.map_pose_samples import (  # noqa: F401
-    SIGHTING, Pose, OdomSample, body_heading, camera_residual, Sighting, _finite, _wrap, wrap_angle, relative, compose, parse_utc,
+    SIGHTING, Pose, OdomSample, body_heading, camera_residual, residual_fields, Sighting, _finite, _wrap, wrap_angle, relative, compose, parse_utc,
     odom_from_snapshot, sighting_from_row)
 
 LOCALIZED, DEGRADED, UNKNOWN = "LOCALIZED", "DEGRADED", "UNKNOWN"
@@ -196,6 +196,9 @@ class MapPose:
     #: prediction in degrees. None without a fix newer than `max_odom_age_s` (deg: also without a camera heading).
     camera_residual_m: Optional[float] = None
     camera_residual_deg: Optional[float] = None
+    camera_x: Optional[float] = None      # where the camera saw the robot when the residual was taken (yaw None: no heading)
+    camera_y: Optional[float] = None
+    camera_yaw: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -490,7 +493,7 @@ class MapPoseTracker:
                     or (anchor.kind != AUTO_LOCATE and anchor_age > cfg.max_anchor_age_s))
         return MapPose(x, y, yaw, DEGRADED if degraded else LOCALIZED, source, bridged, age,
                        anchor_age, anchor.map_id, odom_stamp=latest.stamp, anchor_source=anchor.kind,
-                       bridge_turn_deg=math.degrees(turned), **diag, **self._residual(now))
+                       bridge_turn_deg=math.degrees(turned), **diag, **residual_fields(self._resid, now, cfg.max_odom_age_s))
 
     def _reset(self, since: float) -> None:
         self._auto_camera_odom = None   # the odom frame ended; its path no longer compares
@@ -540,7 +543,7 @@ class MapPoseTracker:
         ref = self._ref if anchor is not None else None
         if ref is not None and sighting.kind in (SIGHTING, TRACK):
             m, deg = camera_residual(ref.map_pose, ref.odom.pose, (*seen[:2], sighting.yaw or 0.0), odom.pose, sighting.yaw is not None)
-            self._resid = (m, deg, sighting.captured_at)
+            self._resid = (m, deg, sighting.captured_at, sighting.x, sighting.y, sighting.yaw)
         if track and anchor is not None and anchor.kind in (SIGHTING, OPERATOR_PIN) and sighting.captured_at - anchor.captured_at <= cfg.max_anchor_age_s:
             return                            # a fresh marker or pin stays the anchor; the track only measured against it
         if anchor is None:
@@ -582,11 +585,6 @@ class MapPoseTracker:
         return (odom.path_m - ref.odom.path_m > cfg.max_dead_reckon_m
                 or odom.turn_rad - ref.odom.turn_rad > math.radians(cfg.max_bridge_turn_deg)
                 or at - ref.captured_at > cfg.max_anchor_age_s)
-
-    def _residual(self, now: float) -> dict:
-        fresh = self._resid is not None and 0.0 <= now - self._resid[2] <= self.config.max_odom_age_s
-        return {"camera_residual_m": self._resid[0] if fresh else None,
-                "camera_residual_deg": self._resid[1] if fresh else None}
 
 
 def _interpolate(before: _Odom, after: _Odom, t: float) -> _Odom:

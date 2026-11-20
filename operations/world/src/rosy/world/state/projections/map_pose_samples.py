@@ -70,6 +70,15 @@ def camera_residual(ref_map: Pose, ref_odom: Pose, seen: Pose, odom: Pose, headi
     return math.dist(predicted[:2], seen[:2]), math.degrees(_wrap(seen[2] - predicted[2])) if heading else None
 
 
+RESIDUAL_FIELDS = ("camera_residual_m", "camera_residual_deg", None, "camera_x", "camera_y", "camera_yaw")
+
+
+def residual_fields(resid: Optional[tuple], now: float, max_age_s: float) -> dict:
+    """MapPose's camera fields from the newest residual (metres, degrees, taken at, camera x, y, yaw); all None when stale."""
+    fresh = resid is not None and 0.0 <= now - resid[2] <= max_age_s
+    return {name: resid[i] if fresh else None for i, name in enumerate(RESIDUAL_FIELDS) if name}
+
+
 def body_heading(travel: Optional[float], odom, since: Optional[float], at: float) -> Optional[float]:
     """The body yaw for a travel direction the camera saw: the opposite one when odometry says the robot backed up."""
     if travel is None:
