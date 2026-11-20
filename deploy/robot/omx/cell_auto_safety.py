@@ -162,11 +162,11 @@ def object_sized(mask, params=None):
     return np.where(keep_lut[labels], mask, 0).astype(mask.dtype)
 
 
-def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:
+def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None, *, opening_width_mm=None) -> dict:
     """Free mm on each closing side and the jaw margin that fits (cell_finger_room); margin None means no room."""
     import cell_finger_room as fr
 
-    return fr.jaw_margin(fr.own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params)
+    return fr.jaw_margin(fr.own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params, opening_width_mm=opening_width_mm)
 
 
 def after_failure(config: dict, site: str, target: dict, moved: dict, wrist_on: bool, failed_yaws: list) -> dict:
