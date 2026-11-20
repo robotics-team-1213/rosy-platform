@@ -5605,3 +5605,8 @@
 - 변경: `sitemap/pipeline_pinky_dispatch.py` 새 소비자. 파이프라인 1초 루프에서 QUEUED pinky 작업을 `trip_plan` → `TripRunner.start`로 한 번 보낸다(SENDING·plan_id를 먼저 장부에 씀, 재기동 때 다시 보내지 않음). 거절은 REFUSED와 사유(지도 버전, 오프라인·E-stop, dispatch 래치, cancel-all, 사람·셀 보류, 셀 사용 중, 기체 주행 중, 120 s 경과). ARRIVED·FAILED·CANCELLED는 trip 상태에서만. `POST .../pinky-tasks/{id}/cancel`은 trip 취소. 등록 행에 `place_id`·`map_version`·`requested_by`. `ROSY_FLEET_PINKY_TASK_DISPATCH=1`일 때만(기본 꺼짐). API v1.435.
 - 증거: `test_pinky_task_dispatch.py` 32개(플래그 꺼짐, 한 번만·두 번 tick, 재기동 2종, 거절 18종, cancel-all, 취소 3종, 경로 행)와 `test_unload_release`·`test_auto_events`·`test_pipeline_orchestrator` 로컬 통과. 실물 미실시.
 - gate 변화: SOURCE. 안전 경로, Safety-Review 대기(robot-08 조정자).
+
+## 2026-11-21 · uncommitted · fix(fleet): Pinky 작업 배차는 이름 있는 운영자 요청만 (D-1059 검토)
+- 변경: 조정자 검토 차단 항목. trip 경로는 `require_named_operator`인데 pinky-tasks 등록은 `operator_guard`라 이름 없는 요청이 주행으로 이어질 수 있었다. 등록 때 `requester_named`를 `site_auth.build_role_guards`의 같은 가드(app.py `app.state.trip_requester_guards`)로 기록하고, `true`가 아니면 REFUSED `REQUESTER_NOT_NAMED`(옛 행 포함). cancel-all 시각 비교 형식 주석. ADR 가드 목록·API v1.435 본문에 반영.
+- 증거: `test_pinky_task_dispatch.py` 37개(이름 있는 운영자 배차, 이름 없는 운영자·service 거절, 필드 없는 행 거절 추가)와 `test_unload_release`·`test_pipeline_orchestrator` 로컬 68 passed. 실물 미실시.
+- gate 변화: SOURCE. 안전 경로, robot-08 조정자 검토 반영.

@@ -24,6 +24,7 @@
 |---|---|
 | `ACTION_NOT_DISPATCHABLE` | 장소 목표가 없음(미세 이동, stop_now, depart_s3) |
 | `REQUESTER_UNKNOWN` | 요청 운영자 신원 없음 |
+| `REQUESTER_NOT_NAMED` | 등록 때 요청자가 trip 경로와 같은 가드(`site_auth.build_role_guards`의 `require_operator` → `require_named_operator`)를 통과하지 못함(`requester_named`가 `true`가 아니면, 필드가 없는 옛 행 포함) |
 | `REQUEST_STALE` | 등록 뒤 120 s 넘음 |
 | `NO_ACTIVE_MAP` · `MAP_VERSION_CHANGED` · `PLACE_NOT_ON_MAP` | 등록 때 지도 버전과 활성 지도가 다르거나 장소가 없음 |
 | `ROBOT_UNKNOWN` · `ROBOT_OFFLINE` · `ROBOT_ESTOP` | 콘솔 스냅숏 |

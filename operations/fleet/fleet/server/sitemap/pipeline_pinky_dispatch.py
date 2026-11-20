@@ -32,10 +32,25 @@ ARMS_OF_CELL = {"cell_s": ("arm_s",), "cell_ab": ("arm_a", "arm_b")}
 TRIP_OPEN = ("started", "running", "link_wait")  # trip_ports.OPEN
 
 
+def requester_named(app_state, principal) -> bool:
+    """True when the trip routes' guards (require_operator, then require_named_operator from
+    site_auth.build_role_guards, set by app.py) admit this principal; no guards or no principal is False."""
+    guards = getattr(app_state, "trip_requester_guards", None)
+    if principal is None or not guards:
+        return False
+    try:
+        for guard in guards:
+            guard(principal)
+    except HTTPException:
+        return False
+    return True
+
+
 def dispatch_fields(active, request, place_id) -> dict:
     """What a pinky-task row carries for this dispatcher: its place, the map it was asked on and who asked."""
     principal = getattr(request.state, "site_principal", None)
-    return {"place_id": place_id, "map_version": active[0], "requested_by": getattr(principal, "principal_id", None)}
+    return {"place_id": place_id, "map_version": active[0], "requested_by": getattr(principal, "principal_id", None),
+            "requester_named": requester_named(request.app.state, principal)}
 
 
 def enabled() -> bool:
@@ -50,6 +65,7 @@ def last_cancel_all_at(task_service) -> str | None:
     """The newest D-421 cancel-all window opening (ISO, UTC) in the Fleet journal, or None."""
     with closing(task_service.store._connect()) as connection:
         row = connection.execute("SELECT MAX(opened_at) FROM fleet_cancel_all").fetchone()
+    # Compared as strings with _iso(created): both sides must stay UTC isoformat(timespec="milliseconds").
     return row[0] if row is not None else None
 
 
@@ -61,6 +77,8 @@ def refusal(state, task: dict, *, now: float, active, robot_row, human_detected:
         return "ACTION_NOT_DISPATCHABLE"  # micro steps, stop_now, depart_s3: not a place goal
     if not task.get("requested_by"):
         return "REQUESTER_UNKNOWN"
+    if task.get("requester_named") is not True:  # parity with the trip routes' require_named_operator
+        return "REQUESTER_NOT_NAMED"
     created = float(task.get("created_at") or 0.0)
     if now - created > MAX_QUEUE_AGE_S:
         return "REQUEST_STALE"

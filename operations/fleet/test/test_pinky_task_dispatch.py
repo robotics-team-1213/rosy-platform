@@ -73,7 +73,7 @@ class Console:
 
 def _task(**kw):
     row = {"task_id": "p1", "robot_id": "rosy_46", "action": "dock_s3", "status": "QUEUED", "place_id": "S3",
-           "map_version": 7, "requested_by": "op-kim", "created_at": time.time()}
+           "map_version": 7, "requested_by": "op-kim", "requester_named": True, "created_at": time.time()}
     return {**row, **kw}
 
 
@@ -172,6 +172,8 @@ def test_trip_path_refusal_is_recorded_and_nothing_started():
 @pytest.mark.parametrize("why, kw", [
     ("ACTION_NOT_DISPATCHABLE", dict(task=dict(place_id=None, action="micro_forward_2cm"))),
     ("REQUESTER_UNKNOWN", dict(task=dict(requested_by=None))),
+    ("REQUESTER_NOT_NAMED", dict(task=dict(requester_named=False))),
+    ("REQUESTER_NOT_NAMED", dict(task=dict(requester_named=None))),  # an old row without the field
     ("REQUEST_STALE", dict(task=dict(created_at=time.time() - 600))),
     ("MAP_VERSION_CHANGED", dict(task=dict(map_version=6))),
     ("MAP_VERSION_CHANGED", dict(task=dict(map_version=None))),
@@ -277,3 +279,50 @@ def test_route_rows_carry_place_map_and_cancel(tmp_path, monkeypatch):
     done = client.post(f"/api/fleet/pipeline/pinky-tasks/{task['task_id']}/cancel")
     assert done.status_code == 200 and done.json()["pinky_task"]["status"] == "CANCELLED"
     assert client.post(f"/api/fleet/pipeline/pinky-tasks/{task['task_id']}/cancel").status_code == 409
+
+
+def _guarded_app(tmp_path, monkeypatch, principal, *, named_config=True):
+    """A pipeline app whose rows see the real site_auth guards and a fixed principal."""
+    from fastapi import FastAPI, Request
+    from fastapi.testclient import TestClient
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+    from fleet.server.site_auth import build_role_guards
+    from fleet.server.sitemap import pipeline_routes as routes
+
+    site, graph, _ = build_world_261026_site_map()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(routes, "_storage_dir", lambda: tmp_path)
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def as_principal(request: Request, call_next):
+        request.state.site_principal = principal
+        return await call_next(request)
+
+    principals = {"h": principal} if named_config else {}
+    _viewer, operator, named, _proposer = build_role_guards(lambda: principal, principals)
+    app.state.trip_requester_guards = (operator, named)
+    routes.install_pipeline_routes(app, site_maps=SimpleNamespace(active=lambda: (7, site, graph, None)))
+    return app, TestClient(app)
+
+
+@pytest.mark.parametrize("role, named_config, named", [
+    ("operator", True, True),     # a configured named operator credential: the trip routes admit it
+    ("operator", False, False),   # operator, but the site has no named operator identity
+    ("service", True, False),     # a service principal is not an operator for the trip routes
+])
+def test_requester_named_follows_the_trip_route_guards(tmp_path, monkeypatch, role, named_config, named):
+    from fleet.server.site_auth import SitePrincipal
+
+    app, client = _guarded_app(tmp_path, monkeypatch, SitePrincipal("op-kim", role), named_config=named_config)
+    row = client.post("/api/fleet/pipeline/pinky-tasks", json={"action": "dock_s3", "robot_id": "rosy_46"})
+    task = row.json()["pinky_task"]
+    assert task["requester_named"] is named and task["requested_by"] == "op-kim"
+    task.update(task_id="p1", created_at=time.time())
+    world = World(SimpleNamespace(pinky_tasks={"p1": task}, omx_cell_tasks={},
+                                  omx_cell_states={"cell_s": {"phase": "RELEASED"}}, arm_holds={}))
+    world.tick()
+    if named:
+        assert task["status"] == "SENT" and world.runner.starts == [("plan-1", "op-kim")]
+    else:
+        assert (task["status"], task["reason"]) == ("REFUSED", "REQUESTER_NOT_NAMED") and world.plans == []
