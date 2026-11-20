@@ -23,7 +23,7 @@ LOCKED = {"wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
     (["timeout", "clear"], None),
     (["timeout", None, "timeout"], 3),
     (["estop"], 1),
-    (["human"], 1),
+    (["human"], None),  # background poll: a person in a cell does not latch idle runners (unchanged)
     (["timeout", "estop"], 2),
 ])
 def test_background_safety_listing_retries_only_missing_replies(tmp_path, monkeypatch, replies, hold_after):

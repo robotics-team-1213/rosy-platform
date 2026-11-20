@@ -153,8 +153,6 @@ def _bounded_safety_listing(request_fn, *, cell_id: str | None = None, task_id: 
     safety = listing["human_safety"]
     if safety.get("active_estop") is not False or not isinstance(safety.get("human_detected"), dict):
         return None
-    if cell_id is None and any(safety["human_detected"].values()):
-        return None
     if cell_id is not None:
         cells = listing.get("cells")
         if not isinstance(cells, dict):
