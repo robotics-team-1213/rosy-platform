@@ -176,3 +176,21 @@ def test_commissioning_replan_refreshes_state_after_slow_park(tmp_path, monkeypa
     status = gate.act(f"load {revised}")
     assert status["ok"] is True and f"load {revised}" in cell.commands
 
+
+@pytest.mark.parametrize("result,held", [("home", False), ("bind_suspected", True), (None, False)])
+def test_the_gate_rehomes_after_the_intent_and_holds_a_started_rehome_that_failed(tmp_path, monkeypatch, result, held):
+    import cell_transfer
+    import cell_unwedge
+
+    order = []
+    receipt = None if result is None else {"plan": [{"joint": "elbow_flex"}], "result": result, "end": {}}
+    monkeypatch.setattr(cell_unwedge, "rehome_before_work", lambda *a: order.append("rehome") or receipt)
+    monkeypatch.setattr(cell_transfer.Gate, "_assess", lambda self, lib, state=None: {"allowed": True, "mode": "commissioning"})
+    library = tmp_path / "lib.json"
+    library.write_text(json.dumps({"chunks": {"home": [[0] * 6]}}))
+    gate = cell_transfer.Gate(Cell(jaws=50.0), {"work_dir": str(tmp_path)}, {})
+    out = gate.open(library, lambda a: order.append("intent"), lambda *a: order.append("finish"))
+    assert order == ["intent", "rehome"]  # the caller writes the one attempt row
+    assert (out is not None and out["reason"] == f"rehome_{result}" and gate.blocked) if held else out is None
+    assert bool(list((tmp_path / "receipts").glob("*"))) is (result is not None)
+

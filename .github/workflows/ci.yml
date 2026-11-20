@@ -496,6 +496,39 @@ jobs:
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     timeout-minutes: 5
     steps:
+      # merge_group.head_sha is the queue's synthetic merge commit, not the PR head; extract pr-N from gh-readonly-queue head_ref to read the PR head SHA.
+      # shortcut: checks only the PR named in head_ref (the group's last PR); a batched group's earlier PRs are not checked, upgrade by listing the queue entries if drain batching matters
+      - name: Cutover drain gate (merge_group)
+        if: github.event_name == 'merge_group' && vars.ROSY_CUTOVER_PHASE == 'drain'
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          ALLOW_SHAS: ${{ vars.ROSY_CUTOVER_ALLOW }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, urllib.request
+
+          allow = set(os.environ.get("ALLOW_SHAS", "").split())
+          head_ref = os.environ.get("HEAD_REF", "")
+          head_sha = os.environ.get("HEAD_SHA", "")
+          match = re.search(r"(?:^|/)pr-(\d+)(?:-|$)", head_ref)
+          pr_sha = ""
+          if match:
+              url = f"https://api.github.com/repos/{os.environ['REPO']}/pulls/{match.group(1)}"
+              req = urllib.request.Request(url, headers={
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "Accept": "application/vnd.github+json",
+              })
+              with urllib.request.urlopen(req, timeout=15) as resp:
+                  pr_sha = json.loads(resp.read().decode("utf-8"))["head"]["sha"]
+          candidate = pr_sha or head_sha
+          if not candidate or candidate not in allow:
+              print(f"::error::ROSY_CUTOVER_PHASE=drain: PR head {candidate or '<unknown>'} (ref={head_ref}) is not in ROSY_CUTOVER_ALLOW")
+              sys.exit(1)
+          print(f"cutover drain gate OK: {candidate} allowed")
+          PY
       - name: All gating jobs passed
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
