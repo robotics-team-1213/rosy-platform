@@ -130,7 +130,7 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
 
 @pytest.mark.parametrize('width', [1440, 390])
 @pytest.mark.parametrize('page_site', [False], indirect=True)
-def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(page_site, width):
+def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(page_site, width, monkeypatch):
     import math
     from playwright.sync_api import expect
     from fleet.site_map import SiteMap
@@ -153,18 +153,23 @@ def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(p
     expect(page.locator('#teach-start')).to_have_attribute('reason', re.compile('시작점'))
     expect(page.locator('#teach-reference')).to_contain_text('10.00, 20.00')
     page.locator('#teach-origin-confirm').check()
-    robot._state = {'robot_id': 'rosy_60', 'pose': None, 'localization': {'state': 'UNKNOWN', 'pose_frame': 'odom'},
-        'odom_pose': {'x': 2, 'y': 3, 'yaw': 0, 'stamp': time.time()}}
+    robot._state = {'robot_id': 'rosy_60', 'pose': None, 'localization': {'state': 'UNKNOWN', 'pose_frame': 'odom'}}
+    read_state = robot.state
+    sample_period = .25
+    moved_at = math.inf
+
+    async def state_with_odom():
+        state = await read_state()
+        stamp = math.floor(time.time() / sample_period) * sample_period
+        state['odom_pose'] = {'x': 2 if stamp < moved_at else 2.2, 'y': 3, 'yaw': 0, 'stamp': stamp}
+        return state
+
+    # Sample while the browser waits, and advance the pose only at a new sensor tick.
+    monkeypatch.setattr(robot, 'state', state_with_odom)
     page.locator('#teach-start').click()
     expect(page.locator('#teach-status')).to_contain_text('조사 기록 중')
-    # A live robot keeps streaming: refresh the moved pose's stamp until the recorder takes it. One stamp set once
-    # went stale before a slow CI poll read it, and 2점 never came (2026-10-28, GitHub CI under load).
-    for _ in range(60):
-        robot._state['odom_pose'] = {'x': 2.2, 'y': 3, 'yaw': 0, 'stamp': time.time()}
-        if '2점' in page.locator('#teach-status').inner_text():
-            break
-        page.wait_for_timeout(250)
-    expect(page.locator('#teach-status')).to_contain_text('2점')
+    moved_at = time.time() + sample_period
+    expect(page.locator('#teach-status')).to_contain_text('2점', timeout=20_000)
     page.locator('#teach-stop').click()
     expect(page.locator('#teach-form')).to_be_visible()
     expect(page.locator('#site-map-svg polyline.teach')).to_have_count(1)

@@ -73,6 +73,25 @@ def detect_field_jpeg(jpeg: bytes) -> FieldDetection:
     return detect_field(image)
 
 
+#: The full world_261026 fit (~0.5 s of 12-DOF solve on R's N150) runs at most this often; the camera is
+#: fixed, so its quad is reused in between. Run per call it starved marker tracking (2026-11-13, 0.7 fps).
+FALLBACK_INTERVAL_S = 60.0
+_fallback_cache: dict = {}
+
+
+def _auto_fit(image: np.ndarray):
+    """The world_261026 auto fit, at most once per FALLBACK_INTERVAL_S for one image size."""
+    size = image.shape[:2]
+    cached = _fallback_cache.get(size)
+    now = time.monotonic()
+    if cached is not None and now - cached[0] < FALLBACK_INTERVAL_S:
+        return cached[1]
+    from rosy_vision.world_261026_auto import auto_calibrate_and_trace_world_261026
+    fit = auto_calibrate_and_trace_world_261026(image)
+    _fallback_cache[size] = (now, fit)
+    return fit
+
+
 def detect_field(image: np.ndarray) -> FieldDetection:
     started = time.perf_counter()
     if image is None or image.ndim != 3 or image.shape[2] != 3:
@@ -82,8 +101,8 @@ def detect_field(image: np.ndarray) -> FieldDetection:
         raise ValueError("image dimensions are outside the supported range")
     proposal, reason = _detect(image)
     if proposal is None:
-        from rosy_vision.world_261026_auto import _proj, auto_calibrate_and_trace_world_261026
-        fit = auto_calibrate_and_trace_world_261026(image)
+        from rosy_vision.world_261026_auto import _proj
+        fit = _auto_fit(image)
         if fit is not None:
             corners_map = np.array([[-1.22, 0.61], [1.22, 0.61], [1.22, -0.61], [-1.22, -0.61]], np.float64)
             quad = _proj(fit["map_to_image"], corners_map)
