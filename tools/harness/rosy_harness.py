@@ -25,6 +25,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), perception_gaps, also when loaded by path
 import perception_gaps  # noqa: E402
+import records_rules  # noqa: E402  (D-1061 records cutover)
 import sim2real  # noqa: E402
 from log_validation import LOG_FIELDS, LOG_FIELD_ALIASES, validate_entries  # noqa: E402,F401
 from generated_records import _normalize, check as _check_records, write as _write_records  # noqa: E402
@@ -290,7 +291,11 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
     adr = parse_adr_log(adr_text, repo / "docs" / "adr")
     gaps, gap_errors = load_adr_gaps(repo, config)
     errors += [f"{ADR_GAPS.as_posix()}: {e}" for e in gap_errors]
-    errors += [f"ADR log: {e}" for e in validate_adr_log(adr, gaps)]
+    strict = records_rules.strict(repo)
+    adr_errors, adr_warnings = records_rules.split_strict(
+        validate_adr_log(adr, gaps), strict, lambda e: records_rules.LENIENT_ADR in e)
+    errors += [f"ADR log: {e}" for e in adr_errors]
+    warnings += [f"ADR log: {w}" for w in adr_warnings]
     warnings += [f"ADR log: {w}" for w in reservation_warnings(adr, gaps, reserved_adrs(repo))]
     warnings += [note for note in [worktrees.lint_note(repo)] if note]
     if config.get("sim2real_gaps"):
@@ -380,7 +385,12 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
             warnings.append(f"{name}: last_verified commit {commit} not found in git history")
         elif int(count) > int(config.get("stale_after_commits", 5)):
             warnings.append(f"{name}: {count.strip()} commits touched {path} since last_verified {commit}")
-    errors += [f"generated: {p}" for p in check_generated(repo, adr)]
+    gen_errors, gen_warnings = records_rules.split_strict(check_generated(repo, adr), strict, lambda e: True)
+    errors += [f"generated: {p}" for p in gen_errors]
+    warnings += [f"generated: {p}" for p in gen_warnings]
+    rule_errors, rule_warnings = records_rules.lint_findings(repo, log_rels)
+    errors += rule_errors
+    warnings += rule_warnings
     for p in sorted((repo / "deploy/robot/omx").glob("*.py")):  # 11-17: the split modules stay under 400 lines
         if (n := len(p.read_text(encoding="utf-8").splitlines())) >= 400:
             errors.append(f"deploy/robot/omx/{p.name}: {n} lines (>= 400; split module)")

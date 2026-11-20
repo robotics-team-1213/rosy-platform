@@ -1,6 +1,11 @@
 name: Refresh Generated Docs
 
+# D-1061 records bot: on every main push (and twice a day) number API fragments, fold log shards,
+# add missing ADR Log rows and regenerate index/STATUS in ONE PR from a bot/records-* branch.
+# One run at a time (concurrency group), so numbers never collide.
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: "0 3,15 * * *"
   workflow_dispatch: {}
@@ -39,16 +44,22 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git switch -c chore/refresh-generated-records
+          git switch -c bot/records-refresh
           git add -A
-          git commit -m "chore(harness): consolidate log shards and refresh generated docs"
-          git push -f origin chore/refresh-generated-records
-          body="Consolidated append-only log/API shards and refreshed generated index/STATUS records."$'\n\n'"Overlap-Review: self (scheduled generated records consolidation)"
-          if gh pr list --head chore/refresh-generated-records --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
-            pr="$(gh pr list --head chore/refresh-generated-records --state open --json number --jq '.[0].number')"
+          git commit -m "chore(records): number API fragments, fold log shards, refresh generated docs (D-1061)"
+          git push -f origin bot/records-refresh
+          body="Records bot (D-1061): numbered API fragments into the reference header, sections, history and CONTRACT; folded log shards; added ADR Log rows; refreshed index/STATUS."$'\n\n'"Overlap-Review: self (scheduled generated records consolidation)"
+          if gh pr list --head bot/records-refresh --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
+            pr="$(gh pr list --head bot/records-refresh --state open --json number --jq '.[0].number')"
             gh pr edit "$pr" --body "$body"
           else
-            gh pr create --base main --head chore/refresh-generated-records \
-              --title "chore(harness): consolidate record shards and refresh generated docs" \
+            gh pr create --base main --head bot/records-refresh \
+              --title "chore(records): number API fragments and refresh generated records (D-1061)" \
               --body "$body"
           fi
+
+      # Strict: stale index.md or an ADR without its Log row is an error here (warnings on PR and queue runs).
+      - name: Lint the consolidated records (strict)
+        env:
+          ROSY_RECORDS_STRICT: "1"
+        run: python3 tools/harness/rosy_harness.py lint

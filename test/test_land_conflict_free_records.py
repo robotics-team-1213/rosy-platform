@@ -60,8 +60,10 @@ def test_new_record_shards_lint_and_consolidate(tmp_path):
     repo = _make_sample_repo(tmp_path)
     shard = new_record.write_log_shard(repo, "fleet", "add conflict-free log", change="shard", evidence="pytest ok", date="2026-11-19")
     assert shard.relative_to(repo).as_posix().startswith("operations/fleet/logs/2026/11/19-")
-    frag = new_record.write_api_fragment(repo, "berth-status", summary="add berth_status field", date="2026-11-19")
-    assert frag.relative_to(repo).as_posix().startswith("docs/reference/api-changes/2026-11-19-")
+    frag = new_record.write_api_fragment(repo, "berth-status", surface="fleet", title="add berth_status field",
+                                         date="2026-11-19")
+    assert frag.relative_to(repo).as_posix() == "docs/reference/api-changes/berth-status.md"
+    frag.unlink()  # numbering needs the API reference; test_records_fragments.py covers it
 
     errors, _ = harness.lint(repo)
     assert errors == []
@@ -109,5 +111,6 @@ def test_refresh_generated_docs_workflow_contract():
     wf = yaml.safe_load((ROOT / ".github" / "workflows" / "refresh-generated-docs.yml").read_text(encoding="utf-8"))
     triggers = wf.get("on", wf.get(True))
     assert {"cron": "0 3,15 * * *"} in triggers["schedule"]
+    assert triggers["push"] == {"branches": ["main"]}  # D-1061: the bot numbers fragments after each merge
     assert wf["concurrency"] == {"group": "rosy-refresh-generated-docs", "cancel-in-progress": False}
     assert "ci-result" not in wf["jobs"]
