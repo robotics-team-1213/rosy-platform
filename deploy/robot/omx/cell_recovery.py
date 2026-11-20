@@ -67,6 +67,8 @@ def unsolved(choices) -> dict:
 
 def moving_rects(config: dict) -> list:
     """The belt's top-view rects ([x0, y0, x1, y1]): delegated to `cell_scene_guard.moving_rects`."""
+    import cell_scene_guard
+
     return cell_scene_guard.moving_rects(config)
 
 
