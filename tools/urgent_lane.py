@@ -17,9 +17,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -39,8 +42,8 @@ class Stop(Exception):
         self.code = code
 
 
-def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8")
+def git(repo: Path, *args: str, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", env=env)
     if check and result.returncode:
         raise Stop(1, f"git {' '.join(args[:2])} failed: {(result.stderr or result.stdout).strip()[:300]}")
     return result
@@ -147,7 +150,7 @@ def verified(repo: Path, sha: str) -> bool:
         return False
 
 
-def publish(repo: Path, sha: str, topic: str, apply: bool, now: datetime) -> str:
+def publish(repo: Path, sha: str, topic: str, apply: bool, now: datetime, reason: str = "") -> str:
     if not verified(repo, sha):
         raise Stop(1, f"no clean urgent evidence for {sha[:10]}: run `urgent_lane.py evidence` on that commit first")
     base = json.loads((folder(repo) / f"{sha}.json").read_text(encoding="utf-8"))["base"]
@@ -155,9 +158,26 @@ def publish(repo: Path, sha: str, topic: str, apply: bool, now: datetime) -> str
     branch = f"{PREFIX}{topic}-{now.strftime('%Y%m%d')}"
     if not re.fullmatch(r"urgent/[a-z0-9][a-z0-9-]*-\d{8}", branch):
         raise Stop(2, f"topic must be lowercase letters, digits and '-': {topic!r}")
+    publish_only = git(repo, "config", "--bool", "rosy.publishOnly", check=False).stdout.strip() == "true"
+    if publish_only and not reason.strip():
+        raise Stop(2, 'rosy.publishOnly clone needs --reason "<why>" to push an urgent/ branch')
     if not apply:
         return f"dry run: would push {sha[:10]} to {branch} and open a merge-commit PR to main; --apply to do it"
-    git(repo, "push", "origin", f"{sha}:refs/heads/{branch}")
+    hooks = None
+    try:
+        if git(repo, "cat-file", "-e", f"{sha}:tools/hooks/pre-push", check=False).returncode == 0:
+            hooks = Path(tempfile.mkdtemp(dir=folder(repo), prefix=f"{branch.replace('/', '-')}-hooks-"))
+            hook_file = hooks / "pre-push"
+            hook_file.write_bytes(git(repo, "show", f"{sha}:tools/hooks/pre-push").stdout.replace("\r", "").encode())
+            hook_file.chmod(0o755)
+        push_env = {**os.environ, "ROSY_PUSH_REASON": reason.strip()} if reason.strip() else None
+        push_args = (["-c", f"core.hooksPath={hooks.as_posix()}"] if hooks else []) + ["push", "origin", f"{sha}:refs/heads/{branch}"]
+        pushed = git(repo, *push_args, check=False, env=push_env)
+        if pushed.returncode != 0:
+            raise Stop(1, f"git push failed: {(pushed.stderr or pushed.stdout).strip()[:400]}")
+    finally:
+        if hooks is not None:
+            shutil.rmtree(hooks, ignore_errors=True)
     subject = git(repo, "log", "-1", "--format=%s", sha).stdout.strip()
     url = run_gh(repo, "pr", "create", "--base", "main", "--head", branch, "--title", f"urgent: {subject}",
                  "--body", f"Urgent lane (D-1038). Evidence: rosy-urgent/{sha}.json (affected tier plus mapped browser"
@@ -180,6 +200,7 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     pub = sub.add_parser("publish")
     pub.add_argument("--topic", required=True)
     pub.add_argument("--sha", help="default: HEAD")
+    pub.add_argument("--reason", default="", help="incident push reason (required when rosy.publishOnly=true)")
     pub.add_argument("--apply", action="store_true", help="push and open the PR (default: dry run)")
     args = parser.parse_args(argv)
     repo, now = args.repo, now or datetime.now(timezone.utc)
@@ -198,7 +219,7 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
             print(f"[urgent] land {head}; then publish --sha {head} (the landed merge of main is not pushed)")
             return subprocess.run([sys.executable, str(TOOLS / "land.py"), "--urgent", args.reason], cwd=repo).returncode
         sha = git(repo, "rev-parse", args.sha or "HEAD").stdout.strip()
-        print(f"[urgent] {publish(repo, sha, args.topic, args.apply, now)}")
+        print(f"[urgent] {publish(repo, sha, args.topic, args.apply, now, args.reason)}")
         return 0
     except Stop as stop:
         print(f"[urgent] {stop}", file=sys.stderr)
