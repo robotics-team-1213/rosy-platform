@@ -614,10 +614,11 @@ def test_unverified_knowledge_never_reaches_an_example(tmp_path, monkeypatch):
 
 
 def test_the_context_digest_is_background_only_and_the_measurement_still_vetoes(tmp_path, monkeypatch):
-    run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    result, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
     cell_decisions.note(tmp_path / "decisions.jsonl", "safety", "per-joint caps are right")
     text = cell_decisions.context(tmp_path / "decisions.jsonl")
-    assert "closing_axis: 2 decisions" in text and "0 -> 1/1 good" in text and "per-joint caps are right" in text
+    assert "closing_axis: 2 decisions" in text and "0 -> 1/1 good" in text and "per-joint caps are right" in text, (
+        result, [(a.get("outcome"), a.get("fail_stage"), a.get("fail_class")) for a in attempts])  # why a run ended early
     asked = []
     seat = judge_seat.Seat(lambda p, i, s: asked.append((p, s)) or {"decision": "retry", "reason": "x"}, context=tmp_path / "decisions.jsonl")
     assert seat.decide({"box_found": True, "next": "grasp", "aligned": False})["decision"] == "retry"
