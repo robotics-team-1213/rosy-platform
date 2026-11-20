@@ -76,8 +76,19 @@ def main(argv=None):
     parser.add_argument("--follower", required=True, help="follower /dev/serial/by-id path")
     parser.add_argument("--leader", required=True, help="leader /dev/serial/by-id path")
     parser.add_argument("--readiness", type=Path, default=READINESS)
+    parser.add_argument("--config", type=Path, help="arm config for the selected library")
+    parser.add_argument("--library", type=Path, help="also check the selected library and the live arm pose")
     args = parser.parse_args(argv)
+    if (args.config is None) != (args.library is None):
+        parser.error("--config and --library must be supplied together")
     report = check(args.follower, args.leader, args.readiness)
+    if args.library is not None:
+        from cell_preflight import check_library
+
+        config = json.loads(args.config.read_text(encoding="utf-8"))
+        report["checks"] += [dict(name=name, ok=ok, detail=why)
+                             for name, ok, why in check_library(config, args.config, args.library)]
+        report["ok"] = all(row["ok"] for row in report["checks"])
     print(json.dumps(report, indent=2))
     return 0 if report["ok"] else 1
 

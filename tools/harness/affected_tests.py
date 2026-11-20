@@ -368,7 +368,12 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                 own = max((r for r in roots if _under(path, r)), key=len, default=None)
                 own_has_tests = own is not None and any(_under(t, own) for t in tests)
                 for test in tests:
-                    other_root = own_has_tests and max((r for r in roots if _under(test, r)), key=len, default=own) != own
+                    # A folder outside every root of this module, or registered by two modules (test/integration/*),
+                    # is no "own root" folder either: only the files that reach the change, never the whole folder.
+                    # (An external holder, own_has_tests False, still keeps its installing distribution's tests whole.)
+                    foreign = not any(_under(test, r) for r in roots) or sum(test in (m.get("tests") or []) for m in repo.modules) > 1
+                    other_root = own_has_tests and (
+                        foreign or max((r for r in roots if _under(test, r)), key=len, default=own) != own)
                     kept = None if safety_review.is_safety(path, repo.safety_roots, repo.safety_modules) \
                         else _narrowed_tests(repo, path, test, reverse=other_root)
                     if other_root and kept == []:

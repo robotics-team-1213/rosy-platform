@@ -14947,6 +14947,7 @@ osy-d395-s1d\`.
 - 변경: `cell_depth_slots.py`(점유·층을 같은 깊이 프레임의 바닥 평면 대비 상대 높이로), `_current_frame_calibration_checks`·`perceive_slot_z_mm`·`verify_stack_outcome(_z_mm)`에 선택 인자(`depth_reference`, `slot_roi`, `floor_rois`, `after_depth`), `zone_rois.floor`. 실제 셀 프레임(test/fixtures/omx_zone_cal_1120)으로 시험. ADR 2-2절.
 - 증거: 로컬 `test_omx_cell_depth_slots.py`, `test_omx_cell_zone_verification.py`, `test_omx_cell_auto_pick.py` 등.
 - gate 변화: 없음. 실물 수용은 별도(zone_rois·floor는 아직 셀 설정에 없음).
+
 ## 2026-11-20 · uncommitted · D-1055 PR + Merge Queue 유일 병합 경로
 - 변경: ADR D-1055(Accepted, 2026-11-20 사용자 승인), ADR Log 행. land.py 착지 은퇴 기준, 두 레인 전환, D-868 개정, 실험실 증거 규칙. 문서만.
 - 증거: 원격 `test_harness_contracts` 결과는 커밋 뒤 기록.
@@ -14995,4 +14996,9 @@ osy-d395-s1d\`.
 ## 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 8차
 - 변경: worker 재전송은 60 s 이상 65 s 미만엔 보내지 않고 보관, 만료 계열 422(`OWNER_EVIDENCE_MEASURED_AT_INVALID`)는 보관 후 재측정; claim은 적재함 확인 결속을 원장 변경 앞에서 한 `now`로 판정해 실패면 거부. ADR D-1057 2-8절.
 - 증거: 로컬 `test_pipeline_evidence.py`·`test_omx_cell_task_worker_refusal.py`와 lint. 원격 시험은 조정 세션.
+- gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · 교훈: 병합 경로 전환은 실제 브랜치로 끝까지 돌린 뒤 연다
+- 변경: `docs/solutions/workflow-issues/pr-path-cutover-needs-a-real-end-to-end-run-2026-11-20.md`. D-1055 개방 직후 pr_land 막힘 4가지(증거 생산자 없음, publishOnly 훅, 훅 파일 불일치, 가짜 backlog)와 동결 중 큐 투입·merge_group flake. 문서만.
+- 증거: PR #260 생성→병합 13분, 이전 경로 p50 1.9시간 + 게시 PR 82분.
 - gate 변화: 없음.
