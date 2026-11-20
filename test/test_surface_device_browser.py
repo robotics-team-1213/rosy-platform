@@ -13,6 +13,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="set ROSY_RU
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / 'middleware' / 'robot_ui' / "robot"
+COMMON = ROOT / "shared" / "web"
 
 
 def test_hardware_panel_marks_last_snapshot_stale_after_access_failure():
@@ -27,9 +28,13 @@ def test_hardware_panel_marks_last_snapshot_stale_after_access_failure():
 
         page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
             status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
-        source = (WEB / "panels" / "host" / "hardware.js").read_text(encoding="utf-8")
-        page.route("http://rosy.test/assets/panels/host/hardware.js", lambda route: route.fulfill(
-            status=200, content_type="application/javascript", body=source))
+        # The panel imports /assets/dom.js (watchStatus), which imports /common/*: serve both like CORE does.
+        page.route("http://rosy.test/assets/**", lambda route: route.fulfill(
+            status=200, content_type="application/javascript",
+            body=(WEB / route.request.url.split("/assets/", 1)[1]).read_text(encoding="utf-8")))
+        page.route("http://rosy.test/common/*", lambda route: route.fulfill(
+            status=200, content_type="application/javascript",
+            body=(COMMON / route.request.url.rsplit("/", 1)[-1]).read_text(encoding="utf-8")))
         page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/host/hardware.js');
