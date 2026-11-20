@@ -83,3 +83,16 @@ def test_tested_commit_comes_from_a_green_ci_result_notice_only():
     }
     assert affected_queue.tested_commit("https://api.example", "o/r", "HEAD1", "t", pages.__getitem__) == sha
     assert affected_queue.tested_commit("https://api.example", "o/r", "HEAD2", "t", pages.__getitem__) == ""
+
+
+def test_ci_wires_the_notice_and_the_queue_switch():
+    import yaml
+    jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
+    notice = next(s for s in jobs["ci-result"]["steps"] if s["name"] == "Tested commit notice (D-1059)")
+    for needle in ("github.event_name == 'pull_request'", "needs.scope.result == 'success'", "needs.test.result == 'success'"):
+        assert needle in notice["if"], "only a green pull_request run names what it tested"
+    assert f"title={affected_queue.NOTICE}::" in notice["run"] and "github.sha" in notice["run"]
+    scope = next(s for s in jobs["scope"]["steps"] if s["name"] == "Test scope (D-436)")
+    assert scope["env"]["QUEUE_DELTA"] == "${{ vars.ROSY_QUEUE_DELTA }}"
+    call = scope["run"].split("tools/harness/affected_queue.py")[0].rsplit("if [", 1)[1]
+    assert "= merge_group ]" in call and '"$QUEUE_DELTA" = 1' in call and f"{affected_queue.ENV}=" in call
