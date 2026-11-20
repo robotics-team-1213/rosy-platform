@@ -17,6 +17,9 @@ reachability, the Rosy runtime, API, and dashboard. Internet failure is a
 warning unless --require-internet is supplied.
 --navigation-status only reads the native rosy-navigation.service state.
 An active service does not establish Nav2 readiness or field acceptance.
+From a trusted source checkout, stream the script to an SSH alias with a pinned host key:
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=yes <robot-alias> bash -s -- --navigation-status \
+    < deploy/robot/pinky_pro/verify/verify-pi.sh
 EOF
 }
 
