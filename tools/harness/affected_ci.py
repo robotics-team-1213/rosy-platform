@@ -131,6 +131,29 @@ def buildable(repo: Repo, sel: Selection) -> bool:
                for p in sel.changed)
 
 
+# Slow root test files that dominate affected GUARD_SET runners when packed together.
+_HEAVY_ROOT_TESTS = (
+    "test/test_harness_contracts.py",
+    "test/test_affected_tests.py",
+    "test/test_land.py",
+    "test/test_robot_cd.py",
+    "test/test_readme_agent_start.py",
+    "test/test_ci_dependencies.py",
+    "test/test_remote_test_tools.py",
+)
+
+
+def _shard_py_invocation(inv: list[str], n: int = ROOT_SHARDS) -> list[list[str]]:
+    """Split large non-directory .py invocations across runners, balancing heavy root tests."""
+    flags = [p for p in inv if p.startswith("-")]
+    targets = [p for p in inv if not p.startswith("-")]
+    if n <= 1 or len(targets) < 12 or not all(p.endswith(".py") for p in targets):
+        return [inv]
+    rank = {p: i for i, p in enumerate(_HEAVY_ROOT_TESTS)}
+    ordered = sorted(targets, key=lambda p: (rank.get(p, len(rank)), p))
+    return [[*ordered[i::n], *flags] for i in range(n) if ordered[i::n]]
+
+
 def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
     """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit."""
     import affected_tests as at
@@ -171,7 +194,8 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
                 continue  # ROS environment grouping must not split the job's leading environment.
             split = [p for p in inv if p in whole and _shard_groups(repo, whole[p])]
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
-            out += [rest] if any(not p.startswith("-") for p in rest) or not split else []
+            if any(not p.startswith("-") for p in rest) or not split:
+                out += _shard_py_invocation(rest) if not split else [rest]
             out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p])]
         entries = affected_ros.entries(out, CI_FULL_MATRIX)
         exclusive_jobs = [inv for inv in sel.invocations if affected_exclusive.dedicated(inv)]
