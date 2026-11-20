@@ -113,10 +113,10 @@ def test_executor_refuses_the_top_only_record_and_accepts_the_two_camera_record(
 # Trimmed from the real cell configs (cell PC, 2026-11-19): sites carry only the place xy, ROI and heights; cameras are top and
 # wrist, with no side camera; there is no plan key. No personal paths, tokens or addresses are kept.
 REAL = {
-    "arm_b": {"cameras": {"top": {}, "wrist": {}}, "sites": {"pallet": {
+    "arm_b": {"cameras": {"top": {}, "wrist": {}}, "episodes": {"cameras": {"side": "http://127.0.0.1:8767/frame/side.jpg"}}, "sites": {"pallet": {
         "surface_z": -0.01, "z": 0.005, "yaw_deg": -90.0, "tier_step_m": 0.0324, "place": [0.153, -0.128],
         "auto_roi": [246, 148, 400, 405]}}},
-    "arm_a": {"cameras": {"top": {}, "wrist": {}}, "sites": {"pallet": {
+    "arm_a": {"cameras": {"top": {}, "wrist": {}}, "episodes": {"cameras": {"side": "http://127.0.0.1:8767/frame/side.jpg"}}, "sites": {"pallet": {
         "surface_z": -0.004, "z": 0.011, "yaw_deg": 0.0, "tier_step_m": 0.0345, "place": [0.115, 0.034],
         "auto_roi": [247, 146, 402, 404]}}},
     "arm_s": {"cameras": {"top": {}, "wrist": {}}, "sites": {"belt": {
@@ -139,3 +139,21 @@ def test_real_cell_s_config_has_no_side_camera_so_the_basis_cannot_match():
     config = {**REAL["arm_s"], "sites": {**REAL["arm_s"]["sites"], "belt": {**REAL["arm_s"]["sites"]["belt"], "col": 1, "row": 1}}}
     out = czv.measure(Cell(REAL["arm_s"]["cameras"]), None, config, "belt", "pinky", config["sites"]["belt"]["auto_roi"])
     assert out["basis"] == czv.TOP_ONLY_BASIS and out["side"]["available"] is False
+
+
+def test_side_frame_source_falls_back_to_the_episodes_side_stream_of_the_same_config():
+    config = {**REAL["arm_b"], "sites": {"pallet-l0": {"layer": 0, "col": 2, "row": 1}}}
+    cell = Cell({"top": "u", "wrist": "u"})
+    seen = []
+    orig = cell.frame_receipt
+    cell.frame_receipt = lambda camera, **kw: (seen.append((camera, dict(cell.cameras))), orig(camera, **kw))[1]
+    out = czv.measure(cell, None, config, "pallet-l0", "pallet-l0", None)
+    assert out["basis"] == czv.BASIS and out["verified"] is True and out["side"]["frame"]["camera"] == "side"
+    assert seen[-1][1]["side"] == "http://127.0.0.1:8767/frame/side.jpg"  # the stream address was visible to the frame call
+    assert "side" not in cell.cameras  # and the cell's own camera map is left as it was
+
+
+def test_no_side_in_cameras_or_episodes_keeps_the_top_only_basis():
+    config = {"sites": {"belt": {"col": 1, "row": 1}}}
+    out = czv.measure(Cell({"top": "u"}), None, config, "belt", "pinky", (1, 2, 3, 4))
+    assert out["basis"] == czv.TOP_ONLY_BASIS

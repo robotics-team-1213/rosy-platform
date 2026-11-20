@@ -59,8 +59,18 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     out: dict[str, Any] = {"basis": "unverified", "verified": False, "top": None,
                            "side": {"available": False, "reason": "no side camera in this cell"}}
     top, why = _frame(source, "top", before_frame)
-    has_side = "side" in (getattr(source, "cameras", None) or {})
-    side, side_why = _frame(source, "side") if has_side else (None, None)
+    cameras = getattr(source, "cameras", None)
+    # The real A/B configs list the side stream only under episodes.cameras: the same camera service, so use that address.
+    episode_side = ((config.get("episodes") or {}).get("cameras") or {}).get("side")
+    borrowed = isinstance(cameras, dict) and "side" not in cameras and isinstance(episode_side, str) and bool(episode_side)
+    has_side = bool(cameras) and ("side" in cameras or borrowed)
+    if borrowed:
+        cameras["side"] = episode_side
+    try:
+        side, side_why = _frame(source, "side") if has_side else (None, None)
+    finally:
+        if borrowed:
+            cameras.pop("side", None)
     out["measured_at"] = time.time()
     if top is not None:
         out["top"] = {"frame": _stamp(top)}

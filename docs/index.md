@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · fix(omx): D-1057 측면 프레임 원천에 episodes.cameras.side 폴백
 - 2026-11-20 · uncommitted · fix(omx): D-1057 접힘 기준을 plan 파일 home으로, 구역 판정을 실제 설정 형태에 맞춤
 - 2026-11-20 · uncommitted · feat(omx): D-1057 배치 직후 구역 측정(zone_verification) 생산자
 - 2026-11-20 · uncommitted · fix(fleet): D-1057 독립 검토 반영
 - 2026-11-20 · uncommitted · docs(adr): D-1057 셀 작업 허가 증거는 실측값으로만 공급
-- 2026-11-18 · uncommitted · D-1036 부록: 게시 브라우저 증거는 바뀐 범위만

@@ -14912,3 +14912,8 @@ osy-d395-s1d\`.
 - 변경: `cell_task_exec`가 config의 `plan_path` 파일에서 `home`을 읽고(설정 JSON에는 plan이 없다) 몸 관절 5개만 비교. `cell_zone_verification`은 tier를 확장된 사이트의 `tier`에서 읽고, col/row가 설정에 없으면 이유를 적어 unverified. 실제 설정 모양으로 축약한 시험 추가.
 - 증거: 로컬 `test/test_omx_cell_zone_verification.py`, `test_omx_cell_task_exec_measured.py`. 실물 미실시.
 - gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · fix(omx): D-1057 측면 프레임 원천에 episodes.cameras.side 폴백
+- 변경: `cell_zone_verification`이 `cameras.side`가 없으면 같은 설정의 `episodes.cameras.side` 주소를 frame 호출 동안만 빌려 쓴다(둘 다 없으면 top 전용 basis). 목표 슬롯 col/row는 그대로 unverified.
+- 증거: 로컬 `test/test_omx_cell_zone_verification.py`. 실물 미실시.
+- gate 변화: 없음.
