@@ -506,8 +506,9 @@ def run_started(tmp_path, monkeypatch, cell, knowledge=None):
 
 
 def test_every_decision_point_writes_a_row_linked_to_its_attempt(tmp_path, monkeypatch):
-    result, rows, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]), str(OMX / "cell-knowledge.example.json"))
-    assert result["result"] == "placed"
+    cell = Cell([CONT2])
+    result, rows, attempts = run_started(tmp_path, monkeypatch, cell, str(OMX / "cell-knowledge.example.json"))
+    assert result["result"] == "placed", (result, attempts[-1:], cell.commands[-6:])  # CI-only refusals: show the refused step
     assert [(r["attempt_id"][-3:], r["stage"]) for r in rows] == [
         ("001", "target"), ("001", "bias"), ("001", "closing_axis"), ("005", "failure"), ("005", "retry"),
         ("006", "target"), ("006", "bias"), ("006", "closing_axis"), ("006", "verify")]
