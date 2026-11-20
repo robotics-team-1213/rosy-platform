@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · feat(omx): D-1057 오래된 보관 결과를 팔 없이 다시 측정해 재전송
 - 2026-11-20 · uncommitted · feat: D-1057 입회 표시가 있는 작업만 감독 시험, 나머지는 D-911 검토 범위
 - 2026-11-20 · uncommitted · feat: D-1057 claim 때 owner 확인과 worker 결과 재전송
 - 2026-11-20 · uncommitted · feat(fleet): D-1057 셀 A/B claim 게이트 (깊이 판정 수용 전)
 - 2026-11-20 · uncommitted · fix(omx): D-1057 Codex 5차 검토 (깊이 경로 증거 강화)
-- 2026-11-20 · uncommitted · feat(omx): D-1057 깊이 다중 프레임 중앙값 (측정 개선만)

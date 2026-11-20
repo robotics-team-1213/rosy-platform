@@ -15,6 +15,7 @@ from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from cell_presence import presence_ok, review_required, zone_acceptance
+from cell_remeasure import write_context
 
 
 def make_ca_urlopen(ca_file: str | Path | None = None):
@@ -225,6 +226,7 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     dst = str(handoff.get("dst_site") or ("pallet-l0" if arm_id != "arm_s" else "belt"))
     src_site = src.rsplit("-l", 1)[0]
     roi = (cfg_data.get("sites") or {}).get(src_site, {}).get("auto_roi") or default_roi
+    src_roi = roi
     omx_dir = Path(__file__).resolve().parent
     target = (cfg_data.get("sites") or {}).get(src_site, {}).get("dock_target_arm_xy_m")
     if target is not None:  # camera only, before any arm command: off the dock target -> the vehicle re-parks
@@ -267,6 +269,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     # measurement (cell_area_zones.verify_stack_outcome*) is used only if the attempt carries it as `zone_verification`;
     # nothing in cell_auto_pick emits that today, so without it the fields below stay unverified and Fleet refuses.
     zone = attempt.get("zone_verification") if isinstance(attempt.get("zone_verification"), dict) else None
+    if placed:
+        write_context(cfg, cfg_data, handoff, arm_id, prep_dir, dst, src_site, src_roi, zone)  # for a later re-measurement
     zone_ok = zone_acceptance(zone, handoff, dst)  # the measured slot and tier must be the task's own
     tier = handoff.get("tier")
     dst_area = dst.rsplit("-l", 1)[0]

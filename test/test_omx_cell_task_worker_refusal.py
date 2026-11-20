@@ -288,3 +288,110 @@ def test_a_run_held_for_review_aborts_with_review_required_and_no_owner_evidence
     assert [p for p, _ in fleet.posts] == ["complete"]
     body = fleet.posts[0][1]
     assert body["phase"] == "ABORTED" and body["reason"] == "REVIEW_REQUIRED" and len(calls) == 1
+
+
+class _Remeasure:
+    def __init__(self, fail=None):
+        self.calls, self.fail = [], fail
+
+    def __call__(self, task_id, entry):
+        import time as _t
+
+        self.calls.append(task_id)
+        if self.fail:
+            raise RuntimeError(self.fail)
+        owner = {**entry["owner_evidence"], "measured_at": _t.time(), "fresh": True}
+        return owner, {**entry["complete"], "fresh": True}
+
+
+def _stale_entry(age_s):
+    import time as _t
+
+    return {"lease": "lease-1", "owner_evidence": {"handoff_lease_id": "lease-1", "measured_at": _t.time() - age_s},
+            "complete": {"phase": "RELEASED"}}
+
+
+def _running(lease="lease-1"):
+    def fleet(method, path, body, posts=[]):  # noqa: B006
+        return {"tasks": [{"task_id": "t-1", "handoff_lease_id": lease}]} if method == "GET" else {"ok": True}
+
+    return fleet
+
+
+def test_a_stale_kept_result_is_measured_again_before_it_is_resent(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    outbox, sent = Outbox(tmp_path / "o.json"), []
+    outbox.put("t-1", _stale_entry(55))
+    fresh = _Remeasure()
+    fleet = _running()
+    resend_pending(outbox, lambda m, p, b: (sent.append((p.rsplit("/", 1)[1], b)) or fleet(m, p, b)) if m == "POST" else fleet(m, p, b), fresh)
+    assert fresh.calls == ["t-1"] and [p for p, _ in sent] == ["owner-evidence", "complete"]
+    assert sent[0][1]["fresh"] is True and sent[1][1]["fresh"] is True and outbox.items() == {}
+
+
+def test_a_fresh_kept_result_is_resent_as_it_is(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    outbox, sent = Outbox(tmp_path / "o.json"), []
+    outbox.put("t-1", _stale_entry(20))
+    fresh = _Remeasure()
+    resend_pending(outbox, lambda m, p, b: (sent.append(b) or {"ok": True}) if m == "POST" else _running()(m, p, b), fresh)
+    assert fresh.calls == [] and "fresh" not in sent[0]
+
+
+def test_a_failed_re_measurement_keeps_the_task_with_the_reason_and_sends_nothing(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    outbox, sent = Outbox(tmp_path / "o.json"), []
+    outbox.put("t-1", _stale_entry(70))
+    done = resend_pending(outbox, lambda m, p, b: (sent.append(b) or {"ok": True}) if m == "POST" else _running()(m, p, b),
+                          _Remeasure(fail="the placement is not verified now"))
+    kept = outbox.items()["t-1"]
+    assert sent == [] and done[0]["action"] == "kept" and "not verified now" in kept["last_refusal"]["reason"]
+
+
+def test_a_stale_result_under_another_lease_is_not_measured_or_sent(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    outbox, sent = Outbox(tmp_path / "o.json"), []
+    outbox.put("t-1", _stale_entry(70))
+    fresh = _Remeasure()
+    resend_pending(outbox, lambda m, p, b: (sent.append(b) or {"ok": True}) if m == "POST" else _running("lease-2")(m, p, b), fresh)
+    assert fresh.calls == [] and sent == [] and outbox.items() == {}
+
+
+def test_the_real_remeasurement_needs_its_stored_context_and_checks_placement_and_fold(tmp_path, monkeypatch):
+    import cv2
+    import numpy as np
+
+    import cell_remeasure as cr
+    import cell_zone_verification as czv
+
+    entry = {"complete": {"stage_result": {"verification": {"placement": {"verified": True, "inside": True}}},
+                          "hardware_telemetry": {"measured_at": 1.0, "stop_event": {"ok": True, "folded": True, "readback": {"folded": True}}},
+                          "receipt": {"handoff_lease_id": "lease-1"}}}
+    with pytest.raises(cr.RemeasureFailed, match="no stored context"):
+        cr.remeasure("t-1", entry, tmp_path)
+    work = tmp_path / "work"
+    (work / "zone-before").mkdir(parents=True)
+    cv2.imwrite(str(work / "zone-before" / "t-1-top.jpg"), np.zeros((8, 8, 3), np.uint8))
+    (tmp_path / "cfg.json").write_text(json.dumps({"io": str(tmp_path), "cameras": {}, "sites": {}}), encoding="utf-8")
+    (tmp_path / "remeasure-t-1.json").write_text(json.dumps({
+        "cfg": str(tmp_path / "cfg.json"), "prep_dir": str(tmp_path), "arm_id": "arm_s", "dst": "belt", "src_site": "pinky",
+        "src_roi": [0, 0, 1, 1], "work_dir": str(work), "before_frames": {"top": "t-1-top.jpg"},
+        "handoff": {"task_id": "t-1", "cell_id": "cell_s", "tier": 1, "handoff_lease_id": "lease-1", "arm_id": "arm_s"}}), encoding="utf-8")
+    good = {"verified": True, "basis": "top_camera_only_target_zone", "target": {"site": "belt", "area": "belt", "roi": [1, 2, 3, 4], "tier": 1}}
+    monkeypatch.setattr(czv, "measure", lambda *a, **k: good)
+    monkeypatch.setattr("cell_pipeline.FifoCell", lambda *a, **k: object())
+    monkeypatch.setattr("cell_task_exec.measured_fold", lambda *a, **k: {"folded": True, "state": None, "fresh": True})
+    owner, complete = cr.remeasure("t-1", entry, tmp_path)
+    assert owner["measured_at"] > 1.0 and complete["receipt"]["goal_evidence_digest"].startswith("sha256:")
+    assert owner["stage_result"]["verification"]["basis"] == "top_camera_only_target_zone"
+    monkeypatch.setattr(czv, "measure", lambda *a, **k: {**good, "verified": False, "basis": "unverified: x"})
+    with pytest.raises(cr.RemeasureFailed, match="not verified now"):
+        cr.remeasure("t-1", entry, tmp_path)
+    monkeypatch.setattr(czv, "measure", lambda *a, **k: good)
+    monkeypatch.setattr("cell_task_exec.measured_fold", lambda *a, **k: {"folded": False, "state": None, "fresh": True})
+    with pytest.raises(cr.RemeasureFailed, match="not folded now"):
+        cr.remeasure("t-1", entry, tmp_path)

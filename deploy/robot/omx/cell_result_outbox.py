@@ -22,6 +22,16 @@ def abort_reason(hw_tel: dict[str, Any]) -> str:
     return "REVIEW_REQUIRED" if hw_tel.get("review_required") else "MEASURED_PLACEMENT_MISSING"
 
 
+def remeasurer(prep_dir: Path):
+    """The re-measure callable for resend_pending (imported lazily: it pulls in the camera and zone code)."""
+    def run(task_id: str, entry: dict[str, Any]):
+        from cell_remeasure import remeasure
+
+        return remeasure(task_id, entry, prep_dir)
+
+    return run
+
+
 def result_bodies(handoff, phase, digest, receipt, stage_result, hw_tel) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     """(owner-evidence body or None, /complete body). Fleet compares /complete with the stored owner record, so for a
     released task the first is sent first and both are kept together."""
@@ -66,8 +76,21 @@ class Outbox:
         return self._read()
 
 
-def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any] | None], dict[str, Any]]) -> list[dict[str, Any]]:
-    """Resend every kept result whose task Fleet still shows RUNNING under the same lease. Returns what was done."""
+STALE_S = 50.0  # Fleet refuses owner evidence measured more than 60 s ago
+
+
+def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any] | None], dict[str, Any]],
+                   remeasure: Callable[[str, dict[str, Any]], tuple[dict[str, Any], dict[str, Any]]] | None = None,
+                   now: float | None = None) -> list[dict[str, Any]]:
+    """Resend every kept result whose task Fleet still shows RUNNING under the same lease. Returns what was done.
+
+    Owner evidence measured STALE_S or more ago would be refused by Fleet, so it is measured again first (no arm motion) and the
+    kept result is replaced by the fresh one. If that fails the entry stays with `last_refusal` and the task stays RUNNING for a
+    person to clean up.
+    """
+    import time
+
+    now = time.time() if now is None else now
     done: list[dict[str, Any]] = []
     entries = outbox.items()
     if not entries:
@@ -82,6 +105,17 @@ def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any
             outbox.drop(task_id)
             done.append({"task_id": task_id, "action": "dropped", "reason": "not RUNNING under the same lease"})
             continue
+        measured = (entry.get("owner_evidence") or {}).get("measured_at")
+        if remeasure is not None and isinstance(measured, (int, float)) and now - measured >= STALE_S:
+            try:
+                entry["owner_evidence"], entry["complete"] = remeasure(task_id, entry)
+                entry.pop("last_refusal", None)
+                outbox.put(task_id, entry)
+            except Exception as exc:  # RemeasureFailed or anything the cameras raise: say why, keep the task for a person
+                entry["last_refusal"] = {"reason": f"{type(exc).__name__}: {exc}"[:200], "at": now}
+                outbox.put(task_id, entry)
+                done.append({"task_id": task_id, "action": "kept", "reason": "re-measurement failed"})
+                continue
         try:
             if entry.get("owner_evidence") is not None:
                 request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence", entry["owner_evidence"])

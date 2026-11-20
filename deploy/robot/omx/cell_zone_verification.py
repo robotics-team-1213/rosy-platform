@@ -127,6 +127,25 @@ def before_side(cell, config: dict) -> dict | None:
         return _frame(source, "side")[0] if has_side else None
 
 
+def _save_before(config: dict, before_frame: dict | None) -> dict | None:
+    """Keep the before frames (JPEG, relative names) in the work directory so a stale result can be measured again later."""
+    import cv2
+
+    task = config.get("_fleet_task")
+    if not isinstance(task, str) or not task or before_frame is None or not config.get("work_dir"):
+        return None
+    folder = Path(config["work_dir"]).expanduser() / "zone-before"
+    names = {}
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        for key, image in (("top", before_frame.get("image")), ("side", (before_frame.get("before_side") or {}).get("image"))):
+            if image is not None and cv2.imwrite(str(folder / f"{task}-{key}.jpg"), image):
+                names[key] = f"{task}-{key}.jpg"
+    except OSError:
+        return None
+    return names or None
+
+
 def record(row: dict, tried: dict, cell, before_frame, config, dest_site, source_site, roi) -> None:
     """Measure, then put verify, transfer and zone_verification on the attempt row: cell_task_exec reads that row, which
     kept none of them before (they went only to the attempts ledger)."""
@@ -197,6 +216,7 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     placed_at = time.time()  # the release finished before this call: a frame captured after it shows the placed result
     source = getattr(cell, "cell", cell)
     out: dict[str, Any] = {"basis": "unverified", "verified": False, "target": None, "top": None,
+                           "before_frames": _save_before(config, before_frame),
                            "side": {"available": False, "reason": "no side camera in this cell"}}
     # The Z16 capture (slow, so it goes first and the RGB frames taken after it stay fresh) is taken only when the cell config
     # has floor ROIs: that is the one case where the zone check uses it.

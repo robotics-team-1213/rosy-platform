@@ -93,6 +93,10 @@ worker는 `--commissioning --person-at-switch`를 더 이상 항상 넘기지 �
 
 **시운전 뒤 D-911 검토 기록:** 자동 등록은 D-911 3·7이 허용하지 않는다(성공이 스스로 승격하지 않고 반복 수·성공률·시작 오차 기준은 검토자가 정하며 기본값이 없다). 대신 기존 절차를 한 단계로 만든 `deploy/robot/omx/cell_envelope_review.py`가 있다: 시험 뒤 `list <work-dir>/attempts.jsonl`로 후보(작업 key·시험 수·성공 수)를 보고, 사람이 `add --attempts ... --envelope ... --task-sha256 ... --reviewed-by ... --evidence-ref ... --min-attempts N --min-success-rate R --home-tolerance U --confirm-physical-review`를 실행한다. 작업 key·scope·`attempts_sha256`은 장부에서 복사하고 검토자·근거·세 숫자는 사람이 준다(기본값 없음). 시험이 그 숫자를 못 채우거나 hardware가 아니거나 이미 검토가 있으면 기록하지 않는다. 규칙은 바뀌지 않았다.
 
+#### 2-6. 오래된 보관 결과는 팔을 움직이지 않고 다시 측정해 보낸다 (사용자 결정, 2026-11-20)
+
+worker가 보관한 결과(2-4절)의 `owner-evidence`가 `measured_at` 기준 50 s 이상 지났으면 Fleet이 60 s 한계로 거부하므로, 재전송 전에 **팔 없이** 다시 측정한다: 보관해 둔 놓기 전 프레임(작업 공간의 `zone-before`)과 새 상부(·측면) 프레임으로 배치 판정을 다시 하고(셀 S는 상단 전용), 접힘은 지금의 러너 상태와 보관한 `park` readback이 모두 접힘이어야 하며, 새 `measured_at`·digest의 `owner-evidence`와 `/complete` 본문으로 보관 결과를 바꿔 보낸다(재측정에 필요한 맥락은 prep 폴더의 `remeasure-<task_id>.json`에 두고 Fleet에는 보내지 않는다). 다시 측정이 실패하면(프레임 없음, 판정 불합격, 접힘 아님 등) 사유를 보관 항목의 `last_refusal`에 남기고 아무것도 보내지 않으며 작업은 RUNNING으로 남아 사람이 정리한다. lease가 바뀌었거나 RUNNING이 아니면 재측정도 재전송도 하지 않는다.
+
 #### 3. 신뢰 경계
 
 owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경(ID 또는 활성 버전)이 한 번이라도 있으면 영구 무효이고, 확인은 조회 때만이 아니라 콘솔이 받는 상태 갱신마다 검사한다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.

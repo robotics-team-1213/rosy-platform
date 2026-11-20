@@ -30,7 +30,7 @@ from cell_camera_telemetry_sync import (
 from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
-from cell_result_outbox import Outbox, abort_reason, result_bodies, resend_pending
+from cell_result_outbox import Outbox, abort_reason, remeasurer, result_bodies, resend_pending
 from cell_task_exec import (
     check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen, query_safety_listing, resolve_task_arm,
 )
@@ -197,7 +197,7 @@ def poll_and_execute_once(
     queued = list(listing.get("tasks") or [])
     work_dir = getattr(pipeline, "work_dir", None)
     outbox = Outbox(None if work_dir is None else Path(work_dir) / "pending-results.json")
-    resend_pending(outbox, request_fn)  # D-1057: a result Fleet did not get is resent as it was; the arm does not run again
+    resend_pending(outbox, request_fn, remeasurer(prep_dir))  # D-1057: resent (a stale one measured again); the arm does not run again
     completed_runs: list[dict[str, Any]] = []
     for task in queued:
         task_id = str(task["task_id"])
