@@ -338,13 +338,39 @@ def last_resort_hold(runner, signals: list, error, sleep=time.sleep) -> None:
         _approve(runner, "operator release (SIGUSR2) after a last-resort hold")
 
 
+def gate_allows(runner, signals: list) -> bool:
+    """No interrupt on record (SIGUSR2 alone is none), or this run recorded an approved end (`_approve`)."""
+    return not [s for s in signals if s != OPERATOR_RELEASE] or bool(getattr(runner, "_off_approved", None))
+
+
 def final_gate(runner, signals: list, hold_file=None, sleep=time.sleep) -> None:
-    """chunk_runner.main's last check, right before close_device: an interrupt was recorded (re-read here, after every
-    other path) and this run has no confirmed fold and no approved exception -> last_resort_hold (nothing sent, torque
-    as the motors hold it) until a person's SIGUSR2. Whatever path returned (idle stop, a judge's stop, the start
-    alignment's stop, a signal landing while a status row was written), close_device runs only after this."""
-    if not [s for s in signals if s != OPERATOR_RELEASE] or getattr(runner, "_off_approved", None):
+    """An interrupt on record without an approved end -> last_resort_hold (nothing sent, torque as the motors hold it)
+    until a person's SIGUSR2, whichever path returned (idle stop, a judge's stop, the start alignment's stop, a
+    signal landing while a status row was written)."""
+    if gate_allows(runner, signals):
         return
     holder = runner if runner is not None else type("Unstarted", (), {"hold_file": hold_file})()
     last_resort_hold(holder, signals, RuntimeError("the run ended after an interrupt without a confirmed fold"),
                      sleep=sleep)
+
+
+BLOCKED_DURING_CLOSE = tuple(getattr(signal, n) for n in ("SIGINT", "SIGTERM", "SIGHUP") if hasattr(signal, n))
+
+
+def gated_close(runner, signals: list, hold_file, close, sleep=time.sleep) -> None:
+    """chunk_runner.main's single place for torque OFF. SIGINT/SIGTERM/SIGHUP are blocked (Linux) from just before the
+    gate reads the recorded signals until close() has returned, so no interrupt can land between an allowing verdict
+    and the torque OFF; one sent meanwhile is delivered after, when the verdict already stands. A refusing verdict
+    unblocks, waits in last_resort_hold for SIGUSR2 (which records an approved end), then the gate runs again."""
+    holder = runner if runner is not None else type("Unstarted", (), {"hold_file": hold_file})()
+    mask = getattr(signal, "pthread_sigmask", None)  # absent on Windows test hosts
+    while True:
+        previous = mask(signal.SIG_BLOCK, BLOCKED_DURING_CLOSE) if mask else None
+        try:
+            if gate_allows(holder, signals):
+                close()
+                return
+        finally:
+            if mask:
+                mask(signal.SIG_SETMASK, previous)
+        final_gate(holder, signals, hold_file, sleep=sleep)

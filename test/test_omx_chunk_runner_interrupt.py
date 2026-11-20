@@ -557,6 +557,17 @@ def test_final_gate_lets_close_device_run_only_without_an_interrupt_or_with_an_a
     assert (hold is not None) == (interrupted and approved is None)
 
 
+def test_gated_close_for_a_runner_that_never_started_closes_after_the_release(tmp_path):
+    closed, signals = [], [signal.SIGTERM]
+
+    def sleep(s):
+        if not closed and RELEASE not in signals:
+            signals.append(RELEASE)
+
+    ci.gated_close(None, signals, tmp_path / "hold.json", lambda: closed.append("off"), sleep=sleep)
+    assert closed == ["off"] and json.loads((tmp_path / "hold.json").read_text())["last_resort"]
+
+
 def test_final_gate_covers_a_runner_that_never_started(tmp_path):
     sleeps, hold = _closed_after_gate(None, [signal.SIGTERM], tmp_path)
     assert sleeps == 3 and hold["hold"]
@@ -571,3 +582,68 @@ def test_every_approved_end_of_an_interrupted_run_is_recorded_for_the_gate():
     assert r3._off_approved == "operator release (SIGUSR2)"
     r4, _, _, _ = drive(GuardRobot(fail_after=30), signal_after=20)
     assert r4._off_approved == "guard stopped, every motor reads torque 0"
+
+
+def test_gated_close_closes_once_when_allowed_and_only_after_a_release_when_not(tmp_path):
+    closed, slept = [], []
+    allowed = type("R", (), {"hold_file": tmp_path / "a.json", "_off_approved": "park settled and home"})()
+    ci.gated_close(allowed, [signal.SIGTERM], None, lambda: closed.append("off"))
+    assert closed == ["off"]
+    refused, signals = type("R", (), {"hold_file": tmp_path / "b.json"})(), [signal.SIGTERM]
+
+    def sleep(s):
+        slept.append(s)
+        assert not closed[1:]  # no torque OFF while held
+        if len(slept) == 2:
+            signals.append(RELEASE)
+
+    ci.gated_close(refused, signals, None, lambda: closed.append("off"), sleep=sleep)
+    assert closed == ["off", "off"] and len(slept) == 2
+
+
+@pytest.mark.skipif(not hasattr(signal, "pthread_sigmask"), reason="Linux only: pthread_sigmask")
+@pytest.mark.parametrize("approved", [True, False])
+def test_a_sigterm_between_the_gate_and_torque_off_waits_until_the_verdict_has_been_carried_out(tmp_path, approved):
+    """Codex round 6: SIGTERM injected right after the gate passed, just before disable_torque."""
+    import os
+    import time
+
+    signals, seen_during_close = [], []
+    saved = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM, signal.SIGUSR2)}
+    monkey_release = ci.OPERATOR_RELEASE
+    try:
+        ci.OPERATOR_RELEASE = signal.SIGUSR2
+        ci.install(signals)
+        r = type("R", (), {"hold_file": tmp_path / "hold.json",
+                           "_off_approved": "park settled and home" if approved else None})()
+
+        def close():
+            os.kill(os.getpid(), signal.SIGTERM)  # lands between the verdict and the torque OFF
+            for _ in range(1000):
+                pass
+            seen_during_close.append(list(signals))  # disable_torque would run here
+
+        if approved:
+            ci.gated_close(r, signals, None, close)
+        else:
+            signals.append(signal.SIGINT)  # an interrupt already on record: the gate refuses
+            released = []
+
+            def sleep(s):
+                time.sleep(0.01)
+                if not released:
+                    released.append(True)
+                    os.kill(os.getpid(), signal.SIGUSR2)
+
+            ci.gated_close(r, signals, None, close, sleep=sleep)
+        for _ in range(100):
+            if signal.SIGTERM in signals:
+                break
+            time.sleep(0.01)
+        # the handler did not run between the verdict and disable_torque; it ran after, the verdict carried out
+        assert seen_during_close == [[] if approved else [signal.SIGINT, signal.SIGUSR2]]
+        assert signal.SIGTERM in signals
+    finally:
+        ci.OPERATOR_RELEASE = monkey_release
+        for s, handler in saved.items():
+            signal.signal(s, handler)

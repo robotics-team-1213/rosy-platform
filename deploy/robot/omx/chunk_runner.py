@@ -27,7 +27,7 @@ ROSY_CHUNK_TRACE=<file> appends one JSON line per tick (time, chunk, target, sen
 
 SIGINT/SIGTERM never cut torque with the arm out: the runner folds home and reads the fold back, then torque goes OFF;
 a fold that cannot finish leaves a human hold (torque ON) until a person sends SIGUSR2 (chunk_runner_interrupt.py).
-`final_gate` right before close_device is the last word: an interrupt recorded without a confirmed fold or an approved
+`gated_close` (final_gate, interrupts blocked through close_device) is the last word: an interrupt recorded without a confirmed fold or an approved
 exception waits (nothing sent) for SIGUSR2, whichever path ended the run.
 
 Launched by record_session.py --chunks; never on its own (the session owns caps and cleanup).
@@ -259,9 +259,10 @@ def main(argv=None):
     finally:
         lines.close()
         try:
-            # the single last check: after an interrupt, no torque OFF without a confirmed fold or an approved exception
-            __import__("chunk_runner_interrupt").final_gate(runner, signals, args.io / "hold.json")
-            close_device(robot)  # torque OFF before the bus closes
+            # the single place torque goes OFF: interrupts blocked from the gate's verdict until close_device returns;
+            # after an interrupt, no torque OFF without a confirmed fold or an approved exception (else SIGUSR2 first)
+            __import__("chunk_runner_interrupt").gated_close(runner, signals, args.io / "hold.json",
+                                                             lambda: close_device(robot))
         finally:
             if motion.monitor is not None:
                 motion.monitor.end()
