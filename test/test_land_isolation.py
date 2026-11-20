@@ -116,6 +116,12 @@ def test_nested_pytest_reports_paths_when_ros_plugins_preimport_modules(pair, pl
     assert "sys.path added by 1 test module(s)" in text and "test_a_inserts.py: helpers" in text, text
 
 
+def test_tracked_tests_takes_more_paths_than_a_windows_command_line(pair):
+    # 40,000+ characters of pathspecs: argv would hit WinError 206 on Windows.
+    filler = [f"missing/{'x' * 200}/{n}" for n in range(200)]
+    assert land_isolation.tracked_tests(pair, [*filler, "test_b_needs.py"]) == ["test_b_needs.py"]
+
+
 def test_each_alone_reports_only_the_masked_file(pair):
     files = land_isolation.tracked_tests(pair, ["."])
     assert files == ["test_a_inserts.py", "test_b_needs.py", "test_c_fixture.py"]

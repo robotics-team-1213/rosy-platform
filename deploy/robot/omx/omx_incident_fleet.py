@@ -205,6 +205,7 @@ def report_for(source_id: str, session_id: str, f: dict, d: dict, acted):
     shown = {k: v for k, v in f.items() if k not in ("frames", "fault_records")}
     shown["windup_hits"] = shown["windup_hits"][:5]
     shown["fault_records"] = [Path(p).name for p in f["fault_records"]][-3:]
+    shown["fault_record_kinds"] = list(f.get("fault_record_kinds") or [])[-3:]  # D-1047: paired with the names above
     frames = []
     for path in f["frames"]:
         data = Path(path).read_bytes() if Path(path).is_file() else b""
@@ -241,7 +242,8 @@ def default_token_file() -> Path | None:
     return matches[0] if len(matches) == 1 else None
 
 
-def clear_incidents(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None, refuse_fn=None) -> int:
+def clear_incidents(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None, refuse_fn=None,
+                    recovery=None, only=None) -> int:
     """Clear every open incident of one arm using explicit Core JWT or 0600 operator token file, then lift local hold."""
     if not note.strip():
         raise SystemExit("a note of what was checked is required")
@@ -258,7 +260,12 @@ def clear_incidents(arm, note, token_file=None, link=None, *, cause=None, basis=
         raise SystemExit(f"{arm}: no Fleet channel configured on this PC (source the observation bridge env)")
     answer = link.hold()
     cleared = list(answer.incident_ids)
+    if only is not None:  # D-1048: the evidence belongs to one incident; never spend it on another
+        cleared = [i for i in cleared if i == only]
     for incident_id in cleared:
+        if recovery is not None:
+            answer = link.clear(incident_id, note, token, cause=cause, basis=basis, recovery=recovery)
+            continue
         if cause is not None or basis is not None:
             try:
                 answer = link.clear(incident_id, note, token, cause=cause, basis=basis)

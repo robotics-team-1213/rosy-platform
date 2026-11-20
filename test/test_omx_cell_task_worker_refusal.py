@@ -19,6 +19,34 @@ import cell_task_worker as ctw  # noqa: E402
 LOCKED = {"wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
 
 
+@pytest.mark.parametrize(("replies", "hold_after"), [
+    (["timeout", "clear"], None),
+    (["timeout", None, "timeout"], 3),
+    (["estop"], 1),
+    (["human"], None),  # background poll: a person in a cell does not latch idle runners (unchanged)
+    (["timeout", "estop"], 2),
+])
+def test_background_safety_listing_retries_only_missing_replies(tmp_path, monkeypatch, replies, hold_after):
+    read, held = [], []
+
+    def request(method, path, body):
+        assert method == "GET"
+        reply = replies[len(read)]
+        read.append(reply)
+        if reply == "timeout":
+            raise TimeoutError("Fleet listing deadline")
+        if reply is None:
+            return None
+        return {"tasks": [], "human_safety": {"active_estop": reply == "estop",
+                                              "human_detected": {"cell_s": reply == "human"}}}
+
+    monkeypatch.setattr(ctw, "_SAFETY_LISTING_RETRY_S", 0, raising=False)
+    monkeypatch.setattr(ctw, "emergency_stop_arms", lambda _: held.append(len(read)))
+    assert ctw.poll_and_execute_once(None, request_fn=request, live_act_fn=pytest.fail, prep_dir=tmp_path) == []
+    assert held == ([] if hold_after is None else [hold_after])
+    assert read == replies
+
+
 def _run(tmp_path: Path, handoff: dict, tier: int = 1):
     hw_calls: list[dict] = []
     posted: list[dict] = []

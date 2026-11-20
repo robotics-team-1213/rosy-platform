@@ -108,6 +108,26 @@ def _collect_arm_models(prep_dir: Path) -> dict[str, Any]:
     return models
 
 
+AUTO_EVENT_TAIL = 30
+
+
+def _collect_auto_events(prep_dir: Path) -> list[dict[str, Any]]:
+    """The last rows of what the cell did by itself (omx_incident_auto.note_event); [] when there is none."""
+    try:
+        lines = (prep_dir / "incidents" / "auto-events.jsonl").read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in lines[-AUTO_EVENT_TAIL:]:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
 def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR, urlopen_fn: Any = urlopen) -> dict[str, Any]:
     """Post camera-quality facts, arm holds and live arm states to Fleet. No image bytes leave the cell PC."""
     ctx = ssl._create_unverified_context()
@@ -135,7 +155,7 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
         arm_models = _collect_arm_models(prep_dir)
         qreq = Request(
             f"{base}/api/fleet/pipeline/cell-quality",
-            data=json.dumps({"schema": "rosy.pipeline.cell-quality.v1", "cameras": cams_quality, "arm_holds": arm_holds, "arm_states": arm_states, "arm_models": arm_models}).encode("utf-8"),
+            data=json.dumps({"schema": "rosy.pipeline.cell-quality.v1", "cameras": cams_quality, "arm_holds": arm_holds, "arm_states": arm_states, "arm_models": arm_models, "auto_events": _collect_auto_events(prep_dir)}).encode("utf-8"),
             method="POST",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         )

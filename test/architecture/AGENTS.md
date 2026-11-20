@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Repo-structure tests: where folders, packages, documents and imports are allowed to live. They read the source tree, `package.xml` files, `harness.yaml` and `surfaces.yaml`; they do not need ROS. Most use exception tables checked by set equality (P5), so a new violation fails and so does a stale entry. Update the table in the same commit that creates or removes the violation.
+Repo-structure tests: where folders, packages, documents and imports are allowed to live. They read the source tree, `package.xml` files, `harness.yaml` and `surfaces.yaml`; they do not need ROS. Most use exception tables checked by set equality (P5), so a new violation fails and so does a stale entry. Update the table in the same commit that creates or removes the violation. Known-list ratchets (lists that only shrink) use `test/ratchet_lists.py`: a new entry fails, a stale one warns.
 
 ## Key Files
 
@@ -26,6 +26,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
 | `test_target_layout.py` | D-310 source layout: every package has a declared target path, XML package names are unique, moved packages keep their name, product containers hold only declared packages, retired sketch names (`rosy_pinky_pro`, `rosy_decision`, ...) must not appear |
 | `test_folder_package_names.py` | D-339/D-231: a source folder whose name differs from its installed package name must be in `FOLDER_TO_PACKAGE`; no stale entries |
 | `test_folder_layout.py` | D-186 script/document ownership, declared deployment and data layout, no retired paths in current developer docs. Module-local helpers stay with their actual install/consumer owner; workspace tools compose owners |
+| `test_3d_asset_boundary.py` | 2026-11-19 3D asset boundary: meshes only under the five runtime roots, no CAD sources (`.3mf .scad .step ...`), every mesh has a `SOURCE.json` with `"source"`, no `manifold3d`/`cadquery` imports. Rule text: `docs/reference/platform-folder-responsibilities.md` 「3D 자산 경계」 |
 | `test_document_placement.py` | D-226 publication first: sample secret/internal paths (`private/`, `.env`, keys, images, bags, `data/teleop`, `*.sqlite3`, worktrees) must be git-ignored; templates, public keys and public material must stay trackable; no tracked file under an ignore rule; repo root carries only the listed files; dated evidence stays out of modules; module roots carry only `README AGENTS CLAUDE progress logs index`; `progress.md` only in `harness.yaml` modules; every nested `AGENTS.md` names its parent in its first lines. Needs `git` on PATH |
 | `test_layer_boundaries.py` | D-229 by AST import scan: perception imports neither decision, vision nor ROS; decision does not import perception; line_follow reads decisions, not pixels; geometry does not import perception |
 | `test_fleet_ledger_writers.py` | D-750: the modules that write Fleet's core ledger tables (`fleet_tasks`, `fleet_task_history`, `fleet_robot_reservations`, `fleet_action_claims`) by literal SQL equal `KNOWN_WRITERS`; a new writer or a dropped one fails, so a new writer needs a reviewed edit of the list |
@@ -48,6 +49,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
   - **Pure moves.** `python tools/harness/split_check.py <base> <head>` prints `AST identical, only imports/paths changed` (exit 0) or what differs: a definition, its order, a non-path string constant, an import to a module outside the moved set, or any changed non-`.py` file. A pure move gets a boundary review only (D-766 3). Compression (joining lines, dropping docstrings) is not a split.
 - Launch coupling is found only through literal package-name calls; dynamic imports need functional coverage. Packages are found under manifest `colcon_roots`: `learning`, `operations`, `middleware`, `contracts`, `integrations`, `shared`.
 - Prove a new guard by mutation: break the guarded thing, see red, restore, see green.
+- A commit that adds a ratchet (a `ratchet_lists` user or an `*only_shrink` test) outside this folder adds it to `tools/harness/affected_tests.py` `GUARD_SET` in the same commit; every file here is already in it. `test/test_harness_contracts.py` checks this.
 
 ### Testing Requirements
 

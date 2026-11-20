@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · docs: 보정 체계·영상 기록 공개 문서(한·영)와 README 소개 갱신
+- 2026-11-20 · uncommitted · 교훈: 병합 경로 전환은 실제 브랜치로 끝까지 돌린 뒤 연다
+- 2026-11-20 · uncommitted · D-1055 PR + Merge Queue 유일 병합 경로
 - 2026-11-18 · uncommitted · D-1036 부록: 게시 브라우저 증거는 바뀐 범위만
 - 2026-11-14 · uncommitted · D-1029 저전력 충전 복귀
-- 2026-11-14 · uncommitted · fleet: D-1022 기체 SLAM 지도–현장 지도 결속
-- 2026-11-14 · uncommitted · API 참조 v1.401 재위치화 경로
-- 2026-11-14 · uncommitted · fix(tools): 임시 ref 삭제 실패가 원격 시험 실행을 죽이지 않음

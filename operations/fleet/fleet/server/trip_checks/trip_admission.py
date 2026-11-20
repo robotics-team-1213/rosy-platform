@@ -316,11 +316,14 @@ class TripAdmission:
             await self._guard_start(robot_id, start_token, start_guard)
             turns.append(await self._align(robot_id, round(-err, 1), operator_name))
 
-    async def _align(self, robot_id: str, delta_deg: float, operator_name: str) -> dict:
+    async def _align(self, robot_id: str, delta_deg: float, operator_name: str, *,
+                     tol_deg: float | None = None, keep_pose: bool = False) -> dict:
         """One CORE turn, waited for, then a sighting newer than its end. Polls are counted, not timed,
-        so a stuck clock still ends the wait; a turn still running then is stopped."""
+        so a stuck clock still ends the wait; a turn still running then is stopped. The start uses CORE's default
+        tolerance; the arrival alignment (``trip_station_align``) passes ``tol_deg`` and wants the sighted pose back."""
+        tol = {} if tol_deg is None else {"tol_deg": tol_deg}
         try:
-            await self._call(self._junction.rotate_to(robot_id, delta_deg, operator_name), "TRIP_ALIGN_REFUSED")
+            await self._call(self._junction.rotate_to(robot_id, delta_deg, operator_name, **tol), "TRIP_ALIGN_REFUSED")
         except TripError as exc:  # CORE's refusal (ROTATE_CLEARANCE {nearest_m, need_m}, MOTION_BUSY, ...)
             exc.detail.update(delta_deg=delta_deg, core=getattr(exc.__cause__, "detail", None))
             raise
@@ -346,7 +349,8 @@ class TripAdmission:
             # D-989: the robot's own pose is not the independent sighting this wait is for
             if (age is not None and getattr(pose, "anchor_source", None) != AUTO_LOCATE
                     and self._clock() - age > done_at):
-                return {"delta_deg": delta_deg, "final_err_deg": status.get("final_err_deg")}
+                return {"delta_deg": delta_deg, "final_err_deg": status.get("final_err_deg"),
+                        **({"pose": pose} if keep_pose else {})}
             await asyncio.sleep(self.config.period_s)
         raise TripError(422, "TRIP_POSE_UNTRUSTED", {"after_align": True, "delta_deg": delta_deg})
 

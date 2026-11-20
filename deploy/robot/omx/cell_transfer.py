@@ -21,7 +21,7 @@ from cell_zones import Zones
 class Gate:
     def __init__(self, cell, config: dict, calibration: dict, *, sequence=cp.SEQUENCE):
         self.cell, self.config, self.calibration, self.assessment = cell, config, calibration, None
-        self.sequence, self.source, self.home = sequence, {}, None
+        self.sequence, self.source, self.home, self.rehome = sequence, {}, None, None
         self.before_motion, self.finish_attempt = None, None
         self.history, self.transitions, self.finalized, self.blocked = [], 0, False, False
         self._lib_cache: dict[tuple[str, int, int], tuple[dict, str]] = {}
@@ -41,24 +41,65 @@ class Gate:
             self._lib_cache[key] = cached
         return cached
 
-    def _assess(self, library, state: dict | None = None) -> dict:
+    def _assess(self, library, state: dict | None = None, **checks) -> dict:
         loaded, lib_sha = self._load_library(library)
         return assess(self.config, self.calibration, loaded,
                       self.cell.act("state") if state is None else state,
-                      sequence=self.sequence, library_sha256=lib_sha)
+                      sequence=self.sequence, library_sha256=lib_sha, **checks)
 
     def open(self, library, before_motion, finish_attempt=None) -> dict | None:
         """None when the carry may start (the intent is written first); else the held envelope."""
-        self.assessment = self._assess(library)
+        from cell_unwedge import can_rehome, rehome_before_work
+
+        loaded, _ = self._load_library(library)
+        state = self.cell.act("state")
+        self.assessment = self._assess(loaded, state=state)
+        if not self.assessment["allowed"] and self.assessment["reason"] != "start_not_home":
+            return self.assessment
+        home = (loaded.get("chunks", {}).get("home") or [None])[-1]
+        rehome_allowed = can_rehome(state, home)
+        needs_home = self.assessment["reason"] == "start_not_home"
+        if needs_home and rehome_allowed:
+            self.assessment = self._assess(loaded, state=state, check_home=False)
         if not self.assessment["allowed"]:
             return self.assessment
         self.scope_sha = digest([self.config, self.calibration, self.sequence])
         try:
-            before_motion(self.assessment)
+            intent = before_motion(self.assessment)
+            if intent is None and self.assessment["mode"] == "automatic":
+                raise OSError("automatic rehome requires a durable intent")
         except OSError:
             return {**self.assessment, "allowed": False, "reason": "audit_unavailable"}
         self.before_motion, self.finish_attempt = before_motion, finish_attempt
+        if not rehome_allowed:  # commissioning keeps no ledger (intent None) and still rehomes, as #263 did
+            return None
+        self.rehome = rehome_before_work(self.cell, loaded, self.config, assessment=self.assessment,
+                                        required=needs_home)
+        try:
+            if self.rehome is not None and self.config.get("work_dir"):
+                cp.write_receipt(Path(self.config["work_dir"]).expanduser() / "receipts", "rehome", self.rehome)
+        except OSError:
+            self.blocked = True
+            return {**self.assessment, "allowed": False, "reason": "audit_unavailable"}
+        if self.rehome is not None:
+            result = self.rehome["result"]
+            if result == "session_changed" or (result != "home" and self.rehome_started):
+                self.blocked = True
+                reason = result if result == "session_changed" else f"rehome_{result}"
+                return {**self.assessment, "allowed": False, "reason": reason}
+            try:
+                fresh = self._assess(library, allow_pending=intent if isinstance(intent, dict) else None)
+            except (OSError, ValueError, TypeError):
+                fresh = {**self.assessment, "allowed": False, "reason": "evidence_unavailable"}
+            if fresh != self.assessment:
+                self.blocked = True
+                return {**fresh, "allowed": False, "reason": "session_changed" if fresh["allowed"] else fresh["reason"]}
         return None
+
+    @property
+    def rehome_started(self) -> bool:
+        receipt = self.rehome or {}
+        return bool(receipt.get("plan") or receipt.get("jogs") or receipt.get("stop"))
 
     def _settled_home(self, status, assessment) -> bool:
         from chunk_runner import SETTLE_TOL

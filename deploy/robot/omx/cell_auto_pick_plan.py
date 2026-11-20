@@ -109,6 +109,22 @@ def past_park_reach(config: dict, point_m) -> float | None:
     return round(reach * 1000) if limit and reach > limit else None
 
 
+def reach_fix(config: dict, raw_m, reach_mm: int) -> dict:
+    """What the vehicle must do to fit the object within the park reach: move it toward the arm base (arm frame)."""
+    limit = round(config["plan"]["limits"]["park_reach_m"] * 1000)
+    length = (reach_mm - limit + 30) / 1000  # 30 mm margin past the limit
+    r = math.hypot(raw_m[0], raw_m[1])
+    return {"object_arm_xy_m": [raw_m[0], raw_m[1]], "reach_mm": reach_mm, "limit_mm": limit,
+            "need_arm_dxdy_m": [round(-raw_m[0] / r * length, 4), round(-raw_m[1] / r * length, 4)]}
+
+
+def reach_fix_of(refused: list) -> dict:
+    """{"reach_fix": ...} of the first refusal, only when every catalogue object was refused for reach alone."""
+    seen = [r for r in refused if r.get("object")]
+    fixes = [r["reach_fix"] for r in seen if "reach_fix" in r]
+    return {"reach_fix": fixes[0]} if seen and len(fixes) == len(seen) else {}
+
+
 def plan_pick(
     config: dict,
     site: str,
@@ -184,7 +200,7 @@ def choose(
     p = config.get("params")
     plan_fn = _parent_attr("plan_pick", plan_pick)
     for o in sorted(objects, key=lambda o: ("split_from" in o, math.dist(o["raw_m"], config["sites"][site]["start"]))):
-        why = None
+        why = fix = None
         px = pixel_fn(o["raw_m"])
         if o.get("tangled"):
             why = "tangled blob"
@@ -198,6 +214,7 @@ def choose(
             why = f"out of reach: pan {pan} deg past the joint1 limit"
         elif (reach := past_park_reach(config, o["raw_m"])) is not None:
             why = f"out of reach: {reach} mm, past the park reach {round(config['plan']['limits']['park_reach_m'] * 1000)} mm"
+            fix = reach_fix(config, o["raw_m"], reach)
         elif not square_entry(entries, o):
             entry = entries[o["object"]]
             ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
@@ -216,7 +233,8 @@ def choose(
                        + f"{room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it")
         if why:
             refused.append(
-                {"centre_mm": o["centre_mm"], "object": o.get("object"), "colour": o.get("colour"), "why": why}
+                {"centre_mm": o["centre_mm"], "object": o.get("object"), "colour": o.get("colour"), "why": why,
+                 **({"reach_fix": fix} if why.startswith("out of reach: ") and fix else {})}
             )
             continue
         entry = entries[o["object"]]
