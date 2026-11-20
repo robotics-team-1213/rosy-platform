@@ -106,16 +106,22 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
                               require_named_operator=require_named_operator)
     try:
         from fleet.server.sitemap.pipeline_routes import install_pipeline_routes
+        from fleet.server.sitemap.pipeline_evidence import amr_evidence, omx_owner_evidence
         install_pipeline_routes(
             app, site_maps=site_maps, read_guard=read_guard,
+            amr_evidence_fn=lambda task: amr_evidence(app, task),
+            omx_evidence_fn=lambda task: omx_owner_evidence(app, task),
             operator_guard=getattr(app.state, "operator_guard", None),
             proposer_guard=getattr(app.state, "proposer_guard", None),
         )
     except ImportError:
         try:
             from fleet.server.pipeline_routes import install_pipeline_routes
+            from fleet.server.sitemap.pipeline_evidence import amr_evidence, omx_owner_evidence
             install_pipeline_routes(
                 app, site_maps=site_maps, read_guard=read_guard,
+                amr_evidence_fn=lambda task: amr_evidence(app, task),
+                omx_evidence_fn=lambda task: omx_owner_evidence(app, task),
                 operator_guard=getattr(app.state, "operator_guard", None),
                 proposer_guard=getattr(app.state, "proposer_guard", None),
             )
