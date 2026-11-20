@@ -82,6 +82,21 @@ def guard(cwd: Path, ref: str | None = None, new: bool = True) -> None:
         raise SystemExit(why)
 
 
+def _sync_github_vars(cwd: Path, state: dict) -> None:
+    allow_shas = " ".join(a["sha"] for a in state.get("allow", []))
+    for name, value in (("ROSY_CUTOVER_PHASE", state["phase"]), ("ROSY_CUTOVER_ALLOW", allow_shas)):
+        try:
+            res = subprocess.run(
+                ["gh", "variable", "set", name, "--body", value],
+                cwd=str(cwd), capture_output=True, text=True,
+            )
+            if res.returncode != 0:
+                detail = (res.stderr or res.stdout or f"exit {res.returncode}").strip()
+                print(f"[freeze] warning: gh variable set {name} failed: {detail}", file=sys.stderr)
+        except OSError as exc:
+            print(f"[freeze] warning: gh variable set {name} failed: {exc}", file=sys.stderr)
+
+
 def main(argv: list[str]) -> int:
     cwd = Path.cwd()
     if argv[:1] == ["show"]:
@@ -105,6 +120,8 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     save(cwd, state)
+    if argv[:1] == ["set"]:
+        _sync_github_vars(cwd, state)
     print(f"[freeze] {path(cwd)}: phase {state['phase']}, {len(state.get('allow', []))} allowed")
     return 0
 
