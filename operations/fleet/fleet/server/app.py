@@ -298,7 +298,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     read_guard = [Depends(require_viewer)]
     app.state.operator_guard = [Depends(require_operator)]  # pipeline mutations
     app.state.proposer_guard = [Depends(require_proposer)]  # cell worker / telemetry ingress
-    # D-1059: a pinky task drives only for a requester the trip routes' own guards would admit.
+    # D-1060: a pinky task drives only for a requester the trip routes' own guards would admit.
     app.state.trip_requester_guards = (require_operator, require_named_operator)
     from fleet.server.workcell_observation_routes import install_workcell_observation_routes as install_observations
     install_observations(app, workcell_observations, require_viewer, require_named_operator, task_service, authorize)

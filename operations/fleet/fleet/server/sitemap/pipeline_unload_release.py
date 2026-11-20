@@ -216,7 +216,7 @@ def install_unload_release_routes(app, ctx) -> None:
                 await app.state.depart_tick()
             except Exception:  # one bad pass must not end automatic departure
                 log.exception("unload departure tick failed")
-            try:  # D-1059: QUEUED pinky tasks go out as Fleet trips (off unless ROSY_FLEET_PINKY_TASK_DISPATCH=1)
+            try:  # D-1060: QUEUED pinky tasks go out as Fleet trips (off unless ROSY_FLEET_PINKY_TASK_DISPATCH=1)
                 await app.state.pinky_dispatch_tick()
             except Exception:
                 log.exception("pinky task dispatch tick failed")

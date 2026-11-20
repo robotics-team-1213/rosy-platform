@@ -1,4 +1,4 @@
-## D-1059 Pinky 작업은 Fleet trip으로 한 번만 배차한다
+## D-1060 Pinky 작업은 Fleet trip으로 한 번만 배차한다
 
 **Status:** Proposed (2026-11-21, 패널 5 조각 3. 안전 경로: robot-08 조정자 Safety-Review 대기. 첫 실물 실행은 사람 입회)
 

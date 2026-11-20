@@ -9,7 +9,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
-### v1.435 Pinky 작업 배차 필드와 취소 (additive, D-1059)
+### v1.435 Pinky 작업 배차 필드와 취소 (additive, D-1060)
 
 `POST /api/fleet/pipeline/pinky-tasks`·`station-zones/dispatch`·`decision-gate`가 만드는 `pinky_tasks` 행에 `place_id`(장소 목표, 없으면 `null`), `map_version`(등록 때 활성 지도), `requested_by`(요청 운영자), `requester_named`(요청자가 trip 경로의 이름 있는 운영자 가드를 통과했는지, bool)를 더한다. `requester_named`가 `true`가 아니면 배차하지 않는다(`REQUESTER_NOT_NAMED`). `ROSY_FLEET_PINKY_TASK_DISPATCH=1`(기본 꺼짐)이면 Fleet이 QUEUED 행을 Fleet trip으로 한 번 보낸다. 상태는 `QUEUED → SENDING → SENT → ARRIVED|FAILED|CANCELLED` 또는 `QUEUED → REFUSED`이고 `reason`, `plan_id`·`trip_id`(`GET /api/fleet/trips/{trip_id}`), `receipt`(`trip_state`, `lease`)를 싣는다. ARRIVED는 trip 상태에서만 온다. 거절 사유는 D-1059 가드 목록이다. `POST /api/fleet/pipeline/pinky-tasks/{task_id}/cancel`(operator): QUEUED는 끝내고 진행 중이면 trip을 취소한다. 응답 `{ok, pinky_task}`, 404 `UNKNOWN_TASK`, 끝난 작업은 409 `PINKY_TASK_ENDED`.
 

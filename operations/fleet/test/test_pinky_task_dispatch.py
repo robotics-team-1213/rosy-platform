@@ -1,4 +1,4 @@
-"""D-1059: a QUEUED pinky task drives once as a Fleet trip, refuses with a reason, and cancels through the trip."""
+"""D-1060: a QUEUED pinky task drives once as a Fleet trip, refuses with a reason, and cancels through the trip."""
 import asyncio
 import sqlite3
 import time

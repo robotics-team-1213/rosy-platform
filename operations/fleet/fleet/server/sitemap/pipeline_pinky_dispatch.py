@@ -1,4 +1,4 @@
-"""Pinky task dispatch (D-1059, panel 5 slice 3): a QUEUED pinky task drives once, as an ordinary Fleet trip.
+"""Pinky task dispatch (D-1060, panel 5 slice 3): a QUEUED pinky task drives once, as an ordinary Fleet trip.
 
 The pinky-task routes only record a row; this tick is their consumer. It never sends a goal itself: the row's place
 goes through the trip plan path (``app.state.trip_plan``) and ``TripRunner.start``, which own the map pose

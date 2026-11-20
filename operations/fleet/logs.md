@@ -5610,3 +5610,8 @@
 - 변경: 조정자 검토 차단 항목. trip 경로는 `require_named_operator`인데 pinky-tasks 등록은 `operator_guard`라 이름 없는 요청이 주행으로 이어질 수 있었다. 등록 때 `requester_named`를 `site_auth.build_role_guards`의 같은 가드(app.py `app.state.trip_requester_guards`)로 기록하고, `true`가 아니면 REFUSED `REQUESTER_NOT_NAMED`(옛 행 포함). cancel-all 시각 비교 형식 주석. ADR 가드 목록·API v1.435 본문에 반영.
 - 증거: `test_pinky_task_dispatch.py` 37개(이름 있는 운영자 배차, 이름 없는 운영자·service 거절, 필드 없는 행 거절 추가)와 `test_unload_release`·`test_pipeline_orchestrator` 로컬 68 passed. 실물 미실시.
 - gate 변화: SOURCE. 안전 경로, robot-08 조정자 검토 반영.
+
+## 2026-11-21 · uncommitted · docs(adr): Pinky 작업 배차 ADR 번호를 D-1060으로 옮김
+- 변경: 위 두 항목의 D-1059는 D-1060이다. main의 D-1059(merge queue 재시험)와 겹쳐 adr_reserve로 새 번호를 받았다(docs/adr/D-1060-pinky-task-dispatch.md).
+- 증거: adr_reserve next → D-1060, git grep으로 이 브랜치의 Pinky 배차 참조를 모두 바꿈.
+- gate 변화: 없음.
