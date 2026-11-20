@@ -4,9 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
-  # D-762 stage 1: a merge queue group runs the full tier against its base (no effect until the
-  # queue is turned on, stage 3). No `concurrency:` group: cancelling a queue or main push run hides
-  # its failure, and a workflow-level group would also bind ubuntu-26.04-rehearsal.yml's call.
+  # D-762 stage 1: a merge queue group runs against its base.
+  # The `concurrency:` block below cancels only stale `pull_request` runs on new push;
+  # `merge_group`, `push`, `schedule`, `workflow_dispatch`, and `workflow_call` each key on `github.run_id`
+  # with `cancel-in-progress: false` so a queue or main push run is never cancelled.
   merge_group:
   # D-436: PR 은 affected 티어, main push·주간·수동 실행은 풀 티어를 GitHub 러너에서
   # 병렬 matrix 로 돈다. 로컬 PC 는 affected 티어와 pre-push 패스트 게이트만 돈다.
@@ -21,6 +22,10 @@ on:
       runs_on:
         type: string
         default: ubuntu-24.04
+
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # D-436: 시험 범위와 병렬 matrix 를 정한다. pull_request 는 변경 범위(affected) 티어 —
