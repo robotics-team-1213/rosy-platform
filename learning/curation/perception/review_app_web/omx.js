@@ -321,7 +321,7 @@ document.addEventListener('visibilitychange',()=>{
   else refreshOwner();
 });
 const STATE={launching:'시작 중',queued:'대기',running:'학습 중',stopping:'중지 중',stopped:'중지됨',cancelled:'취소됨',completed:'완료',succeeded:'완료',failed:'실패',interrupted:'중단됨'};
-let snapshot={datasets:[],runs:[],methods:{}},token='',submitting=false,pendingRequest=null,loading=false,uploading=false,addingExperience=false,pendingExperience=null,targetDataset='';
+let deviceChosen=false,snapshot={datasets:[],runs:[],methods:{}},token='',submitting=false,pendingRequest=null,loading=false,uploading=false,addingExperience=false,pendingExperience=null,targetDataset='';
 function error(message){$('center-error').hidden=!message;$('center-error').textContent=message||'';}
 async function request(path,body){
   const options={cache:'no-store'};
@@ -369,7 +369,7 @@ function selection(){
   const online=$('execution-mode').value==='online_experience';
   $('method').querySelector('[value="act"]').disabled=online;
   if(online)$('method').value='hilserl';
-  $('execution-description').textContent=online?'지속 SAC는 새로 추가한 경험을 받아 CPU 학습을 이어가고, 입력이 없으면 기다립니다. 학습 단계는 입력마다 수행할 단계 수입니다.':'저장된 시범·교정·전이를 CPU로 재학습합니다.';
+  $('execution-description').textContent=online?'지속 SAC는 새로 추가한 경험을 받아 CPU 학습을 이어가고, 입력이 없으면 기다립니다. 학습 단계는 입력마다 수행할 단계 수입니다.':'저장된 시범·교정·전이를 재학습합니다. GPU를 쓸 수 있으면 GPU가 기본입니다.';
   const row=snapshot.datasets.find(d=>d.id===$('dataset').value),area=$('dataset-profile');area.replaceChildren();
   configureTarget(row);
   document.dispatchEvent(new CustomEvent('omx-dataset-profile',{detail:row?.profile||null}));
@@ -380,7 +380,7 @@ function selection(){
     if(/synthetic|smoke/i.test(JSON.stringify({source:row.source,profile})))area.append(el('p','합성 스모크 자료입니다. 실물 수집·개입·성공 증거가 아닙니다.','quiet'));
   }
   const method=snapshot.methods[$('method').value];
-  const devices=online?['cpu']:method?.devices||['cpu'],chosen=devices.includes($('device').value)?$('device').value:'cpu';
+  const devices=online?['cpu']:method?.devices||['cpu'],chosen=deviceChosen&&devices.includes($('device').value)?$('device').value:devices.includes('cuda')?'cuda':'cpu';
   $('device').replaceChildren(...devices.map(value=>{const option=el('option',value==='cuda'?'GPU (CUDA)':'CPU');option.value=value;return option;}));$('device').value=chosen;
   const compatible=!selectedProfileRecord||profileDocumentKey(selectedProfileRecord.profile)===profileDocumentKey(row?.profile);
   $('profile-clear').disabled=!selectedProfileRecord;
@@ -505,7 +505,7 @@ $('native-export-form').onsubmit=async event=>{
 $('dataset').onchange=()=>{pendingRequest=null;selection();};
 $('arm-target').onchange=()=>{pendingRequest=null;selection();};
 $('method').onchange=()=>{pendingRequest=null;selection();};
-$('device').onchange=()=>{pendingRequest=null;};
+$('device').onchange=()=>{deviceChosen=true;pendingRequest=null;};
 $('execution-mode').onchange=()=>{pendingRequest=null;selection();};
 $('experience-run').onchange=()=>{pendingExperience=null;selection();};
 $('train-form').oninput=()=>{pendingRequest=null;};
@@ -542,15 +542,19 @@ $('upload-form').onsubmit=async event=>{
       if(relative!==file.name||!(/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(file.name))||!(/\.npz$/.test(file.name)||['dataset.json','native-split-receipt.json','conversion-receipt.json'].includes(file.name))||names.has(file.name))throw new Error('폴더 바로 아래에 dataset.json, .npz와 공식 변환 영수증만 넣어 주세요.');
       if(!file.size)throw new Error(`빈 파일은 올릴 수 없습니다: ${file.name}`);names.add(file.name);
     }
-    const total=files.reduce((sum,file)=>sum+file.size,0);let uploaded=0;
-    for(const file of files){
-      for(let offset=0;offset<file.size;offset+=256*1024){
-        const bytes=new Uint8Array(await file.slice(offset,offset+256*1024).arrayBuffer());let binary='';
-        for(let begin=0;begin<bytes.length;begin+=8192)binary+=String.fromCharCode(...bytes.subarray(begin,begin+8192));
-        await request(CENTER+'/upload',{upload_id,name:file.name,offset,data:btoa(binary)});uploaded+=bytes.length;
-        $('upload-status').textContent=`${file.name} · ${Math.round(uploaded/total*100)}% 업로드`;
+    const total=files.reduce((sum,file)=>sum+file.size,0),queue=files.slice();let uploaded=0;
+    // Each request waits one network round trip; four files in flight keep the link busy (offsets stay ordered per file).
+    async function sendFiles(){
+      for(let file=queue.shift();file;file=queue.shift()){
+        for(let offset=0;offset<file.size;offset+=256*1024){
+          const bytes=new Uint8Array(await file.slice(offset,offset+256*1024).arrayBuffer());let binary='';
+          for(let begin=0;begin<bytes.length;begin+=8192)binary+=String.fromCharCode(...bytes.subarray(begin,begin+8192));
+          await request(CENTER+'/upload',{upload_id,name:file.name,offset,data:btoa(binary)});uploaded+=bytes.length;
+          $('upload-status').textContent=`${Math.round(uploaded/total*100)}% 업로드 · 파일 ${files.length}개`;
+        }
       }
     }
+    await Promise.all(Array.from({length:Math.min(4,files.length)},sendFiles));
     const published=await request(CENTER+'/publish',{upload_id,name:$('dataset-name').value});
     $('upload-status').textContent='업로드와 데이터 검증을 마쳤습니다.';await refreshCenter();
     const id=published.id||published.dataset?.id;if(id){$('dataset').value=id;$('dataset').dispatchEvent(new Event('change'));}
