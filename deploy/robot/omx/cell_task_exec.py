@@ -8,6 +8,7 @@ from pathlib import Path
 import ssl
 import subprocess
 import sys
+import threading
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import urlopen
@@ -23,6 +24,25 @@ def make_ca_urlopen(ca_file: str | Path | None = None):
         return urlopen(req, context=ctx, **kwargs)
 
     return _open
+
+
+def query_safety_listing(request_fn, timeout_s: float) -> tuple[Any, Exception | None]:
+    """Bound the caller's wait even when the HTTP request completes later."""
+    answer: dict[str, Any] = {}
+    finished = threading.Event()
+
+    def query() -> None:
+        try:
+            answer["value"] = request_fn("GET", "/api/fleet/pipeline/cell-tasks?status=QUEUED", None)
+        except Exception as exc:
+            answer["error"] = exc
+        finally:
+            finished.set()
+
+    threading.Thread(target=query, daemon=True).start()
+    if not finished.wait(timeout_s):
+        return None, TimeoutError("Fleet safety listing timed out")
+    return answer.get("value"), answer.get("error")
 
 
 def resolve_task_arm(task: dict[str, Any]) -> str:

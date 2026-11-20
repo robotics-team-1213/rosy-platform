@@ -14897,3 +14897,8 @@ osy-d395-s1d\`.
 - 변경: ADR D-1055(Accepted, 2026-11-20 사용자 승인), ADR Log 행. land.py 착지 은퇴 기준, 두 레인 전환, D-868 개정, 실험실 증거 규칙. 문서만.
 - 증거: 원격 `test_harness_contracts` 결과는 커밋 뒤 기록.
 - gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · 교훈: 병합 경로 전환은 실제 브랜치로 끝까지 돌린 뒤 연다
+- 변경: `docs/solutions/workflow-issues/pr-path-cutover-needs-a-real-end-to-end-run-2026-11-20.md`. D-1055 개방 직후 pr_land 막힘 4가지(증거 생산자 없음, publishOnly 훅, 훅 파일 불일치, 가짜 backlog)와 동결 중 큐 투입·merge_group flake. 문서만.
+- 증거: PR #260 생성→병합 13분, 이전 경로 p50 1.9시간 + 게시 PR 82분.
+- gate 변화: 없음.

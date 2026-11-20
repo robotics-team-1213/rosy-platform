@@ -67,7 +67,7 @@ def generate_launch_description():
         namespace=LaunchConfiguration('namespace'),
         parameters=[{
             "source_list": ['joint_states'],
-            "rate": 20.0,
+            "rate": 5.0,  # only feeds robot_state_publisher's visual wheel TF; 20 Hz cost CORE ~1 ms per /tf message
             "use_sim_time": LaunchConfiguration('is_sim'),
         }],
         remappings=[

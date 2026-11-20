@@ -110,3 +110,9 @@
 - gate 변화: LOCAL GO, ROS-SIM HOLD 유지(지도 미완주). ARTIFACT/DEVICE/FIELD 변동 없음.
 - 결정: 실제 경로와 임계 visual ray를 독립 분석하며 이전 Leg9 예외는 미재현 상태로 남긴다. 추가 주행·E-stop 해제·안전 완화는 하지 않았다.
 - 교훈: 안전 정지의 반복 원인은 고정 빔 경계 오류와 별개로 검증해야 한다. sampled overlap 0을 미래 궤적·지도 완주 수용으로 대신하지 않는다.
+
+## 2026-11-20 · uncommitted · perf(description): joint_state_publisher 20→5 Hz
+
+- 변경: 실기 `upload_robot.launch.py`의 joint_state_publisher rate. robot_state_publisher의 바퀴·캐스터 표시용 TF만 먹인다. joint_states 토픽에 bringup과 함께 내는 기존 구조는 그대로다.
+- 증거: y8xs 유휴 20초 /proc 실측(한 코어 %, 2회): 같은 CORE에서 CORE 79.4→76.8, joint_state_publisher 7.3→2.4, robot_state_publisher 1.6→0.8, bringup 19.6→19.4, 시스템 3.16→3.10코어. motor/ready 10.0 Hz, joint_states 15.2 Hz 관측. 증거 D:/DevTemp/core-load-1120.
+- gate 변화: 없음.

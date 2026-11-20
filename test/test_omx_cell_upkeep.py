@@ -111,6 +111,22 @@ def test_a_running_session_or_lock_skips_the_bus_and_never_reads_it(tmp_path):
     assert checks["registers"]["status"] == "fixed"  # another arm's session does not own this bus
 
 
+def test_a_wrist_turned_by_hand_while_folded_needs_the_home_stage(tmp_path):
+    """2026-11-19: torque OFF, someone turned all three wrists ~95 units; nothing flagged it until a run refused."""
+    home = [0.0, -62.0, 53.0, 51.6, 44.9, 49.0]
+    arms = arms_setup(tmp_path)
+    (tmp_path / "chunks.json").write_text(json.dumps({"gripper_closed": 49.0, "chunks": {"home": [home]}}))
+    bus = Bus()
+    for r, value in zip(bus.rows, home[:5] + [49.0]):
+        r["position_raw"] = round((value + 100) * 4095 / 200)
+    rep, checks, _ = report(tmp_path, arms, bus=bus)
+    assert checks["pose"]["status"] == "ok" and rep["verdict"] == "ready"
+    bus.rows[4]["position_raw"] = round((-50.5 + 100) * 4095 / 200)
+    rep, checks, _ = report(tmp_path, arms, bus=bus)
+    assert checks["pose"]["status"] == "fail" and "--stage home" in checks["pose"]["detail"]
+    assert rep["verdict"] == "needs_motion_step"
+
+
 def test_a_failed_camera_unit_and_a_dark_top_frame_fail(tmp_path):
     _, checks, _ = report(tmp_path, urls={"http://v/wrist.jpg": (503, b"")})
     assert checks["cameras"]["status"] == "fail" and "wrist" in checks["cameras"]["detail"] and "503" in checks["cameras"]["detail"]
