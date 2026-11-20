@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import ssl
@@ -73,6 +74,58 @@ def _arm_run_spec(arm_id: str, prep_dir: Path) -> tuple[Path, Path, Path, tuple[
     return prep_dir / wrapper, prep_dir / cfg, prep_dir / cat, roi, default_src
 
 
+FOLD_FRESH_S = 60.0  # the measured fold must come from this session's last park, not an old status line
+
+
+def measured_fold(arm_id: str, prep_dir: Path, now: float | None = None) -> dict[str, Any]:
+    """The arm's last runner state from chunk-status (the telemetry reader): folded only when that state says so and is
+    fresh. 2026-11-19 panel: `folded` used to copy `placed`, so a Pinky could be released with the arm over its bed."""
+    import time as _time
+
+    from cell_camera_telemetry_sync import _collect_live_arm_states
+
+    live = _collect_live_arm_states(prep_dir).get(arm_id) or {}
+    now = _time.time() if now is None else now
+    fresh = isinstance(live.get("updated_at"), (int, float)) and now - live["updated_at"] <= FOLD_FRESH_S
+    return {"folded": bool(live.get("folded")) and fresh, "state": live.get("joints_deg"), "fresh": fresh}
+
+
+ZONE_TOL_M = 0.02  # the vehicle re-parks only past this (its repark lands within ~2 mm on 11-19)
+
+
+def source_clearance(cfg: Path, cat: Path, roi, site: str) -> dict[str, Any]:
+    """One read-only look at the source site after the carry: how many catalog objects are left (Fleet releases the
+    vehicle only on 0). Camera only, no arm command; any failure is `objects: None` (Fleet holds)."""
+    try:
+        import cell_auto_pick_plan
+        import cell_pipeline as cp
+
+        config = json.loads(cfg.read_text(encoding="utf-8"))
+        calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text(encoding="utf-8"))
+        catalog = json.loads(cat.read_text(encoding="utf-8"))
+        catalog = catalog.get("objects", catalog) if isinstance(catalog, dict) else catalog
+        cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
+        _img, mask, objects, error = cell_auto_pick_plan.observe(cell, config, calibration, site, roi, catalog)
+        if error:
+            return {"objects": None, "error": error, "site": site}
+        return {"objects": len(objects), "foreground_px": int((mask > 0).sum()) if mask is not None else None, "site": site,
+                "centres_m": [[round(float(v), 4) for v in o["raw_m"][:2]] for o in objects if o.get("raw_m")]}
+    except Exception as exc:  # observation is evidence, never a crash of the worker
+        return {"objects": None, "error": f"{type(exc).__name__}: {exc}"[:200], "site": site}
+
+
+def zone_fix(target, centres, tol_m: float = ZONE_TOL_M) -> dict | None:
+    """The move (arm frame) that brings the object nearest the cell's dock target onto it, when it is off by > tol_m:
+    the vehicle re-parks instead of the arm reaching for a box where it was never meant to be (2026-11-19 user)."""
+    if not (isinstance(target, (list, tuple)) and len(target) == 2) or not centres:
+        return None
+    near = min(centres, key=lambda c: math.hypot(c[0] - target[0], c[1] - target[1]))
+    need = [round(target[0] - near[0], 4), round(target[1] - near[1], 4)]
+    if math.hypot(*need) <= tol_m:
+        return None
+    return {"object_arm_xy_m": list(near), "target_arm_xy_m": list(target), "need_arm_dxdy_m": need, "tol_m": tol_m}
+
+
 def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dict[str, Any]:
     """Execute one Fleet cell handoff via the arm's session wrapper and `cell_auto_pick.py`."""
     arm_id = resolve_task_arm(handoff)
@@ -90,6 +143,15 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     src_site = src.rsplit("-l", 1)[0]
     roi = (cfg_data.get("sites") or {}).get(src_site, {}).get("auto_roi") or default_roi
     omx_dir = Path(__file__).resolve().parent
+    target = (cfg_data.get("sites") or {}).get(src_site, {}).get("dock_target_arm_xy_m")
+    if target is not None:  # camera only, before any arm command: off the dock target -> the vehicle re-parks
+        seen = source_clearance(cfg, cat if cat.is_file() else omx_dir / "object-catalog.example.json", roi, src_site)
+        fix = zone_fix(target, seen.get("centres_m") or [])
+        if fix is not None:
+            return {"arm": arm_id, "error": "ZONE_FIX_REQUESTED",
+                    "stage_result": {"directive_id": handoff.get("task_id"), "arm_id": arm_id, "task_verified": False,
+                                     "zone_fix": fix},
+                    "stop_event": {"command": "stop", "ok": False, "folded": False}}
     cmd = [
         str(wrapper),
         sys.executable,
@@ -104,6 +166,9 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         "--task-id", str(handoff.get("task_id") or ""),
         "--handoff-lease-id", str(handoff.get("handoff_lease_id") or ""),
     ]
+    hint = (handoff.get("tier_hint") or {}).get("layers_below")
+    if isinstance(hint, int) and not isinstance(hint, bool) and hint > 0:
+        cmd += ["--layers-below", str(hint)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     parsed: dict[str, Any] = {}
     for line in reversed(proc.stdout.splitlines()):
@@ -115,6 +180,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
             except ValueError:
                 pass
     placed = proc.returncode == 0 and parsed.get("result") == "placed"
+    fold = measured_fold(arm_id, prep_dir)
+    clearance = source_clearance(cfg, cat if cat.is_file() else omx_dir / "object-catalog.example.json", roi, src_site) if placed else None
     tier = handoff.get("tier")
     dst_area = dst.rsplit("-l", 1)[0]
     stage_result = {
@@ -129,11 +196,14 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
             "z_gate": {"verdict": "PASS" if placed else "FAIL"},
         },
         "raw": parsed,
+        **({"reach_fix": parsed["reach_fix"]} if parsed.get("reach_fix") else {}),
+        **({"source_clearance": clearance} if clearance is not None else {}),
     }
     return {
         "arm": arm_id,
         "events_count": len(parsed.get("attempts") or []),
         "stage_result": stage_result,
-        "stop_event": {"command": "stop", "ok": placed, "folded": placed},
+        "stop_event": {"command": "stop", "ok": placed, "folded": placed and fold["folded"],
+                       **({"state": fold["state"]} if fold.get("state") else {})},
         **({} if placed else {"error": parsed.get("result") or f"exit_{proc.returncode}"}),
     }

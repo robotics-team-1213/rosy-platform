@@ -5,9 +5,25 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.408
+**Version:** v1.419
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.419 대기 기체가 돌아서 짐칸 단수를 본다 (사용자 2026-11-19)
+
+하역 자리 뒤 대기 자리(`observe_from` 사이트 규칙, 예: S3←S5)에 선 기체가 관측한다. `POST /api/fleet/pipeline/observer-requests` `{cell_task_id, unload_place?}`(operator, 사람 감지 409), `GET .../{request_id}`, `POST .../{request_id}/cancel`(닫힌 요청 409). Fleet가 하역 셀의 팔이 접혀 있을 때만 대기 기체를 CORE `/api/v1/motion/rotate_to`로 짐칸 쪽으로 돌려(±25° 안이면 안 돎) 앞 카메라 한 장을 판정하고 되돌린다. 판정(1단·2단, 확신 낮으면 기권)은 셀 작업 `tier_hint` `{layers_below, source, confidence, t}`로 남고 셀은 `--layers-below`로 받는다(올리기만). 결과는 `auto_events` kind `auto_observe`. 기권·기체 없음·팔 미접힘·시간 초과는 SKIPPED로 하역을 막지 않는다. Fleet는 영상을 해석하지 않는다(D-136 3). 판정기는 Vision 소유(`rosy_vision.stack_tiers`)이고 Fleet에 판정기가 없으면 돌기 전에 SKIPPED `NO_JUDGE`다.
+
+### v1.416 팔이 못 닿을 때 운반체 재정차 요청 (사용자 2026-11-19)
+
+셀 작업이 도달 거리 때문에 중단되면(완료 본문 `phase: "ABORTED"`, `stage_result.reach_fix` = `{object_arm_xy_m, reach_mm, limit_mm, need_arm_dxdy_m}`) Fleet가 그 운반체에 재정차 요청 하나를 연다. `GET /api/fleet/pipeline/cell-tasks`에 `repark_requests`(키 robot_id → `{request_id, task_id, cell_id, arm_id, robot_id, need_arm_dxdy_m, need_site_dxdy_m, attempt, state, t}`)가 더해진다. `need_site_dxdy_m`는 사이트 규칙 `arm_to_site[cell_id].yaw_deg`가 있을 때만 값이고 없으면 null이다. 운반체 쪽은 `POST /api/fleet/pipeline/repark/{request_id}` `{state: "DONE"|"FAILED", moved_robot_dxdy_m?, reason?}`로 닫는다(operator, 404 `UNKNOWN_REPARK_REQUEST`, 409 `REPARK_NOT_OPEN`). DONE이면 같은 운반을 `<task_id>-rp<attempt>`로 다시 큐에 넣고, FAILED나 세 번째 시도는 사람 알림(`auto_events` kind `auto_repark`).
+
+### v1.413 접기 증거를 실은 assessor 해제 (D-1048)
+
+`POST .../incidents/{incident_id}/clear` 본문에 선택 필드 `recovery`(assessor만 의미 있음)가 생긴다. `{kind: "auto_fold", folded_state, home, torque_after, corridor_clear, candidate}`이다. `machine_clearable`이 거부한 사건은 `clearable_after_fold`로 다시 판정한다. 사실 목록이 완전하고 래치·감김이 없으며, 접힘이 home 3단위 안이고 사건이 보고한 home과 같고, 토크가 모두 0이며 길이 비었을 때만 해제된다. 증거는 사건 행의 `recovery`에 남는다. 이름 있는 운영자 해제는 그대로다.
+
+### v1.412 통신 끊김 사건의 기계 해제와 하루 세 번 (D-1047)
+
+`POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear`의 assessor 해제 조건이 넓어진다(경로·본문 그대로). 표시 행이 모두 러너의 통신 끊김 문구(`LINK_END` 전체 일치)이고 잘리지 않았으며(`flagged_total`·`fault_records_total`), 고장 기록이 모두 `(5, 'Input/output error')`(정지 사유 없음, `fault_record_kinds`)인 사건은, 보고된 `last_state`·`last_target`·`last_command`·`home`과 `torque_after`로 다시 계산한 쉬는 팔(토크 0, 이동 명령 아님, 목표와 3단위 안, home과 8단위 안)이면 `folded` 없이도 기계 해제할 수 있다. `AI_CLEAR_REPEAT_LIMIT`는 같은 팔의 기계 해제가 24시간 안에 세 번 있었을 때다(이전 한 번).
 
 ### v1.406 AI assessor의 팔 사건 해제 (D-1039)
 
@@ -687,7 +703,7 @@ It does not enable a physical owner, command, calibration or motion admission.
 | `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents` | D-971. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentReport` `{source_id,session_id,facts,decision,recovery?,frames<=2 [{role top\|side,sha256,jpeg_b64}]}`, `facts`/`decision`/`recovery` each a finite JSON object of at most 12,288 bytes and depth 6, each frame a JPEG of at most 200,000 bytes whose sha256 Fleet recomputes; body limit 700,000 bytes (413); `source_id` must equal the path (422) | 200 `{incident_id,hold:{held,incident_ids<=64,reason}}`; no-store. The same `(source_id, session_id)` returns the same incident |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/hold` | D-971. Source-bound `X-Workcell-Observation-Token` | 200 `{held,incident_ids,reason}`; held while an incident of that arm is not cleared; no-store |
-| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator, or (v1.406, D-1039) an AI assessor service principal configured with its arms in `ROSY_FLEET_ARM_ASSESSORS` that may call only this route (guard `require_incident_clearer`); body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists; an assessor must send both) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared; assessor only: 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 422 `AI_CLEAR_CAUSE_REQUIRED`, 403 `AI_CLEAR_KIND_REFUSED` (stored facts fail `machine_clearable`), 403 `AI_CLEAR_REPEAT_LIMIT` (a machine clear of this arm within 24 h, any cause). Records who, when, the note, the cause with its basis (`unknown` for a machine clear) and `cleared.kind` (`machine`/`person`); nothing is deleted |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator, or (v1.406, D-1039) an AI assessor service principal configured with its arms in `ROSY_FLEET_ARM_ASSESSORS` that may call only this route (guard `require_incident_clearer`); body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists; an assessor must send both) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared; assessor only: 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 422 `AI_CLEAR_CAUSE_REQUIRED`, 403 `AI_CLEAR_KIND_REFUSED` (stored facts fail `machine_clearable`), 403 `AI_CLEAR_REPEAT_LIMIT` (v1.412, D-1047: three machine clears of this arm within 24 h, any cause; before, one). Records who, when, the note, the cause with its basis (`unknown` for a machine clear) and `cleared.kind` (`machine`/`person`); nothing is deleted |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence` | v1.375. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentEvidenceFrame {camera, t_rel_s, kind full\|tip, sha256, jpeg_b64}`, one JPEG of at most 200,000 bytes whose sha256 Fleet recomputes | 200 `{incident_id, seq}`; the same sha256 is the same frame; 404 unknown incident of that arm; 409 24 frames already; 413 body; no-store |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence/{seq}` | v1.375. Existing Fleet viewer authentication | `image/jpeg`; no-store; 404 unknown or expired (whole frames 14 days after clearing) |
 | `GET /api/fleet/workcell-observations/arm-incidents/labelled` | v1.375. `ai_observer` only | `{incidents:[...]}` cleared incidents with a recorded cause, newest first (at most 200), frame lists without bytes; no-store |
@@ -4828,6 +4844,10 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.419 | 2026-11-19 | Additive: 관측 요청(`/api/fleet/pipeline/observer-requests`), 대기 기체 제자리 회전→앞 카메라 단수 판정→셀 작업 `tier_hint`, `auto_observe`. |
+| v1.416 | 2026-11-19 | Additive: 셀 작업 중단의 `stage_result.reach_fix` → `repark_requests`(GET cell-tasks), `POST /api/fleet/pipeline/repark/{request_id}` 닫기, DONE이면 같은 운반 재시도(최대 2회). |
+| v1.413 | 2026-11-19 | Additive (D-1048): assessor 해제 본문 선택 `recovery`(자동 접기 증거) → `clearable_after_fold`, 증거는 사건 행 `recovery`에 저장. |
+| v1.412 | 2026-11-19 | Additive (D-1047): 통신 끊김뿐인 사건(러너 문구 전체 일치, 잘리지 않은 목록, EIO 고장 기록)은 다시 계산한 쉬는 팔이면 assessor가 해제한다. `AI_CLEAR_REPEAT_LIMIT`는 팔마다 24시간에 세 번 뒤. |
 | v1.408 | 2026-11-18 | 권한 변경 (D-1043, fix/viewer-estop, Safety-Review 대상): `POST /api/fleet/estop`을 operator 전용에서 사람 계정의 `fleet.read`(보기 전용·정책 관리자·운영자)로 넓힌다. `service` 역할은 그대로 403 `FORBIDDEN`. CORE `POST /api/v1/safety/stop`(Viewer↑)과 같다. 자격 없음 401, 이웃 관제 전용 자격·AI 관찰자 POST 제한은 그대로 403. 해제·`/dispatch/rearm`·재가동·승인 권한은 그대로. 본문·응답·감사 예외 불변. 스키마·envelope 변경 없음 |
 | v1.406 | 2026-11-17 | Additive (D-1039): 설정된 AI assessor 서비스 자격이 지정된 팔의 사건 해제 경로만 부른다. `cause`·`basis` 필수(422 `AI_CLEAR_CAUSE_REQUIRED`), `machine_clearable` 기본 거부(403 `AI_CLEAR_KIND_REFUSED`), 팔마다 하루 한 번(403 `AI_CLEAR_REPEAT_LIMIT`), 다른 팔 403 `AI_CLEAR_ARM_NOT_ASSIGNED`, 다른 경로 403 `ARM_ASSESSOR_SCOPE_REQUIRED`. 사건 행 `cleared.kind`(`machine`·`person`), 기계 해제 근거는 `unknown`. 사람 해제는 그대로. |
 | v1.404 | 2026-11-17 | Additive (D-18): ControlOverview `manifest_digest`(정규화 manifest sha256, 선택). 부모가 직계 자식의 digest와 비교해 다르면 `CONTROL_UNIT_MANIFEST_MISMATCH`(같은 revision 문자열에 다른 manifest 방지). 옛 peer는 보내지 않으며 비교 생략. 배포 순서: 부모(R) 먼저(옛 부모는 모르는 필드를 거부). |
