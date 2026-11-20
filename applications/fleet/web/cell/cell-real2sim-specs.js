@@ -14,6 +14,8 @@ export const CABLE_GUARD_PATH = '/api/fleet/pipeline/cable-guard';
 export const VISION_CHECK_PATH = '/api/fleet/pipeline/vision-auto-check';
 export const ARM_HOLDS_CLEAR_PATH = '/api/fleet/pipeline/arm-holds/clear';
 export const bedConfirmPath = taskId => `${CELL_TASKS_PATH}/${encodeURIComponent(taskId)}/bed-confirm`;
+// D-1057 commissioning presence (first run of a task kind); assumed the same contract as bed-confirm until T18 is read.
+export const presenceConfirmPath = taskId => `${CELL_TASKS_PATH}/${encodeURIComponent(taskId)}/presence-confirm`;
 // D-1057: a named operator's bed confirmation lasts pipeline_evidence.BED_CONFIRM_TTL_S on the server.
 export const BED_CONFIRM_TTL_S = 120;
 
@@ -27,6 +29,7 @@ const REFUSAL_TEXT = {
   HUMAN_HOLD_ACTIVE: '사람 감지로 멈춘 상태입니다',
   CELL_BUSY_OR_HELD: '셀이 다른 작업 중이거나 보류 중입니다',
   PREVIOUS_TIER_NOT_VERIFIED: '아래층 적재가 아직 확인되지 않았습니다',
+  REVIEW_REQUIRED: '검토 필요 · 이 작업 종류의 첫 실행이라 운영자 입회 표시가 필요합니다',
 };
 // Field names of the server's AMR evidence (pipeline_evidence.amr_evidence), when a refusal lists the missing ones.
 const AMR_EVIDENCE_TEXT = {wheel_brake_locked: '정지', v_cmd_mps: '정지', pose: '정차 위치', bed_ready: '적재함 확인', observed_at: '측정 시각'};
@@ -38,16 +41,20 @@ export function refusalText(refusal) {
   return `${refusal.op === 'complete' ? '완료 거부' : '시작 거부'} · ${text}`;
 }
 
-// The row's bed_confirmation (GET /cell-tasks) as a state and plain words; age_s is server time, so no clock skew.
-export function bedConfirmState(task, nowMs = Date.now()) {
-  const rec = task?.bed_confirmation;
+// A row's operator confirmation (GET /cell-tasks) as a state and plain words; age_s is server time, so no clock skew.
+function confirmState(rec, name, voidedWhy, nowMs) {
   if (!rec) return {state: 'none', text: ''};
-  if (rec.invalid) return {state: 'voided', text: '적재함 확인 무효 (핑키 이동 또는 지도 변경)'};
+  if (rec.invalid) return {state: 'voided', text: `${name} 무효${voidedWhy}`};
   const remaining = Math.floor(BED_CONFIRM_TTL_S - Number(rec.age_s));
-  if (!(remaining > 0)) return {state: 'expired', text: '적재함 확인 만료'};
+  if (!(remaining > 0)) return {state: 'expired', text: `${name} 만료`};
   const until = new Date(nowMs + remaining * 1000).toLocaleTimeString('ko-KR', {hour12: false});
-  return {state: 'valid', remaining_s: remaining, text: `적재함 확인됨 · ${remaining}초 남음 (${until}까지)`};
+  return {state: 'valid', remaining_s: remaining, text: `${name}됨 · ${remaining}초 남음 (${until}까지)`};
 }
+export const bedConfirmState = (task, nowMs = Date.now()) =>
+  confirmState(task?.bed_confirmation, '적재함 확인', ' (핑키 이동 또는 지도 변경)', nowMs);
+// shortcut: same 120 s validity as bed-confirm assumed (D-1057 presence-confirm); recheck when its contract is final.
+export const presenceConfirmState = (task, nowMs = Date.now()) =>
+  confirmState(task?.presence_confirmation, '입회 표시', '', nowMs);
 
 // Destinations a cell task may name: the dst_site values the server already lists for that cell (presets, export stations).
 export function dstSiteOptions(body, cellId, tier) {
@@ -187,7 +194,9 @@ export function cellTaskRows(body) {
       ? `[${stopEv.state.join(', ')}]`
       : '—';
     const disp = t.displaced_to ? ` (복구: ${t.displaced_to})` : '';
-    const evidence = [t.status === 'QUEUED' ? bedConfirmState(t).text : '', refusalText(t.last_refusal)].filter(Boolean).join(' · ');
+    const queued = t.status === 'QUEUED';
+    const evidence = [queued ? bedConfirmState(t).text : '', queued ? presenceConfirmState(t).text : '', refusalText(t.last_refusal)]
+      .filter(Boolean).join(' · ');
     return [
       t.task_id,
       `${t.cell_id} / ${t.arm_id}`,
@@ -247,10 +256,13 @@ export function visualCardSpecs(body = {}) {
   const bedConfirmButtons = cellId => {
     const t = tasks.find(x => x.cell_id === cellId && x.status === 'QUEUED');
     if (!t) return [];
-    const bed = bedConfirmState(t);
-    const label = bed.state === 'valid' ? bed.text
-      : bed.state === 'none' ? `적재함 확인 (${t.task_id} · ${t.robot_id})` : `${bed.text} · 다시 확인`;
-    return [{label, bedConfirmTaskId: t.task_id, robot_id: t.robot_id, bedState: bed.state}];
+    const label = (s, name) => s.state === 'valid' ? s.text
+      : s.state === 'none' ? `${name} (${t.task_id} · ${t.robot_id})` : `${s.text} · 다시 확인`;
+    const bed = bedConfirmState(t), presence = presenceConfirmState(t);
+    return [
+      {label: label(bed, '적재함 확인'), bedConfirmTaskId: t.task_id, robot_id: t.robot_id, bedState: bed.state},
+      {label: label(presence, '입회 표시'), presenceConfirmTaskId: t.task_id, robot_id: t.robot_id, presenceState: presence.state},
+    ];
   };
   const refusalFor = cellId => {
     const t = [...tasks].reverse().find(x => x.cell_id === cellId && x.last_refusal && ['QUEUED', 'RUNNING'].includes(x.status));

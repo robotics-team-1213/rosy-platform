@@ -210,11 +210,13 @@ def install_cell_tasks_routes(app, ctx) -> None:
             tasks = [t for t in tasks if t["cell_id"] == cell_id]
         if status is not None:
             tasks = [t for t in tasks if t["status"] == status]
-        beds = getattr(app.state, "cell_bed_confirmations", None) or {}  # D-1057 operator bed confirmations, if installed
+        # D-1057 named-operator confirmations, if installed (presence store name assumed like the bed store: T18).
+        stores = {field: getattr(app.state, attr, None) or {} for field, attr in (
+            ("bed_confirmation", "cell_bed_confirmations"), ("presence_confirmation", "cell_presence_confirmations"))}
         refusals = getattr(app.state, "cell_task_refusals", None) or {}  # last claim/complete refusal (camera routes)
-        tasks = [{**t, **({"bed_confirmation": {"principal_id": bed.get("principal_id"), "invalid": bool(bed.get("invalid")),
-                                                "age_s": round(time.time() - bed["confirmed_at"], 1)}}
-                          if (bed := beds.get(t["task_id"])) else {}),
+        tasks = [{**t, **{field: {"principal_id": rec.get("principal_id"), "invalid": bool(rec.get("invalid")),
+                                  "age_s": round(time.time() - rec["confirmed_at"], 1)}
+                          for field, store in stores.items() if (rec := store.get(t["task_id"]))},
                   **({"last_refusal": refusals[t["task_id"]]} if t["task_id"] in refusals else {})} for t in tasks]
         stations = resolve_omx_cells(active[1], active[2])
         cells_info = {}

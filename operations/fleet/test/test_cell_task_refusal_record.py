@@ -56,6 +56,9 @@ def test_list_shows_bed_confirmation_age_and_void_without_storing_it_on_the_ledg
     bed = _row(client, "t3")["bed_confirmation"]
     assert bed["principal_id"] == "kim" and bed["invalid"] is True and 29 <= bed["age_s"] <= 31
     assert "bed_confirmation" not in app.state.omx_cell_tasks["t3"]
+    app.state.cell_presence_confirmations = {"t3": {"principal_id": "lee", "confirmed_at": time.time() - 10}}
+    presence = _row(client, "t3")["presence_confirmation"]
+    assert presence["principal_id"] == "lee" and presence["invalid"] is False and 9 <= presence["age_s"] <= 11
 
 
 def test_malformed_completion_is_not_recorded_as_a_refusal():

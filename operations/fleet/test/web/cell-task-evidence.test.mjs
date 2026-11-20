@@ -7,6 +7,8 @@ import {
   bedConfirmState,
   cellTaskRows,
   dstSiteOptions,
+  presenceConfirmPath,
+  presenceConfirmState,
   refusalText,
   visualCardSpecs,
 } from "../../../../applications/fleet/web/cell/cell-real2sim-specs.js";
@@ -40,8 +42,27 @@ test("card bed button targets the cell's first queued task and says its state", 
   assert.equal(bed[0].bedState, "voided");
   assert.match(bed[0].label, /무효.*다시 확인/);
   assert.ok(!cellAb.buttons.some(b => b.bedConfirmTaskId), "no queued task, no bed button");
+  const presence = cellS.buttons.filter(b => b.presenceConfirmTaskId);
+  assert.equal(presence.length, 1);
+  assert.equal(presence[0].presenceConfirmTaskId, "t1");
+  assert.equal(presence[0].presenceState, "none");
+  assert.match(presence[0].label, /^입회 표시 \(t1 · rosy_46\)$/);
+  assert.equal(cellS.buttons.indexOf(presence[0]), cellS.buttons.indexOf(bed[0]) + 1, "presence sits next to bed");
+  assert.ok(!cellAb.buttons.some(b => b.presenceConfirmTaskId));
   const running = visualCardSpecs({tasks: [queued({status: "RUNNING"})]})[0];
   assert.ok(!running.buttons.some(b => b.bedConfirmTaskId));
+});
+
+test("presence mark has the bed confirmation's states", () => {
+  assert.equal(presenceConfirmPath("t1"), "/api/fleet/pipeline/cell-tasks/t1/presence-confirm");
+  assert.equal(presenceConfirmState(queued()).state, "none");
+  const valid = presenceConfirmState(queued({presence_confirmation: {age_s: 20}}), 0);
+  assert.equal(valid.state, "valid");
+  assert.match(valid.text, /^입회 표시됨 · 100초 남음/);
+  assert.equal(presenceConfirmState(queued({presence_confirmation: {age_s: 200}})).text, "입회 표시 만료");
+  assert.equal(presenceConfirmState(queued({presence_confirmation: {age_s: 1, invalid: true}})).state, "voided");
+  const rows = cellTaskRows({tasks: [queued({presence_confirmation: {age_s: 20}})]});
+  assert.match(rows[0][5], /입회 표시됨/);
 });
 
 test("refusal codes are said as the missing evidence", () => {
@@ -52,6 +73,7 @@ test("refusal codes are said as the missing evidence", () => {
   assert.match(refusalText({code: "OMX_OWNER_EVIDENCE_UNAVAILABLE", op: "complete"}), /^완료 거부 · 팔 셀이 보낸 완료 증거가 없습니다/);
   assert.match(refusalText({code: "UNVERIFIED_CELL_COMPLETION", op: "complete"}), /확인되지 않은/);
   assert.match(refusalText({code: "OWNER_PRINCIPAL_NOT_REGISTERED", op: "complete"}), /주인으로 등록되지 않았습니다/);
+  assert.match(refusalText({code: "REVIEW_REQUIRED", op: "claim"}), /^시작 거부 · 검토 필요 · .*입회 표시가 필요합니다/);
   assert.match(refusalText({code: "SOMETHING_NEW", op: "claim"}), /사유 확인 필요 \(SOMETHING_NEW\)/);
   const rows = cellTaskRows({tasks: [queued({last_refusal: {code: "OMX_OWNER_EVIDENCE_UNAVAILABLE", op: "complete"}, status: "RUNNING"})]});
   assert.match(rows[0][5], /완료 거부/);
@@ -115,4 +137,14 @@ test("bed button is off without a named operator and posts the robot when on", a
   fail = Object.assign(new Error("Not Found"), {status: 404});
   await actions.confirmBed("t1", "rosy_46");
   assert.match(els["cell-tasks-status"].textContent, /기능이 아직 없습니다/);
+  fail = null;
+  const presenceOff = button();
+  reason = "운영자 권한이 필요합니다";
+  actions.bindActionButton(presenceOff, {presenceConfirmTaskId: "t1", robot_id: "rosy_46"});
+  assert.equal(presenceOff.disabled, true);
+  assert.equal(presenceOff.dataset.presenceConfirmTaskId, "t1");
+  await actions.confirmPresence("t1", "rosy_46");
+  assert.equal(calls.at(-1)[0], "/api/fleet/pipeline/cell-tasks/t1/presence-confirm");
+  assert.deepEqual(JSON.parse(calls.at(-1)[1].body), {robot_id: "rosy_46"});
+  assert.equal(els["cell-tasks-status"].textContent, "태스크(t1) 입회 표시 완료 · 120초 동안 유효");
 });
