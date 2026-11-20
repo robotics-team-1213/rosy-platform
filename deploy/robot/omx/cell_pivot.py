@@ -215,7 +215,7 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
             return fail("jaw sides switched between tries")
         if agreed:
             if report is not None:
-                report.update(reason=None, side=side)
+                report.update(reason=None, side=side, blobs=[[float(v) for v in b[:3]] for b in all_blobs])
             return pick[0], pick[1]
         if pick is not None:
             marks.append(pick[:2])

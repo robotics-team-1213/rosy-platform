@@ -68,6 +68,7 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         self._zone: Optional[str] = None
         self._zone_checked = False      # "out" 판정 직후 한 번은 Nav2 스테이징으로 보낸다
         self._exit_m = 0.0
+        self._init_scan()                              # LiDAR bay pose requests (bay_zone_phases.py)
         # 몸 스캔(짐칸 포함 회전 판정, 앞 여유): (rotation_block, front_gap, rear_gap, at)
         self._body: Optional[tuple] = None
         self._init_guards()
@@ -136,6 +137,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         if h.executor is not None:
             h.executor.stop()
         self._zone = "check"
+        self._req_open = None                          # close the open request before the next ask is allowed
+        self._scan_asked, self._scan_match, self._scan_error, self._bay_lateral = False, None, None, None
         h._enter(DockPhase.BACKOFF)
         return True
 
@@ -182,12 +185,12 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             return obs
         # Only the corridor line was seen: heading and along are measured, the lateral is not. Fill it from
         # the running estimate, else from the map pose; never from the payload's placeholder (2026-11-18).
-        lateral = self._est[0] if self._est is not None else None
+        lateral = self._est[0] if self._est is not None else self._bay_lateral
         if lateral is None:
             pose = self._h._pose_provider()
             if pose is None or self._h._dock is None:
                 return None
-            lateral = map_offsets(pose, self._h._dock)[1]
+            lateral = self._bay_lateral if self._bay_lateral is not None else map_offsets(pose, self._h._dock)[1]
         along, _, _ = rear_errors(obs)
         ax, ay = math.cos(obs.yaw), math.sin(obs.yaw)
         return obs.model_copy(update={"x": along * ax + lateral * ay, "y": along * ay - lateral * ax})
@@ -284,6 +287,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
                 # Too far off to converge: never reverse into it. A straight back-off keeps the bearing, so start over.
                 self._guard_fail("entry", "entry error outside the window (lat %.0f mm, head %.0f deg)"
                                  % (lateral * 1000.0, math.degrees(heading)), h._retry)
+                return
+            if self._entrance_blocked(now, along, lateral):
                 return
             self._est = (lateral, heading)
             self._no_obs_s = 0.0
@@ -437,6 +442,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             h.executor.set_collision_exemption(False)
         self._charging.reset()
         self._baseline_v = None
+        self._req_open = None
+        self._seat_asked, self._seat_match = False, None
         h._enter(DockPhase.SETTLING)
 
     def _tick_settling(self, now: float) -> None:
@@ -445,6 +452,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         cue = self._fresh_fleet_cue(now)
         if cue is not None and cue.get("verdict") == "RETRY_FROM_P":
             h._retry("fleet bay contact misaligned")
+            return
+        if self._seat_blocked():
             return
         voltage = getattr(h._battery, "voltage", None) if h._battery is not None else None
         valid = voltage is not None and math.isfinite(float(voltage))
@@ -544,6 +553,7 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         self._fleet_cue = None
         self._zone = None
         self._exit_m = 0.0
+        self._entry_since, self._entry_asked, self._entry_match = None, False, None
         self._blind_s = self._blind_m = 0.0
 
     def _odometry(self):

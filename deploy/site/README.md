@@ -2447,7 +2447,11 @@ python3 -I -B /root/rosy-conversation-reviewed/<release>/install_conversation_br
 그 snapshot의 validator로 평가 proof를 검사한다. `rosy-deliberation` UID의 `/api/ps`
 조회로 고정 모델 digest와 context 8192만 확인한다. inference나 GLM 호출은 하지 않는다.
 
-새 config의 만료는 평가 시각부터 최대 7일이다. 기존 상태 broker·GLM credential·billing
+새 config의 만료는 평가 시각부터 최대 7일이다. 같은 source SHA를 새로 평가해 갱신할 때는
+새 proof·receipt를 각각 proof SHA가 붙은 파일로 기존 snapshot에 추가하고, 검토한 이전
+config·broker SHA를 지정해 설치한다. 이전 증거는 보존하며 새 평가가 실패하면 기존 승인
+시각은 늘어나지 않는다. Fleet의 private 설정도 AI PC readback 뒤 같은 새 proof SHA와
+만료 시각으로 별도 갱신해야 한다. 기존 상태 broker·GLM credential·billing
 증거·최초 smoke spent marker는 보존한다. 등록되지 않은 기존 ingress 계정, 계정/그룹
 충돌, 외부 파일, 다른 공개키, source 변조는 거절한다. SSH ingress는 정확한
 `rosy-status-v1`·`rosy-conversation-v1`만 받아 각각 zero-argument UID wrapper로 전달한다.

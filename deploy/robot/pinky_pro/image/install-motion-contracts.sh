@@ -16,7 +16,7 @@ for package in skill motion; do
     cp -a "$WORKSPACE/contracts/$package/src" "$CONTRACT_WORK/$package/"
 done
 WHEEL_SOURCES=("$CONTRACT_WORK/skill" "$CONTRACT_WORK/motion")
-WHEEL_NAMES=(rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0)
+WHEEL_NAMES=(rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0)
 # D-789/D-791: the optional robot media wheel (camera mailbox tap + WHIP worker).
 if [[ -f "$WORKSPACE/middleware/media/pyproject.toml" ]]; then
     mkdir -p "$CONTRACT_WORK/media"

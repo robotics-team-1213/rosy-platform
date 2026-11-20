@@ -124,6 +124,8 @@ export function editSurveyElement(map, item) {
     edge.speed_cap_mps = old.speed_cap_mps;
     if (old.robot_kinds !== undefined) edge.robot_kinds = copy(old.robot_kinds);
   }
+  // a hand-moved element keeps its pin: automatic calibration must still leave it alone
+  if (old.pinned) next[key].find(row => row.id === item.id).pinned = true;
   if (group === map.facilities && old.evidence)
     next.facilities.find(row => row.id === item.id).evidence = {...copy(old.evidence), status: 'observed'};
   if (group === map.places && item.yaw === undefined && old.yaw !== undefined)
@@ -159,7 +161,9 @@ export function removeSurveyElement(map, id, key) {
   return next;
 }
 
-export function editPlace(map, id, {name, kind}) {
+function setPinned(row, pinned) { if (pinned) row.pinned = true; else delete row.pinned; }
+
+export function editPlace(map, id, {name, kind, pinned}) {
   const next = copy(map);
   const place = next.places.find(item => item.id === id);
   if (!place) throw new Error(`없는 장소 ${id}`);
@@ -173,11 +177,12 @@ export function editPlace(map, id, {name, kind}) {
     if (kind === 'start' && typeof place.yaw !== 'number') throw new Error('출발 자리는 방향이 필요합니다 · 로봇을 그 자리에 놓고 기록 모드에서 출발 장소로 남기세요');
     place.kind = kind;
   }
+  if (pinned !== undefined) setPinned(place, pinned);
   if (next.survey) next.survey = {...next.survey, reviewed: false, review_note: ''};
   return next;
 }
 
-export function editEdge(map, id, {name, direction, drive_mode: driveMode, speed_cap_mps: speed}) {
+export function editEdge(map, id, {name, direction, drive_mode: driveMode, speed_cap_mps: speed, pinned}) {
   const next = copy(map);
   const edge = next.edges.find(item => item.id === id);
   if (!edge) throw new Error(`없는 차로 ${id}`);
@@ -194,6 +199,7 @@ export function editEdge(map, id, {name, direction, drive_mode: driveMode, speed
     if (!['lane', 'free'].includes(driveMode)) throw new Error('주행 방식은 차선/좌표입니다');
     edge.drive_mode = driveMode;
   }
+  if (pinned !== undefined) setPinned(edge, pinned);
   if (speed !== undefined) {
     const value = Number(speed);
     if (!Number.isFinite(value) || value <= 0 || value > 5) throw new Error('속도 상한은 0–5 m/s입니다');

@@ -1,7 +1,7 @@
 """core.main — 진입점: ROS 노드 기동 + API 서버 (P1-1, ADR-D-1).
 
 프로세스 구조:
-- Main Thread: rclpy 노드 "core" (MultiThreadedExecutor)
+- Main Thread: rclpy 노드 "core" (EventsExecutor, D-1058; ROSY_CORE_EXECUTOR=threaded 이면 MultiThreadedExecutor)
 - Worker Thread: uvicorn + FastAPI
 
 종료(SIGINT/SIGTERM): 신호 처리기는 예외를 던지지 않고 종료 요청만 기록한다.

@@ -42,13 +42,25 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 5, "sensing": 2}  # Station suites (D-772) retain the fixed per-shard cost budget.
+SUITE_SHARDS = {"fleet": 5, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
 # Fleet file weights from pytest result-line timestamps in CI 44563719449 and 44568270495.
 # Retain prior weights where timings are incomplete or inconsistent. Unlisted files weigh 1.
 # The weights only choose runners; every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
+# Other slow files (8 s or more), measured the same way in 12 CI runs of 2026-11-20. affected_ros.consolidate
+# weighs jobs with both tables: at 1 per file it packed every guard invocation onto one 5-7 min runner.
+CI_TEST_SECONDS = {**json.loads(Path(__file__).with_name("ci_test_seconds.json").read_text(encoding="utf-8")),
+                   **FLEET_TEST_SECONDS}
+MAX_CI_JOBS = 18  # GitHub Free runs 20 jobs at once; scope and ci-result take none while the tests run
 _STATION_SCHEDULING = "middleware/core/gateway/test/test_station_camera_scheduling.py"
+
+
+def consolidated(include: list[dict]) -> list[dict]:
+    """Measured seconds spread a PR's small jobs over runners; a selection that would pass MAX_CI_JOBS keeps the coarser packing."""
+    fine = affected_ros.consolidate(include, CI_TEST_SECONDS)
+    return fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
     {"name": "omx-act-cpu", "invocations": [[
@@ -61,7 +73,8 @@ CI_FULL_MATRIX = (
         ["learning/training/world_model/test"], ["learning/evaluation/world_model/test"],
         ["operations/prediction/world_model/test"]], "ros": "none"},
     # 2026-11-18: core-domain was CI's longest runner (pytest step 16.5 and 22.4 min of a 25 min budget, runs
-    # 43769060136 and 42596065578); the gateway suite and the rest now run on two runners, same tests.
+    # 43769060136 and 42596065578) and again 20 min in 44745980037; SUITE_SHARDS splits its gateway files across
+    # runners, same tests. The browser journey stays its own invocation on the last shard.
     {"name": "core-domain", "invocations": [["middleware/core/gateway/test", f"--ignore={_STATION_SCHEDULING}"], [
         "middleware/core/gateway/test/test_account_pipeline.py"
     ]], "ros": "none"},
@@ -131,12 +144,41 @@ def buildable(repo: Repo, sel: Selection) -> bool:
                for p in sel.changed)
 
 
-def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
-    """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit."""
+# Slow root test files that dominate affected GUARD_SET runners when packed together.
+_HEAVY_ROOT_TESTS = (
+    "test/test_harness_contracts.py",
+    "test/test_affected_tests.py",
+    "test/test_land.py",
+    "test/test_robot_cd.py",
+    "test/test_readme_agent_start.py",
+    "test/test_ci_dependencies.py",
+    "test/test_remote_test_tools.py",
+)
+
+
+def _shard_py_invocation(inv: list[str], n: int = ROOT_SHARDS) -> list[list[str]]:
+    """Split large non-directory .py invocations across runners, balancing heavy root tests."""
+    flags = [p for p in inv if p.startswith("-")]
+    targets = [p for p in inv if not p.startswith("-")]
+    if n <= 1 or len(targets) < 12 or not all(p.endswith(".py") for p in targets):
+        return [inv]
+    rank = {p: i for i, p in enumerate(_HEAVY_ROOT_TESTS)}
+    ordered = sorted(targets, key=lambda p: (rank.get(p, len(rank)), p))
+    return [[*ordered[i::n], *flags] for i in range(n) if ordered[i::n]]
+
+
+def _shard_groups(repo: Repo, entry: dict, flags: list[str] | None = None) -> list[list[str]]:
+    """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit.
+
+    Files the entry's own `--ignore=` flags give another runner stay out, since pytest runs a file named on
+    the command line even when it is also ignored. `flags` None is the full tier, which also leaves out
+    files a later invocation of the entry runs; an affected invocation drops only the ones it ignores too."""
     import affected_tests as at
+    skip = {f.split("=", 1)[1] for f in entry["invocations"][0] if f.startswith("--ignore=")}
+    skip = skip | {p for inv in entry["invocations"][1:] for p in inv} if flags is None else {p for p in skip if f"--ignore={p}" in flags}
     n = ROOT_SHARDS if entry["name"] == "root-test" else SUITE_SHARDS.get(entry["name"], 1)
     fleet = entry["name"] == "fleet"
-    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0])) if n > 1 else []
+    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0]) and t not in skip) if n > 1 else []
     groups, loads = [[] for _ in range(n)], [0] * n
     for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)) if fleet else files:
         i = min(range(n), key=lambda i: (loads[i], i))
@@ -153,7 +195,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         entries = []
         for entry in CI_FULL_MATRIX:
             groups = _shard_groups(repo, entry)
-            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{len(groups)}", invocations=[g])
+            later = entry["invocations"][1:]  # e.g. the account browser journey: once, on the last shard
+            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{len(groups)}",
+                             invocations=[g, *(later if i == len(groups) - 1 else [])])
                         for i, g in enumerate(groups)] or [dict(entry)]
         for i in range(ROOT_SHARDS):
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
@@ -169,10 +213,11 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         for inv in sel.invocations:
             if affected_exclusive.dedicated(inv):
                 continue  # ROS environment grouping must not split the job's leading environment.
-            split = [p for p in inv if p in whole and _shard_groups(repo, whole[p])]
+            split = [p for p in inv if p in whole and _shard_groups(repo, whole[p], inv)]
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
-            out += [rest] if any(not p.startswith("-") for p in rest) or not split else []
-            out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p])]
+            if any(not p.startswith("-") for p in rest) or not split:
+                out += _shard_py_invocation(rest) if not split else [rest]
+            out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p], inv)]
         entries = affected_ros.entries(out, CI_FULL_MATRIX)
         exclusive_jobs = [inv for inv in sel.invocations if affected_exclusive.dedicated(inv)]
         if exclusive_jobs:

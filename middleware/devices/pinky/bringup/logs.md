@@ -78,3 +78,8 @@
 - 변경: `44faf7ab51`(ADC 재시도 간격)이 주입 시계를 `self._clock`에 두어 rclpy Node의 시계를 가렸고, 릴리스 175에서 `create_timer`가 `.handle`을 읽다 시작 직후 죽었다(b8xy canary, 2026-11-08 13:19Z). 이름을 `_monotonic`으로 바꿨다.
 - 증거: 시험 스텁 Node에는 시계가 없어 놓쳤다. `test_the_injected_clock_does_not_replace_the_rclpy_node_clock` 추가, 원격 실행 기록 참조.
 - gate 변화: 없음. 실물 기동은 다음 릴리스에서 확인한다.
+
+## 2026-11-20 · uncommitted · perf(bringup): joint_states와 motor/ready True를 30 Hz 루프 3번에 한 번(10 Hz) 낸다
+- 변경: CORE 실행기는 메시지 하나마다 약 2.6 ms를 쓴다(py-spy). motor/ready 리스는 `navigation.readiness.stale_after_s` 2.0 s라 10 Hz도 20배 여유다. False 발행(시작·주행 꺼짐·종료)과 deadman·`attempt_stop`·cmd_vel 경로는 그대로다.
+- 증거: y8xs 유휴 20초 /proc 실측(한 코어 %, 2회): 같은 CORE에서 CORE 79.4→76.8, joint_state_publisher 7.3→2.4, robot_state_publisher 1.6→0.8, bringup 19.6→19.4, 시스템 3.16→3.10코어. motor/ready 10.0 Hz, joint_states 15.2 Hz 관측. 증거 D:/DevTemp/core-load-1120. 원격 영향 시험의 bringup·motor·deadman 시험 통과(실패 2건은 이 변경과 무관한 브랜치 기반 문제였고 origin/main 기반에서 다시 돌림). 독립 읽기 전용 검토 APPROVE.
+- gate 변화: 없음. 실물 주행 확인은 하지 않았다(로봇 정지 상태 측정).

@@ -135,8 +135,7 @@ def run_auto(
             row = {"observed": len(objects), "refused": refused}
             out["attempts"].append(row)
             if error or not usable:
-                kind = cell_diagnose.obstacle_type(refused)
-                row["error"] = error or ("no usable object" + (f" ({kind})" if kind else ""))
+                row["error"] = error or cell_diagnose.no_usable_object(refused)
                 tried["fail"] = {"stage": "choose", "class": row["error"]}
                 if not dry_run:
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
@@ -176,7 +175,7 @@ def run_auto(
                     bias_data, choices, work, failed_yaws, dest_view,
                 )
                 if not usable:
-                    row["error"] = "no usable object after the pivot"
+                    row.update(refused=refused, error=cell_diagnose.no_usable_object(refused, after_pivot=True))
                     return {**out, "result": "stopped: " + row["error"]}
                 target = usable[0]
                 cd.target(objects, usable, refused)
@@ -221,14 +220,14 @@ def run_auto(
             choice, tried["execution"] = cell_executor.choose(choices, attempt)
             gate = Gate(guarded, config, calibration, sequence=sequence)
             ledger = cell_attempts.ReplanLedger(config, calibration, source, dest, attempt, tried, t0, choices)
-            # shadow inference before the gate opens: no delay between the approval and the motion
             shadow_row = shadow.capture(cell, config, attempt, img, source=source, dest=dest) if shadow else None
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a), ledger.finish)
             if held is not None:
-                tried["envelope"] = held
-                tried["transfer"] = {"result": "held", "at": "preflight", "steps": [], "envelope": held}
                 close_episode(cell, episode, False, f"held: {held['reason']}")
-                cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+                try:
+                    ledger.record_open_hold(gate, held)
+                except (OSError, ValueError, KeyError, TypeError):
+                    return {**out, "result": "held: audit_unavailable"}
                 return {**out, "result": f"held: {held['reason']}"}
             guard = cell_auto_evidence.scene_guard(
                 guarded, config, calibration, source, roi, box_centre(o), before_frame["image"])

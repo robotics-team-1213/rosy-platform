@@ -107,7 +107,7 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     except ValueError as exc:
         out["bias_error"] = str(exc)
         out["missing_bias"].extend(f"{site}:{xy[0]},{xy[1]}" for site, xy in targets)
-    out["missing_map"] = [s for s in map_sites(config) if s not in calibration.get("sites", {})]
+    out["missing_map"] = rp.missing_maps(config, calibration, map_sites(config))
     for s in map_sites(config):
         rec = (calibration.get("sites") or {}).get(s) or {}
         if rec.get("loo_error_mm") and not map_agrees(rec, params) and len(rec.get("points") or []) >= 5:
@@ -152,12 +152,14 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     stop evidence (cell_hooks.stills). 2026-11-14: arm_b's first remap goto stopped on contact at wrist_flex 59.3
     and nothing but the runner's one line said what it met."""
     import cv2
-    import cell_pipeline as cp
-    import cell_scene_guard
+    import cell_pipeline as cp, cell_scene_guard
 
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
+    tcp_marks, seen_jaws = bool((config.get("calibrate") or {}).get("tcp_marks")), []
     frames = work / "remap-frames" / time.strftime("%Y%m%d-%H%M%S")
     frames.mkdir(parents=True, exist_ok=True)
+    if not fold(cell).get("ok"):
+        raise SystemExit("remap: initial park failed")
     before = cell.frame("top")
     cv2.imwrite(str(frames / "before.jpg"), before)
     for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
@@ -200,15 +202,29 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         row = {"point": [x, y], "mark": mark, "near": near}
         if mark is None and report.get("reason"):
             row["why"] = report["reason"]
+        if mark and tcp_marks:
+            fk_yaw = rp.planned_yaw(lib, config)
+            if fk_yaw is None:
+                row["why"], mark = "no planned FK yaw for the jaw labelling", None
+            else:
+                seen_jaws.append({"tcp": (x, y), "yaw": fk_yaw, "pixel": tuple(mark), "blobs": report.get("blobs") or []})
         log(row)
         if mark:
             marks.append((mark, (x, y)))
     cell.act("park")
     after = cell.frame("top")
     cv2.imwrite(str(frames / "after.jpg"), after)
-    moved = cell_scene_guard.scene_moved(before, after)
+    moved = cell_scene_guard.scene_moved(before, after, ignore=[*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())])
     if moved:
         raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
+    if tcp_marks:  # each mark's arm point is the place of the jaw it is, so the map maps the TCP (jaws' middle)
+        import cell_jaw_side
+
+        why, marks, labels = cell_jaw_side.remap_marks(seen_jaws, config.get("params"))
+        (frames / "labels.json").write_text(json.dumps({"why": why, **(labels or {})}))
+        log({"jaw_labels": labels, "refused": why})
+        if why:
+            raise SystemExit(f"remap: {why}; no map saved; views in {frames}")
     seen, marks = marks, consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
     dropped = [{"pixel": list(p), "arm_m": list(a)} for p, a in seen if (p, a) not in marks]
     if dropped:
@@ -222,6 +238,7 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks],
         "loo_error_mm": cal.loo_error_mm(marks),
         "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        **({"marks": "tcp"} if tcp_marks else {}),
     })
 
 
@@ -281,7 +298,7 @@ def main(argv=None):
     for step in todo:
         if step == "remap":
             ref_path = Path(config["preflight"]["reference_top"]).expanduser()
-            import cell_hooks
+            import cell_hooks, cell_pivot_bias
 
             stills = cell_hooks.stills(cell, config)
             try:
@@ -307,7 +324,7 @@ def main(argv=None):
             bp_tmp = bp.with_suffix(".tmp")
             bp_tmp.write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}), encoding="utf-8")
             bp_tmp.replace(bp)
-            cell_pivot._BIAS_CACHE.clear()
+            cell_pivot_bias._BIAS_CACHE.clear()
             done.append({"remap": record["loo_error_mm"]})
         elif step == "regions":
             continue
@@ -356,7 +373,6 @@ def main(argv=None):
             done.append({step: touched["result"], "surface_z": touched.get("surface_z")})
         elif step == "post-eval":
             import cell_post_eval
-
             rep = cell_post_eval.run_post_eval(
                 cell, config, calibration, targets=targets or None, apply=True,
                 commissioning=args.commissioning, person_at_switch=args.person_at_switch, work=work,
@@ -364,7 +380,6 @@ def main(argv=None):
             done.append({"post-eval": rep.get("verdict"), "applied": len(rep.get("applied") or []), "escalated": rep.get("escalated")})
         elif step == "depth-verify":
             import cell_cal_eval
-
             bias_d = cell_pivot.load_bias(cell_pivot.bias_path(cal_path), config.get("params")) if cell_pivot.bias_path(cal_path).exists() else None
             # 2026-11-17 panel: this step never passed depth, so it always reported missing_depth on the D435 cells
             depth = depth_capture() if cell_cal_eval.top_has_depth(config) else None

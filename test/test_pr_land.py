@@ -62,6 +62,17 @@ def test_build_body_appends_self_overlap_review():
     assert "Overlap-Review:" not in pr_land.build_body("summary", "")
 
 
+def test_build_body_appends_session_line(monkeypatch):
+    for env, name in (("ROSY_SESSION_NAME", "opencode-1"), ("CLAUDE_SESSION_NAME", "claude-x")):
+        monkeypatch.delenv("ROSY_SESSION_NAME", raising=False)
+        monkeypatch.delenv("CLAUDE_SESSION_NAME", raising=False)
+        monkeypatch.setenv(env, name)
+        assert pr_land.build_body("s", "r").rstrip().endswith(f"Session: {name}")
+    monkeypatch.delenv("ROSY_SESSION_NAME", raising=False)
+    monkeypatch.delenv("CLAUDE_SESSION_NAME", raising=False)
+    assert pr_land.build_body("s", "").rstrip().endswith("Session: unknown")
+
+
 def test_dry_run_skips_push_and_gh(monkeypatch, tmp_path, capsys):
     calls = []
 
@@ -155,6 +166,21 @@ def test_ci_runnable_excludes_lab_only_omx_browser_alone_and_sim():
     assert not pr_land.ci_runnable(["test/learning/perception/test_learning_workflow_pipeline_browser.py"])
 
 
+def _required(monkeypatch, invs, changed=()):
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: json.dumps({"mode": "x", "invocations": invs}) if "affected" in cmd else "\n".join(changed))
+    return pr_land.required_lab_invocations(Path("."), "b", "h")
+
+
+def test_mixed_ci_entries_need_no_lab_but_omx_and_browser_parts_stay(monkeypatch):
+    mixed = ["middleware/core/gateway/test", "operations/overhead/test", "test/architecture"]
+    assert _required(monkeypatch, [mixed]) == []
+    omx = ["middleware/devices/omx/adapter/test"]
+    assert _required(monkeypatch, [mixed + omx]) == [omx]
+    brow = "test/learning/perception/test_learning_workflow_pipeline_browser.py"
+    assert _required(monkeypatch, [mixed + [brow]]) == [[brow]]
+    assert _required(monkeypatch, [["ROSY_RUN_BROWSER_TESTS=1"] + mixed]) != []
+
+
 def test_lab_only_requires_intact_lab_cache_and_ci_covers_lab_ids(tmp_path, monkeypatch):
     def git(*args):
         return subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True, text=True).stdout.strip()
@@ -184,6 +210,34 @@ def test_lab_only_requires_intact_lab_cache_and_ci_covers_lab_ids(tmp_path, monk
     pr_land.verify_lab_evidence(tmp_path, head, [inv])
     assert pr_land.covers_lab_baseline(tmp_path, head, inv, "PASSED middleware/devices/omx/adapter/test/test_a.py::test_one\n")
     assert not pr_land.covers_lab_baseline(tmp_path, head, inv, "1 skipped\n")
+
+
+def test_lab_evidence_accepts_all_skipped_log_only(tmp_path, monkeypatch):
+    def git(*args):
+        return subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    (tmp_path / "f.py").write_text("x = 1\n", encoding="utf-8")
+    git("add", "f.py")
+    git("commit", "-qm", "base")
+    head, tree = git("rev-parse", "HEAD"), git("rev-parse", "HEAD^{tree}")
+    inv = ["middleware/robot_execution/local/test/test_policy_runtime_ros.py"]
+    monkeypatch.setattr(pr_land.land_cache, "env_id", lambda cwd, sha: "env1")
+    cache = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")) / "rosy-land-cache.jsonl"
+
+    def row(text):
+        log = tmp_path / "lab.txt"
+        log.write_text(text, encoding="utf-8")
+        cache.write_text(json.dumps({"tree": tree, "commit": head, "env": "env1", "argv": inv, "log": str(log),
+                                     "log_sha256": hashlib.sha256(log.read_bytes()).hexdigest()}) + "\n", encoding="utf-8")
+
+    row("SKIPPED [1] x.py:3: no rclpy\n== 1 skipped in 0.10s ==\n")
+    pr_land.verify_lab_evidence(tmp_path, head, [inv])
+    row("no tests ran in 0.01s\n")
+    with pytest.raises(SystemExit, match="requires remote_pytest lab evidence"):
+        pr_land.verify_lab_evidence(tmp_path, head, [inv])
 
 
 def _push_fake(monkeypatch, tmp_path, *, publish_only, active, lab=()):

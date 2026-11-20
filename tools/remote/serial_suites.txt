@@ -4,7 +4,8 @@
 # Browser jobs (ROSY_RUN_BROWSER_TESTS=1) and node-id invocations are serial without a line here.
 # 2026-10-27: -n 6 on the model PC matched serial (0 failures) for root test (16:54 -> 3:24), operations/fleet/test
 # (18:19 -> 2:50), middleware/perception (2:34 -> 0:45) and ten smaller suites, so their lines went.
+# A new line needs "# measured YYYY-MM-DD serial vs -n, owner <name>, expires YYYY-MM-DD" (test_serial_suites_ratchet.py).
+# 2026-11-20: tools lifted after a serial vs -n comparison (ids and results identical); conftest.py gives each worker its own HOME/XDG/TMPDIR.
 # xdist needs the same test ids in every worker: no random or clock values in parametrize ids.
 integrations/simulation/gazebo/test  # rclpy nodes, ROS_DOMAIN_ID, ports (not measured under -n)
 learning/envs/isaac/test  # ROS_DOMAIN_ID, subprocesses (not measured under -n)
-tools  # calibration and device tools touch the home directory; land_isolation's collect_alone jobs rely on it

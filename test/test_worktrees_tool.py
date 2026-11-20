@@ -401,7 +401,7 @@ def test_new_creates_below_the_cap_and_refuses_at_it(main, monkeypatch, capsys):
     assert (main / ".worktrees" / "three" / "a.txt").is_file()
     assert git(main / ".worktrees" / "three", "rev-parse", "--abbrev-ref", "HEAD") == "feat/three"
     # Who made it and why it went over the cap are recorded and shown.
-    assert git(main, "config", "branch.fix/one.description") == "owner: t <t@t>; session sess-7"
+    assert git(main, "config", "branch.fix/one.description").startswith("owner: t <t@t>; session sess-7; at ")
     assert "incident 42" in git(main, "config", "branch.feat/three.description")
     assert worktrees.main(["status"]) == 0
     assert "[t <t@t>; session sess-7]" in capsys.readouterr().out
@@ -794,7 +794,7 @@ def test_prune_archives_unlanded_branches_idle_without_a_worktree_and_loses_noth
 
 def test_new_records_the_owner_override_and_status_names_unknown_owners(main, capsys):
     assert worktrees.main(["new", "mine", "feat/mine", "--owner", "dispatcher lane 3"]) == 0
-    assert git(main, "config", "branch.feat/mine.description") == "owner: dispatcher lane 3"
+    assert git(main, "config", "branch.feat/mine.description").startswith("owner: dispatcher lane 3; at ")
     assert worktrees.main(["new", "blank", "feat/blank", "--owner", " "]) == 1
     add(main, "bare", owner=None)
     add(main, "noname", owner=" <>")  # made while git had no user.name / user.email
@@ -892,3 +892,44 @@ def test_new_clears_a_tombstone_folder_or_refuses_while_it_is_held(main, monkeyp
         assert "could not be cleared" in capsys.readouterr().err
     assert worktrees.main(["new", "again", "feat/again"]) == 0
     assert git(folder, "rev-parse", "--abbrev-ref", "HEAD") == "feat/again"
+
+
+def test_prune_never_takes_a_used_worktree(main):
+    """11-20: in-use worktrees were removed: no commit yet, clean in git, or an owner note only."""
+    used = add(main, "used")  # tip == main, no commit of its own: not "landed"
+    os.utime(used / "a.txt", (LATER - HOUR, LATER - HOUR))  # a tracked file touched an hour ago, content the same
+    indexed = add(main, "indexed")
+    index = Path(git(indexed, "rev-parse", "--absolute-git-dir")) / "index"
+    os.utime(index, (LATER - HOUR, LATER - HOUR))  # git add/status an hour ago
+    noted = add(main, "noted", owner=f"{ME}; at {int(LATER - HOUR)}")  # `new` stamped its note an hour ago
+    idle = add(main, "idle", owner=f"{ME}; at {int(LATER - 80 * HOUR)}")  # every file is 75 h old at LATER
+    dirty = add(main, "dirty", commit=True, merge=True)
+    (dirty / "wip.txt").write_text("wip", encoding="utf-8")
+    os.utime(dirty / "wip.txt", (LATER - 100 * HOUR, LATER - 100 * HOUR))  # long untouched, still not lossless
+    assert worktrees.prune(main, apply=True, now=LATER) == 1  # lossless: only the idle one
+    assert not idle.exists()
+    for kept in (used, indexed, noted, dirty):
+        assert kept.is_dir(), kept.name
+    # the same for the old unattended call (--snapshot --all): the used ones still stay
+    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER) == 1
+    assert not dirty.exists() and all(p.is_dir() for p in (used, indexed, noted))
+
+
+def test_a_note_younger_than_the_idle_hours_keeps_a_worktree_for_the_idle_hours_given(main):
+    wt = add(main, "noted", owner=f"{ME}; at {int(LATER - 5 * HOUR)}")
+    assert worktrees.prune(main, apply=True, now=LATER, idle_hours=6) == 0 and wt.is_dir()
+    assert worktrees.prune(main, apply=True, now=LATER, idle_hours=4) == 1 and not wt.exists()
+
+
+def test_prune_treats_origin_main_ancestors_as_merged(main):
+    wt = add(main, "prmerged", commit=True)
+    sha = git(wt, "rev-parse", "HEAD")
+    git(main, "update-ref", "refs/remotes/origin/main", sha)
+    assert worktrees.prune(main, apply=True, now=LATER) == 1
+    assert not wt.exists() and "refs/heads/feat/prmerged" not in refs(main, "refs/heads")
+
+
+def test_newest_file_ignores_oserror(tmp_path, monkeypatch):
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(worktrees.rules.os.path, "getmtime", lambda _p: (_ for _ in ()).throw(OSError("gone")))
+    assert worktrees.rules.newest_file(tmp_path, lambda _r: False) == 0.0

@@ -339,13 +339,18 @@ def test_offline_wheel_closure_binds_metadata_and_direct_requirements(tmp_path,m
     (tmp_path/'dependencies.json').write_bytes(doc)
     lock = m.dependencies(tmp_path,m.sha(doc),b'demo==1.0\n')
     assert lock == ('demo==1.0 --hash=sha256:'+m.sha(raw)+'\n').encode()
+    assert m.dependencies(tmp_path,m.sha(doc),b'demo[pool,binary]==1.0\n') == (
+        'demo[binary,pool]==1.0 --hash=sha256:'+m.sha(raw)+'\n').encode()
+    for malformed in (b'demo[]==1.0\n', b'demo[binary,]==1.0\n', b'demo[binary]==2.0\n'):
+        with pytest.raises(ValueError,match='DEPENDENCY'):
+            m.dependencies(tmp_path,m.sha(doc),malformed)
     with pytest.raises(ValueError,match='DEPENDENCY'):
         m.dependencies(tmp_path,m.sha(doc),b'demo==2.0\n')
     (tmp_path/'wheels/demo-1.0-py3-none-any.whl').write_bytes(b'tampered')
     with pytest.raises(ValueError,match='SHA'):
         m.dependencies(tmp_path,m.sha(doc),b'demo==1.0\n')
 
-@pytest.mark.parametrize('stage', ['dependencies','model','visudo','sshd','effective','configuration','reload',None,
+@pytest.mark.parametrize('stage', ['dependencies','model','visudo','sshd','effective','configuration','reload',None,'renewal',
     'upgrade','upgrade_missing','upgrade_wrong_config','upgrade_wrong_broker','upgrade_lone_config',
     'upgrade_lone_broker','upgrade_malformed','upgrade_foreign_wrapper','upgrade_rollback',
     'ingress','migration','migration_foreign','migration_rollback','no_status'])
@@ -403,7 +408,8 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
     contents = {'deploy/site/requirements-fleet.txt':b'demo==1.0\n'}
     manifest = {'source_commit':'a'*40,'files':{k:m.sha(v) for k,v in contents.items()}}
     proof = {'profile':{'revision':'d728-semantic-v2'},'policy':{'authority':'proposal_only'},'evaluated_at':time.time()}
-    monkeypatch.setattr(m,'inputs',lambda *a:(manifest,proof,contents,b'proof',b'receipt','ssh-ed25519 fixture'))
+    proof_data = {'raw':b'proof'}
+    monkeypatch.setattr(m,'inputs',lambda *a:(manifest,proof,contents,proof_data['raw'],b'receipt','ssh-ed25519 fixture'))
     monkeypatch.setattr(m,'dependencies',lambda *a:(calls.append(('dependencies-read',)) or b'demo==1.0 --hash=sha256:' + b'b'*64+b'\n'))
     calls = []
     ingress_probes = []
@@ -495,6 +501,23 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
             assert calls == []
             assert not (m.VERSIONS/('d'*40)).exists()
             assert m.CONFIG.read_bytes() == old_config and m.BROKER.read_bytes() == old_broker
+    elif stage == 'renewal':
+        assert m.main(argv) == 0
+        old_config, old_broker = m.CONFIG.read_bytes(), m.BROKER.read_bytes()
+        proof['evaluated_at'] += 3600
+        proof_data['raw'] = b'proof renewed'
+        argv[argv.index('--proof-sha256')+1] = 'c'*64
+        argv += ['--previous-config-sha256',m.sha(old_config),
+                 '--previous-broker-sha256',m.sha(old_broker)]
+        assert m.main(argv) == 0
+        cfg = json.loads(m.CONFIG.read_bytes())
+        assert cfg['semantic_evidence_sha256'] == 'c'*64
+        assert cfg['valid_until'] == proof['evaluated_at']+7*86400
+        assert (m.VERSIONS/('a'*40)/('semantic-evaluation-'+('b'*64)+'.json')).read_bytes() == b'proof'
+        assert (m.VERSIONS/('a'*40)/('semantic-evaluation-'+('c'*64)+'.json')).read_bytes() == b'proof renewed'
+        assert (m.VERSIONS/('a'*40)/('semantic-evaluation-receipt-'+('b'*64)+'.json')).read_bytes() == b'receipt'
+        assert (m.VERSIONS/('a'*40)/('semantic-evaluation-receipt-'+('c'*64)+'.json')).read_bytes() == b'receipt'
+        assert len([c for c in calls if '--require-hashes' in c]) == 1
     elif stage in (None,'no_status'):
         assert m.main(argv) == 0
         assert m.main(argv) == 0
