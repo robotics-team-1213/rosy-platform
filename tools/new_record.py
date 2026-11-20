@@ -1,4 +1,9 @@
-"""Conflict-free log/API shard creator and scheduled record consolidator (D-1052)."""
+"""Conflict-free log/API shard creator and scheduled record consolidator (D-1052, D-1061).
+
+PRs write unnumbered fragments; `consolidate` (the records bot, one run at a time) numbers API
+fragments in (date, slug) order, writes the reference header, newest-first sections, history rows
+and CONTRACT together, folds log shards and adds missing ADR Log rows.
+"""
 
 from __future__ import annotations
 
@@ -13,10 +18,17 @@ HARNESS = Path(__file__).resolve().parent / "harness"
 if str(HARNESS) not in sys.path:
     sys.path.insert(0, str(HARNESS))
 
+import records_rules as rules  # noqa: E402
 import rosy_harness as harness  # noqa: E402
 
 ADR_FILE = re.compile(r"^(D-\d+)-.*\.md$")
 TITLE_LINE = re.compile(r"^#+\s*(?:D-\d+[:\s-]*)?(.+)$", re.M)
+STATUS_LINE = re.compile(r"^\*\*Status:\*\*\s*(.+)$", re.M)
+API_HEADER = re.compile(r"^\*\*Version:\*\* v1\.(\d+)\b", re.M)
+API_SECTION = re.compile(r"^### v1\.\d+", re.M)
+HISTORY_HEAD = "| 버전 | 일자 | 내용 |\n|---|---|---|\n"
+CONTRACT_VALUE = re.compile(r"ROSY-API-REF-001 v1\.\d+")
+NEXT = "v1.next"
 
 
 def _slugify(text: str) -> str:
@@ -68,17 +80,67 @@ def write_log_shard(repo: Path, module_name: str, summary: str, *, change: str, 
     return target
 
 
-def write_api_fragment(repo: Path, slug: str, *, summary: str, contract: str = "", date: str | None = None) -> Path:
-    """Write a non-conflicting API change fragment under `docs/reference/api-changes/`."""
-    day = date or dt.date.today().isoformat()
-    api_dir = repo / "docs" / "reference" / "api-changes"
-    api_dir.mkdir(parents=True, exist_ok=True)
-    target = _unique_path(api_dir, f"{day}-{_slugify(slug)}")
-    body = [f"# {day} · {_slugify(slug)}", "", f"- 요약: {summary.strip()}"]
-    if contract.strip():
-        body.append(f"- 계약: {contract.strip()}")
-    target.write_text("\n".join(body) + "\n", encoding="utf-8", newline="\n")
+def write_api_fragment(repo: Path, slug: str, *, surface: str, title: str, history: str = "", body: str = "",
+                       kind: str = "additive", reason: str = "", date: str | None = None) -> Path:
+    """Write `docs/reference/api-changes/<slug>.md`: no number; the records bot assigns it."""
+    slug = _slugify(slug)
+    meta = {"surface": surface, "kind": kind, "slug": slug, "date": date or dt.date.today().isoformat(),
+            "title": " ".join(title.split()), "history": " ".join(history.split())}
+    if reason.strip():
+        meta["reason"] = " ".join(reason.split())
+    text = "---\n" + "".join(f"{k}: {v}\n" for k, v in meta.items() if v) + "---\n" + body.strip() + "\n"
+    target = repo / rules.API_CHANGES / f"{slug}.md"
+    if errors := rules.validate_fragment(target.name, text):
+        raise SystemExit(f"[new-record] invalid API fragment: {'; '.join(errors)}")
+    if target.exists():
+        raise SystemExit(f"[new-record] {target.relative_to(repo).as_posix()} exists; pick another slug")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8", newline="\n")
     return target
+
+
+def consolidate_api(repo: Path, today: str | None = None) -> list[tuple[str, str]]:
+    """Number API fragments in (date, slug) order and fold them into the reference and CONTRACT."""
+    folder = repo / rules.API_CHANGES
+    frags = sorted(((rules.parse_fragment(p.read_text(encoding="utf-8")), p) for p in folder.glob("*.md")
+                    if p.name != "README.md"), key=lambda fp: (fp[0][0].get("date", ""), fp[0][0].get("slug", ""))) \
+        if folder.is_dir() else []
+    if not frags:
+        return []
+    for (meta, _), path in frags:
+        if errors := rules.validate_fragment(path.name, path.read_text(encoding="utf-8")):
+            raise SystemExit(f"[new-record] {path.name}: {'; '.join(errors)}")
+    ref_path, contract_path = repo / rules.API_REF, repo / rules.CONTRACT_FILE
+    ref = ref_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    header = API_HEADER.search(ref)
+    first_section = API_SECTION.search(ref, header.end()) if header else None
+    if header is None or first_section is None or HISTORY_HEAD not in ref:
+        raise SystemExit("[new-record] API reference lacks the **Version:** header, a ### v1.N section or the history table")
+    number, day = int(header.group(1)), today or dt.date.today().isoformat()
+    sections, rows, assigned = [], [], []
+    for (meta, body), path in frags:
+        number += 1
+        version = f"v1.{number}"
+        label = rules.SURFACES[meta["surface"]] + (", breaking" if meta["kind"] == "breaking" else "")
+        text = body.replace(NEXT, version).strip()
+        if meta["kind"] == "breaking":
+            text = f"**Breaking.** 사유: {meta['reason'].replace(NEXT, version)}" + (f"\n\n{text}" if text else "")
+        sections.insert(0, f"### {version} {meta['title'].replace(NEXT, version)} ({label})\n\n" + (f"{text}\n\n" if text else ""))
+        summary = (meta.get("history") or meta["title"]).replace(NEXT, version).replace("|", "\\|")
+        rows.insert(0, f"| {version} | {day} | [{label}] {summary} |\n")
+        assigned.append((meta["slug"], version))
+    at = first_section.start()
+    ref = ref[:at] + "".join(sections) + ref[at:]
+    ref = API_HEADER.sub(f"**Version:** v1.{number}", ref, count=1)
+    ref = ref.replace(HISTORY_HEAD, HISTORY_HEAD + "".join(rows), 1)
+    contract, count = CONTRACT_VALUE.subn(f"ROSY-API-REF-001 v1.{number}", contract_path.read_text(encoding="utf-8"))
+    if count != 1:
+        raise SystemExit(f"[new-record] {rules.CONTRACT_FILE}: expected one CONTRACT value, found {count}")
+    ref_path.write_text(ref, encoding="utf-8", newline="\n")
+    contract_path.write_text(contract, encoding="utf-8", newline="\n")
+    for _, path in frags:
+        path.unlink()
+    return assigned
 
 
 def _sync_adr_log(repo: Path, adr_log_path: Path) -> list[str]:
@@ -96,10 +158,13 @@ def _sync_adr_log(repo: Path, adr_log_path: Path) -> list[str]:
             continue
         raw = fp.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
         tm = TITLE_LINE.search(raw)
-        title = tm.group(1).strip() if tm else fp.stem
-        status = "Accepted" if "Accepted" in raw else "Proposed"
-        row = f"| {adr_id} | {title} | {status} |\n"
-        text = text.replace("\n---\n", f"\n{row}---\n", 1) if "\n---\n" in text else text.rstrip("\n") + "\n" + row
+        title = tm.group(1).strip().replace("|", "\\|") if tm else fp.stem
+        sm = STATUS_LINE.search(raw)
+        status = sm.group(1).strip().replace("|", "\\|") if sm else ("Accepted" if "Accepted" in raw else "Proposed")
+        row = f"| {adr_id} | {title}. [전문](../adr/{fp.name}) | {status} |\n"
+        # newest first, right under the table head; old logs without one get the row at the end
+        text = text.replace("|---|---|---|\n", f"|---|---|---|\n{row}", 1) if "|---|---|---|\n" in text \
+            else text.rstrip("\n") + "\n" + row
         added.append(adr_id)
     if added:
         adr_log_path.write_text(text, encoding="utf-8", newline="\n")
@@ -110,6 +175,7 @@ def consolidate(repo: Path, *, dry_run: bool = False) -> dict:
     """Fold `<module>/logs/**/*.md` shards into `<module>/logs.md`, sync ADR rows, and regenerate records."""
     config = harness.load_config(repo)
     folded, written = [], []
+    api = [] if dry_run else consolidate_api(repo)
     for mod in config["modules"]:
         base = repo / mod["path"]
         logs_dir = base / "logs"
@@ -141,7 +207,7 @@ def consolidate(repo: Path, *, dry_run: bool = False) -> dict:
     adrs_synced = [] if dry_run else _sync_adr_log(repo, repo / config["adr_log"])
     if not dry_run:
         written = [p.relative_to(repo).as_posix() for p in harness.generate(repo)]
-    return {"folded": folded, "adrs_synced": adrs_synced, "generated": written}
+    return {"api": api, "folded": folded, "adrs_synced": adrs_synced, "generated": written}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -157,10 +223,15 @@ def main(argv: list[str] | None = None) -> int:
     sp_log.add_argument("--lesson", default="없음")
     sp_log.add_argument("--commit", default="uncommitted")
     sp_log.add_argument("--date")
-    sp_api = sub.add_parser("api")
-    sp_api.add_argument("slug")
-    sp_api.add_argument("--summary", required=True)
-    sp_api.add_argument("--contract", default="")
+    sp_api = sub.add_parser("api", help="unnumbered API change fragment; write (v1.next) where the number goes")
+    sp_api.add_argument("--surface", required=True, choices=sorted(rules.SURFACES))
+    sp_api.add_argument("--slug", required=True)
+    sp_api.add_argument("--title", required=True, help="the ### section title, without a version")
+    sp_api.add_argument("--history", default="", help="one line for the history table (default: title)")
+    sp_api.add_argument("--body", default="", help="section body markdown")
+    sp_api.add_argument("--body-file", type=Path, help="read the section body from this file")
+    sp_api.add_argument("--kind", default="additive", choices=rules.KINDS)
+    sp_api.add_argument("--reason", default="", help="required for --kind breaking")
     sp_api.add_argument("--date")
     sp_con = sub.add_parser("consolidate")
     sp_con.add_argument("--dry-run", action="store_true")
@@ -171,7 +242,9 @@ def main(argv: list[str] | None = None) -> int:
                               gate=args.gate, decision=args.decision, lesson=args.lesson, commit=args.commit, date=args.date)
         print(out.relative_to(repo).as_posix())
     elif args.cmd == "api":
-        out = write_api_fragment(repo, args.slug, summary=args.summary, contract=args.contract, date=args.date)
+        body = args.body_file.read_text(encoding="utf-8") if args.body_file else args.body
+        out = write_api_fragment(repo, args.slug, surface=args.surface, title=args.title, history=args.history,
+                                 body=body, kind=args.kind, reason=args.reason, date=args.date)
         print(out.relative_to(repo).as_posix())
     else:
         print(consolidate(repo, dry_run=args.dry_run))
