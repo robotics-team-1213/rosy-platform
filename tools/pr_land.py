@@ -2,7 +2,7 @@
 
 Usage::
 
-    python tools/pr_land.py [--title "..."] [--self-review "<reason>"] [--dry-run]
+    python tools/pr_land.py [--title "..."] [--self-review "<reason>"] [--evidence] [--dry-run]
 """
 
 from __future__ import annotations
@@ -119,7 +119,9 @@ def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> s
     base = origin_main or local_main
     if not base:
         raise SystemExit("[pr-land] neither origin/main nor main exists; fetch origin/main first (refusing HEAD^ fallback)")
-    if not allow_backlog and origin_main and local_main and origin_main != local_main:
+    behind_only = origin_main and local_main and subprocess.run(  # local main merely behind origin/main has nothing unpublished
+        ["git", "-C", str(cwd), "merge-base", "--is-ancestor", local_main, origin_main], capture_output=True).returncode == 0
+    if not allow_backlog and origin_main and local_main and origin_main != local_main and not behind_only:
         anc = subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", local_main, head], capture_output=True)
         if anc.returncode == 0:
             raise SystemExit(
@@ -197,6 +199,8 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     parser.add_argument("--allow-backlog", action="store_true", help="allow PR from un-published local main ancestor")
     parser.add_argument("--verify-ci-log", nargs=2, metavar=("ARGV_JSON", "LOG_PATH"),
                         help="verify a CI log covers the lab baseline passed IDs for ARGV_JSON")
+    parser.add_argument("--evidence", action="store_true",
+                        help="run pr_evidence.py HEAD (real remote lab run) first when lab evidence is required")
     parser.add_argument("--dry-run", action="store_true", help="print commands without pushing/merging")
     args = parser.parse_args(argv)
     cwd = (repo or Path.cwd()).resolve()
@@ -222,6 +226,11 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
         raise SystemExit(refused)
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
     lab_needed = required_lab_invocations(cwd, base, head)
+    if args.evidence and lab_needed:
+        import pr_evidence  # lazy: pr_evidence imports pr_land
+
+        if pr_evidence.main(["HEAD", "--base", base], repo=cwd):
+            raise SystemExit("[pr-land] pr_evidence failed; no evidence recorded")
     verify_lab_evidence(cwd, head, lab_needed)
 
     title = args.title or _run(["git", "log", "-1", "--format=%s", "HEAD"], cwd)
@@ -237,6 +246,10 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     env = dict(os.environ)
     if not args.remote_prepush:
         env["ROSY_STATIC_PRE_PUSH"] = "1"
+    if _run(["git", "config", "--bool", "rosy.publishOnly"], cwd, check=False).lower() == "true" and activated(cwd):
+        # D-1055: reason only for this push's env, never global; check_coexistence already required activation.
+        session = os.environ.get("ROSY_SESSION_NAME") or os.environ.get("CLAUDE_SESSION_NAME") or "unknown"
+        env["ROSY_PUSH_REASON"] = f"pr_land D-1055 {session}"
     _run(["git", "push", "-u", "origin", branch], cwd, env=env)
     existing = json.loads(_run(["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number"], cwd) or "[]")
     if existing:
