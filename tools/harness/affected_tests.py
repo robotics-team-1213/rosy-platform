@@ -437,14 +437,18 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                                     kept = None
                                     break
                                 kept = sorted({*(kept or []), *one})
+                        if kept == []:  # no file of this suite reaches the change: skip it, not "keep the whole folder"
+                            continue
                         for one in kept or [test]:
                             add(one, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}"
                                 + (" [import closure]" if kept else ""))
         # A test under the module's own source_paths (drive tests beside middleware/drive) is the module's test,
         # reached through its tests list and import closure above, not a blanket prefix importer.
         roots = (module["path"], *(module.get("source_paths") or ()))
+        registered = [t for m in repo.modules for t in m.get("tests") or []]  # judged by closure above
         for test in repo.test_files:
-            if not any(_under(test, root) for root in roots) and _imports(repo, test, prefixes, names):
+            if (not any(_under(test, root) for root in roots) and not any(_under(test, t) for t in registered)
+                    and _imports(repo, test, prefixes, names)):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
     # D-436 addendum 1 (panel 2026-11-09): a safety path stays FULL; static reach misses its config/IDL readers.

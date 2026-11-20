@@ -72,6 +72,7 @@ class DockRequest(BaseModel):
     yaw: float = 0.0
     map_id: str | None = None
     agent_url: str | None = None
+    metadata: dict = Field(default_factory=dict)    # optional, additive: metadata.reference_scan (bay_scan_pose.py)
 
 
 class DockCommand(BaseModel):

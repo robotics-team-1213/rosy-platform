@@ -141,7 +141,7 @@ FILES = {
     "middleware/perception/control/battery.py": "from core_common import schemas\n",
     "middleware/perception/test/test_battery.py": "from control import battery\n",
     "middleware/core/gateway/core/node.py": "from control.battery import read\n",
-    "middleware/core/gateway/test/test_battery.py": "import core\n",
+    "middleware/core/gateway/test/test_battery.py": "from core import node\n",
     "middleware/core/gateway/test/conftest.py": "",
     "middleware/core/api/core_api_web/app.py": "import core\n",
     "middleware/core/api/test/test_app.py": "import core_api_web\n",
@@ -240,7 +240,7 @@ CASES = [
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
-     {"middleware/perception/test/test_battery.py", "middleware/core/gateway/test"}),  # import closure narrows it
+     {"middleware/perception/test/test_battery.py", "middleware/core/gateway/test/test_battery.py"}),  # import closure narrows it
     ("ADR only -> the ADR Log readers (guards cover the ADR index)",
      ["docs/adr/D-1-sample.md"], "affected", {"test/test_network_topology_contracts.py"}),
     ("doc read by a contract test -> that test too",
@@ -338,7 +338,7 @@ def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
 def test_duplicate_basenames_run_in_separate_invocations(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
-    assert owners["middleware/perception/test/test_battery.py"] != owners["middleware/core/gateway/test"]
+    assert owners["middleware/perception/test/test_battery.py"] != owners["middleware/core/gateway/test/test_battery.py"]
     repo = affected.Repo.load(sample)
     for inv in sel.invocations:
         names = [PurePosixPath(t).name for p in inv for t in repo.test_files_under(p)]
@@ -429,9 +429,41 @@ def test_integration_folder_is_not_pulled_whole_by_a_change_it_does_not_import(t
     assert "test/integration/rig" not in power.reasons and "test/integration/rig/test_rig_other.py" not in power.reasons
 
 
+def test_folder_registered_by_two_modules_is_narrowed_as_reverse_dependent_and_prefix_importer(tmp_path):
+    """A folder registered under a module that imports the changed module (reverse dependent) keeps only the
+    files that reach the change: [] from the narrowing means "skip the folder", and the prefix-import rule
+    does not pull a registered folder's file that the closure already left out."""
+    harness = HARNESS_YAML.replace(
+        "    path: middleware/core/gateway\n    tests: [middleware/core/gateway/test]\n",
+        "    path: middleware/core/gateway\n    tests: [middleware/core/gateway/test, test/integration/rig]\n").replace(
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test]\n",
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test, test/integration/rig]\n")
+    assert harness.count("test/integration/rig") == 2
+    files = {**FILES, "tools/harness/harness.yaml": harness,
+             "middleware/perception/control/vision_only.py": "V = 1\n",
+             "middleware/core/gateway/core/node.py": "from control.battery import read\nfrom control import vision_only\n",
+             "test/integration/rig/test_rig_reaches.py": "from control import vision_only\n",
+             "test/integration/rig/test_rig_prefix.py": "import control\n",
+             "test/integration/rig/test_rig_other.py": "X = 1\n"}
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    repo = affected.Repo.load(tmp_path)
+
+    away = affected.select(repo, ["middleware/perception/control/battery.py"])
+    assert not [t for t in away.reasons if t.startswith("test/integration/rig")], away.reasons
+
+    reach = affected.select(repo, ["middleware/perception/control/vision_only.py"])
+    assert "test/integration/rig/test_rig_reaches.py" in reach.reasons, reach.reasons
+    assert "test/integration/rig" not in reach.reasons and "test/integration/rig/test_rig_other.py" not in reach.reasons
+
+
 def test_reasons_name_the_reverse_dependency(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
-    assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test"])
+    assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test/test_battery.py"])
 
 
 def test_cli_json_diffs_against_base_and_working_tree(sample, capsys):
