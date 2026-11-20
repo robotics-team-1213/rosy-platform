@@ -204,11 +204,7 @@ def remediate(repo: Path, before: dict, *, warm_limit: int = 16, idle_hours: flo
         actions.append(f"cache_warm exit={res.returncode} limit={warm_limit}")
     cleanup_summary = land_tick.cleanup(repo)
     actions.append(cleanup_summary)
-    if len(worktrees.scan(repo)[1]) > worktrees.CAP:
-        quiet = lambda *_: None  # noqa: E731
-        extra = worktrees.prune(repo, apply=True, snapshot=True, everyone=True,
-                                idle_hours=idle_hours, quiet=True, say=quiet)
-        actions.append(f"worktrees_cap_prune idle>={idle_hours}h removed={extra}")
+    # 11-20: no unattended snapshot+everyone prune above the cap (it removed in-use worktrees); cleanup() above is lossless
     return actions
 
 

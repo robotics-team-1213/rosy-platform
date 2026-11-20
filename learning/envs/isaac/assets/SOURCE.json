@@ -1,0 +1,4 @@
+{
+  "source": "ROBOTIS-GIT/open_manipulator (open_manipulator_description, rev 0a4af6a923b8 / release 5.1.2, Apache-2.0); omx_f_palletizing_description derived from same ROBOTIS 5.1.2 URDF (team palletizing jaw v2.1, 2026-10-31)",
+  "note": "See learning/envs/isaac/assets/README.md; omx_wrist_camera_b and ship_r08_berth have their own SOURCE.json."
+}

@@ -327,7 +327,8 @@ def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(re
     monkeypatch.setattr(tool, "safety_range", lambda wt, s: "1 commits checked, 0 missing")
     assert _run(local, "--apply") == 0
     assert _git(tmp_path / "origin.git", "rev-parse", "refs/heads/publish/main-20261026-12") == sha
-    create = calls[-1]
+    assert calls[-1] == ("pr", "merge", "https://example.invalid/pull/1", "--merge", "--auto", "--match-head-commit", sha)
+    create = calls[-2]
     assert create[:2] == ("pr", "create") and "publish/main-20261026-12" in create
     body = create[create.index("--body") + 1]
     for fact in (sha, "`origin/main..SHA` 커밋 수: 1", "이 PR에 없는 착지 1건", "origin/main is ancestor: yes", "IP·호스트 규칙 미검사 (secret_scan에 규칙 없음)",
@@ -336,6 +337,42 @@ def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(re
     assert body.endswith(tool.GENERATED_BY)
     assert _git(local, "worktree", "list").count("\n") == 0  # the temporary worktree is gone
     assert list((local / ".git" / "rosy-publish").iterdir()) == []  # and its hook copy
+
+
+def _publish_with_gh(repo, monkeypatch, fail, *flags):
+    local, _ = repo
+    _commit(local, "tools/hooks/pre-push", "#!/bin/sh\nexit 0\n")
+    _git(local, "push", "-q", "origin", "main")
+    _git(local, "fetch", "-q", "origin")
+    sha = _commit(local, "app.py", "1")
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
+    calls = []
+
+    def gh(repo_path, *args):
+        calls.append(args)
+        if args[:2] == ("pr", "merge") and fail(args):
+            raise tool.Stop(1, "gh pr merge failed: " + fail(args))
+        return "[]" if args[:2] == ("pr", "list") else "https://example.invalid/pull/1"
+    monkeypatch.setattr(tool, "run_gh", gh)
+    monkeypatch.setattr(tool, "safety_range", lambda wt, s: "1 commits checked, 0 missing")
+    return _run(local, "--apply", *flags), [c for c in calls if c[:2] == ("pr", "merge")], sha
+
+
+def test_publish_apply_skips_auto_merge_with_the_opt_out(repo, monkeypatch):
+    code, merges, _ = _publish_with_gh(repo, monkeypatch, lambda a: "", "--no-auto-merge")
+    assert code == 0 and merges == []
+
+
+def test_publish_apply_auto_merge_falls_back_to_the_queue_form(repo, monkeypatch, capsys):
+    code, merges, sha = _publish_with_gh(repo, monkeypatch, lambda a: "set by the merge queue" if "--merge" in a else "")
+    assert code == 0 and "auto-merge enabled" in capsys.readouterr().out
+    assert merges[-1] == ("pr", "merge", "https://example.invalid/pull/1", "--auto", "--match-head-commit", sha)
+
+
+def test_publish_apply_keeps_the_pr_when_auto_merge_fails(repo, monkeypatch, capsys):
+    code, merges, _ = _publish_with_gh(repo, monkeypatch, lambda a: "boom")
+    cap = capsys.readouterr()
+    assert code == 0 and "pushed" in cap.out and "warning: auto-merge not enabled" in cap.err and len(merges) == 1
 
 
 def _view(local: Path, sha: str, **over) -> str:
