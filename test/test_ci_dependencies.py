@@ -483,7 +483,11 @@ def test_merge_group_and_push_run_scoped_affected_against_their_base():
     doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     triggers = doc.get("on", doc.get(True))  # PyYAML reads the bare key `on` as True
     assert "merge_group" in triggers
-    assert "concurrency" not in doc, "a concurrency group could cancel a queue or main push run"
+    conc = doc.get("concurrency") or {}
+    assert conc.get("cancel-in-progress") == "${{ github.event_name == 'pull_request' }}", (
+        "concurrency must cancel only pull_request runs, never merge_group or push"
+    )
+    assert "github.run_id" in str(conc.get("group", "")), "non-PR events must isolate by run_id"
     scope = {s["name"]: s for s in doc["jobs"]["scope"]["steps"]}
     safety = scope["Safety-Review trailer (D-430)"]
     assert "github.event_name == 'merge_group'" in safety["if"]

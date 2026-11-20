@@ -117,6 +117,7 @@ def _bare_node(module, calls):
 def test_run_drains_executor_workers_before_returning(node_module, monkeypatch):
     calls: list[str] = []
     executor = _FakeExecutor(calls)
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "threaded")
     monkeypatch.setattr(node_module, "MultiThreadedExecutor", lambda: executor)
     node = _bare_node(node_module, calls)
 
@@ -151,6 +152,7 @@ def test_run_drains_even_when_spin_raises(node_module, monkeypatch):
         raise RuntimeError("failed to initialize wait set")
 
     executor.spin = spin
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "threaded")
     monkeypatch.setattr(node_module, "MultiThreadedExecutor", lambda: executor)
     node = _bare_node(node_module, calls)
 
@@ -265,7 +267,7 @@ def test_teardown_bounds_fit_inside_systemd_stop_timeout(node_module):
     assert node_module.EXECUTOR_DRAIN_TIMEOUT_S + node_module.API_JOIN_TIMEOUT_S < 15
 
 
-# --- ROSY_CORE_EXECUTOR (D-953): opt-in C++ EventsExecutor for CORE -------------------------
+# --- ROSY_CORE_EXECUTOR (D-953, default events since D-1058): C++ EventsExecutor for CORE ------
 # Why swapping is allowed: CORE and its sensor node make every subscription/timer in the
 # default (mutually exclusive) callback group, so MultiThreadedExecutor never ran two callbacks
 # of one node at once; the only overlap is core node vs safety_node. Callbacks that wait for a
@@ -320,8 +322,12 @@ class _EventsExecutor:
         return True
 
 
-def test_default_stays_multithreaded_and_unknown_value_is_refused(node_module, monkeypatch):
+def test_default_is_events_threaded_stays_selectable_and_unknown_value_is_refused(node_module, monkeypatch):
     monkeypatch.delenv("ROSY_CORE_EXECUTOR", raising=False)
+    assert node_module.core_executor_kind() == "events"  # D-1058
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "")
+    assert node_module.core_executor_kind() == "events"
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "threaded")  # the rollback drop-in
     assert node_module.core_executor_kind() == "threaded"
     monkeypatch.setenv("ROSY_CORE_EXECUTOR", "turbo")
     with pytest.raises(ValueError, match="ROSY_CORE_EXECUTOR"):
@@ -361,7 +367,7 @@ def test_events_spin_ending_on_context_shutdown_returns_like_threaded(node_modul
 
 
 def test_threaded_spin_still_propagates_errors(node_module, monkeypatch):
-    monkeypatch.delenv("ROSY_CORE_EXECUTOR", raising=False)
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "threaded")
     calls: list[str] = []
     node = _bare_node(node_module, calls)
     executor = _FakeExecutor(calls)
