@@ -91,6 +91,10 @@ class Closure:
             for name in names:
                 if name:
                     found |= self.index.get(name, set())
+                    # importing a.b.c runs a/__init__.py and a/b/__init__.py first
+                    parts = name.split(".")
+                    for i in range(1, len(parts)):
+                        found |= {p for p in self.index.get(".".join(parts[:i]), ()) if p.endswith("/__init__.py")}
         found.discard(path)
         self._deps[path] = found
         return found

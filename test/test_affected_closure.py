@@ -127,6 +127,21 @@ def test_narrow_contract_empty_means_no_test_reaches_and_none_means_unknown(tmp_
     assert affected._narrowed_tests(repo, f"{PKG}/pkg/x.py", f"{PKG}/test/test_x.py", reverse=True) is None
 
 
+def test_a_package_import_follows_its_init_reexports(tmp_path):
+    """robot-ca 2026-11-20: `import pkg` reaches what pkg/__init__.py re-exports, so a reverse
+    narrowing never drops a test that only touches the changed module through the package."""
+    files = {k: v for k, v in FILES.items() if not k.endswith(("test_dyn.py", "conftest.py"))}
+    files.update({f"{PKG}/pkg/__init__.py": "from .node import N\n",
+                  f"{PKG}/pkg/node.py": "N = 1\n",
+                  f"{PKG}/test/test_init.py": "import pkg\n\ndef test_i():\n    assert pkg.N\n"})
+    repo = affected.Repo.load(_repo(tmp_path, files))
+    closure = affected.affected_closure.Closure(repo)
+    reached = affected.affected_closure.narrow(repo, f"{PKG}/pkg/node.py", f"{PKG}/test", closure, True)
+    assert f"{PKG}/test/test_init.py" in reached
+    # `from pkg.y import Y` runs pkg/__init__.py too, so it reaches node through the package
+    assert f"{PKG}/test/test_y.py" in reached
+
+
 def test_a_dynamic_loader_or_conftest_reach_is_never_empty(sample):
     repo = affected.Repo.load(sample)
     closure = affected.affected_closure.Closure(repo)
