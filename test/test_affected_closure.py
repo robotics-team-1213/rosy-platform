@@ -111,6 +111,29 @@ def test_a_reverse_dependent_suite_keeps_only_the_files_that_reach_the_change(tm
     assert {p for p in sel.reasons if p.startswith("middleware/user")} == {"middleware/user/test/test_client.py"}
 
 
+def test_narrow_contract_empty_means_no_test_reaches_and_none_means_unknown(tmp_path):
+    files = {k: v for k, v in FILES.items() if not k.endswith(("test_dyn.py", "conftest.py"))}
+    repo = affected.Repo.load(_repo(tmp_path, {**files, f"{PKG}/pkg/lone.py": "L = 1\n"}))
+    closure = affected.affected_closure.Closure(repo)
+    narrow = affected.affected_closure.narrow
+    test_dir = f"{PKG}/test"
+    # reverse, nothing reaches and no dynamic loader: [] (certainly no test)
+    assert narrow(repo, f"{PKG}/pkg/lone.py", test_dir, closure, True) == []
+    assert narrow(repo, f"{PKG}/pkg/x.py", test_dir, closure, True) == [f"{PKG}/test/test_x.py"]
+    # not reverse, nobody reaches: None (whole folder), never []
+    assert narrow(repo, f"{PKG}/pkg/lone.py", test_dir, closure, False) is None
+    # not a .py, or a single test file: None (cannot judge)
+    assert narrow(repo, f"{PKG}/pkg/data.json", test_dir, closure, True) is None
+    assert affected._narrowed_tests(repo, f"{PKG}/pkg/x.py", f"{PKG}/test/test_x.py", reverse=True) is None
+
+
+def test_a_dynamic_loader_or_conftest_reach_is_never_empty(sample):
+    repo = affected.Repo.load(sample)
+    closure = affected.affected_closure.Closure(repo)
+    narrow = affected.affected_closure.narrow
+    assert narrow(repo, f"{PKG}/pkg/data.py", f"{PKG}/test", closure, True) == [f"{PKG}/test/test_dyn.py"]
+
+
 def test_the_closure_does_not_walk_through_a_composition_root(tmp_path, monkeypatch):
     root = _repo(tmp_path, FLAT)
     monkeypatch.setattr(affected.affected_closure, "COMPOSITION_ROOTS", (f"{PKG}/pkg/server/app.py",))
