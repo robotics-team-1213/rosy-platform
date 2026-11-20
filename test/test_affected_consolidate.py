@@ -82,3 +82,8 @@ def test_shard_py_invocation_balances_heavy_root_tests_and_preserves_small():
         p for p in heavy if not p.startswith("-")
     )
     assert all(s[-1] == "--ignore=x.py" for s in shards)
+
+    mixed = ["middleware/media/test", "test/architecture", *(f"test/test_m{i}.py" for i in range(12))]
+    shards = affected_ci._shard_py_invocation(mixed, n=3)
+    assert len(shards) == 3 and sorted(p for s in shards for p in s) == sorted(mixed)
+    assert affected_ci._shard_py_invocation(["a/test", "b/test", *small]) == [["a/test", "b/test", *small]]

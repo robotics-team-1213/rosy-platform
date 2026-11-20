@@ -707,17 +707,13 @@ def _invocation_test_files(repo, invocation):
 
 def test_full_ci_runs_station_scheduling_on_its_own_required_runner():
     repo = _real_repo()
-    suite = "middleware/core/gateway/test"
-    target = f"{suite}/test_station_camera_scheduling.py"
-    ignore = f"--ignore={target}"
+    target = "test/integration/core_fleet/test_station_camera_scheduling.py"
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
     station = next(entry for entry in matrix if entry["name"] == "core-station-simulation")
     assert station["invocations"] == [[target]]
     assert station["gating"] and station["ros"] == "none"
-    # CI shards the gateway suite by file (core-domain in SUITE_SHARDS), so only the lab run names the directory.
-    for invocations, whole in (([inv for entry in matrix for inv in entry["invocations"]], False),
-                               (affected.lab_full_invocations(repo), True)):
-        assert not whole or any(suite in inv and ignore in inv for inv in invocations)
+    for invocations in ([inv for entry in matrix for inv in entry["invocations"]],
+                        affected.lab_full_invocations(repo)):
         assert sum(target in _invocation_test_files(repo, inv) for inv in invocations) == 1
 
 
@@ -757,14 +753,17 @@ def test_ci_gateway_shards_run_every_file_once_in_full_and_affected():
     """CI 44745980037 (2026-11-20): one runner for all of middleware/core/gateway/test took 20 min of pytest."""
     repo = _real_repo()
     suite = "middleware/core/gateway/test"
-    station, browser = f"{suite}/test_station_camera_scheduling.py", f"{suite}/test_account_pipeline.py"
+    # The scheduling and account journeys moved to test/integration/core_fleet (they run Fleet code).
+    moved = "test/integration/core_fleet"
+    station, browser = f"{moved}/test_station_camera_scheduling.py", f"{moved}/test_account_pipeline.py"
     files = sorted(p for p in repo.test_files if p.startswith(suite + "/"))
-    assert station in files and browser in files
+    assert station in repo.test_files and browser in repo.test_files and not {station, browser} & set(files)
     full = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
     shards = [e for e in full if e["name"].startswith("core-domain-")]
     assert len(shards) == affected.SUITE_SHARDS["core-domain"] and all(e["invocations"][0] for e in shards)
     ran = [p for e in full for inv in e["invocations"] for p in inv if p.startswith(suite + "/")]
-    assert sorted(ran) == files, "full tier: each gateway file once, station on its own runner"
+    assert sorted(ran) == files, "full tier: each gateway file once"
+    assert [p for e in full for inv in e["invocations"] for p in inv].count(station) == 1, "station on its own runner"
     assert [inv for e in shards for inv in e["invocations"]].count([browser]) == 1, "browser journey: own invocation"
     assert not any(station in inv for e in shards for inv in e["invocations"])
 
@@ -775,7 +774,7 @@ def test_ci_gateway_shards_run_every_file_once_in_full_and_affected():
         return sorted(p for inv in runs for p in inv if not p.startswith("-"))
     # Naming the account file makes ci.yml run it with the browser opt-in: its plain tests still run, as in the directory run.
     assert targets() == files
-    assert targets(f"--ignore={station}") == [p for p in files if p != station]
+    # The suite's own --ignore of the station file went with the move, so no ignore case is left to pin here.
 
 
 def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
@@ -822,7 +821,8 @@ def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
         [other, *flags], *[group + flags for group in full], affected_exclusive.DEDICATED]
     assert all(e["gating"] for e in matrix)
     assert [e["ros"] for e in matrix] == ["none", *["overlay"] * (len(full) + 1)]
-    assert sorted([p for group in full for p in group] + [affected_exclusive.TARGET]) == sorted(
+    # TARGET and the station scheduling file each run on their own runner, outside the root shards.
+    assert sorted([p for group in full for p in group] + [affected_exclusive.TARGET, "test/integration/core_fleet/test_station_camera_scheduling.py"]) == sorted(
         p for p in repo.test_files if p.startswith("test/"))
 
 
