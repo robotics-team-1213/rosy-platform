@@ -36,6 +36,7 @@ def parser(doc: str) -> argparse.ArgumentParser:
     ap.add_argument("--object", dest="want_object", help="only pick catalogue object ID(s), e.g. container-2 or container-1,container-3")
     ap.add_argument("--colour", "--color", dest="want_colour", help="only pick object colour(s), e.g. yellow or orange,green")
     ap.add_argument("--dry-run", action="store_true", help="observe, choose and plan only; print JSON")
+    ap.add_argument("--layers-below", type=int, help="tier hint: layers under the source stack top; raises, never lowers, the site value")
     return ap
 
 
@@ -46,6 +47,9 @@ def open_cell(args, commissioning=False):
         config["want"] = {**config.get("want", {}),
                           **({"object": args.want_object} if getattr(args, "want_object", None) else {}),
                           **({"colour": args.want_colour} if getattr(args, "want_colour", None) else {})}
+    if getattr(args, "layers_below", None) is not None:
+        site = config["sites"][args.source]  # the planner reads sites[src].layers_below
+        site["layers_below"] = max(int(site.get("layers_below", 0)), args.layers_below)
     if commissioning:
         config["_commissioning"] = {"person_at_switch": True}
     work = Path(config["work_dir"]).expanduser()
