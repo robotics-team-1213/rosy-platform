@@ -183,10 +183,15 @@ def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None
         raise SystemExit(f"[pr-land] lab-only change requires remote_pytest lab evidence before auto-merge: {cmds}")
 
 
+def session_name() -> str:
+    return os.environ.get("ROSY_SESSION_NAME") or os.environ.get("CLAUDE_SESSION_NAME") or "unknown"
+
+
 def build_body(summary: str, self_review: str) -> str:
     lines = [summary.strip() or "PR landing via Merge Queue (D-1052)."]
     if self_review.strip():
         lines += ["", f"Overlap-Review: self ({self_review.strip()})"]
+    lines += ["", f"Session: {session_name()}"]
     return "\n".join(lines) + "\n"
 
 
