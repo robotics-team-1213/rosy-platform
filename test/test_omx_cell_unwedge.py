@@ -22,8 +22,8 @@ class HomeCell:
             self.measured[self.lag_axis] = self.target[self.lag_axis] - self.lag
         elif command.startswith("grip ") and self.jaw_moves:
             self.measured[5] = self.target[5] = float(command.split()[1])
-        return {"ok": True, "state": list(self.measured), "target": list(self.target),
-                "human_hold_latched": self.held or command == "human-hold"}
+        return {"ok": True, "state": list(self.measured), "target": list(self.target), "holding": False,
+                "health": {"current_ma": [0, 0, 0, 0, 0, 10]}, "human_hold_latched": self.held or command == "human-hold"}
 
 
 RETURN_HOME = [0.8, -62.2, 53.1, 51.6, 45.2, 50.0]
@@ -84,6 +84,16 @@ def test_rehome_before_work_turns_a_hand_turned_wrist_back_and_leaves_others():
     out = u.rehome_before_work(arm_s, s_home, {"joint_window_full_range": True}, sleep=lambda _: None)
     assert out["result"] == "home" and arm_s.target[4] == pytest.approx(-5.0, abs=u.HOME_TOL)
     assert not any(c.startswith("grip ") for c in arm_s.commands)  # the jaws are never commanded
+
+
+@pytest.mark.parametrize("drop", ["holding", "health"])
+def test_return_home_refuses_a_state_that_does_not_say_the_jaws_are_empty(drop):
+    """The runner's state did not carry holding before 11-20 and a missing current read as 0 mA (robot-17 review)."""
+    cell = HomeCell([*RETURN_HOME[:4], -50.5, 50.0])
+    act = cell.act
+    cell.act = lambda command: {k: v for k, v in act(command).items() if k != drop}
+    out = u.return_home(cell, RETURN_HOME, {"joint_min": {"wrist_roll.pos": -55.5}}, sleep=lambda _: None)
+    assert out["result"] == "refused" and not any(c.startswith("jog ") for c in cell.commands)
 
 
 def test_return_home_accepts_static_friction_plateau():
