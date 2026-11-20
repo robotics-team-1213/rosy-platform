@@ -1351,6 +1351,26 @@ python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --o
 
 이 코드의 중단 경로가 접힘 확인(settled, home 3단위) 없이 토크를 끄는 예외는 두 가지뿐이다. 하나는 사람이 팔을 받친 뒤 보내는 SIGUSR2다. 다른 하나는 가드가 이미 끈 토크(GUARD_STOPPED, 모두 0으로 읽힘)에 OFF를 다시 쓰는 경우다. teleop·replay(lerobot-record) 자식은 예전처럼 10초 뒤 kill한다.
 
+**입회 실물 확인(중단 경로, 첫 실물 수용 전).** 사람이 비상 스위치 앞에서 지켜보며 한다.
+1. 뻗은 자세에서 세션을 중단한다. 그 자리에서 멈춘 뒤 park가 settled되고, home 3단위를 확인한 다음 토크 OFF가 되는지 본다. `record_session`은 exit 0, `safe_end`.
+2. 접힌 자세에서 중단한다. 멈춘 상태를 연속으로 읽은 뒤 토크 OFF가 되는지 본다.
+3. home을 막 떠나 움직이는 중에 중단한다. 그 자리에서 정지하고, 확인 뒤 토크 OFF(또는 접기)가 되는지 본다.
+4. park 경로를 막고 중단한다.
+   - HOLD(토크 ON), exit 75, `hold.json`, lease `hold`가 나오는지 본다.
+   - 다른 소유자와 같은 소유자의 claim·세션이 모두 거부되는지 본다.
+   - 접는 중에 미리 보낸 SIGUSR2가 무시되는지 본다.
+   - 팔을 받친 뒤 새 SIGUSR2를 보내면 토크 OFF가 되는지 본다.
+   - `release-hold`로 lease를 푼다.
+5. 가드 following error를 일으키는 접기에서 다음을 본다.
+   - 전부 꺼지면 GUARD_STOPPED와 readback 0, 부모의 사고 측정.
+   - 일부만 꺼지면 PARTIAL_GUARD_STOP, 이후 추가 토크 OFF가 없는지.
+6. 러너만 `kill -9`한다. 부모 exit 77, 토크 쓰기 없음, lease `hold`가 나오는지 본다.
+7. #263의 접힌 분기를 타는 자세(roll 차이 > 10)와 상자를 쥔 상태에서 각각 중단한다.
+8. 현장 설정으로 러너를 띄운 직후와 첫 동작 뒤에, `/proc/<러너 PID>/task/*/status`의 SigBlk로 SIGINT(2)·SIGTERM(15)·SIGHUP(1)을 받을 수 있는 비메인 스레드가 없는지 확인한다. 메인 스레드는 tid가 PID와 같은 항목이다.
+   - SigBlk 16진 마스크에 0x4003 비트가 모두 서 있어야 한다.
+   - 예: `for t in /proc/$PID/task/*; do [ "${t##*/}" = "$PID" ] || grep SigBlk $t/status; done`
+   - 러너 stderr에 `signal_routing` 경고가 없어야 한다.
+
 pipeline 설정의 `operating_profile_path`로 선택을 저장할 수도 있다. 선택하면 프로필이 work/review
 경로의 정본이며 옛 전역 경로로 다른 장부를 고르지 않는다. 같은 Fleet 장치에 팔이 둘이면 각
 `instance_id`·설정 SHA·장부 경로를 따로 둔다. manifest 상단의 `device_id`, `instance_id`,
