@@ -48,12 +48,13 @@ function openInbox() {
   const request = new CustomEvent("rosy:inbox", {cancelable: true});
   if (document.dispatchEvent(request)) location.assign("/console?queue=1");
 }
-// count = open intervention rows in the console queue (긴급+주의). There is no read state.
-export function showInboxCount(count) {
+// count = open intervention rows in the console queue (긴급+주의); crit = the 긴급 ones. There is no read state.
+export function showInboxCount(count, crit = 0) {
   const inbox = $("fleet-inbox"), unread = $("header-unread");
   unread.textContent = count ? String(count) : "";
   unread.hidden = !count;
-  inbox.setAttribute("aria-label", `개입 요망 ${count}건 · 큐로 이동`);
+  inbox.dataset.crit = String(crit > 0);
+  inbox.setAttribute("aria-label", crit ? `개입 요망 ${count}건 · 긴급 ${crit}건 · 큐 열기` : `개입 요망 ${count}건 · 큐 열기`);
   inbox.setAttribute("data-ui-tooltip", inbox.getAttribute("aria-label"));
 }
 

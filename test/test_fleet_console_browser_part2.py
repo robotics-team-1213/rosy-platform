@@ -506,7 +506,7 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         assert "rosy_02" in crit and "개입 필요" in crit
         assert "로봇 화면에서 확인" in crit  # 정직한 경로(D-218, F-20)
         assert "rosy_03" in warn and "lidar" in warn
-        assert page.locator(".queues-panel").is_visible()
+        assert page.locator(".queues-panel").get_attribute("hidden") is None  # 11-21: rows wait in the bell's drawer
         assert not errors, f"페이지 오류: {errors}"
         save_temp_screenshot(page, "fleet_console_queues.png")
         browser.close()
@@ -540,8 +540,8 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
-        assert page.locator(".queues-panel").is_visible()
-        assert "릴레이 끊김" in page.inner_text("#critical-list")
+        assert page.locator(".queues-panel").get_attribute("hidden") is None
+        assert "릴레이 끊김" in page.locator("#critical-list").text_content()
         # D-540 3: the robot is named once, in its row; the head counts (names stay in its title).
         assert "rosy_03" in page.inner_text("#critical-list")
         assert "rosy_03" in page.locator("#critical-head small").get_attribute("title")
@@ -650,7 +650,7 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
             # D-540 3: the roster has no scroll of its own; the rail is the one scroll.
             assert page.locator("#roster").evaluate("e => e.scrollHeight <= e.clientHeight")
         elif scenario == "disconnected":
-            assert page.locator(".queues-panel").is_visible()
+            assert page.locator(".queues-panel").get_attribute("hidden") is None
             # D-493: the queue lives in the rail, so the map stays the main view.
             assert fit["mapCanvas"]["height"] >= 0.5 * fit["vh"]
             page.get_by_role("link", name="작업", exact=True).click()

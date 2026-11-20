@@ -547,3 +547,8 @@
   #fleet-robot-stage > .robot-panel { border-inline-start: 0; }
   #fleet-main { padding-block: var(--space-2); gap: var(--space-2); }
 }
+
+/* 11-21: 도크 칸은 56px다. 긴 ID(sample-robot·rosy_46)는 줄임표로 자르고 전체 이름은 툴팁·접근성 이름이 말한다. */
+#fleet-robot-stage > .robot-dock { overflow-x: hidden; }
+#fleet-robot-stage .robot-dock-btn { max-inline-size: 100%; }
+#fleet-robot-stage .robot-dock-id { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; }

@@ -197,7 +197,7 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
             expect(panel).to_be_visible()
             expect(side).to_be_visible()
             expect(side.locator(".hint")).to_be_visible()
-            expect(page.locator(".queues-panel")).to_be_visible()
+            expect(page.locator(".queues-panel")).not_to_have_attribute("hidden", "")  # 11-21: rows wait in the bell's drawer
             expect(page.locator('[aria-labelledby="map-heading"]')).to_be_hidden()
             expect(page.locator("#incident-traffic-list")).to_be_hidden()
             assert panel.evaluate("node => !node.closest('[role=tabpanel]')")
@@ -529,11 +529,13 @@ def test_bell_counts_open_queue_rows_and_the_records_tab_shows_message_stages(si
         rows = page.evaluate(BELL_COUNT)
         assert rows >= 2, rows  # rosy_01 판단 요청(긴급) + rosy_04 끊김(주의)
         button = page.locator("#fleet-inbox")
-        label = f"개입 요망 {rows}건 · 큐로 이동"
+        crit = page.locator("#critical-list > li[data-key]").count()
+        label = f"개입 요망 {rows}건 · 긴급 {crit}건 · 큐 열기" if crit else f"개입 요망 {rows}건 · 큐 열기"
         expect(button).to_have_attribute("aria-label", label)
         expect(page.locator("#header-unread")).to_have_text(str(rows))
         button.click()
         expect(page.locator(".queues-panel")).to_be_focused()
+        expect(button).to_have_attribute("aria-expanded", "true")  # 11-21: the bell opens the queue drawer
         expect(button).to_have_attribute("aria-label", label)  # 누른다고 개입이 해소되지 않는다
         page.get_by_role("tab", name="기록·근거").click()
         expect(page.locator("#context-evidence")).to_be_visible()

@@ -9,7 +9,7 @@ import { leaveCameraView } from "./roster-cards.js";
 import { createManualControl } from "./manual-control.js";
 import { createMovePanel } from "./card-trip.js";
 import { createInboxPanel } from "./inbox.js";
-import { createAlertPopup, isOnScreen } from "./alert-popup.js";
+import { createAlertPopup } from "./alert-popup.js";
 import { createWorkView } from "./work-view.js";
 import { createChannelRequestView } from "./channel-request-view.js";
 import { createIncidentView } from "./incident-view.js";
@@ -56,9 +56,9 @@ const pageScope = createPageScope();
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
 // Current intervention stays outside context tabs; hidden panels keep their owners mounted.
-const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
-  document.querySelector('.console-context')];
-const MAP_PANEL = 1;
+// 11-21: the queue is the bell's drawer (#queues-panel), not a layout panel.
+const layoutPanels = [document.querySelector('[aria-labelledby="map-heading"]'), document.querySelector('.console-context')];
+const MAP_PANEL = 0;
 const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
   robots: () => view.robots,
   canManage: () => !auth.locked && isOperator(auth.role) && !namedReason(),
@@ -113,7 +113,7 @@ const connectionView = createConnectionView({scope: pageScope, el});
 
 function operatorControls() {
   return document.querySelectorAll(
-    "ui-button:not(#estop):not(#robot-panel-stop):not([data-always-live]):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#map-overlay-toggles ui-button):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]):not(.robot-panel-close):not(#alert-popup-region ui-button):not(#inbox-popover ui-button), main input:not(#arm-transfer-id):not(#map-display-mode input), main select:not(#vision-source):not([data-work-read])");
+    "ui-button:not(#estop):not(#robot-panel-stop):not([data-always-live]):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#map-overlay-toggles ui-button):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]):not(.robot-panel-close):not(#alert-popup-region ui-button), main input:not(#arm-transfer-id):not(#map-display-mode input), main select:not(#vision-source):not([data-work-read]), #queues-panel input, #queues-panel select");
 }
 
 const view = {
@@ -183,8 +183,6 @@ delete document.documentElement.dataset.areaPending;
 inbox.focusInitial();
 pageScope.listen(layoutMedia, "change", layoutConsole);
 pageScope.onResume(layoutConsole);
-// 요소 스크롤은 거품이 없어 캡처로 받는다(넓은 창의 .console-secondary 스크롤 포함).
-for (const type of ["scroll", "resize"]) pageScope.listen(window, type, () => syncQueueToasts(), {capture: true, passive: true});
 
 // 셸은 폴링 운율, inbox.js는 로그 상한을 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 // bad 로그는 #log 기록(live 아님)에 남고, 카드는 호출 실패와 같은 사건이면 alert-popup이 한 장·한 번
@@ -277,25 +275,9 @@ let renderMapSelectionBar = null;
 
 // --- 로봇 목록 --------------------------------------------------------------
 
-// F1 — 큐 패널은 hidden이 아니어도 뷰포트 밖(스크롤·앱바 가림)이면 보이는 알림 표면이 아니다.
-// 창 클립에서 고정 앱바 높이만큼 깎고, 스크롤 조상(overflow auto/scroll)의 클립과도 겹쳐야 한다.
-// 판정을 모르면 알리는 쪽(토스트)으로 기운다 — 긴급 알림이 조용히 사라지지 않게.
-function queuesPanelOnScreen(panel) {
-  if (!panel || panel.hidden) return false;
-  const appbarBottom = document.querySelector("header.fleet-header")?.getBoundingClientRect().bottom || 0;
-  const clips = [{ top: appbarBottom, bottom: window.innerHeight, left: 0, right: window.innerWidth }];
-  for (let node = panel.parentElement; node && node !== document.body; node = node.parentElement) {
-    const overflow = getComputedStyle(node).overflow;
-    if (overflow.includes("auto") || overflow.includes("scroll")) clips.push(node.getBoundingClientRect());
-  }
-  return isOnScreen(panel.getBoundingClientRect(), clips);
-}
-
-// 큐 행의 긴급 토스트 판정. 폴링 렌더뿐 아니라 스크롤·창 크기 변화로 큐가 화면에 들어올 때도
-// 돈다 — 좁은 화면에서 큐로 내려가도 다음 폴링까지 같은 행의 토스트가 큐 위에 남지 않게(S6).
+// 11-21 알림 한 곳: 큐는 벨 서랍 하나다. 새 긴급 행은 토스트 없이 한 번 낭독하고 벨이 긴급 표시를 한다.
 function syncQueueToasts() {
-  alertPopup.syncCritRows(el("critical-list"), Boolean(view.stateLoaded && !view.stateUnavailable),
-    { panelVisible: queuesPanelOnScreen(document.querySelector(".queues-panel")) });
+  alertPopup.syncCritRows(el("critical-list"), Boolean(view.stateLoaded && !view.stateUnavailable), { panelVisible: true });
 }
 
 function render() {

@@ -339,7 +339,8 @@ def test_single_column_tier_puts_exceptions_then_the_map_then_robot_context(cons
     from playwright.sync_api import sync_playwright
 
     # Concept 2026-11-14 rule 6 (replaces D-892's order): exceptions, then the map, then the robot context.
-    panels = ['.queues-panel', '[aria-labelledby="map-heading"]', '.console-context']
+    # 11-21: the queue left the column for the bell's drawer; the map, then the robot context.
+    panels = ['[aria-labelledby="map-heading"]', '.console-context']
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
         page.set_viewport_size({"width": width, "height": height})
@@ -354,7 +355,7 @@ def test_single_column_tier_puts_exceptions_then_the_map_then_robot_context(cons
             parents: nodes.map(node => node.parentElement.id)};
         }""", panels)
         assert layout['top'] == sorted(layout['top']), layout
-        assert layout['domOrder'] and layout['parents'] == ['fleet-main'] * 3, layout
+        assert layout['domOrder'] and layout['parents'] == ['fleet-main'] * 2, layout
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         page.evaluate("""selectors => {
           window.retainedPanels = selectors.map(sel => document.querySelector(sel));
@@ -362,7 +363,7 @@ def test_single_column_tier_puts_exceptions_then_the_map_then_robot_context(cons
         }""", panels)
         page.locator('[data-context-tab="evidence"]').click()
         assert page.locator('#context-evidence').is_visible()
-        assert page.locator('.queues-panel').is_visible() and page.locator('#map-stage').is_visible()
+        assert page.locator('#map-stage').is_visible()
         page.locator('[data-context-tab="tools"]').click()
         page.locator('.formation-form-wrap > summary').click()
         page.locator('#formation-spacing').fill('1.7')

@@ -61,8 +61,9 @@ def test_the_queues_panel_heads_the_rail():
     assert '<main id="fleet-main" class="ui-stage-grid" data-layout="watch"' in page
     assert '<div class="console-primary" data-pane="stage">' in page
     assert '<aside class="console-secondary" data-pane="now"' in page
-    assert "const layoutPanels = [document.querySelector('.queues-panel')," in shell
-    assert "const MAP_PANEL = 1;" in shell  # D-1027: queue, map, robot context.
+    assert "const layoutPanels = [document.querySelector('[aria-labelledby=\"map-heading\"]')," in shell
+    assert "const MAP_PANEL = 0;" in shell  # 11-21: the queue is the bell's drawer, not a layout panel.
+    assert 'id="queues-panel" class="queues-panel ui-panel" data-open="false"' in page
 
 
 def test_queue_and_roster_attention_share_one_rule():

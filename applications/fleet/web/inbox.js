@@ -35,24 +35,40 @@ export function createInboxPanel({scope, el, readView}) {
     if (queue && !queue.hasAttribute?.("tabindex")) queue.tabIndex = -1;
     return queue;
   }
+  // 11-21 알림 한 곳: 큐는 오른쪽 위 벨이 여닫는 서랍이다. 열린 행이 없으면(hidden) 열지 않고 그렇게 말한다.
+  function setOpen(queue, open) {
+    queue.dataset.open = String(open);
+    document.getElementById("fleet-inbox")?.setAttribute("aria-expanded", String(open));
+  }
   function focusQueue(queue = queuePanel()) {
-    queue?.scrollIntoView({block: "nearest"});
-    queue?.focus({preventScroll: true});
+    if (!queue) return;
+    if (queue.hidden) { setOpen(queue, false); getAnnouncer().announce("열린 개입 요망이 없습니다"); return; }
+    setOpen(queue, true);
+    queue.focus({preventScroll: true});
   }
   queuePanel();
 
-  // 벨(#fleet-inbox): 큐가 이 화면에 보이면 그리로 포커스, 아니면 막지 않아 /console?queue=1로 간다.
+  // 벨(#fleet-inbox): 콘솔에서는 서랍을 여닫고, 다른 Fleet 문서에서는 막지 않아 /console?queue=1로 간다.
   scope.listen(document, "rosy:inbox", event => {
     const queue = queuePanel();
     if (!queue) return;
     event.preventDefault();  // already on the console: never reload it (a reload drops drafts and open inputs)
-    if (queue.checkVisibility && !queue.checkVisibility()) getAnnouncer().announce("열린 개입 요망이 없습니다");
+    if (queue.dataset.open === "true") setOpen(queue, false);
     else focusQueue(queue);
+  });
+  scope.listen(document, "keydown", event => {
+    const queue = queuePanel();
+    if (event.key !== "Escape" || queue?.dataset.open !== "true") return;
+    setOpen(queue, false);
+    document.getElementById("fleet-inbox")?.focus({preventScroll: true});
   });
 
   // 벨 숫자 = 큐의 열린 개입 행 수. 탭·기록과 무관하다.
   function paintBell() {
-    showInboxCount(document.querySelectorAll('#critical-list > li[data-key], #warning-list > li[data-key]').length);
+    showInboxCount(document.querySelectorAll('#critical-list > li[data-key], #warning-list > li[data-key]').length,
+      document.querySelectorAll('#critical-list > li[data-key]').length);
+    const queue = queuePanel();
+    if (queue?.hidden && queue.dataset.open === "true") setOpen(queue, false);  // last row resolved: the drawer closes
   }
   const tabKeys = ["status", "evidence", "tools"];
   const tabs = createTabs({

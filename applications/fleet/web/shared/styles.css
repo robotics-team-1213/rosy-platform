@@ -471,12 +471,10 @@ main,
   #fleet-main { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; grid-template-rows: auto; }
   .console-primary, .console-secondary { display: contents; }
   /* Concept 2026-11-14 rule 6: exceptions, then the map, then the selected robot; the dispatch strip is last. */
-  .queues-panel { order: 0; }
   .map-section { order: 1; }
   .console-context { order: 2; }
   #fleet-main > [data-raised] { order: -1; }
   #fleet-main:has(> [data-raised]) > .console-context { order: 0; }
-  #fleet-main:has(> [data-raised]) > .queues-panel { order: 1; }
   .fleet-label-below-64[data-icon-only] > .ui-icon-label { position: static; width: auto; height: auto; padding: 0; margin: 0; overflow: visible; clip-path: none; white-space: normal; }
 }
 
@@ -776,3 +774,11 @@ main,
 .map-sel-reason { margin: 0; font-size: var(--text-micro); line-height: var(--leading-label); }
 .quick-group-label { flex-basis: 100%; color: var(--text-secondary); font-size: var(--text-micro); line-height: var(--leading-label); }
 .map-selection-bar ui-button > small[data-reason] { display: none; }
+
+/* 11-21 알림 한 곳: 큐는 오른쪽 위 벨이 여는 서랍이다. 지도·사이드바를 밀지 않고 도크(56px)를 가리지 않는다. */
+#queues-panel { position: fixed; inset-block-start: calc(var(--appbar-height) + var(--space-1)); inset-inline-end: calc(56px + var(--space-2)); z-index: 6;
+  inline-size: min(28rem, calc(100vw - 56px - 2 * var(--space-2))); max-block-size: calc(100dvh - var(--appbar-height) - var(--space-4));
+  overflow-y: auto; overscroll-behavior: contain; background: var(--surface-raised); border: 1px solid var(--border-default); }
+#queues-panel:not([data-open="true"]) { display: none; }
+@media (width < 64rem) { #queues-panel { inset-inline: var(--space-2); inline-size: auto; } }
+#fleet-inbox[data-crit="true"] #header-unread { background: var(--status-crit); color: var(--text-on-danger); }

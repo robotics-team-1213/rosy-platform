@@ -255,8 +255,8 @@ def test_map_click_bell_focuses_queues_and_error_popup_flow(site):
 
             # 이 어설션은 큐 패널이 보이는 이 뷰에서만 성립한다: 패널이 보이면 syncCritRows가
             # 새 긴급 행을 토스트로 복제하지 않는다(패널 숨김 뷰의 긴급 토스트는 아래 시험과 노드 시험이 본다).
-            expect(page.locator(".queues-panel")).to_be_visible()
-            expect(page.locator("#warning-list li, #critical-list li").first).to_be_visible()
+            expect(page.locator(".queues-panel")).not_to_have_attribute("hidden", "")  # 11-21: the bell's drawer holds the rows
+            expect(page.locator("#warning-list li, #critical-list li").first).to_be_attached()
             expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(0)
             expect(page.locator("#inbox-popover")).to_have_count(0)
 
@@ -324,8 +324,9 @@ def test_hidden_queues_panel_surfaces_new_critical_row_without_duplicate_toast(s
 
             # 패널이 스스로 나타나 긴급 행을 보여주고, 같은 항목은 토스트로 중복되지 않는다.
             row = page.locator("#critical-list li[data-key='rosy_46|stuck']")
-            expect(row).to_be_visible()
-            expect(page.locator(".queues-panel")).to_be_visible()
+            expect(row).to_be_attached()
+            expect(page.locator(".queues-panel")).not_to_have_attribute("hidden", "")
+            expect(page.locator("#fleet-inbox")).to_have_attribute("data-crit", "true")  # 11-21: the bell, not a toast
             expect(page.locator("#alert-popup-region .alert-popup-card")).to_have_count(0)
 
             # 행이 해소되면 패널은 다시 숨는다 — 남은 토스트도 없다.

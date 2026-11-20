@@ -46,7 +46,7 @@
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
     <!-- F4: 관제 AI 실행기는 떠 있지 않고 머리줄에 산다(내용을 덮지 않는다). -->
     <ui-button id="assistant-toggle" data-work-read="" kind="quiet" type="button" data-action-icon="help" aria-expanded="false" aria-controls="assistant-panel">관제 AI</ui-button>
-    <ui-button kind="quiet" id="fleet-inbox" type="button" aria-label="개입 요망 · 큐로 이동"><span data-action-icon="notification" data-icon-only="" aria-label="알림"></span><span id="header-unread" hidden></span></ui-button>
+    <ui-button kind="quiet" id="fleet-inbox" type="button" aria-label="개입 요망 · 큐 열기" aria-controls="queues-panel" aria-expanded="false"><span data-action-icon="notification" data-icon-only="" aria-label="알림"></span><span id="header-unread" hidden></span></ui-button>
     <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
     <!-- D-473 — 개발 접속 경고는 닫힌 계정 단추에서도 보인다. -->
     <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="계정과 접속">
@@ -333,21 +333,6 @@
     </section>
     </div>
     <aside class="console-secondary" data-pane="now" aria-label="현재 상태와 대응">
-      <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
-      <section class="queues-panel ui-panel" data-density="compact" aria-labelledby="queues-heading">
-        <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>
-        <!-- D-540 3 — 최우선이 먼저다. 결정이 있는 행(막힘 판단·바뀐 경로 확인)은 그 자리에서 펼친다. -->
-        <div class="queues-container">
-          <div class="queue critical-queue">
-            <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
-            <ul id="critical-list" class="issue-list"></ul>
-          </div>
-          <div class="queue warning-queue">
-            <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
-            <ul id="warning-list" class="issue-list"></ul>
-          </div>
-        </div>
-      </section>
       <section class="console-context" aria-label="관제 상세">
         <div id="context-tabs-mount"></div>
         <div class="context-panel" id="context-status-body">
@@ -577,6 +562,21 @@
     </aside>
   </main>
   </div>
+  <!-- ADR-1000 큐. 11-21 알림 한 곳: 오른쪽 위 벨이 여는 서랍이다(사이드바 자리를 쓰지 않는다). -->
+  <section id="queues-panel" class="queues-panel ui-panel" data-open="false" data-density="compact" aria-labelledby="queues-heading">
+    <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>
+    <!-- D-540 3 — 최우선이 먼저다. 결정이 있는 행(막힘 판단·바뀐 경로 확인)은 그 자리에서 펼친다. -->
+    <div class="queues-container">
+      <div class="queue critical-queue">
+        <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
+        <ul id="critical-list" class="issue-list"></ul>
+      </div>
+      <div class="queue warning-queue">
+        <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
+        <ul id="warning-list" class="issue-list"></ul>
+      </div>
+    </div>
+  </section>
   <aside id="robot-panel-mount" class="robot-panel" hidden></aside>
   <nav id="robot-dock-mount" class="robot-dock" aria-label="로봇 선택 도크"></nav>
   <ui-button id="robot-panel-stop" kind="quiet" data-always-live="" hidden>주행 취소 · 이 로봇</ui-button>
