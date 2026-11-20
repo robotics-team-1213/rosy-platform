@@ -44,5 +44,14 @@ applies_when: "ending a hardware chunk_runner session via 'stop' or executing pa
 
 - **Gap.** The fold above covered the `stop` command only. A SIGTERM to `record_session.py` became SIGINT to `chunk_runner.py`; the runner had no handler, so `KeyboardInterrupt` reached `chunk_runner.main`'s `finally` and `close_device` turned torque OFF where the arm was. After 10 s `record_session` also SIGKILLed the runner and its `finish` cut torque. Found by review (pipeline-gate-1120), not on a real arm.
 - **Fix.** `chunk_runner_interrupt.py` records the signal instead of raising. The run loop folds with the same `stop fold` and ends only when the readback is within `SETTLE_TOL` of home. Any failure (hold, raise, short fold, 120 s bound, guard not yet tracking) latches `human-hold` and keeps the process alive; only SIGUSR2 from a person cuts torque. `record_session` waits for that outcome (`wait_for_runner`) and on HOLD exits 75 without torque OFF, cap restore, incident read or lease release; the runner inherits the session lock fds.
+- **Review round 2 (same day, Codex).** Seven more drop or mislabel paths, all closed in code:
+  - the guard's own stop (send failure after its torque OFF) was reported as a torque-ON HOLD; the runner now reads Torque_Enable and reports GUARD_STOPPED;
+  - the 15 s silence kill went on to `finish()` torque OFF and could record exit 0; it now kills without touching torque, exits 76, `safe_end=false`;
+  - a SIGUSR2 sent before the HOLD released it on a later SIGTERM; only a release after the HOLD counts;
+  - a failed pose read or status write fell through to `close_device`; both now hold;
+  - a park that ended unsettled near home cut torque; it now needs settled AND home;
+  - the lease died with the parent pid; a `hold` marker keeps it until the owner releases it;
+  - a HOLD written before the parent started reading was missed; `hold.json` carries the runner pid.
+  General rule: every exit from a torque-on loop needs its own proof of a safe pose. A guard verdict, a timeout or a missing reading is not that proof.
 - **Apply when** adding any new way to end a torque-on process (a signal, a timeout, a supervisor kill): a `finally` that turns torque OFF is a drop path unless a confirmed fold precedes it.
 - **Verification.** `test/test_omx_chunk_runner_interrupt.py` (fake robot: extended -> park then end; folded -> immediate end; blocked fold and guard stop -> HOLD until SIGUSR2; repeated SIGTERM; bound; live.json; before tracking) and four tests in `test/test_omx_record_session.py`. A supervised real-arm check is still pending.

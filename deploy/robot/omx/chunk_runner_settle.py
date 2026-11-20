@@ -108,7 +108,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
         stop_cmd = getattr(runner, "_stop_after_park", None)
         if stop_cmd:
             runner._stop_after_park = None
-            runner._stopped = True
+            runner._stopped, runner._park_settled = True, settled
             runner.report(
                 command=stop_cmd,
                 ok=True,

@@ -196,8 +196,13 @@ def main(argv=None):
     status_path = args.io / "chunk-status.jsonl"
 
     def status(row):
-        with status_path.open("a") as f:
-            f.write(json.dumps(row) + "\n")
+        try:
+            with status_path.open("a") as f:
+                f.write(json.dumps(row) + "\n")
+        except OSError as error:  # interrupted: a full disk is reported, the fold or hold goes on (no torque OFF)
+            if not signals:
+                raise
+            print(json.dumps({"status_write_failed": str(error)[:300], "row": row}), file=sys.stderr, flush=True)
         print(json.dumps(row), flush=True)
 
     from guarded_native import NativeJointMotion, close_device, connect_passive
@@ -222,14 +227,18 @@ def main(argv=None):
 
         def live(row):  # replaced atomically so a reader never sees half a file
             tmp = live_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(row))
-            os.replace(tmp, live_path)
+            try:
+                tmp.write_text(json.dumps(row))
+                os.replace(tmp, live_path)
+            except OSError:
+                if not signals:
+                    raise
 
         context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
                                   operating_profile=profile, params=params)
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
                         operating_context=context, params=params, plan_check=check)
-        runner.signals = signals
+        runner.signals, runner.hold_file = signals, args.io / "hold.json"  # hold.json: record_session reads it
         trace_path = Path(path).expanduser().resolve() if (path := os.environ.get("ROSY_CHUNK_TRACE")) else None
         trace_file = trace_path.open("a") if trace_path else None  # buffered: no write call per tick
         if trace_file:

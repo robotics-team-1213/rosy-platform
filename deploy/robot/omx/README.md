@@ -1307,11 +1307,32 @@ python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --o
 러너는 새 명령을 받지 않고 다음을 한다(`chunk_runner_interrupt.py`). 가드 한계와 모션 명령은 바꾸지 않는다.
 
 - 몸통 관절이 home에서 `SETTLE_TOL`(3단위) 안이면 바로 끝내고 토크를 끈다.
-- 아니면 기존 `stop fold`(`park_path`)로 접는다. park가 settled되고 읽은 자세가 home 3단위 안이면 그때 토크를 끈다.
-- 접기를 시작할 수 없거나(가드 hold, 접촉이 아닌 고장, home 청크 없음, 가드 추적 전), 접기가 멈추거나, tick이 오류를 내거나, 120초(`INTERRUPT_PARK_S`) 안에 끝나지 않으면 `human-hold`로 그 자리에서 토크를 유지한다. `chunk-status.jsonl`·stderr에 `{"command": "interrupt", "hold": true, "person_needed": true}`, `live.json`에 `"interrupt": "hold"`를 쓰고 프로세스는 계속 산다. 이후의 SIGINT·SIGTERM은 HOLD 보고만 되풀이한다.
-- 감독 복구: 사람이 팔을 받친 뒤 `kill -USR2 <러너 PID>`를 보낸다. 러너는 그 자리에서 토크를 끄고 끝난다. 세션 cap은 기록된 값으로 남으므로 다음 세션 전에 되돌린다.
+- 아니면 기존 `stop fold`(`park_path`)로 접는다. park가 settled=True로 끝나고, 다시 읽은 자세가 home 3단위 안일 때만 토크를 끈다(D-1048).
+- 다음 경우에는 `human-hold`로 마지막으로 안 자세에서 토크를 유지한다(HOLD):
+  - 접기를 시작할 수 없다(가드 hold, 접촉이 아닌 고장, home 청크 없음, 가드 추적 전).
+  - 접기가 멈췄거나, settled 없이 끝났거나, home에 못 미쳤다.
+  - tick이 오류를 냈다.
+  - 자세를 읽지 못했다.
+  - 120초(`INTERRUPT_PARK_S`) 안에 끝나지 않았다.
+- HOLD에 들어가면 다음을 쓰고 프로세스는 계속 산다. 상태 기록이 실패하면(디스크 등) stderr에만 쓰고 HOLD는 그대로다.
+  - `chunk-status.jsonl`·stderr에 `{"command": "interrupt", "hold": true, "person_needed": true}`.
+  - FIFO 옆 `hold.json`에 러너 PID와 이유.
+  - `live.json`에 `"interrupt": "hold"`.
+- 이후의 SIGINT·SIGTERM은 HOLD 보고만 되풀이한다.
+- 가드가 스스로 멈추면(`NativeJointMotion.send` 실패, 가드가 이미 토크 OFF를 시도함) 러너는 Torque_Enable을 읽는다.
+  - 모두 0이면 `GUARD_STOPPED torque off`를 보고하고 끝난다. `record_session`은 기존 토크 확인·사고 측정 경로를 탄다.
+  - 1이 남았거나 읽지 못하면 HOLD다.
+- 감독 복구: 사람이 팔을 받친 뒤 `kill -USR2 <러너 PID>`를 보낸다. HOLD에 들어간 **뒤에** 받은 SIGUSR2만 해제한다. 그 전에 받은 것은 무시하고 stderr에 남긴다. 러너는 그 자리에서 토크를 끄고 끝난다. 세션 cap은 기록된 값으로 남으므로 다음 세션 전에 되돌린다.
 
-`record_session.py`는 고정 10초 대기 뒤 kill하지 않는다. 러너가 끝나면(접힘 확인 뒤 토크 OFF) 평소처럼 토크 0 확인·cap 복원을 한다. HOLD 보고를 읽으면 토크 OFF·cap 복원·사고 측정·lease 반환을 하지 않고, 러너가 물려받은 세션 잠금을 그대로 둔 채 종료 코드 75로 끝난다. 러너가 살아 있는데 `chunk-status.jsonl`·`live.json`을 15초(`RUNNER_SILENT_S`) 동안 쓰지 않을 때만 kill한다. 이 경우 kill 뒤 `finish`가 팔이 있는 자리에서 토크를 끈다(남은 위험). teleop·replay(lerobot-record) 자식은 예전처럼 10초 뒤 kill한다.
+`record_session.py`는 러너가 끝나거나 HOLD를 알릴 때까지 기다린다. 고정 10초 대기 뒤 kill하지 않는다.
+
+| 러너 결과 | `record_session` |
+|---|---|
+| 끝남(접힘 확인, 가드 정지) | 평소처럼 토크 0 확인·cap 복원·사고 측정 |
+| HOLD(상태 행, 이 자식 PID의 `hold.json`, 상태 파일 읽기 오류) | 토크 OFF·cap 복원·사고 측정 없음. lease에 `hold`와 러너 PID를 남김. 종료 코드 75 |
+| 무응답: 살아 있으나 `chunk-status.jsonl`·`live.json`·`hold.json`이 15초(`RUNNER_SILENT_S`) 동안 그대로 | kill. 토크를 끄지 않고 Torque_Enable만 읽음. 장치 없이 사고 보고(재부팅 없음). lease에 `hold`. `safe_end=false`, 종료 코드 76 |
+
+`hold`가 붙은 lease는 pid·만료와 관계없이 살아 있어 다른 소유자의 claim을 거부한다. 사람이 팔을 확인한 뒤 `python cell_arm_lease.py release --arm <팔>`(같은 소유자)로 푼다. teleop·replay(lerobot-record) 자식은 예전처럼 10초 뒤 kill한다.
 
 pipeline 설정의 `operating_profile_path`로 선택을 저장할 수도 있다. 선택하면 프로필이 work/review
 경로의 정본이며 옛 전역 경로로 다른 장부를 고르지 않는다. 같은 Fleet 장치에 팔이 둘이면 각

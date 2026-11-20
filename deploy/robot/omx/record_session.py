@@ -31,10 +31,8 @@ from record_session_helpers import (  # noqa: F401
     finish_pair_sessions,
     interrupt_on_parent_death,
     load_task_card,
-    RUNNER_HOLD_EXIT,
-    RUNNER_SILENT_S,
-    RunnerHeld,
-    wait_for_runner,
+    RUNNER_HOLD_EXIT, RUNNER_KILLED_EXIT, RUNNER_SILENT_S, RunnerHeld, RunnerLeftArm, RunnerUnresponsive,
+    runner_left_arm, wait_for_runner,
     release as _release_for,
     static_episodes,
 )
@@ -313,13 +311,12 @@ class Session:
                 record["exit_code"] = self.run_command(command)
             except KeyboardInterrupt:
                 record["interrupted"] = True
-            except RunnerHeld as held:  # chunk_runner holds the extended arm with torque ON: cut nothing, restore nothing
-                record.update(interrupted=True, runner_held=held.args[0], safe_end=False)
+            except RunnerLeftArm as left:  # a holding or killed runner: cut no torque, restore nothing (no fold confirmed)
+                record.update({"interrupted": True, "safe_end": False, left.key: left.args[0]})
         finally:
             with no_interrupts():
-                if record.get("runner_held"):
-                    self.log(step="RUNNER_HOLD", report=record["runner_held"],
-                             action="torque ON at the runner's pose; a person supports the arm, then kill -USR2 the runner")
+                if record.get("runner_held") or record.get("runner_killed"):
+                    runner_left_arm(self, record, FOLLOWER)
                 elif pairs.get("single") is self:
                     self.finish(record, stopped)
                 else:

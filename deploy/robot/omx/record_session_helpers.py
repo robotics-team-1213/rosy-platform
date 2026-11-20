@@ -21,42 +21,88 @@ def interrupt_on_parent_death() -> None:
 
 
 RUNNER_HOLD_EXIT = 75  # record_session ended but left chunk_runner holding torque ON: a person must act
-RUNNER_SILENT_S = 15.0  # no status or live.json write for this long after the interrupt: the runner is unresponsive
+RUNNER_KILLED_EXIT = 76  # chunk_runner was unresponsive and killed; torque was not cut, the fold is unconfirmed
+RUNNER_SILENT_S = 15.0  # alive, yet no chunk-status.jsonl, live.json or hold.json write for this long: unresponsive
 
 
-class RunnerHeld(Exception):
-    """chunk_runner reported an interrupt HOLD: torque ON at its pose, so the session must not cut torque or restore caps."""
+class RunnerLeftArm(Exception):
+    """The runner ended its part without a confirmed fold: the session must not cut torque or restore caps."""
+    key = "runner_left"
+
+
+class RunnerHeld(RunnerLeftArm):
+    """chunk_runner reported an interrupt HOLD (or its state could not be read): torque ON at its pose."""
+    key = "runner_held"
+
+
+class RunnerUnresponsive(RunnerLeftArm):
+    """chunk_runner was killed after RUNNER_SILENT_S of silence: torque as the motors hold it, the pose unknown."""
+    key = "runner_killed"
 
 
 def wait_for_runner(child, io: Path, offset: int, *, silent_s=RUNNER_SILENT_S, clock=time.monotonic, sleep=time.sleep):
-    """After SIGINT to chunk_runner: ("exited", code) once it folded and ended, ("hold", row) on its HOLD report, or
-    ("silent", None) when it is alive but wrote neither chunk-status.jsonl (from `offset`) nor live.json for silent_s."""
-    status, live = Path(io) / "chunk-status.jsonl", Path(io) / "live.json"
+    """After SIGINT to chunk_runner: ("exited", code) once it ended (folded, released or guard-stopped), ("hold", row)
+    on its HOLD (a status row after `offset`, or hold.json naming this child's pid, so one written before the signal
+    counts too) or when its state cannot be read, and ("silent", None) only when the child is alive and none of
+    chunk-status.jsonl, live.json and hold.json changed for silent_s."""
+    status, live, hold = (Path(io) / name for name in ("chunk-status.jsonl", "live.json", "hold.json"))
     seen, quiet_since, buffer = None, clock(), b""
     while True:
         code = child.poll()
         if code is not None:
             return "exited", code
-        if status.exists():
-            with status.open("rb") as f:
-                f.seek(offset)
-                data = f.read()
-            offset += len(data)
-            buffer += data
-            *done, buffer = buffer.split(b"\n")
-            for line in done:
-                try:
-                    row = json.loads(line)
-                except ValueError:
-                    continue
-                if row.get("command") == "interrupt" and row.get("hold"):
+        try:
+            if hold.exists():
+                row = json.loads(hold.read_text() or "{}")
+                if row.get("pid") == getattr(child, "pid", None) and row.get("hold"):
                     return "hold", row
-        stamp = tuple(p.stat().st_mtime_ns if p.exists() else None for p in (status, live)) + (offset,)
+            if status.exists():
+                with status.open("rb") as f:
+                    f.seek(offset)
+                    data = f.read()
+                offset += len(data)
+                buffer += data
+                *done, buffer = buffer.split(b"\n")
+                for line in done:
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    if row.get("command") == "interrupt" and row.get("hold"):
+                        return "hold", row
+            stamp = tuple(p.stat().st_mtime_ns if p.exists() else None for p in (status, live, hold)) + (offset,)
+        except (OSError, ValueError) as error:  # cannot tell: treat as a possible HOLD, never start finish()
+            return "hold", {"hold": True, "error": f"runner state unreadable: {type(error).__name__}: {error}"[:300]}
         if stamp != seen:
             seen, quiet_since = stamp, clock()
         elif clock() - quiet_since >= silent_s:
             return "silent", None
         sleep(0.5)
+
+
+def runner_left_arm(session, record: dict, follower) -> None:
+    """Instead of finish(): no torque write, no cap restore. A killed runner gets a read-only torque readback."""
+    if record.get("runner_killed"):
+        def read(bus):
+            out = {}
+            for motor in follower:
+                bus.motor = motor
+                try:
+                    out[motor] = bus.cleanup_read("torque")
+                except Exception as exc:  # noqa: BLE001
+                    out[motor] = f"error: {exc}"
+            return out
+
+        try:
+            record["torque_readback"] = session._with_follower(read)
+        except Exception as exc:  # noqa: BLE001
+            record["torque_readback"] = {"open": f"error: {exc}"}
+    record["manual_attention_required"] = True
+    session.log(step="RUNNER_KILLED" if record.get("runner_killed") else "RUNNER_HOLD",
+                report=record.get("runner_killed") or record.get("runner_held"),
+                torque_readback=record.get("torque_readback"),
+                action="torque not cut and caps not restored: a person supports the arm"
+                       + ("" if record.get("runner_killed") else ", then kill -USR2 the runner"))
 
 
 def release(anchor_file: str | Path = __file__) -> str | None:

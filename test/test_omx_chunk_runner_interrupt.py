@@ -1,5 +1,7 @@
 """SIGINT/SIGTERM on chunk_runner: fold home and read it back before torque OFF, else hold torque ON (pipeline-gate-1120)."""
 import importlib.util
+import json
+import os
 from pathlib import Path
 import signal
 import sys
@@ -96,7 +98,7 @@ def test_an_interrupt_while_folded_ends_at_once():
     assert not [row for row in status if row["command"] == "run park"] and len(robot.sent) <= 2
 
 
-@pytest.mark.parametrize("robot", [Robot(blocked=(0,), block_from=19), Robot(fail_after=30)], ids=["blocked-pan", "guard-stop"])
+@pytest.mark.parametrize("robot", [Robot(blocked=(0,), block_from=19), Robot(fail_after=30)], ids=["blocked-pan", "tick-error"])
 def test_a_fold_that_cannot_finish_holds_torque_on_until_a_person_releases_it(robot):
     r, status, ended, held = drive(robot, signal_after=20, release_after=60.0)
     hold = next(row for row in interrupts(status) if row.get("hold"))
@@ -177,3 +179,125 @@ def test_an_interrupt_before_the_guard_tracks_does_not_move_an_extended_arm():
     r.run(lines)
     hold = next(row for row in interrupts(status) if row.get("hold"))
     assert "not tracking" in hold["error"] and all(a["shoulder_pan.pos"] == 30.0 for a in robot.sent)
+
+
+class GuardRobot(Robot):
+    """Like NativeJointMotion.send: past `fail_after` it marks itself failed, tries torque OFF (`off_works`), raises."""
+
+    def __init__(self, fail_after, off_works=True):
+        super().__init__()
+        self.limit, self.off_works, self.torque = fail_after, off_works, dict.fromkeys(m.NAMES, 1)
+        self.motion = type("Motion", (), {"failed": False, "held": None})()
+        robot = self
+
+        class Bus:
+            def sync_read(self, name, normalize=True, num_retry=0):
+                if name != "Torque_Enable":  # the runner's motor-health read
+                    return dict.fromkeys(m.MOTORS, 35 if name == "Present_Temperature" else 0)
+                assert normalize is False
+                return dict(robot.torque)
+
+        self.bus = Bus()
+
+    def send_action(self, action):
+        if self.motion.failed or len(self.sent) >= self.limit:
+            self.motion.failed = True
+            if self.off_works:
+                self.torque = dict.fromkeys(m.NAMES, 0)
+            raise ValueError("shoulder_lift: following error >5 motor degrees")
+        super().send_action(action)
+
+
+def test_a_guard_stop_during_the_fold_reports_guard_stopped_with_the_torque_readback_and_ends():
+    robot = GuardRobot(fail_after=30)
+    r, status, _, held = drive(robot, signal_after=20)
+    done = interrupts(status)[-1]
+    assert done["guard_stopped"] and "GUARD_STOPPED torque off" in done["error"] and set(done["torque"].values()) == {0}
+    assert not held and not any(row.get("hold") for row in interrupts(status))
+
+
+def test_a_guard_stop_whose_torque_still_reads_on_is_a_hold():
+    robot = GuardRobot(fail_after=30, off_works=False)
+    r, status, _, held = drive(robot, signal_after=20, release_after=5.0)
+    hold = next(row for row in interrupts(status) if row.get("hold"))
+    assert "guard stopped, torque reads" in hold["error"] and held
+
+
+def test_a_release_sent_before_the_hold_is_ignored_and_only_a_new_one_releases():
+    robot = Robot(blocked=(0,), block_from=19)
+    status, clock = [], [0.0]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, queue, n, sent = [], ["run reach"], [0], []
+
+    def lines():
+        n[0] += 1
+        holds = [row for row in interrupts(status) if row.get("hold")]
+        if n[0] == 20:
+            r.signals.append(signal.SIGINT)
+        if n[0] == 25:
+            r.signals.append(RELEASE)  # during the fold: too early
+        if holds and "sigterm" not in sent:
+            sent.append("sigterm")
+            r.signals.append(signal.SIGTERM)  # e.g. PDEATHSIG after record_session exits 75
+        if len(holds) >= 2 and "release" not in sent:
+            sent.append("release")
+            r.signals.append(RELEASE)
+        if clock[0] > 600:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)
+    rows = interrupts(status)
+    released = next(i for i, row in enumerate(rows) if row.get("released"))
+    assert sum(1 for row in rows[:released] if row.get("hold")) >= 2  # the SIGTERM only repeated the HOLD
+
+
+def test_an_unreadable_pose_during_the_fold_holds_instead_of_ending():
+    class Blind(Robot):
+        def get_observation(self):
+            if len(self.sent) > 30:
+                raise ConnectionError("Failed to sync read 'Present_Position'")
+            return super().get_observation()
+
+    r, status, _, held = drive(Blind(), signal_after=20, release_after=3.0)
+    assert held and r.human_hold_latched
+    assert interrupts(status)[-1]["released"]
+
+
+def test_a_status_write_that_fails_keeps_the_hold(tmp_path):
+    robot = Robot(blocked=(0,), block_from=19)
+    rows, clock = [], [0.0]
+
+    def status(row):
+        if row.get("hold"):
+            raise OSError(28, "No space left on device")
+        rows.append(row)
+
+    r = m.Runner(robot, library(), fps=30, status=status, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, r.hold_file, queue, n = [], tmp_path / "hold.json", ["run reach"], [0]
+
+    def lines():
+        n[0] += 1
+        if n[0] == 20:
+            r.signals.append(signal.SIGINT)
+        if r.human_hold_latched and n[0] > 400 and RELEASE not in r.signals:
+            r.signals.append(RELEASE)
+        if clock[0] > 600:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)  # never raised: the failed write went to stderr, the hold stayed until the release
+    hold = json.loads((tmp_path / "hold.json").read_text())
+    assert hold["hold"] and hold["pid"] == os.getpid() and n[0] > 400
+
+
+@pytest.mark.parametrize("settled, ends", [(True, True), (False, False)])
+def test_a_fold_ends_with_torque_off_only_when_settled_and_home(settled, ends):
+    robot = Robot()
+    r = m.Runner(robot, library(), fps=30, status=lambda row: None, clock=lambda: 0.0, sleep=lambda s: None)
+    r.target, r.signals = list(HOME), [signal.SIGINT]
+    r._interrupt = {"signal": signal.SIGINT, "phase": "park", "seen": 1, "deadline": 99.0}
+    r._stopped, r._park_settled = True, settled  # the park ended within 3 units of home, settled or out of time
+    assert ci.interrupt_step(r) is ends and r.human_hold_latched is (not ends)
