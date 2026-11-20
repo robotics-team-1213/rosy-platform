@@ -60,3 +60,17 @@ def test_shard_py_invocation_balances_heavy_root_tests_and_preserves_small():
         p for p in heavy if not p.startswith("-")
     )
     assert all(s[-1] == "--ignore=x.py" for s in shards)
+
+
+def test_guard_only_runners_skip_colcon_while_non_guard_overlay_keeps_it():
+    import affected_ci
+    import affected_tests as at
+
+    repo = at.Repo.load(Path(__file__).resolve().parents[1])
+    guard_sel = at.Selection("affected", ["docs/adr/D-1.md"], invocations=[[at.GUARD_SET[0]]])
+    guard_entry = next(e for e in affected_ci.ci_matrix(repo, guard_sel)["include"] if e["kind"] == "pytest")
+    assert guard_entry.get("colcon") is False
+
+    mixed_sel = at.Selection("affected", ["test/test_robot_cd.py"], invocations=[["test/test_robot_cd.py"]])
+    mixed_entry = next(e for e in affected_ci.ci_matrix(repo, mixed_sel)["include"] if e["kind"] == "pytest")
+    assert mixed_entry.get("colcon", True) is True

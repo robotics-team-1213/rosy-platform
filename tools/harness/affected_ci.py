@@ -210,4 +210,7 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         entry.setdefault("kind", "pytest")
         entry.setdefault("gating", True)
         entry.setdefault("ros", "overlay")
+        if (entry["kind"] == "pytest" and entry["ros"] == "overlay" and entry.get("invocations")
+                and all(p in at.GUARD_SET for inv in entry["invocations"] for p in inv if not p.startswith("-"))):
+            entry["colcon"] = False
     return {"include": affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)}
