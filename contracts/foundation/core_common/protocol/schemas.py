@@ -475,6 +475,18 @@ class PeerRow(BaseModel):
     age_s: float = 0.0
 
 
+class SlamFallbackStatus(BaseModel):
+    """SLAM -> site wall map automatic fallback (2026-11-18 user decision); the field is null unless the supervisor runs."""
+
+    phase: str  # MONITORING, STOPPING, SWITCHING, WAITING_LOCALIZATION, ACTIVE, FAILED
+    fallback_active: bool = False
+    reason: str = ""
+    since: Optional[float] = None  # CORE wall clock, epoch seconds, of the last phase change
+    health: str = "ok"  # ok / degraded / lost (slam_health)
+    wall_map: Optional[dict] = None  # {map_id, version, sha256} staged on this robot, else null
+    alert: Optional[str] = None  # set when a person must look (no decision, switch failed)
+
+
 class StateSnapshot(TripLeaseFields):
     """로봇 상태 스냅샷 — /ws/state payload와 동일 (API Ref §6.1)."""
 
@@ -510,6 +522,7 @@ class StateSnapshot(TripLeaseFields):
     #: v1.69 additive (D-395): state and pose frame; null from robots before D-395.
     localization: Optional[LocalizationStatus] = None
     safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.71 additive
+    slam_fallback: Optional[SlamFallbackStatus] = None  # SLAM wall-map fallback, additive (API version reserved by the landing)
     odom_pose: Optional[OdomPose] = None  # D-494 2, v1.112 additive; null until odometry
     #: Peer pose sharing, additive: peer rows this CORE sees, null when the
     #: feature is off (docs/plans/2026-11-04-peer-pose-sharing-design.md §4.3).

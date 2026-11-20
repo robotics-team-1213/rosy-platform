@@ -35,7 +35,7 @@ Python package of feature managers behind CORE's `CoreServices`, one subpackage 
 | `core_features.line_follow` | Drive lane/curvature/body proof and bounded recovery: `middleware/drive/behaviors/line_follow` |
 | `fleet_agent/` | Fleet enrolment and discovery (see `fleet_agent/AGENTS.md`) |
 | `decision/` | Shared allowed-action judgment, D-228 (see `decision/AGENTS.md`) |
-| `core_features.localization` | Drive evidence consumer, autonomy halt and bounded pose/search lifecycle: `middleware/drive/behaviors/localization` |
+| `core_features.localization` | Drive evidence consumer, autonomy halt and bounded pose/search lifecycle: `middleware/drive/behaviors/localization`; also the D-1046 SLAM fallback there: `slam_health.py` (ok/degraded/lost verdict with hysteresis) and `slam_fallback.py` (stop first, zero velocity 2 s, host switch at machine grade, goals refused until a post-restart LOCALIZED, one switch per boot, no way back). Moved out of this folder to keep it under the 10,000-line unit limit |
 | `recovery/` | `camera_fault.py`: operator-selectable camera-fault actions; reports eligibility only, no motion |
 | `core_features.road_behaviour` | Drive road-state speed cap and branch choice: `middleware/drive/behaviors/road_behaviour` |
 | `core_features.traffic_policy` | Drive traffic admission and signal-evidence polling: `middleware/drive/behaviors/traffic_policy` |

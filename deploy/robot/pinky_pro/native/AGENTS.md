@@ -68,6 +68,13 @@ Jazzy. This directory is copied into every offline ROSY release payload.
   `../rosy-lowbatt-shutdown.sh` (age and grace checks, then poweroff). Test:
   `test_the_low_battery_halt_watches_the_file_core_really_writes`.
 
+- `navigation_fallback_host.py` (SLAM -> site wall map fallback, 2026-11-18) is the privileged half of the automatic switch, reached only
+  through the Host Agent at the `machine` grade (CORE's own supervisor, never a login). It installs the wall map CORE spooled (sha256
+  re-checked, yaml built here), and switches `runtime.env` (`ROSY_NAVIGATION_BACKEND=localization`, `ROSY_MAP`, `ROSY_ENABLE_LOC_ASSIST=true`)
+  only through `commit_runtime`, and only after CORE's stop evidence (zero velocity >= 2 s, no goal, fresh on the shared monotonic clock and boot id, a plain file CORE owns). It restarts `rosy-navigation`
+  alone, rolls back to the saved 0600 runtime copy on failure, tries once per boot (a refusal counts; root `reset` re-arms) and never switches back to SLAM.
+  `stage` is refused while a switch runs and never deletes the map `ROSY_MAP` names. Test: `test/test_navigation_fallback_host.py`.
+
 - `rosy-tailscale-join.service` (D-477) is a one-shot root unit, condition-gated on the
   provisioned `/etc/rosy/tailscale-join.json` (0600; absent → the robot stays LAN-only).
   `rosy-tailscale-join.py` spends the auth key once (`tailscale up`, `--accept-dns=false`),

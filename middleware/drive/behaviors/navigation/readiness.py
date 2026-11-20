@@ -73,6 +73,14 @@ class NavigationReadinessGate:
     def required_components(self) -> tuple[str, ...]:
         return self._required_components
 
+    def set_required_components(self, components: Iterable[str]) -> None:
+        """SLAM fallback: the backend changed under a running CORE, so the profile it needs changes with it."""
+        selected = tuple(components)
+        if isinstance(components, (str, bytes)) or not selected or set(selected) - set(COMPONENTS):
+            raise ValueError("navigation readiness components must be known components")
+        with self._lock:
+            self._required_components = selected
+
     def observe(
         self,
         component: str,

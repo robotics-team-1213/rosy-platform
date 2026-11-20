@@ -216,6 +216,8 @@ class RosyCoreNode(Node):
         self.get_logger().info(
             f"core up: robot_id={self.core.identity.robot_id} model={profile.model}")
         self._start_events()
+        if self.core.slam_fallback is not None:
+            self.core.slam_fallback.start()  # own thread; a no-op unless the backend is slam
         # D-260: hand the boot display the inputs only CORE knows (SAF-005 warning,
         # overlaid device states) so the LCD, lamp and buzzer say what the dashboard says.
         from core.system.host_files import STATUS_INPUTS_PERIOD_S
@@ -313,6 +315,9 @@ class RosyCoreNode(Node):
                 self.core.station_docking.close()
             except Exception as exc:
                 self.get_logger().warning(f'station shutdown failed: {exc}')
+        fallback = self.core.slam_fallback
+        if fallback is not None:
+            fallback.stop()  # joins its thread (bounded) before the adapter that carries its halt is closed
         self.control_adapter.close()
         self.get_logger().info("core shutting down")
         if self._api_thread is not None:
