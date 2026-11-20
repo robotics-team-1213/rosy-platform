@@ -8,8 +8,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_act_shadow  # noqa: E402
-import cell_attempts  # noqa: E402
-import cell_auto_record  # noqa: E402
+import cell_attempts, cell_auto_record  # noqa: E402,E401
 import cell_auto_evidence  # noqa: E402
 from cell_auto_pick_plan import CLOSING, choose, observe, plan_pick, save_frame_receipt, verify_placed  # noqa: E402,F401  (re-exported)
 import cell_executor  # noqa: E402
@@ -31,11 +30,11 @@ from cell_observe import keep, predicted_pixel, wrap90  # noqa: E402,F401
 import cell_params as prm  # noqa: E402
 from cell_pick_geom import across, box_centre, grasp_depth, grasp_yaw, jaw_open_for, parse_dest, reachable_ends, surface_z  # noqa: E402,F401
 import cell_pipeline as cp  # noqa: E402
-import cell_pivot  # noqa: E402
-import cell_place_fit  # noqa: E402
+import cell_pivot, cell_place_fit  # noqa: E402,E401
 from cell_return_held import _plan_return_held, run_return_held  # noqa: E402,F401
 from cell_transfer import FOLDED, STILL_HOLDING_UNITS, Gate, transfer_folded  # noqa: E402,F401
 import cell_wrist_ref  # noqa: E402
+import cell_zone_verification  # noqa: E402
 
 
 def run_auto(
@@ -299,6 +298,7 @@ def run_auto(
                                       tried["verify"].get("verified") is True and tried["verify"].get("inside") is True,
                                       "placement verification")
                 tried["verify"]["release"] = cell_release_evidence.from_steps(moved["steps"], config.get("io"))  # observation only
+                cell_zone_verification.record(row, tried, guarded, before_frame, config, dest_site, source, droi)
                 pending = cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(
                     ".pending.json"
                 )
