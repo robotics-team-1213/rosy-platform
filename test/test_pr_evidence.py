@@ -46,6 +46,21 @@ def test_records_only_clean_passes(tmp_path, monkeypatch):
     assert [r[4] for r in rows] == [["test/a.py"]]
 
 
+def test_exit5_all_skipped_is_a_verdict_but_other_exit5_is_not(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    rows = _fakes(monkeypatch, [["test/a.py"], ["test/b.py"]])
+    monkeypatch.setattr(pr_evidence.pr_land, "lab_missing", lambda cwd, head, required: required)
+    monkeypatch.setattr(pr_evidence.land_checks, "tmp_dir", lambda name: tmp_path)
+
+    def run(invs, logs, sha, repo=None, label=None):
+        logs[0].write_text("SKIPPED [1] test/a.py:3: no rclpy\n== 1 skipped in 0.10s ==\n", encoding="utf-8")
+        logs[1].write_text("no tests ran in 0.01s\n", encoding="utf-8")
+        return [5, 5]
+
+    assert pr_evidence.main(["HEAD"], repo=repo, run=run) == 1
+    assert [r[4] for r in rows] == [["test/a.py"]]
+
+
 def test_solo_runs_one_invocation_per_call_alone_and_records_only_passes(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     rows = _fakes(monkeypatch, [["test/a.py"], ["test/b.py"]])
