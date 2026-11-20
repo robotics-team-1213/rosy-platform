@@ -160,7 +160,8 @@ def answer(match):
     def until(m):
         request = m.bay_scan_request()
         if request is not None:
-            m.note_bay_scan_match(good(x=0.0) if m.phase is DockPhase.SETTLING else match, request_id=request[0])
+            m.note_bay_scan_match(true_bay_pose(m.executor) if m._bay_phases._req_kind in ("align", "rowpose")
+                                  else good(x=0.0) if m.phase is DockPhase.SETTLING else match, request_id=request[0])
         return done(m)
     return until
 
@@ -170,7 +171,8 @@ def answer_both(zone_match, seated_match):
     def until(m):
         request = m.bay_scan_request()
         if request is not None:
-            m.note_bay_scan_match(seated_match if m.phase is DockPhase.SETTLING else zone_match, request_id=request[0])
+            m.note_bay_scan_match(true_bay_pose(m.executor) if m._bay_phases._req_kind in ("align", "rowpose")
+                                  else seated_match if m.phase is DockPhase.SETTLING else zone_match, request_id=request[0])
         return done(m)
     return until
 
@@ -182,21 +184,47 @@ def test_stopped_well_short_of_the_stop_face_is_a_blocked_failure_not_a_40_s_wai
     p.manager.dock()
     run_row(p, row, until=answer_both(good(x=0.15), good(x=0.078)))
     assert p.manager.state is DockState.DOCK_FAILED
-    assert "blocked short of the stop face (0.078 m out" in p.manager._error
+    retries = [d["reason"] for kind, d in p.events if kind == "docking.retry"]      # the retry's back-off then stops: no sim gap feed
+    assert any("blocked short of the stop face (0.078 m out" in r for r in retries), retries
 
 
-def test_seated_by_the_scan_keeps_waiting_for_the_charge_and_a_weak_check_changes_nothing():
-    for seated in (good(x=0.01), good(x=0.078, margin=0.1), None):
+def test_seated_by_the_scan_keeps_waiting_for_the_charge_and_an_unverified_seat_never_drives_out():
+    for seated, words in ((good(x=0.01), "charge NOT confirmed"),                         # verified straight: stays DOCKED, never drives out
+                          (good(x=0.078, margin=0.1), "bay seat not measurable"),    # reference scan but no good fit: fail closed
+                          (None, "bay seat not measurable")):
         p, row = a_row(start=(-0.15, 0.0, math.pi), others=(), charges=False)
         with_reference(p)
         p.manager.dock()
         run_row(p, row, until=answer_both(good(x=0.15), seated))
-        assert p.manager.state is DockState.DOCK_FAILED and "no charge after bay contact" in p.manager._error
+        retries = [d["reason"] for kind, d in p.events if kind == "docking.retry"]
+        if "NOT confirmed" in words:
+            assert p.manager.state is DockState.DOCKED and words in p.manager.status().last_event, p.manager.status().last_event
+            assert not [c for ph, c in p.world.commands if ph is DockPhase.BACKOFF and c[0] > 0.0]
+            continue
+        assert p.manager.state is DockState.DOCK_FAILED
+        if "not measurable" in words:
+            assert words in p.manager._error, p.manager._error      # failed closed at the seat, no retry at all
+            assert not [c for ph, c in p.world.commands if ph is DockPhase.BACKOFF]      # and it never drove out
+        else:
+            assert any(words in r for r in retries), retries         # verified straight: the retry happened (its back-off then stops, no sim gap)
 
 
-def answer_kinds(zone=None, entry=None, seat=None, log=None):
+def true_bay_pose(world, heading_lie=0.0):
+    """The LiDAR bay pose of the sim robot: x out of the stop face, y = -lateral (bay frame), heading (the camera line's own formulas)."""
+    x, y, yaw = world.pose
+    c, sn = math.cos(yaw), math.sin(yaw)
+    ox, oy = c * -x + sn * -y, -sn * -x + c * -y
+    oyaw = math.atan2(-sn, c)
+    ax, ay = math.cos(oyaw), math.sin(oyaw)
+    lateral = ay * ox - ax * oy
+    heading = math.remainder(yaw - math.pi, math.tau)
+    return BayScanPose(x=max(0.0, ox * ax + oy * ay - 0.05), y=-lateral, heading=heading + heading_lie, inliers=0.95, margin=0.6, median_m=0.003)
+
+
+def answer_kinds(zone=None, entry=None, seat=None, log=None, find=None):
     """The bridge for every ask, by what the phases are asking for."""
-    answers = {"zone": zone or good(x=0.15), "entry": entry, "seat": seat or good(x=0.0)}
+    answers = {"zone": zone or good(x=0.15), "entry": entry, "seat": seat or good(x=0.0), "find": find or good(x=0.5), "align": None, "alignpose": None, "rowpose": None}
+    find_asks = []
 
     def until(m):
         request = m.bay_scan_request()
@@ -204,7 +232,15 @@ def answer_kinds(zone=None, entry=None, seat=None, log=None):
             kind = m._bay_phases._req_kind
             if log is not None:
                 log.append((kind, request[0]))
-            m.note_bay_scan_match(answers[kind], request_id=request[0])
+            answer = answers[kind]
+            if kind in ("entry", "seat") and isinstance(answer, str) and answer == "true":
+                answer = true_bay_pose(m.executor)
+            if kind in ("align", "alignpose", "rowpose"):
+                answer = true_bay_pose(m.executor)              # the sim body is where the LiDAR says
+            if kind == "find":
+                find_asks.append(1)
+                answer = answer(len(find_asks)) if callable(answer) else answer         # a callable gets the number of the ask
+            m.note_bay_scan_match(answer, request_id=request[0])
         return done(m)
     return until
 
@@ -228,6 +264,7 @@ def test_the_entrance_is_measured_again_after_the_creep_and_every_source_must_be
         log = []
         p.manager.dock()
         run_row(p, row, until=answer_kinds(zone=good(x=0.15, y=-start_y), entry=good(x=0.15, y=entry_y), log=log))
+        log = [e for e in log if e[0] != "rowpose"]
         kinds = [k for k, _ in log]
         assert kinds[:2] == ["zone", "entry"] and log[0][1] != log[1][1], log
         if ok:
@@ -343,7 +380,8 @@ def test_no_answer_in_time_keeps_the_map_path_and_waits_no_longer_than_the_limit
     t0 = p.clock.now
     p.manager.dock()
     run_row(p, row)                                   # nobody answers
-    assert p.manager.state is DockState.DOCKED, p.manager._error     # the consistent map docks it
+    # the zone check took the map path after the wait; inside the rails ALIGNING then has no LiDAR pose to steer on and stops (no camera fallback)
+    assert p.manager.state is DockState.DOCK_FAILED and ("no fresh LiDAR pose" in p.manager._error or "no fresh LiDAR bay pose" in p.manager._error), p.manager._error
     assert p.clock.now - t0 >= CFG.bay_scan_pose_wait_s
 
 
@@ -378,3 +416,249 @@ def test_the_bridge_matches_the_live_scan_against_the_stored_one_off_the_scan_th
     assert match[0].x == pytest.approx(0.084, abs=0.02) and match[0].inliers >= 0.8
     bay_body_scan(services, dict(SCANS["near"]), received_at=p.clock.now)      # asked once per check
     assert p.manager.bay_scan_request() is None
+
+
+def test_a_docked_without_charge_pack_that_stays_down_warns_once_and_a_blip_does_not():
+    # panel B R4/R5: the full-battery seat is DOCKED with no charge evidence; a pack that FALLS (filtered voltage, held 5 s) warns
+    from types import SimpleNamespace  # noqa: PLC0415
+    p, row = a_row(start=(-0.15, 0.0, math.pi), others=(), charges=False)
+    with_reference(p)
+    p.battery.percent = 100.0
+    p.manager.dock()
+    run_row(p, row, until=answer_kinds(zone=good(x=0.15), entry=good(x=0.15), seat=good(x=0.01)))
+    assert p.manager.state is DockState.DOCKED and p.manager._uncharged_v0 is not None
+    v0 = p.manager._uncharged_v0
+
+    def pack(filtered, raw):
+        return SimpleNamespace(voltage=raw, percent=100.0, set_charging=lambda flag: None,
+                               status=lambda: SimpleNamespace(filtered_voltage=filtered))
+    p.manager._battery = pack(v0 - 0.2, v0 - 0.2)
+    for _ in range(3):                                   # 3 s down: not yet
+        p.clock.now += 1.0
+        p.manager.tick()
+    assert not [1 for kind, d in p.events if kind == "docking.uncharged_voltage_drop"]
+    p.manager._battery = pack(v0, v0 - 0.2)              # a raw dip while the filtered voltage is fine: the watch resets
+    p.clock.now += 1.0
+    p.manager.tick()
+    p.manager._battery = pack(v0 - 0.2, v0 - 0.2)
+    for _ in range(7):
+        p.clock.now += 1.0
+        p.manager.tick()
+    warnings = [d for kind, d in p.events if kind == "docking.uncharged_voltage_drop"]
+    assert len(warnings) == 1 and warnings[0]["to_v"] == pytest.approx(v0 - 0.2) and "pack fell" in p.manager.status().last_event
+
+def test_a_reference_dock_docks_end_to_end_when_every_ask_is_answered():
+    # R4: the positive case (the no-answer test above is the fail-closed one)
+    p, row = a_row(start=(-0.15, 0.0, math.pi), others=())
+    with_reference(p)
+    p.manager.dock()
+    run_row(p, row, until=answer_kinds(zone=good(x=0.15), entry=good(x=0.15)))
+    assert p.manager.state is DockState.DOCKED, p.manager._error
+    assert abs(p.world.pose[0] + 0.05) < 1e-6
+
+def test_the_entry_lateral_of_a_reference_dock_comes_from_the_lidar_not_the_drifting_map():
+    # round 21: after staging + turn the camera saw only the crossbar and the lateral was filled from the map: 143 mm -> a retry through another turn
+    p, row = a_row(start=None, others=())
+    with_reference(p)
+    p.manager._pose_provider = lambda: (p.world.pose[0], p.world.pose[1] + 0.143, p.world.pose[2])      # the map is 143 mm off
+    capture = p.detector.capture
+
+    def corridor_only():
+        capture()
+        if p.detector.latest is not None and p.manager.phase is DockPhase.ACQUIRING:
+            p.detector.latest = p.detector.latest.model_copy(update={"lateral_measured": False})
+    p.detector.capture = corridor_only
+    p.manager.dock()
+    run_row(p, row, until=answer_kinds(zone=good(x=1.0), entry="true"))
+    assert not [r for kind, d in p.events if kind == "docking.retry" for r in [d["reason"]] if "entry error" in r], p.events
+    assert p.manager.state is DockState.DOCKED, p.manager._error
+
+def _entry_setup(lateral_measured):
+    p, row = a_row(start=None, others=())
+    with_reference(p)
+    capture = p.detector.capture
+
+    def cam():
+        capture()
+        if p.detector.latest is not None and p.manager.phase is DockPhase.ACQUIRING:
+            p.detector.latest = p.detector.latest.model_copy(update={"lateral_measured": lateral_measured})
+    p.detector.capture = cam
+    return p, row
+
+
+def test_no_good_lidar_pose_at_the_entry_window_and_a_map_filled_lateral_retries_once_then_stops():
+    p, row = _entry_setup(False)
+    p.manager.dock()
+    run_row(p, row, until=answer_kinds(zone=good(x=1.0), entry=None))               # the entry pose never fits
+    retries = [d["reason"] for kind, d in p.events if kind == "docking.retry"]
+    assert any("no LiDAR pose at the entry window" in r for r in retries), retries   # one retry first (its back-off then stops: no sim gap feed)
+    assert p.manager.state is DockState.DOCK_FAILED
+    assert not [c for ph, c in p.world.commands if ph is DockPhase.ALIGNING]
+
+
+def test_no_good_lidar_pose_with_a_measured_camera_lateral_keeps_the_camera():
+    p, row = _entry_setup(True)
+    p.manager.dock()
+    run_row(p, row, until=answer_kinds(zone=good(x=1.0), entry=None))
+    assert "no LiDAR pose at the entry window" not in (p.manager._error or "")
+
+
+def test_a_weak_lidar_heading_that_disagrees_with_the_camera_crossbar_stops():
+    p, row = _entry_setup(True)
+    p.manager.dock()
+    run_row(p, row, until=answer_kinds(zone=good(x=1.0), entry=good(x=0.4, heading=math.radians(15.0), inliers=0.78, margin=0.45)))
+    assert p.manager.state is DockState.DOCK_FAILED and "disagree (false fit?)" in p.manager._error, p.manager._error
+
+
+def test_a_strong_lidar_fit_outweighs_a_camera_heading_that_is_wrong_at_this_site():
+    # round 22: the camera crossbar heading read -20..-25 deg on a straight body; the camera jump check and the cross-check must not stop it
+    p, row = a_row(start=None, others=())
+    with_reference(p)
+    capture = p.detector.capture
+    n = {"acq": 0}
+
+    def lying():
+        capture()
+        if p.detector.latest is not None and p.manager.phase is DockPhase.ACQUIRING:
+            n["acq"] += 1
+            lie = math.radians(-12.0 if n["acq"] < 6 else -25.0)               # a different wrong heading before and after the creep
+            p.detector.latest = p.detector.latest.model_copy(update={"yaw": p.detector.latest.yaw - lie})
+    p.detector.capture = lying
+    seen = []
+    p.manager.dock()
+    until = answer_kinds(zone=good(x=1.0), entry="true")
+
+    def watch(m):
+        if m.status().last_event not in seen:
+            seen.append(m.status().last_event)
+        return until(m)
+    run_row(p, row, until=watch)
+    retries = [d["reason"] for kind, d in p.events if kind == "docking.retry"]
+    assert not any("jumped" in r for r in retries), retries
+    assert p.manager.state is DockState.DOCKED, p.manager._error
+    assert any(e and e.startswith("entry: camera heading") for e in seen), seen
+
+
+def test_the_lidar_steer_state_of_an_earlier_attempt_does_not_outlive_its_aligning():
+    p = a_bay()
+    with_reference(p)
+    p.manager.dock()
+    bp = p.manager._bay_phases
+    bp._lp, bp._lp_lost_since, bp._lp_start, bp._ls_cap = (0.1, 0.0, 0.0, 0.0, 0.0), 5.0, 5.0, 0.3
+    bp._reset_line_state()
+    assert bp._lp is None and bp._lp_lost_since is None and bp._lp_start is None and bp._ls_cap is None
+    p.manager.tick()
+    assert bp._lidar_steer(p.clock.now) is None                # not ALIGNING: no in-the-rails rule at all
+
+def test_the_entry_heading_align_of_a_reference_dock_closes_on_the_lidar_not_the_camera_heading():
+    # R4: the body is 20 deg off after the turn but the camera claims straight: closing on the camera would stop the align at once
+    p, row = a_row(start=None, others=())
+    with_reference(p)
+    p.world.arrival_error = (0.0, math.radians(20.0))
+    capture = p.detector.capture
+
+    def camera_says_straight():
+        capture()
+        if p.detector.latest is not None and p.manager.phase is DockPhase.ACQUIRING:
+            x, y, yaw = p.world.pose
+            p.detector.latest = p.detector.latest.model_copy(update={"yaw": p.detector.latest.yaw + math.remainder(yaw - math.pi, math.tau)})
+    p.detector.capture = camera_says_straight
+    p.manager.dock()
+    run_row(p, row, until=answer_kinds(zone=good(x=1.0), entry="true"))
+    assert p.manager.state is DockState.DOCKED, p.manager._error
+    spins = [c for ph, c in p.world.commands if ph is DockPhase.ACQUIRING and c[0] == 0.0 and abs(c[1]) > 1e-6]
+    assert spins, "the align never turned"
+
+
+def test_the_first_aligning_pose_must_agree_with_the_entry_window_pose():
+    p = a_bay()
+    with_reference(p)
+    p.manager.dock()
+    bp = p.manager._bay_phases
+    bp._entry_match = (good(x=0.4, y=0.0, heading=0.0), p.clock.now)
+    bp.ls_note(good(x=0.36, y=-0.08, heading=0.0), p.clock.now)             # 8 cm sideways of the entry values
+    bp.ls_note(good(x=0.36, y=0.0, heading=math.radians(9.0)), p.clock.now)     # 9 deg apart
+    assert bp._lp is None
+    bp.ls_note(good(x=0.36, y=-0.01, heading=math.radians(1.0)), p.clock.now)
+    assert bp._lp is not None
+
+
+def test_a_lidar_heading_over_40_deg_from_the_camera_stops_even_a_strong_fit():
+    p, row = _entry_setup(True)
+    p.manager.dock()
+    run_row(p, row, until=answer_kinds(zone=good(x=1.0), entry=good(x=0.4, heading=math.radians(43.0), inliers=0.95, margin=0.6)))
+    assert p.manager.state is DockState.DOCK_FAILED and "apart: stopped" in p.manager._error, p.manager._error
+
+def test_an_entry_pose_one_bay_pitch_off_is_an_alias_not_a_pose():
+    # round 23: lateral 191 mm / heading 23 deg right after a good turn on the axis = the neighbouring bay
+    p = a_bay()
+    with_reference(p)
+    p.manager.dock()
+    bp = p.manager._bay_phases
+    bp._entry_since = p.clock.now
+    bp._entry_match = (good(x=0.4, y=-0.191, heading=math.radians(23.0)), p.clock.now)
+    assert bp._entry_lidar(p.clock.now) is None
+    assert "alias of a neighbour bay" in p.manager.status().last_event
+    bp._entry_match = (good(x=0.4, y=-0.03, heading=math.radians(3.0)), p.clock.now)
+    assert bp._entry_lidar(p.clock.now) is not None
+
+
+def test_the_rail_entrance_judges_the_mean_of_several_lidar_poses_and_the_reverse_corrects_the_lateral_first():
+    # a 25 mm lateral at the staging point is centred by the LiDAR-steered reverse before the entrance; noisy single poses do not decide
+    import random  # noqa: PLC0415
+    rng = random.Random(3)
+    p, row = a_row(start=None, others=())
+    with_reference(p)
+    p.world.arrival_error = (0.025, 0.0)
+    until = answer_kinds(zone=good(x=1.0), entry="true")
+
+    def noisy(m):
+        request = m.bay_scan_request()
+        if request is not None and m._bay_phases._req_kind in ("align", "rowpose"):
+            pose = true_bay_pose(m.executor)
+            m.note_bay_scan_match(BayScanPose(x=pose.x, y=pose.y + rng.uniform(-0.004, 0.004), heading=pose.heading, inliers=0.95,
+                                              margin=0.6, median_m=0.003), request_id=request[0])
+            return done(m)
+        return until(m) if request is None else _with(until, m, request)
+
+    def _with(u, m, request):
+        # hand the request back to answer_kinds' logic by asking again is not possible: answer here by kind
+        kind = m._bay_phases._req_kind
+        ans = true_bay_pose(m.executor) if kind in ("entry", "seat", "alignpose") else good(x=1.0) if kind == "zone" else None
+        m.note_bay_scan_match(ans, request_id=request[0])
+        return done(m)
+    p.manager.dock()
+    run_row(p, row, until=noisy)
+    assert p.manager.state is DockState.DOCKED, p.manager._error
+
+
+def test_a_rail_entrance_whose_mean_lateral_is_off_stops_before_the_rails():
+    p = a_bay()
+    with_reference(p)
+    p.manager.dock()
+    bp = p.manager._bay_phases
+    bp._lp_hist, bp._x_now, bp._rail_judged = [0.02, 0.018, 0.022], 0.11, False
+    assert bp._rail_judge(p.clock.now) is True
+    assert p.manager.state is DockState.DOCKING and "bay rail entrance lateral 0.020 m (mean of 3" in p.manager.status().last_event       # a reseat in the lane, not a fail
+    q = a_bay()
+    with_reference(q)
+    q.manager.dock()
+    qb = q.manager._bay_phases
+    qb._lp_hist, qb._x_now, qb._rail_judged = [0.012, -0.010, 0.001], 0.11, False
+    assert qb._rail_judge(q.clock.now) is False and qb._rail_judged         # +-10 mm single poses, mean 1 mm: judged on the mean
+
+
+def test_consecutive_align_poses_may_not_jump_by_more_than_5_deg_plus_the_turn_rate():
+    p = a_bay()
+    with_reference(p)
+    p.manager.dock()
+    bp = p.manager._bay_phases
+    bp._align_lp = (0.0, 0.0, 10.0)
+    t0 = 10.2
+    bp.note_scan_match = bp.note_scan_match
+    bp._req_open, bp._req_kind = 1, "alignpose"
+    bp.note_scan_match(good(x=0.4, heading=math.radians(12.0)), t0, None, 1)       # +12 deg in 0.2 s: a jump
+    assert bp._align_lp[0] == 0.0
+    bp._req_open, bp._req_kind = 2, "alignpose"
+    bp.note_scan_match(good(x=0.4, heading=math.radians(4.0)), t0, None, 2)
+    assert abs(bp._align_lp[0] - math.radians(4.0)) < 1e-9

@@ -22,7 +22,7 @@ The Rosy Cam phone app (Kotlin/CameraX) lives in its own module `operations/site
 
 | Directory | Purpose |
 |-----------|---------|
-| `rosy_vision/` | Python package: `protocol.py`, `ingest.py` (latest-only receiver/direct preview), `detect.py` (isolated OpenCV CPU detector), `rectify.py` (D-318 display-only preview transform), `project.py` (shared games homography), `publish.py` (source-token Fleet client), `worker.py` (fresh latest-frame orchestration), `cli.py` (see `rosy_vision/AGENTS.md`) |
+| `rosy_vision/` | Python package: `protocol.py`, `ingest.py` (latest-only receiver/direct preview), `detect.py` (isolated OpenCV CPU detector), `rectify.py` (D-318 display-only preview transform), `project.py` (shared `core_common.homography`), `publish.py` (source-token Fleet client), `worker.py` (fresh latest-frame orchestration), `cli.py` (see `rosy_vision/AGENTS.md`) |
 | `test/` | ROS-free pytest, `conftest.py` bootstraps `sys.path` without a colcon install |
 | `../signal_observation/` | D-163 signal lamp observer (read-only, no command path), carved out of the signal site device (D-429 §2, D-427 wave 3b). Not part of the `rosy_vision` Python package (no `__init__.py`); see `../signal_observation/AGENTS.md` |
 
@@ -37,7 +37,7 @@ The Rosy Cam phone app (Kotlin/CameraX) lives in its own module `operations/site
 - `captured_at` in `ingest.py` uses this process's own wall clock (`time.time()`) minus the frame's `age_ms` — the phone's clock is never trusted (design §3).
 - The worker requires all four configured map markers and a configured robot marker in one frame. `quality: null` means unmeasured and is not policy evidence. Source, map, calibration, and processor revisions must match Fleet configuration.
 - D-587: with `--track`, a robot marker in `robot_markers` that the approved D-457 record projects becomes a sighting too (`track/marker_sightings.py`, `calibration_source: approved_record`, revision = the record's). It needs the lens FOV for the parallax step (`MARKER_HEIGHT_M`) and passes the corner-geometry gate; robot pose = marker pose minus the URDF mount (LiDAR top) and the per-robot `marker_yaw_offset_deg`. A robot without an installed offset sends none. Sightings go before the detections POST. Unassigned markers and blobs never become sightings.
-- Runtime vision dependencies are installed from package metadata: `opencv-contrib-python-headless`, `numpy`, and `httpx`. `games` supplies the reviewed, ROS-free homography implementation.
+- Runtime vision dependencies are installed from package metadata: `opencv-contrib-python-headless`, `numpy`, and `httpx`. `core_common.homography` supplies the reviewed, ROS-free homography implementation.
 - D-318 preview rectification uses the signed Viewer lease and never changes the raw latest frame consumed by ArUco or Fleet sightings. Browser adjustments are not a measured site calibration; keep DEVICE/FIELD acceptance separate.
 
 ### Testing Requirements

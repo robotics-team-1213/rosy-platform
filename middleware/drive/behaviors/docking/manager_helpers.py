@@ -198,6 +198,8 @@ class DockingPhasesMixin:
             )
 
         target = DockState.CHARGING if confirmed else DockState.DOCKED
+        if confirmed and self._dock is not None:
+            self._seated_dock_id = self._dock.id
         if target is not self._state:
             self._state = target
             self._emit(
@@ -208,6 +210,28 @@ class DockingPhasesMixin:
                     "source": charging.source,
                 },
             )
+
+        # DOCKED without charge evidence (full pack, LiDAR-confirmed seat): a pack that then falls is not being charged. Warn once.
+        v0 = self._uncharged_v0
+        if v0 is not None and confirmed:
+            self._uncharged_v0 = None                      # charge evidence arrived after all
+        if confirmed:
+            self._charge_unconfirmed = False
+        elif v0 is not None and not self._uncharged_warned:
+            status = getattr(self._battery, "status", None)
+            filtered = getattr(status(), "filtered_voltage", None) if callable(status) else None
+            filtered = filtered if filtered is not None else voltage        # BatteryStatus.filtered_voltage; the raw reading only as a fallback
+            if filtered is None or filtered >= v0 - self._cfg.bay_uncharged_drop_v:
+                self._uncharged_since = None
+            else:
+                self._uncharged_since = now if self._uncharged_since is None else self._uncharged_since
+                if now - self._uncharged_since >= self._cfg.bay_uncharged_hold_s:
+                    self._uncharged_warned = True
+                    self._last_event = "docked without charge: pack fell %.2f V (%.2f -> %.2f V), not charging" % (
+                        v0 - filtered, v0, filtered)
+                    self._emit("docking.uncharged_voltage_drop", "warning",
+                               {"dock_id": self._dock.id if self._dock else None, "from_v": v0, "to_v": filtered})
+                    self._call_person("pack voltage falls while docked without charge")
 
         # D-350: 만충 검출 — CHARGING→DOCKED 전이(전류 종단) 또는 전압 유지.
         self._check_full(charging)
@@ -277,10 +301,13 @@ class DockingPhasesMixin:
     def _retry(self, reason: str) -> None:
         """스테이징부터 다시. 도크에 도달하지 못한 실패에 쓴다."""
         limit = self._type().max_retries if self._dock else 0
+        if self._dock and self._bay_phases.active():
+            limit = self._bay_phases.reseat_limit(limit, self._phase)      # a reference dock retrying from the reverse / the seat reseats inside the lane
         if self._retries >= limit:
-            self._fail(reason)
+            self._fail(reason + " (tries used up: %d)" % self._retries if self._retries and self._dock and self._bay_phases.active() else reason)
             return
         self._retries += 1
+        self._last_event = "retry %d: %s" % (self._retries, reason)
         self._emit("docking.retry", "warning", {"reason": reason, "attempt": self._retries})
         self._begin_backoff(DockPhase.STAGING)
 
@@ -291,11 +318,20 @@ class DockingPhasesMixin:
             self._fail(reason)
             return
         self._reseats += 1
+        self._last_event = "reseat %d: %s" % (self._reseats, reason)
         self._emit("docking.reseat", "warning", {"reason": reason, "attempt": self._reseats})
         self._begin_backoff(DockPhase.ACQUIRING)
 
     def _begin_backoff(self, next_phase: DockPhase) -> None:
+        if self._phase in (DockPhase.SETTLING, DockPhase.ALIGNING) and self._bay_phases.active():
+            why = self._bay_phases.drive_out_refusal(self._phase)
+            if why:                                  # the seat is not verified straight: nothing drives out of the rails
+                self._fail(why)
+                return
+        if self._bay_phases.active() and self._bay_phases.reseat_begin(self._phase):
+            next_phase = DockPhase.ACQUIRING                # a lane reseat re-acquires in place, no staging
         self._next_phase_after_backoff = next_phase
+        self._backoff_from_phase = self._phase
         self._stop_detector()
         if self.executor is not None:
             self.executor.set_collision_exemption(False)
@@ -320,6 +356,8 @@ class DockingPhasesMixin:
 
     def _fail(self, reason: str, *, safety_stop: bool = False) -> None:
         """종착이다. 스스로 재시도하지 않는다."""
+        phase = self._phase
+        in_lane = (not safety_stop and self._dock is not None and self._bay_phases.active() and self._bay_phases.in_lane_dead_end(phase))
         self._state = DockState.DOCK_FAILED
         operation = self.native.current
         if operation is not None:
@@ -332,17 +370,21 @@ class DockingPhasesMixin:
             )
         self._phase = None
         self._error = reason
+        self._last_event = "failed: " + reason
         self._release()
         self._emit(
             "docking.failed",
             "error",
             {"reason": reason, "dock_id": self._dock.id if self._dock else None},
         )
+        if in_lane:
+            self._call_person("stopped in the lane: " + reason)    # a dead end that leaves the robot standing in the bay lane needs a person
 
     # --- 공통 -----------------------------------------------------------------
 
     def _mark_docked(self) -> None:
         self._state = DockState.DOCKED
+        self._seated_dock_id = self._dock.id if self._dock is not None else None      # prior for a later first acquisition at this dock
         operation = self.native.current
         if operation is not None:
             self._native_mutate(
@@ -354,6 +396,10 @@ class DockingPhasesMixin:
         self._phase = None
         self._full_announced = False
         self._emit("docking.docked", "info", {"dock_id": self._dock.id})
+
+    def _call_person(self, why: str) -> None:
+        """A seat the LiDAR confirms but the charger does not: a person must look (Fleet reads docking.person_call and status.charge_unconfirmed)."""
+        self._emit("docking.person_call", "warning", {"dock_id": self._dock.id if self._dock else None, "reason": why})
 
     def _check_full(self, charging: "ChargingConfirmation") -> None:
         """D-350: DOCKED 상태에서 만충을 감지하면 `docking.full` 이벤트를 1회 낸다."""

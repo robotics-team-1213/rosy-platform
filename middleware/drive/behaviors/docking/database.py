@@ -208,6 +208,10 @@ class DockDatabase:
         self._path = Path(path) if path is not None else None
         self._types: dict[str, DockType] = {}
         self._docks: dict[str, DockInstance] = {}
+        # Set by the manager: docks added or taught are stamped with the identity of the map frame (metadata["map_epoch"] = map_id). A bay-row
+        # dock whose stamp differs from the frame now is refused by dock() (MAP_FRAME_CHANGED) until it is taught again. Blind when the map id
+        # does not change across a SLAM restart: the LiDAR/map mismatch check of the zone phase is the second guard.
+        self.frame_key = None            # callable -> the identity of the map frame now (map_id, e.g. "occupancy:..."), or None when unknown
         self._load()
 
     @classmethod
@@ -266,9 +270,16 @@ class DockDatabase:
             # 기종을 모르면 어떤 검출기를 쓸지 고를 수 없다.
             raise DockError("UNKNOWN_DOCK_TYPE",
                             f"dock type '{dock.type}' is not registered")
+        dock = self._stamped(dock)
         self._docks[dock.id] = dock
         self._save()
         return dock
+
+    def _stamped(self, dock: DockInstance) -> DockInstance:
+        key = self.frame_key() if callable(self.frame_key) else None
+        if key is None:
+            return dock
+        return dock.model_copy(update={"metadata": {**dock.metadata, "map_epoch": str(key)}})
 
     def get(self, dock_id: str) -> DockInstance:
         dock = self._docks.get(dock_id)
@@ -291,7 +302,7 @@ class DockDatabase:
         줄자로 SLAM 맵 좌표를 재서 쓸 만한 값이 나오지 않는다. 그리고 이렇게
         기록하면 포즈가 나중에 복귀에 쓸 바로 그 맵과 자기모순 없이 일치한다.
         """
-        taught = self.get(dock_id).taught_at(x=x, y=y, yaw=yaw, map_id=map_id)
+        taught = self._stamped(self.get(dock_id).taught_at(x=x, y=y, yaw=yaw, map_id=map_id))
         self._docks[dock_id] = taught
         self._save()
         return taught
