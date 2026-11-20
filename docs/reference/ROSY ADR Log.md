@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-1057 | 셀 작업 허가 증거는 지금 실제로 측정되는 값으로만 공급한다. [전문](../adr/D-1057-cell-task-admission-evidence.md) | Accepted (2026-11-20, 사용자 결정 (가)) |
+| D-1061 | 기록은 번호 없는 조각으로 내고, API 번호·머리 줄·CONTRACT·Log 행은 기록 봇이 쓴다(Merge Queue 충돌 제거, D-1054 4·5항·D-510 API 부분 개정). [전문](../adr/D-1061-records-fragments-merge-queue.md) | Accepted (2026-11-21, 사용자 방향 승인) |
 | D-1059 | Merge Queue는 PR의 녹색 실행과 트리가 같으면 guard 묶음만 다시 돈다(D-762 큐 재시험 범위 개정, 변수 `ROSY_QUEUE_DELTA`, 기본 꺼짐). [전문](../adr/D-1059-merge-queue-retests-what-changed-since-the-pr-run.md) | Accepted (2026-11-21, 사용자 결정) |
 | D-1058 | CORE 실행기 기본값을 events로 바꾼다(D-953 후속 3 개정). 되돌리기는 `ROSY_CORE_EXECUTOR=threaded` drop-in. [전문](../adr/D-1058-core-events-executor-default.md) | Accepted (2026-11-20, 사용자 결정; 정지 상태 실측·Gazebo 확인, 주행 확인 남음) |
 | D-1055 | PR + Merge Queue를 유일한 병합 경로로 하고 land.py 착지를 은퇴한다(D-868 개정). [전문](../adr/D-1055-pr-merge-queue-only-merge-path-land-retired.md) | Accepted (2026-11-20, 사용자 결정) |

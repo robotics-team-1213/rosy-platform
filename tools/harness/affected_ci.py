@@ -43,7 +43,7 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 5, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
+SUITE_SHARDS = {"fleet": 8, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
 # Fleet file weights from pytest result-line timestamps in CI 44563719449 and 44568270495.
 # Retain prior weights where timings are incomplete or inconsistent. Unlisted files weigh 1.
 # The weights only choose runners; every discovered test still runs exactly once.
