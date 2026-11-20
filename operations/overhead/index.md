@@ -43,8 +43,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · fix(vision): world_261026 왜곡·외삽 안정화 및 rectify 시드 폴백 보강
 - 2026-11-17 · uncommitted · feat(vision): R 핫패치 anchor 경로 코드화 및 Fleet POST 연령 재확인·통계·연결 위생
 - 2026-11-16 · uncommitted · fix(vision): world_261026 자동 보정 천장 조명 반사·충전소 가림 시드 보강 및 1칸 밀림 차단
 - 2026-11-11 · uncommitted · fix: Vision→Fleet 게시 재시도 — 끊긴 풀링 연결 1회 재송
 - 2026-11-11 · uncommitted · feat(vision): draft-map 제안 - 정사 평면에서 차로·구역 후보
-- 2026-11-07 · uncommitted · feat(vision): 위치 찾기 세션 동안 카메라를 깨운다 (D-989)

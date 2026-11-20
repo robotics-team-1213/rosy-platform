@@ -22,7 +22,7 @@ CONFIG_DIR = (Path(__file__).resolve().parents[4] / "contracts") / "foundation" 
 HARDWARE = {"runtime": {"mode": "hardware", "navigation_backend": "localization"}}
 MOTION_IDS = {
     "mobility.move", "mobility.navigate", "mobility.follow", "mobility.lead",
-    "perception.localize",
+    "perception.localize", "mobility.dock",
 }
 
 
@@ -141,7 +141,7 @@ def test_core_only_withholds_motion_capabilities_with_a_reason(core_client):
     assert caps["withheld"]["reason"] == "runtime_mode:core"
     assert set(caps["withheld"]["flags"]) == {
         "teleop", "navigation.goal_navigation", "navigation.return_home",
-        "swarm.follow", "swarm.lead", "slam",
+        "swarm.follow", "swarm.lead", "slam", "docking.supported",
     }
     # Speed limits and other non-flag fields are untouched.
     assert caps["navigation"]["max_linear_velocity"] == pytest.approx(0.2)

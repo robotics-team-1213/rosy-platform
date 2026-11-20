@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · D-1055 PR + Merge Queue 유일 병합 경로
 - 2026-11-18 · uncommitted · D-1036 부록: 게시 브라우저 증거는 바뀐 범위만
 - 2026-11-14 · uncommitted · D-1029 저전력 충전 복귀
 - 2026-11-14 · uncommitted · fleet: D-1022 기체 SLAM 지도–현장 지도 결속
 - 2026-11-14 · uncommitted · API 참조 v1.401 재위치화 경로
-- 2026-11-14 · uncommitted · D-1028 Robot 운용 콘솔 좁은 화면 순서
