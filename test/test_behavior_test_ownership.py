@@ -91,7 +91,7 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # observation, sole writer restriction, original ROS odom adapter and real native
     # owner binding. These require gateway CoreServices/bridge/final writer together;
     # pure Budget/Ledger/motion arithmetic remains under services/test.
-    "middleware/core/gateway/test/station_cycle_sim.py",
+    "test/integration/core_fleet/station_cycle_sim.py",
     "middleware/core/gateway/test/test_cmd_vel_observation.py",
     "middleware/core/gateway/test/test_execution_writer_fence.py",
     "middleware/core/gateway/test/test_execution_odometry.py",
