@@ -66,6 +66,7 @@ def classify_poll_error(exc: Exception, token_file: str | Path) -> dict[str, Any
 # D-1057. Same tolerance as chunk_runner_guards.SETTLE_TOL, which the transfer gate uses to accept a park as home.
 FOLD_TOLERANCE = 3.0
 ZONE_BASIS = "predefined_side_and_top_target_zones"
+TOP_ONLY_BASIS = "top_camera_only_target_zone"  # cell S only (D-1057, user decision 2026-11-20): it has no side camera
 
 
 def last_json_object(text: str) -> dict[str, Any]:
@@ -181,9 +182,12 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     # The measured slot and tier must be the task's own: the destination site and the handoff tier.
     target = (zone or {}).get("target") if isinstance((zone or {}).get("target"), dict) else {}
     htier = handoff.get("tier")
-    bound = (target.get("site") == dst and type(htier) is int and target.get("tier") == htier
-             and type(target.get("col")) is int and type(target.get("row")) is int)
-    zone_ok = bool(zone and zone.get("verified") is True and zone.get("basis") == ZONE_BASIS and bound)
+    top_only = handoff.get("cell_id") == "cell_s" and (zone or {}).get("basis") == TOP_ONLY_BASIS
+    roi = target.get("roi")
+    slot_ok = (isinstance(roi, list) and len(roi) == 4 and all(type(v) in (int, float) for v in roi)) if top_only else (
+        type(target.get("col")) is int and type(target.get("row")) is int)
+    bound = target.get("site") == dst and type(htier) is int and target.get("tier") == htier and slot_ok
+    zone_ok = bool(zone and zone.get("verified") is True and (zone.get("basis") == ZONE_BASIS or top_only) and bound)
     tier = handoff.get("tier")
     dst_area = dst.rsplit("-l", 1)[0]
     verification = ({**zone, "placement": placement} if zone is not None else

@@ -121,10 +121,41 @@ def test_a_failed_zone_measurement_or_unmeasured_top_zone_is_not_verified(monkey
     assert out["verified"] is False  # verify_stack_outcome says True by default when nothing was measured on top
 
 
-def test_cell_without_a_side_camera_never_claims_the_two_camera_basis():
-    out = czv.measure(Cell({"top": "u"}), before(side=False), CONFIG, "belt-l0", "pinky", (1, 2, 30, 40))
-    assert out["basis"] == czv.TOP_ONLY_BASIS != czv.BASIS
+# Cell S (top camera only): the real zone measurement on a small synthetic scene, before and after.
+S_CONFIG = {"sites": {"belt": {"place": [0.135, -0.045], "auto_roi": [309, 100, 634, 223]}}}
+S_ROI = (309, 100, 634, 223)
+
+
+def _belt(filled):
+    img = BLANK.copy()
+    if filled:
+        img[110:215, 330:600] = (0, 140, 255)
+    return img
+
+
+def _cell_s(before_filled, after_filled, config=S_CONFIG, roi=S_ROI, **kw):
+    cell = Cell({"top": "u"}, image={"top": _belt(after_filled)}, **kw)
+    return czv.measure(cell, {"image": _belt(before_filled)}, config, "belt", "pinky", roi)
+
+
+def test_cell_s_top_only_passes_when_the_zone_filled_up_since_before():
+    out = _cell_s(False, True)
+    assert out["basis"] == czv.TOP_ONLY_BASIS and out["verified"] is True
+    assert out["target"] == {"site": "belt", "area": "belt", "roi": list(S_ROI), "tier": 1}
     assert out["side"] == {"available": False, "reason": "no side camera in this cell"}
+
+
+@pytest.mark.parametrize("before_filled, after_filled", [(True, True), (False, False)])
+def test_cell_s_top_only_refuses_a_zone_that_was_full_before_or_is_empty_after(before_filled, after_filled):
+    assert _cell_s(before_filled, after_filled)["verified"] is False
+
+
+def test_cell_s_top_only_keeps_the_before_frame_roi_and_freshness_requirements():
+    assert _cell_s(False, True, roi=None)["verified"] is False
+    assert _cell_s(False, True, config={"sites": {"belt": {"layer": 1}}})["verified"] is False
+    assert czv.measure(Cell({"top": "u"}), None, S_CONFIG, "belt", "pinky", S_ROI)["verified"] is False
+    stale = _cell_s(False, True, stamps={"top": time.time() - 5})
+    assert stale["verified"] is False and "before the placement finished" in stale["basis"]
 
 
 def test_record_puts_the_measurements_on_the_attempt_row():

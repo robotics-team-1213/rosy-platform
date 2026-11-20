@@ -44,11 +44,11 @@ def _snapshot(v=0.0, w=0.0, mode="IDLE", nav="IDLE", estop=False, fresh=True, ve
 
 
 class Env:
-    def __init__(self, via="direct"):
+    def __init__(self, via="direct", cell="cell_s"):
         from tools.sim.bay_departure_sim import build_world_261026_site_map
 
         site, graph, _ = build_world_261026_site_map()
-        self.station = resolve_omx_cells(site, graph)["cell_s"].station_xy
+        self.station = resolve_omx_cells(site, graph)[cell].station_xy
         principals = {sha256(t.encode()).hexdigest(): SitePrincipal(t, t) for t in ("viewer", "service", "operator")}
         principals[sha256(b"other").hexdigest()] = SitePrincipal("other", "service")
         principals[sha256(b"console").hexdigest()] = SitePrincipal("site-console", "operator")
@@ -90,7 +90,7 @@ class Env:
         self.client = TestClient(app)
         self.beat()
         self.task = self.client.post("/api/fleet/pipeline/cell-tasks", headers=OP, json={
-            "task_id": TASK, "cell_id": "cell_s", "arm_id": "arm_s", "robot_id": "pinky_1",
+            "task_id": TASK, "cell_id": cell, "arm_id": "arm_s" if cell == "cell_s" else "arm_a", "robot_id": "pinky_1",
             "src_site": "pinky", "dst_site": "belt", "tier": 1}).json()["task"]
 
     def beat(self, snapshot=None, age=0.1, still_s=1.5):
@@ -230,23 +230,23 @@ def test_bed_confirm_endpoint_guards(env):
     assert ok["confirmation"]["principal_id"] == "operator" and ok["confirmation"]["robot_id"] == "pinky_1"
 
 
-def _owner_parts(lease, **stop):
-    stage = {"handoff_lease_id": lease, "directive_id": TASK, "arm_id": "arm_s", "task_verified": True,
-             "verification": {"verified": True, "basis": "predefined_side_and_top_target_zones"},
+def _owner_parts(lease, basis="predefined_side_and_top_target_zones", cell="cell_s", **stop):
+    stage = {"handoff_lease_id": lease, "directive_id": TASK, "arm_id": "arm_s" if cell == "cell_s" else "arm_a",
+             "task_verified": True, "verification": {"verified": True, "basis": basis},
              "place": {"area": "belt", "tier": 1}}
     hardware = {"measured_at": time.time() + 0.05,  # claimed_at is rounded up to 1 ms
                 "stop_event": {"command": "stop", "ok": True, "folded": True, "state": [0.0] * 6, **stop}}
     digest = "sha256:" + hashlib.sha256(json.dumps(
         {"task_id": TASK, "lease": lease, "stage_result": stage, "hardware_telemetry": hardware},
         sort_keys=True, default=str).encode()).hexdigest()
-    receipt = {"handoff_lease_id": lease, "cell_id": "cell_s", "stage_id": TASK, "phase": "RELEASED",
+    receipt = {"handoff_lease_id": lease, "cell_id": cell, "stage_id": TASK, "phase": "RELEASED",
                "goal_evidence_digest": digest, "physical_completion": True, "simulated_success": False}
     return {"receipt": receipt, "stage_result": stage, "hardware_telemetry": hardware}, digest
 
 
-def _claimed(env):
+def _claimed(env, cell="cell_s"):
     env.confirm_bed()
-    claimed = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_s"}).json()
+    claimed = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": cell}).json()
     assert claimed["claimed"] is True
     return claimed["handoff"]["handoff_lease_id"]
 
@@ -453,3 +453,23 @@ def test_a_new_version_of_the_same_map_voids_the_bed_confirmation(env):
     env.console._state_sink("pinky_1", {})
     env.app.state.site_maps.active = real  # reverted before the next request
     assert rec["invalid"] is True and env.amr()["bed_ready"] is False
+
+
+TOP_ONLY = "top_camera_only_target_zone"
+
+
+def test_cell_s_may_release_on_the_top_camera_only_basis(env):
+    lease = _claimed(env)
+    parts, digest = _owner_parts(lease, basis=TOP_ONLY)
+    assert _post_owner(env, lease, parts).status_code == 200
+    done = _complete(env, parts, digest)
+    assert done.status_code == 200 and done.json()["task"]["status"] == "COMPLETED"
+
+
+def test_cell_ab_may_not_release_on_the_top_camera_only_basis():
+    env = Env(cell="cell_ab")
+    lease = _claimed(env, "cell_ab")
+    parts, digest = _owner_parts(lease, basis=TOP_ONLY, cell="cell_ab")
+    assert _post_owner(env, lease, parts).status_code == 200
+    res = _complete(env, parts, digest)
+    assert res.status_code == 422 and res.json()["detail"]["code"] == "UNVERIFIED_CELL_COMPLETION"

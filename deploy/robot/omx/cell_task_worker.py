@@ -276,7 +276,8 @@ def poll_and_execute_once(
                     and stage_result.get("arm_id") == handoff.get("arm_id")
                     and stage_result.get("task_verified") is True
                     and verification.get("verified") is True
-                    and verification.get("basis") == "predefined_side_and_top_target_zones"
+                    and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
+                                                      if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",))
                     and stopped.get("ok") is True and stopped.get("folded") is True
                     and isinstance(hw_tel.get("measured_at"), (int, float)) and not isinstance(hw_tel.get("measured_at"), bool))
         if cell_id == "cell_ab":

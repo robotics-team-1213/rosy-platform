@@ -272,7 +272,9 @@ def install_cameras_routes(app, ctx) -> None:
                         and stage_result.get("arm_id") == task.get("arm_id")
                         and stage_result.get("task_verified") is True
                         and verification.get("verified") is True
-                        and verification.get("basis") == "predefined_side_and_top_target_zones"
+                        # D-1057 (user decision 2026-11-20): cell S has no side camera, so its top-camera zone check counts
+                        and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
+                                                          if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",))
                         and stop_event.get("ok") is True and stop_event.get("folded") is True)
             if cell_id == "cell_ab":
                 place = stage_result.get("place") or {}

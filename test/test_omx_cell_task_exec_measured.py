@@ -37,7 +37,7 @@ def _attempt(verify=None, park=PARK, zone=ZONE):
     return {**row, **({"zone_verification": zone} if zone is not None else {})}
 
 
-def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0):
+def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0, handoff=None):
     (tmp_path / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     # as in the real cell config: the home lives in the grasp plan file that `plan_path` names, not in the config JSON
     (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": home} if home else {}), encoding="utf-8")
@@ -45,7 +45,7 @@ def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0):
     monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
     monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, returncode, stdout=CLI_NOISE + json.dumps(parsed, indent=1, default=str) + "\n", stderr=""))  # as cell_auto_pick prints it
-    return cte.execute_guarded_cell_task(HANDOFF, prep_dir=tmp_path)
+    return cte.execute_guarded_cell_task(handoff or HANDOFF, prep_dir=tmp_path)
 
 
 def test_measured_placement_and_fold_fill_every_field(tmp_path, monkeypatch):
@@ -174,4 +174,23 @@ def test_the_indented_multi_line_cli_output_is_parsed():
 def test_a_measurement_of_another_slot_or_tier_does_not_verify_the_task(tmp_path, monkeypatch, target):
     zone = {**ZONE, "target": target}
     out = _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt(zone=zone)]})
+    assert out["stage_result"]["task_verified"] is False
+
+
+TOP_ONLY = {"verified": True, "basis": "top_camera_only_target_zone",
+            "target": {"site": "belt", "area": "belt", "roi": [309, 100, 634, 223], "tier": 1}}
+
+
+def test_cell_s_accepts_the_top_camera_only_basis_but_cell_ab_does_not(tmp_path, monkeypatch):
+    parsed = {"result": "placed", "attempts": [_attempt(zone=TOP_ONLY)]}
+    s = _exec(tmp_path, monkeypatch, parsed)
+    assert s["stage_result"]["task_verified"] is True and s["stage_result"]["verification"]["basis"] == "top_camera_only_target_zone"
+    ab = _exec(tmp_path, monkeypatch, parsed, handoff={**HANDOFF, "cell_id": "cell_ab"})
+    assert ab["stage_result"]["task_verified"] is False
+
+
+@pytest.mark.parametrize("target", [{"site": "belt", "tier": 1}, {"site": "pallet", "area": "pallet", "roi": [1, 2, 3, 4], "tier": 1},
+                                    {"site": "belt", "roi": [1, 2, 3, 4], "tier": 2}])
+def test_cell_s_top_only_still_needs_the_task_zone_and_tier(tmp_path, monkeypatch, target):
+    out = _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt(zone={**TOP_ONLY, "target": target})]})
     assert out["stage_result"]["task_verified"] is False

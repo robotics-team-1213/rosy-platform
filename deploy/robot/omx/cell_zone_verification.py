@@ -12,7 +12,7 @@ import json
 import time
 from typing import Any
 
-from cell_area_zones import TOP_ROI_BY_COL_ROW, evaluate_zone, verify_stack_outcome, verify_stack_outcome_z_mm
+from cell_area_zones import evaluate_zone, verify_stack_outcome, verify_stack_outcome_z_mm
 
 BASIS = "predefined_side_and_top_target_zones"
 TOP_ONLY_BASIS = "top_camera_only_target_zone"  # a cell without a side camera (cell S): never equals BASIS on purpose
@@ -94,16 +94,27 @@ def _target(config: dict, dest_site: str):
     return {"site": dest_site, "area": dest_site.rsplit("-l", 1)[0], "col": col, "row": row, "tier": layer + 1}, None
 
 
+def _top_target(config: dict, dest_site: str, roi):
+    """Cell S (top camera only, user decision 2026-11-20): the target zone is the destination site's own ROI, tier 1."""
+    site = (config.get("sites") or {}).get(dest_site) or {}
+    if not (isinstance(roi, (list, tuple)) and len(roi) == 4 and all(type(v) in (int, float) for v in roi)):
+        return None, "destination site has no auto_roi"
+    if site.get("layer", 0) != 0:
+        return None, "top-camera-only check is for tier 1"
+    return {"site": dest_site, "area": dest_site.rsplit("-l", 1)[0], "roi": [int(v) for v in roi], "tier": 1}, None
+
+
 def measure(cell, before_frame: dict | None, config: dict, dest_site: str, source_site: str, roi) -> dict:
     """The zone verification record for the placement that just finished at `dest_site`."""
     placed_at = time.time()  # the release finished before this call: a frame captured after it shows the placed result
     source = getattr(cell, "cell", cell)
-    target, bad_target = _target(config, dest_site)
-    out: dict[str, Any] = {"basis": "unverified", "verified": False, "target": target, "top": None,
+    out: dict[str, Any] = {"basis": "unverified", "verified": False, "target": None, "top": None,
                            "side": {"available": False, "reason": "no side camera in this cell"}}
     top, why = _frame(source, "top", before_frame, placed_at)
     with _side_camera(source, config) as has_side:
         side, side_why = _frame(source, "side", None, placed_at) if has_side else (None, None)
+    target, bad_target = _target(config, dest_site) if has_side else _top_target(config, dest_site, roi)
+    out["target"] = target
     judged_at = out["measured_at"] = time.time()
     if top is not None:
         out["top"] = {"frame": _stamp(top)}
@@ -120,12 +131,15 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     failure = why or side_why or bad_target or stale or missing_before
     if failure:
         return {**out, "basis": f"unverified: {failure}"}
-    place = {k: target[k] for k in ("area", "col", "row", "tier")}
+    place = {k: target[k] for k in ("area", "col", "row", "tier") if k in target}
     if not has_side:
-        top_roi = tuple(roi) if roi is not None else TOP_ROI_BY_COL_ROW.get((target["col"], target["row"]))
-        zone = evaluate_zone(top["image"], top_roi, tol_u_px=24.0, tol_v_px=40.0, min_fill=0.15) if top_roi else None
-        out["top"]["zone"] = _plain(zone)
-        return _plain({**out, "basis": TOP_ONLY_BASIS, "verified": bool(zone and zone.get("within_zone"))})
+        # The same before/after test as the top part of the two-camera check: the zone is occupied now and filled up since before.
+        top_roi = tuple(target["roi"])
+        after_zone = evaluate_zone(top["image"], top_roi, tol_u_px=24.0, tol_v_px=40.0, min_fill=0.15)
+        before_zone = evaluate_zone(before_frame["image"], top_roi, min_fill=0.15)
+        grown = float(after_zone.get("fill_ratio") or 0.0) - float(before_zone.get("fill_ratio") or 0.0) >= 0.15
+        out["top"].update(zone=_plain(after_zone), before_zone=_plain(before_zone))
+        return _plain({**out, "basis": TOP_ONLY_BASIS, "verified": bool(after_zone.get("within_zone") and grown)})
     pick = {"area": (config.get("sites") or {}).get(source_site, {}).get("area") or source_site.rsplit("-l", 1)[0]}
     verify = verify_stack_outcome_z_mm if target["area"] == "pallet" else verify_stack_outcome
     stack = verify(before_side=before_side_frame["image"], after_side=side["image"], before_top=before_frame["image"],

@@ -41,6 +41,10 @@ Fleet은 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(proposer
 
 **알려진 공백:** `cell_auto_pick`은 측면·상부 구역 측정(`cell_area_zones`)을 내놓지 않는다. 그 결과가 `attempts[].zone_verification`으로 오기 전에는 `verification.basis`가 `predefined_side_and_top_target_zones`가 될 수 없어 Fleet이 릴리스를 거부한다. 이 거부는 의도한 것이며, 가짜 `PASS`로 메우지 않는다.
 
+#### 2-1. 셀 S는 상단 카메라 판정만으로 RELEASED (사용자 결정, 2026-11-20)
+
+셀 S에는 측면 카메라가 없다. 그래서 `cell_id == "cell_s"`일 때만 Fleet 완료 검사와 worker, `cell_task_exec`가 `verification.basis == "top_camera_only_target_zone"`을 받아들인다. 셀 A/B는 지금처럼 `predefined_side_and_top_target_zones`가 필수이고 상단 전용 기준은 `UNVERIFIED_CELL_COMPLETION`으로 거부한다. 셀 S 상단 판정도 놓기 전 프레임과 놓은 뒤 프레임을 모두 요구하고, 사이트의 `auto_roi`(지정 구역)에서 구역이 채워졌고(채움 비율이 0.15 이상 늘어남) 두 프레임이 배치 뒤 촬영·2 s 이내일 때만 verified다. 측정한 사이트·구역은 작업의 `dst_site`·tier와 같아야 한다. 가드의 다른 조건(접힘, lease, 시각)은 그대로다.
+
 #### 3. 신뢰 경계
 
 owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경(ID 또는 활성 버전)이 한 번이라도 있으면 영구 무효이고, 확인은 조회 때만이 아니라 콘솔이 받는 상태 갱신마다 검사한다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.
