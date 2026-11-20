@@ -476,3 +476,19 @@ def test_the_fleet_update_carries_the_pinned_merge_into_the_container(monkeypatc
     compile(sent["code"], "apply", "exec")
     assert "def merge_pinned(" in sent["code"] and "def snap_edge_ends(" in sent["code"]
     assert 'merge_pinned(map_doc.get("places", []), solved["places"])' in sent["code"]
+
+
+def test_unpinned_place_keeps_its_yaw_and_name_only_xy_follow_the_trace():
+    mod = _load_module()
+    current = [{"id": "S1", "name": "S1 stop", "kind": "stop", "x": -0.6735, "y": -0.1411, "yaw": -1.570796}]
+    traced = [{"id": "S1", "name": "S1", "kind": "stop", "x": -0.679, "y": -0.140, "yaw": None}]
+    assert mod.merge_pinned(current, traced) == [
+        {"id": "S1", "name": "S1 stop", "kind": "stop", "x": -0.679, "y": -0.140, "yaw": -1.570796}]
+
+
+def test_unpinned_edge_keeps_its_settings_only_the_polyline_follows_the_trace():
+    mod = _load_module()
+    current = [{"id": "e", "from": "A", "to": "B", "polyline": [[0, 0], [1, 0]], "speed_cap_mps": 0.08, "width_m": 0.15}]
+    traced = [{"id": "e", "from": "A", "to": "B", "polyline": [[0, 0.01], [1, 0.01]], "speed_cap_mps": 0.15, "width_m": 0.2}]
+    assert mod.merge_pinned(current, traced) == [
+        {"id": "e", "from": "A", "to": "B", "polyline": [[0, 0.01], [1, 0.01]], "speed_cap_mps": 0.08, "width_m": 0.15}]
