@@ -6,51 +6,25 @@ const LOG_MAX = 120;
 
 export function createInboxPanel({scope, el, readView}) {
   const contextTabs = [...document.querySelectorAll('[data-context-tab]')];
-  let contextChoice = new URLSearchParams(location.search).get("inbox") === "1" ? "inbox" : "status";
-  const inboxAttention = new Map();
-  let lastLogMessage = "";
+  // One alert surface (11-17/18): the '주의 요망' queue. The bell counts its open rows and only jumps to it.
+  const params = new URLSearchParams(location.search);
+  let contextChoice = params.get("inbox") === "1" ? "inbox" : "status";
+  let queueWanted = params.get("queue") === "1";
   function paintInbox() {
-    const reading = contextChoice === "inbox";
-    if (reading) {
-      for (const item of inboxAttention.values()) item.unread = false;
-      el("log").querySelectorAll('[data-unread]').forEach(line => delete line.dataset.unread);
-    }
-    const count = [...inboxAttention.values()].filter(item => item.unread).length
-      + el("log").querySelectorAll('[data-unread]').length;
-    showInboxCount(count);
+    showInboxCount(document.querySelectorAll('#critical-list > li, #warning-list > li').length);
+  }
+  function focusQueue() {
+    const queue = document.querySelector('.queues-panel');
+    if (!queue || queue.hidden) return false;
+    queue.tabIndex = -1;
+    queue.focus({preventScroll: true});
+    queue.scrollIntoView({block: "nearest"});
+    return true;
   }
   function refreshInbox() {
-    const rows = [...document.querySelectorAll('#critical-list > li, #warning-list > li')];
-    const keys = new Set();
-    const summary = el("inbox-current");
-    const focusedKey = document.activeElement?.closest('#inbox-current > li')?.dataset.key;
-    summary.replaceChildren();
-    for (const row of rows) {
-      const key = row.dataset.key;
-      if (!key) continue;
-      keys.add(key);
-      const text = (row.querySelector('.queue-row') || row).textContent.trim();
-      const signature = text.replace(/\d+/g, "#");
-      const old = inboxAttention.get(key);
-      if (!old || old.signature !== signature) inboxAttention.set(key, {signature, unread: true});
-      const item = document.createElement("li"), link = document.createElement("a");
-      item.dataset.key = key;
-      item.append(document.createTextNode(`${text} `));
-      link.href = "#queues-heading";
-      link.textContent = "개입 목록으로";
-      link.addEventListener("click", () => {
-        const queue = document.querySelector('.queues-panel');
-        queue.tabIndex = -1;
-        queue.focus();
-      });
-      item.append(link);
-      summary.append(item);
-      if (key === focusedKey) link.focus({preventScroll: true});
-    }
-    for (const key of inboxAttention.keys()) if (!keys.has(key)) inboxAttention.delete(key);
-    if (!rows.length) summary.textContent = "현재 개입 요청이 없습니다.";
     paintInboxMessages();
     paintInbox();
+    if (queueWanted && focusQueue()) queueWanted = false;
   }
   function paintInboxMessages() {
     const view = readView();
@@ -112,13 +86,7 @@ export function createInboxPanel({scope, el, readView}) {
         ai_facts: facts.map(fact => ({kind: fact.kind, source: fact.source, stage: fact.stage, confidence: fact.confidence})),
         fleet_answer: answer ? {decision: answer.decision, tier: answer.tier, accepted: answer.accepted, code: answer.code, outcome: answer.outcome} : null,
       }, null, 2);
-      if (item.dataset.message !== message) {
-        item.dataset.message = message;
-        if (contextChoice !== "inbox") {
-          const attention = inboxAttention.get(`${robot.robot_id}|stuck`);
-          if (attention) attention.unread = true;
-        }
-      }
+      item.dataset.message = message;
       item.querySelector("pre").textContent = message;
       return item;
     });
@@ -139,9 +107,7 @@ export function createInboxPanel({scope, el, readView}) {
   }
   scope.listen(document, "rosy:inbox", event => {
     event.preventDefault();
-    selectContext("inbox");
-    el("context-inbox").focus();
-    el("context-inbox").scrollIntoView({block: "nearest"});
+    focusQueue();
   });
   for (const tab of contextTabs) {
     scope.listen(tab, "click", () => selectContext(tab.dataset.contextTab));
@@ -160,15 +126,9 @@ export function createInboxPanel({scope, el, readView}) {
     selectContext("evidence");
     el("context-evidence").focus({preventScroll: true});
   });
-  function markLog(line, text, kind) {
-    const signature = `${kind || ""}:${text}`;
-    if (contextChoice !== "inbox" && signature !== lastLogMessage) line.dataset.unread = "true";
-    lastLogMessage = signature;
-  }
   function log(text, kind) {
     const line = document.createElement("div");
     if (kind) line.className = kind;
-    markLog(line, text, kind);
     const now = new Date().toTimeString().slice(0, 8);
     line.textContent = `${now}  ${text}`;
     const box = el("log");
@@ -182,7 +142,6 @@ export function createInboxPanel({scope, el, readView}) {
     const box = el("log");
     box.replaceChildren(document.createElement("ui-empty"));
     box.firstChild.textContent = "지웠습니다.";
-    lastLogMessage = "";
     paintInbox();
     el("cancel-all-details").hidden = true;
   });

@@ -449,7 +449,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 expect(page.locator("#fleet-inbox")).to_be_visible()
                 inbox_text = page.locator("#fleet-inbox").text_content().strip()
                 assert not inbox_text or inbox_text.isdecimal(), inbox_text
-                expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("알림 창"))
+                expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("큐로 이동"))
                 # D-926: context tabs show icon above a one-line name, like the rail.
                 for tab in page.locator(".context-tabs [role=tab]").all():
                     tab_label = tab.locator(".ui-icon-label")
@@ -486,8 +486,9 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 if shots:
                     page.screenshot(path=str(Path(shots) / f"{name}-{width}x{height}.png"))
             page.locator("#fleet-inbox").click()
-            expect(page.locator("#context-inbox")).to_be_visible()
-            expect(page.locator("#context-inbox-tab")).to_have_attribute("aria-selected", "true")
+            # The bell only reaches the console's '주의 요망' queue; it never opens a second alert list.
+            expect(page).to_have_url(re.compile(r"/console(\?queue=1)?$"))
+            expect(page.locator("#context-inbox")).to_be_hidden()
             assert not errors, (name, errors)
             page.close()
     for width, _height in SIZES:

@@ -40,7 +40,7 @@
       <ui-text id="clock" scale="value">--:--:--</ui-text>
     </div>
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
-    <ui-button kind="quiet" id="fleet-inbox" type="button" aria-label="알림 창"><span data-action-icon="notification" data-icon-only="" aria-label="알림"></span><span id="header-unread" hidden></span></ui-button>
+    <ui-button kind="quiet" id="fleet-inbox" type="button" aria-label="개입 요망 · 큐로 이동"><span data-action-icon="notification" data-icon-only="" aria-label="알림"></span><span id="header-unread" hidden></span></ui-button>
     <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
     <!-- D-473 — 개발 접속 경고는 닫힌 계정 단추에서도 보인다. -->
     <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="계정과 접속">
@@ -321,7 +321,7 @@
       <section class="console-context" aria-label="관제 상세">
         <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
           <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
-          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="sign" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
+          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="sign" aria-controls="context-inbox" aria-selected="false" tabindex="-1">판단 메시지</ui-button>
           <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
           <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
         </div>
@@ -505,11 +505,8 @@
         </div>
         <div class="context-panel" id="context-inbox" role="tabpanel" tabindex="0" aria-labelledby="context-inbox-tab" hidden>
           <section class="panel" aria-labelledby="inbox-heading">
-            <h2 id="inbox-heading">알림 창</h2>
-            <p class="hint">이 창을 열면 메시지를 읽음으로 표시합니다. 개입이 해소되거나 로봇 상태가 바뀌지는 않습니다.</p>
+            <h2 id="inbox-heading">판단 메시지</h2>
             <p class="hint">현재 제공되는 관제 메시지입니다. 사건 당시의 AI·CORE 판단과 영상 근거는 <a id="inbox-evidence" href="#incident-heading">사건 기록에서 확인</a>합니다.</p>
-            <h3>현재 개입</h3>
-            <ul id="inbox-current" class="issue-list"></ul>
             <h3>전달된 판단 메시지</h3>
             <ul id="inbox-messages" class="issue-list"></ul>
           </section>

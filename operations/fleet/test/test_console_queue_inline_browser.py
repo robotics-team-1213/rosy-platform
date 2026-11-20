@@ -410,9 +410,9 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
             _shot(page, f"context-status-{theme}-{width}x{height}.png")
             status.focus()
             status.press("ArrowRight")
-            expect(page.get_by_role("tab", name="알림", exact=True)).to_be_focused()
+            expect(page.get_by_role("tab", name="판단 메시지", exact=True)).to_be_focused()
             expect(page.locator("#context-inbox")).to_be_visible()
-            page.get_by_role("tab", name="알림", exact=True).press("ArrowRight")
+            page.get_by_role("tab", name="판단 메시지", exact=True).press("ArrowRight")
             expect(page.get_by_role("tab", name="기록·근거")).to_be_focused()
             expect(page.locator("#context-evidence")).to_be_visible()
             expect(page.locator("#context-status")).not_to_be_visible()
@@ -482,7 +482,7 @@ def test_current_evidence_is_folded_and_keeps_keyboard_context_across_poll(site,
         browser.close()
 
 
-def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
+def test_bell_jumps_to_the_queue_and_the_message_tab_shows_stages(site):
     from playwright.sync_api import expect, sync_playwright
 
     stuck = {**STUCK, "inquiry": {"version": "situation-inquiry-v1", "problem_id": STUCK["stuck_id"],
@@ -499,10 +499,17 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         entry.click()
         assert entry.get_attribute("aria-label") == unread
         button = page.locator("#fleet-inbox")
-        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
+        rows = page.locator("#critical-list > li, #warning-list > li")
+        expect(rows.first).to_be_attached()
+        # One alert surface: the bell counts the open queue rows and only jumps there; no read state.
+        expect(button).to_have_attribute("aria-label", f"개입 요망 {rows.count()}건 · 큐로 이동")
         button.click()
+        expect(page.locator(".queues-panel")).to_be_focused()
+        expect(page.locator("#context-inbox")).to_be_hidden()
+        tab = page.get_by_role("tab", name="판단 메시지", exact=True)
+        tab.click()
         expect(page.locator("#context-inbox")).to_be_visible()
-        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        expect(page.locator("#inbox-current")).to_have_count(0)
         messages = page.locator("#inbox-messages")
         expect(messages).to_contain_text("로봇 문의 (CORE)")
         expect(messages).to_contain_text("AI 제안 대기")
@@ -515,11 +522,9 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         expect(messages.locator("pre")).to_contain_text("situation-inquiry-v1")
         page.get_by_role("tab", name="로봇·작업").click()
         page.clock.run_for(6000)
-        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
         stuck["fleet_answer"] = {"decision": "RESUME", "tier": "ai", "accepted": False, "code": "EMERGENCY_ACTIVE"}
         page.clock.run_for(3000)
-        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
-        button.click()
+        tab.click()
         expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
         assert messages.locator("li > details").get_attribute("open") is not None
         assert messages.locator("details details").get_attribute("open") is not None
