@@ -14914,3 +14914,8 @@ osy-d395-s1d\`.
 - 변경: `docs/validation/core-events-executor-2026-11-20/result.md`(y8xs 정지 상태 확인 1·4·5·6, Gazebo 확인 2·3과 Nav2 목표·취소), 교훈 `docs/solutions/deployment/core-restart-leaves-navigation-stopped-2026-11-20.md`.
 - 증거: CORE CPU threaded 76.8% → events 25.4%(navigation 켬). 부하 아래에서도 `cmd_vel` p99는 events 쪽이 같거나 낮았다. 45분 동안 RSS가 평탄했다.
 - gate 변화: 없음. `ROSY_CORE_EXECUTOR` 기본값은 threaded 그대로이고, 주행 시험은 사람이 있을 때로 남겼다.
+
+## 2026-11-21 · uncommitted · D-1059 Merge Queue 재시험 선별(기본 꺼짐)
+- 변경: ADR D-1059, ADR Log 행, `tools/harness/affected_queue.py`(시험한 커밋과 큐 커밋의 두 트리 비교, 증명 못 하면 전체 선택), `affected_ci.ci_matrix` 호출 한 줄, `test/test_affected_queue.py`.
+- 증거: PR 실행의 병합 커밋을 SHA로 받아 로컬 `git merge-tree` 트리와 6건 일치 확인. media 변경 선택 110경로가 무관한 변경 뒤 40경로(guard)로 줄어드는 것을 선택기로 확인.
+- gate 변화: 없음. `ROSY_QUEUE_TESTED`가 없으면 선택은 그대로다. ci.yml 배선과 변수 켜기는 다음 PR.
