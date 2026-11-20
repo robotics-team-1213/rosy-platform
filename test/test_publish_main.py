@@ -341,6 +341,9 @@ def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(re
 
 def _publish_with_gh(repo, monkeypatch, fail, *flags):
     local, _ = repo
+    _commit(local, "tools/hooks/pre-push", "#!/bin/sh\nexit 0\n")
+    _git(local, "push", "-q", "origin", "main")
+    _git(local, "fetch", "-q", "origin")
     sha = _commit(local, "app.py", "1")
     qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     calls = []
