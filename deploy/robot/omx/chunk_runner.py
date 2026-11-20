@@ -27,6 +27,8 @@ ROSY_CHUNK_TRACE=<file> appends one JSON line per tick (time, chunk, target, sen
 
 SIGINT/SIGTERM never cut torque with the arm out: the runner folds home and reads the fold back, then torque goes OFF;
 a fold that cannot finish leaves a human hold (torque ON) until a person sends SIGUSR2 (chunk_runner_interrupt.py).
+`final_gate` right before close_device is the last word: an interrupt recorded without a confirmed fold or an approved
+exception waits (nothing sent) for SIGUSR2, whichever path ended the run.
 
 Launched by record_session.py --chunks; never on its own (the session owns caps and cleanup).
 """
@@ -215,6 +217,7 @@ def main(argv=None):
     motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=MotorHealth())
     motion.shed_load = True  # a guard hold freezes only the held joint: runner_strain.shed moves lift and elbow
     guarded = Guarded(robot, motion)
+    runner = None
     try:
         caps = (robot.bus.sync_read("PWM_Limit", list(load_predict.BODY[1:]), normalize=False, num_retry=2)
                 if "read" not in vars(robot.bus) and hasattr(robot.bus, "model_ctrl_table")
@@ -256,6 +259,8 @@ def main(argv=None):
     finally:
         lines.close()
         try:
+            # the single last check: after an interrupt, no torque OFF without a confirmed fold or an approved exception
+            __import__("chunk_runner_interrupt").final_gate(runner, signals, args.io / "hold.json")
             close_device(robot)  # torque OFF before the bus closes
         finally:
             if motion.monitor is not None:

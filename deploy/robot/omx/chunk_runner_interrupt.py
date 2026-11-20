@@ -103,6 +103,12 @@ def _write_hold(runner, row: dict) -> None:
         _stderr({"command": "interrupt", "hold_file_failed": str(error)[:300]})
 
 
+def _approve(runner, reason: str) -> bool:
+    """The only ways this run may end in torque OFF after an interrupt; `final_gate` reads it last."""
+    runner._off_approved = reason
+    return True
+
+
 def _hold(runner, present, why: str, label: str = "HOLD") -> bool:
     state = runner._interrupt
     if not runner.human_hold_latched:
@@ -144,7 +150,7 @@ def _guard_verdict(runner, torque: dict, cause: str) -> bool:
     present = list(getattr(runner, "last_present", None) or runner.target)  # no bus read: the guard has failed
     if kind == "off":
         _say(runner, present, ok=False, guard_stopped=True, torque=torque, error=f"GUARD_STOPPED torque off: {cause}"[:500])
-        return True
+        return _approve(runner, "guard stopped, every motor reads torque 0")
     label = "PARTIAL_GUARD_STOP" if kind == "partial" else "HOLD"
     return _hold(runner, present, f"guard stopped, torque reads {torque}: {cause}"[:500], label=label)
 
@@ -214,7 +220,7 @@ def _verify(runner, state) -> bool:
         if folded(present, home):
             _say(runner, present, ok=True, folded=True, still_ticks=state["still"],
                  reason="already folded and still, torque goes OFF")
-            return True
+            return _approve(runner, "folded and still")
         return _fold(runner, present)
     if runner.clock() - state["since"] > VERIFY_S:
         return (_hold(runner, present, "near home but never still") if folded(present, home)
@@ -257,7 +263,7 @@ def interrupt_step(runner, *, may_move: bool = True) -> bool:
             if OPERATOR_RELEASE in signals[state["release_from"]:]:
                 _say(runner, present, ok=True, released=True,
                      reason="operator release (SIGUSR2): a person supports the arm, torque goes OFF where it is")
-                return True
+                return _approve(runner, "operator release (SIGUSR2)")
             _say(runner, present, ok=False, hold=True, person_needed=True, error="HOLD: still holding, torque ON")
     if state["phase"] == "hold":
         return False
@@ -268,7 +274,7 @@ def interrupt_step(runner, *, may_move: bool = True) -> bool:
         present, read = _pose(runner)
         if read and getattr(runner, "_park_settled", False) and folded(present, _home(runner)):
             _say(runner, present, ok=True, folded=True, reason="folded home and settled, torque goes OFF")
-            return True
+            return _approve(runner, "park settled and home")
         return _hold(runner, present, "the fold ended unsettled or short of home" if read else
                      "the pose could not be read after the fold")
     if runner.chunk != "park":  # a contact or strain hold stopped the park
@@ -320,7 +326,7 @@ def emergency_hold(runner, error) -> bool:
 def last_resort_hold(runner, signals: list, error, sleep=time.sleep) -> None:
     """The run loop itself raised after an interrupt: no loop is left to stream the hold, so nothing is sent; torque
     stays as the motors hold it. Report HOLD and wait for a SIGUSR2 sent after this point, then return (torque OFF)."""
-    row = {"hold": True, "last_resort": True, "error": f"HOLD: run loop failed: {type(error).__name__}: {error}"[:500]
+    row = {"hold": True, "last_resort": True, "error": f"HOLD: {type(error).__name__}: {error}"[:500]
            + "; nothing streams the pose, a person must support the arm, then kill -USR2 the runner"}
     _write_hold(runner, row)
     _stderr({"command": "interrupt", **row})
@@ -328,3 +334,17 @@ def last_resort_hold(runner, signals: list, error, sleep=time.sleep) -> None:
     while OPERATOR_RELEASE is None or OPERATOR_RELEASE not in signals[mark:]:
         sleep(0.5)
     _stderr({"command": "interrupt", "released": True, "last_resort": True})
+    if runner is not None:
+        _approve(runner, "operator release (SIGUSR2) after a last-resort hold")
+
+
+def final_gate(runner, signals: list, hold_file=None, sleep=time.sleep) -> None:
+    """chunk_runner.main's last check, right before close_device: an interrupt was recorded (re-read here, after every
+    other path) and this run has no confirmed fold and no approved exception -> last_resort_hold (nothing sent, torque
+    as the motors hold it) until a person's SIGUSR2. Whatever path returned (idle stop, a judge's stop, the start
+    alignment's stop, a signal landing while a status row was written), close_device runs only after this."""
+    if not [s for s in signals if s != OPERATOR_RELEASE] or getattr(runner, "_off_approved", None):
+        return
+    holder = runner if runner is not None else type("Unstarted", (), {"hold_file": hold_file})()
+    last_resort_hold(holder, signals, RuntimeError("the run ended after an interrupt without a confirmed fold"),
+                     sleep=sleep)

@@ -1327,6 +1327,11 @@ python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --o
   - 모두 1이거나 읽지 못하면 HOLD다.
   - 마지막 두 경우는 사람을 기다린다.
 - 중단 신호가 기록된 뒤에는 어떤 예외든(신호가 그 틱 도중에 와도) HOLD나 가드 readback으로 간다. 그래도 실행 루프 자체가 예외로 끝나면 `chunk_runner.main`이 close_device 대신 `last_resort_hold`로 아무것도 보내지 않고 SIGUSR2를 기다린다.
+- 최종 보증: `chunk_runner.main`은 close_device 바로 앞에서 `final_gate`로 신호 목록을 다시 읽는다. SIGUSR2를 뺀 중단 신호가 기록돼 있는데 이번 실행에 승인된 끝이 없으면, 어느 경로로 반환했든 close_device 대신 `last_resort_hold`로 간다. 거기서는 아무것도 보내지 않고 SIGUSR2를 기다린다. 승인된 끝(`_off_approved`)은 다음 넷이다.
+  - park settled + home
+  - 멈춤 + home
+  - SIGUSR2 해제
+  - 가드 정지 뒤 모두 0
 - 중단이 기록된 뒤에는 일반 종료 경로(유휴 park·유휴 종료, 판사의 `stop`, 판사 stop fold의 `_stopped`, start 정렬 중 `stop`)가 꺼지고, 중단 판정만 실행을 끝낸다.
 - HOLD 루프는 유지 자세만 가드에 보내고, 틱을 세어 `live.json`을 계속 갱신한다. 청크·건강·접촉 판정은 하지 않는다. 중단 중이나 HOLD 중 FIFO로 온 `human-hold`는 버린다(중단이 먼저 처리되고, HOLD와 같은 뜻이다). `human-hold` 명령의 자세 읽기가 실패하면 마지막으로 안 자세로 유지한다.
 - 감독 복구: 사람이 팔을 받친 뒤 `kill -USR2 <러너 PID>`를 보낸다. HOLD에 들어간 **뒤에** 받은 SIGUSR2만 해제한다. 그 전에 받은 것은 무시하고 stderr에 남긴다. 러너는 그 자리에서 토크를 끄고 끝난다. 세션 cap은 기록된 값으로 남으므로 다음 세션 전에 되돌린다.

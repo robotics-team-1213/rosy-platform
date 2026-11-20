@@ -494,3 +494,80 @@ def test_an_interrupt_at_the_idle_stop_deadline_is_not_ended_by_the_idle_stop():
     rows = interrupts(status)
     assert rows[0]["verifying"] and not any(row.get("folded") for row in rows)
     assert any(row.get("hold") for row in rows) and rows[-1]["released"]  # pan blocked: the fold cannot finish
+
+
+def _closed_after_gate(r, signals, tmp_path, release_after=3):
+    """What chunk_runner.main does last: final_gate, then close_device. Returns (sleeps before close, hold.json)."""
+    slept, closed = [], []
+
+    def sleep(s):
+        slept.append(s)
+        if len(slept) == release_after:
+            signals.append(RELEASE)
+
+    ci.final_gate(r, signals, tmp_path / "hold.json", sleep=sleep)
+    closed.append(len(slept))
+    hold = tmp_path / "hold.json"
+    return closed[0], (json.loads(hold.read_text()) if hold.exists() else None)
+
+
+def test_final_gate_holds_when_sigterm_lands_while_the_idle_stop_row_is_written(tmp_path):
+    status, clock = [], [0.0]
+    r = m.Runner(Robot(), library(), fps=30, status=lambda row: (
+        r.signals.append(signal.SIGTERM) if row["command"] == "stop" and "no command" in row.get("reason", "") else None,
+        status.append(row)), clock=lambda: clock[0], sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, queue = [], ["park"]
+    r.hold_file = tmp_path / "hold.json"
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])  # the idle stop returned during its own status row
+    assert r.signals == [signal.SIGTERM] and not getattr(r, "_off_approved", None)
+    sleeps, hold = _closed_after_gate(r, r.signals, tmp_path)
+    assert sleeps == 3 and hold["last_resort"]  # close_device only after the person's SIGUSR2
+
+
+def test_final_gate_holds_when_sigterm_lands_while_the_start_alignment_stop_row_is_written(tmp_path):
+    robot = Robot()
+    robot.pos = [30.0, -40.0, 30.0, 45.0, 10.0, 46.6]  # out on its reach
+    robot.motion = type("Motion", (), {"tracking": False, "held": None})()
+    clock = [0.0]
+
+    def status(row):
+        if row["command"] == "stop":
+            r.signals.append(signal.SIGTERM)
+
+    r = m.Runner(robot, library(), fps=30, status=status, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, queue, r.hold_file = [], ["stop"], tmp_path / "hold.json"
+    r.run(lambda: [queue.pop(0)] if queue else [])
+    assert r.signals == [signal.SIGTERM]
+    sleeps, hold = _closed_after_gate(r, r.signals, tmp_path)
+    assert sleeps == 3 and hold["hold"]
+
+
+@pytest.mark.parametrize("approved", [None, "park settled and home", "operator release (SIGUSR2)",
+                                      "guard stopped, every motor reads torque 0", "folded and still"])
+@pytest.mark.parametrize("recorded", [[], [signal.SIGTERM], [signal.SIGINT, signal.SIGTERM], [RELEASE]])
+def test_final_gate_lets_close_device_run_only_without_an_interrupt_or_with_an_approved_end(tmp_path, approved,
+                                                                                            recorded):
+    """Whatever path returned from run(): an interrupt on record and no approved end -> no close_device until SIGUSR2."""
+    r = type("R", (), {"hold_file": tmp_path / "hold.json", "_off_approved": approved})()
+    signals = list(recorded)
+    sleeps, hold = _closed_after_gate(r, signals, tmp_path)
+    interrupted = any(s != RELEASE for s in recorded)
+    assert (sleeps > 0) == (interrupted and approved is None)
+    assert (hold is not None) == (interrupted and approved is None)
+
+
+def test_final_gate_covers_a_runner_that_never_started(tmp_path):
+    sleeps, hold = _closed_after_gate(None, [signal.SIGTERM], tmp_path)
+    assert sleeps == 3 and hold["hold"]
+
+
+def test_every_approved_end_of_an_interrupted_run_is_recorded_for_the_gate():
+    r, status, _, _ = drive(Robot(), signal_after=20)  # extended -> park -> folded
+    assert r._off_approved == "park settled and home"
+    r2, _, _, _ = drive(Robot(), signal_after=2, commands=())
+    assert r2._off_approved == "folded and still"
+    r3, _, _, _ = drive(Robot(blocked=(0,), block_from=19), signal_after=20, release_after=1.0)
+    assert r3._off_approved == "operator release (SIGUSR2)"
+    r4, _, _, _ = drive(GuardRobot(fail_after=30), signal_after=20)
+    assert r4._off_approved == "guard stopped, every motor reads torque 0"
