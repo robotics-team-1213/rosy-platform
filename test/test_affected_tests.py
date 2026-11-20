@@ -746,14 +746,17 @@ def test_ci_gateway_shards_run_every_file_once_in_full_and_affected():
     """CI 44745980037 (2026-11-20): one runner for all of middleware/core/gateway/test took 20 min of pytest."""
     repo = affected.Repo.load(ROOT)
     suite = "middleware/core/gateway/test"
-    station, browser = f"{suite}/test_station_camera_scheduling.py", f"{suite}/test_account_pipeline.py"
+    # The scheduling and account journeys moved to test/integration/core_fleet (they run Fleet code).
+    moved = "test/integration/core_fleet"
+    station, browser = f"{moved}/test_station_camera_scheduling.py", f"{moved}/test_account_pipeline.py"
     files = sorted(p for p in repo.test_files if p.startswith(suite + "/"))
-    assert station in files and browser in files
+    assert station in repo.test_files and browser in repo.test_files and not {station, browser} & set(files)
     full = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
     shards = [e for e in full if e["name"].startswith("core-domain-")]
     assert len(shards) == affected.SUITE_SHARDS["core-domain"] and all(e["invocations"][0] for e in shards)
     ran = [p for e in full for inv in e["invocations"] for p in inv if p.startswith(suite + "/")]
-    assert sorted(ran) == files, "full tier: each gateway file once, station on its own runner"
+    assert sorted(ran) == files, "full tier: each gateway file once"
+    assert [p for e in full for inv in e["invocations"] for p in inv].count(station) == 1, "station on its own runner"
     assert [inv for e in shards for inv in e["invocations"]].count([browser]) == 1, "browser journey: own invocation"
     assert not any(station in inv for e in shards for inv in e["invocations"])
 
@@ -764,7 +767,7 @@ def test_ci_gateway_shards_run_every_file_once_in_full_and_affected():
         return sorted(p for inv in runs for p in inv if not p.startswith("-"))
     # Naming the account file makes ci.yml run it with the browser opt-in: its plain tests still run, as in the directory run.
     assert targets() == files
-    assert targets(f"--ignore={station}") == [p for p in files if p != station]
+    # The suite's own --ignore of the station file went with the move, so no ignore case is left to pin here.
 
 
 def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
