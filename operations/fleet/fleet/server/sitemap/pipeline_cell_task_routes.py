@@ -210,6 +210,12 @@ def install_cell_tasks_routes(app, ctx) -> None:
             tasks = [t for t in tasks if t["cell_id"] == cell_id]
         if status is not None:
             tasks = [t for t in tasks if t["status"] == status]
+        beds = getattr(app.state, "cell_bed_confirmations", None) or {}  # D-1057 operator bed confirmations, if installed
+        refusals = getattr(app.state, "cell_task_refusals", None) or {}  # last claim/complete refusal (camera routes)
+        tasks = [{**t, **({"bed_confirmation": {"principal_id": bed.get("principal_id"), "invalid": bool(bed.get("invalid")),
+                                                "age_s": round(time.time() - bed["confirmed_at"], 1)}}
+                          if (bed := beds.get(t["task_id"])) else {}),
+                  **({"last_refusal": refusals[t["task_id"]]} if t["task_id"] in refusals else {})} for t in tasks]
         stations = resolve_omx_cells(active[1], active[2])
         cells_info = {}
         for cid, st in stations.items():
