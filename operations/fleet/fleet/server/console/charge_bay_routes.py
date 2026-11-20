@@ -14,7 +14,7 @@ from fleet.pipeline import resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import CONTRACT_VERSION
 from fleet.pipeline.station_zones import load_station_zones
 from fleet.server.pipeline_routes import install_pipeline_routes, _storage_dir
-from fleet.server.sitemap.pipeline_evidence import amr_evidence, omx_owner_evidence
+from fleet.server.pipeline_evidence import amr_evidence, omx_owner_evidence
 
 # A saved cell claim follows a robot only while that robot is actually at the station.
 CELL_CLAIM_RADIUS_M = 0.18
