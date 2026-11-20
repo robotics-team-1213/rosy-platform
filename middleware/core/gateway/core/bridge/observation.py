@@ -22,6 +22,7 @@ from core.bridge import battery_policy, translate
 from core.bridge.hitl import parse_hitl_request
 from core_features.command.arbitration import Mode
 from core_features.command.manager import Twist as CoreTwist
+from core_features.docking.bay_guards import rear_band_gap
 from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
@@ -215,10 +216,12 @@ def bay_body_scan(services, sample, *, received_at: float) -> None:
         view = body.scan_view(sample, forward_deg=config.lidar_forward_deg,
                               self_mask=config.lidar_self_mask)
         kind, _ = body.rotation_check(view)
-        # No return at all is not a clear way: report zero gaps so a straight drive stops too.
+        # No return at all is not a clear way: report a zero front gap so a straight forward drive stops too.
         front = body.translation_gap(view.points) if view.points else 0.0
-        rear = body.translation_gap(view.points, reverse=True) if view.points else 0.0
-        docking.note_body_scan(kind, front, rear, received_at - _scan_lag_s(sample))
+        # The reverse into the bay is judged on a narrow strip straight behind the tray tip: a neighbour's body beside
+        # the strip must not read as 0 (None = nothing in the strip = this check does not block).
+        rear_gap = rear_band_gap(view.points, rear)
+        docking.note_body_scan(kind, front, rear_gap, received_at - _scan_lag_s(sample))
     except (AttributeError, KeyError, TypeError, ValueError):
         return
 
