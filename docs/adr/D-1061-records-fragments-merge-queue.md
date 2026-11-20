@@ -29,7 +29,7 @@
 ### Consequences
 
 - 같은 표면·다른 표면 API PR 둘이 공유 줄을 갖지 않는다. 번호·CONTRACT는 봇 PR이 병합될 때까지 늦다. 번호를 읽는 코드는 CORE OpenAPI 설명문뿐이다.
-- 봇 PR은 `GITHUB_TOKEN`으로 열린다. GitHub는 그 PR에서 워크플로를 자동으로 돌리지 않는다. 필수 검사를 통과하려면 사람이 한 번 다시 실행하거나 앱 토큰으로 바꿔야 한다(운영 과제).
+- 봇 PR은 `GITHUB_TOKEN`으로 열린다. 그 PR에서는 pull_request 워크플로가 돌지 않는다. 그래서 봇이 `gh workflow run ci.yml --ref bot/records-refresh`로 필수 `ci-result`를 그 head에 올린다(workflow_dispatch는 예외로 돈다). 그다음 `tools/pr_land.py`와 같은 `gh pr merge --auto --merge --match-head-commit`로 큐에 넣는다. 다른 필수 검사 `review-gate`에는 workflow_dispatch 트리거가 없다. 그래서 이 PR에서 돌지 않는다. `review-gate.yml`에 dispatch를 더하거나 앱 토큰을 쓸 때까지 사람이 처리해야 한다(운영 과제).
 - 같은 slug를 두 클론이 쓰면 add/add 충돌이 남는다(드묾, 리뷰에서 이름을 바꾼다).
 - 이 ADR의 Log 행은 새 방식대로 봇이 넣는다(PR에서는 경고).
 

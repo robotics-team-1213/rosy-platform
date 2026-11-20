@@ -114,3 +114,8 @@ def test_refresh_generated_docs_workflow_contract():
     assert triggers["push"] == {"branches": ["main"]}  # D-1061: the bot numbers fragments after each merge
     assert wf["concurrency"] == {"group": "rosy-refresh-generated-docs", "cancel-in-progress": False}
     assert "ci-result" not in wf["jobs"]
+    assert wf["permissions"]["actions"] == "write"
+    script = next(s["run"] for s in wf["jobs"]["consolidate"]["steps"] if s.get("name") == "Open or update consolidation PR")
+    assert "gh workflow run ci.yml --ref bot/records-refresh" in script  # GITHUB_TOKEN PRs start no CI
+    assert 'gh pr merge "$pr" --auto --merge --match-head-commit "$head"' in script  # pr_land.py's queue call
+    assert script.count("gh pr create") == 1 and "gh pr list --head bot/records-refresh --state open" in script
