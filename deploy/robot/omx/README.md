@@ -1327,7 +1327,7 @@ python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --o
   - 모두 1이거나 읽지 못하면 HOLD다.
   - 마지막 두 경우는 사람을 기다린다.
 - 중단 신호가 기록된 뒤에는 어떤 예외든(신호가 그 틱 도중에 와도) HOLD나 가드 readback으로 간다. 그래도 실행 루프 자체가 예외로 끝나면 `chunk_runner.main`이 close_device 대신 `last_resort_hold`로 아무것도 보내지 않고 SIGUSR2를 기다린다.
-- 최종 보증: `chunk_runner.main`은 토크를 끄는 유일한 지점에서 `gated_close`를 부른다. Linux에서는 판정 직전부터 close_device가 끝날 때까지 `pthread_sigmask`로 SIGINT·SIGTERM·SIGHUP을 막는다. 그 사이에 온 신호는 판정이 끝난 뒤 전달된다. 판정은 `final_gate`의 기준을 따른다. SIGUSR2를 뺀 중단 신호가 기록돼 있는데 이번 실행에 승인된 끝이 없으면, 어느 경로로 반환했든 close_device 대신 `last_resort_hold`로 간다. 거기서는 아무것도 보내지 않고 SIGUSR2를 기다린다. 승인된 끝(`_off_approved`)은 다음 넷이다.
+- 최종 보증: `chunk_runner.main`은 토크를 끄는 유일한 지점에서 `gated_close`를 부른다. Linux에서는 판정 직전부터 close_device가 끝날 때까지 `pthread_sigmask`로 SIGINT·SIGTERM·SIGHUP을 막는다. 그 사이에 온 신호는 판정이 끝난 뒤 전달된다. 판정은 `final_gate`의 기준을 따른다. pthread_sigmask는 호출한 스레드만 막는다. 그래서 `chunk_runner.py`는 스크립트로 시작하자마자, 스레드를 만들 수 있는 import보다 먼저 `main_thread_signals.route()`로 메인 스레드에서 SIGINT·SIGTERM·SIGHUP·SIGUSR2를 막는다. 그 뒤 만들어지는 스레드는 막힌 마스크를 물려받고, `threading.Thread.start`도 새 스레드를 막힌 채 만든다. `main()` 시작에서 메인 스레드만 다시 연다. 따라서 이 신호들은 메인 스레드로만 가고, gated_close의 차단은 프로세스 전체에 유효하다. route 전에 이미 있던 스레드와, `/proc/self/task`의 SigBlk로 본 막지 않은 스레드(Thread.start 밖의 네이티브 스레드)는 stderr에 경고한다. SIGUSR2를 뺀 중단 신호가 기록돼 있는데 이번 실행에 승인된 끝이 없으면, 어느 경로로 반환했든 close_device 대신 `last_resort_hold`로 간다. 거기서는 아무것도 보내지 않고 SIGUSR2를 기다린다. 승인된 끝(`_off_approved`)은 다음 넷이다.
   - park settled + home
   - 멈춤 + home
   - SIGUSR2 해제
