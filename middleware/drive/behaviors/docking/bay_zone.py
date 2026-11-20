@@ -39,6 +39,26 @@ class ZoneVerdict:
     exit_m: float = 0.0  # exit: 곧게 전진할 거리
 
 
+def lane_extent(cfg, lateral: float, heading: float) -> float:
+    """The farthest the body (corners incl. the tray) reaches sideways from the lane axis: the lane keeping check is a FOOTPRINT check, not a centre limit
+    (panel B 2026-11-21: tray corner radius 0.144, so the allowed centre offset shrinks with heading: +-0.048 at 0 deg, +-0.026..0.032 at 10 deg)."""
+    s, c = math.sin(heading), math.cos(heading)
+    corners = [(fx, hy) for fx in (cfg.bay_body_front_m, -cfg.bay_turn_rear_overhang_m) for hy in (cfg.bay_body_half_width_m, -cfg.bay_body_half_width_m)]
+    # bay frame: y to the left of the seated robot, heading ccw+ (the spin test: w>0 = ccw = LiDAR +), lateral = -y. A corner at robot-frame (fx, hy) is at
+    # y + fx*sin(h) + hy*cos(h), i.e. lateral - fx*sin(h) - hy*cos(h): a ccw heading swings the tray (fx<0) toward -y = +lateral (right).
+    return max(abs(lateral - fx * s - hy * c) for fx, hy in corners)
+
+
+def scan_fit_pose(match, cfg):
+    """(along, lateral, heading) of a LiDAR bay pose that passes only the FIT gates (inliers, margin, heading), no lane or staging-distance
+    gate: for a dock already being docked (the entry check at the staging point, x beyond the row). None when the fit is not good."""
+    if match is None or not all(math.isfinite(v) for v in (match.x, match.y, match.heading, match.inliers, match.margin)):
+        return None
+    if match.inliers < cfg.bay_scan_inlier_min or match.margin < cfg.bay_scan_margin_min or abs(match.heading) > cfg.bay_scan_heading_max_rad:
+        return None
+    return match.x, -match.y, match.heading
+
+
 def scan_geometry(match, staging_offset_m: float, cfg):
     """(along, lateral, heading) of the zone check from a LiDAR bay-pose match, or None when it is not good enough.
 
@@ -54,6 +74,25 @@ def scan_geometry(match, staging_offset_m: float, cfg):
     if match.x >= staging_offset_m - cfg.bay_zone_margin_m:
         return None                          # at or past staging the reference scan no longer sees the bay
     return match.x, -match.y, match.heading
+
+
+def pose_gate(match, cfg, staging_offset_m=None) -> Optional[str]:
+    """The first gate a LiDAR bay pose fails, as text (None = it passes): what status.last_event names when a pose is dropped."""
+    if match is None:
+        return "no fit"
+    if not all(math.isfinite(v) for v in (match.x, match.y, match.heading, match.inliers, match.margin)):
+        return "non-finite pose"
+    if match.inliers < cfg.bay_scan_inlier_min:
+        return "inliers %.2f < %.2f" % (match.inliers, cfg.bay_scan_inlier_min)
+    if match.margin < cfg.bay_scan_margin_min:
+        return "margin %.2f < %.2f" % (match.margin, cfg.bay_scan_margin_min)
+    if abs(match.heading) > cfg.bay_scan_heading_max_rad:
+        return "heading %.0f deg" % math.degrees(match.heading)
+    if abs(match.y) > cfg.bay_lane_half_m:
+        return "|y| %.3f m outside the lane" % abs(match.y)
+    if staging_offset_m is not None and match.x >= staging_offset_m - cfg.bay_zone_margin_m:
+        return "x %.3f m at or beyond staging" % match.x
+    return None
 
 
 def scan_diagnosis(asked: bool, match, error, scan, cfg) -> str:
@@ -122,6 +161,8 @@ def classify(pose, dock, staging_offset_m: float, observation, cfg, scan=None) -
     if abs(o_lat) <= cfg.bay_exit_lateral_m and abs(o_head) <= min(
             cfg.bay_acquire_heading_max_rad, math.atan(cfg.bay_exit_lateral_m / max(along, 0.05))):
         return ZoneVerdict("acquire", "straight in the lane: acquire where it stands")
+    if lane_extent(cfg, o_lat, o_head) > cfg.bay_lane_edge_m:      # measured values (the line's, or the LiDAR's when it was used): a footprint check, not a centre limit
+        return ZoneVerdict("manual", "inside the bay row but the body (with the tray) overlaps a neighbour lane: not moving in the row")
     exit_m = staging_offset_m - along + cfg.bay_exit_extra_m
     limit = cfg.bay_exit_heading_max_rad
     if cfg.bay_exit_steer_head <= 0.0:       # no line steering on the way out: a straight drive must stay in

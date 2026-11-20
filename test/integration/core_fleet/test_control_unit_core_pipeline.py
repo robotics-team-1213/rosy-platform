@@ -10,7 +10,7 @@ import pytest
 @pytest.mark.parametrize("outcome", ["completed", "canceled"])
 def test_delegated_task_dispatches_through_core_and_projects_exact_terminal_result(
         core_client, monkeypatch, tmp_path, outcome):
-    repo = Path(__file__).resolve().parents[4]
+    repo = Path(__file__).resolve().parents[3]
     for path in ["operations/fleet", "operations/fleet/test", "operations/decision/src", "operations/world/src",
                  "operations/site_execution/src", "operations/processes/palletizing/src"]:
         monkeypatch.syspath_prepend(str(repo / path))
