@@ -9,6 +9,15 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
+### vX.Y (조정 세션 예약) Fleet 셀 작업 증거 두 경로 (D-1057)
+
+표면: Fleet. 버전 번호는 조정 세션이 예약하며 이 자리표시를 바꾼다. 둘 다 additive이고 `claim`·`complete`의 요청·응답 모양과 거부 코드는 바뀌지 않는다.
+
+| Method and path | Contract |
+|---|---|
+| `POST /api/fleet/pipeline/cell-tasks/{task_id}/bed-confirm` | 이름 있는 운영자(operator). 본문 `{robot_id}`가 작업의 로봇과 같아야 한다(아니면 422 `BED_CONFIRM_ROBOT_MISMATCH`). QUEUED 작업만(409 `CELL_TASK_NOT_QUEUED`). 그 순간 로봇 지도 자세가 LOCALIZED(odom 이음 아님)·2 s 이하·셀 정차 구역 안이어야 한다(아니면 409 `BED_CONFIRM_POSE_UNAVAILABLE`). 200 `{ok, confirmation{task_id, robot_id, principal_id, confirmed_at, pose}, expires_in_s}`. 확인은 120 s 유효하고 자세가 2 cm 넘게 움직이면 무효이며 메모리에만 있다. |
+| `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence` | proposer(operator 또는 service). 본문 `{handoff_lease_id, measured_at, receipt, stage_result, hardware_telemetry}`. RUNNING 작업(409 `CELL_TASK_NOT_RUNNING`), `handoff_lease_id`와 `receipt.handoff_lease_id`가 원장 lease와 같고 `receipt.stage_id`가 task_id(422 `OWNER_EVIDENCE_LEASE_MISMATCH`), `measured_at`이 claim 이후이고 미래 2 s 이내(422 `OWNER_EVIDENCE_MEASURED_AT_INVALID`), 세 객체가 유한 JSON 딕셔너리(422 `INVALID_OWNER_EVIDENCE`). 200 `{ok, recorded}`. 같은 lease의 같은 증거는 `recorded:false`, 다른 증거는 409 `OWNER_EVIDENCE_ALREADY_RECORDED`. `complete`의 `RELEASED`는 이 저장 기록과 본문이 같을 때만 통과하고, 저장 60 s 뒤에는 `OMX_OWNER_EVIDENCE_UNAVAILABLE`이다. |
+
 ### v1.406 AI assessor의 팔 사건 해제 (D-1039)
 
 `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear`를 이름 있는 운영자 외에 설정된 AI assessor 서비스 자격도 부를 수 있다(additive). assessor는 `site_users` `role: service`이고 `ROSY_FLEET_ARM_ASSESSORS`(`id=source,source;id=source`, 기본 비어 있음 = 꺼짐)에 팔과 함께 적힌 principal이다. assessor는 이 경로 외 모든 경로에서 403 `ARM_ASSESSOR_SCOPE_REQUIRED`, 지정되지 않은 팔에서 403 `AI_CLEAR_ARM_NOT_ASSIGNED`다. `note`·`cause`·`basis`가 모두 필요하고(없으면 422 `AI_CLEAR_CAUSE_REQUIRED`), 저장된 사실이 `core_common.protocol.arm_incidents.machine_clearable`(기본 거부: 형태가 맞는 사실, 접힌 안전 종료, 모든 모터 토크 0, `caps_restored` 참, 래치·감김·접촉 정지·모터 고장 기록 없음, 실행기 표시 행은 모두 `run park`·`state` 행이고 채워진 `error`·`fault`가 같은 문구로 전체가 `contact in park: <joint> lag rose to <n.n> units at PWM <n> of <n> (lags: <joint> <n.n>, ...)`인 주차 중 부하 정지일 때만)을 통과하지 않으면 403 `AI_CLEAR_KIND_REFUSED`, 그 팔에 24시간 안의 기계 해제가 이미 있으면 원인과 상관없이 403 `AI_CLEAR_REPEAT_LIMIT`다(사람 해제는 세지 않음). 사건 행의 `cleared`에 `kind`(`machine`·`person`)가 붙는다(additive). 기계 해제는 `cleared.by`가 assessor id이고 `basis`가 늘 `unknown`이라 학습 정답으로 채점되지 않는다. 사람 해제는 바뀌지 않는다.
