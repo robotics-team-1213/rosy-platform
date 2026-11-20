@@ -59,7 +59,7 @@ concerns: [learning, decision, control, safety, contracts, other]
 # Checked against .github/CODEOWNERS by test/architecture/test_capability_owners.py.
 capabilities:
   fleet: {epic: KAN-19, owners: [livsbittt]}
-  pinky: {epic: KAN-20, owners: [sajy0804]}
+  pinky: {epic: KAN-20, owners: [WINNAKEN]}
   omx: {epic: KAN-21, owners: [ddaokki, livsbittt]}
   vision_ai: {epic: KAN-22, owners: [now2466]}
   platform: {epic: null, owners: []}
@@ -215,7 +215,7 @@ roots:
     concern: contracts
     capability: platform
     app: core
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     note: >-
       D-442(a) ROS-free Motion Intent and DeviceControlPort shapes. The Pinky B
       writer binding consumes GuardedMotion carrying BaseTwist; full producer admission and the
@@ -231,7 +231,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/drive/behaviors
     layout_target: middleware/drive/behaviors
     part: middleware
@@ -240,7 +240,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     import_prefix: [core_features.line_follow, core_features.docking, core_features.navigation, core_features.localization, core_features.swarm, core_features.road_behaviour, core_features.traffic_policy]
     source_packages:
       line_follow: core_features.line_follow
@@ -259,7 +259,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     import_prefix: [control.control_node, control.goal_node, control.wander_node, control.safety_node]
     source_packages: {"": control}
     note: D-649 legacy ROS adapters installed by control; final legacy writer stays excluded.
@@ -277,7 +277,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/core/services/core_features/safety_gate
     layout_target: middleware/core/services/core_features/safety_gate
     part: middleware
@@ -289,7 +289,7 @@ roots:
     concern: safety
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/core/services/core_features/action_rules
     layout_target: middleware/core/services/core_features/action_rules
     part: middleware
@@ -303,7 +303,7 @@ roots:
     concern: decision
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/core/events
     part: middleware
     d427_target: middleware/core/events
@@ -313,7 +313,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/core/api
     layout_target: middleware/core/api  # D-626 current layout; d427_target is the ownership ID
     part: middleware
@@ -325,7 +325,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/drive/planning/nav2
     layout_target: middleware/drive/planning/nav2
     part: middleware
@@ -336,7 +336,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/drive/planning/nav2/native_map
     layout_target: middleware/drive/planning/nav2/native_map
     part: middleware
@@ -345,7 +345,7 @@ roots:
     concern: safety
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     note: D-783 guarded native map producers, canonical identity, SDK/build and plugin boundary.
   - path: middleware/perception
     part: middleware
@@ -379,7 +379,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     note: D-630 Drive algorithms; installed by the existing control distribution.
   - path: middleware/drive/motion_limits
     layout_target: middleware/drive/motion_limits
@@ -393,7 +393,7 @@ roots:
     concern: safety
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     note: D-630 policy/clearance and existing sensor-only adapter; no new final writer.
   - path: middleware/drivers/imu_bno055
     part: middleware
@@ -1087,7 +1087,7 @@ roots:
     concern: other
     capability: platform
     app: core
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
 
   # --- top-level non-part roots ----------------------------------------------
   - path: profiles
@@ -1389,6 +1389,7 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
   - operations/fleet/fleet/server/ledger/berth_parking_routes.py  # road-nav2/berth-park motion moved here by 973faf9de9 (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/ledger/berth_parking_helpers.py  # physical berth-park teleop and Fleet pin (D-430 panel 2026-11-13)
+  - operations/fleet/fleet/server/ledger/berth_core_dock.py  # berth-park core_line: Fleet's POST /docking/dock and its cancel on Fleet's own deadline are a motion command and a stop path, like the two files above (D-430 §1); imports stdlib only
   - operations/fleet/fleet/server/ledger/task_dispatch_helpers.py  # site->robot goal frame for road-nav2/berth-park (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
   - operations/fleet/fleet/server/auth/policy_approval.py  # D-1024 3 learned-policy approval window and lease issuer
@@ -1614,6 +1615,7 @@ safety_anchors:
   - {symbol: fleet.server.local_stop_transport.UnixLocalStopTransport, public: true}
   - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
   - {symbol: fleet.server.berth_parking_routes.install_berth_parking_routes, public: true}  # road-nav2 / berth-park motion routes (973faf9de9)
+  - {symbol: fleet.server.berth_core_dock.execute_core_line_dock}  # berth-park core_line: dock command to CORE and the cancel on Fleet's deadline
   - {symbol: fleet.server.berth_parking_helpers.BERTH_SUCCESS_REASONS}  # only measured stop-face endings count as parked
   - {symbol: fleet.server.berth_parking_helpers.BAY_DOCK_SPECS, public: true}
   - {symbol: fleet.server.berth_parking_helpers._execute_physical_berth_park, public: true}

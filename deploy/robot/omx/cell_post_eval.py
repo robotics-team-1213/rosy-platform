@@ -16,8 +16,9 @@ from typing import Any
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cell_attempts, cell_cal_monitor, cell_params as prm, cell_pivot, cell_pivot_bias as cpb, cell_remap_plan as rp, omx_tcp  # noqa: E402
+import cell_attempts, cell_cal_monitor, cell_jaw_side, cell_params as prm, cell_pivot, cell_pivot_bias as cpb, cell_remap_plan as rp, omx_tcp  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
+from cell_post_eval_summary import lateral_summary  # noqa: E402,F401  (re-exported: cell_cal_eval, cell_calibrate)
 
 SCHEMA = "rosy.omx-post-eval.v1"
 PAIR_OFFSETS = ((0.0, 180.0), (-60.0, 120.0), (-40.0, 140.0), (-80.0, 100.0), (-90.0, 90.0), (-20.0, 160.0))
@@ -35,7 +36,11 @@ def _tcp_kw(config: dict) -> dict:
 
 def select_visit_yaws(config: dict, site: str, point_m, z_view: float, *,
                       write_library_fn=None, work: Path | None = None) -> tuple[list[float], bool]:
-    """Return `(yaws, geometry_dependent)` preferring an IK-valid opposing `(theta, theta+180)` pair."""
+    """Return `(yaws, geometry_dependent)` preferring an IK-valid opposing `(theta, theta+180)` pair.
+
+    The top-down IK may return the 180-deg twin (the in-limit wrist roll nearest the home one), so `theta` and
+    `theta+180` can plan the very same joints: arm_a 2026-11-17 01:46 and 17:15 got identical above_pick frames and
+    yaw_pair_gap. A pair is used only when the FK yaws of its planned frames are opposite within post.yaw_pair_tol_deg."""
     import cell_pipeline as cp
 
     writer = write_library_fn or cp.write_library
@@ -47,23 +52,25 @@ def select_visit_yaws(config: dict, site: str, point_m, z_view: float, *,
     probe_dir.mkdir(parents=True, exist_ok=True)
     probe_path = probe_dir / "_post_eval_ik_probe.json"
 
-    def ik_ok(yaw: float) -> bool:
+    def planned_yaw(yaw: float) -> float | None:
+        """FK yaw of the planned above_pick frame, or None when there is no plan (IK refused, no library)."""
         try:
             pose = dict(view, yaw_deg=yaw)
-            writer(scoped, pose, pose, probe_path)
-            return True
+            return rp.planned_yaw(writer(scoped, pose, pose, probe_path), config)
         except SystemExit:
-            return False
+            return None
         finally:
             probe_path.unlink(missing_ok=True)
 
+    tol = float(prm.get(config.get("params"), "post.yaw_pair_tol_deg"))
     for d1, d2 in PAIR_OFFSETS:
         y1, y2 = base + d1, base + d2
-        if ik_ok(y1) and ik_ok(y2):
+        q1, q2 = planned_yaw(y1), planned_yaw(y2)
+        if q1 is not None and q2 is not None and abs(abs(_ang_diff_deg(q2, q1)) - 180.0) <= tol:
             return [y1, y2], False
     for d in SINGLE_OFFSETS:
         y1 = base + d
-        if ik_ok(y1):
+        if planned_yaw(y1) is not None:
             return [y1], True
     return [], True
 
@@ -193,10 +200,18 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
     scene_ok = not bool((scene_moved_fn or cell_scene_guard.scene_moved)(before, after))
     mark_sig = float(prm.get(params, "verify.mark_sigma_mm"))
     droop_mm = [round(sum(d[0] for d in droops) / len(droops), 2), round(sum(d[1] for d in droops) / len(droops), 2)] if droops else None
-    finger_ok, pair_err, half_mm, f_why = True, 0.0, None, None
+    finger_ok, pair_err, half_mm, f_why, jaw_sides = True, 0.0, None, None, None
     cand = _finger_candidates(pivot_reg, config)
     if not geom_dep and len(marks_arm) == 2:
+        side_why = None
+        if cand and abs(abs(_ang_diff_deg(fks[1][3], fks[0][3])) - 180.0) <= float(prm.get(params, "post.yaw_pair_tol_deg")):
+            # one visible jaw, which may switch between the two yaws: label both together as the pivot does; a switch
+            # leaves the centre undecided by the other-jaw offset and is refused, a same-jaw pair keeps its midpoint
+            side_why, jaw_sides, moved, _ = cell_jaw_side.label(marks_arm, [f[3] for f in fks], ["ref", "ref"], params, cand[0])
+            marks_arm = moved or marks_arm
         finger_ok, pair_err, half_mm, f_why = _finger_identity_ok(marks_arm[0], marks_arm[1], fks[0][3], fks[1][3], pivot_reg, config)
+        if side_why:
+            finger_ok, f_why = False, "jaw_sides_ambiguous"
         tcp_map = ((marks_arm[0][0] + marks_arm[1][0]) / 2.0, (marks_arm[0][1] + marks_arm[1][1]) / 2.0)
         fk_xy = ((fks[0][0] + fks[1][0]) / 2.0, (fks[0][1] + fks[1][1]) / 2.0)
         sigma_mm = round(math.hypot(mark_sig / math.sqrt(2.0), (half_mm or 25.0) * abs(math.sin(math.radians(pair_err / 2.0)))), 2)
@@ -224,13 +239,14 @@ def measure_point(cell, config: dict, calibration: dict, bias_data: dict | None,
         config, site=site, map_sha=map_sha, source="visit", raw_mm=raw_bias, residual_mm=resid,
         sigma_mm=sigma_mm, accepted=accepted, reason=reason,
         extra={"place_xy": pt_r, "yaw_pair": not geom_dep, "finger_ok": finger_ok, "scene_ok": scene_ok,
-               "geometry_dependent": geom_dep, **({"droop_mm": droop_mm} if droop_mm is not None else {})},
+               "geometry_dependent": geom_dep, **({"droop_mm": droop_mm} if droop_mm is not None else {}),
+               **({"jaw_sides": jaw_sides} if jaw_sides else {})},
     )
     return {"site": site, "point_m": pt_r, "map_sha": map_sha, "status": status, "reason": reason, "accepted": accepted,
             "geometry_dependent": geom_dep, "finger_ok": finger_ok, "scene_ok": scene_ok,
             "half_radius_mm": round(half_mm, 1) if half_mm is not None else None, "raw_bias_mm": raw_bias,
             "used_bias_mm": used_bias, "residual_mm": resid, "residual_mag_mm": resid_mag, "sigma_mm": sigma_mm,
-            "droop_mm": droop_mm, "bias_error": b_err}
+            "droop_mm": droop_mm, "bias_error": b_err, "jaw_sides": jaw_sides}
 
 
 def _track_ok(cell, config: dict, calibration: dict, site: str) -> tuple[bool, dict | None]:
@@ -334,41 +350,6 @@ def run_post_eval(cell, config: dict, calibration: dict, *, targets=None, apply:
     return {"schema": SCHEMA, "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"), "results": rows,
             "applied": applied, "escalated": list(dict.fromkeys(escalated)), "drift": drift, "rigid_drift": rigid,
             "lateral_xy": lateral, "verdict": "escalate" if escalated else lateral["verdict"]}
-
-
-def lateral_summary(config: dict, calibration: dict | None, *, rows: list[dict[str, Any]] | None = None,
-                    now_ts: float | None = None) -> dict[str, Any]:
-    """Pure monitor-backed summary for `cell_cal_eval`: true only when fresh opposing-yaw visits pass."""
-    params = (config or {}).get("params")
-    now, max_age, tol_mm = (float(now_ts) if now_ts is not None else time.time()), float(prm.get(params, "post.max_age_s")), float(prm.get(params, "post.tol_mm"))
-    if rows is None:
-        rows = cell_cal_monitor.load_observations(cell_cal_monitor.monitor_path(config), arm_id=(config or {}).get("arm_id"))
-    visits = [r for r in rows if r.get("source") == "visit" and (now - float(r.get("ts") or 0.0)) <= max_age]
-    sites_out, cal = {}, calibration or {"sites": {}}
-    for name, spec in ((config or {}).get("sites") or {}).items():
-        if (spec or {}).get("tier_of"):
-            continue
-        rec = cell_pivot.map_record(cal, name)
-        sha = cell_attempts.digest(rec) if rec else None
-        matched = [r for r in visits if sha is not None and r.get("site") == name and r.get("map_sha") == sha]
-        if not matched:
-            continue
-        latest = matched[-1]
-        res = latest.get("residual_mm") or [0.0, 0.0]
-        mag, lim = round(math.hypot(float(res[0]), float(res[1])), 2), max(tol_mm, 2.0 * float(latest.get("sigma_mm") or 3.0))
-        if not latest.get("accepted") or not latest.get("scene_ok", True) or not latest.get("finger_ok", True):
-            st = "fail"
-        elif latest.get("geometry_dependent") or not latest.get("yaw_pair", True):
-            st = "advisory"
-        else:
-            st = "pass" if mag <= lim else "fail"
-        sites_out[name] = {"status": st, "residual_mm": res, "residual_mag_mm": mag, "sigma_mm": latest.get("sigma_mm"),
-                           "geometry_dependent": bool(latest.get("geometry_dependent")), "n": len(matched), "map_sha": sha}
-    if not sites_out:
-        return {"lateral_xy_verified": False, "verdict": "unmeasured", "sites": {}, "visit_count": 0}
-    statuses = [v["status"] for v in sites_out.values()]
-    verdict = "fail" if "fail" in statuses else ("advisory" if "advisory" in statuses else "pass")
-    return {"lateral_xy_verified": verdict == "pass", "verdict": verdict, "sites": sites_out, "visit_count": sum(v["n"] for v in sites_out.values())}
 
 
 def main(argv=None) -> int:

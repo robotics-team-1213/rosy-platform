@@ -10,7 +10,9 @@ otherwise), so the logged wrist window is the clearance check.
 """
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 
 import cell_pipeline_io as cio
 
@@ -56,3 +58,23 @@ def refusal(rows: list) -> str | None:
     bad = [r for r in rows if r["error"]]
     return f"remap refused, {len(bad)} of {len(rows)} points leave this arm's window or reach: " + "; ".join(
         f"{r['point']}: {r['error']}" for r in bad) if bad else None
+
+
+def planned_yaw(library: Path, config: dict) -> float | None:
+    """FK yaw of a library's above_pick frame (the top-down IK may plan the 180-deg twin), or None."""
+    import cell_pivot, omx_tcp
+
+    tcp_x_m = omx_tcp.config_tcp(config, config.get("plan"))
+    try:
+        frame = json.loads(Path(library).read_text(encoding="utf-8"))["chunks"]["above_pick"][0][:5]
+        return float(cell_pivot.joints_tcp(frame, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))[3])
+    except (OSError, KeyError, IndexError, TypeError, ValueError):
+        return None
+
+
+def missing_maps(config: dict, calibration: dict, sites) -> list:
+    """Sites to remap: no map, or a one-jaw map while the config asks for a TCP map (calibrate.tcp_marks).
+    2026-11-17 arm_a: its 11-15 map followed one jaw, so every TCP pivot carried ~28 mm and failed max_bias_mm."""
+    tcp = bool((config.get("calibrate") or {}).get("tcp_marks"))
+    have = calibration.get("sites", {})
+    return [s for s in sites if s not in have or (tcp and have[s].get("marks") != "tcp")]

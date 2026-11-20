@@ -82,6 +82,8 @@ import urgent_lane  # noqa: E402  (D-1038: evidence for urgent/ PRs)
 import publish_evidence  # noqa: E402  (canonical plan and exact executed proof)
 import pr_land  # noqa: E402  (lab-only evidence check for the exact candidate)
 import publish_scope  # noqa: E402  (D-1036 addendum: app-only deltas need only their app's evidence)
+sys.path.insert(0, str(TOOLS / "harness"))
+import ci_triage  # noqa: E402  (2026-11-19: classify a red ci-result, rerun only infra)
 SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(SCANNER))
 import secret_scan  # noqa: E402  (the one repository secret scanner: tokens, keys, PSKs, SHA-256 rows)
@@ -406,6 +408,26 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     return message
 
 
+def triage_red(repo: Path, head: str) -> tuple[str, bool]:
+    """Classify the red CI run of head (infra / env_drift / real_failure), rerun it once when all infra.
+
+    Returns (operator lines with log links, whether a rerun was requested). The ledger and the backlog line
+    land_tick prints share <git-common-dir>/rosy-ci-triage.jsonl; any error here keeps today's plain refusal.
+    """
+    try:
+        gh = lambda *args: run_gh(repo, *args)  # noqa: E731
+        slug = gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner").strip()
+        run = ci_triage.newest_run(gh, slug, "ci.yml", head)
+        if run is None:
+            return "", False
+        common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
+        result = ci_triage.handle(gh, slug, run["id"], ledger=common / ci_triage.LEDGER, expected_sha=head,
+                                  event=run.get("event", ""))
+        return "\n".join(ci_triage.describe(result, run["id"])), result["action"] == "rerun"
+    except Exception:  # noqa: BLE001  (triage is advice; never turn a refusal into a crash)
+        return "", False
+
+
 def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime, via_ci: bool = False) -> str:
     view = json.loads(run_gh(repo, "pr", "view", pr, "--json",
                              "state,headRefName,headRefOid,mergeable,mergeStateStatus,statusCheckRollup"))
@@ -425,7 +447,10 @@ def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime, via_ci: bo
     state = (checks[0].get("conclusion") or checks[0].get("status") or "") if checks else "MISSING"
     if state != "SUCCESS":
         if state in ("FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"):
-            raise Stop(1, f"ci-result {state} on PR {pr}; not merging")
+            note, rerun = triage_red(repo, head) if state in ("FAILURE", "TIMED_OUT", "STARTUP_FAILURE") else ("", False)
+            if rerun:
+                raise Stop(5, f"ci-result {state} on PR {pr}; infra-only failure, failed jobs rerun once; retry later\n{note}")
+            raise Stop(1, f"ci-result {state} on PR {pr}; not merging" + (f"\n{note}" if note else ""))
         raise Stop(5, f"ci-result is {state} on PR {pr}; retry later")
     if not apply:
         return f"dry run: PR {pr} is mergeable and ci-result is green; would merge {head[:10]} with --apply"

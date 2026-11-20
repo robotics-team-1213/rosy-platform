@@ -58,12 +58,12 @@ def test_builder_snapshot_guard_executes_before_apt(sources, accepted, monkeypat
             exec(compile(script, "builder-snapshot-guard", "exec"), {})
 
 
-def test_manual_native_arm64_and_read_only():
+def test_native_arm64_and_read_only():
     workflow = _workflow()
     triggers = workflow.get("on", workflow.get(True))
     job = _job()
 
-    assert set(triggers) == {"workflow_dispatch"}
+    assert set(triggers) == {"workflow_dispatch", "workflow_run"}  # no push/PR trigger; workflow_run is main-only
     assert triggers["workflow_dispatch"]["inputs"]["release_id"]["required"] is True
     assert job["runs-on"] == "ubuntu-24.04-arm"
     assert job.get("continue-on-error") is not True
@@ -86,7 +86,7 @@ def test_builds_payload_only_then_assembles_unsigned_release():
 
     assert "deploy/robot/pinky_pro/image/build-native-payload.sh" in text
     assert "build-image.sh" not in text
-    assert "--source-revision \"$GITHUB_SHA\"" in text
+    assert "--source-revision \"$SOURCE_SHA\"" in text
     assert "--lock \"$RESOLVED_LOCK\"" in text
     assert "deploy/robot/pinky_pro/image/resolve-build-lock.py" in text
     assert "install-pinky-hardware-deps.sh --lock \"$RESOLVED_LOCK\"" in text
@@ -110,7 +110,7 @@ def test_uploads_unsigned_artifact_named_by_release_and_sha():
     upload = next(step for step in _job()["steps"] if step.get("uses", "").startswith("actions/upload-artifact@"))
 
     assert upload["with"]["name"] == (
-        "rosy-native-payload-unsigned-${{ inputs.release_id }}-${{ github.sha }}")
+        "rosy-native-payload-unsigned-${{ needs.guard.outputs.release_id }}-${{ needs.guard.outputs.sha }}")
     assert upload["with"]["if-no-files-found"] == "error"
 
 
@@ -179,7 +179,7 @@ def test_the_job_runs_in_the_builder_image_pinned_by_digest():
     workflow = _workflow()
     job = _job()
     default = workflow.get("on", workflow.get(True))["workflow_dispatch"]["inputs"]["builder_image"]["default"]
-    assert job["container"]["image"] == "${{ inputs.builder_image }}"
+    assert job["container"]["image"] == "${{ needs.guard.outputs.builder_image }}"
     assert job["container"]["credentials"]["password"] == "${{ github.token }}"
     assert default.startswith("ghcr.io/robotics-team-1213/rosy-payload-builder@sha256:")
     text = _run_text()
@@ -196,3 +196,42 @@ def test_the_checkout_belongs_to_the_container_user_before_the_cms_trust_check()
     text = _run_text()
     assert 'chown -R "$(id -u):$(id -g)" . && chmod -R go-w .' in text
     assert text.index("chown -R") < text.index("resolve-build-lock.py")
+
+
+def _on():
+    workflow = _workflow()
+    return workflow.get("on", workflow.get(True))
+
+
+def test_main_ci_success_triggers_the_build_through_a_guard():
+    trigger = _on()["workflow_run"]
+    assert trigger["workflows"] == ["ci"] and trigger["types"] == ["completed"] and trigger["branches"] == ["main"]
+    assert "workflow_dispatch" in _on()
+    guard = _workflow()["jobs"]["guard"]
+    for need in ("workflow_run.conclusion == 'success'", "workflow_run.event == 'push'", "head_branch == 'main'"):
+        assert need in guard["if"]
+    assert _job()["needs"] == "guard"
+    assert _job()["if"] == "needs.guard.outputs.build == 'true'"
+
+
+def test_guard_builds_only_when_artifact_impact_says_native_payload():
+    guard = _workflow()["jobs"]["guard"]
+    text = "\n".join(step.get("run", "") for step in guard["steps"])
+    assert "deploy/robot/pinky_pro/release/artifact_impact.py --base \"$base\" --head \"$HEAD_SHA\" --json" in text
+    assert "vars.PINKY_INSTALLED_SOURCE_REVISION" in "\n".join(str(step.get("env", "")) for step in guard["steps"])
+    assert 'impact" == native-payload' in text
+    assert 'rc" != 0' in text and "build=false" in text  # review/error holds, never builds
+
+
+def test_one_build_per_sha_and_checkout_pins_that_sha():
+    assert "workflow_run.head_sha" in _workflow()["concurrency"]["group"]
+    assert _workflow()["concurrency"]["cancel-in-progress"] is False
+    assert "-$HEAD_SHA" in "\n".join(step.get("run", "") for step in _workflow()["jobs"]["guard"]["steps"])
+    checkout = next(s for s in _job()["steps"] if s.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["with"]["ref"] == "${{ needs.guard.outputs.sha }}"
+    assert "GITHUB_SHA" not in _run_text()  # workflow_run's GITHUB_SHA is main's tip, not the tested SHA
+
+
+def test_automatic_build_never_signs():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "sign_image_release.py" not in "\n".join(s.get("run", "") for j in _workflow()["jobs"].values() for s in j["steps"]) and "secrets." not in text
