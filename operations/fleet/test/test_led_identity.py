@@ -1,6 +1,7 @@
 """D-472 LED identity orchestration and binding lifetime (addendum 4)."""
 
 import asyncio
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -222,6 +223,45 @@ def test_verdict_and_readback_routes():
     readback = client.get("/api/fleet/tracking/identity").json()
     row = next(r for r in readback["robots"] if r["robot_id"] == "rosy_60")
     assert row["state"] == "CONFIRMED" and readback["use"] == "observation-only"
+
+
+def _vision_verdict_bodies(monkeypatch):
+    """Bodies built exactly as TrackWorker._report_identity does, from the real led_identity.decide."""
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "overhead"))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "apps" / "games"))
+    from rosy_vision.track import led_identity
+    from rosy_vision.track.worker import _map_yaw
+    blob = led_identity.Blob(x_px=10, y_px=10, radius_px=5, map_x=1.0, map_y=1.0)
+    blink = [led_identity.Sample(1000.0 + i * 0.2, "cal-1", (blob,), (0.0 if 5 <= i < 13 else 0.02,)) for i in range(18)]  # on, off 1.8 s, on
+    out = {}
+    for name, samples in (("matched", blink), ("ambiguous", [])):
+        verdict = led_identity.decide(samples, not_before=1000.0, not_after=1004.0, now=1004.0)
+        out[name] = {"source_id": "ceiling_north", "map_id": "map_v2_fleet", "request_id": "req-1",
+                     "processor_revision": led_identity.PROCESSOR_REVISION, **verdict,
+                     "yaw": _map_yaw(verdict, None)}
+    return out
+
+
+def test_vision_identity_body_with_yaw_is_accepted_and_extra_key_still_refused(monkeypatch):
+    bodies = _vision_verdict_bodies(monkeypatch)
+    assert bodies["matched"]["state"] == "matched" and "yaw" in bodies["matched"]
+    clock, tracking, identity, _ = _setup()
+    app = FastAPI()
+    install_tracking_routes(app, tracking=tracking, require_operator=lambda: None,
+                            read_guard=[], operator_guard=[])
+    client = TestClient(app)
+    _moving(tracking, clock, "rosy_60")
+    started = asyncio.run(identity.request("rosy_60"))
+    clock.now += 6.2
+    _detections(tracking, clock, (1.05, 1.0))
+    headers = {"Authorization": AUTH}
+    for name in ("ambiguous", "matched"):
+        body = {**bodies[name], "request_id": started["request_id"], "captured_at": bodies[name]["captured_at"] and 1005.0,
+                "calibration_revision": bodies[name]["calibration_revision"] and "cal-1"}
+        answer = client.post("/api/fleet/detections/identity", json=body, headers=headers)
+        assert answer.status_code != 422, answer.text
+    assert client.post("/api/fleet/detections/identity", json={**bodies["matched"], "jpeg": "x"},
+                       headers=headers).status_code == 422
 
 
 def test_two_bindings_that_meet_on_one_blob_both_return_to_unknown():
