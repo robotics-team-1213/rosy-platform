@@ -874,6 +874,14 @@ def test_unknown_paths_are_listed_with_a_hint_in_json_and_print(sample, capsys):
     assert "deploy/robot/run.sh\n      hint" not in text
     assert _select(sample, "deploy/robot/run.sh").unmapped == []
 
+
+def test_root_suite_fallback_names_the_path_and_the_fix(sample):
+    """2026-11-20: an unnamed page beside a named server pulled 18k tests into every commit's run."""
+    sel = _select(sample, "deploy/robot/run.sh")
+    assert affected.root_fallback_paths(sel) == ["deploy/robot/run.sh"]
+    assert "      hint (deploy/robot/run.sh): name this path literally" in affected.render(sel)
+    assert affected.root_fallback_paths(_select(sample, "deploy/robot/pinky_pro/udev/99-rosy.rules")) == []
+
 # 2026-10-26: a five-line `modules:` addition went FULL and held the land lock 45+ minutes.
 REAL_HARNESS = (ROOT / "tools/harness/harness.yaml").read_text(encoding="utf-8")
 NEW_MODULE = "  - name: zz_added\n    path: operations/zz_added\n    tests: [test/architecture]\n"

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -145,6 +146,8 @@ BROAD_TESTS = frozenset({"test"})
 
 
 
+# A broad module's path no test names selects the whole root suite (15-31 min remote, 2026-11-20).
+ROOT_FALLBACK = "no test names it, whole root suite"
 UNMAPPED_HINT = ("name this path literally in the test that loads it"
                  " (f-string/module-name-only references are invisible to the selector)")
 
@@ -357,7 +360,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                         add(test, f"module {module['name']} ({path}; root test/ narrowed to functional)")
                 else:
                     # No test names this file: the narrowing has nothing to stand on.
-                    add("test", f"module {module['name']} ({path}; no test names it, whole root suite)")
+                    add("test", f"module {module['name']} ({path}; {ROOT_FALLBACK})")
                     broad_fallback_modules[module["name"]] = module
             else:
                 # A module with source_paths has one test folder per source root (perception/test, drive/test).
@@ -453,7 +456,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
         # CI runs the entire root suite in parallel shards for FULL. The local
         # pre-push gate keeps the module's functional tests and all named tests,
         # rather than repeating that 15k-test CI suite in one SSH invocation.
-        if "test" in sel.reasons and all("whole root suite" in why for why in sel.reasons["test"]):
+        if "test" in sel.reasons and all(ROOT_FALLBACK in why for why in sel.reasons["test"]):
             sel.reasons.pop("test", None)
             for module in broad_fallback_modules.values():
                 for test in module.get("functional") or []:
@@ -487,6 +490,12 @@ def pytest_command(paths: list[str], python: str = "python") -> list[str]:
             "-pno:launch_testing", "-pno:launch_ros"]
 
 
+def root_fallback_paths(sel: Selection) -> list[str]:
+    """Changed paths that pulled in the whole root suite because no test names them."""
+    return [m.group(1) for why in sel.reasons.get("test", ())
+            if (m := re.search(rf"\((.+); {ROOT_FALLBACK}\)$", why))]
+
+
 def render(sel: Selection) -> str:
     lines = [f"affected tier (D-436): mode={sel.mode}, {len(sel.changed)} changed file(s)"]
     for path in sel.changed:
@@ -505,6 +514,7 @@ def render(sel: Selection) -> str:
         for path in sorted(sel.reasons):
             lines.append(f"  {path}")
             lines += [f"      <- {why}" for why in sel.reasons[path]]
+        lines += [f"      hint ({path}): {UNMAPPED_HINT}" for path in root_fallback_paths(sel)]
     lines.append("pytest invocations (run each separately):")
     lines += ["  " + " ".join(pytest_command(inv)) for inv in sel.invocations]
     return "\n".join(lines) + "\n"
@@ -576,6 +586,8 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
         print(json.dumps({"mode": sel.mode, "matrix": {"include": include}}, separators=(",", ":")))
         return 0
     if as_json:
+        for path in root_fallback_paths(sel):  # stderr: callers parse stdout as JSON
+            print(f"[affected] whole root suite for {path}; hint: {UNMAPPED_HINT}", file=sys.stderr)
         print(json.dumps(sel.to_json(), indent=2, ensure_ascii=False))
     else:
         print(render(sel), end="")
