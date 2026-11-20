@@ -18,6 +18,7 @@ if _HERE not in sys.path:
 import cell_params as prm  # noqa: E402
 from chunk_runner_commands import EMPTY_MARGIN  # noqa: E402
 from chunk_runner_guards import SETTLE_TOL  # noqa: E402
+from chunk_runner_interrupt import interrupt_step  # noqa: E402
 
 SETTLE_S = 3.0
 IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
@@ -107,7 +108,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
         stop_cmd = getattr(runner, "_stop_after_park", None)
         if stop_cmd:
             runner._stop_after_park = None
-            runner._stopped = True
+            runner._stopped, runner._park_settled = True, settled
             runner.report(
                 command=stop_cmd,
                 ok=True,
@@ -177,9 +178,11 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
     """Wait for the guard's stationary initial alignment before admitting chunks; False stops early."""
     motion = getattr(runner.robot, "motion", None)
     while motion is not None and not getattr(motion, "tracking", True):
+        if getattr(runner, "signals", None):  # interrupted before the guard tracks: folded ends, else HOLD (no motion)
+            return not interrupt_step(runner, may_move=False)
         started = runner.clock()
         arrived = lines()
-        if arrived:
+        if arrived and not getattr(runner, "signals", None):  # an interrupt (checked first) drops FIFO commands
             runner.pending += arrived
             if "human-hold" in runner.pending:
                 runner.pending.clear()
@@ -188,7 +191,8 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
                 (i for i, cmd in enumerate(runner.pending) if cmd.strip() in ("stop", "stop now", "stop fold")),
                 None,
             )
-            if stop is not None and all(cmd.strip() == "state" for cmd in runner.pending[:stop]):
+            if stop is not None and all(cmd.strip() == "state" for cmd in runner.pending[:stop]) and not getattr(
+                    runner, "signals", None):
                 for cmd in runner.pending[:stop]:
                     runner.command(cmd)
                 runner.report(command=runner.pending[stop], ok=True, present=runner.target)

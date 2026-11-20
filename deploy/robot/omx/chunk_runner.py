@@ -25,6 +25,11 @@ run stops by itself on a read failure or a following error above FOLLOW_STOP for
 Elsewhere a joint whose lag rises past STRAIN_LAG at STRAIN_PWM of its cap holds like a contact (strained()).
 ROSY_CHUNK_TRACE=<file> appends one JSON line per tick (time, chunk, target, sent, present) to measure jitter.
 
+SIGINT/SIGTERM never cut torque with the arm out: the runner folds home and reads the fold back, then torque goes OFF;
+a fold that cannot finish leaves a human hold (torque ON) until a person sends SIGUSR2 (chunk_runner_interrupt.py).
+`gated_close` (final_gate, interrupts blocked through close_device) is the last word: an interrupt recorded without a confirmed fold or an approved
+exception waits (nothing sent) for SIGUSR2, whichever path ended the run.
+
 Launched by record_session.py --chunks; never on its own (the session owns caps and cleanup).
 """
 from __future__ import annotations
@@ -40,6 +45,11 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, motor_health, cell_params, episode_recorder
+if __name__ == "__main__":  # before any import that may start threads: interrupts reach the main thread only
+    import main_thread_signals
+
+    main_thread_signals.quiet_blas()  # one BLAS thread: the runner's per-tick math is a few 6-vectors
+    main_thread_signals.route()
 _ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter")
 if _ADAPTER_SRC not in sys.path:
     sys.path.insert(0, _ADAPTER_SRC)
@@ -173,6 +183,8 @@ def main(argv=None):
     parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
     parser.add_argument("--load-model", type=Path, help="load-model.json (load_model.py): refuse a library whose holds are predicted risky")
     args = parser.parse_args(argv)
+    signals: list = []  # recorded, not raised: an interrupt folds or holds (chunk_runner_interrupt), never drops the arm
+    __import__("chunk_runner_interrupt").install(signals)
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     params = prm.load(args.params)["values"]
@@ -191,8 +203,13 @@ def main(argv=None):
     status_path = args.io / "chunk-status.jsonl"
 
     def status(row):
-        with status_path.open("a") as f:
-            f.write(json.dumps(row) + "\n")
+        try:
+            with status_path.open("a") as f:
+                f.write(json.dumps(row) + "\n")
+        except OSError as error:  # interrupted: a full disk is reported, the fold or hold goes on (no torque OFF)
+            if not signals:
+                raise
+            print(json.dumps({"status_write_failed": str(error)[:300], "row": row}), file=sys.stderr, flush=True)
         print(json.dumps(row), flush=True)
 
     from guarded_native import NativeJointMotion, close_device, connect_passive
@@ -205,6 +222,7 @@ def main(argv=None):
     motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=MotorHealth())
     motion.shed_load = True  # a guard hold freezes only the held joint: runner_strain.shed moves lift and elbow
     guarded = Guarded(robot, motion)
+    runner = None
     try:
         caps = (robot.bus.sync_read("PWM_Limit", list(load_predict.BODY[1:]), normalize=False, num_retry=2)
                 if "read" not in vars(robot.bus) and hasattr(robot.bus, "model_ctrl_table")
@@ -217,13 +235,24 @@ def main(argv=None):
 
         def live(row):  # replaced atomically so a reader never sees half a file
             tmp = live_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(row))
-            os.replace(tmp, live_path)
+            try:
+                tmp.write_text(json.dumps(row))
+                os.replace(tmp, live_path)
+            except OSError:
+                if not signals:
+                    raise
 
         context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
                                   operating_profile=profile, params=params)
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
                         operating_context=context, params=params, plan_check=check)
+        runner.signals, runner.hold_file = signals, args.io / "hold.json"  # hold.json: record_session reads it
+        # heavy imports (lerobot, numpy, torch), the robot and the bus are up: only now may the main thread take signals
+        # (one sent during start-up was pending and is recorded now, the handlers being installed above)
+        runner.signal_routing = __import__("main_thread_signals").unblock_main()
+        if runner.signal_routing:  # another thread can take them: gated_close's re-check right before close_device
+            print(json.dumps({"signal_routing": "threads accept SIGTERM", "tids": runner.signal_routing}),
+                  file=sys.stderr, flush=True)
         trace_path = Path(path).expanduser().resolve() if (path := os.environ.get("ROSY_CHUNK_TRACE")) else None
         trace_file = trace_path.open("a") if trace_path else None  # buffered: no write call per tick
         if trace_file:
@@ -231,13 +260,20 @@ def main(argv=None):
             bind_trace_source(runner, trace_path, trace_file, args.io)
         try:
             runner.run(lines)
+        except Exception as error:
+            if not signals:
+                raise  # no interrupt: the existing stop, torque OFF in the finally below
+            __import__("chunk_runner_interrupt").last_resort_hold(runner, signals, error)  # returns on SIGUSR2 only
         finally:
             if trace_file:
                 trace_file.close()
     finally:
         lines.close()
         try:
-            close_device(robot)  # torque OFF before the bus closes
+            # the single place torque goes OFF: interrupts blocked from the gate's verdict until close_device returns;
+            # after an interrupt, no torque OFF without a confirmed fold or an approved exception (else SIGUSR2 first)
+            __import__("chunk_runner_interrupt").gated_close(runner, signals, args.io / "hold.json",
+                                                             lambda: close_device(robot))
         finally:
             if motion.monitor is not None:
                 motion.monitor.end()
