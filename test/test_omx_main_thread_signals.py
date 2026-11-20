@@ -10,13 +10,14 @@ import sys
 import pytest
 
 OMX = Path(__file__).parents[1] / "deploy/robot/omx"
+ADAPTER = Path(__file__).parents[1] / "middleware/devices/omx/adapter"  # chunk_runner.py adds it to sys.path itself
 
 pytestmark = pytest.mark.skipif(not hasattr(signal, "pthread_sigmask") or not Path("/proc/self/task").is_dir(),
                                 reason="Linux only: pthread_sigmask and /proc/self/task")
 
 PROBE = r"""
 import json, os, signal, sys, threading, time
-sys.path.insert(0, sys.argv[2])
+sys.path[:0] = [sys.argv[2], sys.argv[3]]  # as chunk_runner.py does: its folder and the omx_adapter source
 import main_thread_signals as mts
 routed = sys.argv[1] == "routed"
 if routed:
@@ -51,7 +52,7 @@ print(json.dumps({"unrouted": unrouted, "worker": worker.native_id, "during_clos
 
 
 def probe(mode):
-    done = subprocess.run([sys.executable, "-c", PROBE, mode, str(OMX)], capture_output=True, text=True, timeout=60)
+    done = subprocess.run([sys.executable, "-c", PROBE, mode, str(OMX), str(ADAPTER)], capture_output=True, text=True, timeout=60)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout.strip().splitlines()[-1])
 
