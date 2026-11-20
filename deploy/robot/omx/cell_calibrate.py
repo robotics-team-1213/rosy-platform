@@ -152,8 +152,7 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     stop evidence (cell_hooks.stills). 2026-11-14: arm_b's first remap goto stopped on contact at wrist_flex 59.3
     and nothing but the runner's one line said what it met."""
     import cv2
-    import cell_pipeline as cp
-    import cell_scene_guard
+    import cell_pipeline as cp, cell_scene_guard
 
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
     tcp_marks, seen_jaws = bool((config.get("calibrate") or {}).get("tcp_marks")), []
@@ -215,8 +214,7 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     cell.act("park")
     after = cell.frame("top")
     cv2.imwrite(str(frames / "after.jpg"), after)
-    ignore = [*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())]
-    moved = cell_scene_guard.scene_moved(before, after, ignore=ignore)
+    moved = cell_scene_guard.scene_moved(before, after, ignore=[*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())])
     if moved:
         raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
     if tcp_marks:  # each mark's arm point is the place of the jaw it is, so the map maps the TCP (jaws' middle)
@@ -375,7 +373,6 @@ def main(argv=None):
             done.append({step: touched["result"], "surface_z": touched.get("surface_z")})
         elif step == "post-eval":
             import cell_post_eval
-
             rep = cell_post_eval.run_post_eval(
                 cell, config, calibration, targets=targets or None, apply=True,
                 commissioning=args.commissioning, person_at_switch=args.person_at_switch, work=work,
@@ -383,7 +380,6 @@ def main(argv=None):
             done.append({"post-eval": rep.get("verdict"), "applied": len(rep.get("applied") or []), "escalated": rep.get("escalated")})
         elif step == "depth-verify":
             import cell_cal_eval
-
             bias_d = cell_pivot.load_bias(cell_pivot.bias_path(cal_path), config.get("params")) if cell_pivot.bias_path(cal_path).exists() else None
             # 2026-11-17 panel: this step never passed depth, so it always reported missing_depth on the D435 cells
             depth = depth_capture() if cell_cal_eval.top_has_depth(config) else None
