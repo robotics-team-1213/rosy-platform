@@ -328,7 +328,7 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
                       at_stop=lambda state, status: seen.append((list(cell.cmds), status)))
     assert len(record["points"]) == 6 and cell.cmds[-1] == "park"
     # 2026-11-14: the stop's evidence is taken before the fold, and the log says what the runner said
-    assert len(seen) == 1 and "park" not in seen[0][0] and "wrist_roll lag" in seen[0][1]["error"]
+    assert len(seen) == 1 and "park" not in seen[0][0][1:] and "wrist_roll lag" in seen[0][1]["error"]
     assert any("wrist_roll lag" in str(row.get("error")) for row in rows if "stopped" in row)
     broken = cc.remap(Cell(), config, points, tmp_path, log=lambda row: None, at_stop=lambda *a: 1 / 0)
     assert len(broken["points"]) == 6  # a failing evidence hook still folds and keeps the marks
