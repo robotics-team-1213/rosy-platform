@@ -263,7 +263,7 @@ class ParameterGraphTests(unittest.TestCase):
                 rclpy.shutdown()
 
     def test_per_node_files_apply_under_root_and_robot_namespaces(self):
-        config = Path(__file__).parents[1] / 'config'
+        config = Path(__file__).parents[3] / 'middleware/perception' / 'config'
         for path in sorted(config.glob('*.yaml')):
             document = yaml.safe_load(path.read_text(encoding='utf-8'))
             for selector, settings in document.items():

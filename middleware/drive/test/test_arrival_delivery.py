@@ -71,7 +71,7 @@ def test_rejected_arrival_retries_current_route_then_advances_real_planner():
 
 
 def test_resized_map_endpoint_uses_exact_published_route_identity():
-    from test.test_preferred_clearance_progress import committed_escape_fixture
+    from test_preferred_clearance_progress import committed_escape_fixture
     m, brain, start, original = committed_escape_fixture()
     # Actual run shifted the map lattice by 2.739 mm during a committed
     # escape. The planner permits <5 mm endpoint drift, but arrival identity

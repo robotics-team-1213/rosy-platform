@@ -1,6 +1,16 @@
+import ast
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from test.test_sensing_only import node_method
+
+
+def node_method(name, **bindings):
+    path = Path(__file__).parents[1] / 'calibration/startup_calibration_node.py'
+    cls = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n, ast.ClassDef))
+    method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)
+    namespace = dict(bindings)
+    exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), namespace)
+    return namespace[name]
 
 
 class LiveStatusTest(unittest.TestCase):
