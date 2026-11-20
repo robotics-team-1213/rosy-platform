@@ -385,7 +385,8 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
             warnings.append(f"{name}: last_verified commit {commit} not found in git history")
         elif int(count) > int(config.get("stale_after_commits", 5)):
             warnings.append(f"{name}: {count.strip()} commits touched {path} since last_verified {commit}")
-    gen_errors, gen_warnings = records_rules.split_strict(check_generated(repo, adr), strict, lambda e: True)
+    gen_errors, gen_warnings = records_rules.split_strict(
+        check_generated(repo, adr), strict, lambda e: not e.startswith("cannot render"))
     errors += [f"generated: {p}" for p in gen_errors]
     warnings += [f"generated: {p}" for p in gen_warnings]
     rule_errors, rule_warnings = records_rules.lint_findings(repo, log_rels)

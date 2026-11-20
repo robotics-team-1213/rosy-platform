@@ -517,7 +517,8 @@ def test_repository_adr_log_is_contiguous_and_indexed(config, adr_log):
 
 def test_generated_records_are_current():
     # D-1061: PR and queue runs leave index.md to the records bot; the bot and scheduled runs are strict.
-    stale, _ = records_rules.split_strict(harness.check_generated(ROOT), records_rules.strict(ROOT), lambda e: True)
+    stale, _ = records_rules.split_strict(harness.check_generated(ROOT), records_rules.strict(ROOT),
+                                     lambda e: not e.startswith("cannot render"))
     assert stale == [], (
         f"regenerate with `python tools/harness/rosy_harness.py generate`: {stale}"
     )
