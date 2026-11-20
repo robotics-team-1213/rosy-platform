@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Wheel `rosy-contracts-skill` 0.1.0. ROS-free Skill invocation, receipt identity and PlanBundle/PlanStep shape shared by the other ROSY wheels. `COLCON_IGNORE` keeps colcon off this folder.
+Wheel `rosy-contracts-skill` 0.1.1. ROS-free Skill invocation, receipt identity and PlanBundle/PlanStep shape shared by the other ROSY wheels. `COLCON_IGNORE` keeps colcon off this folder.
 
 ## Key Files
 
