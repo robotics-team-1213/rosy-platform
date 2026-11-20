@@ -29,7 +29,8 @@
 ### Consequences
 
 - 같은 표면·다른 표면 API PR 둘이 공유 줄을 갖지 않는다. 번호·CONTRACT는 봇 PR이 병합될 때까지 늦다. 번호를 읽는 코드는 CORE OpenAPI 설명문뿐이다.
-- 봇 PR은 `GITHUB_TOKEN`으로 열린다. 그 PR에서는 pull_request 워크플로가 돌지 않는다. 그래서 봇이 `gh workflow run ci.yml --ref bot/records-refresh`로 필수 `ci-result`를 그 head에 올린다(workflow_dispatch는 예외로 돈다). 그다음 `tools/pr_land.py`와 같은 `gh pr merge --auto --merge --match-head-commit`로 큐에 넣는다. 다른 필수 검사 `review-gate`에는 workflow_dispatch 트리거가 없다. 그래서 이 PR에서 돌지 않는다. `review-gate.yml`에 dispatch를 더하거나 앱 토큰을 쓸 때까지 사람이 처리해야 한다(운영 과제).
+- 봇 PR은 저장소 secret `RECORDS_BOT_TOKEN`(GitHub App 설치 토큰 또는 fine-grained 토큰)으로만 연다. 그 토큰으로 연 PR에서는 pull_request 워크플로(`ci-result`, `review-gate`)가 그대로 돈다. 큐에는 `tools/pr_land.py`와 같은 `gh pr merge --auto --merge --match-head-commit`으로 넣는다. `GITHUB_TOKEN`으로 연 PR에서는 어떤 워크플로도 돌지 않아 필수 검사를 채울 수 없으므로 쓰지 않는다.
+- secret이 없으면 봇은 확인 모드로 돈다. 러너 안에서만 consolidate를 돌리고, 밀려 있는 변경을 job summary에 적고, 아무것도 push하지 않는다. 그때는 아무 세션이나 손으로 처리한다. origin/main에서 `bot/records-<날짜>` 브랜치를 만들고 `python tools/new_record.py consolidate`를 돈 뒤 `python tools/pr_land.py --evidence`로 올린다(절차: [api-changes/README.md](../reference/api-changes/README.md)). `bot/records-` 접두사가 컷오버 규칙 예외와 엄격 lint를 함께 준다.
 - 같은 slug를 두 클론이 쓰면 add/add 충돌이 남는다(드묾, 리뷰에서 이름을 바꾼다).
 - 이 ADR의 Log 행은 새 방식대로 봇이 넣는다(PR에서는 경고).
 

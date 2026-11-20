@@ -36,3 +36,23 @@ one run at a time) numbers the fragments in (date, slug) order from the current 
 `| v1.N | <day> | [<Surface>[, breaking]] <history> |`, the header and `CONTRACT` in one PR, and deletes
 the fragments. A breaking section starts with `**Breaking.** 사유: <reason>`. Body text in the reference
 (endpoint tables, §8 events) is still edited in the PR itself.
+
+## When the records bot cannot open PRs (no `RECORDS_BOT_TOKEN`)
+
+The workflow opens PRs only with the repository secret `RECORDS_BOT_TOKEN` (GitHub App installation token or
+fine-grained token). A PR opened with `GITHUB_TOKEN` would start no `ci-result`/`review-gate` runs. Without the
+secret each run only consolidates in its runner and lists the pending changes in the job summary; it pushes nothing.
+Then any session folds the records by hand:
+
+```
+git fetch origin main
+git worktree add .worktrees/records-<date> -b bot/records-<date> origin/main   # name must start with bot/records-
+cd .worktrees/records-<date>
+python tools/new_record.py consolidate
+python tools/harness/rosy_harness.py lint          # strict on bot/records-* branches
+git add -A && git commit -m "chore(records): fold fragments (D-1061)"
+python tools/pr_land.py --evidence ...
+```
+
+The `bot/records-` prefix exempts that branch from the cutover rule and makes its lint strict. Run it
+when few PRs are in flight, one records branch at a time.

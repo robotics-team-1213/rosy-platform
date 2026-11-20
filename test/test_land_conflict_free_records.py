@@ -114,8 +114,18 @@ def test_refresh_generated_docs_workflow_contract():
     assert triggers["push"] == {"branches": ["main"]}  # D-1061: the bot numbers fragments after each merge
     assert wf["concurrency"] == {"group": "rosy-refresh-generated-docs", "cancel-in-progress": False}
     assert "ci-result" not in wf["jobs"]
-    assert wf["permissions"]["actions"] == "write"
-    script = next(s["run"] for s in wf["jobs"]["consolidate"]["steps"] if s.get("name") == "Open or update consolidation PR")
-    assert "gh workflow run ci.yml --ref bot/records-refresh" in script  # GITHUB_TOKEN PRs start no CI
+    # D-1061: GITHUB_TOKEN PRs start no pull_request CI, so PRs come only from the RECORDS_BOT_TOKEN secret
+    job = wf["jobs"]["consolidate"]
+    assert wf["permissions"] == {"contents": "read"}
+    assert job["env"]["RECORDS_BOT_TOKEN"] == "${{ secrets.RECORDS_BOT_TOKEN }}"
+    steps = {s.get("name"): s for s in job["steps"]}
+    pr_step = steps["Open or update consolidation PR"]
+    assert pr_step["if"] == "env.RECORDS_BOT_TOKEN != ''"
+    assert pr_step["env"]["GH_TOKEN"] == "${{ secrets.RECORDS_BOT_TOKEN }}"
+    script = pr_step["run"]
     assert 'gh pr merge "$pr" --auto --merge --match-head-commit "$head"' in script  # pr_land.py's queue call
     assert script.count("gh pr create") == 1 and "gh pr list --head bot/records-refresh --state open" in script
+    assert "gh workflow run" not in script and "github.token" not in str(pr_step)
+    report = steps["Report pending records (no RECORDS_BOT_TOKEN)"]
+    assert report["if"] == "env.RECORDS_BOT_TOKEN == ''"
+    assert "GITHUB_STEP_SUMMARY" in report["run"] and "git push" not in report["run"]
