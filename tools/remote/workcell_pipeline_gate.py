@@ -209,7 +209,7 @@ def camera_rows(client: FleetClient, cameras: list[str]) -> list[dict]:
             continue
         try:
             lease = json.loads(raw)
-            token, frame_path = lease["lease"], lease["frame_path"]
+            lease_secret, frame_path = lease["lease"], lease["frame_path"]
         except (ValueError, KeyError, TypeError):
             rows.append({"check": f"{client.name}.camera.{source}", "result": "FAIL",
                          "stage": "lease", "status": status, "why": "no lease/frame_path in the body"})
@@ -221,7 +221,7 @@ def camera_rows(client: FleetClient, cameras: list[str]) -> list[dict]:
             continue
         if not frame_path.startswith("/"):
             frame_path = urllib.parse.urlsplit(frame_path).path
-        frame_status, frame_raw, frame_headers, frame_error = client.call("GET", frame_path, bearer=token)
+        frame_status, frame_raw, frame_headers, frame_error = client.call("GET", frame_path, bearer=lease_secret)
         age_raw = frame_headers.get("X-Frame-Age-Ms") if frame_headers is not None else None
         try:
             age = float(age_raw) if age_raw is not None else None
