@@ -398,6 +398,37 @@ def test_source_path_tests_are_not_pulled_by_the_other_root(tmp_path):
     assert "middleware/drive/test/test_other_drive.py" not in drive.reasons
 
 
+def test_integration_folder_is_not_pulled_whole_by_a_change_it_does_not_import(tmp_path):
+    """A test folder outside the changed file's module roots, or registered by two modules (test/integration/*),
+    keeps only the files that reach the change; its "nobody imports it, keep the whole folder" fallback is for a
+    folder inside the module's own roots."""
+    harness = HARNESS_YAML.replace(
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test]\n",
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test, test/integration/rig]\n").replace(
+        "    path: middleware/perception\n    tests: [middleware/perception/test]\n",
+        "    path: middleware/perception\n    tests: [middleware/perception/test, test/integration/rig]\n")
+    assert harness.count("test/integration/rig") == 2
+    files = {**FILES, "tools/harness/harness.yaml": harness,
+             "middleware/perception/control/vision_only.py": "V = 1\n",
+             "middleware/core/api/core_api_web/thing.py": "T = 1\n",
+             "test/integration/rig/test_rig_power.py": "from core_api_web import thing\n",
+             "test/integration/rig/test_rig_other.py": "X = 1\n"}
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    repo = affected.Repo.load(tmp_path)
+
+    vision = affected.select(repo, ["middleware/perception/control/vision_only.py"])
+    assert not [t for t in vision.reasons if t.startswith("test/integration/rig")], vision.reasons
+
+    power = affected.select(repo, ["middleware/core/api/core_api_web/thing.py"])
+    assert "test/integration/rig/test_rig_power.py" in power.reasons, power.reasons
+    assert "test/integration/rig" not in power.reasons and "test/integration/rig/test_rig_other.py" not in power.reasons
+
+
 def test_reasons_name_the_reverse_dependency(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test"])
