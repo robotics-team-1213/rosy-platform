@@ -21,6 +21,7 @@ Every backend submits a candidate to CORE. No operational final publisher, new m
 | `recovery/` | Bounded recovery proposals (see `recovery/AGENTS.md`) |
 | `runtime/` | Legacy Drive entry modules installed by `control` (see `runtime/AGENTS.md`) |
 | `motion_limits/` | Flat `control.control` limits plus the `control.safety` adapter (see `safety/AGENTS.md`) |
+| `test/` | Pure-logic tests of the drive modules above (moved from `middleware/perception/test`, split round 3); run with `middleware/perception/test` |
 | `tracking/` | Route following plus the `control.wander` adapter (see `tracking/AGENTS.md`) |
 
 ## Manual Notes
