@@ -182,7 +182,7 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
             return not interrupt_step(runner, may_move=False)
         started = runner.clock()
         arrived = lines()
-        if arrived:
+        if arrived and not getattr(runner, "signals", None):  # an interrupt (checked first) drops FIFO commands
             runner.pending += arrived
             if "human-hold" in runner.pending:
                 runner.pending.clear()

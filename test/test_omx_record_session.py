@@ -986,6 +986,14 @@ def test_wait_for_runner_sees_a_hold_written_before_the_session_looked_but_only_
     assert outcome == "hold" and row["error"] == "this runner"
 
 
+def test_wait_for_runner_reads_a_hold_from_live_json_when_the_other_writes_failed(tmp_path):
+    (tmp_path / "live.json").write_text(json.dumps({"pid": 999, "interrupt": "hold"}))
+    assert m.wait_for_runner(RunnerChild([None, 0]), tmp_path, 0, sleep=lambda s: None) == ("exited", 0)
+    (tmp_path / "live.json").write_text(json.dumps({"pid": 4242, "interrupt": "hold", "state": [0] * 6}))
+    outcome, row = m.wait_for_runner(RunnerChild(), tmp_path, 0, sleep=lambda s: None)
+    assert outcome == "hold" and row["interrupt"] == "hold"
+
+
 def test_wait_for_runner_treats_an_unreadable_state_as_a_hold(tmp_path):
     (tmp_path / "chunk-status.jsonl").mkdir()  # reading it raises OSError
     outcome, row = m.wait_for_runner(RunnerChild(), tmp_path, 0, sleep=lambda s: None)
@@ -1007,7 +1015,7 @@ def test_wait_for_runner_calls_a_runner_silent_only_after_it_writes_nothing(tmp_
     assert outcome == ("silent", None) and clock[0] >= 9.5 + m.RUNNER_SILENT_S
 
 
-@pytest.mark.parametrize("left", ["held", "killed"])
+@pytest.mark.parametrize("left", ["held", "killed", "unconfirmed"])
 def test_a_held_or_killed_runner_leaves_torque_and_caps_alone(tmp_path, monkeypatch, left):
     import contextlib
 
@@ -1017,6 +1025,8 @@ def test_a_held_or_killed_runner_leaves_torque_and_caps_alone(tmp_path, monkeypa
     def run(command):
         if left == "held":
             raise m.RunnerHeld({"command": "interrupt", "hold": True})
+        if left == "unconfirmed":
+            raise m.RunnerUnconfirmed({"exit": -9, "runner_alive": False})
         raise m.RunnerUnresponsive({"killed_pid": 7})
 
     s, calls = session(arm, leader, run=run)
@@ -1025,12 +1035,12 @@ def test_a_held_or_killed_runner_leaves_torque_and_caps_alone(tmp_path, monkeypa
     assert record[f"runner_{left}"] and record["safe_end"] is False and record["manual_attention_required"]
     assert all(arm.motors[motor]["torque"] == 1 and arm.motors[motor]["pwm_limit"] == 300 for motor in m.FOLLOWER)
     assert not [w for w in arm.writes if w[1] == "torque"]
-    assert ("torque_readback" in record) == (left == "killed")
-    if left == "killed":
+    assert ("torque_readback" in record) == (left != "held")
+    if left != "held":
         assert set(record["torque_readback"].values()) == {1}
 
 
-@pytest.mark.parametrize("outcome", ["hold", "exited", "silent"])
+@pytest.mark.parametrize("outcome", ["hold", "exited", "silent", "signalled", "check-failed"])
 def test_an_interrupted_chunk_session_waits_for_the_runner_and_kills_only_a_silent_one(main_session, monkeypatch, tmp_path,
                                                                                         outcome):
     import contextlib
@@ -1057,8 +1067,15 @@ def test_an_interrupted_chunk_session_waits_for_the_runner_and_kills_only_a_sile
     monkeypatch.setattr(m, "subprocess", SimpleNamespace(Popen=lambda command, **k: child, TimeoutExpired=TimeoutError))
     monkeypatch.setattr(m, "no_interrupts", contextlib.nullcontext)
     row = {"command": "interrupt", "hold": True, "error": "HOLD: the fold stopped"}
-    monkeypatch.setattr(m, "wait_for_runner", lambda c, io, offset: (outcome, row if outcome == "hold" else 0),
-                        raising=False)
+    def wait_for_runner(c, io, offset):
+        if outcome == "check-failed":
+            raise PermissionError(13, "Permission denied", "chunk-status.jsonl")
+        if outcome == "signalled":
+            return "exited", -9  # SIGKILLed from outside mid-fold
+        return outcome, row if outcome == "hold" else 0
+
+    child.poll = lambda: None if outcome == "check-failed" else 0
+    monkeypatch.setattr(m, "wait_for_runner", wait_for_runner, raising=False)
 
     def execute(run):
         try:
@@ -1085,6 +1102,11 @@ def test_an_interrupted_chunk_session_waits_for_the_runner_and_kills_only_a_sile
         assert result.value.code == m.RUNNER_KILLED_EXIT and incidents == [("incident", None)]
         assert lease["hold"] == "runner killed" and lease["live"]
         assert json.loads(Path("session.json").read_text())["safe_end"] is False
+    elif outcome in ("signalled", "check-failed"):  # no fold confirmation: no finish(), its own code, lease held
+        assert result.value.code == m.RUNNER_UNCONFIRMED_EXIT and incidents == [("incident", None)]
+        assert lease["hold"] == "runner fold unconfirmed" and lease["live"]
+        assert lease["pid"] == (4242 if outcome == "check-failed" else None)
+        assert json.loads(Path("session.json").read_text())["safe_end"] is False
     else:
         assert result.value.code == 0 and len(incidents) == 1 and incidents[0][1] and lease is None
     assert lock.closed
@@ -1104,7 +1126,10 @@ def test_a_held_lease_refuses_other_owners_after_the_session_has_ended(tmp_path)
         with pytest.raises(cell_arm_lease.LeaseHeld, match="runner HOLD"):
             cell_arm_lease.claim("arm_b", "calibration@b", "calibration", root=root)
         assert not cell_arm_lease.hold("arm_b", "x", owner="calibration@b", root=root)  # only the owner marks it
-        assert cell_arm_lease.release("arm_b", "cell@a", root=root)  # a person, after supporting the arm
+        with pytest.raises(cell_arm_lease.LeaseHeld, match="release-hold"):
+            cell_arm_lease.claim("arm_b", "cell@a", "record_session", root=root)  # not even its own owner
+        assert not cell_arm_lease.release("arm_b", "cell@a", root=root)  # a plain release keeps the hold
+        assert cell_arm_lease.release_hold("arm_b", "cell@a", root=root)  # a person, after supporting the arm
         assert cell_arm_lease.claim("arm_b", "calibration@b", "calibration", root=root)["owner"] == "calibration@b"
     finally:
         runner.kill()

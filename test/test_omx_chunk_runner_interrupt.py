@@ -184,9 +184,10 @@ def test_an_interrupt_before_the_guard_tracks_does_not_move_an_extended_arm():
 class GuardRobot(Robot):
     """Like NativeJointMotion.send: past `fail_after` it marks itself failed, tries torque OFF (`off_works`), raises."""
 
-    def __init__(self, fail_after, off_works=True):
+    def __init__(self, fail_after, off_works=True, partial=False):
         super().__init__()
         self.limit, self.off_works, self.torque = fail_after, off_works, dict.fromkeys(m.NAMES, 1)
+        self.partial, self.attempts = partial, 0
         self.motion = type("Motion", (), {"failed": False, "held": None})()
         robot = self
 
@@ -201,8 +202,11 @@ class GuardRobot(Robot):
 
     def send_action(self, action):
         if self.motion.failed or len(self.sent) >= self.limit:
+            self.attempts += 1  # each failed send tries torque OFF again, as NativeJointMotion.send does
             self.motion.failed = True
-            if self.off_works:
+            if self.partial and self.attempts == 1:
+                self.torque["elbow_flex.pos"] = 0  # the first attempt reaches one motor only
+            elif self.off_works:
                 self.torque = dict.fromkeys(m.NAMES, 0)
             raise ValueError("shoulder_lift: following error >5 motor degrees")
         super().send_action(action)
@@ -301,3 +305,74 @@ def test_a_fold_ends_with_torque_off_only_when_settled_and_home(settled, ends):
     r._interrupt = {"signal": signal.SIGINT, "phase": "park", "seen": 1, "deadline": 99.0}
     r._stopped, r._park_settled = True, settled  # the park ended within 3 units of home, settled or out of time
     assert ci.interrupt_step(r) is ends and r.human_hold_latched is (not ends)
+
+
+def test_a_partial_guard_stop_is_reported_and_the_failed_guard_is_never_called_again():
+    robot = GuardRobot(fail_after=30, partial=True)
+    r, status, _, held = drive(robot, signal_after=20, release_after=5.0)
+    partial = next(row for row in interrupts(status) if row.get("hold"))
+    assert partial["error"].startswith("PARTIAL_GUARD_STOP") and partial["partial_guard_stop"]
+    assert robot.attempts == 1  # no second send: a second torque OFF attempt would have dropped the rest
+    assert robot.torque["shoulder_lift.pos"] == 1 and interrupts(status)[-1]["released"]
+
+
+def test_a_guard_readback_that_later_reads_all_off_is_reported_as_guard_stopped():
+    robot = GuardRobot(fail_after=30, off_works=False)
+    status, clock = [], [0.0]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, queue, n = [], ["run reach"], [0]
+
+    def lines():
+        n[0] += 1
+        if n[0] == 20:
+            r.signals.append(signal.SIGINT)
+        if any(row.get("hold") for row in status):
+            robot.torque = dict.fromkeys(m.NAMES, 0)  # e.g. the motors' own overload shutdown
+        if clock[0] > 600:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)
+    assert interrupts(status)[-1]["guard_stopped"] and robot.attempts == 1
+
+
+def test_a_fifo_human_hold_during_an_interrupt_is_dropped_and_an_unread_pose_never_ends_the_run():
+    class Blind(Robot):
+        def get_observation(self):
+            if len(self.sent) > 22:
+                raise ConnectionError("Failed to sync read 'Present_Position'")
+            return super().get_observation()
+
+    robot = Blind(blocked=(0,), block_from=19)
+    status, clock = [], [0.0]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, queue, n = [], ["run reach"], [0]
+
+    def lines():
+        n[0] += 1
+        if n[0] == 20:
+            r.signals.append(signal.SIGINT)
+            return ["human-hold"]  # arrives with the interrupt: the interrupt goes first
+        if r.human_hold_latched and n[0] % 50 == 0 and n[0] < 400:
+            return ["human-hold"]
+        if n[0] >= 400:
+            r.signals.append(RELEASE)
+        if clock[0] > 600:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)
+    assert not [row for row in status if row["command"] == "human-hold"]  # never executed from the FIFO
+    assert interrupts(status)[-1]["released"] and n[0] >= 400
+
+
+def test_a_human_hold_whose_pose_read_fails_holds_the_last_known_pose():
+    class Blind(Robot):
+        def get_observation(self):
+            raise ConnectionError("Failed to sync read 'Present_Position'")
+
+    r = m.Runner(Blind(), library(), fps=30, status=lambda row: None, clock=lambda: 0.0, sleep=lambda s: None)
+    r.target, r.last_present = list(HOME), list(HOME)
+    assert r.command("human-hold") is True and r.human_hold_latched and r.target[:5] == HOME[:5]

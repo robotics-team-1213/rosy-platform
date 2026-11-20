@@ -52,6 +52,12 @@ applies_when: "ending a hardware chunk_runner session via 'stop' or executing pa
   - a park that ended unsettled near home cut torque; it now needs settled AND home;
   - the lease died with the parent pid; a `hold` marker keeps it until the owner releases it;
   - a HOLD written before the parent started reading was missed; `hold.json` carries the runner pid.
+- **Review round 3.** Five more paths, closed in code:
+  - after a guard failure the HOLD loop kept calling the failed guard's send(), which re-ran its torque OFF; now nothing is sent and the readback is reported per change (PARTIAL_GUARD_STOP when only some motors are off);
+  - the parent's first `status.stat()` or any interrupt-check error, and a runner dead by a signal (-9), fell through to finish(); now "unconfirmed", exit 77, no torque write;
+  - a FIFO `human-hold` ran before the interrupt and its own pose read could end in close_device; it is dropped while interrupted and its pose read falls back;
+  - the parent ignored live.json's `interrupt: hold`; it now reads it by pid;
+  - the owner's own claim erased the lease hold; only release_hold clears it.
   General rule: every exit from a torque-on loop needs its own proof of a safe pose. A guard verdict, a timeout or a missing reading is not that proof.
 - **Apply when** adding any new way to end a torque-on process (a signal, a timeout, a supervisor kill): a `finally` that turns torque OFF is a drop path unless a confirmed fold precedes it.
 - **Verification.** `test/test_omx_chunk_runner_interrupt.py` (fake robot: extended -> park then end; folded -> immediate end; blocked fold and guard stop -> HOLD until SIGUSR2; repeated SIGTERM; bound; live.json; before tracking) and four tests in `test/test_omx_record_session.py`. A supervised real-arm check is still pending.

@@ -96,6 +96,8 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
     now = time.time() if now is None else now
     with _locked(arm, root):
         old = _read(arm, root)
+        if old and old.get("hold"):  # not even its owner: only release_hold (a person, after checking the arm) clears it
+            raise LeaseHeld(f"arm {arm} lease held by {old['owner']}: {old['hold']} (cell_arm_lease.py release-hold)")
         if old and old.get("owner") != owner and live(old, now):
             until = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(float(old["expires"])))
             raise LeaseHeld(f"arm {arm} held by {old['owner']} for {old.get('purpose') or '-'} until {until}"
@@ -127,16 +129,21 @@ def hold(arm, reason: str, pid=None, owner=None, root=None) -> bool:
     return True
 
 
-def release(arm, owner=None, root=None) -> bool:
-    """Remove the lease only when it is this owner's."""
+def release(arm, owner=None, root=None, *, hold=False) -> bool:
+    """Remove the lease only when it is this owner's; a held lease only with hold=True (`release_hold`)."""
     owner = owner or default_owner()
     root = lease_root(root)
     with _locked(arm, root):
         old = _read(arm, root)
-        if not old or old.get("owner") != owner:
+        if not old or old.get("owner") != owner or bool(old.get("hold")) != hold:
             return False
         (root / f"{arm}.json").unlink(missing_ok=True)
         return True
+
+
+def release_hold(arm, owner=None, root=None) -> bool:
+    """A person has supported and checked the arm: remove this owner's held lease."""
+    return release(arm, owner, root, hold=True)
 
 
 def status(arm=None, root=None) -> dict:
@@ -163,12 +170,17 @@ def main(argv=None) -> int:
     rl = sub.add_parser("release")
     rl.add_argument("--arm", required=True)
     rl.add_argument("--owner")
+    rh = sub.add_parser("release-hold", help="after a person checked an arm a runner left held or unconfirmed")
+    rh.add_argument("--arm", required=True)
+    rh.add_argument("--owner")
     args = parser.parse_args(argv)
     try:
         if args.cmd == "status":
             result = status(args.arm)
         elif args.cmd == "claim":
             result = claim(args.arm, args.owner, args.purpose, args.ttl_s)
+        elif args.cmd == "release-hold":
+            result = {"released": release_hold(args.arm, args.owner)}
         else:
             result = {"released": release(args.arm, args.owner)}
     except LeaseHeld as exc:

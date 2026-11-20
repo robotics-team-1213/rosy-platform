@@ -22,6 +22,8 @@ def interrupt_on_parent_death() -> None:
 
 RUNNER_HOLD_EXIT = 75  # record_session ended but left chunk_runner holding torque ON: a person must act
 RUNNER_KILLED_EXIT = 76  # chunk_runner was unresponsive and killed; torque was not cut, the fold is unconfirmed
+RUNNER_UNCONFIRMED_EXIT = 77  # the runner died by a signal, or its state could not be checked: no fold confirmed
+LEFT_KEYS = ("runner_held", "runner_killed", "runner_unconfirmed")  # record keys: finish() must not cut torque
 RUNNER_SILENT_S = 15.0  # alive, yet no chunk-status.jsonl, live.json or hold.json write for this long: unresponsive
 
 
@@ -40,6 +42,11 @@ class RunnerUnresponsive(RunnerLeftArm):
     key = "runner_killed"
 
 
+class RunnerUnconfirmed(RunnerLeftArm):
+    """No fold confirmation: the runner ended by a signal (e.g. -9), or the interrupt handling itself failed."""
+    key = "runner_unconfirmed"
+
+
 def wait_for_runner(child, io: Path, offset: int, *, silent_s=RUNNER_SILENT_S, clock=time.monotonic, sleep=time.sleep):
     """After SIGINT to chunk_runner: ("exited", code) once it ended (folded, released or guard-stopped), ("hold", row)
     on its HOLD (a status row after `offset`, or hold.json naming this child's pid, so one written before the signal
@@ -52,10 +59,11 @@ def wait_for_runner(child, io: Path, offset: int, *, silent_s=RUNNER_SILENT_S, c
         if code is not None:
             return "exited", code
         try:
-            if hold.exists():
-                row = json.loads(hold.read_text() or "{}")
-                if row.get("pid") == getattr(child, "pid", None) and row.get("hold"):
-                    return "hold", row
+            for path, mark in ((hold, "hold"), (live, "interrupt")):  # this runner's own HOLD marks, by pid
+                if path.exists():
+                    row = json.loads(path.read_text() or "{}")
+                    if isinstance(row, dict) and row.get("pid") == getattr(child, "pid", None) and row.get(mark) in (True, "hold"):
+                        return "hold", row
             if status.exists():
                 with status.open("rb") as f:
                     f.seek(offset)
@@ -82,7 +90,8 @@ def wait_for_runner(child, io: Path, offset: int, *, silent_s=RUNNER_SILENT_S, c
 
 def runner_left_arm(session, record: dict, follower) -> None:
     """Instead of finish(): no torque write, no cap restore. A killed runner gets a read-only torque readback."""
-    if record.get("runner_killed"):
+    left = next(record[k] for k in LEFT_KEYS if record.get(k))
+    if not record.get("runner_held") and not left.get("runner_alive"):  # the bus is free: read torque, write nothing
         def read(bus):
             out = {}
             for motor in follower:
@@ -98,11 +107,10 @@ def runner_left_arm(session, record: dict, follower) -> None:
         except Exception as exc:  # noqa: BLE001
             record["torque_readback"] = {"open": f"error: {exc}"}
     record["manual_attention_required"] = True
-    session.log(step="RUNNER_KILLED" if record.get("runner_killed") else "RUNNER_HOLD",
-                report=record.get("runner_killed") or record.get("runner_held"),
+    session.log(step=next(k for k in LEFT_KEYS if record.get(k)).upper(), report=left,
                 torque_readback=record.get("torque_readback"),
                 action="torque not cut and caps not restored: a person supports the arm"
-                       + ("" if record.get("runner_killed") else ", then kill -USR2 the runner"))
+                       + (", then kill -USR2 the runner" if record.get("runner_held") else ""))
 
 
 def release(anchor_file: str | Path = __file__) -> str | None:

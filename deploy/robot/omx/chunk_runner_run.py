@@ -9,6 +9,7 @@ Single Responsibility:
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import sys
 import time
@@ -358,11 +359,11 @@ class Runner:
             if arrived:
                 self.last_input, self.idle_parks = started, 0
             self.pending += arrived
+            if getattr(self, "signals", None):  # interrupt first: it folds or holds, so a FIFO human-hold is dropped
+                self.pending.clear()
             if "human-hold" in self.pending:
                 self.pending.clear()  # preempt even a queued stop or park
                 self.command("human-hold")
-            if getattr(self, "signals", None):
-                self.pending.clear()  # interrupted (SIGINT/SIGTERM): no new motion, chunk_runner_interrupt folds or holds
             while (
                 len(self.pending) > 1
                 and self.pending[0].strip().split()[:1] in (["state"], ["episode"])
@@ -387,7 +388,7 @@ class Runner:
                         "fault": self.fault,
                         "human_hold_latched": self.human_hold_latched,
                         "torque_hold_commanded": self.torque_hold_commanded,
-                        **({"interrupt": self._interrupt["phase"]} if getattr(self, "_interrupt", None) else {}),
+                        **({"interrupt": self._interrupt["phase"], "pid": os.getpid()} if getattr(self, "_interrupt", None) else {}),
                         "health": self.health,
                         **({"jitter": self.jitter} if self.jitter["shaking"] else {}),
                     }

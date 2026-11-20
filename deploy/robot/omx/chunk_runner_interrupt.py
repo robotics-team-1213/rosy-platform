@@ -12,9 +12,12 @@ asks `interrupt_tick` once per tick:
     `interrupt` hold=true person_needed=true (chunk-status.jsonl, stdout, stderr), `hold.json` beside the FIFO
     (with this pid, for record_session), live.json `interrupt: "hold"`. The process stays. A failed status write
     goes to stderr and the hold stays.
-  - the guard stopped itself (NativeJointMotion.send failed: it already tried torque OFF): Torque_Enable is read back;
-    all 0 -> GUARD_STOPPED, the run ends so record_session takes its usual torque check and incident path; reads ON
-    or unreadable -> HOLD.
+  - the guard stopped itself (NativeJointMotion.send failed: it already tried torque OFF): nothing is sent through it
+    again; Torque_Enable is read back once a second and each change reported: all 0 -> GUARD_STOPPED, the run ends so
+    record_session takes its usual torque check and incident path; some 0 -> PARTIAL_GUARD_STOP; all 1 or unreadable
+    -> HOLD. The last two wait for a person.
+  - in a HOLD the loop only sends the held pose (no chunk, health or contact logic); a FIFO `human-hold` while
+    interrupted is dropped (the interrupt already holds).
 Later SIGINT/SIGTERM only repeat the HOLD report. Supervised recovery: a person supports the arm, then sends
 `kill -USR2 <runner pid>` (OPERATOR_RELEASE): torque goes OFF where the arm is and the runner exits. Only a release
 received after the HOLD began counts; one sent earlier is ignored and reported.
@@ -33,6 +36,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 from chunk_runner_guards import SETTLE_TOL  # noqa: E402  D-1048's "within 3 units of home"
+from chunk_runner_guards import NAMES  # noqa: E402
 
 INTERRUPT_PARK_S = 120.0  # a park from full reach at PARK_SPEED with pacing holds takes well under a minute
 OPERATOR_RELEASE = getattr(signal, "SIGUSR2", None)  # None on Windows test hosts
@@ -92,7 +96,7 @@ def _write_hold(runner, row: dict) -> None:
         _stderr({"command": "interrupt", "hold_file_failed": str(error)[:300]})
 
 
-def _hold(runner, present, why: str) -> bool:
+def _hold(runner, present, why: str, label: str = "HOLD") -> bool:
     state = runner._interrupt
     if not runner.human_hold_latched:
         runner.hold(present, f"interrupt: {why}", human=True)
@@ -101,9 +105,10 @@ def _hold(runner, present, why: str) -> bool:
         early = runner.signals.count(OPERATOR_RELEASE) if OPERATOR_RELEASE is not None else 0
         if early:
             _stderr({"command": "interrupt", "ignored_release": early, "reason": "SIGUSR2 before the HOLD"})
-    error = f"HOLD: {why}; torque stays ON, a person must support the arm, then kill -USR2 the runner"
-    _write_hold(runner, {"hold": True, "error": error})
-    _say(runner, present, ok=False, hold=True, person_needed=True, error=error)
+    error = f"{label}: {why}; a person must support the arm, then kill -USR2 the runner"
+    _write_hold(runner, {"hold": True, "error": error, "label": label})
+    _say(runner, present, ok=False, hold=True, person_needed=True, error=error, **({"partial_guard_stop": True}
+                                                                                   if label != "HOLD" else {}))
     return False
 
 
@@ -118,16 +123,51 @@ def _guard_stopped(runner):
         return {"error": f"{type(error).__name__}: {error}"[:300]}
 
 
-def _after_error(runner, error) -> bool:
-    torque = _guard_stopped(runner)
-    present, _ = _pose(runner)
-    if torque is not None and "error" not in torque and torque and not any(torque.values()):
-        _say(runner, present, ok=False, guard_stopped=True, torque=torque,
-             error=f"GUARD_STOPPED torque off: {type(error).__name__}: {error}"[:500])
-        return True  # torque is already OFF: the session's torque check and incident path take over
+def _guard_verdict(runner, torque: dict, cause: str) -> bool:
+    """The guard has stopped: never send through it again. Report each change of the torque readback once:
+    all 0 -> GUARD_STOPPED, the run ends (torque is already OFF); some 0 -> PARTIAL_GUARD_STOP; all 1 or unreadable ->
+    HOLD. Both wait for a person (SIGUSR2)."""
+    state = runner._interrupt
+    values = [] if "error" in torque else list(torque.values())
+    kind = ("off" if values and not any(values) else "partial" if values and not all(values) else
+            "on" if values else "unknown")
+    if state.get("guard_kind") == kind:
+        return False
+    state["guard_kind"] = kind
+    present = list(getattr(runner, "last_present", None) or runner.target)  # no bus read: the guard has failed
+    if kind == "off":
+        _say(runner, present, ok=False, guard_stopped=True, torque=torque, error=f"GUARD_STOPPED torque off: {cause}"[:500])
+        return True
+    label = "PARTIAL_GUARD_STOP" if kind == "partial" else "HOLD"
+    return _hold(runner, present, f"guard stopped, torque reads {torque}: {cause}"[:500], label=label)
+
+
+def _hold_tick(runner) -> bool:
+    """In a HOLD: only the held pose goes to the guard; once the guard has failed, nothing is sent, torque is read."""
+    state = runner._interrupt
+    torque, cause = _guard_stopped(runner), state.get("guard_cause", "guard stopped")
+    if torque is None:
+        try:
+            runner.robot.send_action(dict(zip(NAMES, runner.target)))
+            if runner._human_hold_ack_pending:
+                runner._human_hold_ack_pending, runner.torque_hold_commanded = False, True
+            try:
+                runner.present()  # refresh last_present for live.json; a failed read keeps the hold
+            except Exception:  # noqa: BLE001
+                pass
+        except Exception as error:  # noqa: BLE001
+            torque, cause = _guard_stopped(runner), f"{type(error).__name__}: {error}"
+            state["guard_cause"] = cause
+            if torque is None and not state.get("tick_error"):
+                state["tick_error"] = True
+                _stderr({"command": "interrupt", "hold": True, "tick_error": cause[:500]})
+    elif runner.clock() - state.get("guard_read_at", -1e9) < 1.0:
+        return interrupt_step(runner)  # the readback once a second, not every tick
     if torque is not None:
-        return _hold(runner, present, f"guard stopped, torque reads {torque}: {error}"[:500])
-    return _hold(runner, present, f"{type(error).__name__}: {error}"[:500])
+        state["guard_read_at"] = runner.clock()
+        if _guard_verdict(runner, torque, cause):
+            return True
+    return interrupt_step(runner)
 
 
 def _start(runner, *, may_move: bool) -> bool:
@@ -203,15 +243,15 @@ def interrupt_tick(runner, label: str, tick_or_report) -> bool:
     if state is None:
         tick_or_report(runner, label)
         return False
+    if state["phase"] == "hold":
+        return _hold_tick(runner)
     try:
         runner.tick()
     except Exception as error:  # noqa: BLE001
-        if state["phase"] != "hold" or _guard_stopped(runner) is not None:
-            if not state.get("guard_reported"):
-                state["guard_reported"] = _guard_stopped(runner) is not None
-                if _after_error(runner, error):
-                    return True
-        elif not state.get("tick_error"):  # keep commanding the held pose; say once that a tick failed
-            state["tick_error"] = True
-            _stderr({"command": "interrupt", "hold": True, "tick_error": str(error)[:500]})
+        cause = f"{type(error).__name__}: {error}"
+        torque = _guard_stopped(runner)
+        if torque is not None:
+            state["guard_cause"], state["guard_read_at"] = cause, runner.clock()
+            return _guard_verdict(runner, torque, cause)
+        return _hold(runner, _pose(runner)[0], cause[:500])
     return interrupt_step(runner)

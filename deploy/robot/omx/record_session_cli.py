@@ -25,7 +25,8 @@ if _HERE not in sys.path:
 import cell_arm_lease  # noqa: E402
 from joint_tune import SerialBus as _DefaultSerialBus, no_interrupts, protect_signals, session_lock  # noqa: E402
 from record_session_helpers import (  # noqa: E402
-    RUNNER_HOLD_EXIT, RUNNER_KILLED_EXIT, RunnerHeld, RunnerUnresponsive, compose, interrupt_on_parent_death,
+    LEFT_KEYS, RUNNER_HOLD_EXIT, RUNNER_KILLED_EXIT, RUNNER_UNCONFIRMED_EXIT, RunnerHeld, RunnerUnconfirmed,
+    RunnerUnresponsive, compose, interrupt_on_parent_death,
     load_task_card, static_episodes, wait_for_runner)
 from session_caps import load_caps, model_tuning, robot_tuning  # noqa: E402
 
@@ -167,17 +168,25 @@ def main(argv=None, *, _globals: dict | None = None):
                         child.kill()
                         child.wait()
                     raise
-                status = io / "chunk-status.jsonl"
-                offset = status.stat().st_size if status.exists() else 0
-                child.send_signal(signal.SIGINT)  # chunk_runner folds and reads it back, or holds torque ON
-                outcome, row = attr("wait_for_runner", wait_for_runner)(child, io, offset)
+                try:
+                    child.send_signal(signal.SIGINT)  # chunk_runner folds and reads it back, or holds torque ON
+                    status = io / "chunk-status.jsonl"
+                    offset = status.stat().st_size if status.exists() else 0
+                    outcome, row = attr("wait_for_runner", wait_for_runner)(child, io, offset)
+                except Exception as error:  # noqa: BLE001  no fold confirmation: never fall through to finish()
+                    alive = child.poll() is None
+                    raise RunnerUnconfirmed({"reason": f"interrupt check failed: {type(error).__name__}: {error}"[:300],
+                                             "runner_pid": child.pid, "runner_alive": alive})
                 if outcome == "hold":
                     raise RunnerHeld({**row, "runner_pid": child.pid})
-                if outcome == "silent":  # alive, yet no state file changed: the only kill left; torque is not cut
+                if outcome == "silent":  # alive, no state change, no HOLD mark: the only kill left; torque is not cut
                     child.kill()
                     child.wait()
                     raise RunnerUnresponsive({"killed_pid": child.pid, "reason": "no chunk-status.jsonl, live.json or "
                                               "hold.json change for RUNNER_SILENT_S after SIGINT"})
+                if row is not None and row < 0:  # killed by a signal (-9: SIGKILL) mid-fold: nothing confirmed it
+                    raise RunnerUnconfirmed({"reason": f"runner ended by signal {-row}", "exit": row,
+                                             "runner_pid": child.pid, "runner_alive": False})
             raise
 
     attr("protect_signals", protect_signals)()
@@ -252,17 +261,20 @@ def main(argv=None, *, _globals: dict | None = None):
                 Path("session.json").write_text(json.dumps(record, indent=2, default=str))
                 if record.get("runner_held"):
                     raise SystemExit(RUNNER_HOLD_EXIT)  # the bus and arm stay the holding runner's: no incident read
-                # a killed runner: report the incident without a device, so no reboot (it would drop torque)
-                device = None if record.get("runner_killed") else ports.get("follower") or ports.get(args.arm)
+                # no confirmed fold: report the incident without a device, so no reboot (it would drop torque)
+                left = any(record.get(k) for k in LEFT_KEYS)
+                device = None if left else ports.get("follower") or ports.get(args.arm)
                 try:
                     print(json.dumps(omx_incident.after_session(args.arm, device), default=str)[:2000])
                 except Exception as exc:
                     print(f"incident pipeline failed: {exc}")
         finally:
-            left = record.get("runner_held") or record.get("runner_killed")
-            if args.arm and left:  # other owners stay refused until a person releases the lease (README)
-                cell_arm_lease.hold(args.arm, "runner HOLD" if record.get("runner_held") else "runner killed",
-                                    pid=record["runner_held"].get("runner_pid") if record.get("runner_held") else None)
+            key = next((k for k in LEFT_KEYS if record.get(k)), None)
+            if args.arm and key:  # every owner stays refused until a person runs release-hold (README)
+                cell_arm_lease.hold(args.arm, {"runner_held": "runner HOLD", "runner_killed": "runner killed",
+                                               "runner_unconfirmed": "runner fold unconfirmed"}[key],
+                                    pid=record[key].get("runner_pid") if record[key].get("runner_alive", key == "runner_held")
+                                    else None)
             elif lease_created:
                 cell_arm_lease.release(args.arm)
             lock.close()
@@ -271,12 +283,14 @@ def main(argv=None, *, _globals: dict | None = None):
                       "stay with it. A person supports the arm, then kill -USR2 the runner; the session caps stay "
                       "written until restored. "
                       f"Report: {json.dumps(record['runner_held'], default=str)[:1000]}", file=sys.stderr, flush=True)
-            elif record.get("runner_killed"):
-                print("RUNNER KILLED: chunk_runner stopped answering and was killed; torque was NOT cut and the fold is "
-                      f"unconfirmed (readback {record.get('torque_readback')}). A person supports the arm before any "
-                      "torque OFF; the lease stays held.", file=sys.stderr, flush=True)
+            elif key:
+                print(f"{key.upper()}: the fold is unconfirmed and torque was NOT cut (readback "
+                      f"{record.get('torque_readback')}; {record[key].get('reason')}). A person supports the arm before "
+                      "any torque OFF; the lease stays held.", file=sys.stderr, flush=True)
     if record.get("runner_killed"):
         raise SystemExit(RUNNER_KILLED_EXIT)
+    if record.get("runner_unconfirmed"):
+        raise SystemExit(RUNNER_UNCONFIRMED_EXIT)
     if not record.get("safe_end"):
         raise SystemExit("UNSAFE END: follower torque or caps not confirmed restored - see session.json")
     raise SystemExit(record.get("exit_code") or 0)
