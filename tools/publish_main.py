@@ -31,7 +31,9 @@ Publish mode:
    a landing reinstalls the shared hook while the gate runs for hours, and bash rereads the swapped file),
    never --no-verify or force; ``gh pr create`` with the publish facts (lag = landings on
    main after the SHA that this PR leaves out); remove the worktree (``worktree_rules`` tombstone when a
-   held handle keeps the folder).
+   held handle keeps the folder). Then ``gh pr merge <PR> --merge --auto --match-head-commit <sha>`` (the merge queue
+   fallback of merge mode applies) so the PR merges once ci-result is green; ``--no-auto-merge`` skips it, and a
+   failure only prints a warning.
 
 Merge mode (``--merge-when-green``): the PR must be an open ``publish/main-`` PR whose head still has a
 green FULL record, ``mergeable`` MERGEABLE, ``mergeStateStatus`` not DIRTY/BEHIND, and check ``ci-result``
@@ -387,7 +389,21 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     url = run_gh(repo, "pr", "create", "--base", "main", "--head", branch,
                  "--title", f"publish: local main {sha[:10]} ({now:%Y-%m-%d %H} UTC)",
                  "--body", pr_body(repo, sha, why, safety)).strip()
-    return f"pushed {sha} to {branch}; PR {url}"
+    message = f"pushed {sha} to {branch}; PR {url}"
+    if getattr(args, "no_auto_merge", False):
+        return message
+    # The PR exists either way: a failed auto-merge request only warns (merge_when_green --apply still works).
+    try:
+        try:
+            run_gh(repo, "pr", "merge", url, "--merge", "--auto", "--match-head-commit", sha)
+        except Stop as refused:
+            if "merge queue" not in str(refused):
+                raise
+            run_gh(repo, "pr", "merge", url, "--auto", "--match-head-commit", sha)  # same queue fallback as merge_when_green
+        message += "; auto-merge enabled (merges when ci-result is green)"
+    except Stop as failed:
+        print(f"[publish] warning: auto-merge not enabled, run --merge-when-green later: {failed}", file=sys.stderr)
+    return message
 
 
 def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime, via_ci: bool = False) -> str:
@@ -450,6 +466,7 @@ def open_publish_pr(repo: Path) -> str | None:
 def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="push/open the PR or merge (default: dry run)")
+    parser.add_argument("--no-auto-merge", action="store_true", help="with --apply: do not enable auto-merge on the new PR")
     parser.add_argument("--min-hours", type=float, default=6.0)
     parser.add_argument("--force-blocked", metavar="REASON", help="publish now: a teammate PR waits on it")
     parser.add_argument("--merge-when-green", metavar="PR", help="PR number, or 'auto' for the single open publish PR")
