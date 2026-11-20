@@ -185,6 +185,11 @@ It measures quality on original pixels, encodes JPEG once and atomically replace
 one native snapshot with its host-receive timestamp; it publishes no ROS Image or CameraInfo.
 these previews do not admit an arm operation.
 
+Set `ROSY_CAMERA_TIMESTAMP_MODE=exposure` for each camera that needs V4L2
+monotonic start-of-exposure time on its original RGB buffer. The exposure
+entrypoint rejects missing or invalid source timestamps. The default
+`preview` mode retains host-receive timestamps.
+
 Install the reviewed source snapshot and user unit on the camera host. Each
 `~/.config/rosy/omx-camera-<name>.env` binds `ROSY_CAMERA_SOURCE`,
 `ROSY_CAMERA_DEVICE`, `ROSY_CAMERA_TOPIC` and `ROSY_CAMERA_FRAME`
