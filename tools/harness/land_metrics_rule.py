@@ -14,8 +14,8 @@ import re
 #: retroactively.
 RULE_SINCE = dt.datetime.fromisoformat("2026-11-17T18:00:00+09:00")
 PIPELINE = re.compile(r"^tools/(land[^/]*\.py|land_[^/]+/)")
-TRIGGER = re.compile(r"^\+[A-Z][A-Z0-9_]*(?:_S|_POLLS|_EVERY[A-Z0-9_]*)\s*=|"
-                     r"^\+.*(?:land_rollup\.py|rollup\(|\"--auto\")")
+TRIGGER = re.compile(r"^\+(?!\+\+ )[A-Z][A-Z0-9_]*(?:_S|_POLLS|_EVERY[A-Z0-9_]*)\s*=|"
+                     r"^\+(?!\+\+ ).*(?:land_rollup\.py|rollup\(|\"--auto\")")
 
 
 def violations(message: str, files: list[str], diff: str) -> list[str]:

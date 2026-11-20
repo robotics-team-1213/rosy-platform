@@ -112,6 +112,22 @@ def test_main_and_snapshot_branches_are_refused(repo):
         tool.start(main, [], NOW, lambda *a: None)
 
 
+def test_a_landing_ended_on_purpose_says_why_in_stopped_and_log(repo):
+    # 11-19: rollups and newer-HEAD replacements taskkill'ed land.py (exit 1); .stopped then read "land.py exit 1" only
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+
+    def killed(argv, cwd, stdout, stderr, **kw):
+        tool._room().note_stop({"worktree": str(tree)}, "rolled into land/x-rollup")
+        return 1
+    assert tool.supervise(tree, snap, [], run=killed) == 1
+    stopped = (tree.parent / (tree.name + ".stopped")).read_text(encoding="utf-8")
+    assert stopped.startswith("land.py exit 1") and "rolled into land/x-rollup" in stopped
+    assert "rolled into land/x-rollup" in log.read_text(encoding="utf-8")
+    assert not (tree.parent / (tree.name + ".killed")).exists()
+
+
 @pytest.mark.parametrize("lands", [True, False])
 def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     main, dev = repo

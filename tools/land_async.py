@@ -244,6 +244,7 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool
         if not replace:  # it started while this call waited for room: it may hold a newer HEAD than ours
             raise SystemExit(f"[land-async] {where(row)} started while this waited for queue room; not replaced")
         replacements.append((int(row["pid"]), where(row)))
+        _room().note_stop(row, f"replaced by a newer HEAD of {branch}")
     for pid, said in replacements:
         print(f"[land-async] a newer HEAD replaces {said}", flush=True)
         stop(pid)
@@ -358,7 +359,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         except (SystemExit, Exception) as exc:
             print(f"[land-async] resuming cleared MAIN-RED stops skipped: {exc}", flush=True)
     else:
-        (tree.parent / f"{tree.name}.stopped").write_text(f"land.py exit {code}; read {tree.name}.log\n", "utf-8")
+        (tree.parent / f"{tree.name}.stopped").write_text(_room().stopped_text(tree, path, code), "utf-8")
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
         # no STOP block (watchdog, kill): members go back alone, never bisected (D-889 35; 11-19 three were stranded)
         split_rollup(tree, snap, reason=verdict(output))

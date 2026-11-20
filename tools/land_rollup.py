@@ -49,6 +49,7 @@ import land_batch  # noqa: E402
 import land_merge  # noqa: E402
 import land_queue  # noqa: E402
 import land_rollup_failed  # noqa: E402
+import land_room  # noqa: E402
 import land_selection  # noqa: E402
 
 ROLLUP_MAX = int(os.environ.get("ROSY_ROLLUP_MAX", "12"))
@@ -486,6 +487,8 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
         int(r["pid"]) for r in merged if not r.get("rollup") and r.get("pid")}
     # shortcut: a FULL waiter that started this apply is our parent; stopping it (taskkill /T) ends us, so last.
     # A relaunched lander (land_prepare.relaunch) is our grandparent: then later stops may be lost; see the log.
+    for r in [*complete, *(m for m in merged if not m.get("rollup"))]:  # taskkill exits 1 with nothing logged
+        land_room.note_stop(r, f"rolled into {snap}")
     for pid in sorted(pids, key=lambda p: p == os.getppid()):  # only now: the rollup ticket exists
         stop(pid)
     print(f"[rollup] queued {snap}; stopped {len(pids)} landing(s) for {len(merged)} member(s)", flush=True)
