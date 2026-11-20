@@ -50,7 +50,11 @@ def dispatch_runner_command(runner, line: str) -> bool:
         if verb == "human-hold":
             if len(words) != 1:
                 raise ValueError("human-hold takes no arguments")
-            runner.hold(runner.present(), "human hold", human=True)
+            try:
+                pose = runner.present()
+            except Exception:  # noqa: BLE001  an unread pose holds the last known one, never ends in torque OFF
+                pose = list(getattr(runner, "last_present", None) or runner.target)
+            runner.hold(pose, "human hold", human=True)
             return True
         if verb not in ("checked", "state", "stop") and runner.operating_context:
             runner.operating_context = {**runner.operating_context, "session_id": uuid.uuid4().hex}
