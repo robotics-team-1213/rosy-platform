@@ -1,7 +1,7 @@
 {
   "test_navigation_handover.py": 276,
   "test_speed_limit_settings.py": 196,
-  "test_affected_tests.py": 170,
+  "test_affected_tests.py": 80,
   "test_publish_payload_release.py": 56,
   "test_3d_asset_boundary.py": 46,
   "test_g1_timing_gate.py": 40,
