@@ -82,8 +82,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · refactor(omx): observer_handoff.py 400줄 상한에 맞춰 호스트 읽기를 나눈다
 - 2026-11-20 · uncommitted · fix(omx): Gate open 보류를 시도 원장에 남긴다
 - 2026-11-20 · uncommitted · fix(omx): 홈 복귀 전에 검토와 의도를 확인한다
+- 2026-11-20 · 76383cd40c · feat(omx): 팔 A/B 관측기 포트를 세션에 넘기고 돌려받는다 (H4)
 - 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
-- 2026-11-18 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 기본 켬
-- 2026-11-17 · uncommitted · fix(omx-remap): 집게 쪽 판정이 표시 12개를 넘어도 된다

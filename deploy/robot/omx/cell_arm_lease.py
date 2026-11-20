@@ -89,8 +89,10 @@ def _read(arm: str, root: Path) -> dict | None:
         return None
 
 
-def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root=None, now=None) -> dict:
-    """Take or refresh the arm's lease; LeaseHeld when another owner's lease is live."""
+def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root=None, now=None,
+          report_created=False):
+    """Take or refresh the arm's lease; LeaseHeld when another owner's lease is live. With report_created,
+    (record, created): created is False when this owner already held a live lease, decided under the lease lock."""
     owner = owner or default_owner()
     root = lease_root(root)
     now = time.time() if now is None else now
@@ -111,7 +113,7 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
         tmp = root / f"{arm}.json.tmp"
         tmp.write_text(json.dumps(record, indent=2), encoding="utf-8")
         os.replace(tmp, root / f"{arm}.json")
-    return record
+    return (record, not same_live) if report_created else record
 
 
 def hold(arm, reason: str, pid=None, owner=None, root=None) -> bool:

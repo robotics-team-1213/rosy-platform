@@ -4972,6 +4972,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 새 단위 시험 `test/test_site_autoupdate_until_contains.py` 5건(전부 포함 시 설치·하나 빠지면 유지·증명 불가 시 유지·평범한 홀드 불변·CLI 저장/상태 표시/거부). 원격 pytest는 ralph 확인이 돌린다.
 - gate 변화: 없음.
 
+## 2026-11-20 · 76383cd40c · feat(omx): 팔 A/B 관측기 포트를 세션에 넘기고 돌려받는다 (H4)
+- 원인: 2026-10-24 기록의 observer가 session.lock에 양보하지 않아 arm_a/b 관측기를 disable한 문제. ExecStartPre의 잠금·fuser 검사는 시작할 때 한 번이라 실행 중인 관측기를 세션에 양보시키지 못한다(decision H4).
+- 변경: `observer_handoff.py` 새 도구. `acquire <arm>`은 joint_tune_lock 규칙으로 셀·팔 잠금을 잡은 채 `rosy-omx-observer@<arm>`을 정지하고 `omx-observer-<arm>.env`의 장치가 5초 안에 비는지 확인, 실패면 0 아닌 종료로 세션 시작을 막는다. `release <arm>`은 포트를 쓰는 프로세스가 남으면 재시작하지 않고, enabled인 유닛만 다시 시작한다. `chunk_runner --joint-topic`(기본 꺼짐)은 세션 중 같은 SnapshotChannel에 관절 라디안을 써서 bridge가 발신자 하나로 남게 한다(arm S의 arm_status_bridge 경로는 그대로). observer 유닛 주석에 인계 경로를 적고, observation-bridge·arm-status 유닛은 Restart=no에서 Restart=on-failure RestartSec=5로 바꿨다. services.yaml observer 선언은 instances_from: workcell-arms 그대로(호스트 팔 수를 따르므로 arm_a/b와 일치), 주석만 추가. README에 wrapper 앞뒤 셸 두 줄을 적었다.
+- 증거: 새 단위 시험 `test/test_omx_observer_handoff.py` 11건(acquire 성공·포트 미반환 실패·잠금 점유 실패·stop 실패, release 재시작·disabled 유지·포트 점유 거부·env 누락 거부, runner 스냅샷이 bridge NativeSource로 읽히는 형식·오래된 행 만료·기록 실패가 세션을 끊지 않음). 가짜 systemctl/fuser/잠금으로 로컬 실행, 11 passed. 원격 pytest는 착지 단계에서 영향 번들로 돌린다.
+- gate 변화: 없음. 직렬 포트 소유권은 안전 인접이라 커밋에 Safety-Review 트레일러를 남겼고 조정 세션 검토가 남아 있다.
+
 ## 2026-11-20 · uncommitted · fix(omx): 홈 복귀 전에 검토와 의도를 확인한다
 - 변경: 검토 모드는 빈 접힌 팔의 복귀 전에 의도를 기록한다. 복귀 뒤 같은 의도와 새 상태를 다시 검증한다. 자동 픽과 AreaXYZ는 복귀 후 보류를 한 행으로 기록하고 의도 파일을 보존한다.
 - 증거: 가짜 셀 회귀 케이스 추가, 원격 pytest 통과. 독립 검토 APPROVE WITH NOTES(D:/DevTemp/omx-abs-unblock-panel-1120/review-n1n3-f09301836a.md).
@@ -4981,3 +4987,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 사이클, 잡은 물체 반환, owner 목표는 활성 원장이 있으면 보류를 한 행으로 기록한다. 복귀 뒤 차단되면 보류 의도를 보존한다. 재계획 load 거부는 이송 실패로 집계한다.
 - 증거: owner 보류와 재계획 load 거부 회귀 시험을 추가했다.
 - gate 변화: `cell_attempts.py` 변경으로 `task_sha256`이 바뀐다. 기존 운영 검토는 새 해시에 맞춰 갱신해야 한다.
+
+## 2026-11-20 · uncommitted · refactor(omx): observer_handoff.py 400줄 상한에 맞춰 호스트 읽기를 나눈다
+- 변경: `observer_handoff.py`(431줄)의 systemctl·fuser 호출, 포트 점유 확인, unit env 읽기, bridge 바인딩·세션 env 검사, 상태 파일 기록을 새 `observer_handoff_io.py`로 옮겼다. `observer_handoff.py`는 같은 이름을 다시 내보내고(`HandoffError`, `bridge_binding` 등), 시험이 바꿔 끼우는 `resolve_device`·`BY_ID`·`wait_port`·`restart`·`handoff`·`lead`·CLI는 그대로 둔다. 동작 변경 없음.
+- 증거: 로컬 `python -m pytest test/test_omx_observer_handoff.py` 34 passed, 7 skipped(POSIX·Linux 전용). `python tools/harness/rosy_harness.py lint` 0 error.
+- gate 변화: 없음. 두 파일 모두 safety_review 대상 경로가 아니다.
