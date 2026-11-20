@@ -92,3 +92,39 @@ def test_real_maps(capsys):
     assert mh.main([str(REAL / "fresh1.yaml"), "--compare", str(REAL / "unwind1_map.yaml")]) == 0
     out = capsys.readouterr().out
     assert '"resolution": 0.05' in out and json.loads(out)["compare"]["overlap"] >= 0.9
+
+
+def arena_rows(w, h, frame=60):
+    """A closed wall rectangle of w x h cells inside a larger unknown frame."""
+    side = "?" * 5
+    rows = ["?" * frame] * 3 + [side + "#" * w + "?" * (frame - 5 - w)] + \
+           [side + "#" + "." * (w - 2) + "#" + "?" * (frame - 5 - w) for _ in range(h - 2)] + \
+           [side + "#" * w + "?" * (frame - 5 - w)] + ["?" * frame] * 3
+    return rows
+
+
+def arena_verdict(tmp, rows, arena, **kw):
+    meta, w, h, grid = mh.load(write_map(tmp, rows, res=0.05))
+    rep = mh.analyze(meta, w, h, grid)
+    return mh.verdict(rep, arena=arena, **kw), rep
+
+
+def test_arena_box_matches_the_walls_in_either_turn(tmp_path):
+    rows = arena_rows(48, 24)  # 2.4 x 1.2 m of wall cells
+    v, rep = arena_verdict(tmp_path, rows, (0.0, 0.0, 2.4, 1.2))
+    assert v["verdict"] == "ok", (v, rep)
+    assert arena_verdict(tmp_path, rows, (5.0, 5.0, 6.2, 7.4))[0]["verdict"] == "ok"  # origin and quarter turn do not matter
+
+
+def test_arena_box_fails_a_map_that_is_too_big_or_too_small(tmp_path):
+    rows = arena_rows(48, 24)
+    for arena in ((0.0, 0.0, 4.8, 2.4), (0.0, 0.0, 1.2, 0.6)):
+        v, _ = arena_verdict(tmp_path, rows, arena)
+        assert v["verdict"] == "fail" and any("arena" in r for r in v["reasons"]), arena
+    assert arena_verdict(tmp_path, rows, (0.0, 0.0, 4.8, 2.4), arena_tol=2.5)[0]["verdict"] == "ok"
+
+
+def test_no_arena_keeps_the_old_verdict(tmp_path):
+    meta, w, h, grid = mh.load(write_map(tmp_path, arena_rows(48, 24)))
+    rep = mh.analyze(meta, w, h, grid)
+    assert mh.verdict(rep) == mh.verdict(rep, arena=None) and mh.verdict(rep)["verdict"] == "ok"

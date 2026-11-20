@@ -138,10 +138,14 @@ def test_http_sessions_claim_and_revoke_shared_admission(tmp_path):
     assert error.value.status_code == 409
 
 
-def test_pilot_runtime_reserves_before_send_and_revoked_seat_sends_nothing(tmp_path):
+def test_pilot_runtime_reserves_before_send_and_revoked_seat_sends_nothing(tmp_path, monkeypatch):
     from test_pilot_sim_runtime import Arm, jog
     from omx_adapter.pilot_sim.runtime import PilotSimRuntime
+    import omx_adapter.pilot_sim.runtime as pilot_runtime
     arm = Arm()
+    # The fence is under test, not readback expiry: SQLite setup on a loaded host outlasts the 0.5 s freshness limit
+    observed_at = arm.latest_joint_state.received_at
+    monkeypatch.setattr(pilot_runtime, "time", SimpleNamespace(monotonic=lambda: observed_at))
     _, store, admission, _ = _setup(tmp_path)
     arm.control_admission = admission
     admission.owner = arm.owner
@@ -216,11 +220,15 @@ def test_expired_seat_exact_terminal_and_ready_allow_reacquire(tmp_path):
     assert not admission._durable.has_pending()
 
 
-def test_runtime_goal_identity_is_durable_and_unknown_send_stays_fenced(tmp_path):
+def test_runtime_goal_identity_is_durable_and_unknown_send_stays_fenced(tmp_path, monkeypatch):
     from uuid import uuid4
     from test_pilot_sim_runtime import Arm, jog, event
     from omx_adapter.pilot_sim.runtime import PilotSimRuntime
+    import omx_adapter.pilot_sim.runtime as pilot_runtime
     arm = Arm()
+    # The fence is under test, not readback expiry: SQLite setup on a loaded host outlasts the 0.5 s freshness limit
+    observed_at = arm.latest_joint_state.received_at
+    monkeypatch.setattr(pilot_runtime, "time", SimpleNamespace(monotonic=lambda: observed_at))
     arm.owner.run_admission_policy = lambda operation: operation(arm.owner.state)
     store = ActionStore(tmp_path / "runtime.sqlite3")
     admission = ControlSeatAdmission(arm.owner, store)

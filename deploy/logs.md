@@ -4953,3 +4953,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `rosy_site_autoupdate.py`에 `hold --until-contains <sha> [<sha>...]` 추가. 매 실행마다 다음 설치 대상 signed 후보가 대기 sha 전부를 조상으로 두는지 이미 읽는 GitHub compare 증명(`is_newer`와 같은 판정)으로 확인하고, 증명되면 `hold-cleared` 로그와 함께 홀드가 저절로 풀리고 정상 설치 경로로 진행한다. 증명 못 함·후보 없음·네트워크 오류는 홀드 유지(fail closed). `site_update_io.py`의 `set_hold`·`load_update_state`에 `until_contains` 필드(1..8개 40-hex sha) 검증 추가, 옛 홀드 파일은 그대로 파싱. dry run은 홀드를 소비하지 않는다. README 자동 갱신 절에 사용법 문서화.
 - 증거: 새 단위 시험 `test/test_site_autoupdate_until_contains.py` 5건(전부 포함 시 설치·하나 빠지면 유지·증명 불가 시 유지·평범한 홀드 불변·CLI 저장/상태 표시/거부). 원격 pytest는 ralph 확인이 돌린다.
 - gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · fix(omx): 홈 복귀 전에 검토와 의도를 확인한다
+- 변경: 검토 모드는 빈 접힌 팔의 복귀 전에 의도를 기록한다. 복귀 뒤 같은 의도와 새 상태를 다시 검증한다. 자동 픽과 AreaXYZ는 복귀 후 보류를 한 행으로 기록하고 의도 파일을 보존한다.
+- 증거: 가짜 셀 회귀 케이스 추가, 원격 pytest 통과. 독립 검토 APPROVE WITH NOTES(D:/DevTemp/omx-abs-unblock-panel-1120/review-n1n3-f09301836a.md).
+- gate 변화: 검토 digest가 cell_unwedge.py를 포함해 task_sha256이 바뀐다. 기존 검토(operating envelope)는 다시 검토해야 맞는다. runner state 응답이 holding을 싣고, holding이나 전류가 없으면 홈 복귀를 시작하지 않는다.

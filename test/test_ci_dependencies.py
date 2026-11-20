@@ -12,6 +12,20 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+DOCKERFILE = ROOT / ".github" / "ci-image" / "Dockerfile"  # the baked installs (apt, pins, receiver crypto)
+
+
+def test_ci_image_carries_the_pinned_rauc_for_root_fixtures():
+    import yaml
+
+    # Root RAUC fixtures verify the package bytes: the image bakes the pinned deb and ci.yml asserts it.
+    dockerfile = DOCKERFILE.read_text(encoding="utf8")
+    assert "rauc=1.11.3-2 squashfs-tools" in dockerfile
+    assert "apt-get download -qq rauc=1.11.3-2" in dockerfile
+    assert "ROSY_TEST_RAUC_DEB=/opt/rosy-ci/debs/rauc_1.11.3-2_amd64.deb" in dockerfile
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    ready = next(step for step in steps if step["name"] == "CI image readiness")
+    assert "= 1.11.3-2" in ready["run"] and 'test -f "$ROSY_TEST_RAUC_DEB"' in ready["run"]
 
 
 @pytest.mark.parametrize('rest', [[], ['middleware/core/gateway/test']])
@@ -26,7 +40,7 @@ def test_ci_activates_standalone_app_browsers(monkeypatch, target, rest):
     from types import SimpleNamespace
 
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
-    install = next(step for step in steps if step['name'] == 'Install Fleet browser verification tools')
+    install = next(step for step in steps if step['name'] == 'Fleet browser readiness (Chromium and CJK fonts from the image)')
     # Evaluate the condition with the same serialized invocation payload used by Actions.
     condition = install['if'].replace('toJSON(matrix.invocations)', 'payload').replace('||', 'or')
     assert eval(condition, {'__builtins__': {}, 'contains': lambda value, part: part in value,
@@ -177,7 +191,8 @@ def test_core_wheel_dependencies_are_available_before_offline_install():
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
     wheel_index = next(i for i, step in enumerate(steps)
                        if step['name'] == 'Build and install ROS-free platform API wheels')
-    commands = '\n'.join(step.get('run', '') for step in steps[:wheel_index] if not step.get('if'))
+    commands = DOCKERFILE.read_text(encoding='utf8') + '\n' + '\n'.join(
+        step.get('run', '') for step in steps[:wheel_index] if not step.get('if'))
     tokens = shlex.split(commands.replace('\\\n', ' '), comments=True)
     providers = dict(re.findall(r'^([A-Za-z0-9._-]+)==([^\s\\]+)',
                                (ROOT / 'deploy/robot/pinky_pro/image/device-python-requirements.txt')
@@ -201,17 +216,15 @@ def test_ci_provides_the_site_account_oauth_runtime():
     jose_pin = re.search(r'^joserfc==[^\s]+', site_requirements, re.MULTILINE).group()
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
     test_index = next(i for i, step in enumerate(steps) if step['name'] == 'Test (matrix suite, D-436)')
-    tokens = shlex.split('\n'.join(step.get('run', '') for step in steps[:test_index]
-                                  if not step.get('if')).replace('\\\n', ' '), comments=True)
+    baked = DOCKERFILE.read_text(encoding='utf8').replace('\\\n', ' ')
+    tokens = shlex.split(baked, comments=True)
     assert oauth_pin in tokens, f'CI account authority lacks site runtime {oauth_pin}'
     assert jose_pin in tokens, f'CI account authority lacks site runtime {jose_pin}'
     # Installed-package tests run python3 -I, which ignores a --target dir on PYTHONPATH.
-    lines = [line for step in steps[:test_index] if not step.get('if')
-             for line in step.get('run', '').replace('\\\n', ' ').splitlines() if oauth_pin in line]
+    lines = [line for line in baked.splitlines() if oauth_pin in line]
     assert lines and not any('--target' in line for line in lines), f'{oauth_pin} must be system-wide'
     # The receiver --target copy is not enough: boundary tests replace PYTHONPATH.
-    jose_lines = [line for step in steps[:test_index] if not step.get('if')
-                  for line in step.get('run', '').replace('\\\n', ' ').splitlines() if jose_pin in line]
+    jose_lines = [line for line in baked.splitlines() if jose_pin in line]
     assert any('--target' not in line for line in jose_lines), f'{jose_pin} must be system-wide'
 
 
@@ -238,7 +251,7 @@ def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkey
     core = next(entry for entry in CI_FULL_MATRIX if entry['name'] == 'core-domain')
     assert [browser_node] in core['invocations'], 'SSO browser journey must not remain opt-in-only'
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
-    install = next(step for step in steps if step['name'] == 'Install Fleet browser verification tools')
+    install = next(step for step in steps if step['name'] == 'Fleet browser readiness (Chromium and CJK fonts from the image)')
     assert 'test_account_pipeline.py' in install['if']
     script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
     python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
@@ -353,8 +366,7 @@ def test_colcon_ignore_is_scoped_to_the_build(tmp_path, build_exit, preexisting)
 
 
 def test_ci_installs_root_contract_python_dependencies():
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert "jsonschema" in workflow
+    assert "jsonschema" in DOCKERFILE.read_text(encoding="utf-8")
 
 
 def test_root_contract_step_sources_the_colcon_install():
@@ -381,8 +393,7 @@ def test_ci_colcon_build_runs_from_the_repo_root_over_the_manifest_roots():
 
 def test_ci_installs_the_ext4_reader_for_the_card_diagnostics_test():
     # Without it test_card_diagnostics.py skips its real-ext4 case (D-174 F8).
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert "jsonschema ext4" in workflow
+    assert "jsonschema ext4" in DOCKERFILE.read_text(encoding="utf-8")
 
 
 def test_ci_result_aggregates_the_matrix_for_branch_protection():
@@ -440,15 +451,16 @@ def test_raw_numpy_tools_are_isolated_from_debian_and_keep_runtime_constraints()
 def test_ci_loads_hashlocked_receiver_crypto_before_tls_contracts():
     import yaml
 
+    image = DOCKERFILE.read_text(encoding="utf-8")
+    assert "receiver-crypto-requirements.txt" in image
+    assert "--require-hashes --no-deps --only-binary=:all:" in image
+    assert "--platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64" in image
+    assert "--target /opt/rosy-ci/receiver-crypto" in image
+    assert "PYTHONPATH=/opt/rosy-ci/receiver-crypto" in image
     steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
-    step = next((s for s in steps if s["name"] == "Install receiver TLS verification runtime"), None)
+    step = next((s for s in steps if s["name"] == "CI image readiness"), None)
     assert step is not None, "TLS contracts cannot use the older container cryptography"
     script = step["run"]
-    assert "receiver-crypto-requirements.txt" in script
-    assert "--require-hashes --no-deps --only-binary=:all:" in script
-    assert "--platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64" in script
-    assert "--target /tmp/rosy-receiver-crypto" in script
-    assert 'echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}"' in script
     assert "from cryptography.x509.verification import PolicyBuilder, Store" in script
     assert 'cryptography.__version__ == "50.0.0"' in script
     assert steps.index(step) < next(i for i, s in enumerate(steps) if s["name"] == "Test (matrix suite, D-436)")
@@ -546,7 +558,7 @@ def test_test_scope_step_selects_once_per_branch_and_takes_both_outputs_from_tha
 
 
 def test_every_ci_apt_update_uses_the_runner_mirror_with_retries():
-    lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    lines = DOCKERFILE.read_text(encoding="utf-8").splitlines()
     updates = [i for i, line in enumerate(lines) if line.strip().startswith("apt-get update")]
     assert updates
     for i in updates:
@@ -565,3 +577,44 @@ def test_omx_cell_tests_run_on_the_cells_opencv_not_the_containers():
     lock = (ROOT / "deploy/robot/omx/requirements-cell.lock").read_text(encoding="utf-8").splitlines()
     assert any(line.startswith("opencv-python-headless==") for line in lock)
     assert any(line.startswith("numpy==") for line in lock)
+
+
+@pytest.mark.parametrize("head_ref,pr_sha,allow_shas,expected", [
+    ("refs/heads/gh-readonly-queue/main/pr-250-95610b8f9e", "abc123", "abc123 def456", 0),
+    ("refs/heads/gh-readonly-queue/main/pr-258-95610b8f9e", "deadbeef", "abc123 def456", 1),
+    ("refs/heads/gh-readonly-queue/main/pr-258-95610b8f9e", "abc123", "", 1),
+])
+def test_ci_result_cutover_drain_gate_checks_merge_group_pr_head(monkeypatch, head_ref, pr_sha, allow_shas, expected):
+    import io
+    import json
+    import urllib.request
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["ci-result"]["steps"]
+    gate = next(s for s in steps if s["name"] == "Cutover drain gate (merge_group)")
+    assert gate["if"] == "github.event_name == 'merge_group' && vars.ROSY_CUTOVER_PHASE == 'drain'"
+    assert steps[-1]["name"] == "All gating jobs passed"
+    python = gate["run"].split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    monkeypatch.setenv("HEAD_REF", head_ref)
+    monkeypatch.setenv("HEAD_SHA", "mergecommit000")
+    monkeypatch.setenv("ALLOW_SHAS", allow_shas)
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "robotics-team-1213/rosy-platform")
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+
+    seen = []
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=15: (
+        seen.append(req.full_url), _Resp(json.dumps({"head": {"sha": pr_sha}}).encode("utf-8"))
+    )[1])
+    if expected == 0:
+        exec(compile(python, str(WORKFLOW), "exec"), {})
+    else:
+        with pytest.raises(SystemExit) as ended:
+            exec(compile(python, str(WORKFLOW), "exec"), {})
+        assert ended.value.code == expected
+    assert seen == [f"https://api.github.com/repos/robotics-team-1213/rosy-platform/pulls/{head_ref.split('pr-')[1].split('-')[0]}"]

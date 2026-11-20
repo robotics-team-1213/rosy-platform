@@ -217,7 +217,7 @@ def test_shutdown_joins_api_thread_after_audit_hook(node_module):
     node._api_server = server
     node._api_thread = threading.Thread(target=serve, daemon=True)
     node._api_thread.start()
-    node.core = types.SimpleNamespace(station_docking=None, events=types.SimpleNamespace(
+    node.core = types.SimpleNamespace(station_docking=None, slam_fallback=None, events=types.SimpleNamespace(
         publish=lambda event, **kw: calls.append(event)))
 
     node.shutdown()
@@ -225,6 +225,19 @@ def test_shutdown_joins_api_thread_after_audit_hook(node_module):
     assert not node._api_thread.is_alive()
     assert calls == ["system.shutdown", "adapter.close", "core shutting down", "api stopped"]
     assert node.get_logger().warnings == []
+
+
+def test_shutdown_stops_the_slam_fallback_thread_before_the_adapter_that_carries_its_halt_closes(node_module):
+    calls: list[str] = []
+    node = _bare_node(node_module, calls)
+    node._api_server, node._api_thread = None, None
+    node.core = types.SimpleNamespace(
+        station_docking=None, events=types.SimpleNamespace(publish=lambda event, **kw: calls.append(event)),
+        slam_fallback=types.SimpleNamespace(stop=lambda: calls.append("slam_fallback.stop")))
+
+    node.shutdown()
+
+    assert calls == ["system.shutdown", "slam_fallback.stop", "adapter.close", "core shutting down"]
 
 
 def test_shutdown_says_so_when_the_api_thread_outlives_the_join(node_module, monkeypatch):
@@ -235,7 +248,7 @@ def test_shutdown_says_so_when_the_api_thread_outlives_the_join(node_module, mon
     node._api_server = types.SimpleNamespace(should_exit=False)
     node._api_thread = threading.Thread(target=lambda: stuck.wait(30), daemon=True)
     node._api_thread.start()
-    node.core = types.SimpleNamespace(station_docking=None, events=types.SimpleNamespace(
+    node.core = types.SimpleNamespace(station_docking=None, slam_fallback=None, events=types.SimpleNamespace(
         publish=lambda event, **kw: calls.append(event)))
     try:
         node.shutdown()

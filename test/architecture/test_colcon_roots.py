@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+import ratchet_lists
+
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "tools" / "harness" / "platform_parts.yaml"
 READER = ROOT / "tools" / "harness" / "colcon_roots.py"
@@ -73,6 +75,7 @@ EXEMPT = {
     "operations/fleet/package.xml": "XML comment",
     # Tests pin consumer text; none runs colcon or rosdep.
     "test/architecture/test_colcon_roots.py": "this test",
+    "test/test_affected_build_smoke_scope.py": "docstring naming the smoke job's steps; runs nothing",
     "test/test_ci_dependencies.py": "asserts on ci.yml",
     "test/test_image_customization_contract.py": "asserts on image scripts",
     "test/test_native_ros_payload.py": "asserts on the payload script",
@@ -145,7 +148,7 @@ def test_every_colcon_invocation_is_a_consumer_or_exempt():
         assert name in hits, f"{name} no longer invokes colcon/rosdep; drop it from CONSUMERS"
         bare = [(number, line) for number, line in hits[name] if not re.search(pattern, line)]
         assert bare == [], (name, bare)
-    assert sorted(set(EXEMPT) - set(hits)) == [], "stale EXEMPT entries"
+    ratchet_lists.check(set(hits) - set(CONSUMERS), EXEMPT, "colcon invocations outside CONSUMERS (EXEMPT)")
 
 
 def test_every_colcon_consumer_reads_the_one_root_list():

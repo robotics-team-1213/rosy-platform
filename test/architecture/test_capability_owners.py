@@ -193,6 +193,12 @@ def test_app_of_reads_glob_subtrees_and_neutral_first():
     ("test/flaky_quarantine.txt", "core"), ("operations/fleet/logs.md", "neutral"), ("tools/index.md", "neutral"),
     ("docs/adr/D-1036-publish-evidence-from-nightly-full.md", "neutral"), ("test/conftest.py", "repo"),
     ("test/architecture/test_capability_owners.py", "repo"), ("tools/remote/remote_pytest.py", "repo"),
-    ("test/learning/test_x.py", "learning")])
+    ("test/learning/test_x.py", "learning"),
+    # 2026-11-20 (bn-C rank 1): folder guides and the contract version are neutral, cell twin assets are omx-cell,
+    # incident tools are site-fleet.
+    ("tools/AGENTS.md", "neutral"), ("deploy/hosts/README.md", "neutral"),
+    ("middleware/core/api/core_api_web/api/contract_version.py", "neutral"),
+    ("learning/envs/isaac/assets/x.usd", "omx-cell"), ("learning/envs/isaac/cell_physics.yaml", "omx-cell"),
+    ("learning/envs/isaac/stacking_task.py", "learning"), ("tools/incident_reasoning.py", "site-fleet")])
 def test_never_deployed_paths_are_repo_and_gates_stay_core(path, app):
     assert app_of(path, MANIFEST) == app

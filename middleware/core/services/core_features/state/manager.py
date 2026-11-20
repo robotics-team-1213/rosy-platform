@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 import math
 import threading
-from typing import Callable, Optional
-
 import time
+from typing import Callable, Optional
 
 from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S, judge
 from core_common.protocol.state_components import BATTERY_ESTOP_SOURCES
@@ -111,6 +110,7 @@ class StateManager:
         self._localization_provider: Optional[Callable[[], object]] = None
         self._trip_lease_provider: Optional[Callable[[], tuple]] = None
         self._peers_provider: Optional[Callable[[], list]] = None
+        self.slam_fallback_provider: Optional[Callable[[], Optional[dict]]] = None  # SLAM fallback block, lock-free read
 
     def set_localization_provider(self, provider: Optional[Callable[[], object]]) -> None:
         """D-395 P2-1: read live, so the stale timeout and the odom frame flag apply."""
@@ -392,8 +392,7 @@ class StateManager:
                 if type(exc).__name__ != self._safety_policy_error:
                     self._safety_policy_error = type(exc).__name__
                     log.warning("safety_policy block unavailable: %s: %s", type(exc).__name__, exc)
-        localization_provider = self._localization_provider
-        localization = localization_provider() if localization_provider is not None else None
+        localization = self._localization_provider() if self._localization_provider is not None else None
         trip_lease_provider = self._trip_lease_provider
         trip_lease, trip_lease_ended = (trip_lease_provider() if trip_lease_provider is not None
                                         else (None, None))
@@ -442,6 +441,7 @@ class StateManager:
                 capabilities_degraded=list(self._capabilities_degraded),
                 activity=activity,
                 safety_policy=safety_policy,
+                slam_fallback=self.slam_fallback_provider() if self.slam_fallback_provider else None,
                 localization=localization,
                 odom_pose=self._odom_pose,
                 trip_lease=trip_lease,

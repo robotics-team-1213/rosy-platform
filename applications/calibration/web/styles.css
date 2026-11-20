@@ -249,6 +249,15 @@ body {
   grid-column: 1 / -1;
 }
 
+.cal-lower > :nth-child(4) {
+  grid-column: 1 / -1;
+}
+
+.cal-job-status-body {
+  display: grid;
+  gap: var(--space-2);
+}
+
 .cal-subhead {
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
@@ -295,6 +304,10 @@ body {
 
 .cal-table tbody tr:hover {
   background: var(--surface-raised);
+}
+
+.cal-table[data-readonly] tbody tr {
+  cursor: default;
 }
 
 .cal-table tbody tr[data-selected="true"] {

@@ -609,3 +609,12 @@ def test_a_compare_404_is_a_refusal_not_a_crash(tmp_path, current_sha, refusal):
         urllib.error.HTTPError("https://api.github.com/compare", 500, "Server Error", {}, None))
     with pytest.raises(urllib.error.HTTPError):
         u.run()
+
+
+@pytest.mark.parametrize("example", ["deploy/ai_pc/situation-autoupdate.json.example", "deploy/site/site-tools-autoupdate.json.example"])
+def test_example_configs_ship_the_updater_host_module(example):
+    # omx_autoupdate.py imports omx_autoupdate_host; a release without it fails with ModuleNotFoundError (11-20 AI PC / site tools).
+    import json
+    paths = json.loads((Path(__file__).parents[1] / example).read_text())["paths"]
+    assert "deploy/robot/omx/omx_autoupdate.py" in paths
+    assert "deploy/robot/omx/omx_autoupdate_host.py" in paths

@@ -46,6 +46,7 @@ from cell_upkeep_checks import (  # noqa: E402
     check_light,
     check_map,
     check_monitors,
+    check_pose,
     check_registers,
     check_tcp,
     grip_units,
@@ -305,6 +306,8 @@ def upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since=None):
         checks.append(row("bus ownership", "ok", "no record_session.py, lock free"))
         checks.append(check_registers(arm, device, io, fix, out_dir, stamp) if Path(device).exists()
                       else row("registers", "skipped", "follower board missing"))
+        if Path(device).exists():
+            checks.append(check_pose(arm, device, io, library))
     cameras, top = check_cameras(arm, cell.get("cameras", {}), io, fix, bus_free=owner is None)
     checks += cameras + [check_light(top, params, io)]
     logs_dir = Path(rel(base, spec["record"])).parent

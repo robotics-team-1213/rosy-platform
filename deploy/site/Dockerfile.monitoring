@@ -1,5 +1,6 @@
 # D-1001: Monitoring has its own signed image, so a Fleet-image defect cannot take down the observer.
-# No fleet package, no Fleet state; only the monitoring source and the two protocol modules it reads.
+# No fleet package, no Fleet state; only the monitoring source and the protocol modules it reads
+# (account_access/account_client for the D-990 Account receiver loaded when account_config is set).
 FROM ubuntu:24.04 AS assets
 ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1
 RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
@@ -25,9 +26,9 @@ RUN python3 -m venv /opt/rosy-venv \
     && rm /opt/rosy/requirements.txt
 COPY operations/monitoring/src/ /opt/rosy/src/operations/monitoring/
 COPY contracts/foundation/core_common/__init__.py /opt/rosy/src/contracts/foundation/core_common/__init__.py
-COPY contracts/foundation/core_common/protocol/__init__.py contracts/foundation/core_common/protocol/connect_reason.py contracts/foundation/core_common/protocol/monitoring.py /opt/rosy/src/contracts/foundation/core_common/protocol/
+COPY contracts/foundation/core_common/protocol/__init__.py contracts/foundation/core_common/protocol/account_access.py contracts/foundation/core_common/protocol/account_client.py contracts/foundation/core_common/protocol/connect_reason.py contracts/foundation/core_common/protocol/monitoring.py /opt/rosy/src/contracts/foundation/core_common/protocol/
 COPY --from=assets /monitoring-web /opt/rosy/monitoring-web
-RUN python3 -c "import rosy.monitoring.service, rosy.monitoring.sources"
+RUN python3 -c "import rosy.monitoring.service, rosy.monitoring.sources, rosy.monitoring.account_routes, joserfc"
 WORKDIR /opt/rosy
 EXPOSE 8786
 # secret_exec drops to uid 10001 after reading the mounted keys (compose adds SETUID/SETGID only).

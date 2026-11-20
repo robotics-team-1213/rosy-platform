@@ -176,3 +176,44 @@ def test_commissioning_replan_refreshes_state_after_slow_park(tmp_path, monkeypa
     status = gate.act(f"load {revised}")
     assert status["ok"] is True and f"load {revised}" in cell.commands
 
+
+def test_a_commissioning_carry_still_rehomes_a_folded_arm_without_a_ledger(tmp_path, monkeypatch):
+    """The cell worker runs --commissioning (no attempt ledger): a hand-turned folded wrist still takes home first."""
+    import cell_transfer
+    import cell_unwedge
+
+    profile_path = tmp_path / "robot-profile.json"
+    profile_path.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1", "device_id": "fixture-device", "instance_id": "fixture-arm",
+        "robot_config_sha256": "c" * 64, "operating_envelope_path": "review.json", "work_dir": ".",
+    }))
+    from cell_robot_profile import load
+
+    binding = load(profile_path)["binding"]
+    config = {
+        "plan": {"lift_m": 0.04}, "profiles": {}, "sites": {}, "cameras": {},
+        "operating_conditions": {
+            "installation_revision": "fixture-install", "object_revision": "fixture-obj",
+            "payload_max_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "fixture-env",
+        },
+        "payload": {"kg": 0.03, "source": "fixture scale"},
+        "operating_envelope_path": str(tmp_path / "review.json"), "work_dir": str(tmp_path),
+        "operating_profile_path": str(profile_path), "_commissioning": {"person_at_switch": True},
+    }
+    home = [0.8, -62.2, 53.1, 51.6, 45.2, 48.8]
+    library = tmp_path / "lib.json"
+    library.write_text(json.dumps({"fps": 30, "chunks": {"home": [home], "above_pick": [home]}}))
+    state = {"ok": True, "settled": True, "state": [*home[:4], -50.0, 48.8], "target": [*home[:4], -50.0, 48.8],
+             "holding": False, "health": {"current_ma": [0, 0, 0, 0, 0, 10]}, "human_hold_latched": False,
+             "operating_context": {"scope": "hardware", "sha256": "a" * 64, "session_id": "s1", "operating_profile": binding}}
+
+    class FoldedCell:
+        def act(self, command):
+            return dict(state, command=command, t=__import__("time").time())
+
+    calls = []
+    monkeypatch.setattr(cell_unwedge, "rehome_before_work", lambda *a, **k: calls.append(k) or {
+        "plan": [{"joint": "elbow_flex"}], "jogs": [{}], "result": "home"})
+    gate = cell_transfer.Gate(FoldedCell(), config, {})
+    assert gate.open(library, lambda a: None) is None and gate.assessment["mode"] == "commissioning"
+    assert len(calls) == 1 and list((tmp_path / "receipts").glob("*"))

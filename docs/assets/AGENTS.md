@@ -19,7 +19,10 @@ Non-executable images used by repository documentation. Requirements, runbooks, 
 
 ## Subdirectories
 
-None.
+| Directory | Purpose |
+|-----------|---------|
+| `calibration/` | 보정 체계 문서 그림 (`docs/reference/calibration-system*.md`) |
+| `video-records/` | 영상 기록 문서 GIF (`docs/reference/video-records-*.md`) |
 
 ## For AI Agents
 
@@ -35,7 +38,7 @@ None.
 
 ### Common Patterns
 
-PNG only. Referenced from README and governance docs.
+PNG·JPG images. `video-records/` holds GIF previews (3 MB or less each). Referenced from README and governance docs.
 
 ## Dependencies
 
