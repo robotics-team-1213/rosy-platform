@@ -99,6 +99,38 @@ CI_FULL_EXCLUDED = {
 }
 
 
+#: Panel 2026-11-20 (aff-narrow): a change of only these files builds nothing, so CI skips build-smoke (colcon,
+#: flake8, boot smoke); the selected tests (guard set, record and document readers) still run.
+DOC_SUFFIXES = (".md", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".drawio")
+
+#: build-smoke's steps (colcon build, flake8, core boot, SaveMap) read only files inside a colcon root
+#: (platform_parts.yaml ``colcon_roots``, which also feeds colcon_roots.py): a change of documents or of
+#: trees outside every root (tools, root test/, deploy, .github) builds nothing, so the job skips.
+#: platform_parts.yaml is build data — it changes what colcon_roots.py prints, so it keeps the job.
+BUILD_DATA = ("tools/harness/platform_parts.yaml", "tools/harness/colcon_roots.py")
+#: prefixes that can change what the smoke job itself runs or boots with (its workflow, CI image, deploy
+#: configs the boot may read): conservative, the job stays for any change under them (11-20 review)
+BUILD_PREFIXES = (".github/", "deploy/")
+
+
+def docs_only(sel: Selection) -> bool:
+    return (sel.mode == "affected" and not sel.escalations and bool(sel.changed)
+            and all(p.endswith(".md") or (p.startswith("docs/") and p.endswith(DOC_SUFFIXES)) for p in sel.changed))
+
+
+def buildable(repo: Repo, sel: Selection) -> bool:
+    """False only when nothing build-smoke reads can have changed: no changed file inside a colcon root
+    (documents aside) and none of BUILD_DATA. A missing manifest means unknown, so the job stays."""
+    if sel.mode != "affected" or sel.escalations:
+        return True
+    roots = repo.parts.get("colcon_roots") or ()
+    if not roots:
+        return True
+    return any(p in BUILD_DATA or p.startswith(BUILD_PREFIXES) or (not p.endswith(DOC_SUFFIXES)
+                                   and any(affected_ros._under(p, r) for r in roots))
+               for p in sel.changed)
+
+
 def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
     """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit."""
     import affected_tests as at
@@ -148,7 +180,8 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if any(at._under(p.split("::", 1)[0], "learning/training/omx/test")
                for inv in sel.invocations for p in inv):
             entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
-    entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
+    if not docs_only(sel) and buildable(repo, sel):
+        entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")
         entry.setdefault("gating", True)

@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from typing import Optional
 
+import base64
 import math
 
 from fastapi import Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.localization.map_binding import BindingError, bound_pose, fit_rigid, propose_from_walls
+from fleet.localization.wall_grid import build as build_wall_grid
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_routes import site_map_error
 
@@ -90,6 +92,18 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
                 body["camera_site_pose"] = {"x": cam.x, "y": cam.y, "yaw": cam.yaw, "state": cam.state}
                 body["slam_camera_gap_m"] = math.hypot(bx - cam.x, by - cam.y)
         return body
+
+    @app.get("/api/fleet/site-map/wall-grid", dependencies=read_guard, tags=["map-binding"])
+    def site_map_wall_grid() -> dict:
+        """The active site map's walls as a Nav2 map in the site frame: a fallback a robot can localize on (read-only)."""
+        active = site_maps.active()
+        if active is None:
+            raise site_map_error(404, "SITE_MAP_NOT_ACTIVE", "activate a site map first")
+        if not active[1].walls:
+            raise site_map_error(404, "SITE_MAP_NO_WALLS", "the active site map has no walls")
+        built = build_wall_grid(active[1].map_id, active[0], [w.face for w in active[1].walls])
+        pgm = built.pop("pgm")
+        return {**built, "pgm_base64": base64.b64encode(pgm).decode("ascii")}
 
     @app.post("/api/fleet/robots/{robot_id}/map-binding", tags=["map-binding"])
     async def map_binding_approve(robot_id: str, body: ApproveRequest,

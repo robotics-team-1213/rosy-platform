@@ -35,7 +35,8 @@ def main():
                       allowed_commands=("lane_perception.status", "lane_perception.set",
                                         "navigation_approval.status", "navigation_approval.begin",
                                         "navigation_approval.cancel", "navigation_approval.seal",
-                                        "navigation_approval.start_navigation"),
+                                        "navigation_approval.start_navigation", "navigation_fallback.status",
+                                        "navigation_fallback.stage", "navigation_fallback.switch"),
                       audit=audit)
     threading.Thread(target=watch_approval_expiry, name="approval-expiry", daemon=True).start()
     serve_forever(agent, expected_uid=uid, group_gid=gid)

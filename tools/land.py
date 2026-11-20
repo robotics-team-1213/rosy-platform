@@ -61,6 +61,7 @@ from land_selection import _test_dir, fallback_targets  # noqa: E402,F401  (move
 import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
 import land_precheck  # noqa: E402  (the cheap gates alone, before land_async makes a ticket)
 import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
+import land_freeze  # noqa: E402  (cutover freeze: rosy-cutover.json)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan, stale_adr_rows,  # noqa: E402,F401  (auto-resolve)
                         generate_records, resolver)
@@ -499,6 +500,8 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     land_record.plan(invocations, prepared, available=(wt / land_record.TARGET).is_file())
                 except (ValueError, TypeError, KeyError) as exc:
                     raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
+            if why := land_freeze.refusal(wt, candidate, new=False):  # last guard: only allowed shas move main
+                raise Stop(why)
             on_main(main_co); land_checks.stash_main_collisions(main_co, main_sha, candidate)
             ff = git(main_co, "merge", "--ff-only", candidate, check=False, env=MAIN_WRITER_ENV)
             if ff.returncode == 0:
@@ -553,6 +556,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="the user's words: pass waiting tickets (one at a time, D-889 addendum 5)")
     parser.add_argument("--mixed", default="", metavar="REASON", help="the user's words: gate or safety paths with product")
     args = parser.parse_args(argv)
+    if not args.precheck and (why := land_freeze.refusal(Path.cwd(), None)):  # open: no new landing on a publishOnly clone
+        return print(why, file=sys.stderr) or 1
     if args.precheck:
         try:
             land_precheck.precheck(sys.modules[__name__], Path(out(Path.cwd(), "rev-parse", "--show-toplevel")), sys.executable,

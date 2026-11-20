@@ -29,6 +29,7 @@ from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.trip_admission import start_check
 from fleet.server.trip_runner import LOCALIZED, PLAN_TTL_S, TripError
+from fleet.stop_front import body_front_m
 from fleet.swarm.transport import RobotApiError
 
 PlaceRef = Annotated[str, Field(min_length=1, max_length=64)]
@@ -183,7 +184,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         request = PlanRequest(map_version=active[0], start_pose=(pose[0], pose[1], pose[2]), goal=goal,
                               via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
                               blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
-                              **bounds)
+                              body_front_m=body_front_m(bounds.get("robot_kind")), **bounds)
         try:
             plan = plan_trip(active[2], request, routing_config)
         except PlanError as exc:

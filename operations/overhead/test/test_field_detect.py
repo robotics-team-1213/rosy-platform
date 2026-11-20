@@ -139,3 +139,21 @@ def test_jpeg_entry_point_and_payload_shape():
 def test_bad_jpeg_raises_value_error(bad):
     with pytest.raises(ValueError):
         detect_field_jpeg(bad)
+
+
+def test_the_full_auto_fit_runs_at_most_once_per_interval(monkeypatch):
+    import rosy_vision.field_detect as fd
+    import rosy_vision.world_261026_auto as auto
+    calls = []
+    monkeypatch.setattr(auto, "auto_calibrate_and_trace_world_261026", lambda image: calls.append(1))
+    monkeypatch.setattr(fd, "_fallback_cache", {})
+    now = [1000.0]
+    monkeypatch.setattr(fd.time, "monotonic", lambda: now[0])
+    blank = np.zeros((360, 640, 3), np.uint8)  # no field: the fast detector always fails
+    for _ in range(30):
+        assert detect_field(blank).proposal is None
+        now[0] += 1.0
+    assert len(calls) == 1  # 30 s of 1 Hz checks: one full fit, not thirty
+    now[0] += fd.FALLBACK_INTERVAL_S
+    detect_field(blank)
+    assert len(calls) == 2
