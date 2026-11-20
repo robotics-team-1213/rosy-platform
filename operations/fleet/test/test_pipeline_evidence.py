@@ -548,3 +548,46 @@ def test_a_claim_by_a_principal_that_is_not_the_cells_registered_owner_is_refuse
         assert _ledger(env) == before
     monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", "cell_s=service")
     assert env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_s"}).json()["claimed"] is True
+
+
+def _presence(env, headers=OP, body=None):
+    return env.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/presence-confirm", headers=headers, json=body or {})
+
+
+def test_presence_confirm_is_for_a_named_operator_on_a_queued_task_only():
+    env = Env()
+    assert _presence(env, SVC).status_code == 403 and _presence(env, VIEW).status_code == 403
+    assert _presence(env, CONSOLE).json()["detail"]["code"] == "NAMED_OPERATOR_REQUIRED"  # a shared console names nobody
+    assert env.client.post("/api/fleet/pipeline/cell-tasks/nope/presence-confirm", headers=OP, json={}).status_code == 404
+    first = _presence(env).json()
+    assert first["renewed"] is True and first["presence"]["operator"] == "operator" and first["expires_in_s"] == 120.0
+    again = _presence(env).json()
+    assert again["renewed"] is False and again["presence"]["at"] == first["presence"]["at"]  # a repeat never renews the expiry
+    _claimed(env)
+    assert _presence(env).json()["detail"]["code"] == "CELL_TASK_NOT_QUEUED"
+
+
+def test_the_claim_carries_a_valid_presence_once_and_no_presence_otherwise():
+    env = Env()
+    assert _claimed_response(env)["handoff"]["presence"] is None  # nobody confirmed: the reviewed envelope path
+    assert env.app.state.omx_cell_tasks[TASK]["presence"] is None
+    env = Env()
+    _presence(env)
+    res = _claimed_response(env)
+    presence = res["handoff"]["presence"]
+    assert presence["operator"] == "operator" and abs(presence["at"] - time.time()) < 5
+    assert res["task"]["presence"] == presence and TASK not in env.app.state.cell_presence  # used up by this claim
+
+
+def test_an_expired_presence_is_not_carried_by_the_claim():
+    env = Env()
+    _presence(env)
+    env.app.state.cell_presence[TASK]["confirmed_at"] -= 121
+    assert _claimed_response(env)["handoff"]["presence"] is None
+
+
+def _claimed_response(env):
+    env.confirm_bed()
+    res = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_s"}).json()
+    assert res["claimed"] is True
+    return res

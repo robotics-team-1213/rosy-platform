@@ -1475,3 +1475,18 @@ place 점은 셀 보정(`cell_observe.predicted_pixel`)이 있어야 그려진�
 칸의 점유와 층을 깊이 상대 높이(`cell_depth_slots`, ADR D-1057 2-2절)로 판정하고 색·측면은 보조다. `floor`가 없으면 기존 판정이다.
 
 셀 설정의 `depth_frames`(정수 1–9, 기본 5)는 배치 뒤 깊이를 몇 장 연속 캡처해 픽셀별 중앙값으로 쓸지 정한다(3 s 마감, 근거는 ADR D-1057).
+
+### Fleet 작업의 감독 시험과 검토 기록 (D-911, D-1057 2-5)
+
+Fleet worker는 사람이 있다고 스스로 선언하지 않는다. 감독 시험(`--commissioning --person-at-switch`)은 이름 있는 운영자가 그 작업에
+`POST /api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm`을 한 뒤(120 s 안에 claim) 실행되는 작업에만 쓴다. 표시가 없는 작업은
+검토된 운전 범위로만 실행하며, 검토 기록이 없으면 팔은 움직이지 않고 worker가 `ABORTED`, 사유 `REVIEW_REQUIRED`로 보고한다.
+
+시험이 쌓이면 검토자가 다음 두 단계로 기록한다. 숫자와 이름은 사람이 정하고 소프트웨어는 채우지 않는다.
+
+```bash
+python3 deploy/robot/omx/cell_envelope_review.py list <work-dir>/attempts.jsonl
+python3 deploy/robot/omx/cell_envelope_review.py add --attempts <work-dir>/attempts.jsonl --envelope <operating_envelope_path> \
+  --task-sha256 <list의 key> --reviewed-by <이름> --evidence-ref <확인한 근거> \
+  --min-attempts <N> --min-success-rate <R> --home-tolerance <U> --confirm-physical-review
+```

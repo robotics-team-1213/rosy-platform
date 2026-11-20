@@ -212,6 +212,9 @@ def install_cameras_routes(app, ctx) -> None:
         if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
             return {"claimed": False, "task": task, "gate": res["gate"]}
         app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
+        from fleet.server.sitemap.pipeline_evidence import take_presence
+
+        task["presence"] = take_presence(app, task)  # D-1057/D-911: set only for a task a named operator confirmed in time
         task["status"] = "RUNNING"
         task["amr_claim_evidence"] = dict(amr)
         task["handoff_lease_id"] = res["handoff"].get("handoff_lease_id")
@@ -227,6 +230,7 @@ def install_cameras_routes(app, ctx) -> None:
             "src_site": task["src_site"],
             "dst_site": task["dst_site"],
             "displaced_to": task.get("displaced_to"),
+            "presence": task["presence"],
         }
         return {"claimed": True, "task": task, "handoff": handoff, "gate": res["gate"]}
 

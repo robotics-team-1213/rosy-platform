@@ -37,7 +37,7 @@ def _attempt(verify=None, park=PARK, zone=ZONE):
     return {**row, **({"zone_verification": zone} if zone is not None else {})}
 
 
-def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0, handoff=None, live_folded=True):
+def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0, handoff=None, live_folded=True, record=None):
     (tmp_path / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     # as in the real cell config: the home lives in the grasp plan file that `plan_path` names, not in the config JSON
     (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": home} if home else {}), encoding="utf-8")
@@ -46,7 +46,7 @@ def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0, handoff=Non
     # main's telemetry reader and the post-carry source look: the live runner state says folded and fresh; nothing is left at the source
     monkeypatch.setattr(cte, "measured_fold", lambda arm, prep, now=None: {"folded": live_folded, "state": None, "fresh": True})
     monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0, "site": "pinky"})
-    monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+    monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: (record.append(a[0]) if record is not None else None) or subprocess.CompletedProcess(
         a, returncode, stdout=CLI_NOISE + json.dumps(parsed, indent=1, default=str) + "\n", stderr=""))  # as cell_auto_pick prints it
     return cte.execute_guarded_cell_task(handoff or HANDOFF, prep_dir=tmp_path)
 
@@ -205,3 +205,31 @@ def test_both_fold_measurements_must_agree(tmp_path, monkeypatch):
     assert out["stop_event"]["folded"] is False and out["stop_event"]["readback"]["folded"] is True
     assert out["stop_event"]["live"]["folded"] is False and out["error"] == "FOLD_READBACK_MISSING"
     assert out["stage_result"]["source_clearance"] == {"objects": 0, "site": "pinky"}
+
+
+def _flags(tmp_path, monkeypatch, handoff):
+    cmds = []
+    _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt()]}, handoff={**HANDOFF, **handoff}, record=cmds)
+    return [c for c in cmds[-1] if c in ("--commissioning", "--person-at-switch")]
+
+
+def test_the_worker_never_declares_a_person_at_the_switch(tmp_path, monkeypatch):
+    import time
+
+    assert _flags(tmp_path, monkeypatch, {}) == []                                   # no presence: the reviewed envelope path
+    assert _flags(tmp_path, monkeypatch, {"presence": None}) == []
+    ok = {"presence": {"operator": "ops-kim", "at": time.time() - 10}}
+    assert _flags(tmp_path, monkeypatch, ok) == ["--commissioning", "--person-at-switch"]  # only a confirmed task
+    for bad in ({"operator": "ops-kim", "at": time.time() - 4000},                  # expired
+                {"operator": "", "at": time.time()}, {"operator": "site-console", "at": time.time()},   # anonymous
+                {"operator": "development-x", "at": time.time()}, {"operator": "ops-kim"}, {"at": time.time()}, "ops-kim"):
+        assert _flags(tmp_path, monkeypatch, {"presence": bad}) == [], bad
+
+
+def test_a_run_held_by_the_envelope_is_reported_as_review_required(tmp_path, monkeypatch):
+    for reason in ("not_reviewed", "evidence_changed", "acceptance_not_met"):
+        out = _exec(tmp_path, monkeypatch, {"result": f"held: {reason}", "attempts": []})
+        assert out["review_required"] is True and out["stage_result"]["task_verified"] is False
+    out = _exec(tmp_path, monkeypatch, {"result": "held: source moved before transfer", "attempts": []})
+    assert "review_required" not in out  # another hold is not a review problem
+    assert _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt()]})["commissioning"] is False

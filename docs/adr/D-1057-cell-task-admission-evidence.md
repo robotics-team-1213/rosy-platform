@@ -87,6 +87,12 @@ Fleet은 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(proposer
 
 `claim`은 호출 주체가 그 셀의 owner로 등록(`ROSY_FLEET_CELL_OWNERS`)되어 있지 않으면 원장을 바꾸기 전에 `claimed:false`, `OWNER_PRINCIPAL_NOT_REGISTERED`로 거부한다(등록되지 않은 주체가 claim하면 결과를 받아 줄 수 없어 작업이 RUNNING으로 남기 때문이다. 인증이 없는 단독 시험 앱은 확인하지 않는다). 팔 실행 뒤 `owner-evidence` 또는 `/complete` 전송이 실패하면 worker가 같은 lease의 결과를 작업 공간 상태 파일(`pending-results.json`)에 보관하고, 다음 폴링마다 **팔을 다시 움직이지 않고** 같은 본문을 재전송한다. 재전송은 Fleet이 그 작업을 RUNNING으로 보이고 lease가 같을 때만 한다(lease가 바뀌었거나 작업이 끝났으면 항목을 버린다). 같은 `owner-evidence` 본문은 Fleet이 동일 기록으로 받고 다른 본문은 409를 유지하며, 409·422는 다시 시도하지 않는다. 403·5xx·연결 끊김은 다음 폴링에 다시 시도한다.
 
+#### 2-5. 감독 시험은 사람이 표시한 작업만, 나머지는 D-911 검토 범위 (사용자 결정, 2026-11-20)
+
+worker는 `--commissioning --person-at-switch`를 더 이상 항상 넘기지 않는다(사람이 전원 스위치 옆에 있다는 선언을 소프트웨어가 대신하지 않는다, D-911 4). 이름 있는 운영자가 `POST .../presence-confirm`으로 작업에 입회 표시를 하고(120 s), 그 작업의 `claim`이 표시를 소비해 `handoff.presence`로 실을 때만 worker가 그 작업을 감독 시험으로 실행한다. 표시가 없거나 만료·익명이면 `cell_envelope`의 검토된 운전 범위(D-911 `reviews`, `task_sha256` 일치)로만 실행한다. 검토 기록이 없으면 러너가 **팔을 움직이기 전에** `held: not_reviewed`로 멈추고, worker는 `phase: ABORTED`, 사유 `REVIEW_REQUIRED`로 보고한다(claim 전에 Fleet이 envelope 검토 여부를 알지 못하므로 claim 후·동작 전에 판정한다; 팔은 움직이지 않고 owner 증거도 보내지 않는다). ABORTED는 기존대로 AMR 이동 억제를 유지하고 사람이 푼다.
+
+**시운전 뒤 D-911 검토 기록:** 자동 등록은 D-911 3·7이 허용하지 않는다(성공이 스스로 승격하지 않고 반복 수·성공률·시작 오차 기준은 검토자가 정하며 기본값이 없다). 대신 기존 절차를 한 단계로 만든 `deploy/robot/omx/cell_envelope_review.py`가 있다: 시험 뒤 `list <work-dir>/attempts.jsonl`로 후보(작업 key·시험 수·성공 수)를 보고, 사람이 `add --attempts ... --envelope ... --task-sha256 ... --reviewed-by ... --evidence-ref ... --min-attempts N --min-success-rate R --home-tolerance U --confirm-physical-review`를 실행한다. 작업 key·scope·`attempts_sha256`은 장부에서 복사하고 검토자·근거·세 숫자는 사람이 준다(기본값 없음). 시험이 그 숫자를 못 채우거나 hardware가 아니거나 이미 검토가 있으면 기록하지 않는다. 규칙은 바뀌지 않았다.
+
 #### 3. 신뢰 경계
 
 owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경(ID 또는 활성 버전)이 한 번이라도 있으면 영구 무효이고, 확인은 조회 때만이 아니라 콘솔이 받는 상태 갱신마다 검사한다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.

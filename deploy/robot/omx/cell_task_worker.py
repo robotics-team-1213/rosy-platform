@@ -30,7 +30,7 @@ from cell_camera_telemetry_sync import (
 from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
-from cell_result_outbox import Outbox, result_bodies, resend_pending
+from cell_result_outbox import Outbox, abort_reason, result_bodies, resend_pending
 from cell_task_exec import (
     check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen, query_safety_listing, resolve_task_arm,
 )
@@ -302,7 +302,7 @@ def poll_and_execute_once(
                               safety_fault["reason"] if safety_fault else
                               "UNKNOWN_SITE" if not site_ok else
                               "HANDOFF_TASK_MISMATCH" if not claim_bound else
-                              "AMR_NOT_LOCKED_AT_HANDOFF" if not interlock_ok else "MEASURED_PLACEMENT_MISSING")}
+                              "AMR_NOT_LOCKED_AT_HANDOFF" if not interlock_ok else abort_reason(hw_tel))}
         omx_res = {"receipt": receipt, "stage_result": stage_result}
         owner_body, complete_body = result_bodies(handoff, phase, digest, receipt, stage_result, hw_tel)  # D-1057
         outbox.put(task_id, {"lease": handoff.get("handoff_lease_id"), "owner_evidence": owner_body, "complete": complete_body})

@@ -27,6 +27,7 @@ STILL_ANGULAR_RADPS = 1e-3
 STILL_MIN_S = 1.0
 STILL_MAX_GAP_S = 2.5
 BED_CONFIRM_TTL_S = 120.0
+PRESENCE_TTL_S = 120.0   # a named operator's "I am at the power switch" for one task's supervised first run (D-911)
 BED_MOVE_LIMIT_M = 0.02
 OWNER_EVIDENCE_MAX_AGE_S = 60.0
 _IDLE_NAV = frozenset({"IDLE", "ARRIVED", "CANCELED", "FAILED"})  # anything else is a drive task in progress
@@ -222,12 +223,23 @@ def _bed_ready(app, task: dict, pose: dict) -> bool:
     return not rec.get("invalid") and math.hypot(pose["x"] - rec["pose"]["x"], pose["y"] - rec["pose"]["y"]) <= BED_MOVE_LIMIT_M
 
 
+def _presence_valid(rec: dict) -> bool:
+    return 0 <= time.time() - rec["confirmed_at"] <= PRESENCE_TTL_S
+
+
+def take_presence(app, task: dict) -> dict | None:
+    """The valid presence confirmation of this task as {"operator", "at"}, used up by the claim that reads it; else None."""
+    rec = (getattr(app.state, "cell_presence", None) or {}).pop(task["task_id"], None)
+    return None if rec is None or not _presence_valid(rec) else {"operator": rec["principal_id"], "at": rec["confirmed_at"]}
+
+
 def prune_evidence(app) -> None:
     """Drop stored confirmations and owner evidence of finished tasks and of expired records."""
     tasks = getattr(app.state, "omx_cell_tasks", None) or {}
     now = time.time()
     for store, dead in ((getattr(app.state, "cell_bed_confirmations", None) or {},
                          lambda r: not _bed_valid(r)),
+                        (getattr(app.state, "cell_presence", None) or {}, lambda r: not _presence_valid(r)),
                         (getattr(app.state, "cell_owner_evidence", None) or {},
                          lambda r: now - r["measured_at"] > OWNER_EVIDENCE_MAX_AGE_S)):
         for task_id in [k for k, r in store.items()
@@ -307,6 +319,7 @@ def install_evidence_routes(app, ctx) -> None:
     operator_guard, proposer_guard = ctx.operator_guard, ctx.proposer_guard
     app.state.cell_bed_confirmations = getattr(app.state, "cell_bed_confirmations", None) or {}
     app.state.cell_owner_evidence = getattr(app.state, "cell_owner_evidence", None) or {}
+    app.state.cell_presence = getattr(app.state, "cell_presence", None) or {}
 
     async def read_body(request: Request):
         raw = await request.body()
@@ -347,6 +360,24 @@ def install_evidence_routes(app, ctx) -> None:
         watch_pose_updates(app)
         app.state.cell_bed_confirmations[task_id] = rec
         return {"ok": True, "renewed": True, "confirmation": rec, "expires_in_s": BED_CONFIRM_TTL_S}
+
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm", dependencies=operator_guard)
+    async def confirm_presence(task_id: str, request: Request):
+        """A named operator states that a person is at the power switch for this task's supervised (commissioning) run."""
+        task = task_of(task_id)
+        await read_body(request)
+        principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
+        if not principal_id or principal_id == "site-console" or principal_id.startswith("development-"):
+            raise _error(403, "NAMED_OPERATOR_REQUIRED")
+        if task.get("status") != "QUEUED":
+            raise _error(409, "CELL_TASK_NOT_QUEUED")
+        old = app.state.cell_presence.get(task_id)
+        if old is not None and _presence_valid(old):  # a repeated request never renews the expiry
+            return {"ok": True, "renewed": False, "presence": {"operator": old["principal_id"], "at": old["confirmed_at"]}}
+        rec = {"task_id": task_id, "principal_id": principal_id, "confirmed_at": time.time()}
+        app.state.cell_presence[task_id] = rec
+        return {"ok": True, "renewed": True, "presence": {"operator": principal_id, "at": rec["confirmed_at"]},
+                "expires_in_s": PRESENCE_TTL_S}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence", dependencies=proposer_guard)
     async def record_owner_evidence(task_id: str, request: Request):

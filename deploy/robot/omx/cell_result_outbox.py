@@ -16,6 +16,12 @@ from urllib.error import HTTPError
 DROP_CODES = (409, 422)  # Fleet refused this exact body on its merits (another record, stale or invalid): not retried
 
 
+def abort_reason(hw_tel: dict[str, Any]) -> str:
+    """The receipt reason of an aborted run whose placement was not measured: held for review (the runner refused before any
+    motion, D-911) or the generic missing measurement."""
+    return "REVIEW_REQUIRED" if hw_tel.get("review_required") else "MEASURED_PLACEMENT_MISSING"
+
+
 def result_bodies(handoff, phase, digest, receipt, stage_result, hw_tel) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     """(owner-evidence body or None, /complete body). Fleet compares /complete with the stored owner record, so for a
     released task the first is sent first and both are kept together."""

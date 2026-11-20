@@ -14,6 +14,8 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
+from cell_presence import presence_ok, review_required, zone_acceptance
+
 
 def make_ca_urlopen(ca_file: str | Path | None = None):
     """Return a `urlopen`-compatible callable pinned to `ca_file` when provided."""
@@ -242,8 +244,7 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         "--roi", *(str(int(v)) for v in roi),
         "--from", src,
         "--dest", dst,
-        "--commissioning",
-        "--person-at-switch",
+        *(["--commissioning", "--person-at-switch"] if presence_ok(handoff) else []),  # never declared by the worker itself
         "--task-id", str(handoff.get("task_id") or ""),
         "--handoff-lease-id", str(handoff.get("handoff_lease_id") or ""),
     ]
@@ -266,15 +267,7 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     # measurement (cell_area_zones.verify_stack_outcome*) is used only if the attempt carries it as `zone_verification`;
     # nothing in cell_auto_pick emits that today, so without it the fields below stay unverified and Fleet refuses.
     zone = attempt.get("zone_verification") if isinstance(attempt.get("zone_verification"), dict) else None
-    # The measured slot and tier must be the task's own: the destination site and the handoff tier.
-    target = (zone or {}).get("target") if isinstance((zone or {}).get("target"), dict) else {}
-    htier = handoff.get("tier")
-    top_only = handoff.get("cell_id") == "cell_s" and (zone or {}).get("basis") == TOP_ONLY_BASIS
-    roi = target.get("roi")
-    slot_ok = (isinstance(roi, list) and len(roi) == 4 and all(type(v) in (int, float) for v in roi)) if top_only else (
-        type(target.get("col")) is int and type(target.get("row")) is int)
-    bound = target.get("site") == dst and type(htier) is int and target.get("tier") == htier and slot_ok
-    zone_ok = bool(zone and zone.get("verified") is True and (zone.get("basis") == ZONE_BASIS or top_only) and bound)
+    zone_ok = zone_acceptance(zone, handoff, dst)  # the measured slot and tier must be the task's own
     tier = handoff.get("tier")
     dst_area = dst.rsplit("-l", 1)[0]
     verification = ({**zone, "placement": placement} if zone is not None else
@@ -300,6 +293,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         "stage_result": stage_result,
         "stop_event": {"command": "stop", "ok": folded, "folded": folded, "readback": fold, "live": live_fold,
                        **({"state": fold["state"]} if fold["state"] else {})},  # Fleet reads stop_event.state as joints
+        "commissioning": presence_ok(handoff),
+        **({"review_required": True} if review_required(parsed) else {}),
         **({"error": parsed.get("result") or f"exit_{proc.returncode}"} if not placed else
            {} if folded else {"error": "FOLD_READBACK_MISSING"}),
     }

@@ -276,3 +276,15 @@ def test_a_body_fleet_refuses_on_its_merits_is_dropped_not_retried(tmp_path):
 
     assert resend_pending(outbox, fleet)[0]["action"] == "dropped" and outbox.items() == {}
     assert Outbox(None).items() == {}  # no work directory: nothing is kept and nothing fails
+
+
+def test_a_run_held_for_review_aborts_with_review_required_and_no_owner_evidence(tmp_path):
+    calls = []
+    fleet = Fleet()
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+    ctw.poll_and_execute_once(pipe, request_fn=fleet, prep_dir=tmp_path,
+                              live_act_fn=lambda h: calls.append(h) or {"arm": "arm_s", "review_required": True, "error": "held: not_reviewed",
+                                                                         "stop_event": {"ok": False, "folded": False}})
+    assert [p for p, _ in fleet.posts] == ["complete"]
+    body = fleet.posts[0][1]
+    assert body["phase"] == "ABORTED" and body["reason"] == "REVIEW_REQUIRED" and len(calls) == 1
