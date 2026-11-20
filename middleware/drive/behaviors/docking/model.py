@@ -131,7 +131,7 @@ class DockingConfig:
     bay_zone_agree_m: float = 0.05      # 맵 횡과 선 횡이 이만큼 넘게 다르면 모호
     bay_zone_agree_rad: float = 0.1745  # 10 deg
     bay_zone_look_s: float = 1.0        # 칸 줄 안 판정 전에 선 관측을 기다리는 시간
-    bay_exit_lateral_m: float = 0.05    # 칸 줄에서 나가기 시작할 수 있는 횡 오차(선 관측)
+    bay_exit_lateral_m: float = 0.03    # 칸 줄에서 나가기 시작할 수 있는 횡 오차(선 관측)
     bay_exit_heading_max_rad: float = 0.2618  # 15 deg (조향 없이 나가면 atan(횡/거리)로 더 좁힌다)
     bay_acquire_heading_max_rad: float = 0.1047  # 6 deg: 곧은 시작은 나가지 않고 바로 선 포획(정상 흐름 도착 허용 ±6° 시험과 같은 값)
     # LiDAR bay pose (bay_scan_pose.py): a match against the dock's stored seated scan replaces the map pose in the zone
@@ -239,7 +239,8 @@ class DockingConfig:
     # is 0.0566 m (CAD, RobotBody half_width_m), so the body CENTRE may travel +-0.048 m: 0.045 m. bay_line_x_m: the bay line in front (the pink corridor
     # crossbar, seen at bay-frame x ~0.42 on y8xs): to be confirmed from the frames/CAD; a forward move must not reach it.
     # Footprint check (panel B r25-b.md): the body CORNERS (nose 0.042, tray 0.135 behind base_link, half-width 0.0566) must stay within the lane edge.
-    bay_lane_edge_m: float = 0.105
+    bay_lane_width_m: float = 0.18               # the bay lane width of the active map (v268: 0.18, NOT the 0.226 pitch); a dock record metadata["lane_width_m"] overrides it. Half of it bounds the body footprint
+
     bay_body_front_m: float = 0.042
     bay_body_half_width_m: float = 0.0566
     bay_reseat_tries: int = 4                    # lane reseats (retries from the reverse / the seat) before it stops where it stands
@@ -251,7 +252,7 @@ class DockingConfig:
     bay_track_rail_x_m: float = 0.09             # the rails only bound x < ~0.078; a 2-5 cm start accepted by the first acquisition must not be dropped
     bay_track_inlier_min: float = 0.70
     bay_first_x_max_m: float = 0.20              # FIRST acquisition in the bay (case I) with a weak margin: provisional until the 9-cell matrix is measured
-    bay_first_lateral_m: float = 0.05
+    bay_first_lateral_m: float = 0.03
     bay_first_heading_rad: float = 0.1047
     bay_first_inlier_min: float = 0.75
     bay_first_margin_prior: float = 0.10         # seated at this dock earlier: a weaker global margin is accepted

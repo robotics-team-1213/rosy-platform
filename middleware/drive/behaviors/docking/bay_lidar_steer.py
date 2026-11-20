@@ -14,7 +14,7 @@ from typing import Optional
 
 import math
 
-from core_features.docking.bay_zone import lane_extent, pose_gate, scan_fit_pose
+from core_features.docking.bay_zone import lane_edge, lane_extent, pose_gate, scan_fit_pose
 from core_features.docking.model import DockPhase
 
 
@@ -148,11 +148,11 @@ class BayLidarSteerMixin:
                     "none" if self._lp is None else "%.1f s" % (now - self._lp[3]), lat, self._last_drop))
             return "stop"
         self._lp_lost_since = None
-        if self._lp[0] <= cfg.bay_line_x_m and lane_extent(cfg, self._lp[1], self._lp[2]) > cfg.bay_lane_edge_m:
+        if self._lp[0] <= cfg.bay_line_x_m and lane_extent(cfg, self._lp[1], self._lp[2]) > lane_edge(cfg, h._dock):
             self._stop()                       # inside the bay's lines the body centre may not leave the lane (user rule 2026-11-21)
             h._last_event = "lane keeping: left the lane (lateral %.0f mm at x %.2f m)" % (self._lp[1] * 1000.0, self._lp[0])
             h._fail("bay left the lane: the body footprint reaches past %.0f mm (lateral %.0f mm, heading %.0f deg) at x %.2f m: stopped" % (
-                cfg.bay_lane_edge_m * 1000.0, self._lp[1] * 1000.0, math.degrees(self._lp[2]), self._lp[0]))
+                lane_edge(cfg, h._dock) * 1000.0, self._lp[1] * 1000.0, math.degrees(self._lp[2]), self._lp[0]))
             return "stop"
         self._est = (self._lp[1], self._lp[2])
         # Inside the rails the LiDAR x, not the camera along, bounds the travel and the rear guard, and the camera slip rule is off

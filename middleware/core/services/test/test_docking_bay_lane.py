@@ -76,29 +76,42 @@ def test_the_reverse_stops_when_the_lidar_lateral_leaves_the_lane_inside_the_lin
 
 def test_the_lane_footprint_sign_is_asymmetric_a_ccw_heading_swings_the_tray_to_the_right():
     # panel B R1: lateral = -y (left +y), heading ccw+ (spin test w>0 = LiDAR +). Real corner lateral = lateral - fx*sin(h) -+ hy*cos(h)
-    from core_features.docking.bay_zone import lane_extent  # noqa: PLC0415
+    from core_features.docking.bay_zone import lane_edge, lane_extent  # noqa: PLC0415
     from core_features.docking.model import DockingConfig  # noqa: PLC0415
     cfg = DockingConfig()
+    edge = lane_edge(cfg)
     h = math.radians(10.0)
-    assert lane_extent(cfg, 0.030, h) > cfg.bay_lane_edge_m          # +30 mm (right) and a ccw 10 deg: the tray corner reaches 0.109
-    assert lane_extent(cfg, -0.030, h) <= cfg.bay_lane_edge_m        # -30 mm (left) with the same heading: 0.093
-    assert lane_extent(cfg, -0.030, -h) > cfg.bay_lane_edge_m        # mirrored
-    assert lane_extent(cfg, 0.030, -h) <= cfg.bay_lane_edge_m
+    assert lane_extent(cfg, 0.030, h) > edge          # +30 mm (right) and a ccw 10 deg: the tray corner reaches 0.109
+    assert lane_extent(cfg, -0.020, h) <= edge        # -20 mm (left) with the same heading: 0.083 (lane 0.18: edge 0.09)
+    assert lane_extent(cfg, -0.030, -h) > edge        # mirrored
+    assert lane_extent(cfg, 0.020, -h) <= edge
     # the grid survey (loop/scans manifest, hp10 rows: th +10 deg, y -0.006 = lateral +6 mm): the corners as the pose convention puts them
     # span y -0.085..+0.058 (tray to the right), the mirrored footprint would put them at -0.069..+0.074
     assert round(lane_extent(cfg, 0.0056, math.radians(10.13)), 3) == 0.085
 
 
 def test_the_lane_check_allowed_offset_shrinks_with_heading():
-    from core_features.docking.bay_zone import lane_extent  # noqa: PLC0415
+    from core_features.docking.bay_zone import lane_edge, lane_extent  # noqa: PLC0415
     from core_features.docking.model import DockingConfig  # noqa: PLC0415
     cfg = DockingConfig()
+    edge = lane_edge(cfg)
+    assert edge == 0.09 and cfg.bay_exit_lateral_m < 0.0334 and cfg.bay_first_lateral_m < 0.0334      # the 0.18 m lane (map v268)
 
     def worst(lat, deg):
         return max(lane_extent(cfg, lat, math.radians(deg)), lane_extent(cfg, lat, math.radians(-deg)))
-    assert worst(0.047, 0.0) <= cfg.bay_lane_edge_m < worst(0.05, 0.0)
-    assert worst(0.035, 10.0) > cfg.bay_lane_edge_m >= worst(0.025, 10.0)
-    assert worst(0.03, 15.0) > cfg.bay_lane_edge_m >= worst(0.012, 15.0)
+    assert worst(0.033, 0.0) <= edge < worst(0.036, 0.0)
+    assert worst(0.012, 10.0) > edge >= worst(0.010, 10.0)
+    assert worst(0.003, 15.0) > edge >= worst(0.0, 15.0)
+
+
+def test_the_lane_width_comes_from_the_dock_record_when_the_map_gives_it():
+    from types import SimpleNamespace  # noqa: PLC0415
+    from core_features.docking.bay_zone import lane_edge  # noqa: PLC0415
+    from core_features.docking.model import DockingConfig  # noqa: PLC0415
+    cfg = DockingConfig()
+    assert lane_edge(cfg, SimpleNamespace(metadata={"lane_width_m": 0.20})) == 0.10
+    for bad in (None, 0.0, 5.0, 0.26, "0.2", True):
+        assert lane_edge(cfg, SimpleNamespace(metadata={"lane_width_m": bad})) == 0.09
 
 
 def test_a_forward_move_in_the_row_needs_a_fresh_lidar_bay_pose():
