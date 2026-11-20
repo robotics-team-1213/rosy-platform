@@ -145,7 +145,7 @@ def _paired_page(runtime):
                 page.goto(f"http://127.0.0.1:{port}/pilot")
                 page.locator("[data-sim-code]").fill("ABCD-EFGH")
                 page.locator("[data-sim-connect]").click()
-                page.get_by_text("조작 가능").wait_for()
+                page.locator("[data-sim-status]", has_text="조작 가능").wait_for()
                 yield page, errors
             finally:
                 browser.close()
