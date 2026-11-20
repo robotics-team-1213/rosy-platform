@@ -1,4 +1,4 @@
-"""Merge queue retest narrowing (D-1059): only tests the changes since the PR's green run can reach, else everything."""
+"""Merge queue retest (D-1059): the guard set alone when the queue's tree is the one the PR's green run passed, else everything."""
 import functools
 import sys
 from pathlib import Path
@@ -9,7 +9,7 @@ import affected_queue  # noqa: E402
 import affected_tests as affected  # noqa: E402
 
 MEDIA = "middleware/media/src/rosy_media_edge/camera_tap.py"
-WORLD = "applications/fleet/dev/connected.py"  # Python inside a registered module that no media test reaches
+WORLD = "applications/fleet/dev/connected.py"
 
 
 @functools.lru_cache(maxsize=None)
@@ -33,44 +33,27 @@ def test_without_the_queue_environment_the_selection_is_untouched(monkeypatch):
     assert affected_queue.narrowed(_repo(), _pr()) is _pr()
 
 
-def test_changes_that_cannot_reach_a_selected_test_leave_it_out_and_keep_the_guards():
+def test_the_same_tree_repeats_the_guard_set_alone():
     before = (dict(_pr().reasons), _paths(_pr()))
-    for status in ("", f"M\t{WORLD}", "M\tdocs/logs.md", f"A\tapplications/fleet/test/test_new.py\nM\t{WORLD}"):
-        out, why = affected_queue.narrow(_repo(), _pr(), status)
-        assert not any(p.startswith("middleware/media/test") for p in out.reasons), why
-        assert set(out.reasons) < set(_pr().reasons)
-        assert {g for g in affected.GUARD_SET if g in _pr().reasons} <= set(out.reasons), "guards always run"
-        assert set(_paths(out)) < set(before[1]) and out.changed == _pr().changed  # build-smoke still reads the PR's files
+    out, why = affected_queue.narrow(_repo(), _pr(), "")
+    assert why.startswith("same tree") and set(out.reasons) == {g for g in affected.GUARD_SET if g in _pr().reasons}
+    assert set(_paths(out)) < set(before[1]) and out.changed == _pr().changed  # build-smoke still reads the PR's files
     assert (dict(_pr().reasons), _paths(_pr())) == before, "the pull request's own selection is not changed in place"
 
 
-def test_a_change_under_the_same_tests_keeps_them():
-    out, _ = affected_queue.narrow(_repo(), _pr(), f"M\t{MEDIA}")
-    assert set(out.reasons) == set(_pr().reasons)
-    # A test file changed on the base side alone is not in the PR's selection: the queue never ran it before either.
-    out, _ = affected_queue.narrow(_repo(), _pr(), "M\tmiddleware/media/test/test_camera_tap.py")
-    assert "middleware/media/test/test_camera_tap.py" in out.reasons or "middleware/media/test" in out.reasons
-
-
-def test_anything_unproven_keeps_the_whole_selection():
-    for status in ("D\tmiddleware/media/src/rosy_media_edge/gone.py",   # a removed file
-                   "M\ttools/harness/harness.yaml",                      # the registry itself
-                   "M\ttools/land.py",                                   # a gate tool: narrowed tier
-                   # 2026-11-21 review: a foundation contract selects its known readers and leaves `narrowed` empty
-                   "M\tcontracts/foundation/core_common/domain/command_mapping.py",
-                   "M\tshared/web/surfaces.yaml", "M\toperations/fleet/web/console.js",  # read at run time, no import names them
-                   "M\toperations/world/src/rosy/world/api/observation.py",  # Python no registered module owns
-                   f"M\t{WORLD}\nM\ttools/land.py"):
+def test_any_difference_keeps_the_whole_selection():
+    # 2026-11-21 review: each of these looked safe to narrow on and is not. A test runs another module's script,
+    # reads an ADR by glob, or imports a fixture from another test file, and the selector sees none of it.
+    for status in (f"M\t{WORLD}", "M\tdocs/logs.md", "M\tmiddleware/media/test/test_camera_tap.py",
+                   "M\tcontracts/foundation/core_common/domain/command_mapping.py", "D\tx.py", f"M\t{MEDIA}"):
         out, why = affected_queue.narrow(_repo(), _pr(), status)
         assert out is _pr() and why.startswith("whole selection"), status
     full = affected.Selection("full", [], escalations=["x: forced"])
-    assert affected_queue.narrow(_repo(), full, f"M\t{WORLD}")[0] is full
+    assert affected_queue.narrow(_repo(), full, "")[0] is full
 
 
-def test_an_unknown_tested_commit_or_the_legacy_switch_keeps_the_whole_selection(monkeypatch):
+def test_an_unknown_tested_commit_keeps_the_whole_selection():
     assert affected_queue.narrowed(_repo(), _pr(), "0" * 40) is _pr()
-    monkeypatch.setenv("ROSY_FULL_LEGACY", "1")
-    assert affected_queue.narrow(_repo(), _pr(), f"M\t{WORLD}")[0] is _pr()
 
 
 def test_ci_matrix_reads_the_queue_environment(monkeypatch):

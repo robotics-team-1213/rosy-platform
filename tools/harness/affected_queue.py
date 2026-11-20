@@ -2,8 +2,8 @@
 
 A pull_request run tests the merge of the PR head into the base of that moment and, when green, leaves
 that merge commit in a notice on its ``ci-result`` check. The queue's commit differs from it only by what
-entered the base since. A selected test those changes cannot reach has the inputs it passed with, so the
-queue run leaves it out. Whatever this module cannot show keeps the whole selection.
+entered the base since. When nothing did, the queue's tree is the tree that run passed, and the queue run
+repeats the guard set alone. Any difference, or any doubt, keeps the whole selection.
 """
 from __future__ import annotations
 
@@ -15,14 +15,14 @@ import urllib.request
 from pathlib import Path
 
 from affected_pack import SelectionError
-from affected_repo import _git, _under
+from affected_repo import _git
 
 ENV = "ROSY_QUEUE_TESTED"  # the commit the pull_request run tested; ci.yml sets it on merge_group
 NOTICE = "rosy-tested-commit"  # title of the notice ci.yml's ci-result leaves on a green pull_request run
 
 
 def narrowed(repo, sel, tested: str | None = None):
-    """`sel` for the queue's commit, without the tests untouched since `tested`; `sel` itself when unset."""
+    """`sel` for the queue's commit, cut to the guard set when its tree is `tested`'s; `sel` itself when unset."""
     tested = os.environ.get(ENV, "") if tested is None else tested
     if not tested:
         return sel
@@ -35,37 +35,23 @@ def narrowed(repo, sel, tested: str | None = None):
 
 
 def narrow(repo, sel, status: str):
-    """(selection, reason) for `git diff --name-status --no-renames <tested> HEAD` output."""
-    import affected_narrow
-    import affected_tests as at  # here, not at the top: affected_tests imports affected_ci, which imports this
-    import safety_review
-    rows = [line.split("\t", 1) for line in status.splitlines() if "\t" in line]
-    delta = [path for _, path in rows]
-    if sel.mode != "affected" or sel.escalations or affected_narrow.legacy():
-        return sel, "whole selection: the pull request's own selection is the full tier"
-    if any(kind.startswith("D") for kind, _ in rows):
-        return sel, "whole selection: a file was removed since the tested commit"
+    """(selection, reason) for `git diff --name-status --no-renames <tested> HEAD` output.
 
-    def plain(path: str) -> bool:
-        # Only changes the selector maps on its strongest evidence. A FULL trigger that selects "known readers"
-        # (contracts/foundation leaves `narrowed` empty), config, data and web assets are read at run time by
-        # tests no import names, so they keep the whole selection.
-        if any(at._match(path, pattern) for pattern, _ in at.FULL_TRIGGERS) or safety_review.is_safety(
-                path, repo.safety_roots, repo.safety_modules):
-            return False
-        return bool(at.TEST_FILE.search(path)) or path.endswith(".md") or (
-            path.endswith(".py") and repo.module_for(path) is not None)
-    other = next((path for path in delta if not plain(path)), None)
-    if other:
-        return sel, f"whole selection: {other} changed since the tested commit (not a test, Markdown or module Python file)"
-    since = at.select(repo, delta)
-    if since.mode != "affected" or since.escalations or since.narrowed or since.unmapped:
-        return sel, "whole selection: the changes since the tested commit are outside the plain affected tier"
-    keep = sorted(p for p in sel.reasons if any(_under(p, q) or _under(q, p) for q in since.reasons))
+    Only an empty difference narrows: the queue's tree is then the tree the pull_request run passed, and the
+    guard set alone runs again. Narrowing on what the changed files reach was reviewed and dropped on
+    2026-11-21: tests reach other modules by running scripts, read ADRs by glob and import fixtures from
+    other test files, none of which the selector sees (D-1059)."""
+    import affected_tests as at  # here, not at the top: affected_tests imports affected_ci, which imports this
+    rows = [line.split("\t", 1) for line in status.splitlines() if "\t" in line]
+    if sel.mode != "affected" or sel.escalations:
+        return sel, "whole selection: the pull request's own selection is the full tier"
+    if rows:
+        return sel, f"whole selection: {len(rows)} file(s) changed since the tested commit ({rows[0][1]}, ...)"
+    guards = at.select(repo, []).reasons
+    keep = sorted(p for p in sel.reasons if p in guards)
     out = dataclasses.replace(sel, reasons={p: sel.reasons[p] for p in keep})
     out.invocations = out.local_invocations = at.pack(repo, keep)
-    return out, (f"{len(keep)} of {len(sel.reasons)} selected paths are reached by the "
-                 f"{len(delta)} file(s) changed since the tested commit")
+    return out, f"same tree as the tested commit: the guard set alone, {len(keep)} of {len(sel.reasons)} selected paths"
 
 
 def tested_commit(api: str, repository: str, head: str, token: str, get=None) -> str:
