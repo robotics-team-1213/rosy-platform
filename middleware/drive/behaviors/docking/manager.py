@@ -8,6 +8,7 @@ designs: 2026-09-02-docking-station and 2026-09-23-lane-network-parking.
 from __future__ import annotations
 
 import threading
+import uuid
 import time
 from typing import Any, Callable, Optional
 from uuid import UUID
@@ -86,6 +87,7 @@ class DockingManager(DockingPhasesMixin):
         # cancel()/abort() 을 부른다.
         self._lock = threading.RLock()
         self.native = NativeReceipts()
+        self._db.frame_key = lambda: self._map_id_provider() if self._map_id_provider is not None else None
         self._execution_binding = None
 
         self.executor: Optional[DockingExecutor] = None
@@ -112,6 +114,11 @@ class DockingManager(DockingPhasesMixin):
         self._retries, self._reseats = 0, 0
         self._next_phase_after_backoff: Optional[DockPhase] = None
         self._error: Optional[str] = None
+        self._last_event: Optional[str] = None
+        self._uncharged_v0: Optional[float] = None       # pack voltage when DOCKED was declared without charge evidence
+        self._uncharged_warned = False
+        self._charge_unconfirmed = False                 # DOCKED without charge evidence (stays True when the voltage is unreadable)
+        self._uncharged_since: Optional[float] = None
         self._manual_active = False
         self._return_pending = False
 
@@ -189,6 +196,8 @@ class DockingManager(DockingPhasesMixin):
                 phase=self._phase.value if self._phase else None,
                 retries=self._retries,
                 error=self._error,
+                charge_unconfirmed=self._charge_unconfirmed and self._state is DockState.DOCKED,
+                last_event=self._last_event,
             )
 
     def capture_native_operation(self, run_id: UUID | None = None):
@@ -228,6 +237,11 @@ class DockingManager(DockingPhasesMixin):
         dock, dock_type = dock_target(
             self._db, self._safety, self._state, dock_id, supported=self._capability_provider,
             line_active=self._line_follow_active, localized=self.localization_ok, map_id=self._map_id_provider)
+        epoch, now_key = dock.metadata.get("map_epoch"), self._db.frame_key()
+        if dock_type.approach == "line" and epoch is not None and now_key is not None and epoch != str(now_key):
+            raise DockError("MAP_FRAME_CHANGED",
+                            f"dock '{dock.id}' was taught in map frame {epoch}, the robot is in {now_key} now (the SLAM map restarted: its origin is the "
+                            "robot's start pose), so the dock's map pose is stale; teach or register the dock again")
         self.motion_admission('dock', dock, dock_type, correlation_id)
         try:
             self.native.expect(expected_boot_id, expected_owner_generation)
@@ -244,6 +258,11 @@ class DockingManager(DockingPhasesMixin):
         self._retries = 0
         self._reseats = 0
         self._error = None
+        self._last_event = None
+        self._uncharged_v0, self._uncharged_warned, self._uncharged_since = None, False, None
+        self._charge_unconfirmed = False
+        if dock is not None and getattr(self, "_seated_dock_id", None) != dock.id:
+            self._seated_dock_id = None                  # moved to another bay: no prior
         self._charging.reset()
         self._agent = None  # 앞선 계측 도킹의 잔존 에이전트가 후진 확인을 가리지 않게
         self._state = DockState.DOCKING
@@ -274,6 +293,7 @@ class DockingManager(DockingPhasesMixin):
         except ValueError as exc:
             raise DockError(str(exc), str(exc)) from exc
         self._execution('ready')
+        self._seated_dock_id = None                      # leaving the bay: the next dock has no seated prior
         self._take_mode()
         operation = self._native_mutate(self.native.admit, "undock", correlation_id)
         if receipt_sink is not None:
@@ -364,6 +384,17 @@ class DockingManager(DockingPhasesMixin):
     def bay_scan_request(self) -> Optional[tuple]:
         """LiDAR 콜백에서 부른다(락 없음): 칸 줄 판정이 이 칸의 기준 스캔을 기다리면 그 스캔(한 번)."""
         return self._bay_phases.scan_request() if self.active and self._bay_phases.active() else None
+
+    def bay_seat_gap_request(self) -> Optional[tuple]:
+        """LiDAR 콜백에서 부른다(락 없음): 이 칸 기준 스캔의 뒤 여유를 한 번 재 달라는 요청 (칸 id, 스캔)."""
+        return self._bay_phases.seat_gap_request() if self.active and self._bay_phases.active() else None
+
+    def note_bay_seat_gap(self, dock_id, gap) -> None:
+        self._bay_phases.note_seat_gap(dock_id, gap)
+
+    def note_bay_scan_sample(self, sample, lag_s: float = 0.0) -> None:
+        """LiDAR 콜백에서 매 스캔 부른다(락 없음): 제자리 회전 감시가 스캔끼리 맞추는 데 쓰는 최신 표본."""
+        self._bay_phases.note_sample(sample, lag_s)
 
     def note_bay_scan_match(self, match, at=None, error=None, request_id=None) -> None:
         """기준 스캔과 맞춘 칸 자세(BayScanPose, 못 맞추면 None). 락 없음 — 한 번의 대입."""

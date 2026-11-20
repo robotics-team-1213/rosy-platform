@@ -18,6 +18,14 @@ def reverse_twist(cfg: Any, lateral: float, heading: float) -> float:
     return max(-cfg.max_angular, min(cfg.max_angular, -cfg.bay_gain_heading * (heading - target)))
 
 
+def forward_twist(cfg: Any, lateral: float, heading: float) -> float:
+    """Forward (reseat) angular rate: the mirror of reverse_twist. Driving forward a ccw heading moves the body toward +y = -lateral, so a positive lateral
+    wants a positive (ccw) target heading; the target is capped like the reverse one."""
+    cap = cfg.bay_target_heading_max_rad
+    target = max(-cap, min(cap, cfg.bay_gain_lateral / cfg.bay_gain_heading * lateral))
+    return max(-cfg.max_angular, min(cfg.max_angular, -cfg.bay_gain_heading * (heading - target)))
+
+
 def entry_ok(cfg: Any, lateral: float, heading: float) -> bool:
     """ALIGNING 에 들어가도 되는 오차인가(평평한 창). 횡 7 cm·방위 15° 안은 시뮬에서 접촉 0, 밖은 후진하지 않고
     스테이징부터 다시 한다. 맵 횡(통로선만 보일 때)은 수 cm 오차라 창을 4 cm 로 좁히면 맵 오차에 좌우된다."""
@@ -56,6 +64,82 @@ class BayGuardsMixin:
         self._obs_age = 0.0
         self._omega = 0.0             # 마지막 명령 각속도
         self._seen: dict[str, int] = {}         # 사유별 가드 실패 횟수(첫 시도에서만 비운다)
+        self._gap_hist: list = []     # ALIGNING: (scan stamp, LiDAR rear-band gap) — is the body really going back?
+        self._seat_gap: Optional[tuple] = None  # (dock id, rear-band gap of the stored seated reference scan)
+        self._seat_gap_asked: Optional[str] = None
+        self._bo_gap0: Optional[float] = None   # back-off: the LiDAR rear gap when it began
+
+    def _backoff_stuck(self, now: float, travelled: float) -> bool:
+        """Back-off: the wheels have travelled but the LiDAR rear gap did not grow with them: the body is held or pivoting."""
+        cfg, body = self._h._cfg, self._body_fresh(now)
+        gap = body[2] if body is not None else None
+        if self._bo_gap0 is None:
+            if gap is not None and travelled < 0.01:
+                self._bo_gap0 = gap
+            elif travelled >= cfg.bay_backoff_check_m and self._has_reference():
+                # a dock with a reference scan backs out only with the LiDAR watching: no start gap by 2 cm of travel = stop
+                self._stop()
+                self._h._fail("bay back-off: no LiDAR rear gap at its start (wheels %.2f m): not driving out blind" % travelled)
+                return True
+            return False
+        if gap is None or travelled < cfg.bay_backoff_check_m:
+            return False
+        grew = gap - self._bo_gap0
+        if (cfg.bay_backoff_moving_ratio * travelled - cfg.bay_backoff_lower_slack_m <= grew
+                <= cfg.bay_backoff_growth_max_ratio * travelled + cfg.bay_backoff_growth_slack_m):
+            return False
+        self._stop()
+        self._h._fail("bay back-off: the body is not following the wheels (wheels %.2f m, LiDAR rear gap %+.2f m): held or turning in the rails"
+                      % (travelled, grew))
+        return True
+
+    def _has_reference(self) -> bool:
+        dock = self._h._dock
+        return dock is not None and isinstance(getattr(dock, "metadata", {}).get("reference_scan"), dict)
+
+    def seat_gap_request(self) -> Optional[tuple]:
+        """CORE 가 LiDAR 콜백에서 묻는다(락 없음): 이 칸의 기준 스캔이 있고 뒤 여유를 아직 안 쟀으면 (칸 id, 스캔), 한 번."""
+        dock = self._h._dock
+        ref = getattr(dock, "metadata", {}).get("reference_scan") if dock is not None else None
+        if not isinstance(ref, dict) or self._seat_gap_asked == dock.id:
+            return None
+        self._seat_gap_asked = dock.id
+        return dock.id, ref
+
+    def note_seat_gap(self, dock_id: str, gap: Optional[float]) -> None:
+        self._seat_gap = (dock_id, float(gap)) if gap is not None else None
+
+    def _note_rear_gap(self, now: float) -> None:
+        body = self._body_fresh(now)
+        if body is not None and body[2] is not None and (not self._gap_hist or self._gap_hist[-1][0] != body[3]):
+            self._gap_hist = [s for s in self._gap_hist if body[3] - s[0] <= 2.5] + [(body[3], float(body[2]))]
+
+    def _lidar_moving(self, now: float) -> bool:
+        """The LiDAR rear gap shrank by bay_gap_moving_m over the last 0.2-0.35 s AND the newest scan is fresh: the body is
+        going back whatever the line's shape or the wheel odometry say. Cutting the scan feed ends this at once."""
+        cfg, hist = self._h._cfg, self._gap_hist
+        if not hist or now - hist[-1][0] > cfg.bay_scan_fresh_s:
+            return False
+        old = next((s for s in hist if hist[-1][0] - s[0] <= 0.35), None)
+        return old is not None and hist[-1][0] - old[0] >= 0.2 and old[1] - hist[-1][1] >= cfg.bay_gap_moving_m
+
+    def _lidar_stalled(self, now: float) -> bool:
+        """In the rails (LiDAR steering): the rear gap changed by less than bay_lidar_stall_m over the last bay_lidar_stall_s while the robot
+        reverses and the scan is fresh: the body is held (wheels turning). The slip rule is off there, this is its LiDAR form."""
+        cfg, hist = self._h._cfg, self._gap_hist
+        if not hist or now - hist[-1][0] > cfg.bay_scan_fresh_s:
+            return False
+        old = [s for s in hist if hist[-1][0] - s[0] <= cfg.bay_lidar_stall_s + 0.5]
+        if not old or hist[-1][0] - old[0][0] < cfg.bay_lidar_stall_s:
+            return False
+        return abs(old[0][1] - hist[-1][1]) < cfg.bay_lidar_stall_m
+
+    def _lidar_seated(self, now: float) -> bool:
+        """A fresh rear gap at or inside the stored seated reference's: the reverse is at the stop face."""
+        body, seat = self._body_fresh(now), self._seat_gap
+        dock = self._h._dock
+        return (body is not None and body[2] is not None and seat is not None and dock is not None
+                and seat[0] == dock.id and body[2] <= seat[1] + self._h._cfg.bay_seat_gap_tol_m)
 
     def _blind_lateral(self, dt: float, speed: float) -> bool:
         """횡 맹목 예산: 실측 횡이 없는 프레임으로만 후진한 거리·시간. 예산 = (진입 along - 칸 선이 보이는 거리) + 여유로,

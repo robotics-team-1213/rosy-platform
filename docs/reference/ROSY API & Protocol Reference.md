@@ -3036,6 +3036,8 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `motion.rotate_to` | info | 로봇 | `{delta_deg, yaw_odom, tol_deg, max_rate_dps, timeout_s, lease_owner, operator_name, by}` — D-603 회전 요청을 받았다 (v1.194) |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
+| `docking.person_call` | warning | 로봇 | `{dock_id, reason}` — DOCKED를 충전 증거 없이 선언했고 배터리가 `bay_person_call_percent`(30 %) 미만이거나 필터 전압이 내려감: 사람이 봐야 한다. 같은 시점에 `DockingStatus.charge_unconfirmed`(additive, bool)가 참이다. 충전 중(CHARGING)이 아님을 Fleet이 따로 표시하는 데 쓴다 |
+| `docking.uncharged_voltage_drop` | warning | 로봇 | `{dock_id, from_v, to_v}` — DOCKED를 충전 증거 없이(만충 배터리 + LiDAR 안착 확인, `status.last_event`에 사유) 선언한 뒤 필터 전압(`filtered_voltage`)이 도킹 때보다 0.10 V 넘게 5 s 이상 내려가 있음. 한 번만 낸다. 충전 증거가 나중에 오면 감시를 끈다 |
 | `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id, source}` — 확인된 충전 상태. `source: instrumented`(2소스, D-28) 또는 `voltage_only`(후진 도크 D-350 Phase 1 — 배터리 인터록에는 반영되지 않는다) |
 | `docking.full` | info | 로봇 | `{dock_id, source, voltage_v}` — 만춫 감지, 1회 방출. `source: instrumented` 또는 `voltage_only` (D-350) |
 | `docking.undock_started` | info | 로봇 | `{dock_id}` |
