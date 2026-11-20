@@ -38,17 +38,28 @@ def narrow(repo, sel, status: str):
     """(selection, reason) for `git diff --name-status --no-renames <tested> HEAD` output."""
     import affected_narrow
     import affected_tests as at  # here, not at the top: affected_tests imports affected_ci, which imports this
+    import safety_review
     rows = [line.split("\t", 1) for line in status.splitlines() if "\t" in line]
     delta = [path for _, path in rows]
-    if sel.mode != "affected" or sel.escalations:
+    if sel.mode != "affected" or sel.escalations or affected_narrow.legacy():
         return sel, "whole selection: the pull request's own selection is the full tier"
     if any(kind.startswith("D") for kind, _ in rows):
         return sel, "whole selection: a file was removed since the tested commit"
-    if affected_narrow.HARNESS_YAML in delta:
-        return sel, f"whole selection: {affected_narrow.HARNESS_YAML} changed since the tested commit"
+
+    def plain(path: str) -> bool:
+        # Only changes the selector maps on its strongest evidence. A FULL trigger that selects "known readers"
+        # (contracts/foundation leaves `narrowed` empty), config, data and web assets are read at run time by
+        # tests no import names, so they keep the whole selection.
+        if any(at._match(path, pattern) for pattern, _ in at.FULL_TRIGGERS) or safety_review.is_safety(
+                path, repo.safety_roots, repo.safety_modules):
+            return False
+        return bool(at.TEST_FILE.search(path)) or path.endswith(".md") or (
+            path.endswith(".py") and repo.module_for(path) is not None)
+    other = next((path for path in delta if not plain(path)), None)
+    if other:
+        return sel, f"whole selection: {other} changed since the tested commit (not a test, Markdown or module Python file)"
     since = at.select(repo, delta)
     if since.mode != "affected" or since.escalations or since.narrowed or since.unmapped:
-        # A narrowed tier names only the known readers of a change (D-436 2026-11-09): not enough to rule a test out.
         return sel, "whole selection: the changes since the tested commit are outside the plain affected tier"
     keep = sorted(p for p in sel.reasons if any(_under(p, q) or _under(q, p) for q in since.reasons))
     out = dataclasses.replace(sel, reasons={p: sel.reasons[p] for p in keep})
@@ -88,6 +99,7 @@ def main() -> int:
         _git(root, "fetch", "--quiet", "origin", sha)
         if _git(root, "rev-parse", f"{sha}^2").strip() != head:
             raise SelectionError(f"{sha} is not a merge of {head}")
+        _git(root, "merge-base", "--is-ancestor", f"{sha}^1", "HEAD^1")  # the base it was tested on is in the queue's base
     except Exception as exc:  # noqa: BLE001 - any doubt keeps the whole selection, never fails the run
         print(f"[queue] whole selection: {exc}", file=sys.stderr)
         return 0

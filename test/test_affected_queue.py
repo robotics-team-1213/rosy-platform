@@ -9,7 +9,7 @@ import affected_queue  # noqa: E402
 import affected_tests as affected  # noqa: E402
 
 MEDIA = "middleware/media/src/rosy_media_edge/camera_tap.py"
-WORLD = "operations/world/src/rosy/world/api/observation.py"
+WORLD = "applications/fleet/dev/connected.py"  # Python inside a registered module that no media test reaches
 
 
 @functools.lru_cache(maxsize=None)
@@ -34,13 +34,14 @@ def test_without_the_queue_environment_the_selection_is_untouched(monkeypatch):
 
 
 def test_changes_that_cannot_reach_a_selected_test_leave_it_out_and_keep_the_guards():
-    for status in ("", f"M\t{WORLD}", "M\tdocs/logs.md"):
+    before = (dict(_pr().reasons), _paths(_pr()))
+    for status in ("", f"M\t{WORLD}", "M\tdocs/logs.md", f"A\tapplications/fleet/test/test_new.py\nM\t{WORLD}"):
         out, why = affected_queue.narrow(_repo(), _pr(), status)
         assert not any(p.startswith("middleware/media/test") for p in out.reasons), why
         assert set(out.reasons) < set(_pr().reasons)
         assert {g for g in affected.GUARD_SET if g in _pr().reasons} <= set(out.reasons), "guards always run"
-        assert _paths(out) == sorted(out.reasons) and out.changed == _pr().changed  # build-smoke still reads the PR's files
-    assert _paths(_pr()) == sorted(_pr().reasons), "the pull request's own selection is not changed in place"
+        assert set(_paths(out)) < set(before[1]) and out.changed == _pr().changed  # build-smoke still reads the PR's files
+    assert (dict(_pr().reasons), _paths(_pr())) == before, "the pull request's own selection is not changed in place"
 
 
 def test_a_change_under_the_same_tests_keeps_them():
@@ -54,7 +55,11 @@ def test_a_change_under_the_same_tests_keeps_them():
 def test_anything_unproven_keeps_the_whole_selection():
     for status in ("D\tmiddleware/media/src/rosy_media_edge/gone.py",   # a removed file
                    "M\ttools/harness/harness.yaml",                      # the registry itself
-                   "M\ttools/land.py",                                   # a narrowed tier names known readers only
+                   "M\ttools/land.py",                                   # a gate tool: narrowed tier
+                   # 2026-11-21 review: a foundation contract selects its known readers and leaves `narrowed` empty
+                   "M\tcontracts/foundation/core_common/domain/command_mapping.py",
+                   "M\tshared/web/surfaces.yaml", "M\toperations/fleet/web/console.js",  # read at run time, no import names them
+                   "M\toperations/world/src/rosy/world/api/observation.py",  # Python no registered module owns
                    f"M\t{WORLD}\nM\ttools/land.py"):
         out, why = affected_queue.narrow(_repo(), _pr(), status)
         assert out is _pr() and why.startswith("whole selection"), status
@@ -62,8 +67,10 @@ def test_anything_unproven_keeps_the_whole_selection():
     assert affected_queue.narrow(_repo(), full, f"M\t{WORLD}")[0] is full
 
 
-def test_an_unknown_tested_commit_keeps_the_whole_selection():
+def test_an_unknown_tested_commit_or_the_legacy_switch_keeps_the_whole_selection(monkeypatch):
     assert affected_queue.narrowed(_repo(), _pr(), "0" * 40) is _pr()
+    monkeypatch.setenv("ROSY_FULL_LEGACY", "1")
+    assert affected_queue.narrow(_repo(), _pr(), f"M\t{WORLD}")[0] is _pr()
 
 
 def test_ci_matrix_reads_the_queue_environment(monkeypatch):
