@@ -2,6 +2,7 @@
 """Automatic OpenCV full-track calibration and sub-pixel map sync for ceiling_north (world_261026)."""
 from __future__ import annotations
 
+import inspect
 import json
 import math
 import os
@@ -120,6 +121,35 @@ def mean_places(series_places: list[list[dict]]) -> list[dict]:
         else:
             out.append(dict(p))
     return out
+
+
+def merge_pinned(current: list[dict], traced: list[dict]) -> list[dict]:
+    """Traced places or edges for the map, except one a person pinned keeps every field it has now and
+    one the trace does not know stays (2026-11-20: hand-moved S3 and its inner lanes went back to the paint)."""
+    pinned = {p["id"]: p for p in current if p.get("pinned")}
+    traced_ids = {p["id"] for p in traced}
+    return [pinned.get(p["id"], p) for p in traced] + [p for p in current if p["id"] not in traced_ids]
+
+
+def snap_edge_ends(edges: list[dict], places: list[dict]) -> list[dict]:
+    """Edges with each end on its merged place (Fleet refuses an end over 5 cm off); a no-op for an edge that
+    already ends there, so a pinned edge between kept places stays exact.
+    shortcut: only the end point moves, inner points stay; redraw the edge by hand if it kinks."""
+    at = {p["id"]: [p["x"], p["y"]] for p in places}
+    out = []
+    for edge in edges:
+        line = [list(point) for point in edge["polyline"]]
+        line[0] = at.get(edge["from"], line[0])
+        line[-1] = at.get(edge["to"], line[-1])
+        out.append({**edge, "polyline": line})
+    return out
+
+
+def unpinned_place_diff_m(current: list[dict], traced: list[dict]) -> float:
+    """Largest move of a traced place from the map; pinned places never call for a map sync."""
+    old = {p["id"]: (p["x"], p["y"]) for p in current if not p.get("pinned")}
+    return max((math.hypot(p["x"] - old[p["id"]][0], p["y"] - old[p["id"]][1]) for p in traced if p["id"] in old),
+               default=0.0)
 
 
 def decide(
@@ -301,7 +331,9 @@ print(json.dumps({{"cur_cal": cur_cal, "cur_map": cur_map}}))
 
 def apply_fleet_update(token: str, solved: dict, *, needs_cal: bool, needs_map: bool) -> dict:
     apply_code = f"""
-import json, httpx
+import json, httpx, math
+{inspect.getsource(merge_pinned)}
+{inspect.getsource(snap_edge_ends)}
 
 token = {repr(token)}
 solved = {repr(solved)}
@@ -316,8 +348,8 @@ with httpx.Client(verify='/run/secrets/site_ca', timeout=15.0) as client:
         if act_r.status_code == 200:
             map_doc = act_r.json()["map"]
             map_doc.pop("drawing", None)
-            map_doc["places"] = solved["places"]
-            map_doc["edges"] = solved["edges"]
+            map_doc["places"] = merge_pinned(map_doc.get("places", []), solved["places"])
+            map_doc["edges"] = snap_edge_ends(merge_pinned(map_doc.get("edges", []), solved["edges"]), map_doc["places"])
             draft_cur = client.get('https://fleet:8090/api/fleet/site-map/draft', headers=headers).json()
             exp_rev = draft_cur.get("revision")
             put_body = {{"map": map_doc}}
@@ -425,11 +457,7 @@ def main(argv: list[str] | None = None) -> int:
     avg_places = mean_places([h["places"] for h in history])
     place_diff_m = 0.0
     if cur_map and isinstance(cur_map.get("map"), dict):
-        old_places = {p["id"]: (p["x"], p["y"]) for p in cur_map["map"].get("places", [])}
-        for np_item in avg_places:
-            if np_item["id"] in old_places:
-                ox, oy = old_places[np_item["id"]]
-                place_diff_m = max(place_diff_m, math.hypot(np_item["x"] - ox, np_item["y"] - oy))
+        place_diff_m = unpinned_place_diff_m(cur_map["map"].get("places", []), avg_places)
     else:
         place_diff_m = 999.0
 

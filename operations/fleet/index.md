@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · fix(site-map): 자동 트랙 보정이 고정 장소·차로를 지킴
 - 2026-11-20 · uncommitted · fix(fleet): CORE cancel result nav.failed CANCELED gets its own FAILED reason
 - 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 8차
 - 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 7차
 - 2026-11-20 · uncommitted · fix(pipeline): D-1057 검토 반영 — owner 등록 주체, 실제 정차 지점, bed 영구 무효, 저장소 상한
-- 2026-11-20 · uncommitted · feat(pipeline): D-1057 셀 작업 허가 증거 공급자와 bed·owner 증거 경로
