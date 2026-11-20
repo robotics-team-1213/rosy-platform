@@ -12,6 +12,7 @@ where pthread_sigmask is missing (Windows test hosts).
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import signal
 import sys
@@ -45,9 +46,22 @@ def route() -> list:
     return others
 
 
-def unblock_main() -> None:
+def unblock_main() -> list:
+    """Let the main thread alone take ROUTED; returns unrouted_threads() at that moment (should be [])."""
     if _MASK is not None:
         _MASK(signal.SIG_UNBLOCK, ROUTED)
+    return unrouted_threads()
+
+
+BLAS_THREADS = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")
+
+
+def quiet_blas(environ=None) -> None:
+    """Before numpy/torch load: one BLAS/OpenMP thread unless the caller set one. The runner's math per tick is a few
+    6-element vectors and small fits; a BLAS pool only adds native threads that might take a signal."""
+    environ = os.environ if environ is None else environ
+    for name in BLAS_THREADS:
+        environ.setdefault(name, "1")
 
 
 def unrouted_threads() -> list:

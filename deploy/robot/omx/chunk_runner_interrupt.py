@@ -367,7 +367,9 @@ def gated_close(runner, signals: list, hold_file, close, sleep=time.sleep) -> No
     while True:
         previous = mask(signal.SIG_BLOCK, BLOCKED_DURING_CLOSE) if mask else None
         try:
-            if gate_allows(holder, signals):
+            # verdict, then the same check once more right before the torque OFF: a handler can run between two
+            # bytecodes of this thread when a thread outside the routing (main_thread_signals) took the signal
+            if gate_allows(holder, signals) and gate_allows(holder, signals):
                 close()
                 return
         finally:

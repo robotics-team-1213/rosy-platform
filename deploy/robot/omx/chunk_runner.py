@@ -48,6 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, moto
 if __name__ == "__main__":  # before any import that may start threads: interrupts reach the main thread only
     import main_thread_signals
 
+    main_thread_signals.quiet_blas()  # one BLAS thread: the runner's per-tick math is a few 6-vectors
     main_thread_signals.route()
 _ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter")
 if _ADAPTER_SRC not in sys.path:
@@ -182,7 +183,6 @@ def main(argv=None):
     parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
     parser.add_argument("--load-model", type=Path, help="load-model.json (load_model.py): refuse a library whose holds are predicted risky")
     args = parser.parse_args(argv)
-    __import__("main_thread_signals").unblock_main()  # only the main thread takes SIGINT/SIGTERM/SIGHUP/SIGUSR2
     signals: list = []  # recorded, not raised: an interrupt folds or holds (chunk_runner_interrupt), never drops the arm
     __import__("chunk_runner_interrupt").install(signals)
     library = load_library(args.library)
@@ -247,8 +247,12 @@ def main(argv=None):
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
                         operating_context=context, params=params, plan_check=check)
         runner.signals, runner.hold_file = signals, args.io / "hold.json"  # hold.json: record_session reads it
-        if unrouted := __import__("main_thread_signals").unrouted_threads():  # a native thread outside Thread.start
-            print(json.dumps({"signal_routing": "threads accept SIGTERM", "tids": unrouted}), file=sys.stderr, flush=True)
+        # heavy imports (lerobot, numpy, torch), the robot and the bus are up: only now may the main thread take signals
+        # (one sent during start-up was pending and is recorded now, the handlers being installed above)
+        runner.signal_routing = __import__("main_thread_signals").unblock_main()
+        if runner.signal_routing:  # another thread can take them: gated_close's re-check right before close_device
+            print(json.dumps({"signal_routing": "threads accept SIGTERM", "tids": runner.signal_routing}),
+                  file=sys.stderr, flush=True)
         trace_path = Path(path).expanduser().resolve() if (path := os.environ.get("ROSY_CHUNK_TRACE")) else None
         trace_file = trace_path.open("a") if trace_path else None  # buffered: no write call per tick
         if trace_file:
