@@ -908,6 +908,7 @@ def test_console_map_actions_require_hardware_runtime():
             localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}});
           callbacks['/api/v1/system/capabilities']({navigation:{goal_navigation:true}});
           callbacks['/api/v1/host/commissioning']({runtime_mode:'motor'});
+          callbacks['/api/v1/navigation/state']({readiness:{ready:true}});
           window.__callbacks = callbacks;
         }""")
         # Map fetch completes asynchronously; runtime authority is checked with a usable map.
@@ -1323,6 +1324,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
           polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}});
           polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'});
           polls['/api/v1/robot/state'].onData({pose:{x:.5,y:.5,yaw:0}});
+          polls['/api/v1/navigation/state'].onData({readiness:{ready:true}});
         }""")
         panel = page.locator("main").last
         page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('empty') || document.querySelector('#map-status')?.textContent.length > 0")
@@ -1352,6 +1354,13 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({mode:'IDLE',pose:{x:.5,y:.5,yaw:0},localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}})")
         page.locator('[data-map-click="goal"]').click()
         page.locator("canvas").press("Escape")
+        page.locator("canvas").press("Enter")
+        confirm = page.locator("dialog.ui-confirm ui-button[kind=irreversible]")
+        confirm.wait_for()
+        page.evaluate("window.__polls['/api/v1/navigation/state'].onData({readiness:{ready:false}})")
+        confirm.click()
+        assert page.evaluate("window.__calls.filter(call=>call.method==='POST')") == []
+        page.evaluate("window.__polls['/api/v1/navigation/state'].onData({readiness:{ready:true}})")
         page.locator("canvas").press("Enter")
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:false}})")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
