@@ -76,7 +76,7 @@ const OMX_CELL_DEFS = [
 ];
 
 // Pinky stations name no robot: the occupant comes from the server (charge-bays), never from this table.
-export const STATION_INSPECT_LINKS = Object.freeze({
+const STATION_INSPECT_LINKS = Object.freeze({
   S2: { targetId: "arm_a", camId: "arm_a_wrist", label: "S2 상차 · arm_a" },
   S3: { targetId: "arm_s", camId: "arm_s_wrist", label: "S3 하역 셔틀 · arm_s" },
   S5: { targetId: "arm_b", camId: "arm_b_wrist", label: "S5 적재·반출 · arm_b" },
