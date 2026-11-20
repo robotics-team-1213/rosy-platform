@@ -919,3 +919,17 @@ def test_a_note_younger_than_the_idle_hours_keeps_a_worktree_for_the_idle_hours_
     wt = add(main, "noted", owner=f"{ME}; at {int(LATER - 5 * HOUR)}")
     assert worktrees.prune(main, apply=True, now=LATER, idle_hours=6) == 0 and wt.is_dir()
     assert worktrees.prune(main, apply=True, now=LATER, idle_hours=4) == 1 and not wt.exists()
+
+
+def test_prune_treats_origin_main_ancestors_as_merged(main):
+    wt = add(main, "prmerged", commit=True)
+    sha = git(wt, "rev-parse", "HEAD")
+    git(main, "update-ref", "refs/remotes/origin/main", sha)
+    assert worktrees.prune(main, apply=True, now=LATER) == 1
+    assert not wt.exists() and "refs/heads/feat/prmerged" not in refs(main, "refs/heads")
+
+
+def test_newest_file_ignores_oserror(tmp_path, monkeypatch):
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(worktrees.rules.os.path, "getmtime", lambda _p: (_ for _ in ()).throw(OSError("gone")))
+    assert worktrees.rules.newest_file(tmp_path, lambda _r: False) == 0.0
