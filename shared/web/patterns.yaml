@@ -51,7 +51,7 @@ helpers:
   - {name: node, module: shared/web/control-dom.js, aliases: [nodeWithText], ceiling: 13}
   - {name: isOperator, module: applications/fleet/web/shared/authorization.js, aliases: [], ceiling: 0}
 direct:
-  - {what: reason 속성 직접 쓰기, pattern: '(?:set|remove)Attribute\(\s*["'']reason["'']', owners: [shared/web/ui.js, shared/web/cause-line.js, shared/web/choice-group.js], ceiling: 109}
+  - {what: reason 속성 직접 쓰기, pattern: '(?:set|remove)Attribute\(\s*["'']reason["'']', owners: [shared/web/ui.js, shared/web/cause-line.js, shared/web/choice-group.js], ceiling: 108}
   - {what: 운영자 역할 직접 비교, pattern: 'role\s*[!=]==?\s*["'']operator["'']', owners: [applications/fleet/web/shared/authorization.js], ceiling: 1}  # fleet-header.js 표시 색(권한 판정 아님)
   - {what: 권한 문구 직접 쓰기, pattern: '운영자 권한이 필요합니다', owners: [applications/fleet/web/shared/authorization.js], ceiling: 2}  # "이름 있는·기명 운영자 권한이…" 다른 문구 2
   - {what: 콘솔 토큰 저장 키, pattern: 'rosy-console-token', owners: [applications/fleet/web/shared/console-token.js], ceiling: 2}

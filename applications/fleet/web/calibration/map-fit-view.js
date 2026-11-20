@@ -9,6 +9,7 @@ import {
   retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable, STALE_FIT_TEXT, calibrationRequest,
   fitFromCalibration,
 } from "/console/assets/map-fit.js";
+import { setOffBy } from "/common/cause-line.js";
 import { warpImage } from "./field-view.js";
 import { drawStartPointMarks, picturePose } from "./start-point-layer.js";
 
@@ -313,8 +314,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     life.check();
     const generation = ++fitGeneration;
     pending = null; // 지난 제안이 실패한 새 맞춤 뒤에 남지 않게
-    detectButton.setAttribute("disabled", "");
-    detectButton.setAttribute("reason", "맞추는 중");
+    setOffBy(detectButton, "맞추는 중");
     state.textContent = "Vision에서 차선 페인트를 사이트 지도에 맞추는 중입니다…";
     state.dataset.tone = "neutral";
     guidance.hidden = true;
@@ -332,8 +332,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
       }
     } finally {
       if (life.current() && generation === fitGeneration) {
-        detectButton.removeAttribute("disabled");
-        detectButton.removeAttribute("reason");
+        setOffBy(detectButton, "");
       }
     }
     render();
