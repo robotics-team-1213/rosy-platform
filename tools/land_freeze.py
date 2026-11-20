@@ -120,8 +120,7 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     save(cwd, state)
-    if argv[:1] == ["set"]:
-        _sync_github_vars(cwd, state)
+    _sync_github_vars(cwd, state)  # every saved change, so ROSY_CUTOVER_ALLOW never goes stale
     print(f"[freeze] {path(cwd)}: phase {state['phase']}, {len(state.get('allow', []))} allowed")
     return 0
 

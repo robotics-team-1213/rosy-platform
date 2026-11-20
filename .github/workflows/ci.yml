@@ -497,6 +497,7 @@ jobs:
     timeout-minutes: 5
     steps:
       # merge_group.head_sha is the queue's synthetic merge commit, not the PR head; extract pr-N from gh-readonly-queue head_ref to read the PR head SHA.
+      # shortcut: checks only the PR named in head_ref (the group's last PR); a batched group's earlier PRs are not checked, upgrade by listing the queue entries if drain batching matters
       - name: Cutover drain gate (merge_group)
         if: github.event_name == 'merge_group' && vars.ROSY_CUTOVER_PHASE == 'drain'
         env:
