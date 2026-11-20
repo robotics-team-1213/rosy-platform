@@ -75,7 +75,7 @@ def test_a_weak_first_answer_with_the_robot_in_the_neighbour_bay_is_refused():
     def neighbour(kind, pose, now):
         return BayScanPose(x=pose.x, y=pose.y + 0.21, heading=pose.heading, inliers=0.9, margin=0.21, median_m=0.003)
     run(p, answer=neighbour, limit_s=60.0)
-    assert p.manager.state is not DockState.DOCKED and bp.bay_identity == "confirmed"
+    assert p.manager.state is not DockState.DOCKED and bp.bay_identity != "confirmed"      # no bay identity was established
 
 
 def test_charge_unconfirmed_is_its_own_flag_and_the_seated_prior_is_cleared_on_a_move():

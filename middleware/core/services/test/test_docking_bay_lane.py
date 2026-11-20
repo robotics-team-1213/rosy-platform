@@ -71,8 +71,53 @@ def test_the_reverse_stops_when_the_lidar_lateral_leaves_the_lane_inside_the_lin
     t = p.clock.now
     bp._lp = (0.20, 0.06, 0.0, t, 0.0)
     bp._lidar_steer(t)
-    assert p.manager.state is DockState.DOCK_FAILED and "bay left the lane" in p.manager._error, p.manager._error
-    assert "bay left the lane" in p.manager.status().last_event
+    # the footprint guard still stops the reverse; it now starts a lane reseat (bounded, watched) instead of ending the dock, and ends with a person call
+    assert p.manager.state is DockState.DOCKING and p.manager.phase is DockPhase.BACKOFF and bp._reseat_active and p.manager._retries == 1
+    assert "bay left the lane" in p.manager.status().last_event or "reseat 1/" in p.manager.status().last_event
+    assert p.world.command == (0.0, 0.0)
+
+
+def test_a_persistent_over_edge_pose_in_the_lane_ends_in_dock_failed_and_a_person_call():
+    # the reseats are bounded: when the footprint is over the lane edge on every try the dock stops where it stands, fails with the reason and calls a person
+    from test_docking_bay_reseat import _dock, run  # noqa: PLC0415
+    from core_features.docking.bay_scan_pose import BayScanPose  # noqa: PLC0415
+    p = _dock(charges=False)
+
+    def over_the_edge(kind, pose, now):
+        if kind == "align" and pose.x < 0.25:
+            return BayScanPose(x=pose.x, y=pose.y + 0.06, heading=pose.heading, inliers=0.95, margin=0.6, median_m=0.003)       # 60 mm off the lane centre, every time
+        return pose
+    run(p, answer=over_the_edge, limit_s=600.0)
+    assert p.manager.state is DockState.DOCK_FAILED, p.manager._error
+    assert any(k == "docking.person_call" for k, d in p.events), p.manager._error
+    assert p.world.command == (0.0, 0.0) and p.manager._retries <= p.manager._cfg.bay_reseat_tries
+
+
+def test_the_footprint_stop_with_the_reseat_tries_used_up_fails_and_calls_a_person():
+    p = a_bay()
+    with_reference(p)
+    p.manager.dock()
+    bp = p.manager._bay_phases
+    p.manager._cfg.bay_lidar_steer_along_m = 9.0
+    until = answer_kinds(zone=good(x=1.0), entry="true")
+    from test_docking_bay import DT, done  # noqa: PLC0415
+    for k in range(4000):
+        if k % 2 == 0:
+            p.detector.capture()
+            p.manager.note_body_scan(None, None, None, p.clock.now)
+        p.manager.tick()
+        until(p.manager)
+        if p.manager.phase is DockPhase.ALIGNING and bp._lp is not None:
+            break
+        p.world.step()
+        p.clock.now += DT
+    p.manager._retries = p.manager._cfg.bay_reseat_tries                  # every try was spent on the same over-edge pose
+    t = p.clock.now
+    bp._lp = (0.20, 0.06, 0.0, t, 0.0)
+    bp._lidar_steer(t)
+    assert p.manager.state is DockState.DOCK_FAILED and "bay left the lane" in p.manager._error and "tries used up" in p.manager._error, p.manager._error
+    assert any(k == "docking.person_call" for k, d in p.events) and p.world.command == (0.0, 0.0)
+
 
 def test_the_lane_footprint_sign_is_asymmetric_a_ccw_heading_swings_the_tray_to_the_right():
     # panel B R1: lateral = -y (left +y), heading ccw+ (spin test w>0 = LiDAR +). Real corner lateral = lateral - fx*sin(h) -+ hy*cos(h)

@@ -10,6 +10,7 @@ def test_docking_family_preserves_canonical_identity():
         "state": schemas.DockState.UNDOCKED, "dock_id": None,
         "phase": None, "retries": 0, "error": None,
         "charge_unconfirmed": False, "last_event": None,  # additive (v1.433)
+        "site_pose_verified": None, "site_pose_refusal": None,  # additive (site_pose_evidence)
     }
 
 

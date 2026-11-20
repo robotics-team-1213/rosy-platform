@@ -229,7 +229,7 @@ def bay_body_scan(services, sample, *, received_at: float) -> None:
         if seat is not None:
             # the stored seated scan through the same body filter and the same strip: its rear gap is the stop-face reference
             ref_view = body.scan_view(seat[1], forward_deg=config.lidar_forward_deg, self_mask=config.lidar_self_mask)
-            docking.note_bay_seat_gap(seat[0], rear_band_gap(ref_view.points, rear))
+            docking.note_bay_seat_gap(seat[0], rear_band_gap(ref_view.points, rear), ref_view.points)
         request = docking.bay_scan_request()
         if request is not None:
             _match_bay_scan(docking, body, config, view.points, request[1], request[0],

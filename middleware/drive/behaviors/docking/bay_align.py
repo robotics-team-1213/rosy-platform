@@ -140,7 +140,13 @@ class BayAlignMixin:
     def _try_heading_align(self, now: float, lateral: float, heading: float) -> bool:
         """진입창 방위 위반 때: 맞출 수 있으면 멈추고 맞춤을 시작한다. True = 맡았다."""
         if self._in_row or not heading_alignable(self._h._cfg, lateral, heading, self._align_n):
-            return False             # the tray corner's turning circle (0.29 m) exceeds the lane (0.21 m): no in-place turn inside the row, ever
+            return False
+        if self._pitin:
+            # pit-in: an in-place turn only at the turn point (x >= bay_turn_x_min_m) on a LiDAR x; unknown x = no turn
+            em = self._entry_match[0] if self._entry_match is not None else None
+            x = em.x if em is not None else (self._row_pose[0] if self._row_pose is not None else None)
+            if x is None or x < self._h._cfg.bay_turn_x_min_m:
+                return False             # the tray corner's turning circle (0.29 m) exceeds the lane (0.21 m): no in-place turn inside the row, ever
         pose = self._odometry()
         if pose is None:
             return False
