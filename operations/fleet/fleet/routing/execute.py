@@ -12,6 +12,7 @@ from typing import Optional
 from fleet.routing.cost import LEFT, RIGHT, STOP, UTURN, RoutingConfig, classify, turn_deg
 from fleet.routing.graph import Graph
 from fleet.routing.snap import PlanError
+from fleet.routing.stop_line import FALLBACK_FRONT_M
 from fleet.routing.trip import PlanRequest, plan_trip
 
 #: D-495 1: CORE turns at most this much at a junction.
@@ -181,7 +182,7 @@ def plan_again(active, start_pose, request: dict, caps: dict, blocked: frozenset
             via=tuple(v for v in request.get("via", ()) if v not in passed), arrive_yaw=request.get("arrive_yaw"),
             speed_cap=request.get("speed_cap"),
             blocked_edges=frozenset(blocked) | frozenset(request.get("blocked_edges") or ()),
-            extra_cost=request.get("extra_cost") or {}), config)
+            extra_cost=request.get("extra_cost") or {}, body_front_m=caps.get("body_front_m", FALLBACK_FRONT_M)), config)
     except PlanError as exc:
         return None, {"reason": "replan", "plan": None, "code": exc.code, "detail": exc.detail}
     body = plan_body(plan)

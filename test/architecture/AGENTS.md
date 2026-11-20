@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Repo-structure tests: where folders, packages, documents and imports are allowed to live. They read the source tree, `package.xml` files, `harness.yaml` and `surfaces.yaml`; they do not need ROS. Most use exception tables checked by set equality (P5), so a new violation fails and so does a stale entry. Update the table in the same commit that creates or removes the violation.
+Repo-structure tests: where folders, packages, documents and imports are allowed to live. They read the source tree, `package.xml` files, `harness.yaml` and `surfaces.yaml`; they do not need ROS. Most use exception tables checked by set equality (P5), so a new violation fails and so does a stale entry. Update the table in the same commit that creates or removes the violation. Known-list ratchets (lists that only shrink) use `test/ratchet_lists.py`: a new entry fails, a stale one warns.
 
 ## Key Files
 
@@ -48,6 +48,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
   - **Pure moves.** `python tools/harness/split_check.py <base> <head>` prints `AST identical, only imports/paths changed` (exit 0) or what differs: a definition, its order, a non-path string constant, an import to a module outside the moved set, or any changed non-`.py` file. A pure move gets a boundary review only (D-766 3). Compression (joining lines, dropping docstrings) is not a split.
 - Launch coupling is found only through literal package-name calls; dynamic imports need functional coverage. Packages are found under manifest `colcon_roots`: `learning`, `operations`, `middleware`, `contracts`, `integrations`, `shared`.
 - Prove a new guard by mutation: break the guarded thing, see red, restore, see green.
+- A commit that adds a ratchet (a `ratchet_lists` user or an `*only_shrink` test) outside this folder adds it to `tools/harness/affected_tests.py` `GUARD_SET` in the same commit; every file here is already in it. `test/test_harness_contracts.py` checks this.
 
 ### Testing Requirements
 

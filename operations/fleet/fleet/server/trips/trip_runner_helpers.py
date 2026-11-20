@@ -12,6 +12,7 @@ import httpx
 from fleet.hub.hub import HubError
 from fleet.routing.cost import STOP
 from fleet.routing.execute import lane_action
+from fleet.stop_front import body_front_m
 from fleet.server.trip_geometry import pose_view
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import convoy_refusal
@@ -30,6 +31,7 @@ async def _maybe(value):
 def _caps_view(caps) -> dict:
     return {
         "kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
+        "body_front_m": body_front_m(caps.kind),  # replans stop a "stop" place's body front on its line
         "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
         "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
         "line_follow_authority": getattr(caps, "line_follow_authority", False),  # D-760 3: shrink

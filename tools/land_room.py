@@ -10,6 +10,24 @@ import time
 import os
 from pathlib import Path
 
+def note_stop(row: dict, why: str) -> None:
+    """Before ending a landing on purpose (taskkill /F: exit 1, nothing logged): its supervisor reports `why`."""
+    if wt := row.get("worktree"):
+        tree = Path(wt)
+        (tree.parent / (tree.name + ".killed")).write_text(why + "\n", encoding="utf-8")
+
+
+def stopped_text(tree: Path, log: Path, code: int) -> str:
+    """The .stopped note; a note_stop reason (ended on purpose) goes into it and, appended, into the .log."""
+    note = tree.parent / (tree.name + ".killed")
+    why = note.read_text(encoding="utf-8").strip() if note.is_file() else ""
+    note.unlink(missing_ok=True)
+    if why:
+        with open(log, "a", encoding="utf-8") as out:
+            out.write(f"[land-async] land.py was ended on purpose: {why}\n")
+    return f"land.py exit {code}{f' (ended on purpose: {why})' if why else ''}; read {tree.name}.log\n"
+
+
 taken: dict[str, Path] = {}  # tree -> the reservation reserve_now took for it
 
 

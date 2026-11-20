@@ -116,6 +116,7 @@ class CoreServicesLike(Protocol):
     inventory: Any
     maps: Any
     approval_trials: Any
+    slam_fallback: Any
     line_follow: Any
     line_advice: Any
     localization: Any
