@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.419
+**Version:** v1.429
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.429 센서 표본 읽기: imu·odometry·wheels·motor·dock_observation
+
+`GET /api/v1/sensors/{type}` 의 `type` 에 `odometry`(`/odom`), `wheels`(`/joint_states`), `dock_observation`(`/dock/observation` 원본 필드 + `received_at`)를 더하고(additive), `imu`·`motor` 의 필드를 넓힌다. 진단 도구가 ssh 와 `ros2 topic echo` 로 토픽을 직접 읽지 않게 하는 것이 목적이다. 모두 `received_at`(epoch s)을 싣는다. ROS 콜백은 마지막 원본 메시지만 보관하고(키마다 10 Hz 이하) JSON 변환은 GET 때 API 스레드가 한다. 이 다섯 type 은 표본이 없어도 404 가 아니라 200 `{received_at: null, sample_age_s, stale_after_s: 5, evidence: missing|fresh|stale}` 이다(발행자가 침묵하는 IMU 를 구분하기 위함, `battery` 와 같은 모양). `GET /sensors` 목록에는 표본이 있는 것만 나온다. `imu`: `orientation{x,y,z,w}`·`angular_velocity{x,y,z}`·`linear_acceleration{x,y,z}`·`roll_rad`·`pitch_rad`(쿼터니언)·`roll_accel_rad`·`pitch_accel_rad`(중력 방향, 쿼터니언이 0 인 IMU 용)·`frame_id`·`source_stamp_ns`, 기존 `orientation_yaw`·`angular_velocity_z`·`linear_accel_x` 유지. `odometry`: `pose{x,y,z,yaw}`·`twist{linear{x,y,z},angular{x,y,z}}`·`frame_id`·`child_frame_id`·`source_stamp_ns`. `wheels`: `names`·`position`·`velocity`·`effort`(바퀴별 배열, effort 는 비어 있을 수 있다)·`source_stamp_ns`. `motor`: `health`(`motor/health` JSON)·`ready`(`motor/ready`).
 
 ### v1.419 대기 기체가 돌아서 짐칸 단수를 본다 (사용자 2026-11-19)
 
@@ -2162,7 +2166,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/robot/battery` | Viewer | §12 |
 | GET | `/api/v1/robot/velocity` | Viewer | §12 |
 | GET | `/api/v1/sensors` | Viewer | §12 |
-| GET | `/api/v1/sensors/{lidar\|imu\|ultrasonic\|battery\|encoder\|motor}` | Viewer | §12. 표본이 없으면 404 `NOT_FOUND`. 예외로 `battery` 는 404 를 내지 않는다(D-502, v1.120): 200 `{voltage, received_at, source, evidence, sample_age_s, stale_after_s}`. `evidence` 는 `missing`\|`fresh`\|`stale`(`GET /power/health` 의 `battery` 와 같은 판정, 5 s), 표본이 없으면 `voltage`·`received_at`·`source` 는 `null`. 배터리 모니터가 없는 런타임은 `evidence: missing`, `stale_after_s: null`. 제품 그래프의 표본은 `battery/voltage` 에서 오며 `source: "battery/voltage"` 다(D-192 4). 벤치의 `batt_state` 표본은 기존 필드 `percentage`·`power_supply_status`·`location` 을 더 싣는다. 두 토픽이 함께 돌면 마지막으로 온 표본이 이기므로 이 세 필드는 나타났다 사라진다 — 소비자는 있을 때만 읽는다 |
+| GET | `/api/v1/sensors/{lidar\|imu\|odometry\|wheels\|ultrasonic\|battery\|motor\|dock_observation}` | Viewer | §12. 표본이 없으면 404 `NOT_FOUND`. 예외 하나: `imu`·`odometry`·`wheels`·`motor`·`dock_observation` 은 표본이 없어도 200 `{received_at: null, sample_age_s, stale_after_s: 5, evidence: missing\|fresh\|stale, …}` 이다(v1.429, 본문 참조; `wheels` 는 구동 바퀴 `l_wheel_joint`·`r_wheel_joint` 만 싣는다; `encoder` 는 서비스된 적이 없어 목록에서 뺐다). 예외로 `battery` 는 404 를 내지 않는다(D-502, v1.120): 200 `{voltage, received_at, source, evidence, sample_age_s, stale_after_s}`. `evidence` 는 `missing`\|`fresh`\|`stale`(`GET /power/health` 의 `battery` 와 같은 판정, 5 s), 표본이 없으면 `voltage`·`received_at`·`source` 는 `null`. 배터리 모니터가 없는 런타임은 `evidence: missing`, `stale_after_s: null`. 제품 그래프의 표본은 `battery/voltage` 에서 오며 `source: "battery/voltage"` 다(D-192 4). 벤치의 `batt_state` 표본은 기존 필드 `percentage`·`power_supply_status`·`location` 을 더 싣는다. 두 토픽이 함께 돌면 마지막으로 온 표본이 이기므로 이 세 필드는 나타났다 사라진다 — 소비자는 있을 때만 읽는다 |
 | GET | `/api/v1/power` | Viewer | PWR-001 (절전 모드·프레즌스·샘플링 주기) |
 | GET | `/api/v1/power/health` | Viewer | 전원 정책·절전 blockers·wake 제약·배터리 age/신선도/충전 확인·health 조회. 읽기 전용이며 깨우지 않음 |
 | POST | `/api/v1/power/wake` | Operator | PWR-004 (원격 웨이크 — 정보 화면 표시) |
@@ -4857,6 +4861,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.429 | 2026-11-20 | Additive: `GET /api/v1/sensors/{type}` 에 `odometry`·`wheels`·`dock_observation` 을 더하고 `imu`·`motor` 필드를 넓힌다. 이 다섯 type 은 표본이 없으면 404 대신 200 `evidence: missing`. ROS 콜백은 원본만 보관하고 변환은 GET 때 한다 (본문 v1.429) |
 | v1.419 | 2026-11-19 | Additive: 관측 요청(`/api/fleet/pipeline/observer-requests`), 대기 기체 제자리 회전→앞 카메라 단수 판정→셀 작업 `tier_hint`, `auto_observe`. |
 | v1.416 | 2026-11-19 | Additive: 셀 작업 중단의 `stage_result.reach_fix` → `repark_requests`(GET cell-tasks), `POST /api/fleet/pipeline/repark/{request_id}` 닫기, DONE이면 같은 운반 재시도(최대 2회). |
 | v1.413 | 2026-11-19 | Additive (D-1048): assessor 해제 본문 선택 `recovery`(자동 접기 증거) → `clearable_after_fold`, 증거는 사건 행 `recovery`에 저장. |
