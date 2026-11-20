@@ -30,4 +30,5 @@ RestrictSUIDSGID=yes
 RestrictRealtime=yes
 LockPersonality=yes
 SystemCallArchitectures=native
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# AF_NETLINK: the post-switch site-firewall.py check runs iptables -S, which needs netlink (11-20 R stuck in recovery-pending).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
