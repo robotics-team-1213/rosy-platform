@@ -25,7 +25,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from chunk_runner import SETTLE_TOL  # noqa: E402
+from chunk_runner import JOG_MAX, SETTLE_TOL  # noqa: E402
 BODY = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
 ACTIONS = {"lift": "shoulder_lift", "pull": "elbow_flex"}
 STEP, LAG_STOP, CLEAR, MAX_STEPS, SETTLE_S = 1.0, 1.2, 12.0, 60, 1.5
@@ -35,6 +35,12 @@ STEP, LAG_STOP, CLEAR, MAX_STEPS, SETTLE_S = 1.0, 1.2, 12.0, 60, 1.5
 LAG_CEIL, DROOP_ROOM, SMALL_STEP = 2.0, 0.4, 0.3
 HOME = [0.8, -62.2, 53.1, 51.6, 45.2]  # the chunk libraries' home (topdown-guard), body joints
 RELEASE_OPEN, JAW_STEP, JAW_TOL = 2.7, 5.0, 1.5  # gripper units; 2.7 was the way from a 30 mm box back to its approach opening
+HOME_STEP, HOME_SETTLE_S, HOME_TOL, SETTLE_LAG, HOME_MAX_STEPS = min(4.0, JOG_MAX), 2.0, 1.0, 1.5, 80
+REST_TOL = 8.0  # D-1048 cell_auto_fold.REST_TOL on local main
+FOLDED_TOL = 10.0
+# 11-20 13:15: A's long wrist camera contacted the body at roll 18–20 twice; elbow -10 cleared the turn.
+LIFT_JOINT, LIFT_UNITS = "elbow_flex", -10.0
+PLATEAU_TOL = 0.05
 
 
 def lags(status: dict) -> list | None:
@@ -43,6 +49,217 @@ def lags(status: dict) -> list | None:
             type(n) not in (int, float) or not math.isfinite(n) for n in v[:len(BODY)]) for v in values):
         return None
     return [round(abs(t - s), 2) for t, s in zip(values[0][:5], values[1][:5])]
+
+
+def _home_pose(values):
+    return (isinstance(values, list) and len(values) == 6
+            and all(type(value) in (int, float) and math.isfinite(value) for value in values))
+
+
+def _home_state(status, context):
+    return (status.get("ok") is True and not status.get("fault") and not status.get("contact")
+            and not status.get("human_hold_latched")
+            and _home_pose(status.get("state")) and _home_pose(status.get("target"))
+            and status.get("operating_context") == context)
+
+
+def _home_plan(home, bounds, start, lift):
+    measured, held = start["state"], list(start["target"])
+    roll = BODY.index("wrist_roll")
+    if lift is None and abs(home[roll] - measured[roll]) > FOLDED_TOL:
+        lift = (LIFT_JOINT, LIFT_UNITS)
+    lift_axis = BODY.index(lift[0]) if lift else None
+    plan = []
+
+    def add(axis, goal, *, outside=False):
+        low, high = bounds[axis]
+        if not low <= goal <= high:
+            raise ValueError(f"{BODY[axis]}: planned target outside joint limits")
+        plan.append({"joint": BODY[axis], "delta": goal - held[axis], "goal": goal, "outside_limits": outside})
+        held[axis] = goal
+
+    for axis, (low, high) in enumerate(bounds[:len(BODY)]):
+        if not low <= measured[axis] <= high:
+            goal = home[axis]
+            if lift and axis == roll:
+                # Re-enter the limits with room for lag, then finish the turn after lifting.
+                goal = min(goal, low + SETTLE_TOL) if measured[axis] < low else max(goal, high - SETTLE_TOL)
+            add(axis, goal, outside=True)
+    if lift:
+        add(lift_axis, held[lift_axis] + lift[1])
+    for axis in reversed(range(len(BODY))):
+        if (axis != lift_axis and home[axis] != held[axis]
+                and max(abs(home[axis] - held[axis]), abs(home[axis] - measured[axis])) > HOME_TOL):
+            add(axis, home[axis])
+    if lift:
+        add(lift_axis, home[lift_axis])
+    return plan
+
+
+def _home_stop_result(status):
+    if status.get("contact") is True or str(status.get("fault") or "").startswith("contact"):
+        return "bind_suspected"
+    return "stopped"
+
+
+def _home_jogs(cell, home, bounds, start, receipt, sleep, log, grip=True):
+    baseline = lags(start)
+    context = start.get("operating_context")
+    for step in receipt["plan"]:
+        joint, goal = step["joint"], step["goal"]
+        axis = BODY.index(joint)
+        low, high = bounds[axis]
+        while True:
+            status = cell.act("state")
+            if not _home_state(status, context):
+                return _home_stop_result(status), f"{joint}: live state refused"
+            measured, target = status["state"][axis], status["target"][axis]
+            remaining = goal - target
+            delta = round(max(-HOME_STEP, min(HOME_STEP, remaining)), 2)
+            next_target = round(target + delta, 2)
+            if low <= measured <= high and (not delta or (abs(remaining) < 0.01 and not low <= next_target <= high)):
+                break
+            if (not delta or (measured < low and (delta < 0 or next_target <= measured))
+                    or (measured > high and (delta > 0 or next_target >= measured))
+                    or not min(low, measured) <= next_target <= max(high, measured)):
+                return "stopped", f"{joint}: no inward jog"
+            if len(receipt["jogs"]) >= HOME_MAX_STEPS:
+                return "stopped", "too many jogs"
+            command = f"jog {joint}.pos {delta}"
+            row = {"command": command, "joint": joint, "delta": delta, "before": status}
+            receipt["jogs"].append(row)
+            row["ack"] = cell.act(command)
+            if row["ack"].get("ok") is not True:
+                return _home_stop_result(row["ack"]), f"{joint}: jog refused"
+            sleep(HOME_SETTLE_S)
+            history, positions = [], [measured]
+            for attempt in range(10):
+                status = row["after"] = cell.act("state")
+                if not _home_state(status, context):
+                    return _home_stop_result(status), f"{joint}: live state refused after jog"
+                lag = row["lags"] = lags(status)
+                if any(value > max(LAG_CEIL, base + DROOP_ROOM) for value, base in zip(lag, baseline)):
+                    return "bind_suspected", f"{joint}: strain"
+                # A's P-only roll settled 0.5–1.0 units behind, once at 1.75 (11-20).
+                if lag[axis] <= max(SETTLE_LAG, baseline[axis] + DROOP_ROOM):
+                    break
+                history.append(lag[axis])
+                positions.append(status["state"][axis])
+                if len(history) >= 3 and round(max(history[-3:]) - min(history[-3:]), 2) <= PLATEAU_TOL:
+                    break
+                if attempt < 9:
+                    sleep(1.0)
+            else:
+                if max(positions) - min(positions) > PLATEAU_TOL:
+                    return "bind_suspected", f"{joint}: did not settle; inspect cable or obstruction"
+                return "stopped", f"{joint}: did not settle and showed no movement"
+            if log:
+                log(row)
+
+    status = cell.act("state")
+    if not _home_state(status, context):
+        return _home_stop_result(status), "live state refused before grip"
+    if grip:  # an automatic rehome never opens or closes the jaws (an undetected box would drop)
+        ack = receipt["grip"] = cell.act(f"grip {home[5]}")
+        sleep(HOME_SETTLE_S)
+        if ack.get("ok") is not True:
+            return _home_stop_result(ack), "grip refused"
+    status = receipt["end"] = cell.act("state")
+    if not _home_state(status, context):
+        return _home_stop_result(status), "live state refused after grip"
+    if any(abs(value - want) > SETTLE_TOL for value, want in zip(status["state"][:6 if grip else 5], home)):
+        return "stopped", "measured body or gripper did not reach home"
+    return "home", None
+
+
+def can_rehome(status: dict, home: list) -> bool:
+    health = status.get("health") or {}
+    current = health.get("current_ma") if isinstance(health, dict) else ()
+    return (_home_state(status, status.get("operating_context")) and _home_pose(home)
+            and status.get("holding") is False and isinstance(current, list) and len(current) >= 6
+            and type(current[5]) in (int, float) and abs(current[5]) < 140
+            and all(abs(value - want) <= FOLDED_TOL for value, want in zip(status["state"][:4], home)))
+
+
+def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None, grip=True, assessment=None) -> dict:
+    """Return a folded arm to library home through the runner's guarded jogs."""
+    minimum, maximum = limits.get("joint_min") or {}, limits.get("joint_max") or {}
+    names = tuple(f"{joint}.pos" for joint in (*BODY, "gripper"))
+    if not isinstance(minimum, dict) or not isinstance(maximum, dict):
+        raise ValueError("configured joint limits must be objects")
+    bounds = [(minimum.get(name, -100.0), maximum.get(name, 100.0)) for name in names]
+    # an arm with no joint window (arm_s, 11-20) homes over the full range only when its config says so
+    if (not _home_pose(home) or not (minimum or maximum or limits.get("joint_window_full_range") is True)
+            or (minimum.keys() | maximum.keys()) - set(names)
+            or any(not all(type(bound) in (int, float) and math.isfinite(bound) for bound in (low, high))
+                   or not max(-100.0, low) <= value <= min(100.0, high)
+                   for value, (low, high) in zip(home, bounds))):
+        raise ValueError("home or configured joint limits are invalid")
+    bounds = [(max(-100.0, low), min(100.0, high)) for low, high in bounds]
+    if lift is not None and lift is not False and (
+            not isinstance(lift, tuple) or len(lift) != 2 or lift[0] not in BODY
+            or type(lift[1]) not in (int, float) or not math.isfinite(lift[1]) or not round(lift[1], 2)):
+        raise ValueError("lift needs a body joint and a finite delta that rounds to a nonzero jog")
+
+    receipt = {"home": home, "plan": [], "jogs": [], "start": None, "end": None}
+    started = False
+    try:
+        status = receipt["start"] = receipt["end"] = cell.act("state")
+        context = status.get("operating_context")
+        profile = getattr(cell, "operating_profile", None)
+        if assessment is not None:
+            from cell_envelope import same_session
+
+            if not same_session(status, assessment):
+                return {**receipt, "result": "session_changed", "error": "initial runner session refused"}
+        if not _home_state(status, context) or (profile is not None and (context or {}).get("operating_profile") != profile):
+            return {**receipt, "result": "stopped", "error": "initial live state refused"}
+        if not can_rehome(status, home):
+            return {**receipt, "result": "refused", "error": "home requires an empty, folded arm"}
+        try:
+            receipt["plan"] = _home_plan(home, bounds, status, lift)
+        except ValueError as exc:
+            return {**receipt, "result": "refused", "error": str(exc)}
+        started = True
+        result, error = _home_jogs(cell, home, bounds, status, receipt, sleep, log, grip)
+    except (Exception, KeyboardInterrupt) as exc:
+        result, error = "stopped", repr(exc)
+
+    receipt.update(result=result, error=error)
+    if started and result != "home":
+        try:
+            receipt["end"] = status = cell.act("state")
+            if status.get("operating_context") != context:
+                receipt["stop_error"] = "runner session changed or could not be confirmed"
+            elif not status.get("human_hold_latched"):
+                at_rest = (status.get("ok") is True and _home_pose(status.get("state"))
+                           and all(abs(value - want) <= REST_TOL for value, want in zip(status["state"][:5], home)))
+                command = "stop now" if at_rest else "human-hold"
+                receipt["stop"] = {"command": command, "ack": cell.act(command)}
+        except (Exception, KeyboardInterrupt) as exc:
+            receipt["stop_error"] = repr(exc)
+    return receipt
+
+
+def rehome_before_work(cell, library: dict, limits: dict, *, sleep=None, assessment=None,
+                       required: bool = False) -> dict | None:
+    """An empty folded arm off its library home takes the lift-then-turn home first."""
+    try:
+        home = library["chunks"]["home"][-1]
+        status = cell.act("state")
+        if assessment is not None:
+            from cell_envelope import same_session
+
+            if not same_session(status, assessment):
+                return {"result": "session_changed", "error": "initial runner session refused"}
+        state = status.get("state")
+        if (not required and _home_pose(state)
+                and all(abs(a - b) <= SETTLE_TOL for a, b in zip(state[:5], home[:5]))):
+            return None
+        return return_home(cell, home, limits, sleep=time.sleep if sleep is None else sleep,
+                           grip=False, assessment=assessment)
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError) as exc:
+        return {"result": "refused", "error": str(exc)}
 
 
 def decide(last: str | None, blocked: str | None, lifted: float) -> str:

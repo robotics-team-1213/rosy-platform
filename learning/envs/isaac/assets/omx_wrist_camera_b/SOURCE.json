@@ -1,0 +1,5 @@
+{
+  "source": "rosy-docs hardware/omx-wrist-camera-mount (branch docs/omx-wrist-cam-mount, commit a1b43e9); link5_gripper.stl and gripper_plate_F6.stl from ROBOTIS official OMX-AI Follower STEP (extract_parts.py); b16-u16-span-D-holder-assembly.stl printed D mount r06 (11-07)",
+  "frame": "link5 local coordinates, mm",
+  "note": "See learning/envs/isaac/assets/omx_wrist_camera_b/README.md."
+}

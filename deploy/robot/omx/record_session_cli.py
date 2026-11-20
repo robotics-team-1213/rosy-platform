@@ -201,7 +201,9 @@ def main(argv=None, *, _globals: dict | None = None):
     try:
         if args.arm:
             lease_created = claim_arm_lease(args.arm)[1]
-        omx_incident.refuse_if_held(args.arm)
+        # D-1048: cell_auto_fold's recovery session may open on the one held incident it names, nothing else
+        recovery = os.environ.get("ROSY_RECOVERY_INCIDENT")
+        omx_incident.refuse_if_held(args.arm, **({"allow_incident": recovery} if recovery else {}))
         record = session.execute(
             args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card, body_only=args.body_only
         )

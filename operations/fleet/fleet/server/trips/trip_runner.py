@@ -40,6 +40,7 @@ from fleet.server.trip_runner_helpers import (  # noqa: F401
     TripRunnerHelpers, _ROBOT_ERRORS, _build_started_view, _caps_view,
     _check_start_traffic, _maybe,
 )
+from fleet.server.trip_station_align import StationAlign
 from fleet.server.trip_steps import TripSteps
 from fleet.traffic.lane_traffic import TrafficService
 from fleet.traffic.trip_advice import AdviceSender
@@ -52,7 +53,7 @@ _LOG = logging.getLogger(__name__)
 PLAN_TTL_S = 30.0
 
 
-class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, TripReplan):
+class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, TripReplan, StationAlign):
     """Start checks: ``trip_admission``; progress predicates: ``trip_progress``; per-period steps: ``trip_steps``;
     replans and laps: ``trip_replan``; read queries and helpers: ``trip_runner_helpers``."""
 
@@ -67,8 +68,11 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                  traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False,
                  traffic_signals=(), signal_advice: bool = False, lease: Optional[dict] = None,
                  renew_lease: Optional[Callable[[str], Awaitable[None]]] = None,
-                 battery: Optional[Callable[[str], Awaitable[Optional[dict]]]] = None) -> None:
+                 battery: Optional[Callable[[str], Awaitable[Optional[dict]]]] = None,
+                 align_gate: Callable[[str], Optional[str]] = lambda _place: None) -> None:
         self._store = store
+        #: Arrival alignment (trip_station_align): place id -> None (may turn) or the reason it may not.
+        self._align_gate = align_gate
         #: D-1003: the pose port's robot snapshot (the read its map pose came from); free goals go out in the
         #: robot's own Nav2 map frame. A port without one (test plants) keeps the site frame as is.
         self._robot_state = getattr(poses, "state", None)

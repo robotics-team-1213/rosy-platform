@@ -366,6 +366,69 @@ def test_pack_separates_transitively_imported_test_helpers(tmp_path):
 
 
 
+def test_source_path_tests_are_not_pulled_by_the_other_root(tmp_path):
+    """2026-11-20 split: drive tests moved from perception/test to drive/test (a source_paths root of module
+    control, same `control` import prefix). A perception-only change must not pull them in as blanket prefix
+    importers; a drive change still selects the drive test that reaches it."""
+    harness = HARNESS_YAML.replace(
+        "    path: middleware/perception\n    tests: [middleware/perception/test]\n",
+        "    path: middleware/perception\n    source_paths: [middleware/drive]\n"
+        "    tests: [middleware/perception/test, middleware/drive/test]\n")
+    assert harness != HARNESS_YAML
+    files = {**FILES, "tools/harness/harness.yaml": harness,
+             "tools/harness/platform_parts.yaml": PARTS_YAML + "  - path: middleware/drive\n    import_prefix: [control]\n",
+             "middleware/perception/control/vision_only.py": "V = 1\n",
+             "middleware/drive/motion/limits.py": "L = 1\n",
+             "middleware/drive/test/test_limits.py": "import control\nfrom motion import limits\n",
+             "middleware/drive/test/test_other_drive.py": "import control\n"}
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    repo = affected.Repo.load(tmp_path)
+
+    vision = affected.select(repo, ["middleware/perception/control/vision_only.py"])
+    assert vision.mode == "affected"
+    assert not [t for t in vision.reasons if t.startswith("middleware/drive/")], vision.reasons
+
+    drive = affected.select(repo, ["middleware/drive/motion/limits.py"])
+    assert "middleware/drive/test/test_limits.py" in drive.reasons, drive.reasons
+    assert "middleware/drive/test/test_other_drive.py" not in drive.reasons
+
+
+def test_integration_folder_is_not_pulled_whole_by_a_change_it_does_not_import(tmp_path):
+    """A test folder outside the changed file's module roots, or registered by two modules (test/integration/*),
+    keeps only the files that reach the change; its "nobody imports it, keep the whole folder" fallback is for a
+    folder inside the module's own roots."""
+    harness = HARNESS_YAML.replace(
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test]\n",
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test, test/integration/rig]\n").replace(
+        "    path: middleware/perception\n    tests: [middleware/perception/test]\n",
+        "    path: middleware/perception\n    tests: [middleware/perception/test, test/integration/rig]\n")
+    assert harness.count("test/integration/rig") == 2
+    files = {**FILES, "tools/harness/harness.yaml": harness,
+             "middleware/perception/control/vision_only.py": "V = 1\n",
+             "middleware/core/api/core_api_web/thing.py": "T = 1\n",
+             "test/integration/rig/test_rig_power.py": "from core_api_web import thing\n",
+             "test/integration/rig/test_rig_other.py": "X = 1\n"}
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    repo = affected.Repo.load(tmp_path)
+
+    vision = affected.select(repo, ["middleware/perception/control/vision_only.py"])
+    assert not [t for t in vision.reasons if t.startswith("test/integration/rig")], vision.reasons
+
+    power = affected.select(repo, ["middleware/core/api/core_api_web/thing.py"])
+    assert "test/integration/rig/test_rig_power.py" in power.reasons, power.reasons
+    assert "test/integration/rig" not in power.reasons and "test/integration/rig/test_rig_other.py" not in power.reasons
+
+
 def test_reasons_name_the_reverse_dependency(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test"])
@@ -579,7 +642,7 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     # Main CI 38807338775 (2026-10-15) took 224/528/168/275 s with the 2026-10-10 weights;
     # the measured table must keep the slowest shard near a quarter of the suite.
     costs = json.loads((ROOT / "tools/harness/fleet_test_seconds.json").read_text(encoding="utf-8"))
-    assert costs["test_signal_supervision.py"] >= 50, "a slowest Fleet file must be weighed"
+    assert costs["test_fleet_header_browser.py"] >= 100, "a measured slow Fleet file must be weighed"
     repo = affected.Repo.load(ROOT)
     selection = affected.Selection("full", [])
     matrix = affected.ci_matrix(repo, selection)["include"]
@@ -593,6 +656,27 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     assert all(e["gating"] and e["ros"] == "none" for e in shards)
     repo.test_files.reverse()
     assert affected.ci_matrix(repo, selection)["include"] == matrix
+
+
+def _invocation_test_files(repo, invocation):
+    ignored = [p.removeprefix("--ignore=") for p in invocation if p.startswith("--ignore=")]
+    return {t for p in invocation if not p.startswith("-") for t in repo.test_files_under(p)
+            if not any(affected._under(t, path) for path in ignored)}
+
+
+def test_full_ci_runs_station_scheduling_on_its_own_required_runner():
+    repo = affected.Repo.load(ROOT)
+    suite = "middleware/core/gateway/test"
+    target = f"{suite}/test_station_camera_scheduling.py"
+    ignore = f"--ignore={target}"
+    matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    station = next(entry for entry in matrix if entry["name"] == "core-station-simulation")
+    assert station["invocations"] == [[target]]
+    assert station["gating"] and station["ros"] == "none"
+    for invocations in ([inv for entry in matrix for inv in entry["invocations"]],
+                        affected.lab_full_invocations(repo)):
+        assert any(suite in inv and ignore in inv for inv in invocations)
+        assert sum(target in _invocation_test_files(repo, inv) for inv in invocations) == 1
 
 
 def test_account_native_tests_are_required_in_full_and_source_affected_ci():
@@ -613,13 +697,15 @@ def test_ci_full_matrix_reaches_every_registered_module_suite():
     """D-762 stage 1: CI's full tier runs every registered test file, bar the reasoned exclusions."""
     repo = affected.Repo.load(ROOT)
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
-    args = [p for e in matrix for inv in e["invocations"] for p in inv]
-    ignored = {p.removeprefix("--ignore=") for p in args if p.startswith("--ignore=")}
-    assert ignored == set(affected.CI_FULL_EXCLUDED), "every --ignore needs a CI_FULL_EXCLUDED reason"
+    invocations = [inv for e in matrix for inv in e["invocations"]]
+    ran = set().union(*(_invocation_test_files(repo, inv) for inv in invocations))
+    ignores = {p.removeprefix("--ignore=") for inv in invocations for p in inv if p.startswith("--ignore=")}
+    ignored = {t for p in ignores for t in (repo.test_files_under(p) or [p])}
+    excluded = set(affected.CI_FULL_EXCLUDED)
+    assert ignored - ran == excluded, "every ignored test without another invocation needs a CI_FULL_EXCLUDED reason"
     assert all(affected.CI_FULL_EXCLUDED.values())
-    ran = {t for p in args if not p.startswith("-") for t in repo.test_files_under(p)} - ignored
     registered = {t for p in affected._full_paths(repo) for t in repo.test_files_under(p)}
-    missing = sorted(registered - ran - set(affected.CI_FULL_EXCLUDED))
+    missing = sorted(registered - ran - excluded)
     assert not missing, f"registered suites CI's full tier never runs: {missing}"
     for suite in ("middleware/core/api/test", "middleware/robot_ui/pilot/test", "operations/apps/games/test"):
         assert any(affected._under(t, suite) for t in ran), suite

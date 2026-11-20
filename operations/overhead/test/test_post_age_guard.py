@@ -184,13 +184,23 @@ def test_anchors_go_after_the_detections_without_the_markerless_pinky_guess():
 
 
 def test_a_hung_anchors_post_never_delays_the_detections_and_times_out_counted(monkeypatch):
-    monkeypatch.setattr(anchor_feed, "POST_TIMEOUT_S", 0.05)
+    release = None  # the timeout fires only when the test says so: no wall-clock race with the in-flight check
+
+    async def gated_timeout(aw, timeout):
+        post = asyncio.ensure_future(aw)
+        await release.wait()
+        post.cancel()
+        raise asyncio.TimeoutError
+
+    monkeypatch.setattr(anchor_feed.asyncio, "wait_for", gated_timeout)
     now = _Now()
     client = _AnchorClient(hang=True)
     worker = _worker(now, _Detector(), client)
     worker.anchors.tracker = _States()
 
     async def run():
+        nonlocal release
+        release = asyncio.Event()
         await worker.refresh_config()
         first = await worker.process(_frame(seq=1, captured_at=99.9), {})
         await asyncio.sleep(0.01)
@@ -198,7 +208,8 @@ def test_a_hung_anchors_post_never_delays_the_detections_and_times_out_counted(m
         worker.anchors._next_at = 0.0
         await worker.process(_frame(seq=2, captured_at=99.95), {})  # previous send in flight: not queued
         assert len(client.anchors) == 1 and len(client.published) == 2
-        await asyncio.sleep(0.15)
+        release.set()
+        await worker.anchors._task
     try:
         asyncio.run(run())
     finally:

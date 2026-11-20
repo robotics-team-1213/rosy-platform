@@ -11,8 +11,8 @@ the next), never deleting work:
    last STOP gave no verdict on its change (a full queue, the watchdog, a refused --urgent: ``no_verdict``), once
    the queue has room (``requeue``), and a NOT QUEUED request land_async kept there (``land_queue.keep_pending``).
 3. rollup: ``land_rollup apply --auto`` for pending landings that fit together. The only rollup trigger (D-889 36).
-4. cleanup: ``land_gc`` (lossless), worktrees (landed and orphan ones at once, any idle WORKTREE_IDLE_H with its
-   branch kept and dirty work under refs/wip/) and the branch sweep (merged go, idle unlanded to refs/archive/).
+4. cleanup: ``land_gc`` (lossless), worktrees (lossless prune only: landed and orphan ones; idle or dirty ones are
+   a person's ``worktrees.py prune --snapshot``) and the branch sweep (merged go, idle unlanded to refs/archive/).
 5. report: ``<git-common-dir>/rosy-land-backlog.txt``, the queue, stops by kind and open main-red ids with age and
    owner. An unowned main-red id older than ALERT_S is the line a person or agent acts on. Once per 24 h it adds a
    ``[metrics]`` line (arrivals, landed, lead p50/p90, turn-deadline releases, rollups) and a row in
@@ -37,6 +37,7 @@ import land_cache  # noqa: E402
 import land_gc  # noqa: E402
 import land_mainred  # noqa: E402
 import land_events  # noqa: E402
+import land_freeze  # noqa: E402
 import land_queue  # noqa: E402
 import land_stats  # noqa: E402
 import memory_history  # noqa: E402
@@ -46,7 +47,6 @@ ALERT_S = 30 * 60  # a main-red id open this long with no owner is called out
 SHOWN = 10  # the oldest open main-red ids the report names
 ACTIVE_LOG_S = 30 * 60  # an expired ticket whose landing logged this recently is working, not stuck
 WARM_BATCH = 8  # missing main invocations warmed during an idle tick
-WORKTREE_IDLE_H = 12  # a worktree nobody touched this long is removed (branch kept, dirty work to refs/wip/)
 METRICS_EVERY_S = 24 * 3600  # D-889 36: the pipeline's numbers, once per day
 METRICS_LOG = "rosy-land-metrics.jsonl"
 WATCHDOG, URGENT_REFUSED = "watchdog: no progress", "--urgent refused"  # land_watchdog's stop, land_queue.enter's
@@ -170,6 +170,9 @@ def pending(repo: Path) -> str | None:
                 or land_async.git(repo, "rev-parse", branch, check=False) != ref):
             row["path"].unlink(missing_ok=True)  # already landing, or the branch moved past this request
             continue
+        if why := land_freeze.refusal(repo, ref):  # freeze: the kept request stays until the state allows it
+            print(f"[tick] pending {branch}: {why}", flush=True)
+            continue
         land_async.detach([sys.executable, "-X", "utf8", str(repo / "tools" / "land_async.py"), "--branch", branch,
                            *map(str, row.get("args") or [])], row["path"].with_suffix(".log"), repo)
         row["path"].unlink(missing_ok=True)
@@ -206,15 +209,9 @@ def cleanup(repo: Path) -> str:
         reaped += 1
     rows = land_gc.plan(repo, time.time(), 7)
     problems = land_gc.apply(repo, rows)
-    # 11-14: 41 worktrees against the 15 cap, 7 of them clean and idle 7-14 h. Lossless ones (landed, orphan) go at
-    # once; an idle one goes after WORKTREE_IDLE_H (4 h when over CAP) with dirty work saved under refs/wip/ first.
-    # prune also sweeps branches: merged ones go, idle unlanded ones move to refs/archive/.
-    wt_root = repo / ".worktrees"
-    over = wt_root.is_dir() and sum(1 for p in wt_root.iterdir() if p.is_dir()) > worktrees.CAP
-    idle_h = min(WORKTREE_IDLE_H, 4) if over else WORKTREE_IDLE_H
-    quiet = lambda line: None  # noqa: E731
-    gone = worktrees.prune(repo, apply=True, quiet=True, say=quiet)
-    gone += worktrees.prune(repo, apply=True, snapshot=True, everyone=True, idle_hours=idle_h, quiet=True, say=quiet)
+    # 11-20: the idle prune with snapshot+everyone removed other sessions' in-use worktrees (clean or dirty, no
+    # commit yet) every tick; only the lossless prune (landed, orphan) runs unattended. A person runs --snapshot.
+    gone = worktrees.prune(repo, apply=True, quiet=True, say=lambda line: None)
     return (f"reaped {reaped} expired; land_gc removed {sum(r[0] != 'keep' for r in rows) - len(problems)},"
             f" kept {len(problems)} changed; worktrees removed {gone}")
 

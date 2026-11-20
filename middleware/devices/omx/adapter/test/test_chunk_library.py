@@ -138,3 +138,16 @@ assert Path(installed_profile.__file__).is_relative_to(root)
     result = subprocess.run([sys.executable, "-I", "-c", script, str(ROOT), config["smoke"]],
                             cwd=stage, env=env, text=True, capture_output=True, timeout=20)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_a_folded_park_lifts_the_elbow_before_a_large_wrist_turn():
+    """2026-11-20 arm_a: folded, the long wrist camera hit the arm at roll +18..20 until the elbow was lifted first."""
+    chunks = importlib.import_module("omx_adapter.chunk_library")
+    home = [0.0, -60.0, 50.0, 45.0, 10.0, 46.6]
+    frames = chunks.park_path([0.0, -60.0, 50.0, 45.0, 40.0, 46.6], home, 46.6, 30)
+    turning = [f for f in frames if 11.0 < f[4] < 39.0]
+    assert turning and all(f[2] <= 40.5 for f in turning)
+    assert frames[-1] == pytest.approx(home)
+    small = chunks.park_path([0.0, -60.0, 50.0, 45.0, 18.0, 46.6], home, 46.6, 30)
+    assert min(f[2] for f in small) >= 49.9
+

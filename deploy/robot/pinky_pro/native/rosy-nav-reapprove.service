@@ -1,0 +1,29 @@
+[Unit]
+Description=ROSY re-measure navigation approval after a release change (D-986 addendum 2026-11-20)
+# Started only by rosy-nav-reapprove.timer. Acts only on a robot that was approved
+# before and whose approval failed only because the release changed; every outcome
+# is in the journal and the run exits 0.
+Requires=rosy-core.service
+After=rosy-core.service rosy-auto-update.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/navigation_reapprove.py run
+# begin (CORE restart) + five trials + seal (CORE restart) + navigation start.
+TimeoutStartSec=15min
+UMask=0077
+Environment=PYTHONNOUSERSITE=1
+StateDirectory=rosy/nav-reapprove
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# CORE on loopback; rosy-login-code runs here as a child and writes /run/rosy-boot.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
