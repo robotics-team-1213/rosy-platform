@@ -366,6 +366,38 @@ def test_pack_separates_transitively_imported_test_helpers(tmp_path):
 
 
 
+def test_source_path_tests_are_not_pulled_by_the_other_root(tmp_path):
+    """2026-11-20 split: drive tests moved from perception/test to drive/test (a source_paths root of module
+    control, same `control` import prefix). A perception-only change must not pull them in as blanket prefix
+    importers; a drive change still selects the drive test that reaches it."""
+    harness = HARNESS_YAML.replace(
+        "    path: middleware/perception\n    tests: [middleware/perception/test]\n",
+        "    path: middleware/perception\n    source_paths: [middleware/drive]\n"
+        "    tests: [middleware/perception/test, middleware/drive/test]\n")
+    assert harness != HARNESS_YAML
+    files = {**FILES, "tools/harness/harness.yaml": harness,
+             "tools/harness/platform_parts.yaml": PARTS_YAML + "  - path: middleware/drive\n    import_prefix: [control]\n",
+             "middleware/perception/control/vision_only.py": "V = 1\n",
+             "middleware/drive/motion/limits.py": "L = 1\n",
+             "middleware/drive/test/test_limits.py": "import control\nfrom motion import limits\n",
+             "middleware/drive/test/test_other_drive.py": "import control\n"}
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    repo = affected.Repo.load(tmp_path)
+
+    vision = affected.select(repo, ["middleware/perception/control/vision_only.py"])
+    assert vision.mode == "affected"
+    assert not [t for t in vision.reasons if t.startswith("middleware/drive/")], vision.reasons
+
+    drive = affected.select(repo, ["middleware/drive/motion/limits.py"])
+    assert "middleware/drive/test/test_limits.py" in drive.reasons, drive.reasons
+    assert "middleware/drive/test/test_other_drive.py" not in drive.reasons
+
+
 def test_reasons_name_the_reverse_dependency(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test"])
