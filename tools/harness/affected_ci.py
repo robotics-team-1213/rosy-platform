@@ -43,11 +43,12 @@ ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
 SUITE_SHARDS = {"fleet": 5, "sensing": 2}  # Station suites (D-772) retain the fixed per-shard cost budget.
-# Seconds per Fleet file of 5 s or more, the mean of CI 38807338775, 38711952782 and 38830518002
-# (2026-10-15/16, timestamps of the -v result lines); others weigh 1. These only choose runners;
-# every discovered test still runs exactly once.
+# Fleet file weights from pytest result-line timestamps in CI 44563719449 and 44568270495.
+# Retain prior weights where timings are incomplete or inconsistent. Unlisted files weigh 1.
+# The weights only choose runners; every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
+_STATION_SCHEDULING = "middleware/core/gateway/test/test_station_camera_scheduling.py"
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
     {"name": "omx-act-cpu", "invocations": [[
@@ -61,9 +62,11 @@ CI_FULL_MATRIX = (
         ["operations/prediction/world_model/test"]], "ros": "none"},
     # 2026-11-18: core-domain was CI's longest runner (pytest step 16.5 and 22.4 min of a 25 min budget, runs
     # 43769060136 and 42596065578); the gateway suite and the rest now run on two runners, same tests.
-    {"name": "core-domain", "invocations": [["middleware/core/gateway/test"], [
+    {"name": "core-domain", "invocations": [["middleware/core/gateway/test", f"--ignore={_STATION_SCHEDULING}"], [
         "middleware/core/gateway/test/test_account_pipeline.py"
     ]], "ros": "none"},
+    # Runs the known load-sensitive simulation in a fresh runner (PRs #249 and #250).
+    {"name": "core-station-simulation", "invocations": [[_STATION_SCHEDULING]], "ros": "none"},
     {"name": "core-services", "invocations": [[
         "middleware/core/events/test", "middleware/core/services/test",
         "shared/web/test", "contracts/foundation/test",
@@ -94,6 +97,38 @@ CI_FULL_EXCLUDED = {
         "ament lint template, not a product contract; CI never ran it and the lab full tier --ignores it too"
     for name in ("flake8", "pep257", "copyright")
 }
+
+
+#: Panel 2026-11-20 (aff-narrow): a change of only these files builds nothing, so CI skips build-smoke (colcon,
+#: flake8, boot smoke); the selected tests (guard set, record and document readers) still run.
+DOC_SUFFIXES = (".md", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".drawio")
+
+#: build-smoke's steps (colcon build, flake8, core boot, SaveMap) read only files inside a colcon root
+#: (platform_parts.yaml ``colcon_roots``, which also feeds colcon_roots.py): a change of documents or of
+#: trees outside every root (tools, root test/, deploy, .github) builds nothing, so the job skips.
+#: platform_parts.yaml is build data — it changes what colcon_roots.py prints, so it keeps the job.
+BUILD_DATA = ("tools/harness/platform_parts.yaml", "tools/harness/colcon_roots.py")
+#: prefixes that can change what the smoke job itself runs or boots with (its workflow, CI image, deploy
+#: configs the boot may read): conservative, the job stays for any change under them (11-20 review)
+BUILD_PREFIXES = (".github/", "deploy/")
+
+
+def docs_only(sel: Selection) -> bool:
+    return (sel.mode == "affected" and not sel.escalations and bool(sel.changed)
+            and all(p.endswith(".md") or (p.startswith("docs/") and p.endswith(DOC_SUFFIXES)) for p in sel.changed))
+
+
+def buildable(repo: Repo, sel: Selection) -> bool:
+    """False only when nothing build-smoke reads can have changed: no changed file inside a colcon root
+    (documents aside) and none of BUILD_DATA. A missing manifest means unknown, so the job stays."""
+    if sel.mode != "affected" or sel.escalations:
+        return True
+    roots = repo.parts.get("colcon_roots") or ()
+    if not roots:
+        return True
+    return any(p in BUILD_DATA or p.startswith(BUILD_PREFIXES) or (not p.endswith(DOC_SUFFIXES)
+                                   and any(affected_ros._under(p, r) for r in roots))
+               for p in sel.changed)
 
 
 def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
@@ -145,7 +180,8 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if any(at._under(p.split("::", 1)[0], "learning/training/omx/test")
                for inv in sel.invocations for p in inv):
             entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
-    entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
+    if not docs_only(sel) and buildable(repo, sel):
+        entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")
         entry.setdefault("gating", True)

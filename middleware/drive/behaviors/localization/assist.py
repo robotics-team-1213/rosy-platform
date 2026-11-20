@@ -105,6 +105,11 @@ class LocalizationAssist:
         self.on_localized = on_localized
         #: CORE's stop paths when the effective LOCALIZED/map condition is lost.
         self.on_lost = on_lost
+        #: SLAM fallback (2026-11-18): while it names a reason, no report can read LOCALIZED (autonomy refused, halt run)
+        #: and a robot with no report reads UNKNOWN instead of "predates D-395". A plain flag read: it runs under our lock.
+        self.hold: Optional[Callable[[], Optional[str]]] = None
+        #: Localization reports received so far: the fallback waits for one that arrived after its restart.
+        self.reports = 0
         #: D-546 5: the open "where am I" request Fleet reads (`GET /localization/request`).
         self.pose_requests = PoseRequests(events, robot_id)
         #: Run when an accepted result closes an open pose request (line follow resumes).
@@ -141,11 +146,18 @@ class LocalizationAssist:
         with self._lock:
             return self._effective()
 
-    def _effective(self) -> Optional[LocalizationStatus]:
+    def raw_status(self) -> Optional[LocalizationStatus]:
+        """The status without the fallback hold: what the robot really reported (the fallback's own exit test)."""
+        with self._lock:
+            return self._effective(held=False)
+
+    def _effective(self, held: bool = True) -> Optional[LocalizationStatus]:
         """The caller holds the lock."""
         status = self._status
+        reason = self.hold() if held and self.hold is not None else None
         if status is None:
-            return None
+            return None if not reason else LocalizationStatus(
+                state=LocState.UNKNOWN, pose_frame=PoseFrame.ODOM, reason=str(reason)[:64])
         if self._monotonic() - self._status_at > STATE_STALE_S:
             status = LocalizationStatus(state=LocState.UNKNOWN, pose_frame=status.pose_frame,
                                         reason="state_stale")
@@ -153,6 +165,8 @@ class LocalizationAssist:
             status = status.model_copy(update={"pose_frame": PoseFrame.ODOM})
         if status.pose_frame is PoseFrame.ODOM and (status.unmapped_objects or status.objects_stamp is not None):
             status = status.model_copy(update={"unmapped_objects": [], "objects_stamp": None})
+        if reason and status.state is LocState.LOCALIZED:  # the hold beats any pose claim; CANDIDATES etc. still flow to Fleet
+            status = status.model_copy(update={"state": LocState.UNKNOWN, "reason": str(reason)[:64]})
         return status
 
     def autonomy_allowed(self) -> bool:
@@ -181,6 +195,7 @@ class LocalizationAssist:
             with self._lock:
                 self._status = status
                 self._status_at = self._monotonic()
+                self.reports += 1
                 # S1 re-run R5: the robot dropped the request this report answers (a mission
                 # start clears it to null) or moved on; the report never answers again. A
                 # newer report that arrived before its state carries the new id and stays.
@@ -283,7 +298,8 @@ class LocalizationAssist:
             # Only Fleet's answer to the open pose request closes it (a human initialpose or a
             # homing result carries another request_id and must not trigger the RESUME).
             open_request = self.pose_requests.current()
-            if (open_request is not None and open_request["request_id"] == request_id
+            held = self.hold is not None and self.hold() is not None  # R3: no resume while the fallback hold is on
+            if (not held and open_request is not None and open_request["request_id"] == request_id
                     and source is not None and self.pose_requests.clear("answered")):
                 self._run(self.on_pose_answered, "line follow resume on pose answer")
 

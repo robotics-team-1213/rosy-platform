@@ -14,6 +14,7 @@ NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.
 # Taught carry height: turning low first scraped the jaws on the table on 2026-10-24.
 TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
 PARK_SPEED = GUARD_UNITS_PER_S
+FOLDED_ROLL_LIFT = (10.0, -10.0)  # 11-20 arm_a: folded, the wrist camera hit the arm at roll +18..20; lift elbow -10 first
 # shoulder_lift moving negative lifts the arm's weight (rise from a reach). Guard logs 2026-10-26/27: its lag
 # behind the command was median/p90/max 1.8/3.5/4.75 deg at 6-8 deg/s and 1.0/1.8/3.0 deg at 4-6 deg/s; the
 # guard stops at 5 (a rise from x 0.24 m did on 2026-10-27). 2 units/s is 3.6 deg/s: at 3 (5.4 deg/s) a rise
@@ -91,11 +92,10 @@ def park_path(start: list, home: list, closed: float, fps: int, transit: dict | 
         and abs(start[4] - goal[4]) <= 45.0
     )
     if near_home or folded_pose:
-        waypoints = (
-            [list(start), list(start[:5]) + [closed], goal]
-            if abs(start[5] - closed) > 5.0
-            else [list(start), goal]
-        )
+        waypoints = [list(start)] + ([list(start[:5]) + [closed]] if abs(start[5] - closed) > 5.0 else [])
+        if abs(start[4] - goal[4]) > FOLDED_ROLL_LIFT[0]:
+            waypoints += [[*w[:2], w[2] + FOLDED_ROLL_LIFT[1], *w[3:]] for w in (waypoints[-1], goal)]
+        waypoints.append(goal)
         rate = (0.5 if abs(start[0] - goal[0]) <= 12.0 else 1.0) * speed * PARK_SPEED
         return flow(waypoints, fps, rate, blend=[False] * len(waypoints), blend_s=0.2,
                     rise_speed=RISE_SPEED)

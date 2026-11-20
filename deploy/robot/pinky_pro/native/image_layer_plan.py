@@ -109,6 +109,9 @@ UNITS = (
     # D-412: the idle-time updater; only the timer is enabled.
     "rosy-auto-update.service",
     "rosy-auto-update.timer",
+    # D-986 addendum 2026-11-20: re-measure navigation approval after a release change.
+    "rosy-nav-reapprove.service",
+    "rosy-nav-reapprove.timer",
     # D-418: SSH access on CORE's request (expiry timer only while a temp login is on).
     "rosy-ssh-access.service", "rosy-ssh-pairing.service",
     "rosy-ssh-access.path",
@@ -140,6 +143,7 @@ ENABLED_UNITS = frozenset({
     "rosy-hw-probe.path",
     "rosy-hw-test.path",
     "rosy-auto-update.timer",
+    "rosy-nav-reapprove.timer",
     "rosy-ssh-access.path",
     "rosy-ssh-access-boot.service",
     "rosy-lowbatt-shutdown.path",

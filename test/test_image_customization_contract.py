@@ -840,15 +840,25 @@ def test_customizer_fails_the_build_when_core_does_not_import_in_the_image():
 def test_ci_tests_against_the_runtime_the_device_runs():
     for workflow in ("ci.yml", "arm64-rehearsal.yml"):
         text = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
-        lock = "--require-hashes --no-deps --only-binary=:all: -r deploy/robot/pinky_pro/image/device-python-requirements.txt"
+        if workflow == "ci.yml":
+            # ci.yml runs the prebuilt image; the same lock install lives in its Dockerfile.
+            text = (ROOT / ".github/ci-image/Dockerfile").read_text(encoding="utf-8")
+            req = "/opt/rosy-ci/src/device-python-requirements.txt"
+            lock = f"--require-hashes --no-deps --only-binary=:all: -r {req}"
+            constraints = f"grep -o '^[A-Za-z0-9._-]*==[^ ]*' {req}"
+            used = "-c /opt/rosy-ci/runtime-constraints.txt"
+        else:
+            req = "deploy/robot/pinky_pro/image/device-python-requirements.txt"
+            lock = f"--require-hashes --no-deps --only-binary=:all: -r {req}"
+            constraints = f"grep -o '^[A-Za-z0-9._-]*==[^ ]*' {req}"
+            used = "-c /tmp/rosy-runtime-constraints.txt"
         assert lock in text
         # Test tools come after the lock, constrained to its versions, so their
         # dependencies (anyio, h11, idna, typing-extensions) are not a second copy.
-        constraints = "grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt"
         assert constraints in text
-        assert text.index(lock) < text.index(constraints) < text.index("-c /tmp/rosy-runtime-constraints.txt")
+        assert text.index(lock) < text.index(constraints) < text.index(used)
         for line in text.splitlines():
-            if "pip" in line and " install" in line and "-r deploy/robot/pinky_pro/image" not in line:
+            if "pip" in line and " install" in line and "-r deploy/robot/pinky_pro/image" not in line and "-r /opt/rosy-ci/src" not in line:
                 words = set(line.split())
                 assert not words & {"pydantic", "fastapi", "starlette", "uvicorn", "websockets"}, (workflow, line)
 

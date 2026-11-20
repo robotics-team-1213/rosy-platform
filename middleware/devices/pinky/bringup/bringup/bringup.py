@@ -36,6 +36,8 @@ from .wheel_calibration import calibrated_wheels
 TWIST_SUB_TOPIC_NAME = "cmd_vel"
 ODOM_PUB_TOPIC_NAME = "odom"
 JOINT_PUB_TOPIC_NAME = "joint_states"
+JOINT_STATES_EVERY = 3  # 30 Hz loop -> 10 Hz joint_states
+MOTOR_READY_EVERY = 3  # 30 Hz loop -> 10 Hz motor/ready lease
 DEFAULT_ODOM_FRAME_ID = "odom"
 DEFAULT_ODOM_CHILD_FRAME_ID = "base_footprint"
 
@@ -320,7 +322,9 @@ class Rosy(Node):
             # stops producing health updates, even though the topic is latched.
             # A no-motion node never offers it: CORE must not plan on motors
             # that cannot move.
-            self.motor_ready_pub.publish(Bool(data=True))
+            self._ready_cycle = (getattr(self, '_ready_cycle', 0) + 1) % MOTOR_READY_EVERY
+            if self._ready_cycle == 0:  # CORE lease is 2 s; 10 Hz keeps 20x margin
+                self.motor_ready_pub.publish(Bool(data=True))
         stop_result = self.command_deadman.attempt_stop(
             lambda: self.motor_controller.stop().accepted
         )
@@ -364,7 +368,9 @@ class Rosy(Node):
 
         self._publish_tf(current_time)
         self._publish_odometry(current_time, v_x, vth)
-        self._publish_joint_states(current_time, rpm_l, rpm_r)
+        self._joint_cycle = (getattr(self, '_joint_cycle', 0) + 1) % JOINT_STATES_EVERY
+        if self._joint_cycle == 0:  # wheel travel for the API; every message also costs one /tf wheel transform downstream
+            self._publish_joint_states(current_time, rpm_l, rpm_r)
 
         self.last_time = current_time
 

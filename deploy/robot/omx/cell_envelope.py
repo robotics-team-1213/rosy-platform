@@ -32,7 +32,7 @@ def _code_digest() -> str:
     root = Path(__file__).resolve().parent
     files = {name: root / name for name in (
         "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
-        "cell_auto_pick.py", "cell_transfer.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
+        "cell_auto_pick.py", "cell_transfer.py", "cell_unwedge.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
         "cell_pivot.py", "cell_calibrate.py", "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py",
         "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, coordination, motion_profile)})
@@ -143,7 +143,8 @@ def payload_check(config: dict, conditions: dict) -> tuple[dict | None, str | No
 
 
 def assess(config: dict, calibration: dict, library: dict, state: dict, *,
-           now=None, sequence=SEQUENCE, library_sha256: str | None = None) -> dict:
+           now=None, sequence=SEQUENCE, library_sha256: str | None = None,
+           check_home: bool = True, allow_pending: dict | None = None) -> dict:
     """Exact paths only: no radius shrink, spatial interpolation or automatic promotion from success."""
     out = {"schema": SCHEMA, "mode": "automatic", "status": "unverified", "allowed": False,
            "reason": "not_reviewed"}
@@ -210,17 +211,16 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
         if (type(required) is not int or required < 1 or not _number(rate) or not 0 < rate <= 1
                 or not _number(tolerance) or tolerance <= 0):
             raise ValueError("review must specify repetition, success and start tolerances")
-        positions, home = state.get("state"), library["chunks"]["home"][-1]
-        if (not isinstance(positions, list) or len(positions) != 6 or len(home) != 6
-                or any(not _number(v) for v in positions + home)
-                or max(abs(a - b) for a, b in zip(positions[:5], home[:5])) > tolerance):
-            return {**out, "reason": "start_not_home"}
         ledger = Path(document["attempts_path"]).expanduser()
         if not ledger.is_absolute():
             ledger = review_path.parent / ledger
         if ledger.resolve() != (Path(config["work_dir"]).expanduser() / "attempts.jsonl").resolve():
             raise ValueError("review must use this pipeline's active attempt ledger")
-        if ledger.with_suffix(".pending.json").exists():
+        pending = ledger.with_suffix(".pending.json")
+        if allow_pending is None:
+            if pending.exists():
+                return {**out, "reason": "incomplete_attempt"}
+        elif not pending.exists() or json.loads(pending.read_text(encoding="utf-8")) != allow_pending:
             return {**out, "reason": "incomplete_attempt"}
         rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
         if any(not isinstance(row, dict) or not isinstance(row.get("envelope", {}), dict) for row in rows):
@@ -248,6 +248,11 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
                    reviewed_by=review["reviewed_by"])
         if len(trials) < required or successes / len(trials) < rate:
             return {**out, "status": "failed", "reason": "acceptance_not_met"}
+        positions, home = state.get("state"), library["chunks"]["home"][-1]
+        if (not isinstance(positions, list) or not isinstance(home, list)
+                or len(positions) != 6 or len(home) != 6 or any(not _number(v) for v in positions + home)
+                or (check_home and max(abs(a - b) for a, b in zip(positions[:5], home[:5])) > tolerance)):
+            return {**out, "reason": "start_not_home"}
         return {**out, "allowed": True, "status": "verified", "reason": "reviewed_exact_task"}
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError):
         return {**out, "reason": "evidence_unavailable"}

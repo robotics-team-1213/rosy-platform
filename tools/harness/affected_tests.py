@@ -35,21 +35,24 @@ from affected_repo import HARNESS, IMPORT, TEST_FILE, Repo, _git, _match, _under
 import affected_closure
 import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
 import affected_exclusive
+import affected_ros
 import safety_review  # D-430 5 judge, reused so the selector and the trailer rule agree
 from affected_ci import (CI_FULL_EXCLUDED, CI_FULL_MATRIX, FLEET_TEST_SECONDS, FULL_SUITES,  # noqa: F401
                          ROOT_SHARDS, SUITE_SHARDS, ci_matrix)  # the CI full-run matrix, re-exported
 
 # D-436 §1: always on. The 2026-10-03 D-418 merge failures all sat here.
+# Ratchets (known lists that only shrink) run on every selection: 11-19 main grew omx_cell_boundary 148 -> 153
+# outside the guard set while a branch held 148, and list ratchets were half of the 48 h NEW stops (bn H-1).
+_ARCHITECTURE = Path(__file__).resolve().parents[2] / "test" / "architecture"
 GUARD_SET = (
     "test/test_release_boundary_guards.py",
-    "test/architecture/test_module_structure.py",
+    *sorted(f"test/architecture/{p.name}" for p in _ARCHITECTURE.glob("test_*.py")),
+    "test/test_module_functional_surface.py",
+    "test/test_behavior_test_ownership.py",
     "test/test_harness_contracts.py",
     "test/test_secret_public_provenance.py",
     "middleware/core/gateway/test/test_protocol_version_alignment.py",
     "test/test_robot_literals.py",
-    "test/architecture/test_platform_parts.py",
-    # D-762 stage 0: Markdown under a FULL trigger is not FULL; placement still runs.
-    "test/architecture/test_document_placement.py",
     # D-795: walks every deploy/runtime file, so no path mapping selects it (b101f57783 turned main red).
     "test/test_no_cross_host_dds.py",
 )
@@ -357,8 +360,24 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                     add("test", f"module {module['name']} ({path}; no test names it, whole root suite)")
                     broad_fallback_modules[module["name"]] = module
             else:
+                # A module with source_paths has one test folder per source root (perception/test, drive/test).
+                # A folder under another root than the changed file keeps only the files that reach it, like a
+                # reverse dependent; its "nobody imports it, keep the whole folder" fallback is for its own root.
+                # A root with no test folder of its own (an external holder) keeps the module's whole tests.
+                roots = (module["path"], *(module.get("source_paths") or ()))
+                own = max((r for r in roots if _under(path, r)), key=len, default=None)
+                own_has_tests = own is not None and any(_under(t, own) for t in tests)
                 for test in tests:
-                    kept = None if safety_review.is_safety(path, repo.safety_roots, repo.safety_modules)                         else _narrowed_tests(repo, path, test)
+                    # A folder outside every root of this module, or registered by two modules (test/integration/*),
+                    # is no "own root" folder either: only the files that reach the change, never the whole folder.
+                    # (An external holder, own_has_tests False, still keeps its installing distribution's tests whole.)
+                    foreign = not any(_under(test, r) for r in roots) or sum(test in (m.get("tests") or []) for m in repo.modules) > 1
+                    other_root = own_has_tests and (
+                        foreign or max((r for r in roots if _under(test, r)), key=len, default=own) != own)
+                    kept = None if safety_review.is_safety(path, repo.safety_roots, repo.safety_modules) \
+                        else _narrowed_tests(repo, path, test, reverse=other_root)
+                    if other_root and kept == []:
+                        continue
                     for one in kept or [test]:
                         add(one, f"module {module['name']} ({path})" + (" [import closure]" if kept else ""))
             continue
@@ -421,8 +440,11 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                         for one in kept or [test]:
                             add(one, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}"
                                 + (" [import closure]" if kept else ""))
+        # A test under the module's own source_paths (drive tests beside middleware/drive) is the module's test,
+        # reached through its tests list and import closure above, not a blanket prefix importer.
+        roots = (module["path"], *(module.get("source_paths") or ()))
         for test in repo.test_files:
-            if not _under(test, module["path"]) and _imports(repo, test, prefixes, names):
+            if not any(_under(test, root) for root in roots) and _imports(repo, test, prefixes, names):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
     # D-436 addendum 1 (panel 2026-11-09): a safety path stays FULL; static reach misses its config/IDL readers.
@@ -548,7 +570,10 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
         sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     if matrix:
         print(render(sel), end="", file=sys.stderr)  # the human selection (was a second --print call in ci.yml)
-        print(json.dumps({"mode": sel.mode, "matrix": ci_matrix(repo, sel)}, separators=(",", ":")))
+        include = ci_matrix(repo, sel)["include"]
+        if sel.mode != "full":  # only the PR selection is consolidated; the full matrix keeps its tuned runners
+            include = affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+        print(json.dumps({"mode": sel.mode, "matrix": {"include": include}}, separators=(",", ":")))
         return 0
     if as_json:
         print(json.dumps(sel.to_json(), indent=2, ensure_ascii=False))

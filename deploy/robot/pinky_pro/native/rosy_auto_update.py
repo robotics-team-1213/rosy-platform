@@ -15,7 +15,8 @@ Runs from rosy-auto-update.timer as root. One ``run``:
    the wave delay passed) and the robot is eligible: no hold, CORE idle and
    still in two samples 10 s apart, battery >= 40 % or charging, no live
    /run/rosy-claim. A release-bound navigation approval does not hold the robot:
-   it stops being valid on the new release and a person approves again;
+   it stops being valid on the new release and rosy-nav-reapprove re-measures it
+   (D-986 addendum 2026-11-20);
 5. applies under the claim: activate, the core-release check, the new
    release's sync-image-layer.py, restarts, then health (CORE ready, core/io/
    camera active from the new release, no failed rosy-* unit, held 60 s);

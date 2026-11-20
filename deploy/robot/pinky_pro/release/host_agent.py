@@ -51,6 +51,7 @@ class Role(str, Enum):
     VIEWER = "viewer"
     OPERATOR = "operator"  # D-986: only the navigation re-approval commands ask for it
     ADMINISTRATOR = "administrator"
+    MACHINE = "machine"  # 2026-11-18: CORE's own supervisor (SLAM fallback); never a login, never an operator command
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,9 @@ ALLOWLIST: dict[str, CommandSpec] = {
         CommandSpec("navigation_approval.cancel", Role.OPERATOR, False),
         CommandSpec("navigation_approval.seal", Role.OPERATOR, False, frozenset({"operator", "test_surface"})),
         CommandSpec("navigation_approval.start_navigation", Role.OPERATOR, False),
+        CommandSpec("navigation_fallback.status", Role.VIEWER, False),
+        CommandSpec("navigation_fallback.stage", Role.MACHINE, False),
+        CommandSpec("navigation_fallback.switch", Role.MACHINE, False, frozenset({"reason"})),
         CommandSpec("release.status", Role.VIEWER, False),
         CommandSpec("release.install", Role.ADMINISTRATOR, True, frozenset({"release_id"})),
         CommandSpec("release.rollback", Role.ADMINISTRATOR, True),
@@ -117,6 +121,7 @@ class HostCommands(Protocol):
 
     def network_status(self) -> dict: ...
     def navigation_approval(self, action: str, *arguments: str) -> dict: ...
+    def navigation_fallback(self, action: str, *arguments: str) -> dict: ...
     def lane_perception_status(self) -> dict: ...
     def set_lane_perception(self, paint_source: str) -> dict: ...
     def register_ssh_key(self, public_key: str) -> dict: ...
@@ -335,6 +340,15 @@ class HostAgent:
                 f"actor role {raw!r} is not recognised",
                 "CORE 가 viewer, operator 또는 administrator 를 실어 보내야 합니다.",
             )
+        if spec.role is Role.MACHINE and role is not Role.MACHINE:
+            return (
+                "HOST_AGENT_ROLE_INSUFFICIENT",
+                f"{spec.name} is for CORE's supervisor only, actor is {role.value}",
+                "이 명령은 CORE 의 자동 전환 감독기만 보냅니다.",
+            )
+        if role is Role.MACHINE and spec.role not in (Role.MACHINE, Role.VIEWER):
+            return ("HOST_AGENT_ROLE_INSUFFICIENT", f"{spec.name} is not a machine command",
+                    "machine 등급은 읽기와 자동 전환 명령만 보낼 수 있습니다.")
         if spec.role is Role.OPERATOR and role is Role.VIEWER:
             return (
                 "HOST_AGENT_ROLE_INSUFFICIENT",
@@ -454,6 +468,9 @@ class HostAgent:
             "navigation_approval.seal": lambda: self._commands.navigation_approval(
                 "seal", params["operator"], params["test_surface"]),
             "navigation_approval.start_navigation": lambda: self._commands.navigation_approval("start_navigation"),
+            "navigation_fallback.status": lambda: self._commands.navigation_fallback("status"),
+            "navigation_fallback.stage": lambda: self._commands.navigation_fallback("stage"),
+            "navigation_fallback.switch": lambda: self._commands.navigation_fallback("switch", params["reason"]),
             "release.status": lambda: self._commands.release_status(),
             "release.install": lambda: self._commands.install_release(params["release_id"]),
             "release.rollback": lambda: self._commands.rollback_release(),

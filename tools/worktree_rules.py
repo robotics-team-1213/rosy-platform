@@ -282,3 +282,33 @@ def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: boo
         say(f"[worktrees] {'archived' if apply else 'would archive'} {done} unlanded branch(es) idle over"
             f" {ABANDON_DAYS} days with no worktree (refs/archive/<branch>@<sha>)")
     return done
+
+
+def newest_file(path: Path, is_cache) -> float:
+    """Newest mtime of any file outside ``.git`` and the caches: a used worktree that git sees as unchanged is active.
+    shortcut: a full walk per judged worktree, run only when the cheap facts did not decide."""
+    newest = 0.0
+    for folder, dirs, files in os.walk(path):
+        inside = Path(folder).relative_to(path).as_posix()
+        dirs[:] = [d for d in dirs if d != ".git" and not is_cache(f"{'' if inside == '.' else inside + '/'}{d}/")]
+        newest = max([newest, *(os.path.getmtime(os.path.join(folder, n)) for n in files if n != ".git")])
+    return newest
+
+
+def owner_notes(root: Path, git) -> tuple[dict[str, str], dict[str, float]]:
+    """(branch -> identity, branch -> epoch) from the note ``new`` wrote in ``branch.<name>.description``:
+    "owner: <identity>[; at <epoch>][; over cap ...]". A note without a stamp has no epoch; no identity is no owner."""
+    lines = git(root, "config", "--get-regexp", r"^branch\..*\.description$").stdout.splitlines()
+    owners, stamps = {}, {}
+    for key, _, value in (line.partition(" ") for line in lines):
+        if not value.startswith("owner: "):
+            continue
+        branch = key[len("branch."):-len(".description")]
+        who = value.removeprefix("owner: ").split("; over cap")[0]
+        stamp = re.search(r"; at (\d+)", who)
+        who = who.split("; at ")[0]
+        if who.strip(" <>;"):  # " <>": no git identity was set
+            owners[branch] = who
+        if stamp:
+            stamps[branch] = float(stamp.group(1))
+    return owners, stamps

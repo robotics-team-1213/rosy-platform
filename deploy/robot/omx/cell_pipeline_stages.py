@@ -9,6 +9,7 @@ continue to work identically.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import math
 from pathlib import Path
 import sys
@@ -268,6 +269,35 @@ def grasp_yaw(config: dict, calibration: dict, site: str, found: dict, choices):
     learned = (calibration["sites"].get(record_key(site, "top")) or {}).get("wrist") is not None
     cap = config.get("max_turn_deg", 45.0 if learned else 10.0)
     return pick, round(base + max(-cap, min(cap, found.get("turn_deg", 0.0))), 1)
+
+
+def lift_arg(text: str) -> tuple:
+    """--lift JOINT:DELTA, for example elbow_flex:-10."""
+    try:
+        joint, delta = text.split(":")
+        return joint, float(delta)
+    except ValueError:
+        import argparse
+
+        raise argparse.ArgumentTypeError("--lift requires JOINT:DELTA, for example elbow_flex:-10") from None
+
+
+def home(cell, config: dict, library: Path, person_at_switch: bool, *, lift=None) -> dict:
+    """Use the reviewed home frame to recover an empty, folded arm with an operator at the switch."""
+    from cell_unwedge import return_home
+    from chunk_runner import NAMES
+
+    if not person_at_switch:
+        return {"result": "refused", "error": "home requires --person-at-switch"}
+    library = library.expanduser()
+    try:
+        document = json.loads(library.read_text(encoding="utf-8"))
+        if tuple(document["names"]) != tuple(NAMES):
+            raise ValueError("library joint order differs from the runner")
+        result = return_home(cell, document["chunks"]["home"][-1], config, lift=lift)
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:
+        result = {"result": "refused", "error": str(exc)}
+    return {"library": str(library), **result}
 
 
 def recover(cell, config: dict, site: str, work: Path, person_at_switch: bool) -> dict:

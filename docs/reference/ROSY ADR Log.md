@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1055 | PR + Merge Queue를 유일한 병합 경로로 하고 land.py 착지를 은퇴한다(D-868 개정). [전문](../adr/D-1055-pr-merge-queue-only-merge-path-land-retired.md) | Accepted (2026-11-20, 사용자 결정) |
 | D-1052 | 셀프 리뷰 1급 지원, 블로킹 FULL 폐지(Zero-FULL), Merge Queue 직행. [전문](../adr/D-1052-self-review-and-zero-full-ci.md) | Accepted (2026-11-19, 사용자 결정) |
 | D-1035 | 셀 팔 리스, Calibration 보정 작업 API, AI 판정 기록으로 팔 incident 해제(D-971 해제 주체 변경). [전문](../adr/D-1035-calibration-arm-lease-jobs-and-ai-incident-assessment.md) | Accepted (2026-11-17, 사용자 결정; 배포·실물 수용 별도) |
 | D-1024 | OMX 학습 정책의 실물 입회 시험을 하루 안에 연다 — D-793 단계를 줄이되 장치 한계·정지·두 사람 확인은 그대로 둔다. [전문](../adr/D-1024-omx-learned-policy-supervised-real-trial-fast-track.md) | Accepted (2026-11-14, 사용자 지시; 구현·원격 시험, 실물 수용 없음) |
@@ -28,6 +29,9 @@
 | D-1038 | 게시 PR 예약 병합·review-gate 추가 전용 면제·긴급 차선 (2026-11-17 사용자 승인). [전문](../adr/D-1038-scheduled-publish-merge-review-gate-append-only-and-urgent-lane.md) | Proposed (2026-11-17) |
 | D-1043 | 보기 전용도 Fleet 전체 비상 정지(`/api/fleet/estop`)를 누른다 — 해제·재가동은 그대로 운영자. [전문](../adr/D-1043-viewer-may-press-the-fleet-site-estop.md) | Accepted (2026-11-18, 사용자 결정) |
 | D-1039 | 설정된 AI assessor 서비스 자격은 지정된 팔의 안전한 incident(접혀 토크 OFF로 끝나고 신호가 없거나 주차 중 부하 정지뿐인 것)만, 팔마다 하루 한 번 기계 해제로 표시해 해제한다. 사람 해제는 그대로. [전문](../adr/D-1039-ai-assessor-kind-limited-incident-clear.md) | Accepted (2026-11-17, D-1035 사용자 결정; 구현·원격 시험, 배포·토큰 발급·실물 수용 별도) |
+| D-1046 | SLAM이 무너지면 Fleet 사이트 벽 지도(사이트 좌표)로 자동 전환 — 정지 먼저, 부팅당 한 번, SLAM 복귀 없음, 첫 자세는 loc_assist 후보와 천장 카메라 180° 판정. [전문](../adr/D-1046-slam-fallback-to-the-site-wall-map.md) | Accepted (2026-11-18, 사용자 결정 "무조건 자동전환"; 실물 수용 별도) |
+| D-1047 | 셀 S 자동화: 카메라가 하역 끝을 정하고(개수 입력 없음) 하역 판정이 맞으면 Pinky가 사이트 출구로 자동 출발, 통신 끊김으로 끝나 토크 OFF로 쉬는 팔 사건은 셀이 바로 기계 해제(D-1039 개정: 종류 추가, 하루 세 번). [전문](../adr/D-1047-cell-s-automatic-departure-and-link-failure-clear.md) | Accepted (2026-11-19, 사용자 결정; 구현·원격 시험, 배포·실물 수용 별도) |
+| D-1048 | 뻗은 채 멈춘 팔은 위 카메라로 확인한 막히지 않은 길(park, 어깨 회전 우회, unwedge)로 스스로 접고, home 3단위 안·토크 0을 잰 증거로 assessor가 해제(래치·감김은 사람). [전문](../adr/D-1048-automatic-fold-of-a-held-extended-arm.md) | Accepted (2026-11-19, 사용자 결정; 구현·원격 시험, 셀 설정·첫 입회 수용 별도) |
 | D-1021 | ROSY 공통: 값마다 소유자 하나, 신원은 Account, 배치는 비공개 현장 배치 지도 — 다섯 층·정본 표·변경 절차·완료 네 상태. [전문](../adr/D-1021-one-owner-per-value-identity-in-account-placement-in-site-map.md) | Accepted (2026-11-13, 사용자 승인; 일부 구현·운영 수용 별도) |
 | D-1017 | peer 위치 공유로 지도 자세 앵커 보강 — 카메라·운영자 핀 뒤에서만, 첫 앵커는 DEGRADED. [전문](../adr/D-1017-peer-sighting-map-pose-anchor.md) | Proposed (2026-11-11, 사용자 지시; 구현·원격 시험, 현장 수용 없음) |
 | D-1022 | 기체 SLAM 지도와 현장 지도의 결속 — 실제로 읽은 격자(`map_grid_id`)·현장 지도 버전에 묶인 승인 변환, 벽에서 마커 없이 제안, 켜진 현장의 free 목표는 결속으로만. [전문](../adr/D-1022-robot-map-binding.md) | Proposed (2026-11-14, 사용자 지시; 호스트 시험까지, 실물 미수행) |
