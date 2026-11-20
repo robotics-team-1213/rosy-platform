@@ -55,7 +55,7 @@ def test_enqueues_only_the_verified_head(monkeypatch, tmp_path):
         calls.append(cmd)
         if cmd[:2] == ["git", "rev-parse"]:
             return "fix/topic" if "--abbrev-ref" in cmd else head
-        if cmd[:2] in (["git", "status"], ["git", "push"]):
+        if cmd[:2] in (["git", "status"], ["git", "push"], ["git", "config"]):
             return ""
         if cmd[:3] == ["gh", "pr", "list"]:
             return '[{"number": 42}]'
@@ -145,3 +145,54 @@ def test_lab_only_requires_intact_lab_cache_and_ci_covers_lab_ids(tmp_path, monk
     pr_land.verify_lab_evidence(tmp_path, head, [inv])
     assert pr_land.covers_lab_baseline(tmp_path, head, inv, "PASSED middleware/devices/omx/adapter/test/test_a.py::test_one\n")
     assert not pr_land.covers_lab_baseline(tmp_path, head, inv, "1 skipped\n")
+
+
+def _push_fake(monkeypatch, tmp_path, *, publish_only, active, lab=()):
+    head = "a" * 40
+    calls = []
+
+    def fake_run(cmd, cwd, env=None, check=True):
+        calls.append((cmd, env))
+        if cmd[:2] == ["git", "rev-parse"]:
+            return "fix/topic" if "--abbrev-ref" in cmd else head
+        if cmd[:3] == ["git", "config", "--bool"]:
+            return "true" if cmd[3] == "rosy.publishOnly" and publish_only else ""
+        if cmd[:2] in (["git", "status"], ["git", "push"], ["git", "log"]):
+            return ""
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return '[{"number": 7}]'
+        if cmd[:3] == ["gh", "pr", "merge"]:
+            return ""
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(pr_land, "_run", fake_run)
+    monkeypatch.setattr(pr_land, "activated", lambda cwd: active)
+    monkeypatch.setattr(pr_land, "check_coexistence", lambda *a, **kw: "origin/main")
+    monkeypatch.setattr(pr_land, "required_lab_invocations", lambda *a: [list(i) for i in lab])
+    monkeypatch.setattr(pr_land, "verify_lab_evidence", lambda *a: calls.append((["verify"], None)))
+    return calls
+
+
+@pytest.mark.parametrize("publish_only,active,expect", [(True, True, True), (True, False, False), (False, True, False)])
+def test_push_env_carries_reason_only_when_publish_only_and_activated(monkeypatch, tmp_path, publish_only, active, expect):
+    monkeypatch.setenv("ROSY_SESSION_NAME", "sess1")
+    monkeypatch.delenv("ROSY_PUSH_REASON", raising=False)
+    calls = _push_fake(monkeypatch, tmp_path, publish_only=publish_only, active=active)
+    assert pr_land.main([], repo=tmp_path) == 0
+    push_env = next(env for cmd, env in calls if cmd[:2] == ["git", "push"])
+    assert push_env.get("ROSY_PUSH_REASON") == ("pr_land D-1055 sess1" if expect else None)
+    assert "ROSY_PUSH_REASON" not in pr_land.os.environ
+
+
+def test_evidence_flag_runs_pr_evidence_before_verify(monkeypatch, tmp_path):
+    inv = ["middleware/devices/omx/adapter/test"]
+    calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False, lab=[inv])
+    fake = type(sys)("pr_evidence")
+    fake.main = lambda argv, repo=None: calls.append((["evidence", *argv], None)) or 0
+    monkeypatch.setitem(sys.modules, "pr_evidence", fake)
+    assert pr_land.main(["--evidence", "--dry-run"], repo=tmp_path) == 0
+    order = [c[0][0] for c in calls if c[0][0] in ("evidence", "verify")]
+    assert order == ["evidence", "verify"]
+    calls.clear()
+    assert pr_land.main(["--dry-run"], repo=tmp_path) == 0
+    assert [c[0][0] for c in calls if c[0][0] == "evidence"] == []

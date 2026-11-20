@@ -20,6 +20,7 @@ PUBLISH_REF=""
 # D-868: a clone with `git config rosy.publishOnly true` (the shared agent clone) reaches
 # origin only through publish/main-* PRs; teammates' clones leave it unset and are not gated.
 PUBLISH_ONLY=$(git config --bool rosy.publishOnly 2>/dev/null || true)
+# D-1055: tools/pr_land.py sets ROSY_PUSH_REASON for its own push only (when activated); do not export it globally.
 if [ $# -ge 2 ]; then
   while read -r _ local_sha remote_ref _; do
     if [ "$PUBLISH_ONLY" = "true" ] && [ -z "${ROSY_PUSH_REASON:-}" ]; then
