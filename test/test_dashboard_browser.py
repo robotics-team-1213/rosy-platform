@@ -561,8 +561,8 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
         assert set(warm) <= {"ui-button#emergency-stop.stop-button"}, (
             f"정상 상태의 경보 예산 밖 따뜻한 색: {warm}"
         )
-        assert page.locator("#network-rx-rate").inner_text() == "—"
-        assert page.locator("#network-tx-rate").inner_text() == "—"
+        assert page.locator("#network-rx-rate").inner_text() == "정보 없음"
+        assert page.locator("#network-tx-rate").inner_text() == "정보 없음"
         assert "그래프 수집 불가" in page.locator("#ros-risk-list").inner_text()
         assert page.locator("#ros-risk-list .risk-clear").count() == 0
         assert page.locator("#bench-safety-confirmed").count() == 0
@@ -808,8 +808,8 @@ def test_unavailable_camera_keeps_missing_timestamps_missing():
             "window.__apiCalls?.some((call) => call.path === '/api/v1/vision/front/status')"
         )
         page.wait_for_timeout(100)
-        assert page.locator("#vision-age").inner_text() == "\u2014"
-        assert page.locator("#vision-captured").inner_text() == "\u2014"
+        assert page.locator("#vision-age").inner_text() == "정보 없음"
+        assert page.locator("#vision-captured").inner_text() == "정보 없음"
         browser.close()
 
 def test_camera_preview_is_cleared_when_reauthentication_fails():
@@ -1036,7 +1036,7 @@ def test_console_state_matrix_renders_each_state(state):
             assert page.locator("#network-mode").inner_text() == "SITE_STA"
             assert page.locator("#dds-isolation").inner_text() == "LOOPBACK ONLY"
             assert page.locator("#ros-graph-status").inner_text() == "OK"
-            assert page.locator("#network-rx-rate").inner_text() != "—"
+            assert page.locator("#network-rx-rate").inner_text() != "정보 없음"
             assert page.locator("#dds-rmw").is_visible()
             assert page.locator("#network-mode").is_visible()
             # F-08 — 정상 그래프의 토픽 마커는 경보 색을 쓰지 않는다(D-82:
