@@ -124,6 +124,12 @@ def test_skill_contract_records_lifecycle_and_freezes_invocation_inputs():
         SkillInvocation("pallet.transfer", "1.0.0", {"distance_m": float("nan")})
 
 
+def test_plan_types_are_the_skill_contract_objects_re_exported_by_execution_api():
+    import rosy.contracts.skill as contract
+    assert PlanBundle is contract.PlanBundle and PlanStep is contract.PlanStep
+    assert PlanBundle.__module__ == "rosy.contracts.skill.plan"
+
+
 def test_plan_bundle_binds_job_hashes_and_order_without_authority_fields():
     recipe_digest = sha256(b"recipe").hexdigest()
     cell_digest = sha256(b"cell").hexdigest()

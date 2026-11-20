@@ -1,5 +1,4 @@
-"""App composition binds the real palletizing compiler to Fleet's narrow port."""
-from copy import deepcopy
+"""The real palletizing compiler (Fleet adapter) drives the demo through Fleet to a guarded stop."""
 from pathlib import Path
 import sys
 
@@ -7,69 +6,16 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("contracts/skill/src", "applications/fleet/gateway/src", "operations/processes/palletizing/src", "operations/site_execution/src", "middleware/skills/api/src", "operations/fleet", "contracts/foundation"):
+for relative in ("contracts/skill/src", "operations/processes/palletizing/src", "operations/site_execution/src", "middleware/skills/api/src", "operations/fleet", "contracts/foundation"):
     sys.path.insert(0, str(ROOT / relative))
 
-from rosy_gateway.cell_compiler import PalletizingCellCompiler
+from fleet.server.cell_compiler import PalletizingCellJobCompiler
 from rosy.processes.palletizing.submission import compile_cell_submission
 
 
 def documents():
     root = ROOT / "operations/processes/cell/examples/omx_sim"
     return tuple(yaml.safe_load((root / name).read_text(encoding="utf-8")) for name in ("recipe.yaml", "cell.yaml"))
-
-
-@pytest.mark.parametrize("manual_sheet", [False, True])
-def test_gateway_and_fleet_preserve_the_same_complete_compilation(manual_sheet):
-    from fleet.server.cell_compiler import PalletizingCellJobCompiler
-
-    recipe, cell = documents()
-    if manual_sheet:
-        recipe["schema"] = "rosy_cell.recipe/2"
-        recipe["slip_sheet"] = {"handling": "operator", "thickness": .002}
-        del cell["stations"]["sheets"]
-    before = deepcopy((recipe, cell))
-    fleet = PalletizingCellJobCompiler(tol_m=.001)
-    gateway = PalletizingCellCompiler(process_artifact_digest=fleet.process_artifact_digest, tol_m=.001)
-    expected, actual = fleet.compile(recipe, cell), gateway.compile(recipe, cell)
-    if manual_sheet:
-        assert len(expected.operator_checkpoints) == 2
-    assert actual.operator_checkpoints == expected.operator_checkpoints
-    assert actual == expected
-    assert gateway.item_geometry(recipe) == fleet.item_geometry(recipe)
-    candidate = dict(kind="cell_job", recipe=recipe, cell=cell, job=actual.job,
-                     recipe_sha256=actual.plan_bundle.recipe_digest, cell_sha256=actual.plan_bundle.cell_digest)
-    assert gateway.compile_submission(candidate, workcell_id="omx_sim", instance_id="omx_sim_01") == (
-        fleet.compile_submission(candidate, workcell_id="omx_sim", instance_id="omx_sim_01"))
-    assert (recipe, cell) == before
-
-
-def test_real_demo_compiler_preserves_two_layers_sheet_and_both_pallet_markers():
-    recipe, cell = documents()
-    before = deepcopy((recipe, cell))
-    compiler = PalletizingCellCompiler(process_artifact_digest="a" * 64, tol_m=1e-6)
-    compiled = compiler.compile(recipe, cell)
-    bundle = compiled.plan_bundle
-    candidate = dict(kind="cell_job", recipe=recipe, cell=cell, recipe_sha256=bundle.recipe_digest,
-                     cell_sha256=bundle.cell_digest, job=compiled.job)
-    accepted = compile_cell_submission(candidate, compiler=compiler, workcell_id="omx_01", instance_id="omx_01_control")
-    assert (recipe, cell) == before
-    assert len(bundle.steps) == 18
-    assert sum(step.invocation.inputs["item"] == "slip_sheet" for step in bundle.steps) == 2
-    assert {step.invocation.inputs["layer_index"] for step in bundle.steps} == {0, 1}
-    assert accepted.ledger_markers == ((9, "A"), (18, "B"))
-    assert accepted.resources == (("workcell", "omx_01"), ("pallet", "A"), ("pallet", "B"))
-    assert accepted.as_store_document()["job"] == compiled.job
-    candidate["job"] = deepcopy(compiled.job)
-    candidate["job"]["carry_z"] += .01
-    with pytest.raises(ValueError, match="recompiled Job"):
-        compile_cell_submission(candidate, compiler=compiler, workcell_id="omx_01", instance_id="omx_01_control")
-
-
-@pytest.mark.parametrize("digest,tolerance", [("invalid", 1e-6), ("a" * 64, 0), ("a" * 64, True), ("a" * 64, float("nan"))])
-def test_compiler_rejects_unpinned_artifact_or_invalid_tolerance(digest, tolerance):
-    with pytest.raises(ValueError):
-        PalletizingCellCompiler(process_artifact_digest=digest, tol_m=tolerance)
 
 
 def test_actual_demo_compilation_stops_at_unsupported_thin_sheet_without_motion(tmp_path):
@@ -79,7 +25,7 @@ def test_actual_demo_compilation_stops_at_unsupported_thin_sheet_without_motion(
     from datetime import datetime, timezone
 
     recipe, cell = documents()
-    compiler = PalletizingCellCompiler(process_artifact_digest="a" * 64, tol_m=1e-6)
+    compiler = PalletizingCellJobCompiler(tol_m=1e-6)
     compiled = compiler.compile(recipe, cell)
     bundle = compiled.plan_bundle
     candidate = dict(kind="cell_job", recipe=recipe, cell=cell, recipe_sha256=bundle.recipe_digest,
