@@ -5,8 +5,8 @@ on:
     branches: [main]
   pull_request:
   # D-762 stage 1: a merge queue group runs the full tier against its base (no effect until the
-  # queue is turned on, stage 3). No `concurrency:` group: cancelling a queue or main push run hides
-  # its failure, and a workflow-level group would also bind ubuntu-26.04-rehearsal.yml's call.
+  # queue is turned on, stage 3). The `concurrency:` block below cancels only pull_request runs:
+  # cancelling a queue or main push run hides its failure.
   merge_group:
   # D-436: PR 은 affected 티어, main push·주간·수동 실행은 풀 티어를 GitHub 러너에서
   # 병렬 matrix 로 돈다. 로컬 PC 는 affected 티어와 pre-push 패스트 게이트만 돈다.
@@ -22,10 +22,17 @@ on:
         type: string
         default: ubuntu-24.04
 
+# 새 push 가 같은 PR 의 낡은 실행을 취소한다. merge_group·push·schedule·dispatch·call 은 run_id 로
+# 서로 다른 그룹이라 취소되지 않는다.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # D-436: 시험 범위와 병렬 matrix 를 정한다. pull_request 는 변경 범위(affected) 티어 —
   # 선택기가 공용 기반·CI/시험 설정·미분류 파일 때문에 FULL 로 올리면 풀 matrix 다.
-  # main push·merge_group·schedule·workflow_dispatch·workflow_call(PR 이 아닌 호출)은 항상 풀이다.
+  # merge_group·main push 도 affected 티어다(base 가 없거나 못 찾으면 push 는 FULL 로 올리고 merge_group 은
+  # 실패한다). schedule·workflow_dispatch·workflow_call(PR 이 아닌 호출)만 항상 풀이다.
   # D-430 Safety-Review 도 여기서 한 번만 돈다(전체 이력이 필요한 유일한 선행 검사).
   scope:
     # D-135 전환 (2026-09-20): ubuntu-26.04 리허설 연속 녹색 후 게이팅 러너를
