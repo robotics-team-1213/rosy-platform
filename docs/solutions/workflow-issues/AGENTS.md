@@ -19,6 +19,7 @@ Compound lessons about verification process: a gate that cannot actually check i
 | `a-contract-version-bump-is-three-pins-not-one.md` | A contract-version bump is three pins, not one: the reference header, app.py docstring + description, and the line-follow literal move in the same commit (D-347); run the two tripwire tests before pushing a MINOR bump |
 | `in-process-uvicorn-config-hides-logs-from-caplog-2026-10-31.md` | An in-process uvicorn.Config sets 'uvicorn' propagate=False, so caplog misses uvicorn.* logs in the same CI shard; attach the handler to the logger, and replace a red publish PR by landing, closing it and --force-blocked |
 | `verify-what-you-ship-the-working-tree-is-not-the-commit.md` | Verify what you ship: gates that matter run against the commit, not the shared working tree - measure contested guards in a clean worktree at HEAD, stage by content, and document any --no-verify with that evidence |
+| `r-healthy-arm-panel-was-a-hand-patched-fake-and-the-cell-mirror-env-was-empty-2026-11-20.md` | R 콘솔의 "건강한 팔"은 손 패치 이미지의 가짜였고 셀 미러 환경 키는 비어 있었다: fresh인데 sequence가 안 변하면 가짜, 셀과 R sequence 비교, 미러 키 확인, 서명 이미지만 배포 |
 
 ## Subdirectories
 
