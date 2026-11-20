@@ -24,6 +24,7 @@ for _extra in (str(TOOLS), str(TOOLS / "remote"), str(TOOLS / "harness"), str(TO
 import affected_ci  # noqa: E402
 import affected_exclusive  # noqa: E402
 import land_cache  # noqa: E402
+import land_freeze  # noqa: E402
 import work_queue  # noqa: E402
 
 ACT = next(e for e in affected_ci.CI_FULL_MATRIX if e["name"] == "omx-act-cpu")
@@ -95,6 +96,15 @@ def activated(cwd: Path) -> bool:
         if re.search(r"(?m)^\*\*Status:\*\*\s*Accepted\b", adr.read_text(encoding="utf-8", errors="replace")):
             return True
     return False
+
+
+def cutover_refusal(cwd: Path) -> str | None:
+    """Refuse submission while the cutover phase is drain; open and normal pass (activation is checked separately)."""
+    state = land_freeze.load(cwd)
+    if state["phase"] != "drain":
+        return None
+    who = state.get("owner") or "unknown"
+    return f"[pr-land] cutover phase drain: PR submission closed; owner {who}; state file {land_freeze.path(cwd)}"
 
 
 def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> str:
@@ -211,6 +221,9 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
         raise SystemExit("[pr-land] working tree is dirty; commit explicit files first")
 
     head = _run(["git", "rev-parse", "HEAD"], cwd)
+    refused = cutover_refusal(cwd)
+    if refused and not args.dry_run:
+        raise SystemExit(refused)
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
     lab_needed = required_lab_invocations(cwd, base, head)
     if args.evidence and lab_needed:
@@ -223,6 +236,8 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     title = args.title or _run(["git", "log", "-1", "--format=%s", "HEAD"], cwd)
     body = build_body(args.body, args.self_review)
     if args.dry_run:
+        if refused:
+            print(f"{refused} (a real run would stop here)")
         print(f"[pr-land] dry-run branch={branch} lab_required={len(lab_needed)} title={title!r}")
         print(f"[pr-land] plan: git push -u origin {branch}; gh pr create|edit (base main, head {branch}); "
               f"gh pr merge --auto --merge --match-head-commit {head}; then exit (no waiting)")
