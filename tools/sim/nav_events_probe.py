@@ -136,7 +136,7 @@ def run(args):
     if args.slam:  # the two-camera wrapper only knows none|nav; gz_multi takes mode:=slam directly
         launch = ['ros2', 'launch', 'gz_sim', 'gz_multi.launch.py', f'robots:={len(ft.ROBOTS)}', 'prefix:=rosy', 'world_name:=map_v2_fleet_real.world',
                   'mode:=slam', 'headless:=true', 'nominal_camera:=true', 'core:=true', f'run_spec:={root / "run_spec.yaml"}', poses]
-    result = dict(run_id=run_id, executor=os.environ.get('ROSY_CORE_EXECUTOR', 'threaded'), cases={})
+    result = dict(run_id=run_id, executor=os.environ.get('ROSY_CORE_EXECUTOR', 'events'), cases={})
     log = (out / 'api-log.jsonl').open('w', buffering=1)
     ns, probe = ft.ROBOTS[0], None
     core, tok = None, None
