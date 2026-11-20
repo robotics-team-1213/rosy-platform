@@ -14,6 +14,17 @@ from typing import Any, Callable
 from urllib.error import HTTPError
 
 DROP_CODES = (409, 422)  # Fleet refused this exact body on its merits (another record, stale or invalid): not retried
+STALE_S = 65  # Fleet takes owner evidence for 60 s after measured_at; measured again only once that has surely passed
+WAITING_FOR_PERSON = "BED_CONFIRMATION_INVALID"  # 422 on /complete: the bed confirmation lapsed; a named operator confirms again
+RETRY_LATER = ("OMX_OWNER_EVIDENCE_UNAVAILABLE",)  # 422 on /complete: the evidence expired in between; measured again on a later poll
+
+
+def refusal_code(exc: HTTPError) -> str:
+    """The Fleet error code of a refused request (detail.code), else the HTTP reason text."""
+    try:
+        return str(json.loads(exc.read())["detail"]["code"])
+    except Exception:
+        return str(exc.msg)
 
 
 def abort_reason(hw_tel: dict[str, Any]) -> str:
@@ -76,7 +87,6 @@ class Outbox:
         return self._read()
 
 
-STALE_S = 50.0  # Fleet refuses owner evidence measured more than 60 s ago
 
 
 def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any] | None], dict[str, Any]],
@@ -84,9 +94,10 @@ def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any
                    now: float | None = None) -> list[dict[str, Any]]:
     """Resend every kept result whose task Fleet still shows RUNNING under the same lease. Returns what was done.
 
-    Owner evidence measured STALE_S or more ago would be refused by Fleet, so it is measured again first (no arm motion) and the
-    kept result is replaced by the fresh one. If that fails the entry stays with `last_refusal` and the task stays RUNNING for a
-    person to clean up.
+    While Fleet still holds the original owner evidence (60 s) only /complete is retried, with the same body; a 409
+    OWNER_EVIDENCE_ALREADY_RECORDED on the evidence means it is already there. Only after it has expired (STALE_S) is the result
+    measured again (no arm motion) and replaced. If that fails the entry stays with `last_refusal` and the task stays RUNNING for a
+    person to clean up. A 422 BED_CONFIRMATION_INVALID keeps the entry with `last_refusal`: a named operator confirms the bed again.
     """
     import time
 
@@ -118,10 +129,21 @@ def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any
                 continue
         try:
             if entry.get("owner_evidence") is not None:
-                request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence", entry["owner_evidence"])
+                try:
+                    request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence", entry["owner_evidence"])
+                except HTTPError as exc:
+                    if exc.code != 409 or refusal_code(exc) != "OWNER_EVIDENCE_ALREADY_RECORDED":
+                        raise  # a 409 is only "already recorded": the entry stays and /complete is retried below
             request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", entry["complete"])
         except HTTPError as exc:
-            if exc.code in DROP_CODES:
+            code = refusal_code(exc) if exc.code == 422 else None
+            if code == WAITING_FOR_PERSON:
+                entry["last_refusal"] = {"reason": code, "at": now}
+                outbox.put(task_id, entry)
+                done.append({"task_id": task_id, "action": "kept", "reason": "waiting for a named operator to confirm the bed"})
+            elif code in RETRY_LATER:
+                done.append({"task_id": task_id, "action": "kept", "reason": code})
+            elif exc.code in DROP_CODES:
                 outbox.drop(task_id)
                 done.append({"task_id": task_id, "action": "dropped", "reason": f"Fleet refused the result ({exc.code})"})
             else:  # 403 until the principal is registered, 5xx, ...: try again next poll

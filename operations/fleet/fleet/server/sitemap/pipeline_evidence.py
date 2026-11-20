@@ -168,7 +168,24 @@ def zone_pose(app, task: dict):
 
 
 def _bed_valid(rec: dict) -> bool:
-    return not rec.get("invalid") and 0 <= time.time() - rec["confirmed_at"] <= BED_CONFIRM_TTL_S
+    """Not voided, and either bound to a claimed task's lease (the 120 s only bounds the wait for the claim) or inside the TTL."""
+    return not rec.get("invalid") and (bool(rec.get("lease")) or 0 <= time.time() - rec["confirmed_at"] <= BED_CONFIRM_TTL_S)
+
+
+def bind_bed(app, task: dict) -> None:
+    """At the claim: consume the task's bed confirmation into its lease (who, when, pose and map version at that moment)."""
+    rec = (getattr(app.state, "cell_bed_confirmations", None) or {}).get(task["task_id"])
+    if rec is not None and _bed_valid(rec):
+        rec["lease"] = task.get("handoff_lease_id")
+        task["bed_confirmation"] = {"operator": rec["principal_id"], "confirmed_at": rec["confirmed_at"], "pose": dict(rec["pose"]),
+                                    "map_id": rec["map_id"], "map_version": rec["map_version"]}
+
+
+def bed_confirmation_lost(app, task: dict) -> bool:
+    """True for a claimed task that had a bed confirmation which is no longer valid under its lease (needs a named operator)."""
+    rec = (getattr(app.state, "cell_bed_confirmations", None) or {}).get(task["task_id"])
+    return task.get("bed_confirmation") is not None and (
+        rec is None or not _bed_valid(rec) or rec.get("lease") != task.get("handoff_lease_id"))
 
 
 def _map_state(app) -> tuple:
@@ -219,6 +236,8 @@ def _bed_ready(app, task: dict, pose: dict) -> bool:
     rec = (getattr(app.state, "cell_bed_confirmations", None) or {}).get(task["task_id"])
     if rec is None or rec["robot_id"] != task["robot_id"] or not _bed_valid(rec):
         return False
+    if task.get("status") == "RUNNING" and rec.get("lease") != task.get("handoff_lease_id"):
+        return False  # a RUNNING task releases only on a confirmation bound to its own lease
     check_beds(app, task["robot_id"])  # also at the time of asking, for a deployment whose sink could not be chained
     return not rec.get("invalid") and math.hypot(pose["x"] - rec["pose"]["x"], pose["y"] - rec["pose"]["y"]) <= BED_MOVE_LIMIT_M
 
@@ -347,18 +366,27 @@ def install_evidence_routes(app, ctx) -> None:
             raise _error(403, "NAMED_OPERATOR_REQUIRED")
         if not isinstance(body, dict) or body.get("robot_id") != task["robot_id"]:
             raise _error(422, "BED_CONFIRM_ROBOT_MISMATCH")
-        if task.get("status") != "QUEUED":
-            raise _error(409, "CELL_TASK_NOT_QUEUED")
         old = app.state.cell_bed_confirmations.get(task_id)
+        lost = task.get("status") == "RUNNING" and bed_confirmation_lost(app, task)
+        if task.get("status") != "QUEUED" and not lost:  # a RUNNING task may be confirmed again only after its confirmation lapsed
+            raise _error(409, "CELL_TASK_NOT_QUEUED")
         if old is not None and _bed_valid(old):  # a repeated request never renews the expiry or the pose
             return {"ok": True, "renewed": False, "confirmation": old}
         located = zone_pose(app, task)
         if located is None:
             raise _error(409, "BED_CONFIRM_POSE_UNAVAILABLE")
+        if lost:  # the robot must stand still at the station right now, as the release will ask again
+            ev = amr_evidence(app, task)
+            if (ev is None or not ev["wheel_brake_locked"] or abs(ev["v_cmd_mps"]) > 1e-4 or time.time() - ev["observed_at"] > 2.0):
+                raise _error(409, "BED_CONFIRM_ROBOT_NOT_STOPPED")
         rec = {"task_id": task_id, "robot_id": task["robot_id"], "principal_id": principal_id,
                "confirmed_at": time.time(), "pose": located[0], "map_id": _map_state(app)[0], "map_version": _map_state(app)[1]}
         watch_pose_updates(app)
         app.state.cell_bed_confirmations[task_id] = rec
+        if lost:  # same lease, confirmed again under it
+            rec["lease"] = task.get("handoff_lease_id")
+            task["bed_confirmation"] = {"operator": principal_id, "confirmed_at": rec["confirmed_at"], "pose": dict(rec["pose"]),
+                                        "map_id": rec["map_id"], "map_version": rec["map_version"], "renewed": True}
         return {"ok": True, "renewed": True, "confirmation": rec, "expires_in_s": BED_CONFIRM_TTL_S}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm", dependencies=operator_guard)

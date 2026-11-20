@@ -85,7 +85,7 @@ Fleet은 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(proposer
 
 #### 2-4. claim 때 owner 확인과 결과 재전송
 
-`claim`은 호출 주체가 그 셀의 owner로 등록(`ROSY_FLEET_CELL_OWNERS`)되어 있지 않으면 원장을 바꾸기 전에 `claimed:false`, `OWNER_PRINCIPAL_NOT_REGISTERED`로 거부한다(등록되지 않은 주체가 claim하면 결과를 받아 줄 수 없어 작업이 RUNNING으로 남기 때문이다. 인증이 없는 단독 시험 앱은 확인하지 않는다). 팔 실행 뒤 `owner-evidence` 또는 `/complete` 전송이 실패하면 worker가 같은 lease의 결과를 작업 공간 상태 파일(`pending-results.json`)에 보관하고, 다음 폴링마다 **팔을 다시 움직이지 않고** 같은 본문을 재전송한다. 재전송은 Fleet이 그 작업을 RUNNING으로 보이고 lease가 같을 때만 한다(lease가 바뀌었거나 작업이 끝났으면 항목을 버린다). 같은 `owner-evidence` 본문은 Fleet이 동일 기록으로 받고 다른 본문은 409를 유지하며, 409·422는 다시 시도하지 않는다. 403·5xx·연결 끊김은 다음 폴링에 다시 시도한다.
+`claim`은 호출 주체가 그 셀의 owner로 등록(`ROSY_FLEET_CELL_OWNERS`)되어 있지 않으면 원장을 바꾸기 전에 `claimed:false`, `OWNER_PRINCIPAL_NOT_REGISTERED`로 거부한다(등록되지 않은 주체가 claim하면 결과를 받아 줄 수 없어 작업이 RUNNING으로 남기 때문이다. 인증이 없는 단독 시험 앱은 확인하지 않는다). 팔 실행 뒤 `owner-evidence` 또는 `/complete` 전송이 실패하면 worker가 같은 lease의 결과를 작업 공간 상태 파일(`pending-results.json`)에 보관하고, 다음 폴링마다 **팔을 다시 움직이지 않고** 같은 본문을 재전송한다. 재전송은 Fleet이 그 작업을 RUNNING으로 보이고 lease가 같을 때만 한다(lease가 바뀌었거나 작업이 끝났으면 항목을 버린다). 같은 `owner-evidence` 본문은 Fleet이 동일 기록으로 받고 다른 본문은 409를 유지한다(2-7절: 원래 증거가 유효한 동안은 그 409를 "이미 기록됨"으로 보고 `/complete`만 다시 보낸다). 그 밖의 409·422는 다시 시도하지 않는다(적재함 확인 무효는 2-7절). 403·5xx·연결 끊김은 다음 폴링에 다시 시도한다.
 
 #### 2-5. 감독 시험은 사람이 표시한 작업만, 나머지는 D-911 검토 범위 (사용자 결정, 2026-11-20)
 
@@ -95,7 +95,14 @@ worker는 `--commissioning --person-at-switch`를 더 이상 항상 넘기지 �
 
 #### 2-6. 오래된 보관 결과는 팔을 움직이지 않고 다시 측정해 보낸다 (사용자 결정, 2026-11-20)
 
-worker가 보관한 결과(2-4절)의 `owner-evidence`가 `measured_at` 기준 50 s 이상 지났으면 Fleet이 60 s 한계로 거부하므로, 재전송 전에 **팔 없이** 다시 측정한다: 보관해 둔 놓기 전 프레임(작업 공간의 `zone-before`)과 새 상부(·측면) 프레임으로 배치 판정을 다시 하고(셀 S는 상단 전용), 접힘은 지금의 러너 상태와 보관한 `park` readback이 모두 접힘이어야 하며, 새 `measured_at`·digest의 `owner-evidence`와 `/complete` 본문으로 보관 결과를 바꿔 보낸다(재측정에 필요한 맥락은 prep 폴더의 `remeasure-<task_id>.json`에 두고 Fleet에는 보내지 않는다). 다시 측정이 실패하면(프레임 없음, 판정 불합격, 접힘 아님 등) 사유를 보관 항목의 `last_refusal`에 남기고 아무것도 보내지 않으며 작업은 RUNNING으로 남아 사람이 정리한다. lease가 바뀌었거나 RUNNING이 아니면 재측정도 재전송도 하지 않는다.
+worker가 보관한 결과(2-4절)의 `owner-evidence`가 `measured_at` 기준 65 s 이상 지났으면(Fleet 한계 60 s + 두 시계 여유; 2-7절) 재전송 전에 **팔 없이** 다시 측정한다: 보관해 둔 놓기 전 프레임(작업 공간의 `zone-before`)과 새 상부(·측면) 프레임으로 배치 판정을 다시 하고(셀 S는 상단 전용), 접힘은 지금의 러너 상태와 보관한 `park` readback이 모두 접힘이어야 하며, 새 `measured_at`·digest의 `owner-evidence`와 `/complete` 본문으로 보관 결과를 바꿔 보낸다(재측정에 필요한 맥락은 prep 폴더의 `remeasure-<task_id>.json`에 두고 Fleet에는 보내지 않는다). 다시 측정이 실패하면(프레임 없음, 판정 불합격, 접힘 아님 등) 사유를 보관 항목의 `last_refusal`에 남기고 아무것도 보내지 않으며 작업은 RUNNING으로 남아 사람이 정리한다. lease가 바뀌었거나 RUNNING이 아니면 재측정도 재전송도 하지 않는다.
+
+#### 2-7. 검토 7차: 입회는 이번 실행의 것만, 검토된 작업은 검토 경로, 재전송은 원래 증거부터, 적재함 확인은 lease에 묶는다
+
+1. **저장된 설정은 입회를 대신하지 못한다.** `cell_auto_setup.open_cell`은 설정 JSON의 `_commissioning`을 지우고(경고를 stderr에 남긴다) 이번 실행의 `--commissioning --person-at-switch`(Fleet 입회 확인이 있을 때만 worker가 넘긴다)로만 가드에 전달한다.
+2. **검토가 끝난 작업이 먼저다.** `cell_envelope.assess`는 `operating_envelope_path`에 이 `task_sha256`의 검토가 있으면 `_commissioning`이 와도 검토 경로(자동 운전 검사)를 탄다. 시운전 분기는 검토 기록이 없을 때만이다. 그래서 입회 표시가 다시 들어와도 시운전 행이 쌓여 `attempts_sha256`이 달라지는 일(`evidence_changed`)이 없다.
+3. **재전송은 원래 증거부터.** Fleet이 원래 owner 증거를 60 s 들고 있는 동안은 같은 본문으로 `/complete`만 다시 보낸다. `owner-evidence`의 409 `OWNER_EVIDENCE_ALREADY_RECORDED`는 이미 기록됨으로 보고 항목을 지우지 않고 `/complete`를 이어 보낸다(다른 409는 그대로 버린다). 팔 없는 재측정은 원래 증거가 만료된 뒤(`STALE_S` = 65 s)에만 한다. 그 사이 `/complete`가 422 `OMX_OWNER_EVIDENCE_UNAVAILABLE`이면 항목을 두고 다음 폴링에 다시 한다.
+4. **적재함 확인은 claim에서 소비해 lease에 묶는다.** `claim`이 유효한 적재함 확인을 쓰고 확인자·`confirmed_at`·그때의 자세·지도 ID·버전을 작업 행 `bed_confirmation`과 lease에 묶는다. 묶인 뒤 `RELEASED`는 120 s 만료를 다시 보지 않는다(120 s는 claim까지의 대기만 잰다). 다시 확인하는 것은 "확인 뒤 2 cm 넘는 이동 없음·지도 변경 없음"(기존 영구 무효 규칙, 상태 갱신마다)과 정지·정지 위치 증거(`amr_evidence`, 변경 없음)다. 확인이 무효가 됐으면 `/complete`는 422 `BED_CONFIRMATION_INVALID`(속도·정지 미측정은 기존 `AMR_BRAKE_BED_VELOCITY_UNMEASURED`)를 돌려준다. 이때 이름 있는 운영자가 RUNNING 작업에 `bed-confirm`을 다시 보낼 수 있다(같은 lease, 로봇이 지금 정지·정지 구역이어야 하며 아니면 409 `BED_CONFIRM_ROBOT_NOT_STOPPED`; 유효한 확인이 있으면 여전히 409 `CELL_TASK_NOT_QUEUED`). worker는 이 422에서 보관 결과를 두고 `last_refusal`에 사유를 남긴 채 사람을 기다리고, 다른 422(불일치 등)는 이전처럼 버린다.
 
 #### 3. 신뢰 경계
 

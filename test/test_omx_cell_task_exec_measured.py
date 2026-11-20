@@ -233,3 +233,18 @@ def test_a_run_held_by_the_envelope_is_reported_as_review_required(tmp_path, mon
     out = _exec(tmp_path, monkeypatch, {"result": "held: source moved before transfer", "attempts": []})
     assert "review_required" not in out  # another hold is not a review problem
     assert _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt()]})["commissioning"] is False
+
+
+def test_open_cell_ignores_a_commissioning_mark_stored_in_the_config_file_and_warns(tmp_path, monkeypatch, capsys):
+    import cell_auto_setup as setup
+
+    stored = {"cameras": {}, "work_dir": str(tmp_path), "io": str(tmp_path / "io"), "calibration_path": "cal.json",
+              "_commissioning": {"person_at_switch": True}}
+    monkeypatch.setattr(setup, "load_config", lambda path: dict(stored))
+    monkeypatch.setattr(setup.cell_attempts, "start", lambda *a, **k: None)
+    monkeypatch.setattr(setup.cp, "FifoCell", lambda *a, **k: None)
+    monkeypatch.setattr(setup.cp, "KEEP", {})
+    args = SimpleNamespace(config=None, dry_run=True, task_id="t-1")
+    config = setup.open_cell(args)[0]  # no --commissioning on this run
+    assert "_commissioning" not in config and "ignored" in capsys.readouterr().err
+    assert setup.open_cell(args, True)[0]["_commissioning"] == {"person_at_switch": True}  # only this run's own flag sets it

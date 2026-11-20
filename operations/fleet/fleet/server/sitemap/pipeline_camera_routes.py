@@ -212,13 +212,14 @@ def install_cameras_routes(app, ctx) -> None:
         if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
             return {"claimed": False, "task": task, "gate": res["gate"]}
         app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
-        from fleet.server.sitemap.pipeline_evidence import take_presence
+        from fleet.server.sitemap.pipeline_evidence import bind_bed, take_presence
 
         task["presence"] = take_presence(app, task)  # D-1057/D-911: set only for a task a named operator confirmed in time
         task["status"] = "RUNNING"
         task["amr_claim_evidence"] = dict(amr)
         task["handoff_lease_id"] = res["handoff"].get("handoff_lease_id")
         task["claimed_at"] = round(time.time(), 3)
+        bind_bed(app, task)  # D-1057: the bed confirmation is used up here and belongs to this lease from now on
         _enrich_task_health(task)
         _save_ledger()
         handoff = {
@@ -264,7 +265,10 @@ def install_cameras_routes(app, ctx) -> None:
                 raise HTTPException(403, detail={"code": "OWNER_PRINCIPAL_NOT_REGISTERED"})
         amr = _ready_amr(task) if phase == "RELEASED" else task.get("amr_claim_evidence")
         if phase == "RELEASED" and amr is None:
-            raise HTTPException(422, detail={"code": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
+            from fleet.server.sitemap.pipeline_evidence import bed_confirmation_lost
+
+            raise HTTPException(422, detail={"code": "BED_CONFIRMATION_INVALID" if bed_confirmation_lost(app, task)
+                                             else "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
         if phase == "RELEASED":
             trusted = omx_evidence_fn(task) if callable(omx_evidence_fn) else None
             if not isinstance(trusted, dict):

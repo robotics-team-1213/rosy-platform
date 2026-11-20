@@ -591,3 +591,65 @@ def _claimed_response(env):
     res = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_s"}).json()
     assert res["claimed"] is True
     return res
+
+
+
+# --- D-1057 round 7: the bed confirmation is used up at the claim and belongs to the lease --------------------------------
+def _released(env):
+    lease = _claimed(env)
+    parts, digest = _owner_parts(lease, basis=TOP_ONLY)
+    assert _post_owner(env, lease, parts).status_code == 200
+    return parts, digest
+
+
+def _bed_confirm_again(env, headers=OP):
+    return env.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/bed-confirm", headers=headers, json={"robot_id": "pinky_1"})
+
+
+def test_the_claim_binds_the_bed_confirmation_to_the_lease_and_release_does_not_ask_for_the_120_s_again(env):
+    parts, digest = _released(env)
+    bound = env.app.state.omx_cell_tasks[TASK]["bed_confirmation"]
+    assert bound["operator"] == "operator" and bound["map_id"] and bound["pose"]["x"] == env.station[0] and bound["confirmed_at"] > 0
+    assert env.app.state.cell_bed_confirmations[TASK]["lease"] == env.app.state.omx_cell_tasks[TASK]["handoff_lease_id"]
+    env.app.state.cell_bed_confirmations[TASK]["confirmed_at"] -= 3 * ev.BED_CONFIRM_TTL_S  # the transfer took longer than 120 s
+    done = _complete(env, parts, digest)
+    assert done.status_code == 200 and done.json()["task"]["status"] == "COMPLETED"
+
+
+def test_a_confirmation_that_became_invalid_refuses_the_release_with_its_own_code_and_a_named_operator_can_confirm_again(env):
+    parts, digest = _released(env)
+    env.pose.x += 0.05
+    ev.check_beds(env.app)  # the robot moved over 2 cm after the confirmation
+    env.pose.x = env.station[0]
+    refused = _complete(env, parts, digest)
+    assert refused.status_code == 422 and refused.json()["detail"]["code"] == "BED_CONFIRMATION_INVALID"
+    assert env.app.state.omx_cell_tasks[TASK]["status"] == "RUNNING"  # the task waits for the confirmation
+    assert _bed_confirm_again(env, SVC).status_code == 403 and _bed_confirm_again(env, CONSOLE).status_code == 403
+    env.beat(_snapshot(v=0.3))  # still moving: not accepted
+    assert _bed_confirm_again(env).json()["detail"]["code"] == "BED_CONFIRM_ROBOT_NOT_STOPPED"
+    env.beat()
+    again = _bed_confirm_again(env)
+    task = env.app.state.omx_cell_tasks[TASK]
+    assert again.status_code == 200 and task["bed_confirmation"]["renewed"] is True
+    assert env.app.state.cell_bed_confirmations[TASK]["lease"] == task["handoff_lease_id"]  # same lease
+    assert _bed_confirm_again(env).json()["detail"]["code"] == "CELL_TASK_NOT_QUEUED"  # valid again: no second one
+    done = _complete(env, parts, digest)
+    assert done.status_code == 200 and done.json()["task"]["status"] == "COMPLETED"
+
+
+def test_a_running_task_with_a_valid_bound_confirmation_takes_no_new_one_and_other_refusals_keep_their_code(env):
+    parts, digest = _released(env)
+    assert _bed_confirm_again(env).json()["detail"]["code"] == "CELL_TASK_NOT_QUEUED"
+    env.beat(_snapshot(v=0.3))  # moving, but the bed confirmation itself is fine
+    refused = env.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/complete", headers=SVC, json={
+        "phase": "RELEASED", "goal_evidence_digest": digest, **parts})
+    assert refused.status_code == 422 and refused.json()["detail"]["code"] == "AMR_BRAKE_BED_VELOCITY_UNMEASURED"
+
+
+def test_a_map_change_after_the_claim_still_voids_the_bound_confirmation(env):
+    parts, digest = _released(env)
+    real = env.app.state.site_maps.active
+    env.app.state.site_maps.active = lambda: (2, *real()[1:])
+    ev.check_beds(env.app)
+    refused = _complete(env, parts, digest)
+    assert refused.status_code == 422 and refused.json()["detail"]["code"] == "BED_CONFIRMATION_INVALID"

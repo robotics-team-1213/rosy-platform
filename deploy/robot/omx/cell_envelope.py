@@ -180,7 +180,7 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
         out["payload"], over = payload_check(config, conditions)
         if over:  # supervised trials too: a person at the switch does not make an unknown or heavy load safe
             return {**out, "reason": over}
-        if "_commissioning" in config:
+        if "_commissioning" in config and not _reviewed(config, out["task_sha256"]):  # a reviewed task takes the review path
             trial = config["_commissioning"]
             if (not isinstance(trial, dict) or set(trial) != {"person_at_switch"}
                     or trial["person_at_switch"] is not True):
@@ -251,6 +251,15 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
         return {**out, "allowed": True, "status": "verified", "reason": "reviewed_exact_task"}
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError):
         return {**out, "reason": "evidence_unavailable"}
+
+
+def _reviewed(config: dict, task_sha256: str) -> bool:
+    """True when the operating envelope file holds a review of exactly this task (any read problem: no)."""
+    try:
+        document = json.loads(Path(config["operating_envelope_path"]).expanduser().read_text(encoding="utf-8"))
+        return any(isinstance(r, dict) and r.get("task_sha256") == task_sha256 for r in document["reviews"])
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+        return False
 
 
 def same_session(state: dict, assessment: dict, *, now=None, recovering: bool = False) -> bool:

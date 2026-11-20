@@ -547,3 +547,22 @@ def test_profile_cache_returns_defensive_copies_and_assess_reuses_library_sha256
     assert assessed["library_sha256"] == custom_sha
     unit_text = (OMX / "rosy-omx-camera@.service").read_text(encoding="utf-8")
     assert '${ROSY_CAMERA_MAX_FPS:-15}' in unit_text
+
+
+def test_a_reviewed_task_takes_the_review_path_even_when_a_presence_mark_comes_with_it(tmp_path, task, envelope):
+    attempts, _ = approve(tmp_path, envelope, task)
+    before = attempts.read_text(encoding="utf-8")
+    config, calibration, library, state = copy.deepcopy(task)
+    config["_commissioning"] = {"person_at_switch": True}  # the Fleet presence confirmation for this task
+    result = envelope.assess(config, calibration, library, state, now=100.01)
+    assert result["allowed"] and result["mode"] != "commissioning" and result["reason"] == "reviewed_exact_task"
+    assert attempts.read_text(encoding="utf-8") == before  # no commissioning row was added, so the review stays valid
+    assert envelope.assess(*task, now=100.01)["reason"] == "reviewed_exact_task"
+
+
+def test_a_task_without_a_review_is_still_a_supervised_trial_with_presence(task, envelope):
+    config, calibration, library, state = copy.deepcopy(task)
+    config["_commissioning"] = {"person_at_switch": True}
+    assert envelope.assess(config, calibration, library, state, now=100.01)["mode"] == "commissioning"
+    Path(config["operating_envelope_path"]).write_text("not json")  # an unreadable review file is no review
+    assert envelope.assess(config, calibration, library, state, now=100.01)["mode"] == "commissioning"

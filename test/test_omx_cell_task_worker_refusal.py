@@ -322,7 +322,7 @@ def test_a_stale_kept_result_is_measured_again_before_it_is_resent(tmp_path):
     from cell_result_outbox import Outbox, resend_pending
 
     outbox, sent = Outbox(tmp_path / "o.json"), []
-    outbox.put("t-1", _stale_entry(55))
+    outbox.put("t-1", _stale_entry(70))
     fresh = _Remeasure()
     fleet = _running()
     resend_pending(outbox, lambda m, p, b: (sent.append((p.rsplit("/", 1)[1], b)) or fleet(m, p, b)) if m == "POST" else fleet(m, p, b), fresh)
@@ -395,3 +395,80 @@ def test_the_real_remeasurement_needs_its_stored_context_and_checks_placement_an
     monkeypatch.setattr("cell_task_exec.measured_fold", lambda *a, **k: {"folded": False, "state": None, "fresh": True})
     with pytest.raises(cr.RemeasureFailed, match="not folded now"):
         cr.remeasure("t-1", entry, tmp_path)
+
+
+# --- D-1057 round 7: the original evidence is used while Fleet holds it; a lapsed bed confirmation waits for a person ----------
+def _refused(code, status=422):
+    import io
+
+    return HTTPError("https://f/x", status, "refused", {}, io.BytesIO(json.dumps({"detail": {"code": code}}).encode()))
+
+
+def _posting(fleet, sent, fail=None):
+    def request(method, path, body):
+        if method != "POST":
+            return fleet(method, path, body)
+        sent.append(path.rsplit("/", 1)[1])
+        error = fail(sent[-1]) if fail else None
+        if error is not None:
+            raise error
+        return {"ok": True}
+    return request
+
+
+def test_original_evidence_still_held_by_fleet_is_not_measured_again_and_a_409_on_it_means_recorded(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    outbox, sent = Outbox(tmp_path / "o.json"), []
+    outbox.put("t-1", _stale_entry(55))  # Fleet holds the first evidence for 60 s
+    fresh = _Remeasure()
+    fail = lambda part: _refused("OWNER_EVIDENCE_ALREADY_RECORDED", 409) if part == "owner-evidence" else None  # noqa: E731
+    done = resend_pending(outbox, _posting(_running(), sent, fail), fresh)
+    assert fresh.calls == [] and sent == ["owner-evidence", "complete"]
+    assert done[0]["action"] == "resent" and outbox.items() == {}
+
+
+def test_an_owner_evidence_409_with_another_code_is_still_dropped(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    outbox, sent = Outbox(tmp_path / "o.json"), []
+    outbox.put("t-1", _stale_entry(20))
+    done = resend_pending(outbox, _posting(_running(), sent, lambda part: _refused("SOMETHING_ELSE", 409)), _Remeasure())
+    assert sent == ["owner-evidence"] and done[0]["action"] == "dropped" and outbox.items() == {}
+
+
+def test_only_the_expired_evidence_is_measured_again(tmp_path):
+    from cell_result_outbox import STALE_S, Outbox, resend_pending
+
+    assert STALE_S > 60  # Fleet's own limit plus a margin for the two clocks
+    outbox, sent, fresh = Outbox(tmp_path / "o.json"), [], _Remeasure()
+    outbox.put("t-1", _stale_entry(STALE_S + 1))
+    resend_pending(outbox, _posting(_running(), sent), fresh)
+    assert fresh.calls == ["t-1"] and outbox.items() == {}
+
+
+def test_a_lapsed_bed_confirmation_keeps_the_result_with_the_reason_until_a_person_confirms_again(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    outbox, sent, bed = Outbox(tmp_path / "o.json"), [], [False]
+    outbox.put("t-1", _stale_entry(20))
+    fail = lambda part: None if part == "owner-evidence" or bed[0] else _refused("BED_CONFIRMATION_INVALID")  # noqa: E731
+    done = resend_pending(outbox, _posting(_running(), sent, fail), _Remeasure())
+    kept = outbox.items()["t-1"]
+    assert done[0]["action"] == "kept" and kept["last_refusal"]["reason"] == "BED_CONFIRMATION_INVALID"
+    assert resend_pending(outbox, _posting(_running(), sent, fail), _Remeasure())[0]["action"] == "kept"  # still waiting
+    bed[0] = True  # a named operator confirmed the bed again under the same lease
+    assert resend_pending(outbox, _posting(_running(), sent, fail), _Remeasure())[0]["action"] == "resent"
+    assert outbox.items() == {}
+
+
+def test_other_422_refusals_are_dropped_as_before_except_evidence_that_expired_in_between(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    for code, action, left in (("OMX_OWNER_EVIDENCE_MISMATCH", "dropped", 0), ("AMR_BRAKE_BED_VELOCITY_UNMEASURED", "dropped", 0),
+                               ("OMX_OWNER_EVIDENCE_UNAVAILABLE", "kept", 1)):
+        outbox = Outbox(tmp_path / f"{code}.json")
+        outbox.put("t-1", _stale_entry(20))
+        fail = lambda part, code=code: _refused(code) if part == "complete" else None  # noqa: E731
+        assert resend_pending(outbox, _posting(_running(), [], fail), _Remeasure())[0]["action"] == action
+        assert len(outbox.items()) == left

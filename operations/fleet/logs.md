@@ -5598,3 +5598,8 @@
 - 변경: `pipeline_evidence.py`: 정지 표본은 속도 채널이 표본마다 신선하고 navigation·Fleet 목표가 없을 때만, owner-evidence는 `ROSY_FLEET_CELL_OWNERS` 등록 서비스 주체만(/complete는 저장 주체와 같아야 함), 활성 지도 ID와 지도 속 정차 지점이 없으면 None, bed-confirm은 이름 있는 운영자·지도 ID 저장·영구 무효·재전송 무갱신, measured_at 60 s·장치 시각 2 s 대조, 본문 64 KB·종료/만료 기록 제거. `pipeline_camera_routes.py`에 완료 주체 확인 한 블록(가드 검사는 그대로).
 - 증거: 로컬 `operations/fleet/test/test_pipeline_evidence.py` 외 관련 4개 파일.
 - gate 변화: SOURCE.
+
+## 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 7차
+- 변경: 설정 파일의 `_commissioning` 무시(이번 실행 인자만), 검토된 작업은 입회 표시가 와도 검토 경로, 재전송은 원래 증거가 유효한 동안 `/complete`만(409 이미 기록됨은 이어서 전송, 재측정은 65 s 뒤), 적재함 확인은 claim에서 lease에 묶고 무효 때 422 `BED_CONFIRMATION_INVALID`·RUNNING 작업 재확인 허용. ADR D-1057 2-7절과 API v1.428 절을 맞춤.
+- 증거: 로컬 `test_pipeline_evidence.py`·`test_omx_cell_task_worker_refusal.py`·`test_omx_cell_envelope.py`·`test_omx_cell_task_exec_measured.py`와 `rosy_harness.py lint`. 원격 시험은 조정 세션.
+- gate 변화: 없음. 가드 한계는 그대로이고 실물 인터록은 만들지 않았다.

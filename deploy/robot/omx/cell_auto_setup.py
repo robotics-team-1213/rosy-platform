@@ -51,6 +51,8 @@ def open_cell(args, commissioning=False):
         site = config["sites"][args.source]  # the planner reads sites[src].layers_below
         site["layers_below"] = max(int(site.get("layers_below", 0)), args.layers_below)
     config["_fleet_task"] = getattr(args, "task_id", None) or False  # D-1057: the placement zone check runs only for a Fleet task
+    if config.pop("_commissioning", None) is not None:  # a stored file cannot attest that a person is at the switch (D-911)
+        print("warning: _commissioning in the config file is ignored; only --commissioning --person-at-switch sets it", file=sys.stderr)
     if commissioning:
         config["_commissioning"] = {"person_at_switch": True}
     work = Path(config["work_dir"]).expanduser()
