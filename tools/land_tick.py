@@ -37,6 +37,7 @@ import land_cache  # noqa: E402
 import land_gc  # noqa: E402
 import land_mainred  # noqa: E402
 import land_events  # noqa: E402
+import land_freeze  # noqa: E402
 import land_queue  # noqa: E402
 import land_stats  # noqa: E402
 import memory_history  # noqa: E402
@@ -169,6 +170,9 @@ def pending(repo: Path) -> str | None:
         if (not branch or not ref or land_async.holders(repo, branch)
                 or land_async.git(repo, "rev-parse", branch, check=False) != ref):
             row["path"].unlink(missing_ok=True)  # already landing, or the branch moved past this request
+            continue
+        if why := land_freeze.refusal(repo, ref):  # freeze: the kept request stays until the state allows it
+            print(f"[tick] pending {branch}: {why}", flush=True)
             continue
         land_async.detach([sys.executable, "-X", "utf8", str(repo / "tools" / "land_async.py"), "--branch", branch,
                            *map(str, row.get("args") or [])], row["path"].with_suffix(".log"), repo)

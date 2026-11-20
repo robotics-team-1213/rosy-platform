@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 
 import land_events
+import land_freeze
 import land_full
 import land_prepare
 import land_queue
@@ -135,6 +136,8 @@ def eligible(land, wt: Path, row: dict, kind: str = "affected", carried_now: set
         return False
     head = land.git(other, "rev-parse", "HEAD", check=False).stdout.strip()
     tip = land.git(wt, "rev-parse", f"refs/heads/{name}", check=False).stdout.strip()
+    if land_freeze.refusal(wt, tip, new=False):  # drain: a member outside the allowed list never rides
+        return False
     return bool(head) and head == tip and batchable(land, wt, other, name, tip) == kind
 
 
