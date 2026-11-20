@@ -95,6 +95,10 @@ app_subtrees:
   learning/envs/isaac/cell_model_inventory.yaml: omx-cell
   learning/envs/isaac/cell_physics.yaml: omx-cell
   tools/incident_*: site-fleet  # import rosy.decision (Fleet judgment)
+  tools/web_visible_roles.py: pinky  # boots only the Pinky CORE roots (middleware/core) over core contracts
+  tools/capture_surface_round.py: pinky  # same CORE-only boot; imports web_visible_roles
+  tools/drivable_branch_replay.py: vision  # only middleware/perception + integrations/perception (and core foundation)
+  tools/development_link.py: site-fleet  # sys.path = operations/fleet + core foundation; issues Fleet pairing and TLS material
   tools/sim/omx_*: omx-cell
   test/test_omx_*: omx-cell
   tools/land*.py: tooling
