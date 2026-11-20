@@ -182,6 +182,9 @@ Host Agent는 아래 명령만 안다. 임의 명령, 임의 경로, 임의 인�
 | `navigation_approval.cancel` | — | operator | 불필요 |
 | `navigation_approval.seal` | `operator`: 로그인 신원, `test_surface`: floor / lifted | operator | 불필요 |
 | `navigation_approval.start_navigation` | — | operator | 불필요 |
+| `navigation_fallback.status` | — | viewer | 불필요 |
+| `navigation_fallback.stage` | — | machine | 불필요 |
+| `navigation_fallback.switch` | `reason` (식별자형 사유 코드) | machine | 불필요 |
 | `lane_perception.status` | — | viewer | 불필요 |
 | `lane_perception.set` | `paint_source`: threshold / denoise / learned | administrator | 불필요 |
 | `network.apply_profile` | `profile_id` (등록된 프로파일 id만) | administrator | 필요 |
@@ -234,8 +237,14 @@ denoise / learned / denoise_fallback이며 `applied_source_age_s`가 수신 나�
 표시한다. 설정 source·모델 revision 불일치, malformed packet, 카메라 clock reset,
 stale 수신 또는 camera 재시작 전 증거는 null이다. 이는 주행 정책에 입력하지 않는다.
 
-native `rosy-host-agent.service`는 이 표 중 `lane_perception.status/set`과
-`navigation_approval.*`(D-986)만 활성화한다. operator 등급은 이 항법 재승인 명령에만 쓰며 다른 명령의
+native `rosy-host-agent.service`는 이 표 중 `lane_perception.status/set`,
+`navigation_approval.*`(D-986), `navigation_fallback.*`(SLAM 대체 지도 자동 전환, 2026-11-18)만 활성화한다.
+`machine` 등급은 로그인이 아니라 CORE의 자동 전환 감독기가 보내는 신원이며, `machine`은 `viewer`·`machine` 명령만
+보낼 수 있고 operator·administrator 명령은 거부된다. 반대로 `machine` 명령은 `machine`만 보낼 수 있다.
+`navigation_fallback.switch`는 CORE가 쓴 정지 증거(속도 0 2초 이상·목표 없음·같은 부팅의 monotonic 시계로 3초 이내 기록,
+boot id 일치, CORE 소유의 일반 파일)와 sha256이 맞는 벽 지도가 있을 때만 `runtime.env`를 `commit_runtime`으로 바꾸고 `rosy-navigation`만 재시작하며, 실패하면 되돌린다.
+부팅당 한 번만 시도하고(호스트 거절도 시도로 센다) SLAM으로 되돌리는 명령은 없다. `stage`는 전환이 도는 동안 거절하고
+`runtime.env`가 가리키는 지도를 지우지 않는다. operator 등급은 이 항법 재승인 명령에만 쓰며 다른 명령의
 administrator 요구는 그대로다. `begin`·`cancel`·`seal`은 CORE를 다시 시작하므로 별도 transient unit으로
 돌고 결과는 `status`로 읽는다. peer는 `/etc/passwd`의 전용 `rosy-core` UID이며 소켓 그룹도
 `rosy-core`이다. 다른 Host 명령은 해당 runtime에서 COMMAND_UNKNOWN으로
