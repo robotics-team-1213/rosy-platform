@@ -494,3 +494,10 @@ def test_safety_review_trailer_check_sees_the_same_safety_paths():
                   if safety_review.is_safety(path, manifest["roots"], modules) != (_concern_of(path) == SAFETY)]
     assert mismatched == []
     assert sum(safety_review.is_safety(path, manifest["roots"], modules) for path in _tracked()) >= 20
+
+
+def test_safety_review_paths_are_tracked_files():
+    """A renamed or deleted entry would silently drop the trailer check (D-430 §5, 2026-11-20)."""
+    tracked = set(_tracked())
+    paths = _manifest().get("safety_review_paths") or []
+    assert paths and [path for path in paths if path not in tracked] == []

@@ -104,7 +104,7 @@ flowchart TB
   `source=bridged`는 마지막 관측 이후의 dead reckoning이고, 행동 조건부 미래
   예측이 아니다(D-630). World는 최종 `/cmd_vel`을 내지 않고, 모델 설명으로
   실행 사실을 덮어쓰지 않는다(아키텍처 v0.2 §3.1).
-- **단일 프로세스** — CORE는 한 프로세스에서 메인 스레드 rclpy `MultiThreadedExecutor`,
+- **단일 프로세스** — CORE는 한 프로세스에서 메인 스레드 rclpy `EventsExecutor`(D-1058, 되돌리기는 `ROSY_CORE_EXECUTOR=threaded`),
   워커 스레드 uvicorn+FastAPI로 돈다(D-1). 진입점은 `ros2 run core core`.
 - **폴더는 역할 분류** — 디렉터리 경로가 writer 권한·호스트 배치·이미지 closure를
   결정하지 않는다(D-315). 실제 패키지 소비와 설치 묶음은 `deploy/`와 각

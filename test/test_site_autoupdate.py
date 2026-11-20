@@ -1172,6 +1172,8 @@ def test_units_run_the_installed_updater_on_a_persistent_randomized_timer():
     assert "/opt/rosy/candidate/" not in service  # never runs code from the candidate
     assert "Type=oneshot" in service and "NoNewPrivileges=yes" in service
     assert "ProtectSystem=full" in service
+    # The firewall check after a switch reads iptables over netlink; without it every switch stops.
+    assert "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK" in service
     assert "ReadWritePaths=/etc/rosy/site /opt/rosy /var/lib/rosy /run/lock" in service
     assert "OnCalendar=*:0/15" in timer and "RandomizedDelaySec=" in timer
     assert "Persistent=true" in timer and "WantedBy=timers.target" in timer
