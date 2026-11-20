@@ -459,6 +459,15 @@ def test_pinned_places_and_edges_survive_the_traced_map():
     assert mod.unpinned_place_diff_m(current_places[:1], traced_places) == 0.0
 
 
+def test_a_pinned_stop_keeps_its_stop_zone_and_approach_through_the_merge():
+    # 2026-11-21 robot-7b named stop: a drawn zone and approach distance are a person's, like the point.
+    mod = _load_module()
+    stop = {"id": "S3", "name": "S3", "x": 0.745, "y": -0.207, "yaw": 0.0, "kind": "stop", "pinned": True,
+            "stop_zone": [[0.7, -0.25], [0.8, -0.25], [0.8, -0.15], [0.7, -0.15]], "approach_m": 0.3}
+    traced = [{"id": "S3", "name": "S3", "x": 0.699, "y": -0.251, "kind": "stop"}]
+    assert mod.merge_pinned([dict(stop)], traced) == [stop]
+
+
 def test_the_fleet_update_carries_the_pinned_merge_into_the_container(monkeypatch):
     mod = _load_module()
     sent = {}
