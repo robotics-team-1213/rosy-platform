@@ -184,6 +184,17 @@ def test_malformed_json_removes_dock_readout():
     assert mirror.sample("dock_observation") is None
 
 
+def test_oversized_json_integer_removes_dock_readout():
+    from core_features.docking.feed import DockObservationFeed
+
+    mirror, _ = _mirror()
+    mirror.dock_observation({"visible": True})
+    raw = json.dumps({"source": "CAMERA_TAG", "visible": True, "stamp": 10 ** 400})
+    with pytest.raises(OverflowError):
+        ingest_dock_observation(DockObservationFeed(), mirror, raw, received_at=0.0, source_now=0.0)
+    assert mirror.sample("dock_observation") is None
+
+
 def test_sensor_list_omits_detail_age_and_legacy_stamp_is_serializable(core_client, monkeypatch):
     from core_api_web.api.v1 import robot
 

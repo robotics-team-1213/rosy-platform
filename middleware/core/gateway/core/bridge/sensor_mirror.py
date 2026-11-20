@@ -145,7 +145,7 @@ def ingest_dock_observation(feed, mirror: SensorMirror, raw: str, *, received_at
     try:
         payload = json.loads(raw)
         accepted = feed.ingest(payload, received_at=received_at, source_now=source_now)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         mirror.invalidate_dock_observation()
         raise
     if accepted or payload.get("visible") is False:

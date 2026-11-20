@@ -119,7 +119,7 @@ class RosBridgeHelpersMixin:
             sensor_mirror.ingest_dock_observation(
                 self._svc.dock_feed, self._mirror, msg.data, received_at=self._line_clock(),
                 source_now=self._node.get_clock().now().nanoseconds * 1e-9)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             self._node.get_logger().warning(
                 f"ignored dock observation: {exc}", throttle_duration_sec=5.0)
 
