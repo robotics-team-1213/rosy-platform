@@ -6,11 +6,12 @@ the gate; any FAIL exits 1. The client refuses every write: only GET and the fra
 POST /api/fleet/vision/lease go out.
 
     python tools/remote/workcell_pipeline_gate.py --cell-url URL [--r-url URL] \
-        (--cookie-file F | --bearer-file F) [--ca-file F | --insecure] [--json-out PATH]
+        (--cookie-file F | --bearer-file F) --ca-file F [--json-out PATH]
 
 The operator credential is the first non-empty line of a cookie file (--cookie-file) or a
-bearer token file (--bearer-file) and is sent only to the fleet URLs given. TLS is verified
-against --ca-file (--insecure only on a trusted bench LAN). --json-out writes the result
+bearer token file (--bearer-file) and is sent only to the fleet URLs given. TLS is always
+verified against the PEM anchor in --ca-file: the operator cookie is never sent over
+unverified TLS. --json-out writes the result
 document (schema rosy.workcell-pipeline-gate.v1) for Monitoring.
 """
 
@@ -53,16 +54,11 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def tls_context(ca_file: str | None = None, insecure: bool = False) -> ssl.SSLContext:
+def tls_context(ca_file: str) -> ssl.SSLContext:
     """Chain-verified TLS against the given PEM anchor (the served leaf may be the anchor);
-    the name is not checked, the anchor pins the fleet. --insecure only on a trusted bench LAN."""
-    if insecure:
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        return context
+    the name is not checked, the anchor pins the fleet. Verification is never skipped."""
     if not ca_file:
-        raise GateError("HTTPS fleets need --ca-file <certificate or CA PEM>, or --insecure on a trusted LAN")
+        raise GateError("HTTPS fleets need --ca-file <certificate or CA PEM>")
     try:
         context = ssl.create_default_context(cafile=ca_file)
     except (OSError, ValueError) as error:
@@ -314,8 +310,8 @@ def main(argv: list[str] | None = None, client_factory=None) -> int:
     parser.add_argument("--r-url", help="R Fleet base URL")
     parser.add_argument("--cookie-file", help="operator session cookie file (first non-empty line)")
     parser.add_argument("--bearer-file", help="operator bearer token file (first non-empty line)")
-    parser.add_argument("--ca-file", help="PEM anchor the fleets' certificates must chain to")
-    parser.add_argument("--insecure", action="store_true", help="skip TLS verification (bench LAN only)")
+    parser.add_argument("--ca-file", required=True,
+                        help="PEM anchor the fleets' certificates must chain to")
     parser.add_argument("--json-out", help="write the result document here for Monitoring")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_S, help="per request seconds")
     args = parser.parse_args(argv)
@@ -325,7 +321,7 @@ def main(argv: list[str] | None = None, client_factory=None) -> int:
         parser.error("--timeout must be positive")
     try:
         auth = auth_header(args.cookie_file, args.bearer_file)
-        context = tls_context(args.ca_file, args.insecure)
+        context = tls_context(args.ca_file)
     except (GateError, OSError) as error:
         parser.exit(2, f"workcell_pipeline_gate: {error}\n")
     build = client_factory or (lambda name, url: FleetClient(name, url, auth, args.timeout, context))

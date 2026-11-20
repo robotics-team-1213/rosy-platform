@@ -2,6 +2,9 @@
 from importlib.util import module_from_spec, spec_from_file_location
 import json
 from pathlib import Path
+import ssl
+
+import pytest
 
 _FILE = Path(__file__).resolve().parents[1] / 'tools/remote/workcell_pipeline_gate.py'
 _SPEC = spec_from_file_location('workcell_pipeline_gate', _FILE)
@@ -163,7 +166,36 @@ def test_no_write_requests_and_json_document(tmp_path):
     assert doc['targets'] == {'cell': CELL, 'R': CELL} and len(doc['checks']) == len(rows)
 
 
-def test_main_exit_code_and_json_out(tmp_path, capsys):
+def test_tls_verification_cannot_be_skipped(monkeypatch):
+    seen = {}
+
+    def fake_context(*, cafile):
+        seen['cafile'] = cafile
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        return context
+
+    monkeypatch.setattr(gate.ssl, 'create_default_context', fake_context)
+    context = gate.tls_context('anchor.pem')
+    assert seen['cafile'] == 'anchor.pem'
+    assert context.verify_mode == ssl.CERT_REQUIRED and not context.check_hostname
+    for empty in ('', None):
+        with pytest.raises(gate.GateError):
+            gate.tls_context(empty)
+
+
+def test_missing_ca_file_or_insecure_is_a_usage_error(tmp_path, capsys):
+    cookie = tmp_path / 'cookie.txt'
+    cookie.write_text('session=abc\n', encoding='utf-8')
+    for argv in (['--cell-url', CELL, '--cookie-file', str(cookie)],
+                 ['--cell-url', CELL, '--cookie-file', str(cookie), '--insecure'],
+                 ['--cell-url', CELL, '--cookie-file', str(cookie), '--ca-file']):
+        with pytest.raises(SystemExit) as stop:
+            gate.main(argv)
+        assert stop.value.code == 2
+    assert capsys.readouterr().out == ''
+
+
+def test_main_exit_code_and_json_out(tmp_path, capsys, monkeypatch):
     cookie = tmp_path / 'cookie.txt'
     cookie.write_text('session=abc\n', encoding='utf-8')
     fake = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
@@ -173,9 +205,19 @@ def test_main_exit_code_and_json_out(tmp_path, capsys):
     def factory(name, url):
         return client(name, handler, url)
 
+    anchors = []
+
+    def fake_context(*, cafile):
+        anchors.append(str(cafile))
+        return ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+    monkeypatch.setattr(gate.ssl, 'create_default_context', fake_context)
+    ca = tmp_path / 'ca.pem'
+    ca.write_text('-----BEGIN CERTIFICATE-----\n', encoding='utf-8')
     out = tmp_path / 'gate.json'
     code = gate.main(['--cell-url', CELL, '--r-url', CELL, '--cookie-file', str(cookie),
-                      '--insecure', '--json-out', str(out)], client_factory=factory)
+                      '--ca-file', str(ca), '--json-out', str(out)], client_factory=factory)
+    assert anchors == [str(ca)]
     assert code == 1
     doc = json.loads(out.read_text(encoding='utf-8'))
     assert doc['schema'] == 'rosy.workcell-pipeline-gate.v1' and doc['verdict'] == 'FAIL'
