@@ -796,3 +796,16 @@ def test_depth_verify_passes_a_fresh_depth_frame_on_a_depth_top_camera(tmp_path,
         assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify",
                         "--commissioning", "--person-at-switch"]) == 0
         assert seen["depth"] is expect
+
+
+def test_moving_rects_includes_belt_and_moves_sites():
+    import cell_scene_guard as sg
+
+    cfg = {
+        "sites": {
+            "belt": {"auto_roi": [300, 20, 400, 120]},
+            "pinky": {"moves": True, "auto_roi": [100, 0, 310, 200]},
+            "board": {"auto_roi": [430, 350, 580, 440]},
+        }
+    }
+    assert sg.moving_rects(cfg) == [[300, 20, 400, 120], [100, 0, 310, 200]]
