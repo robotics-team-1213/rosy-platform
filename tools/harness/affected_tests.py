@@ -39,7 +39,7 @@ import affected_exclusive
 import affected_ros
 import safety_review  # D-430 5 judge, reused so the selector and the trailer rule agree
 from affected_ci import (CI_FULL_EXCLUDED, CI_FULL_MATRIX, FLEET_TEST_SECONDS, FULL_SUITES,  # noqa: F401
-                         ROOT_SHARDS, SUITE_SHARDS, ci_matrix)  # the CI full-run matrix, re-exported
+                         ROOT_SHARDS, SUITE_SHARDS, ci_matrix, consolidated)  # the CI full-run matrix, re-exported
 
 # D-436 §1: always on. The 2026-10-03 D-418 merge failures all sat here.
 # Ratchets (known lists that only shrink) run on every selection: 11-19 main grew omx_cell_boundary 148 -> 153
@@ -586,7 +586,7 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
         print(render(sel), end="", file=sys.stderr)  # the human selection (was a second --print call in ci.yml)
         include = ci_matrix(repo, sel)["include"]
         if sel.mode != "full":  # only the PR selection is consolidated; the full matrix keeps its tuned runners
-            include = affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+            include = consolidated(include)
         print(json.dumps({"mode": sel.mode, "matrix": {"include": include}}, separators=(",", ":")))
         return 0
     if as_json:

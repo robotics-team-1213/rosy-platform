@@ -1,6 +1,6 @@
 """affected_ros.consolidate merges small same-environment PR jobs and never mixes environments or kinds (11-20)."""
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "harness"))
 import affected_ros  # noqa: E402
@@ -28,6 +28,28 @@ def test_heavy_jobs_are_not_merged_past_the_weight_cap():
     out = affected_ros.consolidate([_e("affected-1", "overlay", ["a/test_big.py"]),
                                     _e("affected-2", "overlay", ["b/test_y.py"])], heavy)
     assert len(out) == 2
+
+
+def test_measured_seconds_keep_the_slow_selector_suite_off_the_shared_guard_runner():
+    """12 CI runs (2026-11-20): six guard invocations ran in turn on one runner, 5-7 min; this file alone took 170 s."""
+    import affected_ci
+    slow = "test/test_affected_tests.py"
+    assert affected_ci.CI_TEST_SECONDS[PurePosixPath(slow).name] >= affected_ros.JOB_WEIGHT
+    assert affected_ci.CI_TEST_SECONDS["test_site_map_browser.py"] == affected_ci.FLEET_TEST_SECONDS["test_site_map_browser.py"]
+    jobs = [_e("affected-1", "overlay", ["test/test_a.py", "test/test_b.py"]), _e("affected-2", "overlay", [slow, "test/test_c.py"]),
+            _e("affected-3", "overlay", ["test/test_d.py"])]
+    out = affected_ros.consolidate(jobs, affected_ci.CI_TEST_SECONDS)
+    assert [o["invocations"] for o in out] == [[["test/test_a.py", "test/test_b.py"], ["test/test_d.py"]], [[slow, "test/test_c.py"]]]
+
+
+def test_ci_keeps_the_coarser_packing_when_measured_weights_would_pass_the_job_limit():
+    import affected_ci
+    slow = "test/test_affected_tests.py"  # each job alone is over JOB_WEIGHT only with the measured table
+    few = [_e(f"affected-{i}", "overlay", [slow]) for i in range(3)]
+    assert len(affected_ci.consolidated(few)) == 3
+    many = [_e(f"affected-{i}", "overlay", [slow]) for i in range(affected_ci.MAX_CI_JOBS + 1)]
+    out = affected_ci.consolidated(many)
+    assert len(out) == 1 and out[0]["invocations"] == [[slow]] * len(many)
 
 
 def test_build_smoke_skips_only_outside_colcon_roots_workflows_and_deploy():

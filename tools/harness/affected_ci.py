@@ -48,7 +48,19 @@ SUITE_SHARDS = {"fleet": 5, "sensing": 2, "core-domain": 3}  # Station suites (D
 # The weights only choose runners; every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
+# Other slow files (8 s or more), measured the same way in 12 CI runs of 2026-11-20. affected_ros.consolidate
+# weighs jobs with both tables: at 1 per file it packed every guard invocation onto one 5-7 min runner.
+CI_TEST_SECONDS = {**json.loads(Path(__file__).with_name("ci_test_seconds.json").read_text(encoding="utf-8")),
+                   **FLEET_TEST_SECONDS}
+MAX_CI_JOBS = 18  # GitHub Free runs 20 jobs at once; scope and ci-result take none while the tests run
 _STATION_SCHEDULING = "middleware/core/gateway/test/test_station_camera_scheduling.py"
+
+
+def consolidated(include: list[dict]) -> list[dict]:
+    """Measured seconds spread a PR's small jobs over runners; a selection that would pass MAX_CI_JOBS keeps the coarser packing."""
+    fine = affected_ros.consolidate(include, CI_TEST_SECONDS)
+    return fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
     {"name": "omx-act-cpu", "invocations": [[

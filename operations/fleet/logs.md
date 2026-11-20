@@ -5589,6 +5589,13 @@
 - 증거: 원격 `operations/world/test`·`operations/fleet/test` 통과(최종 SHA는 보고에).
 - gate 변화: SOURCE. 현장 y8xs 재확인 미실시.
 
+## 2026-11-20 · uncommitted · fix(site-map): 자동 트랙 보정이 고정 장소·차로를 지킴
+- 원인: R `rosy-auto-track-calibration`(2분 타이머)이 지도 동기화 때 장소·차로를 도색 추적값으로 통째로 바꿔, 사람이 안쪽으로 옮긴 S3 (0.745, -0.207)와 안쪽 차로가 v262~v267에서 0.70·차선 중심으로 되돌아갔다.
+- 변경: `SitePlace`·`SiteEdge`에 `pinned`(기본 false), 보정 스크립트는 고정 행을 그대로 두고 차로 끝만 장소에 맞춤, 고정 장소는 place_diff에서 뺌. 지도 편집 검사 칸에 「고정」 확인란. API v1.431.
+- 운영: R에서 v261 형상으로 v268 활성, 타이머 정지. 배포 뒤 S3·loop_right·upper_east를 고정하고 타이머를 다시 켠다.
+- 증거: R `site_map_versions` v259~v267 이력(S3 0.82→0.745/-0.207 사람, v262+ auto-track-calibration 0.70), `test_auto_track_calibration`·`test_site_map_pinned`·`test_trip_bend` 41개와 site-map·map-editor node 시험 36개 통과.
+- gate 변화: 없음.
+
 ## 2026-11-20 · uncommitted · fix(fleet): CORE cancel result nav.failed CANCELED gets its own FAILED reason
 - 변경: `task_results.py`는 `nav.failed` `error_code=CANCELED`를 같은 시도의 `nav.canceled`를 이미 본 경우에만 `FAILED`/`CORE_CANCEL_CONFIRMED`로 투영하고(없으면 `CORE_NAV_FAILED` 유지) cancel-all 표시가 맞으면 `nav.canceled`처럼 `HOLD`/`FLEET_CANCEL_ALL`로 만든다. D-421대로 발행된 작업은 `CANCELED`가 되지 않는다. `evidence.py` native 결과는 FAILED, 사유 `CANCELED`. CORE의 `nav.failed`에는 `data.source`가 없어 안전 취소를 구분하지 못한다. CORE는 바꾸지 않았다.
 - 증거: `test_task_service.py`·`test_cancel_all.py` 사례 추가(nav.failed 먼저, nav.canceled 먼저 둘 다). 원격 affected 8774 passed. 실패 1건 `test_host_control.py::test_no_reboot_path_cuts_an_arm_session`은 origin/main 단독 실행에서 통과해 무관함을 확인 중. 독립 검토 2회.

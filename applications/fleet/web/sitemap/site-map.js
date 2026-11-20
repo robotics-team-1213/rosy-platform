@@ -198,6 +198,7 @@ function select(selection) {
     $('selection').textContent = `장소 ${place.id}`;
     $('place-name').value = place.name;
     $('place-kind').value = place.kind;
+    $('place-pinned').checked = Boolean(place.pinned);
   } else if (crosswalk) {
     $('selection').textContent = `횡단보도 ${crosswalk.id} · 대기 띠 ${(crosswalk.approach || []).length}개`;
     $('crosswalk-lanes').textContent = `덮는 차로 ${(crosswalk.lanes || []).join(', ') || '저장할 때 계산합니다'} · 출처 ${crosswalk.revision}`;
@@ -208,6 +209,7 @@ function select(selection) {
     $('edge-direction').value = edge.direction;
     $('edge-mode').value = edge.drive_mode;
     $('edge-speed').value = edge.speed_cap_mps;
+    $('edge-pinned').checked = Boolean(edge.pinned);
   } else {
     $('selection').textContent = selection ? '초안에 없는 항목입니다 · 초안 보기에서 고르세요' : '선택 없음';
   }
@@ -485,9 +487,10 @@ $('map-view-turn').addEventListener('change', () => guarded(async () => {
 $('apply-edit').addEventListener('click', () => guarded(async () => {
   const sel = state.selected;
   state.working = sel?.place
-    ? editPlace(state.working, sel.place, {name: $('place-name').value, kind: $('place-kind').value})
+    ? editPlace(state.working, sel.place, {name: $('place-name').value, kind: $('place-kind').value,
+      pinned: $('place-pinned').checked})
     : editEdge(state.working, sel.edge, {direction: $('edge-direction').value,
-      drive_mode: $('edge-mode').value, speed_cap_mps: $('edge-speed').value});
+      drive_mode: $('edge-mode').value, speed_cap_mps: $('edge-speed').value, pinned: $('edge-pinned').checked});
   state.dirty = true;
   $('map-source').value = 'draft';
   select(sel);
