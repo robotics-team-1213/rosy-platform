@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 import re
 import time
+
+import numpy as np
 from typing import Any
 
 from cell_area_zones import evaluate_zone, verify_stack_outcome, verify_stack_outcome_z_mm
@@ -58,6 +60,8 @@ def _frame(source, camera: str, previous: dict | None = None, after: float | Non
         try:
             receipt = source.frame_receipt(camera, previous=previous, max_age_s=MAX_FRAME_AGE_S,
                                            timeout_s=max(0.2, deadline - time.time()))
+            if time.time() > deadline + 0.2:  # the read itself returned past the limit (0.2 s is the shortest socket timeout)
+                return None, f"{camera} frame read took longer than {FRAME_WAIT_S} s"
             if after is None or float(receipt["source_stamp"]) >= after:
                 return receipt, None
             reason = f"{camera} frame was captured before the placement finished"
@@ -84,8 +88,9 @@ def _depth_after(config: dict, after: float):
     top = (config.get("cameras") or {}).get("top") or {}
     device = top.get("depth_device") or DEPTH_DEVICE
     try:
-        raw = Path(tempfile.mkdtemp(prefix="zone-depth-")) / "depth.raw"
-        got = cell_depth.capture_top_depth_z16_receipt(device, raw, timeout_s=DEPTH_WAIT_S)
+        with tempfile.TemporaryDirectory(prefix="zone-depth-") as scratch:  # raw frame, receipt and lock go with the directory
+            got = cell_depth.capture_top_depth_z16_receipt(device, Path(scratch) / "depth.raw", timeout_s=DEPTH_WAIT_S)
+            got = None if got is None else (np.array(got[0]), dict(got[1]))
     except (OSError, ValueError) as exc:
         return None, None, f"depth capture failed: {exc}"
     if got is None:
@@ -107,7 +112,9 @@ def before_side(cell, config: dict) -> dict | None:
 def record(row: dict, tried: dict, cell, before_frame, config, dest_site, source_site, roi) -> None:
     """Measure, then put verify, transfer and zone_verification on the attempt row: cell_task_exec reads that row, which
     kept none of them before (they went only to the attempts ledger)."""
-    tried["zone_verification"] = measure(cell, before_frame, config, dest_site, source_site, roi)
+    # Only a Fleet task needs this evidence (cell_auto_setup sets _fleet_task from --task-id); other carries skip the extra reads.
+    tried["zone_verification"] = (measure(cell, before_frame, config, dest_site, source_site, roi) if config.get("_fleet_task")
+                                  else {"basis": "unverified: not a Fleet task", "verified": False})
     row.update(verify=tried["verify"], zone_verification=tried["zone_verification"], transfer=tried["transfer"])
 
 
@@ -118,7 +125,7 @@ def _zone_rois(config: dict):
     if raw is None:
         return None, None
     shapes = {"top": re.compile(r"c[1-3]r[1-2]\Z"), "side": re.compile(r"c[1-3]t[1-3]\Z")}
-    if not isinstance(raw, dict) or set(raw) - set(shapes) - {"floor"}:
+    if not isinstance(raw, dict) or set(raw) - set(shapes) - {"floor", "floor_depth_mm"}:
         return None, "zone_rois must be an object with top, side and floor tables"
 
     def valid(roi) -> bool:
@@ -128,8 +135,12 @@ def _zone_rois(config: dict):
     floor = raw.get("floor")
     if floor is not None and (not isinstance(floor, list) or not floor or not all(valid(r) for r in floor)):
         return None, "zone_rois.floor must be a list of [x1,y1,x2,y2] pallet floor ROIs"
+    depths = raw.get("floor_depth_mm")
+    if floor is not None and (not isinstance(depths, list) or len(depths) != len(floor)
+                              or not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in depths)):
+        return None, "zone_rois.floor_depth_mm must record the floor depth (mm) of every floor patch"
     for kind, table in raw.items():
-        if kind == "floor":
+        if kind in ("floor", "floor_depth_mm"):
             continue
         if not isinstance(table, dict):
             return None, f"zone_rois.{kind} must be an object"
@@ -169,9 +180,11 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     source = getattr(cell, "cell", cell)
     out: dict[str, Any] = {"basis": "unverified", "verified": False, "target": None, "top": None,
                            "side": {"available": False, "reason": "no side camera in this cell"}}
-    # The pallet height gate needs calibrated depth. The slow Z16 capture goes first so the RGB frames taken after it stay fresh.
+    # The Z16 capture (slow, so it goes first and the RGB frames taken after it stay fresh) is taken only when the cell config
+    # has floor ROIs: that is the one case where the zone check uses it.
+    rois, bad_rois = _zone_rois(config)
     depth = depth_receipt = depth_why = None
-    if dest_site.rsplit("-l", 1)[0] == "pallet":
+    if rois is not None and rois.get("floor") and dest_site.rsplit("-l", 1)[0] == "pallet":
         depth, depth_receipt, depth_why = _depth_after(config, placed_at)
     top, why = _frame(source, "top", before_frame, placed_at)
     with _side_camera(source, config) as has_side:
@@ -195,8 +208,10 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
         missing_before = "no before top frame"
     elif has_side and (before_side_frame or {}).get("image") is None:
         missing_before = "no before side frame"
-    rois, bad_rois = _zone_rois(config) if has_side else (None, None)
-    failure = why or side_why or depth_why or bad_target or bad_rois or stale or missing_before
+    slot_key = target and f"c{target.get('col')}r{target.get('row')}"
+    no_slot_roi = (f"zone_rois.top has no cell-specific ROI for {slot_key}"
+                   if has_side and rois is not None and rois.get("floor") and target and slot_key not in (rois.get("top") or {}) else None)
+    failure = why or side_why or depth_why or bad_target or bad_rois or no_slot_roi or stale or missing_before
     if failure:
         return {**out, "basis": f"unverified: {failure}"}
     place = {k: target[k] for k in ("area", "col", "row", "tier") if k in target}
@@ -210,7 +225,7 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
         return _plain({**out, "basis": TOP_ONLY_BASIS, "verified": bool(after_zone.get("within_zone") and grown)})
     pick = {"area": (config.get("sites") or {}).get(source_site, {}).get("area") or source_site.rsplit("-l", 1)[0]}
     verify = verify_stack_outcome_z_mm if target["area"] == "pallet" else verify_stack_outcome
-    extra = {"after_depth": depth, "z_profile": config.get("z_profile")} if target["area"] == "pallet" else {}
+    extra = {"after_depth": depth, "z_profile": config.get("z_profile")} if depth is not None else {}
     if rois is not None:
         extra["zone_rois"] = out["zone_rois"] = rois  # the cell's own zone table, for this check only
     stack = verify(before_side=before_side_frame["image"], after_side=side["image"], before_top=before_frame["image"],

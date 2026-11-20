@@ -137,12 +137,12 @@ def propose_side(image: np.ndarray) -> dict:
     why = []
     if None in dividers:
         why.append("column dividers not seen at the third points of the pallet: " + str([d for d in dividers]))
-    if len(above) < 2:
-        why.append(f"tier boundaries not seen: base edge y={base}, edges above it {above} (need two or three)")
+    if len(above) < 3:  # a boundary that was not observed is not guessed
+        why.append(f"tier boundaries not seen: base edge y={base}, edges above it {above} (need three observed)")
     out["reasons"] = {k: "; ".join(why) or "not implemented for this layout" for k in out["rois"]}
     if not why:  # both kinds of boundary found: cut the pallet into the three columns and the tier bands above the base
         xs = [left] + [int(d) for d in dividers] + [right]
-        tops = above[-3:] if len(above) >= 3 else [above[0] - (base - above[0])] + above
+        tops = above[-3:]
         ys = [int(v) for v in sorted(tops + [base])]
         for c in (1, 2, 3):
             for t in (1, 2, 3):

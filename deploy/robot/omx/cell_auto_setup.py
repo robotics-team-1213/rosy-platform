@@ -50,6 +50,7 @@ def open_cell(args, commissioning=False):
     if getattr(args, "layers_below", None) is not None:
         site = config["sites"][args.source]  # the planner reads sites[src].layers_below
         site["layers_below"] = max(int(site.get("layers_below", 0)), args.layers_below)
+    config["_fleet_task"] = bool(getattr(args, "task_id", None))  # D-1057: the placement zone check runs only for a Fleet task
     if commissioning:
         config["_commissioning"] = {"person_at_switch": True}
     work = Path(config["work_dir"]).expanduser()

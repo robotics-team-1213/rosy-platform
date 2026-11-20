@@ -1,5 +1,5 @@
 {
- "note": "zone_rois proposed from real frames of the cell (2026-11-20, read-only capture): top lanes c1-c3 x rows r1 (empty) and r2 (three containers: black, red, black); side columns and tier bands; floor = pallet header strip and free bottom cell",
+ "note": "zone_rois proposed from real frames of the cell (2026-11-20, read-only capture): top lanes c1-c3 x rows r1 (empty) and r2 (three containers: black, red, black); side columns and tier bands; floor = pallet header strip and free bottom cell; floor_depth_mm = median depth of each floor patch in the two frames (recorded at calibration); floor_depth_mm = median depth of each floor patch in the two frames (recorded at calibration)",
  "zone_rois": {
   "top": {
    "c1r1": [
@@ -97,17 +97,21 @@
   },
   "floor": [
    [
-    300,
-    160,
-    408,
-    192
+    298,
+    155,
+    410,
+    196
    ],
    [
-    322,
-    418,
-    384,
-    448
+    318,
+    410,
+    400,
+    455
    ]
+  ],
+  "floor_depth_mm": [
+   630.0,
+   566.0
   ]
  }
 }

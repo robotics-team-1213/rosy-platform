@@ -217,7 +217,7 @@ def _current_frame_calibration_checks(
 def perceive_slot_z_mm(
     side_img: np.ndarray | None, top_colour: np.ndarray | None = None, top_depth: np.ndarray | None = None, *,
     col: int = 2, row: int = 1, tier: int = 1, z_profile: dict[str, Any] | None = None, spec_id: str = "C3",
-    slot_roi=None, floor_rois=None,
+    slot_roi=None, floor_rois=None, floor_depth_mm=None,
 ) -> dict[str, Any]:
     """(B) Live execution-time Z-axis `mm` perception for a slot `(col, row, tier)` from Side View + optional Top Depth.
 
@@ -226,7 +226,8 @@ def perceive_slot_z_mm(
     if floor_rois and slot_roi is not None and top_depth is not None:
         import cell_depth_slots
 
-        found = cell_depth_slots.perceive(side_img, top_colour, top_depth, col, row, tier, z_profile, spec_id, slot_roi, floor_rois)
+        found = cell_depth_slots.perceive(side_img, top_colour, top_depth, col, row, tier, z_profile, spec_id, slot_roi, floor_rois,
+                                          floor_depth_mm)
         if found is not None:
             return found
     side_prof = SideViewZProfile.from_dict((z_profile or {}).get("side_view"))

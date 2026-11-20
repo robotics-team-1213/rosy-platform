@@ -41,6 +41,7 @@ def before(side=True):
     return {"image": BLANK, "before_side": {"image": BLANK} if side else None}
 
 
+FLOOR = {"top": {"c2r1": [300, 160, 360, 270]}, "floor": [[10, 10, 90, 60]], "floor_depth_mm": [600.0]}  # depth reference ON
 REAL_DEPTH_AFTER = czv._depth_after
 DEPTH = np.full((480, 640), 611, np.uint16)
 
@@ -66,7 +67,7 @@ def fast(monkeypatch):
 
 def test_measured_with_before_and_after_frames_of_both_cameras(fast):
     cell = Cell({"top": "u", "side": "u"})
-    out = czv.measure(cell, before(), CONFIG, "pallet-l2", "belt", None)
+    out = czv.measure(cell, before(), {**CONFIG, "zone_rois": FLOOR}, "pallet-l2", "belt", None)
     assert out["basis"] == czv.BASIS and out["verified"] is True and out["z_gate"]["verdict"] == "PASS"
     assert out["target"] == {"site": "pallet-l2", "area": "pallet", "col": 2, "row": 1, "tier": 3}
     assert fast["place"] == {"area": "pallet", "col": 2, "row": 1, "tier": 3}
@@ -109,15 +110,8 @@ def test_a_frame_captured_before_the_placement_finished_is_not_used(which):
 
 
 def test_both_frames_must_be_fresh_at_the_common_judging_time(monkeypatch):
-    class Slow(Cell):  # the side answer takes long: the top frame is then older than 2 s when they are judged together
-        def frame_receipt(self, camera, **kw):
-            row = super().frame_receipt(camera, **kw)
-            if camera == "side":
-                row["source_stamp"] = time.time() - 0.0
-                monkeypatch.setattr(czv.time, "time", lambda real=time.time: real() + 2.5)
-            return row
-
-    out = czv.measure(Slow({"top": "u", "side": "u"}), before(), CONFIG, "belt-l0", "belt", None)
+    monkeypatch.setattr(czv, "MAX_FRAME_AGE_S", -1.0)  # every frame is already older than that when the two are judged together
+    out = czv.measure(Cell({"top": "u", "side": "u"}), before(), CONFIG, "belt-l0", "belt", None)
     assert out["verified"] is False and "at the judging time" in out["basis"]
 
 
@@ -170,7 +164,7 @@ def test_cell_s_top_only_keeps_the_before_frame_roi_and_freshness_requirements()
 
 def test_record_puts_the_measurements_on_the_attempt_row():
     row, tried = {"observed": 1}, {"verify": {"verified": True}, "transfer": {"steps": []}}
-    czv.record(row, tried, Cell({"top": "u", "side": "u"}), before(), CONFIG, "pallet-l0", "belt", None)
+    czv.record(row, tried, Cell({"top": "u", "side": "u"}), before(), {**CONFIG, "_fleet_task": True}, "pallet-l0", "belt", None)
     assert row["verify"] == {"verified": True} and row["transfer"] == {"steps": []}
     assert row["zone_verification"] is tried["zone_verification"] and row["zone_verification"]["verified"] is True
 
@@ -247,7 +241,8 @@ def test_real_cell_a_b_config_has_the_side_stream_but_no_slot_so_stays_unverifie
 
 def test_a_pallet_without_a_fresh_depth_frame_is_not_verified(monkeypatch):
     monkeypatch.setattr(czv, "_depth_after", lambda config, after: (None, None, "depth capture unavailable"))
-    out = czv.measure(Cell({"top": "u", "side": "u"}), before(), CONFIG, "pallet-l0", "belt", None)
+    out = czv.measure(Cell({"top": "u", "side": "u"}), before(), {**CONFIG, "zone_rois": {**FLOOR, "top": {"c2r1": [1, 2, 30, 40]}}},
+                      "pallet-l0", "belt", None)
     assert out["verified"] is False and "depth capture unavailable" in out["basis"]
 
 
@@ -274,23 +269,24 @@ def test_a_stuck_camera_read_gets_only_the_time_that_is_left():
     assert cell.calls and all(call[4] <= max(0.2, czv.FRAME_WAIT_S) + 1e-9 for call in cell.calls)  # not the 10 s default
 
 
-def test_pallet_height_gate_stays_unknown_with_the_real_gate_until_a_side_z_reference_exists(monkeypatch):
-    # Real verify_stack_outcome_z_mm and a synthetic depth: perceive_slot_z_mm's current-frame calibration check never
-    # reports ok (no independent side Z reference), so the gate cannot PASS: the record says UNKNOWN and is not verified.
+def test_pallet_without_floor_rois_keeps_the_old_height_gate_and_takes_no_depth(monkeypatch):
+    # Real verify_stack_outcome_z_mm without the depth reference: the old current-frame calibration check cannot report ok
+    # (no independent side Z reference), so the gate is UNKNOWN and the record is not verified. No depth capture is made.
     import cell_area_zones
-    from cell_z_profile import TOP_SLOT_CENTER_PX
 
     monkeypatch.setattr(czv, "verify_stack_outcome_z_mm", cell_area_zones.verify_stack_outcome_z_mm)
-    scene, cx = _scene(True, True), int(TOP_SLOT_CENTER_PX[(2, 1)][0])
-    depth = np.full((480, 640), 611, np.uint16)
-    depth[190:240, cx - 20:cx + 20] = 568
-    monkeypatch.setattr(czv, "_depth_after", lambda config, after: (depth, {"source_seq": 1, "exposure_wall_estimate_s": time.time()}, None))
-    cell = Cell({"top": "u", "side": "u"}, image=scene)
-    profile = {"measurement_calibrated": True, "side_view": {}, "top_depth": {"to_depth_matrix": [[1, 0, 0], [0, 1, 0]],
-                                                                              "measured_plate_top_mm": 13.0, "base_px": [395, 217]}}
-    out = czv.measure(cell, {"image": BLANK, "before_side": {"image": BLANK}}, {"sites": {"pallet-l0": {"layer": 0, **SITE}},
-                                                                              "z_profile": profile}, "pallet-l0", "belt", None)
-    assert out["z_gate"]["verdict"] == "UNKNOWN" and out["verified"] is False and out["depth"]["source_seq"] == 1
+    monkeypatch.setattr(czv, "_depth_after", lambda config, after: (_ for _ in ()).throw(AssertionError("no depth capture")))
+    cell = Cell({"top": "u", "side": "u"}, image=_scene(True, True))
+    out = czv.measure(cell, {"image": BLANK, "before_side": {"image": BLANK}}, {"sites": {"pallet-l0": {"layer": 0, **SITE}}},
+                      "pallet-l0", "belt", None)
+    assert out["verified"] is False and "depth" not in out
+
+
+def test_a_carry_that_is_not_a_fleet_task_skips_the_extra_reads():
+    cell = Cell({"top": "u", "side": "u"})
+    row, tried = {}, {"verify": {"verified": True}, "transfer": {"steps": []}}
+    czv.record(row, tried, cell, before(), CONFIG, "pallet-l0", "belt", None)  # no _fleet_task in the config
+    assert cell.calls == [] and row["zone_verification"]["verified"] is False and "not a Fleet task" in row["zone_verification"]["basis"]
 
 
 def test_the_check_is_pinned_to_the_target_slot_even_when_another_slot_holds_the_container(real_zones):

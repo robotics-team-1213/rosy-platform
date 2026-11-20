@@ -300,9 +300,14 @@ def verify_stack_outcome(
         # D-1057: with floor ROIs configured the slot's occupancy and tier come from the depth map (black containers included);
         # the colour and side findings above stay in the record as auxiliary. No usable depth then means not verified.
         import cell_depth_slots
-        slot_roi = named("top", f"c{place_col}r{place_row}") or TOP_ROI_BY_COL_ROW.get((place_col, place_row))
-        depth_ref = cell_depth_slots.depth_reference(after_depth, after_top, slot_roi, zone_rois["floor"], place_tier)
-        target_present, top_orientation_ok = bool(depth_ref["ok"] and depth_ref["tier_ok"]), True
+        slot_roi = named("top", f"c{place_col}r{place_row}")  # the cell's own ROI of the target slot; no shared default here
+        depth_ref = cell_depth_slots.depth_reference(after_depth, after_top, slot_roi, zone_rois["floor"], place_tier,
+                                                     floor_depth_mm=zone_rois.get("floor_depth_mm"))
+        # Depth answers "which tier is filled". That the slot filled now, and how the container lies, stay separate evidence.
+        change = cell_depth_slots.change_evidence(before_top, after_top, slot_roi)
+        depth_ref["change"] = change
+        target_present = bool(depth_ref["ok"] and depth_ref["tier_ok"] and change["changed"])
+        top_orientation_ok = bool(change["orientation_ok"])
     verified = bool(target_present and source_vacated and top_orientation_ok)
     recovery_mode = None if verified else ("re_pick_and_re_place" if not source_vacated else ("re_orient_and_re_place" if not top_orientation_ok else "re_align_place_zone"))
     return {
@@ -349,8 +354,9 @@ def verify_stack_outcome_z_mm(
     resolved_spec = str(spec_id or place.get("spec_id") or pick.get("spec_id") or place.get("object_id") or "C3")
     slot_obs = perceive_slot_z_mm(
         after_side, after_top, after_depth, col=place_col, row=place_row, tier=place_tier, z_profile=z_profile, spec_id=resolved_spec,
-        slot_roi=((zone_rois or {}).get("top") or {}).get(f"c{place_col}r{place_row}") or TOP_ROI_BY_COL_ROW.get((place_col, place_row)),
-        floor_rois=(zone_rois or {}).get("floor"),
+        slot_roi=((zone_rois or {}).get("top") or {}).get(f"c{place_col}r{place_row}")
+        or (None if (zone_rois or {}).get("floor") else TOP_ROI_BY_COL_ROW.get((place_col, place_row))),
+        floor_rois=(zone_rois or {}).get("floor"), floor_depth_mm=(zone_rois or {}).get("floor_depth_mm"),
     )
     if slot_obs.get("found"):
         z_gate = slot_obs.get("spec_gate") or evaluate_signed_tier_residual_mm(

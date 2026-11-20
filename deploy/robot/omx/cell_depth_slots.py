@@ -20,35 +20,54 @@ try:
 except ImportError:  # same constants as omx_adapter.z_profile (CAD stack pitch)
     TIER_TOP_Z_MM = {1: 30.0, 2: 62.4, 3: 94.8}
 
-TOL_MM = 7.0             # observed occupied tier-1 slots: 24.0-33.5 mm (nominal 30); empty slots: -5.6..+4.9 mm
+TOL_MM = 7.0             # tier IDENTIFICATION only (not seating): occupied tier-1 slots 24.0-33.5 mm (nominal 30), empty -5.6..+4.9 mm
 MIN_VALID_RATIO = 0.80   # valid depth pixels in the slot and in the floor patches (as the existing gate)
 PLANE_RMS_MAX_MM = 6.0   # floor patch flatness after the plane fit; observed 3.3-3.9 mm
 ALIGN_EDGE_MAX_PX = 8.0  # RGB-depth edge error allowed for placing ROIs; observed 5.6-5.9 px, margin below covers it
-ALIGN_MARGIN_PX = 6      # ROI shrink in colour pixels
 OCCUPIED_FRACTION = 0.5  # share of slot pixels higher than half a tier above the floor
+FLOOR_DEPTH_TOL_MM = 15.0  # a floor patch's depth versus the depth recorded for it at calibration (tilt and mounting drift)
+PATCH_OFFSET_MAX_MM = 4.0  # each floor patch against the common plane
+CHANGE_LEVEL = 60          # summed RGB difference that counts as a changed pixel
+CHANGE_MIN_FRACTION = 0.25 # share of the slot that must have changed between the before and after top frames
 
 
-def _depth_roi(to_depth: np.ndarray, roi, shrink: int, shape) -> tuple[int, int, int, int] | None:
+def _depth_roi(to_depth: np.ndarray, roi, margin: int, shape) -> tuple[int, int, int, int] | None:
+    """The colour ROI in depth coordinates, shrunk by `margin` DEPTH pixels on every side."""
     x0, y0, x1, y1 = roi
-    a = to_depth @ [x0 + shrink, y0 + shrink, 1.0]
-    b = to_depth @ [x1 - shrink, y1 - shrink, 1.0]
+    a, b = to_depth @ [x0, y0, 1.0], to_depth @ [x1, y1, 1.0]
     h, w = shape
-    xa, ya, xb, yb = int(round(a[0])), int(round(a[1])), int(round(b[0])), int(round(b[1]))
+    xa, ya, xb, yb = int(round(a[0])) + margin, int(round(a[1])) + margin, int(round(b[0])) - margin, int(round(b[1])) - margin
     xa, ya, xb, yb = max(0, xa), max(0, ya), min(w, xb), min(h, yb)
     return (xa, ya, xb, yb) if xb - xa >= 4 and yb - ya >= 4 else None
 
 
+def _patch(depth: np.ndarray, box) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    a, b, c, d = box
+    sub = depth[b:d, a:c]
+    yy, xx = np.mgrid[b:d, a:c]
+    ok = sub > 0
+    return xx[ok], yy[ok], sub[ok], float(ok.mean())
+
+
 def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_roi, floor_rois, tier: int, *,
+                    floor_depth_mm=None, floor_tol_mm: float = FLOOR_DEPTH_TOL_MM,
                     to_depth: np.ndarray | None = None, align_edge_px: float | None = None) -> dict[str, Any]:
     """Occupancy and tier of one slot from depth: {"ok", "occupied", "tier_ok", "median_rel_mm", ...}.
 
-    `ok` says the reference itself is usable (valid ratio, floor flatness, alignment); `occupied`/`tier_ok` are the finding.
+    `ok` says the reference itself is usable; `occupied`/`tier_ok` are the finding. Every floor patch is checked on its own:
+    enough valid depth, flat (own plane fit), its median depth within `floor_tol_mm` of the depth recorded for it at
+    calibration (`floor_depth_mm`, required: a flat surface laid over the floor is not the floor), and consistent with
+    the common plane. The slot ROI and the patches are shrunk in depth pixels by the alignment error plus two.
     """
     expected = float(TIER_TOP_Z_MM.get(int(tier), 30.0))
     out: dict[str, Any] = {"ok": False, "occupied": False, "tier_ok": False, "expected_mm": expected, "tier": int(tier),
                            "basis": "depth_relative_height", "reasons": []}
     if depth is None or getattr(depth, "ndim", 0) != 2 or not floor_rois or slot_roi is None:
         out["reasons"].append("no depth frame, slot ROI or floor ROIs")
+        return out
+    if (not isinstance(floor_depth_mm, (list, tuple)) or len(floor_depth_mm) != len(floor_rois)
+            or not all(isinstance(v, (int, float)) and not isinstance(v, bool) and np.isfinite(v) for v in floor_depth_mm)):
+        out["reasons"].append("no recorded floor depth for every floor patch")
         return out
     depth = np.asarray(depth, dtype=float)
     if to_depth is None:
@@ -66,72 +85,109 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
     if align_edge_px is None or not np.isfinite(align_edge_px) or float(align_edge_px) > ALIGN_EDGE_MAX_PX:
         out["reasons"].append(f"RGB-depth alignment error above {ALIGN_EDGE_MAX_PX} px")
         return out
-    xs, ys, ds, total, valid = [], [], [], 0, 0
-    for roi in floor_rois:
-        box = _depth_roi(to_depth, roi, ALIGN_MARGIN_PX, depth.shape)
+    margin = int(np.ceil(float(align_edge_px))) + 2
+    out["roi_margin_depth_px"] = margin
+    patches = []
+    for index, roi in enumerate(floor_rois):
+        box = _depth_roi(to_depth, roi, margin, depth.shape)
         if box is None:
+            out["reasons"].append(f"floor patch {index} is outside the depth frame or too small")
             continue
-        a, b, c, d = box
-        sub = depth[b:d, a:c]
-        yy, xx = np.mgrid[b:d, a:c]
-        ok = sub > 0
-        total, valid = total + sub.size, valid + int(ok.sum())
-        xs.append(xx[ok]), ys.append(yy[ok]), ds.append(sub[ok])
-    if not xs or valid < 200 or total == 0:
-        out["reasons"].append("floor patches have too few depth pixels")
+        x, y, z, valid = _patch(depth, box)
+        if valid < MIN_VALID_RATIO or len(z) < 50:
+            out["reasons"].append(f"floor patch {index}: valid depth ratio below 0.80 (covered or missing)")
+            continue
+        own = np.c_[x, y, np.ones(len(x))]
+        own_rms = float(np.sqrt(np.mean((own @ np.linalg.lstsq(own, z, rcond=None)[0] - z) ** 2)))
+        median = float(np.median(z))
+        if own_rms > PLANE_RMS_MAX_MM:
+            out["reasons"].append(f"floor patch {index} is not flat (rms {own_rms:.1f} mm)")
+        elif abs(median - float(floor_depth_mm[index])) > floor_tol_mm:
+            out["reasons"].append(f"floor patch {index} depth {median:.0f} mm is not the recorded floor {float(floor_depth_mm[index]):.0f} mm")
+        else:
+            patches.append((x, y, z, median))
+    if out["reasons"]:
         return out
-    x, y, z = np.concatenate(xs), np.concatenate(ys), np.concatenate(ds)
+    x, y, z = (np.concatenate([p[i] for p in patches]) for i in range(3))
     design = np.c_[x, y, np.ones(len(x))]
     coef = np.linalg.lstsq(design, z, rcond=None)[0]
     rms = float(np.sqrt(np.mean((design @ coef - z) ** 2)))
-    box = _depth_roi(to_depth, slot_roi, ALIGN_MARGIN_PX, depth.shape)
+    worst = 0.0
+    for px, py, pz, _ in patches:  # each patch must sit on the common plane, not offset from the others
+        worst = max(worst, abs(float(np.median(np.c_[px, py, np.ones(len(px))] @ coef - pz))))
+    out.update(plane_rms_mm=round(rms, 2), patch_offset_mm=round(worst, 2))
+    if rms > PLANE_RMS_MAX_MM or worst > PATCH_OFFSET_MAX_MM:
+        out["reasons"].append(f"floor patches disagree (rms {rms:.1f} mm, offset {worst:.1f} mm)")
+        return out
+    box = _depth_roi(to_depth, slot_roi, margin, depth.shape)
     if box is None:
-        out["reasons"].append("slot ROI is outside the depth frame")
+        out["reasons"].append("slot ROI is outside the depth frame or too small")
         return out
-    a, b, c, d = box
-    sub = depth[b:d, a:c]
-    yy, xx = np.mgrid[b:d, a:c]
-    ok = sub > 0
-    slot_valid = float(ok.mean())
-    out.update(valid_depth_ratio=round(min(slot_valid, valid / total), 4), plane_rms_mm=round(rms, 2))
-    if slot_valid < MIN_VALID_RATIO or valid / total < MIN_VALID_RATIO:
-        out["reasons"].append("valid depth ratio below 0.80")
-    if rms > PLANE_RMS_MAX_MM:
-        out["reasons"].append(f"floor patches are not flat (rms {rms:.1f} mm)")
-    if out["reasons"]:
+    sx, sy, sz, slot_valid = _patch(depth, box)
+    out["valid_depth_ratio"] = round(slot_valid, 4)
+    if slot_valid < MIN_VALID_RATIO:
+        out["reasons"].append("slot valid depth ratio below 0.80")
         return out
-    rel = (coef[0] * xx[ok] + coef[1] * yy[ok] + coef[2]) - sub[ok]  # > 0: nearer to the camera than the floor
+    rel = (coef[0] * sx + coef[1] * sy + coef[2]) - sz  # > 0: nearer to the camera than the floor
     median = float(np.median(rel))
     fraction = float((rel >= 0.5 * expected).mean())
     out.update(ok=True, median_rel_mm=round(median, 2), raised_fraction=round(fraction, 3),
                occupied=bool(fraction >= OCCUPIED_FRACTION), r_k_mm=round(median - expected, 2))
-    out["tier_ok"] = bool(out["occupied"] and abs(median - expected) <= TOL_MM)
+    out["tier_ok"] = bool(out["occupied"] and abs(median - expected) <= TOL_MM)  # tier identification only
+    return out
+
+
+def change_evidence(before_top: np.ndarray | None, after_top: np.ndarray | None, slot_roi) -> dict[str, Any]:
+    """Separate evidence that something was placed in the slot: the top picture changed there, and what changed is upright.
+
+    Depth says which tier is filled; it does not say that the filling happened now or how the container lies. The same frame
+    given as before and after changes nothing and is refused.
+    """
+    out = {"changed": False, "changed_fraction": 0.0, "orientation_ok": False, "orientation_class": None, "basis": "top_rgb_before_after"}
+    if before_top is None or after_top is None or slot_roi is None or before_top.shape != after_top.shape:
+        return out
+    x0, y0, x1, y1 = (int(v) for v in slot_roi)
+    diff = np.abs(before_top[y0:y1, x0:x1].astype(int) - after_top[y0:y1, x0:x1].astype(int)).sum(axis=2) > CHANGE_LEVEL
+    if diff.size == 0:
+        return out
+    fraction = float(diff.mean())
+    ys, xs = np.where(diff)
+    out["changed_fraction"] = round(fraction, 3)
+    out["changed"] = bool(fraction >= CHANGE_MIN_FRACTION)
+    if out["changed"] and len(xs) > 20:
+        span_u, span_v = np.percentile(xs, 95) - np.percentile(xs, 5), np.percentile(ys, 95) - np.percentile(ys, 5)
+        aspect = float(span_u) / max(float(span_v), 1.0)
+        out["orientation_class"] = "vertical_ns" if aspect <= 1.20 else "horizontal_ew"  # as cell_area_zones for yaw -90
+        out["orientation_ok"] = aspect <= 1.20
     return out
 
 
 def tier_gate(ref: dict[str, Any], tier: int, spec_id: str = "C3") -> dict[str, Any]:
-    """A z_gate dict (same keys as evaluate_signed_tier_residual_mm) from a depth reference: PASS for the right tier."""
+    """The z_gate of a depth reference. TOL_MM only identifies the tier; seating and height anomalies (S5/S6, S2) are judged by
+    the unchanged evaluate_signed_tier_residual_mm band on the same residual."""
+    from omx_adapter.z_profile import evaluate_signed_tier_residual_mm
+
     expected = float(TIER_TOP_Z_MM.get(int(tier), 30.0))
     base = {"expected_tier": int(tier), "expected_top_z_mm": expected, "spec_id": spec_id, "basis": "depth_relative_height",
-            "tolerance_mm": TOL_MM}
+            "tier_tolerance_mm": TOL_MM}
     if not ref.get("ok"):
         return {**base, "verdict": "UNKNOWN", "failure_code": "S5_VIEW_OR_GATE_MISMATCH", "gate_ok": False,
                 "reason": "; ".join(ref.get("reasons") or ["no usable depth reference"]), "z_top_mm": None, "r_k_mm": None}
-    r_k = ref["r_k_mm"]
     if not ref["occupied"]:
-        verdict, code = "FAIL", "S1_TARGET_EMPTY"
-    elif abs(r_k) <= TOL_MM:
-        verdict, code = "PASS", None
-    else:
-        verdict, code = "FAIL", "S2_TOPPLED_OR_SLUMPED" if r_k < 0 else "S5_HEIGHT_ANOMALY"
-    return {**base, "verdict": verdict, "failure_code": code, "gate_ok": True, "z_top_mm": ref["median_rel_mm"], "r_k_mm": r_k}
+        return {**base, "verdict": "FAIL", "failure_code": "S1_TARGET_EMPTY", "gate_ok": True, "z_top_mm": ref["median_rel_mm"],
+                "r_k_mm": ref["r_k_mm"]}
+    if not ref["tier_ok"]:  # another tier than the one asked for
+        return {**base, "verdict": "FAIL", "failure_code": "S2_TOPPLED_OR_SLUMPED" if ref["r_k_mm"] < 0 else "S5_HEIGHT_ANOMALY",
+                "gate_ok": True, "z_top_mm": ref["median_rel_mm"], "r_k_mm": ref["r_k_mm"]}
+    return {**base, **evaluate_signed_tier_residual_mm(ref["median_rel_mm"], tier, valid_depth_ratio=ref["valid_depth_ratio"],
+                                                       spec_id=spec_id), "basis": "depth_relative_height"}
 
 
-def perceive(side_img, top_colour, top_depth, col, row, tier, z_profile, spec_id, slot_roi, floor_rois) -> dict[str, Any] | None:
+def perceive(side_img, top_colour, top_depth, col, row, tier, z_profile, spec_id, slot_roi, floor_rois, floor_depth_mm=None):
     """The perceive_slot_z_mm record from a usable depth reference, or None (the caller then runs its original path)."""
     import cell_z_profile
 
-    ref = depth_reference(top_depth, top_colour, slot_roi, floor_rois, tier)
+    ref = depth_reference(top_depth, top_colour, slot_roi, floor_rois, tier, floor_depth_mm=floor_depth_mm)
     if not ref["ok"]:
         return None
     checks = cell_z_profile._current_frame_calibration_checks(side_img, top_colour, top_depth, None, z_profile,
