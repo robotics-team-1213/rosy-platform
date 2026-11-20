@@ -540,6 +540,11 @@ def test_a_map_only_a_minority_of_the_marks_agree_on_is_refused():
     assert not cc.enough_agree(4, 4)
 
 
+def test_cell_calibrate_clears_bias_cache_on_cell_pivot_bias():
+    assert "cell_pivot._BIAS_CACHE" not in (ROOT / "deploy/robot/omx/cell_calibrate.py").read_text(encoding="utf-8")
+    assert "cell_pivot_bias._BIAS_CACHE.clear()" in (ROOT / "deploy/robot/omx/cell_calibrate.py").read_text(encoding="utf-8")
+
+
 def test_colour_diff_marks_black_finger_over_iso_luma_orange_background():
     """2026-11-15: black fingers over orange/pink can match in grey luminance; channel-max diff still marks them."""
     cv2 = pytest.importorskip("cv2")

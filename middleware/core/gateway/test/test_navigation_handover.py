@@ -4,7 +4,6 @@ import pytest
 from core_api_web.api.deps import Mode
 from test_station_docking_api import station_api  # noqa: F401
 from test_station_return_handover import terminal_navigation
-from test_station_camera_pipeline import pipeline_sources  # noqa: F401
 
 
 def request(svc):

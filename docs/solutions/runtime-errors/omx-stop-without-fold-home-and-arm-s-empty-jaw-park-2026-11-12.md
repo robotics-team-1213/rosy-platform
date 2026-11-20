@@ -39,3 +39,35 @@ applies_when: "ending a hardware chunk_runner session via 'stop' or executing pa
    - Use `i_gain: 0` on `shoulder_lift`, `elbow_flex`, and `wrist_flex` (IDs 12, 13, 14) on `arm_s`, set `"gripper_closed": 48.5` (within `0.4` units of `48.86` physical contact), keep upward `shoulder_lift` step sizes `<= 0.032 units/tick`, and fold to `home` in script `finally:` blocks before sending `"stop"`.
 3. **Verification.**
    - Unit test `test_hardware_stop_while_extended_folds_home_before_turning_torque_off` in `test/test_omx_chunk_runner.py` (`78 passed`).
+
+## 2026-11-20 addendum: the signal path still cut torque while extended
+
+- **Gap.** The fold above covered the `stop` command only. A SIGTERM to `record_session.py` became SIGINT to `chunk_runner.py`; the runner had no handler, so `KeyboardInterrupt` reached `chunk_runner.main`'s `finally` and `close_device` turned torque OFF where the arm was. After 10 s `record_session` also SIGKILLed the runner and its `finish` cut torque. Found by review (pipeline-gate-1120), not on a real arm.
+- **Fix.** `chunk_runner_interrupt.py` records the signal instead of raising. The run loop folds with the same `stop fold` and ends only when the readback is within `SETTLE_TOL` of home. Any failure (hold, raise, short fold, 120 s bound, guard not yet tracking) latches `human-hold` and keeps the process alive; only SIGUSR2 from a person cuts torque. `record_session` waits for that outcome (`wait_for_runner`) and on HOLD exits 75 without torque OFF, cap restore, incident read or lease release; the runner inherits the session lock fds.
+- **Review round 2 (same day, Codex).** Seven more drop or mislabel paths, all closed in code:
+  - the guard's own stop (send failure after its torque OFF) was reported as a torque-ON HOLD; the runner now reads Torque_Enable and reports GUARD_STOPPED;
+  - the 15 s silence kill went on to `finish()` torque OFF and could record exit 0; it now kills without touching torque, exits 76, `safe_end=false`;
+  - a SIGUSR2 sent before the HOLD released it on a later SIGTERM; only a release after the HOLD counts;
+  - a failed pose read or status write fell through to `close_device`; both now hold;
+  - a park that ended unsettled near home cut torque; it now needs settled AND home;
+  - the lease died with the parent pid; a `hold` marker keeps it until the owner releases it;
+  - a HOLD written before the parent started reading was missed; `hold.json` carries the runner pid.
+- **Review round 3.** Five more paths, closed in code:
+  - after a guard failure the HOLD loop kept calling the failed guard's send(), which re-ran its torque OFF; now nothing is sent and the readback is reported per change (PARTIAL_GUARD_STOP when only some motors are off);
+  - the parent's first `status.stat()` or any interrupt-check error, and a runner dead by a signal (-9), fell through to finish(); now "unconfirmed", exit 77, no torque write;
+  - a FIFO `human-hold` ran before the interrupt and its own pose read could end in close_device; it is dropped while interrupted and its pose read falls back;
+  - the parent ignored live.json's `interrupt: hold`; it now reads it by pid;
+  - the owner's own claim erased the lease hold; only release_hold clears it.
+- **Review round 4.** Four more paths, closed in code:
+  - the parent's ordinary child.wait() took a runner killed alone (-9) as a normal end; it is now unconfirmed (77);
+  - "already folded" trusted one reading of a moving arm; the arm now stops and needs VERIFY_TICKS still readings in a row;
+  - a signal arriving inside a tick whose pose read failed let the exception reach close_device; any exception with an interrupt recorded now holds, and main has a last-resort hold;
+  - the HOLD loop stopped counting ticks, so live.json went quiet; it counts again.
+- **Review round 5.** The run loop still called idle() on the tick an interrupt was verifying; an earlier park's home_since let the idle stop end the run with the arm pushed 10 units off home. With an interrupt recorded, every ordinary exit (idle, judge stop, stop-fold _stopped, start-alignment stop) is now off and only the interrupt verdict ends the run.
+- **Review round 6.** A SIGTERM landing while a status row was written still let the idle stop and the start-alignment stop return. Instead of one more per-path patch, `final_gate` now sits right before close_device in chunk_runner.main and re-reads the signals last: an interrupt on record without an approved end (`_off_approved`) goes to last_resort_hold. Per-path handling stays; the gate is the final guarantee.
+- **Review round 7.** A SIGTERM between the gate's verdict and the torque OFF escaped the verdict. `gated_close` blocks SIGINT/SIGTERM/SIGHUP (pthread_sigmask, Linux) from just before the verdict until close_device returns; a refusing verdict unblocks, waits for SIGUSR2, and the gate runs again.
+- **Review round 8.** pthread_sigmask blocks only the calling thread; another thread could take the SIGTERM and the handler then ran inside the close. main_thread_signals routes the four signals to the main thread (blocked before thread-starting imports, Thread.start creates blocked threads, main alone unblocked).
+- **Review round 9.** main() unblocked the main thread before lerobot/numpy loaded, so OpenBLAS's pool inherited an open mask. The unblock now follows all heavy imports and the robot/bus start-up, BLAS pools default to one thread, and gated_close re-reads the signals right before close_device.
+  General rule: every exit from a torque-on loop needs its own proof of a safe pose; put one gate at the single place torque goes OFF instead of chasing every return path. A guard verdict, a timeout or a missing reading is not that proof.
+- **Apply when** adding any new way to end a torque-on process (a signal, a timeout, a supervisor kill): a `finally` that turns torque OFF is a drop path unless a confirmed fold precedes it.
+- **Verification.** `test/test_omx_chunk_runner_interrupt.py` (fake robot: extended -> park then end; folded -> immediate end; blocked fold and guard stop -> HOLD until SIGUSR2; repeated SIGTERM; bound; live.json; before tracking) and four tests in `test/test_omx_record_session.py`. A supervised real-arm check is still pending.

@@ -9,6 +9,7 @@ import time
 from typing import Callable, Optional
 
 from core_common.domain.localization import normalize_map_id, odom_position_jump
+from core_common.sensor_store import SensorStore
 from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S, judge
 from core_common.protocol.state_components import BATTERY_ESTOP_SOURCES
 from core_common.protocol.schemas import (
@@ -81,7 +82,9 @@ class StateManager:
         self._map_grid_update = None
         self._diagnostics: dict[str, HealthState] = {}
         self._errors: list[str] = []
-        self._sensors: dict[str, dict] = {}
+        self._sensors = SensorStore()  # set_sensor(key, dict), set_sensor_lazy(key, provider), get_sensor(s)
+        self.set_sensor, self.set_sensor_lazy = self._sensors.set, self._sensors.set_lazy
+        self.get_sensors, self.get_sensor = self._sensors.all, self._sensors.get
         self._hitl_requested: bool = False
         self._capabilities_degraded: list[str] = []
         self._activity_provider: Optional[Callable[[], Optional[dict]]] = None
@@ -331,19 +334,6 @@ class StateManager:
         with self._lock:
             self._docking = status
             self._mark("docking")
-
-    def set_sensor(self, key: str, data: dict) -> None:
-        with self._lock:
-            self._sensors[key] = data
-
-    def get_sensors(self) -> dict:
-        with self._lock:
-            return {k: dict(v) for k, v in self._sensors.items()}
-
-    def get_sensor(self, key: str) -> Optional[dict]:
-        with self._lock:
-            data = self._sensors.get(key)
-            return dict(data) if data else None
 
     def has_received(self, channel: str) -> bool:
         """True once any sample arrived on `channel` (no seq bump)."""

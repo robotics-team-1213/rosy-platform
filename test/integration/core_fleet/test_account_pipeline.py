@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from core_common.protocol.account_client import AccountClient, AccountDenied, AccountUnavailable
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[3]
 for directory in (ROOT/'operations/fleet', ROOT/'operations/account', ROOT/'test'):
     sys.path.insert(0, str(directory))
 

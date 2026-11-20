@@ -296,6 +296,7 @@ EXPECTED_SUBSCRIPTIONS = [
     ("robot/degraded_modules", "_on_degraded_modules", 10),
     ("scan", "_on_scan", "SENSOR"),
     ("imu_raw", "_on_imu", "SENSOR"),
+    ("joint_states", "_on_joint_states", "SENSOR"),
     ("us_sensor/range", "_on_us_range", "SENSOR"),
     ("batt_state", "_on_batt_state", 10),
     ("map", "_on_map", "LATCHED"),
