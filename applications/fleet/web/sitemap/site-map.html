@@ -119,6 +119,7 @@
         <div id="place-form" class="form" hidden>
           <label>주소 이름<input class="ui-field" id="place-name" maxlength="64"></label>
           <label>장소 종류<select class="ui-field" id="place-kind"></select></label>
+          <label class="ui-check"><input class="ui-field" id="place-pinned" type="checkbox">고정(자동 보정이 옮기지 않음)</label>
         </div>
         <div id="edge-form" class="form" hidden>
           <label>통행 방향<select class="ui-field" id="edge-direction">
@@ -126,6 +127,7 @@
           <label>주행 방식<select class="ui-field" id="edge-mode">
             <option value="lane">차선 따라가기</option><option value="free">지도 좌표 추종</option></select></label>
           <label>속도 상한 (m/s)<input class="ui-field" id="edge-speed" type="number" min="0.01" max="5" step="0.01"></label>
+          <label class="ui-check"><input class="ui-field" id="edge-pinned" type="checkbox">고정(자동 보정이 옮기지 않음)</label>
         </div>
         <div id="crosswalk-form" class="form" hidden>
           <ui-text id="crosswalk-lanes"></ui-text>
