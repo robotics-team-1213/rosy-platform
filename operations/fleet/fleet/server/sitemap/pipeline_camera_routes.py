@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from fastapi import HTTPException, Request
 from fleet.charge_bays import ChargeBays, bays_from_map
@@ -181,6 +182,9 @@ def install_cameras_routes(app, ctx) -> None:
         cell_state = app.state.omx_cell_states.get(cell_id) or {}
         if active_task is not None or cell_state.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD") or cell_state.get("amr_motion_inhibited"):
             return {"claimed": False, "task": task, "reason": "CELL_BUSY_OR_HELD"}
+        # D-1057: cell A/B release stays off until the depth acceptance; refused here, before anything in the ledger changes.
+        if cell_id == "cell_ab" and os.environ.get("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
+            return {"claimed": False, "task": task, "reason": "CELL_AB_EVIDENCE_NOT_ENABLED"}
         amr = _ready_amr(task)
         if amr is None:
             return {"claimed": False, "task": task, "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}

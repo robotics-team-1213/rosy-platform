@@ -79,6 +79,10 @@ Fleet은 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(proposer
 
 셀 S에는 측면 카메라가 없다. 그래서 `cell_id == "cell_s"`일 때만 Fleet 완료 검사와 worker, `cell_task_exec`가 `verification.basis == "top_camera_only_target_zone"`을 받아들인다. 셀 A/B는 지금처럼 `predefined_side_and_top_target_zones`가 필수이고 상단 전용 기준은 `UNVERIFIED_CELL_COMPLETION`으로 거부한다. 셀 S 상단 판정도 놓기 전 프레임과 놓은 뒤 프레임을 모두 요구하고, 사이트의 `auto_roi`(지정 구역)에서 구역이 채워졌고(채움 비율이 0.15 이상 늘어남) 두 프레임이 배치 뒤 촬영·2 s 이내일 때만 verified다. 측정한 사이트·구역은 작업의 `dst_site`·tier와 같아야 한다. 가드의 다른 조건(접힘, lease, 시각)은 그대로다.
 
+#### 2-3. 셀 A/B claim 게이트 (깊이 판정 수용 전까지 꺼 둠)
+
+셀 A/B의 배치·높이 증거(2-2절)는 실제 현장 수용 전이다. 그래서 Fleet `claim`은 `cell_ab` 작업을 `ROSY_FLEET_CELL_AB_RELEASE_ENABLED`(기본 꺼짐, `1`·`true`·`yes`·`on`만 켬, 호출 때 읽음)가 켜져 있지 않으면 `claimed:false`, `reason: CELL_AB_EVIDENCE_NOT_ENABLED`로 거부한다. 거부는 `_ready_amr` 앞이고 원장에서 무엇도 바꾸기 전이라 작업 상태·`handoff_lease_id`·셀 상태가 그대로다(팔이 움직인 뒤 완료가 거부되는 일을 막는다). 셀 S는 영향이 없다. 깊이 판정이 수용되면 사이트 설정에서 켠다. 되돌리는 법은 설정을 끄는 것이다.
+
 #### 3. 신뢰 경계
 
 owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경(ID 또는 활성 버전)이 한 번이라도 있으면 영구 무효이고, 확인은 조회 때만이 아니라 콘솔이 받는 상태 갱신마다 검사한다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.

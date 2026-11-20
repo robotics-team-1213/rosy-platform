@@ -466,7 +466,8 @@ def test_cell_s_may_release_on_the_top_camera_only_basis(env):
     assert done.status_code == 200 and done.json()["task"]["status"] == "COMPLETED"
 
 
-def test_cell_ab_may_not_release_on_the_top_camera_only_basis():
+def test_cell_ab_may_not_release_on_the_top_camera_only_basis(monkeypatch):
+    monkeypatch.setenv("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "1")
     env = Env(cell="cell_ab")
     lease = _claimed(env, "cell_ab")
     parts, digest = _owner_parts(lease, basis=TOP_ONLY, cell="cell_ab")
@@ -494,3 +495,37 @@ def test_a_direct_state_read_in_the_pose_service_voids_the_bed_confirmation():
     assert rec["invalid"] is True and seen[0] == "pinky_1"
     svc.observe_state("pinky_1", {"odom_pose": "bad"})  # a bad snapshot is swallowed and the listener still runs
     assert len(seen) == 2
+
+
+def _ledger(env):
+    import copy
+
+    return copy.deepcopy((env.app.state.omx_cell_tasks, env.app.state.omx_cell_states))
+
+
+@pytest.mark.parametrize("value", [None, "", "0", "false", "no"])
+def test_cell_ab_claim_is_refused_before_the_ledger_changes_unless_enabled(monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", value)
+    env = Env(cell="cell_ab")
+    env.confirm_bed()
+    before = _ledger(env)
+    res = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_ab"}).json()
+    assert res["claimed"] is False and res["reason"] == "CELL_AB_EVIDENCE_NOT_ENABLED"
+    assert _ledger(env) == before  # status, lease and cell state untouched
+    task = env.app.state.omx_cell_tasks[TASK]
+    assert task["status"] == "QUEUED" and not task.get("handoff_lease_id") and "cell_ab" not in env.app.state.omx_cell_states
+
+
+@pytest.mark.parametrize("value", ["1", "true", "YES"])
+def test_cell_ab_claim_takes_the_existing_path_when_enabled(monkeypatch, value):
+    monkeypatch.setenv("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", value)
+    env = Env(cell="cell_ab")
+    assert _claimed(env, "cell_ab")  # the lease came back: the normal checks ran and passed
+
+
+def test_cell_s_is_not_affected_by_the_cell_ab_switch(monkeypatch):
+    monkeypatch.delenv("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", raising=False)
+    assert _claimed(Env())

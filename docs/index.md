@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · feat(fleet): D-1057 셀 A/B claim 게이트 (깊이 판정 수용 전)
 - 2026-11-20 · uncommitted · fix(omx): D-1057 Codex 5차 검토 (깊이 경로 증거 강화)
 - 2026-11-20 · uncommitted · feat(omx): D-1057 깊이 다중 프레임 중앙값 (측정 개선만)
 - 2026-11-20 · uncommitted · fix(omx): D-1057 Codex 4차 검토 1~5 (깊이 경로)
 - 2026-11-20 · uncommitted · D-1055 PR + Merge Queue 유일 병합 경로
-- 2026-11-20 · uncommitted · feat(omx): D-1057 D435 깊이 상대 높이를 독립 Z 기준으로 (사용자 결정)

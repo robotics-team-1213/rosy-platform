@@ -14966,3 +14966,8 @@ osy-d395-s1d\`.
 - 변경: 배치 변화를 밝기·대비 정규화 상부 차이 + 깊이 상승 필수로, 방향을 깊이 블롭 주축으로. 바닥 패치 기록 깊이 ±4 mm와 공통 평면 대조, 슬롯 ROI 국소 엣지 정렬 검사. 버스트 프레임마다 단일 프레임과 같은 검사·순번 연속·시계 오프셋, 형식 재시도 포함 3 s 마감 하나. 비 Fleet 실행은 동작 전 측면 촬영 생략, RGB 읽기 마감 공유.
 - 증거: 로컬 `test_omx_cell_depth_slots.py`(조명만 변경·동방향 오염·국소 정렬), `test_omx_cell_depth_burst.py`, `test_omx_cell_zone_verification.py`. 실제 셀 버스트가 새 검사를 통과함을 읽기 전용으로 확인.
 - gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · feat(fleet): D-1057 셀 A/B claim 게이트 (깊이 판정 수용 전)
+- 변경: `claim`이 `cell_ab` 작업을 `ROSY_FLEET_CELL_AB_RELEASE_ENABLED`(기본 꺼짐)가 켜져 있지 않으면 `CELL_AB_EVIDENCE_NOT_ENABLED`로 `_ready_amr` 앞에서 거부, 원장 불변. 셀 S 무영향. ADR 2-3절. origin/main(#263 홈 복귀 안전) 병합은 별도 커밋.
+- 증거: 로컬 `test_pipeline_evidence.py`(꺼짐 5값·켜짐·셀 S), `test_pipeline_orchestrator.py` 외 관련 Fleet 시험.
+- gate 변화: 셀 A/B 는 켜기 전까지 claim 불가.
