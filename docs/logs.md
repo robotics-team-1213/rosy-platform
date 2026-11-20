@@ -14909,3 +14909,8 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-11-20 · uncommitted · docs: CORE events 실행기 확인 기록(D-953 후속 3)
+- 변경: `docs/validation/core-events-executor-2026-11-20/result.md`(y8xs 정지 상태 확인 1·4·5·6, Gazebo 확인 2·3과 Nav2 목표·취소), 교훈 `docs/solutions/deployment/core-restart-leaves-navigation-stopped-2026-11-20.md`.
+- 증거: CORE CPU threaded 76.8% → events 25.4%(navigation 켬). 부하 아래에서도 `cmd_vel` p99는 events 쪽이 같거나 낮았다. 45분 동안 RSS가 평탄했다.
+- gate 변화: 없음. `ROSY_CORE_EXECUTOR` 기본값은 threaded 그대로이고, 주행 시험은 사람이 있을 때로 남겼다.
