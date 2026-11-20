@@ -18,6 +18,45 @@ sys.modules[SPEC.name] = pr_land
 SPEC.loader.exec_module(pr_land)
 
 
+@pytest.fixture(autouse=True)
+def _normal_cutover(monkeypatch):
+    monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
+    monkeypatch.setattr(pr_land.land_freeze, "path", lambda cwd: Path("rosy-cutover.json"))
+
+
+@pytest.mark.parametrize("phase,refused", [("drain", True), ("open", False), ("normal", False)])
+def test_cutover_phase_gates_submission(monkeypatch, tmp_path, phase, refused):
+    state = {"phase": phase, "allow": [], "owner": "coordinator"}
+    monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: state)
+    msg = pr_land.cutover_refusal(tmp_path)
+    assert (msg is not None) == refused
+    if refused:
+        assert "drain" in msg and "coordinator" in msg and "rosy-cutover.json" in msg
+
+
+def test_drain_refuses_real_run_but_dry_run_prints_reason(monkeypatch, tmp_path, capsys):
+    def fake_run(cmd, cwd, env=None, check=True):
+        if cmd[:2] == ["git", "rev-parse"]:
+            return "feat/topic" if "--abbrev-ref" in cmd else "a" * 40
+        if cmd[:2] == ["git", "status"]:
+            return ""
+        if cmd[:2] == ["git", "log"]:
+            return "feat: sample"
+        if cmd[:3] == ["git", "config", "--bool"]:
+            return ""
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(pr_land, "_run", fake_run)
+    monkeypatch.setattr(pr_land, "check_coexistence", lambda *a, **kw: "origin/main")
+    monkeypatch.setattr(pr_land, "required_lab_invocations", lambda *a: [])
+    monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "drain", "allow": [], "owner": "coordinator"})
+    with pytest.raises(SystemExit, match="drain"):
+        pr_land.main(["--title", "T"], repo=tmp_path)
+    assert pr_land.main(["--dry-run"], repo=tmp_path) == 0
+    out = capsys.readouterr().out
+    assert "phase drain" in out and "gh pr merge --auto" in out
+
+
 def test_build_body_appends_self_overlap_review():
     assert "Overlap-Review: self (coordinated)" in pr_land.build_body("summary", "coordinated")
     assert "Overlap-Review:" not in pr_land.build_body("summary", "")
