@@ -42,6 +42,16 @@ def test_measured_seconds_keep_the_slow_selector_suite_off_the_shared_guard_runn
     assert [o["invocations"] for o in out] == [[["test/test_a.py", "test/test_b.py"], ["test/test_d.py"]], [[slow, "test/test_c.py"]]]
 
 
+def test_ci_keeps_the_coarser_packing_when_measured_weights_would_pass_the_job_limit():
+    import affected_ci
+    slow = "test/test_affected_tests.py"  # each job alone is over JOB_WEIGHT only with the measured table
+    few = [_e(f"affected-{i}", "overlay", [slow]) for i in range(3)]
+    assert len(affected_ci.consolidated(few)) == 3
+    many = [_e(f"affected-{i}", "overlay", [slow]) for i in range(affected_ci.MAX_CI_JOBS + 1)]
+    out = affected_ci.consolidated(many)
+    assert len(out) == 1 and out[0]["invocations"] == [[slow]] * len(many)
+
+
 def test_build_smoke_skips_only_outside_colcon_roots_workflows_and_deploy():
     import affected_ci
     from types import SimpleNamespace
