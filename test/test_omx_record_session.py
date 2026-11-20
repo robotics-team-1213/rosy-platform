@@ -1040,7 +1040,7 @@ def test_a_held_or_killed_runner_leaves_torque_and_caps_alone(tmp_path, monkeypa
         assert set(record["torque_readback"].values()) == {1}
 
 
-@pytest.mark.parametrize("outcome", ["hold", "exited", "silent", "signalled", "check-failed"])
+@pytest.mark.parametrize("outcome", ["hold", "exited", "silent", "signalled", "check-failed", "runner-killed"])
 def test_an_interrupted_chunk_session_waits_for_the_runner_and_kills_only_a_silent_one(main_session, monkeypatch, tmp_path,
                                                                                         outcome):
     import contextlib
@@ -1059,6 +1059,8 @@ def test_an_interrupted_chunk_session_waits_for_the_runner_and_kills_only_a_sile
 
     def wait(timeout=None):
         child.waits.append(timeout)
+        if outcome == "runner-killed":
+            return -9  # only the runner got SIGKILL; the session itself was never interrupted
         if len(child.waits) == 1:
             raise KeyboardInterrupt  # the session got SIGTERM while the runner ran
         return 0
@@ -1091,7 +1093,7 @@ def test_an_interrupted_chunk_session_waits_for_the_runner_and_kills_only_a_sile
     with pytest.raises(SystemExit) as result:
         m.main(["--config", str(path), "--caps", "unused.json", "--arm", "arm_b", "--chunks", str(library)])
     import signal
-    assert child.signals == [signal.SIGINT] and child.killed == (outcome == "silent")
+    assert child.signals == ([] if outcome == "runner-killed" else [signal.SIGINT]) and child.killed == (outcome == "silent")
     lease = cell_arm_lease.status("arm_b").get("arm_b")
     incidents = [e for e in events if isinstance(e, tuple)]
     if outcome == "hold":  # the runner keeps torque, the bus and (by its pid) the lease; the session says so
@@ -1102,7 +1104,7 @@ def test_an_interrupted_chunk_session_waits_for_the_runner_and_kills_only_a_sile
         assert result.value.code == m.RUNNER_KILLED_EXIT and incidents == [("incident", None)]
         assert lease["hold"] == "runner killed" and lease["live"]
         assert json.loads(Path("session.json").read_text())["safe_end"] is False
-    elif outcome in ("signalled", "check-failed"):  # no fold confirmation: no finish(), its own code, lease held
+    elif outcome in ("signalled", "check-failed", "runner-killed"):  # no fold confirmation: no finish(), its own code, lease held
         assert result.value.code == m.RUNNER_UNCONFIRMED_EXIT and incidents == [("incident", None)]
         assert lease["hold"] == "runner fold unconfirmed" and lease["live"]
         assert lease["pid"] == (4242 if outcome == "check-failed" else None)

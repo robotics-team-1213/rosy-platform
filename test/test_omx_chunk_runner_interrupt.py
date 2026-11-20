@@ -82,8 +82,8 @@ def release_signal(monkeypatch):
 def test_an_interrupt_while_extended_parks_then_ends_only_after_the_fold_reads_home():
     robot = Robot()
     r, status, _, held = drive(robot, signal_after=20)  # mid-chunk, pan near 38, lift and elbow out
-    folding, done = interrupts(status)[0], interrupts(status)[-1]
-    assert folding["folding"] and not held
+    folding, done = next(row for row in interrupts(status) if row.get("folding")), interrupts(status)[-1]
+    assert interrupts(status)[0]["verifying"] and not held
     assert max(abs(a - b) for a, b in zip(folding["state"][:5], HOME[:5])) > 10  # it really was out
     park = [row for row in status if row["command"] == "run park"]
     assert park and park[-1]["settled"]
@@ -91,11 +91,33 @@ def test_an_interrupt_while_extended_parks_then_ends_only_after_the_fold_reads_h
     assert not r.human_hold_latched  # run returned: chunk_runner.main turns torque OFF only now
 
 
-def test_an_interrupt_while_folded_ends_at_once():
+def test_an_interrupt_while_folded_ends_after_a_few_still_readings():
     robot = Robot()
     r, status, _, _ = drive(robot, signal_after=2, commands=())
-    assert [row["reason"] for row in interrupts(status)] == ["already folded, torque goes OFF"]
-    assert not [row for row in status if row["command"] == "run park"] and len(robot.sent) <= 2
+    assert interrupts(status)[-1]["reason"] == "already folded and still, torque goes OFF"
+    assert interrupts(status)[-1]["still_ticks"] >= ci.VERIFY_TICKS
+    assert not [row for row in status if row["command"] == "run park"] and len(robot.sent) <= ci.VERIFY_TICKS + 3
+
+
+def test_an_arm_moving_near_home_is_stopped_and_verified_not_switched_off_at_once():
+    robot = Robot()
+    r, status, _, _ = drive(robot, signal_after=3)  # the reach chunk has just left home: within 3 units, moving
+    first = interrupts(status)[0]
+    assert first["verifying"] and max(abs(a - b) for a, b in zip(first["state"][:5], HOME[:5])) <= ci.SETTLE_TOL
+    frozen = robot.sent[-1]
+    assert all(a == frozen for a in robot.sent[-ci.VERIFY_TICKS:])  # the chunk's frames stopped at the signal
+    assert interrupts(status)[-1]["still_ticks"] >= ci.VERIFY_TICKS
+
+
+def test_an_arm_near_home_that_never_stills_is_held_not_switched_off():
+    class Shaking(Robot):
+        def get_observation(self):
+            self.pos[0] = 0.5 if len(self.sent) % 2 else -0.5  # within 3 units of home, never still
+            return super().get_observation()
+
+    r, status, _, held = drive(Shaking(), signal_after=2, commands=(), release_after=1.0)
+    hold = next(row for row in interrupts(status) if row.get("hold"))
+    assert "never still" in hold["error"] and not any(row.get("folded") for row in interrupts(status))
 
 
 @pytest.mark.parametrize("robot", [Robot(blocked=(0,), block_from=19), Robot(fail_after=30)], ids=["blocked-pan", "tick-error"])
@@ -376,3 +398,70 @@ def test_a_human_hold_whose_pose_read_fails_holds_the_last_known_pose():
     r = m.Runner(Blind(), library(), fps=30, status=lambda row: None, clock=lambda: 0.0, sleep=lambda s: None)
     r.target, r.last_present = list(HOME), list(HOME)
     assert r.command("human-hold") is True and r.human_hold_latched and r.target[:5] == HOME[:5]
+
+
+def test_a_signal_during_a_tick_whose_pose_read_fails_holds_instead_of_ending():
+    status, clock, holder = [], [0.0], {}
+
+    class Racing(Robot):
+        def get_observation(self):
+            if len(self.sent) == 25 and not holder.get("raised"):
+                holder["raised"] = True
+                holder["runner"].signals.append(signal.SIGTERM)  # the handler ran inside this tick
+                raise OSError(5, "Input/output error")
+            return super().get_observation()
+
+    robot = Racing()
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    holder["runner"], r.signals, queue = r, [], ["run reach"]
+
+    def lines():
+        if r.human_hold_latched and clock[0] > 10 and RELEASE not in r.signals:
+            r.signals.append(RELEASE)
+        if clock[0] > 600:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)  # no exception reached the caller (chunk_runner.main would have called close_device)
+    hold = next(row for row in interrupts(status) if row.get("hold"))
+    assert "OSError" in hold["error"] and interrupts(status)[-1]["released"]
+
+
+def test_a_hold_keeps_counting_ticks_and_publishing_live_json():
+    rows, status, clock = [], [], [0.0]
+    robot = Robot(blocked=(0,), block_from=19)
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0], live=rows.append,
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, queue, n, mark = [], ["run reach"], [0], []
+
+    def lines():
+        n[0] += 1
+        if n[0] == 20:
+            r.signals.append(signal.SIGINT)
+        if r.human_hold_latched and not mark:
+            mark.append((clock[0], len(rows)))
+        if mark and clock[0] > mark[0][0] + 5:
+            r.signals.append(RELEASE)
+        if clock[0] > 600:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)
+    published = rows[mark[0][1]:]
+    assert len(published) >= 5 * 10 * 0.9 and published[-1]["interrupt"] == "hold"  # ~10 Hz for the 5 s held
+
+
+def test_a_run_loop_that_raises_after_an_interrupt_waits_for_a_person_before_torque_off(tmp_path):
+    signals, slept = [signal.SIGINT], []
+    r = type("R", (), {"hold_file": tmp_path / "hold.json"})()
+
+    def sleep(s):
+        slept.append(s)
+        if len(slept) == 3:
+            signals.append(signal.SIGTERM)  # not a release
+        if len(slept) == 6:
+            signals.append(RELEASE)
+
+    ci.last_resort_hold(r, signals, RuntimeError("live.json"), sleep=sleep)
+    assert len(slept) == 6 and json.loads((tmp_path / "hold.json").read_text())["last_resort"]

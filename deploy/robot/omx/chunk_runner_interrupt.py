@@ -3,9 +3,14 @@
 
 An extended arm never loses torque on an interrupt (D-911, D-1048). The handler only records the signal; the run loop
 asks `interrupt_tick` once per tick:
-  - first signal: human hold already latched -> HOLD; body joints within SETTLE_TOL of home -> end (torque OFF);
-    otherwise the runner's own `stop fold` (park_path from the present pose, every guard unchanged), bounded by
-    INTERRUPT_PARK_S. Before the guard tracks (start alignment) nothing moves: folded ends, otherwise HOLD.
+  - first signal: human hold already latched -> HOLD. Otherwise the arm stops where it is (the running chunk and its
+    queued frames are dropped, torque on) and is verified: VERIFY_TICKS still readings in a row within SETTLE_TOL of
+    home -> end (torque OFF); still elsewhere -> the runner's own `stop fold` (park_path from the present pose, every
+    guard unchanged), bounded by INTERRUPT_PARK_S; near home but not still within VERIFY_S -> HOLD. Before the guard
+    tracks (start alignment) nothing folds: folded and still ends, otherwise HOLD.
+  - any exception once an interrupt is recorded (also one that arrived during the raising tick) -> HOLD or the guard
+    readback below; if the run loop itself still raises, chunk_runner.main waits in `last_resort_hold` (nothing sent)
+    for SIGUSR2 instead of reaching close_device.
   - the park ended settled AND the readback is within SETTLE_TOL of home -> end (torque OFF).
   - the park held (contact, strain, guard hold), raised, could not start, ended unsettled or short of home, ran past
     INTERRUPT_PARK_S, or the pose could not be read -> human hold (torque ON at the last known pose): status
@@ -39,6 +44,8 @@ from chunk_runner_guards import SETTLE_TOL  # noqa: E402  D-1048's "within 3 uni
 from chunk_runner_guards import NAMES  # noqa: E402
 
 INTERRUPT_PARK_S = 120.0  # a park from full reach at PARK_SPEED with pacing holds takes well under a minute
+VERIFY_TICKS, VERIFY_S = 5, 2.0  # "already folded" needs this many still readings in a row, within this time
+STILL_UNITS = 0.08  # body motion per tick that counts as still (chunk_runner_settle's body_still)
 OPERATOR_RELEASE = getattr(signal, "SIGUSR2", None)  # None on Windows test hosts
 
 
@@ -145,6 +152,7 @@ def _guard_verdict(runner, torque: dict, cause: str) -> bool:
 def _hold_tick(runner) -> bool:
     """In a HOLD: only the held pose goes to the guard; once the guard has failed, nothing is sent, torque is read."""
     state = runner._interrupt
+    runner.ticks += 1  # the run loop paces live.json by ticks: a HOLD keeps publishing
     torque, cause = _guard_stopped(runner), state.get("guard_cause", "guard stopped")
     if torque is None:
         try:
@@ -170,27 +178,60 @@ def _hold_tick(runner) -> bool:
     return interrupt_step(runner)
 
 
-def _start(runner, *, may_move: bool) -> bool:
-    runner._interrupt = {"signal": runner.signals[0], "phase": "park", "seen": len(runner.signals),
+def _new_state(runner, may_move: bool) -> dict:
+    runner._interrupt = {"signal": runner.signals[0], "phase": "verify", "seen": len(runner.signals),
+                         "may_move": may_move, "since": runner.clock(), "still": 0, "last": None,
                          "deadline": runner.clock() + INTERRUPT_PARK_S}
+    return runner._interrupt
+
+
+def _start(runner, *, may_move: bool) -> bool:
+    """Stop where the arm is (drop the chunk and its frames), then verify: the arm ends folded only once VERIFY_TICKS
+    readings in a row are still and within SETTLE_TOL of home; otherwise the existing stop fold."""
+    _new_state(runner, may_move)
     runner.pending.clear()
-    (present, read), home = _pose(runner), _home(runner)
+    present, read = _pose(runner)
     if runner.human_hold_latched:
         return _hold(runner, present, "human hold already latched")
     if not read:
         return _hold(runner, present, "the pose could not be read")
-    if folded(present, home):
-        _say(runner, present, ok=True, folded=True, reason="already folded, torque goes OFF")
-        return True
+    if runner.chunk is not None or runner.queue or runner.jog_path or getattr(runner, "_stop_after_park", None):
+        runner.queue, runner.chunk, runner.jog_path, runner._stop_after_park = [], None, [], None
+        runner.target = list(present[:5]) + [runner.target[5]]  # hold here with torque on while the arm settles
+    _say(runner, present, ok=True, verifying=True, reason="stopped at the present pose, verifying before fold or OFF")
+    return False
+
+
+def _verify(runner, state) -> bool:
+    present, read = _pose(runner)
+    if not read:
+        return _hold(runner, present, "the pose could not be read")
+    last, state["last"] = state["last"], list(present[:5])
+    still = last is not None and max(abs(a - b) for a, b in zip(present[:5], last)) < STILL_UNITS
+    state["still"] = state["still"] + 1 if still else 0
+    home = _home(runner)
+    if state["still"] >= VERIFY_TICKS:
+        if folded(present, home):
+            _say(runner, present, ok=True, folded=True, still_ticks=state["still"],
+                 reason="already folded and still, torque goes OFF")
+            return True
+        return _fold(runner, present)
+    if runner.clock() - state["since"] > VERIFY_S:
+        return (_hold(runner, present, "near home but never still") if folded(present, home)
+                else _fold(runner, present))
+    return False
+
+
+def _fold(runner, present) -> bool:
+    state, home = runner._interrupt, _home(runner)
     held = getattr(getattr(runner.robot, "motion", None), "held", None)
     hard_fault = runner.fault and not runner.fault.startswith("contact")
-    if not may_move or home is None or held or hard_fault:
-        why = ("the guard is not tracking yet" if not may_move else "no home chunk" if home is None
+    if not state["may_move"] or home is None or held or hard_fault:
+        why = ("the guard is not tracking yet" if not state["may_move"] else "no home chunk" if home is None
                else f"guard hold {held}" if held else f"fault {runner.fault}")
         return _hold(runner, present, f"cannot fold ({why})")
-    runner._park_settled = False
-    if not getattr(runner, "_stop_after_park", None):  # a judge's stop fold already folding keeps going
-        runner.command("stop fold")
+    state["phase"], state["deadline"], runner._park_settled = "park", runner.clock() + INTERRUPT_PARK_S, False
+    runner.command("stop fold")
     if runner.chunk != "park" or not getattr(runner, "_stop_after_park", None):
         return _hold(runner, present, f"the fold did not start ({runner.fault or 'refused'})")
     _say(runner, present, ok=True, folding=True, reason="folding home before torque goes OFF")
@@ -220,6 +261,8 @@ def interrupt_step(runner, *, may_move: bool = True) -> bool:
             _say(runner, present, ok=False, hold=True, person_needed=True, error="HOLD: still holding, torque ON")
     if state["phase"] == "hold":
         return False
+    if state["phase"] == "verify":
+        return _verify(runner, state)
     if getattr(runner, "_stopped", False):  # the park ended (settled or out of settle time)
         runner._stopped = False
         present, read = _pose(runner)
@@ -235,8 +278,7 @@ def interrupt_step(runner, *, may_move: bool = True) -> bool:
     return False
 
 
-def interrupt_tick(runner, label: str, tick_or_report) -> bool:
-    """One control tick; once interrupted, a raising tick holds (or reports the guard's own stop), never torque OFF."""
+def _interrupt_tick(runner, label: str, tick_or_report) -> bool:
     if getattr(runner, "signals", None) and getattr(runner, "_interrupt", None) is None and interrupt_step(runner):
         return True
     state = getattr(runner, "_interrupt", None)
@@ -245,13 +287,44 @@ def interrupt_tick(runner, label: str, tick_or_report) -> bool:
         return False
     if state["phase"] == "hold":
         return _hold_tick(runner)
-    try:
-        runner.tick()
-    except Exception as error:  # noqa: BLE001
-        cause = f"{type(error).__name__}: {error}"
-        torque = _guard_stopped(runner)
-        if torque is not None:
-            state["guard_cause"], state["guard_read_at"] = cause, runner.clock()
-            return _guard_verdict(runner, torque, cause)
-        return _hold(runner, _pose(runner)[0], cause[:500])
+    runner.tick()
     return interrupt_step(runner)
+
+
+def interrupt_tick(runner, label: str, tick_or_report) -> bool:
+    """One control tick. With an interrupt recorded (even one that arrived during this tick), any exception holds or
+    reports the guard's own stop; it never reaches close_device."""
+    try:
+        return _interrupt_tick(runner, label, tick_or_report)
+    except Exception as error:  # noqa: BLE001
+        if not getattr(runner, "signals", None):
+            raise  # no interrupt: the existing stop (close_device), unchanged
+        return emergency_hold(runner, error)
+
+
+def emergency_hold(runner, error) -> bool:
+    state = getattr(runner, "_interrupt", None) or _new_state(runner, False)
+    cause = f"{type(error).__name__}: {error}"
+    torque = _guard_stopped(runner)
+    if torque is not None:
+        state["guard_cause"], state["guard_read_at"] = cause, runner.clock()
+        return _guard_verdict(runner, torque, cause)
+    if state["phase"] == "hold" and runner.human_hold_latched:
+        if not state.get("tick_error"):
+            state["tick_error"] = True
+            _stderr({"command": "interrupt", "hold": True, "tick_error": cause[:500]})
+        return False
+    return _hold(runner, _pose(runner)[0], cause[:500])
+
+
+def last_resort_hold(runner, signals: list, error, sleep=time.sleep) -> None:
+    """The run loop itself raised after an interrupt: no loop is left to stream the hold, so nothing is sent; torque
+    stays as the motors hold it. Report HOLD and wait for a SIGUSR2 sent after this point, then return (torque OFF)."""
+    row = {"hold": True, "last_resort": True, "error": f"HOLD: run loop failed: {type(error).__name__}: {error}"[:500]
+           + "; nothing streams the pose, a person must support the arm, then kill -USR2 the runner"}
+    _write_hold(runner, row)
+    _stderr({"command": "interrupt", **row})
+    mark = len(signals)
+    while OPERATOR_RELEASE is None or OPERATOR_RELEASE not in signals[mark:]:
+        sleep(0.5)
+    _stderr({"command": "interrupt", "released": True, "last_resort": True})

@@ -246,6 +246,10 @@ def main(argv=None):
             bind_trace_source(runner, trace_path, trace_file, args.io)
         try:
             runner.run(lines)
+        except Exception as error:
+            if not signals:
+                raise  # no interrupt: the existing stop, torque OFF in the finally below
+            __import__("chunk_runner_interrupt").last_resort_hold(runner, signals, error)  # returns on SIGUSR2 only
         finally:
             if trace_file:
                 trace_file.close()

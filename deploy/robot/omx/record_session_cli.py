@@ -157,7 +157,11 @@ def main(argv=None, *, _globals: dict | None = None):
             },
         )
         try:
-            return child.wait()
+            code = child.wait()
+            if io is not None and code < 0:  # the runner alone was killed by a signal (-9): no fold confirmed it
+                raise RunnerUnconfirmed({"reason": f"runner ended by signal {-code}", "exit": code,
+                                         "runner_pid": child.pid, "runner_alive": False})
+            return code
         except KeyboardInterrupt:
             with ni():
                 if io is None:  # lerobot-record: no fold of its own, as before
