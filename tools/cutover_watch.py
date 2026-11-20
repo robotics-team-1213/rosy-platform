@@ -1,6 +1,6 @@
 """Read-only cutover watch (verdict 2026-11-20, item 2).
 
-Reads `<git-common-dir>/rosy-cutover.json` (schema: {"phase": str, "allow": [sha...], "owner": str}), fetches, checks that
+Reads `<git-common-dir>/rosy-cutover.json` (land_freeze.py schema: {"phase": str, "allow": [{"branch", "sha"}], "owner": str}; bare sha strings also accepted), fetches, checks that
 every allowed sha is an ancestor of origin/main, and lists live landing trees (`rosy-land-wt/<name>` without
 `<name>.stopped`) whose HEAD is not in allow. Writes a status json and appends ONE board line only when the state
 content hash changes. It never lands, publishes, kills or edits git state (only `git fetch`).
@@ -47,7 +47,7 @@ def collect(cwd, fetch=True) -> dict:
         return {"phase": "none", "owner": "", "allow": [], "not_in_main": [], "outside_allow": [], "error": ""}
     try:
         cfg = json.loads(cfg_path.read_text("utf-8"))
-        phase, owner, allow = str(cfg["phase"]), str(cfg.get("owner", "")), [str(s) for s in cfg["allow"]]
+        phase, owner, allow = str(cfg["phase"]), str(cfg.get("owner", "")), [str(s["sha"]) if isinstance(s, dict) else str(s) for s in cfg["allow"]]
     except (ValueError, KeyError, TypeError) as e:
         return {"phase": "invalid", "owner": "", "allow": [], "not_in_main": [], "outside_allow": [], "error": f"bad rosy-cutover.json: {e}"}
     error = ""
