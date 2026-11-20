@@ -352,6 +352,23 @@ class DockingManager(DockingPhasesMixin):
         쥐고 있는 로봇을 배터리 정책이 빼앗지 않는다."""
         self._manual_active = bool(active)
 
+    def body_scan_rear_overhang(self) -> Optional[float]:
+        """칸 접근 중이면 짐칸 뒤 돌출(m) — CORE 가 그 몸으로 스캔을 판정해 note_body_scan 에 넣는다."""
+        return self._cfg.bay_turn_rear_overhang_m if self.active and self._bay_phases.active() else None
+
+    def note_body_scan(self, rotation_block, front_gap_m, rear_gap_m, at=None) -> None:
+        """LiDAR 콜백에서 부른다 — 락을 잡지 않는다(한 튜플 대입, 정지 입력을 늦추지 않게)."""
+        self._bay_phases.note_body_scan(rotation_block, front_gap_m, rear_gap_m,
+                                        self._clock() if at is None else at)
+
+    def bay_scan_request(self) -> Optional[tuple]:
+        """LiDAR 콜백에서 부른다(락 없음): 칸 줄 판정이 이 칸의 기준 스캔을 기다리면 그 스캔(한 번)."""
+        return self._bay_phases.scan_request() if self.active and self._bay_phases.active() else None
+
+    def note_bay_scan_match(self, match, at=None, error=None, request_id=None) -> None:
+        """기준 스캔과 맞춘 칸 자세(BayScanPose, 못 맞추면 None). 락 없음 — 한 번의 대입."""
+        self._bay_phases.note_scan_match(match, self._clock() if at is None else at, error, request_id)
+
     def on_estop(self) -> None:
         """D-502: e-stop or release drops a pending return; re-arming waits for safety."""
         self._return_pending = False
@@ -373,6 +390,8 @@ class DockingManager(DockingPhasesMixin):
             return
         if self._db.only() is None and len(self._db.list()) != 1:
             return
+        if not self._db.type_of((self._db.only() or self._db.list()[0]).id).battery_return:
+            return          # 칸 접근은 명시 없이 자동 복귀하지 않는다(틀린 칸·이웃 옆 후진, 2026-11-18)
 
         self._return_pending = True
         self._try_pending_return()

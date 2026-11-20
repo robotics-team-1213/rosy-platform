@@ -2,10 +2,13 @@
 
 Usage::
 
-    python tools/pr_evidence.py <head-ref> [--base origin/main] [--dry-run]
+    python tools/pr_evidence.py <head-ref> [--base origin/main] [--dry-run] [--solo]
 
 Runs from the worktree that has <head-ref> checked out (pr_land reads the same tree). Same runner and the same clean-pass
 rule as tools/publish_evidence.py fill(); nothing in pr_land's checks is relaxed.
+
+After a failed attempt under load, rerun with ``--solo``: the missing invocations run one at a time, each alone on its host
+(ROSY_JOB_ALONE=1, as land.py's D-790 rerun alone); ``solo.txt`` in the log dir lists them. Passes are recorded the same way.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ def main(argv: list[str] | None = None, repo: Path | None = None, run=None) -> i
     parser.add_argument("head", help="branch or commit to produce evidence for (must be this worktree's HEAD)")
     parser.add_argument("--base", default="origin/main")
     parser.add_argument("--dry-run", action="store_true", help="list the lab invocations only")
+    parser.add_argument("--solo", action="store_true", help="run the missing invocations one at a time, each alone on its host")
     args = parser.parse_args(argv)
     cwd = (repo or Path.cwd()).resolve()
     head = pr_land._run(["git", "rev-parse", f"{args.head}^{{commit}}"], cwd)
@@ -57,7 +61,12 @@ def main(argv: list[str] | None = None, repo: Path | None = None, run=None) -> i
         import remote_pytest
         run = remote_pytest.run
     # -rA prints the PASSED lines pr_land.passed_ids needs; the row keeps the plain argv pr_land compares (xdist_plan.tail honours -rA)
-    codes = run([[*inv, "-rA"] for inv in todo], logs, head, repo=cwd, label="pr-evidence")
+    if args.solo:  # ROSY_JOB_ALONE=1 takes the whole host (work_queue.host_alone); the recorded row keeps the plain argv
+        (logdir / "solo.txt").write_text("".join(" ".join(inv) + "\n" for inv in todo), encoding="utf-8")
+        codes = [c for inv, log in zip(todo, logs)
+                 for c in run([["ROSY_JOB_ALONE=1", *inv, "-rA"]], [log], head, repo=cwd, label="pr-evidence-solo")]
+    else:
+        codes = run([[*inv, "-rA"] for inv in todo], logs, head, repo=cwd, label="pr-evidence")
     passed = 0
     for inv, log, code in zip(todo, logs, codes):
         # a clean pass only, exactly publish_evidence.fill's rule
@@ -69,6 +78,8 @@ def main(argv: list[str] | None = None, repo: Path | None = None, run=None) -> i
         else:
             print(f"[pr-evidence] FAILED exit {code}: {' '.join(inv)} (log {log})")
     print(f"[pr-evidence] {passed}/{len(todo)} recorded, {len(required) - len(todo)} kept (logs {logdir})")
+    if passed < len(todo) and not args.solo:
+        print("[pr-evidence] load-sensitive failures: rerun with --solo (recorded groups are reused)")
     return 0 if passed == len(todo) and len(codes) == len(todo) else 1
 
 

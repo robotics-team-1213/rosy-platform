@@ -5,14 +5,14 @@
 
 ## Purpose
 
-Wheel `rosy-contracts-skill` 0.1.0. ROS-free Skill invocation and receipt identity shared by the other ROSY wheels. `COLCON_IGNORE` keeps colcon off this folder.
+Wheel `rosy-contracts-skill` 0.1.1. ROS-free Skill invocation, receipt identity and PlanBundle/PlanStep shape shared by the other ROSY wheels. `COLCON_IGNORE` keeps colcon off this folder.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
 | `pyproject.toml` | Package name `rosy-contracts-skill` |
-| `src/` | Import root `rosy.contracts.skill` |
+| `src/` | Import root `rosy.contracts.skill`; `plan.py` holds PlanBundle/PlanStep (`rosy.execution.api` re-exports them) |
 
 ## Subdirectories
 

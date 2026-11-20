@@ -1,0 +1,73 @@
+{
+ "source": "PR #247 robotics-team-1213/rosy-platform run 44516702259 (publish/main-20261119-11), trimmed excerpts of job logs, 2026-11-19",
+ "head_sha": "9c8b658bc342c5df88ffefd5c344c18fef139666",
+ "apt_install": {
+  "job": {
+   "id": 135548042661,
+   "name": "test (affected-4)",
+   "conclusion": "failure",
+   "steps": [
+    {
+     "name": "Set up job",
+     "conclusion": "success"
+    },
+    {
+     "name": "Checkout",
+     "conclusion": "success"
+    },
+    {
+     "name": "Install colcon & tools",
+     "conclusion": "failure"
+    }
+   ]
+  },
+  "log": "2026-11-19T12:06:02.4055605Z ##[group]Run apt-get update -qq\n2026-11-19T12:10:35.0894419Z W: Failed to fetch http://security.ubuntu.com/ubuntu/dists/noble-security/InRelease  Connection failed [IP: 91.189.92.23 80]\n2026-11-19T12:12:19.9542295Z E: Failed to fetch http://archive.ubuntu.com/ubuntu/pool/main/a/argon2/libargon2-1_0%7e20190702%2bdfsg-4build1_amd64.deb  Connection failed [IP: 91.189.91.81 80]\n2026-11-19T12:12:19.9544704Z E: Failed to fetch http://archive.ubuntu.com/ubuntu/pool/main/l/lvm2/libdevmapper1.02.1_1.02.185-3ubuntu3.2_amd64.deb  Could not connect to archive.ubuntu.com:80 (91.189.91.83), connection timed out Co\n2026-11-19T12:12:19.9548497Z E: Failed to fetch http://archive.ubuntu.com/ubuntu/pool/main/j/json-c/libjson-c5_0.17-1build1_amd64.deb  Unable to connect to archive.ubuntu.com:http: [IP: 91.189.91.81 80]\n2026-11-19T12:12:19.9549563Z E: Failed to fetch http://archive.ubuntu.com/ubuntu/pool/main/c/cryptsetup/libcryptsetup12_2.7.0-1ubuntu4.2_amd64.deb  Unable to connect to archive.ubuntu.com:http: [IP: 91.189.91.81 80]\n2026-11-19T12:12:19.9550614Z E: Failed to fetch http://archive.ubuntu.com/ubuntu/pool/main/u/util-linux/libfdisk1_2.39.3-9ubuntu6.6_amd64.deb  Unable to connect to archive.ubuntu.com:http: [IP: 91.189.91.81 80]\n2026-11-19T12:12:19.9861922Z ##[error]Process completed with exit code 100."
+ },
+ "assertion_test": {
+  "job": {
+   "id": 135573313134,
+   "name": "test (affected-25)",
+   "conclusion": "failure",
+   "steps": [
+    {
+     "name": "Install colcon & tools",
+     "conclusion": "success"
+    },
+    {
+     "name": "Test (matrix suite, D-436)",
+     "conclusion": "failure"
+    }
+   ]
+  },
+  "log": "2026-11-19T12:57:22.2569272Z test/learning/perception/test_learning_tasks_http.py::test_sim_context_fetches_server_evidence_under_project_write_fences[FAILED] PASSED [  6%]\n2026-11-19T12:54:46.9663886Z ##[group]pytest test/architecture/test_app_roles.py test/architecture/test_capability_owners.py test/architecture/test_common_placement.py test/architecture/test_duplicate\n2026-11-19T12:54:46.6230268Z ##[endgroup]\n2026-11-19T13:13:29.7697251Z test/test_omx_cell_frame.py:251: AssertionError\n2026-11-19T13:13:31.9160950Z FAILED test/test_omx_cell_frame.py::test_a_remap_near_the_base_as_a_pose_reaches_the_pallet_where_the_affine_map_drifts - assert 5.37184600492146 > 7.090230242781665\n2026-11-19T13:13:31.9399377Z ##[error]pytest test/architecture/test_app_roles.py test/architecture/test_capability_owners.py test/architecture/test_common_placement.py test/architecture/test_duplicate_definitions.py test/architect"
+ },
+ "segfault_test": {
+  "job": {
+   "id": 135573313225,
+   "name": "test (affected-23)",
+   "conclusion": "failure",
+   "steps": [
+    {
+     "name": "Install colcon & tools",
+     "conclusion": "success"
+    },
+    {
+     "name": "Test (matrix suite, D-436)",
+     "conclusion": "failure"
+    }
+   ]
+  },
+  "log": "2026-11-19T12:59:20.7521758Z test/test_omx_cell_role.py::test_a_config_role_naming_load_or_retrieve_is_refused_not_skipped[step1] PASSED [ 55%]\n2026-11-19T12:59:20.7522183Z test/test_omx_cell_shared_markers.py::test_marker_corners_in_millimetres_and_the_side_camera_from_them Fatal Python error: Segmentation fault\n2026-11-19T12:59:20.7522456Z \n2026-11-19T12:59:20.7522539Z Thread 0x0000731f31a4c6c0 (most recent call first):\n2026-11-19T12:59:20.7522810Z   File \"/__w/rosy-platform/rosy-platform/test/test_omx_cell_calibrate.py\", line 328 in <lambda>\n2026-11-19T12:59:22.8577553Z ##[error]pytest test/architecture/test_angle_wrap_conventions.py test/architecture/test_app_shared_sources.py test/architecture/test_cmd_vel_publisher_identity.py test/architecture/test_common_services\n2026-11-19T13:00:26.4094818Z ##[error]Process completed with exit code 1.\n2026-11-19T13:00:26.4211370Z Post job cleanup."
+ },
+ "ci_result": {
+  "id": 135587490196,
+  "name": "ci-result",
+  "conclusion": "failure",
+  "steps": [
+   {
+    "name": "All gating jobs passed",
+    "conclusion": "failure"
+   }
+  ]
+ }
+}
