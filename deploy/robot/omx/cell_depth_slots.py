@@ -9,6 +9,11 @@ It checks tier and occupancy (+-TOL_MM); it cannot see a 1-3 mm unseated cone, w
 """
 from __future__ import annotations
 
+import hashlib
+import re
+import subprocess
+import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -198,3 +203,64 @@ def perceive(side_img, top_colour, top_depth, col, row, tier, z_profile, spec_id
             "inferred_tier": inferred, "measured_top_z_mm": ref["median_rel_mm"], "expected_top_z_mm": TIER_TOP_Z_MM[int(tier)],
             "valid_depth_ratio": ref["valid_depth_ratio"], "measurement_calibrated": True, "calibration_checks": checks,
             "depth_reference": ref, "r_k_mm": gate["r_k_mm"], "spec_id": gate["spec_id"], "spec_gate": gate}
+
+
+DEPTH_BURST_S = 3.0      # hard limit for the whole burst (warm-up included)
+DEPTH_FPS = 15           # 17 frames (12 warm-up + 5) take about 1.2 s; the single-frame capture runs at 6 fps
+DEPTH_SKIP = 12          # warm-up frames, as the single-frame capture
+_DQBUF = re.compile(r"cap dqbuf:.*?seq:\s*(\d+).*?bytesused:\s*(\d+).*?ts:\s*([0-9.]+)")
+
+
+def median_depth(frames: np.ndarray) -> tuple[np.ndarray, float]:
+    """Per-pixel median of N depth frames (mm, 0 = invalid). A pixel counts only when more than half of the frames are valid
+    there; the rest become 0. Returns (map, fraction of valid pixels)."""
+    frames = np.asarray(frames)
+    count = (frames > 0).sum(axis=0)
+    stack = np.where(frames > 0, frames.astype(np.float32), np.nan)
+    with np.errstate(all="ignore"):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            med = np.nanmedian(stack, axis=0)
+    out = np.where(count * 2 > frames.shape[0], med, 0.0)
+    out = np.nan_to_num(out, nan=0.0).round().astype(np.uint16)
+    return out, float((out > 0).mean())
+
+
+def capture_depth_frames(device: str, n: int, raw_path: Path, *, timeout_s: float = DEPTH_BURST_S,
+                         fps: int = DEPTH_FPS, run=subprocess.run) -> tuple[np.ndarray, dict[str, Any]] | tuple[None, str]:
+    """N consecutive Z16 frames from one V4L2 stream (the depth node the cell code already reads), inside `timeout_s`.
+
+    (frames[N,480,640], receipt) or (None, reason). The receipt carries the last frame's start-of-exposure wall time.
+    """
+    if not Path(device).exists():
+        return None, "depth device missing"
+    raw_path = Path(raw_path)
+    started_wall, started = time.time(), time.monotonic()
+    cmd = ["v4l2-ctl", "--verbose", "-d", device, "--set-fmt-video=width=640,height=480,pixelformat=Z16", f"--set-parm={int(fps)}",
+           "--stream-mmap=3", f"--stream-skip={DEPTH_SKIP}", f"--stream-count={int(n)}", f"--stream-to={raw_path}"]
+    fmt = "--set-fmt-video=width=640,height=480,pixelformat=Z16"
+    try:
+        try:
+            done = run(cmd, timeout=float(timeout_s), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        except subprocess.CalledProcessError:  # v4l2-ctl 1.32 only takes the format with a trailing space (as cell_depth)
+            done = run([f"{fmt} " if part == fmt else part for part in cmd], timeout=float(timeout_s), check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        raw = raw_path.read_bytes()
+    except (OSError, subprocess.SubprocessError) as exc:
+        detail = (getattr(exc, "stderr", "") or "")[-120:]
+        return None, f"depth burst failed: {type(exc).__name__} {detail}".strip()
+    ended_wall, ended = time.time(), time.monotonic()
+    size = 640 * 480 * 2
+    lines = _DQBUF.findall(done.stderr or "")
+    if len(raw) != n * size or len(lines) < n:
+        return None, "depth burst returned the wrong number of frames"
+    stamps = [float(t) for _, _, t in lines[-n:]]
+    if any(b <= a for a, b in zip(stamps, stamps[1:])) or not started - 0.5 <= stamps[-1] <= ended + 0.5:
+        return None, "depth burst frame stamps are not consecutive or not from this capture"
+    frames = np.frombuffer(raw, dtype="<u2").reshape(n, 480, 640)
+    offset = ((started_wall - started) + (ended_wall - ended)) / 2
+    return frames, {"frames": int(n), "source_seq_last": int(lines[-1][0]), "exposure_wall_estimate_s": stamps[-1] + offset,
+                    "first_exposure_wall_estimate_s": stamps[0] + offset, "capture_s": round(ended - started, 2),
+                    "raw_sha256": hashlib.sha256(raw).hexdigest()}

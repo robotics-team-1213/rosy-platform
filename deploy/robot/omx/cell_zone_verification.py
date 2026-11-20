@@ -77,20 +77,33 @@ def _stamp(receipt: dict) -> dict:
 
 
 def _depth_after(config: dict, after: float):
-    """(depth array, receipt, None) from the existing D435 Z16 capture, exposed after `after`, else (None, None, reason).
+    """(depth map, receipt, None) of the pallet depth after `after`, else (None, None, reason).
 
-    cell_depth.capture_top_depth_z16_receipt is the depth source the cell already has (V4L2 depth node, not the colour stream
-    that the camera service holds). Its receipt carries the start-of-exposure wall time."""
+    `config["depth_frames"]` (default 5, 1-9) consecutive Z16 frames are taken in one stream inside DEPTH_BURST_S and reduced
+    to the per-pixel median (more than half of the frames must be valid at a pixel), which lowers the frame noise of the
+    relative height. One frame uses the existing single-frame capture. Nothing else about the depth source changes.
+    """
     import tempfile
 
     import cell_depth
+    import cell_depth_slots
 
     top = (config.get("cameras") or {}).get("top") or {}
     device = top.get("depth_device") or DEPTH_DEVICE
+    n = config.get("depth_frames", 5)
+    if type(n) is not int or not 1 <= n <= 9:
+        return None, None, "depth_frames must be an integer from 1 to 9"
     try:
-        with tempfile.TemporaryDirectory(prefix="zone-depth-") as scratch:  # raw frame, receipt and lock go with the directory
-            got = cell_depth.capture_top_depth_z16_receipt(device, Path(scratch) / "depth.raw", timeout_s=DEPTH_WAIT_S)
-            got = None if got is None else (np.array(got[0]), dict(got[1]))
+        with tempfile.TemporaryDirectory(prefix="zone-depth-") as scratch:  # raw frames, receipt and lock go with the directory
+            if n == 1:
+                got = cell_depth.capture_top_depth_z16_receipt(device, Path(scratch) / "depth.raw", timeout_s=DEPTH_WAIT_S)
+                got = None if got is None else (np.array(got[0]), dict(got[1]))
+            else:
+                frames, receipt = cell_depth_slots.capture_depth_frames(device, n, Path(scratch) / "depth.raw")
+                if frames is None:
+                    return None, None, receipt
+                depth, valid = cell_depth_slots.median_depth(frames)
+                got = (depth, {**receipt, "valid_depth_ratio": valid, "source_seq": receipt["source_seq_last"], "reduction": "median"})
     except (OSError, ValueError) as exc:
         return None, None, f"depth capture failed: {exc}"
     if got is None:

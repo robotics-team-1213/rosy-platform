@@ -246,7 +246,7 @@ def test_a_pallet_without_a_fresh_depth_frame_is_not_verified(monkeypatch):
     assert out["verified"] is False and "depth capture unavailable" in out["basis"]
 
 
-def test_the_depth_capture_is_the_existing_cell_depth_source_and_must_be_exposed_after_the_placement(monkeypatch, tmp_path):
+def test_one_depth_frame_uses_the_existing_cell_depth_capture_and_must_be_exposed_after_the_placement(monkeypatch, tmp_path):
     import cell_depth
 
     seen = {}
@@ -256,11 +256,34 @@ def test_the_depth_capture_is_the_existing_cell_depth_source_and_must_be_exposed
         return DEPTH, {"source_seq": 1, "exposure_wall_estimate_s": time.time() - 30, "valid_depth_ratio": 1.0}
 
     monkeypatch.setattr(cell_depth, "capture_top_depth_z16_receipt", capture)
-    depth, receipt, why = REAL_DEPTH_AFTER({"cameras": {"top": {"depth_device": "/dev/depth-x"}}}, time.time())
+    config = {"cameras": {"top": {"depth_device": "/dev/depth-x"}}, "depth_frames": 1}
+    depth, receipt, why = REAL_DEPTH_AFTER(config, time.time())
     assert depth is None and "before the placement finished" in why
     assert seen == {"device": "/dev/depth-x", "timeout_s": czv.DEPTH_WAIT_S}
     monkeypatch.setattr(cell_depth, "capture_top_depth_z16_receipt", lambda *a, **k: None)
-    assert REAL_DEPTH_AFTER({}, time.time())[2] == "depth capture unavailable"
+    assert REAL_DEPTH_AFTER({"depth_frames": 1}, time.time())[2] == "depth capture unavailable"
+
+
+@pytest.mark.parametrize("bad", [0, 10, True, 2.5, "5"])
+def test_depth_frames_must_be_an_integer_from_1_to_9(bad):
+    assert REAL_DEPTH_AFTER({"depth_frames": bad}, time.time()) == (None, None, "depth_frames must be an integer from 1 to 9")
+
+
+def test_the_default_is_a_median_of_five_frames_from_one_burst(monkeypatch):
+    import cell_depth_slots
+
+    seen = {}
+    frames = np.stack([np.full((480, 640), 600 + i, np.uint16) for i in range(5)])
+
+    def burst(device, n, raw, **kw):
+        seen.update(device=device, n=n)
+        return frames, {"frames": n, "source_seq_last": 16, "exposure_wall_estimate_s": time.time()}
+
+    monkeypatch.setattr(cell_depth_slots, "capture_depth_frames", burst)
+    depth, receipt, why = REAL_DEPTH_AFTER({}, time.time())
+    assert why is None and seen["n"] == 5 and receipt["reduction"] == "median" and int(depth[10, 10]) == 602
+    REAL_DEPTH_AFTER({"depth_frames": 3}, time.time())
+    assert seen["n"] == 3
 
 
 def test_a_stuck_camera_read_gets_only_the_time_that_is_left():
