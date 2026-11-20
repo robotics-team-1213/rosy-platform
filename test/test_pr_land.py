@@ -23,6 +23,17 @@ def test_build_body_appends_self_overlap_review():
     assert "Overlap-Review:" not in pr_land.build_body("summary", "")
 
 
+def test_build_body_appends_session_line(monkeypatch):
+    for env, name in (("ROSY_SESSION_NAME", "opencode-1"), ("CLAUDE_SESSION_NAME", "claude-x")):
+        monkeypatch.delenv("ROSY_SESSION_NAME", raising=False)
+        monkeypatch.delenv("CLAUDE_SESSION_NAME", raising=False)
+        monkeypatch.setenv(env, name)
+        assert pr_land.build_body("s", "r").rstrip().endswith(f"Session: {name}")
+    monkeypatch.delenv("ROSY_SESSION_NAME", raising=False)
+    monkeypatch.delenv("CLAUDE_SESSION_NAME", raising=False)
+    assert pr_land.build_body("s", "").rstrip().endswith("Session: unknown")
+
+
 def test_dry_run_skips_push_and_gh(monkeypatch, tmp_path, capsys):
     calls = []
 
