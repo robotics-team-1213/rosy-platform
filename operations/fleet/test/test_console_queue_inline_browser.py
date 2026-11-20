@@ -110,7 +110,7 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
     answers = {"/api/fleet/incidents/rosy_01/stuck-abc/review": (200, {"reviewed": True}),
                "/api/fleet/incidents/facts/17/review": (200, {"reviewed": True})}
     with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, api, posts, answers)
+        browser, page, errors = _open(playwright, site, api, posts, answers, open_queue=False)
         item = page.locator("#incident-list li")
         expect(item).to_have_count(1)
         records = page.locator(".incident-panel")
@@ -537,6 +537,9 @@ def test_bell_counts_open_queue_rows_and_the_records_tab_shows_message_stages(si
         expect(page.locator(".queues-panel")).to_be_focused()
         expect(button).to_have_attribute("aria-expanded", "true")  # 11-21: the bell opens the queue drawer
         expect(button).to_have_attribute("aria-label", label)  # 누른다고 개입이 해소되지 않는다
+        page.keyboard.press("Escape")  # Esc closes the drawer and returns to the bell
+        expect(button).to_have_attribute("aria-expanded", "false")
+        expect(button).to_be_focused()
         page.get_by_role("tab", name="기록·근거").click()
         expect(page.locator("#context-evidence")).to_be_visible()
         expect(button).to_have_attribute("aria-label", label)  # 탭을 바꿔도 같다
@@ -821,6 +824,7 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
         api["/api/fleet/robots/rosy_01/line-stuck/evidence"] = (preview, jpeg)
         page.reload()
         page.clock.run_for(1500)
+        page.locator("#fleet-inbox").click()  # 11-21: a reload closes the bell's drawer
         slot = page.locator('[data-decision-slot="rosy_01|stuck"]')
         image = slot.locator(".stuck-evidence img")
         page.wait_for_function("""() => {

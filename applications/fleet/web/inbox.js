@@ -54,9 +54,14 @@ export function createInboxPanel({scope, el, readView}) {
     const queue = queuePanel();
     if (!queue) return;
     event.preventDefault();  // already on the console: never reload it (a reload drops drafts and open inputs)
-    if (queue.dataset.open === "true") setOpen(queue, false);
-    else focusQueue(queue);
+    focusQueue(queue);  // the bell always opens; Esc or a press outside the drawer closes it
   });
+  scope.listen(document, "pointerdown", event => {
+    const queue = queuePanel();
+    if (queue?.dataset.open !== "true" || queue.contains(event.target)) return;
+    if (event.target?.closest?.("#fleet-inbox")) return;
+    setOpen(queue, false);
+  }, true);
   scope.listen(document, "keydown", event => {
     const queue = queuePanel();
     if (event.key !== "Escape" || queue?.dataset.open !== "true") return;
