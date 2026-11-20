@@ -8,7 +8,7 @@ import pytest
 
 ROOT=Path(__file__).resolve().parents[4]
 sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx','learning/curation/omx',
-    'learning/curation/omx/test','contracts/learning/src','contracts/foundation')]
+    'learning/curation/omx/test','contracts/foundation','contracts/learning/src')]
 
 
 @pytest.mark.parametrize('representation,queue_steps,noise', [('absolute',1,0.),
