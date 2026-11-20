@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.431
+**Version:** v1.433
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.433 도킹 상태 진단 필드와 도크 metadata (additive)
+
+`GET /api/v1/docking/status` 에 선택 필드 `last_event`(마지막 재시도·재안착·실패와 사유, 없으면 `null`; 재시도는 오류가 아니다)와 `charge_unconfirmed`(bool, 기본 `false`; DOCKED 안착은 LiDAR 로 확인했으나 충전 증거가 없다. CHARGING 이 아니며 Fleet 은 따로 보인다)를 더한다. `POST /api/v1/docking/docks` 본문에 선택 `metadata`(object, 기본 `{}`)를 더하고 `metadata.reference_scan` 이 베이 LiDAR 재안착 기준이다. 이벤트 `docking.person_call`·`docking.uncharged_voltage_drop` 은 §8 표에 있다. 기존 필드·동작은 그대로다.
 
 ### v1.419 대기 기체가 돌아서 짐칸 단수를 본다 (사용자 2026-11-19)
 
@@ -4859,6 +4863,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.433 | 2026-11-21 | Additive: `GET /docking/status` 의 `last_event`·`charge_unconfirmed`, `POST /docking/docks` 의 선택 `metadata`(`reference_scan`), 이벤트 `docking.person_call`·`docking.uncharged_voltage_drop` (본문 v1.433) |
 | v1.431 | 2026-11-20 | Additive: site map place·edge 선택 필드 `pinned`(bool, 기본 false, false면 저장 본문에서 빠짐). 사람이 일부러 둔 장소·차로이며, 현장 자동 트랙 보정(`deploy/site/rosy-auto-track-calibration`)은 고정된 장소·차로를 옮기지 않고 그 장소에 닿는 차로 끝만 그 장소에 맞춘다. 관제 지도 편집의 장소·차로 검사 칸에 「고정」 확인란. |
 | v1.419 | 2026-11-19 | Additive: 관측 요청(`/api/fleet/pipeline/observer-requests`), 대기 기체 제자리 회전→앞 카메라 단수 판정→셀 작업 `tier_hint`, `auto_observe`. |
 | v1.416 | 2026-11-19 | Additive: 셀 작업 중단의 `stage_result.reach_fix` → `repark_requests`(GET cell-tasks), `POST /api/fleet/pipeline/repark/{request_id}` 닫기, DONE이면 같은 운반 재시도(최대 2회). |
