@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.419
+**Version:** v1.430
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -4857,7 +4857,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.<TBD-reserve-via-api_reserve> | 2026-11-20 | Additive (fix/identity-verdict-yaw): `POST /api/fleet/detections/identity` 본문에 선택 `yaw` 추가(Vision이 이미 보냄; 이전에는 422로 전부 거절). 번호는 api_reserve로 받는다. |
+| v1.430 | 2026-11-20 | Additive (fix/identity-verdict-yaw): `POST /api/fleet/detections/identity` 본문에 선택 `yaw` 추가(Vision이 이미 보냄; 이전에는 422로 전부 거절). 번호는 api_reserve로 받는다. |
 | v1.419 | 2026-11-19 | Additive: 관측 요청(`/api/fleet/pipeline/observer-requests`), 대기 기체 제자리 회전→앞 카메라 단수 판정→셀 작업 `tier_hint`, `auto_observe`. |
 | v1.416 | 2026-11-19 | Additive: 셀 작업 중단의 `stage_result.reach_fix` → `repark_requests`(GET cell-tasks), `POST /api/fleet/pipeline/repark/{request_id}` 닫기, DONE이면 같은 운반 재시도(최대 2회). |
 | v1.413 | 2026-11-19 | Additive (D-1048): assessor 해제 본문 선택 `recovery`(자동 접기 증거) → `clearable_after_fold`, 증거는 사건 행 `recovery`에 저장. |
