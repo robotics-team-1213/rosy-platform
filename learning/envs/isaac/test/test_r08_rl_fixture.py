@@ -63,10 +63,15 @@ def test_stage_two_handoff_selects_ppo_and_separates_training_from_evaluation():
     from omx_two_arm_teacher_stages import isaac_handoff
     from omx_ladder import judge_isaac_stage
 
-    handoff = isaac_handoff(dict(task="stack", steps=9, completed=True), layout, seed=42)["stage_2_isaac"]
-    assert handoff["two_arm_scenario"] == "omx-map-container-stacking-rl"
-    assert handoff["two_arm_config"] == request_for(layout, 42, 3)
-    assert handoff["ready"]
+    rows = [dict(container=cid, target=site, arm=arm) for cid, site, arm in layout.plan_order()]
+    for task, count in (("stack-t1", 3), ("stack", 6), ("stack", 9)):
+        result = dict(task=task, steps=count, completed=True, rows=rows[:count])
+        handoff = isaac_handoff(result, layout, seed=42)["stage_2_isaac"]
+        assert handoff["two_arm_scenario"] == "omx-map-container-stacking-rl"
+        assert handoff["two_arm_config"] == request_for(layout, 42, count // 3)
+        assert handoff["ready"]
+    result = dict(task="stack-t2", steps=3, completed=True, rows=rows[3:6])
+    assert not isaac_handoff(result, layout)["stage_2_isaac"]["ready"]
     report = dict(schema="rosy.omx-stacking-rl/1", training_verified=True, task_success=False,
                   evaluation_successes=0, fixture={"case": CASE})
     assert judge_isaac_stage(report)["status"] == "failed"

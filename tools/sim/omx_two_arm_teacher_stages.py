@@ -258,9 +258,12 @@ def isaac_handoff(result, layout, seed=0):
     if layout.choices.get("preset") == PRESET:
         stack_scenario = "omx-map-container-stacking-rl"
         try:
-            if result.get("task") != "stack" or result.get("steps") not in (3, 6, 9):
+            count = result.get("steps")
+            planned = [(r.get("container"), r.get("target"), r.get("arm")) for r in rows]
+            if (result.get("task") not in ("stack", "stack-t1") or count not in (3, 6, 9)
+                    or planned != layout.plan_order()[:count]):
                 raise ValueError("The r08 PhysX PPO handoff accepts h1 stacking only")
-            layers = result["steps"] // 3
+            layers = count // 3
             stack_config = request_for(layout, seed, layers)
         except ValueError as exc:
             stack_config, layout_error = None, str(exc)
