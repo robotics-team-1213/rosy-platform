@@ -30,6 +30,7 @@ from cell_camera_telemetry_sync import (
 from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
+from cell_result_outbox import Outbox, result_bodies, resend_pending
 from cell_task_exec import (
     check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen, query_safety_listing, resolve_task_arm,
 )
@@ -194,6 +195,9 @@ def poll_and_execute_once(
         emergency_stop_arms(prep_dir)
         return []
     queued = list(listing.get("tasks") or [])
+    work_dir = getattr(pipeline, "work_dir", None)
+    outbox = Outbox(None if work_dir is None else Path(work_dir) / "pending-results.json")
+    resend_pending(outbox, request_fn)  # D-1057: a result Fleet did not get is resent as it was; the arm does not run again
     completed_runs: list[dict[str, Any]] = []
     for task in queued:
         task_id = str(task["task_id"])
@@ -300,15 +304,12 @@ def poll_and_execute_once(
                               "HANDOFF_TASK_MISMATCH" if not claim_bound else
                               "AMR_NOT_LOCKED_AT_HANDOFF" if not interlock_ok else "MEASURED_PLACEMENT_MISSING")}
         omx_res = {"receipt": receipt, "stage_result": stage_result}
-        if phase == "RELEASED":  # D-1057: Fleet compares /complete with this stored record, so it must arrive first
-            request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence", {
-                "handoff_lease_id": handoff.get("handoff_lease_id"), "measured_at": hw_tel["measured_at"],
-                "receipt": receipt, "stage_result": stage_result, "hardware_telemetry": hw_tel})
-        done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", {
-            "phase": phase, "goal_evidence_digest": digest,
-            "reason": receipt["reason"], "receipt": receipt,
-            "stage_result": stage_result, "hardware_telemetry": hw_tel,
-        })
+        owner_body, complete_body = result_bodies(handoff, phase, digest, receipt, stage_result, hw_tel)  # D-1057
+        outbox.put(task_id, {"lease": handoff.get("handoff_lease_id"), "owner_evidence": owner_body, "complete": complete_body})
+        if owner_body is not None:
+            request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence", owner_body)
+        done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", complete_body)
+        outbox.drop(task_id)  # Fleet has it; a failure above left the entry for resend_pending
         completed_runs.append({
             "task_id": task_id, "cell_id": cell_id, "arm_id": handoff.get("arm_id"), "task": done["task"],
             "claim_gate": claimed["gate"], "release_gate": done["gate"], "omx_result": omx_res,

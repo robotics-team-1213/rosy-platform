@@ -172,6 +172,13 @@ def install_cameras_routes(app, ctx) -> None:
         if not candidates:
             return {"claimed": False, "task": None}
         task = candidates[0]
+        # D-1057: the claiming principal must be a registered owner of this cell, or a result could never be accepted and the
+        # task would stay RUNNING. Refused before the ledger changes. Bare apps without authentication (no principal) skip it.
+        from fleet.server.sitemap.pipeline_evidence import cell_owner_principals, owner_principal_refusal
+
+        if ((getattr(request.state, "site_principal", None) is not None or cell_owner_principals(cell_id))
+                and owner_principal_refusal(request, task) is not None):
+            return {"claimed": False, "task": task, "reason": "OWNER_PRINCIPAL_NOT_REGISTERED"}
         if type(task.get("tier")) is not int or task["tier"] not in (1, 2, 3):
             return {"claimed": False, "task": task, "reason": "INVALID_CELL_TIER"}
         predecessor = task.get("depends_on")

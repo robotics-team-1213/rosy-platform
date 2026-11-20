@@ -159,3 +159,120 @@ def test_worker_skips_held_arm_before_claim_and_classifies_401(tmp_path: Path) -
     diag = ctw.classify_poll_error(err, tok)
     assert diag["event"] == "poll_auth_error" and diag["status"] == 401 and diag["token_chars"] == len("short-token-value")
     assert "short-token-value" not in json.dumps(diag)
+
+
+# --- D-1057: a result Fleet did not get is resent as it was; the arm never runs again -------------------------------------
+from urllib.error import HTTPError, URLError  # noqa: E402
+
+
+def _good_result(handoff):
+    import time as _t
+
+    zone = {"verified": True, "basis": "top_camera_only_target_zone",
+            "target": {"site": "belt", "area": "belt", "roi": [1, 2, 3, 4], "tier": 1}}
+    return {"arm": "arm_s", "measured_at": _t.time(), "stop_event": {"command": "stop", "ok": True, "folded": True},
+            "stage_result": {"handoff_lease_id": handoff["handoff_lease_id"], "directive_id": handoff["task_id"], "arm_id": "arm_s",
+                             "task_verified": True, "verification": zone, "place": {"area": "belt", "tier": 1}}}
+
+
+class Fleet:
+    """A scripted Fleet: claim, listings, and a send hook that can fail."""
+
+    def __init__(self, lease="lease-1", fail=None, running_lease=None):
+        self.lease, self.fail, self.running_lease = lease, fail, running_lease or lease
+        self.posts, self.status, self.claimed = [], "RUNNING", False
+
+    def __call__(self, method, path, body):
+        if method == "GET" and "status=QUEUED" in path:
+            queued = [] if self.claimed else [{"task_id": "t-1", "cell_id": "cell_s", "tier": 1}]  # claimed: RUNNING in Fleet
+            return {"tasks": queued, "human_safety": {"active_estop": False, "human_detected": {}},
+                    "cells": {"cell_s": {"phase": "ARM_IN_BED_ZONE", "active_task_id": "t-1"}}}
+        if method == "GET" and "status=RUNNING" in path:
+            return {"tasks": [{"task_id": "t-1", "status": "RUNNING", "handoff_lease_id": self.running_lease}] if self.status == "RUNNING" else []}
+        if path.endswith("/claim"):
+            self.claimed = True
+            return {"claimed": True, "gate": {}, "handoff": {**LOCKED, "task_id": "t-1", "cell_id": "cell_s", "tier": 1, "arm_id": "arm_s",
+                                                             "handoff_lease_id": self.lease, "src_site": "pinky", "dst_site": "belt"}}
+        if self.fail is not None and (exc := self.fail(path)) is not None:
+            raise exc
+        self.posts.append((path.rsplit("/", 1)[1], body))
+        return {"gate": {}, "task": {"status": "COMPLETED"}}
+
+
+def _run_worker(tmp_path, fleet, calls):
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+
+    def act(handoff):
+        calls.append(handoff)
+        return _good_result(handoff)
+
+    try:
+        return ctw.poll_and_execute_once(pipe, request_fn=fleet, live_act_fn=act, prep_dir=tmp_path)
+    except Exception as exc:  # the first run reports the failed send as before
+        return exc
+
+
+def _forbidden(path):
+    return HTTPError("https://f/x", 403, "no", {}, None) if path.endswith("owner-evidence") else None
+
+
+def test_a_403_on_owner_evidence_keeps_the_result_and_the_next_poll_resends_it_without_the_arm(tmp_path):
+    calls = []
+    registered = [False]
+    fleet = Fleet(fail=lambda p: None if registered[0] else _forbidden(p))
+    first = _run_worker(tmp_path, fleet, calls)
+    assert isinstance(first, HTTPError) and len(calls) == 1 and fleet.posts == []
+    kept = json.loads((tmp_path / "pipe" / "pending-results.json").read_text(encoding="utf-8"))["t-1"]
+    assert kept["lease"] == "lease-1" and kept["complete"]["phase"] == "RELEASED"
+    assert _run_worker(tmp_path, fleet, calls) == [] and fleet.posts == []  # still 403: kept, nothing new started
+    registered[0] = True  # the principal got registered
+    fleet.posts.clear()
+    _run_worker(tmp_path, fleet, calls)
+    assert [p for p, _ in fleet.posts] == ["owner-evidence", "complete"] and len(calls) == 1  # no second arm run
+    assert fleet.posts[0][1] == kept["owner_evidence"] and fleet.posts[1][1] == kept["complete"]  # the very same bodies
+    assert not (tmp_path / "pipe" / "pending-results.json").read_text(encoding="utf-8").strip("{} \n")  # entry removed
+
+
+def test_a_network_break_on_complete_is_resent_on_a_later_poll(tmp_path):
+    calls, broken = [], [True]
+    fleet = Fleet(fail=lambda p: URLError("down") if (broken[0] and p.endswith("/complete")) else None)
+    assert isinstance(_run_worker(tmp_path, fleet, calls), URLError) and len(calls) == 1
+    assert [p for p, _ in fleet.posts] == ["owner-evidence"]  # the evidence arrived, the completion did not
+    broken[0] = False
+    fleet.posts.clear()
+    _run_worker(tmp_path, fleet, calls)
+    assert [p for p, _ in fleet.posts] == ["owner-evidence", "complete"] and len(calls) == 1
+
+
+def test_a_changed_lease_or_a_finished_task_is_not_resent(tmp_path):
+    calls = []
+    fleet = Fleet(fail=lambda p: _forbidden(p))
+    _run_worker(tmp_path, fleet, calls)
+    assert (tmp_path / "pipe" / "pending-results.json").exists()
+    fleet.fail, fleet.posts = None, []
+    fleet.running_lease = "lease-2"  # Fleet shows the task RUNNING under another lease: that handoff is over
+    _run_worker(tmp_path, fleet, calls)
+    assert fleet.posts == [] and json.loads((tmp_path / "pipe" / "pending-results.json").read_text(encoding="utf-8")) == {}
+    fleet.fail = lambda p: _forbidden(p)
+    fleet.running_lease = "lease-2"
+    fleet.lease = "lease-2"
+    _run_worker(tmp_path, fleet, calls)  # a new run under the new lease leaves a new pending entry
+    fleet.fail, fleet.posts, fleet.status = None, [], "COMPLETED"  # ... but Fleet no longer shows it RUNNING
+    _run_worker(tmp_path, fleet, calls)
+    assert fleet.posts == [] and json.loads((tmp_path / "pipe" / "pending-results.json").read_text(encoding="utf-8")) == {}
+
+
+def test_a_body_fleet_refuses_on_its_merits_is_dropped_not_retried(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    outbox = Outbox(tmp_path / "o.json")
+    outbox.put("t-1", {"lease": "lease-1", "owner_evidence": {"x": 1}, "complete": {"phase": "RELEASED"}})
+    refuse = HTTPError("https://f/x", 409, "OWNER_EVIDENCE_ALREADY_RECORDED", {}, None)
+
+    def fleet(method, path, body):
+        if method == "GET":
+            return {"tasks": [{"task_id": "t-1", "handoff_lease_id": "lease-1"}]}
+        raise refuse
+
+    assert resend_pending(outbox, fleet)[0]["action"] == "dropped" and outbox.items() == {}
+    assert Outbox(None).items() == {}  # no work directory: nothing is kept and nothing fails

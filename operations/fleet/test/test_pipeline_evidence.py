@@ -529,3 +529,22 @@ def test_cell_ab_claim_takes_the_existing_path_when_enabled(monkeypatch, value):
 def test_cell_s_is_not_affected_by_the_cell_ab_switch(monkeypatch):
     monkeypatch.delenv("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", raising=False)
     assert _claimed(Env())
+
+
+def test_a_claim_by_a_principal_that_is_not_the_cells_registered_owner_is_refused_before_the_ledger_changes(monkeypatch):
+    env = Env()
+    env.confirm_bed()
+    before = _ledger(env)
+    for headers, owners in ((OP, "cell_s=service"),                 # an operator is not a service owner
+                            (OTHER, "cell_s=service"),              # a service principal registered for nothing here
+                            (SVC, "cell_ab=service"),               # registered for another cell only
+                            (SVC, None)):                           # no registration at all: nobody
+        if owners is None:
+            monkeypatch.delenv("ROSY_FLEET_CELL_OWNERS", raising=False)
+        else:
+            monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", owners)
+        res = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=headers, json={"cell_id": "cell_s"}).json()
+        assert res["claimed"] is False and res["reason"] == "OWNER_PRINCIPAL_NOT_REGISTERED"
+        assert _ledger(env) == before
+    monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", "cell_s=service")
+    assert env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_s"}).json()["claimed"] is True

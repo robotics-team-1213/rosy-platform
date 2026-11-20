@@ -83,6 +83,10 @@ Fleet은 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(proposer
 
 셀 A/B의 배치·높이 증거(2-2절)는 실제 현장 수용 전이다. 그래서 Fleet `claim`은 `cell_ab` 작업을 `ROSY_FLEET_CELL_AB_RELEASE_ENABLED`(기본 꺼짐, `1`·`true`·`yes`·`on`만 켬, 호출 때 읽음)가 켜져 있지 않으면 `claimed:false`, `reason: CELL_AB_EVIDENCE_NOT_ENABLED`로 거부한다. 거부는 `_ready_amr` 앞이고 원장에서 무엇도 바꾸기 전이라 작업 상태·`handoff_lease_id`·셀 상태가 그대로다(팔이 움직인 뒤 완료가 거부되는 일을 막는다). 셀 S는 영향이 없다. 깊이 판정이 수용되면 사이트 설정에서 켠다. 되돌리는 법은 설정을 끄는 것이다.
 
+#### 2-4. claim 때 owner 확인과 결과 재전송
+
+`claim`은 호출 주체가 그 셀의 owner로 등록(`ROSY_FLEET_CELL_OWNERS`)되어 있지 않으면 원장을 바꾸기 전에 `claimed:false`, `OWNER_PRINCIPAL_NOT_REGISTERED`로 거부한다(등록되지 않은 주체가 claim하면 결과를 받아 줄 수 없어 작업이 RUNNING으로 남기 때문이다. 인증이 없는 단독 시험 앱은 확인하지 않는다). 팔 실행 뒤 `owner-evidence` 또는 `/complete` 전송이 실패하면 worker가 같은 lease의 결과를 작업 공간 상태 파일(`pending-results.json`)에 보관하고, 다음 폴링마다 **팔을 다시 움직이지 않고** 같은 본문을 재전송한다. 재전송은 Fleet이 그 작업을 RUNNING으로 보이고 lease가 같을 때만 한다(lease가 바뀌었거나 작업이 끝났으면 항목을 버린다). 같은 `owner-evidence` 본문은 Fleet이 동일 기록으로 받고 다른 본문은 409를 유지하며, 409·422는 다시 시도하지 않는다. 403·5xx·연결 끊김은 다음 폴링에 다시 시도한다.
+
 #### 3. 신뢰 경계
 
 owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경(ID 또는 활성 버전)이 한 번이라도 있으면 영구 무효이고, 확인은 조회 때만이 아니라 콘솔이 받는 상태 갱신마다 검사한다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.

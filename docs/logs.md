@@ -14971,3 +14971,8 @@ osy-d395-s1d\`.
 - 변경: `claim`이 `cell_ab` 작업을 `ROSY_FLEET_CELL_AB_RELEASE_ENABLED`(기본 꺼짐)가 켜져 있지 않으면 `CELL_AB_EVIDENCE_NOT_ENABLED`로 `_ready_amr` 앞에서 거부, 원장 불변. 셀 S 무영향. ADR 2-3절. origin/main(#263 홈 복귀 안전) 병합은 별도 커밋.
 - 증거: 로컬 `test_pipeline_evidence.py`(꺼짐 5값·켜짐·셀 S), `test_pipeline_orchestrator.py` 외 관련 Fleet 시험.
 - gate 변화: 셀 A/B 는 켜기 전까지 claim 불가.
+
+## 2026-11-20 · uncommitted · feat: D-1057 claim 때 owner 확인과 worker 결과 재전송
+- 변경: Fleet `claim`이 등록된 owner가 아닌 주체를 원장 변경 전에 `OWNER_PRINCIPAL_NOT_REGISTERED`로 거부. worker(`cell_result_outbox.py`)가 전송 실패한 결과를 상태 파일에 보관하고 다음 폴링마다 팔 재실행 없이 같은 본문을 RUNNING·같은 lease일 때만 재전송. 안전 폴링·human-hold 분기는 그대로(그 아래 한 호출 추가).
+- 증거: 로컬 `test_omx_cell_task_worker_refusal.py`(403 뒤·연결 끊김 뒤 재전송, lease 변경·종료 시 미재전송, 팔 재실행 없음), `test_pipeline_evidence.py` 외.
+- gate 변화: 없음.
