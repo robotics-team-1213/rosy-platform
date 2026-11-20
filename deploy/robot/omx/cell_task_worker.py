@@ -277,7 +277,8 @@ def poll_and_execute_once(
                     and stage_result.get("task_verified") is True
                     and verification.get("verified") is True
                     and verification.get("basis") == "predefined_side_and_top_target_zones"
-                    and stopped.get("ok") is True and stopped.get("folded") is True)
+                    and stopped.get("ok") is True and stopped.get("folded") is True
+                    and isinstance(hw_tel.get("measured_at"), (int, float)) and not isinstance(hw_tel.get("measured_at"), bool))
         if cell_id == "cell_ab":
             place = stage_result.get("place") or {}
             z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
@@ -299,6 +300,10 @@ def poll_and_execute_once(
                               "HANDOFF_TASK_MISMATCH" if not claim_bound else
                               "AMR_NOT_LOCKED_AT_HANDOFF" if not interlock_ok else "MEASURED_PLACEMENT_MISSING")}
         omx_res = {"receipt": receipt, "stage_result": stage_result}
+        if phase == "RELEASED":  # D-1057: Fleet compares /complete with this stored record, so it must arrive first
+            request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence", {
+                "handoff_lease_id": handoff.get("handoff_lease_id"), "measured_at": hw_tel["measured_at"],
+                "receipt": receipt, "stage_result": stage_result, "hardware_telemetry": hw_tel})
         done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", {
             "phase": phase, "goal_evidence_digest": digest,
             "reason": receipt["reason"], "receipt": receipt,

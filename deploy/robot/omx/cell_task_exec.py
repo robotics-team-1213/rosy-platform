@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import ssl
 import subprocess
 import sys
+import time
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import urlopen
@@ -59,6 +61,35 @@ def classify_poll_error(exc: Exception, token_file: str | Path) -> dict[str, Any
             "backoff_s": 30.0,
         }
     return {"event": "poll_error", "error": repr(exc), "backoff_s": None}
+
+
+# D-1057. Same tolerance as chunk_runner_guards.SETTLE_TOL, which the transfer gate uses to accept a park as home.
+FOLD_TOLERANCE = 3.0
+ZONE_BASIS = "predefined_side_and_top_target_zones"
+
+
+def _last_attempt(parsed: dict[str, Any]) -> dict[str, Any]:
+    attempts = parsed.get("attempts")
+    last = attempts[-1] if isinstance(attempts, list) and attempts else None
+    return last if isinstance(last, dict) else {}
+
+
+def fold_readback(attempt: dict[str, Any], home: Any) -> dict[str, Any]:
+    """Measured fold: the final transfer step is a settled park whose joint readback is within FOLD_TOLERANCE of home.
+
+    The readback comes from the owner's park step (`state`, `settled`, `ok`), never from the placement result.
+    `t` is the runner's monotonic clock, so it is carried as-is and not used as a wall time.
+    """
+    steps = (attempt.get("transfer") or {}).get("steps") if isinstance(attempt.get("transfer"), dict) else None
+    park = steps[-1] if isinstance(steps, list) and steps and isinstance(steps[-1], dict) else {}
+    state = park.get("state")
+    numbers = (isinstance(state, list) and isinstance(home, list) and len(state) == len(home) == 6
+               and all(type(v) in (int, float) and math.isfinite(v) for v in state[:5] + home[:5]))
+    folded = bool(park.get("command") == "park" and park.get("ok") is True and park.get("settled") is True
+                  and not park.get("fault") and numbers
+                  and all(abs(p - h) <= FOLD_TOLERANCE for p, h in zip(state[:5], home[:5])))
+    return {"folded": folded, "command": park.get("command"), "state": state if numbers else None,
+            "home": home if numbers else None, "tolerance": FOLD_TOLERANCE, "runner_t": park.get("t")}
 
 
 def _arm_run_spec(arm_id: str, prep_dir: Path) -> tuple[Path, Path, Path, tuple[int, int, int, int], str]:
@@ -114,26 +145,40 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
                 break
             except ValueError:
                 pass
-    placed = proc.returncode == 0 and parsed.get("result") == "placed"
+    # The wall clock at the end of the run bounds when the readbacks below existed (the runner's own clock is monotonic).
+    measured_at = time.time()
+    attempt = _last_attempt(parsed)
+    placement = attempt.get("verify") if isinstance(attempt.get("verify"), dict) else {}
+    placed = (proc.returncode == 0 and parsed.get("result") == "placed"
+              and placement.get("verified") is True and placement.get("inside") is True)
+    fold = fold_readback(attempt, (cfg_data.get("plan") or {}).get("home"))
+    # D-1057: cell_auto_pick records only the top-frame placement check (`verify`, basis "map"). The side/top zone
+    # measurement (cell_area_zones.verify_stack_outcome*) is used only if the attempt carries it as `zone_verification`;
+    # nothing in cell_auto_pick emits that today, so without it the fields below stay unverified and Fleet refuses.
+    zone = attempt.get("zone_verification") if isinstance(attempt.get("zone_verification"), dict) else None
+    zone_ok = bool(zone and zone.get("verified") is True and zone.get("basis") == ZONE_BASIS)
     tier = handoff.get("tier")
     dst_area = dst.rsplit("-l", 1)[0]
+    verification = ({**zone, "placement": placement} if zone is not None else
+                    {"verified": False, "basis": placement.get("basis") or "unverified: no placement record",
+                     "placement": placement,
+                     "z_gate": {"verdict": "UNKNOWN", "reason": "no zone measurement from cell_auto_pick"}})
     stage_result = {
         "handoff_lease_id": handoff.get("handoff_lease_id"),
         "directive_id": handoff.get("task_id"),
         "arm_id": arm_id,
-        "task_verified": placed,
+        "task_verified": placed and zone_ok,
         "place": {"area": dst_area, **({"tier": tier} if isinstance(tier, int) else {})},
-        "verification": {
-            "verified": placed,
-            "basis": "predefined_side_and_top_target_zones",
-            "z_gate": {"verdict": "PASS" if placed else "FAIL"},
-        },
+        "verification": verification,
         "raw": parsed,
     }
     return {
         "arm": arm_id,
         "events_count": len(parsed.get("attempts") or []),
+        "measured_at": measured_at,
         "stage_result": stage_result,
-        "stop_event": {"command": "stop", "ok": placed, "folded": placed},
-        **({} if placed else {"error": parsed.get("result") or f"exit_{proc.returncode}"}),
+        "stop_event": {"command": "stop", "ok": fold["folded"], "folded": fold["folded"], "readback": fold,
+                       **({"state": fold["state"]} if fold["state"] else {})},  # Fleet reads stop_event.state as joints
+        **({"error": parsed.get("result") or f"exit_{proc.returncode}"} if not placed else
+           {} if fold["folded"] else {"error": "FOLD_READBACK_MISSING"}),
     }
