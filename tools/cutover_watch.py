@@ -44,24 +44,29 @@ def collect(cwd, fetch=True) -> dict:
     common = common_dir(cwd)
     cfg_path = common / "rosy-cutover.json"
     if not cfg_path.is_file():
-        return {"phase": "none", "owner": "", "allow": [], "not_in_main": [], "outside_allow": [], "error": ""}
+        return {"phase": "none", "owner": "", "allow": [], "not_in_main": [], "outside_allow": [], "unknown": [], "error": ""}
     try:
         cfg = json.loads(cfg_path.read_text("utf-8"))
         phase, owner, allow = str(cfg["phase"]), str(cfg.get("owner", "")), [str(s["sha"]) if isinstance(s, dict) else str(s) for s in cfg["allow"]]
     except (ValueError, KeyError, TypeError) as e:
-        return {"phase": "invalid", "owner": "", "allow": [], "not_in_main": [], "outside_allow": [], "error": f"bad rosy-cutover.json: {e}"}
+        return {"phase": "invalid", "owner": "", "allow": [], "not_in_main": [], "outside_allow": [], "unknown": [], "error": f"bad rosy-cutover.json: {e}"}
     error = ""
     if fetch:
         f = git(cwd, "fetch", "origin", check=False)
         if f.returncode:
             error = "fetch failed: " + f.stderr.strip()[:200]
     not_in_main = [s for s in allow if git(cwd, "merge-base", "--is-ancestor", s, "origin/main", check=False).returncode]
-    outside = []
+    outside, unknown = [], []
     for t in live_trees(common / "rosy-land-wt"):
-        head = git(t, "rev-parse", "HEAD", check=False).stdout.strip()
-        if not listed(head, allow):
+        r = git(t, "rev-parse", "HEAD", check=False)
+        head = r.stdout.strip()
+        if r.returncode or not head:
+            unknown.append(t.name)  # lookup error is not evidence of outside-allow
+        elif not listed(head, allow) and not any(
+            git(cwd, "merge-base", "--is-ancestor", head, ref, check=False).returncode == 0 for ref in ("origin/main", "main")
+        ):
             outside.append(t.name)
-    return {"phase": phase, "owner": owner, "allow": allow, "not_in_main": not_in_main, "outside_allow": outside, "error": error}
+    return {"phase": phase, "owner": owner, "allow": allow, "not_in_main": not_in_main, "outside_allow": outside, "unknown": unknown, "error": error}
 
 
 def digest(state: dict) -> str:
@@ -83,7 +88,7 @@ def record(state: dict, status: Path, board: Path, now=None) -> bool:
     board.parent.mkdir(parents=True, exist_ok=True)
     line = (f"- {now} cutover-watch [{h}] phase={state['phase']} owner={state['owner']} "
             f"not_in_main={','.join(s[:10] for s in state['not_in_main']) or '-'} "
-            f"live_outside_allow={','.join(state['outside_allow']) or '-'}"
+            f"live_outside_allow={','.join(state['outside_allow']) or '-'} unknown={','.join(state['unknown']) or '-'}"
             + (f" error={state['error']}" if state["error"] else "") + "\n")
     with board.open("a", encoding="utf-8") as f:
         f.write(line)

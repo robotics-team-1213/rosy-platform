@@ -81,6 +81,8 @@ def next_step(cell, config, calibration, calibration_path, catalog, roi, source,
         if dry["result"] == "planned":
             return {"step": "pick", "why": "a box has finger room and a plan", "chosen": dry["attempts"][-1].get("chosen")}
         refused = (dry.get("attempts") or [{}])[-1].get("refused", [])
+        if any(str(r.get("why", "")).startswith("neighbour clearance") for r in refused):
+            return {"step": "hold", "why": "neighbour clearance", "refused": refused}
         packed = [r["centre_mm"] for r in refused if str(r["why"]).startswith("no finger room")]
     tangled = [r["centre_mm"] for r in refused if r["why"] == "tangled blob"]
     if not packed and not tangled:

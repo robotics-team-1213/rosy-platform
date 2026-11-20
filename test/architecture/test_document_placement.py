@@ -85,7 +85,7 @@ _LAB_ROBOT_LAN = ("192.168.1.201", "192.168.1.202")
 # for every suite remote_pytest.py runs with --rootdir=. (tools/land_isolation.py).
 ROOT_FILES = {
     ".dockerignore", ".gitattributes", ".gitignore", "conftest.py",
-    "AGENTS.md", "CONCEPTS.md", "CONTRIBUTING.md", "DESIGN.md", "LICENSE", "PRODUCT.md", "README.md", "STATUS.md", "env.sh",
+    "AGENTS.md", "CONCEPTS.md", "CONTRIBUTING.md", "DESIGN.md", "LICENSE", "PRODUCT.md", "README.md", "README.en.md", "STATUS.md", "env.sh",
 }
 MODULE_ROOT_DOCS = {"README.md", "AGENTS.md", "CLAUDE.md", "progress.md", "logs.md", "index.md"}
 # Accepted ADRs that name a module-root file keep it there until superseded.

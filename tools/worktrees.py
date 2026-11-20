@@ -165,9 +165,8 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
     holder = (root / ".worktrees").resolve()
     if not holder.is_dir():
         return root, []
-    times = dict(line.split() for line in git(
-        root, "for-each-ref", "--format=%(objectname) %(committerdate:unix)", "refs/heads").stdout.splitlines())
-    merged = set(git(root, "for-each-ref", "--merged", "main", "--format=%(objectname)", "refs/heads").stdout.split())
+    times = dict(line.split() for line in git(root, "for-each-ref", "--format=%(objectname) %(committerdate:unix)", "refs/heads").stdout.splitlines())
+    merged = {s for t in rules.merge_targets(root) for s in git(root, "for-each-ref", "--merged", t, "--format=%(objectname)", "refs/heads").stdout.split()}
     owners, noted = rules.owner_notes(root, git)
     rows = []
     for block in blocks[1:]:
@@ -178,7 +177,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
         if sha in times:
             is_merged, tip = sha in merged, int(times[sha])
         else:  # detached at a commit no branch points to
-            is_merged = git(root, "merge-base", "--is-ancestor", sha, "main").returncode == 0
+            is_merged = rules.is_merged(root, sha)
             tip = int(git(root, "show", "-s", "--format=%ct", sha).stdout.strip() or 0)
         try:  # `.git` is a file "gitdir: <absolute or relative path>"
             git_dir = path / (path / ".git").read_text(encoding="utf-8").partition("gitdir:")[2].strip()
@@ -351,8 +350,7 @@ def _remove(root: Path, row: dict, day: str, now: float, say=print) -> str:
     note += rules.leave_tombstone(path) if path.exists() else ""
     branch = row["branch"]
     # Exact sha: `update-ref -d` fails if the branch moved, so no commit that is not on main is dropped.
-    if (branch and row["merged"]
-            and git(root, "merge-base", "--is-ancestor", row["sha"], "refs/heads/main").returncode == 0):
+    if branch and row["merged"] and rules.is_merged(root, row["sha"]):
         deleted = git(root, "update-ref", "-d", f"refs/heads/{branch}", row["sha"])
         if deleted.returncode == 0:
             git(root, "config", "--remove-section", f"branch.{branch}")
@@ -411,6 +409,7 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
             except (RuntimeError, OSError) as exc:
                 say(f"FAIL    {label} {exc}")
                 failed.add(row["branch"])  # its "branch kept" holds for this run
+        git(root, "worktree", "prune", *([] if apply else ["--dry-run"]))
         rules.sweep_branches(root, now, apply, say, quiet, keep=failed)
     finally:
         if apply:
@@ -455,7 +454,7 @@ def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
         if row["merged"] or row["orphan"] or row.get("note"):
             continue
         parents = git(root, "rev-list", "--parents", "-n1", row["sha"]).stdout.split()[2:]
-        if any(git(root, "merge-base", "--is-ancestor", p, "main").returncode == 0 for p in parents):
+        if any(rules.is_merged(root, p) for p in parents):
             row["note"] = "tip is a merge of main"
     print(f"{'name':<32} {'branch':<44} {'main':<8} {'dirty':>5} {'idle':>7} {'lock':<6} {'you':<5} verdict  [owner]")
     _table(sorted(rows, key=lambda r: -r["idle_h"]), me, now)

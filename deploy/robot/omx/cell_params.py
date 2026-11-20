@@ -33,6 +33,7 @@ DEFAULTS = {
     "auto.temp_stop_c": (55, "C", 30, 80), "auto.pwm_fraction": (0.8, "ratio", 0.1, 1.0),
     "auto.pwm_window_s": (1.5, "s", 0.1, 30), "auto.pwm_move_units": (0.3, "joint_unit", 0.0, 5), "auto.approach_near_m": (0.020, "m", 0.005, 0.2),
     "auto.grasp_depth_m": (0.015, "m", 0.0, 0.05), "auto.clear_mm": (55.0, "mm", 1, 500),
+    "auto.neighbour_clear_mm": (0.0, "mm", 0.0, 30),
     "auto.finger_mm": (8.0, "mm", 0, 100), "auto.closing_theory_deg": (90, "deg", -180, 180),
     "auto.closing_alt_deg": (0, "deg", -180, 180),
     "auto.fold_before_transport": (1, "flag", 0, 1), "auto.bias_from_place": (1, "flag", 0, 1),

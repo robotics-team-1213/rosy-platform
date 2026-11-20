@@ -1,6 +1,7 @@
 """C4b G5: the production CellJobCompiler recompiles with the palletizing process (D-403 §3)."""
 
 import ast
+from copy import deepcopy
 from pathlib import Path
 import sys
 
@@ -94,6 +95,50 @@ def test_invalid_documents_raise_value_errors():
     recipe_doc, cell_doc = _documents()
     with pytest.raises(ValueError):
         PalletizingCellJobCompiler(tol_m=TOL_M).compile({**recipe_doc, "box": "x"}, cell_doc)
+
+
+@pytest.mark.parametrize("manual_sheet", [False, True])
+def test_complete_compilation_and_submission_survive_the_adapter_unmutated(manual_sheet):
+    # Moved from the removed gateway copy's parity test: recipe/2 (operator-handled sheet) must
+    # keep its checkpoints through compile and compile_submission on the Fleet implementation.
+    recipe, cell = _documents()
+    if manual_sheet:
+        recipe["schema"] = "rosy_cell.recipe/2"
+        recipe["slip_sheet"] = {"handling": "operator", "thickness": .002}
+        del cell["stations"]["sheets"]
+    before = deepcopy((recipe, cell))
+    adapter = PalletizingCellJobCompiler(tol_m=.001)
+    compiled = adapter.compile(recipe, cell)
+    if manual_sheet:
+        assert len(compiled.operator_checkpoints) == 2
+    candidate = dict(kind="cell_job", recipe=recipe, cell=cell, job=compiled.job,
+                     recipe_sha256=compiled.plan_bundle.recipe_digest, cell_sha256=compiled.plan_bundle.cell_digest)
+    document = adapter.compile_submission(candidate, workcell_id="omx_sim", instance_id="omx_sim_01")
+    assert document["job"] == compiled.job
+    assert len(document["steps"]) == (16 if manual_sheet else 18)
+    if manual_sheet:
+        assert document["operator_checkpoints"] == list(compiled.operator_checkpoints)
+    assert (recipe, cell) == before
+
+
+def test_demo_compilation_keeps_two_layers_sheets_and_both_pallet_markers():
+    recipe, cell = _documents()
+    adapter = PalletizingCellJobCompiler(tol_m=1e-6)
+    compiled = adapter.compile(recipe, cell)
+    bundle = compiled.plan_bundle
+    candidate = dict(kind="cell_job", recipe=recipe, cell=cell, recipe_sha256=bundle.recipe_digest,
+                     cell_sha256=bundle.cell_digest, job=compiled.job)
+    accepted = compile_cell_submission(candidate, compiler=adapter, workcell_id="omx_01", instance_id="omx_01_control")
+    assert len(bundle.steps) == 18
+    assert sum(step.invocation.inputs["item"] == "slip_sheet" for step in bundle.steps) == 2
+    assert {step.invocation.inputs["layer_index"] for step in bundle.steps} == {0, 1}
+    assert accepted.ledger_markers == ((9, "A"), (18, "B"))
+    assert accepted.resources == (("workcell", "omx_01"), ("pallet", "A"), ("pallet", "B"))
+    assert accepted.as_store_document()["job"] == compiled.job
+    candidate["job"] = deepcopy(compiled.job)
+    candidate["job"]["carry_z"] += .01
+    with pytest.raises(ValueError, match="recompiled Job"):
+        compile_cell_submission(candidate, compiler=adapter, workcell_id="omx_01", instance_id="omx_01_control")
 
 
 def test_only_cell_compiler_imports_the_palletizing_process_in_fleet():

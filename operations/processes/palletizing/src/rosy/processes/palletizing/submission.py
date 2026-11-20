@@ -9,8 +9,8 @@ import json
 import re
 from typing import Protocol
 
+from rosy.contracts.skill import PlanBundle
 from rosy.contracts.skill.invocation import _finite
-from rosy.execution.api import PlanBundle
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _CANDIDATE_KEYS = {

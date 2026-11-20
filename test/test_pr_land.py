@@ -166,6 +166,21 @@ def test_ci_runnable_excludes_lab_only_omx_browser_alone_and_sim():
     assert not pr_land.ci_runnable(["test/learning/perception/test_learning_workflow_pipeline_browser.py"])
 
 
+def _required(monkeypatch, invs, changed=()):
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: json.dumps({"mode": "x", "invocations": invs}) if "affected" in cmd else "\n".join(changed))
+    return pr_land.required_lab_invocations(Path("."), "b", "h")
+
+
+def test_mixed_ci_entries_need_no_lab_but_omx_and_browser_parts_stay(monkeypatch):
+    mixed = ["middleware/core/gateway/test", "operations/overhead/test", "test/architecture"]
+    assert _required(monkeypatch, [mixed]) == []
+    omx = ["middleware/devices/omx/adapter/test"]
+    assert _required(monkeypatch, [mixed + omx]) == [omx]
+    brow = "test/learning/perception/test_learning_workflow_pipeline_browser.py"
+    assert _required(monkeypatch, [mixed + [brow]]) == [[brow]]
+    assert _required(monkeypatch, [["ROSY_RUN_BROWSER_TESTS=1"] + mixed]) != []
+
+
 def test_lab_only_requires_intact_lab_cache_and_ci_covers_lab_ids(tmp_path, monkeypatch):
     def git(*args):
         return subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True, text=True).stdout.strip()
