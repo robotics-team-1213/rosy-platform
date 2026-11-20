@@ -24,6 +24,7 @@ from core_common.protocol.localization import (CHECKING, DecisionSource, Localiz
 from fleet.localization import cues, service_logic, trust
 from fleet.localization.arbiter import Arbiter, Context
 from fleet.localization.service_logic import Ladder, Monitor
+from fleet.localization.wall_tiebreak import Tiebreak
 from fleet.server.localization_pose_helpers import (
     check_reached_unconfirmed, forget_removed_robots, fresh_overhead_sighting,
     handle_pose_request, observe_pose_from_anchors, track_anchor_provenance,
@@ -150,6 +151,14 @@ class LocalizationService:
         self._pose_tries: dict[str, int] = {}
         #: robot_id -> the overhead map pose (`MapPoseService.arbitrated_pose`), set by app.py.
         self._overhead_pose: Optional[Callable[[str], object]] = None
+        #: SLAM fallback (2026-11-18): robots whose CORE reports phase WAITING_LOCALIZATION pick between mirror-twin candidates
+        #: by the ceiling camera (`Tiebreak`), and get the wall grid pushed by `_wall_sync`.
+        self._fallback: set[str] = set()
+        self._tiebreak = Tiebreak()
+        self._wall_sync = None
+
+    def set_wall_sync(self, sync) -> None:
+        self._wall_sync = sync
 
     def set_overhead_pose(self, provider: Optional[Callable[[str], object]]) -> None:
         self._overhead_pose = provider
@@ -213,6 +222,13 @@ class LocalizationService:
         results = await asyncio.gather(*(self._bounded(self._read_state(rid)) for rid in ids),
                                        return_exceptions=True)
         states = {rid: r for rid, r in zip(ids, results) if isinstance(r, dict)}
+        self._fallback = {rid for rid, s in states.items()  # only the wait for the first pose: never once ACTIVE
+                          if isinstance(s.get("slam_fallback"), dict) and s["slam_fallback"].get("phase") == "WAITING_LOCALIZATION"}
+        if self._wall_sync is not None:
+            try:
+                await self._wall_sync.sync(states)
+            except Exception:  # noqa: BLE001 - the wall map push must never stop localization
+                logger.exception("wall map sync failed")
         localized = {rid: p for rid, s in states.items()
                      if trust.classify(s) == trust.TRUSTED and (p := _pose(s)) is not None}
         self._last_good.update(localized)
@@ -331,6 +347,12 @@ class LocalizationService:
             for peer, seen in service_logic.peer_observations(report.unmapped_objects, leader, peers).items():
                 observations.setdefault(peer, []).append(((rid, *key), seen))
         decision = self._arbiter.observe(report, context, now)
+        if decision is None and rid in self._fallback:
+            sighting = fresh_overhead_sighting(self, rid, now, force=True)
+            tie = self._tiebreak.observe(report, None if sighting is None else (sighting.x, sighting.y), now)
+            if tie is not None:
+                await self._post_decision(rid, client, tie, (tie.pose.x, tie.pose.y, tie.pose.yaw), now)
+                return
         if decision is not None:
             c = report.candidates[decision.candidate_index]
             await self._post_decision(rid, client, decision, (c.x, c.y, c.yaw), now)

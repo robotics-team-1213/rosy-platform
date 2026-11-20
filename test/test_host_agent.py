@@ -65,6 +65,9 @@ class SpyCommands:
     def navigation_approval(self, action: str, *arguments: str) -> dict:
         return self._record("navigation_approval", action, *arguments)
 
+    def navigation_fallback(self, action: str, *arguments: str) -> dict:
+        return self._record("navigation_fallback", action, *arguments)
+
     def release_status(self) -> dict:
         return self._record("release_status")
 
@@ -129,6 +132,9 @@ def test_the_allowlist_matches_the_contract():
         "navigation_approval.cancel",
         "navigation_approval.seal",
         "navigation_approval.start_navigation",
+        "navigation_fallback.status",
+        "navigation_fallback.stage",
+        "navigation_fallback.switch",
         "lane_perception.status",
         "lane_perception.set",
         "network.apply_profile",
@@ -385,7 +391,7 @@ def test_the_whole_parameter_surface_is_enumerated():
     not an identifier; the agent still lists it so the surface stays closed.
     """
     every_param = {param for spec in ALLOWLIST.values() for param in spec.params}
-    assert every_param == {"operator", "test_surface", "profile_id", "release_id", "unit", "mode", "ssid", "psk", "paint_source", "public_key", "request_id"}
+    assert every_param == {"operator", "test_surface", "profile_id", "release_id", "unit", "mode", "ssid", "psk", "paint_source", "public_key", "request_id", "reason"}
 
 
 def test_a_missing_required_parameter_is_refused(agent, commands):
@@ -903,7 +909,7 @@ def test_navigation_approval_role_matrix(agent, commands, command, role):
 
 @pytest.mark.parametrize("command", sorted(set(ALLOWLIST) - set(NAVIGATION_APPROVAL)))
 def test_the_operator_level_opens_no_other_command(command):
-    assert ALLOWLIST[command].role.value in ("viewer", "administrator")
+    assert ALLOWLIST[command].role.value in ("viewer", "administrator", "machine")  # machine: SLAM fallback, 2026-11-18
 
 
 def test_an_operator_cannot_run_an_administrator_command(agent, commands):
@@ -917,3 +923,30 @@ def test_an_operator_cannot_run_an_administrator_command(agent, commands):
 def test_the_seal_refuses_a_bad_approver_or_surface(agent, commands, params):
     response = agent.handle(_request("navigation_approval.seal", role="operator", confirmed=False, **params))
     assert response["code"] == "HOST_AGENT_PARAM_INVALID" and commands.calls == []
+
+
+# --- SLAM fallback: the machine grade (2026-11-18, automatic switch) -----------
+
+
+def test_the_fallback_switch_takes_the_machine_grade_only(agent, commands):
+    ok = agent.handle(_request("navigation_fallback.switch", role="machine", confirmed=False, reason="slam_lost"))
+    assert ok["ok"] is True and commands.calls == [("navigation_fallback", ("switch", "slam_lost"))]
+    for role in ("viewer", "operator", "administrator"):
+        refused = agent.handle(_request("navigation_fallback.switch", role=role, confirmed=False, reason="slam_lost"))
+        assert refused["ok"] is False and refused["code"] == "HOST_AGENT_ROLE_INSUFFICIENT"
+    assert len(commands.calls) == 1
+
+
+def test_the_machine_grade_reaches_nothing_but_reads_and_the_fallback(agent, commands):
+    for command, params in (("navigation_approval.begin", {}), ("release.rollback", {}), ("system.reboot", {}),
+                            ("network.connect", {"ssid": "x", "psk": "12345678"})):
+        refused = agent.handle(_request(command, role="machine", **params))
+        assert refused["ok"] is False and refused["code"] == "HOST_AGENT_ROLE_INSUFFICIENT", command
+    assert agent.handle(_request("navigation_fallback.status", role="machine", confirmed=False))["ok"] is True
+    assert agent.handle(_request("navigation_fallback.stage", role="machine", confirmed=False))["ok"] is True
+
+
+def test_the_fallback_switch_refuses_a_path_or_option_as_its_reason(agent):
+    for reason in ("../etc/passwd", "--now", "", "a b"):
+        refused = agent.handle(_request("navigation_fallback.switch", role="machine", confirmed=False, reason=reason))
+        assert refused["ok"] is False and refused["code"] == "HOST_AGENT_PARAM_INVALID", reason

@@ -70,7 +70,8 @@ class DockObservationFeed:
                 yaw=_finite(payload.get("yaw")),
                 confidence=min(1.0, max(0.0, _finite(payload.get("confidence")))),
                 at=_finite(received_at) - age,
-                lateral_measured=payload.get("lateral_measured", True) is not False)
+                lateral_measured=payload.get("lateral_measured", True) is not False,
+                along_measured=payload.get("along_measured", True) is not False)
         except (ValueError, TypeError):
             # Garbage of unknown origin clears every source: lost, not guessed.
             if source in SOURCES:

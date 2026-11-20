@@ -4,6 +4,7 @@ subprocess.run is stubbed throughout: no git writes, no network, no remote pytes
 """
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,7 @@ import omx_hotfix as oh  # noqa: E402
 
 SHA = "d" * 40  # a fake revision; a hex-looking literal trips the secret scan
 SHORT = SHA[:10]
+FLOOR = "e" * 40
 
 
 class Fake:
@@ -42,7 +44,7 @@ class Fake:
 
 @pytest.fixture
 def fake(monkeypatch):
-    stub = Fake({"rev-parse": SHA})
+    stub = Fake({"rev-parse": SHA, "merge-base": FLOOR})
     monkeypatch.setattr(oh.subprocess, "run", stub)
     return stub
 
@@ -165,3 +167,40 @@ def test_status_lists_link_and_recent_folders(fake):
     assert oh.status("u@h") == "current: omx-tools-aaaaaaaaaa"
     script = fake.ssh_scripts()[0]
     assert "readlink omx-tools-current" in script and "omx-tools-??????????" in script and "head -5" in script
+
+
+def test_deploy_records_the_main_floor_before_switching(fake, tmp_path):
+    oh.deploy("HEAD", "user@host", passing_log(tmp_path))
+    assert f"merge-base {SHA} main" in " ".join(fake.joined())
+    ssh = [(cmd[-1], kw) for cmd, kw in fake.calls if cmd[0] == "ssh"]
+    floor = [i for i, (script, kw) in enumerate(ssh) if script.startswith("python3 - ")]
+    switch = [i for i, (script, _) in enumerate(ssh) if "mv -T" in script]
+    assert len(floor) == 1 and floor[0] < switch[0]
+    script, kw = ssh[floor[0]]
+    assert shlex.split(script)[2:] == [FLOOR, oh.DEFAULT_CONFIG, oh.DEFAULT_ROOT, oh.STATE_FILE, oh.UPDATE_LOCK]
+    assert kw["input"] == oh.FLOOR_SCRIPT.encode()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the floor script runs on the Linux cell (fcntl)")
+def test_the_floor_script_changes_only_floor_sha_in_the_updater_state(tmp_path):
+    import json
+
+    root = tmp_path / "rosy-omx"
+    root.mkdir()
+    old = {"current": "a" * 12, "previous": "b" * 12, "current_sha": "a" * 40, "env": "e1", "failed": "c" * 12,
+           "history": [{"release": "a" * 12, "result": "active", "at": 1.0}], "floor_sha": "0" * 40}
+    (root / oh.STATE_FILE).write_text(json.dumps(old))
+    config = tmp_path / "omx-autoupdate.json"
+    config.write_text(json.dumps({"root": str(root)}))
+
+    def run(*args):
+        return subprocess.run([sys.executable, "-", *args], input=oh.FLOOR_SCRIPT, text=True, capture_output=True,
+                              check=True)
+
+    run(FLOOR, str(config), "/nonexistent-default", oh.STATE_FILE, oh.UPDATE_LOCK)  # root comes from the config
+    assert json.loads((root / oh.STATE_FILE).read_text()) == {**old, "floor_sha": FLOOR}
+    assert sorted(p.name for p in root.iterdir()) == sorted([oh.STATE_FILE, oh.UPDATE_LOCK])  # no tmp left
+    fresh = tmp_path / "fresh"
+    run(FLOOR, str(tmp_path / "no-config.json"), str(fresh), oh.STATE_FILE, oh.UPDATE_LOCK)
+    assert json.loads((fresh / oh.STATE_FILE).read_text()) == {
+        "current": None, "previous": None, "history": [], "floor_sha": FLOOR}

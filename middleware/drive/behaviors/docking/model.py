@@ -98,7 +98,8 @@ class DockingConfig:
     # (Rosy/docs/research/charge-bay-pink-line-2026-11-10/, 명목 36/36·시나리오 13/13).
     bay_reverse_speed: float = 0.05     # m/s, 선 가운데·평행 유지하며 후진
     bay_gain_lateral: float = 8.0       # rad/(s·m), ω = -(a·횡 + b·방위)
-    bay_gain_heading: float = 0.6
+    bay_gain_heading: float = 1.2       # 0.6→1.2: 감쇠 ζ≈0.47→0.95, 5 cm 시작 방위 피크 20.5°→13.2°(운동학 sim, 2026-11-19)
+    bay_target_heading_max_rad: float = 0.26  # 옆 오차가 요구하는 목표 방위 상한(15°; 짐칸 끝 0.135·칸 폭 0.18)
     bay_gate_jump_m: float = 0.02       # 프레임당 횡 점프 게이트(물리 가능 범위 밖 = 이웃선)
     bay_gate_jump_rad: float = 0.0873   # 5 deg/프레임
     bay_coast_slow_s: float = 0.5       # 관측 무효: 이 안은 제어량 유지(코스트)
@@ -108,6 +109,18 @@ class DockingConfig:
     bay_settle_creep_m: float = 0.04    # 회전 뒤 캐스터 정착 크립(전진)
     bay_travel_margin_m: float = 0.02   # 접촉 거리 상한 = 진입 잔여거리 + 이 값
     bay_backoff_m: float = 0.15         # 재시도 전진(교차점 쪽)
+    # 진입 허용창(ALIGNING 시작 때): 평평한 횡·방위 한계(시뮬: 횡 ≤7 cm 는 방위 ±15°에서도 접촉 0, 밖은 거부 — sim-before-after.txt).
+    # 밖이면 후진하지 않고 스테이징부터 다시(직진 후퇴로는 방위가 안 고쳐진다). Nav2 도착 허용 yaw 14° 보다 넓게 둔다.
+    bay_entry_lat_m: float = 0.07
+    bay_entry_heading_max_rad: float = 0.2618   # 15°
+    # 접촉 때 허용창: 가이드 목 ±6 mm·방위 2°(충전 판정)의 두세 배. 넘으면 전압 20 s 를 기다리지 않고 재진입.
+    bay_contact_lat_m: float = 0.015
+    bay_contact_heading_rad: float = 0.0873     # 5°
+    # 횡 맹목 후진(통로선만 보여 횡 실측 없음) 예산 = (진입 along - 칸 선이 보이는 거리) + 여유. 시간은 같은 비율(0.05 m/s).
+    bay_line_view_m: float = 0.305              # 멈춤면 이 안에서만 칸 선이 보인다(관측기)
+    bay_blind_margin_m: float = 0.05            # 관측 지연 2.5 cm + 슬립 여유
+    bay_obs_max_age_s: float = 0.3              # 이보다 오래된 프레임은 게이트를 넓히지 않고 버린다(지연 0.3 s 넘으면 15° 상한이 안 지켜짐)
+    bay_rear_gap_margin_m: float = 0.06         # LiDAR 뒤 여유가 남은 거리보다 이만큼 넘게 작으면 칸 안 장애
     bay_settle_baseline_s: float = 2.0  # 멈춘 뒤 기준 전압을 잡기 전 대기
     bay_charge_rise_v: float = 0.05     # D-941: 20 s 안 +0.05 V(도크 계측 없음)
     bay_charge_confirm_s: float = 20.0
@@ -139,3 +152,14 @@ class DockingConfig:
     # 짐칸 J-v3 뒤끝은 바퀴축 뒤 0.134–0.135 m(정격 CAD, 뒷면 y_d −14.45 · 축 y_d 120.5; 몸 74.5·42.1·r 82.6 이
     # base_link 치수와 일치, 2026-11-18 tray_overhang_cad.py). 모따기 덕에 쓸리는 반경은 0.137 m.
     bay_turn_rear_overhang_m: float = 0.135
+    # 카메라 기준 방향 맞춤·선 찾기(bay_align.py, 실물 y8xs 2026-11-19: 지도-카메라 방향 17~30° 어긋남, 스테이징에서 선 안 보임)
+    bay_stage_map_wrong_way_rad: float = 2.0    # 115°: with the camera on the line only a map yaw this far off is a wrong-way arrival
+    bay_heading_align_max_rad: float = 0.7854   # 45°: 이 안의 방위 위반만 제자리 회전으로 맞춘다(넘으면 재시도)
+    bay_heading_align_tol_rad: float = 0.05     # ~3°: 이 안이면 끝(관측 지연 0.3 s × 0.1 rad/s 1.7° 여유)
+    bay_heading_align_tries: int = 2            # 한 도킹당 회전 맞춤 횟수
+    bay_heading_align_timeout_s: float = 8.0
+    bay_find_wait_s: float = 1.0                # 선이 안 보이면 이만큼 정지해 보고(5 Hz) 나서 후진 크립
+    bay_find_speed: float = 0.03
+    bay_find_creep_max_m: float = 0.12          # 선이 안 보이는 후진 상한 = 선 시야 여유(Nav2 오차 ~0.10 m, 실측)
+    bay_find_extra_m: float = 0.06              # 처음 보인 뒤 더 가는 양 = 정착 크립 0.04 + 여유 0.02
+    bay_find_rear_gap_m: float = 0.06           # 뒤 띠 여유가 이보다 작으면 멈춘다(멈춤면 도착 전 0.17 m 이상 남음)

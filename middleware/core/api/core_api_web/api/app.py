@@ -34,6 +34,7 @@ from core_api_web.api.v1.routes import (
     motion_router,
     motors_router,
     navigation_approval_router,
+    slam_fallback_router,
     host_router,
     intent_router,
     map_router,
@@ -236,6 +237,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(account_receiver_router)
     app.include_router(line_follow_router)
     app.include_router(navigation_approval_router)
+    app.include_router(slam_fallback_router)
     app.include_router(traffic_router)
     app.include_router(vision_router)
     app.include_router(recordings_router)
