@@ -2186,3 +2186,8 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 변경: `core_executor_kind` 기본값과 빈 값이 `events`. `threaded`는 되돌리기용으로 남김. 시험은 threaded 경로를 명시적으로 고른다.
 - 증거: `docs/validation/core-events-executor-2026-11-20/result.md`(y8xs 정지 상태 CPU 76.8→25.4%, 부하 아래 cmd_vel p99, 종료·estop·45분 운전, Gazebo 확인).
 - gate 변화: 없음. 주행 확인은 D-1058 남은 확인.
+
+## 2026-11-20 · uncommitted · docs(core): events 실행기 주행 확인 기록 (D-1058)
+- 변경: `docs/validation/core-events-motion-2026-11-20/result.md`.
+- 증거: geg6 teleop 0.06 m/s. 주행 중 cmd_vel p99는 events 24.6~25.8 ms, threaded 34.7~39.3 ms. E-Stop·명령 끊김 정지는 두 모드가 같다. CORE SIGSTOP 때 deadman이 683 ms에 정지했다.
+- gate 변화: 없음. 장시간 운전과 실기 save_map은 남음.

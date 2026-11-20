@@ -247,7 +247,7 @@ def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkey
     from types import SimpleNamespace
     from tools.harness.affected_tests import CI_FULL_MATRIX
 
-    browser_node = 'middleware/core/gateway/test/test_account_pipeline.py'
+    browser_node = 'test/integration/core_fleet/test_account_pipeline.py'
     core = next(entry for entry in CI_FULL_MATRIX if entry['name'] == 'core-domain')
     assert [browser_node] in core['invocations'], 'SSO browser journey must not remain opt-in-only'
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']

@@ -1303,6 +1303,74 @@ python deploy/robot/omx/record_session.py --config <private-record-config.json> 
 python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --operating-profile <private-robot-profile.json> --stage transfer --from pinky --to belt
 ```
 
+**중단 신호(`--chunks`).** `record_session.py`가 SIGTERM·SIGINT·SIGHUP을 받으면 `chunk_runner.py`에 SIGINT를 보낸다.
+러너는 새 명령을 받지 않고 다음을 한다(`chunk_runner_interrupt.py`). 가드 한계와 모션 명령은 바꾸지 않는다.
+
+- 먼저 그 자리에 멈춘다. 진행 중 청크와 대기 프레임을 버리고 토크는 켜 둔다. 그다음 확인한다.
+  - 연속 5번(`VERIFY_TICKS`) 읽은 자세가 멈춰 있고(틱당 0.08단위 미만) home 3단위 안이면 끝내고 토크를 끈다.
+  - home 근처인데 2초(`VERIFY_S`) 안에 멈추지 않으면 HOLD다.
+- 멈춰 있되 home이 아니면 기존 `stop fold`(`park_path`)로 접는다. park가 settled=True로 끝나고, 다시 읽은 자세가 home 3단위 안일 때만 토크를 끈다(D-1048).
+- 다음 경우에는 `human-hold`로 마지막으로 안 자세에서 토크를 유지한다(HOLD):
+  - 접기를 시작할 수 없다(가드 hold, 접촉이 아닌 고장, home 청크 없음, 가드 추적 전).
+  - 접기가 멈췄거나, settled 없이 끝났거나, home에 못 미쳤다.
+  - tick이 오류를 냈다.
+  - 자세를 읽지 못했다.
+  - 120초(`INTERRUPT_PARK_S`) 안에 끝나지 않았다.
+- HOLD에 들어가면 다음을 쓰고 프로세스는 계속 산다. 상태 기록이 실패하면(디스크 등) stderr에만 쓰고 HOLD는 그대로다.
+  - `chunk-status.jsonl`·stderr에 `{"command": "interrupt", "hold": true, "person_needed": true}`.
+  - FIFO 옆 `hold.json`에 러너 PID와 이유.
+  - `live.json`에 `"interrupt": "hold"`.
+- 이후의 SIGINT·SIGTERM은 HOLD 보고만 되풀이한다.
+- 가드가 스스로 멈추면(`NativeJointMotion.send` 실패, 가드가 이미 토크 OFF를 시도함) 러너는 그 가드로 다시 보내지 않는다. 다시 보내면 가드가 토크 OFF를 또 시도한다. 대신 Torque_Enable을 1초마다 읽고, 바뀔 때마다 보고한다.
+  - 모두 0이면 `GUARD_STOPPED torque off`를 보고하고 끝난다. `record_session`은 기존 토크 확인·사고 측정 경로를 탄다.
+  - 일부만 0이면 `PARTIAL_GUARD_STOP`이다.
+  - 모두 1이거나 읽지 못하면 HOLD다.
+  - 마지막 두 경우는 사람을 기다린다.
+- 중단 신호가 기록된 뒤에는 어떤 예외든(신호가 그 틱 도중에 와도) HOLD나 가드 readback으로 간다. 그래도 실행 루프 자체가 예외로 끝나면 `chunk_runner.main`이 close_device 대신 `last_resort_hold`로 아무것도 보내지 않고 SIGUSR2를 기다린다.
+- 최종 보증: `chunk_runner.main`은 토크를 끄는 유일한 지점에서 `gated_close`를 부른다. Linux에서는 판정 직전부터 close_device가 끝날 때까지 `pthread_sigmask`로 SIGINT·SIGTERM·SIGHUP을 막는다. 그 사이에 온 신호는 판정이 끝난 뒤 전달된다. 판정은 `final_gate`의 기준을 따른다. pthread_sigmask는 호출한 스레드만 막는다. 그래서 `chunk_runner.py`는 스크립트로 시작하자마자, 스레드를 만들 수 있는 import보다 먼저 `main_thread_signals.route()`로 메인 스레드에서 SIGINT·SIGTERM·SIGHUP·SIGUSR2를 막는다. 그 뒤 만들어지는 스레드는 막힌 마스크를 물려받고, `threading.Thread.start`도 새 스레드를 막힌 채 만든다. 메인 스레드는 lerobot·numpy·torch import와 로봇·버스 초기화, Runner 생성이 모두 끝난 뒤에만 다시 연다(`unblock_main()`). 처리기는 그보다 먼저 설치돼 있으므로, 시작 중에 온 신호는 보류됐다가 그때 기록된다. 시작 시 `OPENBLAS_NUM_THREADS`·`OMP_NUM_THREADS`·`MKL_NUM_THREADS`가 정해져 있지 않으면 1로 둔다(`quiet_blas`). 러너의 계산은 틱마다 6원소 벡터 몇 개라 BLAS 병렬이 필요 없다. 다시 열 때 /proc 마스크로 받는 스레드가 있으면 stderr에 경고한다. `gated_close`는 늘 close_device 바로 앞에서 신호 기록을 한 번 더 읽고, 기록돼 있으면 HOLD로 간다. 따라서 이 신호들은 메인 스레드로만 가고, gated_close의 차단은 프로세스 전체에 유효하다. route 전에 이미 있던 스레드와, `/proc/self/task`의 SigBlk로 본 막지 않은 스레드(Thread.start 밖의 네이티브 스레드)는 stderr에 경고한다. SIGUSR2를 뺀 중단 신호가 기록돼 있는데 이번 실행에 승인된 끝이 없으면, 어느 경로로 반환했든 close_device 대신 `last_resort_hold`로 간다. 거기서는 아무것도 보내지 않고 SIGUSR2를 기다린다. 승인된 끝(`_off_approved`)은 다음 넷이다.
+  - park settled + home
+  - 멈춤 + home
+  - SIGUSR2 해제
+  - 가드 정지 뒤 모두 0
+- 중단이 기록된 뒤에는 일반 종료 경로(유휴 park·유휴 종료, 판사의 `stop`, 판사 stop fold의 `_stopped`, start 정렬 중 `stop`)가 꺼지고, 중단 판정만 실행을 끝낸다.
+- HOLD 루프는 유지 자세만 가드에 보내고, 틱을 세어 `live.json`을 계속 갱신한다. 청크·건강·접촉 판정은 하지 않는다. 중단 중이나 HOLD 중 FIFO로 온 `human-hold`는 버린다(중단이 먼저 처리되고, HOLD와 같은 뜻이다). `human-hold` 명령의 자세 읽기가 실패하면 마지막으로 안 자세로 유지한다.
+- 감독 복구: 사람이 팔을 받친 뒤 `kill -USR2 <러너 PID>`를 보낸다. HOLD에 들어간 **뒤에** 받은 SIGUSR2만 해제한다. 그 전에 받은 것은 무시하고 stderr에 남긴다. 러너는 그 자리에서 토크를 끄고 끝난다. 세션 cap은 기록된 값으로 남으므로 다음 세션 전에 되돌린다.
+
+`record_session.py`는 러너가 끝나거나 HOLD를 알릴 때까지 기다린다. 고정 10초 대기 뒤 kill하지 않는다.
+
+| 러너 결과 | `record_session` |
+|---|---|
+| 끝남(접힘 확인, 가드 정지) | 평소처럼 토크 0 확인·cap 복원·사고 측정 |
+| HOLD(상태 행, 이 자식 PID의 `hold.json` 또는 `live.json`의 `"interrupt": "hold"`, 상태 파일 읽기 오류) | 토크 OFF·cap 복원·사고 측정 없음. lease에 `hold`와 러너 PID를 남김. 종료 코드 75 |
+| 접힘 미확인: 신호로 죽음(음수 종료 코드, 예: -9; 중단 중이 아니어도, 러너만 죽어도) 또는 중단 확인 자체가 실패(`status.stat()` 등) | 토크 OFF·cap 복원 없음. 죽은 러너면 Torque_Enable만 읽음. 장치 없이 사고 보고. lease에 `hold`. `safe_end=false`, 종료 코드 77 |
+| 무응답: 살아 있으나 `chunk-status.jsonl`·`live.json`·`hold.json`이 15초(`RUNNER_SILENT_S`) 동안 그대로이고 HOLD 표시도 없음 | kill. 토크를 끄지 않고 Torque_Enable만 읽음. 장치 없이 사고 보고(재부팅 없음). lease에 `hold`. `safe_end=false`, 종료 코드 76 |
+
+`hold`가 붙은 lease는 pid·만료와 관계없이 살아 있다. 같은 소유자를 포함해 모든 claim을 거부하고, 일반 `release`도 거부한다. 사람이 팔을 확인한 뒤 `python cell_arm_lease.py release-hold --arm <팔>`(같은 소유자)로만 푼다.
+
+범위 밖(기존 동작): 중단 신호 전의 시작 단계 오류와 운전 중 예외, 가드 자체의 정지(`NativeJointMotion.send` 실패 시 가드의 토크 OFF).
+
+이 코드의 중단 경로가 접힘 확인(settled, home 3단위) 없이 토크를 끄는 예외는 두 가지뿐이다. 하나는 사람이 팔을 받친 뒤 보내는 SIGUSR2다. 다른 하나는 가드가 이미 끈 토크(GUARD_STOPPED, 모두 0으로 읽힘)에 OFF를 다시 쓰는 경우다. teleop·replay(lerobot-record) 자식은 예전처럼 10초 뒤 kill한다.
+
+**입회 실물 확인(중단 경로, 첫 실물 수용 전).** 사람이 비상 스위치 앞에서 지켜보며 한다.
+1. 뻗은 자세에서 세션을 중단한다. 그 자리에서 멈춘 뒤 park가 settled되고, home 3단위를 확인한 다음 토크 OFF가 되는지 본다. `record_session`은 exit 0, `safe_end`.
+2. 접힌 자세에서 중단한다. 멈춘 상태를 연속으로 읽은 뒤 토크 OFF가 되는지 본다.
+3. home을 막 떠나 움직이는 중에 중단한다. 그 자리에서 정지하고, 확인 뒤 토크 OFF(또는 접기)가 되는지 본다.
+4. park 경로를 막고 중단한다.
+   - HOLD(토크 ON), exit 75, `hold.json`, lease `hold`가 나오는지 본다.
+   - 다른 소유자와 같은 소유자의 claim·세션이 모두 거부되는지 본다.
+   - 접는 중에 미리 보낸 SIGUSR2가 무시되는지 본다.
+   - 팔을 받친 뒤 새 SIGUSR2를 보내면 토크 OFF가 되는지 본다.
+   - `release-hold`로 lease를 푼다.
+5. 가드 following error를 일으키는 접기에서 다음을 본다.
+   - 전부 꺼지면 GUARD_STOPPED와 readback 0, 부모의 사고 측정.
+   - 일부만 꺼지면 PARTIAL_GUARD_STOP, 이후 추가 토크 OFF가 없는지.
+6. 러너만 `kill -9`한다. 부모 exit 77, 토크 쓰기 없음, lease `hold`가 나오는지 본다.
+7. #263의 접힌 분기를 타는 자세(roll 차이 > 10)와 상자를 쥔 상태에서 각각 중단한다.
+8. 현장 설정으로 러너를 띄운 직후와 첫 동작 뒤에, `/proc/<러너 PID>/task/*/status`의 SigBlk로 SIGINT(2)·SIGTERM(15)·SIGHUP(1)을 받을 수 있는 비메인 스레드가 없는지 확인한다. 메인 스레드는 tid가 PID와 같은 항목이다.
+   - SigBlk 16진 마스크에 0x4003 비트가 모두 서 있어야 한다.
+   - 예: `for t in /proc/$PID/task/*; do [ "${t##*/}" = "$PID" ] || grep SigBlk $t/status; done`
+   - 러너 stderr에 `signal_routing` 경고가 없어야 한다.
+
 pipeline 설정의 `operating_profile_path`로 선택을 저장할 수도 있다. 선택하면 프로필이 work/review
 경로의 정본이며 옛 전역 경로로 다른 장부를 고르지 않는다. 같은 Fleet 장치에 팔이 둘이면 각
 `instance_id`·설정 SHA·장부 경로를 따로 둔다. manifest 상단의 `device_id`, `instance_id`,
