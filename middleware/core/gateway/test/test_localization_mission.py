@@ -84,6 +84,104 @@ def _step(services, dt=0.05, odom=None):
 # --- refusals -------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("kind", ["nudge_forward", "rotate_to"])
+@pytest.mark.parametrize("case", ["current", "stale", "intervening_mode"])
+def test_precision_mission_cannot_use_an_old_idle_epoch(core, kind, case):
+    from core_api_web.api.deps import MissionRefused, Mode
+
+    _, services = core
+    mission = services.loc_mission
+    expected = services.modes.epoch
+    if case == "stale":
+        assert services.modes.transition(Mode.NAVIGATION)[0]
+        assert services.modes.transition(Mode.IDLE)[0]
+    if case == "intervening_mode":
+        def revoke(old, new):
+            if new is Mode.NAVIGATION:
+                assert services.modes.transition(Mode.IDLE)[0]
+        services.modes.change_listeners.append(revoke)
+
+    def start():
+        if kind == "rotate_to":
+            return mission.start_rotate_to(delta_deg=10.0, expected_idle_epoch=expected)
+        return mission.start(kind, 0.05, 5.0, expected_idle_epoch=expected)
+
+    if case == "current":
+        assert start()["state"] == "running"
+        assert services.modes.mode is Mode.NAVIGATION
+        return
+
+    with pytest.raises(MissionRefused) as refused:
+        start()
+    assert refused.value.code == "IDLE_MODE_EPOCH_CHANGED"
+    assert services.modes.mode is Mode.IDLE and mission.status()["state"] == "idle"
+    assert not _events(services, "started")
+
+
+@pytest.mark.parametrize("when", ["tick", "end"])
+def test_scoped_precision_mission_cannot_write_or_clear_a_replacement_nav_epoch(core, monkeypatch, when):
+    from core_api_web.api.deps import Mode
+    from core_features.command.manager import Twist
+
+    _, services = core
+    mission, modes, command = services.loc_mission, services.modes, services.command
+    mission.start_rotate_to(delta_deg=10.0, expected_idle_epoch=modes.epoch)
+    modes.change_listeners.remove(mission._on_mode_change)
+    successor = Twist(0.0, 0.077)
+    send = command.set_nav_twist
+
+    def replace():
+        assert modes.transition(Mode.IDLE)[0]
+        assert modes.transition(Mode.NAVIGATION)[0]
+        send(successor)
+
+    if when == "tick":
+        def stale_write(twist, **scope):
+            replace()
+            return send(twist, **scope)
+        monkeypatch.setattr(command, "set_nav_twist", stale_write)
+        mission.tick()
+    else:
+        replace()
+    mission.end("done")
+    assert modes.mode is Mode.NAVIGATION
+    assert command._nav_twist == successor
+    assert mission.status()["state"] == "aborted"
+
+
+def test_scoped_precision_and_native_admission_are_mutually_exclusive(core):
+    from core_api_web.api.deps import MissionRefused, Mode, NavigationError
+
+    client, services = core
+    services.localization.on_state(_state('LOCALIZED'))
+    nav, mission = services.nav, services.loc_mission
+    token = nav.reserve_goal()
+    before = services.modes.epoch
+    with pytest.raises(MissionRefused) as blocked:
+        mission.start_rotate_to(delta_deg=10.0, expected_idle_epoch=before)
+    assert blocked.value.code == "MOTION_BUSY"
+    assert services.modes.mode is Mode.IDLE
+    nav.release_goal_reservation(token)
+
+    assert mission.start_rotate_to(delta_deg=10.0, expected_idle_epoch=before)["state"] == "running"
+    with pytest.raises(NavigationError) as blocked:
+        nav.reserve_goal()
+    assert blocked.value.code == "MOTION_BUSY"
+    with pytest.raises(NavigationError) as blocked:
+        nav.open_moving_session()
+    assert blocked.value.code == "MOTION_BUSY"
+    line = client.put("/api/v1/line-follow/mode", headers=OPERATOR, json={"mode": "CAMERA_LINE"})
+    assert line.status_code == 409 and _code(line) == "MOTION_BUSY"
+    follow = client.post("/api/v1/swarm/follow", headers=OPERATOR,
+                         json={"target_robot_id": "rosy_02", "distance": 0.5, "mode": "trail"})
+    assert follow.status_code == 409 and _code(follow) == "MOTION_BUSY"
+    assert not services.line_follow.active and not services.swarm.active and mission.status()["state"] == "running"
+    mission.end("done")
+    assert services.modes.mode is Mode.IDLE
+    assert not nav.precision_reserved()
+    nav.release_goal_reservation(nav.reserve_goal())
+
+
 def test_a_localized_robot_is_refused(core):
     client, services = core
     services.localization.on_state(_state("LOCALIZED"))

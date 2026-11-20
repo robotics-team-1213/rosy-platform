@@ -499,6 +499,8 @@ class StateSnapshot(TripLeaseFields):
     #: `map_id` is a configured name; Fleet binds a robot map to the site frame by it (map binding).
     map_grid_id: Optional[str] = None
     pose: Pose = Field(default_factory=Pose)
+    #: Coordinate frame of the pose in this snapshot.
+    pose_frame: Optional[str] = None
     velocity: Velocity = Field(default_factory=Velocity)
     battery: Battery = Field(default_factory=Battery)
     battery_status: BatteryStatus = Field(default_factory=BatteryStatus)

@@ -33,6 +33,48 @@ def test_exact_terminal_handover_is_idempotent_and_preserves_native_receipt(stat
         'run_id': body['run_id'], 'boot_id': body['expected_boot_id']}
 
 
+def test_grid_bound_handover_records_idle_epoch_and_refuses_a_changed_grid(station_api):
+    client, svc, _, auth, _, _ = station_api
+    backend = terminal_navigation(svc)
+    svc.state.set_map_id("robot-grid", "occupancy:0123456789ab")
+    body = dict(request(svc), expected_map_grid_id="occupancy:0123456789ab")
+    before = svc.modes.epoch
+    rejected = client.post('/api/v1/navigation/handover',
+        json={**body, "expected_map_grid_id": "occupancy:fedcba987654"}, headers=auth['fleet-a'])
+    assert rejected.status_code == 409 and rejected.json()["error"]["code"] == "NAVIGATION_MAP_GRID_CHANGED"
+    assert svc.modes.mode is Mode.NAVIGATION and svc.modes.epoch == before and backend.canceled == 0
+
+    for _ in range(2):
+        response = client.post('/api/v1/navigation/handover', json=body, headers=auth['fleet-a'])
+        assert response.status_code == 200, response.text
+        assert response.json() == dict(accepted=True, mode='IDLE', run_id=body['run_id'],
+            boot_id=body['expected_boot_id'], owner_generation=body['expected_owner_generation'],
+            map_grid_id=body['expected_map_grid_id'], idle_mode_epoch=before + 1)
+    assert svc.modes.mode is Mode.IDLE and backend.canceled == 0
+    assert svc.nav.native_readback()["operation"]["run_id"] == body["run_id"]
+
+
+def test_grid_bound_handover_does_not_certify_an_intervening_idle_epoch(station_api):
+    client, svc, _, auth, _, _ = station_api
+    backend = terminal_navigation(svc)
+    svc.state.set_map_id("robot-grid", "occupancy:0123456789ab")
+    body = dict(request(svc), expected_map_grid_id=svc.state.map_grid_id)
+    cycle = []
+
+    def change_mode_after_handover(old, new):
+        if new is Mode.IDLE and not cycle:
+            cycle.append(True)
+            assert svc.modes.transition(Mode.NAVIGATION)[0]
+            assert svc.modes.transition(Mode.IDLE)[0]
+
+    svc.modes.change_listeners.append(change_mode_after_handover)
+    before = svc.modes.epoch
+    response = client.post('/api/v1/navigation/handover', json=body, headers=auth['fleet-a'])
+    assert cycle and svc.modes.epoch == before + 3
+    assert response.status_code == 409 and "idle_mode_epoch" not in response.json()
+    assert svc.modes.mode is Mode.IDLE and backend.canceled == 0
+
+
 @pytest.mark.parametrize('fault', ['wrong_run', 'wrong_boot', 'wrong_correlation', 'old_generation',
     'pending_backend', 'active_callback', 'transport_missing', 'new_goal', 'manual', 'mapping', 'line_follow'])
 def test_mismatched_or_unfinished_owner_cannot_yield_mode_or_cancel_a_replacement(station_api, fault):
@@ -63,6 +105,24 @@ def test_mismatched_or_unfinished_owner_cannot_yield_mode_or_cancel_a_replacemen
     assert response.status_code == 409, response.text
     assert svc.modes.mode is before and backend.canceled == 0
     assert svc.nav.native_readback()['operation'] == operation
+
+
+def test_precision_claim_requires_the_exact_live_navigation_predecessor(station_api):
+    _, svc, _, _, _, _ = station_api
+    backend = terminal_navigation(svc)
+    view = svc.nav.native_readback()
+    previous = dict(view["owner"], **{key: view["operation"][key] for key in ("run_id", "correlation_id")})
+    assert svc.nav.claim_precision({**previous, "correlation_id": "different"}) is None
+    assert svc.nav.claim_precision({**previous, "owner_generation": previous["owner_generation"] - 1}) is None
+    for key in ("boot_id", "run_id", "owner_generation", "correlation_id"):
+        assert svc.nav.claim_precision({**previous, key: None}) is None
+        assert svc.nav.claim_precision({k: v for k, v in previous.items() if k != key}) is None
+    assert svc.nav.claim_precision({**previous, "owner_generation": float(previous["owner_generation"])}) is None
+    token = svc.nav.claim_precision(previous)
+    assert token is not None and backend.canceled == 0
+    assert not svc.nav.native_readback()["quiescence"]["quiescent"]
+    svc.nav.release_precision(token)
+    assert svc.nav.native_readback()["quiescence"]["quiescent"]
 
 
 def test_another_trip_owner_fences_passive_handover(station_api):
@@ -138,7 +198,8 @@ def test_reentrant_guard_callback_cannot_reuse_the_prior_native_proof(station_ap
     assert svc.nav.native_readback()['operation']['correlation_id'] == 'SIM-reentrant-new-work'
 
 
-def test_fleet_http_client_yields_the_exact_completed_native_operation(station_api, pipeline_sources):
+@pytest.mark.parametrize("bind_grid", [False, True])
+def test_fleet_http_client_yields_the_exact_completed_native_operation(station_api, pipeline_sources, bind_grid):
     import asyncio
     import httpx
     from fleet.swarm.transport import HttpRobotClient
@@ -147,12 +208,18 @@ def test_fleet_http_client_yields_the_exact_completed_native_operation(station_a
         core, svc, _, auth, _, _ = station_api
         backend = terminal_navigation(svc)
         body = request(svc)
+        if bind_grid:
+            svc.state.set_map_id("robot-grid", "occupancy:0123456789ab")
+            body["expected_map_grid_id"] = svc.state.map_grid_id
         token = auth['fleet-a']['Authorization'].split(' ', 1)[1]
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=core.app), base_url='http://core') as http:
             client = HttpRobotClient(RobotEndpoint(svc.state.snapshot().robot_id, 'http://core', token), http=http)
             result = await client.navigation_handover(**body)
             assert result['accepted'] is True and svc.modes.mode is Mode.IDLE
             assert result['run_id'] == body['run_id'] and backend.canceled == 0
+            if bind_grid:
+                assert result["map_grid_id"] == svc.state.map_grid_id
+                assert result["idle_mode_epoch"] == svc.modes.epoch
     asyncio.run(run())
 
 

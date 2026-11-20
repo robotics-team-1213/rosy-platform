@@ -19,7 +19,7 @@ def transform(stamp_ns=19500000000, x=1.):
 @pytest.fixture
 def pose(core_client):
     from core.bridge.map_pose import MapPoseLease
-    _, svc = core_client()
+    client, svc = core_client()
     wall, state_mono = [100.], [50.]
     assert type(svc.state) is StateManager
     svc.state._clock = lambda: wall[0]
@@ -44,6 +44,24 @@ def test_fresh_transform_keeps_its_original_source_age_in_real_state(pose):
     assert r.bridge._map_pose_ts <= 9.5
     assert not odom_owns_pose(r.bridge._map_pose_ts, r.line[0])
     assert r.svc.state.pose_sample()[4] >= .5
+
+
+def test_robot_state_reports_the_pose_frame_during_odom_fallback(pose):
+    r = pose
+    assert receive(r)
+
+    def stale_localization():
+        r.svc.state.set_pose(-5., -6., 0., frame="odom")
+        return {"state": "LOCALIZED", "pose_frame": "map"}
+
+    r.svc.state.set_localization_provider(stale_localization)
+    response = r.client.get("/api/v1/robot/state", headers={"Authorization": "Bearer rosy-dev-viewer"})
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["localization"]["pose_frame"] == "map"
+    assert snapshot["pose_frame"] == "odom"
+    assert snapshot["pose"]["x"] == -5.
+    assert snapshot["evidence"]["pose"]["evidence"] == "fresh"
 
 
 def test_old_transform_lookup_success_cannot_publish_a_current_map_coordinate(pose):

@@ -411,6 +411,32 @@ def test_navigation_goal_is_refused_while_line_follow_owns_motion(client):
     assert svc.nav.nav_state.value == "IDLE"
 
 
+def test_grid_bound_goal_cannot_start_after_the_loaded_grid_changes(client, monkeypatch):
+    from types import SimpleNamespace
+
+    tc, svc = client
+    # The ROS-free fixture has no kept navigation runtime; exercise the grid gate after that check.
+    monkeypatch.setattr("core_api_web.api.v1.navigation.require_kept", lambda *_: None)
+    goals = []
+    svc.nav.executor = SimpleNamespace(send_goal=goals.append, cancel_goal=lambda: None)
+    svc.state.set_map_id("warehouse_a", "occupancy:new")
+    body = {"x": 0.5, "y": 0.0, "expected_map_grid_id": "occupancy:old"}
+
+    stale = tc.post("/api/v1/navigation/bound-goal", json=body, headers=OPERATOR)
+    assert stale.status_code == 409 and stale.json()["error"]["code"] == "NAVIGATION_MAP_GRID_CHANGED"
+    assert svc.modes.mode.value == "IDLE" and svc.nav.nav_state.value == "IDLE"
+
+    svc.state.invalidate_map_grid()
+    missing = tc.post("/api/v1/navigation/bound-goal", json=body, headers=OPERATOR)
+    assert missing.status_code == 409 and svc.nav.nav_state.value == "IDLE"
+    assert goals == []
+
+    svc.state.set_map_id("warehouse_a", "occupancy:old")
+    matched = tc.post("/api/v1/navigation/bound-goal", json=body, headers=OPERATOR)
+    assert matched.status_code == 409 and matched.json()["error"]["code"] == "NAVIGATION_PLAN_REQUIRED"
+    assert goals == []
+
+
 def test_safety_stop_release_cycle(client):
     tc, svc = client
     assert tc.post("/api/v1/safety/stop", headers=VIEWER).status_code == 200   # 누구나 (SAF-001)

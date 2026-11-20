@@ -63,7 +63,7 @@ def _request_id(value: str) -> str:
 
 
 class LocalizationStatus(BaseModel):
-    """Robot-owned state; `pose_frame` says which frame the snapshot `pose` is in."""
+    """Robot-owned localization estimate; StateSnapshot.pose_frame is atomic with its pose."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

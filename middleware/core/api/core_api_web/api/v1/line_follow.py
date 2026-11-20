@@ -206,6 +206,8 @@ def set_line_follow_mode(body: LineFollowModeRequest,
     # D-344 §7: 차선 추종은 Nav2 가 아니라 구동을 요구한다. 증거 검사는 LineFollowManager 가 한다.
     TaskKind.MOVE.require(svc.capability)
     with localized_start(svc):
+        if svc.nav.precision_reserved():
+            raise ApiError("MOTION_BUSY", 409, "a precision correction owns navigation mode")
         svc.nav.cancel(source=f"line_follow:{auth.role}")
         svc.command.clear_navigation()
         enter_navigation_mode(svc, auth)
