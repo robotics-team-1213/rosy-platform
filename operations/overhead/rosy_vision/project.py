@@ -6,9 +6,9 @@ import math
 from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
+from core_common.homography import Homography, Point, fit
 from core_common.protocol.place_markers import PlaceMarkerPayload, PlaceMarkerPose
 from core_common.protocol.sightings import SiteSightingPayload
-from games.field.homography import Homography, Point, fit
 
 MarkerQuad = tuple[Point, Point, Point, Point]
 

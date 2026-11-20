@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from games.field.homography import Homography, fit
+from core_common.homography import Homography, fit
 
 CALIB_VERSION = "field-calib/1"
 
