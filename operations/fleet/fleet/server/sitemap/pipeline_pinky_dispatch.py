@@ -234,7 +234,7 @@ async def cancel_task(state, task: dict, *, runner, principal_id, now: float) ->
 
 
 def install_pinky_dispatch(app, ctx) -> None:
-    """The cancel route and ``app.state.pinky_dispatch_tick`` (run by the pipeline's 1 s loop in pipeline_unload_release)."""
+    """The cancel route and ``app.state.task_dispatch_tick`` (run by the pipeline's 1 s loop in pipeline_unload_release)."""
     import time
 
     def active_or_none():
@@ -248,7 +248,7 @@ def install_pinky_dispatch(app, ctx) -> None:
 
         return TripRequest(to=place_id)
 
-    app.state.pinky_dispatch_tick = lambda: dispatch_tick(
+    app.state.task_dispatch_tick = lambda: dispatch_tick(
         app.state, console=ctx.console, runner=getattr(app.state, "trip_runner", None),
         plan=getattr(app.state, "trip_plan", None), task_service=getattr(app.state, "task_service", None),
         active=active_or_none(), human_detected=bool(ctx._is_human_detected()), save=ctx._save_ledger,
