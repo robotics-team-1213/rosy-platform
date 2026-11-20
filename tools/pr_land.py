@@ -109,7 +109,9 @@ def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> s
     base = origin_main or local_main
     if not base:
         raise SystemExit("[pr-land] neither origin/main nor main exists; fetch origin/main first (refusing HEAD^ fallback)")
-    if not allow_backlog and origin_main and local_main and origin_main != local_main:
+    behind_only = origin_main and local_main and subprocess.run(  # local main merely behind origin/main has nothing unpublished
+        ["git", "-C", str(cwd), "merge-base", "--is-ancestor", local_main, origin_main], capture_output=True).returncode == 0
+    if not allow_backlog and origin_main and local_main and origin_main != local_main and not behind_only:
         anc = subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", local_main, head], capture_output=True)
         if anc.returncode == 0:
             raise SystemExit(

@@ -196,3 +196,29 @@ def test_evidence_flag_runs_pr_evidence_before_verify(monkeypatch, tmp_path):
     calls.clear()
     assert pr_land.main(["--dry-run"], repo=tmp_path) == 0
     assert [c[0][0] for c in calls if c[0][0] == "evidence"] == []
+
+
+def test_local_main_only_behind_origin_is_not_a_backlog(tmp_path):
+    """robot-17 11-20: local main behind origin/main (nothing unpublished) is an ancestor of HEAD but no backlog."""
+    import subprocess as sp
+
+    def git(*a):
+        return sp.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.invalid")
+    git("config", "user.name", "t")
+    git("commit", "-q", "--allow-empty", "-m", "a")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    git("commit", "-q", "--allow-empty", "-m", "b")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    git("reset", "-q", "--hard", "HEAD~1")  # local main behind origin/main
+    git("checkout", "-q", "-b", "topic", "origin/main")
+    git("commit", "-q", "--allow-empty", "-m", "c")
+    head = git("rev-parse", "HEAD")
+    assert pr_land.check_coexistence(tmp_path, head) == git("rev-parse", "origin/main")
+    git("checkout", "-q", "main")
+    git("commit", "-q", "--allow-empty", "-m", "unpublished")  # now local main has a commit origin lacks
+    git("checkout", "-q", "-b", "topic2")
+    with pytest.raises(SystemExit):
+        pr_land.check_coexistence(tmp_path, git("rev-parse", "HEAD"))
