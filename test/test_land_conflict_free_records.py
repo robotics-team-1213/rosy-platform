@@ -121,7 +121,12 @@ def test_refresh_generated_docs_workflow_contract():
     steps = {s.get("name"): s for s in job["steps"]}
     pr_step = steps["Open or update consolidation PR"]
     assert pr_step["if"] == "env.RECORDS_BOT_TOKEN != ''"
-    assert pr_step["env"]["GH_TOKEN"] == "${{ secrets.RECORDS_BOT_TOKEN }}"
+    assert pr_step["env"]["GH_TOKEN"] == "${{ env.RECORDS_BOT_TOKEN }}"
+    app = steps["Mint records bot App token"]
+    assert app["if"] == "vars.RECORDS_BOT_CLIENT_ID != ''" and app["uses"].startswith("actions/create-github-app-token@")
+    assert app["with"] == {"client-id": "${{ vars.RECORDS_BOT_CLIENT_ID }}", "private-key": "${{ secrets.RECORDS_BOT_PRIVATE_KEY }}"}
+    assert "repositories" not in app["with"]  # the token defaults to this repository only
+    assert steps["Use the App token"]["if"] == "steps.app.outputs.token != ''"
     script = pr_step["run"]
     assert 'gh pr merge "$pr" --auto --merge --match-head-commit "$head"' in script  # pr_land.py's queue call
     assert script.count("gh pr create") == 1 and "gh pr list --head bot/records-refresh --state open" in script
