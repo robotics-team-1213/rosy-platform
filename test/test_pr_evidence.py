@@ -43,3 +43,20 @@ def test_records_only_clean_passes(tmp_path, monkeypatch):
 
     assert pr_evidence.main(["HEAD"], repo=repo, run=run) == 1
     assert [r[4] for r in rows] == [["test/a.py"]]
+
+
+def test_solo_runs_one_invocation_per_call_alone_and_records_only_passes(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    rows = _fakes(monkeypatch, [["test/a.py"], ["test/b.py"]])
+    monkeypatch.setattr(pr_evidence.land_checks, "tmp_dir", lambda name: tmp_path)
+    calls = []
+
+    def run(invs, logs, sha, repo=None, label=None):
+        calls.append(invs)
+        logs[0].write_text("PASSED x::t\n" if "test/a.py" in invs[0] else "FAILED x::t\n", encoding="utf-8")
+        return [0 if "test/a.py" in invs[0] else 1]
+
+    assert pr_evidence.main(["HEAD", "--solo"], repo=repo, run=run) == 1
+    assert calls == [[["ROSY_JOB_ALONE=1", "test/a.py", "-rA"]], [["ROSY_JOB_ALONE=1", "test/b.py", "-rA"]]]
+    assert [r[4] for r in rows] == [["test/a.py"]]
+    assert (tmp_path / "solo.txt").read_text(encoding="utf-8") == "test/a.py\ntest/b.py\n"
