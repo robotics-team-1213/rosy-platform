@@ -56,6 +56,9 @@ from omx_incident_fleet import (  # noqa: E402
     upload_evidence,
 )
 
+from omx_incident_reading import rows, stop_reading  # noqa: E402  (split for size; names kept here)
+from omx_incident_auto import _fault_kind, auto_clear, launch_auto_fold, note_auto_clear  # noqa: E402
+
 HW_BITS = {1: "input voltage", 4: "overheating", 8: "motor encoder", 16: "electrical shock", 32: "overload"}
 REBOOTABLE = 1 | 32       # a latch the cause of which is load or supply, not heat or damage
 HOME_TOL = 3.0            # units: the runner's SETTLE_TOL
@@ -96,9 +99,18 @@ def sync_hold_from_fleet(arm: str | None, link=None) -> bool:
     return not _probe_hold(arm, link)[0]
 
 
-def refuse_if_held(arm: str | None, link=None) -> None:
-    """Before a session: resend unsent reports, ask Fleet for the hold. Fleet unreachable: refuse only on a local hold."""
+def refuse_if_held(arm: str | None, link=None, allow_incident: str | None = None) -> None:
+    """Before a session: resend unsent reports, ask Fleet for the hold. Fleet unreachable: refuse only on a local hold.
+    allow_incident (D-1048, cell_auto_fold's recovery session): opens only when Fleet answers that this one incident is
+    the whole hold; anything else, or Fleet out of reach, refuses as before."""
     is_held, detail = _probe_hold(arm, link)
+    if is_held and allow_incident:
+        try:
+            answer = (link or link_for(arm)).hold()
+            if list(answer.incident_ids) == [allow_incident]:
+                return
+        except Exception as exc:  # no answer: the recovery session does not open
+            detail = f"{detail}; recovery refused: {type(exc).__name__}"
     if is_held:
         raise SystemExit(f"{arm} held for a person: {detail}")
 
@@ -112,38 +124,6 @@ def after_session(arm: str | None, device: str | None, session=Path("session.jso
     verify = (lambda: verify_baseline_caps(device)) if device else None
     return handle(session, arm, act=reboot_latched(device) if device else None, link=link or link_for(arm),
                   verify_caps=verify)
-
-
-def rows(path, since=0.0):
-    out = []
-    if path and Path(path).is_file():
-        for line in Path(path).read_text(errors="replace").splitlines():
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            if row.get("t", since) >= since:
-                out.append(row)
-    return out
-
-
-def stop_reading(status: list) -> dict | None:
-    """What the 30 Hz trace says of the session's last contact stop: too fast or blocked (cell_why). 2026-11-07: an hour of guessing
-    with the answer on disk, and the explanation had no frames and no such fact."""
-    import os
-    import re
-
-    import cell_why
-
-    stops = [re.match(r"contact in (.+?):", str(r.get("error") or "")) for r in status]
-    stops = [m.group(1) for m in stops if m and m.group(1) != "park"]  # a fold refused on what it holds follows the real stop
-    path = os.environ.get("ROSY_CHUNK_TRACE")
-    if not stops or not path or not Path(path).is_file():
-        return None
-    try:
-        return {"chunk": stops[-1], **cell_why.read_motion(cell_why.last_run(cell_why.read_trace(path), stops[-1]))}
-    except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:  # a damaged trace must not lose the report
-        return {"chunk": stops[-1], "verdict": "undetermined", "why": f"trace unreadable: {type(exc).__name__}"}
 
 
 def stills_of(arm: str | None, since: float) -> list:
@@ -169,10 +149,15 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
     kept = sorted(faults_dir.glob(f"{owner}-*.json")) if owner and faults_dir.is_dir() else []
     kept = [p for p in kept if json.loads(p.read_text()).get("session_id") == session.get("motor_health_session")]
     n_arm = min(len(last) - 1, len(home) - 1) if (last and home and len(last) >= 6 and len(home) >= 6) else 5
+    last_row = next((r for r in reversed(status) if r.get("state")), {})
     return {"safe_end": bool(session.get("safe_end")), "latched": latched,
+            # D-1047: what core_common recomputes "rested" from (never a boolean of ours): the runner's last target and
+            # command beside its last state, home, and how many rows the short lists below were cut from
+            "home": list(home) if home else None, "last_target": last_row.get("target"),
+            "last_command": last_row.get("command"), "flagged_total": len(flagged), "fault_records_total": len(kept),
             "torque_after": session.get("torque_after") or {}, "caps_restored": session.get("caps_restored"),
             "folded": bool(home and last and all(abs(a - b) <= HOME_TOL for a, b in zip(last[:n_arm], home[:n_arm]))),
-            "last_state": last, "flagged": [{k: r.get(k) for k in ("command", "error", "fault", "caught", "t")}
+            "last_state": last, "flagged": [{k: r.get(k) for k in ("command", "error", "fault", "caught", "person_needed", "t")}
                                            for r in flagged][-5:],
             "windup_hits": [h for arm in replay.values() for h in arm["hits"]],
             "stop_reading": stop_reading(status),
@@ -180,6 +165,7 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
             "stops": [{k: r.get(k) for k in ("command", "error", "t")} for r in status
                       if str(r.get("error") or "").startswith("contact in ") and not str(r["error"]).startswith("contact in park")][-5:],
             "fault_records": [str(p) for p in kept],
+            "fault_record_kinds": [_fault_kind(p) for p in kept],
             "frames": ([str(p.with_name(f"{p.stem}-{v}.jpg")) for p in kept[-1:] for v in ("top", "side")]
                        or stills_of(arm, session.get("started", 0)))}
 
@@ -284,6 +270,11 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             if chosen:
                 (box / f"{arm}-{sid}.evidence").write_text(json.dumps(chosen))
             incident["reported"] = bool(link) and send(arm, link, None if d["hold"] else label_box(arm))
+    if d["hold"] and incident["reported"]:
+        incident["auto_clear"] = auto_clear(arm, f, link)
+        note_auto_clear(arm, incident["auto_clear"])
+        if not incident["auto_clear"].get("cleared"):
+            incident["auto_fold"] = launch_auto_fold(arm)
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
     return {"incident": True, "folder": str(folder), **incident}
 
@@ -350,12 +341,14 @@ def status(arm: str, link=None) -> dict:
             "incident_ids": fleet_ids, "fleet_reason": fleet_reason}
 
 
-def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None) -> int:
-    """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold."""
+def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None, recovery=None, only=None) -> int:
+    """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold.
+    recovery/only (D-1048): an assessor's auto-fold evidence for that one incident."""
     from omx_incident_fleet import clear_incidents
 
     return clear_incidents(
-        arm, note, token_file, link or link_for(arm), cause=cause, basis=basis, token=token, refuse_fn=refuse_if_held
+        arm, note, token_file, link or link_for(arm), cause=cause, basis=basis, token=token, refuse_fn=refuse_if_held,
+        recovery=recovery, only=only,
     )
 
 

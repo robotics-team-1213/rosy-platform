@@ -80,6 +80,132 @@ def test_reviewed_identical_full_task_can_proceed(tmp_path, task, envelope):
     assert result["attempts"] == result["successes"] == 2
 
 
+@pytest.mark.parametrize("case", [
+    "home", "pending", "evidence", "intent_write", "extended", "holding",
+    "session_before", "session_after", "outside_tolerance", "pending_replaced", "jog_refused", "receipt_write",
+])
+def test_reviewed_rehome_uses_one_durable_intent(tmp_path, task, envelope, monkeypatch, case):
+    import cell_attempts
+    import cell_pipeline
+    import cell_unwedge
+    from cell_transfer import Gate
+
+    config, calibration, library, state = task
+    config["joint_min"] = {"wrist_roll.pos": -80}
+    attempts, review = approve(tmp_path, envelope, task)
+    pending = attempts.with_suffix(".pending.json")
+    state["state"][4] = 25.0
+    state["target"] = state["state"].copy()
+    state.update(holding=False, health={"current_ma": [0, 0, 0, 0, 0, 10]})
+    if case == "pending":
+        pending.write_text("{}")
+    elif case == "evidence":
+        review["reviews"][0]["attempts_sha256"] = "changed"
+        Path(config["operating_envelope_path"]).write_text(json.dumps(review))
+    elif case == "extended":
+        state["state"][1] = 25.0
+    elif case == "holding":
+        state["holding"] = True
+
+    monkeypatch.setattr(envelope, "time", SimpleNamespace(time=lambda: 100.01))
+    monkeypatch.setattr(cell_unwedge, "time", SimpleNamespace(sleep=lambda _: None))
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    binding = {"task_id": "directive", "handoff_lease_id": "lease"}
+    cell_attempts.start(attempts, "current", **binding)
+    commands, intent_bytes = [], []
+
+    def act(command):
+        if command == "state":
+            return copy.deepcopy(state)
+        commands.append(command)
+        if command.startswith("jog "):
+            if not intent_bytes:
+                intent_bytes.append(pending.read_bytes())
+            _, joint, delta = command.split()
+            axis = cell_unwedge.BODY.index(joint.removesuffix(".pos"))
+            if case == "jog_refused" and len(commands) == 2:
+                return {"ok": False, "contact": True}
+            state["target"][axis] = round(state["target"][axis] + float(delta), 2)
+            state["state"][axis] = state["target"][axis]
+            if case == "outside_tolerance" and axis == 4:
+                state["state"][axis] += 0.75
+        return {"ok": True}
+
+    def begin(assessment):
+        if case == "intent_write":
+            raise OSError("cannot write intent")
+        token = cell_attempts.begin(config, assessment)
+        if case == "session_before":
+            state["operating_context"]["session_id"] = "changed"
+        return token
+
+    write_receipt = cell_pipeline.write_receipt
+
+    def receipt(*args):
+        if case == "receipt_write":
+            raise OSError("cannot write rehome receipt")
+        saved = write_receipt(*args)
+        if case == "session_after":
+            state["operating_context"]["session_id"] = "changed"
+        if case == "pending_replaced":
+            pending.write_text("{}")
+        return saved
+
+    path = tmp_path / "library.json"
+    path.write_text(json.dumps(library))
+    cell = SimpleNamespace(act=act)
+    gate = Gate(cell, config, calibration)
+    monkeypatch.setattr("cell_pipeline.write_receipt", receipt)
+    ledger = cell_attempts.ReplanLedger(config, calibration, "tray", "belt", 0,
+                                        {"locate": {"found": True}}, 100.0, None)
+    held = gate.open(path, begin, ledger.finish)
+    reasons = {
+        "pending": "incomplete_attempt", "evidence": "evidence_changed", "intent_write": "audit_unavailable",
+        "extended": "start_not_home", "holding": "start_not_home", "session_before": "session_changed",
+        "session_after": "session_changed", "outside_tolerance": "start_not_home",
+        "pending_replaced": "incomplete_attempt", "jog_refused": "rehome_bind_suspected",
+        "receipt_write": "audit_unavailable",
+    }
+    assert len(attempts.read_text().splitlines()) == 2
+    if case != "home":
+        assert held["reason"] == reasons[case]
+    if case in {"pending", "evidence", "intent_write", "extended", "holding", "session_before"}:
+        assert commands == []
+        assert pending.exists() is (case in {"pending", "session_before"})
+        return
+
+    assert commands[0].startswith("jog elbow_flex.pos ")
+    assert all(command.startswith("jog ") or command == "human-hold" for command in commands)
+    assert json.loads(intent_bytes[0])["envelope"] == gate.assessment
+    assert bool(list((tmp_path / "receipts").glob("*"))) is (case != "receipt_write")
+    if case == "home":
+        assert held is None
+        assert pending.read_bytes() == intent_bytes[0]
+        assert gate.act(f"load {path}")["ok"] and commands[-1].startswith("checked ")
+        last = {"command": "park", "settled": True, **state}
+        assert cell_attempts.finish_area_xyz(
+            config, calibration, {"directive_id": "directive", "arm_id": "arm_s"}, gate.assessment,
+            {"result": "unverified_place"}, [last], {}, folded_home=True,
+            home=library["chunks"]["home"][-1], t_start=100.0) == "current-001"
+        assert not pending.exists()
+        return
+
+    assert gate.blocked and not gate.act(f"load {path}")["ok"]
+    if case == "jog_refused":
+        assert ledger.record_open_hold(gate, held) == "current-001"
+        rows = [json.loads(row) for row in attempts.read_text().splitlines()]
+        assert len(rows) == 3
+        assert rows[-1]["envelope"] == gate.assessment and rows[-1]["task_binding"] == binding
+        assert (rows[-1]["attempt_id"], rows[-1]["outcome"], rows[-1]["fail_class"]) == (
+            "current-001", "failed", "rehome_bind_suspected")
+        assert pending.read_bytes() == intent_bytes[0]
+        with pytest.raises(OSError, match="pending intent"):
+            ledger.record_open_hold(gate, held)
+        assert len(attempts.read_text().splitlines()) == 3
+        assert Gate(cell, config, calibration).open(path, begin)["reason"] == "incomplete_attempt"
+        assert not any(command.startswith("checked ") for command in commands)
+
+
 def test_changed_client_carry_params_cannot_reuse_a_review(tmp_path, task, envelope):
     approve(tmp_path, envelope, task)
     task[0]["params"] = {"auto.fold_before_transport": 0}

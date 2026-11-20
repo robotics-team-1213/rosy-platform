@@ -172,6 +172,8 @@ def leave_tombstone(path: Path) -> str:
     if marker.is_dir():  # a nested repository, not a worktree's gitfile: leave it
         return " folder left (it holds a .git directory)"
     try:
+        if marker.exists():
+            os.chmod(marker, 0o666)
         marker.write_text(f"gitdir: .git/{TOMBSTONE}{path.name}-delete-this-folder\n", encoding="utf-8")
     except OSError as exc:
         return f" folder left, tombstone failed: {exc}"
@@ -224,15 +226,35 @@ def topic_ok(topic: str) -> bool:
     return len(topic) <= TOPIC_MAX and TOPIC.fullmatch(topic) is not None
 
 
+def merge_targets(root: Path) -> list[str]:
+    """Both local main and origin/main when present (D-1055 PR merges advance origin/main first)."""
+    targets = [ref for ref in ("refs/heads/main", "refs/remotes/origin/main")
+               if _git(root, "rev-parse", "--verify", "-q", ref).returncode == 0]
+    return targets or ["refs/heads/main"]
+
+
+def is_merged(root: Path, sha: str) -> bool:
+    return any(_git(root, "merge-base", "--is-ancestor", sha, t).returncode == 0 for t in merge_targets(root))
+
+
+def _merged_rows(root: Path, fmt: str) -> list[str]:
+    seen, out = set(), []
+    for target in merge_targets(root):
+        listed = _git(root, "for-each-ref", "--merged", target, "refs/heads", f"--format={fmt}")
+        if listed.returncode != 0:
+            raise RuntimeError(f"git for-each-ref failed: {listed.stderr.strip()}")
+        for line in listed.stdout.splitlines():
+            if line not in seen:
+                seen.add(line)
+                out.append(line)
+    return out
+
+
 def sweep_branches(root: Path, now: float, apply: bool, say=print, quiet: bool = False, keep=frozenset()) -> int:
     """Delete (or, without ``apply``, count) local branches in main that no worktree has checked out."""
     common = root / _git(root, "rev-parse", "--git-common-dir").stdout.strip()
-    listed = _git(root, "for-each-ref", "--merged", "refs/heads/main", "refs/heads",
-                  "--format=%(refname:short)\t%(objectname)\t%(worktreepath)")
-    if listed.returncode != 0:
-        raise RuntimeError(f"git for-each-ref failed: {listed.stderr.strip()}")
     done = 0
-    for line in listed.stdout.splitlines():
+    for line in _merged_rows(root, "%(refname:short)\t%(objectname)\t%(worktreepath)"):
         branch, sha, checked_out = line.split("\t")
         # A reflog entry within the landed wait: just made, maybe about to be checked out. No reflog: not new.
         fresh = now - reflog_time(common / "logs" / "refs" / "heads" / branch) < LANDED_IDLE_HOURS * 3600
@@ -254,7 +276,8 @@ def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: boo
     """Move unlanded branches no worktree has and nobody committed to for ABANDON_DAYS to
     ``refs/archive/<branch>@<sha10>`` (11-14: 270 branches not in main, 219 without a worktree, 95 idle > 7 days).
     Nothing is lost: restore with ``git branch <branch> refs/archive/<branch>@<sha10>``."""
-    listed = _git(root, "for-each-ref", "--no-merged", "refs/heads/main", "refs/heads",
+    merged_shas = set(_merged_rows(root, "%(objectname)"))
+    listed = _git(root, "for-each-ref", "refs/heads",
                   "--format=%(refname:short)\t%(objectname)\t%(worktreepath)\t%(committerdate:unix)")
     if listed.returncode != 0:
         raise RuntimeError(f"git for-each-ref failed: {listed.stderr.strip()}")
@@ -262,6 +285,8 @@ def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: boo
     done = 0
     for line in listed.stdout.splitlines():
         branch, sha, checked_out, when = line.split("\t")
+        if sha in merged_shas:
+            continue
         # the reflog too: a branch just restored from refs/archive has an old tip but was touched now
         touched = max(int(when or now), reflog_time(common / "logs" / "refs" / "heads" / branch))
         if (checked_out or branch in keep or branch.startswith(("archive/", "land/"))
@@ -282,3 +307,40 @@ def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: boo
         say(f"[worktrees] {'archived' if apply else 'would archive'} {done} unlanded branch(es) idle over"
             f" {ABANDON_DAYS} days with no worktree (refs/archive/<branch>@<sha>)")
     return done
+
+
+def _safe_mtime(path: str) -> float:
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
+def newest_file(path: Path, is_cache) -> float:
+    """Newest mtime of any file outside ``.git`` and the caches: a used worktree that git sees as unchanged is active.
+    shortcut: a full walk per judged worktree, run only when the cheap facts did not decide."""
+    newest = 0.0
+    for folder, dirs, files in os.walk(path):
+        inside = Path(folder).relative_to(path).as_posix()
+        dirs[:] = [d for d in dirs if d != ".git" and not is_cache(f"{'' if inside == '.' else inside + '/'}{d}/")]
+        newest = max([newest, *(_safe_mtime(os.path.join(folder, n)) for n in files if n != ".git")])
+    return newest
+
+
+def owner_notes(root: Path, git) -> tuple[dict[str, str], dict[str, float]]:
+    """(branch -> identity, branch -> epoch) from the note ``new`` wrote in ``branch.<name>.description``:
+    "owner: <identity>[; at <epoch>][; over cap ...]". A note without a stamp has no epoch; no identity is no owner."""
+    lines = git(root, "config", "--get-regexp", r"^branch\..*\.description$").stdout.splitlines()
+    owners, stamps = {}, {}
+    for key, _, value in (line.partition(" ") for line in lines):
+        if not value.startswith("owner: "):
+            continue
+        branch = key[len("branch."):-len(".description")]
+        who = value.removeprefix("owner: ").split("; over cap")[0]
+        stamp = re.search(r"; at (\d+)", who)
+        who = who.split("; at ")[0]
+        if who.strip(" <>;"):  # " <>": no git identity was set
+            owners[branch] = who
+        if stamp:
+            stamps[branch] = float(stamp.group(1))
+    return owners, stamps

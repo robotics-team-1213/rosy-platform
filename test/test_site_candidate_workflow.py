@@ -288,3 +288,5 @@ def test_push_builds_automatically_look_up_latest_signed_base_candidate():
     assert "release.json.sig" in _run_text(check)
     assert build_step["env"]["BASE_COMMIT"] == "${{ inputs.base_commit || needs.check-release-free.outputs.base_commit }}"
     assert 'git merge-base --is-ancestor "$BASE_COMMIT" "$COMMIT"' in build_step["run"]
+    # A dispatch with an empty base_commit is a full build: only pushes look up a base.
+    assert '[[ "$EVENT_NAME" == "push" && -z "$base_commit"' in _run_text(check)
