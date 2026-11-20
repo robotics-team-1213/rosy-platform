@@ -61,6 +61,7 @@ from land_selection import _test_dir, fallback_targets  # noqa: E402,F401  (move
 import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
 import land_precheck  # noqa: E402  (the cheap gates alone, before land_async makes a ticket)
 import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
+import land_freeze  # noqa: E402  (cutover freeze: rosy-cutover.json)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan, stale_adr_rows,  # noqa: E402,F401  (auto-resolve)
                         generate_records, resolver)
@@ -352,7 +353,9 @@ def land(args) -> int:
     qdir = ticket = None
     reserve = getattr(land_queue, "reserve", None)  # A: a place in the cap before the long gates; a full queue ends here
     if reserve and not (args.no_queue or args.dry_run or args.urgent or os.environ.get(land_queue.TICKET_ENV)):
-        _reserved.append(reserve(land_queue.queue_dir(wt), branch, land_queue.lane_of(wt)))
+        adopt = getattr(land_queue, "adopt_reserved", lambda name: None)  # land_async reserved this place for us
+        _reserved.append(adopt(os.environ.pop(getattr(land_queue, "RESERVED_ENV", "_"), "")) or
+                         reserve(land_queue.queue_dir(wt), branch, land_queue.lane_of(wt)))
     if args.no_queue and not args.dry_run:
         holders = land_queue.ahead(land_queue.queue_dir(wt), Path("~"))  # every live ticket: the first holds its turn
         if holders:  # a landing outside the queue mid-turn gave that turn another round (2026-10-25, 22:52)
@@ -369,8 +372,7 @@ def land(args) -> int:
         _unreserve()
         if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # it led a batch at once: one shared pretest instead of one each
-        if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
-            land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
+        land_prepare.pretest(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
         if (code := land_batch.queue(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # a batch landed this branch
     return rounds(args, wt, branch, main_co, python, qdir, ticket)
@@ -437,7 +439,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     note = None
                 if note and note not in summary:
                     summary.append(note)
-                if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
+                if note and ticket is not None and not land_prepare.in_turn(args):  # FULL prepares outside (D-889 39 aside)
                     full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
                     continue
                 # D-970 4: the pretest's LOAD-FLAKY ids run again here, each in its own invocation, and must pass
@@ -478,7 +480,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             if note:
                 full_main = main_sha
                 tier = land_selection.tier(sys.modules[__name__], guarded + tested, True, args)
-                land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+                prepared = land_prepare.saved(sys.modules[__name__], wt, branch, args, candidate, main_sha, tier, invocations, prepared)
                 summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
             if invocations or tested_main is None:
                 tested_main = main_sha
@@ -498,6 +500,8 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     land_record.plan(invocations, prepared, available=(wt / land_record.TARGET).is_file())
                 except (ValueError, TypeError, KeyError) as exc:
                     raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
+            if why := land_freeze.refusal(wt, candidate, new=False):  # last guard: only allowed shas move main
+                raise Stop(why)
             on_main(main_co); land_checks.stash_main_collisions(main_co, main_sha, candidate)
             ff = git(main_co, "merge", "--ff-only", candidate, check=False, env=MAIN_WRITER_ENV)
             if ff.returncode == 0:
@@ -552,6 +556,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="the user's words: pass waiting tickets (one at a time, D-889 addendum 5)")
     parser.add_argument("--mixed", default="", metavar="REASON", help="the user's words: gate or safety paths with product")
     args = parser.parse_args(argv)
+    if not args.precheck and (why := land_freeze.refusal(Path.cwd(), None)):  # open: no new landing on a publishOnly clone
+        return print(why, file=sys.stderr) or 1
     if args.precheck:
         try:
             land_precheck.precheck(sys.modules[__name__], Path(out(Path.cwd(), "rev-parse", "--show-toplevel")), sys.executable,

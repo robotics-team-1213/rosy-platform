@@ -131,9 +131,9 @@ def observe_pose_from_anchors(svc, states: Mapping[str, dict], localized: Mappin
             observations.setdefault(target, []).append((("objects", rid, status.objects_stamp), observed))
 
 
-def fresh_overhead_sighting(svc, rid: str, now: float) -> Optional[cues.Sighting]:
-    """A fresh (<= 300 ms) overhead sighting, only while the D-257 flag is on."""
-    if not svc.overhead_cue or svc._sightings is None:
+def fresh_overhead_sighting(svc, rid: str, now: float, force: bool = False) -> Optional[cues.Sighting]:
+    """A fresh (<= 300 ms) overhead sighting, only while the D-257 flag is on (`force`: the SLAM fallback tie-break, 2026-11-18)."""
+    if not (force or svc.overhead_cue) or svc._sightings is None:
         return None
     for row in svc._sightings.snapshot().get("sightings", ()):
         if row.get("robot_id") != rid:

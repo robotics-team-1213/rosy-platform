@@ -8,13 +8,15 @@
 # platform roots with exactly one consuming role carry a proxy reviewer
 # (2026-11-04 lead approval; platform_parts.yaml `reviewers:` is the source of
 # truth). Signing and release paths (deploy/, tools/release/) stay lead-only.
-/middleware/drive/ @PURPLE-SY @livsbittt
-/contracts/motion/ @PURPLE-SY @livsbittt
-/shared/android/ @PURPLE-SY @livsbittt
-/contracts/skill/ @sajy0804 @ddaokki @livsbittt
-/middleware/skills/api/ @sajy0804 @ddaokki @livsbittt
-/middleware/robot_execution/local/ @sajy0804 @ddaokki @livsbittt
-/tools/calibration/ @sajy0804 @ddaokki @livsbittt
+/middleware/drive/ @sajy0804 @livsbittt
+/contracts/motion/ @sajy0804 @livsbittt
+/shared/android/ @sajy0804 @livsbittt
+/contracts/skill/ @ddaokki @livsbittt
+/middleware/skills/api/ @ddaokki @livsbittt
+/middleware/robot_execution/local/ @ddaokki @livsbittt
+# CORE runs only in the Pinky image (2026-11-19 user decision: app pinky).
+/middleware/core/ @sajy0804 @livsbittt
+/tools/calibration/ @ddaokki @livsbittt
 
 # KAN-19 fleet: 관제·충전·물류
 /operations/fleet/ @livsbittt
@@ -26,27 +28,27 @@
 /operations/prediction/ @livsbittt
 /operations/situation/ @livsbittt
 /applications/fleet/ @livsbittt
-/applications/calibration/ @sajy0804 @ddaokki @livsbittt
+/applications/calibration/ @ddaokki @livsbittt
 /integrations/messaging/discord/ @livsbittt
 
 # KAN-20 pinky. Device and image paths keep the default owner as a second reviewer.
-/middleware/devices/pinky/ @PURPLE-SY @livsbittt
-/middleware/drivers/ @PURPLE-SY @livsbittt
-/middleware/robot_ui/ @PURPLE-SY
-/operations/apps/games/ @PURPLE-SY
-/learning/training/pinky/ @PURPLE-SY
-/learning/curation/pinky/ @PURPLE-SY
-/deploy/robot/pinky_pro/ @PURPLE-SY @livsbittt
+/middleware/devices/pinky/ @sajy0804 @livsbittt
+/middleware/drivers/ @sajy0804 @livsbittt
+/middleware/robot_ui/ @sajy0804 @livsbittt
+/operations/apps/games/ @sajy0804 @livsbittt
+/learning/training/pinky/ @sajy0804 @livsbittt
+/learning/curation/pinky/ @sajy0804 @livsbittt
+/deploy/robot/pinky_pro/ @sajy0804 @livsbittt
 
 # KAN-21 omx. Arm paths keep the default owner as a second reviewer.
-/middleware/devices/omx/ @sajy0804 @ddaokki @livsbittt
-/middleware/skills/manipulation/ @sajy0804 @ddaokki @livsbittt
-/integrations/robots/omx/ @sajy0804 @ddaokki @livsbittt
-/operations/processes/ @sajy0804 @ddaokki
-/learning/envs/isaac/ @sajy0804 @ddaokki
-/learning/training/omx/ @sajy0804 @ddaokki
-/learning/curation/omx/ @sajy0804 @ddaokki
-/deploy/robot/omx/ @sajy0804 @ddaokki @livsbittt
+/middleware/devices/omx/ @ddaokki @livsbittt
+/middleware/skills/manipulation/ @ddaokki @livsbittt
+/integrations/robots/omx/ @ddaokki @livsbittt
+/operations/processes/ @ddaokki @livsbittt
+/learning/envs/isaac/ @ddaokki @livsbittt
+/learning/training/omx/ @ddaokki @livsbittt
+/learning/curation/omx/ @ddaokki @livsbittt
+/deploy/robot/omx/ @ddaokki @livsbittt
 
 # KAN-22 vision_ai: 비전·AI
 /middleware/perception/ @now2466

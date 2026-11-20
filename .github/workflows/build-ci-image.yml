@@ -1,0 +1,54 @@
+name: Build CI image
+run-name: CI image ${{ github.sha }}
+
+# User 11-20 (GitHub landing migration): the apt and pip installs every ci.yml job repeated (~70 s each, and the
+# 11-19 archive.ubuntu.com outage) are baked once. Follows build-payload-builder.yml: the job token pushes to GHCR,
+# the digest is printed, and ci.yml pins that digest. After a build, put the printed digest into ci.yml (both
+# `image:` lines); test/test_ci_image.py refuses a tag or a missing digest.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/ci-image/**
+      - deploy/robot/pinky_pro/image/device-python-requirements.txt
+      - deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
+      - deploy/robot/omx/requirements-cell.lock
+      - .github/workflows/build-ci-image.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: rosy-ci-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ci-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          echo "IMAGE=ghcr.io/${owner}/rosy-ci:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          docker build -f .github/ci-image/Dockerfile -t "ghcr.io/${owner}/rosy-ci:${GITHUB_SHA}" .
+
+      - name: Push image and print its digest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE"
+          digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE")"
+          echo "ci image: $digest" | tee -a "$GITHUB_STEP_SUMMARY"

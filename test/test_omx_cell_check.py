@@ -8,6 +8,9 @@ import pytest
 
 ROOT = Path(__file__).parents[1]
 NOW = 10**18
+for _p in (ROOT / "deploy/robot/omx", ROOT / "middleware/devices/omx/adapter"):  # cell_preflight, chunk_runner imports
+    if str(_p) not in sys.path:
+        sys.path.append(str(_p))
 
 
 def module(name="cell_check"):
@@ -23,6 +26,40 @@ def module(name="cell_check"):
 
 
 m = module()
+
+
+def test_library_preflight_reports_exact_limit_and_recovery_command(tmp_path):
+    from cell_preflight import check_library
+    from chunk_runner import NAMES
+
+    home = [0.8, -62.2, 53.1, 51.6, 45.2, 50.0]
+    bad = [*home[:4], -33.32, home[5]]
+    library = tmp_path / "test library.json"
+    library.write_text(json.dumps({"names": list(NAMES), "chunks": {"home": [home], "unused": [home, bad]}}))
+    config_path = tmp_path / "arm a.json"
+    config = {"arm_id": "arm_a", "joint_min": {"wrist_roll.pos": -31}, "played_chunks": ["home"]}
+    state = {"ok": True, "state": [*home[:4], -49.3, home[5]]}
+    failures = check_library(config, config_path, library, state)
+    assert len(failures) == 2
+    name, ok, why = failures[0]
+    assert not ok and all(part in why for part in ("arm_a", "unused", "frame 1", "wrist_roll.pos", "-33.32", "-31"))
+    name, ok, why = failures[1]
+    assert name == "recovery_required" and not ok
+    assert "--stage home" in why and "--person-at-switch" in why and "test library.json'" in why
+    assert "automatically lifts" in why
+
+
+def test_library_preflight_accepts_any_chunk_start_at_direct_start_limit(tmp_path):
+    from cell_preflight import check_library
+    from chunk_runner import JOG_MAX, NAMES
+
+    home = [0.0, -62.2, 53.1, 51.6, 45.2, 50.0]
+    other = [30.0, *home[1:]]
+    library = tmp_path / "library.json"
+    library.write_text(json.dumps({"names": list(NAMES), "chunks": {"home": [home], "pick": [other]}}))
+    config = {"joint_min": {"wrist_roll.pos": -31}}
+    measured = [other[0] + 2 * JOG_MAX, *other[1:5], -99]
+    assert all(ok for _, ok, _ in check_library(config, tmp_path / "config", library, {"ok": True, "state": measured}))
 
 
 def rows(pwm=20, current=50):

@@ -187,6 +187,20 @@
             </header>
             <div id="sitesTableWrap" class="cal-table-wrap"></div>
           </article>
+
+          <article class="cal-card" aria-label="작업 상태">
+            <header class="cal-card-head">
+              <h2 class="ui-section-heading">작업 상태</h2>
+              <ui-tag id="jobStatusTag" status="neutral">-</ui-tag>
+            </header>
+            <p id="jobStatusNote" class="cal-muted">작업 상태를 불러오는 중…</p>
+            <div id="jobStatusBody" class="cal-job-status-body" hidden>
+              <h3 class="cal-subhead">셀별 리스 점유</h3>
+              <dl id="jobLeaseDl" class="ui-readout"></dl>
+              <h3 class="cal-subhead">최근 작업 3건</h3>
+              <div id="recentJobsWrap" class="cal-table-wrap"></div>
+            </div>
+          </article>
         </section>
       </section>
 

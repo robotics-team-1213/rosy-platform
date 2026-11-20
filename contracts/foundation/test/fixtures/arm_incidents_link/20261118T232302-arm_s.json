@@ -1,0 +1,69 @@
+{
+ "note": "2026-11-18 23:22 arm_s incident facts as the cell recorded them, plus the D-1047 fields (home from chunks-arm-s-inplace-live.json, the runner's last target and command, list totals)",
+ "facts": {
+  "safe_end": true,
+  "latched": {},
+  "torque_after": {
+   "11": 0,
+   "12": 0,
+   "13": 0,
+   "14": 0,
+   "15": 0,
+   "16": 0
+  },
+  "caps_restored": true,
+  "folded": false,
+  "last_state": [
+   -0.02,
+   -58,
+   55.9,
+   50.33,
+   -4.91,
+   49.21
+  ],
+  "flagged": [
+   {
+    "command": "tick",
+    "error": null,
+    "fault": "session ended: RuntimeError: torque OFF not confirmed: [ConnectionError(\"Failed to write 'Torque_Enable' on id_=11 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=12 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=13 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=14 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=15 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=16 with '0' after 3 tries. [TxRxResult] Port is in use!\")]",
+    "caught": null,
+    "t": 1795011778.695,
+    "person_needed": null
+   }
+  ],
+  "windup_hits": [],
+  "stop_reading": null,
+  "stops": [],
+  "fault_records": [
+   "/home/robttt/rosy-test/omx-record-prep-20261019/faults/omx_follower_arm-20261118T142258-f9bf04.json"
+  ],
+  "home": [
+   0,
+   -58,
+   50,
+   50,
+   -5,
+   48.8
+  ],
+  "last_target": [
+   -0.02,
+   -58,
+   55.9,
+   50.33,
+   -4.91,
+   49.21
+  ],
+  "last_command": "tick",
+  "flagged_total": 1,
+  "fault_records_total": 1,
+  "fault_record_kinds": [
+   {
+    "fault": "(5, 'Input/output error')",
+    "stop_reasons": []
+   }
+  ]
+ },
+ "decision": {
+  "hold": true
+ }
+}

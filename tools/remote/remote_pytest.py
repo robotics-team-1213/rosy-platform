@@ -248,17 +248,19 @@ def bundle_base(repo: Path, sha: str) -> str | None:
 
 
 def deps(repo: Path, sha: str, test_tools: str | None = None) -> tuple[str, list[str]]:
-    """(hash of the CI install inputs at sha, the platform wheel dirs ci.yml builds)."""
+    """Return the remote install input hash and the wheel directories declared in CI."""
     remote_test_tools.validate(test_tools)
     ci = git(repo, "show", f"{sha}:{CI}")
     match = re.search(r'--wheel-dir "\$wheelhouse" \\\n\s*(.+)', ci)
     if not match:
         raise SystemExit(f"[remote-pytest] no `pip3 wheel ... --wheel-dir` line in {CI}; update VENV")
     dirs = match.group(1).split()
-    ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, VISION_REQ, *dirs)]
+    # The CI workflow only supplies wheel directories. Matrix, runner and
+    # reporting changes do not change the remote VENV installer.
+    ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, VISION_REQ, *dirs)]
     # Lock/swap changes do not change installed packages or need another venv build.
     install = VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
-    key = hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16]
+    key = hashlib.sha256("\n".join([install, *dirs, *ids]).encode()).hexdigest()[:16]
     if test_tools:
         blob = "\n".join(git(repo, "rev-parse", f"{sha}:{path}")
                          for path in remote_test_tools.inputs(test_tools))

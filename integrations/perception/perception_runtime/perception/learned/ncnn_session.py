@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .manifest import ManifestError, ModelManifest
+from core_common.perception_model import ManifestError, ModelManifest
 from .runner import add_learned_site
 
 

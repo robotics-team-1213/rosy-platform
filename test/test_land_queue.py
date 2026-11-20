@@ -445,6 +445,7 @@ def test_a_dead_reservation_is_reclaimed_and_the_own_one_never_blocks_enter(tmp_
     dead.write_text(json.dumps({"pid": gone_pid(), "host": socket.gethostname(), "start": time.time(), "branch": "x"}))
     old = tmp_path / "00000000000000000002-1.reserve"
     old.write_text(json.dumps({"pid": os.getpid(), "host": "elsewhere", "start": time.time() - queue.RESERVE_TTL - 1}))
+    os.utime(old, (time.time() - queue.RESERVE_TTL - 1,) * 2)  # expiry follows the mtime (_keepalive refreshes it)
     marker = queue.reserve(tmp_path, "feat/a")
     assert not dead.exists() and not old.exists() and marker.exists()
     other = tmp_path / f"{time.time_ns():020d}-{os.getpid()}.reserve"
@@ -491,3 +492,54 @@ def test_speculation_runs_only_when_asked(monkeypatch):
     monkeypatch.setenv(land_prepare.SPECULATE_ENV, "1")
     with pytest.raises(AttributeError):
         hook({"branch": "feat/peer"})  # asked: it goes on to land.land_full
+
+
+def test_nt_lock_waits_past_the_msvcrt_ten_second_give_up(monkeypatch):
+    import errno
+    calls = []
+
+    def locking(fd, mode, n):
+        calls.append(mode)
+        if len(calls) < 3:
+            raise OSError(errno.EDEADLK, "Resource deadlock avoided")
+
+    monkeypatch.setitem(sys.modules, "msvcrt", types.SimpleNamespace(LK_NBLCK=2, locking=locking))
+    monkeypatch.setattr(queue.time, "sleep", lambda s: None)
+    queue.nt_lock(5, True)
+    assert calls == [2, 2, 2]
+
+
+def test_nt_lock_without_wait_fails_at_once(monkeypatch):
+    import errno
+
+    def locking(fd, mode, n):
+        raise OSError(errno.EACCES, "locked")
+
+    monkeypatch.setitem(sys.modules, "msvcrt", types.SimpleNamespace(LK_NBLCK=2, locking=locking))
+    with pytest.raises(OSError):
+        queue.nt_lock(5, False)
+
+
+def test_keepalive_refreshes_the_reservation_marker_so_a_long_admit_is_not_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(queue, "_marked", [])
+    marker = queue.reserve(tmp_path, "feat/a")
+    os.utime(marker, (time.time() - queue.RESERVE_TTL - 5,) * 2)  # admit work ran past the TTL
+    queue._beat()  # what the keepalive thread does every KEEPALIVE_S
+    assert time.time() - marker.stat().st_mtime < 60
+    assert queue._markers(tmp_path) and marker.exists()
+    queue.unreserve(marker)
+
+
+def test_a_child_adopts_the_reservation_its_supervisor_made_and_enter_is_not_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(queue, "CAP", 1)
+    monkeypatch.setattr(queue, "queue_dir", lambda wt: tmp_path)
+    monkeypatch.setattr(queue, "_held", [])
+    monkeypatch.setattr(queue, "_marked", [])
+    marker = tmp_path / f"{time.time_ns():020d}-1.reserve"  # the supervisor's: another pid, same host
+    marker.write_text(json.dumps({"pid": os.getppid(), "host": socket.gethostname(), "start": time.time(), "branch": "x"}))
+    assert queue.full(tmp_path) is not None  # without the hand-over the child finds the queue full
+    assert queue.adopt_reserved(str(marker)) == marker
+    _, ticket = queue.enter(tmp_path, "feat/a")
+    assert ticket.exists()
+    queue.unreserve(marker)
+    assert queue.adopt_reserved(str(marker)) is None and queue.adopt_reserved("") is None  # consumed: reserve() as usual

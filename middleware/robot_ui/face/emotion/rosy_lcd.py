@@ -24,9 +24,9 @@ class LCD():
         GPIO.setup(DC_PIN, GPIO.OUT)
         GPIO.setup(BL_PIN, GPIO.OUT)
         
-        # 백라이트 PWM 설정
-        self.bl = GPIO.PWM(BL_PIN, 1000)
-        self.bl.start(100)  # 백라이트 밝기 100%로 시작
+        # 백라이트는 켜기/끄기만 한다. rpi-lgpio 소프트웨어 PWM 스레드가 몇 시간 뒤 잘못된 절대 시각으로
+        # clock_nanosleep(EINVAL)을 쉬지 않고 돌려 코어 하나를 다 썼다(2026-11-19 b8xy, 차선 모델이 밀림).
+        GPIO.output(BL_PIN, GPIO.HIGH)
 
         # SPI 초기화 
         self.spi = spidev.SpiDev()
@@ -149,9 +149,8 @@ class LCD():
             self._write_data_buffer(buf[i:i+4096])
             
     def set_backlight(self, value):
-        if value < 0: value = 0
-        if value > 100: value = 100
-        self.bl.ChangeDutyCycle(value)
+        # 0 이하는 끔, 그 밖(어둡게 30 포함)은 켬: 위 PWM 사유로 밝기 단계는 없다.
+        GPIO.output(BL_PIN, GPIO.HIGH if value > 0 else GPIO.LOW)
 
     def sleep(self):
         """디스플레이 OFF + Sleep In (0x28/0x10). 대기 전력 절감용."""
@@ -169,5 +168,4 @@ class LCD():
 
     def close(self):
         self.spi.close()
-        self.bl.stop()
         GPIO.cleanup([RST_PIN, DC_PIN, BL_PIN])

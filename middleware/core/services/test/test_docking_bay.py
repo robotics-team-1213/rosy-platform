@@ -175,7 +175,7 @@ def a_bay(*, charges=True, **type_kwargs):
     manager = DockingManager(
         database=db, safety=safety, config=DockingConfig(), clock=clock,
         detector_factory=lambda dock, dock_type: detector,
-        capability_provider=lambda: True, battery=battery,
+        capability_provider=lambda: True, battery=battery, pose_provider=lambda: world.pose,
         events=SimpleNamespace(publish=lambda t, **kw: events.append((t, kw.get("data")))))
     manager.executor = world
     world.manager = manager
@@ -188,6 +188,7 @@ def run(p, until, max_s=240.0):
     while p.clock.now - t0 < max_s:
         if k % 4 == 0:
             p.detector.capture()
+            p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)   # open floor: clear
         p.manager.tick()
         phase = p.manager.phase.value if p.manager.phase else None
         if not phases or phases[-1] != (p.manager.state.value, phase):
@@ -291,6 +292,45 @@ def test_feed_and_detector_selection_carry_the_camera_line_source():
     assert detector.relative_pose() is not None
 
 
+def test_a_corridor_only_view_takes_the_lateral_from_the_map_never_from_the_payload():
+    """2026-11-18 y8xs: only the corridor line in view; the payload's y is a placeholder."""
+    p = a_bay()
+    p.world.arrival_error = (0.02, math.radians(2.0))
+    capture = p.detector.capture
+
+    def corridor_only():
+        capture()
+        if p.detector.latest is not None and p.world.pose[0] < -0.42:
+            # corridor line only at the bay mouth; the lateral blind budget (0.10 m) ends it before the stop face
+            p.detector.latest = p.detector.latest.model_copy(update={"lateral_measured": False})
+            if p.manager.phase is not None and p.manager.phase.value in ("acquiring", "turning", "backoff"):
+                o = p.detector.latest            # a lying y must not steer: shift it 7 cm sideways
+                p.detector.latest = o.model_copy(update={"y": o.y + 0.07})
+    p.detector.capture = corridor_only
+    p.manager.dock()
+    run(p, done)
+    assert p.manager.state is DockState.DOCKED, p.manager._error
+
+
+def test_rear_and_line_docks_never_return_on_low_battery_unless_told_to():
+    """2026-11-18 map panel: Fleet-taught rear bays sit in the robot's own frame with no map id."""
+    rear = DockType(name="charge_bay_rear", detector="lidar_v", approach="rear", staging_offset_m=0.55)
+    assert rear.battery_return is False and DockType(**BAY).battery_return is False
+    assert rear.model_copy(update={"auto_return": True}).battery_return is True
+    assert DockType(name="tag", detector="simulated").battery_return is True     # sim docks unchanged
+
+
+def test_a_robot_s_nominal_camera_line_docks_and_an_unknown_ground_does_not():
+    """One button press docks on the real camera (NOMINAL, user decision 2026-11-18, D-1042 6)."""
+    feed = DockObservationFeed()
+    seen = {"source": CAMERA_LINE, "visible": True, "stamp": 10.0, "tag_id": None,
+            "x": 0.2, "y": 0.01, "yaw": math.pi, "confidence": 0.8}
+    assert feed.ingest(dict(seen, ground="NOMINAL"), received_at=10.2, source_now=10.3)
+    assert feed.ingest(dict(seen, ground="GAZEBO"), received_at=10.3, source_now=10.4)
+    assert not feed.ingest(dict(seen, ground="GUESS"), received_at=10.4, source_now=10.5)
+    assert feed.latest(source=CAMERA_LINE) is None          # the earlier sighting is gone too
+
+
 def test_fleet_centerline_evaluation_guides_reverse_and_triggers_contact_when_camera_drops():
     """When Pinky's onboard camera loses the pink line mid-bay, Fleet's real-time centerline
     evaluation (BACKING_ALIGNED / BACKING_DRIFT -> CONTACT_STOP) guides it to DOCKED."""
@@ -303,6 +343,7 @@ def test_fleet_centerline_evaluation_guides_reverse_and_triggers_contact_when_ca
     while p.clock.now - t0 < 120.0:
         if k % 4 == 0:
             p.detector.capture()
+            p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)   # open floor: clear
         if p.manager.phase is DockPhase.ALIGNING:
             x, y, yaw = p.world.pose
             to_end_m = max(0.0, -DOCKED_ALONG - x)
@@ -336,6 +377,7 @@ def test_fleet_retry_verdict_triggers_immediate_backoff_and_realign():
     while p.clock.now - t0 < 160.0:
         if k % 4 == 0:
             p.detector.capture()
+            p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)   # open floor: clear
         if p.manager.phase is DockPhase.ALIGNING and not injected:
             injected = True
             p.manager._bay_phases.observe_fleet_docking({

@@ -12,7 +12,13 @@ import numpy as np  # noqa: E402
 import omx_real2sim as r2s  # noqa: E402
 
 BELT_STOP_EDGE_OFFSET_M = 0.0080  # 2 mm belt_stop half-width + 3 mm perspective occlusion of 8 mm stop + 3 mm 1st-percentile offset
+FAR_CUT_MIN_PX = 10  # contour points past the far edge before the edge counts as foreign
+FAR_EDGE_TOL_M = 0.0045  # seat pose draw (dy +-4 mm) + a little jitter: a true box edge stays inside this past nominal; 0.008 kept the top-tier far edge 6-7 mm out (calibration scale at box height) and sent ship-h1r0-l2 picks 6.6 mm across (11-18, 6 seeds IK 142 -> 152 of 186)
 DEFAULT_CAM_JITTER = dict(eye_shift_m=(0.012, -0.010, 0.008), focus_shift_m=(0.015, -0.012, 0.0), roll_deg=1.2)
+# Background = table or hull colour, not size. OpenCV hue (0-179) of the sim albedos in omx_two_arm_world.COLOURS (table .59/.43/.08 -> 21, ship .45/.60/.67 -> 99); container .62/.31/.14 -> 11
+# sits 10 away, so a joined 7-8 container group stays foreground. Hue survives the renderer's light gain (11-18 dump: table 21, hull 100, container 11, all lighting).
+BG_HUES = ((21, 4), (99, 12))  # (centre, half-width)
+BG_MIN_AREA_PX = 3000  # speckle guard only; no upper area bound
 _EYE3 = np.eye(3)
 _KERNEL_3X3 = np.ones((3, 3), np.uint8)
 _KERNEL_5X5 = np.ones((5, 5), np.uint8)
@@ -80,8 +86,10 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     cut_u8 = (chromatic & (~edge_cut)).astype(np.uint8)
     n_cc, lab_cc, stats_cc, _ = cv2.connectedComponentsWithStats(cut_u8)
     keep_bg = np.zeros(n_cc, dtype=bool)
-    if n_cc > 1:
-        keep_bg[1:] = stats_cc[1:, cv2.CC_STAT_AREA] > 6000
+    for i in range(1, n_cc):
+        if stats_cc[i, cv2.CC_STAT_AREA] >= BG_MIN_AREA_PX:
+            hue = float(np.median(h[lab_cc == i]))
+            keep_bg[i] = any(abs(hue - c) <= w for c, w in BG_HUES)
     if np.any(keep_bg):
         bg_mask = keep_bg[lab_cc]
         bg_ab = np.median(ab_smooth[bg_mask], axis=0)
@@ -120,24 +128,43 @@ def _raw_plus_end_and_width(
     ref_w: float,
     expected_yaw: float | None = None,
     expected_xy: Any = None,
+    far_clip: bool = False,
+    box_l: float | None = None,
 ) -> tuple[tuple[float, float], float, tuple[float, float], tuple[float, float], np.ndarray]:
-    """Return `(xy_w_corrected, yaw, sz_raw, plus_end_xy, px_used)` on plane `z` before bottom-clipping extension."""
+    """Return `(xy_w_corrected, yaw, sz_raw, plus_end_xy, px_used)` on plane `z` before bottom-clipping extension.
+    `far_clip` (picking a container on a known slot only, not the calibration anchors) drops colour past the far edge."""
     pts = cam.to_plane(px, z)
     if expected_yaw is not None:
         use_yaw = r2s.fold(expected_yaw)
         u_along = np.array([math.cos(use_yaw), math.sin(use_yaw)])
         u_across = np.array([-math.sin(use_yaw), math.cos(use_yaw)])
-        cut_lo = cut_hi = False
+        cut_lo = cut_hi = far_cut = False
         t0 = 0.0
         if expected_xy is not None:
             t0 = float(np.asarray(expected_xy, float) @ u_across)
             rel_t = (pts - np.asarray(expected_xy, float)) @ u_across
+            if far_clip:
+                # side-wall overhang only lands on the eye side; colour past the far edge is something else (gold dock part,
+                # the next column's box) and fed the overhang shift below with a wrong far edge: 15 mm off at ship-h1r0 (11-18)
+                far = -1.0 if (cam.eye[0] - expected_xy[0]) * u_across[0] + (cam.eye[1] - expected_xy[1]) * u_across[1] >= 0.0 else 1.0
+                clean = far * rel_t <= 0.5 * ref_w + FAR_EDGE_TOL_M
+                if int(np.count_nonzero(clean)) >= 25:
+                    far_cut = int(np.count_nonzero(~clean)) >= FAR_CUT_MIN_PX  # the far edge is not the box's: centre on the slot instead
+                    pts, px, rel_t = pts[clean], px[clean], rel_t[clean]
             if float(np.ptp(rel_t)) > 0.048:
                 cut_lo = float(np.percentile(rel_t, 2)) < -0.032
                 cut_hi = float(np.percentile(rel_t, 98)) > 0.032
                 keep = np.abs(rel_t) <= 0.034
                 if int(np.count_nonzero(keep)) >= 25:
                     pts, px = pts[keep], px[keep]
+        if far_clip and box_l is not None and expected_xy is not None:
+            s_all, s_exp = pts @ u_along, float(np.asarray(expected_xy, float) @ u_along)
+            if float(np.ptp(s_all)) > box_l + FAR_EDGE_TOL_M:
+                # a neighbour joined the blob along its length (rehandle b3, ship-h1r0-l0: 134 mm long): the front end the width is read from sat on the
+                # neighbour, 8-9 mm off across. Keep what lies within a box length of the slot.
+                near = np.abs(s_all - s_exp) <= 0.5 * box_l + FAR_EDGE_TOL_M
+                if int(np.count_nonzero(near)) >= 25:
+                    pts, px = pts[near], px[near]
         s = pts @ u_along
         t = pts @ u_across
         s_span = float(np.percentile(s, 99) - np.percentile(s, 1))
@@ -147,7 +174,7 @@ def _raw_plus_end_and_width(
         raw_w = ref_w if (cut_lo and cut_hi) else (t_hi - t_lo)
         c_approx = float(np.mean(s)) * u_along + 0.5 * (t_lo + t_hi) * u_across
         d_eye = (cam.eye[0] - c_approx[0]) * u_across[0] + (cam.eye[1] - c_approx[1]) * u_across[1]
-        if cut_lo and cut_hi:
+        if (cut_lo and cut_hi) or far_cut:
             t_center = t0
         elif cut_lo:
             t_center = t_hi - 0.5 * ref_w
@@ -178,15 +205,22 @@ def _raw_plus_end_and_width(
 
 
 def _box_on_plane(cam: r2s.Camera, px: np.ndarray, top_z: float, box_l: float, box_w: float,
-                  img_h: int = 480, expected_yaw: float | None = None, expected_xy: Any = None) -> tuple[tuple[float, float], float, tuple[float, float]]:
+                  img_h: int = 480, expected_yaw: float | None = None, expected_xy: Any = None,
+                  far_clip: bool = False) -> tuple[tuple[float, float], float, tuple[float, float]]:
     """Back-project contour pixels `px` onto `top_z`, correcting side-wall overhang and bottom-clipped (`row 479`) length."""
-    xy, yaw, sz_raw, plus_xy, px_used = _raw_plus_end_and_width(cam, px, top_z, box_w, expected_yaw, expected_xy)
+    xy, yaw, sz_raw, plus_xy, px_used = _raw_plus_end_and_width(cam, px, top_z, box_w, expected_yaw, expected_xy, far_clip, box_l)
     if sz_raw[1] < 0.021:
         return xy, yaw, (0.0, sz_raw[1])
     sz = (sz_raw[0], min(sz_raw[1], box_w))
     at_bottom = int(px_used[:, 1].max()) >= img_h - 2 and int(px_used[:, 1].min()) > 2
     if at_bottom and sz[0] < box_l:
         xy = (plus_xy[0] - 0.5 * box_l * math.cos(yaw), plus_xy[1] - 0.5 * box_l * math.sin(yaw))
+        sz = (box_l, sz[1])
+    elif not at_bottom and sz[0] > box_l + FAR_EDGE_TOL_M and expected_xy is not None and far_clip:
+        # longer than a box past the tolerance on a known slot: a neighbour joined the blob (ship-h1r0-l0 beside a full r1, 11-18)
+        vec_l = (math.cos(yaw), math.sin(yaw))
+        s0 = (expected_xy[0] - xy[0]) * vec_l[0] + (expected_xy[1] - xy[1]) * vec_l[1]
+        xy = (xy[0] + s0 * vec_l[0], xy[1] + s0 * vec_l[1])
         sz = (box_l, sz[1])
     elif not at_bottom and sz[0] > box_l:
         vec_l = (math.cos(yaw), math.sin(yaw))

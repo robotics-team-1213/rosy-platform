@@ -1,0 +1,54 @@
+name: Refresh Generated Docs
+
+on:
+  schedule:
+    - cron: "0 3,15 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: rosy-refresh-generated-docs
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    name: Consolidate record shards and regenerate index/status
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
+        with:
+          fetch-depth: 0
+
+      - name: Consolidate shard logs and regenerate index/STATUS
+        run: |
+          python3 -c "import yaml" 2>/dev/null || pip3 install --break-system-packages --quiet pyyaml
+          python3 tools/new_record.py consolidate
+
+      - name: Open or update consolidation PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No shard consolidation or generated record changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git switch -c chore/refresh-generated-records
+          git add -A
+          git commit -m "chore(harness): consolidate log shards and refresh generated docs"
+          git push -f origin chore/refresh-generated-records
+          body="Consolidated append-only log/API shards and refreshed generated index/STATUS records."$'\n\n'"Overlap-Review: self (scheduled generated records consolidation)"
+          if gh pr list --head chore/refresh-generated-records --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
+            pr="$(gh pr list --head chore/refresh-generated-records --state open --json number --jq '.[0].number')"
+            gh pr edit "$pr" --body "$body"
+          else
+            gh pr create --base main --head chore/refresh-generated-records \
+              --title "chore(harness): consolidate record shards and refresh generated docs" \
+              --body "$body"
+          fi

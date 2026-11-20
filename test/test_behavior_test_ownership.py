@@ -156,6 +156,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # the sensing node's pure core (control.loc_assist), CORE's relay and app, and
     # Fleet's client against each other, so it belongs to no single package.
     "middleware/core/gateway/test/test_localization_cross_lane.py",
+    # 2026-11-19 D-1046: CORE's SLAM fallback wiring is tested against the drive supervisor
+    # (drive.behaviors.localization.slam_fallback) it starts, the same cross-lane seam as above.
+    "middleware/core/gateway/test/test_slam_fallback_wiring.py",
     # D-964: test/learning/perception now imports perception_runtime, not control, so its
     # eight model intake/signing/replay suites left this list.
 })

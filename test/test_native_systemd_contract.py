@@ -570,7 +570,7 @@ DECLARED_READS = {
     # D-373: root:rosy-camera 0750 models, written only by the operator's sudo install.
     # D-344 §12 addendum 2026-10-03: the operator's camera lane overrides, root 0644,
     # written only by line_observer_overrides under sudo.
-    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml", "/var/lib/rosy/models",
+    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml", "/etc/rosy/camera_nominal.yaml", "/var/lib/rosy/models",
                             "/etc/rosy/line_observer_overrides.yaml"},
     # boot-status.json, network.json and ap-display.txt (root-written; D-190).
     "rosy-boot-display.service": {"/run/rosy-boot"},

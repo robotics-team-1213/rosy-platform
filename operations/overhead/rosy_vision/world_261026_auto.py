@@ -96,7 +96,7 @@ def _sample_strip_centroids(mask: np.ndarray, map_rect: tuple[float, float, floa
     for i in range(n_bins):
         sel = (coord >= bins[i]) & (coord <= bins[i + 1])
         if np.sum(sel) >= 5:
-            centers.append([float(xs[sel].mean()), float(ys[sel].mean())])
+            centers.append([float(np.median(xs[sel])), float(np.median(ys[sel]))])
     return np.array(centers, dtype=np.float64) if centers else np.zeros((0, 2), np.float64)
 
 
@@ -143,8 +143,13 @@ def _segment_masks(img: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     return white_mask, green_mask, pink_mask, yellow_mask
 
 
-def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | None = None) -> dict | None:
-    """100% automatic OpenCV 12-DOF calibration + sub-pixel map tracer for ``world_261026``."""
+def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | None = None,
+                                          seed_map_to_image: np.ndarray | None = None) -> dict | None:
+    """100% automatic OpenCV 12-DOF calibration + sub-pixel map tracer for ``world_261026``.
+
+    ``seed_map_to_image`` replaces the first guess (step 1), which assumes the usual camera view;
+    a re-aimed camera or a robot over an outer bay defeats it, while the refinement still converges.
+    """
     if img is None or img.ndim != 3 or img.shape[2] != 3:
         return None
     t0 = time.perf_counter()
@@ -253,6 +258,8 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
     if map_to_image is None or not np.all(np.isfinite(map_to_image)):
         return None
     map_to_image /= map_to_image[2, 2]
+    if seed_map_to_image is not None:
+        map_to_image = np.asarray(seed_map_to_image, np.float64) / seed_map_to_image[2, 2]
     try:
         image_to_map = np.linalg.inv(map_to_image)
         image_to_map /= image_to_map[2, 2]
@@ -264,6 +271,8 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
         return np.vstack(nonempty) if nonempty else np.zeros((0, 2), np.float64)
 
     # 2. Coarse-to-fine Huber-IRLS Gauss-Newton refinement across 10 track lines
+    #    The divider end points only seed step 1: the painted divider is shorter than +-0.926 (traced
+    #    about -0.90..0.78 on 2026-11-18), and as a residual it doubled the RMS to ~12 mm near the 15 mm cut.
     #    Final stage jointly optimizes 12-DOF: 8-DOF homography + 4-DOF lens distortion (k1, k2, p1, p2)
     K = default_camera_matrix(w, h)
     D = np.zeros(4, dtype=np.float64)
@@ -315,9 +324,6 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
                                   (pts_pb1, -0.4140), (pts_pb2, -0.1900), (pts_pb3, +0.0320)]:
                 if len(pts):
                     res.append(_uproj(H, d_vec, pts)[:, 0] - x_target)
-            if divider_comp is not None:
-                xy_pts = _uproj(H, d_vec, np.array([[u_dl, v_dl], [u_dr, v_dr]]))
-                res.append(xy_pts[:, 0] - np.array([-0.9260, +0.9260]))
             if len(vec) == 9 and include_reg:
                 res.append(np.array([vec[8] * 0.020]))
             return np.concatenate(res) if res else np.zeros(0, np.float64)
@@ -325,7 +331,13 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
         n_dof = 9 if joint_lens else 8
         params = np.append(image_to_map.ravel()[:8], D[0]) if joint_lens else image_to_map.ravel()[:8].copy()
         eps = 1e-6
-        for _ in range(14):
+        lam = 1e-4
+
+        def _huber_cost(r: np.ndarray) -> float:
+            abs_r = np.abs(r)
+            return float(np.sum(np.where(abs_r <= 0.015, 0.5 * r * r, 0.015 * (abs_r - 0.5 * 0.015))))
+
+        for _ in range(16):
             r0 = residuals(params)
             if len(r0) < 25 or not np.all(np.isfinite(r0)):
                 return None
@@ -339,14 +351,24 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
                 J[:, j] = (residuals(dp) - r0) / eps
             Jw = J * weights[:, None]
             rw = r0 * weights
-            step, _, _, _ = np.linalg.lstsq(Jw.T @ Jw + 1e-5 * np.eye(n_dof), -Jw.T @ rw, rcond=None)
-            params += step
-            if np.max(np.abs(step)) < 1e-7:
-                break
+            step, _, _, _ = np.linalg.lstsq(Jw.T @ Jw + lam * np.eye(n_dof), -Jw.T @ rw, rcond=None)
+            cand = params + step
+            if joint_lens:
+                cand[8] = float(np.clip(cand[8], -0.25, 0.25))
+            r1 = residuals(cand)
+            if len(r1) == len(r0) and np.all(np.isfinite(r1)) and _huber_cost(r1) < _huber_cost(r0):
+                params = cand
+                lam = max(1e-6, lam * 0.5)
+                if np.max(np.abs(step)) < 1e-7:
+                    break
+            else:
+                lam = min(1e2, lam * 4.0)
+                if lam >= 1e2:
+                    break
 
         image_to_map = np.append(params[:8], 1.0).reshape(3, 3)
         if joint_lens:
-            D = np.array([float(np.clip(params[8], -0.08, 0.08)), 0.0, 0.0, 0.0], np.float64)
+            D = np.array([float(np.clip(params[8], -0.25, 0.25)), 0.0, 0.0, 0.0], np.float64)
         try:
             map_to_image = np.linalg.inv(image_to_map)
             map_to_image /= map_to_image[2, 2]
@@ -390,11 +412,11 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
             bar_ys.append(my)
     poly_bar_y = np.polyfit(bar_xs, bar_ys, 1) if len(bar_xs) >= 2 else np.array([0.0, 0.025])
 
-    # 3b. Sub-pixel centerline fit of the left & right slanted pink legs (y in [-0.048, -0.002])
+    # 3b. Sub-pixel centerline fit of the left & right slanted pink legs (y in [-0.10, -0.002])
     def _fit_pink_leg(x_lo: float, x_hi: float, default_x0: float, default_slope: float) -> np.ndarray:
         u0, u1 = int((x_lo - min_x) * ppm), int((x_hi - min_x) * ppm)
         lx, ly = [], []
-        for ym in np.linspace(-0.002, -0.048, 10):
+        for ym in np.linspace(-0.002, -0.10, 16):
             v = int(round((max_y - ym) * ppm))
             xs = np.nonzero(pink_p[max(0, v - 1):min(out_h, v + 2), u0:u1])[1]
             if len(xs) >= 3:
@@ -422,7 +444,7 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
 
     # 3c. 3 vertical pink bay lines x(y) (sample unoccluded lower portion y in [0.06, 0.21] for bays 1&2)
     bay_P, bay_C, bay_polylines = [], [], []
-    for x_nom, y_hi in [(-0.416, 0.21), (-0.190, 0.21), (0.032, 0.46)]:
+    for x_nom, y_hi in [(-0.414, 0.21), (-0.190, 0.21), (0.032, 0.46)]:
         u0, u1 = int((x_nom - 0.040 - min_x) * ppm), int((x_nom + 0.040 - min_x) * ppm)
         v0, v1 = int((max_y - y_hi) * ppm), int((max_y - 0.06) * ppm)
         ys_s, xs_s = np.nonzero(pink_p[v0:v1, u0:u1])
@@ -489,7 +511,9 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
     s3_y = y_up(s3_x)
     s4_x = _stop_x(yellow_p, 0.10, 0.22, -0.40, -0.54, 0.1562)
     s4_y = y_lo(s4_x)
-    s5_x = _stop_x(white_p | yellow_p, 0.86, 0.97, -0.41, -0.54, 0.9212)
+    s5_x = _stop_x(yellow_p, 0.86, 0.97, -0.41, -0.54, -1.0)
+    if s5_x < 0.0:
+        s5_x = _stop_x(white_p, 0.86, 0.97, -0.41, -0.54, 0.9212)
     s5_y = y_lo(s5_x)
 
     places = [

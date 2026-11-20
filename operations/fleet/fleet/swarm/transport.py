@@ -145,11 +145,12 @@ class HttpRobotClient(StationTransport, NavigationTransport):
             "/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=self._headers()
         ))
 
-    async def rotate_to(self, delta_deg: float, operator_name: str) -> dict:
+    async def rotate_to(self, delta_deg: float, operator_name: str, tol_deg: float | None = None) -> dict:
         """D-603 ``POST /api/v1/motion/rotate_to``: CORE turns in place by ``delta_deg`` (its odom, its
         defaults: 5 deg tolerance, 20 deg/s, 10 s). Only the trip loop asks, at a trip start."""
         return await self._post("/api/v1/motion/rotate_to",
-                                {"delta_deg": delta_deg, "operator_name": operator_name})
+                                {"delta_deg": delta_deg, "operator_name": operator_name,
+                                 **({} if tol_deg is None else {"tol_deg": tol_deg})})
 
     async def rotate_to_status(self) -> dict:
         return await self._get("/api/v1/motion/rotate_to")
@@ -294,6 +295,10 @@ class HttpRobotClient(StationTransport, NavigationTransport):
 
     async def localization_decision(self, decision: LocalizationDecision) -> dict:
         return await self._post("/api/v1/localization/decision", decision.model_dump(mode="json"))
+
+    async def slam_fallback_wall_map(self, payload: dict) -> dict:
+        """SLAM fallback: the active site map's wall grid, for CORE to spool and the host to stage (2026-11-18)."""
+        return await self._post("/api/v1/navigation/slam-fallback/wall-map", payload)
 
     async def localization_suspect(self, reason: str) -> dict:
         if not reason or len(reason) > 64:

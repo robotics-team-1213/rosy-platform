@@ -143,10 +143,13 @@ def clear_arm_incident(
     context,
     cause=None,
     basis=None,
+    recovery=None,
     opener_fn=None,
 ):
-    """D-971: a named operator's clear over the API; the operator's own bearer, never the arm's source token."""
-    payload = {"note": note, **({"cause": cause} if cause else {}), **({"basis": basis} if basis else {})}
+    """D-971: a named operator's clear over the API; the operator's own bearer, never the arm's source token.
+    recovery (D-1048): an assessor's auto-fold evidence."""
+    payload = {"note": note, **({"cause": cause} if cause else {}), **({"basis": basis} if basis else {}),
+               **({"recovery": recovery} if recovery is not None else {})}
     request = Request(
         _arm_url(fleet_url, source_id) + f'/incidents/{quote(incident_id, safe="")}/clear',
         method="POST",
@@ -212,7 +215,7 @@ class ArmIncidentLink:
     def hold(self):
         return get_arm_hold(self.fleet_url, self.source_id, self.token, context=self.context)
 
-    def clear(self, incident_id, note, operator_token, *, cause=None, basis=None):
+    def clear(self, incident_id, note, operator_token, *, cause=None, basis=None, recovery=None):
         return clear_arm_incident(
             self.fleet_url,
             self.source_id,
@@ -222,6 +225,7 @@ class ArmIncidentLink:
             context=self.context,
             cause=cause,
             basis=basis,
+            recovery=recovery,
         )
 
 

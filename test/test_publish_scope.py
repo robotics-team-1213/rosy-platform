@@ -10,7 +10,8 @@ import land_cache
 import land_mainred
 import publish_evidence
 
-PARTS = {"apps": ["site-fleet", "account", "pinky", "core", "repo"], "safety_modules": [], "roots": [
+PARTS = {"apps": ["site-fleet", "account", "pinky", "core", "tooling", "repo", "neutral"], "safety_modules": [],
+         "app_neutral": ["**/logs.md"], "app_subtrees": {"tools/land*.py": "tooling"}, "roots": [
     {"path": "operations/fleet", "app": "site-fleet"},
     {"path": "docs", "app": "repo"},
     {"path": "tools", "app": "core"},
@@ -120,7 +121,17 @@ def test_repo_paths_do_not_hide_a_gate_path(scoped):
     sha = _commit(local, "docs/note.md", "1")
     sha = _commit(local, "tools/land.py", "gate")
     ok, line = tool.publish_scope.check(tool, local, sha)
-    assert not ok and line == f"{sha[:10]} apps=core mode=full (touches core)" and calls == []
+    assert not ok and line == f"{sha[:10]} apps=tooling mode=full (touches tooling)" and calls == []
+
+
+def test_a_folder_note_adds_no_app_and_no_full(scoped):
+    """2026-11-19: an operations/fleet/logs.md line beside an account change publishes as an account delta."""
+    local, calls = scoped
+    sha = _commit(local, "operations/fleet/logs.md", "1")
+    sha = _commit(local, "operations/account/a.py", "1")
+    _evidence(local, sha)
+    ok, line = tool.publish_scope.check(tool, local, sha)
+    assert ok and calls == [True] and line.startswith(f"{sha[:10]} apps=account mode=app")
 
 
 def test_a_red_repo_test_blocks_no_app_delta(scoped):
@@ -129,3 +140,13 @@ def test_a_red_repo_test_blocks_no_app_delta(scoped):
     _evidence(local, sha)
     _red(local, "docs/test_x.py::test_y")
     assert tool.publish_scope.check(tool, local, sha)[0]
+
+
+def test_parts_from_before_the_app_split_have_no_scope(scoped):
+    """11-19: a candidate whose platform_parts.yaml predates the app split (roots without "app") crashed publish_sha
+    with KeyError: it is simply not an app-scoped candidate."""
+    local, _ = scoped
+    old = {"roots": [{"path": "operations/fleet"}]}
+    sha = _commit(local, tool.publish_scope.PARTS, yaml.safe_dump(old))
+    assert tool.publish_scope.parts_at(tool, local, sha) is None
+    assert tool.publish_scope.check(tool, local, sha) == (False, None)

@@ -14892,3 +14892,20 @@ osy-d395-s1d\`.
 - 변경: `publish_evidence`가 origin/main...SHA가 닿는 브라우저 묶음만 요구(착지 대응 재사용, 실패 시 전부), 기록 나열 불요·조상 reach 규칙 동일, `publish_main.py --fill-browsers [--apply]`, 후보별 브라우저 증거 수 출력. ADR D-1036 부록(사용자 결정).
 - 증거: 원격 `test_publish_evidence`·`test_publish_main` 외 관련 시험.
 - gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · D-1055 PR + Merge Queue 유일 병합 경로
+- 변경: ADR D-1055(Accepted, 2026-11-20 사용자 승인), ADR Log 행. land.py 착지 은퇴 기준, 두 레인 전환, D-868 개정, 실험실 증거 규칙. 문서만.
+- 증거: 원격 `test_harness_contracts` 결과는 커밋 뒤 기록.
+- gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · 교훈: 병합 경로 전환은 실제 브랜치로 끝까지 돌린 뒤 연다
+- 변경: `docs/solutions/workflow-issues/pr-path-cutover-needs-a-real-end-to-end-run-2026-11-20.md`. D-1055 개방 직후 pr_land 막힘 4가지(증거 생산자 없음, publishOnly 훅, 훅 파일 불일치, 가짜 backlog)와 동결 중 큐 투입·merge_group flake. 문서만.
+- 증거: PR #260 생성→병합 13분, 이전 경로 p50 1.9시간 + 게시 PR 82분.
+- gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · docs: 보정 체계·영상 기록 공개 문서(한·영)와 README 소개 갱신
+- 변경: `docs/reference/calibration-system.md`·`.en.md`, `docs/reference/video-records-learning.md`·`.en.md`, `docs/reference/video-records-demo.md`·`.en.md` 신규(Confluence 게시용 원본의 GitHub 문법 변환, 언어 전환 링크, 그림은 `docs/assets/calibration/` 17종·`docs/assets/video-records/` 6종). README.md 소개 문단을 Pinky Pro + OMX 팔 셀(S·A·B) 팔레타이징·보정 체계·모방학습 데이터·시연 범위로 갱신, 배지 아래 영어판 링크, 문서 지도에 보정 체계·영상 기록 행 추가. README.en.md 신규(소개·시작하기·한눈에 보기·문서 지도·핵심 계약).
+- 증거: 그림 23종 전수 Read 판정(제외 0, 비밀·사람 미검출), `grep -n -i -E "ts\.net|\.local\b|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|atlassian|notion\.so|@|token"` 걸림 7행 전부 처리 가능(procudure 단어·허용된 HF 리비전 고정), 루트 pytest 아래 기록.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.

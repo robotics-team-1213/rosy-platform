@@ -27,6 +27,31 @@ def test_events_append_one_line_each_and_a_torn_line_is_skipped(tmp_path, monkey
     assert rows[0]["position"] == 3 and rows[1]["waited_s"] == 120
 
 
+def test_queue_and_landed_carry_the_branch_apps(tmp_path, monkeypatch):
+    """2026-11-19: a week of ``apps`` on queue/landed lines decides per-app parallel turns."""
+    import subprocess
+    git = lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True)  # noqa: E731
+    git("init", "-q", "-b", "main")
+    parts = tmp_path / "tools/harness/platform_parts.yaml"
+    parts.parent.mkdir(parents=True)
+    parts.write_text("app_neutral: ['**/logs.md']\nroots: [{path: ops/fleet, app: site-fleet}]\n", encoding="utf-8")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+    git("checkout", "-qb", "feat/x")
+    for name in ("ops/fleet/a.py", "ops/fleet/logs.md", "README.md"):
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("1", encoding="utf-8")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x")
+    monkeypatch.setattr(land_events, "_where", {})
+    land_events.bind(tmp_path, "feat/x")
+    land_events.emit("queue", ticket="x")
+    land_events.emit("turn", waited_s=1)
+    land_events.landed("abc")
+    rows = land_events.read(tmp_path / ".git" / land_events.EVENTS)
+    assert [r.get("apps") for r in rows] == [["core", "site-fleet"], None, ["core", "site-fleet"]]
+
+
 def test_daily_numbers_from_waits_turns_and_verdicts():
     t = 1_792_900_000.0
     rows = [{"t": t, "event": "turn", "pid": 1, "waited_s": 600},
@@ -36,12 +61,15 @@ def test_daily_numbers_from_waits_turns_and_verdicts():
             {"t": t + 400, "event": "turn", "pid": 2, "waited_s": 1800},
             {"t": t + 700, "event": "tests", "pid": 2, "verdict": "flaky"},
             {"t": t + 760, "event": "landed", "pid": 2},
-            {"t": t + 800, "event": "prepared", "pid": 3, "seconds": 1500}]
+            {"t": t + 800, "event": "prep_wait", "pid": 3, "seconds": 120},
+            {"t": t + 900, "event": "prep_wait", "pid": 3, "seconds": 300},
+            {"t": t + 1000, "event": "prepared", "pid": 3, "seconds": 1500}]
     (day,) = land_stats.daily(rows).values()
     assert (day["landed"], day["stopped"], day["invocations"]) == (1, 1, 3)
     assert day["wait_p90_min"] == 30 and day["turn_p50_min"] in (6, 6.0)
     assert day["new_share"] == round(1 / 3, 3) and day["flaky_share"] == round(1 / 3, 3)
     assert day["prepare_p50_min"] == 25, "prepare time is apart from the queue wait"
+    assert day["prep_wait_p90"] == 5
     assert json.dumps(land_stats.daily(rows))  # --json prints it
 
 

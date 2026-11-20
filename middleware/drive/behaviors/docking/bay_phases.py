@@ -20,19 +20,25 @@ base_link 상대 위치, yaw = 칸 안쪽 축. `rear_errors` 와 같은 분해(a
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any, Optional
 
 from core_common.protocol.schemas import NavigationState
+from core_features.docking.bay_align import BayAlignMixin
+from core_features.docking.bay_guards import BayGuardsMixin, entry_ok, heading_gate, rear_blocked, reverse_twist
+from core_features.docking.bay_zone import map_offsets
+from core_features.docking.bay_zone_phases import BayZoneMixin
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.model import DockPhase
 from core_features.docking.parking import ParkingGains, turn_twist
 from core_features.docking.rear_phases import rear_errors
 
 _TURN_GAINS = ParkingGains()
+_LOG = logging.getLogger(__name__)
 
 
-class BayPhases:
+class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
     """The pink guide-line charge bay, under the manager's lock (D-1013)."""
 
     def __init__(self, host: Any) -> None:
@@ -46,6 +52,8 @@ class BayPhases:
         self._scan_s: Optional[float] = None
         self._resync = False
         self._turn_target: Optional[float] = None
+        self._stage_bad: Optional[float] = None           # first tick the arrival heading looked wrong
+        self._turn_dir = -1.0                             # fixed turn sense: tray swings downstream
         self._creep_from: Optional[float] = None          # 정착 크립 시작 travelled
         self._crept = False
         self._match: Optional[tuple[float, float]] = None  # 크립 전 관측(두 번 일치용)
@@ -56,6 +64,14 @@ class BayPhases:
         self._last_tick: Optional[float] = None
         self._baseline_v: Optional[float] = None
         self._fleet_cue: Optional[tuple[float, dict]] = None
+        # 칸 줄 안 시작(bay_zone.py): None | "check"(선 관측 기다려 판정) | "exit"(곧은 전진)
+        self._zone: Optional[str] = None
+        self._zone_checked = False      # "out" 판정 직후 한 번은 Nav2 스테이징으로 보낸다
+        self._exit_m = 0.0
+        # 몸 스캔(짐칸 포함 회전 판정, 앞 여유): (rotation_block, front_gap, rear_gap, at)
+        self._body: Optional[tuple] = None
+        self._init_guards()
+        self._init_align()
 
     # --- 매니저가 부르는 자리 ---------------------------------------------------
 
@@ -80,6 +96,49 @@ class BayPhases:
             return self._charging.update(None, voltage, now=now), self._charging
         return self._h._rear_phases.docked_confirm(status, voltage, now)
 
+    def note_body_scan(self, rotation_block: Optional[str], front_gap_m: Optional[float],
+                       rear_gap_m: Optional[float], at: float) -> None:
+        """CORE 가 LiDAR 한 장마다 넣는다: 짐칸 포함 제자리 회전 판정(None = 비어 있음)과 앞뒤 여유."""
+        self._body = (rotation_block, front_gap_m, rear_gap_m, float(at))
+
+    def _body_fresh(self, now: float) -> Optional[tuple]:
+        if self._body is None or now - self._body[3] > self._h._cfg.bay_scan_fresh_s:
+            return None
+        return self._body
+
+    def _forward_block(self, now: float, since: float) -> Optional[str]:
+        """곧은 전진(칸 줄 나가기·재시도 후퇴·정착 크립) 전 앞 확인: None = 가도 된다, "wait" = 아직
+        판정 없음(멈춰 기다림), 그 밖 = 실패 사유. 점이 없거나 앞 빔이 무응답이면 비어 있는 것이 아니다."""
+        body = self._body_fresh(now)
+        if body is not None and body[3] < since:
+            body = None
+        if body is None:
+            return "wait" if now - since <= self._h._cfg.bay_scan_wait_s else "no fresh body scan"
+        if body[0] in ("empty", "unknown"):
+            return "LiDAR cannot vouch for the way ahead (%s)" % body[0]
+        if body[1] is not None and body[1] < self._h._cfg.bay_exit_front_gap_m:
+            return "something ahead within %.2f m" % self._h._cfg.bay_exit_front_gap_m
+        return None
+
+    def zone_entry(self) -> bool:
+        """스테이징 전에 칸 줄 안인지 본다(시작·재시도 모두). 판정을 맡으면 True."""
+        if not self.active():
+            return False
+        if self._zone_checked:
+            self._zone_checked = False
+            return False
+        h = self._h
+        self._reset_line_state()
+        if h._detector is None and h._detector_factory is not None and h._dock is not None:
+            h._detector = h._detector_factory(h._dock, h._type())
+        if h._detector is not None:
+            h._detector.start(h._dock)        # a retry's backoff stopped it
+        if h.executor is not None:
+            h.executor.stop()
+        self._zone = "check"
+        h._enter(DockPhase.BACKOFF)
+        return True
+
     def leave_sign(self) -> float:
         """칸 언도킹은 전진(도크가 뒤에 있다). 나머지는 후진형 규칙에 위임."""
         return 1.0 if self.active() else self._h._rear_phases.leave_sign()
@@ -88,7 +147,9 @@ class BayPhases:
         """칸형이면 이 단계를 맡고 True."""
         if not self.active():
             return False
-        if phase is DockPhase.STAGING:
+        if phase is DockPhase.BACKOFF and self._zone is not None:
+            self._tick_zone(now)
+        elif phase is DockPhase.STAGING:
             self._tick_staging(now)
         elif phase is DockPhase.TURNING:
             self._tick_turning(now)
@@ -106,15 +167,30 @@ class BayPhases:
     # --- 단계 -----------------------------------------------------------------
 
     def _drive(self, linear: float, angular: float) -> None:
+        self._omega = angular
         if self._h.executor is not None:
             self._h.executor.drive(linear, angular)
 
     def _stop(self) -> None:
+        self._omega = 0.0
         if self._h.executor is not None:
             self._h.executor.stop()
 
     def _observation(self):
-        return self._h._detector.relative_pose() if self._h._detector is not None else None
+        obs = self._h._detector.relative_pose() if self._h._detector is not None else None
+        if obs is None or obs.lateral_measured:
+            return obs
+        # Only the corridor line was seen: heading and along are measured, the lateral is not. Fill it from
+        # the running estimate, else from the map pose; never from the payload's placeholder (2026-11-18).
+        lateral = self._est[0] if self._est is not None else None
+        if lateral is None:
+            pose = self._h._pose_provider()
+            if pose is None or self._h._dock is None:
+                return None
+            lateral = map_offsets(pose, self._h._dock)[1]
+        along, _, _ = rear_errors(obs)
+        ax, ay = math.cos(obs.yaw), math.sin(obs.yaw)
+        return obs.model_copy(update={"x": along * ax + lateral * ay, "y": along * ay - lateral * ax})
 
     def _tick_staging(self, now: float) -> None:
         """스테이징(교차점) 도착 → 선반 180° 회전부터. Nav2 실패는 후진형과 같은 재시도."""
@@ -127,8 +203,23 @@ class BayPhases:
             h._fail("bay odometry unavailable")
             return
         self._stop()
+        mp = h._pose_provider()
+        # The staging goal faces the bay: a nose far off that axis is a wrong-way arrival, and the
+        # line observer would read it as normal (it forces the axis to -x), so refuse before turning.
+        if mp is None or self._stage_heading_bad(mp):
+            # One noisy or missing pose must not end a first try: stand still and look again for a while.
+            self._stage_bad = now if self._stage_bad is None else self._stage_bad
+            if now - self._stage_bad >= h._cfg.bay_stage_recheck_s:
+                self._stage_bad = None
+                h._fail("bay staging arrival heading off the bay axis")
+            return
+        self._stage_bad = None
         self._reset_line_state()
-        self._turn_target = pose[2] + math.pi
+        if h._retries == 0 and h._reseats == 0:
+            self._seen.clear()           # a fresh dock; a guard failure always counts a retry or reseat
+            self._align_n = 0
+        self._turn_dir = -math.copysign(1.0, h._cfg.bay_downstream_sign) if h._cfg.bay_downstream_sign else 0.0
+        self._turn_target = pose[2] + (self._turn_dir or 1.0) * math.pi
         h._enter(DockPhase.TURNING)
 
     def _tick_turning(self, now: float) -> None:
@@ -137,7 +228,23 @@ class BayPhases:
         if pose is None:
             h._fail("bay odometry unavailable")
             return
+        body = self._body_fresh(now)
+        if body is not None and body[3] < h._phase_since:
+            body = None          # a scan from before the stop at staging says nothing about here
+        if body is None or body[0] is not None:
+            # 짐칸 포함 회전 판정이 비어 있다고 할 때만 돈다 — 매 틱(2026-11-18 옆 칸 접촉).
+            self._stop()
+            if body is not None or now - h._phase_since > h._cfg.bay_scan_wait_s:
+                h._fail("bay turn not clear: %s" % (body[0] if body else "no fresh body scan"))
+            return
         error = _wrap(self._turn_target - pose[2])
+        if error * self._turn_dir < 0.0:
+            if abs(error) > math.pi - 0.2:
+                error += self._turn_dir * 2.0 * math.pi  # start: near ±pi the wrap flips on noise, keep the sense
+            elif abs(error) > h._cfg.bay_turn_overshoot_rad:
+                self._stop()                             # a long way back would swing the tray upstream
+                h._fail("bay turn overshot the target")
+                return
         angular, done = turn_twist(error, _TURN_GAINS)
         if done:
             self._stop()
@@ -152,7 +259,13 @@ class BayPhases:
     def _tick_acquiring(self, now: float) -> None:
         """선 포획 + 캐스터 정착 크립 + 두 번 일치. 크립 없이는 후진 첫 cm 에 킥이 온다."""
         h, cfg = self._h, self._h._cfg
+        if self._align is not None:
+            self._tick_heading_align(now)
+            return
         along, lateral, heading = self._line_errors()
+        seen = (along, lateral, heading) != (None, None, None)
+        if not self._crept and self._find_step(now, seen):
+            return
         if self._crept:
             if (along, lateral, heading) == (None, None, None):
                 if h._last_seen_at is None or now - h._last_seen_at > cfg.detector_lost_grace_s:
@@ -165,12 +278,22 @@ class BayPhases:
                 self._stop()
                 h._retry("bay line observation jumped after the creep")
                 return
+            if not entry_ok(cfg, lateral, heading):
+                if self._try_heading_align(now, lateral, heading):
+                    return
+                # Too far off to converge: never reverse into it. A straight back-off keeps the bearing, so start over.
+                self._guard_fail("entry", "entry error outside the window (lat %.0f mm, head %.0f deg)"
+                                 % (lateral * 1000.0, math.degrees(heading)), h._retry)
+                return
             self._est = (lateral, heading)
             self._no_obs_s = 0.0
+            self._blind_s = self._blind_m = 0.0
+            self._blind_budget_m = max(0.0, along - cfg.bay_line_view_m) + cfg.bay_blind_margin_m
             if h.executor is not None:
                 h.executor.reset_odometry_mark()
                 h.executor.set_collision_exemption(True)
-            self._travel_cap_m = along + cfg.bay_travel_margin_m
+            # An unmeasured along is a stand-in, not a distance: no cap until a measured frame sets it.
+            self._travel_cap_m = along + cfg.bay_travel_margin_m if self._along_m is not None else None
             self._progress = None
             self._slip = None
             h._enter(DockPhase.ALIGNING)
@@ -188,6 +311,12 @@ class BayPhases:
             h.executor.reset_odometry_mark()
             self._creep_from = 0.0
         if abs(h.executor.travelled_m()) < cfg.bay_settle_creep_m:
+            block = self._forward_block(now, h._phase_since)
+            if block is not None:
+                self._stop()
+                if block != "wait":
+                    h._fail("bay settle creep: " + block)
+                return
             self._drive(h._cfg.undock_speed, 0.0)
             return
         self._stop()
@@ -228,10 +357,14 @@ class BayPhases:
             return
         if cfg.bay_coast_slow_s < self._no_obs_s:
             speed = 0.02
+        if self._blind_lateral(dt, speed):
+            return
+        body = self._body_fresh(now)
+        if body is not None and rear_blocked(cfg, body[2], self._along_m):
+            self._guard_fail("rear", "LiDAR sees something in the bay before the stop face", h._retry)
+            return
         lateral, heading = self._est
-        angular = max(-cfg.max_angular, min(cfg.max_angular,
-                                            -(cfg.bay_gain_lateral * lateral
-                                              + cfg.bay_gain_heading * heading)))
+        angular = reverse_twist(cfg, lateral, heading)
         self._drive(-speed, angular)
         # 추정은 오도메트리 명령으로 전파(프레임 사이를 메운다)
         self._est = (lateral + speed * math.sin(heading) * dt,
@@ -248,17 +381,24 @@ class BayPhases:
         """게이트가 증거를 판다: 점프는 이웃 칸 선이나 잡음, 통과만 관측이다."""
         h, cfg = self._h, self._h._cfg
         along, lateral, heading = self._line_errors()
+        if self._obs_age > cfg.bay_obs_max_age_s:
+            along = lateral = heading = None       # too old to steer by, and not worth widening the gate for
         if (along, lateral, heading) != (None, None, None):
             if (not self._resync and self._est is not None and (
                     abs(lateral - self._est[0]) > cfg.bay_gate_jump_m
-                    or abs(heading - self._est[1]) > cfg.bay_gate_jump_rad)):
+                    or abs(heading - self._est[1]) > heading_gate(cfg, self._omega, self._obs_age))):
                 self._no_obs_s += dt          # 물리적으로 불가능한 점프: 무관측
             else:
                 self._est, self._no_obs_s, self._resync = (lateral, heading), 0.0, False
                 h._last_seen_at = h.now()
-                if self._slip is not None and self._h.executor is not None:
+                if self._along_m is None:
+                    self._slip = None            # a stand-in along never moves: not slip evidence
+                    return
+                travelled = abs(h.executor.travelled_m()) if h.executor is not None else None
+                if travelled is not None and self._travel_cap_m is None:
+                    self._travel_cap_m = travelled + along + cfg.bay_travel_margin_m   # first measured along
+                if self._slip is not None and travelled is not None:
                     t0, along0 = self._slip
-                    travelled = abs(self._h.executor.travelled_m())
                     # 창은 선 모양이 움직일 때만 재앵커 — 정지한 그림에서 오도메트리가
                     # 3 cm 넘게 쌓이면 슬립·정지다(시뮬의 고정 가장자리 회귀와 같은 근거).
                     if abs(along0 - along) >= 0.01:
@@ -266,8 +406,8 @@ class BayPhases:
                     elif travelled - t0 > 0.03:
                         self._slip = ("contact", 0.0)
                         return
-                elif self._h.executor is not None:
-                    self._slip = (abs(self._h.executor.travelled_m()), along)
+                elif travelled is not None:
+                    self._slip = (travelled, along)
         else:
             self._no_obs_s += dt
 
@@ -290,6 +430,8 @@ class BayPhases:
 
     def _begin_settling(self) -> None:
         h = self._h
+        if self._contact_off_axis():
+            return
         self._stop()
         if h.executor is not None:
             h.executor.set_collision_exemption(False)
@@ -331,11 +473,20 @@ class BayPhases:
                 self._stop()
                 h._fail("bay backoff blocked")
                 return
+            block = self._forward_block(now, h._phase_since)
+            if block is not None:
+                self._stop()
+                if block != "wait":
+                    h._fail("bay backoff: " + block)
+                return
             self._drive(cfg.undock_speed, 0.0)
             return
         self._stop()
         self._reset_line_state()
-        h._begin_staging()
+        if getattr(h, "_next_phase_after_backoff", None) is DockPhase.ACQUIRING:
+            h._begin_acquiring()             # a reseat: the line is in view, no Nav2 round trip
+        else:
+            h._begin_staging()
 
     # --- 보조 -----------------------------------------------------------------
 
@@ -388,7 +539,12 @@ class BayPhases:
         self._slip = None
         self._backoff = False
         self._turn_target = None
+        self._align = None
+        self._find_on, self._find_seen_m = False, None
         self._fleet_cue = None
+        self._zone = None
+        self._exit_m = 0.0
+        self._blind_s = self._blind_m = 0.0
 
     def _odometry(self):
         pose = getattr(self._h.executor, "odometry_pose", None) if self._h.executor else None
@@ -397,8 +553,12 @@ class BayPhases:
     def _line_errors(self):
         observation = self._observation()
         if observation is None:
+            self._along_m = None
             return None, None, None
-        return rear_errors(observation)
+        errors = rear_errors(observation)
+        self._along_m = errors[0] if observation.along_measured else None
+        self._obs_age = max(0.0, self._h.now() - observation.at)
+        return errors
 
 
 def _wrap(angle: float) -> float:

@@ -31,7 +31,9 @@ Publish mode:
    a landing reinstalls the shared hook while the gate runs for hours, and bash rereads the swapped file),
    never --no-verify or force; ``gh pr create`` with the publish facts (lag = landings on
    main after the SHA that this PR leaves out); remove the worktree (``worktree_rules`` tombstone when a
-   held handle keeps the folder).
+   held handle keeps the folder). Then ``gh pr merge <PR> --merge --auto --match-head-commit <sha>`` (the merge queue
+   fallback of merge mode applies) so the PR merges once ci-result is green; ``--no-auto-merge`` skips it, and a
+   failure only prints a warning.
 
 Merge mode (``--merge-when-green``): the PR must be an open ``publish/main-`` PR whose head still has a
 green FULL record, ``mergeable`` MERGEABLE, ``mergeStateStatus`` not DIRTY/BEHIND, and check ``ci-result``
@@ -78,6 +80,7 @@ sys.path.insert(0, str(TOOLS))
 import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a handle still holds)
 import urgent_lane  # noqa: E402  (D-1038: evidence for urgent/ PRs)
 import publish_evidence  # noqa: E402  (canonical plan and exact executed proof)
+import pr_land  # noqa: E402  (lab-only evidence check for the exact candidate)
 import publish_scope  # noqa: E402  (D-1036 addendum: app-only deltas need only their app's evidence)
 SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(SCANNER))
@@ -293,11 +296,13 @@ def pr_body(repo: Path, sha: str, why: str, safety: str) -> str:
     landings = sum(land_record.read(repo, c) is not None for c in git(repo, "rev-list", f"{sha}..main").stdout.split())
     remote = git(repo, "remote", "get-url", "origin").stdout.strip().removesuffix(".git")
     link = f"{remote}/blob/main/{D868}" if remote.startswith("https://") else D868
+    rec = land_record.read(repo, sha)
+    rec_note = f"FULL 착지 기록 {rec['at']}" if rec else "CI 검증 직행 (D-1052 --via-ci)"
     return "\n".join([
         "## 무엇을, 왜", "",
-        f"D-868 게시: 로컬 main의 녹색 FULL 착지 커밋을 merge commit으로 올린다 ({why}). [D-868]({link})", "",
+        f"D-868 게시: 로컬 main의 검증 커밋을 merge commit으로 올린다 ({why}). [D-868]({link})", "",
         "## 게시 사실", "",
-        f"- 게시 SHA: `{sha}` (FULL 착지 기록 {land_record.read(repo, sha)['at']})",
+        f"- 게시 SHA: `{sha}` ({rec_note})",
         f"- `origin/main..SHA` 커밋 수: {count(f'origin/main..{sha}')}",
         f"- 지연(lag): 이 SHA 뒤 main에 착지했지만 이 PR에 없는 착지 {landings}건 (커밋 {count(f'{sha}..main')}개)",
         "- origin/main is ancestor: yes",
@@ -310,6 +315,15 @@ def pr_body(repo: Path, sha: str, why: str, safety: str) -> str:
         GENERATED_BY])
 
 
+def lab_evidence_ok(worktree: Path, sha: str) -> bool:
+    """True when pr_land's lab evidence check passes for exactly sha; any failure means "not proven"."""
+    try:
+        pr_land.verify_lab_evidence(worktree, sha, pr_land.required_lab_invocations(worktree, "origin/main", sha))
+    except (SystemExit, Exception):
+        return False
+    return True
+
+
 def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     git(repo, "fetch", "origin")
     if not ancestor(repo, "origin/main", "main"):
@@ -318,17 +332,27 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
             raise Stop(3, "sync needs 동기화·게시 담당: " + ", ".join(blocking))
         raise Stop(4, "origin/main is not in local main; the merge is clean or records-only. Sync first:"
                       + sync_commands(now))
-    sha = publish_sha(repo)
+    if getattr(args, "via_ci", False):
+        main_sha = git(repo, "rev-parse", "main").stdout.strip()
+        origin_sha = git(repo, "rev-parse", "origin/main").stdout.strip()
+        candidate = getattr(args, "candidate", None) or main_sha
+        if not ancestor(repo, candidate, main_sha):
+            raise Stop(1, f"candidate {candidate[:10]} is not in local main")
+        if not ancestor(repo, origin_sha, candidate):
+            raise Stop(1, f"candidate {candidate[:10]} is missing the current origin/main; review a newer candidate")
+        sha = None if candidate == origin_sha else candidate
+    else:
+        sha = publish_sha(repo)
     if sha is None:
         return "nothing to publish: no commit past origin/main has a green FULL land record"
     last = last_publish(repo, args.apply)
-    due = last is None or now - last >= timedelta(hours=args.min_hours)
+    due = getattr(args, "via_ci", False) or last is None or now - last >= timedelta(hours=args.min_hours)
     when = last.isoformat(timespec="minutes") if last else "never"
     if not due and not args.force_blocked:
         return f"not due: last publish {when}, --min-hours {args.min_hours}; would publish {sha[:10]}"
     scanned = secret_gate(repo, sha)
     branch = PREFIX + now.strftime("%Y%m%d-%H")
-    why = f"forced: {args.force_blocked}" if args.force_blocked else f"last publish {when}"
+    why = f"forced: {args.force_blocked}" if args.force_blocked else ("via-ci" if getattr(args, "via_ci", False) else f"last publish {when}")
     why += f"; scope {SCOPE[sha]}" if sha in SCOPE else ""
     if not args.apply:
         return f"dry run: would push {sha} to {branch} and open a PR ({why}; {scanned}); rerun with --apply"
@@ -349,8 +373,11 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
         (hooks / "pre-push").write_bytes(git(repo, "show", f"{sha}:{HOOK}").stdout.replace("\r", "").encode())
         (hooks / "pre-push").chmod(0o755)
         # The hook skips the secret scan and Safety-Review this run just passed for exactly this SHA (D-889).
+        push_env = {**os.environ, "ROSY_PUBLISH_CHECKED": sha}
+        if getattr(args, "via_ci", False) and lab_evidence_ok(temp, sha):
+            push_env["ROSY_STATIC_PRE_PUSH"] = "1"  # lab evidence is proven for this sha; ci-result is the pytest gate
         push = git(temp, "-c", f"core.hooksPath={hooks.as_posix()}", "push", "origin", f"{sha}:refs/heads/{branch}",
-                   check=False, env={**os.environ, "ROSY_PUBLISH_CHECKED": sha})
+                   check=False, env=push_env)
         if push.returncode != 0:
             raise Stop(1, f"push refused (pre-push or remote):\n{push.stdout}{push.stderr}".rstrip())
     finally:
@@ -362,18 +389,32 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     url = run_gh(repo, "pr", "create", "--base", "main", "--head", branch,
                  "--title", f"publish: local main {sha[:10]} ({now:%Y-%m-%d %H} UTC)",
                  "--body", pr_body(repo, sha, why, safety)).strip()
-    return f"pushed {sha} to {branch}; PR {url}"
+    message = f"pushed {sha} to {branch}; PR {url}"
+    if getattr(args, "no_auto_merge", False):
+        return message
+    # The PR exists either way: a failed auto-merge request only warns (merge_when_green --apply still works).
+    try:
+        try:
+            run_gh(repo, "pr", "merge", url, "--merge", "--auto", "--match-head-commit", sha)
+        except Stop as refused:
+            if "merge queue" not in str(refused):
+                raise
+            run_gh(repo, "pr", "merge", url, "--auto", "--match-head-commit", sha)  # same queue fallback as merge_when_green
+        message += "; auto-merge enabled (merges when ci-result is green)"
+    except Stop as failed:
+        print(f"[publish] warning: auto-merge not enabled, run --merge-when-green later: {failed}", file=sys.stderr)
+    return message
 
 
-def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime) -> str:
+def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime, via_ci: bool = False) -> str:
     view = json.loads(run_gh(repo, "pr", "view", pr, "--json",
                              "state,headRefName,headRefOid,mergeable,mergeStateStatus,statusCheckRollup"))
     head = view["headRefOid"]
     urgent = view["headRefName"].startswith(urgent_lane.PREFIX)
     if view["state"] != "OPEN" or not (view["headRefName"].startswith(PREFIX) or urgent):
         raise Stop(1, f"PR {pr} is not an open {PREFIX} or {urgent_lane.PREFIX} PR ({view['state']} {view['headRefName']})")
-    # D-1038: an urgent PR's FULL land record is replaced by its remote affected + mapped-browser evidence file.
-    if not (urgent_lane.verified(repo, head) if urgent else green(repo, head)):
+    # D-1038 / D-1052: urgent PR uses urgent evidence; --via-ci relies directly on exact-SHA GitHub ci-result.
+    if not (via_ci or (urgent_lane.verified(repo, head) if urgent else green(repo, head))):
         raise Stop(1, f"PR {pr} head {head[:10]} has no green {'urgent evidence' if urgent else 'FULL land record'}"
                       " here; not merging")
     if view["mergeable"] == "CONFLICTING" or view["mergeStateStatus"] in ("DIRTY", "BEHIND"):
@@ -425,13 +466,22 @@ def open_publish_pr(repo: Path) -> str | None:
 def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="push/open the PR or merge (default: dry run)")
+    parser.add_argument("--no-auto-merge", action="store_true", help="with --apply: do not enable auto-merge on the new PR")
     parser.add_argument("--min-hours", type=float, default=6.0)
     parser.add_argument("--force-blocked", metavar="REASON", help="publish now: a teammate PR waits on it")
     parser.add_argument("--merge-when-green", metavar="PR", help="PR number, or 'auto' for the single open publish PR")
+    parser.add_argument("--via-ci", action="store_true",
+                        help="publish/merge using GitHub ci-result without requiring a local lab FULL record (D-1052)")
+    parser.add_argument("--candidate", metavar="SHA", help="publish this reviewed local main commit with --via-ci")
     parser.add_argument("--fill-browsers", action="store_true", help="run the browser chunks the newest candidate lacks")
     parser.add_argument("--secret-scan", metavar="SHA", help="only the per-commit secret scan of origin/main..SHA")
     parser.add_argument("--repo", type=Path, default=Path.cwd(), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.candidate and (
+        not re.fullmatch(r"[0-9a-f]{40}", args.candidate) or not args.via_ci
+        or args.secret_scan or args.fill_browsers or args.merge_when_green
+    ):
+        parser.error("--candidate requires a full commit SHA and --via-ci in publish mode")
     now = now or datetime.now(timezone.utc)
     try:
         if args.secret_scan:
@@ -441,7 +491,7 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
             message = publish_evidence.fill(sys.modules[__name__], args.repo, args.apply)
         elif args.merge_when_green:
             number = open_publish_pr(args.repo) if args.merge_when_green == "auto" else args.merge_when_green
-            message = (merge_when_green(args.repo, number, args.apply, now) if number
+            message = (merge_when_green(args.repo, number, args.apply, now, via_ci=args.via_ci) if number
                        else f"no open {PREFIX} PR to merge")
         else:
             message = publish(args.repo, args, now)

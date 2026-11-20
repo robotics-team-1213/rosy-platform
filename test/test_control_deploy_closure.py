@@ -63,6 +63,9 @@ DEPLOYED_CONTROL_EXECUTABLES = {
     # D-423: advisory object detection on vision/detections, in camera_preview.launch.py
     # behind object_det (ROSY_OBJECT_DET, default off). CORE does not read it (D-137).
     "object_detector_node",
+    # D-1042 6: the charge-bay pink line on the nominal camera, in camera_preview.launch.py
+    # behind bay_line (ROSY_BAY_LINE, default on). dock/observation evidence only.
+    "bay_line_observer_node",
 }
 
 #: Control executables that can own the final command (D-149 standalone exception).

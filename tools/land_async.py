@@ -1,27 +1,25 @@
 """Queue a landing and free the worktree at once (D-889): land a snapshot of HEAD from a hidden worktree.
 
 land.py runs in the branch's own worktree until the landing ends, and a landing took 3 h 39 min at the median on
-2026-10-27/28, so worktrees waiting to land filled the 15-slot cap and new work stopped. Here the committed HEAD
-becomes branch ``land/<branch>-<UTC stamp>``, checked out under ``<git-common-dir>/rosy-land-wt/`` (outside
-``.worktrees``, so not a slot), and a detached supervisor runs ``land.py`` there. The caller's worktree is free
-the moment this returns: keep working on the branch (later commits go into the next landing) or remove it.
+2026-10-27/28, so waiting worktrees filled the 15-slot cap and new work stopped. Here the committed HEAD becomes
+branch ``land/<branch>-<UTC stamp>``, checked out under ``<git-common-dir>/rosy-land-wt/`` (not a slot), and a
+detached supervisor runs ``land.py`` there. The caller's worktree is free at once (later commits go into the next landing).
 
-The supervisor logs to ``<git-common-dir>/rosy-land-wt/<name>.log``. When the snapshot is in main afterwards it
-removes the hidden worktree and the snapshot branch; otherwise it keeps both and writes ``<name>.stopped``, so the
-owner can read the STOP, fix it on the branch and queue again. Uncommitted changes are refused, never carried.
+The supervisor logs to ``<git-common-dir>/rosy-land-wt/<name>.log``. When the snapshot is in main afterwards it removes
+the hidden worktree and snapshot branch; otherwise it keeps both and writes ``<name>.stopped`` (read the STOP, fix
+it on the branch, queue again). Uncommitted changes are refused, never carried.
 
 A branch queued more than ``PREMERGE_BEHIND`` commits behind main is merged up to date first, so its pretest and
-turn test the current tree; a merge that conflicts is abandoned and queued as-is (``land.py`` stops on it in the log).
+turn test the current tree; a conflicting merge is abandoned and queued as-is (``land.py`` stops on it in the log).
 
     python tools/land_async.py [land.py args]                    # from the branch's worktree; prints the log path
     python tools/land_async.py --branch <name> [land.py args]    # from any checkout (e.g. main) without a slot
     python tools/land_async.py resume <tree-name> [land.py args]   # relaunch a stopped landing on its snapshot
     python tools/land_async.py orphans [--resume]                    # after a reboot: landings that died unstopped
 
-One live landing per branch (2026-10-31/11-01: the same change was queued twice and ran two pretests; 11-09 report:
-322 re-queues). Queueing a HEAD the live landing already holds reuses it; a newer HEAD stops that older lander and
-queues this one (``--replace`` is still accepted). A full queue is polled for FULL_WAIT_S before it stops. When a
-landing ends, older snapshots of its branch that it covers go (land_gc's lossless rules).
+One live landing per branch (10-31: one change queued twice ran two pretests). Queueing a HEAD the live landing
+already holds reuses it; a newer HEAD replaces it. A full queue is polled for FULL_WAIT_S before it stops. The cutover freeze (land_freeze.py) can
+refuse start and resume; a landing that ends removes the older snapshots of its branch it covers.
 """
 
 from __future__ import annotations
@@ -69,9 +67,8 @@ def locked(path: Path, wait: bool = False):
             stream.flush()
         stream.seek(0)
         try:
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK if wait else msvcrt.LK_NBLCK, 1)
+            if os.name == "nt":  # msvcrt LK_LOCK gave up after ~10 s (EDEADLK) behind a minutes-long precheck (11-18)
+                _queue().nt_lock(stream.fileno(), wait)
             else:
                 import fcntl
                 fcntl.flock(stream.fileno(), fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
@@ -208,7 +205,8 @@ def _premerge(wt: Path) -> None:
         print("[land-async] main did not merge cleanly here; queued as-is", flush=True)
 
 
-def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | None = None) -> tuple[str, Path]:
+def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | None = None,
+          allow_big: str | None = None) -> tuple[str, Path]:
     """Create the snapshot branch and hidden worktree, hand them to ``launch``; (snapshot, log path)."""
     deadline, waited = time.monotonic() + FULL_WAIT_S, False
     while True:
@@ -217,8 +215,9 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | 
                 return _start(cwd, land_args, now, launch, replace=not waited, branch=branch)
         except Full as exc:  # polled outside the lock: resumes and rollups go on meanwhile
             if time.monotonic() >= deadline:
+                kept = [*land_args, *(("--allow-big", allow_big) if allow_big else ())]
                 print(f"[land-async] NOT QUEUED: {branch or git(cwd, 'branch', '--show-current')}: {exc} after "
-                      f"{FULL_WAIT_S // 60} min; run land_async.py again when tickets free up", file=sys.stderr)
+                      f"{FULL_WAIT_S // 60} min; {_queue().keep_pending(cwd, kept, branch)}", file=sys.stderr)
                 raise SystemExit(3) from exc
             print(f"[land-async] {exc}; checking again every {FULL_POLL_S} s for up to {FULL_WAIT_S // 60} min", flush=True)
             time.sleep(FULL_POLL_S)
@@ -228,6 +227,7 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch, branch: str | 
 def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool = True,
            branch: str | None = None) -> tuple[str, Path]:
     branch, ref = _precheck_mod().resolve_branch(cwd, branch, PREFIX)
+    _queue(); __import__("land_freeze").guard(cwd, ref)  # cutover freeze (rosy-cutover.json): drain/open refuse here
     land_args = [a for a in land_args if a != "--replace"]  # replacing a live landing is the default now
     replacements, rows = [], holders(cwd, branch)
     for row in rows:  # every owner is checked before any reuse or stop
@@ -243,6 +243,7 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool
         if not replace:  # it started while this call waited for room: it may hold a newer HEAD than ours
             raise SystemExit(f"[land-async] {where(row)} started while this waited for queue room; not replaced")
         replacements.append((int(row["pid"]), where(row)))
+        _room().note_stop(row, f"replaced by a newer HEAD of {branch}")
     for pid, said in replacements:
         print(f"[land-async] a newer HEAD replaces {said}", flush=True)
         stop(pid)
@@ -274,21 +275,15 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool
     return snap, log
 
 
+def _room():
+    _queue()  # main's tools/ (and this copy's folder) on sys.path
+    import land_room
+    return land_room
+
+
 def wait_for_room(tree: Path, deadline: float) -> bool:
-    """FIFO: only the oldest waiting supervisor (.roomwait start) polls, so one freed slot starts one land.py."""
-    sys.path.insert(0, str(tree / "tools"))  # the snapshot's land_queue: this copy runs beside the log
-    import land_queue
-    mine, start = tree.parent / (tree.name + ".roomwait"), str(time.time_ns())
-    while time.monotonic() < deadline:
-        mine.write_text(start, "utf-8")  # rewritten each poll: a waiter silent for 5 min is not in line
-        try:
-            line = [(q.read_text("utf-8"), q.name) for q in mine.parent.glob("*.roomwait") if time.time() - q.stat().st_mtime < 300]
-        except OSError:
-            line = []
-        if line and min(line)[1] == mine.name and not land_queue.full(land_queue.queue_dir(tree), land_queue.lane_of(tree)):
-            return True
-        time.sleep(60)
-    return False
+    """FIFO: only the oldest waiting supervisor polls, and it reserves the freed slot before land.py starts."""
+    return _room().wait_for_room(tree, deadline, _queue())
 
 
 def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call, room=wait_for_room) -> int:
@@ -301,14 +296,31 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
     path = tree.parent / (tree.name + ".log")
     deadline = time.monotonic() + ROOM_WAIT_S
     shortages = 0
+    try:
+        land_queue = _queue()
+    except ImportError:  # no main tools beside this copy: nothing to reserve in, launch as before
+        land_queue = None
+    own = land_queue is not None and not (
+        {"--urgent", "--no-queue", "--dry-run"} & set(land_args) or os.environ.get(land_queue.TICKET_ENV))
     while True:
         seen = path.stat().st_size if path.exists() else 0
+        marker = None
+        if own:  # land.py starts only with a reserved place (FIFO head), never to find the queue full
+            deadline, marker = _room().gate(tree, land_queue, room, deadline, ROOM_WAIT_S)
+            if not deadline:
+                code, output = 1, [f"[land-async] STOP: no place in the landing queue for {ROOM_WAIT_S // 60} min; "
+                                   "land.py was not started"]
+                with open(path, "a", encoding="utf-8") as log:
+                    log.write(output[0] + "\n")
+                break
         # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
         with open(path, "a", encoding="utf-8") as log:
             # CREATE_NO_WINDOW: under the detached supervisor land.py got a new console, a tab of the default
             # terminal; closing that window killed every lander at once (exit 0xC000013A: 8 on 10-28, 12 on 10-30).
             code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
                        stderr=subprocess.STDOUT, **({"creationflags": NO_WINDOW} if os.name == "nt" else {}))
+        if marker is not None:
+            _room().release(land_queue, marker)  # land.py consumed it at enter(); this drops an unused one
         output = path.read_bytes()[seen:].decode("utf-8", "replace").rstrip().splitlines()
         reason = output[-1] if output else ""
         if code != 0 and shortages < RESOURCE_RETRIES and (any(mark in reason for mark in RESOURCE_SHORTAGE)
@@ -328,6 +340,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         main = git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")
         git(Path(main).parent, "worktree", "remove", "--force", str(tree), check=False)
         git(Path(main).parent, "branch", "-D", snap, check=False)
+        (tree.parent / (tree.name + ".requested")).unlink(missing_ok=True)
         print(f"[land-async] {snap} landed; hidden worktree and snapshot branch removed", flush=True)
         for p in (str(Path(__file__).resolve().parent), str(Path(main).parent / "tools")):
             if p not in sys.path:
@@ -345,7 +358,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         except (SystemExit, Exception) as exc:
             print(f"[land-async] resuming cleared MAIN-RED stops skipped: {exc}", flush=True)
     else:
-        (tree.parent / f"{tree.name}.stopped").write_text(f"land.py exit {code}; read {tree.name}.log\n", "utf-8")
+        (tree.parent / f"{tree.name}.stopped").write_text(_room().stopped_text(tree, path, code), "utf-8")
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
         # no STOP block (watchdog, kill): members go back alone, never bisected (D-889 35; 11-19 three were stranded)
         split_rollup(tree, snap, reason=verdict(output))
@@ -354,24 +367,12 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
 
 
 def superseded(tree: Path, snap: str) -> list[str]:
-    """Remove the older snapshots of ``snap``'s branch that land_gc finds nothing unique in (this one covers them);
-    the names removed. 2026-11-08: 149 superseded snapshots (22 GB) waited for a person."""
+    """Older snapshots of snap's branch that this one covers, removed by main's land_gc (this file is a copy)."""
     repo = tree.parent.parent.parent  # <main checkout>/.git/rosy-land-wt/<tree>; the tree itself may be gone
-    sys.path[:0] = [str(repo / "tools"), str(Path(__file__).resolve().parent)]  # main's land_gc (this is a copy)
+    sys.path[:0] = [str(repo / "tools"), str(Path(__file__).resolve().parent)]
     try:
         import land_gc
-        src = land_gc.source(snap)
-        older = {ref.split("-batch")[0].replace("/", "-") for ref in git(
-            repo, "for-each-ref", "--format=%(refname:short)", f"refs/heads/{PREFIX}{src}-*").splitlines()
-            if land_gc.SNAPSHOT.search(ref) and land_gc.source(ref) == src and ref < snap}
-        gone = []
-        for name in sorted(older):
-            rows = land_gc.plan(repo, time.time(), 7, only=name)
-            if any(row[0] == "remove" for row in rows) and not land_gc.apply(repo, rows):
-                gone.append(name)
-        if gone:
-            print(f"[land-async] removed superseded snapshots of {src}: {gone}", flush=True)
-        return gone
+        return land_gc.superseded(repo, snap)
     except Exception as exc:  # cleanup must never change the landing's own outcome
         print(f"[land-async] superseded snapshot cleanup skipped: {exc}", flush=True)
         return []
@@ -438,6 +439,7 @@ def _resume_start(cwd: Path, name: str, land_args: list[str], launch):
     if not snaps:
         raise SystemExit(f"[land-async] no snapshot branch for {name}")
     snap = snaps[0]
+    _queue(); __import__("land_freeze").guard(cwd, snap, new=False)  # drain: only allowed shas resume; open: running ones drain
     if subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0:
         raise SystemExit(f"[land-async] {snap} is already in main")
     if held := [r for r in live_owners(cwd) if r.get("branch") == snap or snap in member_branches(place, r)]:
@@ -570,9 +572,7 @@ def main(argv: list[str]) -> int:
     pre = _precheck_mod()
     branch, argv = pre.pop_opt(argv, "--branch", "a branch name: --branch <type/topic>")
     big, argv = pre.pop_opt(argv, "--allow-big", 'a reason: --allow-big "<why this cannot be split>"')
-    ref = "HEAD"
-    if branch is not None:
-        branch, ref = pre.resolve_branch(Path.cwd(), branch, PREFIX)
+    branch, ref = pre.resolve_branch(Path.cwd(), branch, PREFIX) if branch is not None else (None, "HEAD")
     why = too_big(Path.cwd()) if branch is None else too_big(Path.cwd(), ref=ref)
     if big is None and why:
         raise SystemExit(f"[land-async] refused: {why}. Land the oldest finished part from a new branch off main"
@@ -581,16 +581,17 @@ def main(argv: list[str]) -> int:
         print(f"[land-async] --allow-big: {big}", flush=True)
     words = next((argv[i:i + 2] if a == "--mixed" else [a] for i, a in enumerate(argv)
                   if a == "--mixed" or a.startswith("--mixed=")), [])
+    extra = {"allow_big": big} if big else {}
     if branch is None:
         if subprocess.call(  # cheap gates fail here, before a snapshot or ticket exists
                 [sys.executable, str(Path(__file__).with_name("land.py")), "--precheck", *words], cwd=Path.cwd()):
             return 1
-        snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach)
+        snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach, **extra)
         print(f"[land-async] queued {snap}; this worktree is free now. Log: {log}")
     else:
         if precheck_branch(Path.cwd(), branch, words):
             return 1
-        snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach, branch=branch)
+        snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach, branch=branch, **extra)
         print(f"[land-async] queued {snap} from branch {branch}. Log: {log}")
     return 0
 

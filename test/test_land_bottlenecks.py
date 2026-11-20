@@ -87,5 +87,5 @@ def test_scan_and_remediate_warm_cache_trim_and_prune(tmp_path, monkeypatch):
     actions = lb.remediate(repo, report, warm_limit=8, idle_hours=4.0)
     assert len((common / mh.FILE).read_text(encoding="utf-8").splitlines()) == 5
     assert any("--warm" in c for c in calls)
-    assert any("worktrees_cap_prune" in a for a in actions)
-    assert any(k.get("apply") and k.get("snapshot") and k.get("idle_hours") == 4.0 for k in pruned)
+    assert not any("worktrees_cap_prune" in a for a in actions)
+    assert not any(k.get("apply") and (k.get("snapshot") or k.get("everyone")) for k in pruned)

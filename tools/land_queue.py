@@ -48,11 +48,28 @@ _held: list[Path] = []
 REFRESH = None  # land_prepare.prepare sets it: () -> new tested main; re-runs main's delta outside the lock
 REFRESHES = 2  # per wait; then the ticket takes its turn on whatever it has
 RESERVE_TTL = 20 * 60  # a reservation (a supervisor between its cap check and enter) lives at most this long
+RESERVED_ENV = "ROSY_LAND_RESERVED"  # land_async hands its reservation marker to the land.py it launches
+_marked: list[Path] = []  # reservation markers this process holds: _keepalive refreshes them like tickets
 _status_lock = threading.RLock()  # timer release and the main thread share the ticket's read/replace operation
 
 
 class QueueError(Exception):
     """Waiting for the queue failed; the message says why. land.py exits 1."""
+
+
+def nt_lock(fd: int, wait: bool) -> None:
+    """Lock byte 0 of fd on Windows. LK_LOCK retries only ~10 s and then raises EDEADLK, while a queued landing
+    holds the launch lock through its minutes-long precheck: 11-18 several land_async starts died with "Resource
+    deadlock avoided" instead of waiting. A waiter polls the non-blocking lock until it is free."""
+    import errno
+    import msvcrt
+    while True:
+        try:
+            return msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError as exc:
+            if not wait or exc.errno not in (errno.EACCES, errno.EDEADLK):
+                raise
+        time.sleep(1)
 
 
 def pid_alive(pid: int) -> bool:
@@ -275,6 +292,15 @@ KEEPALIVE_S = 300.0
 _alive: list[threading.Thread] = []
 
 
+def _beat() -> None:
+    """Refresh held tickets and reservation markers (a marker older than RESERVE_TTL is reclaimed by others)."""
+    for path in [*_held, *_marked]:
+        try:
+            os.utime(path)
+        except OSError:
+            pass
+
+
 def _keepalive() -> None:
     """Refresh held tickets every KEEPALIVE_S while this process lives. Rounds and slot waits touched them, but a
     pretest that ran past STALE_AFTER on busy hosts did not, and a live landing's ticket was reclaimed (2026-11-01)."""
@@ -284,11 +310,7 @@ def _keepalive() -> None:
     def beat() -> None:
         while True:
             time.sleep(KEEPALIVE_S)
-            for path in list(_held):
-                try:
-                    os.utime(path)
-                except OSError:
-                    pass
+            _beat()
     _alive.append(threading.Thread(target=beat, daemon=True, name="land-ticket-keepalive"))
     _alive[0].start()
 
@@ -389,7 +411,11 @@ def _markers(qdir: Path) -> list[dict]:
             continue
         except (OSError, ValueError):
             info = {}
-        if (time.time() - info.get("start", 0) > RESERVE_TTL
+        try:
+            age = time.time() - path.stat().st_mtime  # _keepalive touches it: a long admit is not refused later
+        except FileNotFoundError:
+            continue
+        if (age > RESERVE_TTL
                 or (info.get("host") == socket.gethostname() and not pid_alive(int(info.get("pid") or 0)))):
             path.unlink(missing_ok=True)
             continue
@@ -424,6 +450,8 @@ def reserve(qdir: Path, branch: str, lane: str | None = None) -> Path:
         tmp.write_text(json.dumps({"branch": branch, "lane": lane or "", "pid": os.getpid(),
                                    "host": socket.gethostname(), "start": time.time()}), encoding="utf-8")
         os.replace(tmp, marker)
+        _marked.append(marker)
+        _keepalive()
         return marker
     finally:
         lock.unlink(missing_ok=True)
@@ -431,7 +459,28 @@ def reserve(qdir: Path, branch: str, lane: str | None = None) -> Path:
 
 def unreserve(marker: Path | None) -> None:
     if marker is not None:
+        if marker in _marked:
+            _marked.remove(marker)
         marker.unlink(missing_ok=True)
+
+
+def adopt_reserved(name: str) -> Path | None:
+    """Take over the marker a supervisor reserved for this process (RESERVED_ENV): its pid becomes ours, so
+    enter() ignores it like a marker made here. None when there is none or it expired (then reserve() as usual)."""
+    marker = Path(name) if name else None
+    if marker is None or marker.suffix != ".reserve" or not marker.is_file():
+        return None
+    try:
+        info = json.loads(marker.read_text(encoding="utf-8"))
+        info.update(pid=os.getpid(), host=socket.gethostname(), start=time.time())
+        tmp = marker.with_name(f".{marker.name}.tmp")
+        tmp.write_text(json.dumps(info), encoding="utf-8")
+        os.replace(tmp, marker)
+    except (OSError, ValueError):
+        return None
+    _marked.append(marker)
+    _keepalive()
+    return marker
 
 
 def full(qdir: Path, lane: str = "") -> str | None:
@@ -497,3 +546,28 @@ def leave() -> None:
         except (OSError, ValueError):
             pass
         ticket.unlink(missing_ok=True)
+
+
+# A NOT QUEUED request land_async keeps for land_tick's requeue pass; named so no [0-9]* ticket reader sees it.
+PENDING = "pending"
+
+
+def _git(cwd: Path, *args: str) -> str:
+    done = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, encoding="utf-8")
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def keep_pending(cwd: Path, args: list[str], branch: str | None = None) -> str:
+    """Keep a NOT QUEUED landing request beside the queue, so it is not simply gone: one file per branch (branch,
+    ref sha at request time, land args, cwd; a later request supersedes an earlier one) which land_tick's existing
+    requeue pass relaunches via land_async once the queue has room (D-889 addendum 36: no new trigger). The caller
+    prints where it was kept instead of asking for a manual re-run."""
+    branch = branch or _git(cwd, "branch", "--show-current")  # --branch from main names the branch, not main
+    qdir = queue_dir(cwd)
+    qdir.mkdir(parents=True, exist_ok=True)
+    path = qdir / f"{PENDING}-{branch.replace('/', '-')}.json"
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(json.dumps({"branch": branch, "ref": _git(cwd, "rev-parse", branch or "HEAD"),
+                               "args": args, "cwd": str(cwd), "start": time.time()}), encoding="utf-8")
+    os.replace(tmp, path)
+    return f"kept as {path}; land_tick's requeue pass relaunches it when the queue has room"

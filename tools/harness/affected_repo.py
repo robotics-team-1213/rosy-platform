@@ -9,7 +9,9 @@ from __future__ import annotations
 import fnmatch
 import re
 import subprocess
+from collections import Counter
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path, PurePosixPath
 
 import yaml
@@ -33,13 +35,24 @@ def _under(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix.rstrip("/") + "/")
 
 
+NEUTRAL = "neutral"  # folder notes and ADRs: no app's work
+
+
 def app_of(path: str, parts: dict) -> str:
-    """The app that owns `path` (2026-11-18 release split): its deepest ``platform_parts.yaml``
-    root or ``app_subtrees`` entry, else ``core`` (repository root files, uncovered folder notes)."""
-    entries = [(root["path"], root["app"]) for root in parts.get("roots") or []]
+    """The app that owns `path` (2026-11-18 release split): ``neutral`` for an ``app_neutral`` glob, else
+    its deepest ``platform_parts.yaml`` root or ``app_subtrees`` entry (a key with ``*`` is an fnmatch
+    pattern), else ``core`` (repository root files, uncovered folder notes)."""
+    if any(_match(path, pattern) for pattern in parts.get("app_neutral") or ()):
+        return NEUTRAL
+    entries = [(root["path"], root.get("app", "core")) for root in parts.get("roots") or [] if "path" in root]
     entries += list((parts.get("app_subtrees") or {}).items())
-    hits = [entry for entry in entries if _under(path, entry[0])]
+    hits = [(key, app) for key, app in entries if (_match(path, key) if "*" in key else _under(path, key))]
     return max(hits, key=lambda entry: len(entry[0]))[1] if hits else "core"
+
+
+def landing_apps(paths: list[str], parts: dict) -> list[str]:
+    """The apps a landing's delta touches, sorted, neutral paths left out (land_events records them)."""
+    return sorted({app_of(path, parts) for path in paths} - {NEUTRAL})
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -61,12 +74,14 @@ class Repo:
     test_files: list[str]
     safety_roots: list[dict] = field(default_factory=list)
     safety_modules: set[str] = field(default_factory=set)
+    parts: dict = field(default_factory=dict)
     #: Read files at this revision instead of the working tree (``--head``: the pushed or landed commit).
     rev: str | None = None
     _texts: dict[str, str] = field(default_factory=dict)
     _imports: dict[str, set[str]] = field(default_factory=dict)
     _tokens: dict[str, set[str]] = field(default_factory=dict)
     _importers: dict[str, list[str]] = field(default_factory=dict)
+    _dotted_names: dict[str, str | None] = field(default_factory=dict)
     _cat: list = field(default_factory=list)  # one `git cat-file --batch` process for `rev`
 
     @classmethod
@@ -79,6 +94,7 @@ class Repo:
         bare.modules = list(harness.get("modules") or [])
         bare.owners = [(r["path"], tuple(r.get("import_prefix") or ())) for r in parts.get("roots") or []]
         bare.safety_roots, bare.safety_modules = list(parts.get("roots") or []), set(parts.get("safety_modules") or ())
+        bare.parts = dict(parts or {})
         return bare
 
     def text(self, path: str) -> str:
@@ -200,6 +216,11 @@ class Repo:
 
     def dotted(self, path: str) -> str | None:
         """Runtime import name of a changed ``.py`` below its owning root (``fleet.pipeline.x``); None if unresolved."""
+        if path not in self._dotted_names:
+            self._dotted_names[path] = self._resolve_dotted(path)
+        return self._dotted_names[path]
+
+    def _resolve_dotted(self, path: str) -> str | None:
         if not path.endswith(".py") or PurePosixPath(path).name == "__init__.py":
             return None
         roots = [r for r in self.safety_roots if r.get("import_prefix") and path.startswith(r["path"].rstrip("/") + "/")]
@@ -251,9 +272,12 @@ class Repo:
                                              and (self._reaches(t, name) or self._relative(t, changed_path))]
         return self._importers[changed_path]
 
+    @cached_property
+    def _basename_counts(self) -> Counter[str]:
+        return Counter(PurePosixPath(path).name for path in self.tracked)
+
     def basename_unique(self, path: str) -> bool:
-        name = PurePosixPath(path).name
-        return sum(1 for t in self.tracked if PurePosixPath(t).name == name) == 1
+        return self._basename_counts[PurePosixPath(path).name] == 1
 
     def referencing_tests(self, path: str, closure: bool = False) -> list[str]:
         """Test files that name `path`.
