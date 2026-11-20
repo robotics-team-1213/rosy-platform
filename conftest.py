@@ -3,7 +3,7 @@
 Such a module lets later modules in the same process import what they cannot alone (2026-10-26,
 learning/training/omx/test/test_native_cycle.py; tools/land_isolation.py's gate catches the failure itself).
 The summary names each inserter so the path can move into a conftest or go. It never fails a run, and it skips
-the folder pytest itself inserts (prepend import mode). Under xdist the workers hand their findings to the
+the folder pytest itself inserts (prepend import mode). Under xdist each worker also gets its own HOME, XDG dirs and TMPDIR (isolate_worker). Under xdist the workers hand their findings to the
 controller. Loaded when the repository root is the rootdir (remote_pytest.py's ``--rootdir=.``).
 """
 
@@ -22,6 +22,23 @@ except ImportError:
 else:
     # 5 s default: 11-07 FULLs lost hours to UI waits missing it under load, each passing alone. A real failure still fails.
     expect.set_options(timeout=15_000)
+
+def isolate_worker(env, base: str) -> None:
+    """Give an xdist worker its own HOME, XDG dirs and TMPDIR so tests that write there cannot meet another worker's files."""
+    worker = env.get("PYTEST_XDIST_WORKER")
+    if not worker:
+        return
+    root = Path(base) / f"rosy-{worker}-{os.getpid()}"
+    for key, sub in (("HOME", "home"), ("XDG_CONFIG_HOME", "config"), ("XDG_DATA_HOME", "data"),
+                     ("XDG_CACHE_HOME", "cache"), ("XDG_STATE_HOME", "state"), ("TMPDIR", "tmp")):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+        env[key] = str(root / sub)
+
+
+def pytest_configure(config):
+    import tempfile
+    isolate_worker(os.environ, tempfile.gettempdir())
+
 
 _ADDED: dict[str, list[str]] = {}
 KEY = "rosy_syspath_added"

@@ -11,7 +11,7 @@ import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
-import { placeRosterCards as place, mustExpand, selectRobot, createRoiPoller,
+import { placeRosterCards as place, mustExpand, selectRobot, OMX_CELL_DEFS, createRoiPoller,
   buildQuickControlPanel, createFrontCamera } from "./roster-cards.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
@@ -77,14 +77,19 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         const label = host && host !== robot.robot_id ? `${robot.robot_id} (${host})` : robot.robot_id;
         return [robot.robot_id, `🤖 기동 로봇 · ${label}${robot.online ? " · 온라인" : ""}`];
       });
-      const options = robotOptions;
+      // OMX arms are picked here (fa2716a0cd dropped them); they open the right inspector, never a roster card.
+      const omxOptions = OMX_CELL_DEFS.filter(def => (view.anchors || []).some(a => a.target_id === def.target_id)).map(def => {
+        const liveAnc = view.anchors.find(a => a.target_id === def.target_id);
+        return [def.target_id, `🦾 OMX 셀 · ${def.shortLabel} (${liveAnc.cell_status || "상태 미확인"} ↔ ${def.stationId} 연계)`];
+      });
+      const options = [...robotOptions, ...omxOptions];
       const key = JSON.stringify(options);
       if (choice.dataset.options !== key) {
-        const first = nodeWithText("option", "", "로봇을 선택하세요"); first.value = "";
+        const first = nodeWithText("option", "", "로봇 또는 OMX 셀을 선택하세요"); first.value = "";
         choice.replaceChildren(first, ...options.map(([id, name]) => { const option = nodeWithText("option", "", name); option.value = id; return option; }));
         choice.dataset.options = key;
       }
-      choice.value = view.focusRobot || "";
+      choice.value = String(view.focusAnchorId || "").startsWith("arm_") ? view.focusAnchorId : (view.focusRobot || "");
     }
     const index = view.robots.findIndex(robot => robot.robot_id === view.focusRobot);
     if (empty) empty.hidden = index >= 0;

@@ -1410,6 +1410,59 @@ safety_modules:
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
 
+# D-430 §5 Safety-Review trailer only (2026-11-20, after #292 landed untrailered): files that move an OMX arm or
+# filter that decision. No anchor or import invariant applies (chunk_runner imports lerobot); see safety_review.py.
+safety_review_paths:
+  - deploy/robot/omx/chunk_runner.py
+  - deploy/robot/omx/chunk_runner_commands.py
+  - deploy/robot/omx/chunk_runner_guards.py
+  - deploy/robot/omx/chunk_runner_run.py
+  - deploy/robot/omx/chunk_runner_settle.py
+  - deploy/robot/omx/guarded_device.py
+  - deploy/robot/omx/guarded_native.py
+  - deploy/robot/omx/guarded_native_effort.py
+  - deploy/robot/omx/joint_push.py
+  - deploy/robot/omx/session_caps.py
+  - deploy/robot/omx/commissioning_limits.py
+  - deploy/robot/omx/record_session.py
+  - deploy/robot/omx/record_session_helpers.py
+  - deploy/robot/omx/cell_auto_safety.py
+  - deploy/robot/omx/cell_transfer.py
+  - deploy/robot/omx/cell_envelope.py
+  - deploy/robot/omx/cell_zones.py
+  - deploy/robot/omx/cell_space.py
+  - deploy/robot/omx/cell_corridor.py
+  - deploy/robot/omx/cell_unwedge.py
+  - deploy/robot/omx/cell_auto_fold.py
+  - deploy/robot/omx/cell_remap_jaws.py
+  - deploy/robot/omx/cell_task_worker.py
+  - deploy/robot/omx/cell_task_exec.py
+  - deploy/robot/omx/cell_task_live_executor.py
+  - deploy/robot/omx/omx_incident.py
+  - deploy/robot/omx/omx_incident_auto.py
+  - deploy/robot/omx/cell_auto_pick.py
+  - deploy/robot/omx/cell_return_held.py
+  - deploy/robot/omx/cell_cycle.py
+  - deploy/robot/omx/cell_two_arm.py
+  - deploy/robot/omx/cell_pipeline.py
+  - deploy/robot/omx/cell_pipeline_stages.py
+  - deploy/robot/omx/cell_pipeline_io.py
+  - deploy/robot/omx/hardware_owner_goals.py
+  - deploy/robot/omx/cell_policy_drive.py
+  - deploy/robot/omx/cell_stack_guard.py
+  - deploy/robot/omx/cell_arm_lease.py
+  - deploy/robot/omx/commissioning_stop.py
+  - deploy/robot/omx/cell_push.py
+  - deploy/robot/omx/cell_pivot.py
+  - deploy/robot/omx/cell_step.py
+  - deploy/robot/omx/cell_z_shuttle.py
+  - deploy/robot/omx/cell_auto_carry.py
+  - deploy/robot/omx/cell_auto_pick_plan.py
+  - deploy/robot/omx/cell_executor.py
+  - middleware/devices/omx/adapter/omx_adapter/chunk_library.py  # park_path, transit_path
+  - tools/harness/safety_review.py  # the check itself
+  - tools/harness/safety_review_exempt.json
+
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
 # path plus the (possibly nested) definition; each must resolve to a safety file.
 # `string` anchors are operation literals compared with `==` inside `in`.

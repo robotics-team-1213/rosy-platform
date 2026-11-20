@@ -5608,3 +5608,8 @@
 - 변경: worker 재전송은 60 s 이상 65 s 미만엔 보내지 않고 보관, 만료 계열 422(`OWNER_EVIDENCE_MEASURED_AT_INVALID`)는 보관 후 재측정; claim은 적재함 확인 결속을 원장 변경 앞에서 한 `now`로 판정해 실패면 거부. ADR D-1057 2-8절.
 - 증거: 로컬 `test_pipeline_evidence.py`·`test_omx_cell_task_worker_refusal.py`와 lint. 원격 시험은 조정 세션.
 - gate 변화: 없음.
+
+## 2026-11-20 · uncommitted · fix(fleet): CORE cancel result nav.failed CANCELED gets its own FAILED reason
+- 변경: `task_results.py`는 `nav.failed` `error_code=CANCELED`를 같은 시도의 `nav.canceled`를 이미 본 경우에만 `FAILED`/`CORE_CANCEL_CONFIRMED`로 투영하고(없으면 `CORE_NAV_FAILED` 유지) cancel-all 표시가 맞으면 `nav.canceled`처럼 `HOLD`/`FLEET_CANCEL_ALL`로 만든다. D-421대로 발행된 작업은 `CANCELED`가 되지 않는다. `evidence.py` native 결과는 FAILED, 사유 `CANCELED`. CORE의 `nav.failed`에는 `data.source`가 없어 안전 취소를 구분하지 못한다. CORE는 바꾸지 않았다.
+- 증거: `test_task_service.py`·`test_cancel_all.py` 사례 추가(nav.failed 먼저, nav.canceled 먼저 둘 다). 원격 affected 8774 passed. 실패 1건 `test_host_control.py::test_no_reboot_path_cuts_an_arm_session`은 origin/main 단독 실행에서 통과해 무관함을 확인 중. 독립 검토 2회.
+- gate 변화: SOURCE. 실물 미실시.
