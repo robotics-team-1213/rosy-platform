@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-1059 | Pinky 작업은 Fleet trip으로 한 번만 배차한다. 기본 꺼짐(`ROSY_FLEET_PINKY_TASK_DISPATCH=1`), 거절 사유 기록, 취소는 trip 취소. [전문](../adr/D-1059-pinky-task-dispatch.md) | Proposed (2026-11-21, 패널 5 조각 3; Safety-Review 대기) |
+| D-1059 | Merge Queue는 PR의 녹색 실행과 트리가 같으면 guard 묶음만 다시 돈다(D-762 큐 재시험 범위 개정, 변수 `ROSY_QUEUE_DELTA`, 기본 꺼짐). [전문](../adr/D-1059-merge-queue-retests-what-changed-since-the-pr-run.md) | Accepted (2026-11-21, 사용자 결정) |
 | D-1058 | CORE 실행기 기본값을 events로 바꾼다(D-953 후속 3 개정). 되돌리기는 `ROSY_CORE_EXECUTOR=threaded` drop-in. [전문](../adr/D-1058-core-events-executor-default.md) | Accepted (2026-11-20, 사용자 결정; 정지 상태 실측·Gazebo 확인, 주행 확인 남음) |
 | D-1055 | PR + Merge Queue를 유일한 병합 경로로 하고 land.py 착지를 은퇴한다(D-868 개정). [전문](../adr/D-1055-pr-merge-queue-only-merge-path-land-retired.md) | Accepted (2026-11-20, 사용자 결정) |
 | D-1052 | 셀프 리뷰 1급 지원, 블로킹 FULL 폐지(Zero-FULL), Merge Queue 직행. [전문](../adr/D-1052-self-review-and-zero-full-ci.md) | Accepted (2026-11-19, 사용자 결정) |
@@ -29,6 +30,7 @@
 | D-1032 | OMX 두 팔 집기 정책(`omx_two_arm_policy`) CORE 계약 정렬 — `--no-goal` 기본 경로 및 평가 시 `temporal_ensemble_coeff` 강제 덮어쓰기 제거. [전문](../adr/D-1032-omx-two-arm-grasp-policy-no-goal-no-eval-ensemble.md) | Proposed (2026-11-15, Phase A 시뮬 진단 패치·평가 대기; Phase B 재학습·실물 승격 별도) |
 | D-1036 | 게시 증거를 야간 FULL에서 얻는다 — 야간 착지 기록·최근 야간 조상 유지·빨간 CI 재실행 한 번. [전문](../adr/D-1036-publish-evidence-from-nightly-full.md) | Proposed (2026-11-17) |
 | D-1038 | 게시 PR 예약 병합·review-gate 추가 전용 면제·긴급 차선 (2026-11-17 사용자 승인). [전문](../adr/D-1038-scheduled-publish-merge-review-gate-append-only-and-urgent-lane.md) | Proposed (2026-11-17) |
+| D-1051 | Pinky 미세 재정차 `POST /api/v1/motion/repark`(rotate_to·nudge 미션 조합, 옆 ≤ 0.06·앞뒤 ≤ 0.10 m, 0.023 m/s·0.09 rad/s)와 Fleet REQUESTED 요청 실행·닫기. [전문](../adr/D-1051-pinky-fine-repark-motion.md) | Proposed (2026-11-19, 사용자 결정) |
 | D-1043 | 보기 전용도 Fleet 전체 비상 정지(`/api/fleet/estop`)를 누른다 — 해제·재가동은 그대로 운영자. [전문](../adr/D-1043-viewer-may-press-the-fleet-site-estop.md) | Accepted (2026-11-18, 사용자 결정) |
 | D-1039 | 설정된 AI assessor 서비스 자격은 지정된 팔의 안전한 incident(접혀 토크 OFF로 끝나고 신호가 없거나 주차 중 부하 정지뿐인 것)만, 팔마다 하루 한 번 기계 해제로 표시해 해제한다. 사람 해제는 그대로. [전문](../adr/D-1039-ai-assessor-kind-limited-incident-clear.md) | Accepted (2026-11-17, D-1035 사용자 결정; 구현·원격 시험, 배포·토큰 발급·실물 수용 별도) |
 | D-1046 | SLAM이 무너지면 Fleet 사이트 벽 지도(사이트 좌표)로 자동 전환 — 정지 먼저, 부팅당 한 번, SLAM 복귀 없음, 첫 자세는 loc_assist 후보와 천장 카메라 180° 판정. [전문](../adr/D-1046-slam-fallback-to-the-site-wall-map.md) | Accepted (2026-11-18, 사용자 결정 "무조건 자동전환"; 실물 수용 별도) |

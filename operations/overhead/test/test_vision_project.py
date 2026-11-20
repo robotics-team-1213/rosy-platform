@@ -122,7 +122,7 @@ def test_field_camera_map_rejects_mixed_calibration_sources():
 
 
 def test_project_frame_uses_the_field_homography_and_names_the_source():
-    from games.field.homography import fit
+    from core_common.homography import fit
 
     quad = ((100.0, 100.0), (500.0, 100.0), (500.0, 300.0), (100.0, 300.0))
     world = ((0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0))

@@ -12,7 +12,7 @@ import math
 from typing import Optional
 
 from core_features.docking.bay_zone import (DISAGREE, NO_LINE, classify as classify_zone, map_offsets, scan_diagnosis,
-                                            lane_extent, pose_gate, scan_fit_pose, scan_geometry)
+                                            lane_edge, lane_extent, pose_gate, scan_fit_pose, scan_geometry)
 from core_features.docking.model import DockPhase
 from core_features.docking.rear_phases import rear_errors
 
@@ -50,10 +50,10 @@ class BayZoneMixin:
             return "no fresh LiDAR bay pose (<= %.1f s) for a forward move in the row" % cfg.bay_row_pose_fresh_s
         if rp is None:
             return None
-        if lane_extent(cfg, rp[1], rp[2]) > cfg.bay_lane_edge_m:
+        if lane_extent(cfg, rp[1], rp[2]) > lane_edge(cfg, h._dock):
             h._last_event = "lane keeping: the body overlaps a neighbour lane (lateral %.0f mm, heading %.0f deg)" % (rp[1] * 1000.0, math.degrees(rp[2]))
             return "left the lane (body footprint beyond %.0f mm: lateral %.0f mm, heading %.0f deg)" % (
-                cfg.bay_lane_edge_m * 1000.0, rp[1] * 1000.0, math.degrees(rp[2]))
+                lane_edge(cfg, h._dock) * 1000.0, rp[1] * 1000.0, math.degrees(rp[2]))
         step = cfg.bay_backoff_m if step is None else step
         if rp[0] + step > cfg.bay_line_x_m - 0.02:
             h._last_event = "lane keeping: a forward move of %.2f m would pass the bay line (x %.2f m, line %.2f m)" % (step, rp[0], cfg.bay_line_x_m)

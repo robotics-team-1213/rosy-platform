@@ -25,13 +25,13 @@ Device procedure (Pinky Pro, Raspberry Pi OS; HOLD as of 2026-09-24, no Pi run y
    a. checkout: ``git clone``/``git fetch`` the Rosy OS repo on the Pi and check out the
       revision under test (e.g. before and after an R1-R3 change). Running the tool from
       the checkout measures that checkout's ``control`` package; or
-   b. installed: ``scp middleware/perception/tools/device/hotpath_measure.py pinky@<pi>:/tmp/``
+   b. installed: ``scp middleware/drive/tools/device/hotpath_measure.py pinky@<pi>:/tmp/``
       and ``source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash``
       so the deployed ``control`` package is imported. ``environment.control_source``
       in the report records which one was used.
    numpy must be importable (it is on the device image).
 2. Bench, with the robot stack stopped so nothing competes for the CPU (about 1-2 min):
-       cd "<checkout>/middleware/perception"
+       cd "<checkout>/middleware/drive"
        python3 tools/device/hotpath_measure.py bench --iterations 50 --label <revision> \\
            --out ~/rosy-measure/bench-$(date +%Y%m%dT%H%M%S).json
 3. Watch, with the stack running as in the scenario to measure (e.g. startup
@@ -59,8 +59,8 @@ from types import SimpleNamespace
 
 SCHEMA_VERSION = 'rosy.control.hotpath_measure/1'
 _HERE = Path(__file__).resolve()
-#: middleware/perception when run from a checkout; a lone copied file has no package root.
-PKG = _HERE.parents[2] if len(_HERE.parents) > 2 else _HERE.parent
+#: middleware/perception (the control package) when run from a checkout; a lone copied file has no package root.
+PKG = _HERE.parents[3]/'perception' if len(_HERE.parents) > 3 else _HERE.parent
 
 #: console_scripts in setup.py (every control node entry point).
 NODE_NAMES = (
