@@ -5,7 +5,9 @@
 ![ROS 2](https://img.shields.io/badge/ROS%202-Jazzy-22314E)
 ![Python](https://img.shields.io/badge/python-3.12-3776AB)
 
-ROSY Platform은 관측한 세계 상태, 현장 미션 조정, 로봇의 안전한 실행, 오프라인 학습·평가를 연결한다. 첫 하드웨어는 Raspberry Pi 5 기반 **Pinky Pro**이며, [pinky_pro](https://github.com/pinklab-kr/pinky_pro) 포크에서 출발했다.
+English: [README.en.md](README.en.md)
+
+ROSY Platform은 관측한 세계 상태, 현장 미션 조정, 로봇의 안전한 실행, 오프라인 학습·평가를 연결한다. 첫 하드웨어는 Raspberry Pi 5 기반 **Pinky Pro** 주행 로봇이며, [pinky_pro](https://github.com/pinklab-kr/pinky_pro) 포크에서 출발했다. 여기에 **OMX** 팔 셀(S·A·B)이 팔레타이징 작업을 맡는다. 셀은 측정·판정·사람 승인을 한 경로로 묶은 [보정 체계](docs/reference/calibration-system.md)로 카메라와 좌표를 유지하고, 모방학습 데이터는 텔레옵 녹화에서 LeRobot export와 HF 왕복을 거쳐 셀 모델 검증에 돌아온다([학습 데이터 영상 기록](docs/reference/video-records-learning.md)). 실물·시뮬 시연은 근거 표지와 함께 영상 기록으로 남긴다([실물·시뮬 시연 영상 기록](docs/reference/video-records-demo.md)).
 
 기존 구현 기체와 신규 지원 후보는 [로봇 호환성과 검증 상태](docs/reference/robot-compatibility.md)에서 구분한다. RaspTank Metal / Pi 4는 무구동 소스 프로파일을 준비한 지원 후보이며, 장치 드라이버·통합 이미지·실물 수용은 아직 없다.
 
@@ -79,6 +81,8 @@ flowchart TB
 | 관제 규칙 | [Fleet 통합 규칙집](docs/reference/fleet-rulebook.md) — law · rule · AI 후보 · 실행 허가 · 결과 확인 |
 | 업무 앱 계약 | [업무 앱의 지원 계약](docs/reference/application-contract-support.md) — 외부 업무 앱이 쓰는 HTTP 경로·권한·근거 경계 |
 | 배포 | [로봇 배포](docs/deployment/) · [현장 PC 배포](deploy/site/README.md) |
+| 보정 체계 | [보정 체계](docs/reference/calibration-system.md) — 코드 · 화면 · 절차 · 이력 |
+| 영상 기록 | [학습 데이터 영상](docs/reference/video-records-learning.md) · [실물·시뮬 시연 영상](docs/reference/video-records-demo.md) |
 | 협업 | [인수인계](docs/reference/handoff.md) · [git으로 일하는 법](docs/reference/git-workflow.md) · [보류 브랜치](docs/reference/held-branches.md) |
 | 기록 | [해결 기록](docs/solutions/) · [docs 모듈 색인](docs/index.md) |
 
