@@ -4,6 +4,8 @@
 !shared/web/**
 !contracts/foundation/core_common/__init__.py
 !contracts/foundation/core_common/protocol/__init__.py
+!contracts/foundation/core_common/protocol/account_access.py
+!contracts/foundation/core_common/protocol/account_client.py
 !contracts/foundation/core_common/protocol/connect_reason.py
 !contracts/foundation/core_common/protocol/monitoring.py
 !deploy/site/requirements-monitoring.txt

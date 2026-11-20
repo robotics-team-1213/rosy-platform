@@ -93,7 +93,7 @@ def test_invalid_reuse_proof_is_rejected(candidate, value):
     (["applications/monitoring/web/monitoring.js"], {"monitoring"}),
     (["shared/web/theme.js"], {"fleet", "account", "monitoring"}),
     (["deploy/site/site_db.py"], {"fleet", "account"}),
-    (["contracts/foundation/core_common/protocol/account_access.py"], {"fleet", "vision", "account"}),
+    (["contracts/foundation/core_common/protocol/account_access.py"], {"fleet", "vision", "account", "monitoring"}),
 ])
 @pytest.mark.parametrize('independent_base', [False, True])
 @pytest.mark.parametrize('monitoring_base', [False, True])

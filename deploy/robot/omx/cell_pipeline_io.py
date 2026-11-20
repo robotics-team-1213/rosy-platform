@@ -108,7 +108,7 @@ class FifoCell:
         return self._send(f"checked {assessment['session_id']} {assessment['library_sha256']} {command}", timeout)
 
     def act(self, command: str, timeout: float | None = None) -> dict:
-        if (self.operating_profile is not None and command != "state"
+        if (self.operating_profile is not None and command not in ("state", "human-hold")
                 and not command.startswith(("stop", "checked "))):
             from cell_envelope import _state_current
 
