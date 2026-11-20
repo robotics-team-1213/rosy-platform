@@ -175,3 +175,7 @@ D-1041 reserved in another in-flight branch (refs/adr/D-1041), absent from this 
 D-1042 reserved in another in-flight branch (refs/adr/D-1042), absent from this D-1047/D-1048 branch; remove when its ADR lands
 D-1044 reserved in another in-flight branch (refs/adr/D-1044), absent from this D-1047/D-1048 branch; remove when its ADR lands
 D-1045 reserved in another in-flight branch (refs/adr/D-1045), absent from this D-1047/D-1048 branch; remove when its ADR lands
+D-1044 reserved in another in-flight branch (refs/adr/D-1044), absent from this D-1051 branch; remove when its ADR lands
+D-1045 reserved in another in-flight branch (refs/adr/D-1045), absent from this D-1051 branch; remove when its ADR lands
+D-1049 reserved in another in-flight branch (refs/adr/D-1049), absent from this D-1051 branch; remove when its ADR lands
+D-1050 reserved in another in-flight branch (refs/adr/D-1050), absent from this D-1051 branch; remove when its ADR lands
