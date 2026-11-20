@@ -17,7 +17,7 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 | `protocol.py` | Wire protocol: 20-byte frame header, `hello`/`config` JSON, `rosyov://` URI. Pure stdlib |
 | `ingest.py` | `IngestServer`: one connection per source, latest-frame-only |
 | `detect.py` | CPU ArUco detector; OpenCV isolated here |
-| `project.py` | Marker observations to site map (uses the `games` homography) |
+| `project.py` | Marker observations to site map (uses `core_common.homography`) |
 | `publish.py` | Source-token-only Fleet sighting client |
 | `worker.py` | Latest-frame camera-to-Fleet pipeline, no queues |
 | `post_guard.py` | Age re-check (0.8 s) before every Fleet POST plus posted/dropped_stale/post_errors counters; the `vision` stats line prints them every 30 s |
@@ -58,7 +58,7 @@ Small single-purpose modules; config validated up front; fake frames in `test/ma
 
 ### Internal
 
-- `games.field.homography` (via `project.py`), `core_common.protocol.sightings` payload, Fleet sighting API
+- `core_common.homography` (via `project.py`, `field_calib.py`), `core_common.protocol.sightings` payload, Fleet sighting API
 
 ### External
 

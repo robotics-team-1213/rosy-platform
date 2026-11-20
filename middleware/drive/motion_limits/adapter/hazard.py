@@ -6,15 +6,7 @@ ROS-free mixin (D-171): SafetyNode builds each message (``zero_twist``,
 import math
 
 from ..sensing.lidar import wrap_pi
-
-
-def roll_pitch(q):
-    w, x, y, z = q.w, q.x, q.y, q.z
-    roll = math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
-    sinp = 2.0 * (w * y - z * x)
-    sinp = max(-1.0, min(1.0, sinp))
-    pitch = math.asin(sinp)
-    return roll, pitch
+from ..sensing.range_tilt import roll_pitch  # noqa: F401  (re-exported by safety_node)
 
 
 class Hazard:

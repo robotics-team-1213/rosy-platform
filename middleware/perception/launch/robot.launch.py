@@ -11,7 +11,7 @@ from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, Timer
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-from control.control.startup_profile import FEATURES, startup_profile
+from core_common.startup_profile import FEATURES, startup_profile
 
 
 def _share(pkg, *parts):

@@ -92,6 +92,8 @@ jobs:
         id: scope
         shell: bash
         env:
+          QUEUE_DELTA: ${{ vars.ROSY_QUEUE_DELTA }}  # D-1059 switch: unset keeps the whole queue selection
+          GH_TOKEN: ${{ github.token }}
           SCOPE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event_name == 'push' && github.event.before || '' }}
         run: |
           set -eo pipefail
@@ -100,6 +102,10 @@ jobs:
               if [ -z "$SCOPE_BASE" ] || [ "$SCOPE_BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$SCOPE_BASE^{commit}" 2>/dev/null; then
                 echo "::error::missing or unreachable SCOPE_BASE ($SCOPE_BASE) for ${{ github.event_name }}; refusing silent narrowing"
                 exit 1
+              fi
+              if [ "${{ github.event_name }}" = merge_group ] && [ "$QUEUE_DELTA" = 1 ]; then
+                # D-1059: the guard set alone when this tree is the one the pull request's green run passed.
+                ROSY_QUEUE_TESTED="$(python3 tools/harness/affected_queue.py)" && export ROSY_QUEUE_TESTED
               fi
               out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
               ;;
@@ -570,6 +576,13 @@ jobs:
               sys.exit(1)
           print(f"cutover drain gate OK: {candidate} allowed")
           PY
+      # D-1059: the merge commit this green pull_request run tested. A merge queue run reads it back
+      # (tools/harness/affected_queue.py) and repeats the guard set alone when its tree is the same.
+      # It stands before the verdict (tests pin that as the last step), so its own condition keeps a red run silent.
+      - name: Tested commit notice (D-1059)
+        if: github.event_name == 'pull_request' && needs.scope.result == 'success' && needs.test.result == 'success'
+        run: echo "::notice title=rosy-tested-commit::${{ github.sha }}"
+
       - name: All gating jobs passed
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
