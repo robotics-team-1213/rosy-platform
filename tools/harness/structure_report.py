@@ -59,7 +59,7 @@ def _load(name: str):
     path = ARCH / name
     if not path.is_file():
         return None
-    sys.path.insert(0, str(ARCH))
+    sys.path[:0] = [str(ARCH), str(ROOT / "test")]  # architecture tests import test/ratchet_lists
     spec = importlib.util.spec_from_file_location(f"_structure_report_{path.stem}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
