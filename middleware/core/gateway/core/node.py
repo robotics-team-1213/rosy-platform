@@ -29,12 +29,12 @@ CORE_EXECUTOR_KINDS = ("threaded", "events")
 
 
 def core_executor_kind(environ=os.environ) -> str:
-    """ROSY_CORE_EXECUTOR (D-953): 'threaded' (default, today's MultiThreadedExecutor) or 'events'.
+    """ROSY_CORE_EXECUTOR (D-953, D-1058): 'events' (default, C++ EventsExecutor) or 'threaded'.
 
     Separate from ROSY_EXECUTOR on purpose: CORE is the only /cmd_vel publisher (D-430), so
     its executor flips only by its own measured, reviewed decision.
     """
-    kind = environ.get("ROSY_CORE_EXECUTOR", "threaded").strip().lower() or "threaded"
+    kind = environ.get("ROSY_CORE_EXECUTOR", "events").strip().lower() or "events"
     if kind not in CORE_EXECUTOR_KINDS:
         raise ValueError(f"ROSY_CORE_EXECUTOR must be one of {', '.join(CORE_EXECUTOR_KINDS)}, "
                          f"not {kind!r}")
@@ -275,7 +275,7 @@ class RosyCoreNode(Node):
         # returns and there is no pool to drain.
         if events:
             from rclpy.executors import ExternalShutdownException
-            from rclpy.experimental import EventsExecutor  # Jazzy: experimental, hence opt-in
+            from rclpy.experimental import EventsExecutor  # Jazzy: experimental; 'threaded' is the rollback (D-1058)
             executor = EventsExecutor()
             # The native spin raises on context shutdown where the threaded one returns.
             shutdown_return = ExternalShutdownException

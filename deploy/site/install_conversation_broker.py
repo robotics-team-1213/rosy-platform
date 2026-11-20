@@ -166,6 +166,7 @@ def dependencies(bundle, digest, direct):
     if set(manifest) != {'wheels'} or type(manifest['wheels']) is not dict or not 1 <= len(manifest['wheels']) <= 100:
         raise ValueError('DEPENDENCY_MANIFEST_REQUIRED')
     resolved = {}
+    hashes = {}
     lines = []
     for name, expected in manifest['wheels'].items():
         if not re.fullmatch('[A-Za-z0-9_.+-]+[.]whl', name):
@@ -184,13 +185,19 @@ def dependencies(bundle, digest, direct):
         if package in resolved:
             raise ValueError('DEPENDENCY_DUPLICATE_REFUSED')
         resolved[package] = version
-        lines.append(f'{package}=={version} --hash=sha256:{expected}\n')
+        hashes[package] = expected
+    extras = {}
     for line in direct.decode().splitlines():
         if not line or line.startswith('#'):
             continue
-        match = re.fullmatch('([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+!-]+)', line)
-        if not match or resolved.get(re.sub('[-_.]+', '-', match[1]).lower()) != match[2]:
+        match = re.fullmatch(r'([A-Za-z0-9_.-]+)(?:\[([A-Za-z0-9_.-]+(?:,[A-Za-z0-9_.-]+)*)\])?==([A-Za-z0-9_.+!-]+)', line)
+        if not match or resolved.get(re.sub('[-_.]+', '-', match[1]).lower()) != match[3]:
             raise ValueError('DEPENDENCY_DIRECT_PIN_MISMATCH')
+        if match[2]:
+            extras.setdefault(re.sub('[-_.]+', '-', match[1]).lower(), set()).update(match[2].split(','))
+    for package, version in resolved.items():
+        selected = '[' + ','.join(sorted(extras[package])) + ']' if package in extras else ''
+        lines.append(f'{package}{selected}=={version} --hash=sha256:{hashes[package]}\n')
     return ''.join(sorted(lines)).encode()
 
 
@@ -398,7 +405,7 @@ def main(argv=None):
     target = VERSIONS/manifest['source_commit']
     cfg = {'source_commit':manifest['source_commit'], 'profile':proof['profile'], 'policy':proof['policy'],
            'valid_until':proof['evaluated_at']+7*86400, 'semantic_evidence_sha256':pins['proof'],
-           'files':{**manifest['files'], 'semantic-evaluation-proof.json':pins['proof']}}
+           'files':{**manifest['files'], f'semantic-evaluation-{pins["proof"]}.json':pins['proof']}}
     if not time.time() < cfg['valid_until']:
         raise ValueError('EVALUATION_EXPIRED')
     config = json.dumps(cfg, sort_keys=True).encode()
@@ -415,8 +422,9 @@ def main(argv=None):
     preserved = [CONFIG.parent/'status.json', CONFIG.parent/'status-reviewer-admission.json', STATUS,
                  PREVIOUS_INGRESS, *SECURITY_FILES]
     before = {p:p.read_bytes() if p.exists() else None for p in preserved}
-    snapshot(target, {**contents, 'semantic-evaluation-proof.json':proof_raw,
-                     'semantic-evaluation-receipt.json':receipt_raw, 'requirements.lock':lock}, helper)
+    snapshot(target, {**contents, f'semantic-evaluation-{pins["proof"]}.json':proof_raw,
+                     f'semantic-evaluation-receipt-{pins["proof"]}.json':receipt_raw,
+                     'requirements.lock':lock}, helper)
     venv = target/'venv'
     marker = target/'dependencies-ready.json'
     if not marker.exists():
@@ -445,7 +453,7 @@ def main(argv=None):
         'cfg=json.loads(sys.argv[1]);p=Profile.model_validate(cfg["profile"]);'
         'assert cfg["policy"]==source_policy(cfg["source_commit"],p);'
         'assert set(source_files(Path.cwd()))<=set(cfg["files"]);'
-        'validate(json.load(open("semantic-evaluation-proof.json")),cfg,p);'
+        'validate(json.load(open("semantic-evaluation-"+cfg["semantic_evidence_sha256"]+".json")),cfg,p);'
         'from deploy.ai_pc.deliberation_ollama import loaded,exchange;loaded(exchange("/api/ps",None,5));'
         'print("SNAPSHOT_EVALUATION_AND_LOADED_MODEL_VALID")')
     run('/usr/sbin/runuser', '-u', account.pw_name, '--', str(venv/'bin/python'), '-I', '-B', '-c',

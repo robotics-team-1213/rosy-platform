@@ -328,7 +328,7 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
                       at_stop=lambda state, status: seen.append((list(cell.cmds), status)))
     assert len(record["points"]) == 6 and cell.cmds[-1] == "park"
     # 2026-11-14: the stop's evidence is taken before the fold, and the log says what the runner said
-    assert len(seen) == 1 and "park" not in seen[0][0] and "wrist_roll lag" in seen[0][1]["error"]
+    assert len(seen) == 1 and "park" not in seen[0][0][1:] and "wrist_roll lag" in seen[0][1]["error"]
     assert any("wrist_roll lag" in str(row.get("error")) for row in rows if "stopped" in row)
     broken = cc.remap(Cell(), config, points, tmp_path, log=lambda row: None, at_stop=lambda *a: 1 / 0)
     assert len(broken["points"]) == 6  # a failing evidence hook still folds and keeps the marks
@@ -424,7 +424,7 @@ def test_a_scene_that_changed_during_the_remap_saves_no_map(tmp_path, monkeypatc
 
         def frame(self, camera):
             view = np.zeros((480, 640, 3), np.uint8)
-            if self.parked:  # a box pushed while the arm was out
+            if self.i >= 0:  # a box pushed while the arm was out
                 view[100:200, 100:160] = (20, 90, 220)
             return view
 
@@ -440,6 +440,41 @@ def test_a_scene_that_changed_during_the_remap_saves_no_map(tmp_path, monkeypatc
         cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
     kept = sorted(p.name for p in next((tmp_path / "remap-frames").iterdir()).iterdir())
     assert "before.jpg" in kept and "after.jpg" in kept and "07.jpg" in kept
+
+
+def test_remap_parks_before_reference_and_ignores_moving_belt(tmp_path, monkeypatch):
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+
+    class Cell:
+        def __init__(self):
+            self.i, self.parked = -1, False
+
+        def frame(self, camera):
+            view = np.zeros((480, 640, 3), np.uint8)
+            if not self.parked:  # unparked entry arm pose must not pollute `before`
+                view[20:120, 300:400] = (200, 200, 200)
+            if self.i >= 0:  # running belt + configured ignore rect
+                view[90:200, 320:500] = (180, 180, 180)
+                view[10:80, 10:60] = (180, 180, 180)
+            return view
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            self.parked = command == "park"
+            return {"ok": True}
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None, **kw: to_px(points[cell.i]))
+    config = {
+        "coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04},
+        "sites": {"pallet": {"yaw_deg": 0.0}, "belt": {"moving_px": [291, 83, 638, 265]}},
+        "scene_ignore_px": [[0, 0, 75, 300]],
+        "calibrate": {"map_sites": ["pallet"]},
+    }
+    record = cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
+    assert len(record["points"]) == len(points)
 
 
 def _tcp_remap(tmp_path, monkeypatch, shows, pairs):
@@ -503,6 +538,11 @@ def test_a_map_only_a_minority_of_the_marks_agree_on_is_refused():
     assert cc.enough_agree(5, 8) and cc.enough_agree(5, 9)
     assert not cc.enough_agree(5, 10)  # half: either side of the jaws could be the true one
     assert not cc.enough_agree(4, 4)
+
+
+def test_cell_calibrate_clears_bias_cache_on_cell_pivot_bias():
+    assert "cell_pivot._BIAS_CACHE" not in (ROOT / "deploy/robot/omx/cell_calibrate.py").read_text(encoding="utf-8")
+    assert "cell_pivot_bias._BIAS_CACHE.clear()" in (ROOT / "deploy/robot/omx/cell_calibrate.py").read_text(encoding="utf-8")
 
 
 def test_colour_diff_marks_black_finger_over_iso_luma_orange_background():

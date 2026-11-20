@@ -125,6 +125,18 @@ test('edits copy the map and refuse bad values', () => {
   assert.equal(editPlace(faced, 'A', {kind: 'start'}).places[0].kind, 'start');
 });
 
+test('a pin set in the inspector survives a hand move and clears without leaving a false flag', () => {
+  const pinned = editEdge(editPlace(MAP, 'B', {pinned: true}), 'ab', {pinned: true});
+  assert.equal(pinned.places[1].pinned, true);
+  assert.equal(pinned.edges[0].pinned, true);
+  assert.equal('pinned' in editPlace(pinned, 'B', {pinned: false}).places[1], false);
+  let map = createSurveyDraft('new', {revision: 'r1', origin: [0, 0], heading_rad: 0,
+    scale_source: 'odometry', description: 'Start'});
+  map = appendSurveyElement(map, {id: 'a', kind: 'junction', name: 'A', geometry: [[0, 0]]});
+  map = editPlace(map, 'a', {pinned: true});
+  assert.equal(editSurveyElement(map, {id: 'a', kind: 'junction', name: 'A', geometry: [[0, .1]]}).places[0].pinned, true);
+});
+
 test('trip errors read in Korean with the leg and the unblock hint', () => {
   assert.match(tripErrorText('TRIP_NO_ROUTE', {segment: 1, unblock_would_help: true}), /2번째 구간.*막은 차로/);
   assert.match(tripErrorText('NEW_CODE'), /NEW_CODE/);

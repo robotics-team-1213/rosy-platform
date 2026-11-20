@@ -431,23 +431,26 @@ chargeBays.refresh();
 platoon.refresh();
 stationRecovery.refresh();
 personRequests.refresh();
-pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
-pageScope.interval(refreshState, STATE_MS);
-pageScope.interval(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
-pageScope.interval(refreshHealthz, STATE_MS);
+// A hidden tab polls nothing but presence (it must still say visible:false); coming back reads at once.
+const poll = (fn, ms) => pageScope.interval(() => { if (!document.hidden) fn(); }, ms);
+pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); trackingView.refresh(); } });
+poll(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
+poll(refreshState, STATE_MS);
+poll(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
+poll(refreshHealthz, STATE_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
-pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
-pageScope.interval(refreshDiscovery, MAP_MS);
-pageScope.interval(refreshRobotApps, MAP_MS);
-pageScope.interval(() => mapView.refresh(), MAP_MS);
-pageScope.interval(() => chargeBays.refresh(), MAP_MS);
-pageScope.interval(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
-pageScope.interval(() => platoon.refresh(), MAP_MS);
-pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
-pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
-pageScope.interval(() => mapView.refreshGuide(), STATE_MS);  // D-536
-pageScope.interval(() => trackingView.refresh(), TRACKING_MS);
-pageScope.interval(() => visionView.refreshFrame(), 1500);
+poll(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
+poll(refreshDiscovery, MAP_MS);
+poll(refreshRobotApps, MAP_MS);
+poll(() => mapView.refresh(), MAP_MS);
+poll(() => chargeBays.refresh(), MAP_MS);
+poll(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
+poll(() => platoon.refresh(), MAP_MS);
+poll(() => mapView.refreshSightings(), STATE_MS);
+poll(() => mapView.refreshTraffic(), STATE_MS);
+poll(() => mapView.refreshGuide(), STATE_MS);  // D-536
+poll(() => trackingView.refresh(), TRACKING_MS);
+poll(() => visionView.refreshFrame(), 1500);
 
 
 pageScope.onResume(() => {
