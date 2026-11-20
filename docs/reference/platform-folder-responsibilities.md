@@ -62,7 +62,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 
 ## 3D 자산 경계 (2026-11-19)
 
-3D 설계와 플랫폼 런타임은 분리한다. 이 저장소에는 코드나 시험이 직접 읽는 런타임 3D 입력(URDF·시뮬·지도 메시)만 둔다. 허용 루트는 `learning/envs/isaac/assets/`, `middleware/devices/pinky/description/meshes/`, `middleware/perception/map/map_v2_fleet/`, `middleware/perception/map/map_world_261026/`, `integrations/simulation/gazebo/models/` 다섯 곳뿐이다.
+3D 설계와 플랫폼 런타임은 분리한다. 이 저장소에는 코드나 시험이 직접 읽는 런타임 3D 입력(URDF·시뮬·지도 메시)만 둔다. 허용 루트는 `learning/envs/isaac/assets/`, `middleware/devices/pinky/description/meshes/`, `middleware/perception/map/map_v2_fleet/`, `middleware/perception/map/map_world_261026/`, `integrations/simulation/gazebo/models/`, 브라우저 3D 표시용 `shared/web/meshes/` 여섯 곳뿐이다.
 
 - **금지 대상**: 3D 생성기(`manifold3d`·`cadquery` import), CAD 원본(`.3mf`·`.scad`·`.step`·`.stp`·`.f3d`·`.blend`), 출력·검수 파일은 저장소에 두지 않는다.
 - **출처 기록 (`SOURCE.json`)**: 추적되는 모든 메시는 자기 폴더 또는 허용 범위(Pinky는 `description/`) 안 상위 폴더에 `SOURCE.json`을 두어야 한다. 필수 키는 비어 있지 않은 문자열 `"source"`(공급 패키지·상위 저장소·설계 폴더)이며, `"frame"`·`"note"`·`"meshes"` 등을 선택해 함께 적는다.

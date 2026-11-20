@@ -113,7 +113,7 @@ const connectionView = createConnectionView({scope: pageScope, el});
 
 function operatorControls() {
   return document.querySelectorAll(
-    "ui-button:not(#estop):not(#robot-panel-stop):not([data-always-live]):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#map-overlay-toggles ui-button):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]):not(.robot-panel-close):not(#alert-popup-region ui-button), main input:not(#arm-transfer-id):not(#map-display-mode input), main select:not(#vision-source):not([data-work-read]), #queues-panel input, #queues-panel select");
+    "ui-button:not(#estop):not(#robot-panel-stop):not([data-always-live]):not([data-manual-direction]):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#map-overlay-toggles ui-button):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]):not(.robot-panel-close):not(#alert-popup-region ui-button), main input:not(#arm-transfer-id):not(#map-display-mode input), main select:not(#vision-source):not([data-work-read]), #queues-panel input, #queues-panel select");
 }
 
 const view = {

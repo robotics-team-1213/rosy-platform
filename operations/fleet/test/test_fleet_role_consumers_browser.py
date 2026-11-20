@@ -140,7 +140,9 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (path, width)
                 _assert_control(page.locator("#topbar-more"))
                 if path == "/console":
+                    page.locator("#fleet-inbox").click()  # 11-21: queue rows live in the bell's drawer
                     _assert_control(page.locator(".queue-row").first)
+                    page.keyboard.press("Escape")
                     # Ensure rosy_03 panel is open so token link control stays measurable across sizes.
                     btn = page.locator('#robot-dock-mount .robot-dock-btn[data-robot-id="rosy_03"]')
                     if btn.get_attribute("aria-pressed") != "true":
