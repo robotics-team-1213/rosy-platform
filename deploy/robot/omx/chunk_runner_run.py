@@ -34,6 +34,7 @@ from chunk_runner_guards import (  # noqa: E402, F401
     human_hold_overload, read_motor_health,
 )
 from chunk_runner_trace import trace_receipt  # noqa: E402
+from chunk_runner_interrupt import interrupt_tick  # noqa: E402
 from chunk_runner_settle import (  # noqa: E402, F401
     IDLE_PARK_S, IDLE_RETRY_S, IDLE_STOP_S, SETTLE_S,
     check_chunk_settled, check_runner_idle, tick_or_report, wait_aligned_before_start,
@@ -360,6 +361,8 @@ class Runner:
             if "human-hold" in self.pending:
                 self.pending.clear()  # preempt even a queued stop or park
                 self.command("human-hold")
+            if getattr(self, "signals", None):
+                self.pending.clear()  # interrupted (SIGINT/SIGTERM): no new motion, chunk_runner_interrupt folds or holds
             while (
                 len(self.pending) > 1
                 and self.pending[0].strip().split()[:1] in (["state"], ["episode"])
@@ -369,7 +372,8 @@ class Runner:
                     return
             if self.pending and not getattr(self, "_stop_after_park", None) and not self.command(self.pending.pop(0)):
                 return
-            tick_or_report(self, f"run {self.chunk}" if self.chunk else "tick")
+            if interrupt_tick(self, f"run {self.chunk}" if self.chunk else "tick", tick_or_report):
+                return
             if getattr(self, "_stopped", False) or self.idle():
                 return
             if self.live and self.ticks % max(1, self.fps // 10) == 0:
@@ -383,6 +387,7 @@ class Runner:
                         "fault": self.fault,
                         "human_hold_latched": self.human_hold_latched,
                         "torque_hold_commanded": self.torque_hold_commanded,
+                        **({"interrupt": self._interrupt["phase"]} if getattr(self, "_interrupt", None) else {}),
                         "health": self.health,
                         **({"jitter": self.jitter} if self.jitter["shaking"] else {}),
                     }

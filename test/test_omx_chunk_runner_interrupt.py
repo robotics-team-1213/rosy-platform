@@ -1,0 +1,179 @@
+"""SIGINT/SIGTERM on chunk_runner: fold home and read it back before torque OFF, else hold torque ON (pipeline-gate-1120)."""
+import importlib.util
+from pathlib import Path
+import signal
+import sys
+
+import pytest
+
+OMX = Path(__file__).parents[1] / "deploy/robot/omx"
+sys.path.insert(0, str(OMX))
+try:
+    spec = importlib.util.spec_from_file_location("chunk_runner", OMX / "chunk_runner.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    import chunk_runner_interrupt as ci
+finally:
+    sys.path.remove(str(OMX))
+
+HOME = [0.0, -60.0, 50.0, 45.0, 10.0, 46.6]
+RELEASE = 12  # SIGUSR2 on Linux; Windows has none
+
+
+class Robot:
+    """Follows each action at once; joints in `blocked` stay put; `fail_after` sends raise like a guard stop."""
+
+    def __init__(self, blocked=(), fail_after=None, block_from=0):
+        self.pos, self.sent, self.blocked, self.fail_after = list(HOME), [], blocked, fail_after
+        self.block_from = block_from
+
+    def send_action(self, action):
+        if self.fail_after is not None and len(self.sent) >= self.fail_after:
+            raise ValueError("shoulder_lift: following error >5 motor degrees")
+        self.sent.append(action)
+        for i, name in enumerate(m.NAMES):
+            if i not in self.blocked or len(self.sent) <= self.block_from:
+                self.pos[i] = action[name]
+
+    def get_observation(self):
+        return dict(zip(m.NAMES, self.pos))
+
+
+def library():
+    reach = [[k * 2.0, -60.0 + k, 50.0 - k, 45.0, 10.0, 46.6] for k in range(25)]  # pan 48, lift out, elbow in
+    return {"schema": m.SCHEMA, "names": m.NAMES, "gripper_closed": 46.6,
+            "chunks": {"reach": reach, "home": [HOME]}}
+
+
+def drive(robot, *, signal_after, release_after=None, commands=("run reach",), limit_s=600):
+    """Signal SIGINT `signal_after` ticks into the run, the operator release `release_after` s after the HOLD."""
+    status, clock, queue, ticks, held_at = [], [0.0], list(commands), [0], []
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals = []
+
+    def lines():
+        ticks[0] += 1
+        if ticks[0] == signal_after:
+            r.signals.append(signal.SIGINT)
+        if not held_at and any(row.get("hold") for row in status):
+            held_at.append(clock[0])
+        if release_after is not None and held_at and clock[0] >= held_at[0] + release_after and RELEASE not in r.signals:
+            r.signals.append(RELEASE)
+        if clock[0] > limit_s:
+            raise TimeoutError("the runner neither ended nor held")
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)
+    return r, status, clock[0], held_at
+
+
+def interrupts(status):
+    return [row for row in status if row["command"] == "interrupt"]
+
+
+@pytest.fixture(autouse=True)
+def release_signal(monkeypatch):
+    monkeypatch.setattr(ci, "OPERATOR_RELEASE", RELEASE)
+
+
+def test_an_interrupt_while_extended_parks_then_ends_only_after_the_fold_reads_home():
+    robot = Robot()
+    r, status, _, held = drive(robot, signal_after=20)  # mid-chunk, pan near 38, lift and elbow out
+    folding, done = interrupts(status)[0], interrupts(status)[-1]
+    assert folding["folding"] and not held
+    assert max(abs(a - b) for a, b in zip(folding["state"][:5], HOME[:5])) > 10  # it really was out
+    park = [row for row in status if row["command"] == "run park"]
+    assert park and park[-1]["settled"]
+    assert done["ok"] and done["folded"] and robot.pos[:5] == pytest.approx(HOME[:5], abs=ci.SETTLE_TOL)
+    assert not r.human_hold_latched  # run returned: chunk_runner.main turns torque OFF only now
+
+
+def test_an_interrupt_while_folded_ends_at_once():
+    robot = Robot()
+    r, status, _, _ = drive(robot, signal_after=2, commands=())
+    assert [row["reason"] for row in interrupts(status)] == ["already folded, torque goes OFF"]
+    assert not [row for row in status if row["command"] == "run park"] and len(robot.sent) <= 2
+
+
+@pytest.mark.parametrize("robot", [Robot(blocked=(0,), block_from=19), Robot(fail_after=30)], ids=["blocked-pan", "guard-stop"])
+def test_a_fold_that_cannot_finish_holds_torque_on_until_a_person_releases_it(robot):
+    r, status, ended, held = drive(robot, signal_after=20, release_after=60.0)
+    hold = next(row for row in interrupts(status) if row.get("hold"))
+    assert hold["ok"] is False and hold["person_needed"] and "HOLD" in hold["error"]
+    assert r.human_hold_latched and r.torque_hold_commanded == (robot.fail_after is None)  # a dead guard sends nothing
+    assert ended >= held[0] + 60.0  # the run did not end (no close_device, no torque OFF) until the release
+    assert not any(row.get("folded") for row in interrupts(status))
+    assert interrupts(status)[-1]["released"] is True
+
+
+def test_a_further_sigterm_during_a_hold_only_repeats_the_hold():
+    robot = Robot(blocked=(0,), block_from=19)
+    status, clock = [], [0.0]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, queue, n = [], ["run reach"], [0]
+
+    def lines():
+        n[0] += 1
+        if n[0] == 20:
+            r.signals.append(signal.SIGINT)
+        if any(row.get("hold") for row in status) and signal.SIGTERM not in r.signals:
+            r.signals.append(signal.SIGTERM)
+        if sum(1 for row in interrupts(status) if row.get("hold")) >= 2:
+            r.signals.append(RELEASE)
+        if clock[0] > 600:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)
+    holds = [row for row in interrupts(status) if row.get("hold")]
+    assert len(holds) >= 2 and holds[1]["error"] == "HOLD: still holding, torque ON"
+
+
+def test_a_fold_past_its_bound_holds(monkeypatch):
+    monkeypatch.setattr(ci, "INTERRUPT_PARK_S", 0.5)
+    r, status, _, held = drive(Robot(), signal_after=20, release_after=1.0)
+    assert held and "did not finish within" in next(row for row in interrupts(status) if row.get("hold"))["error"]
+
+
+def test_the_live_state_says_hold():
+    rows = []
+    robot = Robot(blocked=(0,), block_from=19)
+    status, clock = [], [0.0]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0], live=rows.append,
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, queue, n = [], ["run reach"], [0]
+
+    def lines():
+        n[0] += 1
+        if n[0] == 20:
+            r.signals.append(signal.SIGINT)
+        if rows and rows[-1].get("interrupt") == "hold":
+            r.signals.append(RELEASE)
+        if clock[0] > 600:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)
+    assert rows[-1]["interrupt"] == "hold" and rows[-1]["human_hold_latched"]
+
+
+def test_an_interrupt_before_the_guard_tracks_does_not_move_an_extended_arm():
+    robot = Robot()
+    robot.pos = [30.0, -40.0, 30.0, 45.0, 10.0, 46.6]
+    robot.motion = type("Motion", (), {"tracking": False, "held": None})()
+    status, clock = [], [0.0]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals, n = [signal.SIGTERM], [0]
+
+    def lines():
+        n[0] += 1
+        if n[0] > 30:
+            r.signals.append(RELEASE)
+        return []
+
+    r.run(lines)
+    hold = next(row for row in interrupts(status) if row.get("hold"))
+    assert "not tracking" in hold["error"] and all(a["shoulder_pan.pos"] == 30.0 for a in robot.sent)

@@ -24,7 +24,8 @@ if _HERE not in sys.path:
 
 import cell_arm_lease  # noqa: E402
 from joint_tune import SerialBus as _DefaultSerialBus, no_interrupts, protect_signals, session_lock  # noqa: E402
-from record_session_helpers import compose, interrupt_on_parent_death, load_task_card, static_episodes  # noqa: E402
+from record_session_helpers import (  # noqa: E402
+    RUNNER_HOLD_EXIT, RunnerHeld, compose, interrupt_on_parent_death, load_task_card, static_episodes, wait_for_runner)
 from session_caps import load_caps, model_tuning, robot_tuning  # noqa: E402
 
 
@@ -138,10 +139,13 @@ def main(argv=None, *, _globals: dict | None = None):
         sub = attr("subprocess", _std_subprocess)
         iopd = attr("interrupt_on_parent_death", interrupt_on_parent_death)
         ni = attr("no_interrupts", no_interrupts)
+        io = Path(chunks["io"]) if chunks else None
         child = sub.Popen(
             command,
             start_new_session=True,
             preexec_fn=iopd,
+            # the runner shares the session lock: a runner left holding keeps the arm locked after this process ends
+            pass_fds=tuple(h.fileno() for h in getattr(lock, "handles", ())) if io else (),
             env={
                 **os.environ,
                 "ROSY_OMX_MONITOR_LOG": str(monitor_path),
@@ -154,10 +158,21 @@ def main(argv=None, *, _globals: dict | None = None):
             return child.wait()
         except KeyboardInterrupt:
             with ni():
-                child.send_signal(signal.SIGINT)
-                try:
-                    child.wait(timeout=10)
-                except sub.TimeoutExpired:
+                if io is None:  # lerobot-record: no fold of its own, as before
+                    child.send_signal(signal.SIGINT)
+                    try:
+                        child.wait(timeout=10)
+                    except sub.TimeoutExpired:
+                        child.kill()
+                        child.wait()
+                    raise
+                status = io / "chunk-status.jsonl"
+                offset = status.stat().st_size if status.exists() else 0
+                child.send_signal(signal.SIGINT)  # chunk_runner folds and reads it back, or holds torque ON
+                outcome, row = attr("wait_for_runner", wait_for_runner)(child, io, offset)
+                if outcome == "hold":
+                    raise RunnerHeld(row)
+                if outcome == "silent":  # alive, yet no status or live write: the only kill left (README)
                     child.kill()
                     child.wait()
             raise
@@ -232,14 +247,21 @@ def main(argv=None, *, _globals: dict | None = None):
                     motor_health_session=monitor_session,
                 )
                 Path("session.json").write_text(json.dumps(record, indent=2, default=str))
+                if record.get("runner_held"):
+                    raise SystemExit(RUNNER_HOLD_EXIT)  # the bus and arm stay the holding runner's: no incident read
                 try:
                     print(json.dumps(omx_incident.after_session(args.arm, ports.get("follower") or ports.get(args.arm)), default=str)[:2000])
                 except Exception as exc:
                     print(f"incident pipeline failed: {exc}")
         finally:
-            if lease_created:
+            if lease_created and not record.get("runner_held"):
                 cell_arm_lease.release(args.arm)
             lock.close()
+            if record.get("runner_held"):
+                print("RUNNER HOLD: chunk_runner holds the arm with torque ON (interrupt fold failed); lease and lock "
+                      "stay with it. A person supports the arm, then kill -USR2 the runner; the session caps stay "
+                      "written until restored. "
+                      f"Report: {json.dumps(record['runner_held'], default=str)[:1000]}", file=sys.stderr, flush=True)
     if not record.get("safe_end"):
         raise SystemExit("UNSAFE END: follower torque or caps not confirmed restored - see session.json")
     raise SystemExit(record.get("exit_code") or 0)

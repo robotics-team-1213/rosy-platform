@@ -39,3 +39,10 @@ applies_when: "ending a hardware chunk_runner session via 'stop' or executing pa
    - Use `i_gain: 0` on `shoulder_lift`, `elbow_flex`, and `wrist_flex` (IDs 12, 13, 14) on `arm_s`, set `"gripper_closed": 48.5` (within `0.4` units of `48.86` physical contact), keep upward `shoulder_lift` step sizes `<= 0.032 units/tick`, and fold to `home` in script `finally:` blocks before sending `"stop"`.
 3. **Verification.**
    - Unit test `test_hardware_stop_while_extended_folds_home_before_turning_torque_off` in `test/test_omx_chunk_runner.py` (`78 passed`).
+
+## 2026-11-20 addendum: the signal path still cut torque while extended
+
+- **Gap.** The fold above covered the `stop` command only. A SIGTERM to `record_session.py` became SIGINT to `chunk_runner.py`; the runner had no handler, so `KeyboardInterrupt` reached `chunk_runner.main`'s `finally` and `close_device` turned torque OFF where the arm was. After 10 s `record_session` also SIGKILLed the runner and its `finish` cut torque. Found by review (pipeline-gate-1120), not on a real arm.
+- **Fix.** `chunk_runner_interrupt.py` records the signal instead of raising. The run loop folds with the same `stop fold` and ends only when the readback is within `SETTLE_TOL` of home. Any failure (hold, raise, short fold, 120 s bound, guard not yet tracking) latches `human-hold` and keeps the process alive; only SIGUSR2 from a person cuts torque. `record_session` waits for that outcome (`wait_for_runner`) and on HOLD exits 75 without torque OFF, cap restore, incident read or lease release; the runner inherits the session lock fds.
+- **Apply when** adding any new way to end a torque-on process (a signal, a timeout, a supervisor kill): a `finally` that turns torque OFF is a drop path unless a confirmed fold precedes it.
+- **Verification.** `test/test_omx_chunk_runner_interrupt.py` (fake robot: extended -> park then end; folded -> immediate end; blocked fold and guard stop -> HOLD until SIGUSR2; repeated SIGTERM; bound; live.json; before tracking) and four tests in `test/test_omx_record_session.py`. A supervised real-arm check is still pending.

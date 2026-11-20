@@ -25,6 +25,9 @@ run stops by itself on a read failure or a following error above FOLLOW_STOP for
 Elsewhere a joint whose lag rises past STRAIN_LAG at STRAIN_PWM of its cap holds like a contact (strained()).
 ROSY_CHUNK_TRACE=<file> appends one JSON line per tick (time, chunk, target, sent, present) to measure jitter.
 
+SIGINT/SIGTERM never cut torque with the arm out: the runner folds home and reads the fold back, then torque goes OFF;
+a fold that cannot finish leaves a human hold (torque ON) until a person sends SIGUSR2 (chunk_runner_interrupt.py).
+
 Launched by record_session.py --chunks; never on its own (the session owns caps and cleanup).
 """
 from __future__ import annotations
@@ -173,6 +176,8 @@ def main(argv=None):
     parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
     parser.add_argument("--load-model", type=Path, help="load-model.json (load_model.py): refuse a library whose holds are predicted risky")
     args = parser.parse_args(argv)
+    signals: list = []  # recorded, not raised: an interrupt folds or holds (chunk_runner_interrupt), never drops the arm
+    __import__("chunk_runner_interrupt").install(signals)
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     params = prm.load(args.params)["values"]
@@ -224,6 +229,7 @@ def main(argv=None):
                                   operating_profile=profile, params=params)
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
                         operating_context=context, params=params, plan_check=check)
+        runner.signals = signals
         trace_path = Path(path).expanduser().resolve() if (path := os.environ.get("ROSY_CHUNK_TRACE")) else None
         trace_file = trace_path.open("a") if trace_path else None  # buffered: no write call per tick
         if trace_file:

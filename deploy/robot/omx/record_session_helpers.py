@@ -20,6 +20,45 @@ def interrupt_on_parent_death() -> None:
     ctypes.CDLL(None, use_errno=True).prctl(PR_SET_PDEATHSIG, signal.SIGINT)
 
 
+RUNNER_HOLD_EXIT = 75  # record_session ended but left chunk_runner holding torque ON: a person must act
+RUNNER_SILENT_S = 15.0  # no status or live.json write for this long after the interrupt: the runner is unresponsive
+
+
+class RunnerHeld(Exception):
+    """chunk_runner reported an interrupt HOLD: torque ON at its pose, so the session must not cut torque or restore caps."""
+
+
+def wait_for_runner(child, io: Path, offset: int, *, silent_s=RUNNER_SILENT_S, clock=time.monotonic, sleep=time.sleep):
+    """After SIGINT to chunk_runner: ("exited", code) once it folded and ended, ("hold", row) on its HOLD report, or
+    ("silent", None) when it is alive but wrote neither chunk-status.jsonl (from `offset`) nor live.json for silent_s."""
+    status, live = Path(io) / "chunk-status.jsonl", Path(io) / "live.json"
+    seen, quiet_since, buffer = None, clock(), b""
+    while True:
+        code = child.poll()
+        if code is not None:
+            return "exited", code
+        if status.exists():
+            with status.open("rb") as f:
+                f.seek(offset)
+                data = f.read()
+            offset += len(data)
+            buffer += data
+            *done, buffer = buffer.split(b"\n")
+            for line in done:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if row.get("command") == "interrupt" and row.get("hold"):
+                    return "hold", row
+        stamp = tuple(p.stat().st_mtime_ns if p.exists() else None for p in (status, live)) + (offset,)
+        if stamp != seen:
+            seen, quiet_since = stamp, clock()
+        elif clock() - quiet_since >= silent_s:
+            return "silent", None
+        sleep(0.5)
+
+
 def release(anchor_file: str | Path = __file__) -> str | None:
     """The code commit these tools came from (RELEASE written by omx_autoupdate.py), if installed so."""
     marker = Path(anchor_file).resolve().parents[3] / "RELEASE"
