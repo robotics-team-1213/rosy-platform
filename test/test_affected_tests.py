@@ -9,6 +9,7 @@ real repository through the CLI so the registry and the selector stay in step.
 
 from __future__ import annotations
 
+import functools
 import json
 import subprocess
 import sys
@@ -46,7 +47,7 @@ def _assert_g1_timing_is_dedicated(invocations):
 
 
 def test_g1_timing_full_ci_and_lab_have_one_exclusive_whole_file():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     _assert_g1_timing_is_dedicated(affected.lab_full_invocations(repo))
     matrix = affected.ci_matrix(repo, affected.Selection('full', []))['include']
     _assert_g1_timing_is_dedicated([inv for entry in matrix for inv in entry['invocations']])
@@ -56,7 +57,7 @@ def test_g1_timing_full_ci_and_lab_have_one_exclusive_whole_file():
     ['test/test_platform_g1_timing.py::test_real_uds_round_trip_stays_inside_the_bound',
      'test/test_affected_tests.py']])
 def test_g1_timing_owner_selections_keep_the_whole_file_exclusive(paths):
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     invocations = affected.pack(repo, paths)
     _assert_g1_timing_is_dedicated(invocations)
     matrix = affected.ci_matrix(repo, affected.Selection('affected', [], invocations=invocations))['include']
@@ -64,7 +65,7 @@ def test_g1_timing_owner_selections_keep_the_whole_file_exclusive(paths):
 
 
 def test_fleet_development_module_selects_application_contracts():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     module = repo.module_for('applications/fleet/dev/sample/engine.py')
     assert module['tests'] == ['applications/fleet/test']
     matrix = affected.ci_matrix(repo, affected.Selection('full', []))['include']
@@ -72,7 +73,7 @@ def test_fleet_development_module_selects_application_contracts():
 
 
 def test_external_drive_holders_select_their_installing_distribution():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     behavior = 'middleware/drive/behaviors/line_follow/manager.py'
     assert repo.module_for(behavior)['name'] == 'core_features'
     assert repo.module_for('middleware/drive/runtime/goal_node.py')['name'] == 'control'
@@ -85,7 +86,7 @@ def test_external_drive_holders_select_their_installing_distribution():
                                      "applications/fleet/web/console.js"])
 def test_a_surface_tree_change_selects_the_registry_contract_suites(changed):
     # 2026-10-18: the D-792 camera page landed red because these suites never name review_app_web.
-    selection = affected.select(affected.Repo.load(ROOT), [changed])
+    selection = affected.select(_real_repo(), [changed])
     assert {"shared/web/test/test_ui_token_contracts.py", "shared/web/test/test_shared_controls.py"} <= set(
         selection.reasons)
 
@@ -187,6 +188,12 @@ def sample(tmp_path_factory) -> Path:
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "base")
     return repo
+
+
+@functools.lru_cache(maxsize=None)
+def _real_repo() -> affected.Repo:
+    """The real tree, read once for the tests that only read it: each fresh Repo re-read and re-parsed it (about 1.9 s a test)."""
+    return affected.Repo.load(ROOT)
 
 
 def _select(sample: Path, *changed: str) -> affected.Selection:
@@ -505,7 +512,7 @@ def test_committed_folder_moves_escalate(sample, capsys, change, mode):
 
 def test_real_repo_wide_ordinary_edits_stay_affected():
     """D-762 stage 0: an API version bump (its pin files), ADR-gap records and D-766 size data are not FULL."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     pins = ["middleware/core/api/core_api_web/api/app.py", "docs/reference/ROSY API & Protocol Reference.md",
             "operations/fleet/test/test_lane_route.py", "operations/fleet/test/test_mission_progress.py",
             "test/test_line_follow_contract_docs.py"]
@@ -518,7 +525,7 @@ def test_real_repo_wide_ordinary_edits_stay_affected():
 def test_real_repo_module_reached_through_a_sibling_import_maps_to_its_tests():
     """D-889 21, 11-01: test_experiment_hub.py loads experiment_center, which imports experiment_hub; the hub was
     "unknown -> full" in 17 landings because the selector followed one import level only."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     sel = affected.select(repo, ["learning/training/omx/experiment_hub.py"])
     assert sel.mode == "affected", sel.escalations
     assert "learning/training/omx/test/test_experiment_hub.py" in sel.reasons
@@ -531,7 +538,7 @@ def test_real_repo_module_reached_through_a_sibling_import_maps_to_its_tests():
 ])
 def test_real_repo_full_tier_covers_every_module_suite_and_the_local_selection(changed):
     """D-762 stage 0: a FULL landing never runs fewer suites than the old guards + mapped path."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     sel = affected.select(repo, changed)
     assert sel.mode == "full"
     full = [p for inv in sel.full_invocations for p in inv if not p.startswith("-")]
@@ -558,7 +565,7 @@ def test_real_registry_guard_set_exists():
 
 def test_real_repo_selector_paths_escalate():
     """The selector's own files and the harness config always escalate."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     for path in ("tools/harness/affected_tests.py", "tools/harness/harness.yaml",
                  "contracts/foundation/core_common/__init__.py", "contracts/foundation/setup.py"):
         assert affected.select(repo, [path]).mode == "full", path
@@ -566,7 +573,7 @@ def test_real_repo_selector_paths_escalate():
 
 def test_real_repo_ci_workflow_keeps_full_execution_coverage():
     """Textual readers do not establish coverage of the jobs a workflow changes."""
-    sel = affected.select(affected.Repo.load(ROOT), [".github/workflows/ci.yml"])
+    sel = affected.select(_real_repo(), [".github/workflows/ci.yml"])
     assert sel.mode == "full", sel.escalations
     assert "test" in sel.reasons
 
@@ -579,7 +586,7 @@ def _safety_escalations(sel):
 
 
 def test_real_repo_safety_paths_escalate_to_full_and_are_never_narrowed():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     # A concern: safety root file, and a safety_modules entry under the narrowable foundation.
     for path in ("middleware/drive/motion_limits/actuation.py",
                  "contracts/foundation/core_common/protocol/swarm_freshness.py"):
@@ -589,7 +596,7 @@ def test_real_repo_safety_paths_escalate_to_full_and_are_never_narrowed():
 
 
 def test_real_repo_non_safety_path_and_safety_markdown_are_not_escalated_by_the_safety_rule():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     for path in ("middleware/perception/control/battery.py",
                  "middleware/drive/motion_limits/AGENTS.md"):  # NOT_TRIGGERS: Markdown is not FULL
         assert not _safety_escalations(affected.select(repo, [path])), path
@@ -644,7 +651,7 @@ def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
 
 
 def test_standalone_app_tests_are_required_in_full_and_affected_ci():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     path = 'applications/fleet/test'
     for selection in (affected.Selection('full', []), affected.select(repo, [path + '/test_sample_browser.py'])):
         matrix = affected.ci_matrix(repo, selection)['include']
@@ -657,7 +664,7 @@ def test_standalone_app_tests_are_required_in_full_and_affected_ci():
 
 
 def test_fleet_timing_data_selects_only_its_reader_and_guards(monkeypatch):
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     timing = "tools/harness/fleet_test_seconds.json"
     reader = "test/test_affected_tests.py"
     assert affected.select(repo, [timing]).mode == "full"  # legacy switch
@@ -699,7 +706,7 @@ def _invocation_test_files(repo, invocation):
 
 
 def test_full_ci_runs_station_scheduling_on_its_own_required_runner():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     suite = "middleware/core/gateway/test"
     target = f"{suite}/test_station_camera_scheduling.py"
     ignore = f"--ignore={target}"
@@ -715,7 +722,7 @@ def test_full_ci_runs_station_scheduling_on_its_own_required_runner():
 
 
 def test_account_native_tests_are_required_in_full_and_source_affected_ci():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     suite = 'operations/account/test'
     assert any(suite in invocation for invocation in affected.lab_full_invocations(repo))
     selections = [affected.Selection('full', []),
@@ -730,7 +737,7 @@ def test_account_native_tests_are_required_in_full_and_source_affected_ci():
 
 def test_ci_full_matrix_reaches_every_registered_module_suite():
     """D-762 stage 1: CI's full tier runs every registered test file, bar the reasoned exclusions."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
     invocations = [inv for e in matrix for inv in e["invocations"]]
     ran = set().union(*(_invocation_test_files(repo, inv) for inv in invocations))
@@ -748,7 +755,7 @@ def test_ci_full_matrix_reaches_every_registered_module_suite():
 
 def test_ci_gateway_shards_run_every_file_once_in_full_and_affected():
     """CI 44745980037 (2026-11-20): one runner for all of middleware/core/gateway/test took 20 min of pytest."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     suite = "middleware/core/gateway/test"
     station, browser = f"{suite}/test_station_camera_scheduling.py", f"{suite}/test_account_pipeline.py"
     files = sorted(p for p in repo.test_files if p.startswith(suite + "/"))
@@ -773,7 +780,7 @@ def test_ci_gateway_shards_run_every_file_once_in_full_and_affected():
 
 def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
     """PR #60 (2026-10-17): one affected runner for all of operations/fleet/test outlasted the 25 min limit."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     full = [e["invocations"][0] for e in affected.ci_matrix(repo, affected.Selection("full", []))["include"]
             if e["name"].startswith("fleet-")]
     sel = affected.Selection("affected", [], invocations=[
@@ -790,7 +797,7 @@ def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
 
 def test_ci_affected_matrix_uses_the_full_tier_ros_environment_per_path():
     """PR #96 (2026-10-18): gateway rclpy tests that main runs under ros: none ran under overlay on a PR."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     sel = affected.Selection("affected", [], invocations=[
         ["middleware/core/gateway/test/test_node_wiring.py", "test/test_land.py", "--ignore=x"]])
     matrix = [e for e in affected.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"]
@@ -804,7 +811,7 @@ def test_ci_affected_matrix_uses_the_full_tier_ros_environment_per_path():
 @pytest.mark.parametrize("flags", [[], ["--ignore=test/test_host_recovery.py"]])
 def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
     """PR #95: the unsplit root suite reached only 60% before the 25-minute limit."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     full = [e["invocations"][0] for e in affected.ci_matrix(repo, affected.Selection("full", []))["include"]
             if e["name"].startswith("root-test-")]
     other = "learning/registry/policy/test"
@@ -902,7 +909,7 @@ def test_full_ci_includes_learning_policy_registry_and_omx_helpers():
     'learning/training/omx/test/test_act_inference_native.py::test_actual_act_weights_consume_snapshot_and_keep_queue_source',
 ])
 def test_affected_act_tests_also_require_the_actual_cpu_runner(target):
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     matrix = affected.ci_matrix(repo, affected.Selection('affected', [], invocations=[[target]]))['include']
     native = [e for e in matrix if e['name'] == 'omx-act-cpu']
     assert len(native) == 1 and native[0]['gating'] and native[0]['ros'] == 'none'
@@ -910,7 +917,7 @@ def test_affected_act_tests_also_require_the_actual_cpu_runner(target):
 
 
 def test_unrelated_affected_tests_do_not_install_act_cpu_dependencies():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     matrix = affected.ci_matrix(repo, affected.Selection(
         'affected', [], invocations=[['operations/world/test']]))['include']
     assert all(e['name'] != 'omx-act-cpu' for e in matrix)
@@ -918,7 +925,7 @@ def test_unrelated_affected_tests_do_not_install_act_cpu_dependencies():
 
 def test_modules_runner_gates():
     """D-762 stage 1: `modules` gates since 2026-10-27; only sensing still reports."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
     assert sorted(e["name"] for e in matrix if not e["gating"] and not e["name"].startswith("sensing")) == []
 
@@ -953,7 +960,7 @@ def _harness_with(entry: str, base: str = REAL_HARNESS) -> str:
 
 
 def _harness_select(head: str, base: str = REAL_HARNESS):
-    return affected.select(affected.Repo.load(ROOT), ["tools/harness/harness.yaml"], harness_texts=(base, head))
+    return affected.select(_real_repo(), ["tools/harness/harness.yaml"], harness_texts=(base, head))
 
 
 def test_harness_yaml_module_added_only_selects_its_suites_not_full():
@@ -1003,7 +1010,7 @@ def test_harness_yaml_module_deletion_is_full():
 
 
 def test_harness_yaml_without_a_base_is_full():
-    sel = affected.select(affected.Repo.load(ROOT), ["tools/harness/harness.yaml"])
+    sel = affected.select(_real_repo(), ["tools/harness/harness.yaml"])
     _assert_harness_full(sel, "no base to compare")
 
 
@@ -1025,7 +1032,7 @@ def test_harness_yaml_added_suite_without_test_functions_is_full():
     ("tools/harness/zz_unknown.json", "full"),
 ])
 def test_harness_data_registries_are_not_full_but_code_and_manifests_are(path, mode):
-    sel = affected.select(affected.Repo.load(ROOT), [path])
+    sel = affected.select(_real_repo(), [path])
     assert sel.mode == mode, sel.escalations
     if mode == "affected":
         assert "test/test_harness_contracts.py" in sel.reasons
@@ -1035,7 +1042,7 @@ def test_harness_yaml_added_module_taking_tracked_files_is_full():
     """A source_paths entry inside an existing module counts as an overlap, like path."""
     head = _harness_with("  - name: zz_added\n    path: operations/zz_added\n"
                          "    source_paths: [middleware/core/services/core_features]\n    tests: [test/architecture]\n")
-    added, why = affected.affected_narrow.harness_modules_added(affected.Repo.load(ROOT), REAL_HARNESS, head)
+    added, why = affected.affected_narrow.harness_modules_added(_real_repo(), REAL_HARNESS, head)
     assert not added and "overlaps module core_features" in why
 
 
@@ -1043,12 +1050,12 @@ def test_harness_yaml_added_module_taking_tracked_files_is_full():
                                   "docs/index.md", "STATUS.md", "deploy/logs.md"])
 def test_records_select_only_their_readers(path):
     """2026-10-26: docs/logs.md selected tests that name it only in a comment or a fixture string."""
-    sel = affected.select(affected.Repo.load(ROOT), [path])
+    sel = affected.select(_real_repo(), [path])
     assert sel.mode == "affected" and set(sel.reasons) == GUARDS | set(affected.RECORD_READERS), sorted(sel.reasons)
 
 
 def test_a_module_record_read_by_a_contract_test_selects_it():
-    sel = affected.select(affected.Repo.load(ROOT), ["operations/apps/games/progress.md"])
+    sel = affected.select(_real_repo(), ["operations/apps/games/progress.md"])
     assert set(sel.reasons) == GUARDS | set(affected.RECORD_READERS) | {"test/test_rosy_games_surface.py"}
 
 
@@ -1057,16 +1064,16 @@ def test_a_module_record_read_by_a_contract_test_selects_it():
     ("operations/fleet/docs/logs.md", False), ("docs/plans/index.md", False), ("operations/progress.md", False),
 ])
 def test_records_are_status_and_module_root_records_only(path, record):
-    assert affected.is_record(affected.Repo.load(ROOT), path) is record
+    assert affected.is_record(_real_repo(), path) is record
 
 
 def test_generated_module_index_does_not_select_the_module_suite():
     """2026-10-26: operations/fleet/index.md selected ~7,900 tests in three commits."""
-    assert "operations/fleet/test" not in affected.select(affected.Repo.load(ROOT), ["operations/fleet/index.md"]).reasons
+    assert "operations/fleet/test" not in affected.select(_real_repo(), ["operations/fleet/index.md"]).reasons
 
 
 def test_module_note_markdown_selects_readers_not_the_module_suite():
-    sel = affected.select(affected.Repo.load(ROOT), ["operations/fleet/docs/call-map.md"])
+    sel = affected.select(_real_repo(), ["operations/fleet/docs/call-map.md"])
     assert "operations/fleet/test" not in sel.reasons
 
 
@@ -1078,7 +1085,7 @@ def test_module_note_markdown_selects_readers_not_the_module_suite():
     ("docs/adr/D-161-ubuntu-server-native-ros-runtime.md", "test/test_network_topology_contracts.py"),
 ])
 def test_contract_checked_markdown_keeps_its_selection(path, expected):
-    assert expected in affected.select(affected.Repo.load(ROOT), [path]).reasons
+    assert expected in affected.select(_real_repo(), [path]).reasons
 
 
 # --- Rule 8 (design 0.7): leaf tools select their tests; the gate tools stay FULL -------------------
@@ -1098,7 +1105,7 @@ GATE_TOOLS = ["tools/land.py", "tools/land_queue.py", "tools/land_cache.py", "to
     ["tools/land_goal.py", "tools/land_stats.py"],
     ["tools/land_goal.py", "test/test_land_goal.py", "docs/logs.md"]])
 def test_landing_reports_select_their_readers_without_the_full_runtime_tier(changed):
-    sel = affected.select(affected.Repo.load(ROOT), changed)
+    sel = affected.select(_real_repo(), changed)
     assert sel.mode == "affected", sel.escalations
     assert GUARDS | {"test/test_land_goal.py", "test/test_land_events.py"} <= set(sel.reasons)
     assert "test" not in sel.reasons
@@ -1108,7 +1115,7 @@ def test_landing_reports_select_their_readers_without_the_full_runtime_tier(chan
     "tools/harness/affected_tests.py", "tools/remote/remote_pytest.py", "tools/land_future_gate.py",
     "unregistered/" + "future" + "_owner.py"])
 def test_landing_reports_do_not_narrow_other_gates_or_unmapped_changes(other):
-    sel = affected.select(affected.Repo.load(ROOT), ["tools/land_goal.py", "tools/land_stats.py", other])
+    sel = affected.select(_real_repo(), ["tools/land_goal.py", "tools/land_stats.py", other])
     assert sel.mode == "full"
     assert any(reason.startswith(other + ":") for reason in sel.escalations), sel.escalations
 
@@ -1116,13 +1123,13 @@ def test_landing_reports_do_not_narrow_other_gates_or_unmapped_changes(other):
 @pytest.mark.parametrize("path", GATE_TOOLS)
 def test_real_repo_gate_tools_stay_full(path):
     """A gate tool may not be tested by the narrow selection it would itself make."""
-    sel = affected.select(affected.Repo.load(ROOT), [path])
+    sel = affected.select(_real_repo(), [path])
     assert sel.mode == "full"
     assert f"{path}: harness configuration or the selector itself" in sel.escalations, sel.escalations
 
 
 def test_real_repo_gate_tool_markdown_is_not_full():
-    assert affected.select(affected.Repo.load(ROOT), ["tools/hooks/AGENTS.md"]).mode == "affected"
+    assert affected.select(_real_repo(), ["tools/hooks/AGENTS.md"]).mode == "affected"
 
 
 def test_head_files_are_read_at_head_not_from_the_checkout(sample, capsys):
@@ -1197,7 +1204,7 @@ def test_known_failures_added_line_needing_a_person_stays_full(sample, head, cha
 
 
 def test_flaky_quarantine_stays_full_as_a_safety_root():
-    sel = affected.select(affected.Repo.load(ROOT), ["test/flaky_quarantine.txt"], base_text=lambda path: "")
+    sel = affected.select(_real_repo(), ["test/flaky_quarantine.txt"], base_text=lambda path: "")
     assert sel.mode == "full" and _safety_escalations(sel)
 
 
