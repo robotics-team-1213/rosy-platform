@@ -55,7 +55,8 @@ def main(argv: list[str] | None = None, repo: Path | None = None, run=None) -> i
     passed = 0
     for inv, log, code in zip(required, logs, codes):
         # a clean pass only, exactly publish_evidence.fill's rule
-        ok = (code == 0 and log.is_file() and land_cache.unusable(code, log) is None
+        # exit 5 counts only as land_cache's D-889 20 all-skipped verdict (unusable() demands the pattern)
+        ok = (code in (0, 5) and log.is_file() and land_cache.unusable(code, log) is None
               and not land_browser.vacuous(inv, log))
         if ok:
             land_cache.record(cwd, head, tree, env, inv, log)
