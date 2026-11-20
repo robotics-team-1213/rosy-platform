@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · fix(pipeline): D-1057 검토 반영 — owner 등록 주체, 실제 정차 지점, bed 영구 무효, 저장소 상한
 - 2026-11-20 · uncommitted · feat(pipeline): D-1057 셀 작업 허가 증거 공급자와 bed·owner 증거 경로
 - 2026-11-18 · uncommitted · fix(map-pose): 늦은 odom·오래된 앵커·3 fps 짝짓기
 - 2026-11-18 · uncommitted · fix(map-pose): D-989 허용 목록에 콘솔 site goal 추가
 - 2026-11-17 · uncommitted · fix(fleet): D-1039 독립 검토 반영
-- 2026-11-17 · uncommitted · feat(fleet): AI assessor 서비스 자격의 안전한 팔 사건 해제 (D-1039)

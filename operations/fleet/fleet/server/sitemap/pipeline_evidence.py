@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
 import threading
 import time
 from datetime import datetime
@@ -28,7 +29,11 @@ STILL_MAX_GAP_S = 2.5
 BED_CONFIRM_TTL_S = 120.0
 BED_MOVE_LIMIT_M = 0.02
 OWNER_EVIDENCE_MAX_AGE_S = 60.0
-_MOVING_NAV = frozenset({"PLANNING", "NAVIGATING", "BLOCKED"})
+_IDLE_NAV = frozenset({"IDLE", "ARRIVED", "CANCELED", "FAILED"})  # anything else is a drive task in progress
+VELOCITY_MAX_AGE_S = 2.0
+MAX_BODY_BYTES = 64 * 1024
+OWNER_MEASURED_SKEW_S = 2.0
+_TERMINAL = frozenset({"COMPLETED", "CANCELLED", "ABORTED"})
 
 
 class StillTracker:
@@ -80,12 +85,18 @@ def _velocity_stamp(snapshot) -> float | None:
         return None
 
 
-def _held_still(snapshot) -> bool:
-    """CORE reports no drive task (IDLE, no navigation in progress), no E-stop, and odom speed at or under threshold."""
-    v = snapshot.velocity
-    return (_finite(v.linear, v.angular) and abs(v.linear) <= STILL_LINEAR_MPS and abs(v.angular) <= STILL_ANGULAR_RADPS
-            and snapshot.mode.value == "IDLE" and snapshot.navigation.value not in _MOVING_NAV
-            and not snapshot.safety.estop)
+def _held_still(app, robot_id: str, snapshot, arrival: float) -> bool:
+    """One sample of held-still: CORE mode IDLE, no drive task, no E-stop, odom 0, velocity channel fresh in this sample.
+
+    No commanded velocity reaches Fleet (D-1057), so a command already sent but not yet moving is excluded by the
+    mode and the absence of a navigation state or Fleet goal, not by measuring the command.
+    """
+    v, stamp = snapshot.velocity, _velocity_stamp(snapshot)
+    goals = getattr(getattr(app.state, "console", None), "_goals", None) or {}
+    return (stamp is not None and abs(arrival - stamp) <= VELOCITY_MAX_AGE_S
+            and _finite(v.linear, v.angular) and abs(v.linear) <= STILL_LINEAR_MPS and abs(v.angular) <= STILL_ANGULAR_RADPS
+            and snapshot.mode.value == "IDLE" and snapshot.navigation.value in _IDLE_NAV
+            and robot_id not in goals and not snapshot.safety.estop)
 
 
 def _tracker(app) -> StillTracker:
@@ -97,7 +108,7 @@ def _tracker(app) -> StillTracker:
 def feed_still_tracker(app, robot_id: str) -> None:
     beat = _heartbeat(app, robot_id)
     if beat is not None:
-        _tracker(app).feed(robot_id, beat[2], beat[1], _held_still(beat[0]))
+        _tracker(app).feed(robot_id, beat[2], beat[1], _held_still(app, robot_id, beat[0], beat[1]))
 
 
 def _ensure_feeder(app) -> None:
@@ -121,6 +132,13 @@ def _ensure_feeder(app) -> None:
     app.state.amr_still_feeder.start()
 
 
+def _has_place(source, place_id: str) -> bool:
+    places = getattr(source, "places", None)
+    if isinstance(places, dict):
+        return place_id in places
+    return any(getattr(p, "id", None) == place_id or (isinstance(p, dict) and p.get("id") == place_id) for p in places or ())
+
+
 def zone_pose(app, task: dict):
     """(pose dict, observation epoch) from the arbitrated map pose, or None.
 
@@ -137,20 +155,61 @@ def zone_pose(app, task: dict):
             or not _finite(pose.x, pose.y, pose.yaw, pose.age_s) or not 0 <= pose.age_s <= POSE_MAX_AGE_S):
         return None
     active_id = svc.active_map_id()
-    if active_id is not None and pose.map_id != active_id:
+    if active_id is None or pose.map_id != active_id:
         return None
     station = resolve_omx_cells(active[1], active[2]).get(task["cell_id"])
-    if station is None or math.hypot(pose.x - station.station_xy[0], pose.y - station.station_xy[1]) > STOP_ZONE_RADIUS_M:
+    # resolve_omx_cells falls back to built-in coordinates; only a stop place that the active map or graph really has counts.
+    if (station is None or not any(_has_place(src, station.station_place) for src in (active[2], active[1]))
+            or math.hypot(pose.x - station.station_xy[0], pose.y - station.station_xy[1]) > STOP_ZONE_RADIUS_M):
         return None
     return {"x": float(pose.x), "y": float(pose.y), "yaw": float(pose.yaw)}, time.time() - pose.age_s
 
 
+def _bed_valid(rec: dict) -> bool:
+    return not rec.get("invalid") and 0 <= time.time() - rec["confirmed_at"] <= BED_CONFIRM_TTL_S
+
+
 def _bed_ready(app, task: dict, pose: dict) -> bool:
+    """A confirmation dies for good once the robot moved over BED_MOVE_LIMIT_M or the map changed, even if it moves back."""
     rec = (getattr(app.state, "cell_bed_confirmations", None) or {}).get(task["task_id"])
-    if rec is None or rec["robot_id"] != task["robot_id"]:
+    if rec is None or rec["robot_id"] != task["robot_id"] or not _bed_valid(rec):
         return False
-    age = time.time() - rec["confirmed_at"]
-    return 0 <= age <= BED_CONFIRM_TTL_S and math.hypot(pose["x"] - rec["pose"]["x"], pose["y"] - rec["pose"]["y"]) <= BED_MOVE_LIMIT_M
+    svc = getattr(app.state, "map_pose", None)
+    if (svc is None or svc.active_map_id() != rec["map_id"]
+            or math.hypot(pose["x"] - rec["pose"]["x"], pose["y"] - rec["pose"]["y"]) > BED_MOVE_LIMIT_M):
+        rec["invalid"] = True
+        return False
+    return True
+
+
+def prune_evidence(app) -> None:
+    """Drop stored confirmations and owner evidence of finished tasks and of expired records."""
+    tasks = getattr(app.state, "omx_cell_tasks", None) or {}
+    now = time.time()
+    for store, dead in ((getattr(app.state, "cell_bed_confirmations", None) or {},
+                         lambda r: not _bed_valid(r)),
+                        (getattr(app.state, "cell_owner_evidence", None) or {},
+                         lambda r: now - r["measured_at"] > OWNER_EVIDENCE_MAX_AGE_S)):
+        for task_id in [k for k, r in store.items()
+                        if (tasks.get(k) or {}).get("status") in _TERMINAL or k not in tasks or dead(r)]:
+            store.pop(task_id, None)
+
+
+def cell_owner_principals(cell_id: str) -> frozenset:
+    """Service principals registered as owners of a cell: ROSY_FLEET_CELL_OWNERS=cell_s=id1,id2;cell_ab=id3 (empty: none)."""
+    for entry in os.environ.get("ROSY_FLEET_CELL_OWNERS", "").split(";"):
+        cell, _, ids = entry.partition("=")
+        if cell.strip() == cell_id:
+            return frozenset(i.strip() for i in ids.split(",") if i.strip())
+    return frozenset()
+
+
+def owner_principal_refusal(request, task: dict) -> HTTPException | None:
+    principal = getattr(request.state, "site_principal", None)
+    pid = getattr(principal, "principal_id", None)
+    if getattr(principal, "role", None) != "service" or not pid or pid not in cell_owner_principals(task["cell_id"]):
+        return _error(403, "OWNER_PRINCIPAL_NOT_REGISTERED")
+    return None
 
 
 def amr_evidence(app, task: dict) -> dict | None:
@@ -164,6 +223,7 @@ def amr_evidence(app, task: dict) -> dict | None:
     confirmation has its own expiry and is not a live observation.
     """
     robot_id = task["robot_id"]
+    prune_evidence(app)
     beat = _heartbeat(app, robot_id)
     located = zone_pose(app, task)
     if beat is None or located is None:
@@ -179,7 +239,7 @@ def amr_evidence(app, task: dict) -> dict | None:
     return {
         "robot_id": robot_id, "cell_id": task["cell_id"],
         "observed_at": min(arrival, stamp, pose_at),
-        "wheel_brake_locked": bool(still_s is not None and still_s >= STILL_MIN_S and _held_still(snapshot)),
+        "wheel_brake_locked": bool(still_s is not None and still_s >= STILL_MIN_S and _held_still(app, robot_id, snapshot, arrival)),
         "v_cmd_mps": float(snapshot.velocity.linear),
         "pose": pose,
         "bed_ready": _bed_ready(app, task, pose),
@@ -188,6 +248,7 @@ def amr_evidence(app, task: dict) -> dict | None:
 
 def omx_owner_evidence(app, task: dict) -> dict | None:
     """The stored owner evidence of this RUNNING task's current lease (never the /complete body), or None."""
+    prune_evidence(app)
     rec = (getattr(app.state, "cell_owner_evidence", None) or {}).get(task["task_id"])
     claimed_at = task.get("claimed_at")
     if (rec is None or task.get("status") != "RUNNING" or not task.get("handoff_lease_id")
@@ -207,7 +268,17 @@ def install_evidence_routes(app, ctx) -> None:
     app.state.cell_bed_confirmations = getattr(app.state, "cell_bed_confirmations", None) or {}
     app.state.cell_owner_evidence = getattr(app.state, "cell_owner_evidence", None) or {}
 
+    async def read_body(request: Request):
+        raw = await request.body()
+        if len(raw) > MAX_BODY_BYTES:
+            raise _error(413, "EVIDENCE_BODY_TOO_LARGE")
+        try:
+            return json.loads(raw)
+        except ValueError:
+            raise _error(422, "INVALID_OWNER_EVIDENCE") from None
+
     def task_of(task_id: str) -> dict:
+        prune_evidence(app)
         task = app.state.omx_cell_tasks.get(task_id)
         if task is None:
             raise _error(404, "UNKNOWN_TASK")
@@ -216,26 +287,33 @@ def install_evidence_routes(app, ctx) -> None:
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/bed-confirm", dependencies=operator_guard)
     async def confirm_bed(task_id: str, request: Request):
         task = task_of(task_id)
-        body = await request.json()
+        body = await read_body(request)
         principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
-        if not principal_id:
+        # A shared console or development identity names nobody (same rule as the assistant routes).
+        if not principal_id or principal_id == "site-console" or principal_id.startswith("development-"):
             raise _error(403, "NAMED_OPERATOR_REQUIRED")
         if not isinstance(body, dict) or body.get("robot_id") != task["robot_id"]:
             raise _error(422, "BED_CONFIRM_ROBOT_MISMATCH")
         if task.get("status") != "QUEUED":
             raise _error(409, "CELL_TASK_NOT_QUEUED")
+        old = app.state.cell_bed_confirmations.get(task_id)
+        if old is not None and _bed_valid(old):  # a repeated request never renews the expiry or the pose
+            return {"ok": True, "renewed": False, "confirmation": old}
         located = zone_pose(app, task)
         if located is None:
             raise _error(409, "BED_CONFIRM_POSE_UNAVAILABLE")
         rec = {"task_id": task_id, "robot_id": task["robot_id"], "principal_id": principal_id,
-               "confirmed_at": time.time(), "pose": located[0]}
+               "confirmed_at": time.time(), "pose": located[0], "map_id": app.state.map_pose.active_map_id()}
         app.state.cell_bed_confirmations[task_id] = rec
-        return {"ok": True, "confirmation": rec, "expires_in_s": BED_CONFIRM_TTL_S}
+        return {"ok": True, "renewed": True, "confirmation": rec, "expires_in_s": BED_CONFIRM_TTL_S}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence", dependencies=proposer_guard)
     async def record_owner_evidence(task_id: str, request: Request):
         task = task_of(task_id)
-        body = await request.json()
+        refusal = owner_principal_refusal(request, task)
+        if refusal is not None:
+            raise refusal
+        body = await read_body(request)
         try:
             json.dumps(body, allow_nan=False)
         except (TypeError, ValueError):
@@ -249,13 +327,18 @@ def install_evidence_routes(app, ctx) -> None:
         if (not lease or body.get("handoff_lease_id") != lease or parts["receipt"].get("handoff_lease_id") != lease
                 or parts["receipt"].get("stage_id") != task_id):
             raise _error(422, "OWNER_EVIDENCE_LEASE_MISMATCH")
-        if not _finite(measured_at) or not task["claimed_at"] <= measured_at <= time.time() + 2.0:
+        device_at = parts["hardware_telemetry"].get("measured_at")
+        if (not _finite(measured_at, device_at) or not task["claimed_at"] <= measured_at <= time.time() + 2.0
+                or time.time() - measured_at > OWNER_EVIDENCE_MAX_AGE_S
+                or abs(measured_at - device_at) > OWNER_MEASURED_SKEW_S):
             raise _error(422, "OWNER_EVIDENCE_MEASURED_AT_INVALID")
         principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
         rec = {"task_id": task_id, "lease": lease, "measured_at": measured_at, "recorded_at": round(time.time(), 3),
                "principal_id": principal_id, **copy.deepcopy(parts)}
         old = app.state.cell_owner_evidence.get(task_id)
         if old is not None and old["lease"] == lease:
+            if old["principal_id"] != principal_id:
+                raise _error(403, "OWNER_PRINCIPAL_NOT_REGISTERED")
             if all(old[k] == rec[k] for k in ("measured_at", *parts)):
                 return {"ok": True, "recorded": False}
             raise _error(409, "OWNER_EVIDENCE_ALREADY_RECORDED")

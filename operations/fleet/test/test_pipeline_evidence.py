@@ -26,6 +26,13 @@ OP = {"Authorization": "Bearer operator"}
 SVC = {"Authorization": "Bearer service"}
 VIEW = {"Authorization": "Bearer viewer"}
 TASK = "evidence-task"
+OTHER = {"Authorization": "Bearer other"}
+CONSOLE = {"Authorization": "Bearer console"}
+
+
+@pytest.fixture(autouse=True)
+def _cell_owners(monkeypatch):
+    monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", "cell_s=service,other;cell_ab=service")
 
 
 def _snapshot(v=0.0, w=0.0, mode="IDLE", nav="IDLE", estop=False, fresh=True, vel_at=None):
@@ -43,6 +50,8 @@ class Env:
         site, graph, _ = build_world_261026_site_map()
         self.station = resolve_omx_cells(site, graph)["cell_s"].station_xy
         principals = {sha256(t.encode()).hexdigest(): SitePrincipal(t, t) for t in ("viewer", "service", "operator")}
+        principals[sha256(b"other").hexdigest()] = SitePrincipal("other", "service")
+        principals[sha256(b"console").hexdigest()] = SitePrincipal("site-console", "operator")
         require_viewer, require_operator, _, require_proposer = build_role_guards(
             build_authorize(None, principals, None), principals)
         self.app = app = FastAPI()
@@ -223,7 +232,8 @@ def _owner_parts(lease, **stop):
     stage = {"handoff_lease_id": lease, "directive_id": TASK, "arm_id": "arm_s", "task_verified": True,
              "verification": {"verified": True, "basis": "predefined_side_and_top_target_zones"},
              "place": {"area": "belt", "tier": 1}}
-    hardware = {"stop_event": {"command": "stop", "ok": True, "folded": True, "state": [0.0] * 6, **stop}}
+    hardware = {"measured_at": time.time() + 0.05,  # claimed_at is rounded up to 1 ms
+                "stop_event": {"command": "stop", "ok": True, "folded": True, "state": [0.0] * 6, **stop}}
     digest = "sha256:" + hashlib.sha256(json.dumps(
         {"task_id": TASK, "lease": lease, "stage_result": stage, "hardware_telemetry": hardware},
         sort_keys=True, default=str).encode()).hexdigest()
@@ -239,9 +249,9 @@ def _claimed(env):
     return claimed["handoff"]["handoff_lease_id"]
 
 
-def _post_owner(env, lease, parts, **over):
-    return env.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/owner-evidence", headers=SVC, json={
-        "handoff_lease_id": lease, "measured_at": time.time() + 0.05, **parts, **over})  # claimed_at is rounded up to 1 ms
+def _post_owner(env, lease, parts, headers=SVC, **over):
+    return env.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/owner-evidence", headers=headers, json={
+        "handoff_lease_id": lease, "measured_at": parts.get("hardware_telemetry", {}).get("measured_at", time.time()), **parts, **over})
 
 
 def _complete(env, parts, digest):
@@ -317,3 +327,103 @@ def test_stop_zone_radius_matches_the_charge_bay_claim_radius():
     from fleet.server.charge_bay_routes import CELL_CLAIM_RADIUS_M
 
     assert ev.STOP_ZONE_RADIUS_M == CELL_CLAIM_RADIUS_M
+
+
+def test_velocity_must_be_fresh_in_every_sample_and_no_goal_may_be_active(env):
+    env.beat(_snapshot(vel_at=time.time() - 5))
+    assert env.amr()["wheel_brake_locked"] is False
+    env.beat()
+    assert env.amr()["wheel_brake_locked"] is True
+    env.app.state.console._goals = {"pinky_1": {"goal": 1}}
+    assert env.amr()["wheel_brake_locked"] is False
+    env.app.state.console._goals = {}
+    env.beat(_snapshot(nav="BLOCKED"))
+    assert env.amr()["wheel_brake_locked"] is False
+
+
+def test_only_a_registered_service_principal_may_post_owner_evidence(env, monkeypatch):
+    lease = _claimed(env)
+    parts, digest = _owner_parts(lease)
+    assert _post_owner(env, lease, parts, headers=OP).json()["detail"]["code"] == "OWNER_PRINCIPAL_NOT_REGISTERED"
+    monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", "cell_ab=service")
+    assert _post_owner(env, lease, parts).status_code == 403  # registered for another cell only
+    monkeypatch.delenv("ROSY_FLEET_CELL_OWNERS")
+    assert _post_owner(env, lease, parts).status_code == 403  # no setting: nobody
+    monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", "cell_s=service,other")
+    assert _post_owner(env, lease, parts).status_code == 200
+    assert _post_owner(env, lease, parts, headers=OTHER).status_code == 403  # first record is owned by its poster
+    env.beat()
+    res = env.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/complete", headers=OTHER, json={
+        "phase": "RELEASED", "goal_evidence_digest": digest, **parts})
+    assert res.status_code == 403 and res.json()["detail"]["code"] == "OWNER_PRINCIPAL_NOT_REGISTERED"
+    assert env.app.state.omx_cell_tasks[TASK]["status"] == "RUNNING"
+
+
+def test_zone_needs_an_active_map_id_and_a_real_stop_place(env):
+    assert env.amr() is not None
+    env.app.state.map_pose.active_map_id = lambda: None
+    assert env.amr() is None
+    env.app.state.map_pose.active_map_id = lambda: "m1"
+    bare = SimpleNamespace(places=[], edges=[])
+    env.app.state.site_maps.active = lambda: (1, bare, bare, None)  # resolve_omx_cells then invents default coordinates
+    assert env.amr() is None
+
+
+def test_bed_confirmation_is_named_one_shot_and_dies_for_good(env):
+    url = f"/api/fleet/pipeline/cell-tasks/{TASK}/bed-confirm"
+    assert env.client.post(url, headers=CONSOLE, json={"robot_id": "pinky_1"}).json()["detail"]["code"] == "NAMED_OPERATOR_REQUIRED"
+    first = env.confirm_bed().json()
+    assert first["renewed"] is True and first["confirmation"]["map_id"] == "m1"
+    rec = env.app.state.cell_bed_confirmations[TASK]
+    stamp = rec["confirmed_at"]
+    env.pose.x += 0.005
+    again = env.confirm_bed().json()
+    assert again["renewed"] is False and rec["confirmed_at"] == stamp and rec["pose"]["x"] == env.station[0]
+    env.pose.x += 0.05
+    assert env.amr()["bed_ready"] is False
+    env.pose.x = env.station[0]
+    assert env.amr()["bed_ready"] is False  # moving back does not revive it
+    assert env.confirm_bed().json()["renewed"] is True  # a new one only after the old one is void
+    assert env.amr()["bed_ready"] is True
+    env.app.state.map_pose.active_map_id = lambda: "m2"
+    env.pose.map_id = "m2"
+    assert env.amr()["bed_ready"] is False
+    env.app.state.map_pose.active_map_id = lambda: "m1"
+    env.pose.map_id = "m1"
+    assert env.amr()["bed_ready"] is False  # the map change voided it for good
+
+
+def test_owner_measured_at_must_be_recent_and_match_the_device_time(env):
+    lease = _claimed(env)
+    parts, _ = _owner_parts(lease)
+    now = time.time()
+    code = lambda r: r.json()["detail"]["code"]
+    assert code(_post_owner(env, lease, parts, measured_at=now + 5)) == "OWNER_EVIDENCE_MEASURED_AT_INVALID"
+    skewed = {**parts, "hardware_telemetry": {**parts["hardware_telemetry"], "measured_at": now - 3}}
+    assert code(_post_owner(env, lease, skewed, measured_at=now + 0.05)) == "OWNER_EVIDENCE_MEASURED_AT_INVALID"
+    no_device = {**parts, "hardware_telemetry": {"stop_event": {}}}
+    assert code(_post_owner(env, lease, no_device, measured_at=now + 0.05)) == "OWNER_EVIDENCE_MEASURED_AT_INVALID"
+    env.app.state.omx_cell_tasks[TASK]["claimed_at"] = now - 200
+    old = {**parts, "hardware_telemetry": {**parts["hardware_telemetry"], "measured_at": now - 61}}
+    assert code(_post_owner(env, lease, old, measured_at=now - 61)) == "OWNER_EVIDENCE_MEASURED_AT_INVALID"
+    assert _post_owner(env, lease, parts).status_code == 200
+
+
+def test_bodies_are_capped_and_finished_or_expired_records_are_removed(env):
+    big = {"x": "y" * (ev.MAX_BODY_BYTES + 1)}
+    assert env.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/bed-confirm", headers=OP, json=big).status_code == 413
+    lease = _claimed(env)
+    assert env.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/owner-evidence", headers=SVC, json=big).status_code == 413
+    parts, digest = _owner_parts(lease)
+    assert _post_owner(env, lease, parts).status_code == 200
+    assert TASK in env.app.state.cell_bed_confirmations and TASK in env.app.state.cell_owner_evidence
+    assert _complete(env, parts, digest).status_code == 200
+    ev.prune_evidence(env.app)
+    assert not env.app.state.cell_bed_confirmations and not env.app.state.cell_owner_evidence
+
+
+def test_expired_bed_confirmation_is_pruned(env):
+    env.confirm_bed()
+    env.app.state.cell_bed_confirmations[TASK]["confirmed_at"] -= ev.BED_CONFIRM_TTL_S + 1
+    ev.prune_evidence(env.app)
+    assert TASK not in env.app.state.cell_bed_confirmations

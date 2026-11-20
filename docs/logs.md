@@ -14897,3 +14897,8 @@ osy-d395-s1d\`.
 - 변경: ADR D-1057과 ADR Log 행, API Reference에 bed-confirm·owner-evidence 두 경로(버전은 "vX.Y (조정 세션 예약)" 자리표시).
 - 증거: 아래 Fleet·셀 변경 커밋의 로컬 시험과 `rosy_harness.py lint`. 원격 시험은 조정 세션.
 - gate 변화: 없음. 실물 인터록(브레이크·bed 센서·명령 속도)은 만들지 않았다.
+
+## 2026-11-20 · uncommitted · fix(fleet): D-1057 독립 검토 반영
+- 변경: ADR·API 문서를 정지 판정(표본별 속도 채널 신선도·모드·목표 부재)·owner 등록 주체·bed 영구 무효·본문 64 KB·measured_at 대조에 맞춤.
+- 증거: 로컬 `test_pipeline_evidence.py` 외 관련 파일. 원격 시험은 조정 세션.
+- gate 변화: 없음.

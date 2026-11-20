@@ -238,6 +238,11 @@ def install_cameras_routes(app, ctx) -> None:
         if phase == "RELEASED" and (_is_human_detected(cell_id)
                                     or (app.state.omx_cell_states.get(cell_id) or {}).get("phase") == "HUMAN_HOLD"):
             raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE"})
+        if phase == "RELEASED":  # D-1057: only the principal that registered the owner evidence may release on it
+            stored = (getattr(app.state, "cell_owner_evidence", None) or {}).get(task_id)
+            if stored is not None and stored["principal_id"] != getattr(
+                    getattr(request.state, "site_principal", None), "principal_id", None):
+                raise HTTPException(403, detail={"code": "OWNER_PRINCIPAL_NOT_REGISTERED"})
         amr = _ready_amr(task) if phase == "RELEASED" else task.get("amr_claim_evidence")
         if phase == "RELEASED" and amr is None:
             raise HTTPException(422, detail={"code": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
