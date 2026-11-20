@@ -271,6 +271,17 @@ def grasp_yaw(config: dict, calibration: dict, site: str, found: dict, choices):
     return pick, round(base + max(-cap, min(cap, found.get("turn_deg", 0.0))), 1)
 
 
+def lift_arg(text: str) -> tuple:
+    """--lift JOINT:DELTA, for example elbow_flex:-10."""
+    try:
+        joint, delta = text.split(":")
+        return joint, float(delta)
+    except ValueError:
+        import argparse
+
+        raise argparse.ArgumentTypeError("--lift requires JOINT:DELTA, for example elbow_flex:-10") from None
+
+
 def home(cell, config: dict, library: Path, person_at_switch: bool, *, lift=None) -> dict:
     """Use the reviewed home frame to recover an empty, folded arm with an operator at the switch."""
     from cell_unwedge import return_home

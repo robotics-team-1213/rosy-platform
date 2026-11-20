@@ -134,6 +134,7 @@ from cell_pipeline_stages import (  # noqa: E402, F401
     grasp_yaw,
     grip_to,
     home,
+    lift_arg,
     recover,
     reset,
     scene,
@@ -304,7 +305,7 @@ def main(argv=None):
     parser.add_argument("--person-at-switch", action="store_true", help="confirm a person is at the switch")
     parser.add_argument("--library", type=Path, help="reviewed library with a home chunk (home stage)")
     lift_options = parser.add_mutually_exclusive_group()
-    lift_options.add_argument("--lift", metavar="JOINT:DELTA", help="override the automatic home-stage lift")
+    lift_options.add_argument("--lift", metavar="JOINT:DELTA", type=lift_arg, help="override the automatic lift")
     lift_options.add_argument("--no-lift", dest="lift", action="store_const", const=False,
                               help="disable the automatic home-stage lift")
     parser.add_argument("--commissioning", action="store_true", help="supervised evidence collection; never enables run")
@@ -316,13 +317,6 @@ def main(argv=None):
         parser.error("home requires --library and --person-at-switch")
     if args.lift is not None and args.stage != "home":
         parser.error("--lift and --no-lift require --stage home")
-    lift = args.lift
-    if isinstance(lift, str):
-        try:
-            joint, delta = lift.split(":")
-            lift = (joint, float(delta))
-        except ValueError:
-            parser.error("--lift requires JOINT:DELTA, for example elbow_flex:-10")
     config = json.loads(args.config.read_text())
     config.pop("_operating_profile_binding", None)
     config.pop("_commissioning", None)  # a stored config cannot attest a person's presence
@@ -342,7 +336,7 @@ def main(argv=None):
         work = Path(config["work_dir"]).expanduser()
         cell = FifoCell(Path(config["io"]).expanduser(), {}, timeout_s=5.0,
                         operating_profile=config["_operating_profile_binding"])
-        result = home(cell, config, args.library, args.person_at_switch, lift=lift)
+        result = home(cell, config, args.library, args.person_at_switch, lift=args.lift)
         path = write_receipt(work / "receipts", "home", result)
         print(json.dumps({"receipt": str(path), "result": result["result"]}))
         return 0 if result["result"] == "home" else 1

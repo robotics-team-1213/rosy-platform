@@ -102,7 +102,7 @@ def _home_stop_result(status):
     return "stopped"
 
 
-def _home_jogs(cell, home, bounds, start, receipt, sleep, log):
+def _home_jogs(cell, home, bounds, start, receipt, sleep, log, grip=True):
     baseline = lags(start)
     context = start.get("operating_context")
     for step in receipt["plan"]:
@@ -159,26 +159,29 @@ def _home_jogs(cell, home, bounds, start, receipt, sleep, log):
     status = cell.act("state")
     if not _home_state(status, context):
         return _home_stop_result(status), "live state refused before grip"
-    grip = receipt["grip"] = cell.act(f"grip {home[5]}")
-    sleep(HOME_SETTLE_S)
+    if grip:  # an automatic rehome never opens or closes the jaws (an undetected box would drop)
+        ack = receipt["grip"] = cell.act(f"grip {home[5]}")
+        sleep(HOME_SETTLE_S)
+        if ack.get("ok") is not True:
+            return _home_stop_result(ack), "grip refused"
     status = receipt["end"] = cell.act("state")
-    if grip.get("ok") is not True:
-        return _home_stop_result(grip), "grip refused"
     if not _home_state(status, context):
         return _home_stop_result(status), "live state refused after grip"
-    if any(abs(value - want) > SETTLE_TOL for value, want in zip(status["state"], home)):
+    if any(abs(value - want) > SETTLE_TOL for value, want in zip(status["state"][:6 if grip else 5], home)):
         return "stopped", "measured body or gripper did not reach home"
     return "home", None
 
 
-def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None) -> dict:
+def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None, grip=True) -> dict:
     """Return a folded arm to library home through the runner's guarded jogs."""
     minimum, maximum = limits.get("joint_min") or {}, limits.get("joint_max") or {}
     names = tuple(f"{joint}.pos" for joint in (*BODY, "gripper"))
     if not isinstance(minimum, dict) or not isinstance(maximum, dict):
         raise ValueError("configured joint limits must be objects")
     bounds = [(minimum.get(name, -100.0), maximum.get(name, 100.0)) for name in names]
-    if (not _home_pose(home) or not (minimum or maximum) or (minimum.keys() | maximum.keys()) - set(names)
+    # an arm with no joint window (arm_s, 11-20) homes over the full range only when its config says so
+    if (not _home_pose(home) or not (minimum or maximum or limits.get("joint_window_full_range") is True)
+            or (minimum.keys() | maximum.keys()) - set(names)
             or any(not all(type(bound) in (int, float) and math.isfinite(bound) for bound in (low, high))
                    or not max(-100.0, low) <= value <= min(100.0, high)
                    for value, (low, high) in zip(home, bounds))):
@@ -208,7 +211,7 @@ def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None) ->
         except ValueError as exc:
             return {**receipt, "result": "refused", "error": str(exc)}
         started = True
-        result, error = _home_jogs(cell, home, bounds, status, receipt, sleep, log)
+        result, error = _home_jogs(cell, home, bounds, status, receipt, sleep, log, grip)
     except (Exception, KeyboardInterrupt) as exc:
         result, error = "stopped", repr(exc)
 
@@ -226,6 +229,20 @@ def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None) ->
         except (Exception, KeyboardInterrupt) as exc:
             receipt["stop_error"] = repr(exc)
     return receipt
+
+
+def rehome_before_work(cell, library: dict, limits: dict, *, sleep=time.sleep) -> dict | None:
+    """User 2026-11-20 "홈자세 다시 잡도록 변경해": on 11-19 all three folded wrists were turned by hand (torque OFF) and
+    work could not start. An arm off its library home takes the lift-then-turn home first. None: already home.
+    A result without jogs (not empty and folded, state refused): nothing moved, the caller goes on as before."""
+    try:
+        home = library["chunks"]["home"][-1]
+        state = cell.act("state").get("state")
+        if _home_pose(state) and all(abs(a - b) <= SETTLE_TOL for a, b in zip(state[:5], home[:5])):
+            return None
+        return return_home(cell, home, limits, sleep=sleep, grip=False)
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError) as exc:
+        return {"result": "refused", "error": str(exc)}
 
 
 def decide(last: str | None, blocked: str | None, lifted: float) -> str:

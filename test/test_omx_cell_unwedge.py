@@ -67,6 +67,25 @@ def test_return_home_failure_commands(lag_axis, lag, held, jaw_moves, result, la
         assert not any(command.startswith("grip ") for command in cell.commands)
 
 
+def test_rehome_before_work_turns_a_hand_turned_wrist_back_and_leaves_others():
+    """11-19: wrists turned by hand with torque OFF; the next task now lifts and turns home before it starts."""
+    library = {"chunks": {"home": [RETURN_HOME]}}
+    limits = {"joint_min": {"wrist_roll.pos": -55.5}}
+    assert u.rehome_before_work(HomeCell(RETURN_HOME), library, limits, sleep=lambda _: None) is None
+    cell = HomeCell([*RETURN_HOME[:4], -50.5, 50.0])
+    out = u.rehome_before_work(cell, library, limits, sleep=lambda _: None)
+    assert out["result"] == "home" and out["plan"][0]["joint"] == "elbow_flex"
+    extended = HomeCell([0.8, -30.0, 20.0, 51.6, 45.2, 50.0])  # not folded: nothing moves
+    assert u.rehome_before_work(extended, library, limits, sleep=lambda _: None)["result"] == "refused"
+    assert not any(c.startswith("jog ") for c in extended.commands)
+    arm_s = HomeCell([0.0, -58.0, 50.0, 50.0, 57.5, 46.5])  # arm_s config has no joint window; home roll -5
+    s_home = {"chunks": {"home": [[0.0, -58.0, 50.0, 50.0, -5.0, 46.5]]}}
+    assert u.rehome_before_work(arm_s, s_home, {}, sleep=lambda _: None)["result"] == "refused"  # no window, no opt-in
+    out = u.rehome_before_work(arm_s, s_home, {"joint_window_full_range": True}, sleep=lambda _: None)
+    assert out["result"] == "home" and arm_s.target[4] == pytest.approx(-5.0, abs=u.HOME_TOL)
+    assert not any(c.startswith("grip ") for c in arm_s.commands)  # the jaws are never commanded
+
+
 def test_return_home_accepts_static_friction_plateau():
     state = [*RETURN_HOME[:4], 41.0, 20.0]
     cell = HomeCell(state, lag=1.75)
