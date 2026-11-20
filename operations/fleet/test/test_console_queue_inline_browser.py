@@ -478,7 +478,7 @@ def test_current_evidence_is_folded_and_keeps_keyboard_context_across_poll(site,
     api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [_robot("rosy_01", line_stuck=stuck)]}}
     posts = []
     with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, api, posts)
+        browser, page, errors = _open(playwright, site, api, posts, open_queue=True)
         page.set_viewport_size({"width": width, "height": 844 if width < 1000 else 768})
         item = page.locator('.stuck-item[data-robot-id="rosy_01"]')
         expect(item).to_be_visible()
@@ -591,7 +591,7 @@ def test_a_refused_queue_answer_shows_in_its_row_and_one_log_line_never_a_toast(
                "/api/fleet/robots/rosy_01/line-stuck/decision": refused}
     posts = []
     with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, API, posts, answers)
+        browser, page, errors = _open(playwright, site, API, posts, answers, open_queue=True)
         before = page.locator("#fleet-inbox").get_attribute("aria-label")
         slot = page.locator('[data-decision-slot="rosy_01|stuck"]')
         slot.locator('ui-button[data-decision="WAIT"]').click()
@@ -664,7 +664,7 @@ def site():
         listener.close()
 
 
-def _open(playwright, origin, api, posts, answers=None, size=(1440, 900), open_queue=True):
+def _open(playwright, origin, api, posts, answers=None, size=(1440, 900), open_queue=False):
     options = launch_options()
     options["args"] = [f"--explicitly-allowed-ports={urlparse(origin).port}"]
     browser = playwright.chromium.launch(**options)
@@ -717,7 +717,7 @@ def test_decision_buttons_show_at_rail_scroll_zero_and_the_rail_is_the_one_scrol
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, API, [])
+        browser, page, errors = _open(playwright, site, API, [], open_queue=True)
         for width, height in [*WIDE, (390, 844)]:
             page.set_viewport_size({"width": width, "height": height})
             page.clock.run_for(1500)
@@ -753,7 +753,7 @@ def test_one_queue_row_open_at_a_time_and_the_replan_confirm_round_trips(site):
                "/api/fleet/robots/rosy_01/line-stuck/claim": (200, {"ok": True}),
                "/api/fleet/robots/rosy_01/line-stuck/decision": (200, {"result": {"outcome": "hold"}})}
     with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, API, posts, answers)
+        browser, page, errors = _open(playwright, site, API, posts, answers, open_queue=True)
         stuck_row = page.locator('li[data-key="rosy_01|stuck"] > .queue-row')
         replan_row = page.locator('li[data-key="rosy_02|replan"] > .queue-row')
         assert stuck_row.get_attribute("aria-expanded") == "true"
@@ -871,7 +871,7 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
     answers = {"/api/fleet/trips/t-rosy_02/confirm-replan": (200, {**HELD, "hold": None}),
                "/api/fleet/trips/t-rosy_03/cancel": (200, {**running, "state": "canceled"})}
     with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, api, posts, answers)
+        browser, page, errors = _open(playwright, site, api, posts, answers, open_queue=True)
         page.clock.run_for(1500)
 
         def slot_of(robot_id):
