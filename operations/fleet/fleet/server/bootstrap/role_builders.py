@@ -48,6 +48,7 @@ from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
 from fleet.server.trip_job_routes import install_trip_job_routes
 from fleet.server.trip_ports import HttpLaneJunction
 from fleet.server.trip_routes import install_trip_routes
+from fleet.server.trip_station_align import station_align_gate
 from fleet.server.trip_runner import TripConfig, TripRunner, cached_battery
 from fleet.server.vision_preview_routes import install_vision_preview_routes
 from fleet.server.work_routes import install_work_routes
@@ -291,7 +292,8 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority,
         traffic_signals=traffic_signals, signal_advice=traffic_signal_advice,
         lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
-        renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id), battery=cached_battery(app.state))
+        renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id), battery=cached_battery(app.state),
+        align_gate=station_align_gate(app.state))
     install_trip_guard(console, trip_runner, claims=task_service.store.resource_claims if task_service else None)
     trip_runner.autonomous_robots = frozenset(autonomous_robots)
     trip_runner.traffic.autonomous_robots = frozenset(autonomous_robots)

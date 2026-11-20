@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import math
 import time
 
@@ -29,6 +30,8 @@ class Fleet:
         self.p = {robot_id: Ports() for robot_id in ids}
         self.blocked: frozenset = frozenset()
         self.now = 1000.0
+        self.turns: list = []  # CORE rotate_to calls: (robot_id, delta_deg, tol_deg)
+        self._turned: set = set()
 
     def advance(self, dt):
         self.now += dt
@@ -42,7 +45,23 @@ class Fleet:
         return await self.p[robot_id].arbitrated_pose(robot_id)
 
     async def refresh(self, robot_id, force_rest=False):
-        pass
+        if robot_id in self._turned:  # the ceiling camera sights the robot again after its turn
+            self._turned.discard(robot_id)
+            self.advance(0.5)
+
+    async def rotate_to(self, robot_id, delta_deg, operator_name, tol_deg=None):
+        """CORE's in-place turn (arrival alignment at a place with a yaw): turns the fake pose exactly."""
+        self.turns.append((robot_id, delta_deg, tol_deg))
+        pose = self.p[robot_id].pose
+        self.p[robot_id].pose = dataclasses.replace(pose, yaw=pose.yaw + math.radians(delta_deg))
+        self._turned.add(robot_id)
+        return {"kind": "rotate_to", "state": "running"}
+
+    async def rotate_status(self, robot_id):
+        return {"kind": "rotate_to", "state": "done", "final_err_deg": 0.0}
+
+    async def rotate_stop(self, robot_id):
+        return {"state": "aborted"}
 
     async def junction_state(self, robot_id):
         return await self.p[robot_id].junction_state(robot_id)
@@ -103,6 +122,16 @@ def _ticks(runner, fleet, n=1, dt=0.5):
         run(runner.tick())
 
 
+def _ticks_one_loop(runner, fleet, n, dt=0.5):
+    """Ticks in one event loop, so a step that outlasts a period (an arrival turn) keeps running between them."""
+    async def go():
+        for _ in range(n):
+            fleet.advance(dt)
+            await runner.tick()
+            await asyncio.sleep(0.2)
+    run(go())
+
+
 def _arc(store, arc_id):
     return store.active()[2].arcs[arc_id]
 
@@ -143,7 +172,7 @@ def test_two_finite_laps_return_to_their_own_start_and_stop():
     start_s = next(place for place in site["places"] if place["id"] == "start_s")
     s = west.project(start_s["x"], start_s["y"])[1]
     start_s["x"], start_s["y"] = west.point_at(s)[:2]  # a body-safe start for the round trip
-    runner, store, fleet = _setup(site=SiteMap.model_validate(site))
+    runner, store, fleet = _setup(site=SiteMap.model_validate(site), period_s=0.05)
     _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N),
           repeat=False, start_at="start_n")
     _trip(runner, store, fleet, "b", "west:fwd", _s_of(store, "west:fwd", START_S),
@@ -160,8 +189,11 @@ def test_two_finite_laps_return_to_their_own_start_and_stop():
         _ticks(runner, fleet)
         assert fleet.p[robot_id].sent[-1][0:2] == ("stop", stop)
         fleet.at(robot_id, live.arc(tail), live.segments[tail]["s_to"])
-        _ticks(runner, fleet)
+        _ticks_one_loop(runner, fleet, 3)  # a place with a yaw squares up (CORE turn) before ARRIVED
         assert runner.view(robot_id)["state"] == "arrived"
+        want = store.active()[2].places[stop].yaw
+        assert abs(math.degrees(math.remainder(fleet.p[robot_id].pose.yaw - want, math.tau))) <= 3.0
+    assert {tol for _r, _d, tol in fleet.turns} <= {2.0}
     assert runner.open_trips() == []
 
 

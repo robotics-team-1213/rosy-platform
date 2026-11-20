@@ -11,6 +11,7 @@ from fleet.pipeline.station_zones import load_station_zones
 
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
+from fleet.server.sitemap.pipeline_unload_release import install_unload_release_routes, manifest_count, unload_release
 
 
 def install_cell_tasks_routes(app, ctx) -> None:
@@ -166,6 +167,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cable_guard_micro": bool(spec.get("cable_guard_micro", dec_row["cable_guard_micro"])),
             "decision": dec_row,
             "preset": spec.get("preset"),
+            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root") if k in spec},
             "pose": pose,
             "status": "QUEUED",
             "created_at": round(time.time(), 3),
@@ -232,10 +234,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "presets": list(CELL_TASK_PRESETS.values()),
             "detected_displaced_site": app.state.detected_displaced_site,
             "cable_tangled": app.state.cable_tangled,
-            "human_safety": {
-                "human_detected": dict(app.state.human_detected),
-                "active_estop": _is_human_detected(),
-            },
+            "human_safety": {"human_detected": dict(app.state.human_detected), "active_estop": _is_human_detected()},
             "station_zones": {
                 "schema": zones_data["schema"],
                 "site_id": zones_data["site_id"],
@@ -247,6 +246,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "station_camera_links": STATION_CAMERA_LINKS,
             "decisions": list(app.state.pipeline_decisions[-20:]),
             "pinky_tasks": list(app.state.pinky_tasks.values()),
+            "auto_events": list(getattr(app.state, "cell_auto_events", None) or [])[-30:],
+            "repark_requests": dict(getattr(app.state, "repark_requests", None) or {}),
         }
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/cancel", dependencies=operator_guard)
@@ -319,7 +320,22 @@ def install_cell_tasks_routes(app, ctx) -> None:
             v_cmd = max_speed_mps
             duration_s = round(checked_finite_float(max_step_m / max(0.005, max_speed_mps)), 2)
             if action == "dock_and_unload_s3":
-                spawned_cell_task = _enqueue_one_task(active, {**CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id})
+                batch_id = f"unload-{uuid.uuid4().hex[:8]}"  # the camera adds the next carry (continue_unload)
+                spawned_cell_task = _enqueue_one_task(active, {
+                    **CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id, "task_id": f"{batch_id}-1",
+                    "unload_batch_id": batch_id, "unload_expected": manifest_count(body), "unload_index": 0,
+                })
+        elif action == "depart_s3":
+            release = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(_is_human_detected()))
+            if not release["ready"]:
+                raise HTTPException(409, detail={"code": "DEPART_NOT_PERMITTED", "reasons": release["reasons"]})
+            principal = getattr(request.state, "site_principal", None)
+            app.state.unload_releases[release["batch_id"]] = {
+                "robot_id": robot_id, "task_id": task_id, "at": round(time.time(), 3), "state": "OPERATOR",
+                "operator": getattr(principal, "principal_id", None), "release": release}
+            target_place = "S3_DEPART"
+            v_cmd = max_speed_mps
+            duration_s = 0.35
         elif action == "dock_s5":
             if _aborted("cell_ab"):
                 raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
@@ -385,5 +401,12 @@ def install_cell_tasks_routes(app, ctx) -> None:
         app.state.pinky_tasks[task_id] = ptask
         _save_ledger()
         return {"ok": True, "pinky_task": ptask, "decision": dec_row, "spawned_cell_task": spawned_cell_task}
+    def record_depart_task(robot_id, batch, place, now):
+        app.state.pinky_tasks[f"depart-{batch}"] = {
+            "task_id": f"depart-{batch}", "robot_id": robot_id, "action": "depart_s3", "target_place": place,
+            "status": "SENT", "auto": True, "created_at": round(now, 3)}
+
+    ctx.record_depart_task = record_depart_task
+    install_unload_release_routes(app, ctx)
     ctx.CELL_TASK_PRESETS = CELL_TASK_PRESETS
     ctx._enqueue_one_task = _enqueue_one_task
