@@ -360,8 +360,8 @@ def test_refused_replan_load_counts_as_a_runtime_failure(tmp_path, task, envelop
     monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
     cell_attempts.start(attempts, "load-refusal")
     cell_attempts.begin(config, assessment)
-    cell_attempts.record(config, calibration, "tray", "belt", 1, {
-        "locate": {"found": True}, "envelope": assessment,
+    cell_attempts.record(config, calibration, "tray", "belt", 1, {  # the real shape: one load step, replan_from set
+        "locate": {"found": True}, "envelope": assessment, "replan_from": ["load-refusal-001"],
         "transfer": {"result": "refused", "at": "load", "envelope": refused,
                      "steps": [{"command": "load revised.json", "ok": False}]},
     }, 100.01)
@@ -369,6 +369,18 @@ def test_refused_replan_load_counts_as_a_runtime_failure(tmp_path, task, envelop
     row = json.loads(attempts.read_text().splitlines()[-1])
     assert (row["outcome"], row["fail_stage"], row["fail_class"]) == ("failed", "transfer", "refused at load")
     assert envelope.assess(*task, now=100.01)["reason"] == "runtime_failure"
+
+
+def test_refused_first_load_keeps_the_envelope_hold(envelope):
+    from cell_attempts import classify
+
+    tried = {
+        "locate": {"found": True}, "envelope": {"allowed": True},
+        "transfer": {"result": "refused", "at": "load",
+                     "envelope": {"allowed": False, "reason": "session_changed"},
+                     "steps": [{"command": "load initial.json", "ok": False}]},
+    }
+    assert classify(tried) == ("held", "envelope", "session_changed")
 
 
 def test_unverified_commissioning_placement_cannot_approve_automatic_task(tmp_path, task, envelope):

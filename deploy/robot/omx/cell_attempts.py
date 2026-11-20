@@ -135,12 +135,13 @@ def classify(tried: dict) -> tuple[str, str | None, str | None]:
     if "plan_error" in tried:
         return "failed", "plan", "no IK for the located box"
     moved = tried.get("transfer") or {}
-    replan_refused = moved.get("result") == "refused" and moved.get("at") == "load"  # review note D: stays a failed carry
+    result, at = moved.get("result"), moved.get("at")
+    steps = moved.get("steps", [])
+    replan_refused = result == "refused" and at == "load" and bool(tried.get("replan_from"))  # ReplanLedger.finish
     envelope = (None if replan_refused else moved.get("envelope")) or tried.get("envelope") or {}
     if envelope.get("allowed") is False:
-        started = any(not s["command"].startswith("load ") for s in moved.get("steps", []))
+        started = any(not s["command"].startswith("load ") for s in steps)
         return "failed" if started else "held", "envelope", envelope.get("reason")
-    result, at = moved.get("result"), moved.get("at")
     if result == "surveyed":
         return "surveyed", None, None
     if result == "placed":

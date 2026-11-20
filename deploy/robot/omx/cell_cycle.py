@@ -283,7 +283,7 @@ def _plan_schedule(plan: dict, cfg: dict, cals: dict):
 
 
 def _tools(plan: dict, commissioning: bool) -> dict:
-    """Everything that touches hardware or heavy imports, built only by the shell."""
+    """Build shell tools. Optional cycle source_site and target_site label held audit rows."""
     import cell_calibrate
     import cell_calibration as cal
     import cell_pivot
@@ -318,7 +318,10 @@ def _tools(plan: dict, commissioning: bool) -> dict:
         if held is not None:
             if ledger_path is not None:
                 tried = {"locate": {"found": True}, "library": str(library)}
-                ledger = cell_attempts.ReplanLedger(config, calibration, "unknown", "unknown", 1, tried, t0, None)
+                ledger = cell_attempts.ReplanLedger(
+                    config, calibration, plan.get("source_site") or "unknown", plan.get("target_site") or "unknown",
+                    1, tried, t0, None,
+                )
                 try:
                     ledger.record_open_hold(gate, held)
                 except (OSError, ValueError, KeyError, TypeError):
