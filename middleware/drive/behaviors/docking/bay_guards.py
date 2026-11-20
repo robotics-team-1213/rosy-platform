@@ -65,6 +65,7 @@ class BayGuardsMixin:
         self._omega = 0.0             # 마지막 명령 각속도
         self._seen: dict[str, int] = {}         # 사유별 가드 실패 횟수(첫 시도에서만 비운다)
         self._gap_hist: list = []     # ALIGNING: (scan stamp, LiDAR rear-band gap) — is the body really going back?
+        self._ref_points: Optional[tuple] = None      # (dock id, the stored seated scan's body-filtered points)
         self._seat_gap: Optional[tuple] = None  # (dock id, rear-band gap of the stored seated reference scan)
         self._seat_gap_asked: Optional[str] = None
         self._bo_gap0: Optional[float] = None   # back-off: the LiDAR rear gap when it began
@@ -106,8 +107,20 @@ class BayGuardsMixin:
         self._seat_gap_asked = dock.id
         return dock.id, ref
 
-    def note_seat_gap(self, dock_id: str, gap: Optional[float]) -> None:
+    def _ref_key(self):
+        """Identity of the dock's CURRENT reference scan (a re-teach with a new reference_scan changes it)."""
+        dock = self._h._dock
+        ref = getattr(dock, "metadata", {}).get("reference_scan") if dock is not None else None
+        if not isinstance(ref, dict):
+            return None
+        r = ref.get("ranges") or []
+        return (dock.id, len(r), hash(tuple(round(float(v), 3) for v in list(r)[:60])), ref.get("source_stamp_ns"))
+
+    def note_seat_gap(self, dock_id: str, gap: Optional[float], points=None) -> None:
+        self._seat_key = self._ref_key()
         self._seat_gap = (dock_id, float(gap)) if gap is not None else None
+        if points is not None:
+            self._ref_points = (dock_id, [(float(p[0]), float(p[1])) for p in points])     # the stored scan's filtered points: the empty-bay depth model
 
     def _note_rear_gap(self, now: float) -> None:
         body = self._body_fresh(now)

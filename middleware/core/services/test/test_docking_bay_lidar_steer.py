@@ -33,7 +33,7 @@ def run(p, gap_of=None, lie_deg=-15.0, lidar=True, lidar_after=None, limit_s=240
         p.manager.tick()
         request = p.manager.bay_scan_request()
         on = lidar and (lidar_after is None or -p.world.pose[0] - 0.05 > lidar_after)
-        if request is not None and on:
+        if request is not None and (on or p.manager._bay_phases._req_kind == "zone"):      # the zone check must be answered (a reference dock never decides on the map alone)
             p.manager.note_bay_scan_match(true_bay_pose(p.world), request_id=request[0])
         if p.manager.phase is DockPhase.ALIGNING:
             yaws.append(p.world.pose[2])
@@ -47,7 +47,7 @@ def run(p, gap_of=None, lie_deg=-15.0, lidar=True, lidar_after=None, limit_s=240
 
 def test_the_robot_seats_straight_although_the_camera_heading_lies_by_15_deg_near_the_seat():
     p = a_bay()
-    with_reference(p)
+    with_reference(p, verified=True)
     p.world.arrival_error = (0.0, 0.0)
     p.manager.dock()
     yaws = run(p)
@@ -58,7 +58,7 @@ def test_the_robot_seats_straight_although_the_camera_heading_lies_by_15_deg_nea
 
 def test_without_a_fresh_lidar_pose_inside_the_rails_it_stops_and_fails_never_steering_on_the_camera():
     p = a_bay()
-    with_reference(p)
+    with_reference(p, verified=True)
     p.manager.dock()
     run(p, lidar_after=0.20)                              # the LiDAR pose stops being answered inside x <= 0.20
     assert p.manager.state is DockState.DOCK_FAILED and "no fresh LiDAR pose" in p.manager._error, p.manager._error
@@ -67,7 +67,7 @@ def test_without_a_fresh_lidar_pose_inside_the_rails_it_stops_and_fails_never_st
 
 def test_the_angular_rate_inside_the_rails_is_bounded_small():
     p = a_bay()
-    with_reference(p)
+    with_reference(p, verified=True)
     p.manager.dock()
     run(p)
     inside = [c for ph, c in p.world.commands if ph is DockPhase.ALIGNING and c[0] < 0.0]
@@ -81,7 +81,7 @@ def _in_rails(p):
 def test_a_lidar_pose_that_jumps_from_the_predicted_one_or_disagrees_with_the_rear_gap_is_not_evidence():
     from core_features.docking.bay_scan_pose import BayScanPose  # noqa: PLC0415
     p = a_bay()
-    with_reference(p)
+    with_reference(p, verified=True)
     p.manager.dock()
     run(p, stop_when=_in_rails)
     bp = p.manager._bay_phases
@@ -99,7 +99,7 @@ def test_a_lidar_pose_that_jumps_from_the_predicted_one_or_disagrees_with_the_re
 def test_the_travel_cap_and_the_stop_come_from_the_lidar_x_when_the_camera_along_drifts():
     # no seated gap (no LiDAR seat end) and the camera along 0.2 m too long: the LiDAR x still bounds the reverse at the stop face
     p = a_bay()
-    with_reference(p)
+    with_reference(p, verified=True)
     p.manager.dock()
     run(p, along_lie=0.2, seat=False, gap_of=lambda p: None)         # no rear-band point either: only the LiDAR x bounds it
     assert p.manager.state is DockState.DOCKED, p.manager._error
@@ -108,7 +108,7 @@ def test_the_travel_cap_and_the_stop_come_from_the_lidar_x_when_the_camera_along
 
 def test_no_lidar_pose_and_no_measured_along_stops_instead_of_steering_on_the_camera():
     p = a_bay()
-    with_reference(p)
+    with_reference(p, verified=True)
     p.manager.dock()
     run(p, lidar=False, unmeasured=True)
     assert p.manager.state is DockState.DOCK_FAILED and ("no LiDAR pose and no measured along" in p.manager._error or "no fresh LiDAR pose" in p.manager._error), p.manager._error
@@ -118,7 +118,7 @@ def test_no_lidar_pose_and_no_measured_along_stops_instead_of_steering_on_the_ca
 def test_a_reverse_the_lidar_sees_held_in_the_rails_stops_and_fails():
     # R5: the wheels turn, the body (so the rear gap and the scan pose) does not change: the slip rule is off in the rails, this is its LiDAR form
     p = a_bay()
-    with_reference(p)
+    with_reference(p, verified=True)
     p.manager.dock()
     held = {}
     step = p.world.step
@@ -135,7 +135,7 @@ def test_a_reverse_the_lidar_sees_held_in_the_rails_stops_and_fails():
 
 def test_without_a_seated_gap_the_camera_along_feeds_the_rear_guard_in_the_rails():
     p = a_bay()
-    with_reference(p)
+    with_reference(p, verified=True)
     p.manager.dock()
     run(p, seat=False, lie_deg=0.0, stop_when=_in_rails)
     for _ in range(4):
