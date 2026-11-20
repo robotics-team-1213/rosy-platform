@@ -16,7 +16,9 @@ or ``identity_ttl_s`` since confirmation.
 
 Use (addendum 3): ``confirmed_track_pose`` is a D-511 lane-compliance *input* and a console
 display. It is never directly a MapPoseService arbitrated pose, a trip input, an initialpose or a
-command (test_boundaries.py); D-989 fits a transform from it, for robots opted in. Nothing here moves a robot.
+command (test_boundaries.py); D-989 fits a transform from it, for robots opted in, and auto_locate_service.py (the one pose
+reader) feeds it as a ``track`` map pose anchor for robots in fleet.map_pose.track_anchor_robots whose ``mode`` is in
+track_modes (2026-11-21 user decision, default off). Nothing here moves a robot.
 """
 
 from __future__ import annotations

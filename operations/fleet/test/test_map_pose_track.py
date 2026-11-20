@@ -1,9 +1,13 @@
 """The confirmed ceiling-camera track as a map pose anchor, and how far the camera is from odometry (2026-11-21)."""
 
+import asyncio
 import math
+from types import SimpleNamespace
 
 import pytest
 
+from fleet.server.auto_locate_service import AutoLocateService
+from fleet.server.map_pose_service import MapPoseService
 from rosy.world.state.projections.map_pose import (DEGRADED, LOCALIZED, TRACK, UNKNOWN, MapPoseConfig, MapPoseTracker,
                                                    OdomSample, Sighting)
 
@@ -65,3 +69,24 @@ def test_a_heading_far_off_after_contact_with_odometry_yaw_still_reads_the_gap()
     assert 50 <= abs(pose.camera_residual_deg) <= 90 and pose.bridge_turn_deg < 5
     assert pose.state == DEGRADED                            # the sighting's jump rule, unchanged
     assert tr.pose(T0 + 0.25 + 3.5).camera_residual_deg is None   # no fresh fix, no residual
+
+
+@pytest.mark.parametrize("mode, source", [("led", TRACK), ("motion", "sighting")])
+def test_the_feeder_anchors_a_listed_robot_for_the_allowed_modes_only(mode, source):
+    wall = [T0]
+    poses = MapPoseService(lambda: ["r1", "r2"], config=CFG, map_id=lambda: "m", wall=lambda: wall[0])
+    tracker = poses._tracker("r1")
+    tracker.add_odom(OdomSample(0.0, 0.0, 0.0, T0), T0)
+    tracker.add_sighting(Sighting("r1", 1.0, 1.0, 0.5, T0, map_id="m"), T0, "m")
+    wall[0] = T0 + 0.5
+    tracker.add_odom(OdomSample(0.1, 0.0, 0.0, wall[0]), wall[0])
+    track = {"state": "CONFIRMED", "x": 1.1, "y": 1.0, "age_s": 0.0, "map_id": "m", "mode": mode}
+    identity = SimpleNamespace(confirmed_track_pose=lambda robot_id: track)
+    service = AutoLocateService(SimpleNamespace(identity=identity, sources=()), map_pose=poses)
+    asyncio.run(service.tick())
+    pose = poses.arbitrated_pose("r1")
+    assert pose.anchor_source == source
+    assert service.track_refused["r1"] == (None if mode == "led" else "DISABLED")
+    assert "r2" not in service.track_refused            # not listed: never fed
+    if mode == "led":
+        assert (pose.x, pose.y, pose.yaw) == (1.1, 1.0, pytest.approx(0.5))   # camera position, odometry-bridged yaw

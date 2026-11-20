@@ -10,13 +10,16 @@ the fit as a map pose anchor (D-989); every other robot stays observation only.
 from __future__ import annotations
 
 import logging
+import math
 import time
 from typing import Callable, Iterable, Mapping, Optional
 
 from fleet.localization import auto_locate
 from fleet.localization.auto_locate import AlignmentTracker, RecoveryWindow
+from fleet.localization.track_heading import TrackHeading
 from fleet.server.identity_triggers import caution
 from fleet.server.trip_guard import engaged
+from rosy.world.state.projections.map_pose import STILL_PATH_M, STILL_TURN_RAD
 
 logger = logging.getLogger("fleet.auto_locate")
 
@@ -38,6 +41,8 @@ class AutoLocateService:
         self._auto_start_retry: dict[str, float] = {}
         self._asked_at: dict[str, float] = {}
         self._trackers: dict[str, AlignmentTracker] = {}
+        self._headings: dict[str, TrackHeading] = {}
+        self.track_refused: dict[str, Optional[str]] = {}   # robot_id -> why the track anchor was not taken
 
     def start(self, robot_ids: Iterable[str]) -> dict:
         """Open or extend a session; a new session forgets a DEGRADED latch."""
@@ -107,6 +112,7 @@ class AutoLocateService:
 
     async def tick(self) -> None:
         self._keep_enabled_open(self._clock())
+        self._feed_track()
         self._feed_map_pose(self._clock())  # first: the blink below can wait on a robot
         try:
             await self._sessions(self._clock())
@@ -170,6 +176,26 @@ class AutoLocateService:
                 refused = self.map_pose.observe_auto_locate(robot_id, None, "FEED_FAILED")
             if refused != "NOT_NEWER":
                 self._anchor_reason[robot_id] = refused
+
+    def _feed_track(self) -> None:
+        """Each tick, the confirmed camera track of each robot in `track_anchor_robots` is a map pose anchor
+        (identity modes as `track_modes` says). The one place that reads a track for the pose (test_boundaries)."""
+        listed = getattr(getattr(self.map_pose, "config", None), "track_anchor_robots", ())
+        identity = self.tracking.identity
+        for robot_id in listed if identity is not None else ():
+            track = self._track(identity, robot_id)
+            heading = self._headings.setdefault(robot_id, TrackHeading(self.map_pose.config.track_heading_min_m))
+            if track.get("state") != "CONFIRMED":
+                heading.reset()
+                self.track_refused[robot_id] = track.get("reason") or "NOT_CONFIRMED"
+                continue
+            try:
+                moving = self.map_pose.moved(robot_id, STILL_PATH_M, math.degrees(STILL_TURN_RAD))
+                self.track_refused[robot_id] = self.map_pose.observe_track(
+                    robot_id, track["x"], track["y"], heading.update(track["x"], track["y"], moving),
+                    track["age_s"], track.get("map_id"), track.get("mode"))
+            except Exception:  # one robot's bad track must not stop the others'
+                logger.exception("track anchor failed: robot_id=%s", robot_id)
 
     def _revision(self, source_id: Optional[str]) -> Optional[str]:
         source = next((s for s in self.tracking.sources if s.source_id == source_id), None)
