@@ -298,7 +298,7 @@ def main(argv=None):
     for step in todo:
         if step == "remap":
             ref_path = Path(config["preflight"]["reference_top"]).expanduser()
-            import cell_hooks
+            import cell_hooks, cell_pivot_bias
 
             stills = cell_hooks.stills(cell, config)
             try:
@@ -324,7 +324,7 @@ def main(argv=None):
             bp_tmp = bp.with_suffix(".tmp")
             bp_tmp.write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}), encoding="utf-8")
             bp_tmp.replace(bp)
-            cell_pivot._BIAS_CACHE.clear()
+            cell_pivot_bias._BIAS_CACHE.clear()
             done.append({"remap": record["loo_error_mm"]})
         elif step == "regions":
             continue
