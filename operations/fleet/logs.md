@@ -5588,3 +5588,10 @@
 - 변경: 3 s 안에 뒤처진 그럴듯한 odom은 `stale_source`(survey 안 끊음), 그 밖은 `out_of_order`; `max_stale_draw_s`(120, 상한 600) 넘은 pin·sighting·peer 앵커는 UNKNOWN; auto-locate 짝 신선도는 `max(0.5, 2/fps)`, 상한 1.0 s; `stale_source`를 trip 진단에 노출.
 - 증거: 원격 `operations/world/test`·`operations/fleet/test` 통과(최종 SHA는 보고에).
 - gate 변화: SOURCE. 현장 y8xs 재확인 미실시.
+
+## 2026-11-20 · uncommitted · fix(site-map): 자동 트랙 보정이 고정 장소·차로를 지킴
+- 원인: R `rosy-auto-track-calibration`(2분 타이머)이 지도 동기화 때 장소·차로를 도색 추적값으로 통째로 바꿔, 사람이 안쪽으로 옮긴 S3 (0.745, -0.207)와 안쪽 차로가 v262~v267에서 0.70·차선 중심으로 되돌아갔다.
+- 변경: `SitePlace`·`SiteEdge`에 `pinned`(기본 false), 보정 스크립트는 고정 행을 그대로 두고 차로 끝만 장소에 맞춤, 고정 장소는 place_diff에서 뺌. 지도 편집 검사 칸에 「고정」 확인란. API v1.431.
+- 운영: R에서 v261 형상으로 v268 활성, 타이머 정지. 배포 뒤 S3·loop_right·upper_east를 고정하고 타이머를 다시 켠다.
+- 증거: R `site_map_versions` v259~v267 이력(S3 0.82→0.745/-0.207 사람, v262+ auto-track-calibration 0.70), `test_auto_track_calibration`·`test_site_map_pinned`·`test_trip_bend` 41개와 site-map·map-editor node 시험 36개 통과.
+- gate 변화: 없음.
