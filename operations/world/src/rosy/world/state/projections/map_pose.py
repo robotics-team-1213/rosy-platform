@@ -122,7 +122,7 @@ class MapPoseConfig:
     peer_after_camera_s: float = 10.0
     #: Robots whose confirmed camera track may anchor the pose (add_track); none by default, so main is unchanged.
     track_anchor_robots: tuple = ()
-    #: Identity modes (``IdentityService.confirmed_track_pose()['mode']``) allowed to anchor.
+    #: Identity binding modes ("led" lamp verdict | "motion" motion match) allowed to anchor.
     track_modes: tuple = ("led",)
     #: A track moved less than this between two feeds gives no motion heading (camera noise is about 5 cm).
     track_heading_min_m: float = 0.15
