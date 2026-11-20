@@ -143,14 +143,29 @@ def run_supervised_static(handoff: dict, config: dict, calibration_path: Path,
                             params=config.get("params_path"), arm_id="arm_b",
                             task_id=task_id, handoff_lease_id=lease)
         gate = Gate(cell, config, calibration, sequence=FOLDED)
+        started = time.time()
         held = gate.open(library_path, lambda assessment: cell_attempts.begin(config, assessment))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         if video is not None:
             video.stop()
         return _held(f"review unavailable: {type(exc).__name__}", frames=frames)
     if held is not None:
-        video.stop()
-        return _held(f"review held: {held.get('reason')}", frames=frames)
+        frames["during"] = video.stop()
+        result = _held(f"review held: {held['reason']}", frames=frames)
+        if gate.blocked:
+            rehome = gate.rehome or {}
+            steps = [*rehome.get("jogs", []), *([rehome["stop"]] if "stop" in rehome else [])]
+            result["steps"] = steps
+            journal = {"result": "fault" if gate.rehome_started else "held", "at": "rehome", "error": held["reason"]}
+            try:
+                attempt_id = cell_attempts.finish_area_xyz(
+                    config, calibration, directive, gate.assessment, journal, steps, frames,
+                    folded_home=False, home=library["chunks"]["home"][-1], t_start=started)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                return {**_held(f"audit unavailable: {type(exc).__name__}", steps=steps, frames=frames),
+                        "pending_recovery": True}
+            return {**result, "attempt_id": attempt_id, "pending_recovery": True}
+        return result
     try:
         joints = AttemptJointEvidence(
             work, task_id, run_id, lease, gate.assessment["library_sha256"],
@@ -160,7 +175,6 @@ def run_supervised_static(handoff: dict, config: dict, calibration_path: Path,
         video.stop()
         return _held(f"joint evidence unavailable: {type(exc).__name__}", frames=frames)
 
-    started = time.time()
     steps: list[dict] = []
     folded_home = False
     released_at = parked_at = parked_wall_at = None

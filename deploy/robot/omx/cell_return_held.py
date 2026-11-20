@@ -139,6 +139,12 @@ def run_return_held(
         held = gate.open(lib, lambda a: cap.cell_attempts.begin(config, a), lambda *_, **__: None)
         if held is not None:
             cap.close_episode(cell, episode, False, f"held: {held['reason']}")
+            if cell_attempts.RUN["path"] is not None:
+                ledger = cell_attempts.ReplanLedger(config, calibration, "held", dest, 1, tried, t0, None)
+                try:
+                    ledger.record_open_hold(gate, held)
+                except (OSError, ValueError, KeyError, TypeError):
+                    return {**out, "result": "held: audit_unavailable", "envelope": held}
             return {**out, "result": f"held: {held['reason']}", "envelope": held}
         opened = True
         moved = cap.transfer_folded(

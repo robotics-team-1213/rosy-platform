@@ -60,6 +60,15 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 
 `middleware/skills`와 `middleware/robot_execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측은 D-782 기반 위치(`operations/prediction`, `learning/{training,evaluation}/world_model`)에만 둔다.
 
+## 3D 자산 경계 (2026-11-19)
+
+3D 설계와 플랫폼 런타임은 분리한다. 이 저장소에는 코드나 시험이 직접 읽는 런타임 3D 입력(URDF·시뮬·지도 메시)만 둔다. 허용 루트는 `learning/envs/isaac/assets/`, `middleware/devices/pinky/description/meshes/`, `middleware/perception/map/map_v2_fleet/`, `middleware/perception/map/map_world_261026/`, `integrations/simulation/gazebo/models/` 다섯 곳뿐이다.
+
+- **금지 대상**: 3D 생성기(`manifold3d`·`cadquery` import), CAD 원본(`.3mf`·`.scad`·`.step`·`.stp`·`.f3d`·`.blend`), 출력·검수 파일은 저장소에 두지 않는다.
+- **출처 기록 (`SOURCE.json`)**: 추적되는 모든 메시는 자기 폴더 또는 허용 범위(Pinky는 `description/`) 안 상위 폴더에 `SOURCE.json`을 두어야 한다. 필수 키는 비어 있지 않은 문자열 `"source"`(공급 패키지·상위 저장소·설계 폴더)이며, `"frame"`·`"note"`·`"meshes"` 등을 선택해 함께 적는다.
+- **신규 설계 위치**: 새 3D 설계·수정은 Git 밖 `Rosy/rosy-modeling/`(또는 연구 작업은 `Rosy/docs/research/`)에서 진행하고, 내보낸 런타임 메시만 `SOURCE.json`과 함께 들인다.
+- **자동 검증**: 이 규칙의 정본은 이 문서이며, [test_3d_asset_boundary.py](../../test/architecture/test_3d_asset_boundary.py)가 허용 루트, 금지 확장자·import, `SOURCE.json` 유효성을 검사한다.
+
 ## 폴더 이름과 묶음
 
 [D-738](../adr/D-738-folder-one-authority.md)이 트리 전체의 규칙이다. `control` 한 곳의 개명이 아니다. 위의 편집 집 표가 현재 경로다. S1은 D-743, S2는 D-747, S6은 D-748, S7은 D-749, S8은 D-750, S9는 D-751, S10은 D-752다. S3부터 S10의 소스 착지는 [남은 폴더 정리](../validation/folder-remaining-2026-10-13/result.md)다. 그 기록의 원격 pytest·CI·배포·장치는 NOT RUN이다. 편집 집 표나 manifest와 다르면 편집 집 표와 manifest가 현재 경로다.

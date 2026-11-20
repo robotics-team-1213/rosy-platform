@@ -109,6 +109,7 @@ class Runner:
         state = self.present() if present is None else present
         if self.jitter["shaking"] and "jitter" not in fields:
             fields["jitter"] = self.jitter
+        fields.setdefault("holding", bool(self.holding))  # return home refuses an arm whose state does not say it is empty
         self.status(
             dict(
                 fields,

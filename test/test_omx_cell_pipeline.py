@@ -51,6 +51,7 @@ def test_home_stage_requires_person_and_writes_receipt(tmp_path, monkeypatch, ca
         assert self.operating_profile == profile
         assert command in ("state", "grip 50.0")
         return {"ok": True, "state": measured, "target": measured,
+                "holding": False, "health": {"current_ma": [0, 0, 0, 0, 0, 10]},
                 "operating_context": {"operating_profile": profile}}
 
     monkeypatch.setattr(m.FifoCell, "act", fake_act)

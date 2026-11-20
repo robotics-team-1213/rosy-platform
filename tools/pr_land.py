@@ -2,7 +2,7 @@
 
 Usage::
 
-    python tools/pr_land.py [--title "..."] [--self-review "<reason>"] [--dry-run]
+    python tools/pr_land.py [--title "..."] [--self-review "<reason>"] [--evidence] [--dry-run]
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ for _extra in (str(TOOLS), str(TOOLS / "remote"), str(TOOLS / "harness"), str(TO
 import affected_ci  # noqa: E402
 import affected_exclusive  # noqa: E402
 import land_cache  # noqa: E402
+import land_freeze  # noqa: E402
 import work_queue  # noqa: E402
 
 ACT = next(e for e in affected_ci.CI_FULL_MATRIX if e["name"] == "omx-act-cpu")
@@ -65,6 +66,24 @@ def ci_runnable(inv: list[str]) -> bool:
     ) and ci_entry(inv) is not None
 
 
+def split_by_ci_entry(inv: list[str]) -> list[list[str]]:
+    """Split a mixed invocation into one part per CI entry; paths no entry covers stay together.
+
+    Non-path words (flags, env tokens) go to every part, so ci_runnable() still rejects env/lab_only/alone parts.
+    """
+    paths = [w for w in inv if not w.startswith("-") and not work_queue.ENV_WORD.match(w)]
+    extras = [w for w in inv if w not in paths]
+    groups: dict[str, list[str]] = {}
+    for p in paths:
+        entry = ci_entry([p])
+        groups.setdefault(entry["name"] if entry else "", []).append(p)
+    parts = [extras + g for g in groups.values()]
+    # a group that fails as a whole may hold only one bad path: isolate it so the CI-runnable paths drop out
+    parts = [q for part in parts for q in ([part] if ci_runnable(part) or len(part) - len(extras) < 2
+             else [extras + [p] for p in part[len(extras):]])]
+    return parts if len(parts) > 1 else [inv]
+
+
 def passed_ids(text: str) -> set[str]:
     first = text.split("=== D-762 flaky quarantine rerun ===", 1)[0]
     return {a or b for a, b in PASSED_ID.findall(first)}
@@ -97,6 +116,15 @@ def activated(cwd: Path) -> bool:
     return False
 
 
+def cutover_refusal(cwd: Path) -> str | None:
+    """Refuse submission while the cutover phase is drain; open and normal pass (activation is checked separately)."""
+    state = land_freeze.load(cwd)
+    if state["phase"] != "drain":
+        return None
+    who = state.get("owner") or "unknown"
+    return f"[pr-land] cutover phase drain: PR submission closed; owner {who}; state file {land_freeze.path(cwd)}"
+
+
 def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> str:
     """Enforce D-868 publishOnly separation and return base ref for PR diff checks."""
     if _run(["git", "config", "--bool", "rosy.publishOnly"], cwd, check=False).lower() == "true" and not activated(cwd):
@@ -109,7 +137,9 @@ def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> s
     base = origin_main or local_main
     if not base:
         raise SystemExit("[pr-land] neither origin/main nor main exists; fetch origin/main first (refusing HEAD^ fallback)")
-    if not allow_backlog and origin_main and local_main and origin_main != local_main:
+    behind_only = origin_main and local_main and subprocess.run(  # local main merely behind origin/main has nothing unpublished
+        ["git", "-C", str(cwd), "merge-base", "--is-ancestor", local_main, origin_main], capture_output=True).returncode == 0
+    if not allow_backlog and origin_main and local_main and origin_main != local_main and not behind_only:
         anc = subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", local_main, head], capture_output=True)
         if anc.returncode == 0:
             raise SystemExit(
@@ -134,13 +164,13 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
         b_paths = browser_scope.targets(changed)
         for group in land_selection.pack(cwd, b_paths):
             invs.extend(land_browser.chunks(cwd, group))
-    return [inv for inv in invs if not ci_runnable(inv)]
+    return [part for inv in invs for part in split_by_ci_entry(inv) if not ci_runnable(part)]
 
 
-def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None:
-    """Require an intact lab land_cache pass for each lab-only invocation on head's tree & env."""
+def lab_missing(cwd: Path, head: str, required: list[list[str]]) -> list[list[str]]:
+    """Lab-only invocations without an intact land_cache pass on head's tree & env."""
     if not required:
-        return
+        return []
     tree = _run(["git", "rev-parse", f"{head}^{{tree}}"], cwd)
     env = land_cache.env_id(cwd, head)
     rows = [
@@ -161,20 +191,31 @@ def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None
             if row.get("log_sha256") != hashlib.sha256(data).hexdigest():
                 continue
             text = data.decode("utf-8-sig", errors="replace")
-            if passed_ids(text) and covers_lab_baseline(cwd, head, inv, text):
+            if (passed_ids(text) or land_cache.ALL_SKIPPED.search(text)) and covers_lab_baseline(cwd, head, inv, text):
                 ok = True
                 break
         if not ok:
             missing.append(inv)
+    return missing
+
+
+def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None:
+    """Require an intact lab land_cache pass for each lab-only invocation on head's tree & env."""
+    missing = lab_missing(cwd, head, required)
     if missing:
         cmds = "; ".join(" ".join(inv) for inv in missing[:3])
         raise SystemExit(f"[pr-land] lab-only change requires remote_pytest lab evidence before auto-merge: {cmds}")
+
+
+def session_name() -> str:
+    return os.environ.get("ROSY_SESSION_NAME") or os.environ.get("CLAUDE_SESSION_NAME") or "unknown"
 
 
 def build_body(summary: str, self_review: str) -> str:
     lines = [summary.strip() or "PR landing via Merge Queue (D-1052)."]
     if self_review.strip():
         lines += ["", f"Overlap-Review: self ({self_review.strip()})"]
+    lines += ["", f"Session: {session_name()}"]
     return "\n".join(lines) + "\n"
 
 
@@ -187,6 +228,8 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     parser.add_argument("--allow-backlog", action="store_true", help="allow PR from un-published local main ancestor")
     parser.add_argument("--verify-ci-log", nargs=2, metavar=("ARGV_JSON", "LOG_PATH"),
                         help="verify a CI log covers the lab baseline passed IDs for ARGV_JSON")
+    parser.add_argument("--evidence", action="store_true",
+                        help="run pr_evidence.py HEAD (real remote lab run) first when lab evidence is required")
     parser.add_argument("--dry-run", action="store_true", help="print commands without pushing/merging")
     args = parser.parse_args(argv)
     cwd = (repo or Path.cwd()).resolve()
@@ -207,13 +250,23 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
         raise SystemExit("[pr-land] working tree is dirty; commit explicit files first")
 
     head = _run(["git", "rev-parse", "HEAD"], cwd)
+    refused = cutover_refusal(cwd)
+    if refused and not args.dry_run:
+        raise SystemExit(refused)
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
     lab_needed = required_lab_invocations(cwd, base, head)
+    if args.evidence and lab_needed:
+        import pr_evidence  # lazy: pr_evidence imports pr_land
+
+        if pr_evidence.main(["HEAD", "--base", base], repo=cwd):
+            raise SystemExit("[pr-land] pr_evidence failed; no evidence recorded")
     verify_lab_evidence(cwd, head, lab_needed)
 
     title = args.title or _run(["git", "log", "-1", "--format=%s", "HEAD"], cwd)
     body = build_body(args.body, args.self_review)
     if args.dry_run:
+        if refused:
+            print(f"{refused} (a real run would stop here)")
         print(f"[pr-land] dry-run branch={branch} lab_required={len(lab_needed)} title={title!r}")
         print(f"[pr-land] plan: git push -u origin {branch}; gh pr create|edit (base main, head {branch}); "
               f"gh pr merge --auto --merge --match-head-commit {head}; then exit (no waiting)")
@@ -222,6 +275,10 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     env = dict(os.environ)
     if not args.remote_prepush:
         env["ROSY_STATIC_PRE_PUSH"] = "1"
+    if _run(["git", "config", "--bool", "rosy.publishOnly"], cwd, check=False).lower() == "true" and activated(cwd):
+        # D-1055: reason only for this push's env, never global; check_coexistence already required activation.
+        session = os.environ.get("ROSY_SESSION_NAME") or os.environ.get("CLAUDE_SESSION_NAME") or "unknown"
+        env["ROSY_PUSH_REASON"] = f"pr_land D-1055 {session}"
     _run(["git", "push", "-u", "origin", branch], cwd, env=env)
     existing = json.loads(_run(["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number"], cwd) or "[]")
     if existing:

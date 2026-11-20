@@ -71,6 +71,8 @@ class DockingPhasesMixin:
         if dock_type is not None and not dock_type.staging:
             self._parking_phases.begin_entry_turn()
             return
+        if self._bay_phases.zone_entry():      # 칸 줄 안에서는 Nav2 를 부르지 않는다
+            return
         self._enter(DockPhase.STAGING)
         self._nav_state = NavigationState.PLANNING
         if self.executor is not None and self._dock is not None:

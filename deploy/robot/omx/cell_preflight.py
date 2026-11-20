@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
+import shlex
 import subprocess
 import sys
 import time
@@ -18,6 +20,63 @@ import urllib.request
 from pathlib import Path
 
 import cell_params as prm
+
+
+def check_library(config: dict, config_path: Path, library_path: Path, state: dict | None = None) -> list:
+    """Check the selected library and the live direct-start gap without sending motion commands."""
+    from chunk_runner import JOG_MAX, NAMES
+
+    arm = config.get("arm_id") or config.get("arm") or config_path.stem
+    label = f"{arm} library {library_path}"
+    minimum, maximum = config.get("joint_min") or {}, config.get("joint_max") or {}
+    if (not isinstance(minimum, dict) or not isinstance(maximum, dict) or not (minimum or maximum)
+            or (minimum.keys() | maximum.keys()) - set(NAMES)):
+        return [(label, False, "configure the selected arm's joint_min/joint_max")]
+    bounds = [(minimum.get(axis, -100.0), maximum.get(axis, 100.0)) for axis in NAMES]
+    if any(not all(type(v) in (int, float) and math.isfinite(v) for v in (lo, hi)) or lo > hi for lo, hi in bounds):
+        return [(label, False, "invalid joint_min/joint_max")]
+
+    def pose(values):
+        return (isinstance(values, list) and len(values) == len(NAMES)
+                and all(type(v) in (int, float) and math.isfinite(v) for v in values))
+
+    try:
+        library = json.loads(library_path.expanduser().read_text(encoding="utf-8"))
+        chunks = library["chunks"]
+        if tuple(library["names"]) != tuple(NAMES) or not chunks["home"]:
+            raise ValueError("library needs runner joint order and a home chunk")
+        if any(not isinstance(frames, list) or not frames or not all(map(pose, frames)) for frames in chunks.values()):
+            raise ValueError("every chunk must contain finite six-joint frames")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        return [(label, False, str(exc))]
+
+    failures = []
+    for chunk, frames in chunks.items():
+        for frame, values in enumerate(frames):
+            for axis, value, (low, high) in zip(NAMES, values, bounds):
+                if not low <= value <= high:
+                    failures.append((label, False, f"{arm} chunk {chunk} frame {frame} {axis} "
+                                                   f"value {value} outside [{low}, {high}]; regenerate and review the chunk"))
+    if state is None:
+        from cell_pipeline_io import FifoCell
+
+        if not config.get("io"):
+            return failures + [("live arm state", False, f"{arm}: configure the runner io directory")]
+        state = FifoCell(Path(config["io"]).expanduser(), {}, timeout_s=5.0).act("state")
+    measured = state.get("state")
+    if state.get("ok") is not True or state.get("fault") or state.get("human_hold_latched") or not pose(measured):
+        return failures + [("live arm state", False, f"{arm}: no usable state from the guarded runner")]
+    starts = [chunks["home"][-1], *(frames[0] for frames in chunks.values())]
+    gap = min(max(abs(value - target) for value, target in zip(measured[:5], start)) for start in starts)
+    if gap > 2 * JOG_MAX:
+        command = ["python3", "cell_pipeline.py", "--stage", "home", "--config", str(config_path),
+                   "--library", str(library_path), "--person-at-switch"]
+        if not config.get("operating_profile_path"):
+            command += ["--operating-profile", "/path/to/operating-profile.json"]
+        failures.append(("recovery_required", False, f"{arm}: nearest start {gap:.2f} > {2 * JOG_MAX:g}; "
+                         "home automatically lifts for a large wrist turn from a folded pose; "
+                         f"with a person at the switch run {shlex.join(command)}"))
+    return failures or [(label, True, "joint limits and live direct-start gap are within bounds")]
 
 
 def reference_matches(path: Path | None, expected_sha256: str | None) -> bool:
@@ -168,10 +227,14 @@ def checks(config: dict, viewer: str, max_shift_px: float, fetch=None, run=subpr
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--config", required=True, type=Path)
+    ap.add_argument("--library", type=Path, help="also check the selected library and the live arm pose")
     ap.add_argument("--viewer", default="http://127.0.0.1:8767")
     ap.add_argument("--max-shift-px", type=float, default=6.0)
     args = ap.parse_args(argv)
-    rows = checks(json.loads(args.config.read_text(encoding="utf-8")), args.viewer, args.max_shift_px)
+    config = json.loads(args.config.read_text(encoding="utf-8"))
+    rows = checks(config, args.viewer, args.max_shift_px)
+    if args.library is not None:
+        rows += check_library(config, args.config, args.library)
     for name, ok, why in rows:
         print(f"{'ok  ' if ok else 'FAIL'} {name}: {why}")
     print("follower caps: record_session refuses raised caps; restore with commissioning_limits.py --baseline (torque OFF)")
