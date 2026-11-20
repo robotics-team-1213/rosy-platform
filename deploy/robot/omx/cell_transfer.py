@@ -21,7 +21,7 @@ from cell_zones import Zones
 class Gate:
     def __init__(self, cell, config: dict, calibration: dict, *, sequence=cp.SEQUENCE):
         self.cell, self.config, self.calibration, self.assessment = cell, config, calibration, None
-        self.sequence, self.source, self.home = sequence, {}, None
+        self.sequence, self.source, self.home, self.rehome = sequence, {}, None, None
         self.before_motion, self.finish_attempt = None, None
         self.history, self.transitions, self.finalized, self.blocked = [], 0, False, False
         self._lib_cache: dict[tuple[str, int, int], tuple[dict, str]] = {}
@@ -49,6 +49,8 @@ class Gate:
 
     def open(self, library, before_motion, finish_attempt=None) -> dict | None:
         """None when the carry may start (the intent is written first); else the held envelope."""
+        from cell_unwedge import rehome_before_work
+
         self.assessment = self._assess(library)
         if not self.assessment["allowed"]:
             return self.assessment
@@ -58,6 +60,17 @@ class Gate:
         except OSError:
             return {**self.assessment, "allowed": False, "reason": "audit_unavailable"}
         self.before_motion, self.finish_attempt = before_motion, finish_attempt
+        # after the intent: a folded arm off home (11-19 wrists turned by hand) takes the lift-then-turn home first
+        self.rehome = rehome_before_work(self.cell, self._load_library(library)[0], self.config)
+        try:
+            if self.rehome is not None and self.config.get("work_dir"):
+                cp.write_receipt(Path(self.config["work_dir"]).expanduser() / "receipts", "rehome", self.rehome)
+        except OSError:
+            self.blocked = True
+            return {**self.assessment, "allowed": False, "reason": "audit_unavailable"}
+        if self.rehome and self.rehome.get("plan") and self.rehome["result"] != "home":  # started, did not finish
+            self.blocked = True  # the caller records the held attempt once (panel r7: no second row from here)
+            return {**self.assessment, "allowed": False, "reason": f"rehome_{self.rehome['result']}"}
         return None
 
     def _settled_home(self, status, assessment) -> bool:

@@ -360,8 +360,19 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                     add("test", f"module {module['name']} ({path}; no test names it, whole root suite)")
                     broad_fallback_modules[module["name"]] = module
             else:
+                # A module with source_paths has one test folder per source root (perception/test, drive/test).
+                # A folder under another root than the changed file keeps only the files that reach it, like a
+                # reverse dependent; its "nobody imports it, keep the whole folder" fallback is for its own root.
+                # A root with no test folder of its own (an external holder) keeps the module's whole tests.
+                roots = (module["path"], *(module.get("source_paths") or ()))
+                own = max((r for r in roots if _under(path, r)), key=len, default=None)
+                own_has_tests = own is not None and any(_under(t, own) for t in tests)
                 for test in tests:
-                    kept = None if safety_review.is_safety(path, repo.safety_roots, repo.safety_modules)                         else _narrowed_tests(repo, path, test)
+                    other_root = own_has_tests and max((r for r in roots if _under(test, r)), key=len, default=own) != own
+                    kept = None if safety_review.is_safety(path, repo.safety_roots, repo.safety_modules) \
+                        else _narrowed_tests(repo, path, test, reverse=other_root)
+                    if other_root and kept == []:
+                        continue
                     for one in kept or [test]:
                         add(one, f"module {module['name']} ({path})" + (" [import closure]" if kept else ""))
             continue
@@ -424,8 +435,11 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                         for one in kept or [test]:
                             add(one, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}"
                                 + (" [import closure]" if kept else ""))
+        # A test under the module's own source_paths (drive tests beside middleware/drive) is the module's test,
+        # reached through its tests list and import closure above, not a blanket prefix importer.
+        roots = (module["path"], *(module.get("source_paths") or ()))
         for test in repo.test_files:
-            if not _under(test, module["path"]) and _imports(repo, test, prefixes, names):
+            if not any(_under(test, root) for root in roots) and _imports(repo, test, prefixes, names):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
     # D-436 addendum 1 (panel 2026-11-09): a safety path stays FULL; static reach misses its config/IDL readers.
