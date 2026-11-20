@@ -294,10 +294,10 @@ def attest(config: dict, supervised: bool) -> dict:
 
 
 def open_gates(cells: dict, configs: dict, calibrations: dict, libraries: dict, sequences: dict, run: Path) -> dict:
-    """One Gate per arm over the Guarded cell (D-911, cell_cycle's pattern). Every (arm, library) is assessed and its
-    durable intent written before any thread starts, so one hold leaves both arms at zero motion. The library index
-    names the intent file: a second open on the same Gate must not hit the first library's pending intent."""
+    """Assess each library and write its durable intent before any rehome or carry for that library.
+    All Gates open before the carry threads start. Each library has its own intent file."""
     from cell_auto_safety import Guarded
+    from cell_attempts import _fsync_directory
     from cell_transfer import Gate
 
     gates = {}
@@ -306,10 +306,13 @@ def open_gates(cells: dict, configs: dict, calibrations: dict, libraries: dict, 
         for i, (path, _) in enumerate(libraries[n]):
 
             def before_motion(assessment, n=n, i=i, path=path):
-                with (run / f"intent-{n}-{i}.json").open("x", encoding="utf-8") as stream:  # exclusive: a hold, never a clobber
+                intent = run / f"intent-{n}-{i}.json"
+                with intent.open("x", encoding="utf-8") as stream:
                     json.dump({"arm": n, "library": str(path), "assessment": assessment}, stream)
                     stream.flush()
                     os.fsync(stream.fileno())
+                _fsync_directory(run)
+                return intent
 
             held = gate.open(path, before_motion)
             if held is not None:

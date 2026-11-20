@@ -172,7 +172,16 @@ def _home_jogs(cell, home, bounds, start, receipt, sleep, log, grip=True):
     return "home", None
 
 
-def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None, grip=True) -> dict:
+def can_rehome(status: dict, home: list) -> bool:
+    health = status.get("health") or {}
+    current = health.get("current_ma") if isinstance(health, dict) else ()
+    return (_home_state(status, status.get("operating_context")) and _home_pose(home)
+            and status.get("holding") is False and isinstance(current, list) and len(current) >= 6
+            and type(current[5]) in (int, float) and abs(current[5]) < 140
+            and all(abs(value - want) <= FOLDED_TOL for value, want in zip(status["state"][:4], home)))
+
+
+def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None, grip=True, assessment=None) -> dict:
     """Return a folded arm to library home through the runner's guarded jogs."""
     minimum, maximum = limits.get("joint_min") or {}, limits.get("joint_max") or {}
     names = tuple(f"{joint}.pos" for joint in (*BODY, "gripper"))
@@ -198,13 +207,14 @@ def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None, gr
         status = receipt["start"] = receipt["end"] = cell.act("state")
         context = status.get("operating_context")
         profile = getattr(cell, "operating_profile", None)
-        if (not _home_state(status, context) or
-                (profile is not None and (context or {}).get("operating_profile") != profile)):
+        if assessment is not None:
+            from cell_envelope import same_session
+
+            if not same_session(status, assessment):
+                return {**receipt, "result": "session_changed", "error": "initial runner session refused"}
+        if not _home_state(status, context) or (profile is not None and (context or {}).get("operating_profile") != profile):
             return {**receipt, "result": "stopped", "error": "initial live state refused"}
-        measured = status["state"]
-        current = (status.get("health") or {}).get("current_ma") or [0] * 6
-        if (status.get("holding") or abs(current[5]) >= 140
-                or any(abs(value - want) > FOLDED_TOL for value, want in zip(measured[:4], home))):
+        if not can_rehome(status, home):
             return {**receipt, "result": "refused", "error": "home requires an empty, folded arm"}
         try:
             receipt["plan"] = _home_plan(home, bounds, status, lift)
@@ -231,16 +241,23 @@ def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None, gr
     return receipt
 
 
-def rehome_before_work(cell, library: dict, limits: dict, *, sleep=time.sleep) -> dict | None:
-    """User 2026-11-20 "홈자세 다시 잡도록 변경해": on 11-19 all three folded wrists were turned by hand (torque OFF) and
-    work could not start. An arm off its library home takes the lift-then-turn home first. None: already home.
-    A result without jogs (not empty and folded, state refused): nothing moved, the caller goes on as before."""
+def rehome_before_work(cell, library: dict, limits: dict, *, sleep=None, assessment=None,
+                       required: bool = False) -> dict | None:
+    """An empty folded arm off its library home takes the lift-then-turn home first."""
     try:
         home = library["chunks"]["home"][-1]
-        state = cell.act("state").get("state")
-        if _home_pose(state) and all(abs(a - b) <= SETTLE_TOL for a, b in zip(state[:5], home[:5])):
+        status = cell.act("state")
+        if assessment is not None:
+            from cell_envelope import same_session
+
+            if not same_session(status, assessment):
+                return {"result": "session_changed", "error": "initial runner session refused"}
+        state = status.get("state")
+        if (not required and _home_pose(state)
+                and all(abs(a - b) <= SETTLE_TOL for a, b in zip(state[:5], home[:5]))):
             return None
-        return return_home(cell, home, limits, sleep=sleep, grip=False)
+        return return_home(cell, home, limits, sleep=time.sleep if sleep is None else sleep,
+                           grip=False, assessment=assessment)
     except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError) as exc:
         return {"result": "refused", "error": str(exc)}
 

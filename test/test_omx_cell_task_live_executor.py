@@ -117,6 +117,79 @@ def _fixture(tmp_path, monkeypatch, *, fail_command=None, unsettled_command=None
     return handoff, config, calibration_path, Cell(), commands
 
 
+@pytest.mark.parametrize("journal_error", [False, True])
+def test_rehome_failure_journals_the_bound_intent_once(tmp_path, monkeypatch, journal_error):
+    import cell_unwedge
+    from cell_robot_profile import load
+    from cell_transfer import Gate
+    from types import SimpleNamespace
+
+    handoff, config, calibration, cell, commands = _fixture(tmp_path, monkeypatch)
+    profile_path = tmp_path / "profile.json"
+    profile_path.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1", "device_id": "arm_b",
+        "instance_id": "arm_b_follower", "robot_config_sha256": "a" * 64,
+        "work_dir": "work", "operating_envelope_path": "review.json",
+    }))
+    profile = load(profile_path)
+    config.update(operating_profile_path=str(profile_path), operating_envelope_path=profile["operating_envelope_path"],
+                  _operating_profile_binding=profile["binding"], joint_min={"wrist_roll.pos": -80},
+                  operating_conditions={"installation_revision": "install", "object_revision": "object",
+                                        "environment_revision": "scene", "payload_max_kg": 0.05,
+                                        "object_dimensions_m": [0.03] * 3},
+                  payload={"kg": 0.03, "source": "fixture"})
+    ledger = Path(config["work_dir"]) / "attempts.jsonl"
+    pending = ledger.with_suffix(".pending.json")
+    pose = [0.0, 0.0, 0.0, 0.0, 25.0, 0.0]
+    original_intent = []
+
+    def act(command):
+        if command == "state":
+            return {"ok": True, "state": pose.copy(), "target": pose.copy(), "t": time.time(),
+                    "holding": False, "health": {"current_ma": [0, 0, 0, 0, 0, 10]},
+                    "operating_context": {"scope": "hardware", "sha256": "a" * 64,
+                                          "session_id": "session", "operating_profile": profile["binding"]}}
+        commands.append(command)
+        if len(commands) == 1:
+            assert command.startswith("jog elbow_flex.pos ")
+            original_intent.append(pending.read_bytes())
+            pose[2] += float(command.split()[-1])
+            return {"ok": True}
+        assert command.startswith("jog ") or command == "human-hold"
+        return {"ok": command == "human-hold", "contact": command.startswith("jog ")}
+
+    monkeypatch.setattr(cell, "act", act)
+    monkeypatch.setattr(live, "Gate", Gate)
+    monkeypatch.setattr(cell_unwedge, "time", SimpleNamespace(sleep=lambda _: None))
+    if journal_error:
+        original_open = Path.open
+
+        def deny_append(path, mode="r", *args, **kwargs):
+            if path == ledger and mode == "a":
+                raise OSError("journal unavailable")
+            return original_open(path, mode, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", deny_append)
+
+    result = live.run_supervised_static(handoff, config, calibration, cell)
+    assert result["result"] == "held" and result["pending_recovery"]
+    assert pending.read_bytes() == original_intent[0]
+    assert len(commands) == 3 and commands[-1] == "human-hold"
+    if journal_error:
+        assert result["reason"] == "audit unavailable: OSError" and not ledger.exists()
+    else:
+        row, = [json.loads(line) for line in ledger.read_text().splitlines()]
+        intent = json.loads(original_intent[0])
+        assert result["reason"] == "review held: rehome_bind_suspected"
+        assert row["attempt_id"] == intent["attempt_id"] == result["attempt_id"]
+        assert row["task_binding"] == intent["task_binding"] == {
+            "task_id": handoff["task_id"], "handoff_lease_id": handoff["handoff_lease_id"]}
+        assert row["envelope"] == intent["envelope"]
+        assert (row["outcome"], row["fail_stage"], row["fail_class"], row["folded_home"]) == (
+            "failed", "rehome", "rehome_bind_suspected", False)
+        assert [step["command"] for step in row["transfer"]["steps"]] == commands
+
+
 def test_static_carry_journals_unknown_without_bound_depth(tmp_path, monkeypatch):
     handoff, config, calibration, cell, commands = _fixture(tmp_path, monkeypatch)
     result = live.run_supervised_static(handoff, config, calibration, cell)
