@@ -19,8 +19,8 @@ from pydantic import ValidationError
 
 from core_common.protocol.arm_incidents import (
     ARM_INCIDENT_BODY_BYTES, ARM_INCIDENT_EVIDENCE_FRAMES, ARM_INCIDENT_FRAME_BYTES, ArmIncidentAccepted, ArmIncidentClear,
-    ArmIncidentEvidenceFrame, ArmIncidentExplanation, ArmIncidentHold, ArmIncidentReport, machine_clearable,
-    software_stop)
+    ArmIncidentEvidenceFrame, ArmIncidentExplanation, ArmIncidentHold, ArmIncidentReport, clearable_after_fold,
+    machine_clearable, software_stop)
 from fleet.server.camera_peer_routes import body as bounded_json
 from fleet.server.site_auth import assessor_arms, build_incident_clearer
 from fleet.server.sqlite_policy import configure_connection, enable_wal
@@ -31,7 +31,8 @@ CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 ROLES = ("top", "side")
 EVIDENCE_KEEP_S = 14 * 86400  # whole frames of a cleared incident; tip crops, labels and facts stay
 EVIDENCE_BODY_BYTES = ARM_INCIDENT_FRAME_BYTES * 4 // 3 + 4096
-REPEAT_WINDOW_S = 86400  # D-1039: one machine clear per arm a day, whatever the cause; the next goes to a person
+REPEAT_WINDOW_S = 86400  # D-1039 window
+MACHINE_CLEARS_PER_WINDOW = 3  # D-1047 (was 1): a fourth machine clear of one arm in 24 h goes to a person
 
 
 class MachineClearRefused(PermissionError):
@@ -121,30 +122,40 @@ class ArmIncidentStore:
     def accepted(self, source_id, incident_id) -> ArmIncidentAccepted:
         return ArmIncidentAccepted(incident_id=incident_id, hold=self.hold(source_id))
 
-    def clear(self, source_id, incident_id, note, principal_id, cause=None, basis=None, machine=False) -> None:
+    def clear(self, source_id, incident_id, note, principal_id, cause=None, basis=None, machine=False,
+              recovery=None) -> None:
         """KeyError: no such incident for this arm. ValueError: already cleared (the first record stands).
         machine (D-1039): an AI assessor clears; MachineClearRefused when the stored facts or a machine clear of this
         arm within REPEAT_WINDOW_S keep it for a person. A machine clear is marked and its basis stored as 'unknown',
         so its cause is never scored as truth."""
         with self._lock, self._db:
             self._listed.clear()
-            row = self._db.execute("SELECT cleared_at, facts FROM arm_incidents WHERE incident_id=? AND source_id=?",
-                                   (incident_id, source_id)).fetchone()
+            row = self._db.execute("SELECT cleared_at, facts, reported_at, recovery FROM arm_incidents "
+                                   "WHERE incident_id=? AND source_id=?", (incident_id, source_id)).fetchone()
             if row is None:
                 raise KeyError(incident_id)
             if row[0] is not None:
                 raise ValueError("already cleared")
             if machine:
-                ok, why = machine_clearable(_facts(row[1]))
+                facts = _facts(row[1])
+                ok, why = machine_clearable(facts)
+                if not ok and recovery is not None:  # D-1048: the cell folded the arm home by itself
+                    ok, why = clearable_after_fold(facts, recovery, incident_id, row[2])
                 if not ok:
                     raise MachineClearRefused("AI_CLEAR_KIND_REFUSED", why)
-                if self._db.execute("SELECT 1 FROM arm_incidents WHERE source_id=? AND cleared_kind='machine' "
-                                    "AND cleared_at>=?", (source_id, self._wall() - REPEAT_WINDOW_S)).fetchone():
-                    raise MachineClearRefused("AI_CLEAR_REPEAT_LIMIT", "a machine clear of this arm in the last 24 h")
+                done = self._db.execute("SELECT count(*) FROM arm_incidents WHERE source_id=? AND cleared_kind='machine' "
+                                        "AND cleared_at>=?", (source_id, self._wall() - REPEAT_WINDOW_S)).fetchone()[0]
+                if done >= MACHINE_CLEARS_PER_WINDOW:
+                    raise MachineClearRefused("AI_CLEAR_REPEAT_LIMIT",
+                                              f"{done} machine clears of this arm in the last 24 h")
                 basis = "unknown"
             self._db.execute("UPDATE arm_incidents SET cleared_by=?, cleared_at=?, clear_note=?, true_cause=?, label_basis=?, "
                              "cleared_kind=? WHERE incident_id=?",
                              (principal_id, self._wall(), note, cause, basis, "machine" if machine else None, incident_id))
+            if machine and recovery is not None:  # kept beside the device's own recovery: what the fold measured
+                kept = {"device": json.loads(row[3]) if row[3] else None, "auto_fold": recovery}
+                self._db.execute("UPDATE arm_incidents SET recovery=? WHERE incident_id=?",
+                                 (json.dumps(kept, default=str), incident_id))
             self._expire()
 
     def add_evidence(self, source_id, incident_id, frame: ArmIncidentEvidenceFrame) -> int:
@@ -312,7 +323,7 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
             raise HTTPException(422, detail={"code": "AI_CLEAR_CAUSE_REQUIRED"})
         try:
             await asyncio.to_thread(store.clear, source_id, incident_id, note.note, principal.principal_id, note.cause,
-                                    note.basis, arms is not None)
+                                    note.basis, arms is not None, note.recovery if arms is not None else None)
         except KeyError:
             raise HTTPException(404, detail={"code": "ARM_INCIDENT_UNKNOWN"}) from None
         except ValueError:

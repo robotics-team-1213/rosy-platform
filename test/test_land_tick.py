@@ -55,6 +55,7 @@ def test_report_counts_the_backlog_and_names_the_oldest_unowned_reds(tmp_path, m
     text = "\n".join(lines)
     assert "pending 1, preparing 1" in text
     assert "stopped: 2 (1 on MAIN-RED, wait for main; 1 for owners)" in text
+    assert "auto-resumed 24h: queue full 0, watchdog 0, urgent 0" in text
     assert "main-red open: 3, 1 unowned over 30 min (ALERT)" in text
     assert (tmp_path / land_tick.REPORT).read_text(encoding="utf-8") == text + "\n"
 
@@ -125,10 +126,60 @@ def test_requeue_relaunches_one_queue_full_stop_once(tmp_path, monkeypatch):
     monkeypatch.setattr(land_tick.land_async, "holder", lambda repo: place)
     monkeypatch.setattr(land_tick.land_async, "git", lambda repo, *a: "abc")
     monkeypatch.setattr(land_tick.land_async, "resume", lambda repo, name, a, d, wait: seen.append(name))
-    assert land_tick.requeue(tmp_path) == "requeued land-fix-a-20261114000000"
+    assert land_tick.requeue(tmp_path) == "requeued land-fix-a-20261114000000 (queue full)"
     assert land_tick.requeue(tmp_path) == "nothing to requeue" and seen == ["land-fix-a-20261114000000"]
     monkeypatch.setattr(land_tick.land_queue, "full", lambda q: "landing queue full (12/12 tickets)")
     assert land_tick.requeue(tmp_path) == "queue full"
+
+
+def _stopped(place: Path, name: str, note: str, log: str) -> None:
+    (place / name).mkdir(parents=True, exist_ok=True)
+    (place / (name + ".stopped")).write_text(note, encoding="utf-8")
+    (place / (name + ".log")).write_text(log + "\n", encoding="utf-8")
+
+
+def _requeue_env(tmp_path, monkeypatch, place, seen, holder=None):
+    monkeypatch.setattr(land_tick.land_queue, "queue_dir", lambda repo: tmp_path)
+    monkeypatch.setattr(land_tick.land_queue, "full", lambda q: None)
+    monkeypatch.setattr(land_tick.land_queue, "urgent_holder", lambda q: holder)
+    monkeypatch.setattr(land_tick.land_async, "holder", lambda repo: place)
+    monkeypatch.setattr(land_tick.land_async, "git", lambda repo, *a: "abc")
+    monkeypatch.setattr(land_tick.land_async, "resume", lambda repo, name, a, d, wait: seen.append(name))
+
+
+def test_requeue_relaunches_a_watchdog_stop_once(tmp_path, monkeypatch):
+    """11-20: watchdog stops (exit 3, reason only in the events) sat 9.5 h of 12 h; an owner's note is left alone."""
+    place, seen = tmp_path / "rosy-land-wt", []
+    dog, owned = "land-fix-dog-20261119000000", "land-fix-own-20261119000000"
+    _stopped(place, dog, f"land.py exit 3; read {dog}.log", "[remote-pytest] pytest ...")
+    _stopped(place, owned, "stopped by owner: hangs on purpose", "[remote-pytest] pytest ...")
+    (tmp_path / land_tick.land_events.EVENTS).write_text("".join(json.dumps(
+        {"t": 1.0, "event": "stop", "pid": 1, "branch": b, "reason": "watchdog: no progress for 31 min"}) + "\n"
+        for b in ("land/fix/dog-20261119000000", "land/fix/own-20261119000000")), encoding="utf-8")
+    _requeue_env(tmp_path, monkeypatch, place, seen)
+    assert land_tick.requeue(tmp_path) == f"requeued {dog} (watchdog)"
+    assert land_tick.requeue(tmp_path) == "nothing to requeue" and seen == [dog]  # once per stop
+    later = time.time() + 60  # it hung again after that relaunch: its owner's to read, not a loop
+    os.utime(place / (dog + ".stopped"), (later, later))
+    assert land_tick.requeue(tmp_path) == "nothing to requeue" and seen == [dog]
+    assert land_tick.resumed(place, time.time()) == ["watchdog"]
+
+
+def test_requeue_relaunches_a_refused_urgent_once_no_urgent_ticket_is_live(tmp_path, monkeypatch):
+    """11-20: --urgent refusals sat 9.7 h; the relaunch keeps the user's --urgent in args.json."""
+    place, seen = tmp_path / "rosy-land-wt", []
+    name = "land-fix-hot-20261119000000"
+    _stopped(place, name, f"land.py exit 1; read {name}.log",
+             "[land] STOP: --urgent refused: land/fix/x (preparing, pid 1) is already urgent (now); one at a time")
+    args = place / (name + ".args.json")
+    args.write_text(json.dumps(["--tests", "auto", "--urgent", "the user's words"]), encoding="utf-8")
+    _requeue_env(tmp_path, monkeypatch, place, seen, holder={"ticket": "0001", "urgent": "now"})
+    assert land_tick.requeue(tmp_path) == "nothing to requeue" and not seen  # the urgent lane is still taken
+    monkeypatch.setattr(land_tick.land_queue, "urgent_holder", lambda q: None)
+    assert land_tick.requeue(tmp_path) == f"requeued {name} (urgent)" and seen == [name]
+    assert land_tick.requeue(tmp_path) == "nothing to requeue" and seen == [name]
+    assert "--urgent" in json.loads(args.read_text(encoding="utf-8"))
+    assert land_tick.no_verdict("NEW failure in test/test_a.py", tmp_path) is None
 
 
 def test_warm_runs_only_when_queue_is_empty(tmp_path, monkeypatch):

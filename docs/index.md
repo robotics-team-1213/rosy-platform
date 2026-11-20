@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · D-1055 PR + Merge Queue 유일 병합 경로
 - 2026-11-20 · uncommitted · feat(omx): D-1057 D435 깊이 상대 높이를 독립 Z 기준으로 (사용자 결정)
 - 2026-11-20 · uncommitted · feat(omx): D-1057 셀 설정 zone_rois 덮어쓰기와 구역 제안 도구
 - 2026-11-20 · uncommitted · docs(api): v1.428 Fleet bed-confirm·owner-evidence 버전 확정 (D-1057)
 - 2026-11-20 · uncommitted · feat(omx): D-1057 슬롯 오버레이 도구와 Codex 3차 지적 수정
-- 2026-11-20 · uncommitted · feat(pipeline): D-1057 셀 S는 상단 카메라 판정만으로 RELEASED (사용자 결정)

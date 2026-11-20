@@ -37,12 +37,15 @@ def _attempt(verify=None, park=PARK, zone=ZONE):
     return {**row, **({"zone_verification": zone} if zone is not None else {})}
 
 
-def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0, handoff=None):
+def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0, handoff=None, live_folded=True):
     (tmp_path / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     # as in the real cell config: the home lives in the grasp plan file that `plan_path` names, not in the config JSON
     (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": home} if home else {}), encoding="utf-8")
     (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json")}), encoding="utf-8")
     monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
+    # main's telemetry reader and the post-carry source look: the live runner state says folded and fresh; nothing is left at the source
+    monkeypatch.setattr(cte, "measured_fold", lambda arm, prep, now=None: {"folded": live_folded, "state": None, "fresh": True})
+    monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0, "site": "pinky"})
     monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, returncode, stdout=CLI_NOISE + json.dumps(parsed, indent=1, default=str) + "\n", stderr=""))  # as cell_auto_pick prints it
     return cte.execute_guarded_cell_task(handoff or HANDOFF, prep_dir=tmp_path)
@@ -71,8 +74,8 @@ def test_placed_flag_alone_never_verifies_or_folds(tmp_path, monkeypatch, parsed
     assert out["stage_result"]["task_verified"] is False and out["error"]
     if not parsed.get("attempts") or "transfer" not in parsed["attempts"][0]:
         assert out["stop_event"]["folded"] is False and out["stop_event"]["ok"] is False
-    else:  # a real park readback still folds on its own: the fold and the placement are separate measurements
-        assert out["stop_event"]["folded"] is True
+    else:  # the park readback is measured on its own, but the arm is released as folded only after a verified placement
+        assert out["stop_event"]["readback"]["folded"] is True and out["stop_event"]["folded"] is False
 
 
 def test_without_a_zone_measurement_the_basis_is_not_claimed(tmp_path, monkeypatch):
@@ -194,3 +197,11 @@ def test_cell_s_accepts_the_top_camera_only_basis_but_cell_ab_does_not(tmp_path,
 def test_cell_s_top_only_still_needs_the_task_zone_and_tier(tmp_path, monkeypatch, target):
     out = _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt(zone={**TOP_ONLY, "target": target})]})
     assert out["stage_result"]["task_verified"] is False
+
+
+def test_both_fold_measurements_must_agree(tmp_path, monkeypatch):
+    # the attempt's park readback is folded, but main's live runner state says it is not: the arm is not released as folded
+    out = _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt()]}, live_folded=False)
+    assert out["stop_event"]["folded"] is False and out["stop_event"]["readback"]["folded"] is True
+    assert out["stop_event"]["live"]["folded"] is False and out["error"] == "FOLD_READBACK_MISSING"
+    assert out["stage_result"]["source_clearance"] == {"objects": 0, "site": "pinky"}

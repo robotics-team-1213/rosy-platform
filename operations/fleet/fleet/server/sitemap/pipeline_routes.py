@@ -160,6 +160,10 @@ def install_pipeline_routes(
             app.state.omx_cell_states.update(saved.get("omx_cell_states") or {})
             app.state.omx_cell_tasks.update(saved.get("omx_cell_tasks") or {})
             app.state.pinky_tasks.update(saved.get("pinky_tasks") or {})
+            app.state.unload_releases = dict(saved.get("unload_releases") or {})
+            app.state.cell_auto_events = list(saved.get("cell_auto_events") or [])[-100:]
+            app.state.repark_requests = dict(saved.get("repark_requests") or {})
+            app.state.repark_done = list(saved.get("repark_done") or [])
             app.state.pipeline_decisions = list(saved.get("pipeline_decisions") or [])[-100:]
             app.state.detected_displaced_site = saved.get("detected_displaced_site")
             if "cable_tangled" in saved:
@@ -179,6 +183,10 @@ def install_pipeline_routes(
                 "omx_cell_states": app.state.omx_cell_states,
                 "omx_cell_tasks": app.state.omx_cell_tasks,
                 "pinky_tasks": app.state.pinky_tasks,
+                "unload_releases": getattr(app.state, "unload_releases", {}),
+                "cell_auto_events": getattr(app.state, "cell_auto_events", None) or [],
+                "repark_requests": getattr(app.state, "repark_requests", {}),
+                "repark_done": getattr(app.state, "repark_done", []),
                 "pipeline_decisions": app.state.pipeline_decisions[-100:],
                 "detected_displaced_site": app.state.detected_displaced_site,
                 "cable_tangled": app.state.cable_tangled,
@@ -377,7 +385,7 @@ def install_pipeline_routes(
         _is_human_detected=_is_human_detected, _evaluate_decision=_evaluate_decision,
         inputs=inputs, rules=rules, active_map=active_map, read_guard=read_guard,
         operator_guard=operator_guard, proposer_guard=proposer_guard,
-        _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn,
+        _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn, console=console,
     )
     install_cell_tasks_routes(app, ctx)
     install_gates_routes(app, ctx)

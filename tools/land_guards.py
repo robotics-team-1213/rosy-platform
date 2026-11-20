@@ -25,6 +25,7 @@ GUARDS = (
     "test/test_secret_public_provenance.py",
     "test/test_robot_literals.py",
     "test/test_no_cross_host_dds.py",
+    "test/test_module_functional_surface.py",
 )
 
 

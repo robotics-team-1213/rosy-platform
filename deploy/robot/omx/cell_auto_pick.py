@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_act_shadow  # noqa: E402
 import cell_attempts, cell_auto_record  # noqa: E402,E401
 import cell_auto_evidence  # noqa: E402
-from cell_auto_pick_plan import CLOSING, choose, observe, plan_pick, save_frame_receipt, verify_placed  # noqa: E402,F401  (re-exported)
+from cell_auto_pick_plan import CLOSING, choose, observe, plan_pick, reach_fix_of, save_frame_receipt, verify_placed  # noqa: E402,F401  (re-exported)
 import cell_executor  # noqa: E402
 import cell_release_evidence  # noqa: E402
 from cell_auto_safety import (  # noqa: E402, F401
@@ -139,7 +139,7 @@ def run_auto(
                 tried["fail"] = {"stage": "choose", "class": row["error"]}
                 if not dry_run:
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
-                return {**out, "result": f"stopped: {row['error']}"}
+                return {**out, "result": f"stopped: {row['error']}", **reach_fix_of(refused)}
             target = usable[0]
             known = cell_pivot.bias_at(bias_data, source, target["object"]["raw_m"], params=config.get("params"))
             bias_data, problem = self_calibrate(
