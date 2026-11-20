@@ -8,6 +8,9 @@ import pytest
 
 ROOT = Path(__file__).parents[1]
 NOW = 10**18
+for _p in (ROOT / "deploy/robot/omx", ROOT / "middleware/devices/omx/adapter"):  # cell_preflight, chunk_runner imports
+    if str(_p) not in sys.path:
+        sys.path.append(str(_p))
 
 
 def module(name="cell_check"):
