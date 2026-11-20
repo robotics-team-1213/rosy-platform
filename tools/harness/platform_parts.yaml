@@ -59,7 +59,7 @@ concerns: [learning, decision, control, safety, contracts, other]
 # Checked against .github/CODEOWNERS by test/architecture/test_capability_owners.py.
 capabilities:
   fleet: {epic: KAN-19, owners: [livsbittt]}
-  pinky: {epic: KAN-20, owners: [sajy0804]}
+  pinky: {epic: KAN-20, owners: [WINNAKEN]}
   omx: {epic: KAN-21, owners: [ddaokki, livsbittt]}
   vision_ai: {epic: KAN-22, owners: [now2466]}
   platform: {epic: null, owners: []}
@@ -95,6 +95,10 @@ app_subtrees:
   learning/envs/isaac/cell_model_inventory.yaml: omx-cell
   learning/envs/isaac/cell_physics.yaml: omx-cell
   tools/incident_*: site-fleet  # import rosy.decision (Fleet judgment)
+  tools/web_visible_roles.py: pinky  # boots only the Pinky CORE roots (middleware/core) over core contracts
+  tools/capture_surface_round.py: pinky  # same CORE-only boot; imports web_visible_roles
+  tools/drivable_branch_replay.py: vision  # only middleware/perception + integrations/perception (and core foundation)
+  tools/development_link.py: site-fleet  # sys.path = operations/fleet + core foundation; issues Fleet pairing and TLS material
   tools/sim/omx_*: omx-cell
   test/test_omx_*: omx-cell
   tools/land*.py: tooling
@@ -215,7 +219,7 @@ roots:
     concern: contracts
     capability: platform
     app: core
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     note: >-
       D-442(a) ROS-free Motion Intent and DeviceControlPort shapes. The Pinky B
       writer binding consumes GuardedMotion carrying BaseTwist; full producer admission and the
@@ -231,7 +235,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/drive/behaviors
     layout_target: middleware/drive/behaviors
     part: middleware
@@ -240,7 +244,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     import_prefix: [core_features.line_follow, core_features.docking, core_features.navigation, core_features.localization, core_features.swarm, core_features.road_behaviour, core_features.traffic_policy]
     source_packages:
       line_follow: core_features.line_follow
@@ -259,7 +263,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     import_prefix: [control.control_node, control.goal_node, control.wander_node, control.safety_node]
     source_packages: {"": control}
     note: D-649 legacy ROS adapters installed by control; final legacy writer stays excluded.
@@ -277,7 +281,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/core/services/core_features/safety_gate
     layout_target: middleware/core/services/core_features/safety_gate
     part: middleware
@@ -289,7 +293,7 @@ roots:
     concern: safety
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/core/services/core_features/action_rules
     layout_target: middleware/core/services/core_features/action_rules
     part: middleware
@@ -303,7 +307,7 @@ roots:
     concern: decision
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/core/events
     part: middleware
     d427_target: middleware/core/events
@@ -313,7 +317,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/core/api
     layout_target: middleware/core/api  # D-626 current layout; d427_target is the ownership ID
     part: middleware
@@ -325,7 +329,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/drive/planning/nav2
     layout_target: middleware/drive/planning/nav2
     part: middleware
@@ -336,7 +340,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
   - path: middleware/drive/planning/nav2/native_map
     layout_target: middleware/drive/planning/nav2/native_map
     part: middleware
@@ -345,7 +349,7 @@ roots:
     concern: safety
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     note: D-783 guarded native map producers, canonical identity, SDK/build and plugin boundary.
   - path: middleware/perception
     part: middleware
@@ -379,7 +383,7 @@ roots:
     concern: control
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     note: D-630 Drive algorithms; installed by the existing control distribution.
   - path: middleware/drive/motion_limits
     layout_target: middleware/drive/motion_limits
@@ -393,7 +397,7 @@ roots:
     concern: safety
     capability: platform
     app: pinky
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
     note: D-630 policy/clearance and existing sensor-only adapter; no new final writer.
   - path: middleware/drivers/imu_bno055
     part: middleware
@@ -1087,7 +1091,7 @@ roots:
     concern: other
     capability: platform
     app: core
-    reviewers: [sajy0804]
+    reviewers: [WINNAKEN]
 
   # --- top-level non-part roots ----------------------------------------------
   - path: profiles
@@ -1390,6 +1394,7 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
   - operations/fleet/fleet/server/ledger/berth_parking_routes.py  # road-nav2/berth-park motion moved here by 973faf9de9 (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/ledger/berth_parking_helpers.py  # physical berth-park teleop and Fleet pin (D-430 panel 2026-11-13)
+  - operations/fleet/fleet/server/ledger/berth_core_dock.py  # berth-park core_line: Fleet's POST /docking/dock and its cancel on Fleet's own deadline are a motion command and a stop path, like the two files above (D-430 §1); imports stdlib only
   - operations/fleet/fleet/server/ledger/task_dispatch_helpers.py  # site->robot goal frame for road-nav2/berth-park (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
   - operations/fleet/fleet/server/auth/policy_approval.py  # D-1024 3 learned-policy approval window and lease issuer
@@ -1409,6 +1414,59 @@ safety_modules:
   - operations/fleet/fleet/server/console/formation_control.py  # D-766 console.py split 2026-11-01: formation session, follower set, leader hand-off (FleetConsole mixin)
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
+
+# D-430 §5 Safety-Review trailer only (2026-11-20, after #292 landed untrailered): files that move an OMX arm or
+# filter that decision. No anchor or import invariant applies (chunk_runner imports lerobot); see safety_review.py.
+safety_review_paths:
+  - deploy/robot/omx/chunk_runner.py
+  - deploy/robot/omx/chunk_runner_commands.py
+  - deploy/robot/omx/chunk_runner_guards.py
+  - deploy/robot/omx/chunk_runner_run.py
+  - deploy/robot/omx/chunk_runner_settle.py
+  - deploy/robot/omx/guarded_device.py
+  - deploy/robot/omx/guarded_native.py
+  - deploy/robot/omx/guarded_native_effort.py
+  - deploy/robot/omx/joint_push.py
+  - deploy/robot/omx/session_caps.py
+  - deploy/robot/omx/commissioning_limits.py
+  - deploy/robot/omx/record_session.py
+  - deploy/robot/omx/record_session_helpers.py
+  - deploy/robot/omx/cell_auto_safety.py
+  - deploy/robot/omx/cell_transfer.py
+  - deploy/robot/omx/cell_envelope.py
+  - deploy/robot/omx/cell_zones.py
+  - deploy/robot/omx/cell_space.py
+  - deploy/robot/omx/cell_corridor.py
+  - deploy/robot/omx/cell_unwedge.py
+  - deploy/robot/omx/cell_auto_fold.py
+  - deploy/robot/omx/cell_remap_jaws.py
+  - deploy/robot/omx/cell_task_worker.py
+  - deploy/robot/omx/cell_task_exec.py
+  - deploy/robot/omx/cell_task_live_executor.py
+  - deploy/robot/omx/omx_incident.py
+  - deploy/robot/omx/omx_incident_auto.py
+  - deploy/robot/omx/cell_auto_pick.py
+  - deploy/robot/omx/cell_return_held.py
+  - deploy/robot/omx/cell_cycle.py
+  - deploy/robot/omx/cell_two_arm.py
+  - deploy/robot/omx/cell_pipeline.py
+  - deploy/robot/omx/cell_pipeline_stages.py
+  - deploy/robot/omx/cell_pipeline_io.py
+  - deploy/robot/omx/hardware_owner_goals.py
+  - deploy/robot/omx/cell_policy_drive.py
+  - deploy/robot/omx/cell_stack_guard.py
+  - deploy/robot/omx/cell_arm_lease.py
+  - deploy/robot/omx/commissioning_stop.py
+  - deploy/robot/omx/cell_push.py
+  - deploy/robot/omx/cell_pivot.py
+  - deploy/robot/omx/cell_step.py
+  - deploy/robot/omx/cell_z_shuttle.py
+  - deploy/robot/omx/cell_auto_carry.py
+  - deploy/robot/omx/cell_auto_pick_plan.py
+  - deploy/robot/omx/cell_executor.py
+  - middleware/devices/omx/adapter/omx_adapter/chunk_library.py  # park_path, transit_path
+  - tools/harness/safety_review.py  # the check itself
+  - tools/harness/safety_review_exempt.json
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
 # path plus the (possibly nested) definition; each must resolve to a safety file.
@@ -1616,6 +1674,7 @@ safety_anchors:
   - {symbol: fleet.server.local_stop_transport.UnixLocalStopTransport, public: true}
   - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
   - {symbol: fleet.server.berth_parking_routes.install_berth_parking_routes, public: true}  # road-nav2 / berth-park motion routes (973faf9de9)
+  - {symbol: fleet.server.berth_core_dock.execute_core_line_dock}  # berth-park core_line: dock command to CORE and the cancel on Fleet's deadline
   - {symbol: fleet.server.berth_parking_helpers.BERTH_SUCCESS_REASONS}  # only measured stop-face endings count as parked
   - {symbol: fleet.server.berth_parking_helpers.BAY_DOCK_SPECS, public: true}
   - {symbol: fleet.server.berth_parking_helpers._execute_physical_berth_park, public: true}

@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Wheel `rosy-app-gateway` (version in `pyproject.toml`). Site gateway application composition. Console script `rosy-site-gateway` calls `rosy_gateway.compose:main`. Depends on `rosy-palletizing` and `rosy-execution`. This is not the Fleet server package in `operations/fleet/`.
+Wheel `rosy-app-gateway` (version in `pyproject.toml`). Site gateway application composition. Console script `rosy-site-gateway` calls `rosy_gateway.compose:main`. Depends only on PyYAML; Cell compilation lives in `operations/fleet` (`PalletizingCellJobCompiler`). This is not the Fleet server package in `operations/fleet/`.
 
 ## Key Files
 
@@ -13,7 +13,6 @@ Wheel `rosy-app-gateway` (version in `pyproject.toml`). Site gateway application
 |------|-------------|
 | `pyproject.toml` | Script entry and wheel pins |
 | `src/rosy_gateway/compose.py` | Process composition and `main` |
-| `src/rosy_gateway/cell_compiler.py` | Cell document compilation for the gateway |
 | `COLCON_IGNORE` | Not a colcon package |
 
 ## Subdirectories
@@ -31,18 +30,17 @@ Wheel `rosy-app-gateway` (version in `pyproject.toml`). Site gateway application
 
 ### Testing Requirements
 
-Import `rosy_gateway` with the two declared wheels installed. There is no ament test directory here.
+Import `rosy_gateway` with PyYAML installed. There is no ament test directory here.
 
 ### Common Patterns
 
-Composition roots stay in `compose.py`. Cell compilation stays in `cell_compiler.py`.
+Composition roots stay in `compose.py`. Cell compilation is not here; it stays in the Fleet server (D-413).
 
 ## Dependencies
 
 ### Internal
 
-- `operations/processes/palletizing/` (`rosy-palletizing`).
-- `operations/site_execution/` (`rosy-execution`).
+- None.
 
 ### External
 

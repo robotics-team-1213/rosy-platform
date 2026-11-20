@@ -506,8 +506,9 @@ def run_started(tmp_path, monkeypatch, cell, knowledge=None):
 
 
 def test_every_decision_point_writes_a_row_linked_to_its_attempt(tmp_path, monkeypatch):
-    result, rows, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]), str(OMX / "cell-knowledge.example.json"))
-    assert result["result"] == "placed"
+    cell = Cell([CONT2])
+    result, rows, attempts = run_started(tmp_path, monkeypatch, cell, str(OMX / "cell-knowledge.example.json"))
+    assert result["result"] == "placed", (result, attempts[-1:], cell.commands[-6:])  # CI-only refusals: show the refused step
     assert [(r["attempt_id"][-3:], r["stage"]) for r in rows] == [
         ("001", "target"), ("001", "bias"), ("001", "closing_axis"), ("005", "failure"), ("005", "retry"),
         ("006", "target"), ("006", "bias"), ("006", "closing_axis"), ("006", "verify")]
@@ -614,10 +615,11 @@ def test_unverified_knowledge_never_reaches_an_example(tmp_path, monkeypatch):
 
 
 def test_the_context_digest_is_background_only_and_the_measurement_still_vetoes(tmp_path, monkeypatch):
-    run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    result, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
     cell_decisions.note(tmp_path / "decisions.jsonl", "safety", "per-joint caps are right")
     text = cell_decisions.context(tmp_path / "decisions.jsonl")
-    assert "closing_axis: 2 decisions" in text and "0 -> 1/1 good" in text and "per-joint caps are right" in text
+    assert "closing_axis: 2 decisions" in text and "0 -> 1/1 good" in text and "per-joint caps are right" in text, (
+        result, [(a.get("outcome"), a.get("fail_stage"), a.get("fail_class")) for a in attempts])  # why a run ended early
     asked = []
     seat = judge_seat.Seat(lambda p, i, s: asked.append((p, s)) or {"decision": "retry", "reason": "x"}, context=tmp_path / "decisions.jsonl")
     assert seat.decide({"box_found": True, "next": "grasp", "aligned": False})["decision"] == "retry"

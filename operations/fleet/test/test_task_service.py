@@ -215,6 +215,27 @@ def test_cancel_request_event_does_not_claim_a_final_action_result(tmp_path):
         },
     })
     assert final["status"] == "FAILED"
+    assert final["reason"] == "CORE_CANCEL_CONFIRMED"
+
+
+def test_nav_failed_canceled_without_prior_nav_canceled_stays_nav_failed(tmp_path):
+    service = _service(tmp_path / "fleet.sqlite3")
+    run(service.submit_navigation(
+        robot_id="rosy_01", x=1.0, y=2.0, source="operator",
+        actor_id="site-console", request_key="cancel-direct-1",
+    ))
+
+    async def dispatch(_task):
+        return {"accepted": True}
+
+    accepted = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    final = service.project_core_event({
+        "robot_id": "rosy_01", "event_id": "cancel-result", "seq": 21,
+        "type": "nav.failed", "data": {
+            "correlation_id": accepted["attempt_id"], "error_code": "CANCELED",
+        },
+    })
+    assert final["status"] == "FAILED"
     assert final["reason"] == "CORE_NAV_FAILED"
 
 
