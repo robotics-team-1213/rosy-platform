@@ -22,10 +22,21 @@ def transport(tmp_path):
     env = {**os.environ, 'HOME': str(home)}
     calls = []
 
+    job = home / 'rosy-test' / 'runs' / (name + '.sim-job')
+
     def call(ssh, host, script, *args):
         calls.append(script)
-        return subprocess.run(['bash', '-c', script, 'remote', *args],
-                              capture_output=True, env=env, timeout=10)
+        fresh = script == jobs.START and not (job / 'submitted').exists()
+        result = subprocess.run(['bash', '-c', script, 'remote', *args],
+                                capture_output=True, env=env, timeout=10)
+        # START returns once it has detached the supervisor. A real observer polls every 10 s; these tests
+        # poll every 20 ms, and on a busy runner two polls came before the supervisor wrote its identity,
+        # which reads as a vanished actor (exit 254: three CI runs on 2026-11-20/21). Wait for it here.
+        deadline = time.monotonic() + 5
+        while (fresh and (job / 'submitted').exists() and not (job / '0.pid').exists()
+               and not (job / '0.rc').exists() and time.monotonic() < deadline):
+            time.sleep(.01)
+        return result
 
     binding = dict(name=name, host='model.example', role='model', source_revision='a' * 40,
                    command_sha256='b' * 64, cpus=8, memory_gib=6, minutes=1)
