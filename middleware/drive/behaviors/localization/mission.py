@@ -154,6 +154,8 @@ class _Run:
     goal: Optional[RotateGoal] = None   # D-603 rotate_to
     signed_rad: float = 0.0             # D-603: signed odom turn since the start
     search: bool = True                  # a pose-search mission ends on LOCALIZED; a step does not
+    speed: Optional[float] = None        # a nudge may crawl slower than cfg.nudge_linear, never faster
+    n: int = 0                           # run number: a caller tells its own run from a foreign one
 
 
 def _wrap(angle: float) -> float:
@@ -181,12 +183,15 @@ class LocalizationMission:
         self.publish: Optional[Callable[[dict], None]] = None
         self._lock = threading.RLock()
         self._run: Optional[_Run] = None
+        self._runs = 0
         self._last: dict[str, Any] = {"kind": None, "state": "idle", "reason": None}
         self._odom: Optional[tuple[float, float, float]] = None
         self._odom_at: Optional[float] = None
         self._scan: Optional[tuple[Any, float]] = None
         self._front: tuple[Any, Any] = (None, None)
         modes.change_listeners.append(self._on_mode_change)
+        from core_features.localization.repark import ReparkRunner  # repark imports this module
+        self.repark = ReparkRunner(self)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """The bridge's line clock: the ROS (sim) clock under `use_sim_time`, else monotonic."""
@@ -210,6 +215,17 @@ class LocalizationMission:
             self._scan = (sample, self._clock())
 
     @property
+    def runs_started(self) -> int:
+        """How many runs have started: a caller's own latest run is the one numbered this."""
+        return self._runs
+
+    def odom_pose(self) -> Optional[tuple[float, float, float]]:
+        """The latest odom pose if fresh, else None (repark closes its loop on it)."""
+        with self._lock:
+            fresh = self._odom is not None and self._clock() - self._odom_at <= self.config.sensor_stale_s
+            return self._odom if fresh else None
+
+    @property
     def owns_wheels(self) -> bool:
         """A rotate or nudge writes the nav slot itself; Nav2 output is dropped meanwhile."""
         with self._lock:
@@ -218,7 +234,7 @@ class LocalizationMission:
     # --- start / status -------------------------------------------------------
 
     def start(self, kind: str, max_distance_m: float, max_time_s: float,
-              target: Optional[dict] = None) -> dict:
+              target: Optional[dict] = None, speed: Optional[float] = None) -> dict:
         """Start a mission or raise `MissionRefused` (409) / `ValueError` (400)."""
         if kind not in KINDS:
             raise ValueError(f"unknown mission kind {kind!r}")
@@ -232,6 +248,8 @@ class LocalizationMission:
             raise ValueError(f"{kind} needs max_distance_m > 0")
         if kind in UNSUPPORTED:
             raise MissionRefused("unsupported", UNSUPPORTED[kind])
+        if speed is not None and not (math.isfinite(speed) and 0.0 < speed <= cfg.nudge_linear):
+            raise ValueError(f"speed must be in (0, {cfg.nudge_linear}]")
         # The leave-LOCALIZED halt and the LOCALIZED end take the same gate, so the
         # state cannot change between the check below and the dispatch.
         with self._loc.gate, self._lock:
@@ -271,7 +289,8 @@ class LocalizationMission:
             if not ok:
                 raise MissionRefused("busy", why)
             self._state.set_mode(RobotMode.NAVIGATION)
-            run = _Run(kind, distance, float(max_time_s), target, now, search=search)
+            self._runs += 1
+            run = _Run(kind, distance, float(max_time_s), target, now, search=search, speed=speed, n=self._runs)
             self._run = run
             if kind == LANE:
                 self._safety.set_session_speed(cfg.lane_linear)
@@ -316,7 +335,8 @@ class LocalizationMission:
             if not ok:
                 raise MissionRefused("MOTION_BUSY", why)
             self._state.set_mode(RobotMode.NAVIGATION)
-            run = _Run(ROTATE_TO, 0.0, goal.timeout_s, None, now, goal=goal)
+            self._runs += 1
+            run = _Run(ROTATE_TO, 0.0, goal.timeout_s, None, now, goal=goal, n=self._runs)
             self._run = run
             self._last = {"kind": ROTATE_TO, "state": "running", "reason": None}
             self._announce("started", run, None, now)
@@ -332,6 +352,10 @@ class LocalizationMission:
 
     def tick(self) -> None:
         """Bridge timer (20 Hz): check the end conditions, then command the next twist."""
+        self._tick()
+        self.repark.tick()  # outside the lock: it starts the next segment through start() (gate, then lock)
+
+    def _tick(self) -> None:
         with self._lock:
             run = self._run
             if run is None:
@@ -352,7 +376,7 @@ class LocalizationMission:
                         self._command.set_nav_twist(Twist(0.0, rate))
                 elif run.kind in (NUDGE, NUDGE_BACK):
                     sign = -1.0 if run.kind == NUDGE_BACK else 1.0
-                    self._command.set_nav_twist(Twist(sign * self.config.nudge_linear, 0.0))
+                    self._command.set_nav_twist(Twist(sign * (run.speed or self.config.nudge_linear), 0.0))
                 return
             self.end(reason)
 

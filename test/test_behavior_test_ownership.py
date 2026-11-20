@@ -34,6 +34,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_initial_pose.py",
     # D-769 route prior: CORE's bridge publication checked end to end with the camera's control inbox.
     "middleware/core/gateway/test/test_lane_route_publication.py",
+    # D-1051 HTTP-to-CORE seam: /motion/repark admission and the closed-loop sequence on the
+    # real mission arbiter; the pure plan limits are also covered here, kept with the seam.
+    "middleware/core/gateway/test/test_motion_repark.py",
     "middleware/core/gateway/test/test_line_follow.py",
     "middleware/core/gateway/test/test_line_follow_api.py",
     # D-760 rev 3: gateway HTTP serialization of the real manager wait judgement.

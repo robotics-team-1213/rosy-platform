@@ -39,15 +39,13 @@ def _mission(svc: CoreServicesLike):
     return mission
 
 
-@motion_router.post("/rotate_to", status_code=202)
-def rotate_to(body: RotateToRequest, auth: AuthContext = Depends(operator),
-              svc: CoreServicesLike = Depends(get_services)):
-    mission = _mission(svc)
-    require_calibration_owner(svc, auth, "rotate_to")  # D-541 3: a live lease admits only its owner
+def _admit(svc: CoreServicesLike, auth: AuthContext, name: str, operator_name: str) -> bool:
+    """Who may move the robot (D-541/D-603); returns whether the caller owns the trip lease."""
+    require_calibration_owner(svc, auth, name)  # D-541 3: a live lease admits only its owner
     owner = owns_trip_lease(svc, auth)
-    if not owner and not body.operator_name.strip():
+    if not owner and not operator_name.strip():
         raise ApiError("OPERATOR_NAME_REQUIRED", 403,
-                       "rotate_to needs the trip-lease owner or a named operator (operator_name)")
+                       f"{name} needs the trip-lease owner or a named operator (operator_name)")
     if svc.nav.mapping_active:
         raise ApiError("MAPPING_ACTIVE", 409, "mapping session owns navigation")
     TaskKind.MOVE.require(svc.capability)
@@ -55,6 +53,14 @@ def rotate_to(body: RotateToRequest, auth: AuthContext = Depends(operator),
         svc.nav.require_ready()
     except NavigationError as exc:
         raise ApiError(exc.code, 503, str(exc)) from exc
+    return owner
+
+
+@motion_router.post("/rotate_to", status_code=202)
+def rotate_to(body: RotateToRequest, auth: AuthContext = Depends(operator),
+              svc: CoreServicesLike = Depends(get_services)):
+    mission = _mission(svc)
+    owner = _admit(svc, auth, "rotate_to", body.operator_name)
     try:
         started = mission.start_rotate_to(delta_deg=body.delta_deg, yaw_odom=body.yaw_odom, tol_deg=body.tol_deg,
                                           max_rate_dps=body.max_rate_dps, timeout_s=body.timeout_s)
@@ -82,3 +88,40 @@ def rotate_to_stop(_: AuthContext = Depends(operator), svc: CoreServicesLike = D
     if mission.status().get("kind") == KIND:
         mission.end("cancelled")  # a no-op once it has ended
     return rotate_to_status(_, svc)
+
+
+class ReparkRequest(BaseModel):
+    forward_m: float = 0.0   # robot body frame: forward +
+    left_m: float = 0.0      # left +
+    operator_name: str = Field(default="", max_length=64)
+
+
+@motion_router.post("/repark", status_code=202)
+def repark(body: ReparkRequest, auth: AuthContext = Depends(operator),
+           svc: CoreServicesLike = Depends(get_services)):
+    """Cell arm reach fix: a bounded sideways shift (<= 0.06 m) / fore-aft (<= 0.10 m) built of
+    rotate_to and nudge missions (`core_features.localization.repark`); same admission as rotate_to."""
+    runner = _mission(svc).repark
+    owner = _admit(svc, auth, "repark", body.operator_name)
+    try:
+        started = runner.start(body.forward_m, body.left_m)
+    except ValueError as exc:
+        raise ApiError("VALIDATION_ERROR", 400, str(exc)) from exc
+    except MissionRefused as exc:
+        raise ApiError(exc.code, 409, str(exc), detail=exc.detail) from exc
+    svc.events.publish("motion.repark", source=f"api:{auth.role}", data={
+        "forward_m": body.forward_m, "left_m": body.left_m, "lease_owner": owner,
+        "operator_name": body.operator_name.strip() or None, "by": auth.label or auth.role})
+    return JSONResponse(status_code=202, content=started)
+
+
+@motion_router.get("/repark")
+def repark_status(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    return _mission(svc).repark.status()
+
+
+@motion_router.delete("/repark")
+def repark_stop(_: AuthContext = Depends(operator), svc: CoreServicesLike = Depends(get_services)):
+    runner = _mission(svc).repark
+    runner.cancel()
+    return runner.status()

@@ -25,6 +25,10 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear`의 assessor 해제 조건이 넓어진다(경로·본문 그대로). 표시 행이 모두 러너의 통신 끊김 문구(`LINK_END` 전체 일치)이고 잘리지 않았으며(`flagged_total`·`fault_records_total`), 고장 기록이 모두 `(5, 'Input/output error')`(정지 사유 없음, `fault_record_kinds`)인 사건은, 보고된 `last_state`·`last_target`·`last_command`·`home`과 `torque_after`로 다시 계산한 쉬는 팔(토크 0, 이동 명령 아님, 목표와 3단위 안, home과 8단위 안)이면 `folded` 없이도 기계 해제할 수 있다. `AI_CLEAR_REPEAT_LIMIT`는 같은 팔의 기계 해제가 24시간 안에 세 번 있었을 때다(이전 한 번).
 
+### v1.417 로봇 미세 재정차 `/api/v1/motion/repark` (D-1051)
+
+로봇 `POST`/`GET`/`DELETE /api/v1/motion/repark`를 더한다(additive, Safety-Review 대상). 셀 팔 도달 보정용으로 정차한 로봇을 로봇 몸체 기준 옆 ≤ 0.06 m·앞뒤 ≤ 0.10 m 옮긴다. 능력 플래그는 따로 없다(`motion.rotate_to`와 같은 `loc_mission`).
+
 ### v1.406 AI assessor의 팔 사건 해제 (D-1039)
 
 `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear`를 이름 있는 운영자 외에 설정된 AI assessor 서비스 자격도 부를 수 있다(additive). assessor는 `site_users` `role: service`이고 `ROSY_FLEET_ARM_ASSESSORS`(`id=source,source;id=source`, 기본 비어 있음 = 꺼짐)에 팔과 함께 적힌 principal이다. assessor는 이 경로 외 모든 경로에서 403 `ARM_ASSESSOR_SCOPE_REQUIRED`, 지정되지 않은 팔에서 403 `AI_CLEAR_ARM_NOT_ASSIGNED`다. `note`·`cause`·`basis`가 모두 필요하고(없으면 422 `AI_CLEAR_CAUSE_REQUIRED`), 저장된 사실이 `core_common.protocol.arm_incidents.machine_clearable`(기본 거부: 형태가 맞는 사실, 접힌 안전 종료, 모든 모터 토크 0, `caps_restored` 참, 래치·감김·접촉 정지·모터 고장 기록 없음, 실행기 표시 행은 모두 `run park`·`state` 행이고 채워진 `error`·`fault`가 같은 문구로 전체가 `contact in park: <joint> lag rose to <n.n> units at PWM <n> of <n> (lags: <joint> <n.n>, ...)`인 주차 중 부하 정지일 때만)을 통과하지 않으면 403 `AI_CLEAR_KIND_REFUSED`, 그 팔에 24시간 안의 기계 해제가 이미 있으면 원인과 상관없이 403 `AI_CLEAR_REPEAT_LIMIT`다(사람 해제는 세지 않음). 사건 행의 `cleared`에 `kind`(`machine`·`person`)가 붙는다(additive). 기계 해제는 `cleared.by`가 assessor id이고 `basis`가 늘 `unknown`이라 학습 정답으로 채점되지 않는다. 사람 해제는 바뀌지 않는다.
@@ -2229,6 +2233,9 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/localization/mission` | Viewer | D-395 P2-7 — `{kind, state, reason}`; `state`: `idle`(아직 없음, `kind`·`reason` 은 `null`) \| `running`(+ `elapsed_s`, `travelled_m`, `turned_rad`) \| `done` \| `aborted` (v1.73) |
 | POST | `/api/v1/motion/rotate_to` | Operator: trip lease 주인(D-541), lease가 없으면 `operator_name`을 적은 운영자 | D-603 (v1.194) — `{delta_deg? (|·| ≤ 180), yaw_odom? (rad, odom), tol_deg = 5 (1–20), max_rate_dps = 20 (≤ 30), timeout_s = 10 (≤ 15), operator_name}`, `delta_deg`·`yaw_odom` 중 하나만. CORE가 제자리에서 자기 odom yaw로 닫힌 고리 회전을 한다(비례 감속, 최저 `localization_mission.rotate_to_min_angular` 0.15 rad/s, 최고 `max_rate_dps`). NAVIGATION 모드의 nav 슬롯으로 들어가 `select_output`(E-Stop·readiness·Safety clip·D-400 정책)을 거친다. `LOCALIZED`와 상관없이 받고, `LOCALIZED`가 되어도 끝나지 않는다. 거부: lease 주인 아님 409 `TRIP_LEASED`, 보정 lease 409 `CALIBRATION_ACTIVE`, 이름 없음 403 `OPERATOR_NAME_REQUIRED`, 매핑 409 `MAPPING_ACTIVE`, E-Stop 409 `EMERGENCY_ACTIVE`, 409 `MOTION_BUSY`·`ODOMETRY_STALE`·`ROTATE_CLEARANCE`, 범위 400, readiness HOLD 503, 구동 능력 없음 501. 202 본문은 `GET`과 같다. 끝: `done`(오차 ≤ `tol_deg`) 또는 `timeout`·`overturn`(odom 회전 합이 요청 + `rotate_to_overturn_deg` 30° 초과)·`obstacle`(회전 중 `rotate_in_place`와 같은 몸체 검사)·`obstacle_sensor_stale`·`odometry_stale`·`estop`·`cancelled`(NAVIGATION을 떠남, `DELETE`)·`error` → `aborted`. 끝나면 바퀴 명령을 지우고 IDLE. 사건 `motion.rotate_to`(요청), `localization.mission`(`kind: rotate_to` 시작·끝) |
 | GET | `/api/v1/motion/rotate_to` | Viewer | D-603 (v1.194) — `{kind: rotate_to, state: running\|done\|aborted\|idle, reason, err_deg (running), final_err_deg (끝), elapsed_s, turned_rad}`; 마지막 미션이 회전이 아니면 `state: idle` |
+| POST | `/api/v1/motion/repark` | Operator: `rotate_to`와 같은 admission(trip lease 주인 또는 `operator_name`) | D-1051 (v1.417) — `{forward_m = 0 (앞 +, |·| ≤ 0.10), left_m = 0 (왼 +, |·| ≤ 0.06), operator_name}`. CORE가 `rotate_to` 회전 θ(≥ 30°) → `nudge` d → odom yaw로 되돌림 → 남은 앞뒤 nudge 순서로 이어 간다(`core_features.localization.repark`). 속도 ≤ 0.023 m/s·≤ 0.09 rad/s, 각 단계는 odom 폐루프이고 `rotate_to`·`nudge`의 몸체 여유·센서 신선도·E-Stop·모드 취소 검사를 그대로 받는다. 거부는 `rotate_to`와 같은 코드 + 범위 400 `VALIDATION_ERROR`. 202 본문은 `GET`과 같다 |
+| GET | `/api/v1/motion/repark` | Viewer | D-1051 (v1.417) — `{state: idle\|running\|done\|aborted, reason, segment (running, "i/n"), moved_robot_dxdy_m {forward_m, left_m} (끝, odom 측정)}`. `aborted`이면 로봇은 선 자리에서 멈췄고 방향이 θ만큼 어긋나 있을 수 있다 |
+| DELETE | `/api/v1/motion/repark` | Operator | D-1051 (v1.417) — 멈춘다(`aborted` `cancelled`). 멈춤이라 lease와 상관없이 받는다 |
 | DELETE | `/api/v1/motion/rotate_to` | Operator | D-603 (v1.194) — 도는 회전을 멈춘다(`cancelled`). 멈춤이므로 lease와 상관없이 받는다. 다른 미션은 건드리지 않는다. 본문은 `GET`과 같다 |
 | POST | `/api/v1/slam/start` | Operator | NAV-005 — 추종 세션이 주행을 쥐고 있으면 409 `NAVIGATION_ACTIVE` |
 | POST | `/api/v1/slam/stop` | Operator | NAV-005 |
@@ -3034,6 +3041,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `localization.request_cleared` | info | 로봇 | `{request_id, why}` — 요청이 닫혔다(v1.163). `why`: `answered`(수락된 결정), `lane_return_resumed`, `line_follow_reset`. `ttl_s` 만료는 이벤트 없이 사라진다 |
 | `localization.mission` | info | 로봇 | `{phase, kind, reason, elapsed_s, travelled_m, turned_rad}` — D-395 P2-7 미션이 시작했거나(`phase: started`, `reason: null`) 끝났다(`phase: done`\|`aborted`, `reason` 은 `POST /localization/mission` 의 끝 사유). 같은 내용이 ROS `localization/mission` 으로 로봇 sensing 노드에 가서 다시 탐색하게 한다 (v1.73) |
 | `motion.rotate_to` | info | 로봇 | `{delta_deg, yaw_odom, tol_deg, max_rate_dps, timeout_s, lease_owner, operator_name, by}` — D-603 회전 요청을 받았다 (v1.194) |
+| `motion.repark` | info | 로봇 | `{forward_m, left_m, lease_owner, operator_name, by}` — D-1051 미세 재정차 요청을 받았다 (v1.417) |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
 | `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id, source}` — 확인된 충전 상태. `source: instrumented`(2소스, D-28) 또는 `voltage_only`(후진 도크 D-350 Phase 1 — 배터리 인터록에는 반영되지 않는다) |
@@ -4858,6 +4866,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.419 | 2026-11-19 | Additive: 관측 요청(`/api/fleet/pipeline/observer-requests`), 대기 기체 제자리 회전→앞 카메라 단수 판정→셀 작업 `tier_hint`, `auto_observe`. |
+| v1.417 | 2026-11-19 | Additive, Safety-Review 대상 (D-1051): 로봇 `POST`/`GET`/`DELETE /api/v1/motion/repark`(미세 재정차, 옆 ≤ 0.06 m·앞뒤 ≤ 0.10 m)와 `motion.repark` 이벤트. 능력 플래그·envelope 변경 없음 |
 | v1.416 | 2026-11-19 | Additive: 셀 작업 중단의 `stage_result.reach_fix` → `repark_requests`(GET cell-tasks), `POST /api/fleet/pipeline/repark/{request_id}` 닫기, DONE이면 같은 운반 재시도(최대 2회). |
 | v1.413 | 2026-11-19 | Additive (D-1048): assessor 해제 본문 선택 `recovery`(자동 접기 증거) → `clearable_after_fold`, 증거는 사건 행 `recovery`에 저장. |
 | v1.412 | 2026-11-19 | Additive (D-1047): 통신 끊김뿐인 사건(러너 문구 전체 일치, 잘리지 않은 목록, EIO 고장 기록)은 다시 계산한 쉬는 팔이면 assessor가 해제한다. `AI_CLEAR_REPEAT_LIMIT`는 팔마다 24시간에 세 번 뒤. |
