@@ -39,6 +39,8 @@ Fleet은 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(proposer
 
 **배치 측정의 결속:** `zone_verification`은 목적지 사이트의 `layer`·`col`·`row`가 설정에 있고 범위(0-2, 1-3, 1-2) 안일 때만 측정하며, 측정한 사이트·층이 작업의 `dst_site`·handoff tier와 같아야 실행기가 수용한다. 놓기 전 상부·측면 프레임과 놓은 뒤 촬영된 상부·측면 프레임이 모두 있어야 하고, 두 프레임은 같은 판정 시각에 2 s 이내여야 한다. 상부 구역을 측정하지 못하면 verified가 아니다.
 
+**팔레트 높이 판정(셀 A/B):** 깊이는 셀에 이미 있는 D435 Z16 캡처(`cell_depth.capture_top_depth_z16_receipt`)를 배치 뒤 한 장 받아(5 s 한계, 노출 시각이 배치 뒤여야 함) 판정에 넘긴다. 다만 `cell_z_profile`의 현재 프레임 보정 검사는 독립 측면 Z 기준이 없어 항상 통과하지 못하므로 `z_gate`는 UNKNOWN이고 팔레트 완료는 아직 거부된다. 이 검사는 안전 판단이라 바꾸지 않았다. 검사 구역은 목표 칸에 고정한다(공용 `verify_stack_outcome`의 `strict_target`: 대체 구역·출발 칸 기본값·상부 증가만으로 target_present를 만드는 분기 차단).
+
 **알려진 공백:** `cell_auto_pick`은 측면·상부 구역 측정(`cell_area_zones`)을 내놓지 않는다. 그 결과가 `attempts[].zone_verification`으로 오기 전에는 `verification.basis`가 `predefined_side_and_top_target_zones`가 될 수 없어 Fleet이 릴리스를 거부한다. 이 거부는 의도한 것이며, 가짜 `PASS`로 메우지 않는다.
 
 #### 2-1. 셀 S는 상단 카메라 판정만으로 RELEASED (사용자 결정, 2026-11-20)

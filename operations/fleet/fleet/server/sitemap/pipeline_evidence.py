@@ -194,6 +194,10 @@ def check_beds(app, robot_id: str | None = None) -> None:
 
 def watch_pose_updates(app) -> None:
     """Chain check_beds behind the console's state sink (the one that feeds MapPoseService), once."""
+    svc = getattr(app.state, "map_pose", None)
+    if svc is not None and hasattr(svc, "add_update_listener") and getattr(app.state, "bed_pose_listener", None) is not svc:
+        svc.add_update_listener(lambda robot_id: check_beds(app, robot_id))  # every pose feed, incl. direct state reads
+        app.state.bed_pose_listener = svc
     console = getattr(app.state, "console", None)
     if getattr(app.state, "bed_pose_watch", False) or console is None or not hasattr(console, "set_state_sink"):
         return

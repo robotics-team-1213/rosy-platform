@@ -14927,3 +14927,8 @@ osy-d395-s1d\`.
 - 변경: Fleet 완료 검사·worker·`cell_task_exec`가 `cell_s`일 때만 basis `top_camera_only_target_zone` 수용. 셀 S 상단 판정은 before/after 프레임·auto_roi 구역·2 s 신선도 요구. ADR D-1057 2-1절.
 - 증거: 로컬 `test_pipeline_evidence.py`(셀 S 통과·셀 AB 거부), `test_omx_cell_zone_verification.py`, `test_omx_cell_task_exec_measured.py`.
 - gate 변화: 없음. 실물 미실시.
+
+## 2026-11-20 · uncommitted · feat(omx): D-1057 슬롯 오버레이 도구와 Codex 3차 지적 수정
+- 변경: `cell_slot_overlay.py`(읽기 전용)와 README 슬롯 설정 절. 깊이 프레임 연결, `verify_stack_outcome(strict_target=)`, `frame_receipt(timeout_s=)`와 프레임 대기 상한, `MapPoseService.add_update_listener`로 bed 확인을 자세 갱신마다 무효화.
+- 증거: 로컬 `test_omx_cell_zone_verification.py`, `test_omx_cell_slot_overlay.py`, `test_pipeline_evidence.py`, `test_omx_cell_auto_pick.py`.
+- gate 변화: 없음. 팔레트 z_gate는 보정 검사 때문에 UNKNOWN(알려진 공백).

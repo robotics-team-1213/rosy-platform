@@ -28,8 +28,8 @@ class Cell:
         self.cameras, self.offset, self.fail, self.calls = cameras, offset, set(fail), []
         self.image, self.stamps = image or {}, stamps or {}
 
-    def frame_receipt(self, camera, *, previous=None, max_age_s=2.0):
-        self.calls.append((camera, previous, max_age_s, dict(self.cameras)))
+    def frame_receipt(self, camera, *, previous=None, max_age_s=2.0, timeout_s=10.0):
+        self.calls.append((camera, previous, max_age_s, dict(self.cameras), timeout_s))
         if camera in self.fail:
             raise ValueError("camera frame source has not advanced")
         now = time.time()
@@ -41,9 +41,18 @@ def before(side=True):
     return {"image": BLANK, "before_side": {"image": BLANK} if side else None}
 
 
+REAL_DEPTH_AFTER = czv._depth_after
+DEPTH = np.full((480, 640), 611, np.uint16)
+
+
+def fake_depth(config, after):
+    return DEPTH, {"source_seq": 3, "exposure_wall_estimate_s": time.time(), "valid_depth_ratio": 1.0, "raw_sha256": "d"}, None
+
+
 @pytest.fixture(autouse=True)
 def fast(monkeypatch):
     monkeypatch.setattr(czv, "FRAME_WAIT_S", 0.1)
+    monkeypatch.setattr(czv, "_depth_after", fake_depth)
     seen = {}
 
     def stack(**kw):
@@ -62,6 +71,7 @@ def test_measured_with_before_and_after_frames_of_both_cameras(fast):
     assert out["target"] == {"site": "pallet-l2", "area": "pallet", "col": 2, "row": 1, "tier": 3}
     assert fast["place"] == {"area": "pallet", "col": 2, "row": 1, "tier": 3}
     assert fast["before_side"] is BLANK and fast["before_top"] is BLANK  # both before frames reach the measurement
+    assert fast["strict_target"] is True and fast["after_depth"] is DEPTH  # the pallet height gate gets the depth frame
     assert out["top"]["frame"]["camera"] == "top" and out["side"]["frame"]["camera"] == "side"
 
 
@@ -107,7 +117,7 @@ def test_both_frames_must_be_fresh_at_the_common_judging_time(monkeypatch):
                 monkeypatch.setattr(czv.time, "time", lambda real=time.time: real() + 2.5)
             return row
 
-    out = czv.measure(Slow({"top": "u", "side": "u"}), before(), CONFIG, "pallet-l0", "belt", None)
+    out = czv.measure(Slow({"top": "u", "side": "u"}), before(), CONFIG, "belt-l0", "belt", None)
     assert out["verified"] is False and "at the judging time" in out["basis"]
 
 
@@ -233,3 +243,64 @@ def test_real_cell_a_b_config_has_the_side_stream_but_no_slot_so_stays_unverifie
     config = cell_place_fit.with_tiers(REAL_AB)[0]
     out = czv.measure(Cell({"top": "u", "wrist": "u"}), before(), config, dest, "pallet-l0", None)
     assert out["side"]["available"] is True and out["verified"] is False and "col/row" in out["basis"]
+
+
+def test_a_pallet_without_a_fresh_depth_frame_is_not_verified(monkeypatch):
+    monkeypatch.setattr(czv, "_depth_after", lambda config, after: (None, None, "depth capture unavailable"))
+    out = czv.measure(Cell({"top": "u", "side": "u"}), before(), CONFIG, "pallet-l0", "belt", None)
+    assert out["verified"] is False and "depth capture unavailable" in out["basis"]
+
+
+def test_the_depth_capture_is_the_existing_cell_depth_source_and_must_be_exposed_after_the_placement(monkeypatch, tmp_path):
+    import cell_depth
+
+    seen = {}
+
+    def capture(device, out_raw, *, timeout_s):
+        seen.update(device=device, timeout_s=timeout_s)
+        return DEPTH, {"source_seq": 1, "exposure_wall_estimate_s": time.time() - 30, "valid_depth_ratio": 1.0}
+
+    monkeypatch.setattr(cell_depth, "capture_top_depth_z16_receipt", capture)
+    depth, receipt, why = REAL_DEPTH_AFTER({"cameras": {"top": {"depth_device": "/dev/depth-x"}}}, time.time())
+    assert depth is None and "before the placement finished" in why
+    assert seen == {"device": "/dev/depth-x", "timeout_s": czv.DEPTH_WAIT_S}
+    monkeypatch.setattr(cell_depth, "capture_top_depth_z16_receipt", lambda *a, **k: None)
+    assert REAL_DEPTH_AFTER({}, time.time())[2] == "depth capture unavailable"
+
+
+def test_a_stuck_camera_read_gets_only_the_time_that_is_left():
+    cell = Cell({"top": "u", "side": "u"})
+    czv.measure(cell, before(), CONFIG, "pallet-l0", "belt", None)
+    assert cell.calls and all(call[4] <= max(0.2, czv.FRAME_WAIT_S) + 1e-9 for call in cell.calls)  # not the 10 s default
+
+
+def test_pallet_height_gate_stays_unknown_with_the_real_gate_until_a_side_z_reference_exists(monkeypatch):
+    # Real verify_stack_outcome_z_mm and a synthetic depth: perceive_slot_z_mm's current-frame calibration check never
+    # reports ok (no independent side Z reference), so the gate cannot PASS: the record says UNKNOWN and is not verified.
+    import cell_area_zones
+    from cell_z_profile import TOP_SLOT_CENTER_PX
+
+    monkeypatch.setattr(czv, "verify_stack_outcome_z_mm", cell_area_zones.verify_stack_outcome_z_mm)
+    scene, cx = _scene(True, True), int(TOP_SLOT_CENTER_PX[(2, 1)][0])
+    depth = np.full((480, 640), 611, np.uint16)
+    depth[190:240, cx - 20:cx + 20] = 568
+    monkeypatch.setattr(czv, "_depth_after", lambda config, after: (depth, {"source_seq": 1, "exposure_wall_estimate_s": time.time()}, None))
+    cell = Cell({"top": "u", "side": "u"}, image=scene)
+    profile = {"measurement_calibrated": True, "side_view": {}, "top_depth": {"to_depth_matrix": [[1, 0, 0], [0, 1, 0]],
+                                                                              "measured_plate_top_mm": 13.0, "base_px": [395, 217]}}
+    out = czv.measure(cell, {"image": BLANK, "before_side": {"image": BLANK}}, {"sites": {"pallet-l0": {"layer": 0, **SITE}},
+                                                                              "z_profile": profile}, "pallet-l0", "belt", None)
+    assert out["z_gate"]["verdict"] == "UNKNOWN" and out["verified"] is False and out["depth"]["source_seq"] == 1
+
+
+def test_the_check_is_pinned_to_the_target_slot_even_when_another_slot_holds_the_container(real_zones):
+    # target col 2 row 2 is empty; a container sits in col 1 row 1. The shared function's substitute zones would find it.
+    import cell_area_zones
+
+    side, top = _scene(True, False)["side"], BLANK.copy()
+    top[165:270, 315:368] = (0, 140, 255)
+    args = dict(before_side=BLANK, after_side=side, before_top=BLANK, after_top=top, pick={"area": "belt"},
+                place={"area": "belt", "col": 2, "row": 2, "tier": 1})
+    strict = cell_area_zones.verify_stack_outcome(**args, strict_target=True)
+    assert strict["verified"] is False and strict["place_slot"]["top_zone"]["roi"] == [370, 271, 420, 380]
+    assert strict["place_slot"]["top_zone"]["within_zone"] is False

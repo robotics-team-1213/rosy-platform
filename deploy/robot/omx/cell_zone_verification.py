@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import json
+from pathlib import Path
 import time
 from typing import Any
 
@@ -19,6 +20,8 @@ TOP_ONLY_BASIS = "top_camera_only_target_zone"  # a cell without a side camera (
 MAX_FRAME_AGE_S = 2.0
 FRAME_WAIT_S = 3.0  # how long to wait for a frame captured after the placement
 SLOT_COLS, SLOT_ROWS, LAYERS = (1, 2, 3), (1, 2), (0, 1, 2)
+DEPTH_WAIT_S = 5.0  # a Z16 capture skips 12 frames at 6 fps first
+DEPTH_DEVICE = "/dev/v4l/by-id/rosy-realsense-d435-depth"
 
 
 def _plain(value: Any) -> Any:
@@ -47,11 +50,13 @@ def _side_camera(source, config: dict):
 
 
 def _frame(source, camera: str, previous: dict | None = None, after: float | None = None):
-    """(receipt, None) of a frame captured at or after `after` (waiting up to FRAME_WAIT_S for one), else (None, reason)."""
+    """(receipt, None) of a frame captured at or after `after` (waiting up to FRAME_WAIT_S for one), else (None, reason).
+    The wait is a hard limit: each HTTP read gets only the time that is left."""
     deadline, reason = time.time() + FRAME_WAIT_S, "no frame"
     while True:
         try:
-            receipt = source.frame_receipt(camera, previous=previous, max_age_s=MAX_FRAME_AGE_S)
+            receipt = source.frame_receipt(camera, previous=previous, max_age_s=MAX_FRAME_AGE_S,
+                                           timeout_s=max(0.2, deadline - time.time()))
             if after is None or float(receipt["source_stamp"]) >= after:
                 return receipt, None
             reason = f"{camera} frame was captured before the placement finished"
@@ -64,6 +69,30 @@ def _frame(source, camera: str, previous: dict | None = None, after: float | Non
 
 def _stamp(receipt: dict) -> dict:
     return {k: receipt.get(k) for k in ("camera", "source_seq", "source_stamp", "captured_at", "jpeg_sha256")}
+
+
+def _depth_after(config: dict, after: float):
+    """(depth array, receipt, None) from the existing D435 Z16 capture, exposed after `after`, else (None, None, reason).
+
+    cell_depth.capture_top_depth_z16_receipt is the depth source the cell already has (V4L2 depth node, not the colour stream
+    that the camera service holds). Its receipt carries the start-of-exposure wall time."""
+    import tempfile
+
+    import cell_depth
+
+    top = (config.get("cameras") or {}).get("top") or {}
+    device = top.get("depth_device") or DEPTH_DEVICE
+    try:
+        raw = Path(tempfile.mkdtemp(prefix="zone-depth-")) / "depth.raw"
+        got = cell_depth.capture_top_depth_z16_receipt(device, raw, timeout_s=DEPTH_WAIT_S)
+    except (OSError, ValueError) as exc:
+        return None, None, f"depth capture failed: {exc}"
+    if got is None:
+        return None, None, "depth capture unavailable"
+    depth, receipt = got
+    if float(receipt.get("exposure_wall_estimate_s", 0.0)) < after:
+        return None, None, "depth frame was exposed before the placement finished"
+    return depth, receipt, None
 
 
 def before_side(cell, config: dict) -> dict | None:
@@ -110,12 +139,20 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     source = getattr(cell, "cell", cell)
     out: dict[str, Any] = {"basis": "unverified", "verified": False, "target": None, "top": None,
                            "side": {"available": False, "reason": "no side camera in this cell"}}
+    # The pallet height gate needs calibrated depth. The slow Z16 capture goes first so the RGB frames taken after it stay fresh.
+    depth = depth_receipt = depth_why = None
+    if dest_site.rsplit("-l", 1)[0] == "pallet":
+        depth, depth_receipt, depth_why = _depth_after(config, placed_at)
     top, why = _frame(source, "top", before_frame, placed_at)
     with _side_camera(source, config) as has_side:
         side, side_why = _frame(source, "side", None, placed_at) if has_side else (None, None)
     target, bad_target = _target(config, dest_site) if has_side else _top_target(config, dest_site, roi)
     out["target"] = target
     judged_at = out["measured_at"] = time.time()
+    if depth_receipt is not None:
+        out["depth"] = {k: depth_receipt.get(k) for k in ("source_seq", "exposure_wall_estimate_s", "valid_depth_ratio", "raw_sha256")}
+        if judged_at - float(depth_receipt["exposure_wall_estimate_s"]) > MAX_FRAME_AGE_S:
+            depth_why = "depth frame older than the common judging time allows"
     if top is not None:
         out["top"] = {"frame": _stamp(top)}
     if has_side:
@@ -128,7 +165,7 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
         missing_before = "no before top frame"
     elif has_side and (before_side_frame or {}).get("image") is None:
         missing_before = "no before side frame"
-    failure = why or side_why or bad_target or stale or missing_before
+    failure = why or side_why or depth_why or bad_target or stale or missing_before
     if failure:
         return {**out, "basis": f"unverified: {failure}"}
     place = {k: target[k] for k in ("area", "col", "row", "tier") if k in target}
@@ -142,8 +179,9 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
         return _plain({**out, "basis": TOP_ONLY_BASIS, "verified": bool(after_zone.get("within_zone") and grown)})
     pick = {"area": (config.get("sites") or {}).get(source_site, {}).get("area") or source_site.rsplit("-l", 1)[0]}
     verify = verify_stack_outcome_z_mm if target["area"] == "pallet" else verify_stack_outcome
+    extra = {"after_depth": depth, "z_profile": config.get("z_profile")} if target["area"] == "pallet" else {}
     stack = verify(before_side=before_side_frame["image"], after_side=side["image"], before_top=before_frame["image"],
-                   after_top=top["image"], pick=pick, place=place)
+                   after_top=top["image"], pick=pick, place=place, strict_target=True, **extra)
     top_zone = (stack.get("place_slot") or {}).get("top_zone")
     # verify_stack_outcome leaves top_orientation_ok True when it measured nothing on top: an unmeasured top zone is not verified.
     top_ok = bool(isinstance(top_zone, dict) and top_zone.get("within_zone") and top_zone.get("orientation_ok") is True)

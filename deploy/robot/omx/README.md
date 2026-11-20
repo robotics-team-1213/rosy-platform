@@ -1421,3 +1421,38 @@ sudo udevadm control --reload-rules
 적용하고 `udevadm settle --timeout=10` 뒤 운영자 계정의 실제 읽기·쓰기 권한을 확인한다.
 이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
 시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.
+
+## 셀 목표 슬롯 설정 (D-1057)
+
+셀 A/B의 배치 판정(`cell_zone_verification`)은 목적지 사이트의 슬롯을 설정에서 읽는다. 설정에 없으면 측정하지 않고
+`unverified`로 남는다. 기본 슬롯은 없다.
+
+기록 위치와 형식은 셀 설정 JSON의 `sites.<이름>`이다.
+
+| 키 | 뜻 | 범위 |
+|---|---|---|
+| `col` | 팔레트 열 (`cell_area_zones` 슬롯 표의 열) | 정수 1–3 |
+| `row` | 팔레트 행 | 정수 1–2 |
+| `layer` | 층(0이 1단). 기본 사이트 `pallet`에는 쓰지 않는다 | 정수 0–2 |
+
+`pallet`처럼 `surface_z`가 있는 기본 사이트에는 `col`·`row`만 적는다. 실행 때 `cell_place_fit.with_tiers`가
+`pallet-l0`, `pallet-l1`, `pallet-l2`를 만들면서 `col`·`row`를 그대로 복사하고 `layer`(와 `tier = layer + 1`)를
+붙인다. 작업의 `dst_site`(예 `pallet-l1`)와 handoff tier가 이 값과 다르면 완료 증거를 받지 않는다.
+
+```json
+"sites": {
+  "pallet": {"surface_z": -0.01, "place": [0.153, -0.128], "auto_roi": [246, 148, 400, 405], "col": 1, "row": 2}
+}
+```
+
+값은 그림을 보고 정한다. 읽기 전용 도구가 슬롯 ROI 표와 각 사이트의 place 점을 상단 프레임 한 장에 겹쳐 PNG로 만든다.
+
+```bash
+python3 deploy/robot/omx/cell_slot_overlay.py --config cell-arm-b-stack.json --frame top.jpg \
+  --out overlay.png --calibration <config의 calibration_path 파일>
+```
+
+place 점은 셀 보정(`cell_observe.predicted_pixel`)이 있어야 그려진다. `--calibration`이 없거나 변환이 안 되는
+사이트는 그림 아래 문구와 표준 출력의 `place_points_omitted`에 이름이 남는다. 설정 파일은 읽기만 한다.
+
+셀 S는 상단 카메라 판정만 쓰므로(ADR D-1057 2-1절) `col`·`row`가 필요 없고 사이트의 `auto_roi`가 지정 구역이다.

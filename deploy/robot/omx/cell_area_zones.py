@@ -198,8 +198,13 @@ def verify_stack_outcome(
     after_top: np.ndarray | None = None,
     pick: dict[str, Any],
     place: dict[str, Any],
+    strict_target: bool = False,
 ) -> dict[str, Any]:
-    """Deterministic zone-based task outcome verification (Isaac-Sim style) using pre-defined `side` and `top` target zones."""
+    """Deterministic zone-based task outcome verification (Isaac-Sim style) using pre-defined `side` and `top` target zones.
+
+    `strict_target` (D-1057): judge only the target slot's own zones. No substitute zone, no same-slot or source-slot default
+    and no top-fill-only shortcut may make the target present; the source is judged elsewhere, so it counts as vacated here.
+    """
     if after_side is None:
         return {
             "verified": True, "recovery_mode": None, "basis": "telemetry_only",
@@ -211,8 +216,8 @@ def verify_stack_outcome(
     place_is_temp = place_area.startswith("temp_plate") or place_area.startswith("tmp-")
     pick_col, pick_row, pick_tier = int(pick.get("col") or 3), int(pick.get("row") or 1), int(pick.get("tier") or 2)
     place_col, place_row, place_tier = int(place.get("col") or 2), int(place.get("row") or 1), int(place.get("tier") or 3)
-    same_slot = bool(pick_area == place_area and pick_col == place_col and pick_row == place_row and pick_tier == place_tier)
-    same_side_band = bool(pick_area == place_area and pick_col == place_col and pick_tier == place_tier and pick_row != place_row)
+    same_slot = bool(not strict_target and pick_area == place_area and pick_col == place_col and pick_row == place_row and pick_tier == place_tier)
+    same_side_band = bool(not strict_target and pick_area == place_area and pick_col == place_col and pick_tier == place_tier and pick_row != place_row)
 
     pick_roi = SIDE_ROI_BY_COL_TIER.get((pick_col, pick_tier), (295, 190, 365, 255))
     place_roi = SIDE_ROI_BY_COL_TIER.get((place_col, place_tier), (226, 120, 292, 195))
@@ -230,7 +235,7 @@ def verify_stack_outcome(
     before_place_zone = evaluate_zone(before_side, place_roi) if before_side is not None else {"fill_ratio": 0.0}
     after_place_zone = evaluate_zone(after_side, place_roi, tol_u_px=20.0, tol_v_px=24.0, min_fill=0.30)
 
-    if not after_place_zone["within_zone"] and after_side is not None and place_tier >= 2:
+    if not after_place_zone["within_zone"] and after_side is not None and place_tier >= 2 and not strict_target:
         live_base = perceive_live_base(before_top if before_top is not None else after_top, before_side if before_side is not None else after_side, preferred_col=place_col)
         dyn_side_roi = (live_base.get("side_roi_by_tier") or {}).get(place_tier)
         if dyn_side_roi is not None:
@@ -245,7 +250,7 @@ def verify_stack_outcome(
     after_place_fill = float(after_place_zone["fill_ratio"])
 
     target_present = bool(after_place_zone["within_zone"]) if same_slot else bool(after_place_zone["within_zone"] and (after_place_fill - before_place_fill) >= 0.20)
-    source_vacated = True if same_slot else (after_pick_fill <= 0.35 or (before_pick_fill is not None and (before_pick_fill - after_pick_fill) >= 0.25))
+    source_vacated = True if (same_slot or strict_target) else (after_pick_fill <= 0.35 or (before_pick_fill is not None and (before_pick_fill - after_pick_fill) >= 0.25))
     if not source_vacated and after_top is not None:
         pick_top_roi = (355, 40, 415, 160) if pick_area == "belt" else (TEMP_PLATE_TOP_ROI_BY_LANE.get(pick_col) if pick_is_temp else TOP_ROI_BY_COL_ROW.get((pick_col, pick_row)))
         if pick_top_roi is not None:
@@ -260,23 +265,25 @@ def verify_stack_outcome(
     if after_top is not None:
         top_roi = TEMP_PLATE_TOP_ROI_BY_LANE.get(place_col, (182, 372, 234, 440)) if place_is_temp else TOP_ROI_BY_COL_ROW.get((place_col, place_row), (316, 160, 374, 270))
         top_zone_info = evaluate_zone(after_top, top_roi, tol_u_px=24.0, tol_v_px=40.0, min_fill=0.15, expected_orientation=expected_orient)
-        if (same_side_band or pick_is_temp or place_is_temp) and before_top is not None:
+        if (same_side_band or pick_is_temp or place_is_temp) and before_top is not None and not strict_target:
             b_q_top = evaluate_zone(before_top, top_roi, min_fill=0.15)
             if top_zone_info["within_zone"] and (float(top_zone_info["fill_ratio"]) - float(b_q_top["fill_ratio"])) >= 0.15:
                 target_present = True
-        if not top_zone_info["within_zone"] and not place_is_temp:
+        if not top_zone_info["within_zone"] and not place_is_temp and not strict_target:
             live_base_top = perceive_live_base(after_top, after_side, preferred_col=place_col)
             dyn_top_roi = live_base_top.get("top_roi")
             if dyn_top_roi is not None:
                 dyn_top_info = evaluate_zone(after_top, dyn_top_roi, tol_u_px=24.0, tol_v_px=40.0, min_fill=0.15, expected_orientation=expected_orient)
                 if dyn_top_info["within_zone"] or dyn_top_info.get("fill_ratio", 0.0) > top_zone_info.get("fill_ratio", 0.0):
                     top_zone_info = dyn_top_info
-        if not top_zone_info["within_zone"] and top_zone_info.get("fill_ratio", 0.0) < 0.15:
+        if not top_zone_info["within_zone"] and top_zone_info.get("fill_ratio", 0.0) < 0.15 and not strict_target:
             alt_top_zone = evaluate_zone(after_top, place_roi, tol_u_px=24.0, tol_v_px=30.0, min_fill=0.20, expected_orientation=expected_orient)
             if alt_top_zone["within_zone"] or alt_top_zone.get("fill_ratio", 0.0) >= 0.20:
                 top_zone_info = alt_top_zone
         if top_zone_info and top_zone_info.get("fill_ratio", 0.0) >= 0.15:
             top_orientation_ok = bool(top_zone_info.get("orientation_ok", True))
+        if strict_target:  # nothing measured on top is not "fine by default"
+            top_orientation_ok = bool(top_zone_info.get("within_zone") and top_zone_info.get("orientation_ok") is True)
 
     verified = bool(target_present and source_vacated and top_orientation_ok)
     recovery_mode = None if verified else ("re_pick_and_re_place" if not source_vacated else ("re_orient_and_re_place" if not top_orientation_ok else "re_align_place_zone"))
@@ -309,10 +316,12 @@ def verify_stack_outcome_z_mm(
     place: dict[str, Any],
     spec_id: str | None = None,
     z_profile: dict[str, Any] | None = None,
+    strict_target: bool = False,
 ) -> dict[str, Any]:
     """`ContainerSpec`-aware Z-mm stack outcome verification with signed residual `r_k` and `post_release` interlock gate."""
     base_out = verify_stack_outcome(
         before_side=before_side, after_side=after_side, before_top=before_top, after_top=after_top, pick=pick, place=place,
+        strict_target=strict_target,
     )
     place_col = int(place.get("col") or 2)
     place_row = int(place.get("row") or 1)

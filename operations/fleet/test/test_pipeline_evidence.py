@@ -473,3 +473,24 @@ def test_cell_ab_may_not_release_on_the_top_camera_only_basis():
     assert _post_owner(env, lease, parts).status_code == 200
     res = _complete(env, parts, digest)
     assert res.status_code == 422 and res.json()["detail"]["code"] == "UNVERIFIED_CELL_COMPLETION"
+
+
+def test_a_direct_state_read_in_the_pose_service_voids_the_bed_confirmation():
+    # The real MapPoseService: its own refresh path feeds observe_state without passing the console sink.
+    from fleet.server.pose.map_pose_service import MapPoseService
+
+    env = Env()
+    svc = MapPoseService(lambda: ["pinky_1"])
+    seen = []
+    svc.add_update_listener(lambda robot_id: seen.append(robot_id))
+    svc.arbitrated_pose = lambda robot_id: env.pose  # the pose the evidence reads; the feed below is the real path
+    env.app.state.map_pose = SimpleNamespace(arbitrated_pose=svc.arbitrated_pose, active_map_id=lambda: "m1",
+                                             add_update_listener=svc.add_update_listener)
+    assert env.confirm_bed().status_code == 200
+    rec = env.app.state.cell_bed_confirmations[TASK]
+    env.pose.x += 0.05
+    svc.observe_state("pinky_1", {})  # what MapPoseService._fetch does for a direct read
+    env.pose.x = env.station[0]
+    assert rec["invalid"] is True and seen[0] == "pinky_1"
+    svc.observe_state("pinky_1", {"odom_pose": "bad"})  # a bad snapshot is swallowed and the listener still runs
+    assert len(seen) == 2

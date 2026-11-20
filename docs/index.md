@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · feat(omx): D-1057 슬롯 오버레이 도구와 Codex 3차 지적 수정
 - 2026-11-20 · uncommitted · feat(pipeline): D-1057 셀 S는 상단 카메라 판정만으로 RELEASED (사용자 결정)
 - 2026-11-20 · uncommitted · fix: D-1057 Codex 2차 검토 반영
 - 2026-11-20 · uncommitted · fix(omx): D-1057 측면 프레임 원천에 episodes.cameras.side 폴백
 - 2026-11-20 · uncommitted · fix(omx): D-1057 접힘 기준을 plan 파일 home으로, 구역 판정을 실제 설정 형태에 맞춤
-- 2026-11-20 · uncommitted · feat(omx): D-1057 배치 직후 구역 측정(zone_verification) 생산자
