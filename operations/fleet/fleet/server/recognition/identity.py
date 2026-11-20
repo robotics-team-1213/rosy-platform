@@ -28,6 +28,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional
 
+from fleet.localization import trust
 from fleet.localization.motion_match import MotionMatcher
 from fleet.server.identity_triggers import AutoTriggers, caution
 
@@ -121,6 +122,7 @@ class _Binding:
     confirmed_at: float
     evidence: dict = field(default_factory=dict)
     yaw: Optional[float] = None
+    mode: str = "led"    # how it was named: "led" (lamp verdict) | "motion" (motion_match.py)
 
 
 class IdentityService:
@@ -374,16 +376,15 @@ class IdentityService:
 
     def _match_by_motion(self, source_id: str, payload) -> None:
         """Bind the robot whose own pose and exactly one detection moved alike (motion_match.py). The binding is
-        used like an LED one: observation only, and D-989 still needs a span that fits before it anchors."""
+        marked ``mode`` "motion" wherever it is read; the map pose may take it only if the site lists that mode (map_pose.track_modes)."""
         source = next((s for s in getattr(self.tracking, "sources", ()) if s.source_id == source_id), None)
         if not self.config.motion_match or source is None or payload.status != "OK":
             self._motion.pop(source_id, None)
             return
         robots = {}
         for robot_id in source.robot_ids:
-            pose = (self.tracking.robot_state(robot_id) or {}).get("pose") or {}
-            x, y = _finite_float(pose.get("x")), _finite_float(pose.get("y"))
-            robots[robot_id] = None if x is None or y is None else (x, y)
+            # Only a LOCALIZED map-frame pose counts: a navigation restart to (0, 0, 0) is not a move.
+            robots[robot_id] = trust.trusted_xy(self.tracking.robot_state(robot_id))
         points = [(d.x, d.y) for d in payload.detections if d.marker_id is None]
         matcher = self._motion.setdefault(source_id, MotionMatcher(
             self.config.track_step_m, min_move_m=self.config.motion_min_move_m, tol_m=self.config.motion_tol_m,
@@ -397,7 +398,7 @@ class IdentityService:
             return  # that detection already carries another robot's name
         now = self._clock()
         self._bindings[robot_id] = _Binding(robot_id, source_id, payload.map_id, payload.calibration_revision,
-                                            x, y, payload.captured_at, now, {"mode": "motion", "moved_m": round(moved, 3)})
+                                            x, y, payload.captured_at, now, {"moved_m": round(moved, 3)}, mode="motion")
         self._last[robot_id] = {"state": "CONFIRMED", "reason": None, "at": now, "source_id": source_id}
 
     def _continue(self, payload, x: float, y: float):
@@ -428,7 +429,8 @@ class IdentityService:
     def confirmed_track_pose(self, robot_id: str) -> dict:
         """Map-frame pose of the robot's confirmed track, or UNKNOWN with the reason.
 
-        Observation only (addendum 3): D-511 lane compliance and the console. ``yaw`` is None:
+        Observation only (addendum 3) unless the site opts a robot into the track anchor (map_pose.track_*).
+        ``mode`` is "led" or "motion" (None when UNKNOWN). ``yaw`` is None unless the detection has one:
         the blob tracker reports no heading. ``age_s`` is not clamped: a negative age is a
         future-stamped detection, which the consumer refuses like a future map pose sighting.
         """
@@ -447,12 +449,12 @@ class IdentityService:
             return {"robot_id": robot_id, "state": "UNKNOWN", "reason": last.get("reason"),
                     "x": None, "y": None, "yaw": None, "age_s": None, "source_id": last.get("source_id"),
                     "map_id": None, "calibration_revision": None, "confirmed_at": None,
-                    "use": "observation-only"}
+                    "mode": None, "use": "observation-only"}
         return {"robot_id": robot_id, "state": "CONFIRMED", "reason": None,
                 "x": binding.x, "y": binding.y, "yaw": binding.yaw, "age_s": round(now - binding.seen_at, 3),
                 "source_id": binding.source_id, "map_id": binding.map_id,
                 "calibration_revision": binding.calibration_revision,
-                "confirmed_at": binding.confirmed_at, "use": "observation-only"}
+                "confirmed_at": binding.confirmed_at, "mode": binding.mode, "use": "observation-only"}
 
     def _source_current(self, binding: _Binding) -> bool:
         source = next((s for s in self.tracking.sources if s.source_id == binding.source_id), None)

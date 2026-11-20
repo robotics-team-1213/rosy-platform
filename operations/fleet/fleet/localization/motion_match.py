@@ -3,7 +3,8 @@
 LED identity (D-472) needs the robot's lamp, which refuses while it shows caution. Here the evidence is motion
 alone: one robot's own pose says it moved, exactly one camera detection moved the same distance, and every other
 robot and detection stood still. Pure: numbers in, at most one (robot, point) out. Anything ambiguous starts over.
-The binding it gives is used like an LED one (observation only); D-989 still needs a 0.5 m span that fits.
+The binding it gives carries ``mode`` "motion" wherever it is read. D-989 needs a span of MIN_SPAN_M (0.5 m) for a fit and
+DRIVE_MIN_SPAN_M (1.0 m) before the fit anchors a map pose; the track anchor (map_pose.track_modes) needs no span.
 """
 
 from __future__ import annotations
