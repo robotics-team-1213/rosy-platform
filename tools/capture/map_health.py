@@ -3,7 +3,7 @@
 
 The sim-map rule "border cells not occupied" (map_bundle check) fails on real maps, so this judges
 what a real map must show: walls exist, little speckle, a usable free region, resolution as expected.
-  python map_health.py MAP.yaml [--compare OTHER.yaml] [--allow-resolution R]
+  python map_health.py MAP.yaml [--compare OTHER.yaml] [--allow-resolution R] [--arena MINX MINY MAXX MAXY [--arena-tol M]]
 Exit 0 ok/warn, 1 fail. Pure functions; no robot, no ROS."""
 import argparse
 import json
@@ -94,13 +94,18 @@ def analyze(meta, w, h, grid):
     # openings: border cells the largest free region reaches through free/unknown (a closed wall ring reaches none)
     reach = _flood(grid, w, h, list(largest)[:1], (FREE, UNK)) if largest else set()
     openings = sum(1 for r, c in reach if r in (0, h - 1) or c in (0, w - 1))
-    return {"cells": len(cells), "occupied": len(occ), "free": len(free), "unknown": len(cells) - len(occ) - len(free),
+    res, (ox, oy) = meta["resolution"], meta["origin"][:2]
+    bbox = None if not occ else [round(ox + min(c for _, c in occ) * res, 6), round(oy + (h - 1 - max(r for r, _ in occ)) * res, 6),
+                                 round(ox + (max(c for _, c in occ) + 1) * res, 6), round(oy + (h - min(r for r, _ in occ)) * res, 6)]
+    return {"cells": len(cells), "occupied": len(occ), "occupied_bbox": bbox, "free": len(free), "unknown": len(cells) - len(occ) - len(free),
             "wall_cells": len(occ), "free_ratio": round(len(free) / len(cells), 3) if cells else 0.0,
             "largest_free_region_cells": len(largest), "enclosed": openings == 0, "openings": openings,
             "speckle": speckle, "resolution": meta["resolution"], "origin": meta["origin"]}
 
 
-def verdict(rep, allow_resolution=None):
+def verdict(rep, allow_resolution=None, arena=None, arena_tol=0.10):
+    """arena = (min_x, min_y, max_x, max_y) the walls should enclose. Only the extent is compared (a SLAM map has its own
+    origin and may be turned a quarter turn), so a map that also sees outside the walls fails; tol is per side, in metres."""
     res, fail, warn = rep["resolution"], [], []
     want = allow_resolution or 0.05
     if rep["occupied"] == 0:
@@ -111,6 +116,13 @@ def verdict(rep, allow_resolution=None):
         fail.append("largest free region under 1 m^2")
     if rep["occupied"] and rep["speckle"] / rep["occupied"] > 0.30:
         fail.append(f"speckle {rep['speckle']}/{rep['occupied']} occupied cells isolated (>30%)")
+    if arena and rep.get("occupied_bbox"):
+        bx0, by0, bx1, by1 = rep["occupied_bbox"]
+        want = (arena[2] - arena[0], arena[3] - arena[1])
+        got = (bx1 - bx0, by1 - by0)
+        fits = lambda w: all(abs(got[i] - w[i]) <= arena_tol + res for i in (0, 1))  # one cell: walls are drawn a cell wide
+        if not (fits(want) or fits(want[::-1])):
+            fail.append(f"occupied extent {got[0]:.2f}x{got[1]:.2f} m does not match arena {want[0]:.2f}x{want[1]:.2f} m (+-{arena_tol} m)")
     if rep["openings"]:
         warn.append(f"{rep['openings']} border cells reachable from the free region (opening)")
     if rep["cells"] and rep["unknown"] / rep["cells"] > 0.60:
@@ -156,10 +168,12 @@ def main(argv=None):
     ap.add_argument("yaml")
     ap.add_argument("--compare")
     ap.add_argument("--allow-resolution", type=float)
+    ap.add_argument("--arena", type=float, nargs=4, metavar=("MINX", "MINY", "MAXX", "MAXY"))
+    ap.add_argument("--arena-tol", type=float, default=0.10)
     a = ap.parse_args(argv)
     meta, w, h, grid = load(a.yaml)
     rep = analyze(meta, w, h, grid)
-    rep.update(verdict(rep, a.allow_resolution))
+    rep.update(verdict(rep, a.allow_resolution, a.arena, a.arena_tol))
     if a.compare:
         m2, _, h2, g2 = load(a.compare)
         ov, rot, tx, ty, ov0 = align(wall_points(meta, h, grid), wall_points(m2, h2, g2), meta["resolution"])
