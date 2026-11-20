@@ -523,7 +523,7 @@ def test_bell_counts_open_queue_rows_and_the_records_tab_shows_message_stages(si
         _robot("rosy_01", line_stuck=stuck), OFFLINE]}}
     posts = []
     with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, api, posts)
+        browser, page, errors = _open(playwright, site, api, posts, open_queue=False)
         expect(page.locator("#inbox-popover")).to_have_count(0)
         expect(page.get_by_role("tab", name="알림", exact=True)).to_have_count(0)
         rows = page.evaluate(BELL_COUNT)
@@ -661,7 +661,7 @@ def site():
         listener.close()
 
 
-def _open(playwright, origin, api, posts, answers=None, size=(1440, 900)):
+def _open(playwright, origin, api, posts, answers=None, size=(1440, 900), open_queue=True):
     options = launch_options()
     options["args"] = [f"--explicitly-allowed-ports={urlparse(origin).port}"]
     browser = playwright.chromium.launch(**options)
@@ -692,6 +692,8 @@ def _open(playwright, origin, api, posts, answers=None, size=(1440, 900)):
     page.clock.install()
     page.goto(origin + "/console")
     page.clock.run_for(2500)  # state, traffic and trips polls
+    if open_queue:  # 11-21: the queue rows live in the bell's drawer
+        page.locator("#fleet-inbox").click()
     return browser, page, errors
 
 

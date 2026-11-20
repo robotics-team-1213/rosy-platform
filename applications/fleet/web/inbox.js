@@ -40,11 +40,12 @@ export function createInboxPanel({scope, el, readView}) {
     queue.dataset.open = String(open);
     document.getElementById("fleet-inbox")?.setAttribute("aria-expanded", String(open));
   }
+  // The drawer stays open until the operator closes it (bell or Esc); with no rows it is hidden and fills again in place.
   function focusQueue(queue = queuePanel()) {
     if (!queue) return;
-    if (queue.hidden) { setOpen(queue, false); getAnnouncer().announce("열린 개입 요망이 없습니다"); return; }
     setOpen(queue, true);
-    queue.focus({preventScroll: true});
+    if (queue.hidden) getAnnouncer().announce("열린 개입 요망이 없습니다");
+    else queue.focus({preventScroll: true});
   }
   queuePanel();
 
@@ -59,6 +60,7 @@ export function createInboxPanel({scope, el, readView}) {
   scope.listen(document, "keydown", event => {
     const queue = queuePanel();
     if (event.key !== "Escape" || queue?.dataset.open !== "true") return;
+    if (event.defaultPrevented || (queue.contains(document.activeElement) && document.activeElement !== queue)) return;  // a row's own Esc (confirm step) wins
     setOpen(queue, false);
     document.getElementById("fleet-inbox")?.focus({preventScroll: true});
   });
@@ -66,10 +68,7 @@ export function createInboxPanel({scope, el, readView}) {
   // 벨 숫자 = 큐의 열린 개입 행 수. 탭·기록과 무관하다.
   function paintBell() {
     showInboxCount(document.querySelectorAll('#critical-list > li[data-key], #warning-list > li[data-key]').length,
-      document.querySelectorAll('#critical-list > li[data-key]').length);
-    const queue = queuePanel();
-    if (queue?.hidden && queue.dataset.open === "true") setOpen(queue, false);  // last row resolved: the drawer closes
-  }
+      document.querySelectorAll('#critical-list > li[data-key]').length);  }
   const tabKeys = ["status", "evidence", "tools"];
   const tabs = createTabs({
     id: "context",

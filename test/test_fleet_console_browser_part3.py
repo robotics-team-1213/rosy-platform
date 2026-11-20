@@ -981,7 +981,7 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
 
         page.route("**/api/fleet/robots/rosy_01/line-stuck/claim", claim)
         page.route("**/api/fleet/robots/rosy_01/line-stuck/decision", decision)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url + "?queue=1", wait_until="networkidle")  # 11-21: open the bell's drawer
         panel = page.locator("#critical-list")  # D-540 3: the answers open in the queue row
         panel.wait_for(state="visible")
         item = panel.locator('.stuck-item[data-robot-id="rosy_01"]')
@@ -1044,7 +1044,7 @@ def test_line_stuck_answer_in_flight_blocks_a_second_submit_then_shows_success(c
             held.append(route)   # answered below, after the in-flight checks
 
         page.route("**/api/fleet/robots/rosy_01/line-stuck/decision", decision)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url + "?queue=1", wait_until="networkidle")  # 11-21: open the bell's drawer
         item = page.locator('#critical-list .stuck-item[data-robot-id="rosy_01"]')
         wait = item.locator('ui-button[data-decision="WAIT"]')
         wait.click()
@@ -1077,7 +1077,7 @@ def test_line_stuck_confirm_follows_the_live_stuck_and_an_offline_robot(console_
     posts = []
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api, posts=posts)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url + "?queue=1", wait_until="networkidle")  # 11-21: open the bell's drawer
         item = page.locator('#critical-list .stuck-item[data-robot-id="rosy_01"]')
         resume = item.locator('ui-button[data-decision="RESUME"]')
         resume.click()

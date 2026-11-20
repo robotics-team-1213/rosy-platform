@@ -470,6 +470,7 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
         assert server.started
         with sync_playwright() as playwright:
             browser, page, errors, _posts = _login(playwright, origin)
+            page.locator("#fleet-inbox").click()  # 11-21: the queue rows live in the bell's drawer
             group = page.locator("#warning-list li[data-group] summary")
             expect(group).to_have_count(1, timeout=20000)
             expect(group).to_contain_text("연결 끊김 · 4대 (rosy_011 · rosy_012 · rosy_013 외 1대)")
