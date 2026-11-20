@@ -307,8 +307,10 @@ jobs:
             base) . /opt/ros/jazzy/setup.sh ;;
           esac
           python3 - <<'PY'
+          import importlib.util
           import json
           import os
+          from pathlib import Path
           import re
           import subprocess
           import sys
@@ -322,6 +324,10 @@ jobs:
           runs = []
           sys.path.insert(0, "tools/harness")
           from affected_exclusive import dedicated, split_environment
+          from affected_pack import is_serial, serial_prefixes
+          from affected_repo import Repo
+          serial = serial_prefixes(Repo(Path("."), [], [], [], []))
+          has_xdist = importlib.util.find_spec("xdist") is not None
           for paths in json.loads(os.environ["ROSY_INVOCATIONS"]):
               paths, job_environment = split_environment(paths)
               flags = [p for p in paths if p.startswith("-")]
@@ -368,7 +374,12 @@ jobs:
                       child_env.pop(key, None)
                   print(f"isolated native ROS: domain={child_env['ROS_DOMAIN_ID']} "
                         f"RMW={child_env['RMW_IMPLEMENTATION']} discovery=LOCALHOST plugins=explicit", flush=True)
-              proc = subprocess.Popen([sys.executable, "-m", "pytest", *paths, "-v",
+              targets = [p for p in paths if not p.startswith("-")]
+              use_xdist = (has_xdist and not extra.get("ROSY_RUN_BROWSER_TESTS") and not native_required
+                           and not act_cpu_required and not dedicated(paths)
+                           and not any("::" in p or is_serial(p, serial) for p in targets))
+              xdist_args = ["-n", "auto"] if use_xdist else []
+              proc = subprocess.Popen([sys.executable, "-m", "pytest", *paths, *xdist_args, "-v",
                                        "--continue-on-collection-errors", *known_failures.NO_ROS_LAUNCH_PLUGINS],
                                       env=child_env, stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True, errors="replace")
