@@ -111,6 +111,29 @@ def check_registers(arm, device, io, fix, out_dir, stamp):
     return row("registers", "fail", f"baseline write did not verify: {(notes + caps)[:3]}")
 
 
+def check_pose(arm, device, io, library):
+    """Torque-off arm away from the library's home pose, e.g. a wrist turned by hand while folded (2026-11-19: all three
+    arms; the long wrist camera then hits the arm if the roll is turned back without lifting). shortcut: normalises raw
+    with the 0..4095 range like grip_units; read the calibration file when an arm is calibrated differently."""
+    from chunk_runner import JOG_MAX
+
+    home = ((library.get("chunks") or {}).get("home") or [None])[-1]
+    if not home:
+        return row("pose", "ok", "library has no home chunk to compare")
+    try:
+        raw = {r["id"]: r.get("position_raw") for r in io.bus_read(device)}
+    except Exception as error:
+        return row("pose", "fail", f"bus read failed: {error!r}")
+    if any(raw.get(i) is None for i in range(11, 16)):
+        return row("pose", "fail", "no position readback for motors 11-15")
+    now = [round(raw[i] * 200 / 4095 - 100, 2) for i in range(11, 16)]
+    gap = max(abs(a - b) for a, b in zip(now, home[:5]))
+    if gap <= 2 * JOG_MAX:
+        return row("pose", "ok", f"within {gap:.1f} of home")
+    return row("pose", "fail", f"{arm} body {now} is {gap:.1f} from home {list(home[:5])}; with a person at the switch run "
+               "cell_pipeline.py --stage home (it lifts the elbow before a large wrist turn)", motion=True)
+
+
 def check_cameras(arm, cameras, io, fix=False, bus_free=True, usb_recover_fn=None):
     """Every configured frame answers with a JPEG."""
     if usb_recover_fn is None:
