@@ -54,7 +54,7 @@ def run_gh(repo: Path, *args: str) -> str:
 
 
 def repo_slug(repo: Path) -> tuple[str, str]:
-    owner, _, name = run_gh(repo, "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner").partition("/")
+    owner, _, name = run_gh(repo, "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner").strip().partition("/")
     if not name:
         raise SystemExit("merge-queue: could not resolve owner/name; run inside the repository checkout")
     return owner, name

@@ -29,7 +29,7 @@ def fake_run_gh(monkeypatch, data):
     def fake(repo, *args):
         calls.append(args)
         if args[:3] == ("repo", "view", "--json"):
-            return "robotics-team-1213/rosy-platform"
+            return "robotics-team-1213/rosy-platform\n"  # real gh -q output ends with a newline
         if args[:2] == ("api", "graphql"):
             return json.dumps({"data": data(args)})
         raise AssertionError(args)
