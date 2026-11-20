@@ -43,16 +43,43 @@ PROFILE = {"Profile_Acceleration": PROFILE_ACC, "Profile_Velocity": PROFILE_VEL}
 HOLD_S, HOLD_TEMP_RISE_C = 3.0, 3
 
 
-def torque_off(bus):
-    """One failed motor must not prevent attempts on the remaining motors."""
-    errors = []
-    for name in bus.motors:
+def _disable(bus, names) -> list:
+    failed = []
+    for name in names:
         try:
             bus.disable_torque(name, num_retry=2)
         except Exception as exc:
-            errors.append(exc)
-    if errors:
-        raise RuntimeError(f"torque OFF not confirmed: {errors}")
+            failed.append((name, exc))
+    return failed
+
+
+def reset_port(bus) -> None:
+    """Free and reopen the serial port after a transfer raised. 2026-11-18 arm_s: a USB hiccup made tcdrain raise EIO in
+    the middle of a sync read; the SDK left `is_using` set, so every torque-off write then failed with "Port is in use"
+    without reaching the bus, and the session ended as an unconfirmed torque-off incident although record_session's own
+    reopen-and-read later found every motor at 0."""
+    port = getattr(bus, "port_handler", None)
+    if port is None:
+        return
+    port.is_using = False
+    try:
+        baud = port.getBaudRate()
+        port.closePort()
+        if port.openPort():
+            port.setBaudRate(baud)
+    except Exception:  # a port that cannot reopen is reported by the retry that follows
+        pass
+
+
+def torque_off(bus):
+    """One failed motor must not prevent attempts on the remaining motors; a failed pass retries the failed motors once
+    on a freed, reopened port before it reports."""
+    failed = _disable(bus, bus.motors)
+    if failed:
+        reset_port(bus)
+        failed = _disable(bus, [name for name, _ in failed])
+    if failed:
+        raise RuntimeError(f"torque OFF not confirmed: {[exc for _, exc in failed]}")
 
 
 def close_device(device):

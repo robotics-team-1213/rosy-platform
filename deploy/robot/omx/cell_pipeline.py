@@ -8,7 +8,7 @@ Supervised `--commissioning --person-at-switch` is for individual stages, never 
   reset      return the box to the start, with a coarse jaw map if needed
   survey     mark the jaws above the box without descending
   record     record one A/B replay; no chunk session may hold the arm
-`locate` and `verify` observe without moving. `recover` requires a person at the switch.
+`locate` and `verify` observe without moving. `recover` and `home` require a person at the switch.
 Receipts and attempts retain checks, interrupted work and phase-specific failures.
 
 The existing guarded chunk_runner session owns the actuator bus. This pipeline only sends
@@ -35,7 +35,7 @@ from cell_observe import (  # noqa: E402
 )
 import numpy as np  # noqa: E402
 
-STAGES = ("run", "reset", "calibrate", "locate", "transfer", "verify", "recover", "record", "survey")
+STAGES = ("run", "reset", "calibrate", "locate", "transfer", "verify", "recover", "home", "record", "survey")
 
 
 def target(config: dict, site: str, xy, yaw_deg=None, place=False) -> dict:
@@ -133,6 +133,8 @@ from cell_pipeline_stages import (  # noqa: E402, F401
     coarse_map,
     grasp_yaw,
     grip_to,
+    home,
+    lift_arg,
     recover,
     reset,
     scene,
@@ -300,12 +302,21 @@ def main(argv=None):
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--stage", default="run", choices=STAGES)
     parser.add_argument("--cycles", type=int, default=1, help="run: A/B cycles after calibration")
-    parser.add_argument("--person-at-switch", action="store_true", help="recover or re-map: a person is at the switch")
+    parser.add_argument("--person-at-switch", action="store_true", help="confirm a person is at the switch")
+    parser.add_argument("--library", type=Path, help="reviewed library with a home chunk (home stage)")
+    lift_options = parser.add_mutually_exclusive_group()
+    lift_options.add_argument("--lift", metavar="JOINT:DELTA", type=lift_arg, help="override the automatic lift")
+    lift_options.add_argument("--no-lift", dest="lift", action="store_const", const=False,
+                              help="disable the automatic home-stage lift")
     parser.add_argument("--commissioning", action="store_true", help="supervised evidence collection; never enables run")
     parser.add_argument("--operating-profile", type=Path, help="select this device's pinned operating profile")
     parser.add_argument("--from", dest="source", default="pinky")
     parser.add_argument("--to", default="belt")
     args = parser.parse_args(argv)
+    if args.stage == "home" and (not args.person_at_switch or args.library is None):
+        parser.error("home requires --library and --person-at-switch")
+    if args.lift is not None and args.stage != "home":
+        parser.error("--lift and --no-lift require --stage home")
     config = json.loads(args.config.read_text())
     config.pop("_operating_profile_binding", None)
     config.pop("_commissioning", None)  # a stored config cannot attest a person's presence
@@ -321,6 +332,14 @@ def main(argv=None):
         config = bind_pipeline(config, args.operating_profile)
     elif args.stage not in ("locate", "verify", "recover"):
         parser.error("select a per-device --operating-profile before a motion stage")
+    if args.stage == "home":
+        work = Path(config["work_dir"]).expanduser()
+        cell = FifoCell(Path(config["io"]).expanduser(), {}, timeout_s=5.0,
+                        operating_profile=config["_operating_profile_binding"])
+        result = home(cell, config, args.library, args.person_at_switch, lift=args.lift)
+        path = write_receipt(work / "receipts", "home", result)
+        print(json.dumps({"receipt": str(path), "result": result["result"]}))
+        return 0 if result["result"] == "home" else 1
     import cell_perception as cp
 
     config["profiles"] = {camera: cp.load_profile(Path(spec.get("profile_path", config["profile_path"])).expanduser())
@@ -376,4 +395,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

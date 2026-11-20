@@ -9,7 +9,7 @@ import numpy as np
 import store
 from review_authority import _sha
 from review_evidence import safe_file, valid_digest
-from perception_runtime.perception.learned.manifest import load_manifest, verify_files, _parse_input, check_revision
+from core_common.perception_model import load_manifest, verify_files, _parse_input, check_revision
 from perception_runtime.perception.learned.runner import LaneSegModel
 from perception_runtime.perception.learned.road_observation import observe_model_frame
 from perception_runtime.perception.learned.road_region import road_masks, observed_road_region

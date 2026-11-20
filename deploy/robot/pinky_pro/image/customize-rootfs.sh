@@ -447,7 +447,7 @@ systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.servic
     rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
     rosy-config.service rosy-network.service rosy-face.service \
     rosy-login-code.service rosy-hw-probe.service rosy-hw-probe.path rosy-hw-test.path \
-    rosy-auto-update.timer rosy-ssh-access.path rosy-ssh-access-boot.service \
+    rosy-auto-update.timer rosy-nav-reapprove.timer rosy-ssh-access.path rosy-ssh-access-boot.service \
     rosy-lowbatt-shutdown.path \
     tailscaled.service rosy-tailscale-join.service
 if [[ -f "$ROOT/etc/systemd/system/rosy-network-agent.service" ]]; then

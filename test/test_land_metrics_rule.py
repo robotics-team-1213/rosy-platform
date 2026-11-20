@@ -28,6 +28,7 @@ def test_the_rule_on_made_up_commits():
     assert violations("fix\n\nMetrics: before=1", pipeline, "+RETRY_POLLS = 4") != []
     assert violations("fix\n\nMetrics: before=1", pipeline, "+EVERY_X = 4") == []  # not a trigger name
     assert violations("fix\n\nMetrics: before=1", pipeline, "+    land.land_watchdog.rollup(common)") != []
+    assert violations("fix\n\nMetrics: before=1", ["tools/land_rollup.py"], "+++ b/tools/land_rollup.py\n+x = 1") == []  # a file header is no trigger
     assert violations("fix\n\nMetrics: before=1\nRemoves: gather", pipeline, "+GATHER_S = 90.0") == []
     assert violations("fix\n\nMetrics: before=1", ["tools/land_x/a.py"], "-GATHER_S = 90.0") == []  # deletion is fine
 

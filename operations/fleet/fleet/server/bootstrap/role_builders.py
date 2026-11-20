@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import time
 from functools import partial
 from types import SimpleNamespace
 
@@ -28,6 +29,7 @@ from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_
 from fleet.server.lane_route_routes import install_lane_route_routes
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.map_pose_service import MapPoseService, install_map_pin_route, install_map_pose_routes
+from fleet.server.wall_map_sync import WallMapSync  # SLAM fallback (2026-11-18)
 from fleet.server.nudge_routes import install_nudge_step_route
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
@@ -46,6 +48,7 @@ from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
 from fleet.server.trip_job_routes import install_trip_job_routes
 from fleet.server.trip_ports import HttpLaneJunction
 from fleet.server.trip_routes import install_trip_routes
+from fleet.server.trip_station_align import station_align_gate
 from fleet.server.trip_runner import TripConfig, TripRunner, cached_battery
 from fleet.server.vision_preview_routes import install_vision_preview_routes
 from fleet.server.work_routes import install_work_routes
@@ -163,6 +166,7 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
     if localization_service is not None:
         localization_service.set_overhead_pose(map_pose.arbitrated_pose)
+        localization_service.set_wall_sync(WallMapSync(site_maps, console.clients, time.monotonic))
     app.state.map_pose = map_pose
     if tracking is not None:
         tracking.map_pose = map_pose.arbitrated_pose
@@ -288,7 +292,8 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority,
         traffic_signals=traffic_signals, signal_advice=traffic_signal_advice,
         lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
-        renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id), battery=cached_battery(app.state))
+        renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id), battery=cached_battery(app.state),
+        align_gate=station_align_gate(app.state))
     install_trip_guard(console, trip_runner, claims=task_service.store.resource_claims if task_service else None)
     trip_runner.autonomous_robots = frozenset(autonomous_robots)
     trip_runner.traffic.autonomous_robots = frozenset(autonomous_robots)

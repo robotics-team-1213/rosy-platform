@@ -4895,6 +4895,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: native systemd·rosy-face 원격 계약 시험 결과는 이 브랜치 검증에 기록한다.
 - gate 변화: 없음. ARM64·장치 LED 수용은 별도다.
 
+## 2026-11-14 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 스위치
+- 변경: `rosy-navigation.service`가 `enable_loc_assist:=${ROSY_ENABLE_LOC_ASSIST}`를 넘긴다(유닛 기본 false, `runtime.env`가 이긴다). 템플릿 `rosy-runtime.env`에 `ROSY_ENABLE_LOC_ASSIST=false`. 실물 Pinky는 `loc_assist_node`를 한 번도 띄우지 않아 `localization/state` 발행자가 없었고, 그래서 CORE `state.localization`이 늘 null이었다(rosy_45, 178).
+- 증거: 원격 `test/test_pinky_loc_assist_switch.py`·`test_image_customization_contract.py`·`test_device_surface_contract.py`·`test_bringup_motor_contracts.py` 140 통과.
+- gate 변화: SOURCE. 기본은 꺼짐. 켠 기체의 LOCALIZED는 D-395 결정 흐름이 필요하다(실물 미실시).
+
+
 ## 2026-11-16 · uncommitted · fix(deploy): 천장 카메라 자동 트랙 보정 10분 주기 안정화 파이프라인 연결
 - 변경: `deploy/site/rosy-auto-track-calibration`의 승인 쿨다운(`MIN_APPROVAL_INTERVAL_S`)을 6시간에서 10분(`600s`)으로 조정하고, `deploy/site/host-state/rosy-auto-track-calibration.timer` 주기를 2분(`OnUnitActiveSec=2min`, 5회 일관성 창 = 10분)으로 맞춰 트랙·카메라 변동 시 10분 주기로 자동 조정되도록 연결했다.
 - 증거: `test/test_auto_track_calibration.py` 원격 pytest 및 `rosy-fleet-r` 실호스트 적용 확인.
@@ -4938,8 +4944,35 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 실물 프레임 재생에서 원 적합 n 7, rms 3.0 mm, 반경 28.1 mm, 버린 표시 0. 이어서 기존 bias 가드가 거절했다(-16.2, 25.1 mm = 29.9 mm > 25). 원격 pytest는 아직 돌리지 않았다.
 - gate 변화: 없음.
 
+## 2026-11-17 · uncommitted · fix(omx-post-eval): 마주 보는 yaw가 실제로 마주 볼 때만 짝으로 쓰고, 두 표시의 집게 쪽을 함께 정한다
+- 원인: arm_a post-eval 두 번(01:46 (0.115, 0.034), 17:15 (0.14, 0.039))이 모두 `yaw_pair_gap`으로 거절됐다. 두 visit 라이브러리의 above_pick 관절이 같았다(wrist_roll 8.775 둘 다). top-down IK가 yaw와 yaw+180을 같은 쌍둥이로 풀어 홈에 가까운 wrist_roll을 고르므로 요청 yaw 0/180은 같은 자세다. arm_a wrist_roll 범위(-31~62 단위, 약 167도)로는 180도 차이 자체가 닿지 않는다. raw (-8.8, 51.8) mm는 17:00 pivot yaw 5.6의 같은 집게 blob(-10.2, 52.1)과 1.5 mm 안에서 같다(같은 자세, 같은 집게). 쪽이 바뀐 짝이 아니었다.
+- 변경: `select_visit_yaws`가 각 yaw의 계획 라이브러리 above_pick 프레임 FK yaw를 읽어, 두 계획 yaw가 180 ± `post.yaw_pair_tol_deg` 안일 때만 짝으로 쓴다. 아니면 기존 1-yaw advisory 경로(또는 기하 없으면 skipped)로 간다. 진짜 마주 보는 짝은 `cell_jaw_side.label`(pivot `relabel`의 공동 판정을 떼어 낸 함수)로 두 표시의 집게 쪽을 함께 정한다. 같은 집게면 가운데가 중심이고, 쪽이 바뀌면 두 조합의 중심이 other_mm만큼 갈려 `jaw_sides_ambiguous`로 거절한다. `yaw_pair_gap`·`finger_identity`·rms·bias 가드는 그대로다. 모니터 행·결과에 `jaw_sides`를 남긴다.
+- 증거: 셀 읽기 전용 확인(visit-pallet-0/1.json 관절 동일, cal-monitor 두 행). 새 단위 시험(쌍둥이 계획은 한 번만 이동·advisory, 다른 집게 짝 수용·편향 복원, 바뀐 짝 거절). 원격 pytest 결과는 보고에 적는다.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-remap): remap 표시를 어느 집게인지 함께 정해 지도가 TCP(두 집게 가운데)를 따르게 한다
+- 원인: 11-15 arm_a remap 표시 8개 중 7개는 위쪽 집게, 1개는 아래쪽 집게였다(그 점은 consensus가 버림). 지도는 한 집게를 TCP로 놓아 약 27 mm(y) 어긋났고, 17:00 pivot bias 29.9 mm가 그 오프셋을 품었다.
+- 변경: 셀 설정 `calibrate.tcp_marks`가 켜지면 `remap`이 점마다 계획 FK yaw와 합의한 시도의 blob 목록(`mark_jaws` report `blobs`)을 모으고, `cell_jaw_side.remap_marks`가 모든 표시를 두 집게로 함께 시험한다(TCP = 가운데, 각 집게 TCP ∓ other_mm/2 at yaw + other_deg). 같은 시도의 두 번째 blob이 반대 집게 자리(other_mm/2 안)에 오면 그 점은 (두 blob 가운데, TCP)로 쓰고 선택을 확정한다. 확정 수와 rms가 같은 조합들의 지도가 pivot.side_agree_mm보다 다르면 지도를 저장하지 않는다. 그 뒤 consensus·enough_agree·LOO·map_agrees는 그대로다. 기록에 `"marks": "tcp"`가 붙고 `jaw_places`는 그 지도에서 기준 집게를 TCP에서 other_mm/2 반대쪽에 둔다. 지도 sha가 바뀌므로 옛 bias는 설계대로 무효다(remap 저장이 bias 파일을 비움).
+- 증거: 11-15 22:25 프레임 재생(222119는 before.jpg만 있어 표시 없음). 8점 모두 유지, 쪽 ref 7·other 1, 짝 4개 확정, rms 3.06 mm(다음 조합 14.25), LOO max 9.6 / mean 4.37 mm(옛 9.55 / 4.8, 옛 지도는 7점). 새 지도로 본 짝 간격 52.1-55.6 mm, 방향 67-91도, 짝 가운데-TCP 0.3-8.7 mm. 17:00 pivot을 새 지도(옛 rebase 변환 적용)로 재생하면 bias (-19.6, -1.2) = 19.6 mm(자유 g) / 16.6 mm(tcp 기하), 옛 지도는 29.8 mm. 한 점씩 뺀 지도에서 x -17~-27 mm로 남는다.
+- gate 변화: 없음.
+
+## 2026-11-17 · uncommitted · fix(omx-remap): 집게 쪽 판정이 표시 12개를 넘어도 된다
+- 원인: 실물 arm_a TCP remap(17:47)이 14점을 모두 표시했지만 "jaw sides unlabelled: 14 remap marks, at most 12"로 거절됐다(2**n 전수 탐색의 상한). 두 blob이 보인 3점은 모두 y 0.08 한 줄이었다.
+- 변경: 판정을 `cell_remap_jaws.py`로 옮기고(`cell_jaw_side`가 다시 내보냄) 세 단계로 한다. (1) 두 blob만 본 점이 한 줄이 아닌 3개 이상이면 그 가운데로 지도를 맞추고 각 표시를 지도가 더 가깝게 놓는 집게로 정한다(두 집게까지 거리 차가 pivot.side_agree_mm 이하면 거절). (2) 아니면 12개 이하는 기존 전수 탐색. (3) 12개 초과면 짝 점과 가장 퍼진 점으로 12개 기준을 골라 전수 탐색으로 지도를 얻고 (1)의 가까운 집게 규칙으로 전체를 정한다. 그 뒤 전체로 다시 맞춘다. 거절 조건과 consensus·LOO는 그대로다.
+- 증거: 17:47 실물 14점 재생은 anchored 경로, 14점 모두 other, 짝 3, rms 1.95 mm(다음 조합 12.77), consensus 14/14, LOO max 8.3 / mean 3.99 mm. 이 지도로 17:00 pallet pivot을 재생하면 bias (-0.9, -4.1) = 4.2 mm(자유 g, rms 3.3) / 5.1 mm(tcp 기하). 11-15 22:25 8점은 pairs 경로로 전과 같은 판정(rms 3.06, LOO 9.6 / 4.37). 옛 한 집게 지도는 29.8 mm.
+- gate 변화: 없음.
+
+## 2026-11-18 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 기본 켬
+- 변경: `rosy-navigation.service`와 템플릿 `rosy-runtime.env`의 `ROSY_ENABLE_LOC_ASSIST` 기본값을 true로(사용자 결정 2026-11-18 "위치 보조도 켜"). 기체의 runtime.env가 false면 그 값이 이긴다.
+- 증거: 원격 `test/test_pinky_loc_assist_switch.py`.
+- gate 변화: SOURCE. 실물 LOCALIZED는 서명 릴리스 뒤 D-395 결정 흐름으로 확인한다.
+
 ## 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
 - 변경: `rosy_site_autoupdate.py`에 `hold --until-contains <sha> [<sha>...]` 추가. 매 실행마다 다음 설치 대상 signed 후보가 대기 sha 전부를 조상으로 두는지 이미 읽는 GitHub compare 증명(`is_newer`와 같은 판정)으로 확인하고, 증명되면 `hold-cleared` 로그와 함께 홀드가 저절로 풀리고 정상 설치 경로로 진행한다. 증명 못 함·후보 없음·네트워크 오류는 홀드 유지(fail closed). `site_update_io.py`의 `set_hold`·`load_update_state`에 `until_contains` 필드(1..8개 40-hex sha) 검증 추가, 옛 홀드 파일은 그대로 파싱. dry run은 홀드를 소비하지 않는다. README 자동 갱신 절에 사용법 문서화.
 - 증거: 새 단위 시험 `test/test_site_autoupdate_until_contains.py` 5건(전부 포함 시 설치·하나 빠지면 유지·증명 불가 시 유지·평범한 홀드 불변·CLI 저장/상태 표시/거부). 원격 pytest는 ralph 확인이 돌린다.
 - gate 변화: 없음.
 
+## 2026-11-20 · uncommitted · fix(omx): 홈 복귀 전에 검토와 의도를 확인한다
+- 변경: 검토 모드는 빈 접힌 팔의 복귀 전에 의도를 기록한다. 복귀 뒤 같은 의도와 새 상태를 다시 검증한다. 자동 픽과 AreaXYZ는 복귀 후 보류를 한 행으로 기록하고 의도 파일을 보존한다.
+- 증거: 가짜 셀 회귀 케이스 추가, 원격 pytest 통과. 독립 검토 APPROVE WITH NOTES(D:/DevTemp/omx-abs-unblock-panel-1120/review-n1n3-f09301836a.md).
+- gate 변화: 검토 digest가 cell_unwedge.py를 포함해 task_sha256이 바뀐다. 기존 검토(operating envelope)는 다시 검토해야 맞는다. runner state 응답이 holding을 싣고, holding이나 전류가 없으면 홈 복귀를 시작하지 않는다.

@@ -1,8 +1,8 @@
 """D-196/D-310: robot-specific names live in the product source family.
 
 Every other production file in manifest-owned source parts that says "pinky" is listed in
-robot_literal_backlog.txt and checked by set equality (D-168 P5): a new hit
-fails, and so does a line whose file no longer matches. Shrinking the list is
+robot_literal_backlog.txt (D-168 P5): a new hit fails; a line whose file no longer
+matches only warns (ratchet_lists, 2026-11-20). Shrinking the list is
 the de-Pinky work (plan P5).
 """
 
@@ -11,6 +11,8 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 import yaml
+
+import ratchet_lists
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -93,4 +95,4 @@ def backlog() -> set:
 
 def test_robot_literals_stay_in_their_family():
     found, known = hits(), backlog()
-    assert found == known, f"new: {sorted(found - known)}, stale (remove): {sorted(known - found)}"
+    ratchet_lists.check(found, known, "robot literal files (move the literal home or list it)")

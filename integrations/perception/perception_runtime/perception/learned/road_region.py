@@ -4,7 +4,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from .manifest import ROLES, validate_label_semantic
+from core_common.perception_model import ROLES, validate_label_semantic
 
 
 def road_masks(labels: np.ndarray, classes: list[dict]) -> tuple[np.ndarray, np.ndarray]:

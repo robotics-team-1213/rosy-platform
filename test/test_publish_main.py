@@ -57,6 +57,29 @@ def _run(local: Path, *argv: str) -> int:
     return tool.main(["--repo", str(local), *argv], now=NOW)
 
 
+def test_via_ci_keeps_the_reviewed_candidate_when_local_main_advances(repo, capsys):
+    local, _ = repo
+    candidate = _commit(local, "app.py", "reviewed")
+    newer = _commit(local, "app.py", "new work")
+
+    assert _run(local, "--via-ci", "--candidate", candidate) == 0
+    out = capsys.readouterr().out
+    assert f"would push {candidate}" in out
+    assert newer not in out
+
+
+def test_via_ci_refuses_a_candidate_that_never_landed(repo, capsys):
+    local, _ = repo
+    _git(local, "switch", "-c", "topic")
+    candidate = _commit(local, "app.py", "unlanded")
+    _git(local, "switch", "main")
+    _commit(local, "app.py", "landed")
+
+    assert _run(local, "--via-ci", "--candidate", candidate, "--apply") == 1
+    assert "not in local main" in capsys.readouterr().err
+    assert _git(local, "ls-remote", "--heads", "origin", "publish/main-*") == ""
+
+
 def test_newest_commit_with_a_green_full_record_is_published(repo, capsys):
     local, _ = repo
     full, affected, bare = (_commit(local, "app.py", str(i)) for i in (1, 2, 3))
@@ -304,7 +327,8 @@ def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(re
     monkeypatch.setattr(tool, "safety_range", lambda wt, s: "1 commits checked, 0 missing")
     assert _run(local, "--apply") == 0
     assert _git(tmp_path / "origin.git", "rev-parse", "refs/heads/publish/main-20261026-12") == sha
-    create = calls[-1]
+    assert calls[-1] == ("pr", "merge", "https://example.invalid/pull/1", "--merge", "--auto", "--match-head-commit", sha)
+    create = calls[-2]
     assert create[:2] == ("pr", "create") and "publish/main-20261026-12" in create
     body = create[create.index("--body") + 1]
     for fact in (sha, "`origin/main..SHA` 커밋 수: 1", "이 PR에 없는 착지 1건", "origin/main is ancestor: yes", "IP·호스트 규칙 미검사 (secret_scan에 규칙 없음)",
@@ -313,6 +337,42 @@ def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(re
     assert body.endswith(tool.GENERATED_BY)
     assert _git(local, "worktree", "list").count("\n") == 0  # the temporary worktree is gone
     assert list((local / ".git" / "rosy-publish").iterdir()) == []  # and its hook copy
+
+
+def _publish_with_gh(repo, monkeypatch, fail, *flags):
+    local, _ = repo
+    _commit(local, "tools/hooks/pre-push", "#!/bin/sh\nexit 0\n")
+    _git(local, "push", "-q", "origin", "main")
+    _git(local, "fetch", "-q", "origin")
+    sha = _commit(local, "app.py", "1")
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
+    calls = []
+
+    def gh(repo_path, *args):
+        calls.append(args)
+        if args[:2] == ("pr", "merge") and fail(args):
+            raise tool.Stop(1, "gh pr merge failed: " + fail(args))
+        return "[]" if args[:2] == ("pr", "list") else "https://example.invalid/pull/1"
+    monkeypatch.setattr(tool, "run_gh", gh)
+    monkeypatch.setattr(tool, "safety_range", lambda wt, s: "1 commits checked, 0 missing")
+    return _run(local, "--apply", *flags), [c for c in calls if c[:2] == ("pr", "merge")], sha
+
+
+def test_publish_apply_skips_auto_merge_with_the_opt_out(repo, monkeypatch):
+    code, merges, _ = _publish_with_gh(repo, monkeypatch, lambda a: "", "--no-auto-merge")
+    assert code == 0 and merges == []
+
+
+def test_publish_apply_auto_merge_falls_back_to_the_queue_form(repo, monkeypatch, capsys):
+    code, merges, sha = _publish_with_gh(repo, monkeypatch, lambda a: "set by the merge queue" if "--merge" in a else "")
+    assert code == 0 and "auto-merge enabled" in capsys.readouterr().out
+    assert merges[-1] == ("pr", "merge", "https://example.invalid/pull/1", "--auto", "--match-head-commit", sha)
+
+
+def test_publish_apply_keeps_the_pr_when_auto_merge_fails(repo, monkeypatch, capsys):
+    code, merges, _ = _publish_with_gh(repo, monkeypatch, lambda a: "boom")
+    cap = capsys.readouterr()
+    assert code == 0 and "pushed" in cap.out and "warning: auto-merge not enabled" in cap.err and len(merges) == 1
 
 
 def _view(local: Path, sha: str, **over) -> str:
@@ -460,3 +520,34 @@ def test_via_ci_plans_main_tip_without_lab_full_record_and_merges_when_ci_green(
     monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls))
     assert _run(local, "--merge-when-green", "7", "--via-ci", "--apply") == 0
     assert ("pr", "merge", "7", "--merge", "--match-head-commit", sha) in calls
+
+
+@pytest.mark.parametrize("evidence,expected", [(True, "1"), (False, None)])
+def test_via_ci_push_uses_the_static_hook_only_with_lab_evidence_for_the_sha(repo, monkeypatch, evidence, expected):
+    local, _ = repo
+    _commit(local, "tools/hooks/pre-push", "#!/bin/sh\nexit 0\n")
+    sha = _commit(local, "app.py", "1")
+    monkeypatch.delenv("ROSY_STATIC_PRE_PUSH", raising=False)
+    monkeypatch.setattr(tool, "run_gh", lambda repo_path, *a: "[]" if a[:2] == ("pr", "list") else "https://example.invalid/pull/1")
+    monkeypatch.setattr(tool, "safety_range", lambda wt, s: "1 commits checked, 0 missing")
+    checked = []
+    monkeypatch.setattr(tool.pr_land, "required_lab_invocations", lambda cwd, base, head: checked.append(head) or [["lab"]])
+
+    def verify(cwd, head, required):
+        if not evidence:
+            raise SystemExit("[pr-land] lab-only change requires remote_pytest lab evidence")
+    monkeypatch.setattr(tool.pr_land, "verify_lab_evidence", verify)
+    pushes, real = [], tool.git
+
+    def spy(repo_path, *args, **kw):
+        if "push" in args:
+            pushes.append((kw.get("env") or {}).get("ROSY_STATIC_PRE_PUSH"))
+        return real(repo_path, *args, **kw)
+    monkeypatch.setattr(tool, "git", spy)
+    assert _run(local, "--via-ci", "--apply") == 0
+    assert pushes == [expected] and checked == [sha]
+
+
+def test_the_scheduled_merge_task_passes_via_ci_like_the_manual_path():
+    text = (Path(__file__).resolve().parents[1] / "tools" / "register_publish_merge_task.ps1").read_text(encoding="utf-8")
+    assert "--merge-when-green auto --via-ci --apply" in text

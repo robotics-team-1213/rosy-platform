@@ -36,6 +36,21 @@ def pipeline_sources(monkeypatch):
                      'operations/apps/games', 'operations/situation',
                      'middleware/core/services/test'):
         monkeypatch.syspath_prepend(str(root / relative))
+    # SIM durability is not under test: fsync on every ledger commit dominated wall time (CPU ~1/3 of wall).
+    import sqlite3
+    real_connect = sqlite3.connect
+
+    class _NoSyncConnection(sqlite3.Connection):
+        def execute(self, sql, *args):
+            if str(sql).strip().lower().startswith('pragma synchronous'):
+                sql = 'PRAGMA synchronous=OFF'
+            return super().execute(sql, *args)
+
+    def connect(*args, **kwargs):
+        connection = real_connect(*args, **{**kwargs, 'factory': _NoSyncConnection})
+        connection.execute('PRAGMA synchronous=OFF')
+        return connection
+    monkeypatch.setattr(sqlite3, 'connect', connect)
     previous_threads = cv2.getNumThreads()
     cv2.setNumThreads(1)  # Small SIM images must not consume the host's entire OpenCV pool.
     try:

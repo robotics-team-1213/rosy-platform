@@ -174,3 +174,48 @@ def validate_nav2_parameters(path: str | Path, limits: MotionLimits) -> None:
             (0, 2),
             (limits.max_linear_mps, limits.max_angular_rps),
         )
+
+
+def derive_slow_speed_params(params: dict, linear: float, angular: float) -> dict:
+    """Pull Nav2 controller values down to the approved speed (never up); mutates and returns params.
+
+    At the stock 0.20 m/s / 0.80 rad/s every rule is a no-op, so defaults are unchanged.
+    """
+
+    v = _positive("approved linear", linear)
+    w = _positive("approved angular", angular)
+
+    def section(*path: str) -> dict:
+        node: Any = params
+        for key in path:
+            node = node.get(key) if isinstance(node, dict) else None
+        return node if isinstance(node, dict) else {}
+
+    def lower(target: dict, key: str, bound: float) -> None:
+        if key in target:
+            target[key] = min(target[key], bound)
+
+    follow = section("controller_server", "ros__parameters", "FollowPath")
+    lower(follow, "desired_linear_vel", v)
+    lower(follow, "rotate_to_heading_angular_vel", w)
+    lower(follow, "min_approach_linear_velocity", v / 2)
+    lower(follow, "regulated_linear_scaling_min_speed", v / 2)
+
+    # SimpleProgressChecker: a full half-turn at w must fit in the window, and the radius must be reachable at v.
+    checker = section("controller_server", "ros__parameters", "progress_checker")
+    if "movement_time_allowance" in checker:
+        checker["movement_time_allowance"] = max(
+            checker["movement_time_allowance"], 1.25 * math.pi / w
+        )
+        lower(checker, "required_movement_radius", 0.25 * v * checker["movement_time_allowance"])
+
+    smoother = section("velocity_smoother", "ros__parameters")
+    if "max_velocity" in smoother:
+        smoother["max_velocity"] = [min(smoother["max_velocity"][0], v), 0.0, min(smoother["max_velocity"][2], w)]
+    if "min_velocity" in smoother:
+        smoother["min_velocity"] = [max(smoother["min_velocity"][0], -v), 0.0, max(smoother["min_velocity"][2], -w)]
+
+    behavior = section("behavior_server", "ros__parameters")
+    lower(behavior, "max_rotational_vel", w)
+    lower(behavior, "min_rotational_vel", w / 2)
+    return params

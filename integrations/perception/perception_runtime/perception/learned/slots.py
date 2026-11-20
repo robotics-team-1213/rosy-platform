@@ -11,7 +11,7 @@ shadow keeps working without a migration step; a later release may move it.
 """
 from __future__ import annotations
 
-from .manifest import TASKS
+from core_common.perception_model import TASKS
 
 MODELS_ROOT = '/var/lib/rosy/models'
 SLOTS = ('shadow', 'active', 'previous')

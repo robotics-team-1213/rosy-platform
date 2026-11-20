@@ -374,6 +374,54 @@ def test_batch_leader_preserves_other_preparing_and_older_pending_claims(tmp_pat
     assert json.loads(later.read_text())["status"] == "pending"
 
 
+def test_ordinary_pending_reserves_the_last_preparation_slot_for_newer_urgent(tmp_path):
+    prep, queue = land.land_prepare, land.land_queue
+    for n in range(prep.MAX_PREPARING - 1):
+        queue.take(tmp_path, f"feat/busy-{n}", status="preparing")
+    ordinary = queue.take(tmp_path, "feat/ordinary", status="pending")
+    urgent = queue.take(tmp_path, "fix/urgent", status="pending", urgent="posting CI is blocked")
+    admissions = []
+
+    def let_urgent_prepare(_seconds):
+        assert not admissions, "ordinary should start when urgent releases its preparation slot"
+        prep.slot(tmp_path, urgent, sleep=lambda _: pytest.fail("ordinary pending blocked urgent"))
+        assert json.loads(urgent.read_text())["status"] == "preparing"
+        assert json.loads(ordinary.read_text())["status"] == "pending"
+        admissions.append("urgent")
+        queue.set_status(urgent, "waiting")
+
+    prep.slot(tmp_path, ordinary, sleep=let_urgent_prepare)
+
+    assert admissions == ["urgent"]
+    assert json.loads(ordinary.read_text())["status"] == "preparing"
+
+
+def test_records_each_preparation_slot_wait_on_the_same_ticket(tmp_path, monkeypatch):
+    prep, queue = land.land_prepare, land.land_queue
+    ticket = queue.take(tmp_path, "fix/example", status="pending")
+    now = [0.0]
+    events = []
+    monkeypatch.setattr(prep.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(land.land_events, "emit", lambda kind, **fields: events.append((kind, fields)))
+    prep.slot(tmp_path, ticket, sleep=lambda _: pytest.fail("a free slot never waits"))
+
+    for seconds in (21.0, 34.0):
+        busy = [queue.take(tmp_path, f"feat/busy-{n}", status="preparing") for n in range(prep.MAX_PREPARING)]
+
+        def release_one(_):
+            busy.pop().unlink()
+            now[0] += seconds
+
+        prep.slot(tmp_path, ticket, sleep=release_one)
+        for other in busy:
+            other.unlink()
+
+    assert [fields for kind, fields in events if kind == "prep_wait"] == [
+        {"ticket": ticket.name, "seconds": 21},
+        {"ticket": ticket.name, "seconds": 34},
+    ]
+
+
 def test_a_pending_landing_continues_on_mains_new_landing_code_with_its_own_ticket(tmp_path, monkeypatch):
     """2026-10-31: queue fixes never reached landers already waiting; they deadlocked until restarted by hand."""
     prep, queue, q = land.land_prepare, land.land_queue, tmp_path / ".git" / "rosy-land-queue"

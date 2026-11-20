@@ -452,7 +452,7 @@ def test_export_onnx_parity(tmp_path):
     torch = pytest.importorskip("torch")
     pytest.importorskip("onnxruntime")
     import export_onnx
-    from perception_runtime.perception.learned.manifest import load_manifest, verify_files
+    from core_common.perception_model import load_manifest, verify_files
     ts = tmp_path / "m.torchscript.pt"
     torch.manual_seed(0)
     torch.jit.script(torch.nn.Conv2d(3, 4, 3, padding=1)).save(str(ts))

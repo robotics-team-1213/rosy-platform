@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pytest
 
-from perception_runtime.perception.learned.manifest import ManifestError
+from core_common.perception_model import ManifestError
 from perception_runtime.perception.learned.runner import LaneSegModel, ModelSlot
 
 

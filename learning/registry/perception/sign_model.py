@@ -24,7 +24,7 @@ for _p in (ROOT / "deploy" / "robot" / "pinky_pro" / "release", ROOT / "middlewa
         sys.path.append(str(_p))
 
 from signing import sign_checksums  # noqa: E402  (deploy/robot/pinky_pro/release/signing.py)
-from perception_runtime.perception.learned.manifest import MANIFEST_NAME  # noqa: E402
+from core_common.perception_model import MANIFEST_NAME  # noqa: E402
 from perception_runtime.perception.learned.signature import (  # noqa: E402
     SIGNATURE_NAME, SignatureError, verify_manifest_signature)
 
