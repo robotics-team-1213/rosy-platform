@@ -10,8 +10,8 @@ from PIL import Image
 import yaml
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'), str(ROOT/'deploy/robot/omx')]
-from omx_adapter.demonstration import DemonstrationRecorder
+sys.path[:0] = [str(ROOT/'deploy/robot/omx'), str(ROOT/'contracts/learning/src'), str(Path(__file__).parent)]
+from demo_episode_fixture import EpisodeWriter
 from sim_pick_place_demonstrations import camera_world
 
 
@@ -47,7 +47,7 @@ def fixture(tmp_path, *, recording_fps=10):
         'camera': {'name': 'front', 'identity': 'gazebo:omx_cell_workcell:front:'+world_hash,
                    'width': 320, 'height': 240,
                    'camera_info_sha256': 'd1b538c8a736b665e05433276033d8722519e8ff1533310f8d6ede6ae8ce00bc'}}
-    recorder = DemonstrationRecorder(run/'recordings', source)
+    recorder = EpisodeWriter(run/'recordings', source)
     episode = recorder.start('Lift infeed_block and place in fixed pallet A slot 1')
     image = io.BytesIO()
     Image.new('RGB', (320,240), (12,34,56)).save(image, format='PNG')

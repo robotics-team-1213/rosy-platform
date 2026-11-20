@@ -8,7 +8,7 @@ import pytest
 
 ROOT=Path(__file__).resolve().parents[4]
 sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx','learning/curation/omx',
-    'middleware/devices/omx/adapter','middleware/devices/omx/adapter/test','contracts/foundation')]
+    'learning/curation/omx/test','contracts/learning/src','contracts/foundation')]
 
 
 @pytest.mark.parametrize('representation,queue_steps,noise', [('absolute',1,0.),
@@ -18,13 +18,12 @@ sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx','learning/curation/o
 def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,monkeypatch,representation,queue_steps,noise):
     torch=pytest.importorskip('torch')
     pytest.importorskip('lerobot')
-    from omx_adapter.demonstration import DemonstrationRecorder
-    from test_demonstration import provenance, sample
+    from demo_episode_fixture import EpisodeWriter, provenance, sample
     from lerobot_export import export_episode
     from act_job import run
     exports,ids,training_actions,training_states,validation_states=[],[],[],[],[]
     for index,base in enumerate([-.2,0.,.5,.6,.7,.8,.9]):
-        recorder=DemonstrationRecorder(tmp_path/f'raw-{index}',provenance())
+        recorder=EpisodeWriter(tmp_path/f'raw-{index}',provenance())
         episode=recorder.start('synthetic integration fixture')
         for frame in range(4):
             target={'joint1':base+.001*frame,'gripper_joint_1':-.1}
