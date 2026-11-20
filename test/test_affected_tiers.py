@@ -23,6 +23,8 @@ FILES = {**base.FILES, "tools/harness/platform_parts.yaml": PARTS,
          "middleware/drive/motion_limits/limits.py": "MAX = 1\n",
          "middleware/drive/motion_limits/test/test_limits.py": "def test_max():\n    pass\n",
          "tools/land_prepare.py": "MAX_PREPARING = 6\n",
+         "tools/land_room.py": "SLOTS = 2\n",
+         "test/test_land_room_flow.py": "import land_room\n\n\ndef test_room():\n    pass\n",
          "test/test_land_sample.py": "def test_land():\n    pass\n",
          "test/test_remote_pytest.py": "def test_remote():\n    pass\n",
          "deploy/requirements.txt": "pyyaml==6.0\n",
@@ -188,3 +190,32 @@ def test_pack_splits_large_non_serial_capsules_for_parallel_runners(tmp_path):
     groups = affected.pack(FakeRepo(), [f"test/test_cap_{i}.py" for i in range(cap + 5)])
     assert len(groups) == 2
     assert all(len(group) <= cap for group in groups)
+
+def test_a_leaf_gate_tool_runs_its_readers_not_the_whole_self_test_tier(sample):
+    """aff-narrow: tools/land_room.py is read by one test; the 85-file land/remote tier stays for unread tools."""
+    sel = _select(sample, "tools/land_room.py")
+    assert sel.mode == "affected" and not sel.escalations
+    assert {"test/test_land_room_flow.py", "test/architecture", "test/test_harness_contracts.py"} <= set(sel.reasons)
+    assert not {"test/test_land_sample.py", "test/test_remote_pytest.py"} & set(sel.reasons)
+
+
+def test_a_leaf_gate_tool_keeps_the_legacy_escape(sample, monkeypatch):
+    monkeypatch.setenv("ROSY_FULL_LEGACY", "1")
+    assert _select(sample, "tools/land_room.py").mode == "full"
+
+
+def _jobs(sample, *changed):
+    sel = _select(sample, *changed)
+    return [e["name"] for e in affected.ci_matrix(affected.Repo.load(sample), sel)["include"]]
+
+
+def test_a_docs_only_change_skips_build_smoke_but_keeps_the_document_readers(sample):
+    sel = _select(sample, "docs/adr/D-1-sample.md")
+    assert "build-smoke" not in _jobs(sample, "docs/adr/D-1-sample.md")
+    assert "test/test_harness_contracts.py" in sel.reasons and "test/architecture/test_document_placement.py" in sel.reasons
+
+
+@pytest.mark.parametrize("changed", [["docs/adr/D-1-sample.md", "tools/land_room.py"], ["deploy/requirements.txt"],
+                                     ["docs/notes.txt"]])
+def test_a_change_with_anything_but_documents_keeps_build_smoke(sample, changed):
+    assert "build-smoke" in _jobs(sample, *changed)

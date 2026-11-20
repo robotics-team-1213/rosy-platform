@@ -285,6 +285,10 @@ class SubprocessCommands:
                "seal": host.request_seal, "start_navigation": host.start_navigation}[action]
         return run(Path("/"), host.SystemOps(), *arguments)
 
+    def navigation_fallback(self, action: str, *arguments: str) -> dict:
+        import navigation_fallback_host as host
+        return host.run_action(Path("/"), host.SystemOps(), action, *arguments)
+
     def lane_perception_status(self) -> dict:
         from host_lane_perception import LanePerceptionConfig
         return LanePerceptionConfig().get()

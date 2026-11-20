@@ -1,8 +1,9 @@
 import "/common/ui.js";
 import { renderTopView, renderArmGrid } from "./grid.js";
 import { initRequests } from "./requests.js";
+import { loadJobStatus } from "./job-status.js";
 
-const $ = (id) => document.getElementById(id);
+export const $ = (id) => document.getElementById(id);
 
 const state = {
   bundle: null,
@@ -44,7 +45,7 @@ function setSegmentGroup(buttons, activeBtn) {
   }
 }
 
-function addDtDd(dl, term, value) {
+export function addDtDd(dl, term, value) {
   const dt = document.createElement("dt");
   dt.textContent = term;
   const dd = document.createElement("dd");
@@ -52,7 +53,7 @@ function addDtDd(dl, term, value) {
   dl.append(dt, dd);
 }
 
-function makeTable(headers) {
+export function makeTable(headers) {
   const tbl = document.createElement("table");
   tbl.className = "cal-table";
   const thead = document.createElement("thead");
@@ -68,7 +69,7 @@ function makeTable(headers) {
   return { tbl, tbody };
 }
 
-async function fetchJson(url) {
+export async function fetchJson(url) {
   const res = await fetch(url, { cache: "no-store" });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(body.error || `${url}: HTTP ${res.status}`), { status: res.status });
@@ -486,6 +487,7 @@ function renderAll() {
 }
 
 async function loadSnapshot() {
+  loadJobStatus();  // independent of the profile registry: --cells alone turns the section on
   try {
     const data = await fetchJson("/api/calibration/v1/profiles");
     state.bundle = data;

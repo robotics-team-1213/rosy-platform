@@ -17,6 +17,7 @@ from fleet.routing.cost import STOP, RoutingConfig, classify, speed, transition_
 from fleet.routing.graph import Arc, Graph
 from fleet.routing.planner import Goal, search
 from fleet.routing.snap import PlanError, heading_ok, snap_goal, snap_start
+from fleet.routing.stop_line import FALLBACK_FRONT_M, stop_goals
 
 DRIVE_MODES = frozenset({"lane", "free"})
 
@@ -35,6 +36,8 @@ class PlanRequest:
     speed_cap: float | None = None
     blocked_edges: frozenset[str] = frozenset()
     extra_cost: Mapping[str, float] = field(default_factory=dict)
+    #: Registered body front (fleet.stop_front.body_front_m); a "stop" place is halted this far before the line.
+    body_front_m: float = FALLBACK_FRONT_M
 
 
 @dataclass(frozen=True)
@@ -87,7 +90,7 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
     legs = _legs(graph, request)
     for index, (via, target) in enumerate(legs):
         last = index == len(legs) - 1
-        goal, loose = _goal(graph, target, request.arrive_yaw if last else None, config)
+        goal, loose = _goal(graph, target, request.arrive_yaw if last else None, config, request.body_front_m)
         kwargs = dict(speed=arc_speed, extra_cost=request.extra_cost, via=via)
         stats: dict = {}
         found = search(graph, at, goal, config, allowed=allowed, stats=stats, **kwargs)
@@ -131,17 +134,22 @@ def _arrived(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan 
     if request.via or not isinstance(request.goal, str):
         return None
     x, y, yaw = request.start_pose
-    if math.dist((x, y), graph.place_xy(request.goal)) > ARRIVED_M:
-        return None
     want = request.arrive_yaw if request.arrive_yaw is not None else getattr(
         graph.places[request.goal], "yaw", None)
+    stops = stop_goals(graph, request.goal, want, config, request.body_front_m)  # a stop line: judge the offset goal
+    if stops:
+        if not any(math.dist((x, y), xy) <= ARRIVED_M for _a, _s, xy in stops):
+            return None
+    elif math.dist((x, y), graph.place_xy(request.goal)) > ARRIVED_M:
+        return None
     if want is not None and not heading_ok(yaw, want, config):
         return None
     return Plan(segments=(), places=(request.goal,), actions=((request.goal, STOP, 0.0),),
                 length_m=0.0, eta_s=0.0, map_version=graph.version)
 
 
-def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig) -> tuple[Goal, Goal | None]:
+def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig,
+          front_m: float = FALLBACK_FRONT_M) -> tuple[Goal, Goal | None]:
     """The goal and, when an arrive yaw narrows a place goal, the same goal without it."""
     if isinstance(target, str):
         place = graph.places[target]
@@ -153,10 +161,12 @@ def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig) -> tuple[Goal
             any_way, any_arcs = snap_goal(graph, *graph.place_xy(target), None, config)
             return Goal(point, on_arcs=on_arcs), Goal(any_way, on_arcs=any_arcs)
         loose = Goal(graph.place_xy(target), place=target)
-        if yaw is None:
-            return loose, None
-        return Goal(loose.xy, place=target,
-                    arrive_ok=lambda arc: heading_ok(yaw, arc.end_tangent, config)), loose
+        line = loose if yaw is None else Goal(loose.xy, place=target,
+                                              arrive_ok=lambda arc: heading_ok(yaw, arc.end_tangent, config))
+        stops = stop_goals(graph, target, yaw, config, front_m)
+        if stops:  # a stop line: the body front on it, so the centre is back by the front offset
+            return Goal(stops[0][2], on_arcs={arc.id: s for arc, s, _xy in stops}), loose
+        return line, (None if yaw is None else loose)
     x, y, yaw = target
     point, on_arcs = snap_goal(graph, x, y, yaw if yaw is not None else arrive_yaw, config)
     return Goal(point, on_arcs=on_arcs), None

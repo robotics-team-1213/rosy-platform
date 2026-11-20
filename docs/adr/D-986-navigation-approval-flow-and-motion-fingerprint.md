@@ -49,3 +49,16 @@
 ## Addendum 2026-11-09: 정지 뒤 바퀴 토크 꺼짐 보장
 
 geg6에서 `rosy-io` 정지 뒤에도 Dynamixel 토크가 남아 begin이 `motor preflight`로 매번 실패했다. 원인은 systemd(KillMode=control-group)와 `ros2 launch`가 SIGINT를 두 번 보내, 두 번째가 `DynamixelDriver.terminate()`의 `time.sleep` 중 `KeyboardInterrupt`로 닿아 `_disable_all()`이 실행되지 않은 것이다. 결정: (a) `terminate()`는 sleep보다 먼저 토크를 끄고 `bringup.main`은 정리 중 SIGINT/SIGTERM을 무시한다. (b) `rosy-io`·`rosy-navigation`에 `ExecStopPost=+...wheel_torque_off.py`(쓰기 전용, 주소 64=0, ID 1·2, 실패는 journal에 남기고 정지는 막지 않음)를 둔다. SIGKILL·충돌은 (a)가 못 막기 때문이다. begin의 "토크 꺼짐" 프로브 요구는 그대로이며, 두 겹의 보장이 그 요구를 채울 뿐이다. 기록: `docs/solutions/runtime-errors/rosy-io-stop-leaves-wheel-torque-on-repeat-sigint-2026-11-09.md`.
+
+## Addendum 2026-11-20: 릴리스로 풀린 승인은 기체가 스스로 다시 잰다
+
+사용자 결정(2026-11-20): "모델 업데이트 이후에 바로 핑키 주행까지 가능하도록", "노트북에 두는 게 아니라 자동으로 되도록 애초에 만들어". 같은 날 y8xs가 196으로 갱신된 뒤 승인이 풀려 Nav2가 멈췄다. 191→195 사이 Nav2 제어 파라미터(42906b7067)·도킹 단계가 바뀌어 지문이 달랐으므로 승계는 맞게 거절됐다.
+
+결정:
+
+1. `rosy-nav-reapprove.timer`(2분)가 `navigation_reapprove.py run`을 root로 실행한다. 이 기체가 전에 승인을 받았고, `mapping_approval.check`가 "릴리스가 다름" 하나로만 실패할 때만 움직인다. 처음 승인, 다른 기체의 표식, 손상된 번들은 사람 몫으로 남는다.
+2. 조건: `/etc/rosy/nav-reapprove.disabled` 없음, `/run/rosy-claim` 없음, 승인 흐름 IDLE, 기체 IDLE이고 10초 간격 두 표본에서 속도 0, 배터리 값 fresh·ok, CORE의 `charging`이 false. 릴리스당 2회까지 시도한다.
+3. 절차는 2항의 API 그대로다. 5분짜리 operator 일회용 코드를 loopback에서 토큰으로 바꿔 begin → 5시험 → seal → navigation-start → logout. 후진은 마지막에 둔다(앞 시험이 뒤 여유를 만든다; y8xs 0.12 → 0.185 m). 시험 시작마다 CORE의 LiDAR 여유 검사는 그대로다. 실패하면 cancel한다.
+4. 이로써 "시험은 사람이 버튼을 쥐는 동안만"과 "후진의 안 보이는 구간은 사람이 확인"은 처음 승인에만 남는다. 갱신 뒤 재측정은 사람 입회 없이 한다. 속도·이동·정지 한도와 시험 거리는 바꾸지 않는다.
+
+한계: 후진 시험의 몸 가림 구간은 LiDAR로 증명하지 못한다. 기체를 벽에 붙여 둔 채 갱신되면 후진 여유 부족으로 실패하고 두 번 뒤 멈춘다. `charging`은 USB-C 선을 감지하지 못한다.

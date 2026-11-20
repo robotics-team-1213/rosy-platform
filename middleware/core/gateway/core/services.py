@@ -88,6 +88,25 @@ from core.system.host_files import HostFileExchange
 from core_features.waypoints.manager import WaypointManager
 
 
+
+def _build_slam_fallback(config: dict, **parts: Any):
+    """SLAM -> wall map fallback (2026-11-18): whatever goes wrong here (import, config, wiring) must not take CORE down."""
+    try:
+        from core.slam_fallback_wiring import build_slam_fallback
+        return build_slam_fallback(config, **parts)
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("slam fallback unavailable: CORE continues without it")
+        try:  # R4: a switch may be owed (marker) or we cannot tell: then goals stay refused instead of opening
+            from core_features.localization.slam_fallback import STATE_NAME, state_dir
+            owed = (state_dir() / STATE_NAME).exists()
+        except Exception:  # noqa: BLE001
+            owed = True
+        assist = parts.get("assist")
+        if owed and assist is not None:
+            assist.hold = lambda: "slam_fallback_unavailable"
+            logging.getLogger(__name__).error("slam fallback unavailable with a switch owed: goals are refused")
+        return None
+
 @dataclass
 class CoreServices:
     config: dict[str, Any]
@@ -142,6 +161,7 @@ class CoreServices:
     # D-525 signal advice, display only: kept off LineFollowManager so no decision can read it.
     line_advice: AdviceStore = field(default_factory=AdviceStore)
     arm_policy: Any = field(default=None, repr=False)  # Explicit installed OMX session only.
+    slam_fallback: Any = None  # inert unless runtime.navigation_backend is slam (ROS-free supervisor)
 
     @classmethod
     def build(cls, config: dict[str, Any], profile: RobotProfile,
@@ -329,6 +349,9 @@ class CoreServices:
         fleet_loss = build_fleet_loss(config, events=events, fleet_agent=fleet_agent, nav=nav,
                                       safety=safety, localization=localization)
 
+        slam_fallback = _build_slam_fallback(
+            config, state=state, nav=nav, command=command, modes=modes, line_follow=line_follow, docking=docking,
+            swarm=swarm, assist=localization, readiness=readiness, events=events)
         maps = MapSnapshotStore()
         nav.costmap_provider = lambda: maps.get_costmap("global")  # D-1009 route pass points
         return cls(config=config, identity=identity, profile=profile, capability=capability, fleet_agent=fleet_agent,
@@ -345,7 +368,7 @@ class CoreServices:
                    audit=audit, calibration=calibration, trip_lease=trip_lease,
                    adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
                    dock_feed=dock_feed, station_docking=station_docking, localization=localization, loc_mission=loc_mission,
-                   fleet_loss=fleet_loss, peers=peers, peer_beacon=peer_beacon,
+                   fleet_loss=fleet_loss, peers=peers, peer_beacon=peer_beacon, slam_fallback=slam_fallback,
                    approval_trials=ApprovalTrials(
                        state, command, safety, lambda: line_follow.config,
                        Path(os.environ.get("STATE_DIRECTORY", "/var/lib/rosy/core")) / "navigation-approval"))
