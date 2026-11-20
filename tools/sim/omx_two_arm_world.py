@@ -83,13 +83,19 @@ def camera_axes(eye, focus, up):
 
 
 class World:
-    def __init__(self, layout=None, wrist=None, cone="elliptic", **choices):
+    def __init__(self, layout=None, wrist=None, cone="elliptic", *, fixture_only=False, **choices):
         self.layout = layout or sites.Layout(**choices)
         self.physics = physics.Physics(self.layout.choices["physics"])
         self.wrist = wrist or self.layout.choices["wrist_camera"]
         self.cone = cone
         self.meshes = tempfile.TemporaryDirectory()
         self.pairs = {}
+        if fixture_only:
+            spec = mujoco.MjSpec()
+            spec.compiler.meshdir = self.meshes.name
+            self._fixture_geoms(spec)
+            self.model = spec.compile()
+            return
         spec = self._spec()
         self.model = spec.compile()
         self.renderers = {}
@@ -115,16 +121,8 @@ class World:
         head = f'<mujoco><compiler meshdir="{self.meshes.name}" balanceinertia="true" discardvisual="false" fusestatic="false"/></mujoco>'
         return f'<robot name="two_arm">{head}{"".join(out)}</robot>'
 
-    def _spec(self):
+    def _fixture_geoms(self, spec):
         L, c = self.layout, self.layout.choices
-        spec = mujoco.MjSpec.from_string(self._urdf())
-        spec.option.timestep = .0005
-        spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_MULTICCD  # a convex mesh against a box gives ONE contact point otherwise: boxes on the deck rocked and crept
-        spec.option.cone, spec.option.impratio = (mujoco.mjtCone.mjCONE_PYRAMIDAL if self.cone == "pyramidal" else mujoco.mjtCone.mjCONE_ELLIPTIC), 10
-        spec.visual.global_.offwidth, spec.visual.global_.offheight = 1280, 960
-        spec.add_texture(name="room", type=mujoco.mjtTexture.mjTEXTURE_SKYBOX, builtin=mujoco.mjtBuiltin.mjBUILTIN_FLAT,
-                         rgb1=COLOURS["wall"][:3], rgb2=COLOURS["wall"][:3], width=8, height=8)  # past the floor the side camera saw black
-        spec.default.geom.solref, spec.default.geom.solimp = [.002, 1], [.95, .99, .001, .5, 2]
         world, box = spec.worldbody, mujoco.mjtGeom.mjGEOM_BOX
         f = L.fixture
         wc, ws = f["workplate_center_m"], f["workplate_size_m"]
@@ -149,6 +147,20 @@ class World:
                                pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["black"])
         self._ship(spec)
         self._temp(spec)
+
+    def _spec(self):
+        L, c = self.layout, self.layout.choices
+        spec = mujoco.MjSpec.from_string(self._urdf())
+        spec.option.timestep = .0005
+        spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_MULTICCD  # a convex mesh against a box gives ONE contact point otherwise: boxes on the deck rocked and crept
+        spec.option.cone, spec.option.impratio = (mujoco.mjtCone.mjCONE_PYRAMIDAL if self.cone == "pyramidal" else mujoco.mjtCone.mjCONE_ELLIPTIC), 10
+        spec.visual.global_.offwidth, spec.visual.global_.offheight = 1280, 960
+        spec.add_texture(name="room", type=mujoco.mjtTexture.mjTEXTURE_SKYBOX, builtin=mujoco.mjtBuiltin.mjBUILTIN_FLAT,
+                         rgb1=COLOURS["wall"][:3], rgb2=COLOURS["wall"][:3], width=8, height=8)  # past the floor the side camera saw black
+        spec.default.geom.solref, spec.default.geom.solimp = [.002, 1], [.95, .99, .001, .5, 2]
+        self._fixture_geoms(spec)
+        world, box = spec.worldbody, mujoco.mjtGeom.mjGEOM_BOX
+        f = L.fixture
         r08 = c["ship_source"] == "r08-berth"
         if r08:
             spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
@@ -248,7 +260,10 @@ class World:
         x0, y0, z0 = sites.ship_cell(L, 0, 0)
         turn = [0, 0, 0, 1]  # ship x runs to -x of the fixture frame
         mesh = mujoco.mjtGeom.mjGEOM_MESH
-        visuals = [("hull", COLOURS["ship"]), ("house", COLOURS["ship"])]
+        house = L.choices["ship_house"]
+        visuals = [("hull", COLOURS["ship"])]
+        if house:
+            visuals.append(("house", COLOURS["ship"]))
         kit = L.choices.get("berth_kit", "v24-docks")
         if kit == "v24-docks":  # 2026-11-14 rated: printed v20 cradles and stopper + the 2 socket-in docking pieces (v24)
             visuals += [
@@ -267,7 +282,7 @@ class World:
         for name, rgba in visuals:
             spec.add_mesh(name=f"ship_{name}", file=self._asset(name), scale=[.001] * 3)
             world.add_geom(name=f"ship_{name}", type=mesh, meshname=f"ship_{name}", pos=[x0, y0, z0], quat=turn, contype=0, conaffinity=0, rgba=rgba)
-        for name in ("cx_bow", "cx_house"):
+        for name in ("cx_bow", "cx_house") if house else ("cx_bow",):
             spec.add_mesh(name=name, file=self._asset(name), scale=[.001] * 3)
             world.add_geom(name=name, type=mesh, meshname=name, pos=[x0, y0, z0], quat=turn, rgba=[0, 0, 0, 0])
         mm, floor = .001, H["floor"] + 3.  # the hull stands 3 mm up on the berth blocks

@@ -1,6 +1,7 @@
 """The PPO fixture and MuJoCo handoff must agree on the same physical layout."""
 
 from pathlib import Path
+import json
 import sys
 
 import pytest
@@ -37,6 +38,16 @@ def test_new_case_rejects_a_modified_layout():
         request_for(layout, 4, 3)
 
 
+def test_r08_home_is_inside_existing_control_profile():
+    import yaml
+    from stacking_fixture import PROFILE, advance_joint
+
+    joints = yaml.safe_load(PROFILE.read_text())["joints"]
+    for home in fixture(layers=1, case=CASE)["home_joints_rad"]:
+        for position, limits in zip(home, joints.values()):
+            assert advance_joint(position, 0., 0., limits, 4/120) == (position, 0.)
+
+
 def test_run_catalog_requires_the_mu_joco_layout_hash():
     config = request_for(cell_layout(), 4, 3)
     scenario = "omx-map-container-stacking-rl"
@@ -60,3 +71,20 @@ def test_stage_two_handoff_selects_ppo_and_separates_training_from_evaluation():
                   evaluation_successes=0, fixture={"case": CASE})
     assert judge_isaac_stage(report)["status"] == "failed"
     assert judge_isaac_stage(report)["result"]["training_verified"]
+
+
+def test_ppo_judgement_requires_matching_final_snapshot(tmp_path):
+    from omx_ladder import judge_isaac_stage, read_ppo_snapshot
+
+    config = request_for(cell_layout(), 42, 1)
+    sha = "1" * 40
+    observation = dict(snapshot="FINAL", status="SUCCEEDED", run_id="run",
+                       input=dict(config=config, source_sha=sha, scenario_id="omx-map-container-stacking-rl"))
+    report = dict(schema="rosy.omx-stacking-rl/1", seed=42, fixture=config, training_verified=True,
+                  task_success=True, evaluation_successes=1, evaluation_episodes=1)
+    (tmp_path / "observation.json").write_text(json.dumps(observation))
+    (tmp_path / "stacking-report.json").write_text(json.dumps(report))
+    assert judge_isaac_stage(report)["status"] == "failed"
+    assert judge_isaac_stage(read_ppo_snapshot(tmp_path, config, sha))["status"] == "passed"
+    with pytest.raises(ValueError, match="MuJoCo handoff"):
+        read_ppo_snapshot(tmp_path, dict(config, seed=43), sha)

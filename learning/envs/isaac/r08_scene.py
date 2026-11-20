@@ -6,7 +6,7 @@ from r08_rl_fixture import cell_layout, layout_digest
 
 def add_structure(stage, fixture):
     import numpy as np
-    from pxr import Gf, UsdGeom, UsdPhysics, UsdShade, Vt
+    from pxr import Gf, Tf, UsdGeom, UsdPhysics, UsdShade, Vt
 
     layout = cell_layout()
     if layout_digest(layout) != fixture["layout_sha256"]:
@@ -14,9 +14,11 @@ def add_structure(stage, fixture):
     os.environ.setdefault("MUJOCO_GL", "disable")
     from omx_two_arm_world import World, mujoco
 
-    scene = World(layout=layout)
+    scene = World(layout=layout, fixture_only=True)
     with scene.meshes:
-        model, data = scene.model, scene.reset()
+        model = scene.model
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)
         bin_root = UsdGeom.Xform.Define(stage, "/World/Bin")
         UsdPhysics.RigidBodyAPI.Apply(bin_root.GetPrim()).CreateKinematicEnabledAttr(True)
         UsdGeom.Xform.Define(stage, "/World/CellStructures")
@@ -25,15 +27,15 @@ def add_structure(stage, fixture):
             if model.geom_bodyid[index] != 0:
                 continue
             name = model.geom(index).name
-            if name in {"floor", "table", "belt", "belt_stop", "ship_house", "cx_house"}:
+            if name in {"floor", "table", "belt", "belt_stop"}:
                 continue
-            ship_contact = name == "cx_bow" or name.startswith(("stern", "hold"))
+            ship_contact = name in {"cx_bow", "cx_house"} or name.startswith(("stern", "hold"))
             temp_contact = name.startswith(("deck_", "wa", "wb"))
             collides = ship_contact or temp_contact
             rgba = model.geom_rgba[index]
             if not collides and rgba[3] <= 0:
                 continue
-            path = f"/World/{'Bin' if ship_contact else 'CellStructures'}/{name}"
+            path = f"/World/{'Bin' if ship_contact else 'CellStructures'}/{Tf.MakeValidIdentifier(name)}"
             if model.geom_type[index] == mujoco.mjtGeom.mjGEOM_MESH:
                 mesh = model.geom_dataid[index]
                 vertex, count = model.mesh_vertadr[mesh], model.mesh_vertnum[mesh]

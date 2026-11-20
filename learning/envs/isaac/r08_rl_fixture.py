@@ -37,7 +37,7 @@ def layout_digest(layout):
                       for name, arm in layout.arms.items()},
                 plan=layout.plan_order(), sites=layout.sites)
     identity = sha256(json.dumps(_round_coordinates(data), sort_keys=True, separators=(",", ":")).encode())
-    for path in sorted(SHIP_ASSETS.iterdir()):
+    for path in sorted(SHIP_ASSETS.iterdir(), key=lambda item: item.name):
         if path.suffix in {".stl", ".json"}:
             identity.update(path.name.encode() + b"\0" + sha256(path.read_bytes()).digest())
     return identity.hexdigest()
@@ -86,7 +86,7 @@ def fixture(layers, nominal):
     value = dict(nominal, case=CASE, revision=CASE, coordinate_scope="ROSY_TWO_ARM_CELL_LAYOUT",
                  layout_sha256=layout_digest(layout), stack_plan=items, r08_scene=True,
                  arm_bases_m=bases, arm_base_yaws_rad=[arm.yaw for arm in arms],
-                 home_joints_rad=[arm.wait[:5].tolist() for arm in arms],
+                 home_joints_rad=[[arm.wait[0], -.4, .7, 1.27, 0.] for arm in arms],
                  tcp_offset_m=layout.sim_arms[ARMS[0]].tcp.tolist(), real_cameras=layout.fixture["real_cameras"],
                  ship_stern_m=list(ship_cell(layout, 0, 0)), workplate_center_m=layout.fixture["workplate_center_m"],
                  workplate_size_m=layout.fixture["workplate_size_m"],

@@ -28,6 +28,7 @@ CHOICES = dict(
     temp_direction_deg=180., # from each arm toward -x, away from the belt (the user's slot plan 2026-10-31)
     temp_source="scad-v12",  # two-color plate v12 CAD STLs ("navy"+"sky"); "scad-v11" keeps monochrome v11 STL; "procedural" shows collision walls
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
+    ship_house=True,
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=0.0,     # r08: hull centreline y centred symmetrically between the 194 mm base plates (modular berth locks port/starboard)   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
                              # edges). Its x reading (holds 25 mm toward the belt) would put the stern over the belt end: x stays
@@ -88,7 +89,7 @@ PRESETS = {"v24-20261114": dict(berth_kit="v24-docks", top_camera="2026-11-14", 
                                 ship_pose="photo-20261114", arm_bases="docks-photo", belt_pose="photo-20261114")}
 # preset "v24-20261114-cad194" (11-14 evening): the same frame and parts, base plates set from the planned 194 mm between the two OMX-AI base plates (user, later that night: the real cell differs, see docks-photo)
 # (inner edge to inner edge: the 130 mm hull with its ~32 mm side docks fits only so; as a centre distance the plates would overlap the ship).
-PRESETS["v24-20261114-cad194"] = dict(PRESETS["v24-20261114"], arm_bases="cad-194")
+PRESETS["v24-20261114-cad194"] = dict(PRESETS["v24-20261114"], arm_bases="cad-194", ship_house=False)
 # preset "v24-20261114-cad190" (DL-52, 11-14 night): the same, inner gap fixed at 190 mm (the low end of the docks' 190-200 range); cad-190 stays a named preset, not the omx_loop default (the physical cell is 194 mm until the v25 docks are printed).
 PRESETS["v24-20261114-cad190"] = dict(PRESETS["v24-20261114"], arm_bases="cad-190")
 ARM_BASES_PLATE_CENTRE = dict(arm_a=((.116, -.164), 90.), arm_b=((.107, .164), -90.))  # G-21: top-frame base plate centres vs arm_b FK (.104, .153)

@@ -92,7 +92,7 @@ def run(args):
     surface.CreateSurfaceVelocityEnabledAttr(True)
     surface.CreateSurfaceVelocityLocalSpaceAttr(False)
     surface.CreateSurfaceVelocityAttr(Gf.Vec3f(*FIXTURE.get('belt_velocity_m_s', [0., FIXTURE['belt_speed_m_s'], 0.])))
-    if args.mapped_cube_stack:
+    if args.mapped_cube_stack and not FIXTURE.get('r08_scene'):
         for i, sign in enumerate((-1, 1)):
             center = FIXTURE['belt_center_m'][:]
             center[1] += sign*(FIXTURE['belt_size_m'][1]/2+.002)

@@ -165,20 +165,26 @@ def judge_gazebo_contract(samples_or_report: dict | Path, *, shape: tuple[int, i
 
 def judge_isaac_stage(suite_or_report: dict | Path, *, scenario: str = "arm-s-cell-case") -> dict:
     """Judge or stage Isaac Sim's D-872 / D-947 contact & vision confirmation from a suite report, single report, 3-tier container stack report, or MuJoCo handoff."""
-    data = json.loads(Path(suite_or_report).read_text(encoding="utf-8")) if isinstance(suite_or_report, (str, Path)) else dict(suite_or_report)
+    from_file = isinstance(suite_or_report, (str, Path))
+    data = json.loads(Path(suite_or_report).read_text(encoding="utf-8")) if from_file else dict(suite_or_report)
     ok_results = _ISAAC_OK_RESULTS
-    if data.get("schema") == "rosy.omx-stacking-rl/1":
-        trained = data.get("training_verified") is True
-        passed = trained and data.get("task_success") is True
+    if "verified_ppo_report" in data or data.get("schema") == "rosy.omx-stacking-rl/1":
+        report = data.get("verified_ppo_report") or data
+        trained = report.get("training_verified") is True
+        passed = (not from_file and "verified_ppo_report" in data and trained and report.get("task_success") is True
+                  and report.get("evaluation_episodes") == 1 and report.get("evaluation_successes") == 1)
         return dict(status="passed" if passed else "failed", claim="PhysX PPO evaluation",
                     scenario="omx-map-container-stacking-rl", run_id=data.get("run_id"),
                     result=dict(training_verified=trained, task_success=passed,
-                                evaluation_successes=data.get("evaluation_successes"),
-                                case=(data.get("fixture") or {}).get("case")),
-                    artifacts=[], reason=None if passed else "Independent PhysX stack evaluation did not pass.")
+                                evaluation_successes=report.get("evaluation_successes"),
+                                case=(report.get("fixture") or {}).get("case")),
+                    artifacts=[], reason=None if passed else "A verified PhysX stack evaluation was not successful.")
     if "suite" in data and "container_stack" in data:
         s_judge = judge_isaac_stage(data["suite"], scenario="arm-s-cell-case")
-        c_judge = judge_isaac_stage(data["container_stack"], scenario="omx-map-container-stack")
+        container_data = data["container_stack"]
+        if from_file and isinstance(container_data, dict):
+            container_data = {key: value for key, value in container_data.items() if key != "verified_ppo_report"}
+        c_judge = judge_isaac_stage(container_data, scenario="omx-map-container-stack")
         passed = s_judge["status"] == "passed" and c_judge["status"] == "passed"
         reasons = [r for r in (s_judge.get("reason"), c_judge.get("reason")) if r]
         return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario="arm-s-cell-case+omx-map-container-stack",
@@ -214,6 +220,20 @@ def judge_isaac_stage(suite_or_report: dict | Path, *, scenario: str = "arm-s-ce
                 artifacts=[], reason=None if cases else "전달할 Isaac 케이스가 없습니다.")
 
 
+def read_ppo_snapshot(snapshot: Path, cfg: dict, sha: str) -> dict:
+    observation = json.loads((snapshot / "observation.json").read_text(encoding="utf-8"))
+    inputs = observation["input"]
+    report = json.loads((snapshot / "stacking-report.json").read_text(encoding="utf-8"))
+    fixture = report["fixture"]
+    if (observation.get("snapshot") != "FINAL" or observation.get("status") != "SUCCEEDED"
+            or inputs.get("source_sha") != sha or inputs.get("scenario_id") != "omx-map-container-stacking-rl"
+            or any(inputs["config"].get(key) != value for key, value in cfg.items())
+            or report.get("schema") != "rosy.omx-stacking-rl/1" or report.get("seed") != cfg["seed"]
+            or any(fixture.get(key) != cfg[key] for key in ("case", "layers", "layout_sha256"))):
+        raise ValueError("Isaac PPO snapshot differs from the requested MuJoCo handoff")
+    return dict(verified_ppo_report=report, run_id=observation["run_id"])
+
+
 def run_isaac_stage(run: Path, sha: str, python: str, mode: str, only: list[str] | None = None) -> dict | Path | None:
     """Execute Stage 2 Isaac Sim (cell_case_suite and/or 3-tier omx-map-container-stack) from Stage 1's handoff."""
     suite_report = stack_report = None
@@ -238,16 +258,27 @@ def run_isaac_stage(run: Path, sha: str, python: str, mode: str, only: list[str]
         out_dir.mkdir(parents=True, exist_ok=True)
         cfg_file = out_dir / "config.json"
         cfg_file.write_text(json.dumps(cfg), encoding="utf-8")
-        subprocess.run([python, str(ROOT / "tools/remote/remote_isaac.py"), "run", "--scenario",
-                        scenario, "--config", str(cfg_file),
-                        "--sha", sha, "--out", str(out_dir / "run")], check=False)
-        report_name = "stacking-report.json" if scenario == "omx-map-container-stacking-rl" else "mapped-stack-report.json"
-        found = next((out_dir / "run").rglob(report_name), None)
-        if found and found.is_file():
-            stack_report = json.loads(found.read_text(encoding="utf-8"))
+        remote_out = out_dir / "run"
+        command = [python, str(ROOT / "tools/remote/remote_isaac.py"), "run", "--scenario",
+                   scenario, "--config", str(cfg_file), "--sha", sha, "--out", str(remote_out)]
+        if scenario == "omx-map-container-stacking-rl":
+            done = subprocess.run(command, stdout=subprocess.PIPE, text=True, encoding="utf-8")
+            if done.returncode:
+                raise ValueError(done.stdout.strip() or f"Isaac runner exited with status {done.returncode}")
+            result = json.loads(done.stdout.strip().splitlines()[-1])
+            if result.get("snapshot_directory") and result.get("status") == "SUCCEEDED":
+                snapshot = Path(result["snapshot_directory"]).resolve()
+                if not snapshot.is_relative_to(remote_out.resolve()):
+                    raise ValueError("Isaac PPO snapshot is outside this invocation's directory")
+                stack_report = read_ppo_snapshot(snapshot, cfg, sha)
+        else:
+            subprocess.run(command, check=False)
+            found = next(remote_out.rglob("mapped-stack-report.json"), None)
+            if found and found.is_file():
+                stack_report = json.loads(found.read_text(encoding="utf-8"))
     if mode == "both" and suite_report is not None and stack_report is not None:
         return dict(suite=suite_report, container_stack=stack_report)
-    return stack_report if mode == "container-stack" else suite_report
+    return stack_report if stack_report is not None else suite_report
 
 
 def parent_on_same_seeds(python: str, sim: str, cell: str, model: Path, episodes: int, base: int, run: Path, environment: dict) -> dict | None:
