@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.432
+**Version:** v1.433
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.433 도킹 상태 진단 필드와 도크 metadata (additive)
+
+`GET /api/v1/docking/status` 에 선택 필드 `last_event`(마지막 재시도·재안착·실패와 사유, 없으면 `null`; 재시도는 오류가 아니다)와 `charge_unconfirmed`(bool, 기본 `false`; DOCKED 안착은 LiDAR 로 확인했으나 충전 증거가 없다. CHARGING 이 아니며 Fleet 은 따로 보인다)를 더한다. `POST /api/v1/docking/docks` 본문에 선택 `metadata`(object, 기본 `{}`)를 더하고 `metadata.reference_scan` 이 베이 LiDAR 재안착 기준이다. 이벤트 `docking.person_call`·`docking.uncharged_voltage_drop` 은 §8 표에 있다. 기존 필드·동작은 그대로다.
 
 ### v1.432 센서 표본 읽기: imu·odometry·wheels·motor·dock_observation
 
@@ -3040,6 +3044,8 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `motion.rotate_to` | info | 로봇 | `{delta_deg, yaw_odom, tol_deg, max_rate_dps, timeout_s, lease_owner, operator_name, by}` — D-603 회전 요청을 받았다 (v1.194) |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
+| `docking.person_call` | warning | 로봇 | `{dock_id, reason}` — DOCKED를 충전 증거 없이 선언했고 배터리가 `bay_person_call_percent`(30 %) 미만이거나 필터 전압이 내려감: 사람이 봐야 한다. 같은 시점에 `DockingStatus.charge_unconfirmed`(additive, bool)가 참이다. 충전 중(CHARGING)이 아님을 Fleet이 따로 표시하는 데 쓴다 |
+| `docking.uncharged_voltage_drop` | warning | 로봇 | `{dock_id, from_v, to_v}` — DOCKED를 충전 증거 없이(만충 배터리 + LiDAR 안착 확인, `status.last_event`에 사유) 선언한 뒤 필터 전압(`filtered_voltage`)이 도킹 때보다 0.10 V 넘게 5 s 이상 내려가 있음. 한 번만 낸다. 충전 증거가 나중에 오면 감시를 끈다 |
 | `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id, source}` — 확인된 충전 상태. `source: instrumented`(2소스, D-28) 또는 `voltage_only`(후진 도크 D-350 Phase 1 — 배터리 인터록에는 반영되지 않는다) |
 | `docking.full` | info | 로봇 | `{dock_id, source, voltage_v}` — 만춫 감지, 1회 방출. `source: instrumented` 또는 `voltage_only` (D-350) |
 | `docking.undock_started` | info | 로봇 | `{dock_id}` |
@@ -4861,6 +4867,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.433 | 2026-11-21 | Additive: `GET /docking/status` 의 `last_event`·`charge_unconfirmed`, `POST /docking/docks` 의 선택 `metadata`(`reference_scan`), 이벤트 `docking.person_call`·`docking.uncharged_voltage_drop` (본문 v1.433) |
 | v1.432 | 2026-11-20 | Additive: `GET /api/v1/sensors/{type}` 에 `odometry`·`wheels`·`dock_observation` 을 더하고 `imu`·`motor` 필드를 넓힌다. 이 다섯 type 은 표본이 없으면 404 대신 200 `evidence: missing`. ROS 콜백은 원본만 보관하고 변환은 GET 때 한다 (본문 v1.429) |
 | v1.431 | 2026-11-20 | Additive: site map place·edge 선택 필드 `pinned`(bool, 기본 false, false면 저장 본문에서 빠짐). 사람이 일부러 둔 장소·차로이며, 현장 자동 트랙 보정(`deploy/site/rosy-auto-track-calibration`)은 고정된 장소·차로를 옮기지 않고 그 장소에 닿는 차로 끝만 그 장소에 맞춘다. 관제 지도 편집의 장소·차로 검사 칸에 「고정」 확인란. |
 | v1.419 | 2026-11-19 | Additive: 관측 요청(`/api/fleet/pipeline/observer-requests`), 대기 기체 제자리 회전→앞 카메라 단수 판정→셀 작업 `tier_hint`, `auto_observe`. |

@@ -167,6 +167,29 @@ class DockingConfig:
     bay_turn_overshoot_rad: float = 0.35  # 회전 지나침 보정 허용(20 deg, 짐칸이 상류로 휘는 양); 넘으면 정지
     bay_corridor_band_m: float = 0.15   # 스테이징 거리 ± 이만큼이 통로선 위(하류 쪽 시작 거절 범위)
     bay_stage_heading_max_rad: float = 1.0472  # 60 deg: 스테이징 도착 코가 칸 축에서 이보다 틀면 실패
+    # ALIGNING ends by LiDAR rear gap against the stored seated reference (bay_seat_gap_tol_m) and, while a FRESH scan (bay_scan_fresh_s)
+    # shows the gap shrinking by bay_gap_moving_m over the last ~0.3 s (about 40 % of 0.05 m/s), the slip rule and the travel
+    # cap stand down: the body IS going back (y8xs 2026-11-20: stopped at x 0.078 twice while teleop passed it). No scan, a stale
+    # scan or no point in the strip leaves every rule as it was. The hard limit (cap + 0.10 m) and the progress check stay.
+    # Stop-first (y8xs 2026-11-20 round 16: seated skewed -17 deg, the retry's forward back-off pivoted the body 77 deg about its jammed rear in
+    # the rails; wheel odometry saw a straight drive): a seated robot the LiDAR finds skewed more than bay_seat_heading_max_rad is not driven
+    # out (fail, a person frees it), and a back-off whose LiDAR rear gap grows by less than bay_backoff_moving_ratio of the wheel travel
+    # (checked from bay_backoff_check_m on) stops and fails.
+    bay_seat_heading_max_rad: float = 0.105
+    bay_inrow_along_m: float = 0.15             # stop face to base_link: nearer than this the robot is in the rails (x < 0.1)
+    bay_inrow_retry_heading_rad: float = 0.1745  # a retry from ALIGNING there with a line heading beyond this stays (no back-off)
+    bay_backoff_check_m: float = 0.02
+    bay_backoff_moving_ratio: float = 0.5
+    bay_backoff_growth_max_ratio: float = 1.5   # ...and by no more than this x the wheel travel + slack: a turning body inflates the gap
+    bay_backoff_growth_slack_m: float = 0.02
+    bay_backoff_lower_slack_m: float = 0.015    # the scan lags up to 0.5 s (2 cm at 0.04 m/s): the lower bound gets slack too
+    bay_backoff_speed: float = 0.04             # slow back-off inside the bay row (m/s)
+    bay_uncharged_hold_s: float = 5.0           # ...and the FILTERED voltage stays that far down this long (raw readings jitter 0.17 V at idle)
+    bay_person_call_percent: float = 30.0       # DOCKED without charge evidence below this battery %: a person is called (docking.person_call)
+    bay_uncharged_drop_v: float = 0.10          # DOCKED without charge evidence: warn when the pack falls this far below its voltage at docking
+    bay_full_battery_percent: float = 98.0      # at or above this a LiDAR-confirmed seat counts as docked without charge evidence
+    bay_gap_moving_m: float = 0.006
+    bay_seat_gap_tol_m: float = 0.002
     bay_scan_fresh_s: float = 0.5       # 몸 스캔 판정이 이보다 오래되면 없는 것
     bay_scan_wait_s: float = 2.0        # 몸 스캔 없이 이만큼 지나면 실패
     # 짐칸 J-v3 뒤끝은 바퀴축 뒤 0.134–0.135 m(정격 CAD, 뒷면 y_d −14.45 · 축 y_d 120.5; 몸 74.5·42.1·r 82.6 이
@@ -181,5 +204,75 @@ class DockingConfig:
     bay_find_wait_s: float = 1.0                # 선이 안 보이면 이만큼 정지해 보고(5 Hz) 나서 후진 크립
     bay_find_speed: float = 0.03
     bay_find_creep_max_m: float = 0.12          # 선이 안 보이는 후진 상한 = 선 시야 여유(Nav2 오차 ~0.10 m, 실측)
+    # With the dock's stored seated rear gap known the find creep is bounded by the LiDAR position (x = rear gap - seated gap), not by 0.12 m
+    # of odometry: Nav2 can stop 0.10 m beyond staging (y8xs round 17: x 0.42, the line only shows inside x ~0.28). It still stops
+    # at bay_find_min_x_m from the seat (outside the rails) and at bay_find_lidar_creep_max_m of travel; the 0.30 turn rule is untouched.
+    bay_find_min_x_m: float = 0.20
+    # In-place turns closed on the LiDAR yaw (bay_turn_watch.py): odometry and the matched scans may differ this much (8 deg) before the turn stops.
+    bay_map_scan_tol_m: float = 0.15            # the map pose and the LiDAR scan pose of the bay may differ this much before a Nav2 start is refused
+    bay_turn_needs_scan: bool = True            # no body-scan sample ever handed over = no turn (fail-closed); False only for sims without the bridge
+    # ALIGNING inside the rails steers on the LiDAR scan pose (bay_lidar_steer.py), the camera heading being 11-19 deg wrong there
+    bay_lidar_steer_along_m: float = 9.0         # reference-scan dock: LiDAR steering from the START of ALIGNING (Nav2 can stop at 0.42, the camera heading is wrong there)
+    bay_lidar_ask_s: float = 0.2
+    bay_lidar_pose_grace_s: float = 4.0
+    bay_lidar_stall_s: float = 1.5               # in the rails the rear gap must change by bay_lidar_stall_m within this while reversing
+    bay_lidar_stall_m: float = 0.005
+    bay_lidar_jump_m: float = 0.03               # a LiDAR pose this far (lateral) from the predicted one is not evidence
+    bay_lidar_jump_rad: float = 0.0873
+    bay_lidar_x_gap_tol_m: float = 0.04          # scan x vs (rear band gap - stored seated gap)
+    bay_rail_max_angular: float = 0.15
+    # The staging turn's sense. 0 = the downstream rule (bay_downstream_sign: the tray swings downstream, clockwise at this site). +1 / -1 force
+    # ccw / cw for a robot that cannot turn one way (y8xs: cw never moves the body). The in-place sweep is checked clear every tick either way, and a
+    # robot that failed one sense (the watch flipped it) turns the other first at its next dock until the CORE process restarts.
+    bay_turn_first_dir: int = 0
+    bay_turn_flip_max_rad: float = 0.3491       # flip the sense only when the body barely moved (LiDAR yaw under 20 deg)
+    bay_entry_heading_cross_rad: float = 0.1745  # LiDAR vs camera crossbar heading at the entry window (outside the rails): beyond this = a false fit, stop
+    bay_entry_strong_inliers: float = 0.85       # a LiDAR fit this strong is believed over a camera crossbar heading that disagrees
+    bay_entry_strong_margin: float = 0.40
+    bay_entry_heading_hard_rad: float = 0.6981   # LiDAR vs camera heading beyond 40 deg stops even a strong fit
+    bay_lidar_first_jump_m: float = 0.05         # the first ALIGNING LiDAR pose vs the entry window's (lateral)
+    # Rail entrance (9.45 mm a side) vs LiDAR accuracy (10-15 mm): the reverse corrects the lateral on the LiDAR pose outside the rails and the guard judges
+    # the MEAN of the last poses just before the wheels reach the entrance, instead of one pose at the start. The limit stays bay_entrance_lateral_m.
+    bay_rail_judge_x_m: float = 0.12
+    bay_rail_judge_n: int = 3
+    # Lane keeping (user rule 2026-11-21: docking exists to KEEP THE PARKING LINES). Bay pitch 0.21 m -> lane half-width 0.105 m; the body half-width
+    # is 0.0566 m (CAD, RobotBody half_width_m), so the body CENTRE may travel +-0.048 m: 0.045 m. bay_line_x_m: the bay line in front (the pink corridor
+    # crossbar, seen at bay-frame x ~0.42 on y8xs): to be confirmed from the frames/CAD; a forward move must not reach it.
+    # Footprint check (panel B r25-b.md): the body CORNERS (nose 0.042, tray 0.135 behind base_link, half-width 0.0566) must stay within the lane edge.
+    bay_lane_edge_m: float = 0.105
+    bay_body_front_m: float = 0.042
+    bay_body_half_width_m: float = 0.0566
+    bay_reseat_tries: int = 4                    # lane reseats (retries from the reverse / the seat) before it stops where it stands
+    bay_reseat_out_m: float = 0.12               # each reseat pulls forward this far (plus 3 cm per further try), short of bay_line_x_m
+    bay_req_timeout_s: float = 2.5               # an unanswered LiDAR pose request is abandoned after this and asked again
+    bay_seat_tries: int = 5                      # the seat pose is asked again when a pose is dropped (up to this many asks)
+    bay_track_lost_s: float = 3.0                # inside the row the pose is TRACKED; no accepted pose this long = back to first acquisition (provisional)
+    bay_track_rail_lateral_m: float = 0.02       # tracked pose inside the rails: |lateral| above this is dropped (provisional)
+    bay_track_rail_x_m: float = 0.09             # the rails only bound x < ~0.078; a 2-5 cm start accepted by the first acquisition must not be dropped
+    bay_track_inlier_min: float = 0.70
+    bay_first_x_max_m: float = 0.20              # FIRST acquisition in the bay (case I) with a weak margin: provisional until the 9-cell matrix is measured
+    bay_first_lateral_m: float = 0.05
+    bay_first_heading_rad: float = 0.1047
+    bay_first_inlier_min: float = 0.75
+    bay_first_margin_prior: float = 0.10         # seated at this dock earlier: a weaker global margin is accepted
+    bay_first_margin_noprior: float = 0.12       # no prior: identity recorded "unconfirmed"
+    bay_first_margin_wrong: float = 0.05         # below this the best fit is another bay
+    bay_row_pose_fresh_s: float = 1.0            # a forward move in the row needs a LiDAR bay pose no older than this (reference-scan dock)
+    bay_lane_keep_m: float = 0.045
+    bay_line_x_m: float = 0.30                   # base_link: the nose (0.042) + 0.02 behind the crossbar edge at bay-frame x 0.4255 (+-0.03); confirm by tape
+    bay_entry_outside_rails_x_m: float = 0.25    # LiDAR x beyond which the camera crossbar heading is cross-checked at the entry window
+    bay_lidar_lateral_gain_mult: float = 1.5     # the LiDAR lateral is trusted: correct it fast enough to centre within the runway (the target heading stays capped)
+    bay_turn_follow_ratio: float = 0.06         # the follow verdict allows this share of the turn on top of the 8 deg floor (odometry reads ~4 % more)
+    bay_turn_stall_s: float = 1.5               # strict stall window: wheels beyond the floor while the LiDAR barely moves
+    bay_turn_close_min_rad: float = 0.0524      # a staging turn the LiDAR finds 3..15 deg short is turned on (twice at most)
+    bay_turn_close_max_rad: float = 0.2618
+    bay_turn_follow_rad: float = 0.1396
+    bay_turn_ask_s: float = 0.5                  # a scan-to-scan match every this long while turning
+    bay_turn_settle_s: float = 0.4               # after the turn stood still before the confirming match
+    bay_turn_watch_wait_s: float = 3.0           # no good match for this long (or two bad ones in a row) fails the turn
+    bay_turn_inlier_min: float = 0.60
+    bay_find_heading_verify_rad: float = 0.0873  # after the in-place align a fresh scan pose must show the heading within this (5 deg)
+    bay_find_heading_max_rad: float = 0.1745     # at the creep's start a LiDAR heading beyond this is aligned first (outside the row) or stops it
+    bay_find_lidar_creep_max_m: float = 0.30
     bay_find_extra_m: float = 0.06              # 처음 보인 뒤 더 가는 양 = 정착 크립 0.04 + 여유 0.02
     bay_find_rear_gap_m: float = 0.06           # 뒤 띠 여유가 이보다 작으면 멈춘다(멈춤면 도착 전 0.17 m 이상 남음)

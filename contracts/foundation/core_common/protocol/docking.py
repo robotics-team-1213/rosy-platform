@@ -30,3 +30,5 @@ class DockingStatus(BaseModel):
     phase: Optional[str] = None      # DOCKING 중의 내부 단계
     retries: int = 0
     error: Optional[str] = None
+    charge_unconfirmed: bool = False  # DOCKED seat LiDAR-confirmed but no charge evidence: not CHARGING; Fleet shows it apart (additive)
+    last_event: Optional[str] = None  # the last retry / reseat / failure with its reason (additive diagnostic: a retry is not an error)

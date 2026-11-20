@@ -177,7 +177,7 @@ def a_bay(*, charges=True, **type_kwargs):
     events, safety = [], SimpleNamespace(estop=False)
     battery = Battery(world, clock, charges)
     manager = DockingManager(
-        database=db, safety=safety, config=DockingConfig(), clock=clock,
+        database=db, safety=safety, config=DockingConfig(bay_turn_needs_scan=False), clock=clock,
         detector_factory=lambda dock, dock_type: detector,
         capability_provider=lambda: True, battery=battery, pose_provider=lambda: world.pose,
         events=SimpleNamespace(publish=lambda t, **kw: events.append((t, kw.get("data")))))
