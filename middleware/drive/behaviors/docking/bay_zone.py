@@ -56,12 +56,15 @@ def classify(pose, dock, staging_offset_m: float, observation, cfg) -> ZoneVerdi
         return ZoneVerdict("out", "at or beyond the staging distance")
     if abs(lateral) > cfg.bay_lane_half_m:
         return ZoneVerdict("manual", "inside the bay row but not in this bay's lane")
+    seen = None if observation is None else rear_errors(observation)
+    if seen is not None:
+        heading = seen[2]        # the camera sees the line: its heading decides, the SLAM yaw may be 17-30 deg off
     if abs(heading) > math.pi / 2:
         return ZoneVerdict("manual", "nose toward the bay: leaving needs a reverse without rear sight")
-    if observation is None:
+    if seen is None:
         return ZoneVerdict("manual", NO_LINE)
-    _, o_lat, o_head = rear_errors(observation)
-    if abs(o_lat - lateral) > cfg.bay_zone_agree_m or abs(_wrap(o_head - heading)) > cfg.bay_zone_agree_rad:
+    _, o_lat, o_head = seen
+    if abs(o_lat - lateral) > cfg.bay_zone_agree_m:
         return ZoneVerdict("manual", "map pose and guide line disagree")
     exit_m = staging_offset_m - along + cfg.bay_exit_extra_m
     limit = cfg.bay_exit_heading_max_rad

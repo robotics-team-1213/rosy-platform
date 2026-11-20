@@ -20,6 +20,9 @@ Docking state machine (DNC-002–003). Map pose is only for staging; final appro
 | `parking_phases.py` | `ParkingPhases`: the parking-only pose phases (turns, creep acquire, approach, align, settle/reseat, distance backoff), called only under the manager's lock; no state or lock of its own |
 | `rear_phases.py` | `RearPhases`: the rear USB dock (`approach="rear"`, D-972): stage facing away, LiDAR V align outside the rails, straight reverse inside them (angular 0, `REVERSING`), stall = contact, voltage-rise charge check, forward backoff/undock. Under the manager's lock; holds only its own progress/voltage state |
 | `bay_phases.py` | `BayPhases`: the pink-line charge bay (`approach="line"`, D-1013): stage, tray-swept turn guard, settle creep, gated reverse, voltage settle |
+| `bay_guards.py` | Bay reverse-parking guards (panel 2026-11-19): reverse control law with a bearing cap, entry window, off-axis contact, blind-lateral budget, LiDAR rear-gap check; mixin of `BayPhases` |
+| `bay_align.py` | `BayAlignMixin`: camera-heading align in place when the map and the line disagree, and the reverse find creep when the line is out of range at staging (real y8xs 2026-11-19); mixin of `BayPhases` |
+| `bay_zone_phases.py` | `BayZoneMixin`: the in-row start ticks (check, straight exit) split from `bay_phases.py` for the 600-line limit |
 | `bay_zone.py` | Docking switched on inside the bay row: leave forward on the line (no Nav2, no in-place turn) or stay still and call a person (D-1013 2026-11-18) |
 | `lidar_v.py` | `detect_dock_v`: the rear dock's V marker in base_link scan points → stop-face centre and inward axis, or None for any other shape (D-972). Fed from CORE's scan in `core.bridge.observation.rear_dock_scan` while docking acquires/aligns; no scan subscription here |
 | `database.py` | `DockDatabase`, `DockInstance`, `DockType`, `DockError` |
