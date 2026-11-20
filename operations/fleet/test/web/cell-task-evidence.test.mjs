@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  abortText,
+  presenceUsedText,
   BED_CONFIRM_TTL_S,
   bedConfirmPath,
   bedConfirmState,
@@ -65,6 +67,19 @@ test("presence mark has the bed confirmation's states", () => {
   assert.match(rows[0][5], /입회 표시됨/);
 });
 
+test("REVIEW_REQUIRED comes as an ABORTED receipt reason and the used presence shows on the row", () => {
+  const review = queued({status: "ABORTED", receipt: {reason: "REVIEW_REQUIRED"}, presence: null});
+  assert.match(abortText(review), /^검토 필요 · 검토된 운전 범위가 없어 팔이 움직이지 않고 멈췄습니다/);
+  assert.equal(abortText(queued({status: "ABORTED", receipt: {reason: "MEASURED_PLACEMENT_MISSING"}})), "");
+  assert.equal(abortText(queued({status: "QUEUED", receipt: {reason: "REVIEW_REQUIRED"}})), "");
+  const rows = cellTaskRows({tasks: [review, queued({task_id: "t9", status: "RUNNING", presence: {operator: "kim", at: 0}})]});
+  assert.match(rows[1][5], /검토 필요/, "rows are newest first");
+  assert.match(rows[0][5], /^시운전 입회: kim · /);
+  assert.equal(presenceUsedText(review), "");
+  const [card] = visualCardSpecs({tasks: [review]});
+  assert.match(card.folded_state, /검토 필요/);
+});
+
 test("refusal codes are said as the missing evidence", () => {
   assert.equal(refusalText(null), "");
   assert.match(refusalText({code: "AMR_BRAKE_BED_VELOCITY_UNMEASURED", op: "claim"}), /^시작 거부 · 핑키 정지·정차 위치·적재함 확인/);
@@ -73,7 +88,7 @@ test("refusal codes are said as the missing evidence", () => {
   assert.match(refusalText({code: "OMX_OWNER_EVIDENCE_UNAVAILABLE", op: "complete"}), /^완료 거부 · 팔 셀이 보낸 완료 증거가 없습니다/);
   assert.match(refusalText({code: "UNVERIFIED_CELL_COMPLETION", op: "complete"}), /확인되지 않은/);
   assert.match(refusalText({code: "OWNER_PRINCIPAL_NOT_REGISTERED", op: "complete"}), /주인으로 등록되지 않았습니다/);
-  assert.match(refusalText({code: "REVIEW_REQUIRED", op: "claim"}), /^시작 거부 · 검토 필요 · .*입회 표시가 필요합니다/);
+  assert.match(refusalText({code: "CELL_AB_EVIDENCE_NOT_ENABLED", op: "claim"}), /셀 A\/B 완료 확인/);
   assert.match(refusalText({code: "SOMETHING_NEW", op: "claim"}), /사유 확인 필요 \(SOMETHING_NEW\)/);
   const rows = cellTaskRows({tasks: [queued({last_refusal: {code: "OMX_OWNER_EVIDENCE_UNAVAILABLE", op: "complete"}, status: "RUNNING"})]});
   assert.match(rows[0][5], /완료 거부/);

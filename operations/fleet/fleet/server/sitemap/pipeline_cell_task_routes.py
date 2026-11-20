@@ -210,9 +210,9 @@ def install_cell_tasks_routes(app, ctx) -> None:
             tasks = [t for t in tasks if t["cell_id"] == cell_id]
         if status is not None:
             tasks = [t for t in tasks if t["status"] == status]
-        # D-1057 named-operator confirmations, if installed (presence store name assumed like the bed store: T18).
+        # D-1057 named-operator confirmations not yet used up by a claim, if installed.
         stores = {field: getattr(app.state, attr, None) or {} for field, attr in (
-            ("bed_confirmation", "cell_bed_confirmations"), ("presence_confirmation", "cell_presence_confirmations"))}
+            ("bed_confirmation", "cell_bed_confirmations"), ("presence_confirmation", "cell_presence"))}
         refusals = getattr(app.state, "cell_task_refusals", None) or {}  # last claim/complete refusal (camera routes)
         tasks = [{**t, **{field: {"principal_id": rec.get("principal_id"), "invalid": bool(rec.get("invalid")),
                                   "age_s": round(time.time() - rec["confirmed_at"], 1)}

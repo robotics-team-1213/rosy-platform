@@ -14,7 +14,7 @@ export const CABLE_GUARD_PATH = '/api/fleet/pipeline/cable-guard';
 export const VISION_CHECK_PATH = '/api/fleet/pipeline/vision-auto-check';
 export const ARM_HOLDS_CLEAR_PATH = '/api/fleet/pipeline/arm-holds/clear';
 export const bedConfirmPath = taskId => `${CELL_TASKS_PATH}/${encodeURIComponent(taskId)}/bed-confirm`;
-// D-1057 commissioning presence (first run of a task kind); assumed the same contract as bed-confirm until T18 is read.
+// D-1057 commissioning presence: a named operator is at the power switch; the next claim uses it up (T18).
 export const presenceConfirmPath = taskId => `${CELL_TASKS_PATH}/${encodeURIComponent(taskId)}/presence-confirm`;
 // D-1057: a named operator's bed confirmation lasts pipeline_evidence.BED_CONFIRM_TTL_S on the server.
 export const BED_CONFIRM_TTL_S = 120;
@@ -29,8 +29,23 @@ const REFUSAL_TEXT = {
   HUMAN_HOLD_ACTIVE: '사람 감지로 멈춘 상태입니다',
   CELL_BUSY_OR_HELD: '셀이 다른 작업 중이거나 보류 중입니다',
   PREVIOUS_TIER_NOT_VERIFIED: '아래층 적재가 아직 확인되지 않았습니다',
-  REVIEW_REQUIRED: '검토 필요 · 이 작업 종류의 첫 실행이라 운영자 입회 표시가 필요합니다',
+  CELL_AB_EVIDENCE_NOT_ENABLED: '셀 A/B 완료 확인(깊이 측정)이 아직 켜지지 않았습니다',
 };
+
+// Why a task ended ABORTED, when the cell worker's receipt says so (D-1057 T18: no reviewed envelope, the arm did not move).
+export function abortText(task) {
+  return task?.status === 'ABORTED' && task.receipt?.reason === 'REVIEW_REQUIRED'
+    ? '검토 필요 · 검토된 운전 범위가 없어 팔이 움직이지 않고 멈췄습니다. 입회 표시를 하고 다시 실행하거나 운전 범위 검토를 등록하세요'
+    : '';
+}
+
+// The presence the claim used up (row presence {operator, at}; null: the run stayed inside the reviewed envelope).
+export function presenceUsedText(task) {
+  const p = task?.presence;
+  if (!p?.operator) return '';
+  const at = Number.isFinite(p.at) ? ` · ${new Date(p.at * 1000).toLocaleTimeString('ko-KR', {hour12: false})}` : '';
+  return `시운전 입회: ${p.operator}${at}`;
+}
 // Field names of the server's AMR evidence (pipeline_evidence.amr_evidence), when a refusal lists the missing ones.
 const AMR_EVIDENCE_TEXT = {wheel_brake_locked: '정지', v_cmd_mps: '정지', pose: '정차 위치', bed_ready: '적재함 확인', observed_at: '측정 시각'};
 
@@ -52,7 +67,7 @@ function confirmState(rec, name, voidedWhy, nowMs) {
 }
 export const bedConfirmState = (task, nowMs = Date.now()) =>
   confirmState(task?.bed_confirmation, '적재함 확인', ' (핑키 이동 또는 지도 변경)', nowMs);
-// shortcut: same 120 s validity as bed-confirm assumed (D-1057 presence-confirm); recheck when its contract is final.
+// D-1057 PRESENCE_TTL_S is also 120 s; a presence is never voided, only used up by a claim or expired.
 export const presenceConfirmState = (task, nowMs = Date.now()) =>
   confirmState(task?.presence_confirmation, '입회 표시', '', nowMs);
 
@@ -195,8 +210,8 @@ export function cellTaskRows(body) {
       : '—';
     const disp = t.displaced_to ? ` (복구: ${t.displaced_to})` : '';
     const queued = t.status === 'QUEUED';
-    const evidence = [queued ? bedConfirmState(t).text : '', queued ? presenceConfirmState(t).text : '', refusalText(t.last_refusal)]
-      .filter(Boolean).join(' · ');
+    const evidence = [queued ? bedConfirmState(t).text : '', queued ? presenceConfirmState(t).text : '',
+      presenceUsedText(t), refusalText(t.last_refusal), abortText(t)].filter(Boolean).join(' · ');
     return [
       t.task_id,
       `${t.cell_id} / ${t.arm_id}`,
@@ -272,8 +287,8 @@ export function visualCardSpecs(body = {}) {
   const s5Gate = cells.cell_ab?.gate || {};
   const s3Meta = formatTaskMeta(lastForCell('cell_s'), 'cell_s');
   const s5Meta = formatTaskMeta(lastForCell('cell_ab'), 'cell_ab');
-  s3Meta.folded_state = [s3Meta.folded_state, refusalFor('cell_s')].filter(Boolean).join(' · ');
-  s5Meta.folded_state = [s5Meta.folded_state, refusalFor('cell_ab')].filter(Boolean).join(' · ');
+  s3Meta.folded_state = [s3Meta.folded_state, refusalFor('cell_s'), abortText(lastForCell('cell_s'))].filter(Boolean).join(' · ');
+  s5Meta.folded_state = [s5Meta.folded_state, refusalFor('cell_ab'), abortText(lastForCell('cell_ab'))].filter(Boolean).join(' · ');
   const lastPinky = pinkyTasks.length ? pinkyTasks[pinkyTasks.length - 1] : null;
   const pinkyId = lastPinky?.robot_id || 'rosy_46';
   const pinkyDec = decisions[pinkyId] || lastPinky?.decision || null;
