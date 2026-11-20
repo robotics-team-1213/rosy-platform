@@ -356,3 +356,44 @@ def test_the_shared_function_uses_a_named_zone_and_the_constants_elsewhere(real_
     assert default["verified"] is False and named["verified"] is True
     assert named["place_slot"]["top_zone"]["roi"] == [300, 160, 360, 270]
     assert cell_area_zones.TOP_ROI_BY_COL_ROW[(2, 1)] == (370, 165, 420, 270)  # the shared table itself is untouched
+
+
+def test_the_top_and_side_reads_share_one_limit_and_each_socket_gets_only_what_is_left(monkeypatch):
+    monkeypatch.setattr(czv, "FRAME_WAIT_S", 1.0)
+
+    class Slowish(Cell):
+        def frame_receipt(self, camera, **kw):
+            time.sleep(0.3)  # each read takes 0.3 s: the second one starts with about 0.7 s left, not a fresh second
+            return super().frame_receipt(camera, **kw)
+
+    cell = Slowish({"top": "u", "side": "u"})
+    czv.measure(cell, before(), CONFIG, "belt-l0", "belt", None)
+    top_timeout, side_timeout = [c[4] for c in cell.calls[:2]]
+    assert top_timeout <= 1.0 and side_timeout < top_timeout and side_timeout <= 0.75
+
+
+def test_a_read_that_runs_out_of_the_shared_limit_is_refused(monkeypatch):
+    monkeypatch.setattr(czv, "FRAME_WAIT_S", 0.25)
+
+    class Slow(Cell):
+        def frame_receipt(self, camera, **kw):
+            time.sleep(0.2)
+            return super().frame_receipt(camera, **kw)
+
+    out = czv.measure(Slow({"top": "u", "side": "u"}), before(), CONFIG, "belt-l0", "belt", None)
+    assert out["verified"] is False and ("exceeded" in out["basis"] or "took longer" in out["basis"])
+
+
+def test_a_carry_that_is_not_a_fleet_task_takes_no_before_side_frame(monkeypatch):
+    import cell_auto_evidence as evidence
+
+    cell = Cell({"top": "u", "side": "u"})
+    monkeypatch.setattr(evidence, "save_frame_receipt", lambda path, receipt: {})
+    monkeypatch.setattr(evidence, "observe", lambda *a, **k: (None, None, [], None))  # source gone: the function returns early
+    for fleet, side_reads in ((False, 0), (True, 1)):
+        cell.calls.clear()
+        before_frame, _, error = evidence.pre_motion_frame(cell, {"_fleet_task": fleet, "verify_tol_mm": 10}, {}, [], "pinky", (0, 0, 1, 1),
+                                                           (0, 0), "o", "pallet-l0", None, (0, 0), {}, None, Path("x.jpg"))
+        assert error == "source moved before transfer"
+        assert [c[0] for c in cell.calls].count("side") == side_reads
+        assert ("before_side" in before_frame) is fleet

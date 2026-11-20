@@ -1,5 +1,5 @@
 {
- "note": "zone_rois proposed from real frames of the cell (2026-11-20, read-only capture): top lanes c1-c3 x rows r1 (empty) and r2 (three containers: black, red, black); side columns and tier bands; floor = pallet header strip and free bottom cell; floor_depth_mm = median depth of each floor patch in the two frames (recorded at calibration); floor_depth_mm = median depth of each floor patch in the two frames (recorded at calibration)",
+ "note": "zone_rois proposed from real frames of the cell (2026-11-20, read-only capture): top lanes c1-c3 x rows r1 (empty) and r2 (three containers: black, red, black); side columns and tier bands; floor = pallet header strip and free bottom cell; floor_depth_mm = median depth of each floor patch in the two frames (recorded at calibration); floor_depth_mm = median depth of each floor patch in the two frames (recorded at calibration). The floor depth of a patch differs by up to 9 mm between two captures a few seconds apart, so the +-4 mm check needs the depth recorded for the pose in use; the by-frame table stands in for a calibration taken at each pose",
  "zone_rois": {
   "top": {
    "c1r1": [
@@ -110,8 +110,18 @@
    ]
   ],
   "floor_depth_mm": [
-   630.0,
-   566.0
+   634.0,
+   565.0
+  ]
+ },
+ "floor_depth_mm_by_frame": {
+  "0": [
+   634.0,
+   565.0
+  ],
+  "2": [
+   625.0,
+   568.0
   ]
  }
 }

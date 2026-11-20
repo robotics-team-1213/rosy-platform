@@ -52,15 +52,20 @@ def _side_camera(source, config: dict):
             cameras.pop("side", None)
 
 
-def _frame(source, camera: str, previous: dict | None = None, after: float | None = None):
-    """(receipt, None) of a frame captured at or after `after` (waiting up to FRAME_WAIT_S for one), else (None, reason).
-    The wait is a hard limit: each HTTP read gets only the time that is left."""
-    deadline, reason = time.time() + FRAME_WAIT_S, "no frame"
+def _frame(source, camera: str, previous: dict | None = None, after: float | None = None, deadline: float | None = None):
+    """(receipt, None) of a frame captured at or after `after`, else (None, reason).
+
+    `deadline` (wall time; default now + FRAME_WAIT_S) is one hard limit for all the reads that share it: each socket gets only
+    the time that is left, and a read that returns after it is refused."""
+    deadline = time.time() + FRAME_WAIT_S if deadline is None else deadline
+    reason = "no frame"
     while True:
         try:
-            receipt = source.frame_receipt(camera, previous=previous, max_age_s=MAX_FRAME_AGE_S,
-                                           timeout_s=max(0.2, deadline - time.time()))
-            if time.time() > deadline + 0.2:  # the read itself returned past the limit (0.2 s is the shortest socket timeout)
+            left = deadline - time.time()
+            if left <= 0.02:
+                return None, f"{camera} frame read exceeded the {FRAME_WAIT_S} s limit" + ("" if reason == "no frame" else f" ({reason})")
+            receipt = source.frame_receipt(camera, previous=previous, max_age_s=MAX_FRAME_AGE_S, timeout_s=left)
+            if time.time() > deadline:
                 return None, f"{camera} frame read took longer than {FRAME_WAIT_S} s"
             if after is None or float(receipt["source_stamp"]) >= after:
                 return receipt, None
@@ -69,7 +74,7 @@ def _frame(source, camera: str, previous: dict | None = None, after: float | Non
             reason = f"{camera} frame unavailable: {exc}"
         if time.time() >= deadline:
             return None, reason
-        time.sleep(0.05)
+        time.sleep(min(0.05, max(0.0, deadline - time.time())))
 
 
 def _stamp(receipt: dict) -> dict:
@@ -109,8 +114,8 @@ def _depth_after(config: dict, after: float):
     if got is None:
         return None, None, "depth capture unavailable"
     depth, receipt = got
-    if float(receipt.get("exposure_wall_estimate_s", 0.0)) < after:
-        return None, None, "depth frame was exposed before the placement finished"
+    if float(receipt.get("first_exposure_wall_estimate_s", receipt.get("exposure_wall_estimate_s", 0.0))) < after:
+        return None, None, "depth frame was exposed before the placement finished"  # the first kept frame of a burst, too
     return depth, receipt, None
 
 
@@ -199,15 +204,16 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     depth = depth_receipt = depth_why = None
     if rois is not None and rois.get("floor") and dest_site.rsplit("-l", 1)[0] == "pallet":
         depth, depth_receipt, depth_why = _depth_after(config, placed_at)
-    top, why = _frame(source, "top", before_frame, placed_at)
+    rgb_deadline = time.time() + FRAME_WAIT_S  # one limit for the whole RGB read, top and side together
+    top, why = _frame(source, "top", before_frame, placed_at, rgb_deadline)
     with _side_camera(source, config) as has_side:
-        side, side_why = _frame(source, "side", None, placed_at) if has_side else (None, None)
+        side, side_why = _frame(source, "side", None, placed_at, rgb_deadline) if has_side else (None, None)
     target, bad_target = _target(config, dest_site) if has_side else _top_target(config, dest_site, roi)
     out["target"] = target
     judged_at = out["measured_at"] = time.time()
     if depth_receipt is not None:
         out["depth"] = {k: depth_receipt.get(k) for k in ("source_seq", "exposure_wall_estimate_s", "valid_depth_ratio", "raw_sha256")}
-        if judged_at - float(depth_receipt["exposure_wall_estimate_s"]) > MAX_FRAME_AGE_S:
+        if judged_at - float(depth_receipt.get("first_exposure_wall_estimate_s", depth_receipt["exposure_wall_estimate_s"])) > MAX_FRAME_AGE_S:
             depth_why = "depth frame older than the common judging time allows"
     if top is not None:
         out["top"] = {"frame": _stamp(top)}

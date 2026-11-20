@@ -30,9 +30,13 @@ MIN_VALID_RATIO = 0.80   # valid depth pixels in the slot and in the floor patch
 PLANE_RMS_MAX_MM = 6.0   # floor patch flatness after the plane fit; observed 3.3-3.9 mm
 ALIGN_EDGE_MAX_PX = 8.0  # RGB-depth edge error allowed for placing ROIs; observed 5.6-5.9 px, margin below covers it
 OCCUPIED_FRACTION = 0.5  # share of slot pixels higher than half a tier above the floor
-FLOOR_DEPTH_TOL_MM = 15.0  # a floor patch's depth versus the depth recorded for it at calibration (tilt and mounting drift)
+FLOOR_DEPTH_TOL_MM = 4.0   # a floor patch's depth versus the depth recorded for it at calibration; single-frame noise is 0.8-1.5 mm,
+#                            median-of-5 0.3-0.5 mm, so 4 mm is a wide margin for noise and a narrow one for a lifted floor
+LOCAL_EDGE_MAX_PX = 8.0    # RGB-depth edge error measured inside the slot ROI (same limit as the whole-frame alignment)
+ELONGATION_MIN = 1.5       # raised blob major/minor axis ratio for an upright container (30 x 90 mm)
+AXIS_MAX_DEG = 25.0        # major axis angle from the picture vertical
+CHANGE_LEVEL_STD = 0.5     # brightness-normalised top difference (global mean/contrast removed) that counts as changed
 PATCH_OFFSET_MAX_MM = 4.0  # each floor patch against the common plane
-CHANGE_LEVEL = 60          # summed RGB difference that counts as a changed pixel
 CHANGE_MIN_FRACTION = 0.25 # share of the slot that must have changed between the before and after top frames
 
 
@@ -52,6 +56,47 @@ def _patch(depth: np.ndarray, box) -> tuple[np.ndarray, np.ndarray, np.ndarray, 
     yy, xx = np.mgrid[b:d, a:c]
     ok = sub > 0
     return xx[ok], yy[ok], sub[ok], float(ok.mean())
+
+
+def local_edge_error(colour: np.ndarray | None, depth: np.ndarray, to_depth: np.ndarray, roi, pad: int = 16) -> float | None:
+    """Mean distance (depth pixels) from the picture edges inside the slot ROI to the nearest depth edge, through `to_depth`.
+
+    A local check of the alignment where it matters; None when the ROI has too few edges to measure (empty slot).
+    """
+    import cv2
+
+    if colour is None:
+        return None
+    x0, y0, x1, y1 = (int(v) for v in roi)
+    x0, y0, x1, y1 = max(0, x0 - pad), max(0, y0 - pad), min(colour.shape[1], x1 + pad), min(colour.shape[0], y1 + pad)
+    gray = cv2.cvtColor(colour[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
+    ys, xs = np.where(cv2.Canny(gray, 50, 150) > 0)
+    smooth = cv2.GaussianBlur(np.where(depth > 0, depth, np.nan).astype(np.float32), (5, 5), 0)
+    smooth = np.nan_to_num(smooth, nan=0.0)
+    grad = np.hypot(cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3), cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)) / 8.0
+    edges = (grad > 6.0) & (smooth > 0)
+    if len(xs) < 30 or edges.sum() < 30:
+        return None
+    dist = cv2.distanceTransform((~edges).astype(np.uint8), cv2.DIST_L2, 3)
+    pts = to_depth @ np.vstack([xs + x0, ys + y0, np.ones(len(xs))])
+    u = np.clip(np.round(pts[0]).astype(int), 0, depth.shape[1] - 1)
+    v = np.clip(np.round(pts[1]).astype(int), 0, depth.shape[0] - 1)
+    return float(np.median(dist[v, u]))
+
+
+def _orientation(sx: np.ndarray, sy: np.ndarray, raised: np.ndarray) -> dict[str, Any]:
+    """Principal axis of the raised blob (depth pixels at or above half a tier): upright means long and near the vertical."""
+    out = {"ok": False, "elongation": None, "angle_from_vertical_deg": None}
+    if int(raised.sum()) < 20:
+        return out
+    cov = np.cov(np.vstack([sx[raised], sy[raised]]))
+    values, vectors = np.linalg.eigh(cov)
+    major = vectors[:, 1]
+    elongation = float(np.sqrt(max(values[1], 1e-9) / max(values[0], 1e-9)))
+    angle = float(np.degrees(np.arctan2(abs(major[0]), abs(major[1]))))
+    out.update(elongation=round(elongation, 2), angle_from_vertical_deg=round(angle, 1),
+               ok=bool(elongation >= ELONGATION_MIN and angle <= AXIS_MAX_DEG))
+    return out
 
 
 def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_roi, floor_rois, tier: int, *,
@@ -110,15 +155,23 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
         elif abs(median - float(floor_depth_mm[index])) > floor_tol_mm:
             out["reasons"].append(f"floor patch {index} depth {median:.0f} mm is not the recorded floor {float(floor_depth_mm[index]):.0f} mm")
         else:
-            patches.append((x, y, z, median))
+            patches.append((x, y, z, median, index))
     if out["reasons"]:
         return out
     x, y, z = (np.concatenate([p[i] for p in patches]) for i in range(3))
+    # the fitted common plane must also reproduce the recorded (calibration) floor at every patch, not only the patch medians
+    design0 = np.c_[x, y, np.ones(len(x))]
+    coef0 = np.linalg.lstsq(design0, z, rcond=None)[0]
+    for px, py, _pz, _median, index in patches:
+        at_patch = float(coef0[0] * np.mean(px) + coef0[1] * np.mean(py) + coef0[2])
+        if abs(at_patch - float(floor_depth_mm[index])) > floor_tol_mm:
+            out["reasons"].append(f"the common floor plane differs from the calibration plane by more than {floor_tol_mm} mm")
+            return out
     design = np.c_[x, y, np.ones(len(x))]
     coef = np.linalg.lstsq(design, z, rcond=None)[0]
     rms = float(np.sqrt(np.mean((design @ coef - z) ** 2)))
     worst = 0.0
-    for px, py, pz, _ in patches:  # each patch must sit on the common plane, not offset from the others
+    for px, py, pz, _, _ in patches:  # each patch must sit on the common plane, not offset from the others
         worst = max(worst, abs(float(np.median(np.c_[px, py, np.ones(len(px))] @ coef - pz))))
     out.update(plane_rms_mm=round(rms, 2), patch_offset_mm=round(worst, 2))
     if rms > PLANE_RMS_MAX_MM or worst > PATCH_OFFSET_MAX_MM:
@@ -133,37 +186,50 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
     if slot_valid < MIN_VALID_RATIO:
         out["reasons"].append("slot valid depth ratio below 0.80")
         return out
+    local = local_edge_error(colour, depth, to_depth, slot_roi)
+    out["local_edge_px"] = None if local is None else round(local, 2)
+    if local is not None and local > LOCAL_EDGE_MAX_PX:
+        out["reasons"].append(f"RGB-depth edge error {local:.1f} px inside the slot ROI exceeds {LOCAL_EDGE_MAX_PX} px")
+        return out
     rel = (coef[0] * sx + coef[1] * sy + coef[2]) - sz  # > 0: nearer to the camera than the floor
     median = float(np.median(rel))
     fraction = float((rel >= 0.5 * expected).mean())
+    out["orientation"] = _orientation(sx, sy, rel >= 0.5 * expected)
     out.update(ok=True, median_rel_mm=round(median, 2), raised_fraction=round(fraction, 3),
                occupied=bool(fraction >= OCCUPIED_FRACTION), r_k_mm=round(median - expected, 2))
     out["tier_ok"] = bool(out["occupied"] and abs(median - expected) <= TOL_MM)  # tier identification only
     return out
 
 
-def change_evidence(before_top: np.ndarray | None, after_top: np.ndarray | None, slot_roi) -> dict[str, Any]:
-    """Separate evidence that something was placed in the slot: the top picture changed there, and what changed is upright.
+def change_evidence(before_top: np.ndarray | None, after_top: np.ndarray | None, slot_roi, depth_ref: dict[str, Any] | None = None
+                    ) -> dict[str, Any]:
+    """Evidence that an OBJECT appeared in the slot now, and how it lies.
 
-    Depth says which tier is filled; it does not say that the filling happened now or how the container lies. The same frame
-    given as before and after changes nothing and is refused.
+    The top picture must change in the slot after global brightness and contrast are removed (a light change alone changes
+    nothing), and the depth must show the slot raised by at least half a tier (`depth_ref`: raised pixel fraction). The
+    direction is the principal axis of the raised depth blob. Depth alone does not say that the filling happened now, and a
+    brightness change alone is not an object.
     """
-    out = {"changed": False, "changed_fraction": 0.0, "orientation_ok": False, "orientation_class": None, "basis": "top_rgb_before_after"}
+    out = {"changed": False, "changed_fraction": 0.0, "orientation_ok": False, "orientation_class": None,
+           "basis": "top_rgb_normalised_before_after+depth_raised_blob", "depth_raised": False}
+    ref = depth_ref or {}
+    out["depth_raised"] = bool(ref.get("ok") and ref.get("raised_fraction", 0.0) >= OCCUPIED_FRACTION)
+    orient = ref.get("orientation") or {}
+    out["orientation_ok"] = bool(out["depth_raised"] and orient.get("ok"))
+    out["orientation_class"] = None if orient.get("elongation") is None else ("vertical_ns" if orient.get("ok") else "not_upright")
     if before_top is None or after_top is None or slot_roi is None or before_top.shape != after_top.shape:
         return out
+
+    def normal(image: np.ndarray) -> np.ndarray:
+        gray = image.astype(np.float32).mean(axis=2)
+        return (gray - gray.mean()) / max(float(gray.std()), 1.0)
+
     x0, y0, x1, y1 = (int(v) for v in slot_roi)
-    diff = np.abs(before_top[y0:y1, x0:x1].astype(int) - after_top[y0:y1, x0:x1].astype(int)).sum(axis=2) > CHANGE_LEVEL
+    diff = np.abs(normal(before_top)[y0:y1, x0:x1] - normal(after_top)[y0:y1, x0:x1]) > CHANGE_LEVEL_STD
     if diff.size == 0:
         return out
-    fraction = float(diff.mean())
-    ys, xs = np.where(diff)
-    out["changed_fraction"] = round(fraction, 3)
-    out["changed"] = bool(fraction >= CHANGE_MIN_FRACTION)
-    if out["changed"] and len(xs) > 20:
-        span_u, span_v = np.percentile(xs, 95) - np.percentile(xs, 5), np.percentile(ys, 95) - np.percentile(ys, 5)
-        aspect = float(span_u) / max(float(span_v), 1.0)
-        out["orientation_class"] = "vertical_ns" if aspect <= 1.20 else "horizontal_ew"  # as cell_area_zones for yaw -90
-        out["orientation_ok"] = aspect <= 1.20
+    out["changed_fraction"] = round(float(diff.mean()), 3)
+    out["changed"] = bool(diff.mean() >= CHANGE_MIN_FRACTION and out["depth_raised"])  # both are required
     return out
 
 
@@ -232,35 +298,55 @@ def capture_depth_frames(device: str, n: int, raw_path: Path, *, timeout_s: floa
                          fps: int = DEPTH_FPS, run=subprocess.run) -> tuple[np.ndarray, dict[str, Any]] | tuple[None, str]:
     """N consecutive Z16 frames from one V4L2 stream (the depth node the cell code already reads), inside `timeout_s`.
 
-    (frames[N,480,640], receipt) or (None, reason). The receipt carries the last frame's start-of-exposure wall time.
+    One deadline covers the whole call including the format-spelling retry. Every kept frame is checked as the single-frame
+    capture checks its one frame (start-of-exposure monotonic stamp, exact buffer size, a stamp from this capture), plus
+    consecutive sequence numbers and stamps, and a wall/monotonic offset that did not move. Returns
+    (frames[N,480,640], receipt) or (None, reason); the receipt holds the first and last exposure wall times.
     """
     if not Path(device).exists():
         return None, "depth device missing"
     raw_path = Path(raw_path)
     started_wall, started = time.time(), time.monotonic()
+    deadline = started + float(timeout_s)
     cmd = ["v4l2-ctl", "--verbose", "-d", device, "--set-fmt-video=width=640,height=480,pixelformat=Z16", f"--set-parm={int(fps)}",
            "--stream-mmap=3", f"--stream-skip={DEPTH_SKIP}", f"--stream-count={int(n)}", f"--stream-to={raw_path}"]
     fmt = "--set-fmt-video=width=640,height=480,pixelformat=Z16"
+
+    def attempt(command):
+        left = deadline - time.monotonic()
+        if left <= 0.2:
+            raise subprocess.TimeoutExpired("v4l2-ctl", timeout_s)
+        return run(command, timeout=left, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+
     try:
         try:
-            done = run(cmd, timeout=float(timeout_s), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+            done = attempt(cmd)
         except subprocess.CalledProcessError:  # v4l2-ctl 1.32 only takes the format with a trailing space (as cell_depth)
-            done = run([f"{fmt} " if part == fmt else part for part in cmd], timeout=float(timeout_s), check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+            done = attempt([f"{fmt} " if part == fmt else part for part in cmd])
         raw = raw_path.read_bytes()
     except (OSError, subprocess.SubprocessError) as exc:
         detail = (getattr(exc, "stderr", "") or "")[-120:]
         return None, f"depth burst failed: {type(exc).__name__} {detail}".strip()
     ended_wall, ended = time.time(), time.monotonic()
     size = 640 * 480 * 2
-    lines = _DQBUF.findall(done.stderr or "")
-    if len(raw) != n * size or len(lines) < n:
+    rows = [(int(a), int(b), float(c), "ts-monotonic, ts-src-soe" in line) for line in (done.stderr or "").splitlines()
+            if (hit := _DQBUF.search(line)) for a, b, c in [hit.groups()]]
+    if len(raw) != n * size or len(rows) < n:
         return None, "depth burst returned the wrong number of frames"
-    stamps = [float(t) for _, _, t in lines[-n:]]
-    if any(b <= a for a, b in zip(stamps, stamps[1:])) or not started - 0.5 <= stamps[-1] <= ended + 0.5:
-        return None, "depth burst frame stamps are not consecutive or not from this capture"
+    kept = rows[-n:]
+    if any(not flag or used != size for _, used, _, flag in kept):
+        return None, "depth burst frame is not a start-of-exposure monotonic buffer of the exact size"
+    seqs, stamps = [r[0] for r in kept], [r[2] for r in kept]
+    if any(b != a + 1 for a, b in zip(seqs, seqs[1:])) or any(b <= a for a, b in zip(stamps, stamps[1:])):
+        return None, "depth burst sequence or stamps are not consecutive"
+    if not all(started - 0.5 <= t <= ended + 0.5 for t in stamps):
+        return None, "depth burst has a frame that is not from this capture"
+    start_offset, end_offset = started_wall - started, ended_wall - ended
+    if abs(start_offset - end_offset) > 0.5:
+        return None, "the wall clock moved during the depth burst"
     frames = np.frombuffer(raw, dtype="<u2").reshape(n, 480, 640)
-    offset = ((started_wall - started) + (ended_wall - ended)) / 2
-    return frames, {"frames": int(n), "source_seq_last": int(lines[-1][0]), "exposure_wall_estimate_s": stamps[-1] + offset,
+    offset = (start_offset + end_offset) / 2
+    return frames, {"frames": int(n), "source_seq_last": seqs[-1], "exposure_wall_estimate_s": stamps[-1] + offset,
                     "first_exposure_wall_estimate_s": stamps[0] + offset, "capture_s": round(ended - started, 2),
+                    "wall_bridge_uncertainty_s": abs(start_offset - end_offset) / 2 + 0.01,
                     "raw_sha256": hashlib.sha256(raw).hexdigest()}

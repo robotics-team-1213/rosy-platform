@@ -304,7 +304,7 @@ def verify_stack_outcome(
         depth_ref = cell_depth_slots.depth_reference(after_depth, after_top, slot_roi, zone_rois["floor"], place_tier,
                                                      floor_depth_mm=zone_rois.get("floor_depth_mm"))
         # Depth answers "which tier is filled". That the slot filled now, and how the container lies, stay separate evidence.
-        change = cell_depth_slots.change_evidence(before_top, after_top, slot_roi)
+        change = cell_depth_slots.change_evidence(before_top, after_top, slot_roi, depth_ref)
         depth_ref["change"] = change
         target_present = bool(depth_ref["ok"] and depth_ref["tier_ok"] and change["changed"])
         top_orientation_ok = bool(change["orientation_ok"])
