@@ -167,10 +167,10 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
     return [part for inv in invs for part in split_by_ci_entry(inv) if not ci_runnable(part)]
 
 
-def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None:
-    """Require an intact lab land_cache pass for each lab-only invocation on head's tree & env."""
+def lab_missing(cwd: Path, head: str, required: list[list[str]]) -> list[list[str]]:
+    """Lab-only invocations without an intact land_cache pass on head's tree & env."""
     if not required:
-        return
+        return []
     tree = _run(["git", "rev-parse", f"{head}^{{tree}}"], cwd)
     env = land_cache.env_id(cwd, head)
     rows = [
@@ -196,6 +196,12 @@ def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None
                 break
         if not ok:
             missing.append(inv)
+    return missing
+
+
+def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None:
+    """Require an intact lab land_cache pass for each lab-only invocation on head's tree & env."""
+    missing = lab_missing(cwd, head, required)
     if missing:
         cmds = "; ".join(" ".join(inv) for inv in missing[:3])
         raise SystemExit(f"[pr-land] lab-only change requires remote_pytest lab evidence before auto-merge: {cmds}")
