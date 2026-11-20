@@ -39,6 +39,14 @@ class ZoneVerdict:
     exit_m: float = 0.0  # exit: 곧게 전진할 거리
 
 
+def lane_edge(cfg, dock=None) -> float:
+    """Half the bay lane width: the map owns it (dock metadata "lane_width_m", 0.10-0.24: edge <= 0.12 so a wrong value cannot admit the neighbour lane), bay_lane_width_m is the default."""
+    width = getattr(dock, "metadata", {}).get("lane_width_m") if dock is not None else None
+    if not isinstance(width, (int, float)) or isinstance(width, bool) or not 0.10 <= width <= 0.24:
+        width = cfg.bay_lane_width_m
+    return width / 2.0
+
+
 def lane_extent(cfg, lateral: float, heading: float) -> float:
     """The farthest the body (corners incl. the tray) reaches sideways from the lane axis: the lane keeping check is a FOOTPRINT check, not a centre limit
     (panel B 2026-11-21: tray corner radius 0.144, so the allowed centre offset shrinks with heading: +-0.048 at 0 deg, +-0.026..0.032 at 10 deg)."""
@@ -156,12 +164,17 @@ def classify(pose, dock, staging_offset_m: float, observation, cfg, scan=None) -
         # The numbers tell a stale map (odom slip near the bay) from a wrong bay at a glance; the verdict itself is unchanged.
         return ZoneVerdict("manual", DISAGREE + " (lateral %s %.3f line %.3f m, heading %s %.1f line %.1f deg)"
                            % (src, lateral, o_lat, src, math.degrees(heading), math.degrees(o_head)))
+    if scan is not None:
+        # The LiDAR pose is authoritative for lateral and heading (the camera line heading is 6-25 deg off at this site and passes the agreement gate
+        # above): the camera only had to agree. b8xy C2 x 0.214: LiDAR straight (y -1 mm, 0.1 deg, extent 0.057), camera -9 deg / -15 mm -> the
+        # camera-driven footprint check refused a robot that was inside its lane. The disagreement gates above are unchanged.
+        o_lat, o_head = lateral, heading
     # Straight enough that the reverse run (along) cannot leave the lane: the rear already faces the bay, so there is
     # no turn and no runway to find, only the line to hold.
-    if abs(o_lat) <= cfg.bay_exit_lateral_m and abs(o_head) <= min(
+    if abs(o_lat) <= cfg.bay_exit_lateral_m and lane_extent(cfg, o_lat, o_head) <= lane_edge(cfg, dock) and abs(o_head) <= min(
             cfg.bay_acquire_heading_max_rad, math.atan(cfg.bay_exit_lateral_m / max(along, 0.05))):
         return ZoneVerdict("acquire", "straight in the lane: acquire where it stands")
-    if lane_extent(cfg, o_lat, o_head) > cfg.bay_lane_edge_m:      # measured values (the line's, or the LiDAR's when it was used): a footprint check, not a centre limit
+    if lane_extent(cfg, o_lat, o_head) > lane_edge(cfg, dock):      # measured values (the line's, or the LiDAR's when it was used): a footprint check, not a centre limit
         return ZoneVerdict("manual", "inside the bay row but the body (with the tray) overlaps a neighbour lane: not moving in the row")
     exit_m = staging_offset_m - along + cfg.bay_exit_extra_m
     limit = cfg.bay_exit_heading_max_rad

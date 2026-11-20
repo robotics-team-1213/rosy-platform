@@ -166,3 +166,14 @@ def test_a_docked_without_charge_low_battery_calls_a_person_and_shows_unconfirme
     run(p, answer=_skewed(0.0, first_n=0))
     assert p.manager.state is DockState.DOCKED and p.manager.status().charge_unconfirmed
     assert any(k == "docking.person_call" for k, d in p.events)
+
+def test_every_dead_end_that_leaves_the_robot_in_the_lane_calls_a_person():
+    # tries used up, and the start refusal "centre it by hand": docking.person_call with the reason
+    p = _dock(charges=False)
+    run(p, answer=_skewed(-9.0, first_n=99))
+    calls = [d for k, d in p.events if k == "docking.person_call"]
+    assert p.manager.state is DockState.DOCK_FAILED and calls and calls[-1]["reason"].startswith("stopped in the lane: ")
+    q = _dock(charges=False)
+    q.world.pose = (-0.15, 0.03, math.pi + math.radians(20.0))              # skewed 20 deg at the start: the footprint refusal
+    run(q, limit_s=30.0)
+    assert q.manager.state is DockState.DOCK_FAILED and [d for k, d in q.events if k == "docking.person_call"]

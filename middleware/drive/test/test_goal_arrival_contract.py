@@ -5,7 +5,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import Mock
 from control.control.path_follow import GOAL_TOLERANCE_M,PathFollower,follow_path
 from control.planning.goals import GoalBrain
-from test.test_arrival_delivery import method
+from test_arrival_delivery import method
 
 
 def test_planner_follower_and_receiver_share_inclusive_arrival_boundary():

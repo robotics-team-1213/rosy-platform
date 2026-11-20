@@ -150,7 +150,7 @@ def test_a_seated_robot_the_lidar_keeps_finding_skewed_is_reseated_inside_the_la
     run_row(p, row, until=answer_kinds(zone=good(x=0.15), entry=good(x=0.15), seat=good(x=0.0, heading=math.radians(-17.0))))
     # (this harness feeds no rear gap, so the reseat's blind-back-off rule may stop it first; the tries-used-up path is in test_docking_bay_reseat.py)
     assert p.manager.state is DockState.DOCK_FAILED
-    assert "bay seated skewed -17.0 deg" in p.manager._error or "no LiDAR rear gap at its start" in p.manager._error, p.manager._error
+    assert "bay seated skewed -17.0 deg" in p.manager._error or "no LiDAR rear gap at its start" in p.manager._error or "past the lane edge" in p.manager._error, p.manager._error
     assert -0.02 <= -p.world.pose[0] - 0.05 <= p.manager._cfg.bay_line_x_m and abs(p.world.pose[1]) < 0.02
 
 
@@ -222,7 +222,7 @@ def test_a_full_battery_with_a_lidar_confirmed_straight_seat_is_docked_without_c
     p.manager.dock()
     run_row(p, row, until=answer_kinds(zone=good(x=0.15), entry=good(x=0.15), seat=good(x=0.01, heading=math.radians(-17.0))))
     assert p.manager.state is DockState.DOCK_FAILED                                              # never docked while skewed; stopped in the lane
-    assert "skewed" in p.manager._error or "no LiDAR rear gap at its start" in p.manager._error
+    assert "skewed" in p.manager._error or "no LiDAR rear gap at its start" in p.manager._error or "past the lane edge" in p.manager._error
 
 
 def test_a_lagging_scan_does_not_stop_a_healthy_back_off():

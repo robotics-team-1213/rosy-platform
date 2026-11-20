@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
-from control.control.startup_profile import FEATURES, startup_profile
+from core_common.startup_profile import FEATURES, startup_profile
 
 
 class StartupProfileTests(unittest.TestCase):
@@ -49,7 +49,7 @@ class StartupLaunchTests(unittest.TestCase):
         context = {'profile': profile, 'calibration_sensing_only': 'auto',
                    'web_port': '', 'web_backend_port': '',
                    **{'start_' + name: 'auto' for name in FEATURES}, **(overrides or {})}
-        source = Path(__file__).parents[1] / 'launch/robot.launch.py'
+        source = Path(__file__).parents[2] / 'perception/launch/robot.launch.py'
         tree = ast.parse(source.read_text(encoding='utf-8-sig'))
         functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
         namespace = dict(os=os, FEATURES=FEATURES, startup_profile=startup_profile,

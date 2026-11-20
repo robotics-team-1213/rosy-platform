@@ -4,7 +4,7 @@ import unittest
 
 from control.sensing.lidar import MOUNT_YAW_DEG, NOSE_YAW, robot_yaw
 from control.control.route import line_route
-from test.test_frontier import FakeScan
+from test_frontier import FakeScan
 
 
 def _front_open_scan():

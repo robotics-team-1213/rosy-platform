@@ -13,7 +13,7 @@ import math
 from typing import Optional
 
 from core_features.docking.bay_guards import forward_twist
-from core_features.docking.bay_zone import lane_extent
+from core_features.docking.bay_zone import lane_edge, lane_extent
 from core_features.docking.model import DockPhase
 
 
@@ -22,6 +22,10 @@ class BayReseatMixin:
         self._reseat_active = False
         self._rs_target = 0.0
         self._rs_lost: Optional[float] = None
+
+    def in_lane_dead_end(self, phase) -> bool:
+        """A failure of a reference-scan dock that leaves the robot standing in the lane (a start inside the row, or the acquire/align/seat/reseat phases)."""
+        return self._has_reference() and (self._in_row or phase in (DockPhase.ACQUIRING, DockPhase.ALIGNING, DockPhase.SETTLING, DockPhase.BACKOFF))
 
     def reseat_limit(self, limit: int, phase) -> int:
         """The retry limit: a reference dock retrying from the reverse or the seat has bay_reseat_tries."""
@@ -64,7 +68,7 @@ class BayReseatMixin:
         self._rs_lost = None
         x, lateral, heading = rp[0], rp[1], rp[2]
         dh = cfg.bay_rail_max_angular * max(0.0, now - rp[3])           # the heading may have changed this much since the pose: take the worse side
-        if max(lane_extent(cfg, lateral, heading - dh), lane_extent(cfg, lateral, heading + dh)) > cfg.bay_lane_edge_m:
+        if max(lane_extent(cfg, lateral, heading - dh), lane_extent(cfg, lateral, heading + dh)) > lane_edge(cfg, h._dock):
             self._stop()
             h._fail("bay reseat: the body footprint reaches past the lane edge (lateral %.0f mm, heading %.0f deg): stopped in the lane"
                     % (lateral * 1000.0, math.degrees(heading)))

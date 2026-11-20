@@ -166,7 +166,7 @@ def test_inside_the_bay_nose_out_it_leaves_straight_and_skips_nav2_and_the_turn(
 
 @pytest.mark.parametrize("start,why", [
     ((-0.15, 0.0, 0.0), "nose toward the bay"),
-    ((-0.15, 0.0, math.pi + math.radians(20.0)), "not straight enough"),
+    ((-0.15, 0.0, math.pi + math.radians(20.0)), "overlaps a neighbour lane"),      # 0.18 m lane: the footprint check refuses before the heading window
     ((-0.40, 0.0, 0.0), "nose toward the bay"),     # inside the staging distance: no Nav2 either
     ((-0.15, PITCH, math.pi), "not in this bay's lane"),
     ((-0.15, 0.07, math.pi), "overlaps a neighbour lane"),      # footprint check (panel B 2026-11-21), not a centre limit

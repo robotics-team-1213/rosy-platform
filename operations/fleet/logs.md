@@ -5620,3 +5620,8 @@
 - 운영: R에서 v261 형상으로 v268 활성, 타이머 정지. 배포 뒤 S3·loop_right·upper_east를 고정하고 타이머를 다시 켠다.
 - 증거: R `site_map_versions` v259~v267 이력(S3 0.82→0.745/-0.207 사람, v262+ auto-track-calibration 0.70), `test_auto_track_calibration`·`test_site_map_pinned`·`test_trip_bend` 41개와 site-map·map-editor node 시험 36개 통과.
 - gate 변화: 없음.
+
+## 2026-11-21 · uncommitted · feat(site-map): 정지 장소 stop_zone·approach_m
+- 변경: 에  전용 선택 필드 (횡단보도 다각형 검사  공용, 장소 점 포함,  필수)과 (0.05–0.6 m,  필수), 순수 함수 . 없으면 저장 본문에서 빠짐. 지도 편집 장소 검사 칸에 접근 거리와 정지 구역 그리기·지우기(대기 띠 그리기와 같은 점 목록, 그리면 고정), 지도에 구역 표시. API v1.434.
+- 증거: ··의 고정 정지 장소 병합 시험, site-map·map-editor node 시험 37개 로컬 통과. 원격·실물 미실시.
+- gate 변화: 없음.
