@@ -40,7 +40,7 @@ SELF_TRIGGER = "harness configuration or the selector itself"
 SELF_TEST = re.compile(r"^test/test_(land|remote_|affected|known_failures|worktree|pre_push|publish_|browser_scope"
                        r"|harness|doctor|collect_alone|work_queue|xdist|g1_timing|safety_review|size_range"
                        r"|host_(?:admission|probe|caps)|lab_hosts"
-                       r"|ci_dependencies|pr_land)[^/]*\.py$")
+                       r"|ci_dependencies|pr_land|serial_suites)[^/]*\.py$")
 
 #: Panel 2026-11-09: the code that CHOOSES or JUDGES tests keeps FULL (design 0.7 rule 8: a gate never tests
 #: itself with a selection it made). Panel 2026-11-17: 34 of 55 FULL landings in 36 h escalated only because they

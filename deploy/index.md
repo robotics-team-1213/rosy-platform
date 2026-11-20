@@ -84,6 +84,6 @@
 
 - 2026-11-20 · uncommitted · Pinky 점검 옵션을 인터페이스 이름으로 받지 않는다
 - 2026-11-20 · uncommitted · Pinky 시연 전 네이티브 주행 서비스 확인
+- 2026-11-20 · uncommitted · fix(omx): Gate open 보류를 시도 원장에 남긴다
 - 2026-11-20 · uncommitted · fix(omx): 홈 복귀 전에 검토와 의도를 확인한다
 - 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
-- 2026-11-18 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 기본 켬
