@@ -19,10 +19,15 @@ import cell_task_exec as cte  # noqa: E402
 import cell_task_worker as ctw  # noqa: E402
 
 HOME = [0.0, -58.0, 50.0, 50.0, -5.0, 58.1]
-ZONE = {"verified": True, "basis": "predefined_side_and_top_target_zones", "z_gate": {"verdict": "PASS"}}
+ZONE = {"verified": True, "basis": "predefined_side_and_top_target_zones", "z_gate": {"verdict": "PASS"},
+        "target": {"site": "belt", "area": "belt", "col": 2, "row": 1, "tier": 1}}
 PARK = {"command": "park", "ok": True, "settled": True, "fault": None, "state": [0.5, -57.0, 49.0, 51.0, -4.0, 58.0], "t": 12.5}
 HANDOFF = {"task_id": "t-1", "cell_id": "cell_s", "arm_id": "arm_s", "tier": 1, "handoff_lease_id": "lease-1",
            "src_site": "pinky", "dst_site": "belt"}
+
+
+# Log lines with braces, as the CLI and its session wrapper print before the final indented JSON object.
+CLI_NOISE = 'wrapper: starting {"session": "x"}\nconfig {a} loaded\n{\n'.replace("{\n", "") + "\n"
 
 
 def _attempt(verify=None, park=PARK, zone=ZONE):
@@ -39,7 +44,7 @@ def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0):
     (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json")}), encoding="utf-8")
     monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
     monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
-        a, returncode, stdout="log\n" + json.dumps(parsed) + "\n", stderr=""))
+        a, returncode, stdout=CLI_NOISE + json.dumps(parsed, indent=1, default=str) + "\n", stderr=""))  # as cell_auto_pick prints it
     return cte.execute_guarded_cell_task(HANDOFF, prep_dir=tmp_path)
 
 
@@ -152,3 +157,21 @@ def test_home_comes_from_the_plan_file_and_five_joints_are_compared(tmp_path, mo
     assert out["stop_event"]["folded"] is True and out["stop_event"]["readback"]["home"] == five
     assert cte.plan_home({"plan_path": str(tmp_path / "missing.json")}) is None
     assert cte.plan_home({}) is None
+
+
+def test_the_indented_multi_line_cli_output_is_parsed():
+    text = CLI_NOISE + json.dumps({"result": "placed", "attempts": [{"verify": {"verified": True}}]}, indent=1) + "\n"
+    assert cte.last_json_object(text)["attempts"][0]["verify"] == {"verified": True}
+    assert cte.last_json_object("no json here {") == {} and cte.last_json_object('{"a": 1} trailing') == {}
+
+
+@pytest.mark.parametrize("target", [
+    {"site": "belt", "area": "belt", "col": 2, "row": 1, "tier": 2},     # another tier than the handoff's
+    {"site": "pallet-l0", "area": "pallet", "col": 2, "row": 1, "tier": 1},  # another site than the handoff's dst
+    {"site": "belt", "area": "belt", "col": None, "row": 1, "tier": 1},
+    None,
+])
+def test_a_measurement_of_another_slot_or_tier_does_not_verify_the_task(tmp_path, monkeypatch, target):
+    zone = {**ZONE, "target": target}
+    out = _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt(zone=zone)]})
+    assert out["stage_result"]["task_verified"] is False

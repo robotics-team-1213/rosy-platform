@@ -68,6 +68,22 @@ FOLD_TOLERANCE = 3.0
 ZONE_BASIS = "predefined_side_and_top_target_zones"
 
 
+def last_json_object(text: str) -> dict[str, Any]:
+    """The JSON object that ends the output. cell_auto_pick prints it indented over many lines after free-form log lines,
+    so take the earliest `{` from which one object parses through to the end of the text."""
+    decoder, start = json.JSONDecoder(), text.find("{")
+    while start != -1:
+        try:
+            value, end = decoder.raw_decode(text, start)
+        except ValueError:
+            value = None
+        else:
+            if isinstance(value, dict) and not text[end:].strip():
+                return value
+        start = text.find("{", start + 1)
+    return {}
+
+
 def _last_attempt(parsed: dict[str, Any]) -> dict[str, Any]:
     attempts = parsed.get("attempts")
     last = attempts[-1] if isinstance(attempts, list) and attempts else None
@@ -150,15 +166,7 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         "--handoff-lease-id", str(handoff.get("handoff_lease_id") or ""),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    parsed: dict[str, Any] = {}
-    for line in reversed(proc.stdout.splitlines()):
-        s = line.strip()
-        if s.startswith("{") and s.endswith("}"):
-            try:
-                parsed = json.loads(s)
-                break
-            except ValueError:
-                pass
+    parsed = last_json_object(proc.stdout)
     # The wall clock at the end of the run bounds when the readbacks below existed (the runner's own clock is monotonic).
     measured_at = time.time()
     attempt = _last_attempt(parsed)
@@ -170,7 +178,12 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     # measurement (cell_area_zones.verify_stack_outcome*) is used only if the attempt carries it as `zone_verification`;
     # nothing in cell_auto_pick emits that today, so without it the fields below stay unverified and Fleet refuses.
     zone = attempt.get("zone_verification") if isinstance(attempt.get("zone_verification"), dict) else None
-    zone_ok = bool(zone and zone.get("verified") is True and zone.get("basis") == ZONE_BASIS)
+    # The measured slot and tier must be the task's own: the destination site and the handoff tier.
+    target = (zone or {}).get("target") if isinstance((zone or {}).get("target"), dict) else {}
+    htier = handoff.get("tier")
+    bound = (target.get("site") == dst and type(htier) is int and target.get("tier") == htier
+             and type(target.get("col")) is int and type(target.get("row")) is int)
+    zone_ok = bool(zone and zone.get("verified") is True and zone.get("basis") == ZONE_BASIS and bound)
     tier = handoff.get("tier")
     dst_area = dst.rsplit("-l", 1)[0]
     verification = ({**zone, "placement": placement} if zone is not None else

@@ -124,6 +124,7 @@ def _ensure_feeder(app) -> None:
             try:
                 for robot_id in hub.registry.online_ids():
                     feed_still_tracker(app, robot_id)
+                check_beds(app)
             except Exception:  # a sampling fault only leaves the run unproven, which the guard refuses
                 pass
             time.sleep(0.5)
@@ -169,17 +170,52 @@ def _bed_valid(rec: dict) -> bool:
     return not rec.get("invalid") and 0 <= time.time() - rec["confirmed_at"] <= BED_CONFIRM_TTL_S
 
 
+def _map_state(app) -> tuple:
+    """(active map id, active map version): a new version of the same map id is a change too."""
+    svc, maps = getattr(app.state, "map_pose", None), getattr(app.state, "site_maps", None)
+    active = maps.active() if maps is not None else None
+    return (svc.active_map_id() if svc is not None else None, active[0] if active else None)
+
+
+def check_beds(app, robot_id: str | None = None) -> None:
+    """Void, for good, every bed confirmation whose robot moved over BED_MOVE_LIMIT_M since it was given, or whose map
+    (id or version) changed. Runs on every state update the console receives (see watch_pose_updates), not only when
+    the evidence is asked for, so a move out and back between two requests is seen."""
+    svc = getattr(app.state, "map_pose", None)
+    for rec in (getattr(app.state, "cell_bed_confirmations", None) or {}).values():
+        if rec.get("invalid") or (robot_id is not None and rec["robot_id"] != robot_id) or svc is None:
+            continue
+        pose = svc.arbitrated_pose(rec["robot_id"])  # any state: an odom-bridged or degraded pose still shows motion
+        moved = (pose is not None and _finite(pose.x, pose.y)
+                 and math.hypot(pose.x - rec["pose"]["x"], pose.y - rec["pose"]["y"]) > BED_MOVE_LIMIT_M)
+        if moved or _map_state(app) != (rec["map_id"], rec["map_version"]):
+            rec["invalid"] = True
+
+
+def watch_pose_updates(app) -> None:
+    """Chain check_beds behind the console's state sink (the one that feeds MapPoseService), once."""
+    console = getattr(app.state, "console", None)
+    if getattr(app.state, "bed_pose_watch", False) or console is None or not hasattr(console, "set_state_sink"):
+        return
+    previous = getattr(console, "_state_sink", None)
+
+    def sink(robot_id, state):
+        try:
+            if previous is not None:
+                previous(robot_id, state)
+        finally:
+            check_beds(app, robot_id)
+
+    console.set_state_sink(sink)
+    app.state.bed_pose_watch = True
+
+
 def _bed_ready(app, task: dict, pose: dict) -> bool:
-    """A confirmation dies for good once the robot moved over BED_MOVE_LIMIT_M or the map changed, even if it moves back."""
     rec = (getattr(app.state, "cell_bed_confirmations", None) or {}).get(task["task_id"])
     if rec is None or rec["robot_id"] != task["robot_id"] or not _bed_valid(rec):
         return False
-    svc = getattr(app.state, "map_pose", None)
-    if (svc is None or svc.active_map_id() != rec["map_id"]
-            or math.hypot(pose["x"] - rec["pose"]["x"], pose["y"] - rec["pose"]["y"]) > BED_MOVE_LIMIT_M):
-        rec["invalid"] = True
-        return False
-    return True
+    check_beds(app, task["robot_id"])  # also at the time of asking, for a deployment whose sink could not be chained
+    return not rec.get("invalid") and math.hypot(pose["x"] - rec["pose"]["x"], pose["y"] - rec["pose"]["y"]) <= BED_MOVE_LIMIT_M
 
 
 def prune_evidence(app) -> None:
@@ -303,7 +339,8 @@ def install_evidence_routes(app, ctx) -> None:
         if located is None:
             raise _error(409, "BED_CONFIRM_POSE_UNAVAILABLE")
         rec = {"task_id": task_id, "robot_id": task["robot_id"], "principal_id": principal_id,
-               "confirmed_at": time.time(), "pose": located[0], "map_id": app.state.map_pose.active_map_id()}
+               "confirmed_at": time.time(), "pose": located[0], "map_id": _map_state(app)[0], "map_version": _map_state(app)[1]}
+        watch_pose_updates(app)
         app.state.cell_bed_confirmations[task_id] = rec
         return {"ok": True, "renewed": True, "confirmation": rec, "expires_in_s": BED_CONFIRM_TTL_S}
 

@@ -59,7 +59,9 @@ class Env:
         app.state.proposer_guard = [Depends(require_proposer)]
         app.state.amr_still_autostart = False  # no sampling thread in tests: the tracker is fed by hand
         self.registry = RobotRegistry()
-        app.state.console = SimpleNamespace(hub=SimpleNamespace(registry=self.registry))
+        self.console = SimpleNamespace(hub=SimpleNamespace(registry=self.registry), _state_sink=None)
+        self.console.set_state_sink = lambda sink: setattr(self.console, "_state_sink", sink)
+        app.state.console = self.console
         self.pose = SimpleNamespace(state="LOCALIZED", source="sighting", x=self.station[0], y=self.station[1],
                                     yaw=0.1, age_s=0.3, map_id="m1")
         app.state.map_pose = SimpleNamespace(arbitrated_pose=lambda rid: self.pose, active_map_id=lambda: "m1")
@@ -427,3 +429,27 @@ def test_expired_bed_confirmation_is_pruned(env):
     env.app.state.cell_bed_confirmations[TASK]["confirmed_at"] -= ev.BED_CONFIRM_TTL_S + 1
     ev.prune_evidence(env.app)
     assert TASK not in env.app.state.cell_bed_confirmations
+
+
+def test_motion_between_two_requests_voids_the_bed_confirmation_through_the_state_sink(env):
+    seen = []
+    env.console._state_sink = lambda robot_id, state: seen.append(robot_id)  # the MapPoseService feed, installed earlier
+    assert env.confirm_bed().status_code == 200
+    rec = env.app.state.cell_bed_confirmations[TASK]
+    sink = env.console._state_sink
+    sink("pinky_1", {})
+    assert not rec.get("invalid") and seen == ["pinky_1"]  # the earlier sink still runs
+    env.pose.x += 0.05
+    sink("pinky_1", {})  # one state update while it is away
+    env.pose.x = env.station[0]  # back home before anyone asks
+    assert rec["invalid"] is True and env.amr()["bed_ready"] is False
+
+
+def test_a_new_version_of_the_same_map_voids_the_bed_confirmation(env):
+    assert env.confirm_bed().status_code == 200
+    rec = env.app.state.cell_bed_confirmations[TASK]
+    real = env.app.state.site_maps.active
+    env.app.state.site_maps.active = lambda: (2, *real()[1:])
+    env.console._state_sink("pinky_1", {})
+    env.app.state.site_maps.active = real  # reverted before the next request
+    assert rec["invalid"] is True and env.amr()["bed_ready"] is False

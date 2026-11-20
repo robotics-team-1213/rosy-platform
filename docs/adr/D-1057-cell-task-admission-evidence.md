@@ -33,15 +33,17 @@
 
 #### 2. OMX owner 증거
 
-Fleet은 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(proposer 권한)로 `receipt`, `stage_result`, `hardware_telemetry`를 먼저 저장한다. 그 셀의 owner로 등록된 서비스 주체만 보낼 수 있다(사이트 설정 `ROSY_FLEET_CELL_OWNERS=cell_s=id1,id2;cell_ab=id3`, 설정이 없으면 403 `OWNER_PRINCIPAL_NOT_REGISTERED`). 완료 요청도 저장 기록을 등록한 주체와 같아야 한다. RUNNING 작업이고 본문 `handoff_lease_id`가 원장 lease와 같고 `measured_at`이 claim 이후 60 s 이내이며 `hardware_telemetry.measured_at`과 2 s 안에서 같아야 한다. 본문은 64 KB까지다. 작업이 COMPLETED·CANCELLED·ABORTED가 되거나 기록이 만료되면 저장소에서 지운다. `omx_evidence_fn`은 이 저장 기록만 돌려준다. 완료 요청 본문을 복사해 돌려주지 않는다. 저장 후 60 s가 지나면 쓰지 않는다. 같은 lease에 같은 증거를 다시 보내면 한 건이고, 다른 증거는 409다.
+Fleet은 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(proposer 권한)로 `receipt`, `stage_result`, `hardware_telemetry`를 먼저 저장한다. 그 셀의 owner로 등록된 서비스 주체만 보낼 수 있다(사이트 설정 `ROSY_FLEET_CELL_OWNERS=cell_s=id1,id2;cell_ab=id3`, 설정이 없으면 403 `OWNER_PRINCIPAL_NOT_REGISTERED`). 완료 요청도 저장 기록을 등록한 주체와 같아야 한다. RUNNING 작업이고 본문 `handoff_lease_id`가 원장 lease와 같고 `measured_at`이 claim 이후 60 s 이내이며 `hardware_telemetry.measured_at`과 2 s 안에서 같아야 한다. 본문은 64 KB까지다. 작업이 COMPLETED·CANCELLED·ABORTED가 되거나 기록이 만료되면 저장소에서 지운다. `omx_evidence_fn`은 이 저장 기록만 돌려준다. 완료 요청 본문을 복사해 돌려주지 않는다. 저장한 시각이 아니라 측정 시각(`measured_at`)을 기준으로 현재보다 60 s 넘게 지난 기록은 등록도 사용도 하지 않는다. 같은 lease에 같은 증거를 다시 보내면 한 건이고, 다른 증거는 409다.
 
 셀 쪽은 `cell_auto_pick`의 `attempts[].verify`(새 상부 프레임 확인)를 `verification.placement`에 싣고, `folded`는 마지막 이동 단계가 settled 상태의 `park`이고 관절 readback이 설정 `plan.home`에서 3.0 이내(`chunk_runner_guards.SETTLE_TOL`와 같은 값)일 때만 참으로 한다. 측정이 없으면 `False`이고 Fleet이 `UNVERIFIED_CELL_COMPLETION`으로 거부한다.
+
+**배치 측정의 결속:** `zone_verification`은 목적지 사이트의 `layer`·`col`·`row`가 설정에 있고 범위(0-2, 1-3, 1-2) 안일 때만 측정하며, 측정한 사이트·층이 작업의 `dst_site`·handoff tier와 같아야 실행기가 수용한다. 놓기 전 상부·측면 프레임과 놓은 뒤 촬영된 상부·측면 프레임이 모두 있어야 하고, 두 프레임은 같은 판정 시각에 2 s 이내여야 한다. 상부 구역을 측정하지 못하면 verified가 아니다.
 
 **알려진 공백:** `cell_auto_pick`은 측면·상부 구역 측정(`cell_area_zones`)을 내놓지 않는다. 그 결과가 `attempts[].zone_verification`으로 오기 전에는 `verification.basis`가 `predefined_side_and_top_target_zones`가 될 수 없어 Fleet이 릴리스를 거부한다. 이 거부는 의도한 것이며, 가짜 `PASS`로 메우지 않는다.
 
 #### 3. 신뢰 경계
 
-owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경이 한 번이라도 있으면 영구 무효다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.
+owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경(ID 또는 활성 버전)이 한 번이라도 있으면 영구 무효이고, 확인은 조회 때만이 아니라 콘솔이 받는 상태 갱신마다 검사한다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.
 
 #### 4. 되돌리는 법
 
