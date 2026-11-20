@@ -623,14 +623,16 @@ def test_ci_full_matrix_shards_slow_suites_by_file(sample):
     repo = affected.Repo.load(sample)
     matrix = affected.ci_matrix(repo, _select(sample, ".github/workflows/ci.yml"))["include"]
     for name, n in affected.SUITE_SHARDS.items():
-        suite = next(e for e in affected.CI_FULL_MATRIX if e["name"] == name)["invocations"][0][0]
-        files = sorted(t for t in repo.test_files if t.startswith(suite + "/"))
+        entry = next(e for e in affected.CI_FULL_MATRIX if e["name"] == name)
+        suite, later = entry["invocations"][0][0], [p for inv in entry["invocations"][1:] for p in inv]
+        ignored = {f.split("=", 1)[1] for f in entry["invocations"][0] if f.startswith("--ignore=")}
+        files = sorted(t for t in repo.test_files if t.startswith(suite + "/") and t not in ignored and t not in later)
         shards = [e for e in matrix if e["name"] == name or e["name"].startswith(name + "-")]
         if len(files) < n:
-            assert [e["invocations"] for e in shards] == [[[suite]]]
+            assert [e["invocations"] for e in shards] == [entry["invocations"]]
             continue
         assert len(shards) == n
-        assert sorted(t for e in shards for inv in e["invocations"] for t in inv) == files
+        assert sorted(t for e in shards for inv in e["invocations"] for t in inv) == sorted(files + later)
 
 
 def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
@@ -705,9 +707,10 @@ def test_full_ci_runs_station_scheduling_on_its_own_required_runner():
     station = next(entry for entry in matrix if entry["name"] == "core-station-simulation")
     assert station["invocations"] == [[target]]
     assert station["gating"] and station["ros"] == "none"
-    for invocations in ([inv for entry in matrix for inv in entry["invocations"]],
-                        affected.lab_full_invocations(repo)):
-        assert any(suite in inv and ignore in inv for inv in invocations)
+    # CI shards the gateway suite by file (core-domain in SUITE_SHARDS), so only the lab run names the directory.
+    for invocations, whole in (([inv for entry in matrix for inv in entry["invocations"]], False),
+                               (affected.lab_full_invocations(repo), True)):
+        assert not whole or any(suite in inv and ignore in inv for inv in invocations)
         assert sum(target in _invocation_test_files(repo, inv) for inv in invocations) == 1
 
 
@@ -741,6 +744,31 @@ def test_ci_full_matrix_reaches_every_registered_module_suite():
     assert not missing, f"registered suites CI's full tier never runs: {missing}"
     for suite in ("middleware/core/api/test", "middleware/robot_ui/pilot/test", "operations/apps/games/test"):
         assert any(affected._under(t, suite) for t in ran), suite
+
+
+def test_ci_gateway_shards_run_every_file_once_in_full_and_affected():
+    """CI 44745980037 (2026-11-20): one runner for all of middleware/core/gateway/test took 20 min of pytest."""
+    repo = affected.Repo.load(ROOT)
+    suite = "middleware/core/gateway/test"
+    station, browser = f"{suite}/test_station_camera_scheduling.py", f"{suite}/test_account_pipeline.py"
+    files = sorted(p for p in repo.test_files if p.startswith(suite + "/"))
+    assert station in files and browser in files
+    full = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    shards = [e for e in full if e["name"].startswith("core-domain-")]
+    assert len(shards) == affected.SUITE_SHARDS["core-domain"] and all(e["invocations"][0] for e in shards)
+    ran = [p for e in full for inv in e["invocations"] for p in inv if p.startswith(suite + "/")]
+    assert sorted(ran) == files, "full tier: each gateway file once, station on its own runner"
+    assert [inv for e in shards for inv in e["invocations"]].count([browser]) == 1, "browser journey: own invocation"
+    assert not any(station in inv for e in shards for inv in e["invocations"])
+
+    def targets(*flags):  # what an affected run of the whole directory hands pytest, flags aside
+        sel = affected.Selection("affected", [], invocations=[[suite, *flags]])
+        runs = [inv for e in affected.ci_matrix(repo, sel)["include"] for inv in e["invocations"]]
+        assert all(set(flags) <= set(inv) for inv in runs), "every shard keeps the invocation's flags"
+        return sorted(p for inv in runs for p in inv if not p.startswith("-"))
+    # Naming the account file makes ci.yml run it with the browser opt-in: its plain tests still run, as in the directory run.
+    assert targets() == files
+    assert targets(f"--ignore={station}") == [p for p in files if p != station]
 
 
 def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():

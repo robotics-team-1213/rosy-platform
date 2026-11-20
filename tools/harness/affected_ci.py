@@ -42,7 +42,7 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 5, "sensing": 2}  # Station suites (D-772) retain the fixed per-shard cost budget.
+SUITE_SHARDS = {"fleet": 5, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
 # Fleet file weights from pytest result-line timestamps in CI 44563719449 and 44568270495.
 # Retain prior weights where timings are incomplete or inconsistent. Unlisted files weigh 1.
 # The weights only choose runners; every discovered test still runs exactly once.
@@ -61,7 +61,8 @@ CI_FULL_MATRIX = (
         ["learning/training/world_model/test"], ["learning/evaluation/world_model/test"],
         ["operations/prediction/world_model/test"]], "ros": "none"},
     # 2026-11-18: core-domain was CI's longest runner (pytest step 16.5 and 22.4 min of a 25 min budget, runs
-    # 43769060136 and 42596065578); the gateway suite and the rest now run on two runners, same tests.
+    # 43769060136 and 42596065578) and again 20 min in 44745980037; SUITE_SHARDS splits its gateway files across
+    # runners, same tests. The browser journey stays its own invocation on the last shard.
     {"name": "core-domain", "invocations": [["middleware/core/gateway/test", f"--ignore={_STATION_SCHEDULING}"], [
         "middleware/core/gateway/test/test_account_pipeline.py"
     ]], "ros": "none"},
@@ -131,12 +132,20 @@ def buildable(repo: Repo, sel: Selection) -> bool:
                for p in sel.changed)
 
 
-def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
-    """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit."""
+def _shard_groups(repo: Repo, entry: dict, flags: list[str] | None = None) -> list[list[str]]:
+    """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit.
+
+    Files the caller's `--ignore=` flags drop stay out (pytest runs a file named on the command line even
+    when it is also ignored). `flags` None is the full tier: the entry's own flags, and files a later
+    invocation of the entry runs. root-test keeps its full-tier groups whatever the flags (PR #95)."""
     import affected_tests as at
+    skip = set()
+    if entry["name"] != "root-test":
+        skip = {f.split("=", 1)[1] for f in (entry["invocations"][0] if flags is None else flags) if f.startswith("--ignore=")}
+        skip |= {p for inv in entry["invocations"][1:] for p in inv} if flags is None else set()
     n = ROOT_SHARDS if entry["name"] == "root-test" else SUITE_SHARDS.get(entry["name"], 1)
     fleet = entry["name"] == "fleet"
-    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0])) if n > 1 else []
+    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0]) and t not in skip) if n > 1 else []
     groups, loads = [[] for _ in range(n)], [0] * n
     for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)) if fleet else files:
         i = min(range(n), key=lambda i: (loads[i], i))
@@ -153,7 +162,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         entries = []
         for entry in CI_FULL_MATRIX:
             groups = _shard_groups(repo, entry)
-            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{len(groups)}", invocations=[g])
+            later = entry["invocations"][1:]  # e.g. the account browser journey: once, on the last shard
+            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{len(groups)}",
+                             invocations=[g, *(later if i == len(groups) - 1 else [])])
                         for i, g in enumerate(groups)] or [dict(entry)]
         for i in range(ROOT_SHARDS):
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
@@ -169,10 +180,10 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         for inv in sel.invocations:
             if affected_exclusive.dedicated(inv):
                 continue  # ROS environment grouping must not split the job's leading environment.
-            split = [p for p in inv if p in whole and _shard_groups(repo, whole[p])]
+            split = [p for p in inv if p in whole and _shard_groups(repo, whole[p], inv)]
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
             out += [rest] if any(not p.startswith("-") for p in rest) or not split else []
-            out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p])]
+            out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p], inv)]
         entries = affected_ros.entries(out, CI_FULL_MATRIX)
         exclusive_jobs = [inv for inv in sel.invocations if affected_exclusive.dedicated(inv)]
         if exclusive_jobs:
