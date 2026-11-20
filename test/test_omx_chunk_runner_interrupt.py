@@ -465,3 +465,32 @@ def test_a_run_loop_that_raises_after_an_interrupt_waits_for_a_person_before_tor
 
     ci.last_resort_hold(r, signals, RuntimeError("live.json"), sleep=sleep)
     assert len(slept) == 6 and json.loads((tmp_path / "hold.json").read_text())["last_resort"]
+
+
+def test_an_interrupt_at_the_idle_stop_deadline_is_not_ended_by_the_idle_stop():
+    """Folded by a park (home_since set), then pushed 10 units off home; SIGTERM lands on the tick the idle stop
+    would end the session: the interrupt's verify, fold or hold decides, never the idle stop."""
+    robot = Robot(blocked=(0,), block_from=10 ** 9)
+    status, clock, queue, signalled = [], [0.0], ["park"], []
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals = []
+
+    def lines():
+        if r.home_since is not None and not signalled and robot.block_from > len(robot.sent):
+            robot.block_from, robot.pos[0] = len(robot.sent), 10.0  # pushed: pan stays 10 units off home
+        if r.home_since is not None and not signalled and clock[0] >= r.home_since + m.IDLE_STOP_S - 1 / 30:
+            signalled.append(clock[0])
+            r.signals.append(signal.SIGTERM)
+        if r.human_hold_latched and RELEASE not in r.signals:
+            r.signals.append(RELEASE)
+        if clock[0] > signalled[0] + 600 if signalled else clock[0] > 6000:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)
+    assert signalled
+    assert not [row for row in status if row["command"] == "stop" and "no command" in row.get("reason", "")]
+    rows = interrupts(status)
+    assert rows[0]["verifying"] and not any(row.get("folded") for row in rows)
+    assert any(row.get("hold") for row in rows) and rows[-1]["released"]  # pan blocked: the fold cannot finish

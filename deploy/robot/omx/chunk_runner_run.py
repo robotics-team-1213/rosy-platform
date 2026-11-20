@@ -344,7 +344,7 @@ class Runner:
 
     def idle(self) -> bool:
         """Fold home, then end the session (True), when no command has come for a while."""
-        return not self.human_hold_latched and check_runner_idle(self, _cr_attr)
+        return not self.human_hold_latched and not getattr(self, "signals", None) and check_runner_idle(self, _cr_attr)
 
     def run(self, lines) -> None:
         """`lines()` returns the commands that arrived since the last call."""
@@ -369,14 +369,15 @@ class Runner:
                 and self.pending[0].strip().split()[:1] in (["state"], ["episode"])
                 and self.pending[1].strip().split()[:1] != ["state"]
             ):
-                if not self.command(self.pending.pop(0)):
+                if not self.command(self.pending.pop(0)) and not getattr(self, "signals", None):
                     return
             if self.pending and not getattr(self, "_stop_after_park", None) and not self.command(self.pending.pop(0)):
-                return
+                if not getattr(self, "signals", None):  # interrupted: only interrupt_tick ends the run
+                    return
             if interrupt_tick(self, f"run {self.chunk}" if self.chunk else "tick", tick_or_report):
                 return
-            if getattr(self, "_stopped", False) or self.idle():
-                return
+            if not getattr(self, "signals", None) and (getattr(self, "_stopped", False) or self.idle()):
+                return  # interrupted: idle stop and a judge's stop fold give way to interrupt_tick's verdict
             if self.live and self.ticks % max(1, self.fps // 10) == 0:
                 self.live(
                     {

@@ -191,7 +191,8 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
                 (i for i, cmd in enumerate(runner.pending) if cmd.strip() in ("stop", "stop now", "stop fold")),
                 None,
             )
-            if stop is not None and all(cmd.strip() == "state" for cmd in runner.pending[:stop]):
+            if stop is not None and all(cmd.strip() == "state" for cmd in runner.pending[:stop]) and not getattr(
+                    runner, "signals", None):
                 for cmd in runner.pending[:stop]:
                     runner.command(cmd)
                 runner.report(command=runner.pending[stop], ok=True, present=runner.target)

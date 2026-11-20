@@ -63,6 +63,7 @@ applies_when: "ending a hardware chunk_runner session via 'stop' or executing pa
   - "already folded" trusted one reading of a moving arm; the arm now stops and needs VERIFY_TICKS still readings in a row;
   - a signal arriving inside a tick whose pose read failed let the exception reach close_device; any exception with an interrupt recorded now holds, and main has a last-resort hold;
   - the HOLD loop stopped counting ticks, so live.json went quiet; it counts again.
+- **Review round 5.** The run loop still called idle() on the tick an interrupt was verifying; an earlier park's home_since let the idle stop end the run with the arm pushed 10 units off home. With an interrupt recorded, every ordinary exit (idle, judge stop, stop-fold _stopped, start-alignment stop) is now off and only the interrupt verdict ends the run.
   General rule: every exit from a torque-on loop needs its own proof of a safe pose. A guard verdict, a timeout or a missing reading is not that proof.
 - **Apply when** adding any new way to end a torque-on process (a signal, a timeout, a supervisor kill): a `finally` that turns torque OFF is a drop path unless a confirmed fold precedes it.
 - **Verification.** `test/test_omx_chunk_runner_interrupt.py` (fake robot: extended -> park then end; folded -> immediate end; blocked fold and guard stop -> HOLD until SIGUSR2; repeated SIGTERM; bound; live.json; before tracking) and four tests in `test/test_omx_record_session.py`. A supervised real-arm check is still pending.
