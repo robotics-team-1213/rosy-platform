@@ -588,6 +588,8 @@ pageScope.interval(() => {
 }, MAP_MS);
 pageScope.interval(() => { if (!document.hidden && !isMapHidden()) trackingView.refresh(); }, TRACKING_MS);
 pageScope.interval(() => { if (!document.hidden && !isMapHidden()) visionView.refreshFrame(); }, 1500);
+// Coming back to a hidden tab reads state at once instead of waiting for the next tick (#311).
+pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); if (!isMapHidden()) trackingView.refresh(); } });
 
 pageScope.onResume(() => {
   visionView.reset(); trackingView.reset(); trackingView.refresh();

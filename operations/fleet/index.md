@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · fix(fleet): CORE cancel result nav.failed CANCELED gets its own FAILED reason
 - 2026-11-18 · uncommitted · fix(map-pose): 늦은 odom·오래된 앵커·3 fps 짝짓기
 - 2026-11-18 · uncommitted · fix(map-pose): D-989 허용 목록에 콘솔 site goal 추가
 - 2026-11-18 · uncommitted · test(fleet): 카메라 관측 누적 시험의 경합 제거
 - 2026-11-18 · uncommitted · test(fleet): 정리 브랜치의 원격 실패 고침 — 노드 import 훅, camera-peer 자산 경로, 한 걸음 거절은 행 안 글자
-- 2026-11-18 · uncommitted · test(fleet): 셀 홀드 해제 시험에 사유 메모, 샘플 제어 막대는 AI 창 옆으로

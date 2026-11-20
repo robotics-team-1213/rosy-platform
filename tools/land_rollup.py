@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import land  # noqa: E402  (merge, checks, Stop)
 import land_async  # noqa: E402
 import land_batch  # noqa: E402
+import land_freeze  # noqa: E402
 import land_merge  # noqa: E402
 import land_queue  # noqa: E402
 import land_rollup_failed  # noqa: E402
@@ -455,7 +456,7 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
     if busy and not urgent:  # D-889 35: one rollup lane; a user's --urgent rollup still builds
         print(f"[rollup] a rollup is in flight: {busy[0]['branch']}", flush=True)
         return 0
-    rows = candidates(live, repo)
+    rows = [r for r in candidates(live, repo) if not land_freeze.refusal(repo, r["branch"])]  # drain: allowed shas only
     if auto or argv[:1] != ["apply"]:  # bn-L-2: a candidate that failed a rollup lands alone
         rows = land_rollup_failed.drop(repo, qdir.parent, rows, now)
     # Bundle fast affected landings on their own lane before falling back to mixed FULL rollups.

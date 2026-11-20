@@ -7,7 +7,7 @@ name = "rosy-contracts-motion"
 version = "0.1.0"
 description = "ROS-free semantic Motion Intent and DeviceControlPort types"
 requires-python = ">=3.12"
-dependencies = ["rosy-contracts-skill==0.1.0"]
+dependencies = ["rosy-contracts-skill==0.1.1"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

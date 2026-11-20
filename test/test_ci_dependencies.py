@@ -483,7 +483,11 @@ def test_merge_group_and_push_run_scoped_affected_against_their_base():
     doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     triggers = doc.get("on", doc.get(True))  # PyYAML reads the bare key `on` as True
     assert "merge_group" in triggers
-    assert "concurrency" not in doc, "a concurrency group could cancel a queue or main push run"
+    conc = doc.get("concurrency") or {}
+    assert conc.get("cancel-in-progress") == "${{ github.event_name == 'pull_request' }}", (
+        "concurrency must cancel only pull_request runs, never merge_group or push"
+    )
+    assert "github.run_id" in str(conc.get("group", "")), "non-PR events must isolate by run_id"
     scope = {s["name"]: s for s in doc["jobs"]["scope"]["steps"]}
     safety = scope["Safety-Review trailer (D-430)"]
     assert "github.event_name == 'merge_group'" in safety["if"]
@@ -577,3 +581,44 @@ def test_omx_cell_tests_run_on_the_cells_opencv_not_the_containers():
     lock = (ROOT / "deploy/robot/omx/requirements-cell.lock").read_text(encoding="utf-8").splitlines()
     assert any(line.startswith("opencv-python-headless==") for line in lock)
     assert any(line.startswith("numpy==") for line in lock)
+
+
+@pytest.mark.parametrize("head_ref,pr_sha,allow_shas,expected", [
+    ("refs/heads/gh-readonly-queue/main/pr-250-95610b8f9e", "abc123", "abc123 def456", 0),
+    ("refs/heads/gh-readonly-queue/main/pr-258-95610b8f9e", "deadbeef", "abc123 def456", 1),
+    ("refs/heads/gh-readonly-queue/main/pr-258-95610b8f9e", "abc123", "", 1),
+])
+def test_ci_result_cutover_drain_gate_checks_merge_group_pr_head(monkeypatch, head_ref, pr_sha, allow_shas, expected):
+    import io
+    import json
+    import urllib.request
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["ci-result"]["steps"]
+    gate = next(s for s in steps if s["name"] == "Cutover drain gate (merge_group)")
+    assert gate["if"] == "github.event_name == 'merge_group' && vars.ROSY_CUTOVER_PHASE == 'drain'"
+    assert steps[-1]["name"] == "All gating jobs passed"
+    python = gate["run"].split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    monkeypatch.setenv("HEAD_REF", head_ref)
+    monkeypatch.setenv("HEAD_SHA", "mergecommit000")
+    monkeypatch.setenv("ALLOW_SHAS", allow_shas)
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "robotics-team-1213/rosy-platform")
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+
+    seen = []
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=15: (
+        seen.append(req.full_url), _Resp(json.dumps({"head": {"sha": pr_sha}}).encode("utf-8"))
+    )[1])
+    if expected == 0:
+        exec(compile(python, str(WORKFLOW), "exec"), {})
+    else:
+        with pytest.raises(SystemExit) as ended:
+            exec(compile(python, str(WORKFLOW), "exec"), {})
+        assert ended.value.code == expected
+    assert seen == [f"https://api.github.com/repos/robotics-team-1213/rosy-platform/pulls/{head_ref.split('pr-')[1].split('-')[0]}"]

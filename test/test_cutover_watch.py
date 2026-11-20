@@ -50,6 +50,7 @@ def test_bad_file_is_invalid(repo):
 
 def test_ancestor_and_trees(repo):
     head = g(repo, "rev-parse", "HEAD")
+    g(repo, "checkout", "-q", "-b", "work")  # off main: landed commits are excluded by ancestry
     (repo / "f").write_text("2")
     g(repo, "commit", "-qam", "two")  # local only, not on origin/main
     local = g(repo, "rev-parse", "HEAD")
@@ -66,7 +67,7 @@ def test_ancestor_and_trees(repo):
 
 
 def test_record_dedupes(tmp_path):
-    st = {"phase": "drain", "owner": "o", "allow": [], "not_in_main": [], "outside_allow": [], "error": ""}
+    st = {"phase": "drain", "owner": "o", "allow": [], "not_in_main": [], "outside_allow": [], "unknown": [], "error": ""}
     status, board = tmp_path / "s" / "status.json", tmp_path / "b" / "board.md"
     assert cw.record(st, status, board, now="t1") is True
     assert cw.record(st, status, board, now="t2") is False
@@ -74,3 +75,27 @@ def test_record_dedupes(tmp_path):
     assert cw.record({**st, "outside_allow": ["x"]}, status, board, now="t3") is True
     assert len(board.read_text().splitlines()) == 2
     assert json.loads(status.read_text())["checked"] == "t3"
+
+
+def test_landed_tree_after_branch_deleted_not_outside(repo):
+    g(repo, "checkout", "-q", "-b", "feat")
+    (repo / "f").write_text("2")
+    g(repo, "commit", "-qam", "feat")
+    sha = g(repo, "rev-parse", "HEAD")
+    g(repo, "push", "-q", "origin", "HEAD:main")  # landed upstream, not in allow
+    g(repo, "checkout", "-q", "main")
+    g(repo, "branch", "-q", "-D", "feat")  # owner deleted the branch
+    g(repo, "fetch", "-q", "origin")
+    cfg(repo, allow=[])
+    tree(repo, "live-landed", sha)
+    s = cw.collect(repo)
+    assert s["outside_allow"] == [] and s["unknown"] == []
+
+
+def test_head_lookup_error_is_unknown(repo):
+    cfg(repo, allow=[])
+    holder = Path(g(repo, "rev-parse", "--absolute-git-dir")) / "rosy-land-wt"
+    (holder / "broken").mkdir(parents=True)
+    (holder / "broken" / ".git").write_text("gitdir: /nonexistent")  # rev-parse fails
+    s = cw.collect(repo)
+    assert s["unknown"] == ["broken"] and s["outside_allow"] == []

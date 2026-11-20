@@ -10,7 +10,8 @@ HEAD itself is checked (HEAD^..HEAD), never the whole history, so one old
 untrailered commit cannot keep CI red. Needs full history (``fetch-depth: 0``).
 
 What is safety-tagged comes from ``tools/harness/platform_parts.yaml``: files under
-a ``concern: safety`` root (deepest root wins) and the ``safety_modules`` list. A
+a ``concern: safety`` root (deepest root wins), the ``safety_modules`` list and the
+``safety_review_paths`` list (trailer only: no anchor or import invariant applies to it). A
 path counts when the manifest at HEAD, at BASE, at the commit, or at its parent
 tags it, so a branch forked before a path was tagged is still checked. A commit needs the
 trailer when it
@@ -105,7 +106,8 @@ def is_safety(path: str, roots: list[dict], modules: set[str]) -> bool:
 
 
 def _is_safety_in(path: str, manifest: dict) -> bool:
-    return is_safety(path, manifest.get("roots") or [], set(manifest.get("safety_modules") or ()))
+    modules = set(manifest.get("safety_modules") or ()) | set(manifest.get("safety_review_paths") or ())
+    return is_safety(path, manifest.get("roots") or [], modules)
 
 
 def tagged(manifest: dict) -> set[str]:
@@ -113,7 +115,8 @@ def tagged(manifest: dict) -> set[str]:
     anchors = {f"anchor:{anchor.get('symbol') or anchor.get('in', '') + '.' + anchor.get('string', '')}"
                for anchor in manifest.get("safety_anchors") or ()}
     return ({f"root:{root['path']}" for root in manifest.get("roots") or () if root.get("concern") == "safety"}
-            | {f"module:{path}" for path in manifest.get("safety_modules") or ()} | anchors)
+            | {f"module:{path}" for path in manifest.get("safety_modules") or ()}
+            | {f"review:{path}" for path in manifest.get("safety_review_paths") or ()} | anchors)
 
 
 def _parents(commit: str) -> list[str]:

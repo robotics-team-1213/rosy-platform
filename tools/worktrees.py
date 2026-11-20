@@ -34,8 +34,10 @@ prune removes an orphan idle 1 h, archiving files other than caches and ``.omc/s
 (``tools/worktree_rules.py``).
 
 Idle is the time since the newest of: the tip commit, the worktree's ``.git``
-file, the newest ``logs/HEAD`` entry, and the files ``git status`` lists. No ``logs/HEAD``
-reads as active. The index is not used: a plain ``git status`` refreshes it.
+file, the newest ``logs/HEAD`` entry, the index file and every non-cache file, changed or not (11-20: used
+worktrees were removed). No ``logs/HEAD`` reads as active. An owner note (``new`` stamps "; at <epoch>") younger
+than ``--idle-hours`` keeps the worktree unless it is clean and landed a commit of its own. Only a person runs
+``--snapshot``; ``land_tick`` and ``land_bottlenecks`` run the lossless prune only.
 
 ``new`` and ``tools/land.py`` only report what the lossless prune would remove
 (``--prune`` applies it, ``--no-prune`` is silent); ``new`` refuses at ``CAP``
@@ -142,7 +144,7 @@ def _only_caches(worktree: Path, rel: str) -> bool:
 
 def _row(path: Path, **facts) -> dict:
     return {"name": path.name, "path": path, "branch": "", "sha": "", "locked": False, "merged": False, "owner": "",
-            "last": _mtime(path), "git_dir": path, "orphan": False, "changed": [], "ignored": [], **facts}
+            "last": _mtime(path), "noted": 0.0, "git_dir": path, "orphan": False, "changed": [], "ignored": [], **facts}
 
 
 def scan(cwd: Path) -> tuple[Path, list[dict]]:
@@ -163,10 +165,9 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
     holder = (root / ".worktrees").resolve()
     if not holder.is_dir():
         return root, []
-    times = dict(line.split() for line in git(
-        root, "for-each-ref", "--format=%(objectname) %(committerdate:unix)", "refs/heads").stdout.splitlines())
-    merged = set(git(root, "for-each-ref", "--merged", "main", "--format=%(objectname)", "refs/heads").stdout.split())
-    owners = _owners(root)
+    times = dict(line.split() for line in git(root, "for-each-ref", "--format=%(objectname) %(committerdate:unix)", "refs/heads").stdout.splitlines())
+    merged = {s for t in rules.merge_targets(root) for s in git(root, "for-each-ref", "--merged", t, "--format=%(objectname)", "refs/heads").stdout.split()}
+    owners, noted = rules.owner_notes(root, git)
     rows = []
     for block in blocks[1:]:
         path = Path(block["worktree"])
@@ -176,7 +177,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
         if sha in times:
             is_merged, tip = sha in merged, int(times[sha])
         else:  # detached at a commit no branch points to
-            is_merged = git(root, "merge-base", "--is-ancestor", sha, "main").returncode == 0
+            is_merged = rules.is_merged(root, sha)
             tip = int(git(root, "show", "-s", "--format=%ct", sha).stdout.strip() or 0)
         try:  # `.git` is a file "gitdir: <absolute or relative path>"
             git_dir = path / (path / ".git").read_text(encoding="utf-8").partition("gitdir:")[2].strip()
@@ -184,7 +185,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
             git_dir = path
         reflog = rules.reflog_time(git_dir / "logs" / "HEAD")  # entry time: gc rewrites the file (D-886)
         branch = block.get("branch", "").removeprefix("refs/heads/")
-        rows.append(_row(path, branch=branch, sha=sha, owner=owners.get(branch, ""),
+        rows.append(_row(path, branch=branch, sha=sha, owner=owners.get(branch, ""), noted=noted.get(branch, 0.0),
                          locked="locked" in block, merged=is_merged, git_dir=git_dir,
                          last=max(tip, reflog, _mtime(path / ".git")) if reflog else float("inf")))
     listed = {row["path"].resolve() for row in rows}
@@ -198,14 +199,6 @@ def _identity(root: Path) -> str:
     who = f"{git(root, 'config', 'user.name').stdout.strip()} <{git(root, 'config', 'user.email').stdout.strip()}>"
     session = os.environ.get("CLAUDE_CODE_SESSION_ID")
     return who + (f"; session {session}" if session else "")
-
-
-def _owners(root: Path) -> dict[str, str]:
-    """branch -> the identity ``new`` recorded in ``branch.<name>.description`` ("owner: <identity>[; over cap ...]")."""
-    lines = git(root, "config", "--get-regexp", r"^branch\..*\.description$").stdout.splitlines()
-    found = {key[len("branch."):-len(".description")]: value.removeprefix("owner: ").split("; over cap")[0]
-             for key, _, value in (line.partition(" ") for line in lines) if value.startswith("owner: ")}
-    return {branch: who for branch, who in found.items() if who.strip(" <>;")}  # " <>": no git identity was set
 
 
 def _status(path: Path) -> tuple[list[str], list[str]] | None:
@@ -258,14 +251,18 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
     stale = None if row["merged"] or not row["sha"] else rules.stale_history(row["path"], row["sha"])
     if stale:
         row["note"] = stale
+    # A young owner note (11-20: its session may be about to use it); a landed clean worktree has nothing to lose.
+    noted = not landed and now - row["noted"] < idle_hours * 3600
     cheap = ("locked" if row["locked"]
              else "current" if row["path"].resolve() == here
              else "on main" if row["branch"] == "main"
              else "stale-history" if stale
+             else "active" if noted
              else "active" if row["wait_h"] and now - row["last"] < row["wait_h"] * 3600
              else "in-progress operation" if any((row["git_dir"] / name).exists() for name in BUSY)
              else "needs snapshot" if lossless and not row["merged"] else None)
     if cheap is None or full:
+        index_t = _mtime(row["git_dir"] / "index")  # before status, which may refresh the index
         status = _status(row["path"])
         if status is None:
             cheap = cheap or "unreadable"
@@ -274,6 +271,8 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
             if status[0]:  # uncommitted files: back to the full idle wait
                 row["fast"], row["wait_h"] = False, idle_hours
             row["last"] = max([row["last"], *(_newest(row["path"] / rel) for rel in row["changed"])])
+            if row["wait_h"]:
+                row["last"] = max(row["last"], index_t, rules.newest_file(row["path"], lambda r: _is_cache(row["path"], r)))
     row["idle_h"] = max(0.0, (now - row["last"]) / 3600)
     row["landed_dirty"] = landed and bool(row["changed"])  # D-790: work continued after the branch landed
     row["verdict"] = ("landed-dirty" if row["landed_dirty"] and cheap in (None, "active")
@@ -351,8 +350,7 @@ def _remove(root: Path, row: dict, day: str, now: float, say=print) -> str:
     note += rules.leave_tombstone(path) if path.exists() else ""
     branch = row["branch"]
     # Exact sha: `update-ref -d` fails if the branch moved, so no commit that is not on main is dropped.
-    if (branch and row["merged"]
-            and git(root, "merge-base", "--is-ancestor", row["sha"], "refs/heads/main").returncode == 0):
+    if branch and row["merged"] and rules.is_merged(root, row["sha"]):
         deleted = git(root, "update-ref", "-d", f"refs/heads/{branch}", row["sha"])
         if deleted.returncode == 0:
             git(root, "config", "--remove-section", f"branch.{branch}")
@@ -411,6 +409,7 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
             except (RuntimeError, OSError) as exc:
                 say(f"FAIL    {label} {exc}")
                 failed.add(row["branch"])  # its "branch kept" holds for this run
+        git(root, "worktree", "prune", *([] if apply else ["--dry-run"]))
         rules.sweep_branches(root, now, apply, say, quiet, keep=failed)
     finally:
         if apply:
@@ -455,7 +454,7 @@ def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
         if row["merged"] or row["orphan"] or row.get("note"):
             continue
         parents = git(root, "rev-list", "--parents", "-n1", row["sha"]).stdout.split()[2:]
-        if any(git(root, "merge-base", "--is-ancestor", p, "main").returncode == 0 for p in parents):
+        if any(rules.is_merged(root, p) for p in parents):
             row["note"] = "tip is a merge of main"
     print(f"{'name':<32} {'branch':<44} {'main':<8} {'dirty':>5} {'idle':>7} {'lock':<6} {'you':<5} verdict  [owner]")
     _table(sorted(rows, key=lambda r: -r["idle_h"]), me, now)
@@ -527,7 +526,7 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
         result = git(root, *add)
     _must(result, "git worktree add")
     # Who made it: `prune --snapshot` takes only the caller's own; people read it in `status` (D-790: --owner).
-    note = f"owner: {owner.strip() if owner else _identity(root)}"
+    note = f"owner: {owner.strip() if owner else _identity(root)}; at {int(now)}"
     if len(rows) >= CAP:
         note += f"; over cap ({len(rows)} >= {CAP}): {reason}"
         print(f"[worktrees] over the cap ({len(rows)} >= {CAP}), forced: {reason}")
