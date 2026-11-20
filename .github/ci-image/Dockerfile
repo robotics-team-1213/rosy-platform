@@ -27,7 +27,7 @@ RUN pip3 install --ignore-installed --require-hashes --no-deps --only-binary=:al
 # Test tools use the locked set as constraints (a hashed file as constraints would force hash mode: name==version lines only).
 RUN grep -o '^[A-Za-z0-9._-]*==[^ ]*' /opt/rosy-ci/src/device-python-requirements.txt > /opt/rosy-ci/runtime-constraints.txt
 # playwright is pinned: 1.65.0 (2026-11-09) enforces the inert attribute and turned the ui-confirm browser tests red.
-RUN pip3 install -c /opt/rosy-ci/runtime-constraints.txt flake8 httpx==0.28.1 pyyaml jsonschema ext4 playwright==1.64.1
+RUN pip3 install -c /opt/rosy-ci/runtime-constraints.txt flake8 httpx==0.28.1 pyyaml jsonschema ext4 playwright==1.64.1 pytest-xdist
 # Account authority imports oauthlib and joserfc at module top; tests that run python3 -I need them system-wide.
 RUN pip3 install --no-deps oauthlib==4.0.0 joserfc==1.7.5
 # D-456: the same hash-locked receiver crypto as the signed ARM payload (AMD64 wheel hashes), kept off the system path.
