@@ -779,6 +779,6 @@ main,
 #queues-panel { position: fixed; inset-block-start: calc(var(--appbar-height) + var(--space-1)); inset-inline-end: calc(56px + var(--space-2)); z-index: 6;
   inline-size: min(28rem, calc(100vw - 56px - 2 * var(--space-2))); max-block-size: calc(100dvh - var(--appbar-height) - var(--space-4));
   overflow-y: auto; overscroll-behavior: contain; background: var(--surface-raised); border: 1px solid var(--border-default); }
-#queues-panel:not([data-open="true"]) { display: none; }
+#queues-panel:not([data-open="true"]), #queues-panel[hidden] { display: none; }
 @media (width < 64rem) { #queues-panel { inset-inline: var(--space-2); inline-size: auto; } }
 #fleet-inbox[data-crit="true"] #header-unread { background: var(--status-crit); color: var(--text-on-danger); }
