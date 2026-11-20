@@ -58,6 +58,19 @@ def freeze(main, phase, *allowed):
 
 
 @pytest.fixture(autouse=True)
+def no_real_gh(monkeypatch):
+    """land_freeze.main syncs GitHub variables; no test may reach the real gh."""
+    real_run = subprocess.run
+
+    def run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "variable", "set"]:
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(land_freeze.subprocess, "run", run)
+
+
+@pytest.fixture(autouse=True)
 def in_main(repo, monkeypatch):
     monkeypatch.chdir(repo[0])  # the CLI works on the cwd's clone
 
@@ -238,3 +251,46 @@ def test_land_py_checks_the_freeze_before_main_moves():
     text = (ROOT / "tools" / "land.py").read_text(encoding="utf-8")
     assert text.index("land_freeze.refusal(wt, candidate, new=False)") < text.index("on_main(main_co); land_checks.stash")
     assert "land_freeze.refusal(Path.cwd(), None)" in text
+
+
+def test_set_syncs_github_variables_and_warns_only_on_gh_failure(repo, monkeypatch, capsys):
+    main, dev = repo
+    sha = _git(dev, "rev-parse", "HEAD")
+    assert land_freeze.main(["allow", "feat/x", sha]) == 0
+    calls = []
+    real_run = subprocess.run
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "variable", "set"]:
+            calls.append((cmd, kwargs.get("cwd")))
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(land_freeze.subprocess, "run", fake_run)
+    assert land_freeze.main(["set", "drain"]) == 0
+    assert calls == [
+        (["gh", "variable", "set", "ROSY_CUTOVER_PHASE", "--body", "drain"], str(main)),
+        (["gh", "variable", "set", "ROSY_CUTOVER_ALLOW", "--body", sha], str(main)),
+    ]
+
+    def failing_run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "variable", "set"]:
+            return subprocess.CompletedProcess(cmd, 1, "", "gh auth missing")
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(land_freeze.subprocess, "run", failing_run)
+    assert land_freeze.main(["set", "normal"]) == 0
+    assert land_freeze.load(main)["phase"] == "normal"
+    assert "warning: gh variable set" in capsys.readouterr().err
+
+    calls.clear()
+
+    def recording_run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "variable", "set"]:
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(land_freeze.subprocess, "run", recording_run)
+    assert land_freeze.main(["allow", "feat/x", sha, "--remove"]) == 0
+    assert ["gh", "variable", "set", "ROSY_CUTOVER_ALLOW", "--body", ""] in calls
