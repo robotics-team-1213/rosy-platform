@@ -356,6 +356,8 @@ class DockingPhasesMixin:
 
     def _fail(self, reason: str, *, safety_stop: bool = False) -> None:
         """종착이다. 스스로 재시도하지 않는다."""
+        phase = self._phase
+        in_lane = (not safety_stop and self._dock is not None and self._bay_phases.active() and self._bay_phases.in_lane_dead_end(phase))
         self._state = DockState.DOCK_FAILED
         operation = self.native.current
         if operation is not None:
@@ -375,6 +377,8 @@ class DockingPhasesMixin:
             "error",
             {"reason": reason, "dock_id": self._dock.id if self._dock else None},
         )
+        if in_lane:
+            self._call_person("stopped in the lane: " + reason)    # a dead end that leaves the robot standing in the bay lane needs a person
 
     # --- 공통 -----------------------------------------------------------------
 
