@@ -215,6 +215,8 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if modules:
             entries.append({"name": "modules", "invocations": modules, "ros": "overlay"})
     else:  # one runner per invocation; a whole SUITE_SHARDS suite keeps its full-tier groups (25 min limit)
+        import affected_queue
+        sel = affected_queue.narrowed(repo, sel)  # the merge queue's env only (D-1059); otherwise sel itself
         whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
         whole["test"] = {"name": "root-test", "invocations": [["test"]]}
         for inv in sel.invocations:
