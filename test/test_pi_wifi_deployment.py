@@ -103,6 +103,18 @@ def test_navigation_status_checks_only_the_native_service(
         assert f"SubState={sub}" in result.stdout
 
 
+@bash_only
+def test_interface_requires_a_value_before_navigation_status():
+    result = subprocess.run(
+        [BASH, "-c", 'export PATH=; source "$@"', "verify-pi-test",
+         str(VERIFIER), "--interface", "--navigation-status"],
+        capture_output=True, text=True, check=False, timeout=10,
+    )
+    assert result.returncode == 2
+    assert "--interface requires auto or an interface name" in result.stderr
+    assert result.stdout == ""
+
+
 def test_installer_uses_official_arm64_capable_docker_repository():
     script = _text(INSTALLER)
 

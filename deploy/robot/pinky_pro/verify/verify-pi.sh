@@ -36,10 +36,10 @@ while (($# > 0)); do
       navigation_status=1
       ;;
     --interface)
-      (($# >= 2)) || {
+      if (($# < 2)) || [[ "$2" == --* ]]; then
         echo "--interface requires auto or an interface name" >&2
         exit 2
-      }
+      fi
       network_interface="$2"
       shift
       ;;
