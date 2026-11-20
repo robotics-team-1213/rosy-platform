@@ -4958,3 +4958,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 검토 모드는 빈 접힌 팔의 복귀 전에 의도를 기록한다. 복귀 뒤 같은 의도와 새 상태를 다시 검증한다. 자동 픽과 AreaXYZ는 복귀 후 보류를 한 행으로 기록하고 의도 파일을 보존한다.
 - 증거: 가짜 셀 회귀 케이스 추가, 원격 pytest 통과. 독립 검토 APPROVE WITH NOTES(D:/DevTemp/omx-abs-unblock-panel-1120/review-n1n3-f09301836a.md).
 - gate 변화: 검토 digest가 cell_unwedge.py를 포함해 task_sha256이 바뀐다. 기존 검토(operating envelope)는 다시 검토해야 맞는다. runner state 응답이 holding을 싣고, holding이나 전류가 없으면 홈 복귀를 시작하지 않는다.
+
+## 2026-11-20 · uncommitted · fix(omx): Gate open 보류를 시도 원장에 남긴다
+- 변경: 사이클, 잡은 물체 반환, owner 목표는 활성 원장이 있으면 보류를 한 행으로 기록한다. 복귀 뒤 차단되면 보류 의도를 보존한다. 재계획 load 거부는 이송 실패로 집계한다.
+- 증거: owner 보류와 재계획 load 거부 회귀 시험을 추가했다.
+- gate 변화: `cell_attempts.py` 변경으로 `task_sha256`이 바뀐다. 기존 운영 검토는 새 해시에 맞춰 갱신해야 한다.

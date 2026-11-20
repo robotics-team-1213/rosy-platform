@@ -350,6 +350,27 @@ def test_failures_stay_in_the_denominator_and_new_failures_revoke(tmp_path, task
     assert envelope.assess(*task, now=100.01)["reason"] == "runtime_failure"
 
 
+def test_refused_replan_load_counts_as_a_runtime_failure(tmp_path, task, envelope, monkeypatch):
+    import cell_attempts
+
+    config, calibration, _, _ = task
+    attempts, _ = approve(tmp_path, envelope, task)
+    assessment = envelope.assess(*task, now=100.01)
+    refused = {**assessment, "allowed": False, "reason": "not_reviewed"}
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    cell_attempts.start(attempts, "load-refusal")
+    cell_attempts.begin(config, assessment)
+    cell_attempts.record(config, calibration, "tray", "belt", 1, {
+        "locate": {"found": True}, "envelope": assessment,
+        "transfer": {"result": "refused", "at": "load", "envelope": refused,
+                     "steps": [{"command": "load revised.json", "ok": False}]},
+    }, 100.01)
+
+    row = json.loads(attempts.read_text().splitlines()[-1])
+    assert (row["outcome"], row["fail_stage"], row["fail_class"]) == ("failed", "transfer", "refused at load")
+    assert envelope.assess(*task, now=100.01)["reason"] == "runtime_failure"
+
+
 def test_unverified_commissioning_placement_cannot_approve_automatic_task(tmp_path, task, envelope):
     attempts, document = approve(tmp_path, envelope, task)
     rows = [json.loads(line) for line in attempts.read_text().splitlines()]

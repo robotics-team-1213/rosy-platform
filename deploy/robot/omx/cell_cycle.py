@@ -307,9 +307,22 @@ def _tools(plan: dict, commissioning: bool) -> dict:
                                operating_profile=bind_pipeline(cfg[a])["_operating_profile_binding"])
 
     def carry(arm, library):
-        gate = Gate(Guarded(cells[arm], cfg[arm]), cfg[arm], cals[arm], sequence=FOLDED)  # D-911, as cell_auto_pick
-        held = gate.open(library, lambda assessment: cell_attempts.begin(cfg[arm], assessment))
+        config, calibration = cfg[arm], cals[arm]
+        ledger_path = cell_attempts.RUN["path"]
+        if ledger_path is not None and (cell_attempts.RUN["arm_id"] != arm
+                or ledger_path.resolve() != (Path(config["work_dir"]).expanduser() / "attempts.jsonl").resolve()):
+            return {"ok": False, "error": "held: audit_unavailable"}
+        t0 = time.time()
+        gate = Gate(Guarded(cells[arm], config), config, calibration, sequence=FOLDED)  # D-911
+        held = gate.open(library, lambda assessment: cell_attempts.begin(config, assessment))
         if held is not None:
+            if ledger_path is not None:
+                tried = {"locate": {"found": True}, "library": str(library)}
+                ledger = cell_attempts.ReplanLedger(config, calibration, "unknown", "unknown", 1, tried, t0, None)
+                try:
+                    ledger.record_open_hold(gate, held)
+                except (OSError, ValueError, KeyError, TypeError):
+                    return {"ok": False, "error": "held: audit_unavailable"}
             return {"ok": False, "error": f"held: {held['reason']}"}
         moved = transfer_folded(gate, library, sequence=FOLDED)
         return {"ok": moved["result"] == "placed", "error": moved["result"]}
