@@ -13,6 +13,7 @@ from importer_compat import import_model, reference_model
 from model_checks import check_urdf, check_vendor_manifest
 from finger_pads import add_finger_pads
 from run_omx_backend import FOLLOWER_STIFFNESS, FOLLOWER_DAMPING, FOLLOWER_MAX_EFFORT_NM
+from r08_rl_fixture import CASE as R08_RL_CASE
 
 
 def run(args):
@@ -116,18 +117,21 @@ def run(args):
     fixed('BeltStop', FIXTURE.get('belt_stop_m', [.16 if mapped else .20, -.029, .027 if mapped else .035]),
           FIXTURE.get('belt_stop_size_m', [.12, .004, .004 if mapped else .02]), [.65, .65, .65])
     floor = args.mapped_cube_stack
-    if FIXTURE.get('ship_plate'):
+    if FIXTURE.get('r08_scene'):
+        from r08_scene import add_structure
+        add_structure(stage, FIXTURE)
+    elif FIXTURE.get('ship_plate'):
         scene.add_ship_plate(stage, FIXTURE)
     else:
         fixed('Bin', [FIXTURE['bin_origin_m'][0]+.045, 0., FIXTURE['bin_origin_m'][2]-.001] if floor else
               ([.16, FIXTURE['bin_origin_m'][1]+FIXTURE['bin_size_m'][1]/2, .0125] if mapped else [.20, .02, .0125]),
               [.09, FIXTURE['bin_size_m'][1] if mapped else .09, .002 if floor else .025], [.30, .32, .34] if floor else [.15, .48, .7])
-    if mapped:
+    if mapped and not FIXTURE.get('r08_scene'):
         from mapped_stack_task import build_map
         build_map(world, stage, FIXTURE)
     origin = np.array(FIXTURE['bin_origin_m'])
     # D-969: the real cameras never see these aids, so frames that train or drive a policy are drawn without them
-    aids = not (FIXTURE.get('demo_recording') or FIXTURE.get('policy'))
+    aids = not (FIXTURE.get('demo_recording') or FIXTURE.get('policy') or FIXTURE.get('r08_scene'))
     for axis in range(3 if aids else 0):
         others = [i for i in range(3) if i != axis]
         for ai, a in enumerate((0., FIXTURE['bin_size_m'][others[0]])):
@@ -266,10 +270,13 @@ def run(args):
     if mapped:
         from mapped_stack_fixture import home, tcp_from_wrist
         from mapped_stack_task import Planner
-        planner = Planner(args.report.parent,scene=FIXTURE.get('planning_scene'),tcp_x_m=FIXTURE.get('tcp_offset_m',[None])[0])
-        initial = planner.request('homes', bases=FIXTURE['arm_bases_m'],
-            base_yaws=FIXTURE.get('arm_base_yaws_rad', [0., 0.]),
-            points=[home(0, args.mapped_cube_stack, fixture=FIXTURE), home(1, args.mapped_cube_stack, fixture=FIXTURE)])
+        if FIXTURE.get('r08_scene'):
+            initial = {'homes': FIXTURE['home_joints_rad']}
+        else:
+            planner = Planner(args.report.parent,scene=FIXTURE.get('planning_scene'),tcp_x_m=FIXTURE.get('tcp_offset_m',[None])[0])
+            initial = planner.request('homes', bases=FIXTURE['arm_bases_m'],
+                base_yaws=FIXTURE.get('arm_base_yaws_rad', [0., 0.]),
+                points=[home(0, args.mapped_cube_stack, fixture=FIXTURE), home(1, args.mapped_cube_stack, fixture=FIXTURE)])
         if FIXTURE.get('gripper'):  # opt-in jaw: finger angles from its pad geometry, not the stock jaw's profile
             from palletizing_gripper import finger_angles
             initial['gripper'] = finger_angles(FIXTURE.get('release_gap_m'))
@@ -342,7 +349,7 @@ def main():
     modes.add_argument('--mapped-container-rl', action='store_true')
     modes.add_argument('--mapped-rl', action='store_true')
     parser.add_argument('--layers', type=int, choices=(1, 2, 3), default=3)
-    parser.add_argument('--container-case', choices=('nominal', 'offset', 'reverse', 'column', 'nominal-estimate', 'nominal-bc-v0',
+    parser.add_argument('--container-case', choices=(R08_RL_CASE, 'nominal', 'offset', 'reverse', 'column', 'nominal-estimate', 'nominal-bc-v0',
                                  'nominal-bc-v0-rl0', 'release-episodes-rl0', 'release-episodes-rl1',
                                  'release-episodes-rl2', 'release-episodes-rl3', 'nominal-bc-v0-rl3',
                                  'nominal-bc-v0-release8', 'nominal-release3', 'nominal-gap6-release3',
@@ -350,6 +357,8 @@ def main():
                                  *('nominal-palletizing-v21-ship-'+n for n in ('y060-c2-g315', 'y060-c2-seat-g315', 'y080-c2-g315', 'y080-c2-seat-g315', 'surveyed-bases-demo', 'surveyed-bases-wrist-demo', 'policy-smoke', 'demo', 'surveyed-bases', 'surveyed', 'surveyed-skew-20261110', 'r08-berth-v16', 'y040', 'y050', 'y060', 'y-060', 'x150', 'y020', 'y030', 'x100', 'y-020', 'y-030', 'g315', 'y020-g315', 'y030-g315', 'y040-g315', 'y-020-g315', 'y-030-g315', 'g3225', 'y060-g315', 'y060-guard-g315', 'r290-g315', 'y080-r290-g315', 'y100-r290-guard-g315', 'y050-g315', 'y100-r290-g315', 'y-080-r290-g315', 'w05-g315', 'y060-r290-g315', 'y070-r290-g315', 'y-060-r290-g315', 'y-070-r290-g315', 'w10-g315', 'w05-r290-g315', 'w10-r290-g315', 'y020-g3225', 'y030-g3225', 'y040-g3225', 'y-020-g3225'))),
                         default='nominal')
     args = parser.parse_args()
+    if args.container_case == R08_RL_CASE and not args.mapped_container_rl:
+        parser.error("r08-v24-cad194 requires --mapped-container-rl")
     check_vendor_manifest()
     if args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack or args.mapped_container_stack or args.mapped_container_rl:
         from mapped_stack_fixture import physical_model

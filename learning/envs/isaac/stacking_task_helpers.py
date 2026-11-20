@@ -202,6 +202,10 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
     env = StackingEnv()
 
     # Observe uncommanded cargo transport on the belt before any policy is applied.
+    if 'belt_probe_start_m' in fixture:
+        cargo[0].set_world_pose(np.array(fixture['belt_probe_start_m']), np.array([1., 0., 0., 0.]))
+        cargo[0].set_linear_velocity(np.zeros(3))
+        cargo[0].set_angular_velocity(np.zeros(3))
     start = cargo[0].get_world_pose()[0].copy()
     for _ in range(120):
         for _ in range(fixture.get('physics_substeps', 1)):

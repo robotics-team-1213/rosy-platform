@@ -167,6 +167,15 @@ def judge_isaac_stage(suite_or_report: dict | Path, *, scenario: str = "arm-s-ce
     """Judge or stage Isaac Sim's D-872 / D-947 contact & vision confirmation from a suite report, single report, 3-tier container stack report, or MuJoCo handoff."""
     data = json.loads(Path(suite_or_report).read_text(encoding="utf-8")) if isinstance(suite_or_report, (str, Path)) else dict(suite_or_report)
     ok_results = _ISAAC_OK_RESULTS
+    if data.get("schema") == "rosy.omx-stacking-rl/1":
+        trained = data.get("training_verified") is True
+        passed = trained and data.get("task_success") is True
+        return dict(status="passed" if passed else "failed", claim="PhysX PPO evaluation",
+                    scenario="omx-map-container-stacking-rl", run_id=data.get("run_id"),
+                    result=dict(training_verified=trained, task_success=passed,
+                                evaluation_successes=data.get("evaluation_successes"),
+                                case=(data.get("fixture") or {}).get("case")),
+                    artifacts=[], reason=None if passed else "Independent PhysX stack evaluation did not pass.")
     if "suite" in data and "container_stack" in data:
         s_judge = judge_isaac_stage(data["suite"], scenario="arm-s-cell-case")
         c_judge = judge_isaac_stage(data["container_stack"], scenario="omx-map-container-stack")
@@ -219,15 +228,21 @@ def run_isaac_stage(run: Path, sha: str, python: str, mode: str, only: list[str]
             suite_report = json.loads((out_dir / "suite-report.json").read_text(encoding="utf-8"))
     if mode in ("container-stack", "both") and handoff_file.is_file():
         s2 = (json.loads(handoff_file.read_text(encoding="utf-8")).get("stage_2_isaac") or {})
+        if s2.get("layout_error"):
+            raise ValueError(s2["layout_error"])
+        scenario = s2.get("two_arm_scenario", "omx-map-container-stack")
+        if scenario == "omx-map-container-stacking-rl" and (not s2.get("ready") or not s2.get("two_arm_config")):
+            return suite_report
         cfg = s2.get("two_arm_config") or dict(seed=0, layers=3, case="nominal-palletizing-v21-ship-surveyed-skew-20261110")
         out_dir = run / "isaac-container-stack"
         out_dir.mkdir(parents=True, exist_ok=True)
         cfg_file = out_dir / "config.json"
         cfg_file.write_text(json.dumps(cfg), encoding="utf-8")
         subprocess.run([python, str(ROOT / "tools/remote/remote_isaac.py"), "run", "--scenario",
-                        s2.get("two_arm_scenario", "omx-map-container-stack"), "--config", str(cfg_file),
+                        scenario, "--config", str(cfg_file),
                         "--sha", sha, "--out", str(out_dir / "run")], check=False)
-        found = next((out_dir / "run").rglob("mapped-stack-report.json"), None)
+        report_name = "stacking-report.json" if scenario == "omx-map-container-stacking-rl" else "mapped-stack-report.json"
+        found = next((out_dir / "run").rglob(report_name), None)
         if found and found.is_file():
             stack_report = json.loads(found.read_text(encoding="utf-8"))
     if mode == "both" and suite_report is not None and stack_report is not None:

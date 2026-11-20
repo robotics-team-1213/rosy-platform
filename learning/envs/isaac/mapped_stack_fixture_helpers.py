@@ -163,6 +163,8 @@ def container_fixture(*, layers, case):
 def plan(cube=False, *, fixture=None):
     if cube:
         fixture = CUBE_FIXTURE if fixture is None else fixture
+        if 'stack_plan' in fixture:
+            return fixture['stack_plan']
         rows = fixture.get('row_order', [0, 1, 2])
         width=len(rows)
         pitch=.03+fixture.get('row_gap_m',0.)
