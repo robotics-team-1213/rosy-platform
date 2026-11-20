@@ -154,6 +154,23 @@ class DockInstance(BaseModel):
             raise ValueError("dock id required")
         return value
 
+    @field_validator("metadata")
+    @classmethod
+    def _reference_scan_is_a_scan(cls, value: dict) -> dict:
+        """An optional seated LiDAR scan (bay_scan_pose.py): the raw scan, bounded. Anything else is refused at the door."""
+        scan = value.get("reference_scan")
+        if scan is None:
+            return value
+        ranges = scan.get("ranges") if isinstance(scan, dict) else None
+        if not isinstance(ranges, list) or not 60 <= len(ranges) <= 2000:
+            raise ValueError("reference_scan needs 60..2000 ranges")
+        for key in ("angle_min", "angle_increment", "range_min", "range_max"):
+            if isinstance(scan.get(key), bool) or not isinstance(scan.get(key), (int, float)) or not math.isfinite(scan[key]):
+                raise ValueError(f"reference_scan.{key} must be a finite number")
+        if any(r is not None and (isinstance(r, bool) or not isinstance(r, (int, float))) for r in ranges):
+            raise ValueError("reference_scan ranges are numbers or null")
+        return value
+
     def staging_pose(self, offset_m: float) -> Pose2D:
         """도크 정면 `offset_m` 앞의 포즈.
 

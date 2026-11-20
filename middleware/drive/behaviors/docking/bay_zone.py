@@ -7,6 +7,8 @@
 쓰지 않는다:
 
 - out: 스테이징 근처나 밖 — 기존 흐름(Nav2 스테이징 → 회전).
+- acquire: 칸 줄 안에서 이미 곧게 서 있다(횡·방위가 후진 정렬 허용 안) — 나가지 않고 그 자리에서 선 포획부터.
+  선이 스테이징 거리 앞에서 끝나는 현장(2026-11-20 y8xs)에서 나가기는 선을 잃는다.
 - exit: 자기 칸 줄 안, 코가 밖을 보고(뒤가 칸 쪽) 분홍선이 보이고 곧게 서 있다 — 축을 따라
   곧게 전진해 스테이징 거리까지 나간 뒤, 이미 뒤가 칸을 보므로 회전 없이 선 포획부터.
 - manual: 그 밖(맵 포즈 없음, 다른 칸 줄, 코가 칸 쪽, 선이 안 보임, 맵과 선이 어긋남, 곧은
@@ -27,13 +29,46 @@ from core_features.docking.rear_phases import rear_errors
 
 
 NO_LINE = "guide line not visible inside the bay"
+DISAGREE = "map pose and guide line disagree"
 
 
 @dataclass(frozen=True)
 class ZoneVerdict:
-    kind: str            # "out" | "exit" | "manual"
+    kind: str            # "out" | "acquire" | "exit" | "manual"
     reason: str
     exit_m: float = 0.0  # exit: 곧게 전진할 거리
+
+
+def scan_geometry(match, staging_offset_m: float, cfg):
+    """(along, lateral, heading) of the zone check from a LiDAR bay-pose match, or None when it is not good enough.
+
+    Bay frame -> dock frame: along = x (out of the bay), lateral = -y (the dock's +x points into the bay, so its left
+    is the seated robot's right), heading is the same. Wrong-bay protection stays: a good fit (inliers, margin to the
+    next different pose), inside this bay's lane, inside the row, a plausible heading. Anything else: None -> map path."""
+    if match is None or not all(math.isfinite(v) for v in (match.x, match.y, match.heading, match.inliers, match.margin)):
+        return None
+    if match.inliers < cfg.bay_scan_inlier_min or match.margin < cfg.bay_scan_margin_min:
+        return None
+    if abs(match.y) > cfg.bay_lane_half_m or abs(match.heading) > cfg.bay_scan_heading_max_rad:
+        return None
+    if match.x >= staging_offset_m - cfg.bay_zone_margin_m:
+        return None                          # at or past staging the reference scan no longer sees the bay
+    return match.x, -match.y, match.heading
+
+
+def scan_diagnosis(asked: bool, match, error, scan, cfg) -> str:
+    """Why the LiDAR bay pose was or was not used, for the refusal text (CORE's Python logging does not reach the journal)."""
+    if scan is not None:
+        return "[scan pose used]"
+    if not asked:
+        return "[scan pose: never requested]"
+    if match is None:
+        return "[scan pose: no answer in %.1f s]" % cfg.bay_scan_pose_wait_s
+    m = match[0]
+    if m is None:
+        return "[scan pose: no fit%s]" % (" (%s)" % error if error else "")
+    return ("[scan pose rejected: inliers %.2f (min %.2f) margin %.2f (min %.2f) x %.3f y %.3f heading %.1f deg]"
+            % (m.inliers, cfg.bay_scan_inlier_min, m.margin, cfg.bay_scan_margin_min, m.x, m.y, math.degrees(m.heading)))
 
 
 def map_offsets(pose, dock) -> tuple[float, float, float]:
@@ -44,10 +79,15 @@ def map_offsets(pose, dock) -> tuple[float, float, float]:
     return -(dx * c + dy * s), -dx * s + dy * c, _wrap(yaw - dock.yaw - math.pi)
 
 
-def classify(pose, dock, staging_offset_m: float, observation, cfg) -> ZoneVerdict:
-    if pose is None:
+def classify(pose, dock, staging_offset_m: float, observation, cfg, scan=None) -> ZoneVerdict:
+    """`scan`: (along, lateral, heading) from scan_geometry, measured by LiDAR; it replaces the map pose."""
+    src = "scan" if scan is not None else "map"
+    if scan is not None:
+        along, lateral, heading = scan
+    elif pose is None:
         return ZoneVerdict("manual", "map pose unavailable")
-    along, lateral, heading = map_offsets(pose, dock)
+    else:
+        along, lateral, heading = map_offsets(pose, dock)
     if along >= staging_offset_m - cfg.bay_zone_margin_m:
         # One-way corridor: Nav2 would drive against the flow into a robot leaving the bay row.
         if (cfg.bay_downstream_sign and abs(along - staging_offset_m) <= cfg.bay_corridor_band_m
@@ -57,15 +97,31 @@ def classify(pose, dock, staging_offset_m: float, observation, cfg) -> ZoneVerdi
     if abs(lateral) > cfg.bay_lane_half_m:
         return ZoneVerdict("manual", "inside the bay row but not in this bay's lane")
     seen = None if observation is None else rear_errors(observation)
-    if seen is not None:
-        heading = seen[2]        # the camera sees the line: its heading decides, the SLAM yaw may be 17-30 deg off
+    if seen is not None and scan is None:
+        heading = seen[2]        # the camera sees the line: its heading decides, the SLAM yaw may be 17-30 deg off (a LiDAR pose is checked against it instead)
     if abs(heading) > math.pi / 2:
         return ZoneVerdict("manual", "nose toward the bay: leaving needs a reverse without rear sight")
     if seen is None:
         return ZoneVerdict("manual", NO_LINE)
     _, o_lat, o_head = seen
-    if abs(o_lat - lateral) > cfg.bay_zone_agree_m:
-        return ZoneVerdict("manual", "map pose and guide line disagree")
+    # A lateral CORE filled from its own estimate or the map says nothing: never compare the map with itself (2026-11-20).
+    # Only a measured line lateral is evidence; a corridor-only frame gives the heading, and the steering checks below
+    # then use the pose source's lateral.
+    measured = getattr(observation, "lateral_measured", True)
+    if not measured:
+        if scan is None:
+            # A corridor-only frame gives a heading; a lateral from the map alone is not evidence (2026-11-20 review L2).
+            return ZoneVerdict("manual", "no measured lateral: corridor line only and no LiDAR scan pose (centre it, or store a reference scan)")
+        o_lat = lateral
+    if (measured and abs(o_lat - lateral) > cfg.bay_zone_agree_m) or abs(_wrap(o_head - heading)) > cfg.bay_zone_agree_rad:
+        # The numbers tell a stale map (odom slip near the bay) from a wrong bay at a glance; the verdict itself is unchanged.
+        return ZoneVerdict("manual", DISAGREE + " (lateral %s %.3f line %.3f m, heading %s %.1f line %.1f deg)"
+                           % (src, lateral, o_lat, src, math.degrees(heading), math.degrees(o_head)))
+    # Straight enough that the reverse run (along) cannot leave the lane: the rear already faces the bay, so there is
+    # no turn and no runway to find, only the line to hold.
+    if abs(o_lat) <= cfg.bay_exit_lateral_m and abs(o_head) <= min(
+            cfg.bay_acquire_heading_max_rad, math.atan(cfg.bay_exit_lateral_m / max(along, 0.05))):
+        return ZoneVerdict("acquire", "straight in the lane: acquire where it stands")
     exit_m = staging_offset_m - along + cfg.bay_exit_extra_m
     limit = cfg.bay_exit_heading_max_rad
     if cfg.bay_exit_steer_head <= 0.0:       # no line steering on the way out: a straight drive must stay in
