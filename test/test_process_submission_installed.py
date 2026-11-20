@@ -68,9 +68,20 @@ sys.meta_path.remove(guard)
 for name in sys.argv[3].split(','):
     module = importlib.import_module('rosy.processes.palletizing.' + name)
     assert Path(module.__file__).is_relative_to(Path(sys.argv[1]))
-from rosy_gateway.cell_compiler import PalletizingCellCompiler
+from rosy.processes.palletizing import compilation
+from rosy.processes.palletizing.submission import compile_cell_submission
+class Compiler:
+    # The Fleet adapter is not installable here (execution independence); same three-method port.
+    process_artifact_digest = 'a'*64
+    def item_geometry(self, recipe):
+        return compilation.item_geometry(recipe)
+    def compile(self, recipe, cell):
+        return compilation.compile_cell_job(recipe, cell, process_artifact_digest=self.process_artifact_digest, tol_m=.001)
+    def compile_submission(self, candidate, *, workcell_id, instance_id):
+        return compile_cell_submission(candidate, compiler=self, workcell_id=workcell_id,
+                                       instance_id=instance_id).as_store_document()
 recipe, cell = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
-compiler = PalletizingCellCompiler(process_artifact_digest='a'*64, tol_m=.001)
+compiler = Compiler()
 compiled = compiler.compile(recipe, cell)
 assert isinstance(compiled.plan_bundle, PlanBundle)
 candidate = dict(kind='cell_job', recipe=recipe, cell=cell, job=compiled.job,

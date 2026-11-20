@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 from dataclasses import replace
 from typing import Callable, Optional
 
@@ -30,6 +31,7 @@ from core_features.line_follow.clearance import return_scan_view as _return_scan
 from core_features.line_follow.crosswalk.gate import scan_rays
 from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
+from core_features.docking import bay_scan_pose
 from core_features.docking.lidar_v import DockVSpec, detect_dock_v, lidar_v_payload
 from core_features.docking.model import DockPhase
 from core_common.protocol.lane_containment import LaneContainmentEvidence
@@ -222,8 +224,27 @@ def bay_body_scan(services, sample, *, received_at: float) -> None:
         # the strip must not read as 0 (None = nothing in the strip = this check does not block).
         rear_gap = rear_band_gap(view.points, rear)
         docking.note_body_scan(kind, front, rear_gap, received_at - _scan_lag_s(sample))
+        request = docking.bay_scan_request()
+        if request is not None:
+            _match_bay_scan(docking, body, config, view.points, request[1], request[0])
     except (AttributeError, KeyError, TypeError, ValueError):
         return
+
+
+def _match_bay_scan(docking, body, config, live_points, reference, request_id) -> None:
+    """The robot's pose in the bay frame by LiDAR, once per zone check, off the scan thread (a few hundred ms of numpy).
+
+    The reference scan goes through the same body filter as the live one. Any failure answers None: the zone
+    check then keeps the map path (bay_scan_pose.py)."""
+    def run():
+        error = None
+        try:
+            ref_view = body.scan_view(reference, forward_deg=config.lidar_forward_deg, self_mask=config.lidar_self_mask)
+            match = bay_scan_pose.locate(ref_view.points, live_points)
+        except Exception as exc:                           # noqa: BLE001 - the map path is the answer to anything
+            match, error = None, "%s: %s" % (type(exc).__name__, exc)
+        docking.note_bay_scan_match(match, error=error, request_id=request_id)
+    threading.Thread(target=run, name="bay-scan-pose", daemon=True).start()
 
 
 def _scan_lag_s(sample) -> float:

@@ -41,7 +41,7 @@ def test_site_frame_signs_outside_is_positive_and_the_bay_row_is_exit():
     out_yaw = -math.pi / 2                                        # nose out, rear to the bay
     assert C2.staging_pose(STAGING).y == pytest.approx(0.027, abs=1e-6)   # P y; poses below sit a hair past it
     assert verdict((-0.19, 0.02, out_yaw)).kind == "out"
-    assert verdict((-0.19, 0.30, out_yaw)).kind == "exit"
+    assert verdict((-0.19, 0.30, out_yaw)).kind == "acquire"   # straight in the row: no exit needed
     assert verdict((-0.19, 0.30, out_yaw + math.pi)).kind == "manual"   # nose to the bay
 
 

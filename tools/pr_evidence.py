@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
@@ -45,25 +46,29 @@ def main(argv: list[str] | None = None, repo: Path | None = None, run=None) -> i
         print("  " + " ".join(inv))
     if args.dry_run or not required:
         return 0
+    todo = pr_land.lab_missing(cwd, head, required)  # an intact earlier pass on this tree & env is kept, not rerun
+    if not todo:
+        print("[pr-evidence] every invocation already has an intact pass; nothing to run")
+        return 0
     env = land_cache.env_id(cwd, head)
     if not env:
         raise SystemExit("[pr-evidence] test environment id unavailable; cannot record evidence")
     tree = pr_land._run(["git", "rev-parse", f"{head}^{{tree}}"], cwd)
-    logdir = land_checks.tmp_dir(f"pr-evidence-{head[:10]}")
-    logs = [logdir / f"lab-{n}.txt" for n in range(len(required))]
+    # one directory per run: a rerun must not overwrite the logs earlier rows hash (log_sha256)
+    logdir = land_checks.tmp_dir(f"pr-evidence-{head[:10]}-{time.strftime('%Y%m%dT%H%M%S')}")
+    logs = [logdir / f"lab-{n}.txt" for n in range(len(todo))]
     if run is None:
         import remote_pytest
         run = remote_pytest.run
     # -rA prints the PASSED lines pr_land.passed_ids needs; the row keeps the plain argv pr_land compares (xdist_plan.tail honours -rA)
     if args.solo:  # ROSY_JOB_ALONE=1 takes the whole host (work_queue.host_alone); the recorded row keeps the plain argv
-        (logdir / "solo.txt").write_text("".join(" ".join(inv) + "\n" for inv in required), encoding="utf-8")
-        codes = [c for inv, log in zip(required, logs)
+        (logdir / "solo.txt").write_text("".join(" ".join(inv) + "\n" for inv in todo), encoding="utf-8")
+        codes = [c for inv, log in zip(todo, logs)
                  for c in run([["ROSY_JOB_ALONE=1", *inv, "-rA"]], [log], head, repo=cwd, label="pr-evidence-solo")]
     else:
-        codes = run([[*inv, "-rA"] for inv in required], logs, head, repo=cwd, label="pr-evidence")
-
+        codes = run([[*inv, "-rA"] for inv in todo], logs, head, repo=cwd, label="pr-evidence")
     passed = 0
-    for inv, log, code in zip(required, logs, codes):
+    for inv, log, code in zip(todo, logs, codes):
         # a clean pass only, exactly publish_evidence.fill's rule
         ok = (code == 0 and log.is_file() and land_cache.unusable(code, log) is None
               and not land_browser.vacuous(inv, log))
@@ -72,10 +77,10 @@ def main(argv: list[str] | None = None, repo: Path | None = None, run=None) -> i
             passed += 1
         else:
             print(f"[pr-evidence] FAILED exit {code}: {' '.join(inv)} (log {log})")
-    print(f"[pr-evidence] {passed}/{len(required)} recorded (logs {logdir})")
-    if passed < len(required) and not args.solo:
+    print(f"[pr-evidence] {passed}/{len(todo)} recorded, {len(required) - len(todo)} kept (logs {logdir})")
+    if passed < len(todo) and not args.solo:
         print("[pr-evidence] load-sensitive failures: rerun with --solo (recorded groups are reused)")
-    return 0 if passed == len(required) and len(codes) == len(required) else 1
+    return 0 if passed == len(todo) and len(codes) == len(todo) else 1
 
 
 if __name__ == "__main__":
