@@ -65,6 +65,24 @@ def ci_runnable(inv: list[str]) -> bool:
     ) and ci_entry(inv) is not None
 
 
+def split_by_ci_entry(inv: list[str]) -> list[list[str]]:
+    """Split a mixed invocation into one part per CI entry; paths no entry covers stay together.
+
+    Non-path words (flags, env tokens) go to every part, so ci_runnable() still rejects env/lab_only/alone parts.
+    """
+    paths = [w for w in inv if not w.startswith("-") and not work_queue.ENV_WORD.match(w)]
+    extras = [w for w in inv if w not in paths]
+    groups: dict[str, list[str]] = {}
+    for p in paths:
+        entry = ci_entry([p])
+        groups.setdefault(entry["name"] if entry else "", []).append(p)
+    parts = [extras + g for g in groups.values()]
+    # a group that fails as a whole may hold only one bad path: isolate it so the CI-runnable paths drop out
+    parts = [q for part in parts for q in ([part] if ci_runnable(part) or len(part) - len(extras) < 2
+             else [extras + [p] for p in part[len(extras):]])]
+    return parts if len(parts) > 1 else [inv]
+
+
 def passed_ids(text: str) -> set[str]:
     first = text.split("=== D-762 flaky quarantine rerun ===", 1)[0]
     return {a or b for a, b in PASSED_ID.findall(first)}
@@ -134,7 +152,7 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
         b_paths = browser_scope.targets(changed)
         for group in land_selection.pack(cwd, b_paths):
             invs.extend(land_browser.chunks(cwd, group))
-    return [inv for inv in invs if not ci_runnable(inv)]
+    return [part for inv in invs for part in split_by_ci_entry(inv) if not ci_runnable(part)]
 
 
 def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None:
