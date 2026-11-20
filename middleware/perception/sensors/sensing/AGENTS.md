@@ -13,6 +13,7 @@ Pure logic (no ROS) for scan geometry, filtering, and footprint (D-229). Camera 
 | File | Description |
 |------|-------------|
 | `lidar.py` | C1 scan geometry — the one heading everyone shares. `NOSE_YAW = π` (URDF nominal, D-397; scan 0° is the rear; an accepted lidar_mount record refines it); every heading through `robot_yaw()`/`wrap_pi()`. Sector ranges use a 10th percentile (`scan_pctl`); `is_robot_scan()` rejects remote gazebo scans (beam count + range_max + wall-clock stamp) unless an isolated rig called `enable_simulation_scans()`; frontier/straight-route finders feed `/safety/frontier_*`, `/safety/route_*` |
+| `range_tilt.py` | `parse_us_range` (US Range → metres, None for no-echo/blind zone) and `roll_pitch` (quaternion → tilt). The safety adapters (bumper, hazard) and calibration both use these one copies |
 | `filt.py` | Median + 1st-order low-pass filters for jumpy sensors |
 | `body.py` | Robot circumradius from URDF (calib param wins if sane); `ignore_m` drops chassis hits; `turn_clear_m` for spin clearance |
 | `perception/` | Camera and lane evidence. Import `control.sensing.perception`, not this package root. See `perception/AGENTS.md` |
