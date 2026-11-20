@@ -30,6 +30,7 @@ const REFUSAL_TEXT = {
   CELL_BUSY_OR_HELD: '셀이 다른 작업 중이거나 보류 중입니다',
   PREVIOUS_TIER_NOT_VERIFIED: '아래층 적재가 아직 확인되지 않았습니다',
   CELL_AB_EVIDENCE_NOT_ENABLED: '셀 A/B 완료 확인(깊이 측정)이 아직 켜지지 않았습니다',
+  BED_CONFIRMATION_INVALID: '적재함 확인이 무효가 되었습니다 (핑키 이동 또는 지도 변경). 핑키가 멈춘 상태에서 적재함을 다시 확인하세요',
 };
 
 // Why a task ended ABORTED, when the cell worker's receipt says so (D-1057 T18: no reviewed envelope, the arm did not move).
@@ -65,8 +66,17 @@ function confirmState(rec, name, voidedWhy, nowMs) {
   const until = new Date(nowMs + remaining * 1000).toLocaleTimeString('ko-KR', {hour12: false});
   return {state: 'valid', remaining_s: remaining, text: `${name}됨 · ${remaining}초 남음 (${until}까지)`};
 }
-export const bedConfirmState = (task, nowMs = Date.now()) =>
-  confirmState(task?.bed_confirmation, '적재함 확인', ' (핑키 이동 또는 지도 변경)', nowMs);
+// A RUNNING task holds the confirmation its claim bound to the lease (row bed_confirmation, D-1057 T19): no 120 s
+// expiry there; it is lost when the server store voided or dropped it, and then a named operator confirms again.
+export function bedConfirmState(task, nowMs = Date.now()) {
+  if (task?.status === 'RUNNING' && task.bed_confirmation) {
+    const s = task.bed_confirm_status;
+    return s && !s.invalid && s.bound
+      ? {state: 'bound', text: `적재함 확인됨 · ${task.bed_confirmation.operator || '운영자'} (이 작업에 묶임)`}
+      : {state: 'lost', text: '적재함 확인 무효 (핑키 이동 또는 지도 변경)'};
+  }
+  return confirmState(task?.bed_confirm_status, '적재함 확인', ' (핑키 이동 또는 지도 변경)', nowMs);
+}
 // D-1057 PRESENCE_TTL_S is also 120 s; a presence is never voided, only used up by a claim or expired.
 export const presenceConfirmState = (task, nowMs = Date.now()) =>
   confirmState(task?.presence_confirmation, '입회 표시', '', nowMs);
@@ -210,7 +220,7 @@ export function cellTaskRows(body) {
       : '—';
     const disp = t.displaced_to ? ` (복구: ${t.displaced_to})` : '';
     const queued = t.status === 'QUEUED';
-    const evidence = [queued ? bedConfirmState(t).text : '', queued ? presenceConfirmState(t).text : '',
+    const evidence = [queued || t.status === 'RUNNING' ? bedConfirmState(t).text : '', queued ? presenceConfirmState(t).text : '',
       presenceUsedText(t), refusalText(t.last_refusal), abortText(t)].filter(Boolean).join(' · ');
     return [
       t.task_id,
@@ -269,12 +279,17 @@ export function visualCardSpecs(body = {}) {
   };
   // The claim takes a cell's first QUEUED task, so the bed confirmation goes to that one.
   const bedConfirmButtons = cellId => {
+    // A RUNNING task whose bound confirmation was lost waits for a new one before the release (D-1057 T19).
+    const lost = tasks.find(x => x.cell_id === cellId && x.status === 'RUNNING' && bedConfirmState(x).state === 'lost');
+    const again = lost ? [{label: `적재함 다시 확인 (${lost.task_id} · ${lost.robot_id})`, bedConfirmTaskId: lost.task_id,
+      robot_id: lost.robot_id, bedState: 'lost'}] : [];
     const t = tasks.find(x => x.cell_id === cellId && x.status === 'QUEUED');
-    if (!t) return [];
+    if (!t) return again;
     const label = (s, name) => s.state === 'valid' ? s.text
       : s.state === 'none' ? `${name} (${t.task_id} · ${t.robot_id})` : `${s.text} · 다시 확인`;
     const bed = bedConfirmState(t), presence = presenceConfirmState(t);
     return [
+      ...again,
       {label: label(bed, '적재함 확인'), bedConfirmTaskId: t.task_id, robot_id: t.robot_id, bedState: bed.state},
       {label: label(presence, '입회 표시'), presenceConfirmTaskId: t.task_id, robot_id: t.robot_id, presenceState: presence.state},
     ];

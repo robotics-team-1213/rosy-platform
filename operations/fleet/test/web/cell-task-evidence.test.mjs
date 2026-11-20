@@ -22,18 +22,18 @@ const queued = (extra = {}) => ({task_id: "t1", cell_id: "cell_s", arm_id: "arm_
 test("bed confirmation states come from the row's server age", () => {
   assert.equal(bedConfirmPath("a b"), "/api/fleet/pipeline/cell-tasks/a%20b/bed-confirm");
   assert.equal(bedConfirmState(queued()).state, "none");
-  const valid = bedConfirmState(queued({bed_confirmation: {age_s: 30.4, invalid: false}}), 0);
+  const valid = bedConfirmState(queued({bed_confirm_status: {age_s: 30.4, invalid: false}}), 0);
   assert.equal(valid.state, "valid");
   assert.equal(valid.remaining_s, BED_CONFIRM_TTL_S - 31);
   assert.match(valid.text, /89초 남음/);
-  assert.equal(bedConfirmState(queued({bed_confirmation: {age_s: 121}})).state, "expired");
-  assert.equal(bedConfirmState(queued({bed_confirmation: {age_s: 5, invalid: true}})).state, "voided");
+  assert.equal(bedConfirmState(queued({bed_confirm_status: {age_s: 121}})).state, "expired");
+  assert.equal(bedConfirmState(queued({bed_confirm_status: {age_s: 5, invalid: true}})).state, "voided");
 });
 
 test("card bed button targets the cell's first queued task and says its state", () => {
   const tasks = [
     {...queued({task_id: "done", status: "COMPLETED"})},
-    queued({bed_confirmation: {age_s: 5, invalid: true}}),
+    queued({bed_confirm_status: {age_s: 5, invalid: true}}),
     queued({task_id: "t2"}),
   ];
   const [cellS, cellAb] = visualCardSpecs({tasks});
@@ -78,6 +78,25 @@ test("REVIEW_REQUIRED comes as an ABORTED receipt reason and the used presence s
   assert.equal(presenceUsedText(review), "");
   const [card] = visualCardSpecs({tasks: [review]});
   assert.match(card.folded_state, /검토 필요/);
+});
+
+test("a RUNNING task's bound bed confirmation, and a lost one asks for a new one", () => {
+  const running = (status) => queued({status: "RUNNING", handoff_lease_id: "L1",
+    bed_confirmation: {operator: "kim", confirmed_at: 1, pose: {x: 0, y: 0, yaw: 0}, map_id: "m", map_version: 3}, ...status});
+  const bound = running({bed_confirm_status: {age_s: 900, invalid: false, bound: true}});
+  assert.deepEqual(bedConfirmState(bound), {state: "bound", text: "적재함 확인됨 · kim (이 작업에 묶임)"}, "no 120 s expiry once bound");
+  assert.equal(bedConfirmState(running({bed_confirm_status: {age_s: 5, invalid: true, bound: true}})).state, "lost");
+  const dropped = running({});
+  assert.equal(bedConfirmState(dropped).state, "lost", "store record pruned after voiding");
+  assert.equal(bedConfirmState(queued({status: "RUNNING"})).state, "none", "no claim-bound confirmation: nothing to redo");
+  assert.ok(!visualCardSpecs({tasks: [bound]})[0].buttons.some(b => b.bedConfirmTaskId));
+  const [card] = visualCardSpecs({tasks: [dropped, queued({task_id: "t2"})]});
+  const bed = card.buttons.filter(b => b.bedConfirmTaskId);
+  assert.deepEqual(bed.map(b => [b.bedConfirmTaskId, b.bedState]), [["t1", "lost"], ["t2", "none"]]);
+  assert.equal(bed[0].label, "적재함 다시 확인 (t1 · rosy_46)");
+  assert.equal(bed[0].robot_id, "rosy_46");
+  assert.match(cellTaskRows({tasks: [dropped]})[0][5], /적재함 확인 무효/);
+  assert.match(refusalText({code: "BED_CONFIRMATION_INVALID", op: "complete"}), /^완료 거부 · 적재함 확인이 무효가 되었습니다.*다시 확인하세요$/);
 });
 
 test("refusal codes are said as the missing evidence", () => {
@@ -149,6 +168,9 @@ test("bed button is off without a named operator and posts the robot when on", a
   fail = Object.assign(new Error("x"), {status: 409, code: "BED_CONFIRM_POSE_UNAVAILABLE"});
   await actions.confirmBed("t1", "rosy_46");
   assert.match(els["cell-tasks-status"].textContent, /핑키 위치를 확인하지 못했습니다/);
+  fail = Object.assign(new Error("x"), {status: 409, code: "BED_CONFIRM_ROBOT_NOT_STOPPED"});
+  await actions.confirmBed("t1", "rosy_46");
+  assert.match(els["cell-tasks-status"].textContent, /^적재함 확인 실패: 핑키가 멈춰 있지 않습니다/);
   fail = Object.assign(new Error("Not Found"), {status: 404});
   await actions.confirmBed("t1", "rosy_46");
   assert.match(els["cell-tasks-status"].textContent, /기능이 아직 없습니다/);

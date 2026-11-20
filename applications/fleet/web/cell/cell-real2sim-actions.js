@@ -16,7 +16,8 @@ import {
 
 const BED_CONFIRM_ERROR = {
   NAMED_OPERATOR_REQUIRED: '이름 있는 운영자 로그인이 필요합니다',
-  CELL_TASK_NOT_QUEUED: '대기 중인 작업만 확인할 수 있습니다',
+  CELL_TASK_NOT_QUEUED: '대기 중인 작업이나 적재함 확인이 무효가 된 실행 중 작업만 확인할 수 있습니다',
+  BED_CONFIRM_ROBOT_NOT_STOPPED: '핑키가 멈춰 있지 않습니다. 핑키가 정차 위치에 멈춘 뒤 다시 확인하세요',
   BED_CONFIRM_ROBOT_MISMATCH: '작업에 지정된 핑키가 아닙니다',
   BED_CONFIRM_POSE_UNAVAILABLE: '지도에서 핑키 위치를 확인하지 못했습니다. 정차 위치를 확인하세요',
 };

@@ -51,11 +51,16 @@ def test_complete_refusal_is_recorded_and_a_successful_claim_clears_the_old_one(
 def test_list_shows_bed_confirmation_age_and_void_without_storing_it_on_the_ledger():
     app, client = _client()
     client.post("/api/fleet/pipeline/cell-tasks", json={"task_id": "t3", "cell_id": "cell_s"})
-    assert "bed_confirmation" not in _row(client, "t3")
+    assert "bed_confirm_status" not in _row(client, "t3")
     app.state.cell_bed_confirmations = {"t3": {"principal_id": "kim", "confirmed_at": time.time() - 30, "invalid": True}}
-    bed = _row(client, "t3")["bed_confirmation"]
-    assert bed["principal_id"] == "kim" and bed["invalid"] is True and 29 <= bed["age_s"] <= 31
-    assert "bed_confirmation" not in app.state.omx_cell_tasks["t3"]
+    bed = _row(client, "t3")["bed_confirm_status"]
+    assert bed["principal_id"] == "kim" and bed["invalid"] is True and 29 <= bed["age_s"] <= 31 and bed["bound"] is False
+    assert "bed_confirm_status" not in app.state.omx_cell_tasks["t3"]
+    # After a claim the row keeps the server's own bed_confirmation; the store status only says whether it is still bound.
+    app.state.omx_cell_tasks["t3"].update(handoff_lease_id="L1", bed_confirmation={"operator": "kim"})
+    app.state.cell_bed_confirmations["t3"].update(invalid=False, lease="L1")
+    row = _row(client, "t3")
+    assert row["bed_confirmation"] == {"operator": "kim"} and row["bed_confirm_status"]["bound"] is True
     app.state.cell_presence = {"t3": {"task_id": "t3", "principal_id": "lee", "confirmed_at": time.time() - 10}}
     presence = _row(client, "t3")["presence_confirmation"]
     assert presence["principal_id"] == "lee" and presence["invalid"] is False and 9 <= presence["age_s"] <= 11
