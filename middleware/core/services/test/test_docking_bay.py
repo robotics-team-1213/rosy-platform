@@ -105,6 +105,7 @@ class LineDetector:
         self.frozen = False
         self.frozen_in_phase = None
         self.glitch_frames = 0
+        self.reach = None            # a guide line that ends this far out of the bay: nothing is seen beyond it
 
     def start(self, dock=None):
         self.started = True
@@ -128,6 +129,9 @@ class LineDetector:
             self.latest = self.latest.model_copy(update={"at": self.clock()})
             return
         x, y, yaw = self.world.pose
+        if self.reach is not None and -x > self.reach:
+            self.latest = None
+            return
         c, s = math.cos(yaw), math.sin(yaw)
         oy = 0.10 if self.glitch_frames > 0 else 0.0
         self.glitch_frames = max(0, self.glitch_frames - 1)
@@ -188,7 +192,7 @@ def run(p, until, max_s=240.0):
     while p.clock.now - t0 < max_s:
         if k % 4 == 0:
             p.detector.capture()
-            p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)   # open floor: clear
+            p.manager.note_body_scan(None, None, None, p.clock.now)   # an open floor: turn clear
         p.manager.tick()
         phase = p.manager.phase.value if p.manager.phase else None
         if not phases or phases[-1] != (p.manager.state.value, phase):
@@ -215,9 +219,10 @@ def test_it_turns_creeps_aligns_on_the_line_and_docks(dy, dyaw_deg):
     phases = run(p, done)
     assert p.manager.state is DockState.DOCKED, phases
     order = [ph for _, ph in phases if ph]
-    # dock() stages at once (the Nav2 stub arrives in navigate_to); the first
-    # tick turns away from the bay — the 180 deg is ours, not the staging goal's.
-    assert order[:4] == ["turning", "acquiring", "aligning", "settling"], order
+    # The first tick finds the robot outside the bay row (bay_zone) and stages by
+    # Nav2 (the stub arrives at once); then it turns away from the bay — the 180 deg
+    # is ours, not the staging goal's.
+    assert order[:5] == ["staging", "turning", "acquiring", "aligning", "settling"], order
     assert p.world.goals[0].yaw == pytest.approx(0.0)
     assert p.world.goals[0].x == pytest.approx(-0.45)
     # The alignment reverses (rear to the bay) and steers while reversing.
@@ -248,9 +253,10 @@ def test_lost_line_scans_backs_off_then_fails_closed():
     phases = run(p, done)
     assert p.manager.state is DockState.DOCK_FAILED, phases
     order = [ph for _, ph in phases if ph]
-    assert order[:4] == ["turning", "acquiring", "aligning", "backoff"], order
-    # The ladder ran a full retry (turn + acquire) before failing closed.
-    assert order.count("acquiring") >= 2, order
+    assert order[:5] == ["staging", "turning", "acquiring", "aligning", "backoff"], order
+    # After the backoff the line is still lost: inside the bay row that stops still
+    # (bay_zone, a person), outside it the retry stages again; never a blind push.
+    assert len(p.world.goals) <= 2
     # It never reached the stop face driving blind.
     assert p.world.pose[0] < -NECK[0]
 
@@ -343,7 +349,7 @@ def test_fleet_centerline_evaluation_guides_reverse_and_triggers_contact_when_ca
     while p.clock.now - t0 < 120.0:
         if k % 4 == 0:
             p.detector.capture()
-            p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)   # open floor: clear
+            p.manager.note_body_scan(None, None, None, p.clock.now)
         if p.manager.phase is DockPhase.ALIGNING:
             x, y, yaw = p.world.pose
             to_end_m = max(0.0, -DOCKED_ALONG - x)
@@ -377,7 +383,7 @@ def test_fleet_retry_verdict_triggers_immediate_backoff_and_realign():
     while p.clock.now - t0 < 160.0:
         if k % 4 == 0:
             p.detector.capture()
-            p.manager._bay_phases.note_body_scan(None, None, None, p.clock.now)   # open floor: clear
+            p.manager.note_body_scan(None, None, None, p.clock.now)
         if p.manager.phase is DockPhase.ALIGNING and not injected:
             injected = True
             p.manager._bay_phases.observe_fleet_docking({

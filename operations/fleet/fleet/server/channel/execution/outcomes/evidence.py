@@ -63,7 +63,7 @@ def terminal_event(events, original):
         if result is not None:
             reason = data.get('native_reason', data.get('reason'))
             if event['type'] == 'nav.failed':
-                reason = 'BACKEND_REJECTED' if data.get('error_code') == 'REJECTED' else 'BACKEND_ERROR'
+                reason = {'REJECTED': 'BACKEND_REJECTED', 'CANCELED': 'CANCELED'}.get(data.get('error_code'), 'BACKEND_ERROR')
             return exact_operation(original | {'phase': 'TERMINAL', 'result': result,
                                    'reason': reason}, original)
         if event['type'] == 'nav.canceled':

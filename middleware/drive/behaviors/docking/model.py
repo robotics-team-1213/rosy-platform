@@ -133,6 +133,26 @@ class DockingConfig:
     bay_zone_look_s: float = 1.0        # 칸 줄 안 판정 전에 선 관측을 기다리는 시간
     bay_exit_lateral_m: float = 0.05    # 칸 줄에서 나가기 시작할 수 있는 횡 오차(선 관측)
     bay_exit_heading_max_rad: float = 0.2618  # 15 deg (조향 없이 나가면 atan(횡/거리)로 더 좁힌다)
+    bay_acquire_heading_max_rad: float = 0.1047  # 6 deg: 곧은 시작은 나가지 않고 바로 선 포획(정상 흐름 도착 허용 ±6° 시험과 같은 값)
+    # LiDAR bay pose (bay_scan_pose.py): a match against the dock's stored seated scan replaces the map pose in the zone
+    # check only when all of these hold; otherwise the map path stays. Measured on y8xs scans (2026-11-20): seated and
+    # near-seated fits inliers 0.77-1.0, margin 0.54-0.66 (grid matcher); a sideways wrong fit inliers 0.79, margin 0.27.
+    bay_scan_inlier_min: float = 0.70
+    bay_scan_margin_min: float = 0.40   # inliers minus the best different pose (another seed's answer)
+    bay_scan_heading_max_rad: float = 0.7854   # 45 deg: a fit sideways in the row is a wrong fit, not a pose
+    bay_scan_pose_wait_s: float = 4.0   # wait for the LiDAR pose this long (one run, off the scan thread), then the map path
+    # Seated check (SETTLING): the stored reference scan says how far the stopped robot is from the stop face. Further
+    # than this, the body was held short of it (y8xs 2026-11-20: stopped 7.5 cm out, 40 s of waiting for a charge).
+    bay_seat_tol_m: float = 0.03
+    # Before the reverse into the rails (entrance ~9.45 mm a side, wheels meet it 7.5 cm before the stop face): the measured
+    # lateral must be within this or the dock stops and asks for a centred robot. Tightening only.
+    # Sensor accuracy next to this limit (y8xs): the camera line lateral and the LiDAR ICP lateral differed by up to 17 mm
+    # on the same stand, the 1 cm grid matcher adds ~1 cm. The limit is tighter than either sensor alone, so a pass needs a
+    # centred robot by every measured source (all must pass). Loosen only on measured evidence; never from here.
+    bay_entrance_lateral_m: float = 0.008
+    bay_rail_entry_along_m: float = 0.13    # stop face to base_link when the wheels meet the entrance roller (0.05 seat + 7.8 cm)
+    bay_entrance_runway_m: float = 0.15     # with this much steering distance left the line correction may centre it
+    bay_seat_check_delay_s: float = 1.0  # stopped this long before the scan is taken
     bay_exit_extra_m: float = 0.02      # 스테이징 거리보다 이만큼 더 나간다
     bay_exit_speed: float = 0.05        # m/s, 칸 줄 곧은 전진
     bay_exit_front_gap_m: float = 0.08  # 앞 여유가 이보다 작으면 멈춘다

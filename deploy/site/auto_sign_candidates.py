@@ -55,6 +55,16 @@ else:  # pragma: no cover - exercised by the scheduled CLI
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
+
+def _load_triage():
+    """tools/harness/ci_triage.py from the checkout this file lives in; None when it is not there (no reruns then)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "harness"))
+    try:
+        import ci_triage
+    except ImportError:
+        return None
+    return ci_triage
+
 EXIT_IDLE = 0
 EXIT_SIGNED = 10
 EXIT_REFUSED = 20
@@ -291,7 +301,7 @@ class AutoSigner:
             conclusion = latest.get("conclusion")
             if latest.get("status") == "completed" and conclusion in {"failure", "cancelled"}:
                 if conclusion == "failure":
-                    self._rerun_failed(latest["id"])
+                    self._rerun_failed(latest["id"], commit)
                 raise CiRed(str(conclusion))
             if latest.get("status") != "completed" or conclusion != "success":
                 raise RuntimeError("CI is not successful yet")
@@ -303,8 +313,11 @@ class AutoSigner:
         except (ValueError, KeyError, TypeError, AttributeError):
             raise RuntimeError("exact-main CI proof is missing or malformed; retry later") from None
 
-    def _rerun_failed(self, run_id: int) -> None:
-        """Ask GitHub once per run id to rerun its failed jobs; the newest-run rule itself is unchanged."""
+    def _rerun_failed(self, run_id: int, commit: str) -> None:
+        """Once per run id, ask ci_triage: it reruns the failed jobs only when every causing job is infra.
+
+        The newest-run rule itself is unchanged; the decision and its ledger rows come from tools/harness/ci_triage.py.
+        """
         state = getattr(self, "_state", None)
         if state is None:
             return
@@ -313,11 +326,15 @@ class AutoSigner:
             return
         done.append(run_id)
         del done[:-_REFUSED_LIMIT]
-        try:
-            self._gh("run", "rerun", str(run_id), "--failed", "--repo", self.repo)
-            self._audit({"decision": "ci-rerun-requested", "run_id": run_id})
-        except RuntimeError as error:  # a token without actions:write keeps today's behaviour
-            self._audit({"decision": "ci-rerun-refused", "run_id": run_id, "reason": str(error)})
+        triage = _load_triage()
+        if triage is None:
+            self._audit({"decision": "ci-rerun-skipped", "run_id": run_id, "reason": "tools/harness/ci_triage.py missing"})
+            return
+        result = triage.handle(self._gh, self.repo, run_id, ledger=self.state_dir / triage.LEDGER,
+                               expected_sha=commit, event="push")
+        decision = ("ci-rerun-requested" if result["action"] == "rerun" else "ci-rerun-refused"
+                    if result["reason"].startswith("rerun refused") else "ci-rerun-skipped")
+        self._audit({"decision": decision, "run_id": run_id, "category": result["category"], "reason": result["reason"]})
 
     # -- state ------------------------------------------------------------
     def _state_path(self) -> Path:

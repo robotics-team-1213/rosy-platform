@@ -141,7 +141,7 @@ FILES = {
     "middleware/perception/control/battery.py": "from core_common import schemas\n",
     "middleware/perception/test/test_battery.py": "from control import battery\n",
     "middleware/core/gateway/core/node.py": "from control.battery import read\n",
-    "middleware/core/gateway/test/test_battery.py": "import core\n",
+    "middleware/core/gateway/test/test_battery.py": "from core import node\n",
     "middleware/core/gateway/test/conftest.py": "",
     "middleware/core/api/core_api_web/app.py": "import core\n",
     "middleware/core/api/test/test_app.py": "import core_api_web\n",
@@ -240,7 +240,7 @@ CASES = [
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
-     {"middleware/perception/test/test_battery.py", "middleware/core/gateway/test"}),  # import closure narrows it
+     {"middleware/perception/test/test_battery.py", "middleware/core/gateway/test/test_battery.py"}),  # import closure narrows it
     ("ADR only -> the ADR Log readers (guards cover the ADR index)",
      ["docs/adr/D-1-sample.md"], "affected", {"test/test_network_topology_contracts.py"}),
     ("doc read by a contract test -> that test too",
@@ -338,7 +338,7 @@ def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
 def test_duplicate_basenames_run_in_separate_invocations(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
-    assert owners["middleware/perception/test/test_battery.py"] != owners["middleware/core/gateway/test"]
+    assert owners["middleware/perception/test/test_battery.py"] != owners["middleware/core/gateway/test/test_battery.py"]
     repo = affected.Repo.load(sample)
     for inv in sel.invocations:
         names = [PurePosixPath(t).name for p in inv for t in repo.test_files_under(p)]
@@ -429,9 +429,41 @@ def test_integration_folder_is_not_pulled_whole_by_a_change_it_does_not_import(t
     assert "test/integration/rig" not in power.reasons and "test/integration/rig/test_rig_other.py" not in power.reasons
 
 
+def test_folder_registered_by_two_modules_is_narrowed_as_reverse_dependent_and_prefix_importer(tmp_path):
+    """A folder registered under a module that imports the changed module (reverse dependent) keeps only the
+    files that reach the change: [] from the narrowing means "skip the folder", and the prefix-import rule
+    does not pull a registered folder's file that the closure already left out."""
+    harness = HARNESS_YAML.replace(
+        "    path: middleware/core/gateway\n    tests: [middleware/core/gateway/test]\n",
+        "    path: middleware/core/gateway\n    tests: [middleware/core/gateway/test, test/integration/rig]\n").replace(
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test]\n",
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test, test/integration/rig]\n")
+    assert harness.count("test/integration/rig") == 2
+    files = {**FILES, "tools/harness/harness.yaml": harness,
+             "middleware/perception/control/vision_only.py": "V = 1\n",
+             "middleware/core/gateway/core/node.py": "from control.battery import read\nfrom control import vision_only\n",
+             "test/integration/rig/test_rig_reaches.py": "from control import vision_only\n",
+             "test/integration/rig/test_rig_prefix.py": "import control\n",
+             "test/integration/rig/test_rig_other.py": "X = 1\n"}
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    repo = affected.Repo.load(tmp_path)
+
+    away = affected.select(repo, ["middleware/perception/control/battery.py"])
+    assert not [t for t in away.reasons if t.startswith("test/integration/rig")], away.reasons
+
+    reach = affected.select(repo, ["middleware/perception/control/vision_only.py"])
+    assert "test/integration/rig/test_rig_reaches.py" in reach.reasons, reach.reasons
+    assert "test/integration/rig" not in reach.reasons and "test/integration/rig/test_rig_other.py" not in reach.reasons
+
+
 def test_reasons_name_the_reverse_dependency(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
-    assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test"])
+    assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test/test_battery.py"])
 
 
 def test_cli_json_diffs_against_base_and_working_tree(sample, capsys):
@@ -591,14 +623,16 @@ def test_ci_full_matrix_shards_slow_suites_by_file(sample):
     repo = affected.Repo.load(sample)
     matrix = affected.ci_matrix(repo, _select(sample, ".github/workflows/ci.yml"))["include"]
     for name, n in affected.SUITE_SHARDS.items():
-        suite = next(e for e in affected.CI_FULL_MATRIX if e["name"] == name)["invocations"][0][0]
-        files = sorted(t for t in repo.test_files if t.startswith(suite + "/"))
+        entry = next(e for e in affected.CI_FULL_MATRIX if e["name"] == name)
+        suite, later = entry["invocations"][0][0], [p for inv in entry["invocations"][1:] for p in inv]
+        ignored = {f.split("=", 1)[1] for f in entry["invocations"][0] if f.startswith("--ignore=")}
+        files = sorted(t for t in repo.test_files if t.startswith(suite + "/") and t not in ignored and t not in later)
         shards = [e for e in matrix if e["name"] == name or e["name"].startswith(name + "-")]
         if len(files) < n:
-            assert [e["invocations"] for e in shards] == [[[suite]]]
+            assert [e["invocations"] for e in shards] == [entry["invocations"]]
             continue
         assert len(shards) == n
-        assert sorted(t for e in shards for inv in e["invocations"] for t in inv) == files
+        assert sorted(t for e in shards for inv in e["invocations"] for t in inv) == sorted(files + later)
 
 
 def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
@@ -673,9 +707,10 @@ def test_full_ci_runs_station_scheduling_on_its_own_required_runner():
     station = next(entry for entry in matrix if entry["name"] == "core-station-simulation")
     assert station["invocations"] == [[target]]
     assert station["gating"] and station["ros"] == "none"
-    for invocations in ([inv for entry in matrix for inv in entry["invocations"]],
-                        affected.lab_full_invocations(repo)):
-        assert any(suite in inv and ignore in inv for inv in invocations)
+    # CI shards the gateway suite by file (core-domain in SUITE_SHARDS), so only the lab run names the directory.
+    for invocations, whole in (([inv for entry in matrix for inv in entry["invocations"]], False),
+                               (affected.lab_full_invocations(repo), True)):
+        assert not whole or any(suite in inv and ignore in inv for inv in invocations)
         assert sum(target in _invocation_test_files(repo, inv) for inv in invocations) == 1
 
 
@@ -709,6 +744,31 @@ def test_ci_full_matrix_reaches_every_registered_module_suite():
     assert not missing, f"registered suites CI's full tier never runs: {missing}"
     for suite in ("middleware/core/api/test", "middleware/robot_ui/pilot/test", "operations/apps/games/test"):
         assert any(affected._under(t, suite) for t in ran), suite
+
+
+def test_ci_gateway_shards_run_every_file_once_in_full_and_affected():
+    """CI 44745980037 (2026-11-20): one runner for all of middleware/core/gateway/test took 20 min of pytest."""
+    repo = affected.Repo.load(ROOT)
+    suite = "middleware/core/gateway/test"
+    station, browser = f"{suite}/test_station_camera_scheduling.py", f"{suite}/test_account_pipeline.py"
+    files = sorted(p for p in repo.test_files if p.startswith(suite + "/"))
+    assert station in files and browser in files
+    full = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    shards = [e for e in full if e["name"].startswith("core-domain-")]
+    assert len(shards) == affected.SUITE_SHARDS["core-domain"] and all(e["invocations"][0] for e in shards)
+    ran = [p for e in full for inv in e["invocations"] for p in inv if p.startswith(suite + "/")]
+    assert sorted(ran) == files, "full tier: each gateway file once, station on its own runner"
+    assert [inv for e in shards for inv in e["invocations"]].count([browser]) == 1, "browser journey: own invocation"
+    assert not any(station in inv for e in shards for inv in e["invocations"])
+
+    def targets(*flags):  # what an affected run of the whole directory hands pytest, flags aside
+        sel = affected.Selection("affected", [], invocations=[[suite, *flags]])
+        runs = [inv for e in affected.ci_matrix(repo, sel)["include"] for inv in e["invocations"]]
+        assert all(set(flags) <= set(inv) for inv in runs), "every shard keeps the invocation's flags"
+        return sorted(p for inv in runs for p in inv if not p.startswith("-"))
+    # Naming the account file makes ci.yml run it with the browser opt-in: its plain tests still run, as in the directory run.
+    assert targets() == files
+    assert targets(f"--ignore={station}") == [p for p in files if p != station]
 
 
 def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
@@ -873,6 +933,14 @@ def test_unknown_paths_are_listed_with_a_hint_in_json_and_print(sample, capsys):
     assert "  tools/mystery/run.sh\n      hint: name this path literally in the test that loads it" in text
     assert "deploy/robot/run.sh\n      hint" not in text
     assert _select(sample, "deploy/robot/run.sh").unmapped == []
+
+
+def test_root_suite_fallback_names_the_path_and_the_fix(sample):
+    """2026-11-20: an unnamed page beside a named server pulled 18k tests into every commit's run."""
+    sel = _select(sample, "deploy/robot/run.sh")
+    assert affected.root_fallback_paths(sel) == ["deploy/robot/run.sh"]
+    assert "      hint (deploy/robot/run.sh): name this path literally" in affected.render(sel)
+    assert affected.root_fallback_paths(_select(sample, "deploy/robot/pinky_pro/udev/99-rosy.rules")) == []
 
 # 2026-10-26: a five-line `modules:` addition went FULL and held the land lock 45+ minutes.
 REAL_HARNESS = (ROOT / "tools/harness/harness.yaml").read_text(encoding="utf-8")

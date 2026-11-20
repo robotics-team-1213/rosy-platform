@@ -91,3 +91,28 @@ def test_merge_when_green_takes_urgent_evidence_in_place_of_the_full_record(repo
     assert _run(local, "--merge-when-green", "9", "--apply") == code
     merges = [c for c in calls if c[:2] == ("pr", "merge")]
     assert merges == ([("pr", "merge", "9", "--merge", "--match-head-commit", sha)] if code == 0 else [])
+
+
+def test_publish_on_publish_only_clone_requires_reason_and_runs_commit_hook(repo, tmp_path, monkeypatch):
+    local, _ = repo
+    _git(local, "config", "rosy.publishOnly", "true")
+    hook = "#!/usr/bin/env bash\n[ -n \"${ROSY_PUSH_REASON:-}\" ] || exit 1\n"
+    (local / "tools/hooks").mkdir(parents=True, exist_ok=True)
+    (local / "tools/hooks/pre-push").write_bytes(hook.encode("utf-8"))
+    (local / "tools/hooks/pre-push").chmod(0o755)
+    _git(local, "add", "tools/hooks/pre-push")
+    _git(local, "commit", "-q", "-m", "hook")
+    stale = local / ".git/hooks/pre-push"
+    stale.write_bytes(b"#!/usr/bin/env bash\nexit 1\n")
+    stale.chmod(0o755)
+    sha = _commit(local, "app.py", "urgent-fix")
+    _evidence(local, tmp_path, monkeypatch)
+    monkeypatch.setattr(urgent_lane, "run_gh", lambda repo_, *a: "https://example/pr/11\n")
+    with pytest.raises(urgent_lane.Stop, match="--reason"):
+        urgent_lane.publish(local, sha, "ci-fix", False, NOW)
+    with pytest.raises(urgent_lane.Stop, match="--reason"):
+        urgent_lane.publish(local, sha, "ci-fix", True, NOW)
+    out = urgent_lane.publish(local, sha, "ci-fix", True, NOW, reason="CI gate blocked")
+    assert out.startswith("pushed")
+    assert _git(local, "ls-remote", "origin", "refs/heads/urgent/ci-fix-20261117").split()[0] == sha
+    assert not list(urgent_lane.folder(local).glob("urgent-ci-fix-*-hooks*"))

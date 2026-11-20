@@ -1,5 +1,5 @@
 name: Build Pinky Pro native payload
-run-name: Pinky payload ${{ inputs.release_id }}
+run-name: Pinky payload ${{ inputs.release_id || github.event.workflow_run.head_sha }}
 
 # D-225 Decision 2.1: payload-only build for updating an already-flashed robot
 # without a card rewrite. Same native ROS/rosdep/lock/hardware-deps steps as
@@ -10,7 +10,14 @@ run-name: Pinky payload ${{ inputs.release_id }}
 # digest), which already holds the ROS snapshot prerequisites and rosdep apt
 # packages; build-native-payload.sh still runs rosdep against the same pins.
 
+# Automatic trigger: after public main CI is green for a SHA, the guard job runs
+# artifact_impact.py and the build runs only for `native-payload`. Signing, canary
+# and on-device acceptance stay human; this never sees a private key.
 on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       release_id:
@@ -28,27 +35,87 @@ permissions:
   packages: read
 
 concurrency:
-  group: rosy-native-payload-${{ github.ref }}
+  group: rosy-native-payload-${{ github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
+  guard:
+    # Once per SHA: the concurrency group above queues a repeat of the same SHA and the
+    # artifact check below skips it. Dispatch always builds the SHA it was started on.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+      sha: ${{ steps.decide.outputs.sha }}
+      release_id: ${{ steps.decide.outputs.release_id }}
+      builder_image: ${{ steps.decide.outputs.builder_image }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Decide whether the payload is affected
+        id: decide
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Installed source_revision when known (repository variable); else the commit's parent.
+          BASE_SHA: ${{ vars.PINKY_INSTALLED_SOURCE_REVISION }}
+          INPUT_RELEASE_ID: ${{ inputs.release_id }}
+          INPUT_BUILDER: ${{ inputs.builder_image }}
+          RUN_NUMBER: ${{ github.run_number }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          {
+            echo "sha=$HEAD_SHA"
+            echo "builder_image=${INPUT_BUILDER:-ghcr.io/robotics-team-1213/rosy-payload-builder@sha256:62d8c7356bb4551da24b7201a5b652cef5d1bda0edbd41e08e12387f0375421f}"
+            echo "release_id=${INPUT_RELEASE_ID:-$(date -u +%Y.%m.%d)-$(printf '%03d' $((RUN_NUMBER % 1000)))}"
+          } >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT" == workflow_dispatch ]]; then echo "build=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          base="${BASE_SHA:-$(git rev-parse "$HEAD_SHA^")}"
+          [[ "$base" =~ ^[0-9a-f]{40}$ ]]
+          set +e
+          python3 deploy/robot/pinky_pro/release/artifact_impact.py --base "$base" --head "$HEAD_SHA" --json | tee /tmp/impact.json
+          rc=${PIPESTATUS[0]}
+          set -e
+          # exit 3 = review: HOLD, never build on a guess.
+          if [[ "$rc" != 0 ]]; then echo "build=false" >> "$GITHUB_OUTPUT"; echo "HOLD: artifact_impact exit $rc" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          impact="$(python3 -c 'import json;print(json.load(open("/tmp/impact.json"))["impact"])')"
+          done="$(gh api "repos/$REPO/actions/artifacts?per_page=100" --paginate -q ".artifacts[] | select(.expired==false and (.name|endswith(\"-$HEAD_SHA\"))) | select(.name|startswith(\"rosy-native-payload-unsigned-\")) | .name" | head -1)"
+          if [[ "$impact" == native-payload && -z "$done" ]]; then echo "build=true" >> "$GITHUB_OUTPUT"; else echo "build=false" >> "$GITHUB_OUTPUT"; fi
+          echo "impact=$impact already_built=${done:-none}" >> "$GITHUB_STEP_SUMMARY"
+
   build-unsigned-payload:
+    needs: guard
+    if: needs.guard.outputs.build == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     container:
-      image: ${{ inputs.builder_image }}
+      image: ${{ needs.guard.outputs.builder_image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ github.token }}
     env:
-      BUILDER_IMAGE: ${{ inputs.builder_image }}
-      RELEASE_ID: ${{ inputs.release_id }}
+      BUILDER_IMAGE: ${{ needs.guard.outputs.builder_image }}
+      RELEASE_ID: ${{ needs.guard.outputs.release_id }}
+      SOURCE_SHA: ${{ needs.guard.outputs.sha }}
       PAYLOAD_WORK: /tmp/rosy-payload-work
       DIST_ROOT: /tmp/rosy-payload-dist
       RESOLVED_LOCK: /tmp/rosy-inputs.resolved.yaml
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
+          ref: ${{ needs.guard.outputs.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -103,7 +170,7 @@ jobs:
           python3 deploy/robot/pinky_pro/image/resolve-build-lock.py \
             --input deploy/robot/pinky_pro/image/inputs.lock.yaml \
             --output "$RESOLVED_LOCK" \
-            --revision "$GITHUB_SHA"
+            --revision "$SOURCE_SHA"
           deploy/robot/pinky_pro/image/verify-inputs.sh "$RESOLVED_LOCK"
 
       - name: Install checksum-pinned Pinky Pro hardware build dependencies
@@ -121,7 +188,7 @@ jobs:
           sudo deploy/robot/pinky_pro/image/build-native-payload.sh \
               --workspace "$GITHUB_WORKSPACE" \
               --release-root "$PAYLOAD_WORK/root" \
-              --source-revision "$GITHUB_SHA" \
+              --source-revision "$SOURCE_SHA" \
               --release-id "$RELEASE_ID" \
               --lock "$RESOLVED_LOCK" \
             | tee /tmp/rosy-native-payload-build.log
@@ -135,8 +202,10 @@ jobs:
           mkdir -p "$DIST_ROOT"
           # D-553 addendum 3: the branch this commit was dispatched from, signed with
           # the payload (manifest + SHA256SUMS). Only main reaches the D-412 channel.
-          [[ "$GITHUB_REF" =~ ^refs/heads/[A-Za-z0-9._/-]+$ ]]
-          printf '%s\n' "${GITHUB_REF#refs/heads/}" > "$PAYLOAD_WORK/root/source-ref.txt"
+          # Only main reaches here via workflow_run; dispatch keeps its own branch.
+          ref="${GITHUB_REF_NAME}"; [[ "$GITHUB_EVENT_NAME" == workflow_run ]] && ref=main
+          [[ "$ref" =~ ^[A-Za-z0-9._/-]+$ ]]
+          printf '%s\n' "$ref" > "$PAYLOAD_WORK/root/source-ref.txt"
           python3 deploy/robot/pinky_pro/release/build_payload_release.py build \
             --payload-root "$PAYLOAD_WORK/root" \
             --release-id "$RELEASE_ID" \
@@ -163,7 +232,7 @@ jobs:
       - name: Upload unsigned payload handoff
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
         with:
-          name: rosy-native-payload-unsigned-${{ inputs.release_id }}-${{ github.sha }}
+          name: rosy-native-payload-unsigned-${{ needs.guard.outputs.release_id }}-${{ needs.guard.outputs.sha }}
           path: /tmp/rosy-payload-dist/*
           if-no-files-found: error
           retention-days: 7

@@ -1361,7 +1361,7 @@ def test_serial_list_and_rules_keep_hazardous_invocations_serial(inv, why):
 def test_serial_list_parses_comments_and_names_real_paths():
     assert xp.load_serial("# head\n\ntest  # why\n middleware\\perception/ \n") == ["test", "middleware/perception"]
     serial = xp.load_serial(xp.SERIAL_FILE.read_text(encoding="utf-8"))
-    assert "integrations/simulation/gazebo/test" in serial and "tools" in serial  # tools: land_isolation's jobs
+    assert "integrations/simulation/gazebo/test" in serial and "tools" not in serial  # lifted 2026-11-20
     assert all((ROOT / prefix).exists() for prefix in serial), "a stale line keeps nothing serial"
 
 
