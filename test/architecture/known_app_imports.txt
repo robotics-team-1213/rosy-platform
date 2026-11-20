@@ -25,7 +25,6 @@ middleware/core/api/test/test_arm_lease_api.py -> omx-cell
 middleware/core/api/test/test_arm_policy_api.py -> omx-cell
 middleware/devices/omx/adapter/test/test_action_receipt_snapshot.py -> site-fleet
 middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py -> site-fleet
-middleware/perception/calibration/calib_node.py -> pinky
 middleware/perception/test/test_loc_e2e.py -> site-fleet
 middleware/robot_execution/local/test/policy_chain_fixtures.py -> site-fleet
 middleware/robot_execution/local/test/policy_chain_gazebo.py -> pinky
