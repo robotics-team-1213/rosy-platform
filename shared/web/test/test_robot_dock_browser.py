@@ -91,8 +91,8 @@ def test_dock_narrow_layout_has_no_overflow_and_44px_targets(gallery):
     from playwright.sync_api import expect
 
     page = gallery
-    if page.wide:
-        pytest.skip("390 only")
+    if page.wide:  # 390 layout check: run it at 390 on both params (a skip is not browser evidence)
+        page.set_viewport_size({"width": 390, "height": 844})
     demo = _demo(page)
     assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
 

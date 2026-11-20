@@ -124,8 +124,8 @@ def test_narrow_panel_keeps_header_stop_visible_and_clickable(gallery):
     from playwright.sync_api import expect
 
     page = gallery
-    if page.wide:
-        pytest.skip("390 only")
+    if page.wide:  # 390 layout check: run it at 390 on both params (a skip is not browser evidence)
+        page.set_viewport_size({"width": 390, "height": 844})
     demo = _demo(page)
     demo.locator('.robot-dock-btn[data-robot-id="rosy_42"]').click()
     panel = demo.locator(".robot-panel")

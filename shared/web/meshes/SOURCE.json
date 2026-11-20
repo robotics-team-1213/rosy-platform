@@ -1,4 +1,4 @@
 {
-  "source": "Display-only reduced copies for the browser robot 3D view, added in 6aa437a2d7 (ROSY UI/UX integration). omx-*: ROBOTIS open_manipulator OMX-F (Apache-2.0; full meshes in learning/envs/isaac/assets/open_manipulator_description). pinky-*: pinklab-art/pinky_pro (Apache-2.0; full meshes in middleware/devices/pinky/description/meshes). Hashes differ from those trees: the exact reduction step was not recorded.",
+  "source": "Display-only reduced copies for the browser robot 3D view, added in 6aa437a2d7 (ROSY UI/UX integration). omx-*: ROBOTIS open_manipulator OMX-F (Apache-2.0; full meshes in learning/envs/isaac/assets/open_manipulator_description). The mobile-robot body and wheel: the vendor robot description package under middleware/devices (Apache-2.0). Hashes differ from those trees: the exact reduction step was not recorded.",
   "note": "Not a simulation or kinematics source; never read for calibration."
 }
