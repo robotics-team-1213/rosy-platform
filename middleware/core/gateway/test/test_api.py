@@ -893,6 +893,25 @@ class TestDockingCommands:
         r = tc.post("/api/v1/docking/dock", json={}, headers=OPERATOR)
         assert r.status_code == 200
 
+    def test_dock_carries_site_pose_evidence_and_core_judges_it(self, docking_client):
+        tc, services = docking_client
+        _register_dock(services)
+        services.state.set_map_id("map-1")
+        evidence = {"anchor_source": "sighting", "identity_mode": "led", "anchor_age_s": 2.0, "camera_residual_m": 0.02,
+                    "camera_residual_deg": 1.0, "map_id": "map-1", "at": 1.0}
+        r = tc.post("/api/v1/docking/dock", json={"dock": "dock_1", "site_pose_evidence": evidence}, headers=OPERATOR)
+        assert r.status_code == 200
+        assert r.json()["site_pose_verified"] is True and r.json()["site_pose_refusal"] is None
+        tc.post("/api/v1/docking/cancel", headers=OPERATOR)
+        r = tc.post("/api/v1/docking/dock", json={"dock": "dock_1", "site_pose_evidence": {**evidence, "anchor_source": "auto_locate"}}, headers=OPERATOR)
+        assert r.status_code == 200 and r.json()["site_pose_verified"] is False and "auto_locate" in r.json()["site_pose_refusal"]
+        tc.post("/api/v1/docking/cancel", headers=OPERATOR)
+        r = tc.post("/api/v1/docking/dock", json={"dock": "dock_1"}, headers=OPERATOR)             # none given: refused for the map path, the dock itself still starts
+        assert r.status_code == 200 and r.json()["site_pose_verified"] is False and "no site_pose_evidence" in r.json()["site_pose_refusal"]
+        tc.post("/api/v1/docking/cancel", headers=OPERATOR)
+        bad = tc.post("/api/v1/docking/dock", json={"dock": "dock_1", "site_pose_evidence": {"anchor_source": "sighting"}}, headers=OPERATOR)
+        assert bad.status_code == 400                                                              # anchor_age_s and map_id are required (the API maps validation errors to 400)
+
     def test_an_unknown_dock_id_is_404(self, docking_client):
         tc, services = docking_client
         _register_dock(services)

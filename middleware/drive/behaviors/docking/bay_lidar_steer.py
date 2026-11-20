@@ -62,6 +62,10 @@ class BayLidarSteerMixin:
             why = self._track_why
         if why is not None and why.startswith("margin") and not self._ans_track and self._lp is None:
             why = self._first_acquisition(match, at)          # case I: a weak global margin in the row, accepted only on the rear gap
+        if why is not None and self._pitin and match is not None and match.x > cfg.bay_line_x_m and why.split(" ")[0] in ("inliers", "margin", "first"):
+            # above the bay line after a pit-in turn: the SEPARATE junction-level acceptance (the row gates below the line are unchanged)
+            why = None if (match.inliers >= cfg.bay_junction_inlier_min and (self._ans_track or match.margin >= cfg.bay_junction_margin_min)
+                           and abs(match.y) <= cfg.bay_entry_lat_m and abs(match.heading) <= cfg.bay_entry_heading_max_rad) else why
         if why is not None:
             return self._ls_drop(why)
         geo = (match.x, -match.y, match.heading)
@@ -151,7 +155,7 @@ class BayLidarSteerMixin:
         if self._lp[0] <= cfg.bay_line_x_m and lane_extent(cfg, self._lp[1], self._lp[2]) > lane_edge(cfg, h._dock):
             self._stop()                       # inside the bay's lines the body centre may not leave the lane (user rule 2026-11-21)
             h._last_event = "lane keeping: left the lane (lateral %.0f mm at x %.2f m)" % (self._lp[1] * 1000.0, self._lp[0])
-            h._fail("bay left the lane: the body footprint reaches past %.0f mm (lateral %.0f mm, heading %.0f deg) at x %.2f m: stopped" % (
+            h._retry("bay left the lane: the body footprint reaches past %.0f mm (lateral %.0f mm, heading %.0f deg) at x %.2f m: stopped" % (      # a lane reseat (bay_reseat.py), then a person
                 lane_edge(cfg, h._dock) * 1000.0, self._lp[1] * 1000.0, math.degrees(self._lp[2]), self._lp[0]))
             return "stop"
         self._est = (self._lp[1], self._lp[2])

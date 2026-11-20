@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+import records_rules
 import rosy_harness as harness
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -508,11 +509,16 @@ def test_every_module_log_is_valid(config):
 def test_repository_adr_log_is_contiguous_and_indexed(config, adr_log):
     gaps, gap_errors = harness.load_adr_gaps(ROOT, config)
     assert gap_errors == []
-    assert harness.validate_adr_log(adr_log, gaps) == []
+    errors = harness.validate_adr_log(adr_log, gaps)
+    # D-1061: an ADR file without its Log row waits for the records bot except in strict runs.
+    errors, _ = records_rules.split_strict(errors, records_rules.strict(ROOT), lambda e: records_rules.LENIENT_ADR in e)
+    assert errors == []
 
 
 def test_generated_records_are_current():
-    stale = harness.check_generated(ROOT)
+    # D-1061: PR and queue runs leave index.md to the records bot; the bot and scheduled runs are strict.
+    stale, _ = records_rules.split_strict(harness.check_generated(ROOT), records_rules.strict(ROOT),
+                                     lambda e: not e.startswith("cannot render"))
     assert stale == [], (
         f"regenerate with `python tools/harness/rosy_harness.py generate`: {stale}"
     )

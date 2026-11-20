@@ -25,6 +25,7 @@ from core_features.docking.bay_phases import BayPhases
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.database import DockDatabase, DockError, DockInstance
 from core_features.docking.detector import DockDetector
+from core_features.docking.site_pose import judge_site_pose
 from core_features.docking.manager_helpers import DockingPhasesMixin
 from core_features.docking.model import DockingConfig, DockingExecutor, DockPhase
 from core_features.docking.native_status import owner_snapshot, readback
@@ -117,6 +118,7 @@ class DockingManager(DockingPhasesMixin):
         self._last_event: Optional[str] = None
         self._uncharged_v0: Optional[float] = None       # pack voltage when DOCKED was declared without charge evidence
         self._uncharged_warned = False
+        self._site_pose = (False, None)                  # CORE's judgement of the last dock command's site_pose_evidence
         self._charge_unconfirmed = False                 # DOCKED without charge evidence (stays True when the voltage is unreadable)
         self._uncharged_since: Optional[float] = None
         self._manual_active = False
@@ -197,6 +199,8 @@ class DockingManager(DockingPhasesMixin):
                 retries=self._retries,
                 error=self._error,
                 charge_unconfirmed=self._charge_unconfirmed and self._state is DockState.DOCKED,
+                site_pose_verified=self._site_pose[0] if self._dock is not None else None,
+                site_pose_refusal=self._site_pose[1] if self._dock is not None else None,
                 last_event=self._last_event,
             )
 
@@ -221,18 +225,21 @@ class DockingManager(DockingPhasesMixin):
     def dock(self, dock_id: Optional[str] = None, *, correlation_id: str | None = None,
              expected_boot_id: UUID | None = None,
              expected_owner_generation: int | None = None,
-             receipt_sink=None, _execution_ticket=None) -> DockInstance:
+             receipt_sink=None, site_pose_evidence=None, _execution_ticket=None) -> DockInstance:
+        """site_pose_evidence: Fleet's evidence that the map pose is a verified site pose (SitePoseEvidence or dict). CORE judges it (site_pose.judge_site_pose). A bay dock
+        with a reference scan stages by the map (Nav2) ONLY on accepted evidence or when a good LiDAR bay fit agrees with the map pose; otherwise it refuses and calls a
+        person (b8xy nosein-4). Position only: heading and the bay entry stay with the LiDAR reference scan."""
         with self._lock:
             self._execution('entry', locals())
             return self._dock_locked(dock_id, correlation_id=correlation_id,
                                      expected_boot_id=expected_boot_id,
                                      expected_owner_generation=expected_owner_generation,
-                                     receipt_sink=receipt_sink)
+                                     receipt_sink=receipt_sink, site_pose_evidence=site_pose_evidence)
 
     def _dock_locked(self, dock_id: Optional[str], *, correlation_id: str | None = None,
                      expected_boot_id: UUID | None = None,
                      expected_owner_generation: int | None = None,
-                     receipt_sink=None) -> DockInstance:
+                     receipt_sink=None, site_pose_evidence=None) -> DockInstance:
         """도킹을 시작한다. 거부는 예외로 나간다 — API 가 그대로 코드에 매핑한다."""
         dock, dock_type = dock_target(
             self._db, self._safety, self._state, dock_id, supported=self._capability_provider,
@@ -259,6 +266,9 @@ class DockingManager(DockingPhasesMixin):
         self._reseats = 0
         self._error = None
         self._last_event = None
+        self._bay_phases.new_dock()
+        self._site_pose = judge_site_pose(site_pose_evidence, self._cfg, self._map_id_provider())
+        self._bay_phases._site_verified, self._bay_phases._site_refusal = self._site_pose
         self._uncharged_v0, self._uncharged_warned, self._uncharged_since = None, False, None
         self._charge_unconfirmed = False
         if dock is not None and getattr(self, "_seated_dock_id", None) != dock.id:
@@ -339,6 +349,7 @@ class DockingManager(DockingPhasesMixin):
         self._release()
         self._state = DockState.UNDOCKED
         self._phase = None
+        self._bay_phases.clear_run_state()               # a status read after a cancel must not show the last run's bay state
         self._emit("docking.canceled", "info",
                    {"dock_id": self._dock.id if self._dock else None})
 
@@ -389,8 +400,8 @@ class DockingManager(DockingPhasesMixin):
         """LiDAR 콜백에서 부른다(락 없음): 이 칸 기준 스캔의 뒤 여유를 한 번 재 달라는 요청 (칸 id, 스캔)."""
         return self._bay_phases.seat_gap_request() if self.active and self._bay_phases.active() else None
 
-    def note_bay_seat_gap(self, dock_id, gap) -> None:
-        self._bay_phases.note_seat_gap(dock_id, gap)
+    def note_bay_seat_gap(self, dock_id, gap, points=None) -> None:
+        self._bay_phases.note_seat_gap(dock_id, gap, points)
 
     def note_bay_scan_sample(self, sample, lag_s: float = 0.0) -> None:
         """LiDAR 콜백에서 매 스캔 부른다(락 없음): 제자리 회전 감시가 스캔끼리 맞추는 데 쓰는 최신 표본."""

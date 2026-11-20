@@ -36,6 +36,7 @@ VERSION_LINE = re.compile(r"^(?:\*\*Version:\*\* |### )v1\.(\d+)\b", re.MULTILIN
 ADDED_LINE = re.compile(r"^\+(?:\*\*Version:\*\* |### )v1\.(\d+)\b")
 HEADER = re.compile(r"^\*\*Version:\*\* (v1\.\d+)\b", re.MULTILINE)
 NAME = re.compile(r"v1\.(\d+)")
+CUTOVER_MARKER = "docs/reference/api-changes/README.md"  # records_rules.MARKER (D-1061)
 
 
 def label(n: int) -> str:
@@ -115,6 +116,11 @@ def main(argv: list[str] | None = None) -> int:
     release.add_argument("--force", action="store_true", help="release someone else's reservation")
     sub.add_parser("bump").add_argument("version")
     args = parser.parse_args(argv)
+    root = Path(shared.git("rev-parse", "--show-toplevel").stdout.strip())
+    if args.command in ("next", "bump") and (root / CUTOVER_MARKER).is_file():
+        print("note: after the records cutover (D-1061) API versions are assigned by the records bot; new PRs "
+              "write 'python tools/new_record.py api --surface ... --slug ...'. This command is kept for PRs "
+              "opened before the cutover.", file=sys.stderr)
     if args.command == "next":
         return shared.claim(used_numbers(), main_highest(), args.reason, NS, label)
     if args.command == "list":
