@@ -419,6 +419,9 @@ def test_core_confirmed_cancel_releases_the_robot_for_new_work(tmp_path):
 
     projected = _nav_canceled(service, first)
     assert projected["status"] == "HOLD" and projected["reason"] == CANCEL_ALL_REASON
+    # CORE's late nav.failed{CANCELED} for the same attempt is recorded, not applied.
+    late = _nav_canceled(service, first, event_id="ev-2", seq=2, event_type="nav.failed")
+    assert (late["status"], late["reason"]) == ("HOLD", CANCEL_ALL_REASON)
 
     second = run(service.submit_navigation(robot_id="rosy_01", x=3, y=4, source="operator",
                                            actor_id="op", request_key="k2"))

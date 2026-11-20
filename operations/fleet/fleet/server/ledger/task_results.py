@@ -103,6 +103,8 @@ def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: 
                    AND event_type='nav.canceled'""", (robot_id, correlation_id)).fetchone():
             # D-421 keeps dispatched tasks FAILED. nav.failed carries no data.source, so a
             # safety cancel cannot be told apart; only a seen nav.canceled earns the distinct reason.
+            # shortcut: any CORE cancel (operator or safety) gets this reason; store the nav.canceled
+            # source in fleet_task_core_events if the two must differ.
             reason = "CORE_CANCEL_CONFIRMED"
         connection.execute(
             """INSERT INTO fleet_task_core_events
