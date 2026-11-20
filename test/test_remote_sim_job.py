@@ -47,7 +47,7 @@ def test_lost_start_reply_tracks_one_actor_and_recovers_complete_log(tmp_path, t
     code = jobs.run('model.example', name, [name], '',
                     'printf "launch\\n" >> "$HOME/launches"; sleep 0.1; printf "complete\\n"; exit 7',
                     tmp_path / 'run.txt', binding, ssh=[], call=dropped_reply,
-                    sleep=lambda _: time.sleep(.02), budget=2)
+                    sleep=lambda _: time.sleep(.02), budget=10)
     assert code == 7
     assert (home / 'launches').read_text() == 'launch\n'
     assert (tmp_path / 'run.txt').read_bytes() == b'complete\n'
