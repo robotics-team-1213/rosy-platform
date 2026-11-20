@@ -10,6 +10,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 import json
 from pathlib import Path
+import re
 import time
 from typing import Any
 
@@ -110,6 +111,25 @@ def record(row: dict, tried: dict, cell, before_frame, config, dest_site, source
     row.update(verify=tried["verify"], zone_verification=tried["zone_verification"], transfer=tried["transfer"])
 
 
+def _zone_rois(config: dict):
+    """(zone_rois or None, None) from the cell config's `zone_rois`, or (None, reason) when it is malformed. A malformed
+    override refuses the measurement instead of falling back to the shared tables."""
+    raw = config.get("zone_rois")
+    if raw is None:
+        return None, None
+    shapes = {"top": re.compile(r"c[1-3]r[1-2]\Z"), "side": re.compile(r"c[1-3]t[1-3]\Z")}
+    if not isinstance(raw, dict) or set(raw) - set(shapes):
+        return None, "zone_rois must be an object with top and side tables"
+    for kind, table in raw.items():
+        if not isinstance(table, dict):
+            return None, f"zone_rois.{kind} must be an object"
+        for key, roi in table.items():
+            if (not shapes[kind].match(str(key)) or not isinstance(roi, list) or len(roi) != 4
+                    or any(type(v) is not int for v in roi) or not (0 <= roi[0] < roi[2] <= 640 and 0 <= roi[1] < roi[3] <= 480)):
+                return None, f"zone_rois.{kind}.{key} is not a valid [x1,y1,x2,y2] in the 640x480 frame"
+    return raw, None
+
+
 def _target(config: dict, dest_site: str):
     """(target dict, None) from the destination site's own layer/col/row, or (None, reason). No default slot or tier."""
     site = (config.get("sites") or {}).get(dest_site) or {}
@@ -165,7 +185,8 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
         missing_before = "no before top frame"
     elif has_side and (before_side_frame or {}).get("image") is None:
         missing_before = "no before side frame"
-    failure = why or side_why or depth_why or bad_target or stale or missing_before
+    rois, bad_rois = _zone_rois(config) if has_side else (None, None)
+    failure = why or side_why or depth_why or bad_target or bad_rois or stale or missing_before
     if failure:
         return {**out, "basis": f"unverified: {failure}"}
     place = {k: target[k] for k in ("area", "col", "row", "tier") if k in target}
@@ -180,6 +201,8 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     pick = {"area": (config.get("sites") or {}).get(source_site, {}).get("area") or source_site.rsplit("-l", 1)[0]}
     verify = verify_stack_outcome_z_mm if target["area"] == "pallet" else verify_stack_outcome
     extra = {"after_depth": depth, "z_profile": config.get("z_profile")} if target["area"] == "pallet" else {}
+    if rois is not None:
+        extra["zone_rois"] = out["zone_rois"] = rois  # the cell's own zone table, for this check only
     stack = verify(before_side=before_side_frame["image"], after_side=side["image"], before_top=before_frame["image"],
                    after_top=top["image"], pick=pick, place=place, strict_target=True, **extra)
     top_zone = (stack.get("place_slot") or {}).get("top_zone")

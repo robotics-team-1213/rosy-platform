@@ -304,3 +304,36 @@ def test_the_check_is_pinned_to_the_target_slot_even_when_another_slot_holds_the
     strict = cell_area_zones.verify_stack_outcome(**args, strict_target=True)
     assert strict["verified"] is False and strict["place_slot"]["top_zone"]["roi"] == [370, 271, 420, 380]
     assert strict["place_slot"]["top_zone"]["within_zone"] is False
+
+
+def test_zone_rois_from_the_cell_config_replace_the_constant_tables_for_this_check_only(fast):
+    rois = {"top": {"c2r1": [300, 160, 360, 270]}, "side": {"c2t1": [200, 250, 290, 315]}}
+    out = czv.measure(Cell({"top": "u", "side": "u"}), before(), {**CONFIG, "zone_rois": rois}, "pallet-l0", "belt", None)
+    assert fast["zone_rois"] == rois and out["zone_rois"] == rois
+    fast.clear()
+    czv.measure(Cell({"top": "u", "side": "u"}), before(), CONFIG, "pallet-l0", "belt", None)
+    assert "zone_rois" not in fast  # no override in the config: the verification path passes none, so the constants apply
+
+
+@pytest.mark.parametrize("bad", [{"top": {"c4r1": [1, 2, 3, 4]}}, {"top": {"c2r1": [1, 2, 3]}}, {"top": {"c2r1": [5, 2, 3, 9]}},
+                                 {"side": {"c2t1": [0, 0, 700, 100]}}, {"top": {"c2r1": [1.5, 2, 30, 40]}}, {"x": {}}, [1]])
+def test_a_malformed_zone_table_refuses_instead_of_falling_back(fast, bad):
+    out = czv.measure(Cell({"top": "u", "side": "u"}), before(), {**CONFIG, "zone_rois": bad}, "pallet-l0", "belt", None)
+    assert out["verified"] is False and "zone_rois" in out["basis"] and not fast
+
+
+def test_the_shared_function_uses_a_named_zone_and_the_constants_elsewhere(real_zones):
+    import cell_area_zones
+
+    side = BLANK.copy()
+    side[260:310, 200:280] = (0, 140, 255)  # a container in a side zone that differs from the table's col 2 tier 1
+    top = BLANK.copy()
+    top[165:270, 300:360] = (0, 140, 255)  # and in a top zone left of the table's col 2 row 1
+    args = dict(before_side=BLANK, after_side=side, before_top=BLANK, after_top=top, pick={"area": "belt"},
+                place={"area": "belt", "col": 2, "row": 1, "tier": 1}, strict_target=True)
+    default = cell_area_zones.verify_stack_outcome(**args)
+    named = cell_area_zones.verify_stack_outcome(**args, zone_rois={"top": {"c2r1": [300, 160, 360, 270]},
+                                                                  "side": {"c2t1": [200, 250, 290, 315]}})
+    assert default["verified"] is False and named["verified"] is True
+    assert named["place_slot"]["top_zone"]["roi"] == [300, 160, 360, 270]
+    assert cell_area_zones.TOP_ROI_BY_COL_ROW[(2, 1)] == (370, 165, 420, 270)  # the shared table itself is untouched

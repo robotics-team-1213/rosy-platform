@@ -199,12 +199,19 @@ def verify_stack_outcome(
     pick: dict[str, Any],
     place: dict[str, Any],
     strict_target: bool = False,
+    zone_rois: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Deterministic zone-based task outcome verification (Isaac-Sim style) using pre-defined `side` and `top` target zones.
 
     `strict_target` (D-1057): judge only the target slot's own zones. No substitute zone, no same-slot or source-slot default
     and no top-fill-only shortcut may make the target present; the source is judged elsewhere, so it counts as vacated here.
+    `zone_rois` (D-1057): a cell's own `{"top": {"c2r1": [x0,y0,x1,y1]}, "side": {"c2t1": [...]}}` replaces the tables below for
+    the slots it names (and, for a side slot it names, the live landmark ROI). Callers that pass none are unchanged.
     """
+    def named(kind: str, key: str):
+        roi = ((zone_rois or {}).get(kind) or {}).get(key)
+        return tuple(int(v) for v in roi) if roi else None
+
     if after_side is None:
         return {
             "verified": True, "recovery_mode": None, "basis": "telemetry_only",
@@ -221,7 +228,9 @@ def verify_stack_outcome(
 
     pick_roi = SIDE_ROI_BY_COL_TIER.get((pick_col, pick_tier), (295, 190, 365, 255))
     place_roi = SIDE_ROI_BY_COL_TIER.get((place_col, place_tier), (226, 120, 292, 195))
-    auto_landmarks = detect_side_self_profile_landmarks(after_side)
+    pick_roi, place_roi = named("side", f"c{pick_col}t{pick_tier}") or pick_roi, named("side", f"c{place_col}t{place_tier}") or place_roi
+    pinned = bool(named("side", f"c{pick_col}t{pick_tier}") or named("side", f"c{place_col}t{place_tier}"))
+    auto_landmarks = [] if pinned else detect_side_self_profile_landmarks(after_side)
     if len(auto_landmarks) >= 2:
         live_prof = SideViewZProfile.fit_from_landmarks(auto_landmarks)
         p_band, q_band = live_prof.tier_band_mm(pick_tier), live_prof.tier_band_mm(place_tier)
@@ -263,7 +272,7 @@ def verify_stack_outcome(
     top_orientation_ok = True
     expected_orient = "vertical_ns" if (not place_is_temp and abs(float(place.get("yaw_deg", -90.0)) + 90.0) <= 25.0) else None
     if after_top is not None:
-        top_roi = TEMP_PLATE_TOP_ROI_BY_LANE.get(place_col, (182, 372, 234, 440)) if place_is_temp else TOP_ROI_BY_COL_ROW.get((place_col, place_row), (316, 160, 374, 270))
+        top_roi = named("top", f"c{place_col}r{place_row}") or (TEMP_PLATE_TOP_ROI_BY_LANE.get(place_col, (182, 372, 234, 440)) if place_is_temp else TOP_ROI_BY_COL_ROW.get((place_col, place_row), (316, 160, 374, 270)))
         top_zone_info = evaluate_zone(after_top, top_roi, tol_u_px=24.0, tol_v_px=40.0, min_fill=0.15, expected_orientation=expected_orient)
         if (same_side_band or pick_is_temp or place_is_temp) and before_top is not None and not strict_target:
             b_q_top = evaluate_zone(before_top, top_roi, min_fill=0.15)
@@ -317,11 +326,12 @@ def verify_stack_outcome_z_mm(
     spec_id: str | None = None,
     z_profile: dict[str, Any] | None = None,
     strict_target: bool = False,
+    zone_rois: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """`ContainerSpec`-aware Z-mm stack outcome verification with signed residual `r_k` and `post_release` interlock gate."""
     base_out = verify_stack_outcome(
         before_side=before_side, after_side=after_side, before_top=before_top, after_top=after_top, pick=pick, place=place,
-        strict_target=strict_target,
+        strict_target=strict_target, zone_rois=zone_rois,
     )
     place_col = int(place.get("col") or 2)
     place_row = int(place.get("row") or 1)
