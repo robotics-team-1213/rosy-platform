@@ -166,10 +166,10 @@ def test_inside_the_bay_nose_out_it_leaves_straight_and_skips_nav2_and_the_turn(
 
 @pytest.mark.parametrize("start,why", [
     ((-0.15, 0.0, 0.0), "nose toward the bay"),
-    ((-0.15, 0.0, math.pi + math.radians(20.0)), "not straight enough"),
+    ((-0.15, 0.0, math.pi + math.radians(20.0)), "overlaps a neighbour lane"),      # 0.18 m lane: the footprint check refuses before the heading window
     ((-0.40, 0.0, 0.0), "nose toward the bay"),     # inside the staging distance: no Nav2 either
     ((-0.15, PITCH, math.pi), "not in this bay's lane"),
-    ((-0.15, 0.07, math.pi), "not straight enough"),
+    ((-0.15, 0.07, math.pi), "overlaps a neighbour lane"),      # footprint check (panel B 2026-11-21), not a centre limit
 ])
 def test_inside_the_bay_row_otherwise_it_stays_still_and_calls_a_person(start, why):
     p, row = a_row(start=start, others=((DOCKED[0], -PITCH, math.pi),))
@@ -228,12 +228,16 @@ def test_a_line_bay_does_not_start_itself_on_low_battery_unless_asked():
     assert q.manager.state is DockState.DOCKING
 
 
-def test_leaving_the_row_steers_on_the_line_from_a_skewed_start():
-    p, row = a_row(start=(-0.12, 0.04, math.pi - math.radians(10.0)))
-    p.manager.dock()
-    phases = run_row(p, row)
-    assert p.manager.state is DockState.DOCKED, (phases, p.manager._error)
-    assert p.world.goals == [] and "turning" not in phases and row.contacts == 0
+def test_a_skewed_start_in_the_row_is_refused_for_every_dock_it_never_drives_out_to_staging():
+    # user rule 2026-11-21: the dock keeps the parking lines. The old "exit" (forward to staging past the bay line, then a 180 turn) is refused for every dock;
+    # skewed starts (10 and 9 deg, beyond the acquire window) stop and say so
+    for start in ((-0.12, 0.015, math.pi - math.radians(10.0)), (-0.12, 0.0, math.pi - math.radians(9.0))):
+        p, row = a_row(start=start, others=())
+        p.manager.dock()
+        run_row(p, row)
+        assert p.manager.state is DockState.DOCK_FAILED, p.manager._error
+        assert "leaving the lane to stage is not allowed" in p.manager._error
+        assert moved(p) == [] and p.world.goals == [] and "turning" not in str(p.manager._error)
 
 
 def test_a_straight_start_acquires_where_it_stands_when_the_line_ends_short_of_the_exit():
@@ -246,14 +250,6 @@ def test_a_straight_start_acquires_where_it_stands_when_the_line_ends_short_of_t
     assert p.manager.state is DockState.DOCKED, p.manager._error
     assert max(out) < 0.20                            # a settle creep only: no exit toward the staging distance
     assert p.world.goals == []
-
-
-def test_a_start_skewed_past_the_acquire_limit_still_leaves_and_never_drives_blind():
-    p, row = a_row(start=(-0.12, 0.0, math.pi - math.radians(9.0)), others=())
-    p.detector.reach = 0.20
-    p.manager.dock()
-    run_row(p, row)
-    assert p.manager.state is DockState.DOCK_FAILED and "lost the guide line" in p.manager._error
 
 
 def test_a_stale_map_pose_stops_it_and_the_reason_carries_both_laterals():
@@ -289,20 +285,6 @@ def _exit_then(p, row, harm):
     harm(p, row)
     run_row(p, row)
     return math.hypot(p.world.pose[0] - start[0], p.world.pose[1] - start[1])
-
-
-def test_losing_the_line_while_leaving_stops_rather_than_driving_blind():
-    p, row = a_row(start=(-0.12, 0.0, math.pi - math.radians(8.0)))
-    moved_m = _exit_then(p, row, lambda p, row: setattr(p.detector, "dead", True))
-    assert p.manager.state is DockState.DOCK_FAILED and "lost the guide line" in p.manager._error
-    assert moved_m < 0.02
-
-
-def test_an_empty_scan_is_not_a_clear_way_out():
-    p, row = a_row(start=(-0.12, 0.0, math.pi - math.radians(8.0)))
-    moved_m = _exit_then(p, row, lambda p, row: setattr(row, "override", lambda p: ("empty", 0.0, 0.0)))
-    assert p.manager.state is DockState.DOCK_FAILED and "cannot vouch" in p.manager._error
-    assert moved_m < 0.02
 
 
 def test_no_scan_after_stopping_at_staging_means_no_turn():

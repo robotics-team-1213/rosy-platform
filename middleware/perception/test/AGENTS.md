@@ -15,9 +15,7 @@ ROS-free unittest suite covering every pure-logic decision module. No ROS on the
 | `test_modes.py` | `control/modes`: label precedence, ESTOP reachable, WARN band edges, `nose_on_wall`, US no-echo/0.80 cap |
 | `test_recover.py` | `control/recover`: `hazard_action` matrix, `wall_first_move`, turn-sign rules, stuck/backup policy |
 | `test_planning.py` | `planning` (GoalBrain): unreachable waypoint skip, degenerate goals, explore→coverage |
-| `test_frontier.py` | `planning/frontier` |
 | `test_body.py` / `test_filt.py` | `sensing/body`, `sensing/filt` |
-| `test_route.py` | `control/route` |
 | `test_scale.py` | `safety/scale` corridor auto-scale |
 | `test_watch.py` | `watch.py` graph inspect |
 

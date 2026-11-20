@@ -4,11 +4,11 @@ import math
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
-from test.test_arrival_delivery import method
+from test_arrival_delivery import method
 from control.control.execution_escape import ExecutionEscape
 from control.control.recover import hazard_action
 from control.control.route_recovery import RouteRecovery
-from test.test_execution_escape import proposal
+from test_execution_escape import proposal
 
 
 def adapter():

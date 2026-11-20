@@ -221,7 +221,7 @@ class RotationEnvelopeTest(unittest.TestCase):
 
     def test_real_gazebo_collision_projection_is_accepted(self):
         from tools.sim.gazebo.prepare_track_world import collision_circumradius
-        model=ET.parse(Path(__file__).parents[1]/'../../tools/sim/gazebo/pinky_maze.sdf').find(".//model[@name='pinky']")
+        model=ET.parse(Path(__file__).parents[3] / 'middleware/perception'/'../../tools/sim/gazebo/pinky_maze.sdf').find(".//model[@name='pinky']")
         geometry=collision_circumradius(model)
         self.assertEqual(len(geometry['footprint_xy']),32)
         est=RotationEnvelope(geometry['radius_m'],geometry['footprint_xy'])
