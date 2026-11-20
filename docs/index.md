@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-20 · uncommitted · docs: CORE events 실행기 확인 기록(D-953 후속 3)
+- 2026-11-20 · uncommitted · docs: 보정 체계·영상 기록 공개 문서(한·영)와 README 소개 갱신
 - 2026-11-20 · uncommitted · 교훈: 병합 경로 전환은 실제 브랜치로 끝까지 돌린 뒤 연다
 - 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 8차
 - 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 7차
-- 2026-11-20 · uncommitted · feat(omx): D-1057 오래된 보관 결과를 팔 없이 다시 측정해 재전송
-- 2026-11-20 · uncommitted · feat: D-1057 입회 표시가 있는 작업만 감독 시험, 나머지는 D-911 검토 범위

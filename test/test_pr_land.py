@@ -62,6 +62,17 @@ def test_build_body_appends_self_overlap_review():
     assert "Overlap-Review:" not in pr_land.build_body("summary", "")
 
 
+def test_build_body_appends_session_line(monkeypatch):
+    for env, name in (("ROSY_SESSION_NAME", "opencode-1"), ("CLAUDE_SESSION_NAME", "claude-x")):
+        monkeypatch.delenv("ROSY_SESSION_NAME", raising=False)
+        monkeypatch.delenv("CLAUDE_SESSION_NAME", raising=False)
+        monkeypatch.setenv(env, name)
+        assert pr_land.build_body("s", "r").rstrip().endswith(f"Session: {name}")
+    monkeypatch.delenv("ROSY_SESSION_NAME", raising=False)
+    monkeypatch.delenv("CLAUDE_SESSION_NAME", raising=False)
+    assert pr_land.build_body("s", "").rstrip().endswith("Session: unknown")
+
+
 def test_dry_run_skips_push_and_gh(monkeypatch, tmp_path, capsys):
     calls = []
 
@@ -153,6 +164,21 @@ def test_ci_runnable_excludes_lab_only_omx_browser_alone_and_sim():
     assert not pr_land.ci_runnable(["ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py"])
     assert not pr_land.ci_runnable(["integrations/simulation/gazebo/test"])
     assert not pr_land.ci_runnable(["test/learning/perception/test_learning_workflow_pipeline_browser.py"])
+
+
+def _required(monkeypatch, invs, changed=()):
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: json.dumps({"mode": "x", "invocations": invs}) if "affected" in cmd else "\n".join(changed))
+    return pr_land.required_lab_invocations(Path("."), "b", "h")
+
+
+def test_mixed_ci_entries_need_no_lab_but_omx_and_browser_parts_stay(monkeypatch):
+    mixed = ["middleware/core/gateway/test", "operations/overhead/test", "test/architecture"]
+    assert _required(monkeypatch, [mixed]) == []
+    omx = ["middleware/devices/omx/adapter/test"]
+    assert _required(monkeypatch, [mixed + omx]) == [omx]
+    brow = "test/learning/perception/test_learning_workflow_pipeline_browser.py"
+    assert _required(monkeypatch, [mixed + [brow]]) == [[brow]]
+    assert _required(monkeypatch, [["ROSY_RUN_BROWSER_TESTS=1"] + mixed]) != []
 
 
 def test_lab_only_requires_intact_lab_cache_and_ci_covers_lab_ids(tmp_path, monkeypatch):

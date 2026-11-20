@@ -3,6 +3,7 @@
 Real owner assembly, journal and Action API; the session, its port and the field carry are fakes. No serial, no torque,
 no ROS, no signal sent to anything."""
 from datetime import datetime, timedelta, timezone
+import json
 import os
 from pathlib import Path
 import sys
@@ -326,6 +327,47 @@ def test_commissioning_is_passed_to_a_carry_only_for_a_fresh_token_and_never_fro
     with pytest.raises(CarryRefused, match="release check"):
         open_carry(g)
     assert token.exists() and seen == [True]
+
+
+@pytest.mark.parametrize("with_ledger", [True, False])
+def test_goal_open_hold_keeps_its_pending_intent(tmp_path, monkeypatch, with_ledger):
+    import cell_attempts
+
+    path = tmp_path / "attempts.jsonl"
+    monkeypatch.setattr(cell_attempts, "RUN", {**cell_attempts.RUN, "path": None})
+    if with_ledger:
+        cell_attempts.start(path, "goal")
+    assessment = {"allowed": True, "mode": "commissioning"}
+    refusal = {**assessment, "allowed": False, "reason": "rehome_stopped"}
+
+    def hold(library, before_motion):
+        before_motion(assessment)
+        return refusal
+
+    gate = SimpleNamespace(open=hold, blocked=True, rehome_started=True, assessment=assessment,
+                           rehome={"result": "stopped"})
+    field = SimpleNamespace(
+        open_cell=lambda *a: ({"work_dir": str(tmp_path)}, "fifo", "cal.json", tmp_path),
+        Guarded=lambda cell, config: cell, Gate=lambda *a, **k: gate, FOLDED=FOLDED, attempts=cell_attempts,
+        calibration=SimpleNamespace(load=lambda p: {}), pivot=SimpleNamespace(with_site_maps=lambda config, cal: cal),
+    )
+    library = tmp_path / "lib.json"
+    library.write_text('{"jaw_empty_stop": 46.5}')
+    section = {**SECTION, "libraries": {"source>target": str(library)}}
+    open_carry = goals_module.open_carry_for(section, field=field, presence=lambda _: True)
+    grant = SimpleNamespace(arm_transfer=SimpleNamespace(source="source", target="target"))
+    with pytest.raises(CarryRefused, match="held: rehome_stopped"):
+        open_carry(grant)
+
+    pending = path.with_suffix(".pending.json")
+    if with_ledger:
+        row, = map(json.loads, path.read_text().splitlines())
+        intent = json.loads(pending.read_text())
+        assert (row["from"], row["to"], row["outcome"]) == ("source", "target", "failed")
+        assert row["attempt_id"] == intent["attempt_id"]
+        assert row["envelope"] == intent["envelope"] == assessment
+    else:
+        assert not path.exists() and not pending.exists()
 
 
 def test_a_final_park_that_is_not_settled_fails_the_release_phase(tmp_path, kin, profile):

@@ -69,7 +69,7 @@ def start(path: Path, run_id: str | None = None, knowledge: str | None = None, p
                task_binding=binding)  # two arms will share a cell
 
 
-def begin(config: dict, envelope: dict) -> None:
+def begin(config: dict, envelope: dict) -> dict | None:
     """An exclusive durable intent survives a crash before the completed attempt row."""
     if RUN["path"] is None:
         if envelope["mode"] == "commissioning":
@@ -78,14 +78,16 @@ def begin(config: dict, envelope: dict) -> None:
     path = Path(RUN["path"])
     if envelope["mode"] == "automatic" and path.resolve() != (Path(config["work_dir"]).expanduser() / "attempts.jsonl").resolve():
         raise OSError("active attempt ledger differs from the reviewed pipeline")
+    intent = {"attempt_id": f"{RUN['run_id']}-{RUN['n'] + 1:03d}", "envelope": envelope,
+              "task_binding": RUN["task_binding"]}
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.with_suffix(".pending.json").open("x", encoding="utf-8") as stream:
-        json.dump({"attempt_id": f"{RUN['run_id']}-{RUN['n'] + 1:03d}", "envelope": envelope,
-                   "task_binding": RUN["task_binding"]}, stream)
+        json.dump(intent, stream)
         stream.flush()
         os.fsync(stream.fileno())
     _fsync_directory(path.parent)
-    RUN["pending"] = f"{RUN['run_id']}-{RUN['n'] + 1:03d}"
+    RUN["pending"] = intent["attempt_id"]
+    return intent
 
 
 _DIGEST_CACHE = {}  # id(dict) -> (repr, sha), 64 entries; guard: an id reuse with a different repr misses
@@ -132,12 +134,14 @@ def classify(tried: dict) -> tuple[str, str | None, str | None]:
         return "failed", "locate", "box not seen"
     if "plan_error" in tried:
         return "failed", "plan", "no IK for the located box"
-    envelope = tried.get("envelope") or (tried.get("transfer") or {}).get("envelope") or {}
-    if envelope.get("allowed") is False:
-        started = any(not s["command"].startswith("load ") for s in (tried.get("transfer") or {}).get("steps", []))
-        return "failed" if started else "held", "envelope", envelope.get("reason")
     moved = tried.get("transfer") or {}
     result, at = moved.get("result"), moved.get("at")
+    steps = moved.get("steps", [])
+    replan_refused = result == "refused" and at == "load" and bool(tried.get("replan_from"))  # ReplanLedger.finish
+    envelope = (None if replan_refused else moved.get("envelope")) or tried.get("envelope") or {}
+    if envelope.get("allowed") is False:
+        started = any(not s["command"].startswith("load ") for s in steps)
+        return "failed" if started else "held", "envelope", envelope.get("reason")
     if result == "surveyed":
         return "surveyed", None, None
     if result == "placed":
@@ -153,12 +157,23 @@ def classify(tried: dict) -> tuple[str, str | None, str | None]:
 
 
 def record(config: dict, calibration: dict, source: str, dest: str, attempt: int, tried: dict,
-           t_start: float, choices=None) -> str | None:
+           t_start: float, choices=None, *, keep_pending: bool = False) -> str | None:
     """Append one attempt row; returns its id (None when no run was started, e.g. in a bare move())."""
     if RUN["path"] is None:
+        if keep_pending:
+            raise OSError("held attempt has no active ledger")
         return None
-    RUN["n"] += 1
-    attempt_id = f"{RUN['run_id']}-{RUN['n']:03d}"
+    attempt_id = f"{RUN['run_id']}-{RUN['n'] + 1:03d}"
+    pending = RUN["path"].with_suffix(".pending.json")
+    if keep_pending:
+        expected = {"attempt_id": attempt_id, "envelope": tried["envelope"], "task_binding": RUN["task_binding"]}
+        if RUN["pending"] != attempt_id or json.loads(pending.read_text(encoding="utf-8")) != expected:
+            raise OSError("held attempt differs from pending intent")
+        existing = RUN["path"].read_text(encoding="utf-8").splitlines() if RUN["path"].exists() else []
+        if any(json.loads(line).get("attempt_id") == attempt_id for line in existing if line.strip()):
+            raise OSError("held attempt row already appended; pending requires manual reconciliation")
+    else:
+        RUN["n"] += 1
     outcome, stage, why = classify(tried)
     opened = RUN.get("episode")  # bound by cell_auto_safety.open_episode to the attempt id it predicted
     episode = None
@@ -176,8 +191,10 @@ def record(config: dict, calibration: dict, source: str, dest: str, attempt: int
         f.write(json.dumps(row, default=str) + "\n")
         f.flush()
         os.fsync(f.fileno())
-    pending = RUN["path"].with_suffix(".pending.json")
-    if (RUN.get("pending") == attempt_id and pending.exists()
+    if keep_pending:
+        _fsync_directory(RUN["path"].parent)
+        RUN["n"] += 1
+    elif (RUN.get("pending") == attempt_id and pending.exists()
             and json.loads(pending.read_text(encoding="utf-8")).get("attempt_id") == attempt_id):
         pending.unlink()
         RUN["pending"] = None
@@ -201,7 +218,7 @@ def finish_area_xyz(config: dict, calibration: dict, directive: dict, assessment
     except (OSError, ValueError) as exc:
         raise OSError("AreaXYZ pending intent unreadable") from exc
     attempt_id = RUN["pending"]
-    if (pending.get("attempt_id") != attempt_id or pending.get("task_binding") != binding
+    if (not isinstance(pending, dict) or pending.get("attempt_id") != attempt_id or pending.get("task_binding") != binding
             or pending.get("envelope") != assessment
             or directive.get("directive_id") != binding["task_id"] or directive.get("arm_id") != RUN["arm_id"]):
         raise OSError("AreaXYZ pending task or library differs from active attempt")
@@ -254,6 +271,17 @@ class ReplanLedger:
         self.config, self.calibration = config, calibration
         self.source, self.dest, self.attempt = source, dest, attempt
         self.tried, self.t_start, self.choices = tried, t_start, choices
+
+    def record_open_hold(self, gate, held):
+        row = {**self.tried, "envelope": gate.assessment if gate.blocked else held,
+               "transfer": {"result": "held", "at": "rehome" if gate.blocked else "preflight",
+                            "steps": [], "envelope": held}}
+        if gate.blocked:
+            row["transfer"]["rehome"] = gate.rehome
+            if gate.rehome_started:
+                row["fail"] = {"stage": "rehome", "class": held["reason"]}
+        return record(self.config, self.calibration, self.source, self.dest, self.attempt, row,
+                      self.t_start, self.choices, keep_pending=gate.blocked)
 
     def finish(self, reason, assessment, status, history):
         path = RUN.get("path")
