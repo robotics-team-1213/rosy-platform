@@ -314,7 +314,7 @@ jobs:
           import sys
 
           # Enable Fleet backend/app and the explicit account SSO journey; leave other CORE browsers opt-in.
-          account_browser = "middleware/core/gateway/test/test_account_pipeline.py"
+          account_browser = "test/integration/core_fleet/test_account_pipeline.py"
           native_ros = {
               "middleware/devices/omx/adapter/test/test_omx_ros_runtime.py": "113",
               "middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py": "114",

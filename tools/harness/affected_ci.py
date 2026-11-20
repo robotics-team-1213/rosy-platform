@@ -48,7 +48,7 @@ SUITE_SHARDS = {"fleet": 5, "sensing": 2}  # Station suites (D-772) retain the f
 # The weights only choose runners; every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
-_STATION_SCHEDULING = "middleware/core/gateway/test/test_station_camera_scheduling.py"
+_STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_scheduling.py"
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
     {"name": "omx-act-cpu", "invocations": [[
@@ -62,8 +62,8 @@ CI_FULL_MATRIX = (
         ["operations/prediction/world_model/test"]], "ros": "none"},
     # 2026-11-18: core-domain was CI's longest runner (pytest step 16.5 and 22.4 min of a 25 min budget, runs
     # 43769060136 and 42596065578); the gateway suite and the rest now run on two runners, same tests.
-    {"name": "core-domain", "invocations": [["middleware/core/gateway/test", f"--ignore={_STATION_SCHEDULING}"], [
-        "middleware/core/gateway/test/test_account_pipeline.py"
+    {"name": "core-domain", "invocations": [["middleware/core/gateway/test"], [
+        "test/integration/core_fleet/test_account_pipeline.py"
     ]], "ros": "none"},
     # Runs the known load-sensitive simulation in a fresh runner (PRs #249 and #250).
     {"name": "core-station-simulation", "invocations": [[_STATION_SCHEDULING]], "ros": "none"},
@@ -159,7 +159,8 @@ def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
     import affected_tests as at
     n = ROOT_SHARDS if entry["name"] == "root-test" else SUITE_SHARDS.get(entry["name"], 1)
     fleet = entry["name"] == "fleet"
-    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0])) if n > 1 else []
+    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0])
+                   and t != _STATION_SCHEDULING) if n > 1 else []
     groups, loads = [[] for _ in range(n)], [0] * n
     for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)) if fleet else files:
         i = min(range(n), key=lambda i: (loads[i], i))
@@ -172,7 +173,7 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
     """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
     import affected_tests as at  # here, not at the top: affected_tests imports this module
     if sel.mode == "full":
-        root_tests = sorted(t for t in repo.test_files if at._under(t, "test"))
+        root_tests = sorted(t for t in repo.test_files if at._under(t, "test") and t != _STATION_SCHEDULING)
         entries = []
         for entry in CI_FULL_MATRIX:
             groups = _shard_groups(repo, entry)

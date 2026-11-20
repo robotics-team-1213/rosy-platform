@@ -698,16 +698,13 @@ def _invocation_test_files(repo, invocation):
 
 def test_full_ci_runs_station_scheduling_on_its_own_required_runner():
     repo = affected.Repo.load(ROOT)
-    suite = "middleware/core/gateway/test"
-    target = f"{suite}/test_station_camera_scheduling.py"
-    ignore = f"--ignore={target}"
+    target = "test/integration/core_fleet/test_station_camera_scheduling.py"
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
     station = next(entry for entry in matrix if entry["name"] == "core-station-simulation")
     assert station["invocations"] == [[target]]
     assert station["gating"] and station["ros"] == "none"
     for invocations in ([inv for entry in matrix for inv in entry["invocations"]],
                         affected.lab_full_invocations(repo)):
-        assert any(suite in inv and ignore in inv for inv in invocations)
         assert sum(target in _invocation_test_files(repo, inv) for inv in invocations) == 1
 
 
@@ -787,7 +784,8 @@ def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
         [other, *flags], *[group + flags for group in full], affected_exclusive.DEDICATED]
     assert all(e["gating"] for e in matrix)
     assert [e["ros"] for e in matrix] == ["none", *["overlay"] * (len(full) + 1)]
-    assert sorted([p for group in full for p in group] + [affected_exclusive.TARGET]) == sorted(
+    # TARGET and the station scheduling file each run on their own runner, outside the root shards.
+    assert sorted([p for group in full for p in group] + [affected_exclusive.TARGET, "test/integration/core_fleet/test_station_camera_scheduling.py"]) == sorted(
         p for p in repo.test_files if p.startswith("test/"))
 
 
