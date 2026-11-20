@@ -57,13 +57,12 @@ _STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_schedulin
 
 
 def consolidated(include: list[dict]) -> list[dict]:
-    """Measured seconds spread a PR's small jobs over runners; a selection that would pass MAX_CI_JOBS keeps a coarser packing.
+    """Measured seconds spread a PR's small jobs over runners; a selection that would pass MAX_CI_JOBS keeps the coarser packing.
 
-    #341 (2026-11-21): two guard jobs ran 117 and 122 s of pytest at JOB_WEIGHT, so the finest packing halves that."""
-    packings = ((CI_TEST_SECONDS, affected_ros.FINE_JOB_WEIGHT), (CI_TEST_SECONDS, affected_ros.JOB_WEIGHT),
-                (FLEET_TEST_SECONDS, affected_ros.JOB_WEIGHT))
-    tried = [affected_ros.consolidate(include, seconds, cap) for seconds, cap in packings]
-    return next((jobs for jobs in tried if len(jobs) <= MAX_CI_JOBS), tried[-1])
+    A 60 s share per job was tried on 2026-11-21 (#343) and dropped: runs used 55% more runner seconds (984 to 1546)
+    and, with several runs sharing the 20 concurrent jobs, the median job waited 177 s for a runner (45 s before)."""
+    fine = affected_ros.consolidate(include, CI_TEST_SECONDS)
+    return fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
 
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
