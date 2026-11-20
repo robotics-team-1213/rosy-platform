@@ -156,6 +156,31 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # 2026-11-19 D-1046: CORE's SLAM fallback wiring is tested against the drive supervisor
     # (drive.behaviors.localization.slam_fallback) it starts, the same cross-lane seam as above.
     "middleware/core/gateway/test/test_slam_fallback_wiring.py",
+    # 2026-11-20 split round 4: vision (perception) + pinky drive tests that moved out of
+    # middleware/perception/test so the vision suite imports no drive module. Each runs a
+    # perception module against a drive module, so it belongs to neither app alone.
+    "test/integration/vision_pinky/test_calibration_certificate.py",
+    "test/integration/vision_pinky/test_calibration_profile.py",
+    "test/integration/vision_pinky/test_calibration_runtime.py",
+    "test/integration/vision_pinky/test_camera_detection.py",
+    "test/integration/vision_pinky/test_camera_policy.py",
+    "test/integration/vision_pinky/test_configured_operation.py",
+    "test/integration/vision_pinky/test_escape_obstacle_gate.py",
+    "test/integration/vision_pinky/test_footprint_guard.py",
+    "test/integration/vision_pinky/test_frontier.py",
+    "test/integration/vision_pinky/test_lidar_guard.py",
+    "test/integration/vision_pinky/test_observation.py",
+    "test/integration/vision_pinky/test_parking_offline.py",
+    "test/integration/vision_pinky/test_policy_handoff.py",
+    "test/integration/vision_pinky/test_precision_odom_pause.py",
+    "test/integration/vision_pinky/test_range_filter.py",
+    "test/integration/vision_pinky/test_return_floor_evidence.py",
+    "test/integration/vision_pinky/test_rotation_envelope.py",
+    "test/integration/vision_pinky/test_rotation_trial.py",
+    "test/integration/vision_pinky/test_route.py",
+    "test/integration/vision_pinky/test_scan_acceptance.py",
+    "test/integration/vision_pinky/test_sensing_only.py",
+    "test/integration/vision_pinky/test_wall_tracker.py",
     # D-964: test/learning/perception now imports perception_runtime, not control, so its
     # eight model intake/signing/replay suites left this list.
 })

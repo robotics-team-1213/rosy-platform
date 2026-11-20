@@ -6,3 +6,5 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3] / "contracts" / "foundation"))
+# `control` and the perception `test` helpers resolve from here (pytest adds it itself only once perception/test is collected).
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "perception"))
