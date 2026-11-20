@@ -83,13 +83,27 @@ def fold_readback(attempt: dict[str, Any], home: Any) -> dict[str, Any]:
     steps = (attempt.get("transfer") or {}).get("steps") if isinstance(attempt.get("transfer"), dict) else None
     park = steps[-1] if isinstance(steps, list) and steps and isinstance(steps[-1], dict) else {}
     state = park.get("state")
-    numbers = (isinstance(state, list) and isinstance(home, list) and len(state) == len(home) == 6
+    # Body joints only (the first five), as cell_recovery.at_home does; the jaw is the sixth and does not count.
+    numbers = (isinstance(state, list) and isinstance(home, list) and len(state) >= 5 and len(home) >= 5
                and all(type(v) in (int, float) and math.isfinite(v) for v in state[:5] + home[:5]))
     folded = bool(park.get("command") == "park" and park.get("ok") is True and park.get("settled") is True
                   and not park.get("fault") and numbers
                   and all(abs(p - h) <= FOLD_TOLERANCE for p, h in zip(state[:5], home[:5])))
     return {"folded": folded, "command": park.get("command"), "state": state if numbers else None,
             "home": home if numbers else None, "tolerance": FOLD_TOLERANCE, "runner_t": park.get("t")}
+
+
+def plan_home(cfg_data: dict[str, Any]) -> Any:
+    """The fold-home pose the runtime uses: `home` of the grasp plan file named by the config's `plan_path`.
+
+    `cell_auto_setup.load_config` loads that file into `config["plan"]`; the config JSON itself never carries it.
+    None when the file is unreadable or has no `home` (then nothing counts as folded).
+    """
+    try:
+        plan = json.loads(Path(str(cfg_data.get("plan_path") or "")).expanduser().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return plan.get("home") if isinstance(plan, dict) else None
 
 
 def _arm_run_spec(arm_id: str, prep_dir: Path) -> tuple[Path, Path, Path, tuple[int, int, int, int], str]:
@@ -151,7 +165,7 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     placement = attempt.get("verify") if isinstance(attempt.get("verify"), dict) else {}
     placed = (proc.returncode == 0 and parsed.get("result") == "placed"
               and placement.get("verified") is True and placement.get("inside") is True)
-    fold = fold_readback(attempt, (cfg_data.get("plan") or {}).get("home"))
+    fold = fold_readback(attempt, plan_home(cfg_data))
     # D-1057: cell_auto_pick records only the top-frame placement check (`verify`, basis "map"). The side/top zone
     # measurement (cell_area_zones.verify_stack_outcome*) is used only if the attempt carries it as `zone_verification`;
     # nothing in cell_auto_pick emits that today, so without it the fields below stay unverified and Fleet refuses.

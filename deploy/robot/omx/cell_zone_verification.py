@@ -53,7 +53,8 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     source = getattr(cell, "cell", cell)
     site = (config.get("sites") or {}).get(dest_site) or {}
     area = dest_site.rsplit("-l", 1)[0]
-    tier = int(site.get("layer", 0)) + 1
+    # cell_place_fit.with_tiers expands `pallet` into `pallet-l0..l2` with layer and tier; a site without them (belt) is tier 1.
+    tier = int(site.get("tier", int(site.get("layer", 0)) + 1))
     col, row = site.get("col"), site.get("row")
     out: dict[str, Any] = {"basis": "unverified", "verified": False, "top": None,
                            "side": {"available": False, "reason": "no side camera in this cell"}}
@@ -65,7 +66,7 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
         out["top"] = {"frame": _stamp(top)}
     if has_side:
         out["side"] = {"available": True, "frame": _stamp(side) if side is not None else None}
-    failure = why or side_why or (None if type(col) is int and type(row) is int else "target slot col/row not configured")
+    failure = why or side_why or (None if type(col) is int and type(row) is int else "target slot col/row not in the site config (real cell configs name only the site place xy)")
     if failure:
         return {**out, "basis": f"unverified: {failure}"}
     place = {"area": area, "col": col, "row": row, "tier": tier}

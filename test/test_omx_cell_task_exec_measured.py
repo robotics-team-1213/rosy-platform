@@ -34,7 +34,9 @@ def _attempt(verify=None, park=PARK, zone=ZONE):
 
 def _exec(tmp_path, monkeypatch, parsed, *, home=HOME, returncode=0):
     (tmp_path / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-    (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({"plan": {"home": home}} if home else {}), encoding="utf-8")
+    # as in the real cell config: the home lives in the grasp plan file that `plan_path` names, not in the config JSON
+    (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": home} if home else {}), encoding="utf-8")
+    (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json")}), encoding="utf-8")
     monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
     monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, returncode, stdout="log\n" + json.dumps(parsed) + "\n", stderr=""))
@@ -141,3 +143,12 @@ def test_worker_aborts_without_a_measurement_time(tmp_path, monkeypatch):
     out = _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt()]})
     posted = _poll(tmp_path, {k: v for k, v in out.items() if k != "measured_at"})
     assert [p.rsplit("/", 1)[1] for p, _ in posted] == ["complete"] and posted[0][1]["reason"] == "MEASURED_PLACEMENT_MISSING"
+
+
+def test_home_comes_from_the_plan_file_and_five_joints_are_compared(tmp_path, monkeypatch):
+    five = [0.8, -62.2, 53.1, 51.6, 45.2]  # the shape of grasp-plan.example.json
+    state = [0.5, -61.0, 52.0, 52.0, 44.0, 12.0]  # the sixth value is the jaw and does not count
+    out = _exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [_attempt(park={**PARK, "state": state})]}, home=five)
+    assert out["stop_event"]["folded"] is True and out["stop_event"]["readback"]["home"] == five
+    assert cte.plan_home({"plan_path": str(tmp_path / "missing.json")}) is None
+    assert cte.plan_home({}) is None

@@ -108,3 +108,34 @@ def test_executor_refuses_the_top_only_record_and_accepts_the_two_camera_record(
         out = helpers._exec(tmp_path, monkeypatch, {"result": "placed", "attempts": [helpers._attempt(zone=zone)]})
         assert out["stage_result"]["task_verified"] is expected
         assert out["stage_result"]["verification"]["basis"] == zone["basis"]
+
+
+# Trimmed from the real cell configs (cell PC, 2026-11-19): sites carry only the place xy, ROI and heights; cameras are top and
+# wrist, with no side camera; there is no plan key. No personal paths, tokens or addresses are kept.
+REAL = {
+    "arm_b": {"cameras": {"top": {}, "wrist": {}}, "sites": {"pallet": {
+        "surface_z": -0.01, "z": 0.005, "yaw_deg": -90.0, "tier_step_m": 0.0324, "place": [0.153, -0.128],
+        "auto_roi": [246, 148, 400, 405]}}},
+    "arm_a": {"cameras": {"top": {}, "wrist": {}}, "sites": {"pallet": {
+        "surface_z": -0.004, "z": 0.011, "yaw_deg": 0.0, "tier_step_m": 0.0345, "place": [0.115, 0.034],
+        "auto_roi": [247, 146, 402, 404]}}},
+    "arm_s": {"cameras": {"top": {}, "wrist": {}}, "sites": {"belt": {
+        "surface_z": 0.028, "z": 0.052, "yaw_deg": -14.4, "place": [0.135, -0.045], "auto_roi": [309, 100, 634, 223]},
+        "pinky": {"place": [0.02, 0.18]}}},
+}
+
+
+@pytest.mark.parametrize("arm, dest", [("arm_b", "pallet-l2"), ("arm_a", "pallet-l0")])
+def test_real_cell_a_b_configs_cannot_name_the_target_slot_so_stay_unverified(arm, dest):
+    import cell_place_fit
+
+    config = cell_place_fit.with_tiers(REAL[arm])[0]  # what cell_auto_pick does at start
+    assert config["sites"][dest]["tier"] == int(dest[-1]) + 1
+    out = czv.measure(Cell({"top": "u"}), None, config, dest, "pallet-l0", config["sites"][dest]["auto_roi"])
+    assert out["verified"] is False and "col/row" in out["basis"] and out["basis"] != czv.BASIS
+
+
+def test_real_cell_s_config_has_no_side_camera_so_the_basis_cannot_match():
+    config = {**REAL["arm_s"], "sites": {**REAL["arm_s"]["sites"], "belt": {**REAL["arm_s"]["sites"]["belt"], "col": 1, "row": 1}}}
+    out = czv.measure(Cell(REAL["arm_s"]["cameras"]), None, config, "belt", "pinky", config["sites"]["belt"]["auto_roi"])
+    assert out["basis"] == czv.TOP_ONLY_BASIS and out["side"]["available"] is False
