@@ -5615,3 +5615,8 @@
 - 변경: 위 두 항목의 D-1059는 D-1060이다. main의 D-1059(merge queue 재시험)와 겹쳐 adr_reserve로 새 번호를 받았다(docs/adr/D-1060-pinky-task-dispatch.md).
 - 증거: adr_reserve next → D-1060, git grep으로 이 브랜치의 Pinky 배차 참조를 모두 바꿈.
 - gate 변화: 없음.
+
+## 2026-11-21 · uncommitted · feat(site-map): 정지 장소 stop_zone·approach_m
+- 변경: 에  전용 선택 필드 (횡단보도 다각형 검사  공용, 장소 점 포함,  필수)과 (0.05–0.6 m,  필수), 순수 함수 . 없으면 저장 본문에서 빠짐. 지도 편집 장소 검사 칸에 접근 거리와 정지 구역 그리기·지우기(대기 띠 그리기와 같은 점 목록, 그리면 고정), 지도에 구역 표시. API v1.434.
+- 증거: ··의 고정 정지 장소 병합 시험, site-map·map-editor node 시험 37개 로컬 통과. 원격·실물 미실시.
+- gate 변화: 없음.

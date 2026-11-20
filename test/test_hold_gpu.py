@@ -32,6 +32,26 @@ def test_it_refuses_a_budget_that_is_not_whole_numbers(tmp_path):
     assert result.returncode == 2 and not (tmp_path / "rosy-jobs").exists()
 
 
+def test_it_holds_the_learning_gpu_lock_for_the_job_and_refuses_when_taken(tmp_path):
+    env = {**os.environ, "HOME": str(tmp_path)}
+    probe = 'flock -n ~/.cache/rosy-learning/gpu.lock true </dev/null 9>&- && echo free || echo held'
+    assert subprocess.run(["bash", str(SCRIPT), "1", "1", "bash", "-c", probe], env=env, capture_output=True, text=True,
+                          check=True).stdout.strip() == "held"  # the job's own subshell cannot take it: hold_gpu holds it
+    holder = subprocess.Popen(["flock", str(tmp_path / ".cache/rosy-learning/gpu.lock"), "sleep", "30"])
+    try:
+        import time
+        for _ in range(50):
+            if subprocess.run(["flock", "-n", str(tmp_path / ".cache/rosy-learning/gpu.lock"), "true"]).returncode:
+                break
+            time.sleep(.1)
+        before = set((tmp_path / "rosy-jobs").glob("train-*.lock"))  # the first run's file stays; its pid is dead
+        result = subprocess.run(["bash", str(SCRIPT), "1", "1", "bash", "-c", "echo ran"], env=env, capture_output=True, text=True)
+        assert result.returncode == 3 and "GPU busy" in result.stderr and "ran" not in result.stdout
+        assert set((tmp_path / "rosy-jobs").glob("train-*.lock")) == before  # refused: tests never see a job that is not running
+    finally:
+        holder.kill()
+
+
 def _fake_ollama(models):
     """An Ollama stand-in on a free port: /api/ps lists `models`, POST bodies are recorded."""
     import http.server
