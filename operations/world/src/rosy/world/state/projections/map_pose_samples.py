@@ -38,7 +38,7 @@ class Sighting:
     robot_id: str
     x: float
     y: float
-    yaw: float
+    yaw: Optional[float]   # None only for a TRACK without a motion heading: it keeps the odometry-bridged yaw
     captured_at: float
     quality: Optional[float] = None
     map_id: Optional[str] = None
@@ -62,6 +62,12 @@ def relative(a: Pose, b: Pose) -> Pose:
 def compose(a: Pose, d: Pose) -> Pose:
     c, s = math.cos(a[2]), math.sin(a[2])
     return a[0] + c * d[0] - s * d[1], a[1] + s * d[0] + c * d[1], _wrap(a[2] + d[2])
+
+
+def camera_residual(ref_map: Pose, ref_odom: Pose, seen: Pose, odom: Pose, heading: bool) -> tuple[float, Optional[float]]:
+    """(metres, degrees) the camera fix `seen` lies from the prediction ref_map + (odom since ref_odom); None deg without a camera heading."""
+    predicted = compose(ref_map, relative(ref_odom, odom))
+    return math.dist(predicted[:2], seen[:2]), math.degrees(_wrap(seen[2] - predicted[2])) if heading else None
 
 
 def parse_utc(text) -> Optional[float]:
