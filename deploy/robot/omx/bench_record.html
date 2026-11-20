@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OMX 작업대 녹화</title>
+<style>
+:root{--bg:#111113;--bg-raise:#18191b;--bg-card:#272a2d;--bg-soft:#212225;--ink:#eeeeef;--ink-q:#b0b4ba;
+--crit:#b54548;--warn:#ffc53d;--good:#3dd68c;--pri:#58a6ff;--accent:#0eb39e;--bd:#363a3f;--r:10px;--rb:8px}
+*{box-sizing:border-box}
+::selection{background:rgba(88,166,255,.32);color:var(--ink)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bd);border-radius:999px}
+::-webkit-scrollbar-thumb:hover{background:#4d535b}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Noto Sans KR",sans-serif;font-size:16px;line-height:1.45;overflow-x:hidden;font-variant-numeric:tabular-nums}
+.wrap{max-width:1520px;margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--bg-raise);border:1px solid var(--bd);border-radius:12px;padding:14px;min-width:0}
+.top-header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;background:var(--bg-raise);border:1px solid var(--bd);border-radius:12px;padding:12px 16px}
+.header-brand{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 320px}
+.header-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.pill-btn{min-height:36px;padding:4px 12px;border-radius:999px;border:1px solid var(--bd);background:var(--bg-soft);color:var(--ink);font-size:.86rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.pill-btn:hover{border-color:var(--pri)}
+.pill-btn.active{background:#132238;border-color:var(--pri);color:#cfe4ff}
+.arm-pills{display:flex;flex-wrap:wrap;gap:8px}
+.tel-grid{display:grid;grid-template-columns:1.2fr repeat(3,minmax(0,1fr));gap:4px 8px;font-size:.82rem;align-items:center}
+.tel-hd{color:var(--ink-q);font-weight:700;font-size:.76rem}
+.prog-track{width:100%;height:5px;background:var(--bg);border:1px solid var(--bd);border-radius:999px;overflow:hidden;margin-top:4px}
+.prog-fill{height:100%;background:var(--pri);transition:width .2s ease}
+.task-listbox{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:8px}
+.task-opt{flex:0 0 auto;display:flex;flex-direction:column;gap:4px;width:100%;height:auto;text-align:left;min-height:54px;padding:10px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--bg-soft);color:var(--ink);font-weight:500;cursor:pointer;justify-content:center;align-items:flex-start;white-space:normal}
+.task-opt:hover:not(:disabled){border-color:var(--pri);background:#1b2330}
+.task-opt[aria-selected="true"]{border-color:var(--pri);background:#132238;box-shadow:inset 0 0 0 1px var(--pri)}
+.task-opt:disabled{opacity:.48;cursor:not-allowed}
+.task-opt-top{display:flex;width:100%;justify-content:space-between;align-items:flex-start;gap:8px;font-size:.9rem;white-space:normal;word-break:break-word}
+.task-opt-sub{width:100%;font-size:.82rem;color:var(--ink-q);line-height:1.35;white-space:normal;word-break:keep-all;overflow-wrap:break-word}
+.map-spot{cursor:pointer;transition:opacity .12s ease}
+.map-spot:hover{opacity:.86}
+.slot-btn{min-height:36px;padding:4px 6px;border-radius:6px;font-size:.8rem;font-weight:600;border:1px solid var(--bd);background:var(--bg);color:var(--ink-q);cursor:pointer;justify-content:center}
+.slot-btn:hover{border-color:var(--pri);color:var(--ink)}
+.slot-btn.active{border-color:#3dd68c;background:#14261e;color:#3dd68c}
+.site-footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 18px;padding:12px 16px;border-top:1px solid var(--bd);color:var(--ink-q);font-size:.84rem}
+.footer-links{display:flex;flex-wrap:wrap;gap:12px}
+.footer-links a{color:var(--ink-q);text-decoration:underline;text-underline-offset:3px}
+.footer-links a:hover{color:var(--ink)}
+.status-bar{background:var(--bg-card);border-color:var(--bd);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.status-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;min-width:0;flex:1 1 240px}
+.badge{display:inline-flex;align-items:center;min-height:32px;padding:4px 12px;border-radius:999px;font-weight:700;font-size:.9rem;background:var(--bg-soft);color:var(--ink);border:1px solid var(--bd)}
+.badge[data-tone="good"]{border-color:var(--good);color:var(--good)}
+.badge[data-tone="warn"]{border-color:var(--warn);color:var(--warn)}
+.badge[data-tone="crit"]{border-color:var(--crit);color:#ff9497}
+.badge[data-tone="live"]{border-color:var(--pri);color:var(--pri)}
+.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;word-break:break-word}
+.quiet{color:var(--ink-q);font-size:.9rem;word-break:keep-all;overflow-wrap:break-word}
+h1{font-size:1.24rem;margin:0 0 4px}
+h2{font-size:1.04rem;margin:0 0 10px;color:var(--ink)}
+h3{font-size:.94rem;margin:0 0 8px;color:var(--ink-q)}
+p{margin:0 0 8px;word-break:keep-all;overflow-wrap:break-word}
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.col-rail{display:none}
+.col-side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.col-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.rail-nav{display:flex;flex-direction:column;gap:6px}
+.rail-link{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--bg-soft);color:var(--ink);text-decoration:none;font-size:.9rem;font-weight:600}
+.rail-link:hover{border-color:var(--pri)}
+.rail-step{font-size:.78rem;padding:2px 8px;border-radius:999px;background:var(--bg);color:var(--ink-q)}
+.rail-step.ok{color:var(--good);border:1px solid var(--good)}
+@media(min-width:960px){
+  .layout{grid-template-columns:minmax(0,1.15fr) minmax(0,.95fr);align-items:start}
+  .col-main{grid-column:1;grid-row:1}
+  .col-side{grid-column:2;grid-row:1;position:sticky;top:14px}
+}
+@media(min-width:1240px){
+  .layout{grid-template-columns:220px minmax(0,1.1fr) minmax(0,1fr);align-items:start}
+  .col-rail{display:flex;flex-direction:column;gap:12px;grid-column:1;grid-row:1;position:sticky;top:14px}
+  .col-main{grid-column:2;grid-row:1}
+  .col-side{grid-column:3;grid-row:1;position:sticky;top:14px}
+}
+.grid-2{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+@media(min-width:600px){.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}}
+label.field{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.95rem;min-width:0}
+input[type="text"],select{width:100%;min-height:48px;padding:10px 12px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);color:var(--ink);font-size:1rem;min-width:0}
+select option:disabled{color:#767b82}
+.group{border:1px solid var(--bd);border-radius:8px;padding:12px;margin:0 0 12px;min-width:0}
+.group legend{padding:0 6px;font-weight:700;font-size:.95rem;color:var(--ink-q)}
+.cal-list{display:flex;flex-direction:column;gap:8px}
+.check-row{display:flex;align-items:center;gap:10px;min-height:48px;padding:8px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-soft);cursor:pointer;min-width:0}
+.check-row input[type="checkbox"]{width:22px;height:22px;flex:0 0 auto;accent-color:var(--pri)}
+.check-row span{overflow-wrap:anywhere;word-break:break-word}
+.check-row:has(input:disabled){opacity:.55;cursor:not-allowed}
+.start-bar{display:flex;flex-wrap:wrap;align-items:stretch;gap:12px}
+.start-bar .check-row{flex:1 1 240px}
+button{min-height:48px;padding:0 18px;border-radius:var(--rb);border:1px solid transparent;font-size:1rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.btn-primary{background:var(--ink);color:var(--bg);min-width:140px}
+.btn-stop{background:var(--crit);color:var(--ink);min-width:160px}
+:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+.alert{border-radius:8px;padding:12px;border:1px solid var(--bd);background:var(--bg-soft);margin-top:10px;overflow-wrap:anywhere}
+.alert.crit{border-color:var(--crit);background:#2a1719;color:#ffd0d1}
+.alert.warn{border-color:var(--warn);background:#2a2314;color:#ffe6a1}
+.alert.good{border-color:var(--good);background:#14261e;color:#bdf5d8}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;font-size:.94rem;margin:0}
+.kv dt{color:var(--ink-q);font-weight:600}
+.kv dd{margin:0;overflow-wrap:anywhere;word-break:break-word}
+.cam-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.cam-box{position:relative;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:6px;min-width:0;transition:opacity .15s ease,filter .15s ease}
+.cam-box.cam-unrecorded{opacity:.32;filter:grayscale(.75)}
+.cam-box.cam-unrecorded img{filter:blur(1.5px)}
+.cam-rec-badge{position:absolute;top:10px;left:10px;padding:2px 7px;border-radius:999px;font-size:.72rem;font-family:ui-monospace,monospace;pointer-events:none;background:rgba(17,17,19,.84)}
+.cam-rec-badge.on{border:1px solid #3dd68c;color:#3dd68c}
+.cam-rec-badge.off{border:1px solid var(--bd);color:var(--ink-q)}
+.cam-box img{width:100%;height:auto;border-radius:6px;display:block;background:#000}
+.cam-tag{position:absolute;top:10px;right:10px;padding:2px 7px;border-radius:999px;background:rgba(17,17,19,.82);border:1px solid #3dd68c;color:#3dd68c;font-size:.72rem;font-family:ui-monospace,monospace;pointer-events:none}
+.sess-list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.sess-item{background:var(--bg-soft);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;font-size:.88rem;display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px}
+.bar-track{position:relative;flex:1 1 120px;height:26px;background:var(--bg-soft);border:1px solid var(--bd);border-radius:6px;cursor:ew-resize;overflow:hidden;touch-action:none;user-select:none}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--pri),#3dd68c);pointer-events:none;transition:width .04s linear}
+.bar-fill.high{background:linear-gradient(90deg,var(--warn),var(--crit))}
+.bar-val{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:.8rem;font-family:ui-monospace,monospace;color:var(--ink);text-shadow:0 1px 2px #000;pointer-events:none}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top-header">
+    <div class="header-brand">
+      <h1>OMX 작업대 녹화</h1>
+      <p class="quiet" style="margin:0">리더 팔을 잡고 다른 손은 follower 전원 스위치에 둔 작업자만 시작합니다. 중지는 정상 종료 요청(SIGTERM)이며 물리 비상 정지가 아닙니다.</p>
+    </div>
+    <div class="header-meta">
+      <span class="badge" data-tone="live">리더-팔로워 전용</span>
+      <span class="badge mono" id="hdr-host">rosy-arm-cell</span>
+      <span class="badge" id="hdr-cam-health" data-tone="warn">카메라 확인 중</span>
+      <button type="button" id="hdr-refresh-btn" class="pill-btn" title="상태와 목록 새로고침">새로고침</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="col-rail" aria-label="작업 단계 사이드바">
+      <div class="card">
+        <h2 style="font-size:.95rem">빠른 팔 전환</h2>
+        <div id="rail-arm-pills" class="arm-pills"></div>
+      </div>
+      <div class="card">
+        <h2 style="font-size:.95rem">녹화 진행 단계</h2>
+        <div class="rail-nav">
+          <a class="rail-link" href="#sec-setup"><span>1 · 촬영 설정</span><span id="rail-1" class="rail-step">대기</span></a>
+          <a class="rail-link" href="#sec-bindings"><span>2 · 연결·한계</span><span id="rail-2" class="rail-step">대기</span></a>
+          <a class="rail-link" href="#sec-start"><span>3 · 확인·시작</span><span id="rail-3" class="rail-step">대기</span></a>
+          <a class="rail-link" href="#sec-cameras"><span>카메라·배치</span><span id="rail-cam" class="rail-step">확인</span></a>
+          <a class="rail-link" href="#sec-evidence"><span>회차 증거</span><span id="rail-ev" class="rail-step">대기</span></a>
+        </div>
+      </div>
+      <div class="card">
+        <h2 style="font-size:.95rem">카메라 상태</h2>
+        <div id="rail-cam-health" class="quiet" style="font-size:.82rem">확인 중...</div>
+      </div>
+      <div class="card quiet" style="font-size:.82rem">
+        <b>단축키</b><br>
+        <code>/</code> 과제 검색<br>
+        <code>Alt+C</code> 현장 확인<br>
+        <code>Ctrl+Enter</code> 시작<br>
+        <code>Esc</code> / <code>Alt+X</code> 중지
+      </div>
+    </nav>
+
+    <aside class="col-side">
+      <section class="card status-bar" id="status-bar" aria-label="상단 상태와 중지" aria-live="polite">
+        <div class="status-meta">
+          <span class="badge" id="top-badge" data-tone="warn">확인 중</span>
+          <span id="top-summary" class="mono">상태를 불러오는 중입니다</span>
+          <span id="top-checked" class="quiet">마지막 확인: 미확인</span>
+        </div>
+        <button type="button" id="stop-btn" class="btn-stop" hidden>녹화 중지 [Esc / Alt+X]</button>
+        <p id="stop-note" class="quiet" style="width:100%;margin:0" hidden>정상 종료 요청(SIGTERM)입니다. Esc 또는 Alt+X로도 중지할 수 있습니다. 물리 비상 정지는 follower 전원 스위치를 사용하세요.</p>
+      </section>
+
+      <section class="card" id="sec-start" aria-labelledby="h-start">
+        <h2 id="h-start">3 · 현장 확인과 시작</h2>
+        <div class="start-bar">
+          <label class="check-row">
+            <input type="checkbox" name="at_bench" id="at_bench" form="bench-form">
+            <span>작업대에서 리더 팔을 잡고 follower 전원 스위치를 확인했습니다 [Alt+C]</span>
+          </label>
+          <button type="submit" id="start-btn" class="btn-primary" form="bench-form" disabled>녹화 시작 [Ctrl+Enter]</button>
+          <button type="button" id="home-btn" class="pill-btn" style="min-height:48px;padding:0 14px;border-radius:8px" disabled title="선택한 팔을 안전한 홈(이니셜) 자세로 이동합니다">홈으로 이동 (Home)</button>
+          <button type="button" id="save-init-pose-btn" class="pill-btn" style="min-height:48px;padding:0 14px;border-radius:8px" disabled title="현재 로봇 팔 자세를 이니셜(홈) 포즈로 저장합니다">팔로워 포즈 저장</button>
+          <button type="button" id="save-leader-pose-btn" class="pill-btn" style="min-height:48px;padding:0 14px;border-radius:8px" disabled title="현재 리더 팔 자세를 리더 홈 포즈로 저장합니다">리더 포즈 저장</button>
+        </div>
+        <p id="start-guard-note" class="quiet" style="margin-top:8px;margin-bottom:0"></p>
+        <div id="lock-conflict-box" class="alert warn" style="margin-top:10px" hidden>
+          <div id="lock-conflict-text" style="margin-bottom:8px"></div>
+          <div id="lock-conflict-list" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+      </section>
+
+      <section class="card" id="sec-evidence" aria-labelledby="h-ev">
+        <h2 id="h-ev">회차 증거</h2>
+        <dl class="kv">
+          <dt>진행 상태</dt><dd id="ev-status" aria-live="polite">확인 중</dd>
+          <dt>회차 이름</dt><dd id="ev-name" class="mono">미확인</dd>
+          <dt>팔</dt><dd id="ev-arm" class="mono">미확인</dd>
+          <dt>과제</dt><dd id="ev-task" class="mono">미확인</dd>
+          <dt>세션 폴더</dt><dd id="ev-folder" class="mono">미확인</dd>
+          <dt>카메라·전송</dt><dd id="ev-extra" class="quiet">미확인</dd>
+        </dl>
+        <div id="ev-restore" class="alert crit" role="alert" hidden></div>
+        <div id="ev-manual" class="alert warn" role="alert" hidden></div>
+        <div id="ev-seal" class="alert good" role="status" hidden></div>
+        <pre id="ev-log-tail" class="mono quiet" style="white-space:pre-wrap;margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;max-height:180px;overflow:auto" hidden></pre>
+        <div id="post-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px" hidden>
+          <button type="button" id="next-ep-btn" class="btn-primary" style="min-height:42px;font-size:.92rem">다음 회차 준비 (수집명 +1)</button>
+          <button type="button" id="copy-transfer-btn" class="btn-quiet" style="min-height:42px;font-size:.92rem;background:var(--bg-soft);color:var(--ink);border-color:var(--bd)">모델 PC 반입 명령 복사</button>
+        </div>
+        <div id="request-error" class="alert crit" role="alert" hidden></div>
+        <div id="conn-error" class="alert warn" role="status" hidden></div>
+      </section>
+
+      <section class="card" id="sec-telemetry" aria-labelledby="h-tel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <h2 id="h-tel" style="margin:0">리더·팔로워 동기화 · 반응속도</h2>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span id="tel-track" class="badge" data-tone="warn">대기</span>
+            <span id="tel-lat" class="badge mono">-- ms</span>
+          </div>
+        </div>
+        <div id="tel-note" class="quiet" style="font-size:.82rem;margin-bottom:6px">녹화/구동 중 0.4초 주기로 관절 동기화(Δ°)와 루프 지연을 표시합니다.</div>
+        <div id="tel-grid" class="tel-grid mono" hidden></div>
+      </section>
+
+      <section class="card" id="sec-cameras" aria-labelledby="h-cams">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <h2 id="h-cams" style="margin:0">실시간 카메라 미리보기 · 집기·안착 가이드</h2>
+          <button type="button" id="save-cam-base-btn" class="btn-quiet" style="min-height:36px;font-size:.84rem;background:var(--bg-soft);color:var(--ink);border:1px solid var(--bd)">기준 카메라 저장</button>
+        </div>
+        <div id="cam-drift-note" class="alert" style="margin:0 0 8px" hidden></div>
+        <div id="cam-guide" class="alert" style="margin:0 0 10px" hidden></div>
+        <p id="cam-note" class="quiet">작업대 카메라(8767)를 확인하는 중입니다.</p>
+        <div id="cam-grid" class="cam-grid"></div>
+      </section>
+
+      <section class="card" id="sec-recent" aria-labelledby="h-recent">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <h2 id="h-recent" style="margin:0">최근 수집 · LeRobot 인코딩 · HF 현황</h2>
+          <span id="hf-login-badge" class="badge" data-tone="warn">HF 확인 중</span>
+        </div>
+        <ul id="recent-list" class="sess-list"></ul>
+        <p id="recent-empty" class="quiet">아직 기록된 세션이 없습니다.</p>
+        <h3 style="margin-top:12px">저장된 LeRobot 데이터셋 (parquet · MP4 인코딩)</h3>
+        <ul id="lerobot-list" class="sess-list"></ul>
+        <p id="lerobot-empty" class="quiet">저장된 LeRobot 데이터셋이 없습니다.</p>
+      </section>
+    </aside>
+
+    <main class="col-main">
+      <form id="bench-form" novalidate>
+        <section class="card" id="sec-setup" aria-labelledby="h-setup">
+          <h2 id="h-setup">1 · 촬영 설정</h2>
+          <div class="grid-2">
+            <div class="field" style="grid-column:1/-1">팔 선택 (복수 선택 시 양팔 동시 · 체크박스)
+              <div id="arm-checks" style="display:flex;flex-wrap:wrap;gap:8px" role="group" aria-label="팔 선택"></div>
+              <select name="arm" id="arm" hidden></select>
+            </div>
+            <div class="field" style="grid-column:1/-1">작업 카드 검색 · 선택 (지도에서 목표점 클릭 시 역선택 가능)
+              <input type="text" id="task-search" placeholder="예: h1-01, belt, tmp-a, pinky 검색... [/]" autocomplete="off" style="min-height:40px;font-size:.92rem">
+              <div id="task-listbox" class="task-listbox" role="listbox" aria-label="작업 카드 목록"></div>
+              <select name="task" id="task" hidden><option value="">없음 (미지정)</option></select>
+            </div>
+            <label class="field">수집명 (소문자·숫자·-)
+              <input type="text" name="name" id="name" required pattern="[a-z0-9][a-z0-9-]{2,63}" placeholder="예: h1-belt-ship-01" autocomplete="off">
+            </label>
+            <label class="field">작업대 배치 리비전
+              <input type="text" name="rig_revision" id="rig_revision" required pattern="[a-z0-9][a-z0-9-]{2,63}" value="bench-r1" placeholder="예: bench-r1" autocomplete="off">
+            </label>
+          </div>
+          <p id="arm-note" class="quiet" style="margin-top:10px"></p>
+          <div class="alert" id="task-summary">
+            <h3>선택한 작업 카드 정보</h3>
+            <dl class="kv">
+              <dt>작업 지시</dt><dd id="tc-single">미확인</dd>
+              <dt>출발점</dt><dd id="tc-origin">미확인</dd>
+              <dt>목표 칸·층</dt><dd id="tc-target">미확인</dd>
+              <dt>반복 수</dt><dd id="tc-episodes">미확인</dd>
+              <dt>회차 시간</dt><dd id="tc-time">미확인</dd>
+              <dt>상단 사진·카메라</dt><dd id="tc-photo">미확인</dd>
+            </dl>
+            <details style="margin-top:8px"><summary class="quiet" style="cursor:pointer">작업 카드 전체 내용 보기</summary>
+              <pre id="tc-raw" class="mono quiet" style="white-space:pre-wrap;margin:8px 0 0;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;max-height:240px;overflow:auto">카드를 선택하세요.</pre>
+            </details>
+          </div>
+          <div id="task-error" class="alert crit" role="alert" hidden></div>
+        </section>
+
+        <section class="card" id="sec-bindings" aria-labelledby="h-bind" style="margin-top:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <h2 id="h-bind" style="margin:0">2 · 연결 확인</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" id="apply-rec-btn" style="min-height:38px;padding:0 12px;font-size:.88rem;background:var(--bg-soft);color:var(--ink);border-color:var(--bd)">추천 설정 자동 세팅</button>
+              <button type="button" id="save-preset-btn" style="min-height:38px;padding:0 12px;font-size:.88rem;background:var(--bg-soft);color:var(--ink);border-color:var(--bd)">현재 설정 저장</button>
+            </div>
+          </div>
+          <fieldset class="group">
+            <legend>녹화 설정 · LeRobot 파라미터</legend>
+            <label class="field">설정 파일
+              <select name="config" id="config"></select>
+            </label>
+            <label class="field" style="margin-top:8px">티칭·시뮬 궤적 리플레이 (--teacher, 선택)
+              <select id="replay" name="replay" form="bench-form">
+                <option value="">수동 리더-팔로워 (기본)</option>
+              </select>
+            </label>
+            <p id="config-meta-note" class="quiet" style="margin:8px 0"></p>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:6px">
+              <label class="field" style="font-size:.84rem">에피소드 수
+                <input type="number" id="lp-episodes" min="1" max="500" step="1" placeholder="기본" style="min-height:40px">
+              </label>
+              <label class="field" style="font-size:.84rem">회차 시간(초)
+                <input type="number" id="lp-ep-time" min="1" max="3600" step="1" placeholder="기본" style="min-height:40px">
+              </label>
+              <label class="field" style="font-size:.84rem">초기화 대기(초)
+                <input type="number" id="lp-reset-time" min="0.5" max="600" step="0.5" placeholder="기본" style="min-height:40px">
+              </label>
+            </div>
+            <p class="quiet" style="font-size:.78rem;margin:6px 0 0">잠금 항목(fps·단위·스텝·카메라)은 로봇 프로필 해시(D-911)로 보호됩니다.</p>
+          </fieldset>
+          <fieldset class="group">
+            <legend>안전 한계 (caps) · 그래프 클릭/드래그 조정</legend>
+            <label class="field">한계 파일
+              <select name="caps" id="caps"></select>
+            </label>
+            <div id="caps-editor" class="alert" style="margin-top:10px" hidden>
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                <span class="quiet">막대 그래프를 클릭하거나 좌우로 끌어당겨 조절한 뒤 저장하세요 (0~2000)</span>
+                <button type="button" id="save-caps-btn" class="btn-primary" style="min-height:40px;padding:0 12px;font-size:.9rem">수정값으로 새 caps 저장·선택</button>
+              </div>
+              <div id="caps-summary-chart" style="margin-bottom:10px"></div>
+              <div id="caps-fields" style="display:flex;flex-direction:column;gap:8px"></div>
+            </div>
+          </fieldset>
+          <details class="group" id="cal-details">
+            <summary style="cursor:pointer;font-weight:700;font-size:.95rem;color:var(--ink-q)">보정 파일 (자동 선택됨 · <span id="cal-summary-count">0개</span>)</summary>
+            <div style="margin-top:10px">
+              <fieldset class="group">
+                <legend>팔로워 보정 (robots/)</legend>
+                <div id="cal-robot-list" class="cal-list"></div>
+              </fieldset>
+              <fieldset class="group" style="margin-bottom:0">
+                <legend>리더 보정 (teleoperators/)</legend>
+                <div id="cal-leader-list" class="cal-list"></div>
+              </fieldset>
+            </div>
+          </details>
+          <div id="cal-list" hidden></div>
+          <div id="binding-issues" class="alert warn" role="status" hidden></div>
+        </section>
+      </form>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div>OMX 작업대 녹화 · <span class="mono">rosy-omx-bench-record.service</span> · <span>D-943 현장 확인 필수</span></div>
+    <div class="footer-links">
+      <a href="/status.json" target="_blank" rel="noopener">상태 JSON</a>
+      <a href="/choices.json" target="_blank" rel="noopener">선택 목록 JSON</a>
+      <a href="/cameras.json" target="_blank" rel="noopener">카메라 JSON</a>
+    </div>
+  </footer>
+</div>
+
+<script src="/bench_record_ui.js"></script>
+<script src="/bench_record_app.js"></script>
+<script src="/bench_record_cam.js"></script>
+</body>
+</html>
