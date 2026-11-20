@@ -41,3 +41,22 @@ def test_build_smoke_skips_only_outside_colcon_roots_workflows_and_deploy():
     assert affected_ci.buildable(repo, sel("deploy/site/x.yaml"))
     assert affected_ci.buildable(repo, sel("tools/harness/platform_parts.yaml"))
     assert affected_ci.buildable(SimpleNamespace(parts={}), sel("tools/land_room.py"))  # unknown roots keep the job
+
+
+def test_shard_py_invocation_balances_heavy_root_tests_and_preserves_small():
+    import affected_ci
+
+    small = [f"test/test_s{i}.py" for i in range(5)]
+    assert affected_ci._shard_py_invocation(small) == [small]
+
+    heavy = list(affected_ci._HEAVY_ROOT_TESTS[:4]) + [f"test/test_extra_{i}.py" for i in range(10)] + ["--ignore=x.py"]
+    shards = affected_ci._shard_py_invocation(heavy, n=3)
+    assert len(shards) == 3
+    # Heavy root tests must not pile onto the same runner
+    for h in affected_ci._HEAVY_ROOT_TESTS[:3]:
+        assert sum(h in s for s in shards) == 1
+    assert len({next(i for i, s in enumerate(shards) if h in s) for h in affected_ci._HEAVY_ROOT_TESTS[:3]}) == 3
+    assert sorted(p for s in shards for p in s if not p.startswith("-")) == sorted(
+        p for p in heavy if not p.startswith("-")
+    )
+    assert all(s[-1] == "--ignore=x.py" for s in shards)
