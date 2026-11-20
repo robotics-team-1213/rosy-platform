@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-1057 | 셀 작업 허가 증거는 지금 실제로 측정되는 값으로만 공급한다. [전문](../adr/D-1057-cell-task-admission-evidence.md) | Accepted (2026-11-20, 사용자 결정 (가)) |
+| D-1058 | CORE 실행기 기본값을 events로 바꾼다(D-953 후속 3 개정). 되돌리기는 `ROSY_CORE_EXECUTOR=threaded` drop-in. [전문](../adr/D-1058-core-events-executor-default.md) | Accepted (2026-11-20, 사용자 결정; 정지 상태 실측·Gazebo 확인, 주행 확인 남음) |
 | D-1055 | PR + Merge Queue를 유일한 병합 경로로 하고 land.py 착지를 은퇴한다(D-868 개정). [전문](../adr/D-1055-pr-merge-queue-only-merge-path-land-retired.md) | Accepted (2026-11-20, 사용자 결정) |
 | D-1052 | 셀프 리뷰 1급 지원, 블로킹 FULL 폐지(Zero-FULL), Merge Queue 직행. [전문](../adr/D-1052-self-review-and-zero-full-ci.md) | Accepted (2026-11-19, 사용자 결정) |
 | D-1035 | 셀 팔 리스, Calibration 보정 작업 API, AI 판정 기록으로 팔 incident 해제(D-971 해제 주체 변경). [전문](../adr/D-1035-calibration-arm-lease-jobs-and-ai-incident-assessment.md) | Accepted (2026-11-17, 사용자 결정; 배포·실물 수용 별도) |

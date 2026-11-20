@@ -176,7 +176,6 @@ test/test_omx_demonstration.py -> pinky
 tools/capture_console_games_round.py -> pinky
 tools/capture_console_games_round.py -> site-fleet
 tools/decision_calibration.py -> site-fleet
-tools/drivable_branch_replay.py -> vision
 tools/lane_replay.py -> vision
 tools/pair_ssh.py -> site-fleet
 tools/sim/bay_departure_sim.py -> site-fleet
@@ -206,4 +205,3 @@ tools/sim/simulate_semantic_road.py -> pinky
 tools/sim/simulate_semantic_road.py -> vision
 tools/sim/transfer_installation.py -> omx-cell
 tools/sim/transfer_installation.py -> site-fleet
-tools/web_visible_roles.py -> pinky

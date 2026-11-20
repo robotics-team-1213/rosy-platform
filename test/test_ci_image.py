@@ -51,7 +51,7 @@ def test_image_dockerfile_holds_the_pins_ci_used_to_install():
     text = DOCKERFILE.read_text(encoding="utf-8")
     assert text.startswith("# Prebuilt CI image") and "FROM ros:jazzy-ros-base" in text
     for needle in ("device-python-requirements.txt", "--require-hashes", "receiver-crypto-requirements.txt",
-                   "requirements-cell.lock", "playwright==1.64.1", "httpx==0.28.1", "oauthlib==4.0.0",
+                   "requirements-cell.lock", "playwright==1.64.1", "pytest-xdist", "httpx==0.28.1", "oauthlib==4.0.0",
                    "joserfc==1.7.5", "rauc=1.11.3-2", "fonts-noto-cjk", "playwright install --with-deps chromium",
                    "manylinux_2_28_x86_64", "PYTHONPATH=/opt/rosy-ci/receiver-crypto"):
         assert needle in text, needle
