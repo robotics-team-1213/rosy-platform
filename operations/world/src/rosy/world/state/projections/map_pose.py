@@ -56,7 +56,7 @@ from dataclasses import dataclass, fields
 from typing import Mapping, Optional
 
 from rosy.world.state.projections.map_pose_samples import (  # noqa: F401
-    SIGHTING, Pose, OdomSample, camera_residual, Sighting, _finite, _wrap, wrap_angle, relative, compose, parse_utc,
+    SIGHTING, Pose, OdomSample, body_heading, camera_residual, Sighting, _finite, _wrap, wrap_angle, relative, compose, parse_utc,
     odom_from_snapshot, sighting_from_row)
 
 LOCALIZED, DEGRADED, UNKNOWN = "LOCALIZED", "DEGRADED", "UNKNOWN"
@@ -402,11 +402,11 @@ class MapPoseTracker:
     def auto_blocked(self) -> bool:
         return self._auto_blocked
 
-    def drop_auto_locate(self) -> None:
-        """D-989: the transform is gone. An auto-locate anchor ends now, not when its age runs out."""
-        self._pending = deque((s for s in self._pending if s.kind != AUTO_LOCATE), maxlen=PENDING_SIGHTINGS)
+    def drop_auto_locate(self, kind: str = AUTO_LOCATE) -> None:
+        """D-989: the transform is gone. An auto-locate anchor ends now, not when its age runs out (TRACK: its identity)."""
+        self._pending = deque((s for s in self._pending if s.kind != kind), maxlen=PENDING_SIGHTINGS)
         self._auto_camera_at, self._auto_camera_odom = None, None
-        if self._anchor is not None and self._anchor.kind == AUTO_LOCATE:
+        if self._anchor is not None and self._anchor.kind == kind:
             self._anchor = self._ref = self._resid = None
             self._degraded, self._consistent = False, 0
 
@@ -449,9 +449,9 @@ class MapPoseTracker:
             return "STALE_SAMPLE"
         if self._newest_track is not None and at <= self._newest_track:
             return "NOT_NEWER"
+        yaw = body_heading(heading, self._odom, self._newest_track, at)   # travel direction -> body yaw (backing up)
         self._newest_track = at   # apart from _newest_sighting: a track never makes a marker sighting look old
-        self._pending.append(Sighting(self.robot_id, xy[0], xy[1], None if heading is None else _wrap(heading), at, None,
-                                      map_id, TRACK))
+        self._pending.append(Sighting(self.robot_id, xy[0], xy[1], yaw, at, None, map_id, TRACK))
         self._resolve(now)
         return None
 
@@ -525,22 +525,24 @@ class MapPoseTracker:
     def _apply(self, sighting: Sighting, odom: _Odom) -> None:
         cfg = self.config
         anchor = self._anchor
-        if anchor is not None and anchor.kind != AUTO_LOCATE and sighting.captured_at < anchor.captured_at:
+        if anchor is not None and anchor.kind not in (AUTO_LOCATE, TRACK) and sighting.captured_at < anchor.captured_at:
             return                            # D-593: seen before the operator pin it would undo
         if anchor is not None and anchor.kind != AUTO_LOCATE and sighting.captured_at - anchor.captured_at > cfg.max_stale_draw_s:
             anchor = None                     # expired anchor reads UNKNOWN; a new sighting starts over
         if anchor is not None and anchor.map_id != sighting.map_id:
             anchor = None                     # another map frame: start over from this sighting
-        yaw = sighting.yaw
-        if yaw is None:                       # a track with no motion heading keeps the bridged one
-            if anchor is None:
-                return                    # nothing to bridge a heading from
-            yaw = compose(anchor.map_pose, relative(anchor.odom.pose, odom.pose))[2]
+        yaw, track = sighting.yaw, sighting.kind == TRACK
+        if anchor is not None and (track or yaw is None):
+            yaw = compose(anchor.map_pose, relative(anchor.odom.pose, odom.pose))[2]   # a travel heading never turns an anchor
+        if yaw is None:
+            return                            # no anchor and no travel heading: nothing to take a yaw from
         seen = (sighting.x, sighting.y, yaw)
         ref = self._ref if anchor is not None else None
         if ref is not None and sighting.kind in (SIGHTING, TRACK):
-            m, deg = camera_residual(ref.map_pose, ref.odom.pose, seen, odom.pose, sighting.yaw is not None)
+            m, deg = camera_residual(ref.map_pose, ref.odom.pose, (*seen[:2], sighting.yaw or 0.0), odom.pose, sighting.yaw is not None)
             self._resid = (m, deg, sighting.captured_at)
+        if track and anchor is not None and anchor.kind in (SIGHTING, OPERATOR_PIN) and sighting.captured_at - anchor.captured_at <= cfg.max_anchor_age_s:
+            return                            # a fresh marker or pin stays the anchor; the track only measured against it
         if anchor is None:
             self._degraded, self._consistent = True, 0       # a first anchor is not yet confirmed
         else:
@@ -572,8 +574,8 @@ class MapPoseTracker:
                 if self._consistent >= RECOVER_AFTER:
                     self._degraded = False
         self._anchor = _Anchor(seen, odom, sighting.captured_at, sighting.map_id, sighting.kind)
-        if sighting.kind != TRACK or ref is None or self._stretched(ref, sighting.captured_at, odom):
-            self._ref = self._anchor          # a track fix keeps the older reference until it is stretched
+        if sighting.kind == SIGHTING or (track and (ref is None or self._stretched(ref, sighting.captured_at, odom))):
+            self._ref = self._anchor          # camera fixes only; a track keeps the older reference until it is stretched
 
     def _stretched(self, ref: _Anchor, at: float, odom: _Odom) -> bool:
         cfg = self.config

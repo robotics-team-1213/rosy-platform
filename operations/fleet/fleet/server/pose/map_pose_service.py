@@ -22,7 +22,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
-from rosy.world.state.projections.map_pose import (LOCALIZED, MapPose, MapPoseConfig, MapPoseTracker,
+from rosy.world.state.projections.map_pose import (LOCALIZED, TRACK, MapPose, MapPoseConfig, MapPoseTracker,
                                          odom_from_snapshot, sighting_from_row)
 from fleet.swarm.transport import RobotApiError
 
@@ -143,6 +143,11 @@ class MapPoseService:
             return "DISABLED"
         now = self._wall()
         return tracker.add_track((x, y), heading, now - age_s, now, map_id, self.active_map_id(), mode)
+
+    def drop_track(self, robot_id: str) -> None:
+        """The identity behind this robot's track anchor is gone: the anchor ends now."""
+        if robot_id in self.config.track_anchor_robots:
+            self._tracker(robot_id).drop_auto_locate(TRACK)
 
     def auto_locate_blocked(self, robot_id: str) -> bool:
         tracker = self._tracker(robot_id) if self.auto_locate_enabled(robot_id) else None

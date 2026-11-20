@@ -6,6 +6,7 @@ from test_led_identity import _confirm, _detections, _setup
 from fleet.server.identity import IdentityConfig
 
 BAY, LANE = (-0.37, 0.48), (0.85, -0.48)
+ON = IdentityConfig(motion_match=True)   # off by default: the site opts in
 
 
 def _poses(tracking, clock, loc="LOCALIZED", **xy):
@@ -17,7 +18,7 @@ def _poses(tracking, clock, loc="LOCALIZED", **xy):
 
 
 def test_the_robot_that_moved_like_one_detection_gets_a_confirmed_track_without_any_lamp_request():
-    clock, tracking, identity, robots = _setup()
+    clock, tracking, identity, robots = _setup(ON)
     _poses(tracking, clock, rosy_60=(0.17, -0.09), rosy_26=(2.0, 2.0))
     _detections(tracking, clock, BAY, LANE)
     assert identity.confirmed_track_pose("rosy_60")["state"] == "UNKNOWN"
@@ -32,7 +33,7 @@ def test_the_robot_that_moved_like_one_detection_gets_a_confirmed_track_without_
 
 
 def test_motion_match_can_be_switched_off_and_never_names_on_a_mismatch():
-    clock, tracking, identity, _robots = _setup(IdentityConfig(motion_match=False))
+    clock, tracking, identity, _robots = _setup()   # the default
     _poses(tracking, clock, rosy_60=(0.0, 0.0))
     _detections(tracking, clock, BAY, LANE)
     clock.now += 1.0
@@ -40,7 +41,7 @@ def test_motion_match_can_be_switched_off_and_never_names_on_a_mismatch():
     _detections(tracking, clock, (-0.37, 0.28), LANE)
     assert identity.confirmed_track_pose("rosy_60")["state"] == "UNKNOWN"
 
-    clock, tracking, identity, _robots = _setup()
+    clock, tracking, identity, _robots = _setup(ON)
     _poses(tracking, clock, rosy_60=(0.0, 0.0))
     _detections(tracking, clock, BAY, LANE)
     clock.now += 1.0
@@ -50,7 +51,7 @@ def test_motion_match_can_be_switched_off_and_never_names_on_a_mismatch():
 
 
 def test_the_site_sets_the_motion_thresholds():
-    clock, tracking, identity, _robots = _setup(IdentityConfig(motion_min_move_m=0.30))
+    clock, tracking, identity, _robots = _setup(IdentityConfig(motion_match=True, motion_min_move_m=0.30))
     _poses(tracking, clock, rosy_60=(0.0, 0.0))
     _detections(tracking, clock, BAY, LANE)
     clock.now += 1.0
@@ -61,7 +62,7 @@ def test_the_site_sets_the_motion_thresholds():
 
 def test_a_pose_that_is_not_localized_never_counts_as_a_move():
     """A navigation restart reports (0, 0, 0) as CANDIDATES, not a drive of 0.2 m."""
-    clock, tracking, identity, _robots = _setup()
+    clock, tracking, identity, _robots = _setup(ON)
     _poses(tracking, clock, loc="CANDIDATES", rosy_60=(0.0, 0.0))
     _detections(tracking, clock, BAY, LANE)
     clock.now += 1.0
@@ -71,7 +72,7 @@ def test_a_pose_that_is_not_localized_never_counts_as_a_move():
 
 
 def test_a_lamp_binding_reads_mode_led_and_an_unknown_robot_reads_none():
-    clock, tracking, identity, _robots = _setup()
+    clock, tracking, identity, _robots = _setup(ON)
     _confirm(clock, tracking, identity)
     assert identity.confirmed_track_pose("rosy_60")["mode"] == "led"
     assert identity.confirmed_track_pose("rosy_26")["mode"] is None

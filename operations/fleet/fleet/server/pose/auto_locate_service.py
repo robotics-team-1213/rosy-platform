@@ -22,6 +22,8 @@ from fleet.server.trip_guard import engaged
 from rosy.world.state.projections.map_pose import STILL_PATH_M, STILL_TURN_RAD
 
 logger = logging.getLogger("fleet.auto_locate")
+#: Identity drop reasons after which the track may belong to another robot (identity.py _drop).
+WRONG_ROBOT_REASONS = ("overlap", "calibration_changed")
 
 SESSION_S = 120.0  # D-691: the phone is awake only this long per request
 RETRY_S = 10.0
@@ -125,6 +127,10 @@ class AutoLocateService:
             return
         open_ids = [rid for rid, until in self._until.items() if now < until]
         tracks = {rid: self._track(identity, rid) for rid in self._watched() | set(open_ids)}
+        modes = getattr(getattr(self.map_pose, "config", None), "track_modes", ("led",))
+        for rid, track in tracks.items():   # a name the site does not trust for a pose is no name here (track_modes)
+            if track.get("state") == "CONFIRMED" and track.get("mode", "led") not in modes:
+                tracks[rid] = {"state": "UNKNOWN", "reason": "MODE_NOT_ALLOWED"}
         for track in tracks.values():   # the pair freshness limit follows the camera's frame interval
             if track.get("state") == "CONFIRMED":
                 fps_of = getattr(self.tracking, "source_fps", None)
@@ -188,11 +194,15 @@ class AutoLocateService:
             if track.get("state") != "CONFIRMED":
                 heading.reset()
                 self.track_refused[robot_id] = track.get("reason") or "NOT_CONFIRMED"
+                if track.get("reason") in WRONG_ROBOT_REASONS:   # the name may have moved to another robot
+                    self.map_pose.drop_track(robot_id)
                 continue
             try:
                 moving = self.map_pose.moved(robot_id, STILL_PATH_M, math.degrees(STILL_TURN_RAD))
+                travel = heading.update(track["x"], track["y"], moving)
+                # Only a heading measured on this tick: a kept one would hold the yaw through a turn in place.
                 self.track_refused[robot_id] = self.map_pose.observe_track(
-                    robot_id, track["x"], track["y"], heading.update(track["x"], track["y"], moving),
+                    robot_id, track["x"], track["y"], travel if heading.fresh else None,
                     track["age_s"], track.get("map_id"), track.get("mode"))
             except Exception:  # one robot's bad track must not stop the others'
                 logger.exception("track anchor failed: robot_id=%s", robot_id)

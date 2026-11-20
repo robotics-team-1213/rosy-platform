@@ -64,7 +64,7 @@ class IdentityConfig:
     auto_min_interval_s: float = 30.0  # D-596 2: at most one request per robot per this
     auto_marker_missing_s: float = 3.0
     auto_near_m: float = 0.5
-    motion_match: bool = True        # 2026-11-21: also name a robot by its motion (motion_match.py), no lamp needed
+    motion_match: bool = False       # 2026-11-21: also name a robot by its motion (motion_match.py), no lamp; the site opts in
     motion_min_move_m: float = 0.15  # the robot's own pose must have moved this far
     motion_tol_m: float = 0.06       # camera and robot distances agree within this (camera error about 5 cm, 2026-11-21)
     motion_still_m: float = 0.04     # anything that moved less stood still
