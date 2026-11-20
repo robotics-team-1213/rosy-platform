@@ -191,6 +191,14 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
                     and now - log.stat().st_mtime > log_days * 86400):
                 out.append(("log", f"older than {log_days:g} days", None, [str(log)]))
                 out.states[(None, (str(log),))] = log.stat()
+    if holder.is_dir():  # 2026-11-18: 2,187 locks of gone trees piled up; the lock is only a lease, a new run recreates it
+        for lock in holder.glob("*.supervisor.lock"):
+            stem = lock.name[:-len(".supervisor.lock")]
+            if (only is not None and stem != only) or (holder / stem).exists() or str((holder / stem).resolve()) in trees:
+                continue
+            if (not any(b.replace("/", "-").split("-batch")[0] == stem for b in names)
+                    and now - lock.stat().st_mtime > QUIET_S):
+                out.append(("lock", "supervisor lock of a gone tree", None, [str(lock)]))
     scratch = land_checks.tmp_root()  # a landing's local logs, kept like its .log, then removed
     # only the default root: a ROSY_LAND_TMP pointing at a shared folder is not ours to sweep
     owned = scratch.name == "rosy-land" and scratch.is_dir()
@@ -219,10 +227,20 @@ def apply(repo: Path, rows) -> list[str]:
         return ["removal requires an unchanged plan from this process"]
     for row in rows:
         action, _, tree, items = row
-        if action not in ("remove", "log", "tmp"):
+        if action not in ("remove", "log", "tmp", "lock"):
             continue
         key = (tree, tuple(items))
         try:
+            if action == "lock":  # kept while any process holds it; closed again before the unlink (Windows)
+                path = Path(items[0])
+                if not (holder / path.name.removesuffix(".supervisor.lock")).exists():
+                    try:
+                        with land_async.locked(path):
+                            pass
+                    except land_async.Busy:
+                        continue  # held: not a problem, just not stale
+                    path.unlink(missing_ok=True)
+                continue
             name = tree.name if tree else Path(items[0]).name.removesuffix(".resume.log").removesuffix(".log")
             fresh = plan(repo, time.time(), rows.log_days, only=name)
             if row not in fresh or rows.states[key] != fresh.states.get(key):
@@ -247,6 +265,23 @@ def apply(repo: Path, rows) -> list[str]:
     return problems
 
 
+def superseded(repo: Path, snap: str) -> list[str]:
+    """Remove the older snapshots of ``snap``'s branch that nothing unique holds (this one covers them); the names
+    removed. 2026-11-08: 149 superseded snapshots (22 GB) waited for a person."""
+    src = source(snap)
+    older = {ref.split("-batch")[0].replace("/", "-") for ref in git(
+        repo, "for-each-ref", "--format=%(refname:short)", f"refs/heads/{land_async.PREFIX}{src}-*").splitlines()
+        if SNAPSHOT.search(ref) and source(ref) == src and ref < snap}
+    gone = []
+    for name in sorted(older):
+        rows = plan(repo, time.time(), 7, only=name)
+        if any(row[0] == "remove" for row in rows) and not apply(repo, rows):
+            gone.append(name)
+    if gone:
+        print(f"[land-async] removed superseded snapshots of {src}: {gone}", flush=True)
+    return gone
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="remove; without it only print the plan")
@@ -266,7 +301,7 @@ def main(argv=None) -> int:
     for key, n in sorted(counts.items()):
         print(f"[land-gc] {n:4d} {key}")
     if not args.apply:
-        print("[land-gc] dry run; --apply removes the 'remove', 'log' and 'tmp' rows")
+        print("[land-gc] dry run; --apply removes the 'remove', 'log', 'lock' and 'tmp' rows")
         return 0
     problems = apply(repo, rows)
     for line in problems:

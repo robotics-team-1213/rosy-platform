@@ -18,14 +18,14 @@ export function initHub(options){
 async function loadConnections(){
   let connections=[];
   try{connections=(await request('/api/accounts/session')).connections||[];}catch{}
-  const usable=connections.filter(item=>(item.scopes||[]).includes('write-repos'));
-  $('hub-connection').replaceChildren(...(usable.length?usable.map(item=>{const option=el('option',`${item.username} · ${item.sharing==='project'?'팀 공유':'개인'}`);option.value=item.connection_id;return option;})
-    :[el('option','쓰기 권한(write-repos)이 있는 HF 연결이 없습니다')]));
+  const usable=connections.filter(item=>item.sharing==='project'&&(item.scopes||[]).includes('write-repos'));
+  $('hub-connection').replaceChildren(...(usable.length?usable.map(item=>{const option=el('option',`${item.username} · 팀 공유`);option.value=item.connection_id;return option;})
+    :[el('option','쓰기 권한(write-repos)이 있는 팀 HF 연결이 없습니다')]));
   $('hub-connection').disabled=!usable.length;
 }
 export function updateHubRuns(runs){
   const done=runs.filter(run=>run.status==='succeeded'&&run.execution_mode!=='native_export'),chosen=$('hub-run').value;
-  $('hub-run').replaceChildren(...(done.length?done.map(run=>{const option=el('option',`${run.method==='act'?'ACT':'SAC'} · ${run.id.slice(0,8)} · 데이터 ${run.dataset_id.slice(0,8)}`);option.value=run.id;return option;})
+  $('hub-run').replaceChildren(...(done.length?done.map(run=>{const option=el('option',`${run.method==='act'?'ACT':'SAC'} · ${run.id.slice(0,8)} · 데이터 ${(run.dataset_id||run.prepared_id||run.study_id||'-').slice(0,8)}`);option.value=run.id;return option;})
     :[el('option','끝난 학습 결과가 없습니다')]));
   if(done.some(run=>run.id===chosen))$('hub-run').value=chosen;
   $('hub-preview').disabled=busy||!done.length;

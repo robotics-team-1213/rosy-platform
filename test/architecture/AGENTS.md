@@ -8,13 +8,13 @@
 
 ## Purpose
 
-Repo-structure tests: where folders, packages, documents and imports are allowed to live. They read the source tree, `package.xml` files, `harness.yaml` and `surfaces.yaml`; they do not need ROS. Most use exception tables checked by set equality (P5), so a new violation fails and so does a stale entry. Update the table in the same commit that creates or removes the violation.
+Repo-structure tests: where folders, packages, documents and imports are allowed to live. They read the source tree, `package.xml` files, `harness.yaml` and `surfaces.yaml`; they do not need ROS. Most use exception tables checked by set equality (P5), so a new violation fails and so does a stale entry. Update the table in the same commit that creates or removes the violation. Known-list ratchets (lists that only shrink) use `test/ratchet_lists.py`: a new entry fails, a stale one warns.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `test_capability_owners.py` | Every `platform_parts.yaml` root has one `capability:`; `.github/CODEOWNERS` routes each owned root to that capability's logins and names no root without them |
+| `test_capability_owners.py` | Every `platform_parts.yaml` root has one `capability:`; `.github/CODEOWNERS` routes each owned root to that capability's logins and names no root without them; every root (plus `app_subtrees`) names one `app:`, so each tracked path maps to exactly one app through `affected_repo.app_of` |
 | `test_wheel_structure.py` | Wheels (`pyproject.toml` without `package.xml`) carry `COLCON_IGNORE`, `AGENTS.md` and their own tests; `KNOWN_WITHOUT_OWN_TESTS` is checked both ways; every `concern: control` wheel is a `harness.yaml` module |
 | `test_module_structure.py` | D-168/D-427 package standard: declared roots, owner guides, harness modules and functional tests; package dependencies and import direction; D-766 absolute size limits (600/800/10,000) against `size_ratchet.txt` and `size_units.txt`; the counting rule is `tools/harness/size_limits.py`. Every tracked code file under a colcon or ops root must be measured (`SIZE_UNMEASURED` lists exceptions with reasons); fleet holders equal `fleet/_source_layout.py` `SOURCE_ROOTS`. Static holder mapping preserves installed package identities |
 | `size_ratchet.txt` | D-766 4: files and units already over the limit, `<count> <key>`, frozen at the measured count; rows only go down. `safety <count> <key> <YYYY-MM-DD>` rows are the D-766 8 exception. Data: not a FULL trigger |
@@ -48,6 +48,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
   - **Pure moves.** `python tools/harness/split_check.py <base> <head>` prints `AST identical, only imports/paths changed` (exit 0) or what differs: a definition, its order, a non-path string constant, an import to a module outside the moved set, or any changed non-`.py` file. A pure move gets a boundary review only (D-766 3). Compression (joining lines, dropping docstrings) is not a split.
 - Launch coupling is found only through literal package-name calls; dynamic imports need functional coverage. Packages are found under manifest `colcon_roots`: `learning`, `operations`, `middleware`, `contracts`, `integrations`, `shared`.
 - Prove a new guard by mutation: break the guarded thing, see red, restore, see green.
+- A commit that adds a ratchet (a `ratchet_lists` user or an `*only_shrink` test) outside this folder adds it to `tools/harness/affected_tests.py` `GUARD_SET` in the same commit; every file here is already in it. `test/test_harness_contracts.py` checks this.
 
 ### Testing Requirements
 

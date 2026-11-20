@@ -9,8 +9,8 @@ Step B migration fields (docs/plans/2026-10-03-d427-source-migration.md, wave 0)
 ``deferred`` names the follow-up that splits a root out of the parent package it
 moves with (Q2). See ``_state`` for moved / partly moved / pending.
 
-KNOWN_VIOLATIONS is checked by set equality (D-168 P5 convention): a new edge
-fails, and so does a listed edge that no longer occurs. Existing import debt only
+KNOWN_VIOLATIONS is a ratchet (ratchet_lists): a new edge fails; a listed edge
+that no longer occurs only warns until it is removed. Existing import debt only
 shrinks; D-637 repartitions unchanged imports when their source owners split.
 
 Honest holes, not oversights:
@@ -35,6 +35,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 import yaml
 
+import ratchet_lists
 from _ast_imports import _imports, _matches
 from _legacy_paths import LegacyScan, in_scope
 
@@ -387,19 +388,12 @@ def test_violation_and_package_dir_keys_name_one_root_each():
 
 def test_import_rules_only_shrink():
     edges = _edges(_manifest(), _tracked())
-    actual = set(edges)
-    new = sorted(actual - set(KNOWN_VIOLATIONS))
-    stale = sorted(set(KNOWN_VIOLATIONS) - actual)
-    assert not new and not stale, (
-        "new D-427 §2 violations: "
-        + "; ".join(f"{key}: {edges[key][:3]}" for key in new)
-        + f" | stale KNOWN_VIOLATIONS (remove them): {stale}"
-    )
+    ratchet_lists.check({key: edges[key][:3] for key in edges}, KNOWN_VIOLATIONS, "D-427 §2 violations (KNOWN_VIOLATIONS)")
 
 
 #: Roots the OMX cell engine in ``deploy/robot/omx`` (D-951) imports. ``deploy`` is outside the
 #: import rules and this engine spans middleware and operations, so no part fits it; freezing the
-#: set keeps new cross-part reach visible. Checked by set equality: it only shrinks.
+#: set keeps new cross-part reach visible. A new root fails, a stale one warns: it only shrinks.
 DEPLOY_OMX_IMPORTS = {
     "contracts/foundation", "contracts/learning", "contracts/skill",
     "middleware/apps/device/omx/adapter", "middleware/apps/device/omx/agent", "middleware/execution/local",
@@ -417,11 +411,7 @@ def test_deploy_omx_engine_imports_only_shrink():
                 target = _target_of(name, owners)
                 if target is not None:
                     found.setdefault(target["d427_target"], f"{path} imports {name}")
-    new = sorted(set(found) - DEPLOY_OMX_IMPORTS)
-    stale = sorted(DEPLOY_OMX_IMPORTS - set(found))
-    assert not new and not stale, (
-        f"new deploy/robot/omx reach: {[found[key] for key in new]} | stale DEPLOY_OMX_IMPORTS (remove them): {stale}"
-    )
+    ratchet_lists.check(found, DEPLOY_OMX_IMPORTS, "deploy/robot/omx reach (DEPLOY_OMX_IMPORTS)")
 
 
 #: (file, matched text) pairs the old-path scan reports that are not paths, e.g. a

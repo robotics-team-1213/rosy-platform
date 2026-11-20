@@ -112,6 +112,22 @@ def test_main_and_snapshot_branches_are_refused(repo):
         tool.start(main, [], NOW, lambda *a: None)
 
 
+def test_a_landing_ended_on_purpose_says_why_in_stopped_and_log(repo):
+    # 11-19: rollups and newer-HEAD replacements taskkill'ed land.py (exit 1); .stopped then read "land.py exit 1" only
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+
+    def killed(argv, cwd, stdout, stderr, **kw):
+        tool._room().note_stop({"worktree": str(tree)}, "rolled into land/x-rollup")
+        return 1
+    assert tool.supervise(tree, snap, [], run=killed) == 1
+    stopped = (tree.parent / (tree.name + ".stopped")).read_text(encoding="utf-8")
+    assert stopped.startswith("land.py exit 1") and "rolled into land/x-rollup" in stopped
+    assert "rolled into land/x-rollup" in log.read_text(encoding="utf-8")
+    assert not (tree.parent / (tree.name + ".killed")).exists()
+
+
 @pytest.mark.parametrize("lands", [True, False])
 def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     main, dev = repo
@@ -130,6 +146,21 @@ def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     assert tree.exists() is not lands
     assert bool(_git(main, "branch", "--list", snap)) is not lands
     assert (tree.parent / (tree.name + ".stopped")).exists() is not lands
+
+
+def test_a_supervisor_copy_beside_its_log_finds_mains_land_queue(tmp_path, monkeypatch):
+    """11-18: the copy in <git-common-dir>/rosy-land-wt crashed with "No module named 'land_queue'" on a full queue."""
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "land_queue.py").write_text("WHERE = 'main tools'\n")
+    copy = tmp_path / ".git" / "rosy-land-wt" / "land-fix-x-20261118000000.land_async.py"
+    copy.parent.mkdir(parents=True)
+    copy.write_bytes((ROOT / "tools" / "land_async.py").read_bytes())
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.delitem(sys.modules, "land_queue", raising=False)
+    spec = importlib.util.spec_from_file_location("land_async_copy", copy)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module._queue().WHERE == "main tools"
 
 
 @pytest.mark.parametrize("room", [True, False])
@@ -204,6 +235,24 @@ def test_a_landing_recovers_after_a_resource_shortage(repo, monkeypatch):
     assert tool.supervise(tree, snap, [], run=fake_land) == 0
     assert len(runs) == 2
     assert not (tree.parent / (tree.name + ".stopped")).exists()
+
+
+def test_one_freed_slot_wakes_only_the_oldest_waiting_supervisor(tmp_path, monkeypatch):
+    """11-18: every queue-full supervisor polled and re-ran land.py at once; now the oldest alone does."""
+    import threading
+    q, slots, real_sleep, got = tool._queue(), [1], time.sleep, {}
+    monkeypatch.setattr(q, "full", lambda qdir, lane="": None if slots and slots.pop() else "landing queue full")
+    monkeypatch.setattr(q, "queue_dir", lambda tree: tree)
+    monkeypatch.setattr(q, "lane_of", lambda tree, ref="HEAD": "")
+    monkeypatch.setattr(time, "sleep", lambda s: real_sleep(0.01))
+    threads = [threading.Thread(target=lambda n=n: got.update({n: tool.wait_for_room(tmp_path / n, time.monotonic() + 1)}))
+               for n in "abc"]
+    for t in threads:  # a starts waiting first
+        t.start()
+        real_sleep(0.1)
+    for t in threads:
+        t.join()
+    assert got == {"a": True, "b": False, "c": False}
 
 
 def test_expired_room_deadline_refuses_even_a_free_queue(repo, monkeypatch):
@@ -318,7 +367,7 @@ def test_requeueing_a_head_the_live_snapshot_holds_reuses_it(repo, monkeypatch):
 
 
 @pytest.mark.parametrize("room_after", [2, None])
-def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room_after):
+def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, capsys, room_after):
     _, dev = repo
     checks, clock = [], [0.0]
     monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": None if room_after and len(checks) >= room_after
@@ -329,9 +378,54 @@ def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room
         assert tool.start(dev, [], NOW, lambda *a: None)[0] == "land/feat/x-20261028044000"
         assert clock[0] == 2 * tool.FULL_POLL_S
     else:
-        with pytest.raises(SystemExit, match="queue full .*waited 30 min"):
+        with pytest.raises(SystemExit) as stop:
             tool.start(dev, [], NOW, lambda *a: None)
+        assert stop.value.code == 3  # not 0: a caller's background command must not read it as queued
+        err = capsys.readouterr().err
+        assert "[land-async] NOT QUEUED: feat/x: landing queue full" in err and "after 30 min" in err
         assert clock[0] >= tool.FULL_WAIT_S and not _git(dev, "branch", "--list", "land/*")
+
+
+def test_not_queued_keeps_one_pending_request_for_the_named_branch(repo, monkeypatch, capsys):
+    """NOT QUEUED keeps the request for land_tick's requeue pass, for --branch from main too (not main itself)."""
+    main, dev = repo
+    clock = [0.0]
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": "landing queue full (12/12 tickets)")
+    monkeypatch.setattr(tool.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(tool.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    for cwd, branch in ((dev, None), (main, "feat/x")):
+        with pytest.raises(SystemExit) as stop:
+            tool.start(cwd, ["--tests", "auto"], NOW, lambda *a: None, branch=branch)
+        assert stop.value.code == 3
+        err = capsys.readouterr().err
+        assert "kept as" in err and "run land_async.py again" not in err
+        (path,) = tool._queue().queue_dir(dev).glob("pending-*.json")
+        row = json.loads(path.read_text(encoding="utf-8"))
+        assert row["branch"] == "feat/x" and row["ref"] == _git(dev, "rev-parse", "feat/x")
+        assert row["args"] == ["--tests", "auto"]
+        clock[0] = 0.0
+
+
+def test_not_queued_preserves_allow_big_for_land_tick_relaunch(repo, monkeypatch):
+    """NOT QUEUED keeps --allow-big in pending-*.json without leaking it into land.py's argv."""
+    main, _ = repo
+    clock, state, launched = [0.0], {"full": "landing queue full (12/12 tickets)"}, []
+    monkeypatch.chdir(main)
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 0)
+    monkeypatch.setattr(tool, "precheck_branch", lambda *a: 0)
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir, lane="": state["full"])
+    monkeypatch.setattr(tool.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(tool.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    monkeypatch.setattr(tool, "detach", lambda argv, log: launched.append(argv))
+    with pytest.raises(SystemExit) as stop:
+        tool.main(["--branch", "feat/x", "--allow-big", "cannot split UI bundle", "--tests", "auto"])
+    assert stop.value.code == 3
+    (path,) = tool._queue().queue_dir(main).glob("pending-*.json")
+    row = json.loads(path.read_text(encoding="utf-8"))
+    assert row["args"] == ["--tests", "auto", "--allow-big", "cannot split UI bundle"]
+    state["full"] = None
+    assert tool.main(["--branch", row["branch"], *row["args"]]) == 0
+    assert launched and launched[0][launched[0].index("--supervise") + 3:] == ["--tests", "auto"]
 
 
 def test_a_finished_landing_removes_the_older_snapshots_it_covers(repo, monkeypatch, tmp_path):
@@ -881,5 +975,90 @@ def test_a_rollup_killed_without_a_verdict_is_not_bisected(repo, monkeypatch, ve
         stdout.write(("[land] STOP: NEW failure\n" if verdict else "") + "[remote-pytest] serial: browser job\n")
         return 1
     tool.supervise(tree, snap, [], run=fake_land)
-    assert bool(split) is verdict
+    # 11-19: without a verdict the members still go back alone (empty reason), never bisected on a progress line
+    assert len(split) == 1 and ("NEW failure" in split[0]["reason"]) is verdict
     assert (tree.parent / (tree.name + ".stopped")).exists()
+
+
+def _fifo_queue(monkeypatch, tmp_path, free):
+    """One shared queue dir; full() says room only while `free` has a slot, and reserve() takes it under its lock."""
+    q, real_sleep = tool._queue(), time.sleep
+    monkeypatch.setattr(q, "full", lambda qdir, lane="": None if free and free.pop() else "landing queue full (12/12)")
+    monkeypatch.setattr(q, "queue_dir", lambda tree: tmp_path / "q")
+    monkeypatch.setattr(q, "lane_of", lambda tree, ref="HEAD": "")
+    monkeypatch.setattr(time, "sleep", lambda s: real_sleep(0.01))
+    monkeypatch.setattr(tool._room(), "taken", {})  # the reservations moved to land_room
+    return q
+
+
+def test_the_freed_slot_is_reserved_for_the_oldest_waiter_not_a_newcomer(tmp_path, monkeypatch):
+    import threading
+    free, got = [], {}
+    _fifo_queue(monkeypatch, tmp_path, free)
+    for n, when in (("old", "1000"), ("mid", "2000")):  # first-request times, written when each was queued
+        (tmp_path / f"{n}.requested").write_text(when)
+    threads = [threading.Thread(target=lambda n=n: got.update({n: tool.wait_for_room(tmp_path / n, time.monotonic() + 1.5)}))
+               for n in ("mid", "old")]
+    for t in threads:
+        t.start()
+    time.sleep(0.3)
+    free.append(1)  # one slot frees up
+    time.sleep(0.2)
+    newcomer = threading.Thread(target=lambda: got.update({"new": tool.wait_for_room(tmp_path / "new", time.monotonic() + 0.5)}))
+    newcomer.start()  # arrives with a fresh request time while the slot is free
+    for t in (*threads, newcomer):
+        t.join()
+    assert got == {"old": True, "mid": False, "new": False}
+    assert (tmp_path / "old.requested").read_text() == "1000"  # the original request time is never reset
+    assert list((tmp_path / "q").glob("*.reserve")) and str(tmp_path / "old") in tool._room().taken
+    assert str(tmp_path / "mid") not in tool._room().taken and str(tmp_path / "new") not in tool._room().taken
+
+
+def test_a_full_ordinary_lane_does_not_hold_the_open_tooling_lane(tmp_path, monkeypatch):
+    queue = _fifo_queue(monkeypatch, tmp_path, [])
+    room = tool._room()
+    monkeypatch.setattr(queue, "lane_of", lambda tree: "" if tree.name == "ordinary" else "tooling")
+    monkeypatch.setattr(queue, "full", lambda qdir, lane="": "landing queue full" if not lane else None)
+    ordinary = tmp_path / "ordinary"
+    tooling = tmp_path / "tooling"
+    later = tmp_path / "tooling-later"
+    old_wait = ordinary.with_suffix(".roomwait")
+    old_tool_wait = tooling.with_suffix(".roomwait")
+    old_wait.write_text("1000", encoding="utf-8")
+    old_tool_wait.write_text("2000", encoding="utf-8")
+
+    assert not room.reserve_now(later, queue, later.with_suffix(".roomwait"), "3000")
+    assert room.reserve_now(tooling, queue, old_tool_wait, "2000")
+    assert old_wait.exists()
+    assert not old_tool_wait.exists()
+
+
+def test_land_py_starts_only_with_a_reservation_and_a_full_queue_never_launches_it(repo, monkeypatch):
+    main, dev = repo
+    q = tool._queue()
+    monkeypatch.setattr(tool, "ROOM_WAIT_S", 0.3)
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    real_sleep, state = time.sleep, {"full": True}
+    monkeypatch.setattr(time, "sleep", lambda s: real_sleep(0.01))
+    monkeypatch.setattr(q, "full", lambda qdir, lane="": "landing queue full (12/12)" if state["full"] else None)
+    runs = []
+
+    def never(*a, **kw):
+        runs.append(1)  # a child here would raise "queue full" (the 792 STOPs)
+        return 1
+    assert tool.supervise(tree, snap, [], run=never) == 1
+    assert not runs and (tree.parent / (tree.name + ".stopped")).exists()
+    assert "land.py was not started" in log.read_text(encoding="utf-8")
+    state["full"] = False
+    (tree.parent / (tree.name + ".stopped")).unlink()
+    seen = []
+
+    def lands(argv, cwd, stdout, stderr, **kw):
+        marker = Path(os.environ[q.RESERVED_ENV])
+        seen.append(marker.is_file())  # handed to the child; its enter() consumes it
+        _git(main, "merge", "-q", "--ff-only", snap)
+        return 0
+    assert tool.supervise(tree, snap, [], run=lands) == 0
+    assert seen == [True] and q.RESERVED_ENV not in os.environ
+    assert not list(q.queue_dir(dev).glob("*.reserve"))  # the supervisor drops what the child did not take

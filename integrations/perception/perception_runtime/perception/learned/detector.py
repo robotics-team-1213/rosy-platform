@@ -20,7 +20,7 @@ import cv2
 import numpy as np
 
 from .lane_mask import NonFiniteLogits, preprocess
-from .manifest import ManifestError, ModelManifest, load_manifest, verify_files
+from core_common.perception_model import ManifestError, ModelManifest, load_manifest, verify_files
 from .runner import _OrtSession
 
 # Wire caps from control/control/detection_evidence.py: 64 boxes per packet.

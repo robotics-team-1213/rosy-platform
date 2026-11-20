@@ -22,6 +22,7 @@ import shutil
 import subprocess  # noqa: F401  (re-exported for test monkeypatching)
 import sys
 import time  # noqa: F401  (re-exported for test monkeypatching)
+import urllib.error
 
 _HERE = str(Path(__file__).resolve().parent)
 if _HERE not in sys.path:
@@ -35,6 +36,12 @@ from omx_autoupdate_host import (  # noqa: E402,F401  (re-exported)
     log,
 )
 
+# Where the updater keeps its state; tools/remote/omx_hotfix.py writes floor_sha into the same file.
+DEFAULT_CONFIG = "~/.config/rosy/omx-autoupdate.json"
+DEFAULT_ROOT = "~/rosy-omx"
+STATE_FILE = "state.json"
+UPDATE_LOCK = "update.lock"
+
 
 class Updater:
     def __init__(self, cfg: dict, host) -> None:
@@ -42,7 +49,7 @@ class Updater:
         self.root = Path(cfg["root"])
         self.releases = self.root / "releases"
         self.envs = self.root / "envs"
-        self.state_path = self.root / "state.json"
+        self.state_path = self.root / STATE_FILE
 
     def state(self) -> dict:
         try:
@@ -116,11 +123,22 @@ class Updater:
                 return "waiting_ci"
             if status[1] != "success" or status[2] != "github-actions":
                 return "ci_failed"
-        if state.get("current_sha") and not self.host.descends(state["current_sha"], sha):
+        # floor_sha: the main commit under the last hand hotfix (omx_hotfix.py deploy); never go back below it
+        if state.get("floor_sha") and not self.descends(state["floor_sha"], sha):
+            return "below_hotfix_floor"
+        if state.get("current_sha") and not self.descends(state["current_sha"], sha):
             return "not_descendant"
         if self.cfg.get("require_verified_commit") and not self.host.verified(sha):
             return "unverified_commit"
         return None
+
+    def descends(self, base: str, head: str) -> bool:
+        try:
+            return self.host.descends(base, head)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:  # base not on origin yet (a floor from local main): refuse, do not fail the unit
+                return False
+            raise
 
     def run(self, *, dry_run: bool = False) -> str:
         self.releases.mkdir(parents=True, exist_ok=True)
@@ -279,7 +297,7 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("required_checks", ["ci-result"])
     cfg.setdefault("paths", list(DEFAULT_PATHS))
     cfg.setdefault("keep", 3)
-    cfg["root"] = os.path.expanduser(cfg.get("root", "~/rosy-omx"))
+    cfg["root"] = os.path.expanduser(cfg.get("root", DEFAULT_ROOT))
     if cfg.get("kind") == "service":
         missing = [
             k
@@ -309,13 +327,13 @@ def load_config(path: Path) -> dict:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--config", type=Path, default=Path("~/.config/rosy/omx-autoupdate.json").expanduser())
+    parser.add_argument("--config", type=Path, default=Path(DEFAULT_CONFIG).expanduser())
     parser.add_argument("command", choices=("run", "status", "rollback"))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     cfg = load_config(args.config)
     Path(cfg["root"]).mkdir(parents=True, exist_ok=True)
-    with (Path(cfg["root"]) / "update.lock").open("a") as lock:
+    with (Path(cfg["root"]) / UPDATE_LOCK).open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         updater = Updater(cfg, Host(cfg))
         if args.command == "status":

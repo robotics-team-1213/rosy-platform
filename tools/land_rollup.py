@@ -48,6 +48,8 @@ import land_async  # noqa: E402
 import land_batch  # noqa: E402
 import land_merge  # noqa: E402
 import land_queue  # noqa: E402
+import land_rollup_failed  # noqa: E402
+import land_room  # noqa: E402
 import land_selection  # noqa: E402
 
 ROLLUP_MAX = int(os.environ.get("ROSY_ROLLUP_MAX", "12"))
@@ -77,13 +79,17 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: boo
     mixed = MIXED if mixed is None else mixed
     host = host or socket.gethostname()
     carried = land_batch.taken(rows)
+    main = git(repo, "rev-parse", "-q", "--verify", "refs/heads/main", check=False).stdout.strip()
     found = []
     for r in rows:
         tree = Path(r.get("worktree") or "")
         # 2026-11-03: a --tests full --no-cache landing for publish evidence was rolled up and ran auto (alone)
         # D-889 38, 2026-11-17: a waiting ticket with a prepare record already passed its tests; re-rolling it threw that
         # away (7 prepared tickets re-rolled at 21:3x, one 138 min ready at queue position 2; rollup lead p50 200 min vs 32 min)
-        prepared = r.get("status") == "waiting" and (r.get("tested") or r.get("tier") == "full_done")
+        # 11-18 panel: a 'pending' ticket (or rollup) whose prepare already passed on today's main was re-rolled too
+        # D-889 38 addendum (11-18 R3): a waiting ticket tested on today's main loses nothing by riding, so it may roll up
+        prepared = (r.get("status") == "waiting" and (r.get("tier") == "full_done" or r.get("tested") not in (None, "", main))
+                    or r.get("status") == "pending" and bool(main) and r.get("tested") == main)
         idle = (r.get("status") in ("pending", "waiting") and not prepared
                 or (mixed and r.get("status") == "preparing" and r.get("full_wait")))  # a FULL waiter runs no test
         rollup = mixed and land_async.ROLLUP.fullmatch(r.get("branch") or "")  # unmixed: a plain row (addendum 23)
@@ -95,6 +101,15 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: boo
         tip = git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{r['branch']}", check=False).stdout.strip()
         if tip and tip == git(tree, "rev-parse", "HEAD", check=False).stdout.strip():
             found += unrolled(repo, r) if rollup else [r]
+    # 11-18: a plain row already riding a live rollup that is not being unrolled here would ride twice (bay-cycle-tool in 3)
+    taken_by, riding = {r["branch"] for r in found if "rollup" in r}, set()
+    for r in rows:
+        if land_async.ROLLUP.fullmatch(r.get("branch") or "") and r["branch"] not in taken_by:
+            try:
+                riding.update(land_async.member_branches(land_async.holder(repo), r))
+            except SystemExit:  # no readable .members record: nothing known to ride it
+                pass
+    found = [r for r in found if "rollup" in r or r.get("branch") not in riding]
     # Keep only the newest snapshot per logical topic so superseded snapshots never fight or merge twice.
     newest: dict[str, int] = {}
     for idx, row in enumerate(found):
@@ -404,6 +419,7 @@ def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume,
         halves = [[m] for m in members]
     else:
         halves = [members[: len(members) // 2], members[len(members) // 2:]]
+        land_rollup_failed.record(holder.parent, rollup, members, now)  # bn-L-2: auto rollups leave them out
     done = []
     # 11-14 04:50: both halves got now's stamp, so the second build found fix/land-rollup-<stamp> taken and crashed,
     # stranding its five members: each half is built one second after the one before
@@ -440,6 +456,8 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
         print(f"[rollup] a rollup is in flight: {busy[0]['branch']}", flush=True)
         return 0
     rows = candidates(live, repo)
+    if auto or argv[:1] != ["apply"]:  # bn-L-2: a candidate that failed a rollup lands alone
+        rows = land_rollup_failed.drop(repo, qdir.parent, rows, now)
     # Bundle fast affected landings on their own lane before falling back to mixed FULL rollups.
     members = whole(plan(repo, rows, tier_of=affected))
     if len(sources(members)) < 2 and not (auto and not MIXED):
@@ -469,6 +487,8 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
         int(r["pid"]) for r in merged if not r.get("rollup") and r.get("pid")}
     # shortcut: a FULL waiter that started this apply is our parent; stopping it (taskkill /T) ends us, so last.
     # A relaunched lander (land_prepare.relaunch) is our grandparent: then later stops may be lost; see the log.
+    for r in [*complete, *(m for m in merged if not m.get("rollup"))]:  # taskkill exits 1 with nothing logged
+        land_room.note_stop(r, f"rolled into {snap}")
     for pid in sorted(pids, key=lambda p: p == os.getppid()):  # only now: the rollup ticket exists
         stop(pid)
     print(f"[rollup] queued {snap}; stopped {len(pids)} landing(s) for {len(merged)} member(s)", flush=True)

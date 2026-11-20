@@ -56,12 +56,12 @@ def repos(tmp_path, monkeypatch, request):
     monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
 
     def fake_run(invocations, logs, sha="HEAD", repo=None, label=None, **kw):
-        # Fixture repos are throwaway and cannot be shipped to a test host; this test itself
-        # already runs on one (D-584), so the inner pytest runs in the fixture worktree.
+        # Fixture repos cannot be shipped to a test host (this test already runs on one, D-584): pytest runs in place.
         return [land.remote_pytest.capture([sys.executable, "-m", "pytest", *inv, *land.remote_pytest.PYTEST_TAIL],
                                            log, cwd=repo) for inv, log in zip(invocations, logs)]
 
     monkeypatch.setattr(land.remote_pytest, "run", fake_run)
+    monkeypatch.setattr(land.land_queue, "REFRESHES", 0)  # these flows rerun main's delta at the turn; the pre-turn refresh has own tests
     return main, wt
 
 
@@ -1272,8 +1272,8 @@ def test_a_landing_leaves_its_queue_turn_round_tests_and_landed_events(repos, mo
     monkeypatch.setattr(land.land_cache, "env_id", lambda wt_, sha: None)
     assert land.main(["--tests", "pkg/test"]) == 0
     rows = land.land_events.read(main / ".git" / land.land_events.EVENTS)
-    assert [r["event"] for r in rows] == ["queue", "turn", "round", "tests", "landed"]
-    assert rows[3]["verdict"] == "pass" and rows[-1]["sha"] == git(main, "rev-parse", "HEAD")
+    assert [r["event"] for r in rows] == ["queue", "turn", "round", "round_start", "tests", "round_end", "landed"]
+    assert rows[4]["verdict"] == "pass" and rows[-1]["sha"] == git(main, "rev-parse", "HEAD")
     assert {r["branch"] for r in rows} == {"feat/x"}
 
 

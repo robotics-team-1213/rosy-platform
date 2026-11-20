@@ -55,10 +55,10 @@ import lab_hosts  # noqa: E402
 import memory_history  # noqa: E402
 import remote_job  # noqa: E402
 import remote_test_tools  # noqa: E402
-import host_caps, host_probe  # noqa: E402
+import host_caps, host_probe, placement  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, current_profile, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
-from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, order, history,  # noqa: E402,F401
+from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, order, history, queue_order,  # noqa: E402,F401
                         small_first, small_only, stranded, upgrade_watch, wanted, workers)
 
 CANCELLED = remote_job.CANCELLED
@@ -202,35 +202,8 @@ def probe(host: str) -> dict | None:
 
 
 def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0) -> tuple[list[str], list[str]]:
-    """(hosts above the cls floor, most headroom first, light ones after, the site PC only when no other fits; notes).
-    ``cores``: an invocation's own ``ROSY_JOB_CORES`` (its lock's reservation) raises the core floor to it."""
-    need_c, need_m = max(NEEDS[cls][0], cores), NEEDS[cls][1]
-    floor_m = LIGHT_GB.get(cls, need_m)
-    ranked, notes = [], []
-    for i, (host, p) in enumerate(zip(hosts, probes)):
-        if p is None:
-            notes.append(f"{host}: unreachable")
-            BLOCKED.discard(host)
-            continue
-        site = host in SITES or p.get("site", False)
-        cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - ((2 if cls == "sim" else SITE_RESERVE[0]) if site else 0)
-        mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
-        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else "alone job running or waiting"
-               if cls == "pytest" and p.get("pytest_blocked") else f"no {cls} capability" if not p[cls]
-               else f"below disk floor {DISK_FLOOR_GB} GB" if disk_full(p)
-               else f"below {cls} floor {need_c} cores/{floor_m} GB" if cores < need_c or mem < floor_m
-               else f"light (under {need_m} GB): serial, smallest invocations" if mem < need_m else "ok")
-        disk = f", disk {p['disk_free_gb']:.1f} GB free ({p['disk_use']}%)" if "disk_free_gb" in p else ""
-        stale = f"; busy marker {p['busy_ignored']} (ignored)" if p.get("busy_ignored") else ""
-        notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{disk}{' (site PC)' if site else ''} - {why}{stale}")
-        (BLOCKED.add if why.startswith("alone job") else BLOCKED.discard)(host)
-        if why == "ok" or why.startswith("light"):
-            HEADROOM[host] = {"cores": cores, "mem": mem, "site": site, "light": mem < need_m,
-                              "sim_held": p.get("sim_held", 0), "browser_jobs": p.get("browser_jobs", 0), "caps": p.get("caps", ())}
-            ranked.append((site, mem < need_m, -min(cores / need_c, mem / need_m), i, host))
-    ranked.sort()
-    non_site = [r[-1] for r in ranked if not r[0]]
-    return (non_site + [r[-1] for r in ranked if r[0]] if not any(not r[0] and not r[1] for r in ranked) else non_site) or [r[-1] for r in ranked], notes
+    """Host choice lives in placement.py; this keeps the public name."""
+    return placement.place(sys.modules[__name__], cls, hosts, probes, cores)
 
 
 LOCAL_REFUSED = ("[remote-pytest] {what} is removed (D-584): tests never run on the operator laptop."
@@ -275,17 +248,19 @@ def bundle_base(repo: Path, sha: str) -> str | None:
 
 
 def deps(repo: Path, sha: str, test_tools: str | None = None) -> tuple[str, list[str]]:
-    """(hash of the CI install inputs at sha, the platform wheel dirs ci.yml builds)."""
+    """Return the remote install input hash and the wheel directories declared in CI."""
     remote_test_tools.validate(test_tools)
     ci = git(repo, "show", f"{sha}:{CI}")
     match = re.search(r'--wheel-dir "\$wheelhouse" \\\n\s*(.+)', ci)
     if not match:
         raise SystemExit(f"[remote-pytest] no `pip3 wheel ... --wheel-dir` line in {CI}; update VENV")
     dirs = match.group(1).split()
-    ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, VISION_REQ, *dirs)]
+    # The CI workflow only supplies wheel directories. Matrix, runner and
+    # reporting changes do not change the remote VENV installer.
+    ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, VISION_REQ, *dirs)]
     # Lock/swap changes do not change installed packages or need another venv build.
     install = VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
-    key = hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16]
+    key = hashlib.sha256("\n".join([install, *dirs, *ids]).encode()).hexdigest()[:16]
     if test_tools:
         blob = "\n".join(git(repo, "rev-parse", f"{sha}:{path}")
                          for path in remote_test_tools.inputs(test_tools))
@@ -353,9 +328,9 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     cores = max((int(w[15:]) for inv in invocations for w in itertools.takewhile(ENV_ARG.match, inv)
                  if w.startswith("ROSY_JOB_CORES=") and w[15:].isdigit()), default=0)
     # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
-    work = Work(sorted(range(len(invocations)), key=lambda i, s=history(repo): order(repo, invocations[i], s)), on_done, stop=stop)
+    work = Work(queue_order(repo, invocations), on_done, stop=stop)
     reruns = {}  # Work index -> original failure and the remaining quarantine rerun; never a completed code
-    host_probe.FULL = False; hosts = placed_hosts("pytest", cores=cores)  # FULL: only a real placement may say "full"
+    placement.reset(); host_probe.FULL = False; hosts = placed_hosts("pytest", cores=cores)  # FULL: only a real placement may say "full"
     wants = host_caps.needs(repo, sha, invocations)  # HOST_CAPABILITIES a test module declares
     while work.todo and not work.stop.is_set():
         deadline, hard = clock() + wait, clock() + host_probe.FULL_WAIT_S  # per placement attempt: productive host time must not eat the D-584 budget
@@ -463,6 +438,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         take = (lambda: work.take_small(pick, host)) if small_first(HEADROOM.get(host)) else lambda: work.take(pick, host)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)
+            placement.charge(host, cost(repo, inv))
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
             if lost:
                 work.codes[i] = remote_job.LOST_EXIT

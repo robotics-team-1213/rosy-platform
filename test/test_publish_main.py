@@ -57,6 +57,29 @@ def _run(local: Path, *argv: str) -> int:
     return tool.main(["--repo", str(local), *argv], now=NOW)
 
 
+def test_via_ci_keeps_the_reviewed_candidate_when_local_main_advances(repo, capsys):
+    local, _ = repo
+    candidate = _commit(local, "app.py", "reviewed")
+    newer = _commit(local, "app.py", "new work")
+
+    assert _run(local, "--via-ci", "--candidate", candidate) == 0
+    out = capsys.readouterr().out
+    assert f"would push {candidate}" in out
+    assert newer not in out
+
+
+def test_via_ci_refuses_a_candidate_that_never_landed(repo, capsys):
+    local, _ = repo
+    _git(local, "switch", "-c", "topic")
+    candidate = _commit(local, "app.py", "unlanded")
+    _git(local, "switch", "main")
+    _commit(local, "app.py", "landed")
+
+    assert _run(local, "--via-ci", "--candidate", candidate, "--apply") == 1
+    assert "not in local main" in capsys.readouterr().err
+    assert _git(local, "ls-remote", "--heads", "origin", "publish/main-*") == ""
+
+
 def test_newest_commit_with_a_green_full_record_is_published(repo, capsys):
     local, _ = repo
     full, affected, bare = (_commit(local, "app.py", str(i)) for i in (1, 2, 3))
@@ -449,3 +472,45 @@ def test_merge_when_green_auto_refuses_without_the_green_full_record_and_with_se
     monkeypatch.setattr(tool, "run_gh", _auto_gh(local, sha, calls, []))
     assert _run(local, "--merge-when-green", "auto", "--apply") == 0
     assert not [c for c in calls if c[:2] == ("pr", "merge")]
+
+
+def test_via_ci_plans_main_tip_without_lab_full_record_and_merges_when_ci_green(repo, monkeypatch, capsys):
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")
+    assert _run(local, "--via-ci") == 0
+    assert f"would push {sha}" in capsys.readouterr().out
+    calls = []
+    monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls))
+    assert _run(local, "--merge-when-green", "7", "--via-ci", "--apply") == 0
+    assert ("pr", "merge", "7", "--merge", "--match-head-commit", sha) in calls
+
+
+@pytest.mark.parametrize("evidence,expected", [(True, "1"), (False, None)])
+def test_via_ci_push_uses_the_static_hook_only_with_lab_evidence_for_the_sha(repo, monkeypatch, evidence, expected):
+    local, _ = repo
+    _commit(local, "tools/hooks/pre-push", "#!/bin/sh\nexit 0\n")
+    sha = _commit(local, "app.py", "1")
+    monkeypatch.delenv("ROSY_STATIC_PRE_PUSH", raising=False)
+    monkeypatch.setattr(tool, "run_gh", lambda repo_path, *a: "[]" if a[:2] == ("pr", "list") else "https://example.invalid/pull/1")
+    monkeypatch.setattr(tool, "safety_range", lambda wt, s: "1 commits checked, 0 missing")
+    checked = []
+    monkeypatch.setattr(tool.pr_land, "required_lab_invocations", lambda cwd, base, head: checked.append(head) or [["lab"]])
+
+    def verify(cwd, head, required):
+        if not evidence:
+            raise SystemExit("[pr-land] lab-only change requires remote_pytest lab evidence")
+    monkeypatch.setattr(tool.pr_land, "verify_lab_evidence", verify)
+    pushes, real = [], tool.git
+
+    def spy(repo_path, *args, **kw):
+        if "push" in args:
+            pushes.append((kw.get("env") or {}).get("ROSY_STATIC_PRE_PUSH"))
+        return real(repo_path, *args, **kw)
+    monkeypatch.setattr(tool, "git", spy)
+    assert _run(local, "--via-ci", "--apply") == 0
+    assert pushes == [expected] and checked == [sha]
+
+
+def test_the_scheduled_merge_task_passes_via_ci_like_the_manual_path():
+    text = (Path(__file__).resolve().parents[1] / "tools" / "register_publish_merge_task.ps1").read_text(encoding="utf-8")
+    assert "--merge-when-green auto --via-ci --apply" in text

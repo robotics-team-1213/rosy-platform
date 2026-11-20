@@ -348,12 +348,31 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
             log_errors, log_warnings = _append_only_findings(repo, check_refs, name, module["path"], text, moved_roots)
             errors += log_errors
             warnings += log_warnings
+        logs_dir = base / "logs"
+        if logs_dir.is_dir():
+            for shard in sorted(logs_dir.rglob("*.md")):
+                rel = shard.relative_to(logs_dir).as_posix()
+                stext = shard.read_text(encoding="utf-8")
+                if lines := find_conflict_markers(stext):
+                    errors.append(f"{name}/logs/{rel}: conflict marker at line {', '.join(map(str, lines))}")
+                if mojibake := find_mojibake(stext):
+                    errors.append(f"{name}/logs/{rel}: suspicious encoding ('??' runs) at line {', '.join(map(str, mojibake[:5]))}")
+                errors += [f"{name}/logs/{rel}: {e}" for e in validate_log(stext)]
 
         commit = (meta.get("last_verified") or {}).get("commit")
         if commit == UNCOMMITTED:
             warnings.append(f"{name}: last_verified is an uncommitted tree; re-verify and record the commit")
         elif isinstance(commit, str):
             stale.append((name, module["path"], commit))
+    api_dir = repo / "docs" / "reference" / "api-changes"
+    if api_dir.is_dir():
+        for frag in sorted(api_dir.rglob("*.md")):
+            ftext = frag.read_text(encoding="utf-8")
+            rel = frag.relative_to(repo).as_posix()
+            if lines := find_conflict_markers(ftext):
+                errors.append(f"{rel}: conflict marker at line {', '.join(map(str, lines))}")
+            if mojibake := find_mojibake(ftext):
+                errors.append(f"{rel}: suspicious encoding ('??' runs) at line {', '.join(map(str, mojibake[:5]))}")
     with ThreadPoolExecutor(max_workers=8) as pool:
         counts = list(pool.map(lambda s: _git(repo, "rev-list", "--count", f"{s[2]}..HEAD", "--", s[1]), stale))
     for (name, path, commit), count in zip(stale, counts):

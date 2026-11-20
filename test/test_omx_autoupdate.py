@@ -576,3 +576,45 @@ def test_a_service_on_the_hosts_packages_also_builds_with_uv(tmp_path, monkeypat
     m.Host({"base_python": "/usr/bin/python3", "uv": "/opt/uv"}).build_env(None, tmp_path / "env")
     assert calls == [["/opt/uv", "venv", "-q", "--python", "/usr/bin/python3", "--system-site-packages",
                       str(tmp_path / "env")]]
+
+
+def test_a_head_below_the_hotfix_floor_is_refused_and_a_descendant_goes_ahead(tmp_path):
+    host = FakeHost()
+    u = updater(tmp_path, host)
+    u.save({"current": None, "previous": None, "history": [], "floor_sha": "f" * 40})
+    asked = []
+    host.descends = lambda base, head: asked.append(base) or host.descendant
+    host.descendant = False
+    assert u.run() == "below_hotfix_floor" and host.archived == [] and asked == ["f" * 40]
+    host.descendant = True
+    assert u.run() == "switched" and u.state()["floor_sha"] == "f" * 40  # the floor stays for later heads
+
+
+@pytest.mark.parametrize("current_sha, refusal", [(None, "below_hotfix_floor"), ("c" * 40, "not_descendant")])
+def test_a_compare_404_is_a_refusal_not_a_crash(tmp_path, current_sha, refusal):
+    import urllib.error
+
+    host = FakeHost()
+    u = updater(tmp_path, host)
+    floor = None if current_sha else "f" * 40
+    u.save({"current": "c" * 12, "previous": None, "history": [], "current_sha": current_sha, "floor_sha": floor})
+
+    def missing(base, head):  # GitHub answers 404 for a commit only local main has
+        raise urllib.error.HTTPError("https://api.github.com/compare", 404, "Not Found", {}, None)
+
+    host.descends = missing
+    assert u.run() == refusal and host.archived == []
+    assert refusal not in {"ci_failed", "smoke_failed", "rolled_back"}  # main() exits 0: the unit does not fail
+    host.descends = lambda base, head: (_ for _ in ()).throw(
+        urllib.error.HTTPError("https://api.github.com/compare", 500, "Server Error", {}, None))
+    with pytest.raises(urllib.error.HTTPError):
+        u.run()
+
+
+@pytest.mark.parametrize("example", ["deploy/ai_pc/situation-autoupdate.json.example", "deploy/site/site-tools-autoupdate.json.example"])
+def test_example_configs_ship_the_updater_host_module(example):
+    # omx_autoupdate.py imports omx_autoupdate_host; a release without it fails with ModuleNotFoundError (11-20 AI PC / site tools).
+    import json
+    paths = json.loads((Path(__file__).parents[1] / example).read_text())["paths"]
+    assert "deploy/robot/omx/omx_autoupdate.py" in paths
+    assert "deploy/robot/omx/omx_autoupdate_host.py" in paths

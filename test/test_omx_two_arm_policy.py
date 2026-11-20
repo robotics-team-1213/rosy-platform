@@ -648,3 +648,67 @@ def test_skill_argv_forwards_track_history_and_delta_action():
     assert "--track-history" not in out and "--delta-action" not in out
     with pytest.raises(ValueError, match="--track-history"):
         helpers.collect([1], ["stack"], "unused", state_history=True, track_history=2)
+
+def test_driver_step_feeds_track_history_state_width(monkeypatch, tmp_path):
+    """A --track-history checkpoint sees state + K x 12 tracking errors in every Driver.step frame (the skill eval already did)."""
+    model_dir, steps_file, _ = _install_fake_driver_deps(monkeypatch, tmp_path, input_features={"observation.state": {}})
+    steps_file.write_text(json.dumps({"longest": {"s1": 2}, "state_names": [f"j{i}" for i in range(12)] + [f"err{k}.j{i}" for k in range(2) for i in range(12)]}), encoding="utf-8")
+    d = policy.Driver(model_dir, steps_file)
+    assert d.track == 2
+    widths = []
+    d.act = lambda state, images, goal=None, prompt=None: widths.append(len(state)) or np.zeros(12, dtype=np.float32)
+    d.policy.reset = lambda: None
+    d.has_goal = False
+    d.world = types.SimpleNamespace(pose=lambda data, c: ((0., 0., 0.), None))
+    monkeypatch.setattr(helpers, "observe", lambda world, data: (np.zeros(12, np.float32), {}))
+    monkeypatch.setattr(helpers, "sheet", lambda images: None)
+    teacher = types.SimpleNamespace(last_cmd={}, frame=lambda *a, **k: None, verdict=lambda *a, **k: {}, contacts=None)
+    d.step(teacher, None, {"id": "s1", "container": "c", "arm": "arm_a", "from": "stand", "to": "stand"}, {})
+    assert widths == [36] * 17
+
+
+def test_driver_concurrent_can_disturb_and_keep_judging_after_a_failed_step(monkeypatch):
+    """The sub-skill evaluation's errors reach the whole-task run (reported angles, zero error read back out), and a failed step no longer ends it."""
+    from contextlib import nullcontext
+    import omx_two_arm_plan as plan_mod
+
+    layout, seen = sites.Layout(), {}
+    fake_world = types.SimpleNamespace(layout=layout, put=lambda *a, **kw: None, pose=lambda _d, _c: (np.array([0.0, 0.0, 0.05]), 0.0, 0.0))
+
+    class FakeTeacher:
+        def __init__(self, *a, **kw):
+            self.belt_skew, self.privileged, self.zero_error = False, True, {}
+
+        def fresh(self, _here):
+            seen["privileged_at_fresh"] = self.privileged
+            return object()
+
+        def frame(self, *_a):
+            pass
+
+        def verdict(self, _d, step, row, _before, _ctx):
+            return dict(row, result="fail" if step["id"] == "s1" else "pass")
+
+        def off_stand(self, *_a):
+            pass
+
+    drv = object.__new__(helpers.Driver)
+    drv.layout, drv.world = layout, fake_world
+    drv.pick_vision = drv.belt_skew = drv.cam_jitter = drv.has_goal = False
+    drv.torch = types.SimpleNamespace(inference_mode=nullcontext)
+    drv.longest = {"t/s1": {"frames": 2, "picked": 1}, "t/s2": {"frames": 2, "picked": 1}}
+    drv.policy = types.SimpleNamespace(reset=lambda: None)
+    drv.act = lambda *a: np.zeros(12, np.float32)
+    monkeypatch.setattr(helpers.teaching, "Teacher", FakeTeacher)
+    monkeypatch.setattr(helpers, "observe", lambda _w, _d, ze=None: seen.setdefault("ze", []).append(ze) or (np.zeros(12, np.float32), {}))
+    monkeypatch.setattr(helpers.skills, "disturb", lambda t, s, deg, lag, *p: t.__dict__.update(zero_error={"arm_a": deg}, drawn=(s, deg, lag)))
+    monkeypatch.setattr(plan_mod, "step_swept_poses", lambda *a: [(0.0, []), (1.0, [])])
+    monkeypatch.setattr(plan_mod, "sweeps_clear", lambda a, b: True)
+    task = {"name": "t", "start": {"c1": "ship-h1r0-l0", "c2": "ship-h1r2-l0"}, "steps": [
+        {"id": "s1", "arm": "arm_a", "container": "c1", "from": "ship-h1r0-l0", "to": "tmp-a-1", "zones": [["a"], ["a"]]},
+        {"id": "s2", "arm": "arm_b", "container": "c2", "from": "ship-h1r2-l0", "to": "tmp-b-1", "after": ["s1"], "zones": [["b"], ["b"]]}]}
+    rows, _ = drv.concurrent(task, seed=0)
+    assert [r["step"] for r in rows] == ["s1"] and seen["privileged_at_fresh"] is True  # the old default: no errors, stop at the first failure
+    rows, summary = drv.concurrent(task, seed=7, disturb=(1., True), stop_on_fail=False)
+    assert sorted(r["step"] for r in rows) == ["s1", "s2"] and summary["passed"] == 1 and not summary["completed"]
+    assert seen["privileged_at_fresh"] is False and seen["ze"][-1] == {"arm_a": 1.}

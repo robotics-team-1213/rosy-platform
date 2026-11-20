@@ -11,7 +11,7 @@ sys.path.insert(0, REPO + "/middleware/perception")
 sys.path.insert(0, REPO + "/integrations/perception")
 sys.path.insert(0, REPO + "/contracts/foundation")  # core_common, imported by control (D-424)
 
-from perception_runtime.perception.learned.manifest import (  # noqa: E402
+from core_common.perception_model import (  # noqa: E402
     ManifestError, load_manifest, verify_files)
 
 

@@ -10,7 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "middleware/perception"))
 sys.path.insert(0, str(ROOT / "integrations/perception"))
-from perception_runtime.perception.learned.manifest import (  # noqa: E402
+sys.path.insert(0, str(ROOT / "contracts/foundation"))
+from core_common.perception_model import (  # noqa: E402
     check_revision, load_manifest, sha256_file, verify_files,
 )
 from store import Store, read_fixed_manifest, refuse_publication_links, safe_name  # noqa: E402

@@ -24,6 +24,7 @@ import threading
 import time
 from pathlib import Path
 
+import land_events
 import land_queue
 
 MAX_PREPARING = 6
@@ -74,8 +75,8 @@ def relaunch(land, qdir: Path, ticket: Path, run=None) -> int | None:
 def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) -> None:
     """Wait for a preparation slot, reserving capacity for older pending tickets, and while ``held()`` (a batch
     carries this branch, ``land_batch.carried``: its pretest covers this one). A carried pending ticket reserves
-    no capacity: it never prepares on its own. An urgent ticket (D-889 addendum 5) reserves nothing for older
-    pending ones: behind their reservations an urgent landing still waited hours for a slot (2026-10-31)."""
+    no capacity: it never prepares on its own. A pending urgent ticket reserves the next freed slot ahead of
+    ordinary tickets. It ignores their reservations and waits for already-running preparations to finish."""
     land_queue.set_status(ticket, "pending")
 
     def busy() -> int:
@@ -83,15 +84,20 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) ->
         carried = {name for r in rows for name in (r.get("batch") or [])}
         urgent = any(r["ticket"] == ticket.name and r.get("urgent") for r in rows)
         return sum((r.get("status") == "preparing" and not r.get("full_wait"))
-                   or (r.get("status") == "pending" and r["ticket"] < ticket.name
-                       and r.get("branch") not in carried and not urgent)
+                   or (not urgent and r.get("status") == "pending" and r.get("branch") not in carried
+                       and (r["ticket"] < ticket.name or bool(r.get("urgent"))))
                    for r in rows if r["ticket"] != ticket.name)
+    waiting_since = None
     while (held and held()) or busy() >= MAX_PREPARING:
+        if waiting_since is None:
+            waiting_since = time.monotonic()
         land_queue.touch(ticket)
         if changed and (code := changed()) is not None:
             raise SystemExit(code)  # main's land.py ran this landing to its end on this ticket
         sleep(POLL)
     land_queue.set_status(ticket, "preparing")
+    if waiting_since is not None:
+        land_events.emit("prep_wait", ticket=ticket.name, seconds=round(time.monotonic() - waiting_since))
 
 
 def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None) -> None:
@@ -123,7 +129,7 @@ def train(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     seen: list[str | None] = [None]
 
     def on_ahead(leader: dict) -> None:
-        if getattr(args, "tests", None) != "auto" or os.environ.get(SPECULATE_ENV) == "0":
+        if getattr(args, "tests", None) != "auto" or os.environ.get(SPECULATE_ENV) != "1":
             return
         if not land.land_full.restore(wt, branch):
             return
@@ -185,6 +191,52 @@ def watch(land, wt: Path):
     return check
 
 
+def full_in_turn(land, wt: Path, branch: str, args) -> bool:
+    """D-889 addendum 39 (user 2026-11-19): an urgent landing whose FULL is certain (a safety path, or --tests full)
+    runs it inside its turn, so main cannot move under it. 11-19 the urgent berth-unblock landing reran its pretest
+    FULL twice outside the lock after main moved (10:52, 13:32): a safety path reuses no prior round."""
+    if not isinstance(getattr(args, "_full_in_turn", None), bool):
+        args._full_in_turn = bool(getattr(args, "urgent", "")) and (
+            args.tests == "full" or (args.tests == "auto" and land.land_batch.safety(land, wt, branch)))
+    return args._full_in_turn
+
+
+def in_turn(args) -> bool:
+    """For land.rounds: this landing's FULL runs in the turn instead of land_prepare.again (full_in_turn)."""
+    return getattr(args, "_full_in_turn", False) is True
+
+
+def saved(land, wt: Path, branch: str, args, candidate: str, main: str, tier, invocations, prepared):
+    """Save the turn's FULL tier; a FULL run in the turn (in_turn) is then the prepared record pre-push reuses."""
+    if not in_turn(args):
+        land.land_full.save(wt, branch, candidate, main, tier, invocations)
+        return prepared
+    env = land.land_cache.env_id(wt, candidate) if args.tests == "full" else None  # current_main's witness
+    land.land_full.save(wt, branch, candidate, main, tier, invocations, env=env)
+    return land.land_full.prepared(wt, branch, main)
+
+
+def pretest(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None) -> None:
+    """Before the wait: prepare, unless an earlier run's tier restores; either way the pre-turn refresh is armed.
+    An urgent FULL in the turn (full_in_turn) prepares nothing: it waits for the turn and runs there."""
+    if ticket is not None and full_in_turn(land, wt, branch, args):
+        land_queue.REFRESH = None
+        print("[land] urgent FULL (safety path or --tests full): no pretest, it runs inside the turn", flush=True)
+        return
+    if args.tests == "full" or (args.tests == "auto" and land.land_full.restore(wt, branch) is None):
+        prepare(land, wt, branch, args, python, qdir, ticket)
+    else:
+        arm_refresh(land, wt, branch, args, python, qdir, ticket)
+
+
+def arm_refresh(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None) -> None:
+    """A head tested over an older main refreshes through here before its turn (land_queue.wait), not inside the lock.
+    11-18: nine relaunched tickets restored their record, skipped prepare, waited unarmed and released on main's delta."""
+    land_queue.REFRESH = ((lambda: (prepare(land, wt, branch, args, python, qdir, ticket),
+                                    land.land_full.restore(wt, branch))[1])
+                          if ticket is not None and getattr(args, "tests", None) == "auto" else None)
+
+
 def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None,
             invocations: list[list[str]] | None = None, note: str | None = None) -> None:
     """Merge main, run this branch's selection (or the given FULL ``invocations`` of main's delta), record it.
@@ -192,6 +244,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     A NEW failure stops here, before the turn; the ticket is released by ``land.main``. One exception (D-889 14):
     a failure main already had at the merged base, when main has moved since, prepares once more on the new main.
     11-01: two landings stopped on a MAIN-RED test that main had fixed during their 66 min pretest."""
+    arm_refresh(land, wt, branch, args, python, qdir, ticket)
     try:
         _prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
     except land.Stop as stop:
@@ -247,33 +300,47 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     began = time.monotonic()
     guard_args = land.argparse.Namespace(**{**vars(args), "no_cache": True}) if explicit else args
     guarded: list[str] = []
+    # The guard round (with land_isolation's alone runs) runs beside the selection (affected tier) or beside the
+    # FULL slot wait (FULL tier): on 2026-10-27 it took 150-870 s and every pretest waited for it.
+    # Each is its own remote_pytest.run (own queue, threads, run dir); a Stop from either stops the landing.
+    raised: list[BaseException] = []
+
+    def guards() -> None:
+        nonlocal guarded
+        try:
+            guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
+                                             isolated=not delta)
+        except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
+            if not full:  # the pre run beside it is moot; cancel before raised is set (see the finally below)
+                land.remote_pytest.remote_job.cancel_all()
+            raised.append(error)
+    side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
+    side.start()
     if full and ticket is not None:
-        # Fail fast on guards (architecture, contracts, ownership, isolation) before waiting behind MAX_FULL.
-        guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
-                                         isolated=not delta)
+        def waiting() -> int | None:
+            if raised:
+                raise raised[0]  # a guard Stop ends the slot wait; no FULL test has started
+            return relaunch(land, qdir, ticket)
+        full_slot(qdir, ticket, changed=waiting)
+        side.join()  # the FULL tier starts only with the slot and green guards
+        if raised:
+            raise raised[0]
         if land.out(wt, "rev-parse", "HEAD") != candidate:
             raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
         land.land_selection.require_eligible(land, args, land.land_selection.eligible(land, guarded, args), guarded)
-        guard_s = time.monotonic() - began
-        full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket))
-        began = time.monotonic() - guard_s
+        began = time.monotonic()  # the slot wait is not preparation time
         tested = land.run_tests(wt, args, invocations, logdir, "pre")
     else:
-        # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on
-        # 2026-10-27 it took 150-870 s and every pretest waited for it while holding one of MAX_PREPARING slots.
-        # Each is its own remote_pytest.run (own queue, threads, run dir); a Stop from either stops the landing.
-        raised: list[BaseException] = []
-
-        def guards() -> None:
-            nonlocal guarded
-            try:
-                guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
-                                                 isolated=not delta)
-            except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
-                raised.append(error)
-        side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
-        side.start()
-        tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+        try:
+            tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+        except land.Overtime:
+            side.join()  # a guard failure cancelled the pre run: the guard's Stop is the verdict, not this Overtime
+            if raised:
+                raise raised[0] from None
+            raise
+        finally:
+            if raised:
+                land.remote_pytest.remote_job.cancel_all(False)
         side.join()
         if raised:
             raise raised[0]
