@@ -135,14 +135,12 @@ def buildable(repo: Repo, sel: Selection) -> bool:
 def _shard_groups(repo: Repo, entry: dict, flags: list[str] | None = None) -> list[list[str]]:
     """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit.
 
-    Files the caller's `--ignore=` flags drop stay out (pytest runs a file named on the command line even
-    when it is also ignored). `flags` None is the full tier: the entry's own flags, and files a later
-    invocation of the entry runs. root-test keeps its full-tier groups whatever the flags (PR #95)."""
+    Files the entry's own `--ignore=` flags give another runner stay out, since pytest runs a file named on
+    the command line even when it is also ignored. `flags` None is the full tier, which also leaves out
+    files a later invocation of the entry runs; an affected invocation drops only the ones it ignores too."""
     import affected_tests as at
-    skip = set()
-    if entry["name"] != "root-test":
-        skip = {f.split("=", 1)[1] for f in (entry["invocations"][0] if flags is None else flags) if f.startswith("--ignore=")}
-        skip |= {p for inv in entry["invocations"][1:] for p in inv} if flags is None else set()
+    skip = {f.split("=", 1)[1] for f in entry["invocations"][0] if f.startswith("--ignore=")}
+    skip = skip | {p for inv in entry["invocations"][1:] for p in inv} if flags is None else {p for p in skip if f"--ignore={p}" in flags}
     n = ROOT_SHARDS if entry["name"] == "root-test" else SUITE_SHARDS.get(entry["name"], 1)
     fleet = entry["name"] == "fleet"
     files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0]) and t not in skip) if n > 1 else []
