@@ -4976,3 +4976,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 검토 모드는 빈 접힌 팔의 복귀 전에 의도를 기록한다. 복귀 뒤 같은 의도와 새 상태를 다시 검증한다. 자동 픽과 AreaXYZ는 복귀 후 보류를 한 행으로 기록하고 의도 파일을 보존한다.
 - 증거: 가짜 셀 회귀 케이스 추가, 원격 pytest 통과. 독립 검토 APPROVE WITH NOTES(D:/DevTemp/omx-abs-unblock-panel-1120/review-n1n3-f09301836a.md).
 - gate 변화: 검토 digest가 cell_unwedge.py를 포함해 task_sha256이 바뀐다. 기존 검토(operating envelope)는 다시 검토해야 맞는다. runner state 응답이 holding을 싣고, holding이나 전류가 없으면 홈 복귀를 시작하지 않는다.
+
+## 2026-11-20 · uncommitted · Pinky 시연 전 네이티브 주행 서비스 확인
+- 변경: `verify-pi.sh --navigation-status`로 `rosy-navigation.service`의 상태만 조회한다. 조회 실패와 미기동 상태는 종료 코드 1을 반환한다.
+- 증거: systemctl 대역으로 기동·종료·미설치·조회 실패를 검증하는 회귀 시험을 추가했다.
+- gate 변화: 없음.
+- 현장 수용: Nav2와 S3 정차 2회(각 도달거리 200 mm 이하)는 별도 실측한다.

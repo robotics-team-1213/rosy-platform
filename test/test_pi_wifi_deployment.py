@@ -1,5 +1,6 @@
 """Static safety contracts for headless Raspberry Pi Wi-Fi deployment."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -64,6 +65,42 @@ def test_deployment_kit_files_exist():
         MOTOR_VERIFY,
     ):
         assert path.is_file(), f"missing deployment file: {path.relative_to(ROOT)}"
+
+
+@bash_only
+@pytest.mark.parametrize(
+    ("load", "active", "sub", "query_exit", "expected_exit"),
+    [
+        ("loaded", "active", "running", 0, 0),
+        ("loaded", "active", "exited", 0, 1),
+        ("loaded", "inactive", "dead", 0, 1),
+        ("not-found", "inactive", "dead", 0, 1),
+        ("loaded", "active", "running", 1, 1),
+    ],
+)
+def test_navigation_status_checks_only_the_native_service(
+    tmp_path, monkeypatch, load, active, sub, query_exit, expected_exit
+):
+    stub = tmp_path / "systemctl"
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        '[[ "$1" == show && "$2" == --no-pager && "$#" == 4 && '
+        '"$4" == rosy-navigation.service ]] || exit 2\n'
+        f"printf '%s\\n' 'LoadState={load}' 'ActiveState={active}' 'SubState={sub}'\n"
+        f"exit {query_exit}\n",
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path), prepend=os.pathsep)
+    result = subprocess.run(
+        [BASH, str(VERIFIER), "--navigation-status"],
+        capture_output=True, text=True, check=False, timeout=10,
+    )
+    assert result.returncode == expected_exit, result.stderr
+    if query_exit:
+        assert "could not query rosy-navigation.service" in result.stdout
+    else:
+        assert f"SubState={sub}" in result.stdout
 
 
 def test_installer_uses_official_arm64_capable_docker_repository():

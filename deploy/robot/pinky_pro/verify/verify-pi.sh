@@ -2,16 +2,21 @@
 set -Eeuo pipefail
 
 require_internet=0
+navigation_status=0
+argument_count=$#
 network_interface="auto"
 failures=0
 
 usage() {
   cat <<'EOF'
 Usage: verify-pi.sh [--require-internet] [--interface auto|IFACE]
+       verify-pi.sh --navigation-status
 
 Checks the selected Raspberry Pi LAN interface (auto, wired, or Wi-Fi), Internet
 reachability, the Rosy runtime, API, and dashboard. Internet failure is a
 warning unless --require-internet is supplied.
+--navigation-status only reads the native rosy-navigation.service state.
+An active service does not establish Nav2 readiness or field acceptance.
 EOF
 }
 
@@ -19,6 +24,13 @@ while (($# > 0)); do
   case "$1" in
     --require-internet)
       require_internet=1
+      ;;
+    --navigation-status)
+      if ((argument_count != 1)); then
+        echo "--navigation-status cannot be combined with other options" >&2
+        exit 2
+      fi
+      navigation_status=1
       ;;
     --interface)
       (($# >= 2)) || {
@@ -63,6 +75,24 @@ fail() {
 has_command() {
   command -v "$1" >/dev/null 2>&1
 }
+
+if ((navigation_status)); then
+  unit="rosy-navigation.service"
+  if ! state="$(timeout 5s systemctl show --no-pager \
+    --property=LoadState,ActiveState,SubState,Result,ConditionResult "$unit" 2>/dev/null)"; then
+    fail "NAVIGATION" "could not query $unit"
+    exit 1
+  fi
+  printf '%s\n' "$state"
+  if grep -Fxq 'LoadState=loaded' <<<"$state" &&
+     grep -Fxq 'ActiveState=active' <<<"$state" &&
+     grep -Fxq 'SubState=running' <<<"$state"; then
+    pass "NAVIGATION" "$unit is running"
+    exit 0
+  fi
+  fail "NAVIGATION" "$unit is not running"
+  exit 1
+fi
 
 network_ipv4=""
 default_interface=""
