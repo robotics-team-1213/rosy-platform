@@ -132,8 +132,8 @@ def rotate_legacy_password(
         invalid_new = (not isinstance(password, str) or not 8 <= len(password) <= 1024
                        or password in (login_hint, login_hint + "!"))
         should_hash = current_ok and not need_current and not invalid_new
-        same_password = should_hash and verify_password_fn(password, checked_hash)
-        encoded = hash_password(password) if (should_hash and not same_password) else ""
+        matches_previous = should_hash and verify_password_fn(password, checked_hash)
+        encoded = hash_password(password) if (should_hash and not matches_previous) else ""
     finally:
         _SCRYPT_SLOTS.release()
     with sessions._lock:
@@ -151,7 +151,7 @@ def rotate_legacy_password(
                     raise ValueError("current password required")
                 if not current_ok:
                     raise CurrentPasswordIncorrect()
-                if password in (login, login + "!") or same_password or not 8 <= len(password) <= 1024:
+                if password in (login, login + "!") or matches_previous or not 8 <= len(password) <= 1024:
                     raise ValueError("invalid new password")
                 db.execute("INSERT OR REPLACE INTO fleet_console_passwords VALUES (?,?,?)",
                            (login, sessions._sources[login], encoded))
