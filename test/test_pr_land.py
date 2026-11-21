@@ -22,7 +22,7 @@ SPEC.loader.exec_module(pr_land)
 def _normal_cutover(monkeypatch):
     monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
     monkeypatch.setattr(pr_land.land_freeze, "path", lambda cwd: Path("rosy-cutover.json"))
-    monkeypatch.setattr(pr_land, "preflight", lambda cwd, base: None)  # its own test below
+    monkeypatch.setattr(pr_land, "preflight", lambda cwd, base, body="": None)  # its own test below
 
 
 @pytest.mark.parametrize("phase,refused", [("drain", True), ("open", False), ("normal", False)])
@@ -212,6 +212,7 @@ def test_what_this_prs_own_ci_run_executes_is_not_lab_evidence(monkeypatch):
 def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypatch):
     seen = []
     monkeypatch.undo()  # the autouse fixture stubs preflight for the other tests
+    monkeypatch.setenv("ROSY_STEP_BACK", "off")  # the step-back check has its own test below
     monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: seen.append(cmd[1:]))
     pr_land.preflight(Path("."), "origin/main")
     assert seen == [["tools/harness/safety_review.py", "origin/main", "HEAD"], ["tools/harness/size_range.py", "origin/main", "HEAD"]]
@@ -221,6 +222,25 @@ def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypa
     monkeypatch.setattr(pr_land, "_run", refuse)
     with pytest.raises(SystemExit):
         pr_land.preflight(Path("."), "origin/main")
+
+
+def test_preflight_runs_the_step_back_check_and_the_switch_skips_it(monkeypatch, capsys):
+    monkeypatch.undo()
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: "")
+    hit = {"level": "block", "why": "w", "pr": 311, "merged_at": "2026-11-20 13:13", "path": "a.js", "lines": 3}
+    info = {"level": "info", "why": "w", "pr": 5, "merged_at": "2026-11-20 13:13", "path": "b.js", "lines": 1}
+    monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [hit, info])
+    monkeypatch.setattr(pr_land.step_back, "size_warnings", lambda *a, **k: ["31 changed files (limit 30)"])
+    monkeypatch.delenv("ROSY_STEP_BACK", raising=False)
+    with pytest.raises(SystemExit) as stop:
+        pr_land.preflight(Path("."), "origin/main", "summary")
+    assert "Replaces: #311 (" in str(stop.value)
+    out = capsys.readouterr().out
+    assert "warning" in out and "31 changed files" in out and "step-back info" in out
+    pr_land.preflight(Path("."), "origin/main", "Replaces: #311 (restructured)")  # named in the body: passes
+    monkeypatch.setenv("ROSY_STEP_BACK", "off")
+    pr_land.preflight(Path("."), "origin/main", "")
+    assert "step-back check skipped" in capsys.readouterr().out
 
 
 def test_lab_only_requires_intact_lab_cache_and_ci_covers_lab_ids(tmp_path, monkeypatch):
@@ -322,7 +342,7 @@ def test_push_env_carries_reason_only_when_publish_only_and_activated(monkeypatc
 def test_evidence_flag_runs_pr_evidence_before_verify(monkeypatch, tmp_path):
     inv = ["middleware/devices/omx/adapter/test"]
     calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False, lab=[inv])
-    monkeypatch.setattr(pr_land, "preflight", lambda cwd, base: calls.append((["preflight", base], None)))
+    monkeypatch.setattr(pr_land, "preflight", lambda cwd, base, body="": calls.append((["preflight", base], None)))
     fake = type(sys)("pr_evidence")
     fake.main = lambda argv, repo=None: calls.append((["evidence", *argv], None)) or 0
     monkeypatch.setitem(sys.modules, "pr_evidence", fake)

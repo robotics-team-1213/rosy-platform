@@ -26,6 +26,7 @@ import affected_ci  # noqa: E402
 import affected_exclusive  # noqa: E402
 import land_cache  # noqa: E402
 import land_freeze  # noqa: E402
+import step_back  # noqa: E402
 import work_queue  # noqa: E402
 
 ACT = next(e for e in affected_ci.CI_FULL_MATRIX if e["name"] == "omx-act-cpu")
@@ -181,13 +182,25 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
     return lab + [part for inv in extra for part in split_by_ci_entry(inv) if not ci_runnable(part)]
 
 
-def preflight(cwd: Path, base: str) -> None:
-    """The Safety-Review trailer and size rule of base..HEAD, before any lab run.
+def preflight(cwd: Path, base: str, body: str = "") -> None:
+    """The Safety-Review trailer, size rule and step-back check of base..HEAD, before any lab run.
 
-    Both stopped a submission only at the push, after the evidence had run (2026-11-21: a session lost a 20
-    minute run to a missing trailer). CI's scope job runs the same two checks."""
+    The first two stopped a submission only at the push, after the evidence had run (2026-11-21: a session lost a 20
+    minute run to a missing trailer). CI's scope job runs the same two checks. The step-back check stops a PR that
+    drops lines another PR merged into main within 7 days unless the PR body names it (shared-checkout.md)."""
     for check in ("safety_review.py", "size_range.py"):
         _run([sys.executable, f"tools/harness/{check}", base, "HEAD"], cwd)
+    for warning in step_back.size_warnings(cwd, base, "HEAD"):
+        print(f"[pr-land] warning: split this branch before submission, {warning}")
+    if os.environ.get("ROSY_STEP_BACK") == "off":
+        print("[pr-land] step-back check skipped (ROSY_STEP_BACK=off)")
+        return
+    hits = step_back.report(cwd, base, "HEAD")
+    for h in (h for h in hits if h["level"] == "info"):
+        print(f"[pr-land] step-back info (never blocks):{step_back.fmt(h)}")
+    if bad := step_back.blocking(hits, body):
+        raise SystemExit("[pr-land] step-back check: this branch removes recent work of other PRs\n" + step_back.explain(bad)
+                         + "\n[pr-land] pass the line with --body, or set ROSY_STEP_BACK=off to skip the check")
 
 
 def lab_missing(cwd: Path, head: str, required: list[list[str]]) -> list[list[str]]:
@@ -277,7 +290,7 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     if refused and not args.dry_run:
         raise SystemExit(refused)
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
-    preflight(cwd, base)
+    preflight(cwd, base, build_body(args.body, args.self_review))
     lab_needed = required_lab_invocations(cwd, base, head)
     if args.evidence and lab_needed:
         import pr_evidence  # lazy: pr_evidence imports pr_land
