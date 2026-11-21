@@ -177,7 +177,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.save();
     ctx.lineWidth = 1;
     ctx.strokeStyle = css("--line-quiet");
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = cameraOn ? 0.18 : 0.5;
     for (const gx of layerOn("grid") ? gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M) : []) {
       const a = toPx(gx, bounds.min_y);
       const b = toPx(gx, bounds.max_y);
