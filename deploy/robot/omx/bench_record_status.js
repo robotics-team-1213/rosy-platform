@@ -94,8 +94,9 @@ function applyArmRules(autoPickSingle){
 function validateStart(){
   const reasons=[];
   if(!statusLoaded)reasons.push('현재 상태를 아직 확인하지 못했습니다');
-  if(lastStatus&&BUSY.has(lastStatus.status))reasons.push('세션이 이미 진행 중입니다');
+  if(benchSessionActive())reasons.push('세션이 이미 진행 중입니다');
   if(typeof poseInFlight!=='undefined'&&poseInFlight)reasons.push('포즈 작업이 진행 중입니다');
+  if(cameraRestartInFlight)reasons.push('카메라를 재시작하는 중입니다');
   if(!armContractValid()||!f.arm.value||!choices.instances[f.arm.value])reasons.push('팔 및 로봇 프로필 확인 필요');
   else if(!armVerifiedBindings(f.arm.value))reasons.push('서버 팔별 검증 조합(arm_bindings) 필요');
   const t=f.task.value;
@@ -162,8 +163,8 @@ function validateStart(){
     }
   }
 
-  window.benchStartReady=!startInFlight&&reasons.length===0;
-  const busyNow=Boolean(lastStatus&&BUSY.has(lastStatus.status))||poseInFlight;
+  window.benchStartReady=!startInFlight&&!stopInFlight&&reasons.length===0;
+  const busyNow=benchSessionActive()||poseInFlight||startInFlight||cameraRestartInFlight;
   const armOk=Boolean(f.arm.value&&armContractValid()&&choices.instances[f.arm.value]&&armVerifiedBindings(f.arm.value));
   const armInfo=lastArmsStatus&&f.arm.value?lastArmsStatus[f.arm.value]:null;
   const hil=$('home-include-leader');
@@ -199,9 +200,8 @@ function validateStart(){
     clearNotice('start-reasons');
   }
 
-  const canStop=Boolean(lastStatus&&(lastStatus.status==='handing_over'||lastStatus.status==='recording'));
+  const canStop=benchSessionActive();
   $('stop-note').hidden=!canStop;
-  if(typeof syncHeaderAndSlimBar==='function')syncHeaderAndSlimBar();
 
   const r1=Boolean(f.arm.value&&NAME_RE.test(f.name.value.trim())&&NAME_RE.test(f.rig_revision.value.trim()));
   const r2=Boolean(f.config.value&&f.caps.value&&robotCals.length>=needRobot&&leaderCals.length>0);
@@ -225,6 +225,7 @@ function validateStart(){
   for(const b of document.querySelectorAll('#sec-goal button,#sec-guide button'))b.disabled=busyNow;
   updateGoalSummaryRows();
   renderStatusKv();
+  if(typeof syncHeaderAndSlimBar==='function')syncHeaderAndSlimBar();
   return reasons.length===0;
 }
 
@@ -236,10 +237,13 @@ function renderStatus(st){
   lastStatus=st;
   statusLoaded=true;
   const code=st.status;
-  const [label,tone]=STATUS_MAP[code]||[code,'warn'];
-  const badge=$('top-badge');
-  badge.textContent=label;
-  badge.dataset.tone=tone;
+  const [label]=STATUS_MAP[code]||[code,'warn'];
+  if(st.stop_result?.message)setNotice('stop-result',st.stop_result.stopped===false?'muted':'good',st.stop_result.message);
+  if(st.link_last_command&&st.link_last_command.applied===false){
+    setNotice('link-cmd-rejected','warn',st.link_last_command.reason||'이전 연동 요청이 적용되지 않았습니다');
+  }else{
+    clearNotice('link-cmd-rejected');
+  }
 
   const key=sessionKey(st);
   const metaMatch=Boolean(lastStartMeta&&key&&lastStartMeta.key===key);
@@ -390,8 +394,8 @@ function renderStatus(st){
     renderTaskListbox();
     updateTaskSummary();
   }
-  validateStart();
   syncBenchPhase();
+  validateStart();
 }
 
 function renderRecent(rows){
@@ -418,66 +422,71 @@ const ARM_PREVIEW_CAMS={
   arm_s:new Set(['arm_s_top','arm_s_wrist']),
 };
 let lastTelemetry=null;
+function setStatusCell(id,value,group){
+  const el=$(id);
+  const text=value??'';
+  if(el.textContent!==text)el.textContent=text;
+  el.title=text;
+  (group||el.closest('dd').parentElement).hidden=text==='';
+}
+
 function renderStatusKv(){
   const st=lastStatus;
-  const d=lastTelemetry;
-  const rows=(d&&Array.isArray(d.motors))?d.motors:[];
-  const armInfo=(typeof lastArmsStatus!=='undefined'&&lastArmsStatus&&f&&f.arm&&f.arm.value)?lastArmsStatus[f.arm.value]:null;
-  const hasTel=Boolean(d&&d.active&&rows.length);
-  const fTxt=hasTel?(rows.some(m=>m.present_raw!=null)?'연결됨':'—'):(armInfo?(armInfo.has_initial_pose?'포즈 저장됨':'포즈 미저장'):'—');
-  const lTxt=hasTel?(rows.some(m=>m.leader_raw!=null)?'연결됨':'—'):(armInfo?(armInfo.has_leader_pose?'포즈 저장됨':'포즈 미저장'):'—');
-  let tqTxt='—';
-  if(hasTel){
-    const tqOn=rows.filter(m=>m.torque_enabled===true).length;
-    const tqOff=rows.filter(m=>m.torque_enabled===false).length;
-    if(tqOn+tqOff>0){
-      const temps=rows.map(m=>m.temperature_c).filter(v=>typeof v==='number');
-      const utils=rows.map(m=>m.pwm_utilization).filter(v=>typeof v==='number');
-      const parts=['ON '+tqOn+'/'+rows.length];
-      if(temps.length)parts.push('최고 '+Math.max(...temps).toFixed(0)+'°C');
-      if(utils.length)parts.push('부하 '+Math.round(Math.max(...utils)*100)+'%');
-      tqTxt=parts.join(' · ');
-    }
-  }
-  const locks=Array.isArray(st?.active_locks)?st.active_locks:[];
-  const hasFault=Boolean(d?.fault)||rows.some(m=>m.fault||m.hardware_error);
-  let holdTxt='—';
-  if(st?.manual_attention)holdTxt='수동 확인 필요';
-  else if(st?.error_kind==='needs_person')holdTxt='사람 확인 필요';
-  else if(st?.status==='leader_manual_check')holdTxt='리더 정체 (hold)';
-  else if(hasFault)holdTxt='모터 이상/차단';
-  else if(locks.length)holdTxt='락 '+locks.length+'건';
-  else if(st?.error)holdTxt=String(st.error);
-  else if(statusLoaded)holdTxt='없음';
-  let phaseTxt='—';
-  const degLeft=st?.starting_deg_left;
-  if(hasFault)phaseTxt='차단';
-  else if(d?.hold||st?.status==='leader_manual_check')phaseTxt='정체 (hold)';
-  else if(st?.starting_step==='aligning')phaseTxt='정렬 중'+(degLeft!=null?' ('+Number(degLeft).toFixed(1)+'° 남음)':'');
-  else if(st?.starting_step&&STARTING_STEP_MAP[st.starting_step])phaseTxt=STARTING_STEP_MAP[st.starting_step];
-  else if(d?.active&&d.tracking===true)phaseTxt='추종 중';
-  else if(d?.active&&d.tracking===false)phaseTxt='정렬 중'+(degLeft!=null?' ('+Number(degLeft).toFixed(1)+'° 남음)':'');
-  if($('sb-st-follower'))$('sb-st-follower').textContent=fTxt;
-  if($('sb-st-leader'))$('sb-st-leader').textContent=lTxt;
-  if($('sb-st-torque'))$('sb-st-torque').textContent=tqTxt;
-  if($('sb-st-hold'))$('sb-st-hold').textContent=holdTxt;
-  if($('sb-st-phase'))$('sb-st-phase').textContent=phaseTxt;
+  const d=lastTelemetry?.active?lastTelemetry:null;
+  const rows=Array.isArray(d?.motors)?d.motors:[];
+  const follower=rows.some(m=>m.present_raw!=null)?'연결됨':'';
+  const leader=rows.some(m=>m.leader_raw!=null)?'연결됨':'';
+  const on=rows.filter(m=>m.torque_enabled===true).length;
+  const off=rows.filter(m=>m.torque_enabled===false).length;
+  const torque=on&&off?'토크 ON '+on+' · OFF '+off:on?'토크 ON':off?'토크 OFF':'';
+  setStatusCell('sb-st-follower',follower,$('sb-st-follower'));
+  setStatusCell('sb-st-torque',torque,$('sb-st-torque'));
+  $('sb-st-follower').closest('dd').parentElement.hidden=!(follower||torque);
+  setStatusCell('sb-st-leader',leader);
+
+  const fault=Boolean(d?.fault)||rows.some(m=>m.fault||m.hardware_error);
+  const holdJoint=typeof d?.hold==='string'?d.hold:d?.hold?.joint;
+  const holding=Boolean(d?.hold)||st?.status==='leader_manual_check';
+  const holdLabel=holding?'정체 hold'+(holdJoint?': '+holdJoint:''):'';
+  const degree=Number.isFinite(st?.starting_deg_left)?' '+st.starting_deg_left.toFixed(1)+'도 남음':'';
+  const track=fault?'차단':holdLabel||((st?.starting_step==='aligning'||d?.tracking===false)?'정렬 중'+degree:d?.tracking===true?'추종 중':'');
+  setStatusCell('tel-track',track);
+  $('tel-track').dataset.tone=fault?'crit':holding?'warn':d?.tracking===true?'good':'live';
+
+  const speed=st?.teleop_speed??d?.teleop_speed;
+  const rate=speed?.track_deg_s;
+  setStatusCell('status-speed',Number.isFinite(rate)?rate+'°/s':speed?.stage!=null?'단계 '+speed.stage:'');
+  const cameras=st?.cameras??d?.cameras;
+  const labels=cameras?previewCamsForArm(Object.keys(cameras),st?.arm||f.arm.value):[];
+  const source={unit:'유닛',recorder:'녹화기'}[st?.camera_source??d?.camera_source];
+  setStatusCell('status-cameras',labels.length?labels.filter(label=>cameras[label]?.fresh===true).length+'/'+labels.length:'',$('status-cameras'));
+  setStatusCell('status-camera-source',source,$('status-camera-source'));
+  $('status-cameras').closest('dd').parentElement.hidden=$('status-cameras').hidden&&!source;
+  $('hdr-cam-health').hidden=labels.length>0;
+
+  const holdReason=(typeof st?.manual_attention==='string'&&st.manual_attention)||st?.error||
+    (st?.manual_attention||st?.error_kind==='needs_person'?'사람 확인 필요':null)||
+    (fault?'모터 이상/차단':null)||(holding?'정체 (hold)':null)||
+    (Array.isArray(st?.active_locks)&&st.active_locks.length?'락 '+st.active_locks.length+'건':null);
+  const holdObserved=statusLoaded&&(Array.isArray(st?.active_locks)||Object.hasOwn(st,'error_kind'));
+  setStatusCell('sb-st-hold',holdReason||(holdObserved?'없음':''));
+  $('sb-st-hold').dataset.tone=fault||st?.error_kind==='needs_person'?'crit':holdReason?'warn':'';
 }
 function renderTelemetry(d){
   lastTelemetry=d||null;
-  lastTelemetryActive=Boolean(d&&d.active);
-  syncBenchPhase();
+  const active=Boolean(d?.active);
+  if(active!==lastTelemetryActive){
+    lastTelemetryActive=active;
+    syncBenchPhase();
+  }
   renderStatusKv();
-  const tr=$('tel-track'), lat=$('tel-lat'), grid=$('tel-grid'), note=$('tel-note');
-  if(!tr||!lat||!grid)return;
-  if(!d||!d.active){
-    tr.textContent='대기';tr.dataset.tone='warn';lat.textContent='-- ms';lat.dataset.tone='warn';
+  syncHeaderAndSlimBar();
+  const lat=$('tel-lat'), grid=$('tel-grid'), note=$('tel-note');
+  if(!active){
+    lat.textContent='-- ms';lat.dataset.tone='warn';
     grid.hidden=true;if(note)note.hidden=false;
     return;
   }
-  const hasFault=Boolean(d.fault)||(Array.isArray(d.motors)&&d.motors.some(m=>m.fault));
-  tr.textContent=hasFault?'차단':(d.tracking?'추적 중':'정렬 중');
-  tr.dataset.tone=hasFault?'crit':(d.tracking?'good':'live');
   const ms=d.loop_latency_ms;
   lat.textContent=(typeof ms==='number')?(ms.toFixed(1)+' ms'):'-- ms';
   lat.dataset.tone=(typeof ms==='number'&&ms>40)?'warn':'good';
@@ -496,6 +505,6 @@ function renderTelemetry(d){
   grid.innerHTML=h;
 }
 async function pollTelemetry(){
-  try{renderTelemetry(await api('/api/telemetry'));}catch(_){}
+  try{renderTelemetry(await api('/api/telemetry'));}catch(_){renderTelemetry(null);}
 }
 setInterval(pollTelemetry,400);
