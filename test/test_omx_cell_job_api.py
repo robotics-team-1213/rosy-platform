@@ -80,8 +80,13 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     }
     drive_argv = api.build_argv(api.JOBS["cell_policy_drive"], base_policy, wd)
     assert "cell_policy_drive.py" in drive_argv
-    assert "--dry-run" in drive_argv and "--person-at-switch" in drive_argv
+    assert "--dry-run" in drive_argv and "--person-at-switch" not in drive_argv
+    assert drive_argv[0] == "bash"
     assert "--commissioning" not in drive_argv
+    live = {**base_policy, "dry_run": False}
+    assert api.build_argv(api.JOBS["cell_policy_drive"], live, wd)[0] == "./with-session-arm-s-live.sh"
+    with pytest.raises(ValueError, match="person_at_switch"):
+        api.build_argv(api.JOBS["cell_policy_drive"], {**live, "person_at_switch": False}, wd)
 
     job = api.JOBS["cell_policy_drive"]
     with_goal = {**base_policy, "goal_site": "yard:r3-s2-t1"}
@@ -89,6 +94,15 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     argv = api.build_argv(job, with_goal, wd)
     assert argv[argv.index("--goal-site") + 1] == "yard:r3-s2-t1"
     assert "--model-calibration" not in argv
+    hybrid = api.build_argv(job, {**with_goal, "mode": "hybrid", "n_action": 8, "max_obs_age_s": 0.6}, wd)
+    assert hybrid[hybrid.index("--mode") + 1] == "hybrid"
+    assert hybrid[hybrid.index("--n-action") + 1] == "8"
+    assert hybrid[hybrid.index("--max-obs-age-s") + 1] == "0.6"
+    taught = {k: v for k, v in with_goal.items() if k not in {"policy_root", "policy_revision", "cell_calibration"}}
+    fallback = api.build_argv(job, {**taught, "mode": "taught"}, wd)
+    assert fallback[fallback.index("--mode") + 1] == "taught" and "--policy-root" not in fallback
+    with pytest.raises(ValueError, match="goal_site"):
+        api.build_argv(job, {**base_policy, "mode": "hybrid"}, wd)
     for site in ("yard:r3-s1-t1", "yard:r3-s2-t1; park", 9):
         with pytest.raises(ValueError, match="goal_site"):
             api.build_argv(job, {**base_policy, "goal_site": site}, wd)

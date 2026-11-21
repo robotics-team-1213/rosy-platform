@@ -123,9 +123,6 @@ JOBS = {
         "argv": [
             "--config", "{config}",
             "--library", "{library}",
-            "--policy-root", "{policy_root}",
-            "--policy-revision", "{policy_revision}",
-            "--cell-calibration", "{cell_calibration}",
             "--max-chunks", "{max_chunks}",
             "--operator", "{operator}",
         ],
@@ -133,13 +130,16 @@ JOBS = {
             "arm": _match(ARM),
             "config": _match(FILE),
             "library": _match(FILE),
-            "policy_root": _safe_path,
-            "policy_revision": _match(SHA256),
-            "cell_calibration": _safe_path,
             "max_chunks": _int_range(1, 6),
             "operator": _match(NAME),
         },
         "optional": {
+            "mode": _match(re.compile(r"act|hybrid|taught")),
+            "policy_root": _safe_path,
+            "policy_revision": _match(SHA256),
+            "cell_calibration": _safe_path,
+            "n_action": _int_range(1, 1000),
+            "max_obs_age_s": _num(0.001, 5),
             "dry_run": _bool,
             "proposer": _match(NAME),
             "goal_site": _goal_site,
@@ -150,6 +150,10 @@ JOBS = {
         },
     },
 }
+
+
+def moves_arm(job, params):
+    return bool(job.get("moving")) and not (job["script"] == "cell_policy_drive.py" and params.get("dry_run") is True)
 
 
 def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
@@ -178,8 +182,16 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
                 raise ValueError(f"{name}: no such file in the workdir")
     if "proposer" in opt_checked and opt_checked["proposer"] == checked.get("operator"):
         raise ValueError("operator must differ from proposer (D-1024)")
-    if job["script"] == "cell_policy_drive.py" and "goal_site" not in opt_checked and "model_calibration" not in opt_checked:
-        raise ValueError("missing param model_calibration")
+    if job["script"] == "cell_policy_drive.py":
+        mode = opt_checked.get("mode", "act")
+        if mode != "act" and "goal_site" not in opt_checked:
+            raise ValueError(f"{mode} needs goal_site")
+        if mode != "taught":
+            for required in ("policy_root", "policy_revision", "cell_calibration"):
+                if required not in opt_checked:
+                    raise ValueError(f"missing param {required}")
+            if "goal_site" not in opt_checked and "model_calibration" not in opt_checked:
+                raise ValueError("missing param model_calibration")
     # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
     if job.get("moving") and any(
         checked.get(name, opt_checked.get(name, "")).startswith(("pinky", "bed"))
@@ -205,7 +217,10 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         args += ["--goal-site", opt_checked["goal_site"]]
     if "model_calibration" in opt_checked:
         args += ["--model-calibration", opt_checked["model_calibration"]]
-    if job.get("moving"):
+    for option in ("mode", "policy_root", "policy_revision", "cell_calibration", "n_action", "max_obs_age_s"):
+        if option in opt_checked:
+            args += ["--" + option.replace("_", "-"), opt_checked[option]]
+    if moves_arm(job, params):
         if params.get("person_at_switch") is not True:
             raise ValueError("a moving job needs person_at_switch: true")
         if params["arm"] not in SESSION:
