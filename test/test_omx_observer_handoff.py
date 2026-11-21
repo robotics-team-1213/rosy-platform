@@ -44,7 +44,8 @@ class Host:
             default_owner=lambda: "me", LeaseHeld=type("LeaseHeld", (RuntimeError,), {}),
             claim=lambda *a, **k: (self.log.append("lease"),
                                    not (lease_before and lease_before["owner"] == "me" and lease_before["live"])),
-            release=lambda *a, **k: self.log.append("unlease"))
+            release=lambda *a, **k: self.log.append("unlease"),
+            hold=lambda *a, **k: self.log.append("hold"))
 
     def run(self, *args):
         self.log.append(args[0])
@@ -619,14 +620,15 @@ def test_record_session_puts_a_pidless_reservation_back_so_it_outlives_the_sessi
     reserved = cell_arm_lease.claim("arm_a", "me@here", "job", root=tmp_path, now=time.time(), ttl_s=3600)
     record, created, before = cli.claim_arm_lease("arm_a")
     assert not created and record["pid"] == os.getpid() and before["pid"] is None  # covered during the session
-    assert cell_arm_lease.restore("arm_a", before, root=tmp_path)
+    assert not cell_arm_lease.restore("arm_a", before, {**record, "pid": 1}, root=tmp_path)  # changed since our claim
+    assert cell_arm_lease.restore("arm_a", before, record, root=tmp_path)
     after = cell_arm_lease._read("arm_a", tmp_path)
     assert after["pid"] is None and after["expires"] == reserved["expires"]
     assert cell_arm_lease.live(after, now=time.time() + 3000)  # still the same valid reservation, no dead pid
     # never over a hold or another owner's lease
-    assert not cell_arm_lease.restore("arm_a", {**before, "owner": "other@x"}, root=tmp_path)
+    assert not cell_arm_lease.restore("arm_a", {**before, "owner": "other@x"}, record, root=tmp_path)
     cell_arm_lease.hold("arm_a", "runner HOLD", owner="me@here", root=tmp_path)
-    assert not cell_arm_lease.restore("arm_a", before, root=tmp_path)
+    assert not cell_arm_lease.restore("arm_a", before, record, root=tmp_path)
     assert cell_arm_lease._read("arm_a", tmp_path)["hold"] == "runner HOLD"
 
 
@@ -637,6 +639,7 @@ def test_run_does_not_wait_a_second_time_after_the_leader_did(cell):
                    sleep=sleeps.append)
     assert code == m.SESSION_LINGERS and sleeps == []  # no window without a leader to pass run's death on
     assert "start" not in host.log
+    assert "hold" in host.log and "unlease" not in host.log  # the arm stays refused until a person checks it
 
 
 @pytest.mark.parametrize("command", [["s", "--joint-topic", "/omx_commissioning/arm_b/joint_states"],
@@ -679,3 +682,17 @@ def test_sigterm_before_the_session_launches_exits_143(cell):
     signal_me(0.05)
     code = handoff(cell, host, signals=m.SIGNALS, sleep=lambda s: time.sleep(0.1), group_timeout_s=1)
     assert code == 143 and "session" not in host.log
+
+
+def test_a_stop_that_times_out_is_checked_before_any_restart(cell):
+    host = Host(active="active")
+    plain = host.run
+
+    def run(*args):
+        if args[0] == "stop":
+            host.log.append("stop")
+            raise m.subprocess.TimeoutExpired("systemctl", 10)
+        return plain(*args)
+
+    assert handoff(cell, host, run=run) == m.HANDOFF_FAILED
+    assert "start" not in host.log and state_of(cell)["observer"] == "stop_failed"

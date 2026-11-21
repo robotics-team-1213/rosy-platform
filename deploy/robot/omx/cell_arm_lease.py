@@ -90,11 +90,12 @@ def _read(arm: str, root: Path) -> dict | None:
 
 
 def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root=None, now=None,
-          report_created=False, keep_live=False):
+          report_created=False, keep_live=False, with_previous=False):
     """Take or refresh the arm's lease; LeaseHeld when another owner's lease is live. With report_created,
     (record, created): created is False when this owner already held a live lease, decided under the lease lock.
     With keep_live, that live lease is returned as it is (pid and expiry unchanged): a caller that only needs
-    cover must not shorten or re-pid a reservation someone else's job relies on."""
+    cover must not shorten or re-pid a reservation someone else's job relies on. With with_previous (needs
+    report_created), (record, created, old): old is what was in the file under the lock, or None."""
     owner = owner or default_owner()
     root = lease_root(root)
     now = time.time() if now is None else now
@@ -108,7 +109,7 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
                             + (f" ({old['hold']}: a person releases it)" if old.get("hold") else ""))
         same_live = bool(old and old.get("owner") == owner and live(old, now))
         if same_live and keep_live:
-            return (old, False) if report_created else old
+            return (old, False, old) if with_previous else (old, False) if report_created else old
         holder = old.get("pid") if same_live and old.get("pid") is not None else pid  # never drop a live holder's pid
         record = {"schema": SCHEMA, "arm": arm, "owner": owner, "purpose": purpose,
                   "host": socket.gethostname(), "pid": holder, "boot_id": _boot_id(), "revision": revision,
@@ -117,20 +118,21 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
         tmp = root / f"{arm}.json.tmp"
         tmp.write_text(json.dumps(record, indent=2), encoding="utf-8")
         os.replace(tmp, root / f"{arm}.json")
-    return (record, not same_live) if report_created else record
+    return (record, not same_live, old) if with_previous else (record, not same_live) if report_created else record
 
 
-def restore(arm, previous: dict, owner=None, root=None) -> bool:
+def restore(arm, previous: dict, expect: dict, owner=None, root=None) -> bool:
     """Put back a pid-less reservation this owner's claim re-pid'd for one session (record_session): the same
-    reservation, expiry and all, stays valid after the session. Only when the lease is still this owner's and not held."""
+    reservation, expiry and all, stays valid after the session. Only when the lease is still exactly the one this session's claim wrote (expect)."""
     owner = owner or default_owner()
     root = lease_root(root)
     if previous.get("owner") != owner or previous.get("pid") is not None or previous.get("hold"):
         return False
     with _locked(arm, root):
         current = _read(arm, root)
-        if not current or current.get("owner") != owner or current.get("hold"):
-            return False
+        if not current or current.get("owner") != owner or current.get("hold") or any(
+                current.get(k) != expect.get(k) for k in ("pid", "acquired", "expires", "boot_id")):
+            return False  # someone claimed, held or changed it since this session's claim: not ours to put back
         tmp = root / f"{arm}.json.tmp"
         tmp.write_text(json.dumps(previous, indent=2), encoding="utf-8")
         os.replace(tmp, root / f"{arm}.json")

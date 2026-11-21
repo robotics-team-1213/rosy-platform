@@ -232,20 +232,27 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
 
     previous = {s: signal.signal(s, forward) for s in signals}
     owner, code, stopped, created = lease.default_owner(), HANDOFF_FAILED, False, False
-    observer, problem = "untouched", None
+    observer, problem, lingers = "untouched", None, False
     try:
         try:
             created = lease.claim(arm, owner, "observer_handoff", pid=os.getpid(), report_created=True,
                                   keep_live=True)[1]
             stopped = True  # from here a failed stop may still have stopped it: recovery decides
-            result = run("stop", unit)
-            if result.returncode != 0:
-                # only a unit that is really down gets the restart; a still-running observer was never stopped, so
-                # its stop failure is the report, not a recovery failure
-                active = run("is-active", unit).stdout.strip()
+            try:
+                result = run("stop", unit)
+                failure = None if result.returncode == 0 else result.stderr.strip()
+            except (OSError, subprocess.SubprocessError) as exc:  # a timeout may still have stopped it
+                failure = f"{type(exc).__name__} {exc}"
+            if failure is not None:
+                # only a unit confirmed down gets the restart; anything else (still running, or no answer) was not
+                # stopped as far as we know, so its stop failure is the report, not a recovery failure
+                try:
+                    active = run("is-active", unit).stdout.strip()
+                except (OSError, subprocess.SubprocessError):
+                    active = ""
                 stopped = active in ("inactive", "failed")
                 observer = "untouched" if stopped else "stop_failed"
-                raise HandoffError(f"could not stop {unit}: {result.stderr.strip()} (is-active: {active or 'no answer'})")
+                raise HandoffError(f"could not stop {unit}: {failure} (is-active: {active or 'no answer'})")
             wait_port(device, want=lambda h: not h, users=users, scan=scan, timeout_s=timeout_s, sleep=sleep,
                       clock=clock)
             if state["signal"]:
@@ -275,14 +282,16 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
                     if clock() >= deadline:
                         problem = f"session processes of group {child.pid} still alive after {group_timeout_s:g} s"
                         report(error=f"{problem}; observer left stopped", stage="session", arm=arm)
-                        stopped, code, observer = False, SESSION_LINGERS, "stayed_down"
+                        stopped, code, observer, lingers = False, SESSION_LINGERS, "stayed_down", True
                         break
                     sleep(0.5)
                 if state["signal"] and code != SESSION_LINGERS:
                     code = 128 + state["signal"]  # cancelled: never a success, whatever the session returned
     finally:
         try:
-            if created:
+            if lingers:  # session processes may still run: nobody else may claim the arm until a person releases it
+                lease.hold(arm, "observer_handoff: session processes still alive after the group wait", owner=owner)
+            elif created:
                 lease.release(arm, owner)
         except Exception as exc:  # noqa: BLE001 - reported; never replaces the session's code
             report(error=f"lease release: {exc}", recovery="failed", arm=arm)
