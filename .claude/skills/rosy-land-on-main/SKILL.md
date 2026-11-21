@@ -75,7 +75,7 @@ python tools/pr_evidence.py HEAD --solo                   # evidence failed unde
 
 ```bash
 python tools/merge_queue.py list
-gh pr view <PR> --json mergeStateStatus,mergeable,statusCheckRollup
+python tools/merge_queue.py status <PR>                         # state, queue position and the one next step (DIRTY: merge origin/main; BEHIND: leave it)
 python tools/merge_queue.py dequeue <PR> --reason "<why>"    # gh pr merge --disable-auto cannot remove a queued PR
 ```
 
