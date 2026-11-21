@@ -471,7 +471,9 @@ def test_ci_result_aggregates_the_matrix_for_branch_protection():
     result = jobs["ci-result"]
     assert result["name"] == "ci-result"
     assert set(result["needs"]) == {"scope", "test"}
-    assert result["if"] == "always()", "must run (and fail) when a needed job fails or is cancelled"
+    assert result["if"] == "always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)", (
+        "must run (and fail) when a needed non-draft job fails or is cancelled"
+    )
     script = result["steps"][-1]["run"]
     assert 'test "$SCOPE_RESULT" = success' in script and 'test "$TEST_RESULT" = success' in script
 
