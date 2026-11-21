@@ -17,7 +17,7 @@ INVENTORY = [
     ("picker keeps an arm_* focus selected",
      "roster.js", ['String(view.focusAnchorId || "").startsWith("arm_")'], [], 311),
     ("hidden tab polls nothing but presence",
-     "console.js", ["const poll = (fn, ms) => pageScope.interval(() => { if (!document.hidden) fn(); }, ms);",
+     "console.js", ["const poll = (fn, ms) => pageScope.interval(() => (!document.hidden ? fn() : undefined), ms);",
                     "poll(refreshState, STATE_MS);", "poll(() => trackingView.refresh(), TRACKING_MS);"],
      ["pageScope.interval(refreshState,", "pageScope.interval(() => trackingView.refresh()"], 311),
     ("presence keeps reporting while hidden",

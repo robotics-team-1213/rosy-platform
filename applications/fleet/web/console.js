@@ -441,20 +441,20 @@ if (owns("drive")) {
   personRequests.refresh();
 }
 // A hidden tab polls nothing but presence (it must still say visible:false); coming back reads at once.
-const poll = (fn, ms) => pageScope.interval(() => { if (!document.hidden) fn(); }, ms);
-const pollDrive = (fn, ms) => poll(() => { if (owns("drive")) fn(); }, ms);
+const poll = (fn, ms) => pageScope.interval(() => (!document.hidden ? fn() : undefined), ms);
+const pollDrive = (fn, ms) => poll(() => (owns("drive") ? fn() : undefined), ms);
 pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); trackingView.refresh(); } });
-pollDrive(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
+pollDrive(() => { if (!auth.locked) return formation.refreshFormation(); }, MAP_MS);
 poll(refreshState, STATE_MS);
-poll(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
+poll(() => { if (!auth.locked) return workView.refresh(); }, MAP_MS);
 poll(refreshHealthz, MAP_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
-poll(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
+poll(() => { if (!auth.locked) return refreshDispatchControl(); }, STATE_MS);
 poll(refreshDiscovery, MAP_MS);
 poll(refreshRobotApps, MAP_MS);
 pollDrive(() => mapView.refresh(), MAP_MS);
 pollDrive(() => chargeBays.refresh(), MAP_MS);
-pollDrive(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
+pollDrive(() => { if (!auth.locked) return Promise.all([stationRecovery.refresh(), personRequests.refresh()]); }, STATE_MS);
 pollDrive(() => platoon.refresh(), MAP_MS);
 pollDrive(() => mapView.refreshSightings(), STATE_MS);
 pollDrive(() => mapView.refreshTraffic(), STATE_MS);

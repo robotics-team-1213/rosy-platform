@@ -718,6 +718,41 @@ def test_stale_snapshot_warns_roll_up_into_one_expandable_row_kept_open_across_p
         browser.close()
 
 
+def test_inbox_link_opens_and_focuses_decision_and_folded_rows(site):
+    """B-2: the inbox's "개입 목록으로" lands on the exact row — a folded B-1 rollup opens on its summary,
+    a closed decision row opens through the queue's own toggle — and the jump posts nothing."""
+    from playwright.sync_api import expect, sync_playwright
+
+    stale = _robot("rosy_05", state_age_s=7.0)
+    stale["state"].update(battery_status={"level": "warning"}, docking={"state": "DOCK_FAILED"},
+                          capabilities_degraded=["cam"], navigation="FAILED")
+    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [*API["/api/fleet/state"]["robots"], stale]}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        replan = page.locator('li[data-key="rosy_02|replan"]')
+        assert replan.locator(".queue-row").get_attribute("aria-expanded") == "false"  # the stuck row holds the open seat
+        page.locator("#fleet-inbox").click()
+        inbox = page.locator("#inbox-current")
+        expect(inbox.locator('li[data-key="rosy_05|stale-snapshot"]')).to_contain_text("지연 경고 4건")
+
+        inbox.locator('li[data-key="rosy_05|stale-snapshot"] a').click()  # folded B-1 row
+        folded = page.locator('#warning-list > li[data-folded="1"]')
+        expect(folded.locator("details")).to_have_attribute("open", "")
+        assert page.evaluate(
+            "() => document.activeElement === document.querySelector('#warning-list li[data-folded] summary')")
+
+        inbox.locator('li[data-key="rosy_02|replan"] a').click()  # decision row, closed until now
+        expect(replan.locator(".queue-row")).to_have_attribute("aria-expanded", "true")
+        expect(page.locator('[data-decision-slot="rosy_02|replan"]')).to_be_visible()
+        assert page.evaluate("""() =>
+            document.activeElement.closest('li[data-key="rosy_02|replan"]') !== null""")
+        assert posts == []  # the jump is a read; nothing moves
+        assert not errors
+        _shot(page, "console-inbox-jump-1440x900.png")
+        browser.close()
+
+
 def test_compact_robot_list_keeps_all_four_safety_exceptions_visible_beside_the_workspace(site):
     """D-651: selecting another robot never hides offline, E-stop, unknown safety or calibration evidence."""
     from playwright.sync_api import expect, sync_playwright
