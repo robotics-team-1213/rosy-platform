@@ -22,6 +22,11 @@ bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'saved-heading
   groups: {'saved-heading': ['observation-heading', 'print-heading', 'catalog-heading', 'real2sim-heading', 'saved-heading']}, label: document.getElementById('cell-screen')});
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
+// B-3 — 읽기 전용 ?focus= 딥링크. 알려진 단계 머리글이나 팔 카드만 허용하고 토큰·자격증은 URL에서 읽지 않는다(D-977).
+const SUBNAV_HEADINGS = ['saved-heading', 'recipe-heading', 'cell-heading', 'preview-heading', 'proposal-heading', 'mission-heading', 'observation-heading'];
+const focusParam = channelQuery.get('focus') || '';
+const armFocusMatch = /^arm:([A-Za-z0-9._:-]{1,64})$/.exec(focusParam);
+let pendingFocusHandled = false;
 let channelReceipt = null, channelReview = null;
 const JOB_STATUS_LABEL = {
   PROPOSED: '제안됨 · 승인 대기', READY: '실행 대기', RUNNING: '실행 중',
@@ -46,7 +51,49 @@ function jobReasonLabel(reason) {
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
+const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value, onSummary: renderExceptions});
+// B-3 — 관측 화면은 저장된 문서 단계에 속한다(D-926 groups). 화면이 바뀐 뒤에 카드로 옮겨야 초점이 살아 있다.
+function jumpToObservations(land) {
+  if (location.hash === '#saved-heading') land();
+  else { location.hash = '#saved-heading'; addEventListener('hashchange', land, {once: true}); }
+}
+if (SUBNAV_HEADINGS.includes(focusParam)) {
+  if (focusParam === 'observation-heading') jumpToObservations(() => $('observation-heading')?.scrollIntoView({block: 'nearest'}));
+  else if (location.hash !== '#' + focusParam) location.hash = '#' + focusParam;
+}
+function focusArmFromLink() {
+  if (!armFocusMatch || pendingFocusHandled) return;
+  if (location.hash && location.hash !== '#saved-heading') return;
+  jumpToObservations(() => { pendingFocusHandled = observations.focusArm(armFocusMatch[1]); });
+}
+// 요약이 바뀔 때만 다시 그린다(관측 모듈이 서명으로 지켜 준다). 접속 끊김·해제는 빈 목록으로 줄을 지운다.
+function renderExceptions(items) {
+  const strip = $('cell-exception-strip');
+  if (!strip) return;
+  const nextKey = JSON.stringify(items.map(item => [item.key, item.severity, item.detail, item.sourceId]));
+  if (strip.dataset.summaryKey === nextKey) return;
+  strip.dataset.summaryKey = nextKey;
+  strip.hidden = items.length === 0;
+  strip.replaceChildren(...items.map(item => {
+    const row = document.createElement('div');
+    row.className = 'cell-exception-item';
+    row.dataset.severity = item.severity;
+    const tag = document.createElement('ui-tag');
+    tag.setAttribute('status', item.severity === 'danger' ? 'crit' : 'warn');
+    tag.textContent = item.severity === 'danger' ? '정지·보류' : '주의';
+    const label = document.createElement('strong'); label.textContent = item.label;
+    const detail = document.createElement('span'); detail.textContent = item.detail;
+    const move = document.createElement('ui-button');
+    move.setAttribute('kind', 'quiet'); move.setAttribute('type', 'button');
+    move.textContent = '관측으로 이동';
+    move.addEventListener('click', () => jumpToObservations(() => {
+      if (item.sourceId) observations.focusArm(item.sourceId);
+      else $('observation-heading')?.scrollIntoView({block: 'nearest'});
+    }));
+    row.append(tag, label, detail, move);
+    return row;
+  }));
+}
 const catalog = createObjectCatalog({request, $});
 const real2sim = createReal2SimPipeline({request, $, isOperator: () => isOperator(role) && !busy,
   namedReason: () => !isOperator(role) || busy ? OPERATOR_REASON
@@ -340,7 +387,7 @@ function connect(credentialChange = false) {
   return action(async () => {
   const session = await api('/api/fleet/session'); role = session.role; principal = session.principal_id;
   showSession(session, {credentialChange, focusOrigin});
-  observations.clear(); void observations.refresh(); void catalog.refresh(); void real2sim.refresh();
+  observations.clear(); void observations.refresh().then(focusArmFromLink); void catalog.refresh(); void real2sim.refresh();
   void refreshUnitLinks();
   loginForm.refresh(false);
   await list();
