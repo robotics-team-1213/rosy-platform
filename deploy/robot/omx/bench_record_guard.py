@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
@@ -114,3 +115,18 @@ def write_restore_list(path, units):
     tmp.write_text(json.dumps(units))
     os.replace(tmp, path)  # a crash never leaves a half-written list
 
+
+# Dependents first: camera-view's Requires= pulls readiness down with it (record_session note, 2026-10-24).
+HANDOVER = (r"rosy-omx-cameras-bind\.timer",
+            r"rosy-omx-camera-view\.service", r"rosy-omx-camera-readiness\.service",
+            r"rosy-omx-camera@[\w-]+\.service", r"rosy-omx-observer@[\w-]+\.service")
+
+
+def systemctl(*args):
+    return subprocess.run(["systemctl", "--user", *args], capture_output=True, text=True, timeout=60)
+
+
+def active_handover_units(run=systemctl):
+    listed = run("list-units", "--state=active,activating", "--no-legend", "--plain", "rosy-omx-*").stdout.split()
+    units = [u for u in listed if u.endswith((".service", ".timer"))]
+    return [u for pattern in HANDOVER for u in units if re.fullmatch(pattern, u)]

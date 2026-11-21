@@ -11,28 +11,14 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
-    check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, write_restore_list, write_snapshot)
+    HANDOVER, active_handover_units, check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, systemctl, write_restore_list, write_snapshot)
 from bench_record_replay import recording_progress  # noqa: E402
 
 # Observer instance per arm (units rosy-omx-observer@<arm>.service, the --arm record_session takes) and the
 # letter the prep folder binds files with (caps-arm-<letter>-*, arm-<letter>-robot-profile.json).
 ARMS = {"arm_a": "a", "arm_b": "b", "arm_s": "s"}
 BI_ARM = "arm_ab"
-# Dependents first: camera-view's Requires= pulls readiness down with it (record_session note, 2026-10-24).
-HANDOVER = (r"rosy-omx-cameras-bind\.timer",
-            r"rosy-omx-camera-view\.service", r"rosy-omx-camera-readiness\.service",
-            r"rosy-omx-camera@[\w-]+\.service", r"rosy-omx-observer@[\w-]+\.service")
 NAME = re.compile(r"[a-z0-9][a-z0-9-]{2,63}")
-
-
-def systemctl(*args):
-    return subprocess.run(["systemctl", "--user", *args], capture_output=True, text=True, timeout=60)
-
-
-def active_handover_units(run=systemctl):
-    listed = run("list-units", "--state=active,activating", "--no-legend", "--plain", "rosy-omx-*").stdout.split()
-    units = [u for u in listed if u.endswith((".service", ".timer"))]
-    return [u for pattern in HANDOVER for u in units if re.fullmatch(pattern, u)]
 
 
 def _read_task_card(path):

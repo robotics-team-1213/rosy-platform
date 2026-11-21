@@ -203,7 +203,43 @@ def _interp_waypoints(waypoints: list[list[float]], max_step: float = 0.15) -> l
     return out
 
 
-def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: str = "pinky") -> dict:
+def _read_live_norm_pose(prep: Path, arm: str, python_exe: str | None) -> list[float] | None:
+    """Read follower current ticks via leader_home.py (torque OFF) and convert to LeRobot norm units."""
+    if not python_exe:
+        return None
+    letter = arm.split("_")[-1] if "_" in arm else arm
+    cfgs = sorted(prep.glob(f"record-config-arm-{letter}*.json"))
+    lh = Path(__file__).resolve().parent / "leader_home.py"
+    if not cfgs or not lh.is_file():
+        return None
+    try:
+        import subprocess
+        out = subprocess.run(
+            [python_exe, str(lh), "--config", str(cfgs[0]), "--arm", arm, "--read-follower-pose"],
+            capture_output=True, text=True, timeout=8,
+        )
+        if out.returncode != 0:
+            return None
+        ticks = json.loads(out.stdout.strip().splitlines()[-1]).get("state")
+        if not isinstance(ticks, list) or len(ticks) != 6:
+            return None
+        cal_p = Path.home() / ".cache/huggingface/lerobot/calibration/robots/omx_follower"
+        robot_id = json.loads(cfgs[0].read_text(encoding="utf-8-sig")).get("robot", {}).get("id", "omx_follower_arm")
+        cal = json.loads((cal_p / f"{robot_id}.json").read_text(encoding="utf-8")) if (cal_p / f"{robot_id}.json").is_file() else {}
+        names = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
+        norm = []
+        for i, n in enumerate(names):
+            c = cal.get(n, {})
+            lo, hi = float(c.get("range_min", 0)), float(c.get("range_max", 4095))
+            span = max(1.0, hi - lo)
+            v = ((float(ticks[i]) - lo) / span * 100.0) if i == 5 else ((float(ticks[i]) - lo) / span * 200.0 - 100.0)
+            norm.append(round(max(-100.0, min(100.0, v)), 3))
+        return norm
+    except Exception:
+        return None
+
+
+def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: str = "pinky", python_exe: str | None = None) -> dict:
     """Build a speed-bounded rosy.omx-replay-trajectory.v1 from calibrated IK surfaces/chunks."""
     if origin and target_slot and origin == target_slot:
         raise ValueError("IK 집을 곳(origin)과 놓을 곳(target_slot)은 같을 수 없습니다")
@@ -230,7 +266,8 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
 
     belt_p, pinky_p = _surface_poses("belt"), _surface_poses("pinky")
     if belt_p and pinky_p:
-        home = belt_p[0] or pinky_p[0] or [0.85, -62.3, 53.0, 51.5, 45.0, 48.9]
+        live_home = _read_live_norm_pose(prep, arm, python_exe)
+        home = live_home or belt_p[0] or pinky_p[0] or [0.85, -62.3, 53.0, 51.5, 45.0, 48.9]
         pick_p = pinky_p if "pinky" in origin.lower() else belt_p
         place_p = belt_p if "pinky" in origin.lower() else pinky_p
         g_open, g_close = 48.0, 38.0
