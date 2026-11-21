@@ -103,9 +103,12 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
     holder = (root / ".worktrees").resolve()
     if not holder.is_dir():
         return root, []
-    times = dict(line.split() for line in git(root, "for-each-ref", "--format=%(objectname) %(committerdate:unix)", "refs/heads").stdout.splitlines())
-    merged = {s for t in rules.merge_targets(root) for s in git(root, "for-each-ref", "--merged", t, "--format=%(objectname)", "refs/heads").stdout.split()}
+    refs = [line.split("\t") for line in git(root, "for-each-ref", "--format=%(objectname)\t%(committerdate:unix)\t%(parent)", "refs/heads").stdout.splitlines()]
+    times, parents_map = {p[0]: int(p[1]) for p in refs}, {p[0]: p[2].split() for p in refs}
+    targets = rules.merge_targets(root)
+    merged = {s for t in targets for s in git(root, "for-each-ref", "--merged", t, "--format=%(objectname)", "refs/heads").stdout.split()}
     owners, noted = rules.owner_notes(root, git)
+    common = Path(_must(git(root, "rev-parse", "--path-format=absolute", "--git-common-dir"), "git rev-parse"))
     rows = []
     for block in blocks[1:]:
         path = Path(block["worktree"])
@@ -113,9 +116,9 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
             continue
         sha = block.get("HEAD", "")
         if sha in times:
-            is_merged, tip = sha in merged, int(times[sha])
+            is_merged, tip, parents = sha in merged, times[sha], parents_map[sha]
         else:  # detached at a commit no branch points to
-            is_merged = rules.is_merged(root, sha)
+            is_merged, parents = rules.is_merged(root, sha, targets), None
             tip = int(git(root, "show", "-s", "--format=%ct", sha).stdout.strip() or 0)
         try:  # `.git` is a file "gitdir: <absolute or relative path>"
             git_dir = path / (path / ".git").read_text(encoding="utf-8").partition("gitdir:")[2].strip()
@@ -124,7 +127,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
         reflog = rules.reflog_time(git_dir / "logs" / "HEAD")  # entry time: gc rewrites the file (D-886)
         branch = block.get("branch", "").removeprefix("refs/heads/")
         rows.append(_row(path, branch=branch, sha=sha, owner=owners.get(branch, ""), noted=noted.get(branch, 0.0),
-                         locked="locked" in block, merged=is_merged, git_dir=git_dir,
+                         locked="locked" in block, merged=is_merged, git_dir=git_dir, common=common, parents=parents,
                          last=max(tip, reflog, _mtime(path / ".git")) if reflog else float("inf")))
     listed = {row["path"].resolve() for row in rows}
     rows += [_row(path, orphan=True) for path in sorted(holder.iterdir())
@@ -161,12 +164,14 @@ def _status(path: Path) -> tuple[list[str], list[str]] | None:
 
 def _landed(row: dict) -> bool:
     """Work landed from this branch: its reflog records a commit made on it. No reflog reads as no."""
+    if "common" in row:
+        return rules.reflog_has_commit(row["common"] / "logs" / "refs" / "heads" / row["branch"])
     log = git(row["path"], "reflog", "show", "--format=%gs", f"refs/heads/{row['branch']}")
     return log.returncode == 0 and any(line.startswith("commit") for line in log.stdout.splitlines())
 
 
 def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool = False, full: bool = False,
-          me: str = "") -> None:
+          me: str = "", ct_cache: dict[str, int] | None = None) -> None:
     """Set ``idle_h``, ``wait_h`` and ``verdict``; ``git status`` runs only when the cheap facts do not decide.
 
     ``lossless`` stops at an unmerged branch (the lossless prune keeps it anyway);
@@ -190,7 +195,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
     kind, _, topic = row["branch"].partition("/")
     adoptable = kind in TYPES and rules.topic_ok(topic)
     row["wait_h"] = 0.0 if landed else min(idle_hours, rules.CLEAN_IDLE_HOURS) if adoptable else idle_hours
-    stale = None if row["merged"] or not row["sha"] else rules.stale_history(row["path"], row["sha"])
+    stale = None if row["merged"] or not row["sha"] else rules.stale_history(row["path"], row["sha"], ct_cache=ct_cache)
     if stale:
         row["note"] = stale
     # A young owner note (11-20: its session may be about to use it); a landed clean worktree has nothing to lose.
@@ -212,7 +217,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
             if status[0]:  # uncommitted files: back to the full idle wait
                 row["fast"], row["wait_h"] = False, idle_hours
             row["last"] = max([row["last"], *(_newest(row["path"] / rel) for rel in row["changed"])])
-            if row["wait_h"]:
+            if row["wait_h"] and row["last"] < now:
                 row["last"] = max(row["last"], rules.newest_file(row["path"], lambda r: _is_cache(row["path"], r)))
     row["idle_h"] = max(0.0, (now - row["last"]) / 3600)
     row["landed_dirty"] = landed and bool(row["changed"])  # D-790: work continued after the branch landed
@@ -390,14 +395,15 @@ def _table(rows: list[dict], me: str, now: float, file=None) -> None:
               f"{row['verdict']}" + (f"  [{owner}]" if owner else ""), file=file)
 
 
-def _judge_status(root: Path, row: dict, now: float, idle_hours: float, here: Path, me: str) -> None:
-    judge(row, now, idle_hours, here, full=True, me=me)
+def _judge_status(root: Path, row: dict, now: float, idle_hours: float, here: Path, me: str,
+                  targets: list[str], merged_shas: set[str], ct_cache: dict[str, int]) -> None:
+    judge(row, now, idle_hours, here, full=True, me=me, ct_cache=ct_cache)
     # A tip that merged main in (tools/land.py does) and was not landed since is not an ancestor of main.
-    # Still unmerged, and correctly kept; the note only explains why a "landed-looking" branch is.
     if row["merged"] or row["orphan"] or row.get("note"):
         return
-    parents = git(root, "rev-list", "--parents", "-n1", row["sha"]).stdout.split()[2:]
-    if any(rules.is_merged(root, p) for p in parents):
+    parents = (row["parents"][1:] if row.get("parents") is not None
+               else git(root, "rev-list", "--parents", "-n1", row["sha"]).stdout.split()[2:])
+    if any(p in merged_shas or rules.is_merged(root, p, targets) for p in parents):
         row["note"] = "tip is a merge of main"
 
 
@@ -405,8 +411,9 @@ def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
     root, rows = scan(cwd)
     here, me = _here(cwd), _identity(root)
     if rows:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(rows))) as pool:
-            list(pool.map(lambda row: _judge_status(root, row, now, idle_hours, here, me), rows))
+        merged_shas, targets, ct_cache = {r["sha"] for r in rows if r["merged"] and r["sha"]}, rules.merge_targets(root), {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(12, len(rows))) as pool:
+            list(pool.map(lambda r: _judge_status(root, r, now, idle_hours, here, me, targets, merged_shas, ct_cache), rows))
     print(f"{'name':<32} {'branch':<44} {'main':<8} {'dirty':>5} {'idle':>7} {'lock':<6} {'you':<5} verdict  [owner]")
     _table(sorted(rows, key=lambda r: -r["idle_h"]), me, now)
     for row in rows:  # D-790: the two states that need a person, said in words

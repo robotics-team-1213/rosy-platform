@@ -23,6 +23,7 @@ import binascii
 import csv
 import hashlib
 import json
+import os
 import re
 import subprocess
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -46,6 +47,7 @@ class Finding:
 from secret_scan_syntax import (
     _PLACEHOLDER,
     _SECRET_NAME_WORDS,
+    _SECRET_NEEDLES,
     _ASSIGNMENT,
     _PYTEST_NODE_ID,
     _PRIVATE_KEY,
@@ -63,6 +65,12 @@ from secret_scan_syntax import (
     _URL,
     _PUBLIC_PATH_TOKEN,
     _PATH_WORD,
+    _PATH_WORD_HEAD,
+    _PATH_WORD_TAIL,
+    _PATH_SPLIT,
+    _KT_STRING_ASSIGN,
+    _PSK_NAME,
+    _MD_SEP,
     _ABSORPTION_INVENTORY_SUFFIX,
     _CHECKSUM_MANIFEST_SUFFIX,
     _SHA256,
@@ -145,6 +153,11 @@ def git_object_in(root: Path):
     return known
 
 
+def _fold_ascii_re(text: str) -> str:
+    """Case-fold while mapping Turkish İ/ı to ASCII 'i' so prefilters match Python re.IGNORECASE."""
+    return text.lower() if text.isascii() else text.replace("\u0130", "i").replace("\u0131", "i").casefold()
+
+
 def scan_text(path: str, text: str, *,
               public_provenance: frozenset[tuple[str, str, str]] = frozenset(),
               is_git_object=lambda value: False) -> list[Finding]:
@@ -159,89 +172,113 @@ def scan_text(path: str, text: str, *,
     public_os_cms_sha256 = 'c9b715ef42497e1e1f746529a882604e7159f7957f652d25977d56f49d9104a1'
     public_os_cms = (path == 'deploy/robot/pinky_pro/release/public-keys/rosy-os-cms-2026-01.pem'
                      and hashlib.sha256((text.rstrip('\r\n') + '\n').encode('utf-8')).hexdigest() == public_os_cms_sha256)
+    norm_path = path.replace("\\", "/")
+    is_md = norm_path.lower().endswith(".md")
+    is_known_failures = norm_path.endswith("test/known_failures.txt")
+    is_kt = norm_path.endswith(".kt")
+    is_inventory = norm_path.endswith(_ABSORPTION_INVENTORY_SUFFIX)
+    is_checksum = norm_path.endswith(_CHECKSUM_MANIFEST_SUFFIX)
+
+    low = _fold_ascii_re(text)
+    has_priv = "PRIVATE KEY-----" in text
+    has_wpa = "psk" in low  # preserve CR-only splitlines() matching for _WPA_PSK
+    has_qr = "wifi:" in low
+    has_secret_word = any(w in low for w in _SECRET_NEEDLES)
+    has_bare = is_inventory or bool(_BARE_TOKEN.search(text))
+    if not (has_priv or has_wpa or has_qr or has_secret_word or has_bare):
+        return findings
+
+    has_url = "://" in text
+    has_md_sha_table = is_md and has_bare and "SHA-256" in text
     lines = text.splitlines()
     sha_table: tuple[int, int] | None = None
 
     for number, line in enumerate(lines, start=1):
         stripped = line.strip()
         cells = None
-        if path.lower().endswith(".md") and stripped.startswith("|") and stripped.endswith("|"):
+        if has_md_sha_table and stripped.startswith("|") and stripped.endswith("|"):
             cells = [cell.strip() for cell in stripped[1:-1].split("|")]
             if "SHA-256" in cells and number < len(lines):
                 separator = lines[number].strip()
                 if separator.startswith("|") and separator.endswith("|"):
                     parts = [part.strip() for part in separator[1:-1].split("|")]
-                    if len(parts) == len(cells) and all(re.fullmatch(r":?-{3,}:?", part) for part in parts):
+                    if len(parts) == len(cells) and all(_MD_SEP.fullmatch(part) for part in parts):
                         sha_table = (len(cells), cells.index("SHA-256"))
             elif sha_table and len(cells) != sha_table[0]:
                 sha_table = None
         else:
             sha_table = None
 
-        if _PRIVATE_KEY.search(line):
+        if has_priv and "PRIVATE KEY-----" in line and _PRIVATE_KEY.search(line):
             findings.append(Finding(path, number, "private-key", stripped[:120]))
             continue
 
-        wpa = _WPA_PSK.match(line)
-        if (
-            wpa
-            and not _is_placeholder(wpa.group("value"))
-            # A wpa_supplicant.conf never says psk=self.setup_psk; source that
-            # passes a passphrase along must not read as one.
-            and not _CODE_REFERENCE.match(wpa.group("value").rstrip(",}"))
-        ):
-            findings.append(Finding(path, number, "wifi-psk", stripped[:120]))
-            continue
-
-        qr = _WIFI_QR.search(line)
-        if qr and not _is_placeholder(qr.group("value")):
-            findings.append(Finding(path, number, "wifi-qr", stripped[:120]))
-            continue
-
-        node_id = (_PYTEST_NODE_ID.match(line)
-                   if path.replace("\\", "/").endswith("test/known_failures.txt") else None)
-        assignment_line = line[node_id.end():] if node_id else line
-        if path.replace('\\', '/').endswith('.kt'):
-            # Remove only a nullable String annotation before an assignment.
-            # Keep its actual default visible: a quoted credential still reports.
-            assignment_line = re.sub(
-                rf'\b([A-Za-z0-9_]*(?:{_SECRET_NAME_WORDS})[A-Za-z0-9_]*)\s*:\s*String\??\s*=',
-                r'\1 =', assignment_line, flags=re.IGNORECASE | re.VERBOSE)
-        matched_assignment = False
-        for match in _ASSIGNMENT.finditer(assignment_line):
-            value = (match.group("quoted") or match.group("squoted")
-                     or match.group("value") or match.group("call"))
+        if has_wpa:
+            wpa = _WPA_PSK.match(line)
             if (
-                _is_placeholder(value)
-                or (not (match.group('quoted') or match.group('squoted'))
-                    and _is_placeholder(value.rstrip(')]},:')))
-                or _TYPE_EXPRESSION.match(value)
-                or _CODE_REFERENCE.match(value.rstrip(",}"))
-                or ("(" not in value and _CODE_REFERENCE.match(value.rstrip("),}")))
-                or (not (match.group('quoted') or match.group('squoted'))
-                    and _NUMERIC_CODE_CALL.fullmatch(value))
-                or (_is_unclosed_fragment(value)
-                    and _call_holds_no_literal(assignment_line, match.end(), match.group("name")))
-                or _reads_the_environment(value, assignment_line, match.end())
-                or _is_a_passed_reference(assignment_line, match, value)
+                wpa
+                and not _is_placeholder(wpa.group("value"))
+                # A wpa_supplicant.conf never says psk=self.setup_psk; source that
+                # passes a passphrase along must not read as one.
+                and not _CODE_REFERENCE.match(wpa.group("value").rstrip(",}"))
             ):
+                findings.append(Finding(path, number, "wifi-psk", stripped[:120]))
                 continue
-            # A reference to another variable or a path is not a literal secret.
-            if value.startswith(("/", "./", "~", "@")):
+
+        if has_qr:
+            qr = _WIFI_QR.search(line)
+            if qr and not _is_placeholder(qr.group("value")):
+                findings.append(Finding(path, number, "wifi-qr", stripped[:120]))
                 continue
-            kind = "wifi-psk" if re.search(r"psk|passphrase", match.group("name"), re.IGNORECASE) else "credential"
-            findings.append(Finding(path, number, kind, stripped[:120]))
-            matched_assignment = True
-        if matched_assignment:
+
+        if has_secret_word and (":" in line or "=" in line):
+            line_low = _fold_ascii_re(line)
+            if any(w in line_low for w in _SECRET_NEEDLES):
+                node_id = _PYTEST_NODE_ID.match(line) if is_known_failures else None
+                assignment_line = line[node_id.end():] if node_id else line
+                if is_kt:
+                    # Remove only a nullable String annotation before an assignment.
+                    # Keep its actual default visible: a quoted credential still reports.
+                    assignment_line = _KT_STRING_ASSIGN.sub(r'\1 =', assignment_line)
+                matched_assignment = False
+                for match in _ASSIGNMENT.finditer(assignment_line):
+                    value = (match.group("quoted") or match.group("squoted")
+                             or match.group("value") or match.group("call"))
+                    if (
+                        _is_placeholder(value)
+                        or (not (match.group('quoted') or match.group('squoted'))
+                            and _is_placeholder(value.rstrip(')]},:')))
+                        or _TYPE_EXPRESSION.match(value)
+                        or _CODE_REFERENCE.match(value.rstrip(",}"))
+                        or ("(" not in value and _CODE_REFERENCE.match(value.rstrip("),}")))
+                        or (not (match.group('quoted') or match.group('squoted'))
+                            and _NUMERIC_CODE_CALL.fullmatch(value))
+                        or (_is_unclosed_fragment(value)
+                            and _call_holds_no_literal(assignment_line, match.end(), match.group("name")))
+                        or _reads_the_environment(value, assignment_line, match.end())
+                        or _is_a_passed_reference(assignment_line, match, value)
+                    ):
+                        continue
+                    # A reference to another variable or a path is not a literal secret.
+                    if value.startswith(("/", "./", "~", "@")):
+                        continue
+                    kind = "wifi-psk" if _PSK_NAME.search(match.group("name")) else "credential"
+                    findings.append(Finding(path, number, kind, stripped[:120]))
+                    matched_assignment = True
+                if matched_assignment:
+                    continue
+
+        if not has_bare or len(line) < 40:
             continue
 
-        entropy_line = _URL.sub(" ", line)
+        entropy_line = _URL.sub(" ", line) if (has_url and "://" in line) else line
         if sha_table and cells and len(cells) == sha_table[0]:
             checksum = cells[sha_table[1]].strip("`")
             if _SHA256.fullmatch(checksum):
                 cells[sha_table[1]] = ""
-                entropy_line = _URL.sub(" ", "|".join(cells))
-        if path.replace("\\", "/").endswith(_ABSORPTION_INVENTORY_SUFFIX):
+                join_cells = "|".join(cells)
+                entropy_line = _URL.sub(" ", join_cells) if (has_url and "://" in join_cells) else join_cells
+        if is_inventory:
             try:
                 fields = next(csv.reader([line]))
             except (csv.Error, StopIteration):
@@ -252,7 +289,7 @@ def scan_text(path: str, text: str, *,
                     if _SHA256.fullmatch(fields[index] or ""):
                         fields[index] = ""
                 entropy_line = ",".join(fields)
-        elif path.replace("\\", "/").endswith(_CHECKSUM_MANIFEST_SUFFIX):
+        elif is_checksum:
             fields = line.split(None, 1)
             if len(fields) == 2 and _SHA256.fullmatch(fields[0]):
                 entropy_line = fields[1]
@@ -272,11 +309,11 @@ def scan_text(path: str, text: str, *,
             # next "/". Judge the whole path word the fragment sits in. A path
             # head never excuses a token: a piece of 32+ characters that holds a
             # digit or is all hex (robot_ui/<revision>, auth/v1/<JWT>) reports.
-            head = re.search(_PATH_WORD + "$", entropy_line[:match.start("value")]).group(0)
-            word = head + value + re.match(_PATH_WORD, entropy_line[match.end("value"):]).group(0)
+            head = _PATH_WORD_HEAD.search(entropy_line[:match.start("value")]).group(0)
+            word = head + value + _PATH_WORD_TAIL.match(entropy_line[match.end("value"):]).group(0)
             if _PUBLIC_PATH_TOKEN.fullmatch(word) and not any(
                     len(piece) >= 32 and (not piece.isalpha() or _HEX_ONLY.fullmatch(piece))
-                    for piece in re.split(r"[/_.-]", word)):
+                    for piece in _PATH_SPLIT.split(word)):
                 continue
             if _is_ed25519_public_key_body(value) or public_os_cms:
                 continue
@@ -292,7 +329,7 @@ def scan_text(path: str, text: str, *,
             # entirely (_URL removes them), so a dependency pinned as
             # `https://host/o/r/tree/<sha>/path | <sha>` left the bare copy
             # looking unattributed. A secret is not its own link target.
-            if any(value in url.group(0) for url in _URL.finditer(line)):
+            if has_url and "://" in line and any(value in url.group(0) for url in _URL.finditer(line)):
                 continue
             # sha256 digests and git revisions are public integrity data, not
             # secrets, and the release manifest is full of them. Word-bounded:
@@ -378,10 +415,16 @@ def scan_files(
     excluded = set(DEFAULT_EXCLUDED_NAMES) | set(excluded_names)
     findings: list[Finding] = []
     is_git_object = git_object_in(root)
+    root_str = str(root)
+    root_prefix = root_str if root_str.endswith(os.sep) else root_str + os.sep
+    prefix_len = len(root_prefix)
 
     for path in paths:
         if path.name in excluded or path.suffix.lower() in DEFAULT_EXCLUDED_SUFFIXES:
             continue
+        path_str = str(path)
+        relative = (path_str[prefix_len:] if path_str.startswith(root_prefix)
+                    else str(path.relative_to(root))).replace("\\", "/")
         try:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -390,14 +433,13 @@ def scan_files(
             # Silently skipping made an unreadable file vacuously clean.
             findings.append(
                 Finding(
-                    str(path.relative_to(root)).replace("\\", "/"),
+                    relative,
                     0,
                     "unscannable",
                     f"could not be read, so it was never checked: {exc}",
                 )
             )
             continue
-        relative = str(path.relative_to(root)).replace("\\", "/")
         # Fixture values are excused inside test trees wherever they live —
         # repo-root test/ and the per-package test/ directories of the
         # domain-grouped workspace. Anywhere else they are secrets.

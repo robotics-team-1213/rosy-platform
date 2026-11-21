@@ -1023,8 +1023,21 @@ def test_adopt_refuses_a_stale_history_branch(main, monkeypatch, capsys):
 
 def test_newest_file_ignores_oserror(tmp_path, monkeypatch):
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
-    monkeypatch.setattr(worktrees.rules.os.path, "getmtime", lambda _p: (_ for _ in ()).throw(OSError("gone")))
+    broken = type("E", (), {"stat": staticmethod(lambda: (_ for _ in ()).throw(OSError("gone")))})()
+    assert worktrees.rules._entry_mtime(broken) == 0.0
+    monkeypatch.setattr(worktrees.rules, "_entry_mtime", lambda _e: 0.0)
     assert worktrees.rules.newest_file(tmp_path, lambda _r: False) == 0.0
+
+
+def test_status_notes_skips_gh_when_no_branch_over_24h(main, tmp_path, monkeypatch):
+    _bare_origin(main, tmp_path)
+    now = time.time()
+    _commit_n(add(main, "young"), 1, date=f"{int(now - 2 * HOUR)} +0000")
+    calls = []
+    monkeypatch.setattr(worktrees.rules, "open_pr_heads", lambda _r: calls.append(1) or set())
+    _, rows = worktrees.scan(main)
+    worktrees.rules.status_notes(main, rows, now)
+    assert calls == []
 
 
 def test_new_starts_from_origin_main_untracked_and_status_warns_on_wrong_head(main, capsys):
