@@ -183,6 +183,6 @@ def test_events_tail_reader_skips_partial_head_line(tmp_path):
     ev = tmp_path / "events.jsonl"
     old = json.dumps({"event": "tests", "argv": ["test/old.py"], "run_s": 999.0}) + "\n"
     new = json.dumps({"event": "tests", "argv": ["test/new.py"], "run_s": 12.0}) + "\n"
-    ev.write_text(old * 10 + new, encoding="utf-8")
+    ev.write_text(old * 10 + new, encoding="utf-8", newline="\n")
     lines = list(work_queue._tail_lines(str(ev), limit=len(new) + 5))
     assert lines == [new]
