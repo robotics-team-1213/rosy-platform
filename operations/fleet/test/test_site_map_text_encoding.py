@@ -34,6 +34,13 @@ def test_draft_and_profile_refuse_double_encoded_names(tmp_path):
     assert "name" in str(title.value)
 
 
+def test_partly_broken_name_is_refused(tmp_path):
+    store = SiteMapStore(tmp_path / "sm.db")
+    with pytest.raises(SiteMapError) as part:
+        store.save_draft(_named(_mangle("상단") + "역"), expected_revision=None, principal_id="op")
+    assert part.value.code == "TEXT_DOUBLE_ENCODED"
+
+
 def test_valid_korean_name_is_saved(tmp_path):
     store = SiteMapStore(tmp_path / "sm.db")
     assert store.save_draft(_named("상단"), expected_revision=None, principal_id="op")["revision"]

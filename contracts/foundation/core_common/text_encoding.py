@@ -15,7 +15,8 @@ _RUN = re.compile(r"[^\x00-\x7f]+")
 _LEAD_TAIL = re.compile(rb"[\xc2-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{1,2}")
 
 
-def _cp1252_bytes(run: str) -> bytes | None:
+def _cp1252_runs(run: str) -> Iterator[bytes]:
+    """Split at characters cp1252 cannot hold (intact Hangul next to a broken name); yield each part's bytes."""
     out = bytearray()
     for ch in run:
         try:
@@ -23,26 +24,27 @@ def _cp1252_bytes(run: str) -> bytes | None:
         except UnicodeEncodeError:
             if 0x80 <= ord(ch) <= 0x9F:  # cp1252 holes (0x81 0x8d 0x8f 0x90 0x9d) survive as C1 controls
                 out.append(ord(ch))
-            else:
-                return None
-    return bytes(out)
+                continue
+            if out:
+                yield bytes(out)
+            out = bytearray()
+    if out:
+        yield bytes(out)
 
 
 def looks_double_encoded(text: str) -> bool:
     """True when a non-ASCII run re-reads as UTF-8 non-ASCII text after a cp1252 round trip."""
     for run in _RUN.findall(text):
-        raw = _cp1252_bytes(run)
-        if raw is None:
-            continue
-        try:
-            fixed = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            if len(_LEAD_TAIL.findall(raw)) >= 2:  # shortcut: two broken pairs, a lone one may be real Latin
+        for raw in _cp1252_runs(run):
+            try:
+                fixed = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                if len(_LEAD_TAIL.findall(raw)) >= 2:  # shortcut: two broken pairs, a lone one may be real Latin
+                    return True
+                continue
+            # a lone 2-byte result is real Latin punctuation too often (a times sign + middle dot)
+            if len(fixed) >= 2 or ord(fixed) >= 0x800:
                 return True
-            continue
-        # a lone 2-byte result is real Latin punctuation too often (a times sign + middle dot)
-        if fixed != run and (len(fixed) >= 2 or ord(fixed) >= 0x800):
-            return True
     return False
 
 

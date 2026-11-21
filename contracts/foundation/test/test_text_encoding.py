@@ -12,6 +12,10 @@ def test_detects_double_encoded_korean():
     assert looks_double_encoded(_mangle("상단").replace("", ""))
 
 
+def test_broken_name_next_to_intact_hangul_is_found():
+    assert looks_double_encoded(_mangle("상단") + "역")
+
+
 def test_valid_text_passes():
     for word in ("상단", "Café", "München 2", "dock-1", "", "A→B", "naïve", "日本語", "1.2×·1.4"):
         assert not looks_double_encoded(word)
