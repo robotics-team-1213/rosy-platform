@@ -2,14 +2,14 @@
 """VLM + Policy orchestrator for A/B cell arms (`arm_a`, `arm_b`) over `cell_job_api` (:8781).
 
 Flow:
-1. Measure first: check `/queue` on `cell_job_api`. If `arm_a` or `arm_b` holds the A/B space, return `idle` without
-   calling the VLM.
+1. Measure first: check `/queue`, `incident_status` holds, and optional `auto_pick_dry_run` object counts before calling
+   the VLM. Held arms are removed from the allowed arm set; if no arm is available, return `idle` without a VLM call.
 2. Observe: fetch available camera frames (`top`, `side`, `arm_a_wrist`, `arm_b_wrist`) as base64 JPEGs; fail closed
    (`idle`) if no non-empty camera frame is available.
 3. Plan (VLM): ask a vision-capable `judge_seat` backend (`ollama` or `openai_chat(vision=True)`, never text-only CLI)
-   to propose `{action, arm, site, reason}`.
-4. Gate & Execute: enforce `proposer != operator` (D-1024), `person_at_switch=True` (D-911), and explicit per-proposal
-   approval before submitting `auto_pick` (IK), `cell_policy_drive` (3-cam ACT/hybrid/taught), or `home` to `cell_job_api`.
+   to propose `{action, arm, site, reason}` grounded on measured facts. Measurement vetoes conflicting proposals.
+4. Gate, Execute & Verify: validate `proposer != operator` (D-1024) and `person_at_switch=True` (D-911) BEFORE
+   requesting per-proposal approval, then submit and attach read-only `verification` (`job_summary` + `post_incident`).
 """
 from __future__ import annotations
 
@@ -99,6 +99,91 @@ def select_vision_backend(spec_or_fn):
     return backend
 
 
+def _parse_last_json(text: str) -> dict | None:
+    stripped = (text or "").strip()
+    if not stripped:
+        return None
+    for line in reversed(stripped.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                parsed = json.loads(line)
+                if isinstance(parsed, dict):
+                    return parsed
+            except ValueError:
+                pass
+    try:
+        parsed = json.loads(stripped)
+        return parsed if isinstance(parsed, dict) else None
+    except ValueError:
+        return None
+
+
+def _query_incident(client: CellJobClient, arm: str, *, poll_s: float = 0.2, timeout_s: float = 30.0) -> dict:
+    try:
+        started = client.start("incident_status", {"arm": arm})
+        res = client.wait(started["id"], poll_s=poll_s, timeout_s=timeout_s)
+    except (CellJobError, TimeoutError, OSError) as exc:
+        return {"arm": arm, "held": True, "exit": None, "reason": f"incident_status failed: {exc}", "raw": None}
+    parsed = _parse_last_json(res.get("log", ""))
+    if res.get("exit") != 0 or parsed is None:
+        return {"arm": arm, "held": True, "exit": res.get("exit"), "reason": "unreadable incident_status", "raw": parsed}
+    local_held = parsed.get("local_held") is True
+    fleet_held = parsed.get("fleet_held")
+    unsent = parsed.get("unsent_outbox") or 0
+    held = bool(local_held or fleet_held is True or (fleet_held is None and unsent > 0))
+    reason = parsed.get("local_reason") or parsed.get("fleet_reason") or ("unsent outbox" if held else "")
+    return {"arm": arm, "held": held, "exit": res.get("exit"), "reason": reason, "raw": parsed}
+
+
+def collect_measured_facts(
+    client: CellJobClient,
+    arm_configs: dict[str, dict] | None = None,
+    *,
+    arms: tuple[str, ...] = tuple(sorted(AB_ARMS)),
+    run_dry_pick: bool = True,
+    poll_s: float = 0.2,
+) -> dict:
+    """Measure arm hold status and optional serial `auto_pick_dry_run` observations before VLM planning."""
+    incidents = {arm: _query_incident(client, arm, poll_s=poll_s) for arm in arms}
+    available = [arm for arm in arms if not incidents[arm]["held"]]
+    dry_pick = {}
+    if run_dry_pick and arm_configs:
+        for arm in available:
+            cfg = arm_configs.get(arm) or {}
+            if not all(k in cfg for k in ("config", "catalog", "roi")):
+                continue
+            source, dest = cfg.get("source", "belt"), cfg.get("dest", "pallet")
+            try:
+                started = client.start(
+                    "auto_pick_dry_run",
+                    {
+                        "config": cfg["config"],
+                        "catalog": cfg["catalog"],
+                        "roi": cfg["roi"],
+                        "source": source,
+                        "dest": dest,
+                        "purpose": f"facts:{arm}",
+                    },
+                )
+                res = client.wait(started["id"], poll_s=poll_s, timeout_s=60.0)
+                parsed = _parse_last_json(res.get("log", "")) or {}
+                attempts = parsed.get("attempts") if isinstance(parsed.get("attempts"), list) else []
+                first = attempts[0] if attempts and isinstance(attempts[0], dict) else {}
+                dry_pick[arm] = {
+                    "exit": res.get("exit"),
+                    "source": source,
+                    "dest": dest,
+                    "result": parsed.get("result"),
+                    "observed": first.get("observed"),
+                    "chosen": first.get("chosen"),
+                    "refused_count": len(first.get("refused") or ()),
+                }
+            except (CellJobError, TimeoutError, OSError) as exc:
+                dry_pick[arm] = {"source": source, "dest": dest, "error": str(exc)}
+    return {"incidents": incidents, "dry_pick": dry_pick, "available_arms": available}
+
+
 def _collect_frames(client: CellJobClient, views: tuple[str, ...]) -> tuple[list[str], list[str]]:
     images_b64, captured = [], []
     for view in views:
@@ -121,8 +206,11 @@ def propose_next(
     *,
     views: tuple[str, ...] = AB_VIEWS,
     context: str = "",
+    arm_configs: dict[str, dict] | None = None,
+    collect_facts: bool = False,
+    poll_s: float = 0.2,
 ) -> dict:
-    """Inspect queue + camera frames and return a validated high-level proposal."""
+    """Inspect queue, measured facts, and camera frames, returning a validated high-level proposal."""
     q = client.queue()
     for active in q.get("active", []):
         if active.get("moving") and active.get("arm") in AB_ARMS:
@@ -133,35 +221,58 @@ def propose_next(
                 "reason": f"queue busy: {active.get('job')} on {active['arm']} (id={active.get('id')})",
                 "views": [],
             }
-    images_b64, captured = _collect_frames(client, views)
-    if not images_b64:
+    facts = collect_measured_facts(client, arm_configs, poll_s=poll_s) if collect_facts else None
+    allowed_arms = tuple(facts["available_arms"]) if facts is not None else tuple(sorted(AB_ARMS))
+    if not allowed_arms:
         return {
             "action": "idle",
             "arm": "arm_a",
             "site": "",
+            "reason": "all A/B arms held or unavailable",
+            "views": [],
+            **({"facts": facts} if facts is not None else {}),
+        }
+    images_b64, captured = _collect_frames(client, views)
+    if not images_b64:
+        return {
+            "action": "idle",
+            "arm": allowed_arms[0],
+            "site": "",
             "reason": "no camera frames available",
             "views": [],
+            **({"facts": facts} if facts is not None else {}),
         }
+    schema = {
+        **PROPOSAL_SCHEMA,
+        "properties": {**PROPOSAL_SCHEMA["properties"], "arm": {"type": "string", "enum": list(allowed_arms)}},
+    }
     prompt = (
         "You supervise the A/B OMX dual-arm cell (arm_a and arm_b share one workspace; only one may move at a time).\n"
         f"Attached camera views in order: {captured}.\n"
         f"Active queue: {json.dumps(q.get('active', []))}.\n"
+        + (f"Measured cell facts (authoritative; never claim empty if observed > 0): {json.dumps(facts)}\n" if facts else "")
         + (f"Operator context: {context}\n" if context else "")
-        + "Choose the next safe step: 'idle' if nothing is ready or uncertain, 'auto_pick' for IK pick/place, "
-        "'cell_policy_drive' for 3-camera learned policy execution, or 'home' to safely fold an arm home. "
-        "For 'site': set the source site (e.g. 'belt') for 'auto_pick', the destination goal_site "
-        "(e.g. 'yard:r3-s2-t1', or '' to use the arm config default) for 'cell_policy_drive', and '' otherwise."
+        + f"Available arms: {list(allowed_arms)}. Choose the next safe step: 'idle' if nothing is ready or uncertain, "
+        "'auto_pick' for IK pick/place, 'cell_policy_drive' for 3-camera learned policy execution, or 'home' to safely "
+        "fold an arm home. For 'site': set the source site (e.g. 'beltend') for 'auto_pick', the destination "
+        "goal_site (e.g. 'yard:r3-s2-t1', or '' to use the arm config default) for 'cell_policy_drive', and '' otherwise."
     )
-    reply = backend(prompt, images_b64, PROPOSAL_SCHEMA)
-    if not isinstance(reply, dict) or reply.get("action") not in ACTIONS or reply.get("arm") not in AB_ARMS:
+    reply = backend(prompt, images_b64, schema)
+    if not isinstance(reply, dict) or reply.get("action") not in ACTIONS or reply.get("arm") not in allowed_arms:
         raise ValueError(f"invalid VLM proposal: {reply!r}")
-    return {
+    proposal = {
         "action": reply["action"],
         "arm": reply["arm"],
         "site": reply.get("site") or "",
         "reason": str(reply.get("reason") or ""),
         "views": captured,
     }
+    if facts is not None:
+        proposal["facts"] = facts
+        arm_dry = facts["dry_pick"].get(proposal["arm"]) or {}
+        if proposal["action"] == "auto_pick" and arm_dry.get("observed") == 0:
+            proposal.update(action="idle", site="", reason=f"vetoed auto_pick: measured 0 objects on {proposal['arm']}")
+    return proposal
 
 
 def build_job_params(
@@ -260,10 +371,12 @@ def run_once(
     approve: Callable[[dict], bool] | None = None,
     wait: bool = True,
     context: str = "",
+    collect_facts: bool = True,
+    poll_s: float = 0.2,
 ) -> dict:
-    """Run one observe -> VLM propose -> (optional) per-proposal approve & execute cycle."""
+    """Run one observe -> VLM propose -> (optional) validate, per-proposal approve & execute cycle."""
     backend = select_vision_backend(backend_spec)
-    proposal = propose_next(client, backend, context=context)
+    proposal = propose_next(client, backend, context=context, arm_configs=arm_configs, collect_facts=collect_facts, poll_s=poll_s)
     if proposal["action"] == "idle":
         return {"status": "idle", "proposal": proposal}
     if not execute:
@@ -272,15 +385,13 @@ def run_once(
     effective_dry_run = bool(
         dry_run or (proposal["action"] == "cell_policy_drive" and arm_cfg.get("dry_run") is True)
     )
+    if effective_dry_run and proposal["action"] == "home":
+        return {"status": "dry_run_skipped", "proposal": proposal, "reason": "home has no dry-run job"}
     if not effective_dry_run:
         if not person_at_switch:
             raise ValueError("executing a moving job requires person_at_switch=True (D-911)")
         if not callable(approve):
             raise ValueError("live execution requires an explicit per-proposal approve callback (D-1024)")
-    if callable(approve) and not approve(proposal):
-        return {"status": "rejected", "proposal": proposal}
-    if effective_dry_run and proposal["action"] == "home":
-        return {"status": "dry_run_skipped", "proposal": proposal, "reason": "home has no dry-run job"}
     built = build_job_params(
         proposal,
         arm_configs,
@@ -290,12 +401,23 @@ def run_once(
         dry_run=effective_dry_run,
     )
     assert built is not None
+    if callable(approve) and not approve(proposal):
+        return {"status": "rejected", "proposal": proposal}
     job_name, params = built
     started = client.start(job_name, params)
     out = {"status": "submitted", "job": job_name, "id": started["id"], "proposal": proposal}
     if wait:
-        out["result"] = client.wait(started["id"])
+        out["result"] = client.wait(started["id"], poll_s=poll_s)
         out["status"] = "completed" if out["result"].get("exit") == 0 else "failed"
+        summary = _parse_last_json(out["result"].get("log", ""))
+        verification: dict = {
+            "job_summary": {k: summary[k] for k in ("result", "attempt_id", "source", "took_one") if k in summary}
+            if summary
+            else None
+        }
+        if collect_facts and not effective_dry_run:
+            verification["post_incident"] = _query_incident(client, proposal["arm"], poll_s=poll_s)
+        out["verification"] = verification
     return out
 
 
