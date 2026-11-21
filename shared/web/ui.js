@@ -405,3 +405,15 @@ new MutationObserver(placeTooltip).observe(document.documentElement, { subtree: 
 for (const button of document.querySelectorAll("[data-action-icon]")) {
   if (!button.querySelector(":scope > .ui-icon")) actionIcon(button, button.getAttribute("data-action-icon"));
 }
+
+// Click-to-open hint for a button that cannot use a hover tooltip (touch, keyboard).
+export function toggletip(button, text) {
+  const wrap = document.createElement("span"), note = document.createElement("span");
+  wrap.className = "ui-toggletip"; note.className = "ui-toggletip-note"; note.setAttribute("role", "status");
+  button.removeAttribute("data-ui-tooltip"); button.replaceWith(wrap); wrap.append(button, note);
+  const close = () => { note.textContent = ""; };
+  button.addEventListener("click", () => { note.textContent = note.textContent ? "" : text; });
+  document.addEventListener("click", event => { if (!wrap.contains(event.target)) close(); });
+  document.addEventListener("keydown", event => { if (event.key === "Escape") close(); });
+  return wrap;
+}
