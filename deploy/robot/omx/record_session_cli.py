@@ -29,6 +29,7 @@ from record_session_helpers import (  # noqa: E402
     RunnerUnresponsive, compose, interrupt_on_parent_death,
     load_task_card, static_episodes, wait_for_runner)
 from session_caps import load_caps, model_tuning, robot_tuning  # noqa: E402
+from teleop_speed import ENV as STAGE_ENV, STAGES, apply_to_caps  # noqa: E402
 
 
 _PARENT_GLOBALS_LIST: list[dict] = []
@@ -91,6 +92,7 @@ def main(argv=None, *, _globals: dict | None = None):
     parser.add_argument(
         "--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory"
     )
+    parser.add_argument("--teleop-stage", type=int, choices=sorted(STAGES), help="full-arm Leader session only: teleop_speed stage (tracking limit, servo profile)")
     parser.add_argument("--operating-profile", type=Path, help="--chunks/--replay: per-device operating profile")
     parser.add_argument(
         "--arm", help="lock only this arm (its observer's instance name), so the other arm can work too"
@@ -102,11 +104,20 @@ def main(argv=None, *, _globals: dict | None = None):
         args.operating_profile = args.operating_profile.expanduser().resolve()
     if args.body_only and not args.teleop_only:
         parser.error("--body-only requires --teleop-only")
+    if args.teleop_stage and (args.chunks or args.replay or args.body_only):
+        parser.error("--teleop-stage is for the one-arm full-arm Leader teleop and recording only")
     lc_fn = attr("load_caps", load_caps)
     mt_fn = attr("model_tuning", model_tuning)
     rt_fn = attr("robot_tuning", robot_tuning)
     caps = lc_fn(args.caps, model=mt_fn(), robot=rt_fn(args.operating_profile))
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
+    if args.teleop_stage:  # only a one-arm session that follows a Leader with the whole arm; every other kind keeps its caps untouched
+        if config["robot"]["type"] == "bi_omx_follower":
+            parser.error("--teleop-stage is for the one-arm full-arm Leader teleop and recording only")
+        caps = apply_to_caps(caps, args.teleop_stage)
+        os.environ[STAGE_ENV] = str(args.teleop_stage)  # the guard process (the session's child) reads it
+    else:
+        os.environ.pop(STAGE_ENV, None)
     if args.task_card is not None:
         card = attr("load_task_card", load_task_card)(args.task_card)
         config = attr("compose", compose)(config, card, stamp=time.strftime("%Y%m%d-%H%M%S"))

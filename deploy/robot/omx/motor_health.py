@@ -119,10 +119,14 @@ class MotorHealth:
         self.motions[self.key(motion)] = dict(limits=limits, last=None, report=None, warnings=())
         self.publish()  # An admitted joint without a sample is explicitly incomplete evidence.
 
+    def resume(self, motion):
+        """The guard restarted after a pause it was told about (lerobot saving an episode): skip the next sample-age check."""
+        self.motions[self.key(motion)]["resumed"] = True
+
     def sample(self, motion, current, pwm, now):
         state = self.motions[self.key(motion)]
         self.number(now, "sample time")
-        if state["last"] is not None and not 0 <= now - state["last"]["sample_time"] <= 0.5:
+        if state["last"] is not None and not state.pop("resumed", False) and not 0 <= now - state["last"]["sample_time"] <= 0.5:
             raise ValueError("stale motor health sample (>0.5 seconds)")
         bus, motors, violations = motion.follower, [], []
         port = getattr(bus, "port", None)

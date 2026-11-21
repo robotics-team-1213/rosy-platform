@@ -8,6 +8,35 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PAGE = (HERE / "bench_record.html").read_text(encoding="utf-8")
+VIEWER = "http://127.0.0.1:8767"
+
+
+def active_preview(bench):
+    with bench.lock:
+        return bench.live_preview if bench.state["status"] == "recording" else None
+
+
+def camera_state(bench):
+    try:
+        with urllib.request.urlopen(f"{VIEWER}/state.json", timeout=1.5) as stream:
+            raw = json.load(stream)
+        cameras = {k: v for k, v in raw.items() if isinstance(v, dict) and "quality" in v}
+    except Exception:
+        cameras = {}
+    preview = active_preview(bench)
+    if preview is not None:
+        cameras.update(preview.fresh_cameras())
+    return cameras
+
+
+def camera_frame(bench, label):
+    preview = active_preview(bench)
+    if preview is not None:
+        jpg = preview.frame(label)
+        if jpg and active_preview(bench) is preview:
+            return jpg
+    with urllib.request.urlopen(f"{VIEWER}/frame/{label}.jpg", timeout=1.5) as stream:
+        return stream.read()
 
 
 def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_control=False):
@@ -31,18 +60,13 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                 return self.reply(403, {"error": "local bench or allowed mDNS host only"})
             path = self.path.split("?", 1)[0]
             if path == "/cameras.json":
-                try:
-                    raw = json.loads(urllib.request.urlopen("http://127.0.0.1:8767/state.json", timeout=1.5).read())
-                    cams = {k: v for k, v in raw.items() if isinstance(v, dict) and "quality" in v}
-                    return self.reply(200, cams)
-                except Exception:
-                    return self.reply(200, {})
+                return self.reply(200, camera_state(bench))
             if path.startswith("/camera/") and path.endswith(".jpg"):
                 label = path[8:-4]
                 if not re.fullmatch(r"[a-zA-Z0-9_-]+", label):
                     return self.reply(400, {"error": "invalid camera label"})
                 try:
-                    jpg = urllib.request.urlopen(f"http://127.0.0.1:8767/frame/{label}.jpg", timeout=1.5).read()
+                    jpg = camera_frame(bench, label)
                     return self.reply(200, jpg, "image/jpeg")
                 except Exception:
                     return self.reply(503, {"error": "camera frame unavailable"})
@@ -60,7 +84,9 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
             routes = {"/": lambda: (PAGE.encode(), "text/html; charset=utf-8"),
                       "/bench_record.css": lambda: ((HERE / "bench_record.css").read_bytes(), "text/css; charset=utf-8"),
                       "/bench_record_ui.js": lambda: ((HERE / "bench_record_ui.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_status.js": lambda: ((HERE / "bench_record_status.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_app.js": lambda: ((HERE / "bench_record_app.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_drawers.js": lambda: ((HERE / "bench_record_drawers.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_cam.js": lambda: ((HERE / "bench_record_cam.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_pipeline.js": lambda: ((HERE / "bench_record_pipeline.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/choices.json": lambda: (bench.choices(), "application/json"),
@@ -95,6 +121,8 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.save_initial_pose(body))
                 if self.path == "/save_leader_pose":
                     return self.reply(200, bench.save_leader_pose(body))
+                if self.path == "/api/cameras/restart":
+                    return self.reply(200, bench.restart_cameras(body))
                 if self.path == "/api/camera_baseline":
                     return self.reply(200, bench.save_camera_baseline(body))
                 if self.path == "/api/pipeline/generate_replay":
@@ -109,7 +137,7 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.hf_upload_config(body))
                 if self.path == "/api/dataset/delete":
                     return self.reply(200, bench.dataset_delete(body))
-                m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose)", self.path)
+                m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose|release_lease)", self.path)
                 if m_arm:
                     arm_id, act = m_arm.group(1), m_arm.group(2)
                     if act == "start":
@@ -122,6 +150,8 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                         return self.reply(200, bench.save_initial_pose(dict(body, arm=arm_id)))
                     if act == "leader_pose":
                         return self.reply(200, bench.save_leader_pose(dict(body, arm=arm_id)))
+                    if act == "release_lease":
+                        return self.reply(200, bench.release_lease(dict(body, arm=arm_id)))
                 self.reply(404, {"error": "not found"})
             except (ValueError, OSError) as exc:
                 self.reply(400, {"error": str(exc)})

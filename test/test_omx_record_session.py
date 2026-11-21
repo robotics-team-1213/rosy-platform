@@ -1136,3 +1136,37 @@ def test_a_held_lease_refuses_other_owners_after_the_session_has_ended(tmp_path)
     finally:
         runner.kill()
         runner.wait()
+
+
+def test_a_teleop_stage_profile_is_written_to_every_follower_motor_and_restored_to_the_value_found(tmp_path):
+    import teleop_speed
+    found = {"profile_acc": 0, "profile_vel": 0}
+    arm, leader = follower({motor: dict(found) for motor in m.FOLLOWER}), leader_arm()
+    path = tmp_path / "caps.json"
+    path.write_text(json.dumps({str(k): v for k, v in CAPS_FILE.items()}))
+    caps = teleop_speed.apply_to_caps(m.load_caps(path), 60)
+    s, calls = session(arm, leader)
+    record = s.execute(config(tmp_path), caps, teleop_only=False)
+    assert record["caps_restored"] is True and record["safe_end"] is True
+    assert all((motor, "profile_vel", 49) in arm.writes and (motor, "profile_acc", 21) in arm.writes for motor in m.FOLLOWER)
+    assert all(arm.motors[motor]["profile_acc"] == 0 and arm.motors[motor]["profile_vel"] == 0 for motor in m.FOLLOWER)  # back to what it found
+
+
+@pytest.mark.parametrize('extra', [['--body-only', '--teleop-only'], ['--chunks', 'lib.json'], ['--replay', 'r.json'], ['--teleop-stage', '50']])
+def test_the_teleop_stage_is_refused_for_every_other_session_kind_before_any_file_is_read(extra):
+    argv = ['--config', 'missing.json', '--caps', 'missing.json', '--teleop-stage', '60', *extra]
+    with pytest.raises(SystemExit) as stop:
+        m.main(argv if '50' not in extra else ['--config', 'x', '--caps', 'y', *extra])
+    assert stop.value.code == 2
+
+
+def test_a_raised_servo_profile_left_by_a_killed_session_is_not_the_baseline(tmp_path):
+    for resting in ({}, {"profile_acc": 0, "profile_vel": 0}, {"profile_acc": 1, "profile_vel": 1}):
+        arm, leader = follower({12: dict(resting)} if resting else None), leader_arm()
+        s, _ = session(arm, leader)
+        s.execute(config(tmp_path), CAPS, teleop_only=False)  # unread or resting (0/1): fine
+    arm, leader = follower({12: {"profile_acc": 21, "profile_vel": 49}}), leader_arm()
+    s, calls = session(arm, leader)
+    with pytest.raises(SystemExit, match="not the baseline"):
+        s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert arm.writes == [] and not [c for c in calls if c[0] == "stop"]  # refused before any write or unit stop
