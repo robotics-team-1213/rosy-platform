@@ -96,3 +96,45 @@ def test_ci_wires_the_notice_and_the_queue_switch():
     assert scope["env"]["QUEUE_DELTA"] == "${{ vars.ROSY_QUEUE_DELTA }}"
     call = scope["run"].split("tools/harness/affected_queue.py")[0].rsplit("if [", 1)[1]
     assert "= merge_group ]" in call and '"$QUEUE_DELTA" = 1' in call and f"{affected_queue.ENV}=" in call
+
+
+def test_queue_passed_needs_a_green_merge_group_run_of_ci_on_that_commit():
+    sha, parent = "a" * 40, "f" * 40
+    url = "https://api.example/repos/o/r/actions/runs?head_sha={}&event=merge_group&per_page=50"
+    ci, ref = ".github/workflows/ci.yml", f"gh-readonly-queue/main/pr-7-{parent}"
+    pages = {
+        url.format(sha): {"workflow_runs": [
+            {"head_sha": sha, "conclusion": "success", "path": ".github/workflows/review-gate.yml", "head_branch": ref},
+            {"head_sha": sha, "conclusion": "success", "path": ci, "head_branch": ref}]},
+        url.format("b" * 40): {"workflow_runs": [
+            {"head_sha": "b" * 40, "conclusion": "failure", "path": ci, "head_branch": ref},
+            {"head_sha": "c" * 40, "conclusion": "success", "path": ci, "head_branch": ref}]},
+        url.format("d" * 40): {"workflow_runs": []},
+        # green on this commit, but the queue built and selected it against another base
+        url.format("e" * 40): {"workflow_runs": [
+            {"head_sha": "e" * 40, "conclusion": "success", "path": ci, "head_branch": "gh-readonly-queue/main/pr-7-" + "9" * 40}]},
+    }
+    passed = lambda commit: affected_queue.queue_passed("https://api.example", "o/r", commit, parent, "t", pages.__getitem__)  # noqa: E731
+    assert passed(sha)
+    assert not passed("b" * 40) and not passed("d" * 40) and not passed("e" * 40)
+
+
+def test_a_push_narrows_only_when_it_is_the_one_entry_the_queue_run_tested():
+    import pytest
+    affected_queue.pushed("p" * 40, "p" * 40, lambda: True)  # one entry, its queue run passed: no error
+    for parent, before, passed in (("p" * 40, "q" * 40, True),   # several entries merged in one push
+                                   ("p" * 40, "", True),          # unknown previous tip
+                                   ("p" * 40, "p" * 40, False)):  # a direct push, or the queue run did not pass
+        with pytest.raises(affected.SelectionError):
+            affected_queue.pushed(parent, before, lambda: passed)
+
+
+def test_ci_wires_the_push_switch():
+    import yaml
+    jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
+    scope = next(s for s in jobs["scope"]["steps"] if s["name"] == "Test scope (D-436)")
+    assert scope["env"]["PUSH_SAME"] == "${{ vars.ROSY_PUSH_SAME }}"
+    push = scope["run"].split("push)", 1)[1].split(";;", 1)[0]
+    call = push.split("tools/harness/affected_queue.py --pushed")[0].rsplit("if [", 1)[1]
+    assert '"$PUSH_SAME" = 1' in call and f"{affected_queue.ENV}=" in call
+    assert push.index("escalating to --full") < push.index("--pushed"), "an unknown push base stays the full tier"

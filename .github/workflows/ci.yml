@@ -93,6 +93,7 @@ jobs:
         shell: bash
         env:
           QUEUE_DELTA: ${{ vars.ROSY_QUEUE_DELTA }}  # D-1059 switch: unset keeps the whole queue selection
+          PUSH_SAME: ${{ vars.ROSY_PUSH_SAME }}  # D-1064 switch: unset keeps the whole push selection
           GH_TOKEN: ${{ github.token }}
           SCOPE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event_name == 'push' && github.event.before || '' }}
         run: |
@@ -114,6 +115,10 @@ jobs:
                 echo "::warning::missing or unreachable push base ($SCOPE_BASE); escalating to --full"
                 out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
               else
+                if [ "$PUSH_SAME" = 1 ]; then
+                  # D-1064: the guard set alone when the merge queue run passed this very commit for this very range.
+                  ROSY_QUEUE_TESTED="$(python3 tools/harness/affected_queue.py --pushed "$SCOPE_BASE")" && export ROSY_QUEUE_TESTED
+                fi
                 out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
               fi
               ;;
