@@ -971,6 +971,20 @@ def test_adopt_reattaches_a_pruned_branch_and_checks_like_new(main, monkeypatch,
     assert git(main, "config", "branch.feat/open.description").startswith("owner: t <t@t>; session sess-9; at ")
 
 
+def test_clean_worktree_on_a_branch_adopt_refuses_waits_the_full_idle_hours(main):
+    """A branch outside <type>/<topic> cannot be re-attached by adopt, so removing its worktree is not lossless."""
+    now = time.time()
+    wt = main / ".worktrees" / "odd"
+    git(main, "worktree", "add", "-q", str(wt), "-b", "cell/odd", "main")
+    (wt / "odd.txt").write_text("odd", encoding="utf-8")
+    git(wt, "add", "odd.txt")
+    git(wt, "commit", "-q", "-m", "odd")
+    assert worktrees.prune(main, apply=True, now=now + 7 * HOUR) == 0 and wt.is_dir()
+    assert worktrees.main(["adopt", "odd2", "cell/odd"]) == 1
+    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=now + 73 * HOUR) == 1
+    assert not wt.exists() and "refs/heads/cell/odd" in refs(main, "refs/heads")
+
+
 def test_adopt_refuses_a_stale_history_branch(main, monkeypatch, capsys):
     wt = main / ".worktrees" / "old"
     _old_line(main, monkeypatch)

@@ -210,7 +210,10 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
     landed = bool(row["branch"] and row["merged"] and row["branch"] != "main" and _landed(row))
     row["fast"] = landed
     # D-1070: a clean worktree on a branch loses nothing; status below puts a dirty one back on idle_hours.
-    row["wait_h"] = 0.0 if landed else min(idle_hours, rules.CLEAN_IDLE_HOURS) if row["branch"] else idle_hours
+    # Only a branch `adopt` takes back: other names wait idle_hours (stale-history is never removed).
+    kind, _, topic = row["branch"].partition("/")
+    adoptable = kind in TYPES and rules.topic_ok(topic)
+    row["wait_h"] = 0.0 if landed else min(idle_hours, rules.CLEAN_IDLE_HOURS) if adoptable else idle_hours
     stale = None if row["merged"] or not row["sha"] else rules.stale_history(row["path"], row["sha"])
     if stale:
         row["note"] = stale
@@ -223,7 +226,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
              else "active" if noted
              else "active" if row["wait_h"] and now - row["last"] < row["wait_h"] * 3600
              else "in-progress operation" if any((row["git_dir"] / name).exists() for name in BUSY)
-             else "needs snapshot" if lossless and not row["merged"] and not row["branch"] else None)
+             else "needs snapshot" if lossless and not row["merged"] and not adoptable else None)
     if cheap is None or full:
         index_t = _mtime(row["git_dir"] / "index")  # before status, which may refresh the index
         status = _status(row["path"])
@@ -241,7 +244,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
     row["verdict"] = ("landed-dirty" if row["landed_dirty"] and cheap in (None, "active")
                       else cheap or ("active" if row["idle_h"] < row["wait_h"]
                                      else "holds ignored data" if row["ignored"]
-                                     else "needs snapshot" if row["changed"] or not (row["merged"] or row["branch"])
+                                     else "needs snapshot" if row["changed"] or not (row["merged"] or adoptable)
                                      else "removable"))
 
 

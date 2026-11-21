@@ -12,7 +12,7 @@
 
 ### Decision
 
-1. 깨끗하고(추적 파일 변경·스테이징·추적 안 된 파일 0, 캐시 밖 무시 파일 없음), 잠기지 않았고, 브랜치에 있는 워크트리는 `CLEAN_IDLE_HOURS`(6시간, `--idle-hours`가 더 작으면 그 값) 쉬면 `prune --apply`가 지운다. 병합 여부와 소유자는 보지 않는다. `main`에 없는 브랜치는 남기고 제거 줄에 `adopt` 명령을 적는다.
+1. 깨끗하고(추적 파일 변경·스테이징·추적 안 된 파일 0, 캐시 밖 무시 파일 없음), 잠기지 않았고, 브랜치에 있는 워크트리는 `CLEAN_IDLE_HOURS`(6시간, `--idle-hours`가 더 작으면 그 값) 쉬면 `prune --apply`가 지운다. 병합 여부와 소유자는 보지 않는다. `main`에 없는 브랜치는 남기고 제거 줄에 `adopt` 명령을 적는다. `adopt`가 붙일 수 없는 브랜치(`<type>/<topic>` 형식 밖, `stale-history`)는 잃는 것 없음 전제가 깨지므로 제외하고 기존 72시간(미병합은 `--snapshot`) 규칙을 따른다.
 2. `python tools/worktrees.py adopt <짧은 이름> <type>/<topic>`은 기존 로컬 브랜치를 `.worktrees/<짧은 이름>`에 붙인다. 이름 형식·한도·`--force-over-cap`·소유자 기록은 `new`와 같다. `stale-history` 브랜치는 거절한다.
 3. 쉰 시간의 정의, 미커밋 워크트리의 72시간, 잠금, 72시간 안의 소유자 기록, 분리 HEAD, `stale-history`, `--snapshot` 규칙은 바꾸지 않는다.
 4. 운영 정본은 `docs/reference/shared-checkout.md` 「워크트리 한도와 슬롯 운영」이다.
