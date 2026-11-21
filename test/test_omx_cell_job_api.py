@@ -374,6 +374,25 @@ def test_runner_whole_cell_ab_cross_lock_and_warm_reuse(tmp_path, monkeypatch):
     refused_owner = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
     assert refused_owner["code"] == 409
 
+    # 5. Stale live.json timestamp or dead pid refuses warm reuse
+    import time
+
+    (lease_dir / "arm_b.json").write_text(json.dumps({"owner": runner._lease_owner, "pid": 12345}), encoding="utf-8")
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False, "t": time.time() - 60.0}),
+        encoding="utf-8",
+    )
+    refused_stale = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert refused_stale["code"] == 409
+
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False, "t": time.time()}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "_pid_alive", lambda _pid: False)
+    refused_dead = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert refused_dead["code"] == 409
+
 
 def test_runner_daemon_reaper_writes_audit_without_get_poll(tmp_path, monkeypatch):
     import subprocess

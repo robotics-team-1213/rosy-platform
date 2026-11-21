@@ -111,14 +111,14 @@ def _install_fake_popen(monkeypatch, *, incidents=None, dry_pick=None, live_outp
             cfg = argv[argv.index("--config") + 1]
             code, payload = dry_pick[cfg]
             if fh is not None:
-                fh.write((json.dumps(payload) + "\n").encode("utf-8"))
+                fh.write(("choice log line\n" + json.dumps(payload, indent=1) + "\n").encode("utf-8"))
                 fh.flush()
             p._code = code
         else:
             p._code = None
             out_row = live_outputs.get(argv[4] if len(argv) > 4 else "")
             if out_row and fh is not None:
-                fh.write((json.dumps(out_row) + "\n").encode("utf-8"))
+                fh.write(("session up\n" + json.dumps(out_row, indent=1) + "\n").encode("utf-8"))
                 fh.flush()
             motion_procs.append(p)
         p.poll.side_effect = lambda: p._code
@@ -453,6 +453,38 @@ def test_orchestrator_cli_requires_interactive_confirmation_for_live_exec(tmp_pa
             "--person-at-switch",
         ])
         assert rc == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        viewer.shutdown()
+        viewer.server_close()
+
+
+def test_multiline_last_json_parser_and_unsent_outbox_hold(tmp_path, monkeypatch):
+    parsed = orch._parse_last_json(
+        'session up\n{"old": 1}\n' + json.dumps({"result": "placed", "attempts": [{"observed": 2}]}, indent=1)
+    )
+    assert parsed == {"result": "placed", "attempts": [{"observed": 2}]}
+
+    wd = _make_workdir(tmp_path)
+    _install_fake_popen(
+        monkeypatch,
+        incidents={
+            "arm_a": {"arm": "arm_a", "local_held": False, "fleet_held": False, "unsent_outbox": 1},
+            "arm_b": {"arm": "arm_b", "local_held": False, "fleet_held": False, "unsent_outbox": 0},
+        },
+    )
+    runner = api.Runner(wd, lock_dir=wd)
+    viewer = _start_fake_viewer()
+    token = "t" * 32
+    server = api.make_server("127.0.0.1", 0, token, runner, viewer=f"http://127.0.0.1:{viewer.server_port}")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        client = CellJobClient(f"http://127.0.0.1:{server.server_port}", token=token)
+        facts = orch.collect_measured_facts(client, _arm_configs(), run_dry_pick=False, poll_s=0.01)
+        assert facts["incidents"]["arm_a"]["held"] is True
+        assert facts["incidents"]["arm_b"]["held"] is False
+        assert facts["available_arms"] == ["arm_b"]
     finally:
         server.shutdown()
         server.server_close()

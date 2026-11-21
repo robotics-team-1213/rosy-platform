@@ -9,7 +9,7 @@ def resolve_goal_site(site: str) -> tuple[str, int]:
     if not isinstance(site, str):
         raise ValueError("expected a Cell site ID")
     here = Path(__file__).resolve()
-    candidates = (here.parents[3] / "tools" / "sim", here.parent / "tools" / "sim")
+    candidates = ((here.parents[3] / "tools" / "sim",) if len(here.parents) > 3 else ()) + (here.parent / "tools" / "sim",)
     sim_tools = str(next((p for p in candidates if p.is_dir()), candidates[0]))
     if sim_tools not in sys.path:
         sys.path.insert(0, sim_tools)

@@ -27,6 +27,8 @@ except ImportError:  # Windows unit tests
     fcntl = None
 
 JOB_TTL_S = 900.0
+LIVE_MAX_AGE_S = 15.0
+_REAL_POPEN = subprocess.Popen
 
 
 def _flock_held(lock_path: Path, mode: int) -> bool:
@@ -53,6 +55,20 @@ def _whole_cell_lock_held(lock_dir: Path | None = None) -> bool:
     if fcntl is None:
         return False
     return _flock_held((lock_dir or (Path.home() / "rosy-omx")) / "session.lock", fcntl.LOCK_SH)
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def _read_json_dict(path: Path) -> dict | None:
@@ -128,12 +144,20 @@ class Runner:
         lease = _read_json_dict(self.lease_dir / f"{arm}.json")
         if lease is None or lease.get("owner") != self._lease_owner or lease.get("hold"):
             return False
+        if "pid" in lease:
+            pid = lease["pid"]
+            if isinstance(pid, bool) or not isinstance(pid, int) or not _pid_alive(pid):
+                return False
         last_run = next((r for r in reversed(list(self.runs.values())) if r["moving"] and r["arm"] == arm), None)
         if last_run is None or last_run["proc"].poll() != 0:
             return False
         live = _read_json_dict(self.workdir / f"chunk-io-{arm.split('_')[-1]}" / "live.json")
         if live is None or live.get("chunk") is not None or live.get("human_hold_latched") or live.get("fault"):
             return False
+        if "t" in live:
+            ts = live["t"]
+            if isinstance(ts, bool) or not isinstance(ts, (int, float)) or (time.time() - float(ts)) > LIVE_MAX_AGE_S:
+                return False
         return True
 
     def start(self, name: str, params: dict) -> dict:
@@ -195,7 +219,7 @@ class Runner:
                 "audited": False,
             }
             self.runs[jid] = run
-            if isinstance(proc, subprocess.Popen):
+            if isinstance(proc, _REAL_POPEN):
                 def _reap(jid=jid, run=run):
                     code = run["proc"].wait()
                     with self.lock:
