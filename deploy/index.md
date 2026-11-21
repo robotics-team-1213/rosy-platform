@@ -82,8 +82,8 @@
 
 ## 최근 기록
 
-- 2026-11-20 · uncommitted · Pinky 점검 옵션을 인터페이스 이름으로 받지 않는다
-- 2026-11-20 · uncommitted · Pinky 시연 전 네이티브 주행 서비스 확인
 - 2026-11-21 · uncommitted · 자동 궤적 보정 저널에 pinned_drift_m 추가
 - 2026-11-21 · uncommitted · fix(site): 자동 트랙 보정이 고정 안 된 장소의 방향·이름·차로 설정을 지킴
+- 2026-11-20 · uncommitted · Pinky 점검 옵션을 인터페이스 이름으로 받지 않는다
+- 2026-11-20 · uncommitted · Pinky 시연 전 네이티브 주행 서비스 확인
 - 2026-11-20 · uncommitted · fix(omx): Gate open 보류를 시도 원장에 남긴다
