@@ -26,7 +26,13 @@ CI_BROWSER_ROOTS = ("operations/fleet/test", "applications/fleet/test")
 # Simulators and OMX adapter hardware suites: GitHub runners cannot run them (same tuple as pr_land.EXCLUDED_PREFIXES).
 LAB_PREFIXES = ("integrations/simulation/", "learning/envs/isaac/", "middleware/devices/omx/adapter/")
 # fails on GitHub runners only; back to lab until the cause is found, 2026-11-21
-LAB_FILES = ("test/test_measured_calibration_browser.py",)
+# renders differently on GitHub runners (fonts); back to lab until the CI fonts match, 2026-11-21
+LAB_FILES = (
+    "test/test_measured_calibration_browser.py",
+    "middleware/robot_ui/pilot/test/test_pilot_browser.py",
+    "test/learning/perception/test_pixel_workspace_browser.py",
+    "test/learning/perception/test_review_flow_browser.py",
+)
 FILES_PER_JOB, MAX_JOBS = 12, 6
 
 
