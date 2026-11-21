@@ -110,6 +110,20 @@ def test_evaluation_progress_tracks_opposing_contact_and_lift_per_cargo():
                                      last_position_m=[.1, 0., .03], last_goal_distance_m=.1, terminal="timeout")
 
 
+def test_first_pick_replay_requires_lift_carry_and_settle_in_order():
+    from stacking_task_helpers import record_replay_phases
+
+    phases = {}
+    record_replay_phases(phases, 0, lifted=False, at_target=False, seated=True)
+    assert not phases
+    record_replay_phases(phases, 1, lifted=True, at_target=False, seated=False)
+    record_replay_phases(phases, 2, lifted=False, at_target=False, seated=True)
+    assert phases == {"unsupported_lift": 1}
+    record_replay_phases(phases, 3, lifted=False, at_target=True, seated=False)
+    record_replay_phases(phases, 4, lifted=False, at_target=False, seated=True)
+    assert phases == {"unsupported_lift": 1, "held_at_target": 3, "settled_on_support": 4}
+
+
 def test_first_pick_replay_rejects_a_jump(tmp_path):
     import hashlib
     import yaml

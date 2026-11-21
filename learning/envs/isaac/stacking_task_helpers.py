@@ -22,6 +22,18 @@ def record_evaluation_step(rows, step):
     item["terminal"] = step["terminal"]
 
 
+def record_replay_phases(phases, index, *, lifted, at_target, seated):
+    """Record the first sample for each ordered, independently observed phase."""
+    if "unsupported_lift" not in phases:
+        if lifted:
+            phases["unsupported_lift"] = index
+    elif "held_at_target" not in phases:
+        if at_target:
+            phases["held_at_target"] = index
+    elif seated:
+        phases.setdefault("settled_on_support", index)
+
+
 def load_first_pick_replay(path, fixture, profile, item):
     """Check a bounded teacher trace before using it in the simulation scene."""
     import numpy as np
@@ -262,7 +274,12 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
 
     env = StackingEnv()
     if replay:
+        from mapped_stack_fixture_helpers import half_extent, unsupported_hold
+
         active, summaries = plan[0]["arm"], {}
+        item = plan[0]
+        destination = np.array(goal(item))
+        phases = {}
         current = env.targets[active]
         settle_steps = fixture["settle_steps"] // fixture["control_decimation"]
         for index, command in enumerate(samples):
@@ -274,19 +291,29 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
                 for _ in range(fixture["physics_substeps"]):
                     world.step(render=False, update_fabric=True)
             position, row, forces = env.measured(0)
-            env.lifted |= free_lift(row["body"], active, env.source_z)
+            body = row["body"]
+            lifted = free_lift(body, active, env.source_z)
+            env.lifted |= lifted
             row["lifted"] = env.lifted
             env.settle = env.settle + 1 if accepted(0, row) else 0
+            seated = env.settle >= settle_steps
+            at_target = unsupported_hold(body, active) and all(
+                abs(position[axis] - destination[axis]) <= half_extent(body, item["size"], axis)
+                for axis in (0, 1)
+            )
+            record_replay_phases(phases, index, lifted=lifted, at_target=at_target, seated=seated)
             record_evaluation_step(summaries, dict(
-                id=plan[0]["id"], arm=active, tcp_distance_m=float(np.linalg.norm(tcp_position(active)-position)),
+                id=item["id"], arm=active, tcp_distance_m=float(np.linalg.norm(tcp_position(active)-position)),
                 rise_m=float(position[2]-env.source_z), finger_forces_n=forces[2*active:2*active+2].tolist(),
-                lifted=env.lifted, seated=env.settle >= settle_steps, position_m=row["position"],
-                goal_distance_m=float(np.linalg.norm(position-np.array(goal(plan[0])))),
+                lifted=env.lifted, seated=seated, position_m=row["position"],
+                goal_distance_m=float(np.linalg.norm(position-destination)),
                 terminal="replay_finished" if index == len(samples)-1 else None))
         capture("first-pick-final.png")
+        settled = env.settle >= settle_steps
         return dict(schema="rosy.omx-first-pick-replay/1", seed=args.seed, fixture=fixture,
                     target_sha256=replay_sha, samples=len(samples), attachment_aid=False,
-                    settled_on_target=env.settle >= settle_steps, progress=summaries,
+                    settled_on_target=settled, observed_phases=phases,
+                    task_success=settled and "settled_on_support" in phases, progress=summaries,
                     image="first-pick-final.png")
 
     # Observe uncommanded cargo transport on the belt before any policy is applied.
