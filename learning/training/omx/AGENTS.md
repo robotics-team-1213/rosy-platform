@@ -53,3 +53,5 @@ Current research settings are in the README (ResNet18 ACT, chunk 4, VAE off, CPU
 - LeRobot 0.4.4 stack in the separate CPU environment. Not installed on the robot.
 
 ## Manual Notes
+
+- Two-PC ACT training for cell arms A/B (3 cameras, 10-slot goal, sim+real mix, data gate, checkpoint choice, known pitfalls): `.claude/skills/rosy-omx-act-training/SKILL.md`.
