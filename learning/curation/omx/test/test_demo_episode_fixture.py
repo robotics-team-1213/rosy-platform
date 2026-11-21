@@ -31,4 +31,4 @@ def test_generator_matches_the_omx_recorder_file_layout(tmp_path):
     manifest = complete_episode(tmp_path)
     path = tmp_path / manifest['episode_id']
     assert sorted(p.name for p in path.iterdir()) == ['events.jsonl', 'images', 'manifest.json', 'samples.jsonl']
-    assert [p.name for p in (path / 'images/front').iterdir()] == ['000000.png', '000001.png']
+    assert sorted(p.name for p in (path / 'images/front').iterdir()) == ['000000.png', '000001.png']
