@@ -1,4 +1,4 @@
-# D-1064: opt-in LAN browser alias for Account login. Append after compose.account.yaml.
+# D-1068: opt-in LAN browser alias for Account login. Append after compose.account.yaml.
 # The proxy gains one more host block on the existing ROSY_SITE_HTTPS_PORT listener and its
 # own site-CA leaf; no port is published, so site-firewall.py and LAN port443 stay unchanged.
 services:

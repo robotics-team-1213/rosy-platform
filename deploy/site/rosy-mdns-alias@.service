@@ -1,5 +1,5 @@
 [Unit]
-# D-1064: publish the instance name (for example rosy-mdns-alias@<alias>.local.service) as an
+# D-1068: publish the instance name (for example rosy-mdns-alias@<alias>.local.service) as an
 # extra mDNS address of this host's LAN interface: the first ROSY_SITE_LAN_IFACE entry.
 Description=Publish %i as an extra mDNS address of this site host
 Requires=avahi-daemon.service

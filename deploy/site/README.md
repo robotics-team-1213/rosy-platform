@@ -455,7 +455,7 @@ recreation and keeps Fleet on its existing backend network.
 
 The firewall reconciles both listeners together: the existing site port keeps
 its configured LAN interfaces, while443 admits only loopback and `tailscale0`.
-The opt-in Account LAN login alias (D-1064) is a host block on the site port, not a 443 change.
+The opt-in Account LAN login alias (D-1068) is a host block on the site port, not a 443 change.
 The wildcard is IPv4 only; no literal host address or public ingress is needed.
 Discovery continues advertising the primary site port. Before activation,
 install the matching reviewed verifier/updater, verify the signed assets,
@@ -548,9 +548,9 @@ and counters only; it never echoes exception messages.
    세션 무효화 검사는 격리된 시험 계정으로 수행하고, 팀원의 새 비밀번호를
    시험자가 임의로 정하지 않는다. 실제 계정 검사와 격리 검사를 따로 기록한다.
 
-### LAN browser login alias (D-1064)
+### LAN browser login alias (D-1068)
 
-Tailscale이 없는 같은 LAN PC에서 콘솔 로그인을 쓰려면 Account 로그인 화면만 LAN 별칭으로 연다([D-1064](../../docs/adr/D-1064-account-lan-browser-alias.md)). issuer는 tailnet 이름 하나로 그대로 두고, 토큰 `iss`·`aud` 검증도 바뀌지 않는다.
+Tailscale이 없는 같은 LAN PC에서 콘솔 로그인을 쓰려면 Account 로그인 화면만 LAN 별칭으로 연다([D-1068](../../docs/adr/D-1068-account-lan-browser-alias.md)). issuer는 tailnet 이름 하나로 그대로 두고, 토큰 `iss`·`aud` 검증도 바뀌지 않는다.
 
 - `compose.account-lan.yaml`(옵트인)은 proxy에 `Caddyfile.account-lan` 호스트 블록과 그 인증서 디렉터리만 더한다. 같은 `ROSY_SITE_HTTPS_PORT` 리스너를 쓰므로 새 포트가 없고 `site-firewall.py` 계획도 같다. LAN 443은 계속 막힌다.
 - 별칭 호스트는 로그인 화면(`/console/login`과 그 자산, `/common/*`), `connection`·`session`·`authorize` 읽기, 비밀번호 로그인과 첫 로그인 비밀번호 변경 POST만 Account로 넘긴다. 나머지는 404다. 관리 화면, `token`·`introspect`·`userinfo`·`apps`·`revoke`·`keys`, 접근 요청, 프로필, 로그아웃은 tailnet 전용이다.

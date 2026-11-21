@@ -30,7 +30,7 @@ DEPLOY_FILES = (
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
-    "compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service", "account-lan-cert.sh",  # D-1064 LAN login alias
+    "compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service", "account-lan-cert.sh",  # D-1068 LAN login alias
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
     "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",

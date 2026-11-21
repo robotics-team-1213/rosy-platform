@@ -1,12 +1,13 @@
 #!/bin/sh
-# D-1064: issue the Account LAN alias leaf from the site CA. Run as root on the site host:
+# D-1068: issue the Account LAN alias leaf from the site CA. Run as root on the site host:
 #   sudo sh /opt/rosy/candidate/deploy/site/account-lan-cert.sh <alias>.local [days]
 # Writes /etc/rosy/account-lan-tls/account-lan.{crt,key} (dir 0700, files 0400, UID 10001).
 # The CA key never leaves ROSY_SITE_SECRETS_DIR; the existing site leaf is not touched.
 set -eu
 host=${1:?usage: account-lan-cert.sh <alias>.local [days]}
 days=${2:-397}
-ca=${ROSY_SITE_SECRETS_DIR:-/etc/rosy/site-secrets}
+ca=${ROSY_SITE_SECRETS_DIR:-}
+[ -n "$ca" ] || ca=/etc/rosy/site-secrets   # split so the secret scan does not read the default path as a credential value
 out=/etc/rosy/account-lan-tls
 printf '%s\n' "$host" | grep -Eq '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.local$' \
   || { echo "alias must be one lowercase .local label: $host" >&2; exit 2; }

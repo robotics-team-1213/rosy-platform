@@ -51,7 +51,7 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     """Allow only canonical configured overlay names before candidate rebasing."""
     pairing, omx = (["-f", f"/opt/rosy/candidate/deploy/site/compose.{name}.yaml"] for name in ("pairing", "omx"))
     account = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
-    account_lan = ["-f", "/opt/rosy/candidate/deploy/site/compose.account-lan.yaml"]  # D-1064, only after Account
+    account_lan = ["-f", "/opt/rosy/candidate/deploy/site/compose.account-lan.yaml"]  # D-1068, only after Account
     allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
     workcell = ["-f", "/opt/rosy/candidate/deploy/site/compose.workcell.yaml"]
     allowed += [base + workcell for base in allowed]

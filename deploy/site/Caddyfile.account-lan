@@ -1,4 +1,4 @@
-# D-1064: LAN browser alias for Account login (opt-in, compose.account-lan.yaml).
+# D-1068: LAN browser alias for Account login (opt-in, compose.account-lan.yaml).
 # The issuer stays the tailnet name; this host only serves the browser login on the existing
 # site port, so no new port and no site-firewall.py change. Everything not listed here is 404:
 # administration, token/introspect/userinfo/apps/revoke/keys and access requests stay tailnet-only.

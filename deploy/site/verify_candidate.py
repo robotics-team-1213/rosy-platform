@@ -36,7 +36,7 @@ REQUIRED_DEPLOYMENT_FILES = (
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
-    "compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service", "account-lan-cert.sh",  # D-1064 LAN login alias
+    "compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service", "account-lan-cert.sh",  # D-1068 LAN login alias
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
     "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
@@ -48,7 +48,7 @@ REQUIRED_DEPLOYMENT_FILES = (
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
 ACCOUNT_LAN_FILES = ("compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service",
-                     "account-lan-cert.sh")  # D-1064
+                     "account-lan-cert.sh")  # D-1068
 ACCOUNT_TLS_FILES = ("account_tls_renew.py", "account-tls.env.example",
                      "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer")
 LOGIN_CHECK_FILES = ("account_login_check.py", "rosy-site-account-login-check.service",

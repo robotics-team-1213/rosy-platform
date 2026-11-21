@@ -1,4 +1,4 @@
-"""D-441/D-960/D-1064: signed optional compose overlays keep the site updater working."""
+"""D-441/D-960/D-1068: signed optional compose overlays keep the site updater working."""
 import pytest
 
 from deploy.site import rosy_site_autoupdate as upd
@@ -12,7 +12,7 @@ from test_site_autoupdate import FakeHost, FakeHttp, NEW, _updater, _world, host
     "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
     "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
     "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.omx.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
-    "-f /opt/rosy/candidate/deploy/site/compose.account.yaml -f /opt/rosy/candidate/deploy/site/compose.account-lan.yaml",  # D-1064
+    "-f /opt/rosy/candidate/deploy/site/compose.account.yaml -f /opt/rosy/candidate/deploy/site/compose.account-lan.yaml",  # D-1068
 ])
 def test_omx_overlay_from_the_candidate_is_allowed(host, overlay):
     with host.paths.site_env.open("a", encoding="utf-8") as stream:

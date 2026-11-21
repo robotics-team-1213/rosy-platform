@@ -1,4 +1,4 @@
-"""D-1064: the opt-in Account LAN alias exposes only the browser login, on the existing port."""
+"""D-1068: the opt-in Account LAN alias exposes only the browser login, on the existing port."""
 import copy
 import json
 import re
@@ -26,7 +26,7 @@ ALLOWED_GET = {
     "/api/fleet/auth/connection", "/api/fleet/auth/session", "/api/fleet/auth/authorize",
 }
 ALLOWED_POST = {"/api/fleet/auth/login", "/api/fleet/auth/change-password"}
-# Called by login-page.js/password-login.js but kept tailnet-only on purpose (D-1064).
+# Called by login-page.js/password-login.js but kept tailnet-only on purpose (D-1068).
 TAILNET_ONLY = {"/api/fleet/auth/access-requests", "/api/fleet/auth/logout"}
 
 
