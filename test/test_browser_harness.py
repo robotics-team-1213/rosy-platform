@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler
 import socket
+import sys
 import threading
 from types import SimpleNamespace
 from urllib.request import urlopen
@@ -120,3 +121,200 @@ def test_safe_http_server_serves_on_the_bound_safe_socket():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def _install_fake_playwright(monkeypatch):
+    events = []
+    state = {"launches": [], "contexts": [], "stops": 0}
+
+    class FakePage:
+        def __init__(self):
+            self.listeners = {}
+            self.timeout = None
+
+        def on(self, name, fn):
+            self.listeners[name] = fn
+
+        def set_default_timeout(self, ms):
+            self.timeout = ms
+
+    class FakeContext:
+        def __init__(self, options):
+            self.options = options
+            self.closed = 0
+            self.pages = [FakePage()]
+
+        def new_page(self):
+            return self.pages[0]
+
+        def close(self):
+            self.closed += 1
+            if self in shared_browser.contexts:
+                shared_browser.contexts.remove(self)
+
+    class FakeBrowser:
+        def __init__(self, options, is_shared=True):
+            self.options = options
+            self.connected = True
+            self.closed = 0
+            self.contexts = []
+            self.fail_close = False
+            self.is_shared = is_shared
+
+        def is_connected(self):
+            return self.connected
+
+        def new_context(self, **options):
+            ctx = FakeContext(options)
+            self.contexts.append(ctx)
+            state["contexts"].append(ctx)
+            return ctx
+
+        def new_page(self, **options):
+            events.append(("dedicated_new_page", options))
+            return FakePage()
+
+        def close(self):
+            self.closed += 1
+            if self.fail_close:
+                raise RuntimeError("close failed")
+
+    shared_browser = None
+
+    class FakePlaywright:
+        def __init__(self):
+            self.chromium = self
+
+        def launch(self, **options):
+            nonlocal shared_browser
+            state["launches"].append(options)
+            browser = FakeBrowser(options, is_shared=("args" not in options))
+            if browser.is_shared:
+                shared_browser = browser
+            return browser
+
+        def stop(self):
+            state["stops"] += 1
+
+    class FakeStarter:
+        def start(self):
+            return FakePlaywright()
+
+    fake_api = SimpleNamespace(sync_playwright=lambda: FakeStarter())
+    monkeypatch.setitem(sys.modules, "playwright", SimpleNamespace(sync_api=fake_api))
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", fake_api)
+    return state, events
+
+
+def test_context_lease_closes_only_context_and_is_idempotent():
+    closed = []
+    ctx = SimpleNamespace(close=lambda: closed.append("ctx"))
+    with browser_harness._ContextLease(ctx) as lease:
+        lease.close()
+        lease.close()
+    lease.close()
+    assert closed == ["ctx"]
+
+
+def test_shared_browser_crash_recovery_and_close_idempotency(monkeypatch):
+    browser_harness.close_shared_browser()
+    state, _ = _install_fake_playwright(monkeypatch)
+    try:
+        b1 = browser_harness.shared_browser()
+        assert browser_harness.shared_browser() is b1
+        b1.connected = False
+        b2 = browser_harness.shared_browser()
+        assert b2 is not b1
+        assert state["stops"] == 1
+        assert len(state["launches"]) == 2
+        b2.contexts.append(SimpleNamespace(close=lambda: None))
+        b2.fail_close = True
+        browser_harness.close_shared_browser()
+        assert state["stops"] == 2
+        browser_harness.close_shared_browser()
+        assert state["stops"] == 2
+    finally:
+        browser_harness._SHARED = None
+
+
+def test_open_shared_page_restricted_port_fallback_vs_safe_port(monkeypatch):
+    browser_harness.close_shared_browser()
+    state, events = _install_fake_playwright(monkeypatch)
+    try:
+        lease, page, errors = browser_harness.open_page(None, 800, 600, url="http://127.0.0.1:43123/", ignore_https_errors=True)
+        assert isinstance(lease, browser_harness._ContextLease)
+        assert page.timeout == 15_000
+        assert state["contexts"][0].options == {"viewport": {"width": 800, "height": 600}, "ignore_https_errors": True}
+        page.listeners["pageerror"](RuntimeError("boom"))
+        assert errors == ["boom"]
+        lease.close()
+        assert state["contexts"][0].closed == 1
+
+        dedicated, page2, _ = browser_harness.open_page(None, 390, 844, url="http://127.0.0.1:6000/")
+        assert not isinstance(dedicated, browser_harness._ContextLease)
+        assert state["launches"][-1]["args"] == ["--explicitly-allowed-ports=6000"]
+        assert events[-1] == ("dedicated_new_page", {"viewport": {"width": 390, "height": 844}})
+        dedicated.close()
+        assert dedicated.closed == 1
+    finally:
+        browser_harness.close_shared_browser()
+
+
+def test_open_token_access_uses_auth_predicate_and_retries_details_toggle():
+    calls = []
+
+    class FakeSummary:
+        def __init__(self, details):
+            self._details = details
+
+        def click(self):
+            calls.append("summary.click")
+            self._details.open_states.pop(0)
+
+    class FakeLocator:
+        def __init__(self, name, page):
+            self.name = name
+            self.page = page
+            self.open_states = [None, None, ""] if name == "#token-access" else []
+
+        def is_visible(self):
+            return self.name == "#topbar-more"
+
+        def get_attribute(self, attr):
+            if self.name == "#topbar-more" and attr == "aria-expanded":
+                return "true" if self.page.menu_open else "false"
+            if self.name == "#token-access" and attr == "open":
+                return self.open_states[0]
+            return None
+
+        def click(self):
+            calls.append(f"{self.name}.click")
+            if self.name == "#topbar-more":
+                self.page.menu_open = True
+
+        def locator(self, sub):
+            assert self.name == "#token-access" and sub == "summary"
+            return FakeSummary(self)
+
+        def wait_for(self, *, state):
+            calls.append(f"{self.name}.wait_for({state})")
+
+    class FakePage:
+        def __init__(self):
+            self.menu_open = False
+            self._locs = {}
+
+        def wait_for_load_state(self, *args, **kwargs):
+            raise AssertionError("networkidle wait_for_load_state must not be called")
+
+        def wait_for_function(self, expr):
+            calls.append(("wait_for_function", expr))
+
+        def locator(self, sel):
+            return self._locs.setdefault(sel, FakeLocator(sel, self))
+
+    page = FakePage()
+    browser_harness.open_token_access(page)
+    assert calls[0][0] == "wait_for_function"
+    assert "user-role" in calls[0][1] and "token-save" in calls[0][1]
+    assert calls[1:] == ["#topbar-more.click", "summary.click", "summary.click", "#console-token.wait_for(visible)"]

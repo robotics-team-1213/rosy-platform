@@ -10,6 +10,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 SRC = (Path(__file__).resolve().parents[3] / "src")
 
 # Each entry is the *outer* ROS-package dir, so the inner Python package
@@ -41,3 +43,10 @@ import os
 if os.environ.get('ROSY_CAPTURE_FLEET_APP_CONTRACTS') == '1':
     sys.path.append(str(SRC.parent / 'applications/fleet/test'))
     from backend_evidence import fleet_contract_probe, pytest_runtest_logreport, pytest_terminal_summary
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _close_shared_chromium_after_module():
+    yield
+    if "browser_harness" in sys.modules:
+        sys.modules["browser_harness"].close_shared_browser()

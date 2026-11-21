@@ -12,6 +12,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 for path in (
@@ -38,3 +40,10 @@ if os.name == "nt" and shutil.which("openssl") is None:
         if os.path.isfile(os.path.join(candidate, "openssl.exe")):
             os.environ["PATH"] = candidate + os.pathsep + os.environ.get("PATH", "")
             break
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _close_shared_chromium_after_module():
+    yield
+    if "browser_harness" in sys.modules:
+        sys.modules["browser_harness"].close_shared_browser()
