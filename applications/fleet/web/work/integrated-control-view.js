@@ -1,6 +1,7 @@
 import {randomUUID} from "/console/assets/uuid.js";
 // Read projections and explicit stop requests share the Work area's existing authentication and lifetime.
 import {fitView} from "/console/assets/site-map-model.js";
+import {node} from "/common/control-dom.js";
 import {EVIDENCE_LABEL, MODE_LABEL, evidenceAgeText} from "/common/core_ui_logic.js";
 
 const prefix = "/api/fleet/control-unit";
@@ -10,7 +11,6 @@ const stopStates = {PENDING: "전달 대기", SENDING: "전달 중", ACKNOWLEDGE
   NOT_REACHED: "미전달", SUPERSEDED_BY_OPERATOR_RECOMMISSIONING: "운영자 재시운전 확인 기록"};
 const omxStates = {NOT_CONFIGURED: "미설정", REQUESTED: "요청됨", LOCAL_LATCHED: "국소 래치 응답",
   UNKNOWN: "미확인", PARTIAL: "일부 응답"};
-const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
 const button = (text, readOnly = false) => {
   const result = node("ui-button", text);
   // The shared role lock treats unmarked dynamic buttons as operator actions.

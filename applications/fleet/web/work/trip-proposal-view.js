@@ -1,6 +1,6 @@
 // D-908: a known external trip proposal keeps its neutral contract and an independent named operator admits it.
+import { node } from "/common/control-dom.js";
 import { armAdmissionReason as admissionReason } from "/console/assets/arm-transfer-view.js";
-const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
 const states = {PROPOSED: "독립 운영자 승인 대기", ADMITTED: "승인됨 · 작업 생성"};
 export function createTripProposalView({scope, call, anchor, active, approveReason, principal, confirm}) {
   const panel = node("section", "", "arm-transfer-work"), heading = node("h2", "외부 앱 이송 제안"),

@@ -5,6 +5,7 @@ import { register } from 'node:module';
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url).href;
 register('data:text/javascript,' + encodeURIComponent(
   `export async function resolve(s, c, next) { return s === '/console/assets/poll-gate.js' ? { url: '${gate}', shortCircuit: true } : next(s, c); }`));
+register('./resolve-console-assets.mjs', import.meta.url);
 const { personHeadline, personView, deliveryText, requestsFor, NO_MOTION_LINE } =
   await import('../../../../applications/fleet/web/person-request.js');
 

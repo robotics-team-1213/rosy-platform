@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+const { register } = await import('node:module');
+register('./resolve-console-assets.mjs', import.meta.url);
 
 const source = new URL('../../../../applications/fleet/web/charge-bays-view.js', import.meta.url);
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);

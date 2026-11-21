@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {analysisText, profileBindingMismatch} from '../../../../applications/fleet/web/devices/robot-profile-view.js';
+const {register} = await import('node:module');
+register('./common-loader.mjs', import.meta.url);
+register('./resolve-console-assets.mjs', import.meta.url);
+const {analysisText, profileBindingMismatch} = await import('../../../../applications/fleet/web/devices/robot-profile-view.js');
 
 test('captured evidence expires even when assessment is recent', () => {
   const report = {status: 'observing', reasons: [], fresh: true, age_s: .01, evidence_age_s: .19, max_age_s: .2};

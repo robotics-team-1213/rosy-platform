@@ -1,3 +1,4 @@
+import {node} from "/common/control-dom.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // Control-unit candidates remain separate from local Task execution and physical stop evidence.
 const labels = {PENDING: "현장 승인 대기", APPROVING: "승인 접수 · 작업 결속 확인 중", REQUESTED: "요청 접수",
@@ -6,8 +7,6 @@ const labels = {PENDING: "현장 승인 대기", APPROVING: "승인 접수 · �
 const terminal = new Set(["COMPLETED", "FAILED", "CANCELED", "EXPIRED"]);
 const unadmitted = new Set(["UNKNOWN_CONTROL_UNIT", "CONTROL_UNIT_OUTSIDE_SCOPE",
   "CONTROL_UNIT_RESOURCE_OUTSIDE_SCOPE", "CONTROL_UNIT_ACTIVE_CAPACITY"]);
-const node = (tag, text, className) => Object.assign(document.createElement(tag),
-  {textContent: text || "", ...(className ? {className} : {})});
 
 export function createControlUnitView({scope, call, anchor, active, approveReason, principal}) {
   const panel = node("section"), heading = node("h2", "관제 간 작업"), context = node("p"),

@@ -40,10 +40,10 @@ patterns:
 # duplicate_bodies: 본문(문자열 비움·공백 제거) 35자 이상이 두 파일 이상에 같은 함수 묶음 수 상한.
 # 모든 ceiling은 수가 늘면 실패, 줄면 같은 변경에서 내린다.
 helpers:
-  - {name: node, module: shared/web/control-dom.js, aliases: [nodeWithText], ceiling: 11}
+  - {name: node, module: shared/web/control-dom.js, aliases: [nodeWithText], ceiling: 6}
 direct:
   - {what: reason 속성 직접 쓰기, pattern: '(?:set|remove)Attribute\(\s*["'']reason["'']', owners: [shared/web/ui.js], ceiling: 125}
   - {what: 운영자 역할 직접 비교, pattern: 'role\s*[!=]==?\s*["'']operator["'']', owners: [applications/fleet/web/shared/authorization.js], ceiling: 42}
-  - {what: 권한 문구 직접 쓰기, pattern: '운영자 권한이 필요합니다', owners: [applications/fleet/web/shared/authorization.js], ceiling: 19}
-  - {what: "'초 전' 손 포맷", pattern: '초 전', owners: [shared/web/core_ui_logic.js, shared/web/component-gallery.js], ceiling: 19}
+  - {what: 권한 문구 직접 쓰기, pattern: '운영자 권한이 필요합니다', owners: [applications/fleet/web/shared/authorization.js], ceiling: 11}
+  - {what: "'초 전' 손 포맷", pattern: '초 전', owners: [shared/web/core_ui_logic.js, shared/web/component-gallery.js], ceiling: 14}
 duplicate_bodies: {ceiling: 9}

@@ -1,3 +1,5 @@
+import { evidenceAgeText } from "/common/core_ui_logic.js";
+import { NAMED_OPERATOR_REASON, OPERATOR_REASON } from "/console/assets/authorization.js";
 import { primaryButton, quietButton, setReason, stuckOverdue } from "./queues.js";
 import { loadEvidence, PreviewMap } from "/console/assets/stuck-evidence.js";
 
@@ -13,7 +15,7 @@ export const CAUSE_LABEL = Object.freeze({ obstacle_ahead: "앞 물체로 멈춤
 export const PHASE_LABEL = Object.freeze({
   ASKING: "관제 답 기다림 · 시간이 지나면 로컬 복구", WAITING_CONSOLE: "관제 답만 기다림", BACKING: "로컬 복구 · 후진 중", SETTLING: "로컬 복구 · 다시 보는 중",
 });
-export const REFUSAL_REASON = Object.freeze({
+const REFUSAL_REASON = Object.freeze({
   no_scan: "LiDAR 스캔이 없습니다", scan_stale: "LiDAR 스캔이 오래되었습니다",
   object_within_stop_distance: "정지 거리 안에 아직 물체가 있습니다", local_recovery_disabled: "이 로봇은 로컬 복구가 꺼져 있습니다",
   attempts_exhausted: "후진 시도를 모두 썼습니다", calibration_active: "보정 세션 중입니다",
@@ -44,7 +46,7 @@ const AI_HELD_REASON = Object.freeze({
   attempts: "후진 시도 소진", rule_budget: "자동 판단 횟수 소진", refused: "후진 거절됨",
 });
 const AI_CLASS_TEXT = Object.freeze({ accepted: "CORE 수락", refused: "CORE 거절", pending: "CORE 답 기다림", held: "Fleet 보류" });
-export function aiHeldText(verdict) {
+function aiHeldText(verdict) {
   if (typeof verdict === "string" && verdict.startsWith("ai:")) return `AI 사실 ${verdict.slice(3)}`;
   if (typeof verdict === "string" && verdict.startsWith("ai_fact:")) return `AI 사실 ${verdict.slice(8)}`;
   return AI_HELD_REASON[verdict] || verdict;
@@ -84,7 +86,7 @@ export function aiLines(stuck) {
 }
 const CREDENTIAL_TEXT = Object.freeze({ enrolled: "등록 자격", token: "판단 토큰", none: "자격 없음" });
 const OWNER_MODE_TEXT = Object.freeze({ available: "사용 가능", shared: "공유", owner_busy: "소유자 사용 중" });
-const secondsAgo = (iso, nowMs) => { const at = Date.parse(iso); return Number.isFinite(at) ? `${Math.max(0, Math.round((nowMs - at) / 1000))}초 전` : ""; };
+const secondsAgo = (iso, nowMs) => { const at = Date.parse(iso); return Number.isFinite(at) ? evidenceAgeText(Math.max(0, Math.round((nowMs - at) / 1000))).slice(3) : ""; };
 export function chainRows(body, nowMs = Date.now()) {
   const chain = body?.chain, status = body?.status;
   if (!chain || !status) return [["연동", "확인할 수 없음"]];
@@ -99,10 +101,10 @@ export function chainRows(body, nowMs = Date.now()) {
       robot.ai_acting ? "AI 제안 실행" : "AI 사실만", `마지막 ${answer}`, last ? secondsAgo(last.at, nowMs) : ""].filter(Boolean).join(" · ")]);
   }
   rows.push(["AI PC", status.state === "present"
-    ? [`신호 ${status.age_s}초 전`, OWNER_MODE_TEXT[status.owner_mode] || status.owner_mode,
+    ? [`신호 ${evidenceAgeText(Number(status.age_s)).slice(3)}`, OWNER_MODE_TEXT[status.owner_mode] || status.owner_mode,
       typeof status.input_lag_s === "number" ? `입력 지연 ${status.input_lag_s.toFixed(1)}초` : "",
       `버전 ${status.service_version} @ ${status.build_commit || "커밋 모름"}`].filter(Boolean).join(" · ")
-    : status.age_s == null ? "없음 (신호 받은 적 없음)" : `없음 (마지막 신호 ${status.age_s}초 전)`]);
+    : status.age_s == null ? "없음 (신호 받은 적 없음)" : `없음 (마지막 신호 ${evidenceAgeText(Number(status.age_s)).slice(3)})`]);
   const n = chain.proposals_1h || {};
   rows.push(["AI 제안 1시간", `수락 ${n.accepted ?? 0} · 보류 ${n.held ?? 0} · 거절 ${n.refused ?? 0} · 답 기다림 ${n.pending ?? 0}`]);
   return rows;
@@ -159,7 +161,7 @@ export function stuckFacts(stuck) {
 export function decisionButtons(stuck, { operator, namedReason = "", busy = false }) {
   return DECISIONS.map((decision) => {
     let reason = "";
-    if (!operator) reason = "운영자 권한이 필요합니다";
+    if (!operator) reason = OPERATOR_REASON;
     else if (namedReason && decision !== "WAIT" && decision !== "ABORT") reason = namedReason;
     else if (stuck.robot_online === false) reason = "로봇 연결이 끊겼습니다";
     else if (busy) reason = "답을 보내는 중";
@@ -197,7 +199,7 @@ export function stuckSummary(stuck) {
     const source = {ai: "AI 분석 제안", human: "운영자 판단", rule: "관제 규칙"}[answer.tier] || "판단 주체 미확인";
     const reason = typeof answer.message === "string" ? answer.message.slice(answer.message.lastIndexOf(": ") + 2) : "";
     const refusal = {EMERGENCY_ACTIVE: "비상정지 중입니다.", CALIBRATION_ACTIVE: "보정 세션이 로봇을 제어하고 있습니다.",
-      OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 로그인이 필요합니다.", FORBIDDEN: "운영자 권한이 필요합니다.",
+      OPERATOR_IDENTITY_REQUIRED: `${NAMED_OPERATOR_REASON}.`, FORBIDDEN: `${OPERATOR_REASON}.`,
       STUCK_ID_MISMATCH: "판단 요청이 바뀌었습니다. 새 요청을 확인하세요."}[answer.code] || REFUSAL_REASON[reason] || "거절 이유 미확인입니다.";
     const receipt = answer.code === "ROBOT_UNREACHABLE" ? "로봇에 연결되지 않아 전달하지 못했습니다. 연결과 현재 요청을 확인하세요."
       : answer.accepted === true ? "관제가 전달했고 로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다."
@@ -223,7 +225,7 @@ export function evidenceCaption(preview, elapsedS = 0) {
   if (preview.state === "loading") return "카메라 그림 받는 중";
   if (preview.live && !previewFresh(preview, elapsedS)) return "현재 영상 만료 — 새 프레임 기다림";
   const age = Math.round((preview.age_s ?? 0) + elapsedS);
-  return `${preview.live ? "현재 영상" : "사건 기록 영상"} · ${CAMERA_LABEL[preview.source] || preview.source || "카메라"} #${preview.sequence} · ${age}초 전 촬영`;
+  return `${preview.live ? "현재 영상" : "사건 기록 영상"} · ${CAMERA_LABEL[preview.source] || preview.source || "카메라"} #${preview.sequence}${evidenceAgeText(age)} 촬영`;
 }
 
 export function alertsDue(seen, robots) {
@@ -268,8 +270,8 @@ export function refusalText(robotId, decision, err) {
     why = REFUSAL_REASON[reason] || "CORE가 거부했습니다";
   } else if (code === "EMERGENCY_ACTIVE") why = "비상정지 중입니다";
   else if (code === "CALIBRATION_ACTIVE") why = "보정 세션이 로봇을 쥐고 있습니다";
-  else if (code === "OPERATOR_IDENTITY_REQUIRED") why = "이름 있는 운영자 로그인이 필요합니다";
-  else if (err && err.status === 403) why = "운영자 권한이 필요합니다";
+  else if (code === "OPERATOR_IDENTITY_REQUIRED") why = NAMED_OPERATOR_REASON;
+  else if (err && err.status === 403) why = OPERATOR_REASON;
   else if (code === "ROBOT_UNREACHABLE") why = "로봇에 닿지 않아 답이 전해지지 않았습니다";
   else if (code === "STUCK_DECISION_OUTCOME_UNKNOWN") why = "로봇이 응답하지 않았습니다. CORE가 이미 적용했을 수 있으니 막힘 상태를 다시 확인한 뒤 답하세요";
   else why = "답을 전하지 못했습니다";

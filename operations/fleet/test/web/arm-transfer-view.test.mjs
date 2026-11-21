@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 const {register} = await import("node:module");
+register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const {armAdmissionReason} = await import("../../../../applications/fleet/web/work/arm-transfer-view.js");
 const job = {status: "PROPOSED", proposal_principal_id: "proposer"};

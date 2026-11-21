@@ -1,7 +1,7 @@
+import {node} from "/common/control-dom.js";
 import {randomUUID} from "/console/assets/uuid.js";
 import {owns, relays} from "/console/assets/unit-scope.js";
 // Known external proposals keep their neutral contract and independent admission.
-const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
 const CELL_APPROVES = "승인은 이 팔을 맡은 셀 관제 화면에서 합니다";
 const approvedElsewhere = () => !owns("arms") || relays();  // no arm here, or this unit only relays its children's jobs
 const states = {PROPOSED: "독립 운영자 승인 대기", READY: "승인됨 · 실행 준비", RUNNING: "실행 중",

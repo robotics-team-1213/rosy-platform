@@ -10,6 +10,7 @@ import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-rea
 import { robotMapPose } from "./localization-badge.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
 import { ruleJudgeSection } from "./site-rules-judge.js";
+import { OPERATOR_REASON } from "/console/assets/authorization.js";
 
 export { endedTripText, openTrip };
 
@@ -22,7 +23,7 @@ export function cardTripLine(view, robotId) {
 export function tripReason(robot, { view, operator, named }) {
   const estop = robot?.state?.safety?.estop;
   return view.stateUnavailable ? "Fleet 상태 확인 불가"
-    : !operator ? "운영자 권한이 필요합니다"
+    : !operator ? OPERATOR_REASON
       : named || (!robot ? "로봇을 고르세요"
         : !robot.online ? "로봇 오프라인"
           : estop === true ? estopText(robot.state)

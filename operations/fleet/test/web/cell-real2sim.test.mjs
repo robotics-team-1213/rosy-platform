@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+const { register } = await import("node:module");
+register("./resolve-console-assets.mjs", import.meta.url);
 
-import {
+const {
   REAL2SIM_PATH,
   EVALUATE_PATH,
   RUNS_PATH,
@@ -18,7 +20,7 @@ import {
   visualCardSpecs,
   inspectorSpecs,
   createReal2SimPipeline,
-} from "../../../../applications/fleet/web/cell/cell-real2sim.js";
+} = await import("../../../../applications/fleet/web/cell/cell-real2sim.js");
 
 test("real2sim routes point to the cell-app pipeline endpoints", () => {
   assert.equal(REAL2SIM_PATH, "/api/fleet/cell-app/real2sim-pipeline");
