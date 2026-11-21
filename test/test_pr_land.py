@@ -164,6 +164,12 @@ def test_ci_runnable_excludes_lab_only_omx_browser_alone_and_sim():
     assert not pr_land.ci_runnable(["ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py"])
     assert not pr_land.ci_runnable(["integrations/simulation/gazebo/test"])
     assert not pr_land.ci_runnable(["test/learning/perception/test_learning_workflow_pipeline_browser.py"])
+    # 2026-11-21: a folder above the lab-only file is CI's root-test. Counted as lab evidence, the whole root suite
+    # (18,847 tests, 37 min) ran on a lab PC for every selection that fell back to `test`. Placement still refuses it.
+    for folder in ("test", "test/learning", "test/learning/perception"):
+        assert pr_land.ci_runnable([folder]) and pr_land.ci_runnable(["--ignore=test/test_platform_g1_timing.py", folder])
+        assert pr_land.work_queue.lab_only([folder]) and not pr_land.work_queue.lab_only([folder], above=False)
+        assert not pr_land.ci_runnable(["ROSY_RUN_BROWSER_TESTS=1", folder])
 
 
 def _required(monkeypatch, invs, changed=()):
