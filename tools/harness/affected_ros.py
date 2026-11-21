@@ -51,12 +51,16 @@ def consolidate(entries: list[dict], seconds: dict[str, int]) -> list[dict]:
         paths = [p for inv in entry["invocations"] for p in inv if not p.startswith("-")]
         return sum(seconds.get(p.rsplit("/", 1)[-1], 1) if p.endswith(".py") else DIR_WEIGHT for p in paths)
 
+    # A run is as long as its slowest job, so smaller jobs may fill up to that size at no cost in time and save
+    # their own setup (about 100 s a job). 2026-11-21: 754 jobs in 65 runs, 29% of the runner time was job setup,
+    # and with 20 concurrent jobs for the organisation the median run waited a minute for a runner.
+    cap = max([JOB_WEIGHT, *(weight(e) for e in entries if e["name"].startswith("affected-") and e.get("kind") == "pytest")])
     out: list[tuple[dict, int]] = []
     for entry in entries:
         w = weight(entry)
         host = next((o for o in out if entry["name"].startswith("affected-") and o[0]["name"].startswith("affected-")
                      and o[0]["ros"] == entry["ros"] and o[0]["kind"] == entry["kind"] == "pytest"
-                     and o[1] + w <= JOB_WEIGHT), None)
+                     and o[1] + w <= cap), None)
         if host:
             host[0]["invocations"] = [*host[0]["invocations"], *entry["invocations"]]
             out[out.index(host)] = (host[0], host[1] + w)

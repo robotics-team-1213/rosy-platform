@@ -380,6 +380,7 @@ def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = D
         "route": svc.nav.route_status(),
         "mapping_active": svc.nav.mapping_active,
         "map_id": svc.state.map_id,
+        "map_generation": svc.state.map_generation.value,
         "readiness": {
             "required": readiness.required,
             "ready": readiness.ready,

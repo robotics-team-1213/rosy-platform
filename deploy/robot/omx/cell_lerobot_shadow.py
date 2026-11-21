@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shadow binding for a LeRobot checkpoint trained on one real arm (arm_s pinky_v1_aug_act_100k, 2026-11-18).
+"""Shadow binding for a single-arm LeRobot ACT checkpoint.
 
 The checkpoint folder is used as LeRobot wrote it (config.json, model.safetensors, policy_pre/postprocessor*), pinned by
 the sha256 of model.safetensors: `act_shadow` = {"kind": "lerobot", "policy_root", "policy_revision": <that sha256>}.
@@ -8,7 +8,8 @@ recording) and one BGR frame per trained camera name. A frame whose size differs
 not a resize. An optional cam_warp.json in the folder (2x3 affine fitted by the model owner's omx_cam_warp.py) maps the
 current view of that one camera back to the training view before inference, as the owner's runner does.
 
-The result is the proposed action chunk in the same LeRobot units. This module reads frames and numbers only; it has no
+Goal-conditioned checkpoints need a goal slot. UNITS.json opts into sim-unit inference for a named arm.
+The result is the proposed action chunk in LeRobot units. This module reads frames and numbers only; it has no
 bus, runner or execution port (cell_act_shadow logs the chunk next to the real IK outcome)."""
 from __future__ import annotations
 
@@ -22,9 +23,13 @@ import numpy as np
 
 WEIGHTS = "model.safetensors"
 WARP = "cam_warp.json"
+UNITS = "UNITS.json"
+GOAL = "observation.environment_state"
 # chunk_runner NAMES order (LeRobot omx_follower motors); the checkpoint's 6-wide state/action follow it.
 JOINT_NAMES = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 IMAGE_PREFIX = "observation.images."
+# The cell's camera roles; a checkpoint must name its inputs by them (docs/solutions/logic-errors/omx-policy-camera-names-differ-from-cell-roles-2026-11-21.md).
+CAMERA_ROLES = ("top", "side", "wrist")
 
 
 def checkpoint_digest(root: Path) -> dict[str, str]:
@@ -38,8 +43,8 @@ def checkpoint_digest(root: Path) -> dict[str, str]:
     return digests
 
 
-def read_features(config: dict) -> tuple[dict[str, tuple[int, int]], int]:
-    """(trained camera name -> (height, width), action width) from config.json; only a 6-joint single-arm ACT."""
+def read_features(config: dict) -> tuple[dict[str, tuple[int, int]], int, int | None]:
+    """Trained camera sizes, action width and optional one-hot goal width from config.json."""
     if config.get("type") != "act":
         raise ValueError(f"policy type {config.get('type')!r}: only LeRobot ACT is bound")  # shortcut: ACT only, add smolvla when one is trained for a cell
     features, outputs = config.get("input_features") or {}, config.get("output_features") or {}
@@ -54,9 +59,40 @@ def read_features(config: dict) -> tuple[dict[str, tuple[int, int]], int]:
             if channels != 3:
                 raise ValueError(f"{key} is not RGB")
             views[key[len(IMAGE_PREFIX):]] = (int(height), int(width))
+    unknown = sorted(set(views) - set(CAMERA_ROLES))
+    if unknown:
+        raise ValueError(f"camera inputs {unknown} are not cell roles {CAMERA_ROLES}: rename the checkpoint inputs after checking a frame of each")
     if not views:
         raise ValueError("checkpoint has no camera input")
-    return views, len(JOINT_NAMES)
+    goal_size = None
+    if GOAL in features:
+        spec = features[GOAL]
+        shape = spec.get("shape") if isinstance(spec, dict) else None
+        if not isinstance(shape, list) or len(shape) != 1 or type(shape[0]) is not int or shape[0] < 1:
+            raise ValueError(f"{GOAL} must have a one-dimensional positive goal width")
+        goal_size = shape[0]
+    return views, len(JOINT_NAMES), goal_size
+
+
+def read_sim_rule(path: Path, config: dict | None) -> dict | None:
+    if not path.exists():
+        return None
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(doc, dict) or (doc.get("state"), doc.get("gripper")) != ("sim_rad", "sim_jaw"):
+        raise ValueError(f"{UNITS}: expected state=sim_rad and gripper=sim_jaw")
+    arm = doc.get("arm")
+    if arm not in ("arm_a", "arm_b") or (config or {}).get("arm_id") != arm:
+        raise ValueError(f"{UNITS}: arm {arm!r} must match the cell config's arm_id (arm_a or arm_b)")
+    from cell_arm_cal import profile_path
+
+    profile = json.loads(profile_path(config, arm).read_text(encoding="utf-8"))
+    if not isinstance(profile, dict) or profile.get("arm_id") != arm:
+        raise ValueError(f"{arm}: arm-cal profile must have the matching arm_id")
+    rule = {key: profile.get(key) for key in ("held_30mm", "gap_mm_per_unit")}
+    if (any(type(value) not in (int, float) or not math.isfinite(value) for value in rule.values())
+            or not 0 <= rule["held_30mm"] <= 100 or rule["gap_mm_per_unit"] <= 0):
+        raise ValueError(f"{arm}: arm-cal profile needs valid held_30mm and gap_mm_per_unit")
+    return rule
 
 
 def read_warp(path: Path, views: dict[str, tuple[int, int]]) -> dict | None:
@@ -104,24 +140,50 @@ class LeRobotShadow:
     policy_environment = "real_lerobot"
     joint_names = JOINT_NAMES
 
-    def __init__(self, root, policy_revision: str, *, loader=_load_lerobot, device: str = "cpu"):
+    def __init__(self, root, policy_revision: str, *, loader=_load_lerobot, device: str = "cpu", cell_config=None):
         root = Path(root).expanduser().resolve(strict=True)
         self.files = checkpoint_digest(root)
         if self.files.get(WEIGHTS) != policy_revision:
             raise ValueError(f"{WEIGHTS} sha256 {self.files.get(WEIGHTS)} differs from the pinned revision {policy_revision}")
         self.policy_revision = policy_revision
-        self.image_views, _ = read_features(json.loads((root / "config.json").read_text(encoding="utf-8")))
+        policy_config = json.loads((root / "config.json").read_text(encoding="utf-8"))
+        self.image_views, _, self.goal_size = read_features(policy_config)
+        self.n_action_steps = policy_config.get("n_action_steps")
+        self.sim_rule = read_sim_rule(root / UNITS, cell_config)
+        self.arm_id = (cell_config or {}).get("arm_id")
         self.warp = read_warp(root / WARP, self.image_views)
         self._predict = loader(root, device)
 
-    def inputs(self, state, frames: dict) -> tuple[dict, dict]:
+    def inputs(self, state, frames: dict, *, goal=None) -> tuple[dict, dict]:
         """(model observation, row metadata); a missing camera, a wrong size or a non-finite joint raises."""
         import cv2
 
         positions = np.asarray([float(v) for v in state], dtype=np.float32)
         if positions.shape != (len(JOINT_NAMES),) or not np.isfinite(positions).all():
             raise ValueError(f"cell state {list(state)} is not 6 finite joints")
+        if self.sim_rule is not None:
+            from arm_status_bridge import JOINTS, to_radians
+            from cell_act_inputs import sim_gripper
+
+            body = to_radians(positions.tolist())
+            positions = np.asarray([body[name] for name in JOINTS[:-1]] + [sim_gripper(float(positions[-1]), self.sim_rule)],
+                                   dtype=np.float32)
         obs, meta = {"observation.state": positions}, {"model_frame_sha256": {}, "warp_sha256": None}
+        if self.goal_size is not None:
+            if goal is None:
+                raise ValueError(f"checkpoint requires a goal slot (0..{self.goal_size - 1})")
+            if isinstance(goal, (int, np.integer)) and not isinstance(goal, bool):
+                if not 0 <= goal < self.goal_size:
+                    raise ValueError(f"goal slot must be 0..{self.goal_size - 1}")
+                vector = np.zeros(self.goal_size, dtype=np.float32)
+                vector[goal] = 1
+            else:
+                vector = np.asarray(goal)
+                if vector.shape != (self.goal_size,) or not np.isin(vector, (0, 1)).all() or np.count_nonzero(vector) != 1:
+                    raise ValueError(f"goal must be a {self.goal_size}-element one-hot vector")
+                vector = vector.astype(np.float32)
+            obs[GOAL] = vector
+            meta["goal_slot"] = int(vector.argmax())
         for view, (height, width) in self.image_views.items():
             frame = frames.get(view)
             if frame is None:
@@ -136,10 +198,26 @@ class LeRobotShadow:
             obs[IMAGE_PREFIX + view] = np.ascontiguousarray(rgb.transpose(2, 0, 1), dtype=np.float32) / 255.0
         return obs, meta
 
-    def infer(self, obs: dict) -> SimpleNamespace:
+    def infer(self, obs: dict, *, state=None) -> SimpleNamespace:
         chunk = np.asarray(self._predict(obs), dtype=np.float64)
-        if chunk.ndim != 2 or chunk.shape[1] != len(JOINT_NAMES) or not np.isfinite(chunk).all():
+        if chunk.ndim != 2 or not len(chunk) or chunk.shape[1] != len(JOINT_NAMES) or not np.isfinite(chunk).all():
             raise ValueError(f"policy output {chunk.shape} is not a finite (n, 6) chunk")
+        if self.sim_rule is not None:
+            from arm_status_bridge import TICKS
+            from cell_act_inputs import real_grippers
+
+            held, slope = self.sim_rule["held_30mm"], self.sim_rule["gap_mm_per_unit"]
+            angles = chunk[:, -1]
+            if np.any((angles < 0) | (angles > 1)):
+                raise ValueError("policy sim jaw output is outside 0..1")
+            gripper = real_grippers(angles, self.sim_rule)
+            if state is not None:
+                gap = 30 + (state[-1] - held) * slope
+                if not 12 <= gap <= 60:
+                    # An echo of the clipped input cannot recover its original position without the readback.
+                    gripper[np.isclose(angles, obs["observation.state"][-1], atol=1e-6, rtol=0)] = state[-1]
+            body = (chunk[:, :-1] + math.pi) * TICKS / (2 * math.pi) * 200 / (TICKS - 1) - 100
+            chunk = np.column_stack((body, gripper))
         return SimpleNamespace(chunk=[tuple(map(float, row)) for row in chunk])
 
 
@@ -151,11 +229,15 @@ def main(argv=None) -> int:
     parser.add_argument("policy_root", type=Path)
     parser.add_argument("policy_revision")
     parser.add_argument("--state", default="18,-31,27,48,68,49", help="6 LeRobot-normalized joints")
+    parser.add_argument("--config", type=Path, help="cell config for a sim-unit checkpoint")
+    parser.add_argument("--goal-slot", type=int, help="zero-based checkpoint goal slot")
     args = parser.parse_args(argv)
-    shadow = LeRobotShadow(args.policy_root, args.policy_revision)
+    config = json.loads(args.config.read_text(encoding="utf-8")) if args.config else None
+    shadow = LeRobotShadow(args.policy_root, args.policy_revision, cell_config=config)
     frames = {view: np.zeros((h, w, 3), dtype=np.uint8) for view, (h, w) in shadow.image_views.items()}
-    obs, meta = shadow.inputs([float(v) for v in args.state.split(",")], frames)
-    chunk = shadow.infer(obs).chunk
+    state = [float(v) for v in args.state.split(",")]
+    obs, meta = shadow.inputs(state, frames, goal=args.goal_slot)
+    chunk = shadow.infer(obs, state=state).chunk
     print(json.dumps({"views": shadow.image_views, "warp": shadow.warp and shadow.warp["camera"], "chunk_len": len(chunk),
                       "first": chunk[0], "finite": all(math.isfinite(v) for row in chunk for v in row), **meta}))
     return 0

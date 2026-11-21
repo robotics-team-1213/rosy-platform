@@ -5,9 +5,16 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.438
+**Version:** v1.440
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.440 지도 자세의 천장 추적 기준과 카메라 차이 (Fleet)
+
+### v1.439 Auto departure: a queued exit goal is not SENT (Fleet)
+
+- `GET /api/fleet/pipeline/unload-release`: `departure` may now stay `state: "SENDING"` with `reason: "GOAL_QUEUED_NOT_ACCEPTED"` and `queue_reason` (the console queue reason, e.g. `LOCALIZATION_UNTRUSTED`) when the exit goal was only queued by Fleet. The queued goal is withdrawn in the same tick; the next tick checks every release condition again. `queued_since` holds the first queue time; if no goal is accepted within 120 s of it (`DEPART_QUEUE_WAIT_S`, same as D-1060 `MAX_QUEUE_AGE_S`), `departure` becomes `state: "HELD"`, `reason: "DEPART_WAIT_EXPIRED"` and an operator re-arms. An accepted goal clears `queued_since`. `SENT` now means the robot accepted the goal (before, a queued goal was also recorded as `SENT`).
+- Pipeline auto events: `auto_depart` may carry `result: "WAITING"` (once per wait) with the queue reason in `why`, and `result: "HELD"`, `why: "DEPART_WAIT_EXPIRED"` once when the wait expires.
 
 ### v1.438 이름 정차용 Nav2 실행 영수증·격자 결속 목표·차선 인계 (CORE)
 
@@ -2218,7 +2225,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/navigation/route` | Operator | D-1009 (v1.382, Safety-Review). 순서 있는 점 목록을 한 요청으로 주행한다. `{points: [{x, y, yaw?, kind: "pass"\|"stop"(기본 stop)}] (1–64개, 마지막은 stop), correlation_id?, lease_ttl_s?, expected_boot_id?, expected_owner_generation?}` → `{accepted, mode, route, operation}`(`operation.kind`는 `navigate`). 관문·소유권·`NAVIGATION_ACTIVE`·`LINE_FOLLOW_ACTIVE`·`GOAL_LEASE_NOT_ACTIVE`는 `/navigation/goal`과 같고, 경로 하나가 native run 하나·`correlation_id` 하나·목표 임대 하나다(`/navigation/goal/lease`로 한 번 갱신하면 경로 전체가 산다). `pass` 점은 서지 않고 지나가며 `stop` 점에서만 멈춘다. 경로는 stop 점마다 잘려 구간마다 Nav2 액션이 하나다: pass 점이 있으면 `NavigateThroughPoses`, 없으면 `NavigateToPose`. 구간이 끝나면 CORE가 같은 run 안에서 다음 구간을 보내므로 구간 사이에 409가 없고 상태는 `NAVIGATING`을 유지한다. 건너뛰기: 구간을 보내기 전에 전역 코스트맵에서 막힘(≥253)이거나 맵 밖인 `pass` 점은 건너뛴다. 구간이 실패했는데 앞에 `pass` 점이 남았으면 그 첫 점을 건너뛰고 같은 구간을 다시 보낸다. `stop` 점은 건너뛰지 않는다. pass 점이 없는 구간이 실패하거나 NAV-006(진척 없음)이 끊으면 `FAILED`다. `yaw` 없는 stop은 직전 점에서 오는 방향을 쓴다. 취소·E-Stop·임대 만료는 `/navigation/cancel`과 같은 경로로 경로 전체를 끝낸다. 속도 한도와 최종 `cmd_vel`은 CORE(D-2)가 그대로 쥔다. 능력 `controls` 변경 없음. Fleet 연동은 다음 단계이고, 이 경로를 모르는 기체는 404를 돌려준다 |
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
-| GET | `/api/v1/navigation/state` | Viewer | NAV-004. `mapping_active: bool`은 CORE가 수락한 맵핑 세션 상태다. SLAM Toolbox의 실제 실행·지도 갱신 성공을 증명하지 않는다. D-1009: `route`는 가장 최근 경로 주행의 읽기(없으면 `null`): `{active, result: null\|succeeded\|failed\|canceled, legs, leg, stops_made, actions, next_stop: {index, x, y}\|null, remaining, skipped: [점 인덱스], points: [{x, y, kind, state: pending\|reached\|skipped\|stopped}], correlation_id, run_id}`. 새 목표나 경로를 받으면 이전 읽기는 사라진다 |
+| GET | `/api/v1/navigation/state` | Viewer | NAV-004. `map_generation: int`(v1.next)는 SLAM 지도 원점이 바뀌었을 수 있을 때마다 바뀌는 영속 카운터다(다른지만 본다: 크기·순서 없이, `boot_id` 와 쌍으로)(항법 스택 lifecycle ACTIVE, CORE 시작). `StateSnapshot.map_generation` 과 같은 값이다. `mapping_active: bool`은 CORE가 수락한 맵핑 세션 상태다. SLAM Toolbox의 실제 실행·지도 갱신 성공을 증명하지 않는다. D-1009: `route`는 가장 최근 경로 주행의 읽기(없으면 `null`): `{active, result: null\|succeeded\|failed\|canceled, legs, leg, stops_made, actions, next_stop: {index, x, y}\|null, remaining, skipped: [점 인덱스], points: [{x, y, kind, state: pending\|reached\|skipped\|stopped}], correlation_id, run_id}`. 새 목표나 경로를 받으면 이전 읽기는 사라진다 |
 | GET | `/api/v1/peers` | Viewer | Peer pose sharing(v1.359, docs/plans/2026-11-04-peer-pose-sharing-design.md). 이 CORE가 보는 peer 로봇 `{peers:[{robot_id, boot_id, seq, map_id, pose, localization_state, age_s}]}`. `max_age_s`(기본 5 s)를 넘겨 침묵한 행은 사라진다. 기능이 꺼져 있으면 빈 목록 |
 | POST | `/api/v1/peers/beacon` | Grant `PEER_SHARE`(operator 이상) | Peer pose sharing beacon(v1.359): `{schema_version:1, robot_id, boot_id, seq, map_id?, pose?, localization_state?, stamp}`. sender가 `LOCALIZED`일 때만 `pose`가 있다. 오래된·중복 `seq`와 `boot_id` 재설정 뒤의 낮은 `seq`는 표를 움직이지 않지만 그대로 202 `{accepted:true, updated:false}`다. 경로의 신뢰 경계는 이 부여다 — 본문의 `robot_id` 주장만으로는 신원이 되지 않는다 |
 | GET | `/api/v1/navigation/path` | Viewer | MAP-003. `{poses}`; 경로 메시지를 받은 뒤에는 `map_id`(그때 로봇 지도 ID 또는 null), `frame_id`(`nav_msgs/Path.header.frame_id` 또는 null), `age_s`(CORE 수신 뒤 경과 초, 서버 monotonic 시계)를 함께 반환한다. 최초 수신 전은 `{poses: []}`. 이 응답은 마지막 수신 계획이며 현재 목표와의 동일성은 증명하지 않는다. |
@@ -3068,6 +3075,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
 | `docking.person_call` | warning | 로봇 | `{dock_id, reason}` — DOCKED를 충전 증거 없이 선언했고 배터리가 `bay_person_call_percent`(30 %) 미만이거나 필터 전압이 내려감: 사람이 봐야 한다. 같은 시점에 `DockingStatus.charge_unconfirmed`(additive, bool)가 참이다. 충전 중(CHARGING)이 아님을 Fleet이 따로 표시하는 데 쓴다 |
+| `docking.anchor` | info | 로봇 | `{dock_id, confirmation, source, odom_epoch, odom_stamp, along_m, lateral_m, heading_deg}` — 로봇이 칸에 앉아 있다는 순간 짝(안착 앵커). `confirmation`: 항상 `lidar_reference`(멈춘 LiDAR 스캔이 도크 기준 스캔과 맞음). 스캔이 맞지 않으면 앵커를 내지 않는다(충전 접점만으로는 다른 칸일 수 있다). `source`: `docked`(도킹이 DOCKED 로 끝남) 또는 `startup_probe`(CORE 재시작 뒤 서 있는 로봇을 기준 스캔과 대조해 안착을 찾음). 같은 값이 `StateSnapshot.docking.anchor` 에 실린다. 안착 오차는 도크 기준 스캔 대비 앞뒤·횡·방위다
 | `docking.uncharged_voltage_drop` | warning | 로봇 | `{dock_id, from_v, to_v}` — DOCKED를 충전 증거 없이(만충 배터리 + LiDAR 안착 확인, `status.last_event`에 사유) 선언한 뒤 필터 전압(`filtered_voltage`)이 도킹 때보다 0.10 V 넘게 5 s 이상 내려가 있음. 한 번만 낸다. 충전 증거가 나중에 오면 감시를 끈다 |
 | `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id, source}` — 확인된 충전 상태. `source: instrumented`(2소스, D-28) 또는 `voltage_only`(후진 도크 D-350 Phase 1 — 배터리 인터록에는 반영되지 않는다) |
 | `docking.full` | info | 로봇 | `{dock_id, source, voltage_v}` — 만춫 감지, 1회 방출. `source: instrumented` 또는 `voltage_only` (D-350) |
@@ -4890,6 +4898,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.440 | 2026-11-21 | [Fleet] Additive: `GET /api/fleet/robots/{id}/map-pose`의 `anchor_source` 값 `track`, 필드 `camera_residual_m`·`camera_residual_deg`·`camera_x`·`camera_y`·`camera_yaw`(3초 안의 카메라 관측이 없으면 null). 식별 스냅샷 로봇 행의 `mode`(`led`\|`motion`\|null). 설정 `fleet.map_pose.track_anchor_robots`·`track_modes`·`track_heading_min_m`, `identity.motion_match`(기본 false) (D-1062) |
+| v1.439 | 2026-11-21 | [Fleet] Auto departure: a queued exit goal is not SENT |
 | v1.438 | 2026-11-21 | [CORE] Additive: CORE `POST /api/v1/navigation/bound-goal`은 승인된 격자 ID로 목표 수락을 제한한다. Fleet `road-nav2`는 이름 기반 정차에서 `expected_site_map_version`과 승인 정합을 확인한다. `dry_run: true`는 요청을 큐에 넣지 않는다. 단독 Nav2 정차는 양방향 자유 구간만 있고 차선 제어·회전 제한·횡단보도가 없는 지도에서 허용한다. 충전 관리 기체는 이 경로에 들어가지 않는다. Additive: CORE `POST /api/v1/navigation/line-handoff-goal`은 현재 주행 임대, 유지 중인 차선 STOP, 격자·부팅·소유권 세대를 동일 요청으로 확인한다. 기존 Nav2 실행 영수증을 반환한다. Additive: `POST /api/v1/navigation/handover`의 선택적 `expected_map_grid_id`를 같은 인계에서 확인한다. 일치하면 `map_grid_id`와 `idle_mode_epoch`를 반환한다. `POST /api/v1/navigation/bound-plan`으로 구동 없이 경로를 요청한다. `bound-goal`과 `line-handoff-goal`은 같은 계획 ID를 요구하고 해당 경로의 실행 조건을 재검사한다. CORE에서 실행 소유권을 발급하기 전에 요청을 거절하면 `error.detail`에 요청의 `plan_id`와 `native_admitted: false`를 반환한다. 소유권을 발급한 뒤에는 이 근거를 반환하지 않는다. `evidence.velocity.sampled_at`에 검증된 속도 측정 구간의 끝 시각을 UTC로 제공한다. `received_at`은 CORE 수신 시각이다. 시간 기준을 확인할 수 없거나 측정이 만료되면 `sampled_at`은 null이다. Fleet은 Nav2 종료 증거보다 뒤의 서로 다른 0속도 표본 두 개로 점유 해제를 검증한다. |
 | v1.437 | 2026-11-21 | [Fleet] `POST /api/fleet/detections/identity` 본문에 선택 `yaw` 추가(Vision이 이미 보냄; 이전에는 422로 전부 거절) |
 | v1.436 | 2026-11-21 | Additive: `POST /docking/dock` 의 선택 `site_pose_evidence`(CORE 가 판정), `GET /docking/status`·dock 응답의 `site_pose_verified`·`site_pose_refusal` (본문 v1.436) |
