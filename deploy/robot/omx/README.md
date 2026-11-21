@@ -1382,6 +1382,54 @@ pipeline 설정의 `operating_profile_path`로 선택을 저장할 수도 있다
 자동 파지에 사용할 수 없다. 카메라/좌표 보정·높이·물체·경로는 task 조건으로 계속 검사하며,
 이 소프트웨어 연계가 각 실물의 설치·최대 도달범위·인양 능력을 측정한 것은 아니다.
 
+## h1-goal ACT 섀도 확인
+
+체크포인트의 `config.json` 옆에 `UNITS.json`을 둔다. 아래는 arm B 예시다.
+arm A 체크포인트는 `arm_a`를 쓴다. 파일이 없으면 기존 LeRobot 정규화 단위를 쓴다.
+
+```json
+{"state": "sim_rad", "gripper": "sim_jaw", "arm": "arm_b"}
+```
+
+`arm`은 셀 설정의 `arm_id`와 같아야 한다. 해당 팔의 `arm-cal-<arm_id>.json`에서
+`held_30mm`와 `gap_mm_per_unit`을 읽는다. 셀 설정의 `arm_calibration_path`로 경로를 지정할 수 있다.
+기존 jaw 형상을 사용하므로 실행 소스 트리에 `learning/envs/isaac/palletizing_gripper.py`와
+그 파일이 읽는 `assets/omx_f_palletizing_description`이 필요하다.
+몸체의 첫 5축은 ±100 단위를 라디안으로 바꾼다. arm B의 손목 롤도 학습 때와 같이 그대로 변환한다.
+학습 변환은 턱 간격을 12~60 mm로 제한한다. 모델이 제한된 입력값을 그대로 내면 해당 프레임의
+실측 턱 위치로 복원한다. 다른 출력값은 턱 형상에서 간격을 구한 뒤 해당 팔의 보정값으로 역변환한다.
+
+`cell_policy_drive.py`에서 `--dry-run --goal-site yard:r3-s2-t1`로 확인한다. Cell Job API의
+`cell_policy_drive` 작업에는 목적지 `goal_site`를 준다. 사이트 맵에서 학습 목표에 대응하는 층 ID와
+`tray` 또는 `vehicle_tray`를 받는다. `--goal-slot N`은 CLI에서 매핑 결과를 수동으로 덮어쓴다.
+`policy-drive.jsonl`의 시작 행에 사이트 ID, 매핑한 학습 목표와 슬롯, 실제 사용한 슬롯을 기록한다.
+`--cell-calibration`에는
+러너의 LeRobot 보정 파일을 준다. 몸체 축의 tick 범위는 0~4095다. `--model-calibration`은
+기존 정규화 단위 체크포인트에 필요하다. sim 체크포인트의 학습 통계에는 시뮬레이션 값이 포함되므로
+envelope는 검토된 라이브러리 범위를 사용한다. `policy-drive.jsonl`에 변환 직후의 `converted_chunk`와
+기존 턱 보정 적용 뒤의 `envelope.ok` 및 거절 이유를 기록한다.
+
+sim 단위 체크포인트는 한 번 추론할 때 `config.json`의 `n_action_steps`만 재생한다.
+측정 자세에서 시작해 15 fps의 출력을 라이브러리 fps로 선형 보간한 뒤 속도 제한을 적용한다.
+30 fps에서 4스텝은 속도 제한 적용 전 8프레임이다.
+arm B의 예측 손목 롤이 검토된 라이브러리 홈과 반 바퀴 건너편의 두 방향 모두에서 45°를 벗어나면
+`wrist_roll_warning`을 기록한다. 실물 실행은 해당 청크를 거절한다.
+
+`--goal-slot`은 학습의 `prepare10.py`가 사용한 0부터 시작하는 배열 인덱스다.
+
+| `N` | 학습 목표 |
+|---:|---|
+| 0 | `ship-h1r0-l0` |
+| 1 | `ship-h1r0-l1` |
+| 2 | `ship-h1r0-l2` |
+| 3 | `ship-h1r1-l0` |
+| 4 | `ship-h1r1-l1` |
+| 5 | `ship-h1r1-l2` |
+| 6 | `ship-h1r2-l0` |
+| 7 | `ship-h1r2-l1` |
+| 8 | `ship-h1r2-l2` |
+| 9 | `tray` |
+
 ## Fleet PC의 상시 관측과 기존 Cell 화면
 
 두 팔의 관절 읽기와 세 카메라의 ROS 구독은 Fleet PC에서 실행한다.
@@ -1494,3 +1542,103 @@ sudo udevadm control --reload-rules
 적용하고 `udevadm settle --timeout=10` 뒤 운영자 계정의 실제 읽기·쓰기 권한을 확인한다.
 이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
 시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.
+
+## 셀 목표 슬롯 설정 (D-1057)
+
+셀 A/B의 배치 판정(`cell_zone_verification`)은 목적지 사이트의 슬롯을 설정에서 읽는다. 설정에 없으면 측정하지 않고
+`unverified`로 남는다. 기본 슬롯은 없다.
+
+기록 위치와 형식은 셀 설정 JSON의 `sites.<이름>`이다.
+
+| 키 | 뜻 | 범위 |
+|---|---|---|
+| `col` | 팔레트 열 (`cell_area_zones` 슬롯 표의 열) | 정수 1–3 |
+| `row` | 팔레트 행 | 정수 1–2 |
+| `layer` | 층(0이 1단). 기본 사이트 `pallet`에는 쓰지 않는다 | 정수 0–2 |
+
+`pallet`처럼 `surface_z`가 있는 기본 사이트에는 `col`·`row`만 적는다. 실행 때 `cell_place_fit.with_tiers`가
+`pallet-l0`, `pallet-l1`, `pallet-l2`를 만들면서 `col`·`row`를 그대로 복사하고 `layer`(와 `tier = layer + 1`)를
+붙인다. 작업의 `dst_site`(예 `pallet-l1`)와 handoff tier가 이 값과 다르면 완료 증거를 받지 않는다.
+
+```json
+"sites": {
+  "pallet": {"surface_z": -0.01, "place": [0.153, -0.128], "auto_roi": [246, 148, 400, 405], "col": 1, "row": 2}
+}
+```
+
+값은 그림을 보고 정한다. 읽기 전용 도구가 슬롯 ROI 표와 각 사이트의 place 점을 상단 프레임 한 장에 겹쳐 PNG로 만든다.
+
+```bash
+python3 deploy/robot/omx/cell_slot_overlay.py --config cell-arm-b-stack.json --frame top.jpg \
+  --out overlay.png --calibration <config의 calibration_path 파일>
+```
+
+place 점은 셀 보정(`cell_observe.predicted_pixel`)이 있어야 그려진다. `--calibration`이 없거나 변환이 안 되는
+사이트는 그림 아래 문구와 표준 출력의 `place_points_omitted`에 이름이 남는다. 설정 파일은 읽기만 한다.
+
+셀 S는 상단 카메라 판정만 쓰므로(ADR D-1057 2-1절) `col`·`row`가 필요 없고 사이트의 `auto_roi`가 지정 구역이다.
+
+### 판정 구역 표 덮어쓰기와 제안 도구 (D-1057)
+
+`cell_area_zones`의 구역 표(`TOP_ROI_BY_COL_ROW`, `SIDE_ROI_BY_COL_TIER`)는 카메라 위치에 묶여 있다. 셀 설정에 `zone_rois`가
+있으면 배치 판정(`cell_zone_verification`)만 그 표를 쓰고, 없으면 공용 상수를 쓴다. 다른 실행기 경로와 공용 상수는 그대로다.
+키는 상단 `c<열>r<행>`(열 1–3, 행 1–2), 측면 `c<열>t<층>`(층 1–3)이고 값은 640x480 영상의 `[x1, y1, x2, y2]` 정수다.
+이름 없는 칸은 공용 표를 쓴다. 형식이 틀리면 공용 표로 되돌아가지 않고 `unverified`가 된다.
+
+```json
+"zone_rois": {"top": {"c1r1": [285, 149, 330, 199]}, "side": {"c1t1": [177, 252, 260, 315]}}
+```
+
+`cell_zone_propose.py`는 상단·측면 프레임에서 트레이 칸 경계를 찾아 `zone_rois` 형식의 제안 JSON과 겹침 PNG(공용 표는 빨강,
+제안은 초록)를 만든다. 경계가 뚜렷하지 않은 칸은 `null`과 이유다. 이 도구는 셀 설정을 읽지도 쓰지도 않는다.
+
+`zone_rois`에는 `"floor": [[x1, y1, x2, y2], ...]`(색 영상 좌표의 팔레트 바닥 ROI, 비어 있는 머리 띠나 빈 칸)를 더할 수 있다. `floor`가 있으면 목표
+칸의 점유와 층을 깊이 상대 높이(`cell_depth_slots`, ADR D-1057 2-2절)로 판정하고 색·측면은 보조다. `floor`가 없으면 기존 판정이다.
+
+셀 설정의 `depth_frames`(정수 1–9, 기본 5)는 배치 뒤 깊이를 몇 장 연속 캡처해 픽셀별 중앙값으로 쓸지 정한다(3 s 마감, 근거는 ADR D-1057).
+
+### Fleet 작업의 감독 시험과 검토 기록 (D-911, D-1057 2-5)
+
+Fleet worker는 사람이 있다고 스스로 선언하지 않는다. 감독 시험(`--commissioning --person-at-switch`)은 이름 있는 운영자가 그 작업에
+`POST /api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm`을 한 뒤(120 s 안에 claim) 실행되는 작업에만 쓴다. 표시가 없는 작업은
+검토된 운전 범위로만 실행하며, 검토 기록이 없으면 팔은 움직이지 않고 worker가 `ABORTED`, 사유 `REVIEW_REQUIRED`로 보고한다.
+
+시험이 쌓이면 검토자가 다음 두 단계로 기록한다. 숫자와 이름은 사람이 정하고 소프트웨어는 채우지 않는다.
+
+```bash
+python3 deploy/robot/omx/cell_envelope_review.py list <work-dir>/attempts.jsonl
+python3 deploy/robot/omx/cell_envelope_review.py add --attempts <work-dir>/attempts.jsonl --envelope <operating_envelope_path> \
+  --task-sha256 <list의 key> --reviewed-by <이름> --evidence-ref <확인한 근거> \
+  --min-attempts <N> --min-success-rate <R> --home-tolerance <U> --confirm-physical-review
+```
+
+### Cell task worker와 팔 세션 래퍼의 관리 릴리스 (2026-11-21)
+
+`rosy-omx-cell-task-worker.service`는 `~/.local/share/rosy/omx-devices/current`(`rosy-omx-devices-autoupdate` 관리 릴리스)에서 돈다.
+worker는 팔 세션 래퍼를 같은 릴리스의 `deploy/robot/omx/session-wrappers/`에서 띄우고 `TOOLS_ROOT`를 넘긴다. 래퍼의
+`tools-env.sh`는 `OMX`·`PYTHONPATH`를 `TOOLS_ROOT`에서 만든다. 손으로 바꾸는 `~/rosy-test/omx-tools-current` 링크는 읽지 않는다.
+셀 설정·카탈로그·caps·chunk-io는 계속 `~/rosy-test/omx-record-prep-20261019`에 있다.
+공용 링크 `omx-tools-current`는 셀 도구 전용이다(2026-11-21 벤치 배포가 바꿔 `wrist.jaw_edge_px` unknown parameter로 셀 세션이 전부 실패). 벤치 페이지는
+`omx_hotfix.py deploy --link omx-bench-current`로 배포하고 벤치 서비스는 그 링크를 쓴다. `--link`는 `omx-<이름>-current`만 받는다.
+
+적용 순서(병합하고 omx-devices 자동 갱신이 끝난 뒤, 팔 세션이 없을 때만):
+
+1. 팔 세션이 없는지 확인한다: `pgrep -af record_session.py`의 출력이 없어야 한다. 출력이 있으면 멈춘다.
+2. 셀의 `~/.config/rosy/omx-devices-autoupdate.json`을 고친다(2026-11-21 live 릴리스에 `omx_adapter/kinematics.py`·`area_xyz.py`·`z_profile.py`·`pose_plan.py`가 없었다).
+   - `"paths"`: `"middleware/devices/omx/adapter/omx_adapter/camera_source.py"`를 `"middleware/devices/omx/adapter/omx_adapter"`로 바꾼다. 결과는
+     `["deploy/robot/omx", "middleware/devices/omx/adapter/omx_adapter", "contracts/foundation", "operations/overhead"]`.
+   - `"smoke"`: `sys.path`에 `'middleware/devices/omx/adapter'`를 더하고 끝의 `print('smoke ok')` 앞에
+     `from omx_adapter import kinematics, area_xyz, z_profile, pose_plan; `를 넣는다. 빠진 릴리스는 smoke에서 거절되고 옛 릴리스가 남는다.
+   - 다른 키는 바꾸지 않는다. 이 유닛을 `units`·`unit_files`에 넣지 않는다(재시작은 사람이 한다).
+3. 다음 릴리스를 기다린다(`systemctl --user start rosy-omx-devices-autoupdate.service`로 당길 수 있다). 다음을 확인한다:
+   - `readlink ~/.local/share/rosy/omx-devices/current`가 이 변경을 포함한 릴리스다.
+   - `ls ~/.local/share/rosy/omx-devices/current/middleware/devices/omx/adapter/omx_adapter/{kinematics,area_xyz,z_profile,pose_plan}.py`가 네 파일을 모두 보인다.
+   - `.../current/deploy/robot/omx/session-wrappers/`가 있다.
+   하나라도 없으면 여기서 멈춘다. 유닛을 설치하지 않는다.
+4. 셀 prep 폴더의 옛 래퍼(`with-session-arm-*.sh`, `tools-env-current.sh`)를 날짜 붙여 백업한다. 다른 도구가 아직 쓰므로 지우지 않는다.
+5. 유닛을 릴리스에서 설치하고 다시 시작한다:
+   `install -m 0644 ~/.local/share/rosy/omx-devices/current/deploy/robot/omx/rosy-omx-cell-task-worker.service ~/.config/systemd/user/`,
+   `systemctl --user daemon-reload`, `systemctl --user restart rosy-omx-cell-task-worker.service`.
+6. `systemctl --user show rosy-omx-cell-task-worker.service -p Environment`에 `TOOLS_ROOT=.../omx-devices/current`가 있는지 본다.
+7. 관제 PC에서 `python tools/remote/update_status.py`를 실행한다. 이 유닛은 `autoupdate`로 나오고 `ADHOC`가 없어야 한다.
+   코드 경로는 ExecStart의 첫 경로(`~/rosy-omx/current-env`)로 읽혀 `KNOWN`으로 나온다(`services.yaml`의 `known_drift`).

@@ -459,6 +459,18 @@ def test_pinned_places_and_edges_survive_the_traced_map():
     assert mod.unpinned_place_diff_m(current_places[:1], traced_places) == 0.0
 
 
+def test_pinned_drift_is_reported_for_pinned_places_with_a_traced_counterpart():
+    mod = _load_module()
+    current = [
+        {"id": "S3", "x": 0.745, "y": -0.207, "pinned": True},
+        {"id": "C1", "x": 1.0, "y": 1.0, "pinned": True},  # no traced counterpart
+        {"id": "J1", "x": 0.0, "y": 0.0},  # unpinned
+    ]
+    traced = [{"id": "S3", "x": 0.699, "y": -0.251}, {"id": "J1", "x": 0.5, "y": 0.0}]
+    assert mod.pinned_drift_m(current, traced) == {"S3": pytest.approx(0.0637, abs=1e-4)}
+    assert mod.pinned_drift_m([], traced) == {}
+
+
 def test_a_pinned_stop_keeps_its_stop_zone_and_approach_through_the_merge():
     # 2026-11-21 robot-7b named stop: a drawn zone and approach distance are a person's, like the point.
     mod = _load_module()
@@ -476,3 +488,19 @@ def test_the_fleet_update_carries_the_pinned_merge_into_the_container(monkeypatc
     compile(sent["code"], "apply", "exec")
     assert "def merge_pinned(" in sent["code"] and "def snap_edge_ends(" in sent["code"]
     assert 'merge_pinned(map_doc.get("places", []), solved["places"])' in sent["code"]
+
+
+def test_unpinned_place_keeps_its_yaw_and_name_only_xy_follow_the_trace():
+    mod = _load_module()
+    current = [{"id": "S1", "name": "S1 stop", "kind": "stop", "x": -0.6735, "y": -0.1411, "yaw": -1.570796}]
+    traced = [{"id": "S1", "name": "S1", "kind": "stop", "x": -0.679, "y": -0.140, "yaw": None}]
+    assert mod.merge_pinned(current, traced) == [
+        {"id": "S1", "name": "S1 stop", "kind": "stop", "x": -0.679, "y": -0.140, "yaw": -1.570796}]
+
+
+def test_unpinned_edge_keeps_its_settings_only_the_polyline_follows_the_trace():
+    mod = _load_module()
+    current = [{"id": "e", "from": "A", "to": "B", "polyline": [[0, 0], [1, 0]], "speed_cap_mps": 0.08, "width_m": 0.15}]
+    traced = [{"id": "e", "from": "A", "to": "B", "polyline": [[0, 0.01], [1, 0.01]], "speed_cap_mps": 0.15, "width_m": 0.2}]
+    assert mod.merge_pinned(current, traced) == [
+        {"id": "e", "from": "A", "to": "B", "polyline": [[0, 0.01], [1, 0.01]], "speed_cap_mps": 0.08, "width_m": 0.15}]

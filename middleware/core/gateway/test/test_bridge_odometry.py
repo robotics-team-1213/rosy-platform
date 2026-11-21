@@ -8,8 +8,31 @@ which host pytest cannot import, so neither case had an assertion.
 from __future__ import annotations
 
 import math
+from types import SimpleNamespace
+
+import pytest
 
 from core.bridge.odometry import travelled_m
+
+
+@pytest.mark.parametrize("fault", [None, "future", "stale", "reordered", "sim", "wrong_frame", "nonplanar"])
+def test_velocity_sample_time_only_certifies_original_wall_clock_odom(fault):
+    from core.bridge.odometry import velocity_sample_time
+
+    bridge = SimpleNamespace(_frame_prefix="robot/", _velocity_source_ns=0,
+                             _node=SimpleNamespace(get_parameter=lambda _: SimpleNamespace(value=fault == "sim")))
+    stamp = SimpleNamespace(sec=100, nanosec=200_000_000)
+    linear = SimpleNamespace(x=0.0, y=0.1 if fault == "nonplanar" else 0.0, z=0.0)
+    angular = SimpleNamespace(x=0.0, y=0.0, z=0.0)
+    message = SimpleNamespace(
+        header=SimpleNamespace(stamp=stamp, frame_id="map" if fault == "wrong_frame" else "robot/odom"),
+        child_frame_id="robot/base_footprint",
+        twist=SimpleNamespace(twist=SimpleNamespace(linear=linear, angular=angular)))
+    received = {"future": 100_100_000_000, "stale": 101_000_000_000}.get(fault, 100_400_000_000)
+    if fault == "reordered":
+        bridge._velocity_source_ns = 100_300_000_000
+    assert velocity_sample_time(bridge, message, {"linear_x": 0., "angular_z": 0.}, received) == (
+        100.2 if fault is None else None)
 
 
 def test_distance_is_straight_line_from_the_mark():

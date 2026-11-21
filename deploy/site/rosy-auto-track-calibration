@@ -126,9 +126,20 @@ def mean_places(series_places: list[list[dict]]) -> list[dict]:
 def merge_pinned(current: list[dict], traced: list[dict]) -> list[dict]:
     """Traced places or edges for the map, except one a person pinned keeps every field it has now and
     one the trace does not know stays (2026-11-20: hand-moved S3 and its inner lanes went back to the paint)."""
-    pinned = {p["id"]: p for p in current if p.get("pinned")}
+    # 2026-11-21: an unpinned stop lost its yaw (the trace carries geometry only); only geometry follows the paint.
+    now = {p["id"]: p for p in current}
+    geometry = ("x", "y", "polyline")
+
+    def merged(t):
+        cur = now.get(t["id"])
+        if cur is None:
+            return t
+        if cur.get("pinned"):
+            return cur
+        return {**cur, **{k: t[k] for k in geometry if k in t}}
+
     traced_ids = {p["id"] for p in traced}
-    return [pinned.get(p["id"], p) for p in traced] + [p for p in current if p["id"] not in traced_ids]
+    return [merged(p) for p in traced] + [p for p in current if p["id"] not in traced_ids]
 
 
 def snap_edge_ends(edges: list[dict], places: list[dict]) -> list[dict]:
@@ -150,6 +161,15 @@ def unpinned_place_diff_m(current: list[dict], traced: list[dict]) -> float:
     old = {p["id"]: (p["x"], p["y"]) for p in current if not p.get("pinned")}
     return max((math.hypot(p["x"] - old[p["id"]][0], p["y"] - old[p["id"]][1]) for p in traced if p["id"] in old),
                default=0.0)
+
+
+def pinned_drift_m(current: list[dict], traced: list[dict]) -> dict:
+    """Metres each pinned place sits from its traced point; report only, it never changes the map or syncs."""
+    # Bays C1-C3 and S3 are pinned (2026-11-21 agreement robot-ce/robot-7b/robot-08); the paint trace keeps
+    # being watched so a rail/paint mismatch shows in the journal.
+    old = {p["id"]: (p["x"], p["y"]) for p in current if p.get("pinned")}
+    return {p["id"]: round(math.hypot(p["x"] - old[p["id"]][0], p["y"] - old[p["id"]][1]), 4)
+            for p in traced if p["id"] in old}
 
 
 def decide(
@@ -460,6 +480,7 @@ def main(argv: list[str] | None = None) -> int:
         place_diff_m = unpinned_place_diff_m(cur_map["map"].get("places", []), avg_places)
     else:
         place_diff_m = 999.0
+    drift = pinned_drift_m(cur_map["map"].get("places", []), avg_places) if cur_map and isinstance(cur_map.get("map"), dict) else {}
 
     now = time.time()
     last_approved_at = state.get("last_approved_at")
@@ -478,6 +499,7 @@ def main(argv: list[str] | None = None) -> int:
             "status": "dry-run",
             "rms_m": solved["rms_m"],
             "place_diff_m": round(place_diff_m, 4),
+            "pinned_drift_m": drift,
             **outcome,
         }))
         return 0
@@ -497,6 +519,7 @@ def main(argv: list[str] | None = None) -> int:
             "status": "ok",
             "rms_m": solved["rms_m"],
             "place_diff_m": round(place_diff_m, 4),
+            "pinned_drift_m": drift,
             "updated": False,
             **outcome,
         }))
@@ -537,6 +560,7 @@ def main(argv: list[str] | None = None) -> int:
             "status": "deferred",
             "rms_m": approved_solve["rms_m"],
             "place_diff_m": round(place_diff_m, 4),
+            "pinned_drift_m": drift,
             **outcome,
             **res,
         }))
@@ -557,6 +581,7 @@ def main(argv: list[str] | None = None) -> int:
         "status": "updated",
         "rms_m": approved_solve["rms_m"],
         "place_diff_m": round(place_diff_m, 4),
+            "pinned_drift_m": drift,
         **outcome,
         **res,
     }))

@@ -1,0 +1,67 @@
+{
+  "model_revision": "v14-drivable-20261116-16bb1c85",
+  "verdict": "pass",
+  "reasons": [],
+  "gate": {
+    "max_host_latency_ms_p50": 400,
+    "max_nan_frames": 0,
+    "min_visible_fraction": 0.3,
+    "replay_sources": [
+      "data/teleop/learning/*.mp4"
+    ],
+    "max_frames_per_source": 200,
+    "require_eval": false,
+    "require_label_semantics": false,
+    "eval_set": null,
+    "eval_max_frames": 400,
+    "min_eval_miou": null,
+    "max_eval_miou_drop": 0.01,
+    "min_lane_marking_iou": null
+  },
+  "tool_commit": "e106ee651a10cd0712860a08b32216669647dca1",
+  "transient": false,
+  "files": [
+    {
+      "name": "model_fp32.onnx",
+      "sha256": "16bb1c85229fce4798c0e92bbd9075529efdbfc588d9da5b2670f38be0fbb5e0"
+    },
+    {
+      "name": "model_int8.onnx",
+      "sha256": "a77bce58258d1f4307b148faa708b61dd56b58b6d21ec94bc11e29d8087c83c9"
+    }
+  ],
+  "task": "lane_seg",
+  "eval": null,
+  "frames": 1381,
+  "latency_ms": {
+    "p50": 19.444827979896218,
+    "p95": 27.102163003291935
+  },
+  "nan_frames": 0,
+  "error_frames": 0,
+  "visible_fraction": 0.9956553222302679,
+  "error_delta": {
+    "median": 0.3446582473002902,
+    "p95": 0.7660913376378451,
+    "n": 1221
+  },
+  "class_fractions_mean": {
+    "background": 0.6460050178765387,
+    "lane_left": 0.024679598871590637,
+    "lane_right": 0.03380165904839488,
+    "crosswalk": 0.0,
+    "speed_bump": 0.0016731629405020516,
+    "drivable": 0.2820612516594255,
+    "parking_zone_line": 0.007976688842626116,
+    "lane_guide_line": 0.003802620760922037
+  },
+  "sources": [
+    "data/teleop/learning/teleop_20260919_151213_part01.mp4",
+    "data/teleop/learning/teleop_20260919_151213_part02.mp4",
+    "data/teleop/learning/teleop_20260919_151213_part03.mp4",
+    "data/teleop/learning/teleop_20260919_151213_part04.mp4",
+    "data/teleop/learning/teleop_20260919_151213_part05.mp4",
+    "data/teleop/learning/teleop_20260919_151213_part06.mp4",
+    "data/teleop/learning/teleop_20260919_151213_part07.mp4"
+  ]
+}

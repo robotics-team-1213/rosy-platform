@@ -411,6 +411,32 @@ def test_navigation_goal_is_refused_while_line_follow_owns_motion(client):
     assert svc.nav.nav_state.value == "IDLE"
 
 
+def test_grid_bound_goal_cannot_start_after_the_loaded_grid_changes(client, monkeypatch):
+    from types import SimpleNamespace
+
+    tc, svc = client
+    # The ROS-free fixture has no kept navigation runtime; exercise the grid gate after that check.
+    monkeypatch.setattr("core_api_web.api.v1.navigation.require_kept", lambda *_: None)
+    goals = []
+    svc.nav.executor = SimpleNamespace(send_goal=goals.append, cancel_goal=lambda: None)
+    svc.state.set_map_id("warehouse_a", "occupancy:new")
+    body = {"x": 0.5, "y": 0.0, "expected_map_grid_id": "occupancy:old"}
+
+    stale = tc.post("/api/v1/navigation/bound-goal", json=body, headers=OPERATOR)
+    assert stale.status_code == 409 and stale.json()["error"]["code"] == "NAVIGATION_MAP_GRID_CHANGED"
+    assert svc.modes.mode.value == "IDLE" and svc.nav.nav_state.value == "IDLE"
+
+    svc.state.invalidate_map_grid()
+    missing = tc.post("/api/v1/navigation/bound-goal", json=body, headers=OPERATOR)
+    assert missing.status_code == 409 and svc.nav.nav_state.value == "IDLE"
+    assert goals == []
+
+    svc.state.set_map_id("warehouse_a", "occupancy:old")
+    matched = tc.post("/api/v1/navigation/bound-goal", json=body, headers=OPERATOR)
+    assert matched.status_code == 409 and matched.json()["error"]["code"] == "NAVIGATION_PLAN_REQUIRED"
+    assert goals == []
+
+
 def test_safety_stop_release_cycle(client):
     tc, svc = client
     assert tc.post("/api/v1/safety/stop", headers=VIEWER).status_code == 200   # 누구나 (SAF-001)
@@ -866,6 +892,25 @@ class TestDockingCommands:
         _register_dock(services)
         r = tc.post("/api/v1/docking/dock", json={}, headers=OPERATOR)
         assert r.status_code == 200
+
+    def test_dock_carries_site_pose_evidence_and_core_judges_it(self, docking_client):
+        tc, services = docking_client
+        _register_dock(services)
+        services.state.set_map_id("map-1")
+        evidence = {"anchor_source": "sighting", "identity_mode": "led", "anchor_age_s": 2.0, "camera_residual_m": 0.02,
+                    "camera_residual_deg": 1.0, "map_id": "map-1", "at": 1.0}
+        r = tc.post("/api/v1/docking/dock", json={"dock": "dock_1", "site_pose_evidence": evidence}, headers=OPERATOR)
+        assert r.status_code == 200
+        assert r.json()["site_pose_verified"] is True and r.json()["site_pose_refusal"] is None
+        tc.post("/api/v1/docking/cancel", headers=OPERATOR)
+        r = tc.post("/api/v1/docking/dock", json={"dock": "dock_1", "site_pose_evidence": {**evidence, "anchor_source": "auto_locate"}}, headers=OPERATOR)
+        assert r.status_code == 200 and r.json()["site_pose_verified"] is False and "auto_locate" in r.json()["site_pose_refusal"]
+        tc.post("/api/v1/docking/cancel", headers=OPERATOR)
+        r = tc.post("/api/v1/docking/dock", json={"dock": "dock_1"}, headers=OPERATOR)             # none given: refused for the map path, the dock itself still starts
+        assert r.status_code == 200 and r.json()["site_pose_verified"] is False and "no site_pose_evidence" in r.json()["site_pose_refusal"]
+        tc.post("/api/v1/docking/cancel", headers=OPERATOR)
+        bad = tc.post("/api/v1/docking/dock", json={"dock": "dock_1", "site_pose_evidence": {"anchor_source": "sighting"}}, headers=OPERATOR)
+        assert bad.status_code == 400                                                              # anchor_age_s and map_id are required (the API maps validation errors to 400)
 
     def test_an_unknown_dock_id_is_404(self, docking_client):
         tc, services = docking_client

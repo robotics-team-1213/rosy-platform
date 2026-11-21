@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import threading
 import urllib.request
+from unittest.mock import Mock
 
 import pytest
 
@@ -17,6 +18,41 @@ def _make_workdir(tmp_path: Path) -> Path:
         (tmp_path / name).write_text("{}", encoding="utf-8")
     (tmp_path / "tools-env-current.sh").write_text("export OMX=~/rosy-test/omx-tools-abc1234/deploy/robot/omx\n", encoding="utf-8")
     return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("job", "site_params", "status"),
+    [
+        ("auto_pick", {"source": "pinky"}, 400),
+        ("auto_pick", {"source": "pinky_42"}, 400),
+        ("auto_pick", {"source": "bed-1"}, 400),
+        ("auto_pick", {"source": "inbound"}, 202),
+        ("auto_pick", {"source": "belt", "dest": "pinky"}, 400),
+        ("auto_pick_dry_run", {"source": "pinky"}, 202),
+        ("pivot_near", {"site": "bed-1"}, 400),
+    ],
+)
+def test_runner_requires_r_cell_task_for_amr_bed_motion(tmp_path, monkeypatch, job, site_params, status):
+    params = {"config": "cell-s.json", **site_params}
+    if job != "auto_pick_dry_run":
+        params.update(arm="arm_s", person_at_switch=True)
+    if job == "pivot_near":
+        params.update(x=0.0, y=0.0)
+    else:
+        params.update(catalog="catalog-live.json", roi=[0, 0, 10, 10], dest="outbound")
+    params.update(site_params)
+
+    wd = _make_workdir(tmp_path)
+    popen = Mock()
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    result = api.Runner(wd, lock_dir=wd).start(job, params)
+
+    assert result["code"] == status
+    if status == 400:
+        assert "R cell-task -> cell_task_worker -> Gate" in result["error"]
+        popen.assert_not_called()
+    else:
+        popen.assert_called_once()
 
 
 def test_remap_and_policy_drive_argv_validation(tmp_path):
@@ -46,6 +82,16 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     assert "cell_policy_drive.py" in drive_argv
     assert "--dry-run" in drive_argv and "--person-at-switch" in drive_argv
     assert "--commissioning" not in drive_argv
+
+    job = api.JOBS["cell_policy_drive"]
+    with_goal = {**base_policy, "goal_site": "yard:r3-s2-t1"}
+    del with_goal["model_calibration"]
+    argv = api.build_argv(job, with_goal, wd)
+    assert argv[argv.index("--goal-site") + 1] == "yard:r3-s2-t1"
+    assert "--model-calibration" not in argv
+    for site in ("yard:r3-s1-t1", "yard:r3-s2-t1; park", 9):
+        with pytest.raises(ValueError, match="goal_site"):
+            api.build_argv(job, {**base_policy, "goal_site": site}, wd)
 
     with pytest.raises(ValueError, match="D-1024"):
         api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "proposer": "op_b"}, wd)

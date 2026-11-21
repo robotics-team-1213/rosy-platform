@@ -8,7 +8,9 @@ import threading
 import time
 from typing import Callable, Optional
 
+from core_common.domain.localization import normalize_map_id, odom_position_jump
 from core_common.sensor_store import SensorStore
+from core_common.map_generation import MapGenerationCounter
 from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S, judge
 from core_common.protocol.state_components import BATTERY_ESTOP_SOURCES
 from core_common.protocol.schemas import (
@@ -33,33 +35,10 @@ from core_common.protocol.schemas import (
 
 log = logging.getLogger(__name__)
 
-#: D-758 0: one odom step beyond this many metres plus ODOM_JUMP_MPS * dt is a discontinuity (the
-#: line-follow PoseTrail's 0.02 + 0.2 dt, recovery/lane_return.py), so the odom epoch moves.
-ODOM_JUMP_M, ODOM_JUMP_MPS = 0.02, 0.2
-
-
-def _as_map_id(value) -> Optional[str]:
-    """MAP-001 map id, normalised to a string or nothing.
-
-    `navigation.map_id: 42` in YAML parses as an int, and every consumer here
-    treats the id as a string: the swarm map guard compares it (so a non-string
-    never matches and the formation silently stops issuing goals), and the
-    leader pose stream declares it `Optional[str]` (so pydantic raises and the
-    socket closes on connect, with the handler's bare except hiding why). A
-    scalar the operator typed becomes its text; anything else is not an id.
-    """
-    if isinstance(value, str):
-        return value or None
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return str(value)
-    return None
-
 
 class StateManager:
     def __init__(self, robot_id: str, clock=time.time, stale_after_s=None,
-                 sources_configured: bool = True, monotonic=time.monotonic) -> None:
+                 sources_configured: bool = True, monotonic=time.monotonic, map_generation_path=None) -> None:
         self._robot_id = robot_id
         # False in CORE-only runtime (D-161): no motor, IO or Nav2 unit runs, so a
         # channel that never reported has no source at all. It is judged
@@ -74,6 +53,7 @@ class StateManager:
             for channel, value in stale_after_s.items():
                 self._stale_after_s[str(channel)] = float(value)
         self._lock = threading.Lock()
+        self.map_grid_gate = threading.RLock()
         self._seq = 0
         self._received: dict[str, float] = {}
         self._mode: RobotMode = RobotMode.IDLE
@@ -100,6 +80,8 @@ class StateManager:
         self._line_follow = LineFollowStatus()
         self._traffic_policy = TrafficPolicyStatus()
         self._map_id = self._map_grid_id = None  # Optional[str]; grid: content id of the grid /map delivered
+        self.map_generation = MapGenerationCounter(map_generation_path)  # changes when the SLAM map origin MAY have changed (core_common.map_generation)
+        self._map_grid_update = None
         self._diagnostics: dict[str, HealthState] = {}
         self._errors: list[str] = []
         self._sensors = SensorStore()  # set_sensor(key, dict), set_sensor_lazy(key, provider), get_sensor(s)
@@ -206,6 +188,11 @@ class StateManager:
                 self._received.pop('pose', None)
                 self._received_mono.pop('pose', None)
 
+    def odom_pose_record(self):
+        """The newest OdomPose (x, y, yaw, wall stamp, epoch), or None before the first one (the dock seat anchor binds to it)."""
+        with self._lock:
+            return self._odom_pose
+
     def odom_sample(self) -> Optional[tuple[float, float, float, float]]:
         """D-581: (x, y, yaw, age_s) of the odom-frame pose; None before the first one."""
         with self._lock:
@@ -253,7 +240,7 @@ class StateManager:
                 return None
             prev, (prev_frame, prev_ns) = self._odom_pose, self._odom_source
             if prev is not None and (
-                    math.hypot(x - prev.x, y - prev.y) > ODOM_JUMP_M + ODOM_JUMP_MPS * (mono - self._odom_mono)
+                    odom_position_jump(x - prev.x, y - prev.y, mono - self._odom_mono)
                     or None not in (frame, prev_frame) and frame != prev_frame
                     or None not in (source_stamp_ns, prev_ns) and source_stamp_ns < prev_ns):
                 self._odom_epoch += 1
@@ -274,9 +261,10 @@ class StateManager:
         finally:
             self._lock.release()
 
-    def set_velocity(self, linear: float, angular: float) -> None:
+    def set_velocity(self, linear: float, angular: float, *, sampled_at: Optional[float] = None) -> None:
         with self._lock:
             self._velocity = Velocity(linear=linear, angular=angular)
+            self._velocity_sampled_at = sampled_at
             self._mark("velocity")
 
     def set_battery(self, percent: Optional[float], voltage: Optional[float] = None) -> None:
@@ -302,11 +290,27 @@ class StateManager:
             self._swarm = status
 
     def set_map_id(self, map_id, grid_id: Optional[str] = None) -> None:
-        with self._lock:
-            normalised = _as_map_id(map_id)
+        with self.map_grid_gate, self._lock:
+            normalised = normalize_map_id(map_id)
             if normalised != self._map_id:
                 self._odom_write_token = object()
+            if grid_id and grid_id != self._map_grid_id:
+                self._map_grid_update = object()
             self._map_id, self._map_grid_id = normalised, grid_id or self._map_grid_id  # save_map: same grid
+
+    def invalidate_map_grid(self) -> object:
+        with self.map_grid_gate, self._lock:
+            self._map_grid_id = None
+            self._map_grid_update = object()
+            return self._map_grid_update
+
+    @property
+    def map_grid_id(self) -> Optional[str]:
+        return self.map_grid_context()[0]
+
+    def map_grid_context(self):
+        with self._lock:
+            return self._map_grid_id, self._map_grid_update
 
     @property
     def map_id(self) -> Optional[str]:
@@ -403,6 +407,7 @@ class StateManager:
                     received_at=self._received.get(channel),
                     now=now,
                     stale_after_s=stale,
+                    sampled_at=getattr(self, "_velocity_sampled_at", None) if channel == "velocity" else None,
                 )
                 for channel, stale in self._stale_after_s.items()
             }
@@ -412,8 +417,9 @@ class StateManager:
                 mode=self._mode,
                 navigation=self._navigation,
                 map_id=self._map_id, map_grid_id=self._map_grid_id,
+                map_generation=self.map_generation.value,
                 peers=peers,
-                pose=self._pose.model_copy(),
+                pose=self._pose.model_copy(), pose_frame=self._pose_frame,
                 velocity=self._velocity.model_copy(),
                 battery=self._battery.model_copy(),
                 battery_status=self._battery_status.model_copy(),

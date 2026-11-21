@@ -93,6 +93,8 @@ jobs:
         shell: bash
         env:
           QUEUE_DELTA: ${{ vars.ROSY_QUEUE_DELTA }}  # D-1059 switch: unset keeps the whole queue selection
+          ROSY_BROWSER_CI: ${{ github.event_name == 'pull_request' && '1' || '' }}  # D-1066: browser evidence rides the pull_request run only
+          PUSH_SAME: ${{ vars.ROSY_PUSH_SAME }}  # D-1064 switch: unset keeps the whole push selection
           GH_TOKEN: ${{ github.token }}
           SCOPE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event_name == 'push' && github.event.before || '' }}
         run: |
@@ -114,6 +116,10 @@ jobs:
                 echo "::warning::missing or unreachable push base ($SCOPE_BASE); escalating to --full"
                 out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
               else
+                if [ "$PUSH_SAME" = 1 ]; then
+                  # D-1064: the guard set alone when the merge queue run passed this very commit for this very range.
+                  ROSY_QUEUE_TESTED="$(python3 tools/harness/affected_queue.py --pushed "$SCOPE_BASE")" && export ROSY_QUEUE_TESTED
+                fi
                 out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
               fi
               ;;
@@ -212,7 +218,7 @@ jobs:
           fi
 
       - name: Fleet browser readiness (Chromium and CJK fonts from the image)
-        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py')
+        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py') || contains(toJSON(matrix.invocations), 'ROSY_RUN_BROWSER_TESTS=1')
         run: |
           # The console is Korean: without fonts-noto-cjk, headless Chromium renders Hangul through
           # Playwright's wide Unifont fallback and 320px layout-fit assertions see overflow.
@@ -376,7 +382,10 @@ jobs:
               if rest:
                   runs.append(([*rest, *flags], job_environment))
               if browser:
-                  runs.append(([*browser, *flags], {**job_environment, "ROSY_RUN_BROWSER_TESTS": "1"}))
+                  # STRICT (vacuous-run check) judges the whole run, so only for whole browser FILES; a directory,
+                  # mixed list or "::" node id selects part of a file or holds legitimate skips.
+                  strict = {"ROSY_BROWSER_STRICT": "1"} if all("::" not in p and p.endswith("_browser.py") for p in browser) else {}
+                  runs.append(([*browser, *flags], {**job_environment, "ROSY_RUN_BROWSER_TESTS": "1", **strict}))
               for target in isolated:
                   runs.append(([target], {
                       "ROSY_OMX_NATIVE_REQUIRED": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
@@ -421,6 +430,7 @@ jobs:
               code = proc.wait()
               failed = known_failures.failed_ids("".join(out))
               ids = [] if dedicated(paths) else known_failures.rerun_ids("".join(out), quarantine)
+              rerun_out = ""
               if known_failures.should_rerun(code, failed, ids):
                   print(f"rerunning quarantined failures once: {' '.join(ids)}", flush=True)
                   rerun = subprocess.run([sys.executable, "-m", "pytest", *ids, "-q", "-rA", "-p", "no:cacheprovider",
@@ -431,6 +441,7 @@ jobs:
                   if known_failures.rerun_passed(code, failed, ids, rerun.returncode, rerun.stdout):
                       print(f"::warning::FLAKY (passed on rerun, D-762): {' '.join(ids)}", flush=True)
                       code = 0
+                      rerun_out = rerun.stdout
               print("::endgroup::", flush=True)
               full_out = "".join(out)
               first_out = full_out.split(known_failures.RERUN_MARKER, 1)[0]
@@ -462,6 +473,13 @@ jobs:
                   kind = "ACT CPU" if act_cpu_required else "ROS"
                   print(f"::error::native {kind} fixture must execute without skips: {' '.join(paths)}", flush=True)
                   status = 1
+              # D-1066: a STRICT browser run is no evidence unless something passed and nothing skipped.
+              if extra.get("ROSY_BROWSER_STRICT") == "1":
+                  from affected_browser import vacuous
+                  reason = vacuous(first_out + rerun_out)  # a rerun that passed is part of the verdict
+                  if reason:
+                      print(f"::error::browser evidence did not run for real: {' '.join(paths)}: {reason}", flush=True)
+                      status = 1
               # 경로가 여럿인데 0건 수집이면 세션 전체가 건너뛰어진 것이다(10-11부터 루트 test/ 가 그랬다).
               if known_failures.collected_nothing(full_out, paths):
                   print(f"::error::pytest {' '.join(paths)} collected 0 items", flush=True)

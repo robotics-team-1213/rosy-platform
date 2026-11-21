@@ -26,12 +26,27 @@ class NavigationTransport:
         """현재 계획 경로(map 프레임 폴리라인). Fleet 이 교행을 미리 보는 유일한 재료다."""
         return await self._get("/api/v1/navigation/path")
 
+    async def navigation_plan(self, x: float, y: float, yaw: float, *, correlation_id: str,
+                              expected_map_grid_id: str, line_handoff: dict | None = None) -> dict:
+        body = {"x": x, "y": y, "yaw": yaw, "correlation_id": correlation_id,
+                "expected_map_grid_id": expected_map_grid_id}
+        if line_handoff is not None:
+            body["line_stop"] = {key: line_handoff.get(key) for key in
+                                 ("lease_id", "trip_id", "job_id", "junction_seq", "stop_place_id")}
+        return await self._post("/api/v1/navigation/bound-plan", body)
+
     async def navigation_goal(self, x: float, y: float, yaw: float, *,
                               correlation_id: str | None = None,
                               lease_ttl_s: float | None = None,
                               expected_boot_id: str | None = None,
-                              expected_owner_generation: int | None = None) -> dict:
+                              expected_owner_generation: int | None = None,
+                              expected_map_grid_id: str | None = None,
+                              line_handoff: dict | None = None, plan_id: str | None = None) -> dict:
         body = {"x": x, "y": y, "yaw": yaw}
+        if expected_map_grid_id is not None:
+            if not plan_id or not correlation_id:
+                raise ValueError("BOUND_GOAL_PLAN_REQUIRED")
+            body["plan_id"] = str(UUID(plan_id))
         if correlation_id is not None:
             body["correlation_id"] = correlation_id
         if lease_ttl_s is not None:  # D-550 10: only to a robot that advertises goal_lease
@@ -40,6 +55,18 @@ class NavigationTransport:
             if expected_boot_id is None or expected_owner_generation is None:
                 raise ValueError('NATIVE_OWNER_EPOCH_PAIR_REQUIRED')
             body.update(expected_boot_id=expected_boot_id, expected_owner_generation=expected_owner_generation)
+        if line_handoff is not None:
+            if (not correlation_id or not expected_map_grid_id
+                    or expected_boot_id is None or expected_owner_generation is None):
+                raise ValueError("LINE_HANDOFF_GOAL_SCOPE_REQUIRED")
+            body.update(expected_map_grid_id=expected_map_grid_id,
+                        lease_id=line_handoff["lease_id"], trip_id=line_handoff["trip_id"],
+                        junction_seq=line_handoff["junction_seq"], stop_place_id=line_handoff["stop_place_id"],
+                        job_id=line_handoff.get("job_id"))
+            return await self._post("/api/v1/navigation/line-handoff-goal", body)
+        if expected_map_grid_id is not None:
+            body["expected_map_grid_id"] = expected_map_grid_id
+            return await self._post("/api/v1/navigation/bound-goal", body)
         return await self._post("/api/v1/navigation/goal", body)
 
     async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict:
@@ -47,16 +74,24 @@ class NavigationTransport:
         return await self._post("/api/v1/navigation/goal/lease",
                                 {"correlation_id": correlation_id, "ttl_s": ttl_s})
 
-    async def navigation_handover(self, *, expected_boot_id, run_id, expected_owner_generation, correlation_id):
+    async def navigation_handover(self, *, expected_boot_id, run_id, expected_owner_generation, correlation_id,
+                                  expected_map_grid_id: str | None = None):
         if (type(expected_owner_generation) is not int or expected_owner_generation < 0
                 or not isinstance(correlation_id, str) or not 1 <= len(correlation_id) <= 128):
             raise ValueError('NATIVE_HANDOVER_SCOPE_INVALID')
         boot, run = str(UUID(str(expected_boot_id))), str(UUID(str(run_id)))
-        body = await self._post('/api/v1/navigation/handover', dict(expected_boot_id=boot, run_id=run,
-            expected_owner_generation=expected_owner_generation, correlation_id=correlation_id))
+        request = dict(expected_boot_id=boot, run_id=run, expected_owner_generation=expected_owner_generation,
+                       correlation_id=correlation_id)
+        if expected_map_grid_id is not None:
+            request["expected_map_grid_id"] = expected_map_grid_id
+        body = await self._post('/api/v1/navigation/handover', request)
         if (body.get('accepted') is not True or body.get('mode') != 'IDLE'
                 or body.get('run_id') != run or body.get('boot_id') != boot
                 or type(body.get('owner_generation')) is not int
                 or body['owner_generation'] != expected_owner_generation):
             raise ValueError('NATIVE_HANDOVER_RESPONSE_UNVERIFIED')
+        if expected_map_grid_id is not None and (
+                body.get("map_grid_id") != expected_map_grid_id
+                or type(body.get("idle_mode_epoch")) is not int or body["idle_mode_epoch"] < 0):
+            raise ValueError("NATIVE_HANDOVER_GRID_RESPONSE_UNVERIFIED")
         return body

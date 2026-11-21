@@ -46,7 +46,7 @@ def overhead_decision(request: Mapping, pose, robot_map_id: Optional[str] = None
     anchored on exactly the robot's own `robot_map_id` (both known and equal). A site-frame pose on
     another map is never silently re-posted as the robot's pose."""
     if (pose is None or pose.state != "LOCALIZED" or pose.anchor_age_s is None
-            or getattr(pose, "anchor_source", None) in ("operator_pin", "auto_locate")   # D-593, D-989: not overhead
+            or getattr(pose, "anchor_source", None) in ("operator_pin", "auto_locate", "track")   # D-593, D-989: not overhead; a track has no marker yaw
             or not 0.0 <= pose.anchor_age_s <= OVERHEAD_ANCHOR_FRESH_S
             or not robot_map_id or pose.map_id != robot_map_id):
         return None

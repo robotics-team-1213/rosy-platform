@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-21 · uncommitted · D-1063 Proposed: 공급암 S 인계 계약 보충(카메라 근거·2단 적재)
+- 2026-11-21 · uncommitted · ADR 색인 시험이 봇 전 PR/main에서 Log 행 누락을 경고로 처리
+- 2026-11-21 · uncommitted · records fragments cutover (D-1061)
+- 2026-11-21 · uncommitted · ci(records): 기록 봇이 rosy-records-bot App 토큰으로 PR을 연다
 - 2026-11-21 · uncommitted · D-1059 ci.yml 배선
-- 2026-11-21 · uncommitted · D-1059 Merge Queue 재시험 선별(기본 꺼짐)
-- 2026-11-20 · uncommitted · docs: CORE events 실행기 확인 기록(D-953 후속 3)
-- 2026-11-20 · uncommitted · docs: 보정 체계·영상 기록 공개 문서(한·영)와 README 소개 갱신
-- 2026-11-20 · uncommitted · 교훈: 병합 경로 전환은 실제 브랜치로 끝까지 돌린 뒤 연다
