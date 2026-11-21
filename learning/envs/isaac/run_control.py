@@ -26,6 +26,12 @@ class Runner:
     def check(self, scenario_id, config, source_sha):
         snapshot = input_snapshot(scenario_id, config, source_sha)
         binding = self._binding(source_sha)
+        if (snapshot['input'].get('scene') or {}).get('r08_scene'):
+            from r08_rl_fixture import require_sdk
+            try:
+                require_sdk(binding)
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                return dict(snapshot, ready=False, reason=str(exc))
         try:
             readiness = self.system.check(binding)
         except (OSError, ValueError, subprocess.SubprocessError):
@@ -45,7 +51,10 @@ class Runner:
         snapshot = input_snapshot(request['scenario_id'], request['config'], request['source_sha'])
         if request['expected_input_sha256'] != snapshot['input_sha256']:
             raise ValueError('Experiment input fingerprint changed')
-        self._binding(request['source_sha'])
+        binding = self._binding(request['source_sha'])
+        if (snapshot['input'].get('scene') or {}).get('r08_scene'):
+            from r08_rl_fixture import require_sdk
+            require_sdk(binding)
         row = self.store.create(request['request_id'], request['scenario_id'], request['config'],
                                 request['source_sha'], parent_run_id=request.get('parent_run_id'))
         if row['revision'] != 0 or row['status'] != 'PENDING':

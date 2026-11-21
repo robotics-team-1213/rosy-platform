@@ -47,6 +47,22 @@ SDK2310초와 후처리를 포함한 소유 서비스2520초 예산을 사용한
 [검증 기록](../validation/omx-cube-stacking-2026-10-29/result.md)을 확인한다.
 이 시나리오는 IK 기준 제어이며 ACT/RL·실물 수용을 뜻하지 않는다.
 
+## r08 작업 셀의 OMX 강화학습
+
+MuJoCo의 `stack` 작업에서 `--choice preset=v24-20261114-cad194`를 사용한다.
+성공한 1~3층 실행의 `isaac-handoff.json`은 `omx-map-container-stacking-rl`의
+`r08-v24-cad194` 사례를 요청한다. 요청에는 배치·CAD 메시의 SHA-256이 들어간다.
+CLI와 웹 실행기는 배치 해시가 다른 요청의 시작을 거절한다.
+
+Isaac Sim 6.2와 MuJoCo가 포함된 SDK 환경이 필요하다.
+PPO는 실제 배치의 벨트, 팔 원점, h1 슬롯과 포켓 충돌체를 사용한다.
+컨테이너 접촉은 실측 치수의 상자로 계산한다. 겉모양은 v3 CAD를 사용한다.
+과거 사례는 기존의 배치와 실행 근거를 유지한다.
+
+Stage 2는 새 PPO 체크포인트와 독립 평가를 기록한다.
+학습 실행과 독립 물리 평가에는 각각 결과를 남긴다.
+실물 적층은 기존 감독 수용 절차를 따른다.
+
 ## 운영 binding
 
 실험 요청에는 경로·명령·호스트를 넣지 않는다. 운영자가 별도 JSON binding으로 승인 source checkout, SDK Python, 설치된 model-code root와 외부 run 데이터 루트를 고정한다. 모든 경로는 해당 모델 PC의 값이며 공개 문서에는 실제 계정·주소를 쓰지 않는다.
