@@ -69,3 +69,27 @@ test("feed drop keeps the last frame marked stale; the next live frame clears th
   assert.equal(stage.dataset.cameraStale, "true");
   assert.match(stamp.textContent, / · \d+초 전$/);
 });
+
+test("coordinates mode keeps birdseye hidden when a live ceiling frame arrives", () => {
+  const stage = { dataset: {} }, stamp = { hidden: true, textContent: "" }, birdseye = { hidden: true, src: "" };
+  const mode = { value: "coordinates" };
+  const elements = {
+    "map-stage": stage, "map-camera-stamp": stamp, "map-birdseye": birdseye,
+    "birdseye-toggle": { disabled: false, setAttribute() {}, removeAttribute() {} },
+    "map-display-mode": mode, "camera-comparison": { open: false },
+  };
+  let handler = null;
+  const scope = {
+    listen: () => {}, guard: (fn) => fn, interval: () => {},
+    timeout: () => () => {},
+    subscribe: (start) => start(), onDispose: () => {},
+  };
+  const visionView = { onFrame: (cb) => { handler = cb; }, fetchPlane: async () => ({ state: "plane-unavailable" }) };
+  const view = { siteMap: { maps: [] } };
+  const backdrop = createCameraBackdrop({ scope, el: (id) => elements[id] || null, view, draw: () => {} });
+  backdrop.bindCamera(visionView);
+
+  handler(frame);
+  assert.equal(view.displayMode, "coordinates");
+  assert.equal(birdseye.hidden, true);
+});

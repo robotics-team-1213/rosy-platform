@@ -172,11 +172,21 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
     const mode = el("map-display-mode");
     view.displayMode = mode.value || "coordinates";
+    let lastFrame = null;
+    const setLive = (url) => {
+      const show = Boolean(url) && (view.displayMode === "camera" || view.displayMode === "overlay");
+      birdseye.hidden = !show;
+      if (url) birdseye.src = url;
+      toggle.disabled = !url;
+      if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
+    };
+    const showFrame = () => setLive(lastFrame?.url);
     const setMode = (value) => {
       view.displayMode = value;
       mode.value = value;
       stage.dataset.view = value === "camera" ? "camera" : "map";
       toggle.setAttribute("aria-pressed", String(value === "camera"));
+      showFrame();
       redraw();
     };
     scope.listen(mode, "change", () => setMode(mode.value));
@@ -185,14 +195,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       if (planes?.current()) keptPlane = planes.current();
       redraw();
     } });
-    const setLive = (url) => {
-      birdseye.hidden = !url;
-      if (url) birdseye.src = url;
-      toggle.disabled = !url;
-      if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
-    };
     setLive(null);
-    let lastFrame = null;
     // 2026-11-14 요청: 끊긴 뒤에도 마지막 프레임을 지도·썸네일에 둔다. 낡음은 바닥 왼쪽 작은
     // 시각 글자(1초마다 갱신)와 반투명으로만 알린다 — 오류 색과는 섞지 않는다.
     const stamp = el("map-camera-stamp");
@@ -210,7 +213,6 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       updateStamp();
     };
     scope.interval(updateStamp, 1000);
-    const showFrame = () => setLive(lastFrame?.url);
     scope.listen(toggle, "click", () => {
       setMode(view.displayMode === "camera" ? "coordinates" : "camera");
       showFrame();
@@ -231,7 +233,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       delete stage.dataset.cameraStale;
       // D-631: the before-correction picture keeps the camera's original orientation.
       (frame.previewElement || frame.image)?.closest?.(".vision-frame")?.setAttribute("data-turn", "0");
-      const wantPlane = !view.map && planeCalibrationsFor(calibrations, view.siteMap, frame.source).length > 0;
+      const wantPlane = view.displayMode === "overlay" && !view.map && planeCalibrationsFor(calibrations, view.siteMap, frame.source).length > 0;
       if (!prevSeq || prevSeq !== frame.seq || prevSource !== frame.source) {
         setCameraFrame(frame);
         showFrame();

@@ -31,6 +31,7 @@ import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
 import { area, areaNav } from "/console/assets/area-nav.js";
 import { bindEstop, noteLink, tickClock } from "/console/assets/fleet-header.js";
+import { owns } from "/console/assets/unit-scope.js";
 // D-798 3.2 — 접속·잠금, 목표 지정, 읽기 갱신은 각자의 팩토리 파일이 가진다.
 import { createConsoleAuth } from "./console-auth.js";
 import { createConsoleGoal } from "./console-goal.js";
@@ -424,39 +425,44 @@ paintSitePath();
 connectionMode();
 refreshState();
 refreshAuthorization();
-visionView.refreshSources();
-mapView.refresh();
-trackingView.refresh();
-chargeBays.refresh();
-platoon.refresh();
-stationRecovery.refresh();
-personRequests.refresh();
+if (owns("drive")) {
+  visionView.refreshSources();
+  mapView.refresh();
+  trackingView.refresh();
+  chargeBays.refresh();
+  platoon.refresh();
+  stationRecovery.refresh();
+  personRequests.refresh();
+}
 // A hidden tab polls nothing but presence (it must still say visible:false); coming back reads at once.
 const poll = (fn, ms) => pageScope.interval(() => { if (!document.hidden) fn(); }, ms);
-pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); trackingView.refresh(); } });
-poll(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
+const pollDrive = (fn, ms) => poll(() => { if (owns("drive")) fn(); }, ms);
+pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); if (owns("drive")) trackingView.refresh(); } });
+pollDrive(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 poll(refreshState, STATE_MS);
 poll(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
-poll(refreshHealthz, STATE_MS);
-pageScope.interval(() => signals.presence(), STATE_MS);
+poll(refreshHealthz, MAP_MS);
+pageScope.interval(() => { if (owns("drive")) signals.presence(); }, STATE_MS);
 poll(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
 poll(refreshDiscovery, MAP_MS);
 poll(refreshRobotApps, MAP_MS);
-poll(() => mapView.refresh(), MAP_MS);
-poll(() => chargeBays.refresh(), MAP_MS);
-poll(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
-poll(() => platoon.refresh(), MAP_MS);
-poll(() => mapView.refreshSightings(), STATE_MS);
-poll(() => mapView.refreshTraffic(), STATE_MS);
-poll(() => mapView.refreshGuide(), STATE_MS);  // D-536
-poll(() => trackingView.refresh(), TRACKING_MS);
-poll(() => visionView.refreshFrame(), 1500);
+pollDrive(() => mapView.refresh(), MAP_MS);
+pollDrive(() => chargeBays.refresh(), MAP_MS);
+pollDrive(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
+pollDrive(() => platoon.refresh(), MAP_MS);
+pollDrive(() => { if (view.layers?.sightings) mapView.refreshSightings(); }, STATE_MS);
+pollDrive(() => mapView.refreshTraffic(), STATE_MS);
+pollDrive(() => mapView.refreshGuide(), STATE_MS);  // D-536
+pollDrive(() => { if (view.layers?.tracking) trackingView.refresh(); }, TRACKING_MS);
+pollDrive(() => visionView.refreshFrame(), 1500);
 
 
 pageScope.onResume(() => {
   visionView.reset();
   trackingView.reset();
-  trackingView.refresh();
   refreshAuthorization();  // refreshes the map once the session answers
-  visionView.refreshSources();
+  if (owns("drive")) {
+    if (view.layers?.tracking) trackingView.refresh();
+    visionView.refreshSources();
+  }
 });

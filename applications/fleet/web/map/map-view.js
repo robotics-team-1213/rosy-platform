@@ -23,14 +23,15 @@ import { drawMapDatum } from "./map-datum.js";
 const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
+  if (!view.displayMode) view.displayMode = "coordinates";
   const camera = createCameraBackdrop({ scope, el, view, draw });
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
   const font = (role, displayScale = 1) => window.RosyPalette.canvasFont(role, "mono", displayScale);
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
-  // D-360 레이어 토글. 기본은 모두 켜고, 상단 #map-overlay-toggles 버튼으로 전체 또는 개별 층을 즉시 켜고 끈다.
+  // D-360 레이어 토글. 첫 화면은 정돈된 가상 지도(로봇·도로·교통·라벨)만 켜고, 천장 카메라 관측/추적 고리는 필요 시 켠다.
   if (!view.layers) {
-    view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: true, tracking: true };
+    view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: false, tracking: false };
   }
   const layerOn = (key) => view.layers?.[key] !== false;
   const toggleBar = el("map-overlay-toggles");
