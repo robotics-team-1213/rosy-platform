@@ -20,7 +20,8 @@ def offset(robot_id: str, spread_s: float) -> float:
 
 
 def spread(read: Callable[[str], Awaitable[Mapping]], spread_s: float,
-           max_reads: int = MAX_READS_IN_FLIGHT) -> Callable[[str], Awaitable[Mapping]]:
+           max_reads: int = MAX_READS_IN_FLIGHT,
+           sleep: Callable[[float], Awaitable[object]] = asyncio.sleep) -> Callable[[str], Awaitable[Mapping]]:
     """``read`` delayed by the robot's offset and capped at ``max_reads`` in flight.
 
     shortcut: the caller's per-call timeout also covers the offset and the wait for a slot,
@@ -30,7 +31,7 @@ def spread(read: Callable[[str], Awaitable[Mapping]], spread_s: float,
     slots = asyncio.Semaphore(max_reads)
 
     async def spread_read(robot_id: str) -> Mapping:
-        await asyncio.sleep(offset(robot_id, spread_s))
+        await sleep(offset(robot_id, spread_s))
         async with slots:
             return await read(robot_id)
     return spread_read

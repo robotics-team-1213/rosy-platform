@@ -19,7 +19,9 @@ Pure: no network, clock, or robot calls. Fleet (M1) feeds it map poses and sends
 
 from __future__ import annotations
 
+import bisect
 import math
+from operator import attrgetter
 from typing import Callable, Collection, Iterable, Mapping, Optional, Sequence
 
 from fleet.traffic.block_types import (
@@ -46,9 +48,20 @@ HELD_PER_ROBOT = 3
 ZONE_STOP_CLEARANCE_M = 0.02
 
 
+_D1 = attrgetter("d1")
+
+
 def _occupied(robot: Robot) -> set[int]:
     rear, front = robot.d - robot.body_length_m - robot.uncertainty_m, robot.d + robot.uncertainty_m
-    return {i for i, s in enumerate(robot.spans) if s.d1 > rear and s.d0 < front}
+    spans = robot.spans
+    found: set[int] = set()
+    for i in range(bisect.bisect_right(spans, rear, key=_D1), len(spans)):
+        s = spans[i]
+        if s.d0 >= front:
+            break
+        if s.d1 > rear:
+            found.add(i)
+    return found
 
 
 def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float, *,
@@ -154,8 +167,13 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
     present: dict[str, set[str]] = {u: set(rs) for u, rs in granted.items()}
     for robot in robots:
         if robot.d is not None:
-            for s in robot.spans:
-                if s.d1 > robot.d - robot.body_length_m and s.d0 < robot.d:
+            spans = robot.spans
+            rear = robot.d - robot.body_length_m
+            for i in range(bisect.bisect_right(spans, rear, key=_D1), len(spans)):
+                s = spans[i]
+                if s.d0 >= robot.d:
+                    break
+                if s.d1 > rear:
                     present.setdefault(s.unit, set()).add(robot.id)
     for table in (state.last_occupied, state.pinned):
         for robot_id, units in table.items():
@@ -165,7 +183,8 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
     for robot in sorted(robots, key=lambda r: r.id):
         if robot.d is None:
             continue
-        front = next((i for i, s in enumerate(robot.spans) if s.d0 <= robot.d < s.d1), None)
+        i = bisect.bisect_right(robot.spans, robot.d, key=_D1)
+        front = i if i < len(robot.spans) and robot.spans[i].d0 <= robot.d < robot.spans[i].d1 else None
         ok, _others, via = (False, (), None) if front is None or front in state.held[robot.id] \
             else free_for(robot, robot.spans[front], present)
         if ok:
@@ -193,7 +212,8 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
         # Coverage starts where the unit under the front starts, not at the estimate: a robot
         # whose own unit is not granted has no authority past that unit's start.
         end, blockers, ahead = None, (), None  # ahead: the first span past ``end`` it does not hold
-        for index, span in enumerate(robot.spans):
+        for index in range(bisect.bisect_right(robot.spans, robot.d, key=_D1), len(robot.spans)):
+            span = robot.spans[index]
             if span.d1 <= robot.d:
                 continue
             if end is None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import secrets
 import sqlite3
 import threading
@@ -14,7 +15,14 @@ from fastapi import HTTPException
 
 from rosy_account.db_policy import enable_wal
 from rosy_account.principal import SitePrincipal, legacy_grants
-from rosy_account.site_users import hash_password
+from rosy_account.site_users import hash_password, verify_password
+
+_REAL_VERIFY_PASSWORD = verify_password
+
+
+@functools.lru_cache(maxsize=256)
+def _is_initial_password(login: str, encoded: str) -> bool:
+    return verify_password(login, encoded) or verify_password(login + "!", encoded)
 
 COOKIE = "rosy_fleet_session"
 IDLE_S = 12 * 3600.0
@@ -79,9 +87,11 @@ def init_legacy_session_tables(sessions: Any, accounts_bootstrap, verify_passwor
             else:
                 db.execute("DELETE FROM fleet_console_sessions WHERE login = ?", (row["login"],))
                 db.execute("DELETE FROM fleet_console_passwords WHERE login = ?", (row["login"],))
+    check_initial = _is_initial_password if verify_password_fn is _REAL_VERIFY_PASSWORD else (
+        lambda login, encoded: verify_password_fn(login, encoded) or verify_password_fn(login + "!", encoded)
+    )
     sessions._required = {
-        login: (verify_password_fn(login, account["password_scrypt"])
-                or verify_password_fn(login + "!", account["password_scrypt"]))
+        login: check_initial(login, account["password_scrypt"])
         for login, account in sessions._logins.items()
     }
 
@@ -113,12 +123,17 @@ def rotate_legacy_password(
             if cached is None:
                 raise StalePasswordCheck()
             checked_hash = sessions._logins[cached["login"]]["password_scrypt"]
+    login_hint = cached["login"]
+    need_current = not sessions._required[login_hint] and current_password is None
     if not _SCRYPT_SLOTS.acquire(timeout=_SCRYPT_WAIT_S):
         raise LoginRateLimited()
     try:
         current_ok = current_password is None or verify_password_fn(current_password, checked_hash)
-        same_password = verify_password_fn(password, checked_hash)
-        encoded = hash_password(password)
+        invalid_new = (not isinstance(password, str) or not 8 <= len(password) <= 1024
+                       or password in (login_hint, login_hint + "!"))
+        should_hash = current_ok and not need_current and not invalid_new
+        same_password = should_hash and verify_password_fn(password, checked_hash)
+        encoded = hash_password(password) if (should_hash and not same_password) else ""
     finally:
         _SCRYPT_SLOTS.release()
     with sessions._lock:
