@@ -138,9 +138,10 @@ class BenchOpsMixin:
                                 "--arm", a, "--pose", str(lpose), "--timeout-s", "35",
                                 "--attest", f"hands-off:bench:{int(time.time())}"]
                         try:
-                            lres = subprocess.run(lcmd, cwd=self.prep, env=env, capture_output=True, text=True, timeout=60)
+                            # leader_home stretches its own deadline to the distance at 1 degree/s; a full turn fits in 420 s
+                            lres = subprocess.run(lcmd, cwd=self.prep, env=env, capture_output=True, text=True, timeout=420)
                         except subprocess.TimeoutExpired:
-                            raise ValueError(f"{a} 리더 홈 이동 시간 초과 (60s)") from None
+                            raise ValueError(f"{a} 리더 홈 이동 시간 초과 (420s)") from None
                         if lres.returncode != 0:
                             raise ValueError(f"{a} 리더 홈 이동 실패: {(lres.stderr or lres.stdout or '').strip()[-240:]}")
                     results.append(a)

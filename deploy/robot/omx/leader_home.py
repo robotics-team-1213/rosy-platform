@@ -19,7 +19,7 @@ if str(HERE) not in sys.path:
 import guarded_device
 from guarded_device import close_device
 from joint_tune import no_interrupts, protect_signals
-from leader_actuator import BODY, DEFAULT_CURRENT, DEFAULT_PWM, LeaderActuator
+from leader_actuator import BODY, DEFAULT_CURRENT, DEFAULT_PWM, RATE_DEG_S, TICKS_PER_DEGREE, LeaderActuator
 
 DEFAULT_GAINS = {n: {"p": 1200, "i": 100} for n in BODY}
 
@@ -74,7 +74,8 @@ def _resolve_target(pose_path: Path, leader) -> dict[str, float]:
     return target
 
 
-def _clear_wrist_roll_wrap(leader, present: dict[str, int]) -> dict[str, int]:
+def _clear_wrist_roll_wrap(leader, present: dict[str, int], *, returning: bool = False) -> dict[str, int]:
+    """`returning`: a move back into the range may start outside it (LeaderActuator.write bounds the way)."""
     cal = getattr(leader, "calibration", None) or {}
     if "wrist_roll" in cal:
         lo, hi = int(cal["wrist_roll"].range_min), int(cal["wrist_roll"].range_max)
@@ -102,7 +103,7 @@ def _clear_wrist_roll_wrap(leader, present: dict[str, int]) -> dict[str, int]:
         if name not in cal:
             raise ValueError(f"리더 {name} 캘리브레이션이 없습니다")
         lo, hi = int(cal[name].range_min), int(cal[name].range_max)
-        if not (lo <= present[name] <= hi):
+        if not returning and not (lo <= present[name] <= hi):
             raise ValueError(f"리더 {name} 현재 위치({present[name]})가 캘리브레이션 범위({lo}..{hi}) 밖입니다")
     return present
 
@@ -151,8 +152,11 @@ def move_leader_home(config_path: Path, arm: str, pose_path: Path, attest: str, 
     raised = False
     restore_failures: list[str] = []
     try:
-        present = _clear_wrist_roll_wrap(leader, _present_ticks(leader))
+        present = _clear_wrist_roll_wrap(leader, _present_ticks(leader), returning=True)
         target = _resolve_target(pose_path, leader)
+        # the ramp is 1 degree/s: a half turn needs about 3 minutes, so the deadline follows the distance
+        far_deg = max(abs(present[n] - target[n]) for n in BODY) / TICKS_PER_DEGREE
+        timeout_s = max(timeout_s, far_deg / RATE_DEG_S + 15.0)
         actuator.admit(pwm=DEFAULT_PWM, current=DEFAULT_CURRENT, gains=DEFAULT_GAINS)
         actuator.enable()
         actuator.seed(present)

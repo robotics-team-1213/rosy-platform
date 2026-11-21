@@ -800,7 +800,7 @@ def test_leader_home_move_writes_step_cmd_and_clears_wrist_roll_wrap(tmp_path, m
                 'Position_I_Gain': {n: 0 for n in self.motors},
                 'Present_PWM': {n: 0 for n in self.motors},
                 'Present_Position': {
-                    'shoulder_pan': 2060, 'shoulder_lift': 670, 'elbow_flex': 3150,
+                    'shoulder_pan': 4179, 'shoulder_lift': 670, 'elbow_flex': 3150,
                     'wrist_flex': 3050, 'wrist_roll': 4119, 'gripper': 1950,
                 },
             }
@@ -840,8 +840,15 @@ def test_leader_home_move_writes_step_cmd_and_clears_wrist_roll_wrap(tmp_path, m
     monkeypatch.setattr(leader_home, 'close_device', lambda _dev: bus.disable_torque())
     monkeypatch.setattr(leader_home, 'protect_signals', lambda: None)
 
+    # pan starts past its range (4179, a hand-turned multi-turn count): it comes back downward, and the
+    # 5 s deadline stretches to the 186 degrees at 1 degree/s instead of timing out
+    clock = [0.0]
+    monkeypatch.setattr(leader_home.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(leader_home.time, 'sleep', lambda s: clock.__setitem__(0, clock[0] + s))
     res = leader_home.move_leader_home(cfg, 'arm_b', pose, 'hands-off:test:now', timeout_s=5.0)
     assert res['ok'] is True
+    pans = [g['shoulder_pan'] for g in bus.written_goals]
+    assert pans[0] > 4095 and pans == sorted(pans, reverse=True) and pans[-1] == 2060
     assert bus.packet_handler.rebooted == [bus.motors['wrist_roll'].id]
     assert bus.written_goals
     assert all(v == 0 for v in bus.regs['Torque_Enable'].values())
