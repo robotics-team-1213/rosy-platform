@@ -1,6 +1,8 @@
 // D-540 2 / D-741 3 — the one Rosy Fleet app bar. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar>
 // markup (test_fleet_header.py pins it) and drive it only through this module: link word and clock, alerts
 // count, role words on the account button, development badge, the account fold and the one E-stop rule.
+import { setOffBy } from "/common/cause-line.js";
+import { isOperator } from "./authorization.js";
 import "/common/ui.js";  // wires the `[data-theme-cycle]` button
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {renderAccountApps, roleLabel} from "/common/account-profile.js";
@@ -55,15 +57,12 @@ export function showInboxCount(count) {
 // or a role without stop rights (403). Unknown stays live — never harder to reach than a refused press.
 export function estopReason(session) {
   if (session === null) return SESSION_REASON;
-  if (session && session.role !== "operator") return OPERATOR_REASON;
+  if (session && !isOperator(session.role)) return OPERATOR_REASON;
   return "";
 }
 
 function gateEstop(session) {
-  const estop = $("estop"), reason = estopReason(session);
-  estop.disabled = Boolean(reason);
-  if (reason) estop.setAttribute("reason", reason);
-  else estop.removeAttribute("reason");
+  setOffBy($("estop"), estopReason(session));
 }
 
 // The fold is on demand only: losing access rewrites the words and the E-stop, never the row's open state.
@@ -131,7 +130,7 @@ export function showSession(identity, {credentialChange = false, focusOrigin = d
   }
   tag.textContent = roleLabel(identity.role);
   tag.title = title;
-  tag.setAttribute("status", identity.role === "operator" ? "active" : "neutral");
+  tag.setAttribute("status", isOperator(identity.role) ? "active" : "neutral");
   $("development-badge").hidden = !developmentConnection;
   gateEstop(identity);
 }

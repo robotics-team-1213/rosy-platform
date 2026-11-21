@@ -1,5 +1,6 @@
+import { setOff, setOffBy } from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
-import {NAMED_OPERATOR_REASON, OPERATOR_REASON, namedOperatorReason} from "/console/assets/authorization.js";
+import {NAMED_OPERATOR_REASON, OPERATOR_REASON, namedOperatorReason, isOperator} from "/console/assets/authorization.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
@@ -47,8 +48,8 @@ $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 const catalog = createObjectCatalog({request, $});
-const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy,
-  namedReason: () => role !== 'operator' || busy ? OPERATOR_REASON
+const real2sim = createReal2SimPipeline({request, $, isOperator: () => isOperator(role) && !busy,
+  namedReason: () => !isOperator(role) || busy ? OPERATOR_REASON
     : principal?.startsWith('development-') ? NAMED_OPERATOR_REASON : namedOperatorReason(role, principal),
   cellFrames: createCellFrameFeed({call: request})});
 createCellLine({root: $('cell-line'), $});
@@ -89,33 +90,32 @@ const scopeFilled = () => $('workcell').value.trim() && $('instance').value.trim
 for (const id of ['workcell', 'instance']) $(id).addEventListener('input', () => refreshControls());
 function refreshControls() {
   for (const field of document.querySelectorAll('input, textarea, select')) {
-    field.disabled = busy; field.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : ''); field.setAttribute('aria-describedby', 'notice');
+    setOffBy(field, busy ? '요청 처리 중 · 입력 잠시 잠금' : ''); field.setAttribute('aria-describedby', 'notice');
   }
-  for (const control of document.querySelectorAll('[data-document-edit]')) { control.disabled = busy; control.setAttribute('reason', busy ? '요청 처리 중' : ''); }
+  for (const control of document.querySelectorAll('[data-document-edit]')) { setOffBy(control, busy ? '요청 처리 중' : ''); }
   for (const id of ['token-save', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
     const unavailable = cellServiceUnavailable && ['recipe-load', 'cell-load', 'read-job'].includes(id);
     const sessionPending = !role && ['recipe-load', 'cell-load', 'read-job'].includes(id);
     const channelBlocked = id === 'new-proposal' && channelRequested;
-    $(id).disabled = busy || unavailable || sessionPending || channelBlocked;
-    $(id).setAttribute('reason', busy ? '요청 처리 중' : unavailable ? '팔레트 적재 서비스 구성 확인 필요' : sessionPending ? '접속 상태 확인 필요' : channelBlocked ? '연결된 대화 요청의 검토 필요' : '');
+    setOff($(id), busy || unavailable || sessionPending || channelBlocked, busy ? '요청 처리 중' : unavailable ? '팔레트 적재 서비스 구성 확인 필요' : sessionPending ? '접속 상태 확인 필요' : channelBlocked ? '연결된 대화 요청의 검토 필요' : '');
   }
   for (const id of commands) {
-    if (cellServiceUnavailable) { $(id).disabled = true; $(id).setAttribute('reason', '팔레트 적재 서비스 구성 확인 필요'); continue; }
+    if (cellServiceUnavailable) { setOffBy($(id), '팔레트 적재 서비스 구성 확인 필요'); continue; }
     const sheetBlocked = id === 'resume' && job?.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS');
     const needsJob = id in jobActionLabels;
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
-    const allowed = role === 'operator' && !busy && jobAllowed && !sheetBlocked &&
+    const allowed = isOperator(role) && !busy && jobAllowed && !sheetBlocked &&
       (id !== 'propose' || (scopeFilled() && previewRefs !== null && (!channelRequested || (channelReceipt && channelReview?.state !== 'LINKED'))));
     let reason = '';
     if (!allowed) {
       reason = id === 'propose' && !scopeFilled() ? '작업 셀 ID와 실행 인스턴스 ID를 입력하세요' : '저장 후 미리보기 필요';
       if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
       if (sheetBlocked) reason = '작업자 간지 삽입 확인 대기';
-      if (role !== 'operator') reason = OPERATOR_REASON;
+      if (!isOperator(role)) reason = OPERATOR_REASON;
       if (busy) reason = '요청 처리 중';
     }
-    $(id).disabled = !allowed; $(id).setAttribute('reason', reason);
+    setOff($(id), !allowed, reason);
   }
 }
 async function action(fn) {
@@ -195,7 +195,7 @@ function cellFields(cell) {
     const label = document.createElement('label'); label.textContent = title;
     const input = document.createElement('input'); input.className = 'ui-field';
     input.type = typeof value === 'number' ? 'number' : 'text'; input.step = 'any'; input.value = value;
-    input.disabled = busy; input.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
+    setOffBy(input, busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
     input.setAttribute('aria-describedby', 'notice');
     input.addEventListener('input', () => {
       editEpoch++; invalidate();
@@ -220,8 +220,7 @@ function recipeFields(recipe) {
     if (value === undefined) continue;
     const label = document.createElement('label'); label.textContent = `${title} (${unit})`;
     const input = document.createElement('input'); input.className = 'ui-field';
-    input.disabled = busy;
-    input.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
+    setOffBy(input, busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
     input.setAttribute('aria-describedby', 'notice');
     input.type = 'number'; input.step = 'any'; input.value = value;
     input.addEventListener('input', () => {
@@ -462,14 +461,14 @@ $('new-proposal').addEventListener('click', () => {
 for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
   $(command).addEventListener('click', async () => {
     if (command === 'cancel' || (command === 'admit' && channelRequested)) {
-      if (busy || role !== 'operator' || !job || job.mission_id !== $('mission-id').value) return;
+      if (busy || !isOperator(role) || !job || job.mission_id !== $('mission-id').value) return;
       const id = job.mission_id, epoch = editEpoch;
       const allowed = await confirmIrreversible({
         message: command === 'admit' ? `대화 요청에 연결된 팔레트 적재 작업 "${id}"의 실행을 승인할까요?` :
           `작업 "${id}"을 취소할까요? 작업 취소는 실행 중인 장치를 정지하지 않습니다. 실제 장치 상태를 확인하세요.`,
         action: command === 'admit' ? '실행 승인' : '작업 취소', opener: $(command),
       });
-      if (!allowed || busy || epoch !== editEpoch || role !== 'operator' || job?.mission_id !== id) return;
+      if (!allowed || busy || epoch !== editEpoch || !isOperator(role) || job?.mission_id !== id) return;
     }
     await action(async () => {
       if (!job || job.mission_id !== $('mission-id').value) throw new Error('작업 상태를 먼저 확인하세요.');

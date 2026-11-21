@@ -1,6 +1,7 @@
 // D-410 — 설치·보정 화면 엔트리. 운용 셸(console.js)과 같은 모듈을 쓰지만
 // 로스터·지도·대형·신호등·발행 상태는 없다. 관제 토큰은 같은 세션 저장소
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 
 import { applyRoleToControls } from "/console/assets/authorization.js";
 import { developmentToken } from "/console/assets/development-auth.js";
@@ -274,7 +275,7 @@ async function refreshDiscovery() {
       if (expired && !scannerLost) log("발견 검색기 끊김 — 로봇 발견·주소 이동 안내 불가", "bad");
       scannerLost = expired;
       discoveryState(expired ? "검색기 끊김" : "검색기 연결 대기",
-        expired ? `마지막 스캔 ${snapshot.scanner_age_s ?? "?"}초 전 · 검색기 연결을 확인하고 다시 시도하세요. 새 주소로 옮기기는 검색기가 돌아온 뒤 가능합니다.`
+        expired ? `마지막 스캔 ${snapshot.scanner_age_s != null && Number.isFinite(Number(snapshot.scanner_age_s)) ? evidenceAgeText(Number(snapshot.scanner_age_s)).slice(3) : "시각 없음"} · 검색기 연결을 확인하고 다시 시도하세요. 새 주소로 옮기기는 검색기가 돌아온 뒤 가능합니다.`
           : "검색기가 아직 연결되지 않았습니다. 검색기 연결을 확인한 뒤 다시 시도하세요.", expired ? "crit" : "warn");
       return;
     }
