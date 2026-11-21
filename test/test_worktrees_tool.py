@@ -91,15 +91,15 @@ def test_clean_merged_worktree_is_pruned_with_its_branch(main):
     assert (main / "done.txt").read_text(encoding="utf-8") == "done"
 
 
-def test_clean_unmerged_worktree_needs_snapshot_and_keeps_its_branch(main):
+def test_clean_unmerged_worktree_is_pruned_and_keeps_its_branch(main, capsys):
+    """D-1070: its branch holds everything; the lossless prune takes it and keeps the branch for `adopt`."""
     wt = add(main, "open", commit=True)
     tip = git(wt, "rev-parse", "HEAD")
-    assert worktrees.prune(main, apply=True, now=LATER) == 0
-    assert wt.is_dir()
-    assert worktrees.prune(main, apply=True, snapshot=True, now=LATER) == 1
+    assert worktrees.prune(main, apply=True, now=LATER) == 1
     assert not wt.exists()
     assert git(main, "rev-parse", "feat/open") == tip
     assert refs(main, "refs/wip") == []  # nothing uncommitted and a branch holds the commits
+    assert "branch kept; re-attach: python tools/worktrees.py adopt open feat/open" in capsys.readouterr().out
 
 
 def _dirty(wt: Path) -> None:
@@ -239,14 +239,15 @@ def test_idle_threshold_is_respected(main):
     assert worktrees.prune(main, apply=True, now=now) == 1  # clean landed (any owner) goes at once
     assert not landed.exists() and wt.is_dir() and dirty.is_dir()
     assert worktrees.prune(main, apply=True, snapshot=True, now=now + 1.1 * HOUR) == 0  # dirty landed waits 72 h
-    assert worktrees.prune(main, apply=True, snapshot=True, now=now + 71 * HOUR) == 0
-    assert wt.is_dir() and dirty.is_dir()
+    assert worktrees.prune(main, apply=True, snapshot=True, now=now + 5 * HOUR) == 0  # clean waits 6 h (D-1070)
+    assert worktrees.prune(main, apply=True, snapshot=True, now=now + 71 * HOUR) == 1
+    assert not wt.exists() and dirty.is_dir()
 
 
 def test_idle_counts_uncommitted_files_and_the_given_threshold(main):
     wt = add(main, "fresh", owner=PEER)
     now = time.time()
-    assert worktrees.prune(main, apply=True, now=now + 100 * HOUR, idle_hours=200) == 0
+    assert worktrees.prune(main, apply=True, now=now + 5 * HOUR, idle_hours=200) == 0  # clean: at most 6 h
     # An uncommitted file written an hour before the clock keeps the worktree active.
     note = wt / "note.txt"
     note.write_text("wip", encoding="utf-8")
@@ -372,7 +373,7 @@ def test_status_names_a_verdict_per_worktree(main, capsys):
     assert worktrees.main(["status"], now=LATER) == 0
     verdict = {line.split()[0]: line for line in capsys.readouterr().out.splitlines()}
     assert "yes   removable" in verdict["done"]
-    assert "yes   needs snapshot" in verdict["open"]
+    assert "unmerged" in verdict["open"] and "yes   removable" in verdict["open"]  # clean, on a branch (D-1070)
     assert "-     locked" in verdict["held"]
     assert worktrees.main(["status"]) == 0
     verdict = {line.split()[0]: line for line in capsys.readouterr().out.splitlines()}
@@ -431,6 +432,7 @@ def test_new_reports_finished_worktrees_and_removes_them_only_with_prune(main, m
     monkeypatch.setattr(worktrees, "CAP", 2)
     done = add(main, "done", commit=True, merge=True)
     kept = add(main, "open", commit=True)
+    (kept / "wip.txt").write_text("wip", encoding="utf-8")  # dirty: the lossless prune keeps it
     assert worktrees.main(["new", "next", "refactor/next"], now=LATER) == 1  # at the cap: nothing was swept
     assert f"1 finished worktree(s) can be removed: {worktrees.SWEEP}" in capsys.readouterr().out
     assert done.is_dir()
@@ -457,7 +459,8 @@ def test_snapshot_takes_only_the_callers_worktrees_unless_all(main, capsys):
     mine = add(main, "mine", commit=True)
     peer = add(main, "peer", commit=True, owner="t <t@t>; session other")
     bare = add(main, "bare", owner=None)  # a bare `git worktree add`, with uncommitted work
-    (bare / "wip.txt").write_text("wip", encoding="utf-8")
+    for wt in (mine, peer, bare):
+        (wt / "wip.txt").write_text("wip", encoding="utf-8")
     assert worktrees.main(["status"], now=LATER) == 0
     line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
     assert "yes   needs snapshot" in line["mine"]
@@ -466,7 +469,7 @@ def test_snapshot_takes_only_the_callers_worktrees_unless_all(main, capsys):
     out = capsys.readouterr().out
     assert "owner unknown: only with --all" in out and "owner t <t@t>; session other: only with --all" in out
     assert not mine.exists() and peer.is_dir() and (bare / "wip.txt").is_file()
-    assert refs(main, "refs/wip") == []
+    assert refs(main, "refs/wip") == [f"refs/wip/{DAY}/mine"]
     assert worktrees.main(["prune", "--snapshot", "--apply", "--all"], now=LATER) == 0
     assert not peer.exists() and not bare.exists()
     assert git(main, "show", f"refs/wip/{DAY}/bare:wip.txt") == "wip"
@@ -476,7 +479,7 @@ def test_cap_refusal_counts_removable_worktrees_per_owner(main, monkeypatch, cap
     monkeypatch.setattr(worktrees, "CAP", 3)
     add(main, "mine", commit=True, merge=True)
     add(main, "bare", commit=True, merge=True, owner=None)
-    add(main, "open", commit=True, owner=None)  # unmerged: not removable, not counted
+    (add(main, "open", commit=True, owner=None) / "wip.txt").write_text("wip", encoding="utf-8")  # dirty, unmerged
     assert worktrees.main(["new", "x", "feat/x", "--no-prune"], now=LATER) == 1
     err = capsys.readouterr().err
     assert "removable now by anyone: bare (removable; owner unknown)" in err
@@ -496,7 +499,8 @@ def test_status_explains_a_tip_that_is_a_merge_of_main(main, capsys):
     line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
     assert " unmerged " in line["half"] and "tip is a merge of main" in line["half"]
     assert "tip is a merge of main" not in line["open"]
-    assert worktrees.prune(main, apply=True, now=LATER) == 0  # unmerged stays unmerged: kept
+    assert worktrees.prune(main, apply=True, now=LATER) == 2  # clean (D-1070): worktrees go, unmerged branches stay
+    assert {"refs/heads/feat/half", "refs/heads/feat/open"} <= set(refs(main, "refs/heads"))
 
 
 @pytest.mark.parametrize("name, branch", [
@@ -641,8 +645,8 @@ def test_zero_wait_takes_any_owners_landed_clean_worktree(main, capsys):
     for branch in ("feat/mine", "feat/peer", "feat/sess", "feat/bare"):
         assert f"refs/heads/{branch}" not in refs(main, "refs/heads/feat")
     assert empty.is_dir() and blind.is_dir()
-    assert worktrees.prune(main, apply=True, now=now + 71 * HOUR) == 0
-    assert worktrees.prune(main, apply=True, now=now + 73 * HOUR) == 2  # no landing evidence: the 72 h rule
+    assert worktrees.prune(main, apply=True, now=now + 5 * HOUR) == 0
+    assert worktrees.prune(main, apply=True, now=now + 7 * HOUR) == 2  # no landing evidence: the clean 6 h rule
     assert not empty.exists() and not blind.exists()
 
 
@@ -780,7 +784,7 @@ def test_prune_archives_unlanded_branches_idle_without_a_worktree_and_loses_noth
     wt = add(main, "idle", commit=True)
     sha = git(wt, "rev-parse", "HEAD")
     git(main, "worktree", "remove", str(wt))
-    add(main, "busy", commit=True)  # checked out: never archived
+    (add(main, "busy", commit=True) / "wip.txt").write_text("wip", encoding="utf-8")  # checked out, dirty: kept
     later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
     assert worktrees.rules.archive_abandoned(main, time.time(), apply=True) == 0  # recent: kept
     worktrees.prune(main, now=later)
@@ -927,6 +931,52 @@ def test_prune_treats_origin_main_ancestors_as_merged(main):
     git(main, "update-ref", "refs/remotes/origin/main", sha)
     assert worktrees.prune(main, apply=True, now=LATER) == 1
     assert not wt.exists() and "refs/heads/feat/prmerged" not in refs(main, "refs/heads")
+
+
+# --- D-1070: clean worktrees go after 6 h whatever their branch; adopt re-attaches the branch ----------
+
+def test_clean_worktree_goes_after_six_hours_dirty_locked_and_noted_ones_stay(main):
+    now = time.time()
+    clean = add(main, "clean", commit=True, owner=PEER)
+    dirty = add(main, "dirty", commit=True, owner=PEER)
+    (dirty / "wip.txt").write_text("wip", encoding="utf-8")
+    os.utime(dirty / "wip.txt", (now, now))
+    held = add(main, "held", commit=True, owner=PEER)
+    git(main, "worktree", "lock", str(held))
+    noted = add(main, "noted", commit=True, owner=f"{PEER}; at {int(now)}")
+    assert worktrees.prune(main, apply=True, now=now + 5 * HOUR) == 0
+    assert worktrees.prune(main, apply=True, now=now + 7 * HOUR) == 1
+    assert not clean.exists() and "refs/heads/feat/clean" in refs(main, "refs/heads")
+    assert all(p.is_dir() for p in (dirty, held, noted))
+    assert worktrees.prune(main, apply=True, now=now + 71 * HOUR) == 0  # dirty waits 72 h, the note 72 h
+    assert all(p.is_dir() for p in (dirty, held, noted))
+
+
+def test_adopt_reattaches_a_pruned_branch_and_checks_like_new(main, monkeypatch, capsys):
+    wt = add(main, "open", commit=True)
+    tip = git(wt, "rev-parse", "HEAD")
+    assert worktrees.prune(main, apply=True, now=LATER) == 1 and not wt.exists()
+    assert worktrees.main(["new", "open", "feat/open"]) == 1  # new never takes an existing branch
+    assert "adopt" in capsys.readouterr().err
+    for name, branch in (("x", "wip/open"), ("../x", "feat/open"), ("x", "feat/missing")):
+        assert worktrees.main(["adopt", name, branch]) == 1
+    monkeypatch.setattr(worktrees, "CAP", 1)
+    add(main, "other")
+    assert worktrees.main(["adopt", "open", "feat/open", "--no-prune"]) == 1
+    assert "the cap is 1" in capsys.readouterr().err and not wt.exists()
+    monkeypatch.setattr(worktrees, "CAP", 14)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "sess-9")
+    assert worktrees.main(["adopt", "open", "feat/open"]) == 0
+    assert git(wt, "rev-parse", "HEAD") == tip and git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/open"
+    assert git(main, "config", "branch.feat/open.description").startswith("owner: t <t@t>; session sess-9; at ")
+
+
+def test_adopt_refuses_a_stale_history_branch(main, monkeypatch, capsys):
+    wt = main / ".worktrees" / "old"
+    _old_line(main, monkeypatch)
+    git(main, "worktree", "remove", str(wt))
+    assert worktrees.main(["adopt", "old", "feat/old"]) == 1
+    assert "refused: feat/old is forks from main" in capsys.readouterr().err and not wt.exists()
 
 
 def test_newest_file_ignores_oserror(tmp_path, monkeypatch):

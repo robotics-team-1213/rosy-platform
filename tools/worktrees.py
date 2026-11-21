@@ -6,6 +6,8 @@ Usage (from the main checkout or any worktree of the repository)::
     python tools/worktrees.py prune [--apply] [--snapshot] [--all] [--idle-hours N]
     python tools/worktrees.py new <short-name> <type>/<topic> [--from REF] [--owner TEXT]
                                   [--prune | --no-prune] [--force-over-cap "<reason>"]
+    python tools/worktrees.py adopt <short-name> <type>/<topic> [--owner TEXT] [--prune | --no-prune]
+                                  [--force-over-cap "<reason>"]
 
 ``prune`` is a dry run unless ``--apply``. Without ``--snapshot`` it removes only
 what is lossless: a worktree that is clean (nothing modified, staged or
@@ -14,7 +16,9 @@ rebase/merge/bisect/cherry-pick in progress, holds no ignored file outside the
 cache directories, and has been idle long enough. No wait at all when its branch landed (a
 commit of its own in the branch reflog, D-790) and the worktree is clean, whoever made it;
 ``--idle-hours`` (default 72) for the rest, a just-created empty worktree or a dirty landed one
-included. Its branch is
+included. D-1070: a clean worktree (nothing modified, staged, untracked or ignored outside caches)
+on a branch waits only ``CLEAN_IDLE_HOURS`` (6 h, or ``--idle-hours`` when smaller), merged or not, whoever made
+it: its branch holds everything, an unmerged branch is kept and ``adopt`` re-attaches it. Its branch is
 deleted by exact sha (``git update-ref -d <ref> <sha>``) once that sha is an
 ancestor of main, as are landed branches no worktree uses (D-886). ``--snapshot``, for a person or dispatcher,
 also takes idle worktrees that are dirty or unmerged: the working files (modified,
@@ -62,17 +66,12 @@ CAP = 14  # everything under .worktrees/, orphan directories included; with main
 IDLE_HOURS = 72.0
 STALE_LOCK = 30 * 60  # seconds after which another run's prune lock is taken over
 TYPES = ("feat", "fix", "refactor", "docs", "uiux")  # D-372
-# Ignored directories that are rebuilt, not written by hand, at any depth; `*.egg-info` by suffix.
-CACHES = {"__pycache__", ".pytest_cache", "node_modules", ".ruff_cache", ".mypy_cache", ".gradle", ".kotlin",
-          ".cxx", ".venv", "graphify-out"}
-# Caches only at the worktree root or where a marker proves it (see _generated_beside).
-GENERATED = {"build", "install", "log", "dist"}
 BUSY = ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG")
 ZERO = "0" * 40
 SNAPSHOT = ("needs snapshot", "landed-dirty")  # verdicts only --snapshot takes, and only from the owner or --all
 SWEEP = "python tools/worktrees.py prune --apply"
-HINT = (f"see `python tools/worktrees.py status`; `{SWEEP}` removes only clean, merged, idle ones, whoever"
-        " made them; `--snapshot` is for a person or the dispatcher, not for every session")
+HINT = (f"see `python tools/worktrees.py status`; `{SWEEP}` removes only clean idle ones, whoever made them"
+        " (an unmerged branch stays: `adopt` re-attaches it); `--snapshot` is for a person or the dispatcher, not for every session")
 
 
 def git(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -100,44 +99,7 @@ def _newest(path: Path) -> float:
     return max((_mtime(os.path.join(d, f)) for d, _, files in os.walk(path) for f in files), default=_mtime(path))
 
 
-def _generated_beside(parent: Path) -> bool:
-    """``parent`` proves its build/install/log/dist are generated: a gradle module or a colcon workspace."""
-    if any(parent.glob("build.gradle*")):
-        return True
-    colcon_dirs = ("build", "install", "log")
-    return (all((parent / d).is_dir() for d in colcon_dirs)
-            and (any((parent / d / "COLCON_IGNORE").is_file() for d in colcon_dirs)
-                 or any((parent / "install").glob("setup.*"))))
-
-
-def _is_cache(worktree: Path, rel: str) -> bool:
-    parts = rel.rstrip("/").split("/")
-    dirs = parts if rel.endswith("/") else parts[:-1]
-    if dirs[:2] == [".omc", "state"]:  # hook throttles and session files; notes and handoffs elsewhere in .omc stay
-        return True
-    for i, name in enumerate(dirs):
-        if name in CACHES or name.endswith(".egg-info"):
-            return True
-        if name in GENERATED and (i == 0 or _generated_beside(worktree.joinpath(*dirs[:i]))):
-            return True
-    return False
-
-
-def _only_caches(worktree: Path, rel: str) -> bool:
-    """An ignored path loses nothing when it is in a cache, or is a directory with no file outside caches.
-
-    git reports a directory whose whole content is ignored as one entry (``ws/``), so it is walked.
-    """
-    if _is_cache(worktree, rel):
-        return True
-    if not rel.endswith("/"):
-        return False
-    for folder, dirs, files in os.walk(worktree / rel):
-        if files:
-            return False
-        inside = Path(folder).relative_to(worktree).as_posix()
-        dirs[:] = [d for d in dirs if not _is_cache(worktree, f"{inside}/{d}/")]
-    return True
+_is_cache, _only_caches = rules.is_cache, rules.only_caches  # moved to worktree_rules (600-line cap)
 
 
 # --- inventory ------------------------------------------------------------------
@@ -247,7 +209,8 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
         return
     landed = bool(row["branch"] and row["merged"] and row["branch"] != "main" and _landed(row))
     row["fast"] = landed
-    row["wait_h"] = 0.0 if landed else idle_hours
+    # D-1070: a clean worktree on a branch loses nothing; status below puts a dirty one back on idle_hours.
+    row["wait_h"] = 0.0 if landed else min(idle_hours, rules.CLEAN_IDLE_HOURS) if row["branch"] else idle_hours
     stale = None if row["merged"] or not row["sha"] else rules.stale_history(row["path"], row["sha"])
     if stale:
         row["note"] = stale
@@ -260,7 +223,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
              else "active" if noted
              else "active" if row["wait_h"] and now - row["last"] < row["wait_h"] * 3600
              else "in-progress operation" if any((row["git_dir"] / name).exists() for name in BUSY)
-             else "needs snapshot" if lossless and not row["merged"] else None)
+             else "needs snapshot" if lossless and not row["merged"] and not row["branch"] else None)
     if cheap is None or full:
         index_t = _mtime(row["git_dir"] / "index")  # before status, which may refresh the index
         status = _status(row["path"])
@@ -278,7 +241,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
     row["verdict"] = ("landed-dirty" if row["landed_dirty"] and cheap in (None, "active")
                       else cheap or ("active" if row["idle_h"] < row["wait_h"]
                                      else "holds ignored data" if row["ignored"]
-                                     else "needs snapshot" if row["changed"] or not row["merged"]
+                                     else "needs snapshot" if row["changed"] or not (row["merged"] or row["branch"])
                                      else "removable"))
 
 
@@ -355,6 +318,8 @@ def _remove(root: Path, row: dict, day: str, now: float, say=print) -> str:
         if deleted.returncode == 0:
             git(root, "config", "--remove-section", f"branch.{branch}")
         note += " branch deleted" if deleted.returncode == 0 else f" branch kept ({deleted.stderr.strip()})"
+    elif branch:
+        note += f" branch kept; re-attach: python tools/worktrees.py adopt {row['name']} {branch}"
     return note
 
 
@@ -471,27 +436,53 @@ def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
     return 0
 
 
-def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, mode: str = "report",
-            base: str = "main", owner: str | None = None) -> int:
+def _form_problem(root: Path, name: str, branch: str, reason: str | None, owner: str | None) -> str | None:
+    """What ``new`` and ``adopt`` both refuse: branch and short-name format, an empty reason or owner, a taken path."""
     kind, _, topic = branch.partition("/")
-    root, _ = scan(cwd)
     held = rules.clear_tombstone(root / ".worktrees", name)  # a removed worktree's folder left by an open handle
-    known = git(root, "rev-parse", "-q", "--verify", f"{base}^{{commit}}").returncode == 0
-    problem = (
+    return (
         f"branch must be <type>/<topic>, <type> one of {', '.join(TYPES)}, {rules.TOPIC_RULE} (D-372): {branch!r}"
         if kind not in TYPES or not rules.topic_ok(topic) or git(root, "check-ref-format", "--branch", branch).returncode != 0
         else f"short name must be one path component of letters, digits, '.', '_', '-', not ending in '.': {name!r}"
         if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?", name)
         else '--force-over-cap needs a reason: --force-over-cap "<reason>"' if reason is not None and not reason.strip()
         else f"{root / '.worktrees' / name} already exists{held}" if (root / ".worktrees" / name).exists()
-        else f"branch {branch} already exists"
-        if git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0
-        else f"--from {base}: not a commit" if not known
         else '--owner needs a name: --owner "<who>"' if owner is not None and not owner.strip()
         else None)
+
+
+def _has_branch(root: Path, branch: str) -> bool:
+    return git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0
+
+
+def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, mode: str = "report",
+            base: str = "main", owner: str | None = None) -> int:
+    root, _ = scan(cwd)
+    known = git(root, "rev-parse", "-q", "--verify", f"{base}^{{commit}}").returncode == 0
+    problem = (_form_problem(root, name, branch, reason, owner)
+               or (f"branch {branch} already exists (re-attach it: adopt)" if _has_branch(root, branch) else None)
+               or (f"--from {base}: not a commit" if not known else None))
     stale = None if problem or base == "main" else rules.stale_history(root, base) or rules.unlanded(root, base)
     if stale:  # D-790: a worktree on the pre-rewrite line would carry it into main
         problem = f"refused: --from {base} is {stale}; rebuild on a new branch from main (D-172)"
+    return _attach(cwd, root, name, branch, ["-b", branch, base], problem, reason, now, mode, owner)
+
+
+def cmd_adopt(cwd: Path, name: str, branch: str, reason: str | None, now: float, mode: str = "report",
+              owner: str | None = None) -> int:
+    """D-1070: put an existing local branch (one a clean prune left) back at ``.worktrees/<name>``."""
+    root, _ = scan(cwd)
+    problem = (_form_problem(root, name, branch, reason, owner)
+               or (f"branch {branch} does not exist" if not _has_branch(root, branch) else None))
+    stale = None if problem else rules.stale_history(root, branch)
+    if stale:  # D-790: the pre-rewrite line is archived by a person, never re-attached
+        problem = f"refused: {branch} is {stale}; rebuild on a new branch from main (D-172)"
+    return _attach(cwd, root, name, branch, [branch], problem, reason, now, mode, owner)
+
+
+def _attach(cwd: Path, root: Path, name: str, branch: str, target: list[str], problem: str | None,
+            reason: str | None, now: float, mode: str, owner: str | None) -> int:
+    """The rest of ``new`` and ``adopt``: refuse, report or sweep, check the cap, add, write the owner note."""
     if problem:
         print(problem, file=sys.stderr)
         return 1
@@ -519,7 +510,7 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
                   f" dispatcher: also --all): {row['name']} ({row['verdict']})", file=sys.stderr)
         print(f'{HINT}\nor, during an incident: add --force-over-cap "<reason>"', file=sys.stderr)
         return 1
-    add = ["worktree", "add", "--relative-paths", f".worktrees/{name}", "-b", branch, base]
+    add = ["worktree", "add", "--relative-paths", f".worktrees/{name}", *target]
     result = git(root, *add)
     if result.returncode != 0 and "relative-paths" in result.stderr:  # git older than 2.48
         add.remove("--relative-paths")
@@ -569,15 +560,17 @@ def main(argv: list[str] | None = None, now: float | None = None) -> int:
     for command in (status, pruner):
         command.add_argument("--idle-hours", type=float, default=IDLE_HOURS)
     new = sub.add_parser("new", help="create .worktrees/<short-name> on a new branch from main")
-    new.add_argument("name", metavar="short-name")
-    new.add_argument("branch", metavar="type/topic")
-    new.add_argument("--force-over-cap", metavar="REASON", help=f"create although {CAP} or more worktrees exist")
     new.add_argument("--from", dest="base", default="main", help="start point (default main); refused when stale")
-    new.add_argument("--owner", help="owner note instead of the git identity and session")
-    sweeping = new.add_mutually_exclusive_group()
-    sweeping.add_argument("--prune", dest="mode", action="store_const", const="apply", default="report",
-                          help="apply the lossless prune first (default: only report what it would remove)")
-    sweeping.add_argument("--no-prune", dest="mode", action="store_const", const="silent", help="no report either")
+    adopt = sub.add_parser("adopt", help="re-attach an existing local branch at .worktrees/<short-name> (D-1070)")
+    for command in (new, adopt):
+        command.add_argument("name", metavar="short-name")
+        command.add_argument("branch", metavar="type/topic")
+        command.add_argument("--force-over-cap", metavar="REASON", help=f"create although {CAP} or more worktrees exist")
+        command.add_argument("--owner", help="owner note instead of the git identity and session")
+        sweeping = command.add_mutually_exclusive_group()
+        sweeping.add_argument("--prune", dest="mode", action="store_const", const="apply", default="report",
+                              help="apply the lossless prune first (default: only report what it would remove)")
+        sweeping.add_argument("--no-prune", dest="mode", action="store_const", const="silent", help="no report either")
     args = parser.parse_args(argv)
     now = time.time() if now is None else now
     try:
@@ -586,6 +579,8 @@ def main(argv: list[str] | None = None, now: float | None = None) -> int:
         if args.command == "new":
             return cmd_new(Path.cwd(), args.name, args.branch, args.force_over_cap, now, args.mode, args.base,
                            args.owner)
+        if args.command == "adopt":
+            return cmd_adopt(Path.cwd(), args.name, args.branch, args.force_over_cap, now, args.mode, args.owner)
         prune(Path.cwd(), idle_hours=args.idle_hours, snapshot=args.snapshot, apply=args.apply,
               everyone=args.everyone, now=now)
         return 0
