@@ -85,6 +85,46 @@ def test_map_aba_advances_generation_and_identical_delivery_does_not(robot):
     assert third.digest == first.digest and first.generation < second.generation < third.generation
 
 
+def test_map_grid_proof_is_reset_until_valid_occupancy_is_received(robot):
+    from core.bridge.map_observation import lifecycle
+
+    assert receive(robot) and robot.svc.state.map_grid_id
+    lifecycle(NS(_svc=robot.svc, _map_pose_lease=None), False)
+    assert robot.svc.state.map_grid_id is None
+    lifecycle(NS(_svc=robot.svc, _map_pose_lease=None), True)
+    assert receive(robot, message(2)) and robot.svc.state.map_grid_id
+    invalid = message(3)
+    invalid.data = []
+    assert not receive(robot, invalid)
+    assert robot.svc.state.map_grid_id is None
+
+
+def test_lifecycle_retires_map_grid_update_while_its_digest_is_pending(robot, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from core.bridge import map_observation
+
+    started, resume = Event(), Event()
+    digest = map_observation.occupancy_map_id
+
+    def blocked_digest(grid):
+        started.set()
+        assert resume.wait(3)
+        return digest(grid)
+
+    monkeypatch.setattr(map_observation, "occupancy_map_id", blocked_digest)
+    with ThreadPoolExecutor(2) as pool:
+        receive_result = pool.submit(receive, robot)
+        try:
+            assert started.wait(3)
+            retired = pool.submit(map_observation.lifecycle, NS(_svc=robot.svc, _map_pose_lease=None), False)
+            retired.result(timeout=3)
+        finally:
+            resume.set()
+        assert receive_result.result(timeout=3) is False
+    assert robot.svc.state.map_grid_id is None
+
+
 def test_render_input_and_returned_cache_cannot_mutate_original_evidence(robot):
     r = robot
     m = message()

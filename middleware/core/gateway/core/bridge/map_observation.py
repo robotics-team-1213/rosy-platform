@@ -39,17 +39,23 @@ def receive_map(bridge, msg, *, warn):
             stamp, load = _stamp(msg.header.stamp), _stamp(msg.info.map_load_time)
         except Exception:
             stamp = load = None
-        token = source.begin(stamp, load)
+    with svc.state.map_grid_gate:
+        update = svc.state.invalidate_map_grid()
+        if source is not None:
+            token = source.begin(stamp, load)
     map_pose.invalidate_map_pose(bridge)
     try:
         if source is not None and not source.complete(token, _original(msg)):
             return False
         grid = translate.grid_from_occupancy(msg)
-        current = svc.state.map_id
         grid_id = occupancy_map_id(grid)
-        map_id = grid_id if current is None or str(current).startswith('occupancy:') else current
-        svc.maps.set_map(grid, map_id=map_id)
-        svc.state.set_map_id(map_id, grid_id)  # same map_id keeps the odom token; the grid id always follows
+        with svc.state.map_grid_gate:
+            if svc.state.map_grid_context()[1] is not update:
+                return False
+            current = svc.state.map_id
+            map_id = grid_id if current is None or str(current).startswith('occupancy:') else current
+            svc.maps.set_map(grid, map_id=map_id)
+            svc.state.set_map_id(map_id, grid_id)  # same map_id keeps the odom token; the grid id always follows
         return True
     except Exception as exc:
         if source is not None:
@@ -65,6 +71,8 @@ def lifecycle(bridge, active):
     parent = None if fence is None else fence._ledger._current
     if source is not None and parent is not None:
         fence.request_stop(parent)
-    if source is not None:
-        source.lifecycle(active)
+    with svc.state.map_grid_gate:
+        svc.state.invalidate_map_grid()
+        if source is not None:
+            source.lifecycle(active)
     map_pose.invalidate_map_pose(bridge)

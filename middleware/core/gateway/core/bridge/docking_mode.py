@@ -12,6 +12,7 @@ by the mode-exit listener (N1).
 from core_common.protocol.schemas import DockState
 from core_features.command.arbitration import Mode
 from core_features.docking.manager import DockPhase
+from core_features.safety.manager import finite_velocity
 
 #: A parking run ticks at the bridge's fast rate; everything else at 1 in 4
 #: of it (the original 5 Hz; a dock agent is polled at most that often).
@@ -69,17 +70,25 @@ def route_nav_cmd_vel(svc, twist) -> bool:
     robot. Line following owns the nav slot while it is active, and so does a
     D-395 P2-7 rotate/nudge mission.
     """
+    epoch = svc.modes.epoch
+    mode = svc.modes.mode
     if svc.line_follow.active or svc.swarm.trail_active:  # D-559: trail owns the slot too
         return False
     mission = svc.loc_mission
     if mission is not None and mission.owns_wheels:
         return False
-    mode = svc.modes.mode
     if mode is Mode.NAVIGATION:
-        svc.command.set_nav_twist(twist)
-        return True
-    if (mode is Mode.DOCKING and svc.docking.state is DockState.DOCKING
-            and svc.docking.phase is DockPhase.STAGING):
-        svc.command.set_docking_twist(twist)
-        return True
-    return False
+        setter = svc.command.set_nav_twist
+    elif (mode is Mode.DOCKING and svc.docking.state is DockState.DOCKING
+          and svc.docking.phase is DockPhase.STAGING):
+        setter = svc.command.set_docking_twist
+    else:
+        return False
+
+    if not finite_velocity(twist.linear, twist.angular):
+        # The setter clears invalid input and publishes the rejection outside the locks.
+        setter(twist)
+        return False
+
+    return svc.nav.observe_twist(
+        lambda: svc.modes.commit_input(mode, lambda: setter(twist), epoch=epoch))

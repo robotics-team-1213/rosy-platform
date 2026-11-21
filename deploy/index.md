@@ -82,8 +82,8 @@
 
 ## 최근 기록
 
+- 2026-11-21 · uncommitted · 자동 궤적 보정 저널에 pinned_drift_m 추가
 - 2026-11-21 · uncommitted · fix(site): 자동 트랙 보정이 고정 안 된 장소의 방향·이름·차로 설정을 지킴
 - 2026-11-20 · uncommitted · fix(omx): Gate open 보류를 시도 원장에 남긴다
 - 2026-11-20 · uncommitted · fix(omx): 홈 복귀 전에 검토와 의도를 확인한다
 - 2026-11-19 · uncommitted · feat(site): autoupdate 홀드가 --until-contains에서 스스로 풀린다
-- 2026-11-18 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 기본 켬
