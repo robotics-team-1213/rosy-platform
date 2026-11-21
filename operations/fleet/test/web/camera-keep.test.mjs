@@ -102,3 +102,76 @@ test("coordinates mode skips plane warp requests while letting watch-ceiling tog
   assert.equal(planeCalls, 0);
   assert.equal(birdseye.hidden, false);
 });
+
+test("a compatible plane stays visible through refresh, 429 and expiry, falls back on explicit 409, and clears with its map or mode", async (t) => {
+  const oldImage = globalThis.Image, oldNow = Date.now;
+  let now = 1_700_000_000_000;
+  Date.now = () => now;
+  globalThis.Image = class { naturalWidth = 200; naturalHeight = 100; async decode() {} };
+  t.after(() => { globalThis.Image = oldImage; Date.now = oldNow; });
+  const stage = {dataset: {}}, mode = {value: "overlay"};
+  const elements = {
+    "map-stage": stage, "map-display-mode": mode, "map-birdseye": {},
+    "birdseye-toggle": {setAttribute() {}, removeAttribute() {}},
+    "camera-comparison": {open: false},
+  };
+  const callbacks = new Map(), timers = [];
+  const scope = {
+    listen: (el, event, fn) => callbacks.set(el, fn), guard: (fn) => fn, interval() {},
+    timeout(fn, ms) { const timer = {fn, ms}; timers.push(timer); return () => { timer.cancelled = true; }; },
+    subscribe: (start) => start(), onDispose() {}, capture: () => ({current: () => true}),
+  };
+  const record = {map_id: "track", source_id: frame.source, calibration_revision: "rev",
+    image: {width: 200, height: 100}, map_to_image: [1, 0, 0, 0, 1, 0, 0, 0, 1]};
+  const map = {map_id: "track"}, otherMap = {map_id: "other"};
+  const view = {siteMap: {maps: [map, otherMap]}, activeSiteMap: {map}};
+  const backdrop = createCameraBackdrop({scope, el: (id) => elements[id], view, draw() {}});
+  backdrop.setCalibrations([record, {...record, map_id: "other"}, {...record, source_id: "new-camera"}]);
+  const plane = (seq) => ({state: "live", source: frame.source, seq, calibrationRevision: "rev", ageMs: 1000,
+    plane: {min_x: 0, min_y: 0, max_x: 2, max_y: 1, ppm: 100}, blob: new Blob(["x"])});
+  let send, finish;
+  backdrop.bindCamera({onFrame: (fn) => { send = fn; }, fetchPlane: () => new Promise((resolve) => { finish = resolve; })});
+  const raw = {...frame, image: new Image()};
+  const flush = () => new Promise(setImmediate);
+  send(raw);
+  finish(plane(raw.seq));
+  await flush();
+  const paints = [];
+  const ctx = {save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, clip() {}, transform() {},
+    drawImage(image) { paints.push({image, alpha: this.globalAlpha}); }};
+  const paint = () => backdrop.drawTopDown(ctx, backdrop.calibration(),
+    {min_x: 0, min_y: 0, max_x: 2, max_y: 1}, (x, y) => ({x, y: -y}), 200, 100, 1, 0);
+  paint();
+  assert.equal(paints[0].alpha, 1);
+  send({...raw, seq: 8});
+  paint();
+  assert.deepEqual(paints[1], paints[0]);
+  timers.find((timer) => !timer.cancelled && timer.ms <= 2000).fn();
+  paint();
+  assert.deepEqual(paints[2], {...paints[0], alpha: 0.5});
+  finish({state: "rate-limited"});  // transient 429 backoff keeps the last compatible plane
+  await flush();
+  paint();
+  assert.deepEqual(paints[3], paints[2]);
+  assert.equal(backdrop.usesPlane(), true);
+  now += 300;
+  send({...raw, seq: 9});
+  finish({state: "plane-unavailable"});  // explicit 409 clears keptPlane -> D-515 fallback
+  await flush();
+  assert.equal(backdrop.usesPlane(), false);
+  now += 30_000;
+  send({...raw, seq: 10});
+  finish(plane(10));  // fresh plane restores overlay after 409 backoff expires
+  await flush();
+  assert.equal(backdrop.usesPlane(), true);
+  view.activeSiteMap = {map: otherMap};
+  assert.equal(backdrop.usesPlane(), false);
+  view.activeSiteMap = {map};
+  send({...raw, seq: 11});
+  mode.value = "coordinates";
+  callbacks.get(mode)();
+  assert.equal(backdrop.usesPlane(), false);
+  mode.value = "overlay";
+  callbacks.get(mode)();
+  assert.equal(backdrop.usesPlane(), false);
+});
