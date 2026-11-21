@@ -25,7 +25,7 @@ STRICT = "ROSY_BROWSER_STRICT=1"
 CI_BROWSER_ROOTS = ("operations/fleet/test", "applications/fleet/test")
 # Simulators and OMX adapter hardware suites: GitHub runners cannot run them (same tuple as pr_land.EXCLUDED_PREFIXES).
 LAB_PREFIXES = ("integrations/simulation/", "learning/envs/isaac/", "middleware/devices/omx/adapter/")
-FILES_PER_JOB, MAX_JOBS = 12, 4
+FILES_PER_JOB, MAX_JOBS = 12, 6
 
 
 def lab_path(path: str) -> bool:
@@ -52,24 +52,29 @@ def vacuous(text: str) -> str | None:
 
 
 def _selected(path: str, sel) -> bool:
-    """Does the run's own selection execute this Fleet-root file? Full mode runs the Fleet suites."""
+    """Does the run's own selection execute this Fleet-root file whole? Full mode runs the plain Fleet suites."""
     if sel.mode == "full":
         return True
-    words = (w.split("::")[0] for inv in sel.invocations for w in inv
-             if not w.startswith("-") and not re.match(r"^ROSY_[A-Z0-9_]*=", w))
+    # An invocation with --ignore/--deselect/-k, or a node id, may skip this file's tests: it is no evidence.
+    plain = (inv for inv in sel.invocations if not any(w.startswith(("--ignore", "--deselect", "-k")) for w in inv))
+    words = (w for inv in plain for w in inv
+             if not w.startswith("-") and "::" not in w and not re.match(r"^ROSY_[A-Z0-9_]*=", w))
     return any(path == p or path.startswith(p.rstrip("/") + "/") for p in words)
 
 
 def entries(repo, sel) -> list[dict]:
     """Extra matrix entries for the browser files a pull_request's changes need; [] unless ROSY_BROWSER_CI=1."""
-    if os.environ.get(ENV) != "1" or not sel.changed:
+    # affected_tests falls back to full mode with no changed list when the diff cannot be computed: run every file.
+    if os.environ.get(ENV) != "1" or not (sel.changed or sel.mode == "full"):
         return []
     import browser_scope  # noqa: PLC0415  (test/, tools/: a failed import must fail the scope job loudly)
     import land_browser
     import affected_ros
     import affected_tests as at
-    ci = [p for p in split(browser_scope.targets(list(sel.changed)))[0]
-          if not (p.startswith(tuple(r + "/" for r in CI_BROWSER_ROOTS)) and _selected(p, sel))]
+    paths = browser_scope.targets(list(sel.changed)) if sel.changed else browser_scope.all_targets()
+    # An ALONE file always goes to browser-alone, even when a Fleet shard also runs it.
+    ci = [p for p in split(paths)[0] if p in land_browser.ALONE
+          or not (p.startswith(tuple(r + "/" for r in CI_BROWSER_ROOTS)) and _selected(p, sel))]
     out = []
     alone = [p for p in ci if p in land_browser.ALONE]
     if alone:
