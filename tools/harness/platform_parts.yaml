@@ -1422,6 +1422,8 @@ safety_review_paths:
   - deploy/robot/omx/chunk_runner_commands.py
   - deploy/robot/omx/chunk_runner_guards.py
   - deploy/robot/omx/chunk_runner_run.py
+  - deploy/robot/omx/chunk_runner_loop.py
+  - deploy/robot/omx/chunk_policy_playback.py
   - deploy/robot/omx/chunk_runner_settle.py
   - deploy/robot/omx/guarded_device.py
   - deploy/robot/omx/guarded_native.py
@@ -1454,6 +1456,9 @@ safety_review_paths:
   - deploy/robot/omx/cell_pipeline_io.py
   - deploy/robot/omx/hardware_owner_goals.py
   - deploy/robot/omx/cell_policy_drive.py
+  - deploy/robot/omx/cell_policy_shape.py
+  - deploy/robot/omx/cell_policy_timing.py
+  - deploy/robot/omx/cell_policy_handoff.py
   - deploy/robot/omx/cell_stack_guard.py
   - deploy/robot/omx/cell_arm_lease.py
   - deploy/robot/omx/commissioning_stop.py

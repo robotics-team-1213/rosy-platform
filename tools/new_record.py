@@ -31,6 +31,29 @@ CONTRACT_VALUE = re.compile(r"ROSY-API-REF-001 v1\.\d+")
 NEXT = "v1.next"
 
 
+LOG_DATE = re.compile(r"^## (\d{4}-\d{2}-\d{2})", re.M)
+
+
+def _insert_by_date(existing: str, additions: list[str]) -> str:
+    """Put each log entry after the last entry dated <= its own date; existing order is never rewritten.
+
+    The log-order lint wants dates non-decreasing; a shard that merged late (older date) used to land
+    at the end and fail it. Same-date entries keep arrival order. shortcut: entries are split on
+    "## YYYY-MM-DD" headings only, so a header-less preface stays first.
+    """
+    starts = [m.start() for m in LOG_DATE.finditer(existing)]
+    head = existing[:starts[0]] if starts else existing.rstrip("\n") + "\n\n"
+    blocks = [existing[a:b].strip("\n") for a, b in zip(starts, starts[1:] + [len(existing)])]
+    for add in additions:
+        m = LOG_DATE.match(add)
+        day = m.group(1) if m else "9999-99-99"
+        at = len(blocks)
+        while at and (d := LOG_DATE.match(blocks[at - 1])) and d.group(1) > day:
+            at -= 1
+        blocks.insert(at, add)
+    return head + "\n\n".join(blocks) + "\n"
+
+
 def _slugify(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug[:48] or "entry"
@@ -196,7 +219,7 @@ def consolidate(repo: Path, *, dry_run: bool = False) -> dict:
                 seen.add(heading)
             folded.append(s.relative_to(repo).as_posix())
         if additions and not dry_run:
-            combined = existing.rstrip("\n") + "\n\n" + "\n\n".join(additions) + "\n"
+            combined = _insert_by_date(existing, additions)
             log_file.write_text(combined, encoding="utf-8", newline="\n")
         if not dry_run:
             for s in shards:

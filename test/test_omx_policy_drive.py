@@ -130,14 +130,16 @@ def test_dry_run_never_loads_or_moves(tmp_path):
 @pytest.mark.parametrize("outside", [False, True])
 def test_sim_goal_cli_converts_and_logs_envelope_without_motion(tmp_path, monkeypatch, outside):
     import hashlib
-    from types import SimpleNamespace
+
+    import cell_pipeline
+    import cv2  # noqa: F401 - load the camera dependency before the inference deadline starts
 
     root = tmp_path / "model"
     root.mkdir()
     weights = b"pinned ACT"
     (root / drive.lrs.WEIGHTS).write_bytes(weights)
     (root / "config.json").write_text(json.dumps({
-        "type": "act", "n_action_steps": 4,
+        "type": "act", "n_action_steps": 4, "chunk_size": 16,
         "input_features": {"observation.state": {"shape": [6]}, drive.lrs.GOAL: {"shape": [10]},
                                            "observation.images.top": {"shape": [3, 4, 4]}},
         "output_features": {"action": {"shape": [6]}},
@@ -149,7 +151,7 @@ def test_sim_goal_cli_converts_and_logs_envelope_without_motion(tmp_path, monkey
     cell_cal = tmp_path / "runner-cal.json"
     cell_cal.write_text(json.dumps(cal()))
     cell = Cell()
-    monkeypatch.setitem(sys.modules, "cell_pipeline", SimpleNamespace(FifoCell=lambda *_: cell))
+    monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: cell)
     seen = []
 
     def predict(obs):
@@ -157,7 +159,7 @@ def test_sim_goal_cli_converts_and_logs_envelope_without_motion(tmp_path, monkey
         action = obs["observation.state"].copy()
         if outside:
             action[0] = 1.5  # ~48 LeRobot units, above the reviewed 20 + margin.
-        return action[None, :]
+        return np.repeat(action[None, :], 16, axis=0)
 
     shadow = drive.lrs.LeRobotShadow
     monkeypatch.setattr(drive.lrs, "LeRobotShadow", lambda *a, **kw: shadow(*a, loader=lambda *_: predict, **kw))
@@ -190,6 +192,7 @@ def test_sim_goal_cli_converts_and_logs_envelope_without_motion(tmp_path, monkey
 class SimPolicy(Policy):
     sim_rule = {"held_30mm": 53.38, "gap_mm_per_unit": 5.0}
     n_action_steps = 4
+    chunk_size = 16
     arm_id = "arm_b"
 
     def infer(self, obs, *, state):
@@ -206,10 +209,10 @@ def test_goal_sites_use_the_h1_training_order():
         assert drive.resolve_goal_site(site) == ("tray", 9)
 
 
-def test_sim_policy_interpolates_from_fresh_state_and_runs_only_four_steps(tmp_path, monkeypatch):
+def test_sim_policy_interpolates_from_fresh_state_and_runs_eight_steps(tmp_path):
     start = np.asarray(Cell().state)
     proposed = [start + [k / 10, 0, 0, 0, 0, 0] for k in range(1, 16)] + [start + 100]
-    policy = SimPolicy([proposed, proposed])
+    policy = SimPolicy([proposed])
     policy.arm_id = "arm_a"
     cell, loaded = Cell(), []
     original_act = cell.act
@@ -222,19 +225,19 @@ def test_sim_policy_interpolates_from_fresh_state_and_runs_only_four_steps(tmp_p
         return original_act(command)
 
     cell.act = act
-    monkeypatch.setattr(drive, "_moved", lambda *_: {})
+    rows = []
     result = drive.run_episode(cell, policy, write_lib(tmp_path), tmp_path, offset=[0] * 6,
-                               max_chunks=2, dry_run=False, log=lambda _: None)
-    assert result["result"] == "chunks_done" and len(loaded) == 2
-    assert policy.seen[1][0] == pytest.approx(0.4)
-    np.testing.assert_allclose(np.asarray(loaded)[:, :, 0], [
-        np.arange(1, 9) / 20, [0.25, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4],
-    ])
+                               max_chunks=1, dry_run=False, log=rows.append)
+    assert result["result"] == "chunks_done" and len(loaded) == 1
+    assert rows[0]["action_steps"] == 8 and len(loaded[0]) == 16
+    dropped = rows[0]["dropped_actions"]
+    assert loaded[0][0][0] == pytest.approx((dropped + 1) / 20)
+    assert loaded[0][-1][0] == pytest.approx((dropped + 8) / 10)
 
 
 def test_sim_dry_run_uses_only_library_envelope(tmp_path):
     rows = []
-    policy = SimPolicy([[[30, -58, 51, 50, -5, 49]]])
+    policy = SimPolicy([[[30, -58, 51, 50, -5, 49]] * 16])
     result = drive.run_episode(Cell(), policy, write_lib(tmp_path), tmp_path, offset=[0] * 6,
                                max_chunks=1, dry_run=True, log=rows.append, demonstrated=([0] * 6, [100] * 6))
     assert result["result"] == "refused" and "shoulder_pan" in rows[0]["envelope"]["reason"]
@@ -255,7 +258,7 @@ def test_sim_jaw_close_detection_uses_converted_floor():
 @pytest.mark.parametrize("dry_run", [False, True])
 def test_arm_b_roll_warning_and_live_refusal(tmp_path, roll, warned, dry_run):
     cell, rows = Cell(), []
-    policy = SimPolicy([[[0, -58, 51, 50, roll, 49]]])
+    policy = SimPolicy([[[0, -58, 51, 50, roll, 49]] * 16])
     result = drive.run_episode(cell, policy, write_lib(tmp_path), tmp_path, offset=[0] * 6,
                                max_chunks=1, dry_run=dry_run, log=rows.append)
     assert ("wrist_roll_warning" in rows[0]) is warned
@@ -263,7 +266,7 @@ def test_arm_b_roll_warning_and_live_refusal(tmp_path, roll, warned, dry_run):
         assert cell.commands == ["state"]
         assert rows[0]["envelope"]["ok"] is (roll == -5)
     elif warned:
-        assert cell.commands == ["state", "park"] and result["reason"] == rows[0]["wrist_roll_warning"]
+        assert cell.commands == ["state", "state", "human-hold"] and result["reason"] == rows[0]["wrist_roll_warning"]
 
 
 def test_out_of_envelope_parks_without_loading(tmp_path):
