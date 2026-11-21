@@ -1,0 +1,9 @@
+<robot name="pinky_pro">
+  <link name="base_footprint"/>
+  <link name="body"><visual><geometry><mesh filename="pinky-body.stl"/></geometry></visual></link>
+  <link name="l_wheel"><visual><origin xyz="0 0 0" rpy="0 0 1.5708"/><geometry><mesh filename="pinky-wheel.stl"/></geometry></visual></link>
+  <link name="r_wheel"><visual><origin xyz="0 0 0" rpy="0 0 -1.5708"/><geometry><mesh filename="pinky-wheel.stl"/></geometry></visual></link>
+  <joint name="body_fixed" type="fixed"><parent link="base_footprint"/><child link="body"/><origin xyz="0 0 0" rpy="0 0 0"/></joint>
+  <joint name="l_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="l_wheel"/><origin xyz="0 0.04055 0.028" rpy="0 0 0"/><axis xyz="0 1 0"/></joint>
+  <joint name="r_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="r_wheel"/><origin xyz="0 -0.04055 0.028" rpy="0 0 0"/><axis xyz="0 1 0"/></joint>
+</robot>

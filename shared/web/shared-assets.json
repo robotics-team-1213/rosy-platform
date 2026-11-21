@@ -38,10 +38,27 @@
     "form-controls.js": "text/javascript",
     "collection-controls.js": "text/javascript",
     "interaction-controls.js": "text/javascript",
+    "skill-state.js": "text/javascript",
+    "sample-data.js": "text/javascript",
+    "localization-state.js": "text/javascript",
     "workflow-controls.js": "text/javascript",
     "component-controls.css": "text/css",
     "component-gallery.css": "text/css",
     "component-gallery.html": "text/html",
-    "component-gallery.js": "text/javascript"
+    "component-gallery.js": "text/javascript",
+    "vendor/three.module.min.js": "text/javascript",
+    "vendor/three.core.min.js": "text/javascript",
+    "meshes/omx-f.urdf": "application/xml",
+    "meshes/omx-link0.stl": "model/stl",
+    "meshes/omx-link1.stl": "model/stl",
+    "meshes/omx-link2.stl": "model/stl",
+    "meshes/omx-link3.stl": "model/stl",
+    "meshes/omx-link4.stl": "model/stl",
+    "meshes/omx-link5.stl": "model/stl",
+    "meshes/omx-link6.stl": "model/stl",
+    "meshes/omx-link7.stl": "model/stl",
+    "meshes/pinky-body.stl": "model/stl",
+    "meshes/pinky-pro.urdf": "application/xml",
+    "meshes/pinky-wheel.stl": "model/stl"
   }
 }
