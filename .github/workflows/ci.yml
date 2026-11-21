@@ -244,7 +244,7 @@ jobs:
       - name: Font diagnostic 2 (without wqy)
         run: |
           dpkg -l | grep -iE "fonts-" | cut -c1-80
-          apt-get purge -y -qq fonts-wqy-zenhei fonts-wqy-microhei 2>&1 | tail -2; fc-cache -f
+          rm -rf /usr/share/fonts/truetype/wqy; fc-cache -f
           grep PRETTY /etc/os-release; fc-match sans-serif; fc-match 'Noto Sans KR'; fc-match system-ui; fc-list | wc -l
           fc-list : family | sed 's/,.*//' | sort -u | wc -l; fc-list : family | sed 's/,.*//' | sort -u | grep -iE 'liberation|noto sans( cjk|$)|dejavu|unifont|emoji|open sans|lato|ubuntu' | tr '\n' ';'; echo
           python3 - <<'PY'
