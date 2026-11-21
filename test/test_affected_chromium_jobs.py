@@ -165,10 +165,10 @@ def test_full_selection_without_a_diff_runs_every_ci_browser_file(repo, on, monk
     assert ab.entries(repo, at.Selection("full", [])) == []
 
 
-def test_browser_alone_marks_env_browser_entries_skip_colcon_and_shards_balance(repo, on):
+def test_browser_alone_marks_env_and_none_shards_balance(repo, on):
     include = affected_ci.ci_matrix(repo, at.select(repo, UI))["include"]
     mine = [e for e in include if e["name"].startswith("browser-")]
-    assert mine and all(e.get("colcon") is False for e in mine)
+    assert mine
     alone = next(e for e in mine if e["name"] == "browser-alone")
     assert land_browser.ALONE_ENV in alone["invocations"][0]
 

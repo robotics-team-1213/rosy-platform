@@ -136,3 +136,15 @@ def test_guard_set_consolidates_onto_one_non_colcon_runner():
     assert len(out) == 1
     assert out[0].get("colcon") is False
     assert len(out[0]["invocations"]) <= 2
+
+
+def test_browser_overlay_entries_skip_colcon(monkeypatch):
+    import affected_browser
+    import affected_ci
+    import affected_tests as at
+
+    monkeypatch.setenv(affected_browser.ENV, "1")
+    repo = at.Repo.load(Path(__file__).resolve().parents[1])
+    include = affected_ci.ci_matrix(repo, at.select(repo, ["shared/web/surface_shell.js"]))["include"]
+    overlay_browsers = [e for e in include if e["name"].startswith("browser-") and e["ros"] == "overlay"]
+    assert overlay_browsers and all(e.get("colcon") is False for e in overlay_browsers)
