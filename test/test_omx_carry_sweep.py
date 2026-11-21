@@ -213,3 +213,14 @@ def test_shadowed_offer_is_counted_apart_and_never_credited(tmp_path):
     rep = sw.ingest(tmp_path, att)
     assert rep["shadowed"] == {"good@t2": 2} and rep["real_unknown"] == {"good@t2": 1}
     assert [r["outcome"] for r in map(json.loads, (tmp_path / "real_outcomes.jsonl").read_text().splitlines())] == ["unknown", "shadowed", "shadowed"]
+
+
+def test_merge_refuses_configured_live_store_before_reading_inputs(tmp_path, monkeypatch):
+    import pytest
+
+    store = tmp_path / "configured-store.json"
+    store.write_text("unchanged", encoding="utf-8")
+    monkeypatch.setenv("ROSY_SITE_STORE", str(store))
+    with pytest.raises(ValueError, match="live site choices"):
+        sw.merge_offers(tmp_path, store)
+    assert store.read_text(encoding="utf-8") == "unchanged"

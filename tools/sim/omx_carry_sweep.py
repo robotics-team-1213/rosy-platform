@@ -3,7 +3,7 @@
 
   MUJOCO_GL=egl python tools/sim/omx_carry_sweep.py run --tiers 1,2,3 --out DIR [--cands 36 --search 8 --heldout 24 --top 6 --workers 8 --dr FILE --choice preset=v24-20261114]
   python tools/sim/omx_carry_sweep.py rank DIR                   # trials.jsonl -> ranked.json, offers.json, summary.md (no MuJoCo)
-  python tools/sim/omx_carry_sweep.py offers DIR --merge SITE/work/choices.json   # offers.json -> the site's choices store (real key names, source sim, evidence)
+  python tools/sim/omx_carry_sweep.py offers DIR --merge review-choices.json     # offers.json -> offline review copy
   python tools/sim/omx_carry_sweep.py ingest DIR --attempts attempts.jsonl [--stack-check TIERPROOF] [--episodes DIR.. --cell FILE]
 
 Only knobs that exist both in the teacher and in the real carry are swept (candidate key -> real setting):
@@ -261,14 +261,18 @@ def write_offers(out: Path, result: dict, meta: dict):
 
 
 def merge_offers(out: Path, store: Path, preset=None, snapshot_sha256=None) -> dict:
-    """offers.json -> the site choices store `store` (rosy.omx-cell-choices.v1), values under the real key names. Idempotent: a candidate
+    """offers.json -> an offline choices copy (rosy.omx-cell-choices.v1), values under the real key names. Idempotent: a candidate
     already there is kept as is (its outcomes are never touched); the sim evidence is refreshed only while it has no real try."""
     import cell_choices
+    from omx_loop import PRESET, is_live_store
+
+    if is_live_store(store):
+        raise ValueError("live site choices cannot be merged by the sweep; use a local review copy")
     src, ch = cell_choices.Choices(out / "offers.json"), cell_choices.Choices(store)
     if snapshot_sha256 is not None and src.data.get("snapshot_sha256") != snapshot_sha256:
         raise ValueError("offers do not match the measured snapshot; rerun the sweep for this snapshot")
     if preset is None:
-        from omx_loop import PRESET as preset
+        preset = PRESET
     entries_all = [(n, e) for n, es in src.data["values"].items() if n.startswith("carry.tier") for e in es]
     bad = sorted({(e.get("evidence") or {}).get("preset") for _, e in entries_all} - {preset}, key=str)
     if bad:  # a sim ranking is only evidence for the layout it was ranked on; refuse before writing anything
@@ -511,7 +515,7 @@ def main(argv=None):
                 ("--keep", {"default": "", "help": "comma list of candidate ids that always meet the held-out scenarios (seeds from an earlier run, e.g. c01,c24,c16)"}),
                 ("--choice", {"action": "append", "help": "key=value Layout choice for every scenario, e.g. preset=v24-20261114 (the scene)"})],
         "rank": [("out", {})], "ingest": [("out", {}), ("--attempts", {"required": True}), ("--stack-check", {}), ("--episodes", {"nargs": "*"}), ("--cell", {})],
-        "offers": [("out", {}), ("--preset", {"help": "the layout preset in force (default: omx_loop PRESET)"}), ("--merge", {"required": True, "help": "the site's work/choices.json (created when missing)"})],
+        "offers": [("out", {}), ("--preset", {"help": "the layout preset in force (default: omx_loop PRESET)"}), ("--merge", {"required": True, "help": "local choices review copy (created when missing)"})],
     }
     for name, opts in specs.items():
         sp = sub.add_parser(name)

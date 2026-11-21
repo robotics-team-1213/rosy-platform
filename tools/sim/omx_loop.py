@@ -6,7 +6,7 @@ moves an arm, never opens ssh to a cell host (the real attempt stays a person-su
 stages, in loop order (each writes RUN/<n>-<stage>/manifest.json with inputs+digests, commands, outputs, code sha):
   r2s     --capture DIR [--prev SNAP] [--twin D] [--dr-next F]   copy the capture, measure, diff against --prev
   rank    --sweep DIR [--run-sweep] [--snapshot SNAP]            (sim), (sweep run), rank; same --preset/--choice everywhere
-  offer   --sweep DIR --store FILE [--site-store]                offers --merge into FILE; the live site store needs --site-store
+  offer   --sweep DIR --store FILE                               offers --merge into a local review copy
   ingest  --sweep DIR --attempts F --cell C [--episodes ROOT]    attempt-episode join, then ingest (tier-proof verdicts)
   gate    --sweep DIR --fit F --candidate N --base-stack F --stack F --grasp F   omx_sysid task --real real_outcomes.jsonl (needs physics-tagged rows)
   twin    --cell C [--twin-host ai|model] [--local-twin]         omx_twin replay + report on a remote_sim host (episodes ship on a WIP commit); --cell is a path on that host
@@ -77,7 +77,9 @@ def code_sha() -> str:
 
 def is_live_store(path: Path) -> bool:
     live = os.environ.get("ROSY_SITE_STORE")
-    return path.name == "choices.json" and (path.resolve().parent.name == "work" or bool(live and path.resolve() == Path(live).resolve()))
+    resolved = path.resolve()
+    return (resolved.name == "choices.json" and resolved.parent.name == "work"
+            or bool(live and resolved == Path(live).resolve()))
 
 
 class Loop:
@@ -172,8 +174,8 @@ class Loop:
     def offer(self, measured_snapshot=None):
         a = self.a
         store = Path(a.store)
-        if is_live_store(store) and not a.site_store:
-            raise Refused(f"refused: {store} is the live site choices store; pass --site-store to write an offer there on purpose")
+        if is_live_store(store) or a.site_store:
+            raise Refused(f"refused: {store} is a live site target; use a local review copy")
         snapshot = measured_snapshot or a.snapshot
         bound = ["--snapshot", snapshot] if snapshot else []
         step = self.tool(SWEEP, "offers", a.sweep, "--preset", a.preset, *bound, "--merge", store)
@@ -272,7 +274,7 @@ def build(argv=None):
     p.add_argument("--camera-moved-ok", action="store_true")
     p.add_argument("--fresh", action="store_true", help="r2s: measure without --prev (the diff still uses it); for a --prev read in another map frame, which the map gate refuses to refit from")
     p.add_argument("--run-sweep", action="store_true", help="rank: also run the sweep (--sweep is its out dir)")
-    p.add_argument("--site-store", action="store_true", help="allow offer to write the live site choices store")
+    p.add_argument("--site-store", action="store_true", help=argparse.SUPPRESS)
     a = p.parse_args(argv)
     need = dict(r2s=["capture"], rank=["sweep"], offer=["sweep", "store"], ingest=["sweep", "attempts"], gate=["sweep", "fit", "candidate", "base_stack", "stack", "grasp"], twin=["cell"],
                 all=["capture", "sweep", "store"])[a.stage]

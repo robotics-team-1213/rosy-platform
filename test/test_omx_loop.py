@@ -115,14 +115,15 @@ def test_manifest_has_inputs_digests_commands_outputs_and_sha(fake):
     assert loop.digest(fake["cap"]) != m["inputs"][0]["sha256"]
 
 
-def test_live_site_store_needs_the_flag(fake):
+def test_live_site_store_is_refused_even_with_legacy_flag(fake):
     live = fake["tmp"] / "site" / "work" / "choices.json"
     a = ["offer", "--run-dir", str(fake["tmp"] / "run"), "--sweep", str(fake["sweep"]), "--store", str(live), "--run"]
     with pytest.raises(SystemExit, match="live site"):
         loop.main(a, runner=fake["runner"])
     assert fake["calls"] == []
-    loop.main(a + ["--site-store"], runner=fake["runner"])
-    assert subs(fake["calls"]) == [("omx_carry_sweep.py", "offers")] and fake["calls"][0][-1] == str(live)
+    with pytest.raises(SystemExit, match="live site"):
+        loop.main(a + ["--site-store"], runner=fake["runner"])
+    assert fake["calls"] == []
 
 
 @pytest.mark.parametrize("argv", [
