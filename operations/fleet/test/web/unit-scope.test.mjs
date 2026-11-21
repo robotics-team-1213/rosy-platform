@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 const flags = () => { const set = new Set(); return {set, toggleAttribute: (name, on) => (on ? set.add(name) : set.delete(name))}; };
-const {applyUnitScope, owns, scopeSummary, unitScope} = await import(new URL("../../../../applications/fleet/web/shared/unit-scope.js", import.meta.url));
+const {applyUnitScope, owns, relays, scopeSummary, unitScope} = await import(new URL("../../../../applications/fleet/web/shared/unit-scope.js", import.meta.url));
 
 test("a cell hides drive and the children list, keeps arms (D-960 §4)", () => {
   const root = flags();
@@ -26,4 +26,14 @@ test("no scope from an older server keeps every block", () => {
   assert.equal(root.set.has("data-unit-root"), true);
   assert.equal(owns("arms"), true);
   assert.equal(scopeSummary(undefined), "");
+});
+
+test("a cell with child units keeps the root-only stop controls and only relays arm jobs", () => {
+  const root = flags();
+  applyUnitScope({role: "cell", drive: false, arms: true, children: true, enrollment: false}, root);
+  assert.equal(root.set.has("data-unit-root"), true);
+  assert.equal(relays(), true);
+  applyUnitScope({role: "standalone", drive: true, arms: true, children: false, enrollment: true}, root);
+  assert.equal(relays(), false);
+  assert.equal(owns("arms"), true);
 });

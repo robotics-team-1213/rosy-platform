@@ -1,13 +1,16 @@
 // D-960 §4 · D-974 — one rule for what this control-unit screen shows. The server's fleet.scope says what the
 // instance owns (통합관제 R, a cell, or a standalone Fleet). A block tagged data-unit-scope="drive|arms|children|
 // enrollment|root" stays out of the screen of a unit that does not own it: another unit's screen owns that job
-// ("root" marks the integrated-control parts a cell leaves to 통합관제 R).
+// ("root" marks the integrated-control parts a cell without child units leaves to 통합관제 R).
 // The stop controls are never tagged; every unit keeps its E-stop. No scope (an older server) shows everything.
 const KEYS = ["drive", "arms", "children", "enrollment"];
 const ROLE = {root: "통합관제", cell: "셀 관제", standalone: "단독 관제"};
 let current = null;
 
 export function unitScope() { return current; }
+
+// A unit with child units reads and relays their jobs; the unit that runs the arm approves (the relay has no admit or recovery route).
+export function relays(scope = current) { return scope?.children === true; }
 
 // True when the unit owns the job; unknown scope keeps today's screen.
 export function owns(need, scope = current) { return !scope || scope[need] === true; }
@@ -24,5 +27,5 @@ export function applyUnitScope(scope, root = globalThis.document?.documentElemen
   if (!root) return;
   root.toggleAttribute("data-unit-scope-ready", current !== null);
   for (const key of KEYS) root.toggleAttribute("data-unit-" + key, owns(key));
-  root.toggleAttribute("data-unit-root", current?.role !== "cell");
+  root.toggleAttribute("data-unit-root", current?.role !== "cell" || relays());  // a cell with children keeps its subtree stop controls
 }

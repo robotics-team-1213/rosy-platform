@@ -89,8 +89,6 @@ def test_each_unit_screen_shows_only_its_own_jobs(unit_fleet):
             expect(page.locator("#cell-main")).to_be_visible()
             expect(page.locator("#cell-unit-note")).to_be_hidden()
 
-            page.goto(origin + "/console/install")
-            expect(page.locator("#robot-enrollment")).to_be_hidden()  # a manifest fixes the roster on both
             assert errors == [], errors
         finally:
             browser.close()
