@@ -50,7 +50,6 @@
   min-width: 0;
   max-width: 100%;
   border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
   padding: var(--space-2) var(--space-3);
