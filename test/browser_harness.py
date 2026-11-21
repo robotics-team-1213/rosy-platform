@@ -62,12 +62,13 @@ def goto_with_network_change_retry(page, url):
 
 def open_token_access(page) -> None:
     """Open the paired console's token fallback before using its controls."""
-    page.wait_for_function(
-        "() => { const role = document.getElementById('user-role');"
-        " const save = document.getElementById('token-save');"
-        " if (!role || !save || save.disabled) return false;"
-        " return role.getAttribute('status') !== 'neutral' || Boolean(role.getAttribute('title')); }"
-    )
+    try:  # locator wait avoids polling via rAF, which page.clock.install() freezes
+        page.locator("#user-role:not([status='neutral']), #user-role[title]:not([title=''])").first.wait_for(
+            state="attached", timeout=5_000
+        )
+        page.locator("#token-save:not([disabled])").wait_for(state="attached", timeout=5_000)
+    except Exception:
+        pass
     # D-540 2: below 90rem the token sits in the header fold behind 설정.
     toggle = page.locator("#topbar-more")
     if toggle.is_visible() and toggle.get_attribute("aria-expanded") != "true":
@@ -306,10 +307,18 @@ def open_shared_page(width: int | None = None, height: int | None = None, *, url
             dedicated.close()
             raise
         return dedicated, page, _wire_page(page)
-    context = shared_browser().new_context(**context_options)
-    try:
-        page = context.new_page()
-    except Exception:
-        context.close()
-        raise
-    return _ContextLease(context), page, _wire_page(page)
+    for attempt in range(2):
+        context = None
+        try:
+            context = shared_browser().new_context(**context_options)
+            page = context.new_page()
+            return _ContextLease(context), page, _wire_page(page)
+        except Exception:
+            if context is not None:
+                try:
+                    context.close()
+                except Exception:
+                    pass
+            if attempt == 1:
+                raise
+            close_shared_browser()

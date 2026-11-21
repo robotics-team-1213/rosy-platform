@@ -296,7 +296,11 @@ def test_open_token_access_uses_auth_predicate_and_retries_details_toggle():
             assert self.name == "#token-access" and sub == "summary"
             return FakeSummary(self)
 
-        def wait_for(self, *, state):
+        @property
+        def first(self):
+            return self
+
+        def wait_for(self, *, state, timeout=None):
             calls.append(f"{self.name}.wait_for({state})")
 
     class FakePage:
@@ -308,13 +312,50 @@ def test_open_token_access_uses_auth_predicate_and_retries_details_toggle():
             raise AssertionError("networkidle wait_for_load_state must not be called")
 
         def wait_for_function(self, expr):
-            calls.append(("wait_for_function", expr))
+            raise AssertionError("wait_for_function freezes under page.clock.install()")
 
         def locator(self, sel):
             return self._locs.setdefault(sel, FakeLocator(sel, self))
 
     page = FakePage()
     browser_harness.open_token_access(page)
-    assert calls[0][0] == "wait_for_function"
-    assert "user-role" in calls[0][1] and "token-save" in calls[0][1]
-    assert calls[1:] == ["#topbar-more.click", "summary.click", "summary.click", "#console-token.wait_for(visible)"]
+    assert "user-role" in calls[0] and "token-save" in calls[1]
+    assert calls[2:] == ["#topbar-more.click", "summary.click", "summary.click", "#console-token.wait_for(visible)"]
+
+
+def test_open_shared_page_retries_once_when_new_page_disposes(monkeypatch):
+    browser_harness.close_shared_browser()
+    state, _ = _install_fake_playwright(monkeypatch)
+    orig_ctx = state["contexts"]
+    failed_once = {"done": False}
+    orig_shared = browser_harness.shared_browser
+
+    def flaky_shared():
+        browser = orig_shared()
+        if not failed_once["done"]:
+            orig_new_context = browser.new_context
+
+            def failing_ctx(**opts):
+                ctx = orig_new_context(**opts)
+
+                def boom():
+                    failed_once["done"] = True
+                    raise RuntimeError("BrowserContext.new_page: Response has been disposed")
+
+                ctx.new_page = boom
+                return ctx
+
+            browser.new_context = failing_ctx
+        return browser
+
+    monkeypatch.setattr(browser_harness, "shared_browser", flaky_shared)
+    try:
+        lease, page, _ = browser_harness.open_shared_page(800, 600)
+        assert isinstance(lease, browser_harness._ContextLease)
+        assert page.timeout == 15_000
+        assert len(orig_ctx) == 2
+        assert orig_ctx[0].closed == 1
+        assert state["stops"] == 1
+        lease.close()
+    finally:
+        browser_harness.close_shared_browser()

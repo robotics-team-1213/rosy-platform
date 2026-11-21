@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, safe_listener, shared_browser
+from browser_harness import browser_tests_enabled, open_shared_page, safe_listener
 from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -126,11 +126,11 @@ def account_page(tmp_path, request, account_backend):
         while not server.started and worker.is_alive() and time.monotonic() < deadline:
             time.sleep(.02)
         assert server.started
-        context = shared_browser().new_context(viewport={'width': 320, 'height': 900})
+        lease, page, _ = open_shared_page(320, 900)
         try:
-            yield context.new_page(), origin
+            yield page, origin
         finally:
-            context.close()
+            lease.close()
     finally:
         server.should_exit = True
         worker.join(timeout=20)
