@@ -6,12 +6,14 @@ import { addressMap, movableRobots, renumberBanner } from "/console/assets/addre
 function robotAppLinks(robotId, peers = []) {
   if (!Array.isArray(peers) || peers.some(peer => !peer || typeof peer !== "object")) return [];
   const candidates = peers.filter(peer => peer.role === "robot" && peer.peer_id === robotId);
-  if (!candidates.length || candidates.some(peer => peer.approval !== "approved"
-      || !["fresh", "unavailable"].includes(peer.freshness))) return [];
+  if (!candidates.length) return [];
+  // mDNS is observation: an address conflict on this robot hides its links (safety).
+  if (candidates.some(peer => peer.provenance !== "approved-directory" && peer.freshness === "conflict")) return [];
+  const approved = candidates.filter(peer => peer.provenance === "approved-directory");
+  if (!approved.length) return [];
   const origins = new Set();
-  for (const peer of candidates) {
-    // mDNS approval binds the identity, not the advertised transport/port.
-    if (peer.provenance !== "approved-directory") return [];
+  for (const peer of approved) {
+    if (peer.approval !== "approved" || !["fresh", "unavailable"].includes(peer.freshness)) return [];
     if (!["http", "https"].includes(peer.transport) || !Number.isInteger(peer.port)
         || peer.port < 1 || peer.port > 65535) return [];
     const host = peer.hostname || peer.address;
