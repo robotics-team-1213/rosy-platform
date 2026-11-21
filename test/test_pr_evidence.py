@@ -98,6 +98,24 @@ def test_an_intact_earlier_pass_is_kept_and_not_rerun(tmp_path, monkeypatch, cap
     assert pr_evidence.main(["HEAD"], repo=repo, run=lambda *a, **k: 1 / 0) == 0
 
 
+def test_placement_lines_remote_pytest_prints_are_kept_in_placement_txt(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path)
+    _fakes(monkeypatch, [["test/a.py"]])
+    monkeypatch.setattr(pr_evidence.land_checks, "tmp_dir", lambda name: tmp_path)
+
+    def run(invs, logs, sha, repo=None, label=None):
+        print("[remote-pytest] ai: 20.0 cores, 90.0 GB free - ok", file=sys.stderr)
+        print("[remote-pytest] pytest -> ai")
+        logs[0].write_text("PASSED test/a.py::t\n", encoding="utf-8")
+        return [0]
+
+    assert pr_evidence.main(["HEAD"], repo=repo, run=run) == 0
+    assert (tmp_path / "placement.txt").read_text(encoding="utf-8") == (
+        "[remote-pytest] ai: 20.0 cores, 90.0 GB free - ok\n[remote-pytest] pytest -> ai\n")
+    captured = capsys.readouterr()  # still shown on the console
+    assert "pytest -> ai" in captured.out and "ai: 20.0 cores" in captured.err
+
+
 def test_each_run_writes_new_logs_so_recorded_hashes_stay_valid(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     _fakes(monkeypatch, [["test/a.py"]])
