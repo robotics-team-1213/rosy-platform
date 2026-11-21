@@ -315,8 +315,8 @@ def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
             client, fake_vlm, _arm_configs(),
             operator="human_op", execute=True, dry_run=True, wait=False, poll_s=0.01,
         )
-        assert dry_pick["job"] == "auto_pick_dry_run" and procs[-1].argv[0] == "bash"
-        procs[-1]._code = 0
+        assert dry_pick["job"] == "auto_pick_dry_run"
+        assert runner.runs[dry_pick["id"]]["argv"][0] == "bash"
 
         next_proposal = {"action": "home", "arm": "arm_a", "site": "", "reason": "fold home"}
         dry_home = orch.run_once(
@@ -324,7 +324,7 @@ def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
             operator="human_op", execute=True, dry_run=True, wait=False, poll_s=0.01,
         )
         assert dry_home["status"] == "dry_run_skipped"
-        assert len(procs) == 2
+        assert len(procs) == 1
 
         # 4. proposer == operator fails BEFORE approve callback is prompted
         next_proposal = {"action": "cell_policy_drive", "arm": "arm_b", "site": "yard:r3-s2-t1", "reason": "live run"}
@@ -358,7 +358,7 @@ def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
             client, fake_vlm, _arm_configs(),
             operator="human_op", execute=True, person_at_switch=True, approve=lambda _: False, poll_s=0.01,
         )
-        assert rejected["status"] == "rejected" and len(procs) == 2
+        assert rejected["status"] == "rejected" and len(procs) == 1
 
         # 5. Live home and live auto_pick wrap through SESSION[arm]
         next_proposal = {"action": "home", "arm": "arm_a", "site": "", "reason": "fold home"}
