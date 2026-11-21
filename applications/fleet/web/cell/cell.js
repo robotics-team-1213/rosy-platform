@@ -63,6 +63,7 @@ if (SUBNAV_HEADINGS.includes(focusParam)) {
 }
 function focusArmFromLink() {
   if (!armFocusMatch || pendingFocusHandled) return;
+  if (location.hash && location.hash !== '#saved-heading') return;
   jumpToObservations(() => { pendingFocusHandled = observations.focusArm(armFocusMatch[1]); });
 }
 // 요약이 바뀔 때만 다시 그린다(관측 모듈이 서명으로 지켜 준다). 접속 끊김·해제는 빈 목록으로 줄을 지운다.
@@ -77,6 +78,9 @@ function renderExceptions(items) {
     const row = document.createElement('div');
     row.className = 'cell-exception-item';
     row.dataset.severity = item.severity;
+    const tag = document.createElement('ui-tag');
+    tag.setAttribute('status', item.severity === 'danger' ? 'crit' : 'warn');
+    tag.textContent = item.severity === 'danger' ? '정지·보류' : '주의';
     const label = document.createElement('strong'); label.textContent = item.label;
     const detail = document.createElement('span'); detail.textContent = item.detail;
     const move = document.createElement('ui-button');
@@ -86,7 +90,7 @@ function renderExceptions(items) {
       if (item.sourceId) observations.focusArm(item.sourceId);
       else $('observation-heading')?.scrollIntoView({block: 'nearest'});
     }));
-    row.append(label, detail, move);
+    row.append(tag, label, detail, move);
     return row;
   }));
 }

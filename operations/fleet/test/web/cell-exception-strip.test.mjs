@@ -127,7 +127,12 @@ test('a freshness flip re-emits only when the summary changed', async t => {
   assert.equal(env.summaries[1][0].key, 'stale:arm_a');
 });
 
-test('a lost observation connection is one warn row, auth loss clears the strip', async t => {
+test('unconfigured 503 stays quiet without prior cells; dropped observation connection is one warn row, auth loss clears the strip', async t => {
+  const unconfigured = setup(t, body([arm({})]));
+  unconfigured.failWith(503);
+  await unconfigured.observations.refresh();
+  assert.deepEqual(unconfigured.summaries, [[]]);  // 미구성 서버 503은 상단 경고를 띄우지 않는다
+
   const env = setup(t, body([arm({})]));
   await env.observations.refresh();
   env.failWith(503);

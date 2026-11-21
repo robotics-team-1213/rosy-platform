@@ -448,8 +448,13 @@ export function createCellObservation({request, root, credential = () => '', onS
         for (const entry of arms.values()) { entry.health.disconnect(); paintHealth(entry); }
         empty.hidden = false;
         empty.textContent = error.status === 503 ? '관측 구성을 확인할 수 없습니다.' : '관측 연결 확인 중 · 오래된 값은 표시하지 않습니다.';
-        observedDisconnected = true;
-        summarize(lastWorkcells, true);
+        if (error.status === 503 && !lastWorkcells.length) {
+          observedDisconnected = false;
+          emitSummary([]);
+        } else {
+          observedDisconnected = true;
+          summarize(lastWorkcells, true);
+        }
       }
     } finally { if (life === scope) pending = false; }
   }
