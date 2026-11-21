@@ -53,7 +53,7 @@ def test_ci_activates_standalone_app_browsers(monkeypatch, target, rest):
     monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
     monkeypatch.delenv('ROSY_BROWSER_TESTS', raising=False)
     monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
-                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter(()), wait=lambda: 0))
+                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter([f'PASSED {target}\n', '== 3 passed in 0.1s ==\n']), wait=lambda: 0))  # a real pass: STRICT and node-id rules need it
     with pytest.raises(SystemExit) as ended:
         exec(compile(python, str(WORKFLOW), 'exec'), {})
     assert ended.value.code == 0
@@ -63,6 +63,7 @@ def test_ci_activates_standalone_app_browsers(monkeypatch, target, rest):
         assert 'ROSY_RUN_BROWSER_TESTS' not in calls[0][1]
     assert calls[-1][0][3:5] == [target, exclude]
     assert calls[-1][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
+    assert ('ROSY_BROWSER_STRICT' in calls[-1][1]) == target.endswith('_browser.py')  # whole file only
 
 
 @pytest.mark.parametrize("selection", [
