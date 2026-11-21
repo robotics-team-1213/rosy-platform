@@ -33,6 +33,7 @@
 - secret이 없으면 봇은 확인 모드로 돈다. 러너 안에서만 consolidate를 돌리고, 밀려 있는 변경을 job summary에 적고, 아무것도 push하지 않는다. 그때는 아무 세션이나 손으로 처리한다. origin/main에서 `bot/records-<날짜>` 브랜치를 만들고 `python tools/new_record.py consolidate`를 돈 뒤 `python tools/pr_land.py --evidence`로 올린다(절차: [api-changes/README.md](../reference/api-changes/README.md)). `bot/records-` 접두사가 컷오버 규칙 예외와 엄격 lint를 함께 준다.
 - 같은 slug를 두 클론이 쓰면 add/add 충돌이 남는다(드묾, 리뷰에서 이름을 바꾼다).
 - 이 ADR의 Log 행은 새 방식대로 봇이 넣는다(PR에서는 경고).
+- `test_adr_index_lists_every_decision_section`도 같은 규칙이다. Log 행이 없는 ADR은 `ROSY_RECORDS_STRICT=1`이 아니면 경고(PR·main push)이고, 엄격 실행에서만 실패한다.
 
 ### Validation
 
