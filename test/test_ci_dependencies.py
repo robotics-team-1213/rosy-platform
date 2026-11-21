@@ -471,7 +471,9 @@ def test_ci_result_aggregates_the_matrix_for_branch_protection():
     result = jobs["ci-result"]
     assert result["name"] == "ci-result"
     assert set(result["needs"]) == {"scope", "test"}
-    assert result["if"] == "always()", "must run (and fail) when a needed job fails or is cancelled"
+    assert result["if"] == "always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)", (
+        "must run (and fail) when a needed non-draft job fails or is cancelled"
+    )
     script = result["steps"][-1]["run"]
     assert 'test "$SCOPE_RESULT" = success' in script and 'test "$TEST_RESULT" = success' in script
 
@@ -569,6 +571,19 @@ def test_merge_group_and_push_run_scoped_affected_against_their_base():
     test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
     assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
     assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
+
+
+def test_draft_pull_requests_skip_ci_and_review_gate():
+    import yaml
+
+    ci_doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    ci_triggers = ci_doc.get("on", ci_doc.get(True))
+    assert "ready_for_review" in ci_triggers["pull_request"]["types"]
+    assert "!github.event.pull_request.draft" in ci_doc["jobs"]["scope"]["if"]
+    ci_res_if = ci_doc["jobs"]["ci-result"]["if"]
+    assert "always()" in ci_res_if and "!github.event.pull_request.draft" in ci_res_if
+    rg_doc = yaml.safe_load((ROOT / ".github" / "workflows" / "review-gate.yml").read_text(encoding="utf-8"))
+    assert "!github.event.pull_request.draft" in rg_doc["jobs"]["review-gate"]["if"]
 
 
 @pytest.mark.parametrize("paths,output,expected", [

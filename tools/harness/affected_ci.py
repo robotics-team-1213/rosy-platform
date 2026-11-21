@@ -199,6 +199,7 @@ def _shard_groups(repo: Repo, entry: dict, flags: list[str] | None = None) -> li
 def ci_matrix(repo: Repo, sel: Selection) -> dict:
     """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
     import affected_tests as at  # here, not at the top: affected_tests imports this module
+    same_tree = False
     if sel.mode == "full":
         root_tests = sorted(t for t in repo.test_files if at._under(t, "test") and t != _STATION_SCHEDULING)
         entries = []
@@ -219,7 +220,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
     else:  # one runner per invocation; a whole SUITE_SHARDS suite keeps its full-tier groups (25 min limit)
         if os.environ.get("ROSY_QUEUE_TESTED"):  # ci.yml sets it on merge_group only (D-1059)
             import affected_queue
+            before_queue = sel
             sel = affected_queue.narrowed(repo, sel)
+            same_tree = sel is not before_queue
         whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
         whole["test"] = {"name": "root-test", "invocations": [["test"]]}
         for inv in sel.invocations:
@@ -239,7 +242,7 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
             entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
     import affected_browser
     entries += affected_browser.entries(repo, sel)  # pull_request runs only (D-1066); [] elsewhere
-    if not docs_only(sel) and buildable(repo, sel):
+    if not docs_only(sel) and buildable(repo, sel) and not same_tree:
         entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")
