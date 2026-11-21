@@ -1,7 +1,6 @@
 """D-472 LED identity orchestration and binding lifetime (addendum 4)."""
 
 import asyncio
-from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -225,25 +224,16 @@ def test_verdict_and_readback_routes():
     assert row["state"] == "CONFIRMED" and readback["use"] == "observation-only"
 
 
-def _vision_verdict_bodies(monkeypatch):
-    """Bodies built exactly as TrackWorker._report_identity does, from the real led_identity.decide."""
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "overhead"))
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "apps" / "games"))
-    from rosy_vision.track import led_identity
-    from rosy_vision.track.worker import _map_yaw
-    blob = led_identity.Blob(x_px=10, y_px=10, radius_px=5, map_x=1.0, map_y=1.0)
-    blink = [led_identity.Sample(1000.0 + i * 0.2, "cal-1", (blob,), (0.0 if 5 <= i < 13 else 0.02,)) for i in range(18)]  # on, off 1.8 s, on
-    out = {}
-    for name, samples in (("matched", blink), ("ambiguous", [])):
-        verdict = led_identity.decide(samples, not_before=1000.0, not_after=1004.0, now=1004.0)
-        out[name] = {"source_id": "ceiling_north", "map_id": "map_v2_fleet", "request_id": "req-1",
-                     "processor_revision": led_identity.PROCESSOR_REVISION, **verdict,
-                     "yaw": _map_yaw(verdict, None)}
-    return out
+def _vision_verdict_bodies():
+    """Literal identity bodies as Vision's TrackWorker._report_identity sends them (D-1036: no vision import)."""
+    base = {"source_id": "ceiling_north", "map_id": "map_v2_fleet", "request_id": "req-1",
+            "processor_revision": "led-identity/1", "captured_at": 1005.0, "calibration_revision": "cal-1"}
+    return {"matched": {**base, "state": "matched", "x": 1.0, "y": 1.0, "yaw": 0.5, "evidence": {"yaw_px": 0.5}},
+            "ambiguous": {**base, "state": "ambiguous", "x": None, "y": None, "yaw": None, "evidence": {}}}
 
 
-def test_vision_identity_body_with_yaw_is_accepted_and_extra_key_still_refused(monkeypatch):
-    bodies = _vision_verdict_bodies(monkeypatch)
+def test_vision_identity_body_with_yaw_is_accepted_and_extra_key_still_refused():
+    bodies = _vision_verdict_bodies()
     assert bodies["matched"]["state"] == "matched" and "yaw" in bodies["matched"]
     clock, tracking, identity, _ = _setup()
     app = FastAPI()
