@@ -5,16 +5,14 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-ADAPTER = ROOT / "middleware" / "devices" / "omx" / "adapter"
-# omx_adapter and its demonstration fixtures stay in the adapter until D-427 wave 2b/4c.
-for _p in (Path(__file__).resolve().parents[1], ADAPTER, ADAPTER / "test",
+for _p in (Path(__file__).resolve().parents[1], Path(__file__).parent, ROOT / "contracts" / "learning" / "src",
            ROOT / "contracts" / "foundation"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from test_demonstration import complete_episode  # noqa: E402
+from demo_episode_fixture import complete_episode  # noqa: E402
 from lerobot_export import dataset_features, export_episode, iter_dataset_frames  # noqa: E402
-from omx_adapter.demonstration import validate_episode  # noqa: E402
+from rosy.contracts.learning.omx import validate_demonstration as validate_episode  # noqa: E402
 
 
 def test_export_schema_keeps_radians_and_source_clocks(tmp_path):
@@ -82,7 +80,7 @@ def test_real_lerobot_v3_export_reopens_state_action_and_video(tmp_path):
 
 
 def test_gripper_feature_and_frame_when_the_episode_names_a_gripper(tmp_path):
-    from test_demonstration import complete_episode_with, gripper_provenance
+    from demo_episode_fixture import complete_episode_with, gripper_provenance
     manifest = complete_episode_with(tmp_path, gripper_provenance())
     features = dataset_features(manifest)
     assert features["action.gripper"] == {"dtype": "float32", "shape": (1,), "names": ["position_rad"]}

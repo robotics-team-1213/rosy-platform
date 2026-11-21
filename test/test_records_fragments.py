@@ -196,3 +196,31 @@ def test_adr_log_row_sync_is_newest_first_with_link_and_status(tmp_path):
     assert new_record._sync_adr_log(repo, repo / rules.ADR_LOG) == ["D-2"]
     lines = (repo / rules.ADR_LOG).read_text(encoding="utf-8").splitlines()
     assert lines[2] == "| D-2 | two things. [전문](../adr/D-2-two.md) | Accepted (2026-11-21, 사용자) |"
+
+
+def _entry(day: str, tag: str) -> str:
+    return f"## {day} · uncommitted · feat(mod): {tag}\n\n- 변경: x\n- 증거: y\n- gate 변화: 없음"
+
+
+def _fold(existing: list[str], shards: list[str]) -> list[str]:
+    out = new_record._insert_by_date("# logs\n\n" + "\n\n".join(existing) + "\n", shards)
+    return [ln for ln in out.splitlines() if ln.startswith("## ")]
+
+
+def test_log_fold_normal_case_appends_in_order():
+    heads = _fold([_entry("2026-11-20", "a")], [_entry("2026-11-21", "b"), _entry("2026-11-22", "c")])
+    assert [h[3:13] for h in heads] == ["2026-11-20", "2026-11-21", "2026-11-22"]
+
+
+def test_log_fold_inserts_older_shard_at_its_dated_position():
+    heads = _fold([_entry("2026-11-19", "a"), _entry("2026-11-21", "b")], [_entry("2026-11-20", "late")])
+    assert [h[3:13] for h in heads] == ["2026-11-19", "2026-11-20", "2026-11-21"]
+    assert "late" in heads[1]
+
+
+def test_log_fold_same_date_shards_follow_existing_and_keep_shard_order():
+    heads = _fold([_entry("2026-11-20", "old"), _entry("2026-11-21", "new")],
+                  [_entry("2026-11-20", "s1"), _entry("2026-11-20", "s2")])
+    assert [h.rsplit(": ", 1)[1] for h in heads] == ["old", "s1", "s2", "new"]
+    text = new_record._insert_by_date("# logs\n", [_entry("2026-11-20", "only")])
+    assert text.startswith("# logs\n\n## 2026-11-20") and text.endswith("\n")

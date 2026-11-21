@@ -215,6 +215,13 @@ class FifoCell:
         with urllib.request.urlopen(url, timeout=10) as reply:
             return cv2.imdecode(np.frombuffer(reply.read(), np.uint8), cv2.IMREAD_COLOR)
 
+    def policy_state(self):
+        """Read the latest encoder sample without sending a FIFO command during playback."""
+        try:
+            return json.loads((self.io / "live.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
     def frame_receipt(self, camera: str, *, previous: dict | None = None,
                       max_age_s: float = 2.0, timeout_s: float = 10.0) -> dict:
         """Read one source frame; reject stale or non-advancing evidence rather than reusing a cached image."""

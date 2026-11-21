@@ -149,6 +149,7 @@ class LeRobotShadow:
         policy_config = json.loads((root / "config.json").read_text(encoding="utf-8"))
         self.image_views, _, self.goal_size = read_features(policy_config)
         self.n_action_steps = policy_config.get("n_action_steps")
+        self.chunk_size = policy_config.get("chunk_size")
         self.sim_rule = read_sim_rule(root / UNITS, cell_config)
         self.arm_id = (cell_config or {}).get("arm_id")
         self.warp = read_warp(root / WARP, self.image_views)

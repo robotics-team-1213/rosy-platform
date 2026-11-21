@@ -239,11 +239,25 @@ jobs:
             echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
           fi
 
+      - name: Cache Pinky CPU torch wheel
+        if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4 (pinned commit)
+        with:
+          path: /tmp/pip-cache-pinky
+          key: ${{ runner.os }}-pinky-torch-2.7.1
+
       - name: Install Pinky CPU model comparison tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
-          pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          pip3 install --cache-dir /tmp/pip-cache-pinky --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
           python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
+
+      - name: Cache OMX ACT CPU verification tools
+        if: matrix.name == 'omx-act-cpu'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4 (pinned commit)
+        with:
+          path: /tmp/rosy-omx-act-cpu
+          key: ${{ runner.os }}-${{ runner.arch }}-59245c63b56d-omx-act-cpu-${{ hashFiles('deploy/robot/omx/requirements-lerobot-export.txt') }}
 
       - name: Install OMX ACT CPU verification tools
         if: matrix.name == 'omx-act-cpu'
@@ -252,9 +266,11 @@ jobs:
           TRANSFORMERS_OFFLINE: '1'
         run: |
           # Separate matrix runner/tool path: the Pinky comparison keeps its own torch pin.
-          pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu \
-            --extra-index-url https://download.pytorch.org/whl/cpu \
-            -r deploy/robot/omx/requirements-lerobot-export.txt
+          if [ ! -d /tmp/rosy-omx-act-cpu/torch ]; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu \
+              --extra-index-url https://download.pytorch.org/whl/cpu \
+              -r deploy/robot/omx/requirements-lerobot-export.txt
+          fi
           PYTHONPATH="/tmp/rosy-omx-act-cpu${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
           import json
           from importlib.metadata import version
@@ -296,10 +312,10 @@ jobs:
           fi
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            core_common==0.0.3 rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.16 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
+            core_common==0.0.3 rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.17 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
 
       - name: Build (colcon)
-        if: matrix.kind == 'smoke' || matrix.ros == 'overlay'
+        if: matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false')
         run: |
           # 러너 셸은 컨테이너 엔트리포인트를 우회하므로 ROS 환경을 직접 얹는다 —
           # 아니면 CMake가 ament_cmake를 찾지 못해 빌드 자체가 시작되지 않는다.
@@ -335,12 +351,14 @@ jobs:
           # module harness: logs.md 는 이 base 이후로 앞부분이 보존되어야 한다 (비면 origin/main merge-base).
           HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           ROSY_ROS: ${{ matrix.ros }}
+          # The Build (colcon) step's own condition: a missing matrix.colcon means build; only an explicit false skips.
+          ROSY_BUILT: ${{ matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false') }}
           ROSY_INVOCATIONS: ${{ toJSON(matrix.invocations) }}
         run: |
           # ROS setup.sh 는 미정의 변수를 참조하므로 -u 를 쓰지 않는다.
           set -eo pipefail
           case "$ROSY_ROS" in
-            overlay) . /opt/ros/jazzy/setup.sh; . install/setup.sh ;;
+            overlay) . /opt/ros/jazzy/setup.sh; [ "$ROSY_BUILT" = true ] && . install/setup.sh || true ;;
             base) . /opt/ros/jazzy/setup.sh ;;
           esac
           python3 - <<'PY'

@@ -15,13 +15,13 @@ FPS = 15
 HOME_B = [0.023, -1.967, 1.667, 1.626, 1.399, 0.6]
 
 
-def _video(path, frames, black=False):
+def _video(path, frames, black=False, static=False):
     path.parent.mkdir(parents=True, exist_ok=True)
     with av.open(str(path), "w") as c:
         s = c.add_stream("mpeg4", rate=FPS)
         s.width, s.height, s.pix_fmt = 64, 48, "yuv420p"
         for i in range(frames):
-            img = np.zeros((48, 64, 3), np.uint8) if black else np.full((48, 64, 3), 40 + (i * 7) % 200, np.uint8)
+            img = np.zeros((48, 64, 3), np.uint8) if black else np.full((48, 64, 3), 90 if static else 40 + (i * 7) % 200, np.uint8)
             for p in s.encode(av.VideoFrame.from_ndarray(img, format="rgb24")):
                 c.mux(p)
         for p in s.encode():
@@ -29,7 +29,7 @@ def _video(path, frames, black=False):
 
 
 def make(root, *, cams=("top", "side", "wrist"), n=80, video_frames=None, black=None, task="Move the designated container from belt to ship-h1r1-l0.",
-         state0=HOME_B, gripper=0.6):
+         state0=HOME_B, gripper=0.6, static=None):
     root = Path(root)
     feats = {"observation.state": {"dtype": "float32", "shape": [6]}, "action": {"dtype": "float32", "shape": [6]}}
     for c in cams:
@@ -43,7 +43,7 @@ def make(root, *, cams=("top", "side", "wrist"), n=80, video_frames=None, black=
     for c in cams:
         key = f"observation.images.{c}"
         _video(root / info["video_path"].format(video_key=key, chunk_index=0, file_index=0),
-               (video_frames or {}).get(c, n), black=(black == c))
+               (video_frames or {}).get(c, n), black=(black == c), static=(static == c))
         ep.update({f"videos/{key}/chunk_index": 0, f"videos/{key}/file_index": 0,
                    f"videos/{key}/from_timestamp": 0.0, f"videos/{key}/to_timestamp": n / FPS})
     pd.DataFrame([ep]).to_parquet(root / "meta/episodes/chunk-000/file-000.parquet")
@@ -111,3 +111,10 @@ def test_a_fixed_layout_source_cannot_enter_a_randomized_set_and_a_changed_file_
         dg.check_receipt(ok)
     with pytest.raises(ValueError, match="kind="):
         dg.gate(ok, "arm_b", {"kind": "sim"})
+
+
+def test_an_unchanged_camera_is_reviewed_only_for_real_sources(tmp_path):
+    root = make(tmp_path / "still", static="side")    # sim side camera with nothing moving in view: identical renders
+    assert dg.gate(root, "arm_b", SIM)["counts"]["review"] == 0
+    r = dg.gate(root, "arm_b", {"kind": "real", "layout": "random"})
+    assert any("side: unchanged" in x for x in r["episodes"][0]["review"])

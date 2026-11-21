@@ -146,6 +146,12 @@ def dispatch_runner_command(runner, line: str) -> bool:
             gap = max(abs(a + o - b) for a, o, b in zip(start[:5], offset, runner.target[:5]))
             if gap > JOG_MAX * 2:
                 raise ValueError(f"chunk {words[1]} starts {gap:.1f} away from the held target")
+            if words[1] == "policy" and "policy_playback" in runner.library:
+                from chunk_policy_playback import start
+
+                if len(words) != 2:
+                    raise ValueError("timed policy frames cannot be shifted")
+                runner.policy_playback = start(runner)
             runner.queue = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
             if words[1].startswith("release"):
                 runner.holding = False
