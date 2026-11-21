@@ -22,6 +22,7 @@ SPEC.loader.exec_module(pr_land)
 def _normal_cutover(monkeypatch):
     monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
     monkeypatch.setattr(pr_land.land_freeze, "path", lambda cwd: Path("rosy-cutover.json"))
+    monkeypatch.setattr(pr_land, "preflight", lambda cwd, base: None)  # its own test below
 
 
 @pytest.mark.parametrize("phase,refused", [("drain", True), ("open", False), ("normal", False)])
@@ -187,6 +188,41 @@ def test_mixed_ci_entries_need_no_lab_but_omx_and_browser_parts_stay(monkeypatch
     assert _required(monkeypatch, [["ROSY_RUN_BROWSER_TESTS=1"] + mixed]) != []
 
 
+def test_what_this_prs_own_ci_run_executes_is_not_lab_evidence(monkeypatch):
+    """2026-11-21: one UI PR spent 2 to 2.5 h per lab run, mostly on tests its pull_request run executes anyway."""
+    media = ["middleware/media/test"]  # a selector suite no full-matrix entry names
+    assert pr_land.ci_entry(media) is None and not pr_land.ci_runnable(media) and pr_land.ci_runnable(media, selected=True)
+    assert _required(monkeypatch, [media]) == []
+    assert not pr_land.ci_runnable(["middleware/perception/test"], selected=True), "a non-gating root stays lab evidence"
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: json.dumps({"mode": "full", "local_invocations": [media]})
+                        if "affected" in cmd else "")
+    assert pr_land.required_lab_invocations(Path("."), "b", "h") == [media], "a FULL selection is not run per invocation"
+
+    browser, alone = "ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1"
+    fleet, other = "operations/fleet/test/test_fleet_header_browser.py", "shared/web/test/test_x_browser.py"
+    assert pr_land.lab_browser_chunk([browser, fleet, other], ["operations/fleet/test"]) == [browser, other]
+    assert pr_land.lab_browser_chunk([browser, fleet], [fleet]) == []
+    assert pr_land.lab_browser_chunk([browser, fleet], ["operations/world/test"]) == [browser, fleet], "not in this PR's CI run"
+    site_map = "operations/fleet/test/test_site_map_browser.py"
+    assert pr_land.lab_browser_chunk([browser, alone, site_map], ["operations/fleet/test"]) == [browser, alone, site_map]
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert 'p.startswith(("%s", "%s"))' % pr_land.CI_BROWSER_ROOTS in workflow, "ci.yml opts these roots in to Chromium itself"
+
+
+def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypatch):
+    seen = []
+    monkeypatch.undo()  # the autouse fixture stubs preflight for the other tests
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: seen.append(cmd[1:]))
+    pr_land.preflight(Path("."), "origin/main")
+    assert seen == [["tools/harness/safety_review.py", "origin/main", "HEAD"], ["tools/harness/size_range.py", "origin/main", "HEAD"]]
+
+    def refuse(cmd, cwd, **k):
+        raise SystemExit("no Safety-Review trailer")
+    monkeypatch.setattr(pr_land, "_run", refuse)
+    with pytest.raises(SystemExit):
+        pr_land.preflight(Path("."), "origin/main")
+
+
 def test_lab_only_requires_intact_lab_cache_and_ci_covers_lab_ids(tmp_path, monkeypatch):
     def git(*args):
         return subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True, text=True).stdout.strip()
@@ -286,12 +322,16 @@ def test_push_env_carries_reason_only_when_publish_only_and_activated(monkeypatc
 def test_evidence_flag_runs_pr_evidence_before_verify(monkeypatch, tmp_path):
     inv = ["middleware/devices/omx/adapter/test"]
     calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False, lab=[inv])
+    monkeypatch.setattr(pr_land, "preflight", lambda cwd, base: calls.append((["preflight", base], None)))
     fake = type(sys)("pr_evidence")
     fake.main = lambda argv, repo=None: calls.append((["evidence", *argv], None)) or 0
     monkeypatch.setitem(sys.modules, "pr_evidence", fake)
     assert pr_land.main(["--evidence", "--dry-run"], repo=tmp_path) == 0
     order = [c[0][0] for c in calls if c[0][0] in ("evidence", "verify")]
     assert order == ["evidence", "verify"]
+    # 2026-11-21: the trailer and size checks stop a doomed push before the lab run, not after it
+    names = [c[0][0] for c in calls]
+    assert names.index("preflight") < names.index("evidence")
     calls.clear()
     assert pr_land.main(["--dry-run"], repo=tmp_path) == 0
     assert [c[0][0] for c in calls if c[0][0] == "evidence"] == []
