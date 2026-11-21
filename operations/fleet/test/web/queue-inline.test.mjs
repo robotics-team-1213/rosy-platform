@@ -132,14 +132,23 @@ class El {
   replaceChildren(...nodes) { for (const one of nodes) if (typeof one !== "string") one.parentElement = this; this.children = [...nodes]; }
   get childElementCount() { return this.children.length; }
   get firstElementChild() { return this.children.find((child) => child.nodeType !== 3) ?? null; }
+  get lastElementChild() { return [...this.children].reverse().find((child) => child.nodeType !== 3) ?? null; }
   get textContent() { return this.text + this.children.map((child) => child.textContent).join(""); }
   set textContent(value) { this.children = []; this.text = String(value); }
   getAttribute(name) { return this.attributes.has(name) ? this.attributes.get(name) : null; }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   removeAttribute(name) { this.attributes.delete(name); }
   addEventListener(type, handler) { this.listeners[type] = handler; }
-  focus() {}
+  focus() { this.focused = true; }
+  scrollIntoView() {}
+  click() {  // a DOM-enough click: handlers get a preventable event
+    const event = {prevented: false, preventDefault() { this.prevented = true; }};
+    this.listeners.click?.(event);
+    return event;
+  }
   matches(selector) {
+    const data = selector.match(/^\[data-([\w-]+)\]$/);  // e.g. [data-message-summary] (camelCase dataset)
+    if (data) return this.dataset[data[1].replace(/-(\w)/g, (_, c) => c.toUpperCase())] !== undefined;
     return selector.startsWith("#") ? this.id === selector.slice(1)
       : selector.startsWith(".") ? this.className.split(/\s+/).includes(selector.slice(1))
       : this.tagName === selector.toUpperCase();
@@ -234,4 +243,47 @@ test("B-1: the inbox reads the folded summary line; an age tick stays read, a ch
   inbox.refresh();  // the folded cause set changed: a genuinely new exception
   assert.equal(el("header-unread").textContent, "1");
   assert.match(el("inbox-current").textContent, /지연 경고 3건/);
+});
+
+const inboxLink = (el, key) => el("inbox-current").children
+  .find((item) => item.dataset.key === key)?.children.find((child) => child.tagName === "A");
+
+test("B-2: the inbox jump opens the exact folded row, focuses its summary and stops the anchor", (t) => {
+  const {el} = fakeConsole(t);
+  const view = STALE_VIEW();
+  const { fillQueues } = createQueues({ scope: {}, el, view, render: () => {}, streamEvidence: () => null });
+  view.robots = [STALE_ROBOT(6)];
+  fillQueues();
+  const inbox = createInboxPanel({ scope: { listen() {} }, el, readView: () => view });
+  inbox.refresh();
+  const li = el("warning-list").children[0];
+  const event = inboxLink(el, "a|stale-snapshot").click();
+  assert.equal(event.prevented, true);  // anchor #queues-heading must not steal focus or scroll
+  assert.equal(li.querySelector("details").open, true);
+  assert.equal(li.querySelector("summary").focused, true);
+});
+
+test("B-2: the inbox jump opens a closed decision row once and never re-closes an open one", (t) => {
+  const {el} = fakeConsole(t);
+  const view = STALE_VIEW();
+  let renders = 0;
+  const { fillQueues } = createQueues({ scope: { guard: (fn) => fn }, el, view, render: () => renders++, streamEvidence: () => null });
+  view.robots = [{ robot_id: "a", online: false, state: null, line_stuck: { stuck_id: "s" } }];
+  view.queueChoice = { key: "a|stuck", open: false };  // the operator had it closed
+  fillQueues();
+  const inbox = createInboxPanel({ scope: { listen() {} }, el, readView: () => view });
+  inbox.refresh();
+  const toggle = el("critical-list").children.find((child) => child.dataset.decision === "stuck").querySelector(".queue-row");
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  const event = inboxLink(el, "a|stuck").click();
+  assert.equal(event.prevented, true);
+  assert.equal(view.queueChoice.open, true);  // the queues.js disclosure handler ran
+  assert.equal(renders, 1);
+  assert.equal(toggle.focused, true);
+  fillQueues();  // the poll applies the choice: aria-expanded flips to true
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  inboxLink(el, "a|stuck").click();  // a second jump must not toggle it closed
+  assert.equal(view.queueChoice.open, true);
+  assert.equal(renders, 1);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
 });
