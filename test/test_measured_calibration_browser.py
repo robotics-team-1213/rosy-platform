@@ -109,6 +109,12 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.wait_for_function("document.querySelector('#measured-state').textContent.includes('저장됨')")
         expect(page.locator('#measured-conditions')).to_be_enabled()
         assert page.locator('#measured-confirm').is_disabled()
+        page.evaluate("""() => { const c = document.querySelector('#measured-conditions'); window.__trace = [];
+          const t = n => window.__trace.push(Math.round(performance.now()) + ' ' + n + ' checked=' + c.checked + ' disabled=' + c.disabled);
+          for (const e of ['mousedown','mouseup','click','input','change']) document.addEventListener(e, ev => t(e + '@' + (ev.target.id || ev.target.tagName)), true);
+          new MutationObserver(m => m.forEach(r => t('attr:' + r.attributeName))).observe(c, {attributes: true});
+          const p = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked');
+          Object.defineProperty(c, 'checked', {get() { return p.get.call(this); }, set(v) { t('set checked=' + v + ' ' + new Error().stack.split('\\n')[2]); p.set.call(this, v); }}); }""")
         page.locator('#measured-conditions').hover()
         page.mouse.down()
         state['hold'] = True
@@ -119,6 +125,12 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         expect(page.locator('#measured-revoke')).to_be_disabled()
         assert state['pending']
         page.mouse.up()
+        try:
+            expect(page.locator('#measured-conditions')).to_be_checked(timeout=3000)
+        except AssertionError:
+            pytest.fail('DIAG ' + json.dumps(page.evaluate("""() => { const c = document.querySelector('#measured-conditions'), r = c.getBoundingClientRect();
+              const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+              return {trace: window.__trace, rect: [r.x, r.y, r.width, r.height], hit: hit && (hit.id || hit.tagName), vw: innerWidth, state: document.querySelector('#measured-state').textContent, errors: []}; }"""), ensure_ascii=False) + ' console=' + repr(errors))
         expect(page.locator('#measured-conditions')).to_be_checked()
         expect(page.locator('#measured-conditions')).to_be_enabled()
         state['hold'] = False
