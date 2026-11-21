@@ -1,9 +1,12 @@
-"""Merge queue: retest only what changed since the pull request's green CI run (D-1059).
+"""Merge queue and main push: repeat the guard set alone on a tree a green run already tested (D-1059, D-1064).
 
 A pull_request run tests the merge of the PR head into the base of that moment and, when green, leaves
 that merge commit in a notice on its ``ci-result`` check. The queue's commit differs from it only by what
 entered the base since. When nothing did, the queue's tree is the tree that run passed, and the queue run
 repeats the guard set alone. Any difference, or any doubt, keeps the whole selection.
+
+The push run on main is the same case one step later (D-1064): when the push is exactly the one queue entry
+whose queue run passed on this very commit, the two runs select the same tests on the same tree.
 """
 from __future__ import annotations
 
@@ -54,14 +57,18 @@ def narrow(repo, sel, status: str):
     return out, f"same tree as the tested commit: the guard set alone, {len(keep)} of {len(sel.reasons)} selected paths"
 
 
-def tested_commit(api: str, repository: str, head: str, token: str, get=None) -> str:
-    """The merge commit a green pull_request ci run tested for PR head `head`; "" when no such run left one."""
+def _reader(token: str):
     def fetch(url: str):
         request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}",
                                                        "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(request, timeout=15) as response:
             return json.loads(response.read().decode("utf-8"))
-    get = get or fetch
+    return fetch
+
+
+def tested_commit(api: str, repository: str, head: str, token: str, get=None) -> str:
+    """The merge commit a green pull_request ci run tested for PR head `head`; "" when no such run left one."""
+    get = get or _reader(token)
     runs = get(f"{api}/repos/{repository}/commits/{head}/check-runs?check_name=ci-result&per_page=100")["check_runs"]
     for run in sorted(runs, key=lambda r: r.get("completed_at") or "", reverse=True):
         if run.get("conclusion") != "success" or (run.get("app") or {}).get("slug") != "github-actions":
@@ -73,19 +80,47 @@ def tested_commit(api: str, repository: str, head: str, token: str, get=None) ->
     return ""
 
 
-def main() -> int:
-    """Print the tested commit for the merge queue commit at HEAD, fetched and checked; nothing when unknown."""
+def queue_passed(api: str, repository: str, sha: str, token: str, get=None) -> bool:
+    """True when a merge queue run of ci.yml passed on exactly `sha` (D-1064)."""
+    get = get or _reader(token)
+    runs = get(f"{api}/repos/{repository}/actions/runs?head_sha={sha}&event=merge_group&per_page=50")["workflow_runs"]
+    return any(run.get("head_sha") == sha and run.get("conclusion") == "success"
+               and str(run.get("path") or "").split("@")[0].endswith(".github/workflows/ci.yml") for run in runs)
+
+
+def pushed(parent: str, before: str, passed) -> None:
+    """Raise unless this push is the one queue entry a green queue run already tested (D-1064).
+
+    The queue run of the tip tests the tip's own pull request against the entry before it. A push that carries
+    several entries is selected over all of them on the final tree, which no queue run did."""
+    if not before or parent != before:
+        raise SelectionError("the push holds more than the last merge queue entry (HEAD^1 is not the previous tip)")
+    if not passed():
+        raise SelectionError("no green merge queue run of ci.yml on this commit")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Print the commit whose green run already tested HEAD's tree (fetched and checked); nothing when unknown.
+
+    No argument: HEAD is a merge queue commit (D-1059). ``--pushed <before>``: HEAD is the new main tip (D-1064)."""
+    argv = sys.argv[1:] if argv is None else argv
     root = Path.cwd()
+    api, repository, token = (os.environ.get("GITHUB_API_URL", "https://api.github.com"),
+                              os.environ.get("GITHUB_REPOSITORY", ""), os.environ.get("GH_TOKEN", ""))
     try:
-        head = _git(root, "rev-parse", "HEAD^2").strip()  # the queue merges the PR head into its base
-        sha = tested_commit(os.environ.get("GITHUB_API_URL", "https://api.github.com"),
-                            os.environ["GITHUB_REPOSITORY"], head, os.environ["GH_TOKEN"])
-        if not sha:
-            raise SelectionError(f"no green pull_request run left a {NOTICE} notice for {head}")
-        _git(root, "fetch", "--quiet", "origin", sha)
-        if _git(root, "rev-parse", f"{sha}^2").strip() != head:
-            raise SelectionError(f"{sha} is not a merge of {head}")
-        _git(root, "merge-base", "--is-ancestor", f"{sha}^1", "HEAD^1")  # the base it was tested on is in the queue's base
+        if argv[:1] == ["--pushed"]:
+            sha = _git(root, "rev-parse", "HEAD").strip()
+            pushed(_git(root, "rev-parse", "HEAD^1").strip(), argv[1] if len(argv) > 1 else "",
+                   lambda: queue_passed(api, repository, sha, token))
+        else:
+            head = _git(root, "rev-parse", "HEAD^2").strip()  # the queue merges the PR head into its base
+            sha = tested_commit(api, repository, head, token)
+            if not sha:
+                raise SelectionError(f"no green pull_request run left a {NOTICE} notice for {head}")
+            _git(root, "fetch", "--quiet", "origin", sha)
+            if _git(root, "rev-parse", f"{sha}^2").strip() != head:
+                raise SelectionError(f"{sha} is not a merge of {head}")
+            _git(root, "merge-base", "--is-ancestor", f"{sha}^1", "HEAD^1")  # the base it was tested on is in the queue's base
     except Exception as exc:  # noqa: BLE001 - any doubt keeps the whole selection, never fails the run
         print(f"[queue] whole selection: {exc}", file=sys.stderr)
         return 0

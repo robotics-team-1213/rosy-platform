@@ -96,3 +96,40 @@ def test_ci_wires_the_notice_and_the_queue_switch():
     assert scope["env"]["QUEUE_DELTA"] == "${{ vars.ROSY_QUEUE_DELTA }}"
     call = scope["run"].split("tools/harness/affected_queue.py")[0].rsplit("if [", 1)[1]
     assert "= merge_group ]" in call and '"$QUEUE_DELTA" = 1' in call and f"{affected_queue.ENV}=" in call
+
+
+def test_queue_passed_needs_a_green_merge_group_run_of_ci_on_that_commit():
+    sha, url = "a" * 40, "https://api.example/repos/o/r/actions/runs?head_sha={}&event=merge_group&per_page=50"
+    ci = ".github/workflows/ci.yml"
+    pages = {
+        url.format(sha): {"workflow_runs": [
+            {"head_sha": sha, "conclusion": "success", "path": ".github/workflows/review-gate.yml"},
+            {"head_sha": sha, "conclusion": "success", "path": ci}]},
+        url.format("b" * 40): {"workflow_runs": [{"head_sha": "b" * 40, "conclusion": "failure", "path": ci},
+                                                 {"head_sha": "c" * 40, "conclusion": "success", "path": ci}]},
+        url.format("d" * 40): {"workflow_runs": []},
+    }
+    assert affected_queue.queue_passed("https://api.example", "o/r", sha, "t", pages.__getitem__)
+    assert not affected_queue.queue_passed("https://api.example", "o/r", "b" * 40, "t", pages.__getitem__)
+    assert not affected_queue.queue_passed("https://api.example", "o/r", "d" * 40, "t", pages.__getitem__)
+
+
+def test_a_push_narrows_only_when_it_is_the_one_entry_the_queue_run_tested():
+    import pytest
+    affected_queue.pushed("p" * 40, "p" * 40, lambda: True)  # one entry, its queue run passed: no error
+    for parent, before, passed in (("p" * 40, "q" * 40, True),   # several entries merged in one push
+                                   ("p" * 40, "", True),          # unknown previous tip
+                                   ("p" * 40, "p" * 40, False)):  # a direct push, or the queue run did not pass
+        with pytest.raises(affected.SelectionError):
+            affected_queue.pushed(parent, before, lambda: passed)
+
+
+def test_ci_wires_the_push_switch():
+    import yaml
+    jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
+    scope = next(s for s in jobs["scope"]["steps"] if s["name"] == "Test scope (D-436)")
+    assert scope["env"]["PUSH_SAME"] == "${{ vars.ROSY_PUSH_SAME }}"
+    push = scope["run"].split("push)", 1)[1].split(";;", 1)[0]
+    call = push.split("tools/harness/affected_queue.py --pushed")[0].rsplit("if [", 1)[1]
+    assert '"$PUSH_SAME" = 1' in call and f"{affected_queue.ENV}=" in call
+    assert push.index("escalating to --full") < push.index("--pushed"), "an unknown push base stays the full tier"
