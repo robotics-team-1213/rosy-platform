@@ -149,8 +149,8 @@ def lead(command):
     for s in SIGNALS:
         signal.signal(s, forward)
     child = subprocess.Popen(command, pass_fds=fds)
-    if pending:  # arrived before the session existed
-        os.kill(child.pid, pending[0])
+    if pending:  # arrived before the session existed: to everything it has forked by now, not only to its shell
+        forward(pending[0], None)
     code = child.wait()
     # Stay (and keep forwarding) until nothing but this leader is left in the group: a shell wrapper may return
     # while its background session runs, and run's death must still reach that session. Bounded, so run's own
@@ -246,10 +246,15 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
             if failure is not None:
                 # only a unit confirmed down gets the restart; anything else (still running, or no answer) was not
                 # stopped as far as we know, so its stop failure is the report, not a recovery failure
-                try:
-                    active = run("is-active", unit).stdout.strip()
-                except (OSError, subprocess.SubprocessError):
-                    active = ""
+                active = ""
+                for _ in range(10):  # a timed-out stop may still be deactivating
+                    try:
+                        active = run("is-active", unit).stdout.strip()
+                    except (OSError, subprocess.SubprocessError):
+                        active = ""
+                    if active != "deactivating":
+                        break
+                    sleep(0.5)
                 stopped = active in ("inactive", "failed")
                 observer = "untouched" if stopped else "stop_failed"
                 raise HandoffError(f"could not stop {unit}: {failure} (is-active: {active or 'no answer'})")
@@ -273,6 +278,10 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
                 code = 127
             else:
                 state["child"] = child
+                if created and getattr(child, "pid", None) and leader_waited:
+                    # the leader lives until its group is gone; this wrapper may be killed first (Fleet's timeout),
+                    # and the lease must not turn reclaimable while the recorder is still folding
+                    lease.repid(arm, child.pid, owner=owner)
                 if state["signal"]:  # arrived between the last check and the spawn
                     kill(child, state["signal"])
                 code = child.wait()

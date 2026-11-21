@@ -45,7 +45,8 @@ class Host:
             claim=lambda *a, **k: (self.log.append("lease"),
                                    not (lease_before and lease_before["owner"] == "me" and lease_before["live"])),
             release=lambda *a, **k: self.log.append("unlease"),
-            hold=lambda *a, **k: self.log.append("hold"))
+            hold=lambda *a, **k: self.log.append("hold"),
+            repid=lambda *a, **k: self.log.append("repid"))
 
     def run(self, *args):
         self.log.append(args[0])
@@ -682,6 +683,39 @@ def test_sigterm_before_the_session_launches_exits_143(cell):
     signal_me(0.05)
     code = handoff(cell, host, signals=m.SIGNALS, sleep=lambda s: time.sleep(0.1), group_timeout_s=1)
     assert code == 143 and "session" not in host.log
+
+
+def test_the_created_lease_follows_the_leader_that_outlives_the_wrapper(cell):
+    host = Host()
+    assert handoff(cell, host, leader_waited=True) == 0
+    assert host.log.index("session") < host.log.index("repid") < host.log.index("unlease")
+    host = Host()
+    assert handoff(cell, host) == 0 and "repid" not in host.log  # no leader (non-Linux): the wrapper's own pid
+
+
+def test_a_stop_still_deactivating_is_waited_for_before_it_is_judged(cell):
+    host, answers = Host(stop_ok=False), iter(["deactivating", "deactivating", "inactive"])
+    plain = host.run
+    host.run = lambda *a: SimpleNamespace(returncode=0, stdout=next(answers) + "\n", stderr="") if a[0] == "is-active" else plain(*a)
+    assert handoff(cell, host) == m.HANDOFF_FAILED and "start" in host.log
+
+
+@posix
+def test_a_signal_before_the_leader_has_a_child_still_reaches_its_background_processes(tmp_path):
+    import subprocess
+
+    pids = tmp_path / "pids"
+    proc = subprocess.Popen([sys.executable, str(OMX / "observer_handoff.py"), "_lead", "--", "sh", "-c",
+                             f"sleep 60 & echo $! > {pids}; sleep 60"], start_new_session=True)
+    deadline = time.monotonic() + 5
+    while not pids.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    sleeper = int(pids.read_text())
+    os.kill(proc.pid, signal.SIGTERM)
+    proc.wait(timeout=10)
+    time.sleep(0.3)
+    with pytest.raises(ProcessLookupError):
+        os.kill(sleeper, 0)
 
 
 def test_a_stop_that_times_out_is_checked_before_any_restart(cell):

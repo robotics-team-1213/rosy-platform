@@ -139,6 +139,20 @@ def restore(arm, previous: dict, expect: dict, owner=None, root=None) -> bool:
     return True
 
 
+def repid(arm, pid, owner=None, root=None) -> bool:
+    """Tie this owner's live, unheld lease to another process (the session leader, which outlives its wrapper)."""
+    owner = owner or default_owner()
+    root = lease_root(root)
+    with _locked(arm, root):
+        old = _read(arm, root)
+        if not old or old.get("owner") != owner or old.get("hold") or not live(old):
+            return False
+        tmp = root / f"{arm}.json.tmp"
+        tmp.write_text(json.dumps({**old, "pid": pid}, indent=2), encoding="utf-8")
+        os.replace(tmp, root / f"{arm}.json")
+    return True
+
+
 def hold(arm, reason: str, pid=None, owner=None, root=None) -> bool:
     """Mark this owner's lease held (live past its pid and expiry) for a runner record_session left on the arm."""
     owner = owner or default_owner()
