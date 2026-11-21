@@ -308,7 +308,7 @@ LAYOUT_GEOMETRY_PROBE = """() => {
     const sides = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].map((v) => parseFloat(v) || 0);
     if (Math.min(...sides) < 1) return false;
     const colors = [s.borderTopColor, s.borderRightColor, s.borderBottomColor, s.borderLeftColor];
-    return colors.every((c) => c && c !== 'transparent' && !/rgba?\\([^)]*,\\s*0(?:\\.0+)?\\)/.test(c));
+    return colors.every((c) => c && c !== 'transparent' && !/rgba\\([^)]*,\\s*0(?:\\.0+)?\\)/.test(c));
   };
   for (const node of document.querySelectorAll('main div, main section, main article, main aside, main details, main ul, main li')) {
     if (!isBorderedBox(node)) continue;
@@ -323,12 +323,12 @@ LAYOUT_GEOMETRY_PROBE = """() => {
     }
   }
 
-  // G5: Floating launcher (#assistant-fab) vs #robot-dock-mount / #estop / open robot sheet (#robot-panel-mount) collision.
+  // G5: Floating launcher (#assistant-toggle) vs #robot-dock-mount / #estop / open robot sheet (#robot-panel-mount) collision.
   // 모바일 시트가 열리면 CSS가 실행기를 visibility:hidden으로 물러나게 하므로 seen()이 잡고,
   // 단추가 시트 바닥의 비상 정지·주행 취소 단추를 덮으면 이 검사가 위반으로 돌린다.
   const openDialog = document.querySelector('dialog[open], [role="dialog"]:not([hidden])');
   if (!openDialog) {
-    const fab = document.getElementById('assistant-fab');
+    const fab = document.getElementById('assistant-toggle');
     if (seen(fab) && !allowed(fab, 'G5')) {
       const fr = fab.getBoundingClientRect();
       for (const id of ['robot-dock-mount', 'estop', 'robot-panel-mount']) {
@@ -338,7 +338,7 @@ LAYOUT_GEOMETRY_PROBE = """() => {
         const ox = Math.min(fr.right, tr.right) - Math.max(fr.left, tr.left);
         const oy = Math.min(fr.bottom, tr.bottom) - Math.max(fr.top, tr.top);
         if (ox > 2 && oy > 2) {
-          violations.push(`G5 floating-dock-collision: #assistant-fab overlaps #${id} by ${Math.round(ox)}x${Math.round(oy)}px`);
+          violations.push(`G5 floating-dock-collision: #assistant-toggle overlaps #${id} by ${Math.round(ox)}x${Math.round(oy)}px`);
         }
       }
     }
@@ -396,7 +396,7 @@ LAYOUT_GEOMETRY_PROBE = """() => {
 
 
 def assert_layout_geometry(page) -> None:
-    """Assert G1-G7 rendered geometry invariants (underfill, sibling overlap/overflow, crushed text, box-in-box, assistant-fab collision, duplicate freshness age, alert-region overlap)."""
+    """Assert G1-G7 rendered geometry invariants (underfill, sibling overlap/overflow, crushed text, box-in-box, assistant-toggle collision, duplicate freshness age, alert-region overlap)."""
     page.evaluate("() => document.fonts ? document.fonts.ready.then(() => null) : null")
     violations = page.evaluate(LAYOUT_GEOMETRY_PROBE)
     assert violations == [], "Layout geometry violations:\n  - " + "\n  - ".join(violations)
