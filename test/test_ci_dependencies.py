@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import os
+import re
 import shutil
 import shlex
 import subprocess
@@ -444,6 +445,17 @@ def test_ci_colcon_build_runs_from_the_repo_root_over_the_manifest_roots():
     assert "--base-paths $COLCON_ROOTS" in step
     assert "colcon --log-base log build" in step  # --log-base is a global colcon option
     assert "--build-base build --install-base install" in step
+
+
+def test_a_matrix_entry_without_a_colcon_key_builds_and_sources_the_overlay():
+    """Actions compares a missing value loosely equal to false; only an explicit false may skip colcon."""
+    text = WORKFLOW.read_text(encoding="utf8")
+    cond = "matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false')"
+    assert f"if: {cond}" in text and f"ROSY_BUILT: ${{{{ {cond} }}}}" in text
+    assert "matrix.colcon != false" not in text
+    assert '[ "$ROSY_BUILT" = true ] && . install/setup.sh' in text  # a setup failure stops the job
+    digest = re.search(r"rosy-ci@sha256:([0-9a-f]{64})", text).group(1)
+    assert f"{{{{ runner.arch }}}}-{digest[:12]}-omx-act-cpu-" in text  # restored binaries follow arch and image
 
 
 def test_ci_installs_the_ext4_reader_for_the_card_diagnostics_test():
