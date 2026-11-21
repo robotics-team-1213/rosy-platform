@@ -103,7 +103,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         if status is not None:
             return self._h._charging.update(status, voltage, now=now), self._h._charging
         if self.active():
-            return self._charging.observe(self._h._battery, now=now), self._charging
+            return self._pack_charging(now), self._charging
         return self._h._rear_phases.docked_confirm(status, voltage, now)
 
     def note_body_scan(self, rotation_block: Optional[str], front_gap_m: Optional[float],
@@ -480,6 +480,11 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         self._seat_asked, self._seat_match, self._seat_tries = False, None, 0
         h._enter(DockPhase.SETTLING)
 
+    def _pack_charging(self, now: float) -> bool:
+        h, cfg = self._h, self._h._cfg
+        return self._charging.observe(h._battery, now=now, since_settled=now - h._phase_since,
+                                      baseline_delay_s=cfg.bay_settle_baseline_s, rise_v=cfg.bay_charge_rise_v)
+
     def _tick_settling(self, now: float) -> None:
         """전압 1소스(D-941): 멈춘 뒤 2 s 기준, 20 s 안 +0.05 V 상승."""
         h, cfg = self._h, self._h._cfg
@@ -489,8 +494,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
             return
         if self._seat_blocked(now):
             return
-        if self._charging.observe(h._battery, now=now, since_settled=now - h._phase_since,
-                                  baseline_delay_s=cfg.bay_settle_baseline_s, rise_v=cfg.bay_charge_rise_v):
+        if self._pack_charging(now):
             h._mark_docked()
             return
         if now - h._phase_since > cfg.settle_timeout_s + cfg.bay_charge_confirm_s:

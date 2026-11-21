@@ -7,6 +7,7 @@ from core_features.docking.charging import PackChargeConfirmation
 from core_features.docking.manager import DockPhase
 from core_features.power.battery import BatteryConfig, BatteryMonitor
 from test_docking_bay import Clock, a_bay, run as run_bay
+from test_docking_bay_reseat import _dock as start_reference_bay, run as run_reference_bay
 from test_docking_rear import a_rear, run as run_rear
 
 
@@ -35,6 +36,12 @@ def test_voltage_only_contact_needs_live_adc_and_withdraws_when_it_stops(make, d
         assert p.manager.state is DockState.DOCKED
         assert any(kind == "docking.charge_lost" for kind, _ in p.events)
         assert not p.manager.status().charge_unconfirmed   # reserved for a LiDAR-confirmed seat
+        for tick in range(2 * window + 3):
+            p.clock.now += 1
+            pack.on_voltage(7.9 if tick <= window else 8.0)
+            p.manager.tick()
+            assert p.manager.state is (DockState.DOCKED if tick <= window else DockState.CHARGING)
+        assert [kind for kind, _ in p.events].count("docking.charging") == 2
     assert not pack.health()["charging_latched"]
 
 
@@ -79,6 +86,18 @@ def test_only_a_sample_captured_after_settle_delay_can_set_the_baseline():
         assert result is (t == 9)
 
 
+def test_qualifying_peak_survives_normal_ripple_until_the_confirm_window_is_full():
+    clock = Clock()
+    start = clock.now
+    pack = BatteryMonitor(BatteryConfig(filter_tau_s=0), clock=clock)
+    tracker = PackChargeConfirmation(clock=clock, window_s=20)
+    for t in range(31):
+        clock.now = start + t
+        pack.on_voltage(7.6 if t < 4 else (7.655 if t == 4 else 7.645))
+        verified = tracker.observe(pack, now=clock(), since_settled=t, baseline_delay_s=2, rise_v=0.05)
+        assert verified is (t >= 20)
+
+
 @pytest.mark.parametrize("rate", [0.25, 4.0])
 def test_confirm_window_uses_docking_time_and_freshness_uses_pack_time(rate):
     clock = Clock()
@@ -93,4 +112,24 @@ def test_confirm_window_uses_docking_time_and_freshness_uses_pack_time(rate):
                                       baseline_delay_s=2, rise_v=0.05)
         assert result is (tick == 40)
     clock.now += 5.01
-    assert not confirmation.observe(pack, now=sim_time)
+    assert not confirmation.observe(pack, now=sim_time, since_settled=sim_time, rise_v=0.05)
+
+
+def test_lidar_seat_with_flat_voltage_waits_for_a_measured_rise_in_one_window():
+    p = start_reference_bay(charges=False)
+    run_reference_bay(p)
+    assert p.manager.status().charge_unconfirmed
+    pack = BatteryMonitor(BatteryConfig(filter_tau_s=0), clock=p.clock)
+    p.manager._battery = pack
+    for t in range(91):
+        p.clock.now += 1
+        # Flat and a short 10 mV contact, then 60 mV drift over a minute (only 20 mV/window).
+        volts = 7.60 + min(t, 60) * 0.001 + (0.01 if t == 4 else 0.0)
+        if t >= 65:
+            volts = 7.75  # genuine late contact; the ensuing plateau keeps the confirmation
+        pack.on_voltage(volts)
+        p.manager.tick()
+        assert p.manager.state is (DockState.DOCKED if t < 65 else DockState.CHARGING)
+        assert p.manager.status().charge_unconfirmed is (t < 65)
+    assert [kind for kind, _ in p.events].count("docking.charging") == 1
+    assert not pack.health()["charging_latched"]

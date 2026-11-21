@@ -59,7 +59,7 @@ class RearPhases:
         if status is not None:
             return self._h._charging.update(status, voltage, now=now), self._h._charging
         if self.active():
-            return self._charging.observe(self._h._battery, now=now), self._charging
+            return self._pack_charging(now), self._charging
         return False, self._h._charging
 
     def staging_pose(self, dock, offset_m: float) -> Pose2D:
@@ -175,11 +175,15 @@ class RearPhases:
             return
         self._drive(-cfg.rear_speed, 0.0)
 
+    def _pack_charging(self, now: float) -> bool:
+        h, cfg = self._h, self._h._cfg
+        return self._charging.observe(h._battery, now=now, since_settled=now - h._phase_since,
+                                      baseline_delay_s=cfg.settle_still_s, rise_v=cfg.rear_charge_rise_v)
+
     def _tick_settling(self, now: float) -> None:
         """전압 1소스 + 멈춘 뒤 기준에서의 상승. 도크 에이전트가 없다."""
         h, cfg = self._h, self._h._cfg
-        if self._charging.observe(h._battery, now=now, since_settled=now - h._phase_since,
-                                  baseline_delay_s=cfg.settle_still_s, rise_v=cfg.rear_charge_rise_v):
+        if self._pack_charging(now):
             h._mark_docked()
             return
         if now - h._phase_since > cfg.settle_timeout_s:

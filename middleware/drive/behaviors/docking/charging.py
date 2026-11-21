@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections import deque
 from typing import Callable, Optional
 
 from core_features.docking.agent import DockStatus
@@ -131,7 +132,8 @@ class PackChargeConfirmation(ChargingConfirmation):
     def reset(self) -> None:
         super().reset()
         self._sample_at = None
-        self._baseline_v = None
+        self._minima = deque()
+        self._rise_seen = False
         self._last_elapsed = None
 
     @staticmethod
@@ -145,7 +147,7 @@ class PackChargeConfirmation(ChargingConfirmation):
         if sample is not None:
             self._sample_at = sample.captured_at   # a capture already present at contact is not a settling sample
 
-    def observe(self, battery, *, now, since_settled=None, baseline_delay_s=0.0, rise_v=0.0) -> bool:
+    def observe(self, battery, *, now, since_settled, rise_v, baseline_delay_s=0.0) -> bool:
         previous_elapsed = self._last_elapsed
         sample = self._read(battery)
         if sample is None:
@@ -161,13 +163,15 @@ class PackChargeConfirmation(ChargingConfirmation):
             self._sample_at = sample.captured_at
             # ROS simulation time can run faster or slower than the ADC's clock.
             # A new reading after an eligible poll is known to be beyond the baseline delay.
-            if (self._baseline_v is None and since_settled is not None
-                    and since_settled >= baseline_delay_s
+            if (not self._rise_seen and since_settled >= baseline_delay_s
                     and (sample.age_s == 0.0 or (previous_elapsed is not None
                          and previous_elapsed >= baseline_delay_s))):
-                self._baseline_v = sample.voltage
+                # Compare fresh pack readings inside one docking-time window, even long after seating.
+                while self._minima and self._minima[0][0] < now - self._window_s:
+                    self._minima.popleft()
+                while self._minima and self._minima[-1][1] >= sample.voltage:
+                    self._minima.pop()
+                self._minima.append((now, sample.voltage))
+                self._rise_seen = sample.voltage - self._minima[0][1] >= rise_v
         self._last_elapsed = since_settled
-        if since_settled is None:
-            return self.confirmed
-        return (self.confirmed and self._baseline_v is not None and self.peak_v is not None
-                and self.peak_v - self._baseline_v >= rise_v)
+        return self.confirmed and self._rise_seen
