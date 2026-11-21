@@ -230,14 +230,21 @@ def test_preflight_runs_the_step_back_check_and_the_switch_skips_it(monkeypatch,
     hit = {"level": "block", "why": "w", "pr": 311, "merged_at": "2026-11-20 13:13", "path": "a.js", "lines": 3}
     info = {"level": "info", "why": "w", "pr": 5, "merged_at": "2026-11-20 13:13", "path": "b.js", "lines": 1}
     monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [hit, info])
-    monkeypatch.setattr(pr_land.step_back, "size_warnings", lambda *a, **k: ["31 changed files (limit 30)"])
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: [])
     monkeypatch.delenv("ROSY_STEP_BACK", raising=False)
     with pytest.raises(SystemExit) as stop:
         pr_land.preflight(Path("."), "origin/main", "summary")
     assert "Replaces: #311 (" in str(stop.value)
     out = capsys.readouterr().out
-    assert "warning" in out and "31 changed files" in out and "step-back info" in out
+    assert "step-back info" in out
     pr_land.preflight(Path("."), "origin/main", "Replaces: #311 (restructured)")  # named in the body: passes
+    monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [])
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: ["31 changed files (limit 30)"])
+    with pytest.raises(SystemExit, match="31 changed files"):
+        pr_land.preflight(Path("."), "origin/main", "summary")
+    pr_land.preflight(Path("."), "origin/main", "summary\nSize-Exception: one mechanical rename")
+    monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [hit, info])
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: [])
     def broken(*a, **k):
         raise pr_land.step_back.ScanError("git merge-base failed")
     monkeypatch.setattr(pr_land.step_back, "report", broken)

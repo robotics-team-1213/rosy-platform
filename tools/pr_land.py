@@ -182,7 +182,7 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
     return lab + [part for inv in extra for part in split_by_ci_entry(inv) if not ci_runnable(part)]
 
 
-def preflight(cwd: Path, base: str, body: str = "") -> None:
+def preflight(cwd: Path, base: str, body: str = "", branch: str = "") -> None:
     """The Safety-Review trailer, size rule and step-back check of base..HEAD, before any lab run.
 
     The first two stopped a submission only at the push, after the evidence had run (2026-11-21: a session lost a 20
@@ -190,11 +190,12 @@ def preflight(cwd: Path, base: str, body: str = "") -> None:
     drops lines another PR merged into main within 7 days unless the PR body names it (shared-checkout.md)."""
     for check in ("safety_review.py", "size_range.py"):
         _run([sys.executable, f"tools/harness/{check}", base, "HEAD"], cwd)
-    for warning in step_back.size_warnings(cwd, base, "HEAD"):
-        print(f"[pr-land] warning: split this branch before submission, {warning}")
     if os.environ.get("ROSY_STEP_BACK") == "off":
         print("[pr-land] step-back check skipped (ROSY_STEP_BACK=off)")
         return
+    if (over := step_back.size_violations(cwd, base, "HEAD", branch)) and not step_back.size_excepted(body):
+        raise SystemExit("[pr-land] branch too big, split it before submission: " + "; ".join(over)
+                         + "\n[pr-land] or add 'Size-Exception: <reason>' to the PR body (--body), or set ROSY_STEP_BACK=off")
     try:
         hits = step_back.report(cwd, base, "HEAD")
     except step_back.ScanError as e:  # a git failure must not read as a pass
@@ -295,7 +296,7 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     if refused and not args.dry_run:
         raise SystemExit(refused)
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
-    preflight(cwd, base, build_body(args.body, args.self_review))
+    preflight(cwd, base, build_body(args.body, args.self_review), branch)
     lab_needed = required_lab_invocations(cwd, base, head)
     if args.evidence and lab_needed:
         import pr_evidence  # lazy: pr_evidence imports pr_land
