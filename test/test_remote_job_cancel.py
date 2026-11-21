@@ -124,3 +124,31 @@ def test_guard_failure_cancels_the_pre_run_and_its_stop_is_the_verdict(repos, mo
         land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto"), sys.executable,
                                   None, None, [["pkg/test"]], "FULL tier (test)")
     assert not isinstance(raised.value, land.Overtime) and not rj._CANCEL.is_set()
+
+
+def test_run_uses_adaptive_poll_intervals_within_poll_s(tmp_path, monkeypatch):
+    polls, sleeps = [0], []
+
+    def fake_call(ssh, host, script, *args):
+        if script == rj.POLL:
+            polls[0] += 1
+            out = b"ROSYJOB 0 0\nok\n" if polls[0] >= 7 else b"ROSYJOB - 1\n"
+            return SimpleNamespace(returncode=0, stdout=out)
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    assert rj.run("h", "r", 0, tmp_path / "p.txt", ["r", "d", ""], [], 60, [],
+                  call=fake_call, sleep=sleeps.append) == 0
+    assert sleeps == [1.5, 2.0, 3.0, 5.0, 10.0, 10.0]
+
+    polls[0] = 0
+    sleeps.clear()
+    monkeypatch.setattr(rj, "POLL_S", 0.5)
+    assert rj.run("h", "r", 1, tmp_path / "q.txt", ["r", "d", ""], [], 60, [],
+                  call=fake_call, sleep=sleeps.append) == 0
+    assert sleeps == [0.5] * 6
+
+
+def test_ship_skips_origin_fetch_when_bundle_verifies():
+    import remote_pytest as rp
+
+    assert "if ! git bundle verify" in rp.SHIP and rp.SHIP.index("git bundle verify") < rp.SHIP.index("git fetch -q \"$3\"")

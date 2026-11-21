@@ -1222,3 +1222,18 @@ def test_ci_matrix_cli_also_prints_the_human_selection_to_stderr_without_changin
     captured = capsys.readouterr()
     assert captured.out.count("\n") == 1 and json.loads(captured.out)["mode"] == "full"
     assert "affected tier (D-436): mode=full" in captured.err
+
+
+def test_pack_drops_strict_child_paths_with_boundary_awareness():
+    class FakeRepo:
+        root = None
+
+        @staticmethod
+        def test_import_names(path):
+            return {path: path}
+
+    groups = affected_pack.pack(FakeRepo(), [
+        "a/b", "a/b/", "a/b/sub/t.py", "a/b2/t.py", "x/y/", "x/y/t.py", "dup/t.py", "dup/t.py",
+    ])
+    flat = [p for g in groups for p in g]
+    assert flat == ["a/b", "a/b2/t.py", "x/y/", "dup/t.py", "dup/t.py"]

@@ -123,19 +123,46 @@ def pr_of_commits(repo, base_ref: str, commits: set[str], since: float) -> dict[
     found: dict[str, tuple[int, int]] = {}
     if not commits:
         return found
+    merges: list[tuple[str, str, int, int]] = []
     for row in git(repo, "log", "--first-parent", "--merges", f"--since={int(since)}", "--format=%H %P|%ct|%s", base_ref).splitlines():
         ids, ct, subj = row.split("|", 2)
         merge, *parents = ids.split()
         m = re.match(r"Merge pull request #(\d+)", subj)
-        if not m or len(parents) != 2:
-            continue
-        if merge in commits:
-            found.setdefault(merge, (int(m.group(1)), int(ct)))
-        for c in git(repo, "rev-list", f"{parents[0]}..{parents[1]}").split():
-            if c in commits:
-                found.setdefault(c, (int(m.group(1)), int(ct)))
-        if len(found) == len(commits):
-            break
+        if m and len(parents) == 2:
+            merges.append((merge, parents[0], int(m.group(1)), int(ct)))
+    if not merges:
+        return found
+    oldest_p0 = merges[-1][1]
+    parents_of = {p[0]: p[1:] for ln in git(repo, "rev-list", "--parents", f"{oldest_p0}..{base_ref}").splitlines()
+                  if (p := ln.split())}
+    cur = git(repo, "rev-parse", f"{base_ref}^{{commit}}").strip()
+    first_chain: list[str] = []
+    while cur and cur != oldest_p0 and cur in parents_of:
+        first_chain.append(cur)
+        cur = parents_of[cur][0] if parents_of[cur] else ""
+    merge_meta = {m: (pr, ct) for m, _, pr, ct in merges}
+    seen_on_main: set[str] = set()
+    for u in reversed(first_chain):
+        ps = parents_of.get(u, ())
+        brought: list[str] = []
+        if len(ps) > 1:
+            stack = [p for p in ps[1:] if p in parents_of and p not in seen_on_main]
+            while stack:
+                x = stack.pop()
+                if x in seen_on_main:
+                    continue
+                seen_on_main.add(x)
+                brought.append(x)
+                for p in parents_of.get(x, ()):
+                    if p in parents_of and p not in seen_on_main:
+                        stack.append(p)
+        seen_on_main.add(u)
+        if info := merge_meta.get(u):
+            if u in commits:
+                found.setdefault(u, info)
+            for c in brought:
+                if c in commits:
+                    found.setdefault(c, info)
     return found
 
 

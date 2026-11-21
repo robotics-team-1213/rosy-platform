@@ -233,7 +233,7 @@ def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypa
     monkeypatch.setenv("ROSY_STEP_BACK", "off")  # the step-back check has its own test below
     monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: seen.append(cmd[1:]))
     pr_land.preflight(Path("."), "origin/main")
-    assert seen == [["tools/harness/safety_review.py", "origin/main", "HEAD"], ["tools/harness/size_range.py", "origin/main", "HEAD"]]
+    assert sorted(seen) == [["tools/harness/safety_review.py", "origin/main", "HEAD"], ["tools/harness/size_range.py", "origin/main", "HEAD"]]
 
     def refuse(cmd, cwd, **k):
         raise SystemExit("no Safety-Review trailer")

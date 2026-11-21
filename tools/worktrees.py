@@ -27,6 +27,7 @@ reports (with ``--apply``, archives+deletes own-only) stale unopened origin bran
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import os
 import re
 import subprocess
@@ -328,8 +329,11 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
             raise RuntimeError(f"another prune is running ({lock}; taken over after 30 min)") from None
     done, failed = 0, set()
     try:
-        for row in sorted(rows, key=lambda r: r["name"]):
-            judge(row, now, idle_hours, here, lossless=not snapshot, me=me)
+        ordered = sorted(rows, key=lambda r: r["name"])
+        if ordered:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(ordered))) as pool:
+                list(pool.map(lambda row: judge(row, now, idle_hours, here, lossless=not snapshot, me=me), ordered))
+        for row in ordered:
             label = f"{row['name']} [{row['branch'] or ('orphan' if row['orphan'] else 'detached')}]"
             if not _takes(row, snapshot):
                 if not quiet:
@@ -386,18 +390,23 @@ def _table(rows: list[dict], me: str, now: float, file=None) -> None:
               f"{row['verdict']}" + (f"  [{owner}]" if owner else ""), file=file)
 
 
+def _judge_status(root: Path, row: dict, now: float, idle_hours: float, here: Path, me: str) -> None:
+    judge(row, now, idle_hours, here, full=True, me=me)
+    # A tip that merged main in (tools/land.py does) and was not landed since is not an ancestor of main.
+    # Still unmerged, and correctly kept; the note only explains why a "landed-looking" branch is.
+    if row["merged"] or row["orphan"] or row.get("note"):
+        return
+    parents = git(root, "rev-list", "--parents", "-n1", row["sha"]).stdout.split()[2:]
+    if any(rules.is_merged(root, p) for p in parents):
+        row["note"] = "tip is a merge of main"
+
+
 def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
     root, rows = scan(cwd)
     here, me = _here(cwd), _identity(root)
-    for row in rows:
-        judge(row, now, idle_hours, here, full=True, me=me)
-        # A tip that merged main in (tools/land.py does) and was not landed since is not an ancestor of main.
-        # Still unmerged, and correctly kept; the note only explains why a "landed-looking" branch is.
-        if row["merged"] or row["orphan"] or row.get("note"):
-            continue
-        parents = git(root, "rev-list", "--parents", "-n1", row["sha"]).stdout.split()[2:]
-        if any(rules.is_merged(root, p) for p in parents):
-            row["note"] = "tip is a merge of main"
+    if rows:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(rows))) as pool:
+            list(pool.map(lambda row: _judge_status(root, row, now, idle_hours, here, me), rows))
     print(f"{'name':<32} {'branch':<44} {'main':<8} {'dirty':>5} {'idle':>7} {'lock':<6} {'you':<5} verdict  [owner]")
     _table(sorted(rows, key=lambda r: -r["idle_h"]), me, now)
     for row in rows:  # D-790: the two states that need a person, said in words
