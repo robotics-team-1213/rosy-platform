@@ -61,12 +61,15 @@ def test_one_rule_for_both_sides():
 
 
 @pytest.mark.parametrize("text, vacuous", [
-    ("3 passed in 0.1s", False), ("0 passed, 4 skipped in 0.1s", True), ("2 passed, 1 skipped in 0.1s", True),
-    ("5 failed in 1.0s", True), ("", True),
-    ("3 passed", True),  # no " in N.NNs": not a summary line
-    ("test_x[3 passed] PASSED\n1 failed in 0.1s", True),  # a test id is no summary
-    ("1 failed in 0.1s\n1 passed in 0.1s", False),  # first run plus a passing quarantine rerun
-    ("1 passed in 0.1s\n1 skipped in 0.1s", True)])
+    ("=== 3 passed in 0.1s ===", False), ("=== 0 passed, 4 skipped in 0.1s ===", True),
+    ("=== 2 passed, 1 skipped in 0.1s ===", True), ("=== 5 failed in 1.0s ===", True), ("", True),
+    ("=== 3 passed ===", True),  # no " in N.NNs": not a summary line
+    ("3 passed in 0.1s", True),  # no banner: not pytest's final summary
+    ("test_x[3 passed] PASSED\n=== 1 failed in 0.1s ===", True),  # a test id is no summary
+    ("=== 1 failed, 2 passed in 3.0s (0:00:03) ===", False),
+    ("=== 1 failed in 0.1s ===\n=== 1 passed in 0.1s ===", False),  # first run plus a passing quarantine rerun
+    ("=== 1 passed in 0.1s ===\n=== 1 skipped in 0.1s ===", True),
+    ("=== 3 passed in 0.1s ===\ntest_vacuous[0 passed, 4 skipped in 0.1s-True] PASSED\n=== 2 passed in 0.1s ===", False)])  # a -v id line is no banner
 def test_vacuous(text, vacuous):
     assert bool(ab.vacuous(text)) is vacuous
 

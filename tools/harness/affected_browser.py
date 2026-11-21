@@ -42,9 +42,10 @@ def vacuous(text: str) -> str | None:
     """Why a STRICT run's pytest output is no verdict (nothing passed, or something skipped); None otherwise.
 
     The rule of land_browser.vacuous, on text: without the opt-in or Chromium every test skips and pytest exits 0."""
-    summary = re.compile(r"\b(passed|failed|skipped|errors?|no tests ran)\b.* in [0-9.]+s")
+    # Only pytest's "=== ... in 2.11s ===" banner counts, never a -v test id; the CI Test step runs pytest with -v, so no banner-less form.
+    summary = re.compile(r"^=.*\b(passed|failed|skipped|errors?|no tests ran)\b.* in [0-9.]+s.*=$")
     runs = [{k: int(n) for n, k in re.findall(r"(\d+) (passed|skipped)", ln)}
-            for ln in text.splitlines() if summary.search(ln)]
+            for ln in map(str.strip, text.splitlines()) if summary.search(ln)]
     passed, skipped = sum(r.get("passed", 0) for r in runs), sum(r.get("skipped", 0) for r in runs)
     if not passed or skipped:
         return f"{passed} passed, {skipped} skipped (the opt-in or Chromium did not reach the job, or a guard skipped)"

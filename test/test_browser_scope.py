@@ -161,7 +161,7 @@ def test_full_registry_keeps_browser_files_after_splitting_them():
     tracked = subprocess.check_output(
         ["git", "-C", str(browser_scope.ROOT), "ls-files", "*.py"], text=True).splitlines()
     # This file tests the selector/chunker itself, rather than a rendered page.
-    unit_only = {"test/test_land_browser.py", "test/test_affected_browser.py"}
+    unit_only = {"test/test_land_browser.py"}
     expected = {path for path in tracked if PurePosixPath(path).name.startswith("test_")
                 and path.endswith("_browser.py") and path not in unit_only}
     everything = browser_scope.all_targets()
