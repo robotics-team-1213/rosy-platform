@@ -22,6 +22,7 @@ import re
 import shutil
 import sys
 import tempfile
+from xml.sax.saxutils import quoteattr
 
 ROOT = Path(__file__).resolve().parents[2]
 ISAAC = ROOT / "learning/envs/isaac"
@@ -105,8 +106,9 @@ class Cell:
         for folder in MESHES:
             for mesh in folder.glob("*.stl"):
                 shutil.copy(mesh, self.meshes.name)
-        head = f'<mujoco><compiler meshdir="{self.meshes.name}" balanceinertia="true" discardvisual="false" fusestatic="false"/></mujoco>'
-        spec = mujoco.MjSpec.from_string(re.sub(r"(<robot\b[^>]*>)", r"\1" + head, urdf, count=1))
+        meshdir = quoteattr(Path(self.meshes.name).as_posix())
+        head = f'<mujoco><compiler meshdir={meshdir} balanceinertia="true" discardvisual="false" fusestatic="false"/></mujoco>'
+        spec = mujoco.MjSpec.from_string(re.sub(r"<robot\b[^>]*>", lambda match: match[0] + head, urdf, count=1))
         spec.option.timestep = .002
         spec.option.cone, spec.option.impratio = mujoco.mjtCone.mjCONE_ELLIPTIC, 10
         spec.visual.global_.offwidth, spec.visual.global_.offheight = 640, 480
