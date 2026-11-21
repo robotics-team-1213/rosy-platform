@@ -13,6 +13,9 @@ Either source alone fails one way: the camera alone leaves with a box it missed,
 fell back on the bed. The departure is automatic (user 2026-11-19, replacing 11-14's operator approval for this path):
 depart_tick sends the vehicle to the site rules' return.exit_place once the check holds on two ticks, re-checks with a
 tight fold age, records the release before it sends (persisted with the ledger), and holds after three failed sends.
+Only a goal the robot accepted is SENT. A goal Fleet merely queued (robot not LOCALIZED, traffic) is withdrawn in the
+same tick: the traffic loop would release it later without these checks. The record stays SENDING and the next tick
+checks everything again.
 A named operator may still send it early with depart_s3; a release is used once per batch."""
 from __future__ import annotations
 
@@ -159,14 +162,28 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
             save()  # the claim is on disk before anything moves
         if target is None:
             continue
-        record["attempts"] += 1
         record["target"] = target[0]
         try:
             result = await console.goal(robot_id, target[1], target[2], target[3])
-            accepted = bool(result.get("accepted")) or bool(result.get("queued"))
         except Exception as exc:  # one failed send is data; the next tick retries up to MAX_SEND_ATTEMPTS
-            accepted, result = False, {"error": f"{type(exc).__name__}: {exc}"[:200]}
+            result = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+        if result.get("queued") is True and not result.get("accepted"):
+            # Queued is not sent: the traffic loop would release it later without the fold, person, hold and bed checks.
+            console.discard_queued_goal(robot_id)
+            if result.get("dispatch_attempted") is True and result.get("cancel_confirmed") is not True:
+                try:  # a CORE goal may be live (cancel_all.py rule): cancel it too
+                    await console.cancel(robot_id)
+                except Exception:
+                    pass  # the Fleet queue entry is already gone; CORE's goal lease expires unrenewed
+            if record.get("reason") != "GOAL_QUEUED_NOT_ACCEPTED":
+                _event(state, robot_id, batch, "WAITING", result.get("reason") or "GOAL_QUEUED", now)
+            record.update(reason="GOAL_QUEUED_NOT_ACCEPTED", queue_reason=result.get("reason"))
+            save()
+            continue  # still SENDING: the next tick checks every release condition again
+        record["attempts"] += 1
+        accepted = bool(result.get("accepted"))
         if accepted:
+            record.pop("reason", None), record.pop("queue_reason", None)  # an earlier tick's queue wait is over
             record.update(state="SENT", sent_at=round(now, 3), receipt={k: result.get(k) for k in ("accepted", "queued")})
             _event(state, robot_id, batch, "SENT", target[0], now)
             if task_log is not None:  # the robot task ledger is the caller's (pipeline_cell_task_routes)

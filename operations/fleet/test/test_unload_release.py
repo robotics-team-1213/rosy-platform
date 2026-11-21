@@ -127,6 +127,75 @@ def test_person_or_stale_fold_stops_the_automatic_send():
     assert console.goals == []
 
 
+class QueuingConsole(Console):
+    """console.goal that only queues (robot not LOCALIZED), like goal_admission.response_of, until told to accept."""
+
+    def __init__(self):
+        super().__init__()
+        self.queued, self.accept, self.cancels = {}, False, []
+
+    async def goal(self, robot_id, x, y, yaw=0.0, **kw):
+        self.goals.append((robot_id, x, y, yaw))
+        if self.accept:
+            return {"accepted": True}
+        self.queued[robot_id] = {"x": x, "y": y, "yaw": yaw}
+        return {"accepted": False, "queued": True, "dispatch_attempted": False, "cancel_confirmed": False,
+                "blocked_by": robot_id, "waiting_on": [], "reason": "LOCALIZATION_UNTRUSTED"}
+
+    def discard_queued_goal(self, robot_id):
+        self.queued.pop(robot_id, None)
+
+    async def cancel(self, robot_id):
+        self.cancels.append(robot_id)
+
+
+def test_a_queued_goal_is_not_sent_and_is_withdrawn_in_the_same_tick():
+    state, console = _state([_task(0)]), QueuingConsole()
+    tick(state, console)
+    sent, _ = tick(state, console)
+    record = state.unload_releases["u"]
+    assert sent == [] and len(console.goals) == 1 and console.queued == {}  # nothing left to leave by itself later
+    assert record["state"] == "SENDING" and record["reason"] == "GOAL_QUEUED_NOT_ACCEPTED"
+    assert record["queue_reason"] == "LOCALIZATION_UNTRUSTED" and record["attempts"] == 0
+    assert "depart-u" not in state.pinky_tasks and console.cancels == []  # no CORE goal was live
+    for _ in range(5):  # waiting for LOCALIZED is not a failed send: never HELD for it
+        tick(state, console)
+    assert record["state"] == "SENDING" and console.queued == {}
+    console.accept = True
+    sent, _ = tick(state, console)
+    assert len(sent) == 1 and record["state"] == "SENT" and "reason" not in record
+    assert state.pinky_tasks["depart-u"]["auto"] is True
+    n = len(console.goals)
+    tick(state, console)
+    tick(state, console)
+    assert len(console.goals) == n  # accepted once, never sent again
+
+
+def test_conditions_are_checked_again_after_a_queued_goal():
+    state, console = _state([_task(0)]), QueuingConsole()
+    tick(state, console)
+    tick(state, console)
+    assert len(console.goals) == 1 and console.queued == {}
+    state.arm_live_states["arm_s"]["folded"] = False  # the arm unfolds between ticks
+    console.accept = True
+    for _ in range(3):
+        tick(state, console)
+    assert len(console.goals) == 1 and state.unload_releases["u"]["state"] == "SENDING"
+
+
+def test_a_queued_goal_after_a_dispatch_without_confirmed_cancel_is_cancelled_too():
+    state, console = _state([_task(0)]), QueuingConsole()
+    plain = console.goal
+
+    async def attempted(robot_id, x, y, yaw=0.0, **kw):
+        return {**await plain(robot_id, x, y, yaw), "dispatch_attempted": True, "reason": "ROUTE_CONFLICT"}
+
+    console.goal = attempted
+    tick(state, console)
+    tick(state, console)
+    assert console.queued == {} and console.cancels == ["rosy_46"]
+
+
 def _client(tmp_path, monkeypatch):
     from tools.sim.bay_departure_sim import build_world_261026_site_map
     from fleet.server.sitemap import pipeline_routes as routes
