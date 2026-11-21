@@ -10,6 +10,8 @@ const REASONS = {ok:'적용 중', not_approved:'승인 없음', not_reported:'�
   config_stale:'설정 확인 만료', frame_stale:'새 영상 대기', geometry_changed:'촬영 조건 바뀜',
   map_changed:'지도 바뀜', invalid_config:'교정 기록 확인 필요', readback_stale:'적용 기록 만료'};
 
+const READING_REASON = '상태 읽는 중';
+
 export function createMeasuredCalibrationView({scope, root, call, visionView, auth}) {
   const el = id => root.querySelector(`#measured-${id}`);
   const file = el('bundle'), p95 = el('p95'), maximum = el('max'), conditions = el('conditions');
@@ -55,20 +57,20 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   }
   // Write only what changed: the 2 s refresh must not touch a control whose state did not change.
   function setEnabled(control, enabled, reason) {
+    const value = enabled ? '' : reason;
     if (control.disabled === enabled) control.disabled = !enabled;
-    for (const name of ['reason','title','aria-description']) {
-      const value = enabled ? '' : reason;
-      if (control.getAttribute(name) !== value) control.setAttribute(name,value);
-    }
+    if (control.getAttribute('reason') !== value) control.setAttribute('reason',value);
+    if (control.hasAttribute('data-reading-reason') !== (value === READING_REASON)) control.toggleAttribute('data-reading-reason');
+    for (const name of ['title','aria-description']) if (control.getAttribute(name) !== value) control.setAttribute(name,value);
   }
   function render() {
-    // A background read (reading) disables controls without touching their reason: a changed reason line would
-    // resize the layout above the checkbox and move it between mousedown and mouseup on a slow device.
-    const busyReason = '요청을 처리 중입니다.';
+    // A read's reason is title/aria only (measured-calibration.css hides its line): a visible line would resize the
+    // layout above the checkbox between mousedown and mouseup on a slow device.
+    const busyReason = '요청을 처리 중입니다.', readingReason = READING_REASON;
     const editable = operator() && !busy;
     const operable = editable && !reading;
     const editReason = busy ? busyReason : '이름 있는 운영자 권한이 필요합니다.';
-    const gate = (control, ok, why) => setEnabled(control, operable && ok, !editable ? editReason : ok ? '' : why);
+    const gate = (control, ok, why) => setEnabled(control, operable && ok, !editable ? editReason : ok ? (reading ? readingReason : '') : why);
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
     setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
     gate(buttons.approve,!!candidate && candidate.evidence_kind === 'measured' && !!limits() && candidate.source_id === source,
@@ -77,7 +79,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const current = record && status?.calibration_revision === record.calibration_revision && status.state !== 'invalid';
     gate(buttons.confirm,!!current && conditions.checked,'적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
     const watch = (control, ok, why) => setEnabled(control, !busy && !reading && ok && !auth.locked,
-      auth.locked ? '먼저 로그인하세요.' : busy ? busyReason : ok ? '' : why);
+      auth.locked ? '먼저 로그인하세요.' : busy ? busyReason : ok ? (reading ? readingReason : '') : why);
     watch(buttons.read,!!current,'현재 교정·촬영 상태를 먼저 확인하세요.');
     watch(buttons.refresh,!!source,'카메라를 먼저 선택하세요.');
     const b = candidate || record?.bundle;
