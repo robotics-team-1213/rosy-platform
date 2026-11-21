@@ -29,8 +29,10 @@ from core_features.docking.bay_align import BayAlignMixin
 from core_features.docking.bay_guards import BayGuardsMixin, entry_ok, heading_gate, rear_blocked, reverse_twist
 from core_features.docking.bay_zone import map_offsets
 from core_features.docking.bay_lidar_steer import BayLidarSteerMixin
+from core_features.docking.bay_centre import BayCentreMixin
 from core_features.docking.bay_reseat import BayReseatMixin
 from core_features.docking.bay_turn_watch import BayTurnMixin
+from core_features.docking.bay_zone_checks import BayZoneChecksMixin
 from core_features.docking.bay_zone_phases import BayZoneMixin
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.model import DockPhase
@@ -41,7 +43,7 @@ _TURN_GAINS = ParkingGains()
 _LOG = logging.getLogger(__name__)
 
 
-class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLidarSteerMixin, BayReseatMixin):
+class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLidarSteerMixin, BayReseatMixin, BayCentreMixin):
     """The pink guide-line charge bay, under the manager's lock (D-1013)."""
 
     def __init__(self, host: Any) -> None:
@@ -55,6 +57,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLi
         self._scan_s: Optional[float] = None
         self._resync = False
         self._turn_target: Optional[float] = None
+        self._site_verified, self._site_refusal = False, None      # CORE's judgement of the dock command's site_pose_evidence (Nav2 staging allowed only when accepted)
+        self._pitin = False                        # this dock run turned at the junction on the LiDAR pose (bay_zone.junction_geometry)
         self._stage_bad: Optional[float] = None           # first tick the arrival heading looked wrong
         self._turn_dir = -1.0                             # fixed turn sense: tray swings downstream
         self._creep_from: Optional[float] = None          # 정착 크립 시작 travelled
@@ -79,6 +83,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLi
         self._init_tw()
         self._init_ls()
         self._init_reseat()
+        self._init_centre()
+        self._facing_bay = False                   # the last LiDAR pose had the nose toward the bay: a retry back-off stays still
 
     # --- 매니저가 부르는 자리 ---------------------------------------------------
 
@@ -113,9 +119,11 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLi
             return None
         return self._body
 
-    def _forward_block(self, now: float, since: float, step: Optional[float] = None) -> Optional[str]:
+    def _forward_block(self, now: float, since: float, step: Optional[float] = None, facing_ok: bool = False) -> Optional[str]:
         """곧은 전진(칸 줄 나가기·재시도 후퇴·정착 크립) 전 앞 확인: None = 가도 된다, "wait" = 아직
         판정 없음(멈춰 기다림), 그 밖 = 실패 사유. 점이 없거나 앞 빔이 무응답이면 비어 있는 것이 아니다."""
+        if not facing_ok and self._facing_recent(now):
+            return "the last LiDAR bay pose has the nose toward the bay: no forward move in the row"      # settle creep / retry back-off / lane exit drive at the bay
         body = self._body_fresh(now)
         if body is not None and body[3] < since:
             body = None
@@ -137,6 +145,10 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLi
         h = self._h
         self._reset_line_state()
         self._row_pose = None if h._retries == 0 and h._reseats == 0 else self._row_pose      # a fresh dock starts without an old pose
+        if h._retries == 0 and h._reseats == 0:
+            self._pitin = False
+            self._cen_n = 0
+            self._facing_bay = False
         if h._detector is None and h._detector_factory is not None and h._dock is not None:
             h._detector = h._detector_factory(h._dock, h._type())
         if h._detector is not None:
@@ -224,6 +236,11 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLi
                 h._fail("bay staging arrival heading off the bay axis")
             return
         self._stage_bad = None
+        self._start_staging_turn(now, pose)
+
+    def _start_staging_turn(self, now: float, pose, bay_heading=None) -> None:
+        """The 180 turn at the staging point (also used by a pit-in arrival at the junction, which has no Nav2 leg); the turn is watched by bay_turn_watch."""
+        h = self._h
         self._reset_line_state()
         if h._retries == 0 and h._reseats == 0:
             self._seen.clear()           # a fresh dock; a guard failure always counts a retry or reseat
@@ -234,8 +251,16 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLi
             self._turn_dir = math.copysign(1.0, h._cfg.bay_turn_first_dir)       # per-robot config: +1 ccw, -1 cw (0: the downstream rule)
         elif self._turn_bad_dir and self._turn_dir == self._turn_bad_dir:
             self._turn_dir = -self._turn_dir                                      # learned: this robot's body did not follow that sense
-        self._turn_target = pose[2] + (self._turn_dir or 1.0) * math.pi
-        self._tw_start(pose[2], now, want=math.pi)
+        self._facing_bay = False                   # after the turn the rear is toward the bay
+        self._last_lidar = None                    # the turn changes the heading: the old facing-bay memory no longer holds
+        ang = math.pi
+        if bay_heading is not None:
+            self._pitin = True
+            # pit-in: turn to the LiDAR bay heading 0 (rear to the bay), not a fixed 180 (b8xy: it stood 13.5 deg short of 180 and ended -13 deg); at most 180, the rest is
+            # left to the in-place heading align the strict pit-in entry window triggers
+            ang = min(math.pi, (-(self._turn_dir or 1.0) * bay_heading) % math.tau)
+        self._turn_target = pose[2] + (self._turn_dir or 1.0) * ang
+        self._tw_start(pose[2], now, want=ang)
         h._enter(DockPhase.TURNING)
 
     def _tick_acquiring(self, now: float) -> None:
@@ -272,12 +297,12 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLi
             if got == "stop":
                 return
             lateral, heading = got
-            if not entry_ok(cfg, lateral, heading):
+            if not entry_ok(cfg, lateral, heading) or (self._pitin and abs(heading) > cfg.bay_pitin_entry_heading_rad):
                 if self._try_heading_align(now, lateral, heading):
                     return
                 # Too far off to converge: never reverse into it. A straight back-off keeps the bearing, so start over.
                 self._guard_fail("entry", "entry error outside the window (lat %.0f mm, head %.0f deg)"
-                                 % (lateral * 1000.0, math.degrees(heading)), h._retry)
+                                 % (lateral * 1000.0, math.degrees(heading)), h._fail if self._pitin else h._retry)       # pit-in: no Nav2 staging to retry from
                 return
             if self._entrance_blocked(now, along, camera_lateral):
                 return

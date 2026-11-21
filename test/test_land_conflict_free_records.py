@@ -60,8 +60,10 @@ def test_new_record_shards_lint_and_consolidate(tmp_path):
     repo = _make_sample_repo(tmp_path)
     shard = new_record.write_log_shard(repo, "fleet", "add conflict-free log", change="shard", evidence="pytest ok", date="2026-11-19")
     assert shard.relative_to(repo).as_posix().startswith("operations/fleet/logs/2026/11/19-")
-    frag = new_record.write_api_fragment(repo, "berth-status", summary="add berth_status field", date="2026-11-19")
-    assert frag.relative_to(repo).as_posix().startswith("docs/reference/api-changes/2026-11-19-")
+    frag = new_record.write_api_fragment(repo, "berth-status", surface="fleet", title="add berth_status field",
+                                         date="2026-11-19")
+    assert frag.relative_to(repo).as_posix() == "docs/reference/api-changes/berth-status.md"
+    frag.unlink()  # numbering needs the API reference; test_records_fragments.py covers it
 
     errors, _ = harness.lint(repo)
     assert errors == []
@@ -109,5 +111,26 @@ def test_refresh_generated_docs_workflow_contract():
     wf = yaml.safe_load((ROOT / ".github" / "workflows" / "refresh-generated-docs.yml").read_text(encoding="utf-8"))
     triggers = wf.get("on", wf.get(True))
     assert {"cron": "0 3,15 * * *"} in triggers["schedule"]
+    assert triggers["push"] == {"branches": ["main"]}  # D-1061: the bot numbers fragments after each merge
     assert wf["concurrency"] == {"group": "rosy-refresh-generated-docs", "cancel-in-progress": False}
     assert "ci-result" not in wf["jobs"]
+    # D-1061: GITHUB_TOKEN PRs start no pull_request CI, so PRs come only from the RECORDS_BOT_TOKEN secret
+    job = wf["jobs"]["consolidate"]
+    assert wf["permissions"] == {"contents": "read"}
+    assert job["env"]["RECORDS_BOT_TOKEN"] == "${{ secrets.RECORDS_BOT_TOKEN }}"
+    steps = {s.get("name"): s for s in job["steps"]}
+    pr_step = steps["Open or update consolidation PR"]
+    assert pr_step["if"] == "env.RECORDS_BOT_TOKEN != ''"
+    assert pr_step["env"]["GH_TOKEN"] == "${{ env.RECORDS_BOT_TOKEN }}"
+    app = steps["Mint records bot App token"]
+    assert app["if"] == "vars.RECORDS_BOT_CLIENT_ID != ''" and app["uses"].startswith("actions/create-github-app-token@")
+    assert app["with"] == {"client-id": "${{ vars.RECORDS_BOT_CLIENT_ID }}", "private-key": "${{ secrets.RECORDS_BOT_PRIVATE_KEY }}"}
+    assert "repositories" not in app["with"]  # the token defaults to this repository only
+    assert steps["Use the App token"]["if"] == "steps.app.outputs.token != ''"
+    script = pr_step["run"]
+    assert 'gh pr merge "$pr" --auto --merge --match-head-commit "$head"' in script  # pr_land.py's queue call
+    assert script.count("gh pr create") == 1 and "gh pr list --head bot/records-refresh --state open" in script
+    assert "gh workflow run" not in script and "github.token" not in str(pr_step)
+    report = steps["Report pending records (no RECORDS_BOT_TOKEN)"]
+    assert report["if"] == "env.RECORDS_BOT_TOKEN == ''"
+    assert "GITHUB_STEP_SUMMARY" in report["run"] and "git push" not in report["run"]
