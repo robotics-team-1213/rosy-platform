@@ -124,6 +124,7 @@ def test_site_goal_previews_server_plan_before_confirm_and_cancels_without_start
             "/api/fleet/robots/rosy_01/trip",
             "/api/fleet/robots/rosy_01/trip",
         ]
+        page.clock.run_for(5500)
         dialog.locator('ui-button[kind="irreversible"]').click()
         for _ in range(50):
             page.clock.run_for(100)
