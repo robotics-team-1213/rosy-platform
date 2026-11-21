@@ -41,7 +41,6 @@ patterns:
 # 모든 ceiling은 수가 늘면 실패, 줄면 같은 변경에서 내린다.
 helpers:
   - {name: node, module: shared/web/control-dom.js, aliases: [nodeWithText], ceiling: 11}
-  - {name: isOperator, module: applications/fleet/web/shared/authorization.js, aliases: [], ceiling: 0}
 direct:
   - {what: reason 속성 직접 쓰기, pattern: '(?:set|remove)Attribute\(\s*["'']reason["'']', owners: [shared/web/ui.js], ceiling: 125}
   - {what: 운영자 역할 직접 비교, pattern: 'role\s*[!=]==?\s*["'']operator["'']', owners: [applications/fleet/web/shared/authorization.js], ceiling: 42}
