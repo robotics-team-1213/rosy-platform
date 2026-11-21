@@ -21,6 +21,7 @@ for _extra in (str(TOOLS), str(TOOLS / "remote"), str(TOOLS / "harness"), str(TO
     if _extra not in sys.path:
         sys.path.insert(0, _extra)
 
+import affected_browser  # noqa: E402
 import affected_ci  # noqa: E402
 import affected_exclusive  # noqa: E402
 import land_cache  # noqa: E402
@@ -54,10 +55,6 @@ def ci_entry(inv: list[str]) -> dict | None:
     return None
 
 
-# The roots ci.yml's Test step opts in to Chromium on its own (test_pr_land pins this against the workflow text).
-CI_BROWSER_ROOTS = ("operations/fleet/test", "applications/fleet/test")
-
-
 def _non_gating(paths: list[str]) -> bool:
     roots = [w for e in affected_ci.CI_FULL_MATRIX if not e.get("gating", True)
              for i in e["invocations"] for w in i if not w.startswith("-")]
@@ -78,22 +75,6 @@ def ci_runnable(inv: list[str], selected: bool = False) -> bool:
         or affected_exclusive.dedicated(inv)
         or any(p.startswith(EXCLUDED_PREFIXES) for p in paths)
     ) and (ci_entry(inv) is not None or (selected and not _non_gating(paths)))
-
-
-def lab_browser_chunk(chunk: list[str], selected_paths: list[str]) -> list[str]:
-    """A browser chunk without the Fleet files this PR's own CI run executes with Chromium; [] when none is left.
-
-    ci.yml turns the browser opt-in on for CI_BROWSER_ROOTS, so a Fleet browser file inside the affected selection
-    runs in the pull_request run and gates the merge. As lab evidence the same files ran a second time
-    (2026-11-21, one UI PR: 42 to 44 chunks, 44 to 51 minutes, again after every merge of main). A load-sensitive
-    ALONE chunk and every file outside the selection or outside those roots stay lab evidence."""
-    env = [w for w in chunk if work_queue.ENV_WORD.match(w)]
-    if work_queue.ALONE_ENV in env:
-        return chunk
-    covered = [p.replace("\\", "/").split("::")[0].rstrip("/") for p in selected_paths]
-    keep = [w for w in chunk if w not in env and not (
-        w.startswith(tuple(r + "/" for r in CI_BROWSER_ROOTS)) and any(w == p or w.startswith(p + "/") for p in covered))]
-    return [*env, *keep] if keep else []
 
 
 def split_by_ci_entry(inv: list[str]) -> list[list[str]]:
@@ -183,7 +164,6 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
     sel = json.loads(_run([sys.executable, "tools/harness/rosy_harness.py", "affected", "--base", base, "--head", head, "--json"], cwd))
     affected = sel.get("mode") != "full"  # CI runs an affected selection one runner per invocation; a FULL one by matrix
     invs = list(sel.get("invocations" if affected else "local_invocations") or [])
-    selected_paths = [w for inv in invs for w in inv if not w.startswith("-") and not work_queue.ENV_WORD.match(w)] if affected else []
     lab = [part for inv in invs for part in split_by_ci_entry(inv) if not ci_runnable(part, selected=affected)]
     extra: list[list[str]] = []
     changed = _run(["git", "diff", "--name-only", f"{base}...{head}"], cwd, check=False).splitlines()
@@ -195,9 +175,9 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
         import browser_scope
         import land_browser
         import land_selection
-        b_paths = browser_scope.targets(changed)
+        b_paths = affected_browser.split(browser_scope.targets(changed))[1]  # the rest runs in the PR's CI run (D-1066)
         for group in land_selection.pack(cwd, b_paths):
-            extra.extend(chunk for chunk in (lab_browser_chunk(c, selected_paths) for c in land_browser.chunks(cwd, group)) if chunk)
+            extra.extend(land_browser.chunks(cwd, group))
     return lab + [part for inv in extra for part in split_by_ci_entry(inv) if not ci_runnable(part)]
 
 
