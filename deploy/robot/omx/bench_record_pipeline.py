@@ -62,7 +62,7 @@ class BenchPipelineMixin:
         if src_type == "ik_planner":
             origin = str(body.get("origin") or "belt-in").strip()
             target_slot = str(body.get("target_slot") or "pinky").strip()
-            base_traj = build_ik_replay(self.prep, arm, origin=origin, target_slot=target_slot)
+            base_traj = build_ik_replay(self.prep, arm, origin=origin, target_slot=target_slot, python_exe=getattr(self, "python", None))
         elif src_ref.startswith("replays/"):
             cand = self.prep / src_ref
             if not cand.is_file():
