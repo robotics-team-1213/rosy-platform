@@ -86,7 +86,7 @@ def test_ingest_lists_missing_mechanisms_and_reweights(tmp_path):
 def test_offers_merge_round_trips_through_the_store_and_never_touches_real_outcomes(tmp_path):
     _fake_sweep(tmp_path)
     sw.rank(tmp_path, {0, 1, 2}, [2], top=2, sha="abc1234567890", preset=P)
-    store = tmp_path / "site" / "choices.json"
+    store = tmp_path / "site" / "review-choices.json"
     assert sw.main(["offers", str(tmp_path), "--merge", str(store)]) == 0
     ch = cell_choices.Choices(store)
     assert [e["source"].startswith("sim:") for e in ch.data["values"]["carry.tier2"]] == [True, True]
@@ -112,7 +112,7 @@ def test_merge_refuses_other_or_missing_preset_and_writes_nothing(tmp_path):
     import pytest
     _fake_sweep(tmp_path)
     sw.rank(tmp_path, {0, 1, 2}, [2], top=2, sha="abc1234567890", preset="v24-old")
-    store = tmp_path / "site" / "choices.json"
+    store = tmp_path / "site" / "review-choices.json"
     with pytest.raises(ValueError, match="v24-old"):
         sw.merge_offers(tmp_path, store, P)
     assert sw.merge_offers(tmp_path, store, "v24-old")["added"] == 2  # the matching preset merges

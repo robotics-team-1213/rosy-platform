@@ -12,7 +12,7 @@ stages, in loop order (each writes RUN/<n>-<stage>/manifest.json with inputs+dig
   twin    --cell C [--twin-host ai|model] [--local-twin]         omx_twin replay + report on a remote_sim host (episodes ship on a WIP commit); --cell is a path on that host
   all     r2s -> rank -> offer, and with --attempts also ingest -> gate (only with --fit) -> twin -> r2s again (twin + dr_next fed in)
 Shortcuts: `omx_twin batch` reads episodes over ssh from the site PC, so the twin stage replays the joined local episodes instead;
-`capture` (ssh to the site PC) is not a stage, pass an existing capture folder. The live store is told by its path (work/choices.json).
+`capture` (ssh to the site PC) is not a stage, pass an existing capture folder. The owner's choices.json is reserved for site use.
 """
 from __future__ import annotations
 
@@ -78,8 +78,7 @@ def code_sha() -> str:
 def is_live_store(path: Path) -> bool:
     live = os.environ.get("ROSY_SITE_STORE")
     resolved = path.resolve()
-    return (resolved.name == "choices.json" and resolved.parent.name == "work"
-            or bool(live and resolved == Path(live).resolve()))
+    return resolved.name == "choices.json" or bool(live and resolved == Path(live).resolve())
 
 
 class Loop:

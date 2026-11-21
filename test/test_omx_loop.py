@@ -48,7 +48,7 @@ def subs(calls):
 
 def args(f, stage, *extra):
     return [stage, "--run-dir", str(f["tmp"] / "run"), "--capture", str(f["cap"]), "--sweep", str(f["sweep"]),
-            "--store", str(f["tmp"] / "choices.json"), "--cell", "cell.yaml", *extra]
+            "--store", str(f["tmp"] / "review-choices.json"), "--cell", "cell.yaml", *extra]
 
 
 def test_default_is_a_plan_that_runs_and_writes_nothing(fake, capsys):
@@ -116,7 +116,7 @@ def test_manifest_has_inputs_digests_commands_outputs_and_sha(fake):
 
 
 def test_live_site_store_is_refused_even_with_legacy_flag(fake):
-    live = fake["tmp"] / "site" / "work" / "choices.json"
+    live = fake["tmp"] / "site" / "configured-cell-state" / "choices.json"
     a = ["offer", "--run-dir", str(fake["tmp"] / "run"), "--sweep", str(fake["sweep"]), "--store", str(live), "--run"]
     with pytest.raises(SystemExit, match="live site"):
         loop.main(a, runner=fake["runner"])
@@ -161,7 +161,7 @@ def test_rank_offer_ingest_for_real_on_tiny_fixtures(tmp_path):
     import test_omx_carry_sweep as t
     t._fake_sweep(tmp_path)
     att = t._attempts(tmp_path, [dict(attempt_id="a1", outcome="placed"), dict(attempt_id="a2", outcome="failed", fail_stage="grasp")])
-    store, run = tmp_path / "store" / "choices.json", tmp_path / "run"
+    store, run = tmp_path / "store" / "review-choices.json", tmp_path / "run"
     (tmp_path / "meta.json").write_text(json.dumps(dict(tiers=[2], search_ids=[0, 1, 2], dr=sw.DR, sha="", choices={"preset": t.P})))
     assert loop.main(["rank", "--run-dir", str(run), "--sweep", str(tmp_path), "--run"]) == 0
     assert loop.main(["offer", "--run-dir", str(run), "--sweep", str(tmp_path), "--store", str(store), "--run"]) == 0
