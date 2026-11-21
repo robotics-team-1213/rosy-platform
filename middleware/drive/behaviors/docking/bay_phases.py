@@ -132,7 +132,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         if body[0] in ("empty", "unknown"):
             return "LiDAR cannot vouch for the way ahead (%s)" % body[0]
         if body[1] is not None and body[1] < self._h._cfg.bay_exit_front_gap_m:
-            return "something ahead within %.2f m" % self._h._cfg.bay_exit_front_gap_m
+            return "something ahead within %.2f m (front gap %.3f m, body scan %.1f s old)" % (self._h._cfg.bay_exit_front_gap_m, body[1], max(0.0, now - body[3]))
         return self._row_forward_reason(step, now, since)
 
     def zone_entry(self) -> bool:
@@ -391,8 +391,10 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         if steer != "use" and self._blind_lateral(dt, speed):
             return
         body = self._body_fresh(now)
-        if body is not None and rear_blocked(cfg, body[2], self._rear_along if steer == "use" else self._along_m):
-            self._guard_fail("rear", "LiDAR sees something in the bay before the stop face", h._retry)
+        rear_along = self._rear_along if steer == "use" else self._along_m
+        if body is not None and rear_blocked(cfg, body[2], rear_along):
+            self._guard_fail("rear", "LiDAR sees something in the bay before the stop face (rear gap %.3f m, expected %.3f m from along %.3f m)" % (
+                body[2], max(0.0, rear_along - cfg.bay_turn_rear_overhang_m), rear_along), h._retry)
             return
         if self._lidar_seated(now):
             self._begin_settling()               # the LiDAR puts the rear at the stored seated gap: the real stop

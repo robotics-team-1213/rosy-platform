@@ -186,6 +186,11 @@ class StateManager:
                 self._received.pop('pose', None)
                 self._received_mono.pop('pose', None)
 
+    def odom_pose_record(self):
+        """The newest OdomPose (x, y, yaw, wall stamp, epoch), or None before the first one (the dock seat anchor binds to it)."""
+        with self._lock:
+            return self._odom_pose
+
     def odom_sample(self) -> Optional[tuple[float, float, float, float]]:
         """D-581: (x, y, yaw, age_s) of the odom-frame pose; None before the first one."""
         with self._lock:
