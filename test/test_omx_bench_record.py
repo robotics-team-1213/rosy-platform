@@ -394,7 +394,7 @@ def test_choices_validate_task_cards_and_serve_bench_html(tmp_path, monkeypatch)
         + (bench_record.HERE / 'bench_record_ui.js').read_text(encoding='utf-8')
         + (bench_record.HERE / 'bench_record_app.js').read_text(encoding='utf-8')
     )
-    for marker in ('id="status-bar"', 'id="stop-btn"', 'id="start-btn"', 'id="cal-list"',
+    for marker in ('id="status-bar"', 'id="hdr-record-btn"', 'id="hdr-estop-btn"', 'id="cal-list"',
                    'id="ev-restore"', 'id="ev-manual"', 'id="request-error"', 'id="task-error"',
                    'arm_bindings', 'X-Bench'):
         assert marker in page_bundle
@@ -563,7 +563,7 @@ def test_http_functional_endpoints_end_to_end(tmp_path, monkeypatch):
 
     try:
         st, html = req('GET', '/')
-        assert st == 200 and 'task-listbox' in html and 'home-btn' in html and 'save-init-pose-btn' in html
+        assert st == 200 and 'task-listbox' in html and 'hdr-home-btn' in html and 'save-init-pose-btn' in html
 
         st, ch = req('GET', '/choices.json')
         assert st == 200 and 'arm_a' in json.loads(ch)['arms']
@@ -846,7 +846,7 @@ def test_leader_home_move_writes_step_cmd_and_clears_wrist_roll_wrap(tmp_path, m
     assert bus.written_goals
     assert all(v == 0 for v in bus.regs['Torque_Enable'].values())
     omx_dir = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
-    html_src = ''.join((omx_dir / f).read_text(encoding='utf-8') for f in ('bench_record.html', 'bench_record_ui.js', 'bench_record_app.js'))
+    html_src = ''.join((omx_dir / f).read_text(encoding='utf-8') for f in ('bench_record.html', 'bench_record_ui.js', 'bench_record_app.js', 'bench_record_cam.js'))
     assert 'ARM_PREVIEW_CAMS' in html_src
     assert 'cam-unrecorded' in html_src
     assert 'updateCameraRecordingMask' in html_src
@@ -914,3 +914,278 @@ def test_replay_teacher_mode_in_choices_and_start(tmp_path, monkeypatch):
     rs_src = (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/record_session.py').read_text(encoding='utf-8')
     assert 'self.replay is not None' in rs_src
     assert 'id="replay"' in (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record.html').read_text(encoding='utf-8')
+
+
+def test_reverse_replay_modes_and_task_override():
+    import bench_record_replay as brr
+    traj = {
+        'schema': 'rosy.omx-replay-trajectory.v1',
+        'fps': 30,
+        'frames': [[1, 0, 0, 0, 0, -50], [2, 0, 0, 0, 0, 50], [2, 0, 0, 0, 0, 50], [3, 0, 0, 0, 0, 50], [4, 0, 0, 0, 0, -50]],
+        'segments': {'A': [0, 2], 'reset': [2, 3], 'B': [3, 5]},
+    }
+    raw = json.dumps(traj).encode('utf-8')
+    sw = json.loads(brr.transform_replay(raw, mode='swap_ab').decode('utf-8'))
+    assert sw['frames'][:2] == [[3, 0, 0, 0, 0, 50], [4, 0, 0, 0, 0, -50]]
+    assert sw['frames'][3:] == [[1, 0, 0, 0, 0, -50], [2, 0, 0, 0, 0, 50]]
+    rev = json.loads(brr.transform_replay(raw, mode='reverse_motion', invert_gripper=True).decode('utf-8'))
+    assert rev['frames'][0][:5] == [2, 0, 0, 0, 0]
+    assert rev['frames'][0][5] == -50.0  # inverted from 50
+    with pytest.raises(ValueError):
+        brr.transform_replay(raw, mode='bad_mode')
+
+    tc = {'task_id': 'h1-belt-ship', 'layout': {'origin': 'belt', 'target_slot': 'ship-h1r0-l0'},
+          'record': {'single_task': 'Move belt to ship-h1r0-l0'}}
+    out = brr.apply_task_override(tc, {'swap_pick_place': True})
+    assert out['layout']['origin'] == 'ship-h1r0-l0'
+    assert out['layout']['target_slot'] == 'belt'
+    assert out['record']['single_task'] == 'Move ship-h1r0-l0 to belt'
+    assert 'ship-h1r0-l0-to-belt' in out['task_id']
+    with pytest.raises(ValueError):
+        brr.apply_task_override(tc, {'origin': 'belt', 'target_slot': 'belt'})
+
+
+def test_recording_progress_and_shell_elements(tmp_path):
+    import bench_record_replay as brr
+    ds = tmp_path / 'h1-belt-r1-20261121-010101'
+    (ds / 'meta').mkdir(parents=True)
+    (ds / 'data' / 'chunk-000').mkdir(parents=True)
+    (ds / 'meta' / 'info.json').write_text('{"total_episodes": 3}', encoding='utf-8')
+    (ds / 'data' / 'chunk-000' / 'file-000.parquet').write_bytes(b'1')
+    p = brr.recording_progress({
+        'status': 'recording', 'recording_started': 100.0, 'started': 99.0,
+        'target_episodes': 10, 'task_id': 'h1-belt', 'dataset_root_prefix': str(tmp_path),
+    }, lambda: 112.5)
+    assert p['recording_elapsed_s'] == 12.5
+    assert p['episodes_done'] == 3
+    assert p['episodes_remaining'] == 7
+    html_src = (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record.html').read_text(encoding='utf-8')
+    for marker in ('id="hdr-estop-btn"', 'id="slim-prog"', 'id="sp-timer"', 'id="toggle-reverse-btn"', 'bench_record.css'):
+        assert marker in html_src
+    ui_js = (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record_ui.js').read_text(encoding='utf-8')
+    assert "arm_a:new Set(['top','side','arm_a_wrist'])" in ui_js
+    assert "arm_b:new Set(['top','side','arm_b_wrist'])" in ui_js
+
+
+def test_closed_loop_pipeline_api_and_guards(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    res = bench.pipeline_generate_replay({'source_type': 'isaac_sim', 'source_ref': 'isaac://h1', 'arm': 'arm_a'})
+    assert res['ok'] is True
+    assert res['replay_id'] == 'replays/pipe-isaac-sim-arm_a.json'
+    assert (bench.prep / res['replay_id']).is_file()
+    with pytest.raises(ValueError):
+        bench.pipeline_generate_replay({'source_type': 'isaac_sim', 'source_ref': '../../etc/passwd'})
+    with pytest.raises(ValueError):
+        bench.pipeline_run({'dataset_folder': 'not-sealed', 'trigger': 'auto_after_seal'})
+    st = bench.pipeline_run({'dataset_folder': 'h1-demo-01', 'trigger': 'manual'})
+    assert st['last_dataset'] == 'h1-demo-01'
+    import time as _t
+    for _ in range(30):
+        cur = bench.pipeline_status()
+        if cur['state'] in ('done', 'failed'):
+            break
+        _t.sleep(0.05)
+    assert cur['state'] == 'done'
+    assert cur['loop_count'] >= 1
+    assert cur['next_checkpoint'].startswith('ckpt://h1-demo-01-aug')
+
+
+def test_audit_hardening_replay_validation_and_collection_name(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    # 1. arm path traversal and missing replays/ ref must fail
+    with pytest.raises(ValueError):
+        bench.pipeline_generate_replay({'source_type': 'isaac_sim', 'arm': '../../evil'})
+    with pytest.raises(ValueError):
+        bench.pipeline_generate_replay({'source_type': 'teacher_traj', 'source_ref': 'replays/missing.json', 'arm': 'arm_a'})
+    # 2. out-of-range joint value in replay must fail
+    rdir = bench.prep / 'replays'
+    rdir.mkdir(exist_ok=True)
+    (rdir / 'bad.json').write_text(json.dumps({
+        'schema': 'rosy.omx-replay-trajectory.v1', 'fps': 15, 'frames': [[999, 0, 0, 0, 0, 0]],
+    }), encoding='utf-8')
+    with pytest.raises(ValueError):
+        bench.pipeline_generate_replay({'source_type': 'teacher_traj', 'source_ref': 'replays/bad.json', 'arm': 'arm_a'})
+    # 3. apply_task_override updates top-level single_task
+    import bench_record_replay as brr
+    tc = {'task_id': 'h1-01', 'single_task': 'Move belt to ship-h1r1-l0',
+          'layout': {'origin': 'belt', 'target_slot': 'ship-h1r1-l0'}}
+    ov = brr.apply_task_override(tc, {'swap_pick_place': True})
+    assert ov['single_task'] == 'Move ship-h1r1-l0 to belt'
+    # 4. session folder -> state['name'] resolution
+    bench.state = {'status': 'sealed', 'name': 'h1-seal-01', 'folder': str(tmp_path / 'sessions' / '20261121-000001-h1-seal-01')}
+    st2 = bench.pipeline_run({'dataset_folder': bench.state['folder'], 'trigger': 'auto_after_seal'})
+    assert st2['last_dataset'] == 'h1-seal-01'
+    # 5. HTTP routes for CSS, pipeline JS, and /api/pipeline/status
+    import threading, urllib.request
+    srv = bench_record.make_server(bench, 0)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        base = f'http://127.0.0.1:{srv.server_port}'
+        for path in ('/bench_record.css', '/bench_record_pipeline.js', '/api/pipeline/status', '/api/hf/status'):
+            with urllib.request.urlopen(base + path, timeout=5) as r:
+                assert r.status == 200
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    fake_home = tmp_path / 'home'
+    (fake_home / '.cache' / 'huggingface').mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(Path, 'home', lambda: fake_home)
+    ds_dir = fake_home / 'rosy-data' / 'omx-leader' / 'h1-demo-01'
+    (ds_dir / 'meta').mkdir(parents=True)
+    (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
+    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
+    (ds_dir / 'data' / 'chunk-000' / 'ep0.parquet').write_bytes(b'pq')
+    # 1. Refuses without HF token
+    with pytest.raises(ValueError):
+        bench.hf_upload_start({'dataset': 'h1-demo-01'})
+    (fake_home / '.cache' / 'huggingface' / 'token').write_text('hf_dummy', encoding='utf-8')
+    # 2. Refuses DO_NOT_TRAIN dataset
+    (ds_dir / 'DO_NOT_TRAIN.txt').write_text('static', encoding='utf-8')
+    with pytest.raises(ValueError):
+        bench.hf_upload_start({'dataset': 'h1-demo-01'})
+    (ds_dir / 'DO_NOT_TRAIN.txt').unlink()
+    # 3. Mock HfApi and run async upload
+    import sys, types, time as _t
+    calls = []
+    class FakeHfApi:
+        def whoami(self): return {'name': 'livsb3'}
+        def create_repo(self, **kw): calls.append(('create', kw['repo_id']))
+        def upload_folder(self, **kw): calls.append(('upload', kw['repo_id']))
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
+    res = bench.hf_upload_start({'dataset': 'h1-demo-01'})
+    assert res['hf_upload']['state'] in ('encoding', 'uploading', 'done')
+    for _ in range(40):
+        st = bench.hf_upload_status()
+        if st['state'] in ('done', 'failed'):
+            break
+        _t.sleep(0.05)
+    assert st['state'] == 'done'
+    assert st['repo_id'] == 'livsb3/h1-demo-01'
+    assert ('upload', 'livsb3/h1-demo-01') in calls
+    ds_rows = bench.lerobot_datasets()
+    assert ds_rows[0]['hf_uploaded'] is True and ds_rows[0]['hf_repo_id'] == 'livsb3/h1-demo-01'
+
+
+def test_ik_planner_belt_in_to_pinky_arm_s(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    wd = bench.prep / 'cell-auto-1028'
+    wd.mkdir()
+    (wd / 'surface-belt.json').write_text(json.dumps({'steps': [
+        {'command': 'load lib', 'state': [0.8, -62.0, 53.0, 51.5, 45.0, 48.0]},
+        {'command': 'goto above_probe', 'state': [0.3, -11.2, 11.5, 50.4, 8.5, 48.0]},
+        {'command': 'run descend_probe', 'state': [0.3, -8.7, 19.8, 40.8, 8.5, 48.0]},
+    ]}), encoding='utf-8')
+    (wd / 'surface-pinky.json').write_text(json.dumps({'steps': [
+        {'command': 'goto above_probe', 'state': [42.8, 7.0, -10.3, 53.7, -18.7, 48.0]},
+        {'command': 'run descend_probe', 'state': [43.2, 7.3, -1.1, 45.3, -18.8, 48.0]},
+    ]}), encoding='utf-8')
+    res = bench.pipeline_generate_replay({
+        'source_type': 'ik_planner', 'arm': 'arm_s', 'origin': 'belt-in', 'target_slot': 'pinky',
+    })
+    assert res['replay_id'] == 'replays/pipe-ik-planner-arm_s.json'
+    traj = json.loads((bench.prep / res['replay_id']).read_text(encoding='utf-8'))
+    assert traj['ik_origin'] == 'belt-in' and traj['ik_target'] == 'pinky'
+    assert len(traj['frames']) > 50
+
+
+def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
+    import types
+
+    bench, body, _, commands = _setup(tmp_path, monkeypatch)
+    wd = bench.prep / 'cell-auto-1028'
+    wd.mkdir()
+    (wd / 'surface-belt.json').write_text(json.dumps({'steps': [
+        {'command': 'load lib', 'state': [0.8, -62.0, 53.0, 51.5, 45.0, 48.0]},
+        {'command': 'goto above_probe', 'state': [0.3, -11.2, 11.5, 50.4, 8.5, 48.0]},
+        {'command': 'run descend_probe', 'state': [0.3, -8.7, 19.8, 40.8, 8.5, 48.0]},
+    ]}), encoding='utf-8')
+    (wd / 'surface-pinky.json').write_text(json.dumps({'steps': [
+        {'command': 'goto above_probe', 'state': [42.8, 7.0, -10.3, 53.7, -18.7, 48.0]},
+        {'command': 'run descend_probe', 'state': [43.2, 7.3, -1.1, 45.3, -18.8, 48.0]},
+    ]}), encoding='utf-8')
+
+    robot_s = {'type': 'omx_follower', 'id': 'arm_s_follower', 'port': '/dev/ttyS'}
+    (bench.prep / 'caps-arm-s-tune.json').write_text('{}', encoding='utf-8')
+    (bench.prep / 'record-config-arm-s.json').write_text(json.dumps({'robot': robot_s}), encoding='utf-8')
+    (bench.prep / 'arm-s-robot-profile.json').write_text(json.dumps({
+        'schema': 'rosy.omx-cell-robot-profile.v1',
+        'device_id': 'arm_s',
+        'instance_id': 'arm_s_follower',
+        'robot_config_sha256': digest(robot_s),
+        'operating_envelope_path': 'envelope.json',
+        'work_dir': str(wd),
+    }), encoding='utf-8')
+    cal_s = tmp_path / 'home/.cache/huggingface/lerobot/calibration/robots/omx_follower/arm_s_follower.json'
+    cal_s.write_text('{}', encoding='utf-8')
+
+    res = bench.pipeline_generate_replay({
+        'source_type': 'ik_planner', 'arm': 'arm_s', 'origin': 'belt-in', 'target_slot': 'pinky',
+    })
+    assert res['ok'] is True
+    replay_file = bench.prep / res['replay_id']
+    assert replay_file.is_file()
+
+    traj = json.loads(replay_file.read_text(encoding='utf-8'))
+    assert traj['schema'] == 'rosy.omx-replay-trajectory.v1' and traj['fps'] == 30
+    frames, segs = traj['frames'], traj['segments']
+    assert max(abs(a - b) for p, q in zip(frames, frames[1:]) for a, b in zip(p, q)) <= 5.0 / 30 + 1e-3
+    (a0, a1), (r0, r1), (b0, b1) = (segs[k] for k in ('A', 'reset', 'B'))
+    assert a0 == 0 < a1 == r0 < r1 == b0 < b1 == len(frames) and a1 - a0 == b1 - b0
+
+    adapter_dir = ROOT / 'middleware/devices/omx/adapter'
+    tt_path = ROOT / 'deploy/robot/omx/teach_trajectory.py'
+    if adapter_dir.is_dir() and tt_path.is_file():
+        monkeypatch.syspath_prepend(str(adapter_dir))
+        tt_spec = importlib.util.spec_from_file_location('teach_trajectory', tt_path)
+        teach_trajectory = importlib.util.module_from_spec(tt_spec)
+        tt_spec.loader.exec_module(teach_trajectory)
+        assert teach_trajectory.load(replay_file, fps=30)['sha256']
+
+    arm_s_body = dict(
+        body, name='arm-s-ik-e2e', arm='arm_s',
+        config='record-config-arm-s.json', caps='caps-arm-s-tune.json',
+        calibrations=[str(cal_s)], replay=res['replay_id'],
+    )
+    assert bench.start(arm_s_body)['target_episodes'] == 2
+    state = finished(bench)
+    assert state['status'] == 'sealed' and state['target_episodes'] == 2
+    assert '--replay' in commands[0] and commands[0][commands[0].index('--arm') + 1] == 'arm_s'
+
+    pipe = bench.pipeline_run({'dataset_folder': state['folder'], 'trigger': 'auto_after_seal'})
+    assert pipe['last_dataset'] == 'arm-s-ik-e2e'
+    for _ in range(40):
+        pipe_cur = bench.pipeline_status()
+        if pipe_cur['state'] in ('done', 'failed'):
+            break
+        time.sleep(0.05)
+    assert pipe_cur['state'] == 'done' and pipe_cur['loop_count'] >= 1
+
+    hf_cache = tmp_path / 'home' / '.cache' / 'huggingface'
+    hf_cache.mkdir(parents=True, exist_ok=True)
+    (hf_cache / 'token').write_text('hf_dummy', encoding='utf-8')
+    ds_dir = tmp_path / 'home' / 'rosy-data' / 'omx-leader' / 'arm-s-ik-e2e'
+    (ds_dir / 'meta').mkdir(parents=True)
+    (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
+    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
+    (ds_dir / 'data' / 'chunk-000' / 'episode_000000.parquet').write_bytes(b'PAR1')
+
+    hf_calls = []
+    class FakeHfApi:
+        def whoami(self): return {'name': 'tester'}
+        def create_repo(self, **kw): hf_calls.append(('create', kw['repo_id']))
+        def upload_folder(self, **kw): hf_calls.append(('upload', kw['repo_id']))
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
+    bench.hf_upload_start({'dataset': 'arm-s-ik-e2e'})
+    for _ in range(40):
+        hf_st = bench.hf_upload_status()
+        if hf_st['state'] in ('done', 'failed'):
+            break
+        time.sleep(0.05)
+    assert hf_st['state'] == 'done' and hf_st['repo_id'] == 'tester/arm-s-ik-e2e'
+    assert ('upload', 'tester/arm-s-ik-e2e') in hf_calls
+    assert (Path(state['folder']) / 'hf-upload.json').is_file()

@@ -12,6 +12,7 @@ if str(HERE) not in sys.path:
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
     check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, write_restore_list, write_snapshot)
+from bench_record_replay import recording_progress  # noqa: E402
 
 # Observer instance per arm (units rosy-omx-observer@<arm>.service, the --arm record_session takes) and the
 # letter the prep folder binds files with (caps-arm-<letter>-*, arm-<letter>-robot-profile.json).
@@ -60,7 +61,6 @@ def _read_task_card(path):
     return card
 
 
-
 class BenchInspectMixin:
     def recent_sessions(self, limit=6):
         root = self.prep / "sessions"
@@ -89,8 +89,12 @@ class BenchInspectMixin:
         for d in sorted((p for p in ds_root.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
             parquets = len(list(d.glob("data/**/*.parquet")))
             videos = len(list(d.glob("videos/**/*.mp4")))
-            static_flag = (d / "DO_NOT_TRAIN.txt").is_file()
-            rows.append({"name": d.name, "episodes": parquets, "videos": videos, "do_not_train": static_flag})
+            rc_p = self.prep / ".hf-receipts" / f"{d.name}.json"
+            item = {"name": d.name, "episodes": parquets, "videos": videos, "do_not_train": (d / "DO_NOT_TRAIN.txt").is_file()}
+            if rc_p.is_file():
+                rc = json.loads(rc_p.read_text(encoding="utf-8"))
+                item.update(hf_uploaded=bool(rc.get("repo_id")), hf_repo_id=rc.get("repo_id", ""), hf_repo_url=rc.get("url", ""))
+            rows.append(item)
         return rows
 
     def scenario_counts(self):
@@ -217,9 +221,11 @@ class BenchInspectMixin:
         return {"status": st.get("status"), "arms": out}
 
     def telemetry(self):
+        with self.lock:
+            state_snap = dict(self.state)
         cand = None
-        if self.state.get("status") == "recording" and self.state.get("folder"):
-            p = Path(self.state["folder"]) / "motor-health-current.json"
+        if state_snap.get("status") == "recording" and state_snap.get("folder"):
+            p = Path(state_snap["folder"]) / "motor-health-current.json"
             if p.is_file():
                 cand = p
         if cand is None:
@@ -227,13 +233,18 @@ class BenchInspectMixin:
             if live_p.is_file() and (self.clock() - live_p.stat().st_mtime) <= 10.0:
                 cand = live_p
         if cand is None:
-            return {"active": False, "status": self.state.get("status")}
+            out = {"active": False, "status": state_snap.get("status")}
+            out.update(recording_progress(state_snap, self.clock))
+            return out
         try:
             data = json.loads(cand.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            return {"active": False, "status": self.state.get("status")}
+            out = {"active": False, "status": state_snap.get("status")}
+            out.update(recording_progress(state_snap, self.clock))
+            return out
         if isinstance(data, dict):
             data.setdefault("active", True)
+            data.update(recording_progress(state_snap, self.clock))
         return data
 
     def check_camera_drift(self, arm=""):
@@ -275,7 +286,9 @@ class BenchInspectMixin:
         return {"ok": True, "arm": arm_key, "cameras": out}
 
     def status(self):
-        if self.state["status"] == "idle" and self.pending.exists() and self.clock() >= self._retry_at:
+        with self.lock:
+            cur_status = self.state["status"]
+        if cur_status == "idle" and self.pending.exists() and self.clock() >= self._retry_at:
             self._retry_at = self.clock() + 10  # a skipped or failed startup recovery is retried, not every poll
             self.restore_leftovers()
         with self.lock:
@@ -285,6 +298,8 @@ class BenchInspectMixin:
         out["scenario_counts"] = self.scenario_counts()
         out["hf_logged_in"] = self.hf_logged_in()
         out["active_locks"] = self.active_lock_holders()
+        out["hf_upload"] = self.hf_upload_status() if hasattr(self, "hf_upload_status") else {}
+        out.update(recording_progress(out, self.clock))
         if out.get("folder") and out.get("status") in ("unsafe_or_failed", "failed", "seal_failed"):
             log_p = Path(out["folder"]) / "bench.log"
             if log_p.is_file():
@@ -382,5 +397,3 @@ class BenchInspectMixin:
         if not pick_l and leaders:
             pick_l = [leaders[0]]
         return {"config": pick_cfg, "caps": pick_cap, "calibrations": [*robots, *(pick_l if arm == BI_ARM else pick_l[:1])]}
-
-

@@ -53,10 +53,16 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
             if path == "/api/camera_check":
                 qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
                 return self.reply(200, bench.check_camera_drift((qs.get("arm") or [""])[0]))
+            if path == "/api/pipeline/status":
+                return self.reply(200, bench.pipeline_status())
+            if path == "/api/hf/status":
+                return self.reply(200, bench.hf_upload_status())
             routes = {"/": lambda: (PAGE.encode(), "text/html; charset=utf-8"),
+                      "/bench_record.css": lambda: ((HERE / "bench_record.css").read_bytes(), "text/css; charset=utf-8"),
                       "/bench_record_ui.js": lambda: ((HERE / "bench_record_ui.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_app.js": lambda: ((HERE / "bench_record_app.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_cam.js": lambda: ((HERE / "bench_record_cam.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_pipeline.js": lambda: ((HERE / "bench_record_pipeline.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/choices.json": lambda: (bench.choices(), "application/json"),
                       "/status.json": lambda: (bench.status(), "application/json")}
             if path not in routes:
@@ -91,6 +97,16 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.save_leader_pose(body))
                 if self.path == "/api/camera_baseline":
                     return self.reply(200, bench.save_camera_baseline(body))
+                if self.path == "/api/pipeline/generate_replay":
+                    return self.reply(200, bench.pipeline_generate_replay(body))
+                if self.path == "/api/pipeline/run":
+                    return self.reply(200, bench.pipeline_run(body))
+                if self.path == "/api/pipeline/config":
+                    return self.reply(200, bench.pipeline_config(body))
+                if self.path == "/api/hf/upload":
+                    return self.reply(200, bench.hf_upload_start(body))
+                if self.path == "/api/hf/config":
+                    return self.reply(200, bench.hf_upload_config(body))
                 m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose)", self.path)
                 if m_arm:
                     arm_id, act = m_arm.group(1), m_arm.group(2)

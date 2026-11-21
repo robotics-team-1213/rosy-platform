@@ -29,6 +29,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+if not (HERE / "omx_adapter").is_dir():
+    _rel = sorted((Path.home() / "rosy-omx" / "releases").glob("*/omx_adapter"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if _rel:
+        os.environ["PYTHONPATH"] = f"{_rel[0].parent}:{os.environ['PYTHONPATH']}" if os.environ.get("PYTHONPATH") else str(_rel[0].parent)
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
     check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, write_restore_list, write_snapshot)
@@ -37,9 +41,11 @@ from bench_record_inspect import (  # noqa: E402,F401
     ARMS, BI_ARM, HANDOVER, NAME, BenchInspectMixin, _read_task_card, active_handover_units, systemctl)
 from bench_record_ops import BenchOpsMixin  # noqa: E402
 from bench_record_http import PAGE, make_server  # noqa: E402,F401
+from bench_record_replay import apply_task_override, transform_replay  # noqa: E402
+from bench_record_pipeline import BenchPipelineMixin  # noqa: E402
 
 
-class Bench(BenchInspectMixin, BenchOpsMixin):
+class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
     def __init__(self, config, *, run=systemctl, popen=subprocess.Popen, clock=time.time, procs=proc_cmdlines,
                  mounts=proc_mounts):
         self.python, self.prep = config["python"], Path(config["prep_root"]).expanduser()
@@ -194,6 +200,14 @@ class Bench(BenchInspectMixin, BenchOpsMixin):
                 if isinstance(v, bool) or not isinstance(v, int) or not (1 <= v <= 500):
                     raise ValueError("num_episodes는 1~500 정수여야 합니다")
                 overrides["num_episodes"] = v
+        replay_mode = body.get("replay_mode") or "none"
+        invert_gripper = bool(body.get("invert_gripper", False))
+        task_override = body.get("task_override")
+        if task_override is not None:
+            if not isinstance(task_override, dict):
+                raise ValueError("task_override는 JSON 객체여야 합니다")
+            if task_override and not task:
+                raise ValueError("집기/놓기 스왑 또는 목표 변경은 작업 카드 선택이 필요합니다")
         with self.lock:
             if self.state["status"] in ("handing_over", "recording", "restoring", "sealing"):
                 raise ValueError("a bench session is already running")
@@ -208,20 +222,40 @@ class Bench(BenchInspectMixin, BenchOpsMixin):
                 effective_cfg = config_bytes
                 effective_task = task
                 snap_files = [("caps.json", caps_bytes)]
-                if overrides:
-                    if effective_task:
-                        import yaml
-                        tc_data = yaml.safe_load(Path(effective_task).read_text(encoding="utf-8"))
+                cfg_data = json.loads(config_bytes.decode("utf-8-sig"))
+                ds_cfg = cfg_data.get("dataset") if isinstance(cfg_data.get("dataset"), dict) else {}
+                eff_task_id, eff_root_prefix, eff_target_eps = None, ds_cfg.get("root"), overrides.get("num_episodes") or ds_cfg.get("num_episodes")
+                if effective_task and (overrides or task_override):
+                    import yaml
+                    tc_data = yaml.safe_load(Path(effective_task).read_text(encoding="utf-8"))
+                    if not isinstance(tc_data, dict):
+                        raise ValueError("과제 카드 YAML 형식이 올바르지 않습니다")
+                    if overrides:
                         tc_data.setdefault("record", {}).update(overrides)
-                        snap_files.append(("effective-task-card.yaml", json.dumps(tc_data, indent=2, ensure_ascii=False).encode("utf-8")))
-                        effective_task = str(snap / "effective-task-card.yaml")
-                    else:
-                        cfg_data = json.loads(config_bytes.decode("utf-8-sig"))
-                        cfg_data.setdefault("dataset", {}).update(overrides)
-                        effective_cfg = json.dumps(cfg_data, indent=2).encode("utf-8")
+                    if task_override:
+                        tc_data = apply_task_override(tc_data, task_override)
+                    rec_blk = tc_data.get("record") or {}
+                    eff_task_id = tc_data.get("task_id")
+                    eff_root_prefix = rec_blk.get("root_prefix") or eff_root_prefix
+                    eff_target_eps = rec_blk.get("num_episodes") or eff_target_eps
+                    snap_files.append(("effective-task-card.yaml", json.dumps(tc_data, indent=2, ensure_ascii=False).encode("utf-8")))
+                    effective_task = str(snap / "effective-task-card.yaml")
+                elif effective_task and task_card:
+                    eff_task_id = task_card.get("task_id")
+                    eff_target_eps = task_card.get("num_episodes") or eff_target_eps
+                    try:
+                        import yaml
+                        eff_root_prefix = (yaml.safe_load(task_card.get("raw") or "") or {}).get("record", {}).get("root_prefix") or eff_root_prefix
+                    except Exception:
+                        pass
+                elif overrides:
+                    cfg_data.setdefault("dataset", {}).update(overrides)
+                    effective_cfg = json.dumps(cfg_data, indent=2).encode("utf-8")
                 snap_files.insert(0, ("record-config.json", effective_cfg))
                 if replay_path:
-                    snap_files.append(("replay.json", Path(replay_path).read_bytes()))
+                    eff_target_eps = 2
+                    raw_replay = Path(replay_path).read_bytes()
+                    snap_files.append(("replay.json", transform_replay(raw_replay, mode=replay_mode, invert_gripper=invert_gripper)))
                 write_snapshot(snap, tuple(snap_files))
                 command = [self.python, str(HERE / "record_session.py"), "--config", str(snap / "record-config.json"),
                            "--caps", str(snap / "caps.json")]
@@ -237,7 +271,9 @@ class Bench(BenchInspectMixin, BenchOpsMixin):
                 release(handles)
                 raise
             self.state = {"status": "handing_over", "name": body["name"], "folder": str(folder), "started": self.clock(),
-                          "config": body["config"], "caps": body["caps"], "snapshot": str(snap)}
+                          "config": body["config"], "caps": body["caps"], "snapshot": str(snap),
+                          "target_episodes": eff_target_eps, "task_id": eff_task_id,
+                          "dataset_root_prefix": eff_root_prefix, "replay_mode": replay_mode}
             self.child, self.abort = None, False
         seal = [self.python, str(HERE / "record_seal.py"), "--session-dir", str(folder), "--name", body["name"],
                 "--rig-revision", body["rig_revision"], *[a for c in calibrations for a in ("--calibration", c)]]
@@ -293,7 +329,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin):
             with self.lock:
                 if self.abort:
                     raise RuntimeError("stopped before recording started")
-                self.state.update(status="recording", stopped=stopped)
+                self.state.update(status="recording", stopped=stopped, recording_started=self.clock())
                 if "--arm" not in command:
                     for h in list(handles):
                         if getattr(h, "name", "").endswith("session.lock"):
@@ -309,7 +345,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin):
             self._set(error=f"{type(exc).__name__}: {exc}")
         finally:
             release(handles)  # recording is over; observer@ ExecStartPre needs that arm's lock free to restart
-            self._set(status="restoring")
+            self._set(status="restoring", recording_ended=self.clock())
             errors, detail = self._start_units(reversed(stopped))
             try:
                 self._remember(errors)

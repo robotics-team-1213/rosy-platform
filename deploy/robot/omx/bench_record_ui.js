@@ -135,14 +135,17 @@ function renderCamGuide(){
   const taskLow=(String(t||'')+' '+String(c?.single_task||'')).toLowerCase();
   const isPinky=okCard&&taskLow.includes('pinky');
   const isBeltIn=okCard&&(taskLow.includes('conveyor')||taskLow.includes('supply'));
-  const oStr=okCard?(c.origin?String(c.origin):(isPinky?'pinky':'')):'';
-  const tStr=okCard?(c.target_slot?String(c.target_slot):(isBeltIn?'belt-in':'')):'';
+  const rawO=okCard?(c.origin?String(c.origin):(isPinky?'pinky':'')):'';
+  const rawT=okCard?(c.target_slot?String(c.target_slot):(isBeltIn?'belt-in':'')):'';
+  const swapped=Boolean(window.zoneSwapped&&okCard&&(rawO||rawT));
+  const oStr=swapped?rawT:rawO;
+  const tStr=swapped?rawO:rawT;
   const org=okCard?describeSpot(oStr):'미선택';
   const tgt=okCard?describeSpot([tStr,c?.target_layer].filter(Boolean).join('-')):'미선택';
   const zoneCol=(z)=>(z==='belt'?tStr==='belt':tStr.startsWith(z))?'#3dd68c':((z==='belt'?oStr==='belt':oStr.startsWith(z))?'#58a6ff':'#363a3f');
   const zoneBg=(z)=>(z==='belt'?tStr==='belt':tStr.startsWith(z))?'#14261e':((z==='belt'?oStr==='belt':oStr.startsWith(z))?'#132238':'#18191b');
   let html='<div style="display:flex;flex-direction:column;gap:8px">';
-  html+='<div><b>집을 곳:</b> <span style="color:#58a6ff">'+org+'</span> &rarr; <b>놓을 곳:</b> <span style="color:#3dd68c">'+tgt+'</span></div>';
+  html+='<div class="guide-head"><div><b>집을 곳:</b> <span style="color:#58a6ff">'+org+'</span> &rarr; <b>놓을 곳:</b> <span style="color:#3dd68c">'+tgt+'</span></div><button type="button" id="swap-zones-btn" class="btn-tool" title="집을 곳과 놓을 곳을 서로 바꿉니다 [Alt+W]" aria-pressed="'+(swapped?'true':'false')+'">⇄ 집기↔놓기 스왑'+(swapped?' (적용됨)':'')+'</button></div>';
   html+='<div id="cam-map-note" class="quiet" style="font-size:.82rem">작업 카드 선택용 배치도입니다(로봇 좌표 제어 아님 · 리더 팔로 직접 조작). 파랑 = 집을 곳 · 초록 = 놓을 곳.</div>';
   html+='<svg viewBox="0 0 360 122" style="width:100%;height:auto;background:#111113;border:1px solid var(--bd);border-radius:6px" aria-label="작업대 구역 배치도">';
   html+='<g class="map-spot" data-spot="tmp-a" role="button" tabindex="0"><rect x="8" y="8" width="84" height="54" rx="6" fill="'+zoneBg('tmp-a')+'" stroke="'+zoneCol('tmp-a')+'" stroke-width="2"/><text x="50" y="31" fill="#eeeeef" font-size="11" text-anchor="middle">임시대 A (좌)</text><text x="50" y="47" fill="#b0b4ba" font-size="9" text-anchor="middle">tmp-a</text></g>';
@@ -167,7 +170,7 @@ function renderCamGuide(){
     for(const row of [0,1,2]){
       const hit=(row===tr&&lv===tl);
       const spot='ship-h1r'+row+'-l'+lv;
-      html+='<button type="button" class="slot-btn'+(hit?' active':'')+'" data-spot="'+spot+'" style="display:flex;flex-direction:column;line-height:1.15;padding:5px 4px"><span>'+(lv+1)+'층·'+ROW_LABELS[row]+(hit?' ★':'')+'</span><span class="mono" style="font-size:.68rem;opacity:.8">r'+row+'·l'+lv+'</span></button>';
+      html+='<button type="button" class="slot-btn'+(hit?' active':'')+'" aria-pressed="'+(hit?'true':'false')+'" data-spot="'+spot+'" style="display:flex;flex-direction:column;line-height:1.15;padding:5px 4px"><span>'+(lv+1)+'층·'+ROW_LABELS[row]+(hit?' ★':'')+'</span><span class="mono" style="font-size:.68rem;opacity:.8">r'+row+'·l'+lv+'</span></button>';
     }
   }
   html+='</div>';
@@ -175,6 +178,15 @@ function renderCamGuide(){
   box.hidden=false;
   for(const el of box.querySelectorAll('[data-spot]')){
     el.addEventListener('click',()=>pickTaskBySpot(el.dataset.spot));
+    el.addEventListener('keydown',(e)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pickTaskBySpot(el.dataset.spot);}});
+  }
+  const swBtn=$('swap-zones-btn');
+  if(swBtn){
+    swBtn.addEventListener('click',()=>{
+      window.zoneSwapped=!window.zoneSwapped;
+      renderCamGuide();
+      updateTaskSummary();
+    });
   }
   for(const tag of $('cam-grid').querySelectorAll('.cam-tag')){
     tag.textContent=(okCard&&c.target_slot)?('목표 '+c.target_slot):'';
@@ -199,11 +211,14 @@ function updateTaskSummary(){
     errEl.textContent='';
   }
   const ok=c&&c.valid!==false;
-  $('tc-single').textContent=ok&&c.single_task?String(c.single_task):'미확인';
+  const sw=Boolean(window.zoneSwapped);
+  const rawTask=ok&&c.single_task?String(c.single_task):'미확인';
+  $('tc-single').textContent=(sw&&ok&&c.single_task&&typeof window.flipTaskLabel==='function')?(window.flipTaskLabel(rawTask)+' [스왑]'):rawTask;
   $('tc-raw').textContent=c&&c.raw?String(c.raw):(t?'내용 없음':'카드를 선택하세요.');
-  $('tc-origin').textContent=ok&&c.origin?describeSpot(c.origin):'미확인';
+  const origTxt=ok&&c.origin?describeSpot(c.origin):'미확인';
   const tgt=ok&&(c.target_slot||c.target_layer)?describeSpot([c.target_slot,c.target_layer].filter(Boolean).join('-')):'미확인';
-  $('tc-target').textContent=tgt;
+  $('tc-origin').textContent=sw?tgt:origTxt;
+  $('tc-target').textContent=sw?origTxt:tgt;
   const q=typeof epQuota==='function'?epQuota(c):null;
   if(q){
     $('tc-episodes').innerHTML=(q.rem===0?'목표 '+q.goal+'회 달성 (현재 '+q.done+'회)':'목표 '+q.goal+'회 중 현재 '+q.done+'회 수집 · 앞으로 '+q.rem+'회 남음')+'<div class="prog-track"><div class="prog-fill" style="width:'+q.pct+'%;background:'+(q.rem===0?'var(--good)':'var(--pri)')+'"></div></div>';
@@ -298,6 +313,7 @@ function applyArmRules(autoPickSingle){
     issues.push('주의: 선택 설정의 top 카메라가 현재 8767에서 미수신 상태입니다');
   }
   renderCapsEditor();
+  if(typeof updateCameraRecordingMask==='function')updateCameraRecordingMask();
   const box=$('binding-issues');
   if(issues.length){box.textContent='조치 필요: '+issues.join(' / ');box.hidden=false;}
   else{box.hidden=true;box.textContent='';}
@@ -307,6 +323,7 @@ function validateStart(){
   const reasons=[];
   if(!statusLoaded)reasons.push('현재 상태를 아직 확인하지 못했습니다');
   if(lastStatus&&BUSY.has(lastStatus.status))reasons.push('세션이 이미 진행 중입니다');
+  if(typeof poseInFlight!=='undefined'&&poseInFlight)reasons.push('포즈 작업이 진행 중입니다');
   if(!armContractValid()||!f.arm.value||!choices.instances[f.arm.value])reasons.push('팔 및 로봇 프로필 확인 필요');
   else if(!armVerifiedBindings(f.arm.value))reasons.push('서버 팔별 검증 조합(arm_bindings) 필요');
   const t=f.task.value;
@@ -348,7 +365,7 @@ function validateStart(){
         llist.innerHTML='';
         for(const item of byPid.values()){
           const row=document.createElement('div');
-          row.style.cssText='display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;background:var(--bg);border:1px solid var(--bd);border-radius:6px';
+          row.style.cssText='display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px';
           const info=document.createElement('span');info.className='mono';info.style.fontSize='.82rem';
           info.textContent=item.locks.join(', ')+(item.pid?' (PID '+item.pid+')':'');
           const btn=document.createElement('button');btn.type='button';btn.className='btn-stop';
@@ -372,14 +389,14 @@ function validateStart(){
     }
   }
 
-  $('start-btn').disabled=startInFlight||reasons.length>0;
+  window.benchStartReady=!startInFlight&&reasons.length===0;
   const busyNow=Boolean(lastStatus&&BUSY.has(lastStatus.status))||poseInFlight;
   const armOk=Boolean(f.arm.value&&armContractValid()&&choices.instances[f.arm.value]&&armVerifiedBindings(f.arm.value));
   const armInfo=lastArmsStatus&&f.arm.value?lastArmsStatus[f.arm.value]:null;
-  const hb=$('home-btn');
+  const hb=$('hdr-home-btn');
   if(hb){
     hb.disabled=!f.at_bench.checked||!armOk||busyNow||locks.length>0;
-    if(!poseInFlight)hb.textContent=(armInfo&&armInfo.has_leader_pose)?'홈 이동 (팔로워+리더)':'홈으로 이동 (팔로워)';
+    if(!poseInFlight)hb.textContent=(armInfo&&armInfo.has_leader_pose)?'홈 이동 (팔로워+리더)':'홈 이동';
   }
   const sb=$('save-init-pose-btn');
   if(sb)sb.disabled=!f.at_bench.checked||!armOk||busyNow||locks.length>0;
@@ -396,9 +413,8 @@ function validateStart(){
   }
 
   const canStop=Boolean(lastStatus&&(lastStatus.status==='handing_over'||lastStatus.status==='recording'));
-  $('stop-btn').hidden=!canStop;
-  $('stop-btn').disabled=!canStop||stopInFlight;
   $('stop-note').hidden=!canStop;
+  if(typeof syncHeaderAndSlimBar==='function')syncHeaderAndSlimBar();
 
   const r1=Boolean(f.arm.value&&NAME_RE.test(f.name.value.trim())&&NAME_RE.test(f.rig_revision.value.trim()));
   const r2=Boolean(f.config.value&&f.caps.value&&robotCals.length>=needRobot&&leaderCals.length>0);
@@ -496,7 +512,7 @@ function renderStatus(st){
   if(st.log_tail){logEl.textContent=st.log_tail;logEl.hidden=false;}
   else{logEl.hidden=true;logEl.textContent='';}
   renderRecent(st.recent_sessions);
-  renderLeRobot(st.lerobot_datasets, st.hf_logged_in);
+  if(typeof renderLeRobotPanel==='function')renderLeRobotPanel(st);
   const scSig=JSON.stringify(st.scenario_counts||{});
   if($('task-listbox')&&$('task-listbox').dataset.scSig!==scSig){
     $('task-listbox').dataset.scSig=scSig;
@@ -504,27 +520,6 @@ function renderStatus(st){
     updateTaskSummary();
   }
   validateStart();
-}
-
-function renderLeRobot(rows, hfOk){
-  const hb=$('hf-login-badge');
-  if(hb){
-    hb.textContent=hfOk?'HF 로그인됨':'HF 미로그인';
-    hb.dataset.tone=hfOk?'good':'warn';
-  }
-  const ul=$('lerobot-list'), empty=$('lerobot-empty');
-  if(!ul||!empty)return;
-  if(!Array.isArray(rows)||!rows.length){ul.innerHTML='';empty.hidden=false;return;}
-  empty.hidden=true;
-  ul.innerHTML='';
-  for(const r of rows){
-    const li=document.createElement('li');li.className='sess-item';
-    const left=document.createElement('span');left.className='mono';left.textContent=r.name||'';
-    const right=document.createElement('span');right.className='quiet';
-    right.textContent=r.episodes+'회(parquet) · '+r.videos+'개(MP4)'+(r.do_not_train?' · 정지회차(DO_NOT_TRAIN)':'');
-    li.append(left,right);
-    ul.append(li);
-  }
 }
 
 function renderRecent(rows){
@@ -545,8 +540,8 @@ function renderRecent(rows){
 }
 
 const ARM_PREVIEW_CAMS={
-  arm_a:new Set(['top','arm_a_wrist']),
-  arm_b:new Set(['side','arm_b_wrist']),
+  arm_a:new Set(['top','side','arm_a_wrist']),
+  arm_b:new Set(['top','side','arm_b_wrist']),
   arm_ab:new Set(['top','side','arm_a_wrist','arm_b_wrist']),
   arm_s:new Set(['arm_s_top','arm_s_wrist']),
 };

@@ -1,30 +1,4 @@
-function updateCameraRecordingMask(){
-  const arm=f.arm?f.arm.value:'';
-  const recSet=ARM_PREVIEW_CAMS[arm]||null;
-  for(const box of $('cam-grid').querySelectorAll('.cam-box[data-cam-box]')){
-    const lbl=box.dataset.camBox;
-    const isRec=!recSet||recSet.has(lbl);
-    box.classList.toggle('cam-unrecorded',!isRec);
-    const badge=box.querySelector('.cam-rec-badge');
-    if(badge){
-      badge.textContent=isRec?'● 녹화':'미녹화';
-      badge.className='cam-rec-badge '+(isRec?'on':'off');
-    }
-  }
-  const note=$('cam-note');
-  if(note&&camLabels.length&&recSet){
-    const recList=camLabels.filter(l=>recSet.has(l));
-    note.textContent='실시간 미리보기 — '+(arm||'선택 암')+' 녹화 대상: '+(recList.length?recList.join(', '):'없음')+' (나머지 미녹화 흐림 표시)';
-  }
-  const rch=$('rail-cam-health');
-  if(rch&&lastCamState&&camLabels.length){
-    rch.innerHTML=camLabels.map(l=>{
-      const ok=lastCamState[l]?.fresh!==false;
-      const isRec=!recSet||recSet.has(l);
-      return '<div class="mono" style="display:flex;justify-content:space-between;gap:6px;opacity:'+(isRec?'1':'0.42')+'"><span>'+l+(isRec?'':' (미녹화)')+'</span><span style="color:'+(ok?'var(--good)':'var(--warn)')+'">'+(ok?'수신':'지연')+'</span></div>';
-    }).join('');
-  }
-}
+function updateCameraRecordingMaskHook(){if(typeof updateCameraRecordingMask==='function')updateCameraRecordingMask();}
 let camLabels=[];
 let lastCamState=null;
 async function pollCameras(){
@@ -133,6 +107,7 @@ function applyPresetOrRecommended(preferRec){
   }
   renderCapsEditor();
   renderConfigMeta();
+  updateCameraRecordingMask();
   validateStart();
 }
 
@@ -161,6 +136,7 @@ function syncArmSelection(){
   f.at_bench.checked=false;
   applyArmRules(true);
   applyPresetOrRecommended(false);
+  if(taskFilter==='arm')renderTaskListbox();
   validateStart();
 }
 
@@ -174,6 +150,7 @@ function selectArm(arm){
 }
 
 function selectTask(val){
+  window.zoneSwapped=false;
   f.task.value=val||'';
   renderTaskListbox();
   updateTaskSummary();
@@ -184,6 +161,28 @@ function selectTask(val){
     f.name.value=String(c.task_id).toLowerCase().replace(/[^a-z0-9-]+/g,'-')+'-01';
   }
   validateStart();
+}
+
+let taskFilter='all';
+function taskMatchesFilter(v,c){
+  if(taskFilter==='all')return true;
+  const hay=(v+' '+(c.origin||'')+' '+(c.target_slot||'')+' '+(c.single_task||'')+' '+(c.raw||'')).toLowerCase();
+  if(taskFilter==='pinky')return /pinky|belt|conveyor|supply/.test(hay);
+  const arm=f.arm.value, blk={arm_a:/arm[_ -]?[bs]\b|tmp-b|belt-in|conveyor|supply/,arm_b:/arm[_ -]?[as]\b|tmp-a|belt-in|conveyor|supply/,arm_ab:/arm[_ -]?s\b|belt-in|conveyor|supply/};
+  if(arm==='arm_s')return /arm[_ -]?s\b|belt-in|conveyor|supply|pinky/.test(hay);
+  return blk[arm]?!blk[arm].test(hay):true;
+}
+function stepTask(delta){
+  const opts=[...($('task-listbox')?.querySelectorAll('.task-opt:not(:disabled)')||[])];
+  if(!opts.length)return;
+  const cur=opts.findIndex(o=>o.getAttribute('aria-selected')==='true');
+  const next=cur<0?(delta>0?0:opts.length-1):(cur+delta+opts.length)%opts.length;
+  opts[next].click();
+  $('task-listbox')?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:'nearest'});
+}
+function setTaskListOpen(open){
+  const box=$('task-listbox'),btn=$('task-toggle-btn');
+  if(box&&btn){box.hidden=!open;btn.setAttribute('aria-expanded',String(open));btn.textContent=open?'목록 접기':'목록 펼치기';}
 }
 
 function renderTaskListbox(){
@@ -214,6 +213,7 @@ function renderTaskListbox(){
   if(!q)addOpt('','없음 (미지정)','과제 카드 없이 자유 녹화',false);
   for(const v of tasks){
     const c=cards[v]||{};
+    if(!taskMatchesFilter(v,c))continue;
     const bad=c.valid===false;
     const meta=[c.origin,c.target_slot].filter(Boolean).join(' -> ');
     const hay=(v+' '+meta+' '+(c.single_task||'')).toLowerCase();
@@ -323,7 +323,7 @@ function renderCapsSummary(){
   const wrap=$('caps-summary-chart');
   const inputs=[...$('caps-fields').querySelectorAll('input[data-mid][data-key="pwm"]')];
   if(!inputs.length){wrap.innerHTML='';return;}
-  let html='<div style="display:grid;grid-template-columns:repeat('+inputs.length+',minmax(0,1fr));gap:6px;align-items:end;height:68px;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:6px">';
+  let html='<div style="display:grid;grid-template-columns:repeat('+inputs.length+',minmax(0,1fr));gap:6px;align-items:end;height:68px;padding:8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px">';
   for(const inp of inputs){
     const v=Math.max(0,Math.min(2000,Number(inp.value)||0));
     const h=Math.max(6,Math.round((v/2000)*46));
@@ -342,7 +342,7 @@ function renderCapsEditor(){
   box.hidden=false;fields.innerHTML='';
   for(const [mid,obj] of Object.entries(data)){
     if(!obj||typeof obj!=='object')continue;
-    const card=document.createElement('div');card.style.cssText='background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:10px';
+    const card=document.createElement('div');card.style.cssText='background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px;padding:10px';
     const h=document.createElement('div');h.className='mono';h.style.cssText='font-weight:700;margin-bottom:6px;font-size:.9rem';h.textContent=JOINT_LABELS[mid]||('모터 ID '+mid);card.append(h);
     for(const [k,val] of Object.entries(obj)){
       const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:8px;margin-top:6px';
@@ -353,7 +353,7 @@ function renderCapsEditor(){
       track.append(fill,vtxt);
       const inp=document.createElement('input');inp.type='number';inp.min='0';inp.max='2000';inp.value=String(val);
       inp.dataset.mid=mid;inp.dataset.key=k;
-      inp.style.cssText='width:68px;min-height:30px;padding:2px 6px;background:var(--bg-soft);color:var(--ink);border:1px solid var(--bd);border-radius:4px;font-family:ui-monospace,monospace';
+      inp.style.cssText='width:68px;min-height:30px;padding:2px 6px;background:var(--ground-soft);color:var(--ink);border:1px solid var(--bd);border-radius:4px;font-family:ui-monospace,monospace';
       const sync=(n)=>{
         const c=Math.max(0,Math.min(2000,Math.round(n)));
         inp.value=String(c);
@@ -421,9 +421,9 @@ let lastArmsStatus=null;
 async function pollArms(){
   try{const res=await api('/api/arms');if(res&&res.arms){lastArmsStatus=res.arms;validateStart();}}catch(_){}
 }
-if($('home-btn')){
-  $('home-btn').addEventListener('click',async()=>{
-    const btn=$('home-btn');
+if($('hdr-home-btn')){
+  $('hdr-home-btn').addEventListener('click',async()=>{
+    const btn=$('hdr-home-btn');
     const incL=Boolean(lastArmsStatus&&f.arm.value&&lastArmsStatus[f.arm.value]?.has_leader_pose);
     poseInFlight=true;btn.disabled=true;btn.textContent='홈 이동 중...';validateStart();
     try{
@@ -433,7 +433,7 @@ if($('home-btn')){
       poseFeedbackMsg='홈(이니셜) 위치 이동 완료: '+((st.home_moved||[]).join(', ')||f.arm.value)+(incL?' (리더 토크 OFF 복구됨)':'');
       poseFeedbackUntil=Date.now()+6000;
     }catch(err){setReqError(err.message);}
-    finally{poseInFlight=false;btn.textContent='홈으로 이동 (Home)';validateStart();}
+    finally{poseInFlight=false;btn.textContent='홈 이동';validateStart();}
   });
 }
 if($('save-leader-pose-btn')){
@@ -469,15 +469,21 @@ if($('save-init-pose-btn')){
   });
 }
 if($('task-search')){
-  $('task-search').addEventListener('input',renderTaskListbox);
+  $('task-search').addEventListener('input',()=>{setTaskListOpen(true);renderTaskListbox();});
   $('task-search').addEventListener('keydown',e=>{
-    const opts=[...($('task-listbox')?.querySelectorAll('.task-opt:not(:disabled)')||[])];
-    if(!opts.length)return;
-    const cur=opts.findIndex(o=>o.getAttribute('aria-selected')==='true');
-    if(e.key==='ArrowDown'){e.preventDefault();opts[(cur+1)%opts.length].click();}
-    else if(e.key==='ArrowUp'){e.preventDefault();opts[(cur-1+opts.length)%opts.length].click();}
+    if(e.key==='ArrowDown'){e.preventDefault();stepTask(1);}
+    else if(e.key==='ArrowUp'){e.preventDefault();stepTask(-1);}
   });
 }
+if($('task-prev-btn'))$('task-prev-btn').addEventListener('click',()=>stepTask(-1));
+if($('task-next-btn'))$('task-next-btn').addEventListener('click',()=>stepTask(1));
+if($('task-toggle-btn'))$('task-toggle-btn').addEventListener('click',()=>setTaskListOpen($('task-listbox').hidden));
+if($('task-filters'))$('task-filters').addEventListener('click',e=>{
+  const btn=e.target.closest('button[data-tfilter]');if(!btn)return;
+  taskFilter=btn.dataset.tfilter||'all';
+  for(const b of $('task-filters').querySelectorAll('button[data-tfilter]')){b.classList.toggle('active',b===btn);b.setAttribute('aria-pressed',String(b===btn));}
+  setTaskListOpen(true);renderTaskListbox();
+});
 if($('hdr-refresh-btn'))$('hdr-refresh-btn').addEventListener('click',()=>{pollStatus();pollCameras();});
 f.arm.addEventListener('change',()=>{
   for(const cb of document.querySelectorAll('#cal-robot-list input, #cal-leader-list input'))cb.checked=false;
@@ -488,6 +494,7 @@ f.arm.addEventListener('change',()=>{
 });
 f.caps.addEventListener('change',()=>{renderCapsEditor();validateStart();});
 f.task.addEventListener('change',()=>{
+  window.zoneSwapped=false;
   renderTaskListbox();
   updateTaskSummary();
   renderConfigMeta();
@@ -501,7 +508,7 @@ for(const el of [f.name,f.rig_revision,f.at_bench]){
   el.addEventListener('input',validateStart);
   el.addEventListener('change',validateStart);
 }
-f.config.addEventListener('change',()=>{renderConfigMeta();validateStart();});
+f.config.addEventListener('change',()=>{renderConfigMeta();updateCameraRecordingMask();validateStart();});
 $('cal-robot-list').addEventListener('change',validateStart);
 $('cal-leader-list').addEventListener('change',validateStart);
 
@@ -510,11 +517,15 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')){
     const ts=$('task-search');if(ts){e.preventDefault();ts.focus();ts.select();}
   }else if((e.ctrlKey&&e.key==='Enter')||(e.altKey&&e.key.toLowerCase()==='s')){
-    if(!$('start-btn').disabled){e.preventDefault();f.requestSubmit();}
+    if(window.benchStartReady&&!BUSY.has(lastStatus?.status)){e.preventDefault();f.requestSubmit();}
   }else if(e.key==='Escape'||(e.altKey&&e.key.toLowerCase()==='x')){
-    if(!$('stop-btn').hidden&&!$('stop-btn').disabled){e.preventDefault();$('stop-btn').click();}
+    if((lastStatus?.status==='recording'||lastStatus?.status==='handing_over')&&!$('hdr-record-btn')?.disabled){e.preventDefault();$('hdr-record-btn').click();}
   }else if(e.altKey&&e.key.toLowerCase()==='c'){
     e.preventDefault();f.at_bench.checked=!f.at_bench.checked;validateStart();
+  }else if(e.altKey&&e.key.toLowerCase()==='r'){
+    const rb=$('toggle-reverse-btn');if(rb&&!rb.disabled){e.preventDefault();rb.click();}
+  }else if(e.altKey&&e.key.toLowerCase()==='w'){
+    const sb=$('swap-zones-btn');if(sb&&!sb.disabled){e.preventDefault();sb.click();}
   }
 });
 
@@ -550,6 +561,7 @@ f.addEventListener('submit',async e=>{
   if(sEp){const v=Number(sEp);if(!Number.isInteger(v)||v<1||v>500){setReqError('에피소드 수(num_episodes)는 1~500 정수여야 합니다.');startInFlight=false;validateStart();return;}lp.num_episodes=v;}
   if(sEt){const v=Number(sEt);if(!Number.isFinite(v)||v<1||v>3600){setReqError('에피소드 시간(episode_time_s)은 1~3600초여야 합니다.');startInFlight=false;validateStart();return;}lp.episode_time_s=v;}
   if(sRt){const v=Number(sRt);if(!Number.isFinite(v)||v<0.5||v>600){setReqError('리셋 시간(reset_time_s)은 0.5~600초여야 합니다.');startInFlight=false;validateStart();return;}lp.reset_time_s=v;}
+  const revOn=$('toggle-reverse-btn')?.getAttribute('aria-pressed')==='true';
   const body={
     arm:f.arm.value,
     name:f.name.value.trim(),
@@ -558,6 +570,9 @@ f.addEventListener('submit',async e=>{
     caps:f.caps.value,
     task:f.task.value,
     replay:$('replay')?.value||'',
+    replay_mode:revOn?($('reverse-mode')?.value||'swap_ab'):'none',
+    invert_gripper:Boolean($('invert-gripper')?.checked),
+    task_override:window.zoneSwapped?{swap_pick_place:true}:null,
     at_bench:f.at_bench.checked,
     lerobot_params:lp,
     calibrations:[...document.querySelectorAll('#cal-robot-list input:checked:not(:disabled), #cal-leader-list input:checked:not(:disabled)')].map(i=>i.value)
