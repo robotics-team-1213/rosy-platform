@@ -457,7 +457,7 @@ def _form_problem(root: Path, name: str, branch: str, reason: str | None, owner:
 
 
 def _has_branch(root: Path, branch: str) -> bool:
-    return git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0
+    return git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0 or rules.restore_archived(root, branch)
 
 
 def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, mode: str = "report",

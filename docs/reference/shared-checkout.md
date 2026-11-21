@@ -77,7 +77,7 @@
 | 새 브랜치는 `main`에 들어간 지점에서만 시작한다. 미착지 브랜치 위에 쌓지 않는다. 이어지는 일은 앞 브랜치를 착지한 뒤 시작한다 | `worktrees.py new --from`이 `main`에 없는 ref를 거절한다(`worktree_rules.unlanded`) |
 | 한 PR은 센 바뀐 파일 30개, 자체 비병합 커밋 20개, 병합 기준 7일 이내다(D-1067 개정). 넘으면 끝난 앞부분을 `origin/main`에서 새 브랜치로 먼저 낸다. `main`을 병합한 커밋은 세지 않는다 | `pr_land.py`가 제출 전에 거절한다. 나눌 수 없는 이유가 있으면 PR 본문에 `Size-Exception: <이유>` |
 | `origin/main` 병합은 PR이 `DIRTY`(충돌)일 때만 한다(「같이 하는 깃」 6번). `BEHIND`는 Merge Queue가 최신 main 위에서 다시 시험하므로 합치지 않는다. 병합이 단순히 가져온 `main`의 크기 문제는 브랜치 탓이 아니다 | `size_range.py`가 병합 커밋을 모든 부모와 다른 경로만으로 본다 |
-| 워크트리가 없고 14일 동안 커밋이 없는 미착지 브랜치는 보관한다. 지우지 않고 `refs/archive/<브랜치>@<sha10>`에 둔다. 되살리기: `git branch <브랜치> refs/archive/<브랜치>@<sha10>` | `worktrees.py prune --apply`가 정확한 sha로만 옮긴다(`archive_abandoned`) |
+| 워크트리가 없고 4일 동안 커밋이 없는 미착지 브랜치는 보관한다(D-1070 후속, 2026-11-21 로컬 브랜치 840개). `worktrees.py adopt`는 보관된 브랜치를 자동으로 되살린다. 지우지 않고 `refs/archive/<브랜치>@<sha10>`에 둔다. 되살리기: `git branch <브랜치> refs/archive/<브랜치>@<sha10>` | `worktrees.py prune --apply`가 정확한 sha로만 옮긴다(`archive_abandoned`) |
 | 폐기(D-1055): 착지 묶음(`land_prepare`·`land_rollup`), 10분 주기 `RosyLandTick`·`land_tick`·`land_gc`, MAIN-RED 재시험 | 묶음은 GitHub Merge Queue(`HEADGREEN`, 최대 4)가 한다 |
 
 ## 같이 하는 깃
