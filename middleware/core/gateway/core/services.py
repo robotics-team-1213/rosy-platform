@@ -245,7 +245,8 @@ class CoreServices:
         if isinstance(evidence_cfg, dict):
             stale_after.update({str(k): float(v) for k, v in evidence_cfg.items()})
         state = StateManager(robot_id, stale_after_s=stale_after,
-                             sources_configured=runtime_mode != "core")
+                             sources_configured=runtime_mode != "core",
+                             map_generation_path=Path(waypoints_path).parent / "map_generation")
         calibration = CalibrationSessionManager(events)
         state.set_activity_provider(calibration.activity)
         registry = SourceRegistry(config.get("command_sources"))

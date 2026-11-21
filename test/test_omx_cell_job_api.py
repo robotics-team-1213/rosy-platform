@@ -83,6 +83,16 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     assert "--dry-run" in drive_argv and "--person-at-switch" in drive_argv
     assert "--commissioning" not in drive_argv
 
+    job = api.JOBS["cell_policy_drive"]
+    with_goal = {**base_policy, "goal_site": "yard:r3-s2-t1"}
+    del with_goal["model_calibration"]
+    argv = api.build_argv(job, with_goal, wd)
+    assert argv[argv.index("--goal-site") + 1] == "yard:r3-s2-t1"
+    assert "--model-calibration" not in argv
+    for site in ("yard:r3-s1-t1", "yard:r3-s2-t1; park", 9):
+        with pytest.raises(ValueError, match="goal_site"):
+            api.build_argv(job, {**base_policy, "goal_site": site}, wd)
+
     with pytest.raises(ValueError, match="D-1024"):
         api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "proposer": "op_b"}, wd)
     with pytest.raises(ValueError, match="max_chunks"):

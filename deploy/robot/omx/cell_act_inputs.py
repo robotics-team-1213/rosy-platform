@@ -53,17 +53,29 @@ def grip_rule(config: dict, arm: str) -> dict:
     return {"held_30mm": float(profile["held_30mm"]), "gap_mm_per_unit": float(profile["gap_mm_per_unit"])}
 
 
-def sim_gripper(units: float, rule: dict) -> float:
-    """Follower gripper units -> the sim's gripper_joint_1: the real jaw gap by the arm's rule, posed by the palletizing jaw
-    geometry (the sim's fingers). The servo angle is not it: 2026-11-17 the servo's 50.5 closed read 0.03 rad, the sim's
-    trained gripper range is 0.34-0.99."""
+def jaw_geometry():
+    """Load the shared palletizing jaw geometry without importing a simulator."""
     isaac = str(Path(__file__).resolve().parents[3] / "learning" / "envs" / "isaac")
     if isaac not in sys.path:
         sys.path.insert(0, isaac)
     import palletizing_gripper as jaw
 
+    return jaw
+
+
+def sim_gripper(units: float, rule: dict) -> float:
+    """Follower gripper units -> the sim's gripper_joint_1: the real jaw gap by the arm's rule, posed by the palletizing jaw
+    geometry (the sim's fingers). The servo angle is not it: 2026-11-17 the servo's 50.5 closed read 0.03 rad, the sim's
+    trained gripper range is 0.34-0.99."""
     gap_mm = min(max(30 + (units - rule["held_30mm"]) * rule["gap_mm_per_unit"], 12.), 60.)  # omx_cell_sim.real_q's 12-60 mm
-    return jaw.angle_for_gap_clipped(gap_mm / 1000)
+    return jaw_geometry().angle_for_gap_clipped(gap_mm / 1000)
+
+
+def real_grippers(angles, rule: dict) -> np.ndarray:
+    """Invert the sim finger geometry to follower units at each angle."""
+    gap_m = jaw_geometry().gap_m
+    return np.asarray([rule["held_30mm"] + (1000 * gap_m(angle) - 30) / rule["gap_mm_per_unit"]
+                       for angle in angles])
 
 
 def _read_state(cell, arm, rule):

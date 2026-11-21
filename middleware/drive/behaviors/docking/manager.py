@@ -25,6 +25,7 @@ from core_features.docking.bay_phases import BayPhases
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.database import DockDatabase, DockError, DockInstance
 from core_features.docking.detector import DockDetector
+from core_features.docking.dock_anchor import DockAnchorKeeper
 from core_features.docking.site_pose import judge_site_pose
 from core_features.docking.manager_helpers import DockingPhasesMixin
 from core_features.docking.model import DockingConfig, DockingExecutor, DockPhase
@@ -60,6 +61,8 @@ class DockingManager(DockingPhasesMixin):
                  take_mode: Optional[Callable[[], None]] = None,
                  release_mode: Optional[Callable[[], None]] = None,
                  motion_admission: Optional[Callable[..., None]] = None,
+                 odom_pose_provider: Optional[Callable[[], Any]] = None,
+                 map_generation_provider: Optional[Callable[[], Optional[int]]] = None,
                  ) -> None:
         self._db = database
         self.motion_admission = motion_admission or (lambda *args: None)
@@ -90,6 +93,9 @@ class DockingManager(DockingPhasesMixin):
         self.native = NativeReceipts()
         self._db.frame_key = lambda: self._map_id_provider() if self._map_id_provider is not None else None
         self._execution_binding = None
+        # The seat anchor (dock_anchor.py): "seated in bay X now" as an odom-bound pair for Fleet; hidden once its odom epoch ended.
+        self._anchor = DockAnchorKeeper(self._cfg, odom_pose_provider or (lambda: None), lambda: self._map_id_provider(), self._emit,
+                                        map_generation_provider=map_generation_provider)
 
         self.executor: Optional[DockingExecutor] = None
         #: D-395: may docking drive (LOCALIZED, map frame)? CORE binds the localization
@@ -201,8 +207,26 @@ class DockingManager(DockingPhasesMixin):
                 charge_unconfirmed=self._charge_unconfirmed and self._state is DockState.DOCKED,
                 site_pose_verified=self._site_pose[0] if self._dock is not None else None,
                 site_pose_refusal=self._site_pose[1] if self._dock is not None else None,
+                anchor=self._anchor.current(),
                 last_event=self._last_event,
             )
+
+    def anchor_probe_request(self) -> Optional[tuple]:
+        """From the LiDAR callback (no lock): after a CORE (re)start, a stationary idle robot is checked against each reference-scan bay: (request id, dock id, reference scan)."""
+        if self._state is not DockState.UNDOCKED or getattr(self._safety, "estop", False):
+            return self._anchor.probe_request(False, [])
+        docks = []
+        for d in self._db.list():
+            try:
+                if isinstance(d.metadata.get("reference_scan"), dict) and self._db.type_of(d.id).approach == "line":
+                    docks.append(d)
+            except DockError:
+                continue
+        return self._anchor.probe_request(True, docks)
+
+    def note_anchor_probe_match(self, match, at=None, error=None, request_id=None) -> None:
+        """The bridge's answer to anchor_probe_request (BayScanPose or None)."""
+        self._anchor.note_probe_match(match, request_id)
 
     def capture_native_operation(self, run_id: UUID | None = None):
         return self.native.capture(self._lock, run_id)
@@ -386,6 +410,10 @@ class DockingManager(DockingPhasesMixin):
     def body_scan_rear_overhang(self) -> Optional[float]:
         """칸 접근 중이면 짐칸 뒤 돌출(m) — CORE 가 그 몸으로 스캔을 판정해 note_body_scan 에 넣는다."""
         return self._cfg.bay_turn_rear_overhang_m if self.active and self._bay_phases.active() else None
+
+    def bay_body_overhang_m(self) -> float:
+        """The bay tray's rear overhang, whether or not a dock is active (the startup probe filters its scan with the same body)."""
+        return self._cfg.bay_turn_rear_overhang_m
 
     def note_body_scan(self, rotation_block, front_gap_m, rear_gap_m, at=None) -> None:
         """LiDAR 콜백에서 부른다 — 락을 잡지 않는다(한 튜플 대입, 정지 입력을 늦추지 않게)."""

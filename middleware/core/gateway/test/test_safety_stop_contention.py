@@ -31,7 +31,9 @@ def test_contended_owner_does_not_delay_latch(core_client, monkeypatch, owner_na
     lock = getattr(getattr(services, owner_name), lock_name)
     with lock:
         worker.start()
-        reached_latch = latched.wait(2)
+        # A blocking capture would wait for this held lock forever, so a roomy bound still proves it;
+        # 2 s lost to a cold request on a busy runner (CI runs 44867446850, 44874878862).
+        reached_latch = latched.wait(15)
     worker.join(5)
     assert reached_latch, "optional owner capture blocked the safety latch"
     assert not worker.is_alive()
