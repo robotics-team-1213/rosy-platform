@@ -10,6 +10,7 @@ from typing import Callable, Optional
 
 from core_common.domain.localization import normalize_map_id, odom_position_jump
 from core_common.sensor_store import SensorStore
+from core_common.map_generation import MapGenerationCounter
 from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S, judge
 from core_common.protocol.state_components import BATTERY_ESTOP_SOURCES
 from core_common.protocol.schemas import (
@@ -37,7 +38,7 @@ log = logging.getLogger(__name__)
 
 class StateManager:
     def __init__(self, robot_id: str, clock=time.time, stale_after_s=None,
-                 sources_configured: bool = True, monotonic=time.monotonic) -> None:
+                 sources_configured: bool = True, monotonic=time.monotonic, map_generation_path=None) -> None:
         self._robot_id = robot_id
         # False in CORE-only runtime (D-161): no motor, IO or Nav2 unit runs, so a
         # channel that never reported has no source at all. It is judged
@@ -79,6 +80,7 @@ class StateManager:
         self._line_follow = LineFollowStatus()
         self._traffic_policy = TrafficPolicyStatus()
         self._map_id = self._map_grid_id = None  # Optional[str]; grid: content id of the grid /map delivered
+        self.map_generation = MapGenerationCounter(map_generation_path)  # changes when the SLAM map origin MAY have changed (core_common.map_generation)
         self._map_grid_update = None
         self._diagnostics: dict[str, HealthState] = {}
         self._errors: list[str] = []
@@ -415,6 +417,7 @@ class StateManager:
                 mode=self._mode,
                 navigation=self._navigation,
                 map_id=self._map_id, map_grid_id=self._map_grid_id,
+                map_generation=self.map_generation.value,
                 peers=peers,
                 pose=self._pose.model_copy(), pose_frame=self._pose_frame,
                 velocity=self._velocity.model_copy(),

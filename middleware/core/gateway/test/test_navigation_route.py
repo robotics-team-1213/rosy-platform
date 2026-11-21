@@ -466,3 +466,10 @@ def test_bridge_builds_through_poses_only_for_a_leg_with_pass_points(monkeypatch
     sys.modules.pop("core.bridge.nav_goal", None)
     if hasattr(core.bridge, "nav_goal"):
         delattr(core.bridge, "nav_goal")
+
+def test_navigation_state_carries_the_map_generation_and_it_follows_a_navigation_restart(robot):
+    tc, svc = robot
+    first = tc.get("/api/v1/navigation/state", headers=OPERATOR).json()["map_generation"]
+    assert isinstance(first, int) and first == svc.state.map_generation.value == svc.state.snapshot().map_generation
+    svc.state.map_generation.bump("a restarted navigation stack went ACTIVE")
+    assert tc.get("/api/v1/navigation/state", headers=OPERATOR).json()["map_generation"] == first + 1
