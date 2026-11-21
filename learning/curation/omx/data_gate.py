@@ -82,7 +82,7 @@ def video_scan(path: Path, t0: float, t1: float, fps: float) -> dict:
     return dict(stamps=stamps, black_s=black / fps, frozen_s=frozen / fps)
 
 
-def episode_verdicts(root: Path, arm: str, legacy: dict[str, str]) -> tuple[dict, list[dict]]:
+def episode_verdicts(root: Path, arm: str, legacy: dict[str, str], real: bool = True) -> tuple[dict, list[dict]]:
     import numpy as np
     import pandas as pd
     info = json.loads((root / "meta/info.json").read_text(encoding="utf-8"))
@@ -114,7 +114,8 @@ def episode_verdicts(root: Path, arm: str, legacy: dict[str, str]) -> tuple[dict
             if scan["black_s"] >= LIMITS["black_reject_s"]:
                 reject.append(f"{role}: black for {scan['black_s']:.1f} s")
             moving = float(np.abs(np.diff(action[:, :5], axis=0)).sum()) > 0.05
-            if moving and scan["frozen_s"] >= LIMITS["frozen_review_s"]:
+            # a renderer cannot freeze: a fixed sim camera repeats identical frames whenever nothing in view moves
+            if real and moving and scan["frozen_s"] >= LIMITS["frozen_review_s"]:
                 review.append(f"{role}: unchanged for {scan['frozen_s']:.1f} s while the arm moves")
         if not (np.isfinite(state).all() and np.isfinite(action).all()):
             reject.append("non-finite state or action")
@@ -147,7 +148,7 @@ def gate(root, arm: str, source: dict, legacy: dict[str, str] | None = None, tra
         raise ValueError("source must declare kind=sim|real and layout=random|fixed")
     legacy = dict(LEGACY_TABLE, **(legacy or {}))
     before = dataset_files(root)
-    meta, rows = episode_verdicts(root, arm, legacy)
+    meta, rows = episode_verdicts(root, arm, legacy, real=source["kind"] == "real")
     dataset = []
     if training_layout == "random" and source["layout"] == "fixed":
         dataset.append("fixed-layout source in a randomized training set: evaluation only")
