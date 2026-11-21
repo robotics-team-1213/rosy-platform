@@ -25,6 +25,7 @@
 !shared/web/ui-wiring.js
 !shared/web/confirmation.js
 !shared/web/live-dialog-geometry.js
+!shared/web/cause-line.js
 !shared/web/fleet-client.js
 !shared/web/request.js
 !shared/web/account-profile.js

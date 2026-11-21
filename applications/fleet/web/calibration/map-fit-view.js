@@ -10,7 +10,8 @@ import {
   retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable, STALE_FIT_TEXT, calibrationRequest,
   fitFromCalibration,
 } from "/console/assets/map-fit.js";
-import { warpImage, storageGet, storageSet } from "./field-view.js";
+import { warpImage } from "./field-view.js";
+import { storageGet, storageSet } from "./field-view.js";
 import { drawStartPointMarks, picturePose } from "./start-point-layer.js";
 
 // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 토큰에서 푼다(테마를 따른다).

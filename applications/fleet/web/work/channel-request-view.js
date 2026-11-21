@@ -16,15 +16,15 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
   }
   function paint() {
     const reason = busy ? "요청 처리 중입니다" : review.state === "LINKED" ? "이미 작업과 연결된 요청입니다" : !canManage() ? "이름 있는 운영자 로그인이 필요합니다" : "로봇 연결과 안전 상태를 확인하세요";
-    setOff(el("channel-review-incident"), busy || review.state === "LINKED" || !canManage(), reason);
-    setOff(el("channel-review-incident-claim"), busy || review.state === "LINKED" || !canManage(), reason);
+    setOff(el("channel-review-incident"), busy || review.state === "LINKED" || !canManage(), reason, "channel-review-state");
+    setOff(el("channel-review-incident-claim"), busy || review.state === "LINKED" || !canManage(), reason, "channel-review-state");
     const incident = review.incident;
     el("channel-review-incident-link-holder").hidden = !incident;
     if (incident) el("channel-review-incident-link").href = `/console?inbox=1&robot=${encodeURIComponent(incident.robot_id)}&incident=${encodeURIComponent(incident.stuck_id)}`;
-    setOff(el("channel-review-mission"), busy || review.state === "LINKED" || !canManage(), reason);
-    setOff(el("channel-review-mission-prepare"), busy || review.state === "LINKED" || !canManage(), reason);
+    setOff(el("channel-review-mission"), busy || review.state === "LINKED" || !canManage(), reason, "channel-review-state");
+    setOff(el("channel-review-mission-prepare"), busy || review.state === "LINKED" || !canManage(), reason, "channel-review-state");
     el("channel-review-mission-admit-holder").hidden = approvedElsewhere() || !(review.state === "LINKED" && review.work_kind === "mission" && review.work_status === "PROPOSED");
-    setOff(el("channel-review-mission-admit"), busy || !canManage(), reason);
+    setOff(el("channel-review-mission-admit"), busy || !canManage(), reason, "channel-review-state");
     el("channel-review-cell-holder").hidden = !owns("arms") || (review.state === "LINKED" && review.work_kind !== "cell_job");
     el("channel-review-cell").href = `/console/cell?channel_request=${encodeURIComponent(receipt.request_id)}`;
     state.textContent = `${reviewStates[review.state] || "검토 상태 확인 필요"}${review.work_status ? " · " + workStatus(review.work_status) : ""} · ${review.reason || "검토 사유를 입력하세요."} · ${reason}`;
