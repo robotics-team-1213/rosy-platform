@@ -1570,6 +1570,8 @@ python3 deploy/robot/omx/cell_envelope_review.py add --attempts <work-dir>/attem
 worker는 팔 세션 래퍼를 같은 릴리스의 `deploy/robot/omx/session-wrappers/`에서 띄우고 `TOOLS_ROOT`를 넘긴다. 래퍼의
 `tools-env.sh`는 `OMX`·`PYTHONPATH`를 `TOOLS_ROOT`에서 만든다. 손으로 바꾸는 `~/rosy-test/omx-tools-current` 링크는 읽지 않는다.
 셀 설정·카탈로그·caps·chunk-io는 계속 `~/rosy-test/omx-record-prep-20261019`에 있다.
+공용 링크 `omx-tools-current`는 셀 도구 전용이다(2026-11-21 벤치 배포가 바꿔 `wrist.jaw_edge_px` unknown parameter로 셀 세션이 전부 실패). 벤치 페이지는
+`omx_hotfix.py deploy --link omx-bench-current`로 배포하고 벤치 서비스는 그 링크를 쓴다. `--link`는 `omx-<이름>-current`만 받는다.
 
 적용 순서(병합하고 omx-devices 자동 갱신이 끝난 뒤, 팔 세션이 없을 때만):
 
