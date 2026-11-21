@@ -35,6 +35,7 @@ import zipfile
 from pathlib import Path
 
 LANDED_IDLE_HOURS = 1.0
+CLEAN_IDLE_HOURS = 6.0  # D-1070: a clean worktree on a branch, merged or not, whoever made it
 STALE_COMMITS = 2_000
 ABANDON_DAYS = 14  # an unlanded branch with no worktree and no commit this long is archived (archive_abandoned)
 # main was rewritten after this commit (2026-09-22 09:55:14 +0900); branches cut before the rewrite share
@@ -44,6 +45,11 @@ REWRITE_TIME = 1790038514  # its committer time: a merge-base this old or older 
 TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 TOPIC_MAX = 48
 TOPIC_RULE = f"<topic> lowercase letters and digits joined by '-', at most {TOPIC_MAX} characters (D-886)"
+# Ignored directories that are rebuilt, not written by hand, at any depth; `*.egg-info` by suffix.
+CACHES = {"__pycache__", ".pytest_cache", "node_modules", ".ruff_cache", ".mypy_cache", ".gradle", ".kotlin",
+          ".cxx", ".venv", "graphify-out"}
+# Caches only at the worktree root or where a marker proves it (see _generated_beside).
+GENERATED = {"build", "install", "log", "dist"}
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
@@ -67,6 +73,48 @@ def stale_history(cwd: Path, tip: str, base: str = "main") -> str | None:
         day = time.strftime("%Y-%m-%d", time.localtime(when))
         return f"forks from {base} at {sha[:10]} ({day}), before the history rewrite after {REWRITE_BASE}"
     return None
+
+
+# --- caches (what tools/worktrees.py may drop) ----------------------------------------
+
+def _generated_beside(parent: Path) -> bool:
+    """``parent`` proves its build/install/log/dist are generated: a gradle module or a colcon workspace."""
+    if any(parent.glob("build.gradle*")):
+        return True
+    colcon_dirs = ("build", "install", "log")
+    return (all((parent / d).is_dir() for d in colcon_dirs)
+            and (any((parent / d / "COLCON_IGNORE").is_file() for d in colcon_dirs)
+                 or any((parent / "install").glob("setup.*"))))
+
+
+def is_cache(worktree: Path, rel: str) -> bool:
+    parts = rel.rstrip("/").split("/")
+    dirs = parts if rel.endswith("/") else parts[:-1]
+    if dirs[:2] == [".omc", "state"]:  # hook throttles and session files; notes and handoffs elsewhere in .omc stay
+        return True
+    for i, name in enumerate(dirs):
+        if name in CACHES or name.endswith(".egg-info"):
+            return True
+        if name in GENERATED and (i == 0 or _generated_beside(worktree.joinpath(*dirs[:i]))):
+            return True
+    return False
+
+
+def only_caches(worktree: Path, rel: str) -> bool:
+    """An ignored path loses nothing when it is in a cache, or is a directory with no file outside caches.
+
+    git reports a directory whose whole content is ignored as one entry (``ws/``), so it is walked.
+    """
+    if is_cache(worktree, rel):
+        return True
+    if not rel.endswith("/"):
+        return False
+    for folder, dirs, files in os.walk(worktree / rel):
+        if files:
+            return False
+        inside = Path(folder).relative_to(worktree).as_posix()
+        dirs[:] = [d for d in dirs if not is_cache(worktree, f"{inside}/{d}/")]
+    return True
 
 
 # --- orphan directories -------------------------------------------------------------
@@ -220,6 +268,16 @@ def reflog_time(path: Path) -> float:
         return float(path.read_text(encoding="utf-8").splitlines()[-1].split("\t")[0].split()[-2])
     except (OSError, UnicodeError, IndexError, ValueError):
         return 0.0
+
+
+WRONG_HEAD_FIX = ("do not merge or fast-forward there; its owner moves that work to a worktree"
+                  " (python tools/worktrees.py adopt) and switches the checkout back to main")
+
+
+def wrong_head(root: Path) -> str | None:
+    """D-1055: the shared main checkout stays on main. Its HEAD when it is anything else (``wrong-head``)."""
+    head = _git(root, "symbolic-ref", "-q", "--short", "HEAD").stdout.strip() or "a detached HEAD"
+    return None if head == "main" else head
 
 
 def topic_ok(topic: str) -> bool:
