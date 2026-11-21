@@ -8,10 +8,11 @@ from omx_ladder import read_ppo_snapshot, judge_isaac_stage
 
 CAMERAS = {"top": "top", "side": "side", "a_wrist": "arm_a_wrist", "b_wrist": "arm_b_wrist"}
 RENDERS = {*CAMERAS, "overview"}
+SENSOR_CLOCK = "v4l2_monotonic_start_of_exposure"
 
 
 def load(path):
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def digest(path):
@@ -54,19 +55,39 @@ def check_render(directory, capture_path, handoff):
                 pixels.verify()
     if len({view["png_sha256"] for view in isaac["views"].values()}) != len(RENDERS):
         raise ValueError("Duplicate Isaac camera frames")
-    stamps = []
+    frames = []
     for name, role in CAMERAS.items():
         frame = capture["frames"][role]
-        stamp = frame.get("source_stamp")
-        if (number_is_invalid(stamp) or frame.get("sha256") != comparison["real_frames"].get(name)):
+        if frame.get("sha256") != comparison["real_frames"].get(name):
             raise ValueError(f"Real capture and render comparison differ: {name}")
         verify_file(capture_path.parent / f"{role}.jpg", frame["sha256"])
-        stamps.append(stamp)
-    return cfg, geometry, round((max(stamps) - min(stamps)) * 1000, 3)
+        frames.append(frame)
+    return cfg, geometry, capture_timing(frames)
 
 
 def number_is_invalid(value):
     return type(value) not in (int, float) or not math.isfinite(value) or value <= 0
+
+
+def capture_timing(frames):
+    if any("exposure_monotonic_s" in frame or frame.get("clock_semantics") == SENSOR_CLOCK
+           for frame in frames):
+        boot = frames[0].get("boot_id")
+        if (not isinstance(boot, str) or not boot.strip()
+                or any(frame.get("boot_id") != boot or frame.get("clock_semantics") != SENSOR_CLOCK
+                       or type(frame.get("source_seq")) is not int or frame["source_seq"] < 0
+                       for frame in frames)):
+            raise ValueError("Real camera exposures must share the V4L2 clock and boot")
+        stamp_key, span_key = "exposure_monotonic_s", "sensor_exposure_span_ms"
+        timing = {"clock_semantics": SENSOR_CLOCK}
+    else:
+        stamp_key, span_key = "source_stamp", "host_source_stamp_span_ms"
+        timing = {}
+    stamps = [frame.get(stamp_key) for frame in frames]
+    if any(number_is_invalid(stamp) for stamp in stamps):
+        raise ValueError(f"Invalid real camera timestamp: {stamp_key}")
+    timing[span_key] = round((max(stamps) - min(stamps)) * 1000, 3)
+    return timing
 
 
 def check_ppo(snapshot, cfg, source_sha):
@@ -86,7 +107,7 @@ def check_ppo(snapshot, cfg, source_sha):
 
 
 def audit(render, capture, handoff, isaac_snapshot=None):
-    cfg, geometry, span = check_render(render, capture, load(handoff))
+    cfg, geometry, timing = check_render(render, capture, load(handoff))
     ppo = (check_ppo(isaac_snapshot, cfg, geometry["source_sha"])
            if isaac_snapshot else {"status": "not_run"})
     return {
@@ -97,7 +118,7 @@ def audit(render, capture, handoff, isaac_snapshot=None):
             "status": "preview_verified",
             "material_profile": geometry.get("material_profile"),
             "camera_snapshot_sha256": geometry["camera_snapshot_sha256"],
-            "host_source_stamp_span_ms": span,
+            **timing,
             "pose_alignment": "unverified",
             "required": ["approved camera calibration", "exposure-bound A/B joint evidence"],
         },

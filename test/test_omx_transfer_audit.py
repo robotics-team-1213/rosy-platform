@@ -50,6 +50,20 @@ def test_transfer_audit_matches_cameras_and_handoff_without_site_acceptance(tmp_
     assert result["s2r"]["physical_acceptance"] == "pending"
     assert result["isaac_physx"]["status"] == "not_run"
 
+    for index, frame in enumerate(captured.values()):
+        frame.update(exposure_monotonic_s=200 + index * .002, source_seq=index,
+                     clock_semantics="v4l2_monotonic_start_of_exposure", boot_id="shared")
+    write_json(capture, dict(frames=captured))
+    sensor = audit(tmp_path, capture, handoff)["r2s"]
+    assert sensor["sensor_exposure_span_ms"] == 6
+    assert "host_source_stamp_span_ms" not in sensor
+    captured["side"]["boot_id"] = "other"
+    write_json(capture, dict(frames=captured))
+    with pytest.raises(ValueError, match="V4L2 clock and boot"):
+        audit(tmp_path, capture, handoff)
+    captured["side"]["boot_id"] = "shared"
+    write_json(capture, dict(frames=captured))
+
     cfg["layout_sha256"] = "3" * 64
     write_json(handoff, handoff_data)
     with pytest.raises(ValueError, match="same CAD194 layout"):
