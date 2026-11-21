@@ -252,7 +252,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   }
   async function refreshSources() {
     const life = scope.capture();
-    life.check();
+    if (!life.current()) return;
     if (busy) return;
     const work = {kind: "sources"}; busy = work;
     try {
@@ -290,12 +290,11 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   }
   async function refreshFrame() {
     const life = scope.capture();
-    life.check();
+    if (!life.current()) return;
     const preview = previewLifetime;
     const current = () => life.current() && preview === previewLifetime && !preview.signal.aborted && isActive();
     if (busy || !isActive()) return;
     if (Date.now() - lastSourcesAt > 30000) await refreshSources();
-    life.check();
     if (!current()) return;
     const source = select.value;
     if (!source || !sourceAvailable) return;
