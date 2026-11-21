@@ -14,7 +14,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     for (const item of el("map-legend").querySelectorAll("[data-legend=grid]")) {
       item.hidden = mode !== "grid";
     }
-    el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
+    el("legend-sighting").hidden = !layerOn("sightings") || (!view.siteMap && !view.sightings.length);
   }
 
   function showSiteMap() {
@@ -251,7 +251,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     const unchanged = JSON.stringify(next) === JSON.stringify(view.sightings);
     view.sightings = next;
     if (unchanged && !next.length) return; // 빈 채로 그대로면 격자를 다시 칠하지 않는다
-    el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
+    el("legend-sighting").hidden = !layerOn("sightings") || (!view.siteMap && !view.sightings.length);
     draw();
   }
 

@@ -316,14 +316,17 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       if (view.siteMap) {
         drawSiteView();
         const b = siteBounds(view.siteMap, 0);
+        const virtualOnly = view.displayMode === "coordinates" && !layerOn("sightings");
         el("map-tag").textContent =
-          `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`
-          + (camera.calibration()
+          `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${virtualOnly ? "가상 좌표" : describeSightings()}`
+          + (camera.calibration() && view.displayMode === "overlay"
             ? ` · ${camera.usesPlane() ? "Rosy Cam 평면 영상" : "브라우저 보정(대체)"} · ${camera.calibration().calibration_revision}`
               + (view.trackingDrift ? " · 카메라 교정 어긋남 — 맵 고정 다시 필요" : "") : "")
           + callLabel;
         el("map-canvas").setAttribute("aria-label",
-          `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 로봇 선택 후 지도를 클릭하여 목표를 지정하세요.`
+          (virtualOnly
+            ? `가상 좌표 사이트 지도${callLabel}. 로봇 선택 후 지도를 클릭하여 목표를 지정하세요.`
+            : `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 로봇 선택 후 지도를 클릭하여 목표를 지정하세요.`)
           + (view.trackingDrift ? " 카메라 교정이 어긋난 것 같습니다. 그림은 수락된 보정 그대로이며 맵 고정을 다시 하세요." : ""));
       }
       return;

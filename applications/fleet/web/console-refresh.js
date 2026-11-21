@@ -87,6 +87,7 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
 
   const pathSample = { proxy: null, fleet: null, vision: null };
   let statePollInFlight = false;
+  let healthzInFlight = false;
 
   function paintSitePath() {
     const list = el("site-path-list");
@@ -110,6 +111,8 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
   }
 
   async function refreshHealthz() {
+    if (healthzInFlight) return;
+    healthzInFlight = true;
     const life = pageScope.capture();
     try {
       const response = await fetch("/healthz", { cache: "no-store", signal: life.signal });
@@ -119,12 +122,15 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
     } catch (err) {
       if (err.name === "AbortError") return;
       pathSample.proxy = { finished: false };
+    } finally {
+      healthzInFlight = false;
     }
     paintSitePath();
   }
   pageScope.onDispose(() => {
     resetRobotApps();
     statePollInFlight = false;
+    healthzInFlight = false;
     view.focusRobot = null;
     view.pinning = null;
     view.selected = null;
