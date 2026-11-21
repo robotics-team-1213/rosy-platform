@@ -82,7 +82,7 @@ def test_tools_env_derives_omx_and_pythonpath_from_tools_root(tmp_path):
     assert probe.stdout.strip() == "ok", probe.stderr
 
 
-def _run(tmp_path, monkeypatch, release: Path | None):
+def _run(tmp_path, monkeypatch, tools_root: Path | None):
     seen: dict = {}
 
     class P:
@@ -94,21 +94,21 @@ def _run(tmp_path, monkeypatch, release: Path | None):
     monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0})
     for n in ("with-session-arm-s-live.sh", "cell-auto-arm-s-live.json"):  # a stale prep-folder wrapper copy is ignored
         (tmp_path / n).write_text("{}")
-    if release is None:
+    if tools_root is None:
         monkeypatch.delenv("TOOLS_ROOT", raising=False)
     else:
-        (release / "deploy/robot/omx/session-wrappers").mkdir(parents=True)
-        (release / "deploy/robot/omx/session-wrappers/with-session-arm-s-live.sh").write_text("#!/bin/bash\n")
-        monkeypatch.setenv("TOOLS_ROOT", str(release))
+        (tools_root / "deploy/robot/omx/session-wrappers").mkdir(parents=True)
+        (tools_root / "deploy/robot/omx/session-wrappers/with-session-arm-s-live.sh").write_text("#!/bin/bash\n")
+        monkeypatch.setenv("TOOLS_ROOT", str(tools_root))
     cte.execute_guarded_cell_task({"arm_id": "arm_s", "task_id": "t", "handoff_lease_id": "l"}, prep_dir=tmp_path)
     return seen
 
 
 def test_exec_launches_the_release_wrapper_and_passes_tools_root(tmp_path, monkeypatch):
-    release = tmp_path / "release"
-    seen = _run(tmp_path, monkeypatch, release)
-    assert Path(seen["cmd"][0]) == release / "deploy/robot/omx/session-wrappers/with-session-arm-s-live.sh"
-    assert seen["env"]["TOOLS_ROOT"] == str(release)
+    tools_root = tmp_path / "release"
+    seen = _run(tmp_path, monkeypatch, tools_root)
+    assert Path(seen["cmd"][0]) == tools_root / "deploy/robot/omx/session-wrappers/with-session-arm-s-live.sh"
+    assert seen["env"]["TOOLS_ROOT"] == str(tools_root)
 
 
 def test_exec_without_tools_root_uses_its_own_release(tmp_path, monkeypatch):
