@@ -382,7 +382,10 @@ jobs:
               if rest:
                   runs.append(([*rest, *flags], job_environment))
               if browser:
-                  runs.append(([*browser, *flags], {**job_environment, "ROSY_RUN_BROWSER_TESTS": "1"}))
+                  # STRICT (vacuous-run check) judges the whole run, so only for whole browser FILES; a directory,
+                  # mixed list or "::" node id selects part of a file or holds legitimate skips.
+                  strict = {"ROSY_BROWSER_STRICT": "1"} if all("::" not in p and p.endswith("_browser.py") for p in browser) else {}
+                  runs.append(([*browser, *flags], {**job_environment, "ROSY_RUN_BROWSER_TESTS": "1", **strict}))
               for target in isolated:
                   runs.append(([target], {
                       "ROSY_OMX_NATIVE_REQUIRED": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
