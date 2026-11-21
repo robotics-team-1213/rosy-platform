@@ -19,7 +19,8 @@ from bench_record_replay import recording_progress  # noqa: E402
 ARMS = {"arm_a": "a", "arm_b": "b", "arm_s": "s"}
 BI_ARM = "arm_ab"
 # Dependents first: camera-view's Requires= pulls readiness down with it (record_session note, 2026-10-24).
-HANDOVER = (r"rosy-omx-camera-view\.service", r"rosy-omx-camera-readiness\.service",
+HANDOVER = (r"rosy-omx-cameras-bind\.timer",
+            r"rosy-omx-camera-view\.service", r"rosy-omx-camera-readiness\.service",
             r"rosy-omx-camera@[\w-]+\.service", r"rosy-omx-observer@[\w-]+\.service")
 NAME = re.compile(r"[a-z0-9][a-z0-9-]{2,63}")
 
@@ -30,7 +31,7 @@ def systemctl(*args):
 
 def active_handover_units(run=systemctl):
     listed = run("list-units", "--state=active,activating", "--no-legend", "--plain", "rosy-omx-*").stdout.split()
-    units = [u for u in listed if u.endswith(".service")]
+    units = [u for u in listed if u.endswith((".service", ".timer"))]
     return [u for pattern in HANDOVER for u in units if re.fullmatch(pattern, u)]
 
 

@@ -1189,3 +1189,19 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
     assert hf_st['state'] == 'done' and hf_st['repo_id'] == 'tester/arm-s-ik-e2e'
     assert ('upload', 'tester/arm-s-ik-e2e') in hf_calls
     assert (Path(state['folder']) / 'hf-upload.json').is_file()
+
+
+def test_active_handover_units_includes_cameras_bind_timer_first():
+    import types
+    import bench_record_inspect as bri
+    fake_out = "\n".join([
+        "rosy-omx-camera@arm_s_top.service loaded active running top",
+        "rosy-omx-camera-view.service loaded active running view",
+        "rosy-omx-cameras-bind.timer loaded active waiting bind",
+        "rosy-omx-bench-record.service loaded active running bench",
+    ])
+    fake_run = lambda *a, **kw: types.SimpleNamespace(stdout=fake_out, returncode=0)
+    units = bri.active_handover_units(fake_run)
+    assert units[0] == "rosy-omx-cameras-bind.timer"
+    assert "rosy-omx-camera@arm_s_top.service" in units
+    assert "rosy-omx-bench-record.service" not in units
