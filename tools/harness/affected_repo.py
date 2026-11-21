@@ -63,7 +63,7 @@ def app_classifier(parts: dict):
         else:
             stripped = key.rstrip("/")
             top = stripped.split("/", 1)[0]
-            by_top.setdefault(top, []).append((len(key), -idx, stripped, stripped + "/", app))
+            by_top.setdefault(top, []).append((len(key), -idx, key, stripped + "/", app))
     for bucket in by_top.values():
         bucket.sort(key=lambda item: (item[0], item[1]), reverse=True)
     globs.sort(key=lambda item: (item[0], item[1]), reverse=True)

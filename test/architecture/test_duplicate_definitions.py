@@ -77,7 +77,7 @@ def _tracked_files() -> list[str]:
 
 _TOP_DEF_RE = re.compile(r"^(?:async[ \t]+)?(?:def|class)[ \t]+([^\W\d]\w*)\b", re.M)
 _TOP_DEF_FALLBACK = re.compile(
-    r"(?:^(?:async\b[^\n]*|def|class)\b[^\n]*\\$|^(?:async[ \t]+)?(?:def|class)[ \t]+[^\x00-\x7f]|;[ \t]*(?:async[ \t]+)?(?:def|class)\b)",
+    r"(?:^(?:async\b[^\n]*|def|class)\b[^\n]*\\$|^(?:async[ \t]+)?(?:def|class)[ \t]+\w*[^\x00-\x7f]|;[ \t]*(?:async[ \t]+)?(?:def|class)\b|\x0c)",
     re.M,
 )
 

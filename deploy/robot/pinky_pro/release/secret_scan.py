@@ -153,6 +153,11 @@ def git_object_in(root: Path):
     return known
 
 
+def _fold_ascii_re(text: str) -> str:
+    """Case-fold while mapping Turkish İ/ı to ASCII 'i' so prefilters match Python re.IGNORECASE."""
+    return text.lower() if text.isascii() else text.replace("\u0130", "i").replace("\u0131", "i").casefold()
+
+
 def scan_text(path: str, text: str, *,
               public_provenance: frozenset[tuple[str, str, str]] = frozenset(),
               is_git_object=lambda value: False) -> list[Finding]:
@@ -174,7 +179,7 @@ def scan_text(path: str, text: str, *,
     is_inventory = norm_path.endswith(_ABSORPTION_INVENTORY_SUFFIX)
     is_checksum = norm_path.endswith(_CHECKSUM_MANIFEST_SUFFIX)
 
-    low = text.lower() if text.isascii() else text.casefold()
+    low = _fold_ascii_re(text)
     has_priv = "PRIVATE KEY-----" in text
     has_wpa = "psk" in low  # preserve CR-only splitlines() matching for _WPA_PSK
     has_qr = "wifi:" in low
@@ -227,7 +232,7 @@ def scan_text(path: str, text: str, *,
                 continue
 
         if has_secret_word and (":" in line or "=" in line):
-            line_low = line.lower() if line.isascii() else line.casefold()
+            line_low = _fold_ascii_re(line)
             if any(w in line_low for w in _SECRET_NEEDLES):
                 node_id = _PYTEST_NODE_ID.match(line) if is_known_failures else None
                 assignment_line = line[node_id.end():] if node_id else line

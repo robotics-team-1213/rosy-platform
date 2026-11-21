@@ -35,7 +35,7 @@ ALLOWED_EDGES = {("pinky", "vision"), ("omx-cell", "vision"), ("learning", "visi
 # structured_output next, omx-cell 2 wait for a core client. Files calling Ollama's HTTP API directly besides rosy.decision.structured_output.
 OLLAMA_BASELINE = 14
 PREFIXES = [(prefix, root["app"]) for root in MANIFEST["roots"] for prefix in root.get("import_prefix") or []]
-_PREFIXES_BY_TOP: dict[str, list[tuple[str, str]]] = {}
+_PREFIXES_BY_TOP: dict[str, list[tuple[int, int, str, str]]] = {}
 for _idx, (_prefix, _app) in enumerate(PREFIXES):
     _PREFIXES_BY_TOP.setdefault(_prefix.split(".", 1)[0], []).append((len(_prefix), -_idx, _prefix, _app))
 for _bucket in _PREFIXES_BY_TOP.values():

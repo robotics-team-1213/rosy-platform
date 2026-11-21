@@ -164,9 +164,14 @@ def test_secret_scan_prefilter_keeps_cr_unicode_casefold_and_multi_assignments()
     sample_psk = "p" + "sk" + "=real_secret_" + "value_1"
     cr_sample = "foo\r" + sample_psk
     assert [f.kind for f in secret_scan.scan_text("wpa.conf", cr_sample)] == ["wifi-psk"]
-    # Unicode long-s under re.IGNORECASE/casefold still hits secret needles.
-    uni_sample = "pa\u017f" + "word = 'not-a-fixture-" + "secret-value'"
+    # Unicode long-s and Turkish dotless/dotted i under re.IGNORECASE still hit secret needles.
+    uni_sample = "pa\u017f\u017f" + "word = 'not-a-fixture-" + "secret-value'"
     assert [f.kind for f in secret_scan.scan_text("cfg.py", uni_sample)] == ["credential"]
+    for bad_i in ("\u0130", "\u0131"):
+        cred_i = f"ap{bad_i}_" + "key = 'live" + "9182aeb27c4d'"
+        assert [f.kind for f in secret_scan.scan_text("cfg.py", cred_i)] == ["credential"]
+        qr_i = f"W{bad_i}F{bad_i}:T:WPA;S:a;P:real_secret_value;;"
+        assert [f.kind for f in secret_scan.scan_text("qr.txt", qr_i)] == ["wifi-qr"]
     multi = "prefix_text " + "api_" + "key='live" + "9182aeb27c4d' " + "sec" + "ret='another_" + "real_secret'"
     assert len(secret_scan.scan_text("cfg.py", multi)) == 2
 

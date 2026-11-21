@@ -220,3 +220,23 @@ def test_record_self_trims_past_size_and_row_limit(tmp_path, monkeypatch):
     kept = history.read_text(encoding="utf-8").splitlines()
     assert len(kept) == 3 and '"test/newest.py"' in kept[-1]
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_record_self_trims_safely_across_concurrent_threads(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    history = tmp_path / mh.FILE
+    monkeypatch.setattr(mh, "SELF_TRIM_BYTES", 1)
+    monkeypatch.setattr(mh, "MAX_ROWS", 10)
+    monkeypatch.setattr(mh, "KEEP_ROWS", 5)
+
+    def worker(idx: int) -> None:
+        for step in range(8):
+            mh.record(history, [f"test/w{idx}_{step}.py"], "h", 100 + idx, "ab" * 20)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(worker, range(4)))
+
+    rows = [json.loads(line) for line in history.read_text(encoding="utf-8").splitlines()]
+    assert 1 <= len(rows) <= 5
+    assert not list(tmp_path.glob("*.tmp"))

@@ -21,8 +21,11 @@ import math
 import os
 import re
 import subprocess
+import threading
 import time
 from pathlib import Path
+
+_LOCK = threading.RLock()
 
 FILE = "rosy-pytest-memory.jsonl"
 # Seconds-to-GB: default cgroup MemoryMax (6 GB); unmeasured runs reserve UNKNOWN_GB until recorded.
@@ -73,13 +76,14 @@ def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str,
     row = {"key": key(inv), "host": host, "peak_mib": peak, "sha": sha,
            "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **({"cores": cores} if cores is not None else {}),
            **(timing or {})}
-    with history.open("a", encoding="utf-8") as out:
-        out.write(json.dumps(row) + "\n")
-    try:
-        if history.stat().st_size > SELF_TRIM_BYTES:
-            trim(history, MAX_ROWS, KEEP_ROWS)
-    except OSError:
-        pass
+    with _LOCK:
+        with history.open("a", encoding="utf-8") as out:
+            out.write(json.dumps(row) + "\n")
+        try:
+            if history.stat().st_size > SELF_TRIM_BYTES:
+                trim(history, MAX_ROWS, KEEP_ROWS)
+        except OSError:
+            pass
 
 
 def trim(history: Path | None, max_rows: int | None = None, keep_rows: int | None = None) -> int:
@@ -88,23 +92,24 @@ def trim(history: Path | None, max_rows: int | None = None, keep_rows: int | Non
         return 0
     max_rows = MAX_ROWS if max_rows is None else max_rows
     keep_rows = KEEP_ROWS if keep_rows is None else keep_rows
-    try:
-        with history.open(encoding="utf-8", errors="replace") as src:
-            rows = src.readlines()
-    except OSError:
-        return 0
-    if len(rows) <= max_rows:
-        return 0
-    kept = rows[-keep_rows:]
-    tmp = history.with_name(f"{history.name}.{os.getpid()}.tmp")
-    try:
-        tmp.write_text("".join(kept), encoding="utf-8")
-        os.replace(tmp, history)
-    except OSError:
-        tmp.unlink(missing_ok=True)
-        return 0
-    _cached_rows.cache_clear()
-    return len(rows) - len(kept)
+    with _LOCK:
+        try:
+            with history.open(encoding="utf-8", errors="replace") as src:
+                rows = src.readlines()
+        except OSError:
+            return 0
+        if len(rows) <= max_rows:
+            return 0
+        kept = rows[-keep_rows:]
+        tmp = history.with_name(f"{history.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        try:
+            tmp.write_text("".join(kept), encoding="utf-8")
+            os.replace(tmp, history)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+            return 0
+        _cached_rows.cache_clear()
+        return len(rows) - len(kept)
 
 
 @functools.lru_cache(maxsize=256)
