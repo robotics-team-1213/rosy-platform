@@ -13,3 +13,5 @@
 2026-10-21: model_lineage.py가 기존 model/dataset/eval/intake 및 선택한 pointer journal을 읽는 조회를 제공한다. RED c685d9489f 13FAIL, GREEN 3d8442651d 원격 130PASS/3SKIP, NEW0. 누락된 원본·사람 검수·학습 receipt는 명시하며 운영 승인으로 올리지 않는다. 전체 브랜치 독립 계약 검토에서 지적 없음. 정본: docs/validation/pipeline-model-lineage-2026-10-21/result.md.
 
 2026-11-01: content_sha에 manifest_bytes 키워드 인자를 추가(D-940 후속). curation build.py의 로컬 stand-in이 폐기되고 이 정본을 소비한다. 시험은 test/learning/perception 원격 실행(착지 기록에 남긴다).
+
+2026-11-21: v14 계열(LRASPP_r, drivable 직접 클래스) 원장 등록. v14.0.00 retired, v14.0.01 candidate. intake PASS(개인 노트북, tool e106ee65), 로봇 전달·Pi 실측 없음. docs/validation/lraspp-drivable-v14-intake-2026-11-21/result.md.

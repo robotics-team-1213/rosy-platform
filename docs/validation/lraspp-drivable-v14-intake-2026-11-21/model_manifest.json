@@ -1,0 +1,32 @@
+{
+  "schema": "rosy.perception.model/1",
+  "model_revision": "v14-drivable-20261116-16bb1c85",
+  "model_version": "v14.0.01",
+  "task": "lane_seg",
+  "backend": "onnx",
+  "files": [
+    {"name": "model_fp32.onnx", "precision": "fp32", "sha256": "16bb1c85229fce4798c0e92bbd9075529efdbfc588d9da5b2670f38be0fbb5e0"},
+    {"name": "model_int8.onnx", "precision": "int8", "sha256": "a77bce58258d1f4307b148faa708b61dd56b58b6d21ec94bc11e29d8087c83c9"}
+  ],
+  "input": {
+    "shape": [1, 3, 128, 320], "layout": "nchw", "color": "rgb",
+    "scale": 0.00392156862745098, "mean": [0.0, 0.0, 0.0], "std": [1.0, 1.0, 1.0],
+    "crop": {"from_frame": [240, 320], "rows": [112, 240]}
+  },
+  "output": {
+    "layout": "nchw_logits",
+    "classes": [
+      {"index": 0, "name": "background", "role": "background"},
+      {"index": 1, "name": "lane_left", "role": "lane_marking"},
+      {"index": 2, "name": "lane_right", "role": "lane_marking"},
+      {"index": 3, "name": "crosswalk", "role": "ignore"},
+      {"index": 4, "name": "speed_bump", "role": "ignore"},
+      {"index": 5, "name": "drivable", "role": "drivable", "semantic": "current_road_region/1"},
+      {"index": 6, "name": "parking_zone_line", "role": "ignore"},
+      {"index": 7, "name": "lane_guide_line", "role": "ignore"}
+    ]
+  },
+  "dataset": {"repo": "geg6-final_all", "revision": "652f375a13d4e4142a2be7348522005fd91f7209211e42e5ed6335de06b54415"},
+  "camera_profile_revision": "pinky-front-320x240",
+  "training": {"arch": "lraspp_r", "epochs": 75, "seed": 1, "aug": "v2", "train_frames": 2101, "val_frames": 483, "val_miou": 0.928}
+}
