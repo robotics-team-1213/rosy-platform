@@ -301,6 +301,9 @@ class DockingPhasesMixin:
     def _retry(self, reason: str) -> None:
         """스테이징부터 다시. 도크에 도달하지 못한 실패에 쓴다."""
         limit = self._type().max_retries if self._dock else 0
+        if self._dock and self._bay_phases.active() and self._bay_phases.no_staging_retry(self._phase):
+            self._fail(reason + " (pit-in: no retry through Nav2 staging, the map is not used)")
+            return
         if self._dock and self._bay_phases.active():
             limit = self._bay_phases.reseat_limit(limit, self._phase)      # a reference dock retrying from the reverse / the seat reseats inside the lane
         if self._retries >= limit:
@@ -379,6 +382,7 @@ class DockingPhasesMixin:
         )
         if in_lane:
             self._call_person("stopped in the lane: " + reason)    # a dead end that leaves the robot standing in the bay lane needs a person
+        self._bay_phases.clear_run_state()                         # nothing of this run may steer or show in the next status read
 
     # --- 공통 -----------------------------------------------------------------
 
@@ -396,6 +400,7 @@ class DockingPhasesMixin:
         self._phase = None
         self._full_announced = False
         self._emit("docking.docked", "info", {"dock_id": self._dock.id})
+        self._bay_phases.clear_run_state()
 
     def _call_person(self, why: str) -> None:
         """A seat the LiDAR confirms but the charger does not: a person must look (Fleet reads docking.person_call and status.charge_unconfirmed)."""

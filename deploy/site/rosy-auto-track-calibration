@@ -126,9 +126,20 @@ def mean_places(series_places: list[list[dict]]) -> list[dict]:
 def merge_pinned(current: list[dict], traced: list[dict]) -> list[dict]:
     """Traced places or edges for the map, except one a person pinned keeps every field it has now and
     one the trace does not know stays (2026-11-20: hand-moved S3 and its inner lanes went back to the paint)."""
-    pinned = {p["id"]: p for p in current if p.get("pinned")}
+    # 2026-11-21: an unpinned stop lost its yaw (the trace carries geometry only); only geometry follows the paint.
+    now = {p["id"]: p for p in current}
+    geometry = ("x", "y", "polyline")
+
+    def merged(t):
+        cur = now.get(t["id"])
+        if cur is None:
+            return t
+        if cur.get("pinned"):
+            return cur
+        return {**cur, **{k: t[k] for k in geometry if k in t}}
+
     traced_ids = {p["id"] for p in traced}
-    return [pinned.get(p["id"], p) for p in traced] + [p for p in current if p["id"] not in traced_ids]
+    return [merged(p) for p in traced] + [p for p in current if p["id"] not in traced_ids]
 
 
 def snap_edge_ends(edges: list[dict], places: list[dict]) -> list[dict]:
