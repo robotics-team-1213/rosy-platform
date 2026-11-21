@@ -103,10 +103,12 @@ test("coordinates mode skips plane warp requests while letting watch-ceiling tog
   assert.equal(birdseye.hidden, false);
 });
 
-test("a compatible plane stays visible through refresh, 409 and expiry, and clears with its map or mode", async (t) => {
-  const oldImage = globalThis.Image;
+test("a compatible plane stays visible through refresh, 429 and expiry, falls back on explicit 409, and clears with its map or mode", async (t) => {
+  const oldImage = globalThis.Image, oldNow = Date.now;
+  let now = 1_700_000_000_000;
+  Date.now = () => now;
   globalThis.Image = class { naturalWidth = 200; naturalHeight = 100; async decode() {} };
-  t.after(() => { globalThis.Image = oldImage; });
+  t.after(() => { globalThis.Image = oldImage; Date.now = oldNow; });
   const stage = {dataset: {}}, mode = {value: "overlay"};
   const elements = {
     "map-stage": stage, "map-display-mode": mode, "map-birdseye": {},
@@ -147,14 +149,25 @@ test("a compatible plane stays visible through refresh, 409 and expiry, and clea
   timers.find((timer) => !timer.cancelled && timer.ms <= 2000).fn();
   paint();
   assert.deepEqual(paints[2], {...paints[0], alpha: 0.5});
-  finish({state: "plane-unavailable"});
+  finish({state: "rate-limited"});  // transient 429 backoff keeps the last compatible plane
   await flush();
   paint();
   assert.deepEqual(paints[3], paints[2]);
+  assert.equal(backdrop.usesPlane(), true);
+  now += 300;
+  send({...raw, seq: 9});
+  finish({state: "plane-unavailable"});  // explicit 409 clears keptPlane -> D-515 fallback
+  await flush();
+  assert.equal(backdrop.usesPlane(), false);
+  now += 30_000;
+  send({...raw, seq: 10});
+  finish(plane(10));  // fresh plane restores overlay after 409 backoff expires
+  await flush();
+  assert.equal(backdrop.usesPlane(), true);
   view.activeSiteMap = {map: otherMap};
   assert.equal(backdrop.usesPlane(), false);
   view.activeSiteMap = {map};
-  send({...raw, seq: 9});
+  send({...raw, seq: 11});
   mode.value = "coordinates";
   callbacks.get(mode)();
   assert.equal(backdrop.usesPlane(), false);

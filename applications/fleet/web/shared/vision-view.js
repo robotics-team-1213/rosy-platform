@@ -91,16 +91,16 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
     const had = Boolean(frame); frame = null; return had;
   }
   async function refresh(wanted = true, targetSeq = null) {
-    if (!wanted) { generation += 1; retryAt = 0; if (drop()) onChange(); return; }
+    if (!wanted) { generation += 1; retryAt = 0; if (drop()) onChange("reset"); return; }
     if (frame && targetSeq != null && frame.seq != null && String(frame.seq) === String(targetSeq)) return;
     if (busy || now() < retryAt) return;
     busy = true;
     const life = scope.capture(), startedGeneration = generation, requestedAt = now();
-    let changed = false;
+    let changed = false, changeReason = null;
     try {
       const got = await visionView.fetchPlane();
       if (!life.current() || startedGeneration !== generation) return;
-      if (got.state === "plane-unavailable") { retryAt = now() + PLANE_RETRY_MS; changed = drop(); return; }
+      if (got.state === "plane-unavailable") { retryAt = now() + PLANE_RETRY_MS; drop(); changed = true; changeReason = "plane-unavailable"; return; }
       if (got.state === "rate-limited") { retryAt = now() + 260; return; }
       if (got.state !== "live") { retryAt = now() + PLANE_ERROR_MS; return; }
       const url = URL.createObjectURL(got.blob), image = new Image();
@@ -112,20 +112,21 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
         return;
       }
       const ageMs = got.ageMs + now() - requestedAt;
-      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs >= FRAME_LATE_MS) { URL.revokeObjectURL(url); changed = drop(); return; }
+      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs >= FRAME_LATE_MS) { URL.revokeObjectURL(url); changed = drop(); changeReason = "stale"; return; }
       if (!planeFitsImage(got.plane, image.naturalWidth, image.naturalHeight)) {
-        URL.revokeObjectURL(url); retryAt = now() + PLANE_RETRY_MS; changed = drop(); return;
+        URL.revokeObjectURL(url); retryAt = now() + PLANE_RETRY_MS; drop(); changed = true; changeReason = "plane-unavailable"; return;
       }
       drop();
       frame = { image, url, source: got.source, plane: got.plane, calibrationRevision: got.calibrationRevision,
         observedFraction: got.observedFraction, ageMs, seq: got.seq ?? null, capturedAtMs: now() - ageMs };
       changed = true;
-      cancelExpiry = scope.timeout(() => { if (drop()) onChange(); }, FRAME_LATE_MS - ageMs);
+      changeReason = "live";
+      cancelExpiry = scope.timeout(() => { if (drop()) onChange("expired"); }, FRAME_LATE_MS - ageMs);
     } catch (error) {
       if (error.name !== "AbortError" && life.current() && startedGeneration === generation) retryAt = now() + PLANE_ERROR_MS;
     } finally {
       busy = false;
-      if (changed && life.current()) onChange();
+      if (changed && life.current()) onChange(changeReason);
     }
   }
   scope.onDispose(drop);

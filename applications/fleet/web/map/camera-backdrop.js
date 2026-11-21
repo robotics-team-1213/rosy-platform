@@ -207,9 +207,11 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     };
     scope.listen(mode, "change", () => setMode(mode.value));
     scope.listen(el("camera-comparison"), "toggle", drawCorrected);
-    planes = createPlaneFeed({ scope, visionView, onChange: () => {
+    planes = createPlaneFeed({ scope, visionView, onChange: (reason) => {
       const frame = planes.current(), record = calibration();
-      if (planeKey && planeKey === keyFor(record) && frame?.source === record.source_id
+      if (reason === "plane-unavailable") {
+        keptPlane = null;
+      } else if (planeKey && planeKey === keyFor(record) && frame?.source === record.source_id
           && planeCalibration(frame, [record], view.siteMap)) {
         keptPlane = { key: planeKey, frame };
       }
