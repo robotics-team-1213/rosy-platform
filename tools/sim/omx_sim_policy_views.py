@@ -9,13 +9,14 @@ import sys
 
 IMAGE_PREFIX = "observation.images."
 REHANDLE_STEP = {"arm_a": "a1", "arm_b": "b1"}
+WRIST_CAMERA = {"arm_a": "a_wrist", "arm_b": "b_wrist"}
+VIDEO_SIZE = (480, 640)
 
 
 def resolve_views(input_features, arm, view_map=None):
     """Return checkpoint image key -> (MuJoCo camera, (height, width))."""
-    wrist = {"arm_a": "a_wrist", "arm_b": "b_wrist"}[arm]
     cameras = {name: name for name in ("top", "side", "a_wrist", "b_wrist")}
-    cameras["wrist"] = wrist
+    cameras["wrist"] = WRIST_CAMERA[arm]
     shapes = {key.removeprefix(IMAGE_PREFIX): spec["shape"]
               for key, spec in input_features.items() if key.startswith(IMAGE_PREFIX)}
     if not shapes:
@@ -52,7 +53,37 @@ def load_act(path, device):
     return policy, pre, post
 
 
-def rollout_act(teacher, here, step, actor, views, seconds, device):
+def open_episode_video(world, path, views, overview):
+    import numpy as np
+    from omx_two_arm_teacher_stages import open_rgb_video
+
+    sizes = [size for _, size in views]
+    if overview:
+        sizes.append(VIDEO_SIZE)
+    height = max(h for h, _ in sizes)
+    width = sum(w for _, w in sizes)
+    # The shared H.264 encoder uses yuv420p, which needs even dimensions.
+    height, width = height + height % 2, width + width % 2
+    encode, close = open_rgb_video(path, width, height)
+
+    def record(data, frames=None):
+        if frames is None:
+            frames = [world.render(data, camera, size) for camera, size in views]
+        if overview:
+            frames = [*frames, world.render(data, "overview", VIDEO_SIZE)]
+        strip = np.zeros((height, width, 3), dtype=np.uint8)
+        left = 0
+        for frame in frames:
+            h, w = frame.shape[:2]
+            top = (height - h) // 2
+            strip[top:top + h, left:left + w] = frame
+            left += w
+        encode(strip)
+
+    return record, close
+
+
+def rollout_act(teacher, here, step, actor, views, seconds, device, record=None):
     import numpy as np
     import torch
     from omx_two_arm_teacher import FPS
@@ -77,24 +108,32 @@ def rollout_act(teacher, here, step, actor, views, seconds, device):
     teacher.contacts = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set())
     teacher.carried, teacher.phase = container, "act"
     policy.reset()
+    trajectory = []
     with torch.inference_mode():
-        for _ in range(round(seconds * FPS)):
+        for frame in range(round(seconds * FPS)):
             q = teacher.q_now(data, arm)
             grip = np.clip(held + (1000 * gap_m(q[5]) - 30) / slope, 0, 100)
             state = [*(rad_to_norm(value) for value in q[:5]), grip]
             batch = {"observation.state": torch.tensor([state], dtype=torch.float32, device=device)}
+            frames = []
             for key, (camera, size) in views.items():
                 rgb = world.render(data, camera, size)
+                if record is not None:
+                    frames.append(rgb)
                 batch[key] = torch.from_numpy(rgb).permute(2, 0, 1)[None].to(device).float() / 255
             action = post(policy.select_action(pre(batch))).cpu().numpy()[0]
             if action.shape != (6,) or not np.isfinite(action).all():
                 raise ValueError("ACT must emit six finite normalized joints")
+            if frame % 5 == 0:
+                trajectory.append(dict(frame=frame, state=np.asarray(state).tolist(), action=action.tolist()))
+            if record is not None:
+                record(data, frames)
             joints = [norm_to_rad(value) for value in np.clip(action[:5], -100, 100)]
             gap = (30 + (np.clip(action[5], 0, 100) - held) * slope) / 1000
             teacher.frame(data, {arm: np.array([*joints, angle_for_gap_clipped(gap)]), **idle}, "act")
             peak = max(peak, world.pose(data, container)[0][2] - start_z)
     row = dict(step=step["id"], arm=arm, container=container,
-               source=step["from"], target=step["to"], lifted=bool(peak > .015))
+               source=step["from"], target=step["to"], lifted=bool(peak > .015), joint_trajectory=trajectory)
     return teacher.verdict(data, step, row, before)
 
 
@@ -109,6 +148,7 @@ def main(argv=None):
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--choice", action="append", help="two-arm geometry choice, e.g. wrist_camera=v21-b")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--video", type=Path, metavar="DIR", help="write an MP4 for each episode")
     args = parser.parse_args(argv)
     if args.episodes < 1 or args.seconds < 1 or args.seed_base < 0:
         parser.error("episodes and seconds must be positive and seed-base must be non-negative")
@@ -142,13 +182,29 @@ def main(argv=None):
     task = tasks.get_task(layout, "rehandle")
     step = next(step for step in task["steps"] if step["id"] == REHANDLE_STEP[args.arm])
     actor = load_act(args.model, args.device) if views else None
+    if args.video is not None:
+        args.video.mkdir(parents=True, exist_ok=True)
+        video_views = list(views.values()) if actor else [
+            (camera, VIDEO_SIZE) for camera in ("top", "side", WRIST_CAMERA[args.arm]) if camera in available
+        ]
     rows = []
     for seed in range(args.seed_base, args.seed_base + args.episodes):
-        teacher = teaching.Teacher(world, seed=seed)
-        if actor is None:
-            row = teacher.run_single(task["start"], step)
-        else:
-            row = rollout_act(teacher, task["start"], step, actor, views, args.seconds, args.device)
+        record = close = hook = None
+        if args.video is not None:
+            kind = "act" if actor else "ik"
+            path = args.video / f"{kind}-{args.arm}-{seed}.mp4"
+            record, close = open_episode_video(world, path, video_views, "overview" in available)
+            if actor is None:
+                hook = lambda data, _label: record(data)  # noqa: E731
+        try:
+            teacher = teaching.Teacher(world, seed=seed, frame_hook=hook)
+            if actor is None:
+                row = teacher.run_single(task["start"], step)
+            else:
+                row = rollout_act(teacher, task["start"], step, actor, views, args.seconds, args.device, record)
+        finally:
+            if close is not None:
+                close()
         rows.append(dict(row, seed=seed))
         print(json.dumps(rows[-1]), flush=True)
     report = dict(task=task["name"], arm=args.arm, step=step["id"], model=args.model,
