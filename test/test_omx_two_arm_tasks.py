@@ -419,7 +419,7 @@ def test_carry_height_clears_containers_standing_on_temp_plates():
 
 
 def test_belt_pick_approach_height_is_independent_of_target_tier(data):
-    """Belt pick approach stays at belt pick clearance regardless of the target ship tier; non-belt picks keep carry_z."""
+    """Belt pick approach stays at belt pick clearance regardless of the target ship tier; non-belt and wait_pose='home' keep carry_z."""
     lay = sites.Layout(preset="v24-20261114")
     here, by_arm = {}, {"arm_a": [], "arm_b": []}
     expected_z = lay.hold_z("belt") + lay.box[2] + tasks.CARRY_CLEAR
@@ -427,8 +427,7 @@ def test_belt_pick_approach_height_is_independent_of_target_tier(data):
         wps = tasks.waypoints(lay, step, here)
         assert wps[0][0] == "approach" and wps[0][2] == pytest.approx(expected_z)
         assert wps[3][0] == "lift" and wps[3][2] == pytest.approx(tasks.carry_z(lay, here, step["from"], step["to"]))
-        if int(step["id"][1:]) > 3:
-            assert wps[3][2] > expected_z
+        assert wps[3][2] > expected_z
         arm = lay.sim_arms[step["arm"]]
         ok, q_app, _, note = tasks.solve_chain(arm, wps, arm.home, roll_floor=lay.roll_floor)
         assert ok, note
@@ -436,6 +435,12 @@ def test_belt_pick_approach_height_is_independent_of_target_tier(data):
         here[step["container"]] = step["to"]
     assert len(by_arm["arm_a"]) == 3 and len(set(by_arm["arm_a"])) == 1
     assert len(by_arm["arm_b"]) == 6 and len(set(by_arm["arm_b"])) == 1
+
+    home_lay = sites.Layout(preset="v24-20261114", wait_pose="home")
+    home_here = {"bar-8": "ship-h1r0-l2"}
+    home_step = {"id": "s9", "container": "bar-9", "to": "ship-h1r2-l2", "arm": "arm_a", **{"from": "belt"}}
+    home_wps = tasks.waypoints(home_lay, home_step, home_here)
+    assert home_wps[0][2] == pytest.approx(tasks.carry_z(home_lay, home_here, home_step["from"], home_step["to"]))
 
     rehandle = tasks.get_task(lay, "rehandle", data)
     r_here, found_non_belt = dict(rehandle["start"]), False
@@ -461,8 +466,18 @@ def test_waiting_arms_hold_wait_pose_without_link1_link3_self_contact():
     waits = {arm: w.layout.sim_arms[arm].wait.copy() for arm in sites.ARMS}
     for _ in range(30):
         t.frame(data, waits, "park")
+    body_pairs = {
+        tuple(sorted((w.body_name[w.model.geom_bodyid[c.geom1]], w.body_name[w.model.geom_bodyid[c.geom2]])))
+        for c in data.contact[:data.ncon]
+    }
+    for p in tw.PREFIX.values():
+        assert tuple(sorted((p + "link1", p + "link3"))) not in body_pairs
     for arm, wait in waits.items():
         assert np.max(np.abs(wait[:5] - data.qpos[w.q[arm][:5]])) < 0.001
         assert np.max(np.abs(t.servo_comp.trim[arm])) < 0.005
-        assert len(list(t.settle_g(data, arm, wait, wait[5]))) < 10
+        n_settle = 0
+        for cmd in t.settle_g(data, arm, wait, wait[5]):
+            t.frame(data, {**waits, arm: cmd}, "park")
+            n_settle += 1
+        assert n_settle == 0
 

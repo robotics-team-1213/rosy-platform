@@ -60,7 +60,7 @@ def step_swept_poses(layout, arm_name, src, dst, here):
     import omx_two_arm_tasks as tasks
     z_up = tasks.carry_z(layout, here, src, dst)
     arm = layout.arms[arm_name]
-    key = (arm_name, tuple(arm.base), round(arm.yaw, 6), src, tuple(layout.sites[src]["xy"]), dst, tuple(layout.sites[dst]["xy"]), round(z_up, 4))
+    key = (arm_name, tuple(arm.base), round(arm.yaw, 6), src, tuple(layout.sites[src]["xy"]), round(layout.sites[src]["z"], 4), dst, tuple(layout.sites[dst]["xy"]), round(z_up, 4), layout.choices.get("wait_pose"))
     if key not in _SWEEP_CACHE:
         problems, path, _ = tasks.check_reach(layout, dict(id="sweep", container="?", to=dst, arm=arm_name, **{"from": src}), here, arm)
         if problems:
