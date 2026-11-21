@@ -187,11 +187,11 @@ class Loop:
 
         def after_join():
             paths = [e["episode"]["path"] for e in json.loads(joined.read_text(encoding="utf-8")).get("joined", []) if e["status"] == "ok"]
-            return [(self.tool(SWEEP, "ingest", a.sweep, "--attempts", a.attempts, *(["--stack-check", a.stack_check] if a.stack_check else []),
+            return [(self.tool(SWEEP, "ingest", a.sweep, "--attempts", a.attempts, "--joined", joined, *(["--stack-check", a.stack_check] if a.stack_check else []),
                                *(["--episodes", *paths] if paths else []), *(["--cell", a.cell] if a.cell and paths else [])), d0 / "ingest.out")]
         join = self.tool(JOIN, a.attempts, *(["--episodes", a.episodes] if a.episodes else []))
         if not self.a.run:  # the plan shows the second command with its episode list still to come
-            after_join = lambda: [(self.tool(SWEEP, "ingest", a.sweep, "--attempts", a.attempts, "--episodes", "<ok episodes of joined.json>",  # noqa: E731
+            after_join = lambda: [(self.tool(SWEEP, "ingest", a.sweep, "--attempts", a.attempts, "--joined", joined, "--episodes", "<ok episodes of joined.json>",  # noqa: E731
                                               *(["--cell", a.cell] if a.cell else [])), d0 / "ingest.out")]
         if join_only:
             return self.stage("ingest", [a.attempts], [(join, joined)], [joined]), joined, None

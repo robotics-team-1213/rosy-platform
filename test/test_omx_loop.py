@@ -68,6 +68,7 @@ def test_all_runs_the_stages_in_order_with_one_preset(fake):
         if c[1].endswith("omx_real2sim.py"):
             assert c[c.index("--preset") + 1] == loop.PRESET
     ingest = calls[5]
+    assert ingest[ingest.index("--joined") + 1] == str(fake["tmp"] / "run/04-ingest/joined.json")
     assert ingest[ingest.index("--episodes") + 1] == str(fake["tmp"] / "ep1") and ingest[-3:-1] != ["--episodes", "/gone"]  # only the ok episode
     assert "/gone" not in ingest
     second = calls[-2]  # the second measure takes the twin folder and dr_next; its diff compares with the first snapshot

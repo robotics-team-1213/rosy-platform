@@ -183,6 +183,26 @@ def test_no_tier_proof_keeps_placed_unknown_and_a_mapping_file_still_reads(tmp_p
     assert sw.real_table(att, old, unknown)[("good", 2)] == {"ok": 1} and unknown == {("good", 2): 1}
 
 
+def test_candidate_ingest_requires_original_episode_when_join_was_checked(tmp_path):
+    from cell_attempt_episodes import episode_ref
+
+    att = _attempts(tmp_path, [dict(attempt_id="a1", outcome="placed")])
+    attempt = json.loads(att.read_text())
+    episode = tmp_path / "episode"
+    episode.mkdir()
+    (episode / "ticks.jsonl").write_text("{}\n")
+    (episode / "task.json").write_text('{"attempt_id": "a1"}')
+    result = episode / "result.json"
+    result.write_text("{}")
+    proof = tmp_path / "proof.json"
+    proof.write_text('{"a1": true}')
+    joined = tmp_path / "joined.json"
+    joined.write_text(json.dumps({"joined": [{"attempt": attempt, "episode": episode_ref(episode), "status": "ok"}]}))
+    assert sw.real_rows(att, proof, joined=joined)[0]["outcome"] == "ok"
+    result.write_text('{"changed": true}')
+    assert sw.real_rows(att, proof, joined=joined)[0]["outcome"] == "unknown"
+
+
 def test_shadowed_offer_is_counted_apart_and_never_credited(tmp_path):
     _fake_sweep(tmp_path)
     att = _attempts(tmp_path, [dict(attempt_id="a1", outcome="placed"),
