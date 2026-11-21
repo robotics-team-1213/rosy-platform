@@ -9,6 +9,8 @@ from omx_ladder import read_ppo_snapshot, judge_isaac_stage
 CAMERAS = {"top": "top", "side": "side", "a_wrist": "arm_a_wrist", "b_wrist": "arm_b_wrist"}
 RENDERS = {*CAMERAS, "overview"}
 SENSOR_CLOCK = "v4l2_monotonic_start_of_exposure"
+JOINT_WINDOW_S = .150
+FOLLOWER_MOTORS = list(range(11, 17))
 
 
 def load(path):
@@ -62,14 +64,49 @@ def check_render(directory, capture_path, handoff):
             raise ValueError(f"Real capture and render comparison differ: {name}")
         verify_file(capture_path.parent / f"{role}.jpg", frame["sha256"])
         frames.append(frame)
-    return cfg, geometry, capture_timing(frames)
+    joint_samples = capture.get("joint_samples")
+    return cfg, geometry, capture_timing(frames, joint_samples)
 
 
 def number_is_invalid(value):
     return type(value) not in (int, float) or not math.isfinite(value) or value <= 0
 
 
-def capture_timing(frames):
+def stationary_joint_window(samples, boot, first_exposure, last_exposure):
+    if not isinstance(samples, dict) or set(samples) != {"arm_a", "arm_b"}:
+        raise ValueError("Joint evidence requires both A and B readbacks")
+    windows = []
+    for arm, pair in samples.items():
+        if not isinstance(pair, dict) or set(pair) != {"before", "after"}:
+            raise ValueError(f"Joint evidence requires before and after scans: {arm}")
+        before, after = pair["before"], pair["after"]
+        bounds = []
+        positions = []
+        for sample in (before, after):
+            if not isinstance(sample, dict) or sample.get("boot_id") != boot:
+                raise ValueError(f"Joint reads must share the camera boot: {arm}")
+            start, end = sample.get("begin_monotonic_s"), sample.get("end_monotonic_s")
+            if any(number_is_invalid(t) for t in (start, end)) or start >= end:
+                raise ValueError(f"Invalid joint scan time: {arm}")
+            bounds.extend((start, end))
+            motors = sample.get("motors")
+            if (not isinstance(motors, list) or not all(isinstance(m, dict) for m in motors)
+                    or [m.get("id") for m in motors] != FOLLOWER_MOTORS
+                    or any(type(m.get("position_raw")) is not int or type(m.get("velocity_raw")) is not int
+                           or abs(m["velocity_raw"]) > 2 or m.get("torque_enabled") != 0
+                           or m.get("hardware_error") != 0 for m in motors)):
+                raise ValueError(f"Expected six passive joint readbacks at rest: {arm}")
+            positions.append([m["position_raw"] for m in motors])
+        start, before_end, after_start, end = bounds
+        if not before_end <= first_exposure <= last_exposure <= after_start or end - start > JOINT_WINDOW_S:
+            raise ValueError(f"Joint scans outside the camera capture window: {arm}")
+        if any(abs(x - y) > 1 for x, y in zip(*positions)):
+            raise ValueError(f"Joint position changed across the camera capture: {arm}")
+        windows.append(end - start)
+    return {"status": "stationary_bracket_verified", "max_window_ms": round(max(windows) * 1000, 3)}
+
+
+def capture_timing(frames, joint_samples=None):
     if any("exposure_monotonic_s" in frame or frame.get("clock_semantics") == SENSOR_CLOCK
            for frame in frames):
         boot = frames[0].get("boot_id")
@@ -86,7 +123,12 @@ def capture_timing(frames):
     stamps = [frame.get(stamp_key) for frame in frames]
     if any(number_is_invalid(stamp) for stamp in stamps):
         raise ValueError(f"Invalid real camera timestamp: {stamp_key}")
-    timing[span_key] = round((max(stamps) - min(stamps)) * 1000, 3)
+    first, last = min(stamps), max(stamps)
+    timing[span_key] = round((last - first) * 1000, 3)
+    if joint_samples is not None:
+        if timing.get("clock_semantics") != SENSOR_CLOCK:
+            raise ValueError("Joint evidence requires V4L2 sensor exposure timestamps")
+        timing["joint_observation"] = stationary_joint_window(joint_samples, boot, first, last)
     return timing
 
 
@@ -110,6 +152,9 @@ def audit(render, capture, handoff, isaac_snapshot=None):
     cfg, geometry, timing = check_render(render, capture, load(handoff))
     ppo = (check_ppo(isaac_snapshot, cfg, geometry["source_sha"])
            if isaac_snapshot else {"status": "not_run"})
+    required = ["approved camera calibration", "calibrated A/B pose alignment"]
+    if "joint_observation" not in timing:
+        required.append("exposure-bound A/B joint evidence")
     return {
         "schema": "rosy.omx-cad194-transfer-audit/1",
         "source_sha": geometry["source_sha"],
@@ -120,7 +165,7 @@ def audit(render, capture, handoff, isaac_snapshot=None):
             "camera_snapshot_sha256": geometry["camera_snapshot_sha256"],
             **timing,
             "pose_alignment": "unverified",
-            "required": ["approved camera calibration", "exposure-bound A/B joint evidence"],
+            "required": required,
         },
         "mujoco": {"status": "handoff_verified", "targets": cfg["layers"] * 3},
         "isaac_physx": ppo,

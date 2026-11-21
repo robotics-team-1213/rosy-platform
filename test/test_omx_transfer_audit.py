@@ -62,6 +62,24 @@ def test_transfer_audit_matches_cameras_and_handoff_without_site_acceptance(tmp_
     with pytest.raises(ValueError, match="V4L2 clock and boot"):
         audit(tmp_path, capture, handoff)
     captured["side"]["boot_id"] = "shared"
+    joints = {
+        arm: {
+            key: dict(boot_id="shared", begin_monotonic_s=stamp, end_monotonic_s=stamp + .02,
+                      motors=[dict(id=i, position_raw=2048, velocity_raw=1,
+                                   hardware_error=0, torque_enabled=0) for i in range(11, 17)])
+            for key, stamp in (("before", 199.96), ("after", 200.02))
+        }
+        for arm in ("arm_a", "arm_b")
+    }
+    write_json(capture, dict(frames=captured, joint_samples=joints))
+    r2s = audit(tmp_path, capture, handoff)["r2s"]
+    assert r2s["joint_observation"] == {"status": "stationary_bracket_verified", "max_window_ms": 80.0}
+    assert r2s["pose_alignment"] == "unverified"
+    joints["arm_b"]["after"]["begin_monotonic_s"] += 1200
+    joints["arm_b"]["after"]["end_monotonic_s"] += 1200
+    write_json(capture, dict(frames=captured, joint_samples=joints))
+    with pytest.raises(ValueError, match="outside the camera capture window"):
+        audit(tmp_path, capture, handoff)
     write_json(capture, dict(frames=captured))
 
     cfg["layout_sha256"] = "3" * 64
