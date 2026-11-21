@@ -1563,3 +1563,22 @@ python3 deploy/robot/omx/cell_envelope_review.py add --attempts <work-dir>/attem
   --task-sha256 <list의 key> --reviewed-by <이름> --evidence-ref <확인한 근거> \
   --min-attempts <N> --min-success-rate <R> --home-tolerance <U> --confirm-physical-review
 ```
+
+### Cell task worker와 팔 세션 래퍼의 관리 릴리스 (2026-11-21)
+
+`rosy-omx-cell-task-worker.service`는 `~/.local/share/rosy/omx-devices/current`(`rosy-omx-devices-autoupdate` 관리 릴리스)에서 돈다.
+worker는 팔 세션 래퍼를 같은 릴리스의 `deploy/robot/omx/session-wrappers/`에서 띄우고 `TOOLS_ROOT`를 넘긴다. 래퍼의
+`tools-env.sh`는 `OMX`·`PYTHONPATH`를 `TOOLS_ROOT`에서 만든다. 손으로 바꾸는 `~/rosy-test/omx-tools-current` 링크는 읽지 않는다.
+셀 설정·카탈로그·caps·chunk-io는 계속 `~/rosy-test/omx-record-prep-20261019`에 있다.
+
+적용 순서(병합하고 omx-devices 자동 갱신이 끝난 뒤, 팔 세션이 없을 때만):
+
+1. 팔 세션이 없는지 확인한다: `pgrep -af record_session.py`의 출력이 없어야 한다. 출력이 있으면 멈춘다.
+2. `readlink ~/.local/share/rosy/omx-devices/current`가 이 변경을 포함한 릴리스인지, `.../current/deploy/robot/omx/session-wrappers/`가 있는지 확인한다.
+3. 셀 prep 폴더의 옛 래퍼(`with-session-arm-*.sh`, `tools-env-current.sh`)를 날짜 붙여 백업한다. 다른 도구가 아직 쓰므로 지우지 않는다.
+4. 유닛을 릴리스에서 설치하고 다시 시작한다:
+   `install -m 0644 ~/.local/share/rosy/omx-devices/current/deploy/robot/omx/rosy-omx-cell-task-worker.service ~/.config/systemd/user/`,
+   `systemctl --user daemon-reload`, `systemctl --user restart rosy-omx-cell-task-worker.service`.
+5. `systemctl --user show rosy-omx-cell-task-worker.service -p Environment`에 `TOOLS_ROOT=.../omx-devices/current`가 있는지 본다.
+6. 관제 PC에서 `python tools/remote/update_status.py`를 실행한다. 이 유닛은 `autoupdate`로 나오고 `ADHOC`가 없어야 한다.
+   코드 경로는 ExecStart의 첫 경로(`~/rosy-omx/current-env`)로 읽혀 `KNOWN`으로 나온다(`services.yaml`의 `known_drift`).

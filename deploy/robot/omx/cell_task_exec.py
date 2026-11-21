@@ -146,6 +146,12 @@ def plan_home(cfg_data: dict[str, Any]) -> Any:
     return plan.get("home") if isinstance(plan, dict) else None
 
 
+def tools_root() -> Path:
+    """The release the worker runs from (its unit sets TOOLS_ROOT): the arm session wrappers and their tools come from it,
+    not from the prep folder or the hand-switched omx-tools-current link (2026-11-21: one release for worker and arm)."""
+    return Path(os.environ.get("TOOLS_ROOT") or Path(__file__).resolve().parents[3])
+
+
 def _arm_run_spec(arm_id: str, prep_dir: Path) -> tuple[Path, Path, Path, tuple[int, int, int, int], str]:
     specs = {
         "arm_b": ("with-session-arm-b-par.sh", "cell-arm-b-stack.json", "object-catalog-orange.json", (10, 340, 230, 478), "temp_plate_b"),
@@ -155,7 +161,8 @@ def _arm_run_spec(arm_id: str, prep_dir: Path) -> tuple[Path, Path, Path, tuple[
     if arm_id not in specs:
         raise ValueError(f"unsupported arm_id for guarded pick: {arm_id!r}")
     wrapper, cfg, cat, roi, default_src = specs[arm_id]
-    return prep_dir / wrapper, prep_dir / cfg, prep_dir / cat, roi, default_src
+    wrappers = tools_root() / "deploy/robot/omx/session-wrappers"  # the cell configs and catalogs stay prep-folder data
+    return wrappers / wrapper, prep_dir / cfg, prep_dir / cat, roi, default_src
 
 
 FOLD_FRESH_S = 60.0  # the measured fold must come from this session's last park, not an old status line
@@ -253,7 +260,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     hint = (handoff.get("tier_hint") or {}).get("layers_below")
     if isinstance(hint, int) and not isinstance(hint, bool) and hint > 0:
         cmd += ["--layers-below", str(hint)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                          env={**os.environ, "TOOLS_ROOT": str(tools_root())})  # the wrapper's tools-env reads it
     parsed = last_json_object(proc.stdout)
     # The wall clock at the end of the run bounds when the readbacks below existed (the runner's own clock is monotonic).
     measured_at = time.time()
