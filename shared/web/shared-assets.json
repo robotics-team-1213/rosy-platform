@@ -40,6 +40,8 @@
     "interaction-controls.js": "text/javascript",
     "workflow-controls.js": "text/javascript",
     "component-controls.css": "text/css",
+    "choice-controls.css": "text/css",
+    "robot-dock.css": "text/css",
     "component-gallery.css": "text/css",
     "component-gallery.html": "text/html",
     "component-gallery.js": "text/javascript"
