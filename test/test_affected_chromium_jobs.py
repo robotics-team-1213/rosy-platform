@@ -54,9 +54,9 @@ def test_lab_path_and_split_on_real_paths():
     assert ab.split([SHARED, LAB_ONLY, FLEET, GAZEBO, SHARED]) == (sorted([FLEET, SHARED]), sorted([GAZEBO, LAB_ONLY]))
 
 
-def test_calibration_browser_file_is_lab_only_until_its_runner_failure_is_found():
+def test_calibration_browser_file_runs_in_ci():
     cal = "test/test_measured_calibration_browser.py"
-    assert ab.split([SHARED, cal]) == ([SHARED], [cal])
+    assert ab.split([SHARED, cal]) == (sorted([SHARED, cal]), [])
 
 
 def test_one_rule_for_both_sides():

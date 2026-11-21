@@ -53,31 +53,33 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const a = p95.valueAsNumber, b = maximum.valueAsNumber;
     return Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a ? {p95_m:a,max_m:b} : null;
   }
+  // Write only what changed: the 2 s refresh must not touch a control whose state did not change.
   function setEnabled(control, enabled, reason) {
-    control.disabled = !enabled;
-    control.setAttribute('reason', enabled ? '' : reason);
-    control.setAttribute('title', enabled ? '' : reason);
-    control.setAttribute('aria-description', enabled ? '' : reason);
+    if (control.disabled === enabled) control.disabled = !enabled;
+    for (const name of ['reason','title','aria-description']) {
+      const value = enabled ? '' : reason;
+      if (control.getAttribute(name) !== value) control.setAttribute(name,value);
+    }
   }
   function render() {
-    const pending = busy || reading;
-    const pendingReason = reading ? '적용 상태를 확인 중입니다.' : '요청을 처리 중입니다.';
+    // A background read (reading) disables controls without touching their reason: a changed reason line would
+    // resize the layout above the checkbox and move it between mousedown and mouseup on a slow device.
+    const busyReason = '요청을 처리 중입니다.';
     const editable = operator() && !busy;
     const operable = editable && !reading;
-    const editReason = pending ? pendingReason : '이름 있는 운영자 권한이 필요합니다.';
+    const editReason = busy ? busyReason : '이름 있는 운영자 권한이 필요합니다.';
+    const gate = (control, ok, why) => setEnabled(control, operable && ok, !editable ? editReason : ok ? '' : why);
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
     setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
-    setEnabled(buttons.approve,operable && !!candidate && candidate.evidence_kind === 'measured'
-      && !!limits() && candidate.source_id === source,
-      !operable ? editReason : '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
-    setEnabled(buttons.revoke,operable && !!record,!operable ? editReason : '철회할 승인 기록이 없습니다.');
+    gate(buttons.approve,!!candidate && candidate.evidence_kind === 'measured' && !!limits() && candidate.source_id === source,
+      '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
+    gate(buttons.revoke,!!record,'철회할 승인 기록이 없습니다.');
     const current = record && status?.calibration_revision === record.calibration_revision && status.state !== 'invalid';
-    setEnabled(buttons.confirm,operable && !!current && conditions.checked,
-      !operable ? editReason : '적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
-    setEnabled(buttons.read,!pending && !!current && !auth.locked,
-      auth.locked ? '먼저 로그인하세요.' : pending ? pendingReason : '현재 교정·촬영 상태를 먼저 확인하세요.');
-    setEnabled(buttons.refresh,!pending && !!source && !auth.locked,
-      auth.locked ? '먼저 로그인하세요.' : pending ? pendingReason : '카메라를 먼저 선택하세요.');
+    gate(buttons.confirm,!!current && conditions.checked,'적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
+    const watch = (control, ok, why) => setEnabled(control, !busy && !reading && ok && !auth.locked,
+      auth.locked ? '먼저 로그인하세요.' : busy ? busyReason : ok ? '' : why);
+    watch(buttons.read,!!current,'현재 교정·촬영 상태를 먼저 확인하세요.');
+    watch(buttons.refresh,!!source,'카메라를 먼저 선택하세요.');
     const b = candidate || record?.bundle;
     summary.textContent = b ? `${b.source_id} · 지도 ${b.map_id} · 독립 검증 p95 ${b.floor.validation.p95_m} m / 최대 ${b.floor.validation.max_m} m · ${b.evidence_kind === 'measured' ? '실측 근거' : '합성 자료 — 승인 불가'}` : '이 카메라의 교정 묶음을 가져오세요.';
   }
