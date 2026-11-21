@@ -312,7 +312,7 @@ jobs:
           fi
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            core_common==0.0.3 rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.16 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
+            core_common==0.0.3 rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.17 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
 
       - name: Build (colcon)
         if: matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false')
