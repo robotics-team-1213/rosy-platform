@@ -386,7 +386,7 @@ class IdentityService:
             return
         robots, epochs = {}, {}
         for robot_id in source.robot_ids:
-            # Wheel odometry: distance moved needs no frame, and a real Pinky reports no localization status
+            # Wheel odometry: distance moved needs no frame, and a real robot reports no localization status
             # (site 2026-11-21: every robot read UNKNOWN, so nothing was ever named). Stale odometry is no pose.
             odom = odom_from_snapshot(self.tracking.robot_state(robot_id))
             fresh = odom is not None and abs(payload.captured_at - odom.stamp) <= self.config.motion_window_s
