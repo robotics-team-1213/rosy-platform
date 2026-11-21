@@ -1189,7 +1189,8 @@ def test_prune_remote_archives_and_deletes_only_stale_own_unopened_branches(main
     assert "refs/heads/feat/stale-own" in refs(bare, "refs/heads")
 
     # Concurrent move on bare origin + archive ref conflict must both keep remote branches untouched
-    adv = git(main, "commit-tree", "HEAD^{tree}", "-p", stale_moved, "-m", "race")
+    adv = git(bare, "commit-tree", f"{stale_moved}^{{tree}}", "-p", stale_moved, "-m", "race",
+              GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
     git(bare, "update-ref", "refs/heads/feat/stale-moved", adv)
     conflict_ref = f"refs/archive/origin/feat/stale-own@{stale_own[:10]}"
     git(main, "update-ref", conflict_ref, git(main, "rev-parse", "main"))
