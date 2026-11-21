@@ -20,7 +20,6 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 FLEET_SAMPLE = [
-    "test/test_unit_scope_browser.py",
     "applications/fleet/test/test_sample_browser.py",
     "applications/fleet/test/test_feature_browser_flows.py",
     "applications/fleet/test/test_integrated_sample_browser.py",
@@ -44,6 +43,7 @@ FLEET = FLEET_SAMPLE + [
     "test/test_peer_picker_browser.py",
     "test/test_console_robot_video_browser.py",
     "test/test_fleet_ui_review_browser.py",
+    "test/test_unit_scope_browser.py",
     "operations/fleet/test/*_browser.py",
 ]
 ROBOT = [
