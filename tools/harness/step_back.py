@@ -290,7 +290,6 @@ def acknowledged(body_text: str, prs) -> set:
     return ok & set(prs)
 
 
-EXEMPT_BRANCH = re.compile(r"^(publish/|bot/records-)")  # tool-made branches: the records bot and the publish chain
 SIZE_EXCEPTION = re.compile(r"Size-Exception:\s*\S.*", re.I)
 
 
@@ -306,11 +305,8 @@ def counted_files(repo, base: str, head_ref: str) -> int:
     return n
 
 
-def size_violations(repo, base_ref: str, head_ref: str, branch: str = "", now: float | None = None) -> list[str]:
-    """Counted changed files > 30, own non-merge commits > 20, merge-base older than 7 days (rule 4, blocking since D-1067).
-    Exempt by branch name: publish/* and bot/records-*."""
-    if EXEMPT_BRANCH.match(branch):
-        return []
+def size_violations(repo, base_ref: str, head_ref: str, now: float | None = None) -> list[str]:
+    """Counted changed files > 30, own non-merge commits > 20, merge-base older than 7 days (rule 4, blocking since D-1067). No branch is exempt by name."""
     try:
         base = merge_base(repo, base_ref, head_ref)
         now = time.time() if now is None else now

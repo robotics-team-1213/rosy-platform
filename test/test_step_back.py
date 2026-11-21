@@ -179,28 +179,30 @@ def test_size_limits_block_each_over_the_limit_and_the_exception_line_passes(tmp
     repo = make_repo(tmp_path)
     branch(repo)
     commit(repo, {f"src/f{i}.py": f"value_{i} = {i}\n" for i in range(31)}, "many files")
-    assert step_back.size_violations(repo, "main", "feat", "feat") == ["31 changed files (limit 30)"]
+    assert step_back.size_violations(repo, "main", "feat") == ["31 changed files (limit 30)"]
     for i in range(21):
         commit(repo, {"one.py": f"x = {i}\n"}, f"c{i}")
-    assert len(step_back.size_violations(repo, "main", "feat", "feat")) == 2
-    assert "merge-base is 9 days old" in step_back.size_violations(repo, "main", "feat", "feat", now=time.time() + 9 * 86400)[-1]
+    assert len(step_back.size_violations(repo, "main", "feat")) == 2
+    assert "merge-base is 9 days old" in step_back.size_violations(repo, "main", "feat", now=time.time() + 9 * 86400)[-1]
     assert step_back.size_excepted("x\nSize-Exception: one rename sweep")
     assert step_back.size_excepted("- Size-Exception: one rename sweep")
     assert not step_back.size_excepted("Size-Exception:   ")
     assert not step_back.size_excepted("Size-Exception:")
 
 
-def test_size_limits_exempt_tool_branches_records_and_pure_renames(tmp_path):
+def test_size_limits_exempt_nothing_by_name_but_not_records_or_pure_renames(tmp_path):
     repo = make_repo(tmp_path)
     branch(repo, "publish/main-20261121-10")
     commit(repo, {f"src/f{i}.py": f"value_{i} = {i}\n" for i in range(31)}, "many files")
-    assert step_back.size_violations(repo, "main", "publish/main-20261121-10", "publish/main-20261121-10") == []
-    assert step_back.size_violations(repo, "main", "publish/main-20261121-10", "bot/records-x") == []
-    assert step_back.size_violations(repo, "main", "publish/main-20261121-10", "feat") != []
+    assert step_back.size_violations(repo, "main", "publish/main-20261121-10") != []  # no branch is exempt by name
+    g(repo, "checkout", "-q", "main")
+    branch(repo, "bot/records-x")
+    commit(repo, {f"src/f{i}.py": f"value_{i} = {i}\n" for i in range(31)}, "many files")
+    assert step_back.size_violations(repo, "main", "bot/records-x") != []
     g(repo, "checkout", "-q", "main")
     branch(repo, "recs")
     commit(repo, {f"docs/logs/2026/11/r{i}.md": f"record {i}\n" for i in range(40)} | {"docs/reference/api-changes/x.md": "x\n"}, "records")
-    assert step_back.size_violations(repo, "main", "recs", "recs") == []  # record and generated paths do not count
+    assert step_back.size_violations(repo, "main", "recs") == []  # record and generated paths do not count
     g(repo, "checkout", "-q", "main")
     commit(repo, {f"mv/f{i}.py": f"moved_{i} = {i} # padding to keep similarity\n" for i in range(35)}, "add files")
     branch(repo, "renames")
@@ -208,4 +210,4 @@ def test_size_limits_exempt_tool_branches_records_and_pure_renames(tmp_path):
     for i in range(35):
         g(repo, "mv", f"mv/f{i}.py", f"mv2/f{i}.py")
     g(repo, "commit", "-q", "-m", "pure renames")
-    assert step_back.size_violations(repo, "main", "renames", "renames") == []
+    assert step_back.size_violations(repo, "main", "renames") == []

@@ -320,6 +320,8 @@ def _push_fake(monkeypatch, tmp_path, *, publish_only, active, lab=()):
 
     def fake_run(cmd, cwd, env=None, check=True):
         calls.append((cmd, env))
+        if cmd[0] == sys.executable:  # preflight's trailer and size_range scripts
+            return ""
         if cmd[:2] == ["git", "rev-parse"]:
             return "fix/topic" if "--abbrev-ref" in cmd else head
         if cmd[:3] == ["git", "config", "--bool"]:
@@ -328,7 +330,7 @@ def _push_fake(monkeypatch, tmp_path, *, publish_only, active, lab=()):
             return ""
         if cmd[:3] == ["gh", "pr", "list"]:
             return '[{"number": 7}]'
-        if cmd[:3] == ["gh", "pr", "merge"]:
+        if cmd[:3] in (["gh", "pr", "merge"], ["gh", "pr", "edit"]):
             return ""
         raise AssertionError(cmd)
 
@@ -393,3 +395,20 @@ def test_local_main_only_behind_origin_is_not_a_backlog(tmp_path):
     git("checkout", "-q", "-b", "topic2")
     with pytest.raises(SystemExit):
         pr_land.check_coexistence(tmp_path, git("rev-parse", "HEAD"))
+
+
+def test_body_reaches_an_existing_pr_so_a_size_exception_counts(monkeypatch, tmp_path):
+    calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False)
+    assert pr_land.main(["--body", "Size-Exception: one rename sweep"], repo=tmp_path) == 0
+    assert any(cmd[:3] == ["gh", "pr", "edit"] and "Size-Exception: one rename sweep" in cmd for cmd, _ in calls)
+
+
+def test_oversized_dry_run_stops_before_push_and_names_the_line_to_add(monkeypatch, tmp_path):
+    monkeypatch.undo()  # the autouse fixture stubs preflight; this test needs the real one
+    monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
+    calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False)
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: ["31 changed files (limit 30)"])
+    monkeypatch.delenv("ROSY_STEP_BACK", raising=False)
+    with pytest.raises(SystemExit, match=r"(?s)--body.*Size-Exception: <reason>"):
+        pr_land.main(["--dry-run"], repo=tmp_path)
+    assert not any(cmd[:2] in (["git", "push"], ["gh", "pr"]) for cmd, _ in calls)
