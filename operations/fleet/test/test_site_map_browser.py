@@ -1045,6 +1045,19 @@ def test_robot_state_auth_failure_removes_operator_controls(page_site, status):
     expect(page.locator("#trip-plan")).to_be_disabled()
 
 
+def test_robot_state_role_refusal_keeps_the_estop_live(page_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=403, content_type="application/json", body='{"detail":{"code":"FORBIDDEN","message":"role"}}'))
+    open_token_access(page)
+    page.locator("#console-token").fill("operator-token")  # the session answer says estop true; only the state read is refused
+    page.locator("#token-save").click()
+    expect(page.locator("#map-status")).to_contain_text("지도 조회 실패")
+    expect(page.locator("#estop")).to_be_enabled()  # D-1043: only a lost session (401) locks it
+
+
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site, width, height):
     from playwright.sync_api import expect
