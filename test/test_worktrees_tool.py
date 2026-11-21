@@ -971,6 +971,18 @@ def test_adopt_reattaches_a_pruned_branch_and_checks_like_new(main, monkeypatch,
     assert git(main, "config", "branch.feat/open.description").startswith("owner: t <t@t>; session sess-9; at ")
 
 
+def test_adopt_restores_a_branch_archive_abandoned_moved(main):
+    """A pruned worktree's branch can be archived later (ABANDON_DAYS); adopt puts it back from refs/archive."""
+    wt = add(main, "open", commit=True)
+    tip = git(wt, "rev-parse", "HEAD")
+    assert worktrees.prune(main, apply=True, now=LATER) == 1
+    later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
+    assert worktrees.rules.archive_abandoned(main, later, apply=True) == 1
+    assert "refs/heads/feat/open" not in refs(main, "refs/heads")
+    assert worktrees.main(["adopt", "open", "feat/open"]) == 0
+    assert git(wt, "rev-parse", "HEAD") == tip
+
+
 def test_clean_worktree_on_a_branch_adopt_refuses_waits_the_full_idle_hours(main):
     """A branch outside <type>/<topic> cannot be re-attached by adopt, so removing its worktree is not lossless."""
     now = time.time()
