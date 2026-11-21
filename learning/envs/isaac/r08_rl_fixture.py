@@ -1,6 +1,4 @@
 """Pinned A/B CAD layout for the r08 ship PPO scenario."""
-from hashlib import sha256
-import json
 from pathlib import Path
 import subprocess
 import sys
@@ -17,30 +15,10 @@ def cell_layout():
     return Layout(preset=PRESET)
 
 
-def _round_coordinates(value):
-    """Remove platform-dependent last bits before hashing or comparing receipts."""
-    if isinstance(value, dict):
-        return {key: _round_coordinates(item) for key, item in value.items()}
-    if isinstance(value, (tuple, list)):
-        return [_round_coordinates(item) for item in value]
-    return round(value, 9) if isinstance(value, float) else value
-
-
 def layout_digest(layout):
-    from omx_two_arm_sites import SHIP_ASSETS
-    frame = layout.fixture
-    data = dict(choices=layout.choices, box=layout.box, table_z=layout.table_z,
-                cameras=frame["real_cameras"], temp_plates=layout.plates,
-                table=[frame["workplate_center_m"], frame["workplate_size_m"]],
-                belt=[layout.belt_stop_x, layout.belt_y, layout.belt_top],
-                arms={name: [arm.base.tolist(), arm.yaw, arm.wait.tolist()]
-                      for name, arm in layout.arms.items()},
-                plan=layout.plan_order(), sites=layout.sites)
-    identity = sha256(json.dumps(_round_coordinates(data), sort_keys=True, separators=(",", ":")).encode())
-    for path in sorted(SHIP_ASSETS.iterdir(), key=lambda item: item.name):
-        if path.suffix in {".stl", ".json"}:
-            identity.update(path.name.encode() + b"\0" + sha256(path.read_bytes()).digest())
-    return identity.hexdigest()
+    from omx_two_arm_sites import layout_digest as digest
+
+    return digest(layout)
 
 
 def request_for(layout, seed, layers):
@@ -100,4 +78,6 @@ def fixture(layers, nominal):
                  gripper="palletizing-v2.1", row_order=[item["cell"][1] for item in items[:3]])
     for key in ("leveling_protocol", "planning_scene", "ship_plate"):
         value.pop(key, None)
-    return _round_coordinates(value)
+    from omx_two_arm_sites import round_coordinates
+
+    return round_coordinates(value)

@@ -381,13 +381,14 @@ class World:
         self.body_name = [m.body(i).name for i in range(m.nbody)]
         self.geom_name = [m.geom(i).name for i in range(m.ngeom)]
 
-    def reset(self, initial_joints=None):
+    def reset(self, *, initial_joints=None):
         data = mujoco.MjData(self.model)
+        initial_joints = initial_joints or {}
         for arm in PREFIX:
-            home = self.layout.arms[arm].wait if initial_joints is None else initial_joints[arm]
-            data.qpos[self.q[arm]] = home
-            data.qpos[self.mimic[arm]] = -home[5]
-            data.ctrl[self.act[arm]] = home
+            q = initial_joints.get(arm, self.layout.arms[arm].wait)
+            data.qpos[self.q[arm]] = q
+            data.qpos[self.mimic[arm]] = -q[5]
+            data.ctrl[self.act[arm]] = q
         for k, (cid, _) in enumerate(self.layout.containers()):
             self.put(data, cid, None, k)
         mujoco.mj_forward(self.model, data)

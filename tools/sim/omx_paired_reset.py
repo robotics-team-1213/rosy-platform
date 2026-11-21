@@ -5,7 +5,6 @@ import json
 import math
 from pathlib import Path
 import re
-import sys
 
 SCHEMA = "rosy.omx.paired-reset/1"
 ARMS = ("arm_a", "arm_b")
@@ -92,12 +91,12 @@ def main(argv=None):
     mujoco.add_argument("start", type=Path)
     mujoco.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "learning/envs/isaac"))
     import yaml
-    from r08_rl_fixture import cell_layout, layout_digest
-    from stacking_fixture import PROFILE
-    layout = cell_layout()
-    profile = yaml.safe_load(PROFILE.read_text(encoding="utf-8"))
+    from omx_two_arm_sites import Layout, layout_digest
+
+    layout = Layout(preset="v24-20261114-cad194")
+    profile_path = Path(__file__).resolve().parents[2] / "deploy/robot/omx/sim/cell_profile.yaml"
+    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
     identity = layout_digest(layout)
     if args.command == "prepare":
         from omx_transfer_audit import check_render, load
@@ -109,7 +108,7 @@ def main(argv=None):
 
         state = read_start(args.start, identity, profile)
         world = World(layout)
-        data = world.reset(state["joints_rad"])
+        data = world.reset(initial_joints=state["joints_rad"])
         actual = {arm: data.qpos[world.q[arm]].tolist() for arm in ARMS}
         result = readback(state, "mujoco", actual)
     args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
