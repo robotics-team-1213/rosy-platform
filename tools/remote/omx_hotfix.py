@@ -6,14 +6,14 @@
   test --sha <sha> --log-dir <dir> -- <tests...>
       Runs tools/remote/remote_pytest.py for that sha (never local pytest, D-584) and returns
       its exit code. Records the sha in <dir>/omx-hotfix-sha for deploy.
-  deploy --sha <sha> --tested-log <dir>/run-1.txt [--host user@host]
+  deploy --sha <sha> --tested-log <dir>/run-1.txt [--host user@host] [--link omx-<name>-current]
       Refuses unless that log came from `test` for this sha and its last pytest summary passed
       without failures or errors. Unpacks `git archive` of deploy/robot, the OMX adapter, contracts/foundation and the Calibration app plus
       REVISION into ~/rosy-test/omx-tools-<sha10>/ (skipped when its REVISION already matches),
       records `git merge-base <sha> main` as floor_sha in the cell's omx_autoupdate state (other keys kept,
       under the updater's lock, atomic rename) so the timer never goes back below the hotfix,
-      then switches ~/rosy-test/omx-tools-current to it atomically. Prints folder and old target.
-  status [--host user@host]
+      then switches ~/rosy-test/<link> (default omx-tools-current, the cell tools) to it atomically. Prints folder and old target.
+  status [--host user@host] [--link omx-<name>-current]
       Prints the current link target and the five newest omx-tools-* folders.
 
 The host comes from --host or OMX_HOTFIX_HOST; no live address is kept in this public repo (D-226).
@@ -40,7 +40,8 @@ HOST_ENV = "OMX_HOTFIX_HOST"
 # applications/calibration: the Calibration screen (D-1004) runs on this PC beside the cell's request store and cameras
 PATHS = ("deploy/robot", "middleware/devices/omx/adapter", "contracts/foundation", "operations/overhead/rosy_vision",
          "applications/calibration")
-LINK = "omx-tools-current"
+LINK = "omx-tools-current"  # the cell tools only; a bench page deploys with --link omx-bench-current
+LINK_NAME = re.compile(r"omx-[a-z0-9-]+-current")
 SHA_FILE = "omx-hotfix-sha"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15"]
 # Last pytest summary line, -q or full form: "3 passed, 1 skipped in 2.10s" / "=== 1 failed ... ===".
@@ -123,10 +124,10 @@ def host_of(value: str | None) -> str:
     return host
 
 
-def switch_script(name: str) -> str:
+def switch_script(name: str, link: str = LINK) -> str:
     # ln -sfn on the live name is unlink+symlink (a gap); rename over it with mv -T is atomic.
-    return (f"cd rosy-test && prev=$(readlink {LINK} || true) && ln -sfn {name} .{LINK}.tmp"
-            f" && mv -T .{LINK}.tmp {LINK} && echo \"$prev\"")
+    return (f"cd rosy-test && prev=$(readlink {link} || true) && ln -sfn {name} .{link}.tmp"
+            f" && mv -T .{link}.tmp {link} && echo \"$prev\"")
 
 
 def unpack_script(name: str) -> str:
@@ -166,7 +167,13 @@ def floor_command(floor: str) -> str:
                                                              UPDATE_LOCK))
 
 
-def deploy(sha: str, host: str, tested_log: Path) -> tuple[str, str]:
+def _link_ok(link: str) -> None:
+    if not LINK_NAME.fullmatch(link):
+        raise SystemExit(f"[omx-hotfix] not a tools link name (omx-<name>-current): {link!r}")
+
+
+def deploy(sha: str, host: str, tested_log: Path, link: str = LINK) -> tuple[str, str]:
+    _link_ok(link)
     full = _sha(sha)
     problem = log_problem(tested_log, full)
     if problem:
@@ -184,15 +191,17 @@ def deploy(sha: str, host: str, tested_log: Path) -> tuple[str, str]:
         if archive.returncode:
             raise SystemExit(f"[omx-hotfix] git archive failed: {archive.stderr.decode(errors='replace')}")
         _ssh(host, unpack_script(name), data=archive.stdout)  # stdin, so no scp or local C: paths
-    # floor first: if the switch then fails, a raised floor only holds the timer back
-    state = _ssh(host, floor_command(floor), data=FLOOR_SCRIPT.encode())
-    print(f"[omx-hotfix] autoupdate floor {floor[:10]} recorded in {state}", flush=True)
-    previous = _ssh(host, switch_script(name))
+    # floor first: if the switch then fails, a raised floor only holds the timer back; a bench link leaves the cell's updater alone
+    if link == LINK:
+        state = _ssh(host, floor_command(floor), data=FLOOR_SCRIPT.encode())
+        print(f"[omx-hotfix] autoupdate floor {floor[:10]} recorded in {state}", flush=True)
+    previous = _ssh(host, switch_script(name, link))
     return f"~/rosy-test/{name}", previous
 
 
-def status(host: str) -> str:
-    return _ssh(host, f"cd rosy-test && echo \"current: $(readlink {LINK} || echo none)\""
+def status(host: str, link: str = LINK) -> str:
+    _link_ok(link)
+    return _ssh(host, f"cd rosy-test && echo \"current: $(readlink {link} || echo none)\""
                       " && ls -1dt omx-tools-?????????? 2>/dev/null | head -5 || true")
 
 
@@ -221,18 +230,20 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--sha", required=True)
     d.add_argument("--tested-log", type=Path, required=True)
     d.add_argument("--host")
+    d.add_argument("--link", default=LINK)
     s = sub.add_parser("status")
     s.add_argument("--host")
+    s.add_argument("--link", default=LINK)
     args = parser.parse_args(argv)
     if args.command == "commit":
         print(commit(args.base, args.ref, args.files, args.message))
     elif args.command == "test":
         return test(args.sha, args.log_dir, args.tests)
     elif args.command == "deploy":
-        folder, previous = deploy(args.sha, host_of(args.host), args.tested_log)
+        folder, previous = deploy(args.sha, host_of(args.host), args.tested_log, args.link)
         print(f"deployed: {folder}\nprevious: {previous or 'none'}")
     else:
-        print(status(host_of(args.host)))
+        print(status(host_of(args.host), args.link))
     return 0
 
 
