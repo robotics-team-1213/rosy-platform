@@ -1,4 +1,6 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
+import { setOff } from "/common/cause-line.js";
+import { isOperator, NAMED_OPERATOR_REASON } from "/console/assets/authorization.js";
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'
     && headers.get('X-Frame-Rectified') === 'measured-map'
@@ -19,7 +21,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   let busy = false, reading = false, imageURL = null, cancelImageExpiry = null;
   let sourceLifetime = new AbortController();
   const identity = () => `${auth.token}\n${auth.role}\n${auth.principal}`;
-  const operator = () => auth.role === 'operator' && !!auth.principal && !auth.locked;
+  const operator = () => isOperator(auth.role) && !!auth.principal && !auth.locked;
   const visible = () => !root.closest('#camera-calibration').hidden;
 
   function clearImage() {
@@ -54,8 +56,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     return Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a ? {p95_m:a,max_m:b} : null;
   }
   function setEnabled(control, enabled, reason) {
-    control.disabled = !enabled;
-    control.setAttribute('reason', enabled ? '' : reason);
+    setOff(control, !enabled, enabled ? '' : reason);
     control.setAttribute('title', enabled ? '' : reason);
     control.setAttribute('aria-description', enabled ? '' : reason);
   }
@@ -64,7 +65,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const pendingReason = reading ? '적용 상태를 확인 중입니다.' : '요청을 처리 중입니다.';
     const editable = operator() && !busy;
     const operable = editable && !reading;
-    const editReason = pending ? pendingReason : '이름 있는 운영자 권한이 필요합니다.';
+    const editReason = pending ? pendingReason : `${NAMED_OPERATOR_REASON}.`;
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
     setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
     setEnabled(buttons.approve,operable && !!candidate && candidate.evidence_kind === 'measured'

@@ -78,7 +78,7 @@ def test_queue_flags_stale_state_from_the_server_age_plus_receive_time():
     """D-493 — state_age_s 에 받은 뒤 흐른 시간을 더한다. 서버/브라우저 시계 차는 쓰지 않는다."""
     roster = QUEUES.read_text(encoding="utf-8")
     assert "staleAgeS(robot, view.receivedAtMs, Date.now())" in roster
-    assert "상태 오래됨 — ${staleS}초 전 값" in roster
+    assert "상태 오래됨 — ${evidenceAgeText(staleS).slice(3)} 값" in roster
     # D-798 3.2: the state poll moved from console.js into console-refresh.js.
     assert "view.receivedAtMs = Date.now();" in (WEB / "console-refresh.js").read_text(encoding="utf-8")
     assert "gathered_at" not in roster

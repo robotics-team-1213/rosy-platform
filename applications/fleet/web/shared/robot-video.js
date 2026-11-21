@@ -4,11 +4,12 @@
 // 위임 토큰은 Authorization 헤더로만 보낸다. 패널이 가려지거나 탭이 숨으면 세션을 닫고,
 // 다시 보이면 같은 선택으로 연다. 새 화면이 1초 넘게 없으면 경고, 2초 넘으면 영상을 숨긴다.
 // 실패한 타일은 "영상 없음"으로 남는다: Fleet 경유 JPEG나 고속 MJPEG는 열지 않는다.
+import { setOffBy } from "/common/cause-line.js";
 
 import {createFleetClient} from "/common/fleet-client.js";
 import {openRobotCamera} from "/console/assets/app-runtime.js";
 
-export const MAX_TILES = 6;
+const MAX_TILES = 6;
 
 const LABEL = {
   live: (robot, s) => `${robot} · ${s.fps}fps · ${Math.round(s.ageMs)}ms`,
@@ -96,7 +97,7 @@ export function bindVisibility({doc = document, target, video, Observer = global
 }
 
 // 콘솔 패널: 사이트 카메라 패널 다음에 붙는다. index.html은 이 모듈을 불러오기만 한다.
-export function mountRobotVideoPanel({doc = document} = {}) {
+function mountRobotVideoPanel({doc = document} = {}) {
   const anchor = doc.querySelector(".vision-preview");
   if (!anchor || doc.getElementById("robot-video")) return null;
   const link = el(doc, "link", null, {rel: "stylesheet", href: "/console/assets/robot-video.css"});
@@ -139,9 +140,7 @@ export function mountRobotVideoPanel({doc = document} = {}) {
   picker.addEventListener("change", () => {
     const boxes = [...picker.querySelectorAll("input:checked")];
     for (const box of picker.querySelectorAll("input")) {
-      box.disabled = !box.checked && boxes.length >= MAX_TILES;
-      if (box.disabled) box.setAttribute("reason", `한 번에 ${MAX_TILES}대까지 볼 수 있습니다`);
-      else box.removeAttribute("reason");
+      setOffBy(box, !box.checked && boxes.length >= MAX_TILES ? `한 번에 ${MAX_TILES}대까지 볼 수 있습니다` : "");
     }
   });
   show.addEventListener("click", async () => {

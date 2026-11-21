@@ -1,3 +1,4 @@
+import { setOffBy } from "/common/cause-line.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
 import {roleLabel} from '/common/account-profile.js';
@@ -21,8 +22,7 @@ function status(message, state) {
 function lock(value) {
   busy = value;
   for (const id of ['profile-name-save', 'profile-password-save', 'profile-reload']) {
-    $(id).disabled = value;
-    $(id).setAttribute('reason', value ? '계정 처리 결과 확인 중' : '');
+    setOffBy($(id), value ? '계정 처리 결과 확인 중' : '');
   }
   for (const id of ['profile-name', 'profile-current', 'profile-new', 'profile-confirm']) $(id).readOnly = value;
 }

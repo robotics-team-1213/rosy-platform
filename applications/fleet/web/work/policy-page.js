@@ -1,4 +1,5 @@
 // D-793 /console/policy: 학습 정책 단계·승인 창·확인 요청·사고 잠금. 규칙은 서버가 판단한다.
+import { setOffBy } from "/common/cause-line.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {developmentToken} from '/console/assets/development-auth.js';
@@ -32,7 +33,7 @@ function element(tag, text = '', attrs = {}) {
 
 function button(label, lock, onClick, kind = 'quiet') {
   const node = element('ui-button', label, {kind});
-  if (lock) { node.disabled = true; node.setAttribute('reason', lock); }
+  if (lock) setOffBy(node, lock);
   node.addEventListener('click', () => onClick(node));
   return node;
 }
@@ -169,10 +170,10 @@ function render() {
     }
   }
   for (const id of ['policy-window-request', 'policy-proposal-submit']) {
-    $(id).disabled = !who.admin; who.admin ? $(id).removeAttribute('reason') : $(id).setAttribute('reason', ADMIN_REASON);
+    setOffBy($(id), who.admin ? '' : ADMIN_REASON);
   }
   for (const id of ['policy-incident-report', 'policy-sync-owner']) {
-    $(id).disabled = !who.operator; who.operator ? $(id).removeAttribute('reason') : $(id).setAttribute('reason', OPERATOR_REASON);
+    setOffBy($(id), who.operator ? '' : OPERATOR_REASON);
   }
 }
 

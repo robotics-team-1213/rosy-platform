@@ -20,7 +20,7 @@
  * `fresh` is evidence freshness, not a lifecycle, so no state here uses it. Stop is danger (estop icon for E-stop,
  * safety icon for an owner HOLD); the tag is never the card (D-202).
  */
-import {EVIDENCE_LABEL} from "./core_ui_logic.js";
+import {EVIDENCE_LABEL, evidenceAgeText} from "./core_ui_logic.js";
 
 export const SKILL_LIFECYCLES = Object.freeze(["proposed", "waiting_approval", "approved", "running", "measured_success", "measured_failure", "stopped", "timed_out", "fallback_proposed"]);
 export const EXECUTOR_LABEL = Object.freeze({ik_chunk: "규칙 운반", act: "학습 정책", smolvla: "학습 정책"});
@@ -56,6 +56,6 @@ export function skillState(input = {}) {
   if (guard && guard !== "ok") readout.push({label: "가드", value: (Object.hasOwn(GUARD_LABEL, guard) ? GUARD_LABEL[guard] : EVIDENCE_LABEL.unavailable)});
   if (measured && measured !== "model" && input.lifecycle.startsWith("measured")) readout.push({label: "측정", value: String(measured)});
   if (finite(leaseS)) readout.push({label: "리스 잔여", value: `${leaseS}초`});
-  if (finite(ageS) && ageS >= 0) readout.push({label: "관측", value: `${ageS}초 전`});
+  if (finite(ageS) && ageS >= 0) readout.push({label: "관측", value: evidenceAgeText(ageS).slice(3)});
   return {...shown, readout};
 }

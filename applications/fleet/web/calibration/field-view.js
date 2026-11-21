@@ -18,10 +18,10 @@ const IDENTITY = [[0, 0], [1, 0], [1, 1], [0, 1]];
 // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 토큰에서 푼다(테마를 따른다).
 const tone = (name) => window.RosyPalette.cssColor(name);
 
-function storageGet(key) {
+export function storageGet(key) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
-function storageSet(key, value) {
+export function storageSet(key, value) {
   try { localStorage.setItem(key, value); return true; } catch { return false; }
 }
 
