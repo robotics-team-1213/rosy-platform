@@ -27,6 +27,7 @@ Honest holes, not oversight:
 """
 
 import ast
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -74,6 +75,13 @@ def _tracked_files() -> list[str]:
     return sorted(line for line in out.splitlines() if line)
 
 
+_TOP_DEF_RE = re.compile(r"^(?:async[ \t]+)?(?:def|class)[ \t]+([^\W\d]\w*)\b", re.M)
+_TOP_DEF_FALLBACK = re.compile(
+    r"(?:^(?:async\b[^\n]*|def|class)\b[^\n]*\\$|^(?:async[ \t]+)?(?:def|class)[ \t]+[^\x00-\x7f]|;[ \t]*(?:async[ \t]+)?(?:def|class)\b)",
+    re.M,
+)
+
+
 def _definitions(text: str) -> list[tuple[str, str]]:
     tree = ast.parse(text)
     out = []
@@ -87,6 +95,23 @@ def _definitions(text: str) -> list[tuple[str, str]]:
     return out
 
 
+def _part_lookup(roots):
+    by_top: dict[str, list[tuple[int, tuple[str, ...], str]]] = {}
+    for prefix, part in roots:
+        by_top.setdefault(prefix[0], []).append((len(prefix), prefix, part))
+    for bucket in by_top.values():
+        bucket.sort(key=lambda item: item[0], reverse=True)
+
+    def part_of(rel: str) -> str | None:
+        parts = tuple(rel.split("/"))
+        for size, prefix, part in by_top.get(parts[0], ()):
+            if len(parts) > size and parts[:size] == prefix:
+                return part
+        return None
+
+    return part_of
+
+
 def scan(root: Path = ROOT) -> dict[tuple[str, str], tuple[str, ...]]:
     """Current identical cross-part definition groups: (name, n) -> paths.
 
@@ -94,23 +119,68 @@ def scan(root: Path = ROOT) -> dict[tuple[str, str], tuple[str, ...]]:
     pure reformat of one copy (same statements, new dump) surfaces as a new
     group instead of silently vanishing.
     """
-    roots = _roots()
-    owners: dict[tuple[str, str], set[str]] = {}  # (name, dump) -> parts
-    where: dict[tuple[str, str, str], set[str]] = {}  # (name, dump, part) -> paths
+    part_of = _part_lookup(_roots())
+    name_parts: dict[str, set[str]] = {}
+    candidates: list[tuple[str, str, list[str]]] = []
+    parsed_fallback: list[tuple[str, str, ast.Module]] = []
     for rel in _tracked_files():
         if "/test/" in f"/{rel}":
             continue
-        part = _part_of(rel, roots)
+        part = part_of(rel)
         if part is None:
             continue
         text = (root / rel).read_text(encoding="utf-8", errors="replace")
+        if _TOP_DEF_FALLBACK.search(text):
+            try:
+                tree = ast.parse(text)
+            except SyntaxError:
+                continue
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    name_parts.setdefault(node.name, set()).add(part)
+            parsed_fallback.append((rel, part, tree))
+            continue
+        found_names = _TOP_DEF_RE.findall(text)
+        if not found_names:
+            continue
+        for def_name in found_names:
+            name_parts.setdefault(def_name, set()).add(part)
+        candidates.append((rel, part, found_names))
+
+    dup_names = {def_name for def_name, parts in name_parts.items() if len(parts) >= 2}
+    buckets: dict[tuple, list[tuple[str, str, ast.AST]]] = {}
+    bucket_parts: dict[tuple, set[str]] = {}
+
+    def _collect(rel: str, part: str, tree: ast.Module) -> None:
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name in dup_names:
+                sig = (type(node), node.name, len(node.decorator_list), tuple(type(s) for s in node.body))
+                buckets.setdefault(sig, []).append((rel, part, node))
+                bucket_parts.setdefault(sig, set()).add(part)
+
+    for rel, part, tree in parsed_fallback:
+        _collect(rel, part, tree)
+    for rel, part, found_names in candidates:
+        if not any(def_name in dup_names for def_name in found_names):
+            continue
         try:
-            definitions = _definitions(text)
+            tree = ast.parse((root / rel).read_text(encoding="utf-8", errors="replace"))
         except SyntaxError:
             continue
-        for name, dump in definitions:
-            owners.setdefault((name, dump), set()).add(part)
-            where.setdefault((name, dump, part), set()).add(rel)
+        _collect(rel, part, tree)
+
+    owners: dict[tuple[str, str], set[str]] = {}  # (name, dump) -> parts
+    where: dict[tuple[str, str, str], set[str]] = {}  # (name, dump, part) -> paths
+    for sig, entries in buckets.items():
+        if len(bucket_parts[sig]) < 2:
+            continue
+        for rel, part, node in entries:
+            dump = ast.dump(node)
+            if len(dump) < MIN_DUMP:
+                continue
+            owners.setdefault((node.name, dump), set()).add(part)
+            where.setdefault((node.name, dump, part), set()).add(rel)
+
     groups = {}
     for (name, dump), parts in owners.items():
         if len(parts) < 2:
