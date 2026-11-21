@@ -11,12 +11,13 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import stat
 from types import SimpleNamespace
 
 import pytest
 from core_api_web.api.app import create_app
 from core_api_web.api.v1 import host as host_api
-from core.system.host_files import HostFileExchange
+from core.system.host_files import HostFileExchange, _write_private
 from core_common import robot_state
 
 VIEWER_TOKEN = "viewer-token"
@@ -709,3 +710,22 @@ def test_status_inputs_report_how_long_since_an_operator(tmp_path):
     svc.host_files.write_status_inputs(svc)
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
     assert written["manual_quiet_s"] == 625.5
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX umask/mode semantics")
+def test_write_status_inputs_keeps_0644_under_umask_0027(tmp_path):
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=_m1_config(tmp_path),
+                          state=FakeState(80.0, 8.0, mode="IDLE", nav="IDLE"),
+                          safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
+    old_umask = os.umask(0o027)
+    try:
+        svc.host_files.write_status_inputs(svc)
+        assert stat.S_IMODE((tmp_path / "run/rosy/status-inputs.json").stat().st_mode) == 0o644
+        p640 = tmp_path / "run/rosy/private-640.json"
+        p600 = tmp_path / "run/rosy/private-600.json"
+        _write_private(str(p640), "{}\n", 0o640, "test-640")
+        _write_private(str(p600), "{}\n", 0o600, "test-600")
+        assert stat.S_IMODE(p640.stat().st_mode) == 0o640
+        assert stat.S_IMODE(p600.stat().st_mode) == 0o600
+    finally:
+        os.umask(old_umask)
