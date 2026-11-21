@@ -334,19 +334,32 @@ def _file_weight(repo: Path, path: Path, fleet: dict[str, float]) -> float:
     return path.stat().st_size / BYTES_PER_S
 
 
+EVENTS_TAIL_BYTES = 8 * 1024 * 1024
+
+
+def _tail_lines(path: str, limit: int = EVENTS_TAIL_BYTES):
+    with open(path, "rb") as fh:
+        fh.seek(0, os.SEEK_END)
+        offset = max(0, fh.tell() - limit)
+        fh.seek(offset)
+        if offset > 0:
+            fh.readline()
+        for raw in fh:
+            yield raw.decode("utf-8", errors="replace")
+
+
 @functools.lru_cache(maxsize=4)
 def _history(events: str, mtime: float) -> dict[tuple, float]:
     runs = collections.defaultdict(list)
-    with open(events, encoding="utf-8") as f:
-        for line in f:
-            if '"run_s"' not in line:
-                continue
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            if row.get("event") == "tests" and isinstance(row.get("run_s"), (int, float)):
-                runs[tuple(row.get("argv") or ())].append(row["run_s"])
+    for line in _tail_lines(events):
+        if '"run_s"' not in line:
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if row.get("event") == "tests" and isinstance(row.get("run_s"), (int, float)):
+            runs[tuple(row.get("argv") or ())].append(row["run_s"])
     return {argv: statistics.median(v) for argv, v in runs.items()}
 
 
@@ -364,17 +377,16 @@ def history(repo: Path) -> dict[tuple, float]:
 def _fail_rates(events: str, mtime: float) -> dict[tuple, float]:
     """Share of an argv's finished runs (not cancelled) that ended new or flaky, from the landing events log."""
     seen = collections.defaultdict(lambda: [0, 0])
-    with open(events, encoding="utf-8") as f:
-        for line in f:
-            if '"tests"' not in line:
-                continue
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            if row.get("event") == "tests" and row.get("verdict") in ("pass", "new", "flaky"):
-                seen[tuple(row.get("argv") or ())][0] += row["verdict"] != "pass"
-                seen[tuple(row.get("argv") or ())][1] += 1
+    for line in _tail_lines(events):
+        if '"tests"' not in line:
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if row.get("event") == "tests" and row.get("verdict") in ("pass", "new", "flaky"):
+            seen[tuple(row.get("argv") or ())][0] += row["verdict"] != "pass"
+            seen[tuple(row.get("argv") or ())][1] += 1
     return {argv: bad / total for argv, (bad, total) in seen.items()}
 
 

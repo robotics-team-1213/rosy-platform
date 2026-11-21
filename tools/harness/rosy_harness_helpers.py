@@ -235,10 +235,10 @@ class AdrLog:
 
 
 def parse_adr_log(text: str, adr_dir: Path | None = None) -> AdrLog:
-    text = _normalize(text)
+    parts = [_normalize(text)]
     if adr_dir and adr_dir.is_dir():
-        for p in adr_dir.glob("*.md"):
-            text += "\n\n" + _normalize(p.read_text(encoding="utf-8"))
+        parts.extend(_normalize(p.read_text(encoding="utf-8")) for p in adr_dir.glob("*.md"))
+    text = "\n\n".join(parts)
     first_body = ADR_BODY_HEADING.search(text)
     index_text = text[: first_body.start()] if first_body else text
     index: dict[str, tuple[str, str]] = {}

@@ -795,7 +795,7 @@ class FakeJobHost:
 
 def test_a_jobs_deadline_starts_over_once_it_gets_host_room(tmp_path):
     """2026-10-30: a Gazebo suite waited 100 min for the host and was killed (124) before its first test."""
-    wait = [rj.WAIT + b" (6 job(s), 18c 22GB in use)\n"] + [b""] * 20  # 210 s: past a 60 s job's 180 s deadline
+    wait = [rj.WAIT + b" (6 job(s), 18c 22GB in use)\n"] + [b""] * 23  # 211.5 s: past a 60 s job's 180 s deadline
     for room, code in ((rj.ROOM[:9], rj.ROOM[9:] + b"\n1 passed\n"), (b"", b"")):
         fake = FakeJobHost(wait + [room, code] + [b""] * 10 + [b"done\n"], 0)
         now, sleep, clock = _clock()
@@ -828,7 +828,7 @@ def test_the_timing_line_splits_host_room_wait_from_run_time(tmp_path):
     log = tmp_path / "run-1.txt"
     assert rj.run("rosy@10.0.0.9", "r", 0, log, ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock) == 0
     line = log.read_text().splitlines()[-1]
-    assert " host=rosy " in line and "10.0.0.9" not in line and " wait_s=30 run_s=20" in line, line
+    assert " host=rosy " in line and "10.0.0.9" not in line and " wait_s=6 run_s=15" in line, line
 
 
 def test_polls_failing_past_the_budget_raise_lost_and_run_on_leaves_the_job(tmp_path, monkeypatch, capsys):
