@@ -233,8 +233,9 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
         home = belt_p[0] or pinky_p[0] or [0.85, -62.3, 53.0, 51.5, 45.0, 48.9]
         pick_p = pinky_p if "pinky" in origin.lower() else belt_p
         place_p = belt_p if "pinky" in origin.lower() else pinky_p
-        g_open, g_close = 48.0, 8.0
+        g_open, g_close = 48.0, 28.0
         a_wps = [
+            list(home),
             [*home[:5], g_open],
             [*pick_p[1][:5], g_open],
             [*pick_p[2][:5], g_open],
@@ -247,9 +248,9 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
             [*home[:5], g_open],
         ]
         motion_a = _interp_waypoints(a_wps, max_step=0.15)
-        seg_a = [list(motion_a[0])] * 45 + motion_a
+        seg_a = [list(motion_a[0])] * 90 + motion_a
         reset_n = 60
-        seg_b = [list(motion_a[-1])] * 45 + list(reversed(motion_a))
+        seg_b = [list(motion_a[-1])] * 90 + list(reversed(motion_a))
         frames = seg_a + [list(seg_a[-1])] * reset_n + seg_b
         return {
             "schema": "rosy.omx-replay-trajectory.v1",
