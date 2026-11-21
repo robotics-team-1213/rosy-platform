@@ -32,6 +32,17 @@ export function stopControls(overview, target, elapsed = 0) {
     .map(row => [row.unit_id, {...row.dispatch}]));
 }
 
+// D-977: only verified https origins from the server summary become links — never a token.
+export function childLinks(summary, target) {
+  const origin = summary?.child_origins?.[target];
+  if (typeof origin !== "string" || !/^https:\/\/[\w.:\[\]-]+$/.test(origin)) return [];
+  const arms = Array.isArray(summary.child_arm_units) && summary.child_arm_units.includes(target);
+  return [
+    {href: `${origin}/console`, label: "관제 화면 열기"},
+    ...(arms ? [{href: `${origin}/console/cell`, label: "셀 화면 열기"}] : []),
+  ];
+}
+
 function drawMap(holder, snapshot) {
   holder.replaceChildren();
   const model = {places: snapshot.places, edges: snapshot.lanes.map(lane => ({
@@ -60,6 +71,7 @@ function drawMap(holder, snapshot) {
 export function createIntegratedControlView({scope, call, anchor, active, approveReason, principal, taskStatus}) {
   const panel = node("section"), heading = node("h2", "통합 관제"), status = node("p", "", "hint"),
     list = node("ul", "", "work-list"), selectedName = node("h3"), detail = node("div"),
+    unitLinks = node("p", "", "integrated-unit-links"),
     map = node("div", "", "integrated-map"), mapInfo = node("p", "", "hint"),
     mapRead = button("선택 관제 지도 보기", true), notice = node("p"), stop = button("선택한 하위 관제에 정지 요청"),
     newStop = button("새 정지 요청 준비"), readStop = button("같은 정지 기록 확인", true),
@@ -94,14 +106,15 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   const intro = node("p", "상단 비상 정지는 이 관제의 직접 장치에 적용됩니다. 아래 하위 관제 정지 요청은 관제별 전달 결과를 확인해야 합니다.", "hint"),
     stopHeading = node("h3", "선택한 하위 관제의 정지 요청"),
     stopNote = node("p", "최신 정지 세대가 있는 관제만 요청에 포함합니다. 정보 없는 관제는 미전달일 수 있습니다. 물리 정지는 미확인입니다.", "hint");
-  panel.append(heading, intro, status, list, selectedName, detail, mapRead, mapInfo, map,
+  panel.append(heading, intro, status, list, selectedName, detail, unitLinks, mapRead, mapInfo, map,
     stopHeading, stopNote, actions, notice, stopIdentity, results, historyFold, reconcileFold);
   // D-960 §4: a cell keeps only its stop history and the local reconcile (D-862); R reads the tree.
-  for (const part of [intro, list, selectedName, detail, mapRead, mapInfo, map, stopHeading, stopNote, actions, notice,
+  for (const part of [intro, list, selectedName, detail, unitLinks, mapRead, mapInfo, map, stopHeading, stopNote, actions, notice,
     stopIdentity, results]) part.dataset.unitScope = "root";
   anchor.before(panel);
   let epoch = 0, overview = null, sampled = 0, target = null, inFlight = false, busy = false,
-    selection = 0, detailRevision = 0, mapRef = null, pending = null, snapshot = null, reference = null, owner = null;
+    selection = 0, detailRevision = 0, mapRef = null, pending = null, snapshot = null, reference = null, owner = null,
+    unitSummary = null;
   const elapsed = () => Math.max(0, (performance.now() - sampled) / 1000);
   const valid = (life, version) => life.current() && version === epoch;
   const localFence = () => {
@@ -131,12 +144,37 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   }
   function reset() {
     epoch++; selection++; overview = null; target = null; mapRef = null; pending = null; snapshot = null; reference = null;
+    unitSummary = null; unitLinks.replaceChildren(); unitLinks.hidden = true;
     list.replaceChildren(); detail.replaceChildren(); map.replaceChildren(); results.replaceChildren(); history.replaceChildren();
     notice.textContent = ""; stopIdentity.textContent = ""; mapInfo.textContent = ""; panel.hidden = true;
     status.textContent = ""; selectedName.textContent = ""; historyState.textContent = "";
     form.reset(); reconcileFold.open = false; historyFold.open = false; controls();
   }
   scope.onDispose(reset);
+  function paintUnitLinks() {
+    const links = unitSummary ? childLinks(unitSummary, target) : [];
+    unitLinks.replaceChildren(...links.map(link => {
+      const anchor = node("a", link.label, "ui-action-link");
+      anchor.dataset.kind = "quiet";
+      anchor.rel = "noreferrer";
+      anchor.href = link.href;
+      return anchor;
+    }));
+    unitLinks.hidden = !links.length;
+  }
+  async function readUnitLinks(version) {
+    if (unitSummary !== null) return;
+    const life = scope.capture();
+    try {
+      const value = await call(prefix);
+      life.check();
+      if (version !== epoch) return;
+      unitSummary = value && typeof value === "object" ? value : {};
+      paintUnitLinks();
+    } catch {  // 이동 링크는 부가 안내다: 실패해도 관제 화면 동작을 바꾸지 않는다.
+      if (life.current()) unitSummary = {};
+    }
+  }
   function paintUnits() {
     const focused = document.activeElement?.closest("[data-integrated-unit]")?.dataset.integratedUnit;
     list.replaceChildren();
@@ -166,7 +204,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   async function selectUnit(unitId) {
     target = unitId; selection++; mapRef = null; map.replaceChildren(); mapInfo.textContent = "";
     selectedName.textContent = unitId + " 관제 직접 자원"; detail.replaceChildren(node("p", "직접 자원 조회 중"));
-    controls(); if (overview) paintUnits();
+    paintUnitLinks(); controls(); if (overview) paintUnits();
     await readDetail();
   }
   async function readDetail() {
@@ -331,7 +369,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
       if (!target || !value.units.some(row => row.unit_id === target)) {
         target = value.unit_id; selection++; selectedName.textContent = target + " 관제 직접 자원";
       }
-      paintUnits(); controls(); await Promise.all([readDetail(), readHistory()]);
+      paintUnits(); controls(); await Promise.all([readDetail(), readHistory(), readUnitLinks(version)]);
     } catch (error) {
       if (valid(life, version)) {
         overview = null; mapRef = null; list.replaceChildren(); detail.replaceChildren(); map.replaceChildren(); controls();

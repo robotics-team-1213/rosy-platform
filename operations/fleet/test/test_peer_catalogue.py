@@ -184,8 +184,30 @@ def test_approved_directory_name_binds_mdns_but_never_promotes_readiness(tmp_pat
         'services': [observation(host='site.local', role='fleet').model_dump()]},
         headers={'Authorization': 'Bearer scanner'})
     peers = client.get('/api/fleet/peers', headers={'Authorization': 'Bearer viewer'}).json()['peers']
-    assert len(peers) == 1 and peers[0]['peer_id'] == 'fleet-approved'
-    assert peers[0]['freshness'] == 'fresh' and peers[0]['readiness'] == 'unknown'
+    observed = next(peer for peer in peers if peer['provenance'] == 'mdns')
+    assert observed['peer_id'] == 'fleet-approved'
+    assert observed['freshness'] == 'fresh' and observed['readiness'] == 'unknown'
+    listed = next(peer for peer in peers if peer['provenance'] == 'approved-directory')
+    assert listed['peer_id'] == 'fleet-approved' and listed['readiness'] == 'unknown'
+
+
+def test_mdns_observation_does_not_mask_the_enrolled_link_origin(tmp_path):
+    console = FleetConsole([RobotEndpoint('robot-1', 'https://robot-a.local:8443', 'rest-secret')],
+                           [FakeRobot('robot-1')])
+    client = TestClient(create_app(console, console_token='viewer',
+                                   discovery=DiscoveryStore(), discovery_token='scanner'))
+    scan = {'devices': [{'name': 'robot-a', 'hostname': 'robot-a.local', 'address': '192.168.1.10',
+                         'port': 8443, 'network': 'sta', 'transport': 'https'}], 'services': []}
+    assert client.post('/api/fleet/discovery/scan', json=scan,
+                       headers={'Authorization': 'Bearer scanner'}).status_code == 200
+    peers = client.get('/api/fleet/peers', headers={'Authorization': 'Bearer viewer'}).json()['peers']
+    assert {peer['provenance'] for peer in peers} == {'mdns', 'approved-directory'}
+    observed = next(peer for peer in peers if peer['provenance'] == 'mdns')
+    assert observed['peer_id'] == 'robot-1' and observed['approval'] == 'approved'
+    listed = next(peer for peer in peers if peer['provenance'] == 'approved-directory')
+    assert listed['peer_id'] == 'robot-1' and listed['approval'] == 'approved'
+    assert listed['freshness'] == 'unavailable' and listed['hostname'] == 'robot-a.local'
+    assert listed['port'] == 8443 and 'rest-secret' not in str(peers)
 
 
 def test_cli_wires_optional_directory_file_into_viewer_catalogue(tmp_path, monkeypatch):
