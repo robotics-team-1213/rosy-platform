@@ -5,9 +5,33 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.440
+**Version:** v1.445
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.445 Site map saves refuse double-encoded text (Fleet)
+
+PUT /api/fleet/site-map/draft and PUT /api/fleet/site-map/profiles/{profile_id} refuse a map or profile name whose text was decoded and encoded twice (UTF-8 read as cp1252, Hangul turned into Latin-1 look-alikes): 400 TEXT_DOUBLE_ENCODED, detail.detail.message lists up to five field paths such as places.0.name. Send the text as UTF-8 again. Nothing is stored.
+
+### v1.444 Motion identity reads wheel odometry (Fleet)
+
+### v1.443 지도 세대 map_generation (CORE)
+
+`StateSnapshot`(`/ws/state`, 하트비트)와 `GET /api/v1/navigation/state` 에 선택 정수 `map_generation` 을 더한다. SLAM 지도 원점이 **바뀌었을 수 있을 때마다** 바뀌는 카운터다: 항법 스택(slam_toolbox, map_server)의 lifecycle 이 ACTIVE 가 될 때마다 +1(항법만 다시 시작해도 바뀐다), CORE 를 시작할 때마다 +1(rosy-navigation 이 rosy-core 를 Requires 하고, CORE 가 구독하기 전에 지나간 재시작은 이벤트가 없다). CORE 데이터 폴더의 작은 파일에 저장해 CORE 재시작 뒤에도 같은 값을 되풀이하지 않는다(파일이 없거나 깨졌으면 벽시계 초에서 시작한다). `boot_id`·`map_id`·`map_grid_id` 와 무관하다: `map_grid_id` 는 격자가 자랄 때마다 해시가 바뀌어 원점 토큰으로 쓸 수 없다. 소비자는 **다른지(≠)만** 본다: 크기·순서를 쓰지 않고, 항상 `boot_id` 와 같이 `(boot_id, map_generation)` 쌍으로 비교한다. 알아내지 못하는 것: lifecycle 전환 없는 slam_toolbox 내부 초기화·지도 교체, 루프 클로저로 map->odom 이 크게 밀리는 것, AMCL 재시작(프레임은 그대로이고 추정만 잃는다). (v1.443)
+
+### v1.442 도킹 안착 앵커 (docking anchor) (CORE)
+
+`GET /api/v1/docking/status`(와 `StateSnapshot.docking`)에 선택 필드 `anchor`(객체 또는 `null`)를 더한다. 로봇이 칸에 **지금** 앉아 있다는 순간 짝이다: `{dock_id, confirmation: "lidar_reference"|"inferred", source: "docked"|"startup_probe", odom_pose: {x, y, yaw, stamp, epoch, mono_s}, boot_id, map_id, along_m, lateral_m, heading_deg, inliers, margin, at, age_s}`. Fleet 은 `odom_pose`(로봇 odom 프레임의 자세와 CORE 벽시계 stamp, epoch)를 그 칸의 현장 자세(위치와 방위)에 묶고 이후 odom 변위로 이어 간다. `confirmation` 은 항상 `"lidar_reference"` 다: 멈춘 LiDAR 스캔이 도크의 기준 스캔과 맞았다는 뜻이고 `along_m`·`lateral_m`·`heading_deg`·`inliers`·`margin`(모두 숫자) 이 그 안착 오차다. 스캔이 맞지 않으면(충전 접점만 확인된 DOCKED 포함) 앵커를 내지 않는다. DOCKED 앵커는 안착 스캔부터 DOCKED 선언까지 바퀴 오도메트리가 3 mm / 0.01 rad 안에서 서 있었을 때만 낸다. Fleet 은 상태 스냅샷의 `docking.anchor` 를 폴링해 `(dock_id, odom_pose.epoch, at)` 로 구별해 읽고, 이벤트는 로그용이다. 앵커는 `odom_pose.epoch` 가 지금 odom epoch 와 같을 때만 보인다(CORE 재시작이나 odom 불연속이면 `null`). `age_s` 는 읽는 시점 기준이다. 이벤트 `docking.anchor` 는 §8 표에 있다. 새 칸에 앉을 때마다 새로 기록되고 기존 필드·동작은 그대로다. 앵커에는 그 순간의 `StateSnapshot.map_generation`(SLAM 지도 원점 세대, 없는 CORE 에서는 `null`)이 `map_generation` 필드로 실린다. (v1.442)
+
+### v1.441 Fleet 셀 작업 증거 두 경로 (D-1057) (Fleet)
+
+표면: Fleet. 둘 다 additive이고 `claim`·`complete`의 요청·응답 모양과 거부 코드는 바뀌지 않는다.
+
+| Method and path | Contract |
+|---|---|
+| `POST /api/fleet/pipeline/cell-tasks/{task_id}/bed-confirm` | 이름 있는 운영자만(공용 `site-console`·`development-*`은 403 `NAMED_OPERATOR_REQUIRED`). 본문 64 KB 이하(413 `EVIDENCE_BODY_TOO_LARGE`). 같은 요청을 다시 보내면 `renewed:false`로 기존 확인을 그대로 돌려준다. 본문 `{robot_id}`가 작업의 로봇과 같아야 한다(아니면 422 `BED_CONFIRM_ROBOT_MISMATCH`). QUEUED 작업, 또는 확인이 무효가 된 RUNNING 작업(같은 lease에 다시 확인, 로봇이 그 순간 정지 상태가 아니면 409 `BED_CONFIRM_ROBOT_NOT_STOPPED`; 그 밖은 409 `CELL_TASK_NOT_QUEUED`). 그 순간 로봇 지도 자세가 LOCALIZED(odom 이음 아님)·2 s 이하·셀 정차 구역 안이어야 한다(아니면 409 `BED_CONFIRM_POSE_UNAVAILABLE`). 200 `{ok, confirmation{task_id, robot_id, principal_id, confirmed_at, pose}, expires_in_s}`. 확인은 지도 ID와 함께 저장되고 claim까지 120 s 유효하며(`claim`이 소비해 작업 행 `bed_confirmation{operator, confirmed_at, pose, map_id, map_version}`과 lease에 묶고, 묶인 뒤 `RELEASED`는 120 s를 다시 보지 않는다), 자세가 2 cm 넘게 움직이거나 지도(ID 또는 활성 버전)가 바뀌면 상태 갱신마다 검사해 영구 무효로 하고 메모리에만 있다. |
+| `POST /api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm` | 이름 있는 운영자만(공용 `site-console`·`development-*`은 403 `NAMED_OPERATOR_REQUIRED`, `bed-confirm`과 같은 규칙·저장 방식). QUEUED 작업만(409 `CELL_TASK_NOT_QUEUED`). 본문은 비어도 되고 64 KB 이하. 200 `{ok, renewed, presence{operator, at}, expires_in_s}`. 유효 120 s이고 같은 요청을 다시 보내도 만료를 갱신하지 않는다. 그 작업의 `claim`이 유효한 확인을 한 번 소비해 `claim` 응답의 `handoff.presence`와 작업 행 `presence`(`{operator, at}`, 없으면 null)에 싣는다. worker는 `presence`가 있는 작업만 감독 시험(`--commissioning --person-at-switch`)으로 실행한다(D-911). |
+| `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence` | 그 셀의 owner로 등록된 service 주체만(설정 `ROSY_FLEET_CELL_OWNERS`, 없으면 403 `OWNER_PRINCIPAL_NOT_REGISTERED`). 본문 64 KB 이하(413). 본문 `{handoff_lease_id, measured_at, receipt, stage_result, hardware_telemetry}`. RUNNING 작업(409 `CELL_TASK_NOT_RUNNING`), `handoff_lease_id`와 `receipt.handoff_lease_id`가 원장 lease와 같고 `receipt.stage_id`가 task_id(422 `OWNER_EVIDENCE_LEASE_MISMATCH`), `measured_at`이 claim 이후·60 s 이내·미래 2 s 이내이고 `hardware_telemetry.measured_at`과 2 s 안에서 같아야 한다(422 `OWNER_EVIDENCE_MEASURED_AT_INVALID`), 세 객체가 유한 JSON 딕셔너리(422 `INVALID_OWNER_EVIDENCE`). 200 `{ok, recorded}`. 같은 lease의 같은 증거는 `recorded:false`, 다른 증거는 409 `OWNER_EVIDENCE_ALREADY_RECORDED`. `complete`의 `RELEASED`는 이 저장 기록과 본문이 같을 때만 통과하고, 측정 시각 `measured_at` 기준 60 s 뒤에는 `OMX_OWNER_EVIDENCE_UNAVAILABLE`이다(저장 시각 기준이 아니다). |
 
 ### v1.440 지도 자세의 천장 추적 기준과 카메라 차이 (Fleet)
 
@@ -4898,6 +4922,11 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.445 | 2026-11-21 | [Fleet] Draft and profile saves answer 400 TEXT_DOUBLE_ENCODED |
+| v1.444 | 2026-11-21 | [Fleet] Motion identity (identity.motion_match) compares the camera track with the robot odom_pose displacement instead of a LOCALIZED map pose; an odometry epoch change or stale odometry starts over. No wire change. |
+| v1.443 | 2026-11-21 | [CORE] Additive: StateSnapshot·GET /navigation/state 의 map_generation(SLAM 지도 원점이 바뀌었을 수 있을 때마다 바뀌는 영속 카운터) |
+| v1.442 | 2026-11-21 | [CORE] Additive: GET /docking/status·StateSnapshot.docking 의 anchor(칸 안착 순간 짝), 이벤트 docking.anchor |
+| v1.441 | 2026-11-21 | [Fleet] Additive (D-1057, Safety-Review 대상): Fleet `POST /api/fleet/pipeline/cell-tasks/{task_id}/bed-confirm`(이름 있는 운영자, 지도 ID·버전과 함께 저장, 120 s·2 cm, 영구 무효), `POST /api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm`(이름 있는 운영자, 120 s, claim이 소비해 `handoff.presence`로 전달)와 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(그 셀의 owner로 등록된 service 주체, 64 KB, 측정 시각 60 s)를 더한다. `claim`·`complete`의 모양은 그대로이며 `complete`는 저장된 owner 증거와 같은 주체만 허용한다. 추가: `complete`는 적재함 확인이 무효가 되면 422 `BED_CONFIRMATION_INVALID`(그 밖의 미측정은 기존 `AMR_BRAKE_BED_VELOCITY_UNMEASURED`)로 거부하고, 작업 행에 `bed_confirmation`이 생긴다. |
 | v1.440 | 2026-11-21 | [Fleet] Additive: `GET /api/fleet/robots/{id}/map-pose`의 `anchor_source` 값 `track`, 필드 `camera_residual_m`·`camera_residual_deg`·`camera_x`·`camera_y`·`camera_yaw`(3초 안의 카메라 관측이 없으면 null). 식별 스냅샷 로봇 행의 `mode`(`led`\|`motion`\|null). 설정 `fleet.map_pose.track_anchor_robots`·`track_modes`·`track_heading_min_m`, `identity.motion_match`(기본 false) (D-1062) |
 | v1.439 | 2026-11-21 | [Fleet] Auto departure: a queued exit goal is not SENT |
 | v1.438 | 2026-11-21 | [CORE] Additive: CORE `POST /api/v1/navigation/bound-goal`은 승인된 격자 ID로 목표 수락을 제한한다. Fleet `road-nav2`는 이름 기반 정차에서 `expected_site_map_version`과 승인 정합을 확인한다. `dry_run: true`는 요청을 큐에 넣지 않는다. 단독 Nav2 정차는 양방향 자유 구간만 있고 차선 제어·회전 제한·횡단보도가 없는 지도에서 허용한다. 충전 관리 기체는 이 경로에 들어가지 않는다. Additive: CORE `POST /api/v1/navigation/line-handoff-goal`은 현재 주행 임대, 유지 중인 차선 STOP, 격자·부팅·소유권 세대를 동일 요청으로 확인한다. 기존 Nav2 실행 영수증을 반환한다. Additive: `POST /api/v1/navigation/handover`의 선택적 `expected_map_grid_id`를 같은 인계에서 확인한다. 일치하면 `map_grid_id`와 `idle_mode_epoch`를 반환한다. `POST /api/v1/navigation/bound-plan`으로 구동 없이 경로를 요청한다. `bound-goal`과 `line-handoff-goal`은 같은 계획 ID를 요구하고 해당 경로의 실행 조건을 재검사한다. CORE에서 실행 소유권을 발급하기 전에 요청을 거절하면 `error.detail`에 요청의 `plan_id`와 `native_admitted: false`를 반환한다. 소유권을 발급한 뒤에는 이 근거를 반환하지 않는다. `evidence.velocity.sampled_at`에 검증된 속도 측정 구간의 끝 시각을 UTC로 제공한다. `received_at`은 CORE 수신 시각이다. 시간 기준을 확인할 수 없거나 측정이 만료되면 `sampled_at`은 null이다. Fleet은 Nav2 종료 증거보다 뒤의 서로 다른 0속도 표본 두 개로 점유 해제를 검증한다. |
