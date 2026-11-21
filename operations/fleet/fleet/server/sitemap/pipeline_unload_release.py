@@ -15,7 +15,8 @@ depart_tick sends the vehicle to the site rules' return.exit_place once the chec
 tight fold age, records the release before it sends (persisted with the ledger), and holds after three failed sends.
 Only a goal the robot accepted is SENT. A goal Fleet merely queued (robot not LOCALIZED, traffic) is withdrawn in the
 same tick: the traffic loop would release it later without these checks. The record stays SENDING and the next tick
-checks everything again.
+checks everything again, for at most DEPART_QUEUE_WAIT_S from the first queue (queued_since); then HELD
+(DEPART_WAIT_EXPIRED) until an operator re-arms.
 A named operator may still send it early with depart_s3; a release is used once per batch."""
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ DEPART_FOLD_AGE_S = 15.0  # the automatic send trusts only a fold reading this f
 BED_MAX_AGE_S = 300.0  # the bed look belongs to this stop, not to an earlier one
 MAX_CONTAINERS = 6
 MAX_SEND_ATTEMPTS = 3
+DEPART_QUEUE_WAIT_S = 120.0  # D-1060 MAX_QUEUE_AGE_S: a later move is not this moment's intent
 OPEN_STATUSES = ("QUEUED", "RUNNING", "PAUSED_HUMAN")
 
 
@@ -146,6 +148,11 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
         record = state.unload_releases.get(batch) if batch else None
         if record is not None and record.get("state") != "SENDING":
             continue  # sent, held or taken by an operator's depart_s3
+        if record is not None and record.get("queued_since") is not None and now - record["queued_since"] > DEPART_QUEUE_WAIT_S:
+            record.update(state="HELD", reason="DEPART_WAIT_EXPIRED")
+            _event(state, robot_id, batch, "HELD", "DEPART_WAIT_EXPIRED", now)
+            save()
+            continue
         if not release["ready"]:
             seen.pop(batch, None)
             continue
@@ -178,12 +185,14 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
             if record.get("reason") != "GOAL_QUEUED_NOT_ACCEPTED":
                 _event(state, robot_id, batch, "WAITING", result.get("reason") or "GOAL_QUEUED", now)
             record.update(reason="GOAL_QUEUED_NOT_ACCEPTED", queue_reason=result.get("reason"))
+            record.setdefault("queued_since", round(now, 3))
             save()
             continue  # still SENDING: the next tick checks every release condition again
         record["attempts"] += 1
         accepted = bool(result.get("accepted"))
         if accepted:
-            record.pop("reason", None), record.pop("queue_reason", None)  # an earlier tick's queue wait is over
+            for key in ("reason", "queue_reason", "queued_since"):  # an earlier tick's queue wait is over
+                record.pop(key, None)
             record.update(state="SENT", sent_at=round(now, 3), receipt={k: result.get(k) for k in ("accepted", "queued")})
             _event(state, robot_id, batch, "SENT", target[0], now)
             if task_log is not None:  # the robot task ledger is the caller's (pipeline_cell_task_routes)

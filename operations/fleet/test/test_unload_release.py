@@ -80,11 +80,11 @@ class Console:
         return {"accepted": True}
 
 
-def tick(state, console, rules=RULES, human=False):
+def tick(state, console, rules=RULES, human=False, now=None):
     saves = []
     sent = asyncio.run(ur.depart_tick(state, console=console, rules=rules, site=SITE,
                                       enqueue=lambda spec: {"task_id": spec["task_id"]}, human_detected=human,
-                                      save=lambda: saves.append(1), now=time.time(),
+                                      save=lambda: saves.append(1), now=time.time() if now is None else now,
                                       task_log=lambda robot, batch, place, now: state.pinky_tasks.__setitem__(
                                           f"depart-{batch}", {"place": place, "auto": True})))
     return sent, saves
@@ -169,6 +169,38 @@ def test_a_queued_goal_is_not_sent_and_is_withdrawn_in_the_same_tick():
     tick(state, console)
     tick(state, console)
     assert len(console.goals) == n  # accepted once, never sent again
+
+
+def test_a_queued_wait_is_bounded_then_held(monkeypatch):
+    events = []
+    monkeypatch.setattr(ur, "_event", lambda state, robot, batch, result, why, now: events.append((result, why)))
+    state, console = _state([_task(0)]), QueuingConsole()
+    t0 = time.time()
+    tick(state, console, now=t0)
+    tick(state, console, now=t0)
+    record = state.unload_releases["u"]
+    assert record["queued_since"] == round(t0, 3)
+    state.arm_live_states["arm_s"]["updated_at"] = t0 + 118  # the fold reading stays fresh
+    tick(state, console, now=t0 + 119)
+    assert record["state"] == "SENDING" and record["queued_since"] == round(t0, 3)  # the first queue time is kept
+    n = len(console.goals)
+    tick(state, console, now=t0 + 121)
+    assert record["state"] == "HELD" and record["reason"] == "DEPART_WAIT_EXPIRED" and len(console.goals) == n
+    tick(state, console, now=t0 + 122)
+    assert len(console.goals) == n and console.queued == {}  # HELD sends nothing more
+    assert events.count(("HELD", "DEPART_WAIT_EXPIRED")) == 1
+
+
+def test_an_accept_inside_the_wait_clears_queued_since():
+    state, console = _state([_task(0)]), QueuingConsole()
+    t0 = time.time()
+    tick(state, console, now=t0)
+    tick(state, console, now=t0)
+    console.accept = True
+    state.arm_live_states["arm_s"]["updated_at"] = t0 + 59
+    tick(state, console, now=t0 + 60)
+    record = state.unload_releases["u"]
+    assert record["state"] == "SENT" and "queued_since" not in record
 
 
 def test_conditions_are_checked_again_after_a_queued_goal():
