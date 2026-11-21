@@ -540,6 +540,11 @@ def test_a_map_only_a_minority_of_the_marks_agree_on_is_refused():
     assert not cc.enough_agree(4, 4)
 
 
+def test_cell_calibrate_clears_bias_cache_on_cell_pivot_bias():
+    assert "cell_pivot._BIAS_CACHE" not in (ROOT / "deploy/robot/omx/cell_calibrate.py").read_text(encoding="utf-8")
+    assert "cell_pivot_bias._BIAS_CACHE.clear()" in (ROOT / "deploy/robot/omx/cell_calibrate.py").read_text(encoding="utf-8")
+
+
 def test_colour_diff_marks_black_finger_over_iso_luma_orange_background():
     """2026-11-15: black fingers over orange/pink can match in grey luminance; channel-max diff still marks them."""
     cv2 = pytest.importorskip("cv2")
@@ -791,3 +796,16 @@ def test_depth_verify_passes_a_fresh_depth_frame_on_a_depth_top_camera(tmp_path,
         assert cc.main(["--config", str(path), "auto", "--only", "depth-verify", "--verify",
                         "--commissioning", "--person-at-switch"]) == 0
         assert seen["depth"] is expect
+
+
+def test_moving_rects_includes_belt_and_moves_sites():
+    import cell_scene_guard as sg
+
+    cfg = {
+        "sites": {
+            "belt": {"auto_roi": [300, 20, 400, 120]},
+            "pinky": {"moves": True, "auto_roi": [100, 0, 310, 200]},
+            "board": {"auto_roi": [430, 350, 580, 440]},
+        }
+    }
+    assert sg.moving_rects(cfg) == [[300, 20, 400, 120], [100, 0, 310, 200]]

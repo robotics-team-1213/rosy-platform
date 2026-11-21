@@ -224,14 +224,23 @@ def bay_body_scan(services, sample, *, received_at: float) -> None:
         # the strip must not read as 0 (None = nothing in the strip = this check does not block).
         rear_gap = rear_band_gap(view.points, rear)
         docking.note_body_scan(kind, front, rear_gap, received_at - _scan_lag_s(sample))
+        docking.note_bay_scan_sample(sample, _scan_lag_s(sample))               # the turn watch matches consecutive scans (bay_turn_watch.py)
+        seat = docking.bay_seat_gap_request()
+        if seat is not None:
+            # the stored seated scan through the same body filter and the same strip: its rear gap is the stop-face reference
+            ref_view = body.scan_view(seat[1], forward_deg=config.lidar_forward_deg, self_mask=config.lidar_self_mask)
+            docking.note_bay_seat_gap(seat[0], rear_band_gap(ref_view.points, rear), ref_view.points)
         request = docking.bay_scan_request()
         if request is not None:
-            _match_bay_scan(docking, body, config, view.points, request[1], request[0])
+            _match_bay_scan(docking, body, config, view.points, request[1], request[0],
+                            step=request[3] if len(request) > 3 and request[2] == "turn" else None,
+                            near=request[3] if len(request) > 3 and request[2] in ("near", "track") else None,
+                            track=len(request) > 3 and request[2] == "track")
     except (AttributeError, KeyError, TypeError, ValueError):
         return
 
 
-def _match_bay_scan(docking, body, config, live_points, reference, request_id) -> None:
+def _match_bay_scan(docking, body, config, live_points, reference, request_id, step=None, near=None, track=False) -> None:
     """The robot's pose in the bay frame by LiDAR, once per zone check, off the scan thread (a few hundred ms of numpy).
 
     The reference scan goes through the same body filter as the live one. Any failure answers None: the zone
@@ -240,7 +249,14 @@ def _match_bay_scan(docking, body, config, live_points, reference, request_id) -
         error = None
         try:
             ref_view = body.scan_view(reference, forward_deg=config.lidar_forward_deg, self_mask=config.lidar_self_mask)
-            match = bay_scan_pose.locate(ref_view.points, live_points)
+            if track:
+                match = bay_scan_pose.locate_track(ref_view.points, live_points, near)
+            elif near is not None:
+                match = bay_scan_pose.locate_near(ref_view.points, live_points, near)
+            elif step is not None:
+                match = bay_scan_pose.locate_step(ref_view.points, live_points, step)
+            else:
+                match = bay_scan_pose.locate(ref_view.points, live_points)
         except Exception as exc:                           # noqa: BLE001 - the map path is the answer to anything
             match, error = None, "%s: %s" % (type(exc).__name__, exc)
         docking.note_bay_scan_match(match, error=error, request_id=request_id)

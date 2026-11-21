@@ -34,7 +34,7 @@ integrations/perception/perception_runtime/perception/camera_ground.py
 middleware/drive/tracking/wander/navigator.py
 middleware/perception/map/map_260905.world
 middleware/perception/map/map_260905_update_v2/original/map_260905.world
-middleware/perception/tools/device/hotpath_measure.py
+middleware/drive/tools/device/hotpath_measure.py
 middleware/perception/tools/device/ir_line_calibrate.py
 middleware/drive/behaviors/line_follow/clearance.py
 integrations/simulation/gazebo/config/simulation_actuation.yaml

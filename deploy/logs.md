@@ -4981,3 +4981,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 사이클, 잡은 물체 반환, owner 목표는 활성 원장이 있으면 보류를 한 행으로 기록한다. 복귀 뒤 차단되면 보류 의도를 보존한다. 재계획 load 거부는 이송 실패로 집계한다.
 - 증거: owner 보류와 재계획 load 거부 회귀 시험을 추가했다.
 - gate 변화: `cell_attempts.py` 변경으로 `task_sha256`이 바뀐다. 기존 운영 검토는 새 해시에 맞춰 갱신해야 한다.
+
+## 2026-11-21 · uncommitted · fix(site): 자동 트랙 보정이 고정 안 된 장소의 방향·이름·차로 설정을 지킴
+
+- 변경: merge_pinned가 고정 안 된 장소는 x·y만, 차로는 polyline만 추적값으로 바꾸고 yaw·name·kind·속도·폭은 지금 지도 값을 지킨다. R v270에서 S1 yaw가 null로 바뀐 것을 보고 고쳤다.
+- 증거: test_auto_track_calibration 새 시험 2개, R 설치 뒤 v271 자세 유지 확인
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

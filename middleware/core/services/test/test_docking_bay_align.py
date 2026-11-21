@@ -157,3 +157,136 @@ def test_find_creep_stops_on_lidar_rear_gap():
     drive(p, lambda m: m.phase is DockPhase.BACKOFF, rear_gap=lambda p: 0.04)
     assert not [c for ph, c in p.world.commands if ph is DockPhase.ACQUIRING and c[0] < 0.0]
     assert any("close behind" in r for r in reasons(p, "docking.retry"))
+
+
+def _far_nav2(p, extra_m):
+    """Nav2 stops extra_m beyond the staging point (y8xs round 17: x 0.42 for a 0.32 staging)."""
+    nav = p.world.navigate_to
+
+    def far(pose):
+        nav(pose)
+        x, y, yaw = p.world.pose
+        p.world.pose = (x - extra_m, y, yaw)
+    p.world.navigate_to = far
+
+
+def _line_inside_0_38(p):
+    capture = p.detector.capture
+
+    def hidden_far():
+        capture()
+        if p.world.pose[0] < -0.38:
+            p.detector.latest = None
+    p.detector.capture = hidden_far
+
+
+def test_a_far_nav2_arrival_fails_the_odometry_bounded_find_creep():
+    # the situation of y8xs round 17: the line shows 0.19 m back, the creep cap is 0.12 m
+    p = a_bay()
+    _far_nav2(p, 0.12)
+    _line_inside_0_38(p)
+    p.manager.dock()
+    drive(p, done)
+    assert any("find creep" in r for r in reasons(p, "docking.retry"))
+
+
+def test_with_the_seated_gap_known_the_find_creep_reaches_the_line_from_a_far_nav2_arrival():
+    p = a_bay()
+    _far_nav2(p, 0.12)
+    _line_inside_0_38(p)
+    p.manager.note_bay_seat_gap("bay1", 0.01)                      # the stored seated reference's rear gap
+    p.manager.dock()
+    drive(p, done, rear_gap=lambda p: max(0.0, -p.world.pose[0] - 0.05) + 0.01)
+    assert p.manager.state is DockState.DOCKED, p.manager._error
+    assert not reasons(p, "docking.retry")
+
+
+def test_the_lidar_bounded_find_creep_still_stops_before_the_rails():
+    p = a_bay()
+    p.detector.dead = True                                         # the line never shows (the test staging is 0.45 m out)
+    p.manager.note_bay_seat_gap("bay1", 0.01)
+    p.manager.dock()
+    xs = []
+    drive(p, lambda m: m.phase is DockPhase.BACKOFF, hook=lambda p: xs.append(-p.world.pose[0] - 0.05),
+          rear_gap=lambda p: max(0.0, -p.world.pose[0] - 0.05) + 0.01)
+    assert min(xs) > CFG.bay_find_min_x_m - 0.03, min(xs)         # never closer to the stop face than the limit
+    assert any("before the rails" in r for r in reasons(p, "docking.retry"))
+
+def _find_setup(p):
+    from test_docking_bay_scan_pose import with_reference  # noqa: PLC0415
+    _line_inside_0_38(p)
+    with_reference(p)
+    p.manager.note_bay_seat_gap("bay1", 0.01)
+
+
+def _find_run(p, find_answer):
+    from test_docking_bay_scan_pose import answer_kinds, good  # noqa: PLC0415
+    from test_docking_bay_zone import a_row, run_row  # noqa: PLC0415
+    return answer_kinds(zone=good(x=1.0), entry="true", find=find_answer)     # zone x 1.0: outside the row, the map path stages by Nav2
+
+
+def test_find_creep_start_with_a_skewed_lidar_heading_outside_the_row_turns_first():
+    # panel B follow-up on a5e44659cc: the turn at staging can end 20 deg off; creeping back with that heading drifts sideways
+    from test_docking_bay_scan_pose import good  # noqa: PLC0415
+    from test_docking_bay_zone import a_row, run_row  # noqa: PLC0415
+    p, row = a_row(start=None, others=())
+    _find_setup(p)
+    p.manager.dock()
+    run_row(p, row, until=_find_run(p, lambda n: good(x=0.5, heading=math.radians(20.0 if n == 1 else 2.0))))    # the 2nd ask: turned out
+    assert _spins(p), "no in-place turn before the creep"
+    assert p.manager.state is DockState.DOCKED, p.manager._error
+
+
+def test_the_in_place_find_align_must_be_verified_by_a_fresh_scan_pose():
+    # panel B R2: after the turn a scan pose is asked again; a heading still beyond 5 deg stops the dock, no creep
+    from test_docking_bay_scan_pose import good  # noqa: PLC0415
+    from test_docking_bay_zone import a_row, run_row  # noqa: PLC0415
+    p, row = a_row(start=None, others=())
+    _find_setup(p)
+    p.manager.dock()
+    run_row(p, row, until=_find_run(p, lambda n: good(x=0.5, heading=math.radians(20.0 if n == 1 else 9.0))))
+    assert _spins(p)
+    assert p.manager.state is DockState.DOCK_FAILED and "did not bring the heading out" in p.manager._error, p.manager._error
+    assert not [c for ph, c in p.world.commands if ph is DockPhase.ACQUIRING and c[0] < 0.0]
+
+
+def test_the_in_place_find_align_turns_no_further_than_its_cap():
+    # panel B R1: odometry that keeps turning away from the target (a runaway) stops at |heading| + 0.1 rad
+    from test_docking_bay_scan_pose import good  # noqa: PLC0415
+    from test_docking_bay_zone import a_row, run_row  # noqa: PLC0415
+    p, row = a_row(start=None, others=())
+    _find_setup(p)
+    odo = p.world.odometry_pose
+    first = {}
+
+    def runaway():
+        x, y, yaw = odo()
+        if p.manager.phase is DockPhase.ACQUIRING and p.manager._bay_phases._fh_turn is not None:
+            first.setdefault("t", p.clock.now)
+            return (x, y, yaw + 1.0 * (p.clock.now - first["t"]))
+        return (x, y, yaw)
+    p.world.odometry_pose = runaway
+    p.manager.dock()
+    run_row(p, row, until=_find_run(p, good(x=0.5, heading=math.radians(20.0))))
+    assert p.manager.state is DockState.DOCK_FAILED and "beyond its cap" in p.manager._error, p.manager._error
+
+
+def test_find_creep_start_with_a_skewed_heading_inside_the_row_does_not_creep():
+    from test_docking_bay_scan_pose import good  # noqa: PLC0415
+    from test_docking_bay_zone import a_row, run_row  # noqa: PLC0415
+    p, row = a_row(start=None, others=())
+    _find_setup(p)
+    p.manager.dock()
+    run_row(p, row, until=_find_run(p, good(x=0.25, heading=math.radians(20.0))))   # x 0.25 < the 0.45 test staging: in the row
+    assert p.manager.state is DockState.DOCK_FAILED and "inside the row" in p.manager._error, p.manager._error
+    assert not [c for ph, c in p.world.commands if ph is DockPhase.ACQUIRING and c[0] < 0.0] and not _spins(p)
+
+
+def test_find_creep_start_with_a_straight_heading_just_creeps():
+    from test_docking_bay_scan_pose import good  # noqa: PLC0415
+    from test_docking_bay_zone import a_row, run_row  # noqa: PLC0415
+    p, row = a_row(start=None, others=())
+    _find_setup(p)
+    p.manager.dock()
+    run_row(p, row, until=_find_run(p, good(x=0.5, heading=math.radians(4.0))))
+    assert not _spins(p) and p.manager.state is DockState.DOCKED, p.manager._error

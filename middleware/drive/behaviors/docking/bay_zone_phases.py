@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
+import math
 from typing import Optional
 
-from core_features.docking.bay_zone import DISAGREE, NO_LINE, classify as classify_zone, scan_diagnosis, scan_geometry
+from core_features.docking.bay_zone import (DISAGREE, NO_LINE, ZoneVerdict, backout_geometry, classify as classify_zone, junction_geometry,
+                                            junction_candidate, scan_diagnosis, lane_edge, lane_extent, pose_gate, scan_fit_pose, scan_geometry)
 from core_features.docking.model import DockPhase
 from core_features.docking.rear_phases import rear_errors
 
@@ -17,13 +20,133 @@ _LOG = logging.getLogger(__name__)
 
 
 class BayZoneMixin:
+    def _row_forward_reason(self, step: Optional[float] = None, now: Optional[float] = None, since: float = 0.0) -> Optional[str]:
+        """In the row (case I: re-dock from inside the lane) with a reference scan, a forward motion (creep 0.04, retry back-off 0.15) must not carry the
+        robot past the bay line in front (bay_line_x_m): the last LiDAR bay pose's x plus the planned step stays inside it, and the lateral stays in the lane."""
+        h, cfg = self._h, self._h._cfg
+        rp = self._row_pose
+        if not ((self._in_row or self._reseat_active) and self._has_reference()):
+            return None
+        if rp is None or (now is not None and now - rp[3] > cfg.bay_row_pose_fresh_s):
+            # R2: no forward motion in the row on a map/camera "acquire" alone: a LiDAR bay pose no older than bay_row_pose_fresh_s must back it
+            if now is not None and now - since <= cfg.bay_scan_pose_wait_s + cfg.bay_scan_wait_s:
+                return "wait"
+            return "no fresh LiDAR bay pose (<= %.1f s) for a forward move in the row" % cfg.bay_row_pose_fresh_s
+        if rp is None:
+            return None
+        ext = lane_extent(cfg, rp[1], rp[2])
+        if ext > lane_edge(cfg, h._dock) and not self._over_edge_ok(ext, ext, rp[0], now if now is not None else h.now()):
+            h._last_event = "lane keeping: the body overlaps a neighbour lane (lateral %.0f mm, heading %.0f deg)" % (rp[1] * 1000.0, math.degrees(rp[2]))
+            return "left the lane (body footprint beyond %.0f mm: lateral %.0f mm, heading %.0f deg)" % (
+                lane_edge(cfg, h._dock) * 1000.0, rp[1] * 1000.0, math.degrees(rp[2]))
+        step = cfg.bay_backoff_m if step is None else step
+        if rp[0] + step > cfg.bay_line_x_m - 0.02 and not (self._reseat_active and self._pitin):      # a pit-in reseat pulls forward to the junction (its target)
+            h._last_event = "lane keeping: a forward move of %.2f m would pass the bay line (x %.2f m, line %.2f m)" % (step, rp[0], cfg.bay_line_x_m)
+            return "a forward move of %.2f m from x %.2f m would pass the bay line (%.2f m)" % (step, rp[0], cfg.bay_line_x_m)
+        return None
+
     def _init_scan(self) -> None:
+        self._seat_tries, self._seat_ask_at, self._req_t, self._req_lat = 0, -1e9, 0.0, None
+        self._row_pose = None                        # (x, lateral, heading, at): the newest good LiDAR bay pose, for the lane-keeping guards
         # LiDAR bay pose (bay_scan_pose.py): one ask per check; request ids drop late answers
         self._scan_asked, self._scan_match, self._scan_error = False, None, None
         self._seat_asked, self._seat_match = False, None            # SETTLING: the seated check asks once
         self._req_seq, self._req_open, self._req_kind = 0, None, ""
+        self._req_track, self._ans_track, self._track_why, self._req_track_was, self._cen_req_seed = False, False, None, False, None
+        self._last_lidar = None
+        self.bay_identity = "confirmed"                 # "unconfirmed" after a weak first acquisition (no stamp, no re-teach from it)
         self._entry_since, self._entry_asked, self._entry_match = None, False, None   # entrance guard: fresh pose after the creep
         self._bay_lateral: Optional[float] = None                  # LiDAR lateral: fills in when the line gives none
+        self._along_last: Optional[tuple] = None   # (last measured along, odometry travel then): the along while the camera cannot measure it
+        self._in_row = False         # the last zone verdict started it inside the bay row (no Nav2 round trip, no drive-out retry)
+
+    def _entry_lidar(self, now: float):
+        """Reference-scan dock after the settle creep, stopped: the fresh LiDAR pose's (lateral, heading) for the entry window. "wait" while
+        the pose is being measured (bay_scan_pose_wait_s); None = no reference scan or no good pose."""
+        h, cfg = self._h, self._h._cfg
+        if not self._has_reference():
+            return None
+        if self._entry_since is None:
+            self._entry_since = now
+        if self._entry_match is None:
+            return "wait" if now - self._entry_since < cfg.bay_scan_pose_wait_s else None
+        fit = scan_fit_pose(self._entry_match[0], cfg)
+        if fit is None and self._pitin:
+            # a SEPARATE junction path (the row gate scan_fit_pose is untouched): inliers >= 0.60, margin >= 0.12, camera lateral agrees, rear to the bay
+            jg = junction_geometry(self._entry_match[0], self._observation(), cfg, facing=0.0)
+            fit = None if jg is None else (jg[0], jg[1], jg[2])
+        if fit is None:
+            return None
+        if abs(fit[1]) > cfg.bay_lane_half_m:
+            # round 23: lateral 191 mm, heading 23 deg right after a good turn while the robot was on the axis: one bay pitch (0.19-0.22) off is an
+            # alias of the neighbouring bay, not a pose. This window (outside the row) has no staging gate, so the lane gate applies here.
+            self._h._last_event = "entry LiDAR pose rejected: lateral %.0f mm is outside this bay's lane (alias of a neighbour bay?)" % (fit[1] * 1000.0)
+            return None
+        return (fit[1], fit[2], fit[0])
+
+    def _entry_values(self, now: float, lateral: float, heading: float):
+        """The (lateral, heading) the entry window judges after the settle creep, or "wait"/"stop" (handled this tick).
+        Reference-scan dock: the LiDAR pose's; no good pose and a map-filled camera lateral = not evidence (one retry, then stop);
+        LiDAR vs camera crossbar heading apart by more than bay_entry_heading_cross_rad outside the rails = a false fit, stop."""
+        h, cfg = self._h, self._h._cfg
+        entry = self._entry_lidar(now)
+        if entry == "wait":
+            return "stop"
+        if entry is not None:
+            cam_heading = heading
+            lat, head, entry_x = entry
+            apart = (cam_heading is not None and entry_x > cfg.bay_entry_outside_rails_x_m
+                     and abs(math.remainder(head - cam_heading, math.tau)) > cfg.bay_entry_heading_cross_rad)
+            m = self._entry_match[0]
+            if (cam_heading is not None and entry_x > cfg.bay_entry_outside_rails_x_m
+                    and abs(math.remainder(head - cam_heading, math.tau)) > cfg.bay_entry_heading_hard_rad):
+                self._stop()                                  # even a strong fit: 40 deg apart is not a 20-deg camera bias, one of them is lost
+                h._fail("bay entry heading: LiDAR %.0f deg vs camera %.0f deg are over %.0f deg apart: stopped"
+                        % (math.degrees(head), math.degrees(cam_heading), math.degrees(cfg.bay_entry_heading_hard_rad)))
+                return "stop"
+            if apart and m.inliers >= cfg.bay_entry_strong_inliers and m.margin >= cfg.bay_entry_strong_margin:
+                # a strong LiDAR fit outweighs the camera crossbar heading (wrong by ~20 deg at this site, round 22): note it, go on
+                h._last_event = "entry: camera heading %.0f deg ignored, strong LiDAR fit %.0f deg (inliers %.2f margin %.2f)" % (
+                    math.degrees(cam_heading), math.degrees(head), m.inliers, m.margin)
+                apart = False
+            if apart:
+                self._stop()
+                h._fail("bay entry heading: LiDAR %.0f deg vs camera %.0f deg disagree (false fit?): stopped"
+                        % (math.degrees(head), math.degrees(cam_heading)))
+                return "stop"
+            return lat, head
+        if self._pitin:
+            self._guard_fail("entry-lidar", "pit-in: no LiDAR pose at the entry window (the camera alone is not enough after a turn at the junction)", h._fail)
+            return "stop"
+        if self._has_reference():
+            raw = h._detector.relative_pose() if h._detector is not None else None
+            if raw is None or not raw.lateral_measured:
+                self._guard_fail("entry-lidar", "no LiDAR pose at the entry window and no measured camera lateral", h._retry)
+                return "stop"
+        return lateral, heading
+
+    def _rail_judge(self, now: float) -> bool:
+        """Reference-scan dock, LiDAR steering: right before the wheels reach the rails' entrance (LiDAR x <= bay_rail_judge_x_m) the mean of the last
+        bay_rail_judge_n LiDAR laterals must be within bay_entrance_lateral_m (the 9.45 mm a side clearance); until then the reverse itself corrects the
+        lateral on the LiDAR pose. Too few poses: stand still and wait (fail after the pose grace). True = handled this tick (stopped or failed)."""
+        h, cfg = self._h, self._h._cfg
+        if self._rail_judged or self._x_now is None or self._x_now > cfg.bay_rail_judge_x_m:
+            return False
+        recent = self._lp_hist[-cfg.bay_rail_judge_n:]
+        if len(recent) < cfg.bay_rail_judge_n:
+            self._stop()
+            self._gap_hist = []
+            self._judge_wait = now if self._judge_wait is None else self._judge_wait
+            if now - self._judge_wait > cfg.bay_lidar_pose_grace_s + 1.0:
+                h._fail("bay rail entrance: fewer than %d LiDAR poses to judge the lateral: stopped" % cfg.bay_rail_judge_n)
+            return True
+        mean = sum(recent) / len(recent)
+        if abs(mean) > cfg.bay_entrance_lateral_m:
+            self._stop()
+            h._retry("bay rail entrance lateral %.3f m (mean of %d LiDAR poses, limit %.3f m)" % (mean, len(recent), cfg.bay_entrance_lateral_m))
+            return True
+        self._rail_judged = True
+        return False
 
     def _entrance_blocked(self, now: float, along: float, lateral: float) -> bool:
         """Before the reverse into the rails (main's entry window has passed): True = handled (still waiting for the fresh
@@ -31,6 +154,10 @@ class BayZoneMixin:
         7.5 cm before the stop face (y8xs 2026-11-20, 22 mm off, stopped short); with the steering runway of a normal
         staging flow the line correction still centres it."""
         h, cfg = self._h, self._h._cfg
+        if self._has_reference() and self._entry_match is not None:
+            fit = scan_fit_pose(self._entry_match[0], cfg)
+            if fit is not None and fit[0] > cfg.bay_rail_judge_x_m + 0.08:
+                return False           # outside the rails with runway: the reverse corrects the lateral and _rail_judge judges at the rails
         if self._along_m is None:
             return False               # along unmeasured = the stop face is out of the camera's range: a long runway
         if self._along_m - cfg.bay_rail_entry_along_m >= cfg.bay_entrance_runway_m:
@@ -48,15 +175,83 @@ class BayZoneMixin:
             return True
         return False
 
-    def _seat_blocked(self) -> bool:
-        """SETTLING: the LiDAR puts the stopped robot well short of the stop face: the body is held, no charge will come."""
-        h, cfg = self._h, self._h._cfg
+    def _seat_geo(self):
+        """(x out of the stop face, lateral, heading) from the stopped robot's LiDAR seat check, or None (no reference / no good fit)."""
         seat = self._seat_match[0] if self._seat_match is not None else None
-        geo = scan_geometry(seat, h._type().staging_offset_m, cfg) if seat is not None else None
-        if geo is None or geo[0] <= cfg.bay_seat_tol_m:
+        return scan_geometry(seat, self._h._type().staging_offset_m, self._h._cfg) if seat is not None else None
+
+    def _note_along(self) -> None:
+        if self._along_m is not None and self._h.executor is not None:
+            self._along_last = (self._along_m, abs(self._h.executor.travelled_m()))
+
+    def _along_now(self) -> Optional[float]:
+        """The along to the stop face: measured, else the last measured one minus the odometry travel since (a reverse only closes it)."""
+        if self._along_m is not None:
+            return self._along_m
+        if self._along_last is None or self._h.executor is None:
+            return None
+        last, at = self._along_last
+        return last - max(0.0, abs(self._h.executor.travelled_m()) - at)
+
+    def drive_out_refusal(self, origin=None) -> Optional[str]:
+        """Why a retry from SETTLING must not drive out of the rails: the dock has a reference scan but the seat could not be
+        measured, or it is skewed (round 16: a forward back-off pivoted a skewed robot 77 deg). None = allowed (also without a reference)."""
+        h, cfg = self._h, self._h._cfg
+        if origin is DockPhase.ALIGNING and self._has_reference():
+            return None                                   # the reverse is judged by the LiDAR pose every tick; a reseat corrects it in the lane
+        if origin is DockPhase.ALIGNING:
+            # No seat check in ALIGNING: inside the rails (x < 0.1) a retry with a skewed line heading must not drive out either.
+            est, along = self._est, self._along_now()
+            if est is not None and along is not None and along < cfg.bay_inrow_along_m and abs(est[1]) > cfg.bay_inrow_retry_heading_rad:
+                return "bay retry from ALIGNING inside the rails with a %.0f deg line heading: not driving out" % math.degrees(est[1])
+            return None
+        if not isinstance(getattr(h._dock, "metadata", {}).get("reference_scan"), dict):
+            return None
+        geo = self._seat_geo()
+        if geo is None:
+            return "bay seat not measurable by LiDAR (no good scan pose): not driving out of the rails"
+        return None                                       # a skewed seat is corrected by a lane reseat (bay_reseat.py), not refused
+
+    def _settle_unconfirmed(self) -> bool:
+        """SETTLING timed out with no charge evidence. A LiDAR-confirmed straight seat stays (user rule 2026-11-21: keep the parking lines, never drive out of
+        a straight seat): DOCKED, not CHARGING, the pack voltage watched (a fall warns), the state said in status.last_event. True = docked."""
+        h, cfg = self._h, self._h._cfg
+        geo = self._seat_geo()
+        if geo is None or abs(geo[2]) > cfg.bay_seat_heading_max_rad or not -0.05 <= geo[0] <= cfg.bay_seat_tol_m:
             return False
-        h._retry("bay blocked short of the stop face (%.3f m out, seated within %.3f m)" % (geo[0], cfg.bay_seat_tol_m))
+        pct = getattr(h._battery, "percent", None)
+        h._last_event = "docked, charge NOT confirmed: LiDAR-confirmed straight seat (%.3f m out, %.1f deg), battery %s: staying in the lane" % (
+            geo[0], math.degrees(geo[2]), "%.0f %%" % pct if pct is not None else "unknown")
+        h._uncharged_v0 = getattr(h._battery, "voltage", None)
+        h._charge_unconfirmed = True
+        h._mark_docked()
+        if pct is not None and pct < cfg.bay_person_call_percent:
+            h._call_person("battery %.0f %% and no charge evidence" % pct)
         return True
+
+    def _seat_blocked(self, now: float) -> bool:
+        """SETTLING, from the LiDAR seat check of the stopped robot: True = handled (failed, retried, or docked)."""
+        h, cfg = self._h, self._h._cfg
+        geo = self._seat_geo()
+        if geo is None:
+            return False
+        if abs(geo[2]) > cfg.bay_seat_heading_max_rad:
+            h._retry("bay seated skewed %.1f deg at x %.2f m (limit %.1f deg)" % (math.degrees(geo[2]), geo[0], math.degrees(cfg.bay_seat_heading_max_rad)))
+            return True
+        if geo[0] > cfg.bay_seat_tol_m:
+            # the LiDAR puts the stopped robot well short of the stop face: the body is held, no charge will come
+            h._retry("bay blocked short of the stop face (%.3f m out, seated within %.3f m)" % (geo[0], cfg.bay_seat_tol_m))
+            return True
+        percent = getattr(h._battery, "percent", None)
+        if percent is not None and percent >= cfg.bay_full_battery_percent:
+            # A full pack does not rise in voltage: the LiDAR-confirmed straight seat is the evidence.
+            h._last_event = "docked without charge evidence: LiDAR-confirmed seat (%.3f m out, %.1f deg), battery %.0f %%" % (
+                geo[0], math.degrees(geo[2]), percent)
+            h._uncharged_v0 = getattr(h._battery, "voltage", None)         # watched while DOCKED: a falling pack warns
+            h._charge_unconfirmed = True
+            h._mark_docked()
+            return True
+        return False
 
     def _corridor_view(self) -> bool:
         raw = self._h._detector.relative_pose() if self._h._detector is not None else None
@@ -66,16 +261,46 @@ class BayZoneMixin:
         """CORE 가 LiDAR 콜백에서 묻는다(락 없음): 기준 스캔을 가진 칸이 자세를 기다리면 (요청 번호, 스캔)을 한 번 내준다.
         세 때: 칸 줄 판정, 정착 크리프 뒤 진입 가드(정지 중 새로 잰다), SETTLING 안착 확인."""
         h = self._h
+        if self._req_open is not None and h.now() - self._req_t > h._cfg.bay_req_timeout_s:
+            # an open request that never got an answer (a matching thread that died or starved) must not block every later one
+            h._last_event = "LiDAR request %s (%s) timed out after %.1f s: asking again" % (self._req_open, self._req_kind, h.now() - self._req_t)
+            self._req_open = None
+        if (h.phase is DockPhase.ACQUIRING and self._align is not None and self._has_reference() and self._req_open is None
+                and h.now() - self._ap_ask_at >= h._cfg.bay_lidar_ask_s):
+            self._ap_ask_at = h.now()
+            return self._open_request(getattr(h._dock, "metadata", {}).get("reference_scan"), "alignpose",
+                                      self._near(self._row_pose))
+        if (((h.phase is DockPhase.ACQUIRING and not self._crept) or h.phase is DockPhase.BACKOFF) and self._in_row and self._has_reference()
+                and self._req_open is None
+                and (self._row_pose is None or h.now() - self._row_pose[3] > h._cfg.bay_row_pose_fresh_s / 2)
+                and h.now() - self._ap_ask_at >= h._cfg.bay_lidar_ask_s):
+            self._ap_ask_at = h.now()                        # a fresh bay pose before the creep (the answer feeds _row_pose)
+            return self._open_request(getattr(h._dock, "metadata", {}).get("reference_scan"), "rowpose", self._near(self._row_pose))
+        if self.centre_request_due(h.now()):
+            self._ap_ask_at = h.now()
+            return self._open_request(getattr(h._dock, "metadata", {}).get("reference_scan"), "centre")
+        if self.ls_ask(h.now()):
+            ref = getattr(h._dock, "metadata", {}).get("reference_scan")
+            return self._open_request(ref, "align", self._near(self._row_pose))
+        turn = self._tw_ask(h.now())                       # an in-place turn being watched (no reference scan needed)
+        if turn is not None:
+            return turn
         dock = h._dock
         ref = getattr(dock, "metadata", {}).get("reference_scan") if dock is not None else None
         if not isinstance(ref, dict):
             return None
         if h.phase is DockPhase.SETTLING and not self._seat_asked:
             # stopped for a while: where is the robot against the stop face (the stored seated scan)?
-            if h.now() - h._phase_since < h._cfg.bay_seat_check_delay_s:
+            if h.now() - h._phase_since < h._cfg.bay_seat_check_delay_s or h.now() - self._seat_ask_at < 1.0:
                 return None
-            self._seat_asked = True
-            return self._open_request(ref, "seat")
+            self._seat_asked, self._seat_ask_at = True, h.now()
+            self._seat_tries += 1
+            return self._open_request(ref, "seat", self._near(self._row_pose) or (0.0, 0.0, 0.0))     # seated: close to the reference itself
+        if h.phase is DockPhase.ACQUIRING and self._find_since is not None and not self._find_asked:
+            if self._fh_verify and h.now() - self._find_since < h._cfg.bay_seat_check_delay_s:
+                return None                      # after the turn: stand still first, the scan must not catch it moving
+            self._find_asked = True
+            return self._open_request(ref, "find")
         if h.phase is DockPhase.ACQUIRING and self._entry_since is not None and not self._entry_asked:
             if h.now() - self._entry_since < h._cfg.bay_seat_check_delay_s:
                 return None                  # stopped after the creep first: the scan must not catch the body moving
@@ -86,21 +311,100 @@ class BayZoneMixin:
         self._scan_asked = True
         return self._open_request(ref, "zone")
 
-    def _open_request(self, ref: dict, kind: str) -> tuple:
+    def tracking(self) -> bool:
+        """Inside the row the pose is TRACKED from the last accepted pose; lost after bay_track_lost_s without one (back to first acquisition)."""
+        rp = self._row_pose
+        return rp is not None and self._h.now() - rp[3] <= self._h._cfg.bay_track_lost_s
+
+    def _track_seed(self):
+        """The last accepted pose carried by the odometry travel since (reverse in ALIGNING, forward in a reseat), bay frame (x, y, heading)."""
+        rp, h = self._row_pose, self._h
+        travel = max(0.0, abs(h.executor.travelled_m()) - rp[4]) if h.executor is not None and len(rp) > 4 else 0.0
+        sign = -1.0 if h.phase is DockPhase.ALIGNING else 1.0 if h.phase is DockPhase.BACKOFF else 0.0
+        return rp[0] + sign * travel, -rp[1], rp[2]
+
+    def _open_request(self, ref: dict, kind: str, near=None) -> tuple:
         self._req_seq += 1
-        self._req_kind, self._req_open = kind, self._req_seq
+        self._req_kind, self._req_open, self._req_t, self._req_track = kind, self._req_seq, self._h.now(), False
+        if kind == "centre" and self._cen is not None and self._cen_pose is not None and self._cen.get("leg") in ("backout", "fwd", "rev"):
+            self._req_track, self._cen_req_seed = True, self._cen_seed()     # back-out / shuttle: tracked from the accepted start pose, never a global re-acquisition
+            return self._req_seq, ref, "track", self._cen_req_seed
+        if kind in ("align", "alignpose", "rowpose", "seat") and self.tracking():
+            self._req_track = True                   # local ICP from the carried pose, no alias seeds, no margin gate
+            return self._req_seq, ref, "track", self._track_seed()
+        if near is not None:                         # seed the ICP at the last good pose: a few runs instead of 36 (the main thread can be 85 % busy)
+            return self._req_seq, ref, "near", near
         return self._req_seq, ref
+
+    def _near(self, pose):
+        """(x, y, heading) of a stored (x, lateral, heading, ...) pose for the ICP seed, or None."""
+        return None if pose is None else (pose[0], -pose[1], pose[2])
 
     def note_scan_match(self, match, at: float, error: Optional[str] = None, request_id: Optional[int] = None) -> None:
         """scan_request 의 답(BayScanPose 또는 None = 못 맞춤). 열린 요청 번호와 다르면(늦은 답) 버린다."""
         if request_id is None or request_id != self._req_open:
+            if request_id is not None:
+                self._h._last_event = "LiDAR answer dropped: request %s is not the open one (%s): late" % (request_id, self._req_open)
             return
+        self._req_lat = float(at) - self._req_t
+        if match is not None and self._req_kind != "turn" and math.isfinite(match.heading) and match.inliers >= 0.5:      # not the turn watch (its heading is relative, not a bay heading)
+            self._last_lidar = (match.heading, float(at))        # the last LiDAR bay heading of this run (any request): "facing the bay" is remembered across verdicts
+        self._track_why, self._ans_track, self._req_track_was = None, self._req_track, self._req_track
+        if self._req_track:
+            why = self._track_gate(match)
+            if why is not None:
+                self._track_why = "tracked pose: " + why
+                self._h._last_event = "LiDAR pose dropped (tracked): " + why
+                match = None
+        if (not self._req_track and match is not None and self._req_kind in ("zone", "entry", "find", "rowpose", "alignpose", "seat")
+                and math.isfinite(match.margin) and match.margin < self._h._cfg.bay_scan_margin_min):
+            # case I first acquisition (x <= 0.20): the global margin is ~0.2 in the row of self-similar bays; the rear gap and the window decide instead
+            if self._first_acquisition(match, float(at)) is None:
+                match = dataclasses.replace(match, margin=1.0)
+        fit = scan_fit_pose(match, self._h._cfg)
+        if fit is not None:
+            travel = abs(self._h.executor.travelled_m()) if self._h.executor is not None else 0.0
+            self._row_pose = (fit[0], fit[1], fit[2], float(at), travel)      # + the odometry travel then (a forward move since is added by the reseat)
         kind, self._req_open = self._req_kind, None
         if kind == "seat":
             self._seat_match = (match, float(at))
+            why = pose_gate(match, self._h._cfg, self._h._type().staging_offset_m)
+            if why is not None:
+                self._h._last_event = "seat LiDAR pose dropped: %s (try %d)" % (why, self._seat_tries)
+                if self._seat_tries < self._h._cfg.bay_seat_tries:
+                    self._seat_asked = False                 # ask again: one dropped pose must not leave the seat unmeasured
         elif kind == "entry":
             self._entry_match = (match, float(at))
-        else:
+        elif kind == "find":
+            self._find_match = (match, float(at))
+        elif kind == "alignpose":
+            fit = scan_fit_pose(match, self._h._cfg)
+            prev = self._align_lp
+            if fit is not None and prev is not None and abs(fit[2] - prev[0]) > 0.0873 + 0.3 * max(0.0, float(at) - prev[2]):
+                fit = None                  # consecutive align poses may not jump more than 5 deg + the turn rate: not evidence
+            if fit is not None:
+                self._align_lp = (fit[2], fit[1], float(at))
+        elif kind == "align":
+            self.ls_note(match, float(at))
+        elif kind == "centre":
+            # a (possibly late) centring / back-out answer is NEVER the zone answer: it only feeds the carried pose, and nothing at all when no back-out is running
+            # (b8xy nosein-5: a dropped late answer fell into the zone branch below, ended the wait with no match and the zone verdict said "acquire" on the camera)
+            seed = getattr(self, "_cen_req_seed", None) if self._req_track_was else None
+            c0 = self._cen or {}
+            cum = (c0.get("leg") == "backout" and c0.get("start") is not None and self._h.executor is not None
+                   and (abs(match.x - (c0["start"][0] + abs(self._h.executor.travelled_m()))) > 0.05 or abs(match.y - c0["start"][1]) > 0.03
+                        or abs(math.remainder(match.heading - c0["start"][2], math.tau)) > 0.17))       # cumulative: vs the START pose + the total odometry travel
+            if self._cen is None or match is None:
+                pass
+            elif cum or (seed is not None and (abs(match.x - seed[0]) > 0.025 or abs(match.y - seed[1]) > 0.03 or abs(math.remainder(match.heading - seed[2], math.tau)) > 0.12)):
+                # odometry and LiDAR disagree, or the fit jumped: not evidence; the carried pose ages and the move stops (stale), then fails
+                self._h._last_event = "LiDAR pose dropped (back-out): jumped from the carried pose (dx %.0f mm, dy %.0f mm, dheading %.1f deg)" % (
+                    (match.x - seed[0]) * 1000.0, (match.y - seed[1]) * 1000.0, math.degrees(math.remainder(match.heading - seed[2], math.tau)))
+            else:
+                self._cen_pose = (match, float(at), abs(self._h.executor.travelled_m()) if self._h.executor is not None else 0.0)
+        elif kind == "turn":
+            self._tw_note(match, float(at), request_id)
+        elif kind == "zone":
             self._scan_error = error
             self._scan_match = (match, float(at))
 
@@ -123,6 +427,9 @@ class BayZoneMixin:
     def _tick_zone(self, now: float) -> None:
         """칸 줄 안: 판정 → 곧은 전진(Nav2·제자리 회전 없음) → 뒤가 칸을 보므로 선 포획부터."""
         h, cfg = self._h, self._h._cfg
+        if self._zone == "centre":
+            self._tick_centre(now)
+            return
         if self._zone == "check":
             pose = h._pose_provider()
             if pose is None and now - h._phase_since < cfg.bay_stage_recheck_s:
@@ -133,9 +440,59 @@ class BayZoneMixin:
                     return                   # the match runs off the scan thread; the map path takes over after the wait
                 if self._scan_match is not None:
                     scan = scan_geometry(self._scan_match[0], h._type().staging_offset_m, cfg)
-                scan_note = scan_diagnosis(self._scan_asked, self._scan_match, self._scan_error, scan, cfg)
-            verdict = classify_zone(pose, h._dock, h._type().staging_offset_m,
-                                    self._observation(), cfg, scan)
+                scan_note = scan_diagnosis(self._scan_asked, self._scan_match, self._scan_error, scan, cfg, h._type().staging_offset_m)
+            junction = None if scan is not None or self._scan_match is None else junction_geometry(
+                self._scan_match[0], self._observation(), cfg)
+            lidar_match = None if self._scan_match is None else self._scan_match[0]
+            self._facing_bay = bool(lidar_match is not None and math.isfinite(lidar_match.heading) and lidar_match.inliers >= 0.5
+                                    and abs(math.remainder(lidar_match.heading - math.pi, math.tau)) < math.pi / 2)
+            backout = None if scan is not None or junction is not None or lidar_match is None else backout_geometry(
+                lidar_match, self._observation(), cfg)
+            weak_note = ""
+            if scan is None and junction is None and backout is None and lidar_match is not None:
+                weak = backout_geometry(lidar_match, self._observation(), cfg, weak=True)     # beyond the bay line: junction-level fit + camera lateral + the modelled depth
+                if weak is not None:
+                    why = self._empty_front_reason(now, lidar_match)
+                    if why == "wait":
+                        return
+                    backout, weak_note = (weak if why is None else None), why or ""
+            candidate = scan is None and junction is None and backout is None and junction_candidate(lidar_match, cfg)
+            lane_nose_in = (scan is None and junction is None and backout is None and lidar_match is not None and self._facing_bay
+                            and abs(lidar_match.y) <= cfg.bay_lane_half_m and lidar_match.x < cfg.bay_turn_x_min_m)       # any quality: never the map, never a turn in the row
+            if backout is not None:
+                verdict = ZoneVerdict("backout", "nose toward the bay inside the lane")
+            elif candidate:
+                # the LiDAR half of the pit-in rule holds but the camera line is not measured yet: wait for it (never fall into Nav2 on the map meanwhile), then refuse
+                if now - h._phase_since < cfg.bay_zone_look_s:
+                    return
+                verdict = ZoneVerdict("manual", "at the staging junction facing the bay but no measured camera line lateral confirms the bay: not using the map")
+            elif lane_nose_in:
+                # in its lane, nose toward the bay, but outside the back-out window (skewed past 30 deg: e.g. a cancelled turn): never turn in the row, never move
+                verdict = ZoneVerdict("manual", "nose toward the bay inside the lane at x %.3f, heading %.0f deg (inliers %.2f, margin %.2f; back-out needs the row gates, or the junction-level fit + camera lateral + depth, heading 180 +- %.0f deg)%s: not moving, not turning in the row" % (
+                    lidar_match.x, math.degrees(lidar_match.heading), lidar_match.inliers, lidar_match.margin, math.degrees(cfg.bay_junction_heading_rad), " [" + weak_note + "]" if weak_note else ""))
+            elif junction is not None:
+                # pit-in: it stands at the junction facing the bay; the map pose is not needed (and after a CORE restart not usable)
+                verdict = ZoneVerdict("junction", "at the staging junction facing the bay (LiDAR x %.3f, lateral %.0f mm, heading %.0f deg)" % (
+                    junction[0], junction[1] * 1000.0, math.degrees(junction[2])))
+            else:
+                verdict = classify_zone(pose, h._dock, h._type().staging_offset_m, self._observation(), cfg, scan)
+            if verdict.kind == "out" and isinstance(getattr(h._dock, "metadata", {}).get("reference_scan"), dict) and self._scan_match is not None:
+                # Nav2 staging BY THE MAP for a reference-scan dock needs the map frame positively verified: the caller asserted a verified site pose
+                # (dock(site_pose_verified=True)), or a good LiDAR bay fit agrees with the map pose. map_epoch cannot verify it (it is blind when the map id does not
+                # change across a SLAM restart), and a "no fit" / weak answer proves nothing. Otherwise refuse + person_call: never stage on an unverified map.
+                why = self._map_verified(pose)
+                if why is not None:
+                    verdict = ZoneVerdict("manual", "not staging by the map: " + why)
+            if isinstance(getattr(h._dock, "metadata", {}).get("reference_scan"), dict) and not self._scan_asked and now - h._phase_since < cfg.bay_scan_pose_wait_s:
+                return                                           # no zone verdict of a reference-scan dock before the LiDAR bay pose has been ASKED for ("never requested")
+            if verdict.kind in ("acquire", "exit") and self._facing_recent(now):
+                verdict = ZoneVerdict("manual", "the last LiDAR bay pose has the nose toward the bay: not acquiring or leaving on the camera / map")
+            if self._scan_match is None and isinstance(getattr(h._dock, "metadata", {}).get("reference_scan"), dict):
+                # a reference-scan dock NEVER decides on the map alone: no LiDAR bay pose answer (CORE just restarted, the scan thread is not up) = the map pose is
+                # unverified (map_epoch / origin reset), so no verdict, no Nav2 staging: refuse and call a person
+                verdict = ZoneVerdict("manual", "no LiDAR bay pose answer within %.1f s: the map pose is unverified (SLAM origin may have been reset), not using it" % cfg.bay_scan_pose_wait_s)
+            if scan is not None:
+                self.bay_identity = "confirmed"                  # the row gates (inliers / margin / lane / heading) accepted this bay's pose
             if scan is not None and verdict.kind in ("acquire", "exit"):
                 self._bay_lateral = scan[1]
             if verdict.reason == NO_LINE and now - h._phase_since < cfg.bay_zone_look_s:
@@ -152,15 +509,32 @@ class BayZoneMixin:
                 verdict = verdict.__class__("manual", "no fresh body scan before Nav2")
             elif verdict.kind == "out" and body[0] == "near":
                 verdict = verdict.__class__("manual", "something within the tray sweep before Nav2")
+            if verdict.kind == "exit":
+                # User rule 2026-11-21: the dock KEEPS the parking lines. The way out (staging 0.32+) passes the bay line in front, and a 180 turn there leaves
+                # the lane: a robot in its lane that is skewed or off-centre cannot acquire in place -> stop and say so, never go out to staging.
+                verdict = verdict.__class__("manual", "in the lane but not straight/centred enough to reverse in; leaving the lane to stage is not allowed: centre it by hand")
+                h._last_event = "lane keeping: " + verdict.reason
+            stale = self._map_frame_mismatch(pose) if verdict.kind == "out" else None
+            if stale:
+                verdict = verdict.__class__("manual", stale)
+            self._in_row = verdict.kind in ("acquire", "exit")
             # a log, not an event: a manual verdict already reaches Fleet as docking.failed "bay zone: ..."
-            _LOG.info("bay zone verdict %s: %s", verdict.kind, verdict.reason)
-            if verdict.kind == "out":
+            _LOG.warning("bay zone verdict %s: %s %s", verdict.kind, verdict.reason, scan_note)       # WARNING reaches the journal (INFO does not): the path taken
+            if verdict.kind == "backout":
+                self._zone_checked = False
+                self.backout_begin(now, backout, lidar_match)
+            elif verdict.kind == "junction":
+                self._pit_in(now, junction, verdict.reason)
+            elif verdict.kind == "out":
                 self._zone, self._zone_checked = None, True
                 h._begin_staging()
             elif verdict.kind == "manual":
                 self._stop()
                 _LOG.warning("bay zone refused: %s %s", verdict.reason, scan_note)    # WARNING reaches the journal; INFO does not
+                call = self._facing_bay or "no LiDAR bay pose answer" in verdict.reason or "not staging by the map" in verdict.reason       # _fail clears the run state
                 h._fail("bay zone: " + verdict.reason + (" " + scan_note if scan_note and scan is None else ""))
+                if call:
+                    h._call_person("stopped nose toward the bay in the lane: " + verdict.reason)         # refused, not moved: a person must look
             elif h.executor is None:
                 h._fail("bay executor unavailable")
             elif verdict.kind == "acquire" or self._corridor_view():

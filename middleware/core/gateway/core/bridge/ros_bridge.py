@@ -28,7 +28,7 @@ from nav2_msgs.action import NavigateThroughPoses, NavigateToPose
 from nav2_msgs.msg import Costmap
 from lifecycle_msgs.msg import TransitionEvent
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from sensor_msgs.msg import BatteryState, CompressedImage, Imu, LaserScan, Range
+from sensor_msgs.msg import BatteryState, CompressedImage, Imu, JointState, LaserScan, Range
 from std_msgs.msg import Bool, Float32, String
 from std_srvs.srv import Empty, SetBool
 
@@ -56,6 +56,7 @@ from core.bridge.goal_tracker import GoalTracker
 from core.bridge.lane_route import RouteGuidePublication
 from core.bridge.ros_bridge_helpers import RosBridgeHelpersMixin
 from core.bridge.route_context import RouteContextPublication
+from core.bridge.sensor_mirror import SensorMirror
 from core_common.protocol.recording import (
     FETCHED_TOPIC,
     RAW_PREVIEW_TOPIC,
@@ -89,6 +90,8 @@ class RosBridge(RosBridgeHelpersMixin):
     def __init__(self, node: Node, services) -> None:
         self._node = node
         self._svc = services
+        self._mirror = SensorMirror()  # /sensors imu·odometry·wheels·motor·dock, converted on GET
+        self._mirror.install(services.state)
         self._bounded_trial_guard = None
         self._readiness = getattr(services, "readiness", None)
         cfg = services.config
@@ -133,6 +136,7 @@ class RosBridge(RosBridgeHelpersMixin):
         node.create_subscription(String, "robot/degraded_modules", self._on_degraded_modules, 10)
         node.create_subscription(LaserScan, "scan", self._on_scan, qos_profile_sensor_data)
         node.create_subscription(Imu, "imu_raw", self._on_imu, qos_profile_sensor_data)
+        node.create_subscription(JointState, "joint_states", self._on_joint_states, qos_profile_sensor_data)
         node.create_subscription(Range, "us_sensor/range", self._on_us_range, qos_profile_sensor_data)
         node.create_subscription(BatteryState, "batt_state", self._on_batt_state, 10)
         node.create_subscription(OccupancyGrid, "map", self._on_map, _LATCHED)
@@ -227,6 +231,7 @@ class RosBridge(RosBridgeHelpersMixin):
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
         self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])
+        self._mirror.odometry(msg)
 
     def _on_lane_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())

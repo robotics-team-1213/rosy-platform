@@ -8,13 +8,43 @@ shared-vertex ties on the recorded frames below and rejected them.
 import gzip
 import json
 import math
+import random
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 import control.sensing.scan_motion as sm
-from tools.device import hotpath_measure as hm
+
+
+# Same box room as drive's hotpath_measure.box_cloud; copied so this vision test imports no pinky module.
+def wall_scan(front=.4, side=.6, nose=0., noise=.0005, seed=0, n=720):
+    """Same geometry as test_wall_tracker_equivalence.scan: a box around the robot."""
+    rng = random.Random(seed)
+    ranges = []
+    for i in range(n):
+        a = -math.pi+i*math.tau/n+nose
+        dx, dy = math.cos(a), math.sin(a)
+        t = min(front/dx if dx > 1e-9 else 1e9, side/abs(dy) if abs(dy) > 1e-9 else 1e9,
+                2./abs(dx) if dx < -1e-9 else 1e9)
+        ranges.append(round(t+rng.gauss(0., noise), 3))
+    return SimpleNamespace(ranges=ranges, angle_min=-math.pi, angle_increment=math.tau/n,
+                           range_min=.05, range_max=12.)
+
+
+def box_cloud(n=180, yaw=0.):
+    """n endpoint points of the same box room, seen from a base rotated by yaw."""
+    import numpy as np
+    s = wall_scan(n=n, noise=0.)
+    angles = s.angle_min+np.arange(n)*s.angle_increment
+    ranges = np.asarray(s.ranges)
+    points = np.column_stack((ranges*np.cos(angles), ranges*np.sin(angles)))
+    c, si = math.cos(yaw), math.sin(yaw)
+    return points@np.array([[c, -si], [si, c]])  # as test_registration_endpoints builds `current`
+
+
+hm = SimpleNamespace(box_cloud=box_cloud)
 
 
 def reference_segments(ref):

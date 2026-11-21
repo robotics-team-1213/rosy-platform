@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -42,13 +43,29 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 5, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
-# Fleet file weights from pytest result-line timestamps in CI 44563719449 and 44568270495.
-# Retain prior weights where timings are incomplete or inconsistent. Unlisted files weigh 1.
+SUITE_SHARDS = {"fleet": 8, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
+# Fleet file weights: setup + call + teardown seconds per file from one serial lab run of the whole suite with
+# the browser tests on (`--durations=0`, 2026-11-21, 3612 s over 571 files). Files under 2 s are unlisted and weigh 1.
+# CI log timestamps are no source for this: pytest's piped output arrives in blocks, so they lump files together.
 # The weights only choose runners; every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
-_STATION_SCHEDULING = "middleware/core/gateway/test/test_station_camera_scheduling.py"
+# Other slow files (8 s or more), measured the same way in 12 CI runs of 2026-11-20. affected_ros.consolidate
+# weighs jobs with both tables: at 1 per file it packed every guard invocation onto one 5-7 min runner.
+CI_TEST_SECONDS = {**json.loads(Path(__file__).with_name("ci_test_seconds.json").read_text(encoding="utf-8")),
+                   **FLEET_TEST_SECONDS}
+MAX_CI_JOBS = 18  # GitHub Free runs 20 jobs at once; scope and ci-result take none while the tests run
+_STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_scheduling.py"
+
+
+def consolidated(include: list[dict]) -> list[dict]:
+    """Measured seconds spread a PR's small jobs over runners; a selection that would pass MAX_CI_JOBS keeps the coarser packing.
+
+    A 60 s share per job was tried on 2026-11-21 (#343) and dropped: runs used 55% more runner seconds (984 to 1546)
+    and, with several runs sharing the 20 concurrent jobs, the median job waited 177 s for a runner (45 s before)."""
+    fine = affected_ros.consolidate(include, CI_TEST_SECONDS)
+    return fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
     {"name": "omx-act-cpu", "invocations": [[
@@ -63,8 +80,8 @@ CI_FULL_MATRIX = (
     # 2026-11-18: core-domain was CI's longest runner (pytest step 16.5 and 22.4 min of a 25 min budget, runs
     # 43769060136 and 42596065578) and again 20 min in 44745980037; SUITE_SHARDS splits its gateway files across
     # runners, same tests. The browser journey stays its own invocation on the last shard.
-    {"name": "core-domain", "invocations": [["middleware/core/gateway/test", f"--ignore={_STATION_SCHEDULING}"], [
-        "middleware/core/gateway/test/test_account_pipeline.py"
+    {"name": "core-domain", "invocations": [["middleware/core/gateway/test"], [
+        "test/integration/core_fleet/test_account_pipeline.py"
     ]], "ros": "none"},
     # Runs the known load-sensitive simulation in a fresh runner (PRs #249 and #250).
     {"name": "core-station-simulation", "invocations": [[_STATION_SCHEDULING]], "ros": "none"},
@@ -145,13 +162,16 @@ _HEAVY_ROOT_TESTS = (
 
 
 def _shard_py_invocation(inv: list[str], n: int = ROOT_SHARDS) -> list[list[str]]:
-    """Split large non-directory .py invocations across runners, balancing heavy root tests."""
+    """Split an invocation with 12 or more .py targets across runners, slowest measured files first.
+
+    Directories in it go round the shards like files (#343: 28 files beside two directories ran 9 min on one runner)."""
     flags = [p for p in inv if p.startswith("-")]
     targets = [p for p in inv if not p.startswith("-")]
-    if n <= 1 or len(targets) < 12 or not all(p.endswith(".py") for p in targets):
+    if n <= 1 or sum(p.endswith(".py") for p in targets) < 12:
         return [inv]
     rank = {p: i for i, p in enumerate(_HEAVY_ROOT_TESTS)}
-    ordered = sorted(targets, key=lambda p: (rank.get(p, len(rank)), p))
+    ordered = sorted(targets, key=lambda p: (not p.endswith(".py"), -CI_TEST_SECONDS.get(PurePosixPath(p).name, 0),
+                                             rank.get(p, len(rank)), p))
     return [[*ordered[i::n], *flags] for i in range(n) if ordered[i::n]]
 
 
@@ -166,7 +186,8 @@ def _shard_groups(repo: Repo, entry: dict, flags: list[str] | None = None) -> li
     skip = skip | {p for inv in entry["invocations"][1:] for p in inv} if flags is None else {p for p in skip if f"--ignore={p}" in flags}
     n = ROOT_SHARDS if entry["name"] == "root-test" else SUITE_SHARDS.get(entry["name"], 1)
     fleet = entry["name"] == "fleet"
-    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0]) and t not in skip) if n > 1 else []
+    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0])
+                   and t not in skip and t != _STATION_SCHEDULING) if n > 1 else []
     groups, loads = [[] for _ in range(n)], [0] * n
     for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)) if fleet else files:
         i = min(range(n), key=lambda i: (loads[i], i))
@@ -179,7 +200,7 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
     """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
     import affected_tests as at  # here, not at the top: affected_tests imports this module
     if sel.mode == "full":
-        root_tests = sorted(t for t in repo.test_files if at._under(t, "test"))
+        root_tests = sorted(t for t in repo.test_files if at._under(t, "test") and t != _STATION_SCHEDULING)
         entries = []
         for entry in CI_FULL_MATRIX:
             groups = _shard_groups(repo, entry)
@@ -196,6 +217,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if modules:
             entries.append({"name": "modules", "invocations": modules, "ros": "overlay"})
     else:  # one runner per invocation; a whole SUITE_SHARDS suite keeps its full-tier groups (25 min limit)
+        if os.environ.get("ROSY_QUEUE_TESTED"):  # ci.yml sets it on merge_group only (D-1059)
+            import affected_queue
+            sel = affected_queue.narrowed(repo, sel)
         whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
         whole["test"] = {"name": "root-test", "invocations": [["test"]]}
         for inv in sel.invocations:

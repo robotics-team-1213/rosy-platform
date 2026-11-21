@@ -158,6 +158,17 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     async def rotate_to_stop(self) -> dict:
         return self._check(await self._http.delete("/api/v1/motion/rotate_to", headers=self._headers()))
 
+    async def repark(self, forward_m: float, left_m: float, operator_name: str) -> dict:
+        """D-1051 ``POST /api/v1/motion/repark``: CORE's bounded fine re-park (robot body frame)."""
+        return await self._post("/api/v1/motion/repark",
+                                {"forward_m": forward_m, "left_m": left_m, "operator_name": operator_name})
+
+    async def repark_status(self) -> dict:
+        return await self._get("/api/v1/motion/repark")
+
+    async def repark_stop(self) -> dict:
+        return self._check(await self._http.delete("/api/v1/motion/repark", headers=self._headers()))
+
     async def line_follow(self) -> dict:
         """D-143 ``GET /api/v1/line-follow``: selected mode and status."""
         return await self._get("/api/v1/line-follow")

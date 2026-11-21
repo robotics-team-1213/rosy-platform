@@ -91,59 +91,6 @@ Id = Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")
 Finite = Field(allow_inf_nan=False)
 
 
-class SitePlace(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    id: str = Id
-    name: str = Field(min_length=1, max_length=64)
-    x: float = Finite
-    y: float = Finite
-    yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
-    kind: PlaceKind = "junction"
-    exit_yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
-    radius_m: Optional[float] = Field(default=None, gt=0.0, le=0.5, allow_inf_nan=False)
-
-    @model_validator(mode="after")
-    def _start_heading(self) -> "SitePlace":
-        if self.kind == "start" and self.yaw is None:
-            raise ValueError(f"start place {self.id} needs a yaw")
-        if self.kind != "bend":
-            if self.exit_yaw is not None or self.radius_m is not None:
-                raise ValueError(f"place {self.id}: exit_yaw and radius_m belong to a bend")
-            return self
-        if None in (self.yaw, self.exit_yaw, self.radius_m):
-            raise ValueError(f"bend place {self.id} needs yaw, exit_yaw and radius_m")
-        turn = abs(math.degrees(math.remainder(self.exit_yaw - self.yaw, math.tau)))
-        if not BEND_MIN_DEG <= turn <= BEND_MAX_DEG:
-            raise ValueError(f"bend place {self.id} turns {turn:.1f} deg, not {BEND_MIN_DEG}-{BEND_MAX_DEG}")
-        return self
-
-
-class SiteEdge(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
-
-    id: str = Id
-    name: Optional[str] = Field(default=None, min_length=1, max_length=64, pattern=r"\S")
-    from_: str = Field(alias="from", pattern=r"^[A-Za-z0-9_.-]{1,32}$")
-    to: str = Id
-    polyline: list[tuple[float, float]] = Field(min_length=2, max_length=MAX_POINTS)
-    direction: Literal["one_way", "two_way"] = "one_way"
-    width_m: float = Field(gt=0.0, le=10.0, allow_inf_nan=False)
-    speed_cap_mps: float = Field(gt=0.0, le=5.0, allow_inf_nan=False)
-    drive_mode: Literal["lane", "free"] = "lane"
-    robot_kinds: Optional[list[Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")]]] = Field(
-        default=None, max_length=16)
-    evidence: Optional[RoadEvidence] = None
-
-    @model_validator(mode="after")
-    def _finite(self) -> "SiteEdge":
-        if any(not math.isfinite(v) for point in self.polyline for v in point):
-            raise ValueError(f"edge {self.id} polyline must be finite")
-        if sum(math.dist(a, b) for a, b in zip(self.polyline, self.polyline[1:])) <= 0.0:
-            raise ValueError(f"edge {self.id} polyline has zero length")
-        return self
-
-
 Polygon = Annotated[list[tuple[float, float]], Field(min_length=3, max_length=32)]
 
 
@@ -166,6 +113,93 @@ def _inside(point, polygon) -> bool:
         if (ay > y) != (by > y) and x < ax + (y - ay) * (bx - ax) / (by - ay):
             hit = not hit
     return hit
+
+
+class SitePlace(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Id
+    name: str = Field(min_length=1, max_length=64)
+    x: float = Finite
+    y: float = Finite
+    yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
+    kind: PlaceKind = "junction"
+    exit_yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
+    radius_m: Optional[float] = Field(default=None, gt=0.0, le=0.5, allow_inf_nan=False)
+    #: A person placed it on purpose; automatic calibration must not move it.
+    pinned: bool = False
+    #: 2026-11-21 (robot-7b named stop): a stop only. ``stop_zone`` is the site-frame polygon the robot
+    #: footprint must end inside (a person draws it, so it needs ``pinned``); ``approach_m`` is how far back
+    #: along ``yaw`` the robot lines up first (see ``approach_pose``).
+    stop_zone: Optional[Polygon] = None
+    approach_m: Optional[float] = Field(default=None, ge=0.05, le=0.6, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _stop_zone(self) -> "SitePlace":
+        if self.kind != "stop" and (self.stop_zone is not None or self.approach_m is not None):
+            raise ValueError(f"place {self.id}: stop_zone and approach_m belong to a stop")
+        if self.stop_zone is not None:
+            zone = list(self.stop_zone)
+            problem = _polygon_problem(zone)
+            if problem:
+                raise ValueError(f"stop {self.id} stop_zone {problem}")
+            if not _inside((self.x, self.y), zone):
+                raise ValueError(f"stop {self.id} lies outside its stop_zone")
+            if not self.pinned:
+                raise ValueError(f"stop {self.id}: a stop_zone needs pinned (calibration must not move a drawn zone)")
+        if self.approach_m is not None and self.yaw is None:
+            raise ValueError(f"stop {self.id}: approach_m needs a yaw")
+        return self
+
+    @model_validator(mode="after")
+    def _start_heading(self) -> "SitePlace":
+        if self.kind == "start" and self.yaw is None:
+            raise ValueError(f"start place {self.id} needs a yaw")
+        if self.kind != "bend":
+            if self.exit_yaw is not None or self.radius_m is not None:
+                raise ValueError(f"place {self.id}: exit_yaw and radius_m belong to a bend")
+            return self
+        if None in (self.yaw, self.exit_yaw, self.radius_m):
+            raise ValueError(f"bend place {self.id} needs yaw, exit_yaw and radius_m")
+        turn = abs(math.degrees(math.remainder(self.exit_yaw - self.yaw, math.tau)))
+        if not BEND_MIN_DEG <= turn <= BEND_MAX_DEG:
+            raise ValueError(f"bend place {self.id} turns {turn:.1f} deg, not {BEND_MIN_DEG}-{BEND_MAX_DEG}")
+        return self
+
+
+def approach_pose(place: SitePlace) -> Optional[tuple[float, float, float]]:
+    """The pose ``approach_m`` behind a stop along its yaw, facing the stop; None without ``approach_m``."""
+    if place.approach_m is None or place.yaw is None:
+        return None
+    d = place.approach_m
+    return place.x - d * math.cos(place.yaw), place.y - d * math.sin(place.yaw), place.yaw
+
+
+class SiteEdge(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    id: str = Id
+    name: Optional[str] = Field(default=None, min_length=1, max_length=64, pattern=r"\S")
+    from_: str = Field(alias="from", pattern=r"^[A-Za-z0-9_.-]{1,32}$")
+    to: str = Id
+    polyline: list[tuple[float, float]] = Field(min_length=2, max_length=MAX_POINTS)
+    direction: Literal["one_way", "two_way"] = "one_way"
+    width_m: float = Field(gt=0.0, le=10.0, allow_inf_nan=False)
+    speed_cap_mps: float = Field(gt=0.0, le=5.0, allow_inf_nan=False)
+    drive_mode: Literal["lane", "free"] = "lane"
+    #: A person drew it on purpose; automatic calibration must not redraw it.
+    pinned: bool = False
+    robot_kinds: Optional[list[Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")]]] = Field(
+        default=None, max_length=16)
+    evidence: Optional[RoadEvidence] = None
+
+    @model_validator(mode="after")
+    def _finite(self) -> "SiteEdge":
+        if any(not math.isfinite(v) for point in self.polyline for v in point):
+            raise ValueError(f"edge {self.id} polyline must be finite")
+        if sum(math.dist(a, b) for a, b in zip(self.polyline, self.polyline[1:])) <= 0.0:
+            raise ValueError(f"edge {self.id} polyline has zero length")
+        return self
 
 
 def _point_segment(p, a, b) -> float:
@@ -347,6 +381,11 @@ class SiteMap(BaseModel):
             for key in ("exit_yaw", "radius_m"):
                 if place[key] is None:
                     del place[key]
+            if not place["pinned"]:  # unpinned places stay byte-equal in stored maps
+                del place["pinned"]
+            for key in ("stop_zone", "approach_m"):  # stop-only fields: other stored maps stay byte-equal
+                if place[key] is None:
+                    del place[key]
         if body["view_turn_deg"] == 0:  # keep stored maps readable by a Fleet without the field
             del body["view_turn_deg"]
         if not body["crosswalks"]:  # D-573: a map without crosswalks stays byte-equal
@@ -360,6 +399,8 @@ class SiteMap(BaseModel):
         if not body["facilities"]:
             del body["facilities"]
         for edge in body["edges"]:
+            if not edge["pinned"]:  # unpinned edges stay byte-equal in stored maps
+                del edge["pinned"]
             if edge["name"] is None:
                 del edge["name"]
             if edge["evidence"] is None:
