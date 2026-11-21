@@ -60,4 +60,28 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}/brand
 )
 
+# C15 3D view: vendored three.js (MIT) and the generated web meshes (tools/robot_meshes.py), listed one by one.
+install(FILES
+  vendor/three.module.min.js
+  vendor/three.core.min.js
+  vendor/three.LICENSE
+  DESTINATION share/${PROJECT_NAME}/vendor
+)
+
+install(FILES
+  meshes/omx-f.urdf
+  meshes/omx-link0.stl
+  meshes/omx-link1.stl
+  meshes/omx-link2.stl
+  meshes/omx-link3.stl
+  meshes/omx-link4.stl
+  meshes/omx-link5.stl
+  meshes/omx-link6.stl
+  meshes/omx-link7.stl
+  meshes/pinky-body.stl
+  meshes/pinky-pro.urdf
+  meshes/pinky-wheel.stl
+  DESTINATION share/${PROJECT_NAME}/meshes
+)
+
 ament_package()
