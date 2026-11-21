@@ -270,6 +270,16 @@ def reflog_time(path: Path) -> float:
         return 0.0
 
 
+WRONG_HEAD_FIX = ("do not merge or fast-forward there; its owner moves that work to a worktree"
+                  " (python tools/worktrees.py adopt) and switches the checkout back to main")
+
+
+def wrong_head(root: Path) -> str | None:
+    """D-1055: the shared main checkout stays on main. Its HEAD when it is anything else (``wrong-head``)."""
+    head = _git(root, "symbolic-ref", "-q", "--short", "HEAD").stdout.strip() or "a detached HEAD"
+    return None if head == "main" else head
+
+
 def topic_ok(topic: str) -> bool:
     return len(topic) <= TOPIC_MAX and TOPIC.fullmatch(topic) is not None
 

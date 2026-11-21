@@ -435,6 +435,8 @@ def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
         if row["verdict"] == "stale-history":
             print(f"WARN    {row['name']}: {row['branch']} {row['note']} (owner {who}). Do not merge or land it;"
                   " rebuild what is needed on a new branch from main (D-172), then archive this one.")
+    if head := rules.wrong_head(root):
+        print(f"WARN    wrong-head: the shared main checkout {root} is on {head}, not main; {rules.WRONG_HEAD_FIX}")
     print(f"[worktrees] {len(rows)} under {root / '.worktrees'} (cap {CAP})")
     return 0
 
@@ -459,16 +461,17 @@ def _has_branch(root: Path, branch: str) -> bool:
 
 
 def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, mode: str = "report",
-            base: str = "main", owner: str | None = None) -> int:
+            base: str | None = None, owner: str | None = None) -> int:
     root, _ = scan(cwd)
+    base = base or ("origin/main" if git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/main").returncode == 0 else "main")  # D-1055, no fetch
     known = git(root, "rev-parse", "-q", "--verify", f"{base}^{{commit}}").returncode == 0
     problem = (_form_problem(root, name, branch, reason, owner)
                or (f"branch {branch} already exists (re-attach it: adopt)" if _has_branch(root, branch) else None)
                or (f"--from {base}: not a commit" if not known else None))
-    stale = None if problem or base == "main" else rules.stale_history(root, base) or rules.unlanded(root, base)
+    stale = None if problem or base in ("main", "origin/main") else rules.stale_history(root, base) or rules.unlanded(root, base)
     if stale:  # D-790: a worktree on the pre-rewrite line would carry it into main
         problem = f"refused: --from {base} is {stale}; rebuild on a new branch from main (D-172)"
-    return _attach(cwd, root, name, branch, ["-b", branch, base], problem, reason, now, mode, owner)
+    return _attach(cwd, root, name, branch, ["--no-track", "-b", branch, base], problem, reason, now, mode, owner)
 
 
 def cmd_adopt(cwd: Path, name: str, branch: str, reason: str | None, now: float, mode: str = "report",
@@ -562,8 +565,8 @@ def main(argv: list[str] | None = None, now: float | None = None) -> int:
                         help="also take dirty or unmerged worktrees, after keeping uncommitted work under refs/wip")
     for command in (status, pruner):
         command.add_argument("--idle-hours", type=float, default=IDLE_HOURS)
-    new = sub.add_parser("new", help="create .worktrees/<short-name> on a new branch from main")
-    new.add_argument("--from", dest="base", default="main", help="start point (default main); refused when stale")
+    new = sub.add_parser("new", help="create .worktrees/<short-name> on a new branch from origin/main")
+    new.add_argument("--from", dest="base", help="start point (default origin/main, else main; no fetch); refused when stale")
     adopt = sub.add_parser("adopt", help="re-attach an existing local branch at .worktrees/<short-name> (D-1070)")
     for command in (new, adopt):
         command.add_argument("name", metavar="short-name")

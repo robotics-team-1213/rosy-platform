@@ -997,3 +997,22 @@ def test_newest_file_ignores_oserror(tmp_path, monkeypatch):
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
     monkeypatch.setattr(worktrees.rules.os.path, "getmtime", lambda _p: (_ for _ in ()).throw(OSError("gone")))
     assert worktrees.rules.newest_file(tmp_path, lambda _r: False) == 0.0
+
+
+def test_new_starts_from_origin_main_untracked_and_status_warns_on_wrong_head(main, capsys):
+    """D-1055: branches start at origin/main when it exists (no fetch, no upstream), else main."""
+    assert worktrees.main(["new", "local", "feat/local"]) == 0  # no origin/main: falls back to main
+    assert git(main / ".worktrees" / "local", "rev-parse", "HEAD") == git(main, "rev-parse", "main")
+    published = git(main, "rev-parse", "HEAD")
+    git(main, "commit", "-q", "--allow-empty", "-m", "local main only")
+    git(main, "update-ref", "refs/remotes/origin/main", published)
+    assert worktrees.main(["new", "pub", "feat/pub"]) == 0
+    assert git(main / ".worktrees" / "pub", "rev-parse", "HEAD") == published
+    assert subprocess.run(["git", "-C", str(main), "config", "branch.feat/pub.merge"]).returncode == 1  # --no-track
+    capsys.readouterr()
+    assert worktrees.main(["status"]) == 0
+    assert "wrong-head" not in capsys.readouterr().out
+    git(main, "switch", "-q", "-c", "fix/oops")  # 11-21: a session switched the shared checkout to its branch
+    assert worktrees.main(["status"]) == 0
+    out = capsys.readouterr().out
+    assert "WARN    wrong-head:" in out and "is on fix/oops, not main" in out and "worktrees.py adopt" in out

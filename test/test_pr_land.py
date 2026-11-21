@@ -16,6 +16,7 @@ SPEC = importlib.util.spec_from_file_location("pr_land", ROOT / "tools" / "pr_la
 pr_land = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = pr_land
 SPEC.loader.exec_module(pr_land)
+SHARED_CHECKOUT = pr_land.shared_checkout  # the autouse fixture stubs it; its own test below
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +24,23 @@ def _normal_cutover(monkeypatch):
     monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
     monkeypatch.setattr(pr_land.land_freeze, "path", lambda cwd: Path("rosy-cutover.json"))
     monkeypatch.setattr(pr_land, "preflight", lambda cwd, base, body="": None)  # its own test below
+    monkeypatch.setattr(pr_land, "shared_checkout", lambda cwd: False)
+
+
+def test_shared_main_checkout_is_refused_and_a_worktree_is_not(monkeypatch, tmp_path):
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path / "main"), *args], check=True, capture_output=True)
+
+    (tmp_path / "main").mkdir()
+    git("init", "-q", "-b", "main")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
+    git("worktree", "add", "-q", "-b", "feat/x", str(tmp_path / "main" / ".worktrees" / "x"))
+    assert SHARED_CHECKOUT(tmp_path / "main") is True
+    assert SHARED_CHECKOUT(tmp_path / "main" / ".worktrees" / "x") is False
+    monkeypatch.setattr(pr_land, "shared_checkout", SHARED_CHECKOUT)
+    git("switch", "-q", "-c", "fix/oops")  # the 11-21 incident: a topic branch in the shared checkout
+    with pytest.raises(SystemExit, match="shared main checkout.*run from your worktree"):
+        pr_land.main(["--dry-run"], repo=tmp_path / "main")
 
 
 @pytest.mark.parametrize("phase,refused", [("drain", True), ("open", False), ("normal", False)])
