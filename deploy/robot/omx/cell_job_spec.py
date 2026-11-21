@@ -108,12 +108,30 @@ JOBS = {
         "argv": ["--config", "{config}", "auto", "--only", "remap", "regions"],
         "params": {"arm": _match(ARM), "config": _match(FILE)},
     },
+    "home": {
+        "script": "cell_pipeline.py",
+        "moving": True,
+        "argv": [
+            "--config", "{config}",
+            "--stage", "home",
+            "--library", "{library}",
+            "--operating-profile", "{operating_profile}",
+        ],
+        "params": {
+            "arm": _match(ARM),
+            "config": _match(FILE),
+            "library": _match(FILE),
+            "operating_profile": _safe_path,
+        },
+        "optional": {"operator": _match(NAME), "proposer": _match(NAME)},
+    },
     "auto_pick": {
         "script": "cell_auto_pick.py",
         "moving": True,
         "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--roi", "{roi}", "--from", "{source}", "--dest", "{dest}"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(NAME), "dest": _match(NAME)},
+        "optional": {"operator": _match(NAME), "proposer": _match(NAME)},
     },
     "cell_policy_drive": {
         "script": "cell_policy_drive.py",
@@ -180,7 +198,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
                 raise ValueError(f"{name}: {exc}") from None
             if name == "catalog" and not (workdir / opt_checked[name]).is_file():
                 raise ValueError(f"{name}: no such file in the workdir")
-    if "proposer" in opt_checked and opt_checked["proposer"] == checked.get("operator"):
+    operator = checked.get("operator") or opt_checked.get("operator")
+    if "proposer" in opt_checked and (not operator or opt_checked["proposer"] == operator):
         raise ValueError("operator must differ from proposer (D-1024)")
     if job["script"] == "cell_policy_drive.py":
         mode = opt_checked.get("mode", "act")
@@ -193,9 +212,10 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             if "goal_site" not in opt_checked and "model_calibration" not in opt_checked:
                 raise ValueError("missing param model_calibration")
     # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
-    if job.get("moving") and any(
-        checked.get(name, opt_checked.get(name, "")).startswith(("pinky", "bed"))
-        for name in ("source", "dest", "site")  # loading onto a bed moves over it too
+    if moves_arm(job, params) and any(
+        (v := checked.get(name, opt_checked.get(name, ""))).startswith(("pinky", "bed"))
+        or v in ("tray", "vehicle_tray", "not_places:vehicle_tray")
+        for name in ("source", "dest", "site", "goal_site")  # loading onto a bed moves over it too
     ):
         raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
     args = []

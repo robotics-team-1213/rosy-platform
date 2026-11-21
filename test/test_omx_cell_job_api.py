@@ -30,6 +30,10 @@ def _make_workdir(tmp_path: Path) -> Path:
         ("auto_pick", {"source": "belt", "dest": "pinky"}, 400),
         ("auto_pick_dry_run", {"source": "pinky"}, 202),
         ("pivot_near", {"site": "bed-1"}, 400),
+        ("cell_policy_drive", {"goal_site": "tray"}, 400),
+        ("cell_policy_drive", {"goal_site": "vehicle_tray"}, 400),
+        ("cell_policy_drive", {"goal_site": "not_places:vehicle_tray"}, 400),
+        ("cell_policy_drive", {"goal_site": "tray", "dry_run": True}, 202),
     ],
 )
 def test_runner_requires_r_cell_task_for_amr_bed_motion(tmp_path, monkeypatch, job, site_params, status):
@@ -38,6 +42,15 @@ def test_runner_requires_r_cell_task_for_amr_bed_motion(tmp_path, monkeypatch, j
         params.update(arm="arm_s", person_at_switch=True)
     if job == "pivot_near":
         params.update(x=0.0, y=0.0)
+    elif job == "cell_policy_drive":
+        params.update(
+            library="chunks-s.json",
+            max_chunks=1,
+            operator="human_op",
+            policy_root="~/rosy-models/pinky_v1",
+            policy_revision="a" * 64,
+            cell_calibration="cell.json",
+        )
     else:
         params.update(catalog="catalog-live.json", roi=[0, 0, 10, 10], dest="outbound")
     params.update(site_params)
@@ -168,3 +181,112 @@ def test_runner_serializes_arms_ab_space_camera_locks_and_http_queue(tmp_path, m
     audit = json.loads((wd / "cell-job-api" / "audit.jsonl").read_text(encoding="utf-8").splitlines()[0])
     assert audit["state_changes"]["arm"] == "arm_a"
     assert audit["state_changes"]["omx_tools_tree"] == "omx-tools-abc1234"
+
+
+def test_home_job_argv_requires_person_and_session(tmp_path):
+    wd = _make_workdir(tmp_path)
+    (wd / "chunks-a.json").write_text("{}", encoding="utf-8")
+    argv = api.build_argv(
+        api.JOBS["home"],
+        {
+            "arm": "arm_a",
+            "config": "cell-a.json",
+            "library": "chunks-a.json",
+            "operating_profile": "profile-a.json",
+            "operator": "human_op",
+            "proposer": "vlm_orchestrator",
+            "person_at_switch": True,
+        },
+        wd,
+    )
+    assert argv[0] == "./with-session-arm-a-par.sh"
+    assert "cell_pipeline.py" in argv
+    assert "--stage" in argv and "home" in argv
+    assert "--commissioning" in argv and "--person-at-switch" in argv
+    assert "--operator" not in argv and "--proposer" not in argv
+    with pytest.raises(ValueError, match="person_at_switch"):
+        api.build_argv(
+            api.JOBS["home"],
+            {"arm": "arm_b", "config": "cell-b.json", "library": "chunks-a.json", "operating_profile": "profile-b.json"},
+            wd,
+        )
+    with pytest.raises(ValueError, match="D-1024"):
+        api.build_argv(
+            api.JOBS["home"],
+            {
+                "arm": "arm_a",
+                "config": "cell-a.json",
+                "library": "chunks-a.json",
+                "operating_profile": "profile-a.json",
+                "operator": "same_id",
+                "proposer": "same_id",
+                "person_at_switch": True,
+            },
+            wd,
+        )
+    with pytest.raises(ValueError, match="D-1024"):
+        api.build_argv(
+            api.JOBS["auto_pick"],
+            {
+                "arm": "arm_b",
+                "config": "cell-b.json",
+                "catalog": "catalog-live.json",
+                "roi": [0, 0, 10, 10],
+                "source": "belt",
+                "dest": "pallet",
+                "proposer": "vlm_orchestrator",
+                "person_at_switch": True,
+            },
+            wd,
+        )
+    pick_argv = api.build_argv(
+        api.JOBS["auto_pick"],
+        {
+            "arm": "arm_b",
+            "config": "cell-b.json",
+            "catalog": "catalog-live.json",
+            "roi": [0, 0, 10, 10],
+            "source": "belt",
+            "dest": "pallet",
+            "operator": "human_op",
+            "proposer": "vlm_orchestrator",
+            "person_at_switch": True,
+        },
+        wd,
+    )
+    assert "--operator" not in pick_argv and "--proposer" not in pick_argv
+
+
+def test_frame_proxy_returns_clean_json_on_viewer_http_error(tmp_path):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import urllib.error
+
+    class FailingViewer(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            pass
+
+        def do_GET(self):
+            self.send_response(404)
+            self.end_headers()
+
+    viewer = ThreadingHTTPServer(("127.0.0.1", 0), FailingViewer)
+    threading.Thread(target=viewer.serve_forever, daemon=True).start()
+    wd = _make_workdir(tmp_path)
+    token = "t" * 32
+    server = api.make_server("127.0.0.1", 0, token, api.Runner(wd, lock_dir=wd), viewer=f"http://127.0.0.1:{viewer.server_port}")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/frame/arm_b_wrist.jpg",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            urllib.request.urlopen(req, timeout=5)
+        assert exc.value.code == 404
+        body = json.loads(exc.value.read().decode("utf-8"))
+        assert "404" in body["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        viewer.shutdown()
+        viewer.server_close()
