@@ -37,7 +37,7 @@ from pathlib import Path
 LANDED_IDLE_HOURS = 1.0
 CLEAN_IDLE_HOURS = 6.0  # D-1070: a clean worktree on a branch, merged or not, whoever made it
 STALE_COMMITS = 2_000
-ABANDON_DAYS = 14  # an unlanded branch with no worktree and no commit this long is archived (archive_abandoned)
+ABANDON_DAYS = 3  # an unlanded branch with no worktree and no commit this long is archived (archive_abandoned); 14 until D-1070 follow-up, 11-21: 840 local branches
 # main was rewritten after this commit (2026-09-22 09:55:14 +0900); branches cut before the rewrite share
 # only it with main and carry ~13,800 commits of the old line (feat/integrated-learning-pipeline, 2026-10-17).
 REWRITE_BASE = "ad86fca808"
