@@ -74,6 +74,7 @@ def test_http_summary_listing_read_and_canceled_task_projection(tmp_path):
     root, leaf = client_for(nodes, "R"), client_for(nodes, "A1")
     summary = root.get("/api/fleet/control-unit", headers=headers())
     assert summary.status_code == 200 and summary.json()["children"] == ["A", "B"]
+    assert summary.json()["child_origins"] == {} and summary.json()["child_arm_units"] == []
     listing = root.get("/api/fleet/control-unit/delegations", headers=headers())
     assert listing.status_code == 200 and listing.json()["delegations"] == []
     assert root.post("/api/fleet/control-unit/delegations", headers=headers(), json=WORK).status_code == 200
@@ -102,3 +103,37 @@ def test_unavailable_journal_returns_stable_503(tmp_path, monkeypatch, path, tok
     response = root.get(path, headers=headers(token))
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "CONTROL_UNIT_JOURNAL_UNAVAILABLE"
+
+
+def test_summary_lists_https_child_origins_and_arm_children_without_credentials(tmp_path):
+    from types import SimpleNamespace
+    from fleet.server.control_unit_config import ControlUnitTopology
+    from fleet.server.control_unit_service import ControlUnitService
+    from fleet.server.control_unit_store import ControlUnitStore
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    from test_control_unit_service import Console
+    manifest = {"revision": "v1", "units": [
+        {"id": "R"},
+        {"id": "A", "parent": "R"},
+        {"id": "B", "parent": "R", "resources": ["workcell:cell_ab"]},
+        {"id": "A1", "parent": "A", "resources": ["workcell:cell_s", "robot:a1"]}]}
+    topology = ControlUnitTopology.from_mapping(manifest)
+    nodes = {}
+    for unit_id in topology.units:
+        path = tmp_path / (unit_id + ".db")
+        robots = {r[6:] for r in topology.unit(unit_id).resources if r.startswith("robot:")}
+        nodes[unit_id] = ControlUnitService(topology, ControlUnitStore(path, unit_id=unit_id),
+                                            FleetTaskService(FleetTaskStore(path), robot_ids=robots),
+                                            Console(), peer=None)
+    nodes["R"].peer = SimpleNamespace(config=SimpleNamespace(peers={
+        "A": SimpleNamespace(url="https://cell-a.example.test:8443/ignored?query#frag", token="secret-a"),
+        "B": SimpleNamespace(url="http://plain.invalid:8080", token="secret-b")}))
+    summary = client_for(nodes, "R").get("/api/fleet/control-unit", headers=headers())
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["child_origins"] == {"A": "https://cell-a.example.test:8443"}
+    # A1's workcell sits in A's subtree, B owns one directly: both map to direct children.
+    assert body["child_arm_units"] == ["A", "B"]
+    assert "secret-a" not in summary.text and "secret-b" not in summary.text
+    assert "plain.invalid" not in summary.text
