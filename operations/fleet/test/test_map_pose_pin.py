@@ -109,7 +109,7 @@ from hashlib import sha256
 
 from fastapi.testclient import TestClient
 
-from fakes import FakeRobot, fresh_reads
+from fakes import FakeRobot, fresh_reads, run
 from fleet.localization.pose_request import overhead_decision
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -233,3 +233,56 @@ def test_stale_draw_limit_is_validated():
         MapPoseConfig(max_stale_draw_s=601.0)
     with pytest.raises(ValueError):
         MapPoseConfig(max_anchor_age_s=30.0, max_stale_draw_s=20.0)
+
+
+def test_offline_parked_pin_clears_on_state_and_never_localizes_driving_pose(tmp_path):
+    from test_trip_runner import _free_map
+    from fleet.server.offline_pin import obstacle_site_pose
+
+    online = FakeRobot("r1", state=_odom_state(time.time()))
+
+    class OfflineRobot(FakeRobot):
+        async def state(self):
+            raise OSError("robot powered off")
+
+    offline = OfflineRobot("r2", state={})
+    console = FleetConsole(
+        [RobotEndpoint("r1", "http://127.0.0.1:8080", "t1"),
+         RobotEndpoint("r2", "http://127.0.0.1:8081", "t2")],
+        [online, offline],
+    )
+    task_service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"r1", "r2"})
+    users = {sha256(NAMED.encode()).hexdigest(): {"principal_id": "kim", "role": "operator"}}
+    app = create_app(console, console_token=OPERATOR, task_service=task_service,
+                     start_task_dispatcher=False, site_users=users)
+    fresh_reads(app)
+
+    with TestClient(app) as client:
+        no_map = client.post("/api/fleet/robots/r2/map-pin",
+                             json={"x": -0.26, "y": 0.59, "yaw": -1.57, "offline_parked": True},
+                             headers={"Authorization": f"Bearer {NAMED}"})
+        assert no_map.status_code == 409 and no_map.json()["detail"]["code"] == "MAP_PIN_NO_ACTIVE_MAP"
+
+        app.state.site_maps.import_if_empty(_free_map(), source="test")
+        is_online = client.post("/api/fleet/robots/r1/map-pin",
+                                json={"x": 1.0, "y": 2.0, "yaw": 0.0, "offline_parked": True},
+                                headers={"Authorization": f"Bearer {NAMED}"})
+        assert is_online.status_code == 409 and is_online.json()["detail"]["code"] == "MAP_PIN_ROBOT_ONLINE"
+
+        ok = client.post("/api/fleet/robots/r2/map-pin",
+                         json={"x": -0.26, "y": 0.59, "yaw": -1.57, "offline_parked": True},
+                         headers={"Authorization": f"Bearer {NAMED}"})
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["state"] == "OFFLINE_PARKED" and ok.json()["anchor_source"] == "operator_pin_offline"
+        assert app.state.map_pose.driving_pose("r2").state == UNKNOWN
+        assert app.state.map_pose.arbitrated_pose("r2").state == UNKNOWN
+        assert obstacle_site_pose(app.state.map_pose, "r2") == ("site", -0.26, 0.59, -1.57)
+        run(console.snapshot())
+        assert obstacle_site_pose(app.state.map_pose, "r2") == ("site", -0.26, 0.59, -1.57)
+        assert app.state.map_pose._offline_pins.pose_on("r2", "other_map") is None
+
+        app.state.map_pose.observe_state("r2", _odom_state(time.time()))
+        assert obstacle_site_pose(app.state.map_pose, "r2") is None
+
+    events = [e for e in app.state.site_maps.events() if e["action"] == "map_pin" and e["detail"].get("offline_parked")]
+    assert len(events) == 1 and events[0]["detail"]["robot_id"] == "r2"

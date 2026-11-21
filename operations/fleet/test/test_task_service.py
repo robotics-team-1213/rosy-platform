@@ -50,7 +50,7 @@ def test_bay_refusal_after_mover_send_keeps_task_unknown(tmp_path, monkeypatch, 
     service = _service(tmp_path / "fleet.sqlite3")
     run(service.submit_navigation(robot_id="rosy_01", x=1.0, y=0.0, source="operator",
                                   actor_id="site-console", request_key="bay-refusal"))
-    console._standing_in_the_way = lambda *_args: ["rosy_02"]
+    console._standing_in_the_way = lambda *_args, **_kw: ["rosy_02"]
     console._pose_of = lambda _rid: (0.0, 0.0)
     monkeypatch.setattr(console_module.bays, "best_bay", lambda *_args, **_kw: (1.0, 1.0))
 
@@ -93,7 +93,7 @@ def test_post_acceptance_owner_errors_keep_task_unknown(tmp_path, stage):
         robot._path = [(0.0, 0.0), (1.0, 0.0)]
         console._claims["rosy_02"] = list(robot._path)
     elif stage == "trust_cancel":
-        console._untrusted_blocks = lambda *_args: True
+        console._untrusted_blocks = lambda *_args, **_kw: True
     elif stage == "lease_cancel":
         original = robot.navigation_goal
 
