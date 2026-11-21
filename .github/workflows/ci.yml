@@ -226,7 +226,6 @@ jobs:
           python3 -c 'from playwright.sync_api import sync_playwright as p; pw = p().start(); pw.chromium.launch().close(); pw.stop()'
 
       - name: Font diagnostic (temporary)
-        if: contains(toJSON(matrix.invocations), 'ROSY_RUN_BROWSER_TESTS=1')
         run: |
           grep PRETTY /etc/os-release; fc-match sans-serif; fc-match 'Noto Sans KR'; fc-match system-ui; fc-list | wc -l
           fc-list : family | sed 's/,.*//' | sort -u | wc -l; fc-list : family | sed 's/,.*//' | sort -u | grep -iE 'liberation|noto sans( cjk|$)|dejavu|unifont|emoji|open sans|lato|ubuntu' | tr '\n' ';'; echo
