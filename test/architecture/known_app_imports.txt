@@ -9,15 +9,11 @@ deploy/robot/omx/g2_task.py -> site-fleet
 integrations/simulation/gazebo/launch/gz_multi.launch.py -> pinky
 integrations/simulation/gazebo/scripts/swarm_bench.py -> site-fleet
 integrations/simulation/gazebo/test/test_sim_battery.py -> pinky
-learning/curation/omx/test/sim_object_truth_fixture.py -> omx-cell
-learning/curation/omx/test/test_lerobot_export.py -> omx-cell
 learning/envs/isaac/test/test_actual_map_fixture.py -> omx-cell
 learning/envs/isaac/test/test_camera_lane.py -> pinky
 learning/evaluation/perception/test/test_road_fitness.py -> site-fleet
 learning/registry/policy/test/test_reasoning_registry.py -> site-fleet
-learning/registry/policy/test/test_sim_l1.py -> omx-cell
 learning/training/omx/test/act_cpu_fixture.py -> omx-cell
-learning/training/omx/test/test_act_multi_eval_native.py -> omx-cell
 learning/training/omx/test/test_act_owner_capture.py -> omx-cell
 learning/training/omx/test/test_act_parent_chain.py -> omx-cell
 learning/training/omx/test/test_act_parent_chain.py -> site-fleet

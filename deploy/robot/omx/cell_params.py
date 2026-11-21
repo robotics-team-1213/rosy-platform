@@ -18,6 +18,12 @@ SCHEMA = "rosy.omx-cell-params.v1"
 SOURCES = ("measured", "taught", "theory", "tuned", "default")
 # name: (default, unit, lowest, highest); counts are ints, the rest numbers
 DEFAULTS = {
+    # Provisional until simulator results are recorded in handoff-thresholds.md.
+    "policy.hold_frames": (8, "count", 1, 30),
+    "policy.rim_margin_m": (0.025, "m", 0.005, 0.05),
+    "policy.pose_xy_tol_m": (0.012, "m", 0.002, 0.05),
+    "policy.pose_angle_tol_deg": (7.0, "deg", 1, 20),
+    "policy.handoff_rise_m": (0.010, "m", 0.005, 0.03),
     "objects.chroma": (25.0, "lab", 1, 100), "objects.light": (60.0, "lab", 1, 255),
     "objects.min_px": (150, "px", 1, 100000), "objects.split_fill": (0.8, "ratio", 0.1, 1.0),
     "objects.split_axis_deg": (12.0, "deg", 0, 45), "objects.open_px": (3, "px", 1, 15),

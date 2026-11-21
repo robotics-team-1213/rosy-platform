@@ -666,6 +666,21 @@ def test_a_gravity_bias_that_leaves_the_calibrated_range_is_refused():
         actuator.write({name: 2028 for name in BODY})
 
 
+def test_a_joint_found_past_its_range_may_come_back_but_never_go_further_out():
+    # 2026-11-21 arm_s: a hand turned the Leader pan to 4179 (multi-turn count past 4095)
+    bus = Bus(leader=True, pwm_limit=330)
+    actuator = actuator_module.LeaderActuator(bus)
+    actuator.admit(pwm=150, current=100)
+    start = {name: 2028 for name in BODY} | {"shoulder_pan": 4179}
+    actuator.seed(start)
+    command = actuator.step({name: 2028 for name in BODY}, 0.5)
+    assert 4095 < command["shoulder_pan"] < 4179
+    actuator.write(command)
+    assert bus.goals["shoulder_pan"] == int(command["shoulder_pan"])
+    with pytest.raises(ValueError, match="outside the calibrated range"):
+        actuator.write(start | {"shoulder_pan": 4180})
+
+
 def test_the_actuator_refuses_a_gravity_bias_outside_its_bounds():
     with pytest.raises(ValueError, match="no body joint"):
         actuator_module.LeaderActuator(Bus(leader=True)).admit(

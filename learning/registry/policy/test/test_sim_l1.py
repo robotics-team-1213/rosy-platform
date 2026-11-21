@@ -65,11 +65,10 @@ def test_report_for_another_checkpoint_is_not_recorded_under_this_revision(tmp_p
     assert len(registry.history()) == 1
 
 
-def test_digest_matches_the_runner_checkpoint_digest(tmp_path):
-    sys.path.insert(0, str(ROOT / 'integrations/robots/omx/src'))
-    from rosy.integrations.robots.omx.policy_runner import checkpoint_digest
+def test_digest_matches_the_contract_checkpoint_digest(tmp_path):
+    from rosy.contracts.learning.digest import checkpoint_sha256
     root, doc = source(tmp_path)
     ckpt = tmp_path / 'ckpt'
     ckpt.mkdir()
     (ckpt / 'weights.bin').write_bytes(b'weights')
-    assert checkpoint_digest(ckpt) == registered_checkpoint_sha256(root, doc)
+    assert checkpoint_sha256(ckpt) == registered_checkpoint_sha256(root, doc)

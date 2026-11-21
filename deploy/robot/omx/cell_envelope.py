@@ -34,7 +34,9 @@ def _code_digest() -> str:
         "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
         "cell_auto_pick.py", "cell_transfer.py", "cell_unwedge.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
         "cell_pivot.py", "cell_calibrate.py", "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py",
-        "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py")}
+        "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py",
+        "chunk_runner_commands.py", "chunk_runner_run.py", "chunk_runner_loop.py", "chunk_policy_playback.py",
+        "cell_policy_drive.py", "cell_policy_timing.py", "cell_policy_shape.py", "cell_policy_handoff.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, coordination, motion_profile)})
     cache_key = (
         tuple((name, path.stat().st_mtime_ns, path.stat().st_size) for name, path in sorted(files.items())),

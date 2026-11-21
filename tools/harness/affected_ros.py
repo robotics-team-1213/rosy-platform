@@ -60,6 +60,7 @@ def consolidate(entries: list[dict], seconds: dict[str, int]) -> list[dict]:
         w = weight(entry)
         host = next((o for o in out if entry["name"].startswith("affected-") and o[0]["name"].startswith("affected-")
                      and o[0]["ros"] == entry["ros"] and o[0]["kind"] == entry["kind"] == "pytest"
+                     and o[0].get("colcon", True) == entry.get("colcon", True)  # a guard-only runner skips colcon
                      and o[1] + w <= cap), None)
         if host:
             host[0]["invocations"] = [*host[0]["invocations"], *entry["invocations"]]

@@ -99,3 +99,23 @@ def test_shard_py_invocation_balances_heavy_root_tests_and_preserves_small():
     shards = affected_ci._shard_py_invocation(mixed, n=3)
     assert len(shards) == 3 and sorted(p for s in shards for p in s) == sorted(mixed)
     assert affected_ci._shard_py_invocation(["a/test", "b/test", *small]) == [["a/test", "b/test", *small]]
+
+
+def test_a_guard_only_runner_never_absorbs_a_job_that_needs_colcon():
+    guard = dict(_e("affected-1", "overlay", ["a/test_x.py"]), colcon=False)
+    out = affected_ros.consolidate([guard, _e("affected-2", "overlay", ["b/test_y.py"])], {})
+    assert [o["name"] for o in out] == ["affected-1", "affected-2"] and out[0]["colcon"] is False
+
+
+def test_guard_only_runners_skip_colcon_while_non_guard_overlay_keeps_it():
+    import affected_ci
+    import affected_tests as at
+
+    repo = at.Repo.load(Path(__file__).resolve().parents[1])
+    guard_sel = at.Selection("affected", ["docs/adr/D-1.md"], invocations=[[at.GUARD_SET[0]]])
+    guard_entry = next(e for e in affected_ci.ci_matrix(repo, guard_sel)["include"] if e["kind"] == "pytest")
+    assert guard_entry.get("colcon") is False
+
+    mixed_sel = at.Selection("affected", ["test/test_robot_cd.py"], invocations=[["test/test_robot_cd.py"]])
+    mixed_entry = next(e for e in affected_ci.ci_matrix(repo, mixed_sel)["include"] if e["kind"] == "pytest")
+    assert mixed_entry.get("colcon", True) is True
